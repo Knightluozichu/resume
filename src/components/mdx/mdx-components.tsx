@@ -920,35 +920,6 @@ import { AacLifecycleStateDiagram } from "./diagrams/aac-lifecycle-state-diagram
 import { RefactorStranglerDiagram } from "./diagrams/refactor-strangler-diagram";
 import { KotlinUiStateDiagram } from "./diagrams/kotlin-ui-state-diagram";
 import { GameMathLab } from "./gamemath/game-math-lab";
-// 设计模式
-import { PatternCategoryMap } from "./design-patterns/diagrams/pattern-category-map";
-import { SolidPrinciplesDiagram } from "./design-patterns/diagrams/solid-principles-diagram";
-import { WhatIsPatternDiagram } from "./design-patterns/diagrams/what-is-pattern-diagram";
-import { StrategyPatternDiagram } from "./design-patterns/diagrams/strategy-pattern-diagram";
-import { ObserverPatternDiagram } from "./design-patterns/diagrams/observer-pattern-diagram";
-import { DecoratorPatternDiagram } from "./design-patterns/diagrams/decorator-pattern-diagram";
-import { CommandPatternDiagram } from "./design-patterns/diagrams/command-pattern-diagram";
-import { StatePatternDiagram } from "./design-patterns/diagrams/state-pattern-diagram";
-import { SingletonPatternDiagram } from "./design-patterns/diagrams/singleton-pattern-diagram";
-import { FactoryMethodDiagram } from "./design-patterns/diagrams/factory-method-diagram";
-import { AbstractFactoryDiagram } from "./design-patterns/diagrams/abstract-factory-diagram";
-import { BuilderPatternDiagram } from "./design-patterns/diagrams/builder-pattern-diagram";
-import { PrototypePatternDiagram } from "./design-patterns/diagrams/prototype-pattern-diagram";
-import { AdapterPatternDiagram } from "./design-patterns/diagrams/adapter-pattern-diagram";
-import { BridgePatternDiagram } from "./design-patterns/diagrams/bridge-pattern-diagram";
-import { CompositePatternDiagram } from "./design-patterns/diagrams/composite-pattern-diagram";
-import { FacadePatternDiagram } from "./design-patterns/diagrams/facade-pattern-diagram";
-import { FlyweightPatternDiagram } from "./design-patterns/diagrams/flyweight-pattern-diagram";
-import { ProxyPatternDiagram } from "./design-patterns/diagrams/proxy-pattern-diagram";
-import { ChainOfResponsibilityDiagram } from "./design-patterns/diagrams/chain-of-responsibility-diagram";
-import { DpIteratorDiagram } from "./design-patterns/diagrams/iterator-diagram";
-import { MediatorDiagram } from "./design-patterns/diagrams/mediator-diagram";
-import { MementoDiagram } from "./design-patterns/diagrams/memento-diagram";
-import { TemplateMethodDiagram } from "./design-patterns/diagrams/template-method-diagram";
-import { VisitorDiagram } from "./design-patterns/diagrams/visitor-diagram";
-import { InterpreterDiagram } from "./design-patterns/diagrams/interpreter-diagram";
-import { CompoundPatternDiagram } from "./design-patterns/diagrams/compound-pattern-diagram";
-import { DecisionTreeDiagram } from "./design-patterns/diagrams/decision-tree-diagram";
 // 游戏编程模式
 import {
   GppOfficialLearningMapMapLab,
@@ -9061,34 +9032,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MvvmFlowDiagram,
   GameMathLab,
   // 设计模式
-  PatternCategoryMap,
-  SolidPrinciplesDiagram,
-  WhatIsPatternDiagram,
-  StrategyPatternDiagram,
-  ObserverPatternDiagram,
-  DecoratorPatternDiagram,
-  CommandPatternDiagram,
-  StatePatternDiagram,
-  SingletonPatternDiagram,
-  FactoryMethodDiagram,
-  AbstractFactoryDiagram,
-  BuilderPatternDiagram,
-  PrototypePatternDiagram,
-  AdapterPatternDiagram,
-  BridgePatternDiagram,
-  CompositePatternDiagram,
-  FacadePatternDiagram,
-  FlyweightPatternDiagram,
-  ProxyPatternDiagram,
-  ChainOfResponsibilityDiagram,
-  DpIteratorDiagram,
-  MediatorDiagram,
-  MementoDiagram,
-  TemplateMethodDiagram,
-  VisitorDiagram,
-  InterpreterDiagram,
-  CompoundPatternDiagram,
-  DecisionTreeDiagram,
   GppOfficialLearningMapMapLab,
   GppOfficialLearningMapExperimentLab,
   GppOfficialLearningMapEvidenceLab,

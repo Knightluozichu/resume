@@ -10291,324 +10291,245 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/intro");
     return {
-      OfficialDesignPatternsIntroMapLab:
-        module0.OfficialDesignPatternsIntroMapLab,
-      OfficialDesignPatternsIntroExperimentLab:
-        module0.OfficialDesignPatternsIntroExperimentLab,
-      OfficialDesignPatternsIntroEvidenceLab:
-        module0.OfficialDesignPatternsIntroEvidenceLab,
+      IntroStructureLab: module0.IntroStructureLab,
+      IntroChangeLab: module0.IntroChangeLab,
+      IntroEvidenceLab: module0.IntroEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/learning-map");
     return {
-      OfficialDesignPatternsLearningMapMapLab:
-        module0.OfficialDesignPatternsLearningMapMapLab,
-      OfficialDesignPatternsLearningMapExperimentLab:
-        module0.OfficialDesignPatternsLearningMapExperimentLab,
-      OfficialDesignPatternsLearningMapEvidenceLab:
-        module0.OfficialDesignPatternsLearningMapEvidenceLab,
+      LearningMapStructureLab: module0.LearningMapStructureLab,
+      LearningMapChangeLab: module0.LearningMapChangeLab,
+      LearningMapEvidenceLab: module0.LearningMapEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/abstract-factory": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/abstract-factory");
     return {
-      OfficialDesignPatternsAbstractFactoryMapLab:
-        module0.OfficialDesignPatternsAbstractFactoryMapLab,
-      OfficialDesignPatternsAbstractFactoryExperimentLab:
-        module0.OfficialDesignPatternsAbstractFactoryExperimentLab,
-      OfficialDesignPatternsAbstractFactoryEvidenceLab:
-        module0.OfficialDesignPatternsAbstractFactoryEvidenceLab,
+      AbstractFactoryStructureLab: module0.AbstractFactoryStructureLab,
+      AbstractFactoryChangeLab: module0.AbstractFactoryChangeLab,
+      AbstractFactoryEvidenceLab: module0.AbstractFactoryEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/builder": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/builder");
     return {
-      OfficialDesignPatternsBuilderMapLab:
-        module0.OfficialDesignPatternsBuilderMapLab,
-      OfficialDesignPatternsBuilderExperimentLab:
-        module0.OfficialDesignPatternsBuilderExperimentLab,
-      OfficialDesignPatternsBuilderEvidenceLab:
-        module0.OfficialDesignPatternsBuilderEvidenceLab,
+      BuilderStructureLab: module0.BuilderStructureLab,
+      BuilderChangeLab: module0.BuilderChangeLab,
+      BuilderEvidenceLab: module0.BuilderEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/factory-method": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/factory-method");
     return {
-      OfficialDesignPatternsFactoryMethodMapLab:
-        module0.OfficialDesignPatternsFactoryMethodMapLab,
-      OfficialDesignPatternsFactoryMethodExperimentLab:
-        module0.OfficialDesignPatternsFactoryMethodExperimentLab,
-      OfficialDesignPatternsFactoryMethodEvidenceLab:
-        module0.OfficialDesignPatternsFactoryMethodEvidenceLab,
+      FactoryMethodStructureLab: module0.FactoryMethodStructureLab,
+      FactoryMethodChangeLab: module0.FactoryMethodChangeLab,
+      FactoryMethodEvidenceLab: module0.FactoryMethodEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/prototype": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/prototype");
     return {
-      OfficialDesignPatternsPrototypeMapLab:
-        module0.OfficialDesignPatternsPrototypeMapLab,
-      OfficialDesignPatternsPrototypeExperimentLab:
-        module0.OfficialDesignPatternsPrototypeExperimentLab,
-      OfficialDesignPatternsPrototypeEvidenceLab:
-        module0.OfficialDesignPatternsPrototypeEvidenceLab,
+      PrototypeStructureLab: module0.PrototypeStructureLab,
+      PrototypeChangeLab: module0.PrototypeChangeLab,
+      PrototypeEvidenceLab: module0.PrototypeEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/01-creational/singleton": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/singleton");
     return {
-      OfficialDesignPatternsSingletonMapLab:
-        module0.OfficialDesignPatternsSingletonMapLab,
-      OfficialDesignPatternsSingletonExperimentLab:
-        module0.OfficialDesignPatternsSingletonExperimentLab,
-      OfficialDesignPatternsSingletonEvidenceLab:
-        module0.OfficialDesignPatternsSingletonEvidenceLab,
+      SingletonStructureLab: module0.SingletonStructureLab,
+      SingletonChangeLab: module0.SingletonChangeLab,
+      SingletonEvidenceLab: module0.SingletonEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/adapter": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/adapter");
     return {
-      OfficialDesignPatternsAdapterMapLab:
-        module0.OfficialDesignPatternsAdapterMapLab,
-      OfficialDesignPatternsAdapterExperimentLab:
-        module0.OfficialDesignPatternsAdapterExperimentLab,
-      OfficialDesignPatternsAdapterEvidenceLab:
-        module0.OfficialDesignPatternsAdapterEvidenceLab,
+      AdapterStructureLab: module0.AdapterStructureLab,
+      AdapterChangeLab: module0.AdapterChangeLab,
+      AdapterEvidenceLab: module0.AdapterEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/bridge": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/bridge");
     return {
-      OfficialDesignPatternsBridgeMapLab:
-        module0.OfficialDesignPatternsBridgeMapLab,
-      OfficialDesignPatternsBridgeExperimentLab:
-        module0.OfficialDesignPatternsBridgeExperimentLab,
-      OfficialDesignPatternsBridgeEvidenceLab:
-        module0.OfficialDesignPatternsBridgeEvidenceLab,
+      BridgeStructureLab: module0.BridgeStructureLab,
+      BridgeChangeLab: module0.BridgeChangeLab,
+      BridgeEvidenceLab: module0.BridgeEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/composite": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/composite");
     return {
-      OfficialDesignPatternsCompositeMapLab:
-        module0.OfficialDesignPatternsCompositeMapLab,
-      OfficialDesignPatternsCompositeExperimentLab:
-        module0.OfficialDesignPatternsCompositeExperimentLab,
-      OfficialDesignPatternsCompositeEvidenceLab:
-        module0.OfficialDesignPatternsCompositeEvidenceLab,
+      CompositeStructureLab: module0.CompositeStructureLab,
+      CompositeChangeLab: module0.CompositeChangeLab,
+      CompositeEvidenceLab: module0.CompositeEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/facade": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/facade");
     return {
-      OfficialDesignPatternsFacadeMapLab:
-        module0.OfficialDesignPatternsFacadeMapLab,
-      OfficialDesignPatternsFacadeExperimentLab:
-        module0.OfficialDesignPatternsFacadeExperimentLab,
-      OfficialDesignPatternsFacadeEvidenceLab:
-        module0.OfficialDesignPatternsFacadeEvidenceLab,
+      FacadeStructureLab: module0.FacadeStructureLab,
+      FacadeChangeLab: module0.FacadeChangeLab,
+      FacadeEvidenceLab: module0.FacadeEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/flyweight": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/flyweight");
     return {
-      OfficialDesignPatternsFlyweightMapLab:
-        module0.OfficialDesignPatternsFlyweightMapLab,
-      OfficialDesignPatternsFlyweightExperimentLab:
-        module0.OfficialDesignPatternsFlyweightExperimentLab,
-      OfficialDesignPatternsFlyweightEvidenceLab:
-        module0.OfficialDesignPatternsFlyweightEvidenceLab,
+      FlyweightStructureLab: module0.FlyweightStructureLab,
+      FlyweightChangeLab: module0.FlyweightChangeLab,
+      FlyweightEvidenceLab: module0.FlyweightEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/02-structural/proxy": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/proxy");
     return {
-      OfficialDesignPatternsProxyMapLab:
-        module0.OfficialDesignPatternsProxyMapLab,
-      OfficialDesignPatternsProxyExperimentLab:
-        module0.OfficialDesignPatternsProxyExperimentLab,
-      OfficialDesignPatternsProxyEvidenceLab:
-        module0.OfficialDesignPatternsProxyEvidenceLab,
+      ProxyStructureLab: module0.ProxyStructureLab,
+      ProxyChangeLab: module0.ProxyChangeLab,
+      ProxyEvidenceLab: module0.ProxyEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/chain-of-responsibility": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/chain-of-responsibility");
     return {
-      OfficialDesignPatternsChainOfResponsibilityMapLab:
-        module0.OfficialDesignPatternsChainOfResponsibilityMapLab,
-      OfficialDesignPatternsChainOfResponsibilityExperimentLab:
-        module0.OfficialDesignPatternsChainOfResponsibilityExperimentLab,
-      OfficialDesignPatternsChainOfResponsibilityEvidenceLab:
-        module0.OfficialDesignPatternsChainOfResponsibilityEvidenceLab,
+      ChainOfResponsibilityStructureLab:
+        module0.ChainOfResponsibilityStructureLab,
+      ChainOfResponsibilityChangeLab: module0.ChainOfResponsibilityChangeLab,
+      ChainOfResponsibilityEvidenceLab:
+        module0.ChainOfResponsibilityEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/command": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/command");
     return {
-      OfficialDesignPatternsCommandMapLab:
-        module0.OfficialDesignPatternsCommandMapLab,
-      OfficialDesignPatternsCommandExperimentLab:
-        module0.OfficialDesignPatternsCommandExperimentLab,
-      OfficialDesignPatternsCommandEvidenceLab:
-        module0.OfficialDesignPatternsCommandEvidenceLab,
+      CommandStructureLab: module0.CommandStructureLab,
+      CommandChangeLab: module0.CommandChangeLab,
+      CommandEvidenceLab: module0.CommandEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/decorator": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/decorator");
     return {
-      OfficialDesignPatternsDecoratorMapLab:
-        module0.OfficialDesignPatternsDecoratorMapLab,
-      OfficialDesignPatternsDecoratorExperimentLab:
-        module0.OfficialDesignPatternsDecoratorExperimentLab,
-      OfficialDesignPatternsDecoratorEvidenceLab:
-        module0.OfficialDesignPatternsDecoratorEvidenceLab,
+      DecoratorStructureLab: module0.DecoratorStructureLab,
+      DecoratorChangeLab: module0.DecoratorChangeLab,
+      DecoratorEvidenceLab: module0.DecoratorEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/interpreter": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/interpreter");
     return {
-      OfficialDesignPatternsInterpreterMapLab:
-        module0.OfficialDesignPatternsInterpreterMapLab,
-      OfficialDesignPatternsInterpreterExperimentLab:
-        module0.OfficialDesignPatternsInterpreterExperimentLab,
-      OfficialDesignPatternsInterpreterEvidenceLab:
-        module0.OfficialDesignPatternsInterpreterEvidenceLab,
+      InterpreterStructureLab: module0.InterpreterStructureLab,
+      InterpreterChangeLab: module0.InterpreterChangeLab,
+      InterpreterEvidenceLab: module0.InterpreterEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/iterator": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/iterator");
     return {
-      OfficialDesignPatternsIteratorMapLab:
-        module0.OfficialDesignPatternsIteratorMapLab,
-      OfficialDesignPatternsIteratorExperimentLab:
-        module0.OfficialDesignPatternsIteratorExperimentLab,
-      OfficialDesignPatternsIteratorEvidenceLab:
-        module0.OfficialDesignPatternsIteratorEvidenceLab,
+      IteratorStructureLab: module0.IteratorStructureLab,
+      IteratorChangeLab: module0.IteratorChangeLab,
+      IteratorEvidenceLab: module0.IteratorEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/mediator": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/mediator");
     return {
-      OfficialDesignPatternsMediatorMapLab:
-        module0.OfficialDesignPatternsMediatorMapLab,
-      OfficialDesignPatternsMediatorExperimentLab:
-        module0.OfficialDesignPatternsMediatorExperimentLab,
-      OfficialDesignPatternsMediatorEvidenceLab:
-        module0.OfficialDesignPatternsMediatorEvidenceLab,
+      MediatorStructureLab: module0.MediatorStructureLab,
+      MediatorChangeLab: module0.MediatorChangeLab,
+      MediatorEvidenceLab: module0.MediatorEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/memento": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/memento");
     return {
-      OfficialDesignPatternsMementoMapLab:
-        module0.OfficialDesignPatternsMementoMapLab,
-      OfficialDesignPatternsMementoExperimentLab:
-        module0.OfficialDesignPatternsMementoExperimentLab,
-      OfficialDesignPatternsMementoEvidenceLab:
-        module0.OfficialDesignPatternsMementoEvidenceLab,
+      MementoStructureLab: module0.MementoStructureLab,
+      MementoChangeLab: module0.MementoChangeLab,
+      MementoEvidenceLab: module0.MementoEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/observer": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/observer");
     return {
-      OfficialDesignPatternsObserverMapLab:
-        module0.OfficialDesignPatternsObserverMapLab,
-      OfficialDesignPatternsObserverExperimentLab:
-        module0.OfficialDesignPatternsObserverExperimentLab,
-      OfficialDesignPatternsObserverEvidenceLab:
-        module0.OfficialDesignPatternsObserverEvidenceLab,
+      ObserverStructureLab: module0.ObserverStructureLab,
+      ObserverChangeLab: module0.ObserverChangeLab,
+      ObserverEvidenceLab: module0.ObserverEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/state": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/state");
     return {
-      OfficialDesignPatternsStateMapLab:
-        module0.OfficialDesignPatternsStateMapLab,
-      OfficialDesignPatternsStateExperimentLab:
-        module0.OfficialDesignPatternsStateExperimentLab,
-      OfficialDesignPatternsStateEvidenceLab:
-        module0.OfficialDesignPatternsStateEvidenceLab,
+      StateStructureLab: module0.StateStructureLab,
+      StateChangeLab: module0.StateChangeLab,
+      StateEvidenceLab: module0.StateEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/strategy": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/strategy");
     return {
-      OfficialDesignPatternsStrategyMapLab:
-        module0.OfficialDesignPatternsStrategyMapLab,
-      OfficialDesignPatternsStrategyExperimentLab:
-        module0.OfficialDesignPatternsStrategyExperimentLab,
-      OfficialDesignPatternsStrategyEvidenceLab:
-        module0.OfficialDesignPatternsStrategyEvidenceLab,
+      StrategyStructureLab: module0.StrategyStructureLab,
+      StrategyChangeLab: module0.StrategyChangeLab,
+      StrategyEvidenceLab: module0.StrategyEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/template-method": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/template-method");
     return {
-      OfficialDesignPatternsTemplateMethodMapLab:
-        module0.OfficialDesignPatternsTemplateMethodMapLab,
-      OfficialDesignPatternsTemplateMethodExperimentLab:
-        module0.OfficialDesignPatternsTemplateMethodExperimentLab,
-      OfficialDesignPatternsTemplateMethodEvidenceLab:
-        module0.OfficialDesignPatternsTemplateMethodEvidenceLab,
+      TemplateMethodStructureLab: module0.TemplateMethodStructureLab,
+      TemplateMethodChangeLab: module0.TemplateMethodChangeLab,
+      TemplateMethodEvidenceLab: module0.TemplateMethodEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/03-behavioral/visitor": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/visitor");
     return {
-      OfficialDesignPatternsVisitorMapLab:
-        module0.OfficialDesignPatternsVisitorMapLab,
-      OfficialDesignPatternsVisitorExperimentLab:
-        module0.OfficialDesignPatternsVisitorExperimentLab,
-      OfficialDesignPatternsVisitorEvidenceLab:
-        module0.OfficialDesignPatternsVisitorEvidenceLab,
+      VisitorStructureLab: module0.VisitorStructureLab,
+      VisitorChangeLab: module0.VisitorChangeLab,
+      VisitorEvidenceLab: module0.VisitorEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/04-compound/compound-patterns": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/compound-patterns");
     return {
-      OfficialDesignPatternsCompoundPatternsMapLab:
-        module0.OfficialDesignPatternsCompoundPatternsMapLab,
-      OfficialDesignPatternsCompoundPatternsExperimentLab:
-        module0.OfficialDesignPatternsCompoundPatternsExperimentLab,
-      OfficialDesignPatternsCompoundPatternsEvidenceLab:
-        module0.OfficialDesignPatternsCompoundPatternsEvidenceLab,
+      CompoundPatternsStructureLab: module0.CompoundPatternsStructureLab,
+      CompoundPatternsChangeLab: module0.CompoundPatternsChangeLab,
+      CompoundPatternsEvidenceLab: module0.CompoundPatternsEvidenceLab,
     } as ChapterMdxComponents;
   },
   "design-patterns/04-compound/final-review": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/diagrams/final-review");
     return {
-      OfficialDesignPatternsFinalReviewMapLab:
-        module0.OfficialDesignPatternsFinalReviewMapLab,
-      OfficialDesignPatternsFinalReviewExperimentLab:
-        module0.OfficialDesignPatternsFinalReviewExperimentLab,
-      OfficialDesignPatternsFinalReviewEvidenceLab:
-        module0.OfficialDesignPatternsFinalReviewEvidenceLab,
+      FinalReviewStructureLab: module0.FinalReviewStructureLab,
+      FinalReviewChangeLab: module0.FinalReviewChangeLab,
+      FinalReviewEvidenceLab: module0.FinalReviewEvidenceLab,
     } as ChapterMdxComponents;
   },
   "dotnet-memory/01-official/basic-concepts": async () => {

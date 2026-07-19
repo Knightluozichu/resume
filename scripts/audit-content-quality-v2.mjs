@@ -442,7 +442,9 @@ function parseChapter(filePath, manifests, visualResults) {
     ? "learning-map"
     : /final-review/.test(chapterSlug)
       ? "final-review"
-      : "chapter";
+      : /compound-patterns/.test(chapterSlug)
+        ? "synthesis"
+        : "chapter";
   const normalizedSource = normalized(sourceWithoutOutline);
   const visualCorpus = normalized(importedCorpus);
   const exerciseCorpus = normalized(exercisesBlock);
