@@ -367,7 +367,7 @@ export function MessageLoopDiagram() {
             x={SLOT0_CX}
             y={QUEUE_Y + SLOT_H + 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             队头（先处理）
@@ -376,7 +376,7 @@ export function MessageLoopDiagram() {
             x={QUEUE_X + (QUEUE_SLOTS - 1) * SLOT_STRIDE + SLOT_W / 2}
             y={QUEUE_Y + SLOT_H + 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             队尾（新入队）
@@ -407,7 +407,7 @@ export function MessageLoopDiagram() {
             x={LOOPER_CX}
             y={LOOPER_Y + 40}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -421,7 +421,7 @@ export function MessageLoopDiagram() {
             x={LOOPER_CX}
             y={LOOPER_Y + LOOPER_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
             opacity="0"
@@ -481,7 +481,7 @@ export function MessageLoopDiagram() {
             x={HANDLER_CX}
             y={HANDLER_Y + 44}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -539,7 +539,7 @@ export function MessageLoopDiagram() {
                   x={ORIGIN_X + MSG_W / 2}
                   y={ORIGIN_Y + 31}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--accent)"
                 >

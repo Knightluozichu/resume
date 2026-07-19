@@ -136,7 +136,7 @@ export function TestPyramidDiagram() {
           <text
             x={TITLE_X}
             y="56"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             底宽顶窄 —— 越往下越多、越快、越廉；越往上越少、越慢、越贵
@@ -179,7 +179,7 @@ export function TestPyramidDiagram() {
                   x={PY_CX}
                   y={topY + 44}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -190,7 +190,7 @@ export function TestPyramidDiagram() {
                   x={PY_CX}
                   y={topY + 60}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {layer.scale}
@@ -217,7 +217,7 @@ export function TestPyramidDiagram() {
           <text
             x={TITLE_X + 16}
             y={PY_TOP + 16}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             少 / 慢 / 贵
@@ -225,7 +225,7 @@ export function TestPyramidDiagram() {
           <text
             x={TITLE_X + 16}
             y={PY_TOP + LAYERS.length * (LAYER_H + LAYER_GAP) - LAYER_GAP - 8}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             多 / 快 / 廉
@@ -282,7 +282,7 @@ export function TestPyramidDiagram() {
                     key={line}
                     x={NOTE_X + 16}
                     y={y + 52 + li * 18}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}

@@ -144,7 +144,7 @@ export function WorkManagerDiagram() {
           <text
             x={STAGE_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             把「保证最终执行」交给系统：进程被杀 / 重启都不丢任务
@@ -179,7 +179,7 @@ export function WorkManagerDiagram() {
           <text
             x={constraintStartX}
             y={tagBandY - 6}
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -204,7 +204,7 @@ export function WorkManagerDiagram() {
                   x={x + TAG_W / 2}
                   y={tagBandY + 14}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--warning)"
                 >
                   {c}
@@ -252,7 +252,7 @@ export function WorkManagerDiagram() {
                 <text
                   x={STAGE_X + 16}
                   y={y + 38}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-primary)"
                 >
@@ -264,7 +264,7 @@ export function WorkManagerDiagram() {
                     key={n}
                     x={STAGE_X + 16}
                     y={y + 54 + j * 13}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -321,7 +321,7 @@ export function WorkManagerDiagram() {
                     key={line}
                     x={NOTE_X + 16}
                     y={y + 24 + j * 16}
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight={j === 0 ? "600" : "400"}
                     fill={j === 0 ? "var(--text-primary)" : "var(--text-secondary)"}
                   >

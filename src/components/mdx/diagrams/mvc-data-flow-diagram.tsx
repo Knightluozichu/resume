@@ -382,7 +382,7 @@ export function MvcDataFlowDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 46}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -438,7 +438,7 @@ export function MvcDataFlowDiagram() {
             x={VIEW.x + NODE_W / 2}
             y={VIEW.y - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① 用户点击 ▾

@@ -165,7 +165,7 @@ export function DebugLoopDiagram() {
           <text
             x={COL_1 + NODE_W / 2 + 16}
             y={center(verify).cy - 8}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -184,7 +184,7 @@ export function DebugLoopDiagram() {
           <text
             x={verify.x + NODE_W + 48}
             y={center(verify).cy + 4}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -219,7 +219,7 @@ export function DebugLoopDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 40}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {n.sub}
@@ -252,7 +252,7 @@ export function DebugLoopDiagram() {
                   x={x + tagW / 2}
                   y={y + 14}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {bp}
@@ -264,7 +264,7 @@ export function DebugLoopDiagram() {
             x={center(locate).cx}
             y={locate.y + NODE_H + 16}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             断点三种：
@@ -286,7 +286,7 @@ export function DebugLoopDiagram() {
             x={center(locate).cx}
             y={locate.y + NODE_H + 68}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             堆栈追踪从顶向下读
@@ -295,7 +295,7 @@ export function DebugLoopDiagram() {
             x={center(locate).cx}
             y={locate.y + NODE_H + 81}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -318,7 +318,7 @@ export function DebugLoopDiagram() {
             x={center(verify).cx}
             y={verify.y + NODE_H + 32}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             卡死无响应？查 ANR
@@ -327,7 +327,7 @@ export function DebugLoopDiagram() {
             x={center(verify).cx}
             y={verify.y + NODE_H + 45}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >

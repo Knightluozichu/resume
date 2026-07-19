@@ -130,7 +130,7 @@ export function AccessibilityTreeDiagram() {
           <text
             x={PHONE_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每个可聚焦控件 = 一个语义节点；TalkBack 从上到下、从左到右遍历焦点，触摸探索 + 双击激活
@@ -196,7 +196,7 @@ export function AccessibilityTreeDiagram() {
                     x={FOCUS_RAIL_X - 8}
                     y={(y1 + y2) / 2}
                     textAnchor="end"
-                    fontSize="9"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--accent)"
                   >
@@ -206,7 +206,7 @@ export function AccessibilityTreeDiagram() {
                     x={FOCUS_RAIL_X - 8}
                     y={(y1 + y2) / 2 + 12}
                     textAnchor="end"
-                    fontSize="9"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--accent)"
                   >
@@ -256,7 +256,7 @@ export function AccessibilityTreeDiagram() {
                 <text
                   x={ctrlX + 12}
                   y={cy + 12}
-                  fontSize="8.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -311,7 +311,7 @@ export function AccessibilityTreeDiagram() {
                     <text
                       x={NODE_X + 20}
                       y={cy + 13}
-                      fontSize="8.5"
+                      fontSize="11"
                       fontFamily="var(--font-mono)"
                       fill="var(--text-secondary)"
                     >
@@ -343,7 +343,7 @@ export function AccessibilityTreeDiagram() {
                     <text
                       x={NODE_X + 20}
                       y={cy - 3}
-                      fontSize="9"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       朗读：
@@ -361,7 +361,7 @@ export function AccessibilityTreeDiagram() {
                     <text
                       x={NODE_X + 20}
                       y={cy + 13}
-                      fontSize="8.5"
+                      fontSize="11"
                       fontFamily="var(--font-mono)"
                       fill="var(--text-secondary)"
                     >
@@ -379,7 +379,7 @@ export function AccessibilityTreeDiagram() {
           <text
             x={PHONE_X}
             y={VIEW_H - 64}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -388,7 +388,7 @@ export function AccessibilityTreeDiagram() {
           <text
             x={PHONE_X}
             y={VIEW_H - 46}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① ImageButton / ImageView 不设 contentDescription，TalkBack 只会读「未加标签的按钮」
@@ -396,7 +396,7 @@ export function AccessibilityTreeDiagram() {
           <text
             x={PHONE_X}
             y={VIEW_H - 30}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ② 纯装饰图设 importantForAccessibility=&quot;no&quot; 被跳过　③ 焦点从上到下、从左到右遍历
@@ -404,7 +404,7 @@ export function AccessibilityTreeDiagram() {
           <text
             x={PHONE_X}
             y={VIEW_H - 14}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ④ 用户用手指划过屏幕触摸探索（朗读当前控件），再双击激活它

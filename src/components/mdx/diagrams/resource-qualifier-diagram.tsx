@@ -104,7 +104,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={DIR_X}
             y="48"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             代码里只写 @string/app_name —— 选哪个目录由系统在运行期按配置决定
@@ -189,7 +189,7 @@ export function ResourceQualifierDiagram() {
                 <text
                   x={DIR_X + 34}
                   y={y + 35}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -200,7 +200,7 @@ export function ResourceQualifierDiagram() {
                   x={DIR_X + DIR_W - 12}
                   y={y + 31}
                   textAnchor="end"
-                  fontSize="9"
+                  fontSize="11"
                   fill={isHit ? "var(--success)" : "var(--text-secondary)"}
                 >
                   {d.note}
@@ -211,7 +211,7 @@ export function ResourceQualifierDiagram() {
                     x={DIR_X + DIR_W - 12}
                     y={y + 16}
                     textAnchor="end"
-                    fontSize="9"
+                    fontSize="11"
                     fontWeight="700"
                     fill="var(--success)"
                   >
@@ -261,7 +261,7 @@ export function ResourceQualifierDiagram() {
                 <text
                   x={DEVICE_X + 20}
                   y={ry + 14}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.key}
@@ -270,7 +270,7 @@ export function ResourceQualifierDiagram() {
                   x={DEVICE_X + DEVICE_W - 20}
                   y={ry + 14}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-primary)"
@@ -284,7 +284,7 @@ export function ResourceQualifierDiagram() {
             x={DEVICE_X + DEVICE_W / 2}
             y={DEVICE_Y + DEVICE_H - 12}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             系统据此挑限定符目录
@@ -309,7 +309,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={dirRightX + 80}
             y={hitMidY - 8}
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -337,7 +337,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={dirRightX + 96}
             y={fbMidY - 8}
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -367,7 +367,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={DIR_X + 16}
             y={RESOLVER_Y + 44}
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -380,7 +380,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={DIR_X + 16}
             y={RESOLVER_Y + 66}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             • 设备 Locale=es 时优先命中 values-es/；连默认都缺该条目才会报缺资源
@@ -388,7 +388,7 @@ export function ResourceQualifierDiagram() {
           <text
             x={DIR_X + 16}
             y={RESOLVER_Y + 84}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             • 改语言只新增一个限定符目录，代码与 layout 的 @string 引用一行都不用动

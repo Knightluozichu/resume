@@ -163,7 +163,7 @@ export function LaunchModeDiagram() {
             <text
               x={VIEW_W - PAD_X - 172}
               y="16"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               新建实例
@@ -182,7 +182,7 @@ export function LaunchModeDiagram() {
             <text
               x={VIEW_W - PAD_X - 80}
               y="16"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               复用既有
@@ -230,7 +230,7 @@ export function LaunchModeDiagram() {
                   x={colMidX}
                   y={VERDICT_Y}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.verdict}
@@ -255,7 +255,7 @@ export function LaunchModeDiagram() {
                       x={colMidX}
                       y={frameTop - 6}
                       textAnchor="middle"
-                      fontSize="9"
+                      fontSize="11"
                       fontWeight="600"
                       fill="var(--warning)"
                     >
@@ -309,7 +309,7 @@ export function LaunchModeDiagram() {
                           x={cardLeft + CARD_W / 2}
                           y={cyMid + 13}
                           textAnchor="middle"
-                          fontSize="8.5"
+                          fontSize="11"
                           fontFamily="var(--font-mono)"
                           fill={color}
                         >
@@ -333,7 +333,7 @@ export function LaunchModeDiagram() {
                   x={colMidX}
                   y={BASELINE_Y + 14}
                   textAnchor="middle"
-                  fontSize="8.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   ▲ 栈底
@@ -344,7 +344,7 @@ export function LaunchModeDiagram() {
                   x={colMidX}
                   y={USECASE_Y}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -355,7 +355,7 @@ export function LaunchModeDiagram() {
                   x={colMidX}
                   y={AFFINITY_Y}
                   textAnchor="middle"
-                  fontSize="8.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.affinity}

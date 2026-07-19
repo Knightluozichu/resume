@@ -206,7 +206,7 @@ export function SearchFlowDiagram() {
               stroke="var(--accent)"
               strokeWidth="1"
             />
-            <text x={NOTE_X + 20} y={TITLE_Y - 2} fontSize="9.5" fill="var(--text-secondary)">
+            <text x={NOTE_X + 20} y={TITLE_Y - 2} fontSize="11" fill="var(--text-secondary)">
               输入
             </text>
             <rect
@@ -220,7 +220,7 @@ export function SearchFlowDiagram() {
               stroke="var(--success)"
               strokeWidth="1"
             />
-            <text x={NOTE_X + 84} y={TITLE_Y - 2} fontSize="9.5" fill="var(--text-secondary)">
+            <text x={NOTE_X + 84} y={TITLE_Y - 2} fontSize="11" fill="var(--text-secondary)">
               处理
             </text>
             <rect
@@ -234,7 +234,7 @@ export function SearchFlowDiagram() {
               stroke="var(--warning)"
               strokeWidth="1"
             />
-            <text x={NOTE_X + 148} y={TITLE_Y - 2} fontSize="9.5" fill="var(--text-secondary)">
+            <text x={NOTE_X + 148} y={TITLE_Y - 2} fontSize="11" fill="var(--text-secondary)">
               结果
             </text>
           </g>
@@ -302,7 +302,7 @@ export function SearchFlowDiagram() {
                 <text
                   x={NODE_X + 36}
                   y={y + 42}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.sub}
@@ -341,7 +341,7 @@ export function SearchFlowDiagram() {
                 <text
                   x={NOTE_X + 12}
                   y={noteY + 22}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fontFamily="var(--font-mono)"
                   fill={n.color}
@@ -351,7 +351,7 @@ export function SearchFlowDiagram() {
                 <text
                   x={NOTE_X + 12}
                   y={noteY + 40}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {n.body}

@@ -524,7 +524,7 @@ export function ImplicitIntentResolutionDiagram() {
                   x={n.x + n.w / 2}
                   y={n.y + n.h / 2 + 14}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -550,7 +550,7 @@ export function ImplicitIntentResolutionDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 72}
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -559,7 +559,7 @@ export function ImplicitIntentResolutionDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 56}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -568,7 +568,7 @@ export function ImplicitIntentResolutionDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 42}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -577,7 +577,7 @@ export function ImplicitIntentResolutionDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 28}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -590,7 +590,7 @@ export function ImplicitIntentResolutionDiagram() {
             x={SYS.x + NODE_W / 2}
             y={SYS.y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >

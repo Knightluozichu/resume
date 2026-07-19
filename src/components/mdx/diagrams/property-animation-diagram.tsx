@@ -279,7 +279,7 @@ export function PropertyAnimationDiagram() {
             x={TRACK_X0}
             y={TRACK_Y + 24}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -299,7 +299,7 @@ export function PropertyAnimationDiagram() {
             x={TRACK_X1}
             y={TRACK_Y + 24}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--success)"
           >
@@ -390,7 +390,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X - 8}
             y={PLOT_Y + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -400,7 +400,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X - 8}
             y={PLOT_BOTTOM + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -410,7 +410,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X - 12}
             y={(PLOT_Y + PLOT_BOTTOM) / 2}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
             transform={`rotate(-90 ${PLOT_X - 12} ${(PLOT_Y + PLOT_BOTTOM) / 2})`}
           >
@@ -420,7 +420,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X + PLOT_W}
             y={PLOT_BOTTOM + 18}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间进度 →
@@ -440,7 +440,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X + PLOT_W - 8}
             y={PLOT_Y + 44}
             textAnchor="end"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
             opacity="0.7"
           >
@@ -458,7 +458,7 @@ export function PropertyAnimationDiagram() {
             x={PLOT_X + PLOT_W / 2}
             y={PLOT_BOTTOM + 34}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--warning)"
           >
@@ -482,7 +482,7 @@ export function PropertyAnimationDiagram() {
             x={VIEW_W - 16}
             y={VIEW_H - 18}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             多个这样的动画可用 AnimatorSet 编排（同时 / 顺序）

@@ -197,7 +197,7 @@ export function GradleBuildPipelineDiagram() {
                 <text
                   x={x + 12}
                   y={TOP + 18}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--text-secondary)"
                 >
@@ -219,7 +219,7 @@ export function GradleBuildPipelineDiagram() {
                   x={x + NODE_W / 2}
                   y={TOP + 50}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -234,7 +234,7 @@ export function GradleBuildPipelineDiagram() {
             x={X0 + NODE_W / 2}
             y={TOP - 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ▼ 原料
@@ -243,7 +243,7 @@ export function GradleBuildPipelineDiagram() {
             x={VIEW_W - X0 - NODE_W / 2}
             y={TOP - 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >

@@ -117,7 +117,7 @@ export function SdkVersionAxisDiagram() {
           <text
             x={PAD_X}
             y="50"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             常见关系：minSdk ≤ targetSdk ≤ compileSdk —— 装得上、按谁的规则跑、能写到多新
@@ -142,7 +142,7 @@ export function SdkVersionAxisDiagram() {
           <text
             x={AXIS_X1 + 4}
             y={AXIS_Y + 4}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             API
@@ -165,7 +165,7 @@ export function SdkVersionAxisDiagram() {
                   x={x}
                   y={AXIS_Y + 24}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -228,7 +228,7 @@ export function SdkVersionAxisDiagram() {
                   x={labelX}
                   y={labelY + 16}
                   textAnchor={m.anchor}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {m.note}
@@ -261,7 +261,7 @@ export function SdkVersionAxisDiagram() {
           <text
             x={coverX + 12}
             y={COVER_Y + COVER_H / 2 + 4}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -287,7 +287,7 @@ export function SdkVersionAxisDiagram() {
               key={t}
               x={PAD_X}
               y={BRANCH_Y + 36 + i * 22}
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               {`• ${t}`}
@@ -308,7 +308,7 @@ export function SdkVersionAxisDiagram() {
           <text
             x={BRANCH_X + 16}
             y={BRANCH_Y + 20}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fontFamily="var(--font-mono)"
             fill="var(--text-primary)"
@@ -331,7 +331,7 @@ export function SdkVersionAxisDiagram() {
             <text
               x={BRANCH_X + 26}
               y={BRANCH_Y + 32 + (ROW_H - 6) / 2 + 4}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -353,7 +353,7 @@ export function SdkVersionAxisDiagram() {
             <text
               x={BRANCH_X + 26}
               y={BRANCH_Y + 32 + ROW_H + (ROW_H - 6) / 2 + 4}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--success)"
             >
@@ -363,7 +363,7 @@ export function SdkVersionAxisDiagram() {
           <text
             x={BRANCH_X + 16}
             y={BRANCH_Y + 32 + ROW_H * 2 + 16}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             AndroidX 向后移植新 API → 老设备也能用，少写 if/else

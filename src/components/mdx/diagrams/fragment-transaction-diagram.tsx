@@ -292,7 +292,7 @@ export function FragmentTransactionDiagram() {
             x={STACK_X + STACK_W / 2}
             y={STACK_BASE_Y + CARD_H + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -372,7 +372,7 @@ export function FragmentTransactionDiagram() {
                   x={SLOT_X + CARD_W / 2}
                   y={SLOT_Y + 52}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {card.role}

@@ -111,7 +111,7 @@ export function DialogFragmentDiagram() {
           <text
             x={PHONE_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             宿主失焦置灰，对话框浮起；整个对话框交给 FragmentManager 托管
@@ -143,7 +143,7 @@ export function DialogFragmentDiagram() {
           <text
             x={screenX + 12}
             y={screenY + 19}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -182,7 +182,7 @@ export function DialogFragmentDiagram() {
             x={screenX + screenW / 2}
             y={screenY + 26}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--bg)"
           >
@@ -223,7 +223,7 @@ export function DialogFragmentDiagram() {
           <text
             x={dialogX + 20}
             y={dialogY + 56}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             删除后无法恢复，确定继续吗？
@@ -232,7 +232,7 @@ export function DialogFragmentDiagram() {
           <text
             x={dialogX + 20}
             y={dialogY + 76}
-            fontSize="9"
+            fontSize="11"
             fontStyle="italic"
             fill="var(--accent)"
           >
@@ -253,7 +253,7 @@ export function DialogFragmentDiagram() {
             x={dialogX + 20 + 44}
             y={dialogY + DIALOG_H - DIALOG_BTN_H - 16 + DIALOG_BTN_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -274,7 +274,7 @@ export function DialogFragmentDiagram() {
             x={dialogX + DIALOG_W - 20 - 44}
             y={dialogY + DIALOG_H - DIALOG_BTN_H - 16 + DIALOG_BTN_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -345,7 +345,7 @@ export function DialogFragmentDiagram() {
           <text
             x={ADV_X}
             y={TOP + ADVANTAGES.length * (ADV_H + ADV_GAP) + 8}
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -354,7 +354,7 @@ export function DialogFragmentDiagram() {
           <text
             x={ADV_X}
             y={TOP + ADVANTAGES.length * (ADV_H + ADV_GAP) + 26}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             → 对话框被 FragmentManager 接管，旋转屏幕也不丢

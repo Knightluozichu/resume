@@ -189,7 +189,7 @@ export function AndroidProjectStructureDiagram() {
                     <text
                       x={NOTE_X + 10}
                       y={y + 3.5}
-                      fontSize="10"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       {n.note}

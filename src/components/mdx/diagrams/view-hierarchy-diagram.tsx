@@ -107,7 +107,7 @@ export function ViewHierarchyDiagram() {
           <text
             x={TREE_X0}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             容器（ViewGroup）能装子节点并负责测量/布局；部件（View）是可见的叶子控件
@@ -202,7 +202,7 @@ export function ViewHierarchyDiagram() {
                     <text
                       x={NOTE_X}
                       y={y + 3.5}
-                      fontSize="10"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       {n.note}
@@ -218,7 +218,7 @@ export function ViewHierarchyDiagram() {
           <text
             x={TREE_X0 + 18}
             y={LEGEND_Y + 4}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             实心点 = ViewGroup（容器，装子 View，负责测量/布局）
@@ -236,7 +236,7 @@ export function ViewHierarchyDiagram() {
           <text
             x={TREE_X0 + 18}
             y={LEGEND_Y + 24}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             空心方块 = View（叶子部件，可见 UI，不再装子节点）
@@ -267,7 +267,7 @@ export function ViewHierarchyDiagram() {
             x={PANEL_X + PANEL_W - 8}
             y={PANEL_TOP + 16}
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -289,7 +289,7 @@ export function ViewHierarchyDiagram() {
           <text
             x={innerX + 10}
             y={titleY + titleH / 2 + 4}
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -312,7 +312,7 @@ export function ViewHierarchyDiagram() {
             x={innerX + innerW / 2}
             y={btnY + btnH / 2 + 4}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
@@ -379,7 +379,7 @@ export function ViewHierarchyDiagram() {
               key={t}
               x={PANEL_X + 12}
               y={btnY + btnH + 28 + i * 16}
-              fontSize="9"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >

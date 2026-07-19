@@ -146,7 +146,7 @@ export function StyleThemeInheritanceDiagram() {
           <text
             x={PAD}
             y={SUBTITLE_TOP}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             左：style 继承链作用于单个 View　右：theme 作用域覆盖整个 Activity/App
@@ -188,7 +188,7 @@ export function StyleThemeInheritanceDiagram() {
                   x={x + STEP_W / 2 - 8}
                   y={(fromBottom + toTop) / 2 + 4}
                   textAnchor="end"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--accent)"
                 >
@@ -236,7 +236,7 @@ export function StyleThemeInheritanceDiagram() {
                 <text
                   x={STYLE_X + 16}
                   y={y + 42}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -247,7 +247,7 @@ export function StyleThemeInheritanceDiagram() {
                     key={n}
                     x={STYLE_X + 16}
                     y={y + 58 + j * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -283,7 +283,7 @@ export function StyleThemeInheritanceDiagram() {
           <text
             x={THEME_X + 14}
             y={COL_TOP + 22}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fontFamily="var(--font-mono)"
             fill="var(--success)"
@@ -293,7 +293,7 @@ export function StyleThemeInheritanceDiagram() {
           <text
             x={THEME_X + 14}
             y={COL_TOP + 40}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             声明一次（或 Activity 级）→ colorPrimary 等属性全局生效
@@ -318,7 +318,7 @@ export function StyleThemeInheritanceDiagram() {
           <text
             x={themeBarCx + 10}
             y={(barBottom + screenTop) / 2 + 4}
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -339,7 +339,7 @@ export function StyleThemeInheritanceDiagram() {
           <text
             x={THEME_X + 14}
             y={screenTop + 22}
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -365,7 +365,7 @@ export function StyleThemeInheritanceDiagram() {
                 <text
                   x={widgetX + 12}
                   y={y + WIDGET_H / 2 + 4}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-primary)"
@@ -376,7 +376,7 @@ export function StyleThemeInheritanceDiagram() {
                   x={widgetX + widgetW - 10}
                   y={y + WIDGET_H / 2 + 4}
                   textAnchor="end"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--success)"
                 >
@@ -416,7 +416,7 @@ export function StyleThemeInheritanceDiagram() {
                   x={x + segW / 2}
                   y={SCALE_TOP + 19}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight={isTop ? 700 : 600}
                   fontFamily="var(--font-mono)"
                   fill={isTop ? "var(--warning)" : "var(--text-primary)"}
@@ -427,7 +427,7 @@ export function StyleThemeInheritanceDiagram() {
                   x={x + segW / 2}
                   y={SCALE_TOP + 35}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {isTop ? "优先级最高" : "被右侧覆盖"}

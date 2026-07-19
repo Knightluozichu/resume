@@ -129,7 +129,7 @@ export function RoomArchitectureDiagram() {
           <text
             x={BLOCK_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Room 在 SQLite 之上加三层抽象，把你从手写胶水代码里解放出来
@@ -159,7 +159,7 @@ export function RoomArchitectureDiagram() {
                 <text
                   x={REL_LABEL_X}
                   y={(fromBottom + toTop) / 2 + 4}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {i === 0 ? "↓ " : "↓ "}
@@ -209,7 +209,7 @@ export function RoomArchitectureDiagram() {
                 <text
                   x={BLOCK_X + 16}
                   y={y + 42}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -221,7 +221,7 @@ export function RoomArchitectureDiagram() {
                     key={n}
                     x={BLOCK_X + 16}
                     y={y + 60 + j * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -264,7 +264,7 @@ export function RoomArchitectureDiagram() {
           <text
             x={DB_X + 12}
             y={dbTop + 16}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fontFamily="var(--font-mono)"
             fill="var(--success)"
@@ -277,7 +277,7 @@ export function RoomArchitectureDiagram() {
               key={`row-${r}`}
               x={DB_X + 12}
               y={dbTop + 44 + r * 20}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >
@@ -290,7 +290,7 @@ export function RoomArchitectureDiagram() {
             x={DB_X + DB_W - 8}
             y={dbTop + DB_H - 8}
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一行 = 一个 Entity 实例
@@ -316,7 +316,7 @@ export function RoomArchitectureDiagram() {
             x={(BLOCK_X + BLOCK_W + DB_X) / 2}
             y={(entityCy + dbCy) / 2 - 6}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -352,7 +352,7 @@ export function RoomArchitectureDiagram() {
                   x={x + flowCardW / 2}
                   y={FLOW_TOP + FLOW_H / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -399,7 +399,7 @@ export function RoomArchitectureDiagram() {
                   x={(firstX + lastX + flowCardW) / 2}
                   y={backY + 14}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--success)"
                 >

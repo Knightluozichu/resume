@@ -30,9 +30,9 @@ const LANE_H = 88; // 单条泳道高
 const LANE_GAP = 48; // 两泳道间距（容纳跨泳道竖向箭头）
 const WORKER_LANE_TOP = MAIN_LANE_TOP + LANE_H + LANE_GAP; // 工作线程泳道顶部 y
 
-const STEP_W = 132; // 流程步骤卡片宽
+const STEP_W = 116; // 流程步骤卡片宽
 const STEP_H = 44; // 流程步骤卡片高
-const STEP_GAP = 36; // 步骤卡片之间水平间距
+const STEP_GAP = 20; // 步骤卡片之间水平间距
 
 const ARROW = 5; // 箭头三角半高
 
@@ -157,7 +157,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={MAIN_LANE_TOP + 40}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             唯一能碰 View
@@ -165,7 +165,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={MAIN_LANE_TOP + 54}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             16ms / 帧要流畅
@@ -173,7 +173,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={MAIN_LANE_TOP + 68}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -205,7 +205,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={WORKER_LANE_TOP + 40}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             跑网络请求 / IO
@@ -213,7 +213,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={WORKER_LANE_TOP + 56}
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -222,7 +222,7 @@ export function ThreadModelDiagram() {
           <text
             x={PAD_X}
             y={WORKER_LANE_TOP + 70}
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -290,7 +290,7 @@ export function ThreadModelDiagram() {
                 <text
                   x={x + 30}
                   y={y + STEP_H / 2 + 4}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {s.label}
@@ -303,7 +303,7 @@ export function ThreadModelDiagram() {
           <text
             x={(cx(0) + cx(1)) / 2 + 8}
             y={(cy("main") + cy("worker")) / 2 + 4}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -313,7 +313,7 @@ export function ThreadModelDiagram() {
             x={(cx(2) + cx(3)) / 2 - 64}
             y={(cy("main") + cy("worker")) / 2 + 4}
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -356,7 +356,7 @@ export function ThreadModelDiagram() {
             x={LANE_X + 16 + (STEP_W + 24) / 2}
             y={WRONG_TOP + 24 + STEP_H / 2 + 4}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -382,7 +382,7 @@ export function ThreadModelDiagram() {
             x={LANE_X + 16 + STEP_W + 24 + 36}
             y={WRONG_TOP + 24 + STEP_H / 2 - 8}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             卡住 &gt; 5s
@@ -401,7 +401,7 @@ export function ThreadModelDiagram() {
           <text
             x={LANE_X + 16 + STEP_W + 24 + 76 + 12}
             y={WRONG_TOP + 16 + 22}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--danger)"
           >
@@ -410,7 +410,7 @@ export function ThreadModelDiagram() {
           <text
             x={LANE_X + 16 + STEP_W + 24 + 76 + 12}
             y={WRONG_TOP + 16 + 40}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             「App 没有响应」
@@ -418,7 +418,7 @@ export function ThreadModelDiagram() {
           <text
             x={LANE_X + 16 + STEP_W + 24 + 76 + 12}
             y={WRONG_TOP + 16 + 54}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             等待 / 关闭

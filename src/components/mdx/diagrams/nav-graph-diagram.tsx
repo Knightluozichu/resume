@@ -385,7 +385,7 @@ export function NavGraphDiagram() {
                 x={(e.x1 + e.x2) / 2}
                 y={e.y1 - 8}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -429,7 +429,7 @@ export function NavGraphDiagram() {
                   x={n.x + NODE_W / 2}
                   y={n.y - 10}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--accent)"
                 >
@@ -453,7 +453,7 @@ export function NavGraphDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 48}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {n.role}
@@ -478,7 +478,7 @@ export function NavGraphDiagram() {
             x={STACK_X + STACK_BOX_W / 2}
             y={stackBoxY(STACK_MAX - 1) - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >

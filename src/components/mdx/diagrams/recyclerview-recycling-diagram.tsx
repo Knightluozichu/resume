@@ -332,7 +332,7 @@ export function RecyclerViewRecyclingDiagram() {
             x={POOL_X + POOL_W / 2}
             y={POOL_Y + POOL_H - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             opacity="0.7"
           >
@@ -409,7 +409,7 @@ export function RecyclerViewRecyclingDiagram() {
                   <text
                     x={SLOT_X + 16}
                     y={SLOT_TOP_Y + 42}
-                    fontSize="10"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {`position = ${card.position}`}

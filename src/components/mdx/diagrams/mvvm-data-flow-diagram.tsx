@@ -453,7 +453,7 @@ export function MvvmDataFlowDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 48}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -509,7 +509,7 @@ export function MvvmDataFlowDiagram() {
             x={VIEW.x + NODE_W / 2}
             y={VIEW.y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① 用户点击 ▾
@@ -530,7 +530,7 @@ export function MvvmDataFlowDiagram() {
             x={VIEW_W / 2}
             y={52}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             对比 MVC：Controller 持有并直接操作 View；这里 View 反过来观察 ViewModel
@@ -541,7 +541,7 @@ export function MvvmDataFlowDiagram() {
             x={(EDGES["auto-bind"].x1 + EDGES["auto-bind"].x2) / 2}
             y={(EDGES["auto-bind"].y1 + EDGES["auto-bind"].y2) / 2 + 36}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >

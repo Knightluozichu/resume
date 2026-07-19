@@ -154,7 +154,7 @@ export function LogcatLineAnatomyDiagram() {
           >
             一行 Logcat 日志，拆开看是这五段
           </text>
-          <text x={PAD_X} y="46" fontSize="10" fill="var(--text-secondary)">
+          <text x={PAD_X} y="46" fontSize="11" fill="var(--text-secondary)">
             认清每段的位置，才知道过滤框里该按哪一段筛
           </text>
 
@@ -191,7 +191,7 @@ export function LogcatLineAnatomyDiagram() {
                   x={cx}
                   y={ROW_Y - 12}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={s.color}
                 >
@@ -213,7 +213,7 @@ export function LogcatLineAnatomyDiagram() {
                   x={cx}
                   y={NOTE_Y}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.note}
@@ -273,7 +273,7 @@ export function LogcatLineAnatomyDiagram() {
                 <text
                   x={PAD_X + 32}
                   y={y + 14}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -283,7 +283,7 @@ export function LogcatLineAnatomyDiagram() {
                 <text
                   x={PAD_X + 96}
                   y={y + 14}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {lv.meaning}
@@ -320,7 +320,7 @@ export function LogcatLineAnatomyDiagram() {
                 <text
                   x={VIEW_W / 2 + 60}
                   y={y + 14}
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {f}

@@ -365,7 +365,7 @@ export function TouchEventSequenceDiagram() {
                 x={step.point.x}
                 y={step.point.y - 12}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={KIND_COLOR[step.kind]}
               >
@@ -493,7 +493,7 @@ export function TouchEventSequenceDiagram() {
             x={P_DOWN.x}
             y={P_DOWN.y + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ▲ 手指按下

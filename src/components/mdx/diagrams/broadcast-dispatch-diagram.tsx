@@ -501,7 +501,7 @@ export function BroadcastDispatchDiagram() {
                   x={n.x + n.w / 2}
                   y={n.y + n.h / 2 + 14}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -527,7 +527,7 @@ export function BroadcastDispatchDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 68}
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -536,7 +536,7 @@ export function BroadcastDispatchDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 52}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -545,7 +545,7 @@ export function BroadcastDispatchDiagram() {
             <text
               x={APP.x + 12}
               y={APP.y - 38}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -558,7 +558,7 @@ export function BroadcastDispatchDiagram() {
             x={SYS.x + NODE_W / 2}
             y={SYS.y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -571,7 +571,7 @@ export function BroadcastDispatchDiagram() {
               x={SYS.x + NODE_W / 2}
               y={VIEW_H - 56}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="600"
               fill="var(--success)"
             >
@@ -581,7 +581,7 @@ export function BroadcastDispatchDiagram() {
               x={SYS.x + NODE_W / 2}
               y={VIEW_H - 38}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="600"
               fill="var(--warning)"
             >
@@ -591,7 +591,7 @@ export function BroadcastDispatchDiagram() {
               x={SYS.x + NODE_W / 2}
               y={VIEW_H - 16}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               Android 8.0+：大部分隐式广播不能再静态 manifest 注册（需动态）

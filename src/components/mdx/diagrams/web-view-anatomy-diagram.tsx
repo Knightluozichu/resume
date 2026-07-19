@@ -148,7 +148,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={LEFT_X}
             y="48"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             中央 WebView 是核心；loadUrl/WebSettings 作用于它，两个 Client 接它的回调，addJavascriptInterface 架起双向桥
@@ -196,7 +196,7 @@ export function WebViewAnatomyDiagram() {
                 <text
                   x={LEFT_X + 16}
                   y={y + 44}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -208,7 +208,7 @@ export function WebViewAnatomyDiagram() {
                     key={n}
                     x={LEFT_X + 16}
                     y={y + 62 + j * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -233,7 +233,7 @@ export function WebViewAnatomyDiagram() {
                   x={(fromX + WV_X) / 2}
                   y={cy - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill={r.color}
                 >
@@ -284,7 +284,7 @@ export function WebViewAnatomyDiagram() {
                 <text
                   x={RIGHT_X + 16}
                   y={y + 44}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -296,7 +296,7 @@ export function WebViewAnatomyDiagram() {
                     key={n}
                     x={RIGHT_X + 16}
                     y={y + 62 + j * 14}
-                    fontSize="9"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -321,7 +321,7 @@ export function WebViewAnatomyDiagram() {
                   x={(WV_X + WV_W + RIGHT_X) / 2}
                   y={cy - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill={r.color}
                 >
@@ -370,7 +370,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={pageX + 10}
             y={pageY + 15}
-            fontSize="9"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -414,7 +414,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={pageX + 12}
             y={pageY + 124}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -423,7 +423,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={pageX + 12}
             y={pageY + 142}
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （链接点击 → WebViewClient 决定去留）
@@ -481,7 +481,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={BRIDGE_X + 16}
             y={BRIDGE_TOP + 42}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             JS → 原生：网页用 Android.方法名() 调注入的原生对象
@@ -489,7 +489,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={BRIDGE_X + 16}
             y={BRIDGE_TOP + 58}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             原生 → JS：evaluateJavascript() 反向执行网页里的 JS
@@ -498,7 +498,7 @@ export function WebViewAnatomyDiagram() {
           <text
             x={BRIDGE_X + 16}
             y={BRIDGE_TOP + 74}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >

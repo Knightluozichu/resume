@@ -151,7 +151,7 @@ function Preview({ kind, color }: { kind: DrawableType["kind"]; color: string })
           x={leftX + btnW / 2}
           y={btnY + btnH / 2 + 3}
           textAnchor="middle"
-          fontSize="7"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           default
@@ -185,7 +185,7 @@ function Preview({ kind, color }: { kind: DrawableType["kind"]; color: string })
           x={rightX + btnW / 2}
           y={btnY + btnH / 2 + 3}
           textAnchor="middle"
-          fontSize="7"
+          fontSize="11"
           fontWeight="700"
           fill="var(--text-primary)"
         >
@@ -239,7 +239,7 @@ export function XmlDrawableTypesDiagram() {
           <text
             x={PAD_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每种由不同的根标签声明，覆盖背景、叠层、状态切换、点击反馈
@@ -295,7 +295,7 @@ export function XmlDrawableTypesDiagram() {
                 <text
                   x={PREVIEW_X + PREVIEW_W + 16}
                   y={PREVIEW_Y + 36}
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   根标签
@@ -338,7 +338,7 @@ export function XmlDrawableTypesDiagram() {
             x={VIEW_W / 2}
             y={TOP + CARD_H * 2 + ROW_GAP + 20 + 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -348,7 +348,7 @@ export function XmlDrawableTypesDiagram() {
             x={VIEW_W / 2}
             y={TOP + CARD_H * 2 + ROW_GAP + 20 + 42}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >

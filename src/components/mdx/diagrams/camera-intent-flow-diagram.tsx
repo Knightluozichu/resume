@@ -149,7 +149,7 @@ export function CameraIntentFlowDiagram() {
           <text
             x={STEP_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             紫 = 我的 App｜绿 = 相机 App；文件只在私有目录，靠 content:// URI + 临时权限借出
@@ -223,7 +223,7 @@ export function CameraIntentFlowDiagram() {
                 <text
                   x={STEP_X + 52}
                   y={y + 20}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={s.color}
                 >
@@ -245,7 +245,7 @@ export function CameraIntentFlowDiagram() {
                     key={n}
                     x={STEP_X + 52}
                     y={y + 50 + j * 13}
-                    fontSize="9"
+                    fontSize="11"
                     fontFamily="var(--font-mono)"
                     fill="var(--text-secondary)"
                   >
@@ -304,7 +304,7 @@ export function CameraIntentFlowDiagram() {
               key={line}
               x={NOTE_X + 14}
               y={noteTop + 40 + i * 14}
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               {line}

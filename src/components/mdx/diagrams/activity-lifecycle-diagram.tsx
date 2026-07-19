@@ -210,7 +210,7 @@ export function ActivityLifecycleDiagram() {
             x="320"
             y={(NODES[1].y + NODES[4].y) / 2 + NODE_H / 2 + 14}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             切回前台
@@ -262,7 +262,7 @@ export function ActivityLifecycleDiagram() {
               <text
                 x={n.x + 14}
                 y={n.y + 39}
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {n.sub}
@@ -297,7 +297,7 @@ export function ActivityLifecycleDiagram() {
             x={RESUMED.x + RESUMED.w / 2}
             y={RESUMED.y + 39}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             可与用户交互的稳定态
@@ -308,7 +308,7 @@ export function ActivityLifecycleDiagram() {
             x={NODES[0].x + NODE_W / 2}
             y={NODES[0].y - 6}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ▲ 启动入口

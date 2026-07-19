@@ -166,7 +166,7 @@ export function AppBarMenuDiagram() {
           <text
             x={PAD_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             菜单项在 menu XML 里声明，showAsAction 决定它落在栏上还是收进 ⋮
@@ -306,7 +306,7 @@ export function AppBarMenuDiagram() {
                 x={r.anchorX}
                 y={NOTE_Y - 12}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={r.color}
               >
@@ -317,7 +317,7 @@ export function AppBarMenuDiagram() {
                 x={r.anchorX}
                 y={NOTE_Y + 4}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {r.note}
@@ -373,7 +373,7 @@ export function AppBarMenuDiagram() {
                 <text
                   x={CODE_X + 16}
                   y={y + 22}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fontWeight="600"
                   fill={c.color}
@@ -384,7 +384,7 @@ export function AppBarMenuDiagram() {
                 <text
                   x={CODE_X + 16}
                   y={y + 42}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.note}
@@ -420,7 +420,7 @@ export function AppBarMenuDiagram() {
           <text
             x={MENU_X + 12}
             y={MENU_Y + 18}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -467,7 +467,7 @@ export function AppBarMenuDiagram() {
                 <text
                   x={MENU_X + 16}
                   y={rowY + 36}
-                  fontSize="9"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >

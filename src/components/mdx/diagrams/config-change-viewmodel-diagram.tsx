@@ -260,7 +260,7 @@ export function ConfigChangeViewModelDiagram() {
             x={AXIS_X2}
             y={AXIS_Y - 8}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →
@@ -328,7 +328,7 @@ export function ConfigChangeViewModelDiagram() {
             x={ROTATE_X}
             y={AXIS_Y + 36}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -415,7 +415,7 @@ export function ConfigChangeViewModelDiagram() {
               x={ACT1_X + ACT_BOX_W / 2}
               y={ACT_BOX_Y + 44}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               成员变量 / UI 状态
@@ -454,7 +454,7 @@ export function ConfigChangeViewModelDiagram() {
               x={ACT2_X + ACT_BOX_W / 2}
               y={ACT_BOX_Y + 44}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               重建（onCreate）
@@ -489,7 +489,7 @@ export function ConfigChangeViewModelDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             另：onSaveInstanceState 的 Bundle 也跨重建恢复轻量 UI 状态

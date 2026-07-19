@@ -100,7 +100,7 @@ export function ApkAnatomyDiagram() {
           <text
             x="24"
             y="42"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             把 .apk 后缀改成 .zip 就能直接解压，里面是这些东西
@@ -153,7 +153,7 @@ export function ApkAnatomyDiagram() {
             x={BOX_X - 54}
             y={shellTop + shellH / 2 + 30}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （= zip）
@@ -211,7 +211,7 @@ export function ApkAnatomyDiagram() {
                 <text
                   x={NOTE_X}
                   y={cy + 4}
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {e.note}

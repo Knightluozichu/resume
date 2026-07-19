@@ -303,7 +303,7 @@ export function BackStackDiagram() {
                   x={CARD_X + CARD_W / 2}
                   y={42}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {card.role}
