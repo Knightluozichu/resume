@@ -12,7 +12,7 @@ const config = {
   hops: [
     {
       label: "客户端",
-      request: "GET /item HTTP/1.1\\nHost: example.test",
+      request: "GET /item HTTP/1.1\nHost: example.test",
       response: "解析URL并发送请求",
     },
     {
@@ -28,7 +28,7 @@ const config = {
     {
       label: "源服务器",
       request: "映射资源并处理方法",
-      response: "HTTP/1.1 200 OK\\nContent-Length: ...",
+      response: "HTTP/1.1 200 OK\nContent-Length: ...",
     },
   ],
   gates: [
