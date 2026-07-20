@@ -36,7 +36,7 @@ export function LookAtDiagram() {
             x="90"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             原点
@@ -59,10 +59,10 @@ export function LookAtDiagram() {
             stroke="var(--text-secondary)"
             strokeWidth="0.8"
           />
-          <text x="156" y="183" fontSize="9" fill="var(--text-secondary)">
+          <text x="156" y="183" fontSize="11.5" fill="var(--text-secondary)">
             X
           </text>
-          <text x="83" y="116" fontSize="9" fill="var(--text-secondary)">
+          <text x="83" y="116" fontSize="11.5" fill="var(--text-secondary)">
             Y
           </text>
 
@@ -72,7 +72,7 @@ export function LookAtDiagram() {
             x="180"
             y="108"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -82,7 +82,7 @@ export function LookAtDiagram() {
             x="180"
             y="146"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             position
@@ -94,7 +94,7 @@ export function LookAtDiagram() {
             x="240"
             y="190"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -123,7 +123,7 @@ export function LookAtDiagram() {
             strokeWidth="1.5"
             strokeDasharray="6 3"
           />
-          <text x="190" y="92" fontSize="9" fill="var(--text-secondary)">
+          <text x="190" y="92" fontSize="11.5" fill="var(--text-secondary)">
             世界 up
           </text>
 
@@ -143,7 +143,7 @@ export function LookAtDiagram() {
             <text
               x="0"
               y="28"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -161,7 +161,7 @@ export function LookAtDiagram() {
             <text
               x="72"
               y="42"
-              fontSize="9"
+              fontSize="11.5"
               fontWeight="600"
               fill="var(--accent)"
             >
@@ -172,7 +172,7 @@ export function LookAtDiagram() {
             <text
               x="0"
               y="62"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -190,7 +190,7 @@ export function LookAtDiagram() {
             <text
               x="72"
               y="76"
-              fontSize="9"
+              fontSize="11.5"
               fontWeight="600"
               fill="var(--success)"
             >
@@ -201,7 +201,7 @@ export function LookAtDiagram() {
             <text
               x="0"
               y="96"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -219,7 +219,7 @@ export function LookAtDiagram() {
             <text
               x="72"
               y="110"
-              fontSize="9"
+              fontSize="11.5"
               fontWeight="600"
               fill="var(--warning)"
             >
@@ -238,7 +238,7 @@ export function LookAtDiagram() {
             >
               LookAt 矩阵 = 平移(-position) · 旋转(R)
             </text>
-            <text x="250" y="20" fontSize="10" fill="var(--text-secondary)">
+            <text x="250" y="20" fontSize="11.5" fill="var(--text-secondary)">
               先把世界平移到摄像机原点，再旋转让摄像机轴对齐坐标轴
             </text>
 
@@ -257,7 +257,7 @@ export function LookAtDiagram() {
               x="315"
               y="51"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -267,7 +267,7 @@ export function LookAtDiagram() {
               x="315"
               y="65"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -277,13 +277,13 @@ export function LookAtDiagram() {
               x="315"
               y="79"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11.5"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
               right_z upReal_z front_z
             </text>
-            <text x="260" y="95" fontSize="9" fill="var(--text-secondary)">
+            <text x="260" y="95" fontSize="11.5" fill="var(--text-secondary)">
               right 列 up 列 front 列
             </text>
           </g>

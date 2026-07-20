@@ -139,7 +139,7 @@ export function PhongBlinnHighlightDiagram({
             x={X0 - 8}
             y={BAND_Y - BAND_H - 8}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             高光强度
@@ -148,7 +148,7 @@ export function PhongBlinnHighlightDiagram({
             x={X0 + BAND_W + 16}
             y={BAND_Y + 16}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             表面位置 →

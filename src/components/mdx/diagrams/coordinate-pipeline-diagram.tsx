@@ -121,7 +121,7 @@ export function CoordinatePipelineDiagram({
                       x={fn}
                       y={y + 42}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11.5"
                       fill="var(--text-secondary)"
                     >
                       {s.sub}
@@ -170,7 +170,7 @@ export function CoordinatePipelineDiagram({
                         x={fn}
                         y={s.label === "透视除法\n+视口变换" ? y + 52 : y + 42}
                         textAnchor="middle"
-                        fontSize="10"
+                        fontSize="11.5"
                         fill="var(--text-secondary)"
                       >
                         {s.sub}
@@ -244,7 +244,7 @@ export function CoordinatePipelineDiagram({
                   x="650"
                   y="0"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11.5"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >

@@ -281,7 +281,7 @@ export function VertexPipelineDiagram() {
                 x={24 + i * 64 + 31}
                 y="324"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11.5"
                 fill="var(--text-secondary)"
                 fontFamily="monospace"
               >

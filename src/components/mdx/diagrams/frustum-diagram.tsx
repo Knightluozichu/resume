@@ -58,7 +58,7 @@ export function FrustumDiagram() {
             x="170"
             y="178"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -80,7 +80,7 @@ export function FrustumDiagram() {
             x="370"
             y="158"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -170,7 +170,7 @@ export function FrustumDiagram() {
             stroke="var(--accent)"
             strokeWidth="1.5"
           />
-          <text x="96" y="198" fontSize="10" fill="var(--accent)">
+          <text x="96" y="198" fontSize="11.5" fill="var(--accent)">
             fov
           </text>
 
@@ -190,7 +190,7 @@ export function FrustumDiagram() {
             x="250"
             y="262"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             物体会被渲染
@@ -210,7 +210,7 @@ export function FrustumDiagram() {
             x="475"
             y="210"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fill="var(--accent)"
           >
             投影
@@ -231,7 +231,7 @@ export function FrustumDiagram() {
             x="542"
             y="270"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -241,7 +241,7 @@ export function FrustumDiagram() {
             x="542"
             y="284"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             [-1,1]³

@@ -234,8 +234,11 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
           !element.closest(".katex-mathml") &&
           // SVG path/circle/line 的局部坐标会在 getBoundingClientRect 中包含
           // viewBox 变换前的巨大几何范围；实际裁切边界由外层 <svg> 决定。
-          // 保留 svg 与 text 的检查，只排除不会独立形成页面溢出的几何图元。
+          // 保留 svg 与 text 的检查，只排除不会独立形成页面溢出的几何图元与分组。
+          // <g> 的边界是子元素的联合边界；它可以落在 viewBox 之外但仍被外层 svg
+          // 正确裁切，所以不能把它当成页面布局溢出。
           !(element instanceof SVGGeometryElement) &&
+          !(element instanceof SVGGElement) &&
           !insideHorizontalScroller(element),
       )
       .map((element) => {
@@ -258,9 +261,18 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       }))
       .filter((item) => item.size > 0 && item.size < 11)
       .slice(0, 20);
+    // 只有声明为教学实验 / 专属视觉 / Stepper / 实时 Demo 的控件才需要
+    // “初始—改变—重置”契约。代码语言切换、目录和术语弹层也是按钮，
+    // 但不是会改变教学模型的实验状态，不能把它们误判成未重置实验。
+    const interactiveScope = [
+      "article .prose section[aria-label*='实验']",
+      "article .prose [data-visual-kind]",
+      "article .prose .mdx-stepper",
+      "article .prose .mdx-shader-demo",
+    ].join(", ");
     const controls = [
       ...document.querySelectorAll(
-        "article .prose .not-prose button, article .prose .not-prose input, article .prose .not-prose select, article .prose .not-prose textarea",
+        `:is(${interactiveScope}) button, :is(${interactiveScope}) input, :is(${interactiveScope}) select, :is(${interactiveScope}) textarea`,
       ),
     ].filter(isVisible);
     const smallControls = controls
@@ -398,13 +410,15 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
   await page.screenshot({ path: corePath });
 
   let interactionChanged = null;
-  let interactiveHandles = await page.$$(
-    "article .prose section[aria-label*='实验'] button:not([disabled]), article .prose section[aria-label*='实验'] input[type=range], article .prose section[aria-label*='实验'] select",
+  const interactiveScope = [
+    "article .prose section[aria-label*='实验']",
+    "article .prose [data-visual-kind]",
+    "article .prose .mdx-stepper",
+    "article .prose .mdx-shader-demo",
+  ].join(", ");
+  const interactiveHandles = await page.$$(
+    `:is(${interactiveScope}) button:not([disabled]), :is(${interactiveScope}) input[type=range], :is(${interactiveScope}) select`,
   );
-  if (interactiveHandles.length === 0)
-    interactiveHandles = await page.$$(
-      "article .prose .not-prose button:not([disabled]), article .prose .not-prose input[type=range], article .prose .not-prose select",
-    );
   const teachingHandles = [];
   for (const handle of interactiveHandles) {
     const isReset = await handle.evaluate((element) =>

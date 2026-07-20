@@ -69,7 +69,7 @@ function StageDiagram({
           x="450"
           y="49"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11.5"
           fill={secondary}
         >
           {subtitle}
@@ -129,15 +129,15 @@ function StageDiagram({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9"
+                fontSize="11.5"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="199" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="199" fontSize="11.5" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="221" fontSize="9.8" fill={primary}>
+              <text x={x + 13} y="221" fontSize="11.5" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -167,7 +167,7 @@ function StageDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11.5"
           fill={primary}
         >
           每个对象和状态都要能回答：谁创建、谁捕获、绘制时谁必须重新绑定
