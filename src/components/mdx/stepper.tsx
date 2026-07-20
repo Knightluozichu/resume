@@ -159,7 +159,9 @@ export function Stepper({
         />
       )}
 
-      {/* 控制栏：上一步 / 暂停-播放 / 下一步 */}
+      {/* 控制栏：上一步 / 重置 / 暂停-播放 / 下一步。
+          重置不是“回退一步”：它让读者从任意步骤、暂停或自动播放状态
+          回到可复现的第一步，满足初始—改变—重置的教学交互契约。 */}
       <div className="mt-4 flex items-center justify-center gap-2">
         <button
           type="button"
@@ -172,6 +174,18 @@ export function Stepper({
           className="rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           上一步
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPlaying(false);
+            go(0);
+          }}
+          aria-label="重置分步演示"
+          className="rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+        >
+          重置
         </button>
 
         {/* 暂停/播放：reduced-motion 下隐藏自动播放（无意义）。

@@ -60,7 +60,7 @@ export function FrameStageDiagram({ stage }: { stage: FrameStage }) {
             x="50"
             y="40"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11.5"
             fill="var(--text-secondary)"
           >
             60×/s

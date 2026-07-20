@@ -89,13 +89,7 @@ export function HelloWindowContractDiagram({
         >
           第一个窗口由四份契约组成
         </text>
-        <text
-          x="450"
-          y="49"
-          textAnchor="middle"
-          fontSize="10.5"
-          fill={secondary}
-        >
+        <text x="450" y="49" textAnchor="middle" fontSize="12" fill={secondary}>
           specification → window/context → function pointers → frame lifecycle
         </text>
         {stages.map((stage, index) => {
@@ -153,15 +147,15 @@ export function HelloWindowContractDiagram({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.2"
+                fontSize="11.5"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="199" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="199" fontSize="11.5" fill={secondary}>
                 职责
               </text>
-              <text x={x + 13} y="221" fontSize="9.7" fill={primary}>
+              <text x={x + 13} y="221" fontSize="11.5" fill={primary}>
                 {stage.detail}
               </text>
             </g>
@@ -191,7 +185,7 @@ export function HelloWindowContractDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11.5"
           fill={primary}
         >
           失败要定位到具体边界：window、context current、loader、viewport 或
