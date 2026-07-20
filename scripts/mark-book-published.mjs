@@ -11,8 +11,13 @@ function argument(name) {
 const bookSlug = argument("--book");
 const release = argument("--release");
 const commit = argument("--commit");
-if (!bookSlug || !release || !commit) {
-  throw new Error("必须提供 --book、--release 与 --commit");
+const checkOnly = process.argv.includes("--check");
+if (!bookSlug || (!checkOnly && (!release || !commit))) {
+  throw new Error(
+    checkOnly
+      ? "检查模式必须提供 --book"
+      : "必须提供 --book、--release 与 --commit",
+  );
 }
 const ledgerPath = path.join(process.cwd(), "quality/remediation-ledger.json");
 const ledger = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
@@ -26,6 +31,10 @@ const invalid = entries.filter(
 );
 if (invalid.length > 0) {
   throw new Error(`仍有 ${invalid.length} 章未通过，不允许标记发布`);
+}
+if (checkOnly) {
+  console.log(`发布资格检查通过：${bookSlug} 共 ${entries.length} 章。`);
+  process.exit(0);
 }
 for (const [, entry] of entries) {
   entry.status = "published";

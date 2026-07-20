@@ -40,6 +40,10 @@ COMMIT_SHA="$(git rev-parse HEAD)"
 RELEASE_ID="release-$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT_SHA:0:12}"
 RELEASE_DIR="${APP_DIR}/releases/${RELEASE_ID}"
 
+# 在耗时构建和远端切换前确认整本书已经通过门禁，避免发布完成后才发现
+# 本地台账不可登记。
+node scripts/mark-book-published.mjs --check --book "$BOOK_SLUG"
+
 SMOKE_PATHS=("/")
 while IFS= read -r smoke_path; do
   [[ -n "$smoke_path" ]] && SMOKE_PATHS+=("$smoke_path")
@@ -77,6 +81,8 @@ rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "$SSH_HOST:$APP_DI
 
 CANDIDATE_NAME="remuse-candidate-${COMMIT_SHA:0:12}"
 CANDIDATE_STARTED=false
+CURRENT_SWITCHED=false
+PREVIOUS_TARGET=""
 RELEASE_SUCCESS=false
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "pm2 delete '$CANDIDATE_NAME' >/dev/null 2>&1 || true; cd '$RELEASE_DIR' && PORT='$CANDIDATE_PORT' HOSTNAME=127.0.0.1 pm2 start server.js --name '$CANDIDATE_NAME' --cwd '$RELEASE_DIR' --update-env >/dev/null"
@@ -90,7 +96,21 @@ cleanup_candidate() {
 cleanup_failed_release() {
   cleanup_candidate
   if [[ "${RELEASE_SUCCESS:-false}" != "true" ]]; then
-    ssh "${SSH_OPTS[@]}" "$SSH_HOST" "rm -rf -- '$RELEASE_DIR'" || true
+    local release_can_be_removed=true
+    if [[ "${CURRENT_SWITCHED:-false}" == "true" ]]; then
+      release_can_be_removed=false
+      if [[ -n "${PREVIOUS_TARGET:-}" ]] && ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+        "rm -f '$APP_DIR/current.rollback' && ln -s '$PREVIOUS_TARGET' '$APP_DIR/current.rollback' && mv -Tf '$APP_DIR/current.rollback' '$APP_DIR/current' && cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null && pm2 save --force >/dev/null"; then
+        CURRENT_SWITCHED=false
+        release_can_be_removed=true
+        echo "↩ 已回滚到：${PREVIOUS_TARGET}" >&2
+      else
+        echo "✗ 自动回滚失败；为避免 current 断链，保留 release：${RELEASE_DIR}" >&2
+      fi
+    fi
+    if [[ "$release_can_be_removed" == "true" ]]; then
+      ssh "${SSH_OPTS[@]}" "$SSH_HOST" "rm -rf -- '$RELEASE_DIR'" || true
+    fi
   fi
 }
 trap cleanup_failed_release EXIT
@@ -140,14 +160,10 @@ PREVIOUS_TARGET="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
 ")"
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "rm -f '$APP_DIR/current.next' && ln -s '$RELEASE_DIR' '$APP_DIR/current.next' && mv -Tf '$APP_DIR/current.next' '$APP_DIR/current'"
+CURRENT_SWITCHED=true
 
 rollback() {
-  echo "✗ 发布复检失败，回滚到：${PREVIOUS_TARGET}" >&2
-  if [[ -n "$PREVIOUS_TARGET" ]]; then
-    ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
-      "rm -f '$APP_DIR/current.rollback' && ln -s '$PREVIOUS_TARGET' '$APP_DIR/current.rollback' && mv -Tf '$APP_DIR/current.rollback' '$APP_DIR/current' && cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null"
-  fi
-  ssh "${SSH_OPTS[@]}" "$SSH_HOST" "rm -rf '$RELEASE_DIR'" || true
+  echo "✗ 发布复检失败，将由退出清理器回滚到：${PREVIOUS_TARGET}" >&2
   exit 1
 }
 
