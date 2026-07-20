@@ -1,26 +1,63 @@
-import {
-  Uhm24PlatformLab,
-  Uhm24BudgetLab,
-  Uhm24EvidenceLab,
-} from "./official-unity-hmi-lab";
+import { OfficialUnityHmiLab } from "./official-unity-hmi-lab";
 
-const title = "第12页 QNX平台支持与优化";
-const focus =
-  "QNX页明确诊断、线程调度、图层、触控与Profiler能力，课程把功能清单转为可复现的启动参数和故障注入实验。";
-const stages = [
-  "配置QNX构建",
-  "设置线程与亲和性",
-  "声明输出图层",
-  "接入触控与日志",
-  "用Profiler验收",
-];
+const props = {
+  "unitId": "uhm-2024-slide-12-qnx-support",
+  "title": "第12页 QNX平台支持与优化",
+  "concepts": [
+    "Stacktrace支持",
+    "日志输出到Slogger2",
+    "主线程、渲染线程与Job线程优先级",
+    "启动参数自定义输出图层大小和位置",
+    "透明图层",
+    "CPU Affinity设置",
+    "多点触控",
+    "QNX IDE Profiler",
+    "面向车机的QNX专门支持与优化"
+  ],
+  "chain": [
+    "锁定原页",
+    "拆分主张",
+    "配置目标",
+    "执行反例",
+    "归档决定"
+  ],
+  "model": {
+    "studio": "QNX目标机诊断台",
+    "boundary": "启动参数 → Screen图层 → 线程调度 → 触控 → slogger2/Profiler",
+    "axisA": {
+      "label": "QNX能力",
+      "levels": [
+        "日志",
+        "图层输入",
+        "线程与分析"
+      ]
+    },
+    "axisB": {
+      "label": "故障注入",
+      "levels": [
+        "错误参数",
+        "Surface重建",
+        "高负载"
+      ]
+    },
+    "fault": "只在编辑器验证透明图层和多点触控",
+    "invariant": "目标QNX镜像上图层几何、输入坐标、线程策略、日志和恢复可复现",
+    "probe": "capture: slogger2+target-profiler\nchecks: layer-rect+alpha+multitouch\nfaults: bad-args+surface-recreate",
+    "signal": "QNX日志、线程、图层与触控记录",
+    "artifact": "QNX平台验收包",
+    "trap": "功能清单不能替代目标镜像、图形栈和硬件组合测试",
+    "practiceMode": "diagnosis",
+    "metric": "QNX目标机诊断台可信度",
+    "risk": "QNX能力误判风险",
+    "task": "围绕第12页 QNX平台支持与优化固定输入与目标配置；只改变QNX能力或故障注入，保存基线、故障、恢复和复位证据。"
+  }
+} as const;
 
-export function Uhm24Slide12QnxSupportMapLab() {
-  return <Uhm24PlatformLab title={title} focus={focus} stages={stages} />;
-}
-export function Uhm24Slide12QnxSupportExperimentLab() {
-  return <Uhm24BudgetLab title={title} focus={focus} stages={stages} />;
-}
-export function Uhm24Slide12QnxSupportEvidenceLab() {
-  return <Uhm24EvidenceLab title={title} focus={focus} stages={stages} />;
-}
+export function Uhm2024Slide12QnxSupportScopeLab() { return <OfficialUnityHmiLab {...props} view="scope" />; }
+export function Uhm2024Slide12QnxSupportDecisionLab() { return <OfficialUnityHmiLab {...props} view="decision" />; }
+export function Uhm2024Slide12QnxSupportRecoveryLab() { return <OfficialUnityHmiLab {...props} view="recovery" />; }
+
+// 兼容整改前由全局MDX组件表公开的名称；v2正文不再使用这些模糊别名。
+export const Uhm24Slide12QnxSupportMapLab = Uhm2024Slide12QnxSupportScopeLab;
+export const Uhm24Slide12QnxSupportExperimentLab = Uhm2024Slide12QnxSupportDecisionLab;
+export const Uhm24Slide12QnxSupportEvidenceLab = Uhm2024Slide12QnxSupportRecoveryLab;

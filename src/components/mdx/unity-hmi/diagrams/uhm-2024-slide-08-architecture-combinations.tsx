@@ -1,26 +1,62 @@
-import {
-  Uhm24PlatformLab,
-  Uhm24BudgetLab,
-  Uhm24EvidenceLab,
-} from "./official-unity-hmi-lab";
+import { OfficialUnityHmiLab } from "./official-unity-hmi-lab";
 
-const title = "第8页 多种架构组合";
-const focus =
-  "演讲展示单SoC、双SoC与多OS组合，课程把每一种组合转成进程边界、合成路径、输入路由和故障隔离合同。";
-const stages = [
-  "选择SoC组合",
-  "划分OS域",
-  "声明显示所有权",
-  "路由输入与信号",
-  "注入单域故障",
-];
+const props = {
+  "unitId": "uhm-2024-slide-08-architecture-combinations",
+  "title": "第8页 多种架构组合",
+  "concepts": [
+    "8155：Linux或QNX加Android",
+    "8295：Linux或QNX加Android",
+    "8155加AliOS",
+    "双8155：Linux或QNX加Android",
+    "芯驰X9HP：Linux或QNX加Android",
+    "芯擎双E04加Flyme",
+    "8155与8295加OpenHarmony",
+    "更多SoC与OS架构组合"
+  ],
+  "chain": [
+    "锁定原页",
+    "拆分主张",
+    "配置目标",
+    "执行反例",
+    "归档决定"
+  ],
+  "model": {
+    "studio": "座舱部署拓扑台",
+    "boundary": "SoC/VM → OS域 → 进程 → Surface → 合成显示",
+    "axisA": {
+      "label": "部署拓扑",
+      "levels": [
+        "单域",
+        "多域",
+        "双SoC"
+      ]
+    },
+    "axisB": {
+      "label": "跨域通道",
+      "levels": [
+        "信号",
+        "图像",
+        "输入"
+      ]
+    },
+    "fault": "只画方框，不登记进程死亡和跨域超时语义",
+    "invariant": "每条显示与输入路径都有所有者、时限、降级和重连规则",
+    "probe": "nodes: soc+os+process+surface\nedges: signal+frame+input\nfaults: process-exit+link-timeout",
+    "signal": "端到端延迟与故障传播边界",
+    "artifact": "可执行部署拓扑",
+    "trap": "架构组合数量不是隔离能力或资源效率的证明",
+    "practiceMode": "design",
+    "metric": "座舱部署拓扑台可信度",
+    "risk": "部署拓扑误判风险",
+    "task": "围绕第8页 多种架构组合固定输入与目标配置；只改变部署拓扑或跨域通道，保存基线、故障、恢复和复位证据。"
+  }
+} as const;
 
-export function Uhm24Slide08ArchitectureCombinationsMapLab() {
-  return <Uhm24PlatformLab title={title} focus={focus} stages={stages} />;
-}
-export function Uhm24Slide08ArchitectureCombinationsExperimentLab() {
-  return <Uhm24BudgetLab title={title} focus={focus} stages={stages} />;
-}
-export function Uhm24Slide08ArchitectureCombinationsEvidenceLab() {
-  return <Uhm24EvidenceLab title={title} focus={focus} stages={stages} />;
-}
+export function Uhm2024Slide08ArchitectureCombinationsScopeLab() { return <OfficialUnityHmiLab {...props} view="scope" />; }
+export function Uhm2024Slide08ArchitectureCombinationsDecisionLab() { return <OfficialUnityHmiLab {...props} view="decision" />; }
+export function Uhm2024Slide08ArchitectureCombinationsRecoveryLab() { return <OfficialUnityHmiLab {...props} view="recovery" />; }
+
+// 兼容整改前由全局MDX组件表公开的名称；v2正文不再使用这些模糊别名。
+export const Uhm24Slide08ArchitectureCombinationsMapLab = Uhm2024Slide08ArchitectureCombinationsScopeLab;
+export const Uhm24Slide08ArchitectureCombinationsExperimentLab = Uhm2024Slide08ArchitectureCombinationsDecisionLab;
+export const Uhm24Slide08ArchitectureCombinationsEvidenceLab = Uhm2024Slide08ArchitectureCombinationsRecoveryLab;

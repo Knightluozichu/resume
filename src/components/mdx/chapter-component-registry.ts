@@ -28410,6 +28410,326 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         OptimizingArtAssetsEvidenceLab: module0.OptimizingArtAssetsEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "unity-hmi/00-uhm-2024-official-learning-map/uhm-2024-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-official-learning-map");
+      return {
+        Uhm2024OfficialLearningMapScopeLab:
+          module0.Uhm2024OfficialLearningMapScopeLab,
+        Uhm2024OfficialLearningMapDecisionLab:
+          module0.Uhm2024OfficialLearningMapDecisionLab,
+        Uhm2024OfficialLearningMapRecoveryLab:
+          module0.Uhm2024OfficialLearningMapRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/01-uhm-2024-slide-01-cover/uhm-2024-slide-01-cover": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-01-cover");
+    return {
+      Uhm2024Slide01CoverScopeLab: module0.Uhm2024Slide01CoverScopeLab,
+      Uhm2024Slide01CoverDecisionLab: module0.Uhm2024Slide01CoverDecisionLab,
+      Uhm2024Slide01CoverRecoveryLab: module0.Uhm2024Slide01CoverRecoveryLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-hmi/02-uhm-2024-slide-02-new-chapter/uhm-2024-slide-02-new-chapter":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-02-new-chapter");
+      return {
+        Uhm2024Slide02NewChapterScopeLab:
+          module0.Uhm2024Slide02NewChapterScopeLab,
+        Uhm2024Slide02NewChapterDecisionLab:
+          module0.Uhm2024Slide02NewChapterDecisionLab,
+        Uhm2024Slide02NewChapterRecoveryLab:
+          module0.Uhm2024Slide02NewChapterRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/03-uhm-2024-slide-03-made-with-unity/uhm-2024-slide-03-made-with-unity":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-03-made-with-unity");
+      return {
+        Uhm2024Slide03MadeWithUnityScopeLab:
+          module0.Uhm2024Slide03MadeWithUnityScopeLab,
+        Uhm2024Slide03MadeWithUnityDecisionLab:
+          module0.Uhm2024Slide03MadeWithUnityDecisionLab,
+        Uhm2024Slide03MadeWithUnityRecoveryLab:
+          module0.Uhm2024Slide03MadeWithUnityRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/04-uhm-2024-slide-04-production-evidence/uhm-2024-slide-04-production-evidence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-04-production-evidence");
+      return {
+        Uhm2024Slide04ProductionEvidenceScopeLab:
+          module0.Uhm2024Slide04ProductionEvidenceScopeLab,
+        Uhm2024Slide04ProductionEvidenceDecisionLab:
+          module0.Uhm2024Slide04ProductionEvidenceDecisionLab,
+        Uhm2024Slide04ProductionEvidenceRecoveryLab:
+          module0.Uhm2024Slide04ProductionEvidenceRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/05-uhm-2024-slide-05-beijing-auto-show/uhm-2024-slide-05-beijing-auto-show":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-05-beijing-auto-show");
+      return {
+        Uhm2024Slide05BeijingAutoShowScopeLab:
+          module0.Uhm2024Slide05BeijingAutoShowScopeLab,
+        Uhm2024Slide05BeijingAutoShowDecisionLab:
+          module0.Uhm2024Slide05BeijingAutoShowDecisionLab,
+        Uhm2024Slide05BeijingAutoShowRecoveryLab:
+          module0.Uhm2024Slide05BeijingAutoShowRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/06-uhm-2024-slide-06-model-performance-budget/uhm-2024-slide-06-model-performance-budget":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-06-model-performance-budget");
+      return {
+        Uhm2024Slide06ModelPerformanceBudgetScopeLab:
+          module0.Uhm2024Slide06ModelPerformanceBudgetScopeLab,
+        Uhm2024Slide06ModelPerformanceBudgetDecisionLab:
+          module0.Uhm2024Slide06ModelPerformanceBudgetDecisionLab,
+        Uhm2024Slide06ModelPerformanceBudgetRecoveryLab:
+          module0.Uhm2024Slide06ModelPerformanceBudgetRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/07-uhm-2024-slide-07-soc-os-compatibility/uhm-2024-slide-07-soc-os-compatibility":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-07-soc-os-compatibility");
+      return {
+        Uhm2024Slide07SocOsCompatibilityScopeLab:
+          module0.Uhm2024Slide07SocOsCompatibilityScopeLab,
+        Uhm2024Slide07SocOsCompatibilityDecisionLab:
+          module0.Uhm2024Slide07SocOsCompatibilityDecisionLab,
+        Uhm2024Slide07SocOsCompatibilityRecoveryLab:
+          module0.Uhm2024Slide07SocOsCompatibilityRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/08-uhm-2024-slide-08-architecture-combinations/uhm-2024-slide-08-architecture-combinations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-08-architecture-combinations");
+      return {
+        Uhm2024Slide08ArchitectureCombinationsScopeLab:
+          module0.Uhm2024Slide08ArchitectureCombinationsScopeLab,
+        Uhm2024Slide08ArchitectureCombinationsDecisionLab:
+          module0.Uhm2024Slide08ArchitectureCombinationsDecisionLab,
+        Uhm2024Slide08ArchitectureCombinationsRecoveryLab:
+          module0.Uhm2024Slide08ArchitectureCombinationsRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/09-uhm-2024-slide-09-ecosystem/uhm-2024-slide-09-ecosystem":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-09-ecosystem");
+      return {
+        Uhm2024Slide09EcosystemScopeLab:
+          module0.Uhm2024Slide09EcosystemScopeLab,
+        Uhm2024Slide09EcosystemDecisionLab:
+          module0.Uhm2024Slide09EcosystemDecisionLab,
+        Uhm2024Slide09EcosystemRecoveryLab:
+          module0.Uhm2024Slide09EcosystemRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/10-uhm-2024-slide-10-head-unit-edition/uhm-2024-slide-10-head-unit-edition":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-10-head-unit-edition");
+      return {
+        Uhm2024Slide10HeadUnitEditionScopeLab:
+          module0.Uhm2024Slide10HeadUnitEditionScopeLab,
+        Uhm2024Slide10HeadUnitEditionDecisionLab:
+          module0.Uhm2024Slide10HeadUnitEditionDecisionLab,
+        Uhm2024Slide10HeadUnitEditionRecoveryLab:
+          module0.Uhm2024Slide10HeadUnitEditionRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/11-uhm-2024-slide-11-tuanjie-head-unit/uhm-2024-slide-11-tuanjie-head-unit":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-11-tuanjie-head-unit");
+      return {
+        Uhm2024Slide11TuanjieHeadUnitScopeLab:
+          module0.Uhm2024Slide11TuanjieHeadUnitScopeLab,
+        Uhm2024Slide11TuanjieHeadUnitDecisionLab:
+          module0.Uhm2024Slide11TuanjieHeadUnitDecisionLab,
+        Uhm2024Slide11TuanjieHeadUnitRecoveryLab:
+          module0.Uhm2024Slide11TuanjieHeadUnitRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/12-uhm-2024-slide-12-qnx-support/uhm-2024-slide-12-qnx-support":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-12-qnx-support");
+      return {
+        Uhm2024Slide12QnxSupportScopeLab:
+          module0.Uhm2024Slide12QnxSupportScopeLab,
+        Uhm2024Slide12QnxSupportDecisionLab:
+          module0.Uhm2024Slide12QnxSupportDecisionLab,
+        Uhm2024Slide12QnxSupportRecoveryLab:
+          module0.Uhm2024Slide12QnxSupportRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/13-uhm-2024-slide-13-embedded-linux-support/uhm-2024-slide-13-embedded-linux-support":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-13-embedded-linux-support");
+      return {
+        Uhm2024Slide13EmbeddedLinuxSupportScopeLab:
+          module0.Uhm2024Slide13EmbeddedLinuxSupportScopeLab,
+        Uhm2024Slide13EmbeddedLinuxSupportDecisionLab:
+          module0.Uhm2024Slide13EmbeddedLinuxSupportDecisionLab,
+        Uhm2024Slide13EmbeddedLinuxSupportRecoveryLab:
+          module0.Uhm2024Slide13EmbeddedLinuxSupportRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/14-uhm-2024-slide-14-tuanjie-engine/uhm-2024-slide-14-tuanjie-engine":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-14-tuanjie-engine");
+      return {
+        Uhm2024Slide14TuanjieEngineScopeLab:
+          module0.Uhm2024Slide14TuanjieEngineScopeLab,
+        Uhm2024Slide14TuanjieEngineDecisionLab:
+          module0.Uhm2024Slide14TuanjieEngineDecisionLab,
+        Uhm2024Slide14TuanjieEngineRecoveryLab:
+          module0.Uhm2024Slide14TuanjieEngineRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/15-uhm-2024-slide-15-uras-architecture/uhm-2024-slide-15-uras-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-15-uras-architecture");
+      return {
+        Uhm2024Slide15UrasArchitectureScopeLab:
+          module0.Uhm2024Slide15UrasArchitectureScopeLab,
+        Uhm2024Slide15UrasArchitectureDecisionLab:
+          module0.Uhm2024Slide15UrasArchitectureDecisionLab,
+        Uhm2024Slide15UrasArchitectureRecoveryLab:
+          module0.Uhm2024Slide15UrasArchitectureRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/16-uhm-2024-slide-16-uras-unified-rendering/uhm-2024-slide-16-uras-unified-rendering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-16-uras-unified-rendering");
+      return {
+        Uhm2024Slide16UrasUnifiedRenderingScopeLab:
+          module0.Uhm2024Slide16UrasUnifiedRenderingScopeLab,
+        Uhm2024Slide16UrasUnifiedRenderingDecisionLab:
+          module0.Uhm2024Slide16UrasUnifiedRenderingDecisionLab,
+        Uhm2024Slide16UrasUnifiedRenderingRecoveryLab:
+          module0.Uhm2024Slide16UrasUnifiedRenderingRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/17-uhm-2024-slide-17-uras-view-isolation/uhm-2024-slide-17-uras-view-isolation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-17-uras-view-isolation");
+      return {
+        Uhm2024Slide17UrasViewIsolationScopeLab:
+          module0.Uhm2024Slide17UrasViewIsolationScopeLab,
+        Uhm2024Slide17UrasViewIsolationDecisionLab:
+          module0.Uhm2024Slide17UrasViewIsolationDecisionLab,
+        Uhm2024Slide17UrasViewIsolationRecoveryLab:
+          module0.Uhm2024Slide17UrasViewIsolationRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/18-uhm-2024-slide-18-unity-china/uhm-2024-slide-18-unity-china":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-18-unity-china");
+      return {
+        Uhm2024Slide18UnityChinaScopeLab:
+          module0.Uhm2024Slide18UnityChinaScopeLab,
+        Uhm2024Slide18UnityChinaDecisionLab:
+          module0.Uhm2024Slide18UnityChinaDecisionLab,
+        Uhm2024Slide18UnityChinaRecoveryLab:
+          module0.Uhm2024Slide18UnityChinaRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/19-uhm-2024-slide-19-timeline/uhm-2024-slide-19-timeline":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-19-timeline");
+      return {
+        Uhm2024Slide19TimelineScopeLab: module0.Uhm2024Slide19TimelineScopeLab,
+        Uhm2024Slide19TimelineDecisionLab:
+          module0.Uhm2024Slide19TimelineDecisionLab,
+        Uhm2024Slide19TimelineRecoveryLab:
+          module0.Uhm2024Slide19TimelineRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/20-uhm-2024-slide-20-capability-foundation/uhm-2024-slide-20-capability-foundation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-20-capability-foundation");
+      return {
+        Uhm2024Slide20CapabilityFoundationScopeLab:
+          module0.Uhm2024Slide20CapabilityFoundationScopeLab,
+        Uhm2024Slide20CapabilityFoundationDecisionLab:
+          module0.Uhm2024Slide20CapabilityFoundationDecisionLab,
+        Uhm2024Slide20CapabilityFoundationRecoveryLab:
+          module0.Uhm2024Slide20CapabilityFoundationRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/21-uhm-2024-slide-21-service-model/uhm-2024-slide-21-service-model":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-21-service-model");
+      return {
+        Uhm2024Slide21ServiceModelScopeLab:
+          module0.Uhm2024Slide21ServiceModelScopeLab,
+        Uhm2024Slide21ServiceModelDecisionLab:
+          module0.Uhm2024Slide21ServiceModelDecisionLab,
+        Uhm2024Slide21ServiceModelRecoveryLab:
+          module0.Uhm2024Slide21ServiceModelRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/22-uhm-2024-slide-22-innovation-scenarios/uhm-2024-slide-22-innovation-scenarios":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-22-innovation-scenarios");
+      return {
+        Uhm2024Slide22InnovationScenariosScopeLab:
+          module0.Uhm2024Slide22InnovationScenariosScopeLab,
+        Uhm2024Slide22InnovationScenariosDecisionLab:
+          module0.Uhm2024Slide22InnovationScenariosDecisionLab,
+        Uhm2024Slide22InnovationScenariosRecoveryLab:
+          module0.Uhm2024Slide22InnovationScenariosRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/23-uhm-2024-slide-23-evidence-closure/uhm-2024-slide-23-evidence-closure":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-slide-23-evidence-closure");
+      return {
+        Uhm2024Slide23EvidenceClosureScopeLab:
+          module0.Uhm2024Slide23EvidenceClosureScopeLab,
+        Uhm2024Slide23EvidenceClosureDecisionLab:
+          module0.Uhm2024Slide23EvidenceClosureDecisionLab,
+        Uhm2024Slide23EvidenceClosureRecoveryLab:
+          module0.Uhm2024Slide23EvidenceClosureRecoveryLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-hmi/24-uhm-2024-official-final-review/uhm-2024-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-hmi/diagrams/uhm-2024-official-final-review");
+      return {
+        Uhm2024OfficialFinalReviewScopeLab:
+          module0.Uhm2024OfficialFinalReviewScopeLab,
+        Uhm2024OfficialFinalReviewDecisionLab:
+          module0.Uhm2024OfficialFinalReviewDecisionLab,
+        Uhm2024OfficialFinalReviewRecoveryLab:
+          module0.Uhm2024OfficialFinalReviewRecoveryLab,
+      } as ChapterMdxComponents;
+    },
   "unity-master/00-guide/ums-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/unity-master/diagrams/ums-official-learning-map");
