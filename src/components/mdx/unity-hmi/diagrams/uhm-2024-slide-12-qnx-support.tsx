@@ -46,10 +46,7 @@ const props = {
     "signal": "QNX日志、线程、图层与触控记录",
     "artifact": "QNX平台验收包",
     "trap": "功能清单不能替代目标镜像、图形栈和硬件组合测试",
-    "practiceMode": "diagnosis",
-    "metric": "QNX目标机诊断台可信度",
-    "risk": "QNX能力误判风险",
-    "task": "围绕第12页 QNX平台支持与优化固定输入与目标配置；只改变QNX能力或故障注入，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

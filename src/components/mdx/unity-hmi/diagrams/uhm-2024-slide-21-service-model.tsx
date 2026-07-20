@@ -67,10 +67,7 @@ const props = {
     "signal": "阶段门失败与遗留风险",
     "artifact": "服务阶段验收包",
     "trap": "服务项目数量不能替代范围、工期、验收和知识转移合同",
-    "practiceMode": "design",
-    "metric": "创新到ISS阶段门可信度",
-    "risk": "合作阶段误判风险",
-    "task": "围绕第21页 创新、实施与迭代服务模式固定输入与目标配置；只改变合作阶段或退出门，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

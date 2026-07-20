@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-07-20T00:39:58.950Z；旧版分数不迁移。
+> 2026-07-20T01:18:03.463Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4373
 - failed：1575
 - queued：1948
-- passed：25
-- published：825
+- passed：0
+- published：850
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -233,6 +233,6 @@
 | 220 | redis-design-implementation | 26 | 0 | 0 | 0 | 0 |
 | 221 | spring-in-action | 25 | 0 | 0 | 0 | 0 |
 | 222 | statistical-learning-methods | 25 | 0 | 0 | 0 | 0 |
-| 223 | unity-hmi | 25 | 0 | 0 | 25 | 0 |
+| 223 | unity-hmi | 25 | 0 | 0 | 0 | 0 |
 | 224 | unix-network-programming-vol1 | 38 | 0 | 0 | 0 | 0 |
 | 225 | windows-journey | 29 | 0 | 0 | 0 | 0 |

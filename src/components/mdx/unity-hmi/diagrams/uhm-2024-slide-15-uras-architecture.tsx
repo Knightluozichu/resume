@@ -39,10 +39,7 @@ const props = {
     "signal": "注册、调度、资源与生命周期事件",
     "artifact": "URAS服务合同",
     "trap": "专有架构名称不能证明具体IPC、调度算法或安全等级",
-    "practiceMode": "design",
-    "metric": "URAS服务边界台可信度",
-    "risk": "服务职责误判风险",
-    "task": "围绕第15页 专有架构：URAS渲染方案固定输入与目标配置；只改变服务职责或隔离对象，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

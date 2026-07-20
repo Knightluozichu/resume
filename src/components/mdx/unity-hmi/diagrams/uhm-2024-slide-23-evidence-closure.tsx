@@ -40,10 +40,7 @@ const props = {
     "signal": "未决主张、阻塞责任与签署",
     "artifact": "演讲证据关闭清单",
     "trap": "Thank you只结束材料，不会自动关闭工程证据",
-    "practiceMode": "diagnosis",
-    "metric": "演讲证据出口台可信度",
-    "risk": "关闭状态误判风险",
-    "task": "围绕第23页 Thank you与证据闭环固定输入与目标配置；只改变关闭状态或签署角色，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

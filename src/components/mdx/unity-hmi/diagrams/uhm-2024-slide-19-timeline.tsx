@@ -41,10 +41,7 @@ const props = {
     "signal": "时间来源与类别冲突",
     "artifact": "双轨时间线",
     "trap": "组织史只能解释主体变化，不能证明某时点已有具体HMI能力",
-    "practiceMode": "design",
-    "metric": "组织时间线核对台可信度",
-    "risk": "时间节点误判风险",
-    "task": "围绕第19页 Unity与Unity中国时间线固定输入与目标配置；只改变时间节点或事实类别，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

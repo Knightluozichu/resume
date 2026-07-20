@@ -60,10 +60,7 @@ const props = {
     "signal": "构建一致性、证据完整度与回滚条件",
     "artifact": "全材料发布证据包",
     "trap": "平均帧率、演示录像和无错误日志都不能单独构成量产通过",
-    "practiceMode": "diagnosis",
-    "metric": "全材料量产答辩台可信度",
-    "risk": "答辩域误判风险",
-    "task": "围绕《Unity for HMI》2024官方演讲综合验收固定输入与目标配置；只改变答辩域或决定，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

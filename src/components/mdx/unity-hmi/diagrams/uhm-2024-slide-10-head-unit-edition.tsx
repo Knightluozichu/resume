@@ -40,10 +40,7 @@ const props = {
     "signal": "进入条件完成度与责任缺口",
     "artifact": "车机版立项门",
     "trap": "产品名称不等于特定项目已获得运行时、平台或支持承诺",
-    "practiceMode": "design",
-    "metric": "车机版进入条件板可信度",
-    "risk": "需求主体误判风险",
-    "task": "围绕第10页 车机版固定输入与目标配置；只改变需求主体或入口状态，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

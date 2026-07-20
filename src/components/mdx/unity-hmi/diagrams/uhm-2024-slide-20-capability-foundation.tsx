@@ -80,10 +80,7 @@ const props = {
     "signal": "能力成熟度与依赖缺口",
     "artifact": "43项能力分层矩阵",
     "trap": "能力地图表达范围，不表达每项能力的版本、许可和成熟度",
-    "practiceMode": "design",
-    "metric": "HMI能力分层台可信度",
-    "risk": "能力层误判风险",
-    "task": "围绕第20页 车载HMI能力底座固定输入与目标配置；只改变能力层或成熟度，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

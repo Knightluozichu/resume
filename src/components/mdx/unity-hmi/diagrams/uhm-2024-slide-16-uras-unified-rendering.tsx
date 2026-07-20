@@ -48,10 +48,7 @@ const props = {
     "signal": "各View帧时、配额、丢帧与恢复",
     "artifact": "统一渲染调度记录",
     "trap": "减少引擎实例可能节省资源，但收益和耦合风险都需测量",
-    "practiceMode": "simulation",
-    "metric": "统一渲染调度台可信度",
-    "risk": "并发View数误判风险",
-    "task": "围绕第16页 URAS统一后台渲染服务固定输入与目标配置；只改变并发View数或资源策略，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "simulation"
   }
 } as const;
 

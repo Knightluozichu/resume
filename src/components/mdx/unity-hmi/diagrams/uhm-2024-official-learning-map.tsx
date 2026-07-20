@@ -60,10 +60,7 @@ const props = {
     "signal": "页码覆盖、配置指纹与发布门",
     "artifact": "页码—主张—试验—结论账本",
     "trap": "把支持清单误读为无条件兼容矩阵",
-    "practiceMode": "design",
-    "metric": "23页量产证据路线台可信度",
-    "risk": "证据层次误判风险",
-    "task": "围绕《Unity for HMI》2024官方演讲学习地图固定输入与目标配置；只改变证据层次或审查跨度，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

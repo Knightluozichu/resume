@@ -47,10 +47,7 @@ const props = {
     "signal": "跨平台差异与构建可追溯性",
     "artifact": "车机运行时基线包",
     "trap": "跨平台复用降低重复工作，但不会消除OS和驱动差异",
-    "practiceMode": "design",
-    "metric": "团结引擎车机基线台可信度",
-    "risk": "运行平台误判风险",
-    "task": "围绕第11页 团结引擎车机版固定输入与目标配置；只改变运行平台或版本约束，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

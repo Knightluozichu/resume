@@ -40,10 +40,7 @@ const props = {
     "signal": "日期、讲者与主张版本",
     "artifact": "材料身份卡与变更记录",
     "trap": "标题页只界定主题和主体，不能替代技术证据",
-    "practiceMode": "design",
-    "metric": "演讲坐标冻结台可信度",
-    "risk": "时间坐标误判风险",
-    "task": "围绕第2页 未来已来：Unity开启3D座舱新篇章固定输入与目标配置；只改变时间坐标或主张类型，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

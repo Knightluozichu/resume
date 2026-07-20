@@ -45,10 +45,7 @@ const props = {
     "signal": "存活View、资源回收与重连时间",
     "artifact": "View隔离故障记录",
     "trap": "脱离Activity与同页多View是能力主张，隔离程度仍要用故障验证",
-    "practiceMode": "diagnosis",
-    "metric": "View生命周期隔离台可信度",
-    "risk": "生命周期事件误判风险",
-    "task": "围绕第17页 URAS View组件与隔离工程固定输入与目标配置；只改变生命周期事件或客户端状态，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

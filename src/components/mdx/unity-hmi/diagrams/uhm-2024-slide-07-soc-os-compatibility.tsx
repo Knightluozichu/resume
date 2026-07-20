@@ -50,10 +50,7 @@ const props = {
     "signal": "组合通过率与首个失败层",
     "artifact": "平台兼容矩阵",
     "trap": "两个分别受支持的名词不自动组成受支持配置",
-    "practiceMode": "diagnosis",
-    "metric": "SoC—OS组合验收台可信度",
-    "risk": "平台组合误判风险",
-    "task": "围绕第7页 主流SoC与操作系统适配固定输入与目标配置；只改变平台组合或测试阶段，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

@@ -63,10 +63,7 @@ const props = {
     "signal": "主/渲染线程、GPU、峰值内存与画质差异",
     "artifact": "目标机预算与捕获包",
     "trap": "演讲的三角面建议是起点，不是脱离分辨率与材质的通用阈值",
-    "practiceMode": "simulation",
-    "metric": "8155场景预算台可信度",
-    "risk": "场景复杂度误判风险",
-    "task": "围绕第6页 模型预算与性能优化固定输入与目标配置；只改变场景复杂度或验证设备，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "simulation"
   }
 } as const;
 

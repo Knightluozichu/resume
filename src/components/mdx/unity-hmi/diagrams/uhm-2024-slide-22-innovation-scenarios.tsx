@@ -97,10 +97,7 @@ const props = {
     "signal": "信号时效、视觉优先级与降级效果",
     "artifact": "60场景安全验收矩阵",
     "trap": "创新清单表达可能性，不等于驾驶中可用或符合安全要求",
-    "practiceMode": "design",
-    "metric": "六类场景风险分级台可信度",
-    "risk": "场景族误判风险",
-    "task": "围绕第22页 六大HMI创新场景固定输入与目标配置；只改变场景族或驾驶风险，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

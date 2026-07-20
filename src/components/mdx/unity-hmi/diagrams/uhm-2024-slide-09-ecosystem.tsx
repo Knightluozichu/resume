@@ -50,10 +50,7 @@ const props = {
     "signal": "数据时效、SDK错误与降级时刻",
     "artifact": "伙伴依赖合同",
     "trap": "合作伙伴名单不等于已集成、已授权或已通过量产验收",
-    "practiceMode": "diagnosis",
-    "metric": "地图与伙伴依赖台可信度",
-    "risk": "伙伴状态误判风险",
-    "task": "围绕第9页 地图方案与合作伙伴生态固定输入与目标配置；只改变伙伴状态或数据模式，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

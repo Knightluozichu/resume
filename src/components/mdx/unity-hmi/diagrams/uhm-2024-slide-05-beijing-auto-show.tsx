@@ -40,10 +40,7 @@ const props = {
     "signal": "车型配置差异与证据来源",
     "artifact": "车展样本矩阵",
     "trap": "现场可见效果无法证明冷启动、休眠恢复和长时稳定性",
-    "practiceMode": "design",
-    "metric": "量产车型样本矩阵可信度",
-    "risk": "样本粒度误判风险",
-    "task": "围绕第5页 搭载Unity HMI技术的量产车型汇聚北京车展固定输入与目标配置；只改变样本粒度或证据环境，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

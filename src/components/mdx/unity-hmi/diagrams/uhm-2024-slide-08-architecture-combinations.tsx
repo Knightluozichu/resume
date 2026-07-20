@@ -45,10 +45,7 @@ const props = {
     "signal": "端到端延迟与故障传播边界",
     "artifact": "可执行部署拓扑",
     "trap": "架构组合数量不是隔离能力或资源效率的证明",
-    "practiceMode": "design",
-    "metric": "座舱部署拓扑台可信度",
-    "risk": "部署拓扑误判风险",
-    "task": "围绕第8页 多种架构组合固定输入与目标配置；只改变部署拓扑或跨域通道，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

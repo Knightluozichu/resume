@@ -42,10 +42,7 @@ const props = {
     "signal": "启动时序、合成状态与系统日志",
     "artifact": "Embedded Linux系统证据包",
     "trap": "同为Linux不代表ABI、窗口系统、驱动和实时行为一致",
-    "practiceMode": "diagnosis",
-    "metric": "Embedded Linux集成台可信度",
-    "risk": "Linux集成层误判风险",
-    "task": "围绕第13页 Embedded Linux平台支持与优化固定输入与目标配置；只改变Linux集成层或系统状态，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

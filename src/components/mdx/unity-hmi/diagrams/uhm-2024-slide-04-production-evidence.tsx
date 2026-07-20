@@ -41,10 +41,7 @@ const props = {
     "signal": "口径、时间戳与外推警告",
     "artifact": "采用声明证据卡",
     "trap": "采用规模不能证明性能、安全或某一目标平台可部署",
-    "practiceMode": "diagnosis",
-    "metric": "采用数字核验台可信度",
-    "risk": "统计口径误判风险",
-    "task": "围绕第4页 量产采用证据固定输入与目标配置；只改变统计口径或核验状态，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "diagnosis"
   }
 } as const;
 

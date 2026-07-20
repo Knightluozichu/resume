@@ -40,10 +40,7 @@ const props = {
     "signal": "可知边界与未证实假设",
     "artifact": "产品能力边界卡",
     "trap": "分隔页建立叙事章节，不提供内部架构细节",
-    "practiceMode": "design",
-    "metric": "专有能力边界板可信度",
-    "risk": "信息层次误判风险",
-    "task": "围绕第14页 团结引擎固定输入与目标配置；只改变信息层次或推理范围，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

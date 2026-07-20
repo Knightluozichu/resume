@@ -40,10 +40,7 @@ const props = {
     "signal": "责任空洞与升级闭环",
     "artifact": "责任分配矩阵",
     "trap": "组织存在不能自动推出支持范围、响应时限或交付质量",
-    "practiceMode": "design",
-    "metric": "组织主张责任台可信度",
-    "risk": "责任主体误判风险",
-    "task": "围绕第18页 Unity中国固定输入与目标配置；只改变责任主体或证据类型，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

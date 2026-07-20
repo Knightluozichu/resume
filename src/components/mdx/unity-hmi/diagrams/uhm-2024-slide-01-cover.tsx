@@ -40,10 +40,7 @@ const props = {
     "signal": "范围声明与非目标清单",
     "artifact": "课程范围卡与责任矩阵",
     "trap": "封面标题本身不提供任何平台、性能或安全保证",
-    "practiceMode": "design",
-    "metric": "课程对象边界板可信度",
-    "risk": "显示对象误判风险",
-    "task": "围绕第1页 Unity for HMI固定输入与目标配置；只改变显示对象或项目阶段，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 

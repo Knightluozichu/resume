@@ -40,10 +40,7 @@ const props = {
     "signal": "展示证据等级与缺口",
     "artifact": "主张分级表",
     "trap": "Made with Unity不等于本项目使用相同架构或达到相同性能",
-    "practiceMode": "design",
-    "metric": "证据类型分流台可信度",
-    "risk": "证据种类误判风险",
-    "task": "围绕第3页 Made with Unity固定输入与目标配置；只改变证据种类或结论强度，保存基线、故障、恢复和复位证据。"
+    "practiceMode": "design"
   }
 } as const;
 
