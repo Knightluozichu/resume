@@ -27,6 +27,8 @@ function parseArgs(argv) {
     chapter: null,
     all: false,
     baseUrl: "http://localhost:3000",
+    concurrency: Number(process.env.QUALITY_VISUAL_CONCURRENCY ?? 4),
+    writeResults: true,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -36,9 +38,12 @@ function parseArgs(argv) {
     else if (argument === "--all") args.all = true;
     else if (argument === "--base-url")
       args.baseUrl = argv[++index] ?? args.baseUrl;
+    else if (argument === "--concurrency")
+      args.concurrency = Number(argv[++index] ?? args.concurrency);
+    else if (argument === "--no-write") args.writeResults = false;
     else if (argument === "--help" || argument === "-h") {
       console.log(
-        "用法: pnpm quality:visual -- --book slug [--chapter chapter-slug] [--base-url URL]；全库需显式 --all",
+        "用法: pnpm quality:visual -- --book slug [--chapter chapter-slug] [--base-url URL] [--concurrency N] [--no-write]；全库需显式 --all",
       );
       process.exit(0);
     } else throw new Error(`未知参数: ${argument}`);
@@ -47,6 +52,12 @@ function parseArgs(argv) {
     throw new Error("必须指定 --book slug；全库巡检需显式使用 --all");
   if (args.chapter && !args.book)
     throw new Error("--chapter 必须与 --book 一起使用");
+  if (
+    !Number.isInteger(args.concurrency) ||
+    args.concurrency < 1 ||
+    args.concurrency > 8
+  )
+    throw new Error("--concurrency 必须是 1 到 8 的整数");
   return args;
 }
 
@@ -690,21 +701,37 @@ const previous = fs.existsSync(RESULT_PATH)
   : { version: 1, chapters: {} };
 const results = { ...previous.chapters };
 try {
-  for (let index = 0; index < chapters.length; index += 1) {
-    const chapter = chapters[index];
-    results[chapter.id] = await inspectChapter(browser, chapter, args.baseUrl);
-    console.log(
-      `[${index + 1}/${chapters.length}] ${chapter.id}: ${results[chapter.id].pass ? "PASS" : "FAIL"}`,
-    );
-  }
+  let nextIndex = 0;
+  const inspectNext = async () => {
+    while (nextIndex < chapters.length) {
+      const index = nextIndex++;
+      const chapter = chapters[index];
+      results[chapter.id] = await inspectChapter(
+        browser,
+        chapter,
+        args.baseUrl,
+      );
+      console.log(
+        `[${index + 1}/${chapters.length}] ${chapter.id}: ${results[chapter.id].pass ? "PASS" : "FAIL"}`,
+      );
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(args.concurrency, chapters.length) },
+      inspectNext,
+    ),
+  );
 } finally {
   await browser.close();
 }
-ensureDirectory(path.dirname(RESULT_PATH));
-fs.writeFileSync(
-  RESULT_PATH,
-  `${JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), chapters: results }, null, 2)}\n`,
-);
+if (args.writeResults) {
+  ensureDirectory(path.dirname(RESULT_PATH));
+  fs.writeFileSync(
+    RESULT_PATH,
+    `${JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), chapters: results }, null, 2)}\n`,
+  );
+}
 const failed = chapters.filter((chapter) => !results[chapter.id]?.pass);
 console.log(
   JSON.stringify(
