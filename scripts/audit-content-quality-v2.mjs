@@ -506,10 +506,21 @@ function parseChapter(filePath, manifests, visualResults) {
     .map(resolveImportedModule)
     .filter(Boolean)
     .map((modulePath) => ({ modulePath, source: moduleCorpus(modulePath) }));
-  const importedCorpus = importedSources.map((item) => item.source).join("\n");
+  // mdx-components 是全站基础组件的聚合入口，而不是本章的专属视觉实现。
+  // 它会导入数百个无关组件名称；把它纳入“伪指标图”指纹会让某个别处的
+  // confidence/useMemo 文本污染所有章节。保留直接导入的图与实验组件检查。
+  const visualImportedCorpus = importedSources
+    .filter(
+      ({ modulePath }) =>
+        !modulePath.endsWith(
+          `${path.sep}components${path.sep}mdx${path.sep}mdx-components.tsx`,
+        ),
+    )
+    .map((item) => item.source)
+    .join("\n");
   const genericWrapper =
     /OfficialCourseLab|OfficialPoeaa24Lab|OfficialDeZeroLab|OfficialCrv18Lab/.test(
-      importedCorpus,
+      visualImportedCorpus,
     );
   const visualComponents = jsxNames.filter((name) => VISUAL_NAME.test(name));
   const interactiveComponents = jsxNames.filter((name) =>
@@ -597,7 +608,7 @@ function parseChapter(filePath, manifests, visualResults) {
         ? "synthesis"
         : "chapter";
   const normalizedSource = normalized(sourceWithoutOutline);
-  const visualCorpus = normalized(importedCorpus);
+  const visualCorpus = normalized(visualImportedCorpus);
   const exerciseCorpus = normalized(exercisesBlock);
 
   const unitEvidence = [];
@@ -715,11 +726,11 @@ function parseChapter(filePath, manifests, visualResults) {
     pattern.test(source),
   ).map(([code]) => code);
   if (genericWrapper) genericFlags.push("generic-official-course-lab");
-  if (hasSyntheticVisualScore(importedCorpus))
+  if (hasSyntheticVisualScore(visualImportedCorpus))
     genericFlags.push("synthetic-visual-score");
-  if (hasGenericSharedVisualShell(importedCorpus))
+  if (hasGenericSharedVisualShell(visualImportedCorpus))
     genericFlags.push("generic-shared-visual-shell");
-  if (hasTitleSubstitutionVisualShell(importedCorpus))
+  if (hasTitleSubstitutionVisualShell(visualImportedCorpus))
     genericFlags.push("generic-title-substitution-visual");
 
   return {
