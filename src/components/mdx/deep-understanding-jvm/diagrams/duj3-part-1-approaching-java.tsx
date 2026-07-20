@@ -39,8 +39,6 @@ const props = {
     "probe": "git rev-parse HEAD\nbash configure --with-debug-level=slowdebug\nmake images",
     "signal": "configure摘要与镜像java -version",
     "practiceMode": "design",
-    "metric": "Java体系与源码入口台复现度",
-    "risk": "时间边界失真风险",
     "task": "建立Java技术体系、虚拟机家族与OpenJDK构建的历史坐标，理解规范、实现和发行版不是同一层次；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "技术体系分层图、虚拟机谱系、JDK构建环境指纹与源码调试入口"
   }

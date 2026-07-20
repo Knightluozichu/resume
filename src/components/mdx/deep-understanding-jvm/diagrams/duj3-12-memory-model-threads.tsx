@@ -55,8 +55,6 @@ const props = {
     "probe": "mvn -q -Dtest=JmmProbeTest test\njcmd PID Thread.print -l",
     "signal": "反例计数、线程转储与同步边",
     "practiceMode": "diagnosis",
-    "metric": "happens-before与线程台复现度",
-    "risk": "线程载体失真风险",
     "task": "从缓存一致性过渡到JMM的原子性、可见性、有序性和happens-before，再比较内核线程与协程；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "JMM动作图、重排序反例、happens-before证明、线程状态轨迹、协程版本边界"
   }

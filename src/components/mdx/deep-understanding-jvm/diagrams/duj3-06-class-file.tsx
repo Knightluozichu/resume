@@ -61,8 +61,6 @@ const props = {
     "probe": "javac -g -parameters --release 12 Sample.java\njavap -v -c -l -s -sysinfo Sample.class",
     "signal": "major version、常量池索引与字节码偏移",
     "practiceMode": "diagnosis",
-    "metric": "Class文件解剖台复现度",
-    "risk": "编译选项失真风险",
     "task": "逐字节解析Class文件表结构与指令族，区分规范公开格式和虚拟机私有执行实现；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "十六进制偏移表、常量池索引图、方法Code属性、操作数栈轨迹、验证失败样本"
   }

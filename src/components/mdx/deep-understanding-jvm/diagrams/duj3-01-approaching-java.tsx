@@ -62,8 +62,6 @@ const props = {
     "probe": "git rev-parse HEAD\nbash configure --with-debug-level=slowdebug\nmake images",
     "signal": "构建日志、镜像校验与断点",
     "practiceMode": "diagnosis",
-    "metric": "OpenJDK构建与调试台复现度",
-    "risk": "调试入口失真风险",
     "task": "从Java体系和JVM演进走到可重复的OpenJDK 12源码构建，建立阅读虚拟机实现的入口；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "JVM家族比较表、JDK 12构建清单、构建日志、镜像验证与调试断点"
   }

@@ -39,8 +39,6 @@ const props = {
     "probe": "javap -v -c -s BytecodeProbe.class",
     "signal": "opcode偏移、栈高与验证错误",
     "practiceMode": "diagnosis",
-    "metric": "字节码速查与栈效应台复现度",
-    "risk": "验证条件失真风险",
     "task": "将指令表作为第6与第8章的查阅索引，按操作数、栈效果、异常和控制流解释字节码；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "指令分类表、栈效果注释、控制流图、验证器约束"
   }

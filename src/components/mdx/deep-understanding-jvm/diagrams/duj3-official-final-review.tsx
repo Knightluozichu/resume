@@ -59,8 +59,6 @@ const props = {
     "probe": "java -version\njavap -v -c Sample\njcmd PID VM.flags",
     "signal": "全书证据包、反例与发布判定",
     "practiceMode": "diagnosis",
-    "metric": "全书跨层故障答辩台复现度",
-    "risk": "结论层次失真风险",
     "task": "用一个从Class加载、热点编译、并发竞争到GC停顿的综合案例答辩串联282个正式节点；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "全书答辩包、原始输出、阶段状态图、版本差异、反例、回滚与复现实验"
   }

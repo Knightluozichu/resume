@@ -39,8 +39,6 @@ const props = {
     "probe": "java -version\njcmd PID Thread.print -l",
     "signal": "线程状态、锁拥有者与顺序证据",
     "practiceMode": "design",
-    "metric": "JMM—线程—锁路线台复现度",
-    "risk": "同步方式失真风险",
     "task": "把硬件一致性、Java内存模型、线程实现、协程与锁优化统一到可证明的并发正确性和性能边界；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "共享状态模型、happens-before图、并发反例、锁状态与公平性证据"
   }

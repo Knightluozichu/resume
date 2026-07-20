@@ -54,8 +54,6 @@ const props = {
     "probe": "jcmd PID VM.flags\njcmd PID Thread.print -l\njcmd PID GC.class_histogram",
     "signal": "SLO、JFR、GC和线程证据",
     "practiceMode": "diagnosis",
-    "metric": "症状—证据—参数台复现度",
-    "risk": "负载形态失真风险",
     "task": "用多类真实案例练习从现象到证据，再以Eclipse案例建立版本、类加载、编译、内存和收集器的受控调优流程；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "案例因果图、基线报告、单变量变更、兼容清单、收益与回滚阈值"
   }

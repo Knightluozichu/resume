@@ -53,8 +53,6 @@ const props = {
     "probe": "java -Xlog:class+load=info,class+init=debug LoaderProbe",
     "signal": "定义加载器、初始化日志与错误类型",
     "practiceMode": "diagnosis",
-    "metric": "加载链接初始化台复现度",
-    "risk": "加载器失真风险",
     "task": "掌握加载、验证、准备、解析、初始化五阶段，理解类身份由名称与加载器共同决定，并纳入JPMS模块边界；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "加载状态机、初始化触发矩阵、加载器委派图、类身份实验、模块可读性与导出表"
   }

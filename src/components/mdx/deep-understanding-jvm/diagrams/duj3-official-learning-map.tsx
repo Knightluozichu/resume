@@ -59,8 +59,6 @@ const props = {
     "probe": "java -version\njavap -version\njcmd -l",
     "signal": "路线覆盖与版本账本",
     "practiceMode": "design",
-    "metric": "282节点跨层路线台复现度",
-    "risk": "证据深度失真风险",
     "task": "沿5个部分、13章和附录A-E建立从JVM历史、内存、执行、编译到并发的完整学习与证据路径；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "282节点覆盖矩阵、章节依赖图、版本边界账本和全书实验清单"
   }

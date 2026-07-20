@@ -58,8 +58,6 @@ const props = {
     "probe": "javac --release 12 Dispatch.java\njavap -v -c Dispatch",
     "signal": "调用指令、描述符与栈映射帧",
     "practiceMode": "diagnosis",
-    "metric": "栈帧与分派台复现度",
-    "risk": "执行形态失真风险",
     "task": "从栈帧和方法调用解释字节码执行，区分解析与分派，并通过MethodHandle与invokedynamic理解动态链接；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "栈帧剖面、invoke指令对照、分派矩阵、MethodHandle实验、逐指令栈变化"
   }

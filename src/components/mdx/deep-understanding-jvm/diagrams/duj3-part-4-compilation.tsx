@@ -39,8 +39,6 @@ const props = {
     "probe": "javac -XprintRounds Sample.java\njava -XX:+PrintCompilation Sample",
     "signal": "AST/字节码、编译事件与去优化",
     "practiceMode": "design",
-    "metric": "前端—JIT证据路线台复现度",
-    "risk": "运行阶段失真风险",
     "task": "区分前端编译、即时编译和提前编译，观察语法糖、IR与优化如何改变代码表示而保持语义；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "编译流水线、源码到字节码差异、JIT事件、IR和基准证据"
   }

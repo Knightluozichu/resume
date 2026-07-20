@@ -59,8 +59,6 @@ const props = {
     "probe": "java -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining JitProbe",
     "signal": "编译层级、内联决定与去优化",
     "practiceMode": "diagnosis",
-    "metric": "分层编译与去优化台复现度",
-    "risk": "优化事件失真风险",
     "task": "比较解释、JIT与AOT，理解编译触发、内联、逃逸分析和Graal IR，并识别投机优化与去优化；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "编译事件时间线、内联决策、逃逸证据、IR演化、去优化反例与版本账本"
   }

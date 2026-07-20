@@ -39,8 +39,6 @@ const props = {
     "probe": "javac --release 12 Sample.java\njavap -v -c -s Sample",
     "signal": "Class校验和、常量池与指令",
     "practiceMode": "design",
-    "metric": "Class到执行状态台复现度",
-    "risk": "解析时点失真风险",
     "task": "沿Class文件、加载与链接、栈帧执行、动态调用和案例实战解释字节码如何成为运行行为；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "源码到Class映射、加载状态机、栈帧时间线、动态调用验证"
   }

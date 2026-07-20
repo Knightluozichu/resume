@@ -48,8 +48,6 @@ const props = {
     "probe": "jcmd PID Thread.print -l\njcmd PID JFR.start duration=30s filename=locks.jfr",
     "signal": "monitor事件、等待时长与业务不变量",
     "practiceMode": "diagnosis",
-    "metric": "锁竞争与优化台复现度",
-    "risk": "竞争强度失真风险",
     "task": "从不可变、互斥与非阻塞实现线程安全，理解自旋、消除、粗化、轻量级锁与偏向锁的版本化实现；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "安全性定义、线性化点、竞争基准、锁状态记录、版本适用域与回归测试"
   }

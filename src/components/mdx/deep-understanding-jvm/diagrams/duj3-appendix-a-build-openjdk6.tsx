@@ -39,8 +39,6 @@ const props = {
     "probe": "sha256sum source-archive.tar.gz\nbash configure\nmake images",
     "signal": "归档哈希、工具链清单与镜像输出",
     "practiceMode": "diagnosis",
-    "metric": "历史OpenJDK 6构建台复现度",
-    "risk": "隔离级别失真风险",
     "task": "保留旧版Windows构建OpenJDK 6的历史方法，借此识别工具链、平台和版本依赖；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "历史工具链清单、隔离环境、构建日志、与第1章OpenJDK 12流程的差异"
   }

@@ -39,8 +39,6 @@ const props = {
     "probe": "jcmd PID GC.heap_dump heap.hprof\njhsdb jmap --binaryheap --pid PID",
     "signal": "对象数量、保留路径与销毁记录",
     "practiceMode": "diagnosis",
-    "metric": "堆快照与OQL台复现度",
-    "risk": "数据处置失真风险",
     "task": "用OQL从堆转储筛选对象、字段与引用关系，同时控制查询成本和敏感数据暴露；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "转储校验和、OQL查询、结果采样、GC根路径、访问与销毁审计"
   }

@@ -53,8 +53,6 @@ const props = {
     "probe": "javac -XprintRounds -XprintProcessorInfo -parameters Sample.java\njavap -v Sample",
     "signal": "处理轮次、诊断与Class哈希",
     "practiceMode": "diagnosis",
-    "metric": "Javac语义与注解处理台复现度",
-    "risk": "处理轮次失真风险",
     "task": "沿Javac解析、符号表、注解处理、语义分析到字节码生成，拆解泛型擦除、装箱与遍历等语法糖；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "Javac阶段图、脱糖前后字节码、处理器输入输出、确定性构建测试"
   }

@@ -53,8 +53,6 @@ const props = {
     "probe": "jcmd PID JFR.start name=duj settings=profile duration=60s filename=duj.jfr\njfr summary duj.jfr",
     "signal": "JFR事件、采集窗口与探针影响",
     "practiceMode": "diagnosis",
-    "metric": "jcmd与JFR证据台复现度",
-    "risk": "探针成本失真风险",
     "task": "按问题选择jps、jstat、jinfo、jmap、jstack、JHSDB、JConsole、VisualVM、JFR与JMC，并记录探针效应；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "工具选择矩阵、命令与版本、原始输出、采集开销、敏感数据处置记录"
   }

@@ -79,8 +79,6 @@ const props = {
     "probe": "java -Xlog:gc*=debug:file=gc.log:time,uptime,level,tags -Xmx512m GcProbe",
     "signal": "GC cause、阶段时长与完成工作量",
     "practiceMode": "diagnosis",
-    "metric": "对象存活与收集器台复现度",
-    "risk": "工作负载失真风险",
     "task": "从对象存活判定、收集算法和HotSpot并发标记细节走到收集器权衡与分配实验；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "可达性图、算法移动过程、收集器权衡表、GC日志、分配年龄实验"
   }

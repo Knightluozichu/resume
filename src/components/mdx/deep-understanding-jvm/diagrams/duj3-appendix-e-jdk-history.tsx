@@ -39,8 +39,6 @@ const props = {
     "probe": "java -version\njavac -version\njava --list-modules",
     "signal": "版本输出、JEP状态与模块清单",
     "practiceMode": "diagnosis",
-    "metric": "JDK版本历史账本复现度",
-    "risk": "功能状态失真风险",
     "task": "把JDK版本演进与本书章节中的行为变化建立索引，避免跨版本套用参数、工具和对象布局；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "版本轨迹、特性到章节映射、弃用与移除清单、迁移验证"
   }

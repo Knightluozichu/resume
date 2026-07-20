@@ -49,8 +49,6 @@ const props = {
     "probe": "java -Xlog:class+load=debug -verbose:class CaseApp",
     "signal": "code source、加载器图与LinkageError",
     "practiceMode": "diagnosis",
-    "metric": "类加载故障案例台复现度",
-    "risk": "失败样本失真风险",
     "task": "比较Tomcat、OSGi、动态代理和Backport的类隔离与字节码改写，再实现受约束的远程执行实验；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "类加载拓扑、隔离用例、代理字节码、远程执行威胁模型、沙箱与清理验证"
   }

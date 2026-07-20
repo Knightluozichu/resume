@@ -56,8 +56,6 @@ const props = {
     "probe": "java -Xmx64m -Xss256k -XX:MaxDirectMemorySize=32m MemoryProbe",
     "signal": "退出码、异常类型与NMT差值",
     "practiceMode": "diagnosis",
-    "metric": "运行时数据区与OOM台复现度",
-    "risk": "故障类型失真风险",
     "task": "区分线程私有与共享运行时区域，理解HotSpot对象创建和布局，并为每类内存异常建立可控复现；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "区域所有权图、对象布局记录、四类OOM最小案例、限制参数与转储证据"
   }

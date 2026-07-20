@@ -39,8 +39,6 @@ const props = {
     "probe": "java -XX:NativeMemoryTracking=summary -Xlog:gc*=info App\njcmd PID VM.native_memory summary",
     "signal": "GC日志、NMT与进程资源",
     "practiceMode": "design",
-    "metric": "内存—GC诊断路线台复现度",
-    "risk": "压力场景失真风险",
     "task": "把运行时数据区、对象生命周期、收集器、诊断工具和调优案例串成内存问题的因果链；执行下面探针，保存基线、变体、故障、恢复与复位证据。",
     "artifact": "内存区域地图、对象生命周期、GC证据矩阵、采集风险预算"
   }
