@@ -90,7 +90,28 @@ function parseArgs(argv) {
   return args;
 }
 
-function regressionBlockers(source) {
+function hasSyntheticVisualScore(source) {
+  const labelFamilies = [
+    /可信度|confidence/i,
+    /复现度|reproducibility/i,
+    /证据闭环度|evidence(?:Score|Closure)?/i,
+    /失真风险|误判风险|distortion|exposure/i,
+  ].filter((pattern) => pattern.test(source)).length;
+  const generatedScoreEngine =
+    /\b(?:clamp|useMemo)\s*\(|Math\.(?:min|max)\s*\(\s*100|setSnapshots|setCaptures/i.test(
+      source,
+    );
+  return labelFamilies >= 2 && generatedScoreEngine;
+}
+
+function hasGenericSharedVisualShell(source) {
+  return (
+    /(?:export\s+)?function\s+Official[A-Za-z0-9]+Lab\b/.test(source) &&
+    !/data-visual-kind\s*=/.test(source)
+  );
+}
+
+function regressionBlockers(source, componentCorpus = "") {
   const blockers = GENERIC_PATTERNS.filter(([, pattern]) =>
     pattern.test(source),
   ).map(([code]) => code);
@@ -100,6 +121,10 @@ function regressionBlockers(source) {
     blockers.push("attribution-block-count");
   if (/<OfficialCourseLab\b/.test(source))
     blockers.push("generic-official-course-lab");
+  if (hasSyntheticVisualScore(componentCorpus))
+    blockers.push("synthetic-visual-score");
+  if (hasGenericSharedVisualShell(componentCorpus))
+    blockers.push("generic-shared-visual-shell");
   return blockers;
 }
 
@@ -163,6 +188,29 @@ val value = raw.toDoubleOrNull()
       `围绕“节点${index + 1}”固定同一套输入，只替换标题而不解释具体机制；这种段落即使很长，也不能被字数或目录覆盖率掩盖，还会让不同知识点得到完全相同的实验因果与验收结论。`,
   );
   assert.equal(maxWithinChapterTemplateCopies(withinChapterTemplate), 10);
+  const syntheticVisual = `
+export function OfficialExampleLab() {
+  const result = useMemo(() => ({
+    confidence: clamp(52),
+    distortion: clamp(38),
+    evidenceScore: clamp(61),
+  }), []);
+  return <section><span>可信度</span><span>失真风险</span><span>证据闭环度</span></section>;
+}`;
+  assert.deepEqual(
+    regressionBlockers(remediatedCarChapter, syntheticVisual).filter((code) =>
+      code.includes("visual"),
+    ).sort(),
+    ["generic-shared-visual-shell", "synthetic-visual-score"],
+  );
+  const dedicatedVisual = `
+export function OfficialEngineLab() {
+  return <section data-visual-kind={spec.kind}>进气 → 压缩 → 做功 → 排气</section>;
+}`;
+  assert.equal(
+    regressionBlockers(remediatedCarChapter, dedicatedVisual).length,
+    0,
+  );
   console.log(
     JSON.stringify({
       version: 2,
@@ -173,6 +221,8 @@ val value = raw.toDoubleOrNull()
         "cross-chapter-copy-detected",
         "within-chapter-template-copy-detected",
         "placeholder-boundary-detected-without-kotlin-false-positive",
+        "synthetic-visual-score-hard-fails",
+        "dedicated-shared-visual-allowed",
       ],
     }),
   );
@@ -327,9 +377,27 @@ function moduleCorpus(modulePath, seen = new Set()) {
         candidate &&
         candidate.startsWith(path.join(ROOT, "src/components/mdx")),
     );
+  // 章节薄包装器通常用普通相对 import 引入一本书内的共享绘图实现。
+  // 只追踪同书目录，避免把全局 MDX 注册表和数千个懒加载模块拼进语料。
+  const mdxComponentRoot = path.join(ROOT, "src/components/mdx");
+  const relativeParts = path.relative(mdxComponentRoot, modulePath).split(path.sep);
+  const bookComponentRoot = relativeParts.length >= 2
+    ? path.join(mdxComponentRoot, relativeParts[0])
+    : null;
+  const localDependencies = bookComponentRoot
+    ? [...source.matchAll(/import[\s\S]*?from\s+["'](\.[^"']+)["']/g)]
+        .map((match) => resolveImportedModule(match[1], modulePath))
+        .filter(
+          (candidate) =>
+            candidate &&
+            candidate.startsWith(`${bookComponentRoot}${path.sep}`),
+        )
+    : [];
   const corpus = [
     source,
-    ...dependencies.map((dependency) => moduleCorpus(dependency, seen)),
+    ...[...new Set([...dependencies, ...localDependencies])].map((dependency) =>
+      moduleCorpus(dependency, seen),
+    ),
   ].join("\n");
   moduleCorpusCache.set(modulePath, corpus);
   return corpus;
@@ -601,6 +669,10 @@ function parseChapter(filePath, manifests, visualResults) {
     pattern.test(source),
   ).map(([code]) => code);
   if (genericWrapper) genericFlags.push("generic-official-course-lab");
+  if (hasSyntheticVisualScore(importedCorpus))
+    genericFlags.push("synthetic-visual-score");
+  if (hasGenericSharedVisualShell(importedCorpus))
+    genericFlags.push("generic-shared-visual-shell");
 
   return {
     id,
