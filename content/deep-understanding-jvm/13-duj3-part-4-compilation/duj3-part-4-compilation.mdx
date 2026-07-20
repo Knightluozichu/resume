@@ -1,174 +1,106 @@
 ---
-title: "第四部分 程序编译与代码优化"
-description: "依据周志明《深入理解Java虚拟机》第3版完整目录独立重构：区分前端编译、即时编译和提前编译，观察语法糖、IR与优化如何改变代码表示而保持语义"
+title: 第四部分 程序编译与代码优化
+description: 第四部分 程序编译与代码优化覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
 type: C
-section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
+section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
 draft: false
 math: true
-sourceUrl: "https://github.com/fenixsoft/jvm_book"
+sourceUrl: 'https://github.com/fenixsoft/jvm_book'
 demo: true
 order: 0
+qualityVersion: 2
+practiceMode: design
+sourceMode: independent-rewrite
 ---
-
-import { Duj3StructureLab, Duj3ExecutionLab, Duj3EvidenceLab } from "@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-4-compilation";
-
-# 第四部分 程序编译与代码优化
-
-本页对应第3版正式结构中的 **第四部分 程序编译与代码优化**。课程不复制原文，而是按目录逐节点独立重构核心知识，把规范、HotSpot实现、工具输出和可复现实验连成证据链。当前任务是：区分前端编译、即时编译和提前编译，观察语法糖、IR与优化如何改变代码表示而保持语义。
-
-<Callout type="info">**版本与来源边界。** 本课程锁定周志明《深入理解Java虚拟机：JVM高级特性与最佳实践》第3版，机械工业出版社，2019年，纸本正文521页，ISBN 9787111641247。作者仓库确认第3版样例代码与持续勘误；出版社版式电子目录确认5个部分、13章与附录A-E。原书成文于2019年中期，以JDK 12和JDK 13预览版为时间边界。后续JDK的行为、参数和工具必须重新查一手资料，不能冒充原书内容。</Callout>
-
-## 可验收学习目标
+import { Duj3Part4CompilationStructureLab, Duj3Part4CompilationExecutionLab, Duj3Part4CompilationEvidenceLab } from "@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-4-compilation";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释本页全部1个正式节点的概念层次、前置关系、版本边界与失败条件。
-- 能实现一个固定JDK、JVM参数、工作量和停止条件的最小可重复实验。
-- 能比较规范承诺、HotSpot实现、工具观测与应用证据，指出哪些结论不可跨版本外推。
-- 能设计反例、资源隔离、回滚和交接记录，让另一位读者独立重放并挑战结论。
+
+- 能解释第四部分 程序编译与代码优化全部1个正式目录节点的规范、实现、发行版与版本边界
+- 能运行“前端—JIT证据路线台”，一次只改变编译阶段或运行阶段
+- 能修改章专属命令或样例，用Class、日志、JFR、转储或并发断言证明状态转换
+- 能注入“把编译器一次输出外推到所有运行阶段”，清空派生证据后重放并恢复“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”
+
 </Objectives>
 
-本页交付 **编译流水线、源码到字节码差异、JIT事件、IR和基准证据**。首要陷阱是“把编译器优化当保证、用微基准观察到的汇编外推业务系统，或忽略去优化与分层编译”；所有实验都必须先预测、再运行、最后解释偏差。
+{/* DUJ3_QUALITY_V2 */}
 
-## 官方目录逐节点复刻
+## 为什么从“前端—JIT证据路线台”开始
+
+第四部分 程序编译与代码优化不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。前端—JIT证据路线台沿“source → AST/desugar → bytecode → profile → compiled code”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+
+第四部分 程序编译与代码优化固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变编译阶段或运行阶段；交互分数只表达因果方向，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+
+## 来源、勘误与独立重写边界
+
+第四部分 程序编译与代码优化依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第四部分 程序编译与代码优化未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
+
+第四部分 程序编译与代码优化保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第四部分 程序编译与代码优化的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
+
+## 本章跨层合同与章专属探针
+
+<Term def="source → AST/desugar → bytecode → profile → compiled code是第四部分 程序编译与代码优化连接冻结JDK与输入与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。">source → AST/desugar → bytecode → profile → compiled code</Term>、<Term def="编译阶段是第四部分 程序编译与代码优化连接区分规范和实现与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。">编译阶段</Term>、<Term def="运行阶段是第四部分 程序编译与代码优化连接执行章专属探针与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。">运行阶段</Term>、<Term def="AST/字节码、编译事件与去优化是第四部分 程序编译与代码优化连接注入失败并恢复与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。">AST/字节码、编译事件与去优化</Term>、<Term def="编译流水线、源码到字节码差异、JIT事件、IR和基准证据是第四部分 程序编译与代码优化连接保存原始发布证据与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。">编译流水线、源码到字节码差异、JIT事件、IR和基准证据</Term>。
+
+第四部分 程序编译与代码优化的通过不变量是“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”。第四部分 程序编译与代码优化的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
+
+第四部分 程序编译与代码优化使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存AST/字节码、编译事件与去优化，不能只复制命令截图：
+
+```bash
+javac -XprintRounds Sample.java
+java -XX:+PrintCompilation Sample
+```
+
+<Callout type="warning" title="危险实验必须隔离">第四部分 程序编译与代码优化涉及OOM、堆转储、调试附加、任意Class、历史工具链或高成本探针时，只能在受限进程、容器或离线虚拟机运行；设置CPU/内存/时间上限并保留敏感数据销毁记录。</Callout>
+
+## 先预测，再操作三层章专属实验
+
+<Stepper>
+  <Step title="1. 规范—实现地图">选择正式节点，标出规范、HotSpot、发行版和应用证据。<Duj3Part4CompilationStructureLab /></Step>
+  <Step title="2. 单变量探针">固定JDK与工作量，只切换编译阶段或运行阶段。<Duj3Part4CompilationExecutionLab /></Step>
+  <Step title="3. 故障、恢复与复位">注入“把编译器一次输出外推到所有运行阶段”，从第一处状态偏离修复并同条件重放。<Duj3Part4CompilationEvidenceLab /></Step>
+</Stepper>
+
+## 官方目录逐项深读
 
 ### 第四部分 程序编译与代码优化
 
-**正式节点 1/1。** 区分前端、解释、JIT和AOT阶段，保存脱糖字节码、编译事件与IR；用预热、基准和去优化反例限制结论。本节点必须服务于“区分前端编译、即时编译和提前编译，观察语法糖、IR与优化如何改变代码表示而保持语义”，并写入编译流水线、源码到字节码差异、JIT事件、IR和基准证据。
+**四级证据 1/1。** 第四部分 程序编译与代码优化中的第四部分 程序编译与代码优化：区分前端、解释、分层编译与去优化，固定预热和工作量后保存Class、编译事件与回退证据。第四部分 程序编译与代码优化固定运行阶段为“预热”，只把编译阶段从“javac”切到“JIT”，以AST/字节码、编译事件与去优化定位第一处变化并验证“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”。
 
-先预测一个能推翻当前理解的结果，再运行基线与单变量对照。验收说明JDK、JVM实现、发行版、参数、工作量和采集时刻；若只能复述术语或命令，尚未覆盖“第四部分 程序编译与代码优化”的核心知识。
+## 三个必须主动触发的误区
 
-## 从虚拟机边界开始
+<Callout type="trap" title="实现图不等于规范">第四部分 程序编译与代码优化中的对象头、收集器默认值、JIT阈值、加载器结构和工具能力都可能随实现或版本变化；只有JVMS/JLS合同可以在对应Java SE版本内作为规范主张。</Callout>
 
-学习JVM必须先区分四层：Java语言规范约束源代码语义，Java虚拟机规范约束Class格式与抽象执行，HotSpot等实现选择内部算法，Oracle JDK、OpenJDK构建或其他发行版再决定打包和默认配置。<Term def="由规范定义、不同合规实现都必须保持的可观察承诺">规范合同</Term>不能由一张HotSpot对象头图替代；<Term def="某一虚拟机在特定版本中为满足规范而选择的数据结构和算法">实现细节</Term>也不能被误写成永久规则。
+<Callout type="trap" title="章专属失败样本">第四部分 程序编译与代码优化主动触发“把编译器优化当保证、用微基准观察到的汇编外推业务系统，或忽略去优化与分层编译”，并进一步注入“把编译器一次输出外推到所有运行阶段”；若AST/字节码、编译事件与去优化未出现，先验证采集链路和阳性对照，不得挑选一条符合预期的运行。</Callout>
 
-每项结论建立<Term def="记录JDK、JVM实现、供应商、操作系统、参数、容器限制与源码提交的可比较标识">环境指纹</Term>。同样的Java版本号仍可能因构建、收集器、压缩指针、容器感知和启动参数不同而产生不同日志、对象布局与性能。课程以第3版2019年语境还原知识，再单独维护版本账本；现代验证只能标为复核，不能回写作者当时尚未观察到的结果。
+<Callout type="trap" title="参数不能先于问题">第四部分 程序编译与代码优化只有在SLO、基线、假设、单变量、资源代价和回滚阈值齐全时才允许改变VM参数；编译通过、进程存活或平均值改善都不能替代正确性和尾部证据。</Callout>
 
-从程序到机器行为至少经过源代码前端编译、Class验证和加载、解释执行、热点编译、运行时服务与操作系统调度。<Term def="源码构造、Class表项、运行时状态和机器级结果之间可追溯的对应关系">表示映射</Term>是排错基础。源码中的一行可能对应多条指令，一次方法调用可能因分派和内联看不到直观栈帧，一个对象分配也可能因逃逸分析被消除。必须说明正在观察哪一层。
-
-性能实验遵循固定工作量、充分预热、重复采样和单变量原则。<Term def="程序从解释执行进入分层编译并达到相对稳定代码形态前的阶段">预热</Term>不是可以随意丢弃的数据，而是启动与短任务的一部分；只有稳态问题才可在明确理由下单独报告稳态。均值不能掩盖尾延迟，吞吐提升不能自动抵消内存、CPU、停顿或公平性退化。
-
-故障实验需要<Term def="在受控资源与权限边界内制造OOM、加载失败、竞争或编译条件变化的可恢复环境">隔离实验</Term>。故意溢出、执行字节码、加载任意类和修改编译参数都可能拖垮宿主或突破信任边界，应使用容器或独立进程、限制CPU和内存、禁用不必要网络、设置超时并保留清理审计。能复现错误不等于可以在生产直接运行复现脚本。
-
-## 跨层证据链
-
-原始证据至少包括源码提交、Class校验和、JDK版本输出、完整命令、参数、工作量、开始结束时间、退出码和未过滤日志。派生图表必须保存查询、过滤与单位。线程转储、堆转储和飞行记录可能包含业务数据，应最小授权、加密、限定保留，并在分析后留下销毁记录。
-
-解释证据时先画状态转换。对象经历分配、可达、不可达与回收；类经历加载、验证、准备、解析和初始化；方法经历解释、编译、内联、失效与去优化；线程经历运行、阻塞、等待和终止。故障往往来自两个状态机边界错配，而不是某个孤立参数。把时间线、所有者和资源变化放在同一图上，才能检验因果顺序。
-
-勘误属于版本化来源。作者仓库对Class表、收集器、类加载、编译和JMM等细节持续修正；课程采用修正后的命题，并在需要时保留原印次差异。若样例输出与课程不同，先核对勘误、JDK和参数，再判断实现变化，不得为了匹配书中截图而禁用安全修复或使用不受支持的生产版本。
-
-没有出现预期事件也是证据，但必须确认观测窗口、采样频率和探针能力足以看见它。一次未观察到GC、编译、竞争或类加载失败，不能直接证明事件不存在；先加入已知会触发信号的阳性对照，验证采集链路，再扩大重复次数或缩小假设。若重放仍不稳定，应报告复现概率和未控制变量，而不是选择一条符合预期的运行作为结论。
-
-## 最小可执行切片
-
-先捕获运行环境，而不是从参数猜测：
-
-```java
-record VmCase(String javaVersion, String vmName, String vmVersion,
-              String flags, String workload, String evidenceHash) {}
-var vmCase = captureEnvironmentBeforeExperiment();
-```
-
-每个实验把预期、实际与可推翻条件写在执行之前：
-
-```java
-var baseline = run(Scenario.BASELINE, fixedWorkload);
-var variant = run(Scenario.ONE_VARIABLE_CHANGED, fixedWorkload);
-assertEquals(baseline.inputHash(), variant.inputHash());
-assertTrue(variant.rawEvidenceRetained());
-```
-
-交接合同不依赖特定IDE或图形工具：
-
-```gherkin
-Feature: 第四部分 程序编译与代码优化
-  Scenario: connect a JVM concept to reproducible evidence
-    Given a versioned JDK, VM flags, source, Class file, and fixed workload
-    When 让同一热点经历解释、分层编译、内联和去优化，保存编译日志与行为不变量
-    Then the observed state transition matches or falsifies the prediction
-    And version limits, resource risks, rollback, and raw evidence are recorded
-```
-
-## 定量模型与边界
-
-进程内存不是只有堆，至少需要同时观察堆、元空间、线程栈、代码缓存、直接内存和其他本地分配：
-
-$$
-M_{process}approx M_{heap}+M_{meta}+N_{threads}M_{stack}+M_{code}+M_{direct}+M_{native}
-$$
-
-垃圾收集成本要放回应用总时间和完成工作量，而不是只比较单次最大停顿：
-
-$$
-R_{gc}=rac{T_{gc}}{T_{wall}},qquad Throughput=rac{Work_{completed}}{T_{wall}}
-$$
-
-热点价值同时取决于单次成本、调用次数和编译形态；内联可减少调用，却可能扩大代码缓存并改变后续优化：
-
-$$
-C_{total}(m)=N(m)	imes ar{C}(m),qquad Delta C=C_{before}-C_{after}
-$$
-
-并发正确性不是概率。若同步关系形成happens-before边，则前序写入对后序读取可见；性能比较还应报告竞争与尾延迟：
-
-$$
-W(a);hb;R(b)Rightarrow visible(a,b),qquad L_{p99}leq Budget_{p99}
-$$
-
-公式用于明确变量和反例，不替代实际JDK证据。每个数字注明单位、并发、数据规模、预热、重复次数、置信区间和机器资源；不同环境的绝对值不能直接横比。
-
-## 三步验证实验
-
-<Steps>
-  <Step title="1. 建立跨层结构">
-    从“区分前端编译、即时编译和提前编译，观察语法糖、IR与优化如何改变代码表示而保持语义”选择一个规范命题和一个HotSpot实现命题，标出源码、Class、运行时和工具证据。先预测二者在版本变化时哪些保持、哪些可能改变。
-    <Duj3StructureLab />
-  </Step>
-  <Step title="2. 重放状态转换">
-    固定环境指纹后执行“让同一热点经历解释、分层编译、内联和去优化，保存编译日志与行为不变量”。基线之后一次只改变一个输入、参数或版本，保存未经筛选的原始输出。
-    <Duj3ExecutionLab />
-  </Step>
-  <Step title="3. 通过证据门">
-    用编译流水线、源码到字节码差异、JIT事件、IR和基准证据核对规范、实现、版本、失败反例、资源风险和回滚；缺少任一项时结论不得跨环境复用。
-    <Duj3EvidenceLab />
-  </Step>
-</Steps>
-
-<Callout type="trap">**陷阱：实现等同规范。** 对象头位布局、收集器默认值、JIT阈值和类加载器层次都可能随实现与版本改变。先证明来源层次，再决定结论适用范围。</Callout>
-
-<Callout type="trap">**陷阱：参数先于问题。** 加大堆、切换收集器、关闭优化或增加线程可能暂时隐藏症状，却扩大停顿、CPU、内存与一致性风险。没有基线和回滚阈值不得调参。</Callout>
-
-<Callout type="warning">**历史语境。** 原书第3版以JDK 12和JDK 13预览期为边界。已弃用、移除或重做的工具与功能仍应作为书中知识学习，但现代使用必须另行核对目标JDK官方资料。</Callout>
-
-## 本章回顾
-
-本页从第四部分 程序编译与代码优化覆盖到第四部分 程序编译与代码优化，共1个正式节点。最小闭环是先区分规范、实现、发行版和版本，建立环境指纹，再执行“让同一热点经历解释、分层编译、内联和去优化，保存编译日志与行为不变量”，最后用编译流水线、源码到字节码差异、JIT事件、IR和基准证据证明结论可重放、可推翻、可回滚。若仍出现“把编译器优化当保证、用微基准观察到的汇编外推业务系统，或忽略去优化与分层编译”，应回到目录节点补做跨层映射和反例，而不是继续叠加参数。
+## 练习、答案与282节点验证
 
 <Exercises>
 
-**问题 1**：如何为第四部分 程序编译与代码优化建立最小可执行证据链？
+**问题1：探针改变。** 如何隔离编译阶段对AST/字节码、编译事件与去优化的因果影响？
 
-<Answer>选择一个明确命题，固定JDK、JVM实现、参数、源码和工作量；执行“让同一热点经历解释、分层编译、内联和去优化，保存编译日志与行为不变量”，保存基线、单变量对照、原始输出与可推翻条件，并标注规范与实现边界。</Answer>
+<Answer>第四部分 程序编译与代码优化固定镜像、参数、工作量、运行阶段与采集窗口，只把编译阶段从“解释”切到“JIT”；保存原始输出、退出码、资源和探针成本，再重置并确认基线可重复。</Answer>
 
-**问题 2**：为什么“把编译器优化当保证、用微基准观察到的汇编外推业务系统，或忽略去优化与分层编译”会破坏本页结论？
+**问题2：四级证据。** 怎样证明本页1个目录节点不是标题复述？
 
-<Answer>它混淆来源层次或改变多个变量，使现象无法归因。应回到编译流水线、源码到字节码差异、JIT事件、IR和基准证据，补齐版本、状态转换、探针效应、失败反例和回滚，再由另一位读者独立重放。</Answer>
+<Answer>
+1. 第四部分 程序编译与代码优化：说明来源层次，执行适用探针，触发一个边界反例，并用AST/字节码、编译事件与去优化断言恢复。
+</Answer>
 
-**问题 3**：从第3版迁移到目标JDK时怎样控制变量？
+**问题3：恢复闭环。** 如何证明“把编译器一次输出外推到所有运行阶段”已经修复？
 
-<Answer>先在原书时间边界内理解命题，再查询目标JDK一手文档和作者勘误；一次只改变JDK、收集器、参数或工具之一，比较合同、输出、副作用和已移除功能，不把现代结果冒充原书内容。</Answer>
+<Answer>第四部分 程序编译与代码优化沿冻结JDK与输入、区分规范和实现、执行章专属探针、注入失败并恢复、保存原始发布证据定位第一处偏离，只改最小因果条件；删除旧Class、日志、JFR、转储、编译缓存或线程状态等适用派生物，以同输入重跑，直到“前端语义、Class结构、编译事件和去优化在同一工作量上对齐”恢复且编译流水线、源码到字节码差异、JIT事件、IR和基准证据可由另一位读者复核。</Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="规范合同">由规范定义、不同合规实现都必须保持的可观察承诺。</GlossaryItem>
-  <GlossaryItem term="实现细节">某一虚拟机在特定版本中为满足规范而选择的数据结构和算法。</GlossaryItem>
-  <GlossaryItem term="环境指纹">记录JDK、JVM实现、供应商、操作系统、参数、容器限制与源码提交的可比较标识。</GlossaryItem>
-  <GlossaryItem term="表示映射">源码构造、Class表项、运行时状态和机器级结果之间可追溯的对应关系。</GlossaryItem>
-  <GlossaryItem term="预热">程序从解释执行进入分层编译并达到相对稳定代码形态前的阶段。</GlossaryItem>
-  <GlossaryItem term="隔离实验">在受控资源与权限边界内制造OOM、加载失败、竞争或编译条件变化的可恢复环境。</GlossaryItem>
+  <GlossaryItem term="source → AST/desugar → bytecode → profile → compiled code">source → AST/desugar → bytecode → profile → compiled code是第四部分 程序编译与代码优化连接冻结JDK与输入与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。</GlossaryItem>
+  <GlossaryItem term="编译阶段">编译阶段是第四部分 程序编译与代码优化连接区分规范和实现与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。</GlossaryItem>
+  <GlossaryItem term="运行阶段">运行阶段是第四部分 程序编译与代码优化连接执行章专属探针与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。</GlossaryItem>
+  <GlossaryItem term="AST/字节码、编译事件与去优化">AST/字节码、编译事件与去优化是第四部分 程序编译与代码优化连接注入失败并恢复与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。</GlossaryItem>
+  <GlossaryItem term="编译流水线、源码到字节码差异、JIT事件、IR和基准证据">编译流水线、源码到字节码差异、JIT事件、IR和基准证据是第四部分 程序编译与代码优化连接保存原始发布证据与可推翻结论的章专属坐标，必须记录版本、输入、单位和探针影响。</GlossaryItem>
 </Glossary>
 
-[← 上一页：第9章 类加载及执行子系统的案例与实战](/learn/deep-understanding-jvm/12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases) · [下一页：第10章 前端编译与优化 →](/learn/deep-understanding-jvm/14-duj3-10-frontend-compiler/duj3-10-frontend-compiler)
-
-<Attribution adaptedFrom="周志明《深入理解Java虚拟机》第3版" adaptedUrl="https://github.com/fenixsoft/jvm_book" />
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" workTitle="周志明《深入理解Java虚拟机》第3版" adaptedUrl="https://github.com/fenixsoft/jvm_book" />
