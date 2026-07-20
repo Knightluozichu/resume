@@ -1113,14 +1113,25 @@ function ledgerEntry(chapter, previous, generatedAt) {
   };
 }
 
-function writeOutputs(chapters, generatedAt) {
+function writeOutputs(chapters, generatedAt, selectedIds = null) {
   const previous = previousLedger();
-  const entries = Object.fromEntries(
-    chapters.map((chapter) => [
-      chapter.id,
-      ledgerEntry(chapter, previous, generatedAt),
-    ]),
-  );
+  const inventoryIds = new Set(chapters.map((chapter) => chapter.id));
+  const entries = selectedIds
+    ? Object.fromEntries(
+        Object.entries(previous.chapters ?? {}).filter(([id]) =>
+          inventoryIds.has(id),
+        ),
+      )
+    : {};
+  for (const chapter of chapters) {
+    if (
+      !selectedIds ||
+      selectedIds.has(chapter.id) ||
+      !Object.hasOwn(entries, chapter.id)
+    ) {
+      entries[chapter.id] = ledgerEntry(chapter, previous, generatedAt);
+    }
+  }
   const ledger = {
     version: 2,
     generatedAt,
@@ -1130,14 +1141,14 @@ function writeOutputs(chapters, generatedAt) {
   fs.mkdirSync(path.dirname(LEDGER_PATH), { recursive: true });
   fs.writeFileSync(LEDGER_PATH, `${JSON.stringify(ledger, null, 2)}\n`);
   fs.mkdirSync(REPORT_DIR, { recursive: true });
-  const publicChapters = chapters.map((chapter) => ({
-    id: chapter.id,
-    title: chapter.title,
-    status: entries[chapter.id].status,
-    score: chapter.score,
-    dimensions: chapter.dimensions,
-    hardBlockers: chapter.hardBlockers,
-    dimensionFailures: chapter.dimensionFailures,
+  const publicChapters = Object.entries(entries).map(([id, entry]) => ({
+    id,
+    title: entry.title,
+    status: entry.status,
+    score: entry.score,
+    dimensions: entry.dimensions,
+    hardBlockers: entry.hardBlockers,
+    dimensionFailures: entry.dimensionFailures,
   }));
   fs.writeFileSync(
     path.join(REPORT_DIR, "content-quality.json"),
@@ -1233,9 +1244,13 @@ const selected = chapters.filter(
 );
 const generatedAt = new Date().toISOString();
 let summary = null;
-if (!args.check || args.updateLedger)
-  summary = writeOutputs(chapters, generatedAt);
-else
+if (!args.check || args.updateLedger) {
+  const selectedIds =
+    args.book || args.changed
+      ? new Set(selected.map((chapter) => chapter.id))
+      : null;
+  summary = writeOutputs(chapters, generatedAt, selectedIds);
+} else
   summary = {
     totals: {
       chapters: chapters.length,
