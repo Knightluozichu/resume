@@ -111,6 +111,12 @@ function hasGenericSharedVisualShell(source) {
   );
 }
 
+function hasTitleSubstitutionVisualShell(source) {
+  // 旧实现让章节包装器只替换 title、nodes 与 focuses，再把它们交给同一套
+  // Pipeline/Cycle/Tree 画布。声明 data-visual-kind 不能把标题替换变成专属图。
+  return /\bOfficialTpp20Lab\b/.test(source);
+}
+
 function hasFragmentedTermSequence(source) {
   return /<\/Term>\s*\n\s*[、，,；;]\s*\n\s*<Term\b/.test(source);
 }
@@ -129,6 +135,8 @@ function regressionBlockers(source, componentCorpus = "") {
     blockers.push("synthetic-visual-score");
   if (hasGenericSharedVisualShell(componentCorpus))
     blockers.push("generic-shared-visual-shell");
+  if (hasTitleSubstitutionVisualShell(componentCorpus))
+    blockers.push("generic-title-substitution-visual");
   if (hasFragmentedTermSequence(source))
     blockers.push("fragmented-term-sequence");
   return blockers;
@@ -217,6 +225,15 @@ export function OfficialEngineLab() {
     regressionBlockers(remediatedCarChapter, dedicatedVisual).length,
     0,
   );
+  const titleSubstitutionVisual = `
+import { OfficialTpp20Lab } from "./official-tpp20-lab";
+export function TopicLab() {
+  return <OfficialTpp20Lab title="只替换标题" nodes={["甲", "乙"]} focuses={["丙"]} />;
+}`;
+  assert.deepEqual(
+    regressionBlockers(remediatedCarChapter, titleSubstitutionVisual),
+    ["generic-title-substitution-visual"],
+  );
   const fragmentedTerms = `${remediatedCarChapter}\n<Term def="a">术语甲</Term>\n、\n<Term def="b">术语乙</Term>`;
   assert.equal(
     regressionBlockers(fragmentedTerms).includes("fragmented-term-sequence"),
@@ -234,6 +251,7 @@ export function OfficialEngineLab() {
         "placeholder-boundary-detected-without-kotlin-false-positive",
         "synthetic-visual-score-hard-fails",
         "dedicated-shared-visual-allowed",
+        "title-substitution-visual-hard-fails",
         "fragmented-term-sequence-hard-fails",
       ],
     }),
@@ -701,6 +719,8 @@ function parseChapter(filePath, manifests, visualResults) {
     genericFlags.push("synthetic-visual-score");
   if (hasGenericSharedVisualShell(importedCorpus))
     genericFlags.push("generic-shared-visual-shell");
+  if (hasTitleSubstitutionVisualShell(importedCorpus))
+    genericFlags.push("generic-title-substitution-visual");
 
   return {
     id,
@@ -1076,6 +1096,9 @@ function ledgerEntry(chapter, previous, generatedAt) {
     passedAt: chapter.pass ? (previousEntry?.passedAt ?? generatedAt) : null,
     publishedAt: preservePublished ? previousEntry.publishedAt : null,
     publishedRelease: preservePublished ? previousEntry.publishedRelease : null,
+    ...(preservePublished && previousEntry.publishedCommit
+      ? { publishedCommit: previousEntry.publishedCommit }
+      : {}),
   };
 }
 
