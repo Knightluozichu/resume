@@ -10042,9 +10042,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-official-learning-map");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3OfficialLearningMapStructureLab:
+          module0.Duj3OfficialLearningMapStructureLab,
+        Duj3OfficialLearningMapExecutionLab:
+          module0.Duj3OfficialLearningMapExecutionLab,
+        Duj3OfficialLearningMapEvidenceLab:
+          module0.Duj3OfficialLearningMapEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/01-duj3-part-1-approaching-java/duj3-part-1-approaching-java":
@@ -10052,9 +10055,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-1-approaching-java");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3Part1ApproachingJavaStructureLab:
+          module0.Duj3Part1ApproachingJavaStructureLab,
+        Duj3Part1ApproachingJavaExecutionLab:
+          module0.Duj3Part1ApproachingJavaExecutionLab,
+        Duj3Part1ApproachingJavaEvidenceLab:
+          module0.Duj3Part1ApproachingJavaEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/02-duj3-01-approaching-java/duj3-01-approaching-java":
@@ -10062,9 +10068,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-01-approaching-java");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj301ApproachingJavaStructureLab:
+          module0.Duj301ApproachingJavaStructureLab,
+        Duj301ApproachingJavaExecutionLab:
+          module0.Duj301ApproachingJavaExecutionLab,
+        Duj301ApproachingJavaEvidenceLab:
+          module0.Duj301ApproachingJavaEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/03-duj3-part-2-memory-management/duj3-part-2-memory-management":
@@ -10072,9 +10081,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-2-memory-management");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3Part2MemoryManagementStructureLab:
+          module0.Duj3Part2MemoryManagementStructureLab,
+        Duj3Part2MemoryManagementExecutionLab:
+          module0.Duj3Part2MemoryManagementExecutionLab,
+        Duj3Part2MemoryManagementEvidenceLab:
+          module0.Duj3Part2MemoryManagementEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/04-duj3-02-memory-areas/duj3-02-memory-areas":
@@ -10082,9 +10094,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-02-memory-areas");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj302MemoryAreasStructureLab: module0.Duj302MemoryAreasStructureLab,
+        Duj302MemoryAreasExecutionLab: module0.Duj302MemoryAreasExecutionLab,
+        Duj302MemoryAreasEvidenceLab: module0.Duj302MemoryAreasEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/05-duj3-03-gc-allocation/duj3-03-gc-allocation":
@@ -10092,9 +10104,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-03-gc-allocation");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj303GcAllocationStructureLab: module0.Duj303GcAllocationStructureLab,
+        Duj303GcAllocationExecutionLab: module0.Duj303GcAllocationExecutionLab,
+        Duj303GcAllocationEvidenceLab: module0.Duj303GcAllocationEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/06-duj3-04-monitoring-tools/duj3-04-monitoring-tools":
@@ -10102,9 +10114,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-04-monitoring-tools");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj304MonitoringToolsStructureLab:
+          module0.Duj304MonitoringToolsStructureLab,
+        Duj304MonitoringToolsExecutionLab:
+          module0.Duj304MonitoringToolsExecutionLab,
+        Duj304MonitoringToolsEvidenceLab:
+          module0.Duj304MonitoringToolsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/07-duj3-05-tuning-cases/duj3-05-tuning-cases":
@@ -10112,9 +10127,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-05-tuning-cases");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj305TuningCasesStructureLab: module0.Duj305TuningCasesStructureLab,
+        Duj305TuningCasesExecutionLab: module0.Duj305TuningCasesExecutionLab,
+        Duj305TuningCasesEvidenceLab: module0.Duj305TuningCasesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/08-duj3-part-3-execution-subsystem/duj3-part-3-execution-subsystem":
@@ -10122,9 +10137,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-3-execution-subsystem");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3Part3ExecutionSubsystemStructureLab:
+          module0.Duj3Part3ExecutionSubsystemStructureLab,
+        Duj3Part3ExecutionSubsystemExecutionLab:
+          module0.Duj3Part3ExecutionSubsystemExecutionLab,
+        Duj3Part3ExecutionSubsystemEvidenceLab:
+          module0.Duj3Part3ExecutionSubsystemEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/09-duj3-06-class-file/duj3-06-class-file":
@@ -10132,9 +10150,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-06-class-file");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj306ClassFileStructureLab: module0.Duj306ClassFileStructureLab,
+        Duj306ClassFileExecutionLab: module0.Duj306ClassFileExecutionLab,
+        Duj306ClassFileEvidenceLab: module0.Duj306ClassFileEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/10-duj3-07-class-loading/duj3-07-class-loading":
@@ -10142,9 +10160,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-07-class-loading");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj307ClassLoadingStructureLab: module0.Duj307ClassLoadingStructureLab,
+        Duj307ClassLoadingExecutionLab: module0.Duj307ClassLoadingExecutionLab,
+        Duj307ClassLoadingEvidenceLab: module0.Duj307ClassLoadingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/11-duj3-08-bytecode-engine/duj3-08-bytecode-engine":
@@ -10152,9 +10170,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-08-bytecode-engine");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj308BytecodeEngineStructureLab:
+          module0.Duj308BytecodeEngineStructureLab,
+        Duj308BytecodeEngineExecutionLab:
+          module0.Duj308BytecodeEngineExecutionLab,
+        Duj308BytecodeEngineEvidenceLab:
+          module0.Duj308BytecodeEngineEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases":
@@ -10162,9 +10183,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-09-loading-execution-cases");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj309LoadingExecutionCasesStructureLab:
+          module0.Duj309LoadingExecutionCasesStructureLab,
+        Duj309LoadingExecutionCasesExecutionLab:
+          module0.Duj309LoadingExecutionCasesExecutionLab,
+        Duj309LoadingExecutionCasesEvidenceLab:
+          module0.Duj309LoadingExecutionCasesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/13-duj3-part-4-compilation/duj3-part-4-compilation":
@@ -10172,9 +10196,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-4-compilation");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3Part4CompilationStructureLab:
+          module0.Duj3Part4CompilationStructureLab,
+        Duj3Part4CompilationExecutionLab:
+          module0.Duj3Part4CompilationExecutionLab,
+        Duj3Part4CompilationEvidenceLab:
+          module0.Duj3Part4CompilationEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/14-duj3-10-frontend-compiler/duj3-10-frontend-compiler":
@@ -10182,9 +10209,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-10-frontend-compiler");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj310FrontendCompilerStructureLab:
+          module0.Duj310FrontendCompilerStructureLab,
+        Duj310FrontendCompilerExecutionLab:
+          module0.Duj310FrontendCompilerExecutionLab,
+        Duj310FrontendCompilerEvidenceLab:
+          module0.Duj310FrontendCompilerEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/15-duj3-11-backend-compiler/duj3-11-backend-compiler":
@@ -10192,9 +10222,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-11-backend-compiler");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj311BackendCompilerStructureLab:
+          module0.Duj311BackendCompilerStructureLab,
+        Duj311BackendCompilerExecutionLab:
+          module0.Duj311BackendCompilerExecutionLab,
+        Duj311BackendCompilerEvidenceLab:
+          module0.Duj311BackendCompilerEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/16-duj3-part-5-concurrency/duj3-part-5-concurrency":
@@ -10202,9 +10235,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-part-5-concurrency");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3Part5ConcurrencyStructureLab:
+          module0.Duj3Part5ConcurrencyStructureLab,
+        Duj3Part5ConcurrencyExecutionLab:
+          module0.Duj3Part5ConcurrencyExecutionLab,
+        Duj3Part5ConcurrencyEvidenceLab:
+          module0.Duj3Part5ConcurrencyEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/17-duj3-12-memory-model-threads/duj3-12-memory-model-threads":
@@ -10212,9 +10248,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-12-memory-model-threads");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj312MemoryModelThreadsStructureLab:
+          module0.Duj312MemoryModelThreadsStructureLab,
+        Duj312MemoryModelThreadsExecutionLab:
+          module0.Duj312MemoryModelThreadsExecutionLab,
+        Duj312MemoryModelThreadsEvidenceLab:
+          module0.Duj312MemoryModelThreadsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/18-duj3-13-thread-safety-locks/duj3-13-thread-safety-locks":
@@ -10222,9 +10261,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-13-thread-safety-locks");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj313ThreadSafetyLocksStructureLab:
+          module0.Duj313ThreadSafetyLocksStructureLab,
+        Duj313ThreadSafetyLocksExecutionLab:
+          module0.Duj313ThreadSafetyLocksExecutionLab,
+        Duj313ThreadSafetyLocksEvidenceLab:
+          module0.Duj313ThreadSafetyLocksEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/19-duj3-appendix-a-build-openjdk6/duj3-appendix-a-build-openjdk6":
@@ -10232,9 +10274,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-appendix-a-build-openjdk6");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3AppendixABuildOpenjdk6StructureLab:
+          module0.Duj3AppendixABuildOpenjdk6StructureLab,
+        Duj3AppendixABuildOpenjdk6ExecutionLab:
+          module0.Duj3AppendixABuildOpenjdk6ExecutionLab,
+        Duj3AppendixABuildOpenjdk6EvidenceLab:
+          module0.Duj3AppendixABuildOpenjdk6EvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/20-duj3-appendix-b-java-future-2013/duj3-appendix-b-java-future-2013":
@@ -10242,9 +10287,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-appendix-b-java-future-2013");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3AppendixBJavaFuture2013StructureLab:
+          module0.Duj3AppendixBJavaFuture2013StructureLab,
+        Duj3AppendixBJavaFuture2013ExecutionLab:
+          module0.Duj3AppendixBJavaFuture2013ExecutionLab,
+        Duj3AppendixBJavaFuture2013EvidenceLab:
+          module0.Duj3AppendixBJavaFuture2013EvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/21-duj3-appendix-c-bytecode-table/duj3-appendix-c-bytecode-table":
@@ -10252,9 +10300,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-appendix-c-bytecode-table");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3AppendixCBytecodeTableStructureLab:
+          module0.Duj3AppendixCBytecodeTableStructureLab,
+        Duj3AppendixCBytecodeTableExecutionLab:
+          module0.Duj3AppendixCBytecodeTableExecutionLab,
+        Duj3AppendixCBytecodeTableEvidenceLab:
+          module0.Duj3AppendixCBytecodeTableEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/22-duj3-appendix-d-oql/duj3-appendix-d-oql":
@@ -10262,9 +10313,9 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-appendix-d-oql");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3AppendixDOqlStructureLab: module0.Duj3AppendixDOqlStructureLab,
+        Duj3AppendixDOqlExecutionLab: module0.Duj3AppendixDOqlExecutionLab,
+        Duj3AppendixDOqlEvidenceLab: module0.Duj3AppendixDOqlEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/23-duj3-appendix-e-jdk-history/duj3-appendix-e-jdk-history":
@@ -10272,9 +10323,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-appendix-e-jdk-history");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3AppendixEJdkHistoryStructureLab:
+          module0.Duj3AppendixEJdkHistoryStructureLab,
+        Duj3AppendixEJdkHistoryExecutionLab:
+          module0.Duj3AppendixEJdkHistoryExecutionLab,
+        Duj3AppendixEJdkHistoryEvidenceLab:
+          module0.Duj3AppendixEJdkHistoryEvidenceLab,
       } as ChapterMdxComponents;
     },
   "deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review":
@@ -10282,9 +10336,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/deep-understanding-jvm/diagrams/duj3-official-final-review");
       return {
-        Duj3StructureLab: module0.Duj3StructureLab,
-        Duj3ExecutionLab: module0.Duj3ExecutionLab,
-        Duj3EvidenceLab: module0.Duj3EvidenceLab,
+        Duj3OfficialFinalReviewStructureLab:
+          module0.Duj3OfficialFinalReviewStructureLab,
+        Duj3OfficialFinalReviewExecutionLab:
+          module0.Duj3OfficialFinalReviewExecutionLab,
+        Duj3OfficialFinalReviewEvidenceLab:
+          module0.Duj3OfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
   "design-patterns/00-intro/intro": async () => {
