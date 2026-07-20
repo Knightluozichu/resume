@@ -1,18 +1,8 @@
 import { OfficialCraftingCompilerLab } from "./official-crafting-compiler-lab";
 
-const data = {
+const props = {
+  unitId: "crc-16-stack-frame",
   title: "第16章 分配栈帧",
-  label: "第3部分 · 代码生成与优化",
-  color: "#be123c",
-  soft: "#ffe4e6",
-  chain: [
-    "选择指令模式",
-    "分配虚拟栈",
-    "降低表达式语句",
-    "修正帧偏移",
-    "发射汇编DSL",
-    "链接执行对照",
-  ],
   concepts: [
     "第16章 分配栈帧",
     "16.1 操作栈",
@@ -22,16 +12,35 @@ const data = {
     "16.5 生成函数序言和尾声",
     "16.6 alloca函数的实现",
   ],
+  chain: ["冻结输入", "产出结构", "断言不变量", "触发首错", "清理重建"],
+  model: {
+    studio: "栈帧布局计算台",
+    boundary: "parameters/locals/temps/alloca → offsets → prologue/epilogue",
+    axisA: {
+      label: "帧对象",
+      levels: ["参数", "局部/临时", "动态分配"],
+    },
+    axisB: {
+      label: "调用深度",
+      levels: ["叶函数", "嵌套调用", "递归"],
+    },
+    fault: "调整临时槽或alloca后未重算全部偏移与恢复路径",
+    invariant: "所有槽不重叠、对齐满足ABI、每条返回路径恢复相同栈状态",
+    probe: "objdump -drwC frame.o\ngdb --batch -x stack.gdb ./frame",
+    signal: "帧大小、偏移、ESP平衡与哨兵",
+    artifact: "栈帧布局表",
+    trap: "固定EBP偏移不能掩盖动态栈变化",
+    practiceMode: "code",
+    task: "第16章 分配栈帧固定源码、cbc提交、JDK/JavaCC、GNU工具与IA-32目标，只改变帧对象或调用深度。",
+  },
 } as const;
 
 export function Crc16StackFrameMapLab() {
-  return <OfficialCraftingCompilerLab {...data} view="map" />;
+  return <OfficialCraftingCompilerLab {...props} view="structure" />;
 }
-
 export function Crc16StackFrameExperimentLab() {
-  return <OfficialCraftingCompilerLab {...data} view="experiment" />;
+  return <OfficialCraftingCompilerLab {...props} view="execution" />;
 }
-
 export function Crc16StackFrameEvidenceLab() {
-  return <OfficialCraftingCompilerLab {...data} view="evidence" />;
+  return <OfficialCraftingCompilerLab {...props} view="evidence" />;
 }
