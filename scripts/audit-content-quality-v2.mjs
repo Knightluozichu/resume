@@ -111,6 +111,10 @@ function hasGenericSharedVisualShell(source) {
   );
 }
 
+function hasFragmentedTermSequence(source) {
+  return /<\/Term>\s*\n\s*[、，,；;]\s*\n\s*<Term\b/.test(source);
+}
+
 function regressionBlockers(source, componentCorpus = "") {
   const blockers = GENERIC_PATTERNS.filter(([, pattern]) =>
     pattern.test(source),
@@ -125,6 +129,8 @@ function regressionBlockers(source, componentCorpus = "") {
     blockers.push("synthetic-visual-score");
   if (hasGenericSharedVisualShell(componentCorpus))
     blockers.push("generic-shared-visual-shell");
+  if (hasFragmentedTermSequence(source))
+    blockers.push("fragmented-term-sequence");
   return blockers;
 }
 
@@ -198,9 +204,9 @@ export function OfficialExampleLab() {
   return <section><span>可信度</span><span>失真风险</span><span>证据闭环度</span></section>;
 }`;
   assert.deepEqual(
-    regressionBlockers(remediatedCarChapter, syntheticVisual).filter((code) =>
-      code.includes("visual"),
-    ).sort(),
+    regressionBlockers(remediatedCarChapter, syntheticVisual)
+      .filter((code) => code.includes("visual"))
+      .sort(),
     ["generic-shared-visual-shell", "synthetic-visual-score"],
   );
   const dedicatedVisual = `
@@ -210,6 +216,11 @@ export function OfficialEngineLab() {
   assert.equal(
     regressionBlockers(remediatedCarChapter, dedicatedVisual).length,
     0,
+  );
+  const fragmentedTerms = `${remediatedCarChapter}\n<Term def="a">术语甲</Term>\n、\n<Term def="b">术语乙</Term>`;
+  assert.equal(
+    regressionBlockers(fragmentedTerms).includes("fragmented-term-sequence"),
+    true,
   );
   console.log(
     JSON.stringify({
@@ -223,6 +234,7 @@ export function OfficialEngineLab() {
         "placeholder-boundary-detected-without-kotlin-false-positive",
         "synthetic-visual-score-hard-fails",
         "dedicated-shared-visual-allowed",
+        "fragmented-term-sequence-hard-fails",
       ],
     }),
   );
@@ -380,10 +392,13 @@ function moduleCorpus(modulePath, seen = new Set()) {
   // 章节薄包装器通常用普通相对 import 引入一本书内的共享绘图实现。
   // 只追踪同书目录，避免把全局 MDX 注册表和数千个懒加载模块拼进语料。
   const mdxComponentRoot = path.join(ROOT, "src/components/mdx");
-  const relativeParts = path.relative(mdxComponentRoot, modulePath).split(path.sep);
-  const bookComponentRoot = relativeParts.length >= 2
-    ? path.join(mdxComponentRoot, relativeParts[0])
-    : null;
+  const relativeParts = path
+    .relative(mdxComponentRoot, modulePath)
+    .split(path.sep);
+  const bookComponentRoot =
+    relativeParts.length >= 2
+      ? path.join(mdxComponentRoot, relativeParts[0])
+      : null;
   const localDependencies = bookComponentRoot
     ? [...source.matchAll(/import[\s\S]*?from\s+["'](\.[^"']+)["']/g)]
         .map((match) => resolveImportedModule(match[1], modulePath))
@@ -494,9 +509,22 @@ function parseChapter(filePath, manifests, visualResults) {
   const answers = countMatches(exercisesBlock, /<Answer\b/g);
   const objectiveBlocks = countMatches(source, /<Objectives\b/g);
   const attributionBlocks = countMatches(source, /<Attribution\b/g);
-  const terms = [...source.matchAll(/<Term\b[^>]*>([\s\S]*?)<\/Term>/g)].map(
-    (match) => normalized(match[1].replace(/<[^>]+>/g, "")),
+  const inlineTerms = [
+    ...source.matchAll(/<Term\b[^>]*>([\s\S]*?)<\/Term>/g),
+  ].map((match) => normalized(match[1].replace(/<[^>]+>/g, "")));
+  const sequenceTerms = [
+    ...source.matchAll(/<TermSequence\b([\s\S]*?)\/>/g),
+  ].flatMap((sequence) =>
+    [...sequence[1].matchAll(/\bterm:\s*("(?:\\.|[^"\\])*")/g)].map((match) => {
+      try {
+        return normalized(JSON.parse(match[1]));
+      } catch {
+        return "";
+      }
+    }),
   );
+  const terms = [...inlineTerms, ...sequenceTerms].filter(Boolean);
+  const fragmentedTermSequence = hasFragmentedTermSequence(source);
   const glossary = [
     ...source.matchAll(/<GlossaryItem\b[^>]*\bterm=["']([^"']+)["']/g),
   ].map((match) => normalized(match[1]));
@@ -697,6 +725,7 @@ function parseChapter(filePath, manifests, visualResults) {
     answers,
     attributionBlocks,
     terms,
+    fragmentedTermSequence,
     glossary,
     glossaryMatches,
     traps,
@@ -767,6 +796,8 @@ function scoreChapter(chapter, sentenceOwners) {
     hardBlockers.push("visual-evidence-missing");
   if (chapter.visualResult && !chapter.visualResult.pass)
     hardBlockers.push("visual-runtime-failed");
+  if (chapter.fragmentedTermSequence)
+    hardBlockers.push("fragmented-term-sequence");
 
   const source =
     (chapter.sourceAccess === "full-text-primary"

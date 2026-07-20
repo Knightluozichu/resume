@@ -468,7 +468,7 @@ import { Objectives } from "./objectives";
 import { PipelineViz } from "./pipeline-viz";
 import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
-import { Term } from "./term";
+import { Term, TermSequence } from "./term";
 import { TextureDemo } from "./texture-demo";
 import { CameraDemo } from "./camera-demo";
 import { LightingDemo } from "./lighting-demo";
@@ -9221,6 +9221,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HfdTemplateMethodDiagram,
   HfdFinalReviewDiagram,
   Term,
+  TermSequence,
   Glossary,
   // === Auto-generated component registrations ===
 

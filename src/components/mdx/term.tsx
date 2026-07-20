@@ -103,7 +103,13 @@ export function Term({
         // 行内高亮：accent 虚线下划线 + cursor-help，不撑行高（baseline 对齐、无 padding）
         className="cursor-help border-0 bg-transparent p-0 font-[inherit] text-accent underline decoration-accent decoration-dashed underline-offset-4 transition-colors duration-(--duration-hover) ease-standard hover:text-primary"
       >
-        {children}
+        {/*
+         * MDX 会把换行后的 children 包成 <p>。button 只允许短语内容，直接渲染
+         * children 会产生 <button><p>…</p></button> 的非法 DOM，并让 prose 的段落
+         * margin 把一个行内术语撑成整块。统一渲染已经递归提取的纯文本，锚点、
+         * tooltip 与视觉文本仍保持同一来源。
+         */}
+        {termText}
       </button>
 
       {/* 章末词条锚链接：小箭头，跳到 Glossary 对应词条 */}
@@ -126,5 +132,42 @@ export function Term({
         {def}
       </span>
     </span>
+  );
+}
+
+export type TermSequenceItem = {
+  term: string;
+  def: string;
+  id?: string;
+};
+
+/**
+ * 一组需要出现在同一正文句子里的术语。
+ *
+ * 不把多个 <Term> 和顿号直接散落在 MDX flow 根节点：格式化器会把顿号编译成
+ * 独立 <p>，造成“术语一行、顿号一行”的断裂版式。这里由一个真实段落持有全部
+ * 行内术语，允许按正文宽度自然换行。
+ */
+export function TermSequence({
+  items,
+  suffix,
+  separator = "、",
+}: {
+  items: TermSequenceItem[];
+  suffix?: string;
+  separator?: string;
+}) {
+  return (
+    <p data-term-sequence>
+      {items.map((item, index) => (
+        <span key={`${item.id ?? item.term}-${index}`}>
+          {index > 0 ? separator : null}
+          <Term def={item.def} id={item.id}>
+            {item.term}
+          </Term>
+        </span>
+      ))}
+      {suffix}
+    </p>
   );
 }

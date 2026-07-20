@@ -176,6 +176,7 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
   const artifactRoot = path.join(ARTIFACT_DIR, chapter.id);
   ensureDirectory(artifactRoot);
   const topPath = path.join(artifactRoot, `${viewport.name}-top.png`);
+  const middlePath = path.join(artifactRoot, `${viewport.name}-middle.png`);
   const corePath = path.join(artifactRoot, `${viewport.name}-core.png`);
   const endPath = path.join(artifactRoot, `${viewport.name}-end.png`);
   await page.screenshot({ path: topPath });
@@ -283,6 +284,27 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
     const fallbackText = /不支持|降级|fallback|截图|静态图/i.test(
       document.querySelector("article")?.textContent ?? "",
     );
+    const invalidTermMarkup = [
+      ...document.querySelectorAll("article .mdx-term button p"),
+    ].map((element) => (element.textContent ?? "").trim().slice(0, 80));
+    const orphanProsePunctuation = [
+      ...document.querySelectorAll("article .prose > p"),
+    ]
+      .map((element) => (element.textContent ?? "").trim())
+      .filter((text) => /^[、，,。；;：:]+$/.test(text))
+      .slice(0, 20);
+    const oversizedTerms = [
+      ...document.querySelectorAll("article .mdx-term button"),
+    ]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          text: (element.textContent ?? "").trim().slice(0, 80),
+          height: Math.round(rect.height),
+        };
+      })
+      .filter((item) => item.height > 48)
+      .slice(0, 20);
     return {
       horizontalOverflow:
         document.documentElement.scrollWidth > viewportWidth + 1,
@@ -294,10 +316,32 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       visualCount,
       canvasCount,
       fallbackText,
+      invalidTermMarkup,
+      orphanProsePunctuation,
+      oversizedTerms,
       footerText: (document.querySelector("footer")?.textContent ?? "").trim(),
       pageHeight: document.documentElement.scrollHeight,
     };
   });
+
+  const middleTarget = await page.evaluate(() => {
+    const target =
+      document.querySelector("article [data-term-sequence]") ??
+      document.querySelector("article .prose");
+    if (!target) return null;
+    if (target.hasAttribute("data-term-sequence"))
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+    else {
+      const rect = target.getBoundingClientRect();
+      window.scrollTo(0, window.scrollY + rect.top + rect.height / 2);
+    }
+    return {
+      tag: target.tagName,
+      termSequence: target.hasAttribute("data-term-sequence"),
+    };
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await page.screenshot({ path: middlePath });
 
   const coreTarget = await page.evaluate(() => {
     const isVisible = (element) => {
@@ -504,6 +548,24 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       code: "console-error",
       detail: consoleErrors,
     });
+  if (metrics.invalidTermMarkup.length > 0)
+    findings.push({
+      severity: "high",
+      code: "invalid-term-markup",
+      detail: metrics.invalidTermMarkup,
+    });
+  if (metrics.orphanProsePunctuation.length > 0)
+    findings.push({
+      severity: "high",
+      code: "orphan-prose-punctuation",
+      detail: metrics.orphanProsePunctuation,
+    });
+  if (metrics.oversizedTerms.length > 0)
+    findings.push({
+      severity: "high",
+      code: "term-control-block-layout",
+      detail: metrics.oversizedTerms,
+    });
   if (metrics.visualCount === 0)
     findings.push({
       severity: "high",
@@ -549,7 +611,7 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       code: "global-attribution-mismatch",
       detail: "非 LearnOpenGL 书籍错误继承了 LearnOpenGL 授权声明",
     });
-  const evidence = [topPath, corePath, endPath].map((filePath) =>
+  const evidence = [topPath, middlePath, corePath, endPath].map((filePath) =>
     path.relative(ROOT, filePath).replaceAll(path.sep, "/"),
   );
   const score = Math.max(
@@ -566,6 +628,7 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       visualCount: metrics.visualCount,
       controlCount: metrics.controlCount,
       pageHeight: metrics.pageHeight,
+      middleTarget,
       coreTarget,
     },
     interactionChanged,
