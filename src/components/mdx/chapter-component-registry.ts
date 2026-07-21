@@ -23616,6 +23616,608 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.PhaOfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/00-map/poeaa24-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-learning-map-diagram");
+      return {
+        Poeaa24LearningMapDiagram: module0.Poeaa24LearningMapDiagram,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/03-pattern-list/poeaa24-pattern-list":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-list-diagram");
+      return {
+        Poeaa24PatternListDiagram: module0.Poeaa24PatternListDiagram,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/06-chapter-01-layering/poeaa24-chapter-01-layering":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch01-layer-stack-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch01-deployment-diagram"),
+      ]);
+      return {
+        Poeaa24Ch01LayerStackDiagram: modules[0].Poeaa24Ch01LayerStackDiagram,
+        Poeaa24Ch01DeploymentDiagram: modules[1].Poeaa24Ch01DeploymentDiagram,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch02-domain-logic-strategies");
+      return {
+        Poeaa24Ch02DomainLogicStrategies:
+          module0.Poeaa24Ch02DomainLogicStrategies,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/08-chapter-03-relational-mapping/poeaa24-chapter-03-relational-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch03-impedance-mismatch");
+      return {
+        Poeaa24Ch03ImpedanceMismatch: module0.Poeaa24Ch03ImpedanceMismatch,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch04-mvc-triangle");
+      return {
+        Poeaa24Ch04MvcTriangle: module0.Poeaa24Ch04MvcTriangle,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/10-chapter-05-concurrency/poeaa24-chapter-05-concurrency":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch05-lost-update-timeline"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch05-optimistic-vs-pessimistic"),
+      ]);
+      return {
+        Poeaa24Ch05LostUpdateTimeline: modules[0].Poeaa24Ch05LostUpdateTimeline,
+        Poeaa24Ch05OptimisticVsPessimistic:
+          modules[1].Poeaa24Ch05OptimisticVsPessimistic,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/11-chapter-06-session-state/poeaa24-chapter-06-session-state":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch06-session-state-positions");
+      return {
+        Poeaa24Ch06SessionStatePositions:
+          module0.Poeaa24Ch06SessionStatePositions,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch07-remote-call-cost");
+      return {
+        Poeaa24Ch07RemoteCallCost: module0.Poeaa24Ch07RemoteCallCost,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/13-chapter-08-putting-together/poeaa24-chapter-08-putting-together":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch08-assembly-diagram");
+      return {
+        Poeaa24Ch08AssemblyDiagram: module0.Poeaa24Ch08AssemblyDiagram,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch09-domain-logic-map");
+      return {
+        Poeaa24Ch09DomainLogicMap: module0.Poeaa24Ch09DomainLogicMap,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/16-pattern-01-transaction-script/poeaa24-pattern-01-transaction-script":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-01-transaction-script-diagram");
+      return {
+        Poeaa24Pattern01TransactionScript:
+          module0.Poeaa24Pattern01TransactionScript,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/17-pattern-02-domain-model/poeaa24-pattern-02-domain-model":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-02-domain-model-diagram");
+      return {
+        Poeaa24Pattern02DomainModel: module0.Poeaa24Pattern02DomainModel,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/18-pattern-03-table-module/poeaa24-pattern-03-table-module":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-03-table-module-diagram");
+      return {
+        Poeaa24Pattern03TableModule: module0.Poeaa24Pattern03TableModule,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-04-service-layer-diagram");
+      return {
+        Poeaa24Pattern04ServiceLayer: module0.Poeaa24Pattern04ServiceLayer,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-gradient");
+      return {
+        Poeaa24Ch10DataSourceGradient: module0.Poeaa24Ch10DataSourceGradient,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-05-table-data-gateway-diagram");
+      return {
+        Poeaa24Pattern05TableDataGateway:
+          module0.Poeaa24Pattern05TableDataGateway,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-06-row-data-gateway-diagram");
+      return {
+        Poeaa24Pattern06RowDataGateway: module0.Poeaa24Pattern06RowDataGateway,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/23-pattern-07-active-record/poeaa24-pattern-07-active-record":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-07-active-record-diagram");
+      return {
+        Poeaa24Pattern07ActiveRecord: module0.Poeaa24Pattern07ActiveRecord,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-08-data-mapper-diagram");
+      return {
+        Poeaa24Pattern08DataMapper: module0.Poeaa24Pattern08DataMapper,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-collaboration");
+      return {
+        Poeaa24Ch11BehaviorCollaboration:
+          module0.Poeaa24Ch11BehaviorCollaboration,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-09-unit-of-work-diagram");
+      return {
+        Poeaa24Pattern09UnitOfWork: module0.Poeaa24Pattern09UnitOfWork,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/27-pattern-10-identity-map/poeaa24-pattern-10-identity-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-10-identity-map-diagram");
+      return {
+        Poeaa24Pattern10IdentityMap: module0.Poeaa24Pattern10IdentityMap,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/28-pattern-11-lazy-load/poeaa24-pattern-11-lazy-load":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-11-lazy-load-diagram");
+      return {
+        Poeaa24Pattern11LazyLoad: module0.Poeaa24Pattern11LazyLoad,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-decision-tree");
+      return {
+        Poeaa24Ch12StructureDecisionTree:
+          module0.Poeaa24Ch12StructureDecisionTree,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/30-pattern-12-identity-field/poeaa24-pattern-12-identity-field":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-12-identity-field-diagram");
+      return {
+        Poeaa24Pattern12IdentityField: module0.Poeaa24Pattern12IdentityField,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-13-foreign-key-mapping-diagram");
+      return {
+        Poeaa24Pattern13ForeignKeyMapping:
+          module0.Poeaa24Pattern13ForeignKeyMapping,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-14-association-table-mapping-diagram");
+      return {
+        Poeaa24Pattern14AssociationTableMapping:
+          module0.Poeaa24Pattern14AssociationTableMapping,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/33-pattern-15-dependent-mapping/poeaa24-pattern-15-dependent-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-15-dependent-mapping-diagram");
+      return {
+        Poeaa24Pattern15DependentMapping:
+          module0.Poeaa24Pattern15DependentMapping,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-16-embedded-value-diagram");
+      return {
+        Poeaa24Pattern16EmbeddedValue: module0.Poeaa24Pattern16EmbeddedValue,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-17-serialized-lob-diagram");
+      return {
+        Poeaa24Pattern17SerializedLob: module0.Poeaa24Pattern17SerializedLob,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance-diagram");
+      return {
+        Poeaa24Pattern18SingleTableInheritance:
+          module0.Poeaa24Pattern18SingleTableInheritance,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-19-class-table-inheritance-diagram");
+      return {
+        Poeaa24Pattern19ClassTableInheritance:
+          module0.Poeaa24Pattern19ClassTableInheritance,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-20-concrete-table-inheritance-diagram");
+      return {
+        Poeaa24Pattern20ConcreteTableInheritance:
+          module0.Poeaa24Pattern20ConcreteTableInheritance,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-21-inheritance-mappers-diagram");
+      return {
+        Poeaa24Pattern21InheritanceMappers:
+          module0.Poeaa24Pattern21InheritanceMappers,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-compare");
+      return {
+        Poeaa24Ch13MetadataCompare: module0.Poeaa24Ch13MetadataCompare,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-22-metadata-mapping-diagram");
+      return {
+        Poeaa24Pattern22MetadataMapping:
+          module0.Poeaa24Pattern22MetadataMapping,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/42-pattern-23-query-object/poeaa24-pattern-23-query-object":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-23-query-object-diagram");
+      return {
+        Poeaa24Pattern23QueryObject: module0.Poeaa24Pattern23QueryObject,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/43-pattern-24-repository/poeaa24-pattern-24-repository":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-24-repository-diagram");
+      return {
+        Poeaa24Pattern24Repository: module0.Poeaa24Pattern24Repository,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/44-chapter-14-web-presentation-patterns/poeaa24-chapter-14-web-presentation-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-presentation-matrix");
+      return {
+        Poeaa24Ch14WebPresentationMatrix:
+          module0.Poeaa24Ch14WebPresentationMatrix,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/45-pattern-25-model-view-controller/poeaa24-pattern-25-model-view-controller":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-25-model-view-controller-diagram");
+      return {
+        Poeaa24Pattern25ModelViewController:
+          module0.Poeaa24Pattern25ModelViewController,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/46-pattern-26-page-controller/poeaa24-pattern-26-page-controller":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-26-page-controller-diagram");
+      return {
+        Poeaa24Pattern26PageController: module0.Poeaa24Pattern26PageController,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/47-pattern-27-front-controller/poeaa24-pattern-27-front-controller":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-27-front-controller-diagram");
+      return {
+        Poeaa24Pattern27FrontController:
+          module0.Poeaa24Pattern27FrontController,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/48-pattern-28-template-view/poeaa24-pattern-28-template-view":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-28-template-view-diagram");
+      return {
+        Poeaa24Pattern28TemplateView: module0.Poeaa24Pattern28TemplateView,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/49-pattern-29-transform-view/poeaa24-pattern-29-transform-view":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-29-transform-view-diagram");
+      return {
+        Poeaa24Pattern29TransformView: module0.Poeaa24Pattern29TransformView,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/50-pattern-30-two-step-view/poeaa24-pattern-30-two-step-view":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-30-two-step-view-diagram");
+      return {
+        Poeaa24Pattern30TwoStepView: module0.Poeaa24Pattern30TwoStepView,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/51-pattern-31-application-controller/poeaa24-pattern-31-application-controller":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-31-application-controller-diagram");
+      return {
+        Poeaa24Pattern31ApplicationController:
+          module0.Poeaa24Pattern31ApplicationController,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-callstack");
+      return {
+        Poeaa24Ch15DistributionCallStack:
+          module0.Poeaa24Ch15DistributionCallStack,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/53-pattern-32-remote-facade/poeaa24-pattern-32-remote-facade":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-32-remote-facade-diagram");
+      return {
+        Poeaa24Pattern32RemoteFacade: module0.Poeaa24Pattern32RemoteFacade,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/54-pattern-33-data-transfer-object/poeaa24-pattern-33-data-transfer-object":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-33-data-transfer-object-diagram");
+      return {
+        Poeaa24Pattern33DataTransferObject:
+          module0.Poeaa24Pattern33DataTransferObject,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-lock-strategies");
+      return {
+        Poeaa24Ch16LockStrategies: module0.Poeaa24Ch16LockStrategies,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/56-pattern-34-optimistic-offline-lock/poeaa24-pattern-34-optimistic-offline-lock":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-34-optimistic-offline-lock-diagram");
+      return {
+        Poeaa24Pattern34OptimisticOfflineLock:
+          module0.Poeaa24Pattern34OptimisticOfflineLock,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/57-pattern-35-pessimistic-offline-lock/poeaa24-pattern-35-pessimistic-offline-lock":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-35-pessimistic-offline-lock-diagram");
+      return {
+        Poeaa24Pattern35PessimisticOfflineLock:
+          module0.Poeaa24Pattern35PessimisticOfflineLock,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/58-pattern-36-coarse-grained-lock/poeaa24-pattern-36-coarse-grained-lock":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-36-coarse-grained-lock-diagram");
+      return {
+        Poeaa24Pattern36CoarseGrainedLock:
+          module0.Poeaa24Pattern36CoarseGrainedLock,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/59-pattern-37-implicit-lock/poeaa24-pattern-37-implicit-lock":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-37-implicit-lock-diagram");
+      return {
+        Poeaa24Pattern37ImplicitLock: module0.Poeaa24Pattern37ImplicitLock,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/60-chapter-17-session-state-patterns/poeaa24-chapter-17-session-state-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch17-session-dataflow");
+      return {
+        Poeaa24Ch17SessionDataFlow: module0.Poeaa24Ch17SessionDataFlow,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/61-pattern-38-client-session-state/poeaa24-pattern-38-client-session-state":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-38-client-session-state-diagram");
+      return {
+        Poeaa24Pattern38ClientSessionState:
+          module0.Poeaa24Pattern38ClientSessionState,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-39-server-session-state-diagram");
+      return {
+        Poeaa24Pattern39ServerSessionState:
+          module0.Poeaa24Pattern39ServerSessionState,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-40-database-session-state-diagram");
+      return {
+        Poeaa24Pattern40DatabaseSessionState:
+          module0.Poeaa24Pattern40DatabaseSessionState,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-deps");
+      return {
+        Poeaa24Ch18BasePatternsDeps: module0.Poeaa24Ch18BasePatternsDeps,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/65-pattern-41-gateway/poeaa24-pattern-41-gateway":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-41-gateway-diagram");
+      return {
+        Poeaa24Pattern41Gateway: module0.Poeaa24Pattern41Gateway,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-42-mapper-diagram");
+      return {
+        Poeaa24Pattern42Mapper: module0.Poeaa24Pattern42Mapper,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-43-layer-supertype-diagram");
+      return {
+        Poeaa24Pattern43LayerSupertype: module0.Poeaa24Pattern43LayerSupertype,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-44-separated-interface-diagram");
+      return {
+        Poeaa24Pattern44SeparatedInterface:
+          module0.Poeaa24Pattern44SeparatedInterface,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/69-pattern-45-registry/poeaa24-pattern-45-registry":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-45-registry-diagram");
+      return {
+        Poeaa24Pattern45Registry: module0.Poeaa24Pattern45Registry,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/70-pattern-46-value-object/poeaa24-pattern-46-value-object":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-46-value-object-diagram");
+      return {
+        Poeaa24Pattern46ValueObject: module0.Poeaa24Pattern46ValueObject,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/71-pattern-47-money/poeaa24-pattern-47-money":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money-diagram");
+      return {
+        Poeaa24Pattern47Money: module0.Poeaa24Pattern47Money,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/72-pattern-48-special-case/poeaa24-pattern-48-special-case":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-48-special-case-diagram");
+      return {
+        Poeaa24Pattern48SpecialCase: module0.Poeaa24Pattern48SpecialCase,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/73-pattern-49-plugin/poeaa24-pattern-49-plugin":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-49-plugin-diagram");
+      return {
+        Poeaa24Pattern49Plugin: module0.Poeaa24Pattern49Plugin,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/74-pattern-50-service-stub/poeaa24-pattern-50-service-stub":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-50-service-stub-diagram");
+      return {
+        Poeaa24Pattern50ServiceStub: module0.Poeaa24Pattern50ServiceStub,
+      } as ChapterMdxComponents;
+    },
+  "poeaa-enterprise-patterns/75-pattern-51-record-set/poeaa24-pattern-51-record-set":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-51-record-set-diagram");
+      return {
+        Poeaa24Pattern51RecordSet: module0.Poeaa24Pattern51RecordSet,
+      } as ChapterMdxComponents;
+    },
   "profiling-unity-games/00-guide/prof-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/profiling-unity-games/diagrams/prof-official-learning-map");
