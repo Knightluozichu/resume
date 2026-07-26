@@ -244,9 +244,13 @@ function bookRank(bookSlug: string): number {
  * 全程不读 frontmatter、不依赖 content↔review 的 slug 相等；书序 / 书名取自 content.ts 常量。
  */
 export function buildReviewScopeTree(): ReviewScopeTree {
+  // 下架（draft:true）书不出现在复习范围树：以当前可用章节的书集合为准。
+  // 生产构建 getAllChapters 已过滤 draft 章节，全 draft 的书不在集合内。
+  const allChapters = getAllChapters();
+  const availableBooks = new Set(allChapters.map((c) => c.bookSlug));
   // bare-slug → book（仅 LearnOpenGL / Android 两本可能有 bare 复习 slug）
   const bareSlugBooks = new Map<string, string>();
-  for (const c of getAllChapters()) {
+  for (const c of allChapters) {
     if (
       c.bookSlug === "learnopengl" ||
       c.bookSlug === "android-advanced-decryption"
@@ -272,6 +276,7 @@ export function buildReviewScopeTree(): ReviewScopeTree {
     if (count <= 0) continue;
     const book = bookSlugForReviewSlug(slug, bareSlugBooks);
     if (!book) continue; // 理论上不该发生；防御性跳过，宁缺毋错
+    if (!availableBooks.has(book)) continue; // 下架书不进入复习范围
     const title = CHAPTER_TITLES[slug as ReviewChapterSlug] ?? slug;
     const list = byBook.get(book) ?? [];
     list.push({ slug, title, count });

@@ -625,17 +625,10 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "掌握语法、类型、控制流、函数、对象与基础内存模型。",
         items: learningBooks([
-          "c-primer-plus",
           "the-c-programming-language",
           "beginning-cpp-game-programming",
-          "easy-cpp-5e",
           "cpp-primer-plus",
-          "cpp-primer-5e",
           "essential-csharp-7",
-          "rust-programming-language",
-          "go-programming-language",
-          "python-crash-course",
-          "lua-programming",
           "ruby-programming",
         ]),
       },
@@ -648,17 +641,9 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
           "cpp-high-performance",
           "optimized-cpp",
           "cpp-testing-recipes",
-          "cpp-server-essence",
           "csharp-quality-code",
           "effective-csharp",
           "deep-understanding-csharp",
-          "csharp-functional-programming",
-          "csharp-10-core",
-          "rust-way",
-          "go-in-action",
-          "go-web-programming",
-          "fluent-python",
-          "python-ops",
         ]),
       },
       {
@@ -670,10 +655,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
           "cpp-concurrency",
           "modern-cpp-design",
           "cpu-eye-cpp",
-          "clr-via-csharp",
           "dotnet-memory",
-          "mastering-rust-2e",
-          "python-advanced",
         ]),
       },
     ],
@@ -687,7 +669,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "用图解和实例建立数组、链表、树、图、搜索与排序的第一直觉。",
         items: learningBooks([
-          "grokking-algorithms-2e",
           "data-structures-visual",
           "math-girl",
         ]),
@@ -696,19 +677,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "intermediate",
         summary: "系统训练数据结构、题型、算法分析与实际编码能力。",
         items: learningBooks([
-          "coding-interviews",
-          "dsa-cpp",
-          "algorithms-4e",
-          "programming-pearls",
-          "competitive-algorithms",
         ]),
       },
       {
         level: "advanced",
         summary: "进入高阶算法、算法证明、位级技巧与生产级算法工程。",
         items: learningBooks([
-          "advanced-algorithm-engineering",
-          "introduction-to-algorithms",
           "hackers-delight",
           "taocp",
         ]),
@@ -724,19 +698,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "先建立数学思维、概率统计与问题建模的基本直觉。",
-        items: learningBooks(["programmers-math", "head-first-statistics"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "系统掌握线性代数、空间、变换和图形开发数学。",
-        items: learningBooks(["game-math-3d", "linear-algebra-done-right"]),
+        items: learningBooks([]),
       },
       {
         level: "advanced",
         summary: "进入离散数学、组合方法和几何数据结构。",
         items: learningBooks([
-          "concrete-mathematics",
-          "geometric-data-structures",
         ]),
       },
     ],
@@ -751,8 +723,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "理解渲染管线、光栅化、OpenGL 基础与光线追踪直觉。",
         items: learningBooks([
           "computer-graphics-4e",
-          "opengl-redbook",
-          "opengl-superbible",
           "ray-tracing-weekend",
         ]),
       },
@@ -760,17 +730,13 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "intermediate",
         summary: "用 OpenGL、Vulkan 和 GPU 实例系统完成现代渲染实践。",
         items: learningBooks([
-          "learnopengl",
           "deep-opengl",
-          "vulkan-guide",
-          "gpu-gems",
         ]),
       },
       {
         level: "advanced",
         summary: "深入实时渲染架构、基于物理的渲染与全局光照。",
         items: learningBooks([
-          "real-time-rendering-4e",
           "cg-principles-practice",
           "pbrt-book",
           "global-illumination",
@@ -787,17 +753,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "掌握顶点、片元、材质、光照与 Shader 编写基础。",
-        items: learningBooks(["unity-shader-essentials", "shader-practice"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "在 ShaderLab、屏幕特效和完整渲染流程中积累实战。",
-        items: learningBooks(["unity-shaderlab", "unity-screen-effects"]),
+        items: learningBooks([]),
       },
       {
         level: "advanced",
         summary: "研究 URP 内置实现、生产级 GPU 技巧和高级着色专题。",
-        items: learningBooks(["unity-urp-shaders", "gpu-pro", "shaderx"]),
+        items: learningBooks([]),
       },
     ],
   },
@@ -811,36 +777,21 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "熟悉 Unity 工作流、游戏设计、HMI 场景和程序员成长路线。",
         items: learningBooks([
-          "unity5",
-          "unity-hmi",
           "game-design-fundamentals",
-          "game-programmer-path",
         ]),
       },
       {
         level: "intermediate",
         summary: "覆盖 UI、脚本、动画、Blender、案例、特效和基础性能优化。",
         items: learningBooks([
-          "unity-game-optimization",
-          "unity-ui-design",
-          "unity-scripting",
           "unity-animation",
-          "blender-3d",
-          "unity-core-tech",
-          "unity-game-cases",
-          "unity-vfx",
-          "unity-scripting-game-dev",
         ]),
       },
       {
         level: "advanced",
         summary: "进入 Profiler、移动/XR/Web、复杂机制和主程级工程能力。",
         items: learningBooks([
-          "profiling-unity-games",
-          "mobile-xr-web-optimization",
           "game-mechanics-advanced",
-          "unity-master",
-          "unity-advanced-programming",
         ]),
       },
     ],
@@ -859,8 +810,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "intermediate",
         summary: "建立引擎架构全景，并完成基础框架与核心子系统。",
         items: learningBooks([
-          "game-engine-architecture-3e",
-          "game-engine-practice-vol1",
         ]),
       },
       {
@@ -882,24 +831,18 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解网络游戏服务器的连接、消息、房间与基本循环。",
-        items: learningBooks(["game-server-programming"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "完成 Unity/C++ 多人游戏、同步与在线架构实战。",
         items: learningBooks([
-          "unity-mmo-game",
-          "unity-cpp-network-game",
-          "multiplayer-game-architecture",
         ]),
       },
       {
         level: "advanced",
         summary: "研究核心网络技术、服务器架构、伸缩性和生产级优化。",
         items: learningBooks([
-          "game-network-core-tech",
-          "game-server-architecture",
-          "multiplayer-game-programming",
         ]),
       },
     ],
@@ -914,30 +857,18 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "掌握 JavaScript 核心、Vue 入门和语言机制。",
         items: learningBooks([
-          "javascript-pro-guide",
-          "vuejs-practice",
-          "you-dont-know-js",
         ]),
       },
       {
         level: "intermediate",
         summary: "系统学习浏览器端、CSS、Node.js 与全栈开发。",
         items: learningBooks([
-          "javascript-definitive-guide",
-          "javascript-fullstack",
-          "css-world",
-          "css-secrets",
-          "nodejs-definitive-guide",
-          "nodejs-debugging-guide",
         ]),
       },
       {
         level: "advanced",
         summary: "深入框架实现、Node.js 内部与大型前端工程体系。",
         items: learningBooks([
-          "vuejs-design-implementation",
-          "deep-nodejs",
-          "frontend-engineering",
         ]),
       },
     ],
@@ -951,28 +882,19 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "建立计算机硬件、程序执行和系统软件的整体认知。",
-        items: learningBooks(["how-computers-work", "how-programs-work"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "系统掌握体系结构、进程、内存、文件系统和操作系统实践。",
         items: learningBooks([
-          "csapp",
-          "modern-os",
-          "os-concepts",
           "windows-journey",
-          "linux-os-practice",
         ]),
       },
       {
         level: "advanced",
         summary: "进入 GUI 框架、内核编程、Linux 内核与 UNIX 系统接口。",
         items: learningBooks([
-          "mfc-deep-dive",
-          "windows-kernel-programming",
-          "linux-kernel-essence",
-          "linux-kernel-design",
-          "unix-advanced-programming",
         ]),
       },
     ],
@@ -994,17 +916,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         items: learningBooks([
           "java-core-tech",
           "effective-java",
-          "spring-in-action",
-          "jvm-troubleshooting",
         ]),
       },
       {
         level: "advanced",
         summary: "深入 JVM 内部、G1 实现与垃圾回收算法。",
         items: learningBooks([
-          "deep-understanding-jvm",
-          "jvm-g1-tuning",
-          "gc-handbook",
         ]),
       },
     ],
@@ -1019,9 +936,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "熟悉 Activity、Fragment、UI、Intent、数据和 Kotlin 基础。",
         items: learningBooks([
-          "first-line-android",
           "big-nerd-ranch-guide",
-          "crazy-android",
           "kotlin-definitive-guide",
         ]),
       },
@@ -1030,11 +945,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "推进到应用架构、Kotlin 实战、组件化、性能与 Compose。",
         items: learningBooks([
           "android-design-patterns",
-          "android-art-exploration",
-          "kotlin-in-action",
-          "android-component-arch",
-          "android-perf-optimization",
-          "jetpack-compose",
         ]),
       },
       {
@@ -1042,8 +952,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "深入 Framework、系统服务、源码机制和 Android 内核。",
         items: learningBooks([
           "android-advanced-decryption",
-          "android-advanced-light",
-          "deep-android-kernel",
           "deep-android-volumes",
         ]),
       },
@@ -1058,7 +966,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "掌握关系模型、SQL 查询与 MySQL 基本使用。",
-        items: learningBooks(["mysql-essentials", "sql-ten-minutes"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
@@ -1069,8 +977,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "advanced",
         summary: "深入 MySQL 性能、数据密集型系统与 Redis 实现。",
         items: learningBooks([
-          "high-performance-mysql",
-          "ddia",
           "redis-design-implementation",
         ]),
       },
@@ -1085,18 +991,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "intermediate",
         summary: "掌握 Kafka、RabbitMQ 与 API 网关的使用和运行机制。",
         items: learningBooks([
-          "kafka-definitive-guide",
-          "rabbitmq-practice",
-          "kong-gateway",
         ]),
       },
       {
         level: "advanced",
         summary: "进入 Kubernetes、可靠分布式架构与微服务模式。",
         items: learningBooks([
-          "kubernetes-in-action",
-          "phoenix-architecture",
-          "microservices-patterns",
         ]),
       },
     ],
@@ -1120,16 +1020,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "系统学习互联网协议、HTTP 细节和 Wireshark 分析。",
         items: learningBooks([
           "computer-networks-top-down",
-          "http-definitive-guide",
-          "wireshark-packet-analysis",
         ]),
       },
       {
         level: "advanced",
         summary: "深入 TCP/IP 协议实现和 UNIX Socket 编程。",
         items: learningBooks([
-          "tcp-ip-illustrated-vol1",
-          "unix-network-programming-vol1",
         ]),
       },
     ],
@@ -1142,17 +1038,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "通过小型脚本语言理解词法、语法、AST 与解释执行。",
-        items: learningBooks(["two-week-scripting-language"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "完整实现编译器前端、中间表示、优化和代码生成。",
-        items: learningBooks(["crafting-compiler", "engineering-a-compiler"]),
+        items: learningBooks(["crafting-compiler"]),
       },
       {
         level: "advanced",
         summary: "用龙书和虎书深入编译理论、优化与现代实现。",
-        items: learningBooks(["dragon-book-compilers", "tiger-book-compiler"]),
+        items: learningBooks([]),
       },
     ],
   },
@@ -1166,32 +1062,18 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "建立人工智能、机器学习和深度学习的全景认知。",
         items: learningBooks([
-          "illustrated-ai",
-          "illustrated-ml",
-          "illustrated-dl",
         ]),
       },
       {
         level: "intermediate",
         summary: "系统训练经典模型、统计学习、神经网络、NLP、生成与强化学习。",
         items: learningBooks([
-          "machine-learning-watermelon",
-          "statistical-learning-methods",
-          "deep-learning-from-scratch",
-          "deep-learning-from-scratch-2",
-          "deep-learning-nlp-advanced",
-          "deep-learning-rl-from-scratch",
-          "deep-learning-gen-models",
         ]),
       },
       {
         level: "advanced",
         summary: "深入深度学习理论、概率模型、底层实现和深度强化学习。",
         items: learningBooks([
-          "deep-learning-textbook",
-          "pattern-recognition-ml",
-          "rl-deep-learning-c",
-          "deep-reinforcement-learning",
         ]),
       },
     ],
@@ -1205,27 +1087,18 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解大模型如何生成文本，以及 Agent 的循环、工具和基本边界。",
-        items: learningBooks(["ai-agent", "this-is-chatgpt"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "完成 Agent、LangChain、LLM 应用和知识增强系统开发。",
         items: learningBooks([
-          "ai-agent-dev",
-          "llm-app-dev-essentials",
-          "langchain-programming",
-          "chatgpt-principles-practice",
-          "large-language-models",
         ]),
       },
       {
         level: "advanced",
         summary: "进入生产级 Agent 模式、大模型工程和多智能体协作。",
         items: learningBooks([
-          "ai-agent-apps",
-          "large-scale-llm-practice",
-          "building-llm-applications",
-          "multiagent-systems",
         ]),
       },
     ],
@@ -1238,17 +1111,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解区块、哈希、共识、账本和数字资产基础。",
-        items: learningBooks(["blockchain-plain"]),
+        items: learningBooks([]),
       },
       {
         level: "intermediate",
         summary: "通过完整应用掌握钱包、交易、合约与链上开发。",
-        items: learningBooks(["blockchain-dev-practice"]),
+        items: learningBooks([]),
       },
       {
         level: "advanced",
         summary: "深入比特币和以太坊协议、节点、脚本与智能合约体系。",
-        items: learningBooks(["mastering-bitcoin", "mastering-ethereum"]),
+        items: learningBooks([]),
       },
     ],
   },
@@ -1261,23 +1134,19 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "先看懂汽车为什么能跑，以及新能源汽车的核心能量链。",
-        items: learningBooks(["auto-why-car-runs", "illustrated-nev"]),
+        items: learningBooks(["auto-why-car-runs"]),
       },
       {
         level: "intermediate",
         summary: "系统掌握传统汽车、新能源专项、汽车电子与 AUTOSAR。",
         items: learningBooks([
           "automotive-systems-specialization",
-          "car-structure-illustrated",
-          "autosar-vehicle-controller",
         ]),
       },
       {
         level: "advanced",
         summary: "进入智能座舱、感知规控、整车软件工程与 SOA 架构。",
         items: learningBooks([
-          "vehicle-software-intelligence",
-          "soa-vehicle-architecture",
         ]),
       },
     ],
@@ -1291,9 +1160,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "理解大型项目协作、设计模式的动机和面向对象设计语言。",
         items: learningBooks([
-          "mythical-man-month",
           "head-first-design-patterns",
-          "design-patterns",
         ]),
       },
       {
@@ -1302,7 +1169,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         items: learningBooks([
           "code-complete-2e",
           "pragmatic-programmer",
-          "code-quality-refactoring",
         ]),
       },
       {
@@ -1310,7 +1176,6 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "进入整洁架构、DDD、企业应用模式和 UNIX 工程哲学。",
         items: learningBooks([
           "architecture-domain-design",
-          "poeaa-enterprise-patterns",
           "art-of-unix-programming",
         ]),
       },
@@ -1325,19 +1190,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "beginner",
         summary: "建立学习、认知、成长和长期练习的基本方法。",
         items: learningBooks([
-          "coder-revolution",
-          "make-it-stick",
-          "mindset-growth",
-          "peak-deliberate-practice",
         ]),
       },
       {
         level: "intermediate",
         summary: "理解复杂系统、有效管理和组织问题解决工具。",
         items: learningBooks([
-          "out-of-control",
-          "effective-executive",
-          "org-problem-tools",
         ]),
       },
     ],
