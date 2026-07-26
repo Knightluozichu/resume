@@ -222,13 +222,13 @@ export function TsanDetectionDiagram() {
       <text
         x={x + 14}
         y={REC_Y + 38}
-        fontSize="10"
+        fontSize="11"
         fontFamily="var(--font-mono)"
         fill="var(--text-primary)"
       >
         {line2}
       </text>
-      <text x={x + 14} y={REC_Y + 54} fontSize="10" fill={MUTED}>
+      <text x={x + 14} y={REC_Y + 54} fontSize="11" fill={MUTED}>
         {line3}
       </text>
     </g>
@@ -291,7 +291,7 @@ export function TsanDetectionDiagram() {
             x={VAR_X + VAR_W / 2}
             y={VAR_Y - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={MUTED}
           >
             共享变量（无保护）
@@ -387,7 +387,7 @@ export function TsanDetectionDiagram() {
               x={VIEW_W / 2}
               y={CMP_Y + CMP_H / 2 + 4}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill={MUTED}
             >
@@ -445,7 +445,7 @@ export function TsanDetectionDiagram() {
             <text
               x={REPORT_X + 14}
               y={REPORT_Y + 38}
-              fontSize="10"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -454,7 +454,7 @@ export function TsanDetectionDiagram() {
             <text
               x={REPORT_X + 14}
               y={REPORT_Y + 56}
-              fontSize="10"
+              fontSize="11"
               fill={MUTED}
             >
               并打印两处访问各自的调用栈，把你直接带到出问题的代码行

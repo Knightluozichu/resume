@@ -61,7 +61,7 @@ export function AccessControlDiagram() {
             x={320}
             y={60}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             外部可见——调用方能使用的接口
@@ -77,7 +77,7 @@ export function AccessControlDiagram() {
           >
             string isbn() const;
           </text>
-          <text x={440} y={90} fontSize="10" fill={secondary}>
+          <text x={440} y={90} fontSize="11" fill={secondary}>
             ✓ 外部可调用
           </text>
 
@@ -90,7 +90,7 @@ export function AccessControlDiagram() {
           >
             double avg_price() const;
           </text>
-          <text x={440} y={112} fontSize="10" fill={secondary}>
+          <text x={440} y={112} fontSize="11" fill={secondary}>
             ✓ 外部可调用
           </text>
 
@@ -103,7 +103,7 @@ export function AccessControlDiagram() {
           >
             Sales_data&amp; combine(const Sales_data&amp;);
           </text>
-          <text x={440} y={134} fontSize="10" fill={secondary}>
+          <text x={440} y={134} fontSize="11" fill={secondary}>
             ✓ 外部可调用
           </text>
 
@@ -121,7 +121,7 @@ export function AccessControlDiagram() {
             x={320}
             y={182}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
           >
             —————— 封装边界：外部代码不能越过这条线 ——————
@@ -152,7 +152,7 @@ export function AccessControlDiagram() {
             x={320}
             y={212}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             隐藏实现——外部不可见、不可直接访问
@@ -167,7 +167,7 @@ export function AccessControlDiagram() {
           >
             string bookNo;
           </text>
-          <text x={440} y={242} fontSize="10" fill={secondary}>
+          <text x={440} y={242} fontSize="11" fill={secondary}>
             ✗ 外部不可访问
           </text>
 
@@ -180,7 +180,7 @@ export function AccessControlDiagram() {
           >
             unsigned units_sold = 0;
           </text>
-          <text x={440} y={264} fontSize="10" fill={secondary}>
+          <text x={440} y={264} fontSize="11" fill={secondary}>
             ✗ 外部不可访问
           </text>
 
@@ -238,7 +238,7 @@ export function AccessControlDiagram() {
             x={160}
             y={302}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             .isbn()
@@ -258,7 +258,7 @@ export function AccessControlDiagram() {
             x={160}
             y={332}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             .bookNo
@@ -268,7 +268,7 @@ export function AccessControlDiagram() {
           <text
             x={210}
             y={334}
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
             fontFamily="monospace"
           >
@@ -276,19 +276,19 @@ export function AccessControlDiagram() {
           </text>
 
           {/* 右侧说明 — 什么时候用哪个 */}
-          <text x={440} y={302} fontSize="10" fill={primary} fontWeight="600">
+          <text x={440} y={302} fontSize="11" fill={primary} fontWeight="600">
             使用原则
           </text>
-          <text x={440} y={316} fontSize="9" fill={secondary}>
+          <text x={440} y={316} fontSize="11" fill={secondary}>
             构造函数 → public
           </text>
-          <text x={440} y={330} fontSize="9" fill={secondary}>
+          <text x={440} y={330} fontSize="11" fill={secondary}>
             需要外部调用的 → public
           </text>
-          <text x={540} y={316} fontSize="9" fill={secondary}>
+          <text x={540} y={316} fontSize="11" fill={secondary}>
             数据成员 → private
           </text>
-          <text x={540} y={330} fontSize="9" fill={secondary}>
+          <text x={540} y={330} fontSize="11" fill={secondary}>
             内部辅助函数 → private
           </text>
         </svg>

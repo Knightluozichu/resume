@@ -74,7 +74,7 @@ export function TwoDimArrayDiagram() {
                   x={gridX + c * cellW + (cellW - 4) / 2}
                   y={gridY + r * cellH - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -123,7 +123,7 @@ export function TwoDimArrayDiagram() {
             strokeDasharray="4 3"
             markerEnd="url(#twoDimArrow)"
           />
-          <text x={100} y={200} fontSize="10" fill={accent}>
+          <text x={100} y={200} fontSize="11" fill={accent}>
             按行展开
           </text>
 

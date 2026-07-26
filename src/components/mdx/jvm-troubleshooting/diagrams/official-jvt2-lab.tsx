@@ -49,6 +49,14 @@ export function OfficialJvt2Studio({
   const [axisB, setAxisB] = useState(1);
   const [scenario, setScenario] = useState<Scenario>("baseline");
   const [captures, setCaptures] = useState(0);
+  function resetExperiment() {
+    setConceptIndex(0);
+    setAxisA(1);
+    setAxisB(1);
+    setScenario("baseline");
+    setCaptures(0);
+  }
+
 
   const result = useMemo(() => {
     const signalShift = scenario === "fault" ? 22 : scenario === "recovery" ? 7 : 0;
@@ -82,6 +90,7 @@ export function OfficialJvt2Studio({
       aria-label={`${unitTitle} · ${model.studio}实验`}
       data-jvt-unit={unitId}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
@@ -202,7 +211,7 @@ export function OfficialJvt2Studio({
               [model.outcomes.evidence, result.evidence],
             ].map(([label, value]) => (
               <div key={String(label)} className="min-w-0 border border-zinc-200 p-2 dark:border-zinc-800">
-                <dt className="min-h-10 [overflow-wrap:anywhere]">{label}</dt>
+                <dt className="min-h-11 [overflow-wrap:anywhere]">{label}</dt>
                 <dd className="mt-1 text-lg font-semibold">{value}</dd>
               </div>
             ))}

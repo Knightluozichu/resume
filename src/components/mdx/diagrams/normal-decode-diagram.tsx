@@ -111,7 +111,7 @@ export function NormalDecodeDiagram() {
             x="110"
             y="232"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             法线图最常见的底色
@@ -161,7 +161,7 @@ export function NormalDecodeDiagram() {
             x="341"
             y="196"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             把 0~1 拉回 -1~1
@@ -207,7 +207,7 @@ export function NormalDecodeDiagram() {
           >
             (0, 0, 1)
           </text>
-          <text x="494" y="220" fontSize="9.5" fill="var(--text-secondary)">
+          <text x="494" y="220" fontSize="11" fill="var(--text-secondary)">
             正对表面外·不扰动
           </text>
 
@@ -222,7 +222,7 @@ export function NormalDecodeDiagram() {
             markerEnd="url(#nd-arrow-warning)"
           />
           <circle cx="610" cy="200" r="3.5" fill="var(--text-primary)" />
-          <text x="612" y="222" fontSize="9.5" fill="var(--warning)">
+          <text x="612" y="222" fontSize="11" fill="var(--warning)">
             偏色→歪
           </text>
 
@@ -230,7 +230,7 @@ export function NormalDecodeDiagram() {
             x="585"
             y="248"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             颜色一偏 = 法线被推歪 = 凹凸

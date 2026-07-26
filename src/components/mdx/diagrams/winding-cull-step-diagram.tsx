@@ -55,7 +55,7 @@ function CubeFaces({ step }: { step: CullStep }) {
           x="150"
           y="70"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fontWeight="600"
           className="font-mono"
           fill="var(--danger)"
@@ -147,7 +147,7 @@ function CubeFaces({ step }: { step: CullStep }) {
         x="106"
         y="180"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fontWeight="600"
         className="font-mono"
         fill={frontStroke}

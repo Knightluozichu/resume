@@ -203,7 +203,7 @@ export function HappensBeforeDAG() {
         x={n.x + NODE_W / 2}
         y={n.y + 40}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         {n.sub}
@@ -321,7 +321,7 @@ export function HappensBeforeDAG() {
             <text
               x={seqAX + 8}
               y={(A1.y + NODE_H + A2.y) / 2 + 4}
-              fontSize="10"
+              fontSize="11"
               fontWeight="600"
               fill={SEQ_COLOR}
             >

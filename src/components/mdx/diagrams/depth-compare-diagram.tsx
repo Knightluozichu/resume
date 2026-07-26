@@ -57,7 +57,7 @@ export function DepthCompareDiagram() {
             fill="var(--accent)"
             opacity="0.85"
           />
-          <text x="36" y="195" fontSize="10.5" fill="var(--text-secondary)">
+          <text x="36" y="195" fontSize="11" fill="var(--text-secondary)">
             相机
           </text>
           {/* “越往右离相机越远”的深度轴 */}
@@ -75,7 +75,7 @@ export function DepthCompareDiagram() {
             x="300"
             y="324"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             深度（越往右 = 离相机越远）
@@ -93,7 +93,7 @@ export function DepthCompareDiagram() {
             stroke="var(--accent)"
             strokeWidth="2"
           />
-          <text x="392" y="138" fontSize="10.5" fill="var(--accent)">
+          <text x="392" y="138" fontSize="11" fill="var(--accent)">
             G-buffer 存的真实表面深度 D
           </text>
 
@@ -119,7 +119,7 @@ export function DepthCompareDiagram() {
           >
             S₁
           </text>
-          <text x="312" y="240" fontSize="9.5" fill="var(--danger)">
+          <text x="312" y="240" fontSize="11" fill="var(--danger)">
             在表面后面（更远）= 被挡 → 遮蔽 +1
           </text>
           {/* 标出 S₁ 这一屏幕方向上、G-buffer 表面所在的点（更近，挡住了 S₁） */}
@@ -146,7 +146,7 @@ export function DepthCompareDiagram() {
           >
             S₂
           </text>
-          <text x="318" y="104" fontSize="9.5" fill="var(--success)">
+          <text x="318" y="104" fontSize="11" fill="var(--success)">
             在表面前面（更近）= 没挡 → 不计
           </text>
           {/* 标出 S₂ 这一屏幕方向上、G-buffer 表面所在的点（更远，没挡到 S₂） */}

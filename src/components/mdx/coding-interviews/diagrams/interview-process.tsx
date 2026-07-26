@@ -99,8 +99,8 @@ export function InterviewFormatMap() {
                 <circle cx={x + 113} cy="102" r="25" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" />
                 <text x={x + 113} y="108" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--accent)">{index + 1}</text>
                 <text x={x + 113} y="148" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">{format.title}</text>
-                <text x={x + 113} y="181" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">主要可见信号</text>
-                <text x={x + 113} y="200" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">{format.signal}</text>
+                <text x={x + 113} y="181" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">主要可见信号</text>
+                <text x={x + 113} y="200" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">{format.signal}</text>
                 <line x1={x + 32} y1="220" x2={x + 194} y2="220" stroke="var(--border)" />
                 <foreignObject x={x + 30} y="230" width="166" height="44">
                   <p className="m-0 text-center text-[10px] leading-4 text-secondary">{format.risk}</p>
@@ -144,15 +144,15 @@ export function InterviewRoundDiagram() {
                 <rect x={x} y="72" width="198" height="142" rx="6" fill="var(--bg)" stroke="var(--accent)" />
                 <rect x={x} y="72" width="198" height="34" rx="6" fill="var(--accent)" fillOpacity="0.1" />
                 <text x={x + 99} y="94" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{index + 1}. {title}</text>
-                <text x={x + 99} y="134" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">观察重点</text>
+                <text x={x + 99} y="134" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">观察重点</text>
                 <text x={x + 99} y="154" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">{focus}</text>
-                <text x={x + 99} y="187" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{outcome}</text>
+                <text x={x + 99} y="187" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{outcome}</text>
                 {index < 2 ? <path d={`M${x + 205} 143 H${x + 239}`} stroke="var(--warning)" strokeWidth="2" /> : null}
               </g>
             );
           })}
           <rect x="144" y="242" width="492" height="34" rx="5" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" />
-          <text x="390" y="263" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">不要只准备答案：面试官持续观察你如何收集信息、修正假设和验证结果。</text>
+          <text x="390" y="263" textAnchor="middle" fontSize="11" fill="var(--text-primary)">不要只准备答案：面试官持续观察你如何收集信息、修正假设和验证结果。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

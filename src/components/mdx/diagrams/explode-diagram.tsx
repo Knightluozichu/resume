@@ -124,7 +124,7 @@ export function ExplodeDiagram({
               x={CX}
               y={CY + 4}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               中心空出

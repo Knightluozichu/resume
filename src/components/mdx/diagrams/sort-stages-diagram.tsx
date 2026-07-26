@@ -102,7 +102,7 @@ export function SortStagesDiagram({ step = 1 }: { step?: number }) {
               key={`idx-${i}`}
               x={startX + i * (cellW + gap) + cellW / 2}
               y={startY - 14}
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -150,9 +150,9 @@ export function SortStagesDiagram({ step = 1 }: { step?: number }) {
           {step === 2 && (
             <>
               <rect x={startX - 6} y={startY - 6} width={5 * (cellW + gap) + 6} height={cellH + 12} rx="10" fill="none" stroke={accent} strokeWidth="1.5" strokeDasharray="5 3" />
-              <text x={startX + 2 * (cellW + gap)} y={startY - 20} fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">&lt; 5</text>
+              <text x={startX + 2 * (cellW + gap)} y={startY - 20} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">&lt; 5</text>
               <rect x={startX + 5 * (cellW + gap) - 6} y={startY - 6} width={4 * (cellW + gap) + 6} height={cellH + 12} rx="10" fill="none" stroke={accent} strokeWidth="1.5" strokeDasharray="5 3" />
-              <text x={startX + 7 * (cellW + gap)} y={startY - 20} fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">&gt; 5</text>
+              <text x={startX + 7 * (cellW + gap)} y={startY - 20} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">&gt; 5</text>
             </>
           )}
 
@@ -160,13 +160,13 @@ export function SortStagesDiagram({ step = 1 }: { step?: number }) {
           {step === 3 && (
             <>
               <line x1={startX + 4 * (cellW + gap)} y1={startY - 8} x2={startX + 4 * (cellW + gap)} y2={startY + cellH + 8} stroke={accent} strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
-              <text x={startX + 2 * (cellW + gap)} y={startY + cellH + 24} fontSize="9" fill={good} textAnchor="middle">左区间已排 ✓</text>
-              <text x={startX + 7 * (cellW + gap)} y={startY + cellH + 24} fontSize="9" fill={good} textAnchor="middle">右区间已排 ✓</text>
+              <text x={startX + 2 * (cellW + gap)} y={startY + cellH + 24} fontSize="11" fill={good} textAnchor="middle">左区间已排 ✓</text>
+              <text x={startX + 7 * (cellW + gap)} y={startY + cellH + 24} fontSize="11" fill={good} textAnchor="middle">右区间已排 ✓</text>
             </>
           )}
 
           {/* 底部说明 */}
-          <text x={w / 2} y={h - 20} fontSize="10" fill={bottomTextColor} textAnchor="middle">
+          <text x={w / 2} y={h - 20} fontSize="11" fill={bottomTextColor} textAnchor="middle">
             {bottomText}
           </text>
         </svg>

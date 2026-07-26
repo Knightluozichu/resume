@@ -12,18 +12,18 @@ export function Poeaa24Pattern48SpecialCase() {
           {/* 基类 */}
           <rect x={270} y={64} width={180} height={56} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={360} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>Customer</text>
-          <text x={360} y={106} textAnchor="middle" fontSize="9" fontFamily="monospace" fill={T.primary}>getBillingPlan()</text>
+          <text x={360} y={106} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>getBillingPlan()</text>
           {/* 继承箭头 */}
           <line x1={310} y1={120} x2={180} y2={152} stroke={T.border} strokeWidth="1.2" />
           <line x1={410} y1={120} x2={540} y2={152} stroke={T.border} strokeWidth="1.2" />
           {/* 正常子类 */}
           <rect x={80} y={152} width={200} height={56} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={180} y={174} textAnchor="middle" fontSize="9" fontWeight="600" fill="#3FB97F">RealCustomer</text>
-          <text x={180} y={194} textAnchor="middle" fontSize="9" fill={T.secondary}>正常计费逻辑</text>
+          <text x={180} y={174} textAnchor="middle" fontSize="11" fontWeight="600" fill="#3FB97F">RealCustomer</text>
+          <text x={180} y={194} textAnchor="middle" fontSize="11" fill={T.secondary}>正常计费逻辑</text>
           {/* 特例子类 */}
           <rect x={440} y={152} width={200} height={56} rx="6" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.2" />
-          <text x={540} y={174} textAnchor="middle" fontSize="9" fontWeight="600" fill="#E5B567">NullCustomer（特例）</text>
-          <text x={540} y={194} textAnchor="middle" fontSize="9" fill={T.secondary}>返回默认值，不抛异常</text>
+          <text x={540} y={174} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567">NullCustomer（特例）</text>
+          <text x={540} y={194} textAnchor="middle" fontSize="11" fill={T.secondary}>返回默认值，不抛异常</text>
           {/* 底部说明 */}
           <rect x={48} y={228} width={624} height={48} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={248} fontSize="11" fill={T.secondary}>• 调用者：customer.getBillingPlan() — 无需 if (customer == null)</text>

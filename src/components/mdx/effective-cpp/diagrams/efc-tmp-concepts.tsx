@@ -87,7 +87,7 @@ export function EfcTmpConceptsDiagram() {
                 <rect x={40} y={y} width={4} height={84} rx="2" fill={p.color} />
                 <text x={56} y={y + 22} fontSize="13" fontWeight="700" fill={p.color}>{p.name}</text>
                 <text x={56} y={y + 42} fontSize="11" fill={secondary}>{p.desc}</text>
-                <text x={56} y={y + 64} fontSize="10.5" fill={primary} fontFamily="monospace">{p.example}</text>
+                <text x={56} y={y + 64} fontSize="11" fill={primary} fontFamily="monospace">{p.example}</text>
               </g>
             );
           })}
@@ -133,7 +133,7 @@ export function EfcTmpConceptsDiagram() {
 
           {/* 底部说明 */}
           <line x1={32} y1={460} x2={VIEW_W - 32} y2={460} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={482} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={482} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 46-48：非成员模板函数做类型转换、traits classes 表现类型信息、认识 template 元编程
           </text>
         </svg>

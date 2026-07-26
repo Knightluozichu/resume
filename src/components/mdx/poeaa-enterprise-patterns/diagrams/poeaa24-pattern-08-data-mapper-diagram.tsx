@@ -14,29 +14,29 @@ export function Poeaa24Pattern08DataMapper() {
           <rect x={48} y={72} width={200} height={28} rx="8" fill="#3FB97F" fillOpacity="0.12" />
           <rect x={48} y={92} width={200} height={8} fill="#3FB97F" fillOpacity="0.12" />
           <text x={148} y={91} textAnchor="middle" fontSize="12" fontWeight="700" fill="#3FB97F">Order（领域对象）</text>
-          <text x={64} y={118} fontSize="10" fontFamily="monospace" fill={T.primary}>- items: OrderItem[]</text>
-          <text x={64} y={136} fontSize="10" fontFamily="monospace" fill={T.primary}>- customer: Customer</text>
-          <text x={64} y={158} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ calculateTotal()</text>
-          <text x={64} y={176} fontSize="10" fill={T.secondary}>不知道 DB 存在</text>
+          <text x={64} y={118} fontSize="11" fontFamily="monospace" fill={T.primary}>- items: OrderItem[]</text>
+          <text x={64} y={136} fontSize="11" fontFamily="monospace" fill={T.primary}>- customer: Customer</text>
+          <text x={64} y={158} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ calculateTotal()</text>
+          <text x={64} y={176} fontSize="11" fill={T.secondary}>不知道 DB 存在</text>
           {/* Mapper */}
           <rect x={296} y={72} width={128} height={120} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={360} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill={T.accent}>OrderMapper</text>
-          <text x={308} y={120} fontSize="9" fontFamily="monospace" fill="#3FB97F">find(id)</text>
-          <text x={308} y={138} fontSize="9" fontFamily="monospace" fill="#3FB97F">insert(obj)</text>
-          <text x={308} y={156} fontSize="9" fontFamily="monospace" fill="#3FB97F">update(obj)</text>
-          <text x={308} y={174} fontSize="9" fontFamily="monospace" fill="#3FB97F">delete(obj)</text>
+          <text x={308} y={120} fontSize="11" fontFamily="monospace" fill="#3FB97F">find(id)</text>
+          <text x={308} y={138} fontSize="11" fontFamily="monospace" fill="#3FB97F">insert(obj)</text>
+          <text x={308} y={156} fontSize="11" fontFamily="monospace" fill="#3FB97F">update(obj)</text>
+          <text x={308} y={174} fontSize="11" fontFamily="monospace" fill="#3FB97F">delete(obj)</text>
           {/* 表 */}
           <rect x={472} y={72} width={200} height={120} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.5" />
           <rect x={472} y={72} width={200} height={28} rx="8" fill="#E5B567" fillOpacity="0.12" />
           <rect x={472} y={92} width={200} height={8} fill="#E5B567" fillOpacity="0.12" />
           <text x={572} y={91} textAnchor="middle" fontSize="12" fontWeight="700" fill="#E5B567">orders 表</text>
-          <text x={488} y={118} fontSize="10" fontFamily="monospace" fill={T.primary}>id | customer_id | amount</text>
-          <text x={488} y={136} fontSize="10" fontFamily="monospace" fill={T.primary}>status | created_at</text>
-          <text x={488} y={158} fontSize="10" fill={T.secondary}>纯关系结构</text>
+          <text x={488} y={118} fontSize="11" fontFamily="monospace" fill={T.primary}>id | customer_id | amount</text>
+          <text x={488} y={136} fontSize="11" fontFamily="monospace" fill={T.primary}>status | created_at</text>
+          <text x={488} y={158} fontSize="11" fill={T.secondary}>纯关系结构</text>
           {/* 箭头 */}
           <line x1={248} y1={132} x2={296} y2={132} stroke={T.secondary} strokeWidth="1.2" />
           <line x1={424} y1={132} x2={472} y2={132} stroke={T.secondary} strokeWidth="1.2" />
-          <text x={360} y={210} textAnchor="middle" fontSize="10" fill={T.accent}>Mapper 双向翻译：行 ↔ 对象</text>
+          <text x={360} y={210} textAnchor="middle" fontSize="11" fill={T.accent}>Mapper 双向翻译：行 ↔ 对象</text>
           {/* 优势 */}
           <rect x={48} y={240} width={624} height={72} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={264} fontSize="11" fontWeight="600" fill={T.primary}>核心优势：</text>

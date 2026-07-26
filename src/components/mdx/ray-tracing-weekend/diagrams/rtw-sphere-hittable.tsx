@@ -23,28 +23,28 @@ export function RtwSphereHittableDiagram() {
 
           {/* 近交点（选中） */}
           <circle cx="188" cy="234" r="5" fill="var(--text-primary)" />
-          <text x="150" y="258" fontSize="10.5" fill="var(--text-primary)">最近交点 p (t 小)</text>
+          <text x="150" y="258" fontSize="11" fill="var(--text-primary)">最近交点 p (t 小)</text>
           {/* 近交点法线 */}
           <line x1="188" y1="234" x2="150" y2="200" stroke="var(--text-secondary)" strokeWidth="1.2" strokeDasharray="3 3" />
-          <text x="118" y="196" fontSize="10.5" fill="var(--text-secondary)">normal n</text>
+          <text x="118" y="196" fontSize="11" fill="var(--text-secondary)">normal n</text>
 
           {/* 远交点（被丢弃） */}
           <circle cx="438" cy="184" r="4" fill="none" stroke="var(--text-secondary)" strokeWidth="1.2" />
-          <text x="430" y="172" fontSize="10.5" fill="var(--text-secondary)">t 更大，丢弃</text>
+          <text x="430" y="172" fontSize="11" fill="var(--text-secondary)">t 更大，丢弃</text>
 
           {/* hit_record 卡片 */}
           <rect x="40" y="312" width="300" height="74" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <text x="190" y="332" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">hit_record</text>
-          <text x="56" y="352" fontSize="10.5" fill="var(--text-secondary)">p（交点） · normal（法线）</text>
-          <text x="56" y="368" fontSize="10.5" fill="var(--text-secondary)">t（参数） · front_face（正反面）</text>
-          <text x="56" y="382" fontSize="10.5" fill="var(--text-secondary)">mat_ptr（材质指针）</text>
+          <text x="56" y="352" fontSize="11" fill="var(--text-secondary)">p（交点） · normal（法线）</text>
+          <text x="56" y="368" fontSize="11" fill="var(--text-secondary)">t（参数） · front_face（正反面）</text>
+          <text x="56" y="382" fontSize="11" fill="var(--text-secondary)">mat_ptr（材质指针）</text>
 
           {/* 流程 */}
           <rect x="370" y="312" width="310" height="74" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
           <text x="525" y="332" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">列表遍历流程</text>
-          <text x="386" y="352" fontSize="10.5" fill="var(--text-primary)">closest = t_max</text>
-          <text x="386" y="368" fontSize="10.5" fill="var(--text-primary)">命中 → closest = t（收紧区间）</text>
-          <text x="386" y="382" fontSize="10.5" fill="var(--text-primary)">最终 rec = 全局最近交点</text>
+          <text x="386" y="352" fontSize="11" fill="var(--text-primary)">closest = t_max</text>
+          <text x="386" y="368" fontSize="11" fill="var(--text-primary)">命中 → closest = t（收紧区间）</text>
+          <text x="386" y="382" fontSize="11" fill="var(--text-primary)">最终 rec = 全局最近交点</text>
 
           <defs>
             <marker id="shArrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">

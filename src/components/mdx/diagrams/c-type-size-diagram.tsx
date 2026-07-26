@@ -121,7 +121,7 @@ export function CTypeSizeDiagram() {
                   <text
                     x={colX.max + 58}
                     y={y + 4}
-                    fontSize="10"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                     opacity="0.7"
                   >

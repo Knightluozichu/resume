@@ -95,7 +95,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
           <text
             x="44"
             y={TOP_Y - 8}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             顶面（深度 0）
@@ -117,7 +117,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
               <text
                 x="496"
                 y={L.y + 4}
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 层{L.d}
@@ -137,7 +137,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
           <text
             x="44"
             y={BOT_Y + 16}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             深度 1
@@ -150,7 +150,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
             stroke="var(--accent)"
             strokeWidth="2"
           />
-          <text x="404" y="226" fontSize="9.5" fill="var(--accent)">
+          <text x="404" y="226" fontSize="11" fill="var(--accent)">
             真实表面深度（高度图）
           </text>
 
@@ -209,7 +209,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
             x={STEP_X[0] - 4}
             y={LAYERS[0].y - 8}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             入口
@@ -256,7 +256,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
                 x="260"
                 y="288"
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 成立＝视线仍在表面上方 → 继续下探到下一层
@@ -292,7 +292,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
                 x="260"
                 y="288"
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 这一层对应的偏移坐标，就是陡峭视差最终的采样 UV
@@ -329,7 +329,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
                     <text
                       x={ix + 10}
                       y={iy - 4}
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="600"
                       fill="var(--warning)"
                     >
@@ -352,7 +352,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
                 x="260"
                 y="294"
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 逼近真实交点、比整层取值更平滑（视差遮蔽映射 POM）

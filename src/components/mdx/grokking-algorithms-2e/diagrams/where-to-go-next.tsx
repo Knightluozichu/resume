@@ -115,14 +115,14 @@ export function TopicRouteMap() {
               {group.items.map((item, index) => (
                 <g key={item}>
                   <rect x={group.x} y={112 + index * 62} width="116" height="40" rx="4" fill="var(--bg)" stroke={group.tone} />
-                  <text x={group.x + 58} y={136 + index * 62} textAnchor="middle" fontSize="9.5" fontWeight="700" fill={primary}>{item}</text>
+                  <text x={group.x + 58} y={136 + index * 62} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{item}</text>
                 </g>
               ))}
             </g>
           ))}
           <rect x="86" y="334" width="588" height="36" rx="4" fill={accent} fillOpacity="0.06" stroke={border} />
-          <text x="380" y="350" textAnchor="middle" fontSize="10.5" fill={primary}>先从当前问题的输出、误差、规模与安全约束出发，再选择深入主题。</text>
-          <text x="380" y="364" textAnchor="middle" fontSize="9" fill={secondary}>这些是概念入口，不是可直接替代生产库的完整实现规范。</text>
+          <text x="380" y="350" textAnchor="middle" fontSize="11" fill={primary}>先从当前问题的输出、误差、规模与安全约束出发，再选择深入主题。</text>
+          <text x="380" y="364" textAnchor="middle" fontSize="11" fill={secondary}>这些是概念入口，不是可直接替代生产库的完整实现规范。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -154,8 +154,8 @@ export function RegressionIndexDiagram() {
           <line x1="70" y1="240" x2="310" y2="112" stroke={accent} strokeWidth="3" />
           {points.map(([x, y], index) => <circle key={index} cx={x} cy={y} r="6" fill={success} />)}
           <line x1="250" y1="258" x2="250" y2="144" stroke={warning} strokeDasharray="4 3" />
-          <text x="250" y="278" textAnchor="middle" fontSize="9" fill={secondary}>3000 ft²</text>
-          <text x="205" y="294" textAnchor="middle" fontSize="9.5" fill={primary}>拟合直线后读取预测价格</text>
+          <text x="250" y="278" textAnchor="middle" fontSize="11" fill={secondary}>3000 ft²</text>
+          <text x="205" y="294" textAnchor="middle" fontSize="11" fill={primary}>拟合直线后读取预测价格</text>
 
           <rect x="396" y="54" width="330" height="250" fill="var(--bg)" stroke={border} />
           <text x="561" y="79" textAnchor="middle" fontSize="11" fontWeight="700" fill={success}>倒排索引：词 → 文档集合</text>
@@ -168,17 +168,17 @@ export function RegressionIndexDiagram() {
             return (
               <g key={term}>
                 <rect x="426" y={y} width="92" height="38" rx="4" fill={warning} fillOpacity="0.08" stroke={warning} />
-                <text x="472" y={y + 24} textAnchor="middle" fontSize="10" fontWeight="700" fill={primary}>{term}</text>
+                <text x="472" y={y + 24} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{term}</text>
                 <line x1="518" y1={y + 19} x2="548" y2={y + 19} stroke={accent} strokeWidth="2" />
                 <rect x="548" y={y} width="142" height="38" rx="4" fill={accent} fillOpacity="0.07" stroke={accent} />
-                <text x="619" y={y + 24} textAnchor="middle" fontSize="10" fill={primary}>{docs}</text>
+                <text x="619" y={y + 24} textAnchor="middle" fontSize="11" fill={primary}>{docs}</text>
               </g>
             );
           })}
-          <text x="561" y="294" textAnchor="middle" fontSize="9.5" fill={primary}>查询hi只读取对应文档列表</text>
+          <text x="561" y="294" textAnchor="middle" fontSize="11" fill={primary}>查询hi只读取对应文档列表</text>
 
           <rect x="84" y="326" width="592" height="28" rx="4" fill={danger} fillOpacity="0.05" stroke={danger} strokeOpacity="0.45" />
-          <text x="380" y="344" textAnchor="middle" fontSize="9.5" fill={secondary}>回归拟合数值关系；倒排索引预先重排词与文档的访问方向。</text>
+          <text x="380" y="344" textAnchor="middle" fontSize="11" fill={secondary}>回归拟合数值关系；倒排索引预先重排词与文档的访问方向。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

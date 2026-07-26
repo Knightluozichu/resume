@@ -59,7 +59,7 @@ export function KrcStructMemoryDiagram() {
           <text x={x + width / 2} y={baseY + 16} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace">
             {m.label}
           </text>
-          <text x={x + width / 2} y={baseY + 32} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">
+          <text x={x + width / 2} y={baseY + 32} textAnchor="middle" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">
             {m.type || "padding"}
           </text>
           {/* offset labels */}
@@ -69,7 +69,7 @@ export function KrcStructMemoryDiagram() {
               x={x + bi * (BYTE_W + BYTE_GAP) + BYTE_W / 2}
               y={baseY + BYTE_H + 16}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
               fontFamily="monospace"
             >
@@ -108,7 +108,7 @@ export function KrcStructMemoryDiagram() {
           <text x={40} y={116} fontSize="11" fill="var(--text-secondary)">成员乱序：6 字节 padding 被浪费</text>
 
           {/* offset header */}
-          <text x={ROW_START_X - 8} y={138} fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">偏移:</text>
+          <text x={ROW_START_X - 8} y={138} fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">偏移:</text>
 
           {renderStruct(structA, 148, 0)}
 
@@ -118,7 +118,7 @@ export function KrcStructMemoryDiagram() {
           </text>
           <text x={40} y={266} fontSize="11" fill="var(--text-secondary)">成员有序：仅 2 字节 padding</text>
 
-          <text x={ROW_START_X - 8} y={288} fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">偏移:</text>
+          <text x={ROW_START_X - 8} y={288} fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">偏移:</text>
 
           {renderStruct(structB, 298, 0)}
 

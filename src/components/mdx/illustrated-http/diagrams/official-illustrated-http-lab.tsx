@@ -35,6 +35,14 @@ export function IllustratedHttpLab(props: Props) {
   const [payload, setPayload] = useState(640);
   const [validated, setValidated] = useState(true);
   const [checked, setChecked] = useState(() => gates.map(() => false));
+  function resetExperiment() {
+    setSelected(0);
+    setRtt(80);
+    setPayload(640);
+    setValidated(true);
+    setChecked(() => gates.map(() => false));
+  }
+
   const result = useMemo(() => {
     const transfer = Math.ceil(payload / 160);
     const elapsed = rtt * (validated ? 2 : 3) + transfer * 8;
@@ -45,6 +53,7 @@ export function IllustratedHttpLab(props: Props) {
     const active = links[selected] ?? links[0];
     return (
       <section className={shell} aria-label={unitTitle + "协议轨迹"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
           {snapshot}
         </p>
@@ -107,6 +116,7 @@ export function IllustratedHttpLab(props: Props) {
   if (mode === "experiment") {
     return (
       <section className={shell} aria-label={unitTitle + "单变量实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
           HTTP单变量实验
         </p>
@@ -136,7 +146,7 @@ export function IllustratedHttpLab(props: Props) {
             />
           </label>
         </div>
-        <label className="mt-4 flex min-h-10 items-center gap-2 text-xs font-semibold">
+        <label className="mt-4 flex min-h-11 items-center gap-2 text-xs font-semibold">
           <input
             type="checkbox"
             checked={validated}
@@ -168,6 +178,7 @@ export function IllustratedHttpLab(props: Props) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell} aria-label={unitTitle + "证据门"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         独立协议证据门
       </p>

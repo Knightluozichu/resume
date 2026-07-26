@@ -39,7 +39,7 @@ export function TcpPositionalLab() {
   const digits = digitsOf(value, radix);
   return (
     <Figure caption="A positional numeral is a polynomial in the radix; the same integer acquires different digit strings while preserving value.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">integer = {value}<input className="mt-2 w-full accent-current" type="range" min="0" max="1023" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">radix = {radix}<input className="mt-2 w-full accent-current" type="range" min="2" max="16" value={radix} onChange={(event) => setRadix(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">integer = {value}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="1023" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">radix = {radix}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="16" value={radix} onChange={(event) => setRadix(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${digits.length}, minmax(0, 1fr))` }}>{digits.map((digit, index) => <Stat key={`${index}-${digit}`} label={`${radix}^${digits.length - index - 1}`} value={digitLabel(digit)} tone="success" />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="digit string" value={digits.map(digitLabel).join("")} /><Stat label="decoded value" value={digits.reduce((sum, digit) => sum * radix + digit, 0).toString()} tone="success" /></div>
     </Figure>
@@ -55,7 +55,7 @@ export function TcpFloatFormatLab() {
   const decoded = (sign ? -1 : 1) * significand * 2 ** (exponent - bias);
   return (
     <Figure caption="This toy 1+3+4 format makes sign, biased exponent, hidden leading bit, and spacing visible without hiding them inside 64 bits.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">sign = {sign}<input className="mt-2 w-full accent-current" type="range" min="0" max="1" value={sign} onChange={(event) => setSign(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">stored exponent = {exponent}<input className="mt-2 w-full accent-current" type="range" min="1" max="6" value={exponent} onChange={(event) => setExponent(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">fraction = {fraction}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={fraction} onChange={(event) => setFraction(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">sign = {sign}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="1" value={sign} onChange={(event) => setSign(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">stored exponent = {exponent}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="6" value={exponent} onChange={(event) => setExponent(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">fraction = {fraction}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={fraction} onChange={(event) => setFraction(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-[1fr_3fr_4fr] gap-2"><Stat label="sign" value={sign.toString()} tone="danger" /><Stat label="exponent" value={exponent.toString(2).padStart(3, "0")} tone="warning" /><Stat label="fraction" value={fraction.toString(2).padStart(4, "0")} tone="success" /></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="significand" value={significand.toFixed(4)} /><Stat label="true exponent" value={(exponent - bias).toString()} /><Stat label="decoded" value={decoded.toString()} tone="success" /></div>
     </Figure>
@@ -79,7 +79,7 @@ export function TcpRoundingLab() {
   const rounded = roundTo(value, places, mode);
   return (
     <Figure caption="A rounding rule is part of the arithmetic contract: it maps an exact result to one representable neighbor and determines the error sign.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">exact value = {value.toFixed(3)}<input className="mt-2 w-full accent-current" type="range" min="-3" max="3" step="0.005" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">decimal places = {places}<input className="mt-2 w-full accent-current" type="range" min="0" max="3" value={places} onChange={(event) => setPlaces(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">rounding mode<select className="mt-2 block w-full border border-border bg-background p-2" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)}><option value="nearest">nearest-even</option><option value="down">toward negative</option><option value="up">toward positive</option><option value="zero">toward zero</option></select></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">exact value = {value.toFixed(3)}<input className="mt-2 h-11 w-full accent-current" type="range" min="-3" max="3" step="0.005" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">decimal places = {places}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="3" value={places} onChange={(event) => setPlaces(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">rounding mode<select className="mt-2 block w-full border border-border bg-background p-2" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)}><option value="nearest">nearest-even</option><option value="down">toward negative</option><option value="up">toward positive</option><option value="zero">toward zero</option></select></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="rounded" value={rounded.toFixed(places)} tone="success" /><Stat label="absolute error" value={Math.abs(rounded - value).toExponential(3)} /><Stat label="error direction" value={rounded === value ? "exact" : rounded > value ? "up" : "down"} tone="warning" /></div>
     </Figure>
   );
@@ -93,7 +93,7 @@ export function TcpCancellationLab() {
   const reference = delta / 2;
   return (
     <Figure caption="Algebraically equivalent formulas can have different floating-point behavior; rationalization avoids subtracting nearly equal numbers.">
-      <label className="text-sm font-semibold text-primary">delta = 10^-{power}<input className="mt-2 w-full accent-current" type="range" min="2" max="16" value={power} onChange={(event) => setPower(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">delta = 10^-{power}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="16" value={power} onChange={(event) => setPower(Number(event.target.value))} /></label>
       <div className="mt-4 grid gap-2 sm:grid-cols-3"><Stat label="direct subtraction" value={direct.toExponential(8)} tone={direct === 0 ? "danger" : "warning"} /><Stat label="rationalized" value={stable.toExponential(8)} tone="success" /><Stat label="first-order reference" value={reference.toExponential(8)} /></div>
     </Figure>
   );
@@ -120,7 +120,7 @@ export function TcpCompensatedSumLab() {
   const exact = value * count;
   return (
     <Figure caption="Compensated summation carries forward low-order bits lost at each addition; it improves accumulation without pretending input values are exact.">
-      <label className="text-sm font-semibold text-primary">terms = {count}<input className="mt-2 w-full accent-current" type="range" min="100" max="100000" step="100" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">terms = {count}<input className="mt-2 h-11 w-full accent-current" type="range" min="100" max="100000" step="100" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label>
       <div className="mt-4 grid gap-2 sm:grid-cols-3"><Stat label="naive error" value={(result.naive - exact).toExponential(4)} tone="warning" /><Stat label="compensated error" value={(result.kahan - exact).toExponential(4)} tone="success" /><Stat label="target" value={exact.toString()} /></div>
     </Figure>
   );
@@ -150,7 +150,7 @@ export function TcpMultiplePrecisionAddLab() {
   const result = chunkAdd(leftChunks, rightChunks, base);
   return (
     <Figure caption="Multiple-precision addition stores a number as radix-B limbs and propagates a bounded carry from the least significant limb.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 w-full accent-current" type="range" min="100000" max="999999" step="137" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 w-full accent-current" type="range" min="100000" max="999999" step="173" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 h-11 w-full accent-current" type="range" min="100000" max="999999" step="137" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 h-11 w-full accent-current" type="range" min="100000" max="999999" step="173" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="left limbs" value={leftChunks.map((value) => value.toString().padStart(3, "0")).join(" | ")} /><Stat label="right limbs" value={rightChunks.map((value) => value.toString().padStart(3, "0")).join(" | ")} /><Stat label="carry trace" value={result.carries.join(" | ")} tone="warning" /></div>
       <div className="mt-2"><Stat label="result limbs" value={result.result.map((value, index) => index ? value.toString().padStart(3, "0") : value.toString()).join(" | ")} tone="success" /></div>
     </Figure>
@@ -173,7 +173,7 @@ export function TcpMultiplePrecisionMultiplyLab() {
   const product = schoolProduct(left, right);
   return (
     <Figure caption="Classical multiplication forms every digit product on a diagonal and then normalizes carries; n-by-n limbs require quadratic elementary products.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 w-full accent-current" type="range" min="10" max="99" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 w-full accent-current" type="range" min="10" max="99" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 h-11 w-full accent-current" type="range" min="10" max="99" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 h-11 w-full accent-current" type="range" min="10" max="99" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="elementary products" value="4" /><Stat label="normalized digits" value={product.join(" ")} /><Stat label="decoded product" value={product.reduce((sum, digit) => sum * 10 + digit, 0).toString()} tone="success" /></div>
     </Figure>
   );
@@ -197,7 +197,7 @@ export function TcpModularLab() {
   const inverse = result.divisor === 1 ? ((result.coefficient % modulus) + modulus) % modulus : null;
   return (
     <Figure caption="A modular inverse exists exactly when the operand and modulus are coprime; extended Euclid produces the witness coefficient.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">a = {value}<input className="mt-2 w-full accent-current" type="range" min="2" max="80" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">modulus = {modulus}<input className="mt-2 w-full accent-current" type="range" min="3" max="97" value={modulus} onChange={(event) => setModulus(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">a = {value}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="80" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">modulus = {modulus}<input className="mt-2 h-11 w-full accent-current" type="range" min="3" max="97" value={modulus} onChange={(event) => setModulus(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="gcd(a,m)" value={result.divisor.toString()} /><Stat label="inverse" value={inverse?.toString() ?? "none"} tone={inverse === null ? "danger" : "success"} /><Stat label="verification" value={inverse === null ? "not invertible" : `${value}×${inverse} mod ${modulus} = ${(value * inverse) % modulus}`} /></div>
     </Figure>
   );
@@ -215,7 +215,7 @@ export function TcpRadixConversionLab() {
   const rows = divisionTrace(value, radix);
   return (
     <Figure caption="Repeated division exposes both the quotient invariant and the reverse remainder order used for integer radix conversion.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">source integer = {value}<input className="mt-2 w-full accent-current" type="range" min="1" max="1023" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">target radix = {radix}<input className="mt-2 w-full accent-current" type="range" min="2" max="16" value={radix} onChange={(event) => setRadix(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">source integer = {value}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="1023" value={value} onChange={(event) => setValue(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">target radix = {radix}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="16" value={radix} onChange={(event) => setRadix(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid gap-1">{rows.map((row) => <div key={row.value} className="grid grid-cols-3 border border-border bg-background p-2 text-center font-mono text-xs text-primary"><span>{row.value} div {radix}</span><span>q={row.quotient}</span><span>r={digitLabel(row.remainder)}</span></div>)}</div>
       <div className="mt-4"><Stat label="reverse remainders" value={rows.map((row) => digitLabel(row.remainder)).reverse().join("")} tone="success" /></div>
     </Figure>
@@ -228,7 +228,7 @@ export function TcpRationalLab() {
   const divisor = gcd(numerator, denominator);
   return (
     <Figure caption="Canonical rational arithmetic reduces numerator and denominator by their gcd, making equality structural and controlling operand growth.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">numerator = {numerator}<input className="mt-2 w-full accent-current" type="range" min="1" max="200" value={numerator} onChange={(event) => setNumerator(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">denominator = {denominator}<input className="mt-2 w-full accent-current" type="range" min="1" max="200" value={denominator} onChange={(event) => setDenominator(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">numerator = {numerator}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="200" value={numerator} onChange={(event) => setNumerator(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">denominator = {denominator}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="200" value={denominator} onChange={(event) => setDenominator(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="gcd" value={divisor.toString()} /><Stat label="canonical numerator" value={(numerator / divisor).toString()} /><Stat label="canonical denominator" value={(denominator / divisor).toString()} tone="success" /></div>
     </Figure>
   );
@@ -249,7 +249,7 @@ export function TcpEuclidLab() {
   const rows = euclidSteps(fib[index + 1], fib[index]);
   return (
     <Figure caption="Consecutive Fibonacci numbers force Euclid to take one quotient-1 step after another, exposing its logarithmic worst-case shape.">
-      <label className="text-sm font-semibold text-primary">Fibonacci index = {index}<input className="mt-2 w-full accent-current" type="range" min="3" max="20" value={index} onChange={(event) => setIndex(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">Fibonacci index = {index}<input className="mt-2 h-11 w-full accent-current" type="range" min="3" max="20" value={index} onChange={(event) => setIndex(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="larger" value={fib[index + 1].toString()} /><Stat label="smaller" value={fib[index].toString()} /><Stat label="division steps" value={rows.length.toString()} tone="warning" /></div>
       <div className="mt-2 font-mono text-xs text-secondary">{rows.slice(0, 8).map(([a, b, r]) => `${a} mod ${b} = ${r}`).join(" · ")}</div>
     </Figure>
@@ -263,7 +263,7 @@ export function TcpHornerLab() {
   for (const coefficient of coefficients.slice(1)) trace.push(trace.at(-1)! * x + coefficient);
   return (
     <Figure caption="Horner evaluation rewrites a degree-n polynomial as nested multiply-adds, using n multiplications and n additions with a simple invariant.">
-      <label className="text-sm font-semibold text-primary">x = {x}<input className="mt-2 w-full accent-current" type="range" min="-5" max="5" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">x = {x}<input className="mt-2 h-11 w-full accent-current" type="range" min="-5" max="5" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-4 gap-2">{trace.map((value, index) => <Stat key={index} label={`stage ${index}`} value={value.toString()} tone={index === trace.length - 1 ? "success" : "accent"} />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="polynomial" value="2x^3−3x^2+5x−7" /><Stat label="P(x)" value={trace.at(-1)!.toString()} tone="success" /></div>
     </Figure>
@@ -282,7 +282,7 @@ export function TcpPowerSeriesLab() {
   const approximation = Array.from({ length: terms }, (_, index) => x ** index / factorial(index)).reduce((sum, term) => sum + term, 0);
   return (
     <Figure caption="A truncated power series trades work for approximation error; recurrence between adjacent terms avoids recomputing powers and factorials.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">x = {x.toFixed(2)}<input className="mt-2 w-full accent-current" type="range" min="-2" max="2" step="0.05" value={x} onChange={(event) => setX(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">terms = {terms}<input className="mt-2 w-full accent-current" type="range" min="1" max="14" value={terms} onChange={(event) => setTerms(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">x = {x.toFixed(2)}<input className="mt-2 h-11 w-full accent-current" type="range" min="-2" max="2" step="0.05" value={x} onChange={(event) => setX(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">terms = {terms}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="14" value={terms} onChange={(event) => setTerms(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="series estimate" value={approximation.toPrecision(10)} /><Stat label="Math.exp" value={Math.exp(x).toPrecision(10)} /><Stat label="absolute error" value={Math.abs(approximation - Math.exp(x)).toExponential(3)} tone="success" /></div>
     </Figure>
   );

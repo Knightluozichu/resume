@@ -61,7 +61,7 @@ export function DsaMathReviewLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="数学主题">
           {(Object.keys(mathModes) as MathMode[]).map((key) => (
-            <button key={key} type="button" onClick={() => setMode(key)} className={"min-h-10 border px-3 text-sm font-semibold " + (mode === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>
+            <button key={key} type="button" onClick={() => setMode(key)} className={"min-h-11 border px-3 text-sm font-semibold " + (mode === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>
               {mathModes[key].label}
             </button>
           ))}
@@ -160,15 +160,15 @@ export function DsaCopyOwnershipLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="flex gap-2" role="group" aria-label="复制方式">
-          <button type="button" onClick={() => setDeepCopy(false)} className={"min-h-10 flex-1 border px-3 text-sm font-semibold " + (!deepCopy ? "border-warning bg-warning text-background" : "border-border bg-background text-primary")}>memberwise 浅复制</button>
-          <button type="button" onClick={() => setDeepCopy(true)} className={"min-h-10 flex-1 border px-3 text-sm font-semibold " + (deepCopy ? "border-success bg-success text-background" : "border-border bg-background text-primary")}>Big Three 深复制</button>
+          <button type="button" onClick={() => setDeepCopy(false)} className={"min-h-11 flex-1 border px-3 text-sm font-semibold " + (!deepCopy ? "border-warning bg-warning text-background" : "border-border bg-background text-primary")}>memberwise 浅复制</button>
+          <button type="button" onClick={() => setDeepCopy(true)} className={"min-h-11 flex-1 border px-3 text-sm font-semibold " + (deepCopy ? "border-success bg-success text-background" : "border-border bg-background text-primary")}>Big Three 深复制</button>
         </div>
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
           <div className="border border-accent bg-accent/10 p-3 text-sm text-accent">object a<div className="mt-2 font-mono">ptr → {aValue}</div></div>
           <div className="text-muted">{deepCopy ? "two allocations" : "same allocation"}</div>
           <div className={"border p-3 text-sm " + (deepCopy ? "border-success bg-success/10 text-success" : "border-warning bg-warning/10 text-warning")}>object b<div className="mt-2 font-mono">ptr → {bValue}</div></div>
         </div>
-        <button type="button" onClick={() => setAValue((value) => value === 2 ? 4 : 2)} className="mt-4 min-h-10 w-full border border-accent bg-background px-3 text-sm font-semibold text-accent">执行 a.write({aValue === 2 ? 4 : 2})</button>
+        <button type="button" onClick={() => setAValue((value) => value === 2 ? 4 : 2)} className="mt-4 min-h-11 w-full border border-accent bg-background px-3 text-sm font-semibold text-accent">执行 a.write({aValue === 2 ? 4 : 2})</button>
         <p className="mb-0 mt-3 text-sm text-secondary">{deepCopy ? "b保持原值；两对象可独立析构。" : "b随a变化，而且两个析构函数会尝试delete同一地址。"}</p>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -195,7 +195,7 @@ export function DsaTemplateContractLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2" role="group" aria-label="模板实参类型">
-          {(Object.keys(comparableTypes) as ComparableType[]).map((key) => <button key={key} type="button" onClick={() => setType(key)} className={"min-h-10 border px-2 font-mono text-xs font-semibold " + (type === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{comparableTypes[key].label}</button>)}
+          {(Object.keys(comparableTypes) as ComparableType[]).map((key) => <button key={key} type="button" onClick={() => setType(key)} className={"min-h-11 border px-2 font-mono text-xs font-semibold " + (type === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{comparableTypes[key].label}</button>)}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <div className="border border-border bg-background p-3 text-xs text-secondary">实例化<div className="mt-2 font-mono text-primary">findMax&lt;{current.label}&gt;</div></div>
@@ -227,7 +227,7 @@ export function DsaMatrixLayoutLab() {
             const row = Math.floor(index / cols);
             const col = index % cols;
             const key = `${row},${col}`;
-            return <button key={key} type="button" onClick={() => setSelected(key)} className={"aspect-square min-h-9 border font-mono text-xs " + (selected === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{row},{col}</button>;
+            return <button key={key} type="button" onClick={() => setSelected(key)} className={"aspect-square min-h-11 border font-mono text-xs " + (selected === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{row},{col}</button>;
           })}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">

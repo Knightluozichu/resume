@@ -249,7 +249,7 @@ export function DeadlockCycleDiagram() {
         x={x + NODE_W / 2}
         y={y + 44}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         {sub}
@@ -378,7 +378,7 @@ export function DeadlockCycleDiagram() {
               x={VIEW_W / 2}
               y={BOT_Y + 30}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               环形等待·谁都不动
@@ -390,7 +390,7 @@ export function DeadlockCycleDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             实线=已持有的锁，虚线=正伸手要却要不到的锁

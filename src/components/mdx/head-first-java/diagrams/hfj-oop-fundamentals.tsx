@@ -67,35 +67,35 @@ export function HfjOopFundamentalsDiagram() {
           >
             class Dog &#123;
           </text>
-          <text x="45" y="116" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="116" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#47;&#47; 实例变量（状态）
           </text>
-          <text x="45" y="132" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="132" fontSize="11" fill="var(--text-secondary)">
             {" "}
             int size;
           </text>
-          <text x="45" y="148" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="148" fontSize="11" fill="var(--text-secondary)">
             {" "}
             String breed;
           </text>
-          <text x="45" y="164" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="164" fontSize="11" fill="var(--text-secondary)">
             {" "}
             String name;
           </text>
-          <text x="45" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="184" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#47;&#47; 方法（行为）
           </text>
-          <text x="45" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="200" fontSize="11" fill="var(--text-secondary)">
             {" "}
             void bark() &#123;...&#125;
           </text>
-          <text x="45" y="216" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="216" fontSize="11" fill="var(--text-secondary)">
             {" "}
             void eat() &#123;...&#125;
           </text>
-          <text x="45" y="236" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="236" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
 
@@ -177,10 +177,10 @@ export function HfjOopFundamentalsDiagram() {
           >
             对象1: dogA
           </text>
-          <text x="435" y="84" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="84" fontSize="11" fill="var(--text-secondary)">
             size=70, breed=&quot;金毛&quot;, name=&quot;旺财&quot;
           </text>
-          <text x="435" y="98" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="98" fontSize="11" fill="var(--text-secondary)">
             bark() &rarr; &quot;汪汪汪!&quot;
           </text>
 
@@ -206,10 +206,10 @@ export function HfjOopFundamentalsDiagram() {
           >
             对象2: dogB
           </text>
-          <text x="435" y="152" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="152" fontSize="11" fill="var(--text-secondary)">
             size=20, breed=&quot;吉娃娃&quot;, name=&quot;小花&quot;
           </text>
-          <text x="435" y="166" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="166" fontSize="11" fill="var(--text-secondary)">
             bark() &rarr; &quot;汪!&quot;
           </text>
 
@@ -235,10 +235,10 @@ export function HfjOopFundamentalsDiagram() {
           >
             对象3: dogC
           </text>
-          <text x="435" y="220" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="220" fontSize="11" fill="var(--text-secondary)">
             size=50, breed=&quot;哈士奇&quot;, name=&quot;二哈&quot;
           </text>
-          <text x="435" y="234" fontSize="9" fill="var(--text-secondary)">
+          <text x="435" y="234" fontSize="11" fill="var(--text-secondary)">
             bark() &rarr; &quot;嗷呜~&quot;
           </text>
 
@@ -276,29 +276,29 @@ export function HfjOopFundamentalsDiagram() {
           >
             不封装（坏实践）
           </text>
-          <text x="45" y="334" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="334" fontSize="11" fill="var(--text-secondary)">
             class DogBad &#123;
           </text>
-          <text x="45" y="350" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="350" fontSize="11" fill="var(--text-secondary)">
             {" "}
             int size; // 外部可随意改
           </text>
-          <text x="45" y="366" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="366" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="45" y="386" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="386" fontSize="11" fill="var(--text-secondary)">
             dog.size = -999; // 合法但荒谬
           </text>
-          <text x="45" y="402" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="402" fontSize="11" fill="var(--text-secondary)">
             dog.size = 0; // 合法但无效
           </text>
-          <text x="45" y="426" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="426" fontSize="11" fill="var(--text-secondary)">
             问题: 状态可被任意破坏
           </text>
-          <text x="45" y="442" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="442" fontSize="11" fill="var(--text-secondary)">
             无法校验, 无法保护不变量
           </text>
-          <text x="45" y="462" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="462" fontSize="11" fill="var(--text-secondary)">
             调试困难, 责任不清
           </text>
 
@@ -324,36 +324,36 @@ export function HfjOopFundamentalsDiagram() {
           >
             封装（好实践）
           </text>
-          <text x="405" y="334" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="334" fontSize="11" fill="var(--text-secondary)">
             class DogGood &#123;
           </text>
-          <text x="405" y="350" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="350" fontSize="11" fill="var(--text-secondary)">
             {" "}
             private int size; // 隐藏
           </text>
-          <text x="405" y="366" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="366" fontSize="11" fill="var(--text-secondary)">
             {" "}
             public int getSize() &#123; return size; &#125;
           </text>
-          <text x="405" y="382" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="382" fontSize="11" fill="var(--text-secondary)">
             {" "}
             public void setSize(int s) &#123;
           </text>
-          <text x="405" y="398" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="398" fontSize="11" fill="var(--text-secondary)">
             {" "}
             if (s &gt; 0) size = s; // 校验
           </text>
-          <text x="405" y="414" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="414" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#125;
           </text>
-          <text x="405" y="434" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="434" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="405" y="454" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="454" fontSize="11" fill="var(--text-secondary)">
             dog.setSize(70); // 合法
           </text>
-          <text x="405" y="470" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="470" fontSize="11" fill="var(--text-secondary)">
             dog.setSize(-1); // 被拒绝
           </text>
         </svg>

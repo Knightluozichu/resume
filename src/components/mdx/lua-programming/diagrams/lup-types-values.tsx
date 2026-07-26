@@ -136,7 +136,7 @@ export function LupTypesValuesDiagram() {
                   x={x + 76}
                   y={y + 62}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={primary}
                   fontFamily="monospace"
                 >

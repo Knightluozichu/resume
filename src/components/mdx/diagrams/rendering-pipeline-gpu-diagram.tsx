@@ -71,7 +71,7 @@ export function RenderingPipelineGpuDiagram({
               <text
                 x="140"
                 y={s.y + 32}
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.sub}
@@ -99,7 +99,7 @@ export function RenderingPipelineGpuDiagram({
             fill="var(--bg)"
             stroke="var(--border)"
           />
-          <text x="320" y="264" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="264" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             Game → Stats：Batches / Tris / Saved by batching · Window → Analysis → Frame Debugger
           </text>
         </svg>

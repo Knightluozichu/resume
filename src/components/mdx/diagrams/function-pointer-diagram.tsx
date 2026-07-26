@@ -74,7 +74,7 @@ export function FunctionPointerDiagram({ step = 0 }: Props) {
           >
             int (*pf)(double, double);
           </text>
-          <text x={64} y={88} fontSize="10" fill={secondary}>
+          <text x={64} y={88} fontSize="11" fill={secondary}>
             pf 是指针；*pf 表示「指向的函数」；括号保证 pf 是指针而非返回 int*
             的函数
           </text>
@@ -163,7 +163,7 @@ export function FunctionPointerDiagram({ step = 0 }: Props) {
             x={476}
             y={184}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             代码区中的入口地址
@@ -184,7 +184,7 @@ export function FunctionPointerDiagram({ step = 0 }: Props) {
                 x={318}
                 y={148}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
               >
                 地址
@@ -231,7 +231,7 @@ export function FunctionPointerDiagram({ step = 0 }: Props) {
           >
             result = (*pf)(3.0, 4.0); /* 或 pf(3.0, 4.0); → 7 */
           </text>
-          <text x={64} y={280} fontSize="10" fill={secondary}>
+          <text x={64} y={280} fontSize="11" fill={secondary}>
             间接调用：CPU 跳转到 pf 保存的地址执行
           </text>
 

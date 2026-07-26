@@ -53,7 +53,7 @@ export function AssimpImportFlowDiagram() {
             x="110"
             y="54"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （几十种格式都行）
@@ -166,7 +166,7 @@ export function AssimpImportFlowDiagram() {
             x="360"
             y="122"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             统一入口，flags = 后处理选项：
@@ -188,7 +188,7 @@ export function AssimpImportFlowDiagram() {
             x="360"
             y="152"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             aiProcess_Triangulate
@@ -210,7 +210,7 @@ export function AssimpImportFlowDiagram() {
             x="360"
             y="190"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             aiProcess_FlipUVs
@@ -242,7 +242,7 @@ export function AssimpImportFlowDiagram() {
             x="630"
             y="54"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （内存里的数据结构）
@@ -283,7 +283,7 @@ export function AssimpImportFlowDiagram() {
             x="630"
             y="121"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             mRootNode
@@ -303,7 +303,7 @@ export function AssimpImportFlowDiagram() {
             x="630"
             y="157"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             mMeshes[]
@@ -323,7 +323,7 @@ export function AssimpImportFlowDiagram() {
             x="630"
             y="193"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             mMaterials[]
@@ -344,7 +344,7 @@ export function AssimpImportFlowDiagram() {
             x="360"
             y="278"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             flags 在加载时顺手把数据「整理」成 OpenGL 好用的样子（拆三角、翻

@@ -74,10 +74,10 @@ export function EquirectToCubemapDiagram() {
           {[57, 71, 84, 97, 111].map((y) => (
             <line key={`hl-${y}`} x1="18" y1={y} x2="218" y2={y} stroke="var(--border)" strokeWidth="0.6" opacity="0.5" />
           ))}
-          <text x="118" y="40" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text-primary)">
+          <text x="118" y="40" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">
             等距柱状投影 HDR (.hdr)
           </text>
-          <text x="118" y="139" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="118" y="139" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             宽:高 = 2:1（经纬展开）
           </text>
 
@@ -96,10 +96,10 @@ export function EquirectToCubemapDiagram() {
             strokeWidth="2"
             markerEnd="url(#eq-arr)"
           />
-          <text x="265" y="76" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--accent)">
+          <text x="265" y="76" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">
             SampleSphericalMap
           </text>
-          <text x="265" y="100" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="265" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             渲染立方体内表面
           </text>
 
@@ -132,7 +132,7 @@ export function EquirectToCubemapDiagram() {
             x={crossX + 2 * cellW}
             y={crossY + 3 * cellH + 14}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -141,13 +141,13 @@ export function EquirectToCubemapDiagram() {
 
           {/* ---- 底部公式 ---- */}
           <rect x="44" y="192" width="472" height="54" rx="8" fill="var(--accent)" opacity="0.05" stroke="var(--accent)" strokeWidth="1" />
-          <text x="280" y="214" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-primary)">
+          <text x="280" y="214" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">
             SampleSphericalMap 公式
           </text>
-          <text x="280" y="234" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="234" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             uv = vec2(atan(dir.z, dir.x), asin(dir.y)) * vec2(1/2π, 1/π) + 0.5
           </text>
-          <text x="280" y="250" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="280" y="250" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             方位角 atan → U；仰角 asin → V；结果映射到 [0,1]
           </text>
         </svg>

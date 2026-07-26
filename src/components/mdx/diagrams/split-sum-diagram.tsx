@@ -50,7 +50,7 @@ export function SplitSumDiagram() {
             x="92"
             y="68"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -99,7 +99,7 @@ export function SplitSumDiagram() {
             x="92"
             y="172"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Ω（半球）
@@ -133,7 +133,7 @@ export function SplitSumDiagram() {
             x="287"
             y="64"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -171,7 +171,7 @@ export function SplitSumDiagram() {
             x="220"
             y="81"
             textAnchor="middle"
-            fontSize="7"
+            fontSize="11"
             fill="var(--bg)"
             fontWeight="700"
           >
@@ -181,7 +181,7 @@ export function SplitSumDiagram() {
             x="246"
             y="81"
             textAnchor="middle"
-            fontSize="7"
+            fontSize="11"
             fill="var(--accent)"
             fontWeight="700"
           >
@@ -191,7 +191,7 @@ export function SplitSumDiagram() {
             x="268"
             y="81"
             textAnchor="middle"
-            fontSize="7"
+            fontSize="11"
             fill="var(--accent)"
             fontWeight="700"
           >
@@ -201,7 +201,7 @@ export function SplitSumDiagram() {
             x="287"
             y="106"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             sample(envMap, R, roughness)
@@ -234,7 +234,7 @@ export function SplitSumDiagram() {
             x="287"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -263,7 +263,7 @@ export function SplitSumDiagram() {
             x="227"
             y="178"
             textAnchor="middle"
-            fontSize="7"
+            fontSize="11"
             fill="var(--bg)"
             fontWeight="700"
           >
@@ -273,7 +273,7 @@ export function SplitSumDiagram() {
             x="257"
             y="178"
             textAnchor="middle"
-            fontSize="7"
+            fontSize="11"
             fill="var(--bg)"
             fontWeight="700"
           >
@@ -283,7 +283,7 @@ export function SplitSumDiagram() {
             x="287"
             y="200"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             LUT(NdotV, roughness) → (A, B)
@@ -305,7 +305,7 @@ export function SplitSumDiagram() {
             x="466"
             y="80"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -315,7 +315,7 @@ export function SplitSumDiagram() {
             x="466"
             y="100"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             prefilteredColor
@@ -324,7 +324,7 @@ export function SplitSumDiagram() {
             x="466"
             y="116"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             × (F0·A + B)
@@ -333,7 +333,7 @@ export function SplitSumDiagram() {
             x="466"
             y="136"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontStyle="italic"
           >
@@ -343,7 +343,7 @@ export function SplitSumDiagram() {
             x="466"
             y="150"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontStyle="italic"
           >
@@ -389,7 +389,7 @@ export function SplitSumDiagram() {
             x="280"
             y="251"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >

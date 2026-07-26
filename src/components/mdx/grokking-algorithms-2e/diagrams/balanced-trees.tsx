@@ -140,13 +140,13 @@ export function BstShapeDiagram() {
           {chain.map((node) => (
             <g key={node.key}>
               <circle cx={node.x} cy={node.y} r="18" fill={danger} fillOpacity="0.09" stroke={danger} />
-              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>{node.key}</text>
+              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.key}</text>
             </g>
           ))}
 
           <rect x="64" y="302" width="632" height="49" rx="4" fill="var(--bg)" stroke={border} />
-          <text x="380" y="322" textAnchor="middle" fontSize="10.5" fill={primary}>BST查找与插入成本是O(h)，不是自动O(log n)。</text>
-          <text x="380" y="340" textAnchor="middle" fontSize="9.5" fill={secondary}>平衡结构把h维持为O(log n)；升序插入的普通BST可让h增长到n-1。</text>
+          <text x="380" y="322" textAnchor="middle" fontSize="11" fill={primary}>BST查找与插入成本是O(h)，不是自动O(log n)。</text>
+          <text x="380" y="340" textAnchor="middle" fontSize="11" fill={secondary}>平衡结构把h维持为O(log n)；升序插入的普通BST可让h增长到n-1。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -195,7 +195,7 @@ export function BTreePageDiagram() {
         >
           <text x="380" y="27" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>B树：一个磁盘页容纳多个键和孩子</text>
           <rect x="248" y="67" width="264" height="70" rx="4" fill={accent} fillOpacity="0.09" stroke={accent} />
-          <text x="380" y="88" textAnchor="middle" fontSize="9.5" fill={secondary}>根页</text>
+          <text x="380" y="88" textAnchor="middle" fontSize="11" fill={secondary}>根页</text>
           {["25", "40", "70"].map((key, index) => (
             <g key={key}>
               <rect x={274 + index * 76} y="96" width="58" height="29" rx="3" fill="var(--bg)" stroke={accent} />
@@ -209,15 +209,15 @@ export function BTreePageDiagram() {
               <g key={leaf.keys}>
                 <line x1={rootX} y1="137" x2={leaf.x} y2="222" stroke={border} strokeWidth="2" />
                 <rect x={leaf.x - 76} y="222" width="152" height="69" rx="4" fill={success} fillOpacity="0.08" stroke={success} />
-                <text x={leaf.x} y="244" textAnchor="middle" fontSize="9.5" fill={secondary}>叶页 {index + 1}</text>
+                <text x={leaf.x} y="244" textAnchor="middle" fontSize="11" fill={secondary}>叶页 {index + 1}</text>
                 <text x={leaf.x} y="272" textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{leaf.keys}</text>
               </g>
             );
           })}
 
           <rect x="82" y="320" width="596" height="39" rx="4" fill={warning} fillOpacity="0.06" stroke={warning} strokeOpacity="0.55" />
-          <text x="380" y="338" textAnchor="middle" fontSize="10.5" fill={primary}>一次读页带回多个键和指针，分支因子远大于2，树高显著降低。</text>
-          <text x="380" y="352" textAnchor="middle" fontSize="9" fill={secondary}>页内比较仍有CPU成本，但昂贵I/O次数通常由树层数主导。</text>
+          <text x="380" y="338" textAnchor="middle" fontSize="11" fill={primary}>一次读页带回多个键和指针，分支因子远大于2，树高显著降低。</text>
+          <text x="380" y="352" textAnchor="middle" fontSize="11" fill={secondary}>页内比较仍有CPU成本，但昂贵I/O次数通常由树层数主导。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

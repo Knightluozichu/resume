@@ -81,7 +81,7 @@ export function EnergyConservationDiagram() {
             x="300"
             y="175"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             材质表面
@@ -114,7 +114,7 @@ export function EnergyConservationDiagram() {
           <text x="404" y="52" fontSize="12" fontWeight="600" fill="var(--accent)">
             反射 k_s
           </text>
-          <text x="404" y="68" fontSize="10" fill="var(--text-secondary)">
+          <text x="404" y="68" fontSize="11" fill="var(--text-secondary)">
             镜面反射
           </text>
 
@@ -131,7 +131,7 @@ export function EnergyConservationDiagram() {
           <text x="330" y="220" fontSize="12" fontWeight="600" fill="var(--success)">
             折射 k_d
           </text>
-          <text x="330" y="236" fontSize="10" fill="var(--text-secondary)">
+          <text x="330" y="236" fontSize="11" fill="var(--text-secondary)">
             漫反射/吸收
           </text>
 

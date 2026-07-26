@@ -19,7 +19,7 @@ export function Algs4AdtBoundaryDiagram() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(adtOperations) as AdtOperation[]).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-10 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-11 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
@@ -72,7 +72,7 @@ export function Algs4ObjectAliasLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2">
-          {(["alias", "independent"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setMode(candidate)} className={"min-h-10 border text-xs font-semibold " + (mode === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(["alias", "independent"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setMode(candidate)} className={"min-h-11 border text-xs font-semibold " + (mode === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <label className="mt-4 block text-sm font-semibold text-primary">
           b.increment() calls = {increments}
@@ -120,7 +120,7 @@ export function Algs4DateInvariantLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {dateCases.map((candidate, candidateIndex) => <button key={candidate.label} type="button" onClick={() => setIndex(candidateIndex)} className={"min-h-10 border font-mono text-xs " + (index === candidateIndex ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate.label}</button>)}
+          {dateCases.map((candidate, candidateIndex) => <button key={candidate.label} type="button" onClick={() => setIndex(candidateIndex)} className={"min-h-11 border font-mono text-xs " + (index === candidateIndex ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate.label}</button>)}
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
           <div className="border border-border bg-background p-3 text-secondary">month<div className="font-mono text-primary">{active.month}</div></div>

@@ -159,7 +159,7 @@ export function McpArchitectureDiagram() {
                 x={CLIENT_X + CLIENT_W / 2}
                 y={clientCY(i) + 16}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 连一个 server 的连接器
@@ -194,7 +194,7 @@ export function McpArchitectureDiagram() {
                 x={SERVER_CX}
                 y={clientCY(i) + 16}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 把这个能力按标准暴露出来

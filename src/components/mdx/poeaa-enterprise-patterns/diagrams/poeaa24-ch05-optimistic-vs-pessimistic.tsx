@@ -131,7 +131,7 @@ export function Poeaa24Ch05OptimisticVsPessimistic() {
                 <text
                   x={LEFT_X + 36}
                   y={sy + 33}
-                  fontSize="10"
+                  fontSize="11"
                   fill={T.secondary}
                   fontFamily="monospace"
                 >
@@ -213,7 +213,7 @@ export function Poeaa24Ch05OptimisticVsPessimistic() {
                 <text
                   x={RIGHT_X + 36}
                   y={sy + 33}
-                  fontSize="10"
+                  fontSize="11"
                   fill={T.secondary}
                   fontFamily="monospace"
                 >
@@ -261,7 +261,7 @@ export function Poeaa24Ch05OptimisticVsPessimistic() {
           <text
             x={RIGHT_X + PANEL_W + 20}
             y={PANEL_Y + 56 + 2 * (STEP_H + STEP_GAP) + STEP_H / 2}
-            fontSize="10"
+            fontSize="11"
             fill={PES_COLOR}
             writingMode="vertical-rl"
           >

@@ -68,7 +68,7 @@ export function EventConditionDiagram() {
             x={CX}
             y={48}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             不用背 9×9 碰撞矩阵，顺着这条决策流走一遍就清楚
@@ -158,7 +158,7 @@ export function EventConditionDiagram() {
             x={CX}
             y={Q1_Y + 39}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             缺一个碰撞器 → 引擎无从判断接触
@@ -168,7 +168,7 @@ export function EventConditionDiagram() {
             x={CX + 10}
             y={Q1_Y + Q_H + 16}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -201,7 +201,7 @@ export function EventConditionDiagram() {
             x={CX}
             y={Q2_Y + 39}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             两个都是静态碰撞器（都没 rb）→ 引擎不为它俩算
@@ -210,7 +210,7 @@ export function EventConditionDiagram() {
             x={CX + 10}
             y={Q2_Y + Q_H + 16}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -243,7 +243,7 @@ export function EventConditionDiagram() {
             x={CX}
             y={Q3_Y + 39}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             勾了走触发回调，没勾走碰撞回调
@@ -253,7 +253,7 @@ export function EventConditionDiagram() {
             x={CX - 66}
             y={Q3_Y + Q_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -263,7 +263,7 @@ export function EventConditionDiagram() {
             x={CX + 66}
             y={Q3_Y + Q_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -297,7 +297,7 @@ export function EventConditionDiagram() {
             x={TRIG_X + R_W / 2}
             y={RESULT_Y + 40}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             不阻挡（能穿过）
@@ -306,7 +306,7 @@ export function EventConditionDiagram() {
             x={TRIG_X + R_W / 2}
             y={RESULT_Y + 55}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             参数：Collider other
@@ -339,7 +339,7 @@ export function EventConditionDiagram() {
             x={COL_X + R_W / 2}
             y={RESULT_Y + 40}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             会物理阻挡（撞上停 / 弹）
@@ -348,7 +348,7 @@ export function EventConditionDiagram() {
             x={COL_X + R_W / 2}
             y={RESULT_Y + 55}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             参数：Collision c
@@ -370,7 +370,7 @@ export function EventConditionDiagram() {
             x={NONE_X + NONE_W / 2}
             y={NONE1_Y + 17}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--danger)"
           >
@@ -380,7 +380,7 @@ export function EventConditionDiagram() {
             x={NONE_X + NONE_W / 2}
             y={NONE1_Y + 31}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             缺 Collider
@@ -401,7 +401,7 @@ export function EventConditionDiagram() {
             x={NONE_X + NONE_W / 2}
             y={NONE2_Y + 17}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--danger)"
           >
@@ -411,7 +411,7 @@ export function EventConditionDiagram() {
             x={NONE_X + NONE_W / 2}
             y={NONE2_Y + 31}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             两边都无 Rigidbody

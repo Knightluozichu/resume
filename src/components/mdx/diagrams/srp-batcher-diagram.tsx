@@ -47,7 +47,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="164"
             y="68"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             相同网格 + 相同材质
@@ -70,7 +70,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="164"
             y="150"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--success)"
           >
@@ -80,7 +80,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="164"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             材质勾选 Enable GPU Instancing
@@ -89,7 +89,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="164"
             y="204"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             适合：草、子弹、相同 Prefab 海
@@ -120,7 +120,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="476"
             y="68"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             URP/HDRP · 兼容 Shader
@@ -170,7 +170,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="444"
             y="150"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             统一 CB 布局 · 少 SetPass
@@ -179,7 +179,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="476"
             y="176"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             不同材质参数 · 同 Shader 变体
@@ -188,7 +188,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="476"
             y="204"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             适合：大量不同颜色/参数的 Lit 物体
@@ -198,7 +198,7 @@ export function SrpBatcherDiagram({ mode = "all" }: Props) {
             x="320"
             y="248"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             二者可叠加：Instancing 管「同网格多份」，SRP Batcher 管「兼容 Shader 批量提交」

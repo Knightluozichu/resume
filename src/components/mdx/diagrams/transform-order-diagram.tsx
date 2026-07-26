@@ -38,7 +38,7 @@ export function TransformOrderDiagram() {
             x="70"
             y="32"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             原点
@@ -70,7 +70,7 @@ export function TransformOrderDiagram() {
             x="90"
             y="148"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             起始
@@ -90,7 +90,7 @@ export function TransformOrderDiagram() {
             x="139"
             y="104"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             ①缩放
@@ -111,7 +111,7 @@ export function TransformOrderDiagram() {
             x="196"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             就地放大
@@ -131,7 +131,7 @@ export function TransformOrderDiagram() {
             x="267"
             y="104"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             ②向右平移
@@ -152,7 +152,7 @@ export function TransformOrderDiagram() {
             x="338"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             落在这里
@@ -194,7 +194,7 @@ export function TransformOrderDiagram() {
             x="90"
             y="308"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             起始
@@ -214,7 +214,7 @@ export function TransformOrderDiagram() {
             x="153"
             y="264"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             ①向右平移
@@ -235,7 +235,7 @@ export function TransformOrderDiagram() {
             x="216"
             y="308"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             挪到这
@@ -255,7 +255,7 @@ export function TransformOrderDiagram() {
             x="279"
             y="264"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             ②整体放大
@@ -276,7 +276,7 @@ export function TransformOrderDiagram() {
             x="528"
             y="316"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             落得更远
@@ -297,7 +297,7 @@ export function TransformOrderDiagram() {
             x="410"
             y="290"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             连「挪过的距离」也被放大

@@ -144,15 +144,15 @@ export function GlsBufferObjectsDiagram({
                 y="155"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.4"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="201" fontSize="11" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="222" fontSize="10.1" fill={primary}>
+              <text x={x + 13} y="222" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -182,7 +182,7 @@ export function GlsBufferObjectsDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.4"
+          fontSize="11"
           fill={primary}
         >
           每次写入都要回答：范围是否合法、谁仍在使用、何时对消费者可见
@@ -247,13 +247,13 @@ export function GlsBufferRoleDiagram() {
         >
           字节存储 + 绑定解释 = 资源角色
         </text>
-        <text x="26" y="65" fontSize="10" fill={secondary}>
+        <text x="26" y="65" fontSize="11" fill={secondary}>
           角色
         </text>
-        <text x="205" y="65" fontSize="10" fill={secondary}>
+        <text x="205" y="65" fontSize="11" fill={secondary}>
           解释入口
         </text>
-        <text x="550" y="65" fontSize="10" fill={secondary}>
+        <text x="550" y="65" fontSize="11" fill={secondary}>
           访问语义
         </text>
         {roleRows.map((row, index) => {
@@ -273,7 +273,7 @@ export function GlsBufferRoleDiagram() {
               <text
                 x="53"
                 y={y + 22}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -283,12 +283,12 @@ export function GlsBufferRoleDiagram() {
                 x="205"
                 y={y + 22}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="550" y={y + 22} fontSize="10" fill={primary}>
+              <text x="550" y={y + 22} fontSize="11" fill={primary}>
                 {row[2]}
               </text>
             </g>
@@ -298,7 +298,7 @@ export function GlsBufferRoleDiagram() {
           x="440"
           y="329"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={secondary}
         >
           容量、binding 数量与 offset alignment 都必须从当前 implementation 查询
@@ -355,19 +355,19 @@ export function GlsBlockLayoutDiagram() {
         >
           布局不是 sizeof(C++) 的自然结果
         </text>
-        <text x="28" y="68" fontSize="10" fill={secondary}>
+        <text x="28" y="68" fontSize="11" fill={secondary}>
           成员
         </text>
-        <text x="175" y="68" fontSize="10" fill={secondary}>
+        <text x="175" y="68" fontSize="11" fill={secondary}>
           std140
         </text>
-        <text x="335" y="68" fontSize="10" fill={secondary}>
+        <text x="335" y="68" fontSize="11" fill={secondary}>
           std430
         </text>
-        <text x="495" y="68" fontSize="10" fill={secondary}>
+        <text x="495" y="68" fontSize="11" fill={secondary}>
           数据量
         </text>
-        <text x="650" y="68" fontSize="10" fill={secondary}>
+        <text x="650" y="68" fontSize="11" fill={secondary}>
           风险
         </text>
         {layoutRows.map((row, index) => {
@@ -388,7 +388,7 @@ export function GlsBlockLayoutDiagram() {
                 x="34"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="10.2"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -398,7 +398,7 @@ export function GlsBlockLayoutDiagram() {
                 x="175"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={color}
               >
                 {row[1]}
@@ -407,7 +407,7 @@ export function GlsBlockLayoutDiagram() {
                 x="335"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={color}
               >
                 {row[2]}
@@ -416,12 +416,12 @@ export function GlsBlockLayoutDiagram() {
                 x="495"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={primary}
               >
                 {row[3]}
               </text>
-              <text x="650" y={y + 24} fontSize="9.8" fill={secondary}>
+              <text x="650" y={y + 24} fontSize="11" fill={secondary}>
                 {row[4]}
               </text>
             </g>
@@ -442,7 +442,7 @@ export function GlsBlockLayoutDiagram() {
           x="450"
           y="314"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           offset(next) = alignUp(offset + size, alignment(next))
@@ -536,7 +536,7 @@ export function GlsPersistentRingDiagram() {
                 x={x + 97.5}
                 y="173"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={stage[2]}
               >
                 {stage[1]}
@@ -564,7 +564,7 @@ export function GlsPersistentRingDiagram() {
           x="440"
           y="292"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={secondary}
         >
           frame i 使用 chunk (i mod K)，复用前等待该 chunk 自己的 fence
@@ -655,7 +655,7 @@ export function GlsShaderDataPathDiagram() {
                 x={x + 97.5}
                 y="140"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[1]}
@@ -674,7 +674,7 @@ export function GlsShaderDataPathDiagram() {
                 y="189"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.3"
+                fontSize="11"
                 fill={color}
               >
                 {row[2]}
@@ -686,7 +686,7 @@ export function GlsShaderDataPathDiagram() {
           x="440"
           y="287"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={secondary}
         >
           写入后要为下一种消费者选择对应 memory barrier bit；barrier
@@ -754,13 +754,13 @@ export function GlsAdvancedTextureDataDiagram() {
         >
           第 11 章的五个优化维度
         </text>
-        <text x="28" y="67" fontSize="10" fill={secondary}>
+        <text x="28" y="67" fontSize="11" fill={secondary}>
           技术
         </text>
-        <text x="190" y="67" fontSize="10" fill={secondary}>
+        <text x="190" y="67" fontSize="11" fill={secondary}>
           机制
         </text>
-        <text x="565" y="67" fontSize="10" fill={secondary}>
+        <text x="565" y="67" fontSize="11" fill={secondary}>
           解决的问题
         </text>
         {advancedRows.map((row, index) => {
@@ -780,7 +780,7 @@ export function GlsAdvancedTextureDataDiagram() {
               <text
                 x="56"
                 y={y + 23}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -790,12 +790,12 @@ export function GlsAdvancedTextureDataDiagram() {
                 x="190"
                 y={y + 23}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="565" y={y + 23} fontSize="10" fill={primary}>
+              <text x="565" y={y + 23} fontSize="11" fill={primary}>
                 {row[2]}
               </text>
             </g>
@@ -812,7 +812,7 @@ export function GlsAdvancedTextureDataDiagram() {
           stroke={warning}
           strokeOpacity="0.5"
         />
-        <text x="450" y="353" textAnchor="middle" fontSize="10" fill={primary}>
+        <text x="450" y="353" textAnchor="middle" fontSize="11" fill={primary}>
           先检查 core version /
           extension，再查询限制、页尺寸、格式支持和最大各向异性
         </text>

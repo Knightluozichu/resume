@@ -74,7 +74,7 @@ export function ModelCompositionDiagram() {
           >
             Model
           </text>
-          <text x="100" y="68" fontSize="10" fill="var(--text-secondary)">
+          <text x="100" y="68" fontSize="11" fill="var(--text-secondary)">
             vector&lt;Mesh&gt; meshes;
           </text>
 
@@ -116,7 +116,7 @@ export function ModelCompositionDiagram() {
             x="561"
             y="118"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （全模型共享的纹理缓存）
@@ -147,7 +147,7 @@ export function ModelCompositionDiagram() {
             x="561"
             y="172"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             paint.png（只加载一次）
@@ -177,7 +177,7 @@ export function ModelCompositionDiagram() {
             x="561"
             y="236"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             tire.png
@@ -214,7 +214,7 @@ export function ModelCompositionDiagram() {
             x="410"
             y="128"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -224,7 +224,7 @@ export function ModelCompositionDiagram() {
             x="410"
             y="140"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -254,7 +254,7 @@ export function ModelCompositionDiagram() {
           <text x="178" y="372" fontSize="11" fill="var(--text-secondary)">
             for (mesh : meshes) mesh.Draw(shader);
           </text>
-          <text x="468" y="372" fontSize="10" fill="var(--accent)">
+          <text x="468" y="372" fontSize="11" fill="var(--accent)">
             一行画完整个模型
           </text>
         </svg>
@@ -313,7 +313,7 @@ function MeshBox({
         stroke="var(--border)"
         strokeWidth="1"
       />
-      <text x="68" y={y + 47} fontSize="10" fill="var(--text-secondary)">
+      <text x="68" y={y + 47} fontSize="11" fill="var(--text-secondary)">
         vertices（顶点：位置 / 法线 / UV）
       </text>
       {/* indices */}
@@ -327,7 +327,7 @@ function MeshBox({
         stroke="var(--border)"
         strokeWidth="1"
       />
-      <text x="68" y={y + 73} fontSize="10" fill="var(--text-secondary)">
+      <text x="68" y={y + 73} fontSize="11" fill="var(--text-secondary)">
         indices（索引：哪几个顶点连成三角形）
       </text>
       {/* textures（accent 紫边，强调它要指向缓存） */}
@@ -341,7 +341,7 @@ function MeshBox({
         stroke="var(--accent)"
         strokeWidth="1.2"
       />
-      <text x="68" y={y + 99} fontSize="10" fill="var(--accent)">
+      <text x="68" y={y + 99} fontSize="11" fill="var(--accent)">
         {texLabel}
       </text>
     </>

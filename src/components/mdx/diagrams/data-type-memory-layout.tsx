@@ -77,7 +77,7 @@ export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
                 <text
                   x={leftLabelX}
                   y={y + 28}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   sizeof({t.label}) = {t.size}
@@ -108,7 +108,7 @@ export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
                           x={cx + cellSize / 2}
                           y={y + 17}
                           textAnchor="middle"
-                          fontSize="10"
+                          fontSize="11"
                           fill={t.color}
                           fontFamily="monospace"
                         >
@@ -120,7 +120,7 @@ export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
                           x={cx + cellSize / 2}
                           y={y + 17}
                           textAnchor="middle"
-                          fontSize="9"
+                          fontSize="11"
                           fill="var(--text-secondary)"
                           opacity="0.3"
                         >

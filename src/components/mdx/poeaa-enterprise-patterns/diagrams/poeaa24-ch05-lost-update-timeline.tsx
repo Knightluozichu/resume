@@ -301,7 +301,7 @@ export function Poeaa24Ch05LostUpdateTimeline() {
           <text
             x={20}
             y={LANE_Y + 36}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             改地址
@@ -318,7 +318,7 @@ export function Poeaa24Ch05LostUpdateTimeline() {
           <text
             x={20}
             y={LANE_Y + STEP_H + ROW_GAP + 36}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             改数量

@@ -51,7 +51,7 @@ export function HemisphereConvolutionDiagram() {
             stroke="var(--border)"
             strokeWidth="2"
           />
-          <text x="42" y={cy + 14} fontSize="8" fill="var(--text-secondary)">
+          <text x="42" y={cy + 14} fontSize="11" fill="var(--text-secondary)">
             表面
           </text>
 
@@ -119,7 +119,7 @@ export function HemisphereConvolutionDiagram() {
           <text
             x={cx + 20}
             y={cy - hemisphereR - 4}
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             法线方向
@@ -127,7 +127,7 @@ export function HemisphereConvolutionDiagram() {
 
           {/* ---- 着色点 ---- */}
           <circle cx={cx} cy={cy} r="5" fill="var(--text-primary)" />
-          <text x={cx - 20} y={cy + 18} fontSize="8" fill="var(--text-secondary)">
+          <text x={cx - 20} y={cy + 18} fontSize="11" fill="var(--text-secondary)">
             着色点 P
           </text>
 
@@ -139,52 +139,52 @@ export function HemisphereConvolutionDiagram() {
             strokeWidth="1"
             strokeDasharray="3 2"
           />
-          <text x={cx + 18} y={cy - 20} fontSize="9" fill="var(--text-secondary)" fontStyle="italic">
+          <text x={cx + 18} y={cy - 20} fontSize="11" fill="var(--text-secondary)" fontStyle="italic">
             θ
           </text>
 
           {/* ---- 右侧注释面板 ---- */}
           <rect x="330" y="50" width="208" height="156" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="434" y="70" textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--text-primary)">
+          <text x="434" y="70" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">
             卷积权重分解
           </text>
           {/* cos(θ) */}
           <rect x="340" y="80" width="188" height="30" rx="4" fill="var(--success)" opacity="0.08" />
-          <text x="434" y="94" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--success)">
+          <text x="434" y="94" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">
             cos(θ) — 朗伯余弦律
           </text>
-          <text x="434" y="106" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="434" y="106" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             正对法线 θ=0° 贡献最强
           </text>
           {/* sin(θ) */}
           <rect x="340" y="118" width="188" height="30" rx="4" fill="var(--warning)" opacity="0.08" />
-          <text x="434" y="132" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--warning)">
+          <text x="434" y="132" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">
             sin(θ) — 雅可比行列式
           </text>
-          <text x="434" y="144" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="434" y="144" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             补偿球面均匀采样面积
           </text>
           {/* Σ */}
           <rect x="340" y="156" width="188" height="38" rx="4" fill="var(--accent)" opacity="0.08" />
-          <text x="434" y="170" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--accent)">
+          <text x="434" y="170" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">
             Σ 黎曼和 → 辐照度
           </text>
-          <text x="434" y="182" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="434" y="182" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             32×32 辐照度贴图已足够
           </text>
-          <text x="434" y="194" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="434" y="194" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             （低频信号，高分辨率冗余）
           </text>
 
           {/* ---- 底部公式 ---- */}
           <rect x="28" y="236" width="492" height="52" rx="8" fill="var(--accent)" opacity="0.05" stroke="var(--accent)" strokeWidth="1" />
-          <text x="280" y="256" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-primary)">
+          <text x="280" y="256" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">
             辐照度卷积公式（黎曼求和近似）
           </text>
-          <text x="280" y="274" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="274" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             irradiance(N) ≈ π × Σ Li(ωi) × cos(θi) × sin(θi) × dφ × dθ
           </text>
-          <text x="280" y="288" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="280" y="288" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             对半球所有采样方向 ωi 加权求和，得到法线 N 方向接收到的漫反射光总量
           </text>
         </svg>

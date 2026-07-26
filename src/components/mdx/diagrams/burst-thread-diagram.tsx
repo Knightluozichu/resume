@@ -52,7 +52,7 @@ export function BurstThreadDiagram() {
             x="280"
             y="80"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             调度 Job → Complete()
@@ -131,7 +131,7 @@ export function BurstThreadDiagram() {
                   x={wx + 50}
                   y="182"
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   Burst Job
@@ -172,7 +172,7 @@ export function BurstThreadDiagram() {
             x="280"
             y="268"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Profiler 的 CPU Usage 里每条 Worker Thread 有独立时间线

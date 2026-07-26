@@ -49,35 +49,35 @@ export function JctInterfacesLambdaDiagram() {
           >
             接口（Interface）
           </text>
-          <text x="45" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="90" fontSize="11" fill="var(--text-secondary)">
             public interface Comparable&lt;T&gt; &#123;
           </text>
-          <text x="45" y="106" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="106" fontSize="11" fill="var(--text-secondary)">
             {" "}
             int compareTo(T other); // 抽象方法
           </text>
-          <text x="45" y="122" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="122" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="45" y="142" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="142" fontSize="11" fill="var(--text-secondary)">
             default 方法（Java 8+）:
           </text>
-          <text x="45" y="158" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="158" fontSize="11" fill="var(--text-secondary)">
             {" "}
             default String getName() &#123;
           </text>
-          <text x="45" y="174" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="174" fontSize="11" fill="var(--text-secondary)">
             {" "}
             return this.getClass().getSimpleName();
           </text>
-          <text x="45" y="190" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="190" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#125;
           </text>
-          <text x="45" y="210" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="210" fontSize="11" fill="var(--text-secondary)">
             static 方法: 接口内提供工具方法
           </text>
-          <text x="45" y="224" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="224" fontSize="11" fill="var(--text-secondary)">
             private 方法（Java 9+）: 内部复用
           </text>
 
@@ -103,30 +103,30 @@ export function JctInterfacesLambdaDiagram() {
           >
             Lambda表达式
           </text>
-          <text x="405" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="90" fontSize="11" fill="var(--text-secondary)">
             函数式接口 = 只有一个抽象方法
           </text>
-          <text x="405" y="110" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="110" fontSize="11" fill="var(--text-secondary)">
             @FunctionalInterface
           </text>
-          <text x="405" y="126" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="126" fontSize="11" fill="var(--text-secondary)">
             interface Runnable &#123; void run(); &#125;
           </text>
-          <text x="405" y="148" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="148" fontSize="11" fill="var(--text-secondary)">
             匿名内部类:
           </text>
-          <text x="405" y="164" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="164" fontSize="11" fill="var(--text-secondary)">
             {" "}
             new Runnable() &#123; public void run()&#123;...&#125; &#125;
           </text>
-          <text x="405" y="186" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="186" fontSize="11" fill="var(--text-secondary)">
             Lambda 简写:
           </text>
-          <text x="405" y="202" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="202" fontSize="11" fill="var(--text-secondary)">
             {" "}
             () -&gt; &#123; System.out.println(&quot;hi&quot;); &#125;
           </text>
-          <text x="405" y="218" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="218" fontSize="11" fill="var(--text-secondary)">
             方法引用: String::length
           </text>
 
@@ -167,7 +167,7 @@ export function JctInterfacesLambdaDiagram() {
             x="115"
             y="306"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             T get()
@@ -176,7 +176,7 @@ export function JctInterfacesLambdaDiagram() {
             x="115"
             y="320"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             无参, 返回T
@@ -185,7 +185,7 @@ export function JctInterfacesLambdaDiagram() {
             x="115"
             y="334"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             () -&gt; new Object()
@@ -216,7 +216,7 @@ export function JctInterfacesLambdaDiagram() {
             x="295"
             y="306"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             void accept(T)
@@ -225,7 +225,7 @@ export function JctInterfacesLambdaDiagram() {
             x="295"
             y="320"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             接收T, 无返回
@@ -234,7 +234,7 @@ export function JctInterfacesLambdaDiagram() {
             x="295"
             y="334"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             s -&gt; print(s)
@@ -265,7 +265,7 @@ export function JctInterfacesLambdaDiagram() {
             x="475"
             y="306"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             R apply(T)
@@ -274,7 +274,7 @@ export function JctInterfacesLambdaDiagram() {
             x="475"
             y="320"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             接收T, 返回R
@@ -283,7 +283,7 @@ export function JctInterfacesLambdaDiagram() {
             x="475"
             y="334"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             s -&gt; s.length()
@@ -314,7 +314,7 @@ export function JctInterfacesLambdaDiagram() {
             x="640"
             y="306"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             boolean test(T)
@@ -323,7 +323,7 @@ export function JctInterfacesLambdaDiagram() {
             x="640"
             y="320"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             接收T, 返回bool
@@ -332,7 +332,7 @@ export function JctInterfacesLambdaDiagram() {
             x="640"
             y="334"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             s -&gt; s.isEmpty()
@@ -361,24 +361,24 @@ export function JctInterfacesLambdaDiagram() {
           >
             接口 vs 抽象类
           </text>
-          <text x="45" y="400" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="400" fontSize="11" fill="var(--text-secondary)">
             接口: 多实现, 无字段(仅常量)
           </text>
-          <text x="45" y="416" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="416" fontSize="11" fill="var(--text-secondary)">
             {" "}
             default/static/private 方法
           </text>
-          <text x="45" y="432" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="432" fontSize="11" fill="var(--text-secondary)">
             抽象类: 单继承, 可有字段和构造器
           </text>
-          <text x="45" y="448" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="448" fontSize="11" fill="var(--text-secondary)">
             {" "}
             可有具体方法和抽象方法
           </text>
-          <text x="45" y="466" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="466" fontSize="11" fill="var(--text-secondary)">
             选用: 定义行为规范用接口
           </text>
-          <text x="45" y="478" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="478" fontSize="11" fill="var(--text-secondary)">
             {" "}
             共享代码用抽象类
           </text>
@@ -405,26 +405,26 @@ export function JctInterfacesLambdaDiagram() {
           >
             Stream + Lambda
           </text>
-          <text x="405" y="400" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="400" fontSize="11" fill="var(--text-secondary)">
             list.stream()
           </text>
-          <text x="405" y="416" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="416" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .filter(s -&gt; s.length() &gt; 3)
           </text>
-          <text x="405" y="432" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="432" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .map(String::toUpperCase)
           </text>
-          <text x="405" y="448" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="448" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .sorted()
           </text>
-          <text x="405" y="464" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="464" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .collect(Collectors.toList());
           </text>
-          <text x="405" y="478" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="478" fontSize="11" fill="var(--text-secondary)">
             声明式 + 链式 + 惰性求值
           </text>
         </svg>

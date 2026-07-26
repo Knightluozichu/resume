@@ -16,7 +16,7 @@ export function DogOpenglEsDiagram() {
               <rect key={`${r}-${c}`} x={40 + c * 55} y={74 + r * 45} width="50" height="40" rx="4" fill={r === 1 && c === 2 ? "var(--accent)" : "var(--bg)"} fillOpacity={r === 1 && c === 2 ? 0.18 : 1} stroke="var(--border)" strokeWidth="1" />
             ))
           )}
-          <text x="150" y="266" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">每块在片上缓存独立处理</text>
+          <text x="150" y="266" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每块在片上缓存独立处理</text>
 
           {/* TBDR 流程 */}
           <rect x="270" y="74" width="410" height="180" rx="8" fill="var(--accent)" fillOpacity="0.05" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
@@ -29,15 +29,15 @@ export function DogOpenglEsDiagram() {
             { y: 212, t: "5. 写回显存（一次性）" },
             { y: 236, t: "透明/未消除片元 + 附件存取 → 带宽与功耗↑" },
           ].map((row) => (
-            <text key={row.y} x="286" y={row.y} fontSize="10" fill={row.t.startsWith("过度") ? "var(--accent)" : "var(--text-primary)"}>{row.t}</text>
+            <text key={row.y} x="286" y={row.y} fontSize="11" fill={row.t.startsWith("过度") ? "var(--accent)" : "var(--text-primary)"}>{row.t}</text>
           ))}
 
           {/* 精度策略 */}
           <rect x="40" y="290" width="640" height="86" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <text x="360" y="312" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">精度策略</text>
-          <text x="60" y="332" fontSize="10" fill="var(--accent)">highp → 位置、矩阵、法线变换（防溢出/条纹）</text>
-          <text x="60" y="350" fontSize="10" fill="var(--text-secondary)">mediump → 先验证范围与误差，再用 GPU 计数器确认收益</text>
-          <text x="60" y="368" fontSize="10" fill="var(--text-secondary)">附件格式/分辨率 → 直接决定片外带宽；临时附件可避免无用 store</text>
+          <text x="60" y="332" fontSize="11" fill="var(--accent)">highp → 位置、矩阵、法线变换（防溢出/条纹）</text>
+          <text x="60" y="350" fontSize="11" fill="var(--text-secondary)">mediump → 先验证范围与误差，再用 GPU 计数器确认收益</text>
+          <text x="60" y="368" fontSize="11" fill="var(--text-secondary)">附件格式/分辨率 → 直接决定片外带宽；临时附件可避免无用 store</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">移动优化同时约束片元工作、附件 load/store、分辨率与数值精度，并以计数器验证</figcaption>

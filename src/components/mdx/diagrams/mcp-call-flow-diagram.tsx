@@ -153,7 +153,7 @@ export function McpCallFlowDiagram() {
                   x={STEP_X + STEP_W - 12}
                   y={stepCY(i) + 4}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill={isFc ? "var(--warning)" : "var(--accent)"}
                 >

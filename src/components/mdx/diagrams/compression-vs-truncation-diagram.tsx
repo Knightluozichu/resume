@@ -133,7 +133,7 @@ export function CompressionVsTruncationDiagram() {
                   x={cx}
                   y={COL_Y + 44}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.tag}

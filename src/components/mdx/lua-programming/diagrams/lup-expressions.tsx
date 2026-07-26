@@ -103,7 +103,7 @@ export function LupExpressionsDiagram() {
             x={132}
             y={158}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             5 // 2 = 2
@@ -154,7 +154,7 @@ export function LupExpressionsDiagram() {
             x={348}
             y={142}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             注意：~= 不是 !=
@@ -163,7 +163,7 @@ export function LupExpressionsDiagram() {
             x={348}
             y={158}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             只返回 true 或 false
@@ -205,7 +205,7 @@ export function LupExpressionsDiagram() {
             x={576}
             y={124}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             and/or 返回操作数而非布尔值
@@ -214,7 +214,7 @@ export function LupExpressionsDiagram() {
             x={576}
             y={142}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             nil 和 false 为假，其余为真
@@ -223,7 +223,7 @@ export function LupExpressionsDiagram() {
             x={576}
             y={158}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             (a or b) 惯用默认值
@@ -286,7 +286,7 @@ export function LupExpressionsDiagram() {
             x={132}
             y={272}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             数字自动转字符串
@@ -327,7 +327,7 @@ export function LupExpressionsDiagram() {
             x={348}
             y={272}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             #&quot;hello&quot; → 5
@@ -368,7 +368,7 @@ export function LupExpressionsDiagram() {
             x={576}
             y={272}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             {'{name="A"}'} — 字典

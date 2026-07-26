@@ -22,7 +22,7 @@ export function TcpSearchTreeLab() {
   const leaves = branching ** depth;
   return (
     <Figure caption="A combinatorial search tree turns a partial assignment into a node and each legal next choice into an edge; exponential growth makes pruning evidence essential.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">decision depth = {depth}<input className="mt-2 w-full accent-current" type="range" min="1" max="10" value={depth} onChange={(event) => setDepth(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">branching factor = {branching}<input className="mt-2 w-full accent-current" type="range" min="2" max="5" value={branching} onChange={(event) => setBranching(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">decision depth = {depth}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="10" value={depth} onChange={(event) => setDepth(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">branching factor = {branching}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="5" value={branching} onChange={(event) => setBranching(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="leaves" value={leaves.toLocaleString()} /><Stat label="complete nodes" value={completeNodes.toLocaleString()} tone="warning" /><Stat label="state per path" value={depth.toString()} /></div>
     </Figure>
   );
@@ -50,7 +50,7 @@ export function TcpNQueensLab() {
   const board = solutions[safeRank];
   return (
     <Figure caption="N-queens backtracking maintains occupied columns and diagonals as incremental invariants; an illegal prefix is rejected before it becomes a full board.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">board size = {size}<input className="mt-2 w-full accent-current" type="range" min="4" max="8" value={size} onChange={(event) => { setSize(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">solution rank = {safeRank}<input className="mt-2 w-full accent-current" type="range" min="0" max={solutions.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">board size = {size}<input className="mt-2 h-11 w-full accent-current" type="range" min="4" max="8" value={size} onChange={(event) => { setSize(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">solution rank = {safeRank}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={solutions.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid aspect-square max-w-[28rem] border border-border" style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}>{Array.from({ length: size * size }, (_, index) => { const row = Math.floor(index / size); const column = index % size; const queen = board[row] === column; return <div key={index} className={`flex aspect-square items-center justify-center border border-border text-sm ${queen ? "bg-success/25 font-bold text-success" : (row + column) % 2 ? "bg-background" : "bg-elevated"}`}>{queen ? "Q" : ""}</div>; })}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="solutions" value={solutions.length.toString()} /><Stat label="row-to-column" value={board.join(" ")} tone="success" /></div>
     </Figure>
@@ -72,7 +72,7 @@ export function TcpBoundPruningLab() {
   }
   return (
     <Figure caption="Branch-and-bound prunes a partial choice only when a valid optimistic bound cannot beat the incumbent; an underestimated bound can destroy correctness.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">capacity = {capacity}<input className="mt-2 w-full accent-current" type="range" min="2" max="14" value={capacity} onChange={(event) => setCapacity(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">incumbent value = {incumbent}<input className="mt-2 w-full accent-current" type="range" min="0" max="45" value={incumbent} onChange={(event) => setIncumbent(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">capacity = {capacity}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="14" value={capacity} onChange={(event) => setCapacity(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">incumbent value = {incumbent}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="45" value={incumbent} onChange={(event) => setIncumbent(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="fractional upper bound" value={upper.toFixed(2)} /><Stat label="incumbent" value={incumbent.toString()} /><Stat label="branch" value={upper <= incumbent ? "prune" : "explore"} tone={upper <= incumbent ? "warning" : "success"} /></div>
     </Figure>
   );
@@ -87,7 +87,7 @@ export function TcpSymmetryLab() {
   const representative = Math.min(normalized, complement);
   return (
     <Figure caption="Symmetry breaking selects one canonical representative from each complement pair, halving a binary search space without deleting equivalence classes.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">bits = {bits}<input className="mt-2 w-full accent-current" type="range" min="2" max="8" value={bits} onChange={(event) => { setBits(Number(event.target.value)); setValue(0); }} /></label><label className="text-sm font-semibold text-primary">state = {normalized}<input className="mt-2 w-full accent-current" type="range" min="0" max={mask} value={normalized} onChange={(event) => setValue(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">bits = {bits}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="8" value={bits} onChange={(event) => { setBits(Number(event.target.value)); setValue(0); }} /></label><label className="text-sm font-semibold text-primary">state = {normalized}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={mask} value={normalized} onChange={(event) => setValue(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="state" value={normalized.toString(2).padStart(bits, "0")} /><Stat label="complement" value={complement.toString(2).padStart(bits, "0")} /><Stat label="canonical min" value={representative.toString(2).padStart(bits, "0")} tone="success" /></div>
     </Figure>
   );
@@ -116,7 +116,7 @@ export function TcpDancingLinksLab() {
   const remainingRows = Object.keys(COVER_ROWS).filter((row) => !COVER_ROWS[row].some((value) => removedColumns.has(value)));
   return (
     <Figure caption="Dancing Links covers a column by unlinking its rows and conflicting columns; exact reversible pointer updates make uncover restore the prior matrix in reverse order.">
-      <label className="text-sm font-semibold text-primary">cover column = {column}<input className="mt-2 w-full accent-current" type="range" min="1" max="7" value={column} onChange={(event) => setColumn(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">cover column = {column}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="7" value={column} onChange={(event) => setColumn(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="candidate rows" value={rows.join(" ") || "none"} /><Stat label="touched columns" value={[...removedColumns].sort().join(" ")} tone="warning" /><Stat label="rows unaffected by all candidates" value={remainingRows.join(" ") || "none"} tone="success" /></div>
     </Figure>
   );
@@ -174,7 +174,7 @@ export function TcpWatchedLiteralLab() {
   const watched = available.slice(0, 2);
   return (
     <Figure caption="Two-watched-literal propagation revisits a clause only when a watched literal becomes false; it then finds a replacement, a unit literal, or conflict.">
-      <label className="text-sm font-semibold text-primary">false-literal mask = {falseMask.toString(2).padStart(4, "0")}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={falseMask} onChange={(event) => setFalseMask(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">false-literal mask = {falseMask.toString(2).padStart(4, "0")}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={falseMask} onChange={(event) => setFalseMask(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-4 gap-2">{LITERALS.map((literal, index) => <Stat key={literal} label={literal} value={falseMask & (1 << index) ? "false" : watched.some((item) => item.index === index) ? "watched" : "available"} tone={falseMask & (1 << index) ? "danger" : watched.some((item) => item.index === index) ? "success" : "accent"} />)}</div>
       <div className="mt-4"><Stat label="clause status" value={available.length === 0 ? "conflict" : available.length === 1 ? `unit ${available[0].literal}` : "not unit"} tone={available.length === 0 ? "danger" : available.length === 1 ? "warning" : "success"} /></div>
     </Figure>

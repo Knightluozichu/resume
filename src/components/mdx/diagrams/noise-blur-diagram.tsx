@@ -62,7 +62,7 @@ function Panel({
         x={x + w / 2}
         y={y + h + 18}
         textAnchor="middle"
-        fontSize="9.5"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         {note}

@@ -83,7 +83,7 @@ export function IOManipulatorTable() {
                 <text
                   x={startX + colW[0] + 8}
                   y={y + rowH / 2 + 4}
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {row.effect}
@@ -91,7 +91,7 @@ export function IOManipulatorTable() {
                 <text
                   x={startX + colW[0] + colW[1] + 8}
                   y={y + rowH / 2 + 4}
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -105,10 +105,10 @@ export function IOManipulatorTable() {
           <line x1={startX} y1={startY + headerH + rows.length * rowH} x2={w - startX} y2={startY + headerH + rows.length * rowH} stroke={border} strokeWidth="1.5" />
 
           {/* 注意事项 */}
-          <text x={startX + colW[0] + colW[1] / 2} y={startY + headerH + rows.length * rowH + 30} fontSize="10" fill={secondary}>
+          <text x={startX + colW[0] + colW[1] / 2} y={startY + headerH + rows.length * rowH + 30} fontSize="11" fill={secondary}>
             注意：hex/oct/fixed/scientific 等一旦设置，后续所有输出都保持该格式——直到再次显式修改。
           </text>
-          <text x={startX + colW[0] + colW[1] / 2} y={startY + headerH + rows.length * rowH + 48} fontSize="10" fill={secondary}>
+          <text x={startX + colW[0] + colW[1] / 2} y={startY + headerH + rows.length * rowH + 48} fontSize="11" fill={secondary}>
             而 setw 只对「下一次」输出有效，用完自动重置为 0。需要 #include &lt;iomanip&gt;。
           </text>
         </svg>

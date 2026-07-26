@@ -25,6 +25,14 @@ export function TopDownNetworkLab(props: Props) {
   const [bandwidth, setBandwidth] = useState(100);
   const [loss, setLoss] = useState(1);
   const [checked, setChecked] = useState(() => gates.map(() => false));
+  function resetExperiment() {
+    setSelected(0);
+    setRtt(40);
+    setBandwidth(100);
+    setLoss(1);
+    setChecked(() => gates.map(() => false));
+  }
+
   const estimate = useMemo(() => {
     const bdp = (bandwidth * rtt) / 8 / 1000;
     const penalty = Math.max(0.15, 1 - loss / 10);
@@ -35,6 +43,7 @@ export function TopDownNetworkLab(props: Props) {
     const active = links[selected] ?? links[0];
     return (
       <section className={shell} aria-label={unitTitle + "协议路径图"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
           第8版自顶向下协议路径
         </p>
@@ -97,6 +106,7 @@ export function TopDownNetworkLab(props: Props) {
   if (mode === "experiment") {
     return (
       <section className={shell} aria-label={unitTitle + "网络参数实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
           单变量网络实验
         </p>
@@ -163,6 +173,7 @@ export function TopDownNetworkLab(props: Props) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell} aria-label={unitTitle + "证据门"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         独立复现实验门
       </p>

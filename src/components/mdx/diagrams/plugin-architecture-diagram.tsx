@@ -136,7 +136,7 @@ export function PluginArchitectureDiagram() {
           <text
             x={PAD_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             插件的代码 / 资源 / 四大组件系统默认都不认——逐一用类加载、资源、占坑 + Hook 解决
@@ -178,7 +178,7 @@ export function PluginArchitectureDiagram() {
             x={(hostX + ACTOR_W + pluginX) / 2}
             y={actorCy - 20}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -188,7 +188,7 @@ export function PluginArchitectureDiagram() {
             x={(hostX + ACTOR_W + pluginX) / 2}
             y={actorCy + 30}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -228,7 +228,7 @@ export function PluginArchitectureDiagram() {
             x={hostX + ACTOR_W - 16}
             y={TOP + 24}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -243,7 +243,7 @@ export function PluginArchitectureDiagram() {
               key={n}
               x={hostX + 16}
               y={TOP + 48 + j * 16}
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               {n}
@@ -284,7 +284,7 @@ export function PluginArchitectureDiagram() {
             x={pluginX + ACTOR_W - 16}
             y={TOP + 24}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -299,7 +299,7 @@ export function PluginArchitectureDiagram() {
               key={n}
               x={pluginX + 16}
               y={TOP + 48 + j * 16}
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               {n}
@@ -357,7 +357,7 @@ export function PluginArchitectureDiagram() {
                 <text
                   x={hostBottomCx + 10}
                   y={(trunkTop + trunkBottom) / 2 + 4}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--warning)"
                 >
@@ -405,7 +405,7 @@ export function PluginArchitectureDiagram() {
                 <text
                   x={x + 12}
                   y={HURDLE_TOP + 48}
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -414,7 +414,7 @@ export function PluginArchitectureDiagram() {
                 <text
                   x={x + 12}
                   y={HURDLE_TOP + 62}
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {h.problem}
@@ -423,7 +423,7 @@ export function PluginArchitectureDiagram() {
                 <text
                   x={x + 12}
                   y={HURDLE_TOP + 86}
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--success)"
                 >
@@ -435,7 +435,7 @@ export function PluginArchitectureDiagram() {
                     key={s}
                     x={x + 12}
                     y={HURDLE_TOP + 100 + j * 14}
-                    fontSize="8.5"
+                    fontSize="11"
                     fontFamily="var(--font-mono)"
                     fill="var(--text-secondary)"
                   >
@@ -461,7 +461,7 @@ export function PluginArchitectureDiagram() {
           <text
             x={PAD_X + 34}
             y={NOTE_TOP + 28}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             <tspan fontWeight="700" fill="var(--accent)">
@@ -473,7 +473,7 @@ export function PluginArchitectureDiagram() {
           <text
             x={PAD_X + 34}
             y={NOTE_TOP + 52}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             与{" "}

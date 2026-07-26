@@ -67,7 +67,7 @@ export function KrcPointerRelationshipDiagram() {
           {arr1d.map((v, i) => (
             <g key={i}>
               <rect x={cell1dX(i)} y={156} width={CELL_W} height={CELL_H} rx="6" fill="var(--accent)" fillOpacity={0.06 + i * 0.02} stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.5" />
-              <text x={cell1dX(i) + CELL_W / 2} y={172} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">a[{i}]</text>
+              <text x={cell1dX(i) + CELL_W / 2} y={172} textAnchor="middle" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">a[{i}]</text>
               <text x={cell1dX(i) + CELL_W / 2} y={190} textAnchor="middle" fontSize="14" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace">{v}</text>
             </g>
           ))}
@@ -104,7 +104,7 @@ export function KrcPointerRelationshipDiagram() {
           {[0, 1, 2, 3].map((c) => (
             <g key={`r0-${c}`}>
               <rect x={cell2dX(c)} y={382} width={CELL_W} height={CELL_H} rx="6" fill="var(--accent)" fillOpacity={0.06} stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.5" />
-              <text x={cell2dX(c) + CELL_W / 2} y={397} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">[{0}][{c}]</text>
+              <text x={cell2dX(c) + CELL_W / 2} y={397} textAnchor="middle" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">[{0}][{c}]</text>
               <text x={cell2dX(c) + CELL_W / 2} y={415} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace">{c + 1}</text>
             </g>
           ))}
@@ -114,7 +114,7 @@ export function KrcPointerRelationshipDiagram() {
           {[0, 1, 2, 3].map((c) => (
             <g key={`r1-${c}`}>
               <rect x={cell2dX(c)} y={432} width={CELL_W} height={CELL_H} rx="6" fill="var(--warning)" fillOpacity={0.06} stroke="var(--warning)" strokeWidth="1.2" strokeOpacity="0.5" />
-              <text x={cell2dX(c) + CELL_W / 2} y={447} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">[{1}][{c}]</text>
+              <text x={cell2dX(c) + CELL_W / 2} y={447} textAnchor="middle" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">[{1}][{c}]</text>
               <text x={cell2dX(c) + CELL_W / 2} y={465} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace">{c + 5}</text>
             </g>
           ))}

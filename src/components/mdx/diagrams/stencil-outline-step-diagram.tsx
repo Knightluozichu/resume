@@ -121,7 +121,7 @@ function CanvasContent({
               x={cx}
               y={cy - objHalf - grow / 2 + 1}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fontWeight="600"
               fill="var(--bg)"
             >

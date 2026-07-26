@@ -91,7 +91,7 @@ export function ParallelVsSequentialDiagram() {
           <text
             x={LEFT_X + 4}
             y={TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             「查订单 + 查天气」两件事彼此独立
@@ -184,7 +184,7 @@ export function ParallelVsSequentialDiagram() {
             x={LEFT_X + COL_W / 2}
             y={COL_TOP + COL_H - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             同时发、一起回——省时间
@@ -213,7 +213,7 @@ export function ParallelVsSequentialDiagram() {
           <text
             x={RIGHT_X + 4}
             y={TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             先查到政策，才知道该查哪张单
@@ -306,7 +306,7 @@ export function ParallelVsSequentialDiagram() {
             x={RIGHT_X + COL_W / 2}
             y={COL_TOP + COL_H - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             只能排队——前者结果是后者的输入

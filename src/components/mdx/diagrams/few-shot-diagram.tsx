@@ -133,7 +133,7 @@ export function FewShotDiagram() {
                   x={cx}
                   y={COL_Y + 44}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.tag}
@@ -159,7 +159,7 @@ export function FewShotDiagram() {
                       <text
                         x={colX(ci) + 26}
                         y={y + 22}
-                        fontSize="10"
+                        fontSize="11"
                         fontWeight="700"
                         fill={isOutput ? outColor : "var(--text-secondary)"}
                       >

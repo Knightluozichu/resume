@@ -33,7 +33,7 @@ export function Poeaa24Ch13MetadataCompare() {
           <text x={64} y={160} fontSize="11" fill={T.primary}>改表结构 → 改代码 → 重新编译</text>
           <text x={64} y={182} fontSize="11" fill={T.secondary}>优点：类型安全、IDE 友好</text>
           <text x={64} y={204} fontSize="11" fill={T.secondary}>缺点：重复代码多、维护成本高</text>
-          <text x={64} y={226} fontSize="10" fontFamily="monospace" fill={T.secondary}>class OrderMapper {"{ ... }"}</text>
+          <text x={64} y={226} fontSize="11" fontFamily="monospace" fill={T.secondary}>class OrderMapper {"{ ... }"}</text>
 
           {/* 右侧：元数据驱动 */}
           <rect x={376} y={60} width={296} height={180} rx="10" fill="#3FB97F" fillOpacity="0.04" stroke="#3FB97F" strokeWidth="1.5" />
@@ -44,7 +44,7 @@ export function Poeaa24Ch13MetadataCompare() {
           <text x={392} y={160} fontSize="11" fill={T.primary}>改表结构 → 改配置 → 无需编译</text>
           <text x={392} y={182} fontSize="11" fill={T.secondary}>优点：一处修改、全局生效</text>
           <text x={392} y={204} fontSize="11" fill={T.secondary}>缺点：调试难、运行时才发现错误</text>
-          <text x={392} y={226} fontSize="10" fontFamily="monospace" fill={T.secondary}>@Column(name="order_id")</text>
+          <text x={392} y={226} fontSize="11" fontFamily="monospace" fill={T.secondary}>@Column(name="order_id")</text>
 
           {/* VS */}
           <text x={VIEW_W / 2} y={156} textAnchor="middle" fontSize="12" fontWeight="700" fill={T.secondary}>VS</text>
@@ -56,14 +56,14 @@ export function Poeaa24Ch13MetadataCompare() {
           {/* Query Object */}
           <rect x={48} y={296} width={296} height={72} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={196} y={320} textAnchor="middle" fontSize="12" fontWeight="700" fill={T.accent}>Query Object</text>
-          <text x={196} y={340} textAnchor="middle" fontSize="10" fill={T.secondary}>把查询条件封装为对象</text>
-          <text x={196} y={356} textAnchor="middle" fontSize="10" fill={T.secondary}>可组合、可复用、可序列化</text>
+          <text x={196} y={340} textAnchor="middle" fontSize="11" fill={T.secondary}>把查询条件封装为对象</text>
+          <text x={196} y={356} textAnchor="middle" fontSize="11" fill={T.secondary}>可组合、可复用、可序列化</text>
 
           {/* Repository */}
           <rect x={376} y={296} width={296} height={72} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.5" />
           <text x={524} y={320} textAnchor="middle" fontSize="12" fontWeight="700" fill="#E5B567">Repository</text>
-          <text x={524} y={340} textAnchor="middle" fontSize="10" fill={T.secondary}>把集合语义包装为领域接口</text>
-          <text x={524} y={356} textAnchor="middle" fontSize="10" fill={T.secondary}>领域层只看到 add/get/remove</text>
+          <text x={524} y={340} textAnchor="middle" fontSize="11" fill={T.secondary}>把集合语义包装为领域接口</text>
+          <text x={524} y={356} textAnchor="middle" fontSize="11" fill={T.secondary}>领域层只看到 add/get/remove</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="元数据映射的权衡：灵活性 vs 类型安全——小项目手写，大项目配置" />
         </svg>

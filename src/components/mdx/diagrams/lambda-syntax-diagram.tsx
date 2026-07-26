@@ -73,7 +73,7 @@ export function LambdaSyntaxDiagram() {
               <text
                 x="71"
                 y="-50"
-                fontSize="10"
+                fontSize="11"
                 fill={captureColor}
                 textAnchor="middle"
                 fontWeight="600"
@@ -109,7 +109,7 @@ export function LambdaSyntaxDiagram() {
               <text
                 x="230"
                 y="-50"
-                fontSize="10"
+                fontSize="11"
                 fill={paramColor}
                 textAnchor="middle"
                 fontWeight="600"
@@ -145,7 +145,7 @@ export function LambdaSyntaxDiagram() {
               <text
                 x="376"
                 y="-50"
-                fontSize="10"
+                fontSize="11"
                 fill={retColor}
                 textAnchor="middle"
                 fontWeight="600"
@@ -181,7 +181,7 @@ export function LambdaSyntaxDiagram() {
               <text
                 x="568"
                 y="-50"
-                fontSize="10"
+                fontSize="11"
                 fill={bodyColor}
                 textAnchor="middle"
                 fontWeight="600"
@@ -251,7 +251,7 @@ export function LambdaSyntaxDiagram() {
                   <text
                     x="61"
                     y="38"
-                    fontSize="10"
+                    fontSize="11"
                     fill={secondary}
                     textAnchor="middle"
                   >
@@ -403,7 +403,7 @@ export function LambdaSyntaxDiagram() {
             <text
               x="60"
               y="18"
-              fontSize="10"
+              fontSize="11"
               fontWeight="600"
               fill={accent}
               textAnchor="middle"
@@ -413,7 +413,7 @@ export function LambdaSyntaxDiagram() {
             <text
               x="60"
               y="36"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -422,7 +422,7 @@ export function LambdaSyntaxDiagram() {
             <text
               x="60"
               y="50"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -431,7 +431,7 @@ export function LambdaSyntaxDiagram() {
             <text
               x="60"
               y="64"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >

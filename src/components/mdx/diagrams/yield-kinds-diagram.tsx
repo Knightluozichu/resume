@@ -199,7 +199,7 @@ export function YieldKindsDiagram() {
                 x={tickX(i)}
                 y={74}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {i === 0 ? "本帧" : `+${i}`}
@@ -235,7 +235,7 @@ export function YieldKindsDiagram() {
               <text
                 x={LANE_LABEL_X + 12}
                 y={laneCY(i) + 13}
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {lane.desc}
@@ -283,7 +283,7 @@ export function YieldKindsDiagram() {
                   textAnchor={
                     lane.resumeTick >= TICK_COUNT - 1 ? "end" : "start"
                   }
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={lane.color}
                 >
@@ -298,7 +298,7 @@ export function YieldKindsDiagram() {
                   textAnchor={
                     lane.resumeTick >= TICK_COUNT - 1 ? "end" : "start"
                   }
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {lane.resumeNote}

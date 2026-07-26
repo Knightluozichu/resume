@@ -158,7 +158,7 @@ export function LostInMiddleDiagram() {
             x={CTX_X - 8}
             y={CURVE_TOP + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             高
@@ -167,7 +167,7 @@ export function LostInMiddleDiagram() {
             x={CTX_X - 8}
             y={CURVE_BOT + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             低
@@ -176,7 +176,7 @@ export function LostInMiddleDiagram() {
             x={CTX_X - 28}
             y={(CURVE_TOP + CURVE_BOT) / 2 + 4}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
             transform={`rotate(-90 ${CTX_X - 28} ${(CURVE_TOP + CURVE_BOT) / 2 + 4})`}

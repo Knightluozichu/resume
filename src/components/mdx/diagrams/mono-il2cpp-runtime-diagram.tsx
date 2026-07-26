@@ -31,7 +31,7 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* Mono: C# source → JIT */}
           <rect x="40" y="74" width="240" height="36" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-          <text x="160" y="96" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="160" y="96" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             C#/IL → 运行时 JIT 编译
           </text>
 
@@ -40,10 +40,10 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* Mono: Boehm GC */}
           <rect x="40" y="124" width="240" height="52" rx="6" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1.5" />
-          <text x="160" y="146" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="160" y="146" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             Boehm GC（保守式）
           </text>
-          <text x="160" y="164" textAnchor="middle" fontSize="9" fill="var(--danger)">
+          <text x="160" y="164" textAnchor="middle" fontSize="11" fill="var(--danger)">
             Stop-The-World · 不可预测暂停
           </text>
 
@@ -52,15 +52,15 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* Mono: managed heap */}
           <rect x="40" y="190" width="240" height="52" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-          <text x="160" y="212" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="160" y="212" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             托管堆（Managed Heap）
           </text>
-          <text x="160" y="230" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="160" y="230" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             对象分配频繁触发 GC 扫描
           </text>
 
           {/* Mono: platform */}
-          <text x="160" y="272" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="160" y="272" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             兼容好 · 启动快 · 移动端已废弃
           </text>
 
@@ -72,7 +72,7 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* IL2CPP: AOT */}
           <rect x="360" y="74" width="240" height="36" rx="6" fill="var(--bg-elevated)" stroke="var(--success)" strokeWidth="1.5" />
-          <text x="480" y="96" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="480" y="96" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             IL → C++ → AOT 静态编译
           </text>
 
@@ -81,10 +81,10 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* IL2CPP: Incremental GC */}
           <rect x="360" y="124" width="240" height="52" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="1.5" />
-          <text x="480" y="146" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="480" y="146" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             增量 GC（可选）
           </text>
-          <text x="480" y="164" textAnchor="middle" fontSize="9" fill="var(--success)">
+          <text x="480" y="164" textAnchor="middle" fontSize="11" fill="var(--success)">
             分步执行 · 可预测暂停
           </text>
 
@@ -93,15 +93,15 @@ export function MonoIl2cppRuntimeDiagram() {
 
           {/* IL2CPP: heap */}
           <rect x="360" y="190" width="240" height="52" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-          <text x="480" y="212" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="480" y="212" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             本机堆（Native Heap）
           </text>
-          <text x="480" y="230" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="480" y="230" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             C++ 对象 · 手动/GC 混合管理
           </text>
 
           {/* IL2CPP: platform */}
-          <text x="480" y="272" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="480" y="272" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             iOS 必须 · 性能更好 · 内存更紧
           </text>
 

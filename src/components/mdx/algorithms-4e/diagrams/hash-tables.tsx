@@ -132,7 +132,7 @@ export function Algs4HashDistributionLab() {
               key={option}
               type="button"
               onClick={() => setMode(option)}
-              className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
+              className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
             >
               {option}
             </button>
@@ -354,7 +354,7 @@ export function Algs4LinearDeleteClusterLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 border border-border" role="group" aria-label="delete strategy">
           {(["before", "naive null", "rehash cluster"] as DeleteMode[]).map((option) => (
-            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
+            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
           ))}
         </div>
         <div className="mt-5"><LinearTable slots={result.slots} homes={result.homes} highlighted={path} /></div>
@@ -418,7 +418,7 @@ export function Algs4HashContractLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 border border-border" role="group" aria-label="hash contract">
           {(["valid equal keys", "hash mismatch", "mutated key"] as ContractMode[]).map((option) => (
-            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
+            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
           ))}
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">

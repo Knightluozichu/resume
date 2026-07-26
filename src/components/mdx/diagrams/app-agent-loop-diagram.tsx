@@ -380,7 +380,7 @@ export function AppAgentLoopDiagram() {
             x={BRAIN_CX}
             y={BRAIN_CY + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             循环的核心
@@ -425,7 +425,7 @@ export function AppAgentLoopDiagram() {
             x={REASON_CX}
             y={REASON_Y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             下一步该干啥？
@@ -470,7 +470,7 @@ export function AppAgentLoopDiagram() {
             x={ACT_CX}
             y={ACT_Y + STATION_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             真去调工具
@@ -515,7 +515,7 @@ export function AppAgentLoopDiagram() {
             x={OBSERVE_CX}
             y={OBSERVE_Y + STATION_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             结果喂回大脑
@@ -560,7 +560,7 @@ export function AppAgentLoopDiagram() {
             x={TOOL_X + TOOL_W / 2}
             y={TOOL_Y + 42}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
           >
@@ -644,7 +644,7 @@ export function AppAgentLoopDiagram() {
             x={ANSWER_CX}
             y={ANSWER_Y + 42}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             带件外套

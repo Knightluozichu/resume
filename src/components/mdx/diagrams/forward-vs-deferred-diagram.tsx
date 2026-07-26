@@ -56,7 +56,7 @@ function Stage({
           x={x + w / 2}
           y={y + 33}
           textAnchor="middle"
-          fontSize="8.5"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {sub}

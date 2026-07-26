@@ -321,7 +321,7 @@ export function PromptRefinementDiagram() {
           <text
             x={PROMPT_X + 4}
             y={PANEL_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             高亮 = 这一步新加进去的部件
@@ -383,7 +383,7 @@ export function PromptRefinementDiagram() {
           <text
             x={OUT_X + 4}
             y={PANEL_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每加一块，模型的回答就好一截

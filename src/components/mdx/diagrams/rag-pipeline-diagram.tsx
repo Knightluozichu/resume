@@ -285,7 +285,7 @@ function RAGPipelineDiagramInner() {
             x={CARD_X + 16}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             离线·建库（事先做好）
@@ -295,7 +295,7 @@ function RAGPipelineDiagramInner() {
             x={CARD_X + 196}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             在线·问答（每次提问才走）
@@ -399,7 +399,7 @@ function RAGPipelineDiagramInner() {
                     x={CARD_X + 20}
                     y={y + 38}
                     textAnchor="start"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontFamily={s.mono ? "var(--font-mono)" : undefined}
                     fill="var(--text-primary)"
                   >
@@ -415,7 +415,7 @@ function RAGPipelineDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 16}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一句话：离线把资料变成可查的向量库，在线检索相关片段拼进提示让模型「开卷答」。

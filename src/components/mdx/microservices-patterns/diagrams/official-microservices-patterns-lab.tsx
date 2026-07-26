@@ -33,6 +33,18 @@ export function MicroservicesPatternsLab(props: LabProps) {
   const [checked, setChecked] = useState<boolean[]>(() =>
     gates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setPatternIndex(0);
+    setRequests(1000);
+    setTimeoutRate(5);
+    setDuplicateRate(3);
+    setRetries(1);
+    setIdempotent(true);
+    setChecked(() =>
+    gates.map(() => false));
+  }
+
 
   const result = useMemo(() => {
     const attempts = requests * (retries + 1);
@@ -51,6 +63,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
     const selected = patterns[patternIndex] ?? patterns[0];
     return (
       <section className={shell} aria-label={unitTitle + "模式关系实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             初版目录 · 模式因果链
@@ -68,7 +81,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
                 type="button"
                 onClick={() => setNodeIndex(index)}
                 className={
-                  "mb-1 min-h-9 w-full rounded px-2 py-1.5 text-left text-xs " +
+                  "mb-1 min-h-11 w-full rounded px-2 py-1.5 text-left text-xs " +
                   (nodeIndex === index
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800")
@@ -90,7 +103,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
                   type="button"
                   onClick={() => setPatternIndex(index)}
                   className={
-                    "min-h-9 rounded px-3 text-xs font-semibold " +
+                    "min-h-11 rounded px-3 text-xs font-semibold " +
                     (patternIndex === index
                       ? "bg-emerald-700 text-white"
                       : "border border-zinc-300 dark:border-zinc-700")
@@ -134,6 +147,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
         className={shell + " p-4"}
         aria-label={unitTitle + "部分失败实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
@@ -141,7 +155,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
             </p>
             <h3 className="mt-1 text-base font-semibold">{unitTitle}</h3>
           </div>
-          <label className="flex min-h-9 items-center gap-2 text-xs font-semibold">
+          <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">
             <input
               type="checkbox"
               checked={idempotent}
@@ -154,7 +168,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
           <label className="text-xs font-semibold">
             业务请求
             <input
-              className="mt-1 min-h-10 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
+              className="mt-1 min-h-11 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
               type="number"
               min={100}
               max={10000}
@@ -165,7 +179,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
           <label className="text-xs font-semibold">
             超时率(%)
             <input
-              className="mt-1 min-h-10 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
+              className="mt-1 min-h-11 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
               type="number"
               min={0}
               max={50}
@@ -176,7 +190,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
           <label className="text-xs font-semibold">
             重复率(%)
             <input
-              className="mt-1 min-h-10 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
+              className="mt-1 min-h-11 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
               type="number"
               min={0}
               max={50}
@@ -187,7 +201,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
           <label className="text-xs font-semibold">
             重试次数
             <input
-              className="mt-1 min-h-10 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
+              className="mt-1 min-h-11 w-full rounded border bg-transparent px-3 dark:border-zinc-700"
               type="number"
               min={0}
               max={5}
@@ -232,6 +246,7 @@ export function MicroservicesPatternsLab(props: LabProps) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell + " p-4"} aria-label={unitTitle + "独立证据门"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
         独立证据门
       </p>

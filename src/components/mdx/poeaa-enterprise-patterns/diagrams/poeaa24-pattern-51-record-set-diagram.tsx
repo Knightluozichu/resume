@@ -12,27 +12,27 @@ export function Poeaa24Pattern51RecordSet() {
           {/* 数据库 */}
           <rect x={48} y={64} width={150} height={80} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.2" />
           <text x={123} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">数据库</text>
-          <text x={64} y={110} fontSize="9" fill={T.secondary}>SELECT * FROM</text>
-          <text x={64} y={128} fontSize="9" fill={T.secondary}>  orders</text>
+          <text x={64} y={110} fontSize="11" fill={T.secondary}>SELECT * FROM</text>
+          <text x={64} y={128} fontSize="11" fill={T.secondary}>  orders</text>
           {/* 箭头 */}
           <line x1={198} y1={104} x2={260} y2={104} stroke={T.accent} strokeWidth="1.5" />
-          <text x={229} y={96} textAnchor="middle" fontSize="9" fill={T.accent}>查询</text>
+          <text x={229} y={96} textAnchor="middle" fontSize="11" fill={T.accent}>查询</text>
           {/* Record Set */}
           <rect x={260} y={64} width={220} height={110} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <rect x={260} y={64} width={220} height={28} rx="8" fill={T.accent} fillOpacity="0.12" />
           <rect x={260} y={84} width={220} height={8} fill={T.accent} fillOpacity="0.12" />
           <text x={370} y={83} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>RecordSet</text>
-          <text x={276} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>id | total | status</text>
-          <text x={276} y={128} fontSize="9" fontFamily="monospace" fill={T.primary}>42 | 597  | paid</text>
-          <text x={276} y={146} fontSize="9" fontFamily="monospace" fill={T.primary}>43 | 120  | open</text>
-          <text x={276} y={164} fontSize="9" fill={T.secondary}>行/列结构 · 内存中</text>
+          <text x={276} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>id | total | status</text>
+          <text x={276} y={128} fontSize="11" fontFamily="monospace" fill={T.primary}>42 | 597  | paid</text>
+          <text x={276} y={146} fontSize="11" fontFamily="monospace" fill={T.primary}>43 | 120  | open</text>
+          <text x={276} y={164} fontSize="11" fill={T.secondary}>行/列结构 · 内存中</text>
           {/* 消费者 */}
           <line x1={480} y1={90} x2={540} y2={72} stroke="#3FB97F" strokeWidth="1" />
           <line x1={480} y1={130} x2={540} y2={148} stroke="#3FB97F" strokeWidth="1" />
           <rect x={540} y={56} width={140} height={32} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={610} y={76} textAnchor="middle" fontSize="9" fill="#3FB97F">Table Module</text>
+          <text x={610} y={76} textAnchor="middle" fontSize="11" fill="#3FB97F">Table Module</text>
           <rect x={540} y={132} width={140} height={32} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={610} y={152} textAnchor="middle" fontSize="9" fill="#3FB97F">UI 数据绑定</text>
+          <text x={610} y={152} textAnchor="middle" fontSize="11" fill="#3FB97F">UI 数据绑定</text>
           {/* 底部说明 */}
           <rect x={48} y={200} width={624} height={56} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={222} fontSize="11" fontWeight="600" fill={T.primary}>定位：</text>

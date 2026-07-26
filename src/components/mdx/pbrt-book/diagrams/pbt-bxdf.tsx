@@ -125,7 +125,7 @@ export function PbtBxdfDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -135,7 +135,7 @@ export function PbtBxdfDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -338,7 +338,7 @@ export function PbtBxdfLobesDiagram() {
                   x="92"
                   y="259"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {lobe.note}
@@ -498,7 +498,7 @@ export function PbtFresnelMediaDiagram() {
                   x="95"
                   y="94"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={accent}
                 >
                   入射
@@ -507,7 +507,7 @@ export function PbtFresnelMediaDiagram() {
                   x="274"
                   y="95"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={panel.color}
                 >
                   F · 反射
@@ -516,7 +516,7 @@ export function PbtFresnelMediaDiagram() {
                   x="236"
                   y="285"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={index === 0 ? success : danger}
                 >
                   {index === 0 ? "(1-F) · 折射" : "导体内吸收"}
@@ -525,7 +525,7 @@ export function PbtFresnelMediaDiagram() {
                   x="181"
                   y="257"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {panel.detail}
@@ -534,7 +534,7 @@ export function PbtFresnelMediaDiagram() {
                   x="181"
                   y="281"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {panel.note}
@@ -671,7 +671,7 @@ export function PbtMicrofacetDiagram() {
               x="164"
               y="210"
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fill={secondary}
             >
               αx / αy 控制各向异性展宽
@@ -733,7 +733,7 @@ export function PbtMicrofacetDiagram() {
                   x="55"
                   y="82"
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {factor.note}
@@ -754,7 +754,7 @@ export function PbtMicrofacetDiagram() {
               x="199"
               y="207"
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fill={secondary}
             >
               采样可见法线，反射后再应用 masking

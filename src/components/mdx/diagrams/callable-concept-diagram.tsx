@@ -44,19 +44,19 @@ export function CallableConceptDiagram() {
               ① 函数指针
             </text>
 
-            <text x="14" y="52" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="14" y="52" fontSize="11" fill={primary} fontFamily="monospace">
               int (*pf)(int, int)
             </text>
-            <text x="14" y="72" fontSize="10" fill={secondary}>
+            <text x="14" y="72" fontSize="11" fill={secondary}>
               最基础的可调用对象
             </text>
-            <text x="14" y="92" fontSize="10" fill={secondary}>
+            <text x="14" y="92" fontSize="11" fill={secondary}>
               ✗ 无状态——只指向一个函数
             </text>
-            <text x="14" y="110" fontSize="10" fill={secondary}>
+            <text x="14" y="110" fontSize="11" fill={secondary}>
               ✗ 不能捕获外部变量
             </text>
-            <text x="14" y="128" fontSize="10" fill={good}>
+            <text x="14" y="128" fontSize="11" fill={good}>
               ✓ 类型安全、C 兼容
             </text>
           </g>
@@ -69,19 +69,19 @@ export function CallableConceptDiagram() {
               ② Lambda 表达式
             </text>
 
-            <text x="14" y="52" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="14" y="52" fontSize="11" fill={primary} fontFamily="monospace">
               [x](int a){'{ return a+x; }'}
             </text>
-            <text x="14" y="72" fontSize="10" fill={secondary}>
+            <text x="14" y="72" fontSize="11" fill={secondary}>
               编译器生成匿名函数对象
             </text>
-            <text x="14" y="92" fontSize="10" fill={accent}>
+            <text x="14" y="92" fontSize="11" fill={accent}>
               ✓ 可捕获上下文（闭包）
             </text>
-            <text x="14" y="110" fontSize="10" fill={accent}>
+            <text x="14" y="110" fontSize="11" fill={accent}>
               ✓ 本质是重载了 operator()
             </text>
-            <text x="14" y="128" fontSize="10" fill={secondary}>
+            <text x="14" y="128" fontSize="11" fill={secondary}>
               ✗ 每个 lambda 是独立类型
             </text>
           </g>
@@ -94,19 +94,19 @@ export function CallableConceptDiagram() {
               ③ 函数对象（Functor）
             </text>
 
-            <text x="14" y="52" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="14" y="52" fontSize="11" fill={primary} fontFamily="monospace">
               class Abs{'{ operator()(int x)'}
             </text>
-            <text x="14" y="72" fontSize="10" fill={secondary}>
+            <text x="14" y="72" fontSize="11" fill={secondary}>
               一个类，重载了 operator()
             </text>
-            <text x="14" y="92" fontSize="10" fill={warn}>
+            <text x="14" y="92" fontSize="11" fill={warn}>
               ✓ 拥有独立状态（成员变量）
             </text>
-            <text x="14" y="110" fontSize="10" fill={warn}>
+            <text x="14" y="110" fontSize="11" fill={warn}>
               ✓ 可复用——多次调用同一实例
             </text>
-            <text x="14" y="128" fontSize="10" fill={secondary}>
+            <text x="14" y="128" fontSize="11" fill={secondary}>
               可配合标准算法使用
             </text>
           </g>
@@ -129,7 +129,7 @@ export function CallableConceptDiagram() {
               三者通过 std::function / 模板参数统一使用——只要满足「能用 () 调用」即可
             </text>
 
-            <text x={cx - 50} y="66" fontSize="10" fill={primary} textAnchor="middle" fontFamily="monospace">
+            <text x={cx - 50} y="66" fontSize="11" fill={primary} textAnchor="middle" fontFamily="monospace">
               std::function&lt;int(int,int)&gt; f = lambda;  // 可持有任意可调用对象
             </text>
           </g>
@@ -137,11 +137,11 @@ export function CallableConceptDiagram() {
           {/* ── 右侧：对比表 ── */}
           <g transform="translate(48, 378)">
             <rect x="0" y="0" width={w - 96} height="52" rx="8" fill={bg} stroke={border} />
-            <text x="110" y="18" fontSize="10" fontWeight="600" fill={primary} textAnchor="middle">
+            <text x="110" y="18" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle">
               特性对比
             </text>
             {["有状态？", "捕获外部变量？", "可复用（同一类型）？", "可直接用标准算法？"].map((label, i) => (
-              <text key={i} x={72 + i * 180} y="36" fontSize="9" fill={secondary} textAnchor="middle">
+              <text key={i} x={72 + i * 180} y="36" fontSize="11" fill={secondary} textAnchor="middle">
                 {label}
               </text>
             ))}

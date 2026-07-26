@@ -50,26 +50,26 @@ export function Poeaa24Ch09DomainLogicMap() {
           {/* Transaction Script - 左下 */}
           <rect x={QX + 40} y={QY + QH / 2 + 30} width={180} height={72} rx="8" fill="#3FB97F" fillOpacity="0.08" stroke="#3FB97F" strokeWidth="1.5" />
           <text x={QX + 130} y={QY + QH / 2 + 56} textAnchor="middle" fontSize="13" fontWeight="700" fill="#3FB97F">Transaction Script</text>
-          <text x={QX + 130} y={QY + QH / 2 + 76} textAnchor="middle" fontSize="10" fill={T.secondary}>一个用例 = 一个过程</text>
-          <text x={QX + 130} y={QY + QH / 2 + 92} textAnchor="middle" fontSize="10" fill={T.secondary}>规则少、分支少</text>
+          <text x={QX + 130} y={QY + QH / 2 + 76} textAnchor="middle" fontSize="11" fill={T.secondary}>一个用例 = 一个过程</text>
+          <text x={QX + 130} y={QY + QH / 2 + 92} textAnchor="middle" fontSize="11" fill={T.secondary}>规则少、分支少</text>
 
           {/* Table Module - 左上 */}
           <rect x={QX + 40} y={QY + 30} width={180} height={72} rx="8" fill="#E5B567" fillOpacity="0.08" stroke="#E5B567" strokeWidth="1.5" />
           <text x={QX + 130} y={QY + 56} textAnchor="middle" fontSize="13" fontWeight="700" fill="#E5B567">Table Module</text>
-          <text x={QX + 130} y={QY + 76} textAnchor="middle" fontSize="10" fill={T.secondary}>一个类管一张表</text>
-          <text x={QX + 130} y={QY + 92} textAnchor="middle" fontSize="10" fill={T.secondary}>结构化查询为主</text>
+          <text x={QX + 130} y={QY + 76} textAnchor="middle" fontSize="11" fill={T.secondary}>一个类管一张表</text>
+          <text x={QX + 130} y={QY + 92} textAnchor="middle" fontSize="11" fill={T.secondary}>结构化查询为主</text>
 
           {/* Domain Model - 右上 */}
           <rect x={QX + QW / 2 + 40} y={QY + QH / 2 + 30} width={180} height={72} rx="8" fill={T.accent} fillOpacity="0.08" stroke={T.accent} strokeWidth="1.5" />
           <text x={QX + QW / 2 + 130} y={QY + QH / 2 + 56} textAnchor="middle" fontSize="13" fontWeight="700" fill={T.accent}>Domain Model</text>
-          <text x={QX + QW / 2 + 130} y={QY + QH / 2 + 76} textAnchor="middle" fontSize="10" fill={T.secondary}>对象网络 + 多态</text>
-          <text x={QX + QW / 2 + 130} y={QY + QH / 2 + 92} textAnchor="middle" fontSize="10" fill={T.secondary}>规则复杂、频繁变化</text>
+          <text x={QX + QW / 2 + 130} y={QY + QH / 2 + 76} textAnchor="middle" fontSize="11" fill={T.secondary}>对象网络 + 多态</text>
+          <text x={QX + QW / 2 + 130} y={QY + QH / 2 + 92} textAnchor="middle" fontSize="11" fill={T.secondary}>规则复杂、频繁变化</text>
 
           {/* Service Layer - 横跨顶部 */}
           <rect x={QX + QW / 2 + 40} y={QY + 30} width={180} height={72} rx="8" fill={T.primary} fillOpacity="0.04" stroke={T.primary} strokeWidth="1.2" strokeDasharray="5 3" />
           <text x={QX + QW / 2 + 130} y={QY + 56} textAnchor="middle" fontSize="13" fontWeight="700" fill={T.primary}>Service Layer</text>
-          <text x={QX + QW / 2 + 130} y={QY + 76} textAnchor="middle" fontSize="10" fill={T.secondary}>应用入口 + 事务边界</text>
-          <text x={QX + QW / 2 + 130} y={QY + 92} textAnchor="middle" fontSize="10" fill={T.secondary}>横跨所有复杂度</text>
+          <text x={QX + QW / 2 + 130} y={QY + 76} textAnchor="middle" fontSize="11" fill={T.secondary}>应用入口 + 事务边界</text>
+          <text x={QX + QW / 2 + 130} y={QY + 92} textAnchor="middle" fontSize="11" fill={T.secondary}>横跨所有复杂度</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="复杂度增长时，从 Transaction Script 向 Domain Model 迁移；Service Layer 始终作为应用入口" />
         </svg>

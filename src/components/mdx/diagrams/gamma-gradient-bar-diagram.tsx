@@ -113,7 +113,7 @@ export function GammaGradientBarDiagram({
             x={X0 + BAR_W / 2}
             y={BAR_Y + BAR_H + 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={corrected ? "var(--accent)" : "var(--danger)"}
           >
             中间调（线性 0.5）
@@ -124,7 +124,7 @@ export function GammaGradientBarDiagram({
             x={X0}
             y={BAR_Y - 8}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             黑 0
@@ -133,7 +133,7 @@ export function GammaGradientBarDiagram({
             x={X0 + BAR_W}
             y={BAR_Y - 8}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             白 1

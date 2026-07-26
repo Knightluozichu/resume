@@ -55,25 +55,25 @@ export function EfcClassEncapsulationDiagram() {
           {/* public 外层 */}
           <rect x={48} y={58} width={280} height={280} rx="14" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.8" />
           <text x={188} y={80} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent} fontFamily="monospace">public</text>
-          <text x={188} y={96} textAnchor="middle" fontSize="10" fill={secondary}>接口：容易被正确使用</text>
+          <text x={188} y={96} textAnchor="middle" fontSize="11" fill={secondary}>接口：容易被正确使用</text>
 
           {/* protected 中层 */}
           <rect x={88} y={108} width={200} height={200} rx="12" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.6" />
           <text x={188} y={128} textAnchor="middle" fontSize="12" fontWeight="700" fill={success} fontFamily="monospace">protected</text>
-          <text x={188} y={144} textAnchor="middle" fontSize="10" fill={secondary}>供派生类访问</text>
+          <text x={188} y={144} textAnchor="middle" fontSize="11" fill={secondary}>供派生类访问</text>
 
           {/* private 内层 */}
           <rect x={128} y={158} width={120} height={120} rx="10" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.6" />
           <text x={188} y={186} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning} fontFamily="monospace">private</text>
-          <text x={188} y={204} textAnchor="middle" fontSize="10" fill={secondary}>成员变量</text>
-          <text x={188} y={222} textAnchor="middle" fontSize="10" fill={secondary}>实现细节</text>
-          <text x={188} y={244} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">隐藏</text>
+          <text x={188} y={204} textAnchor="middle" fontSize="11" fill={secondary}>成员变量</text>
+          <text x={188} y={222} textAnchor="middle" fontSize="11" fill={secondary}>实现细节</text>
+          <text x={188} y={244} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">隐藏</text>
 
           {/* 标注箭头 */}
-          <text x={188} y={300} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={188} y={300} textAnchor="middle" fontSize="11" fill={secondary}>
             由外向内：接口 → 继承钩子 → 实现
           </text>
-          <text x={188} y={318} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={188} y={318} textAnchor="middle" fontSize="11" fill={secondary}>
             封装 = 控制用户能看到什么、能改什么
           </text>
 
@@ -89,8 +89,8 @@ export function EfcClassEncapsulationDiagram() {
                 <rect x={372} y={y} width={312} height={52} rx="8" fill={p.color} fillOpacity="0.06" stroke={p.color} strokeWidth="1.4" />
                 <rect x={372} y={y} width={4} height={52} rx="2" fill={p.color} />
                 <text x={388} y={y + 20} fontSize="12.5" fontWeight="700" fill={p.color}>{p.title}</text>
-                <text x={388} y={y + 38} fontSize="10.5" fill={secondary}>{p.desc}</text>
-                <text x={666} y={y + 20} textAnchor="end" fontSize="10" fill={secondary} fontFamily="monospace">{p.item}</text>
+                <text x={388} y={y + 38} fontSize="11" fill={secondary}>{p.desc}</text>
+                <text x={666} y={y + 20} textAnchor="end" fontSize="11" fill={secondary} fontFamily="monospace">{p.item}</text>
               </g>
             );
           })}

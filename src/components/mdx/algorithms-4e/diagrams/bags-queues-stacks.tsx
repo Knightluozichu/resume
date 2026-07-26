@@ -18,7 +18,7 @@ export function Algs4CollectionSemanticsLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(collectionSemantics) as CollectionKind[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-10 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(Object.keys(collectionSemantics) as CollectionKind[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-11 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
           {Object.entries(active).map(([key, value]) => <div key={key} className="border border-border bg-background p-3 text-secondary">{key}<div className="mt-1 font-mono text-primary">{value}</div></div>)}
@@ -142,7 +142,7 @@ export function Algs4IterationOrderLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
-          {(["bag", "queue", "stack"] as CollectionKind[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-10 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(["bag", "queue", "stack"] as CollectionKind[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-11 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <div className="border border-border bg-background p-3 text-xs text-secondary">insert sequence<div className="mt-1 font-mono text-primary">{inserted.join(" ")}</div></div>

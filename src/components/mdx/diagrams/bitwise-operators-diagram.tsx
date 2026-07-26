@@ -40,11 +40,11 @@ export function BitwiseOperatorsDiagram() {
       <text x={ox} y={oy} fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">
         {title}
       </text>
-      <text x={ox} y={oy + 14} fontSize="10" fill={secondary}>
+      <text x={ox} y={oy + 14} fontSize="11" fill={secondary}>
         {op}
       </text>
       {["A", "B", "结果"].map((h, i) => (
-        <text key={h} x={ox + i * 44 + 18} y={oy + 30} textAnchor="middle" fontSize="9" fill={secondary}>
+        <text key={h} x={ox + i * 44 + 18} y={oy + 30} textAnchor="middle" fontSize="11" fill={secondary}>
           {h}
         </text>
       ))}
@@ -117,7 +117,7 @@ export function BitwiseOperatorsDiagram() {
           <text x={44} y={256} fontSize="11" fill={primary} fontFamily="monospace">
             ~0 → 全 1 位模式；~1 → …11111110（依类型宽度）
           </text>
-          <text x={44} y={274} fontSize="10" fill={secondary}>
+          <text x={44} y={274} fontSize="11" fill={secondary}>
             对 unsigned 直观；signed 取反遵循补码规则
           </text>
 
@@ -125,10 +125,10 @@ export function BitwiseOperatorsDiagram() {
           <text x={44} y={322} fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">
             示例：0b1100 & 0b1010 = 0b1000
           </text>
-          <text x={44} y={342} fontSize="10" fill={secondary}>
+          <text x={44} y={342} fontSize="11" fill={secondary}>
             1100 与 1010 逐位 & → 1000；常用于**掩码**保留特定位、清零标志
           </text>
-          <text x={44} y={358} fontSize="10" fill={secondary}>
+          <text x={44} y={358} fontSize="11" fill={secondary}>
             flags |= MASK 置位；flags &amp; ~MASK 清位；flags ^ MASK 翻转
           </text>
         </svg>

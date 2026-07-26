@@ -143,10 +143,10 @@ export function GraphDirectionDiagram() {
           {nodes.map((node) => (
             <g key={node.id}>
               <circle cx={node.x} cy={node.y} r="30" fill={accent} fillOpacity="0.1" stroke={accent} />
-              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>{node.id}</text>
+              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.id}</text>
             </g>
           ))}
-          <text x="265" y="256" textAnchor="middle" fontSize="9.5" fill={secondary}>邻接表：you → [alice, bob]；alice → [peggy]</text>
+          <text x="265" y="256" textAnchor="middle" fontSize="11" fill={secondary}>邻接表：you → [alice, bob]；alice → [peggy]</text>
 
           <rect x="522" y="68" width="210" height="210" fill="var(--bg)" stroke={border} />
           <line x1="580" y1="120" x2="675" y2="120" stroke={success} strokeWidth="2" />
@@ -162,11 +162,11 @@ export function GraphDirectionDiagram() {
               <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.id}</text>
             </g>
           ))}
-          <text x="627" y="256" textAnchor="middle" fontSize="9.5" fill={secondary}>A连接B也意味着B连接A</text>
+          <text x="627" y="256" textAnchor="middle" fontSize="11" fill={secondary}>A连接B也意味着B连接A</text>
 
           <rect x="90" y="304" width="580" height="48" rx="4" fill={accent} fillOpacity="0.05" stroke={accent} strokeOpacity="0.5" />
-          <text x="380" y="324" textAnchor="middle" fontSize="10.5" fill={primary}>邻接关系表示连接；散列表把每个节点映射到它的邻居列表。</text>
-          <text x="380" y="341" textAnchor="middle" fontSize="9.5" fill={secondary}>无向边在邻接表中通常保存为两个方向，复杂度仍记作O(V+E)。</text>
+          <text x="380" y="324" textAnchor="middle" fontSize="11" fill={primary}>邻接关系表示连接；散列表把每个节点映射到它的邻居列表。</text>
+          <text x="380" y="341" textAnchor="middle" fontSize="11" fill={secondary}>无向边在邻接表中通常保存为两个方向，复杂度仍记作O(V+E)。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -197,20 +197,20 @@ export function BfsShortestPathDiagram() {
           {layers.map((layer) => (
             <g key={layer.distance}>
               <rect x="40" y={layer.y - 24} width="680" height="54" rx="4" fill={layer.tone} fillOpacity="0.06" stroke={layer.tone} strokeOpacity="0.55" />
-              <text x="62" y={layer.y + 8} fontSize="10" fontWeight="700" fill={layer.tone}>距离{layer.distance}</text>
+              <text x="62" y={layer.y + 8} fontSize="11" fontWeight="700" fill={layer.tone}>距离{layer.distance}</text>
               {layer.nodes.map((node, index) => {
                 const gap = 470 / layer.nodes.length;
                 const x = 180 + gap * index + gap / 2;
                 return (
                   <g key={node}>
                     <rect x={x - 44} y={layer.y - 13} width="88" height="32" rx="4" fill="var(--bg)" stroke={layer.tone} />
-                    <text x={x} y={layer.y + 7} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>{node}</text>
+                    <text x={x} y={layer.y + 7} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node}</text>
                   </g>
                 );
               })}
             </g>
           ))}
-          <text x="380" y="376" textAnchor="middle" fontSize="10" fill={secondary}>队列保证距离d的节点全部先于距离d+1的节点出队。</text>
+          <text x="380" y="376" textAnchor="middle" fontSize="11" fill={secondary}>队列保证距离d的节点全部先于距离d+1的节点出队。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

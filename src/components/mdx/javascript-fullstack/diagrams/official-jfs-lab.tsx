@@ -35,6 +35,13 @@ export function JfsBookLab({ title, label, nodes, mode }: Props) {
   const [sample, setSample] = useState<Sample>("normal");
   const [requests, setRequests] = useState(24);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setSample("normal");
+    setRequests(24);
+    setFault(false);
+  }
+
   const color = colors[mode];
   const evidence = useMemo(() => {
     const pressure =
@@ -70,6 +77,7 @@ export function JfsBookLab({ title, label, nodes, mode }: Props) {
       className="my-6 overflow-hidden border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950"
       aria-label={title}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-zinc-500">
@@ -82,7 +90,7 @@ export function JfsBookLab({ title, label, nodes, mode }: Props) {
         <button
           type="button"
           onClick={() => setFault((value) => !value)}
-          className="min-h-9 border px-3 text-sm font-medium"
+          className="min-h-11 border px-3 text-sm font-medium"
           style={{
             borderColor: fault ? "#dc2626" : color.strong,
             color: fault ? "#991b1b" : color.ink,
@@ -105,7 +113,7 @@ export function JfsBookLab({ title, label, nodes, mode }: Props) {
                   key={item}
                   type="button"
                   onClick={() => setSample(item)}
-                  className="min-h-9 border px-3 text-xs font-semibold"
+                  className="min-h-11 border px-3 text-xs font-semibold"
                   style={{
                     borderColor: sample === item ? color.strong : "#d4d4d8",
                     backgroundColor:

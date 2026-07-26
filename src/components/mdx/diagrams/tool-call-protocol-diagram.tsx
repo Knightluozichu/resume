@@ -276,7 +276,7 @@ export function ToolCallProtocolDiagram() {
           <text
             x={MSG_X + 4}
             y={MSG_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每一步往这份列表里 append 一条
@@ -339,7 +339,7 @@ export function ToolCallProtocolDiagram() {
           <text
             x={PANEL_X}
             y={PANEL_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一次完整往返的线路协议

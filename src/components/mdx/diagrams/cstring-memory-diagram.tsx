@@ -97,7 +97,7 @@ export function CStringMemoryDiagram() {
                   x={x + cellW / 2}
                   y={128}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={token.textSecondary}
                   opacity="0.6"
                 >
@@ -160,7 +160,7 @@ export function CStringMemoryDiagram() {
             x={startX + 5 * (cellW + gap) + cellW / 2}
             y={155}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="rgb(229,181,103)"
             fontWeight="600"
           >

@@ -63,7 +63,7 @@ export function CameraMovementDiagram() {
             x={cx}
             y={cy + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             摄像机
@@ -79,7 +79,7 @@ export function CameraMovementDiagram() {
             strokeWidth="2"
             markerEnd="url(#move-arrow-green)"
           />
-          <text x={cx + 78} y={cy + 4} fontSize="10" fill="var(--success)">
+          <text x={cx + 78} y={cy + 4} fontSize="11" fill="var(--success)">
             front
           </text>
 
@@ -93,7 +93,7 @@ export function CameraMovementDiagram() {
             strokeWidth="2"
             markerEnd="url(#move-arrow)"
           />
-          <text x={cx + 8} y={cy - 64} fontSize="10" fill="var(--accent)">
+          <text x={cx + 8} y={cy - 64} fontSize="11" fill="var(--accent)">
             right
           </text>
 
@@ -123,7 +123,7 @@ export function CameraMovementDiagram() {
               x="318"
               y="158"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               + front
@@ -164,7 +164,7 @@ export function CameraMovementDiagram() {
               x="318"
               y="228"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               − front
@@ -205,7 +205,7 @@ export function CameraMovementDiagram() {
               x="66"
               y="128"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               − right
@@ -238,7 +238,7 @@ export function CameraMovementDiagram() {
               x="66"
               y="188"
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               + right

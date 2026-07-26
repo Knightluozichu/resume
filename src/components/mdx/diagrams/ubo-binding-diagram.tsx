@@ -93,7 +93,7 @@ function NoUbo() {
         x="120"
         y="68"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         改一次 projection / view
@@ -117,7 +117,7 @@ function NoUbo() {
         x="262"
         y="160"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fontWeight="600"
         fill="var(--warning)"
       >
@@ -151,7 +151,7 @@ function NoUbo() {
             x="430"
             y={y + 38}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -192,7 +192,7 @@ function WithUbo() {
         x="90"
         y="157"
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         写一次缓冲
@@ -234,7 +234,7 @@ function WithUbo() {
         x="246"
         y="156"
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         className="font-mono"
         fill="var(--text-secondary)"
       >
@@ -257,7 +257,7 @@ function WithUbo() {
         x="352"
         y="148"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fontWeight="600"
         fill="var(--success)"
       >
@@ -308,7 +308,7 @@ function WithUbo() {
             x="490"
             y={y + 36}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             读同一块
@@ -320,7 +320,7 @@ function WithUbo() {
         x="280"
         y="290"
         textAnchor="middle"
-        fontSize="10.5"
+        fontSize="11"
         fontWeight="600"
         fill="var(--accent)"
       >
@@ -405,7 +405,7 @@ function Std140() {
             x={STD140_X0 + c.col * STD140_CELL_W + STD140_CELL_W / 2}
             y={std140RowY(c.row) + 22}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             className="font-mono"
             fill={c.kind === "pad" ? "var(--warning)" : "var(--text-primary)"}
@@ -421,7 +421,7 @@ function Std140() {
           key={n.row}
           x={STD140_X0 + 4 * STD140_CELL_W + 12}
           y={std140RowY(n.row) + 22}
-          fontSize="10"
+          fontSize="11"
           fill={n.warn ? "var(--warning)" : "var(--text-secondary)"}
         >
           {n.text}

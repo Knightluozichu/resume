@@ -310,7 +310,7 @@ export function HazardPointerDiagram() {
                 x={BOARD_X + BOARD_W / 2}
                 y={BOARD_Y + 46}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {b.sub}
@@ -440,7 +440,7 @@ export function HazardPointerDiagram() {
           <text
             x={20}
             y={laneStepY(0) + 38}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （使用者）
@@ -457,7 +457,7 @@ export function HazardPointerDiagram() {
           <text
             x={20}
             y={laneStepY(1) + 38}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （回收者）
@@ -498,7 +498,7 @@ export function HazardPointerDiagram() {
                 <text
                   x={x + 12}
                   y={y + 41}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.sub}
@@ -512,7 +512,7 @@ export function HazardPointerDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 18}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >

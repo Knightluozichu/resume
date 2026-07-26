@@ -75,7 +75,7 @@ export function KLeastMultisetLab() {
           </div>
         </div>
 
-        <div className="mt-4 flex min-h-10 items-center justify-between gap-3">
+        <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
           <p className="m-0 text-sm text-secondary">{step.action}</p>
           <div className="flex shrink-0 items-center gap-1">
             <button type="button" title="上一步" aria-label="上一步" disabled={cursor === 0} onClick={() => setCursor((value) => Math.max(0, value - 1))} className="inline-flex size-9 items-center justify-center border border-border text-secondary disabled:opacity-35"><span aria-hidden="true" className="text-lg leading-none">←</span></button>

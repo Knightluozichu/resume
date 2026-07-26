@@ -18,22 +18,22 @@ export function Poeaa24Pattern35PessimisticOfflineLock() {
           <line x1={600} y1={76} x2={600} y2={280} stroke={T.accent} strokeWidth="1" strokeDasharray="4 3" />
           {/* Step 1: A 获取锁 */}
           <line x1={140} y1={96} x2={600} y2={96} stroke="#3FB97F" strokeWidth="1.5" />
-          <text x={370} y={90} textAnchor="middle" fontSize="9" fill="#3FB97F">请求排他锁 → 获得 🔒</text>
+          <text x={370} y={90} textAnchor="middle" fontSize="11" fill="#3FB97F">请求排他锁 → 获得 🔒</text>
           {/* Step 2: A 修改数据 */}
           <rect x={100} y={108} width={80} height={28} rx="4" fill="#3FB97F" fillOpacity="0.08" stroke="#3FB97F" strokeWidth="1" />
-          <text x={140} y={126} textAnchor="middle" fontSize="9" fill="#3FB97F">安心修改</text>
+          <text x={140} y={126} textAnchor="middle" fontSize="11" fill="#3FB97F">安心修改</text>
           {/* Step 3: B 请求锁被阻塞 */}
           <line x1={400} y1={150} x2={600} y2={150} stroke="#E5634D" strokeWidth="1.5" />
-          <text x={500} y={144} textAnchor="middle" fontSize="9" fontWeight="600" fill="#E5634D">请求锁 → 被阻塞 ⏳</text>
+          <text x={500} y={144} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5634D">请求锁 → 被阻塞 ⏳</text>
           {/* Step 4: B 等待 */}
           <rect x={360} y={162} width={80} height={28} rx="4" fill="#E5634D" fillOpacity="0.08" stroke="#E5634D" strokeWidth="1" strokeDasharray="3 2" />
-          <text x={400} y={180} textAnchor="middle" fontSize="9" fill="#E5634D">等待中…</text>
+          <text x={400} y={180} textAnchor="middle" fontSize="11" fill="#E5634D">等待中…</text>
           {/* Step 5: A 释放锁 */}
           <line x1={140} y1={210} x2={600} y2={210} stroke="#3FB97F" strokeWidth="1.2" />
-          <text x={370} y={204} textAnchor="middle" fontSize="9" fill="#3FB97F">提交修改 → 释放锁 🔓</text>
+          <text x={370} y={204} textAnchor="middle" fontSize="11" fill="#3FB97F">提交修改 → 释放锁 🔓</text>
           {/* Step 6: B 获得锁 */}
           <line x1={600} y1={234} x2={400} y2={234} stroke="#E5B567" strokeWidth="1.2" />
-          <text x={500} y={228} textAnchor="middle" fontSize="9" fill="#E5B567">获得锁 → 继续执行</text>
+          <text x={500} y={228} textAnchor="middle" fontSize="11" fill="#E5B567">获得锁 → 继续执行</text>
           {/* 底部说明 */}
           <rect x={48} y={248} width={624} height={56} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={270} fontSize="11" fontWeight="600" fill={T.primary}>代价与适用：</text>

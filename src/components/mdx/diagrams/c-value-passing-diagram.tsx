@@ -54,7 +54,7 @@ export function CValuePassingDiagram({ step = 4 }: CValuePassingDiagramProps) {
             <text x={callerX + 80} y={memY + 68} fontSize="14" fontWeight="700" fill={primary} fontFamily="monospace">
               {callerVal}
             </text>
-            <text x={callerX + 140} y={memY + 58} fontSize="9" fill={secondary} fontFamily="monospace">
+            <text x={callerX + 140} y={memY + 58} fontSize="11" fill={secondary} fontFamily="monospace">
               0x100
             </text>
             {step >= 2 && step < 4 && (
@@ -84,7 +84,7 @@ export function CValuePassingDiagram({ step = 4 }: CValuePassingDiagramProps) {
             <text x={calleeX + 120} y={memY + 68} fontSize="14" fontWeight="700" fill={step === 3 ? accent : primary} fontFamily="monospace">
               {paramVal}
             </text>
-            <text x={calleeX + 170} y={memY + 58} fontSize="9" fill={secondary} fontFamily="monospace">
+            <text x={calleeX + 170} y={memY + 58} fontSize="11" fill={secondary} fontFamily="monospace">
               0x200
             </text>
             {step === 3 && (
@@ -96,7 +96,7 @@ export function CValuePassingDiagram({ step = 4 }: CValuePassingDiagramProps) {
 
           <g opacity={step === 2 ? 1 : step > 2 ? 0.5 : 0.25}>
             <path d="M 280 150 L 340 150" stroke={accent} strokeWidth="2" markerEnd="url(#cPassArrow)" />
-            <text x={310} y={138} textAnchor="middle" fontSize="10" fontWeight="600" fill={accent}>
+            <text x={310} y={138} textAnchor="middle" fontSize="11" fontWeight="600" fill={accent}>
               拷贝值 5
             </text>
           </g>
@@ -115,7 +115,7 @@ export function CValuePassingDiagram({ step = 4 }: CValuePassingDiagramProps) {
           <text x={40} y={290} fontSize="11" fontFamily="monospace" fill={primary}>
             void try_change(int n) {"{"} n = 99; {"}"}   int num = 5; try_change(num);  // num 还是 5
           </text>
-          <text x={40} y={310} fontSize="10" fill={accent}>
+          <text x={40} y={310} fontSize="11" fill={accent}>
             要让函数改调用方的变量，需传指针（下一章）或 return 新值
           </text>
 

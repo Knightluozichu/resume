@@ -100,7 +100,7 @@ export function LinearHdrPipelineDiagram() {
                   x={x + boxW / 2}
                   y={baseY + 18}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={s.color}
                 >
@@ -110,7 +110,7 @@ export function LinearHdrPipelineDiagram() {
                   x={x + boxW / 2}
                   y={baseY + 32}
                   textAnchor="middle"
-                  fontSize="7.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.sub}
@@ -119,7 +119,7 @@ export function LinearHdrPipelineDiagram() {
                   x={x + boxW / 2}
                   y={baseY + 46}
                   textAnchor="middle"
-                  fontSize="7"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                   opacity="0.7"
                 >
@@ -157,7 +157,7 @@ export function LinearHdrPipelineDiagram() {
             x={totalW / 2}
             y="155"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >

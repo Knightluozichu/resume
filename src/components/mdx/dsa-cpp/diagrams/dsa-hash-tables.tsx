@@ -92,7 +92,7 @@ export function DsaHashTablesDiagram() {
                 <rect x="468" y={y} width="56" height="22" rx="4" fill={isConflict ? warning : isNormal ? success : "var(--bg)"} fillOpacity={isConflict ? 0.12 : isNormal ? 0.08 : 0} stroke={isConflict ? warning : isNormal ? success : border} strokeWidth="1" strokeDasharray={cell.val === null ? "3 3" : "0"} />
                 <text x="496" y={y + 15} textAnchor="middle" fontSize="11" fill={isConflict ? warning : isNormal ? success : secondary}>{`{cell.val === null ? "空" : cell.val}`}</text>
                 {cell.probe !== undefined && (
-                  <text x="536" y={y + 15} fontSize="10" fill={warning}>{`←探测{cell.probe}步`}</text>
+                  <text x="536" y={y + 15} fontSize="11" fill={warning}>{`←探测{cell.probe}步`}</text>
                 )}
               </g>
             );

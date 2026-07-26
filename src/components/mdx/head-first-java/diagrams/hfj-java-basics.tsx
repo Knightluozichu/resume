@@ -53,7 +53,7 @@ export function HfjJavaBasicsDiagram() {
             x="130"
             y="88"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Hello.java
@@ -62,7 +62,7 @@ export function HfjJavaBasicsDiagram() {
             x="130"
             y="102"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             public class Hello &#123;
@@ -71,7 +71,7 @@ export function HfjJavaBasicsDiagram() {
             x="130"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             {" "}
@@ -113,7 +113,7 @@ export function HfjJavaBasicsDiagram() {
             x="370"
             y="88"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             javac Hello.java
@@ -122,7 +122,7 @@ export function HfjJavaBasicsDiagram() {
             x="370"
             y="102"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             编译器检查语法
@@ -131,7 +131,7 @@ export function HfjJavaBasicsDiagram() {
             x="370"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             生成 Hello.class 字节码
@@ -172,7 +172,7 @@ export function HfjJavaBasicsDiagram() {
             x="610"
             y="88"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             java Hello
@@ -181,7 +181,7 @@ export function HfjJavaBasicsDiagram() {
             x="610"
             y="102"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JVM 加载 .class
@@ -190,7 +190,7 @@ export function HfjJavaBasicsDiagram() {
             x="610"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             执行 main 方法
@@ -233,7 +233,7 @@ export function HfjJavaBasicsDiagram() {
             x="82"
             y="206"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             byte short
@@ -242,7 +242,7 @@ export function HfjJavaBasicsDiagram() {
             x="82"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             int long
@@ -273,7 +273,7 @@ export function HfjJavaBasicsDiagram() {
             x="197"
             y="206"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             float
@@ -282,7 +282,7 @@ export function HfjJavaBasicsDiagram() {
             x="197"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             double
@@ -313,7 +313,7 @@ export function HfjJavaBasicsDiagram() {
             x="312"
             y="206"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             char
@@ -322,7 +322,7 @@ export function HfjJavaBasicsDiagram() {
             x="312"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             16位 Unicode
@@ -353,7 +353,7 @@ export function HfjJavaBasicsDiagram() {
             x="427"
             y="206"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             boolean
@@ -362,7 +362,7 @@ export function HfjJavaBasicsDiagram() {
             x="427"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             true / false
@@ -393,7 +393,7 @@ export function HfjJavaBasicsDiagram() {
             x="600"
             y="206"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             String / 数组 / 自定义类
@@ -402,7 +402,7 @@ export function HfjJavaBasicsDiagram() {
             x="600"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             变量存的是对象的引用地址
@@ -442,28 +442,28 @@ export function HfjJavaBasicsDiagram() {
           >
             栈（Stack）——方法局部变量
           </text>
-          <text x="60" y="312" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="312" fontSize="11" fill="var(--text-secondary)">
             int x = 42; &rarr; 栈中直接存值 42
           </text>
-          <text x="60" y="328" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="328" fontSize="11" fill="var(--text-secondary)">
             double d = 3.14; &rarr; 栈中直接存值 3.14
           </text>
-          <text x="60" y="344" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="344" fontSize="11" fill="var(--text-secondary)">
             boolean f = true; &rarr; 栈中直接存值 true
           </text>
-          <text x="60" y="360" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="360" fontSize="11" fill="var(--text-secondary)">
             char c = &apos;A&apos;; &rarr; 栈中直接存值 &apos;A&apos;
           </text>
-          <text x="60" y="380" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="380" fontSize="11" fill="var(--text-secondary)">
             基本类型: 值直接在栈上
           </text>
-          <text x="60" y="396" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="396" fontSize="11" fill="var(--text-secondary)">
             方法结束时自动回收
           </text>
-          <text x="60" y="420" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="420" fontSize="11" fill="var(--text-secondary)">
             引用变量 s 也在栈上:
           </text>
-          <text x="60" y="436" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="436" fontSize="11" fill="var(--text-secondary)">
             String s = &quot;hi&quot;; &rarr; 栈存引用地址
           </text>
 
@@ -489,28 +489,28 @@ export function HfjJavaBasicsDiagram() {
           >
             堆（Heap）——对象实际存放
           </text>
-          <text x="420" y="312" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="312" fontSize="11" fill="var(--text-secondary)">
             new 创建的对象 &rarr; 堆上分配
           </text>
-          <text x="420" y="328" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="328" fontSize="11" fill="var(--text-secondary)">
             String &quot;hi&quot; &rarr; 堆中 String 对象
           </text>
-          <text x="420" y="344" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="344" fontSize="11" fill="var(--text-secondary)">
             int[] arr &rarr; 堆中数组对象
           </text>
-          <text x="420" y="364" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="364" fontSize="11" fill="var(--text-secondary)">
             栈引用 s -----&gt; 堆对象 &quot;hi&quot;
           </text>
-          <text x="420" y="384" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="384" fontSize="11" fill="var(--text-secondary)">
             栈引用 arr --&gt; 堆数组 [1,2,3]
           </text>
-          <text x="420" y="408" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="408" fontSize="11" fill="var(--text-secondary)">
             引用类型: 栈存地址, 堆存对象
           </text>
-          <text x="420" y="424" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="424" fontSize="11" fill="var(--text-secondary)">
             GC 负责回收无引用的对象
           </text>
-          <text x="420" y="444" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="444" fontSize="11" fill="var(--text-secondary)">
             多个引用可指向同一个对象
           </text>
         </svg>

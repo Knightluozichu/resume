@@ -64,19 +64,19 @@ export function RubModulesMixinsDiagram() {
           <rect x={360} y={86} width={300} height={60} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.2" strokeOpacity="0.4" />
           <text x={372} y={106} fontSize="12" fontWeight="600" fill={accent}>include Module</text>
           <text x={372} y={124} fontSize="11" fill={primary}>实例方法混入</text>
-          <text x={372} y={140} fontSize="10" fill={secondary}>查找链：类 → include 的模块 → 父类</text>
+          <text x={372} y={140} fontSize="11" fill={secondary}>查找链：类 → include 的模块 → 父类</text>
 
           {/* prepend */}
           <rect x={360} y={158} width={300} height={60} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
           <text x={372} y={178} fontSize="12" fontWeight="600" fill={warning}>prepend Module</text>
           <text x={372} y={196} fontSize="11" fill={primary}>实例方法混入（优先级最高）</text>
-          <text x={372} y={212} fontSize="10" fill={secondary}>查找链：prepend 的模块 → 类 → ...</text>
+          <text x={372} y={212} fontSize="11" fill={secondary}>查找链：prepend 的模块 → 类 → ...</text>
 
           {/* extend */}
           <rect x={360} y={230} width={300} height={60} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
           <text x={372} y={250} fontSize="12" fontWeight="600" fill={success}>extend Module</text>
           <text x={372} y={268} fontSize="11" fill={primary}>类方法混入（给类本身加方法）</text>
-          <text x={372} y={284} fontSize="10" fill={secondary}>查找链：类的单例类 → extend 的模块</text>
+          <text x={372} y={284} fontSize="11" fill={secondary}>查找链：类的单例类 → extend 的模块</text>
 
           {/* 底部：方法查找链示意 */}
           <line x1={32} y1={300} x2={VIEW_W - 32} y2={300} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
@@ -85,32 +85,32 @@ export function RubModulesMixinsDiagram() {
           </text>
 
           <rect x={60} y={332} width={100} height={36} rx="6" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1" />
-          <text x={110} y={354} textAnchor="middle" fontSize="10" fill={warning}>PrependMod</text>
+          <text x={110} y={354} textAnchor="middle" fontSize="11" fill={warning}>PrependMod</text>
 
           <line x1={160} y1={350} x2={180} y2={350} stroke={secondary} strokeWidth="1" markerEnd="url(#rub-mod-arrow)" />
 
           <rect x={180} y={332} width={80} height={36} rx="6" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
-          <text x={220} y={354} textAnchor="middle" fontSize="10" fill={accent}>Dog（类）</text>
+          <text x={220} y={354} textAnchor="middle" fontSize="11" fill={accent}>Dog（类）</text>
 
           <line x1={260} y1={350} x2={280} y2={350} stroke={secondary} strokeWidth="1" markerEnd="url(#rub-mod-arrow)" />
 
           <rect x={280} y={332} width={100} height={36} rx="6" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1" strokeOpacity="0.5" />
-          <text x={330} y={354} textAnchor="middle" fontSize="10" fill={accent}>IncludeMod</text>
+          <text x={330} y={354} textAnchor="middle" fontSize="11" fill={accent}>IncludeMod</text>
 
           <line x1={380} y1={350} x2={400} y2={350} stroke={secondary} strokeWidth="1" markerEnd="url(#rub-mod-arrow)" />
 
           <rect x={400} y={332} width={80} height={36} rx="6" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1" />
-          <text x={440} y={354} textAnchor="middle" fontSize="10" fill={success}>Animal</text>
+          <text x={440} y={354} textAnchor="middle" fontSize="11" fill={success}>Animal</text>
 
           <line x1={480} y1={350} x2={500} y2={350} stroke={secondary} strokeWidth="1" markerEnd="url(#rub-mod-arrow)" />
 
           <rect x={500} y={332} width={80} height={36} rx="6" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.5" />
-          <text x={540} y={354} textAnchor="middle" fontSize="10" fill={success}>Object</text>
+          <text x={540} y={354} textAnchor="middle" fontSize="11" fill={success}>Object</text>
 
           <line x1={580} y1={350} x2={600} y2={350} stroke={secondary} strokeWidth="1" markerEnd="url(#rub-mod-arrow)" />
 
           <rect x={600} y={332} width={80} height={36} rx="6" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.5" />
-          <text x={640} y={354} textAnchor="middle" fontSize="10" fill={danger}>BasicObject</text>
+          <text x={640} y={354} textAnchor="middle" fontSize="11" fill={danger}>BasicObject</text>
 
           <text x={VIEW_W / 2} y={388} textAnchor="middle" fontSize="11" fill={secondary}>
             super 在 prepend 中可调用被覆盖的原始方法 · include 常用 · extend 给类加方法

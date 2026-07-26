@@ -140,12 +140,20 @@ export function OfficialUnityHmiLab({ unitId, title, concepts, chain, model, vie
   const [axisA, setAxisA] = useState(1);
   const [axisB, setAxisB] = useState(1);
   const [scenario, setScenario] = useState<Scenario>("baseline");
+  function resetExperiment() {
+    setConceptIndex(0);
+    setAxisA(1);
+    setAxisB(1);
+    setScenario("baseline");
+  }
+
   const reset = () => { setConceptIndex(0); setAxisA(1); setAxisB(1); setScenario("baseline"); };
   const spec = visualByUnit[unitId] ?? { kind: "pipeline", heading: title, caption: model.boundary, items: chain };
   const active = view === "scope" ? conceptIndex : view === "decision" ? axisA * 3 + axisB : scenario === "baseline" ? 0 : scenario === "fault" ? 3 : 4;
   const current = concepts[conceptIndex] ?? title;
 
   return <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50" aria-label={`${title} · ${spec.heading}专属图`} data-uhm-unit={unitId} data-visual-kind={spec.kind}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900"><div className="min-w-0"><p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">Unity for HMI 2024 · {view === "scope" ? "机制图" : view === "decision" ? "变量实验" : "故障路径"}</p><h3 className="break-words text-base font-semibold">{spec.heading}</h3><p className="mt-1 max-w-3xl text-xs font-normal text-zinc-600 dark:text-zinc-300">{spec.caption}</p></div><button type="button" onClick={reset} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-zinc-300 bg-white px-3 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950" aria-label={`重置${model.studio}`}><span aria-hidden>↺</span></button></header>
     <div className="grid min-w-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
       <div className="min-w-0 border-b border-zinc-200 p-4 lg:border-r lg:border-b-0 dark:border-zinc-800">

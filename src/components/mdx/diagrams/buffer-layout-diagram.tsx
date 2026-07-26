@@ -89,15 +89,15 @@ export function BufferLayoutDiagram({
         >
           {/* 图例：P/N/U 三种属性 */}
           <Cell x="60" y="20" w="28" fill={OP_P} label="P" />
-          <text x="96" y="43" fontSize="10" fill="var(--text-secondary)">
+          <text x="96" y="43" fontSize="11" fill="var(--text-secondary)">
             位置
           </text>
           <Cell x="160" y="20" w="28" fill={OP_N} label="N" />
-          <text x="196" y="43" fontSize="10" fill="var(--text-secondary)">
+          <text x="196" y="43" fontSize="11" fill="var(--text-secondary)">
             法线
           </text>
           <Cell x="252" y="20" w="28" fill={OP_U} label="U" />
-          <text x="288" y="43" fontSize="10" fill="var(--text-secondary)">
+          <text x="288" y="43" fontSize="11" fill="var(--text-secondary)">
             纹理坐标
           </text>
 
@@ -138,7 +138,7 @@ export function BufferLayoutDiagram({
                 x="412"
                 y="123"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 顶点2…
@@ -149,7 +149,7 @@ export function BufferLayoutDiagram({
                 x="156"
                 y="95"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 ← 顶点 0 →
@@ -158,7 +158,7 @@ export function BufferLayoutDiagram({
                 x="308"
                 y="95"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 ← 顶点 1 →
@@ -169,7 +169,7 @@ export function BufferLayoutDiagram({
                 x="80"
                 y="152"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill="var(--accent)"
               >
@@ -179,7 +179,7 @@ export function BufferLayoutDiagram({
                 x="136"
                 y="152"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill="var(--accent)"
               >
@@ -189,7 +189,7 @@ export function BufferLayoutDiagram({
                 x="192"
                 y="152"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill="var(--accent)"
               >
@@ -213,7 +213,7 @@ export function BufferLayoutDiagram({
                     x="156"
                     y="190"
                     textAnchor="middle"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill="var(--warning)"
                   >
@@ -272,7 +272,7 @@ export function BufferLayoutDiagram({
                       x="160"
                       y={top - 6}
                       textAnchor="middle"
-                      fontSize="9.5"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       ← 所有位置 →
@@ -281,7 +281,7 @@ export function BufferLayoutDiagram({
                       x="320"
                       y={top - 6}
                       textAnchor="middle"
-                      fontSize="9.5"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       ← 所有法线 →
@@ -290,7 +290,7 @@ export function BufferLayoutDiagram({
                       x="460"
                       y={top - 6}
                       textAnchor="middle"
-                      fontSize="9.5"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       ← 所有 uv →
@@ -303,7 +303,7 @@ export function BufferLayoutDiagram({
                           x="80"
                           y={top + 52}
                           textAnchor="middle"
-                          fontSize="9.5"
+                          fontSize="11"
                           fontFamily="monospace"
                           fill="var(--accent)"
                         >
@@ -313,7 +313,7 @@ export function BufferLayoutDiagram({
                           x="240"
                           y={top + 52}
                           textAnchor="middle"
-                          fontSize="9.5"
+                          fontSize="11"
                           fontFamily="monospace"
                           fill="var(--accent)"
                         >
@@ -323,7 +323,7 @@ export function BufferLayoutDiagram({
                           x="430"
                           y={top + 52}
                           textAnchor="middle"
-                          fontSize="9.5"
+                          fontSize="11"
                           fontFamily="monospace"
                           fill="var(--accent)"
                         >
@@ -333,7 +333,7 @@ export function BufferLayoutDiagram({
                           x="360"
                           y={top + 78}
                           textAnchor="middle"
-                          fontSize="10.5"
+                          fontSize="11"
                           fontFamily="monospace"
                           fill="var(--warning)"
                         >

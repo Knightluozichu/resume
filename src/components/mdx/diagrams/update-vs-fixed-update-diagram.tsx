@@ -222,7 +222,7 @@ export function UpdateVsFixedUpdateDiagram() {
             <text
               x={AXIS_X0 + 88}
               y={UPDATE_Y - TICK_H - 16}
-              fontSize="10.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               按渲染帧 · 间隔随帧率波动
@@ -240,7 +240,7 @@ export function UpdateVsFixedUpdateDiagram() {
             <text
               x={AXIS_X0 + 116}
               y={FIXED_Y - TICK_H - 16}
-              fontSize="10.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               固定步长 0.02s · 与帧率脱钩
@@ -250,7 +250,7 @@ export function UpdateVsFixedUpdateDiagram() {
               x={AXIS_X1}
               y={FIXED_Y + 22}
               textAnchor="end"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               时间 →
@@ -288,7 +288,7 @@ export function UpdateVsFixedUpdateDiagram() {
                     x={(x + tx(UPDATE_TICKS[i + 1])) / 2}
                     y={UPDATE_Y + 18}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {UPDATE_DT[i]}
@@ -345,7 +345,7 @@ export function UpdateVsFixedUpdateDiagram() {
               x={(tx(SLOW_FROM) + tx(SLOW_TO)) / 2}
               y={UPDATE_Y + 40}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--danger)"
             >
@@ -355,7 +355,7 @@ export function UpdateVsFixedUpdateDiagram() {
               x={(tx(SLOW_FROM) + tx(SLOW_TO)) / 2}
               y={UPDATE_Y + 56}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--danger)"
             >

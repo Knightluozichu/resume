@@ -181,7 +181,7 @@ export function ReActVsCoTDiagram() {
                   x={LEFT_X + 18}
                   y={y + 37}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {s.body}
@@ -245,7 +245,7 @@ export function ReActVsCoTDiagram() {
                   x={RIGHT_X + 18}
                   y={y + 37}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontFamily={s.tag === "行动" ? "var(--font-mono)" : undefined}
                   fill="var(--text-primary)"
                 >

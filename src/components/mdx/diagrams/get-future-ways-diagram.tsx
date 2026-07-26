@@ -149,7 +149,7 @@ export function GetFutureWaysDiagram() {
                     x={cx}
                     y={SRC_Y + 40 + j * 14}
                     textAnchor="middle"
-                    fontSize="10.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}
@@ -171,7 +171,7 @@ export function GetFutureWaysDiagram() {
                   x={cx}
                   y={(SRC_Y + SRC_H + FUT_Y) / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={col.color}
                 >
@@ -204,7 +204,7 @@ export function GetFutureWaysDiagram() {
                   x={cx}
                   y={FUT_Y + 40}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.detail}
@@ -218,7 +218,7 @@ export function GetFutureWaysDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             async＝自动雇厨师；packaged_task＝可搬运可延后的任务；promise＝你手动摆上台

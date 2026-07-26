@@ -65,7 +65,7 @@ export function DsvHeapsDiagram() {
             <g key={i}>
               <rect x={48 + i * 36} y={278} width="32" height="32" rx="3" fill={i === 0 ? accent : "var(--bg)"} fillOpacity={i === 0 ? "0.12" : "1"} stroke={i === 0 ? accent : border} strokeWidth="1" />
               <text x={48 + i * 36 + 16} y={298} textAnchor="middle" fontSize="12" fontWeight="600" fill={i === 0 ? accent : primary}>{v}</text>
-              <text x={48 + i * 36 + 16} y={324} textAnchor="middle" fontSize="10" fill={secondary}>[{i}]</text>
+              <text x={48 + i * 36 + 16} y={324} textAnchor="middle" fontSize="11" fill={secondary}>[{i}]</text>
             </g>
           ))}
 

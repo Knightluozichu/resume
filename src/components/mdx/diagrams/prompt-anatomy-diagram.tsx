@@ -142,7 +142,7 @@ export function PromptAnatomyDiagram() {
                 <text
                   x={LABEL_X}
                   y={y + 46}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {p.role}

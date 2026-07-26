@@ -72,7 +72,7 @@ function FourStageDiagram({
           x="450"
           y="49"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           {subtitle}
@@ -132,15 +132,15 @@ function FourStageDiagram({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.2"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.signal}
               </text>
-              <text x={x + 13} y="198" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="198" fontSize="11" fill={secondary}>
                 交付证据
               </text>
-              <text x={x + 13} y="220" fontSize="9.8" fill={primary}>
+              <text x={x + 13} y="220" fontSize="11" fill={primary}>
                 {stage.evidence}
               </text>
             </g>
@@ -170,7 +170,7 @@ function FourStageDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           每个结论都必须同时保留工作负载、时间线、画质基线和错误状态

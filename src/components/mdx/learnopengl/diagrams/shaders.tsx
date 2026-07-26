@@ -70,7 +70,7 @@ function StageDiagram({
           x="450"
           y="49"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           {subtitle}
@@ -126,15 +126,15 @@ function StageDiagram({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="199" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="199" fontSize="11" fill={secondary}>
                 证据
               </text>
-              <text x={x + 13} y="221" fontSize="9.8" fill={primary}>
+              <text x={x + 13} y="221" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -164,7 +164,7 @@ function StageDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           数据通道必须同时满足类型、名称或 location、生命周期和当前 program 契约

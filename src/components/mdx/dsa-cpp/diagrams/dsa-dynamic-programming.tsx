@@ -106,7 +106,7 @@ export function DsaDynamicProgrammingDiagram() {
             stroke={accent}
             strokeWidth="1"
           />
-          <text x="130" y="142" textAnchor="middle" fontSize="10" fill={accent}>
+          <text x="130" y="142" textAnchor="middle" fontSize="11" fill={accent}>
             4
           </text>
           <circle
@@ -122,7 +122,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="230"
             y="142"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={warning}
           >
             3
@@ -158,7 +158,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="100"
             y="171"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={warning}
           >
             3
@@ -172,7 +172,7 @@ export function DsaDynamicProgrammingDiagram() {
             stroke={success}
             strokeWidth="1"
           />
-          <text x="150" y="171" textAnchor="middle" fontSize="9" fill={success}>
+          <text x="150" y="171" textAnchor="middle" fontSize="11" fill={success}>
             2
           </text>
           <line
@@ -202,7 +202,7 @@ export function DsaDynamicProgrammingDiagram() {
             stroke={success}
             strokeWidth="1.5"
           />
-          <text x="200" y="171" textAnchor="middle" fontSize="9" fill={success}>
+          <text x="200" y="171" textAnchor="middle" fontSize="11" fill={success}>
             2
           </text>
           <circle
@@ -217,7 +217,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="250"
             y="171"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
           >
             1
@@ -240,16 +240,16 @@ export function DsaDynamicProgrammingDiagram() {
           />
 
           {/* 重复标记 */}
-          <text x="70" y="196" fontSize="10" fill={warning}>
+          <text x="70" y="196" fontSize="11" fill={warning}>
             fib(3) 算了 2 次
           </text>
-          <text x="70" y="212" fontSize="10" fill={success}>
+          <text x="70" y="212" fontSize="11" fill={success}>
             fib(2) 算了 3 次
           </text>
-          <text x="70" y="234" fontSize="10" fill={danger}>
+          <text x="70" y="234" fontSize="11" fill={danger}>
             朴素递归 O(2^n)
           </text>
-          <text x="70" y="250" fontSize="10" fill={accent}>
+          <text x="70" y="250" fontSize="11" fill={accent}>
             DP 缓存后 O(n)
           </text>
 
@@ -268,7 +268,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="540"
             y="106"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             物品(w=2,v=3), (w=3,v=4), 容量 W=5
@@ -279,7 +279,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="400"
             y="128"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={secondary}
           >
@@ -291,7 +291,7 @@ export function DsaDynamicProgrammingDiagram() {
               x={420 + w * 28}
               y="128"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={secondary}
             >
@@ -310,7 +310,7 @@ export function DsaDynamicProgrammingDiagram() {
                 x="400"
                 y={148 + row.i * 24}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={secondary}
               >
@@ -333,7 +333,7 @@ export function DsaDynamicProgrammingDiagram() {
                     x={420 + j * 28}
                     y={146 + row.i * 24}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fill={v > 0 ? success : secondary}
                   >
                     {v}
@@ -347,12 +347,12 @@ export function DsaDynamicProgrammingDiagram() {
             x="540"
             y="220"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             dp[i][j] = max(dp[i-1][j], dp[i-1][j-w]+v)
           </text>
-          <text x="540" y="238" textAnchor="middle" fontSize="10" fill={accent}>
+          <text x="540" y="238" textAnchor="middle" fontSize="11" fill={accent}>
             答案 = dp[2][5] = 7
           </text>
 
@@ -391,13 +391,13 @@ export function DsaDynamicProgrammingDiagram() {
           >
             记忆化（自顶向下）
           </text>
-          <text x="60" y="330" fontSize="10" fill={primary}>
+          <text x="60" y="330" fontSize="11" fill={primary}>
             递归 + 缓存
           </text>
-          <text x="60" y="346" fontSize="10" fill={primary}>
+          <text x="60" y="346" fontSize="11" fill={primary}>
             思路自然
           </text>
-          <text x="60" y="362" fontSize="10" fill={secondary}>
+          <text x="60" y="362" fontSize="11" fill={secondary}>
             有递归栈开销
           </text>
 
@@ -424,13 +424,13 @@ export function DsaDynamicProgrammingDiagram() {
           >
             递推（自底向上）
           </text>
-          <text x="210" y="330" fontSize="10" fill={primary}>
+          <text x="210" y="330" fontSize="11" fill={primary}>
             循环填表
           </text>
-          <text x="210" y="346" fontSize="10" fill={primary}>
+          <text x="210" y="346" fontSize="11" fill={primary}>
             无递归开销
           </text>
-          <text x="210" y="362" fontSize="10" fill={secondary}>
+          <text x="210" y="362" fontSize="11" fill={secondary}>
             可能算无用状态
           </text>
 
@@ -451,7 +451,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="410"
             y="302"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={secondary}
           >
@@ -462,7 +462,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="450"
             y="302"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={secondary}
           >
@@ -472,7 +472,7 @@ export function DsaDynamicProgrammingDiagram() {
             x="490"
             y="302"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={secondary}
           >
@@ -491,7 +491,7 @@ export function DsaDynamicProgrammingDiagram() {
                 x="410"
                 y={322 + i * 22}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={secondary}
               >
@@ -514,7 +514,7 @@ export function DsaDynamicProgrammingDiagram() {
                     x={450 + j * 40}
                     y={322 + i * 22}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fill={v > 0 ? danger : secondary}
                   >
                     {v}
@@ -523,7 +523,7 @@ export function DsaDynamicProgrammingDiagram() {
               ))}
             </g>
           ))}
-          <text x="540" y="412" textAnchor="middle" fontSize="10" fill={accent}>
+          <text x="540" y="412" textAnchor="middle" fontSize="11" fill={accent}>
             LCS(&quot;ABC&quot;,&quot;AC&quot;) = 2 (即 &quot;AC&quot;)
           </text>
 

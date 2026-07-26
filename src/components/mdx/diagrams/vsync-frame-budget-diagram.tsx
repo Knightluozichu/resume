@@ -126,7 +126,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                 x={r.x + colW / 2}
                 y={r.y + 106}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {r.frameTime}
@@ -144,7 +144,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                 x={r.x + colW / 2}
                 y={r.y + 133}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={isActive(i) ? "var(--accent)" : "var(--text-secondary)"}
               >
@@ -155,7 +155,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                 x={r.x + colW / 2}
                 y={r.y + 156}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {r.detail.split("\n")[0]}
@@ -189,7 +189,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
             strokeWidth="1"
             strokeDasharray="8,4"
           />
-          <text x="20" y="240" fontSize="9" fill="var(--text-secondary)">
+          <text x="20" y="240" fontSize="11" fill="var(--text-secondary)">
             VSync 信号（每 16.67ms 一次）
           </text>
           {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((t) => (

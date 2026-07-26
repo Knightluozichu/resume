@@ -234,7 +234,7 @@ export function RigidbodyGravityDiagram() {
                 x={colCX(i)}
                 y={COL_Y + 38}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {tt.s}
@@ -252,7 +252,7 @@ export function RigidbodyGravityDiagram() {
                 x={colX(i) + COL_W - 16}
                 y={GROUND_Y + 16}
                 textAnchor="end"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 地面
@@ -298,7 +298,7 @@ export function RigidbodyGravityDiagram() {
               x={colCX(0)}
               y={GROUND_Y + 30}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               引擎不替它算重力
@@ -334,7 +334,7 @@ export function RigidbodyGravityDiagram() {
               x={colCX(1)}
               y={GROUND_Y + 30}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               受重力，落到地面
@@ -370,7 +370,7 @@ export function RigidbodyGravityDiagram() {
               x={boxX(2) - 10}
               y={REST_Y + BOX + 26}
               textAnchor="start"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fontFamily="var(--font-mono)"
               fill="var(--success)"

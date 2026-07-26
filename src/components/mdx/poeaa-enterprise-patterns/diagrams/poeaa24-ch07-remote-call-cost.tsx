@@ -57,16 +57,16 @@ export function Poeaa24Ch07RemoteCallCost() {
           {["getName()", "getAddress()", "getOrders()", "getBalance()"].map((call, i) => (
             <g key={call}>
               <rect x={48 + i * 156} y={280} width={140} height={28} rx="4" fill={T.danger} fillOpacity="0.08" stroke={T.danger} strokeWidth="1" />
-              <text x={48 + i * 156 + 70} y={298} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>{call}</text>
+              <text x={48 + i * 156 + 70} y={298} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>{call}</text>
             </g>
           ))}
-          <text x={48} y={324} fontSize="10" fill={T.danger}>4 次网络往返 × 10ms = 40ms 延迟</text>
+          <text x={48} y={324} fontSize="11" fill={T.danger}>4 次网络往返 × 10ms = 40ms 延迟</text>
 
           {/* 优化后：一次粗粒度调用 */}
           <text x={48} y={352} fontSize="11" fontWeight="600" fill="#3FB97F">优化后（1 次远程调用）：</text>
           <rect x={48} y={360} width={300} height={28} rx="4" fill="#3FB97F" fillOpacity="0.08" stroke="#3FB97F" strokeWidth="1" />
-          <text x={198} y={378} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>getCustomerDTO() → 一次返回全部数据</text>
-          <text x={380} y={378} fontSize="10" fill="#3FB97F">1 次网络往返 × 10ms = 10ms 延迟</text>
+          <text x={198} y={378} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>getCustomerDTO() → 一次返回全部数据</text>
+          <text x={380} y={378} fontSize="11" fill="#3FB97F">1 次网络往返 × 10ms = 10ms 延迟</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="分布的第一原则：减少远程调用次数，每次调用传递更多信息" />
         </svg>

@@ -53,8 +53,8 @@ export function LupStatementsDiagram() {
           <text x={52} y={192} fontSize="11" fill={primary}>local a, b = 1, 2</text>
           <text x={170} y={192} fontSize="11" fill={secondary}>多重赋值</text>
 
-          <text x={160} y={222} textAnchor="middle" fontSize="10" fill={secondary}>默认全局——必须用 local 声明局部</text>
-          <text x={160} y={238} textAnchor="middle" fontSize="10" fill={secondary}>尽量用 local：更快、不污染全局</text>
+          <text x={160} y={222} textAnchor="middle" fontSize="11" fill={secondary}>默认全局——必须用 local 声明局部</text>
+          <text x={160} y={238} textAnchor="middle" fontSize="11" fill={secondary}>尽量用 local：更快、不污染全局</text>
 
           {/* 分隔线 */}
           <line x1={300} y1={70} x2={300} y2={250} stroke={border} strokeWidth="1" strokeDasharray="4 3" />

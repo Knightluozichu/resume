@@ -88,8 +88,8 @@ export function EfcInheritanceModelDiagram() {
                 <rect x={40} y={y} width={4} height={78} rx="2" fill={ft.color} />
                 <text x={56} y={y + 22} fontSize="13" fontWeight="700" fill={ft.color}>{ft.name}</text>
                 <text x={56} y={y + 42} fontSize="11" fill={primary} fontFamily="monospace">{ft.syntax}</text>
-                <text x={56} y={y + 60} fontSize="10.5" fill={secondary}>{ft.meaning}</text>
-                <text x={56} y={y + 74} fontSize="10.5" fill={secondary}>→ {ft.derived}</text>
+                <text x={56} y={y + 60} fontSize="11" fill={secondary}>{ft.meaning}</text>
+                <text x={56} y={y + 74} fontSize="11" fill={secondary}>→ {ft.derived}</text>
               </g>
             );
           })}
@@ -102,40 +102,40 @@ export function EfcInheritanceModelDiagram() {
           {/* public 非虚函数 */}
           <rect x={400} y={78} width={280} height={60} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
           <text x={540} y={100} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">public: void doWork()</text>
-          <text x={540} y={118} textAnchor="middle" fontSize="10.5" fill={secondary}>非虚：前置条件检查</text>
+          <text x={540} y={118} textAnchor="middle" fontSize="11" fill={secondary}>非虚：前置条件检查</text>
 
           {/* 箭头向下 */}
           <line x1={540} y1={138} x2={540} y2={162} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-im-arrow)" />
-          <text x={560} y={154} fontSize="10" fill={secondary}>调用</text>
+          <text x={560} y={154} fontSize="11" fill={secondary}>调用</text>
 
           {/* private 虚函数 */}
           <rect x={400} y={168} width={280} height={60} rx="8" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.6" />
           <text x={540} y={190} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning} fontFamily="monospace">private: virtual doWorkImpl()</text>
-          <text x={540} y={208} textAnchor="middle" fontSize="10.5" fill={secondary}>虚：真正的多态入口</text>
+          <text x={540} y={208} textAnchor="middle" fontSize="11" fill={secondary}>虚：真正的多态入口</text>
 
           {/* 箭头向下 */}
           <line x1={540} y1={228} x2={540} y2={252} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-im-arrow)" />
-          <text x={560} y={244} fontSize="10" fill={secondary}>调用后</text>
+          <text x={560} y={244} fontSize="11" fill={secondary}>调用后</text>
 
           {/* 后置条件 */}
           <rect x={400} y={258} width={280} height={60} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
           <text x={540} y={280} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">后置条件 / 清理</text>
-          <text x={540} y={298} textAnchor="middle" fontSize="10.5" fill={secondary}>非虚：保证不变式</text>
+          <text x={540} y={298} textAnchor="middle" fontSize="11" fill={secondary}>非虚：保证不变式</text>
 
           {/* NVI 优势 */}
           <rect x={400} y={332} width={280} height={58} rx="8" fill={success} fillOpacity="0.05" stroke={success} strokeWidth="1.2" />
           <text x={540} y={352} textAnchor="middle" fontSize="11.5" fontWeight="700" fill={success}>
             NVI 优势
           </text>
-          <text x={540} y={370} textAnchor="middle" fontSize="10.5" fill={secondary}>统一前后置检查，分离接口与实现</text>
-          <text x={540} y={384} textAnchor="middle" fontSize="10.5" fill={secondary}>派生类只重写实现，不改接口</text>
+          <text x={540} y={370} textAnchor="middle" fontSize="11" fill={secondary}>统一前后置检查，分离接口与实现</text>
+          <text x={540} y={384} textAnchor="middle" fontSize="11" fill={secondary}>派生类只重写实现，不改接口</text>
 
           {/* ===== 底部总结 ===== */}
           <line x1={32} y1={412} x2={VIEW_W - 32} y2={412} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
           <text x={VIEW_W / 2} y={436} textAnchor="middle" fontSize="11.5" fill={secondary}>
             public 继承 = is-a；纯虚 = 只继承接口，虚 = 接口+默认实现，非虚 = 接口+强制实现
           </text>
-          <text x={VIEW_W / 2} y={456} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={456} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 32-40：is-a 关系、避免名称遮蔽、绝不重定义 non-virtual 与缺省参数值
           </text>
         </svg>

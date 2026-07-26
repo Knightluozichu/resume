@@ -87,7 +87,7 @@ export function TcpCircularListLab() {
   const result = josephus(n, step);
   return (
     <Figure caption="A circular list has no null tail; Josephus elimination repeatedly advances modulo the current length and removes one reachable node.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">nodes = {n}<input className="mt-2 w-full accent-current" type="range" min="2" max="16" value={n} onChange={(event) => setN(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">step = {step}<input className="mt-2 w-full accent-current" type="range" min="1" max="8" value={step} onChange={(event) => setStep(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">nodes = {n}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="16" value={n} onChange={(event) => setN(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">step = {step}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="8" value={step} onChange={(event) => setStep(Number(event.target.value))} /></label></div>
       <div className="mt-4"><Cells values={result.removed} /></div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="removal order" value={result.removed.join(",")} /><Stat label="survivor" value={result.survivor.toString()} tone="success" /></div>
     </Figure>
@@ -146,7 +146,7 @@ export function TcpTreePropertyLab() {
   const [nodes, setNodes] = useState(10);
   return (
     <Figure caption="Every finite nonempty tree with n nodes has n−1 edges; adding one new node must attach it with exactly one parent edge to preserve connected acyclicity.">
-      <label className="text-sm font-semibold text-primary">nodes n = {nodes}<input className="mt-2 w-full accent-current" type="range" min="1" max="64" value={nodes} onChange={(event) => setNodes(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">nodes n = {nodes}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="64" value={nodes} onChange={(event) => setNodes(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="nodes" value={nodes.toString()} /><Stat label="tree edges" value={(nodes - 1).toString()} /><Stat label="cycle rank" value="0" tone="success" /></div>
     </Figure>
   );
@@ -189,7 +189,7 @@ export function TcpAllocatorLab() {
   const chosen = strategy === "first" ? eligible[0] : eligible.slice().sort((a, b) => a.size - b.size)[0];
   return (
     <Figure caption="First-fit and best-fit choose different free blocks from the same list; allocation policy changes residual fragmentation while preserving non-overlap.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">request = {request}<input className="mt-2 w-full accent-current" type="range" min="1" max="24" value={request} onChange={(event) => setRequest(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">strategy<select className="mt-2 block w-full border border-border bg-background p-2" value={strategy} onChange={(event) => setStrategy(event.target.value as typeof strategy)}><option value="first">first fit</option><option value="best">best fit</option></select></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">request = {request}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="24" value={request} onChange={(event) => setRequest(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">strategy<select className="mt-2 block w-full border border-border bg-background p-2" value={strategy} onChange={(event) => setStrategy(event.target.value as typeof strategy)}><option value="first">first fit</option><option value="best">best fit</option></select></label></div>
       <div className="mt-4"><Cells values={holes.map((size, index) => `H${index}:${size}`)} active={chosen?.index ?? -1} /></div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="chosen block" value={chosen ? `H${chosen.index}` : "none"} tone={chosen ? "success" : "danger"} /><Stat label="residual" value={chosen ? (chosen.size - request).toString() : "allocation fails"} tone={chosen ? "accent" : "danger"} /></div>
     </Figure>

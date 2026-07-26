@@ -199,7 +199,7 @@ function TraceTimelineDiagramInner() {
                   x={x}
                   y={axisBottom + 18}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {sec}s
@@ -238,7 +238,7 @@ function TraceTimelineDiagramInner() {
                   x={30}
                   y={y + 36}
                   textAnchor="start"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.name}
@@ -289,7 +289,7 @@ function TraceTimelineDiagramInner() {
             x={VIEW_W / 2}
             y={VIEW_H - 16}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             有了 trace 就能回放这次运行：哪步慢、哪步错、哪步烧 token，一眼定位

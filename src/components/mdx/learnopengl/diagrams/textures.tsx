@@ -68,7 +68,7 @@ function Stages({
           x="450"
           y="49"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           {subtitle}
@@ -124,15 +124,15 @@ function Stages({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="8.9"
+                fontSize="11"
                 fill={s.color}
               >
                 {s.code}
               </text>
-              <text x={x + 13} y="199" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="199" fontSize="11" fill={secondary}>
                 验证
               </text>
-              <text x={x + 13} y="221" fontSize="9.8" fill={primary}>
+              <text x={x + 13} y="221" fontSize="11" fill={primary}>
                 {s.result}
               </text>
             </g>
@@ -162,7 +162,7 @@ function Stages({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           纹理正确性必须同时闭合像素格式、采样状态、unit binding 与 shader

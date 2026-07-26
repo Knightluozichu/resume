@@ -71,7 +71,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="70"
             y="150"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             彩色立方体
@@ -92,7 +92,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
               x="131"
               y="92"
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill="var(--accent)"
             >
               第一遍
@@ -139,7 +139,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="220"
             y="156"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             颜色纹理附件
@@ -160,7 +160,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
               x="309"
               y="106"
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill="var(--accent)"
             >
               取出纹理
@@ -182,7 +182,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="384"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill={step >= 2 ? "var(--text-primary)" : "var(--text-secondary)"}
           >
@@ -192,7 +192,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="384"
             y="120"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             贴满整个屏幕
@@ -201,7 +201,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="384"
             y="134"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             采样 + 后处理核
@@ -222,7 +222,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
               x="454"
               y="106"
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill="var(--success)"
             >
               第二遍
@@ -253,7 +253,7 @@ export function TwoPassDiagram({ step }: { step: TwoPassStep }) {
             x="510"
             y="162"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill={onScreen ? "var(--success)" : "var(--text-secondary)"}
           >
             屏幕

@@ -59,10 +59,10 @@ export function QsortBsearchDiagram() {
           <text x={336} y={96} fontSize="11" fill={primary} fontFamily="monospace">
             return *(int*)a - *(int*)b;
           </text>
-          <text x={336} y={116} fontSize="10" fill={secondary}>
+          <text x={336} y={116} fontSize="11" fill={secondary}>
             &lt;0 表示 a 在前 · qsort 反复调用它决定顺序
           </text>
-          <text x={336} y={136} fontSize="10" fill={secondary}>
+          <text x={336} y={136} fontSize="11" fill={secondary}>
             void * 需 cast 成元素类型再比较
           </text>
 
@@ -71,7 +71,7 @@ export function QsortBsearchDiagram() {
           <text x={200} y={120} textAnchor="middle" fontSize="18" fill={accent}>
             →
           </text>
-          <text x={200} y={140} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={200} y={140} textAnchor="middle" fontSize="11" fill={secondary}>
             qsort(arr, n, sizeof(int), compare)
           </text>
 
@@ -132,7 +132,7 @@ export function QsortBsearchDiagram() {
             </g>
           ))}
 
-          <text x={48 + targetIdx * 56} y={348} textAnchor="middle" fontSize="10" fill={warn}>
+          <text x={48 + targetIdx * 56} y={348} textAnchor="middle" fontSize="11" fill={warn}>
             命中
           </text>
 
@@ -140,7 +140,7 @@ export function QsortBsearchDiagram() {
           <text x={336} y={312} fontSize="11" fill={primary} fontFamily="monospace">
             bsearch(&amp;key, arr, n, sizeof(int), compare)
           </text>
-          <text x={336} y={332} fontSize="10" fill={secondary}>
+          <text x={336} y={332} fontSize="11" fill={secondary}>
             必须先排序；compare 与 qsort 同一套规则
           </text>
         </svg>

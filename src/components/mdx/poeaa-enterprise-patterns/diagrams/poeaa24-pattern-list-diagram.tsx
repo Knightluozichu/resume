@@ -14,33 +14,33 @@ export function Poeaa24PatternListDiagram() {
           <text x={360} y={77} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>POEAA</text>
           {/* 左列 */}
           <text x={48} y={120} fontSize="11" fontWeight="600" fill="#3FB97F">领域逻辑 (4)</text>
-          <text x={64} y={138} fontSize="9" fill={T.secondary}>Transaction Script · Domain Model</text>
-          <text x={64} y={154} fontSize="9" fill={T.secondary}>Table Module · Service Layer</text>
+          <text x={64} y={138} fontSize="11" fill={T.secondary}>Transaction Script · Domain Model</text>
+          <text x={64} y={154} fontSize="11" fill={T.secondary}>Table Module · Service Layer</text>
           <text x={48} y={180} fontSize="11" fontWeight="600" fill="#3FB97F">数据源 (4)</text>
-          <text x={64} y={198} fontSize="9" fill={T.secondary}>Table Data Gateway · Row Data Gateway</text>
-          <text x={64} y={214} fontSize="9" fill={T.secondary}>Active Record · Data Mapper</text>
+          <text x={64} y={198} fontSize="11" fill={T.secondary}>Table Data Gateway · Row Data Gateway</text>
+          <text x={64} y={214} fontSize="11" fill={T.secondary}>Active Record · Data Mapper</text>
           <text x={48} y={240} fontSize="11" fontWeight="600" fill="#E5B567">对象关系行为 (3)</text>
-          <text x={64} y={258} fontSize="9" fill={T.secondary}>Unit of Work · Identity Map · Lazy Load</text>
+          <text x={64} y={258} fontSize="11" fill={T.secondary}>Unit of Work · Identity Map · Lazy Load</text>
           <text x={48} y={284} fontSize="11" fontWeight="600" fill="#E5B567">对象关系结构 (6)</text>
-          <text x={64} y={302} fontSize="9" fill={T.secondary}>Identity Field · Foreign Key · Association Table</text>
-          <text x={64} y={318} fontSize="9" fill={T.secondary}>Dependent Mapping · Embedded Value · Serialized LOB</text>
+          <text x={64} y={302} fontSize="11" fill={T.secondary}>Identity Field · Foreign Key · Association Table</text>
+          <text x={64} y={318} fontSize="11" fill={T.secondary}>Dependent Mapping · Embedded Value · Serialized LOB</text>
           <text x={48} y={344} fontSize="11" fontWeight="600" fill="#E5B567">继承映射 (4)</text>
-          <text x={64} y={362} fontSize="9" fill={T.secondary}>Single Table · Class Table · Concrete Table · Inheritance Mappers</text>
+          <text x={64} y={362} fontSize="11" fill={T.secondary}>Single Table · Class Table · Concrete Table · Inheritance Mappers</text>
           {/* 右列 */}
           <text x={400} y={120} fontSize="11" fontWeight="600" fill="#6CB6FF">Web 表示 (7)</text>
-          <text x={416} y={138} fontSize="9" fill={T.secondary}>MVC · Page Controller · Front Controller</text>
-          <text x={416} y={154} fontSize="9" fill={T.secondary}>Template View · Transform View</text>
-          <text x={416} y={170} fontSize="9" fill={T.secondary}>Two Step View · Application Controller</text>
+          <text x={416} y={138} fontSize="11" fill={T.secondary}>MVC · Page Controller · Front Controller</text>
+          <text x={416} y={154} fontSize="11" fill={T.secondary}>Template View · Transform View</text>
+          <text x={416} y={170} fontSize="11" fill={T.secondary}>Two Step View · Application Controller</text>
           <text x={400} y={196} fontSize="11" fontWeight="600" fill="#6CB6FF">分布 (2)</text>
-          <text x={416} y={214} fontSize="9" fill={T.secondary}>Remote Facade · Data Transfer Object</text>
+          <text x={416} y={214} fontSize="11" fill={T.secondary}>Remote Facade · Data Transfer Object</text>
           <text x={400} y={240} fontSize="11" fontWeight="600" fill="#F47067">离线并发 (4)</text>
-          <text x={416} y={258} fontSize="9" fill={T.secondary}>Optimistic Lock · Pessimistic Lock</text>
-          <text x={416} y={274} fontSize="9" fill={T.secondary}>Coarse-Grained Lock · Implicit Lock</text>
+          <text x={416} y={258} fontSize="11" fill={T.secondary}>Optimistic Lock · Pessimistic Lock</text>
+          <text x={416} y={274} fontSize="11" fill={T.secondary}>Coarse-Grained Lock · Implicit Lock</text>
           <text x={400} y={300} fontSize="11" fontWeight="600" fill="#F47067">会话状态 (3)</text>
-          <text x={416} y={318} fontSize="9" fill={T.secondary}>Client Session · Server Session · Database Session</text>
+          <text x={416} y={318} fontSize="11" fill={T.secondary}>Client Session · Server Session · Database Session</text>
           <text x={400} y={344} fontSize="11" fontWeight="600" fill={T.accent}>基础 (5)</text>
-          <text x={416} y={362} fontSize="9" fill={T.secondary}>Gateway · Mapper · Layer Supertype</text>
-          <text x={416} y={378} fontSize="9" fill={T.secondary}>Separated Interface · Registry</text>
+          <text x={416} y={362} fontSize="11" fill={T.secondary}>Gateway · Mapper · Layer Supertype</text>
+          <text x={416} y={378} fontSize="11" fill={T.secondary}>Separated Interface · Registry</text>
           {/* 连接线 */}
           <line x1={300} y1={72} x2={128} y2={108} stroke={T.border} strokeWidth="1" />
           <line x1={420} y1={72} x2={480} y2={108} stroke={T.border} strokeWidth="1" />

@@ -289,7 +289,7 @@ export function TornReadDiagram() {
             x={x + w / 2}
             y={y + h / 2 + 4}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight={seg.kind === "torn" || seg.kind === "new" ? 700 : 600}
             fill={
               seg.kind === "torn"
@@ -555,7 +555,7 @@ export function TornReadDiagram() {
             x={SWEEP_RIGHT}
             y={ATM_PROD_Y + LANE_H + 18}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

@@ -184,7 +184,7 @@ export function InspectorBindingDiagram() {
           <text
             x={LEFT_X + 16}
             y={codeY + 188}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             私有字段，靠特性暴露给编辑器
@@ -203,7 +203,7 @@ export function InspectorBindingDiagram() {
             x={MID}
             y={dragFromY - 12}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -272,7 +272,7 @@ export function InspectorBindingDiagram() {
           <text
             x={slotX}
             y={slotY + slotH + 22}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             原本是空槽 None，拖进来后就指向 Enemy
@@ -304,7 +304,7 @@ export function InspectorBindingDiagram() {
             x={LEFT_X + LEFT_W / 2}
             y={CMP_Y + 44}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             编辑器里点一下就赋好
@@ -313,7 +313,7 @@ export function InspectorBindingDiagram() {
             x={LEFT_X + LEFT_W / 2}
             y={CMP_Y + 60}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             零运行时开销 · 清晰可见
@@ -344,7 +344,7 @@ export function InspectorBindingDiagram() {
             x={RIGHT_X + RIGHT_W / 2}
             y={CMP_Y + 44}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             运行时按名字搜整个场景
@@ -353,7 +353,7 @@ export function InspectorBindingDiagram() {
             x={RIGHT_X + RIGHT_W / 2}
             y={CMP_Y + 60}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             慢 · 找不到失活对象 · 易写错名

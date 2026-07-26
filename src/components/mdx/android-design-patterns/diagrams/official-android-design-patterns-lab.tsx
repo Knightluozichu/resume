@@ -26,6 +26,14 @@ export function AndroidDesignPatternsLab(props: Props) {
   const [changeRate, setChangeRate] = useState(4);
   const [lifecycleFault, setLifecycleFault] = useState(true);
   const [checked, setChecked] = useState(() => gates.map(() => false));
+  function resetExperiment() {
+    setSelected(0);
+    setTeamSize(6);
+    setChangeRate(4);
+    setLifecycleFault(true);
+    setChecked(() => gates.map(() => false));
+  }
+
   const result = useMemo(() => {
     const boundaryLoad = Math.round((teamSize * changeRate) / 3);
     const hiddenStateRisk = boundaryLoad + (lifecycleFault ? 18 : 3);
@@ -36,6 +44,7 @@ export function AndroidDesignPatternsLab(props: Props) {
     const active = patterns[selected] ?? patterns[0];
     return (
       <section className={shell + " p-4"} aria-label={unitTitle + "架构责任图"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
           2018架构责任图
         </p>
@@ -98,6 +107,7 @@ export function AndroidDesignPatternsLab(props: Props) {
   if (mode === "counterexample") {
     return (
       <section className={shell + " p-4"} aria-label={unitTitle + "反例实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
           单变量反例实验
         </p>
@@ -126,7 +136,7 @@ export function AndroidDesignPatternsLab(props: Props) {
             />
           </label>
         </div>
-        <label className="mt-4 flex min-h-10 items-center gap-2 text-xs font-semibold">
+        <label className="mt-4 flex min-h-11 items-center gap-2 text-xs font-semibold">
           <input
             type="checkbox"
             checked={lifecycleFault}
@@ -165,6 +175,7 @@ export function AndroidDesignPatternsLab(props: Props) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell + " p-4"} aria-label={unitTitle + "证据门"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
         独立证据门
       </p>

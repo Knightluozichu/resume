@@ -223,7 +223,7 @@ export function RaycastDiagram() {
             x={ORIGIN_X}
             y={RAY_Y - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
@@ -234,7 +234,7 @@ export function RaycastDiagram() {
             x={ORIGIN_X}
             y={RAY_Y + 28}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             direction →
@@ -257,7 +257,7 @@ export function RaycastDiagram() {
             x={IGNORE_X + IGNORE_W / 2}
             y={IGNORE_Y - 10}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             被忽略层
@@ -279,7 +279,7 @@ export function RaycastDiagram() {
             x={TARGET_X + TARGET_W / 2}
             y={TARGET_Y - 10}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -309,7 +309,7 @@ export function RaycastDiagram() {
               x={IGNORE_X + IGNORE_W / 2}
               y={IGNORE_Y + IGNORE_H + 18}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--text-secondary)"
             >
@@ -319,7 +319,7 @@ export function RaycastDiagram() {
               x={IGNORE_X + IGNORE_W / 2}
               y={IGNORE_Y + IGNORE_H + 32}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               射线穿过此层·不命中
@@ -340,7 +340,7 @@ export function RaycastDiagram() {
               x={HIT_X}
               y={TARGET_Y + TARGET_H + 18}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fontFamily="var(--font-mono)"
               fill="var(--warning)"
@@ -364,7 +364,7 @@ export function RaycastDiagram() {
               x={HIT_X - 20}
               y={RAY_Y - 12}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fontFamily="var(--font-mono)"
               fill="var(--success)"
@@ -400,7 +400,7 @@ export function RaycastDiagram() {
               x={CARD_X + 14}
               y={CARD_Y + 38}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               hit.point · hit.normal
@@ -409,7 +409,7 @@ export function RaycastDiagram() {
               x={CARD_X + 14}
               y={CARD_Y + 54}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               hit.distance · hit.collider
@@ -418,7 +418,7 @@ export function RaycastDiagram() {
               x={CARD_X + 14}
               y={CARD_Y + 70}
               textAnchor="start"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               命中点 / 法线 / 距离 / 命中谁

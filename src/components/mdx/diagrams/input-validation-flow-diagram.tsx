@@ -52,7 +52,7 @@ export function InputValidationFlowDiagram({ step = 4 }: InputValidationFlowDiag
 
           {/* 合法 → 成功 */}
           <line x1={cx + 88} y1={y2 + boxH / 2 + 8} x2={520} y2={y2 + boxH / 2 + 8} stroke={isActive(3) ? "var(--accent)" : "var(--border)"} strokeWidth="1.5" />
-          <text x={430} y={y2 + boxH / 2} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+          <text x={430} y={y2 + boxH / 2} fontSize="11" fill={"var(--accent)"} fontFamily="system-ui">
             是
           </text>
           <g opacity={isActive(3) ? 1 : 0.35}>
@@ -64,7 +64,7 @@ export function InputValidationFlowDiagram({ step = 4 }: InputValidationFlowDiag
 
           {/* 非法 → 清理重试 */}
           <line x1={cx - 88} y1={y2 + boxH / 2 + 8} x2={120} y2={y2 + boxH / 2 + 8} stroke={isActive(4) ? "rgb(229,181,103)" : "var(--border)"} strokeWidth="1.5" />
-          <text x={200} y={y2 + boxH / 2} fontSize="10" fill={"rgb(229,181,103)"} fontFamily="system-ui">
+          <text x={200} y={y2 + boxH / 2} fontSize="11" fill={"rgb(229,181,103)"} fontFamily="system-ui">
             否
           </text>
           <line x1={120} y1={y2 + boxH / 2 + 8} x2={120} y2={y4 + boxH / 2} stroke={isActive(4) ? "rgb(229,181,103)" : "var(--border)"} strokeWidth="1.5" strokeDasharray="5 3" />

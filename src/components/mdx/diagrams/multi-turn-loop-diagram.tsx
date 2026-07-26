@@ -408,7 +408,7 @@ export function MultiTurnLoopDiagram() {
             x={CTX_X + CTX_W / 2}
             y={CTX_TITLE_Y + 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每轮观察喂回，越滚越长
@@ -447,7 +447,7 @@ export function MultiTurnLoopDiagram() {
                 <text
                   x={CTX_X + 12}
                   y={y + 46}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {txt}

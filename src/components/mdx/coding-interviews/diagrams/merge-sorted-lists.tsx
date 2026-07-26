@@ -38,7 +38,7 @@ export function MergeHeadChoiceDiagram() {
           <path d="M187 142 C260 284 520 298 620 270" fill="none" stroke="var(--success)" strokeWidth="3" markerEnd="url(#merge-head-arrow)" />
           <rect x="620" y="238" width="170" height="68" rx="5" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" />
           <text x="705" y="265" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">merged head = 1</text>
-          <text x="705" y="288" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">next = Merge(3→5, 2→4→6)</text>
+          <text x="705" y="288" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">next = Merge(3→5, 2→4→6)</text>
           <text x="430" y="360" textAnchor="middle" fontSize="11.5" fontWeight="700" fill="var(--accent)">选中节点之外的两个后缀仍各自有序</text>
         </svg>
       </div>

@@ -165,7 +165,7 @@ export function PaeK2TreeMatrixLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="flex gap-2" role="group" aria-label="k2-tree 递归层级">{[1, 2].map((item) => <button key={item} type="button" onClick={() => setLevel(item)} className={"min-h-10 border px-4 text-sm font-semibold " + (level === item ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>level {item}</button>)}</div>
+        <div className="flex gap-2" role="group" aria-label="k2-tree 递归层级">{[1, 2].map((item) => <button key={item} type="button" onClick={() => setLevel(item)} className={"min-h-11 border px-4 text-sm font-semibold " + (level === item ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>level {item}</button>)}</div>
         <div className="mx-auto mt-4 grid max-w-md grid-cols-8 gap-px bg-border p-px">{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; return <span key={index} className={"aspect-square " + (graphEdges.has(`${row},${column}`) ? "bg-accent" : "bg-background")} />; })}</div>
         <div className="mt-3 border border-success bg-success/10 p-3 text-xs text-secondary">把矩阵按 {groupSize}×{groupSize} blocks 扫描，非空写1、空写0：<span className="ml-2 font-mono font-semibold text-success">{groups.join("")}</span></div>
       </div>

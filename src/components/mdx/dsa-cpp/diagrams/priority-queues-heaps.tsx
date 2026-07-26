@@ -25,7 +25,7 @@ export function DsaPriorityQueueModelLab() {
               type="button"
               onClick={() => setMode(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (mode === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -80,7 +80,7 @@ export function DsaSimplePriorityQueueMatrix() {
               type="button"
               onClick={() => setOperation(candidate)}
               className={
-                "min-h-10 border px-1 text-xs font-semibold " +
+                "min-h-11 border px-1 text-xs font-semibold " +
                 (operation === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -198,7 +198,7 @@ export function DsaHeapPercolationLab() {
               type="button"
               onClick={() => selectOperation(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (operation === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -343,7 +343,7 @@ export function DsaMeldableHeapLab() {
               type="button"
               onClick={() => setKind(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (kind === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -435,7 +435,7 @@ export function DsaStdPriorityQueueLab() {
               type="button"
               onClick={() => setMode(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (mode === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")

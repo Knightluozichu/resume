@@ -78,7 +78,7 @@ export function VariadicTemplateDiagram({
             <text
               x="16"
               y="22"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               fontFamily="monospace"
             >
@@ -87,7 +87,7 @@ export function VariadicTemplateDiagram({
             <text
               x="16"
               y="42"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -96,7 +96,7 @@ export function VariadicTemplateDiagram({
             <text
               x="16"
               y="58"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -144,7 +144,7 @@ export function VariadicTemplateDiagram({
                     <text
                       x="86"
                       y={y + 18}
-                      fontSize="9"
+                      fontSize="11"
                       fill={secondary}
                       fontFamily="monospace"
                     >
@@ -153,7 +153,7 @@ export function VariadicTemplateDiagram({
                     <text
                       x="130"
                       y={y + 18}
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="600"
                       fill={isActive ? argColors[i] : secondary}
                       fontFamily="monospace"
@@ -169,7 +169,7 @@ export function VariadicTemplateDiagram({
                     <text
                       x="220"
                       y={y + 18}
-                      fontSize="9"
+                      fontSize="11"
                       fill={secondary}
                       fontFamily="monospace"
                     >
@@ -182,7 +182,7 @@ export function VariadicTemplateDiagram({
                             key={j}
                             x={268 + j * 80}
                             y={y + 18}
-                            fontSize="10"
+                            fontSize="11"
                             fill={
                               isActive
                                 ? argColors[i + 1 + j] || accent
@@ -196,7 +196,7 @@ export function VariadicTemplateDiagram({
                         <text
                           x={270 + args[i + 1].length * 70}
                           y={y + 18}
-                          fontSize="9"
+                          fontSize="11"
                           fill={secondary}
                           fontFamily="monospace"
                         >
@@ -208,7 +208,7 @@ export function VariadicTemplateDiagram({
                         <text
                           x="268"
                           y={y + 18}
-                          fontSize="10"
+                          fontSize="11"
                           fill={red}
                           fontFamily="monospace"
                         >
@@ -217,7 +217,7 @@ export function VariadicTemplateDiagram({
                         <text
                           x="310"
                           y={y + 18}
-                          fontSize="9"
+                          fontSize="11"
                           fill={secondary}
                           fontFamily="monospace"
                         >
@@ -233,7 +233,7 @@ export function VariadicTemplateDiagram({
                   <text
                     x={w - 140}
                     y={y + 18}
-                    fontSize="9"
+                    fontSize="11"
                     fill={secondary}
                     fontFamily="monospace"
                   >
@@ -245,7 +245,7 @@ export function VariadicTemplateDiagram({
                 <text
                   x="86"
                   y={y + 36}
-                  fontSize="9"
+                  fontSize="11"
                   fill={isActive ? primary : secondary}
                   fontFamily="monospace"
                 >
@@ -284,7 +284,7 @@ export function VariadicTemplateDiagram({
               <text
                 x={cx - 70}
                 y="30"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
                 fontFamily="monospace"

@@ -222,7 +222,7 @@ export function WorkStealingDiagram() {
             x={cellX(0) - 8}
             y={cellY(0) + CELL_H / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -232,7 +232,7 @@ export function WorkStealingDiagram() {
             x={cellX(0) - 8}
             y={cellY(2) + CELL_H / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >

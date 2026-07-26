@@ -29,7 +29,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             stroke="var(--accent)"
             strokeWidth="1.5"
           />
-          <text x="56" y="124" fontSize="10" fill="var(--text-primary)">
+          <text x="56" y="124" fontSize="11" fill="var(--text-primary)">
             视锥
           </text>
 
@@ -43,7 +43,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             fill="var(--text-secondary)"
             opacity="0.85"
           />
-          <text x="212" y="40" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="212" y="40" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             Occluder
           </text>
 
@@ -57,7 +57,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             fill="var(--accent)"
             opacity="0.75"
           />
-          <text x="164" y="128" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="164" y="128" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             可见
           </text>
 
@@ -78,7 +78,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             x="308"
             y="120"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={culled ? "var(--text-secondary)" : "var(--text-primary)"}
           >
             {culled ? "已剔除" : "仍绘制!"}
@@ -94,7 +94,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             fill="var(--accent)"
             opacity="0.75"
           />
-          <text x="424" y="124" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="424" y="124" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             可见
           </text>
 
@@ -108,7 +108,7 @@ export function OcclusionCullingDiagram({ mode = "off" }: Props) {
             fill="var(--bg)"
             stroke="var(--border)"
           />
-          <text x="320" y="216" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="216" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             {mode === "off"
               ? "仅 Frustum Culling：视锥内但被挡的物体仍会 Draw → Overdraw / Vertex 浪费"
               : "Occlusion Culling 烘焙后：被 Occluder 挡住的 Renderer 跳过 Draw Call"}

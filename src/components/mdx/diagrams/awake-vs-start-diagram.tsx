@@ -215,7 +215,7 @@ export function AwakeVsStartDiagram() {
             x={(COL0_X + COL_W + COL1_X) / 2}
             y={ROW_TOP + (ROW_GAP * OBJECTS.length) / 2 - 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             全场 Awake 都完了

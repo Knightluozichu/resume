@@ -132,7 +132,7 @@ function Divisor0({ y }: { y: number }) {
         x="60"
         y="66"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         顶点
@@ -185,7 +185,7 @@ function Divisor0({ y }: { y: number }) {
         x="55"
         y="142"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         属性表
@@ -194,7 +194,7 @@ function Divisor0({ y }: { y: number }) {
         x="320"
         y="180"
         textAnchor="middle"
-        fontSize="10.5"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         每处理一个顶点 → 往下读一条（4 个顶点读 4 条）
@@ -269,7 +269,7 @@ function Divisor1({ y }: { y: number }) {
               x={x0 + (instW - 18) / 2}
               y="98"
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               实例 {ins}（4 个顶点）
@@ -281,7 +281,7 @@ function Divisor1({ y }: { y: number }) {
         x="60"
         y="66"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         实例
@@ -337,7 +337,7 @@ function Divisor1({ y }: { y: number }) {
         x="55"
         y="164"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         实例化数组
@@ -346,7 +346,7 @@ function Divisor1({ y }: { y: number }) {
         x="320"
         y="200"
         textAnchor="middle"
-        fontSize="10.5"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         每开始一个新实例才往下读一条（3 个实例只读 3 条）

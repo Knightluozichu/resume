@@ -71,13 +71,13 @@ export function StringFunctionTableDiagram() {
                 <text x={40} y={y + 22} fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">
                   {row.fn}
                 </text>
-                <text x={200} y={y + 22} fontSize="10" fill={secondary} fontFamily="monospace">
+                <text x={200} y={y + 22} fontSize="11" fill={secondary} fontFamily="monospace">
                   {row.ret}
                 </text>
-                <text x={300} y={y + 18} fontSize="10" fill={secondary}>
+                <text x={300} y={y + 18} fontSize="11" fill={secondary}>
                   {row.desc}
                 </text>
-                <text x={300} y={y + 34} fontSize="9" fill={accent} fontFamily="monospace">
+                <text x={300} y={y + 34} fontSize="11" fill={accent} fontFamily="monospace">
                   {row.ex}
                 </text>
               </g>

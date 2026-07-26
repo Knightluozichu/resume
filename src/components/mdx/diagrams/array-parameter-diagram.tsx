@@ -82,7 +82,7 @@ export function ArrayParameterDiagram() {
           <text x={col1 + 12} y={topY + 114} fontSize="11" fill={primary} fontFamily="monospace">
             sizeof(arr) = 20
           </text>
-          <text x={col1 + 12} y={topY + 136} fontSize="10" fill={secondary}>
+          <text x={col1 + 12} y={topY + 136} fontSize="11" fill={secondary}>
             (5 × 4 字节 = 20)
           </text>
 
@@ -90,7 +90,7 @@ export function ArrayParameterDiagram() {
           <text x={col1 + 12} y={topY + 164} fontSize="11" fill={primary} fontFamily="monospace">
             sizeof(arr)/sizeof(arr[0])
           </text>
-          <text x={col1 + 12} y={topY + 186} fontSize="10" fill={secondary}>
+          <text x={col1 + 12} y={topY + 186} fontSize="11" fill={secondary}>
             = 20/4 = 5 ✓ 长度可知
           </text>
 
@@ -108,16 +108,16 @@ export function ArrayParameterDiagram() {
           {/* 四种等价声明 */}
           <rect x={col2 + 8} y={topY + 50} width={colW - 16} height={80} rx="6" fill={bg} stroke={border} strokeWidth="1" />
 
-          <text x={col2 + 16} y={topY + 68} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={col2 + 16} y={topY + 68} fontSize="11" fill={primary} fontFamily="monospace">
             void f(int arr[10]);
           </text>
-          <text x={col2 + 16} y={topY + 84} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={col2 + 16} y={topY + 84} fontSize="11" fill={primary} fontFamily="monospace">
             void f(int arr[]);
           </text>
-          <text x={col2 + 16} y={topY + 100} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={col2 + 16} y={topY + 100} fontSize="11" fill={primary} fontFamily="monospace">
             void f(int arr[5]);
           </text>
-          <text x={col2 + 16} y={topY + 116} fontSize="10" fontWeight="700" fill={accent} fontFamily="monospace">
+          <text x={col2 + 16} y={topY + 116} fontSize="11" fontWeight="700" fill={accent} fontFamily="monospace">
             void f(int *arr);
           </text>
 
@@ -134,7 +134,7 @@ export function ArrayParameterDiagram() {
 
           {/* 指针指向首元素 */}
           <line x1={col2 + 90} y1={topY + 160} x2={col2 + 58} y2={topY + 88} stroke={accent} strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrowHeadAccent)" />
-          <text x={col2 + 52} y={topY + 108} fontSize="9" fill={accent}>
+          <text x={col2 + 52} y={topY + 108} fontSize="11" fill={accent}>
             指向 arr[0]
           </text>
 
@@ -149,23 +149,23 @@ export function ArrayParameterDiagram() {
           <text x={col3 + 12} y={topY + 42} fontSize="11" fill={secondary} fontFamily="monospace">
             sizeof(arr) = ?
           </text>
-          <text x={col3 + 12} y={topY + 64} fontSize="10" fill={accent} fontWeight="600" fontFamily="monospace">
+          <text x={col3 + 12} y={topY + 64} fontSize="11" fill={accent} fontWeight="600" fontFamily="monospace">
             = 8 （64 位上指针大小）
           </text>
-          <text x={col3 + 12} y={topY + 82} fontSize="10" fill={secondary}>
+          <text x={col3 + 12} y={topY + 82} fontSize="11" fill={secondary}>
             不是 20！完全不知道长度
           </text>
 
           {/* 解决方案 */}
           <rect x={col3 + 8} y={topY + 96} width={colW - 16} height={66} rx="6" fill={accent} opacity={0.08} stroke={accent} strokeWidth="1" />
 
-          <text x={col3 + 16} y={topY + 114} fontSize="10" fontWeight="700" fill={accent}>
+          <text x={col3 + 16} y={topY + 114} fontSize="11" fontWeight="700" fill={accent}>
             必须单独传长度：
           </text>
-          <text x={col3 + 16} y={topY + 134} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={col3 + 16} y={topY + 134} fontSize="11" fill={primary} fontFamily="monospace">
             void f(int *arr, int n)
           </text>
-          <text x={col3 + 16} y={topY + 152} fontSize="10" fill={secondary}>
+          <text x={col3 + 16} y={topY + 152} fontSize="11" fill={secondary}>
             或传首/尾后指针（begin/end）
           </text>
 

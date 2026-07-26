@@ -97,7 +97,7 @@ export function Poeaa24Ch01DeploymentDiagram() {
                 x={node.x + NODE_W / 2}
                 y={NODE_Y + 40}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={T.secondary}
               >
                 {node.en}
@@ -116,7 +116,7 @@ export function Poeaa24Ch01DeploymentDiagram() {
                 x={node.x + NODE_W / 2}
                 y={NODE_Y + 64}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={node.color}
               >
@@ -128,7 +128,7 @@ export function Poeaa24Ch01DeploymentDiagram() {
                   key={item}
                   x={node.x + 16}
                   y={NODE_Y + 84 + j * 14}
-                  fontSize="10"
+                  fontSize="11"
                   fill={T.secondary}
                 >
                   · {item}

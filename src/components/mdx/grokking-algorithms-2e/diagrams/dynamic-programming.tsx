@@ -115,13 +115,13 @@ export function KnapsackGridDiagram() {
           {headers.map((header, index) => (
             <g key={header}>
               <rect x={left + index * cellWidth} y="48" width={cellWidth} height="36" fill={accent} fillOpacity="0.08" stroke={border} />
-              <text x={left + index * cellWidth + cellWidth / 2} y="70" textAnchor="middle" fontSize="10" fontWeight="700" fill={primary}>{header}</text>
+              <text x={left + index * cellWidth + cellWidth / 2} y="70" textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{header}</text>
             </g>
           ))}
           {rows.map((row, rowIndex) => (
             <g key={row.item}>
               <rect x="34" y={top + rowIndex * cellHeight} width={left - 34} height={cellHeight} fill={row.tone} fillOpacity="0.07" stroke={border} />
-              <text x="130" y={top + rowIndex * cellHeight + 36} textAnchor="middle" fontSize="10" fontWeight="700" fill={primary}>{row.item}</text>
+              <text x="130" y={top + rowIndex * cellHeight + 36} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{row.item}</text>
               {row.values.map((value, columnIndex) => {
                 const isGoal = rowIndex === 2 && columnIndex === 3;
                 const x = left + columnIndex * cellWidth;
@@ -130,15 +130,15 @@ export function KnapsackGridDiagram() {
                   <g key={columnIndex}>
                     <rect x={x} y={y} width={cellWidth} height={cellHeight} fill={isGoal ? success : "var(--bg)"} fillOpacity={isGoal ? 0.15 : 1} stroke={isGoal ? success : border} strokeWidth={isGoal ? 2 : 1} />
                     <text x={x + cellWidth / 2} y={y + 29} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{"$"}{value}</text>
-                    {isGoal && <text x={x + cellWidth / 2} y={y + 46} textAnchor="middle" fontSize="8.5" fill={success}>吉他+笔记本</text>}
+                    {isGoal && <text x={x + cellWidth / 2} y={y + 46} textAnchor="middle" fontSize="11" fill={success}>吉他+笔记本</text>}
                   </g>
                 );
               })}
             </g>
           ))}
           <rect x="82" y="292" width="596" height="44" rx="4" fill={success} fillOpacity="0.06" stroke={success} strokeOpacity="0.55" />
-          <text x="380" y="310" textAnchor="middle" fontSize="10.5" fill={primary}>右下角比较：不选笔记本得$3000；选笔记本得$2000+$1500=$3500。</text>
-          <text x="380" y="325" textAnchor="middle" fontSize="9" fill={secondary}>每个单元格只依赖上一行，确保每件物品最多使用一次。</text>
+          <text x="380" y="310" textAnchor="middle" fontSize="11" fill={primary}>右下角比较：不选笔记本得$3000；选笔记本得$2000+$1500=$3500。</text>
+          <text x="380" y="325" textAnchor="middle" fontSize="11" fill={secondary}>每个单元格只依赖上一行，确保每件物品最多使用一次。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -183,7 +183,7 @@ export function StringMatchGridDiagram() {
               <text x={94 + index * 64} y="211" textAnchor="middle" fontSize="14" fontWeight="700" fill={primary}>{char}</text>
             </g>
           ))}
-          <text x="198" y="264" textAnchor="middle" fontSize="10.5" fontWeight="700" fill={success}>连续匹配 ISH，长度3</text>
+          <text x="198" y="264" textAnchor="middle" fontSize="11" fontWeight="700" fill={success}>连续匹配 ISH，长度3</text>
 
           <rect x="400" y="54" width="324" height="238" fill="var(--bg)" stroke={border} />
           <text x="562" y="79" textAnchor="middle" fontSize="11" fontWeight="700" fill={warning}>最长公共子序列：FOSH vs FISH</text>
@@ -205,10 +205,10 @@ export function StringMatchGridDiagram() {
               </g>
             );
           })}
-          <text x="562" y="264" textAnchor="middle" fontSize="10.5" fontWeight="700" fill={accent}>跳过O与I，保留 F-S-H，长度3</text>
+          <text x="562" y="264" textAnchor="middle" fontSize="11" fontWeight="700" fill={accent}>跳过O与I，保留 F-S-H，长度3</text>
 
           <rect x="84" y="316" width="592" height="34" rx="4" fill={warning} fillOpacity="0.06" stroke={warning} strokeOpacity="0.55" />
-          <text x="380" y="337" textAnchor="middle" fontSize="10" fill={primary}>子串不匹配时归零；子序列不匹配时取上方与左方的较大值。</text>
+          <text x="380" y="337" textAnchor="middle" fontSize="11" fill={primary}>子串不匹配时归零；子序列不匹配时取上方与左方的较大值。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

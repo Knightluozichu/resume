@@ -25,35 +25,35 @@ export function JvtJvmArchitectureDiagram() {
           <text x="40" y="56" fontSize="13" fontWeight="600" fill="var(--warning)">线程私有</text>
           <rect x="40" y="64" width="200" height="100" rx="8" fill="var(--warning)" fillOpacity="0.10" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="140" y="84" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">程序计数器 PC</text>
-          <text x="140" y="102" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">记录字节码行号</text>
-          <text x="140" y="118" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">线程切换可恢复</text>
-          <text x="140" y="140" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">无 OOM 风险</text>
+          <text x="140" y="102" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">记录字节码行号</text>
+          <text x="140" y="118" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">线程切换可恢复</text>
+          <text x="140" y="140" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">无 OOM 风险</text>
 
           <rect x="250" y="64" width="200" height="100" rx="8" fill="var(--warning)" fillOpacity="0.10" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="350" y="84" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">虚拟机栈 VM Stack</text>
-          <text x="350" y="102" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">方法调用=栈帧压栈</text>
-          <text x="350" y="118" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">局部变量表/操作数栈</text>
-          <text x="350" y="140" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">StackOverflow / OOM</text>
+          <text x="350" y="102" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">方法调用=栈帧压栈</text>
+          <text x="350" y="118" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">局部变量表/操作数栈</text>
+          <text x="350" y="140" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">StackOverflow / OOM</text>
 
           <rect x="460" y="64" width="200" height="100" rx="8" fill="var(--warning)" fillOpacity="0.10" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="560" y="84" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">本地方法栈</text>
-          <text x="560" y="102" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">为 native 方法服务</text>
-          <text x="560" y="118" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">与 VM Stack 类似</text>
-          <text x="560" y="140" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">-Xss 调栈大小</text>
+          <text x="560" y="102" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">为 native 方法服务</text>
+          <text x="560" y="118" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">与 VM Stack 类似</text>
+          <text x="560" y="140" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">-Xss 调栈大小</text>
 
           {/* 运行时数据区：线程共享 */}
           <text x="40" y="190" fontSize="13" fontWeight="600" fill="var(--danger)">线程共享</text>
           <rect x="40" y="198" width="310" height="100" rx="8" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="195" y="218" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--danger)">堆 Heap（GC 主战场）</text>
-          <text x="195" y="236" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">新生代：Eden + S0 + S1（8:1:1）</text>
-          <text x="195" y="252" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">老年代：长期存活对象</text>
-          <text x="195" y="274" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">OOM: Java heap space</text>
+          <text x="195" y="236" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">新生代：Eden + S0 + S1（8:1:1）</text>
+          <text x="195" y="252" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">老年代：长期存活对象</text>
+          <text x="195" y="274" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">OOM: Java heap space</text>
 
           <rect x="360" y="198" width="300" height="100" rx="8" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="510" y="218" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--danger)">方法区（元空间 Metaspace）</text>
-          <text x="510" y="236" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">类信息/常量/静态变量</text>
-          <text x="510" y="252" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">JDK8 移到本地内存</text>
-          <text x="510" y="274" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">OOM: Metaspace</text>
+          <text x="510" y="236" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">类信息/常量/静态变量</text>
+          <text x="510" y="252" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">JDK8 移到本地内存</text>
+          <text x="510" y="274" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">OOM: Metaspace</text>
 
           {/* 类加载双亲委派 */}
           <text x="40" y="324" fontSize="13" fontWeight="600" fill="var(--accent)">双亲委派模型（自顶向下委派）</text>

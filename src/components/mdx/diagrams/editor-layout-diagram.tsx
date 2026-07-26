@@ -214,7 +214,7 @@ export function EditorLayoutDiagram() {
             x={leftX + SIDE_W / 2}
             y={GRID_BOTTOM - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             场景里有谁
@@ -249,7 +249,7 @@ export function EditorLayoutDiagram() {
             x={sceneX + sgW / 2}
             y={sceneGameY + centerTopH - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             导演摆位
@@ -271,7 +271,7 @@ export function EditorLayoutDiagram() {
             x={gameX + sgW / 2}
             y={sceneGameY + centerTopH - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             玩家看到的
@@ -301,7 +301,7 @@ export function EditorLayoutDiagram() {
           <text
             x={centerX + 16}
             y={projectY + projectH - 14}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             模型 / 贴图 / 脚本 / 音频 …… 都堆在这里
@@ -337,7 +337,7 @@ export function EditorLayoutDiagram() {
             x={rightX + SIDE_W / 2}
             y={GRID_BOTTOM - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             选中谁就显示谁的属性

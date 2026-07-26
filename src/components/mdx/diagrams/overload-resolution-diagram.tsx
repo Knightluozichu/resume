@@ -134,7 +134,7 @@ export function OverloadResolutionDiagram() {
           <text x={cx + 14} y={s1y + boxH + 18} fontSize="11" fill={secondary}>
             筛选：形参数量对得上吗？
           </text>
-          <text x={cx - 10} y={s1y + boxH + 36} fontSize="10" fill={secondary}>
+          <text x={cx - 10} y={s1y + boxH + 36} fontSize="11" fill={secondary}>
             (加默认参数后)
           </text>
 
@@ -217,7 +217,7 @@ export function OverloadResolutionDiagram() {
           <text x={cx + 14} y={s2y + boxH + 18} fontSize="11" fill={secondary}>
             筛选：谁的隐式转换最少？
           </text>
-          <text x={cx - 10} y={s2y + boxH + 36} fontSize="10" fill={secondary}>
+          <text x={cx - 10} y={s2y + boxH + 36} fontSize="11" fill={secondary}>
             (哪个匹配得最&quot;近&quot;)
           </text>
 

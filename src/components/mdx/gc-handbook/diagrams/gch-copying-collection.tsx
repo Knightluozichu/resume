@@ -55,7 +55,7 @@ export function GchCopyingCollectionDiagram() {
             x="100"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -87,7 +87,7 @@ export function GchCopyingCollectionDiagram() {
             x="70"
             y="113"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             A
@@ -106,7 +106,7 @@ export function GchCopyingCollectionDiagram() {
             x="102"
             y="113"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             B
@@ -125,7 +125,7 @@ export function GchCopyingCollectionDiagram() {
             x="70"
             y="135"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             C
@@ -144,7 +144,7 @@ export function GchCopyingCollectionDiagram() {
             x="102"
             y="135"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             D
@@ -163,7 +163,7 @@ export function GchCopyingCollectionDiagram() {
             x="70"
             y="157"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             E
@@ -173,7 +173,7 @@ export function GchCopyingCollectionDiagram() {
             x="100"
             y="188"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             A→C, A→D
@@ -182,7 +182,7 @@ export function GchCopyingCollectionDiagram() {
             x="100"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             C→E
@@ -191,7 +191,7 @@ export function GchCopyingCollectionDiagram() {
             x="100"
             y="220"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             B,D 不可达 = 垃圾
@@ -200,7 +200,7 @@ export function GchCopyingCollectionDiagram() {
             x="100"
             y="238"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             scan=free=起点
@@ -211,7 +211,7 @@ export function GchCopyingCollectionDiagram() {
             x="250"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -233,7 +233,7 @@ export function GchCopyingCollectionDiagram() {
             x="260"
             y="170"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             等待复制
@@ -253,7 +253,7 @@ export function GchCopyingCollectionDiagram() {
             x="370"
             y="180"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Cheney BFS
@@ -287,7 +287,7 @@ export function GchCopyingCollectionDiagram() {
             x="470"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-tertiary)"
           >
@@ -308,7 +308,7 @@ export function GchCopyingCollectionDiagram() {
             x="480"
             y="170"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             整体可复用
@@ -319,7 +319,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -350,7 +350,7 @@ export function GchCopyingCollectionDiagram() {
             x="590"
             y="113"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             A&apos;
@@ -369,7 +369,7 @@ export function GchCopyingCollectionDiagram() {
             x="622"
             y="113"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             C&apos;
@@ -388,7 +388,7 @@ export function GchCopyingCollectionDiagram() {
             x="590"
             y="135"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             E&apos;
@@ -398,7 +398,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="158"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             A&apos;→C&apos;, A&apos;→D&apos;
@@ -407,7 +407,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="172"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             C&apos;→E&apos;
@@ -416,7 +416,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             无碎片
@@ -425,7 +425,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="210"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             引用自动更新
@@ -434,7 +434,7 @@ export function GchCopyingCollectionDiagram() {
             x="620"
             y="228"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             B,D 被丢弃
@@ -476,45 +476,45 @@ export function GchCopyingCollectionDiagram() {
           <text
             x="60"
             y="348"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
             1. scan = free = To区起点
           </text>
-          <text x="60" y="362" fontSize="9" fill="var(--text-secondary)">
+          <text x="60" y="362" fontSize="11" fill="var(--text-secondary)">
             从根集合复制存活对象到To区，free指针推进
           </text>
 
           <text
             x="60"
             y="382"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
             2. while scan &lt; free:
           </text>
-          <text x="60" y="396" fontSize="9" fill="var(--text-secondary)">
+          <text x="60" y="396" fontSize="11" fill="var(--text-secondary)">
             取出scan处对象，将其引用的未复制对象复制到To区（free推进）
           </text>
-          <text x="60" y="410" fontSize="9" fill="var(--text-secondary)">
+          <text x="60" y="410" fontSize="11" fill="var(--text-secondary)">
             更新scan处对象的引用指向To区新地址；scan推进
           </text>
 
           <text
             x="400"
             y="382"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
             3. scan == free → 完成
           </text>
-          <text x="400" y="396" fontSize="9" fill="var(--text-secondary)">
+          <text x="400" y="396" fontSize="11" fill="var(--text-secondary)">
             所有存活对象已复制且引用已更新
           </text>
-          <text x="400" y="410" fontSize="9" fill="var(--text-secondary)">
+          <text x="400" y="410" fontSize="11" fill="var(--text-secondary)">
             交换From/To角色，原From区整体回收
           </text>
         </svg>

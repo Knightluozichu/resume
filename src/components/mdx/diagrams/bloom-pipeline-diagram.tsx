@@ -56,7 +56,7 @@ function Thumb({
         x={x + w / 2}
         y={y + h + 13}
         textAnchor="middle"
-        fontSize="8.5"
+        fontSize="11"
         fill={active ? "var(--accent)" : "var(--text-secondary)"}
       >
         {label}
@@ -115,7 +115,7 @@ export function BloomPipelineDiagram({ step }: { step: BloomStep }) {
             x={tx1 + 40}
             y={ty - 6}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill={step === 1 ? "var(--accent)" : "var(--text-secondary)"}
           >
             MRT 一次出两图
@@ -164,7 +164,7 @@ export function BloomPipelineDiagram({ step }: { step: BloomStep }) {
             x={tx2 + 40}
             y={ty - 6}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill={step === 2 ? "var(--accent)" : "var(--text-secondary)"}
           >
             水平方向
@@ -218,7 +218,7 @@ export function BloomPipelineDiagram({ step }: { step: BloomStep }) {
             x={tx3 + 40}
             y={ty - 6}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill={step === 3 ? "var(--accent)" : "var(--text-secondary)"}
           >
             垂直方向
@@ -280,7 +280,7 @@ export function BloomPipelineDiagram({ step }: { step: BloomStep }) {
             x={tx4 + 40}
             y={ty - 6}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill={step === 4 ? "var(--success)" : "var(--text-secondary)"}
           >
             加回原图 + tonemap

@@ -38,63 +38,63 @@ export function PercentileStatisticsDiagram() {
 
           {/* X axis */}
           <line x1="44" y1="198" x2="370" y2="198" stroke="var(--border)" strokeWidth="1" />
-          <text x="207" y="222" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="207" y="222" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             帧耗时 (ms) →
           </text>
 
           {/* Mean marker */}
           <line x1="145" y1="40" x2="145" y2="196" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4,3" />
-          <text x="145" y="230" textAnchor="middle" fontSize="9" fill="var(--danger)">
+          <text x="145" y="230" textAnchor="middle" fontSize="11" fill="var(--danger)">
             均值 16.2ms
           </text>
 
           {/* Median marker */}
           <line x1="117" y1="40" x2="117" y2="196" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="117" y="246" textAnchor="middle" fontSize="9" fill="var(--accent)">
+          <text x="117" y="246" textAnchor="middle" fontSize="11" fill="var(--accent)">
             中位数 12.0ms
           </text>
 
           {/* P95 marker */}
           <line x1="257" y1="40" x2="257" y2="196" stroke="var(--warning)" strokeWidth="1.5" strokeDasharray="4,3" />
-          <text x="257" y="230" textAnchor="middle" fontSize="9" fill="var(--warning)">
+          <text x="257" y="230" textAnchor="middle" fontSize="11" fill="var(--warning)">
             P95 38ms
           </text>
 
           {/* StdDev bracket */}
-          <text x="32" y="180" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="32" y="180" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             σ=8.7
           </text>
 
           {/* Right side: four metric cards */}
           <rect x="388" y="36" width="228" height="36" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1" />
-          <text x="396" y="56" fontSize="10" fontWeight="600" fill="var(--danger)">
+          <text x="396" y="56" fontSize="11" fontWeight="600" fill="var(--danger)">
             均值 = 总和÷帧数
           </text>
-          <text x="396" y="68" fontSize="9" fill="var(--text-secondary)">
+          <text x="396" y="68" fontSize="11" fill="var(--text-secondary)">
             对极端值敏感 — 1 帧 300ms 能拉高所有
           </text>
 
           <rect x="388" y="80" width="228" height="36" rx="4" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1" />
-          <text x="396" y="100" fontSize="10" fontWeight="600" fill="var(--accent)">
+          <text x="396" y="100" fontSize="11" fontWeight="600" fill="var(--accent)">
             中位数 = 排序第 50%
           </text>
-          <text x="396" y="112" fontSize="9" fill="var(--text-secondary)">
+          <text x="396" y="112" fontSize="11" fill="var(--text-secondary)">
             不受极端值干扰 — 典型帧体验
           </text>
 
           <rect x="388" y="124" width="228" height="36" rx="4" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1" />
-          <text x="396" y="144" fontSize="10" fontWeight="600" fill="var(--warning)">
+          <text x="396" y="144" fontSize="11" fontWeight="600" fill="var(--warning)">
             P95 = 排序第 95%
           </text>
-          <text x="396" y="156" fontSize="9" fill="var(--text-secondary)">
+          <text x="396" y="156" fontSize="11" fill="var(--text-secondary)">
             最差 5% 帧 — 捕捉间歇卡顿
           </text>
 
           <rect x="388" y="168" width="228" height="36" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="396" y="188" fontSize="10" fontWeight="600" fill="var(--text-primary)">
+          <text x="396" y="188" fontSize="11" fontWeight="600" fill="var(--text-primary)">
             标准差 σ = 离散程度
           </text>
-          <text x="396" y="200" fontSize="9" fill="var(--text-secondary)">
+          <text x="396" y="200" fontSize="11" fill="var(--text-secondary)">
             σ 大 = 帧率波动剧烈 — 优化不完整
           </text>
 

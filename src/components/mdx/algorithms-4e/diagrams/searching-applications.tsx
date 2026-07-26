@@ -34,7 +34,7 @@ export function Algs4SetFilterLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 border border-border" role="group" aria-label="set client">
           {(["dedup", "allowlist", "blocklist"] as FilterMode[]).map((option) => (
-            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
+            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
           ))}
         </div>
         <label className="mt-4 block text-sm font-semibold text-primary">
@@ -83,7 +83,7 @@ export function Algs4SetAlgebraLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 border border-border" role="group" aria-label="set operation">
           {(["union", "intersection", "difference"] as SetOperation[]).map((option) => (
-            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
+            <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>
           ))}
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -178,7 +178,7 @@ export function Algs4BidirectionalIndexLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 border border-border" role="group" aria-label="index direction">
-          {(["movie → people", "person → movies"] as IndexDirection[]).map((option) => <button key={option} type="button" onClick={() => { setDirection(option); setQueryIndex(0); }} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (direction === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>)}
+          {(["movie → people", "person → movies"] as IndexDirection[]).map((option) => <button key={option} type="button" onClick={() => { setDirection(option); setQueryIndex(0); }} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (direction === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>)}
         </div>
         <label className="mt-4 block text-sm font-semibold text-primary">query = {query}<input className="mt-2 w-full accent-current" type="range" min="0" max={Math.max(0, options.length - 1)} value={queryIndex} onChange={(event) => setQueryIndex(Number(event.target.value))} /></label>
         <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">

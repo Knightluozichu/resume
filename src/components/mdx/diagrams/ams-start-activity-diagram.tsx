@@ -488,7 +488,7 @@ export function AmsStartActivityDiagram() {
             <text
               x={C_AMS.cx + 12}
               y={(FORK_EDGE.y1 + FORK_EDGE.y2) / 2 + 4}
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >
@@ -591,7 +591,7 @@ export function AmsStartActivityDiagram() {
                 x={n.x + n.w / 2}
                 y={n.y + n.h / 2 + 14}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -617,7 +617,7 @@ export function AmsStartActivityDiagram() {
               x={APP_X + NODE_W / 2}
               y={APP_START_Y - 18}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -630,7 +630,7 @@ export function AmsStartActivityDiagram() {
             x={C_AMS.cx}
             y={AMS_Y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >

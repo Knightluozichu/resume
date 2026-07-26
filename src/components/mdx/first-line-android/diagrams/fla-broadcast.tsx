@@ -87,7 +87,7 @@ export function FlaBroadcastDiagram() {
             x="97"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             接收者A
@@ -108,7 +108,7 @@ export function FlaBroadcastDiagram() {
             x="182"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             接收者B
@@ -129,7 +129,7 @@ export function FlaBroadcastDiagram() {
             x="267"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             接收者C
@@ -222,7 +222,7 @@ export function FlaBroadcastDiagram() {
             x="545"
             y="156"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             接收者A（priority=100）
@@ -253,7 +253,7 @@ export function FlaBroadcastDiagram() {
             x="545"
             y="212"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             接收者B（priority=50）
@@ -284,7 +284,7 @@ export function FlaBroadcastDiagram() {
             x="545"
             y="268"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             接收者C（priority=10）
@@ -346,7 +346,7 @@ export function FlaBroadcastDiagram() {
             x="195"
             y="392"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             registerReceiver() / unregisterReceiver()
@@ -355,7 +355,7 @@ export function FlaBroadcastDiagram() {
             x="195"
             y="406"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             跟随组件生命周期，灵活但需手动注销
@@ -375,7 +375,7 @@ export function FlaBroadcastDiagram() {
             x="545"
             y="392"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             &lt;receiver android:name=&quot;.MyReceiver&quot;&gt;
@@ -384,7 +384,7 @@ export function FlaBroadcastDiagram() {
             x="545"
             y="406"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             App未启动也能收到（Android 8.0+受限）
@@ -405,7 +405,7 @@ export function FlaBroadcastDiagram() {
             x="160"
             y="458"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BOOT_COMPLETED 开机
@@ -414,7 +414,7 @@ export function FlaBroadcastDiagram() {
             x="320"
             y="458"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             CONNECTIVITY_CHANGE 网络
@@ -423,7 +423,7 @@ export function FlaBroadcastDiagram() {
             x="470"
             y="458"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BATTERY_LOW 电量低
@@ -432,7 +432,7 @@ export function FlaBroadcastDiagram() {
             x="620"
             y="458"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             SCREEN_ON/OFF 屏幕亮灭
@@ -441,7 +441,7 @@ export function FlaBroadcastDiagram() {
             x="370"
             y="482"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             本地广播 LocalBroadcastManager（仅App内传递，更安全高效）

@@ -39,6 +39,14 @@ export function OfficialStatisticalLearningLab({ unitId, title, concepts, chain,
   const [axisB, setAxisB] = useState(1);
   const [scenario, setScenario] = useState<Scenario>("baseline");
   const [checks, setChecks] = useState(0);
+  function resetExperiment() {
+    setConceptIndex(0);
+    setAxisA(1);
+    setAxisB(1);
+    setScenario("baseline");
+    setChecks(0);
+  }
+
 
   const result = useMemo(() => {
     const boundary = scenario === "boundary" ? 27 : scenario === "recovery" ? 5 : 0;
@@ -59,6 +67,7 @@ export function OfficialStatisticalLearningLab({ unitId, title, concepts, chain,
 
   return (
     <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50" aria-label={`${title} · ${model.studio}实验`} data-slm-unit={unitId}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">统计学习方法 2e · {model.studio} · {view === "map" ? "模型地图" : view === "experiment" ? "单变量计算" : "边界与复算"}</p>
@@ -99,7 +108,7 @@ export function OfficialStatisticalLearningLab({ unitId, title, concepts, chain,
 
         <div className="min-w-0 p-4">
           <p className="text-xs font-semibold text-zinc-500">当前数学坐标</p><p className="mt-1 text-sm font-semibold [overflow-wrap:anywhere]">{current}</p><p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{chain[conceptIndex % chain.length]}</p>
-          <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">{[[model.metric, result.fit], [model.risk, result.risk], ["证据闭环度", result.evidence]].map(([label, value]) => <div key={String(label)} className="min-w-0 border border-zinc-200 p-2 dark:border-zinc-800"><dt className="min-h-10 [overflow-wrap:anywhere]">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>)}</dl>
+          <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">{[[model.metric, result.fit], [model.risk, result.risk], ["证据闭环度", result.evidence]].map(([label, value]) => <div key={String(label)} className="min-w-0 border border-zinc-200 p-2 dark:border-zinc-800"><dt className="min-h-11 [overflow-wrap:anywhere]">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>)}</dl>
           <div className={`mt-3 border p-3 text-sm ${result.pass ? "border-emerald-500 bg-emerald-50 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-50" : "border-amber-500 bg-amber-50 text-amber-950 dark:bg-amber-950 dark:text-amber-50"}`}><strong>{result.pass ? "计算与边界证据可接受" : "检查前提、尺度或泄漏"}</strong><p className="mt-1 [overflow-wrap:anywhere]">{model.task}</p></div>
           <button type="button" onClick={() => setChecks((value) => value + 1)} className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">保存手算/残差快照 #{checks + 1}</button>
         </div>

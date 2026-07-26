@@ -146,7 +146,7 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
                     x={p.x + 56}
                     y={p.y + 38 + li * 12}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fill={subFill}
                   >
                     {line}
@@ -170,7 +170,7 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
             x={cx}
             y={cy + 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             定义 → 设计 → 编写
@@ -179,7 +179,7 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
             x={cx}
             y={cy + 24}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             编译 → 运行 → 测试 → 维护

@@ -177,7 +177,7 @@ export function IntroductionToAlgorithmsDiagram() {
             const y = 78 + rowIndex * 72;
             return (
               <g key={row.label}>
-                <text x="18" y={y + 24} fontSize="10" fontWeight="700" fill={row.color}>{row.label}</text>
+                <text x="18" y={y + 24} fontSize="11" fontWeight="700" fill={row.color}>{row.label}</text>
                 {values.map((value, index) => {
                   const x = 105 + index * 39;
                   const active = index >= row.low && index <= row.high;
@@ -195,13 +195,13 @@ export function IntroductionToAlgorithmsDiagram() {
                         stroke={middle ? row.color : active ? border : "none"}
                         strokeWidth={middle ? 1.5 : 1}
                       />
-                      <text x={x + 16} y={y + 21} textAnchor="middle" fontSize="10.5" fontWeight={middle ? "700" : "400"} fill={active ? primary : secondary}>
+                      <text x={x + 16} y={y + 21} textAnchor="middle" fontSize="11" fontWeight={middle ? "700" : "400"} fill={active ? primary : secondary}>
                         {value}
                       </text>
                     </g>
                   );
                 })}
-                <text x="690" y={y + 21} textAnchor="end" fontSize="9.5" fill={secondary}>
+                <text x="690" y={y + 21} textAnchor="end" fontSize="11" fill={secondary}>
                   mid={row.mid}
                 </text>
               </g>
@@ -209,7 +209,7 @@ export function IntroductionToAlgorithmsDiagram() {
           })}
 
           <rect x="105" y="352" width="585" height="25" rx="4" fill={accent} fillOpacity="0.06" stroke={accent} strokeOpacity="0.5" />
-          <text x="397" y="369" textAnchor="middle" fontSize="10.5" fill={primary}>
+          <text x="397" y="369" textAnchor="middle" fontSize="11" fill={primary}>
             15 → 7 → 3 → 1；候选数最多经过⌈log₂(n+1)⌉次比较归零或命中
           </text>
         </svg>

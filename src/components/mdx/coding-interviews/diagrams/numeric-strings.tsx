@@ -78,7 +78,7 @@ export function DecimalExponentFlowDiagram() {
             <rect x={Number(x)} y="92" width="166" height="104" rx="5" fill={index === 3 ? "var(--success)" : "var(--bg)"} fillOpacity={index === 3 ? 0.1 : 1} stroke={index === 3 ? "var(--success)" : "var(--border)"} />
             <text x={Number(x) + 83} y="122" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">{title}</text>
             <text x={Number(x) + 83} y="151" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--text-primary)">{value}</text>
-            <text x={Number(x) + 83} y="177" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">{note}</text>
+            <text x={Number(x) + 83} y="177" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{note}</text>
           </g>)}
           {[210, 412, 614].map((x) => <line key={x} x1={x} y1="144" x2={x + 28} y2="144" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#numeric-flow-arrow)" />)}
           <rect x="92" y="246" width="676" height="96" rx="5" fill="var(--accent)" fillOpacity="0.05" stroke="var(--border)" />

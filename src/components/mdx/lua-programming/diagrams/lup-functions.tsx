@@ -130,7 +130,7 @@ export function LupFunctionsDiagram() {
             x={170}
             y={248}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             函数和数字、字符串一样是值

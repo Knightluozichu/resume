@@ -31,7 +31,7 @@ export function AsyncLoadDiagram({ step = 0 }: { step?: number }) {
           </text>
 
           {/* Sync timeline - spike */}
-          <text x="100" y="52" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="100" y="52" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             同步
           </text>
           <line
@@ -55,14 +55,14 @@ export function AsyncLoadDiagram({ step = 0 }: { step?: number }) {
             x="100"
             y="140"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             单帧尖峰
           </text>
 
           {/* Async timeline - spread */}
-          <text x="420" y="52" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="420" y="52" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             异步
           </text>
           <line
@@ -93,7 +93,7 @@ export function AsyncLoadDiagram({ step = 0 }: { step?: number }) {
             x="420"
             y="140"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             分摊到多帧
@@ -118,7 +118,7 @@ export function AsyncLoadDiagram({ step = 0 }: { step?: number }) {
                 x={80 + i * 140}
                 y="190"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.label}

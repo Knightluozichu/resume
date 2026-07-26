@@ -128,7 +128,7 @@ export function GameObjectAnatomyDiagram() {
             x={FRAME_X + FRAME_W - 18}
             y={HEADER_Y - 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             空壳本身：只是个名字
@@ -174,7 +174,7 @@ export function GameObjectAnatomyDiagram() {
                     x={CARD_X + CARD_W - 14}
                     y={y + 24}
                     textAnchor="end"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="700"
                     fill={c.color}
                   >

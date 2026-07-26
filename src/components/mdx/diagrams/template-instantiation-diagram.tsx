@@ -109,7 +109,7 @@ export function TemplateInstantiationDiagram({
                 <text
                   x={box.x + 8}
                   y={box.y + 48}
-                  fontSize="9"
+                  fontSize="11"
                   fill={isActive ? primary : secondary}
                   fontFamily="monospace"
                 >
@@ -118,7 +118,7 @@ export function TemplateInstantiationDiagram({
                 <text
                   x={box.x + 8}
                   y={box.y + 62}
-                  fontSize="9"
+                  fontSize="11"
                   fill={isActive ? primary : secondary}
                   fontFamily="monospace"
                 >
@@ -193,7 +193,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="16"
                 y="22"
-                fontSize="10"
+                fontSize="11"
                 fill={step >= 1 ? good : secondary}
                 fontFamily="monospace"
               >
@@ -204,7 +204,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="16"
                 y="40"
-                fontSize="10"
+                fontSize="11"
                 fill={step >= 1 ? good : secondary}
                 fontFamily="monospace"
               >
@@ -216,7 +216,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="16"
                 y="62"
-                fontSize="10"
+                fontSize="11"
                 fill={step >= 2 ? warn : secondary}
                 fontFamily="monospace"
               >
@@ -229,7 +229,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="22"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -240,7 +240,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="40"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -251,7 +251,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="62"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -263,7 +263,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="22"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -274,7 +274,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="40"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -285,7 +285,7 @@ export function TemplateInstantiationDiagram({
               <text
                 x="420"
                 y="62"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >

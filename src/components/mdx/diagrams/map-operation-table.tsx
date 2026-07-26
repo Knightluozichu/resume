@@ -151,12 +151,12 @@ export function MapOperationTable() {
                 </text>
 
                 {/* 语法签名 */}
-                <text x={colX[1] + 8} y={rowH / 2 + 4} fontSize="9" fill={primary} fontFamily="monospace">
+                <text x={colX[1] + 8} y={rowH / 2 + 4} fontSize="11" fill={primary} fontFamily="monospace">
                   {row.sig}
                 </text>
 
                 {/* 说明 */}
-                <text x={colX[2] + 8} y={rowH / 2 + 4} fontSize="9" fill={secondary}>
+                <text x={colX[2] + 8} y={rowH / 2 + 4} fontSize="11" fill={secondary}>
                   {row.desc}
                 </text>
 
@@ -164,7 +164,7 @@ export function MapOperationTable() {
                 <text
                   x={colX[3] + colW[3] / 2}
                   y={rowH / 2 + 4}
-                  fontSize="10"
+                  fontSize="11"
                   fill={row.complexity === "O(1)" ? good : (row.complexity.includes("n²") ? warn : primary)}
                   fontFamily="monospace"
                   textAnchor="middle"
@@ -176,7 +176,7 @@ export function MapOperationTable() {
                 <text
                   x={colX[4] + colW[4] / 2}
                   y={rowH / 2 + 4}
-                  fontSize="9"
+                  fontSize="11"
                   fill={row.set === "—（set 无 []）" ? err : secondary}
                   fontFamily={row.set.startsWith("s.") ? "monospace" : undefined}
                   textAnchor="middle"
@@ -188,7 +188,7 @@ export function MapOperationTable() {
           })}
 
           {/* 底部提醒 */}
-          <text x={w / 2} y={headerH + rows.length * rowH + 55} fontSize="10" fill={warn} textAnchor="middle">
+          <text x={w / 2} y={headerH + rows.length * rowH + 55} fontSize="11" fill={warn} textAnchor="middle">
             ⚠ operator[] 仅在 map/unordered_map 可用 —— set 无 []；查找时应优先用 find() 而非 []（[]
             会在 key 不存在时插入默认值）
           </text>

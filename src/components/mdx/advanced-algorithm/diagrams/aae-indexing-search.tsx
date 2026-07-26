@@ -74,19 +74,19 @@ export function AaeIndexingSearchDiagram() {
           <g>
             <rect x={DOCS.x} y={DOCS.y} width={DOCS.w} height={DOCS.h} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
             <text x={DOCS.x + DOCS.w / 2} y={DOCS.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent} fontFamily="monospace">Document Collection</text>
-            <text x={DOCS.x + DOCS.w / 2} y={DOCS.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>文档集合</text>
+            <text x={DOCS.x + DOCS.w / 2} y={DOCS.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>文档集合</text>
           </g>
           <g>
             <rect x={TOKENIZER.x} y={TOKENIZER.y} width={TOKENIZER.w} height={TOKENIZER.h} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
             <text x={TOKENIZER.x + TOKENIZER.w / 2} y={TOKENIZER.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent} fontFamily="monospace">Tokenizer</text>
-            <text x={TOKENIZER.x + TOKENIZER.w / 2} y={TOKENIZER.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>分词 · 归一化 · 去停用词</text>
+            <text x={TOKENIZER.x + TOKENIZER.w / 2} y={TOKENIZER.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>分词 · 归一化 · 去停用词</text>
           </g>
           <g>
             <rect x={INDEX.x} y={INDEX.y} width={INDEX.w} height={INDEX.h} rx="8" fill={accent} fillOpacity="0.12" stroke={accent} strokeWidth="1.8" />
             <text x={INDEX.x + INDEX.w / 2} y={INDEX.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent} fontFamily="monospace">Inverted Index</text>
-            <text x={INDEX.x + INDEX.w / 2} y={INDEX.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>倒排索引 · Term → Posting List</text>
+            <text x={INDEX.x + INDEX.w / 2} y={INDEX.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>倒排索引 · Term → Posting List</text>
             {/* 倒排表示意 */}
-            <g fontFamily="monospace" fontSize="9.5" fill={primary}>
+            <g fontFamily="monospace" fontSize="11" fill={primary}>
               <text x={INDEX.x + 14} y={INDEX.y + 56} fill={accent}>algorithm</text>
               <text x={INDEX.x + 92} y={INDEX.y + 56}>→ [1, 3, 7]</text>
               <text x={INDEX.x + 14} y={INDEX.y + 72} fill={accent}>search</text>
@@ -100,27 +100,27 @@ export function AaeIndexingSearchDiagram() {
           <g>
             <rect x={QUERY.x} y={QUERY.y} width={QUERY.w} height={QUERY.h} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
             <text x={QUERY.x + QUERY.w / 2} y={QUERY.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={success} fontFamily="monospace">Query</text>
-            <text x={QUERY.x + QUERY.w / 2} y={QUERY.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>用户查询 &quot;algorithm search&quot;</text>
+            <text x={QUERY.x + QUERY.w / 2} y={QUERY.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>用户查询 &quot;algorithm search&quot;</text>
           </g>
           <g>
             <rect x={PARSER.x} y={PARSER.y} width={PARSER.w} height={PARSER.h} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
             <text x={PARSER.x + PARSER.w / 2} y={PARSER.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={success} fontFamily="monospace">Query Parser</text>
-            <text x={PARSER.x + PARSER.w / 2} y={PARSER.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>查询解析 · 布尔/短语</text>
+            <text x={PARSER.x + PARSER.w / 2} y={PARSER.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>查询解析 · 布尔/短语</text>
           </g>
           <g>
             <rect x={LOOKUP.x} y={LOOKUP.y} width={LOOKUP.w} height={LOOKUP.h} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
             <text x={LOOKUP.x + LOOKUP.w / 2} y={LOOKUP.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={success} fontFamily="monospace">Index Lookup</text>
-            <text x={LOOKUP.x + LOOKUP.w / 2} y={LOOKUP.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>索引查找 · 取倒排表</text>
+            <text x={LOOKUP.x + LOOKUP.w / 2} y={LOOKUP.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>索引查找 · 取倒排表</text>
           </g>
           <g>
             <rect x={RANKER.x} y={RANKER.y} width={RANKER.w} height={RANKER.h} rx="8" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1.8" />
             <text x={RANKER.x + RANKER.w / 2} y={RANKER.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={warning} fontFamily="monospace">Ranker</text>
-            <text x={RANKER.x + RANKER.w / 2} y={RANKER.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>BM25 / TF-IDF 打分排序</text>
+            <text x={RANKER.x + RANKER.w / 2} y={RANKER.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>BM25 / TF-IDF 打分排序</text>
           </g>
           <g>
             <rect x={RESULTS.x} y={RESULTS.y} width={RESULTS.w} height={RESULTS.h} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
             <text x={RESULTS.x + RESULTS.w / 2} y={RESULTS.y + 19} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={success} fontFamily="monospace">Results</text>
-            <text x={RESULTS.x + RESULTS.w / 2} y={RESULTS.y + 35} textAnchor="middle" fontSize="10.5" fill={secondary}>排序结果返回</text>
+            <text x={RESULTS.x + RESULTS.w / 2} y={RESULTS.y + 35} textAnchor="middle" fontSize="11" fill={secondary}>排序结果返回</text>
           </g>
 
           {/* ===== 构建流水线箭头（accent，纵向） ===== */}

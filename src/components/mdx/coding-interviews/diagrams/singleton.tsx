@@ -96,22 +96,22 @@ export function SingletonBoundaryMap() {
           ].map(([title, detail, y]) => (
             <g key={title}>
               <rect x="286" y={Number(y)} width="208" height="46" rx="4" fill="var(--accent)" fillOpacity="0.08" stroke="var(--border)" />
-              <text x="390" y={Number(y) + 19} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--accent)">{title}</text>
-              <text x="390" y={Number(y) + 36} textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">{detail}</text>
+              <text x="390" y={Number(y) + 19} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">{title}</text>
+              <text x="390" y={Number(y) + 36} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{detail}</text>
             </g>
           ))}
           <rect x="32" y="124" width="176" height="94" rx="5" fill="var(--success)" fillOpacity="0.07" stroke="var(--success)" />
           <text x="120" y="154" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">调用者 A / B / C</text>
-          <text x="120" y="180" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">都经由同一个访问点</text>
+          <text x="120" y="180" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">都经由同一个访问点</text>
           <path d="M208 171 H252" stroke="var(--success)" strokeWidth="2" />
           <rect x="572" y="104" width="176" height="134" rx="5" fill="var(--warning)" fillOpacity="0.07" stroke="var(--warning)" />
           <text x="660" y="132" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">作用域边界</text>
-          <text x="660" y="160" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">通常是当前进程 / 加载域</text>
-          <text x="660" y="184" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">不是机器或集群全局唯一</text>
-          <text x="660" y="208" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">也不自动保证字段线程安全</text>
+          <text x="660" y="160" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">通常是当前进程 / 加载域</text>
+          <text x="660" y="184" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">不是机器或集群全局唯一</text>
+          <text x="660" y="208" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">也不自动保证字段线程安全</text>
           <path d="M528 171 H566" stroke="var(--warning)" strokeWidth="2" />
           <rect x="104" y="314" width="572" height="34" rx="5" fill="var(--danger)" fillOpacity="0.05" stroke="var(--danger)" />
-          <text x="390" y="335" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">创建一次 ≠ 状态并发安全 ≠ 分布式唯一 ≠ 适合所有全局服务</text>
+          <text x="390" y="335" textAnchor="middle" fontSize="11" fill="var(--text-primary)">创建一次 ≠ 状态并发安全 ≠ 分布式唯一 ≠ 适合所有全局服务</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">先定义唯一性的作用域和生命周期，再选择初始化机制。</figcaption>
@@ -137,13 +137,13 @@ export function ConcurrencyRaceDiagram() {
           ].map(([y, left, right]) => (
             <g key={String(y)}>
               <rect x="48" y={Number(y) - 18} width="272" height="36" rx="4" fill="var(--accent)" fillOpacity="0.07" stroke="var(--border)" />
-              <text x="184" y={Number(y) + 5} textAnchor="middle" fontSize="10" fill="var(--text-primary)">{left}</text>
+              <text x="184" y={Number(y) + 5} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{left}</text>
               <rect x="460" y={Number(y) - 18} width="272" height="36" rx="4" fill="var(--success)" fillOpacity="0.07" stroke="var(--border)" />
-              <text x="596" y={Number(y) + 5} textAnchor="middle" fontSize="10" fill="var(--text-primary)">{right}</text>
+              <text x="596" y={Number(y) + 5} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{right}</text>
             </g>
           ))}
           <rect x="132" y="318" width="516" height="32" rx="5" fill="var(--danger)" fillOpacity="0.08" stroke="var(--danger)" />
-          <text x="390" y="338" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">A与B都曾被创建并可能逸出：唯一实例约束已经失败。</text>
+          <text x="390" y="338" textAnchor="middle" fontSize="11" fill="var(--text-primary)">A与B都曾被创建并可能逸出：唯一实例约束已经失败。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">检查与创建必须由锁、类型初始化或经过验证的延迟容器统一保护。</figcaption>

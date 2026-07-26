@@ -57,7 +57,7 @@ export function Poeaa24Ch04MvcTriangle() {
 
           {/* View → Model（读取） */}
           <line x1={VIEW.x + 36} y1={VIEW.y - R + 16} x2={MODEL.x - 16} y2={MODEL.y + R + 2} stroke="#E5B567" strokeWidth="1.2" strokeDasharray="5 3" markerEnd="url(#ch04-arr-w)" />
-          <text x={CX - 44} y={220} fontSize="10" fill="#E5B567" textAnchor="middle">读取状态</text>
+          <text x={CX - 44} y={220} fontSize="11" fill="#E5B567" textAnchor="middle">读取状态</text>
 
           {/* 用户 → Controller */}
           <text x={CTRL.x + 60} y={CTRL.y - 20} fontSize="11" fill={T.secondary}>用户操作</text>
@@ -66,17 +66,17 @@ export function Poeaa24Ch04MvcTriangle() {
           {/* Model 节点 */}
           <rect x={MODEL.x - R} y={MODEL.y - 28} width={R * 2} height={56} rx="10" fill={T.elevated} stroke="#3FB97F" strokeWidth="2" />
           <text x={MODEL.x} y={MODEL.y - 4} textAnchor="middle" fontSize="14" fontWeight="700" fill="#3FB97F">Model</text>
-          <text x={MODEL.x} y={MODEL.y + 16} textAnchor="middle" fontSize="10" fill={T.secondary}>业务数据 + 规则</text>
+          <text x={MODEL.x} y={MODEL.y + 16} textAnchor="middle" fontSize="11" fill={T.secondary}>业务数据 + 规则</text>
 
           {/* View 节点 */}
           <rect x={VIEW.x - R} y={VIEW.y - 28} width={R * 2} height={56} rx="10" fill={T.elevated} stroke="#E5B567" strokeWidth="2" />
           <text x={VIEW.x} y={VIEW.y - 4} textAnchor="middle" fontSize="14" fontWeight="700" fill="#E5B567">View</text>
-          <text x={VIEW.x} y={VIEW.y + 16} textAnchor="middle" fontSize="10" fill={T.secondary}>展示 + 渲染</text>
+          <text x={VIEW.x} y={VIEW.y + 16} textAnchor="middle" fontSize="11" fill={T.secondary}>展示 + 渲染</text>
 
           {/* Controller 节点 */}
           <rect x={CTRL.x - R} y={CTRL.y - 28} width={R * 2} height={56} rx="10" fill={T.elevated} stroke={T.accent} strokeWidth="2" />
           <text x={CTRL.x} y={CTRL.y - 4} textAnchor="middle" fontSize="14" fontWeight="700" fill={T.accent}>Controller</text>
-          <text x={CTRL.x} y={CTRL.y + 16} textAnchor="middle" fontSize="10" fill={T.secondary}>解析输入 + 协调</text>
+          <text x={CTRL.x} y={CTRL.y + 16} textAnchor="middle" fontSize="11" fill={T.secondary}>解析输入 + 协调</text>
 
           {/* 右侧：请求处理路径 */}
           <rect x={440} y={72} width={248} height={260} rx="10" fill={T.elevated} stroke={T.border} strokeWidth="1" />

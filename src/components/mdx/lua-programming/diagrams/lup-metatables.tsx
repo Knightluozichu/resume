@@ -41,25 +41,25 @@ export function LupMetatablesDiagram() {
 
           <rect x={40} y={92} width={160} height={56} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={120} y={112} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent}>普通表 t</text>
-          <text x={120} y={130} textAnchor="middle" fontSize="10" fill={secondary}>{"{x=1, y=2}"}</text>
-          <text x={120} y={144} textAnchor="middle" fontSize="10" fill={secondary}>访问 t.z → nil</text>
+          <text x={120} y={130} textAnchor="middle" fontSize="11" fill={secondary}>{"{x=1, y=2}"}</text>
+          <text x={120} y={144} textAnchor="middle" fontSize="11" fill={secondary}>访问 t.z → nil</text>
 
           {/* 箭头 */}
           <line x1={200} y1={120} x2={240} y2={120} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lup-mt-arrow)" />
-          <text x={220} y={114} textAnchor="middle" fontSize="10" fill={secondary}>元表</text>
+          <text x={220} y={114} textAnchor="middle" fontSize="11" fill={secondary}>元表</text>
 
           {/* 元表 */}
           <rect x={240} y={92} width={200} height={120} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={340} y={112} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning}>元表 metatable</text>
 
           <text x={252} y={132} fontSize="11" fill={primary}>__index = &#123;fallback&#125;</text>
-          <text x={252} y={150} fontSize="10" fill={secondary}>键不存在时查找</text>
+          <text x={252} y={150} fontSize="11" fill={secondary}>键不存在时查找</text>
 
           <text x={252} y={170} fontSize="11" fill={primary}>__newindex = func</text>
-          <text x={252} y={188} fontSize="10" fill={secondary}>新键赋值时调用</text>
+          <text x={252} y={188} fontSize="11" fill={secondary}>新键赋值时调用</text>
 
           <text x={252} y={206} fontSize="11" fill={primary}>__add = func</text>
-          <text x={252} y={208} fontSize="10" fill={secondary}>+ 运算重载</text>
+          <text x={252} y={208} fontSize="11" fill={secondary}>+ 运算重载</text>
 
           {/* 右侧：常用元方法 */}
           <line x1={460} y1={70} x2={460} y2={220} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
@@ -70,23 +70,23 @@ export function LupMetatablesDiagram() {
 
           <rect x={480} y={92} width={200} height={24} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
           <text x={492} y={108} fontSize="11" fill={success}>__index</text>
-          <text x={560} y={108} fontSize="10" fill={secondary}>继承/查找</text>
+          <text x={560} y={108} fontSize="11" fill={secondary}>继承/查找</text>
 
           <rect x={480} y={122} width={200} height={24} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
           <text x={492} y={138} fontSize="11" fill={success}>__newindex</text>
-          <text x={560} y={138} fontSize="10" fill={secondary}>拦截赋值</text>
+          <text x={560} y={138} fontSize="11" fill={secondary}>拦截赋值</text>
 
           <rect x={480} y={152} width={200} height={24} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
           <text x={492} y={168} fontSize="11" fill={success}>__add __sub __mul</text>
-          <text x={620} y={168} fontSize="10" fill={secondary}>算术</text>
+          <text x={620} y={168} fontSize="11" fill={secondary}>算术</text>
 
           <rect x={480} y={182} width={200} height={24} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
           <text x={492} y={198} fontSize="11" fill={success}>__eq __lt __le</text>
-          <text x={580} y={198} fontSize="10" fill={secondary}>比较</text>
+          <text x={580} y={198} fontSize="11" fill={secondary}>比较</text>
 
           <rect x={480} y={212} width={200} height={24} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
           <text x={492} y={228} fontSize="11" fill={success}>__call __tostring</text>
-          <text x={600} y={228} fontSize="10" fill={secondary}>调用/转串</text>
+          <text x={600} y={228} fontSize="11" fill={secondary}>调用/转串</text>
 
           {/* 底部：OOP 实现 */}
           <line x1={32} y1={240} x2={VIEW_W - 32} y2={240} stroke={border} strokeWidth="1" strokeDasharray="4 3" />

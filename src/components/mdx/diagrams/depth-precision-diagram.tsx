@@ -147,7 +147,7 @@ export function DepthPrecisionDiagram() {
             x={x0 + 60}
             y={axisY - 22}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             ↑ 近处：一小段距离吃掉一大片精度（刻度密）
@@ -156,7 +156,7 @@ export function DepthPrecisionDiagram() {
             x={x1 - 4}
             y={axisY - 22}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             远处：一大段距离才挪一点（刻度稀）↑

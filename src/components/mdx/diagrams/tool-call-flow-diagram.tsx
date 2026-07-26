@@ -246,7 +246,7 @@ function ToolCallFlowDiagramInner() {
             x={CARD_X + 16}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             LLM 侧（产出调用 / 续答）
@@ -256,7 +256,7 @@ function ToolCallFlowDiagramInner() {
             x={CARD_X + 206}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             程序侧（解析 / 执行 / 回填）
@@ -337,7 +337,7 @@ function ToolCallFlowDiagramInner() {
                     x={CARD_X + CARD_W - 14}
                     y={y + 21}
                     textAnchor="end"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--text-secondary)"
                   >
@@ -348,7 +348,7 @@ function ToolCallFlowDiagramInner() {
                     x={CARD_X + 20}
                     y={y + 41}
                     textAnchor="start"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontFamily={s.mono ? "var(--font-mono)" : undefined}
                     fill="var(--text-primary)"
                   >
@@ -364,7 +364,7 @@ function ToolCallFlowDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 18}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             红线：LLM 只「产出」调用（②⑥），「执行」始终是你的代码（①③④⑤）

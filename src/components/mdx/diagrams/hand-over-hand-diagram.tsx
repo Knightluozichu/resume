@@ -208,7 +208,7 @@ export function HandOverHandDiagram() {
                 x={nodeCx(i)}
                 y={NODE_Y + 46}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {`第 ${i + 1} 格`}
@@ -247,7 +247,7 @@ export function HandOverHandDiagram() {
                   x={nodeCx(i)}
                   y={NODE_Y - 14}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill={HOLD_COLOR}
                 >
@@ -262,7 +262,7 @@ export function HandOverHandDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             高亮框 = 此刻握着锁的节点；从不出现「四格全亮」——那才是锁全表

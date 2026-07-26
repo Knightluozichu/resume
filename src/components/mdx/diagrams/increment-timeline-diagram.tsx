@@ -99,7 +99,7 @@ export function IncrementTimelineDiagram({ step = 3 }: IncrementTimelineDiagramP
           <text x={stepCenters[1]} y={bottomY + 13} textAnchor="middle" fontSize="13" fontWeight="700" fill={activeColor(2)} fontFamily="monospace">
             返回旧值 5
           </text>
-          <text x={stepCenters[1]} y={bottomY + 30} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">（然后 i 变 6）</text>
+          <text x={stepCenters[1]} y={bottomY + 30} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">（然后 i 变 6）</text>
 
           {/* 箭头 2→3 */}
           {isActive(2) && (

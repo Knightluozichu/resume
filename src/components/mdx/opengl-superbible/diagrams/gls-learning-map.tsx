@@ -134,7 +134,7 @@ export function GlsLearningMapDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
               >
                 {stage.title}
               </text>
-              <text x={x + 48} y="112" fontSize="10" fill={stage.color}>
+              <text x={x + 48} y="112" fontSize="11" fill={stage.color}>
                 Chapters {stage.range}
               </text>
               <rect
@@ -150,25 +150,25 @@ export function GlsLearningMapDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                 x={x + 94}
                 y="151"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.topics}
               </text>
-              <text x={x + 14} y="190" fontSize="10" fill={secondary}>
+              <text x={x + 14} y="190" fontSize="11" fill={secondary}>
                 必须带走
               </text>
               <text
                 x={x + 14}
                 y="208"
-                fontSize="10.3"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.contract}
               </text>
-              <text x={x + 14} y="232" fontSize="9.8" fill={secondary}>
+              <text x={x + 14} y="232" fontSize="11" fill={secondary}>
                 验收 · {stage.evidence}
               </text>
             </g>
@@ -305,7 +305,7 @@ export function GlsOfficialTocDiagram() {
                 x="80"
                 y={y + 31}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--bg)"
               >
@@ -315,7 +315,7 @@ export function GlsOfficialTocDiagram() {
                 x="80"
                 y={y + 47}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--bg)"
               >
                 Ch. {part.range}
@@ -329,13 +329,13 @@ export function GlsOfficialTocDiagram() {
               >
                 {part.title}
               </text>
-              <text x="142" y={y + 43} fontSize="9.7" fill={secondary}>
+              <text x="142" y={y + 43} fontSize="11" fill={secondary}>
                 {part.chapters}
               </text>
               <text
                 x="142"
                 y={y + 59}
-                fontSize="9.7"
+                fontSize="11"
                 fontWeight="600"
                 fill={part.color}
               >
@@ -467,19 +467,19 @@ export function GlsExecutionModelDiagram() {
                 x={x + 94}
                 y="153"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={primary}
               >
                 {row[1]}
               </text>
-              <text x={x + 14} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 14} y="201" fontSize="11" fill={secondary}>
                 核心含义
               </text>
               <text
                 x={x + 14}
                 y="222"
-                fontSize="10.2"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
@@ -508,7 +508,7 @@ export function GlsExecutionModelDiagram() {
           x="420"
           y="320"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           Query、fence、debug output 与读回把异步结果送回 CPU 观察
@@ -609,7 +609,7 @@ export function GlsRouteSelectorDiagram() {
               >
                 {route.goal}
               </text>
-              <text x={x + 14} y="120" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="120" fontSize="11" fill={secondary}>
                 官方章号路线
               </text>
               <rect
@@ -625,28 +625,28 @@ export function GlsRouteSelectorDiagram() {
                 x={x + 94}
                 y="152"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={primary}
               >
                 {route.chapters}
               </text>
-              <text x={x + 14} y="192" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="192" fontSize="11" fill={secondary}>
                 不可跳过
               </text>
               <text
                 x={x + 14}
                 y="211"
-                fontSize="9.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {route.keep}
               </text>
-              <text x={x + 14} y="241" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="241" fontSize="11" fill={secondary}>
                 通过条件
               </text>
-              <text x={x + 14} y="260" fontSize="9.4" fill={route.color}>
+              <text x={x + 14} y="260" fontSize="11" fill={route.color}>
                 {route.gate}
               </text>
             </g>
@@ -713,13 +713,13 @@ export function GlsMilestoneDiagram() {
         >
           四个里程碑：从“能跑”到“能证明”
         </text>
-        <text x="34" y="66" fontSize="10" fill={secondary}>
+        <text x="34" y="66" fontSize="11" fill={secondary}>
           里程碑
         </text>
-        <text x="190" y="66" fontSize="10" fill={secondary}>
+        <text x="190" y="66" fontSize="11" fill={secondary}>
           最小交付物
         </text>
-        <text x="480" y="66" fontSize="10" fill={secondary}>
+        <text x="480" y="66" fontSize="11" fill={secondary}>
           通过条件
         </text>
         {milestones.map((row, index) => {
@@ -746,10 +746,10 @@ export function GlsMilestoneDiagram() {
               >
                 {row[0]}
               </text>
-              <text x="190" y={y + 26} fontSize="10.5" fill={primary}>
+              <text x="190" y={y + 26} fontSize="11" fill={primary}>
                 {row[1]}
               </text>
-              <text x="480" y={y + 26} fontSize="10.3" fill={secondary}>
+              <text x="480" y={y + 26} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>

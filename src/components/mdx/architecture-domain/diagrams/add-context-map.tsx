@@ -110,28 +110,28 @@ export function AddContextMapDiagram() {
           <line x1={SALES.x + SALES.w} y1={SALES.y + SALES.h / 2} x2={ORDER.x} y2={ORDER.y + ORDER.h / 2} stroke={secondary} strokeWidth="1.8" markerEnd="url(#cm-solid)" />
           <line x1={ORDER.x} y1={ORDER.y + ORDER.h / 2 + 4} x2={SALES.x + SALES.w} y2={SALES.y + SALES.h / 2 + 4} stroke={secondary} strokeWidth="1.8" markerEnd="url(#cm-solid)" />
           <text x={(SALES.x + SALES.w + ORDER.x) / 2} y={SALES.y + SALES.h / 2 - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>Partnership</text>
-          <text x={(SALES.x + SALES.w + ORDER.x) / 2} y={SALES.y + SALES.h / 2 + 22} textAnchor="middle" fontSize="10" fill={secondary}>合作关系</text>
+          <text x={(SALES.x + SALES.w + ORDER.x) / 2} y={SALES.y + SALES.h / 2 + 22} textAnchor="middle" fontSize="11" fill={secondary}>合作关系</text>
 
           {/* Order → Inventory: Customer-Supplier（实线箭头） */}
           <line x1={ORDER.x + ORDER.w} y1={ORDER.y + ORDER.h / 2} x2={INVENTORY.x} y2={INVENTORY.y + INVENTORY.h / 2} stroke={secondary} strokeWidth="1.6" markerEnd="url(#cm-solid)" />
           <text x={(ORDER.x + ORDER.w + INVENTORY.x) / 2} y={ORDER.y + ORDER.h / 2 - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>Customer-Supplier</text>
-          <text x={(ORDER.x + ORDER.w + INVENTORY.x) / 2} y={INVENTORY.y + INVENTORY.h / 2 + 20} textAnchor="middle" fontSize="10" fill={secondary}>客户-供应商</text>
+          <text x={(ORDER.x + ORDER.w + INVENTORY.x) / 2} y={INVENTORY.y + INVENTORY.h / 2 + 20} textAnchor="middle" fontSize="11" fill={secondary}>客户-供应商</text>
 
           {/* Order → Billing: ACL（虚线箭头，accent 紫） */}
           <line x1={ORDER.x + 60} y1={ORDER.y + ORDER.h} x2={BILLING.x + BILLING.w / 2} y2={BILLING.y} stroke={accent} strokeWidth="1.6" strokeDasharray="6 3" markerEnd="url(#cm-dashed)" />
           <text x={ORDER.x + 40} y={BILLING.y - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={accent}>ACL</text>
-          <text x={ORDER.x + 40} y={BILLING.y + 4} textAnchor="middle" fontSize="10" fill={secondary}>防腐层</text>
+          <text x={ORDER.x + 40} y={BILLING.y + 4} textAnchor="middle" fontSize="11" fill={secondary}>防腐层</text>
 
           {/* Order → Shipping: OHS（开放主机服务，success 绿双线） */}
           <line x1={ORDER.x + 100} y1={ORDER.y + ORDER.h} x2={SHIPPING.x + SHIPPING.w / 2} y2={SHIPPING.y} stroke={success} strokeWidth="1.8" markerEnd="url(#cm-ohs)" />
           <line x1={ORDER.x + 104} y1={ORDER.y + ORDER.h} x2={SHIPPING.x + SHIPPING.w / 2 + 4} y2={SHIPPING.y} stroke={success} strokeWidth="1" strokeOpacity="0.5" />
           <text x={SHIPPING.x + SHIPPING.w / 2 + 30} y={SHIPPING.y - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={success}>OHS</text>
-          <text x={SHIPPING.x + SHIPPING.w / 2 + 30} y={SHIPPING.y + 4} textAnchor="middle" fontSize="10" fill={secondary}>开放主机服务</text>
+          <text x={SHIPPING.x + SHIPPING.w / 2 + 30} y={SHIPPING.y + 4} textAnchor="middle" fontSize="11" fill={secondary}>开放主机服务</text>
 
           {/* Billing → Shipping: Conformist（实线箭头，warning 黄） */}
           <line x1={BILLING.x + BILLING.w} y1={BILLING.y + BILLING.h / 2} x2={SHIPPING.x} y2={SHIPPING.y + SHIPPING.h / 2} stroke={warning} strokeWidth="1.6" markerEnd="url(#cm-solid)" />
           <text x={(BILLING.x + BILLING.w + SHIPPING.x) / 2} y={BILLING.y + BILLING.h / 2 - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>Conformist</text>
-          <text x={(BILLING.x + BILLING.w + SHIPPING.x) / 2} y={BILLING.y + BILLING.h / 2 + 20} textAnchor="middle" fontSize="10" fill={secondary}>遵奉者</text>
+          <text x={(BILLING.x + BILLING.w + SHIPPING.x) / 2} y={BILLING.y + BILLING.h / 2 + 20} textAnchor="middle" fontSize="11" fill={secondary}>遵奉者</text>
 
           {/* ===== 图例 ===== */}
           <line x1={40} y1={380} x2={VIEW_W - 40} y2={380} stroke={border} strokeWidth="1" strokeDasharray="4 3" />

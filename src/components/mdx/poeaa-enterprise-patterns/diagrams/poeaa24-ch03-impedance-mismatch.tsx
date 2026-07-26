@@ -31,37 +31,37 @@ export function Poeaa24Ch03ImpedanceMismatch() {
           {/* 类框示例 */}
           <rect x={52} y={100} width={110} height={60} rx="6" fill={T.elevated} stroke={T.accent} strokeWidth="1.2" />
           <text x={107} y={118} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.primary} fontFamily="monospace">Order</text>
-          <text x={60} y={136} fontSize="10" fill={T.secondary} fontFamily="monospace">- items: List</text>
-          <text x={60} y={150} fontSize="10" fill={T.secondary} fontFamily="monospace">+ total(): Money</text>
+          <text x={60} y={136} fontSize="11" fill={T.secondary} fontFamily="monospace">- items: List</text>
+          <text x={60} y={150} fontSize="11" fill={T.secondary} fontFamily="monospace">+ total(): Money</text>
 
           <rect x={192} y={100} width={100} height={60} rx="6" fill={T.elevated} stroke={T.accent} strokeWidth="1.2" />
           <text x={242} y={118} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.primary} fontFamily="monospace">Customer</text>
-          <text x={200} y={136} fontSize="10" fill={T.secondary} fontFamily="monospace">- orders: Set</text>
-          <text x={200} y={150} fontSize="10" fill={T.secondary} fontFamily="monospace">+ credit()</text>
+          <text x={200} y={136} fontSize="11" fill={T.secondary} fontFamily="monospace">- orders: Set</text>
+          <text x={200} y={150} fontSize="11" fill={T.secondary} fontFamily="monospace">+ credit()</text>
 
           {/* 关联线 */}
           <line x1={162} y1={130} x2={192} y2={130} stroke={T.accent} strokeWidth="1.2" />
-          <text x={177} y={124} textAnchor="middle" fontSize="9" fill={T.accent}>1..*</text>
+          <text x={177} y={124} textAnchor="middle" fontSize="11" fill={T.accent}>1..*</text>
 
           {/* 继承 */}
           <rect x={52} y={180} width={110} height={44} rx="6" fill={T.elevated} stroke={T.accent} strokeWidth="1.2" strokeDasharray="4 2" />
           <text x={107} y={198} textAnchor="middle" fontSize="11" fontStyle="italic" fill={T.primary} fontFamily="monospace">Payment</text>
-          <text x={107} y={214} textAnchor="middle" fontSize="10" fill={T.secondary}>«abstract»</text>
+          <text x={107} y={214} textAnchor="middle" fontSize="11" fill={T.secondary}>«abstract»</text>
 
           <rect x={52} y={240} width={52} height={32} rx="4" fill={T.elevated} stroke={T.accent} strokeWidth="1" />
-          <text x={78} y={260} textAnchor="middle" fontSize="9" fill={T.secondary}>Cash</text>
+          <text x={78} y={260} textAnchor="middle" fontSize="11" fill={T.secondary}>Cash</text>
           <rect x={112} y={240} width={52} height={32} rx="4" fill={T.elevated} stroke={T.accent} strokeWidth="1" />
-          <text x={138} y={260} textAnchor="middle" fontSize="9" fill={T.secondary}>Card</text>
+          <text x={138} y={260} textAnchor="middle" fontSize="11" fill={T.secondary}>Card</text>
 
           {/* 继承箭头 */}
           <line x1={78} y1={240} x2={95} y2={224} stroke={T.accent} strokeWidth="1" />
           <line x1={138} y1={240} x2={120} y2={224} stroke={T.accent} strokeWidth="1" />
 
           {/* 对象特征标注 */}
-          <text x={200} y={196} fontSize="10" fill={T.secondary}>· 继承 + 多态</text>
-          <text x={200} y={214} fontSize="10" fill={T.secondary}>· 对象图（关联网络）</text>
-          <text x={200} y={232} fontSize="10" fill={T.secondary}>· 行为封装在对象内</text>
-          <text x={200} y={250} fontSize="10" fill={T.secondary}>· 身份由引用表达</text>
+          <text x={200} y={196} fontSize="11" fill={T.secondary}>· 继承 + 多态</text>
+          <text x={200} y={214} fontSize="11" fill={T.secondary}>· 对象图（关联网络）</text>
+          <text x={200} y={232} fontSize="11" fill={T.secondary}>· 行为封装在对象内</text>
+          <text x={200} y={250} fontSize="11" fill={T.secondary}>· 身份由引用表达</text>
 
           {/* 右侧：关系世界 */}
           <rect x={408} y={60} width={280} height={240} rx="10" fill="#E5B567" fillOpacity="0.04" stroke="#E5B567" strokeWidth="1.5" />
@@ -71,26 +71,26 @@ export function Poeaa24Ch03ImpedanceMismatch() {
           <rect x={428} y={100} width={120} height={72} rx="6" fill={T.elevated} stroke="#E5B567" strokeWidth="1.2" />
           <rect x={428} y={100} width={120} height={20} rx="6" fill="#E5B567" fillOpacity="0.12" />
           <text x={488} y={114} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567" fontFamily="monospace">orders</text>
-          <text x={436} y={134} fontSize="10" fill={T.secondary} fontFamily="monospace">id | cust_id</text>
-          <text x={436} y={150} fontSize="10" fill={T.secondary} fontFamily="monospace">total | status</text>
-          <text x={436} y={166} fontSize="10" fill={T.secondary} fontFamily="monospace">created_at</text>
+          <text x={436} y={134} fontSize="11" fill={T.secondary} fontFamily="monospace">id | cust_id</text>
+          <text x={436} y={150} fontSize="11" fill={T.secondary} fontFamily="monospace">total | status</text>
+          <text x={436} y={166} fontSize="11" fill={T.secondary} fontFamily="monospace">created_at</text>
 
           <rect x={568} y={100} width={100} height={56} rx="6" fill={T.elevated} stroke="#E5B567" strokeWidth="1.2" />
           <rect x={568} y={100} width={100} height={20} rx="6" fill="#E5B567" fillOpacity="0.12" />
           <text x={618} y={114} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567" fontFamily="monospace">customers</text>
-          <text x={576} y={134} fontSize="10" fill={T.secondary} fontFamily="monospace">id | name</text>
-          <text x={576} y={150} fontSize="10" fill={T.secondary} fontFamily="monospace">credit_limit</text>
+          <text x={576} y={134} fontSize="11" fill={T.secondary} fontFamily="monospace">id | name</text>
+          <text x={576} y={150} fontSize="11" fill={T.secondary} fontFamily="monospace">credit_limit</text>
 
           {/* 外键 */}
           <line x1={548} y1={130} x2={568} y2={130} stroke="#E5B567" strokeWidth="1.2" strokeDasharray="4 2" />
-          <text x={558} y={124} textAnchor="middle" fontSize="9" fill="#E5B567">FK</text>
+          <text x={558} y={124} textAnchor="middle" fontSize="11" fill="#E5B567">FK</text>
 
           {/* 关系特征标注 */}
-          <text x={428} y={200} fontSize="10" fill={T.secondary}>· 只有行和列（扁平）</text>
-          <text x={428} y={218} fontSize="10" fill={T.secondary}>· 关系靠外键（退化为 ID）</text>
-          <text x={428} y={236} fontSize="10" fill={T.secondary}>· 没有继承（只有 JOIN）</text>
-          <text x={428} y={254} fontSize="10" fill={T.secondary}>· 数据与行为完全分离</text>
-          <text x={428} y={272} fontSize="10" fill={T.secondary}>· 身份由主键表达</text>
+          <text x={428} y={200} fontSize="11" fill={T.secondary}>· 只有行和列（扁平）</text>
+          <text x={428} y={218} fontSize="11" fill={T.secondary}>· 关系靠外键（退化为 ID）</text>
+          <text x={428} y={236} fontSize="11" fill={T.secondary}>· 没有继承（只有 JOIN）</text>
+          <text x={428} y={254} fontSize="11" fill={T.secondary}>· 数据与行为完全分离</text>
+          <text x={428} y={272} fontSize="11" fill={T.secondary}>· 身份由主键表达</text>
 
           {/* 中间冲突标注 */}
           <text x={VIEW_W / 2} y={320} textAnchor="middle" fontSize="12" fontWeight="700" fill={T.danger}>
@@ -117,17 +117,17 @@ export function Poeaa24Ch03ImpedanceMismatch() {
           <line x1={60} y1={424} x2={660} y2={424} stroke={T.secondary} strokeWidth="1.2" markerEnd="url(#ch03-axis)" />
 
           {/* 策略标注 */}
-          <text x={120} y={418} textAnchor="middle" fontSize="10" fontWeight="600" fill="#3FB97F">Active Record</text>
-          <text x={120} y={440} textAnchor="middle" fontSize="9" fill={T.secondary}>对象=行</text>
+          <text x={120} y={418} textAnchor="middle" fontSize="11" fontWeight="600" fill="#3FB97F">Active Record</text>
+          <text x={120} y={440} textAnchor="middle" fontSize="11" fill={T.secondary}>对象=行</text>
 
-          <text x={280} y={418} textAnchor="middle" fontSize="10" fontWeight="600" fill="#E5B567">Row Data Gateway</text>
-          <text x={280} y={440} textAnchor="middle" fontSize="9" fill={T.secondary}>网关隔离 SQL</text>
+          <text x={280} y={418} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567">Row Data Gateway</text>
+          <text x={280} y={440} textAnchor="middle" fontSize="11" fill={T.secondary}>网关隔离 SQL</text>
 
-          <text x={440} y={418} textAnchor="middle" fontSize="10" fontWeight="600" fill={T.accent}>Data Mapper</text>
-          <text x={440} y={440} textAnchor="middle" fontSize="9" fill={T.secondary}>独立映射层</text>
+          <text x={440} y={418} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.accent}>Data Mapper</text>
+          <text x={440} y={440} textAnchor="middle" fontSize="11" fill={T.secondary}>独立映射层</text>
 
-          <text x={600} y={418} textAnchor="middle" fontSize="10" fontWeight="600" fill={T.danger}>+ UoW + IdMap</text>
-          <text x={600} y={440} textAnchor="middle" fontSize="9" fill={T.secondary}>完整对象图管理</text>
+          <text x={600} y={418} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.danger}>+ UoW + IdMap</text>
+          <text x={600} y={440} textAnchor="middle" fontSize="11" fill={T.secondary}>完整对象图管理</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="映射越复杂，对象模型越自由——代价是间接层和维护成本" />
         </svg>

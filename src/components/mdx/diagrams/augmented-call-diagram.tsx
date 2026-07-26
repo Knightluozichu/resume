@@ -375,7 +375,7 @@ export function AugmentedCallDiagram() {
             x={RET_X + SRC_W / 2}
             y={RET_Y + 44}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             退货政策文档
@@ -406,7 +406,7 @@ export function AugmentedCallDiagram() {
             x={MEM_X + SRC_W / 2}
             y={MEM_Y + 44}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             历史 / 偏好
@@ -437,7 +437,7 @@ export function AugmentedCallDiagram() {
             x={TOOL_X + SRC_W / 2}
             y={TOOL_Y + 44}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
           >
@@ -483,7 +483,7 @@ export function AugmentedCallDiagram() {
             x={LLM_CX}
             y={LLM_CY + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             三路汇聚的核心
@@ -510,7 +510,7 @@ export function AugmentedCallDiagram() {
               x={RET_CARD_X + CARD_W / 2}
               y={RET_CARD_Y + 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -520,7 +520,7 @@ export function AugmentedCallDiagram() {
               x={RET_CARD_X + CARD_W / 2}
               y={RET_CARD_Y + 40}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-primary)"
             >
               「7 天无理由可退」
@@ -548,7 +548,7 @@ export function AugmentedCallDiagram() {
               x={MEM_CARD_X + CARD_W / 2}
               y={MEM_CARD_Y + 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -558,7 +558,7 @@ export function AugmentedCallDiagram() {
               x={MEM_CARD_X + CARD_W / 2}
               y={MEM_CARD_Y + 40}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-primary)"
             >
               「VIP · 上月已退一次」
@@ -586,7 +586,7 @@ export function AugmentedCallDiagram() {
               x={TOOL_CARD_X + CARD_W / 2}
               y={TOOL_CARD_Y + 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--success)"
             >
@@ -596,7 +596,7 @@ export function AugmentedCallDiagram() {
               x={TOOL_CARD_X + CARD_W / 2}
               y={TOOL_CARD_Y + 40}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-primary)"
             >
               订单状态：已签收 3 天
@@ -642,7 +642,7 @@ export function AugmentedCallDiagram() {
             x={ANSWER_CX}
             y={ANSWER_Y + 42}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             「按政策 + 您是 VIP，本单可退」

@@ -347,7 +347,7 @@ export function MutexSerializeDiagram() {
             x={slotX(5) - SEG_GAP / 2}
             y={A_Y - 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -369,7 +369,7 @@ export function MutexSerializeDiagram() {
             x={SWEEP_RIGHT}
             y={B_Y + LANE_H + 24}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

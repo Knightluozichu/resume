@@ -215,7 +215,7 @@ export function CASConceptDiagram() {
           x={n.x + BOX_W / 2}
           y={n.y + 38}
           textAnchor="middle"
-          fontSize="9.5"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {n.sub}

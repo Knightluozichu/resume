@@ -137,7 +137,7 @@ export function AssBodyElectronicsDiagram() {
 
           {/* 底部总结 */}
           <line x1={40} y1={436} x2={VIEW_W - 40} y2={436} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={458} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={VIEW_W / 2} y={458} textAnchor="middle" fontSize="11" fill={secondary}>
             BCM 统筹车身功能：CAN 承载关键高速数据，LIN 驱动量大面广的低速节点
           </text>
         </svg>

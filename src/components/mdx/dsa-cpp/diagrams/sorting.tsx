@@ -17,7 +17,7 @@ export function DsaSortingContractLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {(["stable", "memory", "adaptivity"] as const).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setProperty(candidate)} className={"min-h-10 border px-1 text-xs font-semibold " + (property === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setProperty(candidate)} className={"min-h-11 border px-1 text-xs font-semibold " + (property === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -78,7 +78,7 @@ export function DsaShellsortGapLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {([4, 2, 1] as const).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setGap(candidate)} className={"min-h-10 border text-xs font-semibold " + (gap === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>gap {candidate}</button>
+            <button key={candidate} type="button" onClick={() => setGap(candidate)} className={"min-h-11 border text-xs font-semibold " + (gap === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>gap {candidate}</button>
           ))}
         </div>
         <div className="mt-4 space-y-2">
@@ -110,7 +110,7 @@ export function DsaNLogNSortComparisonLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {(["heapsort", "mergesort", "quicksort"] as NLogNAlgorithm[]).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setAlgorithm(candidate)} className={"min-h-10 border px-1 text-xs font-semibold " + (algorithm === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setAlgorithm(candidate)} className={"min-h-11 border px-1 text-xs font-semibold " + (algorithm === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -141,7 +141,7 @@ export function DsaIndirectSortLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2">
           {(["pointers", "cycles"] as const).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setPhase(candidate)} className={"min-h-10 border text-xs font-semibold " + (phase === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setPhase(candidate)} className={"min-h-11 border text-xs font-semibold " + (phase === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 flex gap-2">

@@ -117,7 +117,7 @@ export function DiffuseMapDiagram() {
             x="328"
             y="172"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -170,7 +170,7 @@ export function DiffuseMapDiagram() {
             x="500"
             y="78"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             铁边部位

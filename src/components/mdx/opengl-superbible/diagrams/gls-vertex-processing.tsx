@@ -144,15 +144,15 @@ export function GlsVertexProcessingDiagram({
                 y="155"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="201" fontSize="11" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="222" fontSize="10.1" fill={primary}>
+              <text x={x + 13} y="222" fontSize="11" fill={primary}>
                 {stage.output}
               </text>
             </g>
@@ -182,7 +182,7 @@ export function GlsVertexProcessingDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={primary}
         >
           关键证据：调用参数、内建 ID、裁剪坐标、捕获字节数与窗口映射
@@ -249,13 +249,13 @@ export function GlsMathTransformDiagram() {
         >
           同一矩阵，对象语义不同
         </text>
-        <text x="28" y="67" fontSize="10" fill={secondary}>
+        <text x="28" y="67" fontSize="11" fill={secondary}>
           对象
         </text>
-        <text x="165" y="67" fontSize="10" fill={secondary}>
+        <text x="165" y="67" fontSize="11" fill={secondary}>
           表达
         </text>
-        <text x="450" y="67" fontSize="10" fill={secondary}>
+        <text x="450" y="67" fontSize="11" fill={secondary}>
           正确效果
         </text>
         {transformRows.map((row, index) => {
@@ -275,7 +275,7 @@ export function GlsMathTransformDiagram() {
               <text
                 x="57"
                 y={y + 23}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -285,12 +285,12 @@ export function GlsMathTransformDiagram() {
                 x="165"
                 y={y + 23}
                 fontFamily="monospace"
-                fontSize="10.2"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="450" y={y + 23} fontSize="10.3" fill={primary}>
+              <text x="450" y={y + 23} fontSize="11" fill={primary}>
                 {row[2]}
               </text>
             </g>
@@ -311,7 +311,7 @@ export function GlsMathTransformDiagram() {
           x="430"
           y="308"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={primary}
         >
           列向量约定：p_clip = P · V · M · p_local，最右侧先作用
@@ -405,7 +405,7 @@ export function GlsInterpolationCurveDiagram() {
                 y="144"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={color}
               >
                 {row[1]}
@@ -414,7 +414,7 @@ export function GlsInterpolationCurveDiagram() {
                 x={x + 124}
                 y="188"
                 textAnchor="middle"
-                fontSize="10.3"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -498,16 +498,16 @@ export function GlsDrawCommandDiagram() {
         >
           绘制命令是顶点调用域的描述
         </text>
-        <text x="28" y="67" fontSize="10" fill={secondary}>
+        <text x="28" y="67" fontSize="11" fill={secondary}>
           家族
         </text>
-        <text x="170" y="67" fontSize="10" fill={secondary}>
+        <text x="170" y="67" fontSize="11" fill={secondary}>
           核心参数
         </text>
-        <text x="405" y="67" fontSize="10" fill={secondary}>
+        <text x="405" y="67" fontSize="11" fill={secondary}>
           语义
         </text>
-        <text x="690" y="67" fontSize="10" fill={secondary}>
+        <text x="690" y="67" fontSize="11" fill={secondary}>
           代表 API
         </text>
         {drawRows.map((row, index) => {
@@ -528,7 +528,7 @@ export function GlsDrawCommandDiagram() {
               <text
                 x="57"
                 y={y + 25}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -538,19 +538,19 @@ export function GlsDrawCommandDiagram() {
                 x="170"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={color}
               >
                 {row[1]}
               </text>
-              <text x="405" y={y + 25} fontSize="10" fill={primary}>
+              <text x="405" y={y + 25} fontSize="11" fill={primary}>
                 {row[2]}
               </text>
               <text
                 x="690"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.4"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[3]}
@@ -569,7 +569,7 @@ export function GlsDrawCommandDiagram() {
           stroke={warning}
           strokeOpacity="0.5"
         />
-        <text x="450" y="326" textAnchor="middle" fontSize="10" fill={primary}>
+        <text x="450" y="326" textAnchor="middle" fontSize="11" fill={primary}>
           VAO 提供取数格式；draw 参数提供序列范围、实例数和 base 偏移
         </text>
       </svg>
@@ -666,7 +666,7 @@ export function GlsTransformFeedbackDiagram() {
                 y="181"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.7"
+                fontSize="11"
                 fill={stage[2]}
               >
                 {stage[1]}
@@ -698,7 +698,7 @@ export function GlsTransformFeedbackDiagram() {
           x="440"
           y="285"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={primary}
         >
           GL_RASTERIZER_DISCARD
@@ -797,7 +797,7 @@ export function GlsClipViewportDiagram() {
                 y="144"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={stage[3]}
               >
                 {stage[1]}
@@ -806,7 +806,7 @@ export function GlsClipViewportDiagram() {
                 x={x + 102}
                 y="193"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {stage[2]}
@@ -838,7 +838,7 @@ export function GlsClipViewportDiagram() {
           x="450"
           y="294"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           用户裁剪：shader 写 gl_ClipDistance[i]，应用启用 GL_CLIP_DISTANCEi

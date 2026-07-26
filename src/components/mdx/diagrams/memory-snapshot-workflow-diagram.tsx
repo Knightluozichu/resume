@@ -80,7 +80,7 @@ export function MemorySnapshotWorkflowDiagram() {
                   x={x + 14}
                   y={y - 2}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -102,7 +102,7 @@ export function MemorySnapshotWorkflowDiagram() {
                   x={x + boxW / 2}
                   y={y + 42}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {step.sub}
@@ -128,7 +128,7 @@ export function MemorySnapshotWorkflowDiagram() {
             x="280"
             y="146"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             两次快照 Diff = 只看增量，精确捕获操作过程中的内存泄漏
@@ -137,7 +137,7 @@ export function MemorySnapshotWorkflowDiagram() {
             x="280"
             y="164"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Window → Analysis → Memory Profiler

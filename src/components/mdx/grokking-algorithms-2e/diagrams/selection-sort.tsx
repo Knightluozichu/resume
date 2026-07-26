@@ -159,14 +159,14 @@ export function SelectionSortMemoryDiagram() {
           <text x="28" y="62" fontSize="12" fontWeight="700" fill={success}>数组：连续内存</text>
           <rect x="28" y="76" width="704" height="104" fill="var(--bg)" stroke={border} />
           <rect x="48" y="92" width="330" height="70" fill={success} fillOpacity="0.06" stroke={success} strokeDasharray="5 4" />
-          <text x="58" y="108" fontSize="9" fill={secondary}>同一缓存行可带回多个相邻元素</text>
+          <text x="58" y="108" fontSize="11" fill={secondary}>同一缓存行可带回多个相邻元素</text>
           {arrayValues.map((value, index) => {
             const x = 58 + index * 126;
             return (
               <g key={value}>
                 <rect x={x} y="118" width="82" height="34" rx="3" fill={success} fillOpacity="0.14" stroke={success} />
                 <text x={x + 41} y="140" textAnchor="middle" fontSize="13" fontWeight="700" fill={primary}>{value}</text>
-                <text x={x + 41} y="170" textAnchor="middle" fontSize="9" fill={secondary}>地址 {1000 + index * 4}</text>
+                <text x={x + 41} y="170" textAnchor="middle" fontSize="11" fill={secondary}>地址 {1000 + index * 4}</text>
               </g>
             );
           })}
@@ -193,10 +193,10 @@ export function SelectionSortMemoryDiagram() {
               <rect x={node.x} y={node.y} width="54" height="34" rx="3" fill={accent} fillOpacity="0.14" stroke={accent} />
               <text x={node.x + 17} y={node.y + 22} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary}>{node.value}</text>
               <line x1={node.x + 34} y1={node.y} x2={node.x + 34} y2={node.y + 34} stroke={accent} />
-              <text x={node.x + 44} y={node.y + 22} textAnchor="middle" fontSize="9" fill={secondary}>{index === listNodes.length - 1 ? "∅" : "→"}</text>
+              <text x={node.x + 44} y={node.y + 22} textAnchor="middle" fontSize="11" fill={secondary}>{index === listNodes.length - 1 ? "∅" : "→"}</text>
             </g>
           ))}
-          <text x="380" y="380" textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x="380" y="380" textAnchor="middle" fontSize="11" fill={secondary}>
             数组下标可直接换算地址；链表第k项必须沿next从头走到目标结点。
           </text>
         </svg>

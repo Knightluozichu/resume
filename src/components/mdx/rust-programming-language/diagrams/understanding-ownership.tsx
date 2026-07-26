@@ -80,7 +80,7 @@ export function RplOwnershipTransferLab() {
               <span className="text-xs text-secondary">heap state</span>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {selected.heap.map((item) => (
-                  <div key={item} className="min-h-10 border border-border px-3 py-2 font-mono text-xs text-primary">{item}</div>
+                  <div key={item} className="min-h-11 border border-border px-3 py-2 font-mono text-xs text-primary">{item}</div>
                 ))}
               </div>
             </section>

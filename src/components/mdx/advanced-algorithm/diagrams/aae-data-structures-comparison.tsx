@@ -112,7 +112,7 @@ export function AaeDataStructuresComparisonDiagram() {
                 </text>
 
                 {/* 结构示意标签 */}
-                <text x={x + 12} y={CARD_Y + 76} fontSize="10.5" fontWeight="600" fill={secondary} letterSpacing="0.5">
+                <text x={x + 12} y={CARD_Y + 76} fontSize="11" fontWeight="600" fill={secondary} letterSpacing="0.5">
                   结构示意
                 </text>
 
@@ -129,7 +129,7 @@ export function AaeDataStructuresComparisonDiagram() {
                   <g key={sec.label}>
                     {/* 段标签小药丸 */}
                     <rect x={x + 12} y={sec.y - 13} width={64} height={18} rx="4" fill={card.color} fillOpacity="0.1" stroke={card.color} strokeWidth="1" strokeOpacity="0.5" />
-                    <text x={x + 44} y={sec.y} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={card.color}>
+                    <text x={x + 44} y={sec.y} textAnchor="middle" fontSize="11" fontWeight="700" fill={card.color}>
                       {sec.label}
                     </text>
                     {/* 段值 */}
@@ -190,8 +190,8 @@ function SkipListDiagram({ left, color }: { left: number; color: string }) {
         <circle key={`n2-${i}`} cx={cx(i)} cy={lvY[2]} r="6" fill={color} stroke={color} strokeWidth="1.4" />
       ))}
       {/* 层级标注 */}
-      <text x={left + CARD_W - 12} y={lvY[0] + 4} textAnchor="end" fontSize="9.5" fill={secondary}>L0</text>
-      <text x={left + CARD_W - 12} y={lvY[2] + 4} textAnchor="end" fontSize="9.5" fill={secondary}>L2</text>
+      <text x={left + CARD_W - 12} y={lvY[0] + 4} textAnchor="end" fontSize="11" fill={secondary}>L0</text>
+      <text x={left + CARD_W - 12} y={lvY[2] + 4} textAnchor="end" fontSize="11" fill={secondary}>L2</text>
     </g>
   );
 }
@@ -215,7 +215,7 @@ function BTreeDiagram({ left, color }: { left: number; color: string }) {
       {childXs.map((x, i) => (
         <g key={`b-child-${i}`}>
           <rect x={x - 22} y={childY - 11} width="44" height="20" rx="4" fill="var(--bg-elevated)" stroke={color} strokeWidth="1.4" />
-          <text x={x} y={childY + 3} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={x} y={childY + 3} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
             {i === 0 ? "≤10" : i === 1 ? "11-20" : "≥21"}
           </text>
         </g>
@@ -277,7 +277,7 @@ function BloomDiagram({ left, color }: { left: number; color: string }) {
           strokeOpacity={filled.has(i) ? 0.9 : 0.4}
         />
       ))}
-      <text x={left + 12} y={bitY + 30} fontSize="9.5" fill={secondary}>k 个哈希 → 位数组</text>
+      <text x={left + 12} y={bitY + 30} fontSize="11" fill={secondary}>k 个哈希 → 位数组</text>
     </g>
   );
 }

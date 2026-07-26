@@ -139,7 +139,7 @@ export function ToolGranularityDiagram() {
                   x={cx}
                   y={COL_TOP + 48}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {col.sub}
@@ -149,7 +149,7 @@ export function ToolGranularityDiagram() {
                   x={cx}
                   y={COL_TOP + COL_H - 34}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   <tspan x={cx} dy="0">
@@ -239,7 +239,7 @@ export function ToolGranularityDiagram() {
                   x={cx}
                   y={y + 84}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   一次办成
@@ -294,7 +294,7 @@ export function ToolGranularityDiagram() {
                       x={cx}
                       y={y + 40 + j * 22 + 13}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11"
                       fill="var(--text-primary)"
                     >
                       {it}

@@ -35,6 +35,14 @@ export function ServerNetworkDesignLab(props: Props) {
   const [growth, setGrowth] = useState(35);
   const [singleFailure, setSingleFailure] = useState(true);
   const [checked, setChecked] = useState(() => gates.map(() => false));
+  function resetExperiment() {
+    setSelected(0);
+    setPeak(4);
+    setGrowth(35);
+    setSingleFailure(true);
+    setChecked(() => gates.map(() => false));
+  }
+
   const capacity = useMemo(() => {
     const required = peak * (1 + growth / 100);
     const available = singleFailure ? 8 : 12;
@@ -49,6 +57,7 @@ export function ServerNetworkDesignLab(props: Props) {
     const active = links[selected] ?? links[0];
     return (
       <section className={shell} aria-label={unitTitle + "设计地图"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
           {snapshot}
         </p>
@@ -111,6 +120,7 @@ export function ServerNetworkDesignLab(props: Props) {
   if (mode === "fault") {
     return (
       <section className={shell} aria-label={unitTitle + "容量与故障实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
           单故障容量实验
         </p>
@@ -140,7 +150,7 @@ export function ServerNetworkDesignLab(props: Props) {
             />
           </label>
         </div>
-        <label className="mt-4 flex min-h-10 items-center gap-2 text-xs font-semibold">
+        <label className="mt-4 flex min-h-11 items-center gap-2 text-xs font-semibold">
           <input
             type="checkbox"
             checked={singleFailure}
@@ -181,6 +191,7 @@ export function ServerNetworkDesignLab(props: Props) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell} aria-label={unitTitle + "证据门"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         独立设计证据门
       </p>

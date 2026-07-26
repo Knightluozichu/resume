@@ -330,7 +330,7 @@ export function PbtSamplingDistributionDiagram() {
                   x="205"
                   y="18"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={accent}
                 >
                   高贡献 f(x)
@@ -352,7 +352,7 @@ export function PbtSamplingDistributionDiagram() {
                   x="160"
                   y="154"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {panel.note}
@@ -435,7 +435,7 @@ export function PbtConvergenceDiagram() {
                 x={x}
                 y="256"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 {[1, 4, 16, 64][index]}
@@ -464,7 +464,7 @@ export function PbtConvergenceDiagram() {
             x="216"
             y="119"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             降方差是在同一 N 下整体压低曲线
@@ -492,7 +492,7 @@ export function PbtConvergenceDiagram() {
             x="14"
             y="135"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
             transform="rotate(-90 14 135)"
           >
@@ -510,10 +510,10 @@ export function PbtConvergenceDiagram() {
             stroke={success}
             strokeWidth="3"
           />
-          <text x="176" y="78" fontSize="10" fontWeight="700" fill={warning}>
+          <text x="176" y="78" fontSize="11" fontWeight="700" fill={warning}>
             独立均匀采样
           </text>
-          <text x="170" y="152" fontSize="10" fontWeight="700" fill={success}>
+          <text x="170" y="152" fontSize="11" fontWeight="700" fill={success}>
             分层 / 重要性 / MIS
           </text>
           {[58, 142, 226, 310].map((x, index) => (
@@ -523,7 +523,7 @@ export function PbtConvergenceDiagram() {
                 x={x}
                 y="241"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill={secondary}
               >
                 {[1, 4, 16, 64][index]}
@@ -534,7 +534,7 @@ export function PbtConvergenceDiagram() {
             x="170"
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             降方差是在同一 N 下整体压低误差曲线

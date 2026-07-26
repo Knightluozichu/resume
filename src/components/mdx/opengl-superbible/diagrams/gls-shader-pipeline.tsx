@@ -144,15 +144,15 @@ export function GlsShaderPipelineDiagram({
                 y="157"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.7"
+                fontSize="11"
                 fill={primary}
               >
                 {group.stages}
               </text>
-              <text x={x + 13} y="203" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="203" fontSize="11" fill={secondary}>
                 阶段输出
               </text>
-              <text x={x + 13} y="224" fontSize="10.2" fill={primary}>
+              <text x={x + 13} y="224" fontSize="11" fill={primary}>
                 {group.result}
               </text>
             </g>
@@ -182,7 +182,7 @@ export function GlsShaderPipelineDiagram({
           x="450"
           y="304"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={primary}
         >
           compute shader 单独 dispatch；它可共享资源与同步机制，但不会穿过上述
@@ -280,7 +280,7 @@ export function GlsStageInterfaceDiagram() {
               y="119"
               textAnchor="middle"
               fontFamily="monospace"
-              fontSize="9.5"
+              fontSize="11"
               fill={secondary}
             >
               {code}
@@ -312,7 +312,7 @@ export function GlsStageInterfaceDiagram() {
               <text
                 x="112"
                 y={y + 20}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -322,12 +322,12 @@ export function GlsStageInterfaceDiagram() {
                 x="270"
                 y={y + 20}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={accent}
               >
                 {row[1]}
               </text>
-              <text x="515" y={y + 20} fontSize="10" fill={secondary}>
+              <text x="515" y={y + 20} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -419,7 +419,7 @@ export function GlsTessellationDiagram() {
                 y="140"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={stage[3]}
               >
                 {stage[1]}
@@ -428,7 +428,7 @@ export function GlsTessellationDiagram() {
                 x={x + 97.5}
                 y="184"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 {stage[2]}
@@ -449,7 +449,7 @@ export function GlsTessellationDiagram() {
           x="440"
           y="251"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           三角形域：p = u p₀ + v p₁ + w p₂，且 u + v + w = 1
@@ -458,7 +458,7 @@ export function GlsTessellationDiagram() {
           x="440"
           y="275"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={secondary}
         >
           TCS 可选但 TES 存在时通常配套；generator 是固定功能，不是 shader
@@ -560,7 +560,7 @@ export function GlsProgramLifecycleDiagram() {
                 y="170"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={color}
               >
                 {stage[1]}
@@ -569,7 +569,7 @@ export function GlsProgramLifecycleDiagram() {
                 x={x + 97}
                 y="196"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {stage[2]}
@@ -601,7 +601,7 @@ export function GlsProgramLifecycleDiagram() {
           x="440"
           y="277"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={primary}
         >
           单体 program：glUseProgram　｜　separable programs：glUseProgramStages
@@ -668,13 +668,13 @@ export function GlsInvocationEvidenceDiagram() {
         >
           没有一个阶段永远最贵
         </text>
-        <text x="28" y="64" fontSize="10" fill={secondary}>
+        <text x="28" y="64" fontSize="11" fill={secondary}>
           阶段
         </text>
-        <text x="165" y="64" fontSize="10" fill={secondary}>
+        <text x="165" y="64" fontSize="11" fill={secondary}>
           调用量由什么决定
         </text>
-        <text x="585" y="64" fontSize="10" fill={secondary}>
+        <text x="585" y="64" fontSize="11" fill={secondary}>
           应采集的证据
         </text>
         {invocationRows.map((row, index) => {
@@ -695,20 +695,20 @@ export function GlsInvocationEvidenceDiagram() {
               <text
                 x="54"
                 y={y + 21}
-                fontSize="10.3"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
                 {row[0]}
               </text>
-              <text x="165" y={y + 21} fontSize="10" fill={primary}>
+              <text x="165" y={y + 21} fontSize="11" fill={primary}>
                 {row[1]}
               </text>
               <text
                 x="585"
                 y={y + 21}
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -727,7 +727,7 @@ export function GlsInvocationEvidenceDiagram() {
           stroke={warning}
           strokeOpacity="0.5"
         />
-        <text x="430" y="327" textAnchor="middle" fontSize="10" fill={primary}>
+        <text x="430" y="327" textAnchor="middle" fontSize="11" fill={primary}>
           计数器说明规模，timer query / profiler 才说明耗时；二者应一起看
         </text>
       </svg>

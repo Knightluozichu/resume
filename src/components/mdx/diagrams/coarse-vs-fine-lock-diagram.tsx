@@ -386,7 +386,7 @@ export function CoarseVsFineLockDiagram() {
                   x={x + w / 2}
                   y={y + h / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -411,7 +411,7 @@ export function CoarseVsFineLockDiagram() {
             x={SWEEP_RIGHT}
             y={fineRowY(2) + ROW_H + 14}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

@@ -73,13 +73,13 @@ export function TwoStackQueueFlowDiagram() {
             </g>
           ))}
           <path d="M270 164 C360 108 460 108 550 164" fill="none" stroke="var(--accent)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#queue-arrow)" />
-          <text x="410" y="116" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--accent)">仅当stack2为空：逐个搬运全部元素</text>
+          <text x="410" y="116" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">仅当stack2为空：逐个搬运全部元素</text>
           <path d="M153 60 L153 92" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#queue-arrow)" />
-          <text x="153" y="50" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">appendTail</text>
+          <text x="153" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">appendTail</text>
           <path d="M667 168 L667 132" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#queue-arrow)" />
-          <text x="735" y="142" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">deleteHead</text>
+          <text x="735" y="142" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">deleteHead</text>
           <rect x="164" y="336" width="492" height="34" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="358" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">输出栈未空时，新入队元素留在输入栈，不能越过旧元素。</text>
+          <text x="410" y="358" textAnchor="middle" fontSize="11" fill="var(--text-primary)">输出栈未空时，新入队元素留在输入栈，不能越过旧元素。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">第一次反转发生在入栈，第二次反转发生在跨栈搬运，队列顺序因此恢复。</figcaption>

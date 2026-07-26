@@ -42,18 +42,18 @@ export function LupCApiDiagram() {
           {/* 栈帧（从底到顶） */}
           <rect x={280} y={92} width={160} height={28} rx="4" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" strokeOpacity="0.5" />
           <text x={360} y={110} textAnchor="middle" fontSize="11" fill={primary}>{`字符串 "hello"`}</text>
-          <text x={460} y={110} fontSize="10" fill={secondary}>{`[1] / [-3]`}</text>
+          <text x={460} y={110} fontSize="11" fill={secondary}>{`[1] / [-3]`}</text>
 
           <rect x={280} y={124} width={160} height={28} rx="4" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" strokeOpacity="0.5" />
           <text x={360} y={142} textAnchor="middle" fontSize="11" fill={primary}>{`数字 42`}</text>
-          <text x={460} y={142} fontSize="10" fill={secondary}>{`[2] / [-2]`}</text>
+          <text x={460} y={142} fontSize="11" fill={secondary}>{`[2] / [-2]`}</text>
 
           <rect x={280} y={156} width={160} height={28} rx="4" fill={success} fillOpacity="0.12" stroke={success} strokeWidth="1.2" strokeOpacity="0.6" />
           <text x={360} y={174} textAnchor="middle" fontSize="11" fontWeight="700" fill={success}>{`nil ← 栈顶`}</text>
-          <text x={460} y={174} fontSize="10" fill={success}>{`[3] / [-1]`}</text>
+          <text x={460} y={174} fontSize="11" fill={success}>{`[3] / [-1]`}</text>
 
           {/* 栈底标签 */}
-          <text x={360} y={200} textAnchor="middle" fontSize="10" fill={secondary}>{`↑ 栈底  栈顶 ↑`}</text>
+          <text x={360} y={200} textAnchor="middle" fontSize="11" fill={secondary}>{`↑ 栈底  栈顶 ↑`}</text>
 
           {/* 左侧：压栈操作 */}
           <text x={120} y={78} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent}>{`

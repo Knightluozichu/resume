@@ -73,9 +73,9 @@ export function AaeDistributedAlgorithmsDiagram() {
               strokeWidth="1.8"
             />
             {/* 三角形边标注：只能选两边 */}
-            <text x={(CAP_C.x + CAP_A.x) / 2 - 10} y={(CAP_C.y + CAP_A.y) / 2} fontSize="10" fill={accent} fontFamily="monospace">CP</text>
-            <text x={(CAP_C.x + CAP_P.x) / 2 + 4} y={(CAP_C.y + CAP_P.y) / 2} fontSize="10" fill={secondary} fontFamily="monospace">—</text>
-            <text x={(CAP_A.x + CAP_P.x) / 2} y={(CAP_A.y + CAP_P.y) / 2 + 14} textAnchor="middle" fontSize="10" fill={accent} fontFamily="monospace">AP</text>
+            <text x={(CAP_C.x + CAP_A.x) / 2 - 10} y={(CAP_C.y + CAP_A.y) / 2} fontSize="11" fill={accent} fontFamily="monospace">CP</text>
+            <text x={(CAP_C.x + CAP_P.x) / 2 + 4} y={(CAP_C.y + CAP_P.y) / 2} fontSize="11" fill={secondary} fontFamily="monospace">—</text>
+            <text x={(CAP_A.x + CAP_P.x) / 2} y={(CAP_A.y + CAP_P.y) / 2 + 14} textAnchor="middle" fontSize="11" fill={accent} fontFamily="monospace">AP</text>
             {/* 顶点标签 */}
             <circle cx={CAP_C.x} cy={CAP_C.y} r="14" fill={elevated} stroke={accent} strokeWidth="1.6" />
             <text x={CAP_C.x} y={CAP_C.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">C</text>
@@ -83,11 +83,11 @@ export function AaeDistributedAlgorithmsDiagram() {
             <text x={CAP_A.x} y={CAP_A.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">A</text>
             <circle cx={CAP_P.x} cy={CAP_P.y} r="14" fill={elevated} stroke={accent} strokeWidth="1.6" />
             <text x={CAP_P.x} y={CAP_P.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">P</text>
-            <text x={CAP_C.x} y={CAP_C.y - 22} textAnchor="middle" fontSize="10" fill={secondary}>一致性</text>
-            <text x={CAP_A.x - 24} y={CAP_A.y + 4} textAnchor="middle" fontSize="10" fill={secondary}>可用性</text>
-            <text x={CAP_P.x + 26} y={CAP_P.y + 4} textAnchor="middle" fontSize="10" fill={secondary}>分区</text>
+            <text x={CAP_C.x} y={CAP_C.y - 22} textAnchor="middle" fontSize="11" fill={secondary}>一致性</text>
+            <text x={CAP_A.x - 24} y={CAP_A.y + 4} textAnchor="middle" fontSize="11" fill={secondary}>可用性</text>
+            <text x={CAP_P.x + 26} y={CAP_P.y + 4} textAnchor="middle" fontSize="11" fill={secondary}>分区</text>
             <text x={150} y={262} textAnchor="middle" fontSize="11.5" fontWeight="700" fill={accent}>CAP 定理</text>
-            <text x={150} y={278} textAnchor="middle" fontSize="10" fill={secondary}>三选二</text>
+            <text x={150} y={278} textAnchor="middle" fontSize="11" fill={secondary}>三选二</text>
           </g>
 
           {/* ===== 中心 → CAP 连线 ===== */}
@@ -109,7 +109,7 @@ export function AaeDistributedAlgorithmsDiagram() {
               <text x={n.x + n.w / 2} y={n.y + 22} textAnchor="middle" fontSize="13" fontWeight="700" fill={n.color} fontFamily="monospace">
                 {n.title}
               </text>
-              <text x={n.x + n.w / 2} y={n.y + 41} textAnchor="middle" fontSize="10.5" fill={secondary}>
+              <text x={n.x + n.w / 2} y={n.y + 41} textAnchor="middle" fontSize="11" fill={secondary}>
                 {n.sub}
               </text>
             </g>

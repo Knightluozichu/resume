@@ -292,7 +292,7 @@ export function FunctionCallingDecisionDiagram() {
           <text
             x={MENU_X + 4}
             y={MENU_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             右侧小条 = 与意图的匹配度
@@ -382,7 +382,7 @@ export function FunctionCallingDecisionDiagram() {
           <text
             x={PANEL_X}
             y={PANEL_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             模型侧的挑选过程

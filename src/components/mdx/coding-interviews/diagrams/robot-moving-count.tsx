@@ -36,7 +36,7 @@ export function DigitSumConstraintDiagram() {
           <text x="229" y="202" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--success)">= 18 ≤ k</text>
           <text x="591" y="202" textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--warning)">= 19 &gt; k</text>
           <rect x="174" y="266" width="472" height="30" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="286" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">合法只说明格子可进入；还必须从(0,0)沿合法邻接路径到达。</text>
+          <text x="410" y="286" textAnchor="middle" fontSize="11" fill="var(--text-primary)">合法只说明格子可进入；还必须从(0,0)沿合法邻接路径到达。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">作者示例阈值为18，两个相邻坐标因末位不同落在约束两侧。</figcaption>
@@ -59,10 +59,10 @@ export function RobotReachabilityGridDiagram() {
           {cells.map(({ row, col, allowed }) => {
             const x = 212 + col * 68;
             const y = 64 + row * 68;
-            return <g key={row + "-" + col}><rect x={x} y={y} width="58" height="58" rx="4" fill={allowed ? "var(--success)" : "var(--bg)"} fillOpacity={allowed ? 0.1 : 1} stroke={allowed ? "var(--success)" : "var(--border)"} /><text x={x+29} y={y+25} textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">({row},{col})</text><text x={x+29} y={y+43} textAnchor="middle" fontSize="9" fontWeight="700" fill={allowed ? "var(--success)" : "var(--text-secondary)"}>{row+col}</text></g>;
+            return <g key={row + "-" + col}><rect x={x} y={y} width="58" height="58" rx="4" fill={allowed ? "var(--success)" : "var(--bg)"} fillOpacity={allowed ? 0.1 : 1} stroke={allowed ? "var(--success)" : "var(--border)"} /><text x={x+29} y={y+25} textAnchor="middle" fontSize="11" fill="var(--text-primary)">({row},{col})</text><text x={x+29} y={y+43} textAnchor="middle" fontSize="11" fontWeight="700" fill={allowed ? "var(--success)" : "var(--text-secondary)"}>{row+col}</text></g>;
           })}
-          <text x="172" y="94" textAnchor="end" fontSize="10" fontWeight="700" fill="var(--accent)">起点 →</text>
-          <text x="410" y="492" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">这里只因坐标小于10，数位和等于row+col；大坐标必须逐位计算。</text>
+          <text x="172" y="94" textAnchor="end" fontSize="11" fontWeight="700" fill="var(--accent)">起点 →</text>
+          <text x="410" y="492" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">这里只因坐标小于10，数位和等于row+col；大坐标必须逐位计算。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">搜索只扩展从原点实际到达的合法格，不扫描后直接把所有合法格相加。</figcaption>

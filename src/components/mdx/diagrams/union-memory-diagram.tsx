@@ -62,10 +62,10 @@ export function UnionMemoryDiagram() {
             <text x={102} y={122} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>
               写入 int
             </text>
-            <text x={102} y={142} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={102} y={142} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               u.i = 65;
             </text>
-            <text x={102} y={162} textAnchor="middle" fontSize="9" fill={secondary}>
+            <text x={102} y={162} textAnchor="middle" fontSize="11" fill={secondary}>
               此时有效的是 i
             </text>
             <line x1={172} y1={144} x2={memX} y2={120} stroke={accent} strokeWidth="1.5" markerEnd="url(#uniArrow)" />
@@ -77,10 +77,10 @@ export function UnionMemoryDiagram() {
             <text x={543} y={122} textAnchor="middle" fontSize="11" fontWeight="600" fill={warn}>
               再读 float？
             </text>
-            <text x={543} y={142} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={543} y={142} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               x = u.f;
             </text>
-            <text x={543} y={162} textAnchor="middle" fontSize="9" fill={secondary}>
+            <text x={543} y={162} textAnchor="middle" fontSize="11" fill={secondary}>
               位模式被当 float 解释
             </text>
             <line x1={468} y1={144} x2={memX + memW} y2={120} stroke={warn} strokeWidth="1.5" strokeDasharray="5 3" />
@@ -90,13 +90,13 @@ export function UnionMemoryDiagram() {
           <text x={40} y={268} fontSize="11" fontWeight="600" fill={primary}>
             使用规则
           </text>
-          <text x={40} y={288} fontSize="10" fill={secondary}>
+          <text x={40} y={288} fontSize="11" fill={secondary}>
             · 同一时刻只应通过「最后写入的那种成员类型」来读
           </text>
-          <text x={40} y={306} fontSize="10" fill={secondary}>
+          <text x={40} y={306} fontSize="11" fill={secondary}>
             · 典型用途：节省内存（多种表示互斥）、协议字段复用、与硬件寄存器布局对应
           </text>
-          <text x={40} y={324} fontSize="10" fill={secondary}>
+          <text x={40} y={324} fontSize="11" fill={secondary}>
             · C11 起可用 tagged union 模式：另存 enum 标签记录当前有效成员（编译器不自动检查）
           </text>
 

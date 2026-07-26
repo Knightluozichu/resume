@@ -49,16 +49,16 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             Animal（父类）
           </text>
-          <text x="285" y="86" fontSize="10" fill="var(--text-secondary)">
+          <text x="285" y="86" fontSize="11" fill="var(--text-secondary)">
             String name;
           </text>
-          <text x="285" y="100" fontSize="10" fill="var(--text-secondary)">
+          <text x="285" y="100" fontSize="11" fill="var(--text-secondary)">
             void eat() &#123;...&#125;
           </text>
-          <text x="285" y="114" fontSize="10" fill="var(--text-secondary)">
+          <text x="285" y="114" fontSize="11" fill="var(--text-secondary)">
             void makeSound() &#123;...&#125;
           </text>
-          <text x="285" y="128" fontSize="10" fill="var(--text-secondary)">
+          <text x="285" y="128" fontSize="11" fill="var(--text-secondary)">
             abstract void move();
           </text>
 
@@ -67,7 +67,7 @@ export function HfjInheritancePolymorphismDiagram() {
             x="200"
             y="172"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             extends
@@ -85,7 +85,7 @@ export function HfjInheritancePolymorphismDiagram() {
             x="370"
             y="172"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             extends
@@ -103,7 +103,7 @@ export function HfjInheritancePolymorphismDiagram() {
             x="540"
             y="172"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             extends
@@ -140,17 +140,17 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             Dog extends Animal
           </text>
-          <text x="68" y="234" fontSize="10" fill="var(--text-secondary)">
+          <text x="68" y="234" fontSize="11" fill="var(--text-secondary)">
             &#47;&#47; 继承 name, eat()
           </text>
-          <text x="68" y="248" fontSize="10" fill="var(--text-secondary)">
+          <text x="68" y="248" fontSize="11" fill="var(--text-secondary)">
             void makeSound() &#123;
           </text>
-          <text x="68" y="262" fontSize="10" fill="var(--text-secondary)">
+          <text x="68" y="262" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#47;&#47; 重写: 汪汪
           </text>
-          <text x="68" y="276" fontSize="10" fill="var(--text-secondary)">
+          <text x="68" y="276" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
 
@@ -175,17 +175,17 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             Cat extends Animal
           </text>
-          <text x="288" y="234" fontSize="10" fill="var(--text-secondary)">
+          <text x="288" y="234" fontSize="11" fill="var(--text-secondary)">
             &#47;&#47; 继承 name, eat()
           </text>
-          <text x="288" y="248" fontSize="10" fill="var(--text-secondary)">
+          <text x="288" y="248" fontSize="11" fill="var(--text-secondary)">
             void makeSound() &#123;
           </text>
-          <text x="288" y="262" fontSize="10" fill="var(--text-secondary)">
+          <text x="288" y="262" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#47;&#47; 重写: 喵喵
           </text>
-          <text x="288" y="276" fontSize="10" fill="var(--text-secondary)">
+          <text x="288" y="276" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
 
@@ -210,17 +210,17 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             Wolf extends Animal
           </text>
-          <text x="508" y="234" fontSize="10" fill="var(--text-secondary)">
+          <text x="508" y="234" fontSize="11" fill="var(--text-secondary)">
             &#47;&#47; 继承 name, eat()
           </text>
-          <text x="508" y="248" fontSize="10" fill="var(--text-secondary)">
+          <text x="508" y="248" fontSize="11" fill="var(--text-secondary)">
             void makeSound() &#123;
           </text>
-          <text x="508" y="262" fontSize="10" fill="var(--text-secondary)">
+          <text x="508" y="262" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#47;&#47; 重写: 嗷呜
           </text>
-          <text x="508" y="276" fontSize="10" fill="var(--text-secondary)">
+          <text x="508" y="276" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
 
@@ -258,28 +258,28 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             多态的核心用法
           </text>
-          <text x="45" y="372" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="372" fontSize="11" fill="var(--text-secondary)">
             Animal a1 = new Dog();
           </text>
-          <text x="45" y="388" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="388" fontSize="11" fill="var(--text-secondary)">
             Animal a2 = new Cat();
           </text>
-          <text x="45" y="404" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="404" fontSize="11" fill="var(--text-secondary)">
             Animal a3 = new Wolf();
           </text>
-          <text x="45" y="426" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="426" fontSize="11" fill="var(--text-secondary)">
             a1.makeSound(); // &rarr; &quot;汪汪&quot;
           </text>
-          <text x="45" y="442" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="442" fontSize="11" fill="var(--text-secondary)">
             a2.makeSound(); // &rarr; &quot;喵喵&quot;
           </text>
-          <text x="45" y="458" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="458" fontSize="11" fill="var(--text-secondary)">
             a3.makeSound(); // &rarr; &quot;嗷呜&quot;
           </text>
-          <text x="45" y="478" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="478" fontSize="11" fill="var(--text-secondary)">
             编译时类型 Animal, 运行时类型各不同
           </text>
-          <text x="45" y="494" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="494" fontSize="11" fill="var(--text-secondary)">
             JVM 根据实际对象调用对应方法
           </text>
 
@@ -305,28 +305,28 @@ export function HfjInheritancePolymorphismDiagram() {
           >
             IS-A 测试与规则
           </text>
-          <text x="405" y="372" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="372" fontSize="11" fill="var(--text-secondary)">
             Dog IS-A Animal &rarr; true
           </text>
-          <text x="405" y="388" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="388" fontSize="11" fill="var(--text-secondary)">
             Cat IS-A Animal &rarr; true
           </text>
-          <text x="405" y="404" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="404" fontSize="11" fill="var(--text-secondary)">
             Wolf IS-A Animal &rarr; true
           </text>
-          <text x="405" y="426" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="426" fontSize="11" fill="var(--text-secondary)">
             Animal a = new Dog(); // 向上转型(隐式)
           </text>
-          <text x="405" y="442" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="442" fontSize="11" fill="var(--text-secondary)">
             Dog d = (Dog) a; // 向下转型(显式)
           </text>
-          <text x="405" y="462" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="462" fontSize="11" fill="var(--text-secondary)">
             private 成员不继承
           </text>
-          <text x="405" y="478" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="478" fontSize="11" fill="var(--text-secondary)">
             构造器不继承, 但子类构造器先调 super()
           </text>
-          <text x="405" y="494" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="494" fontSize="11" fill="var(--text-secondary)">
             重写方法不能缩小访问权限
           </text>
         </svg>

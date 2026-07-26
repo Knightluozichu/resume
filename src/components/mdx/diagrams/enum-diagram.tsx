@@ -40,7 +40,7 @@ export function EnumDiagram() {
 
           {/* Source code panel */}
           <rect x={24} y={68} width={280} height={36} rx="6" fill={bg} stroke={border} strokeWidth="1.5" />
-          <text x={40} y={90} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={40} y={90} fontSize="11" fill={primary} fontFamily="monospace">
             enum color c = GREEN;  /* c 的值是 1 */
           </text>
 
@@ -87,10 +87,10 @@ export function EnumDiagram() {
             strokeWidth="2"
             markerEnd="url(#enumArrow)"
           />
-          <text x={150} y={268} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={150} y={268} textAnchor="middle" fontSize="11" fill={secondary}>
             switch (c) 可分支处理；printf 用 %d 打印枚举的整数值
           </text>
-          <text x={150} y={288} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={150} y={288} textAnchor="middle" fontSize="11" fill={secondary}>
             typedef enum {"{ ... } Color;"} 可像 struct 一样起别名
           </text>
 

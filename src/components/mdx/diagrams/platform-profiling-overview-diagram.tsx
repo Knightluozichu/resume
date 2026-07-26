@@ -114,7 +114,7 @@ export function PlatformProfilingOverviewDiagram() {
                 x={p.x + p.w / 2}
                 y={74}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {p.sub}
@@ -124,7 +124,7 @@ export function PlatformProfilingOverviewDiagram() {
                 x={p.x + p.w / 2}
                 y="94"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--text-secondary)"
               >
@@ -134,7 +134,7 @@ export function PlatformProfilingOverviewDiagram() {
                 x={p.x + p.w / 2}
                 y="108"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {p.connection}
@@ -144,7 +144,7 @@ export function PlatformProfilingOverviewDiagram() {
                 x={p.x + p.w / 2}
                 y="128"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--text-secondary)"
               >
@@ -156,7 +156,7 @@ export function PlatformProfilingOverviewDiagram() {
                   x={p.x + p.w / 2}
                   y={142 + li * 13}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {line}
@@ -175,7 +175,7 @@ export function PlatformProfilingOverviewDiagram() {
                 x={p.x + p.w / 2}
                 y={182}
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {p.key}

@@ -25,6 +25,11 @@ export function OfficialAnimationLab({
 }: AnimationLabProps) {
   const [time, setTime] = useState(42);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setTime(42);
+    setFault(false);
+  }
+
   const color = accents[accent];
   const activeIndex = Math.min(
     nodes.length - 1,
@@ -45,6 +50,7 @@ export function OfficialAnimationLab({
       className="my-6 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
       aria-label={title}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
         <div>
           <p className="text-xs font-semibold uppercase text-zinc-500">
@@ -57,7 +63,7 @@ export function OfficialAnimationLab({
         <button
           type="button"
           onClick={() => setFault((value) => !value)}
-          className="min-h-9 rounded border px-3 text-sm font-medium"
+          className="min-h-11 rounded border px-3 text-sm font-medium"
           style={{
             borderColor: color.strong,
             color: color.ink,

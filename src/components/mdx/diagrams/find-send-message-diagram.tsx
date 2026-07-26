@@ -37,7 +37,7 @@ export function FindSendMessageDiagram() {
             x="280"
             y="54"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             Scene Root
@@ -64,7 +64,7 @@ export function FindSendMessageDiagram() {
                 x={cx + 40}
                 y="106"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 Group {i + 1}
@@ -82,7 +82,7 @@ export function FindSendMessageDiagram() {
                 x={cx + 40}
                 y="144"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 Child
@@ -130,7 +130,7 @@ export function FindSendMessageDiagram() {
             x="280"
             y="204"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每次调用从根遍历整棵树 + 字符串匹配；Awake 缓存引用或事件总线替代

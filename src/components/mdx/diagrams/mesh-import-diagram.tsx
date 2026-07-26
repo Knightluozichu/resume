@@ -59,7 +59,7 @@ export function MeshImportDiagram({
                 x="100"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 Off
@@ -68,7 +68,7 @@ export function MeshImportDiagram({
                 x="100"
                 y="110"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 12 MB
@@ -77,7 +77,7 @@ export function MeshImportDiagram({
                 x="100"
                 y="128"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 原始精度
@@ -99,7 +99,7 @@ export function MeshImportDiagram({
                 x="248"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 Medium/High
@@ -108,7 +108,7 @@ export function MeshImportDiagram({
                 x="248"
                 y="110"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--success)"
               >
                 ~4 MB
@@ -117,7 +117,7 @@ export function MeshImportDiagram({
                 x="248"
                 y="128"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 GPU 解压，略增 CPU
@@ -152,7 +152,7 @@ export function MeshImportDiagram({
                 x="420"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 ✗ 关闭
@@ -161,7 +161,7 @@ export function MeshImportDiagram({
                 x="420"
                 y="110"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--success)"
               >
                 只读一份
@@ -170,7 +170,7 @@ export function MeshImportDiagram({
                 x="420"
                 y="128"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 默认推荐
@@ -190,7 +190,7 @@ export function MeshImportDiagram({
                 x="540"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 ✓ 开启
@@ -199,7 +199,7 @@ export function MeshImportDiagram({
                 x="540"
                 y="110"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 ×2 内存
@@ -208,7 +208,7 @@ export function MeshImportDiagram({
                 x="540"
                 y="128"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 仅运行时改 mesh 时
@@ -241,7 +241,7 @@ export function MeshImportDiagram({
             x="320"
             y="212"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Mesh.vertices / RecalculateNormals / 运行时变形 → 开；纯渲染 / 烘焙碰撞 → 关
@@ -250,7 +250,7 @@ export function MeshImportDiagram({
             x="320"
             y="230"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             开错 = 每个网格多占一份可写副本，移动平台内存先爆

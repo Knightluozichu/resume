@@ -52,7 +52,7 @@ export function XrPerformanceBudgetDiagram({ target = "90" }: Props) {
           <text x="24" y="28" fontSize="12" fontWeight="600" fill="var(--text-primary)">
             XR 性能预算 · {t.fps} FPS = {t.ms.toFixed(1)} ms/帧
           </text>
-          <text x="24" y="46" fontSize="10" fill="var(--text-secondary)">
+          <text x="24" y="46" fontSize="11" fill="var(--text-secondary)">
             {t.label} · 双眼各需按时提交 · 超预算 → 重投影/插帧/晕动
           </text>
 
@@ -88,27 +88,27 @@ export function XrPerformanceBudgetDiagram({ target = "90" }: Props) {
             strokeDasharray="4 3"
             opacity="0.6"
           />
-          <text x="32" y="86" fontSize="10" fill="var(--text-primary)">
+          <text x="32" y="86" fontSize="11" fill="var(--text-primary)">
             渲染 + 脚本 + XR 合成
           </text>
-          <text x={24 + budgetW + 8} y="86" fontSize="9" fill="var(--accent)">
+          <text x={24 + budgetW + 8} y="86" fontSize="11" fill="var(--accent)">
             余量
           </text>
 
           {/* 双眼拆分 */}
-          <text x="24" y="118" fontSize="10" fontWeight="600" fill="var(--text-primary)">
+          <text x="24" y="118" fontSize="11" fontWeight="600" fill="var(--text-primary)">
             双眼 ≈ 2× 像素 · 2× Draw（未 Single Pass 时）
           </text>
           <g>
             <rect x="24" y="128" width="148" height="36" rx="6" fill="var(--bg)" stroke="var(--border)" />
-            <text x="98" y="150" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+            <text x="98" y="150" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
               左眼 Pass
             </text>
             <rect x="186" y="128" width="148" height="36" rx="6" fill="var(--bg)" stroke="var(--border)" />
-            <text x="260" y="150" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+            <text x="260" y="150" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
               右眼 Pass
             </text>
-            <text x="350" y="150" fontSize="9" fill="var(--text-secondary)">
+            <text x="350" y="150" fontSize="11" fill="var(--text-secondary)">
               + Late Latch
             </text>
           </g>
@@ -133,7 +133,7 @@ export function XrPerformanceBudgetDiagram({ target = "90" }: Props) {
                   x={x + 32}
                   y="197"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight={active ? "600" : "400"}
                   fill={active ? "var(--accent)" : "var(--text-secondary)"}
                 >
@@ -143,7 +143,7 @@ export function XrPerformanceBudgetDiagram({ target = "90" }: Props) {
             );
           })}
 
-          <text x="24" y="228" fontSize="9" fill="var(--text-secondary)">
+          <text x="24" y="228" fontSize="11" fill="var(--text-secondary)">
             {t.note}
           </text>
         </svg>

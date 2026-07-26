@@ -134,7 +134,7 @@ export function PbtLearningMapDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
               >
                 {stage.title}
               </text>
-              <text x={x + 48} y="112" fontSize="10" fill={stage.color}>
+              <text x={x + 48} y="112" fontSize="11" fill={stage.color}>
                 Chapters {stage.range}
               </text>
               <rect
@@ -150,25 +150,25 @@ export function PbtLearningMapDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                 x={x + 94}
                 y="151"
                 textAnchor="middle"
-                fontSize="9.7"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.topics}
               </text>
-              <text x={x + 14} y="191" fontSize="10" fill={secondary}>
+              <text x={x + 14} y="191" fontSize="11" fill={secondary}>
                 必须带走
               </text>
               <text
                 x={x + 14}
                 y="208"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.contract}
               </text>
-              <text x={x + 14} y="231" fontSize="10" fill={secondary}>
+              <text x={x + 14} y="231" fontSize="11" fill={secondary}>
                 验收 · {stage.deliverable}
               </text>
             </g>
@@ -328,7 +328,7 @@ export function PbtChapterDependencyDiagram() {
               >
                 {group.title}
               </text>
-              <text x="100" y={y + 43} fontSize="9.7" fill={secondary}>
+              <text x="100" y={y + 43} fontSize="11" fill={secondary}>
                 {group.chapters.join(" · ")}
               </text>
               <path
@@ -337,13 +337,13 @@ export function PbtChapterDependencyDiagram() {
                 stroke={border}
                 strokeWidth="2"
               />
-              <text x="605" y={y + 23} fontSize="9.5" fill={secondary}>
+              <text x="605" y={y + 23} fontSize="11" fill={secondary}>
                 本站专题
               </text>
               <text
                 x="605"
                 y={y + 43}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={group.color}
               >
@@ -463,7 +463,7 @@ export function PbtRouteSelectorDiagram() {
               >
                 {route.goal}
               </text>
-              <text x={x + 14} y="120" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="120" fontSize="11" fill={secondary}>
                 官方章号路线
               </text>
               <rect
@@ -479,28 +479,28 @@ export function PbtRouteSelectorDiagram() {
                 x={x + 94}
                 y="152"
                 textAnchor="middle"
-                fontSize="9.7"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={primary}
               >
                 {route.path}
               </text>
-              <text x={x + 14} y="192" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="192" fontSize="11" fill={secondary}>
                 不可跳过
               </text>
               <text
                 x={x + 14}
                 y="211"
-                fontSize="9.8"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {route.keep}
               </text>
-              <text x={x + 14} y="241" fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y="241" fontSize="11" fill={secondary}>
                 通过条件
               </text>
-              <text x={x + 14} y="260" fontSize="9.5" fill={route.color}>
+              <text x={x + 14} y="260" fontSize="11" fill={route.color}>
                 {route.gate}
               </text>
             </g>
@@ -571,13 +571,13 @@ export function PbtMilestoneDiagram() {
         >
           每段学习都要留下可复算交付物
         </text>
-        <text x="34" y="66" fontSize="10" fill={secondary}>
+        <text x="34" y="66" fontSize="11" fill={secondary}>
           里程碑
         </text>
-        <text x="190" y="66" fontSize="10" fill={secondary}>
+        <text x="190" y="66" fontSize="11" fill={secondary}>
           最小交付物
         </text>
-        <text x="480" y="66" fontSize="10" fill={secondary}>
+        <text x="480" y="66" fontSize="11" fill={secondary}>
           通过条件
         </text>
         {milestones.map((row, index) => {
@@ -604,10 +604,10 @@ export function PbtMilestoneDiagram() {
               >
                 {row[0]}
               </text>
-              <text x="190" y={y + 26} fontSize="10.5" fill={primary}>
+              <text x="190" y={y + 26} fontSize="11" fill={primary}>
                 {row[1]}
               </text>
-              <text x="480" y={y + 26} fontSize="10.3" fill={secondary}>
+              <text x="480" y={y + 26} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -727,22 +727,22 @@ export function PbtCodeReadingLoopDiagram() {
               >
                 {node.title}
               </text>
-              <text x={x + 15} y="148" fontSize="10" fill={secondary}>
+              <text x={x + 15} y="148" fontSize="11" fill={secondary}>
                 核对对象
               </text>
               <text
                 x={x + 15}
                 y="168"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {node.detail}
               </text>
-              <text x={x + 15} y="202" fontSize="10" fill={secondary}>
+              <text x={x + 15} y="202" fontSize="11" fill={secondary}>
                 关键问题
               </text>
-              <text x={x + 15} y="221" fontSize="10.3" fill={node.color}>
+              <text x={x + 15} y="221" fontSize="11" fill={node.color}>
                 {node.question}
               </text>
             </g>

@@ -603,7 +603,7 @@ export function ZygoteForkDiagram() {
                 x={n.x + n.w / 2}
                 y={n.y + n.h / 2 + 14}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -663,7 +663,7 @@ export function ZygoteForkDiagram() {
               x={C_APP.cx}
               y={APP_Y + ZYGOTE_H / 2 + 14}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >
@@ -688,7 +688,7 @@ export function ZygoteForkDiagram() {
               x={AMS_X + NODE_W / 2}
               y={AMS_Y - 22}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--warning)"
             >
@@ -701,7 +701,7 @@ export function ZygoteForkDiagram() {
             x={C_ZYGOTE.cx}
             y={ZYGOTE_Y + ZYGOTE_H + 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -711,7 +711,7 @@ export function ZygoteForkDiagram() {
             x={C_ZYGOTE.cx}
             y={ZYGOTE_Y + ZYGOTE_H + 36}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -723,7 +723,7 @@ export function ZygoteForkDiagram() {
             x={C_APP.cx}
             y={APP_Y + ZYGOTE_H + 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >

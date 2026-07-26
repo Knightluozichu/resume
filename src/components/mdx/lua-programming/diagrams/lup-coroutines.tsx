@@ -42,28 +42,28 @@ export function LupCoroutinesDiagram() {
           {/* 状态节点 */}
           <rect x={40} y={92} width={120} height={44} rx="8" fill={elevated} stroke={border} strokeWidth="1.2" />
           <text x={100} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={secondary}>suspended</text>
-          <text x={100} y={128} textAnchor="middle" fontSize="10" fill={secondary}>（初始）</text>
+          <text x={100} y={128} textAnchor="middle" fontSize="11" fill={secondary}>（初始）</text>
 
           <line x1={160} y1={114} x2={200} y2={114} stroke={success} strokeWidth="1.4" markerEnd="url(#lup-co-arrow)" />
-          <text x={180} y={108} textAnchor="middle" fontSize="10" fill={success}>resume</text>
+          <text x={180} y={108} textAnchor="middle" fontSize="11" fill={success}>resume</text>
 
           <rect x={200} y={92} width={120} height={44} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={260} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={success}>running</text>
-          <text x={260} y={128} textAnchor="middle" fontSize="10" fill={secondary}>（执行中）</text>
+          <text x={260} y={128} textAnchor="middle" fontSize="11" fill={secondary}>（执行中）</text>
 
           <line x1={320} y1={114} x2={360} y2={114} stroke={warning} strokeWidth="1.4" markerEnd="url(#lup-co-arrow)" />
-          <text x={340} y={108} textAnchor="middle" fontSize="10" fill={warning}>yield</text>
+          <text x={340} y={108} textAnchor="middle" fontSize="11" fill={warning}>yield</text>
 
           <rect x={360} y={92} width={120} height={44} rx="8" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={420} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>suspended</text>
-          <text x={420} y={128} textAnchor="middle" fontSize="10" fill={secondary}>（挂起）</text>
+          <text x={420} y={128} textAnchor="middle" fontSize="11" fill={secondary}>（挂起）</text>
 
           <line x1={480} y1={114} x2={520} y2={114} stroke={success} strokeWidth="1.4" markerEnd="url(#lup-co-arrow)" />
-          <text x={500} y={108} textAnchor="middle" fontSize="10" fill={success}>resume</text>
+          <text x={500} y={108} textAnchor="middle" fontSize="11" fill={success}>resume</text>
 
           <rect x={520} y={92} width={120} height={44} rx="8" fill={danger} fillOpacity="0.08" stroke={danger} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={580} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={danger}>dead</text>
-          <text x={580} y={128} textAnchor="middle" fontSize="10" fill={secondary}>（完成/出错）</text>
+          <text x={580} y={128} textAnchor="middle" fontSize="11" fill={secondary}>（完成/出错）</text>
 
           {/* 代码示例 */}
           <line x1={32} y1={156} x2={VIEW_W - 32} y2={156} stroke={border} strokeWidth="1" strokeDasharray="4 3" />

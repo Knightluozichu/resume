@@ -377,7 +377,7 @@ export function HotfixDexInjectionDiagram() {
             x={slotCenterX(0)}
             y={TOKEN_Y - 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
             opacity="0.7"
@@ -446,7 +446,7 @@ export function HotfixDexInjectionDiagram() {
                   x={SLOT0_X + CARD_W / 2}
                   y={SLOT_Y + 52}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   Bug.class
@@ -455,7 +455,7 @@ export function HotfixDexInjectionDiagram() {
                   x={SLOT0_X + CARD_W / 2}
                   y={SLOT_Y + 70}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {dex.id === "patch" ? "（修复版）" : "（含 bug · 被遮蔽）"}

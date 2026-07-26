@@ -285,7 +285,7 @@ export function ProcessVsThreadDiagram() {
             x={tProcX + tProcW / 2}
             y={sharedBottom + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -308,7 +308,7 @@ export function ProcessVsThreadDiagram() {
             x={stack1X + stackW / 2}
             y={stackY + SEG_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             线程1 栈
@@ -328,7 +328,7 @@ export function ProcessVsThreadDiagram() {
             x={stack2X + stackW / 2}
             y={stackY + SEG_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             线程2 栈
@@ -337,7 +337,7 @@ export function ProcessVsThreadDiagram() {
             x={tProcX + tProcW / 2}
             y={stackY + SEG_H + 16}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >

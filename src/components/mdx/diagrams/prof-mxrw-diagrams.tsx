@@ -40,12 +40,12 @@ export function UrpArchitectureDiagram() {
         <rect x="10" y="10" width="620" height="90" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
         <text x="320" y="30" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">Built-in Render Pipeline</text>
         <rect x="30" y="45" width="130" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="95" y="68" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Forward</text>
+        <text x="95" y="68" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Forward</text>
         <rect x="180" y="45" width="130" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="245" y="68" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Deferred</text>
+        <text x="245" y="68" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Deferred</text>
         <rect x="330" y="45" width="130" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="395" y="68" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Legacy</text>
-        <text x="500" y="68" fontSize="8" fill="var(--text-secondary)">各路径独立<br />各自管理资源</text>
+        <text x="395" y="68" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Legacy</text>
+        <text x="500" y="68" fontSize="11" fill="var(--text-secondary)">各路径独立<br />各自管理资源</text>
 
         {/* 箭头 */}
         <line x1="320" y1="100" x2="320" y2="115" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#arrowDown)" />
@@ -59,14 +59,14 @@ export function UrpArchitectureDiagram() {
         <rect x="10" y="120" width="620" height="90" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1" />
         <text x="320" y="140" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Universal Render Pipeline (URP)</text>
         <rect x="30" y="155" width="180" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="120" y="172" textAnchor="middle" fontSize="9" fill="var(--text-primary)">SRP Batcher</text>
-        <text x="120" y="186" textAnchor="middle" fontSize="7" fill="var(--text-secondary)">统一数据通道</text>
+        <text x="120" y="172" textAnchor="middle" fontSize="11" fill="var(--text-primary)">SRP Batcher</text>
+        <text x="120" y="186" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">统一数据通道</text>
         <rect x="230" y="155" width="180" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="320" y="172" textAnchor="middle" fontSize="9" fill="var(--text-primary)">URP Asset</text>
-        <text x="320" y="186" textAnchor="middle" fontSize="7" fill="var(--text-secondary)">全局渲染配置</text>
+        <text x="320" y="172" textAnchor="middle" fontSize="11" fill="var(--text-primary)">URP Asset</text>
+        <text x="320" y="186" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">全局渲染配置</text>
         <rect x="430" y="155" width="180" height="40" rx="3" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" />
-        <text x="520" y="172" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Renderer Feature</text>
-        <text x="520" y="186" textAnchor="middle" fontSize="7" fill="var(--text-secondary)">可插拔自定义 pass</text>
+        <text x="520" y="172" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Renderer Feature</text>
+        <text x="520" y="186" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">可插拔自定义 pass</text>
       </svg>
     </DiagramBox>
   );
@@ -111,25 +111,25 @@ export function TileBasedGpuDiagram() {
       >
         {/* 桌面 Immediate 行 */}
         <rect x="10" y="5" width="620" height="85" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-        <text x="320" y="22" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">桌面 GPU：Immediate Mode（N卡/AMD）</text>
-        <text x="25" y="42" fontSize="9" fill="var(--text-secondary)">顶点处理</text>
+        <text x="320" y="22" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">桌面 GPU：Immediate Mode（N卡/AMD）</text>
+        <text x="25" y="42" fontSize="11" fill="var(--text-secondary)">顶点处理</text>
         <rect x="90" y="32" width="80" height="14" rx="2" fill="var(--accent)" opacity="0.25" />
-        <text x="190" y="42" fontSize="9" fill="var(--text-secondary)">→ 光栅化 →</text>
+        <text x="190" y="42" fontSize="11" fill="var(--text-secondary)">→ 光栅化 →</text>
         <rect x="260" y="32" width="80" height="14" rx="2" fill="var(--accent)" opacity="0.25" />
-        <text x="360" y="42" fontSize="9" fill="var(--text-secondary)">→ 片元着色 →</text>
+        <text x="360" y="42" fontSize="11" fill="var(--text-secondary)">→ 片元着色 →</text>
         <rect x="440" y="32" width="80" height="14" rx="2" fill="var(--accent)" opacity="0.25" />
-        <text x="540" y="42" fontSize="9" fill="var(--text-secondary)">→ 显存</text>
-        <text x="320" y="68" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+        <text x="540" y="42" fontSize="11" fill="var(--text-secondary)">→ 显存</text>
+        <text x="320" y="68" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
           所有像素直接写入显存——长流水线，带宽消耗大
         </text>
 
         {/* 箭头 */}
-        <text x="320" y="108" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">⬇ 移动端走另一条路 ⬇</text>
+        <text x="320" y="108" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">⬇ 移动端走另一条路 ⬇</text>
 
         {/* 移动 Tile 行 */}
         <rect x="10" y="118" width="620" height="75" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1" />
-        <text x="320" y="135" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">移动 GPU：Tile-Based Rendering（Mali/Adreno/Apple GPU）</text>
-        <text x="25" y="155" fontSize="8" fill="var(--text-secondary)">屏幕切成 Tile</text>
+        <text x="320" y="135" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">移动 GPU：Tile-Based Rendering（Mali/Adreno/Apple GPU）</text>
+        <text x="25" y="155" fontSize="11" fill="var(--text-secondary)">屏幕切成 Tile</text>
         {[0, 1, 2, 3, 4].map((i) => (
           <rect
             key={`tile-${i}`}
@@ -144,10 +144,10 @@ export function TileBasedGpuDiagram() {
             strokeWidth="0.5"
           />
         ))}
-        <text x="285" y="155" fontSize="8" fill="var(--text-secondary)">→ 每 Tile 在片上 SRAM 渲完</text>
+        <text x="285" y="155" fontSize="11" fill="var(--text-secondary)">→ 每 Tile 在片上 SRAM 渲完</text>
         <rect x="440" y="148" width="60" height="14" rx="2" fill="var(--accent)" opacity="0.15" />
-        <text x="520" y="155" fontSize="8" fill="var(--text-secondary)">→ 写回显存</text>
-        <text x="320" y="183" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+        <text x="520" y="155" fontSize="11" fill="var(--text-secondary)">→ 写回显存</text>
+        <text x="320" y="183" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
           TBDR 省显存带宽但 Tile 边界需存/取中间结果——避免大 RenderTexture 频繁切换
         </text>
       </svg>
@@ -224,13 +224,13 @@ export function XrInputOverheadDiagram() {
               />
             )}
             <rect x={b.x} y="15" width="110" height="90" rx="4" fill={b.color} stroke="var(--border)" strokeWidth="1" />
-            <text x={b.x + 55} y="40" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">{b.label}</text>
-            <text x={b.x + 55} y="58" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">{b.desc.split("\n")[0]}</text>
-            <text x={b.x + 55} y="72" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">{b.desc.split("\n")[1] || ""}</text>
+            <text x={b.x + 55} y="40" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">{b.label}</text>
+            <text x={b.x + 55} y="58" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{b.desc.split("\n")[0]}</text>
+            <text x={b.x + 55} y="72" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{b.desc.split("\n")[1] || ""}</text>
           </React.Fragment>
         ))}
         {/* 底部注释 */}
-        <text x="320" y="140" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+        <text x="320" y="140" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
           每帧约 1-3ms CPU——在高帧率（72/90/120）下占比可观。考虑用 Jobs/Burst 把输入处理移出主线程。
         </text>
       </svg>

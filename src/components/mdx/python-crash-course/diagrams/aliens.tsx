@@ -125,8 +125,8 @@ export function PccCollisionStateLab() {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3 border border-border bg-bg p-3 text-sm text-primary">
           <strong>ships_left: {lives}</strong><span>game_active: {String(active)}</span>
-          <button type="button" onClick={apply} disabled={selected !== 1 && selected !== 2} className="min-h-10 border border-primary bg-primary px-3 text-bg disabled:opacity-40">应用碰撞</button>
-          <button type="button" onClick={reset} className="min-h-10 border border-border px-3 text-secondary">重置</button>
+          <button type="button" onClick={apply} disabled={selected !== 1 && selected !== 2} className="min-h-11 border border-primary bg-primary px-3 text-bg disabled:opacity-40">应用碰撞</button>
+          <button type="button" onClick={reset} className="min-h-11 border border-border px-3 text-secondary">重置</button>
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">选择collision类别，追踪detector、对象删除、lives与game_active的完整状态转换。</figcaption>

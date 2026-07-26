@@ -167,7 +167,7 @@ export function ResourceLifetimeDiagram() {
                 x={s.x + 45}
                 y={126}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill={s.color}
                 fontFamily="monospace"
               >
@@ -216,7 +216,7 @@ export function ResourceLifetimeDiagram() {
                 x={s.x + 45}
                 y={172}
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill={s.statusColor}
                 fontFamily="monospace"
                 fontWeight="600"
@@ -229,7 +229,7 @@ export function ResourceLifetimeDiagram() {
                 x={s.x + 45}
                 y={198}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill={s.statusColor}
               >
                 {s.status}
@@ -273,13 +273,13 @@ export function ResourceLifetimeDiagram() {
             📐 生命周期核心准则
           </text>
 
-          <text x={60} y={306} fontSize="10" fill={primary}>
+          <text x={60} y={306} fontSize="11" fill={primary}>
             ① 构造时获取资源（构造/拷贝/移动），析构时释放——对称
           </text>
-          <text x={60} y={322} fontSize="10" fill={primary}>
+          <text x={60} y={322} fontSize="11" fill={primary}>
             ② 拷贝构造应做深拷贝——新对象独立于源对象
           </text>
-          <text x={60} y={338} fontSize="10" fill={primary}>
+          <text x={60} y={338} fontSize="11" fill={primary}>
             ③ 移动就是把指针&quot;偷&quot;过来——O(1)零分配，源对象置于可析构状态
           </text>
 

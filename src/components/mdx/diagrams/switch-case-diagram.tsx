@@ -55,7 +55,7 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
             <text x={labelX} y={mid(case1Y) + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={"var(--accent)"} fontFamily="monospace">
               case 1:
             </text>
-            <text x={cx} y={case1Y - 6} textAnchor="middle" fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+            <text x={cx} y={case1Y - 6} textAnchor="middle" fontSize="11" fill={"var(--accent)"} fontFamily="system-ui">
               ② choice==1 命中，跳入
             </text>
           </g>
@@ -68,7 +68,7 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
             </text>
             <line x1={labelX + 56} y1={mid(case1Y)} x2={codeX - codeW / 2} y2={mid(case1Y)} stroke={"var(--accent)"} strokeWidth="1.5" markerEnd="url(#sc-arrow)" />
             <line x1={codeX} y1={case1Y + codeH} x2={codeX} y2={endY - 12} stroke={"var(--accent)"} strokeWidth="1.5" strokeDasharray="4 3" />
-            <text x={codeX + 8} y={case1Y + codeH + 16} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+            <text x={codeX + 8} y={case1Y + codeH + 16} fontSize="11" fill={"var(--accent)"} fontFamily="system-ui">
               break 跳出 switch
             </text>
           </g>
@@ -95,7 +95,7 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
             </text>
 
             <line x1={codeX} y1={case2Y + codeH} x2={codeX} y2={case3Y} stroke={"var(--accent)"} strokeWidth="2" markerEnd="url(#sc-arrow)" />
-            <text x={codeX + 10} y={mid(case2Y) + gap / 2 + 4} fontSize="10" fontWeight="700" fill={"var(--accent)"} fontFamily="system-ui">
+            <text x={codeX + 10} y={mid(case2Y) + gap / 2 + 4} fontSize="11" fontWeight="700" fill={"var(--accent)"} fontFamily="system-ui">
               ④ 缺 break → 穿透 fall-through
             </text>
           </g>

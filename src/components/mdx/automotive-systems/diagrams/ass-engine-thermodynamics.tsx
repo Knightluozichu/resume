@@ -184,7 +184,7 @@ export function AssEngineThermodynamicsDiagram() {
 
           {/* 底部总结 */}
           <line x1={40} y1={442} x2={VIEW_W - 40} y2={442} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={456} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={VIEW_W / 2} y={456} textAnchor="middle" fontSize="11" fill={secondary}>
             压缩比 ε = V_max / V_min，提高 ε 可提升热效率，但受爆震限制
           </text>
         </svg>

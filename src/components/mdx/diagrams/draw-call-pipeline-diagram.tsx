@@ -50,7 +50,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="68"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             提交命令
@@ -91,7 +91,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="212"
             y="82"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一次绘制指令
@@ -100,7 +100,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="212"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             网格+材质+Pass
@@ -109,7 +109,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="212"
             y="118"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             CPU 开销大
@@ -149,7 +149,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="372"
             y="82"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             合批后的组
@@ -158,7 +158,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="372"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             多物体→少提交
@@ -167,7 +167,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="372"
             y="118"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             越少越好
@@ -207,7 +207,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="532"
             y="82"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             切换 Shader Pass
@@ -216,7 +216,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="532"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             材质/关键字变
@@ -225,7 +225,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="532"
             y="118"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             切换也贵
@@ -275,7 +275,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="120"
             y="208"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={active("drawcall") ? "var(--accent)" : "var(--text-secondary)"}
           >
             Draw Calls ≈ 原始指令数
@@ -284,7 +284,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="320"
             y="208"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={active("batch") ? "var(--accent)" : "var(--text-secondary)"}
           >
             Batches ≈ 实际提交组数
@@ -293,7 +293,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="520"
             y="208"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={active("setpass") ? "var(--accent)" : "var(--text-secondary)"}
           >
             SetPass Calls ≈ Pass 切换次数
@@ -302,7 +302,7 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
             x="320"
             y="228"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             合批成功 → Batches 远小于 Draw Calls；材质各异 → SetPass 偏高

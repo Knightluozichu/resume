@@ -432,7 +432,7 @@ export function McpMxnDiagram() {
                   x={CLIENT_X + BADGE_W / 2}
                   y={badgeY(ai) + BADGE_H / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--accent)"
                 >
@@ -456,7 +456,7 @@ export function McpMxnDiagram() {
                   x={SERVER_X + BADGE_W / 2}
                   y={badgeY(ti) + BADGE_H / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--accent)"
                 >

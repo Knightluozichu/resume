@@ -68,7 +68,7 @@ export function LinkageDiagram() {
           >
             static int counter = 0;
           </text>
-          <text x={52} y={122} fontSize="9" fill={secondary}>
+          <text x={52} y={122} fontSize="11" fill={secondary}>
             内部链接 — 仅 file_a.c 可见
           </text>
 
@@ -91,7 +91,7 @@ export function LinkageDiagram() {
           >
             int shared = 100;
           </text>
-          <text x={52} y={174} fontSize="9" fill={secondary}>
+          <text x={52} y={174} fontSize="11" fill={secondary}>
             外部链接 — 整个程序共享一份
           </text>
 
@@ -115,7 +115,7 @@ export function LinkageDiagram() {
           >
             extern int shared;
           </text>
-          <text x={52} y={226} fontSize="9" fill={secondary}>
+          <text x={52} y={226} fontSize="11" fill={secondary}>
             声明：别处有定义（可写在头文件）
           </text>
 
@@ -160,7 +160,7 @@ export function LinkageDiagram() {
           >
             extern int shared;
           </text>
-          <text x={364} y={133} fontSize="9" fill={secondary}>
+          <text x={364} y={133} fontSize="11" fill={secondary}>
             引用 file_a 中的 shared
           </text>
 
@@ -178,13 +178,13 @@ export function LinkageDiagram() {
           <text
             x={364}
             y={172}
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
             fontFamily="monospace"
           >
             &#47;* counter 不可见 */
           </text>
-          <text x={364} y={188} fontSize="9" fill={secondary}>
+          <text x={364} y={188} fontSize="11" fill={secondary}>
             写 counter 会链接错误：undefined
           </text>
 
@@ -213,7 +213,7 @@ export function LinkageDiagram() {
             x={320}
             y={312}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             合并各 .o：外部链接符号全局唯一；内部链接符号各文件各一份、互不影响
@@ -222,7 +222,7 @@ export function LinkageDiagram() {
             x={320}
             y={328}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={primary}
           >
             shared → 一份定义，多处 extern 引用 ✓
@@ -236,7 +236,7 @@ export function LinkageDiagram() {
             strokeDasharray="5 3"
             markerEnd="url(#linkExtArrow)"
           />
-          <text x={300} y={148} fontSize="9" fill={externalColor}>
+          <text x={300} y={148} fontSize="11" fill={externalColor}>
             同一符号
           </text>
 
@@ -248,7 +248,7 @@ export function LinkageDiagram() {
             stroke={internalColor}
             strokeWidth="1.5"
           />
-          <text x={170} y={262} fontSize="9" fill={internalColor}>
+          <text x={170} y={262} fontSize="11" fill={internalColor}>
             counter 不出本文件
           </text>
 

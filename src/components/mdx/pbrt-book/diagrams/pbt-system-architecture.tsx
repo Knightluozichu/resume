@@ -129,7 +129,7 @@ export function PbtSystemArchitectureDiagram({
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -139,7 +139,7 @@ export function PbtSystemArchitectureDiagram({
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -300,7 +300,7 @@ export function PbtSceneConstructionDiagram() {
                   x={x + 87}
                   y="150"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -310,7 +310,7 @@ export function PbtSceneConstructionDiagram() {
                   x={x + 87}
                   y="202"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.action}
@@ -433,7 +433,7 @@ export function PbtBvhArchitectureDiagram() {
                   x={x + 87}
                   y="125"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -476,7 +476,7 @@ export function PbtBvhArchitectureDiagram() {
             x="236"
             y="230"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={primary}
           >
             测试 node bounds
@@ -495,7 +495,7 @@ export function PbtBvhArchitectureDiagram() {
             x="400"
             y="230"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={primary}
           >
             先访问近子树
@@ -514,7 +514,7 @@ export function PbtBvhArchitectureDiagram() {
             x="564"
             y="230"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={primary}
           >
             叶节点测 Primitive
@@ -528,7 +528,7 @@ export function PbtBvhArchitectureDiagram() {
             x="400"
             y="278"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             bounds miss 跳过整棵子树；最近命中缩短 tMax，帮助更早剪枝远处节点
@@ -653,7 +653,7 @@ export function PbtCpuParallelDiagram() {
                   x="201"
                   y={y + 23}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {worker.name}
@@ -679,7 +679,7 @@ export function PbtCpuParallelDiagram() {
                   x="388"
                   y={y + 23}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {worker.tile}
@@ -697,7 +697,7 @@ export function PbtCpuParallelDiagram() {
                   x="549"
                   y={y + 23}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   local Sampler
@@ -715,7 +715,7 @@ export function PbtCpuParallelDiagram() {
                   x="703"
                   y={y + 23}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   local ScratchBuffer
@@ -823,7 +823,7 @@ export function PbtWavefrontArchitectureDiagram() {
                   x={x + 87}
                   y="145"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {queue.note}
@@ -853,7 +853,7 @@ export function PbtWavefrontArchitectureDiagram() {
             x="400"
             y="243"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill={primary}
           >
@@ -863,7 +863,7 @@ export function PbtWavefrontArchitectureDiagram() {
             x="400"
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             无对应工作时跳过 kernel；next ray queue 双缓冲进入下一 path depth

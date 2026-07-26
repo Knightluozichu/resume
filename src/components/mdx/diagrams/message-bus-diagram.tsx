@@ -205,7 +205,7 @@ function NodeBox({ cx, cy, w, h, label, sub, filled }: NodeBoxProps) {
           x={cx}
           y={cy + 15}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {sub}
@@ -398,7 +398,7 @@ function MessageBusDiagramInner() {
                   x={m.cardX + 10}
                   y={m.cardY + 17}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={color}
                 >
@@ -408,7 +408,7 @@ function MessageBusDiagramInner() {
                   x={m.cardX + 10}
                   y={m.cardY + 33}
                   textAnchor="start"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   内容：{m.content}

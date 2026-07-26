@@ -54,7 +54,7 @@ export function SiaBeanWiringDiagram() {
             x="137"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Component + 组件扫描
@@ -63,7 +63,7 @@ export function SiaBeanWiringDiagram() {
             x="137"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Autowired 按类型注入
@@ -77,28 +77,28 @@ export function SiaBeanWiringDiagram() {
             fill="var(--bg)"
             fillOpacity="0.5"
           />
-          <text x="55" y="148" fontSize="9" fill="var(--text-secondary)">
+          <text x="55" y="148" fontSize="11" fill="var(--text-secondary)">
             @Component
           </text>
-          <text x="55" y="162" fontSize="9" fill="var(--text-secondary)">
+          <text x="55" y="162" fontSize="11" fill="var(--text-secondary)">
             public class A &lbrace;
           </text>
-          <text x="55" y="176" fontSize="9" fill="var(--text-secondary)">
+          <text x="55" y="176" fontSize="11" fill="var(--text-secondary)">
             {" "}
             @Autowired
           </text>
-          <text x="55" y="190" fontSize="9" fill="var(--text-secondary)">
+          <text x="55" y="190" fontSize="11" fill="var(--text-secondary)">
             {" "}
             B b;
           </text>
-          <text x="55" y="204" fontSize="9" fill="var(--text-secondary)">
+          <text x="55" y="204" fontSize="11" fill="var(--text-secondary)">
             &rbrace;
           </text>
           <text
             x="137"
             y="228"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             最简，Spring Boot 默认
@@ -130,7 +130,7 @@ export function SiaBeanWiringDiagram() {
             x="370"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Configuration + @Bean
@@ -139,7 +139,7 @@ export function SiaBeanWiringDiagram() {
             x="370"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             显式声明第三方库Bean
@@ -153,28 +153,28 @@ export function SiaBeanWiringDiagram() {
             fill="var(--bg)"
             fillOpacity="0.5"
           />
-          <text x="287" y="148" fontSize="9" fill="var(--text-secondary)">
+          <text x="287" y="148" fontSize="11" fill="var(--text-secondary)">
             @Configuration
           </text>
-          <text x="287" y="162" fontSize="9" fill="var(--text-secondary)">
+          <text x="287" y="162" fontSize="11" fill="var(--text-secondary)">
             class Cfg &lbrace;
           </text>
-          <text x="287" y="176" fontSize="9" fill="var(--text-secondary)">
+          <text x="287" y="176" fontSize="11" fill="var(--text-secondary)">
             {" "}
             @Bean
           </text>
-          <text x="287" y="190" fontSize="9" fill="var(--text-secondary)">
+          <text x="287" y="190" fontSize="11" fill="var(--text-secondary)">
             {" "}
             A a()&lbrace;return new A();&rbrace;
           </text>
-          <text x="287" y="204" fontSize="9" fill="var(--text-secondary)">
+          <text x="287" y="204" fontSize="11" fill="var(--text-secondary)">
             &rbrace;
           </text>
           <text
             x="370"
             y="228"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             类型安全，可重构
@@ -206,7 +206,7 @@ export function SiaBeanWiringDiagram() {
             x="602"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             &lt;bean&gt; 显式声明
@@ -215,7 +215,7 @@ export function SiaBeanWiringDiagram() {
             x="602"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             老项目兼容、namespace
@@ -229,26 +229,26 @@ export function SiaBeanWiringDiagram() {
             fill="var(--bg)"
             fillOpacity="0.5"
           />
-          <text x="519" y="148" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="148" fontSize="11" fill="var(--text-secondary)">
             &lt;beans&gt;
           </text>
-          <text x="519" y="162" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="162" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &lt;bean id=&quot;a&quot;
           </text>
-          <text x="519" y="176" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="176" fontSize="11" fill="var(--text-secondary)">
             {" "}
             class=&quot;x.A&quot;&gt;
           </text>
-          <text x="519" y="190" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="190" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &lt;property
           </text>
-          <text x="519" y="204" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="204" fontSize="11" fill="var(--text-secondary)">
             {" "}
             ref=&quot;b&quot;/&gt;
           </text>
-          <text x="519" y="218" fontSize="9" fill="var(--text-secondary)">
+          <text x="519" y="218" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &lt;/bean&gt;
           </text>
@@ -256,7 +256,7 @@ export function SiaBeanWiringDiagram() {
             x="602"
             y="228"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             冗长，不类型安全
@@ -299,7 +299,7 @@ export function SiaBeanWiringDiagram() {
             x="115"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @ComponentScan / XML
@@ -340,7 +340,7 @@ export function SiaBeanWiringDiagram() {
             x="290"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BeanDefinition
@@ -381,7 +381,7 @@ export function SiaBeanWiringDiagram() {
             x="465"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             反射创建对象
@@ -422,7 +422,7 @@ export function SiaBeanWiringDiagram() {
             x="632"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Autowired 完成
@@ -464,7 +464,7 @@ export function SiaBeanWiringDiagram() {
             x="122"
             y="448"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每个容器一个实例
@@ -473,7 +473,7 @@ export function SiaBeanWiringDiagram() {
             x="122"
             y="464"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             无状态Service首选
@@ -482,7 +482,7 @@ export function SiaBeanWiringDiagram() {
             x="122"
             y="484"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Scope(&quot;singleton&quot;)
@@ -513,7 +513,7 @@ export function SiaBeanWiringDiagram() {
             x="295"
             y="448"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每次注入新实例
@@ -522,7 +522,7 @@ export function SiaBeanWiringDiagram() {
             x="295"
             y="464"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             有状态对象
@@ -531,7 +531,7 @@ export function SiaBeanWiringDiagram() {
             x="295"
             y="484"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Scope(&quot;prototype&quot;)
@@ -562,7 +562,7 @@ export function SiaBeanWiringDiagram() {
             x="460"
             y="448"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每个HTTP请求一个
@@ -571,7 +571,7 @@ export function SiaBeanWiringDiagram() {
             x="460"
             y="464"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Web环境
@@ -580,7 +580,7 @@ export function SiaBeanWiringDiagram() {
             x="460"
             y="484"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Scope(&quot;request&quot;)
@@ -611,7 +611,7 @@ export function SiaBeanWiringDiagram() {
             x="625"
             y="448"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每个会话一个
@@ -620,7 +620,7 @@ export function SiaBeanWiringDiagram() {
             x="625"
             y="464"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             用户级状态
@@ -629,7 +629,7 @@ export function SiaBeanWiringDiagram() {
             x="625"
             y="484"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Scope(&quot;session&quot;)

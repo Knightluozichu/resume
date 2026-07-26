@@ -80,7 +80,7 @@ export function FrameDebuggerWorkflowDiagram() {
                   x={x + 16}
                   y={y - 2}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -121,7 +121,7 @@ export function FrameDebuggerWorkflowDiagram() {
             x="280"
             y="148"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             逐帧回放每个 Draw Call，精确定位冗余绘制和 Shader 问题
@@ -130,7 +130,7 @@ export function FrameDebuggerWorkflowDiagram() {
             x="280"
             y="166"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Window → Analysis → Frame Debugger

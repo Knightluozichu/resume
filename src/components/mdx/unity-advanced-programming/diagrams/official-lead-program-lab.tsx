@@ -19,6 +19,13 @@ export function LeadProgramEvidenceLab({ title, label, nodes, mode }: Props) {
   const [sample, setSample] = useState<Sample>("baseline");
   const [load, setLoad] = useState(40);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setSample("baseline");
+    setLoad(40);
+    setFault(false);
+  }
+
   const color = colors[mode];
   const values = useMemo(() => {
     const pressure = sample === "baseline" ? 4 : sample === "boundary" ? 22 : 44;
@@ -31,13 +38,14 @@ export function LeadProgramEvidenceLab({ title, label, nodes, mode }: Props) {
 
   return (
     <section className="my-6 overflow-hidden border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950" aria-label={title}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
         <div className="min-w-0"><p className="text-xs font-semibold text-zinc-500">{label} · {modeLabels[mode]}</p><h3 className="mt-1 text-base font-semibold">{title}</h3></div>
-        <button type="button" onClick={() => setFault((value) => !value)} className="min-h-9 border px-3 text-sm font-medium" style={{ borderColor: color.strong, color: color.ink, backgroundColor: fault ? color.soft : "transparent" }}>{fault ? "清除故障" : "注入故障"}</button>
+        <button type="button" onClick={() => setFault((value) => !value)} className="min-h-11 border px-3 text-sm font-medium" style={{ borderColor: color.strong, color: color.ink, backgroundColor: fault ? color.soft : "transparent" }}>{fault ? "清除故障" : "注入故障"}</button>
       </header>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="p-4">
-          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="样本选择">{(["baseline", "boundary", "failure"] as const).map((item) => <button key={item} type="button" onClick={() => setSample(item)} className="min-h-9 border px-3 text-xs font-semibold" style={{ borderColor: sample === item ? color.strong : "#d4d4d8", backgroundColor: sample === item ? color.soft : "transparent" }}>{sampleLabels[item]}</button>)}</div>
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="样本选择">{(["baseline", "boundary", "failure"] as const).map((item) => <button key={item} type="button" onClick={() => setSample(item)} className="min-h-11 border px-3 text-xs font-semibold" style={{ borderColor: sample === item ? color.strong : "#d4d4d8", backgroundColor: sample === item ? color.soft : "transparent" }}>{sampleLabels[item]}</button>)}</div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="tablist" aria-label="主程证据阶段">{nodes.map((node, index) => <button key={node} type="button" role="tab" aria-selected={stage === index} onClick={() => setStage(index)} className="min-h-24 border p-3 text-left text-xs leading-5" style={{ borderColor: stage === index ? color.strong : "#d4d4d8", backgroundColor: index <= stage ? color.soft : "transparent" }}><span className="block text-sm font-bold">{String(index + 1).padStart(2, "0")}</span><span className="mt-2 block break-words">{node}</span></button>)}</div>
           <label className="mt-5 block text-xs font-medium text-zinc-600 dark:text-zinc-300">系统负载 {load}<input type="range" min="10" max="100" step="5" value={load} onChange={(event) => setLoad(Number(event.target.value))} className="mt-2 block w-full" /></label>
           <div className="mt-4 h-3 bg-zinc-200 dark:bg-zinc-800"><div className="h-full transition-[width]" style={{ width: values.progress + "%", backgroundColor: fault ? "#dc2626" : color.strong }} /></div>

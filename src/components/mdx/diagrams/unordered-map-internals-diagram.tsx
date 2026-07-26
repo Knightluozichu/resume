@@ -71,7 +71,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
             <text
               x="90"
               y="38"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -94,7 +94,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                   <text
                     x="90"
                     y={y + 18}
-                    fontSize="10"
+                    fontSize="11"
                     fill={secondary}
                     textAnchor="middle"
                     fontFamily="monospace"
@@ -134,7 +134,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="80"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -144,7 +144,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="94"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -165,7 +165,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="240"
                 y="100"
-                fontSize="9"
+                fontSize="11"
                 fill={accent}
                 textAnchor="middle"
               >
@@ -196,7 +196,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="160"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -206,7 +206,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="174"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -217,7 +217,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="200"
-                fontSize="10"
+                fontSize="11"
                 fill={warn}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -227,7 +227,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               <text
                 x="80"
                 y="216"
-                fontSize="9"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -330,7 +330,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                 <text
                   x="370"
                   y="-2"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   textAnchor="middle"
                   fontFamily="monospace"
@@ -344,7 +344,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                 <text
                   x="130"
                   y="0"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   textAnchor="middle"
                 >
@@ -353,7 +353,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                 <text
                   x="130"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   textAnchor="middle"
                 >
@@ -378,13 +378,13 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
               ["rehash", "O(n)"],
             ].map(([label, val], i) => (
               <g key={i} transform={`translate(0, ${16 + i * 18})`}>
-                <text x="0" y="0" fontSize="10" fill={secondary}>
+                <text x="0" y="0" fontSize="11" fill={secondary}>
                   {label}
                 </text>
                 <text
                   x="200"
                   y="0"
-                  fontSize="10"
+                  fontSize="11"
                   fill={good}
                   fontFamily="monospace"
                 >
@@ -408,7 +408,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                   <text
                     x="0"
                     y="0"
-                    fontSize="10"
+                    fontSize="11"
                     fill={secondary}
                     fontFamily="monospace"
                   >
@@ -417,7 +417,7 @@ export function UnorderedMapInternalsDiagram({ step = 3 }: Props) {
                   <text
                     x="50"
                     y="0"
-                    fontSize="10"
+                    fontSize="11"
                     fill={val.startsWith("超") ? warn : secondary}
                   >
                     {val}

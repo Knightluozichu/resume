@@ -89,7 +89,7 @@ export function IblConceptDiagram() {
             x={cx}
             y={cy - envR - 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -132,7 +132,7 @@ export function IblConceptDiagram() {
             x={cx}
             y={cy + 4}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -155,7 +155,7 @@ export function IblConceptDiagram() {
             x={cx}
             y={cy + envR + 23}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -167,7 +167,7 @@ export function IblConceptDiagram() {
             x="52"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -177,7 +177,7 @@ export function IblConceptDiagram() {
             x="52"
             y="232"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             4 盏点光源
@@ -199,7 +199,7 @@ export function IblConceptDiagram() {
             x="508"
             y="218"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -209,7 +209,7 @@ export function IblConceptDiagram() {
             x="508"
             y="232"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             全方向环境光

@@ -111,7 +111,7 @@ export function ContainerOverviewDiagram() {
               <text x={cardW / 2} y="0" fontSize="13" fontWeight="700" fill={accent} textAnchor="middle">
                 {c.name}
               </text>
-              <text x={cardW / 2} y="16" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x={cardW / 2} y="16" fontSize="11" fill={secondary} textAnchor="middle">
                 {c.desc}
               </text>
 
@@ -136,12 +136,12 @@ export function ContainerOverviewDiagram() {
                   <text x="24" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
                   <text x="56" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
                   <text x="88" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
-                  <text x="120" y="66" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">?</text>
+                  <text x="120" y="66" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">?</text>
                   {/* 三个指针 */}
-                  <text x={cardW / 2} y="98" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="98" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     begin/end/capacity
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     连续存储，缓存友好
                   </text>
                 </>
@@ -154,23 +154,23 @@ export function ContainerOverviewDiagram() {
                   <rect x="12" y="52" width="14" height="16" rx="2" fill={accent} opacity="0.25" stroke={accent} />
                   <rect x="28" y="52" width="14" height="16" rx="2" fill={accent} opacity="0.25" stroke={accent} />
                   <rect x="44" y="52" width="14" height="16" rx="2" fill="none" stroke={border} strokeDasharray="2 2" />
-                  <text x="19" y="63" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
-                  <text x="35" y="63" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
+                  <text x="19" y="63" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
+                  <text x="35" y="63" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
                   <rect x="8" y="78" width="56" height="24" rx="4" fill={accent} opacity="0.08" stroke={border} />
                   <rect x="12" y="82" width="14" height="16" rx="2" fill={accent} opacity="0.25" stroke={accent} />
                   <rect x="28" y="82" width="14" height="16" rx="2" fill={accent} opacity="0.25" stroke={accent} />
-                  <text x="19" y="93" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
-                  <text x="35" y="93" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
-                  <text x="80" y="60" fontSize="10" fill={secondary} fontFamily="monospace">
+                  <text x="19" y="93" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
+                  <text x="35" y="93" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
+                  <text x="80" y="60" fontSize="11" fill={secondary} fontFamily="monospace">
                     中控数组
                   </text>
-                  <text x="80" y="76" fontSize="10" fill={secondary} fontFamily="monospace">
+                  <text x="80" y="76" fontSize="11" fill={secondary} fontFamily="monospace">
                     → 块指针
                   </text>
-                  <text x="80" y="92" fontSize="10" fill={secondary} fontFamily="monospace">
+                  <text x="80" y="92" fontSize="11" fill={secondary} fontFamily="monospace">
                     → 块指针
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     两端插入 O(1)
                   </text>
                 </>
@@ -181,23 +181,23 @@ export function ContainerOverviewDiagram() {
                 <>
                   {/* 节点 */}
                   <circle cx="24" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="24" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
+                  <text x="24" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
                   <circle cx="74" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="74" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
+                  <text x="74" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
                   <circle cx="124" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="124" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
+                  <text x="124" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
                   {/* 双向箭头 */}
                   <line x1="34" y1="54" x2="64" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
                   <line x1="64" y1="50" x2="34" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
                   <line x1="84" y1="54" x2="114" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
                   <line x1="114" y1="50" x2="84" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
-                  <text x={cardW / 2} y="82" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="82" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     每个节点存 prev + next
                   </text>
-                  <text x={cardW / 2} y="98" fontSize="10" fill={warn} textAnchor="middle">
+                  <text x={cardW / 2} y="98" fontSize="11" fill={warn} textAnchor="middle">
                     随机访问 O(n)
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     任意位置插入 O(1)
                   </text>
                 </>
@@ -207,21 +207,21 @@ export function ContainerOverviewDiagram() {
               {c.name === "forward_list" && (
                 <>
                   <circle cx="24" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="24" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
+                  <text x="24" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
                   <circle cx="74" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="74" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
+                  <text x="74" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
                   <circle cx="124" cy="54" r="10" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="124" y="57" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
+                  <text x="124" y="57" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
                   {/* 单向箭头 */}
                   <line x1="34" y1="54" x2="64" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
                   <line x1="84" y1="54" x2="114" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
-                  <text x={cardW / 2} y="82" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="82" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     只存 next 指针
                   </text>
-                  <text x={cardW / 2} y="96" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="96" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     不能反向遍历
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     内存更省，无 push_back
                   </text>
                 </>
@@ -235,14 +235,14 @@ export function ContainerOverviewDiagram() {
                   <rect x="46" y="46" width="28" height="24" rx="3" fill={accent} opacity="0.2" stroke={accent} />
                   <rect x="78" y="46" width="28" height="24" rx="3" fill={accent} opacity="0.2" stroke={accent} />
                   <rect x="110" y="46" width="24" height="24" rx="3" fill={accent} opacity="0.2" stroke={accent} />
-                  <text x="28" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
-                  <text x="60" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
-                  <text x="92" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
-                  <text x="122" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
-                  <text x={cardW / 2} y="96" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x="28" y="61" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">a</text>
+                  <text x="60" y="61" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
+                  <text x="92" y="61" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
+                  <text x="122" y="61" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
+                  <text x={cardW / 2} y="96" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     编译期固定大小
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     栈上分配，零开销
                   </text>
                 </>
@@ -255,14 +255,14 @@ export function ContainerOverviewDiagram() {
                   <rect x="42" y="48" width="28" height="28" rx="4" fill={accent} opacity="0.25" stroke={accent} />
                   <rect x="74" y="48" width="28" height="28" rx="4" fill={accent} opacity="0.25" stroke={accent} />
                   <rect x="106" y="48" width="28" height="28" rx="4" fill={accent} opacity="0.25" stroke={accent} />
-                  <text x="24" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">H</text>
-                  <text x="56" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">e</text>
-                  <text x="88" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
-                  <text x="120" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
-                  <text x={cardW / 2} y="98" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x="24" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">H</text>
+                  <text x="56" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">e</text>
+                  <text x="88" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
+                  <text x="120" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
+                  <text x={cardW / 2} y="98" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     \0 结尾（C++11 后）
                   </text>
-                  <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
+                  <text x={cardW / 2} y="112" fontSize="11" fill={good} textAnchor="middle">
                     专属字符串操作
                   </text>
                 </>
@@ -298,7 +298,7 @@ export function ContainerOverviewDiagram() {
           ))}
 
           {/* 底部注释 */}
-          <text x={w / 2} y={h - 10} fontSize="10" fill={secondary} textAnchor="middle">
+          <text x={w / 2} y={h - 10} fontSize="11" fill={secondary} textAnchor="middle">
             ∗ vector/string 尾部插入为均摊 O(1)；中间插入删除 vector/string=O(n)，list/forward_list=O(1)，deque≈O(n)
           </text>
 

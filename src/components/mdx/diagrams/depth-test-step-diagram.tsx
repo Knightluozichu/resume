@@ -144,7 +144,7 @@ export function DepthTestStepDiagram({ step }: { step: DepthTestStep }) {
             x="370"
             y="127"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             上半 = 颜色，下半 = 深度
@@ -263,7 +263,7 @@ export function DepthTestStepDiagram({ step }: { step: DepthTestStep }) {
                 x="260"
                 y="216"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 颜色缓冲盖掉远墙色，深度缓冲刷成 0.3
@@ -310,7 +310,7 @@ export function DepthTestStepDiagram({ step }: { step: DepthTestStep }) {
                 x="260"
                 y="230"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 颜色与深度都不写，缓冲仍是 0.3

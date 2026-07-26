@@ -15,10 +15,15 @@ type CodingInterviewLabProps = {
 
 export function CodingInterviewLab({ cases, caption }: CodingInterviewLabProps) {
   const [active, setActive] = useState(0);
+  function resetExperiment() {
+    setActive(0);
+  }
+
   const selected = cases[active];
 
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label={caption}>
           {cases.map((item, index) => (

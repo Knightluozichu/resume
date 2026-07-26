@@ -79,7 +79,7 @@ export function IteratorDiagram() {
                 <text
                   x={cx + cellSize / 2}
                   y={startY + cellSize + 18}
-                  fontSize="10"
+                  fontSize="11"
                   fill={token.textSecondary}
                   textAnchor="middle"
                 >
@@ -115,7 +115,7 @@ export function IteratorDiagram() {
           <text
             x={startX + cellSize / 2}
             y={startY + cellSize + 82}
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -148,7 +148,7 @@ export function IteratorDiagram() {
           <text
             x={startX + elements.length * (cellSize + gap) - gap / 2}
             y={startY + cellSize + 82}
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >

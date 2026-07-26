@@ -74,7 +74,7 @@ export function RubStringsDiagram() {
           <text x={44} y={108} fontSize="11" fill={primary}>
             s = &quot;Hello&quot;
           </text>
-          <text x={160} y={108} fontSize="10" fill={secondary}>
+          <text x={160} y={108} fontSize="11" fill={secondary}>
             # 创建
           </text>
 
@@ -91,7 +91,7 @@ export function RubStringsDiagram() {
           <text x={44} y={150} fontSize="11" fill={primary}>
             s + &quot; World&quot;
           </text>
-          <text x={160} y={150} fontSize="10" fill={secondary}>
+          <text x={160} y={150} fontSize="11" fill={secondary}>
             # 拼接 → &quot;Hello World&quot;
           </text>
 
@@ -108,7 +108,7 @@ export function RubStringsDiagram() {
           <text x={44} y={192} fontSize="11" fill={primary}>
             s &lt;&lt; &quot;!&quot;
           </text>
-          <text x={160} y={192} fontSize="10" fill={success}>
+          <text x={160} y={192} fontSize="11" fill={success}>
             # 追加（原地修改）
           </text>
 
@@ -125,7 +125,7 @@ export function RubStringsDiagram() {
           <text x={44} y={234} fontSize="11" fill={primary}>
             s.upcase / s.downcase
           </text>
-          <text x={200} y={234} fontSize="10" fill={secondary}>
+          <text x={200} y={234} fontSize="11" fill={secondary}>
             # 大小写转换
           </text>
 
@@ -142,7 +142,7 @@ export function RubStringsDiagram() {
           <text x={44} y={276} fontSize="11" fill={primary}>
             &quot;#&#123;s&#125;!&quot;
           </text>
-          <text x={120} y={276} fontSize="10" fill={secondary}>
+          <text x={120} y={276} fontSize="11" fill={secondary}>
             # 插值 → &quot;Hello!&quot;
           </text>
 
@@ -159,7 +159,7 @@ export function RubStringsDiagram() {
           <text x={44} y={318} fontSize="11" fill={primary}>
             s.freeze
           </text>
-          <text x={120} y={318} fontSize="10" fill={warning}>
+          <text x={120} y={318} fontSize="11" fill={warning}>
             # 冻结为不可变
           </text>
 
@@ -211,16 +211,16 @@ export function RubStringsDiagram() {
           <text x={372} y={128} fontSize="11" fill={primary}>
             &quot;hello&quot;
           </text>
-          <text x={372} y={146} fontSize="10" fill={secondary}>
+          <text x={372} y={146} fontSize="11" fill={secondary}>
             可变（可 &lt;&lt; + upcase!）
           </text>
-          <text x={372} y={162} fontSize="10" fill={secondary}>
+          <text x={372} y={162} fontSize="11" fill={secondary}>
             每次创建新对象
           </text>
-          <text x={372} y={178} fontSize="10" fill={secondary}>
+          <text x={372} y={178} fontSize="11" fill={secondary}>
             占内存多
           </text>
-          <text x={372} y={194} fontSize="10" fill={secondary}>
+          <text x={372} y={194} fontSize="11" fill={secondary}>
             适合：文本数据
           </text>
 
@@ -250,16 +250,16 @@ export function RubStringsDiagram() {
           <text x={542} y={128} fontSize="11" fill={primary}>
             :hello
           </text>
-          <text x={542} y={146} fontSize="10" fill={secondary}>
+          <text x={542} y={146} fontSize="11" fill={secondary}>
             不可变（永远不变）
           </text>
-          <text x={542} y={162} fontSize="10" fill={secondary}>
+          <text x={542} y={162} fontSize="11" fill={secondary}>
             同名始终同一对象
           </text>
-          <text x={542} y={178} fontSize="10" fill={secondary}>
+          <text x={542} y={178} fontSize="11" fill={secondary}>
             占内存少（GC 友好）
           </text>
-          <text x={542} y={194} fontSize="10" fill={secondary}>
+          <text x={542} y={194} fontSize="11" fill={secondary}>
             适合：键名、枚举
           </text>
 

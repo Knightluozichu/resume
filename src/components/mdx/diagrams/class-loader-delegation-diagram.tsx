@@ -377,7 +377,7 @@ export function ClassLoaderDelegationDiagram() {
                   x={NODE_X + NODE_W / 2}
                   y={y + 48}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {n.duty}
@@ -418,7 +418,7 @@ export function ClassLoaderDelegationDiagram() {
                   x={sx + SIDE_W / 2}
                   y={sy + 48}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {SIDE_NODE.duty}

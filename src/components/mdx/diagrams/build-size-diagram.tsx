@@ -63,7 +63,7 @@ export function BuildSizeDiagram() {
                   x={x + 14}
                   y="40"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--bg)"
                 >
@@ -84,7 +84,7 @@ export function BuildSizeDiagram() {
                   x={x + 55}
                   y="70"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.sub}
@@ -95,7 +95,7 @@ export function BuildSizeDiagram() {
                     x={x + 55}
                     y={84 + j * 12}
                     textAnchor="middle"
-                    fontSize="9"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}

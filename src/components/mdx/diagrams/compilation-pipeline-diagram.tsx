@@ -208,7 +208,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             x="54"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -218,7 +218,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             x="175"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -228,7 +228,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             x="325"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -238,7 +238,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             x="475"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -247,7 +247,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           <text
             x="700"
             y="38"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
             fontFamily="monospace"
             fontWeight="600"

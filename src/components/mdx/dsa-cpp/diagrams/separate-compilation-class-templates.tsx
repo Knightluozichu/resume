@@ -321,7 +321,7 @@ export function DsaTemplateOwnershipFlow() {
               type="button"
               onClick={() => setOwner(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (owner === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")

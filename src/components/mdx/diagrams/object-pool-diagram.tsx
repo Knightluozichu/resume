@@ -60,7 +60,7 @@ export function ObjectPoolDiagram() {
             x="120"
             y="90"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             Instantiate()
@@ -90,7 +90,7 @@ export function ObjectPoolDiagram() {
             x="120"
             y="130"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             使用
@@ -120,7 +120,7 @@ export function ObjectPoolDiagram() {
             x="120"
             y="170"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             Destroy()
@@ -131,7 +131,7 @@ export function ObjectPoolDiagram() {
             x="120"
             y="200"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--danger)"
           >
             每帧创建/销毁 — GC 压力大
@@ -149,7 +149,7 @@ export function ObjectPoolDiagram() {
             x="248"
             y="140"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--danger)"
           >
             重复
@@ -193,7 +193,7 @@ export function ObjectPoolDiagram() {
             x="480"
             y="90"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             预热：预创建 N 个对象
@@ -224,7 +224,7 @@ export function ObjectPoolDiagram() {
             x="412"
             y="130"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--accent)"
           >
             Get
@@ -234,7 +234,7 @@ export function ObjectPoolDiagram() {
             x="441"
             y="126"
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             →
@@ -253,7 +253,7 @@ export function ObjectPoolDiagram() {
             x="474"
             y="130"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             使用
@@ -263,7 +263,7 @@ export function ObjectPoolDiagram() {
             x="503"
             y="126"
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             →
@@ -282,7 +282,7 @@ export function ObjectPoolDiagram() {
             x="547"
             y="130"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             Return
@@ -311,7 +311,7 @@ export function ObjectPoolDiagram() {
             x="484"
             y="200"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             池中空闲: 3/10 · 活跃: 7 · 自动扩容
@@ -321,7 +321,7 @@ export function ObjectPoolDiagram() {
             x="480"
             y="230"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--success)"
           >
             零 new · 零 GC.Alloc · 帧率稳定
@@ -334,7 +334,7 @@ export function ObjectPoolDiagram() {
             x="320"
             y="292"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             预热 运行时无分配 · Get/Return 均 O(1) · 适合 弹幕/粒子/敌人/UI 项
@@ -343,7 +343,7 @@ export function ObjectPoolDiagram() {
             x="320"
             y="312"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             对象池不是万能：大场景永久对象、唯一 UI 控件不需要池 ——

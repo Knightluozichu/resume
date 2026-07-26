@@ -194,7 +194,7 @@ export function MglGraphTheoryDiagram() {
           {[{x:500,y:130},{x:560,y:130},{x:580,y:170},{x:530,y:200},{x:480,y:170}].map((v, i) => (
             <g key={i}>
               <circle cx={v.x} cy={v.y} r="10" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1.5" />
-              <text x={v.x} y={v.y + 4} textAnchor="middle" fontSize="10" fill={warning}>{i+1}</text>
+              <text x={v.x} y={v.y + 4} textAnchor="middle" fontSize="11" fill={warning}>{i+1}</text>
             </g>
           ))}
           <text x="530" y="226" textAnchor="middle" fontSize="11" fill={secondary}>判定 NP 完全 · TSP 是优化版</text>
@@ -217,7 +217,7 @@ export function MglGraphTheoryDiagram() {
           <text x="530" y="366" textAnchor="middle" fontSize="11" fill={secondary}>任意两点路径唯一</text>
 
           <rect x="360" y="380" width="312" height="22" rx="6" fill={accent} fillOpacity="0.04" stroke={accent} strokeWidth="1" strokeOpacity="0.3" />
-          <text x="516" y="395" textAnchor="middle" fontSize="10" fill={secondary}>MST: Kruskal/Prim 求最小生成树</text>
+          <text x="516" y="395" textAnchor="middle" fontSize="11" fill={secondary}>MST: Kruskal/Prim 求最小生成树</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

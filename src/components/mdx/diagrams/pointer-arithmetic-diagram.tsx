@@ -83,7 +83,7 @@ export function PointerArithmeticDiagram({ step = 3 }: PointerArithmeticDiagramP
             <text x={40} y={224} fontSize="11" fill={secondary} fontFamily="monospace">
               *p == 10
             </text>
-            <text x={40} y={242} fontSize="10" fill={secondary}>
+            <text x={40} y={242} fontSize="11" fill={secondary}>
               地址 0x1000
             </text>
           </g>
@@ -96,7 +96,7 @@ export function PointerArithmeticDiagram({ step = 3 }: PointerArithmeticDiagramP
             <text x={246} y={224} fontSize="11" fill={secondary} fontFamily="monospace">
               *(p + 1) == 20
             </text>
-            <text x={246} y={242} fontSize="10" fill={secondary}>
+            <text x={246} y={242} fontSize="11" fill={secondary}>
               地址 0x1004（+4 字节）
             </text>
           </g>
@@ -109,7 +109,7 @@ export function PointerArithmeticDiagram({ step = 3 }: PointerArithmeticDiagramP
             <text x={452} y={224} fontSize="11" fill={secondary} fontFamily="monospace">
               *(p + 2) == 30
             </text>
-            <text x={452} y={242} fontSize="10" fill={secondary}>
+            <text x={452} y={242} fontSize="11" fill={secondary}>
               地址 0x1008（再 +4）
             </text>
           </g>

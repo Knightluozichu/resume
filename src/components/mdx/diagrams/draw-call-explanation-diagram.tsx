@@ -51,7 +51,7 @@ export function DrawCallExplanationDiagram() {
             x="130"
             y="96"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             准备渲染命令
@@ -72,7 +72,7 @@ export function DrawCallExplanationDiagram() {
                 x="130"
                 y={120 + i * 22}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {label}
@@ -117,7 +117,7 @@ export function DrawCallExplanationDiagram() {
             x="280"
             y="134"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每条 = 一次 CPU→GPU 通信
@@ -148,7 +148,7 @@ export function DrawCallExplanationDiagram() {
             x="430"
             y="96"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             执行渲染管线
@@ -169,7 +169,7 @@ export function DrawCallExplanationDiagram() {
                 x="430"
                 y={119 + i * 18}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {label}
@@ -191,7 +191,7 @@ export function DrawCallExplanationDiagram() {
             x="280"
             y="228"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             合批（Batching）= 把多条 Draw Call 合成一条，减少 CPU-GPU 通信次数

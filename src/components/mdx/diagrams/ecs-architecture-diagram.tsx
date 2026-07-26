@@ -30,17 +30,17 @@ export function EcsArchitectureDiagram() {
           </text>
 
           <rect x="40" y="72" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="109" y="85" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="109" y="85" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             只是一个 int ID
           </text>
 
           <rect x="40" y="96" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="109" y="109" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="109" y="109" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             无数据 · 无方法
           </text>
 
           <rect x="40" y="120" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="109" y="133" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="109" y="133" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             等同于「数据库行号」
           </text>
 
@@ -51,17 +51,17 @@ export function EcsArchitectureDiagram() {
           </text>
 
           <rect x="251" y="72" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="320" y="85" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="320" y="85" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             IComponentData 标记结构体
           </text>
 
           <rect x="251" y="96" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="320" y="109" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="320" y="109" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             只含非托管字段
           </text>
 
           <rect x="251" y="120" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="320" y="133" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="320" y="133" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             struct Translation {"{"} float3; {"}"}
           </text>
 
@@ -72,54 +72,54 @@ export function EcsArchitectureDiagram() {
           </text>
 
           <rect x="462" y="72" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="531" y="85" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="531" y="85" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             纯函数逻辑 · 无状态
           </text>
 
           <rect x="462" y="96" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="531" y="109" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="531" y="109" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             Entities.ForEach 查询
           </text>
 
           <rect x="462" y="120" width="138" height="18" rx="3" fill="var(--bg-elevated)" />
-          <text x="531" y="133" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="531" y="133" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             只在满足条件的 Entity 上跑
           </text>
 
           {/* Data flow arrows */}
           {/* Entity → Component */}
           <line x1="194" y1="96" x2="235" y2="96" stroke="var(--text-secondary)" strokeWidth="1" markerEnd="url(#arrowA)" />
-          <text x="214" y="152" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="214" y="152" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             挂载
           </text>
 
           {/* Component → System */}
           <line x1="405" y1="96" x2="446" y2="96" stroke="var(--text-secondary)" strokeWidth="1" markerEnd="url(#arrowA)" />
-          <text x="426" y="152" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="426" y="152" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             查询
           </text>
 
           {/* ---- Bottom: Key insight ---- */}
           <rect x="40" y="172" width="560" height="60" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.5" />
 
-          <text x="320" y="194" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">
+          <text x="320" y="194" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">
             关键洞察：为什么 ECS 能并行？
           </text>
 
-          <text x="320" y="214" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+          <text x="320" y="214" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             Component 是纯数据（无引用、无虚方法）→ 内存连续排布、CPU Cache-Friendly
           </text>
-          <text x="320" y="228" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+          <text x="320" y="228" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             System 只吃数据、无副作用 → Job System 安全并行 → Burst 编译到 LLVM
           </text>
 
           {/* GameObject comparison */}
           <rect x="40" y="248" width="560" height="44" rx="8" fill="var(--bg-elevated)" stroke="var(--border)" />
 
-          <text x="320" y="268" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text-secondary)">
+          <text x="320" y="268" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-secondary)">
             GameObject 模式（继承 · 虚调用 · 散乱内存）vs ECS 模式（组合 · 纯数据 · 连续内存）
           </text>
-          <text x="320" y="284" textAnchor="middle" fontSize="9" fill="var(--accent)">
+          <text x="320" y="284" textAnchor="middle" fontSize="11" fill="var(--accent)">
             数据布局决定性能上限
           </text>
         </svg>

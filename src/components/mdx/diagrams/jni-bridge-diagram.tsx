@@ -427,7 +427,7 @@ export function JniBridgeDiagram() {
               x={JNI_X}
               y={LANE_TOP - 12}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--warning)"
             >
@@ -438,7 +438,7 @@ export function JniBridgeDiagram() {
               x={JNI_X}
               y={LANE_TOP + LANE_H + 22}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >
@@ -541,7 +541,7 @@ export function JniBridgeDiagram() {
                 x={n.x + n.w / 2}
                 y={n.y + n.h / 2 + 14}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -567,7 +567,7 @@ export function JniBridgeDiagram() {
               x={JAVA_X + NODE_W / 2}
               y={JAVA_CLASS_Y - 22}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -580,7 +580,7 @@ export function JniBridgeDiagram() {
             x={C_NATIVE.cx}
             y={NATIVE_Y + NATIVE_H + 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -591,7 +591,7 @@ export function JniBridgeDiagram() {
             x={C_NATIVE.cx}
             y={NATIVE_Y + NATIVE_H + 32}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >

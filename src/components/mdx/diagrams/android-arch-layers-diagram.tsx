@@ -99,7 +99,7 @@ export function AndroidArchLayersDiagram() {
                 fill={layer.color}
               >
                 {layer.label}
-                <tspan fill="var(--text-secondary)" fontSize="10">
+                <tspan fill="var(--text-secondary)" fontSize="11">
                   {" "}
                   ({layer.en})
                 </tspan>
@@ -125,7 +125,7 @@ export function AndroidArchLayersDiagram() {
                       x={cx}
                       y={layer.y + 32 + (layer.h - 40) / 2}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       {item}
@@ -188,7 +188,7 @@ export function AndroidArchLayersDiagram() {
           <text
             x="16"
             y="296"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Binder IPC 跨越层级实现进程间通信

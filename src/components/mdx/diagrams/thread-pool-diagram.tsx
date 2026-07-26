@@ -372,7 +372,7 @@ export function ThreadPoolDiagram() {
             x={SWEEP_RIGHT}
             y={WORKER_Y + WORKER_H + 24}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

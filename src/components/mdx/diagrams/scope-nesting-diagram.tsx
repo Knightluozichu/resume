@@ -121,10 +121,10 @@ export function ScopeNestingDiagram() {
 
           {/* 跨层连接线指示遮蔽 */}
           <line x1="516" y1="175" x2="516" y2="248" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 3" opacity="0.4" />
-          <text x="526" y="215" fontSize="10" fill="var(--text-secondary)">
+          <text x="526" y="215" fontSize="11" fill="var(--text-secondary)">
             同名
           </text>
-          <text x="526" y="227" fontSize="10" fill="var(--text-secondary)">
+          <text x="526" y="227" fontSize="11" fill="var(--text-secondary)">
             遮蔽
           </text>
 

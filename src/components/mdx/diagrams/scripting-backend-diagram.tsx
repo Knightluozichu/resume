@@ -145,7 +145,7 @@ export function ScriptingBackendDiagram() {
             x={leftCx}
             y={COL_TOP + COL_H - 30}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -155,7 +155,7 @@ export function ScriptingBackendDiagram() {
             x={leftCx}
             y={COL_TOP + COL_H - 12}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--warning)"
           >
             部分平台不支持（iOS / WebGL 用不了）
@@ -212,7 +212,7 @@ export function ScriptingBackendDiagram() {
                 x={rightCx}
                 y={stepY4(i) + 19}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontFamily={i === 0 ? "var(--font-mono)" : undefined}
                 fontWeight="700"
                 fill="var(--text-primary)"
@@ -226,7 +226,7 @@ export function ScriptingBackendDiagram() {
             x={rightCx}
             y={COL_TOP + COL_H - 30}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -236,7 +236,7 @@ export function ScriptingBackendDiagram() {
             x={rightCx}
             y={COL_TOP + COL_H - 12}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--warning)"
           >
             构建更慢 · iOS / WebGL 等必需

@@ -10,6 +10,13 @@ export function OfficialLaeLab({ title, concepts, accent, view }: Props) {
   const [temperature, setTemperature] = useState(80);
   const [tokenBudget, setTokenBudget] = useState(900);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setTemperature(80);
+    setTokenBudget(900);
+    setFault(false);
+  }
+
   const labels = concepts.slice(0, 6);
   const probabilities = useMemo(() => {
     const logits = [2.5, 1.9, 1.2, 0.55, -0.15];
@@ -24,6 +31,7 @@ export function OfficialLaeLab({ title, concepts, accent, view }: Props) {
     { label: "证据可重放", value: clamp(72 + stage * 5 - (fault ? 44 : 0)) },
   ];
   return <div style={{ border: "1px solid #d4d4d8", borderRadius: 6, background: "#fff", padding: 14, color: "#18181b" }}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
       <strong style={{ fontSize: 14 }}>{title}</strong><span style={{ fontSize: 12, color: "#52525b" }}>{view === "pipeline" ? "应用证据链" : view === "request" ? "请求与概率" : "风险门禁"}</span>
     </div>

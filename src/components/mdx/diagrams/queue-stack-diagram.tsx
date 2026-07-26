@@ -69,10 +69,10 @@ export function QueueStackDiagram() {
           </text>
 
           <rect x={40} y={72} width={240} height={48} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
-          <text x={56} y={92} fontSize="10" fill={secondary}>
+          <text x={56} y={92} fontSize="11" fill={secondary}>
             front（队头·出队 dequeue）
           </text>
-          <text x={200} y={92} fontSize="10" fill={secondary}>
+          <text x={200} y={92} fontSize="11" fill={secondary}>
             rear（队尾·入队 enqueue）
           </text>
 
@@ -94,10 +94,10 @@ export function QueueStackDiagram() {
             </g>
           ))}
 
-          <text x={56} y={184} fontSize="10" fill={success}>
+          <text x={56} y={184} fontSize="11" fill={success}>
             ← 出队取 1（最早进入）
           </text>
-          <text x={200} y={184} fontSize="10" fill={warn}>
+          <text x={200} y={184} fontSize="11" fill={warn}>
             入队 4 →
           </text>
 
@@ -113,12 +113,12 @@ export function QueueStackDiagram() {
             Last In, First Out · 后进先出
           </text>
 
-          <text x={436} y={88} fontSize="10" fill={accent}>
+          <text x={436} y={88} fontSize="11" fill={accent}>
             top（栈顶·push/pop）
           </text>
           {drawStack(436, ["1", "2", "3"], "top")}
 
-          <text x={480} y={244} textAnchor="middle" fontSize="10" fill={accent}>
+          <text x={480} y={244} textAnchor="middle" fontSize="11" fill={accent}>
             ↑ push 入栈 / pop 出栈都在 top
           </text>
           <text x={480} y={262} textAnchor="middle" fontSize="11" fill={secondary}>
@@ -133,7 +133,7 @@ export function QueueStackDiagram() {
           <text x={320} y={308} textAnchor="middle" fontSize="11" fill={primary}>
             两者都可用数组 + 下标或链表实现；C 无内置容器，需手写或用库
           </text>
-          <text x={320} y={324} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={324} textAnchor="middle" fontSize="11" fill={secondary}>
             队列：BFS、任务调度 · 栈：表达式求值、函数调用栈、撤销操作
           </text>
         </svg>

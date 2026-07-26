@@ -26,12 +26,12 @@ export function TraversalSplitDiagram() {
           {[1,2,4,7,3,5,6,8].map((value,index) => <g key={`pre-${value}`}><rect x={116 + index*72} y="58" width="58" height="46" fill={index===0 ? "var(--accent)" : index<=3 ? "var(--success)" : "var(--warning)"} fillOpacity="0.1" stroke={index===0 ? "var(--accent)" : "var(--border)"} /><text x={145 + index*72} y="87" textAnchor="middle" fontSize="12" fontWeight={index===0 ? "700" : "500"} fill="var(--text-primary)">{value}</text></g>)}
           <text x="52" y="174" fontSize="11" fontWeight="700" fill="var(--text-secondary)">中序</text>
           {[4,7,2,1,5,3,8,6].map((value,index) => <g key={`in-${value}`}><rect x={116 + index*72} y="148" width="58" height="46" fill={index===3 ? "var(--accent)" : index<3 ? "var(--success)" : "var(--warning)"} fillOpacity="0.1" stroke={index===3 ? "var(--accent)" : "var(--border)"} /><text x={145 + index*72} y="177" textAnchor="middle" fontSize="12" fontWeight={index===3 ? "700" : "500"} fill="var(--text-primary)">{value}</text></g>)}
-          <path d="M361 198 V230" stroke="var(--accent)" strokeWidth="2" /><text x="361" y="248" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">根1把中序分为3个左节点和4个右节点</text>
+          <path d="M361 198 V230" stroke="var(--accent)" strokeWidth="2" /><text x="361" y="248" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">根1把中序分为3个左节点和4个右节点</text>
           <rect x="104" y="280" width="262" height="72" rx="5" fill="var(--success)" fillOpacity="0.07" stroke="var(--success)" />
-          <text x="235" y="306" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">左子树</text><text x="235" y="330" textAnchor="middle" fontSize="10" fill="var(--text-primary)">pre=[2,4,7] · in=[4,7,2]</text>
+          <text x="235" y="306" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">左子树</text><text x="235" y="330" textAnchor="middle" fontSize="11" fill="var(--text-primary)">pre=[2,4,7] · in=[4,7,2]</text>
           <rect x="434" y="280" width="262" height="72" rx="5" fill="var(--warning)" fillOpacity="0.07" stroke="var(--warning)" />
-          <text x="565" y="306" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">右子树</text><text x="565" y="330" textAnchor="middle" fontSize="10" fill="var(--text-primary)">pre=[3,5,6,8] · in=[5,3,8,6]</text>
-          <text x="400" y="382" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">对子区间重复同一规则，直到区间为空或只剩一个节点。</text>
+          <text x="565" y="306" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">右子树</text><text x="565" y="330" textAnchor="middle" fontSize="11" fill="var(--text-primary)">pre=[3,5,6,8] · in=[5,3,8,6]</text>
+          <text x="400" y="382" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">对子区间重复同一规则，直到区间为空或只剩一个节点。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">左子树大小来自中序根位置，并决定前序序列切分点。</figcaption>

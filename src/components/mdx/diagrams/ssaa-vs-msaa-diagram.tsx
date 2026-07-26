@@ -142,7 +142,7 @@ export function SsaaVsMsaaDiagram() {
             x="80"
             y="42"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每个子像素都着色 · 贵
@@ -163,7 +163,7 @@ export function SsaaVsMsaaDiagram() {
             x="320"
             y="42"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             多样本存储 · 着色通常每像素一次
@@ -184,11 +184,11 @@ export function SsaaVsMsaaDiagram() {
 
           {/* 底部图例 */}
           <circle cx="34" cy="204" r="3" fill="var(--warning)" />
-          <text x="44" y="208" fontSize="9" fill="var(--text-secondary)">
+          <text x="44" y="208" fontSize="11" fill="var(--text-secondary)">
             子像素着色点（每个都跑着色器）
           </text>
           <circle cx="262" cy="204" r="3" fill="var(--success)" />
-          <text x="272" y="208" fontSize="9" fill="var(--text-secondary)">
+          <text x="272" y="208" fontSize="11" fill="var(--text-secondary)">
             边缘样本（部分覆盖，形成过渡色）
           </text>
         </svg>

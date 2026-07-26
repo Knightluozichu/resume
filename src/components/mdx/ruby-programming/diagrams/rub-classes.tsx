@@ -71,7 +71,7 @@ export function RubClassesDiagram() {
           <text x={510} y={110} textAnchor="middle" fontSize="11" fontWeight="600" fill={danger}>{`BasicObject（最底层根）`}</text>
 
           <line x1={510} y1={126} x2={510} y2={140} stroke={secondary} strokeWidth="1.2" markerEnd="url(#rub-cls-arrow)" />
-          <text x={530} y={136} fontSize="10" fill={secondary}>{`superclass`}</text>
+          <text x={530} y={136} fontSize="11" fill={secondary}>{`superclass`}</text>
 
           <rect x={360} y={140} width={300} height={40} rx="6" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
           <text x={510} y={164} textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>{`Object（默认父类）`}</text>
@@ -82,7 +82,7 @@ export function RubClassesDiagram() {
           <text x={510} y={218} textAnchor="middle" fontSize="11" fontWeight="600" fill={success}>{`Animal（自定义基类）`}</text>
 
           <line x1={510} y1={234} x2={510} y2={248} stroke={secondary} strokeWidth="1.2" markerEnd="url(#rub-cls-arrow)" />
-          <text x={530} y={244} fontSize="10" fill={secondary}>{`&lt; (继承)`}</text>
+          <text x={530} y={244} fontSize="11" fill={secondary}>{`&lt; (继承)`}</text>
 
           <rect x={360} y={248} width={300} height={40} rx="6" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" strokeOpacity="0.5" />
           <text x={510} y={272} textAnchor="middle" fontSize="11" fontWeight="600" fill={accent}>{`Dog &lt; Animal（子类）`}</text>
@@ -96,15 +96,15 @@ export function RubClassesDiagram() {
 
           <rect x={360} y={328} width={96} height={52} rx="6" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.4" />
           <text x={408} y={348} textAnchor="middle" fontSize="11" fontWeight="600" fill={success}>{`public`}</text>
-          <text x={408} y={368} textAnchor="middle" fontSize="10" fill={secondary}>{`任何人可调用`}</text>
+          <text x={408} y={368} textAnchor="middle" fontSize="11" fill={secondary}>{`任何人可调用`}</text>
 
           <rect x={464} y={328} width={96} height={52} rx="6" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
           <text x={512} y={348} textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>{`protected`}</text>
-          <text x={512} y={368} textAnchor="middle" fontSize="10" fill={secondary}>{`同类实例可调`}</text>
+          <text x={512} y={368} textAnchor="middle" fontSize="11" fill={secondary}>{`同类实例可调`}</text>
 
           <rect x={568} y={328} width={96} height={52} rx="6" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.4" />
           <text x={616} y={348} textAnchor="middle" fontSize="11" fontWeight="600" fill={danger}>{`private`}</text>
-          <text x={616} y={368} textAnchor="middle" fontSize="10" fill={secondary}>{`仅隐式 self`}</text>
+          <text x={616} y={368} textAnchor="middle" fontSize="11" fill={secondary}>{`仅隐式 self`}</text>
 
           <defs>
             <marker id="rub-cls-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">

@@ -92,7 +92,7 @@ export function CHistoryTimelineDiagram() {
                   x={m.x + 40}
                   y={156 + li * 14}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {line}
@@ -120,7 +120,7 @@ export function CHistoryTimelineDiagram() {
             x="360"
             y="190"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间轴上的每个节点代表一次重要的标准化里程碑

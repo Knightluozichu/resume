@@ -69,7 +69,7 @@ export function GeometryShaderPipelineDiagram({ step = 1 }: { step?: 1 }) {
             x="196"
             y="86"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             送来 1 个图元
@@ -109,7 +109,7 @@ export function GeometryShaderPipelineDiagram({ step = 1 }: { step?: 1 }) {
             x="310"
             y="120"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             可选阶段
@@ -129,7 +129,7 @@ export function GeometryShaderPipelineDiagram({ step = 1 }: { step?: 1 }) {
             x="422"
             y="86"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             输出 0/1/多个

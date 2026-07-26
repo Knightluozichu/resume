@@ -33,7 +33,7 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
           className="mx-auto block h-auto w-full max-w-[400px]"
         >
           {/* 帧预算线 at y=80，标签在 y=72（8px 间距） */}
-          <text x="40" y="70" fontSize="10" fill="var(--accent)">
+          <text x="40" y="70" fontSize="11" fill="var(--accent)">
             16.6ms 帧预算 (60 FPS)
           </text>
           <line

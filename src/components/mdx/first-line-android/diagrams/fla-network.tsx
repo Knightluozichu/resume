@@ -65,7 +65,7 @@ export function FlaNetworkDiagram() {
             x="95"
             y="104"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HttpURLConnection
@@ -74,7 +74,7 @@ export function FlaNetworkDiagram() {
             x="95"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             / OkHttp
@@ -115,7 +115,7 @@ export function FlaNetworkDiagram() {
             x="255"
             y="104"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             openConnection()
@@ -124,7 +124,7 @@ export function FlaNetworkDiagram() {
             x="255"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             setRequestMethod
@@ -165,7 +165,7 @@ export function FlaNetworkDiagram() {
             x="415"
             y="104"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             getInputStream()
@@ -174,7 +174,7 @@ export function FlaNetworkDiagram() {
             x="415"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BufferedReader
@@ -215,7 +215,7 @@ export function FlaNetworkDiagram() {
             x="575"
             y="104"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JSONObject
@@ -224,7 +224,7 @@ export function FlaNetworkDiagram() {
             x="575"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             / Gson / Moshi
@@ -256,7 +256,7 @@ export function FlaNetworkDiagram() {
             x="687"
             y="88"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -266,7 +266,7 @@ export function FlaNetworkDiagram() {
             x="687"
             y="102"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             主线程
@@ -275,7 +275,7 @@ export function FlaNetworkDiagram() {
             x="687"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             更新UI
@@ -318,7 +318,7 @@ export function FlaNetworkDiagram() {
             x="135"
             y="200"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             子线程请求网络
@@ -327,7 +327,7 @@ export function FlaNetworkDiagram() {
             x="135"
             y="214"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Handler.sendMessage()
@@ -336,7 +336,7 @@ export function FlaNetworkDiagram() {
             x="135"
             y="228"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             handleMessage() 切主线程
@@ -345,7 +345,7 @@ export function FlaNetworkDiagram() {
             x="135"
             y="246"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             最底层，代码量大
@@ -354,7 +354,7 @@ export function FlaNetworkDiagram() {
             x="135"
             y="258"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             AsyncTask（已废弃）
@@ -385,7 +385,7 @@ export function FlaNetworkDiagram() {
             x="360"
             y="200"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             OkHttpClient
@@ -394,7 +394,7 @@ export function FlaNetworkDiagram() {
             x="360"
             y="214"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Request / Response
@@ -403,7 +403,7 @@ export function FlaNetworkDiagram() {
             x="360"
             y="228"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             enqueue() 异步回调
@@ -412,7 +412,7 @@ export function FlaNetworkDiagram() {
             x="360"
             y="246"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             连接池/拦截器/缓存
@@ -421,7 +421,7 @@ export function FlaNetworkDiagram() {
             x="360"
             y="258"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             社区主流方案
@@ -452,7 +452,7 @@ export function FlaNetworkDiagram() {
             x="595"
             y="200"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             接口定义API（注解）
@@ -461,7 +461,7 @@ export function FlaNetworkDiagram() {
             x="595"
             y="214"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @GET / @POST / @Path
@@ -470,7 +470,7 @@ export function FlaNetworkDiagram() {
             x="595"
             y="228"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             底层基于OkHttp
@@ -479,7 +479,7 @@ export function FlaNetworkDiagram() {
             x="595"
             y="246"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             自动JSON解析（Converter）
@@ -488,7 +488,7 @@ export function FlaNetworkDiagram() {
             x="595"
             y="258"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             配合Coroutine/Flow
@@ -521,7 +521,7 @@ export function FlaNetworkDiagram() {
             x="200"
             y="322"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Pull解析：XmlPullParser（Android内置）
@@ -530,7 +530,7 @@ export function FlaNetworkDiagram() {
             x="200"
             y="336"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             SAX解析：事件驱动流式解析
@@ -539,7 +539,7 @@ export function FlaNetworkDiagram() {
             x="200"
             y="350"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             START_TAG / TEXT / END_TAG 事件
@@ -571,7 +571,7 @@ export function FlaNetworkDiagram() {
             x="545"
             y="322"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JSONObject：手动解析，适合简单结构
@@ -580,7 +580,7 @@ export function FlaNetworkDiagram() {
             x="545"
             y="336"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Gson：fromJson/toJson 自动映射对象
@@ -589,7 +589,7 @@ export function FlaNetworkDiagram() {
             x="545"
             y="350"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Moshi：Kotlin友好，KSP编译期生成
@@ -610,7 +610,7 @@ export function FlaNetworkDiagram() {
             x="370"
             y="410"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             网络请求必须在子线程 — 主线程NetworkOnMainThreadException
@@ -619,7 +619,7 @@ export function FlaNetworkDiagram() {
             x="370"
             y="426"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             AndroidManifest 必须声明 &lt;uses-permission
@@ -629,7 +629,7 @@ export function FlaNetworkDiagram() {
             x="370"
             y="442"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HTTPS默认信任 — HTTP需配置 networkSecurityConfig（Android 9.0+
@@ -639,7 +639,7 @@ export function FlaNetworkDiagram() {
             x="370"
             y="458"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             现代方案：Retrofit + OkHttp + Coroutine +

@@ -74,7 +74,7 @@ export function StreamStateDiagram() {
             x={states.good.x}
             y={states.good.y + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             {states.good.desc}
@@ -106,7 +106,7 @@ export function StreamStateDiagram() {
             x={states.eof.x}
             y={states.eof.y + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             {states.eof.desc}
@@ -138,7 +138,7 @@ export function StreamStateDiagram() {
             x={states.fail.x}
             y={states.fail.y + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             {states.fail.desc}
@@ -170,7 +170,7 @@ export function StreamStateDiagram() {
             x={states.bad.x}
             y={states.bad.y + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             {states.bad.desc}
@@ -185,7 +185,7 @@ export function StreamStateDiagram() {
             strokeWidth="1.8"
             markerEnd="url(#arrowY)"
           />
-          <text x={states.good.x + 40} y={states.good.y + 68} fontSize="9" fill={secondary} textAnchor="middle">
+          <text x={states.good.x + 40} y={states.good.y + 68} fontSize="11" fill={secondary} textAnchor="middle">
             读到EOF
           </text>
 
@@ -197,7 +197,7 @@ export function StreamStateDiagram() {
             strokeWidth="1.8"
             markerEnd="url(#arrowY)"
           />
-          <text x={states.good.x - 30} y={states.good.y + 68} fontSize="9" fill={secondary} textAnchor="middle">
+          <text x={states.good.x - 30} y={states.good.y + 68} fontSize="11" fill={secondary} textAnchor="middle">
             格式错
           </text>
 
@@ -212,7 +212,7 @@ export function StreamStateDiagram() {
             strokeDasharray="5 3"
             markerEnd="url(#arrowR)"
           />
-          <text x={states.bad.x + 30} y={states.bad.y - 20} fontSize="9" fill={secondary} textAnchor="middle">
+          <text x={states.bad.x + 30} y={states.bad.y - 20} fontSize="11" fill={secondary} textAnchor="middle">
             不可恢复错误
           </text>
 
@@ -227,7 +227,7 @@ export function StreamStateDiagram() {
             strokeDasharray="4 3"
             markerEnd="url(#arrowG)"
           />
-          <text x={states.eof.x - 55} y={states.eof.y - 25} fontSize="9" fill={green} textAnchor="middle">
+          <text x={states.eof.x - 55} y={states.eof.y - 25} fontSize="11" fill={green} textAnchor="middle">
             clear()
           </text>
 
@@ -242,7 +242,7 @@ export function StreamStateDiagram() {
             strokeDasharray="4 3"
             markerEnd="url(#arrowG)"
           />
-          <text x={states.fail.x - 67} y={states.fail.y + 22} fontSize="9" fill={green} textAnchor="middle">
+          <text x={states.fail.x - 67} y={states.fail.y + 22} fontSize="11" fill={green} textAnchor="middle">
             clear()
           </text>
 
@@ -254,37 +254,37 @@ export function StreamStateDiagram() {
           </text>
 
           {/* rdstate */}
-          <text x={512} y={80} fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={512} y={80} fontSize="11" fill={secondary} fontFamily="monospace">
             rdstate()
           </text>
-          <text x={512} y={94} fontSize="9" fill={secondary}>
+          <text x={512} y={94} fontSize="11" fill={secondary}>
             获取当前状态位掩码
           </text>
 
           {/* good/fail/eof/bad */}
-          <text x={512} y={116} fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={512} y={116} fontSize="11" fill={secondary} fontFamily="monospace">
             good() fail()
           </text>
-          <text x={512} y={130} fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={512} y={130} fontSize="11" fill={secondary} fontFamily="monospace">
             eof() bad()
           </text>
-          <text x={512} y={144} fontSize="9" fill={secondary}>
+          <text x={512} y={144} fontSize="11" fill={secondary}>
             逐一检查各状态标志
           </text>
 
           {/* clear */}
-          <text x={512} y={170} fontSize="10" fill={green} fontFamily="monospace">
+          <text x={512} y={170} fontSize="11" fill={green} fontFamily="monospace">
             clear()
           </text>
-          <text x={512} y={184} fontSize="9" fill={green}>
+          <text x={512} y={184} fontSize="11" fill={green}>
             重置所有状态位
           </text>
 
           {/* setstate */}
-          <text x={512} y={206} fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={512} y={206} fontSize="11" fill={secondary} fontFamily="monospace">
             setstate(flag)
           </text>
-          <text x={512} y={220} fontSize="9" fill={secondary}>
+          <text x={512} y={220} fontSize="11" fill={secondary}>
             手动设置某个状态位
           </text>
 
@@ -292,7 +292,7 @@ export function StreamStateDiagram() {
           <text x={100} y={440} fontSize="11" fontWeight="700" fill={primary}>
             流状态检查口诀
           </text>
-          <text x={100} y={462} fontSize="10" fill={secondary}>
+          <text x={100} y={462} fontSize="11" fill={secondary}>
             while (file &gt;&gt; word) → 每次读完后自动检查 good，读到 EOF 或出错自动停止
           </text>
 

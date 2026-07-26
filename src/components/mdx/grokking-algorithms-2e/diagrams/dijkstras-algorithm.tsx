@@ -129,13 +129,13 @@ export function WeightedPathDiagram() {
           ].map((node) => (
             <g key={node.label}>
               <circle cx={node.x} cy={node.y} r="28" fill={node.tone} fillOpacity="0.11" stroke={node.tone} />
-              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill={primary}>{node.label}</text>
+              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.label}</text>
             </g>
           ))}
 
           <rect x="72" y="298" width="616" height="40" rx="4" fill={warning} fillOpacity="0.07" stroke={warning} strokeOpacity="0.55" />
-          <text x="380" y="315" textAnchor="middle" fontSize="10.5" fill={primary}>BFS会选上方2条边但耗时7分钟；Dijkstra会选下方3条边但只耗时6分钟。</text>
-          <text x="380" y="329" textAnchor="middle" fontSize="9" fill={secondary}>带权图的路径成本等于沿途边权之和。</text>
+          <text x="380" y="315" textAnchor="middle" fontSize="11" fill={primary}>BFS会选上方2条边但耗时7分钟；Dijkstra会选下方3条边但只耗时6分钟。</text>
+          <text x="380" y="329" textAnchor="middle" fontSize="11" fill={secondary}>带权图的路径成本等于沿途边权之和。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -196,13 +196,13 @@ export function NegativeEdgeDiagram() {
           ].map((node) => (
             <g key={node.label}>
               <circle cx={node.x} cy={node.y} r="31" fill={node.tone} fillOpacity="0.11" stroke={node.tone} />
-              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>{node.label}</text>
+              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.label}</text>
             </g>
           ))}
 
           <rect x="70" y="286" width="620" height="42" rx="4" fill={danger} fillOpacity="0.06" stroke={danger} strokeOpacity="0.55" />
-          <text x="380" y="303" textAnchor="middle" fontSize="10.5" fill={primary}>算法先处理A=2；后来处理B才发现5+(-10)=-5，但A已经被锁定。</text>
-          <text x="380" y="318" textAnchor="middle" fontSize="9" fill={secondary}>反例没有环：问题来自负权边本身，而不是必须存在负权环。</text>
+          <text x="380" y="303" textAnchor="middle" fontSize="11" fill={primary}>算法先处理A=2；后来处理B才发现5+(-10)=-5，但A已经被锁定。</text>
+          <text x="380" y="318" textAnchor="middle" fontSize="11" fill={secondary}>反例没有环：问题来自负权边本身，而不是必须存在负权环。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

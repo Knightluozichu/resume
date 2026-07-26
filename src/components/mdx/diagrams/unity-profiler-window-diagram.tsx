@@ -63,7 +63,7 @@ export function UnityProfilerWindowDiagram({
           >
             Profiler — Play Mode
           </text>
-          <text x="400" y="34" fontSize="10" fill="var(--text-secondary)">
+          <text x="400" y="34" fontSize="11" fill="var(--text-secondary)">
             Record · Deep Profile
           </text>
 
@@ -76,7 +76,7 @@ export function UnityProfilerWindowDiagram({
             stroke="var(--border)"
             strokeWidth="1"
           />
-          <text x="32" y="46" fontSize="9" fill="var(--text-secondary)">
+          <text x="32" y="46" fontSize="11" fill="var(--text-secondary)">
             0ms ——— 16ms (60 FPS) ——— 33ms
           </text>
 
@@ -108,7 +108,7 @@ export function UnityProfilerWindowDiagram({
                 <text
                   x="40"
                   y={m.y + 32}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {m.sub}

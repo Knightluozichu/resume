@@ -155,7 +155,7 @@ export function ValidationRetryDiagram() {
                   x={x + CELL_W / 2}
                   y={CELL_TOP + 48}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontFamily={c.mono ? "var(--font-mono)" : undefined}
                   fill="var(--text-secondary)"
                 >

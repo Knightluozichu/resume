@@ -117,7 +117,7 @@ export function CStringNullTerminatorDiagram() {
                   x={x + (cellW - 4) / 2}
                   y={memY + 68}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   [{idx}]
@@ -161,7 +161,7 @@ export function CStringNullTerminatorDiagram() {
             x={startX + 3.5 * cellW - 2}
             y={memY + 114}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill={nullColor}
           >

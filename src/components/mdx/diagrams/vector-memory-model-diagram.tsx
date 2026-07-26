@@ -85,7 +85,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
                 strokeDasharray="4 4"
                 opacity="0.4"
               />
-              <text x={startX + cellW / 2} y={startY + cellH / 2 + 4} fontSize="10" fill={secondary} textAnchor="middle">
+              <text x={startX + cellW / 2} y={startY + cellH / 2 + 4} fontSize="11" fill={secondary} textAnchor="middle">
                 无内存
               </text>
             </g>
@@ -106,7 +106,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={startX + maxCols * (cellW + gap) / 2}
                 y={startY - 16}
-                fontSize="9"
+                fontSize="11"
                 fill={warn}
                 textAnchor="middle"
               >
@@ -148,7 +148,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
                       <text
                         x={cx + cellW / 2}
                         y={startY + cellH / 2 + 4}
-                        fontSize="9"
+                        fontSize="11"
                         fill={secondary}
                         textAnchor="middle"
                       >
@@ -158,7 +158,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
                     <text
                       x={cx + cellW / 2}
                       y={startY + cellH + 16}
-                      fontSize="9"
+                      fontSize="11"
                       fill={secondary}
                       textAnchor="middle"
                       fontFamily="monospace"
@@ -197,7 +197,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
             {capacity > 0 && (
               <>
                 <line x1="0" y1="0" x2={cellW / 2} y2={cellH - cellH} stroke={accent} strokeWidth="1.5" markerStart="url(#dot)" />
-                <text x="0" y="-14" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">
+                <text x="0" y="-14" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                   begin()
                 </text>
               </>
@@ -214,7 +214,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
                   strokeWidth="1.5"
                   markerStart="url(#dotP)"
                 />
-                <text x={size * (cellW + gap)} y="-14" fontSize="10" fill={primary} textAnchor="middle" fontFamily="monospace">
+                <text x={size * (cellW + gap)} y="-14" fontSize="11" fill={primary} textAnchor="middle" fontFamily="monospace">
                   end()
                 </text>
               </>
@@ -231,7 +231,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
                   strokeWidth="1.5"
                   markerStart="url(#dotW)"
                 />
-                <text x={capacity * (cellW + gap) - gap} y="-14" fontSize="10" fill={warn} textAnchor="middle" fontFamily="monospace">
+                <text x={capacity * (cellW + gap) - gap} y="-14" fontSize="11" fill={warn} textAnchor="middle" fontFamily="monospace">
                   cap
                 </text>
               </>
@@ -241,11 +241,11 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
           {/* 图例 */}
           <g transform={`translate(${startX}, ${startY + cellH + 100})`}>
             <rect x="0" y="2" width="16" height="12" rx="3" fill={accent} opacity="0.15" stroke={accent} strokeWidth="2" />
-            <text x="22" y="12" fontSize="10" fill={secondary}>已占用 (size 个)</text>
+            <text x="22" y="12" fontSize="11" fill={secondary}>已占用 (size 个)</text>
             <rect x="140" y="2" width="16" height="12" rx="3" fill="none" stroke={border} strokeDasharray="3 3" />
-            <text x="162" y="12" fontSize="10" fill={secondary}>预留未用 (capacity−size)</text>
+            <text x="162" y="12" fontSize="11" fill={secondary}>预留未用 (capacity−size)</text>
             <rect x="320" y="2" width="16" height="12" rx="3" fill="none" stroke={warn} strokeDasharray="4 4" />
-            <text x="342" y="12" fontSize="10" fill={secondary}>总容量边界 (capacity)</text>
+            <text x="342" y="12" fontSize="11" fill={secondary}>总容量边界 (capacity)</text>
           </g>
 
           {/* 扩容说明（只在需要扩容的步出现） */}
@@ -277,7 +277,7 @@ export function VectorMemoryModelDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={startX + (2 * (cellW + gap)) / 2}
                 y={startY + cellH + 36}
-                fontSize="9"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
                 opacity="0.35"

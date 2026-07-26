@@ -132,7 +132,7 @@ export function StandardShaderChannelsDiagram() {
                   x={ROW_X + 64}
                   y={y + 43}
                   textAnchor="start"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.ctrl}
@@ -146,7 +146,7 @@ export function StandardShaderChannelsDiagram() {
             x={ROW_X}
             y={ROW_Y0 + 4 * ROW_DY + 6}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             填好这几格 → 各通道合成 → 决定表面最终外观（右）
@@ -166,7 +166,7 @@ export function StandardShaderChannelsDiagram() {
             x={(ROW_X + ROW_W + BALL_X) / 2}
             y={BALL_CY - 10}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             合成
@@ -222,7 +222,7 @@ export function StandardShaderChannelsDiagram() {
             x={BALL_CX}
             y={64 + 188}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             颜色 + 金属感 + 反光 + 凹凸
@@ -233,7 +233,7 @@ export function StandardShaderChannelsDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 22}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             调这几个滑块 / 贴图，就能从塑料调到金属、从磨砂调到镜面——一个

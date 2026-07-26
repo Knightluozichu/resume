@@ -54,7 +54,7 @@ export function TcpBitwiseLab() {
   const result = operation === "and" ? left & right : operation === "or" ? left | right : left ^ right;
   return (
     <Figure caption="Bitwise operations apply a Boolean operator in parallel to every bit position; masks turn set membership and field extraction into word operations.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 w-full accent-current" type="range" min="0" max="255" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 w-full accent-current" type="range" min="0" max="255" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">operation<select className="mt-2 block w-full border border-border bg-background p-2" value={operation} onChange={(event) => setOperation(event.target.value as typeof operation)}><option value="and">AND</option><option value="or">OR</option><option value="xor">XOR</option></select></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">left = {left}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="255" value={left} onChange={(event) => setLeft(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">right = {right}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="255" value={right} onChange={(event) => setRight(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">operation<select className="mt-2 block w-full border border-border bg-background p-2" value={operation} onChange={(event) => setOperation(event.target.value as typeof operation)}><option value="and">AND</option><option value="or">OR</option><option value="xor">XOR</option></select></label></div>
       <div className="mt-4 grid gap-2"><Stat label="left bits" value={left.toString(2).padStart(8, "0")} /><Stat label="right bits" value={right.toString(2).padStart(8, "0")} /><Stat label="result bits" value={result.toString(2).padStart(8, "0")} tone="success" /></div>
       <div className="mt-2"><Stat label="set bits in result" value={result.toString(2).split("1").length - 1 + ""} tone="warning" /></div>
     </Figure>
@@ -99,7 +99,7 @@ export function TcpGrayCodeLab() {
   const changed = current ^ next;
   return (
     <Figure caption="Binary-reflected Gray order visits every bit tuple cyclically while changing one coordinate per step, a minimal-change generation contract.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">bits = {bits}<input className="mt-2 w-full accent-current" type="range" min="2" max="6" value={bits} onChange={(event) => { setBits(Number(event.target.value)); setIndex(0); }} /></label><label className="text-sm font-semibold text-primary">index = {index}<input className="mt-2 w-full accent-current" type="range" min="0" max={modulus - 1} value={index} onChange={(event) => setIndex(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">bits = {bits}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="6" value={bits} onChange={(event) => { setBits(Number(event.target.value)); setIndex(0); }} /></label><label className="text-sm font-semibold text-primary">index = {index}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={modulus - 1} value={index} onChange={(event) => setIndex(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="gray(index)" value={current.toString(2).padStart(bits, "0")} /><Stat label="gray(next)" value={next.toString(2).padStart(bits, "0")} /><Stat label="changed mask" value={changed.toString(2).padStart(bits, "0")} tone={changed > 0 && (changed & (changed - 1)) === 0 ? "success" : "danger"} /></div>
     </Figure>
   );
@@ -119,7 +119,7 @@ export function TcpTupleLab() {
   const tuple = mixedRadixTuple(rank, radices);
   return (
     <Figure caption="Mixed-radix ranking gives every tuple one integer in a contiguous range; incrementing with carries enumerates all tuples without duplicates.">
-      <label className="text-sm font-semibold text-primary">rank = {rank}<input className="mt-2 w-full accent-current" type="range" min="0" max={count - 1} value={rank} onChange={(event) => setRank(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">rank = {rank}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={count - 1} value={rank} onChange={(event) => setRank(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2">{tuple.map((digit, index) => <Stat key={index} label={`coordinate ${index}, radix ${radices[index]}`} value={digit.toString()} tone="success" />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="tuple" value={`(${tuple.join(", ")})`} /><Stat label="total tuples" value={count.toString()} /></div>
     </Figure>
@@ -168,7 +168,7 @@ export function TcpCombinationGeneratorLab() {
   const safeRank = rank % values.length;
   return (
     <Figure caption="A k-combination is an increasing tuple; prefix feasibility bounds prevent duplicates and give a direct lexicographic generator.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">n = {n}<input className="mt-2 w-full accent-current" type="range" min="3" max="9" value={n} onChange={(event) => { setN(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">k = {Math.min(k, n)}<input className="mt-2 w-full accent-current" type="range" min="1" max={n} value={Math.min(k, n)} onChange={(event) => { setK(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">rank = {safeRank}<input className="mt-2 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">n = {n}<input className="mt-2 h-11 w-full accent-current" type="range" min="3" max="9" value={n} onChange={(event) => { setN(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">k = {Math.min(k, n)}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max={n} value={Math.min(k, n)} onChange={(event) => { setK(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">rank = {safeRank}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="combination" value={`{${values[safeRank].join(", ")}}`} tone="success" /><Stat label="count" value={values.length.toString()} /></div>
     </Figure>
   );
@@ -188,7 +188,7 @@ export function TcpIntegerPartitionLab() {
   const safeRank = rank % values.length;
   return (
     <Figure caption="An integer partition is a nonincreasing positive sequence with fixed sum; bounding the next part by the previous part removes order duplicates.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">integer n = {total}<input className="mt-2 w-full accent-current" type="range" min="1" max="9" value={total} onChange={(event) => { setTotal(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">partition rank = {safeRank}<input className="mt-2 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">integer n = {total}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="9" value={total} onChange={(event) => { setTotal(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">partition rank = {safeRank}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="partition" value={values[safeRank].join(" + ")} tone="success" /><Stat label="sum" value={values[safeRank].reduce((sum, value) => sum + value, 0).toString()} /><Stat label="p(n)" value={values.length.toString()} /></div>
     </Figure>
   );
@@ -214,7 +214,7 @@ export function TcpSetPartitionLab() {
   const blocks = Array.from({ length: Math.max(...sequence) + 1 }, (_, label) => sequence.map((value, index) => value === label ? index + 1 : null).filter((value): value is number => value !== null));
   return (
     <Figure caption="Restricted-growth strings canonically label set partitions by order of first block appearance, avoiding permutations of block names.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">set size = {size}<input className="mt-2 w-full accent-current" type="range" min="1" max="6" value={size} onChange={(event) => { setSize(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">rank = {safeRank}<input className="mt-2 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">set size = {size}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="6" value={size} onChange={(event) => { setSize(Number(event.target.value)); setRank(0); }} /></label><label className="text-sm font-semibold text-primary">rank = {safeRank}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={values.length - 1} value={safeRank} onChange={(event) => setRank(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="restricted-growth string" value={sequence.join("")} /><Stat label="blocks" value={blocks.map((block) => `{${block.join(",")}}`).join(" ")} tone="success" /><Stat label="Bell count" value={values.length.toString()} /></div>
     </Figure>
   );
@@ -245,7 +245,7 @@ export function TcpTreeGeneratorLab() {
   const edges = decodePrufer(code);
   return (
     <Figure caption="A Prüfer sequence of length n−2 bijects with labeled trees on n vertices; decoding repeatedly connects the smallest degree-one label.">
-      <div className="grid gap-4 sm:grid-cols-3">{code.map((value, index) => <label key={index} className="text-sm font-semibold text-primary">code[{index}] = {value}<input className="mt-2 w-full accent-current" type="range" min="1" max="5" value={value} onChange={(event) => [setA, setB, setC][index](Number(event.target.value))} /></label>)}</div>
+      <div className="grid gap-4 sm:grid-cols-3">{code.map((value, index) => <label key={index} className="text-sm font-semibold text-primary">code[{index}] = {value}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="5" value={value} onChange={(event) => [setA, setB, setC][index](Number(event.target.value))} /></label>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="Prüfer code" value={code.join(" ")} /><Stat label="tree edges" value={edges.map(([left, right]) => `${left}-${right}`).join(" · ")} tone="success" /><Stat label="edge count" value={edges.length.toString()} /></div>
     </Figure>
   );

@@ -24,10 +24,10 @@ export function DogLearningMapDiagram() {
           {["顶点输入", "顶点着色器", "图元装配", "光栅化", "片元着色器", "逐片元测试", "帧缓冲"].map((s, i) => (
             <g key={s}>
               <rect x={40 + i * 95} y="130" width="86" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x={83 + i * 95} y="150" textAnchor="middle" fontSize="9.5" fill={(s === "顶点着色器" || s === "片元着色器") ? "var(--accent)" : "var(--text-primary)"}>{s}</text>
+              <text x={83 + i * 95} y="150" textAnchor="middle" fontSize="11" fill={(s === "顶点着色器" || s === "片元着色器") ? "var(--accent)" : "var(--text-primary)"}>{s}</text>
             </g>
           ))}
-          <text x="360" y="178" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">橙色为可编程着色器阶段</text>
+          <text x="360" y="178" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">橙色为可编程着色器阶段</text>
 
           {/* 十章卡片 */}
           <text x="360" y="202" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">十章脉络</text>
@@ -45,13 +45,13 @@ export function DogLearningMapDiagram() {
           ].map((c) => (
             <g key={c.t}>
               <rect x={c.x} y={c.y} width="112" height="34" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x={c.x + 56} y={c.y + 22} textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{c.t}</text>
+              <text x={c.x + 56} y={c.y + 22} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{c.t}</text>
             </g>
           ))}
 
           <rect x="40" y="312" width="640" height="60" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
           <text x="360" y="336" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">核心思想：状态机 + 图形管线 + 可编程着色器</text>
-          <text x="360" y="356" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">设状态 → 喂数据 → 发绘制；三 API 同源，差异在子集与扩展</text>
+          <text x="360" y="356" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">设状态 → 喂数据 → 发绘制；三 API 同源，差异在子集与扩展</text>
 
           <defs>
             <marker id="dogArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">

@@ -40,17 +40,17 @@ export function DsaDisjointSetsDiagram() {
           <circle cx="100" cy="132" r="13" fill={accent} fillOpacity="0.1" stroke={accent} strokeWidth="1.5" />
           <text x="100" y="136" textAnchor="middle" fontSize="11" fill={accent}>1</text>
           <circle cx="72" cy="168" r="11" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
-          <text x="72" y="172" textAnchor="middle" fontSize="10" fill={accent}>2</text>
+          <text x="72" y="172" textAnchor="middle" fontSize="11" fill={accent}>2</text>
           <circle cx="128" cy="168" r="11" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
-          <text x="128" y="172" textAnchor="middle" fontSize="10" fill={accent}>3</text>
+          <text x="128" y="172" textAnchor="middle" fontSize="11" fill={accent}>3</text>
           <line x1="94" y1="144" x2="76" y2="158" stroke={accent} strokeWidth="1" />
           <line x1="106" y1="144" x2="124" y2="158" stroke={accent} strokeWidth="1" />
-          <text x="100" y="194" textAnchor="middle" fontSize="10" fill={secondary}>秩=1</text>
+          <text x="100" y="194" textAnchor="middle" fontSize="11" fill={secondary}>秩=1</text>
 
           {/* 树 B：4，秩 0 */}
           <circle cx="240" cy="150" r="11" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1.5" />
           <text x="240" y="154" textAnchor="middle" fontSize="11" fill={warning}>4</text>
-          <text x="240" y="194" textAnchor="middle" fontSize="10" fill={secondary}>秩=0</text>
+          <text x="240" y="194" textAnchor="middle" fontSize="11" fill={secondary}>秩=0</text>
 
           {/* 箭头：合并 */}
           <text x="180" y="218" textAnchor="middle" fontSize="11" fill={primary}>矮树挂高树</text>
@@ -61,11 +61,11 @@ export function DsaDisjointSetsDiagram() {
           <circle cx="180" cy="276" r="13" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
           <text x="180" y="280" textAnchor="middle" fontSize="11" fill={success}>1</text>
           <circle cx="140" cy="308" r="10" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" />
-          <text x="140" y="311" textAnchor="middle" fontSize="9" fill={success}>2</text>
+          <text x="140" y="311" textAnchor="middle" fontSize="11" fill={success}>2</text>
           <circle cx="180" cy="308" r="10" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" />
-          <text x="180" y="311" textAnchor="middle" fontSize="9" fill={success}>3</text>
+          <text x="180" y="311" textAnchor="middle" fontSize="11" fill={success}>3</text>
           <circle cx="220" cy="308" r="10" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1" />
-          <text x="220" y="311" textAnchor="middle" fontSize="9" fill={warning}>4</text>
+          <text x="220" y="311" textAnchor="middle" fontSize="11" fill={warning}>4</text>
           <line x1="172" y1="286" x2="144" y2="300" stroke={success} strokeWidth="1" />
           <line x1="180" y1="289" x2="180" y2="298" stroke={success} strokeWidth="1" />
           <line x1="188" y1="286" x2="216" y2="300" stroke={warning} strokeWidth="1" strokeDasharray="3 2" />
@@ -79,15 +79,15 @@ export function DsaDisjointSetsDiagram() {
           <circle cx="540" cy="132" r="13" fill={accent} fillOpacity="0.1" stroke={accent} strokeWidth="1.5" />
           <text x="540" y="136" textAnchor="middle" fontSize="11" fill={accent}>1</text>
           <circle cx="540" cy="164" r="11" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
-          <text x="540" y="168" textAnchor="middle" fontSize="10" fill={accent}>2</text>
+          <text x="540" y="168" textAnchor="middle" fontSize="11" fill={accent}>2</text>
           <circle cx="540" cy="192" r="11" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
-          <text x="540" y="196" textAnchor="middle" fontSize="10" fill={accent}>3</text>
+          <text x="540" y="196" textAnchor="middle" fontSize="11" fill={accent}>3</text>
           <circle cx="540" cy="220" r="11" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1.5" />
-          <text x="540" y="224" textAnchor="middle" fontSize="10" fill={warning}>4</text>
+          <text x="540" y="224" textAnchor="middle" fontSize="11" fill={warning}>4</text>
           <line x1="540" y1="145" x2="540" y2="153" stroke={border} strokeWidth="1" />
           <line x1="540" y1="175" x2="540" y2="181" stroke={border} strokeWidth="1" />
           <line x1="540" y1="203" x2="540" y2="209" stroke={border} strokeWidth="1" />
-          <text x="570" y="180" fontSize="10" fill={warning}>Find(4)</text>
+          <text x="570" y="180" fontSize="11" fill={warning}>Find(4)</text>
 
           {/* 箭头 */}
           <path d="M 540 238 L 540 250" stroke={primary} strokeWidth="1.2" markerEnd="url(#arrowDsu)" />
@@ -99,11 +99,11 @@ export function DsaDisjointSetsDiagram() {
           <circle cx="540" cy="300" r="13" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
           <text x="540" y="304" textAnchor="middle" fontSize="11" fill={success}>1</text>
           <circle cx="480" cy="336" r="10" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" />
-          <text x="480" y="339" textAnchor="middle" fontSize="9" fill={success}>2</text>
+          <text x="480" y="339" textAnchor="middle" fontSize="11" fill={success}>2</text>
           <circle cx="520" cy="336" r="10" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" />
-          <text x="520" y="339" textAnchor="middle" fontSize="9" fill={success}>3</text>
+          <text x="520" y="339" textAnchor="middle" fontSize="11" fill={success}>3</text>
           <circle cx="560" cy="336" r="10" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1" />
-          <text x="560" y="339" textAnchor="middle" fontSize="9" fill={warning}>4</text>
+          <text x="560" y="339" textAnchor="middle" fontSize="11" fill={warning}>4</text>
           <line x1="530" y1="310" x2="486" y2="326" stroke={success} strokeWidth="1" />
           <line x1="536" y1="312" x2="520" y2="326" stroke={success} strokeWidth="1" />
           <line x1="546" y1="312" x2="556" y2="326" stroke={warning} strokeWidth="1" strokeDasharray="3 2" />

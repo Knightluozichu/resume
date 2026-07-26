@@ -344,7 +344,7 @@ export function Algs4RedBlackEncodingMap() {
               key={option}
               type="button"
               onClick={() => setMode(option)}
-              className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
+              className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
             >
               {option}
             </button>
@@ -416,7 +416,7 @@ export function Algs4RedBlackRepairLab() {
               key={option}
               type="button"
               onClick={() => setMode(option)}
-              className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
+              className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
             >
               {option}
             </button>
@@ -489,7 +489,7 @@ export function Algs4RedBlackInsertionLab() {
               key={option}
               type="button"
               onClick={() => setMode(option)}
-              className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
+              className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
             >
               {option}
             </button>
@@ -734,7 +734,7 @@ export function Algs4RedBlackCertificateLab() {
               key={option}
               type="button"
               onClick={() => setMode(option)}
-              className={"min-h-10 border-b border-r border-border px-2 py-2 text-xs sm:border-b-0 last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
+              className={"min-h-11 border-b border-r border-border px-2 py-2 text-xs sm:border-b-0 last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}
             >
               {option}
             </button>

@@ -145,7 +145,7 @@ function TreeView({
             <div
               key={index}
               className={
-                "min-h-10 border p-2 text-center font-mono text-xs " +
+                "min-h-11 border p-2 text-center font-mono text-xs " +
                 (node === null
                   ? "border-dashed border-border text-secondary"
                   : node.key === selected

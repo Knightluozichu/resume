@@ -42,7 +42,7 @@ export function InheritanceLifetimeDiagram() {
 
           {/* Time axis */}
           <line x1={60} y1={82} x2={660} y2={82} stroke={border} strokeWidth={3} />
-          <text x={360} y={76} fontSize="9" fill={secondary} textAnchor="middle">Time →</text>
+          <text x={360} y={76} fontSize="11" fill={secondary} textAnchor="middle">Time →</text>
 
           {stages.map((s, i) => (
             <g key={i}>
@@ -63,9 +63,9 @@ export function InheritanceLifetimeDiagram() {
               <text x={s.x + 65} y={130} fontSize="11" fontWeight="700" fill={s.color} textAnchor="middle">{s.title}</text>
               <line x1={s.x + 10} y1={138} x2={s.x + 120} y2={138} stroke={border} strokeWidth={0.5} />
               <rect x={s.x + 6} y={144} width={118} height={20} rx={4} fill={bg} stroke={s.color} strokeWidth={1} />
-              <text x={s.x + 65} y={158} fontSize="9" fontWeight="600" fill={primary} textAnchor="middle" fontFamily="monospace">{s.fn}</text>
+              <text x={s.x + 65} y={158} fontSize="11" fontWeight="600" fill={primary} textAnchor="middle" fontFamily="monospace">{s.fn}</text>
               {s.detail.map((line, j) => (
-                <text key={j} x={s.x + 8} y={176 + j * 14} fontSize="8" fill={secondary}>{line}</text>
+                <text key={j} x={s.x + 8} y={176 + j * 14} fontSize="11" fill={secondary}>{line}</text>
               ))}
             </g>
           ))}
@@ -75,36 +75,36 @@ export function InheritanceLifetimeDiagram() {
           <text x={360} y={300} fontSize="11" fontWeight={700} fill={primary} textAnchor="middle">Object Memory Layout Changes During Lifecycle</text>
 
           <rect x={50} y={312} width={140} height={56} rx={4} fill={accent} opacity={0.08} stroke={accent} strokeWidth={1.5} />
-          <text x={120} y={330} fontSize="9" fontWeight="600" fill={accent} textAnchor="middle">Base: initialized</text>
-          <text x={120} y={346} fontSize="9" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Quote vtable</text>
-          <text x={120} y={360} fontSize="8" fill={secondary} textAnchor="middle">Derived: uninitialized</text>
+          <text x={120} y={330} fontSize="11" fontWeight="600" fill={accent} textAnchor="middle">Base: initialized</text>
+          <text x={120} y={346} fontSize="11" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Quote vtable</text>
+          <text x={120} y={360} fontSize="11" fill={secondary} textAnchor="middle">Derived: uninitialized</text>
 
           <text x={198} y={345} fontSize="14" fill={good} textAnchor="middle">→</text>
 
           <rect x={215} y={312} width={140} height={56} rx={4} fill={good} opacity={0.08} stroke={good} strokeWidth={1.5} />
-          <text x={285} y={330} fontSize="9" fontWeight="600" fill={good} textAnchor="middle">Fully constructed</text>
-          <text x={285} y={346} fontSize="9" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Bulk vtable</text>
-          <text x={285} y={360} fontSize="8" fill={secondary} textAnchor="middle">Ready to use</text>
+          <text x={285} y={330} fontSize="11" fontWeight="600" fill={good} textAnchor="middle">Fully constructed</text>
+          <text x={285} y={346} fontSize="11" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Bulk vtable</text>
+          <text x={285} y={360} fontSize="11" fill={secondary} textAnchor="middle">Ready to use</text>
 
           <text x={363} y={345} fontSize="14" fill={warn} textAnchor="middle">→</text>
 
           <rect x={380} y={312} width={140} height={56} rx={4} fill={warn} opacity={0.08} stroke={warn} strokeWidth={1.5} />
-          <text x={450} y={330} fontSize="9" fontWeight="600" fill={warn} textAnchor="middle">Derived destroyed</text>
-          <text x={450} y={346} fontSize="9" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Quote vtable</text>
-          <text x={450} y={360} fontSize="8" fill={secondary} textAnchor="middle">Only base part left</text>
+          <text x={450} y={330} fontSize="11" fontWeight="600" fill={warn} textAnchor="middle">Derived destroyed</text>
+          <text x={450} y={346} fontSize="11" fill={primary} fontFamily="monospace" textAnchor="middle">vptr → Quote vtable</text>
+          <text x={450} y={360} fontSize="11" fill={secondary} textAnchor="middle">Only base part left</text>
 
           <text x={528} y={345} fontSize="14" fill={danger} textAnchor="middle">→</text>
 
           <rect x={545} y={312} width={130} height={56} rx={4} fill={danger} opacity={0.08} stroke={danger} strokeWidth={1.5} />
-          <text x={610} y={330} fontSize="9" fontWeight="600" fill={danger} textAnchor="middle">All destroyed</text>
-          <text x={610} y={346} fontSize="9" fill={secondary} textAnchor="middle">Memory released</text>
+          <text x={610} y={330} fontSize="11" fontWeight="600" fill={danger} textAnchor="middle">All destroyed</text>
+          <text x={610} y={346} fontSize="11" fill={secondary} textAnchor="middle">Memory released</text>
 
           {/* Key principles */}
           <rect x={30} y={396} width={660} height={50} rx={6} fill={accent} opacity={0.05} stroke={accent} strokeWidth={1.5} />
           <text x={360} y={418} fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">
             Rule: construct foundation first, then the building; destruct building first, then the foundation
           </text>
-          <text x={360} y={436} fontSize="9" fill={secondary} textAnchor="middle">
+          <text x={360} y={436} fontSize="11" fill={secondary} textAnchor="middle">
             Destruction order is strict reverse of construction | vptr switches layer by layer | Base destructor MUST be virtual
           </text>
 

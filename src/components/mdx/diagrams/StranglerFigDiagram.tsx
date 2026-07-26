@@ -141,7 +141,7 @@ export function StranglerFigDiagram() {
                 x={c.x + c.w / 2}
                 y={c.y + c.h / 2 + 4}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {c.label}
@@ -194,7 +194,7 @@ export function StranglerFigDiagram() {
             x={FACADE_BOX.x + BOX_W / 2}
             y={FACADE_BOX.y + BOX_H - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             拦截调用 → 路由
@@ -218,7 +218,7 @@ export function StranglerFigDiagram() {
             x={FACADE_BOX.x + BOX_W / 2}
             y={FACADE_BOX.y + 64}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             分派调用
@@ -272,7 +272,7 @@ export function StranglerFigDiagram() {
                 x={m.x + m.w / 2}
                 y={m.y + m.h / 2 + 4}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {m.label}
@@ -391,7 +391,7 @@ export function StranglerFigDiagram() {
             x={OLD_BOX.x + BOX_W / 2}
             y={OLD_BOX.y - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             逐渐缩小 ▾
@@ -400,7 +400,7 @@ export function StranglerFigDiagram() {
             x={NEW_BOX.x + BOX_W / 2}
             y={NEW_BOX.y - 8}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             逐渐增长 ▴

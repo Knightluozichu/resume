@@ -19,6 +19,13 @@ export function OfficialIne23BookLab({ title, concepts, accent, view }: Props) {
   const [load, setLoad] = useState(54);
   const [temperature, setTemperature] = useState(32);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setLoad(54);
+    setTemperature(32);
+    setFault(false);
+  }
+
   const thermalPenalty = Math.max(0, Math.abs(temperature - 28) * 1.2);
   const wheelPower = clamp(load * 0.82 - thermalPenalty - (fault ? 36 : 0));
   const metrics = useMemo(
@@ -43,6 +50,7 @@ export function OfficialIne23BookLab({ title, concepts, accent, view }: Props) {
         color: "#18181b",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",
@@ -168,7 +176,7 @@ export function OfficialIne23BookLab({ title, concepts, accent, view }: Props) {
                       y={index % 2 === 0 ? 87 : 176}
                       textAnchor="middle"
                       fill="#3f3f46"
-                      fontSize="10"
+                      fontSize="11"
                     >
                       {label.slice(0, 10)}
                     </text>

@@ -95,7 +95,7 @@ export function WhenToParallelizeDiagram() {
           >
             该不该传 par？一份判断清单
           </text>
-          <text x="16" y="48" fontSize="10.5" fill="var(--text-secondary)">
+          <text x="16" y="48" fontSize="11" fill="var(--text-secondary)">
             并行不是免费的——分发、调度、合并都要钱，得看活够不够大、够不够独立
           </text>
 
@@ -148,7 +148,7 @@ export function WhenToParallelizeDiagram() {
                       <text
                         x={x + 26}
                         y={y + 20}
-                        fontSize="10"
+                        fontSize="11"
                         fontWeight="700"
                         fill="var(--text-secondary)"
                       >
@@ -181,7 +181,7 @@ export function WhenToParallelizeDiagram() {
                   x={cx}
                   y={COL_Y + COL_H - 20}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={col.color}
                 >

@@ -538,7 +538,7 @@ export function StringDfaDiagram() {
                     x={labelX}
                     y={labelY}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill={active ? "var(--accent)" : "var(--text-secondary)"}
                     fontWeight={active ? "bold" : "normal"}
@@ -614,7 +614,7 @@ export function StringDfaDiagram() {
                     x={node.x}
                     y={node.y + 38}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill={active ? "var(--accent)" : "var(--text-secondary)"}
                     fontWeight={active ? "600" : "normal"}
                     className="transition-colors duration-300"

@@ -118,7 +118,7 @@ export function RecursionSearchDiagram() {
           <text x="380" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
             “在盒中找钥匙”的递归结构
           </text>
-          <text x="380" y="54" textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x="380" y="54" textAnchor="middle" fontSize="11" fill={secondary}>
             每层只解决一步：检查当前盒，并把更小的同类问题交给下一次调用
           </text>
 
@@ -138,8 +138,8 @@ export function RecursionSearchDiagram() {
             <g key={box.label}>
               <rect x={box.x} y={box.y} width="130" height="74" rx="4" fill={box.tone} fillOpacity="0.1" stroke={box.tone} />
               <text x={box.x + 65} y={box.y + 28} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary}>{box.label}</text>
-              <text x={box.x + 65} y={box.y + 50} textAnchor="middle" fontSize="10" fill={secondary}>{box.note}</text>
-              <text x={box.x + 65} y={box.y + 67} textAnchor="middle" fontSize="9" fill={index === boxes.length - 1 ? success : accent}>
+              <text x={box.x + 65} y={box.y + 50} textAnchor="middle" fontSize="11" fill={secondary}>{box.note}</text>
+              <text x={box.x + 65} y={box.y + 67} textAnchor="middle" fontSize="11" fill={index === boxes.length - 1 ? success : accent}>
                 {index === boxes.length - 1 ? "基线条件" : "递归条件"}
               </text>
             </g>
@@ -148,7 +148,7 @@ export function RecursionSearchDiagram() {
           <path d="M645 204 C645 292, 115 292, 115 204" fill="none" stroke={success} strokeWidth="1.7" strokeDasharray="6 4" markerEnd="url(#return-arrow)" />
           <text x="380" y="273" textAnchor="middle" fontSize="11" fontWeight="700" fill={success}>返回阶段：钥匙结果沿尚未完成的调用逐层传回</text>
           <rect x="150" y="304" width="460" height="34" rx="4" fill="var(--bg)" stroke={border} />
-          <text x="380" y="325" textAnchor="middle" fontSize="10.5" fill={primary}>
+          <text x="380" y="325" textAnchor="middle" fontSize="11" fill={primary}>
             终止证明 = 存在可直接回答的基线条件 + 每次调用都缩小未解决问题
           </text>
         </svg>
@@ -187,25 +187,25 @@ export function CallStackFramesDiagram() {
           className="mx-auto block h-auto w-full max-w-[760px]"
         >
           <text x="380" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>函数调用栈：后进先出</text>
-          <text x="380" y="52" textAnchor="middle" fontSize="10.5" fill={secondary}>每次调用创建独立栈帧；当前调用返回后，上一帧才从暂停点继续</text>
+          <text x="380" y="52" textAnchor="middle" fontSize="11" fill={secondary}>每次调用创建独立栈帧；当前调用返回后，上一帧才从暂停点继续</text>
 
           <rect x="160" y="76" width="440" height="250" fill="var(--bg)" stroke={border} />
           {frames.map((frame, index) => (
             <g key={frame.title}>
               <rect x="185" y={frame.y} width="390" height="58" rx="4" fill={frame.tone} fillOpacity="0.1" stroke={frame.tone} />
               <text x="205" y={frame.y + 23} fontSize="11.5" fontWeight="700" fill={primary}>{frame.title}</text>
-              <text x="205" y={frame.y + 43} fontSize="9.5" fill={secondary}>{frame.detail}</text>
-              <text x="552" y={frame.y + 33} textAnchor="end" fontSize="9.5" fill={frame.tone}>{index === frames.length - 1 ? "最先弹出" : "等待"}</text>
+              <text x="205" y={frame.y + 43} fontSize="11" fill={secondary}>{frame.detail}</text>
+              <text x="552" y={frame.y + 33} textAnchor="end" fontSize="11" fill={frame.tone}>{index === frames.length - 1 ? "最先弹出" : "等待"}</text>
             </g>
           ))}
           <line x1="625" y1="278" x2="625" y2="108" stroke={accent} strokeWidth="1.5" />
           <path d="M619 116 L625 106 L631 116" fill="none" stroke={accent} strokeWidth="1.5" />
-          <text x="647" y="198" fontSize="10" fill={accent} transform="rotate(-90 647 198)">压栈方向</text>
+          <text x="647" y="198" fontSize="11" fill={accent} transform="rotate(-90 647 198)">压栈方向</text>
           <line x1="688" y1="108" x2="688" y2="278" stroke={success} strokeWidth="1.5" />
           <path d="M682 270 L688 280 L694 270" fill="none" stroke={success} strokeWidth="1.5" />
-          <text x="710" y="198" fontSize="10" fill={success} transform="rotate(90 710 198)">弹栈方向</text>
+          <text x="710" y="198" fontSize="11" fill={success} transform="rotate(90 710 198)">弹栈方向</text>
           <rect x="160" y="344" width="440" height="27" rx="4" fill={danger} fillOpacity="0.06" stroke={danger} strokeOpacity="0.5" />
-          <text x="380" y="362" textAnchor="middle" fontSize="10" fill={primary}>递归越深，未完成的栈帧越多；每帧都占用有限栈空间。</text>
+          <text x="380" y="362" textAnchor="middle" fontSize="11" fill={primary}>递归越深，未完成的栈帧越多；每帧都占用有限栈空间。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

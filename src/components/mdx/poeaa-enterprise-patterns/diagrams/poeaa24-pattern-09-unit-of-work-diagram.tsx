@@ -19,36 +19,36 @@ export function Poeaa24Pattern09UnitOfWork() {
           <line x1={600} y1={78} x2={600} y2={370} stroke="#E5B567" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.5" />
           {/* Step 1: registerNew */}
           <line x1={120} y1={100} x2={350} y2={100} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={94} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>registerNew(order)</text>
+          <text x={235} y={94} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerNew(order)</text>
           <rect x={340} y={104} width={40} height={20} rx="3" fill={T.accent} fillOpacity="0.15" stroke={T.accent} strokeWidth="0.8" />
-          <text x={360} y={118} textAnchor="middle" fontSize="8" fill={T.accent}>new[]</text>
+          <text x={360} y={118} textAnchor="middle" fontSize="11" fill={T.accent}>new[]</text>
           {/* Step 2: registerDirty */}
           <line x1={120} y1={148} x2={350} y2={148} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={142} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>registerDirty(customer)</text>
+          <text x={235} y={142} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerDirty(customer)</text>
           <rect x={340} y={152} width={40} height={20} rx="3" fill="#E5B567" fillOpacity="0.15" stroke="#E5B567" strokeWidth="0.8" />
-          <text x={360} y={166} textAnchor="middle" fontSize="8" fill="#E5B567">dirty[]</text>
+          <text x={360} y={166} textAnchor="middle" fontSize="11" fill="#E5B567">dirty[]</text>
           {/* Step 3: registerRemoved */}
           <line x1={120} y1={196} x2={350} y2={196} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={190} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>registerRemoved(oldItem)</text>
+          <text x={235} y={190} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerRemoved(oldItem)</text>
           <rect x={340} y={200} width={40} height={20} rx="3" fill={T.danger} fillOpacity="0.15" stroke={T.danger} strokeWidth="0.8" />
-          <text x={360} y={214} textAnchor="middle" fontSize="8" fill={T.danger}>del[]</text>
+          <text x={360} y={214} textAnchor="middle" fontSize="11" fill={T.danger}>del[]</text>
           {/* Step 4: commit */}
           <line x1={120} y1={252} x2={350} y2={252} stroke="#3FB97F" strokeWidth="1.5" markerEnd="url(#uow-arrow)" />
           <text x={235} y={246} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="monospace" fill="#3FB97F">commit()</text>
           {/* commit 内部：按顺序写出 */}
           <line x1={370} y1={272} x2={590} y2={272} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={266} textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E5B567">INSERT order</text>
+          <text x={480} y={266} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">INSERT order</text>
           <line x1={370} y1={296} x2={590} y2={296} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={290} textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E5B567">UPDATE customer</text>
+          <text x={480} y={290} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">UPDATE customer</text>
           <line x1={370} y1={320} x2={590} y2={320} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={314} textAnchor="middle" fontSize="9" fontFamily="monospace" fill="#E5B567">DELETE oldItem</text>
+          <text x={480} y={314} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">DELETE oldItem</text>
           {/* 顺序标注 */}
-          <text x={620} y={276} fontSize="9" fill={T.secondary}>①</text>
-          <text x={620} y={300} fontSize="9" fill={T.secondary}>②</text>
-          <text x={620} y={324} fontSize="9" fill={T.secondary}>③</text>
+          <text x={620} y={276} fontSize="11" fill={T.secondary}>①</text>
+          <text x={620} y={300} fontSize="11" fill={T.secondary}>②</text>
+          <text x={620} y={324} fontSize="11" fill={T.secondary}>③</text>
           {/* 成功返回 */}
           <line x1={590} y1={348} x2={370} y2={348} stroke="#3FB97F" strokeWidth="1" strokeDasharray="4 2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={344} textAnchor="middle" fontSize="9" fill="#3FB97F">全部成功 / 全部回滚</text>
+          <text x={480} y={344} textAnchor="middle" fontSize="11" fill="#3FB97F">全部成功 / 全部回滚</text>
           {/* 箭头 marker */}
           <defs>
             <marker id="uow-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">

@@ -24,7 +24,7 @@ export function TreeSerializationTokenDiagram() {
             {tokens.map((token,index) => {
               const x = index * 62;
               const isNull = token === "$";
-              return <g key={index}><rect x={x} y="0" width="52" height="46" fill={isNull ? "var(--warning)" : "var(--accent)"} fillOpacity="0.1" stroke={isNull ? "var(--warning)" : "var(--accent)"} /><text x={x + 26} y="29" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--text-primary)">{token}</text><text x={x + 26} y="63" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">{index}</text></g>;
+              return <g key={index}><rect x={x} y="0" width="52" height="46" fill={isNull ? "var(--warning)" : "var(--accent)"} fillOpacity="0.1" stroke={isNull ? "var(--warning)" : "var(--accent)"} /><text x={x + 26} y="29" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--text-primary)">{token}</text><text x={x + 26} y="63" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{index}</text></g>;
             })}
           </g>
           <text x="490" y="474" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">8,6,5,$,$,7,$,$,10,9,$,$,11,$,$,</text>

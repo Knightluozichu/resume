@@ -121,7 +121,7 @@ export function WmsArchitectureDiagram() {
           <text
             x={PAD_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             App 申请窗口 → WMS 排布局与层级 → SurfaceFlinger 合成各 Surface → 上屏
@@ -147,7 +147,7 @@ export function WmsArchitectureDiagram() {
             x={(actorX(0) + ACTOR_W + actorX(2)) / 2}
             y={acy + ACTOR_H / 2 - 22}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -181,7 +181,7 @@ export function WmsArchitectureDiagram() {
             x={(actorX(0) + ACTOR_W + actorX(1)) / 2}
             y={acy - 24}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
@@ -192,7 +192,7 @@ export function WmsArchitectureDiagram() {
             x={(actorX(0) + ACTOR_W + actorX(1)) / 2}
             y={acy + 2}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             IWindowSession
@@ -238,7 +238,7 @@ export function WmsArchitectureDiagram() {
                 <text
                   x={x + 16}
                   y={TOP + 44}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -250,7 +250,7 @@ export function WmsArchitectureDiagram() {
                     key={n}
                     x={x + 16}
                     y={TOP + 66 + j * 16}
-                    fontSize="9"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {n}
@@ -278,7 +278,7 @@ export function WmsArchitectureDiagram() {
           <text
             x={screenCx + 12}
             y={(TOP + ACTOR_H + SCREEN_TOP) / 2 + 4}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -310,7 +310,7 @@ export function WmsArchitectureDiagram() {
             x={screenCx}
             y={SCREEN_TOP + 42}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             最终一帧画面
@@ -341,7 +341,7 @@ export function WmsArchitectureDiagram() {
           <text
             x={PAD_X + 34}
             y={NOTE_TOP + 50}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             <tspan fontWeight="700" fill="var(--warning)">
@@ -354,7 +354,7 @@ export function WmsArchitectureDiagram() {
           <text
             x={PAD_X + 34}
             y={NOTE_TOP + 68}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             <tspan fontWeight="700" fill="var(--success)">
@@ -367,7 +367,7 @@ export function WmsArchitectureDiagram() {
           <text
             x={PAD_X + 34}
             y={NOTE_TOP + 86}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             输入事件经{" "}

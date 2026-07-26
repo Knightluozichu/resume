@@ -94,7 +94,7 @@ export function MajorityCancellationMap() {
           <div><div className="text-xs text-muted">票数</div><div className="mt-1 text-lg font-semibold text-success">{step.times}</div></div>
         </div>
 
-        <div className="mt-4 flex min-h-10 items-center justify-between gap-3">
+        <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
           <p className="m-0 text-sm text-secondary">{step.action}</p>
           <div className="flex shrink-0 items-center gap-1">
             <button

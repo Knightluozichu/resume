@@ -320,7 +320,7 @@ export function TransformHierarchyDiagram() {
               x={STAGE_X}
               y={STAGE_Y + 5}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--text-primary)"
             >
@@ -343,7 +343,7 @@ export function TransformHierarchyDiagram() {
               x={STAGE_X + WEAPON_OFF.x}
               y={STAGE_Y + WEAPON_OFF.y + 4}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fontWeight="600"
               fill="var(--text-primary)"
             >
@@ -366,7 +366,7 @@ export function TransformHierarchyDiagram() {
               x={STAGE_X + HAT_OFF.x}
               y={STAGE_Y + HAT_OFF.y + 4}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fontWeight="600"
               fill="var(--text-primary)"
             >
@@ -401,7 +401,7 @@ export function TransformHierarchyDiagram() {
             x="490"
             y="318"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             W 始终在右手、H 始终在头顶：局部偏移恒定

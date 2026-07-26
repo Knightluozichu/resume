@@ -54,7 +54,7 @@ export function StaticBatchingDiagram() {
             x="104"
             y="100"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Batching Static
@@ -63,7 +63,7 @@ export function StaticBatchingDiagram() {
             x="104"
             y="116"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             勾选后不可移动
@@ -99,7 +99,7 @@ export function StaticBatchingDiagram() {
             x="300"
             y="78"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             同材质静态物
@@ -108,7 +108,7 @@ export function StaticBatchingDiagram() {
             x="300"
             y="94"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             → 大网格 + 子网格
@@ -117,7 +117,7 @@ export function StaticBatchingDiagram() {
             x="300"
             y="116"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             占更多内存
@@ -153,7 +153,7 @@ export function StaticBatchingDiagram() {
             x="516"
             y="78"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一次 Draw Call 画整片
@@ -162,7 +162,7 @@ export function StaticBatchingDiagram() {
             x="516"
             y="94"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             无 CPU 顶点合并
@@ -171,7 +171,7 @@ export function StaticBatchingDiagram() {
             x="516"
             y="116"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             Batches ↓ 稳定
@@ -215,7 +215,7 @@ export function StaticBatchingDiagram() {
             x="320"
             y="214"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             移动 Static 物体会打断合批并触发重建——只适合永不动的物体

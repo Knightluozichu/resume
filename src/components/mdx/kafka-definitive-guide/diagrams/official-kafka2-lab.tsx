@@ -44,6 +44,21 @@ export function OfficialKafka2Lab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     evidenceGates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setPartitions(4);
+    setReplicas(3);
+    setKeySeed(7);
+    setMessageRate(12000);
+    setBatchKiB(32);
+    setMinIsr(2);
+    setAcks("all");
+    setSlowConsumer(false);
+    setFailedReplica(false);
+    setChecked(() =>
+    evidenceGates.map(() => false));
+  }
+
 
   const selectedNode = nodes[nodeIndex] ?? unitTitle;
   const selectedPartition = keySeed % partitions;
@@ -87,6 +102,7 @@ export function OfficialKafka2Lab({
         className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "分区拓扑实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             主题、分区与副本拓扑
@@ -107,7 +123,7 @@ export function OfficialKafka2Lab({
                 type="button"
                 onClick={() => setNodeIndex(index)}
                 className={
-                  "mb-1 min-h-9 w-full rounded px-2 py-1.5 text-left text-xs " +
+                  "mb-1 min-h-11 w-full rounded px-2 py-1.5 text-left text-xs " +
                   (index === nodeIndex
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800")
@@ -188,7 +204,7 @@ export function OfficialKafka2Lab({
                       <span
                         key={replica}
                         className={
-                          "flex min-h-10 flex-1 items-center justify-center border text-xs " +
+                          "flex min-h-11 flex-1 items-center justify-center border text-xs " +
                           (replica === 0
                             ? "border-sky-600 bg-sky-100 dark:bg-sky-950/40"
                             : "border-zinc-300 dark:border-zinc-700")
@@ -217,6 +233,7 @@ export function OfficialKafka2Lab({
         className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "吞吐可靠性实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
             吞吐、确认与故障窗口
@@ -285,7 +302,7 @@ export function OfficialKafka2Lab({
                 type="button"
                 onClick={() => setFailedReplica((value) => !value)}
                 aria-pressed={failedReplica}
-                className="min-h-10 w-full rounded border px-2 text-xs"
+                className="min-h-11 w-full rounded border px-2 text-xs"
               >
                 {failedReplica ? "恢复副本" : "故障一个副本"}
               </button>
@@ -293,7 +310,7 @@ export function OfficialKafka2Lab({
                 type="button"
                 onClick={() => setSlowConsumer((value) => !value)}
                 aria-pressed={slowConsumer}
-                className="min-h-10 w-full rounded border px-2 text-xs"
+                className="min-h-11 w-full rounded border px-2 text-xs"
               >
                 {slowConsumer ? "恢复消费者" : "降低消费速率"}
               </button>
@@ -335,6 +352,7 @@ export function OfficialKafka2Lab({
       className="my-6 rounded-md border border-zinc-300 bg-white p-4 text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
       aria-label={unitTitle + "证据门"}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">

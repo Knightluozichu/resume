@@ -114,7 +114,7 @@ export function ToolsAsMenuDiagram() {
           <text
             x={DEF_X + 4}
             y={TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每份 = 名字 + 参数 + 一句描述
@@ -192,7 +192,7 @@ export function ToolsAsMenuDiagram() {
             x={INJECT_CX}
             y={VIEW_H / 2 + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             schema → 文本
@@ -211,7 +211,7 @@ export function ToolsAsMenuDiagram() {
           <text
             x={MENU_X + 4}
             y={TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             像看菜单一样浏览可用工具
@@ -257,7 +257,7 @@ export function ToolsAsMenuDiagram() {
                 <text
                   x={MENU_ITEM_X + 12}
                   y={y + 44}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {t.desc.slice(0, 18)}
@@ -265,7 +265,7 @@ export function ToolsAsMenuDiagram() {
                 <text
                   x={MENU_ITEM_X + 12}
                   y={y + 60}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   {t.desc.slice(18)}

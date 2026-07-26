@@ -176,7 +176,7 @@ export function HfdFinalReviewDiagram() {
                           x={x + w - 10}
                           y={py + 18}
                           textAnchor="end"
-                          fontSize="10"
+                          fontSize="11"
                           fill={cat.color}
                         >
                           本书

@@ -53,7 +53,7 @@ export function DoWhileVsWhileDiagram({ step = 3 }: DoWhileVsWhileDiagramProps) 
             </text>
 
             <line x1={leftCx} y1={condY + diamondH / 2} x2={leftCx} y2={bodyY - boxH / 2} stroke={"var(--accent)"} strokeWidth="1.5" markerEnd="url(#dw-arrow)" />
-            <text x={leftCx + 14} y={(condY + bodyY) / 2} fontSize="9" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            <text x={leftCx + 14} y={(condY + bodyY) / 2} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
               真
             </text>
 
@@ -64,7 +64,7 @@ export function DoWhileVsWhileDiagram({ step = 3 }: DoWhileVsWhileDiagramProps) 
 
             <path d={`M ${leftCx + boxW / 2} ${bodyY} L ${leftCx + 70} ${bodyY} L ${leftCx + 70} ${condY} L ${leftCx + diamondW / 2} ${condY}`} fill="none" stroke={"var(--text-secondary)"} strokeWidth="1" strokeDasharray="4 3" />
 
-            <text x={leftCx} y={bodyY + 48} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            <text x={leftCx} y={bodyY + 48} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
               条件假 → 体一次都不跑
             </text>
           </g>
@@ -93,11 +93,11 @@ export function DoWhileVsWhileDiagram({ step = 3 }: DoWhileVsWhileDiagramProps) 
             </text>
 
             <path d={`M ${rightCx + diamondW / 2} ${bodyY} L ${rightCx + 70} ${bodyY} L ${rightCx + 70} ${condY} L ${rightCx + boxW / 2} ${condY}`} fill="none" stroke={"var(--text-secondary)"} strokeWidth="1" strokeDasharray="4 3" />
-            <text x={rightCx + 14} y={bodyY + diamondH / 2 + 14} fontSize="9" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            <text x={rightCx + 14} y={bodyY + diamondH / 2 + 14} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
               真 → 再来一轮
             </text>
 
-            <text x={rightCx} y={bodyY + 56} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            <text x={rightCx} y={bodyY + 56} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
               至少执行一次循环体
             </text>
           </g>

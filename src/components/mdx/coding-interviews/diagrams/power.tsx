@@ -42,7 +42,7 @@ export function ExponentHalvingDiagram() {
           {edges.map((e,index) => <line key={index} x1={e[0]} y1={e[1]} x2={e[2]} y2={e[3]} stroke="var(--border)" strokeWidth="2" />)}
           {nodes.map(([label,x,y],index) => <g key={String(label)+index}><rect x={Number(x)-50} y={Number(y)-18} width="100" height="36" rx="5" fill={index===0 ? "var(--accent)" : "var(--bg)"} fillOpacity={index===0 ? 0.1 : 1} stroke={index===0 ? "var(--accent)" : "var(--border)"} /><text x={Number(x)} y={Number(y)+4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">{label}</text></g>)}
           <rect x="180" y="316" width="460" height="28" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="335" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">13→6→3→1，递归深度等于指数二进制位数。</text>
+          <text x="410" y="335" textAnchor="middle" fontSize="11" fill="var(--text-primary)">13→6→3→1，递归深度等于指数二进制位数。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">偶数指数只需半次幂平方，奇数指数额外乘一次底数。</figcaption>

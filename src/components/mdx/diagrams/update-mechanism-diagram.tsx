@@ -74,16 +74,16 @@ export function UpdateMechanismDiagram({ step }: Props) {
                 <text x={x + 88} y="78" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                   {m.sub}
                 </text>
-                <text x={x + 88} y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+                <text x={x + 88} y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                   {m.detail.split("\n")[0]}
                 </text>
-                <text x={x + 88} y="114" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+                <text x={x + 88} y="114" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                   {m.detail.split("\n")[1]}
                 </text>
-                <text x={x + 88} y="138" textAnchor="middle" fontSize="10" fill="var(--accent)">
+                <text x={x + 88} y="138" textAnchor="middle" fontSize="11" fill="var(--accent)">
                   ✓ {m.pros}
                 </text>
-                <text x={x + 88} y="156" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+                <text x={x + 88} y="156" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                   ✗ {m.cons}
                 </text>
               </g>

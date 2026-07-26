@@ -87,7 +87,7 @@ export function MallocFreeDiagram({ step = 4 }: MallocFreeDiagramProps) {
             />
           )}
           {step === 3 && (
-            <text x={120} y={heapY + 78} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">
+            <text x={120} y={heapY + 78} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">
               p 仍存旧地址（悬空）
             </text>
           )}
@@ -98,10 +98,10 @@ export function MallocFreeDiagram({ step = 4 }: MallocFreeDiagramProps) {
             <text x={40} y={222} fontSize="11" fontWeight="700" fill={step === 1 ? accent : primary}>
               ① malloc
             </text>
-            <text x={40} y={240} fontSize="10" fill={secondary}>
+            <text x={40} y={240} fontSize="11" fill={secondary}>
               堆上划 n×sizeof(int)
             </text>
-            <text x={40} y={254} fontSize="10" fill={secondary}>
+            <text x={40} y={254} fontSize="11" fill={secondary}>
               返回 void* → 赋给 p
             </text>
           </g>
@@ -111,10 +111,10 @@ export function MallocFreeDiagram({ step = 4 }: MallocFreeDiagramProps) {
             <text x={192} y={222} fontSize="11" fontWeight="700" fill={step === 2 ? accent : primary}>
               ② 使用
             </text>
-            <text x={192} y={240} fontSize="10" fill={secondary} fontFamily="monospace">
+            <text x={192} y={240} fontSize="11" fill={secondary} fontFamily="monospace">
               p[i] = ...
             </text>
-            <text x={192} y={254} fontSize="10" fill={secondary}>
+            <text x={192} y={254} fontSize="11" fill={secondary}>
               读写堆内存
             </text>
           </g>
@@ -124,10 +124,10 @@ export function MallocFreeDiagram({ step = 4 }: MallocFreeDiagramProps) {
             <text x={344} y={222} fontSize="11" fontWeight="700" fill={step === 3 ? accent : primary}>
               ③ free(p)
             </text>
-            <text x={344} y={240} fontSize="10" fill={secondary}>
+            <text x={344} y={240} fontSize="11" fill={secondary}>
               归还堆块
             </text>
-            <text x={344} y={254} fontSize="10" fill={secondary}>
+            <text x={344} y={254} fontSize="11" fill={secondary}>
               之后勿再解引用 p
             </text>
           </g>
@@ -137,10 +137,10 @@ export function MallocFreeDiagram({ step = 4 }: MallocFreeDiagramProps) {
             <text x={496} y={222} fontSize="11" fontWeight="700" fill={step === 4 ? leakColor : primary}>
               ④ 泄漏
             </text>
-            <text x={496} y={240} fontSize="10" fill={secondary}>
+            <text x={496} y={240} fontSize="11" fill={secondary}>
               只 malloc 不 free
             </text>
-            <text x={496} y={254} fontSize="10" fill={secondary}>
+            <text x={496} y={254} fontSize="11" fill={secondary}>
               堆越用越少
             </text>
           </g>

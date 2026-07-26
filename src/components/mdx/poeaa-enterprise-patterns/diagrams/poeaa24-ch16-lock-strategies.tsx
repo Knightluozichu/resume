@@ -61,9 +61,9 @@ export function Poeaa24Ch16LockStrategies() {
           <DiagramTitle x={VIEW_W / 2} y={36} text="离线并发：四种锁策略对比" />
 
           {/* 时间轴标签 */}
-          <text x={startX + 180} y={72} fontSize="10" fill={T.secondary}>读取</text>
-          <text x={startX + 340} y={72} fontSize="10" fill={T.secondary}>编辑</text>
-          <text x={startX + 520} y={72} fontSize="10" fill={T.secondary}>提交</text>
+          <text x={startX + 180} y={72} fontSize="11" fill={T.secondary}>读取</text>
+          <text x={startX + 340} y={72} fontSize="11" fill={T.secondary}>编辑</text>
+          <text x={startX + 520} y={72} fontSize="11" fill={T.secondary}>提交</text>
 
           {STRATEGIES.map((s, i) => {
             const y = startY + i * rowH;
@@ -73,11 +73,11 @@ export function Poeaa24Ch16LockStrategies() {
                 <rect x={startX} y={y} width={boxW} height={72} rx="8" fill={s.color} fillOpacity="0.04" stroke={s.color} strokeWidth="1" />
                 {/* 模式名 */}
                 <text x={startX + 12} y={y + 20} fontSize="12" fontWeight="700" fill={s.color}>{s.name}</text>
-                <text x={startX + 12} y={y + 38} fontSize="10" fill={T.secondary}>{s.desc}</text>
+                <text x={startX + 12} y={y + 38} fontSize="11" fill={T.secondary}>{s.desc}</text>
                 {/* 时序 */}
-                <text x={startX + 12} y={y + 58} fontSize="10" fontFamily="monospace" fill={T.primary}>{s.timeline}</text>
+                <text x={startX + 12} y={y + 58} fontSize="11" fontFamily="monospace" fill={T.primary}>{s.timeline}</text>
                 {/* 代价 */}
-                <text x={startX + boxW - 12} y={y + 20} textAnchor="end" fontSize="10" fill={T.danger}>{s.cost}</text>
+                <text x={startX + boxW - 12} y={y + 20} textAnchor="end" fontSize="11" fill={T.danger}>{s.cost}</text>
                 {/* 时间轴刻度 */}
                 <line x1={startX + 180} y1={y + 44} x2={startX + 180} y2={y + 64} stroke={T.border} strokeWidth="0.8" />
                 <line x1={startX + 340} y1={y + 44} x2={startX + 340} y2={y + 64} stroke={T.border} strokeWidth="0.8" />

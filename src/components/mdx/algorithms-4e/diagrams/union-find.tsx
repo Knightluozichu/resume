@@ -81,7 +81,7 @@ export function Algs4UnionFindApiMap() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-3 gap-2">{(Object.keys(apiOperations) as UfOperation[]).map((candidate) => <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-10 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}</div>
+        <div className="grid grid-cols-3 gap-2">{(Object.keys(apiOperations) as UfOperation[]).map((candidate) => <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-11 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}</div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
           {Object.entries(active).map(([key, value]) => <div key={key} className="border border-border bg-background p-3 text-secondary">{key}<div className="mt-1 font-mono text-primary">{value}</div></div>)}
         </div>
@@ -128,7 +128,7 @@ export function Algs4QuickUnionForestLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-2">{[false, true].map((candidate) => <button key={String(candidate)} type="button" onClick={() => setWeighted(candidate)} className={"min-h-10 border text-xs font-semibold " + (weighted === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate ? "weighted by size" : "plain quick-union"}</button>)}</div>
+        <div className="grid grid-cols-2 gap-2">{[false, true].map((candidate) => <button key={String(candidate)} type="button" onClick={() => setWeighted(candidate)} className={"min-h-11 border text-xs font-semibold " + (weighted === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate ? "weighted by size" : "plain quick-union"}</button>)}</div>
         <label className="mt-4 block text-sm font-semibold text-primary">unions = {steps}<input className="mt-2 w-full accent-current" type="range" min="0" max={pairs.length} value={steps} onChange={(event) => setSteps(Number(event.target.value))} /></label>
         <div className="mt-4 grid grid-cols-10 gap-1">{state.parent.map((parent, index) => <div key={index} className="border border-border bg-background p-2 text-center font-mono text-[10px] text-primary"><div>{index}-&gt;{parent}</div><div className="mt-1 text-secondary">d{depths[index]}</div></div>)}</div>
         <div className="mt-2 border border-success bg-success/10 p-3 text-xs text-success">max depth = {Math.max(...depths)}; components = {state.count}</div>

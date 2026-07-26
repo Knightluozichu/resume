@@ -19,6 +19,13 @@ export function OfficialMet2BookLab({ title, concepts, accent, view }: Props) {
   const [gasLimit, setGasLimit] = useState(72);
   const [load, setLoad] = useState(48);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setGasLimit(72);
+    setLoad(48);
+    setFault(false);
+  }
+
   const gasUsed = Math.min(gasLimit + (fault ? 18 : 0), 18 + load);
   const finalized = !fault && stage >= Math.max(2, labels.length - 2);
   const metrics = useMemo(
@@ -46,6 +53,7 @@ export function OfficialMet2BookLab({ title, concepts, accent, view }: Props) {
         color: "#18181b",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",
@@ -166,7 +174,7 @@ export function OfficialMet2BookLab({ title, concepts, accent, view }: Props) {
                       y={index % 2 === 0 ? 88 : 174}
                       textAnchor="middle"
                       fill="#3f3f46"
-                      fontSize="10"
+                      fontSize="11"
                     >
                       {label.slice(0, 10)}
                     </text>

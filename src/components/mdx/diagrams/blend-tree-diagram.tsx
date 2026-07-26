@@ -310,7 +310,7 @@ export function BlendTreeDiagram() {
                 x={a.x}
                 y={AXIS_Y + 22}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -337,7 +337,7 @@ export function BlendTreeDiagram() {
               x={AXIS_X0}
               y={AXIS_Y - 36}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--warning)"
             >
@@ -358,7 +358,7 @@ export function BlendTreeDiagram() {
             x={AXIS_X0 - 16}
             y={BAR_TOP_Y - 8}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -399,7 +399,7 @@ export function BlendTreeDiagram() {
                 x={b.cx}
                 y={BAR_BASE_Y + 32}
                 textAnchor="middle"
-                fontSize="8.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 clip 权重

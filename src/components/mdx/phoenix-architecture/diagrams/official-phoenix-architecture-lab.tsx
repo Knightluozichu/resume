@@ -33,6 +33,18 @@ export function PhoenixArchitectureLab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     gates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setBoundary("网络");
+    setRequests(1200);
+    setLatency(35);
+    setFailureRate(3);
+    setRetries(1);
+    setIsolated(true);
+    setChecked(() =>
+    gates.map(() => false));
+  }
+
 
   const result = useMemo(() => {
     const attempts = requests * (retries + 1);
@@ -55,6 +67,7 @@ export function PhoenixArchitectureLab({
         className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "责任链实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             2021纸书版 · 责任与失败边界
@@ -72,7 +85,7 @@ export function PhoenixArchitectureLab({
                 type="button"
                 onClick={() => setNodeIndex(index)}
                 className={
-                  "mb-1 min-h-9 w-full rounded px-2 py-1.5 text-left text-xs " +
+                  "mb-1 min-h-11 w-full rounded px-2 py-1.5 text-left text-xs " +
                   (index === nodeIndex
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800")
@@ -94,7 +107,7 @@ export function PhoenixArchitectureLab({
                   type="button"
                   onClick={() => setBoundary(item)}
                   className={
-                    "min-h-9 rounded px-3 text-xs font-semibold " +
+                    "min-h-11 rounded px-3 text-xs font-semibold " +
                     (boundary === item
                       ? "bg-emerald-700 text-white"
                       : "border border-zinc-300 dark:border-zinc-700")
@@ -148,6 +161,7 @@ export function PhoenixArchitectureLab({
         className="my-6 rounded-md border border-zinc-300 bg-white p-4 text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "权衡实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
@@ -174,7 +188,7 @@ export function PhoenixArchitectureLab({
                 max={max}
                 value={value}
                 onChange={(event) => setter(Number(event.target.value))}
-                className="mt-1 min-h-10 w-full rounded border border-zinc-300 bg-transparent px-3 dark:border-zinc-700"
+                className="mt-1 min-h-11 w-full rounded border border-zinc-300 bg-transparent px-3 dark:border-zinc-700"
               />
             </label>
           ))}
@@ -217,6 +231,7 @@ export function PhoenixArchitectureLab({
       className="my-6 rounded-md border border-zinc-300 bg-white p-4 text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
       aria-label={unitTitle + "证据门"}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
         独立证据门
       </p>

@@ -86,13 +86,13 @@ export function BcgOopClassDiagram() {
           {/* 两个实例 */}
           <rect x="490" y="180" width="88" height="56" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="1" />
           <text x="534" y="198" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">p1</text>
-          <text x="534" y="216" textAnchor="middle" fontSize="10" fill="var(--text-primary)">name=Alice</text>
-          <text x="534" y="230" textAnchor="middle" fontSize="10" fill="var(--text-primary)">hp=100</text>
+          <text x="534" y="216" textAnchor="middle" fontSize="11" fill="var(--text-primary)">name=Alice</text>
+          <text x="534" y="230" textAnchor="middle" fontSize="11" fill="var(--text-primary)">hp=100</text>
 
           <rect x="592" y="180" width="88" height="56" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="1" />
           <text x="636" y="198" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">p2</text>
-          <text x="636" y="216" textAnchor="middle" fontSize="10" fill="var(--text-primary)">name=Bob</text>
-          <text x="636" y="230" textAnchor="middle" fontSize="10" fill="var(--text-primary)">hp=80</text>
+          <text x="636" y="216" textAnchor="middle" fontSize="11" fill="var(--text-primary)">name=Bob</text>
+          <text x="636" y="230" textAnchor="middle" fontSize="11" fill="var(--text-primary)">hp=80</text>
 
           {/* ===== 底部生命周期时间线 ===== */}
           <text x={VIEW_W / 2} y="288" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">
@@ -103,17 +103,17 @@ export function BcgOopClassDiagram() {
           {/* 构造 */}
           <circle cx="140" cy="320" r="6" fill="var(--success)" />
           <text x="140" y="346" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">构造</text>
-          <text x="140" y="362" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Player() 初始化</text>
+          <text x="140" y="362" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Player() 初始化</text>
 
           {/* 使用 */}
           <circle cx={VIEW_W / 2} cy="320" r="6" fill="var(--accent)" />
           <text x={VIEW_W / 2} y="346" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">使用</text>
-          <text x={VIEW_W / 2} y="362" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">调用 Move() 等</text>
+          <text x={VIEW_W / 2} y="362" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">调用 Move() 等</text>
 
           {/* 析构 */}
           <circle cx={VIEW_W - 140} cy="320" r="6" fill="var(--danger)" />
           <text x={VIEW_W - 140} y="346" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--danger)">析构</text>
-          <text x={VIEW_W - 140} y="362" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">~Player() 清理</text>
+          <text x={VIEW_W - 140} y="362" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">~Player() 清理</text>
 
           {/* 箭头 */}
           <line x1="150" y1="320" x2={VIEW_W / 2 - 10} y2="320" stroke="var(--accent)" strokeWidth="1.4" markerEnd="url(#bcg-oop-arrow)" />

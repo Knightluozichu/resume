@@ -232,14 +232,14 @@ export function SpecularReflectDiagram() {
             stroke="var(--border)"
             strokeWidth="1.5"
           />
-          <text x="618" y="204" fontSize="10" fill="var(--text-secondary)">
+          <text x="618" y="204" fontSize="11" fill="var(--text-secondary)">
             偏离 R →
           </text>
           <text
             x="372"
             y="64"
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             高光
@@ -272,7 +272,7 @@ export function SpecularReflectDiagram() {
             x="430"
             y="240"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             大斑
@@ -297,7 +297,7 @@ export function SpecularReflectDiagram() {
             x="560"
             y="240"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             小斑

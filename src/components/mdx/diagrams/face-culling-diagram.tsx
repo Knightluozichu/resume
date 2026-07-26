@@ -79,7 +79,7 @@ export function FaceCullingDiagram({
                 x={cx + 22}
                 y={cy - 40}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--danger)"
               >
@@ -117,7 +117,7 @@ export function FaceCullingDiagram({
             x={cx - 23}
             y={cy + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >

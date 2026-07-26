@@ -72,7 +72,7 @@ export function CPUHierarchyDiagram() {
             x="280"
             y="78"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             100% | 16.6 ms
@@ -109,7 +109,7 @@ export function CPUHierarchyDiagram() {
                 x={child.x + 75}
                 y="155"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--text-primary)"
               >
@@ -133,7 +133,7 @@ export function CPUHierarchyDiagram() {
             x="280"
             y="218"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Hierarchy 视图按调用树层级展开，定位最耗时子节点
@@ -142,7 +142,7 @@ export function CPUHierarchyDiagram() {
             x="280"
             y="236"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             剩余 9% = GC / UI / Audio 等其他子系统

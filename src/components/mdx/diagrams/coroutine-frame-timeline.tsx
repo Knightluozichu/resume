@@ -398,7 +398,7 @@ export function CoroutineFrameTimeline() {
               x={(frameCX(1) + frameCX(4)) / 2}
               y={FRAME_Y + FRAME_H + 36}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="600"
               fill="var(--warning)"
             >
@@ -444,7 +444,7 @@ export function CoroutineFrameTimeline() {
               <text
                 x={CODE_X + 24}
                 y={lineY(i) + LINE_H / 2 + 14}
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {ln.note}
@@ -526,7 +526,7 @@ export function CoroutineFrameTimeline() {
               x={CODE_X + CODE_W - 90}
               y={lineY(1) + LINE_H / 2 + 3}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--warning)"
             >
@@ -547,7 +547,7 @@ export function CoroutineFrameTimeline() {
               x={frameCX(4)}
               y={lineY(2) - 34}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--success)"
             >

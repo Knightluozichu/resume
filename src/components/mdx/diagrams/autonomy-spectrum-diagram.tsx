@@ -140,7 +140,7 @@ export function AutonomySpectrumDiagram() {
                   x={segCX(i)}
                   y={BAR_Y + 46}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.eg}
@@ -164,7 +164,7 @@ export function AutonomySpectrumDiagram() {
             x={VIEW_W / 2}
             y={BAR_Y + BAR_H + 56}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             自主性是一根旋钮，不是越大越好：按任务在「灵活」和「可控 / 便宜 / 快」之间取一个点

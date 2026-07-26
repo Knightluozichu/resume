@@ -502,7 +502,7 @@ export function ComponentWorkflowDiagram() {
                 x={n.x + n.w / 2}
                 y={n.y + n.h / 2 + 14}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -528,7 +528,7 @@ export function ComponentWorkflowDiagram() {
               x={APP_X + NODE_W / 2}
               y={APP_START_Y - 18}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -541,7 +541,7 @@ export function ComponentWorkflowDiagram() {
             x={C_AMS.cx}
             y={AMS_Y + AMS_H + 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >

@@ -136,7 +136,7 @@ export function NodeRecursionDiagram() {
             x="180"
             y="90"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMeshes: 无
@@ -167,7 +167,7 @@ export function NodeRecursionDiagram() {
             x="100"
             y="183"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             mMeshes: [0]
@@ -198,7 +198,7 @@ export function NodeRecursionDiagram() {
             x="265"
             y="183"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMeshes: 无
@@ -229,7 +229,7 @@ export function NodeRecursionDiagram() {
             x="210"
             y="283"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             mMeshes: [1]
@@ -260,7 +260,7 @@ export function NodeRecursionDiagram() {
             x="330"
             y="283"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             mMeshes: [2]
@@ -313,7 +313,7 @@ export function NodeRecursionDiagram() {
             x="180"
             y="320"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             ①…⑥ = 深度优先访问顺序
@@ -322,7 +322,7 @@ export function NodeRecursionDiagram() {
             x="180"
             y="338"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每到一个节点：先收它的 mMeshes，
@@ -331,7 +331,7 @@ export function NodeRecursionDiagram() {
             x="180"
             y="352"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             再依次递归它的每个子节点
@@ -359,7 +359,7 @@ export function NodeRecursionDiagram() {
             x="415"
             y="190"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -408,7 +408,7 @@ export function NodeRecursionDiagram() {
             x="560"
             y="340"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             层级没了，只剩一列网格
@@ -437,7 +437,7 @@ function DfsStep({ n, cx, cy }: { n: string; cx: number; cy: number }) {
         x={cx}
         y={cy + 3.5}
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         fontWeight="700"
         fill="var(--bg)"
       >
@@ -483,7 +483,7 @@ function FlatMesh({
         x="560"
         y={y + 42}
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         meshes[{index}]

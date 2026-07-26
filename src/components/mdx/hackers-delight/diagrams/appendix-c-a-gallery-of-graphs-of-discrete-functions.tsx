@@ -113,7 +113,7 @@ function BitStrip({ value, mask }: { value: number; mask?: number }) {
 }
 
 function ModeSelect({ value, onChange, modes }: { value: string; onChange: (value: string) => void; modes: Array<[string, string]> }) {
-  return <label className="text-sm font-semibold text-primary">function<select className="mt-2 block w-full border border-border bg-background p-2" value={value} onChange={(event) => onChange(event.target.value)}>{modes.map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>;
+  return <label className="text-sm font-semibold text-primary">function<select className="mt-2 block min-h-11 w-full border border-border bg-background p-2" value={value} onChange={(event) => onChange(event.target.value)}>{modes.map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>;
 }
 
 export function HDAppendixCLogicalHeatmapLab() {

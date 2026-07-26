@@ -16,7 +16,7 @@ export function DsaAmortizedMethodsLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
-          {(["aggregate", "accounting", "potential"] as AmortizedMethod[]).map((candidate) => <button key={candidate} type="button" onClick={() => setMethod(candidate)} className={"min-h-10 border text-xs font-semibold " + (method === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(["aggregate", "accounting", "potential"] as AmortizedMethod[]).map((candidate) => <button key={candidate} type="button" onClick={() => setMethod(candidate)} className={"min-h-11 border text-xs font-semibold " + (method === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="border border-border bg-background p-3 text-xs text-secondary">amortized unit<div className="mt-1 font-mono text-primary">{details.unit}</div></div>
@@ -138,7 +138,7 @@ export function DsaSplayPotentialLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
-          {(["zig", "zig-zig", "zig-zag"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setCaseName(candidate)} className={"min-h-10 border text-xs font-semibold " + (caseName === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(["zig", "zig-zig", "zig-zag"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setCaseName(candidate)} className={"min-h-11 border text-xs font-semibold " + (caseName === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <div className="border border-border bg-background p-3 text-xs text-secondary">before<div className="mt-1 font-mono text-primary">{details.before}</div></div>

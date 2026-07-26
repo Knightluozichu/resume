@@ -95,7 +95,7 @@ export function AdvancedFeatureTable() {
               key={i}
               x={colStarts[i] + colWidths[i] / 2}
               y={headerY + 17}
-              fontSize="9"
+              fontSize="11"
               fontWeight="700"
               fill={accent}
               textAnchor="middle"
@@ -120,27 +120,27 @@ export function AdvancedFeatureTable() {
                   strokeWidth="0.5"
                 />
                 {/* Feature name */}
-                <text x={colStarts[0] + colWidths[0] / 2} y={y + rowH / 2 + 2} fontSize="10" fontWeight="700" fill={primary} textAnchor="middle">
+                <text x={colStarts[0] + colWidths[0] / 2} y={y + rowH / 2 + 2} fontSize="11" fontWeight="700" fill={primary} textAnchor="middle">
                   {f.name}
                 </text>
                 {/* Keyword */}
-                <text x={colStarts[1] + colWidths[1] / 2} y={y + rowH / 2 + 2} fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">
+                <text x={colStarts[1] + colWidths[1] / 2} y={y + rowH / 2 + 2} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                   {f.keyword}
                 </text>
                 {/* Purpose */}
-                <text x={colStarts[2] + colWidths[2] / 2} y={y + rowH / 2 + 2} fontSize="9" fill={primary} textAnchor="middle">
+                <text x={colStarts[2] + colWidths[2] / 2} y={y + rowH / 2 + 2} fontSize="11" fill={primary} textAnchor="middle">
                   {f.purpose}
                 </text>
                 {/* Scenario */}
-                <text x={colStarts[3] + colWidths[3] / 2} y={y + rowH / 2 + 2} fontSize="9" fill={secondary} textAnchor="middle">
+                <text x={colStarts[3] + colWidths[3] / 2} y={y + rowH / 2 + 2} fontSize="11" fill={secondary} textAnchor="middle">
                   {f.scenario}
                 </text>
                 {/* Caution */}
-                <text x={colStarts[4] + colWidths[4] / 2} y={y + rowH / 2 + 2} fontSize="8" fill="rgb(229,181,103)" textAnchor="middle">
+                <text x={colStarts[4] + colWidths[4] / 2} y={y + rowH / 2 + 2} fontSize="11" fill="rgb(229,181,103)" textAnchor="middle">
                   {f.caution}
                 </text>
                 {/* Rating */}
-                <text x={colStarts[5] + colWidths[5] / 2} y={y + rowH / 2 + 2} fontSize="10" fill={good} fontWeight="700" textAnchor="middle">
+                <text x={colStarts[5] + colWidths[5] / 2} y={y + rowH / 2 + 2} fontSize="11" fill={good} fontWeight="700" textAnchor="middle">
                   ★★★★★
                 </text>
               </g>
@@ -160,7 +160,7 @@ export function AdvancedFeatureTable() {
           <text
             x={cx}
             y={headerY + 32 + 6 * rowH + 27}
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >

@@ -63,12 +63,12 @@ export function Poeaa24Ch17SessionDataFlow() {
                 <rect x={startX} y={y} width={boxW} height={92} rx="8" fill={s.color} fillOpacity="0.04" stroke={s.color} strokeWidth="1.5" />
                 {/* 模式名 */}
                 <text x={startX + 12} y={y + 22} fontSize="13" fontWeight="700" fill={s.color}>{s.name}</text>
-                <text x={startX + 160} y={y + 22} fontSize="10" fill={T.secondary}>{s.desc}</text>
+                <text x={startX + 160} y={y + 22} fontSize="11" fill={T.secondary}>{s.desc}</text>
                 {/* 数据流 */}
-                <text x={startX + 12} y={y + 44} fontSize="10" fontFamily="monospace" fill={T.primary}>{s.flow}</text>
+                <text x={startX + 12} y={y + 44} fontSize="11" fontFamily="monospace" fill={T.primary}>{s.flow}</text>
                 {/* 恢复 + 风险 */}
-                <text x={startX + 12} y={y + 64} fontSize="10" fill="#3FB97F">恢复：{s.recovery}</text>
-                <text x={startX + 12} y={y + 82} fontSize="10" fill={T.danger}>风险：{s.risk}</text>
+                <text x={startX + 12} y={y + 64} fontSize="11" fill="#3FB97F">恢复：{s.recovery}</text>
+                <text x={startX + 12} y={y + 82} fontSize="11" fill={T.danger}>风险：{s.risk}</text>
               </g>
             );
           })}

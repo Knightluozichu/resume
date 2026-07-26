@@ -164,14 +164,14 @@ export function MglFunctionsDiagram() {
 
           <line x1="112" y1="140" x2="138" y2="140" stroke={secondary} strokeWidth="1.4" />
           <polygon points="138,136 138,144 144,140" fill={secondary} />
-          <text x="125" y="132" textAnchor="middle" fontSize="10" fill={secondary}>g</text>
+          <text x="125" y="132" textAnchor="middle" fontSize="11" fill={secondary}>g</text>
 
           <ellipse cx="180" cy="140" rx="36" ry="20" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
           <text x="180" y="144" textAnchor="middle" fontSize="11" fontWeight="600" fill={success}>2x</text>
 
           <line x1="218" y1="140" x2="244" y2="140" stroke={secondary} strokeWidth="1.4" />
           <polygon points="244,136 244,144 250,140" fill={secondary} />
-          <text x="231" y="132" textAnchor="middle" fontSize="10" fill={secondary}>f</text>
+          <text x="231" y="132" textAnchor="middle" fontSize="11" fill={secondary}>f</text>
 
           <ellipse cx="290" cy="140" rx="40" ry="20" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1.5" />
           <text x="290" y="144" textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>4x²+1</text>

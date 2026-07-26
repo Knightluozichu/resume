@@ -45,7 +45,7 @@ export function LayerCollisionDiagram({ highlight = "matrix" }: Props) {
               x={ox + j * cell + cell / 2}
               y={oy - 24}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
               transform={`rotate(-35, ${ox + j * cell + cell / 2}, ${oy - 24})`}
             >
@@ -55,7 +55,7 @@ export function LayerCollisionDiagram({ highlight = "matrix" }: Props) {
 
           {layers.map((rowName, i) => (
             <g key={rowName}>
-              <text x={ox - 8} y={oy + i * cell + cell / 2 + 4} textAnchor="end" fontSize="10" fill="var(--text-secondary)">
+              <text x={ox - 8} y={oy + i * cell + cell / 2 + 4} textAnchor="end" fontSize="11" fill="var(--text-secondary)">
                 {rowName}
               </text>
               {layers.map((_, j) => {

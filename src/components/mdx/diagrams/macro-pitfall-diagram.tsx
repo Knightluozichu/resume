@@ -74,7 +74,7 @@ export function MacroPitfallDiagram() {
           <text x={36} y={300} fontSize="12" fill={good} fontFamily="monospace">
             正确宏：((2 + 3) * (2 + 3)) = 25
           </text>
-          <text x={36} y={324} fontSize="10" fill={secondary} fontFamily="system-ui">
+          <text x={36} y={324} fontSize="11" fill={secondary} fontFamily="system-ui">
             副作用宏（如 MAX(a++, b++)）还会因多次求值踩坑 — 复杂逻辑优先用 inline 函数或 enum。
           </text>
         </svg>

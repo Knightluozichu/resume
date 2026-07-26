@@ -173,7 +173,7 @@ export function DalvikArtCompareDiagram() {
           <text
             x={PAD_X}
             y={TITLE_TOP + 18}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Dalvik 把编译推迟到运行时（装得快、跑得慢）；ART 把编译提前到安装时（装得慢、跑得快）
@@ -259,7 +259,7 @@ export function DalvikArtCompareDiagram() {
                 <text
                   x={innerX}
                   y={COL_TOP + 33}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {p.era}
@@ -295,7 +295,7 @@ export function DalvikArtCompareDiagram() {
                 <text
                   x={innerX}
                   y={stage1Top + 20}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--text-primary)"
                 >
@@ -306,7 +306,7 @@ export function DalvikArtCompareDiagram() {
                     key={line}
                     x={innerX}
                     y={stage1Top + 38 + li * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}
@@ -343,7 +343,7 @@ export function DalvikArtCompareDiagram() {
                 <text
                   x={innerX}
                   y={stage2Top + 20}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--text-primary)"
                 >
@@ -354,7 +354,7 @@ export function DalvikArtCompareDiagram() {
                     key={line}
                     x={innerX}
                     y={stage2Top + 38 + li * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}
@@ -384,7 +384,7 @@ export function DalvikArtCompareDiagram() {
                         : 18 + li * 14)
                     }
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill={p.color}
                   >
@@ -418,7 +418,7 @@ export function DalvikArtCompareDiagram() {
           <text
             x={PAD_X + 12}
             y={TBL_TOP + TBL_HEAD_H / 2 + 4}
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -428,7 +428,7 @@ export function DalvikArtCompareDiagram() {
             x={PAD_X + TBL_DIM_W + TBL_VAL_W / 2}
             y={TBL_TOP + TBL_HEAD_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -438,7 +438,7 @@ export function DalvikArtCompareDiagram() {
             x={PAD_X + TBL_DIM_W + TBL_VAL_W + TBL_VAL_W / 2}
             y={TBL_TOP + TBL_HEAD_H / 2 + 4}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -462,7 +462,7 @@ export function DalvikArtCompareDiagram() {
                 <text
                   x={PAD_X + 12}
                   y={midY}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -472,7 +472,7 @@ export function DalvikArtCompareDiagram() {
                   x={PAD_X + TBL_DIM_W + TBL_VAL_W / 2}
                   y={midY}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {row.dalvik}
@@ -481,7 +481,7 @@ export function DalvikArtCompareDiagram() {
                   x={PAD_X + TBL_DIM_W + TBL_VAL_W + TBL_VAL_W / 2}
                   y={midY}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {row.art}

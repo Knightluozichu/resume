@@ -57,7 +57,7 @@ export function FramebufferAttachmentDiagram() {
             x="320"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             只是「框」
@@ -66,7 +66,7 @@ export function FramebufferAttachmentDiagram() {
             x="320"
             y="182"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             自己不存像素
@@ -98,7 +98,7 @@ export function FramebufferAttachmentDiagram() {
             x="124"
             y="110"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             画面颜色写这里
@@ -107,7 +107,7 @@ export function FramebufferAttachmentDiagram() {
             x="124"
             y="124"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             渲完可当纹理采样
@@ -125,7 +125,7 @@ export function FramebufferAttachmentDiagram() {
             x="228"
             y="113"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             className="font-mono"
             fill="var(--accent)"
           >
@@ -158,7 +158,7 @@ export function FramebufferAttachmentDiagram() {
             x="124"
             y="216"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             存每像素深度
@@ -167,7 +167,7 @@ export function FramebufferAttachmentDiagram() {
             x="124"
             y="230"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             供深度测试用
@@ -185,7 +185,7 @@ export function FramebufferAttachmentDiagram() {
             x="228"
             y="200"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             className="font-mono"
             fill="var(--warning)"
           >
@@ -239,7 +239,7 @@ export function FramebufferAttachmentDiagram() {
             x="524"
             y="164"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-primary)"
           >
@@ -249,7 +249,7 @@ export function FramebufferAttachmentDiagram() {
             x="524"
             y="180"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             == COMPLETE 才能用

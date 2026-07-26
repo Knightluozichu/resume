@@ -46,7 +46,7 @@ export function FileOpenModesDiagram() {
               key={h}
               x={colX[i]}
               y={startY - 8}
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={secondary}
             >
@@ -73,18 +73,18 @@ export function FileOpenModesDiagram() {
                   &quot;{r.mode}&quot;
                 </text>
                 {[r.read, r.write, r.create, r.truncate, r.seek].map((cell, ci) => (
-                  <text key={ci} x={colX[ci + 1]} y={y + 24} fontSize="10" fill={primary}>
+                  <text key={ci} x={colX[ci + 1]} y={y + 24} fontSize="11" fill={primary}>
                     {cell}
                   </text>
                 ))}
-                <text x={colX[6]} y={y + 24} fontSize="9" fill={secondary}>
+                <text x={colX[6]} y={y + 24} fontSize="11" fill={secondary}>
                   {r.note}
                 </text>
               </g>
             );
           })}
 
-          <text x={24} y={342} fontSize="10" fill={secondary}>
+          <text x={24} y={342} fontSize="11" fill={secondary}>
             失败返回 NULL，用 perror 或 strerror(errno) 查原因；成功务必 fclose。
           </text>
         </svg>

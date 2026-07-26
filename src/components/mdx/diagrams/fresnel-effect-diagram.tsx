@@ -88,7 +88,7 @@ export function FresnelEffectDiagram() {
                 x={ox - 8}
                 y={oy - v * h + 4}
                 textAnchor="end"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {v}
@@ -125,7 +125,7 @@ export function FresnelEffectDiagram() {
                 x={ox + v * w}
                 y={oy + 18}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {label}
@@ -182,7 +182,7 @@ export function FresnelEffectDiagram() {
           <text
             x={ox + 34}
             y={oy - 0.04 * h + 4}
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             F0 ~ 0.04
@@ -201,7 +201,7 @@ export function FresnelEffectDiagram() {
           <text
             x={ox + 34}
             y={oy - 0.7 * h + 4}
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             F0 ~ 0.7
@@ -210,11 +210,11 @@ export function FresnelEffectDiagram() {
           {/* 图例 */}
           <rect x="370" y="50" width="160" height="52" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <line x1="380" y1="66" x2="410" y2="66" stroke="var(--accent)" strokeWidth="2.5" />
-          <text x="416" y="70" fontSize="10" fill="var(--text-primary)">
+          <text x="416" y="70" fontSize="11" fill="var(--text-primary)">
             电介质（非金属）
           </text>
           <line x1="380" y1="88" x2="410" y2="88" stroke="var(--warning)" strokeWidth="2.5" />
-          <text x="416" y="92" fontSize="10" fill="var(--text-primary)">
+          <text x="416" y="92" fontSize="11" fill="var(--text-primary)">
             金属
           </text>
 
@@ -223,7 +223,7 @@ export function FresnelEffectDiagram() {
             x={ox + w - 20}
             y={oy - h - 6}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >

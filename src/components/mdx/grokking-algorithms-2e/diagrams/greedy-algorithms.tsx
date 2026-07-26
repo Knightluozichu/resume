@@ -115,7 +115,7 @@ export function ClassroomScheduleDiagram() {
             return (
               <g key={hour}>
                 <line x1={x} y1="62" x2={x} y2="316" stroke={border} strokeDasharray="4 4" />
-                <text x={x} y="53" textAnchor="middle" fontSize="10" fill={secondary}>{hour}:00</text>
+                <text x={x} y="53" textAnchor="middle" fontSize="11" fill={secondary}>{hour}:00</text>
               </g>
             );
           })}
@@ -126,17 +126,17 @@ export function ClassroomScheduleDiagram() {
             const tone = item.chosen ? success : danger;
             return (
               <g key={item.name}>
-                <text x="96" y={y + 22} textAnchor="end" fontSize="10.5" fontWeight="700" fill={primary}>{item.name}</text>
+                <text x="96" y={y + 22} textAnchor="end" fontSize="11" fontWeight="700" fill={primary}>{item.name}</text>
                 <rect x={x} y={y} width={width} height="34" rx="4" fill={tone} fillOpacity="0.1" stroke={tone} />
-                <text x={x + width / 2} y={y + 21} textAnchor="middle" fontSize="9.5" fill={primary}>
+                <text x={x + width / 2} y={y + 21} textAnchor="middle" fontSize="11" fill={primary}>
                   {item.chosen ? "选择" : "冲突"}
                 </text>
               </g>
             );
           })}
           <rect x="86" y="334" width="588" height="38" rx="4" fill={accent} fillOpacity="0.06" stroke={accent} strokeOpacity="0.55" />
-          <text x="380" y="350" textAnchor="middle" fontSize="10.5" fill={primary}>美术10:00结束，数学随后开始，音乐再随后开始，共安排3门。</text>
-          <text x="380" y="364" textAnchor="middle" fontSize="9" fill={secondary}>最早结束为后续课程留下最大时间窗口；该交换论证可证明最优。</text>
+          <text x="380" y="350" textAnchor="middle" fontSize="11" fill={primary}>美术10:00结束，数学随后开始，音乐再随后开始，共安排3门。</text>
+          <text x="380" y="364" textAnchor="middle" fontSize="11" fill={secondary}>最早结束为后续课程留下最大时间窗口；该交换论证可证明最优。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -187,15 +187,15 @@ export function NpSearchSpaceDiagram() {
             const y = 76 + index * 74;
             return (
               <g key={bar.label}>
-                <text x="112" y={y + 20} textAnchor="end" fontSize="10.5" fontWeight="700" fill={primary}>{bar.label}</text>
+                <text x="112" y={y + 20} textAnchor="end" fontSize="11" fontWeight="700" fill={primary}>{bar.label}</text>
                 <rect x="132" y={y} width={bar.width} height="36" rx="4" fill={bar.tone} fillOpacity="0.12" stroke={bar.tone} />
-                <text x={144 + bar.width} y={y + 22} fontSize="10" fontWeight="700" fill={bar.tone}>{bar.value}</text>
+                <text x={144 + bar.width} y={y + 22} fontSize="11" fontWeight="700" fill={bar.tone}>{bar.value}</text>
               </g>
             );
           })}
           <rect x="72" y="298" width="616" height="36" rx="4" fill={accent} fillOpacity="0.06" stroke={accent} strokeOpacity="0.55" />
-          <text x="380" y="314" textAnchor="middle" fontSize="10.5" fill={primary}>近似算法用可接受精度换运行时间，不枚举整个幂集。</text>
-          <text x="380" y="328" textAnchor="middle" fontSize="9" fill={secondary}>指数增长是识别困难组合优化问题的线索，但正式归类仍需要归约证明。</text>
+          <text x="380" y="314" textAnchor="middle" fontSize="11" fill={primary}>近似算法用可接受精度换运行时间，不枚举整个幂集。</text>
+          <text x="380" y="328" textAnchor="middle" fontSize="11" fill={secondary}>指数增长是识别困难组合优化问题的线索，但正式归类仍需要归约证明。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

@@ -60,7 +60,7 @@ function GTexture({
         x={x + w / 2}
         y={y + h + 16}
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         fontFamily="monospace"
         fill="var(--text-secondary)"
       >

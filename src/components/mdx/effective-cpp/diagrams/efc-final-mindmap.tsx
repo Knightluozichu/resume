@@ -142,7 +142,7 @@ export function EfcFinalMindMap() {
           <text x={CX} y={CY + 12} textAnchor="middle" fontSize="14" fontWeight="700" fill={primary}>
             C++
           </text>
-          <text x={CX} y={CY + 32} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={CX} y={CY + 32} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">
             55 Items
           </text>
 

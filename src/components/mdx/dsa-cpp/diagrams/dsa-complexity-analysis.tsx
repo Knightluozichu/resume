@@ -51,15 +51,15 @@ export function DsaComplexityDiagram() {
 
           <rect x="360" y="104" width="312" height="44" rx="6" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.4" />
           <text x="376" y="124" fontSize="11" fill={primary}>a &lt; b^d → T(n) = O(n^d)</text>
-          <text x="376" y="140" fontSize="10" fill={secondary}>根节点代价主导</text>
+          <text x="376" y="140" fontSize="11" fill={secondary}>根节点代价主导</text>
 
           <rect x="360" y="158" width="312" height="44" rx="6" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
           <text x="376" y="178" fontSize="11" fill={primary}>a = b^d → T(n) = O(n^d log n)</text>
-          <text x="376" y="194" fontSize="10" fill={secondary}>各层代价均衡（归并排序）</text>
+          <text x="376" y="194" fontSize="11" fill={secondary}>各层代价均衡（归并排序）</text>
 
           <rect x="360" y="212" width="312" height="44" rx="6" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.4" />
           <text x="376" y="232" fontSize="11" fill={primary}>a &gt; b^d → T(n) = O(n^(log_b a))</text>
-          <text x="376" y="248" fontSize="10" fill={secondary}>叶子代价主导</text>
+          <text x="376" y="248" fontSize="11" fill={secondary}>叶子代价主导</text>
 
           {/* 常见递推 */}
           <rect x="360" y="268" width="312" height="104" rx="8" fill={accent} fillOpacity="0.04" stroke={accent} strokeWidth="1" strokeOpacity="0.3" />

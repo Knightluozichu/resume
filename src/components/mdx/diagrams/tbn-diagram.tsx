@@ -148,7 +148,7 @@ export function TBNDiagram() {
           >
             T
           </text>
-          <text x="476" y="221" fontSize="10" fill="var(--accent)">
+          <text x="476" y="221" fontSize="11" fill="var(--accent)">
             切线（沿 U）
           </text>
 
@@ -171,7 +171,7 @@ export function TBNDiagram() {
           >
             B
           </text>
-          <text x="372" y="338" fontSize="10" fill="var(--success)">
+          <text x="372" y="338" fontSize="11" fill="var(--success)">
             副切线（沿 V）
           </text>
 
@@ -194,7 +194,7 @@ export function TBNDiagram() {
           >
             N
           </text>
-          <text x="328" y="102" fontSize="10" fill="var(--warning)">
+          <text x="328" y="102" fontSize="11" fill="var(--warning)">
             法线（垂直表面）
           </text>
 

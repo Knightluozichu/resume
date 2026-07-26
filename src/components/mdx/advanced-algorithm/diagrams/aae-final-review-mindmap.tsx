@@ -142,7 +142,7 @@ export function AaeFinalReviewMindMap() {
           <text x={CX} y={CY + 12} textAnchor="middle" fontSize="13" fontWeight="700" fill={primary}>
             与算法工程
           </text>
-          <text x={CX} y={CY + 32} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={CX} y={CY + 32} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">
             Mind Map
           </text>
 

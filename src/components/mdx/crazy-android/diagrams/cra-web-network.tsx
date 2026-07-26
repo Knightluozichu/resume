@@ -66,7 +66,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -76,7 +76,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="66"
             y="126"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -85,7 +85,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="66"
             y="142"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -94,7 +94,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="66"
             y="158"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -103,7 +103,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="66"
             y="174"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -125,7 +125,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="204"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -135,7 +135,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="218"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -180,7 +180,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -190,7 +190,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="112"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             标准库内置
@@ -199,7 +199,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="124"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -221,7 +221,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -231,7 +231,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="112"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （已废弃）
@@ -240,7 +240,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="124"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -250,7 +250,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="416"
             y="148"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -259,7 +259,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="416"
             y="166"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -268,7 +268,7 @@ export function CraWebNetworkDiagram() {
           <text
             x="416"
             y="182"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -277,13 +277,13 @@ export function CraWebNetworkDiagram() {
           <text
             x="416"
             y="198"
-            fontSize="9"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
             3. getInputStream 读响应 &rarr; getResponseCode
           </text>
-          <text x="416" y="218" fontSize="9" fill="var(--danger)">
+          <text x="416" y="218" fontSize="11" fill="var(--danger)">
             必须在子线程执行网络请求，主线程网络操作触发ANR
           </text>
 
@@ -326,7 +326,7 @@ export function CraWebNetworkDiagram() {
             x="133"
             y="308"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -336,7 +336,7 @@ export function CraWebNetworkDiagram() {
             x="133"
             y="322"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -346,7 +346,7 @@ export function CraWebNetworkDiagram() {
             x="133"
             y="334"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -368,7 +368,7 @@ export function CraWebNetworkDiagram() {
             x="276"
             y="308"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -378,7 +378,7 @@ export function CraWebNetworkDiagram() {
             x="276"
             y="322"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -388,7 +388,7 @@ export function CraWebNetworkDiagram() {
             x="276"
             y="334"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -410,7 +410,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="368"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -420,7 +420,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="384"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -430,7 +430,7 @@ export function CraWebNetworkDiagram() {
             x="205"
             y="398"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             多线程/线程池处理多个客户端
@@ -474,7 +474,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="308"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -484,7 +484,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="324"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             SAX — 事件驱动流式
@@ -493,7 +493,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="338"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             DOM — 全树加载内存
@@ -502,7 +502,7 @@ export function CraWebNetworkDiagram() {
             x="483"
             y="352"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             XmlPullParser — PULL
@@ -523,7 +523,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="308"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -533,7 +533,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="324"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JSONObject / JSONArray
@@ -542,7 +542,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="338"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             org.json 标准库
@@ -551,7 +551,7 @@ export function CraWebNetworkDiagram() {
             x="626"
             y="352"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Gson — 对象自动映射
@@ -573,7 +573,7 @@ export function CraWebNetworkDiagram() {
             x="555"
             y="386"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -583,7 +583,7 @@ export function CraWebNetworkDiagram() {
             x="555"
             y="400"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             PULL解析适合大XML文件流式处理
@@ -615,21 +615,21 @@ export function CraWebNetworkDiagram() {
           <text
             x="70"
             y="486"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--danger)"
           >
             AndroidManifest: &lt;uses-permission
             android:name=&quot;android.permission.INTERNET&quot; /&gt;
           </text>
-          <text x="70" y="506" fontSize="10" fill="var(--text-secondary)">
+          <text x="70" y="506" fontSize="11" fill="var(--text-secondary)">
             WebView:
             shouldOverrideUrlLoading控制内嵌跳转，addJavascriptInterface实现JS互调
           </text>
-          <text x="70" y="524" fontSize="10" fill="var(--text-secondary)">
+          <text x="70" y="524" fontSize="11" fill="var(--text-secondary)">
             HTTP: HttpURLConnection子线程请求 + Handler/AsyncTask回主线程更新UI
           </text>
-          <text x="70" y="542" fontSize="10" fill="var(--text-secondary)">
+          <text x="70" y="542" fontSize="11" fill="var(--text-secondary)">
             Socket: TCP可靠连接适合IM/文件传输，UDP无连接适合实时音视频/广播
           </text>
         </svg>

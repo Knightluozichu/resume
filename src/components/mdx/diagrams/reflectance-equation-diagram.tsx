@@ -111,7 +111,7 @@ export function ReflectanceEquationDiagram() {
             strokeWidth="1"
             strokeDasharray="4 4"
           />
-          <text x="448" y="252" fontSize="10" fill="var(--accent)">
+          <text x="448" y="252" fontSize="11" fill="var(--accent)">
             omega
           </text>
 
@@ -189,7 +189,7 @@ export function ReflectanceEquationDiagram() {
             stroke="var(--text-secondary)"
             strokeWidth="1.2"
           />
-          <text x="242" y="212" fontSize="10" fill="var(--text-secondary)">
+          <text x="242" y="212" fontSize="11" fill="var(--text-secondary)">
             n . omega_i
           </text>
 
@@ -219,7 +219,7 @@ export function ReflectanceEquationDiagram() {
             x="280"
             y="336"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BRDF fr 衡量每条入射光沿 omega_o 出去多少，对半球所有方向求和

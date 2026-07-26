@@ -83,7 +83,7 @@ export function GeometryOcclusionDiagram() {
             x="175"
             y="74"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             观察方向 V 被邻面挡住
@@ -158,7 +158,7 @@ export function GeometryOcclusionDiagram() {
             x="175"
             y="240"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             反射光被发出但看不见
@@ -189,7 +189,7 @@ export function GeometryOcclusionDiagram() {
             x="525"
             y="74"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             光线方向 L 被邻面挡住
@@ -263,7 +263,7 @@ export function GeometryOcclusionDiagram() {
             x="525"
             y="240"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             光照不到这块微面

@@ -64,7 +64,7 @@ export function JvtJvmToolsDiagram() {
             x="105"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             列 JVM 进程
@@ -73,7 +73,7 @@ export function JvtJvmToolsDiagram() {
             x="105"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             pid + 主类名
@@ -104,7 +104,7 @@ export function JvtJvmToolsDiagram() {
             x="245"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             GC/类加载统计
@@ -113,7 +113,7 @@ export function JvtJvmToolsDiagram() {
             x="245"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             -gc/-gcutil
@@ -144,7 +144,7 @@ export function JvtJvmToolsDiagram() {
             x="385"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             堆内存分析
@@ -153,7 +153,7 @@ export function JvtJvmToolsDiagram() {
             x="385"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             -dump/-histo
@@ -184,7 +184,7 @@ export function JvtJvmToolsDiagram() {
             x="525"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             线程栈 dump
@@ -193,7 +193,7 @@ export function JvtJvmToolsDiagram() {
             x="525"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             死锁/热点定位
@@ -224,7 +224,7 @@ export function JvtJvmToolsDiagram() {
             x="650"
             y="98"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             统一命令
@@ -233,7 +233,7 @@ export function JvtJvmToolsDiagram() {
             x="650"
             y="114"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JDK7+ 首选
@@ -265,7 +265,7 @@ export function JvtJvmToolsDiagram() {
             x="100"
             y="186"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -275,7 +275,7 @@ export function JvtJvmToolsDiagram() {
             x="100"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             找 Java pid
@@ -306,7 +306,7 @@ export function JvtJvmToolsDiagram() {
             x="245"
             y="186"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -316,7 +316,7 @@ export function JvtJvmToolsDiagram() {
             x="245"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             找高 CPU tid
@@ -347,7 +347,7 @@ export function JvtJvmToolsDiagram() {
             x="390"
             y="186"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -357,7 +357,7 @@ export function JvtJvmToolsDiagram() {
             x="390"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             printf &apos;%x&apos;
@@ -388,7 +388,7 @@ export function JvtJvmToolsDiagram() {
             x="535"
             y="186"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -398,7 +398,7 @@ export function JvtJvmToolsDiagram() {
             x="535"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             nid=0xtid
@@ -429,7 +429,7 @@ export function JvtJvmToolsDiagram() {
             x="660"
             y="186"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -439,7 +439,7 @@ export function JvtJvmToolsDiagram() {
             x="660"
             y="202"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             定位代码
@@ -481,7 +481,7 @@ export function JvtJvmToolsDiagram() {
             x="120"
             y="286"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             JMX 实时监控
@@ -490,7 +490,7 @@ export function JvtJvmToolsDiagram() {
             x="120"
             y="302"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             内存/线程/MBean
@@ -499,7 +499,7 @@ export function JvtJvmToolsDiagram() {
             x="120"
             y="318"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             简单开箱即用
@@ -530,7 +530,7 @@ export function JvtJvmToolsDiagram() {
             x="290"
             y="286"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             监控+采样一体
@@ -539,7 +539,7 @@ export function JvtJvmToolsDiagram() {
             x="290"
             y="302"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             堆直方图/dump
@@ -548,7 +548,7 @@ export function JvtJvmToolsDiagram() {
             x="290"
             y="318"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             中度分析
@@ -579,7 +579,7 @@ export function JvtJvmToolsDiagram() {
             x="460"
             y="286"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             堆 dump 深度分析
@@ -588,7 +588,7 @@ export function JvtJvmToolsDiagram() {
             x="460"
             y="302"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Dominator/Leak
@@ -597,7 +597,7 @@ export function JvtJvmToolsDiagram() {
             x="460"
             y="318"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             内存泄漏权威
@@ -628,7 +628,7 @@ export function JvtJvmToolsDiagram() {
             x="625"
             y="286"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             运行时热诊断
@@ -637,7 +637,7 @@ export function JvtJvmToolsDiagram() {
             x="625"
             y="302"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             trace/watch/profiler
@@ -646,7 +646,7 @@ export function JvtJvmToolsDiagram() {
             x="625"
             y="318"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             生产在线不停机
@@ -679,7 +679,7 @@ export function JvtJvmToolsDiagram() {
             x="370"
             y="390"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             快速看概览 &rarr; JConsole / VisualVM
@@ -688,7 +688,7 @@ export function JvtJvmToolsDiagram() {
             x="370"
             y="408"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             内存泄漏深度分析 &rarr; MAT（dump 离线分析）
@@ -697,7 +697,7 @@ export function JvtJvmToolsDiagram() {
             x="370"
             y="426"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             生产在线热诊断 &rarr; Arthas（thread/trace/profiler 不停机）

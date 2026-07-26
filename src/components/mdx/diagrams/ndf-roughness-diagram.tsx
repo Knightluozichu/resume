@@ -99,7 +99,7 @@ export function NdfRoughnessDiagram() {
                   x={cx}
                   y={baseY + 16}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   n . h 夹角
@@ -108,7 +108,7 @@ export function NdfRoughnessDiagram() {
                   x={cx - w / 2 - 4}
                   y={baseY - h / 2}
                   textAnchor="end"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   D
@@ -128,7 +128,7 @@ export function NdfRoughnessDiagram() {
                   x={cx}
                   y={baseY + 36}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {alpha <= 0.1

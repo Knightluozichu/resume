@@ -63,7 +63,7 @@ export function NumberOf1PositionLab() {
           <div><div className="text-xs text-muted">低位</div><div className="mt-1 font-semibold text-primary">{step.low}</div></div>
           <div><div className="text-xs text-muted">本位贡献</div><div className="mt-1 font-semibold text-success">{step.contribution}</div></div>
         </div>
-        <div className="mt-4 flex min-h-10 items-center justify-between gap-3">
+        <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
           <p className="m-0 text-sm text-secondary">{step.rule}</p>
           <div className="shrink-0 text-sm text-muted">截至本位合计 <strong className="text-primary">{total}</strong></div>
         </div>

@@ -87,7 +87,7 @@ export function RubObjectsVariablesDiagram() {
             x={100}
             y={120}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             实例对象
@@ -102,7 +102,7 @@ export function RubObjectsVariablesDiagram() {
             strokeWidth="1.2"
             markerEnd="url(#rub-ov-arrow)"
           />
-          <text x={130} y={142} fontSize="10" fill={secondary}>
+          <text x={130} y={142} fontSize="11" fill={secondary}>
             .class
           </text>
 
@@ -132,7 +132,7 @@ export function RubObjectsVariablesDiagram() {
             x={100}
             y={184}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             类对象
@@ -147,7 +147,7 @@ export function RubObjectsVariablesDiagram() {
             strokeWidth="1.2"
             markerEnd="url(#rub-ov-arrow)"
           />
-          <text x={130} y={206} fontSize="10" fill={secondary}>
+          <text x={130} y={206} fontSize="11" fill={secondary}>
             .class
           </text>
 
@@ -177,7 +177,7 @@ export function RubObjectsVariablesDiagram() {
             x={100}
             y={248}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             所有类的类
@@ -192,7 +192,7 @@ export function RubObjectsVariablesDiagram() {
             strokeWidth="1.2"
             markerEnd="url(#rub-ov-arrow)"
           />
-          <text x={130} y={270} fontSize="10" fill={secondary}>
+          <text x={130} y={270} fontSize="11" fill={secondary}>
             superclass
           </text>
 
@@ -222,7 +222,7 @@ export function RubObjectsVariablesDiagram() {
             x={100}
             y={312}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             万物之根
@@ -286,7 +286,7 @@ export function RubObjectsVariablesDiagram() {
             x={290}
             y={136}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             小写开头 · 方法/块内有效
@@ -327,7 +327,7 @@ export function RubObjectsVariablesDiagram() {
             x={450}
             y={136}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             @开头 · 对象内有效
@@ -368,7 +368,7 @@ export function RubObjectsVariablesDiagram() {
             x={290}
             y={208}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             @@开头 · 类及子类共享
@@ -409,7 +409,7 @@ export function RubObjectsVariablesDiagram() {
             x={450}
             y={208}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             $开头 · 程序全局有效
@@ -449,7 +449,7 @@ export function RubObjectsVariablesDiagram() {
             x={370}
             y={288}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             大写开头 · 可变但警告

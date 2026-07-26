@@ -197,7 +197,7 @@ export function AgentSkeletonDiagram() {
                   x={cx}
                   y={y + 24}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--accent)"
                 >

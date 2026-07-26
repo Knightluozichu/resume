@@ -154,7 +154,7 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
                 x={s.x + s.w / 2}
                 y="118"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.detail.split("\n")[0]}
@@ -163,7 +163,7 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
                 x={s.x + s.w / 2}
                 y="132"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.detail.split("\n")[1]}

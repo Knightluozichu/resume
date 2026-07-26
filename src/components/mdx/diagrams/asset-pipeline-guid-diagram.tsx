@@ -74,7 +74,7 @@ export function AssetPipelineGuidDiagram() {
             x={(N1_X + NODE_W + N2_X) / 2}
             y={NODE_CY - 10}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             生成
@@ -92,7 +92,7 @@ export function AssetPipelineGuidDiagram() {
             x={(N2_X + NODE_W + N3_X) / 2}
             y={NODE_CY - 10}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--accent)"
           >
             按 GUID 找
@@ -134,7 +134,7 @@ export function AssetPipelineGuidDiagram() {
             x={N1_CX}
             y={NODE_Y + 96}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             图片 / 模型 / 预制体 /
@@ -143,7 +143,7 @@ export function AssetPipelineGuidDiagram() {
             x={N1_CX}
             y={NODE_Y + 112}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             脚本 …… 都放 Assets 下
@@ -175,7 +175,7 @@ export function AssetPipelineGuidDiagram() {
             x={N2_CX}
             y={NODE_Y + 50}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-primary)"
           >
@@ -185,7 +185,7 @@ export function AssetPipelineGuidDiagram() {
             x={N2_CX}
             y={NODE_Y + 78}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--success)"
           >
@@ -195,7 +195,7 @@ export function AssetPipelineGuidDiagram() {
             x={N2_CX}
             y={NODE_Y + 100}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             + 导入设置（压缩 /
@@ -204,7 +204,7 @@ export function AssetPipelineGuidDiagram() {
             x={N2_CX}
             y={NODE_Y + 116}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             过滤 / 格式 …）
@@ -236,7 +236,7 @@ export function AssetPipelineGuidDiagram() {
             x={N3_CX}
             y={NODE_Y + 50}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             别的资源 / 场景 / 预制体
@@ -245,7 +245,7 @@ export function AssetPipelineGuidDiagram() {
             x={N3_CX}
             y={NODE_Y + 80}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
           >
@@ -255,7 +255,7 @@ export function AssetPipelineGuidDiagram() {
             x={N3_CX}
             y={NODE_Y + 108}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             记的是 GUID，不是路径
@@ -266,7 +266,7 @@ export function AssetPipelineGuidDiagram() {
             x={VIEW_W / 2}
             y={326}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             ✓ 改名 / 移动资源，引用不丢（GUID 没变）　　✗ .meta 丢了 = GUID
@@ -278,7 +278,7 @@ export function AssetPipelineGuidDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             引用靠 GUID 不靠路径——所以 .meta 必须跟着资源一起走、一起进版本控制

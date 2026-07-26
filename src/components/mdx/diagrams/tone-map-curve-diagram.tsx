@@ -83,7 +83,7 @@ export function ToneMapCurveDiagram() {
             x={x0 - 8}
             y={yTop + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -92,7 +92,7 @@ export function ToneMapCurveDiagram() {
             x={x0 - 8}
             y={yBot + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -101,7 +101,7 @@ export function ToneMapCurveDiagram() {
             x={x1}
             y={yBot + 18}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             5
@@ -141,7 +141,7 @@ export function ToneMapCurveDiagram() {
             x={sx(1)}
             y={yBot + 16}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -171,7 +171,7 @@ export function ToneMapCurveDiagram() {
           />
 
           {/* 图例 */}
-          <g fontSize="10">
+          <g fontSize="11">
             <line
               x1={x0}
               y1={266}

@@ -14,13 +14,13 @@ export function Poeaa24Pattern06RowDataGateway() {
           <rect x={200} y={64} width={320} height={28} rx="10" fill="#E5B567" fillOpacity="0.12" />
           <rect x={200} y={84} width={320} height={8} fill="#E5B567" fillOpacity="0.12" />
           <text x={360} y={83} textAnchor="middle" fontSize="12" fontWeight="700" fill="#E5B567">OrderRow (实例 = 一行)</text>
-          <text x={216} y={112} fontSize="10" fontFamily="monospace" fill={T.primary}>id: number</text>
-          <text x={216} y={132} fontSize="10" fontFamily="monospace" fill={T.primary}>customerId: number</text>
-          <text x={216} y={152} fontSize="10" fontFamily="monospace" fill={T.primary}>amount: number</text>
-          <text x={216} y={172} fontSize="10" fontFamily="monospace" fill={T.primary}>status: string</text>
+          <text x={216} y={112} fontSize="11" fontFamily="monospace" fill={T.primary}>id: number</text>
+          <text x={216} y={132} fontSize="11" fontFamily="monospace" fill={T.primary}>customerId: number</text>
+          <text x={216} y={152} fontSize="11" fontFamily="monospace" fill={T.primary}>amount: number</text>
+          <text x={216} y={172} fontSize="11" fontFamily="monospace" fill={T.primary}>status: string</text>
           <line x1={200} y1={182} x2={520} y2={182} stroke="#E5B567" strokeWidth="0.6" strokeOpacity="0.4" />
-          <text x={216} y={202} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ save(): void</text>
-          <text x={216} y={222} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ delete(): void</text>
+          <text x={216} y={202} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ save(): void</text>
+          <text x={216} y={222} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ delete(): void</text>
           {/* 对应关系 */}
           <text x={48} y={290} fontSize="11" fill="#E5B567">✓ 对象字段 = 表列，一一对应</text>
           <text x={400} y={290} fontSize="11" fill={T.danger}>✗ 无业务逻辑，只是数据容器</text>

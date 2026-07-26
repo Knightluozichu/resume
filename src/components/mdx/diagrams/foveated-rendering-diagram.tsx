@@ -44,12 +44,12 @@ export function FoveatedRenderingDiagram({ level = "medium" }: Props) {
           <text x="20" y="26" fontSize="12" fontWeight="600" fill="var(--text-primary)">
             Foveated Rendering（注视点渲染）
           </text>
-          <text x="20" y="44" fontSize="10" fill="var(--text-secondary)">
+          <text x="20" y="44" fontSize="11" fill="var(--text-secondary)">
             人眼周边视觉分辨率低 · GPU 在周边用更少像素/shader 采样
           </text>
 
           {/* 左眼视图 */}
-          <text x="130" y="68" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="130" y="68" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             单眼视场（俯视）
           </text>
           <circle cx={cx} cy={cy} r="92" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.5" />
@@ -71,21 +71,21 @@ export function FoveatedRenderingDiagram({ level = "medium" }: Props) {
             );
           })}
           <circle cx={cx} cy={cy} r="4" fill="var(--accent)" />
-          <text x={cx} y={cy + 4} textAnchor="middle" fontSize="8" fill="var(--bg)" fontWeight="600">
+          <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11" fill="var(--bg)" fontWeight="600">
             ●
           </text>
           {/* 注视方向标签 — 移到圆右侧、左对齐，箭头指回圆心；避免文字超出 viewBox 左边界（硬规则 4） */}
-          <text x={cx + 100} y={cy + 4} textAnchor="start" fontSize="9" fill="var(--text-secondary)">
+          <text x={cx + 100} y={cy + 4} textAnchor="start" fontSize="11" fill="var(--text-secondary)">
             ← 注视方向
           </text>
 
           {/* 图例 */}
           <g transform="translate(280, 72)">
-            <text x="0" y="0" fontSize="10" fontWeight="600" fill="var(--text-primary)">
+            <text x="0" y="0" fontSize="11" fontWeight="600" fill="var(--text-primary)">
               采样密度
             </text>
             {level === "off" ? (
-              <text x="0" y="24" fontSize="9" fill="var(--text-secondary)">
+              <text x="0" y="24" fontSize="11" fill="var(--text-secondary)">
                 全屏统一 · Fill rate 最高
               </text>
             ) : (
@@ -100,7 +100,7 @@ export function FoveatedRenderingDiagram({ level = "medium" }: Props) {
                     fill="var(--accent)"
                     opacity={cfg.opacities[i] * 0.7}
                   />
-                  <text x="22" y="4" fontSize="9" fill="var(--text-secondary)">
+                  <text x="22" y="4" fontSize="11" fill="var(--text-secondary)">
                     {i === 0 ? "Fovea 1.0×" : i === 1 ? "Mid 0.5×" : i === 2 ? "Periph 0.25×" : "Far 0.125×"}
                   </text>
                 </g>
@@ -110,13 +110,13 @@ export function FoveatedRenderingDiagram({ level = "medium" }: Props) {
 
           {/* 平台说明 */}
           <rect x="20" y="168" width="440" height="58" rx="6" fill="var(--bg)" stroke="var(--border)" />
-          <text x="36" y="188" fontSize="9" fill="var(--text-secondary)">
+          <text x="36" y="188" fontSize="11" fill="var(--text-secondary)">
             Quest / OpenXR：Fixed Foveated Rendering (FFR) · PSVR2：Gaze-contingent（需眼动）
           </text>
-          <text x="36" y="204" fontSize="9" fill="var(--text-secondary)">
+          <text x="36" y="204" fontSize="11" fill="var(--text-secondary)">
             URP：XR Plug-in 或设备 SDK 暴露 FFR 等级 · 与 MSAA/动态分辨率叠加需 Profiler 验证
           </text>
-          <text x="36" y="218" fontSize="9" fontWeight="500" fill="var(--accent)">
+          <text x="36" y="218" fontSize="11" fontWeight="500" fill="var(--accent)">
             {cfg.label}
           </text>
         </svg>

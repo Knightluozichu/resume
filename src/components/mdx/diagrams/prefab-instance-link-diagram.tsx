@@ -305,7 +305,7 @@ export function PrefabInstanceLinkDiagram() {
               x={(INST_X + ASSET_X + ASSET_W) / 2}
               y={ASSET_Y - 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -340,7 +340,7 @@ export function PrefabInstanceLinkDiagram() {
             x={ASSET_CX}
             y={ASSET_Y + 46}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             模板（在 Project 里）
@@ -358,7 +358,7 @@ export function PrefabInstanceLinkDiagram() {
             x={ASSET_CX}
             y={ASSET_Y + 122}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             配好组件 / 参数，可复用
@@ -380,7 +380,7 @@ export function PrefabInstanceLinkDiagram() {
               x={ASSET_CX}
               y={ASSET_Y - 12}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--success)"
             >
@@ -423,7 +423,7 @@ export function PrefabInstanceLinkDiagram() {
               x={INST_X + 72}
               y={INST1_Y + 52}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               跟随资产 · 在场景 Hierarchy 里
@@ -464,7 +464,7 @@ export function PrefabInstanceLinkDiagram() {
               x={INST_X + 72}
               y={INST2_Y + 52}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               单独改 → 覆盖（override）
@@ -486,7 +486,7 @@ export function PrefabInstanceLinkDiagram() {
                 x={INST_X + INST_W - 48}
                 y={INST2_Y + 26}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--warning)"
               >
@@ -529,7 +529,7 @@ export function PrefabInstanceLinkDiagram() {
               x={INST_X + 72}
               y={INST3_Y + 52}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               跟随资产 · 在场景 Hierarchy 里
@@ -541,7 +541,7 @@ export function PrefabInstanceLinkDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             改资产 = 全体同步；override = 单个脱钩；Apply =

@@ -169,7 +169,7 @@ export function MglMachineLearningDiagram() {
               <g key={stage.title}>
                 <rect x={x} y="86" width="146" height="76" rx="7" fill={stage.color} fillOpacity="0.08" stroke={stage.color} strokeWidth="1.2" />
                 <text x={x + 73} y="115" textAnchor="middle" fontSize="14" fontWeight="700" fill={stage.color}>{stage.title}</text>
-                <text x={x + 73} y="140" textAnchor="middle" fontSize="10.5" fill={primary}>{stage.detail}</text>
+                <text x={x + 73} y="140" textAnchor="middle" fontSize="11" fill={primary}>{stage.detail}</text>
                 {index < stages.length - 1 ? (
                   <line x1={x + 149} y1="124" x2={x + 169} y2="124" stroke={secondary} strokeWidth="1.4" markerEnd="url(#mgl-ml-arrow)" />
                 ) : null}
@@ -182,27 +182,27 @@ export function MglMachineLearningDiagram() {
           <rect x="38" y="218" width="196" height="94" rx="7" fill={success} fillOpacity="0.06" stroke={success} />
           <text x="136" y="244" textAnchor="middle" fontSize="13" fontWeight="700" fill={success}>训练集</text>
           <text x="136" y="267" textAnchor="middle" fontSize="11" fill={primary}>拟合参数与预处理统计量</text>
-          <text x="136" y="289" textAnchor="middle" fontSize="10.5" fill={secondary}>模型可以反复看到</text>
+          <text x="136" y="289" textAnchor="middle" fontSize="11" fill={secondary}>模型可以反复看到</text>
 
           <line x1="238" y1="265" x2="257" y2="265" stroke={secondary} markerEnd="url(#mgl-ml-arrow)" />
 
           <rect x="262" y="218" width="196" height="94" rx="7" fill={warning} fillOpacity="0.06" stroke={warning} />
           <text x="360" y="244" textAnchor="middle" fontSize="13" fontWeight="700" fill={warning}>验证集</text>
           <text x="360" y="267" textAnchor="middle" fontSize="11" fill={primary}>选择超参数与停止时机</text>
-          <text x="360" y="289" textAnchor="middle" fontSize="10.5" fill={secondary}>反复查看也会过拟合</text>
+          <text x="360" y="289" textAnchor="middle" fontSize="11" fill={secondary}>反复查看也会过拟合</text>
 
           <line x1="462" y1="265" x2="481" y2="265" stroke={secondary} markerEnd="url(#mgl-ml-arrow)" />
 
           <rect x="486" y="218" width="196" height="94" rx="7" fill={danger} fillOpacity="0.06" stroke={danger} />
           <text x="584" y="244" textAnchor="middle" fontSize="13" fontWeight="700" fill={danger}>测试集</text>
           <text x="584" y="267" textAnchor="middle" fontSize="11" fill={primary}>方案冻结后最终评估</text>
-          <text x="584" y="289" textAnchor="middle" fontSize="10.5" fill={secondary}>看完再调参就被污染</text>
+          <text x="584" y="289" textAnchor="middle" fontSize="11" fill={secondary}>看完再调参就被污染</text>
 
           <rect x="38" y="342" width="644" height="64" rx="8" fill={accent} fillOpacity="0.05" stroke={border} />
           <text x="360" y="367" textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent}>
             训练误差低只证明记住训练样本；泛化要求未见样本仍保持可接受误差
           </text>
-          <text x="360" y="390" textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x="360" y="390" textAnchor="middle" fontSize="11" fill={secondary}>
             数据泄漏、分布偏移、错误指标和不恰当切分都会制造虚假的高分
           </text>
         </svg>

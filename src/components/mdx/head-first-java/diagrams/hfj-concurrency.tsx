@@ -60,28 +60,28 @@ export function HfjConcurrencyDiagram() {
           >
             方式1: extends Thread
           </text>
-          <text x="45" y="102" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="102" fontSize="11" fill="var(--text-secondary)">
             class MyThread extends Thread &#123;
           </text>
-          <text x="45" y="118" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="118" fontSize="11" fill="var(--text-secondary)">
             {" "}
             public void run() &#123;
           </text>
-          <text x="45" y="134" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="134" fontSize="11" fill="var(--text-secondary)">
             {" "}
             System.out.println(&quot;running&quot;);
           </text>
-          <text x="45" y="150" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="150" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#125;
           </text>
-          <text x="45" y="166" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="166" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="45" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="184" fontSize="11" fill="var(--text-secondary)">
             MyThread t = new MyThread();
           </text>
-          <text x="45" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="200" fontSize="11" fill="var(--text-secondary)">
             t.start(); // 启动新线程
           </text>
 
@@ -106,28 +106,28 @@ export function HfjConcurrencyDiagram() {
           >
             方式2: implements Runnable
           </text>
-          <text x="395" y="102" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="102" fontSize="11" fill="var(--text-secondary)">
             class MyJob implements Runnable &#123;
           </text>
-          <text x="395" y="118" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="118" fontSize="11" fill="var(--text-secondary)">
             {" "}
             public void run() &#123;
           </text>
-          <text x="395" y="134" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="134" fontSize="11" fill="var(--text-secondary)">
             {" "}
             System.out.println(&quot;running&quot;);
           </text>
-          <text x="395" y="150" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="150" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &#125;
           </text>
-          <text x="395" y="166" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="166" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="395" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="184" fontSize="11" fill="var(--text-secondary)">
             Thread t = new Thread(new MyJob());
           </text>
-          <text x="395" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="200" fontSize="11" fill="var(--text-secondary)">
             t.start(); // 推荐此方式
           </text>
 
@@ -168,7 +168,7 @@ export function HfjConcurrencyDiagram() {
             x="85"
             y="278"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             已创建未启动
@@ -218,7 +218,7 @@ export function HfjConcurrencyDiagram() {
             x="235"
             y="278"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             就绪/运行中
@@ -268,7 +268,7 @@ export function HfjConcurrencyDiagram() {
             x="385"
             y="278"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             等待锁
@@ -318,7 +318,7 @@ export function HfjConcurrencyDiagram() {
             x="535"
             y="278"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             无限等待
@@ -368,7 +368,7 @@ export function HfjConcurrencyDiagram() {
             x="670"
             y="278"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             终止
@@ -408,16 +408,16 @@ export function HfjConcurrencyDiagram() {
           >
             不同步（数据竞争）
           </text>
-          <text x="45" y="370" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="370" fontSize="11" fill="var(--text-secondary)">
             balance = 100; 线程A和B同时取50
           </text>
-          <text x="45" y="386" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="386" fontSize="11" fill="var(--text-secondary)">
             A读 balance=100, B读 balance=100
           </text>
-          <text x="45" y="402" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="402" fontSize="11" fill="var(--text-secondary)">
             A写 balance=50, B写 balance=50
           </text>
-          <text x="45" y="418" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="418" fontSize="11" fill="var(--text-secondary)">
             结果: 取了两次50, 余额还有50 (错!)
           </text>
 
@@ -443,17 +443,17 @@ export function HfjConcurrencyDiagram() {
           >
             synchronized 同步
           </text>
-          <text x="405" y="370" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="370" fontSize="11" fill="var(--text-secondary)">
             public synchronized void withdraw(int amt) &#123;
           </text>
-          <text x="405" y="386" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="386" fontSize="11" fill="var(--text-secondary)">
             {" "}
             if (balance &gt;= amt) balance -= amt;
           </text>
-          <text x="405" y="402" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="402" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="405" y="418" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="418" fontSize="11" fill="var(--text-secondary)">
             一次只允许一个线程执行, 保证原子性
           </text>
 
@@ -479,13 +479,13 @@ export function HfjConcurrencyDiagram() {
           >
             synchronized 方法
           </text>
-          <text x="40" y="466" fontSize="9" fill="var(--text-secondary)">
+          <text x="40" y="466" fontSize="11" fill="var(--text-secondary)">
             锁 = this 对象
           </text>
-          <text x="40" y="480" fontSize="9" fill="var(--text-secondary)">
+          <text x="40" y="480" fontSize="11" fill="var(--text-secondary)">
             整个方法体同步
           </text>
-          <text x="40" y="494" fontSize="9" fill="var(--text-secondary)">
+          <text x="40" y="494" fontSize="11" fill="var(--text-secondary)">
             粒度粗, 简单安全
           </text>
 
@@ -510,13 +510,13 @@ export function HfjConcurrencyDiagram() {
           >
             synchronized 块
           </text>
-          <text x="270" y="466" fontSize="9" fill="var(--text-secondary)">
+          <text x="270" y="466" fontSize="11" fill="var(--text-secondary)">
             synchronized(lock) &#123;...&#125;
           </text>
-          <text x="270" y="480" fontSize="9" fill="var(--text-secondary)">
+          <text x="270" y="480" fontSize="11" fill="var(--text-secondary)">
             可指定任意锁对象
           </text>
-          <text x="270" y="494" fontSize="9" fill="var(--text-secondary)">
+          <text x="270" y="494" fontSize="11" fill="var(--text-secondary)">
             粒度细, 性能好
           </text>
 
@@ -541,13 +541,13 @@ export function HfjConcurrencyDiagram() {
           >
             wait / notify
           </text>
-          <text x="500" y="466" fontSize="9" fill="var(--text-secondary)">
+          <text x="500" y="466" fontSize="11" fill="var(--text-secondary)">
             wait(): 释放锁, 线程等待
           </text>
-          <text x="500" y="480" fontSize="9" fill="var(--text-secondary)">
+          <text x="500" y="480" fontSize="11" fill="var(--text-secondary)">
             notify(): 唤醒一个等待线程
           </text>
-          <text x="500" y="494" fontSize="9" fill="var(--text-secondary)">
+          <text x="500" y="494" fontSize="11" fill="var(--text-secondary)">
             notifyAll(): 唤醒所有
           </text>
         </svg>

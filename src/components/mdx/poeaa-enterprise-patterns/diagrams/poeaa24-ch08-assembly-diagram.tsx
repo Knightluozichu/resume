@@ -91,9 +91,9 @@ export function Poeaa24Ch08AssemblyDiagram() {
           })}
 
           {/* 右侧分层标注 */}
-          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 28} fontSize="10" fill={T.accent}>表示层</text>
-          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 2 * (LAYER_H + GAP) + 28} fontSize="10" fill="#3FB97F">领域层</text>
-          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 5 * (LAYER_H + GAP) + 28} fontSize="10" fill="#E5B567">数据源层</text>
+          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 28} fontSize="11" fill={T.accent}>表示层</text>
+          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 2 * (LAYER_H + GAP) + 28} fontSize="11" fill="#3FB97F">领域层</text>
+          <text x={LAYER_X + LAYER_W + 16} y={START_Y + 5 * (LAYER_H + GAP) + 28} fontSize="11" fill="#E5B567">数据源层</text>
 
           {/* 左侧请求/响应标注 */}
           <defs>
@@ -113,7 +113,7 @@ export function Poeaa24Ch08AssemblyDiagram() {
             strokeWidth="1.5"
             markerEnd="url(#ch08-down)"
           />
-          <text x={LAYER_X - 36} y={START_Y + 3 * (LAYER_H + GAP)} fontSize="10" fill={T.accent} textAnchor="middle" writingMode="vertical-rl">请求下行</text>
+          <text x={LAYER_X - 36} y={START_Y + 3 * (LAYER_H + GAP)} fontSize="11" fill={T.accent} textAnchor="middle" writingMode="vertical-rl">请求下行</text>
 
           <line
             x1={LAYER_X - 48}
@@ -125,7 +125,7 @@ export function Poeaa24Ch08AssemblyDiagram() {
             strokeDasharray="4 3"
             markerEnd="url(#ch08-up)"
           />
-          <text x={LAYER_X - 60} y={START_Y + 3 * (LAYER_H + GAP)} fontSize="10" fill={T.secondary} textAnchor="middle" writingMode="vertical-rl">响应上行</text>
+          <text x={LAYER_X - 60} y={START_Y + 3 * (LAYER_H + GAP)} fontSize="11" fill={T.secondary} textAnchor="middle" writingMode="vertical-rl">响应上行</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="每层只认识相邻层——模式是层间的连接件，不是孤立的技巧" />
         </svg>

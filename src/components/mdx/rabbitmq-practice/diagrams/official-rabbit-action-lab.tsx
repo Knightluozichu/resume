@@ -47,6 +47,22 @@ export function OfficialRabbitActionLab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     gates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setExchangeType("topic");
+    setRoutingKey("order.created.eu");
+    setRate(4000);
+    setPrefetch(16);
+    setDurable(true);
+    setPersistent(true);
+    setConfirm(true);
+    setManualAck(true);
+    setMirrored(false);
+    setNodeFailure(false);
+    setChecked(() =>
+    gates.map(() => false));
+  }
+
 
   const bindings = ["order.*.eu", "order.created.*", "#", "invoice.#"];
   const matches = bindings.map(
@@ -99,6 +115,7 @@ export function OfficialRabbitActionLab({
         className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "AMQP拓扑实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             RabbitMQ 2.7 AMQP拓扑
@@ -119,7 +136,7 @@ export function OfficialRabbitActionLab({
                 type="button"
                 onClick={() => setNodeIndex(index)}
                 className={
-                  "mb-1 min-h-9 w-full rounded px-2 py-1.5 text-left text-xs " +
+                  "mb-1 min-h-11 w-full rounded px-2 py-1.5 text-left text-xs " +
                   (index === nodeIndex
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800")
@@ -163,7 +180,7 @@ export function OfficialRabbitActionLab({
                 id={id + "-routing"}
                 value={routingKey}
                 onChange={(event) => setRoutingKey(event.target.value)}
-                className="mt-2 min-h-10 w-full rounded border border-zinc-300 bg-transparent px-3 font-mono dark:border-zinc-700"
+                className="mt-2 min-h-11 w-full rounded border border-zinc-300 bg-transparent px-3 font-mono dark:border-zinc-700"
               />
             </label>
             <div className="mt-5 grid grid-cols-[minmax(6rem,0.7fr)_minmax(7rem,0.8fr)_minmax(0,1.5fr)] gap-2 text-center text-xs">
@@ -178,7 +195,7 @@ export function OfficialRabbitActionLab({
                   <div
                     key={binding}
                     className={
-                      "flex min-h-10 items-center justify-between border px-2 " +
+                      "flex min-h-11 items-center justify-between border px-2 " +
                       (matches[index]
                         ? "border-amber-600 bg-amber-50 dark:bg-amber-950/30"
                         : "border-zinc-300 opacity-60 dark:border-zinc-700")
@@ -214,6 +231,7 @@ export function OfficialRabbitActionLab({
         className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
         aria-label={unitTitle + "交付故障实验"}
       >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
             交付语义与故障窗口
@@ -301,6 +319,7 @@ export function OfficialRabbitActionLab({
       className="my-6 rounded-md border border-zinc-300 bg-white p-4 text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
       aria-label={unitTitle + "证据门"}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">

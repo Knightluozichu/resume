@@ -70,7 +70,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
               x={cx}
               y={readY + 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={"var(--text-secondary)"}
               fontFamily="monospace"
             >
@@ -111,7 +111,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
               x={cx}
               y={checkY + 14}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={"var(--text-secondary)"}
               fontFamily="monospace"
             >
@@ -131,7 +131,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
           <text
             x={cx + 12}
             y={(checkY + processY) / 2}
-            fontSize="10"
+            fontSize="11"
             fill={"var(--text-secondary)"}
             fontFamily="system-ui"
           >
@@ -174,7 +174,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
             <text
               x={w - 58}
               y={(readY + processY) / 2}
-              fontSize="10"
+              fontSize="11"
               fill={"var(--accent)"}
               fontFamily="system-ui"
             >
@@ -194,7 +194,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
           <text
             x={cx - diamondW / 2 - 36}
             y={checkY - 8}
-            fontSize="10"
+            fontSize="11"
             fill={"var(--text-secondary)"}
             fontFamily="system-ui"
           >

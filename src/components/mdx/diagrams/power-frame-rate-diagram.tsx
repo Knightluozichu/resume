@@ -151,7 +151,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
                 <text
                   x={m.x + 86}
                   y="131"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {m.battery}
@@ -162,7 +162,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
                 x={m.x + m.w / 2}
                 y="152"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {m.use}
@@ -199,7 +199,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
             x="550"
             y="104"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             场景切换
@@ -232,7 +232,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
             x="320"
             y="232"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             功耗趋势：帧率 ↑ → 功耗 ↑（非线性，翻倍帧率功耗不止翻倍）

@@ -36,9 +36,9 @@ export function DecimalIncrementDiagram() {
           {states.map((digits,row) => <g key={row}>{digits.map((digit,col) => <g key={col}><rect x={212+col*96} y={72+row*84} width="76" height="56" rx="5" fill={row===2 && col===1 ? "var(--success)" : "var(--bg)"} fillOpacity={row===2 && col===1 ? 0.12 : 1} stroke={row===2 && col===1 ? "var(--success)" : "var(--border)"} /><text x={250+col*96} y={108+row*84} textAnchor="middle" fontSize="19" fontWeight="700" fill="var(--text-primary)">{digit}</text></g>)}</g>)}
           <path d="M622 100 L654 100 L654 184 L622 184" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#increment-arrow)" />
           <path d="M622 184 L654 184 L654 268 L622 268" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#increment-arrow)" />
-          <text x="698" y="144" textAnchor="middle" fontSize="10.5" fill="var(--accent)">+1</text>
-          <text x="698" y="228" textAnchor="middle" fontSize="10.5" fill="var(--accent)">+1并进位</text>
-          <text x="410" y="328" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">存储始终4位；输出时0098、0099、0100分别显示98、99、100。</text>
+          <text x="698" y="144" textAnchor="middle" fontSize="11" fill="var(--accent)">+1</text>
+          <text x="698" y="228" textAnchor="middle" fontSize="11" fill="var(--accent)">+1并进位</text>
+          <text x="410" y="328" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">存储始终4位；输出时0098、0099、0100分别显示98、99、100。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">个位开始加一，遇到10写0并向左传播进位。</figcaption>
@@ -75,9 +75,9 @@ export function DigitEnumerationTreeDiagram() {
           <rect x="350" y="52" width="120" height="42" rx="5" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" />
           <text x="410" y="78" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">选择第0位</text>
           {[[110,"0"],[260,"1"],[410,"…"],[560,"8"],[710,"9"]].map(([x,label]) => <g key={String(label)}><line x1="410" y1="94" x2={Number(x)} y2="142" stroke="var(--border)" strokeWidth="2" /><rect x={Number(x)-48} y="142" width="96" height="38" rx="5" fill="var(--bg)" stroke="var(--border)" /><text x={Number(x)} y="166" textAnchor="middle" fontSize="11" fill="var(--text-primary)">首位 {label}</text></g>)}
-          {[[110,"00 / 01 / … / 09"],[260,"10 / 11 / … / 19"],[560,"80 / … / 89"],[710,"90 / … / 99"]].map(([x,label]) => <g key={String(label)}><line x1={Number(x)} y1="180" x2={Number(x)} y2="230" stroke="var(--border)" strokeWidth="2" /><rect x={Number(x)-66} y="230" width="132" height="42" rx="5" fill={x===110 ? "var(--warning)" : "var(--success)"} fillOpacity="0.08" stroke={x===110 ? "var(--warning)" : "var(--success)"} /><text x={Number(x)} y="256" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{label}</text></g>)}
+          {[[110,"00 / 01 / … / 09"],[260,"10 / 11 / … / 19"],[560,"80 / … / 89"],[710,"90 / … / 99"]].map(([x,label]) => <g key={String(label)}><line x1={Number(x)} y1="180" x2={Number(x)} y2="230" stroke="var(--border)" strokeWidth="2" /><rect x={Number(x)-66} y="230" width="132" height="42" rx="5" fill={x===110 ? "var(--warning)" : "var(--success)"} fillOpacity="0.08" stroke={x===110 ? "var(--warning)" : "var(--success)"} /><text x={Number(x)} y="256" textAnchor="middle" fontSize="11" fill="var(--text-primary)">{label}</text></g>)}
           <rect x="174" y="310" width="472" height="30" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="330" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">100个叶子按字典序生成；00跳过，其余去前导零后为1到99。</text>
+          <text x="410" y="330" textAnchor="middle" fontSize="11" fill="var(--text-primary)">100个叶子按字典序生成；00跳过，其余去前导零后为1到99。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">书中称全排列递归，严格说是允许重复选择的十进制笛卡尔积枚举。</figcaption>

@@ -12,15 +12,15 @@ export function Poeaa24Pattern46ValueObject() {
           {/* 两个相等的值对象 */}
           <rect x={80} y={64} width={200} height={80} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={180} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>DateRange A</text>
-          <text x={96} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>start: 2024-01-01</text>
-          <text x={96} y={128} fontSize="9" fontFamily="monospace" fill={T.primary}>end: 2024-12-31</text>
+          <text x={96} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>start: 2024-01-01</text>
+          <text x={96} y={128} fontSize="11" fontFamily="monospace" fill={T.primary}>end: 2024-12-31</text>
           <rect x={440} y={64} width={200} height={80} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={540} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>DateRange B</text>
-          <text x={456} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>start: 2024-01-01</text>
-          <text x={456} y={128} fontSize="9" fontFamily="monospace" fill={T.primary}>end: 2024-12-31</text>
+          <text x={456} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>start: 2024-01-01</text>
+          <text x={456} y={128} fontSize="11" fontFamily="monospace" fill={T.primary}>end: 2024-12-31</text>
           {/* 相等符号 */}
           <text x={360} y={110} textAnchor="middle" fontSize="16" fontWeight="700" fill="#3FB97F">==</text>
-          <text x={360} y={130} textAnchor="middle" fontSize="9" fill="#3FB97F">属性值相同即相等</text>
+          <text x={360} y={130} textAnchor="middle" fontSize="11" fill="#3FB97F">属性值相同即相等</text>
           {/* 底部说明 */}
           <rect x={48} y={172} width={624} height={72} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={196} fontSize="11" fontWeight="600" fill={T.primary}>vs 引用对象（Entity）：</text>

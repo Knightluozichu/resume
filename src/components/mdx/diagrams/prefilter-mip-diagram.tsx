@@ -101,7 +101,7 @@ export function PrefilterMipDiagram() {
                   x={cx}
                   y={top - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--accent)"
                 >
@@ -124,7 +124,7 @@ export function PrefilterMipDiagram() {
                     x={cx}
                     y={baseY + 30}
                     textAnchor="middle"
-                    fontSize="9"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     （{mip.note}）
@@ -160,7 +160,7 @@ export function PrefilterMipDiagram() {
             x="540"
             y="162"
             textAnchor="start"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             r
@@ -171,7 +171,7 @@ export function PrefilterMipDiagram() {
             x="20"
             y="175"
             textAnchor="start"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             清晰 →
@@ -180,7 +180,7 @@ export function PrefilterMipDiagram() {
             x="430"
             y="175"
             textAnchor="start"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             → 模糊
@@ -202,7 +202,7 @@ export function PrefilterMipDiagram() {
             x="280"
             y="211"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >

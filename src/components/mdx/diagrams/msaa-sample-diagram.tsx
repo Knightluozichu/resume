@@ -180,7 +180,7 @@ export function MsaaSampleDiagram({ step }: { step: MsaaStep }) {
                 x="402"
                 y="170"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 切成内 / 外两片

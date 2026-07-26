@@ -245,7 +245,7 @@ export function InterruptibleThreadDiagram() {
                     x={x + NODE_W / 2}
                     y={TRACK_Y + 37}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     查 flag
@@ -372,7 +372,7 @@ export function InterruptibleThreadDiagram() {
                   x={FLAG_X}
                   y={(TRACK_Y + NODE_H + MAIN_Y) / 2 + 4}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill={flagColor}
                 >
@@ -382,7 +382,7 @@ export function InterruptibleThreadDiagram() {
                   x={FLAG_X}
                   y={(TRACK_Y + NODE_H + MAIN_Y) / 2 + 30}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-secondary)"
                 >

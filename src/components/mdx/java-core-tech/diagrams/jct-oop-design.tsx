@@ -65,22 +65,22 @@ export function JctOopDesignDiagram() {
             x="155"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
             字段（封装）
           </text>
-          <text x="65" y="114" fontSize="9" fill="var(--text-secondary)">
+          <text x="65" y="114" fontSize="11" fill="var(--text-secondary)">
             private String name;
           </text>
-          <text x="65" y="128" fontSize="9" fill="var(--text-secondary)">
+          <text x="65" y="128" fontSize="11" fill="var(--text-secondary)">
             private double salary;
           </text>
-          <text x="65" y="142" fontSize="9" fill="var(--text-secondary)">
+          <text x="65" y="142" fontSize="11" fill="var(--text-secondary)">
             private LocalDate hireDate;
           </text>
-          <text x="65" y="154" fontSize="9" fill="var(--text-secondary)">
+          <text x="65" y="154" fontSize="11" fill="var(--text-secondary)">
             &#47;&#47; private = 只能本类访问
           </text>
 
@@ -99,24 +99,24 @@ export function JctOopDesignDiagram() {
             x="370"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
             构造器
           </text>
-          <text x="280" y="114" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="114" fontSize="11" fill="var(--text-secondary)">
             public Employee(String n,
           </text>
-          <text x="280" y="128" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="128" fontSize="11" fill="var(--text-secondary)">
             {" "}
             double s, int year, ...) &#123;
           </text>
-          <text x="280" y="142" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="142" fontSize="11" fill="var(--text-secondary)">
             {" "}
             name = n; salary = s;
           </text>
-          <text x="280" y="154" fontSize="9" fill="var(--text-secondary)">
+          <text x="280" y="154" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
 
@@ -135,23 +135,23 @@ export function JctOopDesignDiagram() {
             x="585"
             y="98"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
             方法
           </text>
-          <text x="495" y="114" fontSize="9" fill="var(--text-secondary)">
+          <text x="495" y="114" fontSize="11" fill="var(--text-secondary)">
             public String getName() &#123;
           </text>
-          <text x="495" y="128" fontSize="9" fill="var(--text-secondary)">
+          <text x="495" y="128" fontSize="11" fill="var(--text-secondary)">
             {" "}
             return name;
           </text>
-          <text x="495" y="142" fontSize="9" fill="var(--text-secondary)">
+          <text x="495" y="142" fontSize="11" fill="var(--text-secondary)">
             &#125;
           </text>
-          <text x="495" y="154" fontSize="9" fill="var(--text-secondary)">
+          <text x="495" y="154" fontSize="11" fill="var(--text-secondary)">
             public void raiseSalary(double p)
           </text>
 
@@ -192,7 +192,7 @@ export function JctOopDesignDiagram() {
             x="370"
             y="244"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             name / salary / hireDate
@@ -242,7 +242,7 @@ export function JctOopDesignDiagram() {
             x="160"
             y="326"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             bonus / setBonus / getSalary
@@ -273,7 +273,7 @@ export function JctOopDesignDiagram() {
             x="580"
             y="326"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             super.getSalary() + bonus
@@ -302,19 +302,19 @@ export function JctOopDesignDiagram() {
             stroke="var(--danger)"
             strokeWidth="1.2"
           />
-          <text x="55" y="406" fontSize="10" fill="var(--text-secondary)">
+          <text x="55" y="406" fontSize="11" fill="var(--text-secondary)">
             Employee[] staff = new Employee[2];
           </text>
-          <text x="55" y="422" fontSize="10" fill="var(--text-secondary)">
+          <text x="55" y="422" fontSize="11" fill="var(--text-secondary)">
             staff[0] = new Employee(&quot;Alice&quot;, 50000);
           </text>
-          <text x="55" y="438" fontSize="10" fill="var(--text-secondary)">
+          <text x="55" y="438" fontSize="11" fill="var(--text-secondary)">
             staff[1] = new Manager(&quot;Bob&quot;, 80000);
           </text>
-          <text x="55" y="458" fontSize="10" fill="var(--text-secondary)">
+          <text x="55" y="458" fontSize="11" fill="var(--text-secondary)">
             staff[0].getSalary(); // 50000
           </text>
-          <text x="55" y="474" fontSize="10" fill="var(--text-secondary)">
+          <text x="55" y="474" fontSize="11" fill="var(--text-secondary)">
             staff[1].getSalary(); // 80000+bonus
           </text>
 
@@ -339,16 +339,16 @@ export function JctOopDesignDiagram() {
           >
             多态三要素
           </text>
-          <text x="405" y="424" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="424" fontSize="11" fill="var(--text-secondary)">
             1. 继承: Manager extends Employee
           </text>
-          <text x="405" y="440" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="440" fontSize="11" fill="var(--text-secondary)">
             2. 重写: Manager 重写 getSalary()
           </text>
-          <text x="405" y="456" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="456" fontSize="11" fill="var(--text-secondary)">
             3. 父类引用指向子类对象
           </text>
-          <text x="405" y="472" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="472" fontSize="11" fill="var(--text-secondary)">
             {" "}
             运行时动态绑定实际方法
           </text>

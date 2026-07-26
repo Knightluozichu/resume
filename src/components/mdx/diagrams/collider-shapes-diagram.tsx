@@ -232,7 +232,7 @@ export function ColliderShapesDiagram() {
             x={VIEW_W / 2}
             y={COST_Y + 39}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             MeshCollider 用在动态（会动的）物体上必须勾

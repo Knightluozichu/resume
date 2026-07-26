@@ -47,28 +47,28 @@ export function FlaAdvancedFeaturesDiagram() {
 
           <rect x="420" y="66" width="250" height="50" rx="6" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="545" y="86" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">ViewModel</text>
-          <text x="545" y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">配置变更时保留数据（不随Activity重建销毁）</text>
-          <text x="545" y="112" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">ViewModelProvider(this).get()</text>
+          <text x="545" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">配置变更时保留数据（不随Activity重建销毁）</text>
+          <text x="545" y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">ViewModelProvider(this).get()</text>
 
           <rect x="420" y="126" width="250" height="50" rx="6" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
           <text x="545" y="146" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">LiveData</text>
-          <text x="545" y="160" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">可观察的数据持有者</text>
-          <text x="545" y="172" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">生命周期感知，自动管理订阅</text>
+          <text x="545" y="160" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">可观察的数据持有者</text>
+          <text x="545" y="172" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">生命周期感知，自动管理订阅</text>
 
           <rect x="420" y="186" width="250" height="50" rx="6" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
           <text x="545" y="206" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Room</text>
-          <text x="545" y="220" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">@Entity / @Dao / @Database</text>
-          <text x="545" y="232" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">编译期SQL检查 + 返回LiveData/Flow</text>
+          <text x="545" y="220" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">@Entity / @Dao / @Database</text>
+          <text x="545" y="232" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">编译期SQL检查 + 返回LiveData/Flow</text>
 
           <rect x="420" y="246" width="250" height="50" rx="6" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="545" y="266" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">Navigation Component</text>
-          <text x="545" y="280" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">导航图（NavGraph）管理Fragment跳转</text>
-          <text x="545" y="292" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">可视化编辑导航路径 + safe args传参</text>
+          <text x="545" y="280" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">导航图（NavGraph）管理Fragment跳转</text>
+          <text x="545" y="292" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">可视化编辑导航路径 + safe args传参</text>
 
           <rect x="420" y="306" width="250" height="50" rx="6" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="545" y="326" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">WorkManager</text>
-          <text x="545" y="340" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">可延迟/可约束的后台任务调度</text>
-          <text x="545" y="352" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">替代Service处理后台任务</text>
+          <text x="545" y="340" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">可延迟/可约束的后台任务调度</text>
+          <text x="545" y="352" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">替代Service处理后台任务</text>
 
           {/* 底部：MVVM架构与推荐架构 */}
           <rect x="30" y="380" width="680" height="80" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
@@ -87,11 +87,11 @@ export function FlaAdvancedFeaturesDiagram() {
           <rect x="480" y="414" width="210" height="34" rx="6" fill="var(--danger)" fillOpacity="0.1" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="585" y="436" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">Repository → Room / Retrofit</text>
 
-          <text x="370" y="478" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">UI层观察LiveData → ViewModel管理状态 → Repository协调本地(Room)和远程(Retrofit)数据源</text>
+          <text x="370" y="478" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">UI层观察LiveData → ViewModel管理状态 → Repository协调本地(Room)和远程(Retrofit)数据源</text>
 
           <text x="370" y="506" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Material Design = 视觉规范（怎么做界面好看）</text>
           <text x="370" y="524" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Jetpack = 架构规范（怎么写代码稳健）</text>
-          <text x="370" y="542" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">两者结合 = 现代 Android 开发（Modern Android Development, MAD）</text>
+          <text x="370" y="542" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">两者结合 = 现代 Android 开发（Modern Android Development, MAD）</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

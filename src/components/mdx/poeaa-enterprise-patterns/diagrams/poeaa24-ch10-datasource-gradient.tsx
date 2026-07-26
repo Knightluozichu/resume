@@ -77,8 +77,8 @@ export function Poeaa24Ch10DataSourceGradient() {
                 <rect x={x} y={topY + 20} width={boxW} height={8} fill={p.color} fillOpacity="0.12" />
                 <text x={x + boxW / 2} y={topY + 19} textAnchor="middle" fontSize="11" fontWeight="700" fill={p.color}>{p.name}</text>
                 {/* 描述 */}
-                <text x={x + 10} y={topY + 52} fontSize="10" fill={T.primary}>{p.desc}</text>
-                <text x={x + 10} y={topY + 72} fontSize="10" fill={T.secondary}>{p.detail}</text>
+                <text x={x + 10} y={topY + 52} fontSize="11" fill={T.primary}>{p.desc}</text>
+                <text x={x + 10} y={topY + 72} fontSize="11" fill={T.secondary}>{p.detail}</text>
                 {/* 序号 */}
                 <text x={x + boxW / 2} y={topY + boxH - 16} textAnchor="middle" fontSize="20" fontWeight="700" fill={p.color} fillOpacity="0.3">{i + 1}</text>
                 {/* 连接箭头 */}

@@ -37,7 +37,7 @@ export function ZFightingDiagram() {
           </text>
 
           {/* 侧视图：两条线段明显前后分开 */}
-          <text x="60" y="80" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="80" fontSize="11" fill="var(--text-secondary)">
             侧视
           </text>
           <line
@@ -48,7 +48,7 @@ export function ZFightingDiagram() {
             stroke="var(--warning)"
             strokeWidth="3"
           />
-          <text x="296" y="104" fontSize="10" fill="var(--warning)">
+          <text x="296" y="104" fontSize="11" fill="var(--warning)">
             远
           </text>
           <line
@@ -59,12 +59,12 @@ export function ZFightingDiagram() {
             stroke="var(--accent)"
             strokeWidth="3"
           />
-          <text x="296" y="128" fontSize="10" fill="var(--accent)">
+          <text x="296" y="128" fontSize="11" fill="var(--accent)">
             近
           </text>
 
           {/* 正视图：近面干净盖住 */}
-          <text x="60" y="168" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="168" fontSize="11" fill="var(--text-secondary)">
             正视
           </text>
           <rect
@@ -111,7 +111,7 @@ export function ZFightingDiagram() {
           </text>
 
           {/* 侧视图：两条线段几乎贴在一起 */}
-          <text x="400" y="80" fontSize="10" fill="var(--text-secondary)">
+          <text x="400" y="80" fontSize="11" fill="var(--text-secondary)">
             侧视
           </text>
           <line
@@ -130,12 +130,12 @@ export function ZFightingDiagram() {
             stroke="var(--accent)"
             strokeWidth="3"
           />
-          <text x="636" y="116" fontSize="10" fill="var(--text-secondary)">
+          <text x="636" y="116" fontSize="11" fill="var(--text-secondary)">
             ≈贴合
           </text>
 
           {/* 正视图：交替撕裂条纹 */}
-          <text x="400" y="168" fontSize="10" fill="var(--text-secondary)">
+          <text x="400" y="168" fontSize="11" fill="var(--text-secondary)">
             正视
           </text>
           <g>

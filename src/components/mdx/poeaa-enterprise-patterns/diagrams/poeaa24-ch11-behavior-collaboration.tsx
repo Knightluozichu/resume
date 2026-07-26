@@ -27,35 +27,35 @@ export function Poeaa24Ch11BehaviorCollaboration() {
           {/* Unit of Work 外框 */}
           <rect x={48} y={60} width={624} height={300} rx="12" fill={T.accent} fillOpacity="0.03" stroke={T.accent} strokeWidth="1.5" strokeDasharray="6 3" />
           <text x={64} y={84} fontSize="13" fontWeight="700" fill={T.accent}>Unit of Work</text>
-          <text x={64} y={102} fontSize="10" fill={T.secondary}>跟踪 new / dirty / removed 集合，commit() 时一次性写出</text>
+          <text x={64} y={102} fontSize="11" fill={T.secondary}>跟踪 new / dirty / removed 集合，commit() 时一次性写出</text>
 
           {/* Identity Map 内框 */}
           <rect x={80} y={120} width={380} height={216} rx="10" fill="#3FB97F" fillOpacity="0.04" stroke="#3FB97F" strokeWidth="1.5" />
           <text x={96} y={144} fontSize="13" fontWeight="700" fill="#3FB97F">Identity Map</text>
-          <text x={96} y={162} fontSize="10" fill={T.secondary}>Map&lt;ID, Object&gt; — 同一 ID 只存一个实例</text>
+          <text x={96} y={162} fontSize="11" fill={T.secondary}>Map&lt;ID, Object&gt; — 同一 ID 只存一个实例</text>
 
           {/* 对象实例 */}
           <rect x={104} y={180} width={140} height={56} rx="6" fill="#3FB97F" fillOpacity="0.08" stroke="#3FB97F" strokeWidth="1" />
           <text x={174} y={202} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.primary}>Order #1001</text>
-          <text x={174} y={220} textAnchor="middle" fontSize="10" fill={T.secondary}>status: dirty</text>
+          <text x={174} y={220} textAnchor="middle" fontSize="11" fill={T.secondary}>status: dirty</text>
 
           <rect x={104} y={252} width={140} height={56} rx="6" fill="#3FB97F" fillOpacity="0.08" stroke="#3FB97F" strokeWidth="1" />
           <text x={174} y={274} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.primary}>Customer #42</text>
-          <text x={174} y={292} textAnchor="middle" fontSize="10" fill={T.secondary}>status: clean</text>
+          <text x={174} y={292} textAnchor="middle" fontSize="11" fill={T.secondary}>status: clean</text>
 
           {/* Lazy Load 区域 */}
           <rect x={488} y={120} width={168} height={216} rx="10" fill="#E5B567" fillOpacity="0.04" stroke="#E5B567" strokeWidth="1.5" />
           <text x={572} y={144} textAnchor="middle" fontSize="13" fontWeight="700" fill="#E5B567">Lazy Load</text>
-          <text x={572} y={162} textAnchor="middle" fontSize="10" fill={T.secondary}>首次访问时加载</text>
+          <text x={572} y={162} textAnchor="middle" fontSize="11" fill={T.secondary}>首次访问时加载</text>
 
           {/* 关联属性 */}
           <rect x={504} y={180} width={136} height={44} rx="6" fill="#E5B567" fillOpacity="0.08" stroke="#E5B567" strokeWidth="1" />
-          <text x={572} y={200} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>order.items</text>
-          <text x={572} y={214} textAnchor="middle" fontSize="9" fill="#E5B567">→ 触发 SELECT</text>
+          <text x={572} y={200} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>order.items</text>
+          <text x={572} y={214} textAnchor="middle" fontSize="11" fill="#E5B567">→ 触发 SELECT</text>
 
           <rect x={504} y={240} width={136} height={44} rx="6" fill="#E5B567" fillOpacity="0.08" stroke="#E5B567" strokeWidth="1" />
-          <text x={572} y={260} textAnchor="middle" fontSize="10" fontFamily="monospace" fill={T.primary}>order.customer</text>
-          <text x={572} y={274} textAnchor="middle" fontSize="9" fill="#E5B567">→ 查 IdentityMap</text>
+          <text x={572} y={260} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>order.customer</text>
+          <text x={572} y={274} textAnchor="middle" fontSize="11" fill="#E5B567">→ 查 IdentityMap</text>
 
           {/* 连接线：Order → Lazy Load */}
           <defs>

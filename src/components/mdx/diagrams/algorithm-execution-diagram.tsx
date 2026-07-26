@@ -97,7 +97,7 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                   key={`idx-${i}`}
                   x={startX + i * (cellW + gap) + cellW / 2}
                   y={startY - 12}
-                  fontSize="9"
+                  fontSize="11"
                   fill={secondary}
                   textAnchor="middle"
                   fontFamily="monospace"
@@ -178,7 +178,7 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                         <text
                           x={startX + i * (cellW + gap) + cellW / 2}
                           y={startY + cellH + 36}
-                          fontSize="10"
+                          fontSize="11"
                           fill={accent}
                           textAnchor="middle"
                           fontFamily="monospace"
@@ -205,7 +205,7 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                         <text
                           x={startX + i * (cellW + gap) + cellW / 2}
                           y={startY + cellH + 20}
-                          fontSize="8"
+                          fontSize="11"
                           fill={secondary}
                           textAnchor="middle"
                         >
@@ -355,7 +355,7 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           <text
             x={w / 2}
             y={h - 20}
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >

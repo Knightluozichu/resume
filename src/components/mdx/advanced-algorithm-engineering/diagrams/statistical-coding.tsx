@@ -17,7 +17,7 @@ export function PaeModelCoderPipelineDiagram() {
           {stages.map(([title, detail], index) => (
             <div key={title} className="relative border border-border bg-background p-3 text-center">
               <div className="text-xs font-semibold text-accent">{index + 1}. {title}</div>
-              <div className="mt-2 min-h-10 text-xs leading-5 text-secondary">{detail}</div>
+              <div className="mt-2 min-h-11 text-xs leading-5 text-secondary">{detail}</div>
               {index < stages.length - 1 ? <span className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 bg-elevated px-1 text-accent sm:block">→</span> : null}
             </div>
           ))}
@@ -188,7 +188,7 @@ export function PaePpmContextLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="text-sm font-semibold text-primary">前缀 abracadabra，K=2；选择下一个符号</div>
         <div className="mt-3 flex gap-2" role="group" aria-label="选择 PPM 下一个字符">
-          {(["c", "d", "e"] as const).map((symbol) => <button key={symbol} type="button" onClick={() => setNext(symbol)} className={"min-h-10 min-w-12 border px-4 text-sm font-semibold " + (next === symbol ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{symbol}</button>)}
+          {(["c", "d", "e"] as const).map((symbol) => <button key={symbol} type="button" onClick={() => setNext(symbol)} className={"min-h-11 min-w-12 border px-4 text-sm font-semibold " + (next === symbol ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{symbol}</button>)}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-4">
           {ppmCases[next].map(([order, prediction, note], index) => <div key={order} className={"relative border p-3 text-xs " + (index === ppmCases[next].length - 1 ? "border-success bg-success/10" : "border-border bg-background")}><div className="font-semibold text-accent">{order}</div><div className="mt-2 font-mono text-primary">{prediction}</div><div className="mt-2 leading-5 text-secondary">{note}</div>{index < ppmCases[next].length - 1 ? <div className="mt-2 text-accent">escape ↓</div> : null}</div>)}

@@ -40,7 +40,7 @@ export function Jg1YoungGcDiagram() {
             <g key={i}>
               <rect x="40" y={s.y} width="660" height="48" rx="6" fill={s.color} fillOpacity="0.10" stroke={s.color} strokeWidth="1.2" />
               <text x="60" y={s.y + 22} fontSize="12" fontWeight="600" fill={s.color}>{s.label}</text>
-              <text x="60" y={s.y + 38} fontSize="10" fill="var(--text-secondary)">{s.desc}</text>
+              <text x="60" y={s.y + 38} fontSize="11" fill="var(--text-secondary)">{s.desc}</text>
               {i < 6 && <line x1="370" y1={s.y + 48} x2="370" y2={s.y + 56} stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrYg)" />}
             </g>
           ))}

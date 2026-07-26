@@ -31,45 +31,45 @@ export function Jg1GcCycleDiagram() {
           {/* 阶段1: Initial Mark (STW) */}
           <rect x="30" y="56" width="120" height="80" rx="6" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.5" />
           <text x="90" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">① 初始标记</text>
-          <text x="90" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Initial Mark</text>
-          <text x="90" y="112" textAnchor="middle" fontSize="10" fill="var(--danger)">STW</text>
-          <text x="90" y="128" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">搭便车Young GC</text>
+          <text x="90" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Initial Mark</text>
+          <text x="90" y="112" textAnchor="middle" fontSize="11" fill="var(--danger)">STW</text>
+          <text x="90" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">搭便车Young GC</text>
 
           <line x1="150" y1="96" x2="168" y2="96" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrCy)" />
 
           {/* 阶段2: Concurrent Mark */}
           <rect x="170" y="56" width="120" height="80" rx="6" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.5" />
           <text x="230" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">② 并发标记</text>
-          <text x="230" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Concurrent Mark</text>
-          <text x="230" y="112" textAnchor="middle" fontSize="10" fill="var(--success)">并发</text>
-          <text x="230" y="128" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">沿引用链标记</text>
+          <text x="230" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Concurrent Mark</text>
+          <text x="230" y="112" textAnchor="middle" fontSize="11" fill="var(--success)">并发</text>
+          <text x="230" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">沿引用链标记</text>
 
           <line x1="290" y1="96" x2="308" y2="96" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrCy)" />
 
           {/* 阶段3: Remark (STW) */}
           <rect x="310" y="56" width="120" height="80" rx="6" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.5" />
           <text x="370" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">③ 最终标记</text>
-          <text x="370" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Remark</text>
-          <text x="370" y="112" textAnchor="middle" fontSize="10" fill="var(--danger)">STW</text>
-          <text x="370" y="128" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">处理SATB队列</text>
+          <text x="370" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Remark</text>
+          <text x="370" y="112" textAnchor="middle" fontSize="11" fill="var(--danger)">STW</text>
+          <text x="370" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">处理SATB队列</text>
 
           <line x1="430" y1="96" x2="448" y2="96" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrCy)" />
 
           {/* 阶段4: Cleanup (STW) */}
           <rect x="450" y="56" width="120" height="80" rx="6" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.5" />
           <text x="510" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">④ 清理</text>
-          <text x="510" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Cleanup</text>
-          <text x="510" y="112" textAnchor="middle" fontSize="10" fill="var(--warning)">部分STW</text>
-          <text x="510" y="128" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">选CSet候选</text>
+          <text x="510" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Cleanup</text>
+          <text x="510" y="112" textAnchor="middle" fontSize="11" fill="var(--warning)">部分STW</text>
+          <text x="510" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">选CSet候选</text>
 
           <line x1="570" y1="96" x2="588" y2="96" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrCy)" />
 
           {/* 阶段5: Evacuation (Mixed GC, STW) */}
           <rect x="590" y="56" width="130" height="80" rx="6" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="655" y="78" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">⑤ 疏散回收</text>
-          <text x="655" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Mixed GC</text>
-          <text x="655" y="112" textAnchor="middle" fontSize="10" fill="var(--accent)">STW</text>
-          <text x="655" y="128" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">复制存活对象</text>
+          <text x="655" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Mixed GC</text>
+          <text x="655" y="112" textAnchor="middle" fontSize="11" fill="var(--accent)">STW</text>
+          <text x="655" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">复制存活对象</text>
 
           {/* IHOP触发线 */}
           <rect x="30" y="156" width="690" height="40" rx="6" fill="var(--text-primary)" fillOpacity="0.06" stroke="var(--text-primary)" strokeWidth="1" strokeOpacity="0.3" />
@@ -92,19 +92,19 @@ export function Jg1GcCycleDiagram() {
           ].map((r, i) => (
             <g key={i}>
               <rect x="45" y={r.y} width="310" height="16" rx="3" fill={r.color} fillOpacity={r.sel ? 0.15 : 0.05} stroke={r.color} strokeWidth="0.8" />
-              <text x="55" y={r.y + 12} fontSize="10" fill={r.sel ? "var(--text-primary)" : "var(--text-tertiary)"}>{r.label}</text>
-              <text x="340" y={r.y + 12} textAnchor="end" fontSize="10" fontWeight="600" fill={r.sel ? "var(--success)" : "var(--text-tertiary)"}>{r.sel ? "✓ 选入CSet" : "✗ 跳过"}</text>
+              <text x="55" y={r.y + 12} fontSize="11" fill={r.sel ? "var(--text-primary)" : "var(--text-tertiary)"}>{r.label}</text>
+              <text x="340" y={r.y + 12} textAnchor="end" fontSize="11" fontWeight="600" fill={r.sel ? "var(--success)" : "var(--text-tertiary)"}>{r.sel ? "✓ 选入CSet" : "✗ 跳过"}</text>
             </g>
           ))}
 
           {/* 时间预算计算 */}
           <rect x="390" y="240" width="330" height="130" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.3" />
           <text x="555" y="260" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">时间预算计算</text>
-          <text x="405" y="280" fontSize="10" fill="var(--text-secondary)">预算 = MaxGCPauseMillis（如200ms）</text>
-          <text x="405" y="298" fontSize="10" fill="var(--text-secondary)">- 新生代Region预估回收时间</text>
-          <text x="405" y="316" fontSize="10" fill="var(--text-secondary)">- 固定开销（根扫描/RSets更新）</text>
-          <text x="405" y="334" fontSize="10" fill="var(--text-secondary)">= 可用于Old Region回收的预算</text>
-          <text x="405" y="356" fontSize="10" fontWeight="600" fill="var(--accent)">贪心选择：按性价比降序，超预算则停</text>
+          <text x="405" y="280" fontSize="11" fill="var(--text-secondary)">预算 = MaxGCPauseMillis（如200ms）</text>
+          <text x="405" y="298" fontSize="11" fill="var(--text-secondary)">- 新生代Region预估回收时间</text>
+          <text x="405" y="316" fontSize="11" fill="var(--text-secondary)">- 固定开销（根扫描/RSets更新）</text>
+          <text x="405" y="334" fontSize="11" fill="var(--text-secondary)">= 可用于Old Region回收的预算</text>
+          <text x="405" y="356" fontSize="11" fontWeight="600" fill="var(--accent)">贪心选择：按性价比降序，超预算则停</text>
 
           {/* Mixed GC多次分批 */}
           <rect x="30" y="390" width="690" height="56" rx="8" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1" strokeOpacity="0.3" />

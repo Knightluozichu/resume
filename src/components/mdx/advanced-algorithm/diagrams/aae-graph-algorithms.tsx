@@ -134,7 +134,7 @@ export function AaeGraphAlgorithmsDiagram() {
               />
             );
           })}
-          <text x={470} y={196} fontSize="10" fill={accent} fillOpacity="0.8">h(n) 启发式</text>
+          <text x={470} y={196} fontSize="11" fill={accent} fillOpacity="0.8">h(n) 启发式</text>
 
           {/* ===== 边 ===== */}
           {EDGES.map((e) => {
@@ -166,14 +166,14 @@ export function AaeGraphAlgorithmsDiagram() {
                 {e.kind === "maxflow" ? (
                   <g>
                     <rect x={lx - 16} y={ly - 9} width="32" height="16" rx="3" fill={warning} fillOpacity="0.18" stroke={warning} strokeWidth="1" />
-                    <text x={lx} y={ly + 3} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={warning} fontFamily="monospace">
+                    <text x={lx} y={ly + 3} textAnchor="middle" fontSize="11" fontWeight="700" fill={warning} fontFamily="monospace">
                       cap{e.cap}
                     </text>
                   </g>
                 ) : (
                   <g>
                     <rect x={lx - 9} y={ly - 9} width="18" height="16" rx="3" fill={elevated} stroke={isHi ? color : border} strokeWidth="1" strokeOpacity={isHi ? 0.6 : 0.5} />
-                    <text x={lx} y={ly + 3} textAnchor="middle" fontSize="10.5" fontWeight={isHi ? 700 : 500} fill={isHi ? color : secondary} fontFamily="monospace">
+                    <text x={lx} y={ly + 3} textAnchor="middle" fontSize="11" fontWeight={isHi ? 700 : 500} fill={isHi ? color : secondary} fontFamily="monospace">
                       {e.w}
                     </text>
                   </g>
@@ -190,7 +190,7 @@ export function AaeGraphAlgorithmsDiagram() {
                 {n.label}
               </text>
               {n.sub && (
-                <text x={n.x} y={n.y + R + 13} textAnchor="middle" fontSize="10" fill={secondary}>
+                <text x={n.x} y={n.y + R + 13} textAnchor="middle" fontSize="11" fill={secondary}>
                   {n.sub}
                 </text>
               )}

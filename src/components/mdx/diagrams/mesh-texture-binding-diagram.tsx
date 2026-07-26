@@ -88,7 +88,7 @@ export function MeshTextureBindingDiagram() {
                     x="115"
                     y={y + 21}
                     textAnchor="middle"
-                    fontSize="10.5"
+                    fontSize="11"
                     fill="var(--text-primary)"
                   >
                     第 {i} 张纹理
@@ -97,7 +97,7 @@ export function MeshTextureBindingDiagram() {
                     x="115"
                     y={y + 39}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill="var(--text-secondary)"
                   >
@@ -129,7 +129,7 @@ export function MeshTextureBindingDiagram() {
                     x="360"
                     y={y + 14}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill="var(--accent)"
                   >
@@ -139,7 +139,7 @@ export function MeshTextureBindingDiagram() {
                     x="360"
                     y={y + 32}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     glActiveTexture(GL_TEXTURE0+{r.unit})
@@ -148,7 +148,7 @@ export function MeshTextureBindingDiagram() {
                     x="360"
                     y={y + 48}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill="var(--warning)"
                   >
@@ -181,7 +181,7 @@ export function MeshTextureBindingDiagram() {
                     x="610"
                     y={y + 21}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     uniform sampler2D
@@ -190,7 +190,7 @@ export function MeshTextureBindingDiagram() {
                     x="610"
                     y={y + 39}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fontFamily="monospace"
                     fill="var(--text-primary)"
                   >
@@ -206,7 +206,7 @@ export function MeshTextureBindingDiagram() {
             x="360"
             y="360"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             按 type 各自从 1 数序号：diffuse → 1、2…；specular → 1…，拼出与

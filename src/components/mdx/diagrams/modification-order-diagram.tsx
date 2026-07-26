@@ -362,7 +362,7 @@ export function ModificationOrderDiagram() {
                     x={x + CELL_W / 2}
                     y={ORDER_Y + 18}
                     textAnchor="middle"
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {`第 ${w.orderIndex + 1} 笔`}
@@ -398,7 +398,7 @@ export function ModificationOrderDiagram() {
             x={LANE_X + LANE_W}
             y={ORDER_Y + CELL_H + 16}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             先 → 后

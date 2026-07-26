@@ -109,7 +109,7 @@ export function InstancingDiagram() {
             x="178"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             配一张表
@@ -184,7 +184,7 @@ export function InstancingDiagram() {
             x="320"
             y="252"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             第 i 行 = 着色器里 gl_InstanceID == i 那一份
@@ -204,7 +204,7 @@ export function InstancingDiagram() {
             x="462"
             y="111"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             照表盖出
@@ -234,7 +234,7 @@ export function InstancingDiagram() {
                 x={p.x}
                 y={p.y + 9}
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fontFamily="monospace"
                 fill="var(--text-primary)"
               >

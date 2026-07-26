@@ -155,7 +155,7 @@ export function LiteralTypesDiagram() {
                       <text
                         x={cx + 14}
                         y={iy + 16}
-                        fontSize="10"
+                        fontSize="11"
                         fill="var(--text-secondary)"
                       >
                         {item.desc}
@@ -236,7 +236,7 @@ export function LiteralTypesDiagram() {
           <text
             x={startX + 24}
             y={escapeStartY + 216}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             换行 \n(0x0A)、回车 \r(0x0D)、制表

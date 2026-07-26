@@ -66,7 +66,7 @@ export function IntegerRangeDiagram() {
                 </text>
 
                 {/* Signed 数轴 */}
-                <text x={centerX - halfW - 16} y={y + 24} fontSize="10" fill="var(--text-secondary)" textAnchor="end">
+                <text x={centerX - halfW - 16} y={y + 24} fontSize="11" fill="var(--text-secondary)" textAnchor="end">
                   signed
                 </text>
                 <rect
@@ -90,18 +90,18 @@ export function IntegerRangeDiagram() {
                   strokeWidth="1"
                   strokeDasharray="3 3"
                 />
-                <text x={centerX - halfW + 4} y={y + 24} fontSize="9" fill={bar.color} fontFamily="monospace">
+                <text x={centerX - halfW + 4} y={y + 24} fontSize="11" fill={bar.color} fontFamily="monospace">
                   {bar.signedMin}
                 </text>
-                <text x={centerX + 4} y={y + 24} fontSize="9" fill="var(--text-primary)" fontFamily="monospace">
+                <text x={centerX + 4} y={y + 24} fontSize="11" fill="var(--text-primary)" fontFamily="monospace">
                   0
                 </text>
-                <text x={centerX + halfW - 4} y={y + 24} fontSize="9" fill={bar.color} textAnchor="end" fontFamily="monospace">
+                <text x={centerX + halfW - 4} y={y + 24} fontSize="11" fill={bar.color} textAnchor="end" fontFamily="monospace">
                   {bar.signedMax}
                 </text>
 
                 {/* Unsigned 数轴 */}
-                <text x={centerX - halfW - 16} y={y + 45} fontSize="10" fill="var(--text-secondary)" textAnchor="end">
+                <text x={centerX - halfW - 16} y={y + 45} fontSize="11" fill="var(--text-secondary)" textAnchor="end">
                   unsigned
                 </text>
                 <rect
@@ -115,10 +115,10 @@ export function IntegerRangeDiagram() {
                   stroke="rgb(229,181,103)"
                   strokeWidth="1"
                 />
-                <text x={centerX + 4} y={y + 46} fontSize="9" fill="rgb(229,181,103)" fontFamily="monospace">
+                <text x={centerX + 4} y={y + 46} fontSize="11" fill="rgb(229,181,103)" fontFamily="monospace">
                   0
                 </text>
-                <text x={centerX + halfW - 4} y={y + 46} fontSize="9" fill="rgb(229,181,103)" textAnchor="end" fontFamily="monospace">
+                <text x={centerX + halfW - 4} y={y + 46} fontSize="11" fill="rgb(229,181,103)" textAnchor="end" fontFamily="monospace">
                   {bar.unsignedMax}
                 </text>
               </g>

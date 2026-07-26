@@ -12,22 +12,22 @@ export function Poeaa24Pattern38ClientSessionState() {
           {/* 客户端 */}
           <rect x={48} y={64} width={240} height={110} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.2" />
           <text x={168} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">客户端（浏览器）</text>
-          <text x={64} y={108} fontSize="9" fontFamily="monospace" fill={T.primary}>Cookie: cart=[...]</text>
-          <text x={64} y={126} fontSize="9" fontFamily="monospace" fill={T.primary}>Hidden: step=2</text>
-          <text x={64} y={144} fontSize="9" fontFamily="monospace" fill={T.primary}>URL: ?session=xyz</text>
-          <text x={64} y={162} fontSize="9" fill={T.secondary}>每次请求携带全部状态</text>
+          <text x={64} y={108} fontSize="11" fontFamily="monospace" fill={T.primary}>Cookie: cart=[...]</text>
+          <text x={64} y={126} fontSize="11" fontFamily="monospace" fill={T.primary}>Hidden: step=2</text>
+          <text x={64} y={144} fontSize="11" fontFamily="monospace" fill={T.primary}>URL: ?session=xyz</text>
+          <text x={64} y={162} fontSize="11" fill={T.secondary}>每次请求携带全部状态</text>
           {/* 双向箭头 */}
           <line x1={288} y1={100} x2={420} y2={100} stroke={T.accent} strokeWidth="1.5" />
-          <text x={354} y={92} textAnchor="middle" fontSize="9" fill={T.accent}>请求（带状态）</text>
+          <text x={354} y={92} textAnchor="middle" fontSize="11" fill={T.accent}>请求（带状态）</text>
           <line x1={420} y1={130} x2={288} y2={130} stroke={T.border} strokeWidth="1.2" />
-          <text x={354} y={146} textAnchor="middle" fontSize="9" fill={T.secondary}>响应（更新状态）</text>
+          <text x={354} y={146} textAnchor="middle" fontSize="11" fill={T.secondary}>响应（更新状态）</text>
           {/* 服务器 */}
           <rect x={420} y={64} width={260} height={110} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={550} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>服务器（无状态）</text>
-          <text x={436} y={110} fontSize="9" fill={T.secondary}>不存储会话数据</text>
-          <text x={436} y={128} fontSize="9" fill={T.secondary}>任意节点可处理请求</text>
-          <text x={436} y={146} fontSize="9" fill={T.secondary}>水平扩展简单</text>
-          <text x={436} y={164} fontSize="9" fill={T.secondary}>需防篡改（签名/加密）</text>
+          <text x={436} y={110} fontSize="11" fill={T.secondary}>不存储会话数据</text>
+          <text x={436} y={128} fontSize="11" fill={T.secondary}>任意节点可处理请求</text>
+          <text x={436} y={146} fontSize="11" fill={T.secondary}>水平扩展简单</text>
+          <text x={436} y={164} fontSize="11" fill={T.secondary}>需防篡改（签名/加密）</text>
           {/* 底部说明 */}
           <rect x={48} y={200} width={624} height={64} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={224} fontSize="11" fontWeight="600" fill={T.primary}>适用与限制：</text>

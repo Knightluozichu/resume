@@ -153,7 +153,7 @@ export function DsaDfsApplicationsLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {(["SCC", "articulation", "Euler"] as DfsApplication[]).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setApplication(candidate)} className={"min-h-10 border text-xs font-semibold " + (application === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setApplication(candidate)} className={"min-h-11 border text-xs font-semibold " + (application === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">

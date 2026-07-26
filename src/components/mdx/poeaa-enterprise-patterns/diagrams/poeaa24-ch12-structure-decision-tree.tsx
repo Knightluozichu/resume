@@ -35,54 +35,54 @@ export function Poeaa24Ch12StructureDecisionTree() {
           <line x1={410} y1={92} x2={600} y2={130} stroke={T.border} strokeWidth="1" />
 
           {/* 分支标签 */}
-          <text x={200} y={116} textAnchor="middle" fontSize="10" fill={T.secondary}>身份</text>
-          <text x={300} y={116} textAnchor="middle" fontSize="10" fill={T.secondary}>关联</text>
-          <text x={420} y={116} textAnchor="middle" fontSize="10" fill={T.secondary}>从属/值</text>
-          <text x={520} y={116} textAnchor="middle" fontSize="10" fill={T.secondary}>复杂图</text>
+          <text x={200} y={116} textAnchor="middle" fontSize="11" fill={T.secondary}>身份</text>
+          <text x={300} y={116} textAnchor="middle" fontSize="11" fill={T.secondary}>关联</text>
+          <text x={420} y={116} textAnchor="middle" fontSize="11" fill={T.secondary}>从属/值</text>
+          <text x={520} y={116} textAnchor="middle" fontSize="11" fill={T.secondary}>复杂图</text>
 
           {/* Identity Field */}
           <rect x={48} y={130} width={152} height={72} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.5" />
           <text x={124} y={152} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">Identity Field</text>
-          <text x={124} y={170} textAnchor="middle" fontSize="10" fill={T.secondary}>对象 ↔ 行 的 ID 桥梁</text>
-          <text x={124} y={186} textAnchor="middle" fontSize="10" fill={T.secondary}>几乎所有映射都需要</text>
+          <text x={124} y={170} textAnchor="middle" fontSize="11" fill={T.secondary}>对象 ↔ 行 的 ID 桥梁</text>
+          <text x={124} y={186} textAnchor="middle" fontSize="11" fill={T.secondary}>几乎所有映射都需要</text>
 
           {/* 关联子决策 */}
           <rect x={216} y={130} width={136} height={36} rx="6" fill={T.primary} fillOpacity="0.04" stroke={T.border} strokeWidth="1" />
-          <text x={284} y={153} textAnchor="middle" fontSize="10" fill={T.primary}>多对多？</text>
+          <text x={284} y={153} textAnchor="middle" fontSize="11" fill={T.primary}>多对多？</text>
 
           <line x1={260} y1={166} x2={232} y2={196} stroke={T.border} strokeWidth="1" />
           <line x1={308} y1={166} x2={336} y2={196} stroke={T.border} strokeWidth="1" />
-          <text x={236} y={184} fontSize="9" fill={T.secondary}>否</text>
-          <text x={320} y={184} fontSize="9" fill={T.secondary}>是</text>
+          <text x={236} y={184} fontSize="11" fill={T.secondary}>否</text>
+          <text x={320} y={184} fontSize="11" fill={T.secondary}>是</text>
 
           {/* Foreign Key */}
           <rect x={168} y={196} width={136} height={64} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.5" />
           <text x={236} y={218} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">Foreign Key</text>
-          <text x={236} y={236} textAnchor="middle" fontSize="10" fill={T.secondary}>一对多：FK 在子表</text>
-          <text x={236} y={250} textAnchor="middle" fontSize="10" fill={T.secondary}>最自然的关联方式</text>
+          <text x={236} y={236} textAnchor="middle" fontSize="11" fill={T.secondary}>一对多：FK 在子表</text>
+          <text x={236} y={250} textAnchor="middle" fontSize="11" fill={T.secondary}>最自然的关联方式</text>
 
           {/* Association Table */}
           <rect x={316} y={196} width={148} height={64} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.5" />
           <text x={390} y={218} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">Association Table</text>
-          <text x={390} y={236} textAnchor="middle" fontSize="10" fill={T.secondary}>多对多：中间表存对</text>
-          <text x={390} y={250} textAnchor="middle" fontSize="10" fill={T.secondary}>两个 FK 组成一行</text>
+          <text x={390} y={236} textAnchor="middle" fontSize="11" fill={T.secondary}>多对多：中间表存对</text>
+          <text x={390} y={250} textAnchor="middle" fontSize="11" fill={T.secondary}>两个 FK 组成一行</text>
 
           {/* Dependent Mapping */}
           <rect x={380} y={130} width={148} height={72} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={454} y={152} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>Dependent Mapping</text>
-          <text x={454} y={170} textAnchor="middle" fontSize="10" fill={T.secondary}>从属对象无独立 ID</text>
-          <text x={454} y={186} textAnchor="middle" fontSize="10" fill={T.secondary}>生命周期跟随父对象</text>
+          <text x={454} y={170} textAnchor="middle" fontSize="11" fill={T.secondary}>从属对象无独立 ID</text>
+          <text x={454} y={186} textAnchor="middle" fontSize="11" fill={T.secondary}>生命周期跟随父对象</text>
 
           {/* Embedded Value + Serialized LOB */}
           <rect x={544} y={130} width={148} height={72} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.5" />
           <text x={618} y={152} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">Embedded Value</text>
-          <text x={618} y={170} textAnchor="middle" fontSize="10" fill={T.secondary}>值对象 → 父表的列</text>
-          <text x={618} y={186} textAnchor="middle" fontSize="10" fill={T.secondary}>如 Address → 3 列</text>
+          <text x={618} y={170} textAnchor="middle" fontSize="11" fill={T.secondary}>值对象 → 父表的列</text>
+          <text x={618} y={186} textAnchor="middle" fontSize="11" fill={T.secondary}>如 Address → 3 列</text>
 
           <rect x={544} y={216} width={148} height={64} rx="8" fill={T.danger} fillOpacity="0.06" stroke={T.danger} strokeWidth="1.5" />
           <text x={618} y={238} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.danger}>Serialized LOB</text>
-          <text x={618} y={256} textAnchor="middle" fontSize="10" fill={T.secondary}>整个对象图 → 一列</text>
-          <text x={618} y={270} textAnchor="middle" fontSize="10" fill={T.secondary}>牺牲查询换取简单</text>
+          <text x={618} y={256} textAnchor="middle" fontSize="11" fill={T.secondary}>整个对象图 → 一列</text>
+          <text x={618} y={270} textAnchor="middle" fontSize="11" fill={T.secondary}>牺牲查询换取简单</text>
 
           {/* 底部总结 */}
           <line x1={48} y1={310} x2={672} y2={310} stroke={T.border} strokeWidth="0.8" />

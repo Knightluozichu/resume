@@ -43,7 +43,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
             x="44"
             y="172"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             镜头
@@ -61,7 +61,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
             x="466"
             y="112"
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             越往右越远 →
@@ -84,7 +84,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="441"
                 y="200"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 不透明墙
@@ -111,7 +111,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="158"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--accent)"
               >
                 ①近(先画)
@@ -132,7 +132,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="258"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 被丢弃
@@ -153,7 +153,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="358"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 被丢弃
@@ -179,7 +179,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="158"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 ③近(后画)
@@ -199,7 +199,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="258"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 ②中
@@ -219,7 +219,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="358"
                 y="196"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 ①远(先画)
@@ -270,7 +270,7 @@ export function BlendSortStepDiagram({ step }: { step: BlendSortStep }) {
                 x="260"
                 y="252"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 把「底」铺好，半透明物随后再画

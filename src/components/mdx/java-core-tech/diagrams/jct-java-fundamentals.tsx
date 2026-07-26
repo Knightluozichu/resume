@@ -75,7 +75,7 @@ export function JctJavaFundamentalsDiagram() {
             x="95"
             y="110"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             -128 ~ 127
@@ -106,7 +106,7 @@ export function JctJavaFundamentalsDiagram() {
             x="205"
             y="110"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             -32768 ~ 32767
@@ -137,7 +137,7 @@ export function JctJavaFundamentalsDiagram() {
             x="315"
             y="110"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             默认整数类型
@@ -168,7 +168,7 @@ export function JctJavaFundamentalsDiagram() {
             x="95"
             y="150"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             需加 L 后缀
@@ -199,7 +199,7 @@ export function JctJavaFundamentalsDiagram() {
             x="205"
             y="150"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             需加 F 后缀
@@ -230,7 +230,7 @@ export function JctJavaFundamentalsDiagram() {
             x="315"
             y="150"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             默认浮点类型
@@ -261,7 +261,7 @@ export function JctJavaFundamentalsDiagram() {
             x="120"
             y="190"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Unicode字符
@@ -292,7 +292,7 @@ export function JctJavaFundamentalsDiagram() {
             x="280"
             y="190"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             true / false
@@ -302,7 +302,7 @@ export function JctJavaFundamentalsDiagram() {
             x="200"
             y="222"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             基本类型直接存值, 存于栈内存
@@ -311,7 +311,7 @@ export function JctJavaFundamentalsDiagram() {
             x="200"
             y="238"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             自动装箱: int &rarr; Integer
@@ -339,31 +339,31 @@ export function JctJavaFundamentalsDiagram() {
           >
             引用类型
           </text>
-          <text x="405" y="92" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="92" fontSize="11" fill="var(--text-secondary)">
             String s = &quot;Hello&quot;; // 不可变
           </text>
-          <text x="405" y="110" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="110" fontSize="11" fill="var(--text-secondary)">
             int[] arr = new int[5]; // 数组
           </text>
-          <text x="405" y="128" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="128" fontSize="11" fill="var(--text-secondary)">
             Object o = new Object();
           </text>
-          <text x="405" y="146" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="146" fontSize="11" fill="var(--text-secondary)">
             Integer i = 42; // 包装类
           </text>
-          <text x="405" y="168" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="168" fontSize="11" fill="var(--text-secondary)">
             引用类型存地址, 存于堆内存
           </text>
-          <text x="405" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="184" fontSize="11" fill="var(--text-secondary)">
             ==比较地址, equals比较内容
           </text>
-          <text x="405" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="200" fontSize="11" fill="var(--text-secondary)">
             String 不可变, 修改创建新对象
           </text>
-          <text x="405" y="216" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="216" fontSize="11" fill="var(--text-secondary)">
             StringBuilder 可变字符串
           </text>
-          <text x="405" y="238" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="238" fontSize="11" fill="var(--text-secondary)">
             null 表示引用不指向任何对象
           </text>
 
@@ -404,7 +404,7 @@ export function JctJavaFundamentalsDiagram() {
             x="140"
             y="328"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             if / else if / else
@@ -413,7 +413,7 @@ export function JctJavaFundamentalsDiagram() {
             x="140"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             switch / case / yield
@@ -444,7 +444,7 @@ export function JctJavaFundamentalsDiagram() {
             x="370"
             y="328"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             for / while / do-while
@@ -453,7 +453,7 @@ export function JctJavaFundamentalsDiagram() {
             x="370"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             for-each / break / continue
@@ -484,7 +484,7 @@ export function JctJavaFundamentalsDiagram() {
             x="600"
             y="328"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             try / catch / finally
@@ -493,7 +493,7 @@ export function JctJavaFundamentalsDiagram() {
             x="600"
             y="342"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             throw / throws / try-with
@@ -522,19 +522,19 @@ export function JctJavaFundamentalsDiagram() {
           >
             变量与运算符
           </text>
-          <text x="45" y="412" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="412" fontSize="11" fill="var(--text-secondary)">
             int x = 10; double y = 3.14;
           </text>
-          <text x="45" y="428" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="428" fontSize="11" fill="var(--text-secondary)">
             var z = &quot;推断类型&quot;; // Java 10+
           </text>
-          <text x="45" y="444" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="444" fontSize="11" fill="var(--text-secondary)">
             算术: + - * / % 关系: == != &lt; &gt;
           </text>
-          <text x="45" y="460" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="460" fontSize="11" fill="var(--text-secondary)">
             逻辑: &amp;&amp; || ! 位: &amp; | ^ ~
           </text>
-          <text x="45" y="476" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="476" fontSize="11" fill="var(--text-secondary)">
             三目: cond ? a : b 赋值: = += -=
           </text>
 
@@ -560,21 +560,21 @@ export function JctJavaFundamentalsDiagram() {
           >
             类型转换
           </text>
-          <text x="405" y="412" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="412" fontSize="11" fill="var(--text-secondary)">
             自动转换（ widening ）:
           </text>
-          <text x="405" y="428" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="428" fontSize="11" fill="var(--text-secondary)">
             {" "}
             byte &rarr; short &rarr; int &rarr; long &rarr; float
           </text>
-          <text x="405" y="444" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="444" fontSize="11" fill="var(--text-secondary)">
             强制转换（ narrowing ）:
           </text>
-          <text x="405" y="460" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="460" fontSize="11" fill="var(--text-secondary)">
             {" "}
             double d = 3.14; int n = (int) d; // n=3
           </text>
-          <text x="405" y="476" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="476" fontSize="11" fill="var(--text-secondary)">
             强转可能丢失精度或溢出!
           </text>
         </svg>

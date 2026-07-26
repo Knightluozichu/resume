@@ -18,12 +18,12 @@ export function RtwCameraDiagram() {
           <circle cx="300" cy="120" r="3" fill="var(--text-secondary)" />
           <circle cx="500" cy="120" r="3" fill="var(--text-secondary)" />
           <circle cx="300" cy="280" r="3" fill="var(--text-primary)" />
-          <text x="262" y="296" fontSize="10.5" fill="var(--text-secondary)">lower_left_corner</text>
+          <text x="262" y="296" fontSize="11" fill="var(--text-secondary)">lower_left_corner</text>
           {/* horizontal / vertical 标注 */}
           <line x1="300" y1="300" x2="500" y2="300" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="3 3" />
-          <text x="400" y="314" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">horizontal</text>
+          <text x="400" y="314" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">horizontal</text>
           <line x1="284" y1="120" x2="284" y2="280" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="3 3" />
-          <text x="278" y="206" textAnchor="end" fontSize="10.5" fill="var(--text-secondary)">vertical</text>
+          <text x="278" y="206" textAnchor="end" fontSize="11" fill="var(--text-secondary)">vertical</text>
 
           {/* 相机起点 */}
           <circle cx="120" cy="200" r="6" fill="var(--accent)" />
@@ -40,7 +40,7 @@ export function RtwCameraDiagram() {
 
           {/* 像素点 P_view */}
           <circle cx="400" cy="200" r="4" fill="var(--text-primary)" />
-          <text x="408" y="194" fontSize="10.5" fill="var(--text-primary)">P_view(u,v)</text>
+          <text x="408" y="194" fontSize="11" fill="var(--text-primary)">P_view(u,v)</text>
 
           {/* 公式条 */}
           <rect x="48" y="350" width="624" height="38" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />

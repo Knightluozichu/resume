@@ -72,7 +72,7 @@ export function AlphaSortDiagram() {
             x="136"
             y="58"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             远玻璃：被丢弃
@@ -105,7 +105,7 @@ export function AlphaSortDiagram() {
             x="264"
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             近玻璃：先画了
@@ -169,7 +169,7 @@ export function AlphaSortDiagram() {
             x="496"
             y="58"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             ① 远玻璃（先画）
@@ -202,7 +202,7 @@ export function AlphaSortDiagram() {
             x="624"
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             ③ 近玻璃（后画）

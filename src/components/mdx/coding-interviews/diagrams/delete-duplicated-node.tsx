@@ -33,7 +33,7 @@ export function DuplicateRunDeletionDiagram() {
           <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">重复值整段删除，不保留一个副本</text>
           {nodes.map(([label,x,duplicate],index) => <g key={index}><rect x={Number(x)-35} y="90" width="70" height="52" rx="5" fill={duplicate ? "var(--warning)" : "var(--bg)"} fillOpacity={duplicate ? 0.1 : 1} stroke={duplicate ? "var(--warning)" : "var(--border)"} /><text x={Number(x)} y="122" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{label}</text>{index<nodes.length-1 ? <line x1={Number(x)+35} y1="116" x2={Number(nodes[index+1][1])-43} y2="116" stroke="var(--border)" strokeWidth="2" markerEnd="url(#duplicate-arrow)" /> : null}</g>)}
           <path d="M180 158 C280 230 580 230 680 158" fill="none" stroke="var(--success)" strokeWidth="3" markerEnd="url(#duplicate-arrow)" />
-          <text x="430" y="240" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">前驱2直接连接重复段后的5</text>
+          <text x="430" y="240" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">前驱2直接连接重复段后的5</text>
           <rect x="245" y="276" width="330" height="48" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
           <text x="410" y="306" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--text-primary)">结果：1 → 2 → 5</text>
         </svg>
@@ -74,7 +74,7 @@ export function HeadRunRewireDiagram() {
           <line x1="112" y1="108" x2="144" y2="108" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#head-arrow)" />
           {[1,1,1,1,2].map((value,index) => <g key={index}><rect x={154+index*102} y="78" width="76" height="58" rx="5" fill={value===1 ? "var(--warning)" : "var(--success)"} fillOpacity="0.1" stroke={value===1 ? "var(--warning)" : "var(--success)"} /><text x={192+index*102} y="114" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           <path d="M100 214 C220 270 490 260 562 150" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#head-arrow)" />
-          <text x="338" y="270" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">删除所有1后，head直接指向2</text>
+          <text x="338" y="270" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">删除所有1后，head直接指向2</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">二级指针、引用或指向链接的指针都能统一处理头部重连。</figcaption>

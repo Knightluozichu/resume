@@ -117,7 +117,7 @@ export function AaeAlgorithmEngineeringDiagram() {
                 <line x1={x + 12} y1={STAGE_Y + 124} x2={x + STAGE_W - 12} y2={STAGE_Y + 124} stroke={border} strokeWidth="1" strokeDasharray="3 3" />
                 {/* 产出 */}
                 <rect x={x + 12} y={STAGE_Y + 136} width={STAGE_W - 24} height={20} rx="4" fill={s.color} fillOpacity="0.12" stroke={s.color} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={cx} y={STAGE_Y + 150} textAnchor="middle" fontSize="10" fontWeight="700" fill={s.color}>
+                <text x={cx} y={STAGE_Y + 150} textAnchor="middle" fontSize="11" fontWeight="700" fill={s.color}>
                   产出
                 </text>
                 <text x={cx} y={STAGE_Y + 180} textAnchor="middle" fontSize="11.5" fontWeight="600" fill={primary}>

@@ -176,7 +176,7 @@ export function KnnDiagram() {
           </text>
 
           {/* k=3 标签 */}
-          <text x={nx + 64} y={ny - 14} fontSize="10" fill={"var(--danger)"} fontWeight="600">
+          <text x={nx + 64} y={ny - 14} fontSize="11" fill={"var(--danger)"} fontWeight="600">
             k = 3
           </text>
 

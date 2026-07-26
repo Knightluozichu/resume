@@ -134,7 +134,7 @@ export function ProfilerSamplingDiagram() {
               x="140"
               y="58"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               BeginSample
@@ -143,7 +143,7 @@ export function ProfilerSamplingDiagram() {
               x="340"
               y="58"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               EndSample
@@ -164,7 +164,7 @@ export function ProfilerSamplingDiagram() {
               x="140"
               y="81"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--accent)"
             >
               ProfilerMarker (零 GC)

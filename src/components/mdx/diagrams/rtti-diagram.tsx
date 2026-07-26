@@ -44,7 +44,7 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
           {/* ── Class hierarchy box ── */}
           <g transform="translate(28, 48)">
             <rect x="0" y="0" width="290" height="122" rx="8" fill="var(--code-bg)" stroke={border} />
-            <text x="145" y="20" fontSize="10" fontWeight="600" fill={secondary} textAnchor="middle">类的继承关系</text>
+            <text x="145" y="20" fontSize="11" fontWeight="600" fill={secondary} textAnchor="middle">类的继承关系</text>
 
             {/* Base class box */}
             <rect x="50" y="30" width="190" height="30" rx="6" fill={baseColor} fillOpacity="0.1" stroke={baseColor} strokeWidth="1.5" />
@@ -52,10 +52,10 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
 
             {/* Derived class boxes */}
             <rect x="30" y="72" width="110" height="30" rx="6" fill={derivedColor} fillOpacity="0.1" stroke={derivedColor} strokeWidth="1" />
-            <text x="85" y="91" fontSize="10" fill={derivedColor} textAnchor="middle">class DerivedA</text>
+            <text x="85" y="91" fontSize="11" fill={derivedColor} textAnchor="middle">class DerivedA</text>
 
             <rect x="150" y="72" width="110" height="30" rx="6" fill={derivedColor} fillOpacity="0.1" stroke={derivedColor} strokeWidth={step >= 2 ? 2.5 : 1} />
-            <text x="205" y="91" fontSize="10" fill={step >= 2 ? derivedColor : secondary} textAnchor="middle">class DerivedB</text>
+            <text x="205" y="91" fontSize="11" fill={step >= 2 ? derivedColor : secondary} textAnchor="middle">class DerivedB</text>
 
             {/* Inheritance arrows */}
             <line x1="85" y1="72" x2="145" y2="60" stroke={border} strokeWidth="1" />
@@ -65,22 +65,22 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
           {/* ── Right side: base pointer to derived ── */}
           <g transform="translate(360, 48)">
             <rect x="0" y="0" width="410" height="122" rx="8" fill="var(--code-bg)" stroke={border} />
-            <text x="205" y="20" fontSize="10" fontWeight="600" fill={secondary} textAnchor="middle">通过基类指针操作派生类对象</text>
+            <text x="205" y="20" fontSize="11" fontWeight="600" fill={secondary} textAnchor="middle">通过基类指针操作派生类对象</text>
 
             {/* Code block */}
-            <text x="14" y="42" fontSize="10" fill={primary} fontFamily="monospace">Base* bp = new DerivedB();</text>
-            <text x="14" y="58" fontSize="10" fill={secondary} fontFamily="monospace">{"// bp 是 Base*——只能调 Base 的方法"}</text>
+            <text x="14" y="42" fontSize="11" fill={primary} fontFamily="monospace">Base* bp = new DerivedB();</text>
+            <text x="14" y="58" fontSize="11" fill={secondary} fontFamily="monospace">{"// bp 是 Base*——只能调 Base 的方法"}</text>
 
             {step >= 2 && (
               <>
-                <text x="14" y="78" fontSize="10" fill={accent} fontFamily="monospace">auto* db = dynamic_cast&lt;DerivedB*&gt;(bp);</text>
+                <text x="14" y="78" fontSize="11" fill={accent} fontFamily="monospace">auto* db = dynamic_cast&lt;DerivedB*&gt;(bp);</text>
                 {step === 2 && (
-                  <text x="14" y="96" fontSize="10" fill={good} fontFamily="monospace">{'if (db) { db->derivedOnlyMethod(); }    // 转型成功！'}</text>
+                  <text x="14" y="96" fontSize="11" fill={good} fontFamily="monospace">{'if (db) { db->derivedOnlyMethod(); }    // 转型成功！'}</text>
                 )}
                 {step === 3 && (
                   <>
-                    <text x="14" y="96" fontSize="10" fill={good} fontFamily="monospace">{"// 指针版本：失败返回 nullptr → 安全判空"}</text>
-                    <text x="14" y="112" fontSize="10" fill={warn} fontFamily="monospace">{"// 引用版本：失败抛 std::bad_cast → 需要 try/catch"}</text>
+                    <text x="14" y="96" fontSize="11" fill={good} fontFamily="monospace">{"// 指针版本：失败返回 nullptr → 安全判空"}</text>
+                    <text x="14" y="112" fontSize="11" fill={warn} fontFamily="monospace">{"// 引用版本：失败抛 std::bad_cast → 需要 try/catch"}</text>
                   </>
                 )}
               </>
@@ -99,13 +99,13 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
                 <>
                   {/* Flow nodes */}
                   <rect x="80" y="34" width="160" height="34" rx="6" fill={baseColor} fillOpacity="0.1" stroke={baseColor} strokeWidth="1.5" />
-                  <text x="160" y="55" fontSize="10" fill={primary} textAnchor="middle">bp 指向的对象类型？</text>
+                  <text x="160" y="55" fontSize="11" fill={primary} textAnchor="middle">bp 指向的对象类型？</text>
 
                   <rect x="310" y="34" width="160" height="34" rx="6" fill={good} fillOpacity="0.1" stroke={good} strokeWidth="1.5" />
-                  <text x="390" y="55" fontSize="10" fill={good} textAnchor="middle">是 DerivedB → 返回有效指针</text>
+                  <text x="390" y="55" fontSize="11" fill={good} textAnchor="middle">是 DerivedB → 返回有效指针</text>
 
                   <rect x="540" y="34" width="160" height="34" rx="6" fill={err} fillOpacity="0.1" stroke={err} strokeWidth="1.5" />
-                  <text x="620" y="55" fontSize="10" fill={err} textAnchor="middle">不是 → 返回 nullptr</text>
+                  <text x="620" y="55" fontSize="11" fill={err} textAnchor="middle">不是 → 返回 nullptr</text>
 
                   {/* Arrows */}
                   <text x="258" y="55" fontSize="14" fill={accent} textAnchor="middle">→</text>
@@ -116,16 +116,16 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
               {step === 3 && (
                 <>
                   <rect x="40" y="34" width="320" height="78" rx="6" fill={good} fillOpacity="0.06" stroke={good} strokeWidth="1.5" />
-                  <text x="200" y="52" fontSize="10" fontWeight="700" fill={good} textAnchor="middle">dynamic_cast&lt;T*&gt;(ptr)</text>
-                  <text x="200" y="70" fontSize="9" fill={primary} textAnchor="middle">类型匹配时返回 T* 指针</text>
-                  <text x="200" y="88" fontSize="9" fill={good} textAnchor="middle">不匹配时返回 nullptr——if (p) 判空</text>
-                  <text x="200" y="104" fontSize="9" fill={secondary} textAnchor="middle">推荐：指针版不会抛异常，逻辑清晰</text>
+                  <text x="200" y="52" fontSize="11" fontWeight="700" fill={good} textAnchor="middle">dynamic_cast&lt;T*&gt;(ptr)</text>
+                  <text x="200" y="70" fontSize="11" fill={primary} textAnchor="middle">类型匹配时返回 T* 指针</text>
+                  <text x="200" y="88" fontSize="11" fill={good} textAnchor="middle">不匹配时返回 nullptr——if (p) 判空</text>
+                  <text x="200" y="104" fontSize="11" fill={secondary} textAnchor="middle">推荐：指针版不会抛异常，逻辑清晰</text>
 
                   <rect x="400" y="34" width="320" height="78" rx="6" fill={warn} fillOpacity="0.06" stroke={warn} strokeWidth="1.5" />
-                  <text x="560" y="52" fontSize="10" fontWeight="700" fill={warn} textAnchor="middle">dynamic_cast&lt;T&amp;&gt;(ref)</text>
-                  <text x="560" y="70" fontSize="9" fill={primary} textAnchor="middle">类型匹配时返回 T&amp; 引用</text>
-                  <text x="560" y="88" fontSize="9" fill={warn} textAnchor="middle">不匹配时抛出 std::bad_cast</text>
-                  <text x="560" y="104" fontSize="9" fill={secondary} textAnchor="middle">场景：确定一定会成功——失败用 catch 捕获</text>
+                  <text x="560" y="52" fontSize="11" fontWeight="700" fill={warn} textAnchor="middle">dynamic_cast&lt;T&amp;&gt;(ref)</text>
+                  <text x="560" y="70" fontSize="11" fill={primary} textAnchor="middle">类型匹配时返回 T&amp; 引用</text>
+                  <text x="560" y="88" fontSize="11" fill={warn} textAnchor="middle">不匹配时抛出 std::bad_cast</text>
+                  <text x="560" y="104" fontSize="11" fill={secondary} textAnchor="middle">场景：确定一定会成功——失败用 catch 捕获</text>
                 </>
               )}
             </g>
@@ -134,12 +134,12 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
           {/* ── Bottom info bar ── */}
           <g transform={`translate(28, ${h - 78})`}>
             <rect x="0" y="0" width="742" height="56" rx="6" fill={step === 1 ? accent : good} fillOpacity="0.05" stroke={border} />
-            <text x="371" y="18" fontSize="10" fontWeight="600" fill={step === 1 ? accent : good} textAnchor="middle">
+            <text x="371" y="18" fontSize="11" fontWeight="600" fill={step === 1 ? accent : good} textAnchor="middle">
               {step === 1 && "① 问题：基类指针 bp 看不到派生类特有成员——编译期只知道静态类型 Base*"}
               {step === 2 && "② dynamic_cast&lt;T*&gt; 在运行时检查实际类型→匹配就返回有效指针、不匹配返回 nullptr→判空即可"}
               {step === 3 && "③ 指针版 vs 引用版——指针失败返 nullptr 好处理，引用失败抛异常；日常编程优先用指针版"}
             </text>
-            <text x="371" y="38" fontSize="9" fill={secondary} textAnchor="middle">
+            <text x="371" y="38" fontSize="11" fill={secondary} textAnchor="middle">
               {step === 1 && "向下或横向 dynamic_cast 的源类型必须是多态类型，常通过虚析构函数满足。"}
               {step === 2 && "语言标准要求多态源类型，但不规定编译器必须用哪种对象布局实现检查。"}
               {step === 3 && "typeid 用于查询；dynamic_cast 用于受检查转换。对空多态指针解引用求 typeid 会抛 bad_typeid。"}

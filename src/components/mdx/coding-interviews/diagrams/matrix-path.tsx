@@ -36,13 +36,13 @@ export function MatrixPathBoardDiagram() {
           {cells.map(([letter,row,col,active,step]) => {
             const x = 216 + Number(col) * 102;
             const y = 74 + Number(row) * 102;
-            return <g key={String(row) + col}><rect x={x} y={y} width="82" height="82" rx="5" fill={active ? "var(--accent)" : "var(--bg)"} fillOpacity={active ? 0.11 : 1} stroke={active ? "var(--accent)" : "var(--border)"} strokeWidth={active ? 2 : 1} /><text x={x+41} y={y+49} textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--text-primary)">{letter}</text>{active ? <text x={x+68} y={y+18} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">{step}</text> : null}</g>;
+            return <g key={String(row) + col}><rect x={x} y={y} width="82" height="82" rx="5" fill={active ? "var(--accent)" : "var(--bg)"} fillOpacity={active ? 0.11 : 1} stroke={active ? "var(--accent)" : "var(--border)"} strokeWidth={active ? 2 : 1} /><text x={x+41} y={y+49} textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--text-primary)">{letter}</text>{active ? <text x={x+68} y={y+18} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">{step}</text> : null}</g>;
           })}
           <path d="M359 156 L359 172" stroke="var(--accent)" strokeWidth="4" markerEnd="url(#path-arrow)" />
           <path d="M400 217 L420 217" stroke="var(--accent)" strokeWidth="4" markerEnd="url(#path-arrow)" />
           <path d="M461 258 L461 274" stroke="var(--accent)" strokeWidth="4" markerEnd="url(#path-arrow)" />
           <rect x="170" y="390" width="480" height="30" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="410" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">路径是坐标序列，不要求字母在内存中连续。</text>
+          <text x="410" y="410" textAnchor="middle" fontSize="11" fill="var(--text-primary)">路径是坐标序列，不要求字母在内存中连续。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">作者示例路径为 B↓F→C↓E；对角线移动不合法。</figcaption>
@@ -88,10 +88,10 @@ export function VisitedRollbackDiagram() {
           <path d="M410 150 L446 150" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#rollback-arrow)" />
           <path d="M606 144 C628 130 628 108 624 92" fill="none" stroke="var(--success)" strokeWidth="3" markerEnd="url(#rollback-arrow)" />
           <path d="M606 158 C628 174 628 198 624 214" fill="none" stroke="var(--warning)" strokeWidth="3" markerEnd="url(#rollback-arrow)" />
-          <text x="697" y="44" textAnchor="middle" fontSize="10.5" fill="var(--success)">返回true，不再探索</text>
-          <text x="697" y="278" textAnchor="middle" fontSize="10.5" fill="var(--warning)">visited=false，再返回false</text>
+          <text x="697" y="44" textAnchor="middle" fontSize="11" fill="var(--success)">返回true，不再探索</text>
+          <text x="697" y="278" textAnchor="middle" fontSize="11" fill="var(--warning)">visited=false，再返回false</text>
           <rect x="188" y="286" width="444" height="30" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="306" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">撤销让同一格能被其他起点或其他分支重新使用。</text>
+          <text x="410" y="306" textAnchor="middle" fontSize="11" fill="var(--text-primary)">撤销让同一格能被其他起点或其他分支重新使用。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">访问限制属于“当前路径”，不是整次搜索的永久封禁。</figcaption>

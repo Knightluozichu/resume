@@ -59,7 +59,7 @@ export function TextureImportDiagram({
                 x="68"
                 y="88"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 RGBA32
@@ -68,7 +68,7 @@ export function TextureImportDiagram({
                 x="68"
                 y="106"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 4 B/px
@@ -88,7 +88,7 @@ export function TextureImportDiagram({
                 x="168"
                 y="88"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 ASTC 6×6
@@ -97,7 +97,7 @@ export function TextureImportDiagram({
                 x="168"
                 y="106"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 ~0.36 B/px
@@ -131,7 +131,7 @@ export function TextureImportDiagram({
                 x="280"
                 y="102"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 4096
@@ -140,7 +140,7 @@ export function TextureImportDiagram({
                 x="280"
                 y="142"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 源图 4K
@@ -162,7 +162,7 @@ export function TextureImportDiagram({
                 x="360"
                 y="102"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 1024
@@ -171,7 +171,7 @@ export function TextureImportDiagram({
                 x="360"
                 y="142"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 UI 图标够用
@@ -221,7 +221,7 @@ export function TextureImportDiagram({
                 x="520"
                 y="142"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 远处用低级 · +33% 内存
@@ -233,7 +233,7 @@ export function TextureImportDiagram({
           <text
             x="80"
             y="172"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -257,7 +257,7 @@ export function TextureImportDiagram({
             fill="var(--danger)"
             opacity="0.35"
           />
-          <text x="490" y="193" fontSize="9" fill="var(--danger)">
+          <text x="490" y="193" fontSize="11" fill="var(--danger)">
             RGBA32 ~5.3 MB
           </text>
 
@@ -270,7 +270,7 @@ export function TextureImportDiagram({
             fill="var(--success)"
             opacity="0.6"
           />
-          <text x="140" y="217" fontSize="9" fill="var(--success)">
+          <text x="140" y="217" fontSize="11" fill="var(--success)">
             ASTC ~0.5 MB
           </text>
 
@@ -278,7 +278,7 @@ export function TextureImportDiagram({
             x="320"
             y="248"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             规则：按用途设 Max Size · 按平台选压缩格式 · 3D 场景纹理开 mipmap，UI/Sprite 常关
@@ -287,7 +287,7 @@ export function TextureImportDiagram({
             x="320"
             y="268"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             源文件 4K 不代表运行时必须 4K——导入设置才是内存真相

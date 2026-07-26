@@ -349,7 +349,7 @@ function TaskDecompositionTreeInner() {
                     x={cx}
                     y={cy + 14}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--success)"
                   >
@@ -366,7 +366,7 @@ function TaskDecompositionTreeInner() {
             x={MARGIN_X + 16}
             y={VIEW_H - 46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             黄框 = 还能再拆的中间节点
@@ -376,7 +376,7 @@ function TaskDecompositionTreeInner() {
             x={MARGIN_X + 206}
             y={VIEW_H - 46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             绿框 = 叶子，能直接动手做
@@ -387,7 +387,7 @@ function TaskDecompositionTreeInner() {
             x={MARGIN_X}
             y={VIEW_H - 22}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             拆解 =

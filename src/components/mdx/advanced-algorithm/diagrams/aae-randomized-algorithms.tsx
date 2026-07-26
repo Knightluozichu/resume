@@ -78,7 +78,7 @@ export function AaeRandomizedAlgorithmsDiagram() {
           <text x={RNG.x + RNG.w / 2} y={RNG.y + 20} textAnchor="middle" fontSize="13" fontWeight="700" fill={success} fontFamily="monospace">
             Random RNG
           </text>
-          <text x={RNG.x + RNG.w / 2} y={RNG.y + 38} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={RNG.x + RNG.w / 2} y={RNG.y + 38} textAnchor="middle" fontSize="11" fill={secondary}>
             随机数生成器 · 随机性来源
           </text>
 
@@ -109,7 +109,7 @@ export function AaeRandomizedAlgorithmsDiagram() {
             {LV_ROWS.map((r, i) => (
               <g key={r.label}>
                 <rect x={LV.x + 14} y={LV.y + 58 + i * 36} width={56} height={20} rx="4" fill={accent} fillOpacity="0.1" stroke={accent} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={LV.x + 42} y={LV.y + 72 + i * 36} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={accent}>
+                <text x={LV.x + 42} y={LV.y + 72 + i * 36} textAnchor="middle" fontSize="11" fontWeight="700" fill={accent}>
                   {r.label}
                 </text>
                 <text x={LV.x + 80} y={LV.y + 72 + i * 36} fontSize="11.5" fill={primary} fontFamily={r.label === "代表" ? "monospace" : "sans-serif"}>
@@ -130,7 +130,7 @@ export function AaeRandomizedAlgorithmsDiagram() {
             {MC_ROWS.map((r, i) => (
               <g key={r.label}>
                 <rect x={MC.x + 14} y={MC.y + 58 + i * 36} width={56} height={20} rx="4" fill={warning} fillOpacity="0.1" stroke={warning} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={MC.x + 42} y={MC.y + 72 + i * 36} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={warning}>
+                <text x={MC.x + 42} y={MC.y + 72 + i * 36} textAnchor="middle" fontSize="11" fontWeight="700" fill={warning}>
                   {r.label}
                 </text>
                 <text x={MC.x + 80} y={MC.y + 72 + i * 36} fontSize="11.5" fill={primary} fontFamily={r.label === "代表" ? "monospace" : "sans-serif"}>

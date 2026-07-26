@@ -12,8 +12,13 @@ export interface ShaderXSnapshot {
 
 export function ShaderXSeriesLab({ title, mode, snapshots, initial = 0 }: { title: string; mode: "map" | "experiment" | "evidence"; snapshots: ReadonlyArray<ShaderXSnapshot>; initial?: number }) {
   const [active, setActive] = useState(Math.min(initial, snapshots.length - 1));
+  function resetExperiment() {
+    setActive(Math.min(initial, snapshots.length - 1));
+  }
+
   const current = snapshots[active];
   return <figure className="mdx-figure not-prose mx-auto my-6">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
     <div className="overflow-hidden rounded-card border border-border bg-elevated">
       <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div><strong className="block text-sm text-primary">{title}</strong><span className="mt-1 block text-xs uppercase text-secondary">ShaderX 1-7 · {mode}</span></div>

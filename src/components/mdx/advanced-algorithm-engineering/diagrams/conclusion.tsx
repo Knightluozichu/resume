@@ -205,7 +205,7 @@ export function PaeMemoryModelShiftLab() {
               type="button"
               onClick={() => setWorkload(key)}
               className={
-                "min-h-10 border px-3 text-sm font-semibold " +
+                "min-h-11 border px-3 text-sm font-semibold " +
                 (workload === key
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")

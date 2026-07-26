@@ -53,7 +53,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
             x="58"
             y="80"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -101,7 +101,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
             x="280"
             y="232"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             斜面被深度图划成若干格，每格只存「中央取样点」的一个最近深度
@@ -115,7 +115,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="250"
                 y="100"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 远光半：current &gt; stored
@@ -124,7 +124,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="250"
                 y="112"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 被自己误判「在阴影」→ 暗条
@@ -133,7 +133,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="408"
                 y="150"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--success)"
               >
                 靠光半：判受光 → 亮条
@@ -146,7 +146,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="280"
                 y="100"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--accent)"
               >
@@ -156,7 +156,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="280"
                 y="116"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 current 再也 &gt; 不过被推远的 stored → 整片受光、条纹消失
@@ -182,7 +182,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="260"
                 y="252"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--danger)"
               >
@@ -206,7 +206,7 @@ export function ShadowAcneDiagram({ mode }: { mode: AcneMode }) {
                 x="260"
                 y="252"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--success)"
               >

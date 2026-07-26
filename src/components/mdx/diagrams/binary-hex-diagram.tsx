@@ -34,7 +34,7 @@ export function BinaryHexDiagram() {
           <text x={120} y={76} fontSize="14" fill={primary} fontFamily="monospace">
             42
           </text>
-          <text x={160} y={76} fontSize="10" fill={secondary}>
+          <text x={160} y={76} fontSize="11" fill={secondary}>
             = 4×10 + 2×1
           </text>
 
@@ -56,7 +56,7 @@ export function BinaryHexDiagram() {
                   stroke={on ? good : border}
                   strokeWidth="1.5"
                 />
-                <text x={x + 22} y={148} textAnchor="middle" fontSize="9" fill={secondary}>
+                <text x={x + 22} y={148} textAnchor="middle" fontSize="11" fill={secondary}>
                   2^{bitLabels[i]}
                 </text>
                 <text x={x + 22} y={166} textAnchor="middle" fontSize="14" fontWeight="700" fill={primary} fontFamily="monospace">
@@ -76,7 +76,7 @@ export function BinaryHexDiagram() {
           <text x={44} y={238} fontSize="13" fill={primary} fontFamily="monospace">
             052
           </text>
-          <text x={100} y={238} fontSize="10" fill={secondary}>
+          <text x={100} y={238} fontSize="11" fill={secondary}>
             每 3 位一组：001 010 100 → 1 2 4
           </text>
 
@@ -87,18 +87,18 @@ export function BinaryHexDiagram() {
           <text x={340} y={238} fontSize="13" fill={primary} fontFamily="monospace">
             0x2A
           </text>
-          <text x={400} y={238} fontSize="10" fill={secondary}>
+          <text x={400} y={238} fontSize="11" fill={secondary}>
             每 4 位一组：0010 1010 → 2 A
           </text>
 
           <rect x={24} y={268} width={592} height={56} rx="8" fill={bgEl} stroke={accent} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={44} y={292} fontSize="10" fontWeight="600" fill={secondary}>
+          <text x={44} y={292} fontSize="11" fontWeight="600" fill={secondary}>
             C 字面量
           </text>
           <text x={44} y={312} fontSize="11" fill={primary} fontFamily="monospace">
             42 &nbsp; 052 &nbsp; 0x2A &nbsp; 0b00101010（C23）
           </text>
-          <text x={380} y={312} fontSize="10" fill={secondary}>
+          <text x={380} y={312} fontSize="11" fill={secondary}>
             printf 用 %d %o %x
           </text>
         </svg>

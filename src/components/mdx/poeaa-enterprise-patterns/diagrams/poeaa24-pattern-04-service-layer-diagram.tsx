@@ -19,7 +19,7 @@ export function Poeaa24Pattern04ServiceLayer() {
           <line x1={160} y1={146} x2={560} y2={146} stroke={T.accent} strokeWidth="0.8" strokeOpacity="0.4" />
           <text x={176} y={168} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ placeOrder(dto): OrderResult</text>
           <text x={176} y={190} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ cancelOrder(id): void</text>
-          <text x={176} y={212} fontSize="10" fill={T.secondary}>职责：事务边界、用例编排、权限检查</text>
+          <text x={176} y={212} fontSize="11" fill={T.secondary}>职责：事务边界、用例编排、权限检查</text>
           {/* 下层 */}
           <line x1={280} y1={232} x2={280} y2={252} stroke={T.secondary} strokeWidth="1" />
           <line x1={440} y1={232} x2={440} y2={252} stroke={T.secondary} strokeWidth="1" />

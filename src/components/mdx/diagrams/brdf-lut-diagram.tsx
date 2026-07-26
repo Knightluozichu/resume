@@ -112,7 +112,7 @@ export function BrdfLutDiagram() {
             x={lutX + lutW / 4}
             y={lutY + lutH / 2 + 10}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--success)"
           >
             scale (A)
@@ -133,7 +133,7 @@ export function BrdfLutDiagram() {
             x={lutX + lutW * 3 / 4}
             y={lutY + lutH / 2 + 10}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--warning)"
           >
             bias (B)
@@ -152,7 +152,7 @@ export function BrdfLutDiagram() {
             x={lutX}
             y={lutY + lutH + 22}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -161,7 +161,7 @@ export function BrdfLutDiagram() {
             x={lutX + lutW}
             y={lutY + lutH + 22}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -170,7 +170,7 @@ export function BrdfLutDiagram() {
             x={lutX + lutW / 2}
             y={lutY + lutH + 22}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -190,7 +190,7 @@ export function BrdfLutDiagram() {
             x={lutX - 14}
             y={lutY + lutH + 4}
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -199,7 +199,7 @@ export function BrdfLutDiagram() {
             x={lutX - 14}
             y={lutY + 4}
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -208,7 +208,7 @@ export function BrdfLutDiagram() {
             x={lutX - 14}
             y={lutY + lutH / 2}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
             transform={`rotate(-90, ${lutX - 14}, ${lutY + lutH / 2})`}
@@ -232,7 +232,7 @@ export function BrdfLutDiagram() {
           <text
             x="284"
             y="88"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -241,7 +241,7 @@ export function BrdfLutDiagram() {
           <text
             x="284"
             y="106"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             当 NdotV↑ 或 roughness↓ 时 A 趋近 1
@@ -262,7 +262,7 @@ export function BrdfLutDiagram() {
           <text
             x="284"
             y="148"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -271,7 +271,7 @@ export function BrdfLutDiagram() {
           <text
             x="284"
             y="166"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             补偿 Fresnel 对粗糙面的基础反射率
@@ -315,7 +315,7 @@ export function BrdfLutDiagram() {
             x="280"
             y="265"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -325,7 +325,7 @@ export function BrdfLutDiagram() {
             x="280"
             y="277"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             F0 从 LUT 中查出的 (A, B) 重建 Fresnel 积分

@@ -136,7 +136,7 @@ export function LoadAssetWaysDiagram() {
                   x={c.x + 58}
                   y={COL_Y + 29}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill={c.badgeFill}
                 >
@@ -157,7 +157,7 @@ export function LoadAssetWaysDiagram() {
                   x={cx}
                   y={COL_Y + 80}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.when}
@@ -179,7 +179,7 @@ export function LoadAssetWaysDiagram() {
                     x={c.x + 26}
                     y={COL_Y + 110 + j * 16}
                     textAnchor="start"
-                    fontSize="9"
+                    fontSize="11"
                     fontFamily="var(--font-mono)"
                     fill="var(--text-primary)"
                   >
@@ -193,7 +193,7 @@ export function LoadAssetWaysDiagram() {
                     x={c.x + 16}
                     y={COL_Y + 156 + j * 18}
                     textAnchor="start"
-                    fontSize="8.8"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     · {ln}
@@ -208,7 +208,7 @@ export function LoadAssetWaysDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             优先编辑期拖引用；运行时造实例用 Instantiate；Resources.Load

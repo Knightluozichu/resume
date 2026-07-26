@@ -132,7 +132,7 @@ export function VectorGrowthDiagram({ step = 1 }: { step?: number }) {
                       <text
                         x={cx + cellSize / 2}
                         y={startY + cellSize / 2 + 4}
-                        fontSize="10"
+                        fontSize="11"
                         fill={token.textSecondary}
                         textAnchor="middle"
                         fontFamily="monospace"
@@ -183,7 +183,7 @@ export function VectorGrowthDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={startX + (2 * (cellSize + gap)) / 2}
                 y={startY + cellSize + 20}
-                fontSize="9"
+                fontSize="11"
                 fill={token.textSecondary}
                 textAnchor="middle"
                 opacity="0.5"

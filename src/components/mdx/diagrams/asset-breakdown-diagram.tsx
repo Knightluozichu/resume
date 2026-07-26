@@ -135,7 +135,7 @@ export function AssetBreakdownDiagram() {
               x="280"
               y={item.y}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               {item.label}：{item.detail}

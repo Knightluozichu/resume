@@ -72,7 +72,7 @@ export function CookTorranceSplitDiagram() {
             x="165"
             y="145"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             c = 反照率颜色（albedo）
@@ -81,7 +81,7 @@ export function CookTorranceSplitDiagram() {
             x="165"
             y="162"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             除以 pi 使半球积分归一化
@@ -155,13 +155,13 @@ export function CookTorranceSplitDiagram() {
           </text>
 
           {/* D F G 三项说明 */}
-          <text x="395" y="148" fontSize="10.5" fill="var(--accent)">
+          <text x="395" y="148" fontSize="11" fill="var(--accent)">
             D = 法线分布（微面对齐度）
           </text>
-          <text x="395" y="164" fontSize="10.5" fill="var(--accent)">
+          <text x="395" y="164" fontSize="11" fill="var(--accent)">
             F = 菲涅尔（反射 vs 折射比例）
           </text>
-          <text x="395" y="180" fontSize="10.5" fill="var(--accent)">
+          <text x="395" y="180" fontSize="11" fill="var(--accent)">
             G = 几何遮蔽（微面自遮挡）
           </text>
 
@@ -190,7 +190,7 @@ export function CookTorranceSplitDiagram() {
             x="330"
             y="256"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             k_s + k_d = 1（能量守恒），下面三节分别拆 D、G、F

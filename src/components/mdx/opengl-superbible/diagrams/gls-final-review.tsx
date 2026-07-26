@@ -67,7 +67,7 @@ function StageDiagram({
           x="450"
           y="49"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           {subtitle}
@@ -127,15 +127,15 @@ function StageDiagram({
                 y="156"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="199" fontSize="9.5" fill={secondary}>
+              <text x={x + 13} y="199" fontSize="11" fill={secondary}>
                 可核查结果
               </text>
-              <text x={x + 13} y="221" fontSize="9.8" fill={primary}>
+              <text x={x + 13} y="221" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -165,7 +165,7 @@ function StageDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           接口、数据、空间、同步、图像、时间和错误日志必须形成同一条证据链

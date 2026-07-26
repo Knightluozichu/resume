@@ -72,7 +72,7 @@ export function StorageClassDiagram() {
               key={h}
               x={colX[i] + (i === 0 ? 0 : 4)}
               y={startY - 8}
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={secondary}
             >
@@ -99,19 +99,19 @@ export function StorageClassDiagram() {
                 <text x={colX[0]} y={y + 22} fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">
                   {r.kw}
                 </text>
-                <text x={colX[1]} y={y + 22} fontSize="10" fill={primary}>
+                <text x={colX[1]} y={y + 22} fontSize="11" fill={primary}>
                   {r.scope}
                 </text>
-                <text x={colX[2]} y={y + 22} fontSize="10" fill={primary}>
+                <text x={colX[2]} y={y + 22} fontSize="11" fill={primary}>
                   {r.storage}
                 </text>
-                <text x={colX[3]} y={y + 22} fontSize="10" fill={primary}>
+                <text x={colX[3]} y={y + 22} fontSize="11" fill={primary}>
                   {r.init}
                 </text>
-                <text x={colX[4]} y={y + 22} fontSize="10" fill={primary}>
+                <text x={colX[4]} y={y + 22} fontSize="11" fill={primary}>
                   {r.lifetime}
                 </text>
-                <text x={colX[5]} y={y + 22} fontSize="9" fill={secondary}>
+                <text x={colX[5]} y={y + 22} fontSize="11" fill={secondary}>
                   {r.note}
                 </text>
               </g>

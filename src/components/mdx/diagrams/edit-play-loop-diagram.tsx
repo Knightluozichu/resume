@@ -262,7 +262,7 @@ export function EditPlayLoopDiagram() {
                   x={c.x}
                   y={c.y + 13}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {node.sub}

@@ -78,7 +78,7 @@ export function FillRateBandwidthDiagram() {
                 x={col.x + 115}
                 y="88"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 单位：{col.unit}
@@ -105,7 +105,7 @@ export function FillRateBandwidthDiagram() {
               <text
                 x={col.x + 15 + gaugeW * col.fill + 6}
                 y="114"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={col.color}
               >
@@ -129,7 +129,7 @@ export function FillRateBandwidthDiagram() {
                 x={col.x + 115}
                 y="164"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {col.title === "Fill Rate"
@@ -144,7 +144,7 @@ export function FillRateBandwidthDiagram() {
             x="280"
             y="210"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             移动端最常见的两类 GPU 瓶颈，需分别排查

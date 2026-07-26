@@ -36,9 +36,9 @@ export function Jg1G1TuningPracticeDiagram() {
           ].map((r, i) => (
             <g key={i}>
               <rect x="40" y={r.y} width="670" height="24" rx="3" fill={r.color} fillOpacity="0.08" stroke={r.color} strokeWidth="0.6" />
-              <text x="55" y={r.y + 16} fontSize="10" fontWeight="600" fill={r.color}>{r.param}</text>
-              <text x="300" y={r.y + 16} fontSize="10" fill="var(--text-secondary)">{r.val}</text>
-              <text x="400" y={r.y + 16} fontSize="10" fill="var(--text-tertiary)">{r.desc}</text>
+              <text x="55" y={r.y + 16} fontSize="11" fontWeight="600" fill={r.color}>{r.param}</text>
+              <text x="300" y={r.y + 16} fontSize="11" fill="var(--text-secondary)">{r.val}</text>
+              <text x="400" y={r.y + 16} fontSize="11" fill="var(--text-tertiary)">{r.desc}</text>
             </g>
           ))}
 
@@ -59,8 +59,8 @@ export function Jg1G1TuningPracticeDiagram() {
           ].map((s, i) => (
             <g key={i}>
               <rect x={s.x} y={s.y} width="150" height="50" rx="6" fill={s.color} fillOpacity="0.10" stroke={s.color} strokeWidth="1.2" />
-              <text x={s.x + 75} y={s.y + 18} textAnchor="middle" fontSize="10" fontWeight="600" fill={s.color}>{s.label}</text>
-              <text x={s.x + 75} y={s.y + 34} textAnchor="middle" fontSize="9" fill="var(--text-secondary)">{s.desc}</text>
+              <text x={s.x + 75} y={s.y + 18} textAnchor="middle" fontSize="11" fontWeight="600" fill={s.color}>{s.label}</text>
+              <text x={s.x + 75} y={s.y + 34} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{s.desc}</text>
               {i < 3 && <line x1={s.x + 150} y1={s.y + 25} x2={s.x + 168} y2={s.y + 25} stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrTp)" />}
             </g>
           ))}
@@ -70,19 +70,19 @@ export function Jg1G1TuningPracticeDiagram() {
 
           <rect x="40" y="422" width="330" height="50" rx="6" fill="var(--danger)" fillOpacity="0.08" stroke="var(--danger)" strokeWidth="1" />
           <text x="55" y="442" fontSize="11" fontWeight="600" fill="var(--danger)">evacuation failure</text>
-          <text x="55" y="460" fontSize="10" fill="var(--text-secondary)">→ G1ReservePercent=20 | IHOP=35 | 增大堆</text>
+          <text x="55" y="460" fontSize="11" fill="var(--text-secondary)">→ G1ReservePercent=20 | IHOP=35 | 增大堆</text>
 
           <rect x="390" y="422" width="330" height="50" rx="6" fill="var(--warning)" fillOpacity="0.08" stroke="var(--warning)" strokeWidth="1" />
           <text x="405" y="442" fontSize="11" fontWeight="600" fill="var(--warning)">Mixed GC 频繁/回收少</text>
-          <text x="405" y="460" fontSize="10" fill="var(--text-secondary)">→ 调高 IHOP | 调小 MixedGCCountTarget | 增大 MaxGCPauseMillis</text>
+          <text x="405" y="460" fontSize="11" fill="var(--text-secondary)">→ 调高 IHOP | 调小 MixedGCCountTarget | 增大 MaxGCPauseMillis</text>
 
           <rect x="40" y="482" width="330" height="50" rx="6" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1" />
           <text x="55" y="502" fontSize="11" fontWeight="600" fill="var(--accent)">Humongous 过多</text>
-          <text x="55" y="520" fontSize="10" fill="var(--text-secondary)">→ 增大 G1HeapRegionSize | 重构代码避免大对象</text>
+          <text x="55" y="520" fontSize="11" fill="var(--text-secondary)">→ 增大 G1HeapRegionSize | 重构代码避免大对象</text>
 
           <rect x="390" y="482" width="330" height="50" rx="6" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" strokeWidth="1" />
           <text x="405" y="502" fontSize="11" fontWeight="600" fill="var(--success)">System.gc() 触发</text>
-          <text x="405" y="520" fontSize="10" fill="var(--text-secondary)">→ -XX:+DisableExplicitGC</text>
+          <text x="405" y="520" fontSize="11" fill="var(--text-secondary)">→ -XX:+DisableExplicitGC</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

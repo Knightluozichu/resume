@@ -58,13 +58,13 @@ export function StreamMedianInsertionLab() {
         <div className="grid grid-cols-2 gap-3">
           <div className="border border-border bg-background p-3">
             <div className="text-xs text-muted">下半最大堆 max</div>
-            <div className="mt-3 grid min-h-10 grid-cols-4 gap-1.5">
+            <div className="mt-3 grid min-h-11 grid-cols-4 gap-1.5">
               {Array.from({ length: 4 }, (_, index) => <div key={index} className="flex h-10 items-center justify-center border border-border text-sm font-semibold text-primary">{state.lower[index] ?? "·"}</div>)}
             </div>
           </div>
           <div className="border border-border bg-background p-3">
             <div className="text-xs text-muted">上半最小堆 min</div>
-            <div className="mt-3 grid min-h-10 grid-cols-5 gap-1.5">
+            <div className="mt-3 grid min-h-11 grid-cols-5 gap-1.5">
               {Array.from({ length: 5 }, (_, index) => <div key={index} className="flex h-10 items-center justify-center border border-border text-sm font-semibold text-primary">{state.upper[index] ?? "·"}</div>)}
             </div>
           </div>
@@ -76,7 +76,7 @@ export function StreamMedianInsertionLab() {
           <div><div className="text-xs text-muted">中位数</div><div className="mt-1 font-semibold text-success">{state.median}</div></div>
         </div>
 
-        <div className="mt-4 flex min-h-10 items-center justify-between gap-3">
+        <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
           <p className="m-0 text-sm text-secondary">{state.action}</p>
           <div className="flex shrink-0 items-center gap-1">
             <button type="button" title="上一步" aria-label="上一步" disabled={cursor === 0} onClick={() => setCursor((value) => Math.max(0, value - 1))} className="inline-flex size-9 items-center justify-center border border-border text-secondary disabled:opacity-35"><span aria-hidden="true" className="text-lg leading-none">←</span></button>

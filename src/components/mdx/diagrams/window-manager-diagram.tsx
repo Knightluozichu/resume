@@ -170,7 +170,7 @@ export function WindowManagerDiagram() {
           <text
             x={MARGIN_X}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一个 Activity 一个 Window；WindowManager 接口背后是进程单例 WindowManagerGlobal
@@ -223,7 +223,7 @@ export function WindowManagerDiagram() {
                 <text
                   x={x + 16}
                   y={TOP + 54}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -250,7 +250,7 @@ export function WindowManagerDiagram() {
                       x={x + TOP_CARD_W + TOP_GAP / 2}
                       y={TOP + TOP_CARD_H / 2 - 8}
                       textAnchor="middle"
-                      fontSize="9"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       {i === 0 ? "持有" : "挂出"}
@@ -312,7 +312,7 @@ export function WindowManagerDiagram() {
                   x={MID_X + MID_CARD_W - 12}
                   y={y + 24}
                   textAnchor="end"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={color}
                 >
@@ -321,7 +321,7 @@ export function WindowManagerDiagram() {
                 <text
                   x={MID_X + 16}
                   y={y + 46}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {n.note}
@@ -346,7 +346,7 @@ export function WindowManagerDiagram() {
                     <text
                       x={MID_X + MID_CARD_W / 2 + 12}
                       y={y + MID_CARD_H + MID_GAP / 2 + 4}
-                      fontSize="9"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       委托
@@ -376,7 +376,7 @@ export function WindowManagerDiagram() {
           <text
             x={(topCardX(1) + TOP_CARD_W / 2 + MID_X + MID_CARD_W / 2) / 2 + 8}
             y={(TOP + TOP_CARD_H + MID_TOP) / 2 + 4}
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
@@ -413,7 +413,7 @@ export function WindowManagerDiagram() {
                 <text
                   x={RIGHT_X + 32}
                   y={rowY + LEGEND_ROW_H / 2 - 2}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={t.color}
                 >
@@ -422,7 +422,7 @@ export function WindowManagerDiagram() {
                 <text
                   x={RIGHT_X + 32}
                   y={rowY + LEGEND_ROW_H / 2 + 12}
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   type {t.range}：{t.example}
@@ -478,7 +478,7 @@ export function WindowManagerDiagram() {
                 <text
                   x={RIGHT_X + 16}
                   y={y + 46}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.note}
@@ -504,7 +504,7 @@ export function WindowManagerDiagram() {
                     <text
                       x={RIGHT_X + RIGHT_W / 2 + 12}
                       y={y + BIND_H + BIND_GAP / 2 + 4}
-                      fontSize="9"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       持有
@@ -535,7 +535,7 @@ export function WindowManagerDiagram() {
             x={(MID_X + MID_CARD_W + RIGHT_X) / 2}
             y={(midTop(2) + MID_CARD_H / 2 + BIND_TOP + BIND_H / 2) / 2 - 6}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -546,7 +546,7 @@ export function WindowManagerDiagram() {
           <text
             x={MARGIN_X}
             y={VIEW_H - 28}
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -555,7 +555,7 @@ export function WindowManagerDiagram() {
           <text
             x={MARGIN_X}
             y={VIEW_H - 12}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             → DecorView 关联到 params 描述的新 Window，WindowManagerGlobal 为它建一套 ViewRootImpl + Surface

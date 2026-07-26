@@ -58,14 +58,14 @@ export function LupClosuresDiagram() {
           <text x={60} y={266} fontSize="12" fontWeight="700" fill={success}>c1 = makeCounter()</text>
           <text x={60} y={286} fontSize="11" fill={primary}>c1() → 1  (count=1)</text>
           <text x={60} y={304} fontSize="11" fill={primary}>c1() → 2  (count=2)</text>
-          <text x={60} y={320} fontSize="10" fill={secondary}>独立 count = 2</text>
+          <text x={60} y={320} fontSize="11" fill={secondary}>独立 count = 2</text>
 
           {/* 闭包2 */}
           <rect x={380} y={246} width={300} height={80} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
           <text x={400} y={266} fontSize="12" fontWeight="700" fill={warning}>c2 = makeCounter()</text>
           <text x={400} y={286} fontSize="11" fill={primary}>c2() → 1  (count=1)</text>
           <text x={400} y={304} fontSize="11" fill={primary}>c2() → 2  (count=2)</text>
-          <text x={400} y={320} fontSize="10" fill={secondary}>独立 count = 2</text>
+          <text x={400} y={320} fontSize="11" fill={secondary}>独立 count = 2</text>
 
           {/* 说明 */}
           <text x={VIEW_W / 2} y={348} textAnchor="middle" fontSize="11" fill={secondary}>

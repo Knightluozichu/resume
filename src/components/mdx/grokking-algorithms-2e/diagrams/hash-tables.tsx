@@ -152,7 +152,7 @@ export function HashFunctionArrayDiagram() {
             </marker>
           </defs>
           <text x="380" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>散列函数 + 数组 = 按键定位</text>
-          <text x="380" y="50" textAnchor="middle" fontSize="10.5" fill={secondary}>相同键在同一表状态下走向同一槽位；不同键仍可能发生冲突</text>
+          <text x="380" y="50" textAnchor="middle" fontSize="11" fill={secondary}>相同键在同一表状态下走向同一槽位；不同键仍可能发生冲突</text>
 
           {rows.map((row, index) => {
             const y = 90 + index * 78;
@@ -161,9 +161,9 @@ export function HashFunctionArrayDiagram() {
               <g key={row.key}>
                 <rect x="35" y={y} width="116" height="44" rx="4" fill={row.tone} fillOpacity="0.1" stroke={row.tone} />
                 <text x="93" y={y + 18} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{row.key}</text>
-                <text x="93" y={y + 34} textAnchor="middle" fontSize="9.5" fill={secondary}>{row.value}</text>
+                <text x="93" y={y + 34} textAnchor="middle" fontSize="11" fill={secondary}>{row.value}</text>
                 <rect x="195" y={y + 3} width="120" height="38" rx="4" fill="var(--bg)" stroke={border} />
-                <text x="255" y={y + 27} textAnchor="middle" fontSize="10.5" fill={primary}>hash(key) → {row.slot}</text>
+                <text x="255" y={y + 27} textAnchor="middle" fontSize="11" fill={primary}>hash(key) → {row.slot}</text>
                 <line x1="151" y1={y + 22} x2="193" y2={y + 22} stroke={accent} markerEnd="url(#hash-arrow)" />
                 <path d={`M315 ${y + 22} C390 ${y + 22}, 400 ${targetY}, 470 ${targetY}`} fill="none" stroke={row.tone} strokeWidth="1.4" markerEnd="url(#hash-arrow)" />
               </g>
@@ -177,19 +177,19 @@ export function HashFunctionArrayDiagram() {
             return (
               <g key={slot}>
                 <rect x="480" y={y} width="220" height="36" rx="3" fill={occupied ? accent : "var(--bg)"} fillOpacity={occupied ? 0.07 : 1} stroke={occupied ? accent : border} />
-                <text x="497" y={y + 23} fontSize="10" fontWeight="700" fill={secondary}>{slot}</text>
+                <text x="497" y={y + 23} fontSize="11" fontWeight="700" fill={secondary}>{slot}</text>
                 {slot === 1 ? (
-                  <text x="520" y={y + 23} fontSize="10.5" fill={primary}>apple:$0.67 → avocado:$1.20</text>
+                  <text x="520" y={y + 23} fontSize="11" fill={primary}>apple:$0.67 → avocado:$1.20</text>
                 ) : slot === 4 ? (
-                  <text x="520" y={y + 23} fontSize="10.5" fill={primary}>milk:$1.49</text>
+                  <text x="520" y={y + 23} fontSize="11" fill={primary}>milk:$1.49</text>
                 ) : (
-                  <text x="590" y={y + 23} textAnchor="middle" fontSize="9.5" fill={secondary}>空</text>
+                  <text x="590" y={y + 23} textAnchor="middle" fontSize="11" fill={secondary}>空</text>
                 )}
               </g>
             );
           })}
           <rect x="480" y="349" width="220" height="25" rx="4" fill={danger} fillOpacity="0.05" stroke={danger} strokeOpacity="0.45" />
-          <text x="590" y="366" textAnchor="middle" fontSize="9.5" fill={primary}>只比槽位不够：桶内还要比较完整键。</text>
+          <text x="590" y="366" textAnchor="middle" fontSize="11" fill={primary}>只比槽位不够：桶内还要比较完整键。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

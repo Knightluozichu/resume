@@ -116,7 +116,7 @@ export function OfficialWatermelonLab({
                 key={item}
                 type="button"
                 onClick={() => setMode(item)}
-                className="min-h-10 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
+                className="min-h-11 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
                 style={{
                   background: mode === item ? soft : undefined,
                   color: mode === item ? color : undefined,
@@ -158,7 +158,7 @@ export function OfficialWatermelonLab({
               {concepts.slice(0, 12).map((concept) => (
                 <div
                   key={concept}
-                  className="min-h-10 border-l-2 px-2 py-1"
+                  className="min-h-11 border-l-2 px-2 py-1"
                   style={{ borderColor: color }}
                 >
                   {concept}

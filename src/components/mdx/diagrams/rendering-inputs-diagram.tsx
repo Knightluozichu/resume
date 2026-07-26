@@ -254,7 +254,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN1_Y + 46}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               形状轮廓（点连成的骨架）
@@ -263,7 +263,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN1_Y + 62}
               textAnchor="start"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               决定「长什么样」
@@ -305,7 +305,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN2_Y + 46}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               外观 = Shader + 一组参数
@@ -314,7 +314,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN2_Y + 62}
               textAnchor="start"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               颜色 / 贴图 / 金属 / 光滑
@@ -359,7 +359,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN3_Y + 46}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               给场景打的灯
@@ -368,7 +368,7 @@ export function RenderingInputsDiagram() {
               x={IN_X + 16}
               y={IN3_Y + 62}
               textAnchor="start"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               决定明暗，没灯就全黑
@@ -411,7 +411,7 @@ export function RenderingInputsDiagram() {
               x={REND_CX}
               y={REND_Y + 56}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               渲染器
@@ -420,7 +420,7 @@ export function RenderingInputsDiagram() {
               x={REND_CX}
               y={REND_Y + 80}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               把三者合起来
@@ -429,7 +429,7 @@ export function RenderingInputsDiagram() {
               x={REND_CX}
               y={REND_Y + 96}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               算成像素
@@ -478,7 +478,7 @@ export function RenderingInputsDiagram() {
               x={OUT_CX}
               y={OUT_SUB_Y}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               屏幕上的像素
@@ -490,7 +490,7 @@ export function RenderingInputsDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             少了形状画不出东西、少了材质不知刷什么、少了灯一片漆黑——三者缺一，画面就不对

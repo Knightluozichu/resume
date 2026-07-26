@@ -69,7 +69,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="180"
               y="42"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -93,7 +93,7 @@ export function TemplateSpecializationDiagram() {
           <text
             x={cx}
             y="170"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >
@@ -152,7 +152,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="38"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -162,7 +162,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="54"
-              fontSize="9"
+              fontSize="11"
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -196,7 +196,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="38"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -206,7 +206,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="54"
-              fontSize="9"
+              fontSize="11"
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -240,7 +240,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="38"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -250,7 +250,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="125"
               y="54"
-              fontSize="9"
+              fontSize="11"
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -314,7 +314,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x="180"
               y="38"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -350,7 +350,7 @@ export function TemplateSpecializationDiagram() {
             <text
               x={cx - 20}
               y="44"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >

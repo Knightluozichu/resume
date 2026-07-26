@@ -41,11 +41,11 @@ export function BitFieldDiagram() {
           <text x={24} y={28} fontSize="16" fontWeight="700" fill={primary} fontFamily="monospace">
             位字段（bit-field）内存打包
           </text>
-          <text x={24} y={48} fontSize="10" fill={secondary} fontFamily="monospace">
+          <text x={24} y={48} fontSize="11" fill={secondary} fontFamily="monospace">
             struct Status {"{ unsigned ready : 1; unsigned mode : 3; unsigned error : 4; unsigned flags : 8; };"}
           </text>
 
-          <text x={startX - 8} y={rowY - 14} fontSize="9" fill={secondary}>
+          <text x={startX - 8} y={rowY - 14} fontSize="11" fill={secondary}>
             一个 unsigned int 存储单元（16 bit 示意）
           </text>
           <rect x={startX - 8} y={rowY - 8} width={bitPos * unitW + 16} height={68} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
@@ -56,10 +56,10 @@ export function BitFieldDiagram() {
             return (
               <g key={c.name}>
                 <rect x={x} y={rowY} width={w} height={36} rx="4" fill={`${c.color}22`} stroke={c.color} strokeWidth="1.5" />
-                <text x={x + w / 2} y={rowY + 16} textAnchor="middle" fontSize="9" fontWeight="700" fill={primary}>
+                <text x={x + w / 2} y={rowY + 16} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>
                   {c.name}
                 </text>
-                <text x={x + w / 2} y={rowY + 30} textAnchor="middle" fontSize="8" fill={secondary} fontFamily="monospace">
+                <text x={x + w / 2} y={rowY + 30} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">
                   : {c.w}
                 </text>
               </g>
@@ -67,13 +67,13 @@ export function BitFieldDiagram() {
           })}
 
           {Array.from({ length: bitPos + 4 }).map((_, i) => (
-            <text key={`idx-${i}`} x={startX + i * unitW + 10} y={rowY + 52} textAnchor="middle" fontSize="7" fill={secondary}>
+            <text key={`idx-${i}`} x={startX + i * unitW + 10} y={rowY + 52} textAnchor="middle" fontSize="11" fill={secondary}>
               {i}
             </text>
           ))}
 
           <rect x={startX + bitPos * unitW} y={rowY} width={4 * unitW - 2} height={36} rx="4" fill={bgEl} stroke={border} strokeDasharray="3 2" strokeWidth="1" />
-          <text x={startX + bitPos * unitW + 2 * unitW} y={rowY + 22} textAnchor="middle" fontSize="8" fill={secondary}>
+          <text x={startX + bitPos * unitW + 2 * unitW} y={rowY + 22} textAnchor="middle" fontSize="11" fill={secondary}>
             未用 / padding
           </text>
 
@@ -81,13 +81,13 @@ export function BitFieldDiagram() {
           <text x={44} y={214} fontSize="11" fontWeight="600" fill={accent}>
             要点
           </text>
-          <text x={44} y={234} fontSize="10" fill={primary}>
+          <text x={44} y={234} fontSize="11" fill={primary}>
             • 多个小字段**打包**进同一整型存储单元，省内存、贴近硬件寄存器布局
           </text>
-          <text x={44} y={252} fontSize="10" fill={primary}>
+          <text x={44} y={252} fontSize="11" fill={primary}>
             • **不能**对位字段取地址；**不能**跨越单元边界（超宽会占用下一单元）
           </text>
-          <text x={44} y={270} fontSize="10" fill={secondary}>
+          <text x={44} y={270} fontSize="11" fill={secondary}>
             • 布局**实现定义**——跨平台二进制不可移植；可移植协议用手动掩码 + 位移更稳
           </text>
         </svg>

@@ -96,7 +96,7 @@ export function StencilTestFlowDiagram() {
             x="250"
             y="133"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ref 与缓冲值按 func 比较
@@ -116,7 +116,7 @@ export function StencilTestFlowDiagram() {
             x="393"
             y="110"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             失败
@@ -146,13 +146,13 @@ export function StencilTestFlowDiagram() {
           <text
             x="570"
             y="115"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
             ← sfail
           </text>
-          <text x="570" y="129" fontSize="9" fill="var(--text-secondary)">
+          <text x="570" y="129" fontSize="11" fill="var(--text-secondary)">
             更新模板值
           </text>
 
@@ -161,7 +161,7 @@ export function StencilTestFlowDiagram() {
             x="266"
             y="160"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             通过
@@ -201,7 +201,7 @@ export function StencilTestFlowDiagram() {
             x="250"
             y="213"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （在模板测试之后）
@@ -221,7 +221,7 @@ export function StencilTestFlowDiagram() {
             x="393"
             y="190"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             失败
@@ -251,13 +251,13 @@ export function StencilTestFlowDiagram() {
           <text
             x="570"
             y="195"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
             ← dpfail
           </text>
-          <text x="570" y="209" fontSize="9" fill="var(--text-secondary)">
+          <text x="570" y="209" fontSize="11" fill="var(--text-secondary)">
             更新模板值
           </text>
 
@@ -266,7 +266,7 @@ export function StencilTestFlowDiagram() {
             x="266"
             y="240"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             通过
@@ -338,13 +338,13 @@ export function StencilTestFlowDiagram() {
           <text
             x="570"
             y="273"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
             ← dppass
           </text>
-          <text x="570" y="287" fontSize="9" fill="var(--text-secondary)">
+          <text x="570" y="287" fontSize="11" fill="var(--text-secondary)">
             更新模板值
           </text>
 

@@ -22,7 +22,7 @@ export function RplVecCapacityLab() {
           <section className={`min-h-80 border p-4 ${compiles ? "border-emerald-500/40 bg-emerald-500/10" : "border-rose-500/40 bg-rose-500/10"}`} aria-live="polite">
             <span className="text-xs text-secondary">执行 v.push(new_value)</span>
             <div className="mt-5 grid grid-cols-5 gap-2">
-              {Array.from({ length: capacity }, (_, index) => <div key={index} className={`aspect-square min-h-10 border p-2 text-center text-xs ${index < length ? "border-cyan-500/50 bg-bg text-primary" : "border-border bg-bg text-secondary"}`}>{index < length ? `v${index}` : "空"}</div>)}
+              {Array.from({ length: capacity }, (_, index) => <div key={index} className={`aspect-square min-h-11 border p-2 text-center text-xs ${index < length ? "border-cyan-500/50 bg-bg text-primary" : "border-border bg-bg text-secondary"}`}>{index < length ? `v${index}` : "空"}</div>)}
             </div>
             <h3 className="mt-6 text-base font-semibold text-primary">{compiles ? `允许修改，push 后 len=${nextLength}` : "E0502：活跃共享借用阻止可变借用"}</h3>
             <p className="mt-4 text-sm text-secondary">{reallocates ? `容量不足，可能迁移到 capacity=${nextCapacity} 的新缓冲；旧元素地址不能继续被引用。` : "本次容量足够，但借用规则不依赖运行时是否碰巧扩容，仍阻止潜在失效。"}</p>
@@ -100,7 +100,7 @@ export function RplHashMapEntryLab() {
           <section className="border border-emerald-500/40 bg-emerald-500/10 p-4" aria-live="polite">
             <span className="text-xs text-secondary">HashMap entries（迭代顺序不作契约）</span>
             <div className="mt-3 space-y-2">
-              {entries.map(([key, value]) => <div key={key} className="grid min-h-10 grid-cols-[1fr_auto] items-center gap-3 border border-border bg-bg px-3 py-2 text-sm"><span className="break-words text-primary">{key}</span><strong className="text-primary">{value}</strong></div>)}
+              {entries.map(([key, value]) => <div key={key} className="grid min-h-11 grid-cols-[1fr_auto] items-center gap-3 border border-border bg-bg px-3 py-2 text-sm"><span className="break-words text-primary">{key}</span><strong className="text-primary">{value}</strong></div>)}
             </div>
             <p className="mt-5 border-t border-border pt-4 text-xs text-secondary">entry 在 Vacant/Occupied 间选择；or_insert 返回 `&mut V`，解引用后可原地累计。</p>
           </section>

@@ -10,6 +10,13 @@ export function OfficialTcgLab({ title, concepts, accent, view }: Props) {
   const [temperature, setTemperature] = useState(80);
   const [context, setContext] = useState(6);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setTemperature(80);
+    setContext(6);
+    setFault(false);
+  }
+
   const labels = concepts.slice(0, 6);
   const probabilities = useMemo(() => {
     const logits = [2.4, 1.8, 1.15, 0.45, -0.2];
@@ -24,6 +31,7 @@ export function OfficialTcgLab({ title, concepts, accent, view }: Props) {
     { label: "结果有证据", value: clamp(74 + stage * 4 - (fault ? 42 : 0)) },
   ];
   return <div style={{ border: "1px solid #d4d4d8", borderRadius: 6, background: "#fff", padding: 14, color: "#18181b" }}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
       <strong style={{ fontSize: 14 }}>{title}</strong><span style={{ fontSize: 12, color: "#52525b" }}>{view === "map" ? "生成证据链" : view === "probability" ? "token概率" : "边界审计"}</span>
     </div>

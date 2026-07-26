@@ -57,7 +57,7 @@ export function DynamicBatchingDiagram() {
                 x={it.x + 48}
                 y="86"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={it.ok ? "var(--success)" : "var(--danger)"}
               >
                 {it.ok ? "✓ 可合" : "✗ 打断"}
@@ -93,7 +93,7 @@ export function DynamicBatchingDiagram() {
             x="160"
             y="188"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             4 Draw Calls
@@ -128,7 +128,7 @@ export function DynamicBatchingDiagram() {
             x="420"
             y="188"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--success)"
           >
             1 Batch（CPU 合并顶点）
@@ -138,7 +138,7 @@ export function DynamicBatchingDiagram() {
             x="320"
             y="212"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             代价：CPU 每帧合并顶点缓冲；移动平台默认常关，顶点数限制更严

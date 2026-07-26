@@ -53,7 +53,7 @@ export function ConditionalCompileDiagram() {
             x={320}
             y={108}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             已定义？
@@ -72,7 +72,7 @@ export function ConditionalCompileDiagram() {
             x={200}
             y={88}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={kept}
             fontWeight="600"
           >
@@ -88,7 +88,7 @@ export function ConditionalCompileDiagram() {
             stroke={kept}
             strokeWidth="2"
           />
-          <text x={36} y={172} fontSize="10" fontWeight="600" fill={kept}>
+          <text x={36} y={172} fontSize="11" fontWeight="600" fill={kept}>
             保留 → 编译进程序
           </text>
           <text
@@ -124,7 +124,7 @@ export function ConditionalCompileDiagram() {
             x={440}
             y={88}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={dropped}
             fontWeight="600"
           >
@@ -141,7 +141,7 @@ export function ConditionalCompileDiagram() {
             strokeWidth="1.5"
             strokeDasharray="6 4"
           />
-          <text x={428} y={172} fontSize="10" fontWeight="600" fill={dropped}>
+          <text x={428} y={172} fontSize="11" fontWeight="600" fill={dropped}>
             丢弃 → 不进 .o
           </text>
           <text
@@ -197,7 +197,7 @@ export function ConditionalCompileDiagram() {
           <text
             x={36}
             y={318}
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
             fontFamily="system-ui"
           >

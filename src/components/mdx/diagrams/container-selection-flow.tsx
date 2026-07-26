@@ -99,7 +99,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                   markerEnd="url(#arrDown)"
                 />
               )}
-              <text x={nodes.q1.x - 90} y={nodes.q1.y + 50} fontSize="9" fill={good} textAnchor="middle">
+              <text x={nodes.q1.x - 90} y={nodes.q1.y + 50} fontSize="11" fill={good} textAnchor="middle">
                 YES ↙
               </text>
 
@@ -113,20 +113,20 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                 strokeWidth="1.2"
                 markerEnd="url(#arrRight)"
               />
-              <text x={nodes.q1.x + 120} y={nodes.q1.y - 10} fontSize="9" fill={warn} textAnchor="middle">
+              <text x={nodes.q1.x + 120} y={nodes.q1.y - 10} fontSize="11" fill={warn} textAnchor="middle">
                 NO ↗
               </text>
               <text x={nodes.first_no.x} y={nodes.first_no.y - 30} fontSize="11" fill={warn} textAnchor="middle">
                 不需要 kv 映射
               </text>
-              <text x={nodes.first_no.x} y={nodes.first_no.y - 14} fontSize="10" fill={secondary} textAnchor="middle">
+              <text x={nodes.first_no.x} y={nodes.first_no.y - 14} fontSize="11" fill={secondary} textAnchor="middle">
                 考虑用顺序容器
               </text>
               {showQ2 && (
                 <rect x={nodes.first_no.x - 60} y={nodes.first_no.y} width="120" height="24" rx="4" fill={bg} stroke={border} />
               )}
               {showQ2 && (
-                <text x={nodes.first_no.x} y={nodes.first_no.y + 16} fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                <text x={nodes.first_no.x} y={nodes.first_no.y + 16} fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                   vector/list/deque...
                 </text>
               )}
@@ -156,7 +156,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                   markerEnd="url(#arrDown)"
                 />
               )}
-              <text x={nodes.q2.x + 50} y={nodes.q2.y + 45} fontSize="9" fill={good} textAnchor="middle">
+              <text x={nodes.q2.x + 50} y={nodes.q2.y + 45} fontSize="11" fill={good} textAnchor="middle">
                 YES（有序）
               </text>
 
@@ -172,21 +172,21 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                     strokeWidth="1.2"
                     markerEnd="url(#arrRight)"
                   />
-                  <text x={370} y={250} fontSize="9" fill={warn} textAnchor="middle">
+                  <text x={370} y={250} fontSize="11" fill={warn} textAnchor="middle">
                     NO（无序）
                   </text>
-                  <text x={520} y={328} fontSize="10" fill={accent} textAnchor="middle">
+                  <text x={520} y={328} fontSize="11" fill={accent} textAnchor="middle">
                     unordered_set
                   </text>
-                  <text x={520} y={343} fontSize="10" fill={accent} textAnchor="middle">
+                  <text x={520} y={343} fontSize="11" fill={accent} textAnchor="middle">
                     unordered_map
                   </text>
                   {showQ4 && (
                     <>
-                      <text x={520} y={358} fontSize="10" fill={secondary} textAnchor="middle">
+                      <text x={520} y={358} fontSize="11" fill={secondary} textAnchor="middle">
                         unordered_multiset
                       </text>
-                      <text x={520} y={373} fontSize="10" fill={secondary} textAnchor="middle">
+                      <text x={520} y={373} fontSize="11" fill={secondary} textAnchor="middle">
                         unordered_multimap
                       </text>
                     </>
@@ -217,7 +217,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                 strokeWidth="1.2"
                 markerEnd="url(#arrLeft)"
               />
-              <text x={nodes.q3.x - 120} y={nodes.q3.y - 8} fontSize="9" fill={good} textAnchor="middle">
+              <text x={nodes.q3.x - 120} y={nodes.q3.y - 8} fontSize="11" fill={good} textAnchor="middle">
                 NO
               </text>
               <rect x={nodes.q3.x - 210} y={nodes.q3.y - 24} width="90" height="22" rx="4" fill={accent} opacity="0.12" stroke={accent} />
@@ -241,7 +241,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                     strokeWidth="1.2"
                     markerEnd="url(#arrRight3)"
                   />
-                  <text x={nodes.q3.x + 120} y={nodes.q3.y - 8} fontSize="9" fill={warn} textAnchor="middle">
+                  <text x={nodes.q3.x + 120} y={nodes.q3.y - 8} fontSize="11" fill={warn} textAnchor="middle">
                     YES
                   </text>
                   <rect x={nodes.q3.x + 120} y={nodes.q3.y - 24} width="110" height="22" rx="4" fill={accent} opacity="0.08" stroke={border} />
@@ -266,7 +266,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                 <text x="210" y="20" fontSize="12" fontWeight="600" fill={primary} textAnchor="middle">
                   无序 + 不可重复key → unordered_set / unordered_map
                 </text>
-                <text x="210" y="42" fontSize="10" fill={secondary} textAnchor="middle">
+                <text x="210" y="42" fontSize="11" fill={secondary} textAnchor="middle">
                   均摊 O(1) 查找/插入，无序遍历——当你不需要有序输出、只关心「快速查找」时选这个
                 </text>
               </g>
@@ -277,7 +277,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                 <text x="210" y="18" fontSize="12" fontWeight="600" fill={secondary} textAnchor="middle">
                   无序 + 可重复key → unordered_multiset / unordered_multimap
                 </text>
-                <text x="210" y="38" fontSize="10" fill={secondary} textAnchor="middle">
+                <text x="210" y="38" fontSize="11" fill={secondary} textAnchor="middle">
                   场景极罕见——大多数时候你不需要无序+重复；先确认是否真的是这个需求
                 </text>
               </g>

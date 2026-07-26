@@ -78,11 +78,11 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
                   [{i}]
                 </text>
                 {/* Type name */}
-                <text x={x + 8} y={y + 36} fontSize="10" fill={isActive ? el.color : secondary} fontFamily="monospace">
+                <text x={x + 8} y={y + 36} fontSize="11" fill={isActive ? el.color : secondary} fontFamily="monospace">
                   {el.name}
                 </text>
                 {/* Value */}
-                <text x={x + boxW - 8} y={y + 36} fontSize="10" fill={primary} textAnchor="end" fontFamily="monospace">
+                <text x={x + boxW - 8} y={y + 36} fontSize="11" fill={primary} textAnchor="end" fontFamily="monospace">
                   {el.value}
                 </text>
                 {/* Get<> annotation */}
@@ -90,7 +90,7 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
                   <text
                     x={x + boxW / 2}
                     y={y + 52}
-                    fontSize="9"
+                    fontSize="11"
                     fill={accent}
                     textAnchor="middle"
                     fontFamily="monospace"
@@ -135,7 +135,7 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
                       strokeWidth={1.5}
                       strokeDasharray="4,3"
                     />
-                    <text x={elX} y={20} fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">
+                    <text x={elX} y={20} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                       ↓
                     </text>
                   </g>
@@ -148,7 +148,7 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
                 <text x={(totalW + 32) / 2} y="18" fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">
                   C++11 解包：tie(a, b, c) = t;
                 </text>
-                <text x={(totalW + 32) / 2} y="34" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                <text x={(totalW + 32) / 2} y="34" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
                   a=42  b=3.14  c=&quot;hello&quot;
                 </text>
               </g>
@@ -167,14 +167,14 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
           {/* Source code panel */}
           <g transform={`translate(40, ${h - 88})`}>
             <rect x="0" y="0" width={w - 80} height="36" rx="6" fill="var(--code-bg)" stroke={border} />
-            <text x="16" y="14" fontSize="10" fill={secondary} fontFamily="monospace">
+            <text x="16" y="14" fontSize="11" fill={secondary} fontFamily="monospace">
               {step <= 3 && "// get<N>(tuple) —— 编译期取第 N 个元素，返回该类型的引用"}
               {step === 1 && ' int x = get<0>(t);'}
               {step === 2 && ' double y = get<1>(t);'}
               {step === 3 && ' string z = get<2>(t);'}
               {step === 4 && ' tie(x, y, z) = t;  // x、y、z 必须先声明'}
             </text>
-            <text x="16" y="28" fontSize="10" fill={step >= 1 ? good : secondary} fontFamily="monospace">
+            <text x="16" y="28" fontSize="11" fill={step >= 1 ? good : secondary} fontFamily="monospace">
               {step === 1 && "// x = 42"}
               {step === 2 && "// x = 42, y = 3.14"}
               {step === 3 && "// x = 42, y = 3.14, z = \"hello\""}

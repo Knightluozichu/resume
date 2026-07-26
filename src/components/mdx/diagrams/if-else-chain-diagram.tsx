@@ -53,13 +53,13 @@ export function IfElseChainDiagram({ step = 3 }: IfElseChainDiagramProps) {
               grade = &apos;A&apos;
             </text>
             <line x1={cx + diaW / 2} y1={ifY} x2={cx + 100} y2={ifY} stroke={"var(--accent)"} strokeWidth="1.5" />
-            <text x={cx + diaW / 2 + 6} y={ifY - 8} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+            <text x={cx + diaW / 2 + 6} y={ifY - 8} fontSize="11" fill={"var(--accent)"} fontFamily="system-ui">
               真 → 执行后跳出链
             </text>
           </g>
 
           <line x1={cx} y1={ifY + diaH / 2} x2={cx} y2={eiY - diaH / 2} stroke={isActive(2) ? "var(--accent)" : "var(--text-secondary)"} strokeWidth="1.5" />
-          <text x={cx + diaW / 2 + 8} y={(ifY + eiY) / 2} fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={cx + diaW / 2 + 8} y={(ifY + eiY) / 2} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             假 ↓
           </text>
 
@@ -80,13 +80,13 @@ export function IfElseChainDiagram({ step = 3 }: IfElseChainDiagramProps) {
               grade = &apos;P&apos;
             </text>
             <line x1={cx + diaW / 2} y1={eiY} x2={cx + 100} y2={eiY} stroke={"var(--text-primary)"} strokeWidth="1.5" />
-            <text x={cx + diaW / 2 + 6} y={eiY - 8} fontSize="10" fill={"var(--text-primary)"} fontFamily="system-ui">
+            <text x={cx + diaW / 2 + 6} y={eiY - 8} fontSize="11" fill={"var(--text-primary)"} fontFamily="system-ui">
               真 → 执行后跳出链
             </text>
           </g>
 
           <line x1={cx} y1={eiY + diaH / 2} x2={cx} y2={elseY - boxH / 2} stroke={isActive(3) ? "var(--accent)" : "var(--text-secondary)"} strokeWidth="1.5" />
-          <text x={cx + diaW / 2 + 8} y={(eiY + elseY) / 2} fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={cx + diaW / 2 + 8} y={(eiY + elseY) / 2} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             全假 ↓
           </text>
 

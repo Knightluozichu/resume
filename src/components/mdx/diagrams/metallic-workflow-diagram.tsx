@@ -87,7 +87,7 @@ export function MetallicWorkflowDiagram() {
           <text x="60" y="265" fontSize="11" fill="var(--text-secondary)">
             镜面反射 ~ 白色（无色彩）
           </text>
-          <text x="60" y="282" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="282" fontSize="11" fill="var(--text-secondary)">
             k_d 大、k_s 小
           </text>
 
@@ -156,7 +156,7 @@ export function MetallicWorkflowDiagram() {
           <text x="385" y="265" fontSize="11" fill="var(--accent)" fontWeight="600">
             镜面反射 = albedo 颜色（有色）
           </text>
-          <text x="385" y="282" fontSize="10" fill="var(--text-secondary)">
+          <text x="385" y="282" fontSize="11" fill="var(--text-secondary)">
             k_d = 0、k_s 大
           </text>
 

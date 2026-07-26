@@ -31,7 +31,7 @@ export function DnmSpanSliceLab() {
           <div className="grid grid-cols-6 gap-2 sm:grid-cols-12">
             {cells.map((index) => {
               const active = index >= start && index < start + safeLength;
-              return <div key={index} className={`flex aspect-square min-h-10 items-center justify-center border text-sm ${active ? "border-emerald-500 bg-emerald-500/20 text-primary" : "border-border bg-elevated text-secondary"}`}>{index}</div>;
+              return <div key={index} className={`flex aspect-square min-h-11 items-center justify-center border text-sm ${active ? "border-emerald-500 bg-emerald-500/20 text-primary" : "border-border bg-elevated text-secondary"}`}>{index}</div>;
             })}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-4">

@@ -335,7 +335,7 @@ export function SceneHierarchyDiagram() {
               x={(COL_X(0) + COL_W + COL_X(1)) / 2}
               y={COL_TOP + CARD_H / 2 - 8}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               拖入
@@ -399,7 +399,7 @@ export function SceneHierarchyDiagram() {
                 <text
                   x={gx + 28}
                   y={gy + CARD_H / 2 + 12}
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {go.sub}
@@ -437,7 +437,7 @@ export function SceneHierarchyDiagram() {
               x={(COL_X(1) + COL_W + COL_X(2)) / 2}
               y={COL_TOP + CARD_H / 2 + CARD_GAP - 8}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--accent)"
             >
               查看组件
@@ -479,7 +479,7 @@ export function SceneHierarchyDiagram() {
                 <text
                   x={COL_X(2) + 14}
                   y={cy + CARD_H / 2 + 12}
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {co.sub}

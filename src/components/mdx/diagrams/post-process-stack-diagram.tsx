@@ -80,7 +80,7 @@ export function PostProcessStackDiagram({
                   x="596"
                   y={y + 22}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {fx.note}

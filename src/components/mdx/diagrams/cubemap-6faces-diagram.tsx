@@ -169,7 +169,7 @@ export function Cubemap6FacesDiagram() {
             x="540"
             y="186"
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             中心

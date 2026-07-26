@@ -64,7 +64,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="150"
             y="90"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -107,7 +107,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="395"
             y="86"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -116,7 +116,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="395"
             y="100"
-            fontSize="9"
+            fontSize="11"
             fill={token.textSecondary}
             opacity="0.6"
             textAnchor="middle"
@@ -157,7 +157,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="600"
             y="91"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -187,7 +187,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="600"
             y="169"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -230,7 +230,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="395"
             y="164"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -239,7 +239,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="395"
             y="178"
-            fontSize="9"
+            fontSize="11"
             fill={token.textSecondary}
             opacity="0.6"
             textAnchor="middle"
@@ -282,7 +282,7 @@ export function IOMemoryBufferDiagram() {
           <text
             x="150"
             y="168"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >

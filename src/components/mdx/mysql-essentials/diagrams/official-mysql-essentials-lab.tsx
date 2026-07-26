@@ -45,12 +45,20 @@ export function OfficialMysqlEssentialsLab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     evidenceItems.map(() => false),
   );
+  function resetExperiment() {
+    setSelected(0);
+    setFailure(0);
+    setChecked(() =>
+    evidenceItems.map(() => false));
+  }
+
   const progress = useMemo(() => checked.filter(Boolean).length, [checked]);
 
   if (mode === "model") {
     const node = nodes[selected] ?? nodes[0];
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 bg-emerald-50 px-4 py-3 dark:border-zinc-800 dark:bg-emerald-950/30">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             模型视图 · {part}
@@ -97,6 +105,7 @@ export function OfficialMysqlEssentialsLab({
   if (mode === "experiment") {
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 bg-amber-50 px-4 py-3 dark:border-zinc-800 dark:bg-amber-950/30">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
             故障实验 · 单变量切换
@@ -144,6 +153,7 @@ export function OfficialMysqlEssentialsLab({
 
   return (
     <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-zinc-200 bg-sky-50 px-4 py-3 dark:border-zinc-800 dark:bg-sky-950/30">
         <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
           证据门 · {progress}/{evidenceItems.length}

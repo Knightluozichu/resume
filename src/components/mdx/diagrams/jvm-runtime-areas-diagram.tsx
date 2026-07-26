@@ -153,7 +153,7 @@ export function JvmRuntimeAreasDiagram() {
           <text
             x={MARGIN}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一条边界把内存切两半：左边全线程共用，右边每个线程各来一套
@@ -173,7 +173,7 @@ export function JvmRuntimeAreasDiagram() {
             x={boundaryX}
             y={TOP - 14}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -235,7 +235,7 @@ export function JvmRuntimeAreasDiagram() {
             x={heapInnerX + heapInnerW - 10}
             y={heapY + 17}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -258,7 +258,7 @@ export function JvmRuntimeAreasDiagram() {
           <text
             x={heapInnerX + 20}
             y={youngY + 16}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -297,7 +297,7 @@ export function JvmRuntimeAreasDiagram() {
                   x={c.x + c.w / 2}
                   y={cellY + cellH / 2 + 4}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
@@ -324,7 +324,7 @@ export function JvmRuntimeAreasDiagram() {
           <text
             x={heapInnerX + 20}
             y={oldY + oldH / 2 + 4}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -363,7 +363,7 @@ export function JvmRuntimeAreasDiagram() {
           <text
             x={heapInnerX + 14}
             y={methodY + 38}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             类元信息 · 运行时常量池 · 静态变量
@@ -371,7 +371,7 @@ export function JvmRuntimeAreasDiagram() {
           <text
             x={heapInnerX + 14}
             y={methodY + 54}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （所有线程共享同一份类的「说明书」）
@@ -417,7 +417,7 @@ export function JvmRuntimeAreasDiagram() {
                 <text
                   x={cardX + THREAD_PAD}
                   y={threadTop + 16}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fontFamily="var(--font-mono)"
                   fill="var(--success)"
@@ -446,7 +446,7 @@ export function JvmRuntimeAreasDiagram() {
                       <text
                         x={cardX + THREAD_PAD + 8}
                         y={ay + 17}
-                        fontSize="9.5"
+                        fontSize="11"
                         fontWeight="600"
                         fill="var(--text-primary)"
                       >
@@ -455,7 +455,7 @@ export function JvmRuntimeAreasDiagram() {
                       <text
                         x={cardX + THREAD_PAD + 8}
                         y={ay + 32}
-                        fontSize="8.5"
+                        fontSize="11"
                         fill="var(--text-secondary)"
                       >
                         {a.note}
@@ -484,7 +484,7 @@ export function JvmRuntimeAreasDiagram() {
                                 x={fx + fw / 2}
                                 y={fy + fh - 3}
                                 textAnchor="middle"
-                                fontSize="6.5"
+                                fontSize="11"
                                 fill="var(--success)"
                               >
                                 栈帧
@@ -507,7 +507,7 @@ export function JvmRuntimeAreasDiagram() {
                 <text
                   x={MARGIN}
                   y={footY}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   栈帧 = {FRAME_PARTS.join(" + ")}
@@ -515,7 +515,7 @@ export function JvmRuntimeAreasDiagram() {
                 <text
                   x={MARGIN}
                   y={footY + 16}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   方法调用 → 压入新栈帧；方法返回 → 栈帧出栈（后进先出）
@@ -524,7 +524,7 @@ export function JvmRuntimeAreasDiagram() {
                   x={VIEW_W - MARGIN}
                   y={footY}
                   textAnchor="end"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--warning)"
                 >

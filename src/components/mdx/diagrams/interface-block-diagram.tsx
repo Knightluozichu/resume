@@ -50,7 +50,7 @@ export function InterfaceBlockDiagram() {
               x="100"
               y={72 + i * 24}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               className="font-mono"
               fill="var(--text-primary)"
             >
@@ -95,7 +95,7 @@ export function InterfaceBlockDiagram() {
               x="250"
               y={72 + i * 24}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               className="font-mono"
               fill="var(--text-primary)"
             >
@@ -107,7 +107,7 @@ export function InterfaceBlockDiagram() {
             x="170"
             y="170"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             变量一多就乱、易写错名
@@ -151,7 +151,7 @@ export function InterfaceBlockDiagram() {
             x="404"
             y="70"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             className="font-mono"
             fill="var(--accent)"
@@ -162,7 +162,7 @@ export function InterfaceBlockDiagram() {
             x="404"
             y="90"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -172,7 +172,7 @@ export function InterfaceBlockDiagram() {
             x="404"
             y="104"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -182,7 +182,7 @@ export function InterfaceBlockDiagram() {
             x="404"
             y="124"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             className="font-mono"
             fill="var(--accent)"
@@ -216,7 +216,7 @@ export function InterfaceBlockDiagram() {
             x="546"
             y="78"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             className="font-mono"
             fill="var(--accent)"
@@ -227,7 +227,7 @@ export function InterfaceBlockDiagram() {
             x="546"
             y="94"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -237,7 +237,7 @@ export function InterfaceBlockDiagram() {
             x="546"
             y="114"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             className="font-mono"
             fill="var(--accent)"
@@ -249,7 +249,7 @@ export function InterfaceBlockDiagram() {
             x="468"
             y="170"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             块名对上即可，实例名可不同
@@ -275,11 +275,11 @@ export function InterfaceBlockDiagram() {
           >
             接口块就是把一组要往下传的 in / out 装进一个有名字的「盒子」整组传
           </text>
-          <text x="60" y="256" fontSize="10.5" fill="var(--text-secondary)">
+          <text x="60" y="256" fontSize="11" fill="var(--text-secondary)">
             · 顶点端 out VS_OUT 块、片段端 in VS_OUT
             块：块名（VS_OUT）两端必须一致
           </text>
-          <text x="60" y="276" fontSize="10.5" fill="var(--text-secondary)">
+          <text x="60" y="276" fontSize="11" fill="var(--text-secondary)">
             · 实例名（vs_out / fs_in）只是本段内的代号，两端可以不同
           </text>
         </svg>

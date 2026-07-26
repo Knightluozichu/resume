@@ -29,7 +29,7 @@ export function TcpPermutationLab() {
   const inversions = inversionCount(values);
   return (
     <Figure caption="An inversion is a pair whose relative order disagrees with sorted order; parity changes under every transposition and insertion cost follows local inversions.">
-      <label className="text-sm font-semibold text-primary">cyclic rotation = {rotation}<input className="mt-2 w-full accent-current" type="range" min="0" max="6" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">cyclic rotation = {rotation}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="6" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-7 gap-1">{values.map((value, index) => <div key={index} className="border border-border bg-background p-3 text-center font-mono text-sm text-primary">{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="inversions" value={inversions.toString()} /><Stat label="parity" value={inversions % 2 ? "odd" : "even"} tone="warning" /><Stat label="permutation" value={values.join(" ")} tone="success" /></div>
     </Figure>
@@ -75,7 +75,7 @@ export function TcpInsertionLab() {
   const result = insertionPrefix(SAMPLE, prefix);
   return (
     <Figure caption="Insertion sort maintains a sorted prefix; the number of element shifts equals the inversions removed from that prefix.">
-      <label className="text-sm font-semibold text-primary">sorted prefix length = {prefix}<input className="mt-2 w-full accent-current" type="range" min="1" max={SAMPLE.length} value={prefix} onChange={(event) => setPrefix(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">sorted prefix length = {prefix}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max={SAMPLE.length} value={prefix} onChange={(event) => setPrefix(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-7 gap-1">{result.output.map((value, index) => <div key={index} className={`border p-3 text-center font-mono text-sm ${index < prefix ? "border-success bg-success/15 text-success" : "border-border bg-background text-primary"}`}>{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="comparisons" value={result.comparisons.toString()} /><Stat label="moves" value={result.moves.toString()} tone="warning" /><Stat label="prefix invariant" value="sorted" tone="success" /></div>
     </Figure>
@@ -128,7 +128,7 @@ export function TcpPartitionLab() {
   const result = partition(SAMPLE, pivotIndex);
   return (
     <Figure caption="Quicksort partitioning establishes an order relation around a pivot; balance determines recursion depth while three-way partitioning controls duplicates.">
-      <label className="text-sm font-semibold text-primary">pivot position = {pivotIndex}<input className="mt-2 w-full accent-current" type="range" min="0" max={SAMPLE.length - 1} value={pivotIndex} onChange={(event) => setPivotIndex(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">pivot position = {pivotIndex}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max={SAMPLE.length - 1} value={pivotIndex} onChange={(event) => setPivotIndex(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="less" value={result.less.join(" ") || "empty"} /><Stat label="pivot / equal" value={`${result.pivot} / ${result.equal.join(" ")}`} tone="warning" /><Stat label="greater" value={result.greater.join(" ") || "empty"} tone="success" /></div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="left size" value={result.less.length.toString()} /><Stat label="right size" value={result.greater.length.toString()} /></div>
     </Figure>
@@ -153,7 +153,7 @@ export function TcpMergeLab() {
   const result = merge(left, right, step);
   return (
     <Figure caption="Merging consumes the smaller current head and maintains a sorted output prefix; equal keys are taken from the left to preserve stability.">
-      <label className="text-sm font-semibold text-primary">output items = {step}<input className="mt-2 w-full accent-current" type="range" min="0" max="8" value={step} onChange={(event) => setStep(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">output items = {step}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="8" value={step} onChange={(event) => setStep(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="left unread" value={left.slice(result.leftCursor).join(" ") || "empty"} /><Stat label="right unread" value={right.slice(result.rightCursor).join(" ") || "empty"} /><Stat label="output prefix" value={result.output.join(" ") || "empty"} tone="success" /></div>
     </Figure>
   );
@@ -185,7 +185,7 @@ export function TcpHeapLab() {
   const valid = result.heap.every((value, index) => (index === 0 || result.heap[Math.floor((index - 1) / 2)] >= value));
   return (
     <Figure caption="Bottom-up heap construction restores the parent-dominates-children invariant from the last internal node to the root in linear time.">
-      <label className="text-sm font-semibold text-primary">heap size = {size}<input className="mt-2 w-full accent-current" type="range" min="2" max="7" value={size} onChange={(event) => setSize(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">heap size = {size}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="7" value={size} onChange={(event) => setSize(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-7 gap-1">{result.heap.map((value, index) => <div key={index} className="border border-border bg-background p-3 text-center font-mono text-sm text-primary">{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="root maximum" value={result.heap[0].toString()} /><Stat label="construction swaps" value={result.swaps.toString()} /><Stat label="heap invariant" value={valid ? "valid" : "broken"} tone={valid ? "success" : "danger"} /></div>
     </Figure>
@@ -200,7 +200,7 @@ export function TcpDistributionLab() {
   const retained = counts.reduce((sum, count) => sum + count, 0);
   return (
     <Figure caption="Distribution sorting replaces key comparisons with a bounded key map; its cost depends on both record count and key universe size.">
-      <label className="text-sm font-semibold text-primary">accepted key range = 0..{range - 1}<input className="mt-2 w-full accent-current" type="range" min="2" max="8" value={range} onChange={(event) => setRange(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">accepted key range = 0..{range - 1}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="8" value={range} onChange={(event) => setRange(Number(event.target.value))} /></label>
       <div className="mt-4 flex h-36 items-end gap-2 border border-border bg-background p-2">{counts.map((count, key) => <div key={key} className="flex flex-1 flex-col justify-end text-center text-xs text-secondary"><span>{count}</span><div className="bg-accent/70" style={{ height: `${Math.max(3, count * 28)}px` }} /><span>{key}</span></div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="retained records" value={retained.toString()} tone="success" /><Stat label="outside range" value={(values.length - retained).toString()} tone={retained === values.length ? "success" : "warning"} /></div>
     </Figure>
@@ -219,7 +219,7 @@ export function TcpDecisionTreeLab() {
   const lowerBound = Math.ceil(Math.log2(leaves));
   return (
     <Figure caption="A deterministic comparison sort needs one decision-tree leaf per input permutation, so worst-case comparisons are at least the ceiling of log2(n!).">
-      <label className="text-sm font-semibold text-primary">items n = {size}<input className="mt-2 w-full accent-current" type="range" min="2" max="10" value={size} onChange={(event) => setSize(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">items n = {size}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="10" value={size} onChange={(event) => setSize(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="permutations n!" value={leaves.toLocaleString()} /><Stat label="minimum tree depth" value={lowerBound.toString()} tone="warning" /><Stat label="n log2 n" value={(size * Math.log2(size)).toFixed(2)} /></div>
     </Figure>
   );
@@ -235,7 +235,7 @@ export function TcpSortingNetworkLab() {
   const sorted = wires.every((value, index) => index === 0 || wires[index - 1] <= value);
   return (
     <Figure caption="A sorting network fixes the comparison schedule independently of data; the zero-one principle reduces verification to binary inputs.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">binary input = {mask.toString(2).padStart(4, "0")}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={mask} onChange={(event) => setMask(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">comparators applied = {stage}<input className="mt-2 w-full accent-current" type="range" min="0" max="5" value={stage} onChange={(event) => setStage(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">binary input = {mask.toString(2).padStart(4, "0")}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={mask} onChange={(event) => setMask(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">comparators applied = {stage}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="5" value={stage} onChange={(event) => setStage(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-4 gap-2">{wires.map((value, index) => <Stat key={index} label={`wire ${index}`} value={value.toString()} tone={sorted ? "success" : "accent"} />)}</div>
       <div className="mt-4"><Stat label="network output" value={sorted ? "sorted" : "unfinished"} tone={sorted ? "success" : "warning"} /></div>
     </Figure>
@@ -266,7 +266,7 @@ export function TcpReplacementSelectionLab() {
   const runs = replacementRuns(input, memory);
   return (
     <Figure caption="Replacement selection freezes incoming records that would break the current run; with random input, runs are often longer than memory.">
-      <label className="text-sm font-semibold text-primary">records in memory = {memory}<input className="mt-2 w-full accent-current" type="range" min="2" max="7" value={memory} onChange={(event) => setMemory(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">records in memory = {memory}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="7" value={memory} onChange={(event) => setMemory(Number(event.target.value))} /></label>
       <div className="mt-4 grid gap-2">{runs.map((run, index) => <Stat key={index} label={`run ${index + 1}`} value={run.join(" ")} tone={index === 0 ? "success" : "accent"} />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="run count" value={runs.length.toString()} /><Stat label="longest run" value={Math.max(...runs.map((run) => run.length)).toString()} tone="success" /></div>
     </Figure>
@@ -291,7 +291,7 @@ export function TcpKWayMergeLab() {
   const result = kWayPrefix(streams, count);
   return (
     <Figure caption="A k-way merge keeps one frontier item per run; a heap or loser tree reduces each output choice from linear scan to logarithmic work.">
-      <label className="text-sm font-semibold text-primary">merged outputs = {count}<input className="mt-2 w-full accent-current" type="range" min="0" max="12" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">merged outputs = {count}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="12" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2">{streams.map((stream, index) => <Stat key={index} label={`run ${index + 1} unread`} value={stream.slice(result.cursors[index]).join(" ") || "empty"} />)}</div>
       <div className="mt-2"><Stat label="merged prefix" value={result.output.join(" ") || "empty"} tone="success" /></div>
     </Figure>

@@ -14,18 +14,18 @@ export function Poeaa24Pattern05TableDataGateway() {
           <text x={128} y={99} textAnchor="middle" fontSize="11" fill={T.primary}>Service / Script</text>
           {/* 箭头 */}
           <line x1={208} y1={94} x2={268} y2={94} stroke={T.secondary} strokeWidth="1.2" />
-          <text x={238} y={86} textAnchor="middle" fontSize="9" fill={T.secondary}>调用</text>
+          <text x={238} y={86} textAnchor="middle" fontSize="11" fill={T.secondary}>调用</text>
           {/* Gateway */}
           <rect x={268} y={60} width={240} height={180} rx="10" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.5" />
           <rect x={268} y={60} width={240} height={28} rx="10" fill="#3FB97F" fillOpacity="0.12" />
           <rect x={268} y={80} width={240} height={8} fill="#3FB97F" fillOpacity="0.12" />
           <text x={388} y={79} textAnchor="middle" fontSize="12" fontWeight="700" fill="#3FB97F">OrderGateway</text>
-          <text x={284} y={108} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ findAll(): ResultSet</text>
-          <text x={284} y={128} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ findById(id): ResultSet</text>
-          <text x={284} y={148} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ insert(data): void</text>
-          <text x={284} y={168} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ update(id, data): void</text>
-          <text x={284} y={188} fontSize="10" fontFamily="monospace" fill="#3FB97F">+ delete(id): void</text>
-          <text x={284} y={218} fontSize="10" fill={T.secondary}>内部持有 SQL 字符串</text>
+          <text x={284} y={108} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ findAll(): ResultSet</text>
+          <text x={284} y={128} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ findById(id): ResultSet</text>
+          <text x={284} y={148} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ insert(data): void</text>
+          <text x={284} y={168} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ update(id, data): void</text>
+          <text x={284} y={188} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ delete(id): void</text>
+          <text x={284} y={218} fontSize="11" fill={T.secondary}>内部持有 SQL 字符串</text>
           {/* DB */}
           <line x1={508} y1={150} x2={568} y2={150} stroke={T.secondary} strokeWidth="1.2" />
           <rect x={568} y={128} width={104} height={44} rx="6" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1" />

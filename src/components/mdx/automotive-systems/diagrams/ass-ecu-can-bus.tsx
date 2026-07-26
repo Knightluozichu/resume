@@ -131,7 +131,7 @@ export function AssEcuCanBusDiagram() {
 
           {/* 底部总结 */}
           <line x1={40} y1={446} x2={VIEW_W - 40} y2={446} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={466} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={VIEW_W / 2} y={466} textAnchor="middle" fontSize="11" fill={secondary}>
             差分信号抗扰 + 终端电阻匹配 + ID 仲裁 = 可靠的多主总线通信
           </text>
         </svg>

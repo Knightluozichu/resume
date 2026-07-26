@@ -108,7 +108,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="180"
               y="148"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               Development Build + Autoconnect
@@ -128,7 +128,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="180"
               y="174"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               USB ADB: adb forward tcp:55000
@@ -137,7 +137,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="180"
               y="188"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               或 WiFi: 同网段直接输 IP
@@ -171,7 +171,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="460"
               y="150"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               Development Build 导出 Xcode 工程
@@ -191,7 +191,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="460"
               y="176"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               Xcode 打开 Devices → 确保可发现
@@ -200,7 +200,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
               x="460"
               y="192"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               USB 连 Mac → Profiler 自动发现
@@ -226,7 +226,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
           <text
             x="205"
             y="104"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
             opacity={isActive(0) ? 1 : 0.4}
           >
@@ -251,7 +251,7 @@ export function RemoteProfilerDiagram({ step }: Props) {
           <text
             x="425"
             y="102"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
             opacity={isActive(1) ? 1 : 0.4}
           >

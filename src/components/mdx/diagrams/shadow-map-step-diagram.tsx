@@ -95,7 +95,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
             x="290"
             y="266"
             textAnchor="end"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             地面（受光面）
@@ -117,7 +117,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
             x="161"
             y="142"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             遮挡物
@@ -140,7 +140,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                   x="98"
                   y="96"
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize="11"
                   fill="var(--warning)"
                 >
                   最近遮挡
@@ -186,7 +186,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="313"
                 y="230"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--success)"
               >
@@ -217,7 +217,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                   x="150"
                   y="170"
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   算它的光空间深度
@@ -273,7 +273,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="450"
                 y="172"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 每方向「最近遮挡距离」
@@ -282,7 +282,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="450"
                 y="184"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 亮 = 近，暗 = 远
@@ -306,7 +306,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="348"
                 y="92"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--warning)"
               >
                 渲进深度图
@@ -395,7 +395,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="165"
                 y="286"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--danger)"
               >
@@ -416,7 +416,7 @@ export function ShadowMapStepDiagram({ step }: { step: ShadowMapStep }) {
                 x="392"
                 y="286"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--success)"
               >

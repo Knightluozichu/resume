@@ -28,9 +28,7 @@ import {
 
 **Smart Pointers 101** 从 RAII 开始：object 持有 resource handle，constructor 建立 ownership，destructor 释放；`operator*`/`operator->` 提供 pointer-like access。这样 exception/early return 不再要求每条路径手写 delete。
 
-<Term def="以对象生命周期管理动态资源并提供受控 pointer-like access 的 RAII handle。">
-  smart pointer
-</Term>
+<Term def="以对象生命周期管理动态资源并提供受控 pointer-like access 的 RAII handle。">smart pointer</Term>
 
 但 syntax 只回答“怎样访问”，不回答“copy 代表 clone、share 还是 transfer”“null 是否允许”“array 如何释放”“跨类型如何转换”。**The Deal** 是：智能指针不是一个类，而是一组相互约束的设计选择；Loki 用 Policies 把它们显式排列。
 
@@ -40,9 +38,7 @@ import {
 
 **Storage of Smart Pointers** 决定底层表示和 primitive operations：保存 `T*` 还是 custom handle；怎样返回 pointer/reference；销毁用 `delete`、`delete[]`、`free` 或 custom deleter；null value 是什么。
 
-<Term def="定义 handle 表示、访问类型、空值与最终销毁操作的 SmartPtr 策略维度。">
-  StoragePolicy
-</Term>
+<Term def="定义 handle 表示、访问类型、空值与最终销毁操作的 SmartPtr 策略维度。">StoragePolicy</Term>
 
 ```cpp
 template<class T>
@@ -66,9 +62,7 @@ Storage 不应擅自决定 copy/share；它只提供资源表示与最终 releas
 
 **Smart Pointer Member Functions** 包括 constructor、copy/move、assignment、destructor、`operator*`、`operator->`、`get`、`swap` 与 boolean test。每个成员都横跨 Policies：copy 先让 OwnershipPolicy 获得新 handle，dereference 先调用 CheckingPolicy，destructor 由 ownership 判断是否最后 owner，再让 storage destroy。
 
-<Term def="在统一 public API 中按顺序编排 storage、ownership、checking 与 conversion 协议的操作集合。">
-  SmartPtr member protocol
-</Term>
+<Term def="在统一 public API 中按顺序编排 storage、ownership、checking 与 conversion 协议的操作集合。">SmartPtr member protocol</Term>
 
 copy-and-swap 能统一 assignment 的 self-assignment 和 exception safety，但 ownership clone 可能抛，swap 必须同时交换所有 Policy state。只交换 raw pointer 而忘记 count/deleter/lock，会把资源与管理状态拆开。
 
@@ -81,9 +75,7 @@ copy-and-swap 能统一 assignment 的 self-assignment 和 exception safety，�
 - `RefLinked`：owners 构成环/链，最后 unlink 的 owner 删除资源。
 - `NoCopy`/destructive copy：禁止 copy 或把 source 清空，现代由 move semantics 正式表达。
 
-<Term def="规定复制、移动、共享、释放与最后 owner 判定如何改变资源身份的策略。">
-  OwnershipPolicy
-</Term>
+<Term def="规定复制、移动、共享、释放与最后 owner 判定如何改变资源身份的策略。">OwnershipPolicy</Term>
 
 <McdOwnershipTransitionMap />
 
@@ -109,9 +101,7 @@ private:
 
 **The Address-of Operator** 对 SmartPtr 有双重含义：`&smart` 通常应取得 wrapper 自身地址；老式 COM/C API 却希望得到 `T**` 输出参数并覆盖内部 pointer。重载 `operator&` 返回内部地址会让普通泛型代码无法取得 wrapper address，还可能覆盖 live resource 而泄漏。
 
-<Term def="在 wrapper 地址与底层 handle 输出地址之间容易混淆、可能破坏现有 ownership 的 API 边界。">
-  address-of boundary
-</Term>
+<Term def="在 wrapper 地址与底层 handle 输出地址之间容易混淆、可能破坏现有 ownership 的 API 边界。">address-of boundary</Term>
 
 现代做法是显式 `put()`/`release_and_get_address_of()`，或 C++23 `out_ptr` adapter：先按 contract release/reset，再把临时 `T**` 给 C API，返回时重建 owner。不要用隐式 operator 隐藏 destructive transition。
 
@@ -119,9 +109,7 @@ private:
 
 **Implicit Conversion to Raw Pointer Types** 让旧 API 调用方便，却让 ownership silently escape，并产生 overload ambiguity：SmartPtr 可同时转 `T*`、bool 或其他 pointer，编译器可能选择意外 overload。裸指针还能长期保存，超出 SmartPtr lifetime。
 
-<Term def="无需显式调用即可把 owning wrapper 变成 non-owning raw pointer 的转换，便利但弱化 lifetime 边界。">
-  raw-pointer conversion
-</Term>
+<Term def="无需显式调用即可把 owning wrapper 变成 non-owning raw pointer 的转换，便利但弱化 lifetime 边界。">raw-pointer conversion</Term>
 
 现代接口更偏好显式 `get()` 与 `explicit operator bool`。`get()` 让 code review 看见 borrow，但仍不延长 lifetime；callee 若要共享必须接 `shared_ptr` by value，若只观察则在调用期间接 `T*`/reference 并文档化。
 
@@ -129,9 +117,7 @@ private:
 
 **Equality and Inequality** 常比较 stored addresses：两个 SmartPtrs 指向同一 object 即 equal，无论 ownership/control block 是否同一。但 aliasing `shared_ptr` 可以共享 owner 而 `get()` 不同；两个独立 control blocks 又可能错误管理同一 address。
 
-<Term def="明确智能指针相等究竟比较 pointee address、resource identity 还是 ownership identity 的关系。">
-  pointer equality
-</Term>
+<Term def="明确智能指针相等究竟比较 pointee address、resource identity 还是 ownership identity 的关系。">pointer equality</Term>
 
 与 raw pointer、null、不同 `T/U` 比较时要限制 convertibility，避免创建 temporary owning pointer。标准库提供 `owner_before`/owner-based facilities 区分 control-block ordering；value comparison 应由 pointee 自身操作表达。
 
@@ -139,9 +125,7 @@ private:
 
 **Ordering Comparisons** 若直接对 unrelated raw pointers 用 `<`，可移植语义受限；`std::less<T*>` 提供 strict total order 供 containers 使用。owner ordering 与 address ordering又不同：前者按 control block，后者按 pointee pointer。
 
-<Term def="为 associative containers 定义稳定 strict weak order，并明确按地址还是按 ownership 排序。">
-  smart-pointer ordering
-</Term>
+<Term def="为 associative containers 定义稳定 strict weak order，并明确按地址还是按 ownership 排序。">smart-pointer ordering</Term>
 
 业务代码很少需要“哪个对象地址更小”。若真正要按 object key 排序，应比较 key；pointer order 多数只用于 map/set identity bookkeeping，必须选择与 equality 一致的 hash/order domain。
 
@@ -149,9 +133,7 @@ private:
 
 **Checking and Error Reporting** 在 dereference 前处理 null/invalid handle。`NoCheck` 信任 precondition，`AssertCheck` 在 debug abort，`RejectNull` 可抛异常，`RejectNullStatic` 试图限制 construction。Policy 让成本和失败语义可选。
 
-<Term def="在解引用或构造边界验证 handle precondition，并选择断言、异常、终止或无检查的策略。">
-  CheckingPolicy
-</Term>
+<Term def="在解引用或构造边界验证 handle precondition，并选择断言、异常、终止或无检查的策略。">CheckingPolicy</Term>
 
 ```cpp
 template<class T>
@@ -175,9 +157,7 @@ checking 只能检测 null，不能检测 dangling raw pointer、use-after-free 
 
 **Smart Pointers to const and const Smart Pointers** 区分两个维度：`SmartPtr<const T>` 表示不能经 pointer 修改 pointee；`const SmartPtr<T>` 表示 wrapper 本身不能 reseat，但通常仍可修改 T，类似 `T* const`。
 
-<Term def="pointee constness 与 handle constness 两个独立限定：前者限制对象访问，后者限制 wrapper 重绑定。">
-  smart-pointer constness
-</Term>
+<Term def="pointee constness 与 handle constness 两个独立限定：前者限制对象访问，后者限制 wrapper 重绑定。">smart-pointer constness</Term>
 
 cross-type constructor 从 `SmartPtr<T>` 到 `SmartPtr<const T>` 通常安全，反向不安全；Derived 到 Base 还要确保 deleter/control state 保持正确。转换应由 `is_convertible<U*,T*>` 和 OwnershipPolicy compatibility 共同限制。
 
@@ -185,9 +165,7 @@ cross-type constructor 从 `SmartPtr<T>` 到 `SmartPtr<const T>` 通常安全，
 
 **Arrays** 不能由 scalar `delete` 释放，且 pointer 不携带 length。ArrayStorage 要用 `delete[]` 并可提供 `operator[]`，但不能自动 bounds check，除非另存 size。把 scalar/array 作为可切换 Policy 会产生误组合：同一 `T*` 看不出最初来自 new T 还是 new T[n]。
 
-<Term def="拥有一组同类型动态元素并要求 delete-array、索引与可选长度契约的智能资源形式。">
-  smart array ownership
-</Term>
+<Term def="拥有一组同类型动态元素并要求 delete-array、索引与可选长度契约的智能资源形式。">smart array ownership</Term>
 
 现代使用 `unique_ptr<T[]>` 表达独占数组，或优先 `vector<T>` 保存 size/capacity；`shared_ptr<T[]>` 也有专门支持。不要让 caller 通过运行时 flag 选择 delete/delete[]。
 
@@ -195,9 +173,7 @@ cross-type constructor 从 `SmartPtr<T>` 到 `SmartPtr<const T>` 通常安全，
 
 **Smart Pointers and Multithreading** 必须分三层：不同 SmartPtr copies 是否可并发改 count；同一个 SmartPtr object 是否可并发 reseat；pointee 是否可并发 mutation。thread-safe RefCounted 只解决第一层的一部分。
 
-<Term def="分别约束 control state、handle object 与 pointee state 的并发访问，而不是笼统宣称智能指针线程安全。">
-  smart-pointer thread domains
-</Term>
+<Term def="分别约束 control state、handle object 与 pointee state 的并发访问，而不是笼统宣称智能指针线程安全。">smart-pointer thread domains</Term>
 
 atomic reference count 让不同 copies 的增减安全，却不让 `*p` 的字段安全；同一个 shared_ptr variable 并发写仍需 atomic shared_ptr 或锁。RefLinked 修改 owner links 更难并发，粗锁可能让 copy hot path 退化。
 
@@ -209,9 +185,7 @@ atomic reference count 让不同 copies 的增减安全，却不让 `*p` 的字�
 
 **Putting It All Together** 时，SmartPtr public operations 成为 Policy orchestration：Storage 提供 handle，Ownership 处理 clone/release，Checking 守 dereference，Conversion 控 raw/cross-type boundary。constructor、copy、assignment、destructor、swap 要保持四者 state 一致。
 
-<Term def="把四个 Policy 的 state 与操作按统一 exception/lifetime contract 编排成完整 SmartPtr 类型。">
-  SmartPtr composition
-</Term>
+<Term def="把四个 Policy 的 state 与操作按统一 exception/lifetime contract 编排成完整 SmartPtr 类型。">SmartPtr composition</Term>
 
 兼容性比“能编译”更严格：DeepCopy 需要 pointee clone，ArrayStorage 与 scalar ownership 不兼容，RejectNull 与 default-null constructor 冲突，threading state 也可能不能 copy。Host 应在 class boundary 用 constraints/static assertions 给出原因。
 

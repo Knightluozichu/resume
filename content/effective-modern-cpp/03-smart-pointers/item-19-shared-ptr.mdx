@@ -28,13 +28,9 @@ import {
 
 Item 19 的原则是 Use std::shared_ptr for shared-ownership resource management（用 shared_ptr 管理共享资源）。多个 owners 可以独立 copy/reset；资源在最后一个 owning reference 消失时销毁。
 
-<Term def="通过共享 control block 记录 ownership count，在最后一个 owner 消失时调用 deleter 的智能指针。">
-  shared_ptr
-</Term>
+<Term def="通过共享 control block 记录 ownership count，在最后一个 owner 消失时调用 deleter 的智能指针。">shared_ptr</Term>
 
-<Term def="多个相互独立的 owner 共同延长同一资源生命周期，无法预先指定哪一个最后释放。">
-  shared ownership
-</Term>
+<Term def="多个相互独立的 owner 共同延长同一资源生命周期，无法预先指定哪一个最后释放。">shared ownership</Term>
 
 ```cpp
 auto first = std::make_shared<Widget>();
@@ -52,35 +48,23 @@ second.reset();      // last owner destroys resource
 
 一个 shared_ptr 通常包含：指向被访问 object 的 pointer，以及指向 control block 的 pointer。因此大小常为 raw pointer 的两倍。
 
-<Term def="shared_ptr 本体中指向 managed/aliased object、由 operator arrow 与 get 返回的地址。">
-  stored object pointer
-</Term>
+<Term def="shared_ptr 本体中指向 managed/aliased object、由 operator arrow 与 get 返回的地址。">stored object pointer</Term>
 
-<Term def="shared_ptr 本体中指向 ownership metadata 的地址，所有相关 owners 共享。">
-  control-block pointer
-</Term>
+<Term def="shared_ptr 本体中指向 ownership metadata 的地址，所有相关 owners 共享。">control-block pointer</Term>
 
 这两根 pointer 不必指向同一 allocation；aliasing constructor 可让 stored pointer 指向 subobject，而 control block 仍拥有完整 parent。
 
-<Term def="共享 parent 的 control block，但让 shared_ptr 对外指向 parent 内部 subobject 的构造方式。">
-  aliasing shared pointer
-</Term>
+<Term def="共享 parent 的 control block，但让 shared_ptr 对外指向 parent 内部 subobject 的构造方式。">aliasing shared pointer</Term>
 
 ## control block 保存 ownership metadata
 
 典型 control block 包含 strong reference count、weak count、deleter、allocator，以及实现需要的 type-erased machinery。
 
-<Term def="保存共享/弱引用计数、deleter、allocator 等生命周期元数据的动态对象。">
-  control block
-</Term>
+<Term def="保存共享/弱引用计数、deleter、allocator 等生命周期元数据的动态对象。">control block</Term>
 
-<Term def="当前 owning shared_ptr 数量；降为零时销毁 managed object。">
-  reference count
-</Term>
+<Term def="当前 owning shared_ptr 数量；降为零时销毁 managed object。">reference count</Term>
 
-<Term def="跟踪 weak observers 与 control block 自身可回收时机的计数/状态。">
-  weak reference count
-</Term>
+<Term def="跟踪 weak observers 与 control block 自身可回收时机的计数/状态。">weak reference count</Term>
 
 object destruction 与 control-block destruction 是两个事件：strong count 为零先删除 object；weak observers 全部消失后才释放 control block。
 
@@ -88,9 +72,7 @@ object destruction 与 control-block destruction 是两个事件：strong count 
 
 不同 threads 可操作指向同一 control block 的不同 shared_ptr objects，因此 count 更新通常使用 atomic operations。
 
-<Term def="为保证多线程 owner copy/reset 正确而执行的原子引用计数增减。">
-  atomic reference-count traffic
-</Term>
+<Term def="为保证多线程 owner copy/reset 正确而执行的原子引用计数增减。">atomic reference-count traffic</Term>
 
 这不表示 managed Widget 自动线程安全；shared_ptr 只同步 ownership metadata，不保护 `*pointer` 的 fields。
 
@@ -109,9 +91,7 @@ auto copy = owner;            // increment strong count
 auto moved = std::move(owner); // transfer handle, owner becomes empty
 ```
 
-<Term def="复制 shared owner 时对 control block strong count 执行原子增加，并在销毁时减少。">
-  shared-owner copy cost
-</Term>
+<Term def="复制 shared owner 时对 control block strong count 执行原子增加，并在销毁时减少。">shared-owner copy cost</Term>
 
 move 通常复制两根内部 pointers 并清空 source，不改变 owner 总数，因此可避免一次 increment/decrement pair。pass-by-value pipeline 应利用 move，而不是反复 copy named shared_ptr。
 
@@ -119,9 +99,7 @@ move 通常复制两根内部 pointers 并清空 source，不改变 owner 总数
 
 常见规则：`make_shared` 总是创建 control block；从 unique_ptr move 构造 shared_ptr 时创建；从 raw pointer 构造 shared_ptr 时也创建新的 control block。
 
-<Term def="为尚未进入共享 ownership 的 object 建立唯一生命周期 metadata 的时刻。">
-  control-block creation point
-</Term>
+<Term def="为尚未进入共享 ownership 的 object 建立唯一生命周期 metadata 的时刻。">control-block creation point</Term>
 
 ```cpp
 auto first = std::make_shared<Widget>();
@@ -143,9 +121,7 @@ std::shared_ptr<Widget> ownerA(raw);
 std::shared_ptr<Widget> ownerB(raw); // separate control block: fatal
 ```
 
-<Term def="同一 managed address 被两个互不知情的 control blocks 各自视为独占删除目标。">
-  duplicate control block
-</Term>
+<Term def="同一 managed address 被两个互不知情的 control blocks 各自视为独占删除目标。">duplicate control block</Term>
 
 ownerA/ownerB 的 counts 都从 1 开始，各自降为零时都执行 delete，产生 double free/use-after-free。
 
@@ -166,9 +142,7 @@ ownerA/ownerB 的 counts 都从 1 开始，各自降为零时都执行 delete，
 auto owner = std::make_shared<Widget>(arguments);
 ```
 
-<Term def="在一个标准 factory call 中同时构造 object 与其唯一 control block。">
-  make_shared ownership entry
-</Term>
+<Term def="在一个标准 factory call 中同时构造 object 与其唯一 control block。">make_shared ownership entry</Term>
 
 这避免 raw pointer 暴露，并通常把 object 与 control block 合并为单次 allocation。Item 21 将进一步比较其例外与 lifetime tradeoffs。
 
@@ -186,15 +160,11 @@ std::shared_ptr<Widget> first(new Widget, logDelete);
 std::shared_ptr<Widget> second(new Widget, otherDelete);
 ```
 
-<Term def="存储在 control block 中、在 strong count 降为零时调用的资源释放策略。">
-  shared custom deleter
-</Term>
+<Term def="存储在 control block 中、在 strong count 降为零时调用的资源释放策略。">shared custom deleter</Term>
 
 两者 concrete type 都是 `std::shared_ptr<Widget>`，可放进同一 container 或传给同一 API。
 
-<Term def="把不同 deleter concrete types 隐藏在统一 runtime interface 后，shared_ptr type 不随 deleter 改变。">
-  deleter type erasure
-</Term>
+<Term def="把不同 deleter concrete types 隐藏在统一 runtime interface 后，shared_ptr type 不随 deleter 改变。">deleter type erasure</Term>
 
 <EmcppSharedDeleterTypeErasureMap />
 
@@ -202,9 +172,7 @@ std::shared_ptr<Widget> second(new Widget, otherDelete);
 
 stateful deleter 的 capture/pool pointer 存入 control block。shared_ptr handle 通常仍为两根 pointers，但 control block allocation 变大。
 
-<Term def="custom deleter 的 capture/context 随 control block 存储，不直接扩展 shared_ptr object。">
-  control-block deleter state
-</Term>
+<Term def="custom deleter 的 capture/context 随 control block 存储，不直接扩展 shared_ptr object。">control-block deleter state</Term>
 
 deleter 仍应 noexcept；最后 owner reset/destructor 中异常逃逸会终止程序。
 
@@ -221,15 +189,11 @@ public:
 };
 ```
 
-<Term def="让 object 从已存在的 shared ownership 获取共享同一 control block 的 shared_ptr。">
-  enable_shared_from_this
-</Term>
+<Term def="让 object 从已存在的 shared ownership 获取共享同一 control block 的 shared_ptr。">enable_shared_from_this</Term>
 
 它内部通过 weak link 连接原 control block。调用前 object 必须已经由 shared_ptr 管理，否则 `shared_from_this()` 抛 `bad_weak_ptr`（版本相关行为应按标准/实现验证）。
 
-<Term def="在 object 尚未进入 shared ownership 时调用 shared_from_this 的生命周期前置条件违约。">
-  premature shared_from_this
-</Term>
+<Term def="在 object 尚未进入 shared ownership 时调用 shared_from_this 的生命周期前置条件违约。">premature shared_from_this</Term>
 
 因此这类 class 通常通过 factory 创建，并避免 public raw/new construction。
 
@@ -237,9 +201,7 @@ public:
 
 如果生命周期有明确单 owner，shared_ptr 的 control block、atomic count 和不确定 destruction timing 都是额外成本。
 
-<Term def="只有多个独立 owner 确实共同决定 lifetime 时才选择 reference-count ownership 的原则。">
-  shared-ownership justification
-</Term>
+<Term def="只有多个独立 owner 确实共同决定 lifetime 时才选择 reference-count ownership 的原则。">shared-ownership justification</Term>
 
 observer、parent-child、cache entry 不一定是 owner。可使用 raw/reference（有严格 lifetime）、weak_ptr（可过期 observer）或 unique_ptr（单 owner）。Item 20 处理 weak observation 和 cycle。
 
@@ -247,17 +209,13 @@ observer、parent-child、cache entry 不一定是 owner。可使用 raw/referen
 
 两个 objects 互持 shared_ptr 时，即使外部 owners 消失，双方 strong counts 仍大于零。
 
-<Term def="shared ownership graph 中的强引用环使所有节点 reference count 永远无法降为零。">
-  shared ownership cycle
-</Term>
+<Term def="shared ownership graph 中的强引用环使所有节点 reference count 永远无法降为零。">shared ownership cycle</Term>
 
 图设计必须区分 owning edge 与 observing/back edge；通常至少一条反向边使用 weak_ptr。
 
 ## shared_ptr 验收矩阵
 
-<Term def="覆盖引用计数、control-block identity、custom deletion、from-this 与 cycle 的测试集合。">
-  shared ownership contract matrix
-</Term>
+<Term def="覆盖引用计数、control-block identity、custom deletion、from-this 与 cycle 的测试集合。">shared ownership contract matrix</Term>
 
 1. copy/move/reset 后 use_count 与 destruction timing 符合预期。
 2. object 只销毁一次，control block 在 weak observers 消失后释放。

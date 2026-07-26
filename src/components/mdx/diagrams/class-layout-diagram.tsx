@@ -34,20 +34,20 @@ export function ClassLayoutDiagram() {
           {/* 成员：bookNo (string) */}
           <rect x={190} y={54} width={180} height={36} rx="4" fill="var(--accent-glow)" stroke={accent} strokeWidth="1" />
           <text x={280} y={70} textAnchor="middle" fontSize="12" fill={primary} fontWeight="600">bookNo</text>
-          <text x={280} y={83} textAnchor="middle" fontSize="10" fill={secondary}>std::string</text>
+          <text x={280} y={83} textAnchor="middle" fontSize="11" fill={secondary}>std::string</text>
 
           {/* 成员：units_sold (unsigned) */}
           <rect x={190} y={96} width={180} height={36} rx="4" fill="var(--accent-glow)" stroke={accent} strokeWidth="1" />
           <text x={280} y={112} textAnchor="middle" fontSize="12" fill={primary} fontWeight="600">units_sold</text>
-          <text x={280} y={125} textAnchor="middle" fontSize="10" fill={secondary}>unsigned（4 字节）</text>
+          <text x={280} y={125} textAnchor="middle" fontSize="11" fill={secondary}>unsigned（4 字节）</text>
 
           {/* 成员：revenue (double) */}
           <rect x={190} y={138} width={180} height={36} rx="4" fill="var(--accent-glow)" stroke={accent} strokeWidth="1" />
           <text x={280} y={154} textAnchor="middle" fontSize="12" fill={primary} fontWeight="600">revenue</text>
-          <text x={280} y={167} textAnchor="middle" fontSize="10" fill={secondary}>double（8 字节）</text>
+          <text x={280} y={167} textAnchor="middle" fontSize="11" fill={secondary}>double（8 字节）</text>
 
           {/* this 标签 */}
-          <text x={280} y={196} textAnchor="middle" fontSize="10" fill={secondary} fontStyle="italic">
+          <text x={280} y={196} textAnchor="middle" fontSize="11" fill={secondary} fontStyle="italic">
             成员函数不占对象空间
           </text>
 
@@ -63,27 +63,27 @@ export function ClassLayoutDiagram() {
           <text x={128} y={94} textAnchor="middle" fontSize="11" fill={accent} fontWeight="600">
             this
           </text>
-          <text x={128} y={118} textAnchor="middle" fontSize="9" fill={secondary}>
+          <text x={128} y={118} textAnchor="middle" fontSize="11" fill={secondary}>
             指向对象的首地址
           </text>
 
           {/* 垂直偏移标注 */}
-          <text x={380} y={70} fontSize="9" fill={secondary} fontFamily="monospace">offset 0</text>
-          <text x={380} y={112} fontSize="9" fill={secondary} fontFamily="monospace">offset +24B</text>
-          <text x={380} y={154} fontSize="9" fill={secondary} fontFamily="monospace">offset +28B</text>
+          <text x={380} y={70} fontSize="11" fill={secondary} fontFamily="monospace">offset 0</text>
+          <text x={380} y={112} fontSize="11" fill={secondary} fontFamily="monospace">offset +24B</text>
+          <text x={380} y={154} fontSize="11" fill={secondary} fontFamily="monospace">offset +28B</text>
 
           {/* 右侧说明 */}
           <rect x={440} y={42} width={184} height={180} rx="6" fill={bg} stroke={border} strokeWidth="1" />
           <text x={532} y={64} textAnchor="middle" fontSize="11" fill={primary} fontWeight="600">
             对象 = 数据集合
           </text>
-          <text x={460} y={86} fontSize="10" fill={secondary}>• 只存数据成员</text>
-          <text x={460} y={106} fontSize="10" fill={secondary}>• 函数不占空间</text>
-          <text x={460} y={126} fontSize="10" fill={secondary}>• 按声明顺序排列</text>
-          <text x={460} y={146} fontSize="10" fill={secondary}>• 可能有对齐填充</text>
-          <text x={460} y={166} fontSize="10" fill={secondary}>• this→成员访问</text>
-          <text x={460} y={186} fontSize="10" fill={secondary}>• sizeof 返回总大小</text>
-          <text x={460} y={210} fontSize="9" fill={accent} fontFamily="monospace">
+          <text x={460} y={86} fontSize="11" fill={secondary}>• 只存数据成员</text>
+          <text x={460} y={106} fontSize="11" fill={secondary}>• 函数不占空间</text>
+          <text x={460} y={126} fontSize="11" fill={secondary}>• 按声明顺序排列</text>
+          <text x={460} y={146} fontSize="11" fill={secondary}>• 可能有对齐填充</text>
+          <text x={460} y={166} fontSize="11" fill={secondary}>• this→成员访问</text>
+          <text x={460} y={186} fontSize="11" fill={secondary}>• sizeof 返回总大小</text>
+          <text x={460} y={210} fontSize="11" fill={accent} fontFamily="monospace">
             sizeof(Sales_data)
           </text>
 
@@ -92,7 +92,7 @@ export function ClassLayoutDiagram() {
           <text x={320} y={262} textAnchor="middle" fontSize="11" fill={primary} fontWeight="600">
             成员函数（代码区，所有同类对象共享）
           </text>
-          <text x={320} y={282} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={282} textAnchor="middle" fontSize="11" fill={secondary}>
             avg_price() | isbn() | combine() — 通过隐藏的 this 参数知道在操作哪个对象
           </text>
 
@@ -100,7 +100,7 @@ export function ClassLayoutDiagram() {
           <line x1={280} y1={228} x2={280} y2={245} stroke={secondary} strokeWidth="1" strokeDasharray="3,2" />
 
           {/* ── 图例 ── */}
-          <text x={16} y={324} fontSize="10" fill={secondary}>
+          <text x={16} y={324} fontSize="11" fill={secondary}>
             🟪 紫色区域 = 对象占用的内存空间 &nbsp;&nbsp; this → 指向当前操作对象的首地址 &nbsp;&nbsp; 虚线框 = 代码段
           </text>
         </svg>

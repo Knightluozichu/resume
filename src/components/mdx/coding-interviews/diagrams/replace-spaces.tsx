@@ -38,13 +38,13 @@ export function ExpansionLayoutDiagram() {
           <text x="54" y="82" fontSize="11" fontWeight="700" fill="var(--text-secondary)">原布局</text>
           {chars.map((char, index) => <g key={`${char}-${index}`}><rect x={132 + index * 68} y="56" width="54" height="48" fill="var(--bg)" stroke="var(--border)" /><text x={159 + index * 68} y="86" textAnchor="middle" fontSize="12" fill="var(--text-primary)">{char === "\0" ? "\\0" : char === " " ? "空格" : char}</text></g>)}
           <path d="M540 112 V146" stroke="var(--warning)" strokeWidth="2" />
-          <text x="540" y="164" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--warning)">read：原末尾</text>
+          <text x="540" y="164" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">read：原末尾</text>
           <text x="54" y="238" fontSize="11" fontWeight="700" fill="var(--text-secondary)">扩展后</text>
           {["W","e","%","2","0","a","r","e","\0"].map((char, index) => <g key={`${char}-new-${index}`}><rect x={132 + index * 58} y="210" width="46" height="48" fill={index >= 2 && index <= 4 ? "var(--accent)" : "var(--bg)"} fillOpacity={index >= 2 && index <= 4 ? "0.12" : "1"} stroke={index >= 2 && index <= 4 ? "var(--accent)" : "var(--border)"} /><text x={155 + index * 58} y="240" textAnchor="middle" fontSize="12" fontWeight={index >= 2 && index <= 4 ? "700" : "500"} fill="var(--text-primary)">{char === "\0" ? "\\0" : char}</text></g>)}
           <path d="M619 266 V300" stroke="var(--success)" strokeWidth="2" />
-          <text x="619" y="318" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--success)">write：新末尾</text>
+          <text x="619" y="318" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">write：新末尾</text>
           <rect x="124" y="344" width="532" height="28" rx="5" fill="var(--success)" fillOpacity="0.07" stroke="var(--success)" />
-          <text x="390" y="363" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">write不在read左侧，已写区域不会覆盖尚未读取的源字符。</text>
+          <text x="390" y="363" textAnchor="middle" fontSize="11" fill="var(--text-primary)">write不在read左侧，已写区域不会覆盖尚未读取的源字符。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">后向复制把每个字符直接放到最终位置，并把一个空格展开为三个字符。</figcaption>

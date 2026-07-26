@@ -124,7 +124,7 @@ export function ShaderIODiagram() {
             x="153"
             y="144"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             in
@@ -164,7 +164,7 @@ export function ShaderIODiagram() {
             x="234"
             y="182"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -185,7 +185,7 @@ export function ShaderIODiagram() {
             x="335"
             y="143"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -195,7 +195,7 @@ export function ShaderIODiagram() {
             x="335"
             y="174"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             沿途插值
@@ -235,7 +235,7 @@ export function ShaderIODiagram() {
             x="438"
             y="182"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -276,7 +276,7 @@ export function ShaderIODiagram() {
             x="581"
             y="166"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             最终颜色

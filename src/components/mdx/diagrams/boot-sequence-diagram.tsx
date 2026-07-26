@@ -331,7 +331,7 @@ export function BootSequenceDiagram() {
               <text
                 x={s.x + 12}
                 y={s.y + 18}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--text-secondary)"
               >
@@ -353,7 +353,7 @@ export function BootSequenceDiagram() {
                 x={s.x + NODE_W / 2}
                 y={s.y + 56}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -367,7 +367,7 @@ export function BootSequenceDiagram() {
             x={PLACED[0].x + NODE_W / 2}
             y={ROW1_Y - 10}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -377,7 +377,7 @@ export function BootSequenceDiagram() {
             x={PLACED[STAGES.length - 1].x + NODE_W / 2}
             y={ROW2_Y + NODE_H + 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >

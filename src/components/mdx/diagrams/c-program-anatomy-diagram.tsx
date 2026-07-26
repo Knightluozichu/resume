@@ -38,7 +38,7 @@ export function CProgramAnatomyDiagram() {
           {/* 标题栏 */}
           <rect x="8" y="8" width="340" height="20" rx="6" fill="var(--border)" />
           <rect x="8" y="22" width="340" height="6" fill="var(--border)" />
-          <text x="22" y="22" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">
+          <text x="22" y="22" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">
             hello.c
           </text>
 
@@ -74,7 +74,7 @@ export function CProgramAnatomyDiagram() {
                   x={line.annX! - 4} y={annY - 12} width="276" height="18" rx="4"
                   fill="var(--bg)" stroke="var(--accent)" strokeWidth="1" opacity="0.92"
                 />
-                <text x={line.annX! + 4} y={annY + 1} fontSize="10" fill="var(--text-primary)">
+                <text x={line.annX! + 4} y={annY + 1} fontSize="11" fill="var(--text-primary)">
                   {line.annotation}
                 </text>
               </g>

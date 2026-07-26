@@ -81,7 +81,7 @@ export function GPUProfilerOverviewDiagram() {
                   x={x + barW / 2}
                   y={baseY + 16}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {pass.label}
@@ -103,7 +103,7 @@ export function GPUProfilerOverviewDiagram() {
           <text
             x="524"
             y={budgetY + 4}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -115,7 +115,7 @@ export function GPUProfilerOverviewDiagram() {
             x="280"
             y="205"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             GPU 帧预算 = 1000 / 目标帧率（90fps XR = 11.1ms）

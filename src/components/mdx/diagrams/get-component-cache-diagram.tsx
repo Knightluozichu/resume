@@ -33,12 +33,12 @@ export function GetComponentCacheDiagram({ mode }: Props) {
               <text x="94" y="78" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Update()</text>
               <path d="M94 92 v16" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#arrow)" />
               <rect x="44" y="108" width="120" height="32" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-              <text x="104" y="128" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">GetComponent&lt;T&gt;()</text>
+              <text x="104" y="128" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">GetComponent&lt;T&gt;()</text>
               <path d="M104 140 v12" stroke="var(--border)" strokeWidth="1.5" />
               <rect x="44" y="152" width="140" height="32" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-              <text x="114" y="172" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Native 查找 + 装箱</text>
+              <text x="114" y="172" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Native 查找 + 装箱</text>
               <text x="200" y="128" fontSize="28" fill="var(--accent)">×60</text>
-              <text x="200" y="148" fontSize="10" fill="var(--text-secondary)">fps</text>
+              <text x="200" y="148" fontSize="11" fill="var(--text-secondary)">fps</text>
             </g>
           )}
           {showFast && (
@@ -51,12 +51,12 @@ export function GetComponentCacheDiagram({ mode }: Props) {
               <text x="94" y="78" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Awake()</text>
               <path d="M94 92 v12" stroke="var(--border)" strokeWidth="1.5" />
               <rect x="44" y="104" width="140" height="28" rx="6" fill="var(--bg-elevated)" stroke="var(--border)" />
-              <text x="114" y="122" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">_rb = GetComponent 一次</text>
+              <text x="114" y="122" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">_rb = GetComponent 一次</text>
               <rect x="44" y="148" width="100" height="36" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
               <text x="94" y="170" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Update()</text>
               <path d="M154 166 h60" stroke="var(--accent)" strokeWidth="2" />
               <rect x="214" y="148" width="72" height="36" rx="6" fill="var(--accent)" fillOpacity="0.15" stroke="var(--accent)" />
-              <text x="250" y="170" textAnchor="middle" fontSize="10" fill="var(--text-primary)">_rb 字段</text>
+              <text x="250" y="170" textAnchor="middle" fontSize="11" fill="var(--text-primary)">_rb 字段</text>
             </g>
           )}
           <defs>

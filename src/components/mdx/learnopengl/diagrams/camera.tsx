@@ -80,7 +80,7 @@ export function CameraUpdateLoopDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) 
               <text x={x + 28} y="94" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--bg)">{i + 1}</text>
               <text x={x + 52} y="94" fontSize="12" fontWeight="700" fill={primary}>{stage.title}</text>
               <rect x={x + 12} y="118" width="180" height="42" rx="6" fill={elevated} stroke={border} />
-              <text x={x + 102} y="143" textAnchor="middle" fontFamily="monospace" fontSize="9.5" fill={stage.color}>{stage.code}</text>
+              <text x={x + 102} y="143" textAnchor="middle" fontFamily="monospace" fontSize="11" fill={stage.color}>{stage.code}</text>
               <text x={x + 102} y="190" textAnchor="middle" fontSize="11" fill={secondary}>{stage.result}</text>
             </g>
           );
@@ -89,7 +89,7 @@ export function CameraUpdateLoopDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) 
           <path key={x} d={`M${x} 142 H${x + 24} M${x + 16} 134 L${x + 25} 142 L${x + 16} 150`} fill="none" stroke={border} strokeWidth="2" />
         ))}
         <path d="M866 235 C866 270 35 270 35 235" fill="none" stroke={secondary} strokeDasharray="5 4" />
-        <text x="450" y="272" textAnchor="middle" fontSize="10" fill={secondary}>requestAnimationFrame：下一帧重新采样</text>
+        <text x="450" y="272" textAnchor="middle" fontSize="11" fill={secondary}>requestAnimationFrame：下一帧重新采样</text>
       </svg>
 
       <div className="grid gap-3 md:hidden">

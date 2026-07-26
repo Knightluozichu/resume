@@ -227,7 +227,7 @@ export function BucketLockDiagram() {
         x={bucketCx(bucket)}
         y={BUCKET_Y + BUCKET_H - 12}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fontWeight="700"
         fill={color}
       >
@@ -292,7 +292,7 @@ export function BucketLockDiagram() {
                   x={t.startX}
                   y="79"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill={t.color}
                 >
@@ -342,7 +342,7 @@ export function BucketLockDiagram() {
                 x={bucketCx(i)}
                 y={BUCKET_Y + 42}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 各一把 mutex
@@ -372,7 +372,7 @@ export function BucketLockDiagram() {
               x={bucketCx(0)}
               y={BUCKET_Y + BUCKET_H + 22}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={WAIT_COLOR}
             >
@@ -385,7 +385,7 @@ export function BucketLockDiagram() {
             x={bucketCx(2)}
             y={BUCKET_Y + BUCKET_H + 22}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -397,7 +397,7 @@ export function BucketLockDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 18}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             落不同桶 = 不同锁 = 并行；落同一桶 = 同一把锁 = 排队

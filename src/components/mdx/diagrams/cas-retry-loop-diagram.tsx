@@ -266,7 +266,7 @@ export function CASRetryLoopDiagram() {
             x={HEAD_X + HEAD_W / 2}
             y={HEAD_Y + HEAD_H + 34}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={FAIL_COLOR}
           >
@@ -276,7 +276,7 @@ export function CASRetryLoopDiagram() {
             x={HEAD_X + HEAD_W / 2}
             y={HEAD_Y + HEAD_H + 50}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill={FAIL_COLOR}
           >
@@ -286,7 +286,7 @@ export function CASRetryLoopDiagram() {
             x={HEAD_X + HEAD_W / 2}
             y={HEAD_Y + HEAD_H + 78}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             CAS 只在 head
@@ -295,7 +295,7 @@ export function CASRetryLoopDiagram() {
             x={HEAD_X + HEAD_W / 2}
             y={HEAD_Y + HEAD_H + 94}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             == expected 时才改

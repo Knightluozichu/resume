@@ -91,7 +91,7 @@ export function ArrayMemoryLayoutDiagram() {
                 x={startX + i * cellW + (cellW - 4) / 2}
                 y={memY + cellH + 18}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -109,7 +109,7 @@ export function ArrayMemoryLayoutDiagram() {
               x={startX + i * cellW + (cellW - 4) / 2}
               y={memY + cellH + 44}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               fontFamily="monospace"
             >

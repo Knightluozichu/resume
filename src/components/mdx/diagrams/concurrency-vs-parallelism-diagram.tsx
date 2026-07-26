@@ -384,7 +384,7 @@ export function ConcurrencyVsParallelismDiagram() {
             x={CONC_X + CONC_W + BLOCK_GAP}
             y={CONC_Y + BLOCK_H + 30}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

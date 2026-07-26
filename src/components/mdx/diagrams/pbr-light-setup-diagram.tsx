@@ -56,7 +56,7 @@ export function PbrLightSetupDiagram() {
             x={cx}
             y={cy + 4}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -107,7 +107,7 @@ export function PbrLightSetupDiagram() {
                   x={l.x}
                   y={l.y + 22}
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {l.label}
@@ -128,7 +128,7 @@ export function PbrLightSetupDiagram() {
                   x={mx + perpX}
                   y={my + perpY}
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   1/d²
@@ -153,7 +153,7 @@ export function PbrLightSetupDiagram() {
             x={cx}
             y="261"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >

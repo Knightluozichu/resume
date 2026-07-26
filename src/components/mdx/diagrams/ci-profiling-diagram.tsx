@@ -114,10 +114,10 @@ export function CIProfilingDiagram({ step }: Props) {
               >
                 {s.sub}
               </text>
-              <text x={s.x + s.w / 2} y="96" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+              <text x={s.x + s.w / 2} y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                 {s.detail.split("\n")[0]}
               </text>
-              <text x={s.x + s.w / 2} y="112" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+              <text x={s.x + s.w / 2} y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                 {s.detail.split("\n")[1]}
               </text>
 
@@ -144,19 +144,19 @@ export function CIProfilingDiagram({ step }: Props) {
 
           {/* Pass box */}
           <rect x="130" y="168" width="160" height="32" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="1.5" />
-          <text x="210" y="184" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--success)">
+          <text x="210" y="184" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">
             ✓ Pass
           </text>
-          <text x="210" y="195" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="210" y="195" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             四指标全在阈值内 → 合并放行
           </text>
 
           {/* Fail box */}
           <rect x="370" y="168" width="160" height="32" rx="6" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1.5" />
-          <text x="450" y="184" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--danger)">
+          <text x="450" y="184" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">
             ✗ Fail
           </text>
-          <text x="450" y="195" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
+          <text x="450" y="195" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             超标 → 阻止合入 + 上传报告
           </text>
         </svg>

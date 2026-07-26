@@ -43,7 +43,7 @@ export function IOStreamDiagram() {
             x="60"
             y="96"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             输入设备
@@ -99,7 +99,7 @@ export function IOStreamDiagram() {
             x="194"
             y="108"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             stdin 缓冲区
@@ -150,7 +150,7 @@ export function IOStreamDiagram() {
             x="338"
             y="108"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             int main()
@@ -202,7 +202,7 @@ export function IOStreamDiagram() {
             x="482"
             y="108"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             stdout 缓冲区
@@ -244,7 +244,7 @@ export function IOStreamDiagram() {
             x="555"
             y="96"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             屏幕显示
@@ -274,7 +274,7 @@ export function IOStreamDiagram() {
             x="178"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             输入方向 ←
@@ -283,7 +283,7 @@ export function IOStreamDiagram() {
             x="338"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             处理
@@ -292,7 +292,7 @@ export function IOStreamDiagram() {
             x="490"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             输出方向 →

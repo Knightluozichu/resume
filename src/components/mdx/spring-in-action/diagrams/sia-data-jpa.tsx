@@ -54,7 +54,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="90"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             业务逻辑，调用 Repository
@@ -95,7 +95,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="155"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             extends JpaRepository&lt;Entity, ID&gt;
@@ -136,7 +136,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="220"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             方法名解析 → JPQL → SQL
@@ -177,7 +177,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="285"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             实体 ↔ 表 映射，一级/二级缓存，脏检查
@@ -219,7 +219,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="350"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             表 / 行 / 外键
@@ -262,7 +262,7 @@ export function SiaDataJpaDiagram() {
             x="137"
             y="443"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             findByEmailAndAge
@@ -271,7 +271,7 @@ export function SiaDataJpaDiagram() {
             x="137"
             y="461"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             findByOrderByDesc
@@ -280,7 +280,7 @@ export function SiaDataJpaDiagram() {
             x="137"
             y="481"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             简单查询零SQL
@@ -311,7 +311,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="443"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @Query(&quot;JPQL&quot;)
@@ -320,7 +320,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="461"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             nativeQuery=true
@@ -329,7 +329,7 @@ export function SiaDataJpaDiagram() {
             x="370"
             y="481"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             复杂查询/联表
@@ -360,7 +360,7 @@ export function SiaDataJpaDiagram() {
             x="602"
             y="443"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             动态查询条件
@@ -369,7 +369,7 @@ export function SiaDataJpaDiagram() {
             x="602"
             y="461"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Criteria API
@@ -378,7 +378,7 @@ export function SiaDataJpaDiagram() {
             x="602"
             y="481"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             运行时拼接条件

@@ -83,7 +83,7 @@ export function DsaAvlRotationLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-2">{(Object.keys(rotations) as Rotation[]).map((key) => <button key={key} type="button" onClick={() => setKind(key)} className={"min-h-10 border font-mono text-sm font-semibold " + (kind === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{key}</button>)}</div>
+        <div className="grid grid-cols-4 gap-2">{(Object.keys(rotations) as Rotation[]).map((key) => <button key={key} type="button" onClick={() => setKind(key)} className={"min-h-11 border font-mono text-sm font-semibold " + (kind === key ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{key}</button>)}</div>
         <div className="mt-4 grid gap-2 sm:grid-cols-3"><div className="border border-warning bg-warning/10 p-3 font-mono text-xs text-warning">{active.before}</div><div className="border border-accent bg-accent/10 p-3 text-xs text-accent">{active.action}</div><div className="border border-success bg-success/10 p-3 font-mono text-xs text-success">{active.after}</div></div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">AVL insertion 只需识别 LL/LR/RR/RL，并在局部 rotation 后重算 height。</figcaption>
@@ -149,7 +149,7 @@ export function DsaSetMapSemanticsLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="flex gap-2"><button type="button" onClick={() => setLookup("find")} className={"min-h-10 flex-1 border px-3 text-sm font-semibold " + (lookup === "find" ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{'find("Jan")'}</button><button type="button" onClick={() => setLookup("bracket")} className={"min-h-10 flex-1 border px-3 text-sm font-semibold " + (lookup === "bracket" ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{'operator[]("Jan")'}</button></div>
+        <div className="flex gap-2"><button type="button" onClick={() => setLookup("find")} className={"min-h-11 flex-1 border px-3 text-sm font-semibold " + (lookup === "find" ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{'find("Jan")'}</button><button type="button" onClick={() => setLookup("bracket")} className={"min-h-11 flex-1 border px-3 text-sm font-semibold " + (lookup === "bracket" ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{'operator[]("Jan")'}</button></div>
         <div className="mt-4 border border-border bg-background p-3 font-mono text-xs text-primary">Pat → {initial.Pat}<br />{janExists ? "Jan → 0 (inserted default)" : "Jan → end() (no mutation)"}</div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">std::map 的 find 是只读查询；operator[] 对缺失 key 会插入默认 value，语义不同。</figcaption>

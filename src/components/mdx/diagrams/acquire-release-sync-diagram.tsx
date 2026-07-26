@@ -208,7 +208,7 @@ export function AcquireReleaseSyncDiagram() {
         x={o.x + BOX_W / 2}
         y={o.y + 42}
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         {o.sub}
@@ -346,7 +346,7 @@ export function AcquireReleaseSyncDiagram() {
               x={(syncX1 + syncX2) / 2}
               y={(syncY1 + syncY2) / 2 + 6}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="600"
               fill={SYNC_COLOR}
             >

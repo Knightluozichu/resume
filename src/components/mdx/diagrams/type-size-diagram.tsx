@@ -244,7 +244,7 @@ export function TypeSizeDiagram() {
                   <text
                     x={colX.max + 90}
                     y={y + 4}
-                    fontSize="10"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                     opacity="0.7"
                   >

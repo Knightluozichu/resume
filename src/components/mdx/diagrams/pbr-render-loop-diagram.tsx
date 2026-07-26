@@ -44,7 +44,7 @@ function Box({
         x={x + w / 2}
         y={sub ? y + h / 2 - 3 : y + h / 2 + 3}
         textAnchor="middle"
-        fontSize="9"
+        fontSize="11"
         fontWeight="600"
         fill={color}
       >
@@ -55,7 +55,7 @@ function Box({
           x={x + w / 2}
           y={y + h / 2 + 10}
           textAnchor="middle"
-          fontSize="7.5"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {sub}
@@ -96,7 +96,7 @@ export function PbrRenderLoopDiagram() {
           <text
             x="10"
             y={row1y - 4}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -153,7 +153,7 @@ export function PbrRenderLoopDiagram() {
             x="280"
             y={row1y + bh + 26}
             textAnchor="middle"
-            fontSize="7.5"
+            fontSize="11"
             fill="var(--warning)"
           >
             下一盏光
@@ -174,7 +174,7 @@ export function PbrRenderLoopDiagram() {
           <text
             x="10"
             y={row2y - 4}
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -202,7 +202,7 @@ export function PbrRenderLoopDiagram() {
             x={455}
             y={row2y + bh / 2 - 3}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -212,7 +212,7 @@ export function PbrRenderLoopDiagram() {
             x={455}
             y={row2y + bh / 2 + 10}
             textAnchor="middle"
-            fontSize="7.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             sRGB 输出

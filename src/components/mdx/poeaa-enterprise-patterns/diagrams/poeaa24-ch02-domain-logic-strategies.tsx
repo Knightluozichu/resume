@@ -95,7 +95,7 @@ export function Poeaa24Ch02DomainLogicStrategies() {
                   x={px + PANEL_W / 2}
                   y={PANEL_Y + 42}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={T.secondary}
                 >
                   {s.en}
@@ -189,20 +189,20 @@ export function Poeaa24Ch02DomainLogicStrategies() {
             strokeWidth="1.2"
             markerEnd="url(#ch02-axis)"
           />
-          <text x={80} y={PANEL_Y + PANEL_H + 84} fontSize="10" fill={T.secondary}>
+          <text x={80} y={PANEL_Y + PANEL_H + 84} fontSize="11" fill={T.secondary}>
             简单
           </text>
-          <text x={620} y={PANEL_Y + PANEL_H + 84} fontSize="10" fill={T.secondary}>
+          <text x={620} y={PANEL_Y + PANEL_H + 84} fontSize="11" fill={T.secondary}>
             复杂
           </text>
           {/* 区间标注 */}
-          <text x={160} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="10" fill="#3FB97F">
+          <text x={160} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill="#3FB97F">
             事务脚本
           </text>
-          <text x={360} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="10" fill="#E5B567">
+          <text x={360} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill="#E5B567">
             表模块
           </text>
-          <text x={560} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="10" fill={T.accent}>
+          <text x={560} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill={T.accent}>
             领域模型
           </text>
 

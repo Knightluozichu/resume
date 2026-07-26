@@ -103,7 +103,7 @@ export function DsaParentArrayLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="flex min-h-10 items-center gap-3 text-sm font-semibold text-primary"><input type="checkbox" checked={compressed} onChange={(event) => setCompressed(event.target.checked)} />run find on every element</label>
+        <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-primary"><input type="checkbox" checked={compressed} onChange={(event) => setCompressed(event.target.checked)} />run find on every element</label>
         <div className="mt-4 grid grid-cols-6 gap-1">
           {state.parent.map((parent, index) => (
             <div key={index} className="border border-border bg-background p-2 text-center font-mono text-xs">
@@ -131,7 +131,7 @@ export function DsaUnionHeuristicLab() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-3 gap-2">
           {(["naive", "size", "rank"] as const).map((candidate) => (
-            <button key={candidate} type="button" onClick={() => setStrategy(candidate)} className={"min-h-10 border text-xs font-semibold " + (strategy === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
+            <button key={candidate} type="button" onClick={() => setStrategy(candidate)} className={"min-h-11 border text-xs font-semibold " + (strategy === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>
           ))}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -153,7 +153,7 @@ export function DsaPathCompressionLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <button type="button" onClick={() => setCompressed((value) => !value)} className="min-h-10 w-full border border-accent bg-accent px-3 text-sm font-semibold text-background">{compressed ? "reset chain" : "find(7) with path compression"}</button>
+        <button type="button" onClick={() => setCompressed((value) => !value)} className="min-h-11 w-full border border-accent bg-accent px-3 text-sm font-semibold text-background">{compressed ? "reset chain" : "find(7) with path compression"}</button>
         <div className="mt-4 flex gap-1">
           {chainParents.map((parent, index) => (
             <div key={index} className={"flex-1 border p-2 text-center font-mono text-[10px] " + (path.includes(index) ? "border-success bg-success/10 text-success" : "border-border bg-background text-muted")}>

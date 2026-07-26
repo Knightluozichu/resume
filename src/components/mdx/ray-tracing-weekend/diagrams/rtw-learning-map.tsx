@@ -142,7 +142,7 @@ export function RtwLearningMapDiagram() {
                 x={c.x + 80}
                 y={c.y + 20}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {c.t}
@@ -171,7 +171,7 @@ export function RtwLearningMapDiagram() {
                 x={c.x + 80}
                 y={c.y + 20}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {c.t}
@@ -200,7 +200,7 @@ export function RtwLearningMapDiagram() {
                 x={c.x + 80}
                 y={c.y + 20}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {c.t}
@@ -229,7 +229,7 @@ export function RtwLearningMapDiagram() {
                 x="630"
                 y={c.y + 20}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 {c.t}
@@ -312,7 +312,7 @@ export function RtwLearningMapDiagram() {
             x="360"
             y="344"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             射线 → 求交 → 材质散射 → 递归与采样，几百行 C++ 渲染真实感图片

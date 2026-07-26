@@ -92,7 +92,7 @@ export function DsaFinalReviewDiagram() {
                 <g key={item.name}>
                   <rect x={col.x} y={140 + i * 40} width="150" height="34" rx="5" fill={col.color} fillOpacity="0.04" stroke={col.color} strokeWidth="1" strokeOpacity="0.3" />
                   <text x={col.x + 12} y={156 + i * 40} fontSize="11" fontWeight="600" fill={primary}>{item.name}</text>
-                  <text x={col.x + 12} y={169 + i * 40} fontSize="10" fill={secondary}>{item.detail}</text>
+                  <text x={col.x + 12} y={169 + i * 40} fontSize="11" fill={secondary}>{item.detail}</text>
                 </g>
               ))}
             </g>
@@ -112,8 +112,8 @@ export function DsaFinalReviewDiagram() {
           ].map((d, i) => (
             <g key={i}>
               <rect x={d.x} y={d.y} width="140" height="40" rx="6" fill={accent} fillOpacity="0.04" stroke={accent} strokeWidth="1" strokeOpacity="0.3" />
-              <text x={d.x + 70} y={d.y + 16} textAnchor="middle" fontSize="10" fontWeight="600" fill={accent}>{d.q}</text>
-              <text x={d.x + 70} y={d.y + 31} textAnchor="middle" fontSize="9" fill={primary}>{d.yes}</text>
+              <text x={d.x + 70} y={d.y + 16} textAnchor="middle" fontSize="11" fontWeight="600" fill={accent}>{d.q}</text>
+              <text x={d.x + 70} y={d.y + 31} textAnchor="middle" fontSize="11" fill={primary}>{d.yes}</text>
               {i < 3 && <text x={d.x + 148} y={d.y + 24} fontSize="12" fill={secondary}>{d.no}</text>}
             </g>
           ))}

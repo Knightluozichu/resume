@@ -108,7 +108,7 @@ export function CotDiagram() {
               x={colX(0) + COL_W / 2}
               y={COL_Y + 46}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               跳过中间步骤，张口就给

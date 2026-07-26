@@ -252,7 +252,7 @@ export function BuildPipelineDiagram() {
               x={PROJ_X + PROJ_W / 2}
               y={STAGE_Y + 46}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               场景 + 资源
@@ -261,7 +261,7 @@ export function BuildPipelineDiagram() {
               x={PROJ_X + PROJ_W / 2}
               y={STAGE_Y + 62}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               （模型 / 贴图 / 音频）
@@ -270,7 +270,7 @@ export function BuildPipelineDiagram() {
               x={PROJ_X + PROJ_W / 2}
               y={STAGE_Y + 78}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               + 脚本
@@ -304,7 +304,7 @@ export function BuildPipelineDiagram() {
               x={BS_X + BS_W / 2}
               y={STAGE_Y + 46}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               选目标平台
@@ -313,7 +313,7 @@ export function BuildPipelineDiagram() {
               x={BS_X + BS_W / 2}
               y={STAGE_Y + 64}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--text-primary)"
             >
@@ -323,7 +323,7 @@ export function BuildPipelineDiagram() {
               x={BS_X + BS_W / 2}
               y={STAGE_Y + 80}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               哪些场景进包 + 顺序
@@ -366,7 +366,7 @@ export function BuildPipelineDiagram() {
               x={BUILD_X + BUILD_W / 2}
               y={STAGE_Y + 78}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               压成成品包
@@ -378,7 +378,7 @@ export function BuildPipelineDiagram() {
             x={ART_X + ART_W / 2}
             y={ART_TOP - 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -406,7 +406,7 @@ export function BuildPipelineDiagram() {
                 x={ART_X + ART_W / 2}
                 y={ART_YS[i] + 16}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--text-primary)"
               >
@@ -416,7 +416,7 @@ export function BuildPipelineDiagram() {
                 x={ART_X + ART_W / 2}
                 y={ART_YS[i] + 30}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--accent)"
               >

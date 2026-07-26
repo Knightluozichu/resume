@@ -99,7 +99,7 @@ export function EfcBookMap() {
                 <text x={cx + COL_W / 2} y={93} textAnchor="middle" fontSize="12" fontWeight="700" fill={col.color}>
                   {col.title}
                 </text>
-                <text x={cx + COL_W / 2} y={103} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">
+                <text x={cx + COL_W / 2} y={103} textAnchor="middle" fontSize="11" fill="var(--text-secondary)" fontFamily="monospace">
                   {col.range}
                 </text>
 

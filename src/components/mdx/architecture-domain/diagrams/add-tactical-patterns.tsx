@@ -100,7 +100,7 @@ export function AddTacticalPatternsDiagram() {
               <text x={item.x + item.w / 2} y={item.y + 20} textAnchor="middle" fontSize="12" fontWeight="700" fill={success} fontFamily="monospace">
                 OrderItem {i === 0 ? "①" : "②"}
               </text>
-              <text x={item.x + item.w / 2} y={item.y + 34} textAnchor="middle" fontSize="10" fill={secondary}>Entity</text>
+              <text x={item.x + item.w / 2} y={item.y + 34} textAnchor="middle" fontSize="11" fill={secondary}>Entity</text>
               <line x1={item.x + 8} y1={item.y + 40} x2={item.x + item.w - 8} y2={item.y + 40} stroke={success} strokeWidth="0.8" strokeOpacity="0.4" />
               <text x={item.x + 12} y={item.y + 54} fontSize="11" fill={primary} fontFamily="monospace">- productId</text>
             </g>
@@ -112,7 +112,7 @@ export function AddTacticalPatternsDiagram() {
             <text x={ADDR.x + ADDR.w / 2} y={ADDR.y + 20} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning} fontFamily="monospace">
               Address
             </text>
-            <text x={ADDR.x + ADDR.w / 2} y={ADDR.y + 34} textAnchor="middle" fontSize="10" fill={secondary}>Value Object</text>
+            <text x={ADDR.x + ADDR.w / 2} y={ADDR.y + 34} textAnchor="middle" fontSize="11" fill={secondary}>Value Object</text>
             <line x1={ADDR.x + 8} y1={ADDR.y + 40} x2={ADDR.x + ADDR.w - 8} y2={ADDR.y + 40} stroke={warning} strokeWidth="0.8" strokeOpacity="0.4" />
             <text x={ADDR.x + 12} y={ADDR.y + 54} fontSize="11" fill={primary} fontFamily="monospace">city, street, zip</text>
           </g>
@@ -121,7 +121,7 @@ export function AddTacticalPatternsDiagram() {
             <text x={MONEY.x + MONEY.w / 2} y={MONEY.y + 20} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning} fontFamily="monospace">
               Money
             </text>
-            <text x={MONEY.x + MONEY.w / 2} y={MONEY.y + 34} textAnchor="middle" fontSize="10" fill={secondary}>Value Object</text>
+            <text x={MONEY.x + MONEY.w / 2} y={MONEY.y + 34} textAnchor="middle" fontSize="11" fill={secondary}>Value Object</text>
             <line x1={MONEY.x + 8} y1={MONEY.y + 40} x2={MONEY.x + MONEY.w - 8} y2={MONEY.y + 40} stroke={warning} strokeWidth="0.8" strokeOpacity="0.4" />
             <text x={MONEY.x + 12} y={MONEY.y + 54} fontSize="11" fill={primary} fontFamily="monospace">amount, currency</text>
           </g>

@@ -30,7 +30,7 @@ export function Jg1FullGcDiagram() {
           {/* 正常GC路径 */}
           <rect x="40" y="56" width="310" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.5" />
           <text x="195" y="78" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">正常路径</text>
-          <text x="195" y="96" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Young GC + Mixed GC → 无 Full GC</text>
+          <text x="195" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Young GC + Mixed GC → 无 Full GC</text>
 
           {/* 退化路径 */}
           <text x="40" y="132" fontSize="13" fontWeight="600" fill="var(--danger)">退化路径（触发 Full GC）</text>
@@ -38,23 +38,23 @@ export function Jg1FullGcDiagram() {
           {/* 触发条件1: 疏散失败 */}
           <rect x="40" y="146" width="210" height="70" rx="6" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="145" y="166" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">① 疏散失败</text>
-          <text x="145" y="182" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">evacuation failure</text>
-          <text x="145" y="196" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Survivor/Old 空间不足</text>
-          <text x="145" y="208" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">to-space exhausted</text>
+          <text x="145" y="182" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">evacuation failure</text>
+          <text x="145" y="196" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Survivor/Old 空间不足</text>
+          <text x="145" y="208" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">to-space exhausted</text>
 
           {/* 触发条件2: 并发标记失败 */}
           <rect x="270" y="146" width="210" height="70" rx="6" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="375" y="166" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">② 标记跟不上分配</text>
-          <text x="375" y="182" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">老年代增长过快</text>
-          <text x="375" y="196" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">IHOP 过高</text>
-          <text x="375" y="208" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Mixed GC 来不及</text>
+          <text x="375" y="182" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">老年代增长过快</text>
+          <text x="375" y="196" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">IHOP 过高</text>
+          <text x="375" y="208" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Mixed GC 来不及</text>
 
           {/* 触发条件3: Humongous分配失败 */}
           <rect x="500" y="146" width="210" height="70" rx="6" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="605" y="166" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">③ 大对象分配失败</text>
-          <text x="605" y="182" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">连续 Free Region 不足</text>
-          <text x="605" y="196" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">碎片导致无法分配</text>
-          <text x="605" y="208" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Humongous 对象</text>
+          <text x="605" y="182" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">连续 Free Region 不足</text>
+          <text x="605" y="196" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">碎片导致无法分配</text>
+          <text x="605" y="208" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Humongous 对象</text>
 
           {/* 箭头汇聚到Full GC */}
           <line x1="145" y1="216" x2="350" y2="240" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrFg)" />
@@ -64,8 +64,8 @@ export function Jg1FullGcDiagram() {
           {/* Full GC */}
           <rect x="250" y="244" width="240" height="60" rx="8" fill="var(--danger)" fillOpacity="0.20" stroke="var(--danger)" strokeWidth="2" />
           <text x="370" y="268" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--danger)">Full GC（Serial Old）</text>
-          <text x="370" y="286" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">单线程 · 全堆 STW · 标记-整理</text>
-          <text x="370" y="298" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">停顿可达数秒~数十秒</text>
+          <text x="370" y="286" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">单线程 · 全堆 STW · 标记-整理</text>
+          <text x="370" y="298" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">停顿可达数秒~数十秒</text>
 
           {/* Full GC流程 */}
           <text x="40" y="332" fontSize="13" fontWeight="600" fill="var(--accent)">Full GC 执行流程</text>
@@ -79,7 +79,7 @@ export function Jg1FullGcDiagram() {
           ].map((s, i) => (
             <g key={i}>
               <rect x={s.x} y="346" width="120" height="44" rx="6" fill={s.color} fillOpacity="0.10" stroke={s.color} strokeWidth="1.2" />
-              <text x={s.x + 60} y="366" textAnchor="middle" fontSize="10" fontWeight="600" fill={s.color}>{s.label}</text>
+              <text x={s.x + 60} y="366" textAnchor="middle" fontSize="11" fontWeight="600" fill={s.color}>{s.label}</text>
               {i < 4 && <line x1={s.x + 120} y1="368" x2={s.x + 138} y2="368" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arrFg)" />}
             </g>
           ))}

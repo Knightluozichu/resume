@@ -28,9 +28,7 @@ import {
 
 **The Default Free Store Allocator** 必须服务几乎所有请求：尺寸从数 byte 到数 GiB，分配/释放次序未知，多线程并发，alignment 不同，还要处理 fragmentation、metadata、错误与回收。这个通用性非常有价值，但每次请求的固定工作对 12-byte list node 可能比 payload 本身还大。
 
-<Term def="由全局 operator new/delete 或 malloc/free 暴露、面向任意大小和生命周期请求的通用动态存储分配设施。">
-  default free store allocator
-</Term>
+<Term def="由全局 operator new/delete 或 malloc/free 暴露、面向任意大小和生命周期请求的通用动态存储分配设施。">default free store allocator</Term>
 
 “小”不是书中永恒阈值，而是相对于 metadata、cache line、allocator size class 和 workload 的概念。现代 malloc 往往已有 thread cache 与小尺寸桶，不能因为 2001 年的结论就假定自定义池一定更快；先 profile allocation count、size histogram、lifetime 与 contention。
 
@@ -44,9 +42,7 @@ import {
 
 **The Workings of a Memory Allocator** 可以拆成三层：向 OS 取得较大 region；把 region 切成可服务的 blocks；用 free structure 查找、split、coalesce 并记录 ownership。general allocator 要支持不同大小，因此常按 size class 分桶，并为大请求走单独路径。
 
-<Term def="从较大内存区域中追踪空闲与占用块、满足 alignment、分配、释放并控制碎片的状态机。">
-  allocator state machine
-</Term>
+<Term def="从较大内存区域中追踪空闲与占用块、满足 alignment、分配、释放并控制碎片的状态机。">allocator state machine</Term>
 
 分配器至少维持四项不变量：返回地址满足 requested alignment；live block 不重叠；同一 block 不能 double free；deallocate 必须回到兼容的 allocator/domain。性能指标也不只平均时间，还包括 p99 pause、resident memory、internal/external fragmentation 和跨线程 transfer。
 
@@ -54,9 +50,7 @@ import {
 
 **A Small-Object Allocator** 利用请求集中在有限小尺寸这一事实：为每个 block size 建专用 pool，一次申请较大连续区域，再切成同样大小的 blocks。固定大小后无需 best-fit 搜索，也无需在每个 block 记录 size。
 
-<Term def="针对有限小尺寸请求，把较大区域切成固定大小块并从专用空闲结构中常数时间取还的分配器。">
-  small-object allocator
-</Term>
+<Term def="针对有限小尺寸请求，把较大区域切成固定大小块并从专用空闲结构中常数时间取还的分配器。">small-object allocator</Term>
 
 ```cpp
 void* SmallObjAllocator::allocate(std::size_t bytes) {
@@ -78,9 +72,7 @@ void SmallObjAllocator::deallocate(void* p, std::size_t bytes) {
 
 **Chunks** 是从 free store 一次申请的连续区域，内部按 `blockSize` 切为 `numBlocks` 个 blocks。Chunk 记录首个可用索引和剩余数量，不为每个 block 额外分配 node。
 
-<Term def="由一次上游分配得到并切成多个等大 blocks 的连续区域，是 FixedAllocator 的实际存储单元。">
-  Chunk
-</Term>
+<Term def="由一次上游分配得到并切成多个等大 blocks 的连续区域，是 FixedAllocator 的实际存储单元。">Chunk</Term>
 
 ```cpp
 void Chunk::reset(std::size_t blockSize, unsigned char blocks) {
@@ -108,9 +100,7 @@ free block 的首 byte 暂时保存 next index；block 交给 object 后，这�
 
 **The Fixed-Size Allocator** 管理同一 block size 的多个 Chunks。它缓存“最近有空闲的 Chunk”和“最近用于释放定位的 Chunk”，避免每次从头扫描；所有 Chunk 满时创建新 Chunk，某个 Chunk 全空时可保留一个备用并释放多余空 Chunk。
 
-<Term def="只服务一个 block size、拥有若干 Chunks 并选择可分配或可回收所属 Chunk 的池。">
-  FixedAllocator
-</Term>
+<Term def="只服务一个 block size、拥有若干 Chunks 并选择可分配或可回收所属 Chunk 的池。">FixedAllocator</Term>
 
 deallocate 的困难不是 push free list，而是确定 pointer 属于哪个 Chunk。线性扫描 Chunk ranges 简单但随 chunk count 增长；sorted ranges 可二分；page-aligned superblock 可用 mask；header/back-pointer 查找快但占空间。任何方案都必须先验证 pointer 在 range 内且按 block boundary 对齐。
 
@@ -118,9 +108,7 @@ deallocate 的困难不是 push free list，而是确定 pointer 属于哪个 Ch
 
 **The SmallObjAllocator Class** 是 sizes 到 FixedAllocator 的 router。请求 size 向上对齐或映射到 bucket；小于阈值走对应 pool，大于阈值回退 default free store。它还决定 page size、maximum object size、Chunk block count 与回收策略。
 
-<Term def="按请求大小选择或创建 FixedAllocator、对大请求回退上游分配器并维护所有小对象桶的路由层。">
-  SmallObjAllocator
-</Term>
+<Term def="按请求大小选择或创建 FixedAllocator、对大请求回退上游分配器并维护所有小对象桶的路由层。">SmallObjAllocator</Term>
 
 <McdSmallObjectRoutingMap />
 
@@ -130,9 +118,7 @@ bucket rounding 会产生 internal fragmentation，例如 13 bytes 进入 16-byt
 
 书中 **A Hat Trick** 的关键是“用空闲 block 自己存 free-list link”：allocated 状态需要所有 bytes 给对象，free 状态则没有对象 lifetime，可以借首 byte 保存下一个 block index。这样没有 per-block external node，也不需要额外 pointer-sized header。
 
-<Term def="在 object lifetime 尚未开始或已经结束的空闲 block 内复用其字节保存 free-list 索引，从而消除独立链表节点。">
-  in-band free list
-</Term>
+<Term def="在 object lifetime 尚未开始或已经结束的空闲 block 内复用其字节保存 free-list 索引，从而消除独立链表节点。">in-band free list</Term>
 
 现代 C++ object lifetime 规则要求谨慎：只能在 block free 时写 allocator metadata；placement construction 开始对象 lifetime 后不得把同一 bytes 当 link；析构结束后才可重新写 link。over-aligned types 还要求 Chunk base 与 block stride 同时满足 alignment。
 
@@ -161,9 +147,7 @@ class-specific `operator new` 把 caller size 与 type 联系起来，但要处�
 
 官方目录的 **Administrivia** 包含初始化、销毁、copy 禁止、异常、线程与统计等管理问题。allocator object 必须活得比所有 blocks 久；shutdown 时若仍有 live object，贸然释放 Chunks 会悬空；跨 module 使用不同 runtime heap 也可能把 deallocation 送错 domain。
 
-<Term def="使分配器可生产使用所需的生命周期、线程、异常、统计、配置与边界管理规则。">
-  allocator administrivia
-</Term>
+<Term def="使分配器可生产使用所需的生命周期、线程、异常、统计、配置与边界管理规则。">allocator administrivia</Term>
 
 线程模型可以是全局锁、每 bucket 锁、thread-local pool 加 remote-free queue，或直接委托成熟 allocator。粒度越细并行度越高，metadata 与跨线程释放越复杂。异常策略也要清楚：上游失败抛 `std::bad_alloc`，pool state 必须保持不变。
 

@@ -29,13 +29,13 @@ export function FlaLearningMapDiagram() {
           {/* 第一排：学习地图 与 Android入门 */}
           <rect x="50" y="80" width="310" height="56" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="205" y="102" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--warning)">全书学习地图</text>
-          <text x="205" y="120" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第0章 知识体系总览</text>
-          <text x="205" y="132" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">四大组件/学习路径</text>
+          <text x="205" y="120" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第0章 知识体系总览</text>
+          <text x="205" y="132" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">四大组件/学习路径</text>
 
           <rect x="380" y="80" width="310" height="56" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="535" y="102" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--warning)">Android入门</text>
-          <text x="535" y="120" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第1章 项目结构/Gradle</text>
-          <text x="535" y="132" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">日志/资源/清单文件</text>
+          <text x="535" y="120" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第1章 项目结构/Gradle</text>
+          <text x="535" y="132" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">日志/资源/清单文件</text>
 
           <text x="205" y="156" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
           <text x="535" y="156" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
@@ -43,13 +43,13 @@ export function FlaLearningMapDiagram() {
           {/* 第二排：UI布局与控件 与 Activity与Fragment */}
           <rect x="50" y="170" width="310" height="56" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
           <text x="205" y="192" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">UI布局与控件</text>
-          <text x="205" y="210" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第2章 LinearLayout/RecyclerView</text>
-          <text x="205" y="222" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">常用控件/自定义View</text>
+          <text x="205" y="210" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第2章 LinearLayout/RecyclerView</text>
+          <text x="205" y="222" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">常用控件/自定义View</text>
 
           <rect x="380" y="170" width="310" height="56" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
           <text x="535" y="192" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">Activity与Fragment</text>
-          <text x="535" y="210" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第3章 生命周期/Intent</text>
-          <text x="535" y="222" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Fragment管理/返回栈</text>
+          <text x="535" y="210" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第3章 生命周期/Intent</text>
+          <text x="535" y="222" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Fragment管理/返回栈</text>
 
           <text x="205" y="246" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
           <text x="535" y="246" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
@@ -57,13 +57,13 @@ export function FlaLearningMapDiagram() {
           {/* 第三排：数据存储 与 广播机制 */}
           <rect x="50" y="260" width="310" height="56" rx="8" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="205" y="282" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--danger)">数据存储</text>
-          <text x="205" y="300" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第4章 SharedPreferences/文件</text>
-          <text x="205" y="312" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">SQLite/LitePal/Room</text>
+          <text x="205" y="300" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第4章 SharedPreferences/文件</text>
+          <text x="205" y="312" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">SQLite/LitePal/Room</text>
 
           <rect x="380" y="260" width="310" height="56" rx="8" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="535" y="282" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--danger)">广播机制</text>
-          <text x="535" y="300" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第5章 标准广播/有序广播</text>
-          <text x="535" y="312" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">动态注册/静态注册</text>
+          <text x="535" y="300" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第5章 标准广播/有序广播</text>
+          <text x="535" y="312" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">动态注册/静态注册</text>
 
           <text x="205" y="336" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
           <text x="535" y="336" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
@@ -71,13 +71,13 @@ export function FlaLearningMapDiagram() {
           {/* 第四排：服务与通知 与 网络编程 */}
           <rect x="50" y="350" width="310" height="56" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
           <text x="205" y="372" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--success)">服务与通知</text>
-          <text x="205" y="390" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第6章 Service生命周期</text>
-          <text x="205" y="402" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">前台服务/通知渠道</text>
+          <text x="205" y="390" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第6章 Service生命周期</text>
+          <text x="205" y="402" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">前台服务/通知渠道</text>
 
           <rect x="380" y="350" width="310" height="56" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
           <text x="535" y="372" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--success)">网络编程</text>
-          <text x="535" y="390" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第7章 HttpURLConnection</text>
-          <text x="535" y="402" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">OkHttp/Retrofit/JSON解析</text>
+          <text x="535" y="390" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第7章 HttpURLConnection</text>
+          <text x="535" y="402" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">OkHttp/Retrofit/JSON解析</text>
 
           <text x="205" y="426" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
           <text x="535" y="426" textAnchor="middle" fontSize="18" fill="var(--text-tertiary)">&darr;</text>
@@ -85,13 +85,13 @@ export function FlaLearningMapDiagram() {
           {/* 第五排：高级特性 与 全书复习 */}
           <rect x="50" y="440" width="310" height="56" rx="8" fill="var(--text-primary)" fillOpacity="0.08" stroke="var(--text-primary)" strokeWidth="1.2" strokeOpacity="0.4" />
           <text x="205" y="462" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">高级特性</text>
-          <text x="205" y="480" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第8章 Material Design/Jetpack</text>
-          <text x="205" y="492" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">ViewModel/LiveData/导航</text>
+          <text x="205" y="480" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第8章 Material Design/Jetpack</text>
+          <text x="205" y="492" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">ViewModel/LiveData/导航</text>
 
           <rect x="380" y="440" width="310" height="56" rx="8" fill="var(--text-primary)" fillOpacity="0.08" stroke="var(--text-primary)" strokeWidth="1.2" strokeOpacity="0.4" />
           <text x="535" y="462" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">全书复习</text>
-          <text x="535" y="480" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">第9章 知识图谱/选型矩阵</text>
-          <text x="535" y="492" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">四大组件→数据→网络→架构</text>
+          <text x="535" y="480" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第9章 知识图谱/选型矩阵</text>
+          <text x="535" y="492" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">四大组件→数据→网络→架构</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

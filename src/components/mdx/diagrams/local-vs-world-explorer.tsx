@@ -161,7 +161,7 @@ export function LocalVsWorldExplorer() {
           <text
             x={toSvg(0, 0).sx + 4}
             y={toSvg(0, 0).sy + 14}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             世界原点
@@ -200,7 +200,7 @@ export function LocalVsWorldExplorer() {
             x={parentPt.sx}
             y={parentPt.sy + 3.5}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -223,7 +223,7 @@ export function LocalVsWorldExplorer() {
             x={childPt.sx}
             y={childPt.sy + 3.5}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-primary)"
           >

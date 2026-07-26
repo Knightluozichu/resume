@@ -81,7 +81,7 @@ export function BufferSubDataDiagram() {
             x="280"
             y="112"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--warning)"
           >
             整块重建（即使只有一格变了，也全传一遍）
@@ -132,7 +132,7 @@ export function BufferSubDataDiagram() {
             x={startX + subFrom * slotW}
             y="248"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--accent)"
           >
@@ -160,7 +160,7 @@ export function BufferSubDataDiagram() {
             x={(startX + subFrom * slotW + startX + (subTo + 1) * slotW) / 2}
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--accent)"
           >

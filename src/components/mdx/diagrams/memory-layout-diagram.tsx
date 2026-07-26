@@ -53,8 +53,8 @@ export function MemoryLayoutDiagram({ step = 1 }: MemoryLayoutDiagramProps) {
           </text>
           <rect x={stackX} y={topY} width={memW} height={memH} rx="8" fill="var(--code-bg)" stroke={stackColor} strokeWidth="1.5" />
           <text x={stackX + memW / 2} y={topY + 28} fontSize="11" fill={stackColor} textAnchor="middle">int x = 42;</text>
-          <text x={stackX + memW / 2} y={topY + 48} fontSize="9" fill={secondary} textAnchor="middle">自动分配，自动析构</text>
-          <text x={stackX + memW / 2} y={topY + 64} fontSize="9" fill={secondary} textAnchor="middle">离开作用域即释放</text>
+          <text x={stackX + memW / 2} y={topY + 48} fontSize="11" fill={secondary} textAnchor="middle">自动分配，自动析构</text>
+          <text x={stackX + memW / 2} y={topY + 64} fontSize="11" fill={secondary} textAnchor="middle">离开作用域即释放</text>
 
           {/* ── Heap (普通 new) ── */}
           <rect x={heapX} y={topY - 24} width={memW} height={24} rx="4" fill={heapColor} fillOpacity="0.12" />
@@ -62,10 +62,10 @@ export function MemoryLayoutDiagram({ step = 1 }: MemoryLayoutDiagramProps) {
             堆 Heap（普通 new）
           </text>
           <rect x={heapX} y={topY} width={memW} height={memH} rx="8" fill="var(--code-bg)" stroke={heapColor} strokeWidth={step === 1 ? 2.5 : 1} />
-          <text x={heapX + memW / 2} y={topY + 24} fontSize="10" fill={heapColor} textAnchor="middle">auto* p = new T();</text>
-          <text x={heapX + memW / 2} y={topY + 40} fontSize="9" fill={step === 1 ? primary : secondary} textAnchor="middle">① operator new——分配内存</text>
-          <text x={heapX + memW / 2} y={topY + 54} fontSize="9" fill={step === 1 ? primary : secondary} textAnchor="middle">② 构造函数——初始化对象</text>
-          <text x={heapX + memW / 2} y={topY + 70} fontSize="9" fill={step === 1 ? warn : secondary} textAnchor="middle">delete p: 析构 + 释放内存</text>
+          <text x={heapX + memW / 2} y={topY + 24} fontSize="11" fill={heapColor} textAnchor="middle">auto* p = new T();</text>
+          <text x={heapX + memW / 2} y={topY + 40} fontSize="11" fill={step === 1 ? primary : secondary} textAnchor="middle">① operator new——分配内存</text>
+          <text x={heapX + memW / 2} y={topY + 54} fontSize="11" fill={step === 1 ? primary : secondary} textAnchor="middle">② 构造函数——初始化对象</text>
+          <text x={heapX + memW / 2} y={topY + 70} fontSize="11" fill={step === 1 ? warn : secondary} textAnchor="middle">delete p: 析构 + 释放内存</text>
 
           {/* ── Pool/Placement new ── */}
           <rect x={poolX} y={topY - 24} width={memW * 2 + 32} height={24} rx="4" fill={poolColor} fillOpacity="0.12" />
@@ -75,8 +75,8 @@ export function MemoryLayoutDiagram({ step = 1 }: MemoryLayoutDiagramProps) {
 
           {/* Raw memory block */}
           <rect x={poolX} y={topY} width={memW * 2 + 32} height={memH - 8} rx="8" fill="var(--code-bg)" stroke={border} strokeWidth="1" />
-          <text x={poolX + (memW * 2 + 32) / 2} y={topY + 22} fontSize="10" fill={poolColor} textAnchor="middle">void* buf = operator new(N * sizeof(T));</text>
-          <text x={poolX + (memW * 2 + 32) / 2} y={topY + 38} fontSize="9" fill={secondary} textAnchor="middle">预分配一大块原始内存（无类型、未初始化）</text>
+          <text x={poolX + (memW * 2 + 32) / 2} y={topY + 22} fontSize="11" fill={poolColor} textAnchor="middle">void* buf = operator new(N * sizeof(T));</text>
+          <text x={poolX + (memW * 2 + 32) / 2} y={topY + 38} fontSize="11" fill={secondary} textAnchor="middle">预分配一大块原始内存（无类型、未初始化）</text>
 
           {/* Placement new annotation */}
           {step === 2 && (

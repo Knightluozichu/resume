@@ -255,7 +255,7 @@ export function Algs4DfsOrderLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-3 border border-border" role="group" aria-label="DFS order">{(["preorder", "postorder", "reverse postorder"] as OrderMode[]).map((option) => <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-10 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>)}</div>
+        <div className="grid grid-cols-3 border border-border" role="group" aria-label="DFS order">{(["preorder", "postorder", "reverse postorder"] as OrderMode[]).map((option) => <button key={option} type="button" onClick={() => setMode(option)} className={"min-h-11 border-r border-border px-2 py-2 text-xs last:border-r-0 " + (mode === option ? "bg-primary text-background" : "bg-background text-secondary")}>{option}</button>)}</div>
         <div className="mt-5"><DirectedGraphCanvas graphEdges={dagEdges} /></div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">{order.map((vertex, rank) => <div key={vertex} className="min-w-12 border border-accent bg-accent/10 p-2 text-center"><div className="font-mono text-xs text-accent">{vertex}</div><div className="text-[9px] text-secondary">rank {rank}</div></div>)}</div>
       </div>

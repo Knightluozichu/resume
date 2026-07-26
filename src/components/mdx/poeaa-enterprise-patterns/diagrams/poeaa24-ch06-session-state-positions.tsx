@@ -69,7 +69,7 @@ export function Poeaa24Ch06SessionStatePositions() {
               <g key={p.title}>
                 <rect x={px} y={PANEL_Y} width={PANEL_W} height={PANEL_H} rx="10" fill={p.color} fillOpacity="0.04" stroke={p.color} strokeWidth="1.5" />
                 <text x={px + PANEL_W / 2} y={PANEL_Y + 24} textAnchor="middle" fontSize="13" fontWeight="700" fill={p.color}>{p.title}</text>
-                <text x={px + PANEL_W / 2} y={PANEL_Y + 42} textAnchor="middle" fontSize="10" fill={T.secondary}>{p.en}</text>
+                <text x={px + PANEL_W / 2} y={PANEL_Y + 42} textAnchor="middle" fontSize="11" fill={T.secondary}>{p.en}</text>
                 <line x1={px} y1={PANEL_Y + 52} x2={px + PANEL_W} y2={PANEL_Y + 52} stroke={p.color} strokeWidth="0.8" strokeOpacity="0.4" />
 
                 <text x={px + 14} y={PANEL_Y + 74} fontSize="11" fontWeight="600" fill={T.primary}>存储位置</text>
@@ -98,12 +98,12 @@ export function Poeaa24Ch06SessionStatePositions() {
             </marker>
           </defs>
           <line x1={60} y1={PANEL_Y + PANEL_H + 44} x2={660} y2={PANEL_Y + PANEL_H + 44} stroke={T.secondary} strokeWidth="1.2" markerEnd="url(#ch06-axis)" />
-          <text x={60} y={PANEL_Y + PANEL_H + 62} fontSize="10" fill={T.secondary}>简单 / 无状态</text>
-          <text x={600} y={PANEL_Y + PANEL_H + 62} fontSize="10" fill={T.secondary}>持久 / 可恢复</text>
+          <text x={60} y={PANEL_Y + PANEL_H + 62} fontSize="11" fill={T.secondary}>简单 / 无状态</text>
+          <text x={600} y={PANEL_Y + PANEL_H + 62} fontSize="11" fill={T.secondary}>持久 / 可恢复</text>
 
-          <text x={160} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="10" fontWeight="600" fill="#3FB97F">客户端</text>
-          <text x={360} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="10" fontWeight="600" fill={T.accent}>服务器</text>
-          <text x={560} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="10" fontWeight="600" fill="#E5B567">数据库</text>
+          <text x={160} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="11" fontWeight="600" fill="#3FB97F">客户端</text>
+          <text x={360} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.accent}>服务器</text>
+          <text x={560} y={PANEL_Y + PANEL_H + 40} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567">数据库</text>
 
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="选择轴：状态量 × 持久性需求 × 扩展性要求" />
         </svg>

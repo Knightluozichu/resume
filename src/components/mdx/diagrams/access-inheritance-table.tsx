@@ -98,7 +98,7 @@ export function AccessInheritanceTable() {
               <text
                 x={colX[i] + colW[i] / 2}
                 y={78}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
                 textAnchor="middle"
@@ -154,7 +154,7 @@ export function AccessInheritanceTable() {
                       <text
                         x={colX[ai + 1] + colW[ai + 1] / 2}
                         y={y + 28}
-                        fontSize="10"
+                        fontSize="11"
                         fontWeight="600"
                         fill={accColor}
                         textAnchor="middle"
@@ -191,7 +191,7 @@ export function AccessInheritanceTable() {
             Three Golden Rules for Access Control
           </text>
 
-          <text x={60} y={320} fontSize="10" fill={primary}>
+          <text x={60} y={320} fontSize="11" fill={primary}>
             1.{" "}
             <tspan fontWeight="700" fill={good}>
               public inheritance
@@ -199,24 +199,24 @@ export function AccessInheritanceTable() {
             (most common): base public → public, base protected → protected.
             Expresses IS-A.
           </text>
-          <text x={70} y={336} fontSize="9" fill={secondary}>
+          <text x={70} y={336} fontSize="11" fill={secondary}>
             User code can access inherited public members through derived
             objects directly.
           </text>
 
-          <text x={60} y={356} fontSize="10" fill={primary}>
+          <text x={60} y={356} fontSize="11" fill={primary}>
             2.{" "}
             <tspan fontWeight="700" fill={warn}>
               protected inheritance
             </tspan>
             : base public + protected → derived protected. Rarely used.
           </text>
-          <text x={70} y={372} fontSize="9" fill={secondary}>
+          <text x={70} y={372} fontSize="11" fill={secondary}>
             Derived class users see nothing inherited. Only further derived
             classes can access.
           </text>
 
-          <text x={60} y={392} fontSize="10" fill={primary}>
+          <text x={60} y={392} fontSize="11" fill={primary}>
             3.{" "}
             <tspan fontWeight="700" fill={danger}>
               private inheritance
@@ -224,7 +224,7 @@ export function AccessInheritanceTable() {
             : base public + protected → derived private. &quot;Implementation
             inheritance&quot; - almost never use.
           </text>
-          <text x={70} y={408} fontSize="9" fill={secondary}>
+          <text x={70} y={408} fontSize="11" fill={secondary}>
             Prefer composition (HAS-A as a member) over private inheritance in
             virtually all cases.
           </text>
@@ -232,7 +232,7 @@ export function AccessInheritanceTable() {
           <text
             x={360}
             y={426}
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >

@@ -33,7 +33,7 @@ export function DsaVectorGrowthLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="flex gap-2"><button type="button" onClick={push} className="min-h-10 flex-1 border border-accent bg-accent px-3 text-sm font-semibold text-background">push_back</button><button type="button" onClick={reset} className="min-h-10 border border-border bg-background px-3 text-sm font-semibold text-primary">reset</button></div>
+        <div className="flex gap-2"><button type="button" onClick={push} className="min-h-11 flex-1 border border-accent bg-accent px-3 text-sm font-semibold text-background">push_back</button><button type="button" onClick={reset} className="min-h-11 border border-border bg-background px-3 text-sm font-semibold text-primary">reset</button></div>
         <div className="mt-4 flex flex-wrap gap-1">{Array.from({ length: capacity }, (_, index) => <span key={index} className={"h-9 min-w-9 border p-2 text-center font-mono text-xs " + (index < size ? "border-success bg-success/10 text-success" : "border-border bg-background text-muted")}>{index < size ? index : "·"}</span>)}</div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-xs"><div className="border border-border bg-background p-2 text-secondary">size <strong className="text-primary">{size}</strong></div><div className="border border-border bg-background p-2 text-secondary">capacity <strong className="text-primary">{capacity}</strong></div><div className="border border-warning bg-warning/10 p-2 text-warning">{size === capacity ? "next push reallocates" : `${capacity - size} spare`}</div></div>
       </div>
@@ -54,7 +54,7 @@ export function DsaListSentinelLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="flex items-center gap-1 overflow-x-auto"><span className="border border-primary bg-primary/10 p-2 font-mono text-xs text-primary">head</span><span className="text-muted">⇄</span>{values.map((value, index) => <button key={`${value}-${index}`} type="button" onClick={() => setSelected(index)} className={"min-w-14 border p-2 font-mono text-xs " + (selected === index ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{value}</button>).flatMap((node, index) => index < values.length - 1 ? [node, <span key={`arrow-${index}`} className="text-muted">⇄</span>] : [node])}<span className="text-muted">⇄</span><span className="border border-primary bg-primary/10 p-2 font-mono text-xs text-primary">tail</span></div>
-        <button type="button" onClick={erase} disabled={!values.length} className="mt-4 min-h-10 w-full border border-warning bg-warning/10 px-3 text-sm font-semibold text-warning">erase selected</button>
+        <button type="button" onClick={erase} disabled={!values.length} className="mt-4 min-h-11 w-full border border-warning bg-warning/10 px-3 text-sm font-semibold text-warning">erase selected</button>
         <p className="mb-0 mt-3 text-sm text-secondary">删除只重连 predecessor.next 与 successor.prev；head/tail 哨兵消除首尾 null 特判。</p>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">官方 List 用两个 sentinel nodes 统一空表、首插、尾插和删除的指针规则。</figcaption>
@@ -119,7 +119,7 @@ export function DsaQueueRingLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="flex gap-2"><button type="button" onClick={enqueue} className="min-h-10 flex-1 border border-success bg-success/10 px-3 text-sm font-semibold text-success">enqueue</button><button type="button" onClick={dequeue} className="min-h-10 flex-1 border border-warning bg-warning/10 px-3 text-sm font-semibold text-warning">dequeue</button></div>
+        <div className="flex gap-2"><button type="button" onClick={enqueue} className="min-h-11 flex-1 border border-success bg-success/10 px-3 text-sm font-semibold text-success">enqueue</button><button type="button" onClick={dequeue} className="min-h-11 flex-1 border border-warning bg-warning/10 px-3 text-sm font-semibold text-warning">dequeue</button></div>
         <div className="mt-4 grid grid-cols-8 gap-1">{Array.from({ length: capacity }, (_, index) => <span key={index} className={"aspect-square border p-2 text-center font-mono text-xs " + (occupied.has(index) ? "border-accent bg-accent/10 text-accent" : "border-border bg-background text-muted")}>{index}</span>)}</div>
         <div className="mt-3 text-center font-mono text-xs text-secondary">front={front}, size={size}, back={(front + size) % capacity}</div>
       </div>

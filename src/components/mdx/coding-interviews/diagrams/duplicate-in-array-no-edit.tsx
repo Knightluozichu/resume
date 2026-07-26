@@ -49,23 +49,23 @@ export function ValueRangeDiagram() {
           <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">二分的是值域，不是数组下标</text>
           <rect x="92" y="66" width="596" height="54" rx="5" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" />
           <text x="390" y="88" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">候选值域 1..7</text>
-          <text x="390" y="108" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">8个元素落入7个可选值，至少一处重复</text>
+          <text x="390" y="108" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">8个元素落入7个可选值，至少一处重复</text>
           <path d="M390 120 L238 164" stroke="var(--border)" /><path d="M390 120 L542 164" stroke="var(--border)" />
           <rect x="92" y="164" width="292" height="82" rx="5" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" strokeWidth="2" />
           <text x="238" y="190" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">左半 1..4</text>
-          <text x="238" y="214" textAnchor="middle" fontSize="10" fill="var(--text-primary)">容量4，实际计数5</text>
-          <text x="238" y="234" textAnchor="middle" fontSize="9.5" fill="var(--success)">5大于4，必含重复</text>
+          <text x="238" y="214" textAnchor="middle" fontSize="11" fill="var(--text-primary)">容量4，实际计数5</text>
+          <text x="238" y="234" textAnchor="middle" fontSize="11" fill="var(--success)">5大于4，必含重复</text>
           <rect x="396" y="164" width="292" height="82" rx="5" fill="var(--bg)" stroke="var(--border)" />
           <text x="542" y="190" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">右半 5..7</text>
-          <text x="542" y="214" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">本轮不再检查</text>
-          <text x="542" y="234" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">丢弃的是候选值，不是输入元素</text>
+          <text x="542" y="214" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">本轮不再检查</text>
+          <text x="542" y="234" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">丢弃的是候选值，不是输入元素</text>
           <path d="M238 246 V280" stroke="var(--success)" strokeWidth="2" />
           <rect x="112" y="280" width="252" height="56" rx="5" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" />
-          <text x="238" y="303" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--text-primary)">继续把1..4拆成1..2与3..4</text>
-          <text x="238" y="323" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">每轮都扫描完整输入重新计数</text>
+          <text x="238" y="303" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">继续把1..4拆成1..2与3..4</text>
+          <text x="238" y="323" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每轮都扫描完整输入重新计数</text>
           <rect x="420" y="280" width="248" height="56" rx="5" fill="var(--warning)" fillOpacity="0.07" stroke="var(--warning)" />
-          <text x="544" y="303" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--warning)">数组顺序始终不变</text>
-          <text x="544" y="323" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">只收缩start..end两个整数</text>
+          <text x="544" y="303" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">数组顺序始终不变</text>
+          <text x="544" y="323" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">只收缩start..end两个整数</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">超过区间可容纳的不同值数量，就是抽屉原理在该半区的可执行判据。</figcaption>

@@ -336,7 +336,7 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
             <text
               x="340"
               y="248"
-              fontSize="10"
+              fontSize="11"
               fill={showMatch ? token.textSecondary : token.border}
               textAnchor="middle"
             >
@@ -371,7 +371,7 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
             <text
               x="180"
               y="320"
-              fontSize="10"
+              fontSize="11"
               fill={token.textSecondary}
               textAnchor="middle"
             >
@@ -403,7 +403,7 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
             <text
               x="460"
               y="320"
-              fontSize="10"
+              fontSize="11"
               fill={token.textSecondary}
               textAnchor="middle"
             >
@@ -460,7 +460,7 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
               <text
                 x="330"
                 y="391"
-                fontSize="10"
+                fontSize="11"
                 fill={token.textSecondary}
                 textAnchor="middle"
               >

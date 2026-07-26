@@ -14,24 +14,24 @@ export function Poeaa24Pattern16EmbeddedValue() {
           <rect x={48} y={64} width={240} height={28} rx="8" fill="#3FB97F" fillOpacity="0.12" />
           <rect x={48} y={84} width={240} height={8} fill="#3FB97F" fillOpacity="0.12" />
           <text x={168} y={83} textAnchor="middle" fontSize="12" fontWeight="700" fill="#3FB97F">Employee</text>
-          <text x={64} y={112} fontSize="10" fontFamily="monospace" fill={T.primary}>id: 1</text>
-          <text x={64} y={132} fontSize="10" fontFamily="monospace" fill={T.primary}>name: "Bob"</text>
+          <text x={64} y={112} fontSize="11" fontFamily="monospace" fill={T.primary}>id: 1</text>
+          <text x={64} y={132} fontSize="11" fontFamily="monospace" fill={T.primary}>name: "Bob"</text>
           <rect x={72} y={142} width={196} height={48} rx="4" fill="#E5B567" fillOpacity="0.08" stroke="#E5B567" strokeWidth="1" strokeDasharray="4 2" />
-          <text x={84} y={160} fontSize="10" fontFamily="monospace" fill="#E5B567">address: Address</text>
-          <text x={84} y={178} fontSize="9" fontFamily="monospace" fill={T.secondary}>  .city .street .zip</text>
+          <text x={84} y={160} fontSize="11" fontFamily="monospace" fill="#E5B567">address: Address</text>
+          <text x={84} y={178} fontSize="11" fontFamily="monospace" fill={T.secondary}>  .city .street .zip</text>
           {/* 映射箭头 */}
           <line x1={288} y1={134} x2={420} y2={134} stroke="#E5B567" strokeWidth="1.5" strokeDasharray="6 3" />
-          <text x={354} y={126} textAnchor="middle" fontSize="10" fill="#E5B567">展开为列</text>
+          <text x={354} y={126} textAnchor="middle" fontSize="11" fill="#E5B567">展开为列</text>
           {/* 表侧 */}
           <rect x={420} y={64} width={260} height={140} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.5" />
           <rect x={420} y={64} width={260} height={28} rx="8" fill="#E5B567" fillOpacity="0.12" />
           <rect x={420} y={84} width={260} height={8} fill="#E5B567" fillOpacity="0.12" />
           <text x={550} y={83} textAnchor="middle" fontSize="12" fontWeight="700" fill="#E5B567">employees 表</text>
-          <text x={436} y={112} fontSize="10" fontFamily="monospace" fill={T.primary}>id: 1</text>
-          <text x={436} y={132} fontSize="10" fontFamily="monospace" fill={T.primary}>name: 'Bob'</text>
-          <text x={436} y={152} fontSize="10" fontFamily="monospace" fill="#E5B567">city: 'Shanghai'</text>
-          <text x={436} y={172} fontSize="10" fontFamily="monospace" fill="#E5B567">street: 'Nanjing Rd'</text>
-          <text x={436} y={192} fontSize="10" fontFamily="monospace" fill="#E5B567">zip: '200001'</text>
+          <text x={436} y={112} fontSize="11" fontFamily="monospace" fill={T.primary}>id: 1</text>
+          <text x={436} y={132} fontSize="11" fontFamily="monospace" fill={T.primary}>name: 'Bob'</text>
+          <text x={436} y={152} fontSize="11" fontFamily="monospace" fill="#E5B567">city: 'Shanghai'</text>
+          <text x={436} y={172} fontSize="11" fontFamily="monospace" fill="#E5B567">street: 'Nanjing Rd'</text>
+          <text x={436} y={192} fontSize="11" fontFamily="monospace" fill="#E5B567">zip: '200001'</text>
           {/* 底部说明 */}
           <rect x={48} y={228} width={624} height={48} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={250} fontSize="11" fill={T.secondary}>• 值对象无独立表、无主键，字段直接平铺到所有者表中</text>

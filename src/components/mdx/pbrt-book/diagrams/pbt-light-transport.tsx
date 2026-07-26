@@ -123,7 +123,7 @@ export function PbtLightTransportDiagram({
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -133,7 +133,7 @@ export function PbtLightTransportDiagram({
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -318,7 +318,7 @@ export function PbtLteFormsDiagram() {
                   x={x + 114}
                   y="211"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {form.note}
@@ -467,20 +467,20 @@ export function PbtPathContributionDiagram() {
                         : 61
                 }
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fill={vertex.color}
               >
                 {vertex.role}
               </text>
             </g>
           ))}
-          <text x="168" y="137" fontSize="10.5" fill={secondary}>
+          <text x="168" y="137" fontSize="11" fill={secondary}>
             G(x1 ↔ x0)
           </text>
-          <text x="376" y="139" fontSize="10.5" fill={secondary}>
+          <text x="376" y="139" fontSize="11" fill={secondary}>
             G(x2 ↔ x1)
           </text>
-          <text x="590" y="116" fontSize="10.5" fill={secondary}>
+          <text x="590" y="116" fontSize="11" fill={secondary}>
             G(x3 ↔ x2)
           </text>
           <rect
@@ -621,25 +621,25 @@ export function PbtMisDiagram() {
                 <text
                   x={x + 18}
                   y="184"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={success}
                 >
                   强项
                 </text>
-                <text x={x + 53} y="184" fontSize="10.5" fill={primary}>
+                <text x={x + 53} y="184" fontSize="11" fill={primary}>
                   {strategy.wins}
                 </text>
                 <text
                   x={x + 18}
                   y="217"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={danger}
                 >
                   风险
                 </text>
-                <text x={x + 53} y="217" fontSize="10.5" fill={secondary}>
+                <text x={x + 53} y="217" fontSize="11" fill={secondary}>
                   {strategy.loses}
                 </text>
               </g>
@@ -765,7 +765,7 @@ export function PbtIntegratorStateDiagram() {
                   x={x + 87}
                   y="163"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {state.meaning}
@@ -783,7 +783,7 @@ export function PbtIntegratorStateDiagram() {
                   x={x + 87}
                   y="205"
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={secondary}
                 >

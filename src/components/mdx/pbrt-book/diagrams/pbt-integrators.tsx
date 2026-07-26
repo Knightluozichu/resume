@@ -125,7 +125,7 @@ export function PbtIntegratorsDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -135,7 +135,7 @@ export function PbtIntegratorsDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -290,7 +290,7 @@ export function PbtIntegratorHierarchyDiagram() {
                   x={x + 104}
                   y="153"
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -300,7 +300,7 @@ export function PbtIntegratorHierarchyDiagram() {
                   x={x + 104}
                   y="202"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {layer.owns}
@@ -441,7 +441,7 @@ export function PbtSamplerDimensionsDiagram() {
                 x={dimension.x + dimension.width / 2}
                 y="99"
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -451,7 +451,7 @@ export function PbtSamplerDimensionsDiagram() {
                 x={dimension.x + dimension.width / 2}
                 y="120"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={dimension.color}
               >
                 {dimension.count}
@@ -460,7 +460,7 @@ export function PbtSamplerDimensionsDiagram() {
                 x={dimension.x + dimension.width / 2}
                 y="158"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill={secondary}
               >
                 group {index + 1}
@@ -491,7 +491,7 @@ export function PbtSamplerDimensionsDiagram() {
             x="212"
             y="239"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             分支不用样本时也要维护后续维度契约
@@ -520,7 +520,7 @@ export function PbtSamplerDimensionsDiagram() {
             x="588"
             y="239"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             同一变量在不同路径上读取不同维度
@@ -647,7 +647,7 @@ export function PbtIntegratorFamiliesDiagram() {
                   x={x + 87}
                   y="141"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {family.domain}
@@ -656,7 +656,7 @@ export function PbtIntegratorFamiliesDiagram() {
                   x={x + 87}
                   y="184"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -673,7 +673,7 @@ export function PbtIntegratorFamiliesDiagram() {
                   x={x + 87}
                   y="232"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {family.use}
@@ -800,7 +800,7 @@ export function PbtAdvancedStrategiesDiagram() {
                   x={x + 114}
                   y="163"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -810,7 +810,7 @@ export function PbtAdvancedStrategiesDiagram() {
                   x={x + 114}
                   y="205"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {strategy.sampling}
@@ -819,7 +819,7 @@ export function PbtAdvancedStrategiesDiagram() {
                   x={x + 114}
                   y="238"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {strategy.risk}

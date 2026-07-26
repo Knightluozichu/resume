@@ -110,7 +110,7 @@ export function AaeApproximationDiagram() {
           {Object.entries(N).map(([key, p]) => (
             <g key={key}>
               <circle cx={p.x} cy={p.y} r="11" fill={elevated} stroke={primary} strokeWidth="1.8" />
-              <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill={primary} fontFamily="monospace">
+              <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary} fontFamily="monospace">
                 {key}
               </text>
             </g>
@@ -137,18 +137,18 @@ export function AaeApproximationDiagram() {
           {/* 条形：OPT */}
           <rect x={OPT_BAR.x} y={BAR_BASE - OPT_BAR.h} width={OPT_BAR.w} height={OPT_BAR.h} rx="4" fill={accent} fillOpacity="0.55" stroke={accent} strokeWidth="1.4" />
           <text x={OPT_BAR.x + OPT_BAR.w / 2} y={BAR_BASE + 16} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">OPT</text>
-          <text x={OPT_BAR.x + OPT_BAR.w / 2} y={BAR_BASE + 30} textAnchor="middle" fontSize="10" fill={secondary}>最优</text>
+          <text x={OPT_BAR.x + OPT_BAR.w / 2} y={BAR_BASE + 30} textAnchor="middle" fontSize="11" fill={secondary}>最优</text>
 
           {/* 条形：APX */}
           <rect x={APX_BAR.x} y={BAR_BASE - APX_BAR.h} width={APX_BAR.w} height={APX_BAR.h} rx="4" fill={warning} fillOpacity="0.55" stroke={warning} strokeWidth="1.4" />
           <text x={APX_BAR.x + APX_BAR.w / 2} y={BAR_BASE + 16} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning} fontFamily="monospace">APX</text>
-          <text x={APX_BAR.x + APX_BAR.w / 2} y={BAR_BASE + 30} textAnchor="middle" fontSize="10" fill={secondary}>近似</text>
+          <text x={APX_BAR.x + APX_BAR.w / 2} y={BAR_BASE + 30} textAnchor="middle" fontSize="11" fill={secondary}>近似</text>
 
           {/* α 标注：连接两条形顶部 */}
           <line x1={OPT_BAR.x + OPT_BAR.w} y1={BAR_BASE - OPT_BAR.h} x2={APX_BAR.x} y2={BAR_BASE - APX_BAR.h} stroke={secondary} strokeWidth="1.4" strokeDasharray="4 3" />
           <circle cx={515} cy={BAR_BASE - 100} r="13" fill={elevated} stroke={secondary} strokeWidth="1.4" />
           <text x={515} y={BAR_BASE - 96} textAnchor="middle" fontSize="13" fontWeight="700" fill={primary} fontFamily="monospace">α</text>
-          <text x={524} y={BAR_BASE + 56} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={524} y={BAR_BASE + 56} textAnchor="middle" fontSize="11" fill={secondary}>
             α 越接近 1 越好
           </text>
 
@@ -165,7 +165,7 @@ export function AaeApproximationDiagram() {
                 <text x={x + 196} y={421} textAnchor="end" fontSize="13" fontWeight="700" fill={a.color} fontFamily="monospace">
                   {a.ratio}
                 </text>
-                <text x={x + 12} y={442} fontSize="10.5" fill={secondary}>
+                <text x={x + 12} y={442} fontSize="11" fill={secondary}>
                   {a.note}
                 </text>
               </g>

@@ -55,7 +55,7 @@ export function Poeaa24Ch14WebPresentationMatrix() {
               <g key={p.name}>
                 <rect x={x} y={localY} width={300} height={34} rx="6" fill={p.color} fillOpacity="0.06" stroke={p.color} strokeWidth="1" />
                 <text x={x + 12} y={localY + 22} fontSize="11" fontWeight="700" fill={p.color}>{p.name}</text>
-                <text x={x + 150} y={localY + 22} fontSize="10" fill={T.secondary}>{p.role}</text>
+                <text x={x + 150} y={localY + 22} fontSize="11" fill={T.secondary}>{p.role}</text>
               </g>
             );
           })}
@@ -67,7 +67,7 @@ export function Poeaa24Ch14WebPresentationMatrix() {
             </marker>
           </defs>
           <line x1={startX + 300} y1={startY + 60} x2={startX + 380} y2={startY + 60} stroke={T.secondary} strokeWidth="1" strokeDasharray="4 3" markerEnd="url(#ch14-arr)" />
-          <text x={startX + 340} y={startY + 52} textAnchor="middle" fontSize="9" fill={T.secondary}>选择视图</text>
+          <text x={startX + 340} y={startY + 52} textAnchor="middle" fontSize="11" fill={T.secondary}>选择视图</text>
 
           {/* 底部：请求流 */}
           <line x1={startX} y1={startY + 4 * rowH + 20} x2={672} y2={startY + 4 * rowH + 20} stroke={T.border} strokeWidth="0.8" />

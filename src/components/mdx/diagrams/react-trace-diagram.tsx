@@ -294,7 +294,7 @@ function ReActTraceDiagramInner() {
                     x={CARD_X + CARD_W - 14}
                     y={y + 22}
                     textAnchor="end"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--text-secondary)"
                   >
@@ -323,7 +323,7 @@ function ReActTraceDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 19}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             思考 → 行动 → 观察 → 再思考 → 回答：边想边干边看

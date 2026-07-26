@@ -43,7 +43,7 @@ export function Poeaa24Ch15DistributionCallStack() {
 
           {/* 网络边界 */}
           <line x1={360} y1={60} x2={360} y2={320} stroke={T.danger} strokeWidth="2" strokeDasharray="6 4" />
-          <text x={360} y={340} textAnchor="middle" fontSize="10" fontWeight="600" fill={T.danger}>网络边界</text>
+          <text x={360} y={340} textAnchor="middle" fontSize="11" fontWeight="600" fill={T.danger}>网络边界</text>
 
           {/* 服务端进程 */}
           <rect x={412} y={60} width={260} height={260} rx="10" fill={T.accent} fillOpacity="0.04" stroke={T.accent} strokeWidth="1.5" />

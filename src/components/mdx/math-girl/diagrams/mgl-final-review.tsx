@@ -170,14 +170,14 @@ export function MglFinalReviewDiagram() {
                 <rect x="24" y={y} width="672" height="72" rx="7" fill={row.color} fillOpacity="0.045" stroke={border} />
                 <rect x="38" y={y + 11} width="88" height="50" rx="6" fill={row.color} fillOpacity="0.12" stroke={row.color} />
                 <text x="82" y={y + 32} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={row.color}>{row.volume}</text>
-                <text x="82" y={y + 49} textAnchor="middle" fontSize="10" fill={primary}>{row.title}</text>
+                <text x="82" y={y + 49} textAnchor="middle" fontSize="11" fill={primary}>{row.title}</text>
 
                 {row.nodes.map((node, nodeIndex) => {
                   const x = 146 + nodeIndex * 106;
                   return (
                     <g key={node}>
                       <rect x={x} y={y + 18} width="88" height="36" rx="5" fill="var(--bg)" stroke={row.color} strokeOpacity="0.55" />
-                      <text x={x + 44} y={y + 41} textAnchor="middle" fontSize="10.2" fill={primary}>{node}</text>
+                      <text x={x + 44} y={y + 41} textAnchor="middle" fontSize="11" fill={primary}>{node}</text>
                       {nodeIndex < row.nodes.length - 1 ? (
                         <line x1={x + 90} y1={y + 36} x2={x + 103} y2={y + 36} stroke={secondary} markerEnd="url(#mgl-review-arrow)" />
                       ) : null}
@@ -189,7 +189,7 @@ export function MglFinalReviewDiagram() {
           })}
 
           <rect x="24" y="460" width="672" height="26" rx="6" fill={accent} fillOpacity="0.06" stroke={accent} strokeOpacity="0.45" />
-          <text x="360" y="478" textAnchor="middle" fontSize="10.5" fontWeight="700" fill={accent}>
+          <text x="360" y="478" textAnchor="middle" fontSize="11" fontWeight="700" fill={accent}>
             跨卷导读用于回查，不增加卷章；权威完成度始终按四卷各10章统计
           </text>
         </svg>

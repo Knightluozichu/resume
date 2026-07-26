@@ -199,10 +199,10 @@ export function ReflectionRefractionDiagram() {
             stroke="var(--border)"
             strokeWidth="2"
           />
-          <text x="416" y="210" fontSize="10" fill="var(--text-secondary)">
+          <text x="416" y="210" fontSize="11" fill="var(--text-secondary)">
             介质（如玻璃 n₂=1.52）
           </text>
-          <text x="416" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="416" y="184" fontSize="11" fill="var(--text-secondary)">
             空气 n₁=1.00
           </text>
           {/* 命中点 */}

@@ -191,7 +191,7 @@ export function DrawPipelineDiagram() {
           <text
             x={BUDGET_X + 12}
             y={BUDGET_TOP + BUDGET_H / 2 + 4}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -213,7 +213,7 @@ export function DrawPipelineDiagram() {
             x={BUDGET_X + BUDGET_W - 12}
             y={BUDGET_TOP + BUDGET_H / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--danger)"
           >
@@ -246,7 +246,7 @@ export function DrawPipelineDiagram() {
             x={vsyncX + VSYNC_W / 2}
             y={triggerCy + 12}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每帧节拍信号
@@ -286,7 +286,7 @@ export function DrawPipelineDiagram() {
             x={driverX + DRIVER_W / 2}
             y={triggerCy + 12}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             驱动一帧：依次跑下面三步
@@ -347,7 +347,7 @@ export function DrawPipelineDiagram() {
                 <text
                   x={x + 12}
                   y={STEP_TOP + 44}
-                  fontSize="10"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -357,7 +357,7 @@ export function DrawPipelineDiagram() {
                 <text
                   x={x + 12}
                   y={STEP_TOP + 60}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.duty}
@@ -385,7 +385,7 @@ export function DrawPipelineDiagram() {
             x={(stepCx(0) + stepCx(1)) / 2}
             y={STEP_TOP - 8}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -438,7 +438,7 @@ export function DrawPipelineDiagram() {
                 <text
                   x={PAD_X + 16}
                   y={y + 38}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {t.detail}
@@ -477,7 +477,7 @@ export function DrawPipelineDiagram() {
                 <text
                   x={lx + 12}
                   y={ly + OD_LAYER_H / 2 + 4}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -489,7 +489,7 @@ export function DrawPipelineDiagram() {
           <text
             x={OD_X}
             y={TIP_TOP + 8 + 3 * (OD_LAYER_H + OD_LAYER_GAP) + 14}
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             叠得越多越红 → 用 GPU 过度绘制检测定位

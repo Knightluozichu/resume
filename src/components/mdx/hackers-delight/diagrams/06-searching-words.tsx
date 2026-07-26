@@ -193,7 +193,7 @@ export function HD6SearchOrderLab() {
   const firstMemoryZero = memory.indexOf("00");
   return (
     <Figure caption="Numeric low-byte order and increasing-memory order coincide only under the matching load/endianness convention; byte search must name its order.">
-      <label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={littleEndian} onChange={(event) => setLittleEndian(event.target.checked)} />little-endian memory view</label>
+      <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={littleEndian} onChange={(event) => setLittleEndian(event.target.checked)} />little-endian memory view</label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="numeric low→high" value={bytes.join(" ")} /><Stat label="memory low→high" value={memory.join(" ")} /><Stat label="first memory zero" value={firstMemoryZero.toString()} tone="success" /></div>
     </Figure>
   );
@@ -218,7 +218,7 @@ export function HD6SearchCertificateLab() {
   const complete = order && sentinels && oracle;
   return (
     <Figure caption="A word-search routine is complete only when search order, edge sentinels, and an independent scalar oracle are explicit.">
-      <div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={order} onChange={(event) => setOrder(event.target.checked)} />search order</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={sentinels} onChange={(event) => setSentinels(event.target.checked)} />edge sentinels</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={oracle} onChange={(event) => setOracle(event.target.checked)} />scalar oracle</label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={order} onChange={(event) => setOrder(event.target.checked)} />search order</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={sentinels} onChange={(event) => setSentinels(event.target.checked)} />edge sentinels</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={oracle} onChange={(event) => setOracle(event.target.checked)} />scalar oracle</label></div>
       <div className="mt-4"><Stat label="search certificate" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
     </Figure>
   );

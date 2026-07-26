@@ -98,10 +98,10 @@ export function RegressionDetectionDiagram({ step }: Props) {
               >
                 {s.sub}
               </text>
-              <text x={s.x + s.w / 2} y="96" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+              <text x={s.x + s.w / 2} y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                 {s.detail.split("\n")[0]}
               </text>
-              <text x={s.x + s.w / 2} y="110" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+              <text x={s.x + s.w / 2} y="110" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                 {s.detail.split("\n")[1]}
               </text>
 
@@ -128,7 +128,7 @@ export function RegressionDetectionDiagram({ step }: Props) {
 
           {/* Baseline bar */}
           <rect x="80" y="160" width="120" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--success)" strokeWidth="1.5" />
-          <text x="140" y="176" textAnchor="middle" fontSize="10" fill="var(--success)">
+          <text x="140" y="176" textAnchor="middle" fontSize="11" fill="var(--success)">
             基线: 12ms
           </text>
 
@@ -137,13 +137,13 @@ export function RegressionDetectionDiagram({ step }: Props) {
 
           {/* Current bar */}
           <rect x="250" y="160" width="120" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="310" y="176" textAnchor="middle" fontSize="10" fill="var(--accent)">
+          <text x="310" y="176" textAnchor="middle" fontSize="11" fill="var(--accent)">
             当前: 14.5ms
           </text>
 
           {/* Threshold line */}
           <line x1="80" y1="210" x2="370" y2="210" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="6,3" />
-          <text x="378" y="214" fontSize="9" fill="var(--danger)">
+          <text x="378" y="214" fontSize="11" fill="var(--danger)">
             阈值区间 (×1.05)
           </text>
 

@@ -62,7 +62,7 @@ export function LinkedListDiagram({ step = 0 }: Props) {
           <text x={36} y={38} fontSize="11" fontWeight="600" fill={secondary}>
             struct Node {"{"} int data; struct Node *next; {"}"}
           </text>
-          <text x={36} y={56} fontSize="10" fill={secondary}>
+          <text x={36} y={56} fontSize="11" fill={secondary}>
             next 存「下一个节点的地址」，末节点 next = NULL
           </text>
 
@@ -82,7 +82,7 @@ export function LinkedListDiagram({ step = 0 }: Props) {
             d="M138 104 l-8 -4 l0 8 z"
             fill={isActive(2) ? accent : border}
           />
-          <text x={100} y={96} fontSize="10" fill={secondary}>
+          <text x={100} y={96} fontSize="11" fill={secondary}>
             头指针
           </text>
 
@@ -158,7 +158,7 @@ export function LinkedListDiagram({ step = 0 }: Props) {
             {captions[step]}
           </text>
 
-          <text x={320} y={272} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={272} textAnchor="middle" fontSize="11" fill={secondary}>
             对比数组：链表插入 O(1) 改指针，但无法 O(1) 随机下标访问
           </text>
         </svg>

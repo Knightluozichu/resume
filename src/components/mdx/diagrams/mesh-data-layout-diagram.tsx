@@ -63,7 +63,7 @@ export function MeshDataLayoutDiagram() {
             x="225"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             vec3 · 12 字节
@@ -94,7 +94,7 @@ export function MeshDataLayoutDiagram() {
             x="375"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             vec3 · 12 字节
@@ -125,7 +125,7 @@ export function MeshDataLayoutDiagram() {
             x="500"
             y="84"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             vec2 · 8 字节
@@ -157,7 +157,7 @@ export function MeshDataLayoutDiagram() {
             x="372"
             y="120"
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             上传进 VBO
@@ -191,7 +191,7 @@ export function MeshDataLayoutDiagram() {
             x="105"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             P
@@ -211,7 +211,7 @@ export function MeshDataLayoutDiagram() {
             x="195"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             N
@@ -231,7 +231,7 @@ export function MeshDataLayoutDiagram() {
             x="270"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             T
@@ -252,7 +252,7 @@ export function MeshDataLayoutDiagram() {
             x="345"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             P
@@ -271,7 +271,7 @@ export function MeshDataLayoutDiagram() {
             x="435"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             N
@@ -290,7 +290,7 @@ export function MeshDataLayoutDiagram() {
             x="510"
             y="201"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             T
@@ -322,7 +322,7 @@ export function MeshDataLayoutDiagram() {
             x="180"
             y="170"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ← 顶点 0 →
@@ -331,7 +331,7 @@ export function MeshDataLayoutDiagram() {
             x="420"
             y="170"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ← 顶点 1 →
@@ -350,7 +350,7 @@ export function MeshDataLayoutDiagram() {
             x="60"
             y="246"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--accent)"
           >
@@ -368,7 +368,7 @@ export function MeshDataLayoutDiagram() {
             x="150"
             y="246"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--accent)"
           >
@@ -386,7 +386,7 @@ export function MeshDataLayoutDiagram() {
             x="240"
             y="246"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--accent)"
           >
@@ -396,7 +396,7 @@ export function MeshDataLayoutDiagram() {
             x="135"
             y="262"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             offsetof(Vertex, …) 算出的字节偏移
@@ -417,7 +417,7 @@ export function MeshDataLayoutDiagram() {
             x="180"
             y="300"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--warning)"
           >
@@ -468,7 +468,7 @@ export function MeshDataLayoutDiagram() {
             x="360"
             y="424"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             前 3 个连第一个三角形、后 3

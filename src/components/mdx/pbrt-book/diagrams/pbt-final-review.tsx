@@ -143,25 +143,25 @@ export function PbtFinalReviewDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                 x={x + 94}
                 y="147"
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.code}
               </text>
-              <text x={x + 15} y="184" fontSize="10" fill={secondary}>
+              <text x={x + 15} y="184" fontSize="11" fill={secondary}>
                 不变量
               </text>
               <text
                 x={x + 15}
                 y="203"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.invariant}
               </text>
-              <text x={x + 15} y="228" fontSize="10" fill={secondary}>
+              <text x={x + 15} y="228" fontSize="11" fill={secondary}>
                 证据 · {stage.evidence}
               </text>
             </g>
@@ -314,14 +314,14 @@ export function PbtBookSpineDiagram() {
               >
                 {row.title}
               </text>
-              <text x="112" y={y + 40} fontSize="10.5" fill={secondary}>
+              <text x="112" y={y + 40} fontSize="11" fill={secondary}>
                 {row.chapters}
               </text>
               <text
                 x="798"
                 y={y + 31}
                 textAnchor="end"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="600"
                 fill={row.color}
               >
@@ -387,13 +387,13 @@ export function PbtPathLedgerDiagram() {
         >
           单条路径贡献账本
         </text>
-        <text x="30" y="63" fontSize="10.5" fill={secondary}>
+        <text x="30" y="63" fontSize="11" fill={secondary}>
           阶段
         </text>
-        <text x="190" y="63" fontSize="10.5" fill={secondary}>
+        <text x="190" y="63" fontSize="11" fill={secondary}>
           状态更新
         </text>
-        <text x="525" y="63" fontSize="10.5" fill={secondary}>
+        <text x="525" y="63" fontSize="11" fill={secondary}>
           必须同时保留的证据
         </text>
         {ledgerRows.map((row, index) => {
@@ -429,7 +429,7 @@ export function PbtPathLedgerDiagram() {
               >
                 {row[1]}
               </text>
-              <text x="525" y={y + 24} fontSize="10.5" fill={secondary}>
+              <text x="525" y={y + 24} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -535,7 +535,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="188"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             positions[] + indices[]
@@ -544,7 +544,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="204"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             Triangle: meshIndex, triIndex
@@ -587,7 +587,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="181"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             edge functions + fallback
@@ -596,7 +596,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="199"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             tHit · barycentrics · normal
@@ -644,7 +644,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="169"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontFamily="monospace"
             fill={primary}
           >
@@ -654,7 +654,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="195"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             不是固定 ray epsilon
@@ -708,7 +708,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="175"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={secondary}
           >
             原点移出误差盒
@@ -717,7 +717,7 @@ export function PbtShapeRobustnessDiagram() {
             x="90"
             y="195"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             方向决定法线侧
@@ -849,7 +849,7 @@ export function PbtRetrospectiveDiagram() {
                 x={x}
                 y="148"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 外部压力
@@ -868,7 +868,7 @@ export function PbtRetrospectiveDiagram() {
                 x={x}
                 y="196"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 设计取舍
@@ -877,7 +877,7 @@ export function PbtRetrospectiveDiagram() {
                 x={x}
                 y="216"
                 textAnchor="middle"
-                fontSize="10.2"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
@@ -887,7 +887,7 @@ export function PbtRetrospectiveDiagram() {
                 x={x}
                 y="247"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={row.color}
               >
                 {row.evidence}

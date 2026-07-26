@@ -28,10 +28,15 @@ export function MathGirlOfficialLab({
   initial?: number;
 }) {
   const [selected, setSelected] = useState(initial);
+  function resetExperiment() {
+    setSelected(initial);
+  }
+
   const item = cases[selected];
 
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className={`grid grid-cols-2 gap-2 ${cases.length > 4 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
           {cases.map((entry, index) => (

@@ -12,25 +12,25 @@ export function Poeaa24Pattern39ServerSessionState() {
           {/* 客户端 */}
           <rect x={48} y={64} width={180} height={80} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.2" />
           <text x={138} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">客户端</text>
-          <text x={64} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>Cookie: sid=abc123</text>
-          <text x={64} y={128} fontSize="9" fill={T.secondary}>只持有会话 ID</text>
+          <text x={64} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>Cookie: sid=abc123</text>
+          <text x={64} y={128} fontSize="11" fill={T.secondary}>只持有会话 ID</text>
           {/* 箭头 */}
           <line x1={228} y1={104} x2={300} y2={104} stroke={T.accent} strokeWidth="1.5" />
-          <text x={264} y={96} textAnchor="middle" fontSize="9" fill={T.accent}>sid</text>
+          <text x={264} y={96} textAnchor="middle" fontSize="11" fill={T.accent}>sid</text>
           {/* 服务器 */}
           <rect x={300} y={64} width={200} height={110} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={400} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>应用服务器</text>
-          <text x={316} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>sessions: Map</text>
-          <text x={316} y={128} fontSize="9" fontFamily="monospace" fill={T.primary}>  abc123 → {"{cart, user}"}</text>
-          <text x={316} y={146} fontSize="9" fill={T.secondary}>内存中存储状态</text>
-          <text x={316} y={164} fontSize="9" fill={T.secondary}>定期清理过期会话</text>
+          <text x={316} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>sessions: Map</text>
+          <text x={316} y={128} fontSize="11" fontFamily="monospace" fill={T.primary}>  abc123 → {"{cart, user}"}</text>
+          <text x={316} y={146} fontSize="11" fill={T.secondary}>内存中存储状态</text>
+          <text x={316} y={164} fontSize="11" fill={T.secondary}>定期清理过期会话</text>
           {/* 故障恢复 */}
           <rect x={540} y={64} width={140} height={110} rx="8" fill="#E5634D" fillOpacity="0.06" stroke="#E5634D" strokeWidth="1.2" />
-          <text x={610} y={86} textAnchor="middle" fontSize="10" fontWeight="600" fill="#E5634D">节点故障</text>
-          <text x={556} y={110} fontSize="9" fill={T.secondary}>内存丢失</text>
-          <text x={556} y={128} fontSize="9" fill={T.secondary}>会话失效</text>
-          <text x={556} y={146} fontSize="9" fill={T.secondary}>需粘性会话</text>
-          <text x={556} y={164} fontSize="9" fill={T.secondary}>或复制/恢复</text>
+          <text x={610} y={86} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5634D">节点故障</text>
+          <text x={556} y={110} fontSize="11" fill={T.secondary}>内存丢失</text>
+          <text x={556} y={128} fontSize="11" fill={T.secondary}>会话失效</text>
+          <text x={556} y={146} fontSize="11" fill={T.secondary}>需粘性会话</text>
+          <text x={556} y={164} fontSize="11" fill={T.secondary}>或复制/恢复</text>
           <line x1={500} y1={119} x2={540} y2={119} stroke="#E5634D" strokeWidth="1" strokeDasharray="4 3" />
           {/* 底部说明 */}
           <rect x={48} y={200} width={624} height={64} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />

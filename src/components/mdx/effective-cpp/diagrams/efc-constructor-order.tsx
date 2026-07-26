@@ -52,7 +52,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 基类构造 */}
           <rect x={70} y={76} width={200} height={54} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
           <text x={170} y={98} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>① 基类构造</text>
-          <text x={170} y={116} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Base::Base()</text>
+          <text x={170} y={116} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Base::Base()</text>
 
           {/* 向下箭头 */}
           <line x1={170} y1={130} x2={170} y2={152} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-co-down)" />
@@ -60,7 +60,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 成员变量构造 */}
           <rect x={70} y={158} width={200} height={54} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
           <text x={170} y={180} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>② 成员变量构造</text>
-          <text x={170} y={198} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">成员按声明顺序初始化</text>
+          <text x={170} y={198} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">成员按声明顺序初始化</text>
 
           {/* 向下箭头 */}
           <line x1={170} y1={212} x2={170} y2={234} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-co-down)" />
@@ -68,7 +68,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 派生类构造体 */}
           <rect x={70} y={240} width={200} height={54} rx="8" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.6" />
           <text x={170} y={262} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>③ 派生类构造体</text>
-          <text x={170} y={280} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Derived::Derived()</text>
+          <text x={170} y={280} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Derived::Derived()</text>
 
           {/* ===== 中间分隔与说明 ===== */}
           <line x1={320} y1={50} x2={320} y2={310} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
@@ -87,7 +87,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 派生类析构 */}
           <rect x={440} y={76} width={200} height={54} rx="8" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.6" />
           <text x={540} y={98} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>① 派生类析构</text>
-          <text x={540} y={116} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Derived::~Derived()</text>
+          <text x={540} y={116} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Derived::~Derived()</text>
 
           {/* 向下箭头 */}
           <line x1={540} y1={130} x2={540} y2={152} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-co-down)" />
@@ -95,7 +95,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 成员变量析构 */}
           <rect x={440} y={158} width={200} height={54} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.6" />
           <text x={540} y={180} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>② 成员变量析构</text>
-          <text x={540} y={198} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">成员按声明逆序析构</text>
+          <text x={540} y={198} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">成员按声明逆序析构</text>
 
           {/* 向下箭头 */}
           <line x1={540} y1={212} x2={540} y2={234} stroke={secondary} strokeWidth="1.8" markerEnd="url(#efc-co-down)" />
@@ -103,7 +103,7 @@ export function EfcConstructorOrderDiagram() {
           {/* 基类析构 */}
           <rect x={440} y={240} width={200} height={54} rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
           <text x={540} y={262} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={primary}>③ 基类析构</text>
-          <text x={540} y={280} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Base::~Base()</text>
+          <text x={540} y={280} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Base::~Base()</text>
 
           {/* ===== 底部警告区 ===== */}
           <rect x={48} y={322} width={624} height={64} rx="8" fill={warning} fillOpacity="0.05" stroke={warning} strokeWidth="1.2" />
@@ -122,7 +122,7 @@ export function EfcConstructorOrderDiagram() {
           <text x={VIEW_W / 2} y={430} textAnchor="middle" fontSize="11.5" fill={secondary}>
             构造自基向派，析构自派向基——中间夹着成员，成员始终比对象本体先构造后析构
           </text>
-          <text x={VIEW_W / 2} y={448} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={448} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 1-12：初始化、构造/析构顺序、operator= 返回引用、自我赋值
           </text>
         </svg>

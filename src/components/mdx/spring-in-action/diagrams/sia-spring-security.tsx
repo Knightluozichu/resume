@@ -55,7 +55,7 @@ export function SiaSpringSecurityDiagram() {
             x="65"
             y="90"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -87,7 +87,7 @@ export function SiaSpringSecurityDiagram() {
             x="185"
             y="82"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -97,7 +97,7 @@ export function SiaSpringSecurityDiagram() {
             x="185"
             y="96"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Chain
@@ -128,7 +128,7 @@ export function SiaSpringSecurityDiagram() {
             x="310"
             y="82"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -138,7 +138,7 @@ export function SiaSpringSecurityDiagram() {
             x="310"
             y="96"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             AuthFilter
@@ -169,7 +169,7 @@ export function SiaSpringSecurityDiagram() {
             x="435"
             y="82"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -179,7 +179,7 @@ export function SiaSpringSecurityDiagram() {
             x="435"
             y="96"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Interceptor
@@ -210,7 +210,7 @@ export function SiaSpringSecurityDiagram() {
             x="560"
             y="82"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -220,7 +220,7 @@ export function SiaSpringSecurityDiagram() {
             x="560"
             y="96"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             CORS/CSRF
@@ -251,7 +251,7 @@ export function SiaSpringSecurityDiagram() {
             x="680"
             y="90"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -295,7 +295,7 @@ export function SiaSpringSecurityDiagram() {
             x="90"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             用户名+密码
@@ -304,7 +304,7 @@ export function SiaSpringSecurityDiagram() {
             x="90"
             y="212"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             POST /login
@@ -345,7 +345,7 @@ export function SiaSpringSecurityDiagram() {
             x="235"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Manager
@@ -354,7 +354,7 @@ export function SiaSpringSecurityDiagram() {
             x="235"
             y="212"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             分发给Provider
@@ -395,7 +395,7 @@ export function SiaSpringSecurityDiagram() {
             x="380"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Provider
@@ -404,7 +404,7 @@ export function SiaSpringSecurityDiagram() {
             x="380"
             y="212"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             调 UserDetailsService
@@ -445,7 +445,7 @@ export function SiaSpringSecurityDiagram() {
             x="525"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             BCryptPasswordEncoder
@@ -454,7 +454,7 @@ export function SiaSpringSecurityDiagram() {
             x="525"
             y="212"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             比对哈希
@@ -495,7 +495,7 @@ export function SiaSpringSecurityDiagram() {
             x="667"
             y="196"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             存已认证主体
@@ -504,7 +504,7 @@ export function SiaSpringSecurityDiagram() {
             x="667"
             y="212"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Authorities
@@ -547,7 +547,7 @@ export function SiaSpringSecurityDiagram() {
             x="137"
             y="338"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             http.authorizeHttpRequests
@@ -556,7 +556,7 @@ export function SiaSpringSecurityDiagram() {
             x="137"
             y="354"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             /admin/** hasRole(&quot;ADMIN&quot;)
@@ -587,7 +587,7 @@ export function SiaSpringSecurityDiagram() {
             x="370"
             y="338"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @PreAuthorize(&quot;hasRole(&apos;ADMIN&apos;)&quot;)
@@ -596,7 +596,7 @@ export function SiaSpringSecurityDiagram() {
             x="370"
             y="354"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             @PostAuthorize / @Secured
@@ -627,7 +627,7 @@ export function SiaSpringSecurityDiagram() {
             x="602"
             y="338"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ACL（访问控制列表）
@@ -636,7 +636,7 @@ export function SiaSpringSecurityDiagram() {
             x="602"
             y="354"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             细粒度到单条记录
@@ -665,40 +665,40 @@ export function SiaSpringSecurityDiagram() {
           >
             密码存储演进——明文是灾难，必须哈希
           </text>
-          <text x="60" y="440" fontSize="10" fill="var(--danger)">
+          <text x="60" y="440" fontSize="11" fill="var(--danger)">
             明文存储{" "}
           </text>
-          <text x="220" y="440" fontSize="10" fill="var(--text-secondary)">
+          <text x="220" y="440" fontSize="11" fill="var(--text-secondary)">
             → 泄露即裸奔（绝对禁止）
           </text>
-          <text x="60" y="458" fontSize="10" fill="var(--warning)">
+          <text x="60" y="458" fontSize="11" fill="var(--warning)">
             MD5/SHA{" "}
           </text>
-          <text x="220" y="458" fontSize="10" fill="var(--text-secondary)">
+          <text x="220" y="458" fontSize="11" fill="var(--text-secondary)">
             → 彩虹表可破（已不安全）
           </text>
-          <text x="60" y="476" fontSize="10" fill="var(--accent)">
+          <text x="60" y="476" fontSize="11" fill="var(--accent)">
             BCrypt（推荐）{" "}
           </text>
-          <text x="220" y="476" fontSize="10" fill="var(--text-secondary)">
+          <text x="220" y="476" fontSize="11" fill="var(--text-secondary)">
             → 自适应哈希 + 盐，慢即安全
           </text>
-          <text x="450" y="440" fontSize="10" fill="var(--accent)">
+          <text x="450" y="440" fontSize="11" fill="var(--accent)">
             Argon2{" "}
           </text>
-          <text x="580" y="440" fontSize="10" fill="var(--text-secondary)">
+          <text x="580" y="440" fontSize="11" fill="var(--text-secondary)">
             → 内存难破解
           </text>
-          <text x="450" y="458" fontSize="10" fill="var(--text-secondary)">
+          <text x="450" y="458" fontSize="11" fill="var(--text-secondary)">
             DelegatingPwdEncoder
           </text>
-          <text x="580" y="458" fontSize="10" fill="var(--text-secondary)">
+          <text x="580" y="458" fontSize="11" fill="var(--text-secondary)">
             → 平滑迁移
           </text>
-          <text x="450" y="476" fontSize="10" fill="var(--text-secondary)">
+          <text x="450" y="476" fontSize="11" fill="var(--text-secondary)">
             Spring默认BCrypt
           </text>
-          <text x="580" y="476" fontSize="10" fill="var(--text-secondary)">
+          <text x="580" y="476" fontSize="11" fill="var(--text-secondary)">
             → 强度因子可调
           </text>
         </svg>

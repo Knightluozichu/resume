@@ -117,7 +117,7 @@ export function UIHierarchyDiagram() {
             x={CANVAS_CX}
             y={CANVAS_Y + 46}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             render mode：Screen Space - Overlay
@@ -151,7 +151,7 @@ export function UIHierarchyDiagram() {
                 x={CHILD_X + CHILD_W - 12}
                 y={CHILD_Y0 + i * CHILD_DY + 25}
                 textAnchor="end"
-                fontSize="8.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {c.d}
@@ -186,7 +186,7 @@ export function UIHierarchyDiagram() {
             x={ES_CX}
             y={ES_Y + 46}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             场景里的独立对象，负责处理 UI 输入
@@ -195,7 +195,7 @@ export function UIHierarchyDiagram() {
             x={ES_CX}
             y={ES_Y + 64}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -218,7 +218,7 @@ export function UIHierarchyDiagram() {
             x={ES_CX}
             y={ES_Y + ES_H + 36}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Canvas 管「画什么、画在哪」
@@ -227,7 +227,7 @@ export function UIHierarchyDiagram() {
             x={ES_CX}
             y={ES_Y + ES_H + 52}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             EventSystem 管「点了谁、拖了谁」

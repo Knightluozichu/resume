@@ -330,7 +330,7 @@ export function CondVarWaitNotifyDiagram() {
                     x={x + w / 2}
                     y={y + h / 2 + 4}
                     textAnchor="middle"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontWeight={seg.kind === "data" ? 700 : 600}
                     fill={
                       seg.kind === "wait" || seg.kind === "data"
@@ -359,7 +359,7 @@ export function CondVarWaitNotifyDiagram() {
           <text
             x={slotX(4) - SEG_GAP / 2 + 4}
             y={QUEUE_Y + LANE_H / 2 + 4}
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -381,7 +381,7 @@ export function CondVarWaitNotifyDiagram() {
             x={SWEEP_RIGHT}
             y={PROD_Y + LANE_H + 20}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

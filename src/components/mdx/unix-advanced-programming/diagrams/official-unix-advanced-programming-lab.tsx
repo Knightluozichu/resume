@@ -116,7 +116,7 @@ export function OfficialUnixAdvancedProgrammingLab({
                 key={item}
                 type="button"
                 onClick={() => setMode(item)}
-                className="min-h-10 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
+                className="min-h-11 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
                 style={{
                   background: mode === item ? soft : undefined,
                   color: mode === item ? color : undefined,

@@ -445,7 +445,7 @@ export function HookMechanismDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + NODE_H / 2 + 16}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -459,7 +459,7 @@ export function HookMechanismDiagram() {
             x={HOOK.x + NODE_W / 2}
             y={HOOK.y + NODE_H + 24}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -507,7 +507,7 @@ export function HookMechanismDiagram() {
             x={C_CALLER.cx}
             y={CALLER.y + NODE_H + 28}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ② 安装后引用被掉包 ▾

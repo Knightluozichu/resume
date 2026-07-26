@@ -215,7 +215,7 @@ export function GetComponentDiagram() {
               <text
                 x={STACK_X + 14}
                 y={cardY(i) + CARD_H / 2 + 13}
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {c.note}
@@ -264,7 +264,7 @@ export function GetComponentDiagram() {
             <text
               x={PROBE_X + 14}
               y={hitCardCY + 12}
-              fontSize="10"
+              fontSize="11"
               fill="var(--success)"
             >
               命中 → 返回 Rigidbody 引用
@@ -306,7 +306,7 @@ export function GetComponentDiagram() {
             <text
               x={PROBE_X + 14}
               y={cardY(2) + CARD_H + 60}
-              fontSize="10"
+              fontSize="11"
               fill="var(--danger)"
             >
               栈里没有 Light → 返回 null
@@ -352,7 +352,7 @@ export function GetComponentDiagram() {
               x={STACK_X + STACK_W / 2}
               y={cardY(2) + CARD_H + 61}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               栈里没挂 Light 这个类型

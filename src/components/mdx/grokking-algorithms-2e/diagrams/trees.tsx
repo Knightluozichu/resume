@@ -117,7 +117,7 @@ export function TreeAnatomyDiagram() {
           className="mx-auto block h-auto w-full max-w-[760px]"
         >
           <text x="380" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>文件目录形成有根树</text>
-          <text x="380" y="49" textAnchor="middle" fontSize="10.5" fill={secondary}>根没有父节点；内部节点既是孩子也可能是父节点；叶节点没有孩子</text>
+          <text x="380" y="49" textAnchor="middle" fontSize="11" fill={secondary}>根没有父节点；内部节点既是孩子也可能是父节点；叶节点没有孩子</text>
           {edges.map(([from, to]) => {
             const a = nodeById[from];
             const b = nodeById[to];
@@ -129,11 +129,11 @@ export function TreeAnatomyDiagram() {
             <g key={node.id}>
               <rect x={node.x - 58} y={node.y - 27} width="116" height="54" rx="4" fill={node.tone} fillOpacity="0.1" stroke={node.tone} />
               <text x={node.x} y={node.y - 3} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.id}</text>
-              <text x={node.x} y={node.y + 16} textAnchor="middle" fontSize="9.5" fill={node.tone}>{node.role}</text>
+              <text x={node.x} y={node.y + 16} textAnchor="middle" fontSize="11" fill={node.tone}>{node.role}</text>
             </g>
           ))}
           <rect x="88" y="335" width="584" height="31" rx="4" fill="var(--bg)" stroke={border} />
-          <text x="380" y="355" textAnchor="middle" fontSize="10" fill={primary}>从根到任一文件只有一条简单路径，例如/home → docs → notes.txt。</text>
+          <text x="380" y="355" textAnchor="middle" fontSize="11" fill={primary}>从根到任一文件只有一条简单路径，例如/home → docs → notes.txt。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -192,7 +192,7 @@ export function HuffmanCodingDiagram() {
           className="mx-auto block h-auto w-full max-w-[760px]"
         >
           <text x="380" y="27" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>霍夫曼树：高频字符走更短路径</text>
-          <text x="145" y="82" textAnchor="middle" fontSize="10" fill={secondary}>频率：A=5, B=2, C=1, D=1</text>
+          <text x="145" y="82" textAnchor="middle" fontSize="11" fill={secondary}>频率：A=5, B=2, C=1, D=1</text>
           {edges.map(([x1, y1, x2, y2, bit], index) => (
             <g key={index}>
               <line x1={x1} y1={y1 + 22} x2={x2} y2={y2 - 22} stroke={border} strokeWidth="2" />
@@ -202,19 +202,19 @@ export function HuffmanCodingDiagram() {
           {nodes.map((node) => (
             <g key={node.label}>
               <rect x={node.x - 48} y={node.y - 22} width="96" height="44" rx="4" fill={node.tone} fillOpacity="0.1" stroke={node.tone} />
-              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>{node.label}</text>
+              <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{node.label}</text>
             </g>
           ))}
           <rect x="34" y="118" width="270" height="190" rx="4" fill="var(--bg)" stroke={border} />
           <text x="169" y="143" textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>从根到叶读取比特</text>
-          <text x="64" y="174" fontSize="10.5" fill={primary}>A → 0</text>
-          <text x="64" y="202" fontSize="10.5" fill={primary}>B → 10</text>
-          <text x="64" y="230" fontSize="10.5" fill={primary}>C → 110</text>
-          <text x="64" y="258" fontSize="10.5" fill={primary}>D → 111</text>
-          <text x="64" y="289" fontSize="9.5" fill={secondary}>没有任何字符码是另一个字符码的前缀。</text>
+          <text x="64" y="174" fontSize="11" fill={primary}>A → 0</text>
+          <text x="64" y="202" fontSize="11" fill={primary}>B → 10</text>
+          <text x="64" y="230" fontSize="11" fill={primary}>C → 110</text>
+          <text x="64" y="258" fontSize="11" fill={primary}>D → 111</text>
+          <text x="64" y="289" fontSize="11" fill={secondary}>没有任何字符码是另一个字符码的前缀。</text>
           <rect x="34" y="330" width="470" height="45" rx="4" fill={success} fillOpacity="0.06" stroke={success} strokeOpacity="0.55" />
-          <text x="269" y="349" textAnchor="middle" fontSize="10" fill={primary}>固定2比特需18比特；霍夫曼加权长度为15比特。</text>
-          <text x="269" y="365" textAnchor="middle" fontSize="9.5" fill={secondary}>编码表本身或树结构也必须让解码端知晓。</text>
+          <text x="269" y="349" textAnchor="middle" fontSize="11" fill={primary}>固定2比特需18比特；霍夫曼加权长度为15比特。</text>
+          <text x="269" y="365" textAnchor="middle" fontSize="11" fill={secondary}>编码表本身或树结构也必须让解码端知晓。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

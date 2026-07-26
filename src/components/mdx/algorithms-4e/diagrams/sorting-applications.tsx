@@ -353,7 +353,7 @@ export function Algs4KendallTauLab() {
             onChange={(event) => setShown(Number(event.target.value))}
           />
         </label>
-        <div className="mt-3 flex min-h-10 flex-wrap gap-2">
+        <div className="mt-3 flex min-h-11 flex-wrap gap-2">
           {pairs.slice(0, shown).map(([i, j]) => (
             <span key={`${i}-${j}`} className="border border-warning bg-warning/10 px-3 py-2 font-mono text-xs text-warning">({i},{j})</span>
           ))}

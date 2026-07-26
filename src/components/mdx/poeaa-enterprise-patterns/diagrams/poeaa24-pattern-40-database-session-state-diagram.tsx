@@ -12,22 +12,22 @@ export function Poeaa24Pattern40DatabaseSessionState() {
           {/* 客户端 */}
           <rect x={48} y={64} width={150} height={70} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.2" />
           <text x={123} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">客户端</text>
-          <text x={64} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>sid=abc123</text>
+          <text x={64} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>sid=abc123</text>
           {/* 箭头到应用服务器 */}
           <line x1={198} y1={99} x2={260} y2={99} stroke={T.accent} strokeWidth="1.5" />
           {/* 应用服务器（多节点） */}
           <rect x={260} y={64} width={180} height={70} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={350} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>任意应用节点</text>
-          <text x={276} y={110} fontSize="9" fill={T.secondary}>无本地状态，按需读写 DB</text>
+          <text x={276} y={110} fontSize="11" fill={T.secondary}>无本地状态，按需读写 DB</text>
           {/* 箭头到数据库 */}
           <line x1={440} y1={99} x2={510} y2={99} stroke="#E5B567" strokeWidth="1.5" />
-          <text x={475} y={90} textAnchor="middle" fontSize="9" fill="#E5B567">SQL</text>
+          <text x={475} y={90} textAnchor="middle" fontSize="11" fill="#E5B567">SQL</text>
           {/* 数据库 */}
           <rect x={510} y={64} width={170} height={100} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.2" />
           <text x={595} y={86} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">sessions 表</text>
-          <text x={526} y={108} fontSize="9" fontFamily="monospace" fill={T.primary}>sid | data | expires</text>
-          <text x={526} y={126} fontSize="9" fontFamily="monospace" fill={T.primary}>abc | {"{...}"} | 30m</text>
-          <text x={526} y={148} fontSize="9" fill={T.secondary}>事务化读写 · 过期清理</text>
+          <text x={526} y={108} fontSize="11" fontFamily="monospace" fill={T.primary}>sid | data | expires</text>
+          <text x={526} y={126} fontSize="11" fontFamily="monospace" fill={T.primary}>abc | {"{...}"} | 30m</text>
+          <text x={526} y={148} fontSize="11" fill={T.secondary}>事务化读写 · 过期清理</text>
           {/* 底部说明 */}
           <rect x={48} y={196} width={624} height={64} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={220} fontSize="11" fontWeight="600" fill={T.primary}>适用与限制：</text>

@@ -63,10 +63,10 @@ export function FileReadWriteFlowDiagram({ step = 4 }: FileReadWriteFlowDiagramP
                 <text x={st.x} y={cy - 28} textAnchor="middle" fontSize="12" fontWeight="700" fill={step === s ? accent : secondary}>
                   {st.label}
                 </text>
-                <text x={st.x} y={cy - 6} textAnchor="middle" fontSize="9" fill={primary} fontFamily="monospace">
+                <text x={st.x} y={cy - 6} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
                   {st.code.length > 22 ? st.code.slice(0, 20) + "…" : st.code}
                 </text>
-                <text x={st.x} y={cy + 12} textAnchor="middle" fontSize="8" fill={secondary}>
+                <text x={st.x} y={cy + 12} textAnchor="middle" fontSize="11" fill={secondary}>
                   {st.sub}
                 </text>
               </g>
@@ -88,7 +88,7 @@ export function FileReadWriteFlowDiagram({ step = 4 }: FileReadWriteFlowDiagramP
             </g>
           ))}
 
-          <text x={320} y={248} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={248} textAnchor="middle" fontSize="11" fill={secondary}>
             {step === 1 && "打开流：检查 fp != NULL 再使用"}
             {step === 2 && "文本行 I/O 用 fgets/fputs；格式化用 fprintf/fscanf；块数据用 fread/fwrite"}
             {step === 3 && "循环读时 feof 常在读完后再判；ferror 捕获 I/O 错误"}

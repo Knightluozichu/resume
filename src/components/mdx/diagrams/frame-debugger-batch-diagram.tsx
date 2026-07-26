@@ -51,7 +51,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
           <text
             x="400"
             y="34"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             {batched ? "Batches: 3" : "Draw Calls: 120+"}
@@ -82,7 +82,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
                 x="400"
                 y={74 + i * 44}
                 textAnchor="end"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {r.draws}
@@ -105,7 +105,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
             x="260"
             y="258"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Window → Analysis → Frame Debugger · Enable 后逐事件展开

@@ -22,7 +22,7 @@ export function EmptyCallbackDiagram() {
           <text x="100" y="44" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">
             Unity 引擎
           </text>
-          <text x="100" y="60" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="100" y="60" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             PlayerLoop 调度表
           </text>
           {callbacks.map((cb) => (
@@ -46,21 +46,21 @@ export function EmptyCallbackDiagram() {
 
           {/* 空函数注释：用短线引出，文字锚定在右侧 rect 外 */}
           <line x1="164" y1="84" x2="172" y2="84" stroke="var(--text-secondary)" strokeWidth="1" />
-          <text x="175" y="80" fontSize="9" fill="var(--text-secondary)">空函数</text>
-          <text x="175" y="90" fontSize="9" fill="var(--text-secondary)">仍注册 ↓</text>
+          <text x="175" y="80" fontSize="11" fill="var(--text-secondary)">空函数</text>
+          <text x="175" y="90" fontSize="11" fill="var(--text-secondary)">仍注册 ↓</text>
           <line x1="164" y1="124" x2="172" y2="124" stroke="var(--text-secondary)" strokeWidth="1" />
-          <text x="175" y="118" fontSize="9" fill="var(--text-secondary)">空函数</text>
-          <text x="175" y="128" fontSize="9" fill="var(--text-secondary)">仍注册 ↓</text>
+          <text x="175" y="118" fontSize="11" fill="var(--text-secondary)">空函数</text>
+          <text x="175" y="128" fontSize="11" fill="var(--text-secondary)">仍注册 ↓</text>
 
           <path d="M180 120 h60" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#ecb-arrow)" />
           <rect x="250" y="75" width="290" height="80" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2" />
           <text x="395" y="103" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">
             MonoBehaviour 脚本
           </text>
-          <text x="395" y="123" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="123" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             void Update() { }
           </text>
-          <text x="395" y="141" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="141" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             void LateUpdate() { } — 体量为零，调度成本不为零
           </text>
 

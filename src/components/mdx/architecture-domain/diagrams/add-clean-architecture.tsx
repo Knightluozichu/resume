@@ -68,21 +68,21 @@ export function AddCleanArchitectureDiagram() {
           {/* 层标签 */}
           {/* Entities（中心） */}
           <text x={CX} y={CY - 8} textAnchor="middle" fontSize="13" fontWeight="700" fill={success}>Entities</text>
-          <text x={CX} y={CY + 10} textAnchor="middle" fontSize="10" fill={secondary}>Enterprise</text>
-          <text x={CX} y={CY + 24} textAnchor="middle" fontSize="10" fill={secondary}>Business Rules</text>
+          <text x={CX} y={CY + 10} textAnchor="middle" fontSize="11" fill={secondary}>Enterprise</text>
+          <text x={CX} y={CY + 24} textAnchor="middle" fontSize="11" fill={secondary}>Business Rules</text>
 
           {/* Use Cases（上方弧标签） */}
           <text x={CX} y={CY - R2 - 8} textAnchor="middle" fontSize="12" fontWeight="600" fill={accent}>Use Cases</text>
-          <text x={CX} y={CY - R2 - 22} textAnchor="middle" fontSize="10" fill={secondary}>Application Business Rules · Interactors</text>
+          <text x={CX} y={CY - R2 - 22} textAnchor="middle" fontSize="11" fill={secondary}>Application Business Rules · Interactors</text>
 
           {/* Interface Adapters（左上弧标签） */}
           <text x={CX - R3 - 4} y={CY - R3 + 24} textAnchor="end" fontSize="12" fontWeight="600" fill={warning}>Interface</text>
           <text x={CX - R3 - 4} y={CY - R3 + 40} textAnchor="end" fontSize="12" fontWeight="600" fill={warning}>Adapters</text>
-          <text x={CX - R3 - 4} y={CY - R3 + 56} textAnchor="end" fontSize="10" fill={secondary}>Controllers / Gateways / Presenters</text>
+          <text x={CX - R3 - 4} y={CY - R3 + 56} textAnchor="end" fontSize="11" fill={secondary}>Controllers / Gateways / Presenters</text>
 
           {/* Frameworks & Drivers（右上弧标签） */}
           <text x={CX + R4 - 56} y={56} textAnchor="middle" fontSize="12" fontWeight="600" fill={accent}>Frameworks &amp; Drivers</text>
-          <text x={CX + R4 - 56} y={72} textAnchor="middle" fontSize="10" fill={secondary}>Web · DB · Devices · External APIs</text>
+          <text x={CX + R4 - 56} y={72} textAnchor="middle" fontSize="11" fill={secondary}>Web · DB · Devices · External APIs</text>
 
           {/* 代表性组件标注（外层四个方向） */}
           <text x={CX} y={CY + R4 - 12} textAnchor="middle" fontSize="11" fill={accent} fontFamily="monospace">DB / Frameworks</text>

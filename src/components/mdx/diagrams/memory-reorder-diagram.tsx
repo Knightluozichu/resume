@@ -194,7 +194,7 @@ export function MemoryReorderDiagram() {
           x={l.x + COL_W - 14}
           y={l.y + LINE_H / 2 + 4}
           textAnchor="end"
-          fontSize="10"
+          fontSize="11"
           fontWeight="600"
           fill={l.color}
         >

@@ -23,7 +23,7 @@ export function RplPanicStrategyLab() {
           <section className={`border p-4 ${mode === "unwind" ? "border-cyan-500/40 bg-cyan-500/10" : "border-rose-500/40 bg-rose-500/10"}`} aria-live="polite">
             <span className="text-xs text-secondary">调用栈</span>
             <div className="mt-3 space-y-2">
-              {[...frames].reverse().map((frame, index) => <div key={frame} className={`grid min-h-10 grid-cols-[auto_1fr_auto] items-center gap-3 border border-border bg-bg px-3 py-2 text-xs ${mode === "unwind" || index === 0 ? "text-primary" : "text-secondary opacity-50"}`}><span>{index}</span><code>{frame}</code><span>{mode === "unwind" ? "Drop" : index === 0 ? "panic site" : "skipped"}</span></div>)}
+              {[...frames].reverse().map((frame, index) => <div key={frame} className={`grid min-h-11 grid-cols-[auto_1fr_auto] items-center gap-3 border border-border bg-bg px-3 py-2 text-xs ${mode === "unwind" || index === 0 ? "text-primary" : "text-secondary opacity-50"}`}><span>{index}</span><code>{frame}</code><span>{mode === "unwind" ? "Drop" : index === 0 ? "panic site" : "skipped"}</span></div>)}
             </div>
             <p className="mt-4 text-xs text-secondary">{backtrace ? "回溯可见：从顶部寻找第一个属于自己项目的 frame。" : "仅显示 panic 位置与消息，调用链未展开。"}</p>
           </section>

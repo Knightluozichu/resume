@@ -269,7 +269,7 @@ function ProductionArchDiagramInner() {
             x={CARD_X + 16}
             y={50}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             接入层（收请求）
@@ -279,7 +279,7 @@ function ProductionArchDiagramInner() {
             x={CARD_X + 166}
             y={50}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             处理层（削峰 + 干活）
@@ -289,7 +289,7 @@ function ProductionArchDiagramInner() {
             x={CARD_X + 366}
             y={50}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             支撑层（挡重复 + 记录）
@@ -404,7 +404,7 @@ function ProductionArchDiagramInner() {
                     x={CARD_X + 20}
                     y={y + 38}
                     textAnchor="start"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontFamily={s.mono ? "var(--font-mono)" : undefined}
                     fill="var(--text-primary)"
                   >
@@ -420,7 +420,7 @@ function ProductionArchDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 16}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一句话：上线 =

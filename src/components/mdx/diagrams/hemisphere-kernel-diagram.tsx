@@ -105,7 +105,7 @@ export function HemisphereKernelDiagram() {
             strokeWidth="1.5"
             strokeDasharray="5 4"
           />
-          <text x={px - r + 6} y={py - 12} fontSize="10" fill="var(--accent)">
+          <text x={px - r + 6} y={py - 12} fontSize="11" fill="var(--accent)">
             采样半球（半径 = uRadius）
           </text>
 
@@ -164,11 +164,11 @@ export function HemisphereKernelDiagram() {
           {/* 图例 */}
           <g transform="translate(420, 70)">
             <circle cx="0" cy="0" r="5" fill="var(--danger)" />
-            <text x="12" y="4" fontSize="10.5" fill="var(--text-secondary)">
+            <text x="12" y="4" fontSize="11" fill="var(--text-secondary)">
               被几何挡住 → 遮蔽 +1
             </text>
             <circle cx="0" cy="24" r="5" fill="var(--success)" />
-            <text x="12" y="28" fontSize="10.5" fill="var(--text-secondary)">
+            <text x="12" y="28" fontSize="11" fill="var(--text-secondary)">
               落在空气里 → 不计
             </text>
           </g>

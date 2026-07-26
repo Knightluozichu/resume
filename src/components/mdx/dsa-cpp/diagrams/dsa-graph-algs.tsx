@@ -63,7 +63,7 @@ export function DsaGraphAlgsDiagram() {
             return (
               <g key={i}>
                 <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={e.shortest ? success : border} strokeWidth={e.shortest ? 2 : 1} strokeOpacity={e.shortest ? 0.6 : 0.4} />
-                <text x={mx + 6} y={my - 4} fontSize="10" fill={e.shortest ? success : secondary}>{e.w}</text>
+                <text x={mx + 6} y={my - 4} fontSize="11" fill={e.shortest ? success : secondary}>{e.w}</text>
               </g>
             );
           })}
@@ -75,7 +75,7 @@ export function DsaGraphAlgsDiagram() {
               <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fill={n.id === 0 ? accent : primary}>{n.id}</text>
             </g>
           ))}
-          <text x="180" y="232" textAnchor="middle" fontSize="10" fill={success}>绿线 = 最短路径树</text>
+          <text x="180" y="232" textAnchor="middle" fontSize="11" fill={success}>绿线 = 最短路径树</text>
 
           {/* ===== 右上：Dijkstra 结果 ===== */}
           <text x="540" y="88" textAnchor="middle" fontSize="13" fontWeight="700" fill={success}>Dijkstra 最短路径（源=0）</text>
@@ -91,10 +91,10 @@ export function DsaGraphAlgsDiagram() {
               <rect x="400" y={104 + i * 26} width="40" height="22" rx="4" fill="var(--bg)" stroke={border} strokeWidth="1" />
               <text x="420" y={119 + i * 26} textAnchor="middle" fontSize="11" fill={accent}>{r.node}</text>
               <text x="452" y={119 + i * 26} fontSize="11" fill={primary}>dist={r.dist}</text>
-              <text x="520" y={119 + i * 26} fontSize="10" fill={secondary}>{r.path}</text>
+              <text x="520" y={119 + i * 26} fontSize="11" fill={secondary}>{r.path}</text>
             </g>
           ))}
-          <text x="540" y="242" textAnchor="middle" fontSize="10" fill={secondary}>贪心：每次取最小 dist 确定节点</text>
+          <text x="540" y="242" textAnchor="middle" fontSize="11" fill={secondary}>贪心：每次取最小 dist 确定节点</text>
 
           {/* ===== 左下：BFS vs DFS ===== */}
           <text x="180" y="276" textAnchor="middle" fontSize="13" fontWeight="700" fill={warning}>BFS vs DFS 遍历顺序</text>
@@ -105,10 +105,10 @@ export function DsaGraphAlgsDiagram() {
             <g key={`bfs-${i}`}>
               <rect x={70 + i * 36} y="310" width="32" height="22" rx="4" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1" />
               <text x={86 + i * 36} y={325} textAnchor="middle" fontSize="11" fill={accent}>{v}</text>
-              {i < 4 && <text x={102 + i * 36} y={325} fontSize="10" fill={secondary}>→</text>}
+              {i < 4 && <text x={102 + i * 36} y={325} fontSize="11" fill={secondary}>→</text>}
             </g>
           ))}
-          <text x="70" y="348" fontSize="10" fill={secondary}>逐层扩展：0 → (3,1) → (4) → (2)</text>
+          <text x="70" y="348" fontSize="11" fill={secondary}>逐层扩展：0 → (3,1) → (4) → (2)</text>
 
           {/* DFS */}
           <text x="70" y="374" fontSize="11" fontWeight="600" fill={success}>DFS（递归栈）</text>
@@ -116,10 +116,10 @@ export function DsaGraphAlgsDiagram() {
             <g key={`dfs-${i}`}>
               <rect x={70 + i * 36} y="384" width="32" height="22" rx="4" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1" />
               <text x={86 + i * 36} y={399} textAnchor="middle" fontSize="11" fill={success}>{v}</text>
-              {i < 4 && <text x={102 + i * 36} y={399} fontSize="10" fill={secondary}>→</text>}
+              {i < 4 && <text x={102 + i * 36} y={399} fontSize="11" fill={secondary}>→</text>}
             </g>
           ))}
-          <text x="70" y="422" fontSize="10" fill={secondary}>一路到底：0→3→4→1→2 回溯</text>
+          <text x="70" y="422" fontSize="11" fill={secondary}>一路到底：0→3→4→1→2 回溯</text>
 
           {/* ===== 右下：拓扑排序 ===== */}
           <text x="540" y="276" textAnchor="middle" fontSize="13" fontWeight="700" fill={danger}>拓扑排序（Kahn 入度法）</text>
@@ -134,10 +134,10 @@ export function DsaGraphAlgsDiagram() {
               <text x="380" y={304 + i * 28} fontSize="11" fill={secondary}>{s.step}.</text>
               <rect x="400" y={290 + i * 28} width="36" height="22" rx="4" fill={danger} fillOpacity="0.08" stroke={danger} strokeWidth="1" />
               <text x="418" y={305 + i * 28} textAnchor="middle" fontSize="11" fill={danger}>{s.node}</text>
-              <text x="448" y={305 + i * 28} fontSize="10" fill={primary}>{s.action}</text>
+              <text x="448" y={305 + i * 28} fontSize="11" fill={primary}>{s.action}</text>
             </g>
           ))}
-          <text x="540" y="422" textAnchor="middle" fontSize="10" fill={secondary}>DAG 专属：有环则输出数 &lt; 节点数</text>
+          <text x="540" y="422" textAnchor="middle" fontSize="11" fill={secondary}>DAG 专属：有环则输出数 &lt; 节点数</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

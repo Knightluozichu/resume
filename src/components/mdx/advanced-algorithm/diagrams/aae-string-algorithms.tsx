@@ -121,7 +121,7 @@ export function AaeStringAlgorithmsDiagram() {
                 {/* ===== KMP 图示 ===== */}
                 {ci === 0 && (
                   <g>
-                    <text x={x + CARD_W / 2} y={CARD_Y + 78} textAnchor="middle" fontSize="10.5" fill={secondary}>
+                    <text x={x + CARD_W / 2} y={CARD_Y + 78} textAnchor="middle" fontSize="11" fill={secondary}>
                       pattern
                     </text>
                     {PATTERN.map((c, i) => {
@@ -136,7 +136,7 @@ export function AaeStringAlgorithmsDiagram() {
                       );
                     })}
                     {/* next 数组 */}
-                    <text x={x + CARD_W / 2} y={CARD_Y + 134} textAnchor="middle" fontSize="10.5" fill={secondary}>
+                    <text x={x + CARD_W / 2} y={CARD_Y + 134} textAnchor="middle" fontSize="11" fill={secondary}>
                       next[] 失败指针
                     </text>
                     {NEXT.map((v, i) => {
@@ -151,10 +151,10 @@ export function AaeStringAlgorithmsDiagram() {
                       );
                     })}
                     {/* 失配回退说明 */}
-                    <text x={x + CARD_W / 2} y={CARD_Y + 184} textAnchor="middle" fontSize="10.5" fill={primary}>
+                    <text x={x + CARD_W / 2} y={CARD_Y + 184} textAnchor="middle" fontSize="11" fill={primary}>
                       失配时 j = next[j]
                     </text>
-                    <text x={x + CARD_W / 2} y={CARD_Y + 200} textAnchor="middle" fontSize="10" fill={secondary}>
+                    <text x={x + CARD_W / 2} y={CARD_Y + 200} textAnchor="middle" fontSize="11" fill={secondary}>
                       无需回溯文本指针
                     </text>
                   </g>
@@ -199,7 +199,7 @@ export function AaeStringAlgorithmsDiagram() {
                         </text>
                       </g>
                     ))}
-                    <text x={x + CARD_W / 2} y={CARD_Y + 260} textAnchor="middle" fontSize="10.5" fill={secondary} fontFamily="monospace">
+                    <text x={x + CARD_W / 2} y={CARD_Y + 260} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">
                       cat · car · dog
                     </text>
                   </g>
@@ -208,7 +208,7 @@ export function AaeStringAlgorithmsDiagram() {
                 {/* ===== 后缀数组图示 ===== */}
                 {ci === 2 && (
                   <g>
-                    <text x={x + CARD_W / 2} y={CARD_Y + 78} textAnchor="middle" fontSize="10.5" fill={secondary}>
+                    <text x={x + CARD_W / 2} y={CARD_Y + 78} textAnchor="middle" fontSize="11" fill={secondary}>
                       text = banana
                     </text>
                     {/* SA 行 */}
@@ -226,7 +226,7 @@ export function AaeStringAlgorithmsDiagram() {
                         </g>
                       );
                     })}
-                    <text x={x + CARD_W / 2} y={CARD_Y + 244} textAnchor="middle" fontSize="10.5" fill={col.color} fontFamily="monospace">
+                    <text x={x + CARD_W / 2} y={CARD_Y + 244} textAnchor="middle" fontSize="11" fill={col.color} fontFamily="monospace">
                       SA = [5,3,1,0,4,2]
                     </text>
                   </g>
@@ -237,7 +237,7 @@ export function AaeStringAlgorithmsDiagram() {
 
                 {/* 复杂度 */}
                 <rect x={x + 12} y={CARD_Y + 280} width={64} height={18} rx="4" fill={col.color} fillOpacity="0.1" stroke={col.color} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={x + 44} y={CARD_Y + 293} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color}>
+                <text x={x + 44} y={CARD_Y + 293} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color}>
                   复杂度
                 </text>
                 <text x={x + 12} y={CARD_Y + 316} fontSize="11.5" fontWeight="600" fill={primary} fontFamily="monospace">
@@ -246,7 +246,7 @@ export function AaeStringAlgorithmsDiagram() {
 
                 {/* 适用场景 */}
                 <rect x={x + 12} y={CARD_Y + 326} width={64} height={18} rx="4" fill={col.color} fillOpacity="0.1" stroke={col.color} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={x + 44} y={CARD_Y + 339} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color}>
+                <text x={x + 44} y={CARD_Y + 339} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color}>
                   场景
                 </text>
                 <text x={x + 12} y={CARD_Y + 362} fontSize="11" fill={primary}>

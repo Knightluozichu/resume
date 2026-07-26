@@ -34,6 +34,13 @@ export function OfficialDeepLearningLab({
   const [batch, setBatch] = useState(8);
   const [depth, setDepth] = useState(3);
   const [step, setStep] = useState(0.1);
+  function resetExperiment() {
+    setMode("baseline");
+    setBatch(8);
+    setDepth(3);
+    setStep(0.1);
+  }
+
   const modeIndex = modes.findIndex((item) => item.id === mode);
   const values = useMemo(() => {
     const instability =
@@ -69,6 +76,7 @@ export function OfficialDeepLearningLab({
         margin: "20px 0",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",
@@ -296,7 +304,7 @@ export function OfficialDeepLearningLab({
                     y="139"
                     textAnchor="middle"
                     fill="#52525b"
-                    fontSize="10.5"
+                    fontSize="11"
                   >
                     {item.slice(0, 7)}
                   </text>

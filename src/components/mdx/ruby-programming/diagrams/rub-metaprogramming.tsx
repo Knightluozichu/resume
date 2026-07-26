@@ -76,7 +76,7 @@ export function RubMetaprogrammingDiagram() {
           <text x={44} y={140} fontSize="11" fill={primary}>
             end
           </text>
-          <text x={44} y={156} fontSize="10" fill={secondary}>
+          <text x={44} y={156} fontSize="11" fill={secondary}>
             # 重新打开 String 加方法（随时可加）
           </text>
 
@@ -110,7 +110,7 @@ export function RubMetaprogrammingDiagram() {
           <text x={380} y={140} fontSize="11" fill={primary}>
             end
           </text>
-          <text x={380} y={156} fontSize="10" fill={secondary}>
+          <text x={380} y={156} fontSize="11" fill={secondary}>
             # 批量生成 getter，无需手写
           </text>
 
@@ -145,7 +145,7 @@ export function RubMetaprogrammingDiagram() {
             {" "}
             else super; end
           </text>
-          <text x={44} y={266} fontSize="10" fill={secondary}>
+          <text x={44} y={266} fontSize="11" fill={secondary}>
             # find_by_name(&quot;Bob&quot;) 自动生效
           </text>
 
@@ -177,7 +177,7 @@ export function RubMetaprogrammingDiagram() {
           <text x={380} y={260} fontSize="11" fill={primary}>
             public_send 不调 private
           </text>
-          <text x={380} y={266} fontSize="10" fill={secondary}>
+          <text x={380} y={266} fontSize="11" fill={secondary}>
             # 运行时决定调什么方法
           </text>
 
@@ -227,7 +227,7 @@ export function RubMetaprogrammingDiagram() {
             x={118}
             y={360}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             find_by_name 等
@@ -236,7 +236,7 @@ export function RubMetaprogrammingDiagram() {
             x={118}
             y={374}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             动态生成
@@ -266,7 +266,7 @@ export function RubMetaprogrammingDiagram() {
             x={284}
             y={360}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             define_method
@@ -275,7 +275,7 @@ export function RubMetaprogrammingDiagram() {
             x={284}
             y={374}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             生成读写器
@@ -305,7 +305,7 @@ export function RubMetaprogrammingDiagram() {
             x={450}
             y={360}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             instance_exec
@@ -314,7 +314,7 @@ export function RubMetaprogrammingDiagram() {
             x={450}
             y={374}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             Rakefile/RSpec
@@ -344,7 +344,7 @@ export function RubMetaprogrammingDiagram() {
             x={613}
             y={360}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             Open Class
@@ -353,7 +353,7 @@ export function RubMetaprogrammingDiagram() {
             x={613}
             y={374}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             修改内置类

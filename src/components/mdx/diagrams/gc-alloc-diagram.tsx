@@ -28,7 +28,7 @@ export function GcAllocDiagram() {
             托管堆
           </text>
           <rect x="24" y="62" width="200" height="28" rx="4" fill="var(--bg-elevated)" stroke="var(--border)" />
-          <text x="124" y="80" textAnchor="middle" fontSize="9" fill="var(--danger)">
+          <text x="124" y="80" textAnchor="middle" fontSize="11" fill="var(--danger)">
             new Object() 分配在此
           </text>
 
@@ -47,13 +47,13 @@ export function GcAllocDiagram() {
               strokeWidth={i === 0 ? 1.5 : 0.5}
             />
           ))}
-          <text x="124" y="138" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="124" y="138" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             持续分配，堆逐渐填满
           </text>
 
           {/* Arrow to GC trigger — 水平居中于 managed-heap 和 GC三阶段之间 */}
           <line x1="224" y1="76" x2="254" y2="76" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#gc-arrow)" />
-          <text x="239" y="68" textAnchor="middle" fontSize="9" fill="var(--accent)">
+          <text x="239" y="68" textAnchor="middle" fontSize="11" fill="var(--accent)">
             堆满
           </text>
 
@@ -64,19 +64,19 @@ export function GcAllocDiagram() {
 
           {/* Mark */}
           <rect x="260" y="62" width="160" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1" />
-          <text x="340" y="78" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+          <text x="340" y="78" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             <tspan fontWeight="600" fill="var(--accent)">① Mark</tspan> 标记所有可达对象
           </text>
 
           {/* Sweep */}
           <rect x="260" y="90" width="160" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1" />
-          <text x="340" y="106" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+          <text x="340" y="106" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             <tspan fontWeight="600" fill="var(--accent)">② Sweep</tspan> 回收不可达对象
           </text>
 
           {/* Compact */}
           <rect x="260" y="118" width="160" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1" />
-          <text x="340" y="134" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+          <text x="340" y="134" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             <tspan fontWeight="600" fill="var(--accent)">③ Compact</tspan> 整理碎片化内存
           </text>
 
@@ -95,7 +95,7 @@ export function GcAllocDiagram() {
               strokeWidth={i === 0 ? 1.5 : 0.5}
             />
           ))}
-          <text x="380" y="186" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+          <text x="380" y="186" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             GC 后仅存活对象保留
           </text>
 
@@ -109,28 +109,28 @@ export function GcAllocDiagram() {
           {/* Profiler bars */}
           <rect x="80" y="234" width="140" height="8" rx="2" fill="var(--bg-elevated)" />
           <rect x="80" y="234" width="80" height="8" rx="2" fill="var(--danger)" opacity="0.6" />
-          <text x="80" y="258" fontSize="8" fill="var(--danger)">
+          <text x="80" y="258" fontSize="11" fill="var(--danger)">
             GC.Alloc ↑ 频繁 new
           </text>
 
           <rect x="250" y="234" width="140" height="8" rx="2" fill="var(--bg-elevated)" />
           <rect x="250" y="234" width="30" height="8" rx="2" fill="var(--warning)" opacity="0.6" />
-          <text x="250" y="258" fontSize="8" fill="var(--warning)">
+          <text x="250" y="258" fontSize="11" fill="var(--warning)">
             GC.Collect 偶尔触发
           </text>
 
           <rect x="420" y="234" width="140" height="8" rx="2" fill="var(--bg-elevated)" />
           <rect x="420" y="234" width="5" height="8" rx="2" fill="var(--success)" opacity="0.6" />
-          <text x="420" y="258" fontSize="8" fill="var(--success)">
+          <text x="420" y="258" fontSize="11" fill="var(--success)">
             对象池化后 GC 平稳
           </text>
 
           {/* Bottom tip */}
-          <text x="320" y="296" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="296" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             每帧 new 大量临时对象 → GC.Alloc 飙升 → 触发 GC.Collect → 帧时间抖动
           </text>
 
-          <text x="320" y="316" textAnchor="middle" fontSize="10" fill="var(--accent)">
+          <text x="320" y="316" textAnchor="middle" fontSize="11" fill="var(--accent)">
             解法：对象池 · 结构体替代类 · 缓存引用 · 拆大对象为值类型
           </text>
           <defs>

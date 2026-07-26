@@ -65,7 +65,7 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
           <text x={valX + 140} y={memTop + 39} fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">a: 5</text>
 
           {/* 实参内存地址标注 */}
-          <text x={valX + 190} y={memTop + 32} fontSize="9" fill={secondary} fontFamily="monospace">0x100</text>
+          <text x={valX + 190} y={memTop + 32} fontSize="11" fill={secondary} fontFamily="monospace">0x100</text>
 
           {/* 分隔 */}
           <line x1={valX + 24} y1={memTop + 74} x2={valX + memBlockW - 24} y2={memTop + 74} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
@@ -76,11 +76,11 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
           <text x={valX + 140} y={memTop + 103} fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">x: 5</text>
 
           {/* 形参内存地址标注 */}
-          <text x={valX + 190} y={memTop + 96} fontSize="9" fill={secondary} fontFamily="monospace">0x200</text>
+          <text x={valX + 190} y={memTop + 96} fontSize="11" fill={secondary} fontFamily="monospace">0x200</text>
 
           {/* 拷贝箭头 */}
           <text x={valX + 14} y={memTop + 82} fontSize="18" fill={accent}>⬇</text>
-          <text x={valX + 8} y={memTop + 68} fontSize="9" fill={accent}>拷贝</text>
+          <text x={valX + 8} y={memTop + 68} fontSize="11" fill={accent}>拷贝</text>
 
           {/* 结论 */}
           <text x={valX + memBlockW / 2} y={memTop + 150} textAnchor="middle" fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">
@@ -96,7 +96,7 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
           <text x={refX + 140} y={memTop + 39} fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">a: 5</text>
 
           {/* 高亮一整块 */}
-          <text x={refX + 14} y={memTop + 12} fontSize="10" fill={accent} fontWeight="700">同一块内存</text>
+          <text x={refX + 14} y={memTop + 12} fontSize="11" fill={accent} fontWeight="700">同一块内存</text>
 
           {/* 形参 x：别名（虚线框指向同一地址） */}
           <rect x={refX + 24} y={memTop + 84} width={190} height={40} rx="6" fill="none" stroke={accent} strokeWidth="2" strokeDasharray="5 3" />
@@ -104,7 +104,7 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
           <text x={refX + 140} y={memTop + 103} fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">x: 5</text>
 
           {/* 别名标注 */}
-          <text x={refX + 14} y={memTop + 109} fontSize="10" fill={accent}>别名</text>
+          <text x={refX + 14} y={memTop + 109} fontSize="11" fill={accent}>别名</text>
 
           {/* 指向箭头 */}
           <path
@@ -113,7 +113,7 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
             strokeWidth="2"
             markerEnd="url(#arrowHeadAccent)"
           />
-          <text x={refX + 160} y={memTop + 68} fontSize="9" fill={accent}>引用</text>
+          <text x={refX + 160} y={memTop + 68} fontSize="11" fill={accent}>引用</text>
 
           {/* 结论 */}
           <text x={refX + memBlockW / 2} y={memTop + 150} textAnchor="middle" fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">

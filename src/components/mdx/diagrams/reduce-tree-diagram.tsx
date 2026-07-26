@@ -172,7 +172,7 @@ export function ReduceTreeDiagram() {
           <text x="16" y="28" fontSize="13" fontWeight="700" fill={LIN_COLOR}>
             accumulate：严格顺序
           </text>
-          <text x="16" y="48" fontSize="10" fill="var(--text-secondary)">
+          <text x="16" y="48" fontSize="11" fill="var(--text-secondary)">
             一张张顺着加，第 i 步等第 i-1 步——不能并行
           </text>
 
@@ -189,7 +189,7 @@ export function ReduceTreeDiagram() {
           <text
             x={TREE_BASE_X - 8}
             y="48"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             两两并行求和、再合并——可重排、可并行
@@ -366,7 +366,7 @@ export function ReduceTreeDiagram() {
                 x={midX(m) + NODE_W / 2}
                 y={MID_Y + NODE_H / 2 + 4}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-primary)"
@@ -406,7 +406,7 @@ export function ReduceTreeDiagram() {
               x={topX + NODE_W / 2}
               y={TOP_Y + NODE_H / 2 + 4}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
@@ -420,7 +420,7 @@ export function ReduceTreeDiagram() {
             x={VIEW_W - 16}
             y={(TOP_Y + NODE_H + MID_Y) / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill={TREE_COLOR}
           >
             第二层：合并 ↑
@@ -430,7 +430,7 @@ export function ReduceTreeDiagram() {
             x={VIEW_W - 16}
             y={(MID_Y + NODE_H + LEAF_Y) / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill={TREE_COLOR}
           >
             第一层：并行 ↑
@@ -453,7 +453,7 @@ export function ReduceTreeDiagram() {
               x={VIEW_W / 2}
               y={WARN_BAND_Y + WARN_BAND_H / 2 + 4}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--text-primary)"
             >

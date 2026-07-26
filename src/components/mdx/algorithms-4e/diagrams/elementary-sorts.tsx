@@ -265,7 +265,7 @@ export function Algs4InsertionInversionLab() {
                 setPass(0);
               }}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (input === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -335,7 +335,7 @@ export function Algs4SortingBarsLab() {
                 setStep(0);
               }}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (algorithm === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")

@@ -143,15 +143,15 @@ export function GlsTextureMappingDiagram({
                 y="155"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.1"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="201" fontSize="11" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="222" fontSize="10" fill={primary}>
+              <text x={x + 13} y="222" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -181,7 +181,7 @@ export function GlsTextureMappingDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={primary}
         >
           验证信号：空间、颜色、LOD、pass 依赖、带宽、画质误差与 GPU 时间
@@ -251,13 +251,13 @@ export function GlsTextureFootprintDiagram() {
         >
           从 UV 到 texture footprint
         </text>
-        <text x="28" y="66" fontSize="10" fill={secondary}>
+        <text x="28" y="66" fontSize="11" fill={secondary}>
           阶段
         </text>
-        <text x="230" y="66" fontSize="10" fill={secondary}>
+        <text x="230" y="66" fontSize="11" fill={secondary}>
           信号
         </text>
-        <text x="610" y="66" fontSize="10" fill={secondary}>
+        <text x="610" y="66" fontSize="11" fill={secondary}>
           决定
         </text>
         {footprintRows.map((row, index) => {
@@ -277,7 +277,7 @@ export function GlsTextureFootprintDiagram() {
               <text
                 x="55"
                 y={y + 23}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -287,12 +287,12 @@ export function GlsTextureFootprintDiagram() {
                 x="230"
                 y={y + 23}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="610" y={y + 23} fontSize="10" fill={secondary}>
+              <text x="610" y={y + 23} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -302,7 +302,7 @@ export function GlsTextureFootprintDiagram() {
           x="450"
           y="337"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           最大 anisotropy 与格式支持均由 implementation/extension 查询，不是固定
@@ -400,7 +400,7 @@ export function GlsMaterialLightingDiagram() {
                 y="149"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -409,7 +409,7 @@ export function GlsMaterialLightingDiagram() {
                 x={x + 97.5}
                 y="202"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -421,7 +421,7 @@ export function GlsMaterialLightingDiagram() {
           x="440"
           y="292"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           Blinn-Phong: diffuse max(N·L,0) + specular max(N·H,0)^p
@@ -497,7 +497,7 @@ export function GlsNprDiagram() {
               <text
                 x="90"
                 y={y + 25}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -507,12 +507,12 @@ export function GlsNprDiagram() {
                 x="300"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="620" y={y + 25} fontSize="9.8" fill={secondary}>
+              <text x="620" y={y + 25} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -522,7 +522,7 @@ export function GlsNprDiagram() {
           x="440"
           y="304"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           量化前先稳定法线和光照空间；阈值边缘用 fwidth/smoothstep 可减少闪烁
@@ -591,13 +591,13 @@ export function GlsAlternativeRenderingDiagram() {
         >
           改变 pass graph，而不只是换一个 shader
         </text>
-        <text x="28" y="67" fontSize="10" fill={secondary}>
+        <text x="28" y="67" fontSize="11" fill={secondary}>
           方法
         </text>
-        <text x="220" y="67" fontSize="10" fill={secondary}>
+        <text x="220" y="67" fontSize="11" fill={secondary}>
           数据路径
         </text>
-        <text x="610" y="67" fontSize="10" fill={secondary}>
+        <text x="610" y="67" fontSize="11" fill={secondary}>
           主要取舍
         </text>
         {alternativeRows.map((row, index) => {
@@ -617,7 +617,7 @@ export function GlsAlternativeRenderingDiagram() {
               <text
                 x="56"
                 y={y + 25}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -627,12 +627,12 @@ export function GlsAlternativeRenderingDiagram() {
                 x="220"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="610" y={y + 25} fontSize="9.8" fill={secondary}>
+              <text x="610" y={y + 25} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -642,7 +642,7 @@ export function GlsAlternativeRenderingDiagram() {
           x="450"
           y="309"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           比较 passes、attachment bytes、samples、overdraw、透明支持与 GPU 时间
@@ -742,7 +742,7 @@ export function GlsTwoDGraphicsDiagram() {
                 y="149"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.4"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -751,7 +751,7 @@ export function GlsTwoDGraphicsDiagram() {
                 x={x + 97.5}
                 y="202"
                 textAnchor="middle"
-                fontSize="9.6"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -763,7 +763,7 @@ export function GlsTwoDGraphicsDiagram() {
           x="440"
           y="292"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           SDF coverage = smoothstep(edge−width, edge+width, distance), width
@@ -850,7 +850,7 @@ export function GlsRenderingEvidenceDiagram() {
               <text
                 x="90"
                 y={y + 25}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -860,12 +860,12 @@ export function GlsRenderingEvidenceDiagram() {
                 x="285"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="610" y={y + 25} fontSize="9.8" fill={secondary}>
+              <text x="610" y={y + 25} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -875,7 +875,7 @@ export function GlsRenderingEvidenceDiagram() {
           x="440"
           y="304"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           先保留 reference

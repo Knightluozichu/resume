@@ -326,7 +326,7 @@ export function LifecycleTimelineDiagram() {
                   x={NODE_CX}
                   y={cy + 13}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {node.stage}
@@ -373,7 +373,7 @@ export function LifecycleTimelineDiagram() {
               x={CAP_X + 84}
               y={nodeCY(3) + 13}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               后台固定节拍 · 物理排练
@@ -393,7 +393,7 @@ export function LifecycleTimelineDiagram() {
               <text
                 x={CAP_X}
                 y={nodeCY(i) - 3}
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {l1}
@@ -401,7 +401,7 @@ export function LifecycleTimelineDiagram() {
               <text
                 x={CAP_X}
                 y={nodeCY(i) + 12}
-                fontSize="10.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {l2}

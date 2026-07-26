@@ -165,7 +165,7 @@ function TokenizationDiagramInner() {
               x={VIEW_W / 2}
               y={50}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="600"
               fill="var(--text-secondary)"
             >
@@ -280,7 +280,7 @@ function TokenizationDiagramInner() {
             x={VIEW_W / 2}
             y={VIEW_H - 16}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             大脑眼里没有「字」，只有这一串 token 编号序列

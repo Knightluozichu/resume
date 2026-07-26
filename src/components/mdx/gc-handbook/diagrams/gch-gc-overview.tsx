@@ -27,19 +27,19 @@ export function GchGcOverviewDiagram() {
 
           <circle cx="185" cy="90" r="26" fill="var(--warning)" fillOpacity="0.15" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="185" y="87" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">吞吐量</text>
-          <text x="185" y="100" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">throughput</text>
+          <text x="185" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">throughput</text>
 
           <circle cx="100" cy="220" r="26" fill="var(--danger)" fillOpacity="0.15" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="100" y="217" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">延迟</text>
-          <text x="100" y="230" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">latency</text>
+          <text x="100" y="230" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">latency</text>
 
           <circle cx="270" cy="220" r="26" fill="var(--success)" fillOpacity="0.15" stroke="var(--success)" strokeWidth="1.2" />
           <text x="270" y="217" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">内存</text>
-          <text x="270" y="230" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">footprint</text>
+          <text x="270" y="230" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">footprint</text>
 
-          <text x="185" y="145" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">STW越短→延迟好</text>
-          <text x="185" y="158" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">但GC频率↑→吞吐↓</text>
-          <text x="185" y="195" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">复制占用空间→内存↑</text>
+          <text x="185" y="145" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">STW越短→延迟好</text>
+          <text x="185" y="158" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">但GC频率↑→吞吐↓</text>
+          <text x="185" y="195" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">复制占用空间→内存↑</text>
 
           {/* 分割线 */}
           <line x1="370" y1="50" x2="370" y2="430" stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
@@ -51,32 +51,32 @@ export function GchGcOverviewDiagram() {
 
           {/* 时间节点 */}
           <circle cx="400" cy="90" r="4" fill="var(--warning)" />
-          <text x="415" y="87" fontSize="10" fontWeight="600" fill="var(--warning)">1959 McCarthy LISP</text>
-          <text x="415" y="99" fontSize="9" fill="var(--text-secondary)">标记-清除 首个GC</text>
+          <text x="415" y="87" fontSize="11" fontWeight="600" fill="var(--warning)">1959 McCarthy LISP</text>
+          <text x="415" y="99" fontSize="11" fill="var(--text-secondary)">标记-清除 首个GC</text>
 
           <circle cx="400" cy="140" r="4" fill="var(--warning)" />
-          <text x="415" y="137" fontSize="10" fontWeight="600" fill="var(--warning)">1963 Minsky</text>
-          <text x="415" y="149" fontSize="9" fill="var(--text-secondary)">复制式回收</text>
+          <text x="415" y="137" fontSize="11" fontWeight="600" fill="var(--warning)">1963 Minsky</text>
+          <text x="415" y="149" fontSize="11" fill="var(--text-secondary)">复制式回收</text>
 
           <circle cx="400" cy="190" r="4" fill="var(--accent)" />
-          <text x="415" y="187" fontSize="10" fontWeight="600" fill="var(--accent)">1970s</text>
-          <text x="415" y="199" fontSize="9" fill="var(--text-secondary)">分代假说/标记压缩</text>
+          <text x="415" y="187" fontSize="11" fontWeight="600" fill="var(--accent)">1970s</text>
+          <text x="415" y="199" fontSize="11" fill="var(--text-secondary)">分代假说/标记压缩</text>
 
           <circle cx="400" cy="240" r="4" fill="var(--accent)" />
-          <text x="415" y="237" fontSize="10" fontWeight="600" fill="var(--accent)">1980s Baker</text>
-          <text x="415" y="249" fontSize="9" fill="var(--text-secondary)">增量/并发GC</text>
+          <text x="415" y="237" fontSize="11" fontWeight="600" fill="var(--accent)">1980s Baker</text>
+          <text x="415" y="249" fontSize="11" fill="var(--text-secondary)">增量/并发GC</text>
 
           <circle cx="400" cy="290" r="4" fill="var(--danger)" />
-          <text x="415" y="287" fontSize="10" fontWeight="600" fill="var(--danger)">2000s</text>
-          <text x="415" y="299" fontSize="9" fill="var(--text-secondary)">CMS/分代并发</text>
+          <text x="415" y="287" fontSize="11" fontWeight="600" fill="var(--danger)">2000s</text>
+          <text x="415" y="299" fontSize="11" fill="var(--text-secondary)">CMS/分代并发</text>
 
           <circle cx="400" cy="340" r="4" fill="var(--danger)" />
-          <text x="415" y="337" fontSize="10" fontWeight="600" fill="var(--danger)">2010s</text>
-          <text x="415" y="349" fontSize="9" fill="var(--text-secondary)">G1/Shenandoah</text>
+          <text x="415" y="337" fontSize="11" fontWeight="600" fill="var(--danger)">2010s</text>
+          <text x="415" y="349" fontSize="11" fill="var(--text-secondary)">G1/Shenandoah</text>
 
           <circle cx="400" cy="390" r="4" fill="var(--success)" />
-          <text x="415" y="387" fontSize="10" fontWeight="600" fill="var(--success)">2018+ ZGC</text>
-          <text x="415" y="399" fontSize="9" fill="var(--text-secondary)">亚毫秒级停顿</text>
+          <text x="415" y="387" fontSize="11" fontWeight="600" fill="var(--success)">2018+ ZGC</text>
+          <text x="415" y="399" fontSize="11" fill="var(--text-secondary)">亚毫秒级停顿</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

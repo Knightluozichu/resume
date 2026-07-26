@@ -63,7 +63,7 @@ export function BlendEquationDiagram() {
             x="80"
             y="122"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-primary)"
           >
@@ -73,7 +73,7 @@ export function BlendEquationDiagram() {
             x="80"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             前景（正在画）
@@ -125,7 +125,7 @@ export function BlendEquationDiagram() {
             x="200"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             源因子 = αsrc
@@ -168,7 +168,7 @@ export function BlendEquationDiagram() {
             x="324"
             y="122"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--bg)"
           >
@@ -178,7 +178,7 @@ export function BlendEquationDiagram() {
             x="324"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             背景（画布已有）
@@ -230,7 +230,7 @@ export function BlendEquationDiagram() {
             x="453"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             目标因子 = 1−αsrc
@@ -273,7 +273,7 @@ export function BlendEquationDiagram() {
             x="608"
             y="118"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-primary)"
           >
@@ -283,7 +283,7 @@ export function BlendEquationDiagram() {
             x="608"
             y="168"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             偏前景、透出点背景

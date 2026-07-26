@@ -58,7 +58,7 @@ export function ResourcesAssetBundleDiagram({
                 x="160"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 构建期：全部打进 Player
@@ -67,7 +67,7 @@ export function ResourcesAssetBundleDiagram({
                 x="160"
                 y="112"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 启动时：生成资源索引表
@@ -76,7 +76,7 @@ export function ResourcesAssetBundleDiagram({
                 x="160"
                 y="132"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 Resources.Load → 无法卸载
@@ -85,7 +85,7 @@ export function ResourcesAssetBundleDiagram({
                 x="160"
                 y="152"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 包体↑ 启动内存↑ 隐藏依赖难查
@@ -119,7 +119,7 @@ export function ResourcesAssetBundleDiagram({
                 x="480"
                 y="92"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 构建期：按包输出 .bundle
@@ -128,7 +128,7 @@ export function ResourcesAssetBundleDiagram({
                 x="480"
                 y="112"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--success)"
               >
                 运行时：LoadFromFileAsync
@@ -137,7 +137,7 @@ export function ResourcesAssetBundleDiagram({
                 x="480"
                 y="132"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--success)"
               >
                 Unload(false/true) 可释放
@@ -146,7 +146,7 @@ export function ResourcesAssetBundleDiagram({
                 x="480"
                 y="152"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 按需下载 · 热更 · 内存可控
@@ -200,7 +200,7 @@ export function ResourcesAssetBundleDiagram({
             x="320"
             y="232"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① 文件夹越大启动越慢 ② 字符串路径无编译期检查 ③ 卸载不了 → 内存只涨不降
@@ -209,7 +209,7 @@ export function ResourcesAssetBundleDiagram({
             x="320"
             y="252"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             现代项目：Addressables 或 AssetBundle；Resources 仅极少量启动必需资源

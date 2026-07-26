@@ -17,6 +17,13 @@ export function OfficialRlLab({ title, concepts, accent, view }: Props) {
   const [gamma, setGamma] = useState(90);
   const [epsilon, setEpsilon] = useState(15);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setState(0);
+    setGamma(90);
+    setEpsilon(15);
+    setFault(false);
+  }
+
   const visible = concepts.slice(0, 6);
   const metrics = useMemo(() => {
     const value = bounded(
@@ -49,6 +56,7 @@ export function OfficialRlLab({ title, concepts, accent, view }: Props) {
         color: "#18181b",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",

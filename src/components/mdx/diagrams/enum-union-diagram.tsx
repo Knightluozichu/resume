@@ -116,7 +116,7 @@ export function EnumUnionDiagram() {
               <g key={dim.label}>
                 {/* Dimension label —— 单独放在左 gutter，竖向居中，完全不与数据列重叠 */}
                 <rect x={labelGutterX} y={labelRectY} width={labelGutterW} height={labelRectH} rx="4" fill="var(--code-bg)" stroke={border} />
-                <text x={labelGutterX + labelGutterW / 2} y={labelRectY + labelRectH / 2 + 3} fontSize="10" fill={secondary} textAnchor="middle">
+                <text x={labelGutterX + labelGutterW / 2} y={labelRectY + labelRectH / 2 + 3} fontSize="11" fill={secondary} textAnchor="middle">
                   {dimLabels[dim.label]}
                 </text>
 
@@ -126,13 +126,13 @@ export function EnumUnionDiagram() {
                 <rect x={col3X} y={y} width={colW} height={rowH} rx="6" fill="var(--code-bg)" stroke={good} strokeWidth={1.5} />
 
                 {/* Content */}
-                <text x={col1X + colW / 2} y={y + rowH / 2 + 4} fontSize="10" fill={primary} textAnchor="middle">
+                <text x={col1X + colW / 2} y={y + rowH / 2 + 4} fontSize="11" fill={primary} textAnchor="middle">
                   {dim.left}
                 </text>
-                <text x={col2X + colW / 2} y={y + rowH / 2 + 4} fontSize="10" fill={primary} textAnchor="middle">
+                <text x={col2X + colW / 2} y={y + rowH / 2 + 4} fontSize="11" fill={primary} textAnchor="middle">
                   {dim.mid}
                 </text>
-                <text x={col3X + colW / 2} y={y + rowH / 2 + 4} fontSize="10" fill={primary} textAnchor="middle">
+                <text x={col3X + colW / 2} y={y + rowH / 2 + 4} fontSize="11" fill={primary} textAnchor="middle">
                   {dim.right}
                 </text>
               </g>
@@ -146,16 +146,16 @@ export function EnumUnionDiagram() {
             return (
               <g>
                 <rect x={col1X} y={verdictY} width={verdictW} height="56" rx="8" fill={accent} fillOpacity="0.05" stroke={accent} strokeWidth="1.5" />
-                <text x={col1X + colW / 2} y={verdictY + 22} fontSize="10" fill={good} fontWeight="700" textAnchor="middle">
+                <text x={col1X + colW / 2} y={verdictY + 22} fontSize="11" fill={good} fontWeight="700" textAnchor="middle">
                   新代码一律用 enum class
                 </text>
-                <text x={col2X + colW / 2} y={verdictY + 22} fontSize="10" fill={warn} fontWeight="700" textAnchor="middle">
+                <text x={col2X + colW / 2} y={verdictY + 22} fontSize="11" fill={warn} fontWeight="700" textAnchor="middle">
                   传统 enum——只维护老代码
                 </text>
-                <text x={col3X + colW / 2} y={verdictY + 22} fontSize="10" fill={good} fontWeight="700" textAnchor="middle">
+                <text x={col3X + colW / 2} y={verdictY + 22} fontSize="11" fill={good} fontWeight="700" textAnchor="middle">
                   C++11 用 tag 管理活跃成员
                 </text>
-                <text x={col1X + verdictW / 2} y={verdictY + 42} fontSize="10" fill={secondary} textAnchor="middle">
+                <text x={col1X + verdictW / 2} y={verdictY + 42} fontSize="11" fill={secondary} textAnchor="middle">
                   enum class：类型安全 + 作用域限定。union：共享存储 + 显式生命周期管理。
                 </text>
               </g>
@@ -168,7 +168,7 @@ export function EnumUnionDiagram() {
             return (
               <g>
                 <rect x={cx - 200} y={legendY} width="400" height="20" rx="4" fill="var(--code-bg)" stroke={border} />
-                <text x={cx} y={legendY + 14} fontSize="10" fill={secondary} textAnchor="middle">
+                <text x={cx} y={legendY + 14} fontSize="11" fill={secondary} textAnchor="middle">
                   ⬤ enum class = 限定作用域 &#xa0;&#xa0; ⬤ 传统 enum = 可隐式转整数 &#xa0;&#xa0; ⬤ union = 追踪活跃成员
                 </text>
               </g>

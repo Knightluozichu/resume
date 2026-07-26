@@ -23,6 +23,14 @@ export function HttpTransactionLab(props: Props) {
   const [lifetime, setLifetime] = useState(120);
   const [validator, setValidator] = useState(true);
   const [checked, setChecked] = useState(() => gates.map(() => false));
+  function resetExperiment() {
+    setSelected(0);
+    setAge(40);
+    setLifetime(120);
+    setValidator(true);
+    setChecked(() => gates.map(() => false));
+  }
+
   const cache = useMemo(() => {
     if (age < lifetime)
       return { label: "新鲜命中", action: "直接复用缓存副本" };
@@ -51,6 +59,7 @@ export function HttpTransactionLab(props: Props) {
     const hop = hops[selected] ?? hops[0];
     return (
       <section className={shell} aria-label={title + "HTTP报文路径实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
@@ -106,6 +115,7 @@ export function HttpTransactionLab(props: Props) {
   if (mode === "decision") {
     return (
       <section className={shell} aria-label={title + "缓存决策实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
             单变量缓存与连接实验
@@ -138,7 +148,7 @@ export function HttpTransactionLab(props: Props) {
             />
           </label>
         </div>
-        <label className="mt-4 flex min-h-10 items-center gap-2 text-xs font-semibold">
+        <label className="mt-4 flex min-h-11 items-center gap-2 text-xs font-semibold">
           <input
             type="checkbox"
             checked={validator}
@@ -163,6 +173,7 @@ export function HttpTransactionLab(props: Props) {
   const complete = checked.filter(Boolean).length;
   return (
     <section className={shell} aria-label={title + "HTTP证据门实验"}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         独立事务证据门
       </p>

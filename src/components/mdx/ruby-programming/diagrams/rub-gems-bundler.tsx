@@ -74,7 +74,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={108} fontSize="11" fill={primary}>
             gem install rails
           </text>
-          <text x={200} y={108} fontSize="10" fill={secondary}>
+          <text x={200} y={108} fontSize="11" fill={secondary}>
             # 安装 gem
           </text>
 
@@ -91,7 +91,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={150} fontSize="11" fill={primary}>
             gem uninstall rails
           </text>
-          <text x={200} y={150} fontSize="10" fill={secondary}>
+          <text x={200} y={150} fontSize="11" fill={secondary}>
             # 卸载
           </text>
 
@@ -108,7 +108,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={192} fontSize="11" fill={primary}>
             gem list
           </text>
-          <text x={120} y={192} fontSize="10" fill={secondary}>
+          <text x={120} y={192} fontSize="11" fill={secondary}>
             # 列出已安装
           </text>
 
@@ -125,7 +125,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={234} fontSize="11" fill={primary}>
             gem sources
           </text>
-          <text x={140} y={234} fontSize="10" fill={secondary}>
+          <text x={140} y={234} fontSize="11" fill={secondary}>
             # 镜像源管理
           </text>
 
@@ -142,7 +142,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={276} fontSize="11" fill={primary}>
             gem build mygem.gemspec
           </text>
-          <text x={220} y={276} fontSize="10" fill={secondary}>
+          <text x={220} y={276} fontSize="11" fill={secondary}>
             # 打包
           </text>
 
@@ -159,7 +159,7 @@ export function RubGemsBundlerDiagram() {
           <text x={44} y={318} fontSize="11" fill={primary}>
             gem push mygem-1.0.gem
           </text>
-          <text x={220} y={318} fontSize="10" fill={secondary}>
+          <text x={220} y={318} fontSize="11" fill={secondary}>
             # 发布到 RubyGems
           </text>
 
@@ -269,7 +269,7 @@ export function RubGemsBundlerDiagram() {
           <text x={372} y={298} fontSize="11" fill={primary}>
             actionpack (= 7.0.4)
           </text>
-          <text x={372} y={312} fontSize="10" fill={secondary}>
+          <text x={372} y={312} fontSize="11" fill={secondary}>
             # 精确版本，团队一致
           </text>
 

@@ -229,7 +229,7 @@ export function BodyTypesDiagram() {
                 x={colCX(i)}
                 y={COL_Y + 38}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >
@@ -255,7 +255,7 @@ export function BodyTypesDiagram() {
             x={colX(0) + COL_W - 42}
             y={BASE_Y + 64}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             墙（不动）
@@ -367,7 +367,7 @@ export function BodyTypesDiagram() {
               x={colCX(2)}
               y={BASE_Y + 64}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               平台（黄）主动移 · 动态箱（紫）被顶着走

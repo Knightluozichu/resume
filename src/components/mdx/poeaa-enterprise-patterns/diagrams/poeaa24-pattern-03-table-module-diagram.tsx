@@ -18,7 +18,7 @@ export function Poeaa24Pattern03TableModule() {
           <text x={216} y={158} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ findByCustomer(id): RowSet</text>
           <text x={216} y={180} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ update(row): void</text>
           <text x={216} y={202} fontSize="11" fontFamily="monospace" fill="#3FB97F">+ delete(id): void</text>
-          <text x={216} y={228} fontSize="10" fill={T.secondary}>操作对象是行集合，不是单个对象</text>
+          <text x={216} y={228} fontSize="11" fill={T.secondary}>操作对象是行集合，不是单个对象</text>
           <text x={48} y={280} fontSize="11" fill="#E5B567">✓ 结构化查询、批量操作自然</text>
           <text x={400} y={280} fontSize="11" fill={T.danger}>✗ 复杂业务规则难以表达</text>
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="适用：结构化查询为主、业务规则简单的系统" />

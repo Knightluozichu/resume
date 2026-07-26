@@ -196,7 +196,7 @@ export function ExecutionPolicyDiagram() {
           <text
             x="16"
             y={SEQ_Y - 12}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一个厨师顺序做（8 拍）
@@ -233,7 +233,7 @@ export function ExecutionPolicyDiagram() {
                 x={cellX(i) + CELL_W / 2}
                 y={SEQ_Y + CELL_H / 2 + 4}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-primary)"
@@ -268,7 +268,7 @@ export function ExecutionPolicyDiagram() {
           <text
             x="16"
             y={PAR_Y - 12}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             4 厨师分块同时做（2 拍）
@@ -309,7 +309,7 @@ export function ExecutionPolicyDiagram() {
                       x={parCellX(c) + PAR_CELL_W / 2}
                       y={parLaneY(r) + PAR_LANE_H / 2 + 4}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="700"
                       fontFamily="var(--font-mono)"
                       fill="var(--text-primary)"
@@ -347,7 +347,7 @@ export function ExecutionPolicyDiagram() {
           <text
             x="16"
             y={UNSEQ_Y - 12}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             4 厨师 + 每人颠两锅（向量化，1 拍）
@@ -394,7 +394,7 @@ export function ExecutionPolicyDiagram() {
                         x={vx + vecW / 2}
                         y={UNSEQ_Y + CELL_H / 2 + 4}
                         textAnchor="middle"
-                        fontSize="10"
+                        fontSize="11"
                         fontWeight="700"
                         fontFamily="var(--font-mono)"
                         fill="var(--text-primary)"
@@ -409,7 +409,7 @@ export function ExecutionPolicyDiagram() {
                   x={laneStartX + laneW / 2}
                   y={UNSEQ_Y + CELL_H + 16}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {`线程${r}`}

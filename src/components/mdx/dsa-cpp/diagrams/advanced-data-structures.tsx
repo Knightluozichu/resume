@@ -84,7 +84,7 @@ export function DsaDeterministicSkipListLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-3 gap-2">{([1, 2, 3] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setGap(candidate)} className={"min-h-10 border text-xs font-semibold " + (gap === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>gap {candidate}</button>)}</div>
+        <div className="grid grid-cols-3 gap-2">{([1, 2, 3] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setGap(candidate)} className={"min-h-11 border text-xs font-semibold " + (gap === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>gap {candidate}</button>)}</div>
         <div className="mt-4 border border-accent bg-accent/10 p-3 font-mono text-xs text-accent">upper: {promoted.join(" -> ")}</div>
         <div className="mt-2 border border-border bg-background p-3 font-mono text-xs text-primary">bottom: {bottom.join(" -> ")}</div>
       </div>
@@ -102,7 +102,7 @@ export function DsaAATreeSkewSplitLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-2">{(["skew", "split"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-10 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}</div>
+        <div className="grid grid-cols-2 gap-2">{(["skew", "split"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setOperation(candidate)} className={"min-h-11 border text-xs font-semibold " + (operation === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}</div>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <div className="border border-warning bg-warning/10 p-3 font-mono text-xs text-warning">{detail.before}</div>
           <div className="border border-accent bg-accent/10 p-3 font-mono text-xs text-accent">{detail.action}</div>
@@ -128,7 +128,7 @@ export function DsaTreapDualOrderLab() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-2">{(["key", "priority"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setView(candidate)} className={"min-h-10 border text-xs font-semibold " + (view === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate} order</button>)}</div>
+        <div className="grid grid-cols-2 gap-2">{(["key", "priority"] as const).map((candidate) => <button key={candidate} type="button" onClick={() => setView(candidate)} className={"min-h-11 border text-xs font-semibold " + (view === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate} order</button>)}</div>
         <div className="mt-4 flex gap-2">{sorted.map((node) => <div key={node.key} className="flex-1 border border-border bg-background p-2 text-center font-mono text-[10px]"><div>k={node.key}</div><div className="mt-1 text-accent">p={node.priority}</div></div>)}</div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">Treap同时保持BST key order与min-heap random priority；rotation恢复priority而不破坏inorder。</figcaption>

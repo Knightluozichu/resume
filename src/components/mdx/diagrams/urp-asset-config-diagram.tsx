@@ -17,7 +17,7 @@ export function UrpAssetConfigDiagram() {
 
           {/* Header row */}
           <rect x="20" y="42" width="130" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="85" y="60" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-secondary)">参数</text>
+          <text x="85" y="60" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-secondary)">参数</text>
 
           <rect x="154" y="42" width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--success)" strokeWidth="1.5" />
           <text x="232" y="60" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">High（高端机）</text>
@@ -39,20 +39,20 @@ export function UrpAssetConfigDiagram() {
           ].map((row) => (
             <g key={row.label}>
               <rect x="20" y={row.y} width="130" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x="30" y={row.y + 18} fontSize="10" fill="var(--text-primary)">{row.label}</text>
+              <text x="30" y={row.y + 18} fontSize="11" fill="var(--text-primary)">{row.label}</text>
 
               <rect x="154" y={row.y} width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x="232" y={row.y + 18} textAnchor="middle" fontSize="10" fill="var(--text-primary)">{row.high}</text>
+              <text x="232" y={row.y + 18} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{row.high}</text>
 
               <rect x="314" y={row.y} width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x="392" y={row.y + 18} textAnchor="middle" fontSize="10" fill="var(--text-primary)">{row.mid}</text>
+              <text x="392" y={row.y + 18} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{row.mid}</text>
 
               <rect x="474" y={row.y} width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x="552" y={row.y + 18} textAnchor="middle" fontSize="10" fill="var(--text-primary)">{row.low}</text>
+              <text x="552" y={row.y + 18} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{row.low}</text>
             </g>
           ))}
 
-          <text x="20" y="308" fontSize="10" fill="var(--text-secondary)">
+          <text x="20" y="308" fontSize="11" fill="var(--text-secondary)">
             每档绑定一个 URP Asset 文件 · Quality Settings 切换 · Render Scale 是移动端调优第一参数
           </text>
         </svg>

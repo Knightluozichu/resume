@@ -276,7 +276,7 @@ export function MecanimStateMachineDiagram() {
             x={(IDLE_X + NODE_W + WALK_X) / 2}
             y={IDLE_CY - 10}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -296,7 +296,7 @@ export function MecanimStateMachineDiagram() {
             x={(WALK_X + NODE_W + RUN_X) / 2}
             y={WALK_CY - 10}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -325,7 +325,7 @@ export function MecanimStateMachineDiagram() {
             x={WALK_CX + 70}
             y={(WALK_Y + NODE_H + JUMP_Y) / 2 + 4}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
           >
@@ -335,7 +335,7 @@ export function MecanimStateMachineDiagram() {
             x={WALK_CX + 70}
             y={(WALK_Y + NODE_H + JUMP_Y) / 2 + 18}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             任意态都可触发
@@ -358,7 +358,7 @@ export function MecanimStateMachineDiagram() {
               x={RING_X0 + RING_W / 2}
               y={RING_Y0 - 8}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -394,7 +394,7 @@ export function MecanimStateMachineDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 42}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {n.clip} · {n.d}
@@ -428,7 +428,7 @@ export function MecanimStateMachineDiagram() {
             x={PANEL_X + 16}
             y={PANEL_Y + 40}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             过渡上挂的条件，全看这里的参数值

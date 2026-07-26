@@ -143,15 +143,15 @@ export function GlsGeometryShadersDiagram({
                 y="155"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.2"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="201" fontSize="11" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="222" fontSize="10" fill={primary}>
+              <text x={x + 13} y="222" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -181,7 +181,7 @@ export function GlsGeometryShadersDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={primary}
         >
           不启用某阶段时，数据直接进入后续合法阶段；不是所有 draw 都需要完整链
@@ -283,7 +283,7 @@ export function GlsTessellationDomainsDiagram() {
                 y="146"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -292,7 +292,7 @@ export function GlsTessellationDomainsDiagram() {
                 x={x + 126}
                 y="197"
                 textAnchor="middle"
-                fontSize="10.2"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -304,7 +304,7 @@ export function GlsTessellationDomainsDiagram() {
           x="430"
           y="282"
           textAnchor="middle"
-          fontSize="10.4"
+          fontSize="11"
           fill={secondary}
         >
           equal_spacing / fractional_even_spacing / fractional_odd_spacing · cw
@@ -375,7 +375,7 @@ export function GlsTessellationFactorsDiagram() {
               <text
                 x="105"
                 y={y + 26}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -385,12 +385,12 @@ export function GlsTessellationFactorsDiagram() {
                 x="385"
                 y={y + 26}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="605" y={y + 26} fontSize="10" fill={secondary}>
+              <text x="605" y={y + 26} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -405,7 +405,7 @@ export function GlsTessellationFactorsDiagram() {
           x="430"
           y="304"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={secondary}
         >
           从同一边端点和同一 LOD 规则计算，避免浮点或视角分歧
@@ -460,13 +460,13 @@ export function GlsGeometryContractDiagram() {
         >
           输入是完整图元，输出是 strip
         </text>
-        <text x="28" y="66" fontSize="10" fill={secondary}>
+        <text x="28" y="66" fontSize="11" fill={secondary}>
           input layout
         </text>
-        <text x="320" y="66" fontSize="10" fill={secondary}>
+        <text x="320" y="66" fontSize="11" fill={secondary}>
           gl_in.length()
         </text>
-        <text x="585" y="66" fontSize="10" fill={secondary}>
+        <text x="585" y="66" fontSize="11" fill={secondary}>
           合法 output family
         </text>
         {topologyRows.map((row, index) => {
@@ -487,7 +487,7 @@ export function GlsGeometryContractDiagram() {
                 x="55"
                 y={y + 22}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -497,7 +497,7 @@ export function GlsGeometryContractDiagram() {
                 x="350"
                 y={y + 22}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -506,7 +506,7 @@ export function GlsGeometryContractDiagram() {
                 x="585"
                 y={y + 22}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -518,7 +518,7 @@ export function GlsGeometryContractDiagram() {
           x="450"
           y="335"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           query: GL_MAX_GEOMETRY_OUTPUT_VERTICES +
@@ -609,7 +609,7 @@ export function GlsEmissionStateDiagram() {
                 y="149"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="10.3"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -619,7 +619,7 @@ export function GlsEmissionStateDiagram() {
                 x={x + 97.5}
                 y="184"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill={stage[2]}
               >
                 {stage[1]}
@@ -640,7 +640,7 @@ export function GlsEmissionStateDiagram() {
           x="440"
           y="285"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           line_strip: V−1 segments · triangle_strip: max(0,V−2) triangles
@@ -713,7 +713,7 @@ export function GlsLayerViewportDiagram() {
                 x="95"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="10.2"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -723,7 +723,7 @@ export function GlsLayerViewportDiagram() {
                 x="350"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -732,7 +732,7 @@ export function GlsLayerViewportDiagram() {
                 x="570"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -744,7 +744,7 @@ export function GlsLayerViewportDiagram() {
           x="440"
           y="303"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           总 invocation = input primitives × layout(invocations=N)；输出量仍受每

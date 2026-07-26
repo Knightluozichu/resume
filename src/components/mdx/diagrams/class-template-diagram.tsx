@@ -42,13 +42,13 @@ export function ClassTemplateDiagram() {
             <text x="127" y="18" fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">
               ① template 声明
             </text>
-            <text x="10" y="44" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="10" y="44" fontSize="11" fill={primary} fontFamily="monospace">
               template&lt;typename T&gt;
             </text>
-            <text x="10" y="62" fontSize="10" fill={secondary}>
+            <text x="10" y="62" fontSize="11" fill={secondary}>
               template + &lt;&gt; = 模板前缀
             </text>
-            <text x="10" y="78" fontSize="10" fill={secondary}>
+            <text x="10" y="78" fontSize="11" fill={secondary}>
               typename/class = 类型参数关键字
             </text>
           </g>
@@ -60,13 +60,13 @@ export function ClassTemplateDiagram() {
             <text x="127" y="18" fontSize="11" fontWeight="700" fill={warn} textAnchor="middle">
               ② 类型参数 T
             </text>
-            <text x="10" y="44" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="10" y="44" fontSize="11" fill={primary} fontFamily="monospace">
               T 是占位符——编译前不确定
             </text>
-            <text x="10" y="62" fontSize="10" fill={secondary}>
+            <text x="10" y="62" fontSize="11" fill={secondary}>
               实例化时 T → int / string / ...
             </text>
-            <text x="10" y="78" fontSize="10" fill={secondary}>
+            <text x="10" y="78" fontSize="11" fill={secondary}>
               可多个：&lt;typename T, typename U&gt;
             </text>
           </g>
@@ -78,13 +78,13 @@ export function ClassTemplateDiagram() {
             <text x="145" y="18" fontSize="11" fontWeight="700" fill={green} textAnchor="middle">
               ③ 类体 + 成员函数
             </text>
-            <text x="10" y="44" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="10" y="44" fontSize="11" fill={primary} fontFamily="monospace">
               class Blob {'{'} T data; void push(T); {'}'}
             </text>
-            <text x="10" y="62" fontSize="10" fill={secondary}>
+            <text x="10" y="62" fontSize="11" fill={secondary}>
               成员用 T 声明——类内可省略前缀
             </text>
-            <text x="10" y="78" fontSize="10" fill={secondary}>
+            <text x="10" y="78" fontSize="11" fill={secondary}>
               类外定义需重写 template 前缀
             </text>
           </g>
@@ -93,39 +93,39 @@ export function ClassTemplateDiagram() {
           <g transform="translate(20, 155)">
             <rect x="0" y="0" width="840" height="150" rx="8" fill="var(--code-bg)" stroke={border} />
 
-            <text x="16" y="20" fontSize="10" fill={accent} fontWeight="700" fontFamily="monospace">
+            <text x="16" y="20" fontSize="11" fill={accent} fontWeight="700" fontFamily="monospace">
               {`// 类模板定义`}
             </text>
-            <text x="16" y="38" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="16" y="38" fontSize="11" fill={primary} fontFamily="monospace">
               template&lt;typename T&gt;
             </text>
-            <text x="16" y="56" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="16" y="56" fontSize="11" fill={primary} fontFamily="monospace">
               {`class Blob {`}
             </text>
-            <text x="30" y="74" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="30" y="74" fontSize="11" fill={primary} fontFamily="monospace">
               {`std::vector<T> data;`}
             </text>
-            <text x="30" y="92" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="30" y="92" fontSize="11" fill={primary} fontFamily="monospace">
               {`void push_back(const T &t);  // 类内声明`}
             </text>
-            <text x="16" y="110" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x="16" y="110" fontSize="11" fill={primary} fontFamily="monospace">
               {'};'}
             </text>
 
             {/* 类外定义区 */}
-            <text x="16" y="132" fontSize="10" fill={accent} fontWeight="700" fontFamily="monospace">
+            <text x="16" y="132" fontSize="11" fill={accent} fontWeight="700" fontFamily="monospace">
               {`// 类外定义——必须重写 template 前缀 + 作用域限定`}
             </text>
-            <text x="16" y="148" fontSize="10" fill={warn} fontFamily="monospace">
+            <text x="16" y="148" fontSize="11" fill={warn} fontFamily="monospace">
               {`template<typename T>                    // 必须重写`}
             </text>
-            <text x="16" y="163" fontSize="10" fill={warn} fontFamily="monospace">
+            <text x="16" y="163" fontSize="11" fill={warn} fontFamily="monospace">
               {`void Blob<T>::push_back(const T &t) {   // Blob<T> 作用域`}
             </text>
-            <text x="16" y="178" fontSize="10" fill={warn} fontFamily="monospace">
+            <text x="16" y="178" fontSize="11" fill={warn} fontFamily="monospace">
               {`    data.push_back(t);`}
             </text>
-            <text x="16" y="193" fontSize="10" fill={warn} fontFamily="monospace">
+            <text x="16" y="193" fontSize="11" fill={warn} fontFamily="monospace">
               {'}'}
             </text>
           </g>
@@ -141,13 +141,13 @@ export function ClassTemplateDiagram() {
             {/* Blob<int> */}
             <g transform="translate(40, 44)">
               <rect x="0" y="0" width="350" height="42" rx="6" fill={green} fillOpacity="0.08" stroke={green} strokeWidth="1" />
-              <text x="10" y="18" fontSize="10" fontWeight="700" fill={green} fontFamily="monospace">
+              <text x="10" y="18" fontSize="11" fontWeight="700" fill={green} fontFamily="monospace">
                 Blob&lt;int&gt;
               </text>
-              <text x="120" y="18" fontSize="9" fill={secondary} fontFamily="monospace">
+              <text x="120" y="18" fontSize="11" fill={secondary} fontFamily="monospace">
                 T → int | vector&lt;int&gt; data
               </text>
-              <text x="120" y="34" fontSize="9" fill={secondary} fontFamily="monospace">
+              <text x="120" y="34" fontSize="11" fill={secondary} fontFamily="monospace">
                 push_back(const int&amp;)
               </text>
             </g>
@@ -160,22 +160,22 @@ export function ClassTemplateDiagram() {
             {/* Blob<string> */}
             <g transform="translate(450, 44)">
               <rect x="0" y="0" width="350" height="42" rx="6" fill={warn} fillOpacity="0.08" stroke={warn} strokeWidth="1" />
-              <text x="10" y="18" fontSize="10" fontWeight="700" fill={warn} fontFamily="monospace">
+              <text x="10" y="18" fontSize="11" fontWeight="700" fill={warn} fontFamily="monospace">
                 Blob&lt;string&gt;
               </text>
-              <text x="140" y="18" fontSize="9" fill={secondary} fontFamily="monospace">
+              <text x="140" y="18" fontSize="11" fill={secondary} fontFamily="monospace">
                 T → string | vector&lt;string&gt; data
               </text>
-              <text x="140" y="34" fontSize="9" fill={secondary} fontFamily="monospace">
+              <text x="140" y="34" fontSize="11" fill={secondary} fontFamily="monospace">
                 push_back(const string&amp;)
               </text>
             </g>
 
             {/* Bottom note */}
-            <text x={cx - 20} y="112" fontSize="10" fill={secondary} textAnchor="middle">
+            <text x={cx - 20} y="112" fontSize="11" fill={secondary} textAnchor="middle">
               每个不同的模板实参组合 = 一份全新的类定义（独立的 static 成员 + 独立的函数）
             </text>
-            <text x={cx - 20} y="130" fontSize="10" fill={warn} textAnchor="middle" fontFamily="monospace">
+            <text x={cx - 20} y="130" fontSize="11" fill={warn} textAnchor="middle" fontFamily="monospace">
               Blob&lt;int&gt; 和 Blob&lt;string&gt; 彼此没有任何关系——不是父子、不是友元
             </text>
           </g>

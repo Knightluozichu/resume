@@ -229,7 +229,7 @@ function MemoryArchitectureDiagramInner() {
             x={CARD_X + 16}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             短期记忆（上下文窗口）
@@ -239,7 +239,7 @@ function MemoryArchitectureDiagramInner() {
             x={CARD_X + 206}
             y={46}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             长期记忆（外部档案柜）
@@ -320,7 +320,7 @@ function MemoryArchitectureDiagramInner() {
                     x={CARD_X + CARD_W - 14}
                     y={y + 21}
                     textAnchor="end"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--text-secondary)"
                   >
@@ -331,7 +331,7 @@ function MemoryArchitectureDiagramInner() {
                     x={CARD_X + 20}
                     y={y + 41}
                     textAnchor="start"
-                    fontSize="10.5"
+                    fontSize="11"
                     fill="var(--text-primary)"
                   >
                     {s.body}
@@ -346,7 +346,7 @@ function MemoryArchitectureDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 18}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             脑子（短期）会满会忘；笔记本（长期）存到外面，要用再翻回来

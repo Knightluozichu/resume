@@ -40,7 +40,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
                 x={56 + i * frameW}
                 y="36"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {f === 0 ? "0ms" : `+${(f * 16.6).toFixed(0)}ms`}
@@ -66,7 +66,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               strokeWidth={1.5}
             />
           ))}
-          <text x="320" y="118" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="118" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             每渲染帧 1 次 · 间隔随 FPS 变化
           </text>
 
@@ -91,7 +91,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               />
             );
           })}
-          <text x="320" y="190" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="190" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             固定 0.02s（50Hz）· 与帧率解耦
           </text>
 
@@ -114,13 +114,13 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
                   stroke={active("physics") ? "var(--accent)" : "var(--border)"}
                   strokeWidth={1.5}
                 />
-                <text x={x + (frameW - 12) / 2} y="238" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+                <text x={x + (frameW - 12) / 2} y="238" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
                   sim
                 </text>
               </g>
             );
           })}
-          <text x="320" y="262" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="262" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             碰撞检测 + 求解 · 成本随刚体/接触对数上升
           </text>
 

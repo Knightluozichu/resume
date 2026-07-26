@@ -24,7 +24,7 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
 
   const renderBits = (bits: string[], startX: number, y: number, label: string, hlFrom?: number) => (
     <g>
-      <text x={startX} y={y - 8} fontSize="10" fill={secondary} fontFamily="monospace">
+      <text x={startX} y={y - 8} fontSize="11" fill={secondary} fontFamily="monospace">
         {label}
       </text>
       {bits.map((b, i) => {
@@ -81,7 +81,7 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
             <text x={44} y={86} fontSize="11" fill={primary} fontFamily="monospace">
               0000 0101 &lt;&lt; 2 → 0001 0100
             </text>
-            <text x={44} y={106} fontSize="10" fill={secondary}>
+            <text x={44} y={106} fontSize="11" fill={secondary}>
               位向左移动 n 位，右侧补 0；等价于无溢出时 × 2^n（5 &lt;&lt; 2 = 20）
             </text>
           </g>
@@ -101,7 +101,7 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
               ② 无符号右移 &gt;&gt; n
             </text>
             {renderBits(["0", "0", "1", "1", "0", "0", "0", "0"], 44, 178, "1011 0000 >> 2", 6)}
-            <text x={280} y={196} fontSize="10" fill={secondary}>
+            <text x={280} y={196} fontSize="11" fill={secondary}>
               左侧补 0；等价 ÷ 2^n（整除）
             </text>
           </g>
@@ -121,10 +121,10 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
               ③ 有符号右移 &gt;&gt; n（算术右移）
             </text>
             {renderBits(["1", "1", "0", "1", "0", "0", "0", "0"], 44, 262, "1101 0000 >> 2 (signed)", 6)}
-            <text x={280} y={280} fontSize="10" fill={warn}>
+            <text x={280} y={280} fontSize="11" fill={warn}>
               左侧补**符号位**（负数补 1）；C 对有符号 &gt;&gt; 实现定义，多数平台为算术右移
             </text>
-            <text x={44} y={298} fontSize="10" fill={secondary}>
+            <text x={44} y={298} fontSize="11" fill={secondary}>
               右移负数不等于数学除法——-1 {'>>'} 1 可能仍是 -1
             </text>
           </g>

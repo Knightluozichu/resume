@@ -226,7 +226,7 @@ export function DanglingRefDiagram() {
               x={FRAME_X + FRAME_W / 2}
               y={FRAME_Y + 46}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               函数一返回就整个销毁
@@ -273,7 +273,7 @@ export function DanglingRefDiagram() {
             x={LOCAL_X + LOCAL_W / 2}
             y={LOCAL_Y + 42}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             局部变量（砧板）
@@ -303,7 +303,7 @@ export function DanglingRefDiagram() {
               x={LOCAL_X + LOCAL_W / 2}
               y={LOCAL_Y + LOCAL_H + 16}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--danger)"
             >
@@ -360,7 +360,7 @@ export function DanglingRefDiagram() {
               x={CHILD_X + CHILD_W / 2}
               y={CHILD_Y + 46}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               detach 后独立跑
@@ -379,7 +379,7 @@ export function DanglingRefDiagram() {
               x={CHILD_X + CHILD_W / 2}
               y={CHILD_Y + 96}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               持有指向 local 的引用

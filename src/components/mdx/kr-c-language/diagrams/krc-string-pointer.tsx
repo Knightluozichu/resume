@@ -118,7 +118,7 @@ export function KrcStringPointerDiagram() {
                   x={x + CELL_W / 2}
                   y={174}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                   fontFamily="monospace"
                 >
@@ -168,7 +168,7 @@ export function KrcStringPointerDiagram() {
             x={455}
             y={176}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -269,7 +269,7 @@ export function KrcStringPointerDiagram() {
                   x={x + CELL_W / 2}
                   y={292}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                   fontFamily="monospace"
                 >
@@ -291,7 +291,7 @@ export function KrcStringPointerDiagram() {
                   x={x + CELL_W / 2}
                   y={338}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--success)"
                   fontFamily="monospace"
                 >

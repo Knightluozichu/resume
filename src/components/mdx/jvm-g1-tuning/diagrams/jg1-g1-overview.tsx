@@ -41,7 +41,7 @@ export function Jg1G1OverviewDiagram() {
             return (
               <g key={i}>
                 <rect x={x} y={y} width="76" height="36" rx="4" fill={colors[t]} fillOpacity="0.15" stroke={colors[t]} strokeWidth="1" />
-                <text x={x + 38} y={y + 22} textAnchor="middle" fontSize="10" fontWeight="600" fill={colors[t]}>{labels[t]}</text>
+                <text x={x + 38} y={y + 22} textAnchor="middle" fontSize="11" fontWeight="600" fill={colors[t]}>{labels[t]}</text>
               </g>
             );
           })}
@@ -64,17 +64,17 @@ export function Jg1G1OverviewDiagram() {
           {/* 白色对象 */}
           <circle cx="100" cy="260" r="22" fill="var(--bg-elevated)" stroke="var(--text-tertiary)" strokeWidth="2" />
           <text x="100" y="264" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">白</text>
-          <text x="100" y="296" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">未访问</text>
+          <text x="100" y="296" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">未访问</text>
 
           {/* 灰色对象 */}
           <circle cx="280" cy="260" r="22" fill="var(--warning)" fillOpacity="0.3" stroke="var(--warning)" strokeWidth="2" />
           <text x="280" y="264" textAnchor="middle" fontSize="11" fill="var(--warning)">灰</text>
-          <text x="280" y="296" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">已访问/引用未完</text>
+          <text x="280" y="296" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">已访问/引用未完</text>
 
           {/* 黑色对象 */}
           <circle cx="460" cy="260" r="22" fill="var(--success)" fillOpacity="0.3" stroke="var(--success)" strokeWidth="2" />
           <text x="460" y="264" textAnchor="middle" fontSize="11" fill="var(--success)">黑</text>
-          <text x="460" y="296" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">已访问/引用已完</text>
+          <text x="460" y="296" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">已访问/引用已完</text>
 
           {/* 箭头 */}
           <line x1="124" y1="260" x2="256" y2="260" stroke="var(--text-tertiary)" strokeWidth="1.5" markerEnd="url(#arr1)" />

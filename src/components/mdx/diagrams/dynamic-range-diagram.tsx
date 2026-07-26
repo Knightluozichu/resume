@@ -104,7 +104,7 @@ export function DynamicRangeDiagram() {
             x={oneX}
             y={LDR_Y - 18}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             强度=1（普通帧缓冲上限）
@@ -115,7 +115,7 @@ export function DynamicRangeDiagram() {
             x={X0}
             y={LDR_Y - 6}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--danger)"
           >
             普通帧缓冲（RGBA8，每通道只存 0~1）
@@ -144,7 +144,7 @@ export function DynamicRangeDiagram() {
             x={(oneX + X0 + BAR_W) / 2}
             y={LDR_Y + BAR_H + 13}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             &gt;1 全压成纯白·层次丢失
@@ -155,7 +155,7 @@ export function DynamicRangeDiagram() {
             x={X0}
             y={HDR_Y - 6}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             HDR 浮点帧缓冲（RGBA16F，能存 &gt;1）
@@ -174,7 +174,7 @@ export function DynamicRangeDiagram() {
             x={(oneX + X0 + BAR_W) / 2}
             y={HDR_Y + BAR_H + 13}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             &gt;1 完整存下·高光仍有层次
@@ -185,7 +185,7 @@ export function DynamicRangeDiagram() {
             x={X0}
             y={HDR_Y + BAR_H + 28}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0 暗
@@ -194,7 +194,7 @@ export function DynamicRangeDiagram() {
             x={X0 + BAR_W}
             y={HDR_Y + BAR_H + 28}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             6 极亮的窗 →

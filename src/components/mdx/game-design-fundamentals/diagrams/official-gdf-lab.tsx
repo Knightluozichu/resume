@@ -28,8 +28,13 @@ const evidenceModes = {
 
 export function GdfPlayerContractLab({ title, focus, stages }: LabProps) {
   const [selected, setSelected] = useState(0);
+  function resetExperiment() {
+    setSelected(0);
+  }
+
   return (
     <section className="my-6 overflow-hidden rounded-md border border-emerald-300 bg-white dark:border-emerald-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
         <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
           {title}
@@ -69,6 +74,12 @@ export function GdfPrototypeExperimentLab({ title, focus }: LabProps) {
   const [choices, setChoices] = useState(3);
   const [challenge, setChallenge] = useState(100);
   const [latency, setLatency] = useState(120);
+  function resetExperiment() {
+    setChoices(3);
+    setChallenge(100);
+    setLatency(120);
+  }
+
   const metrics = useMemo(() => {
     const readability = Math.max(0, 1 - Math.max(0, choices - 4) * 0.12);
     const match = Math.max(0, 1 - Math.abs(challenge - 100) / 90);
@@ -82,6 +93,7 @@ export function GdfPrototypeExperimentLab({ title, focus }: LabProps) {
   }, [choices, challenge, latency]);
   return (
     <section className="my-6 overflow-hidden rounded-md border border-amber-300 bg-white dark:border-amber-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
         <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
           {title}
@@ -155,9 +167,14 @@ export function GdfPrototypeExperimentLab({ title, focus }: LabProps) {
 
 export function GdfPlaytestEvidenceLab({ title, focus }: LabProps) {
   const [mode, setMode] = useState<keyof typeof evidenceModes>("normal");
+  function resetExperiment() {
+    setMode("normal");
+  }
+
   const current = evidenceModes[mode];
   return (
     <section className="my-6 overflow-hidden rounded-md border border-sky-300 bg-white dark:border-sky-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/30">
         <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
           {title}

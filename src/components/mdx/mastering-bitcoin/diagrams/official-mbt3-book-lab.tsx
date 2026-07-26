@@ -19,6 +19,13 @@ export function OfficialMbt3BookLab({ title, concepts, accent, view }: Props) {
   const [inputs, setInputs] = useState(2);
   const [feeRate, setFeeRate] = useState(8);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setInputs(2);
+    setFeeRate(8);
+    setFault(false);
+  }
+
   const virtualBytes = 68 * inputs + 2 * 31 + 11;
   const fee = virtualBytes * feeRate;
   const confirmations = Math.max(0, Math.min(6, stage + 1 - (fault ? 2 : 0)));
@@ -44,6 +51,7 @@ export function OfficialMbt3BookLab({ title, concepts, accent, view }: Props) {
         color: "#18181b",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",
@@ -164,7 +172,7 @@ export function OfficialMbt3BookLab({ title, concepts, accent, view }: Props) {
                       y={index % 2 === 0 ? 88 : 174}
                       textAnchor="middle"
                       fill="#3f3f46"
-                      fontSize="10"
+                      fontSize="11"
                     >
                       {label.slice(0, 8)}
                     </text>

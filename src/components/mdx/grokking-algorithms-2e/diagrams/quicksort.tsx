@@ -152,7 +152,7 @@ export function DivideConquerFarmDiagram() {
             </marker>
           </defs>
           <text x="380" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>分而治之：把土地切成最大的同尺寸正方形</text>
-          <text x="380" y="51" textAnchor="middle" fontSize="10.5" fill={secondary}>每次保留更小的余下矩形；当一边能整除另一边时，问题达到基线条件</text>
+          <text x="380" y="51" textAnchor="middle" fontSize="11" fill={secondary}>每次保留更小的余下矩形；当一边能整除另一边时，问题达到基线条件</text>
           {stages.slice(0, -1).map((stage, index) => (
             <line
               key={stage.label}
@@ -171,13 +171,13 @@ export function DivideConquerFarmDiagram() {
               <rect x={stage.x + 12} y="106" width="52" height="52" fill={index === stages.length - 1 ? success : accent} fillOpacity="0.15" stroke={index === stages.length - 1 ? success : accent} />
               <rect x={stage.x + 64} y="106" width="64" height="52" fill={warning} fillOpacity="0.1" stroke={warning} strokeDasharray="4 3" />
               <text x={stage.x + 73} y="181" textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>{stage.label}</text>
-              <text x={stage.x + 73} y="221" textAnchor="middle" fontSize="9.5" fill={secondary}>{stage.squares}</text>
-              <text x={stage.x + 73} y="239" textAnchor="middle" fontSize="9.5" fill={index === stages.length - 1 ? success : accent}>{stage.remainder}</text>
+              <text x={stage.x + 73} y="221" textAnchor="middle" fontSize="11" fill={secondary}>{stage.squares}</text>
+              <text x={stage.x + 73} y="239" textAnchor="middle" fontSize="11" fill={index === stages.length - 1 ? success : accent}>{stage.remainder}</text>
             </g>
           ))}
           <rect x="110" y="275" width="540" height="44" rx="4" fill={success} fillOpacity="0.06" stroke={success} strokeOpacity="0.55" />
-          <text x="380" y="294" textAnchor="middle" fontSize="10.5" fontWeight="700" fill={primary}>求最大方格边长等价于反复求余：gcd(1680, 640)=80</text>
-          <text x="380" y="311" textAnchor="middle" fontSize="9.5" fill={secondary}>关键不是记住数字，而是识别“余下矩形仍是同一种更小问题”。</text>
+          <text x="380" y="294" textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>求最大方格边长等价于反复求余：gcd(1680, 640)=80</text>
+          <text x="380" y="311" textAnchor="middle" fontSize="11" fill={secondary}>关键不是记住数字，而是识别“余下矩形仍是同一种更小问题”。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

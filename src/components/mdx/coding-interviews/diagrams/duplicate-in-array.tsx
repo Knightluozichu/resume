@@ -66,20 +66,20 @@ export function PlacementInvariantDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 360" role="img" aria-label="值m应放在下标m的槽位；若目标槽已是m，则发现重复，否则交换让至少一个数字归位。" className="mx-auto block h-auto w-full max-w-[780px]">
           <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">值域0..n-1把每个数字映射到唯一目标槽</text>
-          <text x="84" y="74" fontSize="10" fill="var(--text-secondary)">下标</text>
+          <text x="84" y="74" fontSize="11" fill="var(--text-secondary)">下标</text>
           {[0, 1, 2, 3, 4, 5, 6].map((value, index) => {
             const x = 122 + index * 82;
-            return <g key={value}><text x={x + 30} y="74" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{value}</text><rect x={x} y="88" width="60" height="52" fill="var(--bg)" stroke="var(--border)" /><text x={x + 30} y="120" textAnchor="middle" fontSize="14" fontWeight="700" fill={index === 0 || index === 2 ? "var(--warning)" : "var(--text-primary)"}>{[2,3,1,0,2,5,3][index]}</text></g>;
+            return <g key={value}><text x={x + 30} y="74" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{value}</text><rect x={x} y="88" width="60" height="52" fill="var(--bg)" stroke="var(--border)" /><text x={x + 30} y="120" textAnchor="middle" fontSize="14" fontWeight="700" fill={index === 0 || index === 2 ? "var(--warning)" : "var(--text-primary)"}>{[2,3,1,0,2,5,3][index]}</text></g>;
           })}
           <path d="M152 148 C152 206 316 206 316 148" fill="none" stroke="var(--warning)" strokeWidth="3" />
           <path d="M316 148 l-7 10 h14 z" fill="var(--warning)" />
           <text x="234" y="224" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">numbers[0]=2，应去下标2</text>
           <rect x="80" y="256" width="280" height="64" rx="5" fill="var(--success)" fillOpacity="0.07" stroke="var(--success)" />
-          <text x="220" y="281" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">目标槽不是2：交换</text>
-          <text x="220" y="304" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">交换后数字2永久归位，推进终止度量</text>
+          <text x="220" y="281" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">目标槽不是2：交换</text>
+          <text x="220" y="304" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">交换后数字2永久归位，推进终止度量</text>
           <rect x="420" y="256" width="280" height="64" rx="5" fill="var(--danger)" fillOpacity="0.07" stroke="var(--danger)" />
-          <text x="560" y="281" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--danger)">目标槽已经是2：重复</text>
-          <text x="560" y="304" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">两个位置都想占用下标2，对应同一数字</text>
+          <text x="560" y="281" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--danger)">目标槽已经是2：重复</text>
+          <text x="560" y="304" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">两个位置都想占用下标2，对应同一数字</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">交换不是排序全数组，只负责让当前数字回到由它的值指定的槽位。</figcaption>

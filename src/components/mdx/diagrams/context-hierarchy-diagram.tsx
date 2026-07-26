@@ -113,7 +113,7 @@ export function ContextHierarchyDiagram() {
           <text
             x={TREE_X0}
             y="48"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ContextWrapper 持 mBase 指向 ContextImpl（真正实现），调用全转发——装饰器模式
@@ -206,7 +206,7 @@ export function ContextHierarchyDiagram() {
                     <text
                       x={NOTE_X}
                       y={y + 3.5}
-                      fontSize="9.5"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       {n.note}
@@ -243,7 +243,7 @@ export function ContextHierarchyDiagram() {
           <text
             x={IMPL_X + 14}
             y={IMPL_TOP + 37}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             唯一真正实现 Context 所有方法的类；ContextWrapper.mBase 即指向它
@@ -263,7 +263,7 @@ export function ContextHierarchyDiagram() {
           <text
             x={PANEL_X}
             y={PANEL_TOP}
-            fontSize="10"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -290,7 +290,7 @@ export function ContextHierarchyDiagram() {
                   x={PANEL_X + COUNT_BOX_W / 2}
                   y={y + 18}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fontFamily="var(--font-mono)"
                   fill={c.color}
@@ -301,7 +301,7 @@ export function ContextHierarchyDiagram() {
                   x={PANEL_X + COUNT_BOX_W / 2}
                   y={y + 33}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.sub}
@@ -310,7 +310,7 @@ export function ContextHierarchyDiagram() {
                 <text
                   x={PANEL_X + COUNT_BOX_W + 12}
                   y={y + COUNT_BOX_H / 2 + 3.5}
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {i === 0
@@ -350,7 +350,7 @@ export function ContextHierarchyDiagram() {
                 <text
                   x={PANEL_X + 16}
                   y={warnTop + 20}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--danger)"
                 >
@@ -366,7 +366,7 @@ export function ContextHierarchyDiagram() {
                     key={line}
                     x={PANEL_X + 16}
                     y={warnTop + 38 + j * 14}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {line}

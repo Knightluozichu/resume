@@ -53,7 +53,7 @@ export function GCAllocColorDiagram() {
           <text
             x="520"
             y={baseY + 4}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             t
@@ -76,7 +76,7 @@ export function GCAllocColorDiagram() {
                   x={spike.x}
                   y={baseY - spike.h - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="500"
                   fill={spike.color}
                 >
@@ -111,7 +111,7 @@ export function GCAllocColorDiagram() {
             x="350"
             y="171"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -120,15 +120,15 @@ export function GCAllocColorDiagram() {
 
           {/* Legend */}
           <rect x="80" y="178" width="10" height="10" rx="2" fill="var(--danger)" opacity="0.8" />
-          <text x="94" y="188" fontSize="10" fill="var(--text-secondary)">
+          <text x="94" y="188" fontSize="11" fill="var(--text-secondary)">
             GC.Collect（卡顿尖峰）
           </text>
           <rect x="240" y="178" width="10" height="10" rx="2" fill="var(--warning)" opacity="0.8" />
-          <text x="254" y="188" fontSize="10" fill="var(--text-secondary)">
+          <text x="254" y="188" fontSize="11" fill="var(--text-secondary)">
             分配突发
           </text>
           <rect x="380" y="178" width="10" height="10" rx="2" fill="var(--success)" opacity="0.6" />
-          <text x="394" y="188" fontSize="10" fill="var(--text-secondary)">
+          <text x="394" y="188" fontSize="11" fill="var(--text-secondary)">
             0 Alloc = gold standard
           </text>
         </svg>

@@ -79,7 +79,7 @@ export function ProfilingToolsDiagram() {
                 x={t.x + 100}
                 y="124"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--accent)"
               >
                 Window → Analysis

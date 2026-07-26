@@ -63,7 +63,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
                 x={200 + (s - 1) * 160}
                 y={71}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="700"
                 fill={step >= s ? accent : secondary}
               >
@@ -140,7 +140,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={84}
                 y={184}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -149,19 +149,19 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={84}
                 y={200}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
                 double price (data)
               </text>
-              <text x={84} y={214} fontSize="9" fill={secondary}>
+              <text x={84} y={214} fontSize="11" fill={secondary}>
                 Non-virtual: not in vtable
               </text>
               <text
                 x={180}
                 y={302}
-                fontSize="9"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -223,7 +223,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={394}
                 y={184}
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -232,7 +232,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={394}
                 y={200}
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -249,7 +249,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={394}
                 y={222}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -258,17 +258,17 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={394}
                 y={238}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
                 double discount(derived new)
               </text>
 
-              <text x={50} y={340} fontSize="9" fill={secondary}>
+              <text x={50} y={340} fontSize="11" fill={secondary}>
                 Key: each object&apos;s vptr points to a different vtable
               </text>
-              <text x={50} y={356} fontSize="9" fill={secondary}>
+              <text x={50} y={356} fontSize="11" fill={secondary}>
                 vptr is set during construction - layer by layer
               </text>
             </>
@@ -311,7 +311,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={130}
                 y={149}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={accent}
                 textAnchor="middle"
@@ -322,7 +322,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={130}
                 y={180}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -362,7 +362,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={370}
                 y={149}
-                fontSize="10"
+                fontSize="11"
                 fill={good}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -372,7 +372,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={370}
                 y={172}
-                fontSize="8"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -420,7 +420,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={130}
                 y={309}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={accent}
                 textAnchor="middle"
@@ -431,7 +431,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={130}
                 y={340}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -471,7 +471,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={370}
                 y={309}
-                fontSize="10"
+                fontSize="11"
                 fill={good}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -481,7 +481,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={370}
                 y={332}
-                fontSize="8"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -495,22 +495,22 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
                 markerEnd="url(#vtArrow)"
               />
 
-              <text x={560} y={156} fontSize="10" fill={secondary}>
+              <text x={560} y={156} fontSize="11" fill={secondary}>
                 Base vtable slot 0
               </text>
-              <text x={560} y={172} fontSize="10" fill={secondary}>
+              <text x={560} y={172} fontSize="11" fill={secondary}>
                 → Quote::net_price
               </text>
-              <text x={560} y={316} fontSize="10" fill={secondary}>
+              <text x={560} y={316} fontSize="11" fill={secondary}>
                 Derived vtable slot 0
               </text>
-              <text x={560} y={332} fontSize="10" fill={secondary}>
+              <text x={560} y={332} fontSize="11" fill={secondary}>
                 → Bulk_quote::net_price
               </text>
-              <text x={560} y={356} fontSize="9" fill={accent}>
+              <text x={560} y={356} fontSize="11" fill={accent}>
                 Same slot, diff addr
               </text>
-              <text x={560} y={372} fontSize="9" fill={accent}>
+              <text x={560} y={372} fontSize="11" fill={accent}>
                 → this is dynamic dispatch
               </text>
             </>
@@ -603,7 +603,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={200}
                 y={235}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={accent}
                 textAnchor="middle"
@@ -633,7 +633,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={344}
                 y={235}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={accent}
                 textAnchor="middle"
@@ -663,7 +663,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={508}
                 y={235}
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill={good}
                 textAnchor="middle"
@@ -674,7 +674,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={360}
                 y={290}
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -684,7 +684,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={360}
                 y={308}
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 textAnchor="middle"
               >
@@ -714,7 +714,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
               <text
                 x={360}
                 y={366}
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 textAnchor="middle"
                 fontFamily="monospace"

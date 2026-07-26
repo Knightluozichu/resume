@@ -15,8 +15,8 @@ export function TileBasedGpuDiagram() {
         >
           {/* Screen → Tiles */}
           <rect x="20" y="20" width="140" height="100" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="2" />
-          <text x="90" y="44" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">屏幕</text>
-          <text x="90" y="60" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">1920×1080</text>
+          <text x="90" y="44" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">屏幕</text>
+          <text x="90" y="60" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">1920×1080</text>
 
           {/* Grid lines */}
           {[0, 1, 2, 3].map((r) =>
@@ -30,34 +30,34 @@ export function TileBasedGpuDiagram() {
 
           {/* One Tile extracted */}
           <rect x="190" y="30" width="80" height="80" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
-          <text x="230" y="50" textAnchor="middle" fontSize="9" fill="var(--accent)">一个 Tile</text>
-          <text x="230" y="66" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">16×16 像素</text>
-          <text x="230" y="82" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">→ 加载到 SRAM</text>
+          <text x="230" y="50" textAnchor="middle" fontSize="11" fill="var(--accent)">一个 Tile</text>
+          <text x="230" y="66" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">16×16 像素</text>
+          <text x="230" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">→ 加载到 SRAM</text>
 
           {/* Arrow down */}
           <text x="230" y="120" textAnchor="middle" fontSize="14" fill="var(--accent)">↓</text>
 
           {/* GPU Tile Memory (SRAM) */}
           <rect x="170" y="130" width="120" height="70" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
-          <text x="230" y="152" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">Tile Memory (SRAM)</text>
-          <text x="230" y="168" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">超快片上缓存</text>
-          <text x="230" y="184" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Vertex → Fragment → Blend</text>
+          <text x="230" y="152" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Tile Memory (SRAM)</text>
+          <text x="230" y="168" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">超快片上缓存</text>
+          <text x="230" y="184" textAnchor="middle" fontSize="11" fill="var(--text-primary)">Vertex → Fragment → Blend</text>
 
           {/* Arrow to DRAM */}
           <text x="370" y="168" fontSize="14" fill="var(--accent)">→</text>
 
           {/* DRAM */}
           <rect x="390" y="130" width="150" height="70" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.5" />
-          <text x="465" y="152" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-secondary)">主显存 (DRAM)</text>
-          <text x="465" y="168" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">完成后的 Tile</text>
-          <text x="465" y="184" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">一次性写回</text>
+          <text x="465" y="152" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-secondary)">主显存 (DRAM)</text>
+          <text x="465" y="168" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">完成后的 Tile</text>
+          <text x="465" y="184" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">一次性写回</text>
 
           {/* Bottom cost annotation */}
           <rect x="20" y="220" width="520" height="90" rx="6" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1" />
           <text x="36" y="244" fontSize="11" fontWeight="600" fill="var(--danger)">每 Tile 的 Load/Store 开销</text>
-          <text x="36" y="264" fontSize="10" fill="var(--text-secondary)">Load：把像素数据从 DRAM 加载到 Tile Memory（按需操作）</text>
-          <text x="36" y="280" fontSize="10" fill="var(--text-secondary)">Store：渲染完成后从 Tile Memory 写回 DRAM（逐 Tile 执行）</text>
-          <text x="36" y="296" fontSize="10" fill="var(--text-secondary)">
+          <text x="36" y="264" fontSize="11" fill="var(--text-secondary)">Load：把像素数据从 DRAM 加载到 Tile Memory（按需操作）</text>
+          <text x="36" y="280" fontSize="11" fill="var(--text-secondary)">Store：渲染完成后从 Tile Memory 写回 DRAM（逐 Tile 执行）</text>
+          <text x="36" y="296" fontSize="11" fill="var(--text-secondary)">
             频繁切换 Render Target = 额外 Load/Store × N — 移动端渲染优化核心：减少 RT 切换次数
           </text>
         </svg>

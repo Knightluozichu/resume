@@ -162,7 +162,7 @@ export function ToolDefAnatomyDiagram() {
                   x={PART_X + PART_W - 20}
                   y={y + 54}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {GROUP_LABEL[p.group]}

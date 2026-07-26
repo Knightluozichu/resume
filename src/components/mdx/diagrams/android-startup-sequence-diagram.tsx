@@ -117,7 +117,7 @@ export function AndroidStartupSequenceDiagram() {
               <text
                 x={arrowX + 38}
                 y={step.y + 32}
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {step.sub}

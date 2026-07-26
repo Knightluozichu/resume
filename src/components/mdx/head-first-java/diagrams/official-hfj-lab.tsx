@@ -12,8 +12,13 @@ const evidenceModes = {
 
 export function HfjReferenceMapLab({ title, focus, stages }: LabProps) {
   const [selected, setSelected] = useState(0);
+  function resetExperiment() {
+    setSelected(0);
+  }
+
   return (
     <section className="my-6 overflow-hidden rounded-md border border-emerald-300 bg-white dark:border-emerald-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
         <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">{title}</p>
         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">当前合同：{focus}</p>
@@ -39,6 +44,12 @@ export function HfjExecutionExperimentLab({ title, focus }: LabProps) {
   const [objects, setObjects] = useState(4);
   const [operations, setOperations] = useState(12);
   const [workers, setWorkers] = useState(1);
+  function resetExperiment() {
+    setObjects(4);
+    setOperations(12);
+    setWorkers(1);
+  }
+
   const metrics = useMemo(() => {
     const work = objects * operations;
     const ideal = work / workers;
@@ -47,6 +58,7 @@ export function HfjExecutionExperimentLab({ title, focus }: LabProps) {
   }, [objects, operations, workers]);
   return (
     <section className="my-6 overflow-hidden rounded-md border border-amber-300 bg-white dark:border-amber-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30"><p className="text-sm font-semibold text-amber-950 dark:text-amber-100">{title}</p><p className="mt-1 text-xs text-amber-800 dark:text-amber-300">实验工件：{focus}</p></header>
       <div className="grid gap-5 p-4 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-4">
@@ -64,9 +76,14 @@ export function HfjExecutionExperimentLab({ title, focus }: LabProps) {
 
 export function HfjEvidenceLab({ title, focus }: LabProps) {
   const [mode, setMode] = useState<keyof typeof evidenceModes>("normal");
+  function resetExperiment() {
+    setMode("normal");
+  }
+
   const current = evidenceModes[mode];
   return (
     <section className="my-6 overflow-hidden rounded-md border border-sky-300 bg-white dark:border-sky-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/30"><p className="text-sm font-semibold text-sky-950 dark:text-sky-100">{title}</p><p className="mt-1 text-xs text-sky-800 dark:text-sky-300">反例焦点：{focus}</p></header>
       <div className="grid grid-cols-3 border-b border-zinc-200 dark:border-zinc-800">
         {(Object.keys(evidenceModes) as Array<keyof typeof evidenceModes>).map((key) => <button key={key} type="button" aria-pressed={mode === key} onClick={() => setMode(key)} className={"min-h-11 border-r border-zinc-200 px-2 text-sm last:border-r-0 dark:border-zinc-800 " + (mode === key ? "bg-sky-100 font-semibold text-sky-950 dark:bg-sky-950 dark:text-sky-100" : "bg-white text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300")}>{evidenceModes[key].label}</button>)}

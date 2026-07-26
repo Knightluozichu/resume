@@ -126,7 +126,7 @@ export function PbtCameraModelDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -136,7 +136,7 @@ export function PbtCameraModelDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.result}
@@ -387,7 +387,7 @@ export function PbtCameraSpacesDiagram() {
                   x="117"
                   y="280"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {model.note}
@@ -532,7 +532,7 @@ export function PbtDepthOfFieldDiagram() {
               x="56"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               Film
@@ -541,7 +541,7 @@ export function PbtDepthOfFieldDiagram() {
               x="176"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               pinhole
@@ -550,7 +550,7 @@ export function PbtDepthOfFieldDiagram() {
               x="286"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               所有深度只有一条路径
@@ -682,7 +682,7 @@ export function PbtDepthOfFieldDiagram() {
               x="56"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={warning}
             >
               焦外散布圆
@@ -691,7 +691,7 @@ export function PbtDepthOfFieldDiagram() {
               x="176"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               lens aperture
@@ -700,7 +700,7 @@ export function PbtDepthOfFieldDiagram() {
               x="274"
               y="225"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               焦平面
@@ -821,7 +821,7 @@ export function PbtFilmPipelineDiagram() {
                   x={x + 87}
                   y="154"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={primary}
                 >
                   {stage.detail}
@@ -871,7 +871,7 @@ export function PbtFilmPipelineDiagram() {
             x="400"
             y="263"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             `AddSample` 与 `AddSplat` 的并发和归一化语义不同

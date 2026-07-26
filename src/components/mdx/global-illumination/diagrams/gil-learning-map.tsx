@@ -38,7 +38,7 @@ export function GilLearningMapDiagram() {
               <strong className="text-sm text-primary">{column.title}</strong>
             </div>
             <div className="grid gap-2">
-              {column.rows.map((row) => <div key={row} className="min-h-9 border-l-2 border-border bg-elevated px-3 py-2 text-xs text-secondary">{row}</div>)}
+              {column.rows.map((row) => <div key={row} className="min-h-11 border-l-2 border-border bg-elevated px-3 py-2 text-xs text-secondary">{row}</div>)}
             </div>
           </section>
         ))}

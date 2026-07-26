@@ -47,13 +47,13 @@ export function RplPackageTopologyLab() {
           <section className="border border-border bg-bg p-4" aria-live="polite">
             <span className="text-xs text-secondary">rustc 编译起点</span>
             <div className="mt-3 space-y-2">
-              {selected.roots.map((root) => <code key={root} className="block min-h-10 break-words border border-border px-3 py-2 text-xs text-primary">{root}</code>)}
+              {selected.roots.map((root) => <code key={root} className="block min-h-11 break-words border border-border px-3 py-2 text-xs text-primary">{root}</code>)}
             </div>
           </section>
           <section className="border border-emerald-500/40 bg-emerald-500/10 p-4">
             <span className="text-xs text-secondary">独立 crate 产物</span>
             <div className="mt-3 space-y-2">
-              {selected.artifacts.map((artifact) => <div key={artifact} className="min-h-10 border border-border bg-bg px-3 py-2 text-xs text-primary">{artifact}</div>)}
+              {selected.artifacts.map((artifact) => <div key={artifact} className="min-h-11 border border-border bg-bg px-3 py-2 text-xs text-primary">{artifact}</div>)}
             </div>
           </section>
         </div>
@@ -151,7 +151,7 @@ export function RplPathSurfaceLab() {
           <section className="border border-border bg-bg p-4">
             <span className="text-xs text-secondary">解析与文件映射</span>
             <div className="mt-3 space-y-2">
-              {selected.files.map((line) => <code key={line} className="block min-h-10 break-words border border-border px-3 py-2 text-xs text-primary">{line}</code>)}
+              {selected.files.map((line) => <code key={line} className="block min-h-11 break-words border border-border px-3 py-2 text-xs text-primary">{line}</code>)}
             </div>
             <p className="mt-5 border-t border-border pt-4 text-sm text-secondary">{selected.scope}</p>
           </section>

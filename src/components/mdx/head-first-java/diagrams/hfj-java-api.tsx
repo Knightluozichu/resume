@@ -49,37 +49,37 @@ export function HfjJavaApiDiagram() {
           >
             ArrayList&lt;E&gt;——有序可重复列表
           </text>
-          <text x="45" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="90" fontSize="11" fill="var(--text-secondary)">
             ArrayList&lt;String&gt; list = new ArrayList&lt;&gt;();
           </text>
-          <text x="45" y="110" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="110" fontSize="11" fill="var(--text-secondary)">
             list.add(&quot;Java&quot;); // [Java]
           </text>
-          <text x="45" y="126" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="126" fontSize="11" fill="var(--text-secondary)">
             list.add(&quot;Python&quot;); // [Java, Python]
           </text>
-          <text x="45" y="142" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="142" fontSize="11" fill="var(--text-secondary)">
             list.add(0, &quot;C++&quot;); // [C++, Java, Python]
           </text>
-          <text x="45" y="158" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="158" fontSize="11" fill="var(--text-secondary)">
             list.get(1); // &rarr; &quot;Java&quot;
           </text>
-          <text x="45" y="174" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="174" fontSize="11" fill="var(--text-secondary)">
             list.size(); // &rarr; 3
           </text>
-          <text x="45" y="190" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="190" fontSize="11" fill="var(--text-secondary)">
             list.remove(&quot;C++&quot;); // [Java, Python]
           </text>
-          <text x="45" y="206" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="206" fontSize="11" fill="var(--text-secondary)">
             list.contains(&quot;Java&quot;); // &rarr; true
           </text>
-          <text x="45" y="226" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="226" fontSize="11" fill="var(--text-secondary)">
             底层: 动态数组, 查询快 O(1)
           </text>
-          <text x="45" y="242" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="242" fontSize="11" fill="var(--text-secondary)">
             中间插入/删除慢 O(n)
           </text>
-          <text x="45" y="258" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="258" fontSize="11" fill="var(--text-secondary)">
             自动扩容: 容量不足时增长 1.5 倍
           </text>
 
@@ -105,38 +105,38 @@ export function HfjJavaApiDiagram() {
           >
             HashMap&lt;K,V&gt;——键值映射
           </text>
-          <text x="395" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="90" fontSize="11" fill="var(--text-secondary)">
             HashMap&lt;String,Integer&gt; map = new HashMap&lt;&gt;();
           </text>
-          <text x="395" y="110" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="110" fontSize="11" fill="var(--text-secondary)">
             map.put(&quot;Java&quot;, 1995); // &#123;Java=1995&#125;
           </text>
-          <text x="395" y="126" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="126" fontSize="11" fill="var(--text-secondary)">
             map.put(&quot;Python&quot;, 1991); // &#123;Java=1995,
             Python=1991&#125;
           </text>
-          <text x="395" y="142" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="142" fontSize="11" fill="var(--text-secondary)">
             map.get(&quot;Java&quot;); // &rarr; 1995
           </text>
-          <text x="395" y="158" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="158" fontSize="11" fill="var(--text-secondary)">
             map.containsKey(&quot;Java&quot;); // &rarr; true
           </text>
-          <text x="395" y="174" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="174" fontSize="11" fill="var(--text-secondary)">
             map.size(); // &rarr; 2
           </text>
-          <text x="395" y="190" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="190" fontSize="11" fill="var(--text-secondary)">
             map.remove(&quot;Python&quot;); // &#123;Java=1995&#125;
           </text>
-          <text x="395" y="206" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="206" fontSize="11" fill="var(--text-secondary)">
             map.put(&quot;Java&quot;, 1996); // 覆盖旧值
           </text>
-          <text x="395" y="226" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="226" fontSize="11" fill="var(--text-secondary)">
             底层: 哈希表 + 链表/红黑树
           </text>
-          <text x="395" y="242" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="242" fontSize="11" fill="var(--text-secondary)">
             增删查快 O(1), 键唯一无序
           </text>
-          <text x="395" y="258" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="258" fontSize="11" fill="var(--text-secondary)">
             键可为 null, 一个 Entry 最多一个
           </text>
 
@@ -177,7 +177,7 @@ export function HfjJavaApiDiagram() {
             x="370"
             y="346"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             可迭代接口
@@ -227,7 +227,7 @@ export function HfjJavaApiDiagram() {
             x="200"
             y="416"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             List / Set / Queue 的父接口
@@ -258,7 +258,7 @@ export function HfjJavaApiDiagram() {
             x="540"
             y="416"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             独立体系, 不是 Collection
@@ -307,7 +307,7 @@ export function HfjJavaApiDiagram() {
             x="125"
             y="468"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -317,7 +317,7 @@ export function HfjJavaApiDiagram() {
             x="125"
             y="481"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ArrayList, LinkedList
@@ -338,7 +338,7 @@ export function HfjJavaApiDiagram() {
             x="275"
             y="468"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -348,7 +348,7 @@ export function HfjJavaApiDiagram() {
             x="275"
             y="481"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HashSet, TreeSet
@@ -369,7 +369,7 @@ export function HfjJavaApiDiagram() {
             x="540"
             y="468"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -379,7 +379,7 @@ export function HfjJavaApiDiagram() {
             x="540"
             y="481"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HashMap, TreeMap

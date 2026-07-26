@@ -89,7 +89,7 @@ export function BcgFunctionMechanismDiagram() {
                     <line x1={cx} y1={COL_TOP + 78} x2={cx} y2={COL_TOP + 96} stroke="var(--success)" strokeWidth="1.6" markerEnd="url(#bcg-fn-arrow)" />
                     <rect x={x + 24} y={COL_TOP + 98} width={108} height="24" rx="5" fill="var(--bg-elevated)" stroke="var(--success)" strokeWidth="1" />
                     <text x={cx} y={COL_TOP + 114} textAnchor="middle" fontSize="11" fill="var(--text-primary)">函数收到副本</text>
-                    <text x={cx} y={COL_TOP + 138} textAnchor="middle" fontSize="10" fill="var(--success)">原值不变</text>
+                    <text x={cx} y={COL_TOP + 138} textAnchor="middle" fontSize="11" fill="var(--success)">原值不变</text>
                   </>
                 )}
                 {m.flow === "alias" && (
@@ -97,25 +97,25 @@ export function BcgFunctionMechanismDiagram() {
                     <line x1={cx} y1={COL_TOP + 78} x2={cx} y2={COL_TOP + 96} stroke="var(--accent)" strokeWidth="1.6" markerEnd="url(#bcg-fn-arrow)" />
                     <rect x={x + 24} y={COL_TOP + 98} width={108} height="24" rx="5" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1" />
                     <text x={cx} y={COL_TOP + 114} textAnchor="middle" fontSize="11" fill="var(--text-primary)">同一份变量</text>
-                    <text x={cx} y={COL_TOP + 138} textAnchor="middle" fontSize="10" fill="var(--accent)">改它 = 改原值</text>
+                    <text x={cx} y={COL_TOP + 138} textAnchor="middle" fontSize="11" fill="var(--accent)">改它 = 改原值</text>
                   </>
                 )}
                 {m.flow === "default" && (
                   <>
                     <text x={cx} y={COL_TOP + 96} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">传参？</text>
                     <line x1={cx - 28} y1={COL_TOP + 104} x2={cx - 28} y2={COL_TOP + 120} stroke="var(--success)" strokeWidth="1.4" markerEnd="url(#bcg-fn-arrow)" />
-                    <text x={cx - 28} y={COL_TOP + 134} textAnchor="middle" fontSize="10" fill="var(--success)">用实参</text>
+                    <text x={cx - 28} y={COL_TOP + 134} textAnchor="middle" fontSize="11" fill="var(--success)">用实参</text>
                     <line x1={cx + 28} y1={COL_TOP + 104} x2={cx + 28} y2={COL_TOP + 120} stroke="var(--warning)" strokeWidth="1.4" markerEnd="url(#bcg-fn-arrow)" />
-                    <text x={cx + 28} y={COL_TOP + 134} textAnchor="middle" fontSize="10" fill="var(--warning)">用默认</text>
+                    <text x={cx + 28} y={COL_TOP + 134} textAnchor="middle" fontSize="11" fill="var(--warning)">用默认</text>
                   </>
                 )}
                 {m.flow === "overload" && (
                   <>
                     <rect x={x + 16} y={COL_TOP + 92} width={56} height="22" rx="5" fill="var(--bg-elevated)" stroke="var(--danger)" strokeWidth="1" />
-                    <text x={x + 44} y={COL_TOP + 107} textAnchor="middle" fontSize="10" fill="var(--text-primary)">f(int)</text>
+                    <text x={x + 44} y={COL_TOP + 107} textAnchor="middle" fontSize="11" fill="var(--text-primary)">f(int)</text>
                     <rect x={x + 84} y={COL_TOP + 92} width={56} height="22" rx="5" fill="var(--bg-elevated)" stroke="var(--danger)" strokeWidth="1" />
-                    <text x={x + 112} y={COL_TOP + 107} textAnchor="middle" fontSize="10" fill="var(--text-primary)">f(str)</text>
-                    <text x={cx} y={COL_TOP + 134} textAnchor="middle" fontSize="10" fill="var(--danger)">编译器按参数选</text>
+                    <text x={x + 112} y={COL_TOP + 107} textAnchor="middle" fontSize="11" fill="var(--text-primary)">f(str)</text>
+                    <text x={cx} y={COL_TOP + 134} textAnchor="middle" fontSize="11" fill="var(--danger)">编译器按参数选</text>
                   </>
                 )}
 

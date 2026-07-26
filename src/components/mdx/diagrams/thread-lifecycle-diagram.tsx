@@ -346,7 +346,7 @@ export function ThreadLifecycleDiagram() {
                 x={n.x + NODE_W / 2}
                 y={n.y + 42}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {n.sub}

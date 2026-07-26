@@ -106,7 +106,7 @@ export function JsonSchemaDiagram() {
             x={schemaX + BLOCK_W / 2}
             y={BLOCK_Y + 46}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             字段名 · 类型 · 是否必填
@@ -128,7 +128,7 @@ export function JsonSchemaDiagram() {
                 x={schemaX + 20}
                 y={lineY(r) + 16}
                 textAnchor="start"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {`${f.type} · ${f.required ? "必填" : "可选"}`}
@@ -163,7 +163,7 @@ export function JsonSchemaDiagram() {
             x={schemaX + BLOCK_W + BLOCK_GAP / 2}
             y={arrowMidY + 24}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             constrain

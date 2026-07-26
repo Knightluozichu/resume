@@ -89,7 +89,7 @@ export function AssignmentContractMap() {
           <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">赋值运算符不是一次memcpy，而是一组对象契约</text>
           <rect x="286" y="62" width="208" height="64" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" />
           <text x="390" y="89" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">CMyString::operator=</text>
-          <text x="390" y="110" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">复制值，同时守住所有权与可用状态</text>
+          <text x="390" y="110" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">复制值，同时守住所有权与可用状态</text>
           {checks.map(([title, detail], index) => {
             const column = index % 3;
             const row = Math.floor(index / 3);
@@ -100,7 +100,7 @@ export function AssignmentContractMap() {
                 <path d={`M390 126 L${x + 98} ${y}`} stroke="var(--border)" />
                 <rect x={x} y={y} width="196" height="64" rx="5" fill="var(--bg)" stroke="var(--success)" />
                 <text x={x + 98} y={y + 25} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">{title}</text>
-                <text x={x + 98} y={y + 46} textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">{detail}</text>
+                <text x={x + 98} y={y + 46} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{detail}</text>
               </g>
             );
           })}
@@ -129,15 +129,15 @@ export function OwnershipTransitionDiagram() {
                 <rect x={x} y="76" width="166" height="166" rx="6" fill="var(--bg)" stroke={index === 0 ? "var(--warning)" : "var(--accent)"} />
                 <text x={x + 83} y="104" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">{title}</text>
                 <rect x={x + 18} y="126" width="130" height="38" rx="4" fill="var(--accent)" fillOpacity="0.08" stroke="var(--border)" />
-                <text x={x + 83} y="150" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{first}</text>
+                <text x={x + 83} y="150" textAnchor="middle" fontSize="11" fill="var(--text-primary)">{first}</text>
                 <rect x={x + 18} y="178" width="130" height="38" rx="4" fill="var(--success)" fillOpacity="0.08" stroke="var(--border)" />
-                <text x={x + 83} y="202" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{second}</text>
+                <text x={x + 83} y="202" textAnchor="middle" fontSize="11" fill="var(--text-primary)">{second}</text>
                 {index < 3 ? <path d={`M${x + 168} 159 H${x + 186}`} stroke="var(--warning)" strokeWidth="2" /> : null}
               </g>
             );
           })}
           <rect x="108" y="270" width="564" height="34" rx="5" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" />
-          <text x="390" y="291" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">复制失败发生在提交之前；交换完成后，临时对象负责释放旧资源。</text>
+          <text x="390" y="291" textAnchor="middle" fontSize="11" fill="var(--text-primary)">复制失败发生在提交之前；交换完成后，临时对象负责释放旧资源。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">临时对象把可能失败的准备阶段与不应失败的提交阶段分离。</figcaption>

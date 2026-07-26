@@ -44,12 +44,12 @@ export function RubBlocksProcsDiagram() {
           <text x={44} y={132} fontSize="11" fill={primary}>{`  puts x`}</text>
           <text x={44} y={148} fontSize="11" fill={primary}>{`end`}</text>
           <text x={44} y={168} fontSize="11" fill={secondary}>{`--- 特性 ---`}</text>
-          <text x={44} y={184} fontSize="10" fill={secondary}>{`不是对象（不能单独存）`}</text>
-          <text x={44} y={200} fontSize="10" fill={secondary}>{`通过 yield 调用`}</text>
-          <text x={44} y={216} fontSize="10" fill={secondary}>{`通过 &amp;block 捕获`}</text>
-          <text x={44} y={232} fontSize="10" fill={secondary}>{`return 退出整个方法`}</text>
-          <text x={44} y={248} fontSize="10" fill={secondary}>{`宽松参数检查`}</text>
-          <text x={44} y={264} fontSize="10" fill={success}>{`最常用！惯用法核心`}</text>
+          <text x={44} y={184} fontSize="11" fill={secondary}>{`不是对象（不能单独存）`}</text>
+          <text x={44} y={200} fontSize="11" fill={secondary}>{`通过 yield 调用`}</text>
+          <text x={44} y={216} fontSize="11" fill={secondary}>{`通过 &amp;block 捕获`}</text>
+          <text x={44} y={232} fontSize="11" fill={secondary}>{`return 退出整个方法`}</text>
+          <text x={44} y={248} fontSize="11" fill={secondary}>{`宽松参数检查`}</text>
+          <text x={44} y={264} fontSize="11" fill={success}>{`最常用！惯用法核心`}</text>
 
           {/* Proc */}
           <rect x={255} y={72} width={210} height={200} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
@@ -59,11 +59,11 @@ export function RubBlocksProcsDiagram() {
           <text x={267} y={148} fontSize="11" fill={primary}>{`end`}</text>
           <text x={267} y={168} fontSize={11} fill={primary}>{`p.call(5)  # 10`}</text>
           <text x={267} y={184} fontSize={11} fill={secondary}>{`--- 特性 ---`}</text>
-          <text x={267} y={200} fontSize="10" fill={secondary}>{`是对象（可存入变量）`}</text>
-          <text x={267} y={216} fontSize="10" fill={secondary}>{`通过 .call / .() 调用`}</text>
-          <text x={267} y={232} fontSize="10" fill={secondary}>{`return 退出定义它的方法`}</text>
-          <text x={267} y={248} fontSize="10" fill={secondary}>{`宽松参数检查`}</text>
-          <text x={267} y={264} fontSize="10" fill={secondary}>{`block 对象化的产物`}</text>
+          <text x={267} y={200} fontSize="11" fill={secondary}>{`是对象（可存入变量）`}</text>
+          <text x={267} y={216} fontSize="11" fill={secondary}>{`通过 .call / .() 调用`}</text>
+          <text x={267} y={232} fontSize="11" fill={secondary}>{`return 退出定义它的方法`}</text>
+          <text x={267} y={248} fontSize="11" fill={secondary}>{`宽松参数检查`}</text>
+          <text x={267} y={264} fontSize="11" fill={secondary}>{`block 对象化的产物`}</text>
 
           {/* Lambda */}
           <rect x={478} y={72} width={210} height={200} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
@@ -73,11 +73,11 @@ export function RubBlocksProcsDiagram() {
           <text x={490} y={148} fontSize="11" fill={primary}>{`end`}</text>
           <text x={490} y={168} fontSize="11" fill={primary}>{`l = -&gt;(x) { puts x }`}</text>
           <text x={490} y={184} fontSize="11" fill={secondary}>{`--- 特性 ---`}</text>
-          <text x={490} y={200} fontSize="10" fill={secondary}>{`是对象（Proc 子类）`}</text>
-          <text x={490} y={216} fontSize="10" fill={secondary}>{`严格参数检查`}</text>
-          <text x={490} y={232} fontSize="10" fill={secondary}>{`return 只退出自身`}</text>
-          <text x={490} y={248} fontSize="10" fill={secondary}>{`行为更像匿名函数`}</text>
-          <text x={490} y={264} fontSize="10" fill={success}>{`适合回调、高阶函数`}</text>
+          <text x={490} y={200} fontSize="11" fill={secondary}>{`是对象（Proc 子类）`}</text>
+          <text x={490} y={216} fontSize="11" fill={secondary}>{`严格参数检查`}</text>
+          <text x={490} y={232} fontSize="11" fill={secondary}>{`return 只退出自身`}</text>
+          <text x={490} y={248} fontSize="11" fill={secondary}>{`行为更像匿名函数`}</text>
+          <text x={490} y={264} fontSize="11" fill={success}>{`适合回调、高阶函数`}</text>
 
           {/* 底部：yield 与 &amp;block */}
           <line x1={32} y1={288} x2={VIEW_W - 32} y2={288} stroke={border} strokeWidth="1" strokeDasharray="4 3" />

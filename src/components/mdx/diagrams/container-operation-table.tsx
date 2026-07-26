@@ -294,7 +294,7 @@ export function ContainerOperationTable() {
           <text
             x={leftPad}
             y={topPad + headerH + rows.length * rowH + 20}
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             ✓ 原生高效支持 | ✗ 不支持 | ✓ O(n) 支持但慢 | ∗ 均摊

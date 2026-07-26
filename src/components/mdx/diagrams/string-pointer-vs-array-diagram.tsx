@@ -36,7 +36,7 @@ export function StringPointerVsArrayDiagram() {
           >
             char ar[] = &quot;Hi&quot;;
           </text>
-          <text x={48} y={52} fontSize="10" fill={secondary}>
+          <text x={48} y={52} fontSize="11" fill={secondary}>
             数组在栈上，内容可修改
           </text>
 
@@ -50,7 +50,7 @@ export function StringPointerVsArrayDiagram() {
             stroke={ok}
             strokeWidth="1.5"
           />
-          <text x={60} y={88} fontSize="10" fill={secondary}>
+          <text x={60} y={88} fontSize="11" fill={secondary}>
             栈 memory
           </text>
           {chars.map((ch, i) => (
@@ -78,10 +78,10 @@ export function StringPointerVsArrayDiagram() {
               </text>
             </g>
           ))}
-          <text x={48} y={168} fontSize="10" fill={ok}>
+          <text x={48} y={168} fontSize="11" fill={ok}>
             ar[0] = &apos;h&apos;; ✓ 合法
           </text>
-          <text x={48} y={186} fontSize="10" fill={secondary}>
+          <text x={48} y={186} fontSize="11" fill={secondary}>
             sizeof(ar) = 3（含 \\0）
           </text>
 
@@ -96,7 +96,7 @@ export function StringPointerVsArrayDiagram() {
           >
             char *ptr = &quot;Hi&quot;;
           </text>
-          <text x={360} y={52} fontSize="10" fill={secondary}>
+          <text x={360} y={52} fontSize="11" fill={secondary}>
             指针变量在栈，指向只读字面量
           </text>
 
@@ -125,7 +125,7 @@ export function StringPointerVsArrayDiagram() {
             x={388}
             y={130}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
           >
             栈
@@ -149,7 +149,7 @@ export function StringPointerVsArrayDiagram() {
             strokeWidth="1.5"
             strokeDasharray="4 3"
           />
-          <text x={490} y={88} fontSize="10" fill={danger}>
+          <text x={490} y={88} fontSize="11" fill={danger}>
             只读数据段
           </text>
           {chars.map((ch, i) => (
@@ -177,10 +177,10 @@ export function StringPointerVsArrayDiagram() {
               </text>
             </g>
           ))}
-          <text x={360} y={168} fontSize="10" fill={danger}>
+          <text x={360} y={168} fontSize="11" fill={danger}>
             ptr[0] = &apos;h&apos;; ✗ 未定义行为
           </text>
-          <text x={360} y={186} fontSize="10" fill={secondary}>
+          <text x={360} y={186} fontSize="11" fill={secondary}>
             sizeof(ptr) = 指针大小（8 或 4）
           </text>
 

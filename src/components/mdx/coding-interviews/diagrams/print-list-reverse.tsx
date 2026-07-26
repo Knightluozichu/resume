@@ -25,13 +25,13 @@ export function LinkedListDirectionDiagram() {
           {[1,2,3].map((value, index) => { const x = 110 + index * 180; return <g key={value}><rect x={x} y="72" width="108" height="58" rx="5" fill="var(--bg)" stroke="var(--accent)" /><text x={x + 54} y="106" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text>{index < 2 ? <g><path d={`M${x + 108} 101 H${x + 164}`} stroke="var(--accent)" strokeWidth="2" /><path d={`M${x + 164} 101 l-10 -6 v12 z`} fill="var(--accent)" /></g> : null}</g>; })}
           <text x="650" y="106" fontSize="11" fill="var(--text-secondary)">null</text>
           <path d="M164 150 C164 190 524 190 524 150" fill="none" stroke="var(--warning)" strokeWidth="2" strokeDasharray="5 4" />
-          <text x="344" y="205" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--warning)">正向遍历：1 → 2 → 3</text>
+          <text x="344" y="205" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">正向遍历：1 → 2 → 3</text>
           {[1,2,3].map((value, index) => <g key={`stack-${value}`}><rect x={310} y={292 - index * 42} width="160" height="36" fill="var(--success)" fillOpacity={0.05 + index * 0.02} stroke="var(--success)" /><text x="390" y={315 - index * 42} textAnchor="middle" fontSize="11" fill="var(--text-primary)">节点 {value}</text></g>)}
           <path d="M492 264 H552" stroke="var(--success)" strokeWidth="2" /><path d="M552 264 l-10 -6 v12 z" fill="var(--success)" />
           <text x="620" y="258" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">弹出输出</text>
           <text x="620" y="279" textAnchor="middle" fontSize="13" fill="var(--text-primary)">3 → 2 → 1</text>
           <rect x="92" y="326" width="596" height="26" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--border)" />
-          <text x="390" y="344" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">next指针始终保持1→2→3，逆序只发生在输出次序。</text>
+          <text x="390" y="344" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">next指针始终保持1→2→3，逆序只发生在输出次序。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">显式栈保存节点指针，递归则把同样的信息隐式保存在调用栈帧中。</figcaption>

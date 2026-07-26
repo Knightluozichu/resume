@@ -81,7 +81,7 @@ export function GammaCurveDiagram() {
             x={x0 - 8}
             y={yTop + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -90,7 +90,7 @@ export function GammaCurveDiagram() {
             x={x0 - 8}
             y={yBot + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -99,7 +99,7 @@ export function GammaCurveDiagram() {
             x={x1}
             y={yBot + 18}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -139,7 +139,7 @@ export function GammaCurveDiagram() {
             x={sx(0.5)}
             y={yBot + 14}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0.5
@@ -190,7 +190,7 @@ export function GammaCurveDiagram() {
           <text
             x={sx(0.5) + 8}
             y={sy(midDisplay) + 4}
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             ≈0.22
@@ -198,14 +198,14 @@ export function GammaCurveDiagram() {
           <text
             x={sx(0.5) + 8}
             y={sy(midCorrect) + 4}
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             ≈0.73
           </text>
 
           {/* 图例 */}
-          <g fontSize="10">
+          <g fontSize="11">
             <line
               x1={x0}
               y1={272}

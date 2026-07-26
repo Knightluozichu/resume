@@ -30,9 +30,7 @@ import {
 
 先预测这条链上有几个 object-model boundary：跨进程 bytes、host/plugin allocator、construction phase、secondary base view、template type registration、exception/RTTI identity。崩溃点只是 foreign vptr 被使用的时刻；根因早在把 process-local object representation 当 stable record 时就已产生。
 
-<Term def="把 object layout、call lowering、lifetime state 与 template/exception/RTTI ABI identity 放到同一因果链诊断的方法。">
-  seven-chapter incident analysis
-</Term>
+<Term def="把 object layout、call lowering、lifetime state 与 template/exception/RTTI ABI identity 放到同一因果链诊断的方法。">seven-chapter incident analysis</Term>
 
 <IcoFinalKnowledgeMatrixMap />
 
@@ -66,9 +64,7 @@ struct PluginNode final : Node, Renderable {
 
 这段 declaration 本身已经提出四个问题：shared virtual base `Identity` 在 most-derived object 里只有一份；`Renderable*` 可能是 secondary base view；`PluginNode` 含 nontrivial `std::string`，不可 raw-copy；Node constructor 中 virtual `registerType` 只能使用 active Node phase，不能调到 PluginNode override。
 
-<Term def="跨进程或跨不兼容 module 保存了 vptr、type_info address、allocator-owned pointer 等只在原执行环境有效的对象表示。">
-  foreign object representation
-</Term>
+<Term def="跨进程或跨不兼容 module 保存了 vptr、type_info address、allocator-owned pointer 等只在原执行环境有效的对象表示。">foreign object representation</Term>
 
 host 端错误地执行：从 shared memory `memcpy` 整个 PluginNode bytes 到 pool；把其中地址解释为 host 地址；通过 `Renderable*` 调 virtual；用 host `delete` 销毁 plugin 创建的对象；让 C++ exception 穿过 DSO。每一步都把 local ABI fact 当成 universal contract。
 
@@ -78,9 +74,7 @@ host 端错误地执行：从 shared memory `memcpy` 整个 PluginNode bytes 到
 
 ### 第1/3章：表示与数据访问
 
-<Term def="most-derived object 内的 base subobjects、nonstatic members、padding、vptr 与 virtual-base metadata 的 ABI-specific bytes。">
-  native object layout
-</Term>
+<Term def="most-derived object 内的 base subobjects、nonstatic members、padding、vptr 与 virtual-base metadata 的 ABI-specific bytes。">native object layout</Term>
 
 shared memory 中的 `PluginNode` bytes 包含 source process 的 vptr、string internal pointer，以及 virtual base adjustment 所依赖的 ABI representation。即便两进程使用同一 executable，ASLR、allocator state、mapping base 与 object lifetime 都不共享。host 不能通过 `reinterpret_cast` 获得合法 C++ object。
 
@@ -88,9 +82,7 @@ shared memory 中的 `PluginNode` bytes 包含 source process 的 vptr、string 
 
 ### 第2/5章：构造、复制与 active phase
 
-<Term def="construction/destruction 中当前已建立到哪一个 class subobject，并据此限制 virtual behavior 与可访问 invariant 的阶段。">
-  active construction phase
-</Term>
+<Term def="construction/destruction 中当前已建立到哪一个 class subobject，并据此限制 virtual behavior 与可访问 invariant 的阶段。">active construction phase</Term>
 
 `Node()` 调 `registerType()` 时，PluginNode members 尚未构造，常见 vptr state 只表达 Node phase，因此不会进入 PluginNode override。修复不是“手改 vptr”，而是让 factory 在 complete construction 后调用 non-constructor `start/register`，或把所需 data 通过 base constructor 明确传入。
 
@@ -105,9 +97,7 @@ raw `memcpy` 还跳过 copy constructor：target string 没建立独立 ownershi
 
 ### 第4章：slot 与 secondary-base thunk
 
-<Term def="从 secondary base view 调 virtual function 时，将 incoming base pointer 调整成 final overrider 所需 this 的 compiler adapter。">
-  secondary-base adjustment thunk
-</Term>
+<Term def="从 secondary base view 调 virtual function 时，将 incoming base pointer 调整成 final overrider 所需 this 的 compiler adapter。">secondary-base adjustment thunk</Term>
 
 合法 `Renderable*` 指向 PluginNode 内 Renderable subobject；其 vptr/slot 可指向 thunk，先调整到 PluginNode address 再进入 render body。foreign bytes 让 slot 本身无效；若 slot 恰好可读，wrong virtual-base metadata 仍可能计算出错误 `this`。因此必须记录 incoming view、slot target、adjustment 与 body，不能只比对函数名。
 
@@ -129,9 +119,7 @@ struct Slot {
 };
 ```
 
-<Term def="把 aligned storage、object lifetime start/end、generation 与匹配 destroy function 作为一个不可分割状态机管理的池槽。">
-  phase-safe object pool
-</Term>
+<Term def="把 aligned storage、object lifetime start/end、generation 与匹配 destroy function 作为一个不可分割状态机管理的池槽。">phase-safe object pool</Term>
 
 pool 不能假设所有 types 同 alignment/size，也不能用 `delete` 释放 placement object。plugin 提供 placement construct/destroy entry，或更简单地让 plugin 自己管理 object，host 只持 opaque handle。constructor throw 时 slot remains unoccupied；只有成功后 publish handle。generation 防 stale handle 重用旧 slot。
 
@@ -147,9 +135,7 @@ pool 不能假设所有 types 同 alignment/size，也不能用 `delete` 释放 
 
 ## 第7章：模板、异常和RTTI留在ABI内侧
 
-<Term def="host 与 plugin 共同使用的 version、calling convention、data layout、ownership、error 与 function-table contract。">
-  versioned module ABI
-</Term>
+<Term def="host 与 plugin 共同使用的 version、calling convention、data layout、ownership、error 与 function-table contract。">versioned module ABI</Term>
 
 template registry 若在 host/plugin 分别隐式实例化，并把 `typeid(T).hash_code()` 或 `type_info*` 当 persistent ID，会把 implementation identity 泄露到 boundary。改用 schema 中明确分配的 stable numeric/string ID；template 只用于 module 内生成 mapping，必要时 explicit instantiation，跨模块只交换 stable values。
 
@@ -167,9 +153,7 @@ struct NodeApiV1 {
 }
 ```
 
-<Term def="不暴露 C++ class layout 的未解释 token，只能交回定义它的 versioned function table 操作和销毁。">
-  opaque module handle
-</Term>
+<Term def="不暴露 C++ class layout 的未解释 token，只能交回定义它的 versioned function table 操作和销毁。">opaque module handle</Term>
 
 `create/destroy` 在同一 module 配对，allocator ownership 不跨界；record/error payload 由明确 size/version 控制；function pointers 是装载后有效的 local process contract，不写进 shared memory。plugin unload 前必须证明没有 outstanding handles/callbacks。
 
@@ -177,9 +161,7 @@ struct NodeApiV1 {
 
 <IcoCapstoneEvidenceMap />
 
-<Term def="只包含版本化 value fields、stable IDs 与 relative offsets，不包含 process-local code/data addresses 的共享或线格式。">
-  stable data boundary
-</Term>
+<Term def="只包含版本化 value fields、stable IDs 与 relative offsets，不包含 process-local code/data addresses 的共享或线格式。">stable data boundary</Term>
 
 ### Gate 1：Representation
 
@@ -197,9 +179,7 @@ trace constructor order：virtual base 一次、direct bases/members 正序、fa
 
 host/plugin 使用不同 build version 做 compatibility matrix；template-generated IDs 与 schema stable ID 一致；plugin 内 exception 全被翻译；dynamic_cast/typeid 不跨 boundary。测试 plugin unload 时 outstanding handle 被拒绝，错误信息不引用 module-local storage。
 
-<Term def="对 representation、construction/call、copy/lifetime 与 late-bound ABI 四层分别给出可重复 correctness 和 failure-path 证据。">
-  object-model acceptance gate
-</Term>
+<Term def="对 representation、construction/call、copy/lifetime 与 late-bound ABI 四层分别给出可重复 correctness 和 failure-path 证据。">object-model acceptance gate</Term>
 
 ## 第七章联合诊断清单
 

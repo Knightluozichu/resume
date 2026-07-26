@@ -319,7 +319,7 @@ export function CompositionVsInheritanceDiagram() {
                 <text
                   x={RIGHT_X + 40}
                   y={y + toggleH / 2 + 13}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {t.note}

@@ -44,7 +44,7 @@ export function DsaGreedyExchangeLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(coinCases) as (keyof typeof coinCases)[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-10 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
+          {(Object.keys(coinCases) as (keyof typeof coinCases)[]).map((candidate) => <button key={candidate} type="button" onClick={() => setKind(candidate)} className={"min-h-11 border text-xs font-semibold " + (kind === candidate ? "border-accent bg-accent text-background" : "border-border bg-background text-primary")}>{candidate}</button>)}
         </div>
         <div className="mt-4 border border-border bg-background p-3 font-mono text-xs text-secondary">coins {active.coins.join(", ")}; amount {active.amount}</div>
         <div className="mt-2 grid grid-cols-2 gap-2">

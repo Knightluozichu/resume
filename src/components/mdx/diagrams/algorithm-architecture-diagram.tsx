@@ -85,12 +85,12 @@ export function AlgorithmArchitectureDiagram() {
                 </text>
               </g>
             ))}
-            <text x="90" y="88" fontSize="9" fill={secondary} textAnchor="middle">
+            <text x="90" y="88" fontSize="11" fill={secondary} textAnchor="middle">
               连续存储 [0..N)
             </text>
             {/* 底部 begin/end 标记 */}
-            <text x="36" y="108" fontSize="8" fill={good} fontFamily="monospace">begin()</text>
-            <text x="148" y="108" fontSize="8" fill={warn} fontFamily="monospace">end()</text>
+            <text x="36" y="108" fontSize="11" fill={good} fontFamily="monospace">begin()</text>
+            <text x="148" y="108" fontSize="11" fill={warn} fontFamily="monospace">end()</text>
           </g>
 
           {/* list 容器 */}
@@ -117,11 +117,11 @@ export function AlgorithmArchitectureDiagram() {
             {[40, 80, 120].map((sx, i) => (
               <line key={i} x1={sx + 2} y1="52" x2={sx + 18} y2="52" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
             ))}
-            <text x="90" y="88" fontSize="9" fill={secondary} textAnchor="middle">
+            <text x="90" y="88" fontSize="11" fill={secondary} textAnchor="middle">
               链式节点，每个存 prev + next
             </text>
-            <text x="36" y="108" fontSize="8" fill={good} fontFamily="monospace">begin()</text>
-            <text x="148" y="108" fontSize="8" fill={warn} fontFamily="monospace">end()</text>
+            <text x="36" y="108" fontSize="11" fill={good} fontFamily="monospace">begin()</text>
+            <text x="148" y="108" fontSize="11" fill={warn} fontFamily="monospace">end()</text>
           </g>
 
           {/* deque 容器 */}
@@ -138,13 +138,13 @@ export function AlgorithmArchitectureDiagram() {
             <rect x="10" y="64" width="60" height="22" rx="4" fill={accent} opacity="0.06" stroke={border} />
             <rect x="14" y="67" width="16" height="16" rx="3" fill={accent} opacity="0.15" stroke={accent} />
             <rect x="32" y="67" width="16" height="16" rx="3" fill={accent} opacity="0.15" stroke={accent} />
-            <text x="88" y="52" fontSize="9" fill={secondary} fontFamily="monospace">中控</text>
-            <text x="88" y="66" fontSize="9" fill={secondary} fontFamily="monospace">数组</text>
-            <text x="80" y="105" fontSize="9" fill={secondary} textAnchor="middle">
+            <text x="88" y="52" fontSize="11" fill={secondary} fontFamily="monospace">中控</text>
+            <text x="88" y="66" fontSize="11" fill={secondary} fontFamily="monospace">数组</text>
+            <text x="80" y="105" fontSize="11" fill={secondary} textAnchor="middle">
               分段存储
             </text>
-            <text x="20" y="122" fontSize="8" fill={good} fontFamily="monospace">begin()</text>
-            <text x="128" y="122" fontSize="8" fill={warn} fontFamily="monospace">end()</text>
+            <text x="20" y="122" fontSize="11" fill={good} fontFamily="monospace">begin()</text>
+            <text x="128" y="122" fontSize="11" fill={warn} fontFamily="monospace">end()</text>
           </g>
 
           {/* 容器→迭代器的向下箭头 */}
@@ -188,10 +188,10 @@ export function AlgorithmArchitectureDiagram() {
                 { label: "iter==end", x: 500, desc: "范围终点" },
               ].map(({ label: lbl, x: ix, desc }, i) => (
                 <g key={i}>
-                  <text x={ix} y="44" fontSize="10" fontWeight="600" fill={primary} textAnchor="middle" fontFamily="monospace">
+                  <text x={ix} y="44" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle" fontFamily="monospace">
                     {lbl}
                   </text>
-                  <text x={ix} y="58" fontSize="8" fill={secondary} textAnchor="middle">
+                  <text x={ix} y="58" fontSize="11" fill={secondary} textAnchor="middle">
                     {desc}
                   </text>
                 </g>
@@ -210,10 +210,10 @@ export function AlgorithmArchitectureDiagram() {
               strokeWidth="2"
               markerEnd="url(#arrAccent)"
             />
-            <text x={leftCol + 316} y={iterY + 120} fontSize="10" fill={secondary}>
+            <text x={leftCol + 316} y={iterY + 120} fontSize="11" fill={secondary}>
               算法只需 begin/end，
             </text>
-            <text x={leftCol + 316} y={iterY + 136} fontSize="10" fill={secondary}>
+            <text x={leftCol + 316} y={iterY + 136} fontSize="11" fill={secondary}>
               不关心是什么容器
             </text>
           </g>
@@ -249,21 +249,21 @@ export function AlgorithmArchitectureDiagram() {
 
           {/* 右侧解耦说明（放在迭代器盒与算法盒之间的右侧空白，避免压住算法盒） */}
           <g transform={`translate(${rightCol + 6}, ${iterY + 86})`}>
-            <text x="0" y="0" fontSize="10" fill={secondary}>
+            <text x="0" y="0" fontSize="11" fill={secondary}>
               <tspan x="0" dy="0" fill={accent} fontWeight="600">算法</tspan>
               {" "}不认容器
             </text>
-            <text x="0" y="16" fontSize="10" fill={secondary}>
+            <text x="0" y="16" fontSize="11" fill={secondary}>
               <tspan x="0" dy="0" fill={good} fontWeight="600">只认迭代器</tspan>
               {" "}范围
             </text>
-            <text x="0" y="36" fontSize="9" fill={secondary}>
+            <text x="0" y="36" fontSize="11" fill={secondary}>
               find(begin, end, val)
             </text>
-            <text x="0" y="50" fontSize="9" fill={secondary}>
+            <text x="0" y="50" fontSize="11" fill={secondary}>
               sort(begin, end)
             </text>
-            <text x="0" y="64" fontSize="9" fill={secondary}>
+            <text x="0" y="64" fontSize="11" fill={secondary}>
               copy(src_begin, src_end, dst)
             </text>
           </g>
@@ -271,7 +271,7 @@ export function AlgorithmArchitectureDiagram() {
           {/* 图例 */}
           <g transform={`translate(${leftCol + 20}, ${h - 20})`}>
             <line x1="0" y1="4" x2="28" y2="4" stroke={accent} strokeWidth="2" markerEnd="url(#arrAccent)" />
-            <text x="36" y="8" fontSize="9" fill={secondary}>
+            <text x="36" y="8" fontSize="11" fill={secondary}>
               算法作用于容器的数据流方向
             </text>
           </g>

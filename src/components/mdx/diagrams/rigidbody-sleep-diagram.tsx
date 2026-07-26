@@ -47,7 +47,7 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
                 <text x={b.x + 40} y={sleeping ? 174 : 158} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">
                   {b.label}
                 </text>
-                <text x={b.x + 40} y="208" textAnchor="middle" fontSize="10" fill={sleeping ? "var(--text-secondary)" : "var(--accent)"}>
+                <text x={b.x + 40} y="208" textAnchor="middle" fontSize="11" fill={sleeping ? "var(--text-secondary)" : "var(--accent)"}>
                   {sleeping ? "Sleeping 💤" : "Awake · 每步积分"}
                 </text>
               </g>
@@ -57,7 +57,7 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
           {state === "wake" && (
             <>
               <path d="M 520 120 L 540 100 L 560 120" fill="none" stroke="var(--accent)" strokeWidth="2" />
-              <text x="540" y="92" textAnchor="middle" fontSize="10" fill="var(--accent)">
+              <text x="540" y="92" textAnchor="middle" fontSize="11" fill="var(--accent)">
                 玩家 bump
               </text>
             </>

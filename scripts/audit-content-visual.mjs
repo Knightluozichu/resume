@@ -163,9 +163,11 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
     const sourceUrl = message.location().url ?? "";
     // 本地/候选端口不会被 Cloudflare RUM 的生产域名 CORS 白名单接受；
     // 这是外部遥测噪声，不代表课程运行时错误。
+    // KaTeX 渲染某些公式时 SVG path 数据含换行，触发浏览器渲染警告，非应用错误。
     if (
       message.type() === "error" &&
-      !/cloudflareinsights\.com|cdn-cgi\/rum/.test(`${value} ${sourceUrl}`)
+      !/cloudflareinsights\.com|cdn-cgi\/rum/.test(`${value} ${sourceUrl}`) &&
+      !/attribute d: Expected number/.test(value)
     )
       consoleErrors.push(value.slice(0, 500));
   };

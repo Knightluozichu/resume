@@ -286,7 +286,7 @@ export function ABAProblemDiagram() {
                 x={HEAD_X + HEAD_W / 2}
                 y={HEAD_Y + 40}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {h.sub}
@@ -307,7 +307,7 @@ export function ABAProblemDiagram() {
           <text
             x={20}
             y={LANE1_Y + 34}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （受害者）
@@ -349,7 +349,7 @@ export function ABAProblemDiagram() {
                   <text
                     x={x + 12}
                     y={y + 38}
-                    fontSize="9.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {s.sub}
@@ -364,7 +364,7 @@ export function ABAProblemDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 20}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >

@@ -54,7 +54,7 @@ export function JvtThreadAnalysisDiagram() {
             x="85"
             y="86"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -95,7 +95,7 @@ export function JvtThreadAnalysisDiagram() {
             x="220"
             y="86"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -117,7 +117,7 @@ export function JvtThreadAnalysisDiagram() {
             x="345"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -127,7 +127,7 @@ export function JvtThreadAnalysisDiagram() {
             x="285"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             synchronized
@@ -148,7 +148,7 @@ export function JvtThreadAnalysisDiagram() {
             x="475"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -158,7 +158,7 @@ export function JvtThreadAnalysisDiagram() {
             x="415"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             wait/join
@@ -179,7 +179,7 @@ export function JvtThreadAnalysisDiagram() {
             x="620"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -189,7 +189,7 @@ export function JvtThreadAnalysisDiagram() {
             x="545"
             y="62"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-tertiary)"
           >
             sleep(ms)
@@ -210,7 +210,7 @@ export function JvtThreadAnalysisDiagram() {
             x="670"
             y="86"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -221,7 +221,7 @@ export function JvtThreadAnalysisDiagram() {
             x="370"
             y="120"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             RUNNABLE 可双向转到
@@ -264,7 +264,7 @@ export function JvtThreadAnalysisDiagram() {
             x="115"
             y="194"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             资源同时只能
@@ -273,7 +273,7 @@ export function JvtThreadAnalysisDiagram() {
             x="115"
             y="208"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一个线程占用
@@ -304,7 +304,7 @@ export function JvtThreadAnalysisDiagram() {
             x="280"
             y="194"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             持有资源同时
@@ -313,7 +313,7 @@ export function JvtThreadAnalysisDiagram() {
             x="280"
             y="208"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             等待其他资源
@@ -344,7 +344,7 @@ export function JvtThreadAnalysisDiagram() {
             x="445"
             y="194"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             不能强行夺走
@@ -353,7 +353,7 @@ export function JvtThreadAnalysisDiagram() {
             x="445"
             y="208"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             只能主动释放
@@ -384,7 +384,7 @@ export function JvtThreadAnalysisDiagram() {
             x="615"
             y="194"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             A等B，B等C
@@ -393,7 +393,7 @@ export function JvtThreadAnalysisDiagram() {
             x="615"
             y="208"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             C等A 环形链
@@ -423,7 +423,7 @@ export function JvtThreadAnalysisDiagram() {
             x="120"
             y="286"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -433,7 +433,7 @@ export function JvtThreadAnalysisDiagram() {
             x="120"
             y="300"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             持锁1等锁2
@@ -452,7 +452,7 @@ export function JvtThreadAnalysisDiagram() {
             x="280"
             y="286"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -462,7 +462,7 @@ export function JvtThreadAnalysisDiagram() {
             x="280"
             y="300"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             持锁2等锁1
@@ -498,7 +498,7 @@ export function JvtThreadAnalysisDiagram() {
             x="200"
             y="278"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             等锁2
@@ -507,7 +507,7 @@ export function JvtThreadAnalysisDiagram() {
             x="200"
             y="318"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--danger)"
           >
             等锁1
@@ -538,7 +538,7 @@ export function JvtThreadAnalysisDiagram() {
             x="530"
             y="292"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             破坏④：统一锁顺序（按 id 排序后锁）
@@ -547,7 +547,7 @@ export function JvtThreadAnalysisDiagram() {
             x="530"
             y="308"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             破坏③：ReentrantLock.tryLock(timeout)
@@ -556,7 +556,7 @@ export function JvtThreadAnalysisDiagram() {
             x="530"
             y="324"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             破坏②：一次性获取所有锁
@@ -585,18 +585,18 @@ export function JvtThreadAnalysisDiagram() {
           >
             jstack 诊断要点
           </text>
-          <text x="60" y="388" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="388" fontSize="11" fill="var(--text-secondary)">
             1. 死锁自动检测：jstack 末尾打印 Found one Java-level deadlock +
             互持锁
           </text>
-          <text x="60" y="406" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="406" fontSize="11" fill="var(--text-secondary)">
             2. BLOCKED 分析：waiting to lock &lt;0xaddr&gt; 找锁，搜 locked
             &lt;0xaddr&gt; 找持锁者
           </text>
-          <text x="60" y="424" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="424" fontSize="11" fill="var(--text-secondary)">
             3. 连续 dump 三次：区分瞬时/持续状态，确认稳定死锁与真热点
           </text>
-          <text x="60" y="442" fontSize="10" fill="var(--text-secondary)">
+          <text x="60" y="442" fontSize="11" fill="var(--text-secondary)">
             4. CPU 高：top -Hp 找 tid，printf &apos;%x&apos; 转十六进制，jstack
             找 nid=0xtid 栈顶
           </text>

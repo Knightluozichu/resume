@@ -204,7 +204,7 @@ export function HD5ZeroPolicyLab() {
   const complete = clzWidth && ctzWidth && documented;
   return (
     <Figure caption="CLZ and CTZ at zero may return word width, be undefined, or use a sentinel; portability requires the wrapper contract to choose explicitly.">
-      <div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={clzWidth} onChange={(event) => setClzWidth(event.target.checked)} />CLZ(0) policy</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={ctzWidth} onChange={(event) => setCtzWidth(event.target.checked)} />CTZ(0) policy</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={documented} onChange={(event) => setDocumented(event.target.checked)} />documented</label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={clzWidth} onChange={(event) => setClzWidth(event.target.checked)} />CLZ(0) policy</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={ctzWidth} onChange={(event) => setCtzWidth(event.target.checked)} />CTZ(0) policy</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={documented} onChange={(event) => setDocumented(event.target.checked)} />documented</label></div>
       <div className="mt-4"><Stat label="zero-input contract" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
     </Figure>
   );
@@ -217,7 +217,7 @@ export function HD5CountingCertificateLab() {
   const complete = identity && zero && target;
   return (
     <Figure caption="A counting primitive is ready when its identity, zero behavior, and target instruction/library mapping all agree.">
-      <div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={identity} onChange={(event) => setIdentity(event.target.checked)} />identity</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={zero} onChange={(event) => setZero(event.target.checked)} />zero case</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={target} onChange={(event) => setTarget(event.target.checked)} />target primitive</label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={identity} onChange={(event) => setIdentity(event.target.checked)} />identity</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={zero} onChange={(event) => setZero(event.target.checked)} />zero case</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={target} onChange={(event) => setTarget(event.target.checked)} />target primitive</label></div>
       <div className="mt-4"><Stat label="counting certificate" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
     </Figure>
   );

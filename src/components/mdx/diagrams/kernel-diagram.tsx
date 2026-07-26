@@ -46,7 +46,7 @@ export function KernelDiagram() {
             x={gridX + cell * 1.5}
             y={gridY - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             邻域 9 个采样
@@ -73,7 +73,7 @@ export function KernelDiagram() {
             x={gridX + cell * 1.5}
             y={gridY + cell * 1.5 + 4}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--accent)"
           >
             当前
@@ -82,7 +82,7 @@ export function KernelDiagram() {
             x={gridX + cell * 1.5}
             y={gridY + cell * 3 + 16}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             中心 = 要算的像素
@@ -105,7 +105,7 @@ export function KernelDiagram() {
             x={kerX + cell * 1.5}
             y={kerY - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             权重核（边缘检测）
@@ -146,7 +146,7 @@ export function KernelDiagram() {
             x={kerX + cell * 1.5}
             y={kerY + cell * 3 + 16}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             权重和 = 0（突出边缘）
@@ -190,7 +190,7 @@ export function KernelDiagram() {
             x="503"
             y={kerY + 62}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             加权求和结果
@@ -212,7 +212,7 @@ export function KernelDiagram() {
             x="280"
             y="264"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             权重和 = 1 → 亮度不变（如模糊核 1/9）；= 0 → 突出边缘（如此核）

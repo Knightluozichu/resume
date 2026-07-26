@@ -28,8 +28,13 @@ const scenarios = {
 
 export function RtcdPipelineLab({ title, focus, stages }: LabProps) {
   const [selected, setSelected] = useState(0);
+  function resetExperiment() {
+    setSelected(0);
+  }
+
   return (
     <section className="my-6 overflow-hidden rounded-md border border-emerald-300 bg-white shadow-sm dark:border-emerald-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
         <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
           {title}
@@ -70,6 +75,13 @@ export function RtcdBudgetLab({ title, focus, stages }: LabProps) {
   const [materials, setMaterials] = useState(80);
   const [workers, setWorkers] = useState(4);
   const [paused, setPaused] = useState(false);
+  function resetExperiment() {
+    setActors(240);
+    setMaterials(80);
+    setWorkers(4);
+    setPaused(false);
+  }
+
   const metrics = useMemo(() => {
     const cpu =
       (actors * 0.018) / Math.max(1, Math.sqrt(workers)) +
@@ -86,6 +98,7 @@ export function RtcdBudgetLab({ title, focus, stages }: LabProps) {
   }, [actors, materials, workers]);
   return (
     <section className="my-6 overflow-hidden rounded-md border border-amber-300 bg-white shadow-sm dark:border-amber-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
         <div>
           <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
@@ -175,9 +188,14 @@ export function RtcdBudgetLab({ title, focus, stages }: LabProps) {
 
 export function RtcdEvidenceLab({ title, focus, stages }: LabProps) {
   const [scenario, setScenario] = useState<keyof typeof scenarios>("normal");
+  function resetExperiment() {
+    setScenario("normal");
+  }
+
   const current = scenarios[scenario];
   return (
     <section className="my-6 overflow-hidden rounded-md border border-cyan-300 bg-white shadow-sm dark:border-cyan-800 dark:bg-zinc-950">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-cyan-200 bg-cyan-50 px-4 py-3 dark:border-cyan-900 dark:bg-cyan-950/30">
         <p className="text-sm font-semibold text-cyan-950 dark:text-cyan-100">
           {title}
@@ -200,7 +218,7 @@ export function RtcdEvidenceLab({ title, focus, stages }: LabProps) {
               aria-selected={scenario === key}
               onClick={() => setScenario(key)}
               className={
-                "min-h-9 flex-1 rounded border px-2 text-xs font-semibold " +
+                "min-h-11 flex-1 rounded border px-2 text-xs font-semibold " +
                 (scenario === key
                   ? "border-cyan-600 bg-cyan-100 text-cyan-950 dark:bg-cyan-950 dark:text-cyan-100"
                   : "border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-300")

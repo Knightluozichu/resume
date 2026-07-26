@@ -100,7 +100,7 @@ export function AssimpSceneGraphDiagram() {
             x="360"
             y="78"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMeshes: [ ]｜mChildren: 2
@@ -149,7 +149,7 @@ export function AssimpSceneGraphDiagram() {
             x="180"
             y="158"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMeshes: [0]
@@ -180,7 +180,7 @@ export function AssimpSceneGraphDiagram() {
             x="540"
             y="158"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMeshes: [1, 2]
@@ -250,7 +250,7 @@ export function AssimpSceneGraphDiagram() {
             x="116"
             y="318"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMaterialIndex: 0
@@ -282,7 +282,7 @@ export function AssimpSceneGraphDiagram() {
             x="254"
             y="318"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMaterialIndex: 1
@@ -314,7 +314,7 @@ export function AssimpSceneGraphDiagram() {
             x="392"
             y="318"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             mMaterialIndex: 1
@@ -351,7 +351,7 @@ export function AssimpSceneGraphDiagram() {
             x="541"
             y="304"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -361,7 +361,7 @@ export function AssimpSceneGraphDiagram() {
             x="541"
             y="320"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -383,7 +383,7 @@ export function AssimpSceneGraphDiagram() {
             x="629"
             y="304"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -393,7 +393,7 @@ export function AssimpSceneGraphDiagram() {
             x="629"
             y="320"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -430,7 +430,7 @@ export function AssimpSceneGraphDiagram() {
             x="300"
             y="200"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -458,7 +458,7 @@ export function AssimpSceneGraphDiagram() {
             x="400"
             y="392"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -480,7 +480,7 @@ export function AssimpSceneGraphDiagram() {
             x="360"
             y="450"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             同一个 aiMesh / aiMaterial 可被多处引用，不必复制

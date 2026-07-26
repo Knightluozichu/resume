@@ -33,11 +33,11 @@ export function SuccessorCopyDeleteDiagram() {
           <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">非尾节点：复制后继内容，再删除后继对象</text>
           {nodes.map(([label,x,target],index) => <g key={String(label)}><rect x={Number(x)} y="88" width="92" height="58" rx="5" fill={target ? "var(--accent)" : "var(--bg)"} fillOpacity={target ? 0.11 : 1} stroke={target ? "var(--accent)" : "var(--border)"} strokeWidth={target ? 2 : 1} /><text x={Number(x)+46} y="124" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{label}</text>{index<nodes.length-1 ? <line x1={Number(x)+92} y1="117" x2={Number(nodes[index+1][1])-10} y2="117" stroke="var(--border)" strokeWidth="2" markerEnd="url(#delete-arrow)" /> : null}</g>)}
           <path d="M546 158 C520 214 452 218 410 158" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#delete-arrow)" />
-          <text x="478" y="234" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">value 4复制到目标对象</text>
+          <text x="478" y="234" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">value 4复制到目标对象</text>
           <rect x="360" y="268" width="92" height="58" rx="5" fill="var(--success)" fillOpacity="0.11" stroke="var(--success)" strokeWidth="2" />
           <text x="406" y="304" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">4</text>
           <line x1="452" y1="297" x2="630" y2="297" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#delete-arrow)" />
-          <text x="510" y="354" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">目标地址保留；原后继4对象被释放，逻辑序列少了3。</text>
+          <text x="510" y="354" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">目标地址保留；原后继4对象被释放，逻辑序列少了3。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">常数时间来自改变删除对象的物理身份，而不是凭空获得前驱指针。</figcaption>
@@ -75,12 +75,12 @@ export function NodeIdentityImpactDiagram() {
           <rect x="484" y="86" width="220" height="98" rx="5" fill="var(--warning)" fillOpacity="0.08" stroke="var(--warning)" />
           <text x="226" y="116" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">外部target引用</text>
           <text x="226" y="146" textAnchor="middle" fontSize="11" fill="var(--text-primary)">地址不变，值3→4</text>
-          <text x="226" y="168" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">观察者看到对象内容被替换</text>
+          <text x="226" y="168" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">观察者看到对象内容被替换</text>
           <text x="594" y="116" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">外部successor引用</text>
           <text x="594" y="146" textAnchor="middle" fontSize="11" fill="var(--text-primary)">原值4对象被释放</text>
-          <text x="594" y="168" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">继续解引用成为悬空指针</text>
+          <text x="594" y="168" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">继续解引用成为悬空指针</text>
           <rect x="168" y="226" width="484" height="42" rx="5" fill="var(--bg)" stroke="var(--border)" />
-          <text x="410" y="252" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">若节点身份、地址或析构副作用有业务意义，不能使用该技巧。</text>
+          <text x="410" y="252" textAnchor="middle" fontSize="11" fill="var(--text-primary)">若节点身份、地址或析构副作用有业务意义，不能使用该技巧。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">算法保证链表值序列正确，不保证“传入的物理对象被释放”。</figcaption>

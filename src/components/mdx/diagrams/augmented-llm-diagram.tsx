@@ -148,7 +148,7 @@ export function AugmentedLlmDiagram() {
             x={SHELL_X + SHELL_W - 8}
             y={SHELL_Y + 16}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
           >
             增强外壳

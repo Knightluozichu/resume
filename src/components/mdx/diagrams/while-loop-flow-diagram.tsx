@@ -141,7 +141,7 @@ export function WhileLoopFlowDiagram({ step = 4 }: WhileLoopFlowDiagramProps) {
               x={bodyX}
               y={bodyY + 20}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
               fontFamily="monospace"
             >
@@ -189,7 +189,7 @@ export function WhileLoopFlowDiagram({ step = 4 }: WhileLoopFlowDiagramProps) {
               x={updateX}
               y={updateY + 20}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
               fontFamily="monospace"
             >
@@ -211,7 +211,7 @@ export function WhileLoopFlowDiagram({ step = 4 }: WhileLoopFlowDiagramProps) {
             <text
               x={64}
               y={180}
-              fontSize="10"
+              fontSize="11"
               fill={isActive(4) ? "var(--accent)" : "var(--text-secondary)"}
               fontFamily="system-ui"
             >

@@ -154,7 +154,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
                 x={s.x + s.w / 2}
                 y="116"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.detail.split("\n")[0]}
@@ -163,7 +163,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
                 x={s.x + s.w / 2}
                 y="128"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {s.detail.split("\n")[1]}
@@ -220,7 +220,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             x="84"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -230,7 +230,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             x="335"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -240,7 +240,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             x="485"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -250,7 +250,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             x="635"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
           >
@@ -260,7 +260,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             x="730"
             y="38"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--accent)"
             fontFamily="monospace"
             fontWeight="600"

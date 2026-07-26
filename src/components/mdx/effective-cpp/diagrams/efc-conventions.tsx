@@ -99,8 +99,8 @@ export function EfcConventionsDiagram() {
                 <rect x={x} y={y} width={4} height={66} rx="2" fill={c.color} />
                 <text x={x + 18} y={y + 22} fontSize="13" fontWeight="700" fill={c.color}>{c.title}</text>
                 <text x={x + 18} y={y + 40} fontSize="11" fill={primary}>{c.rule}</text>
-                <text x={x + 18} y={y + 56} fontSize="10" fill={secondary} fontFamily="monospace">{c.example}</text>
-                <text x={x + 306} y={y + 22} textAnchor="end" fontSize="10" fill={secondary} fontFamily="monospace">{c.item}</text>
+                <text x={x + 18} y={y + 56} fontSize="11" fill={secondary} fontFamily="monospace">{c.example}</text>
+                <text x={x + 306} y={y + 22} textAnchor="end" fontSize="11" fill={secondary} fontFamily="monospace">{c.item}</text>
               </g>
             );
           })}
@@ -111,8 +111,8 @@ export function EfcConventionsDiagram() {
             <rect x={200} y={300} width={4} height={66} rx="2" fill={success} />
             <text x={218} y={322} fontSize="13" fontWeight="700" fill={success}>标准库与 Boost</text>
             <text x={218} y={340} fontSize="11" fill={primary}>熟悉 TR1 / 标准库 / Boost 组件</text>
-            <text x={218} y={356} fontSize="10" fill={secondary} fontFamily="monospace">条款 54-55：不重复造轮子</text>
-            <text x={506} y={322} textAnchor="end" fontSize="10" fill={secondary} fontFamily="monospace">条款 54-55</text>
+            <text x={218} y={356} fontSize="11" fill={secondary} fontFamily="monospace">条款 54-55：不重复造轮子</text>
+            <text x={506} y={322} textAnchor="end" fontSize="11" fill={secondary} fontFamily="monospace">条款 54-55</text>
           </g>
 
           {/* ===== 底部总结 ===== */}
@@ -126,7 +126,7 @@ export function EfcConventionsDiagram() {
 
           {/* 底部说明 */}
           <line x1={32} y1={446} x2={VIEW_W - 32} y2={446} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={468} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={468} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 53-55：编译器警告、TR1 标准库、Boost 生态
           </text>
         </svg>

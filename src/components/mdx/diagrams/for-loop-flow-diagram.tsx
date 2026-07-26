@@ -62,7 +62,7 @@ export function ForLoopFlowDiagram({ step = 4 }: ForLoopFlowDiagramProps) {
             <text x={cx} y={initY + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill={isActive(1) ? "var(--text-primary)" : "var(--text-secondary)"} fontFamily="system-ui">
               ① 初始化 init
             </text>
-            <text x={cx} y={initY + 22} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="monospace">
+            <text x={cx} y={initY + 22} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="monospace">
               int i = 0;
             </text>
           </g>
@@ -84,7 +84,7 @@ export function ForLoopFlowDiagram({ step = 4 }: ForLoopFlowDiagramProps) {
           </g>
 
           <line x1={cx + diamondW / 2} y1={condY} x2={bodyX - boxW / 2} y2={bodyY - boxH / 2} stroke={isActive(3) ? "var(--accent)" : "var(--text-secondary)"} strokeWidth="1.5" />
-          <text x={cx + diamondW / 2 + 8} y={condY - 8} fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={cx + diamondW / 2 + 8} y={condY - 8} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             真
           </text>
 
@@ -124,7 +124,7 @@ export function ForLoopFlowDiagram({ step = 4 }: ForLoopFlowDiagramProps) {
             <text x={updateX} y={updateY + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill={isActive(4) ? "var(--text-primary)" : "var(--text-secondary)"} fontFamily="system-ui">
               ④ 更新 update
             </text>
-            <text x={updateX} y={updateY + 22} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="monospace">
+            <text x={updateX} y={updateY + 22} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="monospace">
               i++
             </text>
           </g>
@@ -138,14 +138,14 @@ export function ForLoopFlowDiagram({ step = 4 }: ForLoopFlowDiagramProps) {
               strokeWidth="1.5"
               markerEnd={isActive(4) ? "url(#for-loop-arrow)" : "url(#for-loop-arrow-dim)"}
             />
-            <text x={38} y={updateY - 12} fontSize="10" fill={isActive(4) ? "var(--accent)" : "var(--text-secondary)"} fontFamily="system-ui">
+            <text x={38} y={updateY - 12} fontSize="11" fill={isActive(4) ? "var(--accent)" : "var(--text-secondary)"} fontFamily="system-ui">
               回到②
             </text>
           </g>
 
           {/* 假 → 退出 */}
           <line x1={cx - diamondW / 2} y1={condY} x2={endX + boxW / 2} y2={endY - boxH / 2} stroke={"var(--text-secondary)"} strokeWidth="1.5" />
-          <text x={cx - diamondW / 2 - 28} y={condY - 8} fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={cx - diamondW / 2 - 28} y={condY - 8} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             假
           </text>
 

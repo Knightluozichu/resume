@@ -139,7 +139,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN}
             y="46"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             可达性分析：GC Root 走得到 = 存活；走不到 = 不可达 = 被回收
@@ -149,7 +149,7 @@ export function MemoryLeakDiagram() {
           <text
             x={rootsX0}
             y={TOP - 10}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -184,7 +184,7 @@ export function MemoryLeakDiagram() {
                   x={x + ROOT_W / 2}
                   y={TOP + 37}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {r.note}
@@ -218,7 +218,7 @@ export function MemoryLeakDiagram() {
                 <text
                   x={x + 12}
                   y={(y1 + y2) / 2 + 4}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-secondary)"
                 >
@@ -263,7 +263,7 @@ export function MemoryLeakDiagram() {
             x={victimCx}
             y={victimY + 46}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -276,7 +276,7 @@ export function MemoryLeakDiagram() {
                 x={victimCx}
                 y={victimY + 62 + j * 12}
                 textAnchor="middle"
-                fontSize="8.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {line}
@@ -295,7 +295,7 @@ export function MemoryLeakDiagram() {
                 <text
                   x={MARGIN}
                   y={rowY - 6}
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--danger)"
                 >
@@ -323,7 +323,7 @@ export function MemoryLeakDiagram() {
                         x={lx + LINK_W / 2}
                         y={rowCy + 3.5}
                         textAnchor="middle"
-                        fontSize="9"
+                        fontSize="11"
                         fontWeight="600"
                         fill="var(--text-primary)"
                       >
@@ -372,7 +372,7 @@ export function MemoryLeakDiagram() {
                 <text
                   x={MARGIN + 4}
                   y={rowY + CHAIN_H + 11}
-                  fontSize="9"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--warning)"
                 >
@@ -405,7 +405,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN + 16}
             y={NORMAL_TOP + 22}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -414,7 +414,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN + 16}
             y={NORMAL_TOP + 40}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Activity 销毁后，没有任何 GC Root 能到达它 → 不可达 → 下次 GC 即被回收（无泄漏）
@@ -436,7 +436,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN + 16}
             y={FOOT_TOP + 22}
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -445,7 +445,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN + 16}
             y={FOOT_TOP + 40}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             onDestroy 后用弱引用观察 Activity → 触发 GC → 仍可达（未回收）= 泄漏
@@ -453,7 +453,7 @@ export function MemoryLeakDiagram() {
           <text
             x={MARGIN + 16}
             y={FOOT_TOP + 54}
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             → dump heap 分析，找出从 GC Roots 到 Activity 的最短引用链

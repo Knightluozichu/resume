@@ -18,9 +18,9 @@ export function MotionToPhotonDiagram() {
           {/* Stage 1: Sensor */}
           <rect x="20" y="44" width="140" height="80" rx="6" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="90" y="66" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">① 传感器</text>
-          <text x="90" y="82" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">IMU 采样姿态</text>
-          <text x="90" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">~1–3ms（硬件固定）</text>
-          <text x="90" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：低延迟 IMU 模式</text>
+          <text x="90" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">IMU 采样姿态</text>
+          <text x="90" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">~1–3ms（硬件固定）</text>
+          <text x="90" y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">优化：低延迟 IMU 模式</text>
 
           {/* Arrow */}
           <line x1="164" y1="84" x2="176" y2="84" stroke="var(--accent)" strokeWidth="2" />
@@ -29,9 +29,9 @@ export function MotionToPhotonDiagram() {
           {/* Stage 2: CPU */}
           <rect x="180" y="44" width="140" height="80" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
           <text x="250" y="66" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">② CPU · 游戏逻辑</text>
-          <text x="250" y="82" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Update/物理/AI/输入</text>
-          <text x="250" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">预算 ≤9ms (90FPS)</text>
-          <text x="250" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：缓存引用·分帧执行</text>
+          <text x="250" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Update/物理/AI/输入</text>
+          <text x="250" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">预算 ≤9ms (90FPS)</text>
+          <text x="250" y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">优化：缓存引用·分帧执行</text>
 
           {/* Arrow */}
           <line x1="324" y1="84" x2="336" y2="84" stroke="var(--accent)" strokeWidth="2" />
@@ -40,9 +40,9 @@ export function MotionToPhotonDiagram() {
           {/* Stage 3: GPU */}
           <rect x="340" y="44" width="140" height="80" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
           <text x="410" y="66" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">③ GPU · 渲染双眼</text>
-          <text x="410" y="82" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Single Pass × FFR</text>
-          <text x="410" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">预算 ≤8ms (90FPS)</text>
-          <text x="410" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：SPI/FFR/RenderScale</text>
+          <text x="410" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Single Pass × FFR</text>
+          <text x="410" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">预算 ≤8ms (90FPS)</text>
+          <text x="410" y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">优化：SPI/FFR/RenderScale</text>
 
           {/* Arrow */}
           <line x1="484" y1="84" x2="496" y2="84" stroke="var(--accent)" strokeWidth="2" />
@@ -51,9 +51,9 @@ export function MotionToPhotonDiagram() {
           {/* Stage 4: Comp + Display */}
           <rect x="500" y="44" width="130" height="80" rx="6" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="565" y="66" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">④ 合成+显示</text>
-          <text x="565" y="82" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">畸变校正·ATW·刷新</text>
-          <text x="565" y="96" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">~2–4ms（设备端）</text>
-          <text x="565" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：Late Latch</text>
+          <text x="565" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">畸变校正·ATW·刷新</text>
+          <text x="565" y="96" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">~2–4ms（设备端）</text>
+          <text x="565" y="112" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">优化：Late Latch</text>
 
           {/* Bottom: total chain with critical threshold */}
           <rect x="20" y="140" width="610" height="38" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
@@ -61,7 +61,7 @@ export function MotionToPhotonDiagram() {
 
           {/* Deadline warning */}
           <rect x="20" y="186" width="610" height="24" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1" />
-          <text x="325" y="203" textAnchor="middle" fontSize="10" fill="var(--danger)">
+          <text x="325" y="203" textAnchor="middle" fontSize="11" fill="var(--danger)">
             ⚠ 任何阶段超时 → 错过帧提交截止 → 合成重显上一帧 → 视觉跳跃 → 用户晕
           </text>
         </svg>

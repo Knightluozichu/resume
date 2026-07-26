@@ -352,7 +352,7 @@ export function JoinVsDetachTimeline() {
             x={slotX(2) - SEG_GAP / 2}
             y={J_MAIN_Y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -393,7 +393,7 @@ export function JoinVsDetachTimeline() {
             x={TRACK_X + TRACK_W + SEG_GAP}
             y={J_CHILD_Y + LANE_H + 24}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →
@@ -459,7 +459,7 @@ export function JoinVsDetachTimeline() {
             x={slotX(2) + SLOT_W + SEG_GAP / 2}
             y={D_MAIN_Y - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -470,7 +470,7 @@ export function JoinVsDetachTimeline() {
             x={slotX(5) + SLOT_W / 2}
             y={D_CHILD_Y + LANE_H + 20}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill={CHILD_COLOR}
           >

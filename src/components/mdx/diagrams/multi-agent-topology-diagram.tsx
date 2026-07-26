@@ -225,7 +225,7 @@ function NodeBox({ cx, cy, w, h, label, sub, color, filled }: NodeBoxProps) {
           x={cx}
           y={cy + 15}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {sub}
@@ -426,7 +426,7 @@ function MultiAgentTopologyDiagramInner() {
                   x={SV_MARGIN_X + 6}
                   y={172}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--accent)"
                 >
@@ -457,7 +457,7 @@ function MultiAgentTopologyDiagramInner() {
                   x={VIEW_W - SV_MARGIN_X - 6}
                   y={172}
                   textAnchor="end"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill="var(--text-secondary)"
                 >
@@ -516,7 +516,7 @@ function MultiAgentTopologyDiagramInner() {
                   x={SW_CX}
                   y={SW_CY + 13}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   谁接手谁商量
@@ -640,7 +640,7 @@ function MultiAgentTopologyDiagramInner() {
                 x={VIEW_W / 2}
                 y={PL_CY + PL_H / 2 + 40}
                 textAnchor="middle"
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--success)"
               >

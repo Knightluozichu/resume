@@ -17,47 +17,47 @@ export function Wasm2023Diagram() {
 
           {/* Pipeline flow */}
           <rect x="20" y="48" width="90" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="65" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">C# 源码</text>
+          <text x="65" y="72" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">C# 源码</text>
 
           <line x1="112" y1="68" x2="122" y2="68" stroke="var(--accent)" strokeWidth="2" />
           <polygon points="118,62 128,68 118,74" fill="var(--accent)" />
 
           <rect x="130" y="48" width="90" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="175" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">IL2CPP</text>
+          <text x="175" y="72" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">IL2CPP</text>
 
           <line x1="222" y1="68" x2="232" y2="68" stroke="var(--accent)" strokeWidth="2" />
           <polygon points="228,62 238,68 228,74" fill="var(--accent)" />
 
           <rect x="240" y="48" width="100" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="290" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">C++ 中间码</text>
+          <text x="290" y="72" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">C++ 中间码</text>
 
           <line x1="342" y1="68" x2="352" y2="68" stroke="var(--accent)" strokeWidth="2" />
           <polygon points="348,62 358,68 348,74" fill="var(--accent)" />
 
           <rect x="360" y="48" width="110" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
-          <text x="415" y="68" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">Emscripten</text>
-          <text x="415" y="82" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">+ Wasm 2023</text>
+          <text x="415" y="68" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Emscripten</text>
+          <text x="415" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">+ Wasm 2023</text>
 
           <line x1="472" y1="68" x2="482" y2="68" stroke="var(--accent)" strokeWidth="2" />
           <polygon points="478,62 488,68 478,74" fill="var(--accent)" />
 
           <rect x="490" y="48" width="100" height="40" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="2" />
-          <text x="540" y="68" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--success)">.wasm</text>
-          <text x="540" y="82" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">字节码</text>
+          <text x="540" y="68" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">.wasm</text>
+          <text x="540" y="82" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">字节码</text>
 
           {/* 2023 improvements box */}
           <rect x="20" y="108" width="570" height="110" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="40" y="132" fontSize="12" fontWeight="600" fill="var(--accent)">Wasm 2023 关键改进 vs 旧版 Wasm</text>
 
-          <text x="40" y="156" fontSize="10" fill="var(--text-primary)">❶ Sign Extension · Non-Trapping FP-to-Int · Bulk Memory 指令集完成</text>
-          <text x="56" y="174" fontSize="9" fill="var(--text-secondary)">旧版缺失这些指令 → IL2CPP 绕路生成大量辅助指令 → .wasm 体积大 5–15%、解析更慢</text>
+          <text x="40" y="156" fontSize="11" fill="var(--text-primary)">❶ Sign Extension · Non-Trapping FP-to-Int · Bulk Memory 指令集完成</text>
+          <text x="56" y="174" fontSize="11" fill="var(--text-secondary)">旧版缺失这些指令 → IL2CPP 绕路生成大量辅助指令 → .wasm 体积大 5–15%、解析更慢</text>
 
-          <text x="40" y="194" fontSize="10" fill="var(--text-primary)">❷ Wasm GC（部分落地）→ IL2CPP 托管对象与浏览器 JS 引擎 GC 直接协作</text>
-          <text x="56" y="212" fontSize="9" fill="var(--text-secondary)">旧版全靠手动引用计数桥接 · 开销高 · 易泄漏 · 2023 版效率大幅提升</text>
+          <text x="40" y="194" fontSize="11" fill="var(--text-primary)">❷ Wasm GC（部分落地）→ IL2CPP 托管对象与浏览器 JS 引擎 GC 直接协作</text>
+          <text x="56" y="212" fontSize="11" fill="var(--text-secondary)">旧版全靠手动引用计数桥接 · 开销高 · 易泄漏 · 2023 版效率大幅提升</text>
 
           {/* Threads */}
           <rect x="20" y="236" width="570" height="34" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="40" y="258" fontSize="10" fill="var(--text-primary)">❸ Native Wasm Threads：多线程 Worker → Job System + Burst 在浏览器里并行跑</text>
+          <text x="40" y="258" fontSize="11" fill="var(--text-primary)">❸ Native Wasm Threads：多线程 Worker → Job System + Burst 在浏览器里并行跑</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">

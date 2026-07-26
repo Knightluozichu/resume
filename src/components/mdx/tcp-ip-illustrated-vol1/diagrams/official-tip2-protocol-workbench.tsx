@@ -86,7 +86,7 @@ export function Tip2ProtocolWorkbench({
           <button
             type="button"
             onClick={() => setFault((value) => !value)}
-            className={`min-h-9 rounded border px-3 py-1.5 text-sm font-medium ${fault ? "border-rose-600 bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200" : "border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}
+            className={`min-h-11 rounded border px-3 py-1.5 text-sm font-medium ${fault ? "border-rose-600 bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200" : "border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}
           >
             {fault ? "恢复基线报文" : "注入单变量故障"}
           </button>
@@ -105,7 +105,7 @@ export function Tip2ProtocolWorkbench({
                 key={stage.label}
                 type="button"
                 onClick={() => setActiveStage(index)}
-                className={`min-h-10 border px-1 py-2 text-xs font-medium ${activeStage === index ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"}`}
+                className={`min-h-11 border px-1 py-2 text-xs font-medium ${activeStage === index ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"}`}
               >
                 {stage.label}
               </button>

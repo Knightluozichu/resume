@@ -126,7 +126,7 @@ export function DrawcallCompareDiagram() {
                   x="180"
                   y={yy - 6}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fontFamily="monospace"
                   fill="var(--danger)"
                 >
@@ -227,7 +227,7 @@ export function DrawcallCompareDiagram() {
             x="540"
             y="146"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--success)"
           >
@@ -237,7 +237,7 @@ export function DrawcallCompareDiagram() {
             x="540"
             y="184"
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >

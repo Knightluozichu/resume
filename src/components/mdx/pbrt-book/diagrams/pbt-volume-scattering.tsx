@@ -129,7 +129,7 @@ export function PbtVolumeScatteringDiagram({
                   x={x + 87}
                   y="155"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={primary}
                 >
@@ -139,7 +139,7 @@ export function PbtVolumeScatteringDiagram({
                   x={x + 87}
                   y="199"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {stage.note}
@@ -361,7 +361,7 @@ export function PbtVolumeProcessesDiagram() {
                   x="92"
                   y="222"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {process.note}
@@ -370,7 +370,7 @@ export function PbtVolumeProcessesDiagram() {
                   x="92"
                   y="252"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={primary}
                 >
                   {index < 2 ? "能量移除 / 加入" : "方向重分配"}
@@ -486,7 +486,7 @@ export function PbtTransmittanceDiagram() {
               x="180"
               y="184"
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fill={secondary}
             >
               常数 σt，解析 Beer–Lambert
@@ -540,7 +540,7 @@ export function PbtTransmittanceDiagram() {
               x="180"
               y="42"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={danger}
             >
               局部 majorant 上界
@@ -566,7 +566,7 @@ export function PbtTransmittanceDiagram() {
               x="180"
               y="196"
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fill={secondary}
             >
               指数候选事件：真实 / null / 越过
@@ -585,7 +585,7 @@ export function PbtTransmittanceDiagram() {
             x="400"
             y="329"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill={primary}
           >
             σn(p) = σmaj - σt(p)，填充虚构粒子后可使用指数采样
@@ -697,7 +697,7 @@ export function PbtPhaseFunctionDiagram() {
                   stroke={warning}
                   strokeWidth="3"
                 />
-                <text x="41" y="176" fontSize="9" fill={warning}>
+                <text x="41" y="176" fontSize="11" fill={warning}>
                   来光传播
                 </text>
                 {index === 0 && (
@@ -733,7 +733,7 @@ export function PbtPhaseFunctionDiagram() {
                   x="115"
                   y="265"
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {phase.note}
@@ -876,7 +876,7 @@ export function PbtMediumDiagram() {
               x="125"
               y="207"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               nullptr Material：边界不可见
@@ -927,7 +927,7 @@ export function PbtMediumDiagram() {
                   x="64"
                   y="62"
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {medium.note}
@@ -946,7 +946,7 @@ export function PbtMediumDiagram() {
               x="232"
               y="194"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               RayMajorantIterator 按前到后返回不重叠区间

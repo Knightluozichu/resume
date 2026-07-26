@@ -63,7 +63,7 @@ export function DsaStringHashLab() {
               type="button"
               onClick={() => setWord(candidate)}
               className={
-                "min-h-10 border px-2 font-mono text-xs font-semibold " +
+                "min-h-11 border px-2 font-mono text-xs font-semibold " +
                 (word === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -132,7 +132,7 @@ export function DsaSeparateChainingLab() {
               <div className="flex items-center justify-center border border-border bg-background font-mono text-xs text-muted">
                 {bucket}
               </div>
-              <div className="flex min-h-10 items-center gap-1 border-y border-r border-border bg-background p-1">
+              <div className="flex min-h-11 items-center gap-1 border-y border-r border-border bg-background p-1">
                 {chain.length === 0 ? (
                   <span className="px-2 text-xs text-muted">empty</span>
                 ) : (
@@ -201,7 +201,7 @@ export function DsaOpenAddressingProbeLab() {
               type="button"
               onClick={() => setMode(candidate)}
               className={
-                "min-h-10 border px-1 text-xs font-semibold " +
+                "min-h-11 border px-1 text-xs font-semibold " +
                 (mode === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -330,7 +330,7 @@ export function DsaStdHashSemanticsLab() {
               type="button"
               onClick={() => setOperation(candidate)}
               className={
-                "min-h-10 border px-1 text-xs font-semibold " +
+                "min-h-11 border px-1 text-xs font-semibold " +
                 (operation === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -376,7 +376,7 @@ export function DsaExtendibleHashingLab() {
               type="button"
               onClick={() => setGlobalDepth(depth)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (globalDepth === depth
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -394,7 +394,7 @@ export function DsaExtendibleHashingLab() {
               </div>
               <div
                 className={
-                  "min-h-10 border-y border-r p-2 font-mono text-xs " +
+                  "min-h-11 border-y border-r p-2 font-mono text-xs " +
                   (bucket.keys.length > 2
                     ? "border-warning bg-warning/10 text-warning"
                     : "border-success bg-success/10 text-success")

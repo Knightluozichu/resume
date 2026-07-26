@@ -225,7 +225,7 @@ export function TimeScaleDiagram() {
             x={LEFT_CX}
             y={CLOCK_CY - CLOCK_R - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             用「游戏时间」（受 timeScale 缩放）
@@ -248,7 +248,7 @@ export function TimeScaleDiagram() {
             x={RIGHT_CX}
             y={CLOCK_CY - CLOCK_R - 12}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             用「真实时间」（不受 timeScale 影响）
@@ -388,7 +388,7 @@ export function TimeScaleDiagram() {
               x={VIEW_W / 2}
               y={CONC_Y + 42}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               否则 WaitForSeconds 会随游戏一起冻住，那个 yield

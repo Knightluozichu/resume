@@ -44,13 +44,13 @@ export function ShortCircuitDiagram() {
           <text x={rightX} y={row1Y - 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={"var(--text-secondary)"} fontFamily="monospace">
             求值 b
           </text>
-          <text x={rightX} y={row1Y + 14} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={rightX} y={row1Y + 14} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             a 为假时跳过
           </text>
 
           <line x1={leftX + boxW / 2} y1={row1Y} x2={rightX - boxW / 2 - 40} y2={row1Y} stroke={"var(--accent)"} strokeWidth="1.5" />
           <line x1={leftX + boxW / 2 + 20} y1={row1Y + boxH / 2} x2={leftX + boxW / 2 + 20} y2={row1Y + 52} stroke={"var(--accent)"} strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={leftX + boxW / 2 + 24} y={row1Y + 68} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+          <text x={leftX + boxW / 2 + 24} y={row1Y + 68} fontSize="11" fill={"var(--accent)"} fontFamily="system-ui">
             a==0 → 直接得 0，b 不算
           </text>
 
@@ -72,13 +72,13 @@ export function ShortCircuitDiagram() {
           <text x={rightX} y={row2Y - 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={"var(--text-secondary)"} fontFamily="monospace">
             求值 b
           </text>
-          <text x={rightX} y={row2Y + 14} textAnchor="middle" fontSize="10" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={rightX} y={row2Y + 14} textAnchor="middle" fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             a 为真时跳过
           </text>
 
           <line x1={leftX + boxW / 2} y1={row2Y} x2={rightX - boxW / 2 - 40} y2={row2Y} stroke={"var(--text-primary)"} strokeWidth="1.5" />
           <line x1={leftX + boxW / 2 + 20} y1={row2Y + boxH / 2} x2={leftX + boxW / 2 + 20} y2={row2Y + 52} stroke={"var(--text-primary)"} strokeWidth="1.5" strokeDasharray="4 3" />
-          <text x={leftX + boxW / 2 + 24} y={row2Y + 68} fontSize="10" fill={"var(--text-primary)"} fontFamily="system-ui">
+          <text x={leftX + boxW / 2 + 24} y={row2Y + 68} fontSize="11" fill={"var(--text-primary)"} fontFamily="system-ui">
             a!=0 → 直接得 1，b 不算
           </text>
 

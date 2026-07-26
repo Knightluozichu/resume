@@ -38,6 +38,17 @@ export function CssSecretsOfficialLab({
   const [stage, setStage] = useState(view === "evidence" ? 5 : 0);
   const [stress, setStress] = useState(2);
   const [fallback, setFallback] = useState(view !== "experiment");
+  function resetExperiment() {
+    setMode(view === "experiment"
+      ? "enhanced"
+      : view === "evidence"
+        ? "recovery"
+        : "baseline");
+    setStage(view === "evidence" ? 5 : 0);
+    setStress(2);
+    setFallback(view !== "experiment");
+  }
+
 
   const evidence = useMemo(() => {
     const enhanced = mode === "enhanced" || mode === "recovery";
@@ -56,6 +67,7 @@ export function CssSecretsOfficialLab({
       className="my-6 overflow-hidden border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950"
       aria-label={title}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-zinc-500">{label}</p>
@@ -82,7 +94,7 @@ export function CssSecretsOfficialLab({
                 key={item}
                 type="button"
                 onClick={() => setMode(item)}
-                className="min-h-9 border px-3 text-xs font-semibold"
+                className="min-h-11 border px-3 text-xs font-semibold"
                 style={{
                   borderColor: mode === item ? color : "#d4d4d8",
                   background: mode === item ? soft : "transparent",

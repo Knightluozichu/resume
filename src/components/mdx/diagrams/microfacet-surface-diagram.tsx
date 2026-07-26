@@ -147,7 +147,7 @@ export function MicrofacetSurfaceDiagram() {
             x="175"
             y="162"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             微面法线对齐
@@ -168,7 +168,7 @@ export function MicrofacetSurfaceDiagram() {
             x="175"
             y="260"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             微面朝向一致 → 反射方向集中
@@ -301,7 +301,7 @@ export function MicrofacetSurfaceDiagram() {
             x="525"
             y="162"
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             微面法线随机
@@ -322,7 +322,7 @@ export function MicrofacetSurfaceDiagram() {
             x="525"
             y="260"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             微面朝向随机 → 反射方向分散

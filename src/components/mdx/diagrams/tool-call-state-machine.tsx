@@ -166,7 +166,7 @@ export function ToolCallStateMachine() {
                 x={SHARED_X + 14}
                 y={y + 32}
                 textAnchor="start"
-                fontSize="10"
+                fontSize="11"
                 fontFamily={c.mono ? "var(--font-mono)" : undefined}
                 fill="var(--text-primary)"
               >
@@ -178,7 +178,7 @@ export function ToolCallStateMachine() {
                   x={VIEW_W / 2}
                   y={y + SHARED_CARD_H + 8}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   ↓
@@ -256,7 +256,7 @@ export function ToolCallStateMachine() {
                   x={LEFT_X + 16}
                   y={y + 35}
                   textAnchor="start"
-                  fontSize="10"
+                  fontSize="11"
                   fontFamily={c.mono ? "var(--font-mono)" : undefined}
                   fill="var(--text-primary)"
                 >
@@ -315,7 +315,7 @@ export function ToolCallStateMachine() {
                   x={RIGHT_X + 16}
                   y={y + 35}
                   textAnchor="start"
-                  fontSize="10"
+                  fontSize="11"
                   fontFamily={c.mono ? "var(--font-mono)" : undefined}
                   fill="var(--text-primary)"
                 >
@@ -331,7 +331,7 @@ export function ToolCallStateMachine() {
           x={LEFT_X}
           y={VIEW_H - 14}
           textAnchor="start"
-          fontSize="10.5"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {path === "success"

@@ -27,7 +27,7 @@ export function Algs4ProgrammingModelMap() {
               type="button"
               onClick={() => setLayer(candidate)}
               className={
-                "min-h-10 border px-1 text-[10px] font-semibold sm:text-xs " +
+                "min-h-11 border px-1 text-[10px] font-semibold sm:text-xs " +
                 (layer === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -117,7 +117,7 @@ export function Algs4ArrayAliasLab() {
               type="button"
               onClick={() => setMode(candidate)}
               className={
-                "min-h-10 border text-xs font-semibold " +
+                "min-h-11 border text-xs font-semibold " +
                 (mode === candidate
                   ? "border-accent bg-accent text-background"
                   : "border-border bg-background text-primary")
@@ -251,7 +251,7 @@ export function Algs4BinarySearchTraceLab() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs font-semibold text-primary">key<select className="mt-1 min-h-10 w-full border border-border bg-background px-2 font-mono" value={key} onChange={(event) => { setKey(Number(event.target.value)); setRequestedStep(0); }}>{[14, 37, 58, 42, 99].map((candidate) => <option key={candidate}>{candidate}</option>)}</select></label>
+          <label className="text-xs font-semibold text-primary">key<select className="mt-1 min-h-11 w-full border border-border bg-background px-2 font-mono" value={key} onChange={(event) => { setKey(Number(event.target.value)); setRequestedStep(0); }}>{[14, 37, 58, 42, 99].map((candidate) => <option key={candidate}>{candidate}</option>)}</select></label>
           <label className="text-xs font-semibold text-primary">step {step + 1}/{frames.length}<input className="mt-3 w-full accent-current" type="range" min="0" max={frames.length - 1} value={step} onChange={(event) => setRequestedStep(Number(event.target.value))} /></label>
         </div>
         <div className="mt-4 grid grid-cols-10 gap-1">

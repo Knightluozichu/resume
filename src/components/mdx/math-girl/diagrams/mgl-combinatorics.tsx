@@ -188,7 +188,7 @@ export function MglCombinatoricsDiagram() {
               </g>
             ))
           ))}
-          <text x="520" y="208" textAnchor="middle" fontSize="10" fill={secondary}>C(n,k) = C(n-1,k-1) + C(n-1,k)</text>
+          <text x="520" y="208" textAnchor="middle" fontSize="11" fill={secondary}>C(n,k) = C(n-1,k-1) + C(n-1,k)</text>
 
           {/* ===== 右下：容斥原理 ===== */}
           <rect x="340" y="224" width="332" height="120" rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.4" />
@@ -199,7 +199,7 @@ export function MglCombinatoricsDiagram() {
           <circle cx="500" cy="296" r="36" fill={danger} fillOpacity="0.15" stroke={danger} strokeWidth="1.5" />
           <text x="420" y="300" textAnchor="middle" fontSize="11" fill={accent}>|A|</text>
           <text x="520" y="300" textAnchor="middle" fontSize="11" fill={danger}>|B|</text>
-          <text x="470" y="300" textAnchor="middle" fontSize="10" fill={primary}>∩</text>
+          <text x="470" y="300" textAnchor="middle" fontSize="11" fill={primary}>∩</text>
 
           <text x="506" y="338" textAnchor="middle" fontSize="12" fontFamily="monospace" fill={primary}>|A∪B| = |A| + |B| - |A∩B|</text>
 

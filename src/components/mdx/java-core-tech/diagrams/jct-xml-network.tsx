@@ -49,29 +49,29 @@ export function JctXmlNetworkDiagram() {
           >
             XML解析方式
           </text>
-          <text x="45" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="90" fontSize="11" fill="var(--text-secondary)">
             DOM: 整棵树加载到内存
           </text>
-          <text x="45" y="106" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="106" fontSize="11" fill="var(--text-secondary)">
             {" "}
             DocumentBuilder / Element / NodeList
           </text>
-          <text x="45" y="122" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="122" fontSize="11" fill="var(--text-secondary)">
             {" "}
             适合小文件, 可随机访问
           </text>
-          <text x="45" y="142" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="142" fontSize="11" fill="var(--text-secondary)">
             SAX: 事件驱动, 流式解析
           </text>
-          <text x="45" y="158" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="158" fontSize="11" fill="var(--text-secondary)">
             {" "}
             startElement / endElement
           </text>
-          <text x="45" y="174" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="174" fontSize="11" fill="var(--text-secondary)">
             {" "}
             适合大文件, 只读, 内存省
           </text>
-          <text x="45" y="194" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="194" fontSize="11" fill="var(--text-secondary)">
             StAX: 拉取式流解析（Cursor）
           </text>
 
@@ -97,28 +97,28 @@ export function JctXmlNetworkDiagram() {
           >
             JSON处理
           </text>
-          <text x="405" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="90" fontSize="11" fill="var(--text-secondary)">
             Jackson:
           </text>
-          <text x="405" y="106" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="106" fontSize="11" fill="var(--text-secondary)">
             {" "}
             ObjectMapper mapper = new ObjectMapper();
           </text>
-          <text x="405" y="122" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="122" fontSize="11" fill="var(--text-secondary)">
             {" "}
             String json = mapper.writeValueAsString(obj);
           </text>
-          <text x="405" y="138" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="138" fontSize="11" fill="var(--text-secondary)">
             {" "}
             User u = mapper.readValue(json, User.class);
           </text>
-          <text x="405" y="158" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="158" fontSize="11" fill="var(--text-secondary)">
             Gson: toJson / fromJson
           </text>
-          <text x="405" y="174" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="174" fontSize="11" fill="var(--text-secondary)">
             @JsonProperty 重命名
           </text>
-          <text x="405" y="194" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="194" fontSize="11" fill="var(--text-secondary)">
             @JsonIgnore 忽略字段
           </text>
 
@@ -155,19 +155,19 @@ export function JctXmlNetworkDiagram() {
           >
             Socket / ServerSocket
           </text>
-          <text x="45" y="290" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="290" fontSize="11" fill="var(--text-secondary)">
             ServerSocket server = new ServerSocket(8080);
           </text>
-          <text x="45" y="306" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="306" fontSize="11" fill="var(--text-secondary)">
             Socket client = server.accept(); // 阻塞等待
           </text>
-          <text x="45" y="322" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="322" fontSize="11" fill="var(--text-secondary)">
             InputStream in = client.getInputStream();
           </text>
-          <text x="45" y="338" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="338" fontSize="11" fill="var(--text-secondary)">
             OutputStream out = client.getOutputStream();
           </text>
-          <text x="45" y="358" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="358" fontSize="11" fill="var(--text-secondary)">
             TCP: 可靠, 面向连接
           </text>
 
@@ -192,21 +192,21 @@ export function JctXmlNetworkDiagram() {
           >
             HttpClient（Java 11+）
           </text>
-          <text x="405" y="290" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="290" fontSize="11" fill="var(--text-secondary)">
             HttpClient client = HttpClient.newHttpClient();
           </text>
-          <text x="405" y="306" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="306" fontSize="11" fill="var(--text-secondary)">
             HttpRequest req = HttpRequest.newBuilder()
           </text>
-          <text x="405" y="322" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="322" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .uri(URI.create(&quot;https://api.example.com&quot;))
           </text>
-          <text x="405" y="338" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="338" fontSize="11" fill="var(--text-secondary)">
             {" "}
             .GET().build();
           </text>
-          <text x="405" y="358" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="358" fontSize="11" fill="var(--text-secondary)">
             HttpResponse&lt;String&gt; res = client.send(...);
           </text>
 
@@ -233,16 +233,16 @@ export function JctXmlNetworkDiagram() {
           >
             URL / URI / InetAddress
           </text>
-          <text x="45" y="430" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="430" fontSize="11" fill="var(--text-secondary)">
             URL: 统一资源定位符, 可打开连接
           </text>
-          <text x="45" y="446" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="446" fontSize="11" fill="var(--text-secondary)">
             URI: 统一资源标识符, 纯标识, 不含连接能力
           </text>
-          <text x="45" y="462" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="462" fontSize="11" fill="var(--text-secondary)">
             InetAddress: 主机名与IP地址解析, getByName(&quot;localhost&quot;)
           </text>
-          <text x="45" y="478" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="478" fontSize="11" fill="var(--text-secondary)">
             DatagramSocket: UDP无连接通信, 适合实时但不保证可靠
           </text>
         </svg>

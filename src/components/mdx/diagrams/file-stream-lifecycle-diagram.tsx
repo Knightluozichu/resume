@@ -94,7 +94,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[0].x - 30}
               y={stages[0].y + 82}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               fontFamily="monospace"
             >
@@ -122,7 +122,7 @@ export function FileStreamLifecycleDiagram({
             <text
               x={stages[0].x + 20}
               y={stages[0].y + 88}
-              fontSize="10"
+              fontSize="11"
               fill={accent}
             >
               构造函数打开
@@ -130,7 +130,7 @@ export function FileStreamLifecycleDiagram({
             <text
               x={stages[0].x + 20}
               y={stages[0].y + 108}
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               含文件/二进制模式
@@ -173,7 +173,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[1].x}
               y={stages[1].y + 70}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -183,7 +183,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[1].x}
               y={stages[1].y + 86}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -193,7 +193,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[1].x}
               y={stages[1].y + 102}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -203,7 +203,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[1].x}
               y={stages[1].y + 120}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
             >
               从硬盘→内存缓冲→变量
@@ -246,7 +246,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[2].x}
               y={stages[2].y + 72}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -256,7 +256,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[2].x}
               y={stages[2].y + 88}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -266,7 +266,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[2].x}
               y={stages[2].y + 108}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={primary}
               fontFamily="monospace"
             >
@@ -276,7 +276,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[2].x}
               y={stages[2].y + 122}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
             >
               在内存中操作数据
@@ -329,7 +329,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[3].x}
               y={stages[3].y + 92}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               或析构函数自动关闭
@@ -338,7 +338,7 @@ export function FileStreamLifecycleDiagram({
               x={stages[3].x}
               y={stages[3].y + 112}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
             >
               释放文件句柄·刷新缓冲
@@ -410,7 +410,7 @@ export function FileStreamLifecycleDiagram({
             x={w / 2}
             y={244}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             打开 → 读取 → 处理 → 关闭

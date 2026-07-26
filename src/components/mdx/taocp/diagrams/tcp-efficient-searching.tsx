@@ -23,7 +23,7 @@ export function TcpSequentialSearchLab() {
   const comparisons = index < 0 ? ORDERED.length : index + 1;
   return (
     <Figure caption="Sequential search needs no ordering and stops at the first match; a sentinel removes an inner boundary test without changing linear comparison growth.">
-      <label className="text-sm font-semibold text-primary">target = {target}<input className="mt-2 w-full accent-current" type="range" min="0" max="95" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">target = {target}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="95" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-11 gap-1">{ORDERED.map((value, position) => <div key={value} className={`border p-2 text-center font-mono text-xs ${position < comparisons ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-primary"}`}>{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="comparisons" value={comparisons.toString()} /><Stat label="index" value={index.toString()} tone={index < 0 ? "warning" : "success"} /><Stat label="ordering required" value="no" /></div>
     </Figure>
@@ -49,7 +49,7 @@ export function TcpBinarySearchLab() {
   const found = result.index < ORDERED.length && ORDERED[result.index] === target;
   return (
     <Figure caption="Half-open binary search preserves the invariant that every valid lower-bound answer lies in [low, high]; the same contract handles missing keys and duplicates.">
-      <label className="text-sm font-semibold text-primary">target = {target}<input className="mt-2 w-full accent-current" type="range" min="0" max="95" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">target = {target}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="95" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-11 gap-1">{ORDERED.map((value, index) => <div key={value} className={`border p-2 text-center font-mono text-xs ${result.mids.includes(index) ? "border-warning bg-warning/20 text-warning" : index === result.index ? "border-success bg-success/15 text-success" : "border-border bg-background text-primary"}`}>{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="probed indices" value={result.mids.join(" → ")} /><Stat label="lower bound" value={result.index.toString()} /><Stat label="exact match" value={found ? "yes" : "no"} tone={found ? "success" : "warning"} /></div>
     </Figure>
@@ -70,7 +70,7 @@ export function TcpBstSearchLab() {
   const found = path.at(-1) === target;
   return (
     <Figure caption="Binary-search-tree lookup follows one root-to-leaf comparison path; cost is tree height, so shape is part of the data-structure contract.">
-      <label className="text-sm font-semibold text-primary">target key = {target}<input className="mt-2 w-full accent-current" type="range" min="1" max="15" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">target key = {target}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="15" value={target} onChange={(event) => setTarget(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-7 gap-2">{[8, 4, 12, 2, 6, 10, 14].map((value) => <Stat key={value} label={`key ${value}`} value={path.includes(value) ? `visit ${path.indexOf(value) + 1}` : "not visited"} tone={path.at(-1) === value && found ? "success" : path.includes(value) ? "warning" : "accent"} />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="search path" value={path.join(" → ")} /><Stat label="result" value={found ? "found" : "absent"} tone={found ? "success" : "warning"} /></div>
     </Figure>
@@ -104,7 +104,7 @@ export function TcpBTreeFanoutLab() {
   const height = Math.ceil(Math.log(records) / Math.log(fanout));
   return (
     <Figure caption="A multiway search tree matches one node to one storage block; larger fanout lowers height and therefore random block reads.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">block bytes = {blockSize}<input className="mt-2 w-full accent-current" type="range" min="1024" max="16384" step="1024" value={blockSize} onChange={(event) => setBlockSize(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">key bytes = {keyBytes}<input className="mt-2 w-full accent-current" type="range" min="4" max="64" step="4" value={keyBytes} onChange={(event) => setKeyBytes(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">block bytes = {blockSize}<input className="mt-2 h-11 w-full accent-current" type="range" min="1024" max="16384" step="1024" value={blockSize} onChange={(event) => setBlockSize(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">key bytes = {keyBytes}<input className="mt-2 h-11 w-full accent-current" type="range" min="4" max="64" step="4" value={keyBytes} onChange={(event) => setKeyBytes(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="estimated fanout" value={fanout.toString()} /><Stat label="records" value="1,000,000,000" /><Stat label="height bound" value={height.toString()} tone="success" /></div>
     </Figure>
   );
@@ -152,7 +152,7 @@ export function TcpChainingLab() {
   const longest = Math.max(...table.map((chain) => chain.length));
   return (
     <Figure caption="Separate chaining stores colliding keys in per-bucket collections; load factor predicts average work only under a suitable hash distribution.">
-      <label className="text-sm font-semibold text-primary">bucket count = {buckets}<input className="mt-2 w-full accent-current" type="range" min="3" max="13" value={buckets} onChange={(event) => setBuckets(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">bucket count = {buckets}<input className="mt-2 h-11 w-full accent-current" type="range" min="3" max="13" value={buckets} onChange={(event) => setBuckets(Number(event.target.value))} /></label>
       <div className="mt-4 grid gap-2 sm:grid-cols-4">{table.map((chain, index) => <Stat key={index} label={`bucket ${index}`} value={chain.join(" → ") || "empty"} tone={chain.length > 2 ? "warning" : "accent"} />)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="load factor" value={(HASH_KEYS.length / buckets).toFixed(2)} /><Stat label="longest chain" value={longest.toString()} tone="warning" /><Stat label="all keys retained" value={table.flat().length.toString()} tone="success" /></div>
     </Figure>

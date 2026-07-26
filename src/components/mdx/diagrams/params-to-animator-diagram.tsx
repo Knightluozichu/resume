@@ -265,7 +265,7 @@ export function ParamsToAnimatorDiagram() {
               x={L_X + 16}
               y={CODE_Y0}
               textAnchor="start"
-              fontSize="10.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -275,7 +275,7 @@ export function ParamsToAnimatorDiagram() {
               x={L_X + 16}
               y={CODE_Y0 + 16}
               textAnchor="start"
-              fontSize="10.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -287,7 +287,7 @@ export function ParamsToAnimatorDiagram() {
               x={L_X + 16}
               y={CODE_Y0 + CODE_DY}
               textAnchor="start"
-              fontSize="10.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -297,7 +297,7 @@ export function ParamsToAnimatorDiagram() {
               x={L_X + 16}
               y={CODE_Y0 + CODE_DY + 16}
               textAnchor="start"
-              fontSize="10.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -342,7 +342,7 @@ export function ParamsToAnimatorDiagram() {
             x={PARAM_X + PARAM_W / 2}
             y={PARAM_Y0 + 19}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             float Speed
@@ -375,7 +375,7 @@ export function ParamsToAnimatorDiagram() {
             x={PARAM_X + PARAM_W / 2}
             y={PARAM_Y0 + PARAM_DY + 19}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             trigger Jump
@@ -458,7 +458,7 @@ export function ParamsToAnimatorDiagram() {
                 x={ST_X + ST_W - 12}
                 y={ST_Y0 + i * ST_DY + 19}
                 textAnchor="end"
-                fontSize="8.5"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--text-secondary)"
               >

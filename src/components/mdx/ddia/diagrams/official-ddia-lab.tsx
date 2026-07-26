@@ -48,6 +48,18 @@ export function OfficialDdiaLab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     evidenceGates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setShapeIndex(1);
+    setNetworkDelay(40);
+    setReplicaLag(120);
+    setWriters(4);
+    setPartitioned(false);
+    setLinearizableRead(false);
+    setChecked(() =>
+    evidenceGates.map(() => false));
+  }
+
 
   const selectedNode = nodes[nodeIndex] ?? unitTitle;
   const shape = deploymentShapes[shapeIndex];
@@ -69,6 +81,7 @@ export function OfficialDdiaLab({
   if (mode === "architecture") {
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             数据流与责任边界
@@ -90,7 +103,7 @@ export function OfficialDdiaLab({
                 type="button"
                 onClick={() => setNodeIndex(index)}
                 className={
-                  "mb-1 min-h-9 w-full rounded px-2 py-1.5 text-left text-xs transition-colors " +
+                  "mb-1 min-h-11 w-full rounded px-2 py-1.5 text-left text-xs transition-colors " +
                   (index === nodeIndex
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800")
@@ -168,6 +181,7 @@ export function OfficialDdiaLab({
   if (mode === "failure") {
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
             延迟、并发与部分故障推演
@@ -270,6 +284,7 @@ export function OfficialDdiaLab({
 
   return (
     <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
           可复核证据门

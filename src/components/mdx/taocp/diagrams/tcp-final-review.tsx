@@ -64,7 +64,7 @@ export function TcpCostModelLab() {
   for (let mergedRuns = 1; mergedRuns < runs; mergedRuns *= ways) passes += 1;
   return (
     <Figure caption="The same asymptotic notation can hide distinct resources; a useful cost model names comparisons, memory traffic, random block reads, and full external passes separately.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">records = {records.toLocaleString()}<input className="mt-2 w-full accent-current" type="range" min="1000" max="10000000" step="1000" value={records} onChange={(event) => setRecords(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">initial runs = {runs}<input className="mt-2 w-full accent-current" type="range" min="2" max="256" value={runs} onChange={(event) => setRuns(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">merge ways = {ways}<input className="mt-2 w-full accent-current" type="range" min="2" max="32" value={ways} onChange={(event) => setWays(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">records = {records.toLocaleString()}<input className="mt-2 h-11 w-full accent-current" type="range" min="1000" max="10000000" step="1000" value={records} onChange={(event) => setRecords(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">initial runs = {runs}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="256" value={runs} onChange={(event) => setRuns(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">merge ways = {ways}<input className="mt-2 h-11 w-full accent-current" type="range" min="2" max="32" value={ways} onChange={(event) => setWays(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="n log2 n comparisons" value={Math.round(comparisons).toLocaleString()} /><Stat label="external passes" value={passes.toString()} tone="warning" /><Stat label="read+write data volumes" value={(2 * passes).toString()} tone="success" /></div>
     </Figure>
   );
@@ -113,7 +113,7 @@ export function TcpCapstoneLab() {
   const [project, setProject] = useState<keyof typeof CAPSTONES>("constraint solver");
   return (
     <Figure caption="A capstone is a producer-to-consumer chain across volumes: representation feeds transitions, transitions feed cost, and independent evidence closes the loop.">
-      <label className="text-sm font-semibold text-primary">capstone<select className="mt-2 block w-full border border-border bg-background p-2" value={project} onChange={(event) => setProject(event.target.value as keyof typeof CAPSTONES)}>{Object.keys(CAPSTONES).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <label className="text-sm font-semibold text-primary">capstone<select className="mt-2 block min-h-11 w-full border border-border bg-background p-2" value={project} onChange={(event) => setProject(event.target.value as keyof typeof CAPSTONES)}>{Object.keys(CAPSTONES).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
       <div className="mt-4 grid grid-cols-4 gap-2">{CAPSTONES[project].map((stage, index) => <Stat key={stage} label={`stage ${index + 1}`} value={stage} tone={index === 3 ? "success" : "accent"} />)}</div>
     </Figure>
   );
@@ -129,7 +129,7 @@ export function TcpReviewRouteLab() {
   const [profile, setProfile] = useState<keyof typeof ROUTES>("systems");
   return (
     <Figure caption="Review routes may change order by goal, but a final audit still checks every published unit and its prerequisite contracts.">
-      <label className="text-sm font-semibold text-primary">review profile<select className="mt-2 block w-full border border-border bg-background p-2" value={profile} onChange={(event) => setProfile(event.target.value as keyof typeof ROUTES)}><option value="systems">systems and storage</option><option value="numeric">numeric and simulation</option><option value="combinatorial">combinatorial search</option></select></label>
+      <label className="text-sm font-semibold text-primary">review profile<select className="mt-2 block min-h-11 w-full border border-border bg-background p-2" value={profile} onChange={(event) => setProfile(event.target.value as keyof typeof ROUTES)}><option value="systems">systems and storage</option><option value="numeric">numeric and simulation</option><option value="combinatorial">combinatorial search</option></select></label>
       <div className="mt-4 grid grid-cols-5 gap-2">{ROUTES[profile].map((unit, index) => <Stat key={unit} label={`stop ${index + 1}`} value={unit} tone={index === 0 ? "success" : "accent"} />)}</div>
     </Figure>
   );
@@ -140,7 +140,7 @@ export function TcpBookCertificateLab() {
   const passed = UNITS.filter((unit) => checked[unit.id]).length;
   return (
     <Figure caption="The book certificate requires all eight official units; a high average cannot compensate for one missing published chapter or an unverified outline unit.">
-      <div className="grid gap-3 sm:grid-cols-4">{UNITS.map((unit) => <label key={unit.id} className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={Boolean(checked[unit.id])} onChange={(event) => setChecked({ ...checked, [unit.id]: event.target.checked })} />{unit.id}</label>)}</div>
+      <div className="grid gap-3 sm:grid-cols-4">{UNITS.map((unit) => <label key={unit.id} className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={Boolean(checked[unit.id])} onChange={(event) => setChecked({ ...checked, [unit.id]: event.target.checked })} />{unit.id}</label>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="official units passed" value={`${passed}/8`} /><Stat label="book gate" value={passed === 8 ? "complete" : "incomplete"} tone={passed === 8 ? "success" : "warning"} /></div>
     </Figure>
   );

@@ -218,7 +218,7 @@ export function ContextBudgetDiagram() {
                   x={cx}
                   y={noteY}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {seg.note}

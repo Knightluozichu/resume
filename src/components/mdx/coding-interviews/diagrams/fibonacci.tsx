@@ -56,7 +56,7 @@ export function FibonacciRecursionOverlapDiagram() {
             </g>
           ))}
           <rect x="150" y="338" width="520" height="34" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="360" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">记忆化让每个n只求一次；自底向上连递归栈也省掉。</text>
+          <text x="410" y="360" textAnchor="middle" fontSize="11" fill="var(--text-primary)">记忆化让每个n只求一次；自底向上连递归栈也省掉。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">高亮节点在不同分支重复出现，n增大后调用数按指数级增长。</figcaption>
@@ -98,10 +98,10 @@ export function FrogStepCorrespondenceDiagram() {
           <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最后一步分类：两类方案互斥且穷尽</text>
           {[1, 2, 3, 4, 5].map((step) => <g key={step}><rect x={80 + step * 115} y={230 - step * 30} width="94" height={step * 30} fill="var(--bg)" stroke="var(--border)" /><text x={127 + step * 115} y={250 - step * 30} textAnchor="middle" fontSize="11" fill="var(--text-primary)">第{step}级</text></g>)}
           <path d="M426 126 C475 84 535 86 585 96" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#frog-arrow)" />
-          <text x="505" y="72" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--accent)">从n-1跳1级</text>
+          <text x="505" y="72" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">从n-1跳1级</text>
           <path d="M311 160 C390 84 500 70 585 96" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#frog-arrow)" />
-          <text x="392" y="62" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">从n-2跳2级</text>
-          <text x="410" y="282" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">J(n)=J(n-1)+J(n-2)，初值J(1)=1、J(2)=2。</text>
+          <text x="392" y="62" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">从n-2跳2级</text>
+          <text x="410" y="282" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">J(n)=J(n-1)+J(n-2)，初值J(1)=1、J(2)=2。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">递推式来自最后一步的完备分类，不是看到数列后机械套公式。</figcaption>

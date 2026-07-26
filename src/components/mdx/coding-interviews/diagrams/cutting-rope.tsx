@@ -37,7 +37,7 @@ export function RopePartitionDiagram() {
           <line x1="469" y1="78" x2="469" y2="180" stroke="var(--warning)" strokeWidth="3" />
           <text x="410" y="218" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--accent)">2 × 3 × 3 = 18</text>
           <rect x="172" y="248" width="476" height="30" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="410" y="268" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">段数由算法决定，但必须至少有一次切分。</text>
+          <text x="410" y="268" textAnchor="middle" fontSize="11" fill="var(--text-primary)">段数由算法决定，但必须至少有一次切分。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">相同总长度下，因子接近自然常数时乘积更大；整数最优集中在2和3。</figcaption>

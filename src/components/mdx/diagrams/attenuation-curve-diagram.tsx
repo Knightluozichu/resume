@@ -80,7 +80,7 @@ export function AttenuationCurveDiagram() {
             x={x0 - 10}
             y={yTop + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             1
@@ -89,7 +89,7 @@ export function AttenuationCurveDiagram() {
             x={x0 - 10}
             y={yBot + 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             0
@@ -133,7 +133,7 @@ export function AttenuationCurveDiagram() {
 
           {/* 起点满亮标记 */}
           <circle cx={sx(0)} cy={sy(1)} r="4" fill="var(--accent)" />
-          <text x={sx(0) + 8} y={sy(1) - 6} fontSize="10" fill="var(--accent)">
+          <text x={sx(0) + 8} y={sy(1) - 6} fontSize="11" fill="var(--accent)">
             近处≈满亮
           </text>
 
@@ -146,7 +146,7 @@ export function AttenuationCurveDiagram() {
             stroke="var(--accent)"
             strokeWidth="2.5"
           />
-          <text x="330" y="236" fontSize="10" fill="var(--text-secondary)">
+          <text x="330" y="236" fontSize="11" fill="var(--text-secondary)">
             含二次项 Kq·d²
           </text>
           <line
@@ -159,7 +159,7 @@ export function AttenuationCurveDiagram() {
             strokeDasharray="4 3"
             opacity="0.7"
           />
-          <text x="150" y="236" fontSize="10" fill="var(--text-secondary)">
+          <text x="150" y="236" fontSize="11" fill="var(--text-secondary)">
             仅线性（更慢）
           </text>
         </svg>

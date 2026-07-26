@@ -93,7 +93,7 @@ export function ParallaxPrincipleDiagram() {
             stroke="var(--border)"
             strokeWidth="2"
           />
-          <text x="430" y="172" fontSize="10" fill="var(--text-secondary)">
+          <text x="430" y="172" fontSize="11" fill="var(--text-secondary)">
             几何平面（着色器以为表面是平的）
           </text>
 
@@ -111,7 +111,7 @@ export function ParallaxPrincipleDiagram() {
             fill="var(--accent)"
             opacity="0.08"
           />
-          <text x="430" y="278" fontSize="10" fill="var(--accent)">
+          <text x="430" y="278" fontSize="11" fill="var(--accent)">
             真实表面轮廓（高度图里存的凹凸深度）
           </text>
 
@@ -162,7 +162,7 @@ export function ParallaxPrincipleDiagram() {
           >
             A
           </text>
-          <text x="328" y="158" fontSize="9.5" fill="var(--danger)">
+          <text x="328" y="158" fontSize="11" fill="var(--danger)">
             原采样点（没修正）
           </text>
 
@@ -184,7 +184,7 @@ export function ParallaxPrincipleDiagram() {
           >
             B
           </text>
-          <text x="150" y="176" fontSize="9.5" fill="var(--success)">
+          <text x="150" y="176" fontSize="11" fill="var(--success)">
             真正该看到的点（凸起先挡住视线）
           </text>
 

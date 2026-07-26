@@ -268,7 +268,7 @@ export function AgentRunTraceDiagram() {
           <text
             x={CODE_X + 4}
             y={CODE_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             高亮 = 当前正在执行这一块
@@ -339,7 +339,7 @@ export function AgentRunTraceDiagram() {
           <text
             x={TRACE_X + 4}
             y={TRACE_TITLE_Y + 8}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每执行一块，这里追加一条

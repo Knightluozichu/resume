@@ -129,7 +129,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_CX}
             y={SH_Y + 46}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             决定「表面怎么被画」的程序 / 模板
@@ -139,7 +139,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_X + 18}
             y={SH_Y + 78}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -149,7 +149,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_X + 18}
             y={SH_Y + 98}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -159,7 +159,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_X + 18}
             y={SH_Y + 118}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -169,7 +169,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_X + 18}
             y={SH_Y + 138}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -179,7 +179,7 @@ export function MaterialVsShaderDiagram() {
             x={SH_CX}
             y={SH_Y + 158}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--accent)"
           >
             一组待填的参数槽
@@ -225,7 +225,7 @@ export function MaterialVsShaderDiagram() {
                   x={MAT_X + 70}
                   y={y + 50}
                   textAnchor="start"
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -240,7 +240,7 @@ export function MaterialVsShaderDiagram() {
             x={MAT_X + MAT_W / 2}
             y={MAT_Y0 + 2 * MAT_DY + MAT_H + 20}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             三个 Material 都是同一个 Shader「复制」出来的，只是参数填得不同
@@ -251,7 +251,7 @@ export function MaterialVsShaderDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 22}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Shader 是「怎么画」的程序模板，Material

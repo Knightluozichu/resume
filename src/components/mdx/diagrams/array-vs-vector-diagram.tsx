@@ -47,7 +47,7 @@ export function ArrayVsVectorDiagram() {
                 <g key={i}>
                   <rect x={cx} y="0" width="78" height="52" rx="4" fill={token.accent} fillOpacity="0.12" stroke={token.accent} />
                   <text x={cx + 39} y="24" fontSize="12" fontWeight="600" fill={token.textSecondary} textAnchor="middle">?</text>
-                  <text x={cx + 39} y="44" fontSize="9" fill={token.textSecondary} textAnchor="middle">arr[{i}]</text>
+                  <text x={cx + 39} y="44" fontSize="11" fill={token.textSecondary} textAnchor="middle">arr[{i}]</text>
                 </g>
               );
             })}
@@ -59,20 +59,20 @@ export function ArrayVsVectorDiagram() {
           {/* 缺点列表 */}
           <g transform="translate(28, 200)">
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(229,181,103)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(229,181,103)">✗ 不能 arr[3] ← 4; 加第四个元素</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(229,181,103)">✗ 越界不检查 → 悄悄写坏相邻内存</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(229,181,103)">✗ 不能 arr[3] ← 4; 加第四个元素</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(229,181,103)">✗ 越界不检查 → 悄悄写坏相邻内存</text>
           </g>
 
           <g transform="translate(28, 258)">
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(229,181,103)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(229,181,103)">✗ 不知道自己的大小</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(229,181,103)">✗ 指针退化：arr 当参数传递会退化成 int*</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(229,181,103)">✗ 不知道自己的大小</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(229,181,103)">✗ 指针退化：arr 当参数传递会退化成 int*</text>
           </g>
 
           <g transform="translate(28, 316)">
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(229,181,103)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(229,181,103)">✗ 不能复制：int arr2[3] = arr; ← 错</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(229,181,103)">✗ 需要手动逐个复制</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(229,181,103)">✗ 不能复制：int arr2[3] = arr; ← 错</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(229,181,103)">✗ 需要手动逐个复制</text>
           </g>
 
           {/* ===== 右栏：std::vector ===== */}
@@ -91,7 +91,7 @@ export function ArrayVsVectorDiagram() {
                 <g key={i}>
                   <rect x={cx} y="0" width="54" height="52" rx="4" fill="rgb(63,185,127)" fillOpacity="0.15" stroke="rgb(63,185,127)" />
                   <text x={cx + 27} y="24" fontSize="12" fontWeight="600" fill={token.textPrimary} textAnchor="middle">{i + 1}0</text>
-                  <text x={cx + 27} y="44" fontSize="9" fill={token.textSecondary} textAnchor="middle">[{i}]</text>
+                  <text x={cx + 27} y="44" fontSize="11" fill={token.textSecondary} textAnchor="middle">[{i}]</text>
                 </g>
               );
             })}
@@ -101,8 +101,8 @@ export function ArrayVsVectorDiagram() {
               return (
                 <g key={i}>
                   <rect x={cx} y="0" width="54" height="52" rx="4" fill="none" stroke={token.border} strokeDasharray="3 3" opacity="0.4" />
-                  <text x={cx + 27} y="24" fontSize="10" fill={token.textSecondary} textAnchor="middle">预留</text>
-                  <text x={cx + 27} y="44" fontSize="9" fill={token.textSecondary} textAnchor="middle">[{i}]</text>
+                  <text x={cx + 27} y="24" fontSize="11" fill={token.textSecondary} textAnchor="middle">预留</text>
+                  <text x={cx + 27} y="44" fontSize="11" fill={token.textSecondary} textAnchor="middle">[{i}]</text>
                 </g>
               );
             })}
@@ -114,20 +114,20 @@ export function ArrayVsVectorDiagram() {
           {/* 优点列表 */}
           <g transform={`translate(${svgW / 2 + 30}, 200)`}>
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(63,185,127)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(63,185,127)">✓ v.push_back(40); 自动添加元素</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(63,185,127)">✓ v.size() 知道自己的大小</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(63,185,127)">✓ v.push_back(40); 自动添加元素</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(63,185,127)">✓ v.size() 知道自己的大小</text>
           </g>
 
           <g transform={`translate(${svgW / 2 + 30}, 258)`}>
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(63,185,127)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(63,185,127)">✓ v.at(i) 检查越界，安全</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(63,185,127)">✓ vector&lt;int&gt; v2 = v; 深拷贝</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(63,185,127)">✓ v.at(i) 检查越界，安全</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(63,185,127)">✓ vector&lt;int&gt; v2 = v; 深拷贝</text>
           </g>
 
           <g transform={`translate(${svgW / 2 + 30}, 316)`}>
             <rect x="0" y="0" width={254} height="44" rx="6" fill="rgb(63,185,127)" opacity="0.06" />
-            <text x="16" y="18" fontSize="10" fill="rgb(63,185,127)">✓ 范围 for 轻松遍历</text>
-            <text x="16" y="36" fontSize="10" fill="rgb(63,185,127)">✓ 传参不退化</text>
+            <text x="16" y="18" fontSize="11" fill="rgb(63,185,127)">✓ 范围 for 轻松遍历</text>
+            <text x="16" y="36" fontSize="11" fill="rgb(63,185,127)">✓ 传参不退化</text>
           </g>
 
           {/* 底部结论 */}

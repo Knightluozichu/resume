@@ -36,7 +36,7 @@ export function LodTransitionDiagram({ lod = 0 }: Props) {
             fill="var(--accent)"
             opacity="0.9"
           />
-          <text x="60" y="160" textAnchor="middle" fontSize="10" fill="var(--text-primary)">
+          <text x="60" y="160" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             Camera
           </text>
 
@@ -86,7 +86,7 @@ export function LodTransitionDiagram({ lod = 0 }: Props) {
                   x={x}
                   y="168"
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {info.dist}
@@ -95,7 +95,7 @@ export function LodTransitionDiagram({ lod = 0 }: Props) {
                   x={x}
                   y="182"
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize="11"
                   fill={isActive ? "var(--accent)" : "var(--text-secondary)"}
                 >
                   {info.tris}
@@ -117,10 +117,10 @@ export function LodTransitionDiagram({ lod = 0 }: Props) {
               strokeWidth={showCulled ? 2.5 : 1.5}
               strokeDasharray="6 4"
             />
-            <text x="564" y="124" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+            <text x="564" y="124" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
               Culled
             </text>
-            <text x="564" y="168" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+            <text x="564" y="168" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
               &gt;100m
             </text>
           </g>

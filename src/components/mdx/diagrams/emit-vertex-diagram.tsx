@@ -61,7 +61,7 @@ export function EmitVertexDiagram() {
             x="80"
             y="124"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -125,7 +125,7 @@ export function EmitVertexDiagram() {
             x={midCx}
             y="164"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             发完 4 个 → EndPrimitive()
@@ -173,7 +173,7 @@ export function EmitVertexDiagram() {
             x={rightCx}
             y="164"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             一片 billboard 面

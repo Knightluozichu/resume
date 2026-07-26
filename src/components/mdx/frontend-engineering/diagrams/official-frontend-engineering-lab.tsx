@@ -37,6 +37,17 @@ export function FrontendEngineeringOfficialLab({
   );
   const [modules, setModules] = useState(4);
   const [buildOnce, setBuildOnce] = useState(view !== "experiment");
+  function resetExperiment() {
+    setMode(view === "experiment"
+      ? "cache"
+      : view === "evidence"
+        ? "rollback"
+        : "normal");
+    setStage(view === "evidence" ? chain.length - 1 : 0);
+    setModules(4);
+    setBuildOnce(view !== "experiment");
+  }
+
   const evidence = useMemo(() => {
     const failed = mode === "permission" || mode === "conflict";
     const artifacts = buildOnce ? 1 : 2;
@@ -55,6 +66,7 @@ export function FrontendEngineeringOfficialLab({
       className="my-6 overflow-hidden border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950"
       aria-label={title}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
         <div>
           <p className="text-xs font-semibold text-zinc-500">{label}</p>
@@ -81,7 +93,7 @@ export function FrontendEngineeringOfficialLab({
                 key={item}
                 type="button"
                 onClick={() => setMode(item)}
-                className="min-h-9 border px-3 text-xs font-semibold"
+                className="min-h-11 border px-3 text-xs font-semibold"
                 style={{
                   borderColor: mode === item ? color : "#d4d4d8",
                   background: mode === item ? soft : "transparent",

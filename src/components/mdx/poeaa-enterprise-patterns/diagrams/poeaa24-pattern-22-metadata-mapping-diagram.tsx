@@ -14,31 +14,31 @@ export function Poeaa24Pattern22MetadataMapping() {
           <rect x={48} y={64} width={200} height={28} rx="8" fill="#E5B567" fillOpacity="0.12" />
           <rect x={48} y={84} width={200} height={8} fill="#E5B567" fillOpacity="0.12" />
           <text x={148} y={83} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">映射元数据</text>
-          <text x={64} y={112} fontSize="9" fontFamily="monospace" fill={T.primary}>class: Order</text>
-          <text x={64} y={130} fontSize="9" fontFamily="monospace" fill={T.primary}>table: orders</text>
-          <text x={64} y={148} fontSize="9" fontFamily="monospace" fill={T.primary}>field: amount → col: amt</text>
-          <text x={64} y={166} fontSize="9" fontFamily="monospace" fill={T.primary}>field: customer → FK</text>
-          <text x={64} y={188} fontSize="9" fill={T.secondary}>XML / 注解 / JSON</text>
+          <text x={64} y={112} fontSize="11" fontFamily="monospace" fill={T.primary}>class: Order</text>
+          <text x={64} y={130} fontSize="11" fontFamily="monospace" fill={T.primary}>table: orders</text>
+          <text x={64} y={148} fontSize="11" fontFamily="monospace" fill={T.primary}>field: amount → col: amt</text>
+          <text x={64} y={166} fontSize="11" fontFamily="monospace" fill={T.primary}>field: customer → FK</text>
+          <text x={64} y={188} fontSize="11" fill={T.secondary}>XML / 注解 / JSON</text>
           {/* 箭头到 Mapper */}
           <line x1={248} y1={134} x2={300} y2={134} stroke="#E5B567" strokeWidth="1.2" />
-          <text x={274} y={126} textAnchor="middle" fontSize="9" fill="#E5B567">读取</text>
+          <text x={274} y={126} textAnchor="middle" fontSize="11" fill="#E5B567">读取</text>
           {/* 通用 Mapper */}
           <rect x={300} y={84} width={160} height={100} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <text x={380} y={108} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>通用 Mapper</text>
-          <text x={316} y={132} fontSize="9" fontFamily="monospace" fill="#3FB97F">load(meta, id)</text>
-          <text x={316} y={150} fontSize="9" fontFamily="monospace" fill="#3FB97F">save(meta, obj)</text>
-          <text x={316} y={170} fontSize="9" fill={T.secondary}>一套代码处理所有类</text>
+          <text x={316} y={132} fontSize="11" fontFamily="monospace" fill="#3FB97F">load(meta, id)</text>
+          <text x={316} y={150} fontSize="11" fontFamily="monospace" fill="#3FB97F">save(meta, obj)</text>
+          <text x={316} y={170} fontSize="11" fill={T.secondary}>一套代码处理所有类</text>
           {/* 箭头到对象/表 */}
           <line x1={460} y1={114} x2={530} y2={94} stroke="#3FB97F" strokeWidth="1.2" />
           <line x1={460} y1={154} x2={530} y2={174} stroke="#E5B567" strokeWidth="1.2" />
           {/* 对象 */}
           <rect x={530} y={64} width={150} height={60} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={605} y={86} textAnchor="middle" fontSize="10" fontWeight="600" fill="#3FB97F">Order 对象</text>
-          <text x={546} y={108} fontSize="9" fontFamily="monospace" fill={T.primary}>amount, customer</text>
+          <text x={605} y={86} textAnchor="middle" fontSize="11" fontWeight="600" fill="#3FB97F">Order 对象</text>
+          <text x={546} y={108} fontSize="11" fontFamily="monospace" fill={T.primary}>amount, customer</text>
           {/* 表 */}
           <rect x={530} y={144} width={150} height={60} rx="6" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1" />
-          <text x={605} y={166} textAnchor="middle" fontSize="10" fontWeight="600" fill="#E5B567">orders 表</text>
-          <text x={546} y={188} fontSize="9" fontFamily="monospace" fill={T.primary}>amt, customer_id</text>
+          <text x={605} y={166} textAnchor="middle" fontSize="11" fontWeight="600" fill="#E5B567">orders 表</text>
+          <text x={546} y={188} fontSize="11" fontFamily="monospace" fill={T.primary}>amt, customer_id</text>
           {/* 底部说明 */}
           <rect x={48} y={232} width={624} height={64} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={256} fontSize="11" fontWeight="600" fill={T.primary}>核心思想：</text>

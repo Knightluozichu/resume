@@ -120,7 +120,7 @@ export function PrintfFormatFlagsDiagram() {
           <text x="16" y={startY + items.length * rowH + 28} fontSize="11" fill={token.textSecondary}>
             格式通式：%[标志][宽度][.精度]类型
           </text>
-          <text x="16" y={startY + items.length * rowH + 46} fontSize="10" fill={token.textSecondary} opacity="0.7">
+          <text x="16" y={startY + items.length * rowH + 46} fontSize="11" fill={token.textSecondary} opacity="0.7">
             标志：-（左对齐） +（显示正号） #（加前缀 0x/0） 0（补零）    类型：d/f/s/c/u/x 等
           </text>
         </svg>

@@ -12,23 +12,23 @@ export function Poeaa24Pattern44SeparatedInterface() {
           {/* 高层模块 */}
           <rect x={48} y={72} width={180} height={64} rx="8" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1.2" />
           <text x={138} y={94} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">高层模块</text>
-          <text x={64} y={118} fontSize="9" fill={T.secondary}>只 import 接口包</text>
+          <text x={64} y={118} fontSize="11" fill={T.secondary}>只 import 接口包</text>
           {/* 接口包 */}
           <rect x={290} y={64} width={160} height={80} rx="8" fill={T.accent} fillOpacity="0.06" stroke={T.accent} strokeWidth="1.5" />
           <rect x={290} y={64} width={160} height={28} rx="8" fill={T.accent} fillOpacity="0.12" />
           <rect x={290} y={84} width={160} height={8} fill={T.accent} fillOpacity="0.12" />
           <text x={370} y={83} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>接口包</text>
-          <text x={306} y={112} fontSize="9" fontFamily="monospace" fill={T.primary}>interface Payment</text>
-          <text x={306} y={130} fontSize="9" fontFamily="monospace" fill={T.primary}>  charge(amount)</text>
+          <text x={306} y={112} fontSize="11" fontFamily="monospace" fill={T.primary}>interface Payment</text>
+          <text x={306} y={130} fontSize="11" fontFamily="monospace" fill={T.primary}>  charge(amount)</text>
           {/* 实现包 */}
           <rect x={520} y={72} width={160} height={64} rx="8" fill="#E5B567" fillOpacity="0.06" stroke="#E5B567" strokeWidth="1.2" />
           <text x={600} y={94} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">实现包</text>
-          <text x={536} y={118} fontSize="9" fontFamily="monospace" fill={T.primary}>StripePayment</text>
+          <text x={536} y={118} fontSize="11" fontFamily="monospace" fill={T.primary}>StripePayment</text>
           {/* 依赖箭头 */}
           <line x1={228} y1={104} x2={290} y2={104} stroke="#3FB97F" strokeWidth="1.5" />
-          <text x={259} y={96} textAnchor="middle" fontSize="9" fill="#3FB97F">依赖</text>
+          <text x={259} y={96} textAnchor="middle" fontSize="11" fill="#3FB97F">依赖</text>
           <line x1={520} y1={104} x2={450} y2={104} stroke="#E5B567" strokeWidth="1.5" />
-          <text x={485} y={96} textAnchor="middle" fontSize="9" fill="#E5B567">实现</text>
+          <text x={485} y={96} textAnchor="middle" fontSize="11" fill="#E5B567">实现</text>
           {/* 底部说明 */}
           <rect x={48} y={172} width={624} height={72} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={196} fontSize="11" fontWeight="600" fill={T.primary}>依赖方向规则：</text>

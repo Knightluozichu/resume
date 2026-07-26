@@ -116,7 +116,7 @@ export function Algs4AbstractMergeLab() {
             <span>a[lo..k)</span>
             <span className="font-mono text-success">{frame.decision}</span>
           </div>
-          <div className="grid min-h-10 grid-cols-8 gap-1">
+          <div className="grid min-h-11 grid-cols-8 gap-1">
             {Array.from({ length: 8 }, (_, index) => (
               <div
                 key={index}

@@ -134,7 +134,7 @@ export function RetrievalFlowDiagram() {
                   x={cx}
                   y={STEP_Y + 78}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {step.desc}

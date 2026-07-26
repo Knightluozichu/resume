@@ -19,7 +19,7 @@ export function DogDebuggingToolsDiagram() {
               <rect x={s.x} y="50" width="200" height="120" rx="8" fill="var(--bg)" stroke={s.c} strokeWidth="1.4" />
               <text x={s.x + 100} y="74" textAnchor="middle" fontSize="11" fontWeight="700" fill={s.c}>{s.t}</text>
               {s.d.map((line, i) => (
-                <text key={i} x={s.x + 14} y={96 + i * 20} fontSize="9.5" fill="var(--text-secondary)">{line}</text>
+                <text key={i} x={s.x + 14} y={96 + i * 20} fontSize="11" fill="var(--text-secondary)">{line}</text>
               ))}
             </g>
           ))}
@@ -33,16 +33,16 @@ export function DogDebuggingToolsDiagram() {
             { y: 274, t: "带宽/CPU bound", r: "附件/采样字节或提交过多 → 格式/分辨率或批处理实例化" },
           ].map((row) => (
             <g key={row.t}>
-              <text x="60" y={row.y} fontSize="10" fontWeight="700" fill="var(--accent)">{row.t}</text>
-              <text x="200" y={row.y} fontSize="10" fill="var(--text-secondary)">{row.r}</text>
+              <text x="60" y={row.y} fontSize="11" fontWeight="700" fill="var(--accent)">{row.t}</text>
+              <text x="200" y={row.y} fontSize="11" fill="var(--text-secondary)">{row.r}</text>
             </g>
           ))}
 
           {/* 黑屏排查 */}
           <rect x="40" y="308" width="640" height="68" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <text x="360" y="330" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">黑屏排查清单</text>
-          <text x="60" y="350" fontSize="10" fill="var(--text-secondary)">getError 有错误码? · 着色器编译链接日志? · VAO/VBO 绑定与属性指针? · uniform 设了没? · viewport/清屏?</text>
-          <text x="60" y="368" fontSize="10" fill="var(--text-secondary)">深度测试/混合状态? · 上下文是否丢失? · 逐 draw 用帧抓取器核对管线状态</text>
+          <text x="60" y="350" fontSize="11" fill="var(--text-secondary)">getError 有错误码? · 着色器编译链接日志? · VAO/VBO 绑定与属性指针? · uniform 设了没? · viewport/清屏?</text>
+          <text x="60" y="368" fontSize="11" fill="var(--text-secondary)">深度测试/混合状态? · 上下文是否丢失? · 逐 draw 用帧抓取器核对管线状态</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">WebGL 与原生调试入口分开；先隔离正确性，再用非阻塞 GPU 查询定位性能</figcaption>

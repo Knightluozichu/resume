@@ -332,7 +332,7 @@ export function DeadlockVsLivelockDiagram() {
           x={panelX + PANEL_W / 2}
           y={PANEL_Y + NODE_DY + NODE_H + 18}
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={MUTED}
         >
           {headSub}
@@ -353,7 +353,7 @@ export function DeadlockVsLivelockDiagram() {
           x={barX + BAR_W / 2}
           y={PANEL_Y + BAR_DY + BAR_H / 2 + 4}
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fontWeight="700"
           fill={MUTED}
         >
@@ -385,7 +385,7 @@ export function DeadlockVsLivelockDiagram() {
           x={verdictX + BAR_W / 2}
           y={PANEL_Y + VERDICT_DY + 39}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={MUTED}
         >
           {verdictSub}
@@ -442,7 +442,7 @@ export function DeadlockVsLivelockDiagram() {
               x={LEFT_X + PANEL_W / 2}
               y={PANEL_Y + NODE_DY - 8}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={MUTED}
             >
@@ -455,7 +455,7 @@ export function DeadlockVsLivelockDiagram() {
               x={LEFT_X + PANEL_W / 2}
               y={PANEL_Y + NODE_DY + NODE_H + 34}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={DEAD_COLOR}
             >
@@ -492,7 +492,7 @@ export function DeadlockVsLivelockDiagram() {
               x={RIGHT_X + PANEL_W / 2}
               y={PANEL_Y + NODE_DY + NODE_H + 34}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill={LIVE_COLOR}
             >
@@ -557,7 +557,7 @@ export function DeadlockVsLivelockDiagram() {
             <text
               x={CPU_X + 14}
               y={CPU_Y + 35}
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               仅是线索：真实现场还要看线程栈、等待图与进展计数

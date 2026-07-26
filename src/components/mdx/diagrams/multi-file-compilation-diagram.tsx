@@ -114,7 +114,7 @@ export function MultiFileCompilationDiagram({ step = 0 }: Props) {
           <text
             x="160"
             y="90"
-            fontSize="10"
+            fontSize="11"
             fill={textColor(1)}
             opacity={boxOpacity(1)}
           >
@@ -225,7 +225,7 @@ export function MultiFileCompilationDiagram({ step = 0 }: Props) {
           <text
             x="440"
             y="90"
-            fontSize="10"
+            fontSize="11"
             fill={textColor(2)}
             opacity={boxOpacity(2)}
           >

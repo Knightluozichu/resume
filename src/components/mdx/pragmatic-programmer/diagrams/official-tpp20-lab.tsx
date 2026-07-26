@@ -662,6 +662,12 @@ export function OfficialTpp20Lab({
   const [nodeIndex, setNodeIndex] = useState(0);
   const [focusIndex, setFocusIndex] = useState(0);
   const [scenario, setScenario] = useState<Scenario>("baseline");
+  function resetExperiment() {
+    setNodeIndex(0);
+    setFocusIndex(0);
+    setScenario("baseline");
+  }
+
   const kind = kindByUnit[unitId] ?? "roadmap";
   const copy = kindCopy[kind];
   const active =
@@ -689,6 +695,7 @@ export function OfficialTpp20Lab({
       data-tpp20-unit={unitId}
       data-visual-kind={kind}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">

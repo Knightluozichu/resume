@@ -287,7 +287,7 @@ function AgentLoopDiagramInner() {
               x={CENTER_X}
               y={CENTER_Y - 8}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="600"
               fill="var(--text-secondary)"
             >
@@ -364,7 +364,7 @@ function AgentLoopDiagramInner() {
                 x={g.cx}
                 y={g.cy + 14}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {g.sub}

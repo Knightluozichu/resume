@@ -71,7 +71,7 @@ export function GlFragCoordDiagram() {
             x={gridX - 6}
             y={gridBottom + 32}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             原点
@@ -128,7 +128,7 @@ export function GlFragCoordDiagram() {
             x={gridX + cols * cell}
             y={gridTop - 8}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             className="font-mono"
             fill="var(--text-secondary)"
           >
@@ -193,7 +193,7 @@ export function GlFragCoordDiagram() {
             x="260"
             y="268"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"
           >
@@ -203,7 +203,7 @@ export function GlFragCoordDiagram() {
             x="260"
             y="282"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             要除以 uResolution 才归一化到 0..1

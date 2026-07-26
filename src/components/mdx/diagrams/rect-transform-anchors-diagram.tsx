@@ -278,7 +278,7 @@ export function RectTransformAnchorsDiagram() {
             x={LP_X + LP_W - 6}
             y={LP_Y + 38}
             textAnchor="end"
-            fontSize="8.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--accent)"
           >
@@ -301,7 +301,7 @@ export function RectTransformAnchorsDiagram() {
               x={LBTN_X + LBTN_W / 2}
               y={LBTN_Y + LBTN_H / 2 + 4}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -312,7 +312,7 @@ export function RectTransformAnchorsDiagram() {
             x={LP_X + LP_W / 2}
             y={LP_Y + LP_H - 16}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             贴右上角平移
@@ -321,7 +321,7 @@ export function RectTransformAnchorsDiagram() {
             x={LP_X + LP_W / 2}
             y={LP_Y + LP_H - 2}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -402,7 +402,7 @@ export function RectTransformAnchorsDiagram() {
             x={RBAR_X + 12}
             y={RBAR_Y + RBAR_H / 2 + 4}
             textAnchor="start"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--success)"
           >
@@ -412,7 +412,7 @@ export function RectTransformAnchorsDiagram() {
             x={RP_X + RP_W / 2}
             y={RP_Y + RP_H - 16}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             跟着父框一起变宽
@@ -421,7 +421,7 @@ export function RectTransformAnchorsDiagram() {
             x={RP_X + RP_W / 2}
             y={RP_Y + RP_H - 2}
             textAnchor="middle"
-            fontSize="9.5"
+            fontSize="11"
             fontWeight="700"
             fill="var(--text-secondary)"
           >
@@ -433,7 +433,7 @@ export function RectTransformAnchorsDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 22}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             换分辨率 / 父级缩放时，UI 不跑位、不拉伸错乱，全靠 anchors

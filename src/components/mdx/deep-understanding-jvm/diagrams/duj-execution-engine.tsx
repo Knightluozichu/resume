@@ -26,40 +26,40 @@ export function DujExecutionEngineDiagram() {
 
           <rect x="50" y="60" width="140" height="56" rx="8" fill="var(--warning)" fillOpacity="0.10" stroke="var(--warning)" strokeWidth="1.2" />
           <text x="120" y="82" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">字节码</text>
-          <text x="120" y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">.class 文件</text>
+          <text x="120" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">.class 文件</text>
 
           <text x="205" y="92" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
 
           <rect x="225" y="60" width="140" height="56" rx="8" fill="var(--accent)" fillOpacity="0.10" stroke="var(--accent)" strokeWidth="1.2" />
           <text x="295" y="82" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">解释器</text>
-          <text x="295" y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">逐条解释执行</text>
+          <text x="295" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">逐条解释执行</text>
 
           <text x="380" y="92" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
 
           <rect x="400" y="60" width="140" height="56" rx="8" fill="var(--danger)" fillOpacity="0.10" stroke="var(--danger)" strokeWidth="1.2" />
           <text x="470" y="82" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--danger)">JIT 编译器</text>
-          <text x="470" y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">热点代码 → 本地代码</text>
+          <text x="470" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">热点代码 → 本地代码</text>
 
           <text x="555" y="92" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
 
           <rect x="575" y="60" width="120" height="56" rx="8" fill="var(--success)" fillOpacity="0.10" stroke="var(--success)" strokeWidth="1.2" />
           <text x="635" y="82" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">机器码</text>
-          <text x="635" y="100" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">CPU 直接执行</text>
+          <text x="635" y="100" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">CPU 直接执行</text>
 
           <rect x="50" y="130" width="310" height="60" rx="6" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1" strokeOpacity="0.4" />
           <text x="205" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">C1 编译器（Client）</text>
-          <text x="205" y="166" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">快速编译，简单优化</text>
-          <text x="205" y="180" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">方法内联 / 简单去虚拟化</text>
+          <text x="205" y="166" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">快速编译，简单优化</text>
+          <text x="205" y="180" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">方法内联 / 简单去虚拟化</text>
 
           <rect x="380" y="130" width="310" height="60" rx="6" fill="var(--danger)" fillOpacity="0.06" stroke="var(--danger)" strokeWidth="1" strokeOpacity="0.4" />
           <text x="535" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">C2 编译器（Server）</text>
-          <text x="535" y="166" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">耗时编译，激进优化</text>
-          <text x="535" y="180" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">逃逸分析 / 锁消除 / 循环展开</text>
+          <text x="535" y="166" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">耗时编译，激进优化</text>
+          <text x="535" y="180" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">逃逸分析 / 锁消除 / 循环展开</text>
 
           {/* 中间：热点探测 */}
           <rect x="200" y="222" width="340" height="44" rx="8" fill="var(--text-primary)" fillOpacity="0.06" stroke="var(--text-primary)" strokeWidth="1" strokeOpacity="0.3" />
           <text x="370" y="242" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">热点探测（Hot Spot Detection）</text>
-          <text x="370" y="258" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">方法调用计数器 + 回边计数器 → 触发 JIT</text>
+          <text x="370" y="258" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">方法调用计数器 + 回边计数器 → 触发 JIT</text>
 
           {/* 下半：栈帧结构 */}
           <text x={VIEW_W / 2} y="292" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">栈帧结构（Stack Frame）</text>
@@ -78,7 +78,7 @@ export function DujExecutionEngineDiagram() {
           <rect x="200" y="430" width="340" height="28" rx="4" fill="var(--success)" fillOpacity="0.10" stroke="var(--success)" strokeWidth="1" />
           <text x="370" y="448" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">方法返回地址（Return Address）— 正常/异常返回</text>
 
-          <text x={VIEW_W / 2} y="470" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">一个方法调用 = 一个栈帧入栈；方法返回 = 栈帧出栈</text>
+          <text x={VIEW_W / 2} y="470" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">一个方法调用 = 一个栈帧入栈；方法返回 = 栈帧出栈</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

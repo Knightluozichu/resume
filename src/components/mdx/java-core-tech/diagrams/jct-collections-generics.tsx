@@ -75,7 +75,7 @@ export function JctCollectionsGenericsDiagram() {
             x="200"
             y="114"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Iterable 子接口
@@ -124,7 +124,7 @@ export function JctCollectionsGenericsDiagram() {
             x="95"
             y="158"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -134,7 +134,7 @@ export function JctCollectionsGenericsDiagram() {
             x="95"
             y="172"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             有序可重复
@@ -143,7 +143,7 @@ export function JctCollectionsGenericsDiagram() {
             x="95"
             y="182"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ArrayList
@@ -164,7 +164,7 @@ export function JctCollectionsGenericsDiagram() {
             x="205"
             y="158"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -174,7 +174,7 @@ export function JctCollectionsGenericsDiagram() {
             x="205"
             y="172"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             无序不重复
@@ -183,7 +183,7 @@ export function JctCollectionsGenericsDiagram() {
             x="205"
             y="182"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HashSet
@@ -204,7 +204,7 @@ export function JctCollectionsGenericsDiagram() {
             x="315"
             y="158"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -214,7 +214,7 @@ export function JctCollectionsGenericsDiagram() {
             x="315"
             y="172"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             FIFO队列
@@ -223,7 +223,7 @@ export function JctCollectionsGenericsDiagram() {
             x="315"
             y="182"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ArrayDeque
@@ -255,7 +255,7 @@ export function JctCollectionsGenericsDiagram() {
             x="200"
             y="232"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             HashMap / TreeMap / LinkedHashMap
@@ -264,7 +264,7 @@ export function JctCollectionsGenericsDiagram() {
             x="200"
             y="244"
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             键唯一, 值可重复
@@ -292,41 +292,41 @@ export function JctCollectionsGenericsDiagram() {
           >
             泛型（Generics）
           </text>
-          <text x="405" y="90" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="90" fontSize="11" fill="var(--text-secondary)">
             编译期类型安全, 避免运行时转换
           </text>
-          <text x="405" y="112" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="112" fontSize="11" fill="var(--text-secondary)">
             ArrayList&lt;String&gt; list = new ArrayList&lt;&gt;();
           </text>
-          <text x="405" y="128" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="128" fontSize="11" fill="var(--text-secondary)">
             list.add(&quot;hi&quot;); // 只能存String
           </text>
-          <text x="405" y="148" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="148" fontSize="11" fill="var(--text-secondary)">
             泛型方法:
           </text>
-          <text x="405" y="164" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="164" fontSize="11" fill="var(--text-secondary)">
             {" "}
             &lt;T&gt; T getFirst(List&lt;T&gt; list)
           </text>
-          <text x="405" y="184" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="184" fontSize="11" fill="var(--text-secondary)">
             通配符:
           </text>
-          <text x="405" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="200" fontSize="11" fill="var(--text-secondary)">
             {" "}
             ? extends T 上界(只读)
           </text>
-          <text x="405" y="216" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="216" fontSize="11" fill="var(--text-secondary)">
             {" "}
             ? super T 下界(只写)
           </text>
-          <text x="405" y="236" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="236" fontSize="11" fill="var(--text-secondary)">
             类型擦除: 运行时泛型信息被擦除
           </text>
-          <text x="405" y="252" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="252" fontSize="11" fill="var(--text-secondary)">
             {" "}
             List&lt;String&gt; 和 List&lt;Integer&gt;
           </text>
-          <text x="405" y="262" fontSize="10" fill="var(--text-secondary)">
+          <text x="405" y="262" fontSize="11" fill="var(--text-secondary)">
             {" "}
             运行时都是 List
           </text>
@@ -364,13 +364,13 @@ export function JctCollectionsGenericsDiagram() {
           >
             ArrayList
           </text>
-          <text x="45" y="348" fontSize="9" fill="var(--text-secondary)">
+          <text x="45" y="348" fontSize="11" fill="var(--text-secondary)">
             get: O(1) add: O(1)末尾
           </text>
-          <text x="45" y="362" fontSize="9" fill="var(--text-secondary)">
+          <text x="45" y="362" fontSize="11" fill="var(--text-secondary)">
             insert/remove: O(n)
           </text>
-          <text x="45" y="376" fontSize="9" fill="var(--text-secondary)">
+          <text x="45" y="376" fontSize="11" fill="var(--text-secondary)">
             底层: 动态数组
           </text>
 
@@ -395,13 +395,13 @@ export function JctCollectionsGenericsDiagram() {
           >
             HashMap
           </text>
-          <text x="275" y="348" fontSize="9" fill="var(--text-secondary)">
+          <text x="275" y="348" fontSize="11" fill="var(--text-secondary)">
             put/get/remove: O(1)平均
           </text>
-          <text x="275" y="362" fontSize="9" fill="var(--text-secondary)">
+          <text x="275" y="362" fontSize="11" fill="var(--text-secondary)">
             最坏 O(log n) 红黑树
           </text>
-          <text x="275" y="376" fontSize="9" fill="var(--text-secondary)">
+          <text x="275" y="376" fontSize="11" fill="var(--text-secondary)">
             底层: 哈希表+链表/树
           </text>
 
@@ -426,13 +426,13 @@ export function JctCollectionsGenericsDiagram() {
           >
             LinkedList
           </text>
-          <text x="505" y="348" fontSize="9" fill="var(--text-secondary)">
+          <text x="505" y="348" fontSize="11" fill="var(--text-secondary)">
             get: O(n) add首尾: O(1)
           </text>
-          <text x="505" y="362" fontSize="9" fill="var(--text-secondary)">
+          <text x="505" y="362" fontSize="11" fill="var(--text-secondary)">
             insert/remove: O(1)已知节点
           </text>
-          <text x="505" y="376" fontSize="9" fill="var(--text-secondary)">
+          <text x="505" y="376" fontSize="11" fill="var(--text-secondary)">
             底层: 双向链表
           </text>
 
@@ -459,13 +459,13 @@ export function JctCollectionsGenericsDiagram() {
           >
             迭代器与 fail-fast
           </text>
-          <text x="45" y="436" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="436" fontSize="11" fill="var(--text-secondary)">
             Iterator&lt;E&gt; it = list.iterator();
           </text>
-          <text x="45" y="452" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="452" fontSize="11" fill="var(--text-secondary)">
             while (it.hasNext()) &#123; E e = it.next(); it.remove(); &#125;
           </text>
-          <text x="45" y="470" fontSize="10" fill="var(--text-secondary)">
+          <text x="45" y="470" fontSize="11" fill="var(--text-secondary)">
             for-each 本质 = Iterator. 并发修改时
             ConcurrentModificationException（fail-fast）
           </text>

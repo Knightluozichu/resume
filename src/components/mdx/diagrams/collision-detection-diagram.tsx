@@ -23,7 +23,7 @@ export function CollisionDetectionDiagram({ mode = "discrete" }: Props) {
         >
           {/* 墙 */}
           <rect x="220" y="40" width="24" height="120" rx="2" fill="var(--border)" stroke="var(--text-secondary)" strokeWidth="1.5" />
-          <text x="232" y="176" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="232" y="176" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             墙
           </text>
 
@@ -31,12 +31,12 @@ export function CollisionDetectionDiagram({ mode = "discrete" }: Props) {
             <>
               {/* 帧 t */}
               <circle cx="120" cy="100" r="14" fill="var(--accent)" opacity="0.5" />
-              <text x="120" y="76" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+              <text x="120" y="76" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                 t
               </text>
               {/* 帧 t+1 穿墙 */}
               <circle cx="280" cy="100" r="14" fill="var(--accent)" opacity="0.9" />
-              <text x="280" y="76" textAnchor="middle" fontSize="10" fill="var(--accent)">
+              <text x="280" y="76" textAnchor="middle" fontSize="11" fill="var(--accent)">
                 t+1 穿过
               </text>
               <line x1="134" y1="100" x2="266" y2="100" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="4 3" />

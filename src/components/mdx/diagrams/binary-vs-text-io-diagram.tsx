@@ -36,16 +36,16 @@ export function BinaryVsTextIODiagram() {
           <text x={40} y={92} fontSize="13" fontWeight="700" fill={accent} fontFamily="monospace">
             文本模式 &quot;r&quot; / &quot;w&quot;
           </text>
-          <text x={40} y={112} fontSize="10" fill={secondary}>
+          <text x={40} y={112} fontSize="11" fill={secondary}>
             fprintf / fscanf · fgets / fputs
           </text>
-          <text x={40} y={136} fontSize="10" fill={primary}>
+          <text x={40} y={136} fontSize="11" fill={primary}>
             换行：\n ↔ \r\n（Windows）
           </text>
-          <text x={40} y={156} fontSize="10" fill={primary}>
+          <text x={40} y={156} fontSize="11" fill={primary}>
             人类可读 · 适合日志、配置
           </text>
-          <text x={40} y={180} fontSize="9" fontWeight="600" fill={secondary}>
+          <text x={40} y={180} fontSize="11" fontWeight="600" fill={secondary}>
             磁盘字节示意（文本行）
           </text>
           {textBytes.map((b, i) => (
@@ -62,11 +62,11 @@ export function BinaryVsTextIODiagram() {
             />
           ))}
           {textBytes.map((b, i) => (
-            <text key={`t${i}`} x={57 + i * 38} y={210} textAnchor="middle" fontSize="8" fill={primary} fontFamily="monospace">
+            <text key={`t${i}`} x={57 + i * 38} y={210} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               {b}
             </text>
           ))}
-          <text x={40} y={248} fontSize="9" fill={secondary}>
+          <text x={40} y={248} fontSize="11" fill={secondary}>
             EOF 由文本结束或 feof 检测
           </text>
 
@@ -75,16 +75,16 @@ export function BinaryVsTextIODiagram() {
           <text x={352} y={92} fontSize="13" fontWeight="700" fill={primary} fontFamily="monospace">
             二进制 &quot;rb&quot; / &quot;wb&quot;
           </text>
-          <text x={352} y={112} fontSize="10" fill={secondary}>
+          <text x={352} y={112} fontSize="11" fill={secondary}>
             fread / fwrite · 结构体整块写
           </text>
-          <text x={352} y={136} fontSize="10" fill={primary}>
+          <text x={352} y={136} fontSize="11" fill={primary}>
             无换行转换 · 字节原样落盘
           </text>
-          <text x={352} y={156} fontSize="10" fill={primary}>
+          <text x={352} y={156} fontSize="11" fill={primary}>
             紧凑 · 适合 struct / 数组快照
           </text>
-          <text x={352} y={180} fontSize="9" fontWeight="600" fill={secondary}>
+          <text x={352} y={180} fontSize="11" fontWeight="600" fill={secondary}>
             磁盘字节示意（原始）
           </text>
           {binBytes.map((b, i) => (
@@ -101,15 +101,15 @@ export function BinaryVsTextIODiagram() {
             />
           ))}
           {binBytes.map((b, i) => (
-            <text key={`b${i}`} x={369 + i * 38} y={210} textAnchor="middle" fontSize="8" fill={primary} fontFamily="monospace">
+            <text key={`b${i}`} x={369 + i * 38} y={210} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               {b}
             </text>
           ))}
-          <text x={352} y={248} fontSize="9" fill={secondary}>
+          <text x={352} y={248} fontSize="11" fill={secondary}>
             int 72 可能占 4 字节 0x48 0x00…
           </text>
 
-          <text x={24} y={296} fontSize="10" fill={secondary}>
+          <text x={24} y={296} fontSize="11" fill={secondary}>
             跨平台共享二进制文件时注意 struct 对齐与字节序；文本更便携但体积大、解析慢。
           </text>
         </svg>

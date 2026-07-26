@@ -382,7 +382,7 @@ export function LayerCallTraversalDiagram() {
             x={LAYER_X + LAYER_W + 16}
             y={BINDER_BOUNDARY_Y - 6}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fontWeight="700"
             fill="var(--warning)"
           >
@@ -436,7 +436,7 @@ export function LayerCallTraversalDiagram() {
                 <text
                   x={LAYER_X + 16}
                   y={y + LAYER_H / 2 + 16}
-                  fontSize="9.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-secondary)"
                 >
@@ -450,7 +450,7 @@ export function LayerCallTraversalDiagram() {
           <text
             x={LAYER_X + LAYER_W + 16}
             y={layerCenterY(LAYER_INDEX.hal)}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--warning)"
           >
@@ -459,7 +459,7 @@ export function LayerCallTraversalDiagram() {
           <text
             x={LAYER_X + LAYER_W + 16}
             y={layerCenterY(LAYER_INDEX.hal) + 14}
-            fontSize="9.5"
+            fontSize="11"
             fontFamily="var(--font-mono)"
             fill="var(--text-secondary)"
           >
@@ -471,7 +471,7 @@ export function LayerCallTraversalDiagram() {
             x={LAYER_X - 16}
             y={layerCenterY(LAYER_INDEX.kernel) - 4}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >
@@ -481,7 +481,7 @@ export function LayerCallTraversalDiagram() {
             x={LAYER_X - 16}
             y={layerCenterY(LAYER_INDEX.kernel) + 10}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--success)"
           >

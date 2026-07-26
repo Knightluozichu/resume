@@ -53,7 +53,7 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="100" y="105" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₁
               </text>
-              <text x="135" y="104" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="135" y="104" fontSize="11" fill={secondary} textAnchor="middle">
                 &lt;
               </text>
 
@@ -61,40 +61,40 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="322" y="105" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₅
               </text>
-              <text x="290" y="104" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="290" y="104" fontSize="11" fill={secondary} textAnchor="middle">
                 &gt;
               </text>
 
               {/* 第3层 */}
               <circle cx="50" cy="175" r="15" fill={accent} opacity="0.08" stroke={accent} strokeWidth="1" />
-              <text x="50" y="179" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">
+              <text x="50" y="179" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₀
               </text>
-              <text x="76" y="178" fontSize="9" fill={secondary} textAnchor="middle">
+              <text x="76" y="178" fontSize="11" fill={secondary} textAnchor="middle">
                 &lt;
               </text>
 
               <circle cx="150" cy="175" r="15" fill={accent} opacity="0.08" stroke={accent} strokeWidth="1" />
-              <text x="150" y="179" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">
+              <text x="150" y="179" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₂
               </text>
-              <text x="125" y="178" fontSize="9" fill={secondary} textAnchor="middle">
+              <text x="125" y="178" fontSize="11" fill={secondary} textAnchor="middle">
                 &gt;
               </text>
 
               <circle cx="272" cy="175" r="15" fill={accent} opacity="0.08" stroke={accent} strokeWidth="1" />
-              <text x="272" y="179" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">
+              <text x="272" y="179" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₄
               </text>
-              <text x="246" y="178" fontSize="9" fill={secondary} textAnchor="middle">
+              <text x="246" y="178" fontSize="11" fill={secondary} textAnchor="middle">
                 &lt;
               </text>
 
               <circle cx="372" cy="175" r="15" fill={accent} opacity="0.08" stroke={accent} strokeWidth="1" />
-              <text x="372" y="179" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">
+              <text x="372" y="179" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
                 key₆
               </text>
-              <text x="346" y="178" fontSize="9" fill={secondary} textAnchor="middle">
+              <text x="346" y="178" fontSize="11" fill={secondary} textAnchor="middle">
                 &gt;
               </text>
 
@@ -108,11 +108,11 @@ export function AssociativeContainerOverviewDiagram() {
 
               {/* 颜色标记：红/黑 */}
               <circle cx="160" cy="66" r="4" fill="rgb(229,103,92)" />
-              <text x="170" y="69" fontSize="9" fill={secondary}>
+              <text x="170" y="69" fontSize="11" fill={secondary}>
                 红节点
               </text>
               <circle cx="260" cy="66" r="4" fill={primary} />
-              <text x="270" y="69" fontSize="9" fill={secondary}>
+              <text x="270" y="69" fontSize="11" fill={secondary}>
                 黑节点
               </text>
             </g>
@@ -123,13 +123,13 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="105" y="18" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle">
                 map / set
               </text>
-              <text x="105" y="38" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="105" y="38" fontSize="11" fill={secondary} textAnchor="middle">
                 map: key→value键值对
               </text>
-              <text x="105" y="54" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="105" y="54" fontSize="11" fill={secondary} textAnchor="middle">
                 set: 只存key（去重判存在）
               </text>
-              <text x="105" y="74" fontSize="10" fill={good} textAnchor="middle">
+              <text x="105" y="74" fontSize="11" fill={good} textAnchor="middle">
                 按key有序排列、不可重复key
               </text>
 
@@ -137,13 +137,13 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="327" y="18" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle">
                 multimap / multiset
               </text>
-              <text x="327" y="38" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="327" y="38" fontSize="11" fill={secondary} textAnchor="middle">
                 multimap: 允许重复key
               </text>
-              <text x="327" y="54" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="327" y="54" fontSize="11" fill={secondary} textAnchor="middle">
                 multiset: 允许重复key
               </text>
-              <text x="327" y="74" fontSize="10" fill={warn} textAnchor="middle">
+              <text x="327" y="74" fontSize="11" fill={warn} textAnchor="middle">
                 仍按key有序，但允许多个同key
               </text>
             </g>
@@ -161,10 +161,10 @@ export function AssociativeContainerOverviewDiagram() {
                 ["内存结构", "每个节点含left/right/parent+color指针"],
               ].map(([label, val], i) => (
                 <g key={i} transform={`translate(0, ${30 + i * 20})`}>
-                  <text x="0" y="0" fontSize="10" fill={secondary}>
+                  <text x="0" y="0" fontSize="11" fill={secondary}>
                     {label}
                   </text>
-                  <text x="430" y="0" fontSize="10" fill={good} textAnchor="end" fontFamily="monospace">
+                  <text x="430" y="0" fontSize="11" fill={good} textAnchor="end" fontFamily="monospace">
                     {val}
                   </text>
                 </g>
@@ -183,7 +183,7 @@ export function AssociativeContainerOverviewDiagram() {
             <g transform="translate(20, 40)">
               {/* 桶数组 */}
               <rect x="6" y="0" width="110" height="180" rx="6" fill={elevated} stroke={border} />
-              <text x="61" y="18" fontSize="10" fontWeight="600" fill={accent} textAnchor="middle">
+              <text x="61" y="18" fontSize="11" fontWeight="600" fill={accent} textAnchor="middle">
                 桶数组 (buckets)
               </text>
 
@@ -199,10 +199,10 @@ export function AssociativeContainerOverviewDiagram() {
               ].map(([label, arrow, active], i) => (
                 <g key={i} transform={`translate(14, ${26 + i * 18})`}>
                   <rect x="0" y="-8" width="44" height="18" rx="3" fill={active ? accent : "none"} opacity={active ? 0.12 : 1} stroke={active ? accent : border} />
-                  <text x="22" y="5" fontSize="9" fill={active ? accent : secondary} textAnchor="middle">
+                  <text x="22" y="5" fontSize="11" fill={active ? accent : secondary} textAnchor="middle">
                     {label}
                   </text>
-                  <text x="50" y="5" fontSize="9" fill={secondary} textAnchor="middle">
+                  <text x="50" y="5" fontSize="11" fill={secondary} textAnchor="middle">
                     {arrow}
                   </text>
                 </g>
@@ -231,7 +231,7 @@ export function AssociativeContainerOverviewDiagram() {
                     opacity={cfg.accent ? 0.2 : 0.08}
                     stroke={cfg.accent ? accent : border}
                   />
-                  <text x={cfg.w / 2} y="5" fontSize="10" fill={cfg.accent ? accent : secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cfg.w / 2} y="5" fontSize="11" fill={cfg.accent ? accent : secondary} textAnchor="middle" fontFamily="monospace">
                     {label}
                   </text>
                 </g>
@@ -245,10 +245,10 @@ export function AssociativeContainerOverviewDiagram() {
 
             {/* 哈希函数标注 */}
             <g transform="translate(20, 228)">
-              <text x="0" y="0" fontSize="10" fill={secondary}>
+              <text x="0" y="0" fontSize="11" fill={secondary}>
                 hash(key) % bucket_count → 桶索引
               </text>
-              <text x="0" y="16" fontSize="10" fill={secondary}>
+              <text x="0" y="16" fontSize="11" fill={secondary}>
                 同桶内拉链法(chaining)解决冲突
               </text>
             </g>
@@ -259,13 +259,13 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="105" y="18" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle">
                 unordered_map / unordered_set
               </text>
-              <text x="105" y="38" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="105" y="38" fontSize="11" fill={secondary} textAnchor="middle">
                 unordered_map: key→value
               </text>
-              <text x="105" y="54" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="105" y="54" fontSize="11" fill={secondary} textAnchor="middle">
                 unordered_set: 只存key
               </text>
-              <text x="105" y="74" fontSize="10" fill={good} textAnchor="middle">
+              <text x="105" y="74" fontSize="11" fill={good} textAnchor="middle">
                 无序、不可重复key、均摊O(1)
               </text>
 
@@ -273,13 +273,13 @@ export function AssociativeContainerOverviewDiagram() {
               <text x="327" y="18" fontSize="11" fontWeight="600" fill={primary} textAnchor="middle">
                 unordered_multimap / set
               </text>
-              <text x="327" y="38" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="327" y="38" fontSize="11" fill={secondary} textAnchor="middle">
                 unordered_multimap: 重复key
               </text>
-              <text x="327" y="54" fontSize="10" fill={secondary} textAnchor="middle">
+              <text x="327" y="54" fontSize="11" fill={secondary} textAnchor="middle">
                 unordered_multiset: 重复key
               </text>
-              <text x="327" y="74" fontSize="10" fill={warn} textAnchor="middle">
+              <text x="327" y="74" fontSize="11" fill={warn} textAnchor="middle">
                 无序、允许重复key、均摊O(1)
               </text>
             </g>
@@ -297,10 +297,10 @@ export function AssociativeContainerOverviewDiagram() {
                 ["内存", "桶数组 + 链表/节点"],
               ].map(([label, val], i) => (
                 <g key={i} transform={`translate(0, ${30 + i * 20})`}>
-                  <text x="0" y="0" fontSize="10" fill={secondary}>
+                  <text x="0" y="0" fontSize="11" fill={secondary}>
                     {label}
                   </text>
-                  <text x="430" y="0" fontSize="10" fill={good} textAnchor="end" fontFamily="monospace">
+                  <text x="430" y="0" fontSize="11" fill={good} textAnchor="end" fontFamily="monospace">
                     {val}
                   </text>
                 </g>
@@ -309,7 +309,7 @@ export function AssociativeContainerOverviewDiagram() {
           </g>
 
           {/* 底部注释 */}
-          <text x={w / 2} y={h - 10} fontSize="10" fill={secondary} textAnchor="middle">
+          <text x={w / 2} y={h - 10} fontSize="11" fill={secondary} textAnchor="middle">
             有序容器底层为红黑树（自平衡二叉搜索树）→ O(log n)；无序容器底层为哈希表（桶+链）→ 均摊 O(1)，但最坏 O(n)
           </text>
 

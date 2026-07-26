@@ -144,7 +144,7 @@ export function PbtRadiometryDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                   x={x + 87}
                   y="220"
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                 >
                   {quantity.question}
@@ -362,7 +362,7 @@ export function PbtSurfaceScatteringDiagram() {
             x="125"
             y="281"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill={secondary}
           >
             BSSRDF：可从另一点离开
@@ -473,10 +473,10 @@ export function PbtSpectrumColorDiagram() {
               stroke={accent}
               strokeWidth="3"
             />
-            <text x="20" y="143" fontSize="10" fill={secondary}>
+            <text x="20" y="143" fontSize="11" fill={secondary}>
               360 nm
             </text>
-            <text x="203" y="143" fontSize="10" fill={secondary}>
+            <text x="203" y="143" fontSize="11" fill={secondary}>
               830 nm
             </text>
           </g>
@@ -583,7 +583,7 @@ export function PbtSpectrumColorDiagram() {
               x="80"
               y="137"
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
             >
               同一数值不等于同一光谱

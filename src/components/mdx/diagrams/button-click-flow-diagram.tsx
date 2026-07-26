@@ -241,7 +241,7 @@ export function ButtonClickFlowDiagram() {
             x={N1_CX}
             y={NODE_Y + 52}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① 用户点一下
@@ -285,7 +285,7 @@ export function ButtonClickFlowDiagram() {
               x={N2_CX}
               y={NODE_Y + 52}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               ② 触发点击事件
@@ -294,7 +294,7 @@ export function ButtonClickFlowDiagram() {
               x={N2_CX}
               y={NODE_Y + 70}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               按钮自带的事件
@@ -328,7 +328,7 @@ export function ButtonClickFlowDiagram() {
               x={N3_CX}
               y={NODE_Y + 52}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               ③ 注册的方法被调用
@@ -337,7 +337,7 @@ export function ButtonClickFlowDiagram() {
               x={N3_CX}
               y={NODE_Y + 70}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-secondary)"
             >
@@ -372,7 +372,7 @@ export function ButtonClickFlowDiagram() {
             x={N4_CX}
             y={NODE_Y + 46}
             textAnchor="middle"
-            fontSize="8"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ④ scoreText.text = …
@@ -410,7 +410,7 @@ export function ButtonClickFlowDiagram() {
             x={VIEW_W / 2}
             y={VIEW_H - 22}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             提前用 AddListener「接好线」，之后每次点击都会自动跑你的方法去改 UI

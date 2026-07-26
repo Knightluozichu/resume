@@ -201,7 +201,7 @@ export function HD11RoundingContractLab() {
   const complete = floorRoot && zero && negative;
   return (
     <Figure caption="An integer elementary function needs an explicit rounding rule, zero behavior, and signed-domain policy before optimization.">
-      <div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={floorRoot} onChange={(event) => setFloorRoot(event.target.checked)} />floor rule</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={zero} onChange={(event) => setZero(event.target.checked)} />zero case</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={negative} onChange={(event) => setNegative(event.target.checked)} />negative domain</label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={floorRoot} onChange={(event) => setFloorRoot(event.target.checked)} />floor rule</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={zero} onChange={(event) => setZero(event.target.checked)} />zero case</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={negative} onChange={(event) => setNegative(event.target.checked)} />negative domain</label></div>
       <div className="mt-4"><Stat label="rounding contract" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
     </Figure>
   );
@@ -214,7 +214,7 @@ export function HD11ElementaryCertificateLab() {
   const complete = bounds && overflow && oracle;
   return (
     <Figure caption="An integer elementary function is ready when adjacent-value bounds, intermediate overflow guards, and an independent oracle all pass.">
-      <div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={bounds} onChange={(event) => setBounds(event.target.checked)} />adjacent bounds</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={overflow} onChange={(event) => setOverflow(event.target.checked)} />overflow guards</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={oracle} onChange={(event) => setOracle(event.target.checked)} />oracle</label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={bounds} onChange={(event) => setBounds(event.target.checked)} />adjacent bounds</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={overflow} onChange={(event) => setOverflow(event.target.checked)} />overflow guards</label><label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={oracle} onChange={(event) => setOracle(event.target.checked)} />oracle</label></div>
       <div className="mt-4"><Stat label="elementary certificate" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
     </Figure>
   );

@@ -350,7 +350,7 @@ export function CollisionTriggerEventsDiagram() {
             x={WALL_X + WALL_W / 2}
             y={BASE_Y + 76}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             墙（实心·挡得住）
@@ -387,7 +387,7 @@ export function CollisionTriggerEventsDiagram() {
                 x={colX(0) + COL_W - 18}
                 y={CB_Y0 + i * CB_DY}
                 textAnchor="end"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {cb.d}
@@ -413,7 +413,7 @@ export function CollisionTriggerEventsDiagram() {
             x={ZONE_X + ZONE_W / 2}
             y={BASE_Y + 86}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             感应区（虚线·不挡，能穿过）
@@ -450,7 +450,7 @@ export function CollisionTriggerEventsDiagram() {
                 x={colX(1) + COL_W - 18}
                 y={CB_Y0 + i * CB_DY}
                 textAnchor="end"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {cb.d}

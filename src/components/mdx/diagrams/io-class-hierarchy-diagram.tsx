@@ -163,11 +163,11 @@ export function IOClassHierarchyDiagram() {
 
           {/* 图例 */}
           <rect x={20} y={h - 36} width={14} height={14} rx={3} fill={baseFill} stroke={baseStroke} strokeWidth="1.5" />
-          <text x={40} y={h - 24} fontSize="10" fill={secondary}>基类</text>
+          <text x={40} y={h - 24} fontSize="11" fill={secondary}>基类</text>
           <rect x={90} y={h - 36} width={14} height={14} rx={3} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={110} y={h - 24} fontSize="10" fill={secondary}>派生类</text>
+          <text x={110} y={h - 24} fontSize="11" fill={secondary}>派生类</text>
           <rect x={170} y={h - 36} width={14} height={14} rx={3} fill={derivedFill} stroke={accent} strokeWidth="2" />
-          <text x={190} y={h - 24} fontSize="10" fill={secondary}>多重继承</text>
+          <text x={190} y={h - 24} fontSize="11" fill={secondary}>多重继承</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">

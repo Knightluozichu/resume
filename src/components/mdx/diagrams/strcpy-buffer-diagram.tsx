@@ -146,7 +146,7 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
                     x={startX + i * cellW + (cellW - 4) / 2}
                     y={rowY + 140}
                     textAnchor="middle"
-                    fontSize="9"
+                    fontSize="11"
                     fill={secondary}
                   >
                     {cell.label}
@@ -188,7 +188,7 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
             >
               ① 目标太小
             </text>
-            <text x={40} y={292} fontSize="10" fill={secondary}>
+            <text x={40} y={292} fontSize="11" fill={secondary}>
               dest 只有 8 字节
             </text>
           </g>
@@ -213,7 +213,7 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
             >
               ② strcpy 无检查
             </text>
-            <text x={246} y={292} fontSize="10" fill={secondary}>
+            <text x={246} y={292} fontSize="11" fill={secondary}>
               一直拷到源串 \0
             </text>
           </g>
@@ -238,7 +238,7 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
             >
               ③ 越界覆盖
             </text>
-            <text x={452} y={292} fontSize="10" fill={secondary}>
+            <text x={452} y={292} fontSize="11" fill={secondary}>
               破坏栈上其他变量
             </text>
           </g>

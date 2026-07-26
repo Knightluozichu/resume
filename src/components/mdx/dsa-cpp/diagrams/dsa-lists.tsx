@@ -36,7 +36,7 @@ export function DsaListsDiagram() {
             <g key={i}>
               <rect x={56 + i * 44} y="104" width="40" height="36" rx="4" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.2" />
               <text x={56 + i * 44 + 20} y="127" textAnchor="middle" fontSize="12" fontWeight="600" fill={primary}>{v}</text>
-              <text x={56 + i * 44 + 20} y="156" textAnchor="middle" fontSize="10" fill={secondary}>[{i}]</text>
+              <text x={56 + i * 44 + 20} y="156" textAnchor="middle" fontSize="11" fill={secondary}>[{i}]</text>
             </g>
           ))}
           {/* 扩容区域 */}

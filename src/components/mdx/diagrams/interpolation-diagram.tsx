@@ -59,17 +59,17 @@ export function InterpolationDiagram() {
             x="150"
             y="50"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             红
           </text>
           <circle cx="76" cy="196" r="9" fill="#5ad17a" />
-          <text x="50" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="50" y="200" fontSize="11" fill="var(--text-secondary)">
             绿
           </text>
           <circle cx="224" cy="196" r="9" fill="#5a8cff" />
-          <text x="236" y="200" fontSize="10" fill="var(--text-secondary)">
+          <text x="236" y="200" fontSize="11" fill="var(--text-secondary)">
             蓝
           </text>
           <text

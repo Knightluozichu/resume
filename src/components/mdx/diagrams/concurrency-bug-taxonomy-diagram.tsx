@@ -125,7 +125,7 @@ export function ConcurrencyBugTaxonomyDiagram() {
             x={VIEW_W / 2}
             y={HEAD_Y + 37}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             每类对照：症状 · 常见成因 · 往哪查
@@ -160,7 +160,7 @@ export function ConcurrencyBugTaxonomyDiagram() {
                 <text
                   x={CARD_X + 16}
                   y={y + 38}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {r.chapter}
@@ -169,7 +169,7 @@ export function ConcurrencyBugTaxonomyDiagram() {
                 <text
                   x={CARD_X + 168}
                   y={y + 22}
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   症状：{r.symptom}
@@ -177,7 +177,7 @@ export function ConcurrencyBugTaxonomyDiagram() {
                 <text
                   x={CARD_X + 168}
                   y={y + 41}
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-primary)"
                 >
                   成因：{r.cause}
@@ -185,7 +185,7 @@ export function ConcurrencyBugTaxonomyDiagram() {
                 <text
                   x={CARD_X + 168}
                   y={y + 60}
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="600"
                   fill={r.color}
                 >

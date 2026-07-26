@@ -70,6 +70,18 @@ export function OfficialHighPerformanceMysqlLab({
   const [checked, setChecked] = useState<boolean[]>(() =>
     gates.map(() => false),
   );
+  function resetExperiment() {
+    setNodeIndex(0);
+    setTargetBasisPoints(9990);
+    setWindowIndex(2);
+    setConcurrency(64);
+    setRowExponent(6);
+    setHitRate(96);
+    setFailureIndex(0);
+    setChecked(() =>
+    gates.map(() => false));
+  }
+
 
   const target = targetBasisPoints / 100;
   const selectedWindow = windows[windowIndex];
@@ -96,6 +108,7 @@ export function OfficialHighPerformanceMysqlLab({
   if (mode === "slo") {
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             服务目标与目录节点
@@ -137,7 +150,7 @@ export function OfficialHighPerformanceMysqlLab({
                   type="button"
                   onClick={() => setWindowIndex(index)}
                   className={
-                    "min-h-10 rounded border px-2 text-xs font-medium " +
+                    "min-h-11 rounded border px-2 text-xs font-medium " +
                     (windowIndex === index
                       ? "border-emerald-600 bg-emerald-600 text-white"
                       : "border-zinc-300 dark:border-zinc-700")
@@ -199,6 +212,7 @@ export function OfficialHighPerformanceMysqlLab({
   if (mode === "capacity") {
     return (
       <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
         <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
             容量、缓存与尾延迟模型
@@ -214,7 +228,7 @@ export function OfficialHighPerformanceMysqlLab({
                 type="button"
                 onClick={() => setFailureIndex(index)}
                 className={
-                  "min-h-10 rounded border px-2 py-2 text-xs font-medium " +
+                  "min-h-11 rounded border px-2 py-2 text-xs font-medium " +
                   (failureIndex === index
                     ? "border-sky-600 bg-sky-600 text-white"
                     : "border-zinc-300 dark:border-zinc-700")
@@ -300,6 +314,7 @@ export function OfficialHighPerformanceMysqlLab({
 
   return (
     <section className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100">
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
         <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
           生产证据门 · {evidenceProgress}/{gates.length}

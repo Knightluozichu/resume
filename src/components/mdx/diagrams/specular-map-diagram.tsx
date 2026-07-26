@@ -72,7 +72,7 @@ export function SpecularMapDiagram() {
             x="120"
             y="100"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-primary)"
           >
             白＝钢边
@@ -81,7 +81,7 @@ export function SpecularMapDiagram() {
             x="120"
             y="138"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             黑＝木头
@@ -121,7 +121,7 @@ export function SpecularMapDiagram() {
             x="340"
             y="100"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontFamily="monospace"
             fill="var(--text-secondary)"
           >
@@ -155,7 +155,7 @@ export function SpecularMapDiagram() {
             x="340"
             y="218"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             灰度值直接乘到镜面项
@@ -219,7 +219,7 @@ export function SpecularMapDiagram() {
             x="592"
             y="44"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--warning)"
           >
             钢边：锐利高光

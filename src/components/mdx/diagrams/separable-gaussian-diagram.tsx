@@ -86,7 +86,7 @@ export function SeparableGaussianDiagram() {
             x={lOx + span / 2}
             y={lOy - 8}
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -119,7 +119,7 @@ export function SeparableGaussianDiagram() {
             x="300"
             y={lOy + span / 2 + 26}
             textAnchor="middle"
-            fontSize="8.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             结果等价
@@ -131,7 +131,7 @@ export function SeparableGaussianDiagram() {
             x={rOx - 8}
             y={rHy + CELL / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ① 横 1×N
@@ -141,7 +141,7 @@ export function SeparableGaussianDiagram() {
             x={rOx + span + 10}
             y={rHy + CELL / 2 + 4}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             N 次
@@ -164,7 +164,7 @@ export function SeparableGaussianDiagram() {
             x={rOx - 8}
             y={rVy + span / 2 + 4}
             textAnchor="end"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             ② 纵 N×1
@@ -174,7 +174,7 @@ export function SeparableGaussianDiagram() {
             x={rOx + (span - CELL) / 2 + CELL + 10}
             y={rVy + span / 2 + 4}
             textAnchor="start"
-            fontSize="9.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             N 次

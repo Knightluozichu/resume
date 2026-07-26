@@ -17,6 +17,13 @@ export function OfficialPrmlLab({ title, concepts, accent, view }: Props) {
   const [noise, setNoise] = useState(28);
   const [budget, setBudget] = useState(64);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStage(0);
+    setNoise(28);
+    setBudget(64);
+    setFault(false);
+  }
+
   const visible = concepts.slice(0, 6);
   const metrics = useMemo(() => {
     const normalized = bounded(
@@ -51,6 +58,7 @@ export function OfficialPrmlLab({ title, concepts, accent, view }: Props) {
         color: "#18181b",
       }}
     >
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div
         style={{
           display: "flex",

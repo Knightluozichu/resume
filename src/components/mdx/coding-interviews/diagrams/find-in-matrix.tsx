@@ -53,17 +53,17 @@ export function MonotoneMatrixDiagram() {
             const onPath = [[0,3],[0,2],[0,1],[1,1],[2,1]].some(([pr,pc]) => pr === r && pc === c);
             return <g key={`${r}-${c}`}><rect x={x} y={y} width="64" height="48" rx="4" fill={onPath ? "var(--accent)" : "var(--bg)"} fillOpacity={onPath ? "0.12" : "1"} stroke={onPath ? "var(--accent)" : "var(--border)"} /><text x={x + 32} y={y + 30} textAnchor="middle" fontSize="13" fontWeight={onPath ? "700" : "500"} fill="var(--text-primary)">{value}</text></g>;
           }))}
-          <text x="260" y="358" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">行向右不减，列向下不减</text>
+          <text x="260" y="358" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">行向右不减，列向下不减</text>
           <rect x="470" y="76" width="250" height="214" rx="6" fill="var(--bg)" stroke="var(--border)" />
           <text x="595" y="106" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">在候选区域右上角比较x</text>
           <rect x="492" y="132" width="206" height="42" rx="4" fill="var(--danger)" fillOpacity="0.07" stroke="var(--danger)" />
-          <text x="595" y="158" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x大于target → 删除当前列</text>
+          <text x="595" y="158" textAnchor="middle" fontSize="11" fill="var(--text-primary)">x大于target → 删除当前列</text>
           <rect x="492" y="188" width="206" height="42" rx="4" fill="var(--success)" fillOpacity="0.07" stroke="var(--success)" />
-          <text x="595" y="214" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x小于target → 删除当前行</text>
+          <text x="595" y="214" textAnchor="middle" fontSize="11" fill="var(--text-primary)">x小于target → 删除当前行</text>
           <rect x="492" y="244" width="206" height="30" rx="4" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" />
-          <text x="595" y="264" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x等于target → 命中</text>
+          <text x="595" y="264" textAnchor="middle" fontSize="11" fill="var(--text-primary)">x等于target → 命中</text>
           <rect x="100" y="386" width="580" height="28" rx="5" fill="var(--warning)" fillOpacity="0.07" stroke="var(--warning)" />
-          <text x="390" y="405" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">路径的行坐标只增加、列坐标只减少，候选区域单调收缩。</text>
+          <text x="390" y="405" textAnchor="middle" fontSize="11" fill="var(--text-primary)">路径的行坐标只增加、列坐标只减少，候选区域单调收缩。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">右上角让每次比较都有唯一排除方向；左下角可做完全对称的搜索。</figcaption>

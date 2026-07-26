@@ -64,7 +64,7 @@ export function StringMemoryDiagram() {
           <text
             x="66"
             y="74"
-            fontSize="10"
+            fontSize="11"
             fill={token.accent}
             textAnchor="middle"
             fontFamily="monospace"
@@ -123,7 +123,7 @@ export function StringMemoryDiagram() {
           <text
             x="103"
             y="158"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -132,7 +132,7 @@ export function StringMemoryDiagram() {
           <text
             x="190"
             y="158"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -141,7 +141,7 @@ export function StringMemoryDiagram() {
           <text
             x="276"
             y="158"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -221,7 +221,7 @@ export function StringMemoryDiagram() {
           <text
             x="420"
             y="74"
-            fontSize="10"
+            fontSize="11"
             fill={token.accent}
             textAnchor="middle"
             fontFamily="monospace"
@@ -245,7 +245,7 @@ export function StringMemoryDiagram() {
           <text
             x="445"
             y="118"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -265,7 +265,7 @@ export function StringMemoryDiagram() {
           <text
             x="445"
             y="154"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -275,7 +275,7 @@ export function StringMemoryDiagram() {
           <text
             x="532"
             y="118"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -295,7 +295,7 @@ export function StringMemoryDiagram() {
           <text
             x="532"
             y="154"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -305,7 +305,7 @@ export function StringMemoryDiagram() {
           <text
             x="618"
             y="118"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -325,7 +325,7 @@ export function StringMemoryDiagram() {
           <text
             x="618"
             y="154"
-            fontSize="10"
+            fontSize="11"
             fill={token.textSecondary}
             textAnchor="middle"
           >
@@ -345,7 +345,7 @@ export function StringMemoryDiagram() {
           <text
             x="480"
             y="204"
-            fontSize="10"
+            fontSize="11"
             fill="rgb(63,185,127)"
             textAnchor="middle"
             fontFamily="monospace"

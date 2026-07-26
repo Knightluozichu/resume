@@ -43,7 +43,7 @@ export function TcpLcgLab() {
   const values = lcg(seed, multiplier, increment, modulus, 16);
   return (
     <Figure caption="A linear congruential generator is a deterministic state machine; changing seed or parameters changes the orbit, not the recurrence law.">
-      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">a = {multiplier}<input className="mt-2 w-full accent-current" type="range" min="1" max="15" value={multiplier} onChange={(event) => setMultiplier(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">c = {increment}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={increment} onChange={(event) => setIncrement(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">a = {multiplier}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="15" value={multiplier} onChange={(event) => setMultiplier(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">c = {increment}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={increment} onChange={(event) => setIncrement(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-8 gap-1">{values.map((value, index) => <div key={index} className="border border-border bg-background p-2 text-center font-mono text-xs text-primary">{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="distinct states" value={new Set(values).size.toString()} /><Stat label="modulus" value={modulus.toString()} tone="success" /></div>
     </Figure>
@@ -67,7 +67,7 @@ export function TcpPeriodLab() {
   const result = orbitLength(0, multiplier, increment, 16);
   return (
     <Figure caption="Finite state guarantees eventual repetition; full period means the orbit visits every residue before returning, a necessary but insufficient quality condition.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">a = {multiplier}<input className="mt-2 w-full accent-current" type="range" min="1" max="15" value={multiplier} onChange={(event) => setMultiplier(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">c = {increment}<input className="mt-2 w-full accent-current" type="range" min="0" max="15" value={increment} onChange={(event) => setIncrement(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">a = {multiplier}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="15" value={multiplier} onChange={(event) => setMultiplier(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">c = {increment}<input className="mt-2 h-11 w-full accent-current" type="range" min="0" max="15" value={increment} onChange={(event) => setIncrement(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="transient prefix" value={result.prefix.toString()} /><Stat label="period" value={result.period.toString()} tone={result.period === 16 ? "success" : "warning"} /><Stat label="full-period" value={result.period === 16 ? "yes" : "no"} tone={result.period === 16 ? "success" : "danger"} /></div>
     </Figure>
   );
@@ -101,7 +101,7 @@ export function TcpFrequencyTestLab() {
   const chiSquare = buckets.reduce((sum, value) => sum + (value - expected) ** 2 / expected, 0);
   return (
     <Figure caption="A frequency test compares observed bucket counts with a uniform expectation; the statistic is evidence against a model, not proof of randomness.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">samples = {count}<input className="mt-2 w-full accent-current" type="range" min="64" max="2048" step="64" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">samples = {count}<input className="mt-2 h-11 w-full accent-current" type="range" min="64" max="2048" step="64" value={count} onChange={(event) => setCount(Number(event.target.value))} /></label></div>
       <div className="mt-4 flex h-40 items-end gap-2 border border-border bg-background p-2">{buckets.map((value, index) => <div key={index} className="flex-1 bg-accent/70" style={{ height: `${Math.max(2, value / Math.max(...buckets) * 100)}%` }} title={`bucket ${index}: ${value}`} />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="expected / bucket" value={expected.toFixed(1)} /><Stat label="chi-square" value={chiSquare.toFixed(3)} tone="success" /></div>
     </Figure>
@@ -117,7 +117,7 @@ export function TcpSerialTestLab() {
   const statistic = bins.reduce((sum, value) => sum + (value - expected) ** 2 / expected, 0);
   return (
     <Figure caption="A serial test bins pairs separated by a chosen lag; uniform marginals can coexist with strongly nonuniform transitions.">
-      <label className="text-sm font-semibold text-primary">lag = {lag}<input className="mt-2 w-full accent-current" type="range" min="1" max="8" value={lag} onChange={(event) => setLag(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">lag = {lag}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="8" value={lag} onChange={(event) => setLag(Number(event.target.value))} /></label>
       <div className="mt-4 grid aspect-square max-w-[26rem] grid-cols-8 gap-1">{bins.map((value, index) => <div key={index} className={`aspect-square border ${value > expected * 1.5 ? "border-warning bg-warning/30" : "border-border bg-accent/15"}`} title={`pair bin ${index}: ${value}`} />)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="pair bins" value="64" /><Stat label="serial statistic" value={statistic.toFixed(2)} tone="warning" /></div>
     </Figure>
@@ -131,7 +131,7 @@ export function TcpRunsTestLab() {
   const runs = 1 + bits.slice(1).filter((bit, index) => bit !== bits[index]).length;
   return (
     <Figure caption="A runs test ignores exact magnitudes and asks how often a binary classification changes; too few or too many runs signals dependence.">
-      <label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-16 gap-1">{bits.map((bit, index) => <div key={index} className={`aspect-square border ${bit ? "border-success bg-success/30" : "border-border bg-background"}`} />)}</div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="zeros" value={bits.filter((bit) => bit === 0).length.toString()} /><Stat label="ones" value={bits.filter((bit) => bit === 1).length.toString()} /><Stat label="runs" value={runs.toString()} tone="success" /></div>
     </Figure>
@@ -144,7 +144,7 @@ export function TcpDistributionLab() {
   const exponential = -Math.log1p(-u) / rate;
   return (
     <Figure caption="Inverse transformation converts a uniform variate through a target quantile; endpoint policy is essential because logarithms diverge at u=1.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">uniform u = {u.toFixed(3)}<input className="mt-2 w-full accent-current" type="range" min="0.001" max="0.999" step="0.001" value={u} onChange={(event) => setU(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">rate lambda = {rate.toFixed(1)}<input className="mt-2 w-full accent-current" type="range" min="0.1" max="5" step="0.1" value={rate} onChange={(event) => setRate(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">uniform u = {u.toFixed(3)}<input className="mt-2 h-11 w-full accent-current" type="range" min="0.001" max="0.999" step="0.001" value={u} onChange={(event) => setU(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">rate lambda = {rate.toFixed(1)}<input className="mt-2 h-11 w-full accent-current" type="range" min="0.1" max="5" step="0.1" value={rate} onChange={(event) => setRate(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="u" value={u.toFixed(6)} /><Stat label="−ln(1−u)" value={(-Math.log1p(-u)).toFixed(6)} /><Stat label="sample x" value={exponential.toFixed(6)} tone="success" /></div>
     </Figure>
   );
@@ -161,7 +161,7 @@ export function TcpRejectionLab() {
   }
   return (
     <Figure caption="Rejection sampling draws from an easy proposal and keeps points inside a target region; acceptance rate controls work per output sample.">
-      <label className="text-sm font-semibold text-primary">proposals = {samples}<input className="mt-2 w-full accent-current" type="range" min="100" max="10000" step="100" value={samples} onChange={(event) => setSamples(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">proposals = {samples}<input className="mt-2 h-11 w-full accent-current" type="range" min="100" max="10000" step="100" value={samples} onChange={(event) => setSamples(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="accepted" value={accepted.toString()} /><Stat label="acceptance" value={(accepted / samples).toFixed(4)} /><Stat label="4 × rate" value={(4 * accepted / samples).toFixed(5)} tone="success" /></div>
     </Figure>
   );
@@ -182,7 +182,7 @@ export function TcpShuffleLab() {
   const values = shuffled(10, seed);
   return (
     <Figure caption="Fisher–Yates chooses uniformly among the remaining positions at each step; shrinking the choice range is what makes all permutations equiprobable.">
-      <label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">seed = {seed}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="99" value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-10 gap-1">{values.map((value) => <div key={value} className="border border-border bg-background p-2 text-center font-mono text-sm text-primary">{value}</div>)}</div>
       <div className="mt-4 grid grid-cols-2 gap-2"><Stat label="permutation" value={values.join(" ")} /><Stat label="unique items" value={new Set(values).size.toString()} tone="success" /></div>
     </Figure>
@@ -203,7 +203,7 @@ export function TcpReservoirLab() {
   }
   return (
     <Figure caption="Reservoir sampling keeps k uniform items from an unknown-length stream using O(k) memory; item i is admitted with probability k/i.">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">stream items = {seen}<input className="mt-2 w-full accent-current" type="range" min="4" max="100" value={seen} onChange={(event) => setSeen(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">reservoir k = {capacity}<input className="mt-2 w-full accent-current" type="range" min="1" max="10" value={capacity} onChange={(event) => setCapacity(Number(event.target.value))} /></label></div>
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-primary">stream items = {seen}<input className="mt-2 h-11 w-full accent-current" type="range" min="4" max="100" value={seen} onChange={(event) => setSeen(Number(event.target.value))} /></label><label className="text-sm font-semibold text-primary">reservoir k = {capacity}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="10" value={capacity} onChange={(event) => setCapacity(Number(event.target.value))} /></label></div>
       <div className="mt-4 grid grid-cols-5 gap-2">{reservoir.map((value, index) => <Stat key={index} label={`slot ${index}`} value={value.toString()} tone="success" />)}</div>
     </Figure>
   );

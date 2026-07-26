@@ -104,7 +104,7 @@ export function MultipleLightsDiagram() {
           <text x="92" y="98" fontSize="11" fill="var(--text-secondary)">
             CalcDirLight()
           </text>
-          <text x="46" y="112" fontSize="10" fill="var(--success)">
+          <text x="46" y="112" fontSize="11" fill="var(--success)">
             → 贡献 1
           </text>
 
@@ -172,7 +172,7 @@ export function MultipleLightsDiagram() {
           <text x="92" y="180" fontSize="11" fill="var(--text-secondary)">
             CalcPointLight()
           </text>
-          <text x="46" y="194" fontSize="10" fill="var(--warning)">
+          <text x="46" y="194" fontSize="11" fill="var(--warning)">
             → 贡献 2
           </text>
 
@@ -222,7 +222,7 @@ export function MultipleLightsDiagram() {
           <text x="92" y="262" fontSize="11" fill="var(--text-secondary)">
             CalcSpotLight()
           </text>
-          <text x="46" y="276" fontSize="10" fill="var(--danger)">
+          <text x="46" y="276" fontSize="11" fill="var(--danger)">
             → 贡献 3
           </text>
 
@@ -231,7 +231,7 @@ export function MultipleLightsDiagram() {
             x="125"
             y="306"
             textAnchor="middle"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             三盏光各算各的，互不影响

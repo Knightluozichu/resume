@@ -70,7 +70,7 @@ export function TypeConversionOperatorDiagram() {
             <text x="385" y="188" fontSize="12" fontWeight="700" fill={good} textAnchor="middle">
               ① 转换构造函数
             </text>
-            <text x="385" y="206" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+            <text x="385" y="206" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
               SalesData(double price)  // 非 explicit
             </text>
           </g>
@@ -82,7 +82,7 @@ export function TypeConversionOperatorDiagram() {
             <text x="385" y="300" fontSize="11" fontWeight="700" fill={explicitColor} textAnchor="middle">
               ② explicit 转换构造（加 explicit 防隐式）
             </text>
-            <text x="385" y="316" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+            <text x="385" y="316" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
               必须显式写 SmallInt si(num); / static_cast
             </text>
           </g>
@@ -94,7 +94,7 @@ export function TypeConversionOperatorDiagram() {
             <text x="385" y="390" fontSize="12" fontWeight="700" fill={accent} textAnchor="middle">
               ③ 类型转换运算符
             </text>
-            <text x="385" y="408" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+            <text x="385" y="408" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
               operator double() const;  // 类→double
             </text>
           </g>
@@ -105,7 +105,7 @@ export function TypeConversionOperatorDiagram() {
             <text x={cx - 50} y="16" fontSize="11" fontWeight="600" fill={accent} fontFamily="monospace">
               explicit operator bool()
             </text>
-            <text x={cx - 50} y="32" fontSize="10" fill={secondary}>
+            <text x={cx - 50} y="32" fontSize="11" fill={secondary}>
               必须显式转换 bool——防止隐式的条件判断混乱（if(obj) 可以，int x = obj; 不行）
             </text>
           </g>

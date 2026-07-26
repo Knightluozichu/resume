@@ -111,29 +111,29 @@ export function FruitFeatureDiagram() {
           <text x="380" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>橙子与葡萄柚：把观察变成特征坐标</text>
           <line x1="82" y1="318" x2="700" y2="318" stroke={border} strokeWidth="2" />
           <line x1="82" y1="318" x2="82" y2="64" stroke={border} strokeWidth="2" />
-          <text x="390" y="354" textAnchor="middle" fontSize="10" fill={secondary}>大小：小 → 大</text>
-          <text x="34" y="192" textAnchor="middle" fontSize="10" fill={secondary} transform="rotate(-90 34 192)">红度：低 → 高</text>
+          <text x="390" y="354" textAnchor="middle" fontSize="11" fill={secondary}>大小：小 → 大</text>
+          <text x="34" y="192" textAnchor="middle" fontSize="11" fill={secondary} transform="rotate(-90 34 192)">红度：低 → 高</text>
           {oranges.map(([x, y], index) => (
             <g key={index}>
               <circle cx={x} cy={y} r="17" fill={warning} fillOpacity="0.16" stroke={warning} />
-              <text x={x} y={y + 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={primary}>橙</text>
+              <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>橙</text>
             </g>
           ))}
           {grapefruit.map(([x, y], index) => (
             <g key={index}>
               <circle cx={x} cy={y} r="17" fill={danger} fillOpacity="0.13" stroke={danger} />
-              <text x={x} y={y + 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={primary}>柚</text>
+              <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>柚</text>
             </g>
           ))}
           <circle cx={query.x} cy={query.y} r="58" fill={accent} fillOpacity="0.04" stroke={accent} strokeDasharray="5 4" />
           <circle cx={query.x} cy={query.y} r="21" fill={accent} fillOpacity="0.18" stroke={accent} strokeWidth="2" />
-          <text x={query.x} y={query.y + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill={primary}>新</text>
+          <text x={query.x} y={query.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={primary}>新</text>
           <line x1={query.x - 13} y1={query.y + 16} x2="278" y2="238" stroke={accent} strokeDasharray="3 3" />
           <line x1={query.x + 12} y1={query.y - 15} x2="434" y2="152" stroke={accent} strokeDasharray="3 3" />
           <line x1={query.x - 15} y1={query.y + 10} x2="250" y2="210" stroke={accent} strokeDasharray="3 3" />
           <rect x="112" y="334" width="536" height="36" rx="4" fill={success} fillOpacity="0.06" stroke={success} strokeOpacity="0.55" />
-          <text x="380" y="350" textAnchor="middle" fontSize="10.5" fill={primary}>最近3个邻居：橙子、葡萄柚、橙子 → 多数投票预测橙子。</text>
-          <text x="380" y="364" textAnchor="middle" fontSize="9" fill={secondary}>图中几何关系只在特征经过合适编码与缩放后才有业务意义。</text>
+          <text x="380" y="350" textAnchor="middle" fontSize="11" fill={primary}>最近3个邻居：橙子、葡萄柚、橙子 → 多数投票预测橙子。</text>
+          <text x="380" y="364" textAnchor="middle" fontSize="11" fill={secondary}>图中几何关系只在特征经过合适编码与缩放后才有业务意义。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
@@ -172,13 +172,13 @@ export function RecommendationFeatureMap() {
         >
           <text x="380" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>推荐系统：把用户表示成偏好特征向量</text>
           {labels.map((label, index) => (
-            <text key={label} x={270 + index * 82} y="72" textAnchor="middle" fontSize="9.5" fontWeight="700" fill={secondary}>{label}</text>
+            <text key={label} x={270 + index * 82} y="72" textAnchor="middle" fontSize="11" fontWeight="700" fill={secondary}>{label}</text>
           ))}
           {users.map((user, row) => {
             const y = 96 + row * 70;
             return (
               <g key={user.name}>
-                <text x="176" y={y + 24} textAnchor="end" fontSize="10.5" fontWeight="700" fill={primary}>{user.name}</text>
+                <text x="176" y={y + 24} textAnchor="end" fontSize="11" fontWeight="700" fill={primary}>{user.name}</text>
                 {user.values.map((value, column) => (
                   <g key={column}>
                     <rect x={236 + column * 82} y={y} width="68" height="44" rx="4" fill={user.tone} fillOpacity={value / 34} stroke={user.tone} />
@@ -189,10 +189,10 @@ export function RecommendationFeatureMap() {
             );
           })}
           <line x1="190" y1="118" x2="190" y2="188" stroke={success} strokeWidth="3" />
-          <text x="116" y="157" textAnchor="middle" fontSize="9.5" fill={success}>最相似</text>
+          <text x="116" y="157" textAnchor="middle" fontSize="11" fill={success}>最相似</text>
           <rect x="82" y="316" width="596" height="36" rx="4" fill={warning} fillOpacity="0.06" stroke={warning} strokeOpacity="0.55" />
-          <text x="380" y="332" textAnchor="middle" fontSize="10.5" fill={primary}>相似用户提供推荐候选；目标用户未看过且邻居高评分的电影优先。</text>
-          <text x="380" y="346" textAnchor="middle" fontSize="9" fill={secondary}>特征应与“口味相似”相关，缺失评分也需单独处理。</text>
+          <text x="380" y="332" textAnchor="middle" fontSize="11" fill={primary}>相似用户提供推荐候选；目标用户未看过且邻居高评分的电影优先。</text>
+          <text x="380" y="346" textAnchor="middle" fontSize="11" fill={secondary}>特征应与“口味相似”相关，缺失评分也需单独处理。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">

@@ -143,15 +143,15 @@ export function GlsFragmentShadingDiagram({
                 y="155"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.1"
+                fontSize="11"
                 fill={stage.color}
               >
                 {stage.code}
               </text>
-              <text x={x + 13} y="201" fontSize="10" fill={secondary}>
+              <text x={x + 13} y="201" fontSize="11" fill={secondary}>
                 结果
               </text>
-              <text x={x + 13} y="222" fontSize="10" fill={primary}>
+              <text x={x + 13} y="222" fontSize="11" fill={primary}>
                 {stage.result}
               </text>
             </g>
@@ -181,7 +181,7 @@ export function GlsFragmentShadingDiagram({
           x="450"
           y="302"
           textAnchor="middle"
-          fontSize="10.3"
+          fontSize="11"
           fill={primary}
         >
           逻辑结果受状态约束；硬件可在保持可观察语义时提前或并行执行部分测试
@@ -251,13 +251,13 @@ export function GlsFragmentInvocationDiagram() {
         >
           Fragment invocation 的可观察输入
         </text>
-        <text x="28" y="66" fontSize="10" fill={secondary}>
+        <text x="28" y="66" fontSize="11" fill={secondary}>
           输入
         </text>
-        <text x="230" y="66" fontSize="10" fill={secondary}>
+        <text x="230" y="66" fontSize="11" fill={secondary}>
           语义
         </text>
-        <text x="610" y="66" fontSize="10" fill={secondary}>
+        <text x="610" y="66" fontSize="11" fill={secondary}>
           典型用途
         </text>
         {invocationRows.map((row, index) => {
@@ -278,7 +278,7 @@ export function GlsFragmentInvocationDiagram() {
                 x="55"
                 y={y + 23}
                 fontFamily="monospace"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -288,12 +288,12 @@ export function GlsFragmentInvocationDiagram() {
                 x="230"
                 y={y + 23}
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="610" y={y + 23} fontSize="10" fill={secondary}>
+              <text x="610" y={y + 23} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -303,7 +303,7 @@ export function GlsFragmentInvocationDiagram() {
           x="450"
           y="338"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           Helper invocation 可计算导数但不会更新 framebuffer 或执行可见副作用
@@ -390,7 +390,7 @@ export function GlsPerFragmentTestsDiagram() {
               <text
                 x="80"
                 y={y + 24}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -400,12 +400,12 @@ export function GlsPerFragmentTestsDiagram() {
                 x="300"
                 y={y + 24}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="650" y={y + 24} fontSize="10" fill={secondary}>
+              <text x="650" y={y + 24} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -415,7 +415,7 @@ export function GlsPerFragmentTestsDiagram() {
           x="450"
           y="337"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           layout(early_fragment_tests) 可强制提前测试；gl_FragDepth 与 discard
@@ -485,13 +485,13 @@ export function GlsBlendEquationDiagram() {
         >
           Source、Destination、Factor、Equation
         </text>
-        <text x="28" y="67" fontSize="10" fill={secondary}>
+        <text x="28" y="67" fontSize="11" fill={secondary}>
           模式
         </text>
-        <text x="220" y="67" fontSize="10" fill={secondary}>
+        <text x="220" y="67" fontSize="11" fill={secondary}>
           颜色方程
         </text>
-        <text x="590" y="67" fontSize="10" fill={secondary}>
+        <text x="590" y="67" fontSize="11" fill={secondary}>
           常见 factors
         </text>
         {blendRows.map((row, index) => {
@@ -511,7 +511,7 @@ export function GlsBlendEquationDiagram() {
               <text
                 x="56"
                 y={y + 25}
-                fontSize="10.4"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -521,7 +521,7 @@ export function GlsBlendEquationDiagram() {
                 x="220"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.5"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -530,7 +530,7 @@ export function GlsBlendEquationDiagram() {
                 x="590"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.2"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -542,7 +542,7 @@ export function GlsBlendEquationDiagram() {
           x="450"
           y="309"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           Integer color attachments 不执行普通 floating-point blending；格式与
@@ -640,7 +640,7 @@ export function GlsFramebufferDiagram() {
                 y="149"
                 textAnchor="middle"
                 fontFamily="monospace"
-                fontSize="9.4"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -649,7 +649,7 @@ export function GlsFramebufferDiagram() {
                 x={x + 97.5}
                 y="199"
                 textAnchor="middle"
-                fontSize="9.8"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -672,7 +672,7 @@ export function GlsFramebufferDiagram() {
           x="440"
           y="303"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={primary}
         >
           attach → glDrawBuffers → completeness check → set viewport →
@@ -776,7 +776,7 @@ export function GlsMultisampleDiagram() {
                 x={x + 97.5}
                 y="178"
                 textAnchor="middle"
-                fontSize="9.3"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
@@ -785,7 +785,7 @@ export function GlsMultisampleDiagram() {
                 x={x + 97.5}
                 y="205"
                 textAnchor="middle"
-                fontSize="9.3"
+                fontSize="11"
                 fill={secondary}
               >
                 {row[2]}
@@ -806,7 +806,7 @@ export function GlsMultisampleDiagram() {
           x="440"
           y="287"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           4x MSAA 通常约四倍 sample storage，但着色次数取决于 sample shading
@@ -890,7 +890,7 @@ export function GlsFormatReadbackDiagram() {
               <text
                 x="90"
                 y={y + 25}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -900,12 +900,12 @@ export function GlsFormatReadbackDiagram() {
                 x="285"
                 y={y + 25}
                 fontFamily="monospace"
-                fontSize="9.6"
+                fontSize="11"
                 fill={row[3]}
               >
                 {row[1]}
               </text>
-              <text x="575" y={y + 25} fontSize="9.8" fill={secondary}>
+              <text x="575" y={y + 25} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -915,7 +915,7 @@ export function GlsFormatReadbackDiagram() {
           x="440"
           y="304"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="11"
           fill={secondary}
         >
           read pixels 可同步阻塞；PBO 可延迟映射，但仍需 fence 或其他 completion

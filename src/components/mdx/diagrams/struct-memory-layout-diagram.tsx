@@ -52,7 +52,7 @@ export function StructMemoryLayoutDiagram() {
               x={startX + i * cellW + cellW / 2}
               y={84}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               fontFamily="monospace"
             >
@@ -100,7 +100,7 @@ export function StructMemoryLayoutDiagram() {
                 x={startX + m.start * cellW + (m.len * cellW - 2) / 2}
                 y={memY + cellH + 16}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -112,10 +112,10 @@ export function StructMemoryLayoutDiagram() {
           <text x={24} y={memY + cellH + 52} fontSize="11" fill={primary} fontFamily="monospace">
             sizeof(struct) = 12 字节
           </text>
-          <text x={24} y={memY + cellH + 72} fontSize="10" fill={secondary}>
+          <text x={24} y={memY + cellH + 72} fontSize="11" fill={secondary}>
             int 通常要求 4 字节对齐 → c 后插 3 字节 pad；末尾也可能 pad 到最大成员对齐倍数
           </text>
-          <text x={24} y={memY + cellH + 92} fontSize="10" fill={secondary}>
+          <text x={24} y={memY + cellH + 92} fontSize="11" fill={secondary}>
             用 #pragma pack 或 __attribute__((packed)) 可改变布局，但可能降低访问速度
           </text>
 
@@ -123,16 +123,16 @@ export function StructMemoryLayoutDiagram() {
           <text x={416} y={192} fontSize="11" fontWeight="600" fill={primary}>
             成员访问
           </text>
-          <text x={416} y={212} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={416} y={212} fontSize="11" fill={primary} fontFamily="monospace">
             s.c = &apos;A&apos;;
           </text>
-          <text x={416} y={230} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={416} y={230} fontSize="11" fill={primary} fontFamily="monospace">
             s.i = 42;
           </text>
-          <text x={416} y={248} fontSize="10" fill={primary} fontFamily="monospace">
+          <text x={416} y={248} fontSize="11" fill={primary} fontFamily="monospace">
             s.d = &apos;Z&apos;;
           </text>
-          <text x={416} y={272} fontSize="9" fill={secondary}>
+          <text x={416} y={272} fontSize="11" fill={secondary}>
             点号 . 访问具名成员
           </text>
         </svg>

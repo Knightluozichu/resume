@@ -56,7 +56,7 @@ export function BitsetOperationDiagram() {
             bitset 操作示意图——8 个二进制位的集合
           </text>
 
-          <text x={cx} y="44" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+          <text x={cx} y="44" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
             bitset&lt;8&gt; b(&quot;10100110&quot;);
           </text>
 
@@ -84,7 +84,7 @@ export function BitsetOperationDiagram() {
                 <text x={x + bitW / 2} y={bitY + 20} fontSize="14" fontWeight="700" fill={bit === 1 ? good : secondary} textAnchor="middle">
                   {bit}
                 </text>
-                <text x={x + bitW / 2} y={bitY + 38} fontSize="9" fill={secondary} textAnchor="middle">
+                <text x={x + bitW / 2} y={bitY + 38} fontSize="11" fill={secondary} textAnchor="middle">
                   位{bitLabels[i]}
                 </text>
               </g>
@@ -114,7 +114,7 @@ export function BitsetOperationDiagram() {
                 <text x={bitStartX + 28} y={rowY + 20} fontSize="12" fontWeight="700" fill={op.color} textAnchor="middle">
                   {op.label}
                 </text>
-                <text x={bitStartX + 28} y={rowY + 36} fontSize="9" fill={op.color} textAnchor="middle">
+                <text x={bitStartX + 28} y={rowY + 36} fontSize="11" fill={op.color} textAnchor="middle">
                   {op.desc}
                 </text>
 
@@ -163,12 +163,12 @@ export function BitsetOperationDiagram() {
                         {bit}
                       </text>
                       {isTarget && (
-                        <text x={x + bitW / 2} y={rowY + 40} fontSize="8" fill={op.color} textAnchor="middle">
+                        <text x={x + bitW / 2} y={rowY + 40} fontSize="11" fill={op.color} textAnchor="middle">
                           {op.desc}
                         </text>
                       )}
                       {isCount && bit === 1 && (
-                        <text x={x + bitW / 2} y={rowY + 40} fontSize="8" fill={accent} textAnchor="middle">
+                        <text x={x + bitW / 2} y={rowY + 40} fontSize="11" fill={accent} textAnchor="middle">
                           ✓
                         </text>
                       )}
@@ -197,10 +197,10 @@ export function BitsetOperationDiagram() {
           {/* Legend */}
           <g transform={`translate(${bitStartX - 12}, ${opsStartY + 5 * 64 + 8})`}>
             <rect x="0" y="0" width={totalBitW + 24} height="48" rx="6" fill={accent} fillOpacity="0.04" stroke={border} />
-            <text x="16" y="18" fontSize="10" fill={secondary}>
+            <text x="16" y="18" fontSize="11" fill={secondary}>
               核心记忆：set=置1  reset=清0  flip=翻转  test=查值(不修改)  count=统计所有1的个数
             </text>
-            <text x="16" y="34" fontSize="10" fill={secondary}>
+            <text x="16" y="34" fontSize="11" fill={secondary}>
               所有操作都发生在编译期——bitset 是模板，大小 N 必须是编译期常量，运行时零开销。
             </text>
           </g>

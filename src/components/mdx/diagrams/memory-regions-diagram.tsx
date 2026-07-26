@@ -61,10 +61,10 @@ export function MemoryRegionsDiagram() {
                 <text x={cx + 12} y={ry + 16} fontSize="12" fontWeight="700" fill={r.color}>
                   {r.label}
                 </text>
-                <text x={cx + 12} y={ry + 32} fontSize="10" fill={secondary}>
+                <text x={cx + 12} y={ry + 32} fontSize="11" fill={secondary}>
                   {r.sub}
                 </text>
-                <text x={cx + 12} y={ry + r.h - 6} fontSize="10" fill={primary} fontFamily="monospace">
+                <text x={cx + 12} y={ry + r.h - 6} fontSize="11" fill={primary} fontFamily="monospace">
                   {r.example}
                 </text>
               </g>
@@ -78,10 +78,10 @@ export function MemoryRegionsDiagram() {
             strokeWidth="1.5"
             markerEnd="url(#memHeapArrow)"
           />
-          <text x={538} y={245} fontSize="10" fill={heapColor}>
+          <text x={538} y={245} fontSize="11" fill={heapColor}>
             malloc
           </text>
-          <text x={538} y={258} fontSize="10" fill={heapColor}>
+          <text x={538} y={258} fontSize="11" fill={heapColor}>
             向高地址
           </text>
 
@@ -92,10 +92,10 @@ export function MemoryRegionsDiagram() {
             strokeWidth="1.5"
             markerEnd="url(#memStackArrow)"
           />
-          <text x={538} y={275} fontSize="10" fill={stackColor}>
+          <text x={538} y={275} fontSize="11" fill={stackColor}>
             函数调用
           </text>
-          <text x={538} y={288} fontSize="10" fill={stackColor}>
+          <text x={538} y={288} fontSize="11" fill={stackColor}>
             向低地址
           </text>
 
@@ -103,16 +103,16 @@ export function MemoryRegionsDiagram() {
           <text x={36} y={82} fontSize="11" fontWeight="600" fill={primary}>
             谁放哪？
           </text>
-          <text x={36} y={100} fontSize="10" fill={secondary}>
+          <text x={36} y={100} fontSize="11" fill={secondary}>
             · 字符串字面量 → 只读数据
           </text>
-          <text x={36} y={116} fontSize="10" fill={secondary}>
+          <text x={36} y={116} fontSize="11" fill={secondary}>
             · static / 全局 → .data 或 .bss
           </text>
-          <text x={36} y={132} fontSize="10" fill={secondary}>
+          <text x={36} y={132} fontSize="11" fill={secondary}>
             · 局部 auto → 栈
           </text>
-          <text x={36} y={148} fontSize="10" fill={secondary}>
+          <text x={36} y={148} fontSize="11" fill={secondary}>
             · malloc → 堆
           </text>
 

@@ -325,7 +325,7 @@ export function FuturePromiseDiagram() {
                     x={x + w / 2}
                     y={y + h / 2 + 4}
                     textAnchor="middle"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontWeight={seg.kind === "ready" ? 700 : 600}
                     fill={
                       seg.kind === "block" || seg.kind === "ready"
@@ -367,7 +367,7 @@ export function FuturePromiseDiagram() {
             x={SWEEP_RIGHT}
             y={TASK_Y + LANE_H + 20}
             textAnchor="end"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             时间 →

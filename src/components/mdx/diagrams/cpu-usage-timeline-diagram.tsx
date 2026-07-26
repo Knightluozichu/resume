@@ -104,7 +104,7 @@ export function CPUUsageTimelineDiagram() {
           <text
             x={budgetX + 4}
             y={barY - 6}
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--danger)"
           >
@@ -139,7 +139,7 @@ export function CPUUsageTimelineDiagram() {
                 <text
                   x={lx + 16}
                   y={166}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {seg.label}
@@ -153,7 +153,7 @@ export function CPUUsageTimelineDiagram() {
             x="280"
             y="192"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             超出 16.6ms 预算 = 掉帧（Profiler 红线标记）

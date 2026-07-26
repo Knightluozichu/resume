@@ -36,29 +36,29 @@ export function DsaTreesDiagram() {
           {[1,2,3,4,5].map((v, i) => (
             <g key={v}>
               <circle cx="80" cy={128 + i * 22} r="11" fill={danger} fillOpacity="0.1" stroke={danger} strokeWidth="1.2" />
-              <text x="80" y={132 + i * 22} textAnchor="middle" fontSize="10" fill={danger}>{v}</text>
+              <text x="80" y={132 + i * 22} textAnchor="middle" fontSize="11" fill={danger}>{v}</text>
               {i < 4 && <line x1="80" y1={139 + i * 22} x2="80" y2={145 + i * 22} stroke={danger} strokeWidth="1" />}
             </g>
           ))}
-          <text x="120" y="172" fontSize="10" fill={danger}>高度=n → O(n)</text>
+          <text x="120" y="172" fontSize="11" fill={danger}>高度=n → O(n)</text>
 
           {/* AVL 平衡树 */}
           <text x="200" y="112" fontSize="11" fontWeight="600" fill={success}>AVL 树（自平衡）</text>
           <circle cx="250" cy="128" r="12" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
-          <text x="250" y="132" textAnchor="middle" fontSize="10" fill={success}>3</text>
+          <text x="250" y="132" textAnchor="middle" fontSize="11" fill={success}>3</text>
           <circle cx="220" cy="158" r="11" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
-          <text x="220" y="162" textAnchor="middle" fontSize="10" fill={success}>1</text>
+          <text x="220" y="162" textAnchor="middle" fontSize="11" fill={success}>1</text>
           <circle cx="280" cy="158" r="11" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
-          <text x="280" y="162" textAnchor="middle" fontSize="10" fill={success}>4</text>
+          <text x="280" y="162" textAnchor="middle" fontSize="11" fill={success}>4</text>
           <circle cx="240" cy="188" r="10" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
-          <text x="240" y="192" textAnchor="middle" fontSize="10" fill={success}>2</text>
+          <text x="240" y="192" textAnchor="middle" fontSize="11" fill={success}>2</text>
           <circle cx="300" cy="188" r="10" fill={success} fillOpacity="0.1" stroke={success} strokeWidth="1.5" />
-          <text x="300" y="192" textAnchor="middle" fontSize="10" fill={success}>5</text>
+          <text x="300" y="192" textAnchor="middle" fontSize="11" fill={success}>5</text>
           <line x1="244" y1="136" x2="226" y2="152" stroke={border} strokeWidth="1.2" />
           <line x1="256" y1="136" x2="274" y2="152" stroke={border} strokeWidth="1.2" />
           <line x1="224" y1="166" x2="236" y2="182" stroke={border} strokeWidth="1.2" />
           <line x1="284" y1="166" x2="296" y2="182" stroke={border} strokeWidth="1.2" />
-          <text x="250" y="214" textAnchor="middle" fontSize="10" fill={success}>高度=log n → O(log n)</text>
+          <text x="250" y="214" textAnchor="middle" fontSize="11" fill={success}>高度=log n → O(log n)</text>
 
           {/* 四种旋转 */}
           <rect x="48" y="228" width="272" height="100" rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
@@ -81,13 +81,13 @@ export function DsaTreesDiagram() {
 
           {/* 子节点 */}
           <rect x="364" y="160" width="100" height="32" rx="4" fill="var(--bg)" stroke={success} strokeWidth="1.2" />
-          <text x="390" y="180" textAnchor="middle" fontSize="10" fill={primary}>10|20</text>
+          <text x="390" y="180" textAnchor="middle" fontSize="11" fill={primary}>10|20</text>
 
           <rect x="476" y="160" width="100" height="32" rx="4" fill="var(--bg)" stroke={success} strokeWidth="1.2" />
-          <text x="502" y="180" textAnchor="middle" fontSize="10" fill={primary}>40|50</text>
+          <text x="502" y="180" textAnchor="middle" fontSize="11" fill={primary}>40|50</text>
 
           <rect x="588" y="160" width="84" height="32" rx="4" fill="var(--bg)" stroke={success} strokeWidth="1.2" />
-          <text x="610" y="180" textAnchor="middle" fontSize="10" fill={primary}>70|80</text>
+          <text x="610" y="180" textAnchor="middle" fontSize="11" fill={primary}>70|80</text>
 
           <line x1="470" y1="140" x2="414" y2="160" stroke={border} strokeWidth="1" />
           <line x1="530" y1="140" x2="526" y2="160" stroke={border} strokeWidth="1" />

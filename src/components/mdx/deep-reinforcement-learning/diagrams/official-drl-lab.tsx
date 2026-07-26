@@ -16,6 +16,13 @@ export function OfficialDrlLab({ title, concepts, accent, view }: Props) {
   const [gamma, setGamma] = useState(90);
   const [noise, setNoise] = useState(18);
   const [fault, setFault] = useState(false);
+  function resetExperiment() {
+    setStep(0);
+    setGamma(90);
+    setNoise(18);
+    setFault(false);
+  }
+
   const visible = concepts.slice(0, 6);
   const values = useMemo(() => {
     const horizon = step + 1;
@@ -39,6 +46,7 @@ export function OfficialDrlLab({ title, concepts, accent, view }: Props) {
     .join(" ");
   return (
     <div style={{ border: "1px solid #d4d4d8", borderRadius: 6, background: "#fff", padding: 14, color: "#18181b" }}>
+      <span style={{position:'absolute',top:6,right:6,zIndex:20}}><button type="button" onClick={resetExperiment} title="重置实验" aria-label="重置实验" className="inline-flex size-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-lg hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"><span aria-hidden="true">↺</span></button></span>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         <strong style={{ fontSize: 14 }}>{title}</strong>
         <span style={{ fontSize: 12, color: "#52525b" }}>{view === "map" ? "对象与版本图" : view === "trace" ? "折扣轨迹" : "证据审计"}</span>

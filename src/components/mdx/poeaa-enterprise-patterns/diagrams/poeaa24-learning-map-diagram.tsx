@@ -59,7 +59,7 @@ export function Poeaa24LearningMapDiagram() {
           {/* 元数据 → 离线并发 */}
           <line x1={552} y1={160} x2={552} y2={120} stroke={T.border} strokeWidth="1" strokeDasharray="4 3" />
           {/* 图例 */}
-          <text x={48} y={400} fontSize="9" fill={T.secondary}>虚线 = 依赖方向（上层依赖下层）  颜色 = 逻辑分组</text>
+          <text x={48} y={400} fontSize="11" fill={T.secondary}>虚线 = 依赖方向（上层依赖下层）  颜色 = 逻辑分组</text>
           <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 8} text="10 个模式族、51 个模式的依赖网络：基础模式支撑全局" />
         </svg>
       </div>

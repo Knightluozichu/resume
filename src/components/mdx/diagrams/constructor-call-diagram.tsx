@@ -103,7 +103,7 @@ export function ConstructorCallDiagram({
                 <text
                   x={56}
                   y={y + 36}
-                  fontSize="10"
+                  fontSize="11"
                   fill={isActive ? secondary : secondary}
                 >
                   {s.desc}
@@ -200,7 +200,7 @@ export function ConstructorCallDiagram({
             >
               Sales_data item;
             </text>
-            <text x={256} y={178} fontSize="10" fill={secondary}>
+            <text x={256} y={178} fontSize="11" fill={secondary}>
               &#47;&#47; 触发构造过程 ↓
             </text>
           </g>
@@ -247,7 +247,7 @@ export function ConstructorCallDiagram({
             >
               revenue = 0.0
             </text>
-            <text x={256} y={276} fontSize="10" fill={secondary}>
+            <text x={256} y={276} fontSize="11" fill={secondary}>
               ← 默认初始化（合成默认构造）
             </text>
           </g>
@@ -263,7 +263,7 @@ export function ConstructorCallDiagram({
             >
               {"{"} 构造函数体 {"}"}
             </text>
-            <text x={256} y={314} fontSize="10" fill={secondary}>
+            <text x={256} y={314} fontSize="11" fill={secondary}>
               ← 空体或自定义逻辑
             </text>
           </g>
@@ -284,7 +284,7 @@ export function ConstructorCallDiagram({
               x={576}
               y={244}
               textAnchor="middle"
-              fontSize="9"
+              fontSize="11"
               fill={primary}
               fontWeight="600"
             >
@@ -294,7 +294,7 @@ export function ConstructorCallDiagram({
               x={576}
               y={260}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill={secondary}
             >
               bookNo: &quot;&quot;
@@ -303,7 +303,7 @@ export function ConstructorCallDiagram({
               x={576}
               y={274}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill={secondary}
             >
               units: 0
@@ -312,7 +312,7 @@ export function ConstructorCallDiagram({
               x={576}
               y={288}
               textAnchor="middle"
-              fontSize="8"
+              fontSize="11"
               fill={secondary}
             >
               revenue: 0
@@ -320,7 +320,7 @@ export function ConstructorCallDiagram({
           </g>
 
           {/* ── 关键提示 ── */}
-          <text x={16} y={332} fontSize="10" fill={accent} fontWeight="600">
+          <text x={16} y={332} fontSize="11" fill={accent} fontWeight="600">
             💡 关键：成员初始化在构造体之前——进入 {"{}"}{" "}
             时所有成员已初始化完毕。
           </text>

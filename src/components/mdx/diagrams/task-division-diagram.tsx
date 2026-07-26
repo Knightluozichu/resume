@@ -113,7 +113,7 @@ export function TaskDivisionDiagram() {
                   x={cx}
                   y={COL_Y + 46}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.subtitle}
@@ -150,7 +150,7 @@ export function TaskDivisionDiagram() {
                       x={startX + k * (blockW + gap) + blockW / 2}
                       y={cy + blockH / 2 + 4}
                       textAnchor="middle"
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="700"
                       fontFamily="var(--font-mono)"
                       fill="var(--text-primary)"
@@ -163,7 +163,7 @@ export function TaskDivisionDiagram() {
                   x={x + COL_W / 2}
                   y={cy + blockH + 22}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   4 个线程各领一段，独立算
@@ -233,7 +233,7 @@ export function TaskDivisionDiagram() {
                   x={cx}
                   y={leafY + 30}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   拆成两半、子任务再并行
@@ -273,7 +273,7 @@ export function TaskDivisionDiagram() {
                         x={sx + stageW / 2}
                         y={cy + stageH / 2 + 4}
                         textAnchor="middle"
-                        fontSize="9.5"
+                        fontSize="11"
                         fontWeight="700"
                         fill="var(--text-primary)"
                       >
@@ -299,7 +299,7 @@ export function TaskDivisionDiagram() {
                   x={x + COL_W / 2}
                   y={cy + stageH + 26}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   数据一件件流过各阶段
@@ -331,7 +331,7 @@ export function TaskDivisionDiagram() {
                   x={cx}
                   y={COL_Y + COL_H - 36}
                   textAnchor="middle"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontWeight="700"
                   fill={c.color}
                 >
@@ -341,7 +341,7 @@ export function TaskDivisionDiagram() {
                   x={cx}
                   y={COL_Y + COL_H - 18}
                   textAnchor="middle"
-                  fontSize="9.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {line2}

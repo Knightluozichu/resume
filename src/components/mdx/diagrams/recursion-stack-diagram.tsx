@@ -92,7 +92,7 @@ export function RecursionStackDiagram({ step = 4 }: RecursionStackDiagramProps) 
                   x={stackX + stackW / 2}
                   y={f.y + 18}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight={isTop ? 700 : 500}
                   fill={isTop ? accent : primary}
                   fontFamily="monospace"
@@ -100,7 +100,7 @@ export function RecursionStackDiagram({ step = 4 }: RecursionStackDiagramProps) 
                   {f.label}
                 </text>
                 {returning && idx === 0 && (
-                  <text x={stackX + stackW / 2} y={f.y + 34} textAnchor="middle" fontSize="9" fill={accent}>
+                  <text x={stackX + stackW / 2} y={f.y + 34} textAnchor="middle" fontSize="11" fill={accent}>
                     return 1 ↑
                   </text>
                 )}

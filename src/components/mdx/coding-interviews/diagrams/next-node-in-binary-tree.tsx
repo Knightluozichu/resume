@@ -25,12 +25,12 @@ export function InorderSuccessorCaseMap() {
           {[[8,400,70],[6,246,150],[10,554,150],[5,160,240],[7,332,240],[9,468,240],[11,640,240]].map(([v,x,y]) => <g key={v}><circle cx={x} cy={y} r="28" fill="var(--bg)" stroke={v===8 ? "var(--accent)" : "var(--border)"} strokeWidth={v===8 ? 2 : 1} /><text x={x} y={y+5} textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">{v}</text></g>)}
           {[[400,98,246,122],[400,98,554,122],[246,178,160,212],[246,178,332,212],[554,178,468,212],[554,178,640,212]].map((p,i) => <line key={i} x1={p[0]} y1={p[1]} x2={p[2]} y2={p[3]} stroke="var(--border)" strokeWidth="2" />)}
           <path d="M400 98 C430 120 486 160 468 212" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="5 3" />
-          <text x="520" y="116" fontSize="10" fontWeight="700" fill="var(--success)">8有右子树：去10再一路向左到9</text>
+          <text x="520" y="116" fontSize="11" fontWeight="700" fill="var(--success)">8有右子树：去10再一路向左到9</text>
           <path d="M332 212 C346 188 306 164 274 150 C314 126 360 102 390 94" fill="none" stroke="var(--warning)" strokeWidth="3" strokeDasharray="5 3" />
-          <text x="150" y="314" fontSize="10" fontWeight="700" fill="var(--warning)">7无右子树：越过6，首个合适祖先是8</text>
+          <text x="150" y="314" fontSize="11" fontWeight="700" fill="var(--warning)">7无右子树：越过6，首个合适祖先是8</text>
           <rect x="100" y="344" width="600" height="56" rx="5" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" />
-          <text x="400" y="367" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">有右子树：后继在下方；无右子树：后继只可能在父链上方。</text>
-          <text x="400" y="388" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">值大小没有参与决策，这不是二叉搜索树查找。</text>
+          <text x="400" y="367" textAnchor="middle" fontSize="11" fill="var(--text-primary)">有右子树：后继在下方；无右子树：后继只可能在父链上方。</text>
+          <text x="400" y="388" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">值大小没有参与决策，这不是二叉搜索树查找。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">父指针把“回到尚未访问的祖先”从根开始扫描变成局部上爬。</figcaption>

@@ -62,7 +62,7 @@ export function TcpChapterSpineLab() {
   const selected = chapterSpine[chapter - 1];
   return (
     <Figure caption="Every chapter pairs a representation with an algorithm and a measurable claim; selecting a chapter exposes that input-to-certificate contract.">
-      <label className="text-sm font-semibold text-primary">chapter = {chapter}<input className="mt-2 w-full accent-current" type="range" min="1" max="7" value={chapter} onChange={(event) => setChapter(Number(event.target.value))} /></label>
+      <label className="text-sm font-semibold text-primary">chapter = {chapter}<input className="mt-2 h-11 w-full accent-current" type="range" min="1" max="7" value={chapter} onChange={(event) => setChapter(Number(event.target.value))} /></label>
       <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2"><Stat label="input" value={selected.inputs} /><div className="text-xl text-accent">→</div><Stat label="certificate" value={selected.output} tone="success" /></div>
       <div className="mt-3 border border-border bg-background p-3 text-center text-sm font-semibold text-primary">Chapter {selected.id} · {selected.label}</div>
     </Figure>

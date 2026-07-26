@@ -173,7 +173,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="425"
                 y="207"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--danger)"
               >
@@ -183,7 +183,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="425"
                 y="223"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 其余方向没有遮挡记录
@@ -252,7 +252,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                       x={x + u / 2}
                       y={y + u / 2 + 12}
                       textAnchor="middle"
-                      fontSize="8"
+                      fontSize="11"
                       fill="var(--text-secondary)"
                     >
                       面
@@ -264,7 +264,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="120"
                 y="252"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 6 张面图拼成一个立方体
@@ -282,7 +282,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="430"
                 y="154"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fontWeight="700"
                 fill="var(--bg)"
               >
@@ -306,7 +306,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="430"
                 y="84"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--accent)"
               >
                 +Y
@@ -315,7 +315,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="356"
                 y="154"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--accent)"
               >
                 −X
@@ -324,7 +324,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="498"
                 y="154"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--accent)"
               >
                 +X
@@ -333,7 +333,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="430"
                 y="226"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 6 台朝外的小相机各渲一张
@@ -380,7 +380,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="70"
                 y="180"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--warning)"
               >
@@ -410,7 +410,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="130"
                 y="112"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--warning)"
               >
                 近 → 距离小
@@ -439,7 +439,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="230"
                 y="200"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--warning)"
               >
                 远 → 距离大
@@ -450,7 +450,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="450"
                 y="58"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--accent)"
               >
@@ -488,7 +488,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="428"
                 y="178"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 亮 = 近
@@ -497,7 +497,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="472"
                 y="178"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 暗 = 远
@@ -507,7 +507,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="280"
                 y="252"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 距离 ÷ far 归一化到 [0,1] 存进去
@@ -553,7 +553,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="90"
                 y="62"
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--warning)"
               >
@@ -574,7 +574,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="230"
                 y="112"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fill="var(--text-primary)"
               >
                 遮挡物
@@ -612,7 +612,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="178"
                 y="135"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--danger)"
               >
                 方向 R₁
@@ -640,7 +640,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="290"
                 y="138"
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="11"
                 fill="var(--success)"
               >
                 方向 R₂
@@ -662,7 +662,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="160"
                 y="256"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--danger)"
               >
@@ -683,7 +683,7 @@ export function PointShadowStepDiagram({ step }: { step: PointShadowStep }) {
                 x="402"
                 y="256"
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fontWeight="600"
                 fill="var(--success)"
               >

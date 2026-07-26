@@ -87,7 +87,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
             <text
               x="12"
               y="30"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               fontFamily="monospace"
             >
@@ -142,7 +142,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x={0}
                   y={46}
-                  fontSize="8"
+                  fontSize="11"
                   fill={good}
                   fontFamily="monospace"
                 >
@@ -151,7 +151,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x={8 * charW - 2}
                   y={64}
-                  fontSize="8"
+                  fontSize="11"
                   fill={accent}
                   fontFamily="monospace"
                 >
@@ -160,7 +160,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x={0 * charW}
                   y={80}
-                  fontSize="9"
+                  fontSize="11"
                   fill={good}
                   fontFamily="monospace"
                 >
@@ -196,7 +196,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="8"
                   y="12"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -205,7 +205,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="8"
                   y="26"
-                  fontSize="9"
+                  fontSize="11"
                   fill={step >= 3 ? good : secondary}
                   fontFamily="monospace"
                 >
@@ -245,7 +245,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="14"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={blue}
                   fontFamily="monospace"
                 >
@@ -254,7 +254,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="60"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -263,7 +263,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="140"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={primary}
                   fontFamily="monospace"
                 >
@@ -274,7 +274,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="14"
                   y="36"
-                  fontSize="10"
+                  fontSize="11"
                   fill={orange}
                   fontFamily="monospace"
                 >
@@ -283,7 +283,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="60"
                   y="36"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -292,7 +292,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="140"
                   y="36"
-                  fontSize="10"
+                  fontSize="11"
                   fill={good}
                   fontFamily="monospace"
                 >
@@ -303,7 +303,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="14"
                   y="54"
-                  fontSize="10"
+                  fontSize="11"
                   fill={accent}
                   fontFamily="monospace"
                 >
@@ -312,7 +312,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="60"
                   y="54"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -321,7 +321,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="140"
                   y="54"
-                  fontSize="10"
+                  fontSize="11"
                   fill={accent}
                   fontFamily="monospace"
                 >
@@ -332,7 +332,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="180"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -341,7 +341,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="260"
                   y="18"
-                  fontSize="10"
+                  fontSize="11"
                   fill={blue}
                   fontFamily="monospace"
                 >
@@ -351,7 +351,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="180"
                   y="36"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -360,7 +360,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="260"
                   y="36"
-                  fontSize="10"
+                  fontSize="11"
                   fill={good}
                   fontFamily="monospace"
                 >
@@ -370,7 +370,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="180"
                   y="54"
-                  fontSize="10"
+                  fontSize="11"
                   fill={secondary}
                   fontFamily="monospace"
                 >
@@ -379,7 +379,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
                 <text
                   x="260"
                   y="54"
-                  fontSize="10"
+                  fontSize="11"
                   fill={accent}
                   fontFamily="monospace"
                 >
@@ -395,7 +395,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
               <text
                 x="0"
                 y="0"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >

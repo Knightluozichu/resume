@@ -164,7 +164,7 @@ export function MglProbabilityDiagram() {
           <circle cx="200" cy="154" r="36" fill={danger} fillOpacity="0.12" stroke={danger} strokeWidth="1.5" />
           <text x="120" y="158" textAnchor="middle" fontSize="11" fill={accent}>P(A)</text>
           <text x="220" y="158" textAnchor="middle" fontSize="11" fill={danger}>P(B)</text>
-          <text x="170" y="158" textAnchor="middle" fontSize="10" fill={primary}>A∩B</text>
+          <text x="170" y="158" textAnchor="middle" fontSize="11" fill={primary}>A∩B</text>
 
           <text x="180" y="226" textAnchor="middle" fontSize="13" fontFamily="monospace" fontWeight="600" fill={primary}>P(A|B) = P(B|A)·P(A) / P(B)</text>
           <text x="180" y="246" textAnchor="middle" fontSize="11" fill={secondary}>后验 = 似然 × 先验 / 证据</text>

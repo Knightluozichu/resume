@@ -143,25 +143,25 @@ export function GlsFirstProgramDiagram({ step = 0 }: { step?: 0 | 1 | 2 | 3 }) {
                 x={x + 94}
                 y="150"
                 textAnchor="middle"
-                fontSize="9.7"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={primary}
               >
                 {stage.code}
               </text>
-              <text x={x + 14} y="190" fontSize="10" fill={secondary}>
+              <text x={x + 14} y="190" fontSize="11" fill={secondary}>
                 状态
               </text>
               <text
                 x={x + 14}
                 y="208"
-                fontSize="10.3"
+                fontSize="11"
                 fontWeight="600"
                 fill={primary}
               >
                 {stage.state}
               </text>
-              <text x={x + 14} y="232" fontSize="9.7" fill={secondary}>
+              <text x={x + 14} y="232" fontSize="11" fill={secondary}>
                 证据 · {stage.evidence}
               </text>
             </g>
@@ -264,16 +264,16 @@ export function GlsFrameworkBoundaryDiagram() {
         >
           四层边界：平台、加载、示例框架、OpenGL
         </text>
-        <text x="30" y="65" fontSize="10" fill={secondary}>
+        <text x="30" y="65" fontSize="11" fill={secondary}>
           层
         </text>
-        <text x="150" y="65" fontSize="10" fill={secondary}>
+        <text x="150" y="65" fontSize="11" fill={secondary}>
           官方仓库实现
         </text>
-        <text x="320" y="65" fontSize="10" fill={secondary}>
+        <text x="320" y="65" fontSize="11" fill={secondary}>
           职责
         </text>
-        <text x="590" y="65" fontSize="10" fill={secondary}>
+        <text x="590" y="65" fontSize="11" fill={secondary}>
           学习边界
         </text>
         {boundaryRows.map((row, index) => {
@@ -303,16 +303,16 @@ export function GlsFrameworkBoundaryDiagram() {
               <text
                 x="150"
                 y={y + 25}
-                fontSize="10.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={color}
               >
                 {row[1]}
               </text>
-              <text x="320" y={y + 25} fontSize="10.3" fill={primary}>
+              <text x="320" y={y + 25} fontSize="11" fill={primary}>
                 {row[2]}
               </text>
-              <text x="590" y={y + 25} fontSize="10" fill={secondary}>
+              <text x="590" y={y + 25} fontSize="11" fill={secondary}>
                 {row[3]}
               </text>
             </g>
@@ -425,13 +425,13 @@ export function GlsShaderProgramDiagram() {
               <text
                 x={x + 14}
                 y={y + 54}
-                fontSize="10"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={color}
               >
                 {row[1]}
               </text>
-              <text x={x + 14} y={y + 73} fontSize="10" fill={secondary}>
+              <text x={x + 14} y={y + 73} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -539,7 +539,7 @@ export function GlsVertexIdDiagram() {
               <text
                 x="52"
                 y={y + 17}
-                fontSize="10.5"
+                fontSize="11"
                 fontWeight="700"
                 fill={primary}
               >
@@ -548,7 +548,7 @@ export function GlsVertexIdDiagram() {
               <text
                 x="52"
                 y={y + 32}
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={secondary}
               >
@@ -558,7 +558,7 @@ export function GlsVertexIdDiagram() {
                 x="296"
                 y={y + 25}
                 textAnchor="end"
-                fontSize="9.5"
+                fontSize="11"
                 fontFamily="monospace"
                 fill={accent}
               >
@@ -607,7 +607,7 @@ export function GlsVertexIdDiagram() {
           x="475"
           y="258"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={secondary}
         >
           ID 1
@@ -616,7 +616,7 @@ export function GlsVertexIdDiagram() {
           x="600"
           y="103"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={secondary}
         >
           ID 2
@@ -625,7 +625,7 @@ export function GlsVertexIdDiagram() {
           x="726"
           y="258"
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill={secondary}
         >
           ID 0
@@ -639,7 +639,7 @@ export function GlsVertexIdDiagram() {
         >
           count = 3 → 一个完整 triangle primitive
         </text>
-        <text x="420" y="338" textAnchor="middle" fontSize="10.5" fill={danger}>
+        <text x="420" y="338" textAnchor="middle" fontSize="11" fill={danger}>
           VAO 是 core-profile 绘制状态；本例不用 VBO，不等于真实项目永远不需要
           buffer
         </text>
@@ -720,7 +720,7 @@ export function GlsFrameLoopDiagram() {
                 fillOpacity="0.07"
                 stroke={color}
               />
-              <text x={x + 14} y={y + 23} fontSize="9.5" fill={secondary}>
+              <text x={x + 14} y={y + 23} fontSize="11" fill={secondary}>
                 {row[0]}
               </text>
               <text
@@ -733,7 +733,7 @@ export function GlsFrameLoopDiagram() {
               >
                 {row[1]}
               </text>
-              <text x={x + 14} y={y + 69} fontSize="9.8" fill={secondary}>
+              <text x={x + 14} y={y + 69} fontSize="11" fill={secondary}>
                 {row[2]}
               </text>
             </g>
@@ -756,7 +756,7 @@ export function GlsFrameLoopDiagram() {
           x="420"
           y="334"
           textAnchor="middle"
-          fontSize="10.5"
+          fontSize="11"
           fill={secondary}
         >
           下一帧重新执行 render；对象持续存在，命令和 back-buffer 内容持续变化

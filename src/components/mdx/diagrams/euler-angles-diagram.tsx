@@ -53,7 +53,7 @@ function CameraPanel({
         x={cx}
         y="84"
         textAnchor="middle"
-        fontSize="10"
+        fontSize="11"
         fill="var(--text-secondary)"
       >
         {subtitle}

@@ -48,13 +48,13 @@ export function StructPointerAccessDiagram({ step = 3 }: StructPointerAccessDiag
             <text x={130} y={72} textAnchor="middle" fontSize="12" fontWeight="700" fill={step === 1 ? accent : secondary}>
               ① 结构体变量
             </text>
-            <text x={130} y={94} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={130} y={94} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               struct Book b;
             </text>
-            <text x={130} y={114} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={130} y={114} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               b.price = 29.9;
             </text>
-            <text x={130} y={134} textAnchor="middle" fontSize="9" fill={secondary}>
+            <text x={130} y={134} textAnchor="middle" fontSize="11" fill={secondary}>
               变量名 . 成员
             </text>
             <rect x={70} y={142} width={120} height={12} rx="3" fill={accent} opacity={0.15} />
@@ -75,13 +75,13 @@ export function StructPointerAccessDiagram({ step = 3 }: StructPointerAccessDiag
             <text x={320} y={72} textAnchor="middle" fontSize="12" fontWeight="700" fill={step === 2 ? accent : secondary}>
               ② 取地址
             </text>
-            <text x={320} y={94} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={320} y={94} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               struct Book *pb;
             </text>
-            <text x={320} y={114} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={320} y={114} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               pb = &amp;b;
             </text>
-            <text x={320} y={134} textAnchor="middle" fontSize="9" fill={secondary}>
+            <text x={320} y={134} textAnchor="middle" fontSize="11" fill={secondary}>
               pb 指向 b 的首地址
             </text>
           </g>
@@ -101,45 +101,45 @@ export function StructPointerAccessDiagram({ step = 3 }: StructPointerAccessDiag
             <text x={510} y={72} textAnchor="middle" fontSize="12" fontWeight="700" fill={step === 3 ? accent : secondary}>
               ③ 箭头访问
             </text>
-            <text x={510} y={94} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={510} y={94} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               pb-&gt;price = 19.9;
             </text>
-            <text x={510} y={114} textAnchor="middle" fontSize="10" fill={primary} fontFamily="monospace">
+            <text x={510} y={114} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
               (*pb).price 等价
             </text>
-            <text x={510} y={134} textAnchor="middle" fontSize="9" fill={secondary}>
+            <text x={510} y={134} textAnchor="middle" fontSize="11" fill={secondary}>
               指针名 -&gt; 成员
             </text>
           </g>
 
           {/* Memory visual */}
           <rect x={120} y={185} width={400} height={56} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
-          <text x={140} y={208} fontSize="10" fontWeight="600" fill={secondary}>
+          <text x={140} y={208} fontSize="11" fontWeight="600" fill={secondary}>
             struct Book b 在内存中
           </text>
           <rect x={140} y={218} width={80} height={18} rx="4" fill={accent} opacity={0.2} stroke={accent} strokeWidth="1" />
-          <text x={180} y={231} textAnchor="middle" fontSize="9" fill={primary} fontFamily="monospace">
+          <text x={180} y={231} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
             title
           </text>
           <rect x={230} y={218} width={60} height={18} rx="4" fill={accent} opacity={step >= 1 ? 0.35 : 0.15} stroke={accent} strokeWidth="1" />
-          <text x={260} y={231} textAnchor="middle" fontSize="9" fill={primary} fontFamily="monospace">
+          <text x={260} y={231} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
             price
           </text>
           <rect x={300} y={218} width={50} height={18} rx="4" fill={accent} opacity={0.2} stroke={accent} strokeWidth="1" />
-          <text x={325} y={231} textAnchor="middle" fontSize="9" fill={primary} fontFamily="monospace">
+          <text x={325} y={231} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">
             pages
           </text>
 
           {step >= 2 && (
             <>
               <line x1={320} y1={175} x2={260} y2={218} stroke={accent} strokeWidth="1.5" markerEnd="url(#spaArrow)" />
-              <text x={300} y={168} fontSize="9" fill={accent} fontFamily="monospace">
+              <text x={300} y={168} fontSize="11" fill={accent} fontFamily="monospace">
                 pb →
               </text>
             </>
           )}
 
-          <text x={320} y={278} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={278} textAnchor="middle" fontSize="11" fill={secondary}>
             {step === 1 && "b.price：直接通过变量名访问成员"}
             {step === 2 && "pb = &b：指针保存结构体起始地址；可用 (*pb).member"}
             {step === 3 && "pb->price 是 (*pb).price 的语法糖；函数参数常用 struct T * 避免拷贝"}

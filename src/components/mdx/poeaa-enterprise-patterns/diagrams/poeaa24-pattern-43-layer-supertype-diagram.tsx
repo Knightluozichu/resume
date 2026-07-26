@@ -14,19 +14,19 @@ export function Poeaa24Pattern43LayerSupertype() {
           <rect x={250} y={64} width={220} height={28} rx="8" fill={T.accent} fillOpacity="0.12" />
           <rect x={250} y={84} width={220} height={8} fill={T.accent} fillOpacity="0.12" />
           <text x={360} y={83} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>DomainObject（基类）</text>
-          <text x={266} y={110} fontSize="9" fontFamily="monospace" fill={T.primary}>id: Long</text>
-          <text x={266} y={128} fontSize="9" fontFamily="monospace" fill={T.primary}>isDirty / markDirty()</text>
+          <text x={266} y={110} fontSize="11" fontFamily="monospace" fill={T.primary}>id: Long</text>
+          <text x={266} y={128} fontSize="11" fontFamily="monospace" fill={T.primary}>isDirty / markDirty()</text>
           {/* 继承箭头 */}
           <line x1={300} y1={136} x2={160} y2={172} stroke={T.border} strokeWidth="1.2" />
           <line x1={360} y1={136} x2={360} y2={172} stroke={T.border} strokeWidth="1.2" />
           <line x1={420} y1={136} x2={560} y2={172} stroke={T.border} strokeWidth="1.2" />
           {/* 子类 */}
           <rect x={80} y={172} width={160} height={44} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={160} y={198} textAnchor="middle" fontSize="9" fill="#3FB97F">Customer</text>
+          <text x={160} y={198} textAnchor="middle" fontSize="11" fill="#3FB97F">Customer</text>
           <rect x={280} y={172} width={160} height={44} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={360} y={198} textAnchor="middle" fontSize="9" fill="#3FB97F">Order</text>
+          <text x={360} y={198} textAnchor="middle" fontSize="11" fill="#3FB97F">Order</text>
           <rect x={480} y={172} width={160} height={44} rx="6" fill="#3FB97F" fillOpacity="0.06" stroke="#3FB97F" strokeWidth="1" />
-          <text x={560} y={198} textAnchor="middle" fontSize="9" fill="#3FB97F">Product</text>
+          <text x={560} y={198} textAnchor="middle" fontSize="11" fill="#3FB97F">Product</text>
           {/* 底部说明 */}
           <rect x={48} y={232} width={624} height={44} rx="8" fill={T.primary} fillOpacity="0.03" stroke={T.border} strokeWidth="1" />
           <text x={64} y={252} fontSize="11" fill={T.secondary}>• 只放真正跨层内类型的共同机制（ID、脏标记、乐观锁版本）</text>

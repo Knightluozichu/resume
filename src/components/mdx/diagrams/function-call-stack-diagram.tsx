@@ -78,10 +78,10 @@ export function FunctionCallStackDiagram({
           </text>
 
           {/* 栈底标注 */}
-          <text x={stackX - 10} y={stackBot - 10} textAnchor="end" fontSize="10" fill={secondary}>
+          <text x={stackX - 10} y={stackBot - 10} textAnchor="end" fontSize="11" fill={secondary}>
             栈底
           </text>
-          <text x={stackX - 10} y={stackTop + 16} textAnchor="end" fontSize="10" fill={secondary}>
+          <text x={stackX - 10} y={stackTop + 16} textAnchor="end" fontSize="11" fill={secondary}>
             栈顶 ↑
           </text>
 
@@ -148,7 +148,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={340}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 (局部变量 a,b,c)
@@ -186,7 +186,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={254}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
               >
                 压入参数
@@ -251,7 +251,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={144}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -261,7 +261,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={164}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -271,7 +271,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={190}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
               >
                 int z = x + y;
@@ -292,7 +292,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={237}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -353,7 +353,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={156}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={accent}
                 fontFamily="monospace"
               >
@@ -363,7 +363,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={186}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 返回值 8 → 寄存器/eax
@@ -412,7 +412,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={155}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
               >
                 (add() 栈帧已释放)
@@ -444,7 +444,7 @@ export function FunctionCallStackDiagram({
                 x={stackX + stackW / 2}
                 y={328}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >

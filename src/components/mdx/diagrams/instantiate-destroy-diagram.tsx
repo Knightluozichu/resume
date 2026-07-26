@@ -240,7 +240,7 @@ export function InstantiateDestroyDiagram() {
             x={TPL_X + TPL_W / 2}
             y={TPL_Y + TPL_H - 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             样板 · 不在场景跑

@@ -207,7 +207,7 @@ export function LoopTerminationDiagram() {
                   x={cx}
                   y={EXIT_Y + 90}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {e.result}

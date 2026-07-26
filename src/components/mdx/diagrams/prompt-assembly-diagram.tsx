@@ -243,7 +243,7 @@ function PromptAssemblyDiagramInner() {
                   x={BLOCK_X + 22}
                   y={y + 44}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {layer.title}
@@ -253,7 +253,7 @@ function PromptAssemblyDiagramInner() {
                   x={BLOCK_X + 22}
                   y={y + 60}
                   textAnchor="start"
-                  fontSize="10.5"
+                  fontSize="11"
                   fontFamily="var(--font-mono)"
                   fill="var(--text-primary)"
                 >

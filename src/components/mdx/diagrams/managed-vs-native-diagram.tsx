@@ -151,7 +151,7 @@ export function ManagedVsNativeDiagram() {
             x="280"
             y="238"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Memory Profiler 分别展示两类内存；Native 泄漏不会被 GC 发现

@@ -21,8 +21,8 @@ export function RtwFinalReviewDiagram() {
             <g key={n.t}>
               <rect x={n.x} y="64" width="116" height="64" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.4" />
               <text x={n.x + 58} y="88" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">{n.t}</text>
-              <text x={n.x + 58} y="104" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{n.c}</text>
-              <text x={n.x + 58} y="120" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">{n.ch}</text>
+              <text x={n.x + 58} y="104" textAnchor="middle" fontSize="11" fill="var(--text-primary)">{n.c}</text>
+              <text x={n.x + 58} y="120" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{n.ch}</text>
               {i < flow.length - 1 && (
                 <line x1={n.x + 116} y1="96" x2={n.x + 128} y2="96" stroke="var(--accent)" strokeWidth="1.3" markerEnd="url(#frArrow)" />
               )}
@@ -46,9 +46,9 @@ export function RtwFinalReviewDiagram() {
             { y: 326, s: "金属黑斑", e: "scatter(金属)", r: "反射方向钻入表面未校验" },
           ].map((row) => (
             <g key={row.s}>
-              <text x="60" y={row.y} fontSize="10.5" fontWeight="700" fill="var(--accent)">{row.s}</text>
-              <text x="200" y={row.y} fontSize="10.5" fill="var(--text-primary)">{row.e}</text>
-              <text x="360" y={row.y} fontSize="10.5" fill="var(--text-secondary)">{row.r}</text>
+              <text x="60" y={row.y} fontSize="11" fontWeight="700" fill="var(--accent)">{row.s}</text>
+              <text x="200" y={row.y} fontSize="11" fill="var(--text-primary)">{row.e}</text>
+              <text x="360" y={row.y} fontSize="11" fill="var(--text-secondary)">{row.r}</text>
             </g>
           ))}
         </svg>

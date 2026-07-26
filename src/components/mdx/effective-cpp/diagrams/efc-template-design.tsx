@@ -53,8 +53,8 @@ export function EfcTemplateDesignDiagram() {
           {/* 主模板 */}
           <rect x={48} y={72} width={200} height={66} rx="10" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="1.6" />
           <text x={148} y={94} textAnchor="middle" fontSize="12.5" fontWeight="700" fill={accent} fontFamily="monospace">primary template</text>
-          <text x={148} y={112} textAnchor="middle" fontSize="10.5" fill={secondary} fontFamily="monospace">template&lt;typename T&gt;</text>
-          <text x={148} y={128} textAnchor="middle" fontSize="10.5" fill={secondary} fontFamily="monospace">class Widget&lt;T&gt; {}</text>
+          <text x={148} y={112} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">template&lt;typename T&gt;</text>
+          <text x={148} y={128} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">class Widget&lt;T&gt; {}</text>
 
           {/* 箭头分叉 */}
           <line x1={248} y1={105} x2={300} y2={105} stroke={secondary} strokeWidth="1.6" markerEnd="url(#efc-td-arrow)" />
@@ -66,16 +66,16 @@ export function EfcTemplateDesignDiagram() {
           {/* 全特化 */}
           <rect x={360} y={56} width={168} height={52} rx="8" fill={success} fillOpacity="0.08" stroke={success} strokeWidth="1.5" />
           <text x={444} y={76} textAnchor="middle" fontSize="12" fontWeight="700" fill={success}>全特化</text>
-          <text x={444} y={94} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Widget&lt;int&gt;</text>
+          <text x={444} y={94} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Widget&lt;int&gt;</text>
 
           {/* 偏特化 */}
           <rect x={360} y={118} width={168} height={52} rx="8" fill={warning} fillOpacity="0.08" stroke={warning} strokeWidth="1.5" />
           <text x={444} y={138} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning}>偏特化</text>
-          <text x={444} y={156} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">Widget&lt;T*&gt;</text>
+          <text x={444} y={156} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">Widget&lt;T*&gt;</text>
 
           {/* 说明 */}
-          <text x={560} y={76} fontSize="10.5" fill={secondary}>所有参数已确定</text>
-          <text x={560} y={138} fontSize="10.5" fill={secondary}>部分参数有约束</text>
+          <text x={560} y={76} fontSize="11" fill={secondary}>所有参数已确定</text>
+          <text x={560} y={138} fontSize="11" fill={secondary}>部分参数有约束</text>
 
           {/* ===== 分隔线 ===== */}
           <line x1={32} y1={196} x2={VIEW_W - 32} y2={196} stroke={border} strokeWidth="1" strokeDasharray="6 4" />
@@ -110,10 +110,10 @@ export function EfcTemplateDesignDiagram() {
           <text x={VIEW_W / 2} y={440} textAnchor="middle" fontSize="11.5" fill={secondary}>
             模板用隐式接口在编译期选择实现，继承用显式接口在运行期分发——选型取决于是否需要运行期灵活
           </text>
-          <text x={VIEW_W / 2} y={460} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={460} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 41-45：隐式接口、typename 双重含义、模板化基类名称、参数无关代码抽离、成员函数模板
           </text>
-          <text x={VIEW_W / 2} y={478} textAnchor="middle" fontSize="10.5" fill={secondary}>
+          <text x={VIEW_W / 2} y={478} textAnchor="middle" fontSize="11" fill={secondary}>
             条款 46-48：非成员模板函数、traits classes、template 元编程
           </text>
         </svg>

@@ -84,19 +84,19 @@ export function UrpXrSettingsDiagram({ highlight = "all" }: Props) {
                     key={item}
                     x="36"
                     y={row.y + 40 + i * 14}
-                    fontSize="9"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     • {item}
                   </text>
                 ))}
                 {row.key === "input" && on && (
-                  <text x="380" y={row.y + 50} fontSize="10" fill="var(--danger)" fontWeight="600">
+                  <text x="380" y={row.y + 50} fontSize="11" fill="var(--danger)" fontWeight="600">
                     CPU ↑
                   </text>
                 )}
                 {row.key === "rendering" && on && (
-                  <text x="380" y={row.y + 50} fontSize="10" fill="var(--accent)" fontWeight="600">
+                  <text x="380" y={row.y + 50} fontSize="11" fill="var(--accent)" fontWeight="600">
                     GPU ↑
                   </text>
                 )}
@@ -105,7 +105,7 @@ export function UrpXrSettingsDiagram({ highlight = "all" }: Props) {
           })}
 
           {/* 帧内时间线 */}
-          <text x="20" y="252" fontSize="9" fill="var(--text-secondary)">
+          <text x="20" y="252" fontSize="11" fill="var(--text-secondary)">
             单帧顺序：Input Poll → Script Update → XR 渲染(双眼) → EndFrame · Profiler 分开看 XR 与 PlayerLoop
           </text>
         </svg>

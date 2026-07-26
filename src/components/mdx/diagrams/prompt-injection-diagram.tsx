@@ -230,7 +230,7 @@ function PromptInjectionDiagramInner() {
             x={CARD_X + 16}
             y={52}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             攻击链（没护栏 → 得逞）
@@ -240,7 +240,7 @@ function PromptInjectionDiagramInner() {
             x={CARD_X + 236}
             y={52}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             有护栏（入口拦下 → 掐断）
@@ -323,7 +323,7 @@ function PromptInjectionDiagramInner() {
                     x={CARD_X + CARD_W - 16}
                     y={y + 22}
                     textAnchor="end"
-                    fontSize="10"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--text-secondary)"
                   >
@@ -334,7 +334,7 @@ function PromptInjectionDiagramInner() {
                     x={CARD_X + 20}
                     y={y + 43}
                     textAnchor="start"
-                    fontSize="10.5"
+                    fontSize="11"
                     fontFamily={s.mono ? "var(--font-mono)" : undefined}
                     fill="var(--text-primary)"
                   >
@@ -350,7 +350,7 @@ function PromptInjectionDiagramInner() {
             x={CARD_X}
             y={VIEW_H - 22}
             textAnchor="start"
-            fontSize="10.5"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             红线：根因是把「数据」当「指令」（③）；护栏就在入口识别可疑指令、抢先拦下

@@ -77,7 +77,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="40"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -87,7 +87,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="56"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -96,7 +96,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="72"
-              fontSize="9"
+              fontSize="11"
               fill={blue}
               textAnchor="middle"
               fontFamily="monospace"
@@ -118,7 +118,7 @@ export function RandomPipelineDiagram({
           <text
             x={20 + boxW + 24}
             y={topY + boxH / 2 - 6}
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >
@@ -150,7 +150,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="40"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -160,7 +160,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="56"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -169,7 +169,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="72"
-              fontSize="9"
+              fontSize="11"
               fill={warn}
               textAnchor="middle"
               fontFamily="monospace"
@@ -191,7 +191,7 @@ export function RandomPipelineDiagram({
           <text
             x={300 + boxW + 24}
             y={topY + boxH / 2 - 6}
-            fontSize="9"
+            fontSize="11"
             fill={secondary}
             textAnchor="middle"
           >
@@ -223,7 +223,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="40"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -233,7 +233,7 @@ export function RandomPipelineDiagram({
             <text
               x={boxW / 2}
               y="56"
-              fontSize="9"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
             >
@@ -243,7 +243,7 @@ export function RandomPipelineDiagram({
               <text
                 x={boxW / 2}
                 y="72"
-                fontSize="9"
+                fontSize="11"
                 fill={good}
                 textAnchor="middle"
                 fontFamily="monospace"
@@ -280,7 +280,7 @@ export function RandomPipelineDiagram({
               <text
                 x="12"
                 y="40"
-                fontSize="10"
+                fontSize="11"
                 fill={primary}
                 fontFamily="monospace"
               >
@@ -290,7 +290,7 @@ export function RandomPipelineDiagram({
               <text
                 x="12"
                 y="56"
-                fontSize="10"
+                fontSize="11"
                 fill={secondary}
                 fontFamily="monospace"
               >
@@ -342,7 +342,7 @@ export function RandomPipelineDiagram({
             <text
               x="310"
               y="14"
-              fontSize="10"
+              fontSize="11"
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -353,7 +353,7 @@ export function RandomPipelineDiagram({
             <text
               x="310"
               y="28"
-              fontSize="9"
+              fontSize="11"
               fill={accent}
               textAnchor="middle"
               fontFamily="monospace"

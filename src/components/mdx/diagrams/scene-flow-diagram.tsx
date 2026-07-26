@@ -198,7 +198,7 @@ export function SceneFlowDiagram() {
               x={(SCENE_XS[0] + SCENE_W + SCENE_XS[1]) / 2}
               y={SCENE_Y + SCENE_H / 2 - 10}
               textAnchor="middle"
-              fontSize="8.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -208,7 +208,7 @@ export function SceneFlowDiagram() {
               x={(SCENE_XS[0] + SCENE_W + SCENE_XS[1]) / 2}
               y={SCENE_Y + SCENE_H / 2 + 18}
               textAnchor="middle"
-              fontSize="8.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               点「开始」
@@ -230,7 +230,7 @@ export function SceneFlowDiagram() {
               x={(SCENE_XS[1] + SCENE_W + SCENE_XS[2]) / 2}
               y={SCENE_Y + SCENE_H / 2 - 10}
               textAnchor="middle"
-              fontSize="8.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--accent)"
             >
@@ -240,7 +240,7 @@ export function SceneFlowDiagram() {
               x={(SCENE_XS[1] + SCENE_W + SCENE_XS[2]) / 2}
               y={SCENE_Y + SCENE_H / 2 + 18}
               textAnchor="middle"
-              fontSize="8.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               角色死亡
@@ -275,7 +275,7 @@ export function SceneFlowDiagram() {
                 x={SCENE_XS[i] + SCENE_W / 2}
                 y={SCENE_Y + 52}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fontFamily="var(--font-mono)"
                 fill="var(--accent)"
               >
@@ -310,7 +310,7 @@ export function SceneFlowDiagram() {
               x={LIST_X + 18}
               y={LIST_Y + 48}
               textAnchor="start"
-              fontSize="10.5"
+              fontSize="11"
               fontFamily="var(--font-mono)"
               fill="var(--text-primary)"
             >
@@ -320,7 +320,7 @@ export function SceneFlowDiagram() {
               x={LIST_X + 18}
               y={LIST_Y + 70}
               textAnchor="start"
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
               fill="var(--warning)"
             >
@@ -330,7 +330,7 @@ export function SceneFlowDiagram() {
               x={LIST_X + 18}
               y={LIST_Y + 90}
               textAnchor="start"
-              fontSize="9.5"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               不在列表里就 Load → 运行时报「scene not in build settings」；索引

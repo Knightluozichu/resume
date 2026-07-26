@@ -137,7 +137,7 @@ export function ScriptsVsEngineDiagram() {
             x="280"
             y="102"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -149,7 +149,7 @@ export function ScriptsVsEngineDiagram() {
             x="280"
             y="206"
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             Profiler 的 CPU Usage 按此分区着色，快速定位瓶颈在脚本还是引擎

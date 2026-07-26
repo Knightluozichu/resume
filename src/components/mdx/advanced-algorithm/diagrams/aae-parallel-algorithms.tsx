@@ -93,7 +93,7 @@ export function AaeParallelAlgorithmsDiagram() {
                     {[72, 118, 164].map((mx, i) => (
                       <g key={`mr-map-${i}`}>
                         <rect x={mx} y={CARD_Y + 66} width="38" height="28" rx="4" fill={elevated} stroke={col.color} strokeWidth="1.4" />
-                        <text x={mx + 19} y={CARD_Y + 84} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color} fontFamily="monospace">Map</text>
+                        <text x={mx + 19} y={CARD_Y + 84} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color} fontFamily="monospace">Map</text>
                       </g>
                     ))}
                     {/* Map → Shuffle 箭头 */}
@@ -111,7 +111,7 @@ export function AaeParallelAlgorithmsDiagram() {
                     {[80, 142].map((mx, i) => (
                       <g key={`mr-red-${i}`}>
                         <rect x={mx} y={CARD_Y + 172} width="52" height="28" rx="4" fill={elevated} stroke={col.color} strokeWidth="1.4" />
-                        <text x={mx + 26} y={CARD_Y + 190} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color} fontFamily="monospace">Reduce</text>
+                        <text x={mx + 26} y={CARD_Y + 190} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color} fontFamily="monospace">Reduce</text>
                       </g>
                     ))}
                   </g>
@@ -124,7 +124,7 @@ export function AaeParallelAlgorithmsDiagram() {
                     {[323, 359, 395].map((px, i) => (
                       <g key={`bsp-p-${i}`}>
                         <circle cx={px} cy={CARD_Y + 76} r="11" fill={elevated} stroke={col.color} strokeWidth="1.5" />
-                        <text x={px} y={CARD_Y + 80} textAnchor="middle" fontSize="9.5" fontWeight="700" fill={col.color} fontFamily="monospace">P{i}</text>
+                        <text x={px} y={CARD_Y + 80} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color} fontFamily="monospace">P{i}</text>
                       </g>
                     ))}
                     {/* Superstep 盒 */}
@@ -134,10 +134,10 @@ export function AaeParallelAlgorithmsDiagram() {
                     <text x={294} y={CARD_Y + 166} fontSize="11" fill={primary}>② Communicate 通信</text>
                     <text x={294} y={CARD_Y + 190} fontSize="11" fill={primary}>③ Barrier 栅栏同步</text>
                     <line x1={294} y1={CARD_Y + 200} x2={424} y2={CARD_Y + 200} stroke={col.color} strokeWidth="1" strokeOpacity="0.4" />
-                    <text x={359} y={CARD_Y + 214} textAnchor="middle" fontSize="10" fill={secondary}>每步末尾全局同步</text>
+                    <text x={359} y={CARD_Y + 214} textAnchor="middle" fontSize="11" fill={secondary}>每步末尾全局同步</text>
                     {/* 循环箭头 */}
                     <path d={`M 436 ${CARD_Y + 160} C 460 ${CARD_Y + 160}, 460 ${CARD_Y + 110}, 436 ${CARD_Y + 110}`} fill="none" stroke={col.color} strokeWidth="1.4" markerEnd="url(#pa-loop)" />
-                    <text x={458} y={CARD_Y + 138} fontSize="9.5" fill={col.color}>循环</text>
+                    <text x={458} y={CARD_Y + 138} fontSize="11" fill={col.color}>循环</text>
                   </g>
                 )}
 
@@ -148,7 +148,7 @@ export function AaeParallelAlgorithmsDiagram() {
                     {[524, 560, 596, 632].map((px, i) => (
                       <g key={`pram-p-${i}`}>
                         <circle cx={px} cy={CARD_Y + 76} r="11" fill={elevated} stroke={col.color} strokeWidth="1.5" />
-                        <text x={px} y={CARD_Y + 80} textAnchor="middle" fontSize="9" fontWeight="700" fill={col.color} fontFamily="monospace">P{i}</text>
+                        <text x={px} y={CARD_Y + 80} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color} fontFamily="monospace">P{i}</text>
                       </g>
                     ))}
                     {/* 箭头到共享内存 */}
@@ -162,7 +162,7 @@ export function AaeParallelAlgorithmsDiagram() {
                     {[508, 542, 576, 610, 644].map((mx, i) => (
                       <g key={`pram-m-${i}`}>
                         <rect x={mx} y={CARD_Y + 178} width="28" height="22" rx="3" fill={elevated} stroke={col.color} strokeWidth="1.2" />
-                        <text x={mx + 14} y={CARD_Y + 193} textAnchor="middle" fontSize="9.5" fill={primary} fontFamily="monospace">M{i}</text>
+                        <text x={mx + 14} y={CARD_Y + 193} textAnchor="middle" fontSize="11" fill={primary} fontFamily="monospace">M{i}</text>
                       </g>
                     ))}
                   </g>
@@ -173,13 +173,13 @@ export function AaeParallelAlgorithmsDiagram() {
 
                 {/* 场景 */}
                 <rect x={x + 12} y={CARD_Y + 256} width={64} height={18} rx="4" fill={col.color} fillOpacity="0.1" stroke={col.color} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={x + 44} y={CARD_Y + 269} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color}>场景</text>
+                <text x={x + 44} y={CARD_Y + 269} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color}>场景</text>
                 <text x={x + 12} y={CARD_Y + 292} fontSize="11" fill={primary}>{col.scene}</text>
 
                 {/* 度量 */}
                 <rect x={x + 12} y={CARD_Y + 300} width={64} height={18} rx="4" fill={col.color} fillOpacity="0.1" stroke={col.color} strokeWidth="1" strokeOpacity="0.5" />
-                <text x={x + 44} y={CARD_Y + 313} textAnchor="middle" fontSize="10.5" fontWeight="700" fill={col.color}>度量</text>
-                <text x={x + 12} y={CARD_Y + 336} fontSize="10.5" fill={primary} fontFamily="monospace">{col.metric}</text>
+                <text x={x + 44} y={CARD_Y + 313} textAnchor="middle" fontSize="11" fontWeight="700" fill={col.color}>度量</text>
+                <text x={x + 12} y={CARD_Y + 336} fontSize="11" fill={primary} fontFamily="monospace">{col.metric}</text>
               </g>
             );
           })}
