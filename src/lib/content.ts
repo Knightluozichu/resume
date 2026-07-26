@@ -98,59 +98,33 @@ export const BOOK_ORDER = [
   "learnopengl",
   "game-engine-architecture-3e",
   "game-engine-practice-vol1",
-  "game-engine-practice-vol2",
-  "real-time-collision-detection",
   "cpp-primer-5e",
   "c-primer-plus",
   "coding-interviews",
-  "big-nerd-ranch-guide",
-  "android-design-patterns",
-  "android-advanced-decryption",
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
   "auto-why-car-runs",
-  "cpp-concurrency",
   "unity5",
   "ai-agent-dev",
   "ai-agent",
   "ai-agent-apps",
   "design-patterns",
-  "game-programming-patterns",
   "code-quality-refactoring",
   "architecture-domain-design",
   "advanced-algorithm-engineering",
   "automotive-systems-specialization",
   "vehicle-software-intelligence",
-  "the-c-programming-language",
-  "beginning-cpp-game-programming",
-  "effective-cpp",
-  "effective-modern-cpp",
-  "cpp-high-performance",
-  "inside-cpp-object-model",
-  "optimized-cpp",
-  "modern-cpp-design",
-  "cpu-eye-cpp",
   "easy-cpp-5e",
-  "cpp-primer-plus",
-  "cpp-testing-recipes",
   "cpp-server-essence",
   "head-first-design-patterns",
-  "essential-csharp-7",
-  "csharp-quality-code",
-  "effective-csharp",
-  "deep-understanding-csharp",
   "csharp-functional-programming",
   "csharp-10-core",
   "clr-via-csharp",
-  "dotnet-memory",
   "rust-programming-language",
   "go-programming-language",
   "python-crash-course",
   "lua-programming",
-  "ruby-programming",
-  "data-structures-visual",
-  "math-girl",
   "dsa-cpp",
   "rust-way",
   "go-in-action",
@@ -163,8 +137,6 @@ export const BOOK_ORDER = [
   "programming-pearls",
   "competitive-algorithms",
   "introduction-to-algorithms",
-  "hackers-delight",
-  "taocp",
   "programmers-math",
   "head-first-statistics",
   "linear-algebra-done-right",
@@ -173,14 +145,11 @@ export const BOOK_ORDER = [
   "ray-tracing-weekend",
   "deep-opengl",
   "vulkan-guide",
-  "computer-graphics-4e",
   "opengl-redbook",
   "opengl-superbible",
   "gpu-gems",
   "real-time-rendering-4e",
-  "cg-principles-practice",
   "pbrt-book",
-  "global-illumination",
   "unity-shader-essentials",
   "shader-practice",
   "unity-shaderlab",
@@ -190,12 +159,9 @@ export const BOOK_ORDER = [
   "shaderx",
   // §6 游戏开发
   "unity-hmi",
-  "game-design-fundamentals",
-  "game-mechanics-advanced",
   "game-programmer-path",
   "unity-ui-design",
   "unity-scripting",
-  "unity-animation",
   "blender-3d",
   "unity-core-tech",
   "unity-game-cases",
@@ -227,16 +193,12 @@ export const BOOK_ORDER = [
   "csapp",
   "modern-os",
   "os-concepts",
-  "windows-journey",
   "linux-os-practice",
   "mfc-deep-dive",
   "windows-kernel-programming",
   "linux-kernel-essence",
   "linux-kernel-design",
   "unix-advanced-programming",
-  "head-first-java",
-  "java-core-tech",
-  "effective-java",
   "spring-in-action",
   "jvm-troubleshooting",
   "deep-understanding-jvm",
@@ -244,7 +206,6 @@ export const BOOK_ORDER = [
   "gc-handbook",
   "first-line-android",
   "crazy-android",
-  "kotlin-definitive-guide",
   "android-art-exploration",
   "kotlin-in-action",
   "android-component-arch",
@@ -252,28 +213,21 @@ export const BOOK_ORDER = [
   "jetpack-compose",
   "android-advanced-light",
   "deep-android-kernel",
-  "deep-android-volumes",
   "mysql-essentials",
   "sql-ten-minutes",
-  "database-system-concepts",
   "high-performance-mysql",
   "ddia",
-  "redis-design-implementation",
   "kafka-definitive-guide",
   "rabbitmq-practice",
   "kong-gateway",
   "kubernetes-in-action",
   "phoenix-architecture",
   "microservices-patterns",
-  "illustrated-http",
-  "illustrated-server-network",
-  "computer-networks-top-down",
   "http-definitive-guide",
   "wireshark-packet-analysis",
   "tcp-ip-illustrated-vol1",
   "unix-network-programming-vol1",
   "two-week-scripting-language",
-  "crafting-compiler",
   "engineering-a-compiler",
   "dragon-book-compilers",
   "tiger-book-compiler",
@@ -308,10 +262,7 @@ export const BOOK_ORDER = [
   "autosar-vehicle-controller",
   "soa-vehicle-architecture",
   "mythical-man-month",
-  "code-complete-2e",
-  "pragmatic-programmer",
   "poeaa-enterprise-patterns",
-  "art-of-unix-programming",
   "coder-revolution",
   "make-it-stick",
   "mindset-growth",
@@ -616,104 +567,6 @@ function learningBooks(
  */
 const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
-    slug: "cpp",
-    title: "编程语言基础",
-    description:
-      "从 C/C++、C# 到 Rust、Go、Python、Lua、Ruby，建立语言与运行时基础。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "掌握语法、类型、控制流、函数、对象与基础内存模型。",
-        items: learningBooks([
-          "the-c-programming-language",
-          "beginning-cpp-game-programming",
-          "cpp-primer-plus",
-          "essential-csharp-7",
-          "ruby-programming",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "进入现代语言特性、代码质量、性能、测试、Web 与工程化。",
-        items: learningBooks([
-          "effective-cpp",
-          "effective-modern-cpp",
-          "cpp-high-performance",
-          "optimized-cpp",
-          "cpp-testing-recipes",
-          "csharp-quality-code",
-          "effective-csharp",
-          "deep-understanding-csharp",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary:
-          "深入对象模型、并发、泛型设计、运行时、内存管理与高级语言机制。",
-        items: learningBooks([
-          "inside-cpp-object-model",
-          "cpp-concurrency",
-          "modern-cpp-design",
-          "cpu-eye-cpp",
-          "dotnet-memory",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "algorithms",
-    title: "算法与数据结构",
-    description: "从图解直觉与基础结构，推进到经典算法、复杂度证明和算法工程。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "用图解和实例建立数组、链表、树、图、搜索与排序的第一直觉。",
-        items: learningBooks([
-          "data-structures-visual",
-          "math-girl",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统训练数据结构、题型、算法分析与实际编码能力。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入高阶算法、算法证明、位级技巧与生产级算法工程。",
-        items: learningBooks([
-          "hackers-delight",
-          "taocp",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "mathematics",
-    title: "数学基础",
-    description:
-      "补齐程序设计、统计、线性代数、离散数学和计算几何所需的数学地基。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "先建立数学思维、概率统计与问题建模的基本直觉。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统掌握线性代数、空间、变换和图形开发数学。",
-        items: learningBooks([]),
-      },
-      {
-        level: "advanced",
-        summary: "进入离散数学、组合方法和几何数据结构。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
     slug: "graphics",
     title: "计算机图形学与渲染",
     description: "从图形学概念和 API 实作，进入实时渲染、PBR 与全局光照。",
@@ -721,407 +574,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解渲染管线、光栅化、OpenGL 基础与光线追踪直觉。",
-        items: learningBooks([
-          "computer-graphics-4e",
-          "ray-tracing-weekend",
-        ]),
+        items: learningBooks(["ray-tracing-weekend"]),
       },
       {
         level: "intermediate",
         summary: "用 OpenGL、Vulkan 和 GPU 实例系统完成现代渲染实践。",
-        items: learningBooks([
-          "deep-opengl",
-        ]),
+        items: learningBooks(["deep-opengl"]),
       },
       {
         level: "advanced",
         summary: "深入实时渲染架构、基于物理的渲染与全局光照。",
-        items: learningBooks([
-          "cg-principles-practice",
-          "pbrt-book",
-          "global-illumination",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "shader-gpu",
-    title: "Shader 与 GPU 编程",
-    description:
-      "从 Shader 基础和 Unity 渲染实践，进入 URP、GPU Pro 与 ShaderX 专题。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "掌握顶点、片元、材质、光照与 Shader 编写基础。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "在 ShaderLab、屏幕特效和完整渲染流程中积累实战。",
-        items: learningBooks([]),
-      },
-      {
-        level: "advanced",
-        summary: "研究 URP 内置实现、生产级 GPU 技巧和高级着色专题。",
-        items: learningBooks([]),
-      },
-    ],
-  },
-  {
-    slug: "unity",
-    title: "游戏开发（Unity 为主）",
-    description:
-      "从编辑器和游戏制作基础，推进到完整项目、性能分析与平台专项优化。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "熟悉 Unity 工作流、游戏设计、HMI 场景和程序员成长路线。",
-        items: learningBooks([
-          "game-design-fundamentals",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "覆盖 UI、脚本、动画、Blender、案例、特效和基础性能优化。",
-        items: learningBooks([
-          "unity-animation",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入 Profiler、移动/XR/Web、复杂机制和主程级工程能力。",
-        items: learningBooks([
-          "game-mechanics-advanced",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "game-engine",
-    title: "游戏引擎与游戏架构",
-    description: "从游戏编程模式，进入引擎系统分层、碰撞检测和高级运行时技术。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "用可复用模式理解游戏循环、对象、状态与系统解耦。",
-        items: learningBooks(["game-programming-patterns"]),
-      },
-      {
-        level: "intermediate",
-        summary: "建立引擎架构全景，并完成基础框架与核心子系统。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入碰撞检测、并行运行时、工具链和高级引擎技术。",
-        items: learningBooks([
-          "real-time-collision-detection",
-          "game-engine-practice-vol2",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "multiplayer-servers",
-    title: "网络游戏与服务器",
-    description:
-      "从服务器端基础，推进到多人同步、房间系统、网络架构和大规模优化。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "理解网络游戏服务器的连接、消息、房间与基本循环。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "完成 Unity/C++ 多人游戏、同步与在线架构实战。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "研究核心网络技术、服务器架构、伸缩性和生产级优化。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "frontend-web",
-    title: "前端与 Web",
-    description:
-      "从 JavaScript 与 Vue 入门，进入 CSS、Node.js、全栈和前端工程化。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "掌握 JavaScript 核心、Vue 入门和语言机制。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统学习浏览器端、CSS、Node.js 与全栈开发。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入框架实现、Node.js 内部与大型前端工程体系。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "systems",
-    title: "系统与操作系统",
-    description:
-      "从计算机和程序运行原理，进入操作系统、内核、Windows、Linux 与 UNIX。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "建立计算机硬件、程序执行和系统软件的整体认知。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统掌握体系结构、进程、内存、文件系统和操作系统实践。",
-        items: learningBooks([
-          "windows-journey",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入 GUI 框架、内核编程、Linux 内核与 UNIX 系统接口。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "java-jvm",
-    title: "JVM / Java 生态",
-    description:
-      "从 Java 编程基础，进入核心库、Spring、JVM 诊断、GC 与运行时实现。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "建立 Java 对象、集合、异常、并发与基本工程习惯。",
-        items: learningBooks(["head-first-java"]),
-      },
-      {
-        level: "intermediate",
-        summary: "掌握核心类库、最佳实践、Spring 与 JVM 故障诊断。",
-        items: learningBooks([
-          "java-core-tech",
-          "effective-java",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入 JVM 内部、G1 实现与垃圾回收算法。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "android",
-    title: "Android 开发",
-    description:
-      "从应用开发和 Kotlin，进入架构、性能、Compose，再深入系统源码与内核。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "熟悉 Activity、Fragment、UI、Intent、数据和 Kotlin 基础。",
-        items: learningBooks([
-          "big-nerd-ranch-guide",
-          "kotlin-definitive-guide",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "推进到应用架构、Kotlin 实战、组件化、性能与 Compose。",
-        items: learningBooks([
-          "android-design-patterns",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入 Framework、系统服务、源码机制和 Android 内核。",
-        items: learningBooks([
-          "android-advanced-decryption",
-          "deep-android-volumes",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "databases",
-    title: "数据库",
-    description:
-      "从 SQL 与 MySQL 使用，进入数据库系统原理、性能、分布式数据和 Redis。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "掌握关系模型、SQL 查询与 MySQL 基本使用。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统理解存储、索引、查询、事务和数据库实现。",
-        items: learningBooks(["database-system-concepts"]),
-      },
-      {
-        level: "advanced",
-        summary: "深入 MySQL 性能、数据密集型系统与 Redis 实现。",
-        items: learningBooks([
-          "redis-design-implementation",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "distributed-systems",
-    title: "分布式与中间件",
-    description: "覆盖消息队列、网关、容器编排、微服务与大型分布式系统架构。",
-    stages: [
-      {
-        level: "intermediate",
-        summary: "掌握 Kafka、RabbitMQ 与 API 网关的使用和运行机制。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入 Kubernetes、可靠分布式架构与微服务模式。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "networking",
-    title: "计算机网络",
-    description:
-      "从 HTTP 与服务端网络图解，进入协议栈、抓包分析、TCP/IP 与 UNIX 网络编程。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "建立 HTTP、客户端到服务端和网络分层的直觉。",
-        items: learningBooks([
-          "illustrated-http",
-          "illustrated-server-network",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统学习互联网协议、HTTP 细节和 Wireshark 分析。",
-        items: learningBooks([
-          "computer-networks-top-down",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入 TCP/IP 协议实现和 UNIX Socket 编程。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "compilers",
-    title: "编译原理",
-    description: "从自制语言和编译器实践，进入现代编译器设计与经典理论教材。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "通过小型脚本语言理解词法、语法、AST 与解释执行。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "完整实现编译器前端、中间表示、优化和代码生成。",
-        items: learningBooks(["crafting-compiler"]),
-      },
-      {
-        level: "advanced",
-        summary: "用龙书和虎书深入编译理论、优化与现代实现。",
-        items: learningBooks([]),
-      },
-    ],
-  },
-  {
-    slug: "ai-ml",
-    title: "人工智能与机器学习",
-    description:
-      "从图解 AI/ML/DL，进入经典机器学习、深度学习、生成模型和强化学习。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "建立人工智能、机器学习和深度学习的全景认知。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "系统训练经典模型、统计学习、神经网络、NLP、生成与强化学习。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "深入深度学习理论、概率模型、底层实现和深度强化学习。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "ai-agent",
-    title: "AI Agent 与大模型应用",
-    description:
-      "从 LLM 与 Agent 心智模型，进入应用开发、编排、生产化和多智能体系统。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "理解大模型如何生成文本，以及 Agent 的循环、工具和基本边界。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "完成 Agent、LangChain、LLM 应用和知识增强系统开发。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入生产级 Agent 模式、大模型工程和多智能体协作。",
-        items: learningBooks([
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "blockchain",
-    title: "区块链",
-    description: "从区块链基本原理，进入应用开发、比特币和以太坊协议与工程。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "理解区块、哈希、共识、账本和数字资产基础。",
-        items: learningBooks([]),
-      },
-      {
-        level: "intermediate",
-        summary: "通过完整应用掌握钱包、交易、合约与链上开发。",
-        items: learningBooks([]),
-      },
-      {
-        level: "advanced",
-        summary: "深入比特币和以太坊协议、节点、脚本与智能合约体系。",
-        items: learningBooks([]),
+        items: learningBooks(["pbrt-book"]),
       },
     ],
   },
@@ -1139,15 +602,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "intermediate",
         summary: "系统掌握传统汽车、新能源专项、汽车电子与 AUTOSAR。",
-        items: learningBooks([
-          "automotive-systems-specialization",
-        ]),
-      },
-      {
-        level: "advanced",
-        summary: "进入智能座舱、感知规控、整车软件工程与 SOA 架构。",
-        items: learningBooks([
-        ]),
+        items: learningBooks(["automotive-systems-specialization"]),
       },
     ],
   },
@@ -1159,44 +614,12 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解大型项目协作、设计模式的动机和面向对象设计语言。",
-        items: learningBooks([
-          "head-first-design-patterns",
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "形成构建、维护、重构和持续改善代码的工程方法。",
-        items: learningBooks([
-          "code-complete-2e",
-          "pragmatic-programmer",
-        ]),
+        items: learningBooks(["head-first-design-patterns"]),
       },
       {
         level: "advanced",
         summary: "进入整洁架构、DDD、企业应用模式和 UNIX 工程哲学。",
-        items: learningBooks([
-          "architecture-domain-design",
-          "art-of-unix-programming",
-        ]),
-      },
-    ],
-  },
-  {
-    slug: "personal-growth",
-    title: "通识与个人成长",
-    description: "覆盖学习科学、成长心态、刻意练习、组织认知与管理实践。",
-    stages: [
-      {
-        level: "beginner",
-        summary: "建立学习、认知、成长和长期练习的基本方法。",
-        items: learningBooks([
-        ]),
-      },
-      {
-        level: "intermediate",
-        summary: "理解复杂系统、有效管理和组织问题解决工具。",
-        items: learningBooks([
-        ]),
+        items: learningBooks(["architecture-domain-design"]),
       },
     ],
   },
