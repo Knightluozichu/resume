@@ -46,7 +46,7 @@ export function MonotoneMatrixDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 430" role="img" aria-label="四乘四行列递增矩阵，从右上角9查找7；大于目标向左，小于目标向下，路径依次经过9、8、2、4、7。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">右上角同时是当前行最大值与当前列最小值</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">右上角同时是当前行最大值与当前列最小值</text>
           {matrix.map((row, r) => row.map((value, c) => {
             const x = 88 + c * 86;
             const y = 74 + r * 66;

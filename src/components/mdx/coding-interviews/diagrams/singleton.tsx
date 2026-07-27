@@ -86,7 +86,7 @@ export function SingletonBoundaryMap() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 370" role="img" aria-label="Singleton由私有构造、唯一静态实例和公共访问点组成，约束只在当前运行时作用域内有效。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">Singleton回答三个问题：谁能创建、存在哪里、作用域多大</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">Singleton回答三个问题：谁能创建、存在哪里、作用域多大</text>
           <rect x="258" y="58" width="264" height="228" rx="6" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2" />
           <text x="390" y="88" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--text-primary)">sealed Singleton</text>
           {[
@@ -124,7 +124,7 @@ export function ConcurrencyRaceDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 370" role="img" aria-label="两个线程同时观察instance为空，各自创建Singleton，导致出现两个实例；锁或类型初始化需要把检查和创建变成一次操作。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">无锁的“先检查再创建”不是原子操作</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">无锁的“先检查再创建”不是原子操作</text>
           <line x1="184" y1="62" x2="184" y2="292" stroke="var(--accent)" strokeWidth="2" />
           <line x1="596" y1="62" x2="596" y2="292" stroke="var(--success)" strokeWidth="2" />
           <text x="184" y="55" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">线程 A</text>

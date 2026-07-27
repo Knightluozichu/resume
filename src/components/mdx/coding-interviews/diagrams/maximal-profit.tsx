@@ -45,7 +45,7 @@ export function MaximalProfitTimelineDiagram() {
           <defs>
             <marker id="profit-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">最大利润 = 某个卖出日价格 − 此前历史最低价</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">最大利润 = 某个卖出日价格 − 此前历史最低价</text>
           {/* 坐标轴 */}
           <line x1="80" y1="280" x2="760" y2="280" stroke="var(--border)" strokeWidth="1.4" />
           <line x1="80" y1="50" x2="80" y2="280" stroke="var(--border)" strokeWidth="1.4" />

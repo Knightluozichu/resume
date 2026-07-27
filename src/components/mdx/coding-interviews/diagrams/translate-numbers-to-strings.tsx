@@ -40,7 +40,7 @@ export function TranslationMappingDiagram() {
           aria-label="把数字翻译成字符串图。编码规则：0 到 25 分别对应 a 到 z。单个数字 0 到 9 总是合法；两位数字必须是 10 到 25（如 10→k、25→z），26 无效、01 也不等于双字符 1。计数用动态规划：f(i) = f(i+1)（取一位）加上当两位合法时的 f(i+2)。例 12258：有效两位有 12、22、25，共 5 种翻译（bccfi、bwfi、bczi、mcfi、mzi）。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">编码 0→25 对应 a→z；单位合法，两位须 10→25</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">编码 0→25 对应 a→z；单位合法，两位须 10→25</text>
           {/* 单位映射 */}
           <text x={rowX - 16} y={78} textAnchor="end" fontSize="11" fontWeight="700" fill="var(--text-secondary)">单位</text>
           {single.map((d, i) => (

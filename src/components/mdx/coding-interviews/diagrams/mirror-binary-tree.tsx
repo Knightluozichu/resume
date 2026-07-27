@@ -31,7 +31,7 @@ export function MirrorSwapDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 430" role="img" aria-label="二叉树85610镜像后每个节点左右子节点交换。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="mirror-swap-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每个节点都交换左右链接</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每个节点都交换左右链接</text>
           <text x="205" y="66" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">原树</text>
           <text x="655" y="66" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">镜像</text>
           {[[8,205,102],[6,125,206],[10,285,206],[5,82,318],[7,168,318]].map(([value,x,y],index) => <g key={"a"+index}><circle cx={Number(x)} cy={Number(y)} r="30" fill="var(--bg)" stroke="var(--border)" /><text x={Number(x)} y={Number(y)+6} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}

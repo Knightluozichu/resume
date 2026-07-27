@@ -38,7 +38,7 @@ export function NumberOf1RecursiveDecompositionDiagram() {
           aria-label="1 到 n 整数中 1 出现的次数图。以 n=21345 为例，按最高位拆解：最高位（万位）为 1 的贡献是 10000 到 19999 共 10000 次；其余四个位为 1 的贡献是 首位2 × 位数4 × 1000 共 8000 次；去掉首位后的后缀 1345 递归计算得 821 次。三者相加 10000+8000+821 = 18821。后缀继续同样拆解：1345→345→45→5（基例）。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最高位拆解：F(n) = 最高位贡献 + 其余位贡献 + F(后缀)</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最高位拆解：F(n) = 最高位贡献 + 其余位贡献 + F(后缀)</text>
           {/* 顶部 n */}
           <rect x="310" y="52" width="200" height="46" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.6" />
           <text x="410" y="80" textAnchor="middle" fontSize="16" fontWeight="800" fontFamily="monospace" fill="var(--accent)">n = 21345</text>

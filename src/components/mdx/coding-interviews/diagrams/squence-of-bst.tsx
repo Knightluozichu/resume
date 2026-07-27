@@ -22,7 +22,7 @@ export function BstPostorderPartitionDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 900 330" role="img" aria-label="后序序列4、8、6、12、16、14、10以末尾10为根，前段小于10，后段大于10。" className="mx-auto block h-auto w-full max-w-[900px]">
-          <text x="450" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">最后一个数字是根节点：root = 10</text>
+          <text x="450" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">最后一个数字是根节点：root = 10</text>
           {cells.map(([value, kind], index) => {
             const x = 80 + index * 108;
             const color = kind === "左" ? "var(--success)" : kind === "右" ? "var(--accent)" : "var(--warning)";

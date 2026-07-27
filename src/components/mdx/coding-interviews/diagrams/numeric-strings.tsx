@@ -68,7 +68,7 @@ export function DecimalExponentFlowDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 390" role="img" aria-label="数值字符串按整数、小数、指数和完整消费四阶段扫描。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="numeric-flow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">-123.45e+6 的一次前向扫描</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">-123.45e+6 的一次前向扫描</text>
           {[
             ["-123", "扫描A", "基数已有数字", 44],
             [".45", "扫描点与B", "点后无符号整数", 246],

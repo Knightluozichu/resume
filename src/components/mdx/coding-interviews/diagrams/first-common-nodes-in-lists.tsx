@@ -45,7 +45,7 @@ export function ListIntersectionIdentityDiagram() {
           <defs>
             <marker id="list-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--border)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两前缀 next 指向同一节点：共享的是身份与整个后缀</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两前缀 next 指向同一节点：共享的是身份与整个后缀</text>
           {/* 链表 A */}
           <text x="88" y="66" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">链表 A</text>
           <Node x={60} y={80} label="1" />

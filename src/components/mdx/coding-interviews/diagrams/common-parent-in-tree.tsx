@@ -65,7 +65,7 @@ export function CommonParentTreeDiagram() {
           aria-label="树中两个节点的最低公共父节点图。普通多叉树：1 的孩子 2、3；2 的孩子 4、5；4 的孩子 6、7；5 的孩子 8、9、10。目标 6 与 8 的根路径分别为 1,2,4,6 与 1,2,5,8。同步比较两条路径：1 相同、2 相同、到 4 与 5 分叉，所以最后一个公共节点 2 就是最低公共父节点。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两条根路径最后公共的节点即最低公共父节点</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两条根路径最后公共的节点即最低公共父节点</text>
           {/* 边 */}
           <E x1={410} y1={76} x2={280} y2={140} tone="var(--success)" />
           <E x1={410} y1={76} x2={580} y2={140} tone="var(--border)" />

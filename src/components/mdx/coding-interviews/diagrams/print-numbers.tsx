@@ -32,7 +32,7 @@ export function DecimalIncrementDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 350" role="img" aria-label="字符串数字0098加一得到0099，再加一经过连续进位得到0100。" className="mx-auto block h-auto w-full max-w-[820px]">
           <defs><marker id="increment-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">字符数组上的十进制加一</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">字符数组上的十进制加一</text>
           {states.map((digits,row) => <g key={row}>{digits.map((digit,col) => <g key={col}><rect x={212+col*96} y={72+row*84} width="76" height="56" rx="5" fill={row===2 && col===1 ? "var(--success)" : "var(--bg)"} fillOpacity={row===2 && col===1 ? 0.12 : 1} stroke={row===2 && col===1 ? "var(--success)" : "var(--border)"} /><text x={250+col*96} y={108+row*84} textAnchor="middle" fontSize="19" fontWeight="700" fill="var(--text-primary)">{digit}</text></g>)}</g>)}
           <path d="M622 100 L654 100 L654 184 L622 184" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#increment-arrow)" />
           <path d="M622 184 L654 184 L654 268 L622 268" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#increment-arrow)" />
@@ -71,7 +71,7 @@ export function DigitEnumerationTreeDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 360" role="img" aria-label="两位数字递归树第一层选0到9，第二层再次选0到9，共100个叶子并跳过00。" className="mx-auto block h-auto w-full max-w-[820px]">
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">n=2：每一位独立枚举0到9</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">n=2：每一位独立枚举0到9</text>
           <rect x="350" y="52" width="120" height="42" rx="5" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" />
           <text x="410" y="78" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">选择第0位</text>
           {[[110,"0"],[260,"1"],[410,"…"],[560,"8"],[710,"9"]].map(([x,label]) => <g key={String(label)}><line x1="410" y1="94" x2={Number(x)} y2="142" stroke="var(--border)" strokeWidth="2" /><rect x={Number(x)-48} y="142" width="96" height="38" rx="5" fill="var(--bg)" stroke="var(--border)" /><text x={Number(x)} y="166" textAnchor="middle" fontSize="11" fill="var(--text-primary)">首位 {label}</text></g>)}

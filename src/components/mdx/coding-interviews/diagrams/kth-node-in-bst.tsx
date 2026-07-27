@@ -59,7 +59,7 @@ export function KthNodeBstOrderDiagram() {
           aria-label="二叉搜索树的第 k 小节点图。BST 中序遍历（左、根、右）得到递增序列：树 8；6,10；5,7,9,11 的中序为 5,6,7,8,9,10,11。所以第 k 小就是中序遍历的第 k 个节点。以 k=4 为例，中序访问到节点 8 时是第 4 个，命中返回；之后的 9、10、11 不再访问。k 从 1 计，k=0 或超过节点数返回空。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">BST 中序 = 递增序列：第 k 小即中序第 k 个</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">BST 中序 = 递增序列：第 k 小即中序第 k 个</text>
           {/* 树 */}
           <E x1={410} y1={78} x2={280} y2={140} />
           <E x1={410} y1={78} x2={540} y2={140} />
@@ -80,7 +80,7 @@ export function KthNodeBstOrderDiagram() {
             <g key={v}>
               <rect x={ox + i * (cellW + 8)} y={304} width={cellW} height={44} rx="6" fill={v === 8 ? "var(--success)" : "var(--accent)"} fillOpacity={v === 8 ? 0.16 : 0.08} stroke={v === 8 ? "var(--success)" : "var(--accent)"} strokeWidth={v === 8 ? 1.8 : 1.2} />
               <text x={ox + i * (cellW + 8) + cellW / 2} y={326} textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill={v === 8 ? "var(--success)" : "var(--accent)"}>{v}</text>
-              <text x={ox + i * (cellW + 8) + cellW / 2} y={342} textAnchor="middle" fontSize="9" fill="var(--text-secondary)">第{i + 1}</text>
+              <text x={ox + i * (cellW + 8) + cellW / 2} y={342} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">第{i + 1}</text>
             </g>
           ))}
           <text x="410" y="378" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--success)">k=4 → 中序第 4 个 = 8（命中后 9、10、11 不再访问）</text>

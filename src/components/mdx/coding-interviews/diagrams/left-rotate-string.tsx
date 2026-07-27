@@ -46,7 +46,7 @@ export function LeftRotatePartitionDiagram() {
           <defs>
             <marker id="lr-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">左旋 n 位 = 把 AB 变成 BA（例 abcdefg，n=2）</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">左旋 n 位 = 把 AB 变成 BA（例 abcdefg，n=2）</text>
           {/* 原串 AB */}
           <text x={rowX - 16} y={78} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--text-primary)">原串</text>
           <g transform="translate(0,56)">

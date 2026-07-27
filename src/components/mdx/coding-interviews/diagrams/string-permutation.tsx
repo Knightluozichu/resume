@@ -29,7 +29,7 @@ export function PermutationSwapTreeDiagram() {
           aria-label="字符串排列图。以 abc 为例，用交换递归生成全排列：每一层把 begin 到末尾的每个字符轮流交换到固定位置，再递归排列剩余后缀。第一层固定首位：固定 a（abc）、交换 a,b 固定 b（bac）、交换 a,c 固定 c（cba）；第二层排列后缀各得 2 个叶子：abc、acb、bac、bca、cba、cab，共 3! = 6 个。每次交换后递归返回要再交换回来（回溯），保证后续分支看到原始字符串。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">交换递归树：逐层固定首位，后缀继续排列（abc → 6 个）</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">交换递归树：逐层固定首位，后缀继续排列（abc → 6 个）</text>
           {/* 根 */}
           <Node x={410} y={70} label="abc" tone="var(--accent)" />
           <text x={470} y={66} fontSize="10" fill="var(--text-secondary)">begin=0</text>

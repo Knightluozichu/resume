@@ -30,7 +30,7 @@ export function DuplicateRunDeletionDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 360" role="img" aria-label="排序链表1233445中两个3和两个4作为重复段全部删除，剩125。" className="mx-auto block h-auto w-full max-w-[820px]">
           <defs><marker id="duplicate-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">重复值整段删除，不保留一个副本</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">重复值整段删除，不保留一个副本</text>
           {nodes.map(([label,x,duplicate],index) => <g key={index}><rect x={Number(x)-35} y="90" width="70" height="52" rx="5" fill={duplicate ? "var(--warning)" : "var(--bg)"} fillOpacity={duplicate ? 0.1 : 1} stroke={duplicate ? "var(--warning)" : "var(--border)"} /><text x={Number(x)} y="122" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{label}</text>{index<nodes.length-1 ? <line x1={Number(x)+35} y1="116" x2={Number(nodes[index+1][1])-43} y2="116" stroke="var(--border)" strokeWidth="2" markerEnd="url(#duplicate-arrow)" /> : null}</g>)}
           <path d="M180 158 C280 230 580 230 680 158" fill="none" stroke="var(--success)" strokeWidth="3" markerEnd="url(#duplicate-arrow)" />
           <text x="430" y="240" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">前驱2直接连接重复段后的5</text>
@@ -69,7 +69,7 @@ export function HeadRunRewireDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 310" role="img" aria-label="链表11112删除头部重复段后，head从第一个1改指向2。" className="mx-auto block h-auto w-full max-w-[820px]">
           <defs><marker id="head-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">头部重复段没有前驱，必须改写head</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">头部重复段没有前驱，必须改写head</text>
           <text x="78" y="112" fontSize="11" fontWeight="700" fill="var(--accent)">head</text>
           <line x1="112" y1="108" x2="144" y2="108" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#head-arrow)" />
           {[1,1,1,1,2].map((value,index) => <g key={index}><rect x={154+index*102} y="78" width="76" height="58" rx="5" fill={value===1 ? "var(--warning)" : "var(--success)"} fillOpacity="0.1" stroke={value===1 ? "var(--warning)" : "var(--success)"} /><text x={192+index*102} y="114" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}

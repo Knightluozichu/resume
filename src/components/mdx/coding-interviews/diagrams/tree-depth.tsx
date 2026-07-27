@@ -45,7 +45,7 @@ export function TreeDepthPathDiagram() {
           aria-label="二叉树的深度图。深度是最长根到叶路径上的节点数。树 1；2,3；4,5,_,6；7（5 的孩子 7）。最长路径为 1→2→5→7，按节点计数深度是 4。递推：depth(node) = max(depth(左), depth(右)) + 1，空树返回 0。根节点 1 左子树深 3、右子树深 2，取较大者加 1 得 4。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">深度 = 最长根→叶路径的节点数</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">深度 = 最长根→叶路径的节点数</text>
           {/* 边 */}
           <E x1={410} y1={78} x2={280} y2={140} hot />
           <E x1={410} y1={78} x2={540} y2={140} />

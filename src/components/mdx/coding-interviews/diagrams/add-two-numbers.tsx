@@ -43,7 +43,7 @@ export function AddTwoNumbersBitDiagram() {
           aria-label="不用加减乘除做加法的位级真值表。对两个二进制位：a XOR b 得到不计进位的当前位结果，a AND b 得到是否需要向高一位进位。0+1 和 1+0 的 XOR 为 1、进位 0；1+1 的 XOR 为 0、进位 1（结果 10）。于是 sum = a XOR b，carry = (a AND b) 左移一位，循环直到进位为 0。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">XOR 得当前位，AND 得进位：逐位拆解加法</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">XOR 得当前位，AND 得进位：逐位拆解加法</text>
           {/* 表头 */}
           {headers.map((h, i) => <text key={h} x={colX[i]} y={headY} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{h}</text>)}
           {/* 数据行 */}

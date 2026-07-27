@@ -56,7 +56,7 @@ export function LastNumberCircleDiagram() {
           aria-label="圆圈中最后剩下的数字（约瑟夫环）图。0、1、2、3、4 围成一圈，n=5、m=3。从 0 开始报数，把当前节点算第一个，数到第 3 个删除：首次删除 2，下一轮从 3 重新报数。依次删除 2、0、4、1，最后剩下 3。递推公式 f(n,m) = (f(n-1,m)+m) % n，f(1,m)=0，不必真的维护圆圈。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">约瑟夫环：从 0 报数，数到第 m 个删除，后继重新报数</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">约瑟夫环：从 0 报数，数到第 m 个删除，后继重新报数</text>
           {/* 圆圈 */}
           <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth="1.4" strokeDasharray="4 4" />
           {[0, 1, 2, 3, 4].map((v) => {

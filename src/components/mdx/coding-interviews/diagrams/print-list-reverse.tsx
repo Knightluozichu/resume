@@ -21,7 +21,7 @@ export function LinkedListDirectionDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 360" role="img" aria-label="单向链表1到2到3只能沿next正向遍历，把节点压栈后按3、2、1弹出即可逆序输出且不修改链接。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">链表只给向前边，逆序输出需要记住走过的节点</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">链表只给向前边，逆序输出需要记住走过的节点</text>
           {[1,2,3].map((value, index) => { const x = 110 + index * 180; return <g key={value}><rect x={x} y="72" width="108" height="58" rx="5" fill="var(--bg)" stroke="var(--accent)" /><text x={x + 54} y="106" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text>{index < 2 ? <g><path d={`M${x + 108} 101 H${x + 164}`} stroke="var(--accent)" strokeWidth="2" /><path d={`M${x + 164} 101 l-10 -6 v12 z`} fill="var(--accent)" /></g> : null}</g>; })}
           <text x="650" y="106" fontSize="11" fill="var(--text-secondary)">null</text>
           <path d="M164 150 C164 190 524 190 524 150" fill="none" stroke="var(--warning)" strokeWidth="2" strokeDasharray="5 4" />

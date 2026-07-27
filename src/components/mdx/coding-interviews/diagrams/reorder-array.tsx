@@ -27,7 +27,7 @@ export function OddEvenPartitionDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 360" role="img" aria-label="首尾双指针把左侧偶数2与右侧奇数7交换并继续收缩。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="reorder-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">1,2,3,4,5,6,7：只交换两侧错位元素</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">1,2,3,4,5,6,7：只交换两侧错位元素</text>
           {[1,2,3,4,5,6,7].map((value, index) => {
             const x = 78 + index * 104;
             const wrong = value === 2 || value === 7;

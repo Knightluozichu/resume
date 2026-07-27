@@ -46,7 +46,7 @@ export function ValueRangeDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 370" role="img" aria-label="把值域1到7二分为1到4和5到7，统计每个区间里的元素个数；计数超过区间容量的一半必含重复。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">二分的是值域，不是数组下标</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">二分的是值域，不是数组下标</text>
           <rect x="92" y="66" width="596" height="54" rx="5" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" />
           <text x="390" y="88" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">候选值域 1..7</text>
           <text x="390" y="108" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">8个元素落入7个可选值，至少一处重复</text>

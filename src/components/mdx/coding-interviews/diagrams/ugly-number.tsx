@@ -58,7 +58,7 @@ export function UglyFactorizationDiagram() {
           aria-label="丑数判定图。丑数是只含因子 2、3、5 的正整数，1 约定为第一个。判定法：反复除尽 2、3、5，若最后恰好剩 1 则是丑数。6 除 2 得 3、再除 3 得 1，是丑数；8 连除三个 2 得 1，是丑数；14 除 2 得 7 后除不尽，含因子 7 不是丑数。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">反复除尽 2、3、5：恰好剩 1 即丑数</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">反复除尽 2、3、5：恰好剩 1 即丑数</text>
           {values.map((item, i) => {
             const tone = item.ok ? "var(--success)" : "var(--warning)";
             return (

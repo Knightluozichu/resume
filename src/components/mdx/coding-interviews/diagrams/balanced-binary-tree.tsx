@@ -44,7 +44,7 @@ export function BalancedBinaryTreeLocalRuleDiagram() {
           aria-label="平衡二叉树判定图。平衡指任一节点的左右子树深度差不超过 1。三种形态：完全树左右深度都 2、差 0，平衡；非完全但平衡的树左深 3 右深 2、差 1，仍平衡（完全不等于平衡）；局部偏斜的树左深 3 右深 1、差 2，失衡。平衡检查作用于每个节点，任一节点差值超过 1 就失败。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">平衡 = 任一节点左右深度差 ≤ 1</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">平衡 = 任一节点左右深度差 ≤ 1</text>
           {cases.map((c) => {
             const tone = c.ok ? "var(--success)" : "var(--danger)";
             const rx = c.x;

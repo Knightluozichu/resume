@@ -19,7 +19,7 @@ export function BstInorderLinkDiagram() {
             <marker id="bst-list-right" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
             <marker id="bst-list-left" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto"><path d="M8 0 L0 4 L8 8 Z" fill="var(--success)" /></marker>
           </defs>
-          <text x="470" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">中序访问次序直接成为双向链表升序</text>
+          <text x="470" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">中序访问次序直接成为双向链表升序</text>
           {[[10,470,78],[6,310,172],[14,630,172],[4,220,274],[8,400,274],[12,540,274],[16,720,274]].map(([value,x,y]) => <g key={String(value)}><circle cx={x} cy={y} r="28" fill="var(--bg)" stroke="var(--border)" /><text x={x} y={y + 6} textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           {[[452,100,328,150],[488,100,612,150],[292,194,238,250],[328,194,382,250],[612,194,558,250],[648,194,702,250]].map((line,index) => <line key={index} x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke="var(--border)" strokeWidth="2" />)}
           {[4,6,8,10,12,14,16].map((value,index) => {

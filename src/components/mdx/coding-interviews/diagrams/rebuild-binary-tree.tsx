@@ -21,7 +21,7 @@ export function TraversalSplitDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 800 400" role="img" aria-label="前序序列首项1是根，中序序列以1分成左侧4、7、2和右侧5、3、8、6，左侧长度3再切分前序。" className="mx-auto block h-auto w-full max-w-[800px]">
-          <text x="400" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">前序给根，中序给左右边界</text>
+          <text x="400" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">前序给根，中序给左右边界</text>
           <text x="52" y="84" fontSize="11" fontWeight="700" fill="var(--text-secondary)">前序</text>
           {[1,2,4,7,3,5,6,8].map((value,index) => <g key={`pre-${value}`}><rect x={116 + index*72} y="58" width="58" height="46" fill={index===0 ? "var(--accent)" : index<=3 ? "var(--success)" : "var(--warning)"} fillOpacity="0.1" stroke={index===0 ? "var(--accent)" : "var(--border)"} /><text x={145 + index*72} y="87" textAnchor="middle" fontSize="12" fontWeight={index===0 ? "700" : "500"} fill="var(--text-primary)">{value}</text></g>)}
           <text x="52" y="174" fontSize="11" fontWeight="700" fill="var(--text-secondary)">中序</text>

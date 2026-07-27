@@ -40,7 +40,7 @@ export function ReverseWordsTwoPassDiagram() {
           <defs>
             <marker id="rw-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两遍翻转：先整句、再逐词（原地 O(1)）</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两遍翻转：先整句、再逐词（原地 O(1)）</text>
           {rows.map((r, i) => (
             <g key={r.title}>
               <text x="120" y={rowY[i] + 30} textAnchor="end" fontSize="12" fontWeight="800" fill={r.tone}>{r.title}</text>

@@ -65,7 +65,7 @@ export function MissingNumberIndexShiftDiagram() {
           aria-label="0 到 n-1 中缺失的数字图。数组 0、1、2、4、5 缺失 3。下标 0 到 2 处值与下标相等；从缺失位置开始，值整体比下标大 1。下标 3 是首个 值不等于下标 的位置，即答案。这个单调分界使二分成立：相等则缺口在右，偏移则缺口在左。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">缺失把 值=下标 切成两段：首个错位下标即答案</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">缺失把 值=下标 切成两段：首个错位下标即答案</text>
           {values.map((value, index) => {
             const c = tone(index);
             const shifted = value !== index;

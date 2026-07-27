@@ -40,7 +40,7 @@ export function GreatestSumRecurrenceDiagram() {
           aria-label="最大子数组和动态规划图。数组 1、-2、3、10、-4、7、2、-5。current 表示必须以当前位置结尾的最大子数组和：此前 current 大于 0 就延续旧段，否则从当前元素重启。各位置 current 依次为 1、-1、3、13、9、16、18、13，best 取最大值 18，对应下标 2 到 6 的段 3、10、-4、7、2。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">current = 以当前位置结尾的最大和；best = 全程最大</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">current = 以当前位置结尾的最大和；best = 全程最大</text>
           {/* 数组行 */}
           {values.map((v, i) => (
             <g key={"v" + i}>

@@ -69,7 +69,7 @@ export function IntegerIdenticalDifferenceDiagram() {
           aria-label="数组中数值与下标相等的元素图。数组 -3、-1、1、3、5，逐位计算差值 值减下标：-3、-2、-1、0、+1。差值严格递增（不下降），在下标 3 处差值为 0，即 numbers[3]=3 命中。差值为负说明该搜右边，为正说明该搜左边，因此可以二分。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">差值 = 值 − 下标：严格递增使差值不下降，零点即答案</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">差值 = 值 − 下标：严格递增使差值不下降，零点即答案</text>
           {values.map((value, index) => {
             const diff = value - index;
             const c = tone(diff);

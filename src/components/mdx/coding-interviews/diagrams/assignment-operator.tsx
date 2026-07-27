@@ -86,7 +86,7 @@ export function AssignmentContractMap() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 390" role="img" aria-label="CMyString赋值运算符的六项契约，包括返回引用、const参数、释放旧值、深拷贝、自赋值和异常安全。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">赋值运算符不是一次memcpy，而是一组对象契约</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">赋值运算符不是一次memcpy，而是一组对象契约</text>
           <rect x="286" y="62" width="208" height="64" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" />
           <text x="390" y="89" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">CMyString::operator=</text>
           <text x="390" y="110" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">复制值，同时守住所有权与可用状态</text>
@@ -116,7 +116,7 @@ export function OwnershipTransitionDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 330" role="img" aria-label="临时对象交换赋值的四步：复制源对象、目标和临时对象各自持有资源、交换指针、临时对象析构旧资源。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先准备成功，再用不抛异常的交换提交</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先准备成功，再用不抛异常的交换提交</text>
           {[
             ["1 复制源对象", "temp → new data", "可能抛出，目标未改变"],
             ["2 两份资源有效", "this → old data", "temp → new data"],

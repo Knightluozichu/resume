@@ -65,7 +65,7 @@ export function PlacementInvariantDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 360" role="img" aria-label="值m应放在下标m的槽位；若目标槽已是m，则发现重复，否则交换让至少一个数字归位。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">值域0..n-1把每个数字映射到唯一目标槽</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">值域0..n-1把每个数字映射到唯一目标槽</text>
           <text x="84" y="74" fontSize="11" fill="var(--text-secondary)">下标</text>
           {[0, 1, 2, 3, 4, 5, 6].map((value, index) => {
             const x = 122 + index * 82;

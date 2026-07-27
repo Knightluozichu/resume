@@ -31,7 +31,7 @@ export function RegexTokenSemanticsDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 840 330" role="img" aria-label="普通字符、点号和星号组合的正则匹配语义对照。" className="mx-auto block h-auto w-full max-w-[840px]">
-          <text x="420" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">模式只含普通字符、点号和星号</text>
+          <text x="420" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">模式只含普通字符、点号和星号</text>
           {rows.map((row, index) => {
             const y = 66 + index * 82;
             return <g key={row.token}>
@@ -74,7 +74,7 @@ export function RegexStateProgressDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 390" role="img" aria-label="字符串aab与模式c*a*b的匹配状态推进图。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="regex-state-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">aab 与 c*a*b：先跳过，再消费</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">aab 与 c*a*b：先跳过，再消费</text>
           {[
             ["(aab, c*a*b)", 64, 86, "c*取零次"],
             ["(aab, a*b)", 318, 86, "a*消费a"],

@@ -21,7 +21,7 @@ export function ZigzagTwoStackDiagram() {
             <marker id="zigzag-right-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--success)" /></marker>
             <marker id="zigzag-left-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="460" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两个栈把相邻层的弹出方向交替反转</text>
+          <text x="460" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两个栈把相邻层的弹出方向交替反转</text>
           {[[8,460,82],[4,300,190],[12,620,190],[2,190,318],[6,370,318],[10,550,318],[14,730,318]].map(([value,x,y], index) => <g key={String(value)}><circle cx={x} cy={y} r="29" fill={index === 0 ? "var(--success)" : "var(--bg)"} fillOpacity={index === 0 ? 0.12 : 1} stroke={index === 0 ? "var(--success)" : "var(--border)"} /><text x={x} y={y + 6} textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           {[[442,106,318,166],[478,106,602,166],[282,214,208,294],[318,214,352,294],[602,214,568,294],[638,214,712,294]].map((line,index) => <line key={index} x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke="var(--border)" strokeWidth="2" />)}
           <path d="M370 126 H550" fill="none" stroke="var(--success)" strokeWidth="4" markerEnd="url(#zigzag-right-arrow)" />

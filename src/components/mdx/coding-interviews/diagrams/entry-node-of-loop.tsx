@@ -31,7 +31,7 @@ export function LoopMeetingDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 400" role="img" aria-label="链表12345回到3，快慢指针在环内追及相遇。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="loop-meet-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">slow每次一步，fast每次两步</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">slow每次一步，fast每次两步</text>
           {[1,2,3].map((value,index) => <g key={value}><rect x={62 + index * 150} y="150" width="76" height="58" rx="5" fill={value === 3 ? "var(--success)" : "var(--bg)"} fillOpacity={value === 3 ? 0.1 : 1} stroke={value === 3 ? "var(--success)" : "var(--border)"} /><text x={100 + index * 150} y="186" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text>{index < 2 ? <line x1={138 + index*150} y1="179" x2={202 + index*150} y2="179" stroke="var(--border)" strokeWidth="2" markerEnd="url(#loop-meet-arrow)" /> : null}</g>)}
           <ellipse cx="626" cy="180" rx="148" ry="112" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="2" />
           {[[3,500,150],[4,626,82],[5,740,188]].map(([value,x,y]) => <g key={value}><circle cx={Number(x)} cy={Number(y)} r="34" fill={value === 4 ? "var(--warning)" : "var(--bg)"} fillOpacity={value === 4 ? 0.12 : 1} stroke={value === 4 ? "var(--warning)" : "var(--border)"} /><text x={Number(x)} y={Number(y)+6} textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
@@ -72,7 +72,7 @@ export function LoopGapEntryDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 340" role="img" aria-label="两个指针从头出发，一者先行环长L，随后同步在入口3相遇。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="loop-gap-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">p1先行L步，p2从头同步追随</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">p1先行L步，p2从头同步追随</text>
           {[1,2,3,4,5].map((value,index) => {
             const x = 82 + index * 145;
             return <g key={value}><rect x={x} y="112" width="76" height="58" rx="5" fill={value===3 ? "var(--success)" : "var(--bg)"} fillOpacity={value===3 ? 0.1 : 1} stroke={value===3 ? "var(--success)" : "var(--border)"} /><text x={x+38} y="148" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text>{index<4 ? <line x1={x+76} y1="141" x2={x+135} y2="141" stroke="var(--border)" strokeWidth="2" markerEnd="url(#loop-gap-arrow)" /> : null}</g>;

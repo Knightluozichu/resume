@@ -45,7 +45,7 @@ export function DigitSequenceBlocksDiagram() {
           aria-label="数字序列中的某一位图。把序列 0123456789101112... 按位数分块：1 位数 0 到 9 共 10 个字符（索引 0..9），2 位数 10 到 99 共 180 个字符（索引 10..189），3 位数 100 到 999 共 2700 个字符（索引 190..2889），依次类推。定位某索引：先找到所在块（位数），再用块内偏移除位数得目标数字、取模得数内下标。例：索引 1001 在 3 位数块，偏移 811，811/3=270 → 数字 100+270=370，811%3=1 → 第 2 位 7。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">序列 0123456789101112… 按位数分块，逐块累加字符数</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">序列 0123456789101112… 按位数分块，逐块累加字符数</text>
           <text x="410" y="52" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每块字符数 = 数字个数 × 位数；从 2 位起每块有 9×10^(d-1) 个数字</text>
           {/* 分块条 */}
           {blocks.map((b) => {

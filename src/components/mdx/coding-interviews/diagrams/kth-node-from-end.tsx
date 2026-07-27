@@ -27,7 +27,7 @@ export function KthGapDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 360" role="img" aria-label="五节点链表中快指针领先慢指针一条边，最终定位倒数第二节点。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="kth-gap-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">k=2：ahead始终领先behind一条边</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">k=2：ahead始终领先behind一条边</text>
           {[1,2,3,4,5].map((value,index) => {
             const x = 110 + index * 145;
             return <g key={value}>

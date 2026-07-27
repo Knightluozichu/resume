@@ -21,7 +21,7 @@ export function InorderSuccessorCaseMap() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 800 430" role="img" aria-label="二叉树8的左右子树为6和10，叶子为5、7、9、11；中序后继分为右子树最左节点与沿父指针上爬两类。" className="mx-auto block h-auto w-full max-w-[800px]">
-          <text x="400" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">中序顺序：左子树 → 根 → 右子树</text>
+          <text x="400" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">中序顺序：左子树 → 根 → 右子树</text>
           {[[8,400,70],[6,246,150],[10,554,150],[5,160,240],[7,332,240],[9,468,240],[11,640,240]].map(([v,x,y]) => <g key={v}><circle cx={x} cy={y} r="28" fill="var(--bg)" stroke={v===8 ? "var(--accent)" : "var(--border)"} strokeWidth={v===8 ? 2 : 1} /><text x={x} y={y+5} textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">{v}</text></g>)}
           {[[400,98,246,122],[400,98,554,122],[246,178,160,212],[246,178,332,212],[554,178,468,212],[554,178,640,212]].map((p,i) => <line key={i} x1={p[0]} y1={p[1]} x2={p[2]} y2={p[3]} stroke="var(--border)" strokeWidth="2" />)}
           <path d="M400 98 C430 120 486 160 468 212" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="5 3" />

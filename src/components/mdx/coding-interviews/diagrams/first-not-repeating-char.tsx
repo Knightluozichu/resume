@@ -48,7 +48,7 @@ export function FirstUniqueFrequencyDiagram() {
           <defs>
             <marker id="fu-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两遍扫描：先计频次，再按原顺序找首个频次1</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两遍扫描：先计频次，再按原顺序找首个频次1</text>
           {/* 字符串 */}
           {chars.map((c, i) => {
             const unique = c.count === 1;

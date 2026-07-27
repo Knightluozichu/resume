@@ -41,7 +41,7 @@ export function QueueWithMaxDataDiagram() {
           aria-label="队列的最大值图。用两个队列：数据队列保存每个元素（值#唯一索引），按 FIFO 弹出；候选最大值队列只保留可能成为最大值的元素，值从队首到队尾递减。例：数据队列 2#0、3#1、4#2、2#3，候选队列 4#2、2#3，队首 4#2 即当前最大值。push 时从候选队尾淘汰不大于新值的旧候选；pop 时仅当两队首索引相同才同步删候选。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双队列：数据队列 FIFO + 候选队列值递减</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双队列：数据队列 FIFO + 候选队列值递减</text>
           {/* 数据队列 */}
           <text x={qx - 16} y={92} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--text-primary)">数据队列</text>
           <text x={qx - 16} y={110} textAnchor="end" fontSize="10" fill="var(--text-secondary)">队首</text>

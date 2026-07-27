@@ -37,7 +37,7 @@ export function TwoNumbersWithSumPointerDiagram() {
           <defs>
             <marker id="tns-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">首尾双指针夹逼：和偏大移右端，和偏小移左端</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">首尾双指针夹逼：和偏大移右端，和偏小移左端</text>
           {/* 数组行 */}
           {values.map((v, i) => {
             const end = i === 0 || i === 5;

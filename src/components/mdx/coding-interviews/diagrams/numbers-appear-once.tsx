@@ -34,7 +34,7 @@ export function NumbersAppearOnceXorDiagram() {
           aria-label="数组中只出现一次的两个数字图。2、4、3、6、3、2、5、5 中 4 和 6 各出现一次。全部异或后成对项归零，只剩 4 异或 6 等于 2（二进制 0010）。取结果为 1 的某一位（如 bit1）作为分组位：4 该位为 0、6 该位为 1，被分到不同组；相同数字该位相同必进同一组。两组各自异或，成对抵消后各留下一个目标：6 与 4。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">全体异或得 4⊕6，再按一个不同位拆成两组</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">全体异或得 4⊕6，再按一个不同位拆成两组</text>
           {/* 数组行 */}
           {values.map((v, i) => (
             <g key={i}>

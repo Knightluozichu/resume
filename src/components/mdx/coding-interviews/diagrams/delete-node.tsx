@@ -30,7 +30,7 @@ export function SuccessorCopyDeleteDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 400" role="img" aria-label="删除中间节点3时把后继4的值复制到目标对象，再绕过并释放后继对象。" className="mx-auto block h-auto w-full max-w-[820px]">
           <defs><marker id="delete-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">非尾节点：复制后继内容，再删除后继对象</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">非尾节点：复制后继内容，再删除后继对象</text>
           {nodes.map(([label,x,target],index) => <g key={String(label)}><rect x={Number(x)} y="88" width="92" height="58" rx="5" fill={target ? "var(--accent)" : "var(--bg)"} fillOpacity={target ? 0.11 : 1} stroke={target ? "var(--accent)" : "var(--border)"} strokeWidth={target ? 2 : 1} /><text x={Number(x)+46} y="124" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{label}</text>{index<nodes.length-1 ? <line x1={Number(x)+92} y1="117" x2={Number(nodes[index+1][1])-10} y2="117" stroke="var(--border)" strokeWidth="2" markerEnd="url(#delete-arrow)" /> : null}</g>)}
           <path d="M546 158 C520 214 452 218 410 158" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#delete-arrow)" />
           <text x="478" y="234" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">value 4复制到目标对象</text>
@@ -70,7 +70,7 @@ export function NodeIdentityImpactDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 310" role="img" aria-label="外部引用target仍指向同一地址但值从3变4，外部引用successor在删除后悬空。" className="mx-auto block h-auto w-full max-w-[820px]">
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">逻辑值删除与对象身份变化</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">逻辑值删除与对象身份变化</text>
           <rect x="116" y="86" width="220" height="98" rx="5" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" />
           <rect x="484" y="86" width="220" height="98" rx="5" fill="var(--warning)" fillOpacity="0.08" stroke="var(--warning)" />
           <text x="226" y="116" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">外部target引用</text>

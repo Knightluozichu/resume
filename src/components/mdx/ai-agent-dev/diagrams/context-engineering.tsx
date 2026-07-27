@@ -71,10 +71,10 @@ export function ContextBudgetDiagram() {
             const el = (
               <g key={seg.label}>
                 <rect x={accX} y={barY} width={w} height={barH} fill={seg.color} fillOpacity="0.22" stroke={seg.color} strokeWidth="1" />
-                <text x={accX + w / 2} y={barY + barH / 2 - 2} textAnchor="middle" fontSize="10" fontWeight="700" fill={seg.color}>
+                <text x={accX + w / 2} y={barY + barH / 2 - 2} textAnchor="middle" fontSize="11" fontWeight="700" fill={seg.color}>
                   {seg.label}
                 </text>
-                <text x={accX + w / 2} y={barY + barH / 2 + 14} textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+                <text x={accX + w / 2} y={barY + barH / 2 + 14} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
                   {Math.round(seg.pct * 100)}%
                 </text>
               </g>

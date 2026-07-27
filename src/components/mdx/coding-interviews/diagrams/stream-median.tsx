@@ -37,7 +37,7 @@ export function StreamMedianHeapInvariantDiagram() {
           aria-label="数据流中的中位数图。用两个堆：下半最大堆 max 保存较小一半（根为下半最大值），上半最小堆 min 保存较大一半（根为上半最小值）。不变式：max 所有元素不大于 min 所有元素，两堆数量差不超过 1。例：max=[3,2,1]、min=[4,5,6,7]，总数为偶数时中位数 = (max[0]+min[0])/2 = 3.5；总数为奇数时 min 多一个，中位数 = min[0]。插入时由奇偶决定目标堆，越界则经另一堆转移边界值。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双堆夹住中位数：下半最大堆 + 上半最小堆</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双堆夹住中位数：下半最大堆 + 上半最小堆</text>
           {/* 下半最大堆 */}
           <path d="M 220 84 L 120 230 L 320 230 Z" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" />
           <circle cx="220" cy="120" r="24" fill="var(--accent)" fillOpacity="0.16" stroke="var(--accent)" strokeWidth="1.8" />

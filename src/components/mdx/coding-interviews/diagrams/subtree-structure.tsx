@@ -31,7 +31,7 @@ export function SubtreeCandidateSearchDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 430" role="img" aria-label="主树有两个值为8的候选，根候选失败后在左子节点8处匹配树B。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="subtree-search-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先在A中找候选根，再从候选同步匹配B</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先在A中找候选根，再从候选同步匹配B</text>
           <text x="210" y="68" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">树A</text>
           {[[8,210,104],[8,120,206],[7,300,206],[9,72,310],[2,168,310]].map(([value,x,y],index) => <g key={index}><circle cx={Number(x)} cy={Number(y)} r="31" fill={index===1 ? "var(--success)" : index===0 ? "var(--warning)" : "var(--bg)"} fillOpacity={index<=1 ? 0.1 : 1} stroke={index===1 ? "var(--success)" : index===0 ? "var(--warning)" : "var(--border)"} /><text x={Number(x)} y={Number(y)+6} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           {[[188,130,136,180],[232,130,278,180],[102,232,82,278],[138,232,158,278]].map((line,index) => <line key={index} x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke="var(--border)" strokeWidth="2" markerEnd="url(#subtree-search-arrow)" />)}

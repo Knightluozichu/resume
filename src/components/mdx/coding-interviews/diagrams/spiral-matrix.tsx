@@ -44,7 +44,7 @@ export function SpiralRingPathDiagram() {
           <defs>
             <marker id="spiral-ring-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">start = 0，endX = 4，endY = 3</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">start = 0，endX = 4，endY = 3</text>
           {cells.map(({ row, col, value, outer }) => {
             const x = 170 + col * 104;
             const y = 78 + row * 78;

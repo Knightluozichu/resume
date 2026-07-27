@@ -95,7 +95,7 @@ export function FrogStepCorrespondenceDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 820 300" role="img" aria-label="到达第n级台阶的最后一步只能来自n减1或n减2，因此方案数相加。" className="mx-auto block h-auto w-full max-w-[820px]">
           <defs><marker id="frog-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最后一步分类：两类方案互斥且穷尽</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最后一步分类：两类方案互斥且穷尽</text>
           {[1, 2, 3, 4, 5].map((step) => <g key={step}><rect x={80 + step * 115} y={230 - step * 30} width="94" height={step * 30} fill="var(--bg)" stroke="var(--border)" /><text x={127 + step * 115} y={250 - step * 30} textAnchor="middle" fontSize="11" fill="var(--text-primary)">第{step}级</text></g>)}
           <path d="M426 126 C475 84 535 86 585 96" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#frog-arrow)" />
           <text x="505" y="72" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">从n-1跳1级</text>

@@ -31,7 +31,7 @@ export function MergeHeadChoiceDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 390" role="img" aria-label="比较两个有序链表头1和2，选择1作为合并头，再递归合并剩余链。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="merge-head-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每次只需比较两个未合并头节点</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每次只需比较两个未合并头节点</text>
           <text x="60" y="102" fontSize="12" fontWeight="700" fill="var(--text-secondary)">list1</text>
           <text x="60" y="202" fontSize="12" fontWeight="700" fill="var(--text-secondary)">list2</text>
           {[[1,150,76],[3,290,76],[5,430,76],[2,150,176],[4,290,176],[6,430,176]].map(([value,x,y],index) => <g key={index}><rect x={Number(x)} y={Number(y)} width="74" height="56" rx="5" fill={value===1 ? "var(--success)" : "var(--bg)"} fillOpacity={value===1 ? 0.1 : 1} stroke={value===1 ? "var(--success)" : "var(--border)"} /><text x={Number(x)+37} y={Number(y)+35} textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{value}</text>{index%3<2 ? <line x1={Number(x)+74} y1={Number(y)+28} x2={Number(x)+132} y2={Number(y)+28} stroke="var(--border)" strokeWidth="2" markerEnd="url(#merge-head-arrow)" /> : null}</g>)}

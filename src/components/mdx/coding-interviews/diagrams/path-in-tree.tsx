@@ -17,7 +17,7 @@ export function RootLeafPathDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 900 440" role="img" aria-label="树10、5、12、4、7中，目标22对应根到叶路径10到5到7和10到12。" className="mx-auto block h-auto w-full max-w-[900px]">
           <defs><marker id="path-tree-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="450" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">目标22：只接受从根出发并在叶子结束的完整路径</text>
+          <text x="450" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">目标22：只接受从根出发并在叶子结束的完整路径</text>
           <line x1="432" y1="108" x2="318" y2="174" stroke="var(--success)" strokeWidth="5" />
           <line x1="468" y1="108" x2="582" y2="174" stroke="var(--accent)" strokeWidth="5" />
           <line x1="282" y1="220" x2="218" y2="292" stroke="var(--border)" strokeWidth="2" />

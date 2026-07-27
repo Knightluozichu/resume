@@ -90,7 +90,7 @@ export function InterviewFormatMap() {
           aria-label="电话、共享桌面远程和现场三种面试形式，分别强调口头推理、可见的编码过程和面对面协作。"
           className="mx-auto block h-auto w-full max-w-[780px]"
         >
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">形式会改变证据通道，不改变解决问题的主线</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">形式会改变证据通道，不改变解决问题的主线</text>
           {formats.map((format, index) => {
             const x = 28 + index * 254;
             return (
@@ -136,7 +136,7 @@ export function InterviewRoundDiagram() {
           aria-label="一轮面试通常包含行为面试、技术面试和应聘者提问三个环节，每个环节提供不同证据。"
           className="mx-auto block h-auto w-full max-w-[780px]"
         >
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每轮面试的三个环节</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">每轮面试的三个环节</text>
           {rounds.map(([title, focus, outcome], index) => {
             const x = 44 + index * 248;
             return (

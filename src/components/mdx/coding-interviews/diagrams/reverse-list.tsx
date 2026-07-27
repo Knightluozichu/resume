@@ -27,7 +27,7 @@ export function ReversePointerOrderDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 380" role="img" aria-label="反转链表一轮中先保存next，再改current指向previous，最后推进两个指针。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="reverse-order-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">处理节点2：保存、反向、推进</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">处理节点2：保存、反向、推进</text>
           {[
             ["prev", "1", 92, "var(--success)"],
             ["current", "2", 332, "var(--warning)"],
@@ -75,7 +75,7 @@ export function ReverseHeadTailDiagram() {
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 860 300" role="img" aria-label="反转前头1尾5，反转后头5尾1，节点身份保持。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="reverse-head-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">只改变链接方向，不交换节点值</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">只改变链接方向，不交换节点值</text>
           <text x="72" y="96" fontSize="12" fontWeight="700" fill="var(--text-secondary)">反转前</text>
           <text x="72" y="216" fontSize="12" fontWeight="700" fill="var(--text-secondary)">反转后</text>
           {[1,2,3,4,5].map((value,index) => <g key={"a"+value}><rect x={170+index*116} y="66" width="68" height="52" rx="4" fill="var(--bg)" stroke="var(--border)" /><text x={204+index*116} y="98" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text>{index<4 ? <line x1={238+index*116} y1="92" x2={278+index*116} y2="92" stroke="var(--border)" strokeWidth="2" markerEnd="url(#reverse-head-arrow)" /> : null}</g>)}

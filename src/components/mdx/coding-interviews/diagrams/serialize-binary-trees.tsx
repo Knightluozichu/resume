@@ -17,7 +17,7 @@ export function TreeSerializationTokenDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 980 500" role="img" aria-label="三层树按前序输出节点值和美元符号空标记，形成可逆令牌流。" className="mx-auto block h-auto w-full max-w-[980px]">
-          <text x="490" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">前序：节点 → 左子树 → 右子树；空位置也占一个token</text>
+          <text x="490" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">前序：节点 → 左子树 → 右子树；空位置也占一个token</text>
           {[[8,490,80],[6,330,170],[10,650,170],[5,240,270],[7,420,270],[9,560,270],[11,740,270]].map(([value,x,y]) => <g key={String(value)}><circle cx={x} cy={y} r="27" fill="var(--bg)" stroke="var(--border)" /><text x={x} y={y + 6} textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           {[[472,102,348,148],[508,102,632,148],[312,192,258,246],[348,192,402,246],[632,192,578,246],[668,192,722,246]].map((line,index) => <line key={index} x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke="var(--border)" strokeWidth="2" />)}
           <g transform="translate(20 350)">

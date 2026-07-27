@@ -19,7 +19,7 @@ export function ComplexListInterleaveDiagram() {
             <marker id="complex-next-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
             <marker id="complex-sibling-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--success)" /></marker>
           </defs>
-          <text x="470" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">阶段1：复制节点插入原节点后面</text>
+          <text x="470" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">阶段1：复制节点插入原节点后面</text>
           {[["1",95,false],["1′",235,true],["2",375,false],["2′",515,true],["3",655,false],["3′",795,true]].map(([label,x,clone]) => <g key={String(label)}><rect x={Number(x)} y="150" width="92" height="62" fill={clone ? "var(--accent)" : "var(--bg)"} fillOpacity={clone ? 0.12 : 1} stroke={clone ? "var(--accent)" : "var(--border)"} strokeWidth={clone ? 3 : 2} /><text x={Number(x) + 46} y="188" textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--text-primary)">{label}</text><text x={Number(x) + 46} y="236" textAnchor="middle" fontSize="11" fontWeight="700" fill={clone ? "var(--accent)" : "var(--text-secondary)"}>{clone ? "clone" : "original"}</text></g>)}
           {[187,327,467,607,747].map((x) => <line key={x} x1={x} y1="181" x2={x + 48} y2="181" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#complex-next-arrow)" />)}
           <path d="M141 142 C180 68 600 68 701 142" fill="none" stroke="var(--success)" strokeWidth="3" strokeDasharray="6 4" markerEnd="url(#complex-sibling-arrow)" />

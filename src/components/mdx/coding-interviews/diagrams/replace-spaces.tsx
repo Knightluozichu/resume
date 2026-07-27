@@ -34,7 +34,7 @@ export function ExpansionLayoutDiagram() {
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
         <svg viewBox="0 0 780 390" role="img" aria-label="原字符串We空格are扩展为We%20are，读指针从原末尾向左，写指针从新末尾向左，避免覆盖未读字符。" className="mx-auto block h-auto w-full max-w-[780px]">
-          <text x="390" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先计算最终边界，再从后向前一次写到位</text>
+          <text x="390" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">先计算最终边界，再从后向前一次写到位</text>
           <text x="54" y="82" fontSize="11" fontWeight="700" fill="var(--text-secondary)">原布局</text>
           {chars.map((char, index) => <g key={`${char}-${index}`}><rect x={132 + index * 68} y="56" width="54" height="48" fill="var(--bg)" stroke="var(--border)" /><text x={159 + index * 68} y="86" textAnchor="middle" fontSize="12" fill="var(--text-primary)">{char === "\0" ? "\\0" : char === " " ? "空格" : char}</text></g>)}
           <path d="M540 112 V146" stroke="var(--warning)" strokeWidth="2" />

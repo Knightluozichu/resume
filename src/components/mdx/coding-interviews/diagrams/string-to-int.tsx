@@ -57,7 +57,7 @@ export function StringToIntContractDiagram() {
           <defs>
             <marker id="si-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">事务式解析：默认无效，完整消费后提交有效</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">事务式解析：默认无效，完整消费后提交有效</text>
           {phases.map((p, i) => (
             <g key={p.index}>
               <rect x={cx(i)} y={64} width={cardW} height={cardH} rx="8" fill="var(--accent)" fillOpacity="0.07" stroke="var(--accent)" strokeWidth="1.4" />

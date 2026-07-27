@@ -46,7 +46,7 @@ export function InversePairDecompositionDiagram() {
           <defs>
             <marker id="inv-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="var(--warning)" /></marker>
           </defs>
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">总逆序数 = 左段内部 + 右段内部 + 跨段（归并时批量统计）</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">总逆序数 = 左段内部 + 右段内部 + 跨段（归并时批量统计）</text>
           {/* 数组行：左段/右段 */}
           {values.map((v, i) => (
             <g key={i}>

@@ -36,7 +36,7 @@ export function SymmetricTraversalDiagram() {
         <svg viewBox="0 0 860 430" role="img" aria-label="对称树中左侧按根左右遍历，右侧按根右左遍历，成对节点值和空位置一致。" className="mx-auto block h-auto w-full max-w-[860px]">
           <defs><marker id="symmetric-traversal-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker></defs>
           <line x1="430" y1="54" x2="430" y2="372" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 5" />
-          <text x="430" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">沿根轴成对比较镜像位置</text>
+          <text x="430" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">沿根轴成对比较镜像位置</text>
           {[[8,430,80],[6,282,176],[6,578,176],[5,194,294],[7,354,294],[7,506,294],[5,666,294]].map(([value,x,y],index) => <g key={index}><circle cx={Number(x)} cy={Number(y)} r="31" fill={index===0 ? "var(--success)" : "var(--bg)"} fillOpacity={index===0 ? 0.1 : 1} stroke={index===0 ? "var(--success)" : "var(--border)"} /><text x={Number(x)} y={Number(y)+6} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{value}</text></g>)}
           {[[412,105,303,151],[448,105,557,151],[262,202,210,264],[302,202,338,264],[558,202,522,264],[598,202,650,264]].map((line,index) => <line key={index} x1={line[0]} y1={line[1]} x2={line[2]} y2={line[3]} stroke="var(--border)" strokeWidth="2" markerEnd="url(#symmetric-traversal-arrow)" />)}
           <path d="M250 352 C330 400 530 400 610 352" fill="none" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#symmetric-traversal-arrow)" />

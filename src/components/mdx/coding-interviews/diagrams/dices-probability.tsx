@@ -36,7 +36,7 @@ export function DicesProbabilityStateDiagram() {
           aria-label="n 个骰子点数和的概率分布图。以 2 个骰子为例，和 2 到 12 的有序结果数依次为 1、2、3、4、5、6、5、4、3、2、1，关于和 7 对称，总样本 36。动态规划递推：f(n,s) 等于 f(n-1,s-1) 到 f(n-1,s-6) 之和，即最后一颗骰子可能是 1 到 6 点。概率为该和的计数除以 6 的 n 次方。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">点数和分布（以 2 骰为例）：计数关于峰值对称</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">点数和分布（以 2 骰为例）：计数关于峰值对称</text>
           {/* 坐标轴 */}
           <line x1="70" y1={baseY} x2="760" y2={baseY} stroke="var(--border)" strokeWidth="1.4" />
           {/* 柱状图 */}

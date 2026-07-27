@@ -35,7 +35,7 @@ export function TreeLineCounterDiagram() {
           aria-label="按行打印二叉树图。广度优先逐行输出：树 8；6,10；5,7,9,11 输出三行：8 / 6,10 / 5,7,9,11。用两个计数器判断层边界：toBePrinted 记录当前层还剩几个节点未打印，nextLevel 记录下一层已入队几个。每打印一个节点 toBePrinted 减 1 并把其孩子入队使 nextLevel 加 1；当 toBePrinted 为 0 时当前层打完，换行，把 nextLevel 赋给 toBePrinted 并清零 nextLevel。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">BFS 逐行打印：双计数器判断层边界</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">BFS 逐行打印：双计数器判断层边界</text>
           {/* 树 */}
           <E x1={230} y1={78} x2={140} y2={130} />
           <E x1={230} y1={78} x2={320} y2={130} />

@@ -87,7 +87,7 @@ export function DuplicateDecisionDiagram() {
           aria-label="最长不含重复字符的子字符串决策图。动态规划：设 curLength 为以当前字符结尾的最长无重复后缀长度，d 为当前字符到上次出现位置的距离。三分支：从未出现（prev=-1）或 d 大于 curLength（旧字符已在后缀外）→ curLength 加 1；d 小于等于 curLength（旧字符还在后缀内）→ curLength 改为 d，即删除旧字符及其左侧。例 abcacfrar：到 c@4 时 d=2、curLength=3，d≤3 故 curLength=2；历史最大 best=4（acfr）。"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">curLength 三分支：d = 到上次出现位置的距离</text>
+          <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">curLength 三分支：d = 到上次出现位置的距离</text>
           {branches.map((b, i) => (
             <g key={b.condition}>
               <rect x={cx(i)} y={56} width={cardW} height={cardH} rx="8" fill={b.color} fillOpacity="0.08" stroke={b.color} strokeWidth="1.5" />
