@@ -100,6 +100,7 @@ export const BOOK_ORDER = [
   "game-engine-practice-vol1",
   "cpp-primer-5e",
   "c-primer-plus",
+  "cpp-concurrency",
   "coding-interviews",
   "unity-game-optimization",
   "profiling-unity-games",
@@ -574,7 +575,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "beginner",
         summary: "理解渲染管线、光栅化、OpenGL 基础与光线追踪直觉。",
-        items: learningBooks(["ray-tracing-weekend"]),
+        items: learningBooks(["ray-tracing-weekend", "learnopengl"]),
       },
       {
         level: "intermediate",
@@ -654,6 +655,40 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "intermediate",
         summary: "强化学习与深度学习的核心原理与 C 语言实现。",
         items: learningBooks(["rl-deep-learning-c"]),
+      },
+      {
+        level: "advanced",
+        summary: "大模型应用与智能体（Agent）开发实践。",
+        items: learningBooks(["ai-agent-apps"]),
+      },
+    ],
+  },
+  {
+    slug: "cpp",
+    title: "C/C++ 编程",
+    description: "从 C 语言基础到 C++ 并发编程的系统训练。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "C 语言基础：指针、数组、内存与字符串的系统掌握。",
+        items: learningBooks(["c-primer-plus"]),
+      },
+      {
+        level: "advanced",
+        summary: "C++ 并发编程：线程、内存模型与无锁编程。",
+        items: learningBooks(["cpp-concurrency"]),
+      },
+    ],
+  },
+  {
+    slug: "game-dev",
+    title: "游戏开发",
+    description: "游戏引擎、渲染与性能优化的工程实践。",
+    stages: [
+      {
+        level: "advanced",
+        summary: "Unity 游戏性能优化与工程实践。",
+        items: learningBooks(["unity-game-optimization"]),
       },
     ],
   },

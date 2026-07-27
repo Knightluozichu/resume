@@ -120,6 +120,32 @@ function fileImportsOfficialLab(file) {
   return false;
 }
 
+// 全局组件映射：解析 mdx-components.tsx 的 import，得到 组件名 → 文件 路径。
+// 用于检测 MDX 中未显式 import、而是经全局 mdxComponents 注入的图解组件（如 learnopengl 的 BloomPipelineDiagram）。
+const MDX_COMPONENTS_FILE = path.join(COMP, "mdx-components.tsx");
+let globalComponentMapCache = null;
+function buildGlobalComponentMap() {
+  if (globalComponentMapCache) return globalComponentMapCache;
+  globalComponentMapCache = new Map();
+  let src;
+  try {
+    src = fs.readFileSync(MDX_COMPONENTS_FILE, "utf8");
+  } catch {
+    return globalComponentMapCache;
+  }
+  const importRe = /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g;
+  let mm;
+  while ((mm = importRe.exec(src))) {
+    const names = mm[1].split(",").map((s) => s.trim().split(/\s+as\s+/).pop().trim()).filter(Boolean);
+    const file = resolveImport(MDX_COMPONENTS_FILE, mm[2]);
+    if (!file) continue;
+    // 只收录 diagrams/ 目录下的图解组件；排除 UI 脚手架（callout/exercises/objectives 等自带小SVG图标，非真图解）
+    if (!file.split(path.sep).includes("diagrams")) continue;
+    for (const n of names) globalComponentMapCache.set(n, file);
+  }
+  return globalComponentMapCache;
+}
+
 // 返回 { genuine: 闭包含非模板真图解, genericLab: 用了通用模板 Lab }
 function chapterGraphicAnalysis(mdxPath) {
   const src = fs.readFileSync(mdxPath, "utf8");
@@ -156,6 +182,15 @@ function chapterGraphicAnalysis(mdxPath) {
     // 通用模板：组件名命中三连特征，或文件 import 了 official*lab 共享组件
     if (LAB_SYMBOL.test(tag) || fileImportsOfficialLab(file)) genericLab = true;
   }
+  // 全局注册组件：MDX 未显式 import 但经 mdxComponents 注入的图解
+  const globalMap = buildGlobalComponentMap();
+  for (const tag of used) {
+    if (nameToFile.has(tag)) continue; // 已由显式 import 处理
+    const file = globalMap.get(tag);
+    if (!file) continue;
+    if (hasGenuineGraphic(file)) genuine = true;
+    if (LAB_SYMBOL.test(tag) || fileImportsOfficialLab(file)) genericLab = true;
+  }
   if (/<svg[\s>]/.test(body)) genuine = true;
   return { genuine, genericLab };
 }
@@ -167,6 +202,7 @@ function isStructural(relPath, title) {
   if (/(official-)?final-review/.test(s)) return true;
   if (/acknowledg/.test(s)) return true;
   if (/(^|[-/])(introduction|preface|foreword|prologue)([-/]|$)/.test(s)) return true;
+  if (/(^|[-/])(references|bibliography)([-/]|$)/.test(s)) return true; // 参考文献页
   if (/^[IVXLC]+\.\s/.test((title || "").trim())) return true;
   return false;
 }

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+export { MaterialVsShaderDiagram } from "../../diagrams/material-vs-shader-diagram";
+
 const accent = "var(--accent)";
 const success = "var(--success)";
 const warning = "var(--warning)";

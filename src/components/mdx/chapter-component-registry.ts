@@ -20090,6 +20090,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.LlmOfficialFinalReviewEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "learnopengl/lighting/colors": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/diagrams/colors");
+    return {
+      ColorMultiplyDiagram: module0.ColorMultiplyDiagram,
+    } as ChapterMdxComponents;
+  },
   "linear-algebra-done-right/00-guide/lad4-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/linear-algebra-done-right/diagrams/lad4-official-learning-map");

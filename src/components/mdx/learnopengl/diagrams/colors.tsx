@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+export { ColorMultiplyDiagram } from "../../diagrams/color-multiply-diagram";
+
 const accent = "var(--accent)";
 const success = "var(--success)";
 const warning = "var(--warning)";
