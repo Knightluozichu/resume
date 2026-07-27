@@ -203,6 +203,8 @@ function isStructural(relPath, title) {
   if (/acknowledg/.test(s)) return true;
   if (/(^|[-/])(introduction|preface|foreword|prologue)([-/]|$)/.test(s)) return true;
   if (/(^|[-/])(references|bibliography)([-/]|$)/.test(s)) return true; // 参考文献页
+  if (/(^|[-/])part-\d+/.test(s)) return true; // 部分导言页（part-01-narratives 等）
+  if (/(^|[-/])(afterword|appendix|appendices)([-/.]|$)/.test(s)) return true; // 后记/附录
   if (/^[IVXLC]+\.\s/.test((title || "").trim())) return true;
   return false;
 }

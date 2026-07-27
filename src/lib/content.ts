@@ -207,6 +207,7 @@ export const BOOK_ORDER = [
   "gc-handbook",
   "first-line-android",
   "crazy-android",
+  "big-nerd-ranch-guide",
   "android-art-exploration",
   "kotlin-in-action",
   "android-component-arch",
@@ -630,7 +631,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "advanced",
         summary: "进入整洁架构、DDD、企业应用模式和 UNIX 工程哲学。",
-        items: learningBooks(["architecture-domain-design"]),
+        items: learningBooks(["architecture-domain-design", "poeaa-enterprise-patterns"]),
       },
     ],
   },
@@ -654,7 +655,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "intermediate",
         summary: "强化学习与深度学习的核心原理与 C 语言实现。",
-        items: learningBooks(["rl-deep-learning-c"]),
+        items: learningBooks(["rl-deep-learning-c", "ai-agent-dev"]),
       },
       {
         level: "advanced",
@@ -674,6 +675,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         items: learningBooks(["c-primer-plus"]),
       },
       {
+        level: "intermediate",
+        summary: "C++ 核心语法与标准库的系统掌握（C++ Primer 第5版）。",
+        items: learningBooks(["cpp-primer-5e"]),
+      },
+      {
         level: "advanced",
         summary: "C++ 并发编程：线程、内存模型与无锁编程。",
         items: learningBooks(["cpp-concurrency"]),
@@ -689,6 +695,18 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         level: "advanced",
         summary: "Unity 游戏性能优化与工程实践。",
         items: learningBooks(["unity-game-optimization"]),
+      },
+    ],
+  },
+  {
+    slug: "android",
+    title: "Android 开发",
+    description: "从入门到进阶的 Android 应用开发系统训练。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "Android 应用开发入门：组件、界面与生命周期。",
+        items: learningBooks(["big-nerd-ranch-guide"]),
       },
     ],
   },
