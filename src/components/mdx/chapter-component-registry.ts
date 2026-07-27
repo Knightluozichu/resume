@@ -15456,196 +15456,46 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         HDAppendixCGraphCertificateLab: module0.HDAppendixCGraphCertificateLab,
       } as ChapterMdxComponents;
     },
-  "head-first-design-patterns/00-intro/hfd-learning-map": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-learning-map");
-    return {
-      OfficialHeadFirstDesignPatternsHfdLearningMapMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLearningMapMapLab,
-      OfficialHeadFirstDesignPatternsHfdLearningMapExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLearningMapExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdLearningMapEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLearningMapEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/00-intro/hfd-strategy": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-strategy");
-    return {
-      OfficialHeadFirstDesignPatternsHfdStrategyMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStrategyMapLab,
-      OfficialHeadFirstDesignPatternsHfdStrategyExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStrategyExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdStrategyEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStrategyEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/01-variation/hfd-decorator": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-decorator");
-    return {
-      OfficialHeadFirstDesignPatternsHfdDecoratorMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdDecoratorMapLab,
-      OfficialHeadFirstDesignPatternsHfdDecoratorExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdDecoratorExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdDecoratorEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdDecoratorEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/01-variation/hfd-observer": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-observer");
-    return {
-      OfficialHeadFirstDesignPatternsHfdObserverMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdObserverMapLab,
-      OfficialHeadFirstDesignPatternsHfdObserverExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdObserverExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdObserverEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdObserverEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/02-composition/hfd-factory": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-factory");
-    return {
-      OfficialHeadFirstDesignPatternsHfdFactoryMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFactoryMapLab,
-      OfficialHeadFirstDesignPatternsHfdFactoryExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFactoryExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdFactoryEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFactoryEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/02-composition/hfd-singleton": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-singleton");
-    return {
-      OfficialHeadFirstDesignPatternsHfdSingletonMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdSingletonMapLab,
-      OfficialHeadFirstDesignPatternsHfdSingletonExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdSingletonExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdSingletonEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdSingletonEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/03-state/hfd-adapter-facade": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-adapter-facade");
-    return {
-      OfficialHeadFirstDesignPatternsHfdAdapterFacadeMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdAdapterFacadeMapLab,
-      OfficialHeadFirstDesignPatternsHfdAdapterFacadeExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdAdapterFacadeExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdAdapterFacadeEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdAdapterFacadeEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/03-state/hfd-command": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-command");
-    return {
-      OfficialHeadFirstDesignPatternsHfdCommandMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCommandMapLab,
-      OfficialHeadFirstDesignPatternsHfdCommandExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCommandExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdCommandEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCommandEvidenceLab,
-    } as ChapterMdxComponents;
-  },
   "head-first-design-patterns/04-advanced/hfd-compound-patterns": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-compound-patterns");
     return {
-      OfficialHeadFirstDesignPatternsHfdCompoundPatternsMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCompoundPatternsMapLab,
-      OfficialHeadFirstDesignPatternsHfdCompoundPatternsExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCompoundPatternsExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdCompoundPatternsEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdCompoundPatternsEvidenceLab,
+      HfdCompoundPatternsDiagram: module0.HfdCompoundPatternsDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-design-patterns/04-advanced/hfd-iterator-composite": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-iterator-composite");
     return {
-      OfficialHeadFirstDesignPatternsHfdIteratorCompositeMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdIteratorCompositeMapLab,
-      OfficialHeadFirstDesignPatternsHfdIteratorCompositeExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdIteratorCompositeExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdIteratorCompositeEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdIteratorCompositeEvidenceLab,
+      HfdIteratorCompositeDiagram: module0.HfdIteratorCompositeDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-design-patterns/04-advanced/hfd-leftover-patterns": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-leftover-patterns");
     return {
-      OfficialHeadFirstDesignPatternsHfdLeftoverPatternsMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLeftoverPatternsMapLab,
-      OfficialHeadFirstDesignPatternsHfdLeftoverPatternsExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLeftoverPatternsExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdLeftoverPatternsEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdLeftoverPatternsEvidenceLab,
+      HfdLeftoverPatternsDiagram: module0.HfdLeftoverPatternsDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-design-patterns/04-advanced/hfd-proxy": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-proxy");
     return {
-      OfficialHeadFirstDesignPatternsHfdProxyMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdProxyMapLab,
-      OfficialHeadFirstDesignPatternsHfdProxyExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdProxyExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdProxyEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdProxyEvidenceLab,
+      HfdProxyDiagram: module0.HfdProxyDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-design-patterns/04-advanced/hfd-real-world": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-real-world");
     return {
-      OfficialHeadFirstDesignPatternsHfdRealWorldMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdRealWorldMapLab,
-      OfficialHeadFirstDesignPatternsHfdRealWorldExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdRealWorldExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdRealWorldEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdRealWorldEvidenceLab,
+      HfdRealWorldDiagram: module0.HfdRealWorldDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-design-patterns/04-advanced/hfd-state": async () => {
     const module0 =
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-state");
     return {
-      OfficialHeadFirstDesignPatternsHfdStateMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStateMapLab,
-      OfficialHeadFirstDesignPatternsHfdStateExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStateExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdStateEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdStateEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/04-summary/hfd-final-review": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-final-review");
-    return {
-      OfficialHeadFirstDesignPatternsHfdFinalReviewMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFinalReviewMapLab,
-      OfficialHeadFirstDesignPatternsHfdFinalReviewExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFinalReviewExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdFinalReviewEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdFinalReviewEvidenceLab,
-    } as ChapterMdxComponents;
-  },
-  "head-first-design-patterns/04-summary/hfd-template-method": async () => {
-    const module0 =
-      await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-template-method");
-    return {
-      OfficialHeadFirstDesignPatternsHfdTemplateMethodMapLab:
-        module0.OfficialHeadFirstDesignPatternsHfdTemplateMethodMapLab,
-      OfficialHeadFirstDesignPatternsHfdTemplateMethodExperimentLab:
-        module0.OfficialHeadFirstDesignPatternsHfdTemplateMethodExperimentLab,
-      OfficialHeadFirstDesignPatternsHfdTemplateMethodEvidenceLab:
-        module0.OfficialHeadFirstDesignPatternsHfdTemplateMethodEvidenceLab,
+      HfdStateDiagram: module0.HfdStateDiagram,
     } as ChapterMdxComponents;
   },
   "head-first-java/00-hfj-3e-official-learning-map/hfj-3e-official-learning-map":

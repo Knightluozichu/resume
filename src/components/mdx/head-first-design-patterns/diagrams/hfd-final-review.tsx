@@ -1,5 +1,3 @@
-import { OfficialCourseLab } from "../../official-course-lab";
-
 /**
  * <HfdFinalReviewDiagram>：全书模式分类总览（Head First 设计模式 · 总复习章）。
  *
@@ -231,27 +229,3 @@ export function HfdFinalReviewDiagram() {
   );
 }
 
-// OFFICIAL_QUALITY_WRAPPER_HeadFirstDesignPatterns_HfdFinalReview
-const officialQualityProps = {
-  title: "总复习",
-  stages: [
-    "总复习",
-    "回到起点",
-    "GoF 三大分类",
-    "三大原则贯穿全书",
-    "交互Demo",
-  ],
-  sourceLabel: "O'Reilly Head First Design Patterns 2e",
-} as const;
-
-export function OfficialHeadFirstDesignPatternsHfdFinalReviewMapLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="map" />;
-}
-
-export function OfficialHeadFirstDesignPatternsHfdFinalReviewExperimentLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="experiment" />;
-}
-
-export function OfficialHeadFirstDesignPatternsHfdFinalReviewEvidenceLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="evidence" />;
-}

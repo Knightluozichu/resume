@@ -1,5 +1,3 @@
-import { OfficialCourseLab } from "../../official-course-lab";
-
 /**
  * <HfdLearningMapDiagram>：《Head First 设计模式》全书学习地图。
  *
@@ -243,27 +241,3 @@ export function HfdLearningMapDiagram() {
   );
 }
 
-// OFFICIAL_QUALITY_WRAPPER_HeadFirstDesignPatterns_HfdLearningMap
-const officialQualityProps = {
-  title: "学习地图",
-  stages: [
-    "学习地图",
-    "为什么需要一张地图",
-    "五大板块一览",
-    "三大设计原则",
-    "交互Demo",
-  ],
-  sourceLabel: "O'Reilly Head First Design Patterns 2e",
-} as const;
-
-export function OfficialHeadFirstDesignPatternsHfdLearningMapMapLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="map" />;
-}
-
-export function OfficialHeadFirstDesignPatternsHfdLearningMapExperimentLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="experiment" />;
-}
-
-export function OfficialHeadFirstDesignPatternsHfdLearningMapEvidenceLab() {
-  return <OfficialCourseLab {...officialQualityProps} mode="evidence" />;
-}

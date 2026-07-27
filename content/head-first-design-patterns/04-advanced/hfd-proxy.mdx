@@ -1,210 +1,136 @@
 ---
-title: 第11章 代理模式
+title: 代理模式
 type: C
-section: 对象访问控制
+section: 状态驱动行为
 order: 11
-description: 比较远程、虚拟、保护和动态代理，并验证代理与真实主题的接口合同。
+description: 为对象提供替身以控制访问——虚拟代理延迟昂贵创建，远程代理隐藏网络，保护代理控制权限。
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/head-first-design/9781492077992/"
 draft: false
 ---
 
-import {
-  OfficialHeadFirstDesignPatternsHfdProxyMapLab,
-  OfficialHeadFirstDesignPatternsHfdProxyExperimentLab,
-  OfficialHeadFirstDesignPatternsHfdProxyEvidenceLab,
-} from "@/components/mdx/head-first-design-patterns/diagrams/hfd-proxy";
+import { HfdProxyDiagram } from "@/components/mdx/head-first-design-patterns/diagrams/hfd-proxy";
 import {
   Objectives,
   Callout,
+  Attribution,
   Glossary,
   GlossaryItem,
   Term,
   Exercises,
   Answer,
-  Stepper,
-  Step,
-  Attribution,
 } from "@/components/mdx/mdx-components";
-
-{/* OFFICIAL_COURSE_ENHANCEMENT */}
 
 <Objectives>
 
-- 能解释第11章 代理模式的输入、核心结构、状态变化和输出合同
-- 能绘制并修改第11章 代理模式的最小模型，比较至少一种替代方案
-- 能复现正常、边界和单故障样本，定位第一条证据分叉
-- 能根据成本与风险判断方案适用范围，并完成清理重建
+- 能用自己的话解释代理模式是什么、为什么需要它
+- 能看懂虚拟代理的 Java 代码，说出远程代理、保护代理的用途
+- 能回答：代理和装饰器结构相似，本质区别是什么？
 
 </Objectives>
 
-## 为什么只记结论不足以掌握第11章 代理模式
+## 为什么需要代理模式
 
-学习“第11章 代理模式”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，第11章 代理模式的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+你在开发一个音乐播放器，封面图片要从远程 CD 加载，每张图加载需要 5 秒。如果界面一打开就同步创建所有 RealImage，用户要盯着白屏等半分钟。
 
-结构分析从远程代理开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+最直觉的方案是「先显示，后加载」，但这个逻辑如果散落在各个界面代码里，每个用到图片的地方都要自己处理占位、异步、就绪切换——重复且易错。
 
-机制验证要把虚拟代理写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+问题的根源是：**直接访问昂贵对象会阻塞调用方**。需要一个「代言人」先顶替真对象，控制好访问时机和方式，调用方却察觉不到中间多了一层。
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。保护代理不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+## 概念讲解
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+代理模式的思路是：**给真实对象提供一个替身，替身实现相同接口，控制对真对象的访问**。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+<Term def="代理和真实对象共同实现的接口，保证代理可以顶替真对象的位置">统一接口</Term>
+是 Icon。ImageProxy 和 RealImage 都实现它——Client 面向 Icon 编程，拿到的是代理还是真对象无所谓，调用方式完全一样。
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“动态代理”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+<Term def="实现与真对象相同的接口，持有真对象引用，控制对真对象的访问">Proxy（代理）</Term>
+是 ImageProxy。它先显示占位符，启动后台线程加载，加载完成后才真正创建
+RealImage，之后把 `paintIcon()` 委托给它。Client 全程不被阻塞。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+<Term def="被代理的真实对象，创建或使用昂贵，由代理在合适时机创建并委托">RealSubject（真实对象）</Term>
+是 RealImage。它不知道自己被代理了——该加载就加载，该画就画。代理只是在它「就绪之前」替它挡了一下。
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“第11章 代理模式”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<HfdProxyDiagram />
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+书中还介绍了另外两种代理：**远程代理**（为不同地址空间的对象提供本地代表，隐藏网络通信，如 RMI/JAVA RPC）和**保护代理**（根据调用者权限控制对真对象的访问，如企业系统的角色鉴权）。三者本质相同：代理是对象的「代言人」，控制访问。
 
-本页用<Term def="第11章 代理模式连接第11章 代理模式的机制、边界与可复查证据。">第11章 代理模式</Term>、
+## 代码对照
 
-<Term def="远程代理连接第11章 代理模式的机制、边界与可复查证据。">远程代理</Term>、<Term def="虚拟代理连接第11章 代理模式的机制、边界与可复查证据。">虚拟代理</Term>、<Term def="保护代理连接第11章 代理模式的机制、边界与可复查证据。">保护代理</Term>、<Term def="动态代理连接第11章 代理模式的机制、边界与可复查证据。">动态代理</Term>
-建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+```java
+// 统一接口
+public interface Icon {
+    void paintIcon(Component c, Graphics g, int x, int y);
+}
 
-## 权威目录与核心概念逐项对照
+// 虚拟代理——先顶替，后台加载，就绪后委托
+public class ImageProxy implements Icon {
+    ImageIcon realImage;      // 真实对象，初始为 null
+    URL imageURL;
+    boolean loading = false;
 
-- 第11章 代理模式
-- 远程代理
-- 虚拟代理
-- 保护代理
-- 动态代理
-- 访问控制
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+        if (realImage != null) {
+            realImage.paintIcon(c, g, x, y);   // 就绪：委托真对象
+        } else {
+            g.drawString("加载中…", x, y);      // 未就绪：占位符
+            if (!loading) {
+                loading = true;
+                new Thread(() -> {
+                    realImage = new ImageIcon(imageURL);  // 后台创建
+                }).start();
+            }
+        }
+    }
+}
 
-## 三视图实验：结构、变量与证据
+// Client——拿到的是代理，用法和真对象一样
+Icon icon = new ImageProxy(cdCoverURL);
+frame.add(new ImageComponent(icon));
+```
 
-<Stepper>
-  <Step title="第一步：冻结结构并先预测">
-    先预测参与者、连接方向与关键状态，再点击结构节点核对。
-    <OfficialHeadFirstDesignPatternsHfdProxyMapLab />
-  </Step>
-  <Step title="第二步：只改变一个变量">
-    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
-    <OfficialHeadFirstDesignPatternsHfdProxyExperimentLab />
-  </Step>
-  <Step title="第三步：注入单故障并保存证据">
-    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
-    <OfficialHeadFirstDesignPatternsHfdProxyEvidenceLab />
-  </Step>
-</Stepper>
+Client 调 `paintIcon()` 时，代理决定是显示占位符还是委托真对象——访问被控制，Client 无感知。
+
+## 常见误区
 
 <Callout type="trap">
-  <strong>误区：</strong>
-  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+  <strong>现象 →</strong> 给每个对象都套一层代理，代码凭空多出一倍间接层。{" "}
+  <strong>原因 →</strong> 代理的价值是「控制访问」——对象创建不昂贵、访问无需控制时，代理只是多余中间人。{" "}
+  <strong>修法 →</strong> 只在真对象创建昂贵（虚拟代理）、跨地址空间（远程代理）、需要权限控制（保护代理）时引入代理。普通对象直接 new 直接用。
 </Callout>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
-</Callout>
+## 小结与练习
 
-## 可复现的最小实现
-
-先把决策记录写成机器可读结构：
-
-```json
-{
-  "unit": "第11章 代理模式",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
-
-再用同一条执行链处理三类样本：
-
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
-
-最后保存回归门禁，禁止失败样本静默通过：
-
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
-
-用统一评分解释实验结果：
-
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
-
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
-
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
-
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
-
-## 本章回顾
-
-- 第11章 代理模式必须绑定冻结输入和明确成功标准。
-- 远程代理必须能画成结构并沿边追踪责任。
-- 虚拟代理要由正常、边界和单故障样本共同验证。
-- 保护代理必须保存第一处偏离和清理重建步骤。
-- 动态代理决定方案是否可以进入下一阶段。
+- 代理模式为真实对象提供替身，两者实现同一接口，Client 无感知
+- 虚拟代理延迟昂贵创建（先占位后委托），远程代理隐藏网络，保护代理控制权限
+- 代理控制「访问」，装饰器增强「行为」——结构相似，意图不同
+- 适用场景：对象创建/访问昂贵、跨网络、需权限控制
 
 <Exercises>
-
-**问题 1**：为“第11章 代理模式”写出最小输入合同，并指出一个不能省略的边界条件。
-
-<Answer>
-  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
-</Answer>
-
-**问题 2**：构造一个只破坏“虚拟代理”的单故障样本，第一条预期证据是什么？
-
-<Answer>
-  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
-</Answer>
-
-**问题 3**：什么情况下不应采用本页方案？
-
-<Answer>
-  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
-</Answer>
-
+  <Answer question="代理和装饰器结构几乎一样（都持有同类型引用并委托），本质区别是什么？">
+    意图不同。装饰器的目的是「增强行为」——给对象动态叠加额外职责（加缓冲、加行号），客户端通常知道自己在叠加功能，装饰器和被装饰对象是「加法」关系。代理的目的是「控制访问」——替真对象挡一下（延迟创建、隐藏网络、鉴权），客户端不知道也不关心中间有代理，代理和真对象是「顶替」关系。生命周期不同：装饰器是客户端主动一层层包上去的；代理往往是真对象还没就绪/不可直接访问时被动顶替。判断：想给对象加功能用装饰器，想控制对对象的访问用代理。
+  </Answer>
+  <Answer question="虚拟代理为什么能让 Client 不被阻塞？如果加载永远失败怎么办？">
+    阻塞的根源是「同步等待昂贵创建」。虚拟代理把创建推迟：paintIcon()
+    被调用时若真对象未就绪，立即返回占位符（不等待），同时启动后台线程创建。Client
+    的调用瞬间返回，UI 线程不被占用；真对象就绪后，下一次 paintIcon()
+    自动委托给它。若加载永远失败，代理应提供失败处理：显示错误占位符、记录日志、允许重试或降级。好的代理不仅控制「成功路径」的访问，也要处理「失败路径」——否则占位符会永远转下去，用户体验比同步加载更糟。
+  </Answer>
 </Exercises>
 
-## 术语表
-
 <Glossary>
-  <GlossaryItem term="第11章 代理模式">
-    第11章 代理模式用于描述“第11章
-    代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="虚拟代理">
+    延迟昂贵对象的创建。先显示占位符，后台加载，就绪后委托真对象。Client 不被阻塞。
   </GlossaryItem>
   <GlossaryItem term="远程代理">
-    远程代理用于描述“第11章
-    代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
-  </GlossaryItem>
-  <GlossaryItem term="虚拟代理">
-    虚拟代理用于描述“第11章
-    代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    为不同地址空间的对象提供本地代表，隐藏网络通信细节。如 RMI、RPC 的 stub。
   </GlossaryItem>
   <GlossaryItem term="保护代理">
-    保护代理用于描述“第11章
-    代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    根据调用者权限控制对真对象的访问。如企业系统按角色放行不同操作。
   </GlossaryItem>
-  <GlossaryItem term="动态代理">
-    动态代理用于描述“第11章
-    代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="代理 vs 装饰器">
+    结构相似（持有同类型引用并委托），意图不同：代理控制访问（顶替），装饰器增强行为（叠加）。
   </GlossaryItem>
 </Glossary>
 
@@ -212,9 +138,3 @@ $$
   adaptedFrom="Eric Freeman、Elisabeth Robson著《Head First Design Patterns, 2nd Edition》，O'Reilly Media，2020，672页，ISBN 9781492077992 · 独立教学重构"
   adaptedUrl="https://www.oreilly.com/library/view/head-first-design/9781492077992/"
 />
-
-## 官方章节核心
-
-比较远程、虚拟、保护和动态代理，并验证代理与真实主题的接口合同。
-
-本页依照 O'Reilly 第二版官方目录恢复旧课程遗漏的章节。重点不是背诵类名，而是写清参与者、协作顺序、状态变化、代价和不适用条件，并用正常、边界、失败三类样本核对。

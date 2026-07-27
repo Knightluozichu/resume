@@ -579,7 +579,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "intermediate",
         summary: "用 OpenGL、Vulkan 和 GPU 实例系统完成现代渲染实践。",
-        items: learningBooks(["deep-opengl"]),
+        items: learningBooks(["deep-opengl", "opengl-superbible"]),
       },
       {
         level: "advanced",
@@ -604,6 +604,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "系统掌握传统汽车、新能源专项、汽车电子与 AUTOSAR。",
         items: learningBooks(["automotive-systems-specialization"]),
       },
+      {
+        level: "advanced",
+        summary: "智能车软件、车联网与软件定义汽车的进阶实践。",
+        items: learningBooks(["vehicle-software-intelligence"]),
+      },
     ],
   },
   {
@@ -617,9 +622,38 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         items: learningBooks(["head-first-design-patterns"]),
       },
       {
+        level: "intermediate",
+        summary: "掌握代码质量、重构手法与可维护性工程实践。",
+        items: learningBooks(["code-quality-refactoring"]),
+      },
+      {
         level: "advanced",
         summary: "进入整洁架构、DDD、企业应用模式和 UNIX 工程哲学。",
         items: learningBooks(["architecture-domain-design"]),
+      },
+    ],
+  },
+  {
+    slug: "algorithms",
+    title: "算法与数据结构",
+    description: "从图解算法直觉，进入数据结构与算法分析的系统训练。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "用图解建立算法核心直觉：递归、排序、搜索、动态规划与贪心。",
+        items: learningBooks(["grokking-algorithms-2e"]),
+      },
+    ],
+  },
+  {
+    slug: "ai-ml",
+    title: "人工智能与机器学习",
+    description: "从强化学习与深度学习基础，进入大模型应用与智能体开发。",
+    stages: [
+      {
+        level: "intermediate",
+        summary: "强化学习与深度学习的核心原理与 C 语言实现。",
+        items: learningBooks(["rl-deep-learning-c"]),
       },
     ],
   },
