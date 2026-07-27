@@ -10,12 +10,6 @@ sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_11"
 draft: true
 ---
 
-import {
-  DnmBackgroundGcTimelineLab,
-  DnmGcFlavorMatrixMap,
-  DnmGcSettingsExperimentLab,
-} from "@/components/mdx/dotnet-memory/diagrams/gc-flavors-and-settings";
-
 <Objectives>
 
 - 能描述 workstation/server 与 background/blocking 两个正交维度的 heap、线程、暂停和资源差异，并识别 foreground GC
@@ -161,39 +155,11 @@ Per-object-heap limits 可分别约束 SOH/LOH/POH，但配置组合有完整性
 
 `System.GC.ConserveMemory` 的 1–9 越高越积极缩小 heap，代价是更频繁、可能更长的回收；非零时还可能在 LOH 碎片较高时自动压缩。`RetainVM` 则在释放给 OS 与保留 standby 复用之间取舍。两个开关方向不同，不能同时改后只看一次 RSS。
 
-<DnmGcSettingsExperimentLab />
-
 图中的 workload preset 是实验起点，不是生产答案。先预测 server/background/conserve/hard-limit 对 CPU、pause 和 memory 的方向，再以真实版本/容器限额运行足够长的稳态压测。
 
 <Callout type="trap" title="陷阱：把 GC heap hard limit 当进程内存限额">
   Hard limit 覆盖 GC heap commit 与 bookkeeping，不覆盖全部 native memory、线程栈和映射。容器验收必须同时看 `TotalCommittedBytes`、managed heap、process RSS、container working set/limit 与 OOM 事件，并保留本机内存安全余量。
 </Callout>
-
-## 怎样做单变量配置实验
-
-建立基线时固定运行时版本、CPU/memory limit、负载、预热、请求混合和时间窗。每轮只改一个维度：workstation/server、concurrent、latency window、hard limit 或 ConserveMemory。收集 requests/s、CPU、allocation MB/s、Gen 0/1/2 数量、GC type/reason、pause p50/p95/p99/max、heap/fragmentation/committed、RSS 与 OOM/超时。
-
-判断 server GC 时至少覆盖低并发与峰值并发；判断 background 时同时看单次 pause 与总 GC CPU/墙钟；判断低延迟时要包含进入、关键窗口、退出后的回收债务。配置若只改善平均值却让 p99 或 OOM 风险越过 SLO，应回滚。
-
-## 三步完成 GC flavor 调优闭环
-
-<Stepper>
-  <Step title="第一步：确认实际 flavor 与目标负载">
-    读取 IsServerGC、configuration variables、CPU quota 和 heap 数，先预测四种组合的资源/暂停差异，再选一个最小对照变量。
-
-    <DnmGcFlavorMatrixMap />
-  </Step>
-  <Step title="第二步：解释 background 时间线">
-    对齐后台 Gen 2、foreground Gen 0/1、SuspendEE 和业务请求；分开统计并发墙钟、暂停和 GC CPU，避免把高 suspend 全归因于 mark/compact。
-
-    <DnmBackgroundGcTimelineLab />
-  </Step>
-  <Step title="第三步：在真实约束下验收配置">
-    固定容器 limits 与负载，只改 server/concurrent、hard limit 或 ConserveMemory 之一；比较吞吐、p99、heap/RSS、完整回收和 OOM 余量并定义回滚线。
-
-    <DnmGcSettingsExperimentLab />
-  </Step>
-</Stepper>
 
 ## 小结
 

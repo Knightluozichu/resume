@@ -22,11 +22,6 @@ import {
   Stepper,
   Step,
 } from "@/components/mdx/mdx-components";
-import {
-  Uct04ProtobufInGamesMapLab,
-  Uct04ProtobufInGamesExperimentLab,
-  Uct04ProtobufInGamesEvidenceLab,
-} from "@/components/mdx/unity-core-tech/diagrams/uct-04-protobuf-in-games";
 
 <Objectives>
 
@@ -41,8 +36,6 @@ import {
 ## 问题：为什么客户端和服务器都能成功编译同名字段，线上仍可能解析成完全不同的数据？
 
 先预测：只比较字段名称是否足以判断 Protobuf 兼容？不足。二进制线格式依赖字段编号和 wire type，名称主要服务源码。原书第四章从消息结构体定义、编写 proto、制作转换工具到 Unity 使用，真正主线是建立唯一 schema 和可追溯代码生成链。
-
-<Uct04ProtobufInGamesMapLab />
 
 ## 原书边界与目录小节
 
@@ -64,8 +57,6 @@ proto 消息由字段编号、类型、重复规则和嵌套关系定义。字�
 Unity 侧将消息序列化为 byte 数组只是内层协议，网络流还需要长度前缀、消息 ID、压缩或校验等帧层。TCP 没有消息边界，直接把一次 Receive 当一条 Protobuf 会在粘包和半包时失败。
 
 解析失败要记录协议版本、消息 ID、声明长度、实际长度和十六进制前缀，不能把全部异常吞成网络断开。Protobuf 提供结构兼容而不是加密、认证或传输可靠性，这些责任必须由其他层承担。
-
-<Uct04ProtobufInGamesExperimentLab />
 
 ## 五个核心术语与责任边界
 
@@ -91,53 +82,6 @@ Unity 侧将消息序列化为 byte 数组只是内层协议，网络流还需�
 唯一 proto 仓库经过固定 protoc 生成 C# 和服务端代码，构建产物记录 schema 哈希；发送端先序列化消息，再写入消息 ID 与长度前缀；接收端先重组完整帧，之后按类型解析。输出包括领域对象、协议指标和失败字节样本。
 
 每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
-
-## 三步可重复实验
-
-动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
-
-<Stepper>
-  <Step title="固定 Schema 与生成器">
-    <Uct04ProtobufInGamesMapLab />
-
-定义登录请求，保留字段编号并记录 protoc 版本；删除字段时使用 reserved，禁止把旧编号分配给新语义。
-
-```protobuf
-syntax = "proto3";
-message LoginRequest {
-  string account = 1;
-  bytes credential = 2;
-  uint32 client_version = 3;
-}
-```
-
-  </Step>
-  <Step title="建立帧边界">
-    <Uct04ProtobufInGamesExperimentLab />
-
-在 Protobuf 载荷外写固定字节序的长度和消息 ID，分多次投喂接收缓冲，确认半包不会提前解析、粘包能循环拆出多帧。
-
-```csharp
-byte[] payload = request.ToByteArray();
-writer.WriteUInt32((uint)payload.Length);
-writer.WriteUInt16(LoginRequestId);
-writer.WriteBytes(payload);
-```
-
-  </Step>
-  <Step title="回放版本演进">
-    <Uct04ProtobufInGamesEvidenceLab />
-
-用旧客户端解析带新增字段的新消息，再用新客户端解析缺少字段的旧消息；保存默认值、未知字段和失败载荷。
-
-```csharp
-LoginRequest parsed = LoginRequest.Parser.ParseFrom(payload);
-Debug.Assert(parsed.Account.Length > 0);
-Debug.Log(Convert.ToHexString(payload.AsSpan(0, Math.Min(16, payload.Length))));
-```
-
-  </Step>
-</Stepper>
 
 ## 正常、边界与故障注入
 
@@ -165,8 +109,6 @@ Unity 的 IL2CPP、代码裁剪与 AOT 会影响反射或动态注册路径，�
 验收包含 schema 提交与哈希、生成命令和版本、客户端服务器生成文件一致性、半包粘包测试、旧新版本双向解析矩阵、错误载荷十六进制样本及目标平台 IL2CPP 结果。
 
 证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
-
-<Uct04ProtobufInGamesEvidenceLab />
 
 ## 小结
 

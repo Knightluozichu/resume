@@ -10,8 +10,6 @@ demo: true
 order: 0
 ---
 
-import { Apo12PipelineLab, Apo12ExperimentLab, Apo12EvidenceLab } from "@/components/mdx/android-perf-optimization/diagrams/apo12-official-final-review";
-
 # 《Android应用性能优化》全书总复习
 
 本页依据Hervé Guihot《Pro Android Apps Performance Optimization》独立重构，不复制原文。原版锁定Apress 2012年1月版、282页、ISBN 9781430239994；中文版锁定人民邮电出版社2012年10月第1版、白龙译、226页、ISBN 9787115272416。
@@ -94,75 +92,6 @@ import { Apo12PipelineLab, Apo12ExperimentLab, Apo12EvidenceLab } from "@/compon
 **正式节点 9/9。** “第9章 RenderScript”必须放进“从等价性、时间、内存、线程、能耗和图形六类证据闭环SDK、NDK与RenderScript全部节点”的性能因果链：先固定输入与正确输出，再区分Java、JNI、原生、内存、线程、设备和图形边界，最后选择时间、分配、唤醒或帧证据。没有等价性测试和基线，任何更快数字都不能算优化。
 
 为该节点准备未优化、优化和反例三组实现。固定设备、Android版本、ABI、CPU状态、构建类型与数据规模，完成预热和重复采样；记录原始结果、资源释放与回滚。现代工具可以重测，但必须单列与2012年机制的差异。
-
-## 最小可重复实验
-
-先预测结果和复杂度，再比较递归、迭代与缓存。样例故意把正确性断言放在计时之前，防止“删除工作”成为最快实现。
-
-```java
-static long fibonacci(int n) {
-    if (n < 0 || n > 92) throw new IllegalArgumentException("n");
-    long a = 0L, b = 1L;
-    for (int i = 0; i < n; i++) {
-        long next = Math.addExact(a, b);
-        a = b;
-        b = next;
-    }
-    return a;
-}
-
-assert fibonacci(10) == 55L;
-```
-
-固定构建与设备状态，保存Java、JNI、原生和系统证据。历史工具命令需要按可用SDK调整，但报告必须记录替代关系。
-
-```bash
-./gradlew --no-daemon clean assembleRelease connectedCheck
-adb shell dumpsys meminfo org.example.performance > meminfo.txt
-adb shell dumpsys batterystats --reset
-adb shell am force-stop org.example.performance
-adb logcat -c && adb logcat -d -v threadtime > run.log
-```
-
-把性能结论写成可失败合同：
-
-```gherkin
-Given identical inputs, expected outputs, a pinned release build, device, Android version, ABI, power and thermal state
-When the baseline and optimized scenario for "apo12-official-final-review" are warmed up and sampled repeatedly
-Then correctness, latency distribution, allocation, thread, energy, graphics, and lifecycle evidence match the prediction
-And invalid inputs, unsupported CPUs, destroyed owners, low memory, and resource release remain observable
-And modern tooling is reported as migration evidence rather than original 2012 behavior
-```
-
-这三段材料分别约束等价性、环境和行为。若报告没有原始样本、分布、设备指纹和失败结果，便无法判断差异来自算法、JIT、调频、缓存、热降频、跟踪开销还是随机噪声。
-
-## 六层性能与故障证明
-
-**正确性层。** 为整数溢出、浮点误差、排序稳定性、图像色差、并发顺序与数据库事务写断言。优化版必须在正常、边界和无效输入上保持合同；若只比较速度不比较结果，结论立即无效。
-
-**时间层。** 区分墙钟、线程CPU与系统CPU时间，先预热再多轮交错采样，报告中位数、尾延迟和离散程度。跟踪器会扰动被测程序，因此TraceView、日志或Perfetto数据不能与无跟踪时间直接比较。
-
-**内存层。** 记录对象与原生分配、峰值、分配速率、GC停顿、引用链和低内存恢复。JNI数组复制、直接缓冲、Bitmap、纹理与RenderScript Allocation可能不在同一堆统计中，必须分别核对所有者与释放。
-
-**线程层。** 标主线程、Handler/Looper、AsyncTask线程池、原生线程与并发容器。测锁竞争、队列等待、上下文切换和多核加速比；组件销毁后取消工作，迟到结果不得重新持有界面。
-
-**设备与能耗层。** 探测ABI、NEON、OpenGL扩展、纹理格式和核心数，提供标量与不支持路径。将网络、位置、传感器、Alarm、WakeLock和GPU活动纳入能耗预算；长时间实验控制温度与电量。
-
-**版本层。** 原书锁定2012年。ART取代Dalvik，Android Studio取代Eclipse/ADT，AsyncTask、RenderScript、DDMS、layoutopt均已废弃或移除。现代迁移一次只改变运行时、工具或API之一，并保留原书机制为何有效及为何不再适用。
-
-围绕“只有优化后数字，没有相同输入、正确性、预热、重复样本、设备状态、资源释放与回滚基线”预写推翻条件：结果改变、尾延迟恶化、分配或唤醒增加、JNI异常、错误CPU路径、生命周期泄漏、图形不兼容或无法回滚中的任一项出现，都说明优化不成立。最终交付全书节点表、Java/NDK对照基准、内存与线程故障、电量记录、图形实验和版本迁移报告，使另一位开发者无需口头提示即可重放。
-
-## 跨层垂直验收
-
-选择同一批图像或数值输入，先以Java实现基线，再决定是否进入NDK、NEON或RenderScript；同时记录内存布局、线程调度、设备能力、图形输出和电量。每次只改变一个实现层并保留回退。若性能提升只能在单一设备、Debug构建或关闭正确性检查时出现，就不能进入发布结论。
-
-## 三步交互实验
-
-<Steps>
-  <Step title="1. 建立执行与资源管线">逐个连接9个正式节点，标出Java、JNI/NDK、内存线程、设备图形与结果；先预测成本。<Apo12PipelineLab /></Step>
-  <Step title="2. 控制变量运行反例">切换基线、优化、错误结果、热状态或所有者销毁，每次只改变一个条件；保存原始样本。<Apo12ExperimentLab /></Step>
-  <Step title="3. 通过性能证据门">用全书节点表、Java/NDK对照基准、内存与线程故障、电量记录、图形实验和版本迁移报告核对正确性、时间、资源、设备和版本；缺项时不得发布“更快”结论。<Apo12EvidenceLab /></Step>
-</Steps>
 
 <Callout type="trap">**本章核心陷阱。** 只有优化后数字，没有相同输入、正确性、预热、重复样本、设备状态、资源释放与回滚基线。修复时先恢复等价性、测量、资源与生命周期合同，再写能推翻优化的测试。</Callout>
 
