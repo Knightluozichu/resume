@@ -4909,6 +4909,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       AccumulateDispatchMap: module0.AccumulateDispatchMap,
       AccumulateTemplateDiagram: module0.AccumulateTemplateDiagram,
       AccumulateOfficialCaseLab: module0.AccumulateOfficialCaseLab,
+      AccumulateRecursionDiagram: module0.AccumulateRecursionDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/arrays/constuct-array": async () => {
