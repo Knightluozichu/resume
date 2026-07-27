@@ -28,19 +28,41 @@ const officialCases = streamStates.map((state, index) => ({
 })) as ReadonlyArray<{ label: string; fields: ReadonlyArray<readonly [string, string]> }>;
 
 export function StreamMedianHeapInvariantDiagram() {
-  const rows = [
-    ["max向量 / 最大堆", "保存较小一半", "max[0]是下半最大值", "数量等于min或少1"],
-    ["min向量 / 最小堆", "保存较大一半", "min[0]是上半最小值", "数量等于max或多1"],
-    ["有序边界", "所有max项不大于min项", "max[0]不大于min[0]", "根节点夹住中位数"],
-    ["奇数总量", "min多一个", "中位数为min[0]", "作者固定的配额方向"],
-  ] as const;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-          <thead><tr className="border-b border-border">{["结构", "保存范围", "根节点", "数量规则"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="数据流中的中位数图。用两个堆：下半最大堆 max 保存较小一半（根为下半最大值），上半最小堆 min 保存较大一半（根为上半最小值）。不变式：max 所有元素不大于 min 所有元素，两堆数量差不超过 1。例：max=[3,2,1]、min=[4,5,6,7]，总数为偶数时中位数 = (max[0]+min[0])/2 = 3.5；总数为奇数时 min 多一个，中位数 = min[0]。插入时由奇偶决定目标堆，越界则经另一堆转移边界值。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双堆夹住中位数：下半最大堆 + 上半最小堆</text>
+          {/* 下半最大堆 */}
+          <path d="M 220 84 L 120 230 L 320 230 Z" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" />
+          <circle cx="220" cy="120" r="24" fill="var(--accent)" fillOpacity="0.16" stroke="var(--accent)" strokeWidth="1.8" />
+          <text x="220" y="126" textAnchor="middle" fontSize="17" fontWeight="800" fontFamily="monospace" fill="var(--accent)">3</text>
+          <text x="175" y="196" textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">2</text>
+          <text x="265" y="196" textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">1</text>
+          <text x="220" y="256" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--accent)">下半最大堆 max</text>
+          <text x="220" y="276" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">存较小一半，根 max[0]=3 最大</text>
+          {/* 上半最小堆 */}
+          <path d="M 600 84 L 500 230 L 700 230 Z" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.4" />
+          <circle cx="600" cy="120" r="24" fill="var(--success)" fillOpacity="0.16" stroke="var(--success)" strokeWidth="1.8" />
+          <text x="600" y="126" textAnchor="middle" fontSize="17" fontWeight="800" fontFamily="monospace" fill="var(--success)">4</text>
+          <text x="555" y="196" textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">5</text>
+          <text x="645" y="196" textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">6</text>
+          <text x="600" y="256" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">上半最小堆 min</text>
+          <text x="600" y="276" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">存较大一半，根 min[0]=4 最小</text>
+          {/* 边界 */}
+          <line x1="410" y1="90" x2="410" y2="230" stroke="var(--border)" strokeWidth="1.4" strokeDasharray="5 4" />
+          <text x="410" y="150" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--text-primary)">max[0] ≤ min[0]</text>
+          <text x="410" y="170" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">3 ≤ 4</text>
+          {/* 中位数规则 */}
+          <text x="410" y="316" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">偶数个：中位数 = (max[0]+min[0])/2 = (3+4)/2 = 3.5</text>
+          <text x="410" y="342" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">奇数个：min 多一个，中位数 = min[0]</text>
+          <text x="410" y="376" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">两堆数量差不超过 1；插入由奇偶定目标堆，越界则经另一堆转移边界值。插入 O(log n)、查询 O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         作者变量名按堆类型命名：min是上半最小堆，max是下半最大堆。

@@ -27,19 +27,47 @@ const officialCases = locations.map((item) => ({
 })) as ReadonlyArray<{ label: string; fields: ReadonlyArray<readonly [string, string]> }>;
 
 export function DigitSequenceBlocksDiagram() {
-  const rows = [
-    ["1", "0", "10", "10", "0..9"],
-    ["2", "10", "90", "180", "10..189"],
-    ["3", "100", "900", "2700", "190..2889"],
-    ["4", "1000", "9000", "36000", "2890..38889"],
+  const blocks = [
+    { label: "1 位数", range: "0..9", chars: "10 字符", idx: "索引 0..9", w: 90, color: "var(--success)" },
+    { label: "2 位数", range: "10..99", chars: "180 字符", idx: "索引 10..189", w: 150, color: "var(--accent)" },
+    { label: "3 位数", range: "100..999", chars: "2700 字符", idx: "索引 190..2889", w: 220, color: "var(--warning)" },
+    { label: "4 位数", range: "1000..9999", chars: "36000 字符", idx: "索引 2890..", w: 200, color: "var(--danger)" },
   ] as const;
+  let accX = 60;
+  const segY = 90;
+  const segH = 64;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-          <thead><tr className="border-b border-border">{["位数", "起始数字", "数字数量", "字符数量", "全局索引"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 4 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="数字序列中的某一位图。把序列 0123456789101112... 按位数分块：1 位数 0 到 9 共 10 个字符（索引 0..9），2 位数 10 到 99 共 180 个字符（索引 10..189），3 位数 100 到 999 共 2700 个字符（索引 190..2889），依次类推。定位某索引：先找到所在块（位数），再用块内偏移除位数得目标数字、取模得数内下标。例：索引 1001 在 3 位数块，偏移 811，811/3=270 → 数字 100+270=370，811%3=1 → 第 2 位 7。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">序列 0123456789101112… 按位数分块，逐块累加字符数</text>
+          <text x="410" y="52" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每块字符数 = 数字个数 × 位数；从 2 位起每块有 9×10^(d-1) 个数字</text>
+          {/* 分块条 */}
+          {blocks.map((b) => {
+            const x = accX;
+            accX += b.w;
+            return (
+              <g key={b.label}>
+                <rect x={x} y={segY} width={b.w} height={segH} fill={b.color} fillOpacity="0.12" stroke={b.color} strokeWidth="1.4" />
+                <text x={x + b.w / 2} y={segY + 24} textAnchor="middle" fontSize="12" fontWeight="800" fill={b.color}>{b.label}</text>
+                <text x={x + b.w / 2} y={segY + 44} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="var(--text-secondary)">{b.range}</text>
+                <text x={x + b.w / 2} y={segY + segH + 18} textAnchor="middle" fontSize="10" fill={b.color}>{b.chars}</text>
+                <text x={x + b.w / 2} y={segY + segH + 34} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{b.idx}</text>
+              </g>
+            );
+          })}
+          {/* 定位步骤 */}
+          <text x="410" y="228" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">定位索引：① 逐块减去字符数定位数 d → ② 块内偏移 offset</text>
+          <text x="410" y="254" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">③ 数字 = 起始数 + offset / d → ④ 数内下标 = offset % d</text>
+          <text x="410" y="296" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">例：索引 1001 → 减去 10（1位）与 180（2位）后在 3 位块，offset = 1001-190 = 811</text>
+          <text x="410" y="320" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">811 / 3 = 270 → 数字 100+270 = 370；811 % 3 = 1 → 370 的第 2 位 = 7</text>
+          <text x="410" y="356" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">索引 1000、1001、1002 分别命中 370 的 3、7、0；大索引需用 64 位防溢出。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         一位数块包含0到9共10项；从两位数起，每块有9乘10的位数减一次幂个数字。

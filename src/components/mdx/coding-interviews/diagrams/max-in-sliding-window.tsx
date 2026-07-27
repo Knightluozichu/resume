@@ -29,11 +29,47 @@ const officialCases = [
 
 export function MaxSlidingWindowCandidateDiagram() {
   const values = [2, 3, 4, 2, 6, 2, 5, 1];
+  const cellW = 76;
+  const cellH = 52;
+  const gapW = 8;
+  const rowX = 78;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
+  const inWindow = (i: number) => i >= 2 && i <= 4;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-8 gap-2">{values.map((value, index) => <div key={index} className={"relative flex min-h-[76px] flex-col items-center justify-center border " + (index >= 2 && index <= 4 ? "border-accent bg-accent/10" : "border-border bg-background")}><span className="font-semibold text-primary">{value}</span><span className="mt-1 text-[10px] text-muted">{index}</span>{index === 4 && <span className="absolute -top-2 bg-success px-1 text-[10px] font-semibold text-white">max</span>}</div>)}</div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3"><div className="border border-border bg-background p-3 text-sm text-secondary">窗口下标：[2, 4]</div><div className="border border-success bg-success/10 p-3 text-sm font-semibold text-success">队首候选 4:6</div><div className="border border-accent bg-accent/10 p-3 text-sm text-accent">较小且更早的候选已淘汰</div></div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="滑动窗口最大值图。数组 2、3、4、2、6、2、5、1，窗口大小 3。当前窗口下标 2 到 4（值 4、2、6），最大值 6。单调双端队列保存仍可能成为最大值的候选下标，从队首到队尾值严格递减：新值大于等于队尾就从队尾弹出（更早且更小水远不会优先），队首下标越出窗口就从队首弹出（过期）。队首即当前窗口最大值。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">单调队列：队首到队尾值递减，队首即窗口最大</text>
+          {/* 窗口括号 */}
+          <path d={`M ${cx(2)} 56 L ${cx(2)} 48 L ${cx(4) + cellW} 48 L ${cx(4) + cellW} 56`} fill="none" stroke="var(--accent)" strokeWidth="2" />
+          <text x={(cx(2) + cx(4) + cellW) / 2} y="42" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">窗口 [2, 4]（size=3）</text>
+          {/* 数组行 */}
+          {values.map((v, i) => (
+            <g key={i}>
+              <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={inWindow(i) ? "var(--accent)" : "var(--bg)"} fillOpacity={inWindow(i) ? 0.1 : 1} stroke={inWindow(i) ? "var(--accent)" : "var(--border)"} strokeWidth={inWindow(i) ? 1.6 : 1.2} />
+              <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="700" fontFamily="monospace" fill={inWindow(i) ? "var(--accent)" : "var(--text-primary)"}>{v}</text>
+              <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+            </g>
+          ))}
+          {/* max 标记 */}
+          <text x={cx(4) + cellW / 2} y={160} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">max=6</text>
+          {/* 单调队列 */}
+          <text x="410" y="200" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">单调双端队列（下标:值，队首→队尾递减）</text>
+          <rect x="330" y="214" width="160" height="44" rx="6" fill="var(--success)" fillOpacity="0.14" stroke="var(--success)" strokeWidth="1.6" />
+          <text x="410" y="242" textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill="var(--success)">[4:6]</text>
+          <text x="300" y="242" textAnchor="end" fontSize="11" fill="var(--success)">队首</text>
+          <text x="520" y="242" fontSize="11" fill="var(--text-secondary)">队尾</text>
+          {/* 规则 */}
+          <text x="410" y="292" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">队尾淘汰：新值 ≥ 队尾值 → 弹出队尾（更早且更小，永不优先）</text>
+          <text x="410" y="316" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">队首过期：队首下标 ≤ i-size → 弹出队首（已离开窗口）</text>
+          <text x="410" y="340" textAnchor="middle" fontSize="12" fill="var(--success)">输出：num[队首] 即窗口最大值（本窗口 4,4,6,6,6,5）</text>
+          <text x="410" y="372" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每个下标入队一次、出队至多一次，O(n) 摊还；队列空间 O(size)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         双端队列保存仍可能成为当前或未来窗口最大值的候选下标。

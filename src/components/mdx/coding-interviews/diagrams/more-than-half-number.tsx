@@ -26,34 +26,48 @@ const officialCases = [
 ] as const;
 
 export function MajorityPartitionDiagram() {
-  const rows = [
-    ["middle = length >> 1", "目标下标4", "只关心中位位置，不要求全数组有序"],
-    ["index 大于 middle", "end = index - 1", "目标只可能在左侧区间"],
-    ["index 小于 middle", "start = index + 1", "目标只可能在右侧区间"],
-    ["index 等于 middle", "numbers[middle]", "得到候选后仍需统计真实次数"],
-  ] as const;
-
+  const values = [1, 2, 2, 2, 2, 2, 3, 5, 4];
+  const middle = 4;
+  const cellW = 72;
+  const cellH = 52;
+  const gapW = 6;
+  const rowX = 62;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              {["判断", "区间动作", "含义"].map((item) => (
-                <th key={item} className="p-3 text-primary">{item}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row[0]} className="border-b border-border last:border-0">
-                {row.map((cell, index) => (
-                  <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="数组中出现次数超过一半的数字图。1、2、3、2、2、2、5、4、2 共 9 个数，2 出现 5 次超过一半。把数组排序后 2 占据下标 1 到 5，必然覆盖中位下标 4。所以用分区找到第 4 小的元素（中位数）就是候选，再扫一遍计数验证 times 乘 2 大于 length。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">严格多数（&gt; n/2）必然覆盖中位下标</text>
+          {/* 中位括号 */}
+          <path d={`M ${cx(middle)} 56 L ${cx(middle)} 48 L ${cx(middle) + cellW} 48 L ${cx(middle) + cellW} 56`} fill="none" stroke="var(--success)" strokeWidth="2" />
+          <text x={cx(middle) + cellW / 2} y="42" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">middle = 9&gt;&gt;1 = 4</text>
+          {/* 数组行（分区/排序后） */}
+          {values.map((v, i) => {
+            const isMid = i === middle;
+            const isMajor = v === 2;
+            return (
+              <g key={i}>
+                <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--bg)"} fillOpacity={isMid ? 0.16 : isMajor ? 0.1 : 1} stroke={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--border)"} strokeWidth={isMid ? 2 : 1.2} />
+                <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="800" fontFamily="monospace" fill={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--text-primary)"}>{v}</text>
+                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+              </g>
+            );
+          })}
+          {/* 多数元素跨度 */}
+          <path d={`M ${cx(1)} 152 L ${cx(1)} 160 L ${cx(5) + cellW} 160 L ${cx(5)} 152`} fill="none" stroke="var(--accent)" strokeWidth="1.6" />
+          <text x={(cx(1) + cx(5) + cellW) / 2} y={178} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">2 出现 5 次（&gt; 9/2），排序后必覆盖下标 4</text>
+          {/* 步骤 */}
+          <text x="410" y="216" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">① 分区找中位数：让枢轴落位 middle，numbers[middle] 即候选</text>
+          <text x="410" y="242" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">② 验证：再扫一遍计数，times × 2 &gt; length 才是真多数</text>
+          <text x="410" y="268" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">index &gt; middle 搜左、index &lt; middle 搜右、== middle 停</text>
+          <text x="410" y="306" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">候选阶段只负责压缩空间；“超过一半”必须由第二次计数证明（无多数时返回0并置无效标志）。</text>
+          <text x="410" y="330" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">分区法平均 O(n)、会重排输入；抵消法（投票）稳定 O(n) 且不修改输入。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         作者复用随机 Partition，把第4小的元素放到下标4；若真有严格多数，中位位置必然属于它。

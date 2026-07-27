@@ -18,18 +18,6 @@ const officialCases = [
   { label: "空输入", fields: [["根", "nullptr"], ["两个节点", "nullptr"], ["结果", "nullptr"], ["用途", "入口防御"]] },
 ] as const;
 
-function NodeBadge({ value, tone = "default" }: { value: string; tone?: "default" | "left" | "right" | "both" }) {
-  const color =
-    tone === "both"
-      ? "border-success bg-success/15 text-success"
-      : tone === "left"
-        ? "border-accent bg-accent/15 text-accent"
-        : tone === "right"
-          ? "border-warning bg-warning/15 text-warning"
-          : "border-border bg-background text-primary";
-  return <span className={"grid size-9 place-items-center border text-sm font-semibold " + color}>{value}</span>;
-}
-
 export function CommonParentDecisionMap() {
   const rows = [
     ["二叉搜索树", "左右孩子 + 有序键", "比较两个目标值与当前值", "首个落在两值区间内的节点", "O(h) / O(1)"],
@@ -53,26 +41,61 @@ export function CommonParentDecisionMap() {
 }
 
 export function CommonParentTreeDiagram() {
-  const edges = [
-    { parent: "1", children: ["2", "3"], tone: "both" as const, note: "两条路径共同经过" },
-    { parent: "2", children: ["4", "5"], tone: "both" as const, note: "最后公共父节点" },
-    { parent: "4", children: ["6", "7"], tone: "left" as const, note: "通向目标 6" },
-    { parent: "5", children: ["8", "9", "10"], tone: "right" as const, note: "通向目标 8" },
-  ];
-
+  const toneOf = (v: string) =>
+    v === "1" || v === "2" ? "var(--success)" : v === "4" || v === "6" || v === "7" ? "var(--accent)" : v === "5" || v === "8" || v === "9" || v === "10" ? "var(--warning)" : "var(--border)";
+  const N = ({ x, y, label }: { x: number; y: number; label: string }) => {
+    const tone = toneOf(label);
+    const strong = label === "2" || label === "6" || label === "8";
+    return (
+      <g>
+        <circle cx={x} cy={y} r="16" fill={tone} fillOpacity={strong ? 0.2 : 0.1} stroke={tone} strokeWidth={strong ? 2.2 : 1.4} />
+        <text x={x} y={y + 5} textAnchor="middle" fontSize="13" fontWeight="800" fontFamily="monospace" fill={tone}>{label}</text>
+      </g>
+    );
+  };
+  const E = ({ x1, y1, x2, y2, tone }: { x1: number; y1: number; x2: number; y2: number; tone: string }) => (
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={tone} strokeWidth="1.6" />
+  );
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-2 border border-border bg-elevated p-4 sm:grid-cols-2 sm:p-5">
-        {edges.map((edge) => (
-          <div key={edge.parent} className="flex min-h-24 items-center gap-3 border border-border bg-background p-3">
-            <NodeBadge value={edge.parent} tone={edge.tone} />
-            <span className="text-muted">→</span>
-            <div className="flex flex-1 flex-wrap gap-2">
-              {edge.children.map((child) => <NodeBadge key={child} value={child} tone={child === "6" ? "left" : child === "8" ? "right" : "default"} />)}
-            </div>
-            <span className="max-w-24 text-xs leading-5 text-secondary">{edge.note}</span>
-          </div>
-        ))}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="树中两个节点的最低公共父节点图。普通多叉树：1 的孩子 2、3；2 的孩子 4、5；4 的孩子 6、7；5 的孩子 8、9、10。目标 6 与 8 的根路径分别为 1,2,4,6 与 1,2,5,8。同步比较两条路径：1 相同、2 相同、到 4 与 5 分叉，所以最后一个公共节点 2 就是最低公共父节点。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两条根路径最后公共的节点即最低公共父节点</text>
+          {/* 边 */}
+          <E x1={410} y1={76} x2={280} y2={140} tone="var(--success)" />
+          <E x1={410} y1={76} x2={580} y2={140} tone="var(--border)" />
+          <E x1={280} y1={160} x2={180} y2={230} tone="var(--accent)" />
+          <E x1={280} y1={160} x2={380} y2={230} tone="var(--warning)" />
+          <E x1={180} y1={250} x2={120} y2={320} tone="var(--accent)" />
+          <E x1={180} y1={250} x2={240} y2={320} tone="var(--accent)" />
+          <E x1={380} y1={250} x2={330} y2={320} tone="var(--warning)" />
+          <E x1={380} y1={250} x2={420} y2={320} tone="var(--warning)" />
+          <E x1={380} y1={250} x2={500} y2={320} tone="var(--warning)" />
+          {/* 节点 */}
+          <N x={410} y={64} label="1" />
+          <N x={280} y={150} label="2" />
+          <N x={580} y={150} label="3" />
+          <N x={180} y={240} label="4" />
+          <N x={380} y={240} label="5" />
+          <N x={120} y={330} label="6" />
+          <N x={240} y={330} label="7" />
+          <N x={330} y={330} label="8" />
+          <N x={420} y={330} label="9" />
+          <N x={500} y={330} label="10" />
+          {/* 路径标注 */}
+          <text x={120} y={372} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">目标 6</text>
+          <text x={330} y={372} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">目标 8</text>
+          {/* 结论 */}
+          <text x="640" y="240" textAnchor="middle" fontSize="12" fill="var(--accent)">路径1：1,2,4,6</text>
+          <text x="640" y="262" textAnchor="middle" fontSize="12" fill="var(--warning)">路径2：1,2,5,8</text>
+          <text x="640" y="292" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--success)">最后公共 = 2</text>
+          <text x="410" y="404" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">同步扫描两条根路径，用 pLast 保存最近一次身份相同的节点；路径在 4/5 分叉后不会重新汇合。O(n) 时间、O(h) 空间。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         作者 Test1 的普通多叉树：目标 6 与 8 的两条祖先路径在节点 2 后分叉。

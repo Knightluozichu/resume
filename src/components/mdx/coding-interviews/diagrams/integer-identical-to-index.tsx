@@ -54,44 +54,43 @@ const officialCases = [
 
 export function IntegerIdenticalDifferenceDiagram() {
   const values = [-3, -1, 1, 3, 5];
+  const cellW = 110;
+  const cellH = 112;
+  const gapW = 12;
+  const rowX = 111;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
+  const tone = (diff: number) => (diff === 0 ? "var(--success)" : diff < 0 ? "var(--accent)" : "var(--warning)");
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-5 gap-2">
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 360"
+          role="img"
+          aria-label="数组中数值与下标相等的元素图。数组 -3、-1、1、3、5，逐位计算差值 值减下标：-3、-2、-1、0、+1。差值严格递增（不下降），在下标 3 处差值为 0，即 numbers[3]=3 命中。差值为负说明该搜右边，为正说明该搜左边，因此可以二分。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">差值 = 值 − 下标：严格递增使差值不下降，零点即答案</text>
           {values.map((value, index) => {
-            const difference = value - index;
-            const hit = difference === 0;
+            const diff = value - index;
+            const c = tone(diff);
             return (
-              <div
-                key={index}
-                className={
-                  "relative flex min-h-[112px] flex-col items-center justify-center border p-2 " +
-                  (hit
-                    ? "border-success bg-success/12"
-                    : difference < 0
-                      ? "border-accent bg-accent/10"
-                      : "border-warning bg-warning/10")
-                }
-              >
-                {hit && (
-                  <span className="absolute -top-2 bg-success px-1 text-[10px] font-semibold text-white">
-                    命中
-                  </span>
-                )}
-                <span className="text-xs text-muted">下标 {index}</span>
-                <span className="mt-1 text-xl font-semibold text-primary">{value}</span>
-                <span className="mt-2 text-xs font-semibold text-secondary">
-                  差值 {difference > 0 ? "+" : ""}{difference}
-                </span>
-              </div>
+              <g key={index}>
+                <rect x={cx(index)} y={64} width={cellW} height={cellH} rx="7" fill={c} fillOpacity={diff === 0 ? 0.14 : 0.08} stroke={c} strokeWidth={diff === 0 ? 2 : 1.3} />
+                {diff === 0 && <text x={cx(index) + cellW / 2} y={58} textAnchor="middle" fontSize="11" fontWeight="800" fill="var(--success)">命中</text>}
+                <text x={cx(index) + cellW / 2} y={90} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">下标 {index}</text>
+                <text x={cx(index) + cellW / 2} y={124} textAnchor="middle" fontSize="22" fontWeight="800" fontFamily="monospace" fill="var(--text-primary)">{value}</text>
+                <text x={cx(index) + cellW / 2} y={154} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill={c}>差值 {diff > 0 ? "+" : ""}{diff}</text>
+              </g>
             );
           })}
-        </div>
-        <div className="mt-4 flex items-center justify-between border border-border bg-background px-3 py-2 text-xs text-secondary">
-          <span>负差值：继续向右</span>
-          <span className="font-semibold text-success">零：数值等于下标</span>
-          <span>正差值：继续向左</span>
-        </div>
+          {/* 图例 */}
+          <text x="150" y="216" fontSize="12" fontWeight="700" fill="var(--accent)">差值 &lt; 0 → 向右搜</text>
+          <text x="360" y="216" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">差值 = 0 → 命中</text>
+          <text x="670" y="216" textAnchor="end" fontSize="12" fontWeight="700" fill="var(--warning)">差值 &gt; 0 → 向左搜</text>
+          <text x="410" y="256" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">整数值严格递增 → 每向右一步，值至少 +1 而下标只 +1，差值不下降。</text>
+          <text x="410" y="280" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">差值序列不下降，就能像有序数组一样二分：每轮排除一半区间，O(log n)。</text>
+          <text x="410" y="316" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">例：-3,-1,1,3,5 → 差值 -3,-2,-1,0,+1；mid=2 差值-1&lt;0→排除左半，mid=3 差值0→返回3。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         严格递增整数数组使差值序列不下降；零点就是数组中数值和下标相等的元素。

@@ -23,15 +23,64 @@ const officialCases = [
 ] as const;
 
 export function NumberAppearingOnceBitCountDiagram() {
+  const cols = ["bit2", "bit1", "bit0"];
+  const colX = [300, 430, 560];
   const rows = [
-    ["数字 1 × 3", "001", "bit0 加 3"],
-    ["数字 2 × 3", "010", "bit1 加 3"],
-    ["数字 3 × 1", "011", "bit1、bit0 各加 1"],
-    ["总计", "0 / 4 / 4", "各位对 3 取余为 0 / 1 / 1"],
+    { label: "1 × 3", bits: [0, 0, 1] },
+    { label: "2 × 3", bits: [0, 1, 0] },
+    { label: "3 × 1", bits: [0, 1, 1] },
   ] as const;
+  const count = [0, 4, 4];
+  const rem = [0, 1, 1];
+  const cellW = 100;
+  const cellH = 38;
+  const rowY = [96, 140, 184];
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5"><table className="w-full min-w-[680px] border-collapse text-left text-sm"><thead><tr className="border-b border-border">{["输入贡献", "低三位", "位计数"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (row[0] === "总计" || index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody></table></div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="数组中唯一出现一次的数字位计数图。1、2、2、2、1、1、3 中 1 和 2 各出现三次，3 出现一次。逐位统计所有数字的该位之和：bit2 为 0，bit1 为 4，bit0 为 4。出现三次的数字在每一位都贡献 3 的倍数，对 3 取余后消失；余数 0、1、1 拼成 011 即唯一值 3。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">逐位求和再模 3：出现三次者归零，余数重建唯一值</text>
+          <text x="410" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">例：1、1、1、2、2、2、3（1 与 2 各三次，3 一次）</text>
+          {/* 表头 */}
+          <text x="120" y={78} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">输入贡献</text>
+          {cols.map((c, i) => <text key={c} x={colX[i]} y={78} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">{c}</text>)}
+          {/* 数据行 */}
+          {rows.map((row, r) => (
+            <g key={row.label}>
+              <text x="120" y={rowY[r] + cellH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="var(--text-secondary)">{row.label}</text>
+              {row.bits.map((b, i) => (
+                <g key={i}>
+                  <rect x={colX[i] - cellW / 2} y={rowY[r]} width={cellW} height={cellH} rx="5" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
+                  <text x={colX[i]} y={rowY[r] + cellH / 2 + 5} textAnchor="middle" fontSize="15" fontWeight="700" fontFamily="monospace" fill={b ? "var(--accent)" : "var(--text-secondary)"}>{b}</text>
+                </g>
+              ))}
+            </g>
+          ))}
+          {/* 计数行 */}
+          <text x="120" y={228 + cellH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">位计数</text>
+          {count.map((c, i) => (
+            <g key={"c" + i}>
+              <rect x={colX[i] - cellW / 2} y={228} width={cellW} height={cellH} rx="5" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
+              <text x={colX[i]} y={228 + cellH / 2 + 5} textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill="var(--accent)">{c}</text>
+            </g>
+          ))}
+          {/* 余数行 */}
+          <text x="120" y={272 + cellH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">模 3 余数</text>
+          {rem.map((c, i) => (
+            <g key={"r" + i}>
+              <rect x={colX[i] - cellW / 2} y={272} width={cellW} height={cellH} rx="5" fill="var(--success)" fillOpacity="0.14" stroke="var(--success)" strokeWidth="1.4" />
+              <text x={colX[i]} y={272 + cellH / 2 + 5} textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill="var(--success)">{c}</text>
+            </g>
+          ))}
+          <text x="410" y="346" textAnchor="middle" fontSize="14" fontWeight="800" fill="var(--success)">余数 0 1 1 → 011 = 3（唯一值）</text>
+          <text x="410" y="374" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">负数按 32 位补码逐位统计同样成立；每元素检查 32 位，O(n) 时间、O(1) 空间。</text>
+        </svg>
+      </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         三次出现的数字在每一位都贡献 3 的倍数；余数 011 正好重建唯一值 3。
       </figcaption>

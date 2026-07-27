@@ -23,26 +23,56 @@ const officialCases = [
 ] as const;
 
 export function FirstUniqueFrequencyDiagram() {
-  const rows = [
-    { char: "g", count: 2, positions: "0、3", status: "重复" },
-    { char: "o", count: 2, positions: "1、2", status: "重复" },
-    { char: "l", count: 1, positions: "4", status: "候选" },
-    { char: "e", count: 1, positions: "5", status: "候选" },
+  const chars = [
+    { ch: "g", count: 2 },
+    { ch: "o", count: 2 },
+    { ch: "o", count: 2 },
+    { ch: "g", count: 2 },
+    { ch: "l", count: 1 },
+    { ch: "e", count: 1 },
   ] as const;
-
+  const cellW = 76;
+  const cellH = 52;
+  const gapW = 8;
+  const rowX = 130;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {rows.map((row) => (
-          <div key={row.char} className={"border p-4 " + (row.count === 1 ? "border-success bg-success/10" : "border-border bg-elevated")}>
-            <div className="flex items-center justify-between">
-              <span className="text-2xl font-semibold text-primary">{row.char}</span>
-              <span className={"text-sm font-semibold " + (row.count === 1 ? "text-success" : "text-warning")}>次数 {row.count}</span>
-            </div>
-            <div className="mt-3 text-sm text-secondary">位置：{row.positions}</div>
-            <div className="mt-2 text-xs text-muted">{row.status}</div>
-          </div>
-        ))}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="第一个只出现一次的字符图。以 google 为例：第一遍统计频次 g:2、o:2、l:1、e:1；第二遍按原顺序扫描，g 和 o 频次为 2 跳过，l 频次为 1 是第一个唯一字符，返回 l。频次表能回答谁唯一，但不能回答谁最早，所以必须第二遍按原顺序扫描。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="fu-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两遍扫描：先计频次，再按原顺序找首个频次1</text>
+          {/* 字符串 */}
+          {chars.map((c, i) => {
+            const unique = c.count === 1;
+            const found = c.ch === "l";
+            return (
+              <g key={i}>
+                <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={unique ? "var(--success)" : "var(--warning)"} fillOpacity={found ? 0.2 : 0.1} stroke={unique ? "var(--success)" : "var(--warning)"} strokeWidth={found ? 2.2 : 1.3} />
+                <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 7} textAnchor="middle" fontSize="20" fontWeight="800" fontFamily="monospace" fill={unique ? "var(--success)" : "var(--warning)"}>{c.ch}</text>
+                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+              </g>
+            );
+          })}
+          {/* 频次 */}
+          <text x="410" y="166" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">第一遍频次：g:2（重复）、o:2（重复）、l:1、e:1</text>
+          {/* 第二遍扫描 */}
+          <path d={`M ${cx(0) + cellW / 2} 186 L ${cx(4) + cellW / 2} 186`} stroke="var(--accent)" strokeWidth="1.6" markerEnd="url(#fu-arrow)" />
+          <text x="410" y="206" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">第二遍按原顺序扫描：g→跳、o→跳、l 频次1→命中</text>
+          {/* 结果 */}
+          <text x="410" y="248" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--success)">第一个只出现一次的字符 = l（l 早于 e）</text>
+          {/* 对比 */}
+          <text x="410" y="290" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">频次表只能回答“谁唯一”，不能回答“谁最早”；第二遍按原顺序扫描不可省略。</text>
+          <text x="410" y="316" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">例：abac 与 acab 频次表相同（a:2,b:1,c:1），但答案分别是 b 和 c。</text>
+          <text x="410" y="352" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">无唯一字符或空指针返回 NUL；两遍扫描 O(n)，频次数组 O(1)（256 槽）。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         google中l与e都只出现一次；第二遍按原顺序先遇到l，所以答案是l。

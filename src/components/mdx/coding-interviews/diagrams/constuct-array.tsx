@@ -30,28 +30,68 @@ const officialCases = [
 
 export function ConstructArrayMatrixDiagram() {
   const values = [1, 2, 3, 4, 5];
-
+  const cellW = 88;
+  const cellH = 50;
+  const gap = 4;
+  const gridX = 180;
+  const gridY = 92;
+  const colX = (j: number) => gridX + j * (cellW + gap);
+  const rowY = (i: number) => gridY + i * (cellH + gap);
+  const legend = [
+    { label: "下三角：左侧前缀积（第一遍左→右）", color: "var(--success)" },
+    { label: "对角线：排除 A[i]（不乘自身）", color: "var(--danger)" },
+    { label: "上三角：右侧后缀积（第二遍右→左）", color: "var(--accent)" },
+  ] as const;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid min-w-[620px] grid-cols-[70px_repeat(5,1fr)] gap-1 text-center text-xs">
-          <div />
-          {values.map((_, index) => <div key={index} className="border border-border bg-background p-2 font-semibold text-primary">A[{index}]</div>)}
-          {values.map((_, row) => (
-            <div key={"row-" + row} className="contents">
-              <div className="border border-border bg-background p-2 font-semibold text-primary">B[{row}]</div>
-              {values.map((value, column) => <div key={column} className={"border p-2 " + (column === row ? "border-danger bg-danger/10 text-danger" : column < row ? "border-success bg-success/10 text-success" : "border-accent bg-accent/10 text-accent")}>{column === row ? "排除" : value}</div>)}
-            </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 480"
+          role="img"
+          aria-label="构造数组矩阵图。B[i] 等于 A 中除 A[i] 外所有元素的乘积。把乘积展开成 5 行 5 列矩阵：第 i 行对应 B[i]，对角格 A[i] 被排除，对角左下方的格来自左侧前缀积，由第一遍从左到右扫描得到；对角右上方的格来自右侧后缀积，由第二遍从右到左扫描得到。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
+            B[i] = A[0]×…×A[i-1] · A[i+1]×…×A[n-1]：对角排除，两次扫描填充
+          </text>
+          {/* 列头 A[j] */}
+          {values.map((_, j) => (
+            <text key={"col" + j} x={colX(j) + cellW / 2} y={gridY - 14} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">
+              A[{j}]
+            </text>
           ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="border border-success bg-success/10 p-3 text-sm text-success">下三角：左侧前缀积</div>
-          <div className="border border-danger bg-danger/10 p-3 text-sm text-danger">对角线：排除 A[i]</div>
-          <div className="border border-accent bg-accent/10 p-3 text-sm text-accent">上三角：右侧后缀积</div>
-        </div>
+          {/* 行头 B[i] 与矩阵格 */}
+          {values.map((_, i) => (
+            <g key={"row" + i}>
+              <text x={gridX - 16} y={rowY(i) + cellH / 2 + 4} textAnchor="end" fontSize="12" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">
+                B[{i}]
+              </text>
+              {values.map((v, j) => {
+                const excluded = j === i;
+                const prefix = j < i;
+                const tone = excluded ? "var(--danger)" : prefix ? "var(--success)" : "var(--accent)";
+                return (
+                  <g key={"cell" + i + "-" + j}>
+                    <rect x={colX(j)} y={rowY(i)} width={cellW} height={cellH} rx="5" fill={tone} fillOpacity={excluded ? 0.12 : 0.1} stroke={tone} strokeWidth="1.2" />
+                    <text x={colX(j) + cellW / 2} y={rowY(i) + cellH / 2 + 5} textAnchor="middle" fontSize={excluded ? 11 : 14} fontWeight="700" fontFamily="monospace" fill={tone}>
+                      {excluded ? "排除" : v}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          ))}
+          {/* 图例 */}
+          {legend.map((item, idx) => (
+            <g key={item.label}>
+              <rect x={130} y={392 + idx * 28} width={16} height={16} rx="3" fill={item.color} fillOpacity="0.15" stroke={item.color} strokeWidth="1.2" />
+              <text x={156} y={404 + idx * 28} fontSize="12" fill="var(--text-secondary)">{item.label}</text>
+            </g>
+          ))}
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        每一行排除对角元素；下三角与上三角分别由两次方向相反的扫描提供。
+        每一行排除对角元素；下三角由左到右的前缀扫描、上三角由右到左的后缀扫描分别提供，全程不做除法。
       </figcaption>
     </figure>
   );

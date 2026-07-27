@@ -21,15 +21,57 @@ const officialCases = [
 ] as const;
 
 export function LeftRotatePartitionDiagram() {
-  const blocks = [
-    ["原串 AB", "ab", "cdefg", "A 在前，B 在后"],
-    ["目标 BA", "cdefg", "ab", "两段换位，段内不变"],
-  ] as const;
-
+  const A = ["a", "b"];
+  const B = ["c", "d", "e", "f", "g"];
+  const cellW = 56;
+  const cellH = 48;
+  const gapW = 6;
+  const rowX = 120;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
+  const Cell = ({ i, ch, tone }: { i: number; ch: string; tone: string }) => (
+    <g>
+      <rect x={cx(i)} y={0} width={cellW} height={cellH} rx="5" fill={tone} fillOpacity="0.12" stroke={tone} strokeWidth="1.4" />
+      <text x={cx(i) + cellW / 2} y={cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="800" fontFamily="monospace" fill={tone}>{ch}</text>
+    </g>
+  );
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 border border-border bg-elevated p-4 sm:grid-cols-2 sm:p-5">
-        {blocks.map(([title, first, second, note], row) => <div key={title} className="border border-border bg-background p-4"><div className="text-xs font-semibold text-primary">{title}</div><div className="mt-3 grid grid-cols-[2fr_5fr] gap-2 text-center font-mono text-sm"><div className={(row === 0 ? "border-accent bg-accent/10 text-accent" : "border-success bg-success/10 text-success") + " border p-3"}>{first}</div><div className={(row === 0 ? "border-success bg-success/10 text-success" : "border-accent bg-accent/10 text-accent") + " border p-3"}>{second}</div></div><div className="mt-3 text-xs text-secondary">{note}</div></div>)}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="左旋转字符串图。把字符串看成 A 与 B 两段，左旋 n 位就是把 AB 变成 BA。例 abcdefg、n=2：A=ab、B=cdefg，目标 cdefgab。三次翻转法：先翻 A 得 ba|cdefg，再翻 B 得 ba|gfedc，最后整体翻转得 cdefg|ab。原理：(AʳBʳ)ʳ = (Bʳ)ʳ(Aʳ)ʳ = BA。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="lr-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">左旋 n 位 = 把 AB 变成 BA（例 abcdefg，n=2）</text>
+          {/* 原串 AB */}
+          <text x={rowX - 16} y={78} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--text-primary)">原串</text>
+          <g transform="translate(0,56)">
+            {A.map((ch, i) => <Cell key={"a" + i} i={i} ch={ch} tone="var(--accent)" />)}
+            {B.map((ch, i) => <Cell key={"b" + i} i={i + A.length} ch={ch} tone="var(--success)" />)}
+          </g>
+          <text x={cx(0) + cellW / 2} y={128} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">A=ab</text>
+          <text x={(cx(2) + cx(6) + cellW) / 2} y={128} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">B=cdefg</text>
+          {/* 箭头 */}
+          <path d="M 410 140 L 410 164" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#lr-arrow)" />
+          {/* 目标 BA */}
+          <text x={rowX - 16} y={204} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--text-primary)">目标</text>
+          <g transform="translate(0,182)">
+            {B.map((ch, i) => <Cell key={"b2" + i} i={i} ch={ch} tone="var(--success)" />)}
+            {A.map((ch, i) => <Cell key={"a2" + i} i={i + B.length} ch={ch} tone="var(--accent)" />)}
+          </g>
+          <text x={(cx(0) + cx(4) + cellW) / 2} y={254} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">B=cdefg</text>
+          <text x={cx(6) + cellW / 2} y={254} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">A=ab</text>
+          {/* 三次翻转 */}
+          <text x="410" y="292" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">三次翻转法（原地、不额外分配）</text>
+          <text x="410" y="318" textAnchor="middle" fontSize="12" fontFamily="monospace" fill="var(--accent)">① 翻 A：ab|cdefg → ba|cdefg</text>
+          <text x="410" y="342" textAnchor="middle" fontSize="12" fontFamily="monospace" fill="var(--accent)">② 翻 B：ba|cdefg → ba|gfedc</text>
+          <text x="410" y="366" textAnchor="middle" fontSize="12" fontFamily="monospace" fill="var(--success)">③ 翻整体：ba|gfedc → cdefg|ab</text>
+          <text x="410" y="398" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">原理：(AʳBʳ)ʳ = (Bʳ)ʳ(Aʳ)ʳ = BA；每段二次翻转恢复，整体翻转交换段序。O(n)、O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         左旋 n 位就是把前段 A 搬到后段 B 之后，将 AB 变成 BA。

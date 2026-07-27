@@ -24,18 +24,53 @@ const officialCases = [
 ] as const;
 
 export function BalancedBinaryTreeLocalRuleDiagram() {
-  const rows = [
-    ["完全树", "左深 2", "右深 2", "差 0", "平衡"],
-    ["非完全树", "左深 3", "右深 2", "差 1", "平衡"],
-    ["局部偏斜", "左深 3", "右深 1", "差 2", "失衡"],
+  const cases = [
+    { title: "完全树", left: 2, right: 2, diff: 0, ok: true, x: 150 },
+    { title: "非完全但平衡", left: 3, right: 2, diff: 1, ok: true, x: 410 },
+    { title: "局部偏斜", left: 3, right: 1, diff: 2, ok: false, x: 670 },
   ] as const;
+  const N = ({ x, y, tone }: { x: number; y: number; tone: string }) => (
+    <circle cx={x} cy={y} r="11" fill={tone} fillOpacity="0.15" stroke={tone} strokeWidth="1.5" />
+  );
+  const E = ({ x1, y1, x2, y2, tone }: { x1: number; y1: number; x2: number; y2: number; tone: string }) => (
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={tone} strokeWidth="1.4" />
+  );
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 border border-border bg-elevated p-4 sm:grid-cols-3 sm:p-5">
-        {rows.map((row) => {
-          const ok = row[4] === "平衡";
-          return <div key={row[0]} className={"border p-4 " + (ok ? "border-success bg-success/10" : "border-danger bg-danger/10")}><div className="font-semibold text-primary">{row[0]}</div><div className="mt-3 grid grid-cols-2 gap-2 text-xs text-secondary"><span>{row[1]}</span><span>{row[2]}</span></div><div className="mt-3 text-sm text-secondary">{row[3]}</div><div className={"mt-2 font-semibold " + (ok ? "text-success" : "text-danger")}>{row[4]}</div></div>;
-        })}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="平衡二叉树判定图。平衡指任一节点的左右子树深度差不超过 1。三种形态：完全树左右深度都 2、差 0，平衡；非完全但平衡的树左深 3 右深 2、差 1，仍平衡（完全不等于平衡）；局部偏斜的树左深 3 右深 1、差 2，失衡。平衡检查作用于每个节点，任一节点差值超过 1 就失败。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">平衡 = 任一节点左右深度差 ≤ 1</text>
+          {cases.map((c) => {
+            const tone = c.ok ? "var(--success)" : "var(--danger)";
+            const rx = c.x;
+            return (
+              <g key={c.title}>
+                <rect x={rx - 118} y={52} width={236} height={252} rx="10" fill={tone} fillOpacity="0.05" stroke={tone} strokeWidth="1.5" />
+                <text x={rx} y={76} textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--text-primary)">{c.title}</text>
+                {/* 小树 */}
+                <E x1={rx} y1={104} x2={rx - 40} y2={140} tone={tone} />
+                <E x1={rx} y1={104} x2={rx + 40} y2={140} tone={tone} />
+                <N x={rx} y={96} tone={tone} />
+                <N x={rx - 40} y={148} tone={tone} />
+                <N x={rx + 40} y={148} tone={tone} />
+                {/* 左侧深度 */}
+                <E x1={rx - 40} y1={158} x2={rx - 56} y2={192} tone={tone} />
+                <N x={rx - 56} y={200} tone={tone} />
+                {c.left >= 3 && <g><E x1={rx - 56} y1={210} x2={rx - 66} y2={240} tone={tone} /><N x={rx - 66} y={248} tone={tone} /></g>}
+                {/* 右侧深度 */}
+                {c.right >= 2 && <g><E x1={rx + 40} y1={158} x2={rx + 56} y2={192} tone={tone} /><N x={rx + 56} y={200} tone={tone} /></g>}
+                {c.right >= 3 && <g><E x1={rx + 56} y1={210} x2={rx + 66} y2={240} tone={tone} /><N x={rx + 66} y={248} tone={tone} /></g>}
+                <text x={rx} y={280} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">左深 {c.left} / 右深 {c.right}，差 {c.diff}</text>
+                <text x={rx} y={298} textAnchor="middle" fontSize="13" fontWeight="800" fill={tone}>{c.ok ? "平衡" : "失衡"}</text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         平衡检查作用于每个节点；非完全树也可以平衡，任一节点差值超过 1 就失败。

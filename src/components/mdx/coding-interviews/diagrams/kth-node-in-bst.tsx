@@ -37,36 +37,55 @@ const officialCases = [
   },
 ] as const;
 
-function TreeNodeBox({ value, active = false }: { value: number; active?: boolean }) {
-  return (
-    <div className={"mx-auto flex size-11 items-center justify-center rounded-full border-2 text-sm font-semibold " + (active ? "border-success bg-success/15 text-success" : "border-border bg-background text-primary")}>
-      {value}
-    </div>
-  );
-}
-
 export function KthNodeBstOrderDiagram() {
   const order = [5, 6, 7, 8, 9, 10, 11];
+  const N = ({ x, y, label, hot = false }: { x: number; y: number; label: number; hot?: boolean }) => (
+    <g>
+      <circle cx={x} cy={y} r="18" fill={hot ? "var(--success)" : "var(--bg)"} fillOpacity={hot ? 0.16 : 1} stroke={hot ? "var(--success)" : "var(--border)"} strokeWidth={hot ? 2 : 1.4} />
+      <text x={x} y={y + 5} textAnchor="middle" fontSize="14" fontWeight="800" fontFamily="monospace" fill={hot ? "var(--success)" : "var(--text-primary)"}>{label}</text>
+    </g>
+  );
+  const E = ({ x1, y1, x2, y2 }: { x1: number; y1: number; x2: number; y2: number }) => (
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--border)" strokeWidth="1.4" />
+  );
+  const cellW = 70;
+  const ox = 130;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-y-3">
-          <div className="col-span-4"><TreeNodeBox value={8} /></div>
-          <div className="col-span-2"><TreeNodeBox value={6} /></div>
-          <div className="col-span-2"><TreeNodeBox value={10} /></div>
-          {[5, 7, 9, 11].map((value) => <TreeNodeBox key={value} value={value} />)}
-        </div>
-        <div className="mt-5 border-t border-border pt-4">
-          <div className="mb-2 text-xs font-semibold text-muted">左 → 根 → 右的访问次序</div>
-          <div className="grid grid-cols-7 gap-2">
-            {order.map((value, index) => (
-              <div key={value} className="border border-accent bg-accent/10 p-2 text-center">
-                <div className="font-semibold text-primary">{value}</div>
-                <div className="mt-1 text-[10px] text-muted">第 {index + 1} 个</div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="二叉搜索树的第 k 小节点图。BST 中序遍历（左、根、右）得到递增序列：树 8；6,10；5,7,9,11 的中序为 5,6,7,8,9,10,11。所以第 k 小就是中序遍历的第 k 个节点。以 k=4 为例，中序访问到节点 8 时是第 4 个，命中返回；之后的 9、10、11 不再访问。k 从 1 计，k=0 或超过节点数返回空。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">BST 中序 = 递增序列：第 k 小即中序第 k 个</text>
+          {/* 树 */}
+          <E x1={410} y1={78} x2={280} y2={140} />
+          <E x1={410} y1={78} x2={540} y2={140} />
+          <E x1={280} y1={160} x2={200} y2={220} />
+          <E x1={280} y1={160} x2={360} y2={220} />
+          <E x1={540} y1={160} x2={480} y2={220} />
+          <E x1={540} y1={160} x2={620} y2={220} />
+          <N x={410} y={64} label={8} hot />
+          <N x={280} y={150} label={6} />
+          <N x={540} y={150} label={10} />
+          <N x={200} y={230} label={5} />
+          <N x={360} y={230} label={7} />
+          <N x={480} y={230} label={9} />
+          <N x={620} y={230} label={11} />
+          {/* 中序序列 */}
+          <text x="410" y="292" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-secondary)">中序遍历（左→根→右）：</text>
+          {order.map((v, i) => (
+            <g key={v}>
+              <rect x={ox + i * (cellW + 8)} y={304} width={cellW} height={44} rx="6" fill={v === 8 ? "var(--success)" : "var(--accent)"} fillOpacity={v === 8 ? 0.16 : 0.08} stroke={v === 8 ? "var(--success)" : "var(--accent)"} strokeWidth={v === 8 ? 1.8 : 1.2} />
+              <text x={ox + i * (cellW + 8) + cellW / 2} y={326} textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill={v === 8 ? "var(--success)" : "var(--accent)"}>{v}</text>
+              <text x={ox + i * (cellW + 8) + cellW / 2} y={342} textAnchor="middle" fontSize="9" fill="var(--text-secondary)">第{i + 1}</text>
+            </g>
+          ))}
+          <text x="410" y="378" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--success)">k=4 → 中序第 4 个 = 8（命中后 9、10、11 不再访问）</text>
+          <text x="410" y="404" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">k 由引用在递归层共享递减；k=1 返回最小节点 5；k=0 或越界返回空。O(h+k) 时间、O(h) 栈。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         二叉搜索树中序遍历得到 5 到 11 的有序节点序列；作者的 k=1 返回 5。

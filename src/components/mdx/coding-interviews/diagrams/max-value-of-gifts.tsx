@@ -38,17 +38,41 @@ const officialCases = [
 ] as const;
 
 export function GiftGridDPDiagram() {
+  const cellW = 120;
+  const cellH = 76;
+  const gapW = 10;
+  const gridX = 155;
+  const gridY = 64;
+  const cx = (j: number) => gridX + j * (cellW + gapW);
+  const cy = (i: number) => gridY + i * (cellH + gapW);
+  const onPath = (i: number, j: number) => path.has(i + "," + j);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-2">
-          {values.flatMap((row, rowIndex) => row.map((value, colIndex) => (
-            <div key={rowIndex + "-" + colIndex} className="flex min-h-[72px] flex-col items-center justify-center border border-border bg-background">
-              <span className="text-xs text-muted">礼物 {value}</span>
-              <span className="mt-1 text-lg font-semibold text-accent">{totals[rowIndex][colIndex]}</span>
-            </div>
-          )))}
-        </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 470"
+          role="img"
+          aria-label="礼物最大价值动态规划图。4×4 网格，每格小字是礼物原价值，大字是从左上角到该格的最大累计价值。递推 f(i,j) 等于当前价值加上上方与左方累计值的较大者。高亮的最优路径 1、12、5、7、7、16、5 总和 53，右下角即答案。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">f(i,j) = value(i,j) + max( f(i-1,j), f(i,j-1) )</text>
+          <text x="410" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每格小字为原价值，大字为到该格的最大累计；高亮为最优路径</text>
+          {values.map((row, i) =>
+            row.map((value, j) => {
+              const sel = onPath(i, j);
+              const tone = sel ? "var(--success)" : "var(--border)";
+              return (
+                <g key={i + "-" + j}>
+                  <rect x={cx(j)} y={cy(i)} width={cellW} height={cellH} rx="6" fill={sel ? "var(--success)" : "var(--bg)"} fillOpacity={sel ? 0.12 : 1} stroke={tone} strokeWidth={sel ? 1.8 : 1.2} />
+                  <text x={cx(j) + cellW / 2} y={cy(i) + 24} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">礼物 {value}</text>
+                  <text x={cx(j) + cellW / 2} y={cy(i) + 56} textAnchor="middle" fontSize="20" fontWeight="800" fontFamily="monospace" fill={sel ? "var(--success)" : "var(--accent)"}>{totals[i][j]}</text>
+                </g>
+              );
+            }),
+          )}
+          <text x="410" y="432" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">最优路径 1+12+5+7+7+16+5 = 53（右下角）</text>
+          <text x="410" y="456" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">只能向右或向下；第一行只能从左侧累计，第一列只能从上方累计。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         每格小字是原价值，大字是从左上到该格的最大累计值；右下角得到53。

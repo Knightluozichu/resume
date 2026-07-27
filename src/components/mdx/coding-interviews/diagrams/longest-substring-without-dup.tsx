@@ -69,23 +69,40 @@ export function LongestSubstringTraceLab() {
 
 export function DuplicateDecisionDiagram() {
   const branches = [
-    { condition: "从未出现", example: "f @ 5", result: "curLength + 1", meaning: "不会制造重复" },
-    { condition: "距离大于当前长度", example: "a距旧位置很远", result: "curLength + 1", meaning: "旧字符已在后缀外" },
-    { condition: "距离小于或等于当前长度", example: "c @ 4，距离2", result: "距离", meaning: "删除旧字符及其左侧" },
+    { condition: "从未出现", example: "prev = -1（如 f）", result: "curLength + 1", meaning: "不会制造重复", color: "var(--success)" },
+    { condition: "距离 d > curLength", example: "旧字符已在后缀外", result: "curLength + 1", meaning: "直接增长", color: "var(--accent)" },
+    { condition: "距离 d ≤ curLength", example: "c@4，d=2，当前长3", result: "curLength = d", meaning: "删旧字符及其左侧", color: "var(--warning)" },
   ] as const;
-
+  const cardW = 224;
+  const cardH = 168;
+  const gapW = 18;
+  const rowX = 60;
+  const cx = (i: number) => rowX + i * (cardW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 md:grid-cols-3">
-        {branches.map((item, index) => (
-          <div key={item.condition} className="border border-border bg-elevated p-4">
-            <div className="text-xs font-semibold text-accent">分支 {index + 1}</div>
-            <h4 className="mt-2 text-base font-semibold text-primary">{item.condition}</h4>
-            <div className="mt-3 border-y border-border py-3 text-sm text-secondary">{item.example}</div>
-            <div className="mt-3 font-semibold text-success">{item.result}</div>
-            <p className="mb-0 mt-2 text-sm text-muted">{item.meaning}</p>
-          </div>
-        ))}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="最长不含重复字符的子字符串决策图。动态规划：设 curLength 为以当前字符结尾的最长无重复后缀长度，d 为当前字符到上次出现位置的距离。三分支：从未出现（prev=-1）或 d 大于 curLength（旧字符已在后缀外）→ curLength 加 1；d 小于等于 curLength（旧字符还在后缀内）→ curLength 改为 d，即删除旧字符及其左侧。例 abcacfrar：到 c@4 时 d=2、curLength=3，d≤3 故 curLength=2；历史最大 best=4（acfr）。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">curLength 三分支：d = 到上次出现位置的距离</text>
+          {branches.map((b, i) => (
+            <g key={b.condition}>
+              <rect x={cx(i)} y={56} width={cardW} height={cardH} rx="8" fill={b.color} fillOpacity="0.08" stroke={b.color} strokeWidth="1.5" />
+              <text x={cx(i) + cardW / 2} y={82} textAnchor="middle" fontSize="11" fontWeight="700" fill={b.color}>分支 {i + 1}</text>
+              <text x={cx(i) + cardW / 2} y={108} textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--text-primary)">{b.condition}</text>
+              <text x={cx(i) + cardW / 2} y={132} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{b.example}</text>
+              <line x1={cx(i) + 20} y1={146} x2={cx(i) + cardW - 20} y2={146} stroke="var(--border)" strokeWidth="1" />
+              <text x={cx(i) + cardW / 2} y={172} textAnchor="middle" fontSize="14" fontWeight="800" fontFamily="monospace" fill={b.color}>{b.result}</text>
+              <text x={cx(i) + cardW / 2} y={198} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{b.meaning}</text>
+            </g>
+          ))}
+          <text x="410" y="266" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">best = max(best, curLength)；例 abcacfrar → best = 4（子串 acfr）</text>
+          <text x="410" y="296" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">等号属于“旧字符仍在后缀内”分支：源码条件必须是 d &gt; curLength 才增长，d ≤ curLength 则收缩。</text>
+          <text x="410" y="322" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">用长 26 的 position 数组记录每个字母上次位置；一次遍历 O(n)、O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         等号属于重复仍在当前后缀内的分支，所以源码条件必须是distance大于curLength才增长。

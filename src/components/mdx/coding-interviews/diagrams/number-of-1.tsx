@@ -24,20 +24,45 @@ const officialCases = [
 ] as const;
 
 export function NumberOf1RecursiveDecompositionDiagram() {
-  const rows = [
-    ["21345", "2 / 5", "10000", "8000", "F(1345)=821", "18821"],
-    ["1345", "1 / 4", "346", "300", "F(345)=175", "821"],
-    ["345", "3 / 3", "100", "60", "F(45)=15", "175"],
-    ["45", "4 / 2", "10", "4", "F(5)=1", "15"],
-    ["5", "5 / 1", "基例", "—", "—", "1"],
+  const parts = [
+    { label: "最高位为 1", detail: "10000～19999", value: "10000 次", color: "var(--success)" },
+    { label: "其余位为 1", detail: "2 × 4 × 1000", value: "8000 次", color: "var(--accent)" },
+    { label: "递归后缀 F(1345)", detail: "去掉首位再算", value: "821 次", color: "var(--warning)" },
   ] as const;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-          <thead><tr className="border-b border-border">{["当前后缀", "首位/长度", "首位为1", "其余位为1", "递归后缀", "合计"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 5 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="1 到 n 整数中 1 出现的次数图。以 n=21345 为例，按最高位拆解：最高位（万位）为 1 的贡献是 10000 到 19999 共 10000 次；其余四个位为 1 的贡献是 首位2 × 位数4 × 1000 共 8000 次；去掉首位后的后缀 1345 递归计算得 821 次。三者相加 10000+8000+821 = 18821。后缀继续同样拆解：1345→345→45→5（基例）。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">按最高位拆解：F(n) = 最高位贡献 + 其余位贡献 + F(后缀)</text>
+          {/* 顶部 n */}
+          <rect x="310" y="52" width="200" height="46" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.6" />
+          <text x="410" y="80" textAnchor="middle" fontSize="16" fontWeight="800" fontFamily="monospace" fill="var(--accent)">n = 21345</text>
+          <text x="410" y="116" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">首位 2、长度 5，拆为三部分</text>
+          {/* 三部分 */}
+          {parts.map((p, i) => {
+            const x = 70 + i * 240;
+            return (
+              <g key={p.label}>
+                <path d={`M 410 100 L ${x + 105} 150`} stroke="var(--border)" strokeWidth="1.2" />
+                <rect x={x} y={150} width={210} height={92} rx="8" fill={p.color} fillOpacity="0.1" stroke={p.color} strokeWidth="1.4" />
+                <text x={x + 105} y={176} textAnchor="middle" fontSize="12" fontWeight="800" fill={p.color}>{p.label}</text>
+                <text x={x + 105} y={200} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="var(--text-secondary)">{p.detail}</text>
+                <text x={x + 105} y={226} textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="monospace" fill={p.color}>{p.value}</text>
+              </g>
+            );
+          })}
+          {/* 求和 */}
+          <text x="410" y="288" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--success)">10000 + 8000 + 821 = 18821</text>
+          {/* 递归链 */}
+          <text x="410" y="326" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">后缀同样拆解：21345 → 1345 → 345 → 45 → 5（基例返回 1）</text>
+          <text x="410" y="352" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">首位&gt;1 贡献整块 10^(len-1)；首位=1 贡献 后缀+1；其余位 = 首位×(len-1)×10^(len-2)。</text>
+          <text x="410" y="388" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">等价按位视角（high/cur/low）逐位累加也得 18821；把对 n 个数的枚举降为对十进制位的处理。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         作者每层把答案拆成最高位贡献、其余位贡献和去掉首字符后的递归贡献。

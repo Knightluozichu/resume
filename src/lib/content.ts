@@ -645,6 +645,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "用图解建立算法核心直觉：递归、排序、搜索、动态规划与贪心。",
         items: learningBooks(["grokking-algorithms-2e"]),
       },
+      {
+        level: "intermediate",
+        summary: "以剑指Offer系统训练数组、字符串、链表、二叉树与动态规划等面试高频题。",
+        items: learningBooks(["coding-interviews"]),
+      },
     ],
   },
   {

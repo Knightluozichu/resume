@@ -127,3 +127,69 @@ export function AccumulateTemplateDiagram() {
 export function AccumulateOfficialCaseLab() {
   return <CodingInterviewLab cases={officialCases} caption="作者测试 1、5、10、0；前三种运行时方案在 Test 中检查，模板方案因参数必须是常量而单独实例化检查。" />;
 }
+
+/**
+ * <AccumulateRecursionDiagram>：递归求 1+2+…+n 的下降与回溯累加图。
+ * 左列递归下降 sum(n)→sum(n-1)→…→sum(1) 触底；右列回溯累加 1→3→6→10→15。
+ * 纯静态 SVG，viewBox 720×360。
+ */
+export function AccumulateRecursionDiagram() {
+  const calls = ["sum(5)", "sum(4)", "sum(3)", "sum(2)", "sum(1)"];
+  const returns = [15, 10, 6, 3, 1]; // 与 calls 同层：sum(5)=15 … sum(1)=1
+  const colL = 150;
+  const colR = 560;
+  const topY = 70;
+  const stepY = 64;
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <svg
+          viewBox="0 0 720 360"
+          role="img"
+          aria-label="递归求和图。左列递归下降：sum(5)调用sum(4)、sum(4)调用sum(3)、直到sum(1)触底（基例）。右列回溯累加：sum(1)返回1，sum(2)返回1加2等于3，sum(3)返回3加3等于6，sum(4)返回10，sum(5)返回15。每一层 sum(n) 等于 n 加上 sum(n-1) 的返回值。"
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
+          <text x="150" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">递归下降（调用）</text>
+          <text x="560" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="#3FB97F">回溯累加（返回）</text>
+          {/* 下降调用栈 */}
+          {calls.map((c, i) => {
+            const y = topY + i * stepY;
+            const isBase = i === calls.length - 1;
+            return (
+              <g key={c}>
+                <rect x={colL - 55} y={y - 18} width={110} height={34} rx="7" fill={isBase ? "#E5B567" : "var(--accent)"} fillOpacity={isBase ? 0.2 : 0.12} stroke={isBase ? "#E5B567" : "var(--accent)"} strokeWidth="1.4" />
+                <text x={colL} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill={isBase ? "#E5B567" : "var(--accent)"}>{c}</text>
+                {isBase && <text x={colL} y={y + 30} textAnchor="middle" fontSize="10" fontWeight="700" fill="#E5B567">基例：sum(1)=1</text>}
+                {i < calls.length - 1 && <path d={`M ${colL} ${y + 16} L ${colL} ${y + stepY - 18}`} stroke="var(--accent)" strokeWidth="1.4" markerEnd="url(#accDown)" />}
+              </g>
+            );
+          })}
+          {/* 回溯返回值 */}
+          {returns.map((v, i) => {
+            const y = topY + i * stepY;
+            return (
+              <g key={`r${i}`}>
+                <rect x={colR - 55} y={y - 18} width={110} height={34} rx="7" fill="#3FB97F" fillOpacity="0.14" stroke="#3FB97F" strokeWidth="1.4" />
+                <text x={colR} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="#3FB97F">返回 {v}</text>
+                {i > 0 && <path d={`M ${colR} ${y + stepY - 18} L ${colR} ${y + 16}`} stroke="#3FB97F" strokeWidth="1.4" markerEnd="url(#accUp)" />}
+              </g>
+            );
+          })}
+          {/* 同层关联：sum(n) = n + sum(n-1) 的返回 */}
+          {calls.map((c, i) => {
+            const y = topY + i * stepY;
+            return <line key={`link${i}`} x1={colL + 55} y1={y} x2={colR - 55} y2={y} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 3" />;
+          })}
+          <defs>
+            <marker id="accDown" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1 1 L4 6 L7 1" fill="none" stroke="var(--accent)" strokeWidth="1.4" /></marker>
+            <marker id="accUp" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1 7 L4 2 L7 7" fill="none" stroke="#3FB97F" strokeWidth="1.4" /></marker>
+          </defs>
+          <text x="360" y={topY + 4 * stepY + 40} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每层 sum(n) = n + sum(n-1) 的返回值；不用循环/条件，靠递归触底再回溯累加</text>
+        </svg>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        递归求 1+2+…+n：一路调用到基例 sum(1)=1，再逐层回溯把 n 累加回去，最终 sum(5)=15。
+      </figcaption>
+    </figure>
+  );
+}

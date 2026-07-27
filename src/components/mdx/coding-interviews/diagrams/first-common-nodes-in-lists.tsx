@@ -21,30 +21,57 @@ const officialCases = [
   { label: "两条空链", fields: [["链A", "nullptr"], ["链B", "nullptr"], ["期望", "nullptr"], ["长度", "0 / 0"]] },
 ] as const;
 
-function NodeBox({ value, shared = false }: { value: string; shared?: boolean }) {
-  return (
-    <div className={"flex h-11 min-w-11 items-center justify-center border px-3 font-semibold " + (shared ? "border-success bg-success/15 text-success" : "border-border bg-background text-primary")}>
-      {value}
-    </div>
-  );
-}
-
 export function ListIntersectionIdentityDiagram() {
+  const nodeW = 56;
+  const nodeH = 44;
+  const Node = ({ x, y, label, shared = false }: { x: number; y: number; label: string; shared?: boolean }) => (
+    <g>
+      <rect x={x} y={y} width={nodeW} height={nodeH} rx="6" fill={shared ? "var(--success)" : "var(--bg)"} fillOpacity={shared ? 0.14 : 1} stroke={shared ? "var(--success)" : "var(--border)"} strokeWidth={shared ? 1.8 : 1.3} />
+      <text x={x + nodeW / 2} y={y + nodeH / 2 + 5} textAnchor="middle" fontSize="15" fontWeight="700" fontFamily="monospace" fill={shared ? "var(--success)" : "var(--text-primary)"}>{label}</text>
+    </g>
+  );
+  const Arrow = ({ x1, y1, x2, y2 }: { x1: number; y1: number; x2: number; y2: number }) => (
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--border)" strokeWidth="1.6" markerEnd="url(#list-arrow)" />
+  );
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 border border-border bg-elevated p-4 sm:p-5 lg:grid-cols-[1fr_1fr_1.1fr]">
-        <div className="border border-border bg-background p-4">
-          <div className="text-xs font-semibold text-accent">链表A独有前缀</div>
-          <div className="mt-3 flex items-center gap-2"><NodeBox value="1" /><span>→</span><NodeBox value="2" /><span>→</span><NodeBox value="3" /></div>
-        </div>
-        <div className="border border-border bg-background p-4">
-          <div className="text-xs font-semibold text-accent">链表B独有前缀</div>
-          <div className="mt-3 flex items-center gap-2"><NodeBox value="4" /><span>→</span><NodeBox value="5" /></div>
-        </div>
-        <div className="border border-success bg-success/5 p-4">
-          <div className="text-xs font-semibold text-success">同一组共享节点对象</div>
-          <div className="mt-3 flex items-center gap-2"><NodeBox value="6" shared /><span>→</span><NodeBox value="7" shared /><span>→ null</span></div>
-        </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 360"
+          role="img"
+          aria-label="两个链表的第一个公共节点图。链表 A 为 1、2、3，链表 B 为 4、5，两者的 next 都指向同一个节点 6，随后共享 6、7、null 整个后缀。相交指的是节点身份（地址）相同，而不只是数值相同；一旦共享某节点，之后只能沿同一条 next 链走到相同尾部。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="list-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--border)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">两前缀 next 指向同一节点：共享的是身份与整个后缀</text>
+          {/* 链表 A */}
+          <text x="88" y="66" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">链表 A</text>
+          <Node x={60} y={80} label="1" />
+          <Node x={150} y={80} label="2" />
+          <Node x={240} y={80} label="3" />
+          <Arrow x1={116} y1={102} x2={148} y2={102} />
+          <Arrow x1={206} y1={102} x2={238} y2={102} />
+          {/* 链表 B */}
+          <text x="133" y="212" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">链表 B</text>
+          <Node x={105} y={226} label="4" />
+          <Node x={195} y={226} label="5" />
+          <Arrow x1={161} y1={248} x2={193} y2={248} />
+          {/* 汇聚箭头 */}
+          <Arrow x1={296} y1={110} x2={416} y2={158} />
+          <Arrow x1={251} y1={240} x2={416} y2={182} />
+          {/* 共享后缀 */}
+          <Node x={420} y={150} label="6" shared />
+          <Node x={540} y={150} label="7" shared />
+          <Arrow x1={476} y1={172} x2={538} y2={172} />
+          <text x={640} y={178} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-secondary)">null</text>
+          <Arrow x1={596} y1={172} x2={618} y2={172} />
+          <text x={476} y={130} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">共享后缀（同一组节点对象）</text>
+          {/* 说明 */}
+          <text x="410" y="316" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">判等用指针地址 pA == pB；值相同但地址不同的两个独立节点不算相交。</text>
+          <text x="410" y="340" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">长度对齐：长链先走长度差步，再同步前进，首次地址相等即首个公共节点。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         两个前缀都把next指向同一个节点6；共享的是节点身份及其整个后缀，不只是数值6。

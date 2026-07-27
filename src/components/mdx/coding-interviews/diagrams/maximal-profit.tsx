@@ -28,24 +28,47 @@ const officialCases = [
 ] as const;
 
 export function MaximalProfitTimelineDiagram() {
+  const chartX = (day: number) => 80 + day * 94.3;
+  const chartY = (p: number) => 280 - ((p - 1) / 15) * 220;
+  const points = prices.map((p, i) => `${chartX(i)},${chartY(p)}`).join(" ");
+  const buyDay = 2;
+  const sellDay = 4;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid min-w-[720px] grid-cols-8 gap-2">
-          {prices.map((price, day) => (
-            <div key={day} className={"relative flex min-h-24 flex-col items-center justify-center border " + (day === 2 ? "border-success bg-success/10" : day === 4 ? "border-accent bg-accent/10" : "border-border bg-background")}>
-              <span className="text-xs text-muted">时刻 {day}</span>
-              <span className="mt-1 text-lg font-semibold text-primary">{price}</span>
-              {day === 2 && <span className="mt-1 text-xs font-semibold text-success">买入</span>}
-              {day === 4 && <span className="mt-1 text-xs font-semibold text-accent">卖出</span>}
-            </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="股票最大利润时间线图。价格依次为 9、11、5、7、16、1、4、2。在时刻 2 价格 5 买入、时刻 4 价格 16 卖出，利润 11 是最大差值。后面出现的更低价格 1 不能与已经过去的 16 配对，因为买入必须早于卖出。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="profit-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">最大利润 = 某个卖出日价格 − 此前历史最低价</text>
+          {/* 坐标轴 */}
+          <line x1="80" y1="280" x2="760" y2="280" stroke="var(--border)" strokeWidth="1.4" />
+          <line x1="80" y1="50" x2="80" y2="280" stroke="var(--border)" strokeWidth="1.4" />
+          <text x="60" y="64" textAnchor="end" fontSize="10" fill="var(--text-secondary)">16</text>
+          <text x="60" y="284" textAnchor="end" fontSize="10" fill="var(--text-secondary)">1</text>
+          {/* 价格折线 */}
+          <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2.4" />
+          {prices.map((p, i) => (
+            <g key={i}>
+              <circle cx={chartX(i)} cy={chartY(p)} r="4.5" fill={i === buyDay ? "var(--success)" : i === sellDay ? "var(--accent)" : "var(--bg)"} stroke={i === buyDay ? "var(--success)" : i === sellDay ? "var(--accent)" : "var(--border)"} strokeWidth="1.6" />
+              <text x={chartX(i)} y={chartY(p) - 12} textAnchor="middle" fontSize="11" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">{p}</text>
+              <text x={chartX(i)} y={300} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">t{i}</text>
+            </g>
           ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="border border-border bg-background p-3 text-sm text-secondary">买入必须早于卖出</div>
-          <div className="border border-success bg-success/10 p-3 text-sm font-semibold text-success">此前最低价格 5</div>
-          <div className="border border-accent bg-accent/10 p-3 text-sm font-semibold text-accent">最大差值 16 - 5 = 11</div>
-        </div>
+          {/* 买入/卖出标注 */}
+          <text x={chartX(buyDay)} y={chartY(5) + 26} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">买入 5</text>
+          <text x={chartX(sellDay)} y={chartY(16) + 24} textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--accent)">卖出 16</text>
+          <path d={`M ${chartX(buyDay) + 34} ${chartY(5) - 30} C ${chartX(3)} ${chartY(5) - 70}, ${chartX(3.5)} ${chartY(16) - 40}, ${chartX(sellDay) - 34} ${chartY(16) - 6}`} fill="none" stroke="var(--success)" strokeWidth="2" strokeDasharray="5 4" markerEnd="url(#profit-arrow)" />
+          <text x={chartX(3)} y={chartY(5) - 66} textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--success)">利润 16 − 5 = 11</text>
+          {/* 说明 */}
+          <text x="410" y="340" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">扫描时先以“此前最低价”算当天卖出的利润，再把当天价格纳入未来买入候选。</text>
+          <text x="410" y="364" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">后面出现的 1 不能与已过去的 16 配对：买入必须早于卖出。一次遍历 O(n)、O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         后面虽出现更低的 1，却不能与已经过去的 16 组成合法交易。

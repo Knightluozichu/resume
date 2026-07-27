@@ -18,19 +18,47 @@ const officialCases = [
 ] as const;
 
 export function NumbersAppearOnceXorDiagram() {
-  const items = [
-    ["2", "配对 A"], ["4", "目标"], ["3", "配对 B"], ["6", "目标"],
-    ["3", "配对 B"], ["2", "配对 A"], ["5", "配对 C"], ["5", "配对 C"],
-  ] as const;
+  const values = [2, 4, 3, 6, 3, 2, 5, 5];
+  const isTarget = (v: number) => v === 4 || v === 6;
+  const cellW = 76;
+  const cellH = 52;
+  const gapW = 8;
+  const rowX = 78;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-          {items.map((item, index) => <div key={index} className={"border p-2 text-center " + (item[1] === "目标" ? "border-warning bg-warning/10" : "border-border bg-background")}><div className="font-semibold text-primary">{item[0]}</div><div className="mt-1 text-[10px] text-muted">{item[1]}</div></div>)}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          {["2 xor 2 = 0", "3 xor 3 = 0", "5 xor 5 = 0", "4 xor 6 = 2"].map((item, index) => <div key={item} className={"border p-3 text-center text-xs font-semibold " + (index === 3 ? "border-accent bg-accent/10 text-accent" : "border-success bg-success/10 text-success")}>{item}</div>)}
-        </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="数组中只出现一次的两个数字图。2、4、3、6、3、2、5、5 中 4 和 6 各出现一次。全部异或后成对项归零，只剩 4 异或 6 等于 2（二进制 0010）。取结果为 1 的某一位（如 bit1）作为分组位：4 该位为 0、6 该位为 1，被分到不同组；相同数字该位相同必进同一组。两组各自异或，成对抵消后各留下一个目标：6 与 4。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">全体异或得 4⊕6，再按一个不同位拆成两组</text>
+          {/* 数组行 */}
+          {values.map((v, i) => (
+            <g key={i}>
+              <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={isTarget(v) ? "var(--warning)" : "var(--bg)"} fillOpacity={isTarget(v) ? 0.12 : 1} stroke={isTarget(v) ? "var(--warning)" : "var(--border)"} strokeWidth={isTarget(v) ? 1.6 : 1.2} />
+              <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="700" fontFamily="monospace" fill={isTarget(v) ? "var(--warning)" : "var(--text-primary)"}>{v}</text>
+            </g>
+          ))}
+          {/* 全体异或 */}
+          <text x="410" y="146" textAnchor="middle" fontSize="13" fill="var(--text-primary)">全体异或：2⊕2=0、3⊕3=0、5⊕5=0 → 只剩 4⊕6 = 2（0010）</text>
+          <text x="410" y="172" textAnchor="middle" fontSize="13" fill="var(--accent)">取结果为 1 的一位作分组位：bit1（掩码 0010）—— 4=0100 该位 0，6=0110 该位 1</text>
+          {/* 两组 */}
+          <rect x="90" y="196" width="300" height="120" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" />
+          <text x="240" y="220" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--accent)">bit1 = 1 组</text>
+          <text x="240" y="248" textAnchor="middle" fontSize="13" fontFamily="monospace" fill="var(--text-primary)">2, 3, 6, 3, 2</text>
+          <text x="240" y="276" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">2⊕2、3⊕3 抵消</text>
+          <text x="240" y="302" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--success)">组内异或 = 6</text>
+          <rect x="430" y="196" width="300" height="120" rx="8" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.4" />
+          <text x="580" y="220" textAnchor="middle" fontSize="12" fontWeight="800" fill="var(--success)">bit1 = 0 组</text>
+          <text x="580" y="248" textAnchor="middle" fontSize="13" fontFamily="monospace" fill="var(--text-primary)">4, 5, 5</text>
+          <text x="580" y="276" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">5⊕5 抵消</text>
+          <text x="580" y="302" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--success)">组内异或 = 4</text>
+          <text x="410" y="356" textAnchor="middle" fontSize="14" fontWeight="800" fill="var(--success)">两个只出现一次的数字：4 与 6</text>
+          <text x="410" y="384" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">分组只看同一个二进制位，相同数字绝不会被拆散；两次线性扫描 O(n)、O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         全部数字异或后，成对项归零，只剩两个只出现一次数字的异或结果。

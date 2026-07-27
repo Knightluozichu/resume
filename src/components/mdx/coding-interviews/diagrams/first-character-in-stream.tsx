@@ -53,22 +53,46 @@ export function StreamOccurrenceStateLab() {
 
 export function OccurrenceSentinelDiagram() {
   const states = [
-    { value: "-1", label: "从未出现", event: "第一次Insert", next: "首次位置index", color: "text-muted" },
-    { value: "index", label: "恰好出现一次", event: "第二次Insert", next: "-2", color: "text-success" },
-    { value: "-2", label: "出现多次", event: "后续Insert", next: "-2", color: "text-warning" },
+    { value: "-1", label: "从未出现", x: 130, color: "var(--text-secondary)" },
+    { value: "index", label: "恰好出现一次", x: 410, color: "var(--success)" },
+    { value: "-2", label: "出现多次", x: 690, color: "var(--warning)" },
   ] as const;
-
+  const cy = 130;
+  const r = 46;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 md:grid-cols-3">
-        {states.map((state) => (
-          <div key={state.value} className="border border-border bg-elevated p-4">
-            <div className={"text-2xl font-semibold " + state.color}>{state.value}</div>
-            <div className="mt-2 text-sm font-semibold text-primary">{state.label}</div>
-            <div className="mt-4 border-y border-border py-3 text-xs text-secondary">{state.event}</div>
-            <div className="mt-3 text-sm text-secondary">下一状态：<strong className="text-primary">{state.next}</strong></div>
-          </div>
-        ))}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 360"
+          role="img"
+          aria-label="字符流中第一个只出现一次的字符状态机图。每个字符的 occurrence 有三种状态：-1 从未出现；首次 Insert 后记录首次位置 index（非负）；第二次 Insert 后变为 -2 表示永久重复，之后不再改变。查询时扫描 256 个槽，取 occurrence 为非负的最小位置对应的字符；若没有非负值则返回 NUL。状态只会单向前进，因为输入流只增不删。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="occ-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">occurrence 状态机：只会单向前进（流只增不删）</text>
+          {/* 状态节点 */}
+          {states.map((s) => (
+            <g key={s.value}>
+              <circle cx={s.x} cy={cy} r={r} fill={s.color} fillOpacity="0.1" stroke={s.color} strokeWidth="1.8" />
+              <text x={s.x} y={cy + 2} textAnchor="middle" fontSize="18" fontWeight="800" fontFamily="monospace" fill={s.color}>{s.value}</text>
+              <text x={s.x} y={cy + 24} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{s.label}</text>
+            </g>
+          ))}
+          {/* 转移箭头 */}
+          <path d={`M ${130 + r} ${cy - 12} L ${410 - r} ${cy - 12}`} stroke="var(--accent)" strokeWidth="1.8" markerEnd="url(#occ-arrow)" />
+          <text x="270" y={cy - 22} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">首次 Insert → 记首次位置</text>
+          <path d={`M ${410 + r} ${cy - 12} L ${690 - r} ${cy - 12}`} stroke="var(--accent)" strokeWidth="1.8" markerEnd="url(#occ-arrow)" />
+          <text x="550" y={cy - 22} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">第二次 Insert</text>
+          {/* -2 自环 */}
+          <path d={`M ${690 + r - 6} ${cy - 30} C ${760} ${cy - 60}, ${770} ${cy + 20}, ${690 + r - 4} ${cy + 24}`} fill="none" stroke="var(--warning)" strokeWidth="1.6" markerEnd="url(#occ-arrow)" />
+          <text x="720" y={cy + 60} textAnchor="middle" fontSize="10" fill="var(--warning)">后续 Insert</text>
+          {/* 查询 */}
+          <text x="410" y="240" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">查询：扫描 256 槽，取 occurrence 非负的最小位置 → 该字符</text>
+          <text x="410" y="266" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">例 google：g、o 都转 -2，l@4、e@5 为非负，最小位置 4 → 返回 l</text>
+          <text x="410" y="292" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">无非负值（如 goog）→ 返回 NUL；Insert 为 O(1)，查询扫描 256 槽为 O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         状态只会从未出现走向出现一次，再走向永久重复；输入流只增不删，因此无需恢复。

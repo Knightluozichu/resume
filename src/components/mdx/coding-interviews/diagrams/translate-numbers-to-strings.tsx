@@ -25,21 +25,48 @@ const officialCases = [
 ] as const;
 
 export function TranslationMappingDiagram() {
-  const rows = [
-    ["0", "a", "单字符0合法", "不是经典1到26解码"],
-    ["1", "b", "单字符1合法", "所有单个数字都合法"],
-    ["9", "j", "单字符9合法", "个位映射结束"],
-    ["10", "k", "双字符下边界", "01不等于双字符1"],
-    ["12", "m", "12258可选12", "与1|2形成不同路径"],
-    ["25", "z", "双字符上边界", "26无效"],
-  ] as const;
+  const single = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  const letters = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+  const cellW = 56;
+  const gapW = 8;
+  const rowX = 90;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[840px] border-collapse text-left text-sm">
-          <thead><tr className="border-b border-border">{["编码", "字母", "合法性", "边界意义"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="把数字翻译成字符串图。编码规则：0 到 25 分别对应 a 到 z。单个数字 0 到 9 总是合法；两位数字必须是 10 到 25（如 10→k、25→z），26 无效、01 也不等于双字符 1。计数用动态规划：f(i) = f(i+1)（取一位）加上当两位合法时的 f(i+2)。例 12258：有效两位有 12、22、25，共 5 种翻译（bccfi、bwfi、bczi、mcfi、mzi）。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">编码 0→25 对应 a→z；单位合法，两位须 10→25</text>
+          {/* 单位映射 */}
+          <text x={rowX - 16} y={78} textAnchor="end" fontSize="11" fontWeight="700" fill="var(--text-secondary)">单位</text>
+          {single.map((d, i) => (
+            <g key={d}>
+              <rect x={cx(i)} y={56} width={cellW} height={34} rx="5" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
+              <text x={cx(i) + cellW / 2} y={78} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--accent)">{d}</text>
+              <text x={cx(i) + cellW / 2} y={110} textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">{letters[i]}</text>
+            </g>
+          ))}
+          <text x={rowX - 16} y={110} textAnchor="end" fontSize="11" fill="var(--text-secondary)">字母</text>
+          {/* 两位规则 */}
+          <text x="410" y="150" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">两位数字：10→k … 25→z（合法）；26 无效、01 不等于双字符 1</text>
+          {/* DP */}
+          <text x="410" y="188" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">计数递推：f(i) = f(i+1) + （两位合法时）f(i+2)</text>
+          {/* 例 12258 */}
+          <text x="410" y="222" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">例 12258（有效两位：12、22、25）</text>
+          {["1", "2", "2", "5", "8"].map((d, i) => (
+            <g key={i}>
+              <rect x={cx(i) + 60} y={238} width={cellW} height={40} rx="5" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.2" />
+              <text x={cx(i) + 60 + cellW / 2} y={263} textAnchor="middle" fontSize="16" fontWeight="800" fontFamily="monospace" fill="var(--text-primary)">{d}</text>
+            </g>
+          ))}
+          <text x="410" y="306" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--success)">共 5 种：bccfi、bwfi、bczi、mcfi、mzi</text>
+          <text x="410" y="336" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">从右向左递推：f(4)=1、f(3)=1、f(2)=2、f(1)=3、f(0)=5；计数不构造字符串。</text>
+          <text x="410" y="362" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">本题是 0→25 编码（非经典 1→26）；负数入口返回 0，O(n) 时间、O(n) 或滚动 O(1) 空间。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         作者映射从0到25对应a到z；单个0合法，双字符必须是10到25。

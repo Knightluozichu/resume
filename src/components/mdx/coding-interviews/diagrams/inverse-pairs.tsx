@@ -25,23 +25,51 @@ const officialCases = [
 ] as const;
 
 export function InversePairDecompositionDiagram() {
-  const groups = [
-    { label: "左段内部", values: "[1, 4, 7]", count: 0, note: "已经有序" },
-    { label: "右段内部", values: "[2, 3, 6]", count: 0, note: "已经有序" },
-    { label: "跨段逆序", values: "(4,2)、(4,3)、(7,2)、(7,3)、(7,6)", count: 5, note: "归并时批量统计" },
-  ] as const;
-
+  const values = [1, 4, 7, 2, 3, 6];
+  const cellW = 80;
+  const cellH = 52;
+  const gapW = 10;
+  const rowX = 145;
+  const cx = (i: number) => rowX + i * (cellW + gapW);
+  const isLeft = (i: number) => i <= 2;
+  // 跨段逆序对：左段元素 > 右段元素
+  const pairs: Array<[number, number]> = [[1, 3], [1, 4], [2, 3], [2, 4], [2, 5]];
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-3 md:grid-cols-3">
-        {groups.map((group) => (
-          <div key={group.label} className="border border-border bg-elevated p-4">
-            <div className="text-sm font-semibold text-accent">{group.label}</div>
-            <div className="mt-3 min-h-[46px] text-sm text-secondary">{group.values}</div>
-            <div className="mt-3 border-t border-border pt-3 text-2xl font-semibold text-primary">{group.count}</div>
-            <div className="mt-1 text-xs text-muted">{group.note}</div>
-          </div>
-        ))}
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="逆序对分治统计图。数组 1、4、7、2、3、6 分成左段 1、4、7 与右段 2、3、6。总逆序数等于左段内部、右段内部与跨段三部分之和；左右段各自有序后内部逆序为 0。跨段逆序对为 4 大于 2、4 大于 3、7 大于 2、7 大于 3、7 大于 6，共 5 对，归并时批量统计。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="inv-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="var(--warning)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">总逆序数 = 左段内部 + 右段内部 + 跨段（归并时批量统计）</text>
+          {/* 数组行：左段/右段 */}
+          {values.map((v, i) => (
+            <g key={i}>
+              <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={isLeft(i) ? "var(--accent)" : "var(--success)"} fillOpacity="0.1" stroke={isLeft(i) ? "var(--accent)" : "var(--success)"} strokeWidth="1.4" />
+              <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="18" fontWeight="700" fontFamily="monospace" fill={isLeft(i) ? "var(--accent)" : "var(--success)"}>{v}</text>
+            </g>
+          ))}
+          <text x={(cx(0) + cx(2) + cellW) / 2} y={56} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">左段（已有序）</text>
+          <text x={(cx(3) + cx(5) + cellW) / 2} y={56} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--success)">右段（已有序）</text>
+          {/* 跨段逆序对箭头 */}
+          {pairs.map(([a, b], idx) => {
+            const x1 = cx(a) + cellW / 2;
+            const x2 = cx(b) + cellW / 2;
+            const mid = (x1 + x2) / 2;
+            const depth = 150 + (idx % 3) * 16;
+            return <path key={idx} d={`M ${x1} 122 Q ${mid} ${depth} ${x2} 122`} fill="none" stroke="var(--warning)" strokeWidth="1.4" strokeOpacity="0.75" markerEnd="url(#inv-arrow)" />;
+          })}
+          <text x="410" y="216" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">跨段逆序：4&gt;2、4&gt;3（2 对） + 7&gt;2、7&gt;3、7&gt;6（3 对） = 5 对</text>
+          {/* 三部分汇总 */}
+          <text x="410" y="256" textAnchor="middle" fontSize="13" fill="var(--text-primary)">左段内部 [1,4,7]：0 对 · 右段内部 [2,3,6]：0 对 · 跨段：5 对 → 总计 5</text>
+          <text x="410" y="294" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">归并时左指针值大于右指针值，则它与右段全部剩余元素都构成逆序，一次加完。</text>
+          <text x="410" y="318" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">分治递归处理左右段内部，跨段部分在归并中 O(n) 完成，总复杂度 O(n log n)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         总逆序数等于左段内部、右段内部与跨段三部分之和；分治递归处理前两部分。

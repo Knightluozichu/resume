@@ -22,20 +22,48 @@ const officialCases = [
 ] as const;
 
 export function AddTwoNumbersBitDiagram() {
+  const headers = ["位 a", "位 b", "a XOR b", "a AND b", "二进制结果"];
   const rows = [
     ["0", "0", "0", "0", "0"],
-    ["0", "1", "1", "0", "0"],
-    ["1", "0", "1", "0", "0"],
+    ["0", "1", "1", "0", "1"],
+    ["1", "0", "1", "0", "1"],
     ["1", "1", "0", "1", "10"],
   ] as const;
-
+  const colX = [120, 250, 390, 530, 670];
+  const cellW = 110;
+  const cellH = 40;
+  const headY = 60;
+  const rowY = [104, 148, 192, 236];
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[640px] border-collapse text-center text-sm">
-          <thead><tr className="border-b border-border">{["位 a", "位 b", "a XOR b", "a AND b", "二进制结果"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0] + row[1]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={index} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : index === 3 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
-        </table>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="不用加减乘除做加法的位级真值表。对两个二进制位：a XOR b 得到不计进位的当前位结果，a AND b 得到是否需要向高一位进位。0+1 和 1+0 的 XOR 为 1、进位 0；1+1 的 XOR 为 0、进位 1（结果 10）。于是 sum = a XOR b，carry = (a AND b) 左移一位，循环直到进位为 0。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">XOR 得当前位，AND 得进位：逐位拆解加法</text>
+          {/* 表头 */}
+          {headers.map((h, i) => <text key={h} x={colX[i]} y={headY} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{h}</text>)}
+          {/* 数据行 */}
+          {rows.map((row, r) => {
+            const carry = row[0] === "1" && row[1] === "1";
+            return (
+              <g key={r}>
+                {row.map((cell, c) => (
+                  <g key={c}>
+                    <rect x={colX[c] - cellW / 2} y={rowY[r]} width={cellW} height={cellH} rx="5" fill={carry ? "var(--warning)" : "var(--bg)"} fillOpacity={carry ? 0.1 : 1} stroke={carry ? "var(--warning)" : "var(--border)"} strokeWidth={carry ? 1.4 : 1} />
+                    <text x={colX[c]} y={rowY[r] + cellH / 2 + 5} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill={c === 2 ? "var(--accent)" : c === 3 ? "var(--success)" : carry ? "var(--warning)" : "var(--text-secondary)"}>{cell}</text>
+                  </g>
+                ))}
+              </g>
+            );
+          })}
+          <text x="410" y="308" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">sum = a XOR b（不计进位的和）</text>
+          <text x="410" y="332" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">carry = (a AND b) &lt;&lt; 1（向高一位的进位）</text>
+          <text x="410" y="368" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">把 sum 与 carry 再当两个加数重复上述步骤，直到 carry 为 0；例 5+7 需三轮得到 12。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         XOR 给当前位结果，AND 只标记需要向更高一位传递进位的位置。

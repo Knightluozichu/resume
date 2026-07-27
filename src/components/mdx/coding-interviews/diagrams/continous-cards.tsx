@@ -27,29 +27,63 @@ const officialCases = [
 ] as const;
 
 export function ContinuousCardsSortDiagram() {
+  const original = [0, 3, 2, 6, 4];
+  const sorted = [0, 2, 3, 4, 6];
+  const cardW = 60;
+  const cardH = 52;
+  const gapW = 10;
+  const rowX = 240;
+  const cx = (i: number) => rowX + i * (cardW + gapW);
+  const lineY = 288;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-          <div className="border border-border bg-background p-4">
-            <div className="text-xs text-muted">原始抽牌顺序</div>
-            <div className="mt-3 grid grid-cols-5 gap-2">
-              {[0, 3, 2, 6, 4].map((card, index) => <div key={index} className={"flex h-14 items-center justify-center border text-lg font-semibold " + (card === 0 ? "border-success bg-success/10 text-success" : "border-border text-primary")}>{card}</div>)}
-            </div>
-          </div>
-          <div className="text-center text-xl text-accent">→</div>
-          <div className="border border-accent bg-accent/10 p-4">
-            <div className="text-xs text-muted">排序并分离 0</div>
-            <div className="mt-3 grid grid-cols-5 gap-2">
-              {[0, 2, 3, 4, 6].map((card, index) => <div key={index} className={"flex h-14 items-center justify-center border text-lg font-semibold " + (card === 0 ? "border-success bg-success/10 text-success" : "border-accent bg-background text-primary")}>{card}</div>)}
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="border border-border bg-background p-3 text-sm text-secondary">大小王：1 张</div>
-          <div className="border border-border bg-background p-3 text-sm text-secondary">非零空缺：缺少 5</div>
-          <div className="border border-success bg-success/10 p-3 text-sm font-semibold text-success">1 张王恰好补齐</div>
-        </div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 420"
+          role="img"
+          aria-label="扑克牌顺子判定图。原始抽牌 0、3、2、6、4，排序后 0、2、3、4、6，大小王 0 被聚到最左。非零牌 2、3、4、6 在数轴上缺少 5，空缺为 1；恰好有 1 张王可以填补，所以是顺子。若出现重复非零牌则直接失败。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <defs>
+            <marker id="cards-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" /></marker>
+          </defs>
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">排序聚 0，再数空缺：王的张数 ≥ 空缺总数即顺子</text>
+          {/* 原始顺序 */}
+          <text x="410" y="62" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">原始抽牌顺序</text>
+          {original.map((card, i) => (
+            <g key={"o" + i}>
+              <rect x={cx(i)} y={72} width={cardW} height={cardH} rx="6" fill={card === 0 ? "var(--success)" : "var(--bg)"} fillOpacity={card === 0 ? 0.12 : 1} stroke={card === 0 ? "var(--success)" : "var(--border)"} strokeWidth="1.4" />
+              <text x={cx(i) + cardW / 2} y={72 + cardH / 2 + 6} textAnchor="middle" fontSize="18" fontWeight="700" fontFamily="monospace" fill={card === 0 ? "var(--success)" : "var(--text-primary)"}>{card}</text>
+            </g>
+          ))}
+          {/* 向下箭头 */}
+          <path d="M 410 132 L 410 158" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#cards-arrow)" />
+          <text x="430" y="150" fontSize="11" fill="var(--accent)">排序</text>
+          {/* 排序后 */}
+          <text x="410" y="184" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">排序后：0（王）聚左，非零牌递增</text>
+          {sorted.map((card, i) => (
+            <g key={"s" + i}>
+              <rect x={cx(i)} y={194} width={cardW} height={cardH} rx="6" fill={card === 0 ? "var(--success)" : "var(--accent)"} fillOpacity={card === 0 ? 0.12 : 0.1} stroke={card === 0 ? "var(--success)" : "var(--accent)"} strokeWidth="1.4" />
+              <text x={cx(i) + cardW / 2} y={194 + cardH / 2 + 6} textAnchor="middle" fontSize="18" fontWeight="700" fontFamily="monospace" fill={card === 0 ? "var(--success)" : "var(--accent)"}>{card}</text>
+            </g>
+          ))}
+          {/* 数轴空缺 */}
+          <text x="410" y={lineY - 12} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">非零牌在数轴上的空缺：2、3、4、6 之间缺 5</text>
+          {[2, 3, 4, 5, 6].map((n) => {
+            const missing = n === 5;
+            const x = 250 + (n - 2) * 70;
+            return (
+              <g key={"n" + n}>
+                <rect x={x} y={lineY} width={58} height={46} rx="6" fill={missing ? "var(--danger)" : "var(--accent)"} fillOpacity={missing ? 0.08 : 0.1} stroke={missing ? "var(--danger)" : "var(--accent)"} strokeWidth={missing ? 1.6 : 1.2} strokeDasharray={missing ? "5 4" : undefined} />
+                <text x={x + 29} y={lineY + 29} textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="monospace" fill={missing ? "var(--danger)" : "var(--accent)"}>{missing ? "缺" : n}</text>
+              </g>
+            );
+          })}
+          {/* 王填补 */}
+          <path d="M 460 250 C 460 268 460 272 460 284" fill="none" stroke="var(--success)" strokeWidth="2" markerEnd="url(#cards-arrow)" />
+          <text x="410" y={lineY + 78} textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">空缺 = 1，王 = 1 → 恰好补齐，是顺子</text>
+          <text x="410" y={lineY + 102} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">排序后相邻非零牌相同→有对子，直接判负；王只能填点数，不能消除对子。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         排序把所有 0 聚到左侧，也让重复牌与相邻空缺能够一次线性扫描发现。

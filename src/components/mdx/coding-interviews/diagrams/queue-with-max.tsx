@@ -25,11 +25,49 @@ const officialCases = [
 ] as const;
 
 export function QueueWithMaxDataDiagram() {
+  const data = ["2#0", "3#1", "4#2", "2#3"];
+  const maxima = ["4#2", "2#3"];
+  const boxW = 92;
+  const boxH = 48;
+  const gapW = 12;
+  const qx = 200;
+  const bx = (i: number) => qx + i * (boxW + gapW);
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="grid gap-4 border border-border bg-elevated p-4 sm:grid-cols-2 sm:p-5">
-        <div className="border border-border bg-background p-4"><div className="text-sm font-semibold text-primary">数据队列</div><div className="mt-3 flex gap-2">{["2#0", "3#1", "4#2", "2#3"].map((item) => <div key={item} className="border border-border px-3 py-2 text-sm text-secondary">{item}</div>)}</div><div className="mt-3 text-xs text-muted">保存每一个元素，队首按 FIFO 弹出</div></div>
-        <div className="border border-accent bg-accent/10 p-4"><div className="text-sm font-semibold text-primary">候选最大值队列</div><div className="mt-3 flex gap-2">{["4#2", "2#3"].map((item) => <div key={item} className="border border-accent px-3 py-2 text-sm font-semibold text-accent">{item}</div>)}</div><div className="mt-3 text-xs text-muted">值递减，队首 4#2 即当前最大值</div></div>
+      <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <svg
+          viewBox="0 0 820 400"
+          role="img"
+          aria-label="队列的最大值图。用两个队列：数据队列保存每个元素（值#唯一索引），按 FIFO 弹出；候选最大值队列只保留可能成为最大值的元素，值从队首到队尾递减。例：数据队列 2#0、3#1、4#2、2#3，候选队列 4#2、2#3，队首 4#2 即当前最大值。push 时从候选队尾淘汰不大于新值的旧候选；pop 时仅当两队首索引相同才同步删候选。"
+          className="mx-auto block h-auto w-full max-w-[820px]"
+        >
+          <text x="410" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">双队列：数据队列 FIFO + 候选队列值递减</text>
+          {/* 数据队列 */}
+          <text x={qx - 16} y={92} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--text-primary)">数据队列</text>
+          <text x={qx - 16} y={110} textAnchor="end" fontSize="10" fill="var(--text-secondary)">队首</text>
+          {data.map((item, i) => (
+            <g key={item}>
+              <rect x={bx(i)} y={70} width={boxW} height={boxH} rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.3" />
+              <text x={bx(i) + boxW / 2} y={70 + boxH / 2 + 5} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">{item}</text>
+            </g>
+          ))}
+          <text x={qx - 16} y={146} textAnchor="end" fontSize="10" fill="var(--text-secondary)">保存每个元素，pop 从队首弹出</text>
+          {/* 候选队列 */}
+          <text x={qx - 16} y={212} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--accent)">候选队列</text>
+          <text x={qx - 16} y={230} textAnchor="end" fontSize="10" fill="var(--text-secondary)">队首</text>
+          {maxima.map((item, i) => (
+            <g key={item}>
+              <rect x={bx(i)} y={190} width={boxW} height={boxH} rx="6" fill="var(--accent)" fillOpacity={i === 0 ? 0.16 : 0.08} stroke="var(--accent)" strokeWidth={i === 0 ? 1.8 : 1.3} />
+              <text x={bx(i) + boxW / 2} y={190 + boxH / 2 + 5} textAnchor="middle" fontSize="14" fontWeight="800" fontFamily="monospace" fill="var(--accent)">{item}</text>
+            </g>
+          ))}
+          <text x={qx - 16} y={266} textAnchor="end" fontSize="10" fill="var(--text-secondary)">值递减，队首即最大</text>
+          {/* max */}
+          <text x="410" y="300" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--success)">max() = 候选队首的值 = 4</text>
+          {/* 规则 */}
+          <text x="410" y="334" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">push：新值 ≥ 候选队尾 → 弹出队尾（摊还 O(1)）；pop：两队首索引相同才同步删候选。</text>
+          <text x="410" y="360" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">索引用于区分相等值的身份；pop 必须比较索引而非只比较数值。max/pop 最坏 O(1)。</text>
+        </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         两个队列都存值与唯一索引；候选队列只是数据队列的单调子序列。
