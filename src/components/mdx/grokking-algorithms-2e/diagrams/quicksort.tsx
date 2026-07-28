@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -184,35 +182,5 @@ export function DivideConquerFarmDiagram() {
         分治的设计顺序是先找到最简单的基线，再把当前问题缩小为结构相同的子问题。
       </figcaption>
     </figure>
-  );
-}
-
-export function RecursiveSumLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={sumCases}
-      caption="递归求和把数组首元素与剩余数组之和组合，空数组是可直接回答的基线。"
-      tone="emerald"
-    />
-  );
-}
-
-export function QuickSortPartitionLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={partitionCases}
-      caption="一次复制分区把比较关系建立好，但左右两组内部仍需递归排序。"
-      tone="cyan"
-    />
-  );
-}
-
-export function QuickSortComplexityLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={complexityCases}
-      caption="每层线性工作乘以递归树高度，得到平均与最坏情况的不同增长率。"
-      tone="violet"
-    />
   );
 }

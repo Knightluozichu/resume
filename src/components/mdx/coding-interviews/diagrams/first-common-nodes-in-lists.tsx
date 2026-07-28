@@ -1,26 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const alignmentStates = [
-  { label: "起点", long: "1", short: "4", longRemaining: 5, shortRemaining: 4, action: "链A长5，链B长4；两指针距尾部不相等" },
-  { label: "长链先走1步", long: "2", short: "4", longRemaining: 4, shortRemaining: 4, action: "长度差为1；现在两个指针到尾部的剩余节点数相等" },
-  { label: "同步第1步", long: "2", short: "4", longRemaining: 4, shortRemaining: 4, action: "节点地址不同，同时前进" },
-  { label: "同步第2步", long: "3", short: "5", longRemaining: 3, shortRemaining: 3, action: "节点地址仍不同，同时前进" },
-  { label: "命中", long: "6", short: "6", longRemaining: 2, shortRemaining: 2, action: "两个指针指向同一个节点6；它就是第一个公共节点" },
-] as const;
-
-const officialCases = [
-  { label: "中间相交", fields: [["链A", "1-2-3-6-7"], ["链B", "4-5-6-7"], ["期望", "节点6"], ["长度差", "1"]] },
-  { label: "完全不交", fields: [["链A", "1-2-3-4"], ["链B", "5-6-7"], ["期望", "nullptr"], ["终点", "同时为空"]] },
-  { label: "尾节点相交", fields: [["链A", "1-2-3-4-7"], ["链B", "5-6-7"], ["期望", "节点7"], ["长度差", "2"]] },
-  { label: "同一头节点", fields: [["两条链", "完全重合"], ["期望", "节点1"], ["同步循环", "不进入"], ["覆盖", "首节点"]] },
-  { label: "一条空链", fields: [["链A", "nullptr"], ["链B", "1-2-3-4-5"], ["期望", "nullptr"], ["对齐", "长链走5步"]] },
-  { label: "两条空链", fields: [["链A", "nullptr"], ["链B", "nullptr"], ["期望", "nullptr"], ["长度", "0 / 0"]] },
-] as const;
-
 export function ListIntersectionIdentityDiagram() {
   const nodeW = 56;
   const nodeH = 44;
@@ -79,38 +59,6 @@ export function ListIntersectionIdentityDiagram() {
     </figure>
   );
 }
-
-export function ListLengthAlignmentLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = alignmentStates[cursor];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-5 gap-1.5">
-          {alignmentStates.map((item, index) => (
-            <button key={item.label} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"min-h-11 border px-1 text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{item.label}</button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className={"border p-4 " + (state.long === state.short ? "border-success bg-success/10" : "border-border bg-background")}>
-            <div className="text-xs text-muted">长链指针 / 剩余节点</div>
-            <div className="mt-2 text-xl font-semibold text-primary">{state.long} / {state.longRemaining}</div>
-          </div>
-          <div className={"border p-4 " + (state.long === state.short ? "border-success bg-success/10" : "border-border bg-background")}>
-            <div className="text-xs text-muted">短链指针 / 剩余节点</div>
-            <div className="mt-2 text-xl font-semibold text-primary">{state.short} / {state.shortRemaining}</div>
-          </div>
-        </div>
-        <p className="mb-0 mt-3 text-sm text-secondary">{state.action}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        长链先消去长度差后，两指针到尾部距离相等；同步前进会在共享后缀入口同时到达。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function SharedSuffixProofMap() {
   const rows = [
     ["第一次指针相等", "pA与pB是同一地址", "返回该节点", "之前每一步地址都不同"],
@@ -159,8 +107,4 @@ export function ListIntersectionContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function FirstCommonNodeOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者main执行6组测试，覆盖中间、末尾、首节点相交，以及不相交、一空、两空。" />;
 }

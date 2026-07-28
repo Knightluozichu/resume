@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const streamStates = [
   { label: "空", value: "—", lower: [] as number[], upper: [] as number[], median: "异常", action: "还没有数字，GetMedian抛出异常" },
   { label: "+5", value: "5", lower: [], upper: [5], median: "5", action: "总数原为偶数，5最终进入上半最小堆" },
@@ -16,16 +14,6 @@ const streamStates = [
   { label: "+0", value: "0", lower: [3, 2, 1, 0], upper: [4, 5, 6, 7], median: "3.5", action: "0进入下半堆，恢复两堆等大" },
   { label: "+8", value: "8", lower: [3, 2, 1, 0], upper: [4, 5, 6, 7, 8], median: "4", action: "8进入上半堆，上半堆再次多一个" },
 ] as const;
-
-const officialCases = streamStates.map((state, index) => ({
-  label: index === 0 ? "空流" : state.label,
-  fields: [
-    ["累计输入", index === 0 ? "无" : "5,2,3,4,1,6,7,0,8".split(",").slice(0, index).join(",")],
-    ["下半最大堆", state.lower.length === 0 ? "空" : state.lower.join(",")],
-    ["上半最小堆", state.upper.length === 0 ? "空" : state.upper.join(",")],
-    ["期望中位数", state.median],
-  ],
-})) as ReadonlyArray<{ label: string; fields: ReadonlyArray<readonly [string, string]> }>;
 
 export function StreamMedianHeapInvariantDiagram() {
   return (
@@ -70,50 +58,6 @@ export function StreamMedianHeapInvariantDiagram() {
     </figure>
   );
 }
-
-export function StreamMedianInsertionLab() {
-  const [cursor, setCursor] = useState(streamStates.length - 1);
-  const state = streamStates[cursor];
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="border border-border bg-background p-3">
-            <div className="text-xs text-muted">下半最大堆 max</div>
-            <div className="mt-3 grid min-h-11 grid-cols-4 gap-1.5">
-              {Array.from({ length: 4 }, (_, index) => <div key={index} className="flex h-10 items-center justify-center border border-border text-sm font-semibold text-primary">{state.lower[index] ?? "·"}</div>)}
-            </div>
-          </div>
-          <div className="border border-border bg-background p-3">
-            <div className="text-xs text-muted">上半最小堆 min</div>
-            <div className="mt-3 grid min-h-11 grid-cols-5 gap-1.5">
-              {Array.from({ length: 5 }, (_, index) => <div key={index} className="flex h-10 items-center justify-center border border-border text-sm font-semibold text-primary">{state.upper[index] ?? "·"}</div>)}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid min-h-[76px] grid-cols-3 gap-3 border-y border-border py-3 text-center">
-          <div><div className="text-xs text-muted">本步</div><div className="mt-1 font-semibold text-primary">{state.label}</div></div>
-          <div><div className="text-xs text-muted">插入值</div><div className="mt-1 font-semibold text-accent">{state.value}</div></div>
-          <div><div className="text-xs text-muted">中位数</div><div className="mt-1 font-semibold text-success">{state.median}</div></div>
-        </div>
-
-        <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
-          <p className="m-0 text-sm text-secondary">{state.action}</p>
-          <div className="flex shrink-0 items-center gap-1">
-            <button type="button" title="上一步" aria-label="上一步" disabled={cursor === 0} onClick={() => setCursor((value) => Math.max(0, value - 1))} className="inline-flex size-9 items-center justify-center border border-border text-secondary disabled:opacity-35"><span aria-hidden="true" className="text-lg leading-none">←</span></button>
-            <button type="button" title="重置" aria-label="重置" onClick={() => setCursor(0)} className="inline-flex size-9 items-center justify-center border border-border text-secondary"><span aria-hidden="true" className="text-lg leading-none">↻</span></button>
-            <button type="button" title="下一步" aria-label="下一步" disabled={cursor === streamStates.length - 1} onClick={() => setCursor((value) => Math.min(streamStates.length - 1, value + 1))} className="inline-flex size-9 items-center justify-center border border-border text-secondary disabled:opacity-35"><span aria-hidden="true" className="text-lg leading-none">→</span></button>
-          </div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        回放作者完整插入序列；格内按数值边界排列，根节点分别位于两边最靠近中位数的位置。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function StreamMedianRoutingDiagram() {
   const rows = [
     ["插入前总数为偶数", "新值最终进入min", "若小于max根，先入max再把max根移到min", "min比max多1"],
@@ -157,8 +101,4 @@ export function StreamMedianContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function StreamMedianOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换空流和9次插入后的作者检查点，核对两堆边界、数量与期望中位数。" />;
 }

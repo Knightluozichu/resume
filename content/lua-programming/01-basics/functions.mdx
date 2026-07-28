@@ -7,19 +7,9 @@ description: "掌握Lua函数调用、多返回值上下文调整、可变参数
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilMultipleResultLab, PilVariadicPackLab, PilTailCallLab } from "@/components/mdx/lua-programming/diagrams/functions";
-
-<Objectives>
-
-- 能推导函数调用在赋值、参数列表、table constructor与括号中的结果数量，复现错位和静默丢值
-- 能设计可变参数的arity与nil保真协议，使用select、table.pack和table.unpack验证边界
-- 能识别proper tail call与伪尾调用，解释栈帧复用、错误传播和深链路测试结果
-
-</Objectives>
 
 ## 为什么Lua函数的返回值数量不是函数自身的固定属性
 
@@ -27,7 +17,7 @@ Lua函数是first-class value：可以保存到变量、放进table、作为参�
 
 先预测：函数`f()`返回`"ok", nil, 7`时，`a=f()`、`a,b,c=f()`、`sink(f(), 9)`、`sink(9, f())`、`{f()}`、`{f(), 9}`与`(f())`各能观察到几个结果。答案不能只写“f返回三个值”，因为Lua真正执行的是call site与context共同组成的契约。
 
-<Term def="函数调用产生的多个结果按赋值目标数及其是否位于参数列表或constructor最后位置而展开、补nil或截断的规则。">multiple-result adjustment</Term>是理解Lua API的起点。一次call可以在一个位置产生多个values，但不是tuple object；只要把它移出允许展开的最后位置，或加一层括号，observable arity就会变化。
+是理解Lua API的起点。一次call可以在一个位置产生多个values，但不是tuple object；只要把它移出允许展开的最后位置，或加一层括号，observable arity就会变化。
 
 ```lua
 local function decode()
@@ -46,21 +36,10 @@ assert(x == "ok" and y == nil and z == 7 and extra == nil)
 
 Assignment会按左侧变量数调整：结果不足补nil，结果过多丢弃。函数参数列表与table constructor的list fields只允许最后一个expression贡献多个结果；前面的call会收缩为一个。`return`列表也遵循相似的最后表达式规则，因此wrapper是否把call原样放在最后，决定它能否透明转发全部结果。
 
-<Term def="API边界不仅规定每个value的type，还规定可接受与可返回的结果数量、nil位置及超额或缺失时策略。">call-boundary arity</Term>不能靠注释“returns result”含糊带过。尤其是Lua惯用的`value, error`：成功常返回value，失败返回`nil, message`；caller若只接一个变量，会静默丢掉诊断，若用truthiness又可能误判合法的false。
+不能靠注释“returns result”含糊带过。尤其是Lua惯用的`value, error`：成功常返回value，失败返回`nil, message`；caller若只接一个变量，会静默丢掉诊断，若用truthiness又可能误判合法的false。
 
 Parentheses在这里不是纯排版。`return (f())`强制一个结果；`return f()`可转发全部结果。`g(f(), x)`中的f不是最后expression，只贡献一个；`g(x, f())`则可贡献全部。Constructor同理，`{f(), marker}`与`{marker, f()}`可能形成完全不同的sequence。
 
-<PilMultipleResultLab />
-
-<Stepper>
-  <Step title="切换Assignment、Final Argument、Constructor Tail和Parenthesized"><PilMultipleResultLab /></Step>
-  <Step title="填写Arity Ledger">逐行记录producer结果数、call所处位置、consumer目标数、补nil/截断行为与最终值，禁止只记录打印文本。</Step>
-  <Step title="改写透明Wrapper">分别实现只取首值与完整转发的wrapper，用成功、失败、含nil三组结果证明接口没有意外改变arity。</Step>
-</Stepper>
-
-<Callout type="trap" title="加括号只会提高可读性，不会改变函数结果">
-对ordinary arithmetic常是这样，但对Lua function call，额外括号会把multiple results压成一个。Review wrapper与return时，`return f()`和`return (f())`必须视为不同行为。
-</Callout>
 
 ## Function Definitions、Sugar与调用边界
 
@@ -72,7 +51,7 @@ Default value写成`x = x or default`会把false也当missing；只想处理nil�
 
 ## Variadic Functions：Dots不是一个可测长度的Table
 
-Variadic function在固定形参后写`...`，函数体可以把dots放入expression list、转发给其它call，或用`select`检查。<Term def="可变参数接口显式保留实参数量、每个位置及nil，并在解码前验证最小、最大或精确arity的协议。">variadic arity contract</Term>强调“传了nil”和“根本没传”是不同事实：两者读取某个位置都可能得到nil，但`select("#", ...)`能区分参数总数。
+Variadic function在固定形参后写`...`，函数体可以把dots放入expression list、转发给其它call，或用`select`检查。强调“传了nil”和“根本没传”是不同事实：两者读取某个位置都可能得到nil，但`select("#", ...)`能区分参数总数。
 
 `select("#", ...)`返回实参数量，包含nil；`select(i, ...)`返回从第i个参数开始的所有values，negative i从尾部计数。它适合实现forwarding、parameter scanners和recursive folds，但i必须在合法范围。不要用`#{...}`计数，constructor中的holes让length不再可靠。
 
@@ -89,17 +68,10 @@ assert(count == 3 and args.n == 3)
 assert(args[1] == "alpha" and args[2] == nil and args[3] == "omega")
 ```
 
-<PilVariadicPackLab />
-
-<Stepper>
-  <Step title="切换Direct Dots、select Count、table.pack和select Slice"><PilVariadicPackLab /></Step>
-  <Step title="构造Nil Matrix">测试零参数、一个nil、尾部nil、中间nil、超上限与mixed types，分别记录`select`计数和packed.n。</Step>
-  <Step title="限制Forwarding">在转发前检查最大arity与每个位置的schema；错误返回位置、expected type和actual type，避免深层callee承担解析责任。</Step>
-</Stepper>
 
 ## Table.pack是Packed Argument Contract
 
-`table.pack(...)`创建table并写入显式字段`n`，所以尾部或中间nil不会丢失argument count。<Term def="用table entries保存参数值，同时把n字段作为包含nil在内的逻辑长度且禁止消费者用#猜测长度的协议。">packed argument contract</Term>意味着`n`不是可忽略metadata：复制、排队、序列化或过滤参数时都要同步维护它。
+`table.pack(...)`创建table并写入显式字段`n`，所以尾部或中间nil不会丢失argument count。意味着`n`不是可忽略metadata：复制、排队、序列化或过滤参数时都要同步维护它。
 
 Packed table仍然是mutable table。Consumer若改entries或n，后续unpack结果会改变；跨异步队列应明确ownership并在需要时snapshot。Untrusted `n`可能导致巨大range展开，应验证它是non-negative integer、在上限内，并与允许keys一致。Serialization不能自然保存“hole”，必须把logical positions映射为带tag的array或显式null。
 
@@ -107,7 +79,7 @@ Packed table仍然是mutable table。Consumer若改entries或n，后续unpack结
 
 ## The Function table.unpack：范围是接口的一部分
 
-`table.unpack(list, i, j)`返回integer range i到j的elements；默认通常从1到`#list`。对packed/holey table，默认上界不可靠，应传`1, args.n`。<Term def="展开table时显式指定起止位置与可信逻辑长度，避免holes、无关keys或恶意range改变返回值数量的规则。">explicit unpack range</Term>使调用方能审计成本和arity。
+`table.unpack(list, i, j)`返回integer range i到j的elements；默认通常从1到`#list`。对packed/holey table，默认上界不可靠，应传`1, args.n`。使调用方能审计成本和arity。
 
 Unpack不是iterator，也不会跳过nil；range内每个position都对应一个result。它只看integer indices，不会展开record fields。结果过多可能超过Lua/C stack或函数参数限制，所以dynamic input必须设max arguments。若只需一个slice，先验证i、j再unpack；不要用“失败时缩短range”掩盖corrupt payload。
 
@@ -125,25 +97,15 @@ end, args)
 assert(n == 3)
 ```
 
-<Callout type="trap" title="table.unpack(t)总能还原table.pack产生的参数">
-默认upper bound通常依赖`#t`，而含nil的packed table不是可靠proper sequence。必须使用`table.unpack(t, 1, t.n)`，并先验证n与资源上限。
-</Callout>
 
 ## Proper Tail Calls：调用完成后当前函数不再做任何事
 
-Proper tail call的关键形式是直接`return f(args)`：当前函数把callee的全部结果原样交给自己的caller，不需要保留当前activation record。<Term def="直接返回另一个函数调用的全部结果且当前函数不再调整、计算或清理，因此实现可复用当前activation frame的调用位置。">tail-call frame reuse</Term>让状态机、解释器与图遍历可以用函数跳转表达长链而不按链长增长Lua stack。
+Proper tail call的关键形式是直接`return f(args)`：当前函数把callee的全部结果原样交给自己的caller，不需要保留当前activation record。让状态机、解释器与图遍历可以用函数跳转表达长链而不按链长增长Lua stack。
 
 这不是“递归函数自动优化”。`return f(x)+1`必须等待callee后加一；`return (f(x))`要执行single-result adjustment；`return f(x), marker`还要组合结果；这些都不是proper tail call。Local cleanup、to-be-closed variables、debug hooks、C boundary和wrapper语义也要按目标Lua版本验证，不能只看source长得像return call。
 
 Mutual recursion同样可以tail-call：A直接return B，B直接return A。是否调用自身不重要，tail position才重要。这样的chain不会保留每一跳的ordinary Lua stack frame，因此debug stack trace也不会展示完整历史；若业务需要路径诊断，应显式累计bounded trace或state transitions，而不是依赖call stack。
 
-<PilTailCallLab />
-
-<Stepper>
-  <Step title="切换Direct Return、Post-process、Force One和Protected Call"><PilTailCallLab /></Step>
-  <Step title="标注最后工作">对每个return写callee完成后caller是否还要算术、组装结果、调整arity、关闭资源或处理错误；只要要做就不是该callee的tail position。</Step>
-  <Step title="运行深链实验">用十万次state transition比较direct tail call与non-tail recursion，核对结果、最大栈行为、trace可见性和失败定位。</Step>
-</Stepper>
 
 ## Error Ownership与Wrapper Transparency
 
@@ -160,31 +122,7 @@ Lua函数可以返回status values，也可以`error`；`pcall`把异常转换�
 5. Proper tail call是直接返回callee结果且之后无工作，支持frame reuse但缩短ordinary stack history。
 6. Wrapper、pcall、result normalization与resource cleanup都会改变arity、error或tail-call contract，必须测试。
 
-<Exercises>
-
-**问题 1：为什么把`return parse(text)`改成`return (parse(text))`可能破坏错误处理？**
-
-<Answer>若parse返回`nil, message, position`，直接return可转发全部结果；加括号只保留首个nil，message和position被截断。Caller仍看到失败却失去诊断。测试应同时断言result count与每个位置，而不是只判断第一个值。</Answer>
-
-**问题 2：怎样可靠地延迟调用`fn("a", nil, "c")`？**
-
-<Answer>用`args=table.pack("a", nil, "c")`保存values与args.n，入队前验证n和types并明确table ownership；执行时调用`fn(table.unpack(args,1,args.n))`。不能用`{...}`加`#args`，因为hole使逻辑长度不可靠。</Answer>
-
-**问题 3：`return walk(next)+1`为何不是Proper Tail Call，怎样改成常量栈状态迁移？**
-
-<Answer>Caller必须等walk返回后再加一，所以当前frame不能被替换。把累计值改成显式参数，例如`return walk(next, count+1)`，base case返回count；再用很深输入验证结果和栈行为，并为诊断单独保留bounded transition trace。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="multiple-result adjustment" definition="函数多个结果按赋值目标及最后表达式位置展开、补nil或截断的规则。" />
-  <GlossaryItem term="call-boundary arity" definition="API明确输入输出数量、nil位置及缺失或超额策略的数量契约。" />
-  <GlossaryItem term="variadic arity contract" definition="可变参数保留含nil实参数量并在解码前验证arity的协议。" />
-  <GlossaryItem term="packed argument contract" definition="Table entries保存值且n字段保存包含nil在内逻辑长度的协议。" />
-  <GlossaryItem term="explicit unpack range" definition="Unpack显式提供起止位置和可信logical length的边界。" />
-  <GlossaryItem term="tail-call frame reuse" definition="Direct returned call无需caller后续工作并可复用activation frame的语义。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 6: Functions" adaptedUrl="https://www.lua.org/pil/" />

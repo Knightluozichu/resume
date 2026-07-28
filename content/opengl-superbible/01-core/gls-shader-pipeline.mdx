@@ -11,27 +11,19 @@ draft: false
 ---
 
 import { GlsShaderPipelineDiagram, GlsStageInterfaceDiagram, GlsTessellationDiagram, GlsProgramLifecycleDiagram, GlsInvocationEvidenceDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-shader-pipeline";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
-<Objectives>
-- 能解释一次 draw 从顶点输入到帧缓冲写入的完整路径
-- 能区分曲面细分控制、固定图元生成和曲面细分求值三个职责
-- 能判断阶段间接口的类型、位置与插值限定符是否匹配
-- 能写出 GLSL shader 的编译、program 链接与程序自省检查链
-- 能分析调用次数与 GPU 计时证据，而不是预设某个阶段永远最慢
-</Objectives>
 
 ## 为什么完整管线不是“把所有 shader 都打开”
 
-一次 OpenGL 绘制并不是“顶点 shader 接着片段 shader”这么短，也不是阶段越多越完整。正确主链是：顶点输入进入<Term def="逐顶点或逐索引结果执行并产生裁剪空间位置的可编程阶段">顶点着色器</Term>；按需经过<Term def="按 patch 执行、写出细分级别与输出控制点的可编程阶段">曲面细分控制着色器</Term>、固定的<Term def="依据细分级别在参数域产生新坐标的固定功能阶段">图元生成器</Term>、<Term def="在生成的参数域坐标上计算新顶点属性与位置的可编程阶段">曲面细分求值着色器</Term>和<Term def="按输入图元执行并可发射零到多个输出图元的可编程阶段">几何着色器</Term>；随后进入图元装配、裁剪、透视除法、视口变换与<Term def="把屏幕空间图元覆盖转换为片段候选的固定功能过程">光栅化</Term>；最后由<Term def="为片段候选计算颜色、深度或其他输出的可编程阶段">片段着色器</Term>产生输出，再由深度、模板、混合等<Term def="决定片段输出是否以及如何写入附件的一组固定功能操作">帧缓冲操作</Term>决定实际写入。
+一次 OpenGL 绘制并不是“顶点 shader 接着片段 shader”这么短，也不是阶段越多越完整。正确主链是：顶点输入进入；按需经过、固定的、和；随后进入图元装配、裁剪、透视除法、视口变换与；最后由产生输出，再由深度、模板、混合等决定实际写入。
 
 <GlsShaderPipelineDiagram />
 
-这里的“可选”是数据和程序契约，不是装饰：没有曲面细分就不提交 `GL_PATCHES`；没有需要增删的图元就不挂几何 shader。<Term def="由独立 dispatch 启动、用于通用并行计算且不经过绘制光栅链的着色阶段">计算着色器</Term>使用同一套缓冲、纹理和同步对象，但由 `glDispatchCompute` 启动，不属于上图这条 draw 管线。
+这里的“可选”是数据和程序契约，不是装饰：没有曲面细分就不提交 `GL_PATCHES`；没有需要增删的图元就不挂几何 shader。使用同一套缓冲、纹理和同步对象，但由 `glDispatchCompute` 启动，不属于上图这条 draw 管线。
 
 ## 阶段间接口：链接先检查，光栅化再插值
 
-生产阶段的 `out` 与下一可编程阶段的 `in` 构成<Term def="相邻可编程阶段之间由链接器核对的数据契约">阶段接口</Term>。单个 shader 编译成功只说明语法和该阶段语义成立；program 链接时才检查跨阶段类型、数组形状、接口块和资源位置。显式 `layout(location = n)` 能让宿主代码与 shader 形成稳定契约，接口块则适合成组传递属性。
+生产阶段的 `out` 与下一可编程阶段的 `in` 构成。单个 shader 编译成功只说明语法和该阶段语义成立；program 链接时才检查跨阶段类型、数组形状、接口块和资源位置。显式 `layout(location = n)` 能让宿主代码与 shader 形成稳定契约，接口块则适合成组传递属性。
 
 <GlsStageInterfaceDiagram />
 
@@ -72,7 +64,7 @@ OpenGL 的术语是 Tessellation Control Shader（TCS）、固定功能 tessella
 
 <GlsTessellationDiagram />
 
-TCS 以 patch 为单位调度，通常每个输出控制点有一次 invocation。它可复制或重写 `gl_in`，并设置 `gl_TessLevelOuter` 与 `gl_TessLevelInner`。固定<Term def="由控制点组成、作为曲面细分输入而非最终三角形的图元类型">Patch</Term>生成器据此产生参数域坐标；TES 读取 `gl_TessCoord`，将参数域点映射到真实表面。三角形域中的重心求值为：
+TCS 以 patch 为单位调度，通常每个输出控制点有一次 invocation。它可复制或重写 `gl_in`，并设置 `gl_TessLevelOuter` 与 `gl_TessLevelInner`。固定生成器据此产生参数域坐标；TES 读取 `gl_TessCoord`，将参数域点映射到真实表面。三角形域中的重心求值为：
 
 $$
 \mathbf p(u,v,w)=u\mathbf p_0+v\mathbf p_1+w\mathbf p_2,
@@ -143,7 +135,7 @@ early fragment tests 是否能提前发生，受深度写入、`discard`、副�
 
 GLSL 提供标量、向量、矩阵、数组、结构体、构造器与 swizzle，控制流与 C 类似；sampler、image 和 atomic counter 等 opaque type 表示受 API 绑定约束的资源，不能当普通数值随意复制。内建变量也属于阶段契约，例如顶点 shader 必须为后续光栅路径提供 `gl_Position`，TES 和几何 shader 也要为它们产生的新顶点写位置。
 
-<Term def="OpenGL Shading Language，用于描述各可编程阶段的强类型语言">GLSL</Term> 源码先进入<Term def="把单个着色阶段源码转换并检查为 shader object 的过程">着色器编译</Term>，然后多个 shader object 进入<Term def="核对跨阶段接口并建立可执行 program 的过程">程序链接</Term>。两步都必须读取状态与完整 info log；不能因为返回了对象名称就当作成功。
+ 源码先进入，然后多个 shader object 进入。两步都必须读取状态与完整 info log；不能因为返回了对象名称就当作成功。
 
 <GlsProgramLifecycleDiagram />
 
@@ -171,7 +163,7 @@ GLuint link(GLuint vertex, GLuint fragment) {
 }
 ```
 
-链接后可用<Term def="通过 program interface 查询资源名称、类型、位置和数组信息的运行时检查">程序自省</Term>核对实现实际暴露的输入、输出、uniform 与 buffer block。官方 `programinfo` 示例使用 `glGetProgramInterfaceiv`、`glGetProgramResourceName` 和 `glGetProgramResourceiv` 枚举 program outputs，这比假设资源一定未被优化掉可靠。
+链接后可用核对实现实际暴露的输入、输出、uniform 与 buffer block。官方 `programinfo` 示例使用 `glGetProgramInterfaceiv`、`glGetProgramResourceName` 和 `glGetProgramResourceiv` 枚举 program outputs，这比假设资源一定未被优化掉可靠。
 
 传统单体 program 用 `glUseProgram` 绑定完整阶段集合。separable program 设置 `GL_PROGRAM_SEPARABLE`，再通过 `glUseProgramStages` 组装 program pipeline；它便于替换单个阶段，但仍要保证相邻阶段接口兼容，并可用 `glValidateProgramPipeline` 收集验证日志。
 
@@ -189,98 +181,15 @@ for (GLint i = 0; i < count; ++i) {
 
 先预测：如果一个场景从 10 万个小三角形改成一张覆盖全屏的三角形，顶点调用会减少，但片段覆盖可能几乎不变。哪个阶段更快、哪个瓶颈更突出，必须由计数与计时回答。
 
-<Stepper>
-<Step title="第一步：先闭合顶点与阶段接口">
-只启用 vertex 和 fragment 两个必要可编程阶段，核对 `gl_Position`、`out`/`in` 类型与位置，记录编译和链接日志。此时先证明输入能稳定穿过接口。
-
-<GlsShaderPipelineDiagram step={1} />
-</Step>
-<Step title="第二步：按需求加入图元生成">
-需要连续 LOD 时才提交 patch 并加入 TCS、固定 primitive generator 与 TES；需要按图元改写时再加入 geometry shader。用 generated primitives 查询限制放大量。
-
-<GlsShaderPipelineDiagram step={2} />
-</Step>
-<Step title="第三步：验证覆盖、测试与写入">
-检查裁剪、面剔除、viewport、sample 覆盖、深度模板和混合状态。把片段 shader 输出与 framebuffer 最终附件分开验证，并用 timer query 定位成本。
-
-<GlsShaderPipelineDiagram step={3} />
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 文档把 OpenGL 细分写成 Hull、Tessellator、Domain。
-
-**原因 →** 混用了 Direct3D 术语，读者无法对应 `GL_TESS_CONTROL_SHADER`、固定 primitive generator 与 `GL_TESS_EVALUATION_SHADER`。
-
-**修法 →** 使用 OpenGL 的 TCS、primitive generator、TES 名称，并沿 `GL_PATCHES`、细分级别、`gl_TessCoord` 逐项验证。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 片段 shader 被预设为执行最多、优化优先级永远最高。
-
-**原因 →** 把典型高覆盖场景误当成管线定律，忽略顶点复用、细分放大、几何输出、采样数和 early tests。
-
-**修法 →** 同时收集各阶段 invocation、generated primitives、samples passed 与 GPU 时间，再决定优化顺序。
-</Callout>
-
-<Callout type="trap">
-**现象 →** shader 编译成功，draw 却黑屏，于是继续改 GLSL 算法。
-
-**原因 →** 忽略了 program 链接、接口位置、被优化资源、framebuffer 状态或 per-fragment operations。
-
-**修法 →** 保存编译与链接日志，执行程序自省，检查当前 program pipeline、viewport、附件完整性和深度模板混合状态。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1：** 写出包含可选阶段与固定功能阶段的一次 draw 主链，并说明计算着色器的位置。
-
-<Answer>
-顶点输入 → 顶点 shader → 可选 TCS → 固定 primitive generator → 可选 TES → 可选几何 shader → 图元装配与裁剪 → 透视除法与视口变换 → 光栅化 → 片段 shader → per-fragment operations → framebuffer。计算 shader 由独立 dispatch 启动，不在这条 draw 链中。
-</Answer>
-
-**问题 2：** 一个 fragment 输入颜色出现突变，应从哪三个接口维度排查？
-
-<Answer>
-先查生产者 `out` 与消费者 `in` 的 location，再查类型、数组或接口块形状，最后查 `smooth`、`flat`、`noperspective` 限定符。编译成功不能替代 program 链接日志；必要时用程序自省读取实际资源。
-</Answer>
-
-**问题 3：** 为什么把细分级别提高两倍可能远不止增加两倍工作量？
-
-<Answer>
-固定 primitive generator 在二维参数域内生成点和图元。规则三角形或四边形域的生成量通常近似按细分级别平方增长，随后 TES、几何、光栅化和片段工作量也可能连锁增加。
-</Answer>
-
-**问题 4：** 如何验证“片段阶段是当前瓶颈”，而不是凭覆盖面积猜测？
-
-<Answer>
-记录 samples passed 或相关 pipeline statistics，并用 timer query 或 GPU profiler 对比变更前后时间；再控制分辨率、MSAA、片段 shader 复杂度和深度预通过等变量。计数说明规模，GPU 时间才说明当前成本。
-</Answer>
-</Exercises>
 
 ## 本章回顾
 
 完整 OpenGL 管线由可编程阶段、阶段接口和固定功能阶段共同组成。TCS、固定 primitive generator、TES 是 OpenGL 细分术语；装配、裁剪、光栅化与帧缓冲操作不能从流程中省略；计算 shader 是独立 dispatch。工程上还必须把 GLSL 编译、program 链接、程序自省与 GPU 计数计时纳入同一条证据链，避免用“某阶段必然最慢”替代测量。
 
-<Glossary>
-<GlossaryItem term="顶点着色器">逐顶点或逐索引结果执行并产生裁剪空间位置的可编程阶段。</GlossaryItem>
-<GlossaryItem term="曲面细分控制着色器">按 patch 执行、写出细分级别与输出控制点的可编程阶段。</GlossaryItem>
-<GlossaryItem term="图元生成器">依据细分级别在参数域产生新坐标的固定功能阶段。</GlossaryItem>
-<GlossaryItem term="曲面细分求值着色器">在生成的参数域坐标上计算新顶点属性与位置的可编程阶段。</GlossaryItem>
-<GlossaryItem term="几何着色器">按输入图元执行并可发射零到多个输出图元的可编程阶段。</GlossaryItem>
-<GlossaryItem term="光栅化">把屏幕空间图元覆盖转换为片段候选的固定功能过程。</GlossaryItem>
-<GlossaryItem term="片段着色器">为片段候选计算颜色、深度或其他输出的可编程阶段。</GlossaryItem>
-<GlossaryItem term="帧缓冲操作">决定片段输出是否以及如何写入附件的一组固定功能操作。</GlossaryItem>
-<GlossaryItem term="计算着色器">由独立 dispatch 启动、用于通用并行计算且不经过绘制光栅链的着色阶段。</GlossaryItem>
-<GlossaryItem term="阶段接口">相邻可编程阶段之间由链接器核对的数据契约。</GlossaryItem>
-<GlossaryItem term="Patch">由控制点组成、作为曲面细分输入而非最终三角形的图元类型。</GlossaryItem>
-<GlossaryItem term="GLSL">OpenGL Shading Language，用于描述各可编程阶段的强类型语言。</GlossaryItem>
-<GlossaryItem term="着色器编译">把单个着色阶段源码转换并检查为 shader object 的过程。</GlossaryItem>
-<GlossaryItem term="程序链接">核对跨阶段接口并建立可执行 program 的过程。</GlossaryItem>
-<GlossaryItem term="程序自省">通过 program interface 查询资源名称、类型、位置和数组信息的运行时检查。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapters 3 and 6; official sb7code examples fragcolorfrompos, tessellatedtri, gstessellate, and programinfo" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

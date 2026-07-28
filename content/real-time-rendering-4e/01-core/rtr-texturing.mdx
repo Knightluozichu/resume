@@ -7,21 +7,9 @@ description: "承载官方 Ch6、Ch12：纹理表示与过滤、采样足迹、�
 demo: true
 math: true
 sourceUrl: "https://www.realtimerendering.com/"
-draft: true
+draft: false
 ---
 
-import { RtrTexturingDiagram, RtrTextureFootprintDiagram, RtrImageSpaceDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-texturing";
-import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能分析 screen pixel 在 texture space 的 footprint，并解释 mip LOD 与各向异性
-- 能区分 color、normal、roughness、depth、cube、volume 与 render-target texture 的采样规则
-- 能描述 Image-Space Effects 对 depth、normal、motion vector 和 history 的依赖
-- 能设计纹理走样、重投影、遮挡暴露和时域稳定性的可复现实验
-
-</Objectives>
 
 ## 直觉：采样的是面积，不是一个点
 
@@ -29,11 +17,10 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 Ch6 Texturing 研究从参数坐标到离散纹理信号的表示、寻址与过滤；Ch12 Image-Space Effects 利用已经光栅化的 color/depth/normal/motion 数据近似更昂贵的光学、遮蔽和重建过程。两章的共同核心是 footprint、visibility 与 reconstruction。
 
-<RtrTexturingDiagram />
 
 ## Ch6 Texturing：映射、寻址与数据语义
 
-<Term def="把表面参数、方向或三维位置映射到离散纹理域，并对纹素信号进行重建和过滤的过程">纹理映射</Term>不只包括 2D UV。常见映射还有 cube map 的方向查询、projective texture、triplanar mapping、3D volume texture、array/atlas 和 procedural texture。
+不只包括 2D UV。常见映射还有 cube map 的方向查询、projective texture、triplanar mapping、3D volume texture、array/atlas 和 procedural texture。
 
 一条采样链包含：坐标生成与插值 → address mode（repeat/clamp/mirror/border）→ LOD/footprint → texel fetch/decompression → reconstruction filter → data decode。UV seam、wrap 和导数不连续会影响 LOD；atlas 还需 padding，避免 mip 与双线性跨 tile 污染。
 
@@ -41,9 +28,8 @@ Ch6 Texturing 研究从参数坐标到离散纹理信号的表示、寻址与过
 
 ## 采样理论、Mipmap 与 footprint
 
-<RtrTextureFootprintDiagram />
 
-<Term def="一个输出样本反投影到纹理域后覆盖的区域；其形状与大小决定需要积分的纹理频率和过滤核">纹理足迹</Term>可由屏幕导数近似。对二维坐标 $(u,v)$：
+可由屏幕导数近似。对二维坐标 $(u,v)$：
 
 $$
 J=\begin{bmatrix}\partial u/\partial x&\partial u/\partial y\\
@@ -59,7 +45,7 @@ $$
 
 其中 $S$ 是纹理尺度。bilinear 在单层四邻域重建，trilinear 再在相邻 mip 层插值；它减弱 mip 过渡，但不能准确积分细长 footprint。
 
-<Term def="沿纹理足迹长轴增加采样、限制长短轴比，以改善斜视表面缩小过滤的技术">各向异性过滤</Term>比把椭圆扩成大圆保留更多细节。质量/成本依最大 anisotropy、实现与 cache；不能把“16x”理解为所有样本固定取 16 次。
+比把椭圆扩成大圆保留更多细节。质量/成本依最大 anisotropy、实现与 cache；不能把“16x”理解为所有样本固定取 16 次。
 
 完整、方形、每边减半且相同格式的二维 mip chain，面积级数为 $1+1/4+1/16+\cdots=4/3$。非方形、稀疏、尾部打包、压缩对齐和 streaming 改变实际开销，因此“mip 一定增加 33%”不是通用内存结论。
 
@@ -82,15 +68,14 @@ derivative 在 fragment quad 上估计；动态分支、discard、primitive 边�
 
 block compression 以固定块近似 texel，可降低存储和带宽，但会产生端点、block boundary、normal 与 HDR 误差；“不影响视觉质量”不成立。格式选择要按内容：颜色、单通道 mask、双通道 normal、HDR 各有不同候选。
 
-<Term def="只让需要的纹理页驻留物理内存，并通过页表把虚拟纹理坐标映射到缓存页面的技术">虚拟纹理</Term>把超大纹理变成 feedback、page request、stream、cache 与 page table 系统。验收除画质外，还要检查 miss、反馈延迟、mip fallback、border、I/O 峰值和相机快速移动时的稳定性。
+把超大纹理变成 feedback、page request、stream、cache 与 page table 系统。验收除画质外，还要检查 miss、反馈延迟、mip fallback、border、I/O 峰值和相机快速移动时的稳定性。
 
 ## Ch12 Image-Space Effects：便宜来自可见样本的复用
 
-<RtrImageSpaceDiagram />
 
 图像空间效果只拥有当前/历史 frame buffers，不天然知道屏幕后面的几何。常见输入有 HDR color、linear depth、normal、roughness、material ID、motion vector 和 exposure；常见效果包括 bloom、tone mapping、depth of field、motion blur、SSAO、SSR、outlines 和 temporal reconstruction。
 
-<Term def="用当前像素的运动向量把它映射到上一帧对应位置，以复用历史颜色或统计量的过程">时域重投影</Term>常写为 `prevUV = currUV + motion`，但 motion 的方向、NDC/UV 单位、jitter 和 dynamic object transform 必须一致。camera-only motion 不足以处理动画物体。
+常写为 `prevUV = currUV + motion`，但 motion 的方向、NDC/UV 单位、jitter 和 dynamic object transform 必须一致。camera-only motion 不足以处理动画物体。
 
 历史样本需通过 depth/normal/material 一致性验证。disocclusion 没有有效历史；越界、透明、粒子、反射和曝光变化也需要特殊处理。history clamp/neighborhood clipping 限制拖影，但过强会损失稳定性。
 
@@ -122,84 +107,15 @@ vec3 resolved = mix(currentColor, clipped, valid ? historyWeight : 0.0);
 
 ## 三步采样与历史验收
 
-<Stepper>
-<Step title="第一步：可视化 footprint 与 buffers">
-
-显示 mip level、anisotropy、UV derivative，以及 linear depth、normal、velocity、history validity 和 disocclusion mask。
-
-<RtrStepFlowDiagram caption="先确认过滤与后处理真正读到了什么。" stage={1} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity"]} />
-
-</Step>
-<Step title="第二步：建立空间和时间压力场景">
-
-使用远退棋盘、斜视地面、UV seam、亚像素线、相机 pan、动态物体、遮挡暴露和曝光跳变。
-
-<RtrStepFlowDiagram caption="固定场景分别暴露 spatial aliasing 与 temporal ghosting。" stage={2} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity", "Stress：minification、seams、motion、disocclusion、exposure"]} />
-
-</Step>
-<Step title="第三步：比较 reference 与成本">
-
-对比 supersampled/spatial-only reference，记录静态误差、运动误差、闪烁频谱、history rejection、带宽和 GPU 时间。
-
-<RtrStepFlowDiagram caption="清晰不能以闪烁换取，稳定也不能靠无限模糊获得。" stage={3} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity", "Stress：minification、seams、motion、disocclusion、exposure", "Validate：reference error、flicker、rejection、bandwidth、time"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 远处纹理仍闪烁，开三线性后斜地面又过度模糊。**原因 →** 各向同性 mip 不能准确覆盖细长 footprint。**修法 →** 可视化导数/LOD，使用合适 anisotropic filter，并验证 UV seam 与 sampler 状态。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 所有纹理都标 sRGB，法线和 roughness 失真。**原因 →** 混淆颜色编码与数值数据。**修法 →** 在资产 schema 中声明语义、色域、transfer、normal convention 和压缩格式，并加入导入测试。
-</Callout>
-
-<Callout type="trap">
-**现象 →** TAA 在人物后留下长尾，SSR 在屏幕边缘消失。**原因 →** 无效历史未拒绝，且图像空间方法缺少屏外信息。**修法 →** 校验 motion/depth/normal，标出 disocclusion；对 SSR 提供 environment/probe/ray tracing fallback。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：为什么 trilinear 仍可能让斜视地面模糊？**
-
-<Answer>
-它用各向同性尺度选择 mip，并在两层间插值；斜视像素在纹理域形成高长宽比椭圆，扩成圆形 footprint 会沿短轴过度低通。各向异性过滤沿长轴取多个受限样本，更贴近真实覆盖。
-</Answer>
-
-**问题 2：什么情况下 mip chain 不是简单增加 1/3 内存？**
-
-<Answer>
-非方形或非完整链、block compression 对齐、mip tail packing、稀疏/虚拟纹理、array/cube/volume、不同层格式及 streaming resident policy 都会改变实际分配；4/3 只描述理想二维面积级数。
-</Answer>
-
-**问题 3：如何判断 TAA 拖影来自 motion vector 还是 history clamp？**
-
-<Answer>
-可视化 motion 和 prevUV，用静态/刚体解析运动检查重投影误差；再分别禁用 history、固定权重、显示 rejection 与 clamp 范围。错误 prevUV 会沿运动方向错位，过宽 clamp/过高权重则让错误历史长期存留。
-</Answer>
-
-**问题 4：SSR 缺失信息时应该怎样处理？**
-
-<Answer>
-根据 ray miss、屏幕边缘、步进置信度和粗糙度建立 confidence，渐进混合 environment map、reflection probe 或 ray-traced fallback；不能把 miss 当黑色，也不能假装屏幕空间结果完整。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 Ch6 与 Ch12 都在解决有限样本如何重建信号。纹理过滤关注屏幕像素在纹理域的空间足迹，图像空间效果还要处理跨帧对应和缺失可见性。可靠结果来自正确数据语义、footprint/history 可视化、压力场景、reference 与成本共同验证。
 
-<Glossary>
-<GlossaryItem term="纹理映射">把参数、方向或位置映射到纹理域并重建纹素信号。</GlossaryItem>
-<GlossaryItem term="纹理足迹">输出样本反投影到纹理空间后覆盖的区域。</GlossaryItem>
-<GlossaryItem term="各向异性过滤">沿足迹长轴增加采样以改善斜视缩小质量的过滤。</GlossaryItem>
-<GlossaryItem term="虚拟纹理">以页表和缓存按需驻留超大纹理页面的系统。</GlossaryItem>
-<GlossaryItem term="时域重投影">用运动向量寻找上一帧对应表面样本的过程。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Real-Time Rendering 4e, Chapters 6 and 12" adaptedUrl="https://www.realtimerendering.com/" />

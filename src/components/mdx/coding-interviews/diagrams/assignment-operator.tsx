@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const safetyCases = [
   {
     label: "先删后分配",
@@ -143,12 +141,4 @@ export function OwnershipTransitionDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">临时对象把可能失败的准备阶段与不应失败的提交阶段分离。</figcaption>
     </figure>
   );
-}
-
-export function ExceptionSafetyLab() {
-  return <CodingInterviewLab cases={safetyCases} caption="切换方案，观察分配失败时目标对象能否保持原值。" />;
-}
-
-export function AssignmentTestLab() {
-  return <CodingInterviewLab cases={testCases} caption="作者源码的三组测试之外，还应注入分配失败验证异常保证。" />;
 }

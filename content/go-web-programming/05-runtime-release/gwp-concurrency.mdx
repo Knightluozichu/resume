@@ -7,27 +7,18 @@ description: "区分并发与并行，使用goroutine和channel改造独立Web�
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-9"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { GwpConcurrencyModelLab, GwpChannelFlowLab, GwpLatencyLab } from "@/components/mdx/go-web-programming/diagrams/gwp-concurrency";
-
-<Objectives>
-- 能区分并发与并行，并判断Web任务是否具有可安全重叠的独立性
-- 能实现goroutine与channel通信，写出发送、关闭、取消和等待协议
-- 能比较串行与有限并发延迟，并用race与泄漏证据验证改造
-</Objectives>
 
 ## 从重叠不等于同时开始
 
-先预测：两个HTTP调用各耗时100毫秒，启动两个goroutine后总耗时一定50毫秒吗？不会。理想关键路径接近较慢任务，还受调度、连接和下游容量影响。<Term def="多个任务在同一时间区间独立推进，但不保证同一时刻执行。">concurrency overlap model</Term>先描述结构。
+先预测：两个HTTP调用各耗时100毫秒，启动两个goroutine后总耗时一定50毫秒吗？不会。理想关键路径接近较慢任务，还受调度、连接和下游容量影响。先描述结构。
 
-<GwpConcurrencyModelLab />
 
 ## 并发不是并行
 
-并发是任务分解与协调，并行是硬件同时执行。<Term def="可并发任务被多个执行资源同时运行的运行时状态。">parallel execution condition</Term>取决于CPU、GOMAXPROCS和阻塞；I/O并发可在单核上缩短等待，但CPU任务可能只增加切换。
+并发是任务分解与协调，并行是硬件同时执行。取决于CPU、GOMAXPROCS和阻塞；I/O并发可在单核上缩短等待，但CPU任务可能只增加切换。
 
 ```go
 start := time.Now()
@@ -37,7 +28,7 @@ log.Printf("elapsed=%s", time.Since(start))
 
 ## Goroutine
 
-`go`语句启动独立调用，返回值不能直接回到调用点。<Term def="由运行时调度、必须拥有完成或取消路径的轻量执行单元。">goroutine lifetime contract</Term>要求调用前决定谁等待、谁取消、错误去哪；请求结束后不得遗留无主工作。
+`go`语句启动独立调用，返回值不能直接回到调用点。要求调用前决定谁等待、谁取消、错误去哪；请求结束后不得遗留无主工作。
 
 ```go
 results := make(chan Result, 2)
@@ -47,13 +38,12 @@ go func() { results <- fetchPosts(ctx, id) }()
 
 ## Channel
 
-Channel传值并建立同步点。<Term def="元素类型、容量、发送者、接收者、关闭者和退出条件组成的通信协议。">channel ownership protocol</Term>由知道不再发送的一侧关闭；关闭不是取消广播的万能替代，接收方也不应猜测生产者寿命。
+Channel传值并建立同步点。由知道不再发送的一侧关闭；关闭不是取消广播的万能替代，接收方也不应猜测生产者寿命。
 
-<GwpChannelFlowLab />
 
 ## Web应用中的并发
 
-适合并发的是相互独立的慢任务，例如并行读取多个后端；不适合的是需要顺序事务或会压垮同一资源的工作。<Term def="由连接池、API限额和CPU预算共同决定的最大同时工作量。">web concurrency budget</Term>应显式限制。
+适合并发的是相互独立的慢任务，例如并行读取多个后端；不适合的是需要顺序事务或会压垮同一资源的工作。应显式限制。
 
 ```go
 for i := 0; i < 2; i++ {
@@ -66,42 +56,20 @@ for i := 0; i < 2; i++ {
 }
 ```
 
-<GwpLatencyLab />
 
 ## 取消、错误与收敛
 
-请求context传播取消，结果要携带错误，上层等待所有已启动任务。<Term def="响应结束前，所有子任务已完成、被取消或被明确移交的要求。">request concurrency closure</Term>防止goroutine、连接和channel泄漏。
+请求context传播取消，结果要携带错误，上层等待所有已启动任务。防止goroutine、连接和channel泄漏。
 
-<Stepper>
-  <Step title="识别独立任务"><GwpConcurrencyModelLab /></Step>
-  <Step title="设计通信"><GwpChannelFlowLab /></Step>
-  <Step title="测量收益">分别运行串行、无界和有限并发，记录p50、p95、错误与下游并发。</Step>
-</Stepper>
 
 ## 验收实验：双后端聚合
 
 构建一个同时读取profile与posts的handler，分别注入快、慢、错误和永不返回后端。比较串行与并发延迟，取消客户端请求，确认两任务退出；再运行race detector和goroutine profile，证明没有共享竞态或数量持续增长。
 
-<Callout type="trap" title="每个循环项都启动Goroutine">无界并发会耗尽连接、内存和下游配额；并发数必须绑定资源预算。</Callout>
-<Callout type="trap" title="关闭结果Channel即可取消生产者">关闭生产者正在发送的channel会panic；取消应通过context或专用信号，由生产者自行退出。</Callout>
 
 ## 本章回顾
 
 本章覆盖并发不是并行、goroutine、channel和Web应用并发。正确改造先判断独立性和预算，再设计所有权与取消，最后用延迟、race和泄漏证据证明收益。
 
-<Exercises>
-**问题 1：并发保证并行吗？**<Answer>不保证；并发是结构，并行取决于运行资源与调度。</Answer>
-**问题 2：谁关闭结果channel？**<Answer>知道所有发送者都已结束的生产侧协调者。</Answer>
-**问题 3：如何证明没有泄漏？**<Answer>取消请求后等待子任务，并检查goroutine profile和长期数量趋势。</Answer>
-</Exercises>
 
 ## 术语表
-<Glossary>
-  <GlossaryItem term="concurrency overlap model" definition="任务在同一时间区间独立推进。" />
-  <GlossaryItem term="parallel execution condition" definition="多个执行资源同时运行任务。" />
-  <GlossaryItem term="goroutine lifetime contract" definition="goroutine完成与取消协议。" />
-  <GlossaryItem term="channel ownership protocol" definition="channel发送、关闭与退出协议。" />
-  <GlossaryItem term="web concurrency budget" definition="由下游资源决定的并发上限。" />
-  <GlossaryItem term="request concurrency closure" definition="请求结束前子任务全部收敛。" />
-</Glossary>
-<Attribution adaptedFrom="Go Web Programming Chapter 9 Leveraging Go concurrency" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-9" />

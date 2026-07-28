@@ -7,19 +7,9 @@ description: "掌握Lua simple与complete I/O model、read formats、file handle
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilSimpleIoLab, PilFileHandleLab, PilSystemCommandLab } from "@/components/mdx/lua-programming/diagrams/external-world";
-
-<Objectives>
-
-- 能区分simple与complete I/O model，推导read format、EOF、current-file state和error result
-- 能设计file handle的open、iterate、seek、buffer、flush与close协议，验证文本和二进制边界
-- 能设计filesystem与system-command capability边界，验证路径竞争、命令注入和退出状态解码
-
-</Objectives>
 
 ## 为什么External World必须从Ownership与Failure开始
 
@@ -27,7 +17,7 @@ import { PilSimpleIoLab, PilFileHandleLab, PilSystemCommandLab } from "@/compone
 
 先预测：`io.read("l")`遇到empty line和EOF各返回什么；`io.output(path)`会不会保留旧内容；`file:write`成功是否表示数据已经落盘；`io.lines(path)`与`file:lines()`谁负责close；`os.execute`返回的第一个值能否直接当exit code；把用户输入拼进command是否只需加引号。先写平台和Lua版本，再运行实验。
 
-<Term def="每个外部资源明确创建者、唯一关闭责任、有效生命周期、失败路径与跨函数转移方式的协议。">external resource ownership</Term>是本章贯穿线。Ordinary Lua 5.3 file handle不能只靠“离开scope”及时关闭；GC最终回收不是可预测的release schedule，写路径尤其必须显式close并检查结果。
+是本章贯穿线。Ordinary Lua 5.3 file handle不能只靠“离开scope”及时关闭；GC最终回收不是可预测的release schedule，写路径尤其必须显式close并检查结果。
 
 ## The Simple I/O Model
 
@@ -35,7 +25,7 @@ Simple model维护current input file与current output file。`io.input()`/`io.ou
 
 传filename给`io.output(path)`通常按write mode打开并截断目标；若需求是append或atomic replace，应使用complete model明确mode与commit流程。Library函数不应悄悄替换current files，否则caller之后的日志和输入会指向错误资源。确需临时切换时保存旧handle、在所有success/failure path恢复，并仍要处理新handle关闭。
 
-<Term def="io.read与io.write通过可替换current input/output隐式选择资源，任何切换都可能影响后续无显式handle调用的共享状态。">current-file state</Term>解释了simple API的便利和风险。它不是thread-local transaction，也不携带lexical ownership。
+解释了simple API的便利和风险。它不是thread-local transaction，也不携带lexical ownership。
 
 ```lua
 local previous = io.input()
@@ -55,21 +45,10 @@ return first
 
 Read可接多个formats并返回对应values。`"l"`读取一行且去掉line ending，`"L"`保留line ending，`"a"`读取剩余全部内容，`"n"`解析number，integer n读取最多n bytes；Lua 5.3为兼容也接受带`*`的形式。Zero-length read可用于检查EOF语义，但协议应以目标runtime manual和测试为准。
 
-<Term def="Read API明确format、文本或byte单位、empty data与EOF区分、partial result、parse failure和资源上限的输入协议。">read-format contract</Term>要求caller检查每个返回值。Line读取在empty line返回empty string，在EOF返回nil；whole-file read可能返回巨大string，必须在不可信文件上先限定size或stream。Number format遇到invalid token会返回nil，而输入位置未必按naive loop期待前进；`while true do n=read('n') end`可能形成stuck parser。
+要求caller检查每个返回值。Line读取在empty line返回empty string，在EOF返回nil；whole-file read可能返回巨大string，必须在不可信文件上先限定size或stream。Number format遇到invalid token会返回nil，而输入位置未必按naive loop期待前进；`while true do n=read('n') end`可能形成stuck parser。
 
 Multiple formats中一旦某项失败，返回结果需要结合Lua manual理解，不能把部分values当完整record。对结构化数据更稳妥的方式是按line/bytes读取、显式parse，并返回line/offset和reason。Text mode会受平台line translation影响；需要stable offsets、hash或wire bytes时用binary mode。
 
-<PilSimpleIoLab />
-
-<Stepper>
-  <Step title="切换Current Input、Read Line、Read Number和Current Output"><PilSimpleIoLab /></Step>
-  <Step title="建立EOF Matrix">覆盖empty file、empty line、最后一行无换行、invalid number、partial byte read和whole-file size上限，分别记录value与error。</Step>
-  <Step title="移除Hidden State">把library改为接收explicit input/output handles；用两个同时打开的文件交错测试，证明调用顺序不再改变目标资源。</Step>
-</Stepper>
-
-<Callout type="trap" title="io.read返回nil只代表正常EOF">
-Nil还可能来自numeric parse failure或I/O error，且不同read form的额外诊断能力不同。Parser必须知道format与当前位置，必要时改用line/byte read再自行解析，不能统一吞成EOF。
-</Callout>
 
 ## The Complete I/O Model
 
@@ -77,7 +56,7 @@ Complete model用`io.open(filename, mode)`返回独立file handle，后续调用
 
 Mode由`r`、`w`、`a`组成，可加`+`允许update，加`b`选择binary。`w`会创建或截断，`a`让writes定位到end，`r+`通常要求文件存在且不截断；具体共享、locking和newline translation是platform concern。Mode必须来自代码中的allowlist，不能直接接受untrusted string。
 
-<Term def="File API显式声明text encoding、newline translation、byte offsets、partial read/write及跨平台差异，避免把文本字符位置当稳定字节位置。">text-byte boundary</Term>在UTF-8上尤其重要：读取n bytes可能截断multibyte sequence，seek offset通常是byte-oriented，不是Unicode code point。Lua string能容纳任意bytes，但display/parser未必能处理invalid text。
+在UTF-8上尤其重要：读取n bytes可能截断multibyte sequence，seek offset通常是byte-oriented，不是Unicode code point。Lua string能容纳任意bytes，但display/parser未必能处理invalid text。
 
 ## Iteration与Close Ownership
 
@@ -110,13 +89,6 @@ end
 
 这里多读一个byte，用可观测证据区分“大小正好等于上限”和“内容被静默截断”；无论读取结果如何都由同一owner关闭handle。若`read`自身可能抛错，生产helper还要用protected cleanup结构组合read与close错误。
 
-<PilFileHandleLab />
-
-<Stepper>
-  <Step title="切换Open Modes、Lines Iterator、Seek和Buffering"><PilFileHandleLab /></Step>
-  <Step title="画Handle Lifecycle">标出open成功/失败、read/write、early return、callback error、flush error和close error，每条路径必须到唯一owner。</Step>
-  <Step title="做Binary Offset Test">写入含NUL与多字节UTF-8的bytes，分别在text/binary mode seek与读取，验证offset、newline translation和hash结果。</Step>
-</Stepper>
 
 ## Other System Calls
 
@@ -132,7 +104,7 @@ Temporary names、environment与process exit都属于authority较大的host inte
 
 `io.popen(command, mode)`启动command并返回连接其standard output或input的file handle，通常只能单向读或写。读取stdout并不自动捕获stderr；不持续drain pipe、等待/close顺序、large output、timeout与child process tree都可能deadlock或泄漏。`popen`/`close`的status同样需要decode。
 
-<Term def="任何调用shell或子进程的接口都把executable、arguments、environment、cwd、stdio、timeout与退出状态视为结构化且受限的能力边界。">command capability boundary</Term>禁止把untrusted filename、branch name或query直接拼进command。Shell quoting函数很难跨shell可靠；需要dynamic arguments时用host library提供的argument-vector spawn API，显式设置env/cwd和stdio limits。
+禁止把untrusted filename、branch name或query直接拼进command。Shell quoting函数很难跨shell可靠；需要dynamic arguments时用host library提供的argument-vector spawn API，显式设置env/cwd和stdio limits。
 
 ```lua
 local function run_fixed_health_check()
@@ -153,17 +125,6 @@ end
 
 上例仍只适合程序内固定command，并不解决timeout、output limit或portable spawn；它的价值是展示status tuple必须检查。真实服务应把process runner封装在host层，Lua只提交validated operation ID与typed arguments。
 
-<PilSystemCommandLab />
-
-<Stepper>
-  <Step title="切换Rename/Remove、Temporary File、os.execute和io.popen"><PilSystemCommandLab /></Step>
-  <Step title="列Capability Allowlist">为每个操作记录允许root、固定executable、typed arguments、env、cwd、stdin/stdout上限、timeout、cancel和audit字段。</Step>
-  <Step title="注入Failure Matrix">覆盖missing permission、disk full、rename conflict、child nonzero、signal、huge output与timeout，验证cleanup和status decode。</Step>
-</Stepper>
-
-<Callout type="trap" title="只要给用户输入加Shell引号，os.execute就安全">
-Quoting依赖具体shell、encoding和嵌套语法，且仍暴露executable、cwd、env、timeout与resource limits。Dynamic input必须走argument-vector process API或固定operation adapter，不拼command string。
-</Callout>
 
 ## 本章回顾：External API必须携带Owner、Unit与Outcome
 
@@ -174,30 +135,7 @@ Quoting依赖具体shell、encoding和嵌套语法，且仍暴露executable、cw
 5. Rename、remove、environment和exit是host capabilities，路径与process scope必须受控。
 6. `os.execute`和`io.popen`返回结构化outcome且经过shell；dynamic arguments应交给host spawn adapter。
 
-<Exercises>
-
-**问题 1：为什么`for line in file:lines() do ... end`后不能假设file已经关闭？**
-
-<Answer>`file:lines()`使用caller提供的handle，不接管其ownership；正常EOF也不替caller关闭。保留handle，在success、break、error和early return路径统一close并检查close error。`io.lines(path)`的自动打开/EOF关闭是另一套契约，不能混用。</Answer>
-
-**问题 2：怎样安全保存一份配置文件，避免一开始就截断旧文件？**
-
-<Answer>在目标同目录创建安全temporary handle，写完整内容并检查write、flush、close；验证长度或重新读取，再按平台规则rename替换目标。限制path root并处理rename conflict、权限和disk-full。需要durability时由host层补fsync和directory sync。</Answer>
-
-**问题 3：为什么`if os.execute(cmd) == 0 then`不是Lua 5.3的可移植成功判断？**
-
-<Answer>Lua 5.3通常返回success boolean或nil、termination kind与status，而不是单一exit integer；不同平台还改变shell/termination semantics。完整接收三个结果并按目标平台decode。若cmd含dynamic data，不论如何判断status都应改用argument-vector host runner。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="external resource ownership" definition="外部资源明确创建、唯一关闭责任、生命周期、失败与转移方式的协议。" />
-  <GlossaryItem term="current-file state" definition="Simple I/O通过可替换current input/output隐式选择资源的共享状态。" />
-  <GlossaryItem term="read-format contract" definition="Read明确format、unit、EOF、partial result、parse failure与上限的协议。" />
-  <GlossaryItem term="text-byte boundary" definition="文件接口区分encoding、newline、byte offset与Unicode位置的边界。" />
-  <GlossaryItem term="command capability boundary" definition="子进程执行把程序、参数、环境、stdio、timeout和状态作为受限结构化能力。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 7: The External World" adaptedUrl="https://www.lua.org/pil/" />

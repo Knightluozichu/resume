@@ -11,21 +11,13 @@ draft: false
 ---
 
 import { GlsTextureMappingDiagram, GlsTextureFootprintDiagram, GlsMaterialLightingDiagram, GlsNprDiagram, GlsAlternativeRenderingDiagram, GlsTwoDGraphicsDiagram, GlsRenderingEvidenceDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-texture-mapping";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
-<Objectives>
-- 能推导纹理坐标导数、mipmap LOD 与各向异性 footprint 的关系
-- 能设计并验证 base color、normal、gloss 与 environment maps 的光照模型
-- 能比较 toon、rim、outline 等非真实感渲染的信号变换
-- 能分析 forward、deferred、screen-space 与 multipass ray 替代渲染路径
-- 能实现并检验 atlas、texture array、bitmap font 与 SDF 二维图形
-</Objectives>
 
 ## 为什么“多纹理、压缩、各向异性”还不是 Rendering Techniques
 
 原书第 13 章 Rendering Techniques 的官方结构是 Lighting Models、Non-Photo-Realistic Rendering、Alternative Rendering Methods、Two-Dimensional Graphics。旧章只罗列多层纹理、压缩、各向异性和 texture array，既重复了第 11 章数据管理，又没有解释这些数据如何组成可复刻的渲染算法。
 
-纹理是<Term def="按维度、格式、mipmap 和采样规则组织、可由 sampler 重建的数据资源">纹理资源</Term>；渲染技术则要明确信号空间、材质方程、pass graph、framebuffer 依赖和二维合成。完整主链如下：
+纹理是；渲染技术则要明确信号空间、材质方程、pass graph、framebuffer 依赖和二维合成。完整主链如下：
 
 <GlsTextureMappingDiagram />
 
@@ -33,7 +25,7 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 ## Texture Object、Sampler、Unit 与 Footprint
 
-<Term def="保存 texel storage、格式、尺寸和 mip 层的 OpenGL 对象">Texture Object</Term>保存图像；<Term def="独立保存 wrap、min/mag filter、LOD 和 comparison 等采样状态的对象">Sampler Object</Term>可覆盖 texture 自带采样参数；texture unit 组合当前绑定资源与 sampler；GLSL sampler uniform 保存的是 **unit index**，不是 texture object name。
+保存图像；可覆盖 texture 自带采样参数；texture unit 组合当前绑定资源与 sampler；GLSL sampler uniform 保存的是 **unit index**，不是 texture object name。
 
 <GlsTextureFootprintDiagram />
 
@@ -45,9 +37,9 @@ $$
 \qquad \lambda=\log_2\rho
 $$
 
-<Term def="把纹理预过滤为逐级减半图像、让缩小时按 footprint 选择适当尺度的层级链">Mipmap</Term>降低远处高频 aliasing。Trilinear filtering 在两个 mip level 的双线性结果间插值；它不是“始终最高质量”，因为斜视 footprint 往往细长而非正方形。
+降低远处高频 aliasing。Trilinear filtering 在两个 mip level 的双线性结果间插值；它不是“始终最高质量”，因为斜视 footprint 往往细长而非正方形。
 
-<Term def="沿采样 footprint 主轴增加样本、改善斜视表面纹理重建的过滤方式">各向异性过滤</Term>可按主轴/次轴长度比理解：
+可按主轴/次轴长度比理解：
 
 $$
 A=\frac{\rho_{major}}{\max(\rho_{minor},\epsilon)}
@@ -55,13 +47,13 @@ $$
 
 实际最大 anisotropy 由扩展和 implementation 查询，不固定为 16×；更高设置会增加样本和带宽，是否改善目标画面要实测。
 
-<Term def="把多个子图放进同一二维纹理、通过 UV 子矩形访问的资源布局">纹理图集</Term>允许不同尺寸，但 mip 和线性过滤会跨子图边界，需要 padding、重复边缘和 mip-aware packing。<Term def="把同尺寸同格式图像存为独立 layer、用三维采样坐标选择层的资源">纹理数组</Term>不会跨 layer 过滤，更适合 sprites、材质集和字体 glyph layers。
+允许不同尺寸，但 mip 和线性过滤会跨子图边界，需要 padding、重复边缘和 mip-aware packing。不会跨 layer 过滤，更适合 sprites、材质集和字体 glyph layers。
 
 纹理压缩的比率与质量由具体 block format 决定，解码也不是抽象意义上的“零开销”。它可能减少带宽并提高速度，也可能因格式不支持、缓存行为或画质约束不适合；应记录实际 bytes、GPU 时间与 reference image，而不是固定宣称 4–8 倍。
 
 ## 多纹理不是叠加，而是 Material Parameters
 
-<Term def="把表面几何、材质参数、光源和视点映射为出射颜色的计算模型">光照模型</Term>需要单位向量 $\mathbf N$、光向量 $\mathbf L$、视向量 $\mathbf V$ 和半程向量 $\mathbf H$ 位于同一空间。Lambert diffuse 与 Blinn-Phong specular 可写为：
+需要单位向量 $\mathbf N$、光向量 $\mathbf L$、视向量 $\mathbf V$ 和半程向量 $\mathbf H$ 位于同一空间。Lambert diffuse 与 Blinn-Phong specular 可写为：
 
 $$
 I=k_a+\mathbf c_d\max(\mathbf N\cdot\mathbf L,0)
@@ -70,7 +62,7 @@ $$
 
 <GlsMaterialLightingDiagram />
 
-Base-color map 提供 $\mathbf c_d$；normal map 的 texel $\mathbf t\in[0,1]^3$ 先解码到 $[-1,1]$，再由<Term def="由切线、副切线和几何法线构成、把 tangent-space 方向变到目标空间的基矩阵">TBN 基</Term>变换：
+Base-color map 提供 $\mathbf c_d$；normal map 的 texel $\mathbf t\in[0,1]^3$ 先解码到 $[-1,1]$，再由变换：
 
 $$
 \mathbf N=\operatorname{normalize}\left(TBN\,(2\mathbf t-1)\right)
@@ -101,7 +93,7 @@ outColor = vec4(base * diffuse + specular + reflected * 0.1, 1.0);
 
 ## Non-Photorealistic Rendering：有意改变信号语言
 
-<Term def="用离散色阶、轮廓、排线等视觉规则表达形状而非追求照片真实的渲染方法">非真实感渲染</Term>（NPR）仍可从连续光照信号出发。Toon shading 将 $d=\max(\mathbf N\cdot\mathbf L,0)$ 量化成 $K$ 档：
+（NPR）仍可从连续光照信号出发。Toon shading 将 $d=\max(\mathbf N\cdot\mathbf L,0)$ 量化成 $K$ 档：
 
 $$
 q(d)=\frac{\left\lfloor Kd\right\rfloor}{K-1}
@@ -111,7 +103,7 @@ $$
 
 <GlsNprDiagram />
 
-<Term def="在视线与法线接近垂直时增强轮廓附近亮度的非真实感或补光项">Rim Lighting</Term>常用：
+常用：
 
 $$
 I_{rim}=\left(1-\max(\mathbf N\cdot\mathbf V,0)\right)^p
@@ -123,7 +115,7 @@ NPR 不是“低质量光照”。它同样需要稳定法线、线性颜色、�
 
 ## Alternative Rendering Methods：重组 Pass Graph
 
-<Term def="改变几何、可见性、材质与光照在多个 passes 中保存和消费顺序的渲染结构">替代渲染</Term>不是简单换 fragment shader。Forward rendering 在材质 pass 直接计算光照；deferred rendering 先写 G-buffer，第二 pass 按屏幕位置计算光照；screen-space methods 从 depth/normal 邻域估计效果；multipass ray methods 用多个 framebuffer 保存并合成路径状态。
+不是简单换 fragment shader。Forward rendering 在材质 pass 直接计算光照；deferred rendering 先写 G-buffer，第二 pass 按屏幕位置计算光照；screen-space methods 从 depth/normal 邻域估计效果；multipass ray methods 用多个 framebuffer 保存并合成路径状态。
 
 <GlsAlternativeRenderingDiagram />
 
@@ -160,11 +152,11 @@ drawFullscreenTriangle(lightingProgram);
 
 ## Two-Dimensional Graphics：Sprites、Bitmap 与 SDF
 
-<Term def="在窗口或正交空间绘制 sprites、形状、文字与界面元素的渲染类别">二维图形</Term>（2D graphics）仍经过 vertex/fragment、texture、blend 和 framebuffer。常见优化是用实例化或批量 quad 减少 draw calls，再用 atlas sub-rect 或 texture array layer 选择图像。
+（2D graphics）仍经过 vertex/fragment、texture、blend 和 framebuffer。常见优化是用实例化或批量 quad 减少 draw calls，再用 atlas sub-rect 或 texture array layer 选择图像。
 
 <GlsTwoDGraphicsDiagram />
 
-Bitmap font 为每个 glyph 存覆盖位图，固定分辨率下快速清晰，放大后会出现像素化。<Term def="在 texel 中保存到字形边界的带符号距离、由阈值重建覆盖率的文字表示">Signed Distance Field</Term>（SDF）用 distance $d$ 与屏幕导数宽度 $w$ 计算 coverage：
+Bitmap font 为每个 glyph 存覆盖位图，固定分辨率下快速清晰，放大后会出现像素化。（SDF）用 distance $d$ 与屏幕导数宽度 $w$ 计算 coverage：
 
 $$
 \alpha=\operatorname{smoothstep}(t-w,t+w,d),
@@ -208,97 +200,15 @@ $s_i$ 还会因 filtering、mip、shadow comparison 和 shader control flow 改�
 
 ## 按证据建立 Rendering Technique
 
-<Stepper>
-<Step title="第一步：先闭合 Texture Footprint 与 Material">
-显示 UV、mip level、normal map 解码结果和各材质通道；确认 sampler unit、颜色空间、TBN 与 derivative，再建立单光源 reference。
-
-<GlsTextureMappingDiagram step={1} />
-</Step>
-<Step title="第二步：重组 NPR 或 Alternative Passes">
-NPR 逐项量化 toon/rim/outline 信号；alternative rendering 明确每个 attachment 的 producer、consumer、格式和 pass timer，不允许只比较最终截图。
-
-<GlsTextureMappingDiagram step={2} />
-</Step>
-<Step title="第三步：完成 2D 合成与质量复查">
-验证 atlas padding 或 array layer、bitmap/SDF 边缘、premultiplied alpha 和 sRGB；记录 batches、overdraw、glyph count 与 composite 时间。
-
-<GlsTextureMappingDiagram step={3} />
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 文档声称压缩纹理固定减少 4–8 倍且“硬件解压零开销”。
-
-**原因 →** 忽略 block format、通道数、平台支持、cache、质量和采样路径差异，把存储比直接当时间比。
-
-**修法 →** 对目标格式计算实际 bytes，确认支持与上传路径，保存 reference image并测量 GPU 时间；把画质误差和性能放在同一结果中。
-</Callout>
-
-<Callout type="trap">
-**现象 →** Normal map 光照随模型旋转出现错误高光。
-
-**原因 →** Tangent-space normal 与 world/eye-space L、V 混用，或 TBN 在非均匀缩放后不正交。
-
-**修法 →** 可视化 T、B、N 和解码 normal；把所有向量变换到统一空间并正交化，逐项关闭 normal/gloss/environment maps 对照。
-</Callout>
-
-<Callout type="trap">
-**现象 →** Atlas sprite 边缘出现邻图颜色，SDF 字体缩放时粗细跳变。
-
-**原因 →** Atlas 没有 padding/mip-aware packing，SDF 阈值没有按屏幕导数调整。
-
-**修法 →** 重复边缘并为各 mip 留安全区，或改用 texture array；SDF 使用 `fwidth` 调节 smoothstep 宽度并检查目标缩放范围。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1：** 隐式 mip LOD 如何由纹理坐标导数得到？为什么斜视表面还需要 anisotropy？
-
-<Answer>
-把 UV 导数缩放到 texel space，取 x/y footprint 向量长度的最大值 $\rho$，LOD 近似为 $\log_2\rho$。普通 mip 以近似方形尺度过滤；斜视 footprint 细长，单一最大尺度会过度模糊短轴，因此 anisotropy 沿主轴增加样本。
-</Answer>
-
-**问题 2：** Base color、normal、gloss 与 environment maps 应如何进入同一光照模型？
-
-<Answer>
-Base color 按正确颜色空间解码；normal 从 [0,1] 映射到 [-1,1] 后经 TBN 变到统一空间；gloss 定义 specular power/roughness 等明确参数；environment 用同一空间的 reflect/refract 方向采样。每张 map 都要能单独关闭验证。
-</Answer>
-
-**问题 3：** Deferred rendering 相比 forward 改变了什么，为什么不保证更快？
-
-<Answer>
-Deferred 先把可见表面材质和几何写入 G-buffer，再按屏幕像素评估光照，适合许多光源；但增加 attachments、带宽、pass 和内存，并让透明/MSAA 更复杂。是否更快取决于可见 fragments、光源覆盖、格式和平台，必须分 pass 计时。
-</Answer>
-
-**问题 4：** Atlas、texture array、bitmap font 与 SDF font 如何选择？
-
-<Answer>
-Atlas 支持不同尺寸但需要 padding 和 mip-aware packing；array 要求同尺寸格式，layer 间不会串色；bitmap 适合固定尺寸锐利文字；SDF 适合较大缩放范围和描边效果，但分辨率不足会损失细节。选择还要考虑 batching、内存和目标画质。
-</Answer>
-</Exercises>
 
 ## 本章回顾
 
 原书 Rendering Techniques 不是纹理功能清单，而是用纹理和 framebuffer 数据构建 lighting models、NPR、alternative rendering 与 two-dimensional graphics。正确流程从 footprint、颜色/坐标空间和材质参数开始，经 toon/rim 或 multipass graph，最终以 atlas/array、bitmap/SDF 和 alpha 规则完成二维合成。可复刻的标准，是每个信号可视化、每个 pass 有 producer/consumer、每个质量变化都有 reference 和时间证据。
 
-<Glossary>
-<GlossaryItem term="纹理资源">按维度、格式、mipmap 和采样规则组织、可由 sampler 重建的数据资源。</GlossaryItem>
-<GlossaryItem term="Texture Object">保存 texel storage、格式、尺寸和 mip 层的 OpenGL 对象。</GlossaryItem>
-<GlossaryItem term="Sampler Object">独立保存 wrap、min/mag filter、LOD 和 comparison 等采样状态的对象。</GlossaryItem>
-<GlossaryItem term="Mipmap">把纹理预过滤为逐级减半图像、让缩小时按 footprint 选择适当尺度的层级链。</GlossaryItem>
-<GlossaryItem term="各向异性过滤">沿采样 footprint 主轴增加样本、改善斜视表面纹理重建的过滤方式。</GlossaryItem>
-<GlossaryItem term="纹理图集">把多个子图放进同一二维纹理、通过 UV 子矩形访问的资源布局。</GlossaryItem>
-<GlossaryItem term="纹理数组">把同尺寸同格式图像存为独立 layer、用三维采样坐标选择层的资源。</GlossaryItem>
-<GlossaryItem term="光照模型">把表面几何、材质参数、光源和视点映射为出射颜色的计算模型。</GlossaryItem>
-<GlossaryItem term="TBN 基">由切线、副切线和几何法线构成、把 tangent-space 方向变到目标空间的基矩阵。</GlossaryItem>
-<GlossaryItem term="非真实感渲染">用离散色阶、轮廓、排线等视觉规则表达形状而非追求照片真实的渲染方法。</GlossaryItem>
-<GlossaryItem term="Rim Lighting">在视线与法线接近垂直时增强轮廓附近亮度的非真实感或补光项。</GlossaryItem>
-<GlossaryItem term="替代渲染">改变几何、可见性、材质与光照在多个 passes 中保存和消费顺序的渲染结构。</GlossaryItem>
-<GlossaryItem term="二维图形">在窗口或正交空间绘制 sprites、形状、文字与界面元素的渲染类别。</GlossaryItem>
-<GlossaryItem term="Signed Distance Field">在 texel 中保存到字形边界的带符号距离、由阈值重建覆盖率的文字表示。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapter 13; official sb7code examples blinnphong, perpixelgloss, bumpmapping, envmapsphere, cubemapenv, toonshading, rimlight, deferredshading, ssao, raytracer, fontdemo, and sdfdemo" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

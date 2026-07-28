@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "空串边界",
@@ -99,8 +97,4 @@ export function RegexStateProgressDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">状态由两个后缀位置唯一确定，适合用二维备忘录消除重复搜索。</figcaption>
     </figure>
   );
-}
-
-export function RegexOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者30组测试中的代表组合，核对空串、点号、星号与多段回溯。" />;
 }

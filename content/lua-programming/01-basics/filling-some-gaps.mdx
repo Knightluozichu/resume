@@ -7,19 +7,9 @@ description: "掌握Lua局部变量与block、truthiness、if、while、repeat�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilScopeBlockLab, PilLoopControlLab, PilExitGotoLab } from "@/components/mdx/lua-programming/diagrams/filling-some-gaps";
-
-<Objectives>
-
-- 能推导local声明、initializer、do/repeat block与closure捕获的精确可见范围，复现shadowing错误
-- 能比较if、while、repeat、numerical for与generic for并判断truthiness、边界求值和迭代协议
-- 能设计break、return与goto的退出和cleanup路径，判断label跳转是否违反local scope限制
-
-</Objectives>
 
 ## 从Control-flow Graph开始理解Statement，而不是背关键字
 
@@ -29,7 +19,7 @@ Lua控制结构少而正交：local决定name binding与lifetime，condition决�
 
 ## Local Variables and Blocks
 
-Local declaration从声明之后到当前block结束有效。Block可以是chunk、function body、control structure body，也可用`do ... end`显式创建。<Term def="局部名字从声明完成后开始遮蔽外层binding，并在所属lexical block结束时失效的精确可见性规则。">lexical local boundary</Term>意味着`local x = x`右侧initializer仍解析到外层x；新local不会在自身initializer中生效。
+Local declaration从声明之后到当前block结束有效。Block可以是chunk、function body、control structure body，也可用`do ... end`显式创建。意味着`local x = x`右侧initializer仍解析到外层x；新local不会在自身initializer中生效。
 
 Local默认值为nil，多变量声明按multiple-result rules调整。把相关locals放在靠近首次使用处可缩短lifetime，但递归或相互引用需要forward declaration：先`local f`，再赋function。`local f = function() return f() end`在没有外层f时，function body里的f可能解析为global，因为新local尚未覆盖initializer；`local function f()`是为递归处理过的sugar。
 
@@ -51,21 +41,10 @@ end
 assert(factorial(5) == 120)
 ```
 
-<PilScopeBlockLab />
-
-<Stepper>
-  <Step title="切换Local Initializer、do Block、Repeat Scope和Forward Local"><PilScopeBlockLab /></Step>
-  <Step title="画Binding Timeline">对每个同名identifier标出declaration完成点、reads、writes、capturing closures与block end，禁止只按缩进猜scope。</Step>
-  <Step title="缩短Resource Lifetime">用do block包住temporary values和handles，并验证每个early exit仍执行显式cleanup；scope结束本身不等于close。</Step>
-</Stepper>
-
-<Callout type="trap" title="local x = x一定把新变量初始化为nil">
-Initializer求值时新local尚未进入scope，因此它读取可见的外层local或global x；只有没有任何binding时才得到nil。重命名或拆分声明能消除这种隐式依赖。
-</Callout>
 
 ## Control Structures与Truthiness
 
-Lua只有false与nil为falsey；数字0、empty string、empty table都truthy。<Term def="条件表达式仅把false和nil视为不成立，0、空字符串和其它所有values均进入true branch的判定规则。">Lua truthiness contract</Term>让C/JavaScript移植代码常出错：`while count do`不会在count变0时停止，`if text then`不会拒绝empty string。
+Lua只有false与nil为falsey；数字0、empty string、empty table都truthy。让C/JavaScript移植代码常出错：`while count do`不会在count变0时停止，`if text then`不会拒绝empty string。
 
 Conditions不要求boolean type，但boundary validation最好先转成domain predicate，例如`count > 0`、`text ~= ""`。`and`与`or`返回operand value而非规范化boolean，并short-circuit；适合guard，但`value or default`会把false也替换掉。需要boolean output时用explicit comparison或`not not value`，但后者仍只表达truthiness。
 
@@ -85,7 +64,7 @@ Condition读mutable external state时可能永不变化。加入max iterations�
 
 ## repeat
 
-Repeat先执行body，再在尾部测试`until condition`，因此至少一次。与许多语言不同，repeat body中的locals对until condition可见，因为condition属于同一block。<Term def="repeat body声明的local持续到until条件求值完成，使一次读取或尝试的结果可直接参与终止判定。">repeat-condition scope</Term>适合read-then-validate、prompt-once和attempt-until-valid。
+Repeat先执行body，再在尾部测试`until condition`，因此至少一次。与许多语言不同，repeat body中的locals对until condition可见，因为condition属于同一block。适合read-then-validate、prompt-once和attempt-until-valid。
 
 注意until在condition为truthy时停止，和while继续条件方向相反。把`while not done`机械改成`repeat ... until not done`会反转两次。Body中的break仍可提前退出，不求值本轮until；cleanup与result state要覆盖这条edge。
 
@@ -104,7 +83,7 @@ assert(value == "ready" and attempts == 3)
 
 ## Numerical for
 
-Numerical form为`for variable = initial, limit, step do ... end`，step省略时为1。Initial、limit与step在loop开始前各求值一次，不会因body修改来源变量而变化。<Term def="数值for在进入循环时一次性求值initial、limit和step，并用私有控制状态推进到inclusive bound的快照语义。">numerical-for snapshot</Term>要求动态limit必须改用while才能每轮重新读取。
+Numerical form为`for variable = initial, limit, step do ... end`，step省略时为1。Initial、limit与step在loop开始前各求值一次，不会因body修改来源变量而变化。要求动态limit必须改用while才能每轮重新读取。
 
 Loop variable是body local，不应在body内给它赋值；即使语法允许某些操作，也不能依赖修改影响hidden control state。Positive step在value不超过limit时执行，negative step在value不小于limit时执行；step为zero或NaN等异常必须在输入边界拒绝。Bound是inclusive，off-by-one测试要覆盖empty range、single value、reverse range和大整数边界。
 
@@ -114,23 +93,16 @@ Lua 5.3的integer/float subtypes会影响数值for行为与精度；时间戳、
 
 Generic form为`for names in expression-list do ... end`。Expression list通常产生iterator function、invariant state与initial control value；loop反复调用iterator(state, control)，把results赋给loop variables，并以第一个result为下一control。当第一个result为nil时结束，false不会结束。
 
-<Term def="Generic for由iterator function、invariant state和control value驱动，每步以首个返回值更新control并在其为nil时终止的三元协议。">generic-for protocol</Term>统一了`pairs`、`ipairs`、`io.lines`和custom iterators。Additional results只是本轮variables，不决定termination。Expression list只在进入loop时求值一次。
+统一了`pairs`、`ipairs`、`io.lines`和custom iterators。Additional results只是本轮variables，不决定termination。Expression list只在进入loop时求值一次。
 
 Pairs不保证order，ipairs按sequence到first nil；选择generic for并不会抹掉underlying iterator contract。Custom iterator必须保证progress、终止与mutation policy；若closure捕获state，要说明并发/重入是否安全。Iterator返回nil作为合法data就与termination冲突，应改用control key加data value。
 
-<PilLoopControlLab />
-
-<Stepper>
-  <Step title="切换while、repeat、Numerical for和Generic for"><PilLoopControlLab /></Step>
-  <Step title="填写Evaluation Ledger">记录condition/bounds/iterator expression求值次数、每轮control、minimum runs和termination evidence。</Step>
-  <Step title="注入Boundary Cases">覆盖0、empty string、false、nil、empty range、negative step、iterator返回false与不前进iterator，验证guard和预算。</Step>
-</Stepper>
 
 ## break, return, and goto
 
 Break退出最内层loop，控制转到loop后的statement；它不能直接退出两层loop，也不携带result。Return退出当前function并遵循multiple-result adjustment。Goto跳到当前function内可见label `::name::`，可前跳或后跳，但不能跳入某个尚未生效local的scope。
 
-<Term def="每个非顺序控制转移都明确离开的block、仍存活的locals、必须执行的cleanup和携带的结果，且不得跳入新local生命周期。">structured exit boundary</Term>避免“找到结果就跳走”造成handle泄漏。Lua 5.3没有内建continue，常见写法是在iteration尾放label并goto；为避免跳入locals的scope，把本轮locals包在`do ... end`内，再把label放在block之后。
+避免“找到结果就跳走”造成handle泄漏。Lua 5.3没有内建continue，常见写法是在iteration尾放label并goto；为避免跳入locals的scope，把本轮locals包在`do ... end`内，再把label放在block之后。
 
 ```lua
 for index, item in ipairs({ "ok", "", "skip", "done" }) do
@@ -145,17 +117,6 @@ end
 
 Goto适合状态机、统一error cleanup或continue-like flow，但过多crossing edges会让lifetime和invariant难审计。优先用small function、guard和structured loop；确需goto时让label邻近、方向明确、无resource acquisition跨越，并测试每条jump edge。
 
-<PilExitGotoLab />
-
-<Stepper>
-  <Step title="切换break、return、Outward goto和Loop Label"><PilExitGotoLab /></Step>
-  <Step title="审计Jump Edge">对source与label列出中间local declarations、owned resources、deferred writes与invariants，确认没有进入scope或跳过cleanup。</Step>
-  <Step title="改写双层退出">分别用helper return、flag+break和goto实现，比较result传递、cleanup集中度与可读性，再选最小控制图。</Step>
-</Stepper>
-
-<Callout type="trap" title="Goto只要Label在文本后方就一定合法">
-Lexical rule禁止jump进入一个local变量的scope，即使label肉眼可见。把label移到local block外、缩小do block，或改为function return；编译成功后仍要检查cleanup和invariant。
-</Callout>
 
 ## 本章回顾：每条Edge都要证明Scope与Progress
 
@@ -166,31 +127,7 @@ Lexical rule禁止jump进入一个local变量的scope，即使label肉眼可见�
 5. Generic for由iterator、state与control驱动，以iterator首个结果为nil终止。
 6. Break、return与goto离开不同区域；每条exit都要满足local scope、result和cleanup契约。
 
-<Exercises>
-
-**问题 1：为什么`local config = config or defaults`可能读取Global Config？**
-
-<Answer>新local config在initializer完成后才进入scope，右侧config解析到外层local或global。若要表达fallback，先把outer值命名为input，再声明validated config；若要nil初始化，直接`local config`。用binding timeline而不是变量名猜语义。</Answer>
-
-**问题 2：怎样把“读取一次，直到得到非空行或EOF”写成Repeat且区分两种结果？**
-
-<Answer>在repeat body声明line并让until检查`line == nil or line ~= ""`，因为line在condition可见；退出后用显式status或把line赋给外层result，nil表示EOF，nonempty string表示成功。加入最大空行数或byte预算防止无限输入。</Answer>
-
-**问题 3：Custom Generic Iterator为什么不能用false表示结束？**
-
-<Answer>Generic for只在iterator首个result为nil时终止，false仍是合法control并继续下一轮。若data可以是nil/false，使用独立non-nil control key作为首值，把data放第二值；证明control每步推进且最终返回nil。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="lexical local boundary" definition="Local从声明完成后遮蔽外层binding并持续到所属block结束的范围。" />
-  <GlossaryItem term="Lua truthiness contract" definition="Condition仅把false与nil判为不成立，0和empty string仍为true。" />
-  <GlossaryItem term="repeat-condition scope" definition="Repeat body local对尾部until condition保持可见的block规则。" />
-  <GlossaryItem term="numerical-for snapshot" definition="数值for进入时一次求值initial、limit、step并按inclusive bound推进。" />
-  <GlossaryItem term="generic-for protocol" definition="Iterator、invariant state与control组成且以首个nil result终止的协议。" />
-  <GlossaryItem term="structured exit boundary" definition="非顺序转移明确离开区域、locals、cleanup与results的边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 8: Filling some Gaps" adaptedUrl="https://www.lua.org/pil/" />

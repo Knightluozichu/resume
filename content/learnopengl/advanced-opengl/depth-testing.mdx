@@ -10,14 +10,16 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Depth-testing
 draft: false
 ---
 
-import {
-  DepthBufferDiagram,
-  DepthPipelineTimingDiagram,
-  DepthPrecisionDiagram,
-  DepthStateContractDiagram,
-  DepthTestStepDiagram,
-  ZFightingDiagram,
-} from "@/components/mdx/learnopengl/diagrams/depth-testing";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { FrameStageDiagram } from "@/components/mdx/diagrams/frame-stage-diagram";
+import { ShaderDemo } from "@/components/mdx/shader-demo";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* A 概念型首章（HEL-67，高级OpenGL 篇第 1 篇）：原书「深度测试 Depth testing」。重心是概念讲解(§3)：深度缓冲是什么、深度测试在管线哪个阶段、glEnable 启用、glDepthFunc 比较函数、深度值非线性分布（近密远疏）、线性化深度、深度可视化、Z-fighting。数学 math:true 选讲(§4)：非线性深度 1/z 映射 + 线性化反算公式。承接「你好窗口」（已知颜色缓冲 / 清屏 / 渲染循环）与坐标系统（已知 NDC / near far 平面 / 透视投影）。沿用工厂流水线类比库（深度测试是管线里逐片段测试阶段）。主 viz 两个：Stepper 逐片段深度测试算法（每步带 SVG）+ ShaderDemo 深度灰度（程序化伪深度，非线性 vs 线性化滑块）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -55,7 +57,6 @@ import {
 
 每个像素记的那个数，就是 <Term def="深度缓冲里每个像素存的窗口深度，通常范围 0~1。标准投影约定近平面映射到 0、远平面映射到 1，并配 GL_LESS；reversed-Z 会反转映射与比较方向。片段着色器可从 gl_FragCoord.z 读取当前片段的窗口深度。">深度值</Term>（depth value）。本章先采用 OpenGL 教程的标准配置：**0 表示最近、1 表示最远**；后文提到 reversed-Z 时会明确说明状态反转。下面这张图把「一个像素 = 颜色 + 深度两份数据」，以及「靠比深度让近物盖住远物」画在一起：
 
-<DepthBufferDiagram />
 
 为什么要专门存这份账？因为只有记下每个像素「当前贴的有多远」，新来的色块才有得比。它在管线里的位置紧贴着颜色缓冲：每写一个像素的颜色，旁边就配一个深度，供下一块色块过来时核对。
 
@@ -67,7 +68,6 @@ import {
 
 从规范结果看，深度测试决定片段是否能更新帧缓冲；但硬件调度不一定等片段着色器跑完。若 shader 不会用 `discard` 改变覆盖、不写 `gl_FragDepth` 改变最终深度，也没有必须保留的相关副作用，驱动可以先比较深度，把必定失败的片段提前拒绝，这叫 **Early-Z**，能省掉昂贵的片段着色。反之则可能退回着色后的 Late-Z。无论调度早晚，最终可见结果必须一致。
 
-<DepthPipelineTimingDiagram />
 
 因此更准确的管线描述是：光栅化先产生窗口深度，深度测试逻辑位于片段操作阶段、颜色写入之前；实现可以在安全时把比较提前。下面先按“着色完成后统一判定”的逻辑模型拆步骤，因为它最容易理解结果契约，再回到代码讨论状态与优化边界。
 
@@ -81,25 +81,21 @@ import {
 
 <Stepper>
   <Step title="① 逻辑模型：候选片段已有颜色 + 深度">
-    <DepthTestStepDiagram step={1} />
     流水线把这个片段送到质检口：它的颜色已经算好，深度值是
     <code>0.3</code>。深度缓冲这一格当前存着上一块（远墙）留下的{" "}
     <code>0.7</code>。还没动手，先把两个数摆出来。
   </Step>
   <Step title="② 比较：0.3 < 0.7 吗？（默认 GL_LESS）">
-    <DepthTestStepDiagram step={2} />
     按默认规则
     <code>GL_LESS</code>——「新深度更小才通过」。这里
     <code>0.3 &lt; 0.7</code> 成立：新片段更近，<strong>通过</strong>测试。
   </Step>
   <Step title="③ 通过 → 写颜色 + 更新深度缓冲">
-    <DepthTestStepDiagram step={3} />
     通过了，于是把这个片段的颜色写进颜色缓冲（盖掉远墙的颜色），
     同时把深度缓冲这一格从
     <code>0.7</code> 更新成更近的 <code>0.3</code>。账本刷新。
   </Step>
   <Step title="④ 失败的反例：再来一块更远的（0.5）">
-    <DepthTestStepDiagram step={4} />
     假设之后又来一块深度
     <code>0.5</code> 的片段落在同一格：<code>0.5 &lt; 0.3</code> 不成立，
     <strong>不通过</strong>——整个片段被丢弃，颜色和深度都不写。近的稳稳留住。
@@ -125,7 +121,6 @@ import {
 
 `GL_ALWAYS` 会让颜色表现成“谁后画谁赢”，但它**不等于关闭深度测试**：测试仍启用且总通过，`glDepthMask(GL_TRUE)` 时还会把每个片段深度写回缓冲；真正关闭 `GL_DEPTH_TEST` 时既不比较也不写深度。八个算子里还有 `GL_NOTEQUAL` / `GL_GEQUAL`，用法同理。
 
-<DepthStateContractDiagram />
 
 ## 深度值的精度：为什么近处看得清、远处糊
 
@@ -133,7 +128,6 @@ import {
 
 下面这张图把这件事画得很直白——把深度值 0→1 等间隔取刻度、标回真实距离轴，你会看到近平面附近刻度挤成一簇、远平面附近稀稀拉拉：
 
-<DepthPrecisionDiagram />
 
 为什么要这么设计？因为我们通常更在乎近处物体之间的遮挡是否精确（它们占了画面大头），远处糊一点无所谓。这套非线性映射是透视投影「免费附送」的副产物，具体公式 §4 会拆开讲。**但它也埋了个雷**：远处深度值挨得太近，两个远处的面稍微一靠近就会分不出谁前谁后——这正是下一节 Z-fighting 的温床。
 
@@ -143,7 +137,6 @@ import {
 
 最后一个绕不开的现象。当两个面片**几乎共面**（深度差小到深度缓冲分辨不出）时，会出现 <Term def="两个表面靠得极近、深度值小到深度缓冲分辨不出谁前谁后时，渲染出来同一片区域里两个面交替胜出、形成一道道交错闪烁的撕裂条纹的现象。又称深度冲突。摄像机一动还会闪。常见于贴在墙上的海报、地面上的贴花等共面情形。">深度冲突</Term>（Z-fighting）：同一片区域里，哪个面通过深度测试反复横跳，渲染成一道道交错的撕裂条纹，视角一动还会闪烁。
 
-<ZFightingDiagram />
 
 成因正是上一节那个雷：深度值在远处（或两面太近时）精度不够，两个面的深度值被四舍五入成了同一个数，深度测试只能「随机」二选一，于是斑驳撕裂。怎么治？§7 会给三种实用修法。
 

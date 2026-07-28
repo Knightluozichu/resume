@@ -1,56 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const streamStates = [
-  { label: "初始", stream: "空", inserted: "无", nextIndex: 0, occurrence: "全部为 -1", answer: "NUL", note: "没有出现一次的字符" },
-  { label: "读g", stream: "g", inserted: "g @ 0", nextIndex: 1, occurrence: "g: 0", answer: "g", note: "g首次出现，保存位置0" },
-  { label: "读o", stream: "go", inserted: "o @ 1", nextIndex: 2, occurrence: "g: 0，o: 1", answer: "g", note: "两个唯一字符中g位置更小" },
-  { label: "再读o", stream: "goo", inserted: "o @ 2", nextIndex: 3, occurrence: "g: 0，o: -2", answer: "g", note: "o从首次位置转为永久重复" },
-  { label: "再读g", stream: "goog", inserted: "g @ 3", nextIndex: 4, occurrence: "g: -2，o: -2", answer: "NUL", note: "当前没有只出现一次的字符" },
-  { label: "读l", stream: "googl", inserted: "l @ 4", nextIndex: 5, occurrence: "g: -2，o: -2，l: 4", answer: "l", note: "l成为唯一候选" },
-  { label: "读e", stream: "google", inserted: "e @ 5", nextIndex: 6, occurrence: "g: -2，o: -2，l: 4，e: 5", answer: "l", note: "l的位置4早于e的位置5" },
-] as const;
-
-const officialCases = [
-  { label: "初始", fields: [["流", "空"], ["唯一字符", "无"], ["返回", "NUL"], ["测试", "Test1"]] },
-  { label: "g", fields: [["流", "g"], ["g状态", "位置0"], ["返回", "g"], ["测试", "Test2"]] },
-  { label: "go", fields: [["流", "go"], ["候选", "g@0、o@1"], ["返回", "g"], ["测试", "Test3"]] },
-  { label: "goo", fields: [["流", "goo"], ["o状态", "-2"], ["返回", "g"], ["测试", "Test4"]] },
-  { label: "goog", fields: [["流", "goog"], ["g/o", "均为-2"], ["返回", "NUL"], ["测试", "Test5"]] },
-  { label: "googl", fields: [["流", "googl"], ["l状态", "位置4"], ["返回", "l"], ["测试", "Test6"]] },
-  { label: "google", fields: [["流", "google"], ["l/e", "位置4/5"], ["返回", "l"], ["测试", "Test7"]] },
-] as const;
-
-export function StreamOccurrenceStateLab() {
-  const [cursor, setCursor] = useState(streamStates.length - 1);
-  const state = streamStates[cursor];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-7 gap-1.5">
-          {streamStates.map((item, index) => (
-            <button key={item.label} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"min-h-11 border px-1 text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{item.label}</button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">当前流</div><div className="mt-1 font-semibold text-primary">{state.stream}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">本次插入 / 下个位置</div><div className="mt-1 font-semibold text-primary">{state.inserted} / {state.nextIndex}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">查询结果</div><div className="mt-1 font-semibold text-success">{state.answer}</div></div>
-        </div>
-        <div className="mt-3 border border-border bg-background p-3 text-sm text-secondary">{state.occurrence}</div>
-        <p className="mb-0 mt-3 text-sm text-secondary">{state.note}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        逐步插入google；表中非负数保存首次位置，-2表示已经重复。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function OccurrenceSentinelDiagram() {
   const states = [
     { value: "-1", label: "从未出现", x: 130, color: "var(--text-secondary)" },
@@ -149,8 +99,4 @@ export function StaticAndStreamUniqueDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function FirstCharacterInStreamOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者按空、g、go、goo、goog、googl、google顺序执行7次快照查询。" />;
 }

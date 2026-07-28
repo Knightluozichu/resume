@@ -7,21 +7,9 @@ description: "逐章覆盖 shadow volume/map、PCF/VSM/PSSM、延迟着色、环
 demo: true
 math: true
 sourceUrl: "https://developer.nvidia.com/gpugems"
-draft: true
+draft: false
 ---
 
-import { GpgLightingShadowsDiagram, GpgLightingChapterMatrixDiagram, GpgShadowDecisionDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-lighting-shadows";
-import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述三卷 24 个光照阴影原章的独立问题、核心表示与现代承载路径
-- 能推导 shadow map/volume、PCF、VSM、级联、AO 和体积散射的关键不变量
-- 能比较前向可见性、deferred shading、irradiance/BTF、艺术灯光与材质/纹理架构
-- 能针对 aliasing、bias、light leaking、过度遮蔽和屏幕空间缺失设计诊断证据
-
-</Objectives>
 
 ## 直觉：这些章节不构成“硬阴影到软阴影”的单线演进
 
@@ -29,13 +17,11 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：把 3×3 PCF 核扩大能否自动产生随遮挡距离增大的物理半影？不能。固定核只过滤 shadow test，半影几何需要光源尺寸、blocker 与接收距离关系。
 
-<Term def="从光源到接收点的路径是否被几何阻断；阴影图、阴影体和光线查询只是不同离散表示">光可见性</Term>是阴影技术共享的不变量。
+是阴影技术共享的不变量。
 
-<GpgLightingShadowsDiagram />
 
 ## 24 个原章与核心承载
 
-<GpgLightingChapterMatrixDiagram />
 
 ### GPU Gems 1 Ch9-15：阴影表示与艺术灯光
 
@@ -53,7 +39,7 @@ $$
 V(\mathbf p)=\mathbf 1[z_L(\mathbf p)-b\le D_L(x_L,y_L)].
 $$
 
-<Term def="对 shadow map 邻域的多个深度样本分别执行比较，再平均二值结果以过滤采样边界的技术">Percentage-closer filtering</Term>主要处理离散 aliasing；固定核不包含面光源几何，不能称为物理正确软影。
+主要处理离散 aliasing；固定核不包含面光源几何，不能称为物理正确软影。
 
 ```glsl
 float pcf(sampler2DShadow sm, vec3 q, vec2 texel) {
@@ -81,7 +67,7 @@ shadow volume 不受 shadow-map 分辨率影响，却依赖稳健 silhouette、�
 - **Using Vertex Texture Displacement for Realistic Water Rendering**：顶点纹理位移与几何/法线一致；
 - **Generic Refraction Simulation**：屏幕空间/环境纹理偏移近似折射并处理遮挡边界。
 
-<Term def="先把可见表面材质与几何属性写入 G-buffer，再按光源读取并着色的多阶段架构">延迟着色</Term>把复杂度由“物体×光源提交”转为可见像素上的光体积计算，但不保证更快。近似工作量可比较：
+把复杂度由“物体×光源提交”转为可见像素上的光体积计算，但不保证更快。近似工作量可比较：
 
 $$
 C_{forward}\sim\sum_o L_oP_o,\qquad
@@ -122,7 +108,7 @@ $$
 P(z\ge t)\le\frac{\sigma^2}{\sigma^2+(t-\mu)^2}.
 $$
 
-<Term def="存储深度一、二阶矩并用概率上界估计可见性，使阴影可用普通线性过滤的表示">Variance shadow map</Term>支持大核，但会 light leaking；minimum variance、bleeding reduction 只是缓解，不能恢复丢失的多峰深度分布。
+支持大核，但会 light leaking；minimum variance、bleeding reduction 只是缓解，不能恢复丢失的多峰深度分布。
 
 PSSM/CSM 级联 split 可混合均匀与对数分割：
 
@@ -132,11 +118,10 @@ $$
 
 验收包括 texel density、级联接缝、稳定投影和相机移动 shimmering。
 
-<GpgShadowDecisionDiagram />
 
 ## AO 与 GI：遮蔽不是光
 
-<Term def="半球方向中被几何遮挡比例的局部近似，用于减弱环境光；本身不包含光源、颜色反弹或完整传输">环境光遮蔽</Term>常写为：
+常写为：
 
 $$
 A(\mathbf x)=\frac{1}{\pi}\int_{\Omega}V(\mathbf x,\omega)(\mathbf n\cdot\omega)^+d\omega.
@@ -162,84 +147,15 @@ evidence.gpuTimes = readDelayedQueries();
 
 ## 三步 24 章验收
 
-<Stepper>
-<Step title="第一步：按表示做最小探针">
-
-平面+遮挡块验证 shadow map/volume；球体阵列验证 deferred/BTF/AO；大气层和水面验证介质/折射。
-
-<GpgStepFlowDiagram caption="不同表示必须在能暴露其边界的最小场景中验证。" stage={1} stages={["Probe：visibility、lighting architecture、indirect、media"]} />
-
-</Step>
-<Step title="第二步：逐中间量比较">
-
-保存深度/矩、stencil、G-buffer、irradiance、AO、transmittance，与 CPU/解析参考或高质量离线结果比较。
-
-<GpgStepFlowDiagram caption="最终颜色相似不能证明深度、可见性和能量正确。" stage={2} stages={["Probe：visibility、lighting architecture、indirect、media", "Inspect：depth/moments、stencil、G-buffer、AO、transmittance"]} />
-
-</Step>
-<Step title="第三步：扫描边界和成本">
-
-扫描 bias、核、光源尺寸、级联、光数量、AO 半径、介质步长和屏幕边缘；记录误差、闪烁、泄漏和 GPU 时间。
-
-<GpgStepFlowDiagram caption="技术选择由伪影边界、可用信息和预算共同决定。" stage={3} stages={["Probe：visibility、lighting architecture、indirect、media", "Inspect：depth/moments、stencil、G-buffer、AO、transmittance", "Validate：artifacts、temporal stability、bandwidth、GPU time"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 扩大 PCF 核后称其为物理面光源软阴影。
-**原因 →** 混淆深度比较过滤与 blocker/receiver 半影几何。
-**修法 →** PCF 用于过滤；要距离相关半影需引入光源尺寸和 blocker 搜索/其他面积光近似，并做接触硬化验收。
-</Callout>
-
-<Callout type="trap">
-**现象 →** VSM 大核很平滑，却在薄墙后漏光。
-**原因 →** 两个矩无法表示多峰深度，概率上界过松。
-**修法 →** 显示矩和 variance，调最小方差/bleeding reduction，并在不可接受场景换 EVSM/MSM/深度比较路径。
-</Callout>
-
-<Callout type="trap">
-**现象 →** AO 加深角落后称为全局光照完成。
-**原因 →** 遮蔽比例没有光源、方向、反弹颜色和能量传输。
-**修法 →** AO 只调制合适的间接环境项；GI 另行验证 irradiance/transfer 和光照变化响应。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：Shadow Map Antialiasing 与 Summed-Area Variance Shadow Maps 的核心差异是什么？**
-
-<Answer>
-PCF 对多个深度比较结果平均，保留非线性比较；VSM 过滤深度矩并用概率上界估计可见性，可高效大核/SAT，但会因矩信息不足发生 light leaking。两者误差模式不同。
-</Answer>
-
-**问题 2：Deferred Shading 何时可能比前向更差？**
-
-<Answer>
-光少、材质简单或带宽受限时，G-buffer 写读成本可能超过省下的重复着色；透明、复杂 MSAA 和多材质数据也增加额外路径。应测可见光体积像素、G-buffer 带宽和目标 GPU。
-</Answer>
-
-**问题 3：为 24 章设计一个综合场景。**
-
-<Answer>
-室外城市含方向光级联、点光 cubemap、shadow volume 对照、VSM/PCF 切换、deferred G-buffer、动态 irradiance/AO、风格化建筑、水面折射与大气；提供每项中间附件和固定相机序列，扫描光数、核、级联和介质参数。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 三卷 24 章覆盖的是多种可见性表示、着色架构、材质数据、间接光和介质近似。完整复现必须保留每章独立身份，纠正 PCF/AO 等常见过度解读，并用深度、矩、G-buffer、AO、透射和性能证据选择技术。
 
-<Glossary>
-<GlossaryItem term="光可见性">光源到接收点路径是否被几何阻断的函数。</GlossaryItem>
-<GlossaryItem term="Percentage-closer filtering">对多个深度比较结果求平均的 shadow-map 过滤。</GlossaryItem>
-<GlossaryItem term="延迟着色">先写 G-buffer，再按光源读取可见表面属性着色的架构。</GlossaryItem>
-<GlossaryItem term="Variance shadow map">以深度矩和概率上界估计可见性的可过滤阴影表示。</GlossaryItem>
-<GlossaryItem term="环境光遮蔽">对局部半球几何遮挡比例的近似，不等于完整间接光。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="GPU Gems 1 Ch9-15, GPU Gems 2 Ch9-19, GPU Gems 3 Ch8-13" adaptedUrl="https://developer.nvidia.com/gpugems" />

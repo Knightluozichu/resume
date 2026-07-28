@@ -1,7 +1,5 @@
 "use client";
 
-import { MathGirlOfficialLab } from "./official-lab";
-
 const VIEW_W = 720;
 const VIEW_H = 500;
 
@@ -12,127 +10,6 @@ const danger = "var(--danger)";
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
-
-const volumeCases = [
-  {
-    label: "第1卷",
-    fields: [
-      ["对象", "数列与数学模型"],
-      ["表示", "递推、生成函数、卷积"],
-      ["增长", "调和数与泰勒展开"],
-      ["终点", "分拆数"],
-    ],
-  },
-  {
-    label: "第2卷",
-    fields: [
-      ["对象", "整数、质数、勾股数"],
-      ["结构", "互质、群、模运算"],
-      ["证明", "反证与无穷递降"],
-      ["终点", "费马大定理"],
-    ],
-  },
-  {
-    label: "第3卷",
-    fields: [
-      ["对象", "极限、无穷、形式系统"],
-      ["语言", "ε-δ、语法与语义"],
-      ["构造", "对角线与自指编码"],
-      ["终点", "哥德尔不完备性"],
-    ],
-  },
-  {
-    label: "第4卷",
-    fields: [
-      ["对象", "不确定性与算法代价"],
-      ["工具", "概率、期望、渐近阶"],
-      ["表示", "矩阵与随机漫步"],
-      ["终点", "随机SAT与随机快排"],
-    ],
-    alert: "四卷是四条连续叙事，不是数论、代数、图论、机器学习等泛主题拼成的十章教材。",
-  },
-] as const;
-
-const proofCases = [
-  {
-    label: "递推与归纳",
-    fields: [
-      ["起点", "初值或基例"],
-      ["一步", "由较小下标推出下一项"],
-      ["整体", "归纳覆盖全部自然数"],
-      ["卷次", "第1卷"],
-    ],
-  },
-  {
-    label: "反证与递降",
-    fields: [
-      ["假设", "存在反例"],
-      ["选择", "取最小反例"],
-      ["构造", "得到更小反例"],
-      ["卷次", "第2卷"],
-    ],
-  },
-  {
-    label: "量词与对角",
-    fields: [
-      ["极限", "先给ε再找δ"],
-      ["列表", "假设已经列全"],
-      ["构造", "对角处逐位不同"],
-      ["卷次", "第3卷"],
-    ],
-  },
-  {
-    label: "概率与期望",
-    fields: [
-      ["空间", "先定义随机试验"],
-      ["变量", "把代价写成随机变量"],
-      ["汇总", "指示器与期望线性"],
-      ["卷次", "第4卷"],
-    ],
-    alert: "证明方法不能只按名称迁移；必须重新检查对象、量词、概率空间和适用条件。",
-  },
-] as const;
-
-const synthesisCases = [
-  {
-    label: "选择表示",
-    fields: [
-      ["数列", "变成生成函数"],
-      ["状态", "变成向量与矩阵"],
-      ["公式", "变成编码后的数"],
-      ["价值", "暴露可计算结构"],
-    ],
-  },
-  {
-    label: "构造对象",
-    fields: [
-      ["卷积", "由两部分合成对象"],
-      ["递降", "从反例造更小反例"],
-      ["对角", "造出列表外对象"],
-      ["随机", "造出高概率成功路径"],
-    ],
-  },
-  {
-    label: "标注条件",
-    fields: [
-      ["等式", "定义域与收敛域"],
-      ["定理", "公理和前提"],
-      ["期望", "概率空间"],
-      ["算法", "输入与保证对象"],
-    ],
-  },
-  {
-    label: "完成证据",
-    fields: [
-      ["复述", "说清问题链"],
-      ["推导", "独立补全关键式"],
-      ["反例", "指出条件缺失"],
-      ["迁移", "解释跨卷复用"],
-    ],
-    alert: "“看过”不是完成证据；能复述、推导、反驳和迁移，才说明知识已经形成可调用结构。",
-  },
-] as const;
-
 export function MglFinalReviewDiagram() {
   const rows = [
     { volume: "第1卷", title: "发现结构", nodes: ["数列模型", "生成函数", "卷积差分", "调和泰勒", "分拆数"], color: accent },
@@ -198,35 +75,5 @@ export function MglFinalReviewDiagram() {
         四卷各有连续问题链：从表示与结构，到证明方法、形式系统边界，再到概率化算法保证。
       </figcaption>
     </figure>
-  );
-}
-
-export function MglVolumeReviewLab() {
-  return (
-    <MathGirlOfficialLab
-      cases={volumeCases}
-      caption="四卷分别围绕数列结构、费马问题、形式系统边界和随机算法展开，每卷都保留10章连续推进。"
-      tone="cyan"
-    />
-  );
-}
-
-export function MglProofTransferLab() {
-  return (
-    <MathGirlOfficialLab
-      cases={proofCases}
-      caption="递推归纳、反证递降、量词对角和概率期望是四类证明动作；迁移时必须保留各自前提。"
-      tone="amber"
-    />
-  );
-}
-
-export function MglSynthesisCheckLab() {
-  return (
-    <MathGirlOfficialLab
-      cases={synthesisCases}
-      caption="总复习以表示、构造、条件和证据为索引，让40章形成可检索、可推导、可迁移的知识网络。"
-      tone="violet"
-    />
   );
 }

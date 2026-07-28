@@ -5,7 +5,7 @@ description: >-
   3.0源码、故障和恢复对账验收。
 type: C
 section: Redis设计与实现（第2版 / Redis 3.0 / 2014）
-draft: true
+draft: false
 math: false
 sourceUrl: 'https://huangz.works/redisbook1e/'
 demo: true
@@ -14,16 +14,7 @@ qualityVersion: 2
 practiceMode: simulation
 sourceMode: independent-rewrite
 ---
-import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
 
-<Objectives>
-
-- 能在Redis 3.0源码中解释把I/O多路复用、文件事件处理器、时间事件和aeProcessEvents调度连接为单线程事件循环
-- 能沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账重建第12章 事件的字段与控制流
-- 能操作文件与时间事件调度台，一次只改变文件就绪量或回调耗时
-- 能注入“在单个事件回调中执行长任务，使其他客户端与时间事件共同饥饿”，用“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”判断恢复是否通过
-
-</Objectives>
 
 {/* RDI_QUALITY_V2 */}
 
@@ -41,7 +32,7 @@ import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, S
 
 ## 本章术语与源码合同
 
-<Term def="文件事件是第12章 事件中连接冻结3.0基线与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">文件事件</Term>、<Term def="时间事件是第12章 事件中连接定位结构入口与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">时间事件</Term>、<Term def="事件的调度与执行是第12章 事件中连接执行单变量变更与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">事件的调度与执行</Term>、<Term def="恢复不变量是第12章 事件中连接注入边界故障与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">恢复不变量</Term>、<Term def="结构字段是第12章 事件中连接恢复并对账与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">结构字段</Term>、<Term def="控制流是第12章 事件中连接冻结3.0基线与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">控制流</Term>。
+、、、、、。
 
 第12章 事件必须守住“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”。观察同时记录文件与时间事件调度台一致率与回调耗时分叉风险；只有结构快照、函数入口、运行结果和故障反例互相一致，才接受实现结论。
 
@@ -99,58 +90,12 @@ replay: same_version_same_input
 
 ## 三个必须主动触发的误区
 
-<Callout type="trap" title="命令表象不等于实现">
-  第12章 事件不能从一次redis-cli结果反推全部控制流；必须在ae.c定位结构、写入路径和读取路径，并保存能推翻解释的边界输入。
-</Callout>
-
-<Callout type="trap" title="版本倒灌">
-  Redis 4.0以后新增或替换的结构与功能不能倒灌到3.0。新版资料只作差异说明，正式验收仍以本章源码文件与作者目录为准。
-</Callout>
-
-<Callout type="trap" title="恢复不等于进程在线">
-  注入在单个事件回调中执行长任务，使其他客户端与时间事件共同饥饿后，要用同一命令序列核对结构、回复、文件或偏移以及最终键值；只有“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”恢复才算通过。
-</Callout>
 
 ## 练习、答案与节点验证
 
-<Exercises>
-
-**问题 1：单变量因果。** 怎样验证文件就绪量而不让回调耗时混入结论？
-
-<Answer>固定Redis 3.0提交、配置、数据与回调耗时，只把文件就绪量从“稳定”切到“突发”；比较前后字段、函数轨迹、命令结果与回调耗时分叉风险。</Answer>
-
-**问题 2：逐节点四级证据。** 怎样证明5个正式节点不是只在目录中出现？
-
-<Answer>
-1. 文件事件：在ae.c定位文件事件，保存出现、解释、实验和结果断言四项证据。
-2. 时间事件：在ae.c定位时间事件，保存出现、解释、实验和结果断言四项证据。
-3. 事件的调度与执行：在ae.c定位事件的调度与执行，保存出现、解释、实验和结果断言四项证据。
-4. 重点回顾：在ae.c定位恢复不变量，保存出现、解释、实验和结果断言四项证据。
-5. 参考资料：在ae.c定位结构字段，保存出现、解释、实验和结果断言四项证据。
-</Answer>
-
-**问题 3：故障恢复。** 如何证明“在单个事件回调中执行长任务，使其他客户端与时间事件共同饥饿”已经被修复？
-
-<Answer>沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账找到第一个破坏点，只改变最小因果前提；随后以同版本同输入重放稳定、故障、恢复和复位四条轨迹，并让未参与者依据事件循环时序、处理器注册表、阻塞实验与调度延迟分布独立确认“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”。</Answer>
-
-</Exercises>
 
 ## 术语复核与本章回顾
 
-<Glossary>
-  <GlossaryItem term="文件事件">文件事件是第12章 事件中连接冻结3.0基线与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="时间事件">时间事件是第12章 事件中连接定位结构入口与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="事件的调度与执行">事件的调度与执行是第12章 事件中连接执行单变量变更与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="恢复不变量">恢复不变量是第12章 事件中连接注入边界故障与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="结构字段">结构字段是第12章 事件中连接恢复并对账与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="控制流">控制流是第12章 事件中连接冻结3.0基线与“就绪事件不丢不重复，时间事件按策略执行，长回调不无限阻塞其他客户端与serverCron”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-</Glossary>
 
 完成第12章 事件意味着能从ae.c解释把I/O多路复用、文件事件处理器、时间事件和aeProcessEvents调度连接为单线程事件循环，能运行章专属状态实验，能制造反例并在复位后证明旧状态没有残留。
 
-<Attribution
-  mode="independent-rewrite"
-  sourceBasis="outline-only"
-  workTitle="黄健宏《Redis设计与实现》（正式出版新版，Redis 3.0源码基线）"
-  adaptedUrl="https://huangz.works/redisbook1e/"
-/>

@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "交错输入",
@@ -86,8 +84,4 @@ export function PredicateExtensionDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">作者Reorder约定谓词为true的元素属于后半区，调用端只替换判断函数。</figcaption>
     </figure>
   );
-}
-
-export function ReorderOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者六组测试，核对交错、逆序、已分区、单元素与空输入。" />;
 }

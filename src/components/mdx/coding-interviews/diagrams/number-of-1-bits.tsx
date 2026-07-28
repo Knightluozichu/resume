@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "0",
@@ -82,8 +80,4 @@ export function BitCountMethodMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">W是位宽，K是1的数量；所有方案额外空间均为常数。</figcaption>
     </figure>
   );
-}
-
-export function BitCountTestLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者官方位型，核对零、普通正数、最大正数与负数位表示。" />;
 }

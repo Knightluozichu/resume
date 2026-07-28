@@ -5,7 +5,7 @@ description: >-
   3.0源码、故障和恢复对账验收。
 type: C
 section: Redis设计与实现（第2版 / Redis 3.0 / 2014）
-draft: true
+draft: false
 math: false
 sourceUrl: 'https://huangz.works/redisbook1e/'
 demo: true
@@ -14,16 +14,7 @@ qualityVersion: 2
 practiceMode: simulation
 sourceMode: independent-rewrite
 ---
-import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
 
-<Objectives>
-
-- 能在Redis 3.0源码中解释还原SORT对象数组、数值与字典序比较、BY外部键、LIMIT、GET、STORE和选项执行顺序
-- 能沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账重建第21章 排序的字段与控制流
-- 能操作SORT选项执行管线台，一次只改变比较方式或输出阶段
-- 能注入“按参数书写顺序执行所有选项，导致比较、分页、投影和保存的语义错位”，用“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”判断恢复是否通过
-
-</Objectives>
 
 {/* RDI_QUALITY_V2 */}
 
@@ -41,7 +32,7 @@ import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, S
 
 ## 本章术语与源码合同
 
-<Term def="SORT &lt;key&gt;命令的实现是第21章 排序中连接冻结3.0基线与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">SORT &lt;key&gt;命令的实现</Term>、<Term def="ALPHA选项的实现是第21章 排序中连接定位结构入口与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">ALPHA选项的实现</Term>、<Term def="ASC选项和DESC选项的实现是第21章 排序中连接执行单变量变更与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">ASC选项和DESC选项的实现</Term>、<Term def="BY选项的实现是第21章 排序中连接注入边界故障与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">BY选项的实现</Term>、<Term def="带有ALPHA选项的BY选项的实现是第21章 排序中连接恢复并对账与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">带有ALPHA选项的BY选项的实现</Term>、<Term def="LIMIT选项的实现是第21章 排序中连接冻结3.0基线与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">LIMIT选项的实现</Term>。
+、、、、、。
 
 第21章 排序必须守住“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”。观察同时记录SORT选项执行管线台一致率与输出阶段分叉风险；只有结构快照、函数入口、运行结果和故障反例互相一致，才接受实现结论。
 
@@ -129,63 +120,12 @@ replay: same_version_same_input
 
 ## 三个必须主动触发的误区
 
-<Callout type="trap" title="命令表象不等于实现">
-  第21章 排序不能从一次redis-cli结果反推全部控制流；必须在sort.c定位结构、写入路径和读取路径，并保存能推翻解释的边界输入。
-</Callout>
-
-<Callout type="trap" title="版本倒灌">
-  Redis 4.0以后新增或替换的结构与功能不能倒灌到3.0。新版资料只作差异说明，正式验收仍以本章源码文件与作者目录为准。
-</Callout>
-
-<Callout type="trap" title="恢复不等于进程在线">
-  注入按参数书写顺序执行所有选项，导致比较、分页、投影和保存的语义错位后，要用同一命令序列核对结构、回复、文件或偏移以及最终键值；只有“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”恢复才算通过。
-</Callout>
 
 ## 练习、答案与节点验证
 
-<Exercises>
-
-**问题 1：单变量因果。** 怎样验证比较方式而不让输出阶段混入结论？
-
-<Answer>固定Redis 3.0提交、配置、数据与输出阶段，只把比较方式从“ALPHA”切到“BY外部键”；比较前后字段、函数轨迹、命令结果与输出阶段分叉风险。</Answer>
-
-**问题 2：逐节点四级证据。** 怎样证明10个正式节点不是只在目录中出现？
-
-<Answer>
-1. SORT &lt;key&gt;命令的实现：在sort.c定位SORT &lt;key&gt;命令的实现，保存出现、解释、实验和结果断言四项证据。
-2. ALPHA选项的实现：在sort.c定位ALPHA选项的实现，保存出现、解释、实验和结果断言四项证据。
-3. ASC选项和DESC选项的实现：在sort.c定位ASC选项和DESC选项的实现，保存出现、解释、实验和结果断言四项证据。
-4. BY选项的实现：在sort.c定位BY选项的实现，保存出现、解释、实验和结果断言四项证据。
-5. 带有ALPHA选项的BY选项的实现：在sort.c定位带有ALPHA选项的BY选项的实现，保存出现、解释、实验和结果断言四项证据。
-6. LIMIT选项的实现：在sort.c定位LIMIT选项的实现，保存出现、解释、实验和结果断言四项证据。
-7. GET选项的实现：在sort.c定位SORT &lt;key&gt;命令的实现，保存出现、解释、实验和结果断言四项证据。
-8. STORE选项的实现：在sort.c定位ALPHA选项的实现，保存出现、解释、实验和结果断言四项证据。
-9. 多个选项的执行顺序：在sort.c定位ASC选项和DESC选项的实现，保存出现、解释、实验和结果断言四项证据。
-10. 重点回顾：在sort.c定位BY选项的实现，保存出现、解释、实验和结果断言四项证据。
-</Answer>
-
-**问题 3：故障恢复。** 如何证明“按参数书写顺序执行所有选项，导致比较、分页、投影和保存的语义错位”已经被修复？
-
-<Answer>沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账找到第一个破坏点，只改变最小因果前提；随后以同版本同输入重放稳定、故障、恢复和复位四条轨迹，并让未参与者依据SORT执行管线、选项组合矩阵、稳定性与复杂度测试独立确认“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”。</Answer>
-
-</Exercises>
 
 ## 术语复核与本章回顾
 
-<Glossary>
-  <GlossaryItem term="SORT &lt;key&gt;命令的实现">SORT &lt;key&gt;命令的实现是第21章 排序中连接冻结3.0基线与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="ALPHA选项的实现">ALPHA选项的实现是第21章 排序中连接定位结构入口与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="ASC选项和DESC选项的实现">ASC选项和DESC选项的实现是第21章 排序中连接执行单变量变更与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="BY选项的实现">BY选项的实现是第21章 排序中连接注入边界故障与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="带有ALPHA选项的BY选项的实现">带有ALPHA选项的BY选项的实现是第21章 排序中连接恢复并对账与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="LIMIT选项的实现">LIMIT选项的实现是第21章 排序中连接冻结3.0基线与“输入元素、比较键、排序方向、分页与输出投影按固定顺序组合，缺失外部键语义一致”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-</Glossary>
 
 完成第21章 排序意味着能从sort.c解释还原SORT对象数组、数值与字典序比较、BY外部键、LIMIT、GET、STORE和选项执行顺序，能运行章专属状态实验，能制造反例并在复位后证明旧状态没有残留。
 
-<Attribution
-  mode="independent-rewrite"
-  sourceBasis="outline-only"
-  workTitle="黄健宏《Redis设计与实现》（正式出版新版，Redis 3.0源码基线）"
-  adaptedUrl="https://huangz.works/redisbook1e/"
-/>

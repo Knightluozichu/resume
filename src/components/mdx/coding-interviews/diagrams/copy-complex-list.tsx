@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["next", "1→2→3→4→5"], ["sibling", "1→3，2→5，4→2"], ["空引用", "3与5"], ["覆盖", "前后跨节点"]] },
   { label: "Test2", fields: [["next", "1→2→3→4→5"], ["sibling", "2→5，3→3，4→2"], ["特殊", "3自指"], ["覆盖", "随机指针指向自身"]] },
@@ -73,8 +71,4 @@ export function ComplexListSplitDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">拆分不能只取奇数位；每次还要恢复原节点next，并把克隆节点next接到下一个克隆。</figcaption>
     </figure>
   );
-}
-
-export function CopyComplexListOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者5组测试，核对跨节点、自指、sibling环、单节点自指与空链。" />;
 }

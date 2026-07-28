@@ -7,41 +7,27 @@ description: "按CLRS第四版第22章重建Bellman-Ford、DAG、Dijkstra、差�
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: true
+draft: false
 ---
 
-import { CLRS4ShortestPathContractLab, CLRS4RelaxEdgeLab, CLRS4BellmanFordPassLab, CLRS4NegativeCycleLab, CLRS4DAGRelaxOrderLab, CLRS4DijkstraFrontierLab, CLRS4DijkstraHeapLab, CLRS4DifferenceConstraintLab, CLRS4ConstraintFeasibilityLab, CLRS4ShortestPathPropertiesLab, CLRS4PredecessorGraphLab, CLRS4ShortestPathCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/22-single-source-shortest-paths";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释distance upper bound、RELAX、predecessor witness与reachable negative cycle的语义
-- 能计算Bellman-Ford passes、DAG topological relaxation、Dijkstra settled distances和constraint graph
-- 能实现统一RELAX以及Bellman-Ford、DAG-SHORTEST-PATHS、Dijkstra与差分约束求解
-- 能分析edge-weight前置条件、relaxation order和triangle/convergence properties为何保证正确
-- 能设计包含all-edge inequalities、negative-cycle status、tight parents与算法前置条件的最短路证书
-
-</Objectives>
 
 ## 从“同一条RELAX为什么能支撑三种算法”开始
 
 先预测：当前$d[u]=4$、edge weight为$-2$、$d[v]=7$，经过$u$可给候选2，应更新$v$并令parent为$u$。Bellman-Ford、DAG shortest paths与Dijkstra都执行这个动作；差别只是何时可以确信所有必要edges已按正确顺序relax。
 
-<Term def="在weighted directed graph中，从固定source到每个vertex寻找最小path weight，并区分不可达与负环影响的优化问题。">单源最短路径</Term>令path $p=\langle v_0,\ldots,v_k\rangle$的weight为edges之和，$\delta(s,v)$为所有$s$到$v$ paths的minimum。
+令path $p=\langle v_0,\ldots,v_k\rangle$的weight为edges之和，$\delta(s,v)$为所有$s$到$v$ paths的minimum。
 
-<CLRS4ShortestPathContractLab />
 
 ### Initialize and relax
 
 所有算法先令$d[s]=0$、其他$d[v]=\infty$、parents为NIL。$d[v]$始终是某条已发现path的weight upper bound。
 
-<Term def="比较当前d[v]与d[u]加edge weight，若经u更短则同时降低distance upper bound并更新parent的基本操作。">松弛</Term>定义：
+定义：
 
 $$
 d[v]\leftarrow\min\{d[v],d[u]+w(u,v)\}.
 $$
 
-<CLRS4RelaxEdgeLab />
 
 ```cpp
 void relax(Vertex u, Vertex v, Weight w) {
@@ -58,7 +44,7 @@ Guard避免infinity与负weight相加溢出。Integer实现还要检查finite ad
 
 ### Negative edges and cycle detection
 
-<Term def="重复V减1轮relax全部edges，并用额外一轮判断source可达负weight cycle的通用单源最短路算法。">Bellman-Ford算法</Term>允许negative edges。若不存在source-reachable negative cycle，任一shortest path可取simple path，最多$|V|-1$ edges。
+允许negative edges。若不存在source-reachable negative cycle，任一shortest path可取simple path，最多$|V|-1$ edges。
 
 ```text
 BELLMAN-FORD(G, w, s)
@@ -73,7 +59,6 @@ BELLMAN-FORD(G, w, s)
 
 第$i$轮后，只要某条shortest path的前$i$条edges已按path order被relax，其endpoint就converge。固定edge iteration可能在一轮传播多条edge，只会提前收敛，不破坏上界。
 
-<CLRS4BellmanFordPassLab />
 
 时间$O(VE)$、空间$O(V)$。若某轮没有update可early stop；这改善具体实例，不改变worst-case bound。
 
@@ -87,17 +72,12 @@ $$
 
 在$|V|-1$轮后仍可relax的edge证明存在reachable negative cycle；unreachable negative cycle因$d[u]=\infty$不影响source problem。
 
-<CLRS4NegativeCycleLab />
-
-<Callout type="trap" title="图里有negative edge就没有最短路">
-Negative edge本身可以有finite shortest paths；真正破坏finite optimum的是source可达negative cycle及其可达后继。修法是用Bellman-Ford额外scan检测cycle，而不是看到负数直接拒绝。
-</Callout>
 
 ## 22.2 Single-source shortest paths in directed acyclic graphs
 
 ### One topological pass
 
-<Term def="先拓扑排序DAG，再按该顺序对每个vertex的outgoing edges各relax一次的线性时间最短路算法。">有向无环图最短路径</Term>允许negative edges，因为没有cycle可反复降低weight。
+允许negative edges，因为没有cycle可反复降低weight。
 
 ```text
 DAG-SHORTEST-PATHS(G, w, s)
@@ -108,7 +88,6 @@ DAG-SHORTEST-PATHS(G, w, s)
 5          RELAX(u,v,w)
 ```
 
-<CLRS4DAGRelaxOrderLab />
 
 当处理$u$时，所有可能进入$u$的path predecessors都位于topological order之前，因此$d[u]$已是$\delta(s,u)$；relax outgoing edges把正确候选传向后继。总时间$O(V+E)$，也可求critical path：把目标从min改成max或取负weights，但需同步初始化与比较方向。
 
@@ -116,15 +95,13 @@ DAG-SHORTEST-PATHS(G, w, s)
 
 ### Settling the nearest vertex
 
-<Term def="在所有edge weights非负时，以min-priority queue反复settle最小distance upper bound vertex并relax outgoing edges的算法。">Dijkstra算法</Term>维护settled set $S$。每轮从$V-S$ extract minimum $u$；证明$d[u]=\delta(s,u)$后永久加入$S$。
+维护settled set $S$。每轮从$V-S$ extract minimum $u$；证明$d[u]=\delta(s,u)$后永久加入$S$。
 
-<CLRS4DijkstraFrontierLab />
 
 证明反设存在到$u$更短path。取该path上第一个不在$S$的vertex $y$及其settled predecessor $x$。当$x$被settle时edge $(x,y)$已relax，且nonnegative suffix保证$d[y]\le\delta(s,u)\lt d[u]$，与$u$为extract-min矛盾。
 
 Negative edge会破坏“尚未走的suffix不会降低cost”：一个已settled vertex可能后来经负edge得到更短path，算法却不再修复。
 
-<CLRS4DijkstraHeapLab />
 
 Adjacency list加binary heap为：
 
@@ -135,15 +112,12 @@ $$
 
 Fibonacci heap理论界$O(E+V\log V)$；dense matrix加array为$O(V^2)$。Lazy priority queue可push duplicate entries并在pop时丢弃stale distance，代码简单但heap元素数与常数不同。
 
-<Callout type="trap" title="只有negative cycle才会让Dijkstra失败">
-一条negative edge即可能在vertex settled后改进它，即使graph无cycle。修法是验证所有reachable edges nonnegative；有负edge用Bellman-Ford，若是DAG则用topological relaxation。
-</Callout>
 
 ## 22.4 Difference constraints and shortest paths
 
 ### Constraints as edges
 
-<Term def="形如x_j减x_i不大于b_k的线性不等式系统，可编码为v_i到v_j权重b_k的constraint graph edges。">差分约束</Term>：
+：
 
 $$
 x_j-x_i\le b_k
@@ -153,7 +127,6 @@ $$
 
 把constraint转为edge $(v_i,v_j)$ weight $b_k$。新增super-source $v_0$，向每个$v_i$连weight 0 edge，使全部constraint vertices reachable。
 
-<CLRS4DifferenceConstraintLab />
 
 若constraint graph无negative cycle，Bellman-Ford distances给一组solution $x_i=\delta(v_0,v_i)$。Triangle inequality保证对每条edge：
 
@@ -163,7 +136,6 @@ $$
 
 若存在negative cycle，把cycle对应不等式相加，left变量telescopes为0，right为negative，得到不可能的$0\le w(c)\lt0$，所以system infeasible。
 
-<CLRS4ConstraintFeasibilityLab />
 
 Constraint solutions通常不唯一；所有variables同时加常数仍保持differences。Super-source只是建立可达性，不向原system添加业务变量约束。
 
@@ -179,7 +151,6 @@ Constraint solutions通常不唯一；所有variables同时加常数仍保持dif
 4. Convergence property：若$d[u]=\delta(s,u)$且$(u,v)$在某shortest path上，relax后$d[v]=\delta(s,v)$。
 5. Path-relaxation property：按某shortest path的edge order relax，endpoint最终converge，中间可穿插其他relax。
 
-<CLRS4ShortestPathPropertiesLab />
 
 这些properties把算法差异缩成“何时保证shortest-path edges按可用order被处理”。Bellman-Ford枚举足够轮数，DAG用topological order，Dijkstra用nonnegative weights证明extract-min已converged。
 
@@ -193,29 +164,9 @@ $$
 
 parents应形成以source为root的shortest-path tree。Equal shortest paths会产生不同合法parents；tie policy决定witness但不改变distances。
 
-<CLRS4PredecessorGraphLab />
 
 验证结果时可独立检查：$d[s]=0$；每条edge满足$d[v]\le d[u]+w(u,v)$；每个finite非source vertex有tight parent edge；parent chains终止于source且无cycle。对Bellman-Ford还需报告negative-cycle status，对Dijkstra需证明weights nonnegative。
 
-<CLRS4ShortestPathCertificateLab />
-
-<Stepper>
-<Step title="固定距离语义与前置条件">
-区分finite、unreachable与negative-cycle affected，核对edge weights是否允许所选算法。
-
-<CLRS4ShortestPathContractLab />
-</Step>
-<Step title="按合法顺序RELAX">
-Bellman-Ford重复all edges，DAG按topological order，Dijkstra按minimum unsettled upper bound。
-
-<CLRS4RelaxEdgeLab />
-</Step>
-<Step title="验证distance与witness">
-检查all-edge inequalities、negative cycles、tight parent edges、acyclic parent chains和source reachability。
-
-<CLRS4ShortestPathCertificateLab />
-</Step>
-</Stepper>
 
 ## 小结
 
@@ -223,41 +174,4 @@ Chapter 22 Single-Source Shortest Paths以initialize与relax统一算法。Bellm
 
 Proofs of shortest-paths properties通过triangle inequality、upper bound、convergence和path relaxation解释不同顺序何时足够。最终交付不只是distance array，还应包含算法前置条件、negative-cycle状态、tight predecessor witness与独立edge-inequality audit。
 
-<Exercises>
 
-**问题 1**：Bellman-Ford为何执行$|V|-1$轮而不是$|E|$轮？
-
-<Answer>
-若不存在reachable negative cycle，任一finite shortest path可取simple path，最多含$|V|-1$ edges。每轮保证path order又向前覆盖至少一条edge，所以$|V|-1$轮足以；edge数量只影响每轮扫描成本。
-</Answer>
-
-**问题 2**：DAG shortest paths为何允许negative edges？
-
-<Answer>
-DAG没有cycle，任何path长度有限且topological order让所有predecessors在vertex之前完成。Negative edge不会被反复绕行，也不会在vertex处理后从后方返回改进它，因此一次有序relax即可。
-</Answer>
-
-**问题 3**：Dijkstra为何要求所有reachable edges nonnegative？
-
-<Answer>
-Settling证明依赖shortest path剩余suffix不会降低当前prefix weight。Negative edge可让尚未settled路径在未来大幅下降并改进已settled vertex，破坏extract-min永久正确性，即使没有negative cycle也会失败。
-</Answer>
-
-**问题 4**：Difference constraints存在negative cycle为何代表infeasible？
-
-<Answer>
-把cycle上所有$x_j-x_i\le b_k$相加，left variables首尾抵消为0，right等于cycle total weight。若该weight为negative，就要求$0\le$一个负数，矛盾，因此没有变量赋值能同时满足全部constraints。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="单源最短路径">在weighted directed graph中，从固定source到每个vertex寻找最小path weight，并区分不可达与负环影响的优化问题。</GlossaryItem>
-<GlossaryItem term="松弛">比较当前d[v]与d[u]加edge weight，若经u更短则同时降低distance upper bound并更新parent的基本操作。</GlossaryItem>
-<GlossaryItem term="Bellman-Ford算法">重复V减1轮relax全部edges，并用额外一轮判断source可达负weight cycle的通用单源最短路算法。</GlossaryItem>
-<GlossaryItem term="有向无环图最短路径">先拓扑排序DAG，再按该顺序对每个vertex的outgoing edges各relax一次的线性时间最短路算法。</GlossaryItem>
-<GlossaryItem term="Dijkstra算法">在所有edge weights非负时，以min-priority queue反复settle最小distance upper bound vertex并relax outgoing edges的算法。</GlossaryItem>
-<GlossaryItem term="差分约束">形如x_j减x_i不大于b_k的线性不等式系统，可编码为v_i到v_j权重b_k的constraint graph edges。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 22 · Single-Source Shortest Paths" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

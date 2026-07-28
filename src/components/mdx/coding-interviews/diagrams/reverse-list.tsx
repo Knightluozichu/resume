@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "五节点",
@@ -87,8 +85,4 @@ export function ReverseHeadTailDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">原尾在处理时next为空，作者把该节点记录为pReversedHead。</figcaption>
     </figure>
   );
-}
-
-export function ReverseOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者三类输入及双重反转性质，核对新头、新尾、空链和节点身份。" />;
 }

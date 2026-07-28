@@ -11,15 +11,7 @@ draft: false
 ---
 
 import { PbtBvhArchitectureDiagram, PbtCpuParallelDiagram, PbtSceneConstructionDiagram, PbtSystemArchitectureDiagram, PbtWavefrontArchitectureDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-system-architecture";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
-<Objectives>
-- 能解释 PBRT 为什么分离解析期实体与渲染期对象，并追踪 BasicScene 到 Aggregate 和 Integrator 的创建依赖
-- 能推导 BVH 的 SAH 分割代价，比较 SAH、HLBVH、Middle 与 EqualCounts 的构建权衡
-- 能分析线性 BVH 的内存布局、近优先遍历与最坏复杂度，避免把所有查询都误称为对数时间
-- 能描述 ImageTileIntegrator 的渐进波次、ParallelFor2D、线程池和线程局部对象的真实协作方式
-- 能比较 CPU 逐路径与 GPU wavefront 的数据流，并用 Amdahl 定律、负载均衡和访存证据诊断性能
-</Objectives>
 
 ## 为什么“Scene → BVH → tile”不足以解释 PBRT
 
@@ -31,11 +23,11 @@ PBRT 也不是长期保留可编辑节点关系的通用 Scene Graph。解析器
 
 ## 1. 解析表示与渲染表示：先保留意图，再确定布局
 
-<Term def="场景文件中一个带类型名、参数字典、变换状态和源文件位置的延迟创建描述">场景实体</Term> `SceneEntity` 保留用户写下的配置，而不是立即构造最终对象。这样解析器可以报告准确 `FileLoc`，处理属性栈、命名资源、实例与 `Import`，也能在依赖满足前暂存描述。
+ `SceneEntity` 保留用户写下的配置，而不是立即构造最终对象。这样解析器可以报告准确 `FileLoc`，处理属性栈、命名资源、实例与 `Import`，也能在依赖满足前暂存描述。
 
-<Term def="收集解析期实体并提供方法把纹理、材质、介质、光源、Primitive 与渲染器配置转换成最终对象的场景桥梁">BasicScene</Term> 是解析期与渲染期的边界。官方 [BasicScene and Final Object Creation](https://www.pbr-book.org/4ed/Processing_the_Scene_Description/BasicScene_and_Final_Object_Creation) 展示了它如何保存实体、同步多个 importer，并在可行时提前创建 Camera、Sampler、纹理、介质和光源。
+ 是解析期与渲染期的边界。官方 [BasicScene and Final Object Creation](https://www.pbr-book.org/4ed/Processing_the_Scene_Description/BasicScene_and_Final_Object_Creation) 展示了它如何保存实体、同步多个 importer，并在可行时提前创建 Camera、Sampler、纹理、介质和光源。
 
-<Term def="把可独立的对象创建提交给线程池并在真正读取结果时等待完成的后台任务">异步作业</Term> `AsyncJob` 让贴图加载或相机创建和后续解析重叠。它不会消除依赖：Aggregate 仍必须等到 shape、material、area light 与 medium 都可用，Integrator 也必须等到 Camera、Sampler、Aggregate 和 lights 完成。
+ `AsyncJob` 让贴图加载或相机创建和后续解析重叠。它不会消除依赖：Aggregate 仍必须等到 shape、material、area light 与 medium 都可用，Integrator 也必须等到 Camera、Sampler、Aggregate 和 lights 完成。
 
 <PbtSceneConstructionDiagram />
 
@@ -62,9 +54,9 @@ integrator.Render();
 
 ## 2. Primitive 与 Aggregate：求交接口是系统汇合点
 
-<Term def="把 Shape 的几何求交与 Material、AreaLight 和 MediumInterface 绑定起来的运行时场景图元接口">Primitive</Term> 是 Integrator 看见的几何单位。`GeometricPrimitive` 组合 shape、material、area light 和介质边界；transformed/animated primitive 负责实例变换；Integrator 不需要知道它最终命中了三角形、球还是实例。
+ 是 Integrator 看见的几何单位。`GeometricPrimitive` 组合 shape、material、area light 和介质边界；transformed/animated primitive 负责实例变换；Integrator 不需要知道它最终命中了三角形、球还是实例。
 
-<Term def="实现 Primitive 接口并在内部组织大量图元以加速 Intersect 与 IntersectP 的顶层加速对象">Aggregate</Term> 同样表现为一个 Primitive。`Integrator::Intersect()` 只转发给 aggregate，因此替换 BVH 或其他加速结构不改变光传输代码。`IntersectP()` 只返回遮挡谓词，避免为 shadow ray 构造最近交点的完整 `SurfaceInteraction`。
+ 同样表现为一个 Primitive。`Integrator::Intersect()` 只转发给 aggregate，因此替换 BVH 或其他加速结构不改变光传输代码。`IntersectP()` 只返回遮挡谓词，避免为 shadow ray 构造最近交点的完整 `SurfaceInteraction`。
 
 若一组图元为 $S$，其 BVH 节点包围盒是子图元包围盒的并：
 
@@ -76,7 +68,7 @@ $$
 
 ## 3. BVH 构建：树高不是唯一目标
 
-<Term def="按空间邻近把每个 Primitive 恰好放入一个叶集合，并用层次包围盒组织这些集合的加速结构">BVH</Term>属于 primitive subdivision。若二叉 BVH 每叶一个图元，$N$ 个叶子和 $N-1$ 个内部节点给出
+属于 primitive subdivision。若二叉 BVH 每叶一个图元，$N$ 个叶子和 $N-1$ 个内部节点给出
 
 $$
 N_{\mathrm{nodes}}=2N-1.
@@ -84,7 +76,7 @@ $$
 
 图元不会像某些空间细分结构那样复制进多个 cell，因此节点和图元引用的内存有界。实际 PBRT 允许一个叶子存多个图元，节点数还会更少。
 
-PBRT 默认 <Term def="根据节点表面积近似 ray 命中概率，并估计遍历与图元求交总成本的 BVH 分割模型">表面积启发式</Term>。设父包围盒面积为 $A$，两个候选子集合面积和图元数为 $(A_0,N_0)$、$(A_1,N_1)$，估计分割代价为
+PBRT 默认。设父包围盒面积为 $A$，两个候选子集合面积和图元数为 $(A_0,N_0)$、$(A_1,N_1)$，估计分割代价为
 
 $$
 C_{\mathrm{split}}=C_{\mathrm{trav}}+
@@ -102,15 +94,15 @@ $$
 
 只有分割代价更低，或图元数超过叶上限时才继续拆分。PBRT 用 12 个 centroid buckets 近似搜索，而不是尝试所有连续平面。
 
-<Term def="把图元质心量化为 Morton code、排序后并行生成局部线性树，再用 SAH 连接上层 treelet 的快速 BVH 构建法">HLBVH</Term>更容易并行且构建近线性，但通常生成的树不如完整 SAH 高效。<Term def="把多维整数坐标的位交错成一维 z-order 键，使空间邻近点通常在排序后相近的编码">Morton编码</Term>是它把空间聚类转成排序问题的关键。`Middle` 与 `EqualCounts` 更便宜，但主要用于简单基线。
+更容易并行且构建近线性，但通常生成的树不如完整 SAH 高效。是它把空间聚类转成排序问题的关键。`Middle` 与 `EqualCounts` 更便宜，但主要用于简单基线。
 
 <PbtBvhArchitectureDiagram />
 
 ## 4. 压平与遍历：布局直接参与算法成本
 
-构建期使用指针 `BVHBuildNode` 便于递归操作。完成后，PBRT 重新排列叶内 Primitive，使每个叶子对应连续数组范围，再把树深度优先压平为 <Term def="用连续 LinearBVHNode 数组和子节点偏移表示、避免每节点独立指针分配的遍历布局">线性BVH</Term>。
+构建期使用指针 `BVHBuildNode` 便于递归操作。完成后，PBRT 重新排列叶内 Primitive，使每个叶子对应连续数组范围，再把树深度优先压平为。
 
-一个内部节点的第一个子节点紧随当前节点，第二个子节点由 offset 指向；叶节点保存首图元下标与数量。连续节点减少分配元数据和指针追逐，并让常见访问路径更可能落在相邻 cache line。<Term def="让频繁连续使用的数据在地址和时间上靠近，以减少缓存未命中和内存等待的布局性质">数据局部性</Term>在这里不是抽象口号，而是 `orderedPrims` 与 `LinearBVHNode[]` 的具体结果。
+一个内部节点的第一个子节点紧随当前节点，第二个子节点由 offset 指向；叶节点保存首图元下标与数量。连续节点减少分配元数据和指针追逐，并让常见访问路径更可能落在相邻 cache line。在这里不是抽象口号，而是 `orderedPrims` 与 `LinearBVHNode[]` 的具体结果。
 
 ray 与 AABB 的 slab 测试把每个轴的入射和离开参数合并：
 
@@ -120,7 +112,7 @@ t_{\mathrm{enter}}=\max_i\min(t_{i0},t_{i1}),
 t_{\mathrm{exit}}=\min_i\max(t_{i0},t_{i1}).
 $$
 
-当 $t_{\mathrm{enter}}\le t_{\mathrm{exit}}$ 且区间与当前 ray 范围相交时，才访问节点。<Term def="根据 ray 方向先压入远子树、立即访问近子树，并在找到最近命中后缩短 tMax 的 BVH 策略">近优先遍历</Term>提高后续远节点被剪枝的机会：
+当 $t_{\mathrm{enter}}\le t_{\mathrm{exit}}$ 且区间与当前 ray 范围相交时，才访问节点。提高后续远节点被剪枝的机会：
 
 ```cpp
 while (true) {
@@ -146,9 +138,9 @@ BVH 不是二分查找树。ray 可能同时穿过两个子包围盒，重叠严
 
 ## 5. CPU 渲染：渐进波次、自动 tile 与线程局部状态
 
-<Term def="把二维像素区域拆成多个 Bounds2i 作业，并由 ParallelFor2D 动态分配给线程池的 CPU 并行方式">图块并行</Term>位于 `ImageTileIntegrator::Render()`。图块不是固定 16×16；`ParallelFor2D` 根据图像范围和运行线程数选择粒度，在调度开销与负载均衡之间折中。
+位于 `ImageTileIntegrator::Render()`。图块不是固定 16×16；`ParallelFor2D` 根据图像范围和运行线程数选择粒度，在调度开销与负载均衡之间折中。
 
-<Term def="先让全图各取少量样本，再按 1、1、2、4 等批次增加每像素样本并可写出中间图像的渲染组织方式">渐进波次</Term>使长渲染很早就有全图预览。PBRT 的下一波大小翻倍并封顶 64：
+使长渲染很早就有全图预览。PBRT 的下一波大小翻倍并封顶 64：
 
 $$
 1,1,2,4,8,16,32,64,64,\ldots
@@ -160,9 +152,9 @@ $$
 W=\operatorname{Area}(\mathrm{pixelBounds})\times\mathrm{spp}.
 $$
 
-每个 tile 的实际耗时仍会因几何、材质、路径长度和介质而变化，所以作业数需要显著多于线程数。<Term def="在程序启动时创建固定 worker，并让它们和主线程共同从并行作业列表取得工作的 CPU 调度设施">线程池</Term>避免为每轮 tile 反复创建线程；提交并行循环的主线程也参与执行。
+每个 tile 的实际耗时仍会因几何、材质、路径长度和介质而变化，所以作业数需要显著多于线程数。避免为每轮 tile 反复创建线程；提交并行循环的主线程也参与执行。
 
-<Term def="通过 ThreadLocal 为每个执行线程维护独立 Sampler、ScratchBuffer 或 Allocator，避免共享可变状态和高频加锁">线程局部存储</Term>用于 Sampler 与临时内存。Sampler 有 pixel/sample/dimension 游标，不能并发共享；<Term def="从预分配连续区域快速分配短生命周期 BxDF、BSSRDF 和 RayMajorantIterator，并整体 Reset 的 arena">ScratchBuffer</Term>在每个 pixel sample 结束后重置。
+用于 Sampler 与临时内存。Sampler 有 pixel/sample/dimension 游标，不能并发共享；在每个 pixel sample 结束后重置。
 
 <PbtCpuParallelDiagram />
 
@@ -205,9 +197,9 @@ $$
 
 ## 7. GPU wavefront：同一传输算法，不同调度形状
 
-<Term def="把一条路径的不同阶段拆成多个 kernel，并让大量同类工作通过队列批量执行的 GPU 渲染架构">波前架构</Term>用于 `WavefrontPathIntegrator`。PBRT 4e 的 GPU 路径只有体积路径追踪，物理语义对应 CPU `VolPathIntegrator`；它不是另一种光传输方程。
+用于 `WavefrontPathIntegrator`。PBRT 4e 的 GPU 路径只有体积路径追踪，物理语义对应 CPU `VolPathIntegrator`；它不是另一种光传输方程。
 
-<Term def="保存待执行的同类型 path state，使一个 kernel 可以批量消费并把后续任务推入其他队列的缓冲结构">工作队列</Term>连接相机 ray、最近求交、escaped ray、area-light hit、介质、不同 material、shadow ray 和 next ray。每个 path depth 执行相应 kernel，没有介质或某类材质时可跳过空队列。current/next ray queue 双缓冲，下一深度交换角色。
+连接相机 ray、最近求交、escaped ray、area-light hit、介质、不同 material、shadow ray 和 next ray。每个 path depth 执行相应 kernel，没有介质或某类材质时可跳过空队列。current/next ray queue 双缓冲，下一深度交换角色。
 
 <PbtWavefrontArchitectureDiagram />
 
@@ -217,85 +209,12 @@ wavefront 的收益来自 GPU throughput：同一 material kernel 从相同工�
 
 动手试：固定一个小场景、一个 pixel/sample 与一条 ray，把“初始化慢、求交慢、着色慢、调度慢”拆成可验证阶段。
 
-<Stepper>
-<Step title="第一步：核对场景实体与创建依赖">
-从 Parser 的 FileLoc 和参数字典开始，确认 BasicSceneBuilder 的属性栈、实例和 Import；列出 Camera、Sampler、纹理、介质、光源、材质、Aggregate 与 Integrator 的创建依赖，以及哪些 AsyncJob 可以和解析重叠。
-<PbtSystemArchitectureDiagram step={1} />
-</Step>
-<Step title="第二步：核对 Aggregate 与传输入口">
-确认所有可求交对象通过 Primitive 接口进入 Aggregate；记录 BVH split method、节点数、叶图元数和 build time。用固定 ray 对比 brute force 与 BVH 最近命中，不能只检查是否命中。
-<PbtSystemArchitectureDiagram step={2} />
-</Step>
-<Step title="第三步：核对并行状态与 Film 输出">
-CPU 路径检查 wave 范围、tile 数、ThreadLocal Sampler/ScratchBuffer 和每样本 Reset；GPU 路径检查各 queue 数量与 next-ray 双缓冲。最终确认相机权重、filter weight 与 Film 写回只应用一次。
-<PbtSystemArchitectureDiagram step={3} />
-</Step>
-</Stepper>
 
 ## 9. 常见误区与诊断
 
-<Callout type="trap">
-**现象：** BVH 树高接近 $\log_2N$，但某些 camera ray 仍访问大量节点。**原因：** 子包围盒重叠或 ray 穿过两侧，遍历不是只选一个子树的二分查找。**修法：** 统计 node visits 和 primitive tests，比较 SAH split 与叶大小，并检查真实 ray 分布，而不是只看树高。
-</Callout>
-
-<Callout type="trap">
-**现象：** 增加线程后速度停在 4 倍，继续减小 tile 反而更慢。**原因：** 串行阶段、内存带宽、作业获取开销或尾部 tile 负载限制并行效率。**修法：** 用 Amdahl 上限和 worker 时间线区分串行瓶颈与负载不均，让 ParallelFor2D 自动粒度先作为基线。
-</Callout>
-
-<Callout type="trap">
-**现象：** 偶发崩溃出现在 BxDF 分配或样本维度，单线程无法复现。**原因：** 多线程共享了 Sampler、ScratchBuffer 或非线程安全 allocator。**修法：** 把只读场景与可变游标分开，使用 ThreadLocal/Clone；以 pixel、sample、dimension 固定重放，并在每个样本后 Reset scratch arena。
-</Callout>
 
 ## 小结与自检
 
 PBRT 的工程骨架围绕清晰的表示和所有权转换：SceneEntity 保存解析意图，BasicScene 创建运行时对象，Primitive/Aggregate 统一求交，SAH 或 HLBVH 构建后压平成线性 BVH。CPU 通过渐进波次、自动 tile、线程池和 ThreadLocal 状态并行；GPU 通过 wavefront 队列重排同一 VolPath 传输。性能结论必须落到节点访问、作业粒度、线程利用率和内存流量，而不是用 `O(log N)` 或固定 tileSize 代替测量。
 
-<Exercises>
-**问题 1：** 父节点面积为 100，候选两侧面积和图元数分别是 $(40,3)$ 与 $(60,7)$。取 $C_{trav}=0.5$、$C_{isect}=1$，求 SAH 分割代价，并与 10 个图元的叶代价比较。
 
-<Answer>
-$C_{split}=0.5+(40/100)\times3+(60/100)\times7=0.5+1.2+4.2=5.9$。$C_{leaf}=10$，因此该模型下分割更便宜。结论只比较这个候选平面；实现还要在多个 bucket boundary 中选择最小代价。
-</Answer>
-
-**问题 2：** 为什么平衡二叉 BVH 仍不能保证每条 ray 的查询是 $O(\log N)$？
-
-<Answer>
-因为 ray 与节点包围盒相交时可能同时进入两个子树，不像按 key 搜索的二叉树每层只走一边。若子包围盒重叠严重、ray 穿过大量空间或叶分割质量差，遍历可访问大量节点和图元，最坏达到 $O(N)$。树高只是栈深和潜在路径长度，不是访问节点数证明。
-</Answer>
-
-**问题 3：** 目标为 20 spp，PBRT 从 waveStart=0、waveEnd=1、nextWaveSize=1 开始。每一波新增多少样本，何时完成？
-
-<Answer>
-新增样本依次为 1、1、2、4、8、4，对应累计 1、2、4、8、16、20 spp。第五波后 nextWaveSize 本可继续翻倍，但 waveEnd 被 `min(spp, ...)` 截到 20，因此最后一波只补 4 个样本。
-</Answer>
-
-**问题 4：** 某渲染器串行比例 $s=0.1$，其余部分在 8 核上理想并行。Amdahl 理论最大加速比是多少？为什么实际通常更低？
-
-<Answer>
-$S(8)=1/(0.1+0.9/8)\approx4.71$。实际还会低于这个理想值，因为 tile 调度、同步、缓存和内存带宽、BVH/材质负载不均以及系统其他工作都增加了并行开销或有效串行比例。
-</Answer>
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="场景实体">带类型、参数、变换和 FileLoc 的解析期对象描述，用于延迟创建运行时资源。</GlossaryItem>
-<GlossaryItem term="BasicScene">收集解析实体并按依赖创建纹理、材质、介质、光源、Primitive、Aggregate 和 Integrator 的桥梁。</GlossaryItem>
-<GlossaryItem term="异步作业">提交可独立对象创建并在取结果时等待，使资源加载与继续解析重叠的后台任务。</GlossaryItem>
-<GlossaryItem term="Primitive">统一几何求交并绑定 Material、AreaLight 与 MediumInterface 的运行时图元接口。</GlossaryItem>
-<GlossaryItem term="Aggregate">实现 Primitive 接口并在内部加速大量图元求交的顶层场景对象。</GlossaryItem>
-<GlossaryItem term="BVH">按图元集合递归组织包围盒、允许 miss 时剪掉整棵子树的 primitive-subdivision 层次结构。</GlossaryItem>
-<GlossaryItem term="表面积启发式">用节点表面积近似访问概率并估计遍历与图元求交成本的 BVH 分割模型。</GlossaryItem>
-<GlossaryItem term="HLBVH">用 Morton 排序并行构建局部 LBVH，再用 SAH 连接 treelet 的快速构建方法。</GlossaryItem>
-<GlossaryItem term="Morton编码">交错多维整数坐标位、把空间邻近关系近似映射到一维 z-order 的编码。</GlossaryItem>
-<GlossaryItem term="线性BVH">把指针构建树压平为连续 LinearBVHNode 数组并重排叶图元的遍历表示。</GlossaryItem>
-<GlossaryItem term="数据局部性">让连续使用的数据在地址和时间上靠近，以减少缓存未命中与内存等待的性质。</GlossaryItem>
-<GlossaryItem term="近优先遍历">先访问 ray 方向上的近子树并利用最近命中缩短 tMax、帮助远节点剪枝的策略。</GlossaryItem>
-<GlossaryItem term="图块并行">由 ParallelFor2D 把像素 Bounds 拆成多个作业并动态分配给 CPU 线程的方式。</GlossaryItem>
-<GlossaryItem term="渐进波次">按逐步增长的 sample range 覆盖全图，使长渲染可提前获得完整低样本预览。</GlossaryItem>
-<GlossaryItem term="线程池">预先创建固定 worker、由 worker 和主线程共同执行 ParallelJob 的 CPU 调度设施。</GlossaryItem>
-<GlossaryItem term="线程局部存储">为每个执行线程提供独立可变对象，避免 Sampler 和临时分配器并发共享。</GlossaryItem>
-<GlossaryItem term="ScratchBuffer">从预分配 arena 快速分配短生命周期散射对象并整体 Reset 的线程局部缓冲。</GlossaryItem>
-<GlossaryItem term="波前架构">把路径阶段拆成多个 kernel，并通过工作队列批量处理同类型任务的 GPU 架构。</GlossaryItem>
-<GlossaryItem term="工作队列">在 wavefront kernel 之间保存 path state 和后续任务类型的缓冲结构。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th ed., Chapters 1, 7, 15 and Appendices B-C" adaptedUrl="https://www.pbr-book.org/4ed/contents" />

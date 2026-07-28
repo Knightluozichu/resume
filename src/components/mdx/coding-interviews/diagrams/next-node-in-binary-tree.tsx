@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const caseRows = [
   { label: "节点8", fields: [["右子树", "根10"], ["向左", "10 → 9"], ["后继", "9"], ["规则", "右子树最左节点"]] },
   { label: "节点5", fields: [["右子树", "无"], ["父关系", "5是6的左孩子"], ["后继", "6"], ["规则", "父节点立即可访问"]] },
@@ -50,12 +48,4 @@ export function AncestorClimbDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">上爬循环只跨过已经完整访问过的右分支。</figcaption>
     </figure>
   );
-}
-
-export function SuccessorTraceLab() {
-  return <CodingInterviewLab cases={caseRows} caption="切换节点，判断后继来自右子树还是父指针链。" />;
-}
-
-export function SuccessorTestLab() {
-  return <CodingInterviewLab cases={tests} caption="官方16组断言覆盖完整树、全左、全右、单节点与空后继。" />;
 }

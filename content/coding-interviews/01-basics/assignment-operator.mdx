@@ -10,18 +10,8 @@ sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127
 draft: false
 ---
 
-import { AssignmentContractMap, OwnershipTransitionDiagram, ExceptionSafetyLab, AssignmentTestLab } from "@/components/mdx/coding-interviews/diagrams/assignment-operator";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { AssignmentContractMap, OwnershipTransitionDiagram } from "@/components/mdx/coding-interviews/diagrams/assignment-operator";
 
-<Objectives>
-
-- 能解释复制赋值运算符为什么返回当前对象的左值引用，并用连续赋值验证
-- 能实现拥有动态字符数组的 `CMyString` 深拷贝，正确释放旧资源
-- 能分析先释放后分配在自赋值和分配失败时分别造成的风险
-- 能实现临时对象交换方案，并说明它如何提供强异常保证
-- 能设计普通赋值、自赋值、连续赋值、独立所有权和异常注入测试
-
-</Objectives>
 
 ## 从`str3 = str2 = str1`开始
 
@@ -29,7 +19,7 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 这道题表面只要求“为`CMyString`添加赋值运算符函数”，实际在同时检查C++接口习惯、资源所有权、自赋值和异常安全。只把源指针复制给目标对象会造成共享所有权，两个析构函数最终重复释放；只会深拷贝却先删除目标旧值，又会在分配失败时破坏对象。
 
-<Term def="对象已经存在时，把另一个同类型对象的值复制到它，并正确处理原有状态的成员函数。">复制赋值运算符</Term>的典型签名是`CMyString& operator=(const CMyString& other)`。返回`CMyString&`而不是值，可支持连续赋值且避免额外复制；参数使用常量引用，既避免传参复制，也承诺不修改源对象。
+的典型签名是`CMyString& operator=(const CMyString& other)`。返回`CMyString&`而不是值，可支持连续赋值且避免额外复制；参数使用常量引用，既避免传参复制，也承诺不修改源对象。
 
 <AssignmentContractMap />
 
@@ -41,9 +31,9 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 **释放目标旧资源。** `str2`可能已经持有字符数组，覆盖指针前必须安排旧数组的释放，否则每次赋值都会泄漏。关键不是“尽早delete”，而是“新状态准备成功后，旧资源必定有人释放”。
 
-**执行<Term def="复制对象拥有的资源内容，让源对象与目标对象最终拥有相互独立的资源。">深拷贝</Term>。** 源和目标的文本可以相同，但`m_pData`不能指向同一动态数组。赋值结束后销毁或修改其中一个对象，不应影响另一个。仅复制地址的浅拷贝违反独占所有权。
+**执行。** 源和目标的文本可以相同，但`m_pData`不能指向同一动态数组。赋值结束后销毁或修改其中一个对象，不应影响另一个。仅复制地址的浅拷贝违反独占所有权。
 
-**处理<Term def="赋值表达式左右两侧最终指向同一个对象，例如x = x或通过别名发生的赋值。">自赋值</Term>。** 直接实现通常先用`if (this == &other)`返回。若没有这一步，先释放`m_pData`后再从`other.m_pData`复制，读取的正是已经释放的内存。临时对象交换方案天然能安全处理自赋值，但保留快速判断可以省去一次无意义复制。
+**处理。** 直接实现通常先用`if (this == &other)`返回。若没有这一步，先释放`m_pData`后再从`other.m_pData`复制，读取的正是已经释放的内存。临时对象交换方案天然能安全处理自赋值，但保留快速判断可以省去一次无意义复制。
 
 **保持异常安全。** 动态分配可能抛出`std::bad_alloc`。若目标先删除旧数组，再申请新数组，失败后旧值已经丢失。函数没有泄漏不等于状态正确；资源类还应明确失败时对象处于什么状态。
 
@@ -68,15 +58,12 @@ CMyString& CMyString::operator=(const CMyString& other) {
 
 这段代码展示了返回`*this`、自赋值判断、释放旧资源和深拷贝，适合暴露基本考点。但把执行顺序画出来就会发现事务边界错误：`delete[]`已经提交了破坏性变化，后面的`new`却仍可能失败。若失败，`m_pData`保持空指针；类的复制构造、`Print`或其他成员若默认它总指向以`'\0'`结尾的数组，对象不变式就被破坏。
 
-<Callout type="trap" title="有this == &other就已经异常安全">
-自赋值判断只处理源和目标是同一对象的别名问题。它不能阻止`new`抛异常，也不能恢复刚刚被`delete[]`释放的旧内容。别名安全和异常安全是两条独立检查线。
-</Callout>
 
 ## 用临时对象交换提交新状态
 
 更稳健的思路是：先完成所有可能失败的准备，再执行不会抛异常的提交。先调用复制构造创建`temp`，成功后`temp`拥有源内容的独立副本；然后交换`temp.m_pData`与`this->m_pData`。函数结束时，`temp`析构并释放目标原来的旧数组。
 
-若构造`temp`时分配失败，交换尚未发生，目标对象完全不变；若复制成功，交换指针本身不分配内存，提交路径很短。这就是<Term def="操作成功时产生完整新状态；操作失败抛出异常时，目标对象保持调用前状态。">强异常保证</Term>。
+若构造`temp`时分配失败，交换尚未发生，目标对象完全不变；若复制成功，交换指针本身不分配内存，提交路径很短。这就是。
 
 ```cpp
 #include <cstring>
@@ -123,7 +110,7 @@ private:
 };
 ```
 
-<Term def="先复制参数或构造临时对象，再交换资源，使旧资源随临时对象析构而释放的赋值惯用法。">copy-and-swap</Term>把资源准备、状态提交和旧值清理连接起来。还可以把参数改为按值传递：
+把资源准备、状态提交和旧值清理连接起来。还可以把参数改为按值传递：
 
 ```cpp
 CMyString& operator=(CMyString other) {
@@ -136,7 +123,6 @@ CMyString& operator=(CMyString other) {
 
 <OwnershipTransitionDiagram />
 
-<ExceptionSafetyLab />
 
 ## 正确性来自对象不变式
 
@@ -146,9 +132,6 @@ CMyString& operator=(CMyString other) {
 
 赋值不是构造。复制构造面对的是尚未拥有资源的新对象；复制赋值面对的是已经有有效状态的对象，必须同时处理旧资源和新资源。面试中把二者混成“复制一下指针”通常会漏掉释放、别名或异常路径。
 
-<Callout type="trap" title="内容相等就证明深拷贝正确">
-赋值后立即比较字符串，只能证明当时的字节相同。还要销毁或修改源对象，再读取目标对象；否则浅拷贝在两个对象都存活时看起来完全正常，直到析构时才重复释放。
-</Callout>
 
 ## 四组测试覆盖四类失效
 
@@ -187,14 +170,6 @@ void test_chained_assignment() {
 
 普通赋值验证内容和旧资源替换；作用域结束后的再次读取验证独立所有权；自赋值验证别名安全；连续赋值验证返回类型和结合顺序。异常注入测试应先保存目标旧值，让复制阶段抛出，再确认旧值未变、资源计数平衡且对象仍可继续赋值。
 
-<AssignmentTestLab />
-
-<Stepper>
-  <Step title="先列出赋值契约"><AssignmentContractMap />确认返回引用、const参数、旧资源、深拷贝、自赋值和异常失败六条要求，避免只盯着字符串复制。</Step>
-  <Step title="画出资源所有权变化"><OwnershipTransitionDiagram />把源对象、目标对象、临时对象和两块数组分别画出，验证每一刻只有一个所有者负责释放。</Step>
-  <Step title="把可能失败操作放在提交前"><ExceptionSafetyLab />先构造临时副本，成功后只交换指针；复制失败时目标仍保持调用前状态。</Step>
-  <Step title="用失效模式驱动测试"><AssignmentTestLab />普通、自赋值、连续赋值和故障注入分别验证不同契约，单一happy path不能替代。</Step>
-</Stepper>
 
 ## 复杂度与现代C++边界
 
@@ -215,37 +190,7 @@ void test_chained_assignment() {
 7. 测试至少覆盖普通、自赋值、连续赋值、独立所有权和分配失败。
 8. 真实工程优先使用RAII成员和Rule of Zero，手写资源类时再完整维护特殊成员。
 
-<Exercises>
-
-**问题 1：为什么返回`CMyString&`而不是`const CMyString&`或`void`？**
-
-<Answer>返回非const左值引用与内置赋值一致，支持`a = b = c`及对赋值结果继续进行合法左值操作；`void`会截断连续赋值，返回值会制造副本。返回const引用是旧式限制技巧，会阻止某些本应合法的表达式，现代实现通常返回`T&`。</Answer>
-
-**问题 2：直接写法已有自赋值判断，为什么`new`失败仍会破坏对象？**
-
-<Answer>自赋值判断只在`this`与源对象地址相同的时候提前返回。普通赋值中，函数先删除目标旧数组，再申请新数组；申请抛异常时旧值无法恢复，`m_pData`为空或不满足类不变式，因此没有强异常保证。</Answer>
-
-**问题 3：copy-and-swap怎样同时释放旧资源并保持异常安全？**
-
-<Answer>先复制源对象得到临时对象，失败时目标尚未改变；复制成功后用`noexcept`交换把新资源交给目标，把旧资源交给临时对象。函数结束后临时对象析构释放旧资源，所以提交阶段不再做可能失败的分配。</Answer>
-
-**问题 4：哪项测试能区分深拷贝和浅拷贝？**
-
-<Answer>让目标由源赋值后结束源对象生命周期，再检查目标内容；也可以在受控接口下修改源。浅拷贝会让目标指向已释放或被修改的同一数组，深拷贝则仍持有独立内容。还应配合内存检测验证无重复释放。</Answer>
-
-</Exercises>
 
 ## 名词解释
 
-<Glossary>
-  <GlossaryItem term="复制赋值运算符">对象已存在时，把同类型源对象的值复制到目标并处理目标旧状态的成员函数。</GlossaryItem>
-  <GlossaryItem term="深拷贝">复制资源内容，使源对象和目标对象各自拥有独立资源。</GlossaryItem>
-  <GlossaryItem term="自赋值">赋值表达式两侧最终引用同一对象的别名场景。</GlossaryItem>
-  <GlossaryItem term="强异常保证">操作失败时目标对象保持调用前状态，成功时完整提交新状态。</GlossaryItem>
-  <GlossaryItem term="copy-and-swap">先构造临时副本再交换资源，由临时对象析构清理旧资源的赋值惯用法。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  adaptedFrom="《剑指Offer（第2版）》面试题1及何海涛官方源码 AssignmentOperator.cpp"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/01_AssignmentOperator/AssignmentOperator.cpp"
-/>

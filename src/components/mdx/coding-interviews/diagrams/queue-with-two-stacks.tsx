@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traces = [
   {
     label: "入队a,b,c",
@@ -104,12 +102,4 @@ export function QueueStateInvariantMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">两个栈共同表示一条逻辑队列，输出栈中的旧元素始终优先。</figcaption>
     </figure>
   );
-}
-
-export function QueueOperationTraceLab() {
-  return <CodingInterviewLab cases={traces} caption="按官方交错操作切换状态，观察新旧元素为什么不会串序。" />;
-}
-
-export function QueueAmortizedCostLab() {
-  return <CodingInterviewLab cases={tests} caption="从元素生命周期和边界序列验证正确性与摊还常数代价。" />;
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traceCases = [
   {
     label: "计算长度",
@@ -67,12 +65,4 @@ export function CapacityFormulaMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">%20长度为3，但替换掉原有1个空格，所以每处只净增2；容量还要再留一个终止符。</figcaption>
     </figure>
   );
-}
-
-export function BackwardTraceLab() {
-  return <CodingInterviewLab cases={traceCases} caption="逐步观察长度扫描、终止符复制、普通字符复制与空格展开。" />;
-}
-
-export function ReplacementTestLab() {
-  return <CodingInterviewLab cases={testCases} caption="官方九组测试覆盖位置、连续空格、退化输入；容量不足是必要的工程补充。" />;
 }

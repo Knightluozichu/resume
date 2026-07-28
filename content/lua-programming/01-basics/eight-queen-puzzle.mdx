@@ -7,18 +7,9 @@ description: "用八皇后完整程序训练Lua table状态、1-based索引、�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能推导同列与两条对角线冲突公式，并证明每次递归只扩展安全的partial board
-- 能实现由当前递归层拥有mutation与restore的N皇后深度优先搜索，复现N=4与N=8解数
-- 能设计solution emitter和trace ledger，区分完整搜索、重复解、状态别名与输出副作用故障
-
-</Objectives>
 
 ## 从完整程序开始检验第一章基础
 
@@ -26,7 +17,7 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：是否需要复制完整board才能尝试每个candidate；`board[row]`在递归返回后必须设nil吗；为什么只检查之前rows就够；打印函数若把board保存到列表会发生什么；N=8应该输出多少解。答案依赖state owner与不变量，而不是递归语法本身。
 
-<Term def="Board的1到row-1项各表示一行的列号，并且这些已放置皇后两两不攻击的递归前置条件。">partial board invariant</Term>是整段程序的证明核心。每次进入`search(row)`都假设prefix安全；只把通过predicate的candidate加入prefix；child返回后当前层继续尝试，因此归纳地不会探索非法prefix。
+是整段程序的证明核心。每次进入`search(row)`都假设prefix安全；只把通过predicate的candidate加入prefix；child返回后当前层继续尝试，因此归纳地不会探索非法prefix。
 
 ## Representing and testing board configurations：用Table表示Board
 
@@ -51,15 +42,8 @@ assert(board[1] == nil and #board == 0)
 
 已放queen `(priorRow, priorColumn)`与candidate `(row, column)`冲突条件：同列 `priorColumn == column`；同一descending diagonal时 `priorColumn - priorRow == column - row`；同一ascending diagonal时 `priorColumn + priorRow == column + row`。等价写法是absolute column distance等于row distance。
 
-<Term def="两个位置若column相同，或column-row相同，或column+row相同，就不能同时放置皇后的判定规则。">diagonal conflict law</Term>应只读safe prefix并返回boolean，不修改board。它遍历`1 .. row-1`，因为future rows不存在，current row也尚未commit。
+应只读safe prefix并返回boolean，不修改board。它遍历`1 .. row-1`，因为future rows不存在，current row也尚未commit。
 
-<PilQueenConflictLab />
-
-<Stepper>
-  <Step title="切换Column、Down、Up和Safe Prefix"><PilQueenConflictLab /></Step>
-  <Step title="手算四个Candidate">在board `{2, 4}`上检查row=3的columns 1..4，分别标出触发的等式，而不是只记true/false。</Step>
-  <Step title="做Predicate Property Test">随机生成safe prefix，对predicate接受的位置再做pairwise checker，二者不一致就保存counterexample。</Step>
-</Stepper>
 
 ```lua
 local function is_place_ok(board, row, column)
@@ -75,27 +59,17 @@ local function is_place_ok(board, row, column)
 end
 ```
 
-<Callout type="trap" title="Row每次加一，所以只检查Column就够">
-固定一行一个queen只消除了row冲突；diagonal仍跨多行。漏掉任一`column-row`或`column+row`等式都会把非法board计为solution，N=2/3零解测试很快暴露。
-</Callout>
 
 ## A complete recursive backtracking Lua program：Choice Point与State Ownership
 
-每层遍历columns 1..N，安全就assign、递归下一row、返回后再试下一column。<Term def="搜索在一个row上枚举candidate、临时提交一个选择并在child返回后继续枚举的位置。">backtracking choice point</Term>属于当前activation。Assignment不是永久commit，它只是当前DFS路径上的state。
+每层遍历columns 1..N，安全就assign、递归下一row、返回后再试下一column。属于当前activation。Assignment不是永久commit，它只是当前DFS路径上的state。
 
 若child只同步读取board，下一次assignment会自然overwrite同一slot；显式`board[row] = nil`仍有价值：它恢复representation invariant、避免debug/emitter读到stale future rows，并让异常/提前终止策略更清楚。若callback可能保留board，必须copy snapshot；否则所有保存项都alias同一table，最终看见相同状态。
 
-<PilQueenSearchLab />
-
-<Stepper>
-  <Step title="切换Choose、Validate、Explore和Undo"><PilQueenSearchLab /></Step>
-  <Step title="标出每层Owner">Row r只能写board[r]；读取1..r-1；child拥有r+1；emitter只借用完整board，不能异步保留mutable alias。</Step>
-  <Step title="注入Early Stop">让emitter返回stop，设计search逐层传播并仍执行restore；验证board为空且只发一个solution。</Step>
-</Stepper>
 
 ## Base Case与Solution Emission Boundary
 
-当`row > size`，prefix已有size个安全queen，就是一个解。<Term def="完整board从mutable search state转换为同步消费、复制快照或外部输出的责任边界。">solution emission boundary</Term>必须决定三件事：emitter能否保留value；输出失败是否停止search；solution顺序是否是contract。
+当`row > size`，prefix已有size个安全queen，就是一个解。必须决定三件事：emitter能否保留value；输出失败是否停止search；solution顺序是否是contract。
 
 打印可以同步读取当前board，不保留reference；收集测试结果要copy。用characters生成每row时，内层column只比较`board[row]`，不要依赖`pairs`顺序。输出不是搜索correctness的一部分，最好由callback注入，count测试无需写console。
 
@@ -137,17 +111,8 @@ Printer把representation转换为display。每row构造N个cells，queen位置�
 
 ## Known Counts与Search Evidence Ledger
 
-<Term def="记录visited prefixes、rejected candidates、emitted solutions与known count，用来证明搜索完整且没有重复或状态泄漏的证据集合。">search evidence ledger</Term>让回溯从“看起来能跑”变成可回归：N=1有1解，N=2和3有0解，N=4有2解，N=8有92解。对N=4可保存完整trace，N=8只count避免大量输出干扰。
+让回溯从“看起来能跑”变成可回归：N=1有1解，N=2和3有0解，N=4有2解，N=8有92解。对N=4可保存完整trace，N=8只count避免大量输出干扰。
 
-<Stepper>
-  <Step title="切换N=1、N=2/3、N=4和N=8"></Step>
-  <Step title="记录Search Counters">统计predicate calls、safe assignments、solutions和max depth；修改冲突公式时比较哪一层开始偏离。</Step>
-  <Step title="验证每个Emitted Board">独立pairwise checker验证N行、列范围、列唯一与diagonal唯一，不能用同一predicate自证。</Step>
-</Stepper>
-
-<Callout type="trap" title="把board直接插入solutions table就保存了每个解">
-Table assignment保存reference，不复制内容。所有entries会指向同一mutable board，回溯后看见最终状态。Emitter必须按1..N复制number values，或立即序列化/消费。
-</Callout>
 
 ## 复杂度、Symmetry与优化边界
 
@@ -163,30 +128,7 @@ Lua中可用三个tables记录used column、down diagonal、up diagonal，并在
 4. Base case在row大于size时emits solution；保留solution必须copy，打印与搜索分离。
 5. N=1、2/3、4、8的known counts和独立checker组成确定性回归门。
 
-<Exercises>
-
-**问题 1：为什么`math.abs(board[r]-c) == row-r`能同时代替两条Diagonal等式？**
-
-<Answer>两个位置在diagonal上时横向距离等于纵向距离。Absolute equality展开为`board[r]-c == row-r`或其相反数，分别等价于column-row相同和column+row相同。仍需单独检查同列，因为横向距离0而纵向距离大于0不会触发。</Answer>
-
-**问题 2：`solutions[#solutions+1] = board`为什么最后得到一组相同Table？**
-
-<Answer>Lua table assignment复制reference，递归持续修改同一board；solutions每项都alias它。Base case中创建snapshot，循环1..N复制column numbers后保存。测试还应在solve结束后修改原board，确认snapshot不变。</Answer>
-
-**问题 3：加入used-column/diagonal Tables后怎样验证Undo没有遗漏？**
-
-<Answer>每次assign同时set三张表，child返回用完全相同keys清nil；用protected/finally-like结构或明确no-throw callback保证restore。与simple oracle比较N=1..8 count，随机prefix比较candidate set，并在search返回后断言board与三张used tables为空。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="partial board invariant" definition="Rows 1到当前row之前已各放一个且两两不攻击的搜索前提。" />
-  <GlossaryItem term="diagonal conflict law" definition="Column、column-row或column+row相等即冲突的判定。" />
-  <GlossaryItem term="backtracking choice point" definition="当前row临时选择candidate、探索并恢复的位置。" />
-  <GlossaryItem term="solution emission boundary" definition="完整mutable board被同步消费、复制或输出的责任边界。" />
-  <GlossaryItem term="search evidence ledger" definition="Prefix、reject、solution和known count组成的完整性证据。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 2: Interlude - The Eight-Queen Puzzle" adaptedUrl="https://www.lua.org/pil/" />

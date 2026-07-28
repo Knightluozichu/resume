@@ -7,29 +7,17 @@ description: "构造并逆转 BWT，以 MTF、RLE0 和统计编码形成 bzip，
 demo: true
 math: true
 sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
-draft: true
+draft: false
 ---
 
-import { PaeBwtForwardTransformLab, PaeLfMappingLab, PaeMoveToFrontLab, PaeWheelerRleZeroLab, PaeBzipPipelineDiagram, PaeCompressionBoostingDiagram, PaeFmBackwardSearchLab } from "@/components/mdx/advanced-algorithm-engineering/diagrams/block-sorting-compression";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释 BWT 为何制造局部同质性但不直接压缩
-- 能计算 forward transform 与 LF inverse 的完整步骤
-- 能实现 MTF、RLE0 与 bzip 的变换链
-- 能分析 compression boosting 的经验熵上界
-- 能设计 FM-index backward search 与采样取舍
-
-</Objectives>
 
 ## 从“可逆重排能否让普通编码器变聪明”开始
 
-block-sorting compression（<Term def="把输入分块后按循环移位或后缀的全局次序重排，再用局部变换和统计编码压缩每块。">块排序压缩</Term>）先做一件反直觉的事：它不立即删除 redundancy，而是重排字符，让相似 context 的前驱聚到一起。后续简单的 Move-To-Front、Run-Length Encoding 与 entropy coder 才能吃到这些 runs 和偏斜分布。
+block-sorting compression（）先做一件反直觉的事：它不立即删除 redundancy，而是重排字符，让相似 context 的前驱聚到一起。后续简单的 Move-To-Front、Run-Length Encoding 与 entropy coder 才能吃到这些 runs 和偏斜分布。
 
 先预测 `abracadabra` 的字符若只排序成 `aaaaabbcdrr` 是否够用。它压缩友好，却丢失所有次序，许多不同字符串会产生相同结果。目标必须同时满足两点：输出 locally homogeneous，又能无歧义恢复原串。
 
-Burrows-Wheeler transform（<Term def="排序带唯一 sentinel 的所有循环移位，输出排序矩阵最后一列与 sentinel 行位置信息的可逆置换。">Burrows-Wheeler变换</Term>，BWT）正好完成这个桥接。它是 permutation，不改变字符数；真正的 compressed bits 由后面的 MTF、RLE 与 statistical coding 产生。
+Burrows-Wheeler transform（，BWT）正好完成这个桥接。它是 permutation，不改变字符数；真正的 compressed bits 由后面的 MTF、RLE 与 statistical coding 产生。
 
 ## Forward BWT：排序所有 cyclic rotations
 
@@ -39,7 +27,6 @@ Burrows-Wheeler transform（<Term def="排序带唯一 sentinel 的所有循环�
 2. 按从左到右的字典序排序这些 rows，得到矩阵 M'。
 3. 读取最后一列 L，并保存 `$` 的位置 r；也可把 `$` 从 L 去掉，返回 L-hat 与 r。
 
-<PaeBwtForwardTransformLab />
 
 对 `abracadabra$`，最后一列是 `ard$rcaaaabb`，删除 sentinel 得 `ardrcaaaabb`，r=3。结尾的 `aaaabb` 体现 local homogeneity：排序后，拥有相似右侧 context 的 rows 相邻，它们在 L 中对应的 preceding symbols 也被放在一个连续区域。
 
@@ -67,9 +54,6 @@ $$
 
 所以已有 Suffix Array 后只需线性扫描生成 L；总时间/IO 由 SA construction 决定，而不是构造旋转矩阵。
 
-<Callout type="trap" title="在产品代码里真的构造 rotation matrix">
-矩阵只是证明和教学工具。存 n 个长度 n 的 rows 会把空间与字符搬运放大到平方级；实现应构造 suffix array、suffix sorting order 或专用 BWT algorithm，再按 SA 前驱取 L。
-</Callout>
 
 ## Backward BWT：first-last property 与 LF mapping
 
@@ -78,7 +62,7 @@ M' 的第一列 F 是 L 的 sorted permutation。只知道 F 不能还原次序�
 1. 同一 row 中，L[i] 是 F[i] 在原循环串中的 preceding symbol。
 2. 相同字符在 L 与 F 中的 occurrences 保持相同相对次序。
 
-LF mapping（<Term def="把 L 中某字符的第 k 次出现映射到 F 中同字符第 k 次出现的行号。">LF映射</Term>）定义为：若 L[i] 的第 k 个 occurrence 对应 F[j] 的第 k 个 occurrence，则 LF[i]=j。
+LF mapping（）定义为：若 L[i] 的第 k 个 occurrence 对应 F[j] 的第 k 个 occurrence，则 LF[i]=j。
 
 设 C[c] 是小于 c 的字符总数，Rank(c,i) 计数 L[0,i) 中 c 的 occurrences，则：
 
@@ -88,7 +72,6 @@ LF(i)
 C[L[i]]+\operatorname{Rank}(L[i],i)
 $$
 
-<PaeLfMappingLab />
 
 从 sentinel 对应 row 起，当前 L 字符是原串中当前位置的 predecessor；跳到 LF(row) 后再次读取 L，就向原串左移一个字符。重复 n 次可逆序填满 s，时间 O(n)。显式 LF array 占 O(n) words，也可用压缩 Rank structure 在线计算。
 
@@ -111,9 +94,8 @@ InvertBWT(L, sentinelRow):
 
 ## MTF：把局部同质字符统一成小整数
 
-Move-To-Front（<Term def="用动态 alphabet list 中的当前位置替换字符，并把该字符移到表首的可逆变换。">Move-To-Front</Term>，MTF）初始化为 alphabet 的固定顺序。处理字符 c 时，输出它当前 index p，再把 c 移到 front。inverse 用同一 initial list：取 index p 处字符输出，再移到 front，双方始终同步。
+Move-To-Front（，MTF）初始化为 alphabet 的固定顺序。处理字符 c 时，输出它当前 index p，再把 c 移到 front。inverse 用同一 initial list：取 index p 处字符输出，再移到 front，双方始终同步。
 
-<PaeMoveToFrontLab />
 
 若 L 中同字符连续出现，第一个可能输出较大 index，之后都输出0；若一个小集合频繁交替，输出通常也只在0、1、2附近。不同局部区域即使使用不同字符，也统一变成 small-integer alphabet。原章例 `bananacocco` 从列表 `a,b,c,n,o` 得到 `11311134101`。
 
@@ -132,15 +114,13 @@ $$
 \text{ 删除最高的 }1
 $$
 
-<PaeWheelerRleZeroLab />
 
 例如五个0：ℓ+1=6，binary 为110，删除 leading 1 后写10。decoder 读 maximal 0/1 sequence，补回 leading 1、转整数再减1。输出 digit 数不超过原0-run长度；长 run 越省。
 
 ## bzip Compressor：每一层为下一层制造分布
 
-bzip compressor（<Term def="按块串联 BWT、MTF、RLE0 与统计编码，并保存 inverse 所需元数据的压缩器。">bzip压缩器</Term>）的主链是：
+bzip compressor（）的主链是：
 
-<PaeBzipPipelineDiagram />
 
 1. BWT 把相似 context 的 preceding symbols 聚成局部同质 L。
 2. MTF 把重复/近邻字符变成0和 small integers。
@@ -151,15 +131,11 @@ preamble 还要保存 block original size、CRC、sentinel/primary index、使�
 
 bzip 按 block 工作，因为 forward BWT 与 inverse LF 的内存访问较分散，整文件全局排序昂贵。大 block 有更长 context 和更强 homogeneity，通常 compression ratio 更好；但 SA/BWT construction memory、compression latency 与 inverse cache misses 都增加。与 LZ window 不同，扩大 BWT block 也会明显拖慢 decompression。
 
-<Callout type="trap" title="把 BWT 输出变短当成压缩成功">
-BWT 只重排 n 个字符，长度仍是 n；MTF 也输出 n 个整数。必须把 RLE0、entropy coder 与所有 metadata 计入，才能讨论 bzip 压缩率。单独比较 L 的 runs 只是诊断信号。
-</Callout>
 
 ## Compression Boosting：用多个0阶块模拟k阶模型
 
-compression boosting（<Term def="借 BWT 将相同 k-context 的前驱形成连续 L blocks，再分别用0阶 coder 压缩，从而达到高阶经验熵界。">压缩提升</Term>）解释了 BWT 不只是“看起来 runs 多”。在 sorted rows 中，以同一 context w 开头的 rows 连续；其 L 区段 Lw 恰好收集原串中 w 的 preceding symbols。
+compression boosting（）解释了 BWT 不只是“看起来 runs 多”。在 sorted rows 中，以同一 context w 开头的 rows 连续；其 L 区段 Lw 恰好收集原串中 w 的 preceding symbols。
 
-<PaeCompressionBoostingDiagram />
 
 若0阶 compressor C0 对任意 t 使用至多 |t|H0(t)+overhead(t) bits，把 L 按所有 k-context 分成 Lw 并逐块压缩，则主项：
 
@@ -175,7 +151,7 @@ $$
 
 ## Compressed Indexing：BWT 既能压，也能搜索
 
-compressed indexing（<Term def="在接近压缩后文本空间内支持 Count、Locate 与 Extract，而无需先完整解压。">压缩索引</Term>）沿用 BWT、C 与 Rank。FM-index 可理解为 compressed suffix array，也可理解为 searchable bzip representation。
+compressed indexing（）沿用 BWT、C 与 Rank。FM-index 可理解为 compressed suffix array，也可理解为 searchable bzip representation。
 
 核心操作：
 
@@ -192,7 +168,6 @@ last'  &= C[c]+\operatorname{Rank}(c,last+1)-1.
 \end{aligned}
 $$
 
-<PaeFmBackwardSearchLab />
 
 对 `abracadabra$` 的 pattern `ab`，先由 F 中 b 的范围得 [6,7]；再用 L 的 a-ranks 扩为 [2,3]，因此出现2次。每轮只做常数次 Rank，若 Rank O(1)，Count 时间 O(|P|)。
 
@@ -216,28 +191,6 @@ Rank 的定义有两种常见 convention：inclusive L[0..i] 或 half-open L[0..
 
 ## 端到端实现与验证
 
-<Stepper>
-  <Step title="先观察排序前后的最后一列">
-    <PaeBwtForwardTransformLab />
-    用小字符串验证 sentinel、row order、L 与 primary index，再换 SA 实现。
-  </Step>
-  <Step title="逐 occurrence 构造 LF">
-    <PaeLfMappingLab />
-    相同字符第 k 次出现必须映射到 F 中同字符第 k 次出现。
-  </Step>
-  <Step title="把局部重复变成零游程">
-    <PaeMoveToFrontLab />
-    固定 initial alphabet，检查 forward 与 inverse list 在每步完全一致。
-  </Step>
-  <Step title="只编码最有价值的0-runs">
-    <PaeWheelerRleZeroLab />
-    对 ℓ+1 写 binary 并去 leading 1，覆盖长度1和最大 block run。
-  </Step>
-  <Step title="复用 Rank 做 backward search">
-    <PaeFmBackwardSearchLab />
-    从 pattern 末端逐字符缩小 row interval，再按采样策略 Locate。
-  </Step>
-</Stepper>
 
 性能报告至少包含 block size、bits/input-byte、BWT construction time、inverse time、peak memory、cache misses、MTF/RLE0 分布、Rank ns/query、Count µs/character 与 Locate occurrences/s。正确性覆盖空块、单字符、全相同、全不同、重复 sentinel byte 的 escaping、CRC、truncated metadata、corrupted run 与超大 primary index。
 
@@ -254,41 +207,7 @@ Rank 的定义有两种常见 convention：inclusive L[0..i] 或 half-open L[0..
 9. FM-index 的 backward search 用 C 与 Rank 在压缩 L 上维护 suffix-row interval。
 10. Locate 与 Extract 通过 LF sampling 以辅助空间换查询步数。
 
-<Exercises>
-
-**问题 1：为什么第一列 F 很容易压缩，却不能代替 BWT 的 L？**
-
-<Answer>F 只是输入字符 multiset 的全排序，所有具有相同字符计数的字符串都得到同一个 F，原次序已丢失。L 仍包含每个 sorted context 的 predecessor，并通过同字符 occurrence order 与 LF mapping 保留可逆关系。</Answer>
-
-**问题 2：对 L=`ard$rcaaaabb`，L[6] 的 a 应映射到 F 哪一项？**
-
-<Answer>L[0..6) 中已有一个a，所以 L[6] 是第二个a（以1计数）。F=`$aaaaabbcdrr` 中 a 从位置1开始，第二个a在位置2；half-open Rank(a,6)=1，LF(6)=C[a]+1=1+1=2。</Answer>
-
-**问题 3：长度5的0-run 在 Wheeler RLE0 中写什么，如何还原？**
-
-<Answer>先算5+1=6，binary是110，删掉 leading 1 得10。decoder 在10前补1得110=6，再减1恢复5；0和1已被保留给 run code，非零MTF index先加1避免歧义。</Answer>
-
-**问题 4：FM-index 的 μ 从32增到256，会怎样影响 Locate？**
-
-<Answer>采样行约减少8倍，辅助空间下降；但未采样 row 到最近 sample 的 LF/Rank 步数最坏从32增到256，每个 occurrence 的定位延迟约增8倍。Count 不依赖该 SA sampling，基本不变。</Answer>
-
-</Exercises>
 
 ## 名词解释
 
-<Glossary>
-  <GlossaryItem term="块排序压缩">分块重排全局 context 后再执行局部与统计编码的压缩体系。</GlossaryItem>
-  <GlossaryItem term="Burrows-Wheeler变换">由 sorted cyclic rotations 的最后一列与 primary index 构成的可逆置换。</GlossaryItem>
-  <GlossaryItem term="LF映射">连接 L 与 F 中同字符同 occurrence 的行映射。</GlossaryItem>
-  <GlossaryItem term="Move-To-Front">输出字符动态列表位置并将该字符移到表首的变换。</GlossaryItem>
-  <GlossaryItem term="bzip压缩器">串联 BWT、MTF、RLE0 与统计编码的 block compressor。</GlossaryItem>
-  <GlossaryItem term="压缩提升">借 BWT context blocks 把0阶 compressor 提升到高阶经验熵界。</GlossaryItem>
-  <GlossaryItem term="压缩索引">在接近压缩空间中直接支持 Count、Locate 与 Extract 的全文索引。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  name="Pearls of Algorithm Engineering · Chapter 14 The Burrows-Wheeler Transform"
-  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
-  author="Paolo Ferragina"
-  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
-/>

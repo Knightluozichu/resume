@@ -10,13 +10,14 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
 draft: false
 ---
 
-import {
-  GlFragCoordDiagram,
-  InterfaceBlockDiagram,
-  ShaderDemo,
-  Std140PackingDiagram,
-  UboBindingDiagram,
-} from "@/components/mdx/learnopengl/diagrams/advanced-glsl";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-74，高级OpenGL 篇第 8 篇）：原书「高级GLSL Advanced GLSL」。重心是代码对照(§6 覆盖≥80% 关键代码)：①内建变量 gl_FragCoord（窗口像素坐标）+ gl_FrontFacing（正反面给不同色）②接口块 interface block（out VS_OUT{...}vs_out / in VS_OUT{...}fs_in）③UBO（GLSL 端 layout(std140) uniform Matrices{...} + CPU 端 createBuffer/bindBufferBase/uniformBlockBinding/getUniformBlockIndex/bindBufferRange）。math:false 整节省略§4。承接深度/混合/帧缓冲（同 section 工厂流水线类比库：GLSL 内建变量是流水线每个工位免费发的「工牌/仪表」，UBO 是一块「公告板」多个 shader 都来读）。主 viz 两个：ShaderDemo gl_FragCoord 分屏可视化（uSplit 分界线 + 两色）+ Stepper UBO 共享（每步带 UboBindingDiagram step）。新建 3 图：GlFragCoordDiagram / InterfaceBlockDiagram / UboBindingDiagram。误区 ≥3（gl_FragCoord 当 NDC / std140 对齐算错 / 绑定点不对齐）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -65,7 +66,6 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 这里有个小白最容易栽的坑，先用图掐死它：`gl_FragCoord.xy` 是**像素值**——`x` 从 0 到画布宽、`y` 从 0 到画布高，**不是** -1 到 1 的那种归一化坐标（NDC）。所以想把它变成 0..1 的比例，得**除以画布分辨率**：
 
-<GlFragCoordDiagram />
 
 最经典的玩法就是拿它做**屏幕分屏**：判断 `gl_FragCoord.x` 落在画布左半还是右半，左半涂一色、右半涂另一色——画面立刻被切成两块。本章的主 Demo 就是这个，等会儿你能亲手拖那条分界线。
 
@@ -87,7 +87,6 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 写法是顶点端 `out VS_OUT { ... } vs_out;`、片段端 `in VS_OUT { ... } fs_in;`。注意两个名字的分工：`VS_OUT` 是**块名**，两端**必须一致**（靠它配对）；`vs_out` / `fs_in` 是**实例名**，只是这个块在本段着色器里的代号，两端**可以不同**。块内用 `vs_out.TexCoords` 这样的点号访问。下面这张图把「散装」和「打包」并排对照：
 
-<InterfaceBlockDiagram />
 
 接口块不改变数据怎么流（还是顶点 → 片段、还是会被插值），只是把声明组织得更整洁——传的东西越多，它越省心。
 
@@ -97,11 +96,9 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 它怎么「连到多个程序」？靠一个 <Term def="一个带编号的「插座」，UBO 缓冲插在这个编号上，多个着色器程序也都声明连到同一个编号，于是它们就共享了这块缓冲。CPU 侧用 glBindBufferBase/glBindBufferRange 把缓冲接到某个编号，再用 glUniformBlockBinding 把每个程序里的 uniform 块也指到同一个编号——编号对齐，连接就成立。编号不一致就会读到错数据。">绑定点</Term>（binding point）——可以理解成一个带编号的「插座」。UBO 缓冲插在 0 号插座上，每个要共享它的程序也都声明「我连 0 号插座」，于是它们就连到同一块缓冲了。下面这张图就是公告板的全貌（左右滑看「不用 UBO 各传一遍」和「用 UBO 一处生效」的差别）：
 
-<UboBindingDiagram step={2} />
 
 还有一个绕不开的细节：UBO 这块缓冲里的数据，CPU 和 GPU 必须遵守同一套摆放方式。这套约定最常用的叫 <Term def="uniform block 的标准内存布局。成员按基础对齐开始：标量 4B、vec2 8B、vec3/vec4 16B；数组和结构体的步长至少为 16B，矩阵按 vec4 列或行排列。vec3 的起始对齐是 16B，但紧随的 float 可使用第 4 个槽位，不能把所有 vec3 一律当 16B 数据大小。">std140 布局</Term>。关键是“**起始对齐**”：`vec3` 必须从 16 的倍数开始，但它后面若是 `float`，这个 float 可以放进同一个 16B 槽；若后面是 `vec2`、数组或矩阵，则按它们自己的更高规则向前跳。
 
-<Std140PackingDiagram />
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。std140 的字节偏移不当公式推，用 UboBindingDiagram step3 的「内存条 + padding」图示 + §6 代码对照里的偏移注释直观讲，符合 C 型 + 小白友好。 */}
 
@@ -113,52 +110,6 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 这块画布在片段着色器里读 `gl_FragCoord.x`、除以画布宽得到「这个像素在水平方向的 0..1 比例」，再和你拖的 `uSplit` 比较：比它小（在左边）涂左色、比它大（在右边）涂右色，分界线那一道高亮成品牌紫。盯着拖 `uSplit` 时分界线怎么走：
 
-<ShaderDemo
-  caption="片段着色器读 gl_FragCoord.x（这个像素的窗口像素 x 坐标），除以 uResolution.x 归一化到 0..1，再和分界线位置 uSplit 比较：左半涂左色、右半涂右色，分界处一道紫线。拖『分界线位置 uSplit』：滑到 0 画面几乎全是右色、滑到 1 几乎全是左色、0.5 左右两色各占一半。拖两个颜色换左右色。点重置回到初始 0.5。"
-  aspect={16 / 9}
-  controls={[
-    {
-      name: "uSplit",
-      label: "分界线位置 uSplit（0=最左 / 1=最右）",
-      type: "float",
-      min: 0,
-      max: 1,
-      step: 0.01,
-      default: 0.5,
-    },
-    {
-      name: "uLeftColor",
-      label: "左半颜色",
-      type: "color",
-      default: [0.486, 0.361, 1],
-    },
-    {
-      name: "uRightColor",
-      label: "右半颜色",
-      type: "color",
-      default: [0.898, 0.71, 0.404],
-    },
-  ]}
-  frag={`#version 300 es
-precision highp float;
-// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号(*)
-uniform vec2 uResolution;   // 画布像素尺寸（标准 uniform，自动注入）
-uniform float uSplit;       // 控件：分界线水平位置，0..1
-uniform vec3 uLeftColor;    // 控件：左半颜色
-uniform vec3 uRightColor;   // 控件：右半颜色
-out vec4 FragColor;
-void main() {
-  // gl_FragCoord.x 是这个片段的窗口像素 x 坐标（0..画布宽，不是 -1..1）；
-  // 除以画布宽，归一化成 0..1 的水平比例 norm。
-  float norm = gl_FragCoord.x / uResolution.x;
-  // 和分界线比：norm < uSplit 在左边、否则在右边。
-  vec3 col = norm < uSplit ? uLeftColor : uRightColor;
-  // 分界线附近一窄带高亮成品牌紫，标出那条切割线。
-  float edge = abs(norm - uSplit);
-  if (edge < 0.004) col = vec3(0.486, 0.361, 1.0);
-  FragColor = vec4(col, 1.0);
-}`}
-/>
 
 把 `uSplit` 滑到**最右边（1）**，几乎每个像素的 `norm` 都比它小、都判进「左边」，于是画面几乎被**左色铺满**；滑到**最左边（0）**则反过来，几乎全是右色；停在 **0.5** 附近，左右两色各占一半。这整套切割，靠的就是片段着色器从 `gl_FragCoord` 这块工牌上读到「我是哪个像素」——这正是 `gl_FragCoord` 最朴素的用法：**让每个片段知道自己在屏幕上的位置**。
 
@@ -173,7 +124,6 @@ void main() {
 <Stepper>
   <Step title="① 不用 UBO：每个程序各传一遍">
     <div className="space-y-3">
-      <UboBindingDiagram step={1} />
       <div className="text-sm leading-6">
         不用 UBO 时，每个<strong>着色器程序</strong>里都各自存一份{" "}
         <code>projection</code> / <code>view</code> 的 uniform。想改一次相机，CPU
@@ -183,7 +133,6 @@ void main() {
   </Step>
   <Step title="② 用 UBO：一块缓冲经绑定点接到所有程序">
     <div className="space-y-3">
-      <UboBindingDiagram step={2} />
       <div className="text-sm leading-6">
         用 UBO：把 <code>projection</code> / <code>view</code> 放进
         <strong>一块共享缓冲</strong>，让它插在 <strong>0 号绑定点</strong>
@@ -194,7 +143,6 @@ void main() {
   </Step>
   <Step title="③ std140：按成员起始对齐摆进缓冲">
     <div className="space-y-3">
-      <UboBindingDiagram step={3} />
       <div className="text-sm leading-6">
         CPU 和 GPU 要对「数据怎么摆」达成一致。<strong>std140</strong>
         规定成员的<strong>起始对齐</strong>：<code>vec3</code> 从 16 的倍数起，但紧随的

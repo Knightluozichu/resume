@@ -5,7 +5,7 @@ description: >-
   覆盖5个正式节点，并以Redis 3.0源码、故障和恢复对账验收。
 type: C
 section: Redis设计与实现（第2版 / Redis 3.0 / 2014）
-draft: true
+draft: false
 math: false
 sourceUrl: 'https://huangz.works/redisbook1e/'
 demo: true
@@ -14,16 +14,7 @@ qualityVersion: 2
 practiceMode: simulation
 sourceMode: independent-rewrite
 ---
-import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
 
-<Objectives>
-
-- 能在Redis 3.0源码中解释按zlbytes、zltail、zllen和变长节点解析连续内存，并推演previous_entry_length导致的连锁更新
-- 能沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账重建第7章 压缩列表的字段与控制流
-- 能操作压缩列表字节解析台，一次只改变前节点长度或变更
-- 能注入“忽略previous_entry_length扩展引发的连锁更新，导致尾偏移或反向遍历失真”，用“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”判断恢复是否通过
-
-</Objectives>
 
 {/* RDI_QUALITY_V2 */}
 
@@ -41,7 +32,7 @@ import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, S
 
 ## 本章术语与源码合同
 
-<Term def="压缩列表的构成是第7章 压缩列表中连接冻结3.0基线与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">压缩列表的构成</Term>、<Term def="压缩列表节点的构成是第7章 压缩列表中连接定位结构入口与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">压缩列表节点的构成</Term>、<Term def="连锁更新是第7章 压缩列表中连接执行单变量变更与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">连锁更新</Term>、<Term def="压缩列表API是第7章 压缩列表中连接注入边界故障与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">压缩列表API</Term>、<Term def="结构字段是第7章 压缩列表中连接恢复并对账与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">结构字段</Term>、<Term def="控制流是第7章 压缩列表中连接冻结3.0基线与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。">控制流</Term>。
+、、、、、。
 
 第7章 压缩列表必须守住“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”。观察同时记录压缩列表字节解析台一致率与变更分叉风险；只有结构快照、函数入口、运行结果和故障反例互相一致，才接受实现结论。
 
@@ -99,58 +90,12 @@ replay: same_version_same_input
 
 ## 三个必须主动触发的误区
 
-<Callout type="trap" title="命令表象不等于实现">
-  第7章 压缩列表不能从一次redis-cli结果反推全部控制流；必须在ziplist.c定位结构、写入路径和读取路径，并保存能推翻解释的边界输入。
-</Callout>
-
-<Callout type="trap" title="版本倒灌">
-  Redis 4.0以后新增或替换的结构与功能不能倒灌到3.0。新版资料只作差异说明，正式验收仍以本章源码文件与作者目录为准。
-</Callout>
-
-<Callout type="trap" title="恢复不等于进程在线">
-  注入忽略previous_entry_length扩展引发的连锁更新，导致尾偏移或反向遍历失真后，要用同一命令序列核对结构、回复、文件或偏移以及最终键值；只有“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”恢复才算通过。
-</Callout>
 
 ## 练习、答案与节点验证
 
-<Exercises>
-
-**问题 1：单变量因果。** 怎样验证前节点长度而不让变更混入结论？
-
-<Answer>固定Redis 3.0提交、配置、数据与变更，只把前节点长度从“跨254边界”切到“连续跨界”；比较前后字段、函数轨迹、命令结果与变更分叉风险。</Answer>
-
-**问题 2：逐节点四级证据。** 怎样证明5个正式节点不是只在目录中出现？
-
-<Answer>
-1. 压缩列表的构成：在ziplist.c定位压缩列表的构成，保存出现、解释、实验和结果断言四项证据。
-2. 压缩列表节点的构成：在ziplist.c定位压缩列表节点的构成，保存出现、解释、实验和结果断言四项证据。
-3. 连锁更新：在ziplist.c定位连锁更新，保存出现、解释、实验和结果断言四项证据。
-4. 压缩列表API：在ziplist.c定位压缩列表API，保存出现、解释、实验和结果断言四项证据。
-5. 重点回顾：在ziplist.c定位结构字段，保存出现、解释、实验和结果断言四项证据。
-</Answer>
-
-**问题 3：故障恢复。** 如何证明“忽略previous_entry_length扩展引发的连锁更新，导致尾偏移或反向遍历失真”已经被修复？
-
-<Answer>沿冻结3.0基线、定位结构入口、执行单变量变更、注入边界故障、恢复并对账找到第一个破坏点，只改变最小因果前提；随后以同版本同输入重放稳定、故障、恢复和复位四条轨迹，并让未参与者依据字节布局图、节点解析器、连锁更新最坏轨迹与边界测试独立确认“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”。</Answer>
-
-</Exercises>
 
 ## 术语复核与本章回顾
 
-<Glossary>
-  <GlossaryItem term="压缩列表的构成">压缩列表的构成是第7章 压缩列表中连接冻结3.0基线与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="压缩列表节点的构成">压缩列表节点的构成是第7章 压缩列表中连接定位结构入口与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="连锁更新">连锁更新是第7章 压缩列表中连接执行单变量变更与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="压缩列表API">压缩列表API是第7章 压缩列表中连接注入边界故障与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="结构字段">结构字段是第7章 压缩列表中连接恢复并对账与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-  <GlossaryItem term="控制流">控制流是第7章 压缩列表中连接冻结3.0基线与“总字节、尾偏移、节点数和每个前驱长度一致，插删后能双向遍历到终止字节”的源码坐标；必须以Redis 3.0字段、函数或运行输出定义。</GlossaryItem>
-</Glossary>
 
 完成第7章 压缩列表意味着能从ziplist.c解释按zlbytes、zltail、zllen和变长节点解析连续内存，并推演previous_entry_length导致的连锁更新，能运行章专属状态实验，能制造反例并在复位后证明旧状态没有残留。
 
-<Attribution
-  mode="independent-rewrite"
-  sourceBasis="outline-only"
-  workTitle="黄健宏《Redis设计与实现》（正式出版新版，Redis 3.0源码基线）"
-  adaptedUrl="https://huangz.works/redisbook1e/"
-/>

@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "删除中间3",
@@ -86,8 +84,4 @@ export function NodeIdentityImpactDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">算法保证链表值序列正确，不保证“传入的物理对象被释放”。</figcaption>
     </figure>
   );
-}
-
-export function DeleteNodeCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者官方删除位置，核对物理动作、头指针变化与复杂度。" />;
 }

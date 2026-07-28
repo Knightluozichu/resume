@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const timingCases = [
   {
     label: "无锁延迟",
@@ -149,12 +147,4 @@ export function ConcurrencyRaceDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">检查与创建必须由锁、类型初始化或经过验证的延迟容器统一保护。</figcaption>
     </figure>
   );
-}
-
-export function InitializationTimingLab() {
-  return <CodingInterviewLab cases={timingCases} caption="对比作者源码中的初始化时机、并发正确性与访问成本。" />;
-}
-
-export function SingletonTradeoffLab() {
-  return <CodingInterviewLab cases={tradeoffCases} caption="切换场景，判断Singleton是否真是正确的生命周期与作用域。" />;
 }

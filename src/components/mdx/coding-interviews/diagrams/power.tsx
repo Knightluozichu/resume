@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "正指数",
@@ -90,8 +88,4 @@ export function PowerContractMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">先分类定义域，再进入无符号指数核心，避免边界散落在循环中。</figcaption>
     </figure>
   );
-}
-
-export function PowerCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者官方输入分类，核对数值结果与错误状态。" />;
 }

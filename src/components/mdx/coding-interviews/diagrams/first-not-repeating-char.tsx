@@ -1,27 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const passStates = [
-  { label: "计数a", phase: "第一遍", cursor: 0, counts: "a:1", action: "只累计频次，暂不决定答案" },
-  { label: "计数b", phase: "第一遍", cursor: 1, counts: "a:1, b:1", action: "b目前唯一，但后续仍可能重复" },
-  { label: "计数a", phase: "第一遍", cursor: 2, counts: "a:2, b:1", action: "a变成重复字符" },
-  { label: "计数c", phase: "第一遍", cursor: 3, counts: "a:2, b:1, c:1", action: "继续完成整串计数" },
-  { label: "计数c", phase: "第一遍", cursor: 4, counts: "a:2, b:1, c:2", action: "c变成重复字符" },
-  { label: "计数d/e/f/f", phase: "第一遍", cursor: 8, counts: "a:2, b:1, c:2, d:1, e:1, f:2", action: "频次表最终完成" },
-  { label: "检查a", phase: "第二遍", cursor: 0, counts: "count[a] = 2", action: "不是唯一，按原顺序继续" },
-  { label: "检查b", phase: "第二遍", cursor: 1, counts: "count[b] = 1", action: "第一个频次为1的字符，立即返回b" },
-] as const;
-
-const officialCases = [
-  { label: "存在唯一", fields: [["输入", "google"], ["频次1", "l、e"], ["返回", "l"], ["原因", "l更靠前"]] },
-  { label: "没有唯一", fields: [["输入", "aabccdbd"], ["所有字符", "频次大于1"], ["返回", "\\0"], ["语义", "无答案"]] },
-  { label: "全部唯一", fields: [["输入", "abcdefg"], ["所有字符", "频次1"], ["返回", "a"], ["原因", "首字符"]] },
-  { label: "空指针", fields: [["输入", "nullptr"], ["入口", "立即返回"], ["返回", "\\0"], ["语义", "无效输入"]] },
-] as const;
-
 export function FirstUniqueFrequencyDiagram() {
   const chars = [
     { ch: "g", count: 2 },
@@ -80,38 +59,6 @@ export function FirstUniqueFrequencyDiagram() {
     </figure>
   );
 }
-
-export function FirstUniqueTwoPassLab() {
-  const [cursor, setCursor] = useState(passStates.length - 1);
-  const state = passStates[cursor];
-  const chars = "abaccdeff".split("");
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-8 gap-1.5">
-          {passStates.map((item, index) => (
-            <button key={item.label + index} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"min-h-11 border px-1 text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{item.label}</button>
-          ))}
-        </div>
-        <div className="mt-4 flex gap-2">
-          {chars.map((char, index) => (
-            <div key={index} className={"flex h-10 w-10 items-center justify-center border font-semibold " + (index === state.cursor ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-primary")}>{char}</div>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-[120px_1fr]">
-          <div className="border border-border bg-background p-3 text-sm font-semibold text-primary">{state.phase}</div>
-          <div className="border border-border bg-background p-3 text-sm text-secondary">{state.counts}</div>
-        </div>
-        <p className="mb-0 mt-3 text-sm text-secondary">{state.action}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        第一遍只统计完整频次；第二遍回到原串，首个count等于1的b就是答案。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function FirstUniqueOrderMap() {
   const examples = [
     { text: "abac", counts: "a:2, b:1, c:1", answer: "b", reason: "b先于c" },
@@ -159,8 +106,4 @@ export function FirstUniqueContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function FirstNotRepeatingOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者main执行4组静态字符串测试；题干示例abaccdeff返回b，但未写入测试函数。" />;
 }

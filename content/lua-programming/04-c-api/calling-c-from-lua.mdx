@@ -7,19 +7,9 @@ description: "实现Lua可调用的C functions、可让出的continuation协议�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilCFunctionFrameLab, PilContinuationLab, PilCModuleLab } from "@/components/mdx/lua-programming/diagrams/calling-c-from-lua";
-
-<Objectives>
-
-- 能解释Lua调用C function时arguments、temporary values、results与error的stack协议，并验证所有参数边界
-- 能实现lua_yieldk/lua_pcallk continuation，保存可恢复状态并处理yield、resume、cancel与native cleanup
-- 能设计luaL_Reg和luaopen入口构成的C module，验证ABI、symbol、require cache与native code信任边界
-
-</Objectives>
 
 ## 为什么Lua调用C仍然只看一条Virtual Stack
 
@@ -27,7 +17,7 @@ import { PilCFunctionFrameLab, PilContinuationLab, PilCModuleLab } from "@/compo
 
 先预测：Lua传三个arguments时`-1`指谁；C push五个temporaries后返回2，Lua收到哪两个；`luaL_checkinteger`失败后尾部cleanup是否运行；C callback里调用会yield的Lua function会怎样；`lua_yieldk`之后原函数的下一行是否执行；`require "mymath"`期待哪个exported symbol和返回值。
 
-<Term def="Lua-to-C frame contract规定入口arguments索引、参数验证、native所有权、top上的results数量以及raise时的清理责任。">Lua-to-C frame contract</Term>是所有扩展函数的起点。
+是所有扩展函数的起点。
 
 ## C Functions
 
@@ -48,15 +38,8 @@ static int l_sum(lua_State *L) {
 
 调用`sum(1,2,3)`得到`6,3`。Function可把输入arguments留在栈底并在上方push results；Lua只取返回数量指定的top values。复杂helper仍应保存base，避免在内部错误恢复或调用其它Lua API时误认位置。
 
-<Term def="C result-count protocol用C函数返回的非负整数选择top上的n个Lua values作为调用结果。">C result-count protocol</Term>与错误status完全不同。若想返回`nil,message`，就push两个values并return 2；若想raise，则调用`luaL_error`或`lua_error`。
+与错误status完全不同。若想返回`nil,message`，就push两个values并return 2；若想raise，则调用`luaL_error`或`lua_error`。
 
-<PilCFunctionFrameLab />
-
-<Stepper>
-  <Step title="切换Arguments、Work、Results和Error"><PilCFunctionFrameLab /></Step>
-  <Step title="填写Frame Ledger">对0、1、many arguments记录entry top、每次push、最终top n results，覆盖nil、embedded-zero string和range error。</Step>
-  <Step title="验证Native Cleanup">在allocation、handle acquisition和Lua raise前后故障注入，确保资源在luaL_error之前释放或转交owner。</Step>
-</Stepper>
 
 ## 参数、Results与Registration
 
@@ -79,15 +62,12 @@ static void register_scale(lua_State *L, lua_Number factor) {
 }
 ```
 
-<Callout type="trap" title="C Function的Return 0表示失败，Return 1表示成功">
-Return值是Lua result count。`return 0`是正常返回零个结果，`return 1`要求top上有一个结果；错误要raise或按库约定返回`nil,error`，不要混用两种协议。
-</Callout>
 
 ## Continuations
 
 普通C activation不能跨Lua yield保存native call stack。C function若直接调用可能yield的Lua code，而API没有continuation，Lua会报告跨不可yield边界。Lua 5.3提供`lua_yieldk`、`lua_callk`、`lua_pcallk`：注册`lua_KFunction`和`lua_KContext`，在resume或protected outcome后由Lua调用continuation。
 
-<Term def="C continuation protocol把yield前的自动C控制流转换为lua_KContext、Lua-owned state和一个新的continuation invocation。">C continuation protocol</Term>要求显式state machine。原C函数在yield点后的普通语句不会作为可恢复frame继续；continuation负责完成后半段并返回result count。
+要求显式state machine。原C函数在yield点后的普通语句不会作为可恢复frame继续；continuation负责完成后半段并返回result count。
 
 ```c
 typedef struct PendingRead PendingRead;
@@ -115,17 +95,6 @@ static int l_read_async(lua_State *L) {
 
 示例用稳定ID而非裸pointer更容易防止use-after-free；真实owner还处理cancel、state close、timeout和duplicate completion。Resume传入的values位于continuation可见stack上，协议要定义。`lua_pcallk` continuation的status还可能是protected error code，不能只处理`LUA_YIELD`。
 
-<PilContinuationLab />
-
-<Stepper>
-  <Step title="切换Enter、Yield、Resume和Finish"><PilContinuationLab /></Step>
-  <Step title="画Explicit State Machine">标operation ID、Lua registry/state、native owner、resume arguments和每个terminal cleanup，禁止依赖C local地址。</Step>
-  <Step title="注入Continuation竞态">让completion、timeout、cancel与state close交错，验证只有一个winner恢复task且handle只释放一次。</Step>
-</Stepper>
-
-<Callout type="trap" title="Yield后原C函数会从下一行继续">
-不会把普通C stack frame保存成coroutine frame。使用k API时Lua调用新的continuation，并通过status/context和Lua stack恢复状态；自动local与未托管resource不能充当持久状态。
-</Callout>
 
 ## Continuation中的Error与Resource Lifetime
 
@@ -137,7 +106,7 @@ Yield前把operation登记到由state/host拥有的pending table，并保证stat
 
 C module是共享库加一个Lua-visible open function。`require "mymath"`通过`package.searchers`和`package.cpath`找到artifact，加载与Lua ABI兼容的library，解析约定的`luaopen_mymath` symbol并调用。Open function返回module value，通常是一张包含C closures的table。
 
-<Term def="C module open contract要求导出匹配模块名的luaopen函数，在stack上构造一个明确module value并返回1。">C module open contract</Term>避免隐式污染globals。
+避免隐式污染globals。
 
 ```c
 static const luaL_Reg mymath_functions[] = {
@@ -156,19 +125,12 @@ int luaopen_mymath(lua_State *L) {
 
 Static embedding可用`luaL_requiref`注册同一open function，不必走filesystem loader。Module初始化可能分配resource或raise，需定义重复require、partial initialization和state close时的owner。不要把per-state数据放在无隔离的process global里。
 
-<PilCModuleLab />
-
-<Stepper>
-  <Step title="切换Search、Symbol、Open和Cache"><PilCModuleLab /></Step>
-  <Step title="验证Build Matrix">针对目标Lua major/minor、architecture、runtime linkage和symbol visibility构建并在clean process中require。</Step>
-  <Step title="审计Native Trust">固定package.cpath、验证artifact provenance，测试missing/wrong symbol、ABI mismatch、init error和second require。</Step>
-</Stepper>
 
 ## Build、ABI与Security Boundary
 
 Header version、linked Lua runtime、integer/number配置、calling convention和architecture必须一致。Undefined symbols、重复Lua runtime或跨state传value都会造成难诊断故障。CI应构建最小host，实际load module并调用每个export，而不只编译object。
 
-<Term def="Native module以宿主进程权限执行，加载路径、artifact来源与允许的exports共同构成不可由Lua sandbox替代的信任边界。">native module trust boundary</Term>要求部署时固定并审计二进制来源。
+要求部署时固定并审计二进制来源。
 
 加载C module等于执行native code，Lua sandbox无法约束其process权限。对不可信脚本关闭动态C loader，固定search path和allowlist；真正敌对native extension需要process/OS isolation。
 
@@ -181,30 +143,7 @@ Header version、linked Lua runtime、integer/number配置、calling convention�
 5. Async completion必须回到lua_State所属线程，并解决completion/cancel/close的single winner。
 6. C module导出luaopen函数并返回API table；ABI、search path和native provenance都是加载门禁。
 
-<Exercises>
-
-**问题 1：C Function想返回nil和Error Message应该Return多少？**
-
-<Answer>依次push nil与message，然后`return 2`；这是普通业务失败协议。若采用raise语义则把error object放top并调用lua_error/luaL_error，由protected caller接收，两种风格应在module内保持一致。</Answer>
-
-**问题 2：Continuation为什么不能把PendingRead裸Pointer无条件当Context？**
-
-<Answer>Timeout、cancel或state close可能先释放对象，地址也可能复用。使用host-owned稳定ID加generation，continuation重新lookup并竞争terminal ownership，找不到就返回typed failure，保证close一次。</Answer>
-
-**问题 3：如何验证C Module不是“编译通过但无法Require”？**
-
-<Answer>用目标Lua runtime在clean process中设置受控cpath，实际require并检查luaopen symbol返回table，再调用exports；覆盖architecture/ABI、symbol visibility、missing dependency和重复require。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="Lua-to-C frame contract" definition="规定入口参数、native owner、结果数量与raise清理的C函数协议。" />
-  <GlossaryItem term="C result-count protocol" definition="C返回整数选择top上n个values作为Lua调用结果的规则。" />
-  <GlossaryItem term="C continuation protocol" definition="用k context和新continuation invocation恢复跨yield状态的协议。" />
-  <GlossaryItem term="C module open contract" definition="luaopen入口构造并返回明确module value的加载契约。" />
-  <GlossaryItem term="native module trust boundary" definition="动态库以进程权限执行、必须由路径与provenance策略控制的边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 29: Calling C from Lua" adaptedUrl="https://www.lua.org/pil/" />

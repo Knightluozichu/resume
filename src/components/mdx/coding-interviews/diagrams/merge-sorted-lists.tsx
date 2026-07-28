@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "交错链表",
@@ -84,8 +82,4 @@ export function MergeTiePolicyDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">值序列都正确，但重复值节点的跨链身份顺序取决于严格或非严格比较。</figcaption>
     </figure>
   );
-}
-
-export function MergeOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者五组测试，核对交错、重复值、单节点、单空和双空边界。" />;
 }

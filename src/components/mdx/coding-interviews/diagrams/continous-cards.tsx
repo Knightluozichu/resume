@@ -1,31 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const gapCases = [
-  { label: "一张王刚好补齐", cards: "0,3,2,6,4", sorted: "0 | 2,3,4,6", zeros: 1, gaps: "0+0+1 = 1", duplicate: "无", result: "顺子" },
-  { label: "一张王不够", cards: "0,3,1,6,4", sorted: "0 | 1,3,4,6", zeros: 1, gaps: "1+0+1 = 2", duplicate: "无", result: "失败" },
-  { label: "非零对子", cards: "1,0,0,1,0", sorted: "0,0,0 | 1,1", zeros: 3, gaps: "无需继续", duplicate: "1 重复", result: "失败" },
-  { label: "全是大小王", cards: "0,0,0,0,0", sorted: "0,0,0,0,0", zeros: 5, gaps: "0", duplicate: "无非零牌", result: "顺子" },
-] as const;
-
-const officialCases = [
-  { label: "Test1", fields: [["输入", "1,3,2,5,4"], ["0 数量", "0"], ["空缺", "0"], ["期望", "true"]] },
-  { label: "Test2", fields: [["输入", "1,3,2,6,4"], ["0 数量", "0"], ["空缺", "1"], ["期望", "false"]] },
-  { label: "Test3", fields: [["输入", "0,3,2,6,4"], ["0 数量", "1"], ["空缺", "1"], ["期望", "true"]] },
-  { label: "Test4", fields: [["输入", "0,3,1,6,4"], ["0 数量", "1"], ["空缺", "2"], ["期望", "false"]] },
-  { label: "Test5", fields: [["输入", "1,3,0,5,0"], ["0 数量", "2"], ["空缺", "2"], ["期望", "true"]] },
-  { label: "Test6", fields: [["输入", "1,3,0,7,0"], ["0 数量", "2"], ["空缺", "4"], ["期望", "false"]] },
-  { label: "Test7", fields: [["输入", "1,0,0,5,0"], ["0 数量", "3"], ["空缺", "3"], ["期望", "true"]] },
-  { label: "Test8", fields: [["输入", "1,0,0,7,0"], ["0 数量", "3"], ["空缺", "5"], ["期望", "false"]] },
-  { label: "Test9", fields: [["输入", "3,0,0,0,0"], ["非零牌", "3"], ["0 数量", "4"], ["期望", "true"]] },
-  { label: "Test10", fields: [["输入", "0,0,0,0,0"], ["非零牌", "无"], ["0 数量", "5"], ["期望", "true"]] },
-  { label: "Test11", fields: [["输入", "1,0,0,1,0"], ["重复", "1"], ["0 数量", "3"], ["期望", "false"]] },
-  { label: "Test12", fields: [["输入", "nullptr, 0"], ["入口", "拒绝"], ["排序", "不执行"], ["期望", "false"]] },
-] as const;
-
 export function ContinuousCardsSortDiagram() {
   const original = [0, 3, 2, 6, 4];
   const sorted = [0, 2, 3, 4, 6];
@@ -91,35 +66,6 @@ export function ContinuousCardsSortDiagram() {
     </figure>
   );
 }
-
-export function ContinuousCardsGapLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = gapCases[cursor];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {gapCases.map((item, index) => (
-            <button key={item.label} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"min-h-12 border px-2 text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {[["输入", state.cards], ["排序", state.sorted], ["0 数量", String(state.zeros)], ["空缺", state.gaps], ["重复", state.duplicate]].map(([label, value]) => <div key={label} className="border border-border bg-background p-3"><div className="text-xs text-muted">{label}</div><div className="mt-1 text-sm font-semibold text-primary">{value}</div></div>)}
-        </div>
-        <p className={"mb-0 mt-4 border-l-4 p-3 text-sm font-semibold " + (state.result === "顺子" ? "border-success bg-success/10 text-success" : "border-danger bg-danger/10 text-danger")}>
-          判定：{state.result}
-        </p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        选择官方代表用例，观察替代预算、相邻空缺与重复牌三者的判定顺序。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function ContinuousCardsJokerBudgetMap() {
   const rows = [
     ["0,2,3,4,6", "1", "缺 5，共 1", "刚好补齐", "true"],
@@ -168,8 +114,4 @@ export function ContinuousCardsContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function ContinuousCardsOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者 12 个测试覆盖无王、多王、预算刚好与不足、单非零、全王、对子以及空指针。" />;
 }

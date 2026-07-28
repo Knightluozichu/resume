@@ -7,43 +7,16 @@ description: "从齐次裁剪、边函数和 top-left 规则，到透视正确�
 demo: true
 math: true
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
-draft: true
+draft: false
 ---
 
-import {
-  Cg4RasterizationDiagram,
-  Cg4SamplingFrequencyDiagram,
-} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-rasterization";
-import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述齐次裁剪、perspective divide、viewport、triangle setup 与 sample coverage 的严格顺序
-- 能实现带 top-left 规则的边函数三角形扫描转换，并用共享边测试验证无缝归属
-- 能推导重心坐标和透视正确插值，计算给定样本的 UV、深度与属性
-- 能比较 pixel、coverage sample、fragment invocation、MSAA、SSAA 与着色走样的边界
-
-</Objectives>
 
 ## 光栅化回答“哪些样本属于图元”
 
-连续三角形没有“天然像素”。<Term def="在离散采样位置上判断点、线或多边形覆盖，并生成供后续着色和逐样本操作处理的片段数据">扫描转换</Term>需要先规定 sample positions、边界包含规则、数值精度和 viewport 映射。若相邻三角形对共享边采用不同临时判断，就会出现裂缝或重复覆盖。
+连续三角形没有“天然像素”。需要先规定 sample positions、边界包含规则、数值精度和 viewport 映射。若相邻三角形对共享边采用不同临时判断，就会出现裂缝或重复覆盖。
 
 光栅化也不负责所有前后工作：图元必须先在齐次 clip space 裁剪，之后 perspective divide 和 viewport 进入屏幕坐标；覆盖后才有插值、fragment shader、depth/stencil、blend 与 resolve。
 
-<Cg4RasterizationDiagram />
 
 ## 齐次裁剪必须早于除以 w
 
@@ -87,11 +60,11 @@ $$
 \lambda_2=1-\lambda_0-\lambda_1.
 $$
 
-<Term def="以三角形三个顶点为仿射基的权重，满足 lambda0+lambda1+lambda2=1，可表示位置和线性属性">重心坐标</Term>在内部通常非负；它既是覆盖判据的归一化形式，也是插值权重。
+在内部通常非负；它既是覆盖判据的归一化形式，也是插值权重。
 
 ## Top-left 规则固定共享边归属
 
-若覆盖条件只是三条边均 `>= 0`，两个相邻三角形都会包含共享边；若都用 `> 0`，两边都排除，出现裂缝。<Term def="对边界样本只包含 top 或 left 类型边、排除其互补边，使共享边精确归属一个图元的覆盖约定">Top-left 规则</Term>用半开集合固定归属。
+若覆盖条件只是三条边均 `>= 0`，两个相邻三角形都会包含共享边；若都用 `> 0`，两边都排除，出现裂缝。用半开集合固定归属。
 
 具体 top/left 判定依屏幕 y 方向和绕序约定。实现应先统一坐标系与正面积方向，再把“边值为零时是否包含”封装为单一函数；不能从另一 API 示例复制判断符号。
 
@@ -154,7 +127,7 @@ a(p)=
 {\sum_i\lambda_i/w_i}.
 $$
 
-<Term def="在屏幕重心权重下分别插值属性除以 clip w 与 1/w，再相除恢复投影前线性关系的方法">透视正确插值</Term>不是“插完再随便乘回 w”，分母是每个样本插值得到的 reciprocal-w。
+不是“插完再随便乘回 w”，分母是每个样本插值得到的 reciprocal-w。
 
 ```cpp
 template <typename T>
@@ -175,7 +148,6 @@ GLSL 默认 smooth varying 使用透视正确插值；`noperspective`选择屏�
 
 ## Pixel、Sample、Fragment 不是同义词
 
-<Cg4SamplingFrequencyDiagram />
 
 一个 pixel 是存储/显示格；coverage sample 是图元覆盖和 depth/stencil 的测试位置；fragment invocation 是 shader 执行；resolve 后才得到最终 pixel color。它们的数量不固定相等：
 
@@ -189,7 +161,7 @@ Fragment shader 也不总在像素中心求值；插值位置必须在 covered r
 
 ## 走样是采样与重建问题
 
-<Term def="连续信号中超过采样系统可表示频率的内容折叠成错误低频模式，形成锯齿、摩尔纹或闪烁">走样</Term>不仅是轮廓锯齿。几何边界、细纹理、高光、程序噪声和动画时间变化都可能超出采样能力。
+不仅是轮廓锯齿。几何边界、细纹理、高光、程序噪声和动画时间变化都可能超出采样能力。
 
 采样理论的理想带限条件为采样频率至少是最高信号频率两倍，但几何阶跃边界并非带限。工程方法是在采样前滤波或增加样本并重建：
 
@@ -203,92 +175,12 @@ Fragment shader 也不总在像素中心求值；插值位置必须在 covered r
 
 ## 三步实现参考光栅器
 
-<Stepper>
-<Step title="第一步：固定坐标与覆盖规则">
-
-定义 clip/depth range、viewport 原点、pixel centers、subpixel precision、正面积绕序和 top-left inclusive edges；为共享边构造测试。
-
-<Cg4StepFlowDiagram
-  caption="覆盖规则必须先冻结，才能谈逐像素 reference。"
-  stage={1}
-  stages={["Coverage contract：clip、viewport、samples、winding、top-left"]}
-/>
-
-</Step>
-<Step title="第二步：生成片段属性">
-
-裁剪图元，遍历 bounding box，增量求边函数；对 covered samples 计算重心、reciprocal-w、深度和 varyings。
-
-<Cg4StepFlowDiagram
-  caption="覆盖和插值共享边函数基础，但分别验证。"
-  stage={2}
-  stages={[
-    "Coverage contract：clip、viewport、samples、winding、top-left",
-    "Fragment data：edge values、barycentrics、1/w、depth、varyings",
-  ]}
-/>
-
-</Step>
-<Step title="第三步：扩展采样并比较">
-
-加入 1×/4× sample patterns、resolve 与纹理 minification 场景；和 GPU capture 比较内部样本、共享边及容差内图像。
-
-<Cg4StepFlowDiagram
-  caption="多样本验证既看边缘，也看 shader invocation 与 resolve 边界。"
-  stage={3}
-  stages={[
-    "Coverage contract：clip、viewport、samples、winding、top-left",
-    "Fragment data：edge values、barycentrics、1/w、depth、varyings",
-    "Sampling evidence：MSAA/SSAA、resolve、texture filtering、GPU compare",
-  ]}
-/>
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 两个三角形拼成矩形时对角线偶发裂缝或颜色加深。
-**原因 →** 边值等于 0 时两个图元都包含或都排除，没有统一 top-left 半开规则，或独立浮点误差破坏共享边一致性。
-**修法 →** 统一绕序和 subpixel 表示，对互补有向边使用一致 inclusive 判定，并测试共享边每个 sample 恰好归属一次。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 纹理在倾斜平面上像橡皮布一样游动。
-**原因 →** 用屏幕重心直接线性插值 UV，忽略每顶点 clip w。
-**修法 →** 插值 UV/w 和 1/w 后相除；CPU 与 shader 使用同一顶点 clip values 做数值对照。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 开启 4×MSAA 后远处棋盘纹和高光仍闪烁。
-**原因 →** MSAA 主要增加几何 coverage samples，并未预滤纹理或 shader 高频。
-**修法 →** 纹理使用 mip/anisotropic footprint filtering，高光限制频率或采用时域/超采样策略；按走样来源选择滤波。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-1. **共享边：** 两个相邻 CCW 三角形共享一条边，样本恰在边上。为什么单纯 `E>=0` 和 `E>0` 都不正确？
-
-<Answer>
-若两边都用 `E>=0`，共享边样本会被两个三角形覆盖，blend/计数可能重复；若都用 `E>0`，两者都排除，形成裂缝。Top-left 半开规则根据有向边类型让一个三角形包含、另一侧排除，因此并集无缝且不重复。判定符号需与坐标 y 方向和绕序配套。
-</Answer>
-
-2. **透视插值：** 屏幕重心为 (0.5,0.25,0.25)，三个顶点 $w=(1,2,4)$，标量属性 $a=(0,1,1)$。求透视正确值。
-
-<Answer>
-分子为 $0.5·0/1+0.25·1/2+0.25·1/4=0.1875$；分母为 $0.5/1+0.25/2+0.25/4=0.6875$；结果 $a=0.1875/0.6875\approx0.2727$。直接屏幕线性插值会得到 0.5，明显不同。
-</Answer>
-
-3. **采样频率：** 一个 pixel 的 4 个 MSAA samples 有 3 个被三角形覆盖。是否必然执行 3 次 fragment shader？Resolve 结果是什么？
-
-<Answer>
-不必然。默认情况下实现可按 fragment/pixel 频率执行一次着色并把颜色用于三个 covered samples；开启 sample shading 或 sample-specific 行为才可能增加 invocation。Resolve 将各 samples 的最终颜色按规则合成：三个 covered samples 使用三角形结果，一个 uncovered sample保留背景，因此简单平均示例为 $0.75C_{tri}+0.25C_{bg}$，还需考虑实际 format/resolve 规则。
-</Answer>
-
-</Exercises>
 
 ## 本章回顾
 
@@ -299,12 +191,4 @@ Fragment shader 也不总在像素中心求值；插值位置必须在 covered r
 
 ## 术语表
 
-<Glossary>
-<GlossaryItem term="扫描转换">在离散样本位置判断图元覆盖并生成后续着色和逐样本操作所需数据的过程。</GlossaryItem>
-<GlossaryItem term="重心坐标">以三角形顶点为仿射基、和为 1 的权重，用于表示位置与插值属性。</GlossaryItem>
-<GlossaryItem term="Top-left 规则">以半开边界约定让共享边样本精确归属一个三角形的覆盖规则。</GlossaryItem>
-<GlossaryItem term="透视正确插值">插值 attribute/w 与 1/w 后相除，恢复投影前线性关系的方法。</GlossaryItem>
-<GlossaryItem term="走样">不可表示的高频内容折叠为错误低频模式而产生的锯齿、摩尔纹或闪烁。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

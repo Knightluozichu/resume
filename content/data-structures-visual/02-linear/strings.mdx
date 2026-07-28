@@ -7,19 +7,9 @@ description: "从长度明确的串ADT与顺序/链式表示出发，推导朴�
 demo: true
 math: false
 sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { DsvStringStorageLab, DsvNaiveMatchLab, DsvKmpFailureLab } from "@/components/mdx/data-structures-visual/diagrams/strings";
-
-<Objectives>
-
-- 能描述串的长度、相等、比较、子串、连接与索引契约，并区分字节、编码字符和NUL终止表示
-- 能实现带显式长度的朴素模式匹配，推导每次对齐、比较次数和空模式等边界
-- 能推导KMP的前缀/后缀不变量、构建next数组与nextval改进，并用reference matcher验证线性搜索
-
-</Objectives>
 
 ## 从“字符串不是字符数组的同义词”开始
 
@@ -27,13 +17,13 @@ import { DsvStringStorageLab, DsvNaiveMatchLab, DsvKmpFailureLab } from "@/compo
 
 先预测：空模式在任意文本中是否匹配；文本长度小于模式是否需要逐字符尝试；UTF-8的一个汉字应算一个字符还是三个字节。本文算法按byte sequence演示，空模式匹配起点0；Unicode字符/用户可见字素需要更高层解码与索引。
 
-<Term def="由零个或多个字符组成的有限序列，具有明确长度与次序。">串</Term>可为空串，空串与只含空格或NUL的串不同。
+可为空串，空串与只含空格或NUL的串不同。
 
 ## 串的定义与比较
 
 两个串相等要求长度相同且每个位置单位相等。字典序比较从左到右找首个不同单位，较小单位对应较小串；若一个是另一个前缀，较短者更小。比较器必须与排序、查找和Hash相等语义一致。
 
-<Term def="在固定字符单位和排序规则下，从左到右比较首个不同位置，或以前缀长度决定次序。">串比较</Term>若使用本地化collation，其等价、大小写和normalization规则必须显式，不再是简单byte compare。
+若使用本地化collation，其等价、大小写和normalization规则必须显式，不再是简单byte compare。
 
 ```c
 #include <stddef.h>
@@ -58,39 +48,22 @@ int string_compare(StringView left, StringView right) {
 
 ## 串的抽象数据类型
 
-串的抽象数据类型通常提供assign/copy、empty、length、compare、clear、concat、substring、index/match与replace。<Term def="用有限字符序列和操作契约定义、隐藏连续或块链表示的抽象类型。">串ADT</Term>必须声明操作返回新串还是原地修改，失败时owner和原值如何处理。
+串的抽象数据类型通常提供assign/copy、empty、length、compare、clear、concat、substring、index/match与replace。必须声明操作返回新串还是原地修改，失败时owner和原值如何处理。
 
 `substring(position,length)`要防`position + length`溢出，宜检查`position <= source.length`且`length <= source.length - position`。连接需要先检查总长度、分配成功后再写，才能在失败时保持原串。借用view切片不复制，但生命周期不得超过owner。
 
 ## 串的顺序存储与链式存储
 
-<DsvStringStorageLab />
 
-<Stepper>
-  <Step title="切换四种串表示"><DsvStringStorageLab /></Step>
-  <Step title="加入操作分布">比较随机索引、扫描、连接、切片、增长和跨边界匹配的成本。</Step>
-  <Step title="验证owner">动态串扩容后旧指针失效；view只借用；块链clear必须释放全部块且不重复释放payload。</Step>
-</Stepper>
+按位读取和批量比较局部性好，连接/插入可能扩容和移动。定长表示必须区分拒绝与截断；静默截断会让相等、匹配和协议解析都失真。
 
-<Term def="把全部字符放在连续存储中，并以长度或终止符界定有效序列。">串的顺序存储</Term>按位读取和批量比较局部性好，连接/插入可能扩容和移动。定长表示必须区分拒绝与截断；静默截断会让相等、匹配和协议解析都失真。
+能分散分配和较便宜拼接，但按位访问、比较和模式匹配要跨块维护cursor。每结点只存一个字符会导致链接开销过大，实际常用块链或rope类结构。
 
-<Term def="把串拆成多个固定或可变大小块，由链接保持先后次序。">串的链式存储</Term>能分散分配和较便宜拼接，但按位访问、比较和模式匹配要跨块维护cursor。每结点只存一个字符会导致链接开销过大，实际常用块链或rope类结构。
-
-<Callout type="trap" title="C里字符串就是以NUL结尾的char数组">
-那只是常见表示。网络frame、文件切片和二进制字段可能含NUL或不带终止符；算法若接受显式length，就能把表示前置条件放在边界而非隐藏在strlen中。
-</Callout>
 
 ## 朴素模式匹配
 
-给文本`T`长度`n`和模式`P`长度`m`，朴素算法依次尝试起点`0..n-m`，每次从`P[0]`开始比较，直到失配或完整匹配。<Term def="对每个可能起点从模式首位重新比较，失配后整体右移一位的搜索。">朴素模式匹配</Term>简单、对短模式常够用，但重复前缀会产生大量重复比较。
+给文本`T`长度`n`和模式`P`长度`m`，朴素算法依次尝试起点`0..n-m`，每次从`P[0]`开始比较，直到失配或完整匹配。简单、对短模式常够用，但重复前缀会产生大量重复比较。
 
-<DsvNaiveMatchLab />
-
-<Stepper>
-  <Step title="切换朴素匹配轨迹"><DsvNaiveMatchLab /></Step>
-  <Step title="记录每次比较">对`AAAAAAAAAB`查`AAAAB`列出每个起点匹配长度，观察重复工作。</Step>
-  <Step title="覆盖边界">空模式、空文本、模式更长、相等、首/尾匹配、无匹配、含NUL与重复字符。</Step>
-</Stepper>
 
 ```c
 #include <stdbool.h>
@@ -122,17 +95,10 @@ bool naive_find(StringView text, StringView pattern, size_t *position) {
 
 KMP观察到：在某起点已匹配`P[0..j)`后失配，这段文本已经等于模式前缀；下一次可能匹配不必让文本回退，只需找到该已匹配前缀的最长“既是前缀又是后缀”的真边界，把模式索引`j`回退到其长度。
 
-<Term def="一个串中既是前缀又是后缀、但不等于整个串的子串。">真前后缀</Term>为失配提供可复用信息。<Term def="为模式各前缀记录失配后应回退位置或可保留边界长度的表。">next数组</Term>只依赖模式，可预处理复用。
+为失配提供可复用信息。只依赖模式，可预处理复用。
 
 不同资料有三种常见表示：1-based `next[1]=0`；0-based带`-1`哨兵；0-based LPS/prefix-function记录最长边界长度。它们可转换，但表项语义不同。本文代码采用0-based prefix length `lps[i]`，即`pattern[0..i]`的最长真前后缀长度。
 
-<DsvKmpFailureLab />
-
-<Stepper>
-  <Step title="切换Prefix、Failure、next和nextval"><DsvKmpFailureLab /></Step>
-  <Step title="手算Failure Table">对`ABABAC`逐位置列候选边界链，得到`0,0,1,2,3,0`。</Step>
-  <Step title="与朴素对照">随机生成text/pattern，断言两算法found/position一致，并计数比较次数。</Step>
-</Stepper>
 
 ### next数组值的推导
 
@@ -175,13 +141,10 @@ bool kmp_find(StringView text, StringView pattern, const size_t *lps,
 
 ### nextval数组与KMP改进
 
-若失配后回退到位置`k`，但`pattern[j] == pattern[k]`，同一个文本字符会立刻再次失配，可继续沿failure链跳过。<Term def="当回退位置字符与当前模式字符相同时继续压缩failure链的改进表。">nextval数组</Term>减少某些重复比较，不改变最坏线性阶。
+若失配后回退到位置`k`，但`pattern[j] == pattern[k]`，同一个文本字符会立刻再次失配，可继续沿failure链跳过。减少某些重复比较，不改变最坏线性阶。
 
 nextval实现高度依赖`next`约定。不要把1-based教材公式直接抄进0-based LPS代码；先写每个表项的语义和哨兵，再对全相同、周期模式和无重复模式逐项对照。现代实现常直接使用LPS，是否加入nextval由实际比较成本决定。
 
-<Callout type="trap" title="KMP永远比朴素匹配快，所以所有场景都应使用">
-KMP有预处理、额外表和更复杂分支；短模式、小文本或一次性搜索中朴素/经过优化的库函数可能更快。KMP保证线性最坏比较，选择仍需工作负载与profile。
-</Callout>
 
 ## 完整验证：结果、表与复杂度
 
@@ -217,34 +180,7 @@ Fuzz时限制长度并用朴素算法作oracle，记录seed、text、pattern、L
 4. KMP用真前后缀构建next/failure table，文本索引不回退，构建加搜索为线性。
 5. nextval压缩会立即重复失配的跳转，但必须与next下标约定一致。
 
-<Exercises>
-
-**问题 1：为什么StringView必须同时保存pointer和length？**
-
-<Answer>Length界定序列，可表示含NUL或非NUL结尾切片，避免strlen越界/截断；pointer只给地址。还要规定length为0时NULL是否允许，以及view借用owner的生命周期。</Answer>
-
-**问题 2：怎样手算模式ABABAC的LPS数组？**
-
-<Answer>逐前缀求最长真前后缀长度：A=0，AB=0，ABA=1，ABAB=2，ABABA=3，ABABAC失配并沿3->1->0回退仍不匹配C，得0，所以数组为0,0,1,2,3,0。</Answer>
-
-**问题 3：怎样证明KMP没有漏掉朴素算法会找到的首个匹配？**
-
-<Answer>不变量是已处理文本后缀等于pattern[0..j)；失配只沿所有可能真边界回退，任何更早不满足边界的起点已被已知字符排除。再枚举小输入与朴素oracle比较首位置，覆盖空、重复和无匹配。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="串" definition="零个或多个字符组成并具有明确长度和次序的有限序列。" />
-  <GlossaryItem term="串比较" definition="按固定单位和排序规则比较首个差异或前缀长度。" />
-  <GlossaryItem term="串ADT" definition="以字符序列和操作契约定义并隐藏存储表示的类型。" />
-  <GlossaryItem term="串的顺序存储" definition="字符连续存放并以长度或终止符界定有效序列。" />
-  <GlossaryItem term="串的链式存储" definition="把字符分块并用链接保存先后次序的表示。" />
-  <GlossaryItem term="朴素模式匹配" definition="每个候选起点都从模式首位重新比较的搜索。" />
-  <GlossaryItem term="真前后缀" definition="既是前缀又是后缀但不等于整个串的子串。" />
-  <GlossaryItem term="next数组" definition="记录模式前缀失配后回退位置或边界长度的表。" />
-  <GlossaryItem term="nextval数组" definition="压缩回退后会立即重复失配跳转的改进表。" />
-</Glossary>
 
-<Attribution adaptedFrom="大话数据结构（溢彩加强版），第5章 串" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

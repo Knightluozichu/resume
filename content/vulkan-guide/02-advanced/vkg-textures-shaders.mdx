@@ -7,39 +7,13 @@ description: "从 image 内存需求、staging 和 mip barriers 到 view、sampl
 demo: true
 math: false
 sourceUrl: "https://docs.vulkan.org/guide/latest/memory_allocation.html"
-draft: true
+draft: false
 ---
 
-import {
-  VkgTexturesShadersDiagram,
-  VkgTextureContractDiagram,
-} from "@/components/mdx/vulkan-guide/diagrams/vkg-textures-shaders";
-import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述 VkImage 创建、查询 requirements、选择 memory type、绑定与子分配的职责链
-- 能实现 staging upload、non-coherent flush、copy 与逐 mip synchronization2 barrier
-- 能比较 image、image view、sampler、descriptor 和 shader 在资源接口中的不同合同
-- 能解释 sRGB、format feature、anisotropy limit、push constant limit 与 descriptor 生命周期检查
-
-</Objectives>
 
 ## 创建 VkImage 还没有分配存储
 
-<Term def="描述图像类型、format、extent、mips、layers、samples、tiling 和 usage 的资源对象；创建后仍需绑定满足 requirements 的 device memory">VkImage</Term>创建成功只建立资源描述。应用还要查询 size、alignment 和 memoryTypeBits，选择兼容 memory type，分配或从大块 allocation 子分配，再用 `vkBindImageMemory2`绑定。
+创建成功只建立资源描述。应用还要查询 size、alignment 和 memoryTypeBits，选择兼容 memory type，分配或从大块 allocation 子分配，再用 `vkBindImageMemory2`绑定。
 
 为每张纹理单独 `vkAllocateMemory`容易触及 allocation count 限制并造成碎片。生产渲染器通常使用经过验证的 Vulkan Memory Allocator，或实现按 memory type、usage 和生命周期分池的 allocator；无论哪种都必须遵守 requirements alignment、memoryTypeBits 和 dedicated allocation 要求。
 
@@ -87,7 +61,6 @@ Optimal tiling 通常适合 GPU 采样和渲染，但 host 不能按紧密 RGBA 
 
 Host-visible memory 若不是 HOST_COHERENT，CPU 写入后必须按 `nonCoherentAtomSize`对齐 range 并 `vkFlushMappedMemoryRanges`，再让 transfer queue 读取。反方向 GPU 写回供 CPU 读时则需等待 GPU 完成并 invalidate non-coherent range。
 
-<VkgTexturesShadersDiagram />
 
 上传命令的依赖链是：host write/flush → transfer read staging → transfer write image → shader sample。Host flush 不是 GPU pipeline barrier；queue submission 和 barrier 仍需建立 device 侧执行与内存可见性。
 
@@ -125,7 +98,7 @@ vkCmdCopyBufferToImage(cmd, stagingBuffer, image,
 
 ## 每个 mip/layer 有独立状态
 
-<Term def="由 aspect、mip level 和 array layer 定位的 image 状态与访问最小跟踪单位">Image subresource</Term>意味着“一张 image 当前是 SHADER_READ_ONLY”常常过于粗糙。生成 mip 时，level 0 可能是 TRANSFER_SRC，level 1 是 TRANSFER_DST，已完成 levels 又可能转成 shader read。
+意味着“一张 image 当前是 SHADER_READ_ONLY”常常过于粗糙。生成 mip 时，level 0 可能是 TRANSFER_SRC，level 1 是 TRANSFER_DST，已完成 levels 又可能转成 shader read。
 
 一个典型 blit 循环对第 i-1 层执行 TRANSFER_DST → TRANSFER_SRC，blit 到第 i 层，再把第 i-1 层转到 SHADER_READ_ONLY；循环结束后单独转换最后一层。Barrier 的 subresourceRange 必须只覆盖目标 mip/layer，不能提前把尚未写入的 levels 宣布为可采样。
 
@@ -156,7 +129,7 @@ transitionMip(cmd, image, mipCount - 1,
 
 ## Image view 是解释窗口
 
-<Term def="为 VkImage 选择 view type、format、component mapping 与 aspect/mip/layer subresource range 的访问对象">VkImageView</Term>是 descriptor 和 attachment 实际引用的对象。一个 cubemap image 可有 cube view 和逐 face 2D views；一个 mip chain 可有全范围 sampled view 和单 mip attachment views。
+是 descriptor 和 attachment 实际引用的对象。一个 cubemap image 可有 cube view 和逐 face 2D views；一个 mip chain 可有全范围 sampled view 和单 mip attachment views。
 
 Format reinterpretation 不是任意的：image 创建 flags、format compatibility class、aspect 和设备 feature 都会限制 view format。Depth/stencil image 的 aspect 选择也必须与用途匹配。
 
@@ -191,13 +164,12 @@ Sampler 可以在兼容纹理间共享。Immutable sampler 可固化进 descript
 
 ## Descriptor 与 shader ABI
 
-<Term def="按 pipeline layout 中的 set/binding/type/count 把 buffer、image view 和 sampler 等资源连接到 shader 的绑定集合">Descriptor set</Term>从 descriptor pool 分配，必须符合 descriptor set layout。Pool 同时受 maxSets 和各 descriptor type 数量约束；只增加 maxSets 不能解决 combined image sampler 配额不足。
+从 descriptor pool 分配，必须符合 descriptor set layout。Pool 同时受 maxSets 和各 descriptor type 数量约束；只增加 maxSets 不能解决 combined image sampler 配额不足。
 
 `VkDescriptorImageInfo::imageLayout`声明 descriptor 被使用时 image 处于的 layout，不会转换 image。更新 descriptor 后，实际 draw/dispatch 前必须用 barrier 把对应 subresource 转入匹配 layout并建立 shader read 可见性。
 
 默认 descriptor set 在 pending command buffer 使用期间不能随意更新或释放。Per-frame sets、资源 generation，或经过 feature/flags 设计的 update-after-bind 路径可解决生命周期；不能只因为 `vkUpdateDescriptorSets`是 host 调用就认为 GPU 看不到竞争。
 
-<VkgTextureContractDiagram />
 
 Shader 源码应显式写 set 与 binding，构建时编译到目标 Vulkan environment，并反射验证 descriptor type/count、stage visibility、locations 和 push constants：
 
@@ -221,92 +193,12 @@ Push constants 的最低保证是 128 bytes，但实际可用上限由 `maxPushC
 
 ## 三步发布纹理资产
 
-<Stepper>
-<Step title="第一步：建立格式与内存合同">
-
-解析资产颜色语义和 mip policy，查询 format features；创建 image，查询 requirements，由 allocator 绑定兼容 memory。
-
-<VkgStepFlowDiagram
-  caption="格式选择先回答数据含义，再回答设备是否支持用途。"
-  stage={1}
-  stages={["Resource contract：color semantics、format features、requirements、allocation"]}
-/>
-
-</Step>
-<Step title="第二步：上传并跟踪子资源">
-
-写 staging、必要时 flush，录制 copy/mip 生成和逐 subresource barriers；跨 queue 时完成 semaphore 与 ownership transfer。
-
-<VkgStepFlowDiagram
-  caption="上传完成证据覆盖每个实际写入的 mip 和 layer。"
-  stage={2}
-  stages={[
-    "Resource contract：color semantics、format features、requirements、allocation",
-    "Transfer proof：flush、copy/blit、barriers、ownership、completion",
-  ]}
-/>
-
-</Step>
-<Step title="第三步：发布 shader 接口">
-
-创建范围正确的 view 与 limit-safe sampler，更新 descriptor generation；反射验证 SPIR-V ABI，待 upload completion 后才让 draw 可见。
-
-<VkgStepFlowDiagram
-  caption="资源只有在 upload、状态和 descriptor 三项同时完成后才进入可采样状态。"
-  stage={3}
-  stages={[
-    "Resource contract：color semantics、format features、requirements、allocation",
-    "Transfer proof：flush、copy/blit、barriers、ownership、completion",
-    "Shader publication：view、sampler、descriptor、reflection、retirement",
-  ]}
-/>
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 纹理在部分离散 GPU 上全黑，但集显正常。
-**原因 →** staging memory 非 HOST_COHERENT，CPU 写完未 flush；统一内存设备恰好掩盖了错误。
-**修法 →** 检查 memory properties，按 nonCoherentAtomSize 对齐并 flush host writes；再保留 transfer 和 shader barriers。
-</Callout>
-
-<Callout type="trap">
-**现象 →** mip 0 正常，远处纹理随机或 validation 报部分 subresource layout 错误。
-**原因 →** 只上传 mip 0，却把整张 image 的 descriptor/layout 当成完整 mip chain，或 barrier range 覆盖错误。
-**修法 →** 为每 mip 生成/上传有效内容并独立跟踪状态；view 的 levelCount 和 sampler maxLod 不超过已发布范围。
-</Callout>
-
-<Callout type="trap">
-**现象 →** descriptor 写了 SHADER_READ_ONLY_OPTIMAL，采样时仍报 image 实际处于 TRANSFER_DST。
-**原因 →** 把 descriptor imageLayout 字段误当成 layout transition。
-**修法 →** 在使用前录制 transfer-write → shader-read barrier 和真实 layout transition；descriptor 字段仅声明预期状态。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-1. **内存链：** vkCreateImage 成功后为何仍不能 copy？列出到可上传前的最小步骤。
-
-<Answer>
-VkImage 尚未绑定存储。需查询 VkMemoryRequirements2，选择满足 memoryTypeBits 且符合策略的 memory type，按 size/alignment 分配或子分配 VkDeviceMemory，再 vkBindImageMemory/2。之后还要把目标 subresource 从 UNDEFINED barrier 到 TRANSFER_DST_OPTIMAL，staging 写入若 non-coherent 需 flush，才可 copy。
-</Answer>
-
-2. **Mip 状态：** 4 层 mip，刚 copy 完 level 0，准备逐级 blit。为何不能一次把 0..3 全部转到 SHADER_READ_ONLY？
-
-<Answer>
-Levels 1..3 尚未被写入，level 0 还要作为 TRANSFER_SRC，后续 level 也会在 TRANSFER_DST/TRANSFER_SRC 间变化。提前转成 shader-read 会与 blit 的真实访问和 layout 冲突。应逐层转换生产者 mip，blit 后将已完成的上一层发布为 shader-read，最后单独发布末层。
-</Answer>
-
-3. **采样器与 descriptor：** 设备不支持 anisotropy，纹理有 6 mips，descriptor 写 SHADER_READ_ONLY。怎样创建并证明可采样？
-
-<Answer>
-Sampler 将 anisotropyEnable 设 false、maxAnisotropy=1，minLod=0、maxLod=5，并选择支持的 filter/mipmap mode。Image view 覆盖 6 个有效 mips；descriptor 的 set/binding/type 与 shader/layout 匹配。上传完成后用 barrier 把六层实际转到 SHADER_READ_ONLY 并建立 consuming shader stage 的 sampled-read 可见性；descriptor 字段本身不执行转换。
-</Answer>
-
-</Exercises>
 
 ## 本章检查清单
 
@@ -317,11 +209,4 @@ Sampler 将 anisotropyEnable 设 false、maxAnisotropy=1，minLod=0、maxLod=5�
 
 ## 术语表
 
-<Glossary>
-<GlossaryItem term="VkImage">描述 format、extent、mips、layers、samples、tiling 和 usage，并需另行绑定 device memory 的图像对象。</GlossaryItem>
-<GlossaryItem term="Image subresource">由 aspect、mip level 与 array layer 定位、可独立拥有 layout 和访问状态的图像范围。</GlossaryItem>
-<GlossaryItem term="VkImageView">为 image 选择 view type、format、component mapping 和 subresource range 的访问对象。</GlossaryItem>
-<GlossaryItem term="Descriptor set">按 pipeline layout 的 set/binding/type/count 把资源连接到 shader 的绑定集合。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/memory_allocation.html" />

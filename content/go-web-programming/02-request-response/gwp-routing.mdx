@@ -7,27 +7,18 @@ description: "用net/http建立服务器，掌握Handler、HandlerFunc、ServeMu
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-3"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { GwpServerLab, GwpHandlerLab, GwpMuxLab } from "@/components/mdx/go-web-programming/diagrams/gwp-routing";
-
-<Objectives>
-- 能实现显式http.Server、Handler与ServeMux，并解释默认mux的全局状态风险
-- 能比较Handler接口与HandlerFunc适配器，判断一次响应的唯一提交路径
-- 能复现端口占用、路由冲突和handler失败，并保存可诊断证据
-</Objectives>
 
 ## 从谁接收TCP连接开始
 
-先预测：调用ListenAndServe后，main是否继续执行下一行？正常运行时它阻塞并持续接收连接，只有服务停止或失败才返回。<Term def="监听地址、超时、handler和错误返回共同组成的服务器运行协议。">HTTP server lifecycle contract</Term>要求启动错误不能被忽略。
+先预测：调用ListenAndServe后，main是否继续执行下一行？正常运行时它阻塞并持续接收连接，只有服务停止或失败才返回。要求启动错误不能被忽略。
 
-<GwpServerLab />
 
 ## Go net/http库
 
-net/http把连接管理、消息解析与handler调用连接起来。<Term def="把传输层请求转换为Request与ResponseWriter调用的标准库边界。">nethttp serving boundary</Term>让应用通常不直接操作socket，但仍要配置header读取、空闲和关闭策略。
+net/http把连接管理、消息解析与handler调用连接起来。让应用通常不直接操作socket，但仍要配置header读取、空闲和关闭策略。
 
 ```go
 server := &http.Server{
@@ -40,7 +31,7 @@ log.Fatal(server.ListenAndServe())
 
 ## Handler与HandlerFunc
 
-Handler只要求`ServeHTTP(http.ResponseWriter, *http.Request)`；普通函数通过HandlerFunc适配。<Term def="接收结构化请求并向唯一ResponseWriter提交响应的接口协议。">handler interface contract</Term>支持对象持有依赖，也支持函数保持轻量。
+Handler只要求`ServeHTTP(http.ResponseWriter, *http.Request)`；普通函数通过HandlerFunc适配。支持对象持有依赖，也支持函数保持轻量。
 
 ```go
 type healthHandler struct{}
@@ -49,11 +40,10 @@ func (healthHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 }
 ```
 
-<GwpHandlerLab />
 
 ## Multiplexer
 
-Mux根据模式选择handler。<Term def="从请求host、method或path到单一handler的确定匹配规则。">multiplexer matching invariant</Term>需要覆盖具体路径、子树、根fallback和不支持方法；路由只分派，不替代认证与业务验证。
+Mux根据模式选择handler。需要覆盖具体路径、子树、根fallback和不支持方法；路由只分派，不替代认证与业务验证。
 
 ```go
 mux := http.NewServeMux()
@@ -63,44 +53,22 @@ mux.HandleFunc("GET /threads/", showThread)
 
 ## 默认Mux与显式依赖
 
-包级`http.HandleFunc`写入DefaultServeMux，测试和多个服务器会共享全局状态。<Term def="由调用方创建并传入mux，使路由集合具有明确所有者的设计。">explicit router ownership</Term>更容易隔离测试和审查暴露面。
+包级`http.HandleFunc`写入DefaultServeMux，测试和多个服务器会共享全局状态。更容易隔离测试和审查暴露面。
 
-<GwpMuxLab />
 
 ## HTTP/2支持
 
-HTTP/2在一条连接上复用stream并压缩header。<Term def="传输协议升级不改变应用Handler语义的兼容边界。">HTTP version abstraction</Term>要求代码不依赖连接对应单请求或响应写入时序巧合；TLS配置和客户端协商由服务器层处理。
+HTTP/2在一条连接上复用stream并压缩header。要求代码不依赖连接对应单请求或响应写入时序巧合；TLS配置和客户端协商由服务器层处理。
 
-<Stepper>
-  <Step title="启动服务器"><GwpServerLab /></Step>
-  <Step title="比较Handler"><GwpHandlerLab /></Step>
-  <Step title="验证Mux">注册具体与fallback模式，逐项发送请求并记录命中处理器。</Step>
-</Stepper>
 
 ## 验收实验：路由与失败矩阵
 
 分别制造端口占用、未知路径、方法不匹配、handler panic和响应二次写入，保存启动错误、状态码和日志。再用两个独立mux运行测试，证明路由状态不会跨用例污染；切换HTTP版本确认handler断言保持一致。
 
-<Callout type="trap" title="ListenAndServe返回nil表示成功退出">它通常以错误返回；正常关闭可能是ErrServerClosed，需要按关闭上下文区分。</Callout>
-<Callout type="trap" title="路由命中就代表请求合法">路由只选择处理器，参数、身份、权限和领域不变量仍需后续验证。</Callout>
 
 ## 本章回顾
 
 本章覆盖Go net/http库、使用Go提供HTTP服务、处理器与处理函数、多路复用器、默认mux所有权和HTTP/2服务支持。服务链从监听开始，以唯一handler响应结束，任何失败都必须有明确状态或日志。
 
-<Exercises>
-**问题 1：HandlerFunc解决什么？**<Answer>把符合签名的普通函数适配为Handler接口。</Answer>
-**问题 2：为何优先显式mux？**<Answer>避免全局路由状态，让每个服务器和测试拥有独立路由集合。</Answer>
-**问题 3：HTTP/2会改变业务handler签名吗？**<Answer>不会，net/http保持Request与ResponseWriter高层抽象。</Answer>
-</Exercises>
 
 ## 术语表
-<Glossary>
-  <GlossaryItem term="HTTP server lifecycle contract" definition="服务器启动、运行与退出协议。" />
-  <GlossaryItem term="nethttp serving boundary" definition="连接解析到handler调用的标准库边界。" />
-  <GlossaryItem term="handler interface contract" definition="Request与ResponseWriter处理接口。" />
-  <GlossaryItem term="multiplexer matching invariant" definition="请求到唯一handler的确定匹配。" />
-  <GlossaryItem term="explicit router ownership" definition="调用方显式拥有路由集合。" />
-  <GlossaryItem term="HTTP version abstraction" definition="协议版本与应用handler之间的抽象。" />
-</Glossary>
-<Attribution adaptedFrom="Go Web Programming Chapter 3 Handling requests" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-3" />

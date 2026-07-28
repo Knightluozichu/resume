@@ -7,47 +7,20 @@ description: "以附件生命周期、load/store、layout barrier 为主线，�
 demo: true
 math: false
 sourceUrl: "https://docs.vulkan.org/spec/latest/chapters/renderpass.html"
-draft: true
+draft: false
 ---
 
-import {
-  VkgRenderPassDiagram,
-  VkgRenderingModelDiagram,
-} from "@/components/mdx/vulkan-guide/diagrams/vkg-render-pass";
-import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述 attachment 从前序访问、layout transition、load、draw、store 到后序访问的完整生命周期
-- 能实现 synchronization2 + dynamic rendering 的颜色深度绘制闭环
-- 能比较 LOAD、CLEAR、DONT_CARE 与 STORE、DONT_CARE 对内容有效性和带宽机会的影响
-- 能解释 legacy render pass、subpass、input attachment 与 framebuffer 仍有价值的场景
-
-</Objectives>
 
 ## 附件是有历史的图像子资源
 
-<Term def="在一次 rendering instance 中作为 color、depth、stencil 或 resolve 目标使用的 image view 及其访问合同">Rendering attachment</Term>不是一块自动清空的“帧缓冲槽”。它背后是 VkImage 的某个 subresource range，进入渲染前已有 queue ownership、layout、可见内容和上一次访问者；离开后又会被采样、复制、继续绘制或呈现。
+不是一块自动清空的“帧缓冲槽”。它背后是 VkImage 的某个 subresource range，进入渲染前已有 queue ownership、layout、可见内容和上一次访问者；离开后又会被采样、复制、继续绘制或呈现。
 
 因此一段渲染至少回答：前一个 producer 是谁、旧内容是否要保留、当前 attachment 的 format/sample/layout 是什么、结束内容是否有效、下一消费者是谁。Dynamic rendering 与 legacy render pass 只是表达这些答案的两种模型。
 
-<VkgRenderPassDiagram />
 
 ## Layout 不是同步的替代品
 
-<Term def="实现为特定 image 用途优化的状态标签；layout transition 必须与执行和内存依赖一起建立">Image layout</Term>描述图像在某类访问中的组织和用途。把 layout 字段从 A 写成 B，不会自动让 A 阶段写入对 B 阶段可见；barrier 还要提供正确的 src/dst stage、access、subresource range，以及必要的 queue family ownership。
+描述图像在某类访问中的组织和用途。把 layout 字段从 A 写成 B，不会自动让 A 阶段写入对 B 阶段可见；barrier 还要提供正确的 src/dst stage、access、subresource range，以及必要的 queue family ownership。
 
 `VK_IMAGE_LAYOUT_UNDEFINED`允许实现丢弃旧内容，适合首次使用或明确不保留内容。它不能与期待旧数据的 LOAD 语义配合。需要保留时应记录真实旧 layout，并从真实 producer 建立依赖；把 layout 粗暴改成 GENERAL 也不会自动保留或同步内容。
 
@@ -76,7 +49,7 @@ vkCmdPipelineBarrier2(cmd, &before);
 
 ## Load/store 决定内容承诺
 
-<Term def="rendering instance 开始和结束时，应用对附件旧内容和新内容是否有效作出的语义声明">Load/store operations</Term>影响正确性，也给 tile-based 实现避免外存读写的机会：
+影响正确性，也给 tile-based 实现避免外存读写的机会：
 
 | 操作 | 语义 | 内容边界 |
 |---|---|---|
@@ -161,7 +134,7 @@ Transient attachment 和 lazily allocated memory 可能降低 tile GPU 外存成
 
 ## Legacy render pass 与 framebuffer
 
-<Term def="预先描述 attachments、subpasses、references 和 dependencies 的渲染对象，并由 framebuffer 绑定具体 image views">Legacy render pass</Term>仍是有效模型。VkRenderPass 定义附件格式/采样、load/store、初末 layout、subpass 引用和依赖；VkFramebuffer 把兼容 image views 绑定到附件槽。Graphics pipeline 与某个 compatible render pass/subpass 创建。
+仍是有效模型。VkRenderPass 定义附件格式/采样、load/store、初末 layout、subpass 引用和依赖；VkFramebuffer 把兼容 image views 绑定到附件槽。Graphics pipeline 与某个 compatible render pass/subpass 创建。
 
 Subpass 可把前一阶段输出作为 input attachment 在后续 fragment shader 中按当前像素读取。Tile-based GPU 可能把这些数据保留在片上，减少外存往返；但这是架构机会，不是所有实现都保证收益，也不适合需要任意邻域采样的普通 sampled image 算法。
 
@@ -180,98 +153,17 @@ VkSubpassDependency2 gbufferToLighting{
 
 Dependency 必须同时表达 execution 与 memory scope；仅写“subpass 0 在 subpass 1 前”不足以让写入可见。External dependency 连接 render pass instance 外部操作，仍要与真实 producer/consumer 阶段匹配。
 
-<VkgRenderingModelDiagram />
 
 Dynamic rendering 适合通用 render graph、动态附件集合和减少对象组合；legacy subpass 适合明确受益于 input attachment 局部性的路径，或兼容旧平台。两者可共存，选择应来自设备能力和 profile，而不是“新 API 必然更快”。
 
 ## 三步建立附件状态机
 
-<Stepper>
-<Step title="第一步：声明进入合同">
-
-从 render graph 取得每个 attachment 的 previous stage/access/layout/owner，决定 loadOp，并生成 begin 前 barrier。
-
-<VkgStepFlowDiagram
-  caption="LOAD 必须追溯真实 producer；CLEAR/DONT_CARE 才能放弃旧内容。"
-  stage={1}
-  stages={["Enter：previous access、layout、ownership、load intent"]}
-/>
-
-</Step>
-<Step title="第二步：录制 rendering instance">
-
-验证 pipeline formats/samples，填写 views、load/store、clear、renderArea 与 layers/viewMask，begin、draw、end。
-
-<VkgStepFlowDiagram
-  caption="Dynamic rendering 的简化发生在对象模型，不发生在附件合同。"
-  stage={2}
-  stages={[
-    "Enter：previous access、layout、ownership、load intent",
-    "Render：formats、samples、views、load/store、draw",
-  ]}
-/>
-
-</Step>
-<Step title="第三步：发布结果">
-
-根据下一消费者生成 after barrier、layout 和 ownership；STORE/DONT_CARE 与后续读取意图必须一致，并记录新的 subresource state。
-
-<VkgStepFlowDiagram
-  caption="附件结束状态是下一 pass 的输入合同。"
-  stage={3}
-  stages={[
-    "Enter：previous access、layout、ownership、load intent",
-    "Render：formats、samples、views、load/store、draw",
-    "Exit：next access、layout、ownership、store validity",
-  ]}
-/>
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** dynamic rendering 第一帧正常，第二帧 validation 报 layout 不匹配或出现旧帧残影。
-**原因 →** 以为 begin/end rendering 自动转换 layout，没有记录 swapchain image 的真实历史状态。
-**修法 →** begin 前从实际旧 layout barrier 到 attachment layout，end 后 barrier 到 PRESENT；按 imageIndex 记录状态。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 设置 loadOp=LOAD 后内容随机，或设置 storeOp=DONT_CARE 后下一 pass 采样噪声。
-**原因 →** LOAD 的旧内容未有效保存/同步，或 DONT_CARE 明确放弃了结束内容。
-**修法 →** 从真实 producer 建立依赖并保证旧内容有效；任何后续读取都要求 STORE 或等价的有效保留合同。
-</Callout>
-
-<Callout type="trap">
-**现象 →** legacy 两 subpass 之间偶发读到未完成 G-buffer。
-**原因 →** dependency 只有阶段顺序，srcAccess/dstAccess 没覆盖 color write 到 input attachment read。
-**修法 →** 使用匹配的 stage/access scopes，局部附件依赖可加 BY_REGION，并验证 attachment references/layouts。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-1. **内容有效性：** 离屏 color attachment 首次使用时 CLEAR，结束后下一 compute pass 读取。应怎样设置 load/store 和前后 barrier？
-
-<Answer>
-首次内容不保留，可从 UNDEFINED、NONE/NONE barrier 到 COLOR_ATTACHMENT_OPTIMAL + COLOR_ATTACHMENT_WRITE；loadOp=CLEAR。结束内容要供 compute 读取，所以 storeOp=STORE；end 后从 COLOR_ATTACHMENT_OUTPUT/COLOR_ATTACHMENT_WRITE barrier 到 COMPUTE_SHADER/SHADER_SAMPLED_READ（或实际 storage read）并转到合适 shader-read layout。
-</Answer>
-
-2. **Dynamic rendering：** 删除 VkRenderPass/VkFramebuffer 后，哪些信息仍必须提供？
-
-<Answer>
-Pipeline 创建仍需 color/depth/stencil formats 和 sample count；录制仍需 attachment image views、layouts、load/store、clear values、render area、layerCount/viewMask；begin 前和 end 后仍需执行/内存依赖、layout transition 和可能的 queue ownership。删除的是预创建对象，不是附件合同。
-</Answer>
-
-3. **Subpass 选择：** G-buffer 光照需要按当前像素读取多个附件，目标平台以 tile GPU 为主。为何 legacy subpass 可能有价值，又为何不能直接断言更快？
-
-<Answer>
-Input attachments 与 BY_REGION subpass dependency 允许实现把局部数据保留在 tile memory，减少外存存取，因此值得实现和测试。但硬件/驱动可能同样优化 dynamic rendering/render graph，subpass 也有 pipeline 和架构约束；若算法需要邻域采样则不适合 input attachment。最终需比较带宽、GPU 时间和平台覆盖。
-</Answer>
-
-</Exercises>
 
 ## 本章检查清单
 
@@ -282,11 +174,4 @@ Input attachments 与 BY_REGION subpass dependency 允许实现把局部数据�
 
 ## 术语表
 
-<Glossary>
-<GlossaryItem term="Rendering attachment">一次 rendering instance 中作为 color、depth、stencil 或 resolve 目标的 image view 及访问合同。</GlossaryItem>
-<GlossaryItem term="Image layout">为特定 image 用途优化的状态标签，转换时必须配合执行和内存依赖。</GlossaryItem>
-<GlossaryItem term="Load/store operations">声明 rendering 开始时旧内容如何处理，以及结束内容是否继续有效。</GlossaryItem>
-<GlossaryItem term="Legacy render pass">预先描述 attachments、subpasses、references 和 dependencies，并由 framebuffer 绑定 views 的模型。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Vulkan Specification: Render Pass" adaptedUrl="https://docs.vulkan.org/spec/latest/chapters/renderpass.html" />

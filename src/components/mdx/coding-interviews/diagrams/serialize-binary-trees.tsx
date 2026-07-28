@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["树形", "8；6/10；5,7,9,11"], ["前缀", "8,6,5,$,$,7,..."], ["往返", "结构和值相同"], ["覆盖", "完整三层树"]] },
   { label: "Test2", fields: [["树形", "5→左4→左3→左2"], ["空标记", "每层右孩子为$"], ["往返", "保持全左"], ["覆盖", "左偏斜"]] },
@@ -76,8 +74,4 @@ export function DeserializeCursorMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">反序列化游标单调前进；数字消费自身及左右子树，$只消费一个空分支。</figcaption>
     </figure>
   );
-}
-
-export function SerializeTreesOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者6组往返测试，核对完整树、左右链、单点、空树和全同值不规则结构。" />;
 }

@@ -7,25 +7,9 @@ description: "UBO、SSBO、std140/std430、原子操作、内存屏障、持久�
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
-draft: true
+draft: false
 ---
 
-import {
-  GlrAdvancedBuffersDiagram,
-  GlrBufferLayoutDiagram,
-  GlrMemoryDependencyDiagram,
-} from "@/components/mdx/opengl-redbook/diagrams/glr-advanced-buffers";
-import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能按容量、访问权限、布局与阶段选择普通 uniform、UBO、SSBO、atomic counter 或 vertex buffer
-- 能计算 std140/std430 中标量、向量、数组和结构体的对齐与偏移，并用反射验证
-- 能写出 compute shader 的 work group、共享内存、原子更新和越界保护
-- 能根据生产者与消费者选择 memory barrier、fence、flush 和持久映射所有权协议
-
-</Objectives>
 
 ## 直觉：缓冲只是字节，合同决定这些字节何时有效
 
@@ -33,9 +17,8 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：compute 已更新 indirect command，随后 draw 偶尔仍使用旧 count。仅在 shader 内调用 `barrier()` 能解决吗？不能；它只覆盖同一 work group 内 invocation，跨命令消费者需要 API 级 memory barrier。
 
-<Term def="把 buffer 的一段范围连接到着色器声明的 indexed binding point，使多个 program block 能访问同一存储的绑定机制">索引缓冲绑定</Term>把对象存储与 shader block 解耦。
+把对象存储与 shader block 解耦。
 
-<GlrAdvancedBuffersDiagram />
 
 ## UBO、SSBO 与限制查询
 
@@ -57,7 +40,7 @@ UBO/SSBO 的 offset 还必须满足 `GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT` 或 `GL
 
 ## std140 与 std430 布局
 
-<Term def="GLSL interface block 的标准布局规则；std140 对数组和结构体采用更保守的 vec4 级对齐，std430 允许部分标量/向量更紧凑排列">标准缓冲布局</Term>决定每个成员的 base alignment、offset、array stride 和 matrix stride。
+决定每个成员的 base alignment、offset、array stride 和 matrix stride。
 
 若当前偏移为 $o$，成员对齐为 $a$，则下一个成员起点为：
 
@@ -79,11 +62,10 @@ layout(std140, binding = 0) uniform Camera {
 };
 ```
 
-<GlrBufferLayoutDiagram />
 
 ## Compute 的执行层级
 
-<Term def="不经过图元装配与光栅化、按三维工作组派发通用 GPU invocation 的可编程阶段">计算着色器</Term>由 `glDispatchCompute(nx, ny, nz)` 创建 work groups，每组尺寸由 shader `local_size` 固定或专门化。
+由 `glDispatchCompute(nx, ny, nz)` 创建 work groups，每组尺寸由 shader `local_size` 固定或专门化。
 
 $$
 \text{globalInvocation}=\text{workGroupID}\cdot\text{workGroupSize}+\text{localInvocationID}.
@@ -120,7 +102,7 @@ $$
 
 ## Memory barrier：声明后续消费者
 
-<Term def="在已排序命令之间，使指定类型的先前 shader/资源写入对指定后续访问可见的 API 级依赖声明">内存屏障</Term>按**后续消费者**选择 bit。compute 写 SSBO 后供 vertex fetch 使用，需要包含 shader-storage 与 vertex-attrib 相关 barrier；生成 indirect command 后要包含 command barrier。
+按**后续消费者**选择 bit。compute 写 SSBO 后供 vertex fetch 使用，需要包含 shader-storage 与 vertex-attrib 相关 barrier；生成 indirect command 后要包含 command barrier。
 
 ```cpp
 glUseProgram(cullProgram);
@@ -136,96 +118,26 @@ glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT,
 
 `GL_ALL_BARRIER_BITS` 可作诊断对照，不应代替访问图。它也不是 CPU 等待 GPU 完成的 fence。
 
-<GlrMemoryDependencyDiagram />
 
 ## Fence、映射与所有权
 
 sync object/fence 表示 GPU 命令流到达某点；`glClientWaitSync` 让 CPU 查询或等待。persistent mapping 让指针长期有效，但不等于零拷贝，也不等于 CPU/GPU 可同时无协议读写同一区域。
 
-<Term def="映射指针跨多次命令保持有效的 buffer storage 模式；应用仍需用分区、fence 和 coherent/flush 规则管理 CPU/GPU 所有权">持久映射</Term>通常配 ring buffer。CPU 只写未被 GPU 使用的 segment；提交后插 fence；回绕前确认 fence 完成。
+通常配 ring buffer。CPU 只写未被 GPU 使用的 segment；提交后插 fence；回绕前确认 fence 完成。
 
 对非 coherent 映射，CPU 写后按映射规则 flush；GPU 写供 CPU 读时，先等待完成并满足 client-mapped 可见性要求。孤立、双/三缓冲和 persistent ring 是不同策略，按更新频率、延迟与驱动实测选择。
 
 ## 三步内存验证
 
-<Stepper>
-<Step title="第一步：证明布局">
-
-查询实现限制与 binding alignment；反射 block offset/stride，并用哨兵数据验证 CPU 与 GLSL 解释一致。
-
-<GlrStepFlowDiagram caption="先证明相同字节在两端具有相同布局。" stage={1} stages={["Layout：limits、alignment、offset、stride、reflection"]} />
-
-</Step>
-<Step title="第二步：证明执行与访问">
-
-用小数据比较 CPU oracle；检查 dispatch 组数、越界保护、原子计数和组内 shared/barrier。
-
-<GlrStepFlowDiagram caption="执行规模、访问范围与组内依赖分别验证。" stage={2} stages={["Layout：limits、alignment、offset、stride、reflection", "Execution：dispatch、bounds、shared、atomic counters"]} />
-
-</Step>
-<Step title="第三步：证明可见性与所有权">
-
-画出每个资源的生产者/消费者，选 barrier bit；对 CPU 映射区域记录 segment、fence、flush 与回绕证据。
-
-<GlrStepFlowDiagram caption="结果算完、对消费者可见、存储可复用是三个不同时刻。" stage={3} stages={["Layout：limits、alignment、offset、stride、reflection", "Execution：dispatch、bounds、shared、atomic counters", "Visibility：barrier、fence、flush、ring ownership"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** C++ `sizeof` 看似正确，SSBO 第二个成员仍错位。
-**原因 →** 用主机结构默认 padding 猜 std140/std430。
-**修法 →** 按 base alignment 计算，显式 padding，并用 program-interface reflection 和哨兵值核对。
-</Callout>
-
-<Callout type="trap">
-**现象 →** dispatch 后立刻 draw 偶尔读旧数据，于是加入 `barrier()`。
-**原因 →** 混淆 shader 内组同步与 API 命令间内存可见性。
-**修法 →** 在 dispatch 与消费者命令之间调用匹配访问类型的 `glMemoryBarrier`。
-</Callout>
-
-<Callout type="trap">
-**现象 →** persistent pointer 可用便让 CPU 覆写 GPU 正在读取的 segment。
-**原因 →** 把长期映射误解为无需所有权和等待。
-**修法 →** 使用 ring segment 和 fence；回绕前确认完成，并正确处理 coherent/flush 规则。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：为什么不能说 SSBO 大小无限制？**
-
-<Answer>
-规范要求实现提供至少某些下限，但实际最大 block size、每阶段 block 数和 binding 数都可查询且有限。应用必须针对运行设备检查并分块或改用其他表示。
-</Answer>
-
-**问题 2：compute 生成 indirect command 后，正确依赖链是什么？**
-
-<Answer>
-compute 对 SSBO/command buffer 写入并结束 dispatch；API 在 draw 前调用覆盖 shader-storage 和 command 消费者的 memory barrier；随后 indirect draw 读取参数。若 CPU 读取，还需另加 fence/映射合同。
-</Answer>
-
-**问题 3：设计 persistent ring 的压力测试。**
-
-<Answer>
-划分至少三段，每帧写带序号和校验和的数据，提交后给该段插 fence；模拟 GPU 延迟和 CPU 快速回绕，确认未完成段不会被覆盖。分别测试 coherent 与显式 flush，并记录等待次数、吞吐和错误计数。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 高级缓冲的统一模型是：存储只有字节，block layout 解释字节，dispatch/draw 产生访问，barrier 建立 GPU 消费者可见性，fence 与映射协议管理 CPU/GPU 所有权。Compute、SSBO 和 persistent mapping 并不自动正确或更快，必须以布局反射、参考值和访问图验收。
 
-<Glossary>
-<GlossaryItem term="索引缓冲绑定">把 buffer range 连接到 shader block binding point 的机制。</GlossaryItem>
-<GlossaryItem term="标准缓冲布局">std140/std430 定义的成员对齐、偏移与 stride 规则。</GlossaryItem>
-<GlossaryItem term="计算着色器">按三维工作组派发、不经过图形光栅阶段的通用 GPU 阶段。</GlossaryItem>
-<GlossaryItem term="内存屏障">使指定先前写入对指定后续 GPU 访问可见的 API 声明。</GlossaryItem>
-<GlossaryItem term="持久映射">映射指针长期有效、但仍需所有权和同步协议的存储模式。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 11 and 12" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

@@ -7,33 +7,21 @@ description: "按Hacker's Delight第二版第7章重建位字节反转、洗牌�
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
-draft: true
+draft: false
 ---
 
-import { HD7BitReverseLab, HD7SwapStagesLab, HD7ByteReverseLab, HD7PerfectShuffleLab, HD7UnshuffleLab, HD7MatrixTransposeLab, HD7TransposeRoundTripLab, HD7CompressLab, HD7ExpandLab, HD7CompressExpandRoundTripLab, HD7MaskPartitionLab, HD7LruStackLab, HD7LruMatrixLab, HD7RearrangementCertificateLab } from "@/components/mdx/hackers-delight/diagrams/07-rearranging-bits-and-bytes";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释reversing bits and bytes的position permutation与mask-and-swap network
-- 能计算shuffling bits的interleave/deinterleave mapping并证明inverse
-- 能实现transposing a bit matrix的scalar oracle与staged word exchanges
-- 能分析compress or generalized extract和expand or generalized insert的selected-subspace identities
-- 能设计LRU algorithm的move-to-front stack与pairwise recency matrix更新
-
-</Objectives>
 
 ## 从“移动value”改为“移动position”开始
 
 先预测：8-bit `10110010`反转后为`01001101`。Population count没有变化，因为rearrangement不创建或删除bits，只改变positions。若能写出每个destination position来自哪个source position，正确性就从一串magic masks变成一个可审计permutation。
 
-<Term def="对有限bit positions的一一映射，每个source恰到一个destination且每个destination恰有一个source。">位置排列</Term>是reversing、shuffle和transpose的共同模型。Compress/expand稍有不同：它们在mask-selected positions与packed low positions之间建立bijection，未selected subspace会被丢弃或填zero。
+是reversing、shuffle和transpose的共同模型。Compress/expand稍有不同：它们在mask-selected positions与packed low positions之间建立bijection，未selected subspace会被丢弃或填zero。
 
 ## 7.1 Reversing bits and bytes
 
 ### Bit reversal as an involution
 
-对width $w$，<Term def="把source position i移动到destination position w减1减i的permutation。">位反转</Term>定义
+对width $w$，定义
 
 $$
 \operatorname{rev}_w(x)_{w-1-i}=x_i,
@@ -47,11 +35,9 @@ $$
 \operatorname{rev}_w(\operatorname{rev}_w(x))=x.
 $$
 
-<HD7BitReverseLab />
 
 Scalar reference逐bit读source、写mirror destination，最易验证。Broadword implementation则把permutation分解为adjacent groups的swap network：先交换1-bit groups，再交换2-bit groups，继续4、8、16。
 
-<HD7SwapStagesLab />
 
 ```c
 #include <stdint.h>
@@ -75,9 +61,8 @@ static uint32_t reverse_bits_u32(uint32_t x) {
 
 ### Byte reversal is not full bit reversal
 
-<Term def="只逆转multi-byte word的byte lanes顺序，保持每个byte内部bit positions不变。">字节反转</Term>常用于endianness conversion。Full bit reversal等价于先reverse byte order，再在每个byte内reverse bits；只有byte swap不会得到CRC或FFT中常见的bit-reversed index。
+常用于endianness conversion。Full bit reversal等价于先reverse byte order，再在每个byte内reverse bits；只有byte swap不会得到CRC或FFT中常见的bit-reversed index。
 
-<HD7ByteReverseLab />
 
 Memory byte order与numeric word permutation要分开。Load之后做byte reverse改变register value；换一种endianness解释同一memory bytes是representation mapping。Production code优先使用standard byteswap/bit-reverse primitives，让compiler选择target instructions。
 
@@ -85,7 +70,7 @@ Memory byte order与numeric word permutation要分开。Load之后做byte revers
 
 ### Perfect interleave
 
-<Term def="把两个equal-length bit streams交错写入even与odd destination positions的permutation。">完美洗牌</Term>（perfect shuffle）把low half $a$放入even positions、high half $b$放入odd positions：
+（perfect shuffle）把low half $a$放入even positions、high half $b$放入odd positions：
 
 $$
 y_{2i}=a_i,
@@ -93,11 +78,9 @@ y_{2i}=a_i,
 y_{2i+1}=b_i.
 $$
 
-<HD7PerfectShuffleLab />
 
 Unshuffle执行inverse mapping：gather even positions形成$a$，gather odd positions形成$b$。这也是Morton/Z-order interleave、SIMD lane rearrangement和bit-matrix algorithms的building block。
 
-<HD7UnshuffleLab />
 
 Shuffle network可用mask-and-shift stages实现，也可看成后面的expand到alternating masks。Width必须为even，且half ordering、bit numbering要写清；某些文献把high half放even positions，名称相同但permutation不同。
 
@@ -105,13 +88,12 @@ Shuffle network可用mask-and-shift stages实现，也可看成后面的expand�
 
 ### Rows become columns
 
-把8个bytes视为8×8 matrix $B$，每个row存于一个byte。<Term def="交换bit matrix的row和column indices，使destination B prime的i j等于source B的j i。">位矩阵转置</Term>定义
+把8个bytes视为8×8 matrix $B$，每个row存于一个byte。定义
 
 $$
 B'_{ij}=B_{ji}.
 $$
 
-<HD7MatrixTransposeLab />
 
 Scalar oracle逐row、column提取一bit并写入opposite coordinate：
 
@@ -132,7 +114,6 @@ $$
 (B^\mathsf{T})^\mathsf{T}=B.
 $$
 
-<HD7TransposeRoundTripLab />
 
 Optimized version把8 bytes装入64-bit word，通过距离7、14、28等mask-and-XOR exchanges逐层交换off-diagonal blocks。每一stage只交换coordinate binary representations中某一位不同的pairs。不要从constants猜意图；先用scalar coordinate mapping生成oracle，再验证all one-hot matrix entries。
 
@@ -142,7 +123,7 @@ Matrix storage convention决定结果bytes。若row bit 0被画在left而算法�
 
 ### Gather selected positions
 
-<Term def="按mask中1-bits从low到high的顺序，gather对应source bits到contiguous low output positions。">广义提取</Term>（compress or generalized extract）对mask set positions
+（compress or generalized extract）对mask set positions
 
 $$
 p_0\lt p_1\lt\cdots\lt p_{k-1}
@@ -156,7 +137,6 @@ $$
 0\le j\lt k.
 $$
 
-<HD7CompressLab />
 
 Result high positions从$k$开始为zero。Scalar reference每次取mask lowest one，若source该position为1就设置next packed bit：
 
@@ -180,7 +160,7 @@ Iteration count为mask population，不是source population。Broadword algorith
 
 ### Scatter packed positions
 
-<Term def="按mask中1-bits从low到high的顺序，把packed source low bits写入selected destinations，其余位置填zero。">广义插入</Term>（expand or generalized insert）是selected-position mapping的反向：
+（expand or generalized insert）是selected-position mapping的反向：
 
 $$
 \operatorname{expand}(y,m)_{p_j}=y_j,
@@ -189,7 +169,6 @@ $$
 \ \text{when}\ m_i=0.
 $$
 
-<HD7ExpandLab />
 
 Compress与expand不是整个word space上的unconditional inverses。令$k=\operatorname{pop}(m)$、$L_k=2^k-1$，正确round trips是
 
@@ -205,13 +184,11 @@ $$
 y\mathbin{\&}L_k.
 $$
 
-<HD7CompressExpandRoundTripLab />
 
 第一条丢弃unselected source bits，第二条丢弃packed source中第$k$位以上bits。只有$x$已限制在mask subspace、$y$已限制在low-$k$ subspace时，round trip才等于full input。
 
 Mask与complement-mask可把word稳定分成selected和rejected streams；分别expand后OR可完整reconstruct：
 
-<HD7MaskPartitionLab />
 
 这种partition可用于stable bit packing、rank/select data structures、Morton codes和field serialization。仍要区分bit order与byte serialization order。
 
@@ -219,22 +196,20 @@ Mask与complement-mask可把word稳定分成selected和rejected streams；分别
 
 ### Move-to-front recency stack
 
-<Term def="每次access后把item移动到front，并保持其他items相对顺序，用tail作为least-recently-used candidate。">最近使用栈</Term>是一个dynamic permutation。Access item $p$时，从current order中remove $p$，再prepend；其他items做stable compact。
+是一个dynamic permutation。Access item $p$时，从current order中remove $p$，再prepend；其他items做stable compact。
 
-<HD7LruStackLab />
 
 若items以fixed-width fields packed进word，remove-and-compact可用mask、compress和expand表达；实际cache通常使用approximate policies，因为exact full associativity LRU state随ways增长。
 
 ### Pairwise recency matrix
 
-<Term def="n乘n bit matrix，其中entry i j表示item i比item j更新；access i时set row i并clear column i。">新近矩阵</Term>提供另一种exact LRU algorithm。Diagonal保持zero。Access page $i$时：
+提供另一种exact LRU algorithm。Diagonal保持zero。Access page $i$时：
 
 1. Set row $i$对所有other pages为1。
 2. Clear column $i$对所有rows为0。
 
 于是$M_{ij}=1$表示$i$比$j$更recent。Rows按set inclusion形成total recency order；unsigned minimum row对应LRU candidate。
 
-<HD7LruMatrixLab />
 
 ```c
 static void lru_access_u8(uint8_t rows[8], unsigned page) {
@@ -248,35 +223,9 @@ static void lru_access_u8(uint8_t rows[8], unsigned page) {
 
 Initial all-zero state让never-accessed pages tie，eviction policy还需tie breaker。Matrix使用$n^2$ bits，stack encoding只需记录permutation但update更复杂；hardware常在area、latency与replacement quality间折中。
 
-<Callout type="trap" title="Byte reverse就是bit reverse">
-Byte reverse只重排8-bit lanes，每个lane内部bit order不变。修法是先写position mapping；full bit reverse还要reverse each byte，或使用完整swap network。
-</Callout>
-
-<Callout type="trap" title="Compress和expand对任何word都互为逆">
-Compress丢unselected bits，expand忽略超出mask population的packed high bits。修法是使用x AND mask与low-popcount mask形式的round-trip identities，并测试zero/all-one/sparse masks。
-</Callout>
 
 ## 一条position-first的验证流程
 
-<Stepper>
-<Step title="写出source到destination mapping">
-固定width、bit numbering、byte order与matrix coordinates，逐个one-hot input预测destination。
-
-<HD7BitReverseLab />
-</Step>
-<Step title="证明bijection或selected subspace">
-Full permutation检查每个position恰出现一次；compress/expand明确discarded与zero-filled positions。
-
-<HD7CompressExpandRoundTripLab />
-</Step>
-<Step title="验证inverse和target implementation">
-Small widths exhaustively compare scalar oracle，检查round trip、mask extremes和compiler/ISA primitives。
-
-<HD7RearrangementCertificateLab />
-</Step>
-</Stepper>
-
-<HD7RearrangementCertificateLab />
 
 ## 小结
 
@@ -286,44 +235,4 @@ Compress or generalized extract按mask gather selected source bits；expand or g
 
 LRU algorithm把rearrangement用于dynamic state：move-to-front stack稳定压缩未accessed items，pairwise matrix通过set row/clear column维护total recency。每种实现都应明确mapping、discarded subspace、round-trip identity和state initialization。
 
-<Exercises>
 
-**问题 1**：为什么8-bit bit reversal可由swap 1、2、4-bit groups三阶段完成？
-
-<Answer>
-Position index有3个binary bits。每一stage交换index中一个coordinate不同的groups；依次翻转三个index bits后，destination index就是7减source index。Masks让paired groups disjoint，所有positions恰移动一次。
-</Answer>
-
-**问题 2**：Perfect shuffle把low half放even positions、high half放odd positions。其inverse如何得到两个halves？
-
-<Answer>
-对alternating even mask做compress得到original low half，对odd mask做compress得到original high half，再把high half放回packed upper half。Expanding两者到各自masks并OR也会恢复shuffled word。
-</Answer>
-
-**问题 3**：若mask population为4，为什么compress(expand(y,mask),mask)不一定等于full y？
-
-<Answer>
-Expand只消费y的low 4 bits，higher bits没有destination而被忽略；再compress只能恢复low 4 bits。因此结果是y AND 15，只有y本来就在low-4-bit subspace时才等于y。
-</Answer>
-
-**问题 4**：LRU matrix access page i时为何既要set row i又要clear column i？
-
-<Answer>
-Set row表示i比所有other pages更新；clear column表示所有other pages都不比刚访问的i更新。两步共同维护pairwise antisymmetric recency relation，diagonal也因clear自身column保持zero。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="位置排列">对有限bit positions的一一映射，每个source恰到一个destination且每个destination恰有一个source。</GlossaryItem>
-<GlossaryItem term="位反转">把source position i移动到destination position w减1减i的permutation。</GlossaryItem>
-<GlossaryItem term="字节反转">只逆转multi-byte word的byte lanes顺序，保持每个byte内部bit positions不变。</GlossaryItem>
-<GlossaryItem term="完美洗牌">把两个equal-length bit streams交错写入even与odd destination positions的permutation。</GlossaryItem>
-<GlossaryItem term="位矩阵转置">交换bit matrix的row和column indices，使destination B prime的i j等于source B的j i。</GlossaryItem>
-<GlossaryItem term="广义提取">按mask中1-bits从low到high的顺序，gather对应source bits到contiguous low output positions。</GlossaryItem>
-<GlossaryItem term="广义插入">按mask中1-bits从low到high的顺序，把packed source low bits写入selected destinations，其余位置填zero。</GlossaryItem>
-<GlossaryItem term="最近使用栈">每次access后把item移动到front，并保持其他items相对顺序，用tail作为least-recently-used candidate。</GlossaryItem>
-<GlossaryItem term="新近矩阵">n乘n bit matrix，其中entry i j表示item i比item j更新；access i时set row i并clear column i。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 7 · Rearranging Bits and Bytes" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

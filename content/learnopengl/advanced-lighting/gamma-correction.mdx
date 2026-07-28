@@ -10,10 +10,18 @@ sourceUrl: https://learnopengl.com/Advanced-Lighting/Gamma-Correction
 draft: false
 ---
 
-import {
-  GammaAttenuationContractDiagram,
-  GammaPipelineContractDiagram,
-} from "@/components/mdx/learnopengl/diagrams/gamma-correction";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { GammaCurveDiagram } from "@/components/mdx/diagrams/gamma-curve-diagram";
+import { ShaderDemo } from "@/components/mdx/shader-demo";
+import { CompareSlider } from "@/components/mdx/compare-slider";
+import { GammaGradientBarDiagram } from "@/components/mdx/diagrams/gamma-gradient-bar-diagram";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* A 概念型 + math:true 章（HEL-81，高级光照篇第 2 篇）：原书「Gamma 校正 Gamma Correction」。重心是概念讲解(spec A 列 §3 重)：显示器的非线性 gamma 响应（输出≈输入^2.2、源于 CRT、sRGB 沿用）、线性空间 vs sRGB/gamma 空间、为何光照运算必须在线性空间做、gamma 校正=输出前 pow(color,1/2.2) 编码回去、sRGB 纹理输入要先解码到线性。math:true 故 §4 数学要写（gamma 幂律 + 校正公式 + sRGB 纹理解码），但 A 型不喧宾夺主、display 公式 ≤8。承接上一篇 blinn-phong（已学 Phong/Blinn 镜面、点乘、世界空间光照），沿用「光与材质 / 相机与摄影」类比库。A 型段式：概念讲解(§3 重) + 数学(§4 写，math:true) + 代码对照(§6 选，输出前 pow 那段) + 误区(§7 ≥2，必含 双重 gamma + sRGB 没解码) + 小结含改 Demo 题(§8)。主 viz = GammaCurveDiagram（三条幂曲线，本章核心概念图）；交互 viz = ShaderDemo（黑到白渐变条，uCorrect 0/1 切校正、uGamma 滑块）；CompareSlider（左 GammaGradientBarDiagram corrected=false / 右 corrected=true，静态 SVG 渐变条对比，不塞 WebGL）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -79,13 +87,11 @@ import {
 
 所以颜色类纹理进来后，得先**解码回线性**：要么手动 `pow(采样色, vec3(2.2))`（屏幕脾气的逆操作的逆操作——把 sRGB 压回线性），要么干脆用 **sRGB 纹理格式**让硬件采样时自动解码（WebGL2 里用 `gl.SRGB8` 等格式，更省事也更准）。一句话记牢这条流水线：**入口处把 sRGB 纹理解码进线性 → 全程在线性空间算光照 → 出口处 gamma 校正回 sRGB**。注意：只有**颜色/漫反射**贴图是 sRGB 要解码；法线贴图、镜面遮罩这类**存数据而非颜色**的贴图本来就是线性的，千万别解码（解码了反而毁掉数据），这个坑后面误区还会细说。
 
-<GammaPipelineContractDiagram step={3} />
 
 ## 衰减也要回到线性空间重调
 
 原教程还指出一个容易被旧参数掩盖的变化：真实点光源的起点是平方反比 `1 / d^2`。未校正的显示器会额外把它压成近似 `(1 / d^2)^2.2`，看起来衰减过快，于是旧项目常改用 `1 / d` 或可调的经验曲线。进入线性工作流后，平方反比重新成为合理起点；可调衰减仍可保留，但参数要在校正后的画面里重新定。
 
-<GammaAttenuationContractDiagram />
 
 {/* 4. 数学推导（spec §四，math:true 要写但 A 型不喧宾夺主）：节首符号表 + gamma 幂律 display + 校正公式 + 显示器+校正抵消 + sRGB 纹理解码，共 4 个 display 公式（≤8）；每式后人话翻译、不跳步。 */}
 
@@ -206,15 +212,12 @@ void main() {
 
 <Stepper>
   <Step title="① 颜色纹理先解码，数据纹理不动">
-    <GammaPipelineContractDiagram step={1} />
     漫反射和 albedo 贴图通常是 sRGB，采样后要转线性；法线、粗糙度和遮罩存的是数据，不应做 gamma 解码。
   </Step>
   <Step title="② 所有中间光照都保持线性">
-    <GammaPipelineContractDiagram step={2} />
     光照累加、距离衰减、HDR、混合和中间 FBO 的值继续保持线性，不能在每个 pass 结束时随手编码。
   </Step>
   <Step title="③ 最终输出编码一次">
-    <GammaPipelineContractDiagram step={3} />
     最后一张显示目标使用硬件 sRGB 编码，或最后一次 shader 手动 `pow(c, 1/2.2)`；两条路径只能选一条。
   </Step>
 </Stepper>

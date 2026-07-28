@@ -7,21 +7,9 @@ description: "DSA、实例化、多重间接绘制、GPU 剔除、持久映射�
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
-draft: true
+draft: false
 ---
 
-import { GlrModernOpenglDiagram, GlrSubmissionDiagram, GlrProfilingDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-modern-opengl";
-import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能区分状态切换、API 提交、驱动验证、GPU 执行和内存带宽五类成本
-- 能设计实例化、multi-draw indirect 与 GPU culling 的命令和资源合同
-- 能用 DSA 和持久映射降低隐藏状态与更新开销，同时保持同步正确
-- 能使用 debug groups、pipeline statistics、timestamp/query 和帧捕获证明优化收益
-
-</Objectives>
 
 ## 直觉：减少调用不是目标，减少瓶颈才是
 
@@ -29,13 +17,12 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：把 1000 个不同材质对象硬合成一次 indirect draw，CPU 时间下降但 GPU 时间上升，优化算成功吗？不能仅凭 draw count 判断，要比较目标帧预算、状态/分支、带宽和可见对象量。
 
-<Term def="把相同顶点/索引和管线状态复用于多个实例，通过 instance id 或 divisor 属性提供每实例数据的绘制方式">实例化</Term>减少重复提交，但不会自动减少被遮挡实例的顶点/片段工作。
+减少重复提交，但不会自动减少被遮挡实例的顶点/片段工作。
 
-<GlrModernOpenglDiagram />
 
 ## DSA 与对象配置
 
-<Term def="在命令参数中直接指定被创建、查询或修改对象，避免依赖临时 target binding 的 OpenGL 4.5 接口风格">Direct State Access</Term>降低隐藏状态和恢复绑定错误。它主要改善代码合同与驱动验证机会，不是无条件性能捷径。
+降低隐藏状态和恢复绑定错误。它主要改善代码合同与驱动验证机会，不是无条件性能捷径。
 
 ```cpp
 glCreateVertexArrays(1, &vao);
@@ -64,7 +51,7 @@ $$
 
 ## Multi-draw indirect 与 GPU 剔除
 
-<Term def="从 GL_DRAW_INDIRECT_BUFFER 读取 count、instanceCount、firstIndex、baseVertex 和 baseInstance 等参数并执行一个或多个绘制的命令">间接绘制</Term>允许 compute culling 生成命令，CPU 不必逐对象回读可见列表。
+允许 compute culling 生成命令，CPU 不必逐对象回读可见列表。
 
 ```cpp
 glUseProgram(cullProgram);
@@ -78,7 +65,6 @@ glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT,
                             nullptr, maxCommands, sizeof(DrawCommand));
 ```
 
-<GlrSubmissionDiagram />
 
 GPU 生成 command 时要验证计数器上限、写入 stride、索引范围和 barrier。没有 indirect-count 扩展/核心能力时，可固定 max command 并把不可见项 `instanceCount=0`；这仍可能有命令处理成本。
 
@@ -92,7 +78,7 @@ $$
 
 ## Persistent ring 与帧间所有权
 
-<Term def="把动态 buffer 映射为长期有效 CPU 指针，并以分段、fence 与 coherent/flush 规则管理写入和 GPU 使用的更新模式">持久映射环</Term>避免每帧 map/unmap，但不保证零拷贝，也不允许覆盖 GPU 正在读取的数据。
+避免每帧 map/unmap，但不保证零拷贝，也不允许覆盖 GPU 正在读取的数据。
 
 ```cpp
 void* mapped = glMapNamedBufferRange(stream, 0, totalBytes,
@@ -114,11 +100,10 @@ texture array、bindless handle 或 atlas 可减少纹理绑定，但分别引�
 
 ## 调试、查询与测量
 
-<Term def="用 debug group/object label 标记命令，用 timer、occlusion、pipeline statistics 等 query 获取异步 GPU 证据的性能诊断方法">GPU 查询与标记</Term>将捕获结果对应到逻辑 pass。
+将捕获结果对应到逻辑 pass。
 
 CPU wall time 只测提交线程，不等于 GPU 时间；围绕 GPU 工作立刻 `glFinish` 会扭曲流水。timer query 应异步读取，通常延后一到数帧；还要预热 shader/cache、固定场景和分辨率，并报告中位数与高分位。
 
-<GlrProfilingDiagram />
 
 可用统计包括 submitted primitives、clipping、shader invocations、samples passed；它们解释“为什么时间变化”。仅报告 FPS 会隐藏帧时间非线性：
 
@@ -130,84 +115,15 @@ $$
 
 ## 三步优化闭环
 
-<Stepper>
-<Step title="第一步：固定基线">
-
-固定硬件、驱动、分辨率、场景、相机和暖机；记录 CPU submit、GPU pass、draw/primitive/sample 计数。
-
-<GlrStepFlowDiagram caption="没有可复现基线，优化结论无法归因。" stage={1} stages={["Baseline：scene、state、CPU/GPU time、counters"]} />
-
-</Step>
-<Step title="第二步：只改变一条提交合同">
-
-分别测试实例化、MDI、GPU culling、DSA 重构或 persistent ring，并保留输出图像与调试消息一致性。
-
-<GlrStepFlowDiagram caption="一次只改变一类成本，避免收益与回归互相抵消。" stage={2} stages={["Baseline：scene、state、CPU/GPU time、counters", "Change：one batching、submission or streaming strategy"]} />
-
-</Step>
-<Step title="第三步：跨场景复测">
-
-在低/高对象数、低/高遮挡、CPU/GPU bound 场景比较分位数，确认阈值与回退策略。
-
-<GlrStepFlowDiagram caption="优化只有在适用区间和退化边界都明确时才可上线。" stage={3} stages={["Baseline：scene、state、CPU/GPU time、counters", "Change：one batching、submission or streaming strategy", "Validate：images、percentiles、thresholds、fallback"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** draw call 降为一个，GPU 时间却变长。
-**原因 →** 过度合批增加不可见实例、分支、带宽或状态不一致成本。
-**修法 →** 同时看 CPU/GPU 时间和 primitive/sample 统计，按可兼容状态与可见性重新划批。
-</Callout>
-
-<Callout type="trap">
-**现象 →** timer query 读取时 CPU 偶发长 stall。
-**原因 →** 同帧同步取结果，迫使 CPU 等 GPU。
-**修法 →** 使用 query ring 延迟读取，检查 availability，并分开报告提交与 GPU 时间。
-</Callout>
-
-<Callout type="trap">
-**现象 →** persistent mapping 压测偶发花屏。
-**原因 →** CPU 回绕覆盖未完成 segment，或非 coherent range 未 flush。
-**修法 →** 每 segment 插 fence，复用前确认完成，并按映射 flags 执行 flush/visibility 合同。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：实例化一定把 1000 次 draw 降为一次吗？**
-
-<Answer>
-只有共享 mesh 和兼容 program、材质/资源与状态的实例才能在同一批次；不同 pass、透明顺序或资源限制会拆批。正确指标是总批次数及 CPU/GPU 成本，而不是口号式“一次”。
-</Answer>
-
-**问题 2：GPU culling 到 indirect draw 需要哪些正确性证据？**
-
-<Answer>
-验证 bounds 输入、可见计数上限、command layout/stride、索引范围、零实例规则和 command barrier；与 CPU 可见列表及参考图比较，并在低/高遮挡下测 culling 与节省成本。
-</Answer>
-
-**问题 3：怎样证明一个优化不是测量噪声？**
-
-<Answer>
-固定环境并暖机，多次交替运行基线/改动，异步采集 CPU 与 GPU 时间，报告中位数和高分位及计数器；保持参考图一致，并跨不同负载复测适用阈值。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 现代 OpenGL 实践不是堆叠 DSA、instancing 和 indirect API，而是建立显式对象、批量命令、资源所有权与异步测量。任何优化都要同时证明图像不变、同步正确、目标瓶颈下降，并说明在哪些场景会退化。
 
-<Glossary>
-<GlossaryItem term="实例化">共享几何与状态、用实例域数据绘制多个对象的方式。</GlossaryItem>
-<GlossaryItem term="Direct State Access">直接指定对象并减少隐藏 target binding 的接口风格。</GlossaryItem>
-<GlossaryItem term="间接绘制">从 GPU buffer 读取一个或多个绘制参数的提交方式。</GlossaryItem>
-<GlossaryItem term="持久映射环">用长期映射分段和 fence 管理动态流数据的更新协议。</GlossaryItem>
-<GlossaryItem term="GPU 查询与标记">用结构化标签和异步 query 采集 GPU pass 证据的方法。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 1, 3, 11, 12 and Appendix G" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

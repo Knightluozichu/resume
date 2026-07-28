@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "单节点",
@@ -85,8 +83,4 @@ export function LoopGapEntryDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">同步前进时保持相隔环长；p2到入口，p1多走一圈也回到入口。</figcaption>
     </figure>
   );
-}
-
-export function LoopEntryOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者七组测试，核对单节点自环、入口在中部/头/尾、无环和空链。" />;
 }

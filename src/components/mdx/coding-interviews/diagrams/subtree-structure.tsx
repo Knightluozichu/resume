@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "普通匹配",
@@ -87,8 +85,4 @@ export function SubstructureVsSubtreeDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">本题只要求B的全部节点在A中对应，不要求候选A子树到叶子完全相同。</figcaption>
     </figure>
   );
-}
-
-export function SubtreeOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者九组测试，核对普通树、左右斜树、结构缺口与三种空树组合。" />;
 }

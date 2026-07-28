@@ -7,19 +7,9 @@ description: "掌握first-class function、non-global function、lexical scope�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilFirstClassFunctionLab, PilClosureBindingLab, PilFunctionalPipelineLab } from "@/components/mdx/lua-programming/diagrams/closures";
-
-<Objectives>
-
-- 能解释function value的创建、identity、存储、传递与返回，并判断callback替换后的引用关系
-- 能推导lexical binding、upvalue共享和closure生命周期，复现独立状态、共享状态与内存保留
-- 能设计map、filter、fold与composition pipeline，验证shape、order、error和side-effect contract
-
-</Objectives>
 
 ## 为什么Closure不是“函数里带一个值”
 
@@ -27,13 +17,13 @@ Closure来自两条Lua基础规则：function是value，name按lexical scope解�
 
 先预测：两次调用counter factory得到的函数是否共享count；同一次factory返回getter/setter是否共享value；把module field替换为新function后，旧变量引用会不会自动变化；callback只使用`context.id`却捕获整个context时，context里的large cache能否回收；map callback返回多个values会保留几个。先画identity与reachability，再运行。
 
-<Term def="Function value与其引用的外层lexical bindings共同形成可在原block结束后继续执行的运行时对象。">closure binding object</Term>比“记忆”更精确：closure可以只读，也可完全无状态；关键是code与binding environment，而不是一定有mutable counter。
+比“记忆”更精确：closure可以只读，也可完全无状态；关键是code与binding environment，而不是一定有mutable counter。
 
 ## Functions as First-Class Values
 
 Function与number、string、table一样可赋变量、存table、作为argument、作为result。`function f(x) ... end`等价于给f赋一个function value；`function t.run(x) ... end`等价于给`t.run`赋值。Anonymous function只是没有在expression内声明name的function literal，赋给变量后同样可调用和比较identity。
 
-<Term def="Function可在不特殊包装的情况下被创建、赋值、存储、传参和返回，并以identity参与程序数据流的性质。">first-class function value</Term>让strategy、callback、iterator和factory成为普通结构。Table field被新function替换，只改变field mapping；之前保存到local或另一个table的旧function仍指向原value，直到所有references释放。
+让strategy、callback、iterator和factory成为普通结构。Table field被新function替换，只改变field mapping；之前保存到local或另一个table的旧function仍指向原value，直到所有references释放。
 
 `table.sort(items, comparator)`展示典型higher-order API。Comparator可以匿名定义并捕获sort direction或field name，但必须形成strict ordering且不要在比较中修改items。Callback API需声明调用次数上限、result arity、error传播、是否允许yield和是否长期保存callback。
 
@@ -54,29 +44,18 @@ end)
 assert(records[1].name == "beta" and records[2].name == "alpha")
 ```
 
-<PilFirstClassFunctionLab />
-
-<Stepper>
-  <Step title="切换Store、Pass、Return和Compose"><PilFirstClassFunctionLab /></Step>
-  <Step title="画Function Identity Graph">标出创建点、table fields、locals、registered callbacks、replacement和unregister，区分改binding与改function内部state。</Step>
-  <Step title="写Callback Contract">记录argument/result arity、nil、error/yield、side effects、调用频率、保存期限和取消方式，再做替换与重复注册测试。</Step>
-</Stepper>
-
-<Callout type="trap" title="把Module函数替换后，所有旧Callback都会自动更新">
-Table field assignment只更新该mapping。已经读取并注册的旧function value保持原identity与upvalues；热更新必须显式重新注册，或让稳定wrapper每次通过module table查找当前实现。
-</Callout>
 
 ## Non-Global Functions
 
 非全局function主要有两种：放在table field中形成namespace，或保存在local中。Table namespace适合exported API，local function隐藏implementation并避免global name collision。`local function parse(...) ... end`是递归友好的声明形式，等价于先声明local再赋function，而不是普通`local parse = function...`的完全机械替换。
 
-Mutual recursion需要先声明所有locals，再分别赋function，否则较早的function body可能解析到global或nil。例如先`local parse_expr, parse_atom`，再给两者赋值。<Term def="Function名称被限制在local block或显式module table中，export surface与递归binding都由声明顺序控制的命名策略。">non-global function boundary</Term>让API审计能分清public、private与replaceable hooks。
+Mutual recursion需要先声明所有locals，再分别赋function，否则较早的function body可能解析到global或nil。例如先`local parse_expr, parse_atom`，再给两者赋值。让API审计能分清public、private与replaceable hooks。
 
 Local function不是安全边界：若被return、存入public table或作为callback注册，外部仍可调用。反过来，global function也不必然共享state；state取决于upvalues和tables。模块设计应最小化exports，把invariants放在不可直接访问的locals，并为需要测试替换的dependencies显式注入。
 
 ## Lexical Scoping
 
-Lexical scoping按source nesting决定name绑定，不按caller stack动态查找。Function在定义处解析free variables；在别处调用时仍访问原来的outer locals。<Term def="Free variable按函数定义处的source block绑定到local或environment，而不随调用者的局部变量改变的名称解析规则。">lexical scope resolution</Term>保证把callback传给陌生caller后语义仍稳定。
+Lexical scoping按source nesting决定name绑定，不按caller stack动态查找。Function在定义处解析free variables；在别处调用时仍访问原来的outer locals。保证把callback传给陌生caller后语义仍稳定。
 
 Outer function每调用一次会创建一组新的locals，因此两次factory calls通常产生独立bindings。同一次factory若返回多个closures，它们引用同一个local，则共享读写。Upvalue在仍有closure可达时存活；最后一个closure不可达后，binding与其引用对象才有机会被GC回收。
 
@@ -97,15 +76,8 @@ set_a(11)
 assert(get_a() == 11 and get_b() == 20)
 ```
 
-<Term def="同一lexical local被多个closures捕获时，所有closures读取和修改同一个binding，而不同factory activation通常创建不同binding。">shared upvalue ownership</Term>可以实现private state，也会引入隐式coupling。Getter/setter、event handlers和iterator若共享状态，应声明reentrancy、concurrency和reset policy；callback调用callback时可能在同一operation中二次修改upvalue。
+可以实现private state，也会引入隐式coupling。Getter/setter、event handlers和iterator若共享状态，应声明reentrancy、concurrency和reset policy；callback调用callback时可能在同一operation中二次修改upvalue。
 
-<PilClosureBindingLab />
-
-<Stepper>
-  <Step title="切换One Factory、Two Factories、Sibling Closures和Retained Graph"><PilClosureBindingLab /></Step>
-  <Step title="画Activation与Binding">每次factory call建立独立box，逐个closure连到它实际捕获的box；对write标出所有后续observers。</Step>
-  <Step title="验证Lifecycle">注册callback后释放其它references，确认captured graph仍存活；unregister并清空最后reference后用profile观察是否可回收。</Step>
-</Stepper>
 
 ## Capture Size、Loop Binding与Lifecycle
 
@@ -117,7 +89,7 @@ Long-lived registry、timer、UI listener或C callback必须有unregister/revoke
 
 ## A Taste of Functional Programming
 
-Higher-order programming把行为作为argument：map把每个input变换为output，filter按predicate保留values，fold从seed累计，composition连接stages。<Term def="Higher-order pipeline明确每个stage的输入输出shape、顺序、effects、failure与资源成本，而不是只把callbacks串在一起。">functional transformation contract</Term>防止“函数式”成为隐藏mutation与多次遍历的标签。
+Higher-order programming把行为作为argument：map把每个input变换为output，filter按predicate保留values，fold从seed累计，composition连接stages。防止“函数式”成为隐藏mutation与多次遍历的标签。
 
 Lua table同时可表示sequence/map，functional helper必须声明接受proper sequence还是arbitrary table。Map通常保持1..n cardinality；callback返回nil会在Lua table中制造hole，需选择reject、sentinel或packed result。Filter用truthiness判断时false与nil都不保留，但0和empty string保留。Fold必须给seed与direction；非associative operation改变order就改变结果。
 
@@ -145,17 +117,6 @@ assert(result[1] == "@ada" and result[2] == "@lua")
 
 Composition要考虑multiple results：`second(first(x))`让first位于最后argument position，可展开多个results；若second只期望一个，应用括号或先存local显式收缩。Error可直接传播、返回result object或在stage boundary捕获，但整条pipeline只能选一套清晰协议。
 
-<PilFunctionalPipelineLab />
-
-<Stepper>
-  <Step title="切换Map、Filter、Fold和Pipeline"><PilFunctionalPipelineLab /></Step>
-  <Step title="填写Shape Ledger">记录input shape、output cardinality、nil policy、order、seed、multiple results与mutation owner。</Step>
-  <Step title="做Law Tests">Map测identity/composition，filter测predicate与stable order，fold测seed/direction；再注入callback error和large input预算。</Step>
-</Stepper>
-
-<Callout type="trap" title="Closure捕获的是创建那一刻Value的副本">
-Closure捕获lexical binding。Sibling closures会看到彼此对同一upvalue的写入；需要snapshot时创建新的local并不再修改，需要live state时则明确共享与同步策略。
-</Callout>
 
 ## 本章回顾：先画Binding，再谈函数式风格
 
@@ -166,31 +127,7 @@ Closure捕获lexical binding。Sibling closures会看到彼此对同一upvalue�
 5. Closure会延长captured graph寿命，long-lived callbacks必须有明确unregister和capture-size策略。
 6. Map/filter/fold/composition仍需shape、order、nil、error、effect和cost contract。
 
-<Exercises>
-
-**问题 1：为什么Getter和Setter能共享Private Value，而两个Factory实例互不影响？**
-
-<Answer>同一次new_cell activation只创建一个value local，getter/setter都捕获该binding，所以setter写入后getter可见；第二次activation创建另一个binding，closure graph没有连接，因此独立。用两个实例交错调用可验证ownership。</Answer>
-
-**问题 2：怎样避免长期Callback无意保留一个巨大Context？**
-
-<Answer>先确认需要snapshot还是live state。只需immutable字段时提取small locals再创建closure；需要live state时保存最小facade或ID查表。Registry提供unregister，owner结束时删除callback并清空references，用memory profile验证captured graph可回收。</Answer>
-
-**问题 3：Map Callback可能返回Nil时应怎样定义结果？**
-
-<Answer>不能直接写入sequence并继续依赖#或ipairs，因为nil会形成hole。选择一种明确协议：reject nil、用private sentinel、返回table.pack并维护n，或把语义改为filter-map且compact输出。测试nil在首/中/尾位置及order/cardinality。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="closure binding object" definition="Function value与其引用的外层lexical bindings共同形成的运行时对象。" />
-  <GlossaryItem term="first-class function value" definition="Function可创建、赋值、存储、传参、返回并按identity流动的性质。" />
-  <GlossaryItem term="non-global function boundary" definition="Function name限制在local block或显式module table的命名策略。" />
-  <GlossaryItem term="lexical scope resolution" definition="Free variable按函数定义处source nesting绑定而不按caller变化的规则。" />
-  <GlossaryItem term="shared upvalue ownership" definition="多个closures共享同一outer local binding及其读写的所有权模型。" />
-  <GlossaryItem term="functional transformation contract" definition="Higher-order stage明确shape、order、effects、failure与cost的协议。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 9: Closures" adaptedUrl="https://www.lua.org/pil/" />

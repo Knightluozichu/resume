@@ -7,21 +7,9 @@ description: "从 fragment-pass 工具箱、流体/体绘制，到流式架构�
 demo: true
 math: true
 sourceUrl: "https://developer.nvidia.com/gpugems"
-draft: true
+draft: false
 ---
 
-import { GpgGpuComputingDiagram, GpgComputeChapterMatrixDiagram, GpgParallelPrimitiveDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-gpu-computing";
-import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述三卷 20 个 GPU 计算原章及 fragment-pass、streaming、CUDA 三代编程模型
-- 能推导流体投影、volume compositing、reduction/scan、随机采样与 Gaussian recurrence 的核心关系
-- 能解释 data layout、gather/scatter、flow control、memory traffic、feedback compaction 的性能边界
-- 能为 AES、地震成像、超声、stereogram、deformer 等应用建立 CPU oracle 和端到端证据
-
-</Objectives>
 
 ## 直觉：GPU 计算不是从 Compute Shader 开始的
 
@@ -29,13 +17,11 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：一个现代 compute 版 reduction 比原 fragment-pass 快，是否说明原章算法已被“替代”？只说明载体性能变化；树形归约的工作量、跨度、结合律和数值顺序仍需复现。
 
-<Term def="把同一个 kernel 应用于大量数据元素，并把存储访问和控制流组织为可并行流的计算模型">流式计算模型</Term>贯穿三代载体。
+贯穿三代载体。
 
-<GpgGpuComputingDiagram />
 
 ## 20 个原章与独立核心
 
-<GpgComputeChapterMatrixDiagram />
 
 ### GPU Gems 1 Ch37-42：借图形管线做计算
 
@@ -46,7 +32,7 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 - **Real-Time Stereograms**：按深度约束建立左右像素对应并生成自立体图；
 - **Deformers**：把 lattice、twist、bend 等几何变形映射到 vertex program。
 
-<Term def="把计算域编码为纹理，用全屏/几何光栅产生 invocation，fragment shader 从源纹理 gather 并写目标纹理，再交换读写目标的早期 GPGPU 方式">Fragment-pass GPGPU</Term>受到输出位置固定、scatter 困难和 pass 同步限制。
+受到输出位置固定、scatter 困难和 pass 同步限制。
 
 ```cpp
 Texture src = initialState, dst = scratch;
@@ -78,7 +64,7 @@ C_{new}=C+(1-\alpha)\alpha_s C_s,\qquad
 \alpha_{new}=\alpha+(1-\alpha)\alpha_s.
 $$
 
-<Term def="把标量体数据经 transfer function 映射为颜色/消光，沿视线采样并按透射率合成的图像生成过程">体绘制</Term>要说明采样步长、transfer function、梯度法线和 early termination。超声数据还需保留物理强度/动态范围和医学空间标定，不能把图像增强当诊断真实性。
+要说明采样步长、transfer function、梯度法线和 early termination。超声数据还需保留物理强度/动态范围和医学空间标定，不能把图像增强当诊断真实性。
 
 Stereogram 与 deformers 分别代表约束传播和独立顶点映射；前者要处理冲突/遮挡，后者要验证坐标空间、Jacobian/法线和边界连续性。
 
@@ -93,9 +79,8 @@ Stereogram 与 deformers 分别代表约束传播和独立顶点映射；前者�
 - **GPU Program Optimization**：用瓶颈、算术强度、访问合并和 pass 数量驱动优化；
 - **Stream Reduction Operations for GPGPU Applications**：以树形 pass 合并 sum/min/max 等流。
 
-<Term def="把一组元素按结合运算合并为较少元素直至单值或分块结果的并行原语">并行归约</Term>对 $N$ 项的总工作 $O(N)$、理想跨度 $O(\log N)$。浮点加法不满足严格结合律，树顺序与 CPU 串行结果可能不同，需误差容限/补偿策略。
+对 $N$ 项的总工作 $O(N)$、理想跨度 $O(\log N)$。浮点加法不满足严格结合律，树顺序与 CPU 串行结果可能不同，需误差容限/补偿策略。
 
-<GpgParallelPrimitiveDiagram />
 
 ```glsl
 shared float tile[BLOCK];
@@ -121,7 +106,7 @@ if (lid==0) partial[groupId] = tile[0];
 
 ### Scan、RNG 与可变长输出
 
-<Term def="输出每个位置之前或包含当前位置的前缀结合结果，是 compaction、排序、分配和稀疏构建的基础原语">并行前缀和</Term>。exclusive scan：
+。exclusive scan：
 
 $$
 y_i=\sum_{j=0}^{i-1}x_j.
@@ -152,84 +137,15 @@ Result validateKernel(Kernel gpu, Reference cpu, Inputs tests) {
 
 ## 三步 20 章验收
 
-<Stepper>
-<Step title="第一步：还原时代数据流">
-
-分别画出 texture/pass、streaming GPU 与 CUDA block 的输入、输出、同步和不可表达操作，禁止直接抹成 compute。
-
-<GpgStepFlowDiagram caption="算法为何这样写，取决于当时可用 gather、scatter 和同步。" stage={1} stages={["Recover：fragment passes → streams → CUDA blocks"]} />
-
-</Step>
-<Step title="第二步：建立原语与应用 oracle">
-
-为 reduction/scan/RNG/AES/Gaussian 写 CPU tests；为 fluid/volume/ultrasound/seismic/deformer 检查解析量和中间场。
-
-<GpgStepFlowDiagram caption="原语正确和应用结果正确需要两层独立证据。" stage={2} stages={["Recover：fragment passes → streams → CUDA blocks", "Verify：primitive tests + application invariants + intermediate fields"]} />
-
-</Step>
-<Step title="第三步：规模与端到端性能">
-
-扫描数据量、分支分布、tile、迭代、传输和精度，报告 kernel/whole-pipeline 时间与 CPU 交叉点。
-
-<GpgStepFlowDiagram caption="GPU 优势必须包含调度、传输和问题规模。" stage={3} stages={["Recover：fragment passes → streams → CUDA blocks", "Verify：primitive tests + application invariants + intermediate fields", "Validate：scaling、traffic、accuracy、end-to-end crossover"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 用一段现代 Compute Shader 卷积代表 20 个 GPGPU 原章。
-**原因 →** 忽略 fragment-pass 限制、流式抽象、并行原语和 CUDA 应用各自核心。
-**修法 →** 保留三代数据流，并逐章验证 fluid/volume、structures/reduction、AES/RNG/scan 等不同问题。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 用 `mix/step` 替换所有分支，认为必然更快。
-**原因 →** 分支相干性、执行架构和两边工作量未测；predication 可能执行全部路径。
-**修法 →** 构造不同分支分布，测 instruction/occupancy/time，并保持数值边界一致。
-</Callout>
-
-<Callout type="trap">
-**现象 →** GPU kernel 快于 CPU 就宣布加速。
-**原因 →** 忽略上传、下载、同步、预处理和小规模 launch 成本。
-**修法 →** 同时报 kernel 与端到端时间，扫描问题规模并给出性能交叉点和驻留数据条件。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：fragment-pass reduction 与 CUDA reduction 的不变量是什么？**
-
-<Answer>
-都以结合运算分层缩小元素数，工作近似 O(N)、跨度 O(log N)，每层输出成为下一层输入。不同的是写入/gather、同步和局部存储载体；浮点树顺序误差两者都要验收。
-</Answer>
-
-**问题 2：如何验证 Parallel Prefix Sum？**
-
-<Answer>
-对零长度、1、非幂二、跨 block、大值溢出和随机数组，与 CPU exclusive/inclusive scan 比较；检查总工作、block sums、uniform add 和容量，并用 scan 驱动 compaction 端到端测试。
-</Answer>
-
-**问题 3：设计覆盖 20 章的综合任务。**
-
-<Answer>
-读取超声/地震体数据，GPU deformer/流体更新场，volume render 输出；用 reduction 统计、scan compact、RNG 采样、Gaussian filter，AES 加密输出；保留 fragment-pass 教学对照与 CUDA/compute 现代路径，并记录数值、流量和时间。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 20 章记录 GPU 从图形管线计算工具箱、流式并行机器到 CUDA 通用处理器的演进。完整复现既要保留每代限制，也要验证 reduction/scan/RNG 等基础原语和 fluid/volume/AES/seismic 等应用，不能用“GPU 适合数据并行”一句话代替。
 
-<Glossary>
-<GlossaryItem term="流式计算模型">同一 kernel 作用于大量数据元素并组织并行流的模型。</GlossaryItem>
-<GlossaryItem term="Fragment-pass GPGPU">以纹理、fragment shader 和 ping-pong render target 表达计算的早期路径。</GlossaryItem>
-<GlossaryItem term="体绘制">对体数据沿视线采样 transfer function 并按透射率合成。</GlossaryItem>
-<GlossaryItem term="并行归约">按结合运算分层把元素集合缩小为部分或单一结果。</GlossaryItem>
-<GlossaryItem term="并行前缀和">为每个位置计算此前元素结合结果的基础并行原语。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="GPU Gems 1 Ch37-42, GPU Gems 2 Ch29-36, GPU Gems 3 Ch36-41" adaptedUrl="https://developer.nvidia.com/gpugems" />

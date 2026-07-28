@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const unwindCases = [
   { label: "进入节点1", fields: [["调用", "visit(1)"], ["动作", "先调用visit(2)"], ["输出", "暂不输出1"], ["栈帧", "保存返回到节点1的位置"]] },
   { label: "进入节点2/3", fields: [["调用", "visit(2) → visit(3)"], ["动作", "继续沿next前进"], ["输出", "仍为空"], ["栈帧", "1、2、3逐层压入"]] },
@@ -52,12 +50,4 @@ export function OutputContractMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">把“打印”抽象为值序列或回调，才能测试顺序并与终端I/O解耦。</figcaption>
     </figure>
   );
-}
-
-export function StackUnwindLab() {
-  return <CodingInterviewLab cases={unwindCases} caption="切换递归阶段，观察输出为什么只在越过尾节点后发生。" />;
-}
-
-export function StrategyTradeoffMap() {
-  return <CodingInterviewLab cases={strategies} caption="比较递归、显式栈、反转恢复和重复扫描的时间、空间与副作用。" />;
 }

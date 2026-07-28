@@ -7,37 +7,23 @@ description: "按CLRS第四版第16章重建聚合分析、核算法、势能法
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: true
+draft: false
 ---
 
-import { CLRS4AggregateStackLab, CLRS4BinaryCounterLab, CLRS4AccountingCoinsLab, CLRS4AccountingInvariantLab, CLRS4PotentialCounterLab, CLRS4PotentialTelescopeLab, CLRS4DynamicTableLoadLab, CLRS4DynamicResizeLab, CLRS4MethodCompareLab, CLRS4AmortizedCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/16-amortized-analysis";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释摊还成本为何是任意操作序列的worst-case guarantee而不是随机输入的期望
-- 能计算栈MULTIPOP、二进制计数器和动态表在一段操作序列上的总实际成本
-- 能实现聚合求和、信用记账与势能函数三种等价的摊还证明
-- 能分析credit不变量、potential边界和扩缩容阈值是否足以覆盖昂贵操作
-- 能设计含cost model、sequence quantifier、invariant与telescoping bound的摊还证书
-
-</Objectives>
 
 ## 从“一次昂贵扩容是否意味着每次都很慢”开始
 
 先预测：动态数组第9次插入可能复制8个旧元素再写入新元素，实际成本为9。能否据此断言每次INSERT都要$O(n)$？不能。前8次插入中只有容量边界触发复制；昂贵操作之间积累了足够多便宜操作。
 
-<Term def="对任意操作序列的总实际成本建立上界，再把该上界分配给各次操作；不依赖输入概率或随机假设。">摊还分析</Term>研究sequence cost。它允许某次operation很贵，但要求所有长度$n$的合法序列总成本都受控。若总成本$T(n)=O(n)$，则每次amortized cost为$O(1)$，这不是说每次actual cost都为常数。
+研究sequence cost。它允许某次operation很贵，但要求所有长度$n$的合法序列总成本都受控。若总成本$T(n)=O(n)$，则每次amortized cost为$O(1)$，这不是说每次actual cost都为常数。
 
-<CLRS4MethodCompareLab />
 
 ## 16.1 Aggregate analysis
 
 ### Stack operations
 
-<Term def="直接界定长度n操作序列的总成本T(n)，再用T(n)/n得到每次操作统一摊还成本的方法。">聚合分析</Term>不区分各操作收费。考虑`PUSH`、`POP`和`MULTIPOP(k)`：单次`MULTIPOP`最坏可弹出$n$项，但每个item在被PUSH后最多POP一次。
+不区分各操作收费。考虑`PUSH`、`POP`和`MULTIPOP(k)`：单次`MULTIPOP`最坏可弹出$n$项，但每个item在被PUSH后最多POP一次。
 
-<CLRS4AggregateStackLab />
 
 若序列包含$n$次操作，PUSH数至多$n$，所有POP和MULTIPOP实际弹出的item总数也至多PUSH数。因此：
 
@@ -53,7 +39,6 @@ $$
 
 二进制计数器`INCREMENT`把尾部连续1翻成0，再把首个0翻成1。值$2^j-1$之后的一次操作会翻$j+1$位，单次成本并非常数。
 
-<CLRS4BinaryCounterLab />
 
 观察每一bit：最低位每次翻，bit $j$每$2^j$次increment至多翻一次。$n$次操作总flip数满足：
 
@@ -85,11 +70,10 @@ int increment(vector<int>& bits) {
 
 ### Prepaying future work
 
-<Term def="给不同操作指定可能高于或低于实际成本的摊还收费，把结余credit存到对象上并保证任意前缀余额非负的方法。">核算法</Term>像记账：amortized charge减actual cost形成credit。便宜操作预付，未来昂贵操作消费这些余额。
+像记账：amortized charge减actual cost形成credit。便宜操作预付，未来昂贵操作消费这些余额。
 
 对stack可向每次PUSH收2：1支付实际push，1枚coin留在该item上。POP收费0并拿走item上的coin支付实际pop。因为item不存在就不能pop，任何sequence prefix都不会欠债。
 
-<CLRS4AccountingCoinsLab />
 
 对前$i$次操作，令$\hat c_j$为摊还收费、$c_j$为实际成本、$b_i$为余额：
 
@@ -99,7 +83,6 @@ $$
 
 于是$\sum c_j\le\sum\hat c_j$。非负条件必须对每个prefix成立，而不是仅检查最终余额；否则证明可能在中途借用尚未发生操作的钱，无法上界提前停止的序列。
 
-<CLRS4AccountingInvariantLab />
 
 核算法不要求所有operation采用相同charge。可以让push收费2、pop收费0；关键是明确credit属于哪个object或state，并证明其创建、转移和消费均保持不变量。信用不能被同一未来工作重复使用。
 
@@ -121,15 +104,12 @@ struct AccountedStack {
 };
 ```
 
-<Callout type="trap" title="最后余额非负就够了">
-只检查完整测试序列可能隐藏中途负债，而算法可在任意前缀停止。修法是证明每个合法prefix的累计credit非负，通常把coin绑定到仍存在的item、置1的bit或未占满的table slot。
-</Callout>
 
 ## 16.3 The potential method
 
 ### State-level stored work
 
-<Term def="用非负函数Phi把整个数据结构状态映射为储存能量，并以实际成本加势能变化定义每次摊还成本的方法。">势能法</Term>是全局化accounting。对第$i$次操作前后状态$D_{i-1},D_i$，定义：
+是全局化accounting。对第$i$次操作前后状态$D_{i-1},D_i$，定义：
 
 $$
 \hat c_i=c_i+\Phi(D_i)-\Phi(D_{i-1}).
@@ -145,7 +125,6 @@ $$
 
 若$\Phi(D_n)\ge\Phi(D_0)$，则总摊还成本上界总实际成本。常令$\Phi(D_0)=0$且所有reachable state势能非负，便自动覆盖任意prefix。
 
-<CLRS4PotentialTelescopeLab />
 
 ### Binary counter potential
 
@@ -155,7 +134,6 @@ $$
 \hat c_i=(t+1)+(1-t)=2.
 $$
 
-<CLRS4PotentialCounterLab />
 
 carry越长，actual cost越高，但清除的1越多，释放势能恰好抵消。选择potential不是猜一个“看起来像能量”的量，而是识别昂贵操作消耗了哪些此前逐步积累的结构。
 
@@ -165,7 +143,7 @@ Potential可以整体加常数而不改变$\Delta\Phi$，但边界条件仍要�
 
 ### Expansion by doubling
 
-<Term def="容量随元素数变化的连续数组；满时倍增并复制元素，删除后仅在足够低装载率时缩容以维持常数摊还更新成本。">动态表</Term>支持table insert和delete。容量`size`、元素数`num`，load factor为$\alpha=num/size$。
+支持table insert和delete。容量`size`、元素数`num`，load factor为$\alpha=num/size$。
 
 只考虑插入：未满时写一个slot成本1；满时申请两倍空间，复制`num`项，再插入。扩容复制规模依次为$1,2,4,\ldots$，到$n$次insert前总复制量小于$n$：
 
@@ -176,7 +154,6 @@ n+\sum_{j=0}^{\lfloor\lg n\rfloor}2^j
 \lt 3n.
 $$
 
-<CLRS4DynamicTableLoadLab />
 
 ```cpp
 void table_insert(Table& t, Value value) {
@@ -197,7 +174,6 @@ void table_insert(Table& t, Value value) {
 
 若delete后load一到$1/2$就容量减半，边界附近一次insert扩容、一次delete缩容可反复复制$\Theta(n)$项，摊还界失效。CLRS使用hysteresis：满载时扩为两倍，仅在load降至$1/4$时缩为一半；缩容后load回到$1/2$，与下一次扩容之间隔着许多insert。
 
-<CLRS4DynamicResizeLab />
 
 同时处理扩缩容时可用分段potential：
 
@@ -211,29 +187,6 @@ $$
 
 它在$\alpha=1/2$处为0，在接近满载或四分之一缩容边界时积累credit。每次普通insert/delete的actual cost与potential change均为常数，resize释放的potential支付copy，因此任意$m$次操作总成本为$O(m)$。
 
-<Callout type="trap" title="把最坏单次成本除以操作数">
-摊还分析不是把一次resize的Theta(n)随意除以n。必须证明任意序列中resize之间有足够多操作，并用aggregate sum、credit invariant或potential telescope把每份复制成本只支付一次。
-</Callout>
-
-<CLRS4AmortizedCertificateLab />
-
-<Stepper>
-<Step title="固定实际成本模型">
-明确一次bit flip、一次stack item push/pop、一次slot write和一次resize copy各计多少，覆盖隐藏内存搬运。
-
-<CLRS4AggregateStackLab />
-</Step>
-<Step title="选择证明视角">
-直接求sequence total，给operation或object分配credit，或构造对昂贵状态变化敏感的potential。
-
-<CLRS4MethodCompareLab />
-</Step>
-<Step title="证明所有前缀">
-量化任意合法sequence，验证credit或potential边界并望远镜求和，最后给出total与per-operation bound。
-
-<CLRS4AmortizedCertificateLab />
-</Step>
-</Stepper>
 
 ## 小结
 
@@ -241,40 +194,4 @@ Chapter 16 Amortized Analysis用aggregate analysis直接界定栈与binary count
 
 摊还界是对任意操作序列的确定性上界，不是average-case概率。合格证明必须写清actual cost model、操作序列量词、credit或potential不变量、昂贵事件间隔与最终求和；单个示例trace只能辅助理解，不能替代全序列证明。
 
-<Exercises>
 
-**问题 1**：一次MULTIPOP可能花费Theta(n)，为何stack操作仍是常数摊还？
-
-<Answer>
-每个item只能由一次PUSH进入stack，随后最多被POP一次。把整段序列的实际push和实际pop按item计数，总成本至多两倍PUSH数，也就至多$2n$；昂贵MULTIPOP只是集中执行此前尚未发生的pop。
-</Answer>
-
-**问题 2**：核算法为什么要求任意前缀credit非负？
-
-<Answer>
-算法可能在任意前缀结束，摊还收费必须在该时刻已经覆盖实际成本。若中途余额为负，证明借用了未来未必出现的operation收费，无法推出当前actual total不超过amortized total。
-</Answer>
-
-**问题 3**：二进制计数器势能取1-bit个数时，一次长carry的摊还成本是多少？
-
-<Answer>
-若有$t$个trailing ones，实际成本$t+1$；这些1清零并新增一个1，势能变化$1-t$。两者相加为2，所以无论carry长度，每次increment的摊还成本都为2。
-</Answer>
-
-**问题 4**：动态表为何在四分之一满时缩容，而不是二分之一满时立即缩容？
-
-<Answer>
-二分之一边界缩容后table立刻接近再次扩容边界，交替insert/delete可反复复制大量元素。四分之一时缩半后load回到二分之一，距离满载还有线性数量的insert，足以积累支付下一次resize的credit。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="摊还分析">对任意操作序列的总实际成本建立上界，再把该上界分配给各次操作；不依赖输入概率或随机假设。</GlossaryItem>
-<GlossaryItem term="聚合分析">直接界定长度n操作序列的总成本T(n)，再用T(n)/n得到每次操作统一摊还成本的方法。</GlossaryItem>
-<GlossaryItem term="核算法">给不同操作指定可能高于或低于实际成本的摊还收费，把结余credit存到对象上并保证任意前缀余额非负的方法。</GlossaryItem>
-<GlossaryItem term="势能法">用非负函数Phi把整个数据结构状态映射为储存能量，并以实际成本加势能变化定义每次摊还成本的方法。</GlossaryItem>
-<GlossaryItem term="动态表">容量随元素数变化的连续数组；满时倍增并复制元素，删除后仅在足够低装载率时缩容以维持常数摊还更新成本。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 16 · Amortized Analysis" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

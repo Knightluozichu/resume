@@ -10,7 +10,17 @@ sourceUrl: https://learnopengl.com/Advanced-Lighting/Bloom
 draft: false
 ---
 
-import { BloomCompositionContractDiagram } from "@/components/mdx/learnopengl/diagrams/bloom";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { BloomPipelineDiagram } from "@/components/mdx/diagrams/bloom-pipeline-diagram";
+import { ShaderDemo } from "@/components/mdx/shader-demo";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { CompareSlider } from "@/components/mdx/compare-slider";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-87，高级光照篇第 8 篇）：原书「泛光 Bloom」。重心是代码对照(spec C 列 §6 重，覆盖 MRT 两张图 + 可分离高斯 + 乒乓 + 合成)。承接 HDR（泛光只对 >1 的高亮区生效·亮度阈值提取就是从 HDR 颜色里挑 >阈值的）+ framebuffers（多遍帧缓冲·泛光是典型多遍渲染）。沿用「相机与摄影 / 光与材质（夜里看路灯柔光、镜头对强光的眩光）」类比。math:false（高斯权重、可分离原理 §3 行内点到，§4 整节省略）。主 viz = ShaderDemo（frag 内程序化构造暗背景 + 几个超亮光点的 HDR 场景，单遍解析地叠加高斯光晕近似辉光：uBloom 开关 / uThreshold 亮度阈值 / uIntensity 泛光强度，caption 诚实说明这是单遍近似、真多遍乒乓高斯见代码对照）；辅 viz = CompareSlider（左 关泛光硬光点 / 右 开泛光柔和辉光，用静态 BloomPipelineDiagram step 截图态，不塞两个 WebGL 画布）；流程图 BloomPipelineDiagram（§5 Stepper 四步：MRT→横→纵→合成）+ SeparableGaussianDiagram（N²→2N）。draft:true，老板验收后才发布(硬规则 7)。诚实化（HEL-82 教训）：只演示确信能渲的——开关辉光有无、阈值/强度调辉光强弱，不声称「泛光多遍渲染正常」（单 frag 做不了真乒乓）。 */}
 
@@ -46,7 +56,6 @@ import { BloomCompositionContractDiagram } from "@/components/mdx/learnopengl/di
 
 整条流水线分四步，下面这个分步图每步都配了张缩略图示意数据长什么样，先扫一眼建立全局印象，后面 Demo 里我们再走一遍：
 
-<BloomCompositionContractDiagram />
 
 ## 第一步：只把「够亮」的挑出来当泛光源
 
@@ -62,7 +71,6 @@ import { BloomCompositionContractDiagram } from "@/components/mdx/learnopengl/di
 
 但如果直接拿一个 `N×N` 的二维核糊，一个像素要采它周围整片 `N²` 个邻居，采样次数随核变大**平方级暴涨**。这里有个关键技巧——<Term def="把一个二维高斯核拆成『先做一遍水平方向的一维核、再做一遍垂直方向的一维核』两步来算。因为高斯函数数学上可以分离，这样做出来的模糊结果和直接用二维核完全等价，但每像素采样次数从 N×N（N²）降到 N+N（2N），N 越大省得越多。泛光的模糊就靠它来压低开销。">可分离高斯</Term>：二维高斯核在数学上可以拆成「先横一遍 `1×N`、再纵一遍 `N×1`」两步，**结果完全等价**，但每像素采样次数从 `N²` 降到 `2N`：
 
-<SeparableGaussianDiagram />
 
 而且一遍横纵往往糊得不够柔，得来回多糊几遍。这就用上 <Term def="ping-pong framebuffer，乒乓帧缓冲。准备两个内容一样的帧缓冲（FBO），让它们交替充当『输入』和『输出』：第一遍从 A 读、写进 B（横向模糊），第二遍从 B 读、写回 A（纵向模糊），如此来回（像打乒乓）反复若干次。这样只用两个 FBO 就能把横、纵模糊交替做很多遍，把亮区越糊越柔，又不必为每一遍都新建一个帧缓冲。">乒乓帧缓冲</Term>（ping-pong）：准备两个帧缓冲交替当输入/输出，第一遍从 A 读、写进 B（横向），第二遍从 B 读、写回 A（纵向），像打乒乓一样来回若干次，只用两个 FBO 就能把横、纵模糊反复做很多遍，越糊越柔：
 

@@ -7,29 +7,20 @@ description: "统一线程、消息、锁、条件变量、原子、线程池、
 demo: true
 math: false
 sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RswConcurrencyModelLab, RswSynchronizationLab, RswParallelEcosystemLab } from "@/components/mdx/rust-way/diagrams/rsw-concurrency";
-
-<Objectives>
-- 能区分进程、线程、事件、异步与协程，并解释Send、Sync和owner如何排除数据竞争
-- 能实现锁、条件变量、屏障、原子与通道同步，并验证死锁、关闭、背压和内存顺序
-- 能比较线程池、Rayon、Crossbeam、Future、async/await与SIMD，选择CPU或I/O并发模型
-</Objectives>
 
 ## 从并发不等于并行开始
 
-并发描述多个任务在时间上交叠推进，并行描述多个计算同时执行；异步主要把等待转成可挂起状态，SIMD则让一条指令处理多lane数据。<Term def="根据任务是CPU计算、阻塞I/O、可挂起I/O还是数据向量化，选择执行与调度方式。">concurrency execution model</Term>决定使用线程、线程池、Future或SIMD，而不是由“更现代”决定。
+并发描述多个任务在时间上交叠推进，并行描述多个计算同时执行；异步主要把等待转成可挂起状态，SIMD则让一条指令处理多lane数据。决定使用线程、线程池、Future或SIMD，而不是由“更现代”决定。
 
 先预测：在单线程async runtime里调用阻塞读取，会阻塞同一worker上的其他Future；async语法本身不会让阻塞API变成非阻塞。
 
-<RswConcurrencyModelLab />
 
 ## 线程管理与所有权移动
 
-`thread::spawn`闭包通常要求`'static`并可Send，因为线程可能比调用scope活得久；`move`把owner移入线程。Scoped thread允许在线程完成受scope约束时借用局部值。<Term def="规定任务启动、借用或移动数据、完成、取消和join责任的线程生命周期协议。">thread lifecycle contract</Term>必须包含panic和提前退出处理。
+`thread::spawn`闭包通常要求`'static`并可Send，因为线程可能比调用scope活得久；`move`把owner移入线程。Scoped thread允许在线程完成受scope约束时借用局部值。必须包含panic和提前退出处理。
 
 ```rust
 use std::thread;
@@ -41,11 +32,11 @@ assert_eq!(handle.join().expect("worker panicked"), 10);
 
 ## Send、Sync与内部可变性
 
-Send表示值可安全move到另一线程，Sync表示共享引用可安全跨线程；`T: Sync`与`&T: Send`相关。Arc提供跨线程共享owner，不提供内部修改；Mutex、RwLock或atomic承担同步。<Term def="由类型及其所有字段证明跨线程移动或共享不会破坏别名和数据竞争规则。">Send Sync proof</Term>对裸指针包装的unsafe impl必须逐项审计。
+Send表示值可安全move到另一线程，Sync表示共享引用可安全跨线程；`T: Sync`与`&T: Send`相关。Arc提供跨线程共享owner，不提供内部修改；Mutex、RwLock或atomic承担同步。对裸指针包装的unsafe impl必须逐项审计。
 
 ## 锁、条件变量与屏障
 
-Mutex guard把锁寿命绑定到RAII；多锁需要全局顺序避免死锁。Condvar总与一个由锁保护的predicate配合，等待必须放在循环中应对虚假唤醒。Barrier适合固定参与者分阶段到齐。<Term def="共享状态由哪把锁保护、何时等待、谁通知以及醒来后重新检查什么的协议。">synchronization predicate contract</Term>比“加锁了”更完整。
+Mutex guard把锁寿命绑定到RAII；多锁需要全局顺序避免死锁。Condvar总与一个由锁保护的predicate配合，等待必须放在循环中应对虚假唤醒。Barrier适合固定参与者分阶段到齐。比“加锁了”更完整。
 
 ```rust
 use std::sync::{Arc, Condvar, Mutex};
@@ -60,13 +51,12 @@ assert!(*ready);
 
 ## 原子类型与内存顺序
 
-Atomic操作防止数据竞争，但Relaxed只保证该原子值不可撕裂，不自动发布其他内存。Acquire/Release建立同步关系，SeqCst再提供更强全局顺序。<Term def="说明哪些写入必须在何种原子关系后对哪些读取可见的证明。">atomic visibility proof</Term>应以状态机和happens-before推导，不能靠试运行。
+Atomic操作防止数据竞争，但Relaxed只保证该原子值不可撕裂，不自动发布其他内存。Acquire/Release建立同步关系，SeqCst再提供更强全局顺序。应以状态机和happens-before推导，不能靠试运行。
 
-<RswSynchronizationLab />
 
 ## 通道、关闭与背压
 
-Channel以消息传递减少共享修改。发送owned值转移owner，发送Arc共享；bounded channel可施加背压，unbounded channel可能在consumer变慢时耗尽内存。<Term def="定义容量、阻塞或丢弃策略、sender耗尽后的关闭语义和接收者退出方式的消息协议。">channel shutdown contract</Term>必须覆盖发送失败和所有sender被drop。
+Channel以消息传递减少共享修改。发送owned值转移owner，发送Arc共享；bounded channel可施加背压，unbounded channel可能在consumer变慢时耗尽内存。必须覆盖发送失败和所有sender被drop。
 
 ```rust
 use std::sync::mpsc::sync_channel;
@@ -80,58 +70,22 @@ assert_eq!(rx.recv()?, "job");
 
 ## 线程池、Rayon与Crossbeam
 
-线程池复用worker并限制并发度；Rayon用work stealing把iterator和join转成数据并行；Crossbeam提供scoped thread、channel和并发结构。<Term def="任务提交、窃取、排队、公平性、panic和shutdown组成的worker复用协议。">thread pool lifecycle</Term>需要有界队列或负载控制，不能无限接受工作。
+线程池复用worker并限制并发度；Rayon用work stealing把iterator和join转成数据并行；Crossbeam提供scoped thread、channel和并发结构。需要有界队列或负载控制，不能无限接受工作。
 
 ## Future、生成器与async/await
 
-`async fn`返回惰性Future；executor调用poll，Pending时Future登记Waker，事件就绪后重新入队。`.await`是可能挂起点，持锁跨await会扩大临界区甚至死锁。<Term def="poll返回Ready或Pending，并通过Waker请求再次poll的协作式进度协议。">Future polling contract</Term>要求poll快速、不可阻塞，取消时Drop必须保持资源一致。
+`async fn`返回惰性Future；executor调用poll，Pending时Future登记Waker，事件就绪后重新入队。`.await`是可能挂起点，持锁跨await会扩大临界区甚至死锁。要求poll快速、不可阻塞，取消时Drop必须保持资源一致。
 
 ## SIMD：数据并行不是线程并行
 
 SIMD把同一操作施加到多lane数据，适合规则数组计算；要处理alignment、尾部、target feature、浮点重排和scalar fallback。它可与线程并行叠加，但先测量内存带宽和向量化收益。
 
-<RswParallelEcosystemLab />
-
-<Stepper>
-  <Step title="选择执行模型"><RswConcurrencyModelLab /></Step>
-  <Step title="证明同步关系"><RswSynchronizationLab /></Step>
-  <Step title="验证生态工具">分别用线程池、Rayon和Future实现小任务，记录worker数、等待、取消、panic与shutdown。</Step>
-</Stepper>
-
-<Callout type="trap" title="Arc让内部值自动线程安全">
-Arc只使引用计数线程安全。若内部值不Sync，Arc也不能安全共享；修改仍需锁、原子、消息或不可变数据设计。
-</Callout>
-
-<Callout type="trap" title="async任务比线程更适合所有工作">
-Async擅长大量可挂起I/O；CPU密集计算会占住executor worker，应放入受控blocking pool、Rayon或专用线程。选择依据是等待模型。
-</Callout>
 
 ## 本章回顾
 
 本章覆盖安全并发中的进程、线程、事件、异步与协程，线程管理与Send、Sync，锁、屏障、条件变量与原子类型，通道与内部可变性，线程池、Rayon与Crossbeam，生成器、Future与async/await，以及SIMD。安全证明还要补活性、背压、取消与关闭。
 
-<Exercises>
-**问题 1：为什么Condvar等待要用while检查predicate？**
-<Answer>等待可能虚假唤醒，其他线程也可能先消费条件；醒来只表示应重新检查，不保证predicate成立。必须在同一锁下循环检查。</Answer>
-
-**问题 2：Relaxed原子适合什么场景？**
-<Answer>只关心该原子值本身的原子性、无需借它发布其他内存时，例如独立统计计数。若flag用于发布数据，需推导Acquire/Release等同步关系。</Answer>
-
-**问题 3：Future被取消时怎样保证一致性？**
-<Answer>await之间的状态必须可安全Drop，临时资源由RAII owner持有，外部写入采用事务或可恢复协议；不能假定async函数最终一定执行到清理语句。</Answer>
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="concurrency execution model" definition="按计算、等待和向量化特征选择调度方式。" />
-  <GlossaryItem term="thread lifecycle contract" definition="线程启动、数据传递、完成、取消和join协议。" />
-  <GlossaryItem term="Send Sync proof" definition="类型跨线程移动或共享不破坏别名与竞争规则的证明。" />
-  <GlossaryItem term="synchronization predicate contract" definition="锁、条件、等待、通知与复查组成的同步协议。" />
-  <GlossaryItem term="atomic visibility proof" definition="通过原子顺序证明跨线程写入可见性的关系。" />
-  <GlossaryItem term="channel shutdown contract" definition="容量、背压、关闭、失败和退出组成的消息协议。" />
-  <GlossaryItem term="thread pool lifecycle" definition="任务队列、worker、panic和shutdown协议。" />
-  <GlossaryItem term="Future polling contract" definition="Ready、Pending、Waker与取消组成的协作进度协议。" />
-</Glossary>
 
-<Attribution adaptedFrom="《Rust编程之道》第11章 安全并发" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

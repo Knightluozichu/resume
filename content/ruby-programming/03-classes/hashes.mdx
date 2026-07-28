@@ -7,23 +7,13 @@ description: "系统掌握Hash创建、默认值、fetch/presence、keys/values�
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyHashCreationLab, RubyHashAccessLab, RubyHashMutationLab } from "@/components/mdx/ruby-programming/diagrams/hashes";
-
-<Objectives>
-
-- 能比较Hash literal、static default、default block与pair construction的missing和ownership语义
-- 能分析`[]`、fetch、key?/value?、keys/values和size提供的证据、复杂度与schema风险
-- 能实现删除、clear、merge conflict policy与可复现词频统计，并保持key稳定
-
-</Objectives>
 
 ## 从“Hash只是按名字取值”开始深化
 
-Hash通过key的`hash`与`eql?`定位value；key type、equality、mutation和missing default共同决定正确性。<Term def="Hash规定允许key类型、hash/eql?稳定性、missing语义、value shape与iteration order。">hash schema contract</Term>不能由一组随意Symbol/String键替代。
+Hash通过key的`hash`与`eql?`定位value；key type、equality、mutation和missing default共同决定正确性。不能由一组随意Symbol/String键替代。
 
 先预测：把mutable String作为key后原地修改，再用修改后的String lookup会怎样？Stored hash bucket可能基于旧hash，lookup失败；需要stable immutable key，或非常谨慎地`rehash`。Key应表达稳定identity。
 
@@ -31,7 +21,7 @@ Hash通过key的`hash`与`eql?`定位value；key type、equality、mutation和mi
 
 Hash保存key-value pairs，key唯一，赋同key替换value。现代Ruby保留insertion order；本书Ruby 2.3也有相应行为，但业务排序仍应显式。Assignment复制Hash reference，dup只复制outer Hash，keys/values对象继续共享。
 
-Symbol与String是不同keys。JSON通常产生String keys，Ruby options常用Symbols；在parser boundary normalize一次并allowlist，深层代码不应到处同时尝试两种。<Term def="外部field names在一个边界转换为唯一内部key类型并拒绝未知字段。">key normalization boundary</Term>防止schema漂移。
+Symbol与String是不同keys。JSON通常产生String keys，Ruby options常用Symbols；在parser boundary normalize一次并allowlist，深层代码不应到处同时尝试两种。防止schema漂移。
 
 ## 散列的创建：`{}`与Hash.new
 
@@ -50,7 +40,7 @@ p record["name"] # nil: different key
 
 ### 散列的默认值
 
-Default value适合immutable 0等；每key mutable collection用block并写回：`Hash.new { |hash, key| hash[key] = [] }`。<Term def="Missing lookup返回什么、是否创建并写回、创建对象是否按key独立的约定。">hash default contract</Term>必须测试。
+Default value适合immutable 0等；每key mutable collection用block并写回：`Hash.new { |hash, key| hash[key] = [] }`。必须测试。
 
 ```ruby
 groups = Hash.new { |hash, key| hash[key] = [] }
@@ -63,21 +53,10 @@ p groups
 
 Default block不应执行昂贵/有副作用的隐式I/O；普通read会触发。Cache loading用明确method并考虑concurrency，Hash default block不提供atomic check-create。
 
-<RubyHashCreationLab />
-
-<Stepper>
-  <Step title="切换四种创建方式"><RubyHashCreationLab /></Step>
-  <Step title="画Missing读取">记录返回object identity、Hash size变化、key是否写入和下一次lookup结果。</Step>
-  <Step title="让Static default可变"><RubyHashCreationLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="Hash.new([])会为每个缺失key自动保存独立Array">
-它返回同一个default object，且普通lookup不写key。Grouping使用default block并`hash[key] = []`，测试不同keys的value不equal?。
-</Callout>
 
 ## 值的获取与设定
 
-`hash[key]`按default policy宽松读取，`fetch(key)`对missing抛KeyError，或接收显式default/block。<Term def="Optional field用[]，required field用fetch，把missing错误固定在schema边界。">hash access evidence</Term>避免远处nil error。
+`hash[key]`按default policy宽松读取，`fetch(key)`对missing抛KeyError，或接收显式default/block。避免远处nil error。
 
 ```ruby
 config = { retries: 0, enabled: false }
@@ -97,19 +76,12 @@ p retries: retries, enabled: enabled, timeout: timeout
 
 ### 键或值的存在检查：查看指定对象是否为散列的键或值
 
-`key?`/`has_key?`按key semantics判断presence，平均lookup快速；`value?`/`has_value?`通常线性扫描。<Term def="Key presence、stored nil/false与value existence是三种不同查询。">hash presence contract</Term>要求根据问题选API。
+`key?`/`has_key?`按key semantics判断presence，平均lookup快速；`value?`/`has_value?`通常线性扫描。要求根据问题选API。
 
-<RubyHashAccessLab />
-
-<Stepper>
-  <Step title="切换[]、fetch、presence和keys/values"><RubyHashAccessLab /></Step>
-  <Step title="生成Presence矩阵">覆盖missing、stored nil、stored false、default value/block、String/Symbol key。</Step>
-  <Step title="把Required字段改fetch"><RubyHashAccessLab /></Step>
-</Stepper>
 
 ## 查看散列的大小
 
-`size`/`length`返回stored pairs数量，不含仅被读取但未写回的static default；`empty?`判断无entries。<Term def="Hash size只统计真实stored keys，不代表所有required schema fields存在或values有效。">hash cardinality contract</Term>防止把`size == 3`当schema validation。
+`size`/`length`返回stored pairs数量，不含仅被读取但未写回的static default；`empty?`判断无entries。防止把`size == 3`当schema validation。
 
 Validate record应逐required key fetch并拒绝unknown keys，再验证values。Counting cache size还不等于memory size；keys/values retained graph、default proc capture和overhead需profile。
 
@@ -129,11 +101,11 @@ p same.empty?       # true
 p same.default      # 0
 ```
 
-<Term def="Delete/clear是否修改同一Hash、返回什么、保留default并影响哪些aliases。">hash reset contract</Term>在cache/config reload中尤其重要。
+在cache/config reload中尤其重要。
 
 ## 合并两个散列
 
-`merge`返回new Hash，`merge!`修改receiver；默认冲突由other/new value胜出，block可接`key, old, new`决定。<Term def="多来源Hash冲突时的优先级、组合、nil/false语义与provenance。">hash merge conflict contract</Term>不能只写“后者覆盖”。
+`merge`返回new Hash，`merge!`修改receiver；默认冲突由other/new value胜出，block可接`key, old, new`决定。不能只写“后者覆盖”。
 
 ```ruby
 defaults = { timeout: 5, tags: ["base"] }
@@ -148,21 +120,10 @@ p combined
 
 Nested Hash merge不是自动deep merge；shallow merge会整体替换nested value。Configuration layer应使用schema-aware merger并保留每个field source，测试explicit nil/false、unknown key和Array merge policy。
 
-<RubyHashMutationLab />
-
-<Stepper>
-  <Step title="切换Delete、Clear、Merge和Count"><RubyHashMutationLab /></Step>
-  <Step title="画Alias与Provenance">标出receiver/new Hash、共享nested values、冲突来源、stored keys和default。</Step>
-  <Step title="注入nil/false冲突"><RubyHashMutationLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="merge会递归合并所有嵌套Hash">
-标准merge是shallow，冲突nested object整体按policy选择。需要deep merge时先定义每种value type的组合、array策略、nil/false和provenance，再实现并做property tests。
-</Callout>
 
 ## 应用示例：计算单词数量
 
-词频核心是`Hash.new(0)`加一，但正确性取决于decode、normalization、tokenization、case与punctuation。<Term def="词频统计先固定encoding、normalization与token grammar，再更新count并稳定排序。">word count pipeline</Term>使结果可复现。
+词频核心是`Hash.new(0)`加一，但正确性取决于decode、normalization、tokenization、case与punctuation。使结果可复现。
 
 ```ruby
 counts = Hash.new(0)
@@ -191,34 +152,7 @@ Large vocabulary消耗memory，可stream partition、external sort或approximate
 4. Delete/clear/merge的mutation、alias、default和conflict policy要明确，nested merge不是自动的。
 5. 词频Hash只是pipeline一环，encoding/tokenization/normalization/tie-break决定可复现结果。
 
-<Exercises>
-
-**问题 1：怎样安全使用mutable object作为Hash key？**
-
-<Answer>最好不用：提取immutable identity/String dup+freeze/value object。若不可避免，key参与hash/eql?的state不可在stored期间改变；修改后rehash也会影响并发/aliases。测试lookup、mutation与duplicate equality。</Answer>
-
-**问题 2：如何区分missing、stored nil和stored false？**
-
-<Answer>用key?判断presence，再读取value；required字段直接fetch。Default value/proc不会改变key?，除非default proc显式写回。建立三态测试，不用truthiness代替presence。</Answer>
-
-**问题 3：一个可复现词频工具需要哪些固定规则？**
-
-<Answer>固定input encoding/error policy、Unicode normalization、case folding、token pattern、max token/unique数量、排序方向与tie-breaker。测试多文件顺序、同频词、非法编码、标点和超长输入。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="hash schema contract" definition="Key类型/equality、missing、value shape与order约定。" />
-  <GlossaryItem term="key normalization boundary" definition="外部field names一次转换为内部key schema的边界。" />
-  <GlossaryItem term="hash default contract" definition="Missing返回、写回与per-key object ownership规则。" />
-  <GlossaryItem term="hash access evidence" definition="Optional []与required fetch提供的不同证据。" />
-  <GlossaryItem term="hash presence contract" definition="区分key存在、nil/false value与value search。" />
-  <GlossaryItem term="hash cardinality contract" definition="Size只统计stored pairs而非schema validity。" />
-  <GlossaryItem term="hash reset contract" definition="Delete/clear的mutation、返回、default与alias规则。" />
-  <GlossaryItem term="hash merge conflict contract" definition="Merge冲突优先级、组合和provenance约定。" />
-  <GlossaryItem term="word count pipeline" definition="编码、normalization、token、count与稳定排序流程。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第15章 散列类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

@@ -7,29 +7,16 @@ description: "从动态子串字典出发，推导 LZ77/LZSS、gzip、LZ78 与 L
 demo: true
 math: true
 sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
-draft: true
+draft: false
 ---
 
-import { PaeDictionaryCompressionPipelineDiagram, PaeLz77WindowLab, PaeLz77OverlapCopyDiagram, PaeGzipMatchSearchLab, PaeLz78TrieGrowthLab, PaeLzwDictionarySyncLab, PaeCompressorOptimalityMap } from "@/components/mdx/advanced-algorithm-engineering/diagrams/dictionary-based-compressors";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释动态字典压缩与统计编码的职责差异
-- 能计算 LZ77/LZSS phrase 并实现重叠复制
-- 能分析 gzip 匹配搜索的速度与码长取舍
-- 能实现 LZ78 与 LZW 的字典同步
-- 能设计压缩器最优性的经验熵评测
-
-</Objectives>
 
 ## 从“重复子串为何还要逐字符付费”开始
 
-dictionary-based compressors（<Term def="把已经出现或动态收集的重复子串替换为字典 token，再编码 token 中的整数与字面量。">基于字典的压缩器</Term>）采取与上一章不同的入口。统计编码先估计 symbol probability；字典方法先发现 substring repetition，把一整段重复内容替换成 position、phrase id 或其他 token。
+dictionary-based compressors（）采取与上一章不同的入口。统计编码先估计 symbol probability；字典方法先发现 substring repetition，把一整段重复内容替换成 position、phrase id 或其他 token。
 
 先预测字符串 `abcabcabcabc`。0阶模型只知道 a、b、c 各占三分之一，无法表达“每三个字符必然重复”；一个字典 phrase `abc` 却可直接复用三次。字典并非替代 bit coder：LZ parser 产生 distance、length、id、literal 后，仍要用整数编码、Huffman 或 Arithmetic Coding 把这些字段写成 bits。
 
-<PaeDictionaryCompressionPipelineDiagram />
 
 静态字典适合已知领域，却要预共享或随文件发送；英语词典对意大利语、可执行文件或像素流未必有效。Lempel 与 Ziv 的关键做法是让输入自身成为动态 dictionary：双方从空状态或单字符表开始，按已解码前缀同步扩展，不必传整本词典。
 
@@ -47,15 +34,14 @@ $$
 
 ## LZ77：滑动窗口中的最长旧子串
 
-LZ77（<Term def="在已处理滑动窗口中寻找 look-ahead 最长前缀，用 distance、length 和后继字符描述 phrase 的动态字典算法。">LZ77</Term>）维护已处理窗口 W 与待处理 buffer B。解析器找 B 的最长前缀 α，使它从当前位置向前 distance d 处出现；经典格式输出三元组 ⟨d,|α|,c⟩，其中 c 是 match 后的下一字符。无匹配时输出 ⟨0,0,B[1]⟩。
+LZ77（）维护已处理窗口 W 与待处理 buffer B。解析器找 B 的最长前缀 α，使它从当前位置向前 distance d 处出现；经典格式输出三元组 ⟨d,|α|,c⟩，其中 c 是 match 后的下一字符。无匹配时输出 ⟨0,0,B[1]⟩。
 
 “在 W 中搜索”是便于理解的简称。原章允许 previous occurrence 从 W 开始并延伸进 B，因此 match 可以与当前输出重叠。dictionary 是窗口起点向右延伸的所有可复制子串，并不需要显式枚举。
 
 ### LZSS：literal 与 copy 二选一
 
-LZSS（<Term def="LZ77 的二元输出变体：无匹配时输出 literal，有匹配时只输出 distance-length，省去冗余零和后继字符。">LZSS</Term>）修正经典三元组的两处浪费：有 match 时不再附加后继字符，无 match 时不再写两个0。它输出 literal ⟨0,c⟩，或 copy ⟨d,ℓ⟩。
+LZSS（）修正经典三元组的两处浪费：有 match 时不再附加后继字符，无 match 时不再写两个0。它输出 literal ⟨0,c⟩，或 copy ⟨d,ℓ⟩。
 
-<PaeLz77WindowLab />
 
 对 `aabbabab`，一种 LZSS greedy parse 是 `a | a | b | b | ab | ab`，对应 literal a、copy ⟨1,1⟩、literal b、copy ⟨1,1⟩、copy ⟨3,2⟩、copy ⟨2,2⟩。实际格式通常用独立 flag、混合 Huffman alphabet 或保留值域区分 literal 与 length。
 
@@ -82,19 +68,14 @@ for i = 0 .. length - 1:
 position = position + length
 ```
 
-<PaeLz77OverlapCopyDiagram />
 
 前两次写出的字符会立即成为后四次的 source，因此 seed `ab` 可扩展为 `abababab`。这也是 run 与周期串压得很好的原因。解码器必须先验证 distance 非零、distance 不超过已有 output、length 不使输出越界，并限制 declared original size，防止损坏流造成越界或解压炸弹。
 
-<Callout type="trap" title="用不保证重叠语义的内存复制">
-当 length 大于 distance，source 与 destination 重叠且新字节会被再次读取。固定快照或错误方向的复制会得到不同内容；应使用明确的逐前向复制、等价循环展开或专门 match-copy primitive。
-</Callout>
 
 ## gzip：3-gram 哈希链与双 Huffman 字母表
 
 brute-force 枚举窗口中每个起点并比较 look-ahead，成本太高。gzip 的核心索引把窗口内每个 3-gram 映射到 occurrence positions。当前 buffer 的首个3字符查到候选链后，只对这些位置计算 LCP，选择足够好的 match。
 
-<PaeGzipMatchSearchLab />
 
 候选按最近到最远排列有两个好处：近 match 的 distance code 往往更短，cache locality 也更好。压缩等级可以扩大 window、检查更多 hash-chain entries 或进行更深 lazy matching；这提升找到长 match 的概率，却增加 CPU。
 
@@ -114,15 +95,11 @@ $$
 
 解析应比较“本 token + 后续最优 suffix”的总成本。greedy longest match 只看当前 ℓ；lazy matching 至少比较“现在发 match”与“先发一个 literal、下一位置可能发更好 match”。更完整的 optimal parsing 可在位置图上做 shortest path，但计算更贵。
 
-<Callout type="trap" title="把 gzip 压缩等级理解成解码兼容级别">
-等级主要改变窗口、候选预算和解析搜索；输出仍是同一格式，decoder 不需要知道 encoder 等级。更高等级通常只让压缩变慢，解码甚至可能因 phrase 更少而略快。
-</Callout>
 
 ## LZ78：显式的 prefix-complete phrase dictionary
 
-LZ78（<Term def="寻找当前输入在显式 phrase 字典中的最长前缀，输出其 id 与下一字符，并把拼接结果加入字典。">LZ78</Term>）不再用固定窗口隐式表示全部子串。字典 D 初始含 id 0 对应空串；在未解析 suffix S' 上找最长 dictionary phrase f，读取下一字符 c，输出 ⟨id(f),c⟩，并把 fc 作为新 phrase 加入 D。
+LZ78（）不再用固定窗口隐式表示全部子串。字典 D 初始含 id 0 对应空串；在未解析 suffix S' 上找最长 dictionary phrase f，读取下一字符 c，输出 ⟨id(f),c⟩，并把 fc 作为新 phrase 加入 D。
 
-<PaeLz78TrieGrowthLab />
 
 每个新 phrase 只比已有 phrase 多一个字符，所以 D 必然 prefix-complete：若 phrase 在字典中，它的所有前缀也在。用 uncompacted Trie 时，每个 node 就是一个 phrase id，每条 edge 是一个字符；从 root 沿 S' 走到缺边，当前 node 给出 f，补一条 c edge 即完成查询和插入。
 
@@ -143,7 +120,7 @@ LZ77 的 window 限制重复距离，却容纳窗口内任意 substring；LZ78 �
 
 ## LZW：只输出 id，以及那个尚不存在的 code
 
-LZW（<Term def="以全部单字符初始化字典的 LZ78 变体，只输出最长 phrase id，并让下一 phrase 的首字符隐式完成字典更新。">LZW</Term>）由 Welch 在1984年提出。初始化 D 为全部单字符，字节流通常占 ids 0到255。encoder 找最长 phrase f，输出 id(f)，把 f+c 加入字典；下一次解析从 c 开始。由于 c 成为下一 phrase 的首字符，无需像 LZ78 那样随 id 显式发送字符。
+LZW（）由 Welch 在1984年提出。初始化 D 为全部单字符，字节流通常占 ids 0到255。encoder 找最长 phrase f，输出 id(f)，把 f+c 加入字典；下一次解析从 c 开始。由于 c 成为下一 phrase 的首字符，无需像 LZ78 那样随 id 显式发送字符。
 
 decoder 维护 previous phrase f'。读到下一 code 后得到 current phrase f''，输出 f''，并插入：
 
@@ -153,7 +130,6 @@ $$
 f'\,\Vert\,f''[1]
 $$
 
-<PaeLzwDictionarySyncLab />
 
 难点是 current code 偶尔恰好等于“下一条待插入 id”，所以字典里还查不到 f''。这发生于 encoder 刚插入 f'+f'[1]，随后立刻匹配它的情形。decoder 虽看似循环依赖，仍知道未知 f'' 的首字符必是 f'[1]，于是令 f''=f'+f'[1]，输出并插入即可。
 
@@ -177,7 +153,7 @@ LZW 必须定义 code width 从9位扩到10/11/12位的确切时刻、dictionary
 
 ## On the Optimality of Compressors：先说清楚“最优”的量词
 
-optimality of compressors（<Term def="相对于源熵或字符串经验熵，规定压缩率的加性或乘性冗余如何随输入长度消失的理论比较。">压缩器最优性</Term>）不能只说“输出小”。早期结果假设无限串来自 stationary ergodic source，LZ77/LZ78 的 ratio 渐近逼近源熵；现实中通常不知道生成源，因此原章转向可从单个字符串计算的 kth-order empirical entropy。
+optimality of compressors（）不能只说“输出小”。早期结果假设无限串来自 stationary ergodic source，LZ77/LZ78 的 ratio 渐近逼近源熵；现实中通常不知道生成源，因此原章转向可从单个字符串计算的 kth-order empirical entropy。
 
 设 context ω 长度为 k，Sω 是所有紧随 ω 的字符组成的串，nω 是 ω 出现次数。一种等价写法是：
 
@@ -207,7 +183,6 @@ $$
 \lambda H_k(S)+o\!\left(H_k(S)\right)
 $$
 
-<PaeCompressorOptimalityMap />
 
 原章给出边界：LZ78 是 coarsely optimal，却存在低熵串使其 output/H0 比值无界，因此不是任意常数 λ 的最优；配合 RLE 的修改版可对 H0 达到3-optimal，但对更高 k 不成立。
 
@@ -217,28 +192,6 @@ $$
 
 ## 工程验收：parser、token coder 与 decoder 分开测
 
-<Stepper>
-  <Step title="先确认字典属于哪一层">
-    <PaeDictionaryCompressionPipelineDiagram />
-    parser 负责发现重复，token coder 才决定 distance、length、id 的真实位数。
-  </Step>
-  <Step title="验证滑窗 phrase 与重叠 copy">
-    <PaeLz77WindowLab />
-    对每个 token 检查 source 已可用，并用前向语义还原输出。
-  </Step>
-  <Step title="给匹配搜索设明确预算">
-    <PaeGzipMatchSearchLab />
-    记录候选数、最长 LCP、最终 bit cost 与压缩耗时，而不是只报等级。
-  </Step>
-  <Step title="逐步核对显式字典 id">
-    <PaeLz78TrieGrowthLab />
-    每次插入必须是已有 phrase 加一个字符，encoder/decoder 使用同一 id。
-  </Step>
-  <Step title="覆盖 LZW 缺项特殊分支">
-    <PaeLzwDictionarySyncLab />
-    golden stream 必须触发 code 等于 nextDictionaryId，验证 previous 自举规则。
-  </Step>
-</Stepper>
 
 端到端 benchmark 同时报告 compressed bytes、bits/input-byte、parse tokens、average match length、distance distribution、compress/decompress MB/s、peak dictionary memory 与 block random-access latency。安全测试覆盖 truncated token、超窗 distance、巨大 length、非法 LZW code、reset 边界、整数溢出和 declared size 不一致。
 
@@ -255,41 +208,7 @@ $$
 9. LZW 遇到尚不存在的 next id 时，用 previous+first(previous) 解开循环。
 10. coarse 与 λ-optimality 的误差尺度不同；工程快不等于所有 Hk 下渐近最优。
 
-<Exercises>
-
-**问题 1：为何 LZ77 的 copy length 可以大于 distance，解码仍然确定？**
-
-<Answer>token 只要求 source 的起点在已输出前缀中。decoder 按 i 从0递增复制时，第 i 个新字符写出后会成为后续 i+distance 位置的 source；因此 distance=2、length=6 可从 seed `ab` 确定生成 `ababab`，无需预先存在完整6字符 source。</Answer>
-
-**问题 2：为什么 longest match 不一定产生最短 gzip bitstream？**
-
-<Answer>length 和 distance 都经分桶 Huffman 与 extra bits 编码。更长 match 可能来自很远位置，distance 成本很高；把它拆成两个较近 match，或先发 literal 再取下一位置的长 match，总成本可能更低。应比较 token bit cost 与 suffix parse。</Answer>
-
-**问题 3：LZW decoder 读到一个等于 nextDictionaryId、尚不存在的 code 时如何处理？**
-
-<Answer>这种合法特殊情形表示 current phrase 是 previous phrase 加其首字符。decoder 构造 current=previous+first(previous)，输出它，再按普通规则插入 previous+first(current)；若 code 既不存在又不等于 next id，则流非法。</Answer>
-
-**问题 4：coarsely optimal 为什么仍可能在低熵数据上表现很差？**
-
-<Answer>coarse bound 允许加性误差 fk(n)，它只要求绝对误差趋于0。当 Hk(S) 比 fk(n) 更快趋近0时，输出率虽满足 Hk+fk，相对 Hk 的倍数仍可无界。λ-optimality 用乘性尺度限制这种低熵相对浪费。</Answer>
-
-</Exercises>
 
 ## 名词解释
 
-<Glossary>
-  <GlossaryItem term="基于字典的压缩器">以动态或静态 phrase token 替换重复子串的无损压缩方法。</GlossaryItem>
-  <GlossaryItem term="LZ77">用滑动窗口 distance-length-next character 描述重复片段的算法。</GlossaryItem>
-  <GlossaryItem term="LZSS">把 LZ77 phrase 简化为 literal 或 distance-length 的变体。</GlossaryItem>
-  <GlossaryItem term="LZ78">输出已有 phrase id 与下一字符并显式增长字典的算法。</GlossaryItem>
-  <GlossaryItem term="LZW">预装单字符、只输出 phrase id 的 LZ78 变体。</GlossaryItem>
-  <GlossaryItem term="压缩器最优性">相对源熵或经验熵刻画渐近压缩率与冗余的理论标准。</GlossaryItem>
-  <GlossaryItem term="经验熵">直接从字符串 context 与后继频率计算的 Hk，不依赖未知生成源。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  name="Pearls of Algorithm Engineering · Chapter 13 Dictionary-Based Compressors"
-  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
-  author="Paolo Ferragina"
-  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
-/>

@@ -7,19 +7,9 @@ description: "掌握Lua 5.3 bitwise operators、unsigned interpretation、string
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilBitwiseOperatorLab, PilBinaryFormatLab, PilBinaryFrameLab } from "@/components/mdx/lua-programming/diagrams/bits-bytes";
-
-<Objectives>
-
-- 能解释Lua 5.3整数位模式、mask、逻辑shift与unsigned comparison，推导fixed-width field结果
-- 能实现string.pack/unpack格式并验证endianness、signedness、alignment、string length和cursor
-- 能设计binary file frame parser，复现truncation、oversized length、wrong version与trailing-byte故障
-
-</Objectives>
 
 ## 为什么Bits必须先声明Width
 
@@ -27,13 +17,13 @@ Bitwise code常写成几枚operators，却同时依赖Lua integer width、协议
 
 先预测：negative integer右移是否补sign bits；shift count为negative时发生什么；8-bit complement `~value`是否只翻8位；signed -1与unsigned max比较谁更小；`string.pack("I2", 65536)`是截断还是错误；unpack返回几个values；binary mode为何仍不能保证一次read拿满请求长度。先写width与schema，再运行。
 
-<Term def="每次位运算先规定逻辑字段的bit width、允许range和运算后mask，避免Lua整数高位污染较窄协议字段。">fixed-width bit domain</Term>把“整数值”和“n-bit pattern”分开。对8-bit field常用mask `0xFF`；extract前shift/mask，set前验证field value fits，再清除目标bits并写入。
+把“整数值”和“n-bit pattern”分开。对8-bit field常用mask `0xFF`；extract前shift/mask，set前验证field value fits，再清除目标bits并写入。
 
 ## Bitwise Operators
 
 Lua 5.3提供binary AND `&`、OR `|`、XOR `~`、left shift `<<`、right shift `>>`，以及unary NOT `~`。Operands必须可转换为integer，否则报错；result为integer。Unary NOT翻转整个Lua integer width，不是application field width，之后通常要mask。
 
-<Term def="Lua的左右shift按整数位宽丢弃越界bits并用zero填充，right shift对负数也不是arithmetic sign extension。">logical-shift contract</Term>意味着`x >> 1`不能替代signed floor/truncate division。Negative shift count会向相反方向shift；绝对值达到或超过integer width通常得到zero，仍应在boundary限制count而非依赖极端行为。
+意味着`x >> 1`不能替代signed floor/truncate division。Negative shift count会向相反方向shift；绝对值达到或超过integer width通常得到zero，仍应在boundary限制count而非依赖极端行为。
 
 Precedence中shifts与bitwise层级和算术不同，复杂field expression加parentheses。XOR与unary NOT都写`~`，由arity/context区分。不要把C的`^`当XOR，Lua里`^`是exponentiation。
 
@@ -54,21 +44,10 @@ assert((~0x0F & 0xFF) == 0xF0) -- explicit 8-bit complement
 
 `(1 << width)-1`在width等于integer full width时会溢出/shift to zero，generic helper需要特别处理full-width mask。Protocol通常选择1/2/4/8-byte fields并用tested constants，避免dynamic unchecked width。
 
-<PilBitwiseOperatorLab />
-
-<Stepper>
-  <Step title="切换Mask、Set/XOR、Left Shift和Right Shift"><PilBitwiseOperatorLab /></Step>
-  <Step title="画Bit Lanes">对8/16/32-bit examples逐位标input、mask、discarded bits与zero fill，再与Lua full-width hex输出比较。</Step>
-  <Step title="做Shift Matrix">覆盖0、width-1、width、negative count、negative operand和non-integer operand，验证value或expected error。</Step>
-</Stepper>
-
-<Callout type="trap" title="Negative Integer右移等价除以2并保留Sign">
-Lua right shift是logical zero-fill，不做sign extension；negative pattern会变成large non-negative-looking bit pattern。Signed arithmetic使用`//`或明确rounding，protocol extraction则先声明unsigned field width。
-</Callout>
 
 ## Unsigned Integers
 
-Lua integer type本身通常是signed，但bitwise operators操作其bit pattern。最高位为1的pattern打印成decimal可能为negative，却可表示协议中的unsigned value。<Term def="同一lua_Integer bit pattern按signed arithmetic或modulo 2^width的unsigned magnitude解释，比较与格式化必须选择一种视图。">unsigned interpretation</Term>禁止用普通less-than比较full-width unsigned patterns。
+Lua integer type本身通常是signed，但bitwise operators操作其bit pattern。最高位为1的pattern打印成decimal可能为negative，却可表示协议中的unsigned value。禁止用普通less-than比较full-width unsigned patterns。
 
 `math.ult(a, b)`按unsigned integer比较两个Lua integers，适合full `lua_Integer` width。较窄unsigned field先mask后通常落入non-negative range，可普通比较。输出可使用明确hex更直观；decimal unsigned formatting的portable behavior要按Lua/C library验证。
 
@@ -78,7 +57,7 @@ Unsigned overflow按modulo field width是否允许是protocol decision。Sequenc
 
 `string.pack(format, values...)`按format构造binary string；`string.unpack(format, data, position)`返回decoded values，最后额外返回next unread position；`string.packsize(format)`给fixed-size format的byte size，variable-length string formats不能总给constant size。
 
-<Term def="Pack format把endianness、alignment、numeric width/signedness、padding和string framing编码为必须版本化和审计的二进制schema。">binary format string</Term>常用prefix：`<` little endian、`>` big endian、`=` native endian；`!n`控制最大alignment。Integer items包括fixed-size `i[n]`/`I[n]`及native types；float items包括`f`、`d`、`n`。Strings可用`c[n]` fixed bytes、`z` zero-terminated、`s[n]` length-prefixed。
+常用prefix：`<` little endian、`>` big endian、`=` native endian；`!n`控制最大alignment。Integer items包括fixed-size `i[n]`/`I[n]`及native types；float items包括`f`、`d`、`n`。Strings可用`c[n]` fixed bytes、`z` zero-terminated、`s[n]` length-prefixed。
 
 稳定wire/file schema应显式byte order、exact widths且避免native padding。`j/J/T/l/L`等native-size类型会随ABI变化，不适合跨机协议。String encoding另行声明；pack只处理bytes，不验证UTF-8。Zero-terminated string无法表示embedded NUL，length-prefixed/ fixed string则可以。
 
@@ -94,21 +73,14 @@ local payload = string.sub(encoded, next_pos, next_pos + length - 1)
 assert(payload == "abc")
 ```
 
-<Term def="String.unpack最后返回的next position是后续字段唯一可信起点，parser必须证明它单调前进且不越过input end。">unpack cursor invariant</Term>使多个records可顺序decode。Lua string index从1开始；next position指向未消费byte，而不是已消费end。Position和length都按bytes。
+使多个records可顺序decode。Lua string index从1开始；next position指向未消费byte，而不是已消费end。Position和length都按bytes。
 
-<PilBinaryFormatLab />
-
-<Stepper>
-  <Step title="切换Endian、Integers、Strings和Alignment"><PilBinaryFormatLab /></Step>
-  <Step title="计算Byte Layout">为每个item写offset、size、padding和endianness，用known hex fixture对照pack output，不只做同实现round-trip。</Step>
-  <Step title="验证Failure Matrix">覆盖value overflow、short input、bad start position、missing NUL、length prefix过大和variable packsize，断言明确失败。</Step>
-</Stepper>
 
 ## Binary files
 
 Binary file用`"rb"`/`"wb"`避免text newline translation。Lua string可保存任意bytes和NUL；读取n bytes可能少于n或在EOF返回nil/short data，frame parser必须实现exact-read loop并区分clean EOF与truncated frame。Network stream更不能假设一次read等于一个frame。
 
-<Term def="Binary record先以固定可信header声明magic、version、flags与bounded length，再精确读取payload并处理integrity和trailing bytes的边界。">binary frame boundary</Term>要求在allocation/substr前验证length上限与remaining bytes。Magic只防误识别，version选择schema，flags拒绝unknown reserved bits。
+要求在allocation/substr前验证length上限与remaining bytes。Magic只防误识别，version选择schema，flags拒绝unknown reserved bits。
 
 ```lua
 local function read_exact(file, length)
@@ -137,17 +109,6 @@ end
 
 Frame还可能需要checksum或cryptographic authentication。Checksum发现accidental corruption，不证明sender；MAC/AEAD需要key management和constant-time library，不应手写。Compressed payload要同时限制compressed与decompressed size，防止decompression bomb。
 
-<PilBinaryFrameLab />
-
-<Stepper>
-  <Step title="切换Header、Payload、Cursor和Integrity"><PilBinaryFrameLab /></Step>
-  <Step title="建立Hex Fixtures">保存独立工具生成的valid frame、每个header field边界与expected offsets，避免pack/unpack同bug互相通过。</Step>
-  <Step title="Fuzz Truncation与Length">在每个byte boundary截断，篡改length/version/flags并附加trailing bytes，验证无越界、无巨大allocation和稳定reason。</Step>
-</Stepper>
-
-<Callout type="trap" title="Pack和Unpack能Round-trip就证明Binary Protocol可移植">
-同一runtime会用相同native endian、size和alignment，因此round-trip可能掩盖平台依赖。使用显式endianness/width、known hex fixtures和不同architecture实现互测。
-</Callout>
 
 ## Schema Evolution与Security
 
@@ -164,31 +125,7 @@ Binary parser面对untrusted bytes时，所有count乘法、offset加法和alloc
 5. Unpack返回values加next cursor，parser要验证cursor、remaining bytes和trailing policy。
 6. Binary file按exact frame读取，先验证header/length/version，再处理payload与integrity。
 
-<Exercises>
-
-**问题 1：怎样计算8-bit Value的Bitwise NOT？**
-
-<Answer>Lua unary `~value`翻整个lua_Integer width，因此随后mask：`(~value) & 0xFF`。先验证value位于0..255；测试0x00得到0xFF、0x0F得到0xF0、0xFF得到0x00。</Answer>
-
-**问题 2：为什么Binary Schema不应使用Native `j`、`T`或`=`？**
-
-<Answer>这些依赖host integer/size_t width或native byte order/alignment，同一logical record在不同ABI产生不同bytes。Wire/file协议选固定`i[n]/I[n]`、显式`<`/`>`并避免implicit padding，再用known hex fixture跨实现验证。</Answer>
-
-**问题 3：Header宣布1GB Payload时Parser应何时拒绝？**
-
-<Answer>Unpack固定header后、任何payload allocation/read/substr之前，验证length为允许integer、未超max_payload且offset arithmetic不overflow。Stream随后exact-read；短读返回truncated。若压缩，还要限制解压后size。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="fixed-width bit domain" definition="位运算显式规定field width、range并在运算后mask的范围。" />
-  <GlossaryItem term="logical-shift contract" definition="Shift丢弃越界bits并zero-fill且不做sign extension的语义。" />
-  <GlossaryItem term="unsigned interpretation" definition="同一integer bit pattern按modulo 2^width magnitude解释的视图。" />
-  <GlossaryItem term="binary format string" definition="编码endianness、width、alignment、padding与string framing的schema。" />
-  <GlossaryItem term="unpack cursor invariant" definition="Unpack next position单调前进且始终位于input边界内的约束。" />
-  <GlossaryItem term="binary frame boundary" definition="固定header、bounded payload、version与integrity组成的record边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 13: Bits and Bytes" adaptedUrl="https://www.lua.org/pil/" />

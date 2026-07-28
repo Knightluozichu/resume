@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["BST", "10；6/14；4,8,12,16"], ["正向", "4,6,8,10,12,14,16"], ["反向", "16,14,12,10,8,6,4"], ["覆盖", "完整树"]] },
   { label: "Test2", fields: [["BST", "5→左4→左3→左2→左1"], ["正向", "1,2,3,4,5"], ["头", "原最小节点1"], ["覆盖", "全左链"]] },
@@ -75,8 +73,4 @@ export function BstLinearBoundaryDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">边界nullptr是作者打印函数终止正向与反向遍历的依据，不能擅自改成循环链表。</figcaption>
     </figure>
   );
-}
-
-export function ConvertBstOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者5组测试，核对完整树、左右单链、单节点和空树的正反向线性链。" />;
 }

@@ -1,23 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const traceStates = [
-  { range: "[0, 5]", left: 1, right: 15, sum: 16, relation: "大于 15", action: "右指针左移到 11" },
-  { range: "[0, 4]", left: 1, right: 11, sum: 12, relation: "小于 15", action: "左指针右移到 2" },
-  { range: "[1, 4]", left: 2, right: 11, sum: 13, relation: "小于 15", action: "左指针右移到 4" },
-  { range: "[2, 4]", left: 4, right: 11, sum: 15, relation: "等于 15", action: "返回 4 与 11" },
-] as const;
-
-const officialCases = [
-  { label: "答案在中间", fields: [["数组", "1,2,4,7,11,15"], ["目标", "15"], ["作者结果", "4 与 11"], ["期望", "true"]] },
-  { label: "答案在两端", fields: [["数组", "1,2,4,7,11,16"], ["目标", "17"], ["作者结果", "1 与 16"], ["期望", "true"]] },
-  { label: "不存在答案", fields: [["数组", "1,2,4,7,11,16"], ["目标", "10"], ["指针", "最终相遇"], ["期望", "false"]] },
-  { label: "空输入", fields: [["数组", "nullptr"], ["长度", "0"], ["入口", "长度先拒绝"], ["期望", "false"]] },
-] as const;
-
 export function TwoNumbersWithSumPointerDiagram() {
   const values = [1, 2, 4, 7, 11, 15];
   const cellW = 90;
@@ -68,24 +51,6 @@ export function TwoNumbersWithSumPointerDiagram() {
     </figure>
   );
 }
-
-export function TwoNumbersWithSumTraceLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = traceStates[cursor];
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-2">{traceStates.map((item, index) => <button key={item.range} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"h-11 border text-sm font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>第 {index + 1} 步</button>)}</div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-5"><div className="border border-border bg-background p-3"><div className="text-xs text-muted">区间</div><div className="mt-1 font-semibold text-primary">{state.range}</div></div><div className="border border-border bg-background p-3"><div className="text-xs text-muted">左值</div><div className="mt-1 font-semibold text-primary">{state.left}</div></div><div className="border border-border bg-background p-3"><div className="text-xs text-muted">右值</div><div className="mt-1 font-semibold text-primary">{state.right}</div></div><div className="border border-border bg-background p-3"><div className="text-xs text-muted">当前和</div><div className="mt-1 font-semibold text-primary">{state.sum}</div></div><div className="border border-accent bg-accent/10 p-3"><div className="text-xs text-muted">关系</div><div className="mt-1 text-sm font-semibold text-accent">{state.relation}</div></div></div>
-        <p className="mb-0 mt-3 border-l-4 border-accent bg-background p-3 text-sm text-secondary">{state.action}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        对目标 15，指针经过四次比较命中 4 与 11；每次只朝一个方向移动。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function TwoNumbersWithSumEliminationMap() {
   const rows = [
     ["当前和小于 s", "固定右端时左端是区间最小值", "当前左端无法与任何更小右端达标", "left 右移"],
@@ -120,8 +85,4 @@ export function TwoNumbersWithSumContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function TwoNumbersWithSumOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者 main 执行 4 组测试：中间答案、两端答案、无解与空输入。" />;
 }

@@ -7,21 +7,9 @@ description: "承载官方 Ch7 Shadows：shadow map 投影、偏移、过滤、�
 demo: true
 math: true
 sourceUrl: "https://www.realtimerendering.com/"
-draft: true
+draft: false
 ---
 
-import { RtrShadowsDiagram, RtrShadowPrecisionDiagram, RtrShadowMethodsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shadows";
-import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能追踪 shadow caster 到 light-space depth，再到 receiver visibility 的完整数据流
-- 能分析 projection、texel footprint、depth precision 与 bias 如何共同产生 acne 或 detached shadow
-- 能比较 PCF、PCSS、VSM/EVSM、CSM、cube shadow 和 ray-traced shadow 的边界
-- 能设计覆盖移动相机、薄片、alpha test、级联接缝和动态光源的阴影回归
-
-</Objectives>
 
 ## 直觉：阴影是一个可见性查询
 
@@ -29,11 +17,10 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 Ch7 Shadows 的核心问题是：从着色点沿光源方向，是否能看见发光体。shadow map 把三维 visibility 离散成光源视图中的 depth lookup；ray tracing 直接查询几何；其他方法则在精度、覆盖、软化和成本之间选择近似。
 
-<RtrShadowsDiagram />
 
 ## Shadow map：深度是光源看到的第一层
 
-<Term def="从光源投影场景的最近深度，并在接收点重新投影比较深度以近似光源可见性的技术">阴影映射</Term>通常包含：
+通常包含：
 
 1. 选择 light view/projection 与 caster set；
 2. 渲染最接近光的 depth，包含 alpha-tested caster 的一致裁剪；
@@ -57,9 +44,8 @@ float sampleShadow(vec4 lightClip, vec3 normalWS, vec3 lightDirWS) {
 
 ## 精度与 bias：不是一个魔法常数
 
-<RtrShadowPrecisionDiagram />
 
-<Term def="接收面在有限 shadow texel 与量化深度上和自身存储深度发生错误比较，形成条纹或点状自遮挡">Shadow acne</Term>的来源包括：同一 texel 代表一片 receiver、rasterization sampling 差异、深度格式/投影精度，以及表面对光的斜率。
+的来源包括：同一 texel 代表一片 receiver、rasterization sampling 差异、深度格式/投影精度，以及表面对光的斜率。
 
 constant depth bias、slope-scaled bias、normal offset 和 receiver-plane depth bias 处理不同误差。近似 slope bias 可随 $\tan\theta$ 增长：
 
@@ -70,13 +56,13 @@ $$
 
 但 grazing angle 时必须 clamp；单位还可能是 shadow depth、depth ULP、texel 或 world distance，不能把示例常数跨场景复制。
 
-<Term def="bias 或 normal offset 过大使接触处 visibility 被错误判为可见，导致阴影与 caster 分离的现象">Peter-panning</Term>是漏影的一种表现。front-face culling 有时隐藏闭合厚物体的 acne，但薄片、open mesh、foliage 和 double-sided caster 会丢失，不是通用修法。
+是漏影的一种表现。front-face culling 有时隐藏闭合厚物体的 acne，但薄片、open mesh、foliage 和 double-sided caster 会丢失，不是通用修法。
 
 shadow texel 对应的 world-space footprint 随 projection 和位置变化。增大分辨率可缩小 footprint，却不能修复错误 near/far、坐标变换、bias 单位或 caster 缺失。首先可视化 cascade、light frustum、uvz、bias 和 raw comparison。
 
 ## 过滤与软阴影
 
-<Term def="在接收点周围执行多个深度比较，再对二值 visibility 结果加权平均的阴影过滤方法">PCF</Term>必须“先比较、后平均”；直接线性过滤 depth 再比较并不等价。固定 PCF 核提供抗锯齿/模糊边界，但不会自然产生随 blocker-receiver-light 几何变化的 penumbra。
+必须“先比较、后平均”；直接线性过滤 depth 再比较并不等价。固定 PCF 核提供抗锯齿/模糊边界，但不会自然产生随 blocker-receiver-light 几何变化的 penumbra。
 
 对宽度 $w_L$ 的面光源，简化平行平面下的 penumbra 尺度近似：
 
@@ -86,13 +72,12 @@ $$
 
 其中 $z_B$ 是 blocker 距离，$z_R$ 是 receiver 距离。PCSS 先搜索 blocker，估计平均 blocker depth，再按 penumbra 调整 PCF 核；它仍有 blocker 搜索、采样噪声和复杂遮挡近似误差。
 
-<Term def="存储深度矩并用概率不等式估计可见性，使阴影图可预过滤的 moment shadow 方法">VSM</Term>存储 $E[z]$ 与 $E[z^2]$，用 Chebyshev 上界估计遮挡。它支持普通过滤，却会 light bleeding；variance clamp、bleed reduction、EVSM/MSM 改善但会带来指数溢出、精度或额外矩成本。
+存储 $E[z]$ 与 $E[z^2]$，用 Chebyshev 上界估计遮挡。它支持普通过滤，却会 light bleeding；variance clamp、bleed reduction、EVSM/MSM 改善但会带来指数溢出、精度或额外矩成本。
 
-<RtrShadowMethodsDiagram />
 
 ## CSM：覆盖、稳定和接缝是一个系统
 
-<Term def="沿相机视锥深度划分多个区间，每区间使用独立方向光 shadow projection 的级联阴影映射">级联阴影映射</Term>让近处小覆盖获得高 texel density，远处大覆盖保留阴影。split 可混合 uniform 与 logarithmic：
+让近处小覆盖获得高 texel density，远处大覆盖保留阴影。split 可混合 uniform 与 logarithmic：
 
 $$
 d_i=\lambda n(f/n)^{i/N}+(1-\lambda)\left[n+(f-n)i/N\right].
@@ -116,85 +101,15 @@ ray-traced shadow 能直接采样面光源和几何 visibility，但仍需 sampl
 
 ## 三步阴影验收
 
-<Stepper>
-<Step title="第一步：观察原始空间与比较值">
-
-显示 light frustum、cascade index、shadow UV/depth、stored depth、bias、raw visibility 和 caster draw list。
-
-<RtrStepFlowDiagram caption="先区分覆盖缺失、坐标错误、精度误差与过滤问题。" stage={1} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters"]} />
-
-</Step>
-<Step title="第二步：扫描几何与参数边界">
-
-测试接触盒、斜平面、薄片、负尺度、alpha foliage、cube seam；扫描 near/far、resolution、bias、kernel 与 split。
-
-<RtrStepFlowDiagram caption="单一场景调出的 bias 不能代表系统正确。" stage={2} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters", "Stress：slopes、thin/alpha geometry、seams、camera and light motion"]} />
-
-</Step>
-<Step title="第三步：对比 reference 与时间稳定性">
-
-以高分辨率或 ray-traced visibility 为参考，记录 false shadow、leak、penumbra、cascade transition、flicker、draws 与 GPU 时间。
-
-<RtrStepFlowDiagram caption="阴影门槛同时包含接触、覆盖、稳定、软化和成本。" stage={3} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters", "Stress：slopes、thin/alpha geometry、seams、camera and light motion", "Validate：reference visibility、temporal stability、coverage、cost"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 到处套 `max(0.05*(1-N·L),0.005)`。**原因 →** 忽略 bias 的单位、projection、texel footprint 和 depth precision。**修法 →** 在目标 cascade/灯光空间标定 constant、slope、normal/receiver-plane offset，并用多尺度场景回归。
-</Callout>
-
-<Callout type="trap">
-**现象 →** PCF 核越大就认为面光源越大。**原因 →** 固定图空间模糊没有 blocker/receiver 几何。**修法 →** 需要接触硬化时用 PCSS、采样面光源或光追 reference，并验证 penumbra 随距离变化。
-</Callout>
-
-<Callout type="trap">
-**现象 →** CSM 相机移动时闪动，分界处阴影跳变。**原因 →** projection 未对齐 texel，层间 footprint/bias 不一致。**修法 →** stable fit/texel snapping、overlap blend，并显示 cascade index 做运动回归。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：提高 shadow map 分辨率为何不保证消除 acne？**
-
-<Answer>
-它只缩小 texel footprint；错误的 light projection/depth range、量化、receiver slope、坐标变换和 bias 单位仍存在。应分别观察 stored/receiver depth 与 bias，再用斜面和多距离验证。
-</Answer>
-
-**问题 2：PCF 与 PCSS 的核心差别是什么？**
-
-<Answer>
-PCF 用固定或预设核平均多个二值比较，主要过滤离散边缘；PCSS 先估计 blocker depth，再根据 light/blocker/receiver 几何调整过滤半径，近似接触硬化，但增加搜索和估计误差。
-</Answer>
-
-**问题 3：怎样验收 CSM 的稳定性？**
-
-<Answer>
-沿固定相机轨迹记录 cascade index、投影矩阵、texel origin 和阴影图像；检查微小平移/旋转时是否游泳，跨 split 是否平滑，动态 caster 是否进入正确层，并记录每层 draw、分辨率和 GPU 时间。
-</Answer>
-
-**问题 4：为什么 alpha foliage 与半透明玻璃不能用同一套普通 shadow map 处理？**
-
-<Answer>
-foliage cutout 可在 depth pass 以 alpha test 产生二值覆盖；玻璃需要部分且可能带颜色的 transmittance，单层最近 depth 不能表达多层透射。后者需 opacity/deep、stochastic 或 ray-based 方案及明确近似。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 Ch7 Shadows 把光源可见性转化为有限资源下的查询问题。shadow map 的质量由投影、caster、depth、bias、filter 和时空稳定共同决定；PCF、PCSS、moment、CSM 与 ray tracing 各解决不同边界，必须以可视化、压力场景、reference 和成本闭环。
 
-<Glossary>
-<GlossaryItem term="阴影映射">从光源记录最近深度并在接收点比较以近似可见性的技术。</GlossaryItem>
-<GlossaryItem term="Shadow acne">有限深度与接收面误差造成的错误自遮挡。</GlossaryItem>
-<GlossaryItem term="Peter-panning">过大偏移导致接触阴影与 caster 分离的现象。</GlossaryItem>
-<GlossaryItem term="PCF">对多个二值深度比较结果加权平均的阴影过滤。</GlossaryItem>
-<GlossaryItem term="VSM">存储深度矩并估计可见性的可预过滤阴影方法。</GlossaryItem>
-<GlossaryItem term="级联阴影映射">按相机深度区间分配多个方向光 shadow projection 的方法。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Real-Time Rendering 4e, Chapter 7: Shadows" adaptedUrl="https://www.realtimerendering.com/" />

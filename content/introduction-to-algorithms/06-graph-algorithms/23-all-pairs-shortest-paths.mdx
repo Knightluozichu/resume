@@ -7,35 +7,22 @@ description: "按CLRS第四版第23章重建最短路径与矩阵乘法、Floyd-
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: true
+draft: false
 ---
 
-import { CLRS4WeightMatrixLab, CLRS4MinPlusCellLab, CLRS4EdgeDoublingLab, CLRS4FloydIntermediateLab, CLRS4FloydCellLab, CLRS4PredecessorMatrixLab, CLRS4TransitiveClosureLab, CLRS4JohnsonPotentialLab, CLRS4JohnsonReweightLab, CLRS4APSPCompareLab, CLRS4APSPCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/23-all-pairs-shortest-paths";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释weight matrix、min-plus product、intermediate-set DP与potential reweighting的状态语义
-- 能计算矩阵extension cell、Floyd-Warshall stage、predecessor entry和Johnson recovered distance
-- 能实现EXTEND-SHORTEST-PATHS、Floyd-Warshall、path reconstruction与Johnson pipeline
-- 能分析negative cycle、density、edge-weight前置条件及reweight telescoping为何保证正确
-- 能设计覆盖ordered pairs、diagonal、triangle inequalities、predecessors与reweight recovery的APSP证书
-
-</Objectives>
 
 ## 从“一次运行为什么不够回答所有source”开始
 
 先预测：有$n$个vertices，每个source都要到其余vertices的distance。对每个source单独Bellman-Ford可行却昂贵；若graph dense，直接在$n\times n$ matrix上共享subproblems更自然。APSP的关键是选“path允许多少edges”或“允许哪些intermediate vertices”为state。
 
-<Term def="为weighted directed graph中每个有序vertex pair计算minimum path weight，并可选重构对应paths的问题。">所有结点对最短路径</Term>输出distance matrix $D=(d_{ij})$。假定不存在negative-weight cycle；否则受该cycle影响的ordered pairs没有finite optimum。
+输出distance matrix $D=(d_{ij})$。假定不存在negative-weight cycle；否则受该cycle影响的ordered pairs没有finite optimum。
 
-<CLRS4WeightMatrixLab />
 
 ## 23.1 Shortest paths and matrix multiplication
 
 ### Paths with bounded edge count
 
-<Term def="把普通矩阵乘法中的乘法换成加法、求和换成minimum，以组合两段path weight的代数运算。">最小加法矩阵乘法</Term>也称min-plus product。Weight matrix $W=(w_{ij})$定义：
+也称min-plus product。Weight matrix $W=(w_{ij})$定义：
 
 $$
 w_{ij}=
@@ -55,7 +42,6 @@ l_{ij}^{(m)}
 \{l_{ik}^{(m-1)}+w_{kj}\}.
 $$
 
-<CLRS4MinPlusCellLab />
 
 ```cpp
 Matrix extend_shortest_paths(const Matrix& left, const Matrix& right) {
@@ -78,17 +64,12 @@ $$
 
 只需$O(\log n)$轮，时间$O(n^3\log n)$。
 
-<CLRS4EdgeDoublingLab />
-
-<Callout type="trap" title="把普通乘法库直接用于distance matrix">
-普通product会乘weights并相加候选，语义不是path concatenation。修法是明确semiring：combine两段path用加法，聚合不同intermediate候选用minimum，并正确处理infinity。
-</Callout>
 
 ## 23.2 The Floyd-Warshall algorithm
 
 ### Intermediate-vertex dynamic programming
 
-<Term def="按可用intermediate vertices逐个扩展path集合，以三重循环在O(V立方)时间求APSP的动态规划算法。">Floyd-Warshall算法</Term>编号vertices为$1,\ldots,n$。令$d_{ij}^{(k)}$为从$i$到$j$、所有internal vertices只来自$\{1,\ldots,k\}$的minimum。
+编号vertices为$1,\ldots,n$。令$d_{ij}^{(k)}$为从$i$到$j$、所有internal vertices只来自$\{1,\ldots,k\}$的minimum。
 
 Shortest path要么不用$k$，要么在simple path中使用$k$并分成$i$到$k$与$k$到$j$两段：
 
@@ -99,7 +80,6 @@ d_{ij}^{(k)}
 d_{ik}^{(k-1)}+d_{kj}^{(k-1)}\}.
 $$
 
-<CLRS4FloydIntermediateLab />
 
 ```cpp
 for (int k = 0; k < n; ++k)
@@ -108,7 +88,6 @@ for (int k = 0; k < n; ++k)
             d[i][j] = min(d[i][j], d[i][k] + d[k][j]);
 ```
 
-<CLRS4FloydCellLab />
 
 In-place update安全，因为stage $k$对row/column $k$的值不会因允许$k$作为intermediate而获得更优simple path；读取已更新值不会改变recurrence result。时间$O(V^3)$、distance空间$O(V^2)$。
 
@@ -116,15 +95,14 @@ In-place update安全，因为stage $k$对row/column $k$的值不会因允许$k$
 
 ### Reconstructing paths
 
-<Term def="为每个ordered pair记录target在对应shortest path上的previous vertex，用于从distance matrix恢复path witness的二维表。">前驱矩阵</Term>可与distance同步更新。若经$k$改进$i$到$j$，令$\pi_{ij}=\pi_{kj}$；也可保存split matrix并递归输出$i\to k$和$k\to j$。
+可与distance同步更新。若经$k$改进$i$到$j$，令$\pi_{ij}=\pi_{kj}$；也可保存split matrix并递归输出$i\to k$和$k\to j$。
 
-<CLRS4PredecessorMatrixLab />
 
 Equal shortest paths需fixed tie policy，避免zero-weight cycles造成parent loop。验证器应沿parents在最多$V$步内到达source，并检查edge存在与weight tightness。
 
 ### Transitive closure
 
-<Term def="对每个ordered pair判断是否存在directed path的Boolean matrix，可把Floyd recurrence的min-plus运算替换成OR-AND。">传递闭包</Term>使用：
+使用：
 
 $$
 t_{ij}^{(k)}
@@ -134,7 +112,6 @@ t_{ij}^{(k-1)}
 (t_{ik}^{(k-1)}\land t_{kj}^{(k-1)}).
 $$
 
-<CLRS4TransitiveClosureLab />
 
 Initial diagonal通常为true表示length-0 path。若业务只接受nonempty reachability，需要调整diagonal contract。
 
@@ -142,7 +119,7 @@ Initial diagonal通常为true表示length-0 path。若业务只接受nonempty re
 
 ### Reweighting without changing shortest paths
 
-<Term def="先用Bellman-Ford求vertex potentials并排除negative cycle，再重赋非负edge weights并从每个source运行Dijkstra的稀疏APSP算法。">Johnson算法</Term>允许negative edges但不允许negative cycles。
+允许negative edges但不允许negative cycles。
 
 新增vertex $q$，向每个$v\in V$连weight 0 edge；运行Bellman-Ford得到：
 
@@ -158,7 +135,6 @@ $$
 
 Triangle inequality $h(v)\le h(u)+w(u,v)$保证$\widehat w(u,v)\ge0$，可运行Dijkstra。
 
-<CLRS4JohnsonPotentialLab />
 
 ```text
 JOHNSON(G)
@@ -179,7 +155,6 @@ $$
 
 同一ordered endpoints的所有paths都加同一常数，最短path次序不变。
 
-<CLRS4JohnsonReweightLab />
 
 恢复original distances：
 
@@ -189,11 +164,6 @@ $$
 
 Binary heap实现为$O(VE\log V)$量级；Fibonacci heap可给$O(VE+V^2\log V)$，加一次$O(VE)$ Bellman-Ford。Sparse graph比Floyd的$O(V^3)$更有吸引力；dense graph通常选择Floyd以获得简单连续memory access。
 
-<Callout type="trap" title="把negative edge直接截断为0">
-Clamping会改变不同paths的相对weight，不能保留shortest paths。修法是使用vertex potential差$h(u)-h(v)$；它沿完整path telescopes成只由endpoints决定的常数。
-</Callout>
-
-<CLRS4APSPCompareLab />
 
 ### Cross-checking the result
 
@@ -205,25 +175,6 @@ APSP输出可独立验证：
 4. Unreachable pair为infinity且无parent。
 5. Johnson的reweighted edges全部nonnegative，recovery equation逐pair成立。
 
-<CLRS4APSPCertificateLab />
-
-<Stepper>
-<Step title="选择path state">
-Dense matrix可按edge count或intermediate set做DP；sparse graph选择potential加repeated Dijkstra。
-
-<CLRS4APSPCompareLab />
-</Step>
-<Step title="计算distance与witness">
-同步维护distance、predecessor或split matrix，固定equal-path tie policy并保留infinity。
-
-<CLRS4PredecessorMatrixLab />
-</Step>
-<Step title="验证所有ordered pairs">
-检查diagonal、triangle inequalities、negative cycles、tight paths和Johnson reweight/recovery。
-
-<CLRS4APSPCertificateLab />
-</Step>
-</Stepper>
 
 ## 小结
 
@@ -231,41 +182,4 @@ Chapter 23 All-Pairs Shortest Paths以shortest paths and matrix multiplication�
 
 三条路线都要求明确negative-cycle contract、infinity arithmetic和path witness。Distance matrix不是孤立数字表；diagonal、all-pairs triangle inequalities、predecessor tightness以及Johnson recovery共同构成可独立复核的certificate。
 
-<Exercises>
 
-**问题 1**：Min-plus matrix product中的加法和minimum各代表什么？
-
-<Answer>
-加法组合$i$到$k$与$k$到$j$两段path weights，minimum在所有intermediate $k$候选中选择最轻path。普通乘法与求和没有这两个path语义，因此不能直接替代。
-</Answer>
-
-**问题 2**：Floyd-Warshall为何可以原地更新distance matrix？
-
-<Answer>
-Stage $k$只引入vertex $k$作为新intermediate。涉及$d[i,k]$或$d[k,j]$的更新不会借助$k$形成更优simple path，因此即使本stage值已写回，仍等价于读取上一stage所需值。
-</Answer>
-
-**问题 3**：Johnson reweighting为何保持shortest path不变？
-
-<Answer>
-任一从$u$到$v$ path的每条edge增加$h(x)-h(y)$，内部vertices potentials相消，只留下$h(u)-h(v)$。同endpoints的所有paths增加同一常数，weight排序和argmin不变。
-</Answer>
-
-**问题 4**：APSP结果中出现negative diagonal说明什么？
-
-<Answer>
-$d[i,i]\lt0$表示从$i$出发存在回到$i$的negative-weight closed walk，因此包含negative cycle。可到该cycle再到target的ordered pairs没有finite shortest path，需要按API标记或整体拒绝。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="所有结点对最短路径">为weighted directed graph中每个有序vertex pair计算minimum path weight，并可选重构对应paths的问题。</GlossaryItem>
-<GlossaryItem term="最小加法矩阵乘法">把普通矩阵乘法中的乘法换成加法、求和换成minimum，以组合两段path weight的代数运算。</GlossaryItem>
-<GlossaryItem term="Floyd-Warshall算法">按可用intermediate vertices逐个扩展path集合，以三重循环在O(V立方)时间求APSP的动态规划算法。</GlossaryItem>
-<GlossaryItem term="前驱矩阵">为每个ordered pair记录target在对应shortest path上的previous vertex，用于从distance matrix恢复path witness的二维表。</GlossaryItem>
-<GlossaryItem term="传递闭包">对每个ordered pair判断是否存在directed path的Boolean matrix，可把Floyd recurrence的min-plus运算替换成OR-AND。</GlossaryItem>
-<GlossaryItem term="Johnson算法">先用Bellman-Ford求vertex potentials并排除negative cycle，再重赋非负edge weights并从每个source运行Dijkstra的稀疏APSP算法。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 23 · All-Pairs Shortest Paths" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

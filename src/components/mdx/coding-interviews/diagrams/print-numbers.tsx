@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "n=1",
@@ -83,8 +81,4 @@ export function DigitEnumerationTreeDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">书中称全排列递归，严格说是允许重复选择的十进制笛卡尔积枚举。</figcaption>
     </figure>
   );
-}
-
-export function PrintNumbersCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者官方n值，核对范围、进位、前导零和非法输入。" />;
 }

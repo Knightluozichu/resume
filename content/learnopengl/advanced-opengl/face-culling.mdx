@@ -10,13 +10,15 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Face-culling
 draft: false
 ---
 
-import {
-  CullingPipelineDiagram,
-  CullingTransformParityDiagram,
-  FaceCullingDiagram,
-  WindingCullStepDiagram,
-  WindingOrderDiagram,
-} from "@/components/mdx/learnopengl/diagrams/face-culling";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { CompareSlider } from "@/components/mdx/compare-slider";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* A 概念型（HEL-70，高级OpenGL 篇第 4 篇）：原书「面剔除 Face culling」。重心是概念讲解(§3)：面剔除是什么（光栅化前丢掉背对镜头的面、省片段）、环绕顺序 winding order（顶点 v0→v1→v2 定义成 CCW 逆时针 / CW 顺时针）、正面 front face vs 背面 back face（投影到屏幕后看顶点环绕方向判定，正面=约定的环绕、背面=反转的环绕）、glEnable(GL_CULL_FACE) 启用、glCullFace(GL_BACK) 剔谁（默认背面）、glFrontFace(GL_CCW) 哪种环绕算正面（默认 CCW）、为何能省约一半（封闭凸体背面总被正面挡住）、何时不能用（单面/开放网格如草纸片布、内外都要看的双面物体）。数学 math:false（纯几何/约定无公式，§4 整节省略）。承接深度/模板（同 section 管线测试叙述），沿用工厂流水线类比库（面剔除是光栅化前的一道「省料」工序）。主 viz 两个：Stepper 环绕顺序如何定正背面（每步带 SVG，<WindingCullStepDiagram step>）+ CompareSlider 剔除关 vs 开（<FaceCullingDiagram culled> 两态同构同框）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -52,11 +54,7 @@ import {
 
 更精确的顺序是：所有顶点先执行 vertex shader，primitive 装配并经过裁剪，随后根据窗口坐标有向面积判定正背并剔除，保留面才光栅化。被剔面连片段都不生成，所以主要节省光栅与 fragment shader；顶点成本已经发生，不能把剔除宣传成“整个三角形零成本”。
 
-<CullingPipelineDiagram />
-
 下面图用 X-ray/线框方式把本来会被深度遮住的背面显出来，目的是比较 GPU **提交了多少面**，不是模拟普通不透明渲染的最终颜色：
-
-<FaceCullingDiagram culled={false} />
 
 正常深度测试下，封闭不透明立方体开关剔除后的最终图像通常相同：关闭时背面仍被处理，只是最终深度失败。是否安全不只取决于“封闭”，还取决于相机在外部、材质不需要双面效果、几何环绕一致。摄像机进入封闭网格内部时，原本的背面正是要看的内壁，策略必须切换。
 
@@ -65,8 +63,6 @@ import {
 那 GPU 凭什么一眼认出「这个面朝你还是背你」？靠的是三角形三个顶点的 <Term def="三角形顶点按 v0→v1→v2 投影到窗口坐标后形成的逆时针（CCW）或顺时针（CW）方向。原始索引给出起点，完整变换链可能保持或翻转它；GPU 用最终窗口环绕判定 front/back。">环绕顺序</Term>（winding order）——把三个顶点按定义的先后（`v0 → v1 → v2`）连起来走一圈，这一圈要么是**逆时针**（CCW，counter-clockwise）、要么是**顺时针**（CW，clockwise）。
 
 这个方向完全由你**定义顶点的顺序**决定。同样三个位置的点，你先写左下还是先写右下，绕出来的方向就相反。一般约定建模时所有三角形都按**逆时针**定义顶点。下面这张图把「逆时针」和「顺时针」两种绕法并排画出来：
-
-<WindingOrderDiagram />
 
 记住一个反直觉但关键的事实（也是整章的题眼）：**同一个三角形，从正面看是逆时针、从它背面看就变成顺时针**——就像你正面看墙上一个顺时针画的钟，绕到墙背后透过去看，它就成了逆时针。GPU 利用的正是这一点。
 
@@ -94,8 +90,6 @@ import {
 
 环绕不只由原始索引决定，还受完整变换链影响。普通平移、旋转和正尺度保持朝向；在一个轴上使用 `scale.x = -1` 做镜像，会把窗口几何左右翻转，CCW 变 CW。两个负尺度轴又翻转两次、恢复原方向。判断依据是模型变换左上 3×3 的行列式符号：负值表示奇数次镜像、环绕反转。
 
-<CullingTransformParityDiagram />
-
 渲染镜像实例时有三种做法：为该 draw call 临时切换 `glFrontFace(GL_CW)`；预处理一份反转三角形索引的 mesh；或在确实双面时关闭剔除。状态切换要按 draw 分组并在之后恢复。投影矩阵若人为翻转 Y，也会改变最终窗口环绕，因此跨 OpenGL/Vulkan 或离屏坐标约定时应通过一个已知三角形实测，而不是只看模型文件。
 
 面剔除只看**位置投影后的环绕**，不读取顶点法线；法线反了会让光照错，却不会直接改变 culling。片段 shader 可用 `gl_FrontFacing` 区分当前 primitive 的朝向，为真正双面材质选择不同法线或颜色，但前提是该面没有在更早阶段被剔除。
@@ -114,7 +108,6 @@ import {
 
 <Stepper>
   <Step title="① 模型里：两个面顶点都按逆时针 CCW 定义">
-    <WindingCullStepDiagram step={1} />
     建模时定下一个统一约定：所有三角形都按
     <code>v0 → v1 → v2</code> 的<strong>逆时针</strong>顺序写顶点。立方体上
     <strong>朝你的正面</strong>和<strong>背对你的背面</strong>
@@ -123,7 +116,6 @@ import {
     谁正谁背；正背是投影到屏幕后才分出来的。
   </Step>
   <Step title="② 投影到屏幕：朝你的仍 CCW=正面，背你的反转成 CW=背面">
-    <WindingCullStepDiagram step={2} />
     顶点经顶点着色器投影到屏幕。<strong>朝你的那个面</strong>
     ，你正对着它看，环绕方向仍是
     <strong>逆时针（CCW）</strong>，和约定一致 → 判为<strong>正面</strong>。
@@ -133,7 +125,6 @@ import {
     。同一套顶点约定，正背就这么分开了。
   </Step>
   <Step title="③ 剔除：背面（CW）被丢弃，不进光栅化">
-    <WindingCullStepDiagram step={3} />
     默认 <code>glCullFace(GL_BACK)</code> 剔背面：那个被判成
     <strong>顺时针的背面</strong>被<strong>直接丢弃</strong>
     ，连片段都不生成、不跑片段着色器。只有
@@ -152,14 +143,6 @@ import {
 > 猜一猜：下面故意用 X-ray/线框诊断方式显示“实际提交过的面”。从剔除关切到开，哪些背面 primitive 会消失？若恢复正常不透明材质和深度测试，最终颜色是否应该明显改变？
 
 左边让诊断层画出正背两侧，右边只保留正面，因此能直观看到减少的 primitive。这个对比故意不等价于普通 opaque 渲染：真实场景中前面的深度会挡住背面，开关剔除通常不改变最终颜色，只改变 GPU 是否为背面执行光栅与片段工作。
-
-<CompareSlider
-  leftLabel="剔除关（背面也提交）"
-  rightLabel="剔除开（背面已丢弃）"
-  initial={42}
-  left={<FaceCullingDiagram culled={false} bare />}
-  right={<FaceCullingDiagram culled={true} bare />}
-/>
 
 开剔除后诊断视图里消失的是按窗口环绕判成 back-facing 的 primitives。对满足条件的封闭外壳，它应当“只省工作、不改最终图像”；如果正常 opaque 图像明显改变，优先检查环绕、负缩放、相机是否在内部，以及材质是否本来就要求双面。
 

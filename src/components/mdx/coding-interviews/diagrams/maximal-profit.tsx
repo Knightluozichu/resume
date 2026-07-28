@@ -2,31 +2,7 @@
 
 import { useState } from "react";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const prices = [9, 11, 5, 7, 16, 1, 4, 2] as const;
-
-const scanStates = [
-  { day: 1, price: 11, minimum: 9, diff: 2, best: 2, note: "买 9、卖 11，建立首个合法交易" },
-  { day: 2, price: 5, minimum: 9, diff: -4, best: 2, note: "当天 5 只能作为卖价；下一天起才成为历史最低" },
-  { day: 3, price: 7, minimum: 5, diff: 2, best: 2, note: "买 5、卖 7，与当前最佳持平" },
-  { day: 4, price: 16, minimum: 5, diff: 11, best: 11, note: "买 5、卖 16，刷新最大利润" },
-  { day: 5, price: 1, minimum: 5, diff: -4, best: 11, note: "更低价格出现得太晚，不能配对之前的 16" },
-  { day: 6, price: 4, minimum: 1, diff: 3, best: 11, note: "买 1、卖 4，仍不超过 11" },
-  { day: 7, price: 2, minimum: 1, diff: 1, best: 11, note: "最终答案保持 11" },
-] as const;
-
-const officialCases = [
-  { label: "Test1", fields: [["价格", "4,1,3,2,5"], ["买入", "1"], ["卖出", "5"], ["结果", "4"]] },
-  { label: "Test2", fields: [["价格", "1,2,4,7,11,16"], ["形态", "严格递增"], ["交易", "1 → 16"], ["结果", "15"]] },
-  { label: "Test3", fields: [["价格", "16,11,7,4,2,1"], ["形态", "严格递减"], ["最小亏损", "2 → 1"], ["结果", "-1"]] },
-  { label: "Test4", fields: [["价格", "16,16,16,16,16"], ["形态", "全部相同"], ["交易", "任意先后两天"], ["结果", "0"]] },
-  { label: "Test5", fields: [["价格", "9,11,5,7,16,1,4,2"], ["买入", "5"], ["卖出", "16"], ["结果", "11"]] },
-  { label: "Test6", fields: [["价格", "2,4"], ["唯一交易", "2 → 4"], ["长度", "2"], ["结果", "2"]] },
-  { label: "Test7", fields: [["价格", "4,2"], ["唯一交易", "4 → 2"], ["长度", "2"], ["结果", "-2"]] },
-  { label: "Test8", fields: [["价格", "nullptr"], ["长度", "0"], ["入口", "无效"], ["结果", "0"]] },
-] as const;
-
 export function MaximalProfitTimelineDiagram() {
   const chartX = (day: number) => 80 + day * 94.3;
   const chartY = (p: number) => 280 - ((p - 1) / 15) * 220;
@@ -76,36 +52,6 @@ export function MaximalProfitTimelineDiagram() {
     </figure>
   );
 }
-
-export function MaximalProfitScanLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = scanStates[cursor];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {scanStates.map((item, index) => (
-            <button key={item.day} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"h-11 border text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>
-              {item.day}:{item.price}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">当前卖价</div><div className="mt-1 font-semibold text-primary">{state.price}</div></div>
-          <div className="border border-success bg-success/10 p-3"><div className="text-xs text-muted">此前最低</div><div className="mt-1 font-semibold text-success">{state.minimum}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">候选利润</div><div className="mt-1 font-semibold text-primary">{state.diff}</div></div>
-          <div className="border border-accent bg-accent/10 p-3"><div className="text-xs text-muted">当前最大</div><div className="mt-1 font-semibold text-accent">{state.best}</div></div>
-        </div>
-        <p className="mb-0 mt-3 border-l-4 border-accent bg-background p-3 text-sm text-secondary">{state.note}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        点击每个卖出时刻，观察此前最低价、当前差值和全局最大差值。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function MaximalProfitInvariantMap() {
   const rows = [
     ["进入卖出日 i", "min = prices[0..i-1] 的最小值", "买入严格早于卖出", "不能先纳入 prices[i]"],
@@ -152,8 +98,4 @@ export function MaximalProfitContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function MaximalProfitOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者 8 组测试证明其语义是强制一次交易，并覆盖递增、递减、相等、两元素和空输入。" />;
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -159,17 +157,6 @@ export function RecursionSearchDiagram() {
     </figure>
   );
 }
-
-export function BaseAndRecursiveCaseLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={baseCaseCases}
-      caption="countdown(3)的四层调用展示递归条件怎样单调靠近基线条件。"
-      tone="cyan"
-    />
-  );
-}
-
 export function CallStackFramesDiagram() {
   const frames = [
     { title: "greet(name='Maggie')", detail: "暂停点：等待greet2返回", y: 240, tone: accent },
@@ -212,15 +199,5 @@ export function CallStackFramesDiagram() {
         不同栈帧可以拥有同名局部变量；它们互不覆盖，因为每次函数调用都有独立上下文。
       </figcaption>
     </figure>
-  );
-}
-
-export function RecursionChoiceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={choiceCases}
-      caption="选择表达方式时同时比较问题结构、状态存放位置、最大深度和运行时限制。"
-      tone="violet"
-    />
   );
 }

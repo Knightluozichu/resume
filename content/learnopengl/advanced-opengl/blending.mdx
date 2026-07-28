@@ -10,14 +10,15 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Blending
 draft: false
 ---
 
-import {
-  AlphaSortDiagram,
-  BlendAlphaModeDiagram,
-  BlendEquationDiagram,
-  BlendSortStepDiagram,
-  DiscardVsBlendDiagram,
-  TransparencyPassDiagram,
-} from "@/components/mdx/learnopengl/diagrams/blending";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { ShaderDemo } from "@/components/mdx/shader-demo";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-69，高级OpenGL 篇第 3 篇）：原书「混合 Blending」。重心是代码对照(§6 覆盖≥80% 关键代码)：glEnable(GL_BLEND)+glBlendFunc / 片段着色器 discard 镂空 / 半透明排序 + glDepthMask(false) 关深度写入。math:true 选讲(§4)：混合方程 C=Csrc·Fsrc+Cdst·Fdst + over 展开 Fsrc=αsrc/Fdst=1−αsrc。承接深度/模板章（同 section 工厂流水线管线测试阶段：混合发生在测试之后、写颜色那一刻）。沿用「光与材质 / 颜料」类比：混合像往画布叠一层半透明颜料。主 viz 两个：ShaderDemo over 混合可玩（程序化 src/dst 色块 + uSrcAlpha/uSrcColor 控件）+ Stepper 半透明排序（每步带 BlendSortStepDiagram）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -65,7 +66,6 @@ $$
 
 它说：最终颜色 = 源色乘源因子 + 目标色乘目标因子。`Fsrc`（源因子）控制「新颜色占多少」，`Fdst`（目标因子）控制「旧颜色透出多少」。这两个因子由你用 `glBlendFunc` 指定，可以是常数 0、1，也可以是源色的 alpha 等。下面这张图把「两块色块各乘一个权重再相加」画得很直白：
 
-<BlendEquationDiagram />
 
 最常用的一种配法，是把源因子设成**源色的 alpha**、目标因子设成 **1 减源色 alpha**——这正好对应「颜料按浓度盖、背景按剩下的比例透出」，业界叫 <Term def="最常用的一种混合配法：源因子取源色的 alpha、目标因子取 1 减源色 alpha，于是结果 = αsrc·源色 + (1−αsrc)·目标色。前景占 αsrc、背景占剩下的，就像把半透明颜料盖到画上。用 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) 设定。">over 混合</Term>（«source over»）。它的展开式 §4 会细推，直觉就一句：**前景占 αsrc，背景占剩下的 1−αsrc**。这也是本章主 Demo 让你亲手调的那条公式。
 
@@ -73,7 +73,6 @@ $$
 
 上面的公式默认纹理 RGB 仍是原始颜色，alpha 单独存放，这叫**直通 alpha**（straight alpha）。此时固定管线需要再乘一次源 alpha，使用 `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`。另一种常见资源在存储时已经把 RGB 乘过 alpha，叫**预乘 alpha**（premultiplied alpha）；它的源 RGB 已含覆盖率，再用 `SRC_ALPHA` 会二次相乘、边缘发暗，因此应使用 `ONE, ONE_MINUS_SRC_ALPHA`。
 
-<BlendAlphaModeDiagram />
 
 如果渲染目标的 alpha 后续还要参与合成，只用两参数 `glBlendFunc` 还会让输出 alpha 按 RGB 因子计算成 `αsrc² + αdst(1-αsrc)`，这不是标准 source-over。直通 alpha 更完整的设置是分别指定 RGB 与 alpha 因子：
 
@@ -92,7 +91,6 @@ glBlendFuncSeparate(
 
 办法是片段着色器里的 <Term def="片段着色器里的一条命令：一旦执行，当前片段就被立即丢弃，不再往后走、不会进入颜色缓冲。常用来做镂空——纹理里 alpha 很小（接近全透明）的片段直接 discard，于是草叶、铁丝网的空隙就被「抠掉」，露出背后，得到清晰的硬边镂空。">discard</Term>：采样纹理拿到 alpha，若 alpha 小于一个阈值（接近全透明）就 `discard`，这个片段直接被丢掉、连颜色缓冲都不进，于是空隙处「抠空」露出背后。它和混合的区别很值得对照看——一个是硬边镂空、一个是柔和半透明：
 
-<DiscardVsBlendDiagram />
 
 什么时候用哪个？记住一句：**二元透明（草、铁丝网这类非透即不透）用 discard，连续半透明（玻璃、水）用 blend**。用错了会出毛病（§7 会讲），现在先记住这个分界。
 
@@ -102,11 +100,9 @@ glBlendFuncSeparate(
 
 如果先画近玻璃且写入深度，之后的远玻璃会直接深度失败；即便关闭深度写入，顺序仍然错误，因为颜色已经按“近后远”的顺序累积。下面这张图把乱序与正确透叠并排画清楚：
 
-<AlphaSortDiagram />
 
 经典画法是：先画所有不透明物建立深度；再把透明表面从远到近稳定排序，保持深度测试开启、通常用 `glDepthMask(GL_FALSE)` 关闭<Term def="片段通过深度测试后更新深度缓冲的动作。透明 pass 通常关闭它，使透明片段仍被不透明深度遮挡，却不把某一透明层固化成最近遮挡面。它不能替代远到近排序，pass 结束必须恢复。">深度写入</Term>。完美远到近且不相交时，透明层即便写深度通常也会依次通过，但关闭写入能让 pass 契约更稳健；它仍不能修复错误顺序或相交几何。
 
-<TransparencyPassDiagram />
 
 对象中心距离只是近似。两块透明几何若相交、包围或形成循环遮挡，不存在单一对象顺序；需要拆分三角形排序、depth peeling、weighted blended OIT 等方案。大量粒子常选择近似 OIT，接受一定颜色误差换稳定性能。
 
@@ -238,7 +234,6 @@ void main() {
 
 <Stepper>
   <Step title="① 乱序画 → 穿帮">
-    <BlendSortStepDiagram step={1} />
     不管顺序随便画：先画了最<strong>近</strong>
     那块玻璃，它把颜色混进画布、也把自己的 <strong>深度</strong>
     写了进去。之后再画后面更<strong>远</strong>
@@ -246,13 +241,11 @@ void main() {
     ——可它们是半透明的，本该透出来！结果后面两块消失，穿帮。
   </Step>
   <Step title="② 第一招：先画所有不透明物体">
-    <BlendSortStepDiagram step={2} />
     修法第一步：先把场景里所有<strong>不透明物体</strong>
     （比如那面墙）用正常深度测试画好，
     深度缓冲记下它们。这样半透明物之后还能被不透明物正确遮挡。这一步只把「底」铺好，还没动半透明玻璃。
   </Step>
   <Step title="③ 第二招：半透明从远到近 + 关深度写入">
-    <BlendSortStepDiagram step={3} />
     再把半透明玻璃<strong>从远到近</strong>排序，并{" "}
     <code>glDepthMask(GL_FALSE)</code> <strong>关掉深度写入</strong>
     ，逐块画：先画最远、再中间、最后最近。每块都叠在已画好的更远色之上， over

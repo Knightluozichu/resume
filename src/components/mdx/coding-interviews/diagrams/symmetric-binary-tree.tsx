@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "完整对称",
@@ -87,8 +85,4 @@ export function SymmetricShapeCounterexampleDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">全值相同仍可能不对称；空孩子的镜像位置是结构信息的一部分。</figcaption>
     </figure>
   );
-}
-
-export function SymmetricOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者十组测试，核对值冲突、结构缺口、深层斜树、空树和全同值陷阱。" />;
 }

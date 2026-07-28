@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -142,27 +140,6 @@ export function TreeAnatomyDiagram() {
     </figure>
   );
 }
-
-export function DepthFirstTraversalLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={dfsCases}
-      caption="DFS先沿docs分支走到文件叶子，再回溯到home进入photos分支。"
-      tone="cyan"
-    />
-  );
-}
-
-export function TreePropertyLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={propertyCases}
-      caption="有根术语、连通、无环和二叉限制分别回答树的方向、图性质与孩子数量。"
-      tone="emerald"
-    />
-  );
-}
-
 export function HuffmanCodingDiagram() {
   const nodes = [
     { label: "总频率9", x: 380, y: 74, tone: accent },

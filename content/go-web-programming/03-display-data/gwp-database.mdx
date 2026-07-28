@@ -7,27 +7,18 @@ description: "比较内存、CSV、gob、SQL关系与映射器，建立CRUD、�
 demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-6"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { GwpStorageChoiceLab, GwpCrudLab, GwpMapperLab } from "@/components/mdx/go-web-programming/diagrams/gwp-database";
-
-<Objectives>
-- 能比较内存、CSV、gob与关系数据库的持久性、并发和查询边界
-- 能实现参数化CRUD与事务，并正确关闭Rows、Stmt和Tx
-- 能分析手写映射与关系映射器的查询成本、错误传播和所有权
-</Objectives>
 
 ## 从数据需要活多久开始
 
-先预测：把论坛主题保存在map中，进程重启后是否仍存在？不会。<Term def="数据跨请求、进程和主机故障需要保持到何种范围的要求。">persistence lifetime requirement</Term>先决定寿命、容量、查询和并发，再选择介质。
+先预测：把论坛主题保存在map中，进程重启后是否仍存在？不会。先决定寿命、容量、查询和并发，再选择介质。
 
-<GwpStorageChoiceLab />
 
 ## 内存存储
 
-Struct、slice和map提供低延迟，但状态只存在于进程内。<Term def="由单进程拥有并通过锁或消息协议保护的数据集合。">in memory repository contract</Term>适合缓存、测试替身或临时状态；多goroutine读写必须同步，快照与恢复要另行设计。
+Struct、slice和map提供低延迟，但状态只存在于进程内。适合缓存、测试替身或临时状态；多goroutine读写必须同步，快照与恢复要另行设计。
 
 ```go
 type MemoryStore struct {
@@ -38,7 +29,7 @@ type MemoryStore struct {
 
 ## CSV与Gob文件存储
 
-CSV便于交换和检查，gob保留Go类型信息但与Go结构耦合。<Term def="编码、临时文件、刷盘、原子替换和恢复共同组成的文件持久化协议。">file storage commit protocol</Term>不能直接覆盖唯一好文件；部分写入、进程崩溃和schema变化都要测试。
+CSV便于交换和检查，gob保留Go类型信息但与Go结构耦合。不能直接覆盖唯一好文件；部分写入、进程崩溃和schema变化都要测试。
 
 ```go
 tmp, err := os.CreateTemp(dir, "threads-*.tmp")
@@ -49,13 +40,12 @@ defer tmp.Close()
 
 ## Go与SQL
 
-database/sql是连接池和查询抽象，`*sql.DB`不是单连接。<Term def="参数化语句、连接池、扫描、受影响行数和错误组成的数据库访问边界。">SQL execution contract</Term>要求使用占位参数、区分ErrNoRows、检查Rows.Err并关闭Rows。
+database/sql是连接池和查询抽象，`*sql.DB`不是单连接。要求使用占位参数、区分ErrNoRows、检查Rows.Err并关闭Rows。
 
-<GwpCrudLab />
 
 ## CRUD与事务
 
-Create、retrieve、update、delete必须定义未找到、重复键和并发更新行为。<Term def="一组SQL操作要么全部提交要么全部回滚的状态迁移边界。">transaction atomicity boundary</Term>由BeginTx、Commit和Rollback明确拥有，不能跨请求泄漏。
+Create、retrieve、update、delete必须定义未找到、重复键和并发更新行为。由BeginTx、Commit和Rollback明确拥有，不能跨请求泄漏。
 
 ```go
 tx, err := db.BeginTx(ctx, nil)
@@ -67,45 +57,21 @@ return tx.Commit()
 
 ## SQL关系
 
-用户、主题和回复通过主外键连接，一对多与多对多影响查询和删除规则。<Term def="主键、外键、唯一约束和级联规则共同维护的关系不变量。">relational integrity invariant</Term>应由数据库约束与应用验证双层保护。
+用户、主题和回复通过主外键连接，一对多与多对多影响查询和删除规则。应由数据库约束与应用验证双层保护。
 
 ## Go关系映射器
 
-Mapper可减少扫描和SQL样板，但可能隐藏N+1查询、事务和字段映射。<Term def="领域对象与关系行之间显式转换并保留查询证据的适配层。">relational mapping boundary</Term>要求日志或测试能观察执行SQL数量和参数。
+Mapper可减少扫描和SQL样板，但可能隐藏N+1查询、事务和字段映射。要求日志或测试能观察执行SQL数量和参数。
 
-<GwpMapperLab />
-
-<Stepper>
-  <Step title="选择介质"><GwpStorageChoiceLab /></Step>
-  <Step title="验证CRUD"><GwpCrudLab /></Step>
-  <Step title="审查映射">为一对多查询记录SQL次数，并注入扫描和提交失败。</Step>
-</Stepper>
 
 ## 验收实验：同一仓库三种实现
 
 为Thread仓库定义同一接口，分别实现内存、文件和SQL版本；运行共享契约测试。注入并发写、部分文件写、ErrNoRows、扫描失败和Commit失败，确认每种实现返回一致领域结果且不泄漏资源。
 
-<Callout type="trap" title="sql.DB用完一次就Close">它是并发安全连接池，通常由进程长期持有并在服务退出时关闭。</Callout>
-<Callout type="trap" title="ORM会自动消除数据库问题">映射器可隐藏查询数量、事务和锁，仍需查看SQL与执行计划。</Callout>
 
 ## 本章回顾
 
 本章覆盖内存存储、CSV与gob文件、Go与SQL、SQL关系、Go关系映射器和CRUD。正确存储选择由生命周期与查询驱动，正确实现由原子提交、资源关闭和故障证据证明。
 
-<Exercises>
-**问题 1：sql.DB是什么？**<Answer>并发安全的数据库句柄和连接池，不是单一连接。</Answer>
-**问题 2：查询Rows要检查什么？**<Answer>逐行Scan错误、迭代后的Rows.Err以及Close。</Answer>
-**问题 3：文件怎样避免部分覆盖？**<Answer>写临时文件、刷盘并关闭成功后原子rename替换。</Answer>
-</Exercises>
 
 ## 术语表
-<Glossary>
-  <GlossaryItem term="persistence lifetime requirement" definition="数据跨故障需要保持的寿命要求。" />
-  <GlossaryItem term="in memory repository contract" definition="进程内数据的所有权与同步协议。" />
-  <GlossaryItem term="file storage commit protocol" definition="文件编码到原子替换的提交协议。" />
-  <GlossaryItem term="SQL execution contract" definition="SQL参数、扫描、结果与错误边界。" />
-  <GlossaryItem term="transaction atomicity boundary" definition="事务全提交或全回滚边界。" />
-  <GlossaryItem term="relational integrity invariant" definition="键和约束维护的关系不变量。" />
-  <GlossaryItem term="relational mapping boundary" definition="对象与关系行的映射边界。" />
-</Glossary>
-<Attribution adaptedFrom="Go Web Programming Chapter 6 Storing data" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-6" />

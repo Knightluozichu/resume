@@ -7,21 +7,9 @@ description: "从法线变换和 Phong/Blinn-Phong，到距离衰减、聚光、
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
-draft: true
+draft: false
 ---
 
-import { GlrLightingDiagram, GlrLightingSpacesDiagram, GlrShadowMapDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-lighting";
-import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能在统一坐标和线性颜色空间中推导环境、漫反射与镜面局部光照项
-- 能解释非均匀缩放下法线矩阵、插值后归一化和切线基的必要性
-- 能实现方向光、点光和聚光的几何量、衰减与材质参数
-- 能实现 shadow mapping 的光空间变换、深度比较、偏差、PCF 与常见伪影诊断
-
-</Objectives>
 
 ## 直觉：光照是几何、单位和采样合同的交点
 
@@ -29,9 +17,8 @@ OpenGL 没有“自动光照”。shader 接收位置、法线、材质和光源
 
 先预测：模型带非均匀缩放时，直接用 `mat3(model)` 变换法线会只改变法线长度，还是也改变方向？会改变方向，并破坏与切平面的垂直关系。
 
-<Term def="在单个表面点用光源、视线、法线和材质近似直接光贡献，而不求解场景多次反射的着色关系">局部光照模型</Term>包括经典 Phong/Blinn-Phong 等；常数 ambient 只是间接光近似，不是 global illumination。
+包括经典 Phong/Blinn-Phong 等；常数 ambient 只是间接光近似，不是 global illumination。
 
-<GlrLightingDiagram />
 
 ## 空间与法线矩阵
 
@@ -41,9 +28,8 @@ $$
 N=(M^{-1})^T,\qquad (N\mathbf n)\cdot(M\mathbf t)=\mathbf n\cdot\mathbf t=0.
 $$
 
-<Term def="模型线性变换逆矩阵的转置，用于在一般仿射变换下保持法线与变换后切平面垂直">法线矩阵</Term>在刚体或统一缩放时可简化，但一般实现不应无条件使用 model matrix。顶点法线经过插值后长度不再为一，片段阶段需重新 normalize。
+在刚体或统一缩放时可简化，但一般实现不应无条件使用 model matrix。顶点法线经过插值后长度不再为一，片段阶段需重新 normalize。
 
-<GlrLightingSpacesDiagram />
 
 ## Diffuse 与 Specular
 
@@ -59,7 +45,7 @@ $$
 L_s=k_s\odot I\,\max(\mathbf n\cdot\mathbf h,0)^p.
 $$
 
-<Term def="控制经验镜面瓣宽度的指数；指数越高高光越窄，但它不等同于跨模型通用的物理粗糙度">光泽指数</Term>不可直接当 PBR roughness。Phong/Blinn-Phong 是教学与风格化模型，不自动能量守恒，也不应宣称 Blinn 一定更快或更自然。
+不可直接当 PBR roughness。Phong/Blinn-Phong 是教学与风格化模型，不自动能量守恒，也不应宣称 Blinn 一定更快或更自然。
 
 ```glsl
 vec3 shadeLocal(Surface s, Light light, vec3 eye) {
@@ -89,13 +75,13 @@ $$
 
 ## 材质与法线细节
 
-<Term def="描述表面如何响应光的参数集合，可含 diffuse/specular、shininess、法线/凹凸贴图和遮罩；它不是 OpenGL 固定对象">材质</Term>可通过 UBO/SSBO、纹理和实例 id 组织。材质参数的颜色空间、范围和缺省值必须固定。
+可通过 UBO/SSBO、纹理和实例 id 组织。材质参数的颜色空间、范围和缺省值必须固定。
 
 Normal mapping 把纹理方向从切线空间通过 TBN 转到着色空间。TBN 要处理 UV 镜像 handedness，并在插值后正交化；高度 bump mapping 则由高度偏导扰动法线。二者改变着色法线，不改变几何轮廓或真实遮挡。
 
 ## Shadow mapping：从光源判断可见性
 
-<Term def="先从光源视角记录最近深度，再在相机绘制时把表面投影到光空间并比较深度的阴影算法">阴影映射</Term>把可见性问题离散为深度纹理查询。
+把可见性问题离散为深度纹理查询。
 
 ```cpp
 // Pass 1: light depth
@@ -119,7 +105,6 @@ $$
 
 必须检查 $q$ 是否在有效投影域。方向光常用正交投影，聚光用透视，点光可用 cubemap 六面深度。
 
-<GlrShadowMapDiagram />
 
 ## Bias、过滤与伪影
 
@@ -139,84 +124,15 @@ float shadowPCF(sampler2DShadow map, vec3 q, vec2 texel) {
 
 ## 三步光照验证
 
-<Stepper>
-<Step title="第一步：证明空间与输入">
-
-输出世界位置、编码法线、N·L、距离和材质 id 调试附件；用非均匀缩放和镜像 UV 测边界。
-
-<GlrStepFlowDiagram caption="先证明向量空间和输入范围，再看最终颜色。" stage={1} stages={["Inputs：spaces、normal matrix、material、linear color"]} />
-
-</Step>
-<Step title="第二步：证明光照项">
-
-分别显示 diffuse、specular、attenuation 和 spotlight weight，与 CPU 对已知点计算比较。
-
-<GlrStepFlowDiagram caption="分项输出避免一个错误被另一个项掩盖。" stage={2} stages={["Inputs：spaces、normal matrix、material、linear color", "Lighting：N·L、N·H、attenuation、cone"]} />
-
-</Step>
-<Step title="第三步：证明阴影采样">
-
-显示 shadow depth、投影坐标、比较结果与 PCF；扫描 bias、分辨率和光投影范围并保存参考图。
-
-<GlrStepFlowDiagram caption="阴影验收同时覆盖几何变换、深度精度和过滤足迹。" stage={3} stages={["Inputs：spaces、normal matrix、material、linear color", "Lighting：N·L、N·H、attenuation、cone", "Shadow：light depth、projection、bias、PCF"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 非均匀缩放模型上的高光方向漂移。
-**原因 →** 法线直接乘 model matrix，且插值后未归一化。
-**修法 →** 使用 inverse-transpose 法线矩阵，并在统一空间内片段归一化。
-</Callout>
-
-<Callout type="trap">
-**现象 →** shadow acne 消失后物体像悬浮。
-**原因 →** 用过大常数 bias 掩盖精度和斜率问题。
-**修法 →** 缩紧光投影范围，提高有效精度，并按斜率/法线调 bias，用参考场景扫描阈值。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 开启 sRGB 纹理后材质突然变暗或高光错误。
-**原因 →** 采样解码、shader 线性计算和 framebuffer 编码合同不一致。
-**修法 →** 颜色数据按 sRGB 解码，法线/参数保持线性，在线性空间光照和混合，输出阶段统一编码。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：为什么法线用 inverse-transpose？**
-
-<Answer>
-法线是切平面的协向量。inverse-transpose 保证变换后法线仍与所有变换后切线垂直；直接乘一般 model 线性部分在非均匀缩放下不满足该不变量。
-</Answer>
-
-**问题 2：Phong ambient 为什么不等于全局光照？**
-
-<Answer>
-常数 ambient 不追踪遮挡、方向、多次反射或材质间能量交换，只是避免无直接光区域全黑的经验项。全局光照需要求解或近似间接光传输。
-</Answer>
-
-**问题 3：如何区分 shadow acne、peter-panning 与 aliasing？**
-
-<Answer>
-acne 是表面自比较条纹，随 bias 增大减弱；peter-panning 是 bias 过大导致阴影脱离；aliasing 是光空间 texel 密度不足导致阶梯/闪烁。分别扫描 bias、观察接触边和调整投影范围/分辨率诊断。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 光照正确性从统一空间和法线不变量开始，并在线性颜色空间逐项计算材质响应；阴影映射再用光空间深度近似可见性。模型、偏差和过滤各有边界，必须通过分项附件和参数扫描验证，而不是以“看起来有立体感”验收。
 
-<Glossary>
-<GlossaryItem term="局部光照模型">在单点近似直接光与材质响应的着色关系。</GlossaryItem>
-<GlossaryItem term="法线矩阵">一般仿射变换下用于保持法线与切平面垂直的逆转置矩阵。</GlossaryItem>
-<GlossaryItem term="光泽指数">控制经验镜面高光瓣宽度的指数参数。</GlossaryItem>
-<GlossaryItem term="材质">描述表面对光响应和细节参数的集合。</GlossaryItem>
-<GlossaryItem term="阴影映射">以光源深度纹理比较近似光可见性的两阶段算法。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapter 7" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

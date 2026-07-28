@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -217,25 +215,5 @@ export function BfsShortestPathDiagram() {
         在每条边成本相同的图上，节点第一次被发现时记录的距离就是最少边数。
       </figcaption>
     </figure>
-  );
-}
-
-export function MangoSellerQueueLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={mangoCases}
-      caption="芒果销售商示例中，邻居按发现顺序进入队列，一度关系始终先于二度关系检查。"
-      tone="cyan"
-    />
-  );
-}
-
-export function TopologicalSortLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={topoCases}
-      caption="Kahn拓扑排序反复取入度为0的节点；若仍有节点却没有可取节点，图中存在依赖环。"
-      tone="violet"
-    />
   );
 }

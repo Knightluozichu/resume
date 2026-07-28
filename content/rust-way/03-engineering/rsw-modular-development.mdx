@@ -7,29 +7,20 @@ description: "区分package、crate、workspace和module，管理Cargo依赖、f
 demo: true
 math: false
 sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RswCargoGraphLab, RswModuleVisibilityLab, RswCsvPackageLab } from "@/components/mdx/rust-way/diagrams/rsw-modular-development";
-
-<Objectives>
-- 能区分Cargo package、crate、target与workspace，并解释依赖解析、feature、profile和lockfile边界
-- 能设计module tree、path、use与pub可见性，让公开API稳定而内部表示可替换
-- 能实现一个完整CSV功能包，覆盖协议解析、领域转换、错误来源、测试和发布元数据
-</Objectives>
 
 ## 从“文件夹不是模块边界”开始
 
-模块化开发同时有构建边界与语言边界。Cargo package由manifest描述，可包含library与binary等target；crate是一次编译和命名空间单元；workspace协调多个package；module则组织crate内部路径和可见性。<Term def="package、crate、target、workspace与module各自承担职责的分层构建模型。">Rust modular coordinate</Term>避免把目录、编译单元和发布单元混为一谈。
+模块化开发同时有构建边界与语言边界。Cargo package由manifest描述，可包含library与binary等target；crate是一次编译和命名空间单元；workspace协调多个package；module则组织crate内部路径和可见性。避免把目录、编译单元和发布单元混为一谈。
 
 先预测：把源码移动到子目录不会自动改变公开API，但修改`mod`声明和`pub use`会改变名称路径。
 
-<RswCargoGraphLab />
 
 ## Cargo package、crate与target
 
-`Cargo.toml`定义package元数据、依赖、feature、profile和target。一个package最多有一个library crate，可有多个binary、example、test和bench target；每个target产生crate。<Term def="由manifest、源码入口、依赖与构建配置组成的可发布或可执行单元。">Cargo package contract</Term>还应包含license、repository、edition与minimum supported Rust version等维护信息。
+`Cargo.toml`定义package元数据、依赖、feature、profile和target。一个package最多有一个library crate，可有多个binary、example、test和bench target；每个target产生crate。还应包含license、repository、edition与minimum supported Rust version等维护信息。
 
 ```toml
 [package]
@@ -44,13 +35,13 @@ serde = { version = "1", features = ["derive"] }
 
 ## 依赖、feature、lockfile与自定义构建
 
-Cargo通过语义版本和registry/source解析依赖图；feature应是加法式能力，避免同名feature在关闭时改变不相关语义。库通常发布兼容范围，应用提交Cargo.lock获得可重复解析。<Term def="锁定依赖来源、版本、feature、target与构建输入，使产物可重建的记录。">dependency provenance lock</Term>不能覆盖native compiler、环境变量或build script外部工具，后者也需记录。
+Cargo通过语义版本和registry/source解析依赖图；feature应是加法式能力，避免同名feature在关闭时改变不相关语义。库通常发布兼容范围，应用提交Cargo.lock获得可重复解析。不能覆盖native compiler、环境变量或build script外部工具，后者也需记录。
 
 `build.rs`在编译前生成代码、探测native库或输出link指令；它是构建程序，不应偷偷下载不可校验内容。生成文件写入OUT_DIR，并通过明确输入触发rerun。
 
 ## Workspace：共享而不混同发布
 
-Workspace共享lockfile和target目录，可统一lint与profile，同时每个member仍有独立package版本与发布策略。<Term def="多个package共享开发基础设施、但保持crate图和发布边界独立的仓库组织。">workspace coordination boundary</Term>适合把domain、CLI、server和binding拆开，不能用循环依赖连接它们。
+Workspace共享lockfile和target目录，可统一lint与profile，同时每个member仍有独立package版本与发布策略。适合把domain、CLI、server和binding拆开，不能用循环依赖连接它们。
 
 ```toml
 [workspace]
@@ -63,17 +54,16 @@ serde = { version = "1", features = ["derive"] }
 
 ## 模块系统、路径与use
 
-`mod`建立模块树，`crate`、`self`和`super`确定路径起点，`use`只把名称引入scope。文件布局是模块树的载体，不是API设计本身。<Term def="由模块树、绝对或相对路径、名称导入和重导出构成的命名空间关系。">module path graph</Term>应让内部移动文件时，稳定入口仍可通过`pub use`保持。
+`mod`建立模块树，`crate`、`self`和`super`确定路径起点，`use`只把名称引入scope。文件布局是模块树的载体，不是API设计本身。应让内部移动文件时，稳定入口仍可通过`pub use`保持。
 
 ## 可见性与私有性
 
-Item默认私有，`pub`公开，`pub(crate)`、`pub(super)`和`pub(in path)`限制范围。字段私有使构造器可以维护不变量；sealed trait可限制外部实现。<Term def="只向调用者暴露可长期承诺的类型与行为，把表示和辅助操作留在最小范围。">visibility design boundary</Term>不是“全部pub方便调用”。
+Item默认私有，`pub`公开，`pub(crate)`、`pub(super)`和`pub(in path)`限制范围。字段私有使构造器可以维护不变量；sealed trait可限制外部实现。不是“全部pub方便调用”。
 
-<RswModuleVisibilityLab />
 
 ## 完整CSV功能包
 
-CSV不是按逗号split：quoted field可含逗号和换行，escape与编码也有协议。Library层接受Reader并返回领域记录或类型化Error；CLI层负责路径、stdout、stderr和exit status。<Term def="把协议读取、字段验证、领域转换、错误上下文和输出写入连接成可测试包的管线。">CSV package pipeline</Term>应保留row/field坐标并避免部分输出伪装成功。
+CSV不是按逗号split：quoted field可含逗号和换行，escape与编码也有协议。Library层接受Reader并返回领域记录或类型化Error；CLI层负责路径、stdout、stderr和exit status。应保留row/field坐标并避免部分输出伪装成功。
 
 ```rust
 use serde::Deserialize;
@@ -86,47 +76,12 @@ fn read_records(input: impl std::io::Read) -> csv::Result<Vec<Record>> {
 }
 ```
 
-<RswCsvPackageLab />
-
-<Stepper>
-  <Step title="标记构建坐标"><RswCargoGraphLab /></Step>
-  <Step title="收窄可见性">从所有item私有开始，只在真实调用者无法完成任务时扩大到最小pub范围。</Step>
-  <Step title="验收CSV包"><RswCsvPackageLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="一个文件就应该对应一个公开模块">
-文件是实现布局，模块是名称与隐私边界。可以用私有子模块拆文件，再从稳定父模块重导出少量公共类型。
-</Callout>
-
-<Callout type="trap" title="Feature可以互斥选择完全不同实现">
-Cargo feature会在依赖图中统一合并，互斥feature可能同时开启并编译失败。优先设计加法式feature，互斥选择用独立crate、运行期配置或明确编译检查。
-</Callout>
 
 ## 本章回顾
 
 本章覆盖模块化开发、Cargo包与依赖、Cargo.toml与自定义构建、模块系统、CSV功能包以及可见性与私有性。先区分构建与语言坐标，再锁定依赖来源，最后以稳定API和可失败管线验收模块边界。
 
-<Exercises>
-**问题 1：package与crate有什么区别？**
-<Answer>Package是Cargo manifest描述的发布与构建集合；crate是一次编译和命名空间单元。一个package可含一个library crate和多个binary等target crate。</Answer>
-
-**问题 2：库项目是否应提交Cargo.lock？**
-<Answer>发布库的依赖由使用者整体解析，lockfile不约束下游；但仓库中的测试、示例或workspace可提交lockfile提高CI复现。应用通常应提交并部署锁定版本。</Answer>
-
-**问题 3：CSV包怎样避免部分输出被误用？**
-<Answer>先写临时产物并检查所有record、flush和sync，成功后原子替换；或输出到调用者提供的Writer并在Error时明确结果无完整性保证。</Answer>
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="Rust modular coordinate" definition="package、crate、target、workspace和module的分层坐标。" />
-  <GlossaryItem term="Cargo package contract" definition="manifest、入口、依赖与构建配置组成的包契约。" />
-  <GlossaryItem term="dependency provenance lock" definition="锁定依赖与构建输入的可重建记录。" />
-  <GlossaryItem term="workspace coordination boundary" definition="共享基础设施但保持包与发布独立的边界。" />
-  <GlossaryItem term="module path graph" definition="模块树、路径、use与重导出组成的命名图。" />
-  <GlossaryItem term="visibility design boundary" definition="公开长期承诺、隐藏可替换表示的范围设计。" />
-  <GlossaryItem term="CSV package pipeline" definition="读取、验证、转换、错误和输出组成的CSV管线。" />
-</Glossary>
 
-<Attribution adaptedFrom="《Rust编程之道》第10章 模块化开发" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

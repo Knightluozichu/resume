@@ -7,19 +7,9 @@ description: "建立Lua 5.3 C API的lua_State生命周期、虚拟栈索引与�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilCApiLifecycleLab, PilCApiStackLab, PilCApiBoundaryLab } from "@/components/mdx/lua-programming/diagrams/c-api-overview";
-
-<Objectives>
-
-- 能解释lua_State创建、load、protected call与close的所有权，并逐步推导每次调用的stack top变化
-- 能实现push、type query、checked conversion和stack rearrangement，验证正负index、capacity与string pointer生命周期
-- 能设计application/library错误边界和custom allocator，处理error object、panic、native cleanup与memory limit
-
-</Objectives>
 
 ## 为什么C API首先是一份Stack Contract
 
@@ -27,7 +17,7 @@ Lua与C不共享静态函数签名。两侧通过`lua_State *L`指向的virtual 
 
 先预测：empty stack上push三个值后`-1`指谁；`lua_settop(L,-2)`删除几个；load成功和失败各在top留下什么；`lua_pcall`的function和arguments去哪；`lua_tointeger`返回0时如何区分conversion failure；`luaL_error`之后的C cleanup会不会继续执行；allocator缩小block能否随意失败。
 
-<Term def="C API stack contract明确入口top、value indices、top delta、结果数量与每条错误路径的最终stack形状。">C API stack contract</Term>是宿主和扩展库共同遵守的ABI。
+是宿主和扩展库共同遵守的ABI。
 
 ## A First Example
 
@@ -58,19 +48,12 @@ int main(int argc, char **argv) {
 
 `luaL_openlibs`开放完整标准库，只适合trusted scripts；嵌入应用通常只注册allowlist。关闭state会回收它拥有的Lua objects，但host分配的资源仍按各自owner清理。State不是随意跨线程并发调用的对象，宿主需要serialization或独立states。
 
-<PilCApiLifecycleLab />
-
-<Stepper>
-  <Step title="切换Create、Load、Call和Close"><PilCApiLifecycleLab /></Step>
-  <Step title="填写Lifecycle Ledger">记录state owner、top before/after、status、error object与host resources，分别覆盖compile和runtime failure。</Step>
-  <Step title="收紧Host Surface">从openlibs baseline改为逐项注册，验证脚本无法恢复未授权io、os、debug和package能力。</Step>
-</Stepper>
 
 ## The Stack
 
 Virtual stack按当前C activation划定frame。正index从frame底部1向上，负index从当前top的-1向下；`lua_gettop`返回元素数量，也给出top的positive index。Pseudo-index（例如registry）不是普通stack slot，不能用于全部stack operations。
 
-<Term def="Relative stack index以当前top为参照，push、pop或rotate后可能指向另一value，因此需要时先转成absolute index。">relative stack index</Term>可用`lua_absindex`冻结坐标。API接受valid index、acceptable index或pseudo-index的范围不同，调用前应遵守手册契约。
+可用`lua_absindex`冻结坐标。API接受valid index、acceptable index或pseudo-index的范围不同，调用前应遵守手册契约。
 
 栈空间按需增长但不是无限；C function至少有基本空间，批量push或递归helper前用`lua_checkstack`确保额外slots。失败表示无法扩展，不能继续写越界。
 
@@ -96,29 +79,18 @@ static int push_record(lua_State *L, lua_Integer id,
 
 `lua_type`返回实际type tag，`lua_typename`转为名称；`lua_isnumber`等检查是否可转换，不一定等于原始type。`lua_toboolean`只有false和nil为false。数值读取优先`lua_tointegerx`/`lua_tonumberx`并检查`isnum`，否则合法数字0与转换失败都表现为0。
 
-<Term def="Checked stack conversion同时返回转换值与success标记，避免把合法零值、空指针或类型错误混为一谈。">checked stack conversion</Term>应位于host输入边界。`lua_tolstring`返回pointer加length，并可能把stack中的number转换为string；该pointer由Lua管理，在对应value被移除或发生规定的失效条件后不可保存。需要跨API生命周期保留时复制到host-owned buffer或建立registry reference。
+应位于host输入边界。`lua_tolstring`返回pointer加length，并可能把stack中的number转换为string；该pointer由Lua管理，在对应value被移除或发生规定的失效条件后不可保存。需要跨API生命周期保留时复制到host-owned buffer或建立registry reference。
 
 ## Other stack operations
 
 `lua_settop(L,n)`同时实现truncate和extend（扩展位置填nil）；`lua_pop`是便捷宏。`lua_pushvalue`复制value到top，`lua_copy`覆盖目标slot不改top，`lua_rotate`旋转一段stack；`lua_insert`、`lua_remove`、`lua_replace`在Lua 5.3中可由这些操作表达。
 
-<PilCApiStackLab />
-
-<Stepper>
-  <Step title="切换Index、Push、Query和Rotate"><PilCApiStackLab /></Step>
-  <Step title="逐行模拟Stack">为每个operation画bottom-to-top values，同时写positive/negative index和top delta，再与lua_gettop断言比较。</Step>
-  <Step title="做Mutation测试">在保存relative index后push/pop/rotate，观察错指；改用lua_absindex并验证helper成功、失败都恢复契约。</Step>
-</Stepper>
-
-<Callout type="trap" title="Negative Index会永久指向同一个Value">
-`-1`永远表示查询当下的top。Push后旧top变成`-2`，pop后目标可能消失；需要跨stack mutation引用普通slot时先用`lua_absindex`，长期引用则使用registry机制。
-</Callout>
 
 ## Error Handling with the C API
 
 Lua错误使用类似long jump的非局部控制转移。Protected boundary把它转换为status和stack上的error object；没有保护时会调用panic function，通常表示embedding边界设计错误。Error object不保证是string，日志转换器应有fallback且不能再次抛错。
 
-<Term def="Protected call boundary把Lua非局部错误转成明确status、error object和可恢复stack状态。">protected call boundary</Term>由`lua_pcall`建立。Message handler index可在错误展开时生成traceback；必须在调用前放好并用absolute index定位。
+由`lua_pcall`建立。Message handler index可在错误展开时生成traceback；必须在调用前放好并用absolute index定位。
 
 ## Error handling in application code
 
@@ -150,23 +122,13 @@ static int run_loaded(lua_State *L) {
 
 因此file descriptor、mutex、temporary allocation等必须在raise前释放，或交给能在Lua侧生命周期中回收的owner；C++对象析构是否执行取决于Lua构建与异常机制，不能默认跨C API long jump安全。Library还应维持“返回n表示top上n个results”的契约。
 
-<Callout type="trap" title="luaL_error之后C函数还会执行Cleanup">
-它不会正常返回。把资源释放放在raise之前，或使用明确owner和protected boundary；任何依赖函数尾部cleanup的错误分支都会泄漏或保持锁定。
-</Callout>
 
 ## Memory Allocation
 
 `lua_newstate(allocator,ud)`允许host提供allocator；调用形态类似`realloc(ptr,osize,nsize)`：`nsize==0`释放并返回NULL，`ptr==NULL`分配新block，其余调整大小。增长失败返回NULL；按Lua allocator契约，缩小block不应失败。`osize`在某些新分配情形可携带type信息，不能盲目当成真实旧block大小做未验证读写。
 
-<Term def="Allocator accounting invariant要求每次allocate、resize、free都以同一owner更新已用bytes，失败时保留旧block与账本一致。">allocator accounting invariant</Term>支持per-state memory limit。达到limit时拒绝增长会触发memory error，但allocator本身不能调用回Lua、分配无界诊断内存或破坏旧pointer。State创建返回NULL也必须由host直接处理。
+支持per-state memory limit。达到limit时拒绝增长会触发memory error，但allocator本身不能调用回Lua、分配无界诊断内存或破坏旧pointer。State创建返回NULL也必须由host直接处理。
 
-<PilCApiBoundaryLab />
-
-<Stepper>
-  <Step title="切换Load、Runtime、Panic和Memory边界"><PilCApiBoundaryLab /></Step>
-  <Step title="验证Every Error Shape">注入syntax error、non-string error、library arg error、OOM和unprotected raise，记录status、top与native resource状态。</Step>
-  <Step title="压测Allocator Ledger">随机allocate/grow/shrink/free并故障注入，断言used bytes、old block保留、limit和lua_close后的归零。</Step>
-</Stepper>
 
 ## 本章回顾：宿主必须守住State、Stack与Failure
 
@@ -177,30 +139,7 @@ static int run_loaded(lua_State *L) {
 5. Library check/error API不会正常返回，native cleanup必须在raise前或由外部owner保证。
 6. Custom allocator遵守realloc语义与账本不变量，memory limit只是总体resource policy的一部分。
 
-<Exercises>
-
-**问题 1：为什么读取Integer要用lua_tointegerx而不是只看返回值？**
-
-<Answer>转换失败和合法整数0都可能返回0；`isnum`输出才能区分。边界代码先检查success，再接受value，并按API决定是否允许numeric string转换。</Answer>
-
-**问题 2：一个Stack Helper如何证明失败后没有泄漏Value？**
-
-<Answer>入口保存`base=lua_gettop(L)`，文档化成功delta；每个失败分支恢复`lua_settop(L,base)`，测试注入每个失败点并断言top和原有slots不变。</Answer>
-
-**问题 3：Custom Allocator拒绝增长时必须保持什么？**
-
-<Answer>返回NULL且旧block仍有效，已用bytes账本不变；不能先扣旧大小再忘记回滚。缩小按契约不能失败，free必须归还正确owner，state creation的NULL由host处理。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="C API stack contract" definition="描述入口top、indices、delta、results与error shape的宿主ABI。" />
-  <GlossaryItem term="relative stack index" definition="以当前top为参照、会随stack mutation变化的负索引。" />
-  <GlossaryItem term="checked stack conversion" definition="同时检查转换成功标记与转换值的边界读取。" />
-  <GlossaryItem term="protected call boundary" definition="把Lua非局部错误转换成status和error object的保护调用。" />
-  <GlossaryItem term="allocator accounting invariant" definition="所有分配变化与owner账本保持一致、失败不破坏旧block的规则。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 27: An Overview of the C API" adaptedUrl="https://www.lua.org/pil/" />

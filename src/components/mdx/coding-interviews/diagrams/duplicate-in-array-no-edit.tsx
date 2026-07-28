@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traceCases = [
   {
     label: "值域1..7",
@@ -71,22 +69,4 @@ export function ValueRangeDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">超过区间可容纳的不同值数量，就是抽屉原理在该半区的可执行判据。</figcaption>
     </figure>
   );
-}
-
-export function PigeonholeTraceLab() {
-  return <CodingInterviewLab cases={traceCases} caption="沿值域收缩路径检查容量、计数与下一半区的选择。" />;
-}
-
-export function ComplexityTradeoffMap() {
-  return <CodingInterviewLab cases={tradeoffs} caption="修改权限、时间和额外空间共同决定查重方案。" />;
-}
-
-export function NoEditTestLab() {
-  const cases = [
-    { label: "边界重复1", fields: [["输入", "[1,2,3,4,5,6,7,1,8]"], ["输出", "1"], ["覆盖", "值域下界"], ["长度", "9个元素，值域1..8"]] },
-    { label: "边界重复n", fields: [["输入", "[1,7,3,4,5,6,8,2,8]"], ["输出", "8"], ["覆盖", "值域上界"], ["检查", "闭区间端点"]] },
-    { label: "多个重复", fields: [["输入", "[1,2,2,6,4,5,6]"], ["允许输出", "2或6"], ["覆盖", "只要求任意一个"], ["检查", "测试接受答案集合"]] },
-    { label: "契约不成立", fields: [["输入", "[1,2,6,4,5,3]"], ["现象", "长度6，值域含6"], ["问题", "不是1..5"], ["要求", "验证值域后返回失败"]] },
-  ] as const;
-  return <CodingInterviewLab cases={cases} caption="不修改版本要同时测试值域两端、多个重复与不满足抽屉前提的输入。" />;
 }

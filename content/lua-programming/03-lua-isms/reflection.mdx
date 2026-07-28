@@ -7,19 +7,9 @@ description: "掌握Lua debug库的函数、栈帧、局部变量、upvalue与�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilDebugIntrospectionLab, PilDebugHookLab, PilSandboxBoundaryLab } from "@/components/mdx/lua-programming/diagrams/reflection";
-
-<Objectives>
-
-- 能解释getinfo、getlocal与getupvalue观察的是function metadata、live frame slot还是closure cell，并验证索引和生命周期
-- 能实现对当前线程与suspended coroutine的hook和profile，测量事件、开销、tail call与coroutine归属
-- 能设计不暴露debug能力的sandbox，组合environment allowlist、instruction budget、资源限制和process isolation
-
-</Objectives>
 
 ## 为什么Reflection首先是Capability边界
 
@@ -27,13 +17,13 @@ Lua通常保护函数的局部变量、调用栈和closure状态；`debug`库却
 
 先预测：`debug.getinfo(1)`里的level 1是谁；同名local在不同frame是否同一slot；修改upvalue会影响几个closures；suspended coroutine能否读取；hook是否归属于thread；删掉`os`和`io`后为何仍未形成安全sandbox。把每个API标成read metadata、read state、write state或control execution。
 
-<Term def="Debug library提供越过普通语言可见性、观察或修改执行状态的特权，因此必须由host显式授予。">reflective capability boundary</Term>意味着“方便诊断”和“可交给不可信脚本”是两种相反的设计目标。
+意味着“方便诊断”和“可交给不可信脚本”是两种相反的设计目标。
 
 ## Introspective Facilities
 
 `debug.getinfo([thread,] function-or-level, what)`返回信息table。传function观察静态信息；传stack level观察某个active frame。`what`选择字段，例如`S` source、`l` current line、`n` name、`u` parameter/upvalue信息、`f` function、`L` valid lines；只请求所需字段，避免在高频路径中制造额外table和line集合。
 
-<Term def="Stack level是相对当前debug查询点的瞬时frame位置，wrapper、tail call和coroutine切换都会改变它。">stack-frame coordinate</Term>不能作为长期identity。函数名也不是function固有属性，Lua常从调用上下文推断，匿名函数或间接调用可能没有可靠name。
+不能作为长期identity。函数名也不是function固有属性，Lua常从调用上下文推断，匿名函数或间接调用可能没有可靠name。
 
 ```lua
 local function describe(level)
@@ -57,19 +47,12 @@ work()
 
 `debug.traceback([thread,] message, level)`是面向诊断的stack snapshot；错误发生时尽早保存。Source、line和name来自debug metadata，发布时剥离路径或敏感参数，避免诊断本身泄露host结构。
 
-<PilDebugIntrospectionLab />
-
-<Stepper>
-  <Step title="切换Function、Frame、Local和Upvalue"><PilDebugIntrospectionLab /></Step>
-  <Step title="建立Frame Ledger">为每次查询记录thread、level、function identity、requested fields和查询时刻，验证wrapper与tail call造成的变化。</Step>
-  <Step title="分离Read与Write">先只读采集snapshot，再在隔离测试中启用setlocal/setupvalue，比较行为变化并恢复状态。</Step>
-</Stepper>
 
 ## Accessing local variables
 
 `debug.getlocal([thread,] level, index)`返回local name和value；没有该slot时返回nil。正索引遍历parameters和locals，负索引可访问相应frame的varargs。`debug.setlocal`按同样坐标写值并返回name。编译器生成或不可命名slot可能显示临时名称，变量超出live range后不会因为源码里出现过就可读取。
 
-<Term def="Local slot由特定thread、live stack frame和当前index共同定位，只在那次暂停或查询时有效。">live local slot</Term>不是变量的稳定handle。若先resume coroutine再拿旧level/index写入，目标可能已经改变或消失。
+不是变量的稳定handle。若先resume coroutine再拿旧level/index写入，目标可能已经改变或消失。
 
 ```lua
 local function inspect_first_local(level)
@@ -94,7 +77,7 @@ Debugger展示locals时要限制深度、数量和string长度；直接递归格
 
 Closure把外层local捕获成upvalue。`debug.getupvalue(function, index)`返回name/value，`debug.setupvalue`改写cell；`debug.upvalueid`可判断两个closures是否共享同一cell，`debug.upvaluejoin`能让一个upvalue改为共享另一个cell。
 
-<Term def="Upvalue cell是closure捕获并可能由多个functions共享的可变存储身份，而不只是一次值拷贝。">upvalue-cell identity</Term>解释了为什么修改一个counter的upvalue会影响共享该cell的closure。`upvaluejoin`是instrumentation级手术，索引随function实现变化，不应作为模块公开协议。
+解释了为什么修改一个counter的upvalue会影响共享该cell的closure。`upvaluejoin`是instrumentation级手术，索引随function实现变化，不应作为模块公开协议。
 
 ```lua
 local function counter()
@@ -114,15 +97,12 @@ assert(next_value() == 11)
 
 热修复若替换upvalue，必须验证name、function source/version和cell sharing，再做原子切换与rollback；仅凭index 1可能改到不同构建中的另一个capture。
 
-<Callout type="trap" title="Local和Upvalue索引可当作稳定Schema">
-索引是编译结果与当前frame的坐标，增加local、wrapper或改写closure就可能变化。Debugger可动态枚举并展示，生产协议应使用显式table字段、API和version，而不是debug索引。
-</Callout>
 
 ## Accessing other coroutines
 
 多个debug API接受可选thread参数，可读取另一个Lua coroutine的stack、info和locals。最可靠的检查点是task已经yield、处于suspended状态且scheduler暂不resume；此时frame不会在采集中途变化。Dead coroutine通常没有可用执行栈，running current coroutine用普通形式即可。
 
-<Term def="Coroutine inspection snapshot是在scheduler冻结resume权期间，对指定suspended thread的stack、locals和trace进行的有界采集。">coroutine inspection snapshot</Term>要求scheduler持有唯一owner。不要一边异步展示旧snapshot，一边允许用户按旧level写回新frame。
+要求scheduler持有唯一owner。不要一边异步展示旧snapshot，一边允许用户按旧level写回新frame。
 
 生产诊断应把thread ID、status、wait reason、top frames和bounded locals复制成普通data，然后立即释放暂停；不要把thread或live values暴露到远程console。`debug.traceback(co)`可补全跨task错误，但需把resumer关系和operation ID另行记录，因为coroutine stacks彼此独立。
 
@@ -130,19 +110,8 @@ assert(next_value() == 11)
 
 `debug.sethook([thread,] hook, mask, count)`为指定thread安装hook；mask包含`c` call、`r` return、`l` line，正count产生instruction-count事件。Hook收到event和可选line。`debug.gethook`读取当前配置；传空参数关闭hook。
 
-<Term def="Hook observer tax是事件频率、回调工作量、allocation与被观测代码形态共同造成的时间和行为扰动。">hook observer tax</Term>必须实测。Line hook通常比低频count sampling昂贵；hook内不做blocking I/O、不遍历对象图、不调用会再次触发复杂路径的代码，也不依赖yield。回调只写预分配buffer或轻量counter，重处理放到安全点。
+必须实测。Line hook通常比低频count sampling昂贵；hook内不做blocking I/O、不遍历对象图、不调用会再次触发复杂路径的代码，也不依赖yield。回调只写预分配buffer或轻量counter，重处理放到安全点。
 
-<PilDebugHookLab />
-
-<Stepper>
-  <Step title="切换Call、Return、Line和Count"><PilDebugHookLab /></Step>
-  <Step title="校准Observer Tax">对同一workload跑baseline、不同mask/count与buffer策略，比较wall time、allocations、event loss和结果一致性。</Step>
-  <Step title="验证Stack异常形态">覆盖tail call、C function、error unwind和多个coroutines，确保shadow stack不会因缺失普通return而错位。</Step>
-</Stepper>
-
-<Callout type="trap" title="Instruction Hook等于不可绕过的Timeout">
-Count hook只在Lua VM执行指令时获得控制；长时间blocking C call、native loop、内存耗尽或host崩溃不一定及时触发。它是cooperative budget的一层，不是完整安全隔离。
-</Callout>
 
 ## Profiles
 
@@ -156,13 +125,6 @@ Sandbox从最小capability开始：加载chunk时给出新environment，只放�
 
 Environment隔离不限制CPU、memory、stack、output、open handles或native call。Instruction hook提供Lua bytecode budget，host还需wall-clock cancellation、allocator/memory limit、I/O quota与并发上限。对敌对代码使用独立Lua state，强边界场景放入受OS限制的separate process，以窄IPC交换普通data。
 
-<PilSandboxBoundaryLab />
-
-<Stepper>
-  <Step title="切换Environment、Debug、Budget和Isolation"><PilSandboxBoundaryLab /></Step>
-  <Step title="画Capability Graph">从每个允许value追踪可达function、closure、metatable、registry和host resource，删除可恢复危险global的路径。</Step>
-  <Step title="做Adversarial Tests">运行infinite loop、deep recursion、large allocation、huge output、blocking native call和capability leak，验证每层limit及cleanup。</Step>
-</Stepper>
 
 ## 本章回顾：Reflection必须由Host拥有
 
@@ -173,31 +135,7 @@ Environment隔离不限制CPU、memory、stack、output、open handles或native 
 5. Profiler要区分running、waiting、tail call、C function与coroutine归属，并报告baseline差异。
 6. Sandbox不能只删globals；还要收紧capability、禁用debug、限制资源，并按威胁使用state/process isolation。
 
-<Exercises>
-
-**问题 1：为什么Debugger不能缓存Stack Level与Local Index后稍后写回？**
-
-<Answer>Level和index只定位查询时那个thread的live frame slot。Resume、return、tail call或新增wrapper都会改变stack；应在scheduler冻结thread期间重新枚举并用function/source/name校验，生产代码则使用显式API。</Answer>
-
-**问题 2：如何证明Profiler没有把优化目标本身扭曲？**
-
-<Answer>固定workload，分别运行无hook baseline、低频sampling和目标配置，多次记录时间与allocation分布；改变count频率检查热点排序是否稳定，并覆盖tail calls、C functions、errors和coroutine attribution。</Answer>
-
-**问题 3：只给Script一个空Environment为什么仍不安全？**
-
-<Answer>允许值可能通过closure、metatable或registry路径泄露host capability，脚本也能耗尽CPU、memory或调用blocking native code。应使用allowlist和data-only boundary，移除debug/package逃逸，增加instruction、wall-clock、memory和I/O限制；敌对代码放到受限process。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="reflective capability boundary" definition="Debug库越过正常可见性并观察或修改执行状态的特权边界。" />
-  <GlossaryItem term="stack-frame coordinate" definition="由thread和瞬时level确定、会随调用形态变化的栈帧坐标。" />
-  <GlossaryItem term="live local slot" definition="只在特定活跃frame和时刻有效的局部变量槽位。" />
-  <GlossaryItem term="upvalue-cell identity" definition="可由多个closures共享并被反射API读取或改写的捕获存储身份。" />
-  <GlossaryItem term="coroutine inspection snapshot" definition="Scheduler暂停resume期间对指定协程做的有界诊断快照。" />
-  <GlossaryItem term="hook observer tax" definition="Hook频率与回调工作给被观测程序带来的运行时扰动。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 25: Reflection" adaptedUrl="https://www.lua.org/pil/" />

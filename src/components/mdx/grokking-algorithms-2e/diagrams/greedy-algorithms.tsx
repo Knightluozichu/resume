@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -145,27 +143,6 @@ export function ClassroomScheduleDiagram() {
     </figure>
   );
 }
-
-export function KnapsackChoiceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={knapsackCases}
-      caption="0/1背包按价值或价值密度贪心都可能失败；可分割背包才可安全使用密度贪心。"
-      tone="violet"
-    />
-  );
-}
-
-export function SetCoverLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={coverCases}
-      caption="集合覆盖贪心每轮最大化新增覆盖，并从剩余元素中删除已覆盖部分。"
-      tone="cyan"
-    />
-  );
-}
-
 export function NpSearchSpaceDiagram() {
   const bars = [
     { label: "10个候选", value: "1,024个子集", width: 112, tone: success },

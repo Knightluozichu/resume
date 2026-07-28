@@ -7,29 +7,20 @@ description: "逐项证明裸指针、static、union与unsafe Trait，封装型�
 demo: true
 math: false
 sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RswUnsafeOperationLab, RswSafeAbstractionLab, RswInteropLab } from "@/components/mdx/rust-way/diagrams/rsw-unsafe-rust";
-
-<Objectives>
-- 能列出unsafe解锁的操作，并为裸指针、static、union和unsafe Trait写出具体安全条件
-- 能设计安全抽象，分析子类型、型变、无界生命周期、dropck、NonNull、panic安全和分配协议
-- 能实现C/C++ FFI、动态语言或WebAssembly边界，并验证ABI、布局、owner、错误与线程约定
-</Objectives>
 
 ## 从unsafe究竟允许什么开始
 
-unsafe不会关闭类型检查、借用检查和生命周期检查；它只允许解引用裸指针、调用unsafe函数、访问或修改可变static、实现unsafe Trait、读取union字段等少数能力。<Term def="编译器无法独立验证、需要程序员逐项证明的底层前置条件集合。">unsafe proof obligation</Term>必须比“我知道这里没问题”具体到非空、对齐、初始化、范围、别名、寿命和释放。
+unsafe不会关闭类型检查、借用检查和生命周期检查；它只允许解引用裸指针、调用unsafe函数、访问或修改可变static、实现unsafe Trait、读取union字段等少数能力。必须比“我知道这里没问题”具体到非空、对齐、初始化、范围、别名、寿命和释放。
 
 先预测：创建裸指针通常是safe，解引用才unsafe；指针存在本身不承诺目标仍有效。
 
-<RswUnsafeOperationLab />
 
 ## 裸指针、static与union
 
-裸指针可为空、悬垂、不对齐或指向未初始化内存；地址运算还需保持在允许对象范围。可变static是全局共享状态，读写可能数据竞争。Union字段共享存储，读取非活动或不合法表示可能产生未定义行为。<Term def="在一次裸指针访问前必须成立的有效性、对齐、初始化、别名和范围条件。">raw pointer validity</Term>应紧邻unsafe块记录来源与保持方式。
+裸指针可为空、悬垂、不对齐或指向未初始化内存；地址运算还需保持在允许对象范围。可变static是全局共享状态，读写可能数据竞争。Union字段共享存储，读取非活动或不合法表示可能产生未定义行为。应紧邻unsafe块记录来源与保持方式。
 
 ```rust
 fn first_or_none(values: &[u32]) -> Option<u32> {
@@ -44,13 +35,12 @@ assert_eq!(first_or_none(&[7, 8]), Some(7));
 
 ## 安全抽象：调用者不能制造UB
 
-安全函数内部可使用unsafe，但必须对所有safe输入维持不变量。入口验证长度与关系，unsafe内核尽量局部，出口重新建立初始化和owner。<Term def="把unsafe前置条件封装在实现内部，使任何安全调用组合都不能触发未定义行为的API。">sound safe abstraction</Term>不仅测试当前实现，还要审计公开方法之间的组合。
+安全函数内部可使用unsafe，但必须对所有safe输入维持不变量。入口验证长度与关系，unsafe内核尽量局部，出口重新建立初始化和owner。不仅测试当前实现，还要审计公开方法之间的组合。
 
-<RswSafeAbstractionLab />
 
 ## 子类型、型变与无界生命周期
 
-引用生命周期存在子类型关系，容器对类型参数可能协变、逆变或不变；可变引用对目标类型通常需要不变以防写入破坏。由裸指针凭空构造引用可能让编译器推断过长、近似无界的生命周期。<Term def="一个泛型类型如何保留、反转或禁止其类型参数子类型关系的属性。">variance relation</Term>影响unsafe容器是否能安全暴露引用。
+引用生命周期存在子类型关系，容器对类型参数可能协变、逆变或不变；可变引用对目标类型通常需要不变以防写入破坏。由裸指针凭空构造引用可能让编译器推断过长、近似无界的生命周期。影响unsafe容器是否能安全暴露引用。
 
 ```rust
 use std::marker::PhantomData;
@@ -66,11 +56,11 @@ PhantomData告诉dropck、auto trait与型变分析这个类型在语义上持�
 
 ## dropck、NonNull与析构安全
 
-Drop实现运行时，类型参数指向的数据必须仍满足析构访问需要。NonNull表达非空协变指针并支持空指针优化，但不证明对齐、初始化或唯一访问。<Term def="确保带Drop类型在析构执行期间仍可合法访问其声明拥有或借用数据的检查。">drop-check guarantee</Term>与字段声明、PhantomData和析构体读取行为共同决定。
+Drop实现运行时，类型参数指向的数据必须仍满足析构访问需要。NonNull表达非空协变指针并支持空指针优化，但不证明对齐、初始化或唯一访问。与字段声明、PhantomData和析构体读取行为共同决定。
 
 ## Panic安全与部分初始化
 
-unsafe集合在扩容、clone元素或用户回调panic时，必须避免重复drop、读取未初始化值和长度撒谎。<Term def="操作被panic中断后，内存安全不变量仍成立，且逻辑状态满足基本或强保证。">panic safety boundary</Term>常通过先写入MaybeUninit、最后更新len，以及guard在unwind时清理已初始化前缀实现。
+unsafe集合在扩容、clone元素或用户回调panic时，必须避免重复drop、读取未初始化值和长度撒谎。常通过先写入MaybeUninit、最后更新len，以及guard在unwind时清理已初始化前缀实现。
 
 ```rust
 use std::mem::MaybeUninit;
@@ -84,58 +74,22 @@ assert_eq!(value, "ready");
 
 ## 内存分配与安全原则
 
-Allocator返回的地址需满足size与alignment，deallocate必须使用兼容layout和allocator；零大小类型、溢出和realloc失败都有边界。<Term def="分配、初始化、增长、移动、释放与失败路径共享同一layout和owner信息的协议。">allocation safety contract</Term>要求先证明算术不溢出，再调用低层API。
+Allocator返回的地址需满足size与alignment，deallocate必须使用兼容layout和allocator；零大小类型、溢出和realloc失败都有边界。要求先证明算术不溢出，再调用低层API。
 
 ## FFI、C/C++与动态语言
 
-FFI必须固定ABI、`repr(C)`布局、整数宽度、字符串编码、null、数组length、错误返回、线程、回调和释放函数。Rust panic不能随意穿越C边界，C++异常也不能穿越未知Rust帧。<Term def="跨语言双方对ABI、layout、owner、错误、线程和资源释放达成的完整约定。">foreign boundary protocol</Term>通常由很薄的unsafe binding层转换为safe领域类型。
+FFI必须固定ABI、`repr(C)`布局、整数宽度、字符串编码、null、数组length、错误返回、线程、回调和释放函数。Rust panic不能随意穿越C边界，C++异常也不能穿越未知Rust帧。通常由很薄的unsafe binding层转换为safe领域类型。
 
 ## WebAssembly与线性内存
 
 WebAssembly边界常传offset与length或借助绑定生成器。Host可能让线性内存增长并改变视图，字符串需明确UTF-8，handle需防重复释放。动态语言GC对象不能被Rust裸借用跨越未知回调；应使用runtime提供的root或handle机制。
 
-<RswInteropLab />
-
-<Stepper>
-  <Step title="列出证明义务"><RswUnsafeOperationLab /></Step>
-  <Step title="封装安全出口"><RswSafeAbstractionLab /></Step>
-  <Step title="验证外部协议">让双方分别生成size、alignment、ABI和生命周期记录，再注入null、短buffer、回调panic与重复释放。</Step>
-</Stepper>
-
-<Callout type="trap" title="unsafe块小就一定安全">
-小块便于审计，却不自动满足前置条件。若上游长度计算溢出、指针已悬垂或别名关系不成立，一行解引用仍可产生UB。
-</Callout>
-
-<Callout type="trap" title="repr(C)已经完成FFI设计">
-repr(C)只解决一部分布局问题。双方仍需统一ABI、类型宽度、字符串、owner、allocator、错误、线程和异常协议。
-</Callout>
 
 ## 本章回顾
 
 本章覆盖超越安全边界：unsafe语法、static、union与裸指针，安全抽象，子类型、型变与无界生命周期，dropck、NonNull与panic安全，内存分配与安全原则，FFI与C/C++，以及动态语言与WebAssembly。Unsafe的产物应是更小、更清楚、更可审计的安全API。
 
-<Exercises>
-**问题 1：为slice首元素裸指针解引用要证明什么？**
-<Answer>Slice非空，pointer由该slice产生并仍有效，地址对齐，目标已初始化，访问未越界，引用期间没有违反别名的写入；返回副本时T还需满足读取语义。</Answer>
-
-**问题 2：NonNull保证了什么，没保证什么？**
-<Answer>它保证指针值非空并提供适合容器的表示性质；不保证目标有效、对齐、已初始化、可访问、唯一或活得足够久。</Answer>
-
-**问题 3：FFI字符串API最少写明哪些条件？**
-<Answer>编码、pointer是否可null、length是否含终止符、buffer由谁分配释放、有效期、线程和回调规则、错误返回，以及Rust是否复制还是借用数据。</Answer>
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="unsafe proof obligation" definition="由程序员证明的底层前置条件集合。" />
-  <GlossaryItem term="raw pointer validity" definition="裸指针访问的有效、对齐、初始化、别名与范围条件。" />
-  <GlossaryItem term="sound safe abstraction" definition="安全调用者无法组合出未定义行为的封装。" />
-  <GlossaryItem term="variance relation" definition="泛型类型对参数子类型关系的保留、反转或禁止。" />
-  <GlossaryItem term="drop-check guarantee" definition="析构期间仍可合法访问相关数据的检查。" />
-  <GlossaryItem term="panic safety boundary" definition="panic中断后仍维持内存与逻辑不变量的边界。" />
-  <GlossaryItem term="allocation safety contract" definition="分配、初始化、增长和释放共享layout与owner的协议。" />
-  <GlossaryItem term="foreign boundary protocol" definition="ABI、layout、owner、错误、线程与释放组成的跨语言协议。" />
-</Glossary>
 
-<Attribution adaptedFrom="《Rust编程之道》第13章 超越安全边界" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

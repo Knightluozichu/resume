@@ -7,21 +7,9 @@ description: "从 glow、颜色、DOF、过滤、OpenEXR 和图像图，到光�
 demo: true
 math: true
 sourceUrl: "https://developer.nvidia.com/gpugems"
-draft: true
+draft: false
 ---
 
-import { GpgImageProcessingDiagram, GpgImageChapterMatrixDiagram, GpgImageEvidenceDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-image-processing";
-import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述三卷 24 个图像相关原章的输入、滤波域、输出表示和主要误差
-- 能推导卷积、纹理足迹、景深 CoC、运动曝光积分和线性颜色合成的核心关系
-- 能比较图像处理图、LUT/OpenEXR 色彩管线、抗锯齿/预滤波与视频检测
-- 能解释 impostor、normal baking、off-screen particles 和 Nalu hair 为何也依赖图像表示
-
-</Objectives>
 
 ## 直觉：图像处理不仅是“最终画面加滤镜”
 
@@ -29,13 +17,11 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：在线性 RGB 上做模糊与在 sRGB 数值上做同一核，结果是否相同？不相同。卷积是线性运算，必须先把非线性编码解码到正确工作域。
 
-<Term def="明确输入采样、工作颜色/几何域、滤波或重采样算子、输出编码和边界条件的图像处理约定">图像算子合同</Term>是跨 24 章的统一验收单位。
+是跨 24 章的统一验收单位。
 
-<GpgImageProcessingDiagram />
 
 ## 24 个原章与独立核心
 
-<GpgImageChapterMatrixDiagram />
 
 ### GPU Gems 1 Ch21-27：HDR、颜色、过滤与框架
 
@@ -53,7 +39,7 @@ $$
 y[p]=\sum_{q\in K}k[q]x[p-q].
 $$
 
-<Term def="为每个输出样本定义源图像邻域和权重，用于重建、缩放、模糊、锐化或特征提取的离散函数">重建滤波核</Term>应说明是否归一化、是否有负 lobes、边界如何扩展及在哪个颜色域执行。
+应说明是否归一化、是否有负 lobes、边界如何扩展及在哪个颜色域执行。
 
 ```glsl
 vec3 convolveLinear(sampler2D src, vec2 uv, vec2 texel) {
@@ -86,7 +72,7 @@ $$
 
 其中 $A$ 与光圈相关、$z_f$ 为焦平面。后处理 DOF 缺少被前景遮挡的背景信息，容易 foreground bleed；分层/散射 gather 与真实多样本各有边界。
 
-<Term def="支持高动态范围像素、16 位 half、任意通道、data/display window、压缩和元数据的生产图像交换格式">OpenEXR</Term>不是“让画面自动 HDR”。读写必须保持 channel name/type、色度/颜色空间和 premultiplication 元数据约定。
+不是“让画面自动 HDR”。读写必须保持 channel name/type、色度/颜色空间和 premultiplication 元数据约定。
 
 ### GPU Gems 2 Ch20-28：高质量采样与生产图像管线
 
@@ -100,7 +86,7 @@ $$
 - **Advanced High-Quality Filtering**：更广核、更高阶和 separable/优化实现；
 - **Mipmap-Level Measurement**：测量实际 minification level 和 footprint 误差。
 
-<Term def="把多维颜色变换预采样为网格，运行时通过一维或三维插值近似原函数的查找结构">颜色查找表</Term>必须固定输入/输出颜色空间、range、grid 分辨率和插值。LUT 误差要用色差/最大误差测量，不能只目测。
+必须固定输入/输出颜色空间、range、grid 分辨率和插值。LUT 误差要用色差/最大误差测量，不能只目测。
 
 ```cpp
 ImageGraph graph;
@@ -125,11 +111,10 @@ Nalu hair 不只是粒子：图像侧要处理多层透明排序/近似、深度
 - **Motion Blur as a Post-Processing Effect**：用深度/速度重建曝光期轨迹并处理遮挡；
 - **Practical Post-Process Depth of Field**：可部署 DOF 的分层、scatter/gather 和伪影控制。
 
-<GpgImageEvidenceDiagram />
 
 ## 线性光与颜色出口
 
-<Term def="与辐射/光子贡献近似成比例、可以进行加权平均和能量合成的颜色数值域">场景线性颜色</Term>是 lighting、filtering、resampling 和 alpha composite 的默认工作域。sRGB 是编码传输函数，不是“gamma 2.2 精确等价”。
+是 lighting、filtering、resampling 和 alpha composite 的默认工作域。sRGB 是编码传输函数，不是“gamma 2.2 精确等价”。
 
 直通 alpha 合成在线性域：
 
@@ -172,84 +157,15 @@ vec3 accumulateMotion(sampler2D color, sampler2D depth, vec2 uv, vec2 velocity) 
 
 ## 三步 24 章验收
 
-<Stepper>
-<Step title="第一步：固定信号与工作域">
-
-为每章记录输入采样、颜色编码、alpha、深度/速度/法线和边界扩展；用 impulse、step edge、斜线与色卡作探针。
-
-<GpgStepFlowDiagram caption="标准信号让 filter、coverage 和颜色错误可量化。" stage={1} stages={["Signal：impulse、edge、line、color chart、depth layers"]} />
-
-</Step>
-<Step title="第二步：比较参考与中间层">
-
-用 CPU 高精度卷积、subpixel raster、multi-sample DOF/motion 和高模法线作 oracle；输出 footprint、CoC、velocity、LUT 坐标与 coverage。
-
-<GpgStepFlowDiagram caption="最终图像无法单独区分重建、编码和遮挡错误。" stage={2} stages={["Signal：impulse、edge、line、color chart、depth layers", "Inspect：kernel、footprint、CoC、velocity、coverage、color transform"]} />
-
-</Step>
-<Step title="第三步：时空与性能回归">
-
-扫描缩放、旋转、曝光、焦点、视角、视频光照和粒子数量；保存时序差、PSNR/色差、边缘误差和 GPU pass 时间。
-
-<GpgStepFlowDiagram caption="图像算法必须在尺度、时间和编码变化中保持合同。" stage={3} stages={["Signal：impulse、edge、line、color chart、depth layers", "Inspect：kernel、footprint、CoC、velocity、coverage、color transform", "Validate：spatial error、temporal artifacts、latency、GPU cost"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 页面只讲 Bloom 和 tone mapping，却宣称覆盖 GPU Gems 图像章节。
-**原因 →** 忽略过滤、格式、图像图、几何烘焙、矢量覆盖、视频和时域重建。
-**修法 →** 按 24 章清单分别保留信号、工作域、边界和参考判据。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 直接在 sRGB 数值上模糊/缩放后出现暗边。
-**原因 →** 在非线性编码域做线性加权。
-**修法 →** 先解码到约定工作域，正确处理 premultiplied alpha，过滤后再编码输出。
-</Callout>
-
-<Callout type="trap">
-**现象 →** post-process DOF/运动模糊在轮廓泄漏背景或前景颜色。
-**原因 →** 单层 depth/velocity 无法表示被遮挡表面，且采样未做层兼容。
-**修法 →** 分层/散射或 depth-aware 权重，明确 disocclusion 回退，并与多样本参考序列比较。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：High-Quality Filtering 与 The Importance of Being Linear 如何相互约束？**
-
-<Answer>
-高质量核只有在正确信号域加权才有意义。若输入为 sRGB 编码或 straight-alpha 边缘，直接卷积会改变亮度/引入色边；应解码线性并通常预乘 alpha，再应用核和重新编码。
-</Answer>
-
-**问题 2：True Impostor 与普通 billboard 的差异怎么验证？**
-
-<Answer>
-从离轴视角和相互穿插场景检查内部视差、silhouette、深度测试与遮挡。普通 billboard 只是一张平面颜色；true impostor 利用深度/表面表示沿视线重建交点。
-</Answer>
-
-**问题 3：设计覆盖 24 章的图像回归包。**
-
-<Answer>
-包含 HDR/OpenEXR 色卡、impulse/edge/线条/矢量、缩放纹理、hair/particle alpha、impostor/normal bake 模型、视频颜色目标，以及焦点和运动轨迹；保存线性中间图、coverage、depth/velocity、LUT 坐标和参考误差。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 三卷图像章节是一套采样、表示、颜色和时空重建方法，不是单一后处理链。完整复现要覆盖 24 个原章，明确每个算子的工作域与边界，用高精度空间/时间参考和中间缓冲证明结果。
 
-<Glossary>
-<GlossaryItem term="图像算子合同">输入采样、工作域、算子、输出编码与边界的约定。</GlossaryItem>
-<GlossaryItem term="重建滤波核">定义输出样本如何加权源邻域的离散函数。</GlossaryItem>
-<GlossaryItem term="OpenEXR">支持 HDR/half、任意通道和生产元数据的图像交换格式。</GlossaryItem>
-<GlossaryItem term="颜色查找表">把颜色变换预采样为网格并运行时插值的结构。</GlossaryItem>
-<GlossaryItem term="场景线性颜色">与光贡献近似成比例、适合加权与合成的颜色域。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="GPU Gems 1 Ch21-27, GPU Gems 2 Ch20-28, GPU Gems 3 Ch21-28" adaptedUrl="https://developer.nvidia.com/gpugems" />

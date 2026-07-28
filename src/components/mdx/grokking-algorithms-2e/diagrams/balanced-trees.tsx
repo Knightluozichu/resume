@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -155,27 +153,6 @@ export function BstShapeDiagram() {
     </figure>
   );
 }
-
-export function AvlRotationLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={rotationCases}
-      caption="LL、RR用单旋，LR、RL用双旋；四种局部重组都保持BST中序顺序。"
-      tone="cyan"
-    />
-  );
-}
-
-export function SplayAccessLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={splayCases}
-      caption="伸展树把最近访问节点旋到根，以偶尔昂贵的操作换取整个操作序列的摊还效率。"
-      tone="violet"
-    />
-  );
-}
-
 export function BTreePageDiagram() {
   const leaves = [
     { keys: "5 | 12 | 18", x: 92 },

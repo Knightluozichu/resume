@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -185,25 +183,5 @@ export function RegressionIndexDiagram() {
         线性回归用于连续预测；搜索引擎使用倒排索引定位包含查询词的文档。
       </figcaption>
     </figure>
-  );
-}
-
-export function ScaleAndSketchLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={scaleCases}
-      caption="信号分解、并行批处理与概率结构分别用不同方式处理数据规模。"
-      tone="cyan"
-    />
-  );
-}
-
-export function HashCryptoOptimizationLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={securityCases}
-      caption="SHA、局部敏感哈希、Diffie-Hellman和线性规划解决的是完全不同的问题，不能因名称相近而混用。"
-      tone="violet"
-    />
   );
 }

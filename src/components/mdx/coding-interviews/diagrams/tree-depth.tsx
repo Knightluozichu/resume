@@ -1,27 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const depthStates = [
-  { node: 4, left: 0, right: 0, result: 1, note: "叶节点 4 的两个空子树深度都为 0" },
-  { node: 7, left: 0, right: 0, result: 1, note: "叶节点 7 返回 1" },
-  { node: 5, left: 1, right: 0, result: 2, note: "节点 5 选择左子树 7，返回 2" },
-  { node: 2, left: 1, right: 2, result: 3, note: "节点 2 选择更深的右子树 5，返回 3" },
-  { node: 6, left: 0, right: 0, result: 1, note: "叶节点 6 返回 1" },
-  { node: 3, left: 0, right: 1, result: 2, note: "节点 3 选择右子树 6，返回 2" },
-  { node: 1, left: 3, right: 2, result: 4, note: "根节点选择左子树，整棵树深度为 4" },
-] as const;
-
-const officialCases = [
-  { label: "普通树", fields: [["节点", "1 到 7"], ["最长路径", "1→2→5→7"], ["节点数", "4"], ["期望", "4"]] },
-  { label: "纯左链", fields: [["节点", "1→2→3→4→5"], ["树高", "5 层"], ["递归栈", "5 层"], ["期望", "5"]] },
-  { label: "纯右链", fields: [["节点", "1→2→3→4→5"], ["树高", "5 层"], ["方向", "全部向右"], ["期望", "5"]] },
-  { label: "单节点", fields: [["根", "1"], ["左右子树", "均为空"], ["计算", "max(0,0)+1"], ["期望", "1"]] },
-  { label: "空树", fields: [["根", "nullptr"], ["路径", "不存在"], ["基例", "直接返回"], ["期望", "0"]] },
-] as const;
-
 export function TreeDepthPathDiagram() {
   const onPath = (v: number) => v === 1 || v === 2 || v === 5 || v === 7;
   const N = ({ x, y, label }: { x: number; y: number; label: number }) => {
@@ -79,33 +58,6 @@ export function TreeDepthPathDiagram() {
     </figure>
   );
 }
-
-export function TreeDepthRecurrenceLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = depthStates[cursor];
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-7 gap-2">
-          {depthStates.map((item, index) => (
-            <button key={item.node} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"h-11 border text-sm font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{item.node}</button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">当前节点</div><div className="mt-1 font-semibold text-primary">{state.node}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">左深度</div><div className="mt-1 font-semibold text-primary">{state.left}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">右深度</div><div className="mt-1 font-semibold text-primary">{state.right}</div></div>
-          <div className="border border-success bg-success/10 p-3"><div className="text-xs text-muted">返回值</div><div className="mt-1 font-semibold text-success">{state.result}</div></div>
-        </div>
-        <p className="mb-0 mt-3 border-l-4 border-accent bg-background p-3 text-sm text-secondary">{state.note}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        点击节点观察自底向上的递推：返回较深子树的深度再加 1。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function TreeDepthCallStackDiagram() {
   const rows = [
     ["进入节点", "递归左、递归右", "等待两个子问题结果"],
@@ -144,8 +96,4 @@ export function TreeDepthContractMap() {
       </figcaption>
     </figure>
   );
-}
-
-export function TreeDepthOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者 main 执行 5 组测试，覆盖普通分叉树、左右单链、单节点和空树。" />;
 }

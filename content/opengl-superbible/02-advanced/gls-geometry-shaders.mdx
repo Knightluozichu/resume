@@ -11,21 +11,13 @@ draft: false
 ---
 
 import { GlsGeometryShadersDiagram, GlsTessellationDomainsDiagram, GlsTessellationFactorsDiagram, GlsGeometryContractDiagram, GlsEmissionStateDiagram, GlsLayerViewportDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-geometry-shaders";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
-<Objectives>
-- 能解释 patch、TCS、固定 tessellator 与 TES 的完整曲面细分链
-- 能计算 triangles、quads、isolines 三种参数域的求值位置
-- 能设计相邻 patch 兼容的 outer tessellation levels，避免边界裂缝
-- 能写出 geometry shader 的输入拓扑、输出 strip 与 EmitVertex 状态机
-- 能分析 invocation、生成图元、layer/viewport 路由和 GPU 时间证据
-</Objectives>
 
 ## 为什么图元处理不能只讲 Geometry Shader
 
 原书第 8 章 Primitive Processing 有两个同等重要部分：tessellation 用规则参数域生成大量新顶点，geometry shader（GS）按完整输入图元过滤、改写、放大或路由输出。旧章只保留 GS，不仅漏掉半章核心，还把“最慢”和“现代 API 不推荐”写成普遍定律。正确选择应由任务粒度、实现限制、生成量和 GPU 计时决定。
 
-<Term def="顶点处理之后、光栅化之前对 patch 或完整图元执行细分、装配、改写与路由的阶段集合">图元处理</Term>的主链如下：
+的主链如下：
 
 <GlsGeometryShadersDiagram />
 
@@ -33,15 +25,15 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 ## Patch、TCS 与固定 Tessellator
 
-<Term def="由若干控制点组成、通过 GL_PATCHES 提交给曲面细分阶段的输入图元">Patch</Term>的输入控制点数由 `glPatchParameteri(GL_PATCH_VERTICES, n)` 设置，并受 `GL_MAX_PATCH_VERTICES` 限制。若 draw 提交 $V$ 个控制点且每 patch 有 $n$ 个点，完整 patch 数为：
+的输入控制点数由 `glPatchParameteri(GL_PATCH_VERTICES, n)` 设置，并受 `GL_MAX_PATCH_VERTICES` 限制。若 draw 提交 $V$ 个控制点且每 patch 有 $n$ 个点，完整 patch 数为：
 
 $$
 N_{patch}=\left\lfloor\frac{V}{n}\right\rfloor
 $$
 
-<Term def="按 patch 调度、输出新控制点与内外细分级别的可编程阶段">曲面细分控制着色器</Term>（TCS）用 `layout(vertices=m) out` 指定输出 patch 的控制点数；每个 invocation 通过 `gl_InvocationID` 处理一个输出控制点。输入点数 $n$ 与输出点数 $m$ 可以不同，不能假设二者相等。
+（TCS）用 `layout(vertices=m) out` 指定输出 patch 的控制点数；每个 invocation 通过 `gl_InvocationID` 处理一个输出控制点。输入点数 $n$ 与输出点数 $m$ 可以不同，不能假设二者相等。
 
-TCS 还写 `gl_TessLevelOuter[]` 与 `gl_TessLevelInner[]`。这些<Term def="决定 patch 边界分段与内部密度的浮点控制值">内外细分级别</Term>由固定<Term def="读取参数域和细分级别、生成 TES invocation 参数坐标的固定功能单元">Tessellator</Term>消费。TCS 是可选阶段；若省略它，应用可通过 patch default level 状态提供级别，但启用 tessellation 时<Term def="在 tessellator 生成的参数坐标上计算真实属性与 gl_Position 的可编程阶段">曲面细分求值着色器</Term>（TES）不可缺少。
+TCS 还写 `gl_TessLevelOuter[]` 与 `gl_TessLevelInner[]`。这些由固定消费。TCS 是可选阶段；若省略它，应用可通过 patch default level 状态提供级别，但启用 tessellation 时（TES）不可缺少。
 
 ```glsl
 // Tessellation control shader: 3 output control points
@@ -70,7 +62,7 @@ void main() {
 
 ## Triangles、Quads 与 Isolines 参数域
 
-TES 的 input layout 选择<Term def="使用三个重心坐标表达三角形参数点的细分域">Triangles Domain</Term>、<Term def="使用二维 uv 坐标表达四边形参数点的细分域">Quads Domain</Term>或<Term def="以线编号和线内参数表达多条独立线段的细分域">Isolines Domain</Term>。它还声明 `equal_spacing`、`fractional_even_spacing` 或 `fractional_odd_spacing`，以及 triangles/quads 的 `cw`、`ccw` 和可选 `point_mode`。
+TES 的 input layout 选择、或。它还声明 `equal_spacing`、`fractional_even_spacing` 或 `fractional_odd_spacing`，以及 triangles/quads 的 `cw`、`ccw` 和可选 `point_mode`。
 
 <GlsTessellationDomainsDiagram />
 
@@ -116,7 +108,7 @@ fractional spacing 允许 level 连续变化时更平滑地增加段数，但仍
 
 ## Geometry Shader 的输入输出契约
 
-<Term def="以一个完整输入图元为一次工作单元，可发射零到多个输出 strip 的可编程阶段">几何着色器</Term>位于最后一个顶点类阶段与光栅化之间。输入 `points`、`lines`、`lines_adjacency`、`triangles`、`triangles_adjacency` 分别决定 `gl_in[]` 长度；带<Term def="在主图元两侧附加相邻顶点、供轮廓与邻域算法使用的输入拓扑">邻接信息</Term>的 line/triangle 需要 draw mode 与 shader layout 同时匹配。
+位于最后一个顶点类阶段与光栅化之间。输入 `points`、`lines`、`lines_adjacency`、`triangles`、`triangles_adjacency` 分别决定 `gl_in[]` 长度；带的 line/triangle 需要 draw mode 与 shader layout 同时匹配。
 
 <GlsGeometryContractDiagram />
 
@@ -140,7 +132,7 @@ $$
 
 ## EmitVertex 与 EndPrimitive 是 Strip 状态机
 
-<Term def="把当前 geometry shader 输出变量快照追加为输出 strip 的一个顶点">EmitVertex</Term>不是“返回一个顶点”。调用后，输出变量值变为未定义，下一次发射前必须重写 `gl_Position`、用户 outputs、`gl_Layer` 或 `gl_ViewportIndex` 等所有需要值。<Term def="结束当前输出 strip，使下一次 EmitVertex 从新 strip 开始">EndPrimitive</Term>结束当前 strip；它不会结束 shader invocation，也不会自动发射顶点。
+不是“返回一个顶点”。调用后，输出变量值变为未定义，下一次发射前必须重写 `gl_Position`、用户 outputs、`gl_Layer` 或 `gl_ViewportIndex` 等所有需要值。结束当前 strip；它不会结束 shader invocation，也不会自动发射顶点。
 
 <GlsEmissionStateDiagram />
 
@@ -181,7 +173,7 @@ $$
 N_{GS}=N_{input\ primitives}\times N_{invocations}
 $$
 
-每个 invocation 可使用不同矩阵，并写<Term def="把输出图元选择到 viewport array 中某个视口的内建输出">gl_ViewportIndex</Term>或<Term def="把输出图元选择到 layered framebuffer 某个图层的内建输出">gl_Layer</Term>。同一输出图元的顶点应给出一致路由值，且每次 EmitVertex 前重写。
+每个 invocation 可使用不同矩阵，并写或。同一输出图元的顶点应给出一致路由值，且每次 EmitVertex 前重写。
 
 <GlsLayerViewportDiagram />
 
@@ -217,98 +209,15 @@ $$
 
 ## 按证据建立图元处理链
 
-<Stepper>
-<Step title="第一步：先闭合 Patch 与参数域">
-用一个 patch 验证输入控制点数、TCS 输出数、inner/outer slots、spacing 和 TES domain。先固定 level 并显示 point_mode，再引入距离 LOD。
-
-<GlsGeometryShadersDiagram step={1} />
-</Step>
-<Step title="第二步：按需求加入 Geometry Shader">
-声明与 draw 匹配的 input topology，查询 output limits；从“原样转发一个图元”开始，再加入过滤、法线或放大。每次 EmitVertex 前重写全部输出。
-
-<GlsGeometryShadersDiagram step={2} />
-</Step>
-<Step title="第三步：验证路由与生成量">
-逐个验证 EndPrimitive 边界、primitive ID、viewport/layer；记录 GS invocations、emitted primitives 和 GPU 时间，确认新增阶段解决的问题值得成本。
-
-<GlsGeometryShadersDiagram step={3} />
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 所有 patch 独立按中心到相机距离计算 outer levels，接缝出现裂缝。
-
-**原因 →** 相邻 patch 对同一共享边得到不同分段点，inner level 又无法修复边界。
-
-**修法 →** 以共享边身份和端点误差生成一致 edge level，明确 domain 的 outer slot 对应方向，并用线框/point mode 检查边界采样。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 第一个 GS 顶点颜色正确，后续顶点随机或继承错误 layer。
-
-**原因 →** 误以为 EmitVertex 后输出变量仍保留；规范把这些值视为未定义。
-
-**修法 →** 每次 EmitVertex 前完整写入 `gl_Position`、所有用户 outputs 和路由输出；用小型 strip 逐顶点编码颜色验证。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 文档断言 GS “现代 API 不推荐”或固定比其他阶段慢。
-
-**原因 →** 把某类大放大负载的经验泛化为 API 契约，忽略法线调试、多 viewport 和图层路由等实际用途。
-
-**修法 →** 查询实现上限，记录 invocation、emitted primitives 与 GPU timer；再比较固定功能、tessellation、compute/indirect 或离线生成方案。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1：** TCS、固定 tessellator 与 TES 各自负责什么？TCS 能否省略？
-
-<Answer>
-TCS 按 patch 输出控制点和内外细分级别；固定 tessellator 按 domain、spacing、winding 和 levels 生成参数坐标；TES 把每个参数坐标求值为属性与 gl_Position。TCS 可省略并使用 patch default levels，但启用 tessellation 时 TES 必须存在。
-</Answer>
-
-**问题 2：** 为什么相邻 patch 的 shared-edge outer level 必须兼容？
-
-<Answer>
-Outer level 决定边上生成哪些参数点。两侧若分段不同，会形成 T-junction 或裂缝；inner level 只影响内部。应让两侧从同一共享边数据计算相同 level，并确认 outer array slot 方向对应正确。
-</Answer>
-
-**问题 3：** 用 GS 输出两条互不相连的线，需要怎样调用 EmitVertex 与 EndPrimitive？
-
-<Answer>
-为第一条线写端点 A 的全部输出并 Emit，再写 B 并 Emit，然后 EndPrimitive；第二条线重新写 C、Emit，写 D、Emit，再 EndPrimitive。每次 Emit 后输出未定义，不能依赖上次颜色、位置或 layer。
-</Answer>
-
-**问题 4：** 如何判断 geometry shader 是否是当前瓶颈？
-
-<Answer>
-记录 geometry shader invocations、primitives emitted 和 timer query，并对照输入图元、invocations 数、实际发射顶点及输出接口宽度。再用关闭 GS、降低放大或替代方案作同负载对比，不能仅凭 max_vertices 或阶段名称判断。
-</Answer>
-</Exercises>
 
 ## 本章回顾
 
 完整 Primitive Processing 由 patch、TCS、固定 tessellator、TES、可选 geometry shader 和后续固定图元处理组成。Triangles、quads、isolines 定义参数域，outer levels 定义共享边契约；GS 的 input topology、output strip、EmitVertex 与 EndPrimitive 构成严格状态机，invocations、layer 和 viewport 提供多路路由。可复刻原书的标准，是能从 level 推导参数点、从发射顺序推导 strip、从查询和时间证明成本。
 
-<Glossary>
-<GlossaryItem term="图元处理">顶点处理之后、光栅化之前对 patch 或完整图元执行细分、装配、改写与路由的阶段集合。</GlossaryItem>
-<GlossaryItem term="Patch">由若干控制点组成、通过 GL_PATCHES 提交给曲面细分阶段的输入图元。</GlossaryItem>
-<GlossaryItem term="曲面细分控制着色器">按 patch 调度、输出新控制点与内外细分级别的可编程阶段。</GlossaryItem>
-<GlossaryItem term="内外细分级别">决定 patch 边界分段与内部密度的浮点控制值。</GlossaryItem>
-<GlossaryItem term="Tessellator">读取参数域和细分级别、生成 TES invocation 参数坐标的固定功能单元。</GlossaryItem>
-<GlossaryItem term="曲面细分求值着色器">在 tessellator 生成的参数坐标上计算真实属性与 gl_Position 的可编程阶段。</GlossaryItem>
-<GlossaryItem term="Triangles Domain">使用三个重心坐标表达三角形参数点的细分域。</GlossaryItem>
-<GlossaryItem term="Quads Domain">使用二维 uv 坐标表达四边形参数点的细分域。</GlossaryItem>
-<GlossaryItem term="Isolines Domain">以线编号和线内参数表达多条独立线段的细分域。</GlossaryItem>
-<GlossaryItem term="几何着色器">以一个完整输入图元为一次工作单元，可发射零到多个输出 strip 的可编程阶段。</GlossaryItem>
-<GlossaryItem term="邻接信息">在主图元两侧附加相邻顶点、供轮廓与邻域算法使用的输入拓扑。</GlossaryItem>
-<GlossaryItem term="EmitVertex">把当前 geometry shader 输出变量快照追加为输出 strip 的一个顶点。</GlossaryItem>
-<GlossaryItem term="EndPrimitive">结束当前输出 strip，使下一次 EmitVertex 从新 strip 开始。</GlossaryItem>
-<GlossaryItem term="gl_ViewportIndex">把输出图元选择到 viewport array 中某个视口的内建输出。</GlossaryItem>
-<GlossaryItem term="gl_Layer">把输出图元选择到 layered framebuffer 某个图层的内建输出。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapter 8; official sb7code examples tessellatedtri, tessmodes, tesssubdivmodes, tessellatedcube, normalviewer, gsculling, gstessellate, and multiviewport" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

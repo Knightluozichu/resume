@@ -160,8 +160,6 @@ function dijkstraTrace() {
 }
 
 const dijkstraStates = dijkstraTrace();
-const finalDijkstra = dijkstraStates[dijkstraStates.length - 1];
-
 export function Algs4WeightedDigraphModelMap() {
   const [edgeIndex, setEdgeIndex] = useState(2);
   const edge = edges[edgeIndex];
@@ -190,115 +188,6 @@ export function Algs4WeightedDigraphModelMap() {
     </figure>
   );
 }
-
-export function Algs4EdgeRelaxationLab() {
-  const [edgeIndex, setEdgeIndex] = useState(7);
-  const [known, setKnown] = useState(1.4);
-  const [apply, setApply] = useState(false);
-  const edge = edges[edgeIndex];
-  const sourceDistance = finalDijkstra.dist[edge.from];
-  const candidate = sourceDistance + edge.weight;
-  const improves = candidate < known;
-  const result = apply && improves ? candidate : known;
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          relax edge {edgeLabel(edge)}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={edges.length - 1} value={edgeIndex} onChange={(event) => setEdgeIndex(Number(event.target.value))} />
-        </label>
-        <label className="mt-4 block text-xs text-secondary">
-          current distTo[{edge.to}] = {known.toFixed(2)}
-          <input className="mt-2 w-full accent-current" type="range" min="0.2" max="2.4" step="0.1" value={known} onChange={(event) => setKnown(Number(event.target.value))} />
-        </label>
-        <div className="mt-4"><WeightedDigraphCanvas current={edge} distances={finalDijkstra.dist.map((value, vertex) => vertex === edge.to ? result : value)} /></div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3 text-xs">
-          <div className="border border-border p-3 text-secondary">prefix dist<div className="font-mono text-primary">{formatDistance(sourceDistance)}</div></div>
-          <div className="border border-border p-3 text-secondary">candidate<div className="font-mono text-primary">{sourceDistance.toFixed(2)} + {edge.weight.toFixed(2)} = {candidate.toFixed(2)}</div></div>
-          <div className={"border p-3 " + (improves ? "border-success text-success" : "border-warning text-warning")}>{improves ? "strict improvement" : "no update"}<div className="font-mono">{result.toFixed(2)}</div></div>
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-sm text-primary"><input type="checkbox" checked={apply} onChange={(event) => setApply(event.target.checked)} />apply relaxation update</label>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Relaxation只在prefix distance加edge weight严格更小时，同时更新distTo与edgeTo。
-      </figcaption>
-    </figure>
-  );
-}
-
-export function Algs4DijkstraLab() {
-  const [step, setStep] = useState(2);
-  const state = dijkstraStates[step];
-  const treeEdges = state.edgeTo.filter((edge): edge is DirectedEdge => edge !== null);
-  const frontier = state.dist
-    .map((distance, vertex) => ({ distance, vertex }))
-    .filter((item) => !state.settled.includes(item.vertex) && Number.isFinite(item.distance))
-    .sort((a, b) => a.distance - b.distance);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          settle vertex {state.current} · dist = {state.dist[state.current].toFixed(2)}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={dijkstraStates.length - 1} value={step} onChange={(event) => setStep(Number(event.target.value))} />
-        </label>
-        <div className="mt-4"><WeightedDigraphCanvas highlighted={treeEdges} settled={state.settled} distances={state.dist} /></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr]">
-          <div className="border border-success p-3 text-xs text-success">relaxed now<div className="mt-1 font-mono">{state.changed.map(edgeLabel).join(" · ") || "none"}</div></div>
-          <div className="border border-border bg-background p-3 text-xs text-secondary">IndexMinPQ front<div className="mt-1 font-mono text-primary">{frontier.slice(0, 5).map((item) => `${item.vertex}@${item.distance.toFixed(2)}`).join(" · ") || "empty"}</div></div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Nonnegative weights保证minimum-key vertex一旦settled，其distTo不再可能被后续path降低。
-      </figcaption>
-    </figure>
-  );
-}
-
-export function Algs4DijkstraInvariantLab() {
-  const [step, setStep] = useState(3);
-  const state = dijkstraStates[step];
-  const finalDistances = finalDijkstra.dist;
-  const finalizedCorrectly = state.settled.every((vertex) => Math.abs(state.dist[vertex] - finalDistances[vertex]) < 1e-9);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          settled-prefix certificate · step {step + 1}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={dijkstraStates.length - 1} value={step} onChange={(event) => setStep(Number(event.target.value))} />
-        </label>
-        <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-8">
-          {state.dist.map((distance, vertex) => {
-            const settled = state.settled.includes(vertex);
-            return (
-              <div key={vertex} className={"border p-2 text-center text-xs " + (settled ? "border-accent bg-accent/10" : "border-border bg-background")}>
-                <div className="font-semibold text-primary">v{vertex}</div>
-                <div className="font-mono text-secondary">{formatDistance(distance)}</div>
-                <div className={settled ? "text-success" : "text-warning"}>{settled ? "final" : "upper bound"}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 overflow-hidden border border-border bg-background">
-          {state.settled.map((vertex) => (
-            <div key={vertex} className="grid grid-cols-[4rem_1fr_1fr] border-b border-border p-2 text-xs last:border-b-0">
-              <span className="font-mono text-primary">v{vertex}</span>
-              <span className="font-mono text-secondary">settled {state.dist[vertex].toFixed(2)}</span>
-              <span className="font-mono text-success">oracle {finalDistances[vertex].toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-        <div className={"mt-3 border p-3 text-sm " + (finalizedCorrectly ? "border-success text-success" : "border-danger text-danger")}>{finalizedCorrectly ? "all settled labels equal final shortest distances" : "invariant violated"}</div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Dijkstra的核心不是“访问过”，而是settled label已成为不可再改善的shortest-path distance。
-      </figcaption>
-    </figure>
-  );
-}
-
 const dagPoints: Point[] = [
   { x: 55, y: 150 },
   { x: 155, y: 65 },
@@ -339,34 +228,6 @@ function dagShortestTrace() {
   }
   return states;
 }
-
-const dagStates = dagShortestTrace();
-
-export function Algs4DagShortestPathLab() {
-  const [step, setStep] = useState(2);
-  const state = dagStates[step];
-  const treeEdges = state.edgeTo.filter((edge): edge is DirectedEdge => edge !== null);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          topological relax vertex {state.current}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={dagStates.length - 1} value={step} onChange={(event) => setStep(Number(event.target.value))} />
-        </label>
-        <div className="mt-4 flex gap-1">
-          {dagPoints.map((_, vertex) => <div key={vertex} className={"min-w-0 flex-1 border p-2 text-center text-xs font-mono " + (vertex === state.current ? "border-warning text-warning" : vertex < state.current ? "border-success text-success" : "border-border text-secondary")}>{vertex}</div>)}
-        </div>
-        <div className="mt-3"><WeightedDigraphCanvas graphEdges={dagEdges} graphPoints={dagPoints} highlighted={treeEdges} settled={Array.from({ length: state.current + 1 }, (_, vertex) => vertex)} distances={state.dist} /></div>
-        <div className="mt-3 border border-border bg-background p-3 text-xs text-secondary">updated edges: <span className="font-mono text-primary">{state.changed.map(edgeLabel).join(" · ") || "none"}</span></div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        DAG的topological order让所有进入v的paths在处理v之前完成，因此negative edges也不会要求回头。
-      </figcaption>
-    </figure>
-  );
-}
-
 const jobs = [
   { name: "A", duration: 3, prerequisites: [] as number[] },
   { name: "B", duration: 2, prerequisites: [] as number[] },
@@ -384,49 +245,6 @@ function computeEarliestStarts() {
   }
   return starts;
 }
-
-const earliestStarts = computeEarliestStarts();
-
-export function Algs4CriticalPathLab() {
-  const [jobIndex, setJobIndex] = useState(2);
-  const finishTimes = jobs.map((job, index) => earliestStarts[index] + job.duration);
-  const makespan = Math.max(...finishTimes);
-  const job = jobs[jobIndex];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          selected job {job.name} · earliest start {earliestStarts[jobIndex]}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={jobs.length - 1} value={jobIndex} onChange={(event) => setJobIndex(Number(event.target.value))} />
-        </label>
-        <div className="mt-4 border border-border bg-background p-4">
-          {jobs.map((item, index) => (
-            <div key={item.name} className="mb-3 grid grid-cols-[2rem_1fr] items-center gap-2 last:mb-0">
-              <span className="text-xs font-semibold text-primary">{item.name}</span>
-              <div className="relative h-8 border border-border bg-elevated">
-                <div
-                  className={"absolute top-1 h-6 border " + (index === jobIndex ? "border-warning bg-warning/20" : "border-accent bg-accent/15")}
-                  style={{ left: `${(earliestStarts[index] / makespan) * 100}%`, width: `${(item.duration / makespan) * 100}%` }}
-                />
-                <span className="absolute inset-y-0 flex items-center text-[10px] font-mono text-primary" style={{ left: `calc(${(earliestStarts[index] / makespan) * 100}% + 6px)` }}>{earliestStarts[index]}→{finishTimes[index]}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-          <div className="border border-border p-3 text-secondary">predecessors<div className="font-mono text-primary">{job.prerequisites.map((index) => jobs[index].name).join(", ") || "source"}</div></div>
-          <div className="border border-accent p-3 text-accent">duration<div className="font-mono">{job.duration}</div></div>
-          <div className="border border-success p-3 text-success">project finish<div className="font-mono">{makespan}</div></div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Critical path method把job duration放在DAG edges上；source到job-start的longest path就是earliest start。
-      </figcaption>
-    </figure>
-  );
-}
-
 const bellmanPoints: Point[] = [
   { x: 55, y: 150 },
   { x: 180, y: 65 },
@@ -487,115 +305,4 @@ function bellmanFordQueueTrace() {
   }
   return states;
 }
-
-const bellmanStates = bellmanFordQueueTrace();
-
-export function Algs4BellmanFordLab() {
-  const [step, setStep] = useState(3);
-  const state = bellmanStates[Math.min(step, bellmanStates.length - 1)];
-  const treeEdges = state.edgeTo.filter((edge): edge is DirectedEdge => edge !== null);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          dequeue vertex {state.current} · pass event {step + 1}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={bellmanStates.length - 1} value={step} onChange={(event) => setStep(Number(event.target.value))} />
-        </label>
-        <div className="mt-4"><WeightedDigraphCanvas graphEdges={bellmanEdges} graphPoints={bellmanPoints} highlighted={treeEdges} current={state.changed[0]} distances={state.dist} /></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[2fr_1fr]">
-          <div className="border border-success p-3 text-xs text-success">successful relaxations<div className="mt-1 font-mono">{state.changed.map(edgeLabel).join(" · ") || "none"}</div></div>
-          <div className="border border-accent p-3 text-xs text-accent">FIFO queue<div className="mt-1 font-mono">{state.queue.join(" → ") || "empty"}</div></div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Queue-based Bellman-Ford只重扫distTo刚变化的vertices；onQueue防止同一vertex重复排队。
-      </figcaption>
-    </figure>
-  );
-}
-
 const negativeCycleEdge: DirectedEdge = { from: 5, to: 1, weight: -5 };
-const negativeCycleEdges = [
-  bellmanEdges.find((edge) => edge.from === 1 && edge.to === 3),
-  bellmanEdges.find((edge) => edge.from === 3 && edge.to === 4),
-  bellmanEdges.find((edge) => edge.from === 4 && edge.to === 5),
-  negativeCycleEdge,
-].filter((edge): edge is DirectedEdge => edge !== undefined);
-
-export function Algs4NegativeCycleLab() {
-  const [enabled, setEnabled] = useState(true);
-  const [laps, setLaps] = useState(2);
-  const graphEdges = enabled ? [...bellmanEdges, negativeCycleEdge] : bellmanEdges;
-  const cycleWeight = negativeCycleEdges.reduce((sum, edge) => sum + edge.weight, 0);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />enable edge 5→1 @ -5</label>
-        <label className="mt-4 block text-xs text-secondary">
-          repeat cycle {laps} times
-          <input className="mt-2 w-full accent-current" type="range" min="1" max="6" value={laps} onChange={(event) => setLaps(Number(event.target.value))} />
-        </label>
-        <div className="mt-4"><WeightedDigraphCanvas graphEdges={graphEdges} graphPoints={bellmanPoints} highlighted={enabled ? negativeCycleEdges : []} current={enabled ? negativeCycleEdge : undefined} /></div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-          <div className="border border-border p-3 text-secondary">cycle<div className="font-mono text-primary">1→3→4→5→1</div></div>
-          <div className={"border p-3 " + (enabled ? "border-danger text-danger" : "border-success text-success")}>one lap<div className="font-mono">{enabled ? cycleWeight.toFixed(2) : "not closed"}</div></div>
-          <div className="border border-warning p-3 text-warning">distance change<div className="font-mono">{enabled ? (cycleWeight * laps).toFixed(2) : "bounded"}</div></div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Reachable negative cycle可重复任意次并持续降低path weight，因此不存在finite shortest path。
-      </figcaption>
-    </figure>
-  );
-}
-
-type CertificateMode = "valid" | "wrong predecessor" | "overstated distance" | "missing reachable";
-
-export function Algs4ShortestPathCertificateLab() {
-  const [mode, setMode] = useState<CertificateMode>("valid");
-  const candidate = useMemo(() => {
-    const dist = [...finalDijkstra.dist];
-    const edgeTo = [...finalDijkstra.edgeTo];
-    if (mode === "wrong predecessor") edgeTo[5] = edges.find((edge) => edge.from === 3 && edge.to === 5) ?? null;
-    if (mode === "overstated distance") dist[7] = 2;
-    if (mode === "missing reachable") dist[5] = Number.POSITIVE_INFINITY;
-    return { dist, edgeTo };
-  }, [mode]);
-
-  const triangleViolations = edges.filter((edge) => Number.isFinite(candidate.dist[edge.from]) && candidate.dist[edge.to] > candidate.dist[edge.from] + edge.weight + 1e-9);
-  const predecessorViolations = candidate.dist.flatMap((distance, vertex) => {
-    if (vertex === 0 || !Number.isFinite(distance)) return [];
-    const edge = candidate.edgeTo[vertex];
-    return !edge || edge.to !== vertex || Math.abs(candidate.dist[edge.from] + edge.weight - distance) > 1e-9 ? [vertex] : [];
-  });
-  const valid = candidate.dist[0] === 0 && triangleViolations.length === 0 && predecessorViolations.length === 0;
-  const treeEdges = candidate.edgeTo.filter((edge): edge is DirectedEdge => edge !== null);
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <label className="text-sm font-semibold text-primary">
-          candidate shortest-path certificate
-          <select className="mt-2 w-full border border-border bg-background p-2 text-primary" value={mode} onChange={(event) => setMode(event.target.value as CertificateMode)}>
-            <option value="valid">valid</option>
-            <option value="wrong predecessor">wrong predecessor</option>
-            <option value="overstated distance">overstated distance</option>
-            <option value="missing reachable">missing reachable</option>
-          </select>
-        </label>
-        <div className="mt-4"><WeightedDigraphCanvas highlighted={treeEdges} current={triangleViolations[0]} distances={candidate.dist} /></div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3 text-xs">
-          <div className={"border p-3 " + (candidate.dist[0] === 0 ? "border-success text-success" : "border-danger text-danger")}>source label<div className="font-mono">{formatDistance(candidate.dist[0])}</div></div>
-          <div className={"border p-3 " + (triangleViolations.length === 0 ? "border-success text-success" : "border-danger text-danger")}>edge inequalities<div className="font-mono">{triangleViolations.map(edgeLabel).join(" · ") || "all pass"}</div></div>
-          <div className={"border p-3 " + (predecessorViolations.length === 0 ? "border-success text-success" : "border-danger text-danger")}>edgeTo equalities<div className="font-mono">{predecessorViolations.join(", ") || "all pass"}</div></div>
-        </div>
-        <div className={"mt-3 border p-3 text-sm " + (valid ? "border-success text-success" : "border-danger text-danger")}>{valid ? "certificate accepted" : "certificate rejected"}</div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        独立validator同时检查source、all-edge triangle inequalities与每个reachable vertex的tight predecessor edge。
-      </figcaption>
-    </figure>
-  );
-}

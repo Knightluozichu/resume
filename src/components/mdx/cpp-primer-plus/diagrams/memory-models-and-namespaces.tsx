@@ -60,38 +60,3 @@ export function EppStorageScopeLinkageFlow() {
     </figure>
   );
 }
-
-const symbolCases = [
-  { label: "缺少定义", setup: "extern int count; but no definition linked", symptom: "undefined reference", evidence: "inspect objects/link command", fix: "provide one definition and link its object" },
-  { label: "重复定义", setup: "int count = 0; in a header included twice", symptom: "multiple definition", evidence: "each TU emitted external symbol", fix: "extern declaration + one definition or inline variable" },
-  { label: "内部链接", setup: "static int count in two .cpp files", symptom: "two independent counters", evidence: "local symbols / distinct addresses", fix: "intentional internal state or shared external owner" },
-  { label: "命名歧义", setup: "using namespace alpha; using namespace beta; run()", symptom: "ambiguous lookup", evidence: "both namespaces export run", fix: "qualify alpha::run or narrow using declaration" },
-] as const;
-
-export function EppSymbolBoundaryLab() {
-  const [active, setActive] = useState(0);
-  const current = symbolCases[active];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
-        <div role="tablist" aria-label="选择符号和命名空间故障" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {symbolCases.map((item, index) => (
-            <button key={item.label} type="button" role="tab" aria-selected={active === index} onClick={() => setActive(index)} className={`min-h-12 border px-3 py-2 text-sm transition-colors ${active === index ? "border-accent bg-accent/15 text-primary" : "border-border bg-background text-secondary hover:text-primary"}`}>{item.label}</button>
-          ))}
-        </div>
-        <section role="tabpanel" className="mt-4 min-h-80 border border-border bg-background/60 p-4 sm:p-5">
-          <code className="block break-words text-sm text-accent">{current.setup}</code>
-          <div className="mt-5 grid gap-3 lg:grid-cols-3">
-            <div className="min-h-40 border border-rose-500/35 bg-rose-500/10 p-4"><strong className="text-sm text-primary">现象</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.symptom}</p></div>
-            <div className="min-h-40 border border-cyan-500/35 bg-cyan-500/10 p-4"><strong className="text-sm text-primary">证据</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.evidence}</p></div>
-            <div className="min-h-40 border border-emerald-500/35 bg-emerald-500/10 p-4"><strong className="text-sm text-primary">修复</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.fix}</p></div>
-          </div>
-        </section>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        四类现象分别属于定义数量、链接身份与名字查找；“多加 include”可能把缺定义变成重复定义。
-      </figcaption>
-    </figure>
-  );
-}

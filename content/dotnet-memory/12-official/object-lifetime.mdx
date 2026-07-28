@@ -7,14 +7,16 @@ description: 对齐原书第 12 章：区分托管可达性与外部资源生命
 demo: false
 math: false
 sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_12"
-draft: true
+draft: false
 ---
 
-import {
-  DnmHandleSemanticsLab,
-  DnmLifetimeStateMap,
-  DnmResourceOwnershipLab,
-} from "@/components/mdx/dotnet-memory/diagrams/object-lifetime";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 <Objectives>
 
@@ -32,7 +34,6 @@ GC 只管理托管对象存储的可达性。文件描述符、socket、窗口�
 
 <Term def="代码中唯一负责取得、使用并最终释放外部资源的契约；所有权可转移，但同一时刻应能指出谁必须释放且只能释放一次。">资源所有权</Term>
 
-<DnmLifetimeStateMap />
 
 Dispose 是所有者主动结束资源生命周期，不会让对象立即从托管堆消失；GC 仍按可达性回收包装器。Finalizer 是遗漏确定性释放时的兜底，也不会承诺在业务截止时间前运行。把两者混成“Dispose 会删除对象”或“GC 会关闭资源”都会产生错误设计。
 
@@ -180,7 +181,6 @@ sealed class NativeBuffer : IDisposable
 
 传给 P/Invoke 的 SafeHandle 参数可由 marshaller 协调危险引用计数，避免本机调用期间被并发 Dispose 提前关闭。手工取 `DangerousGetHandle` 后若跨越 GC/Dispose，需要严格配对 `DangerousAddRef/Release` 或更高层 API；“Dangerous”不是装饰词。
 
-<DnmResourceOwnershipLab />
 
 ## JIT early root collection 怎样影响资源包装器
 
@@ -230,7 +230,6 @@ Metadata GetMetadata(object owner) =>
 
 ConditionalWeakTable 不是通用高性能字典，也不提供基于时间/数量的精确淘汰。它适合给外部 owner 附加不应改变 owner 生命周期的数据。不要依赖某次 Gen 0 后回调/清理必然发生，pinned/demotion 和实现细节会影响观察时机。
 
-<DnmHandleSemanticsLab />
 
 <Callout type="trap" title="陷阱：把 WeakReference 当成所有权">
   弱目标可在两次读取之间消失。必须用 TryGetTarget 一次取得局部强引用，再在该作用域使用；不能先检查 IsAlive、稍后再取 Target。长弱引用还可能返回已经终结、资源已关闭的对象。
@@ -256,17 +255,14 @@ dotnet-dump analyze process.dmp
   <Step title="第一步：画出托管与资源两条时间线">
     对每个 owner 标出强可达、Dispose、f-reachable、finalizer 和真正回收，先预测正常/遗漏/复活路径，再确认资源是否只有一个释放点。
 
-    <DnmLifetimeStateMap />
   </Step>
   <Step title="第二步：选择最小而可靠的所有权模型">
     优先 using/await using；裸 native handle 交给 SafeHandle，业务 wrapper 不重复写 finalizer。验证重复 Dispose、异常、并发和借用 ownsHandle=false 路径。
 
-    <DnmResourceOwnershipLab />
   </Step>
   <Step title="第三步：验证句柄没有改变预期生命周期">
     区分 strong/weak/track-resurrection/dependent/pinned，构造 key/value 反向引用与临时 pin 实验；用 gcroot/gchandles/finalizequeue 验证实际根。
 
-    <DnmHandleSemanticsLab />
   </Step>
 </Stepper>
 

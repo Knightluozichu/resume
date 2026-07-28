@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["操作", "push 3"], ["数据栈", "3"], ["辅助栈", "3"], ["min", "3"]] },
   { label: "Test2", fields: [["操作", "push 4"], ["数据栈", "3,4"], ["辅助栈", "3,3"], ["min", "3"]] },
@@ -80,8 +78,4 @@ export function MinStackOperationMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">常数时间来自预先维护派生状态，代价是O(n)辅助空间与同步更新责任。</figcaption>
     </figure>
   );
-}
-
-export function MinStackOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者8次官方检查，跟踪数据栈、等高辅助栈和每一步min结果。" />;
 }

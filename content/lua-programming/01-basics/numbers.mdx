@@ -7,25 +7,15 @@ description: "掌握Lua 5.3整数与浮点双表示、numeral语法、算术与�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilNumberRepresentationLab, PilArithmeticRoundingLab, PilNumberConversionLab } from "@/components/mdx/lua-programming/diagrams/numbers";
-
-<Objectives>
-
-- 能解释Lua 5.3 integer/float subtype、numeral写法和表示边界，并判断一次运算的结果subtype与溢出风险
-- 能推导`//`、`%`、floor/ceil在负数上的结果，使用代数不变量复现除法与舍入错误
-- 能设计text-to-number、exact integer和pseudo-random边界，验证range、precision、seed与跨版本兼容
-
-</Objectives>
 
 ## 为什么Lua 5.3的Number不再等于Double
 
 Lua语言层的type name仍是`number`，但5.3默认实现内部有integer与float两种subtype：通常是signed 64-bit integer和double-precision float。`math.type`可观察subtype，`math.maxinteger`/`math.mininteger`给出整数边界。构建Lua时可选择不同width，因此工程contract不能只写“Lua number一定是64-bit”。
 
-<Term def="同一个number语言类型在运行时保留integer或float subtype，并按operand和operator选择表示的Lua 5.3模型。">dual number representation</Term>同时带来性能、精度和互操作收益，也引入边界：ID若被迫转float可能丢bit；C API要区分`lua_Integer`与`lua_Number`；JSON decoder是否保留整数需要验证。
+同时带来性能、精度和互操作收益，也引入边界：ID若被迫转float可能丢bit；C API要区分`lua_Integer`与`lua_Number`；JSON decoder是否保留整数需要验证。
 
 先预测：`3`与`3.0`的`type`和`math.type`分别返回什么；`7/2`与`7//2`是什么subtype；最大integer加1会抛错还是wrap；大integer转float再转回能否保持identity；`0.3-0.2==0.1`能否作为money invariant。先写答案，再用目标Lua binary运行。
 
@@ -49,35 +39,17 @@ assert(0x1.8p1 == 3.0)
 
 ## Representation Limits与Exact Integer Boundary
 
-64-bit signed integer范围通常从`-2^63`到`2^63-1`；double有约53 bits significand，所以只保证到`2^53`附近的连续整数精确。<Term def="整数超过浮点significand可连续表示的范围后，integer到float再回来的round-trip可能改变值的边界。">exact integer boundary</Term>决定数据库key、timestamp tick、bit mask和counter是否能经过float通道。
+64-bit signed integer范围通常从`-2^63`到`2^63-1`；double有约53 bits significand，所以只保证到`2^53`附近的连续整数精确。决定数据库key、timestamp tick、bit mask和counter是否能经过float通道。
 
 Integer arithmetic overflow按Lua整数语义wrap，不应作为business validation；先检查range或使用domain-specific big integer/decimal library。Float有rounding、infinity与NaN；NaN不等于自身，会破坏table key/equality与sorting assumptions。Lua table numeric keys会归一化exact integral float和integer的等价性，但不可把这推广到所有序列化器或host language。
 
-<PilNumberRepresentationLab />
-
-<Stepper>
-  <Step title="切换Integer、Float、Exact Crossover和Configured Lua"><PilNumberRepresentationLab /></Step>
-  <Step title="记录Runtime Fingerprint">保存`_VERSION`、`math.type(1)`、min/max integer、C API widths与serializer numeric policy。</Step>
-  <Step title="做Round-trip Matrix">对`2^53-1`、`2^53`、`2^53+1`、min/max和邻值经过float/text/JSON/C API，逐个比较bits与value。</Step>
-</Stepper>
-
-<Callout type="trap" title="type(x)返回number，所以Integer和Float没有任何区别">
-语言type相同不表示representation相同。`math.type`、division、bitwise/C API、overflow和large-ID round-trip都依赖subtype与范围；边界协议必须显式保留integer。
-</Callout>
 
 ## Arithmetic Operators与Subtype传播
 
 Lua提供`+ - * / // % ^`和unary minus。两个integer对`+ - * % //`通常走integer arithmetic；若任一operand为float或operator要求float，则转换。`/`总做floating division，`^`产生float。不要通过“打印无小数点”推断subtype，用`math.type`。
 
-Floor division `//`向负无穷取整，不是toward-zero truncation；modulo与它配套。<Term def="对非零b，q等于floor(a/b)，r等于a-b*q，并满足a=q*b+r的除法与余数约束。">floor division law</Term>在negative inputs最能区分实现是否正确。Divisor为0、mininteger除-1、float NaN/infinity等边界要单独测试。
+Floor division `//`向负无穷取整，不是toward-zero truncation；modulo与它配套。在negative inputs最能区分实现是否正确。Divisor为0、mininteger除-1、float NaN/infinity等边界要单独测试。
 
-<PilArithmeticRoundingLab />
-
-<Stepper>
-  <Step title="切换Slash、Floor Division、Modulo与Rounding"><PilArithmeticRoundingLab /></Step>
-  <Step title="填Positive/Negative表">计算`7,3`、`-7,3`、`7,-3`、`-7,-3`的`//`和`%`，验证重构等式。</Step>
-  <Step title="迁移到Bucket Logic">实现时间bucket或ring index，明确要floor还是truncate；加入负timestamp与negative offset回归。</Step>
-</Stepper>
 
 ```lua
 local cases = {
@@ -109,7 +81,7 @@ Numbers支持`== ~= < <= > >=`。Integer与float比较时，Lua尽力避免先�
 
 ## Random-number Generator不是Security Boundary
 
-Lua 5.3 `math.random()`可生成unit interval伪随机float，单integer参数给1..upper，两参数给lower..upper；invalid/empty range应失败。`math.randomseed`设置当前process generator state。<Term def="测试固定seed和call sequence，生产明确entropy source与security用途，且不承诺跨实现相同序列的随机协议。">reproducible random contract</Term>防止flaky test和伪安全token。
+Lua 5.3 `math.random()`可生成unit interval伪随机float，单integer参数给1..upper，两参数给lower..upper；invalid/empty range应失败。`math.randomseed`设置当前process generator state。防止flaky test和伪安全token。
 
 固定seed适合单runtime回归，但algorithm和sequence可能随Lua build/version变化；测试更应inject RNG或assert statistical/property outcomes，不锁死跨版本序列。密码、session token、nonce和key必须使用OS/crypto RNG，`math.random`不提供不可预测性。多thread/state环境还需明确generator是否共享及同步。
 
@@ -123,15 +95,8 @@ Float显示round到若干digits不等于value已round；`string.format`只改变
 
 `tonumber(text)`解析完整numeric string，失败返回nil；`tonumber(text, base)`按2..36的base解析integer digits。Arithmetic对numeric string的隐式coercion在Lua版本间有差异且隐藏invalid input，boundary应显式parse。`tostring`/`string.format`负责输出，但默认格式不承诺round-trip所有float或稳定schema。
 
-<Term def="外部text或float只有在完整parse、range、integrality与domain规则通过后才进入内部number模型的边界。">numeric conversion gate</Term>要区分invalid syntax、out of range、fractional、non-finite和unsupported base，而不是都变成0。`math.tointeger`是exact-integral gate，不是rounding。
+要区分invalid syntax、out of range、fractional、non-finite和unsupported base，而不是都变成0。`math.tointeger`是exact-integral gate，不是rounding。
 
-<PilNumberConversionLab />
-
-<Stepper>
-  <Step title="切换Text、Base、Exact Integer和Random"><PilNumberConversionLab /></Step>
-  <Step title="构造Invalid Matrix">覆盖empty、whitespace policy、partial digits、wrong base、fraction、NaN/infinity、min/max邻值和locale decimal separator。</Step>
-  <Step title="建立Typed Result">Parser返回value或reason，进入domain后只保留validated integer/float；序列化再做round-trip proof。</Step>
-</Stepper>
 
 ```lua
 local function parse_port(text)
@@ -149,9 +114,6 @@ assert(select(2, parse_port("3.5")) == "not-an-integer")
 assert(select(2, parse_port("70000")) == "out-of-range")
 ```
 
-<Callout type="trap" title="tonumber失败时用or 0就能简化所有输入">
-0可能是合法value，也可能违反range；把invalid text静默变0会丢失原因并污染统计。Parse、integrality、range和domain default必须是四个显式decision。
-</Callout>
 
 ## Precedence与可读性
 
@@ -174,30 +136,7 @@ Lua 5.2及更早的常见配置用单一double number model，5.3加入integer s
 5. Math、random、rounding和conversion都要有units、range、seed与failure contract。
 6. Lua 5.3前后的single/double与dual subtype模型不同，迁移必须覆盖wire和C boundary。
 
-<Exercises>
-
-**问题 1：为什么64-bit ID不能无条件经过Double再返回？**
-
-<Answer>Double significand约53 bits，超过连续精确整数区间后相邻IDs可能映射到同一float。保留Lua integer或decimal text/wire integer，round-trip测试2^53附近及min/max；C/JSON边界记录numeric policy，不能因打印相同就判等。</Answer>
-
-**问题 2：`-7 // 3`和`-7 % 3`为何是-3与2？**
-
-<Answer>Floor division取不大于-7/3的最大整数，即-3；remainder按`r=a-q*b`得到2，并满足`-7=(-3)*3+2`。Toward-zero truncation会得到-2与-1，是另一套contract，bucket/index逻辑必须明确选择。</Answer>
-
-**问题 3：怎样为可复现Simulation设计Random Boundary？**
-
-<Answer>把RNG作为dependency传入，测试固定seed和call order并记录Lua/build，但不承诺跨实现sequence；验收范围、分布property和failure。Production simulation保存seed便于重放，security token则切换OS crypto RNG，绝不复用math.random。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="dual number representation" definition="number在runtime保留integer或float subtype的Lua 5.3模型。" />
-  <GlossaryItem term="exact integer boundary" definition="Integer经float round-trip开始可能丢失相邻值区分的边界。" />
-  <GlossaryItem term="floor division law" definition="q=floor(a/b)、r=a-bq且a=qb+r的除法余数约束。" />
-  <GlossaryItem term="reproducible random contract" definition="明确seed、state、用途和跨实现非保证的伪随机协议。" />
-  <GlossaryItem term="numeric conversion gate" definition="Text/float经过parse、integrality、range与domain验证的边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 3: Numbers" adaptedUrl="https://www.lua.org/pil/" />

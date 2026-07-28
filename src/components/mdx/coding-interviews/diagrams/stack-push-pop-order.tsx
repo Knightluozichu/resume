@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["压入", "1,2,3,4,5"], ["弹出", "4,5,3,2,1"], ["关键过程", "压到4弹4；压5后连续回退"], ["结果", "true"]] },
   { label: "Test2", fields: [["压入", "1,2,3,4,5"], ["弹出", "3,5,4,2,1"], ["关键过程", "弹3；压4,5；弹5,4"], ["结果", "true"]] },
@@ -109,8 +107,4 @@ export function StackSequenceCounterexampleDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">非法序列4,3,5,1,2的首个矛盾：2压在1上方，却要求1先弹出。</figcaption>
     </figure>
   );
-}
-
-export function StackPushPopOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者7组官方测试，核对两个合法序列、两个阻塞序列、单元素与空指针契约。" />;
 }

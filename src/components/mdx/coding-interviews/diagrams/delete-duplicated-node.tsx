@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "部分重复",
@@ -80,8 +78,4 @@ export function HeadRunRewireDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">二级指针、引用或指向链接的指针都能统一处理头部重连。</figcaption>
     </figure>
   );
-}
-
-export function DeleteDuplicatedCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者官方代表链表，核对部分重复、头部重复、全重复与空边界。" />;
 }

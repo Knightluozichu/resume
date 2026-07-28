@@ -7,35 +7,9 @@ description: "串联十个核心单元，审计首帧、稳态、重建、故障
 demo: true
 math: false
 sourceUrl: "https://docs.vulkan.org/tutorial/latest/00_Introduction.html"
-draft: true
+draft: false
 ---
 
-import {
-  VkgFinalReviewDiagram,
-  VkgEvidenceChainDiagram,
-} from "@/components/mdx/vulkan-guide/diagrams/vkg-final-review";
-import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述十个核心单元如何收敛为 capability、resource、interface、execution 与 evidence 五类合同
-- 能实现不使用每帧 queue/device idle 的 acquire、record、submit2、present 稳态循环
-- 能比较首帧、稳态、swapchain 重建、device lost 与 shutdown 的不同生命周期边界
-- 能解释 validation、对象命名、捕获、GPU timing、画质对比和回退测试如何构成交付证据
-
-</Objectives>
 
 ## 学完不是记住对象数量
 
@@ -49,9 +23,8 @@ Vulkan 程序不以“创建了多少种对象”衡量完整性。最小三角�
 4. **Execution**：command state、barrier、submit2、semaphore/fence、acquire/present；
 5. **Evidence**：validation、debug labels、捕获、timing、画质、fallback 与故障恢复。
 
-<Term def="把设备能力、资源状态、接口、执行依赖和验证证据组合为可检查渲染路径的工程约束">Vulkan 工程合同</Term>让“在我机器上出图”升级为“在声明支持的设备集合上可解释、可复现、可回退”。
+让“在我机器上出图”升级为“在声明支持的设备集合上可解释、可复现、可回退”。
 
-<VkgFinalReviewDiagram />
 
 ## 十个核心单元回扣
 
@@ -72,7 +45,7 @@ Vulkan 程序不以“创建了多少种对象”衡量完整性。最小三角�
 
 ## 首帧是依赖图
 
-<Term def="从 loader/instance 能力协商，到资源、pipeline、command、WSI 同步全部满足后首次成功呈现的依赖图">首帧依赖图</Term>不是固定函数列表。现代 dynamic rendering 路径大致为：
+不是固定函数列表。现代 dynamic rendering 路径大致为：
 
 ```text
 loader version
@@ -93,7 +66,7 @@ Pipeline 可以与部分资源上传并行创建，但依赖 shader/layout/forma
 
 ## 稳态帧循环
 
-<Term def="CPU frame slot 与 WSI image index 分离，使用精确 completion 回收资源并持续 acquire/record/submit/present 的循环">稳态帧循环</Term>应避免每帧 `vkQueueWaitIdle`或 `vkDeviceWaitIdle`。等待只发生在即将复用的 frame slot 上。
+应避免每帧 `vkQueueWaitIdle`或 `vkDeviceWaitIdle`。等待只发生在即将复用的 frame slot 上。
 
 ```cpp
 FrameResult drawFrame(Renderer& r) {
@@ -146,7 +119,7 @@ recordFrame 必须基于该 `imageIndex`的真实旧 layout，先 barrier 到 at
 | swapchain image | WSI acquire | first image access | binary semaphore wait stage | imageIndex 由 acquire 给出 |
 | swapchain image | color write + PRESENT layout | present engine | submit signal + present wait | renderFinished[imageIndex] |
 
-<Term def="明确资源范围、前序生产者、后续消费者、stage/access/layout/owner 和生命周期完成条件的同步记录">Producer/consumer 同步表</Term>能同时发现过窄数据竞争和过宽性能停顿。Validation 可发现部分 hazard，但表格表达的是引擎意图，不能由工具自动猜全。
+能同时发现过窄数据竞争和过宽性能停顿。Validation 可发现部分 hazard，但表格表达的是引擎意图，不能由工具自动猜全。
 
 ```cpp
 VkImageMemoryBarrier2 sampledAfterUpload{
@@ -196,7 +169,6 @@ Vulkan 不保证“完全可预测”“绑定永远极低开销”或“必然�
 
 ## 证据链而不是单一绿灯
 
-<VkgEvidenceChainDiagram />
 
 开发构建建议启用 core validation、synchronization validation、debug utils 对象名和 command labels。GPU capture 检查实际 attachments/descriptors/draw；timestamps 与 performance counters 回答瓶颈；截图/差异图回答画质；多设备 fallback 测试回答 capability tier 是否真正独立。
 
@@ -219,92 +191,12 @@ performance gate:
 
 ## 三步完成全书验收
 
-<Stepper>
-<Step title="第一步：冻结能力与接口合同">
-
-保存设备快照、enabled tiers、shader reflection、pipeline/descriptor/attachment signatures，任何不满足都给出明确回退或拒绝原因。
-
-<VkgStepFlowDiagram
-  caption="启动报告必须能解释运行路径，而不是只打印 GPU 名称。"
-  stage={1}
-  stages={["Contracts：capability tiers、shader ABI、pipeline/attachment signatures"]}
-/>
-
-</Step>
-<Step title="第二步：跑通状态与生命周期">
-
-用 frame/image 分离的稳态循环验证 acquire、barriers、dynamic rendering、submit2、present；压力测试上传、重建、最小化和资源 retire。
-
-<VkgStepFlowDiagram
-  caption="状态测试覆盖正常帧，也覆盖所有早退和 generation 切换。"
-  stage={2}
-  stages={[
-    "Contracts：capability tiers、shader ABI、pipeline/attachment signatures",
-    "Lifecycle：upload、record、submit、present、recreate、retire",
-  ]}
-/>
-
-</Step>
-<Step title="第三步：提交正确性与性能证据">
-
-关联 validation、捕获、参考图、timestamps/counters、cold/warm 创建和 fallback A/B；记录设备/驱动/配置使结果可复现。
-
-<VkgStepFlowDiagram
-  caption="只有证据可复现，优化和高级 tier 才能成为默认产品路径。"
-  stage={3}
-  stages={[
-    "Contracts：capability tiers、shader ABI、pipeline/attachment signatures",
-    "Lifecycle：upload、record、submit、present、recreate、retire",
-    "Evidence：validation、capture、images、timings、fallback matrix",
-  ]}
-/>
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 正常运行一段时间，resize 后永久卡在 frame fence。
-**原因 →** acquire 前 reset fence，OUT_OF_DATE 早退后没有 submission signal；重建只改 extent，未重建 format/generation 资源。
-**修法 →** 确认提交后再 reset fence；重查完整 surface 合同，并按 generation 延后回收旧资源。
-</Callout>
-
-<Callout type="trap">
-**现象 →** validation 0 错误但画面偶发使用旧纹理或错误材质。
-**原因 →** Descriptor/resource generation 在 pending 时被覆写，或算法级索引错误未违反 valid usage。
-**修法 →** 将 descriptors、uploads 和 resource slots 绑定到 completion/retire value，并加入参考图与资源 ID capture。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 开启更多 frames、async compute、bindless 和 pipeline cache 后反而更慢。
-**原因 →** 把 Vulkan feature 当性能保证，未测排队延迟、跨 queue 同步、descriptor cache 行为和真实编译命中。
-**修法 →** 每项保留 baseline A/B，记录 CPU/GPU/present 指标和画质；只交付在目标设备矩阵有净收益的路径。
-</Callout>
 
 ## 综合练习
 
-<Exercises>
-
-1. **黑屏诊断：** Acquire/submit/present 都 SUCCESS，validation 无错误，但 swapchain 始终是 clear color，没有三角形。按合同列出排查顺序。
-
-<Answer>
-先用 capture 确认 draw 是否录制且未被条件剔除；检查 pipeline attachment format/sample 与 dynamic rendering view 匹配，viewport/scissor 非零，color write mask/blend 和 rasterizer discard/cull/front-face；检查 vertex/index buffer、descriptor/push constant ABI 与 shader 输出 location；检查 render area、load/store 和 draw 后是否仍有覆盖 clear。最后用 shader 固定输出和简化 geometry 二分，validation 无错不能排除算法/状态值错误。
-</Answer>
-
-2. **跨系统同步：** Transfer queue 上传纹理，compute 生成 indirect buffer，graphics 采样纹理并 indirect draw，最后 present。写出依赖骨架。
-
-<Answer>
-Host 写 staging 后必要时 flush；transfer copy image，执行 transfer-write → sampled-read 的 release/ownership；semaphore 让 graphics wait，graphics acquire 后转换到 shader-read。Compute storage-write indirect buffer，若跨 queue则 release/ownership + semaphore，graphics acquire 为 DRAW_INDIRECT/INDIRECT_COMMAND_READ。WSI acquire binary semaphore阻塞最早 swapchain image 使用；graphics 绘制后 barrier 到 PRESENT，signal image-indexed renderFinished，present wait 它。Host 资源回收由 fences/timeline values 决定。
-</Answer>
-
-3. **发布判定：** Ray tracing tier 在高端设备快 20%，中端设备慢 15%，一个驱动版本偶发 device lost。应如何交付？
-
-<Answer>
-不能全局默认开启。把 tier 资格合同扩展到设备/驱动已知问题和性能策略：高端已验证设备可默认，其他设备保持 raster fallback或用户实验开关；中端按 A/B 结果默认关闭；问题驱动 denylist/升级提示并保留诊断。保存正确性参考图、GPU timing、driver/device ID 和 device-lost 复现，修复并通过矩阵后再扩大默认范围。
-</Answer>
-
-</Exercises>
 
 ## 本章检查清单
 
@@ -315,11 +207,4 @@ Host 写 staging 后必要时 flush；transfer copy image，执行 transfer-writ
 
 ## 术语表
 
-<Glossary>
-<GlossaryItem term="Vulkan 工程合同">把能力、资源状态、接口、执行依赖和验证证据组合为可检查路径的约束。</GlossaryItem>
-<GlossaryItem term="首帧依赖图">从 loader/instance 协商到资源、pipeline、command、WSI 同步首次全部满足的依赖关系。</GlossaryItem>
-<GlossaryItem term="稳态帧循环">分离 CPU frame slot 与 WSI image index，并以精确 completion 持续 acquire/record/submit/present 的循环。</GlossaryItem>
-<GlossaryItem term="Producer/consumer 同步表">记录资源范围、生产者、消费者、stage/access/layout/owner 与完成条件的同步证据。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Khronos Vulkan Tutorial" adaptedUrl="https://docs.vulkan.org/tutorial/latest/00_Introduction.html" />

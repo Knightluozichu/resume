@@ -7,21 +7,9 @@ description: "逐片段测试、颜色写入、FBO 完整性、MRT、MSAA resolv
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
-draft: true
+draft: false
 ---
 
-import { GlrFramebufferDiagram, GlrFragmentOpsDiagram, GlrMsaaResolveDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-framebuffer";
-import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能按顺序解释 scissor、stencil、depth、blending、logic op、mask 等逐片段操作
-- 能创建并验证颜色/深度/模板、多渲染目标和 layered framebuffer attachment
-- 能区分 multisample sample storage、coverage、per-sample shading 与 resolve
-- 能推导直通与预乘 Alpha 混合，并设计透明、读回和离屏渲染验收
-
-</Objectives>
 
 ## 直觉：Fragment shader 输出还不是 framebuffer 最终值
 
@@ -29,9 +17,8 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 先预测：fragment shader 确实输出红色，但颜色附件仍是清屏色。只检查 shader 够吗？不够，还要检查 scissor、sample coverage、depth/stencil、draw buffers、color mask 和 FBO 完整性。
 
-<Term def="由一组颜色、深度、模板附件及 draw/read buffer 路由组成的渲染目标容器；它引用纹理或 renderbuffer 存储而不复制内容">帧缓冲对象</Term>（FBO）的完整性依赖附件尺寸、样本数、层次与格式组合。
+（FBO）的完整性依赖附件尺寸、样本数、层次与格式组合。
 
-<GlrFramebufferDiagram />
 
 ## Attachment 与完整性
 
@@ -51,7 +38,7 @@ if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLET
     fail("incomplete framebuffer");
 ```
 
-<Term def="附件格式、尺寸、层次、样本数、layered 状态和路由满足规范组合要求，FBO 才可作为读写目标的条件">帧缓冲完整性</Term>必须在每次重建尺寸/附件后检查。无颜色附件的 shadow FBO 应显式把 draw/read buffer 设为 `GL_NONE`。
+必须在每次重建尺寸/附件后检查。无颜色附件的 shadow FBO 应显式把 draw/read buffer 设为 `GL_NONE`。
 
 ## MRT、draw/read framebuffer 与路由
 
@@ -69,7 +56,7 @@ layout(location=2) out uint outObjectId;
 
 ## 逐片段操作链
 
-<Term def="fragment shader 之后按 coverage、scissor、stencil、depth、blend、logic operation 与 write mask 等状态决定每个样本结果的阶段集合">逐片段操作</Term>不是完全固定的串行软件列表，实现可做 early tests；但可观察结果必须符合规范依赖。
+不是完全固定的串行软件列表，实现可做 early tests；但可观察结果必须符合规范依赖。
 
 深度测试比较候选 $z_s$ 与附件 $z_d$。常规 `GL_LESS` 下通过条件为：
 
@@ -79,13 +66,12 @@ $$
 
 写 `gl_FragDepth`、使用 discard、image/SSBO 副作用或某些状态会影响 early-Z 优化。`layout(early_fragment_tests)` 强制部分测试在 shader 前发生，但也改变 shader 副作用是否执行，不能只当性能开关。
 
-<GlrFragmentOpsDiagram />
 
 Stencil 由 compare mask、reference、stencil value 决定测试，再按 stencil-fail/depth-fail/depth-pass 三种结果更新。Color/depth/stencil write mask 最后还可能阻止写入；“测试通过”不等于附件一定改变。
 
 ## Blending 与预乘 Alpha
 
-<Term def="把源颜色和目标附件颜色分别乘以 blend factor，再按加、减、最小或最大方程组合的逐样本操作">混合</Term>对直通（straight）Alpha 的常见 RGB 公式是：
+对直通（straight）Alpha 的常见 RGB 公式是：
 
 $$
 C_o=\alpha_s C_s+(1-\alpha_s)C_d.
@@ -102,7 +88,7 @@ $$
 
 ## MSAA：覆盖样本与 Resolve
 
-<Term def="每像素保存多个 coverage/depth/stencil/color 样本，光栅化按样本覆盖并在显示或复制前合成为单样本结果的抗锯齿方式">多重采样</Term>与 SSAA 不同：fragment shader 通常可按像素频率执行并把结果复制到覆盖样本，除非启用 sample shading 或使用 sample-qualified 输入。
+与 SSAA 不同：fragment shader 通常可按像素频率执行并把结果复制到覆盖样本，除非启用 sample shading 或使用 sample-qualified 输入。
 
 颜色 resolve 常近似样本平均：
 
@@ -122,7 +108,6 @@ glBlitNamedFramebuffer(msFbo, resolvedFbo,
   GL_COLOR_BUFFER_BIT, GL_NEAREST);
 ```
 
-<GlrMsaaResolveDiagram />
 
 ## Feedback loop 与尺寸重建
 
@@ -132,84 +117,15 @@ glBlitNamedFramebuffer(msFbo, resolvedFbo,
 
 ## 三步 FBO 验证
 
-<Stepper>
-<Step title="第一步：证明附件与路由">
-
-列出每个 attachment 的对象、format、level/layer、尺寸、sample count；检查完整性和 draw/read buffer 路由。
-
-<GlrStepFlowDiagram caption="先证明 shader location 有合法且匹配的写入目标。" stage={1} stages={["Target：attachments、formats、samples、draw/read routing"]} />
-
-</Step>
-<Step title="第二步：证明逐样本状态">
-
-逐一关闭/开启 scissor、stencil、depth、blend 与 masks，用固定覆盖图案读取颜色、深度和模板样本。
-
-<GlrStepFlowDiagram caption="逐项切换找出第一处阻止或改变写入的状态。" stage={2} stages={["Target：attachments、formats、samples、draw/read routing", "Fragment ops：coverage、tests、blend、masks"]} />
-
-</Step>
-<Step title="第三步：证明 resolve 与读回">
-
-比较 1x/4x 样本边缘、straight/premultiplied 透明和自定义 resolve；PBO 读回检查像素哈希与 stall。
-
-<GlrStepFlowDiagram caption="最终证据同时覆盖离屏存储、合成结果和 CPU 可观察值。" stage={3} stages={["Target：attachments、formats、samples、draw/read routing", "Fragment ops：coverage、tests、blend、masks", "Validate：resolve、readback、reference image、timing"]} />
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** FBO 完整且 shader 输出正确，某 MRT 附件仍为空。
-**原因 →** 没有把输出 location 加入 draw-buffer 路由，或 color mask 关闭。
-**修法 →** 同时核对 shader location、`glDrawBuffers`、附件格式类别和写掩码。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 预乘纹理边缘出现暗边。
-**原因 →** 资产已预乘，仍使用 `SRC_ALPHA` 再乘一次，或在线性/非线性空间混合错误。
-**修法 →** 统一资产与 shader 表示，预乘源使用 ONE，并在线性颜色空间完成合成。
-</Callout>
-
-<Callout type="trap">
-**现象 →** MSAA color resolve 正常，object ID 却变成无意义值。
-**原因 →** 把整数标识附件当连续颜色平均。
-**修法 →** 为离散数据选择明确样本或自定义 resolve，并独立验收边缘归属规则。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-**问题 1：FBO complete 为什么仍可能没有任何颜色写入？**
-
-<Answer>
-完整性只证明附件组合可用，不证明 draw-buffer 路由、shader location、逐片段测试或 color mask 允许写入。需要沿输出 location 到附件，再到测试和写掩码逐项验证。
-</Answer>
-
-**问题 2：straight 与 premultiplied Alpha 的关键差异是什么？**
-
-<Answer>
-straight 存未乘颜色，混合时用 SRC_ALPHA；premultiplied 已把 RGB 乘 Alpha，混合时源因子用 ONE。后者更适合过滤边缘，但生产和消费必须使用同一约定。
-</Answer>
-
-**问题 3：设计 MSAA FBO 的验收。**
-
-<Answer>
-绘制穿过像素中心和边界的已知三角形，读取每样本 coverage/color/depth，比较 1x 与 4x resolve。对 HDR、整数 ID 和深度分别定义 resolve，测试 resize 后样本数一致与完整性。
-</Answer>
-
-</Exercises>
 
 ## 小结
 
 FBO 定义附件和路由，fragment shader 只生成候选值，逐片段操作决定最终样本，resolve 再把多样本变成后续可用表示。完整性、测试、混合、样本语义和读回是五个独立门槛，不能用“FBO 创建成功”替代整条输出链验收。
 
-<Glossary>
-<GlossaryItem term="帧缓冲对象">引用颜色、深度和模板附件并定义读写目标的容器。</GlossaryItem>
-<GlossaryItem term="帧缓冲完整性">附件组合满足尺寸、样本、层次、格式和路由规则的条件。</GlossaryItem>
-<GlossaryItem term="逐片段操作">在 shader 后决定样本测试、混合和写入的状态阶段。</GlossaryItem>
-<GlossaryItem term="混合">按源/目标因子和方程组合候选颜色与附件颜色。</GlossaryItem>
-<GlossaryItem term="多重采样">每像素存储多个覆盖与附件样本并在后续 resolve 的方式。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 4 and 6" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

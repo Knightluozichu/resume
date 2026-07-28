@@ -10,13 +10,15 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Stencil-testing
 draft: false
 ---
 
-import {
-  StencilBufferDiagram,
-  StencilMaskContractDiagram,
-  StencilOutlineStepDiagram,
-  StencilPassStateDiagram,
-  StencilTestFlowDiagram,
-} from "@/components/mdx/learnopengl/diagrams/stencil-testing";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { CompareSlider } from "@/components/mdx/compare-slider";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* A 概念型（HEL-68，高级OpenGL 篇第 2 篇）：原书「模板测试 Stencil testing」。重心是概念讲解(§3)：模板缓冲是什么（每像素存一个整数）、模板测试按 ref 与缓冲值比较决定片段去留、glStencilFunc(func,ref,mask)、glStencilOp(sfail,dpfail,dppass) 三情形怎么更新模板值、glStencilMask 写入掩码（0x00=只读）、模板测试在深度测试之前、物体描边两遍法。数学 math:false（整数比较无公式，§4 整节省略）。承接深度测试章（已知逐片段测试、深度缓冲、glClear 清缓冲、管线里片段着色器之后的测试阶段）。沿用工厂流水线类比库（模板测试是管线里又一道逐片段「掩模/盖章」工序）。主 viz 两个：Stepper 物体描边两遍法（每步带 SVG，<StencilOutlineStepDiagram step>）+ CompareSlider 无描边 vs 有描边。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -52,8 +54,6 @@ import {
 
 你已经认识两个孪生缓冲了：颜色缓冲存「什么颜色」、深度缓冲存「多远」。模板缓冲是第三个孪生兄弟，存的是一个**没有固定物理含义、由你自己定义用途的整数**——你想拿它标记「这块像素属于哪个物体 / 要不要保护起来 / 是不是边界」都行。它同样不直接显示，只在幕后记账。下面这张图把它当成喷漆模板来理解最直观：
 
-<StencilBufferDiagram />
-
 每个像素存的那个数，就是它的 <Term def="模板缓冲里每个像素存的那个整数（0~255）。它没有固定物理含义，含义由你自己规定（比如约定『物体所在的像素记 1，其余记 0』）。模板测试时，新片段拿一个参考值和这个数比较，来决定自己能不能通过。">模板值</Term>（stencil value）。它的含义完全由你规定——本章用得最多的约定就是「物体覆盖到的像素记 `1`，其余记 `0`」，用这个 0/1 的形状当镂空模板。
 
 ## 模板测试：拿参考值和模板值比一比
@@ -61,8 +61,6 @@ import {
 有了这块缓冲，那道「掩模」工序就能干活了。<Term def="GPU 对候选片段执行的整数位比较：先把参考值 ref 与已存模板值分别和比较掩码按位与，再按 glStencilFunc 判断。逻辑上模板结果先于深度结果，用于选择 sfail/dpfail/dppass；实现可在结果不变时提前执行测试。">模板测试</Term>（stencil test）做的事，一句话：**参考值和已存模板值先按比较掩码筛位，再决定片段是否进入后续深度测试，并选择对应的模板更新操作**。
 
 从**结果依赖**看，先判断模板是否通过，再判断深度是否通过，才能在 `sfail`、`dpfail`、`dppass` 三个操作中选一个；两关都通过后颜色才有资格写入。但和上一章 Early-Z 一样，硬件不一定等片段着色器结束：只要不改变可见结果，模板/深度测试可提前执行。正确说法是“逻辑顺序为模板 → 深度 → 写入”，而不是把所有测试固定描述成 shader 之后的单一时间点。
-
-<StencilTestFlowDiagram />
 
 注意图右侧标的三处 `sfail` / `dpfail` / `dppass`——它们对应「模板测试失败 / 模板过但深度失败 / 两关都过」三种情形，每种情形下模板缓冲该怎么更新，由后面要讲的 `glStencilOp` 控制。先记住这条主干顺序：**模板测试 → 深度测试 → 写颜色**。
 
@@ -104,8 +102,6 @@ import {
 
 它和 `glStencilOp` 的分工别搞混：`glStencilOp` 产生候选结果，`glStencilMask` 决定候选结果的哪些位能覆盖旧值。`0x00` 不是写入数字 0，而是**完全不修改**。描边第二遍用它保护第一遍写好的形状；清除模板前则必须恢复 `0xFF`，因为 `glClear(GL_STENCIL_BUFFER_BIT)` 也受模板写掩码影响。
 
-<StencilMaskContractDiagram />
-
 {/* 4. 数学推导（spec §四，math:false）：模板测试是整数比较、无公式，整节按规范省略。 */}
 
 {/* 5(主 viz 1). 交互 Demo（spec §五）：A 型用 Stepper 把「物体描边两遍法」概念步拆开——每步必带 SVG 图示（chapter-spec §五：纯文字步 = 打回），用按 step prop 切状态的 <StencilOutlineStepDiagram>（仿 DepthTestStepDiagram）。猜一猜引导。控件即 Stepper 单步/进度。 */}
@@ -120,7 +116,6 @@ import {
 
 <Stepper>
   <Step title="① 第一遍：正常画物体，把它的模板值盖章成 1">
-    <StencilOutlineStepDiagram step={1} />
     先设
     <code>glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)</code> 和
     <code>glStencilFunc(GL_ALWAYS, 1, 0xFF)</code>，再开模板写入
@@ -131,7 +126,6 @@ import {
     <code>1</code>（右图高亮区），其余仍是 <code>0</code>。
   </Step>
   <Step title="② 第二遍：画放大物体，只在模板≠1 处上描边色">
-    <StencilOutlineStepDiagram step={2} />
     改成
     <code>glStencilFunc(GL_NOTEQUAL, 1, 0xFF)</code>（只在模板值
     <strong>不等于 1</strong> 处通过），并 <strong>关掉深度测试</strong>
@@ -144,7 +138,6 @@ import {
     ≠1）才通过、被涂上边框色。
   </Step>
   <Step title="③ 结果：物体周围留下一圈描边">
-    <StencilOutlineStepDiagram step={3} />
     两遍叠起来：中心是第一遍正常画的物体，外圈是第二遍只在 ≠1
     处画出的那一环边框色——物体周围正好镶了一圈轮廓边，描边完成。关掉深度测试是为了让这圈边框不被场景里别的物体挡住；模板设只读是为了别让放大物体又去改模板缓冲。最后记得把
     <code>glStencilMask(0xFF)</code> 和深度测试恢复回来。
@@ -160,14 +153,6 @@ import {
 > 猜一猜：把下面这个滑块从左拖到右，画面会从「光秃秃一个物体」变成「物体镶了一圈边」。那圈边是直接画在物体身上的吗，还是长在物体**外侧**的一环？拖动看看，再回想 §5 第 ② 步——它正是「只在模板≠1 的外环上色」的结果。
 
 左边是没做描边的原物体，右边是跑完两遍法后的描边效果。拖动中间的滑块左右对比，那圈轮廓边只出现在物体**外缘一圈**，物体本身一点没被盖掉：
-
-<CompareSlider
-  leftLabel="无描边（只画了物体）"
-  rightLabel="有描边（两遍法后）"
-  initial={42}
-  left={<StencilOutlineStepDiagram step={1} view="canvas" />}
-  right={<StencilOutlineStepDiagram step={3} view="canvas" />}
-/>
 
 看出来了吧——描边那一圈是长在物体**外侧**的（来自第二遍那个放大物体里「模板≠1」的外环），并没有覆盖物体本身。所以选中高亮看起来既清楚又不挡住物体细节，这正是模板测试在游戏里最常见的用法。
 
@@ -269,8 +254,6 @@ gl.enable(gl.DEPTH_TEST);
 </CodeTabs>
 
 逐行对着 §5：第一遍只在模板和深度都通过的可见像素写 `1`；第二遍使用 `NOTEQUAL` 与只读掩码，只让放大模型的外环上色。关闭深度会让轮廓始终可见、甚至透过前景物体；若目标是“只描可见部分”，应保留深度测试并根据几何膨胀处理深度偏差。代码必须恢复 `func/op/mask/depth` 全套状态；真实渲染器最好由 pass/state cache 保存调用前状态，而不是无条件假定深度原本开启。
-
-<StencilPassStateDiagram />
 
 {/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能让读者亲眼看翻车（联想 §5 Stepper / CompareSlider）。① glStencilMask(0x00) 时写不进模板（描边第一遍忘开写入）；② 描边被深度测试干扰 / 两遍法顺序错；③ ref/mask 设错。 */}
 

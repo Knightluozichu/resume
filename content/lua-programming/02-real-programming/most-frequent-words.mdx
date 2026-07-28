@@ -7,19 +7,9 @@ description: "实现从streaming text、tokenization、frequency table到determi
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilTokenPipelineLab, PilFrequencyTableLab, PilFrequencyRankingLab } from "@/components/mdx/lua-programming/diagrams/most-frequent-words";
-
-<Objectives>
-
-- 能解释逐行读取与tokenization policy，判断大小写、punctuation、digit、locale和UTF-8如何改变结果
-- 能实现frequency table并验证total、unique、positive count与resource budget不变量
-- 能设计确定性排序和top-k输出，复现pairs顺序、非严格comparator与cutoff tie故障
-
-</Objectives>
 
 ## 从一条Data Pipeline开始理解词频
 
@@ -27,7 +17,7 @@ Most Frequent Words把前几章连成一个完整程序：`io.lines`流式读取
 
 先预测：`Hello, hello_2`用`%w+`得到几个tokens；`pairs(counts)`是否每次给相同order；两个word同为10次时sort comparator只写count greater-than会不会稳定；k大于unique count怎么办；UTF-8中文在byte-oriented pattern下会得到什么；输入包含一亿个不同tokens时程序先耗尽CPU还是memory。先写政策，再写代码。
 
-<Term def="从bytes到word keys的规则集合，明确character model、pattern、case normalization、punctuation、digits、locale与invalid input。">tokenization policy</Term>不是实现细节，而是报表定义。同一文本按`%a+`、`%w+`或Unicode word segmentation会得到不同分母与排名；测试fixture必须连同policy version保存。
+不是实现细节，而是报表定义。同一文本按`%a+`、`%w+`或Unicode word segmentation会得到不同分母与排名；测试fixture必须连同policy version保存。
 
 ## Reading and tokenizing text
 
@@ -53,21 +43,10 @@ assert(sample[1] == "lua" and sample[2] == "lua")
 
 Coroutine不是完成此任务的唯一方式，直接gmatch loop更轻；这里用它把tokenizer封装为iterator。API要声明underscore和digits是否属于word。若需要apostrophe、hyphen或CJK segmentation，pattern会变成product rule，不能用“看起来像词”验收。
 
-<PilTokenPipelineLab />
-
-<Stepper>
-  <Step title="切换ASCII Words、Letters Only、Apostrophes和UTF-8"><PilTokenPipelineLab /></Step>
-  <Step title="建立Golden Corpus">覆盖empty、case variants、digits、underscore、apostrophe、hyphen、NUL、invalid UTF-8与多语言文本，保存expected tokens。</Step>
-  <Step title="加Streaming Budgets">逐行累计bytes、tokens与line length，超过上限返回typed reason；不要等table allocation失败后才报告。</Step>
-</Stepper>
-
-<Callout type="trap" title="%w+就是跨语言通用的Word Definition">
-Lua pattern按byte-oriented class与active locale工作，不实现Unicode segmentation。它适合受控ASCII示例；多语言输入必须选择Unicode tokenizer并固定normalization/case-fold版本。
-</Callout>
 
 ## Counting word frequencies with tables
 
-Counts table以normalized word为key、positive integer为value。更新惯用`counts[word] = (counts[word] or 0) + 1`，因为missing key为nil；这要求table只存counts，绝不能把false混入。<Term def="每处理一个token，总频次恰增一，已有key保持正整数，新key使unique count恰增一，所有keys已规范化的计数约束。">frequency-table invariant</Term>可让错误定位到单次update。
+Counts table以normalized word为key、positive integer为value。更新惯用`counts[word] = (counts[word] or 0) + 1`，因为missing key为nil；这要求table只存counts，绝不能把false混入。可让错误定位到单次update。
 
 同时维护`total`与`unique`，就能检查`sum(counts)==total`且table entry数等于unique。Counter接近`math.maxinteger`时必须拒绝、saturate或切换representation；Lua integer overflow不能成为合法频次。Untrusted input还要限制key length，避免少量超长tokens占满memory。
 
@@ -90,15 +69,8 @@ for word in string.gmatch("red blue red", "%a+") do add_word(state, word) end
 assert(state.total == 3 and state.unique == 2 and state.counts.red == 2)
 ```
 
-<Term def="输入处理在bytes、lines、tokens、token length、unique keys、counter range与elapsed time上设置可观测上限的资源协议。">streaming input budget</Term>让“逐行读取”真正bounded。超限时应返回partial/failed状态，不把截断结果冒充完整报告；若允许approximation，算法和error bound必须另行标注。
+让“逐行读取”真正bounded。超限时应返回partial/failed状态，不把截断结果冒充完整报告；若允许approximation，算法和error bound必须另行标注。
 
-<PilFrequencyTableLab />
-
-<Stepper>
-  <Step title="切换First Token、Repeated Token、New Vocabulary和Overflow/Budget"><PilFrequencyTableLab /></Step>
-  <Step title="验证Three Invariants">每批输入后检查sum counts等于total、entry数等于unique、所有counts为positive integer且keys已normalize。</Step>
-  <Step title="注入Adversarial Vocabulary">生成大量唯一长tokens、单一热点与counter邻界值，验证拒绝原因、partial-state policy和memory曲线。</Step>
-</Stepper>
 
 ## Collecting keys for ranking
 
@@ -108,7 +80,7 @@ Table按word查count高效，但`table.sort`只排序proper sequence，因此先
 
 ## Sorting and reporting the most frequent words
 
-Primary order是count descending。Equal counts若不加secondary key，`table.sort`不保证stable，输入sequence又来自unordered pairs，报告会漂移。<Term def="Comparator先按count降序，再以word或另一个稳定key完全消除equal-count歧义的确定性顺序。">deterministic frequency tie-break</Term>使snapshot、cache和用户分页可复现。
+Primary order是count descending。Equal counts若不加secondary key，`table.sort`不保证stable，输入sequence又来自unordered pairs，报告会漂移。使snapshot、cache和用户分页可复现。
 
 Comparator必须strict：同一个word与自身比较返回false；不能使用greater-or-equal。若word comparison受locale影响，固定byte lexical order或使用versioned collation key。Sort期间counts不可修改，否则comparator可能违反transitivity。
 
@@ -136,19 +108,8 @@ local report = top_words({ lua = 3, code = 2, book = 2 }, 10)
 assert(report[2].word == "book" and report[3].word == "code")
 ```
 
-<Term def="Top-k API明确k的type/range、equal-count cutoff、少于k项、output schema与format escaping的报告边界。">top-k reporting boundary</Term>要求data与printing分离。先返回records，再由CLI/JSON/UI formatter处理delimiter、Unicode与alignment；直接`print(word,count)`难以测试escaping和schema。
+要求data与printing分离。先返回records，再由CLI/JSON/UI formatter处理delimiter、Unicode与alignment；直接`print(word,count)`难以测试escaping和schema。
 
-<PilFrequencyRankingLab />
-
-<Stepper>
-  <Step title="切换Count Desc、Lexical Tie、Top k和Display"><PilFrequencyRankingLab /></Step>
-  <Step title="做Comparator Law Test">随机选a/b/c验证irreflexive、asymmetric与transitive；equal counts必须按secondary key给唯一order。</Step>
-  <Step title="验证Cutoff">覆盖k为0、1、等于/大于unique，以及第k名多人同频；确认采用固定k还是include-all-ties policy。</Step>
-</Stepper>
-
-<Callout type="trap" title="按Count排序后，相同Count自然保持Alphabetical Order">
-Table.sort不保证stable，words又来自无序pairs。Comparator必须在count相等时显式比较word；使用greater-or-equal会破坏strict ordering，不能解决稳定性。
-</Callout>
 
 ## End-to-end failure与验证
 
@@ -165,30 +126,7 @@ Property tests可生成tokens list，直接构造expected counts，再比较stre
 5. Top-k明确k range、cutoff ties与output schema，并把data generation和formatting分离。
 6. 失败或截断结果必须标partial，不能冒充完整统计。
 
-<Exercises>
-
-**问题 1：为什么逐行读取仍可能Memory Exhaustion？**
-
-<Answer>Line streaming只限制当前raw text，counts table仍为每个unique normalized token保存key与counter；攻击者可发送无限不同长词。限制bytes、token length、token count和max unique，超限返回明确失败或使用标注误差的approximate algorithm。</Answer>
-
-**问题 2：怎样保证Equal Count的报告每次相同？**
-
-<Answer>把keys收集进sequence后，用strict comparator：count不同时降序，相同时按固定word byte order升序。不要依赖pairs或stable sort，也不要用greater-or-equal。对全同频输入反复随机插入顺序做property test。</Answer>
-
-**问题 3：Top 10只有7个Unique Words时应该怎样输出？**
-
-<Answer>先验证k为non-negative integer，再迭代到`math.min(k,#words)`，返回7条records；不要补nil items。若产品要求“第10名同频全部包含”，那是另一种include-all-ties contract，需在cutoff处扩展并可能超过k。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="tokenization policy" definition="从bytes生成word keys并明确character、case、punctuation、digits与locale的规则。" />
-  <GlossaryItem term="frequency-table invariant" definition="每个token使total加一并维持positive counts、normalized keys与unique计数。" />
-  <GlossaryItem term="streaming input budget" definition="对bytes、tokens、key数量、counter与时间设置可观测上限的协议。" />
-  <GlossaryItem term="deterministic frequency tie-break" definition="Count降序后用稳定secondary key消除同频歧义的排序。" />
-  <GlossaryItem term="top-k reporting boundary" definition="明确k、cutoff tie、少量结果与output schema的报告边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 11: Interlude: Most Frequent Words" adaptedUrl="https://www.lua.org/pil/" />

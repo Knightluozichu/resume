@@ -7,43 +7,29 @@ description: "按CLRS第四版第17章重建动态顺序统计、扩张数据结
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
-draft: true
+draft: false
 ---
 
-import { CLRS4OrderStatisticTreeLab, CLRS4OSSelectPathLab, CLRS4OSRankPathLab, CLRS4AugmentationDependencyLab, CLRS4RotationRepairLab, CLRS4AugmentationChecklistLab, CLRS4IntervalOverlapLab, CLRS4IntervalTreeMaxLab, CLRS4IntervalSearchPathLab, CLRS4AugmentationCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/17-augmenting-data-structures";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释为何在红黑树节点上维护child-local元数据不会改变对数高度与更新上界
-- 能计算order-statistic tree中的第i小元素、节点rank及interval subtree的最大high端点
-- 能实现OS-SELECT、OS-RANK、旋转后字段修复与INTERVAL-SEARCH
-- 能分析一个augmentation字段是否满足局部可计算条件以及一次pruning为何安全
-- 能设计包含field semantics、sentinel、update path、rotation repair和query proof的扩张证书
-
-</Objectives>
 
 ## 从“为什么不为每次rank查询重新中序遍历”开始
 
 先预测：一棵平衡搜索树有一百万个节点，要查询key 42是第几小。每次中序遍历需线性时间；若每个节点记录其subtree size，沿一条root-to-node路径就能累计被跳过的节点数。
 
-<Term def="在已有数据结构上增加可维护元数据和新操作，同时保留基础结构不变量与渐近性能的系统方法。">数据结构扩张</Term>不是随手加cache字段。必须给出字段的精确定义、base value、更新与旋转维护规则，并证明新查询依据该字段跳过数据时不会漏解。
+不是随手加cache字段。必须给出字段的精确定义、base value、更新与旋转维护规则，并证明新查询依据该字段跳过数据时不会漏解。
 
-<CLRS4AugmentationChecklistLab />
 
 ## 17.1 Dynamic order statistics
 
 ### Subtree sizes
 
-<Term def="在集合动态插入和删除的同时支持SELECT第i小元素与RANK元素次序的红黑树扩张问题。">动态顺序统计</Term>以red-black tree为base。每个节点$x$增加`size[x]`，表示以$x$为root的内部节点数；sentinel `NIL`的size为0：
+以red-black tree为base。每个节点$x$增加`size[x]`，表示以$x$为root的内部节点数；sentinel `NIL`的size为0：
 
 $$
 size[x]=size[x.left]+size[x.right]+1.
 $$
 
-<Term def="节点自身及其全部后代的数量，是顺序统计树用来把全局次序分解为局部rank的元数据。">子树大小</Term>只依赖两个children，因此沿insert/delete search path可自底向上更新；rotation只改变常数个节点的child关系。
+只依赖两个children，因此沿insert/delete search path可自底向上更新；rotation只改变常数个节点的child关系。
 
-<CLRS4OrderStatisticTreeLab />
 
 ### Selecting by rank
 
@@ -57,7 +43,6 @@ OS-SELECT(x, i)
 4  return OS-SELECT(x.right, i - r)
 ```
 
-<CLRS4OSSelectPathLab />
 
 每步下降一层，red-black tree高度$O(\log n)$，所以OS-SELECT为$O(\log n)$。调用前必须验证$1\le i\le size[x]$；否则递归可能进入NIL却没有合法答案。
 
@@ -71,7 +56,6 @@ rank(x)=size[x.left]+1+
 (size[y.parent.left]+1).
 $$
 
-<CLRS4OSRankPathLab />
 
 ```cpp
 int os_rank(Node* tree, Node* x) {
@@ -97,9 +81,8 @@ int os_rank(Node* tree, Node* x) {
 3. 证明insert、delete和rotation能维护字段且代价受控。
 4. 设计新操作，并证明每次branch或pruning都由字段语义授权。
 
-<CLRS4AugmentationDependencyLab />
 
-<Term def="若红黑树节点字段可由该节点、左右子节点及其扩张字段在常数时间计算，则插入删除可在对数时间内维护该字段。">扩张定理</Term>给出通用维护上界。普通BST search path有$O(\log n)$个节点，可在path上更新字段；red-black fixup执行$O(\log n)$次recolor和常数次rotation。每次rotation只需重算旋转涉及的两个node。
+给出通用维护上界。普通BST search path有$O(\log n)$个节点，可在path上更新字段；red-black fixup执行$O(\log n)$次recolor和常数次rotation。每次rotation只需重算旋转涉及的两个node。
 
 以left rotation为例，原$x$的右child $y$升为subtree root。先用新children重算$x$，再重算$y$：
 
@@ -109,7 +92,6 @@ field[x]\leftarrow F(x,x.left,x.right),
 field[y]\leftarrow F(y,y.left,y.right).
 $$
 
-<CLRS4RotationRepairLab />
 
 ```cpp
 void repair_after_left_rotate(Node* x, Node* y) {
@@ -121,15 +103,12 @@ void repair_after_left_rotate(Node* x, Node* y) {
 
 字段“node depth”不满足该定理：一个rotation可能改变整个moved subtree内许多节点的depth，且depth依赖ancestors而非children。定理不是说它无法维护，而是不能直接获得常数rotation repair的结论。
 
-<Callout type="trap" title="只在插入搜索路径上加一">
-Red-black fixup可能rotation并改变局部subtree边界。只更新原search path会留下stale metadata。修法是同时为每种rotation规定字段重算顺序，并让测试检查基础树不变量与扩张字段不变量。
-</Callout>
 
 ## 17.3 Interval trees
 
 ### Overlap contract
 
-<Term def="以区间low端点为搜索键，并在每个节点维护subtree最大high端点，从而支持对数时间重叠查询的红黑树。">区间树</Term>存closed intervals $i=[i.low,i.high]$。两个closed intervals $i,j$重叠当且仅当：
+存closed intervals $i=[i.low,i.high]$。两个closed intervals $i,j$重叠当且仅当：
 
 $$
 i.low\le j.high
@@ -137,7 +116,6 @@ i.low\le j.high
 j.low\le i.high.
 $$
 
-<CLRS4IntervalOverlapLab />
 
 若业务使用half-open intervals，端点相等不算overlap，应改用严格比较。Endpoint policy必须从存储到查询保持一致。
 
@@ -151,7 +129,6 @@ $$
 
 并令`NIL.max`为负无穷。该字段是child-local，扩张定理保证red-black insert/delete仍为$O(\log n)$。
 
-<CLRS4IntervalTreeMaxLab />
 
 ### Searching for one overlap
 
@@ -168,35 +145,11 @@ INTERVAL-SEARCH(T, query)
 7  return x
 ```
 
-<CLRS4IntervalSearchPathLab />
 
 为何去right不会漏掉left解？若`left.max < query.low`，left中每个interval的high都早于query.low，绝无重叠。为何选择left不会错过唯一right解？即使left最终无解，可以证明若right有重叠，则沿所选路径的结构关系保证left方向存在可返回的overlap，或算法之后在相关证明中以BST low-order排除不可能区域。这里目标是返回任意一个overlap，不是枚举全部。
 
 查询每轮下降一层，时间$O(\log n)$。若要报告所有$k$个重叠区间，需要遍历所有仍可能命中的subtrees，典型输出敏感上界为$O(\log n+k)$，不能用“返回一个”的路径证明直接宣称完成枚举。
 
-<Callout type="trap" title="max字段存当前节点high">
-若`max`没有覆盖整个subtree，就不能据此排除left中的其他区间。修法是按node high、left max、right max三者取最大，并在insert、delete、transplant和rotation后逐层验证recurrence。
-</Callout>
-
-<CLRS4AugmentationCertificateLab />
-
-<Stepper>
-<Step title="定义元数据语义">
-写出field对每个node、NIL和duplicate key的精确定义，并确认它只依赖node及children。
-
-<CLRS4AugmentationDependencyLab />
-</Step>
-<Step title="覆盖所有结构更新">
-沿搜索路径修复字段，并为left/right rotation明确先修较低node、再修新root。
-
-<CLRS4RotationRepairLab />
-</Step>
-<Step title="证明新查询">
-把每次rank调整或subtree pruning连接到字段不变量，覆盖not-found、边界与输出规模。
-
-<CLRS4AugmentationCertificateLab />
-</Step>
-</Stepper>
 
 ## 小结
 
@@ -204,40 +157,4 @@ Chapter 17 Augmenting Data Structures以dynamic order statistics展示`size`如�
 
 扩张的核心不是多一个字段，而是一个端到端证书：field semantics、sentinel base、path update、rotation repair、query pruning和complexity。任何一环缺失，metadata都可能在结构更新后悄悄失真，或让查询错误跳过含答案的subtree。
 
-<Exercises>
 
-**问题 1**：OS-SELECT进入right subtree时为何把$i$改成$i-r$？
-
-<Answer>
-当前node的left subtree有$r-1$个更小元素，当前node本身是第$r$个。进入right前已经跳过这$r$个元素，所以原全局第$i$小对应right subtree内部第$i-r$小。
-</Answer>
-
-**问题 2**：扩张定理为何要求字段能由node及children常数时间计算？
-
-<Answer>
-搜索路径只有对数个node，而rotation只改变常数个node的child关系。若每个字段都能由局部信息常数时间重算，则路径维护为$O(\log n)$、每次rotation为$O(1)$；ancestor或整棵subtree依赖不自动满足该界。
-</Answer>
-
-**问题 3**：区间查询`[22,24]`在left.max为23时为何仍应搜索left？
-
-<Answer>
-left subtree至少有某个interval的high达到23，不早于query low 22，因此尚不能排除重叠。只有left.max严格低于query low时，left全部interval都在query之前结束，才可安全去right。
-</Answer>
-
-**问题 4**：从closed interval改成half-open interval需要改哪里？
-
-<Answer>
-Overlap predicate要把端点相等视为不重叠，比较从不严格改为严格；搜索pruning条件也要与该政策同步。字段max语义不变，但查询边界、测试样例和文档必须共同更新。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="数据结构扩张">在已有数据结构上增加可维护元数据和新操作，同时保留基础结构不变量与渐近性能的系统方法。</GlossaryItem>
-<GlossaryItem term="动态顺序统计">在集合动态插入和删除的同时支持SELECT第i小元素与RANK元素次序的红黑树扩张问题。</GlossaryItem>
-<GlossaryItem term="子树大小">节点自身及其全部后代的数量，是顺序统计树用来把全局次序分解为局部rank的元数据。</GlossaryItem>
-<GlossaryItem term="扩张定理">若红黑树节点字段可由该节点、左右子节点及其扩张字段在常数时间计算，则插入删除可在对数时间内维护该字段。</GlossaryItem>
-<GlossaryItem term="区间树">以区间low端点为搜索键，并在每个节点维护subtree最大high端点，从而支持对数时间重叠查询的红黑树。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 17 · Augmenting Data Structures" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

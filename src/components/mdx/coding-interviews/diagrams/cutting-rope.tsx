@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "长度2/3",
@@ -84,8 +82,4 @@ export function GreedyRemainderDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">余数1不能单独留下，3+1必须改成2+2。</figcaption>
     </figure>
   );
-}
-
-export function CuttingRopeMethodLab() {
-  return <CodingInterviewLab cases={cases} caption="切换小长度、余数分支与作者大输入，核对动态规划和贪心结果。" />;
 }

@@ -7,23 +7,13 @@ description: "把ARGV、stdin、文件读取、正则筛选、方法定义与req
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyArgvContractLab, RubyFileReadLab, RubyCommandBoundaryLab } from "@/components/mdx/ruby-programming/diagrams/building-command";
-
-<Objectives>
-
-- 能设计包含参数形状、stdin/stdout/stderr和exit status的命令行输入契约
-- 能比较整文件、逐行与显式handle读取，选择有界内存且可靠关闭资源的实现
-- 能实现与ARGV解耦的筛选方法，并用require或require_relative组合多个源文件
-
-</Objectives>
 
 ## 从“能跑的脚本”开始构造命令
 
-脚本只要在作者机器上执行一次即可；命令则需要稳定接受输入、产生可解释输出、用exit status说明结果，并在不同当前目录与错误场景下保持一致。<Term def="命令对参数、标准输入、输出通道、诊断、退出状态和副作用的完整外部约定。">command boundary contract</Term>是本章的主线。
+脚本只要在作者机器上执行一次即可；命令则需要稳定接受输入、产生可解释输出、用exit status说明结果，并在不同当前目录与错误场景下保持一致。是本章的主线。
 
 我们实现一个`simple_grep.rb`：第一个参数是pattern，之后是一个或多个文件；若文件写`-`则读取stdin。正常匹配写stdout，参数/读取错误写stderr；找到匹配返回0，没有匹配返回1，调用错误返回2。真实`grep`的细节更多，这里先建立可测试边界。
 
@@ -31,7 +21,7 @@ import { RubyArgvContractLab, RubyFileReadLab, RubyCommandBoundaryLab } from "@/
 
 ## 命令行的输入数据
 
-Ruby脚本通过`ARGV`获得位置参数，每个元素都是String。`ARGV.shift`方便消费参数，却会修改global array，使后续方法和测试依赖调用顺序。更稳妥的边界先复制或用index解析，再把普通value传给domain method。<Term def="把原始参数序列一次转换为经过验证的命令配置，之后不再读取或修改ARGV。">argument parsing boundary</Term>能消除隐藏global state。
+Ruby脚本通过`ARGV`获得位置参数，每个元素都是String。`ARGV.shift`方便消费参数，却会修改global array，使后续方法和测试依赖调用顺序。更稳妥的边界先复制或用index解析，再把普通value传给domain method。能消除隐藏global state。
 
 ```ruby
 Command = Struct.new(:pattern, :paths)
@@ -50,21 +40,10 @@ end
 
 CLI option变多时使用标准库`OptionParser`，不要手写一串`shift`。无论使用哪种parser，都要测试空参数、帮助、未知option、缺value、重复option、`--`后的路径以及包含空格的shell argument。Shell quoting发生在Ruby启动前，程序只看到解析后的String数组。
 
-<RubyArgvContractLab />
-
-<Stepper>
-  <Step title="切换四种参数形状"><RubyArgvContractLab /></Step>
-  <Step title="写Command表">为每种输入列出parse结果、I/O owner、stdout、stderr、status和是否允许继续处理。</Step>
-  <Step title="注入缺参和非法Regexp"><RubyArgvContractLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="ARGV是普通数组，业务方法直接读取最省事">
-直接读取让测试依赖process global state，也让同一进程内多次调用互相污染。只允许最外层CLI adapter接触ARGV，并把解析后的显式参数传入方法。
-</Callout>
 
 ## 文件的读取：先确定大小和资源owner
 
-文件API的选择取决于输入上界和处理方式。`File.read(path)`一次返回整个String，适合配置和有明确大小限制的小文件；`File.foreach(path)`逐行yield，适合日志与筛选。<Term def="读取策略在最大输入、峰值内存、处理粒度与文件关闭责任之间的约束。">file read contract</Term>必须在实现前确定。
+文件API的选择取决于输入上界和处理方式。`File.read(path)`一次返回整个String，适合配置和有明确大小限制的小文件；`File.foreach(path)`逐行yield，适合日志与筛选。必须在实现前确定。
 
 Path来自用户时，还要说明允许根目录、符号链接策略、普通文件要求和最大size；CLI本地工具与服务器上传接口的安全边界不同。不要用字符串前缀判断路径是否在目录内，应canonicalize后比较路径层次，并防止检查后替换文件的race。第18章会系统展开File与Dir。
 
@@ -91,17 +70,10 @@ end
 
 逐行模式把峰值内存限制在line size附近，但超长单行仍可能很大。Line默认保留separator，`chomp`返回去掉record separator的新String，`chomp!`原地修改。若工具要原样复制，就不要先`chomp`再盲目补`\n`，否则最后一行是否有换行的信息会丢失。
 
-<RubyFileReadLab />
-
-<Stepper>
-  <Step title="切换四种读取方式"><RubyFileReadLab /></Step>
-  <Step title="预算资源">对1 KB、10 MB、2 GB与超长单行输入估计峰值内存、首条结果延迟和close owner。</Step>
-  <Step title="模拟中途异常"><RubyFileReadLab /></Step>
-</Stepper>
 
 ## 从文件中读取指定模式的内容并输出
 
-筛选器不需要知道line来自文件还是stdin。让它接收任何可`each_line`/`each`的enumerable，并返回匹配数量；CLI adapter再负责打开source与映射status。<Term def="把纯文本筛选逻辑与文件、标准输入和进程退出规则分离的接口。">text filter seam</Term>使同一核心能在单元测试、文件和pipeline中复用。
+筛选器不需要知道line来自文件还是stdin。让它接收任何可`each_line`/`each`的enumerable，并返回匹配数量；CLI adapter再负责打开source与映射status。使同一核心能在单元测试、文件和pipeline中复用。
 
 ```ruby
 def emit_matches(lines, pattern, output: $stdout)
@@ -128,7 +100,7 @@ Ruby 2.3没有`Regexp#match?`，兼容实现使用`pattern.match(line)`；`match
 
 ## 方法的定义：把政策放在参数和返回值里
 
-方法的参数表达输入，返回值表达结果；异常表达调用者必须处理的失败。隐藏读取`ARGV`、写global变量或直接`exit`的方法很难组合。<Term def="方法只接收完成任务所需依赖，并以返回值或明确异常交还结果。">narrow method boundary</Term>让测试矩阵小而完整。
+方法的参数表达输入，返回值表达结果；异常表达调用者必须处理的失败。隐藏读取`ARGV`、写global变量或直接`exit`的方法很难组合。让测试矩阵小而完整。
 
 本例可分三层：`parse_arguments`只解析；`emit_matches`只筛选；`run(argv, stdin:, stdout:, stderr:)`编排路径并返回整数status。只有文件末尾adapter调用`exit run(...)`。这样require该文件时不会意外结束测试进程，也能对每一层单独注入失败。
 
@@ -138,19 +110,9 @@ Ruby 2.3没有`Regexp#match?`，兼容实现使用`pattern.match(line)`；`match
 
 `require "simple_grep/filter"`通过`$LOAD_PATH`查找feature并通常只加载一次；`require_relative "filter"`相对当前source file解析，不受process working directory影响。`load`会每次重新执行文件，适合受控reload场景，不是普通依赖机制。
 
-<RubyCommandBoundaryLab />
 
-<Stepper>
-  <Step title="切换Method、require与CLI adapter"><RubyCommandBoundaryLab /></Step>
-  <Step title="改变当前目录">从项目根、子目录和临时目录启动命令，验证source-relative dependency与用户path各自解析正确。</Step>
-  <Step title="Require两次"><RubyCommandBoundaryLab /></Step>
-</Stepper>
+文件被require时，顶层定义和side effect都会执行。Library file不要在顶层读取ARGV、打开业务文件或打印banner；将可执行入口放在`if $PROGRAM_NAME == __FILE__`保护下。是小型Ruby项目最重要的composition边界之一。
 
-文件被require时，顶层定义和side effect都会执行。Library file不要在顶层读取ARGV、打开业务文件或打印banner；将可执行入口放在`if $PROGRAM_NAME == __FILE__`保护下。<Term def="只有文件作为主程序运行时才执行CLI adapter，被require时仅提供定义。">main file guard</Term>是小型Ruby项目最重要的composition边界之一。
-
-<Callout type="trap" title="require的相对路径总是相对当前文件">
-普通`require`搜索`$LOAD_PATH`，不会自动以当前source目录为基准；working directory变化可能暴露错误。项目内相邻文件可用`require_relative`，打包library则配置lib目录并按feature name require。
-</Callout>
 
 ## 本章回顾：命令只是薄适配层
 
@@ -160,31 +122,7 @@ Ruby 2.3没有`Regexp#match?`，兼容实现使用`pattern.match(line)`；`match
 4. 方法使用显式依赖、返回值和异常，不在深层调用`exit`或读取process globals。
 5. `require`按load path且通常一次，`require_relative`按source file；main guard阻止library import触发CLI。
 
-<Exercises>
-
-**问题 1：如何测试命令行工具而不修改真实ARGV和stdout？**
-
-<Answer>实现`run(argv, stdin:, stdout:, stderr:)`并返回status；测试传普通Array与StringIO，断言输出通道和整数状态。最外层才调用`exit run(...)`，另保留少量真实进程集成测试验证shell quoting和exit code。</Answer>
-
-**问题 2：为什么逐行读取仍然需要输入上界？**
-
-<Answer>峰值内存虽不再等于整个文件，但单行可以任意长，Regexp也可能在恶意文本上耗时。限制总字节、单行长度和处理时间；测试大文件、超长无换行输入、非法编码以及读取中途异常。</Answer>
-
-**问题 3：怎样保证同一脚本从任意当前目录运行都能找到内部依赖？**
-
-<Answer>同项目相邻文件使用`require_relative`，library按标准`lib/feature`结构配置load path后使用`require`；用户输入路径则明确相对working directory或转换为absolute path。测试至少从根目录、子目录和临时目录启动。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="command boundary contract" definition="命令对参数、I/O通道、诊断、副作用和退出状态的约定。" />
-  <GlossaryItem term="argument parsing boundary" definition="把ARGV一次转换为经过验证的命令配置。" />
-  <GlossaryItem term="file read contract" definition="读取策略对大小、内存、粒度和关闭责任的约束。" />
-  <GlossaryItem term="text filter seam" definition="文本筛选逻辑与文件、stdin和进程规则分离的接口。" />
-  <GlossaryItem term="narrow method boundary" definition="方法只接收必要依赖并明确交还结果或失败。" />
-  <GlossaryItem term="main file guard" definition="仅当文件作为主程序运行时才启动CLI adapter的保护。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第3章 创建命令" adaptedUrl="https://tanoshiiruby.github.io/5/" />

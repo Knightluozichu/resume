@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "BFCE成功",
@@ -97,8 +95,4 @@ export function VisitedRollbackDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">访问限制属于“当前路径”，不是整次搜索的永久封禁。</figcaption>
     </figure>
   );
-}
-
-export function MatrixPathTraceLab() {
-  return <CodingInterviewLab cases={cases} caption="切换官方代表样例，观察成功路径、禁止复用和长度边界。" />;
 }

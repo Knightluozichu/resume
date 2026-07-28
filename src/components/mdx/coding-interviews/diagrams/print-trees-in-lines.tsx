@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["树形", "8；6/10；5,7,9,11"], ["第1行", "8"], ["第2行", "6,10"], ["第3行", "5,7,9,11"]] },
   { label: "Test2", fields: [["树形", "5→左4→左3→左2"], ["输出", "每层一个值"], ["行数", "4"], ["覆盖", "全左链"]] },
@@ -115,8 +113,4 @@ export function TreeLineStrategyMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">四种方法时间和渐进队列空间相同；作者源码应优先按双计数器理解。</figcaption>
     </figure>
   );
-}
-
-export function PrintTreeLinesOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者6组测试，核对完整树、左右链、单点、空树和方向交替稀疏树的逐行输出。" />;
 }

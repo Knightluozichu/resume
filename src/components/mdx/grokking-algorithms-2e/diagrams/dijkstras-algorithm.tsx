@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -144,27 +142,6 @@ export function WeightedPathDiagram() {
     </figure>
   );
 }
-
-export function DijkstraTraceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={traceCases}
-      caption="原书四步循环：选最低成本未处理节点、检查邻居、更新成本与父节点、标记已处理。"
-      tone="cyan"
-    />
-  );
-}
-
-export function PianoTradeMap() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={pianoCases}
-      caption="钢琴交换把物品当节点、额外花费当边权，最低成本交换链为35美元。"
-      tone="violet"
-    />
-  );
-}
-
 export function NegativeEdgeDiagram() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">

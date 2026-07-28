@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   {
     label: "1×1 / 2×2",
@@ -103,8 +101,4 @@ export function SpiralStartInvariantDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">循环不变量：进入第start圈前，外侧start层已打印完，剩余区域左上角恰为(start,start)。</figcaption>
     </figure>
   );
-}
-
-export function SpiralMatrixOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者12组官方尺寸，核对方阵、窄高、宽矮、单行、单列与中心残层。" />;
 }

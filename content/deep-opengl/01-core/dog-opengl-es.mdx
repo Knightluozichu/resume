@@ -10,36 +10,10 @@ sourceUrl: "https://registry.khronos.org/OpenGL/index_es.php"
 draft: false
 ---
 
-import {
-  DogOpenglEsDiagram,
-  DogMobileLifecycleDiagram,
-} from "@/components/mdx/deep-opengl/diagrams/dog-opengl-es";
-import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能比较 OpenGL ES 2.0、3.0、3.1 与 3.2 的核心能力，并按最低设备基线选择路径
-- 能解释 NativeWindow、EGLSurface、EGLContext 和 GPU 资源为何具有不同生命周期
-- 能实现带错误检查的 EGL 初始化、Surface 重建和 EGL_CONTEXT_LOST 恢复
-- 能分析 tile-based GPU 的片元、附件带宽、分辨率和热降频瓶颈并设计验证实验
-
-</Objectives>
 
 ## 直觉引入
 
-移动渲染的困难不是“桌面 GPU 缩小了”。应用窗口会随 Activity、SurfaceView 或系统合成器反复创建和销毁；GPU 共享系统内存和功耗预算；设备进入<Term def="系统为满足温度与功耗限制而主动降低 CPU 或 GPU 频率的保护状态">热降频</Term>后吞吐会下降。一个场景刚启动能跑 60 FPS，不代表持续十分钟仍能维持，也不代表切后台回来后 EGLSurface 仍有效。
+移动渲染的困难不是“桌面 GPU 缩小了”。应用窗口会随 Activity、SurfaceView 或系统合成器反复创建和销毁；GPU 共享系统内存和功耗预算；设备进入后吞吐会下降。一个场景刚启动能跑 60 FPS，不代表持续十分钟仍能维持，也不代表切后台回来后 EGLSurface 仍有效。
 
 许多移动 GPU 采用 tile-based 架构：先把图元分配到屏幕小块，在片上内存完成尽可能多的深度、模板和颜色工作，最后再写回系统内存。它能减少带宽，也改变了优化重点：透明层、过大的附件、无意义的 load/store、高分辨率后处理和频繁跨 pass 同步都可能迫使数据离开 tile memory。
 
@@ -58,16 +32,15 @@ OpenGL ES 不是单一版本。应用应从目标设备覆盖率和实际功能�
 
 ## EGL 连接窗口系统与 ES
 
-<Term def="在 OpenGL ES 与原生窗口系统之间选择配置、创建上下文和表面并提交交换的接口">EGL</Term>把四类对象连接起来：
+把四类对象连接起来：
 
 - EGLDisplay 表示与底层显示系统的连接，不等于一块物理屏幕；
 - EGLConfig 描述颜色、深度、模板、采样和可渲染 API 等配置；
-- <Term def="保存 OpenGL ES 当前状态并拥有或共享 GPU 对象命名空间的执行环境">EGLContext</Term>承载 ES 状态与资源；
-- <Term def="把窗口或离屏存储变成 EGL 可渲染和可交换目标的表面对象">EGLSurface</Term>连接 ANativeWindow 或 pbuffer。
+-承载 ES 状态与资源；
+-连接 ANativeWindow 或 pbuffer。
 
 eglMakeCurrent(display, drawSurface, readSurface, context) 同时确定当前线程使用的上下文和读写表面。Surface 可因旋转、窗口切换或 Activity 生命周期被销毁，而 Context 仍可能保留；驱动重置也可能让 Context 丢失，届时仅重建 Surface 不够。
 
-<DogMobileLifecycleDiagram />
 
 ## 带错误检查的 EGL 初始化
 
@@ -171,9 +144,8 @@ GLSL ES 的 highp、mediump、lowp 给出最低范围与精度保证。较低精
 
 ## Tile GPU 的真实成本
 
-<Term def="把屏幕分块并尽量在片上存储中完成深度、模板和颜色工作的 GPU 渲染架构">Tile-based 渲染</Term>先进行几何处理和 binning，再逐 tile 执行片元工作。部分实现可在片元着色前消除不可见不透明表面，所以不能断言每个被覆盖片元都会完整着色；透明混合、discard、复杂深度依赖和某些副作用会削弱这种优化。
+先进行几何处理和 binning，再逐 tile 执行片元工作。部分实现可在片元着色前消除不可见不透明表面，所以不能断言每个被覆盖片元都会完整着色；透明混合、discard、复杂深度依赖和某些副作用会削弱这种优化。
 
-<DogOpenglEsDiagram />
 
 移动端常见四类成本：
 
@@ -186,35 +158,6 @@ GLSL ES 的 highp、mediump、lowp 给出最低范围与精度保证。较低精
 
 先预测：一个深度附件只在当前 pass 做遮挡，后续永远不采样也不保留；帧末仍把它完整写回系统内存有教学或画质价值吗？
 
-<Stepper>
-<Step title="第一步：确定输出和附件预算">
-<DogStepFlowDiagram
-  caption="第 1 步：分辨率、格式、MSAA 和附件数量先决定最低带宽成本。"
-  stage={1}
-  stages={["确定分辨率与附件 load/store 预算", "减少未消除片元和跨 pass 同步", "用计数器与热稳态验证收益"]}
-/>
-
-按目标屏幕和画质选择动态分辨率、颜色/深度格式与 MSAA。标记后续不读取的深度、模板或中间颜色为临时数据。
-</Step>
-<Step title="第二步：组织可留在 tile 内的工作">
-<DogStepFlowDiagram
-  caption="第 2 步：先处理不透明可见性，再限制透明层和不必要的附件往返。"
-  stage={2}
-  stages={["确定分辨率与附件 load/store 预算", "减少未消除片元和跨 pass 同步", "用计数器与热稳态验证收益"]}
-/>
-
-对不透明物体采用合适的排序和深度策略；限制大面积透明和 discard；合并能共享附件的 pass，避免 CPU readback，并在合适时声明无须保存的附件。
-</Step>
-<Step title="第三步：验证持续性能">
-<DogStepFlowDiagram
-  caption="第 3 步：GPU 时间、带宽、片元计数、功耗和温度共同证明优化有效。"
-  stage={3}
-  stages={["确定分辨率与附件 load/store 预算", "减少未消除片元和跨 pass 同步", "用计数器与热稳态验证收益"]}
-/>
-
-运行固定相机脚本至少数分钟，记录 P50/P95 GPU 时间、带宽、片元调用、频率、功耗和温度。一次冷机帧率不是移动优化验收。
-</Step>
-</Stepper>
 
 ## 避免无用附件写回
 
@@ -239,45 +182,9 @@ void endOpaquePass(bool keepDepthForLaterSampling) {
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** Activity 旋转后 swap 失败，代码只重新 makeCurrent，仍不断得到 EGL_BAD_SURFACE。
-**原因 →** 原生窗口和 EGLSurface 已销毁，但 EGLContext 可能仍有效；两层生命周期被混为一体。
-**修法 →** 停止渲染线程，销毁旧 Surface，等待新 ANativeWindow 后创建新 Surface；仅在 EGL_CONTEXT_LOST 时重建 Context 和全部 GPU 资源。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 把全部片元变量改为 mediump 后某台设备变快，于是认定所有设备都能省电且画质无损。
-**原因 →** 精度映射、寄存器宽度和吞吐随 GPU 变化，数值范围也随场景变化；附件带宽并未因此自动下降。
-**修法 →** 查询精度、跑极端误差场景，并在各 GPU 家族上记录 shader counter、功耗和温度，按变体选择而非全局硬编码。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 只按透明层数量解释移动 GPU 过热，减少透明后仍无改善。
-**原因 →** 瓶颈可能是高分辨率 RGBA16F、多附件 store、MSAA、跨 pass 采样或热降频，而非单一过度绘制。
-**修法 →** 分别降低分辨率、附件位宽/数量和 shader 复杂度，比较 GPU counter 与稳态频率，定位片元、带宽或热预算。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1**：ANativeWindow 被销毁后，EGLSurface 与 EGLContext 必须怎样处理？什么错误证明要重建 Context 而不只是 Surface？
-
-<Answer>
-应先停止该 Surface 上的提交，解绑并销毁 EGLSurface；若策略和平台允许，EGLContext 可暂时保留。新窗口到来后创建新 Surface、makeCurrent、查询尺寸并更新 viewport。eglSwapBuffers 或其他 EGL 调用返回 EGL_CONTEXT_LOST 时，才证明 Context 及其 GPU 资源需要整体重建；EGL_BAD_SURFACE 通常只要求重建 Surface 链路。
-</Answer>
-
-**问题 2**：为什么 tile-based GPU 不等于“每次过度绘制都会完整执行片元着色”？哪些情况仍特别昂贵？
-
-<Answer>
-许多 tile-based 实现能在片上根据深度和可见性消除部分被遮挡的不透明片元，因此覆盖不必然等于完整片元执行。透明混合需要保留层次，discard 或深度副作用可能限制早期消除；大面积复杂 shader、多个高位宽附件、MSAA、load/store 和跨 pass 往返仍会增加片元或片外带宽成本。结论必须由 GPU 计数器验证。
-</Answer>
-
-**问题 3**：设计一个证明移动优化可持续的实验，应记录哪些变量，为什么不能只看启动后十秒的平均 FPS？
-
-<Answer>
-固定场景、相机轨迹、分辨率和画质，持续运行数分钟，记录 P50/P95 CPU/GPU 帧时间、片元调用、附件读写或带宽、GPU 频率、功耗、电池与温度，并标记 thermal 状态。冷机十秒尚未积累热量，频率可能处于短时峰值；只有热稳态下仍满足帧预算，才能证明优化可持续。
-</Answer>
-</Exercises>
 
 ## 小结
 
@@ -287,15 +194,4 @@ void endOpaquePass(bool keepDepthForLaterSampling) {
 - Tile-based 架构可减少带宽和部分隐藏片元工作，但透明、附件 store、同步与高分辨率仍需精确计量。
 - 移动优化验收必须进入热稳态，并同时观察帧时间、GPU counter、频率、功耗和温度。
 
-<Glossary>
-<GlossaryItem term="EGL">在 OpenGL ES 与原生窗口系统之间选择配置、创建上下文和表面并提交交换的接口。</GlossaryItem>
-<GlossaryItem term="EGLContext">保存 OpenGL ES 当前状态并拥有或共享 GPU 对象命名空间的执行环境。</GlossaryItem>
-<GlossaryItem term="EGLSurface">把窗口或离屏存储变成 EGL 可渲染、可读取或可交换的目标表面。</GlossaryItem>
-<GlossaryItem term="Tile-based 渲染">把屏幕分块并尽量在片上存储完成深度、模板和颜色工作的 GPU 架构。</GlossaryItem>
-<GlossaryItem term="热降频">设备为满足温度和功耗限制而降低 CPU/GPU 频率，导致长时间性能低于冷机峰值。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  adaptedFrom="Khronos OpenGL ES 3.2 and EGL 1.5 specifications"
-  adaptedUrl="https://registry.khronos.org/OpenGL/index_es.php"
-/>

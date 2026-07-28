@@ -10,11 +10,14 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Advanced-Data
 draft: false
 ---
 
-import {
-  BufferLayoutDiagram,
-  BufferSubDataDiagram,
-  BufferUpdateHazardDiagram,
-} from "@/components/mdx/learnopengl/diagrams/advanced-data";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-73，高级OpenGL 篇第 7 篇）：原书「高级数据 Advanced Data」。重心是代码对照(§6 覆盖≥80% 关键代码)：①glBufferData 全量 vs glBufferSubData(offset,size,data) 局部更新；②交错布局 interleaved 的 glVertexAttribPointer（stride=sizeof(Vertex)、offset 用 offsetof/手算）；③分批布局 batched 的 attribPointer（各属性独立 offset=各段起点、stride=自身大小）；④glCopyBufferSubData 缓冲间复制 + WebGL2 无 glMapBuffer 的 Callout。math:false 省略 §4。本章偏数据布局、较短、无 bespoke WebGL demo（用 Stepper + 静态 SVG）。承接前几章（同 section 工厂流水线/货架：之前讲怎么对画布做测试混合后处理，本章回到「数据怎么进显存、怎么摆」这层基建）。沿用「工厂流水线 / 仓库货架」类比。主 viz 两个：Stepper 三步交错 vs 分批内存排布（每步带 BufferLayoutDiagram mode）+ BufferSubDataDiagram 局部更新图。draft:true，老板验收后才发布(硬规则 7)。 */}
 
@@ -56,11 +59,9 @@ import {
 
 可如果你只是想改其中一小段（比如一个顶点动了），整架推倒重来太浪费。这时用 <Term def="在已存在的缓冲上只更新一小段：glBufferSubData(target, offset, size, data)。它不重新分配空间，只把从字节 offset 处起、长 size 的那一段覆盖成新的 data，其余字节保持原样。前提是这块缓冲已经用 glBufferData 开辟过空间。只有一小段数据变化时用它，比每帧整块重传省得多。">glBufferSubData</Term>——它**不重新分配**空间，只把从字节 `offset` 起、长 `size` 的那一段覆盖掉，其余字节原封不动，相当于「只补中间那一格」。前提是这块缓冲已经用 `glBufferData` 开辟过空间。下面这张图把两者画在同一块缓冲上对照：
 
-<BufferSubDataDiagram />
 
 局部更新字节更少，但不保证一定更快：若上一帧 draw 仍在读取同一存储，驱动可能让 CPU 等待。对每帧整体变化的流式数据，常用 orphaning：再次 `glBufferData(target, size, NULL, usage)` 请求一块同尺寸新存储，再上传新内容，让 GPU 继续读旧存储。
 
-<BufferUpdateHazardDiagram />
 
 还有一种更直接的写法叫 <Term def="桌面 OpenGL 将 buffer 的全部或区间映射到 CPU 地址空间。返回指针并不保证零拷贝，也不自动消除同步；访问 flags、GPU 是否仍使用该区间以及 unmap 结果共同决定正确性和性能。WebGL2 不暴露该 API。">内存映射</Term>（`glMapBuffer` / `glMapBufferRange`）。CPU 可通过返回指针读写，但映射不是“免费直通显存”：若 GPU 仍在使用旧数据，普通映射可能等待；使用 invalidate/unsynchronized flags 时则由应用保证不覆盖忙碌区域。WebGL2 不提供映射 API，使用 `bufferSubData`。
 
@@ -92,14 +93,12 @@ import {
 
 <Stepper>
   <Step title="① 交错布局 interleaved：一个顶点的 P N U 挨着，循环重复">
-    <BufferLayoutDiagram mode="interleaved" />
     一个顶点的<strong>位置 P、法线 N、纹理坐标 U 挨着摆</strong>
     ，下一个顶点紧跟其后。三个属性<strong>共用同一个步长</strong>
     <code>stride = 32</code>（一个顶点结构体的总字节数），偏移分别是
     <code>0 / 12 / 24</code>。这是最常用、缓存最友好的摆法。
   </Step>
   <Step title="② 分批布局 batched：所有 P 一段、所有 N 一段、所有 U 一段">
-    <BufferLayoutDiagram mode="batched" />
     换成<strong>所有位置堆一段、所有法线堆一段、所有纹理坐标堆一段</strong>
     。这下每个属性
     <strong>各自独立</strong>：步长等于<strong>自身大小</strong>（位置法线各
@@ -108,7 +107,6 @@ import {
     （位置 <code>0</code>、法线在所有位置之后、纹理坐标再往后）。
   </Step>
   <Step title="③ 对比：同一个 VAO，只是 stride / offset 填法不同">
-    <BufferLayoutDiagram mode="compare" />
     两种布局存的是<strong>同一批顶点</strong>，也都喂给
     <strong>同一个 VAO</strong>
     ，画出来一模一样。唯一的区别，就是

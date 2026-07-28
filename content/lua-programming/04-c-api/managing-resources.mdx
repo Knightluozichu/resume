@@ -7,19 +7,9 @@ description: "用目录迭代器与XML parser案例掌握native资源的acquire/
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilResourceLifecycleLab, PilDirectoryIteratorLab, PilXmlCallbackLab } from "@/components/mdx/lua-programming/diagrams/managing-resources";
-
-<Objectives>
-
-- 能解释native resource从acquire到publish、use、explicit close与__gc fallback的所有权迁移，并验证幂等性
-- 能实现持有DIR*的directory iterator，处理EOF、error、early break、closure reachability和entry buffer生命周期
-- 能设计XML parser到Lua callback的保护桥，延迟跨foreign frame的error并限制input、depth、entities与callback work
-
-</Objectives>
 
 ## 为什么Managing Resources先区分Close与GC
 
@@ -27,7 +17,7 @@ Lua GC按reachability回收memory，不承诺在文件描述符、directory hand
 
 先预测：constructor取得handle后在metatable设置前raise会由谁释放；目录循环break时iterator是否收到通知；`readdir`返回的name pointer能否跨下一次调用保存；XML C callback中直接`luaL_error`是否会跳过parser cleanup；character data callback一次是否对应完整text node；finalizer失败能否当普通错误传播。
 
-<Term def="Resource owner state machine把native handle限制在acquired、published/open与closed状态，并为每次迁移指定唯一owner和幂等清理。">resource owner state machine</Term>使success、error、cancel和GC路径可逐项验证。
+使success、error、cancel和GC路径可逐项验证。
 
 ## Resource Lifecycle与Error Discipline
 
@@ -35,19 +25,12 @@ Acquire后但publish前，当前C scope独占handle；任何失败先释放再ra
 
 Finalizer不应raise、调用任意Lua业务callback或依赖其它finalizable对象仍按某顺序存在。Native close失败可在explicit close返回`nil,error`，finalizer只能best-effort记录。`lua_close`时仍要允许所有owner安全收尾。
 
-<PilResourceLifecycleLab />
-
-<Stepper>
-  <Step title="切换Acquire、Publish、Use和Close"><PilResourceLifecycleLab /></Step>
-  <Step title="填写Owner Ledger">为handle、userdata、closure与external library记录owner、state、reachable roots和每条release path。</Step>
-  <Step title="做Every-edge Failure Injection">在acquire后、publish前、callback中、explicit close和state close注入失败，断言open-handle计数归零。</Step>
-</Stepper>
 
 ## A Directory Iterator
 
 POSIX `opendir`返回`DIR *`，`readdir`逐次给出entry，`closedir`释放。Iterator closure捕获full userdata，使handle在遍历期间可达。Userdata metatable定义idempotent `__gc`/close；EOF和native error都主动close。
 
-<Term def="Iterator closure root是被iterator C closure捕获的full userdata，使native cursor在每次next之间保持Lua可达。">iterator closure root</Term>解决跨调用lifetime，但也意味着提前break后closure仍可能占用handle。
+解决跨调用lifetime，但也意味着提前break后closure仍可能占用handle。
 
 ```c
 typedef struct DirectoryHandle { DIR *directory; } DirectoryHandle;
@@ -103,29 +86,19 @@ static int l_directory(lua_State *L) {
 
 代码展示原理；更完整API返回iterator和显式owner/close function，或返回带`next`/`close`的object。仅返回closure时caller难以确定性关闭。
 
-<PilDirectoryIteratorLab />
-
-<Stepper>
-  <Step title="切换Open、Next、EOF和Break"><PilDirectoryIteratorLab /></Step>
-  <Step title="验证Reachability">在遍历中强制GC，证明captured userdata存活；EOF、error和explicit close后DIR*为空。</Step>
-  <Step title="压测Early Exit">大量循环只读取第一项后break，比较有/无explicit close的open descriptor曲线与GC延迟。</Step>
-</Stepper>
 
 ## Early Termination与Cleanup Gap
 
-Generic for在break时不会回调iterator“遍历结束”。<Term def="Early-break cleanup gap是consumer停止请求next而resource-bearing iterator仍保持open、只能等待显式close或GC的时间窗。">early-break cleanup gap</Term>会耗尽file descriptors。API应让owner可见并提供close；调用者用protected block确保成功与错误都close。
+Generic for在break时不会回调iterator“遍历结束”。会耗尽file descriptors。API应让owner可见并提供close；调用者用protected block确保成功与错误都close。
 
 Lua 5.3没有依靠语言级to-be-closed变量解决此案例，因此library contract和host scope更加重要。不要把“最终GC会处理”当作峰值resource bound。
 
-<Callout type="trap" title="Generic For在Break时会自动调用Iterator Finalizer">
-Break只停止调用iterator，closure与userdata何时不可达取决于引用和GC。Resource iterator必须提供显式close/owner，__gc只作为遗漏时的fallback。
-</Callout>
 
 ## An XML Parser
 
 SAX式XML library在读取start element、text、end element时调用C callbacks；bridge再调用Lua handler table。Parser context必须锚定handler table，保存`lua_State`、native parser、failure flag和bounded error message。外层parse function拥有全部资源。
 
-<Term def="Foreign callback error barrier在第三方C library callback中用lua_pcall捕获Lua失败、记录并停止native operation，返回owner frame清理后再raise。">foreign callback error barrier</Term>避免`lua_error`long jump穿过不保证可跳出的foreign frames。
+避免`lua_error`long jump穿过不保证可跳出的foreign frames。
 
 ```c
 typedef struct XmlContext {
@@ -159,23 +132,13 @@ static void on_start(void *data, const char *name, const char **attributes) {
 
 Outer function完成`XML_Parse`返回后，无论parser error还是handler failure，都先`XML_ParserFree`、`luaL_unref` handler table并释放input buffer，再用`luaL_error`报告。Callback不得保存attributes/name pointers到返回之后，需立即复制。
 
-<PilXmlCallbackLab />
-
-<Stepper>
-  <Step title="切换Feed、Callback、Record Error和Unwind"><PilXmlCallbackLab /></Step>
-  <Step title="画Nested Control Flow">标outer C owner、Expat frame、bridge callback、lua_pcall和deferred error，确认long jump不穿过foreign frame。</Step>
-  <Step title="注入Parser与Handler失败">覆盖malformed input、callback raise、OOM、stop、final chunk和cleanup error，断言parser/ref/buffer只释放一次。</Step>
-</Stepper>
 
 ## Incremental Text与Parser Security
 
-Character data callback按input chunks和parser内部策略分段，不保证一次就是完整text node。<Term def="Incremental parser chunk contract要求consumer按事件顺序累积或流式处理任意分片，不把callback边界当成文档边界。">incremental parser chunk contract</Term>同样要求每次callback工作有上限。
+Character data callback按input chunks和parser内部策略分段，不保证一次就是完整text node。同样要求每次callback工作有上限。
 
 限制document bytes、nesting depth、attribute count/bytes、text accumulation、entity expansion和callback次数；按library能力禁用external entities与network access。Parser处理不可信XML时，成熟library配置和process resource limits是安全边界的一部分。
 
-<Callout type="trap" title="XML Text Callback一次总会给完整Element Text">
-Parser可把同一段文本拆成多次callback，也可能在entity/chunk边界分割。Handler应累积到明确end event或流式消费，并限制累计大小。
-</Callout>
 
 ## 本章回顾：先回到Owner Frame再Raise
 
@@ -186,30 +149,7 @@ Parser可把同一段文本拆成多次callback，也可能在entity/chunk边界
 5. Outer owner frame统一free parser、unref handlers和buffer，最后才raise Lua error。
 6. Incremental XML callback没有完整node保证，并需限制depth、entities、bytes与callback work。
 
-<Exercises>
-
-**问题 1：为什么Directory Iterator只靠__gc会造成Descriptor峰值？**
-
-<Answer>提前break后iterator可能仍被引用，即使不可达GC也不保证立即运行；大量短遍历会同时保留DIR*。API应暴露owner和explicit close，并让EOF/error也立即close。</Answer>
-
-**问题 2：XML C Callback里Lua Handler失败后为何先记录而不lua_error？**
-
-<Answer>lua_error可能long-jump穿过第三方parser的C frames，绕过其cleanup或违反library契约。Callback用pcall捕获、复制错误并stop parser；outer owner恢复后先释放全部native/Lua refs，再raise。</Answer>
-
-**问题 3：Resource Finalizer需要满足哪些不变量？**
-
-<Answer>可重复调用、不raise、不依赖finalizer顺序、只释放仍open的handle并立刻标closed；explicit close与state shutdown走同一内部idempotent释放逻辑。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="resource owner state machine" definition="以acquire、publish/open和closed状态约束native handle owner的模型。" />
-  <GlossaryItem term="iterator closure root" definition="被iterator closure捕获、保持native cursor可达的full userdata。" />
-  <GlossaryItem term="early-break cleanup gap" definition="Consumer停止迭代后资源仍open直到close或GC的时间窗。" />
-  <GlossaryItem term="foreign callback error barrier" definition="在第三方C callback内捕获错误、返回owner清理后再raise的边界。" />
-  <GlossaryItem term="incremental parser chunk contract" definition="按任意事件分片累积/流式处理并限制工作量的解析协议。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 32: Managing Resources" adaptedUrl="https://www.lua.org/pil/" />

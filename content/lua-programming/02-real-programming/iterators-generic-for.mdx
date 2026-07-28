@@ -7,19 +7,9 @@ description: "掌握closure iterator、generic-for三元协议、stateless itera
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilIteratorClosureLab, PilGenericForProtocolLab, PilIteratorStyleLab } from "@/components/mdx/lua-programming/diagrams/iterators-generic-for";
-
-<Objectives>
-
-- 能解释closure iterator的state、progress、termination与lifecycle，并判断独立实例和共享消费行为
-- 能推导generic for的iterator/state/control三元协议，复现first-result nil与false控制值差异
-- 能设计stateless、有序和true iterator，比较snapshot、mutation、early stop与callback错误边界
-
-</Objectives>
 
 ## 为什么Generic for背后有三个State Values
 
@@ -27,11 +17,11 @@ import { PilIteratorClosureLab, PilGenericForProtocolLab, PilIteratorStyleLab } 
 
 先预测：iterator首结果false是否结束；expression list中的factory调用几次；body给loop variable赋值能否改变下一control；同一个closure iterator交给两个loops会独立吗；pairs为何能stateless；按sorted keys遍历时source中途新增key会不会出现；callback-style true iterator如何break。先画owner与control。
 
-<Term def="Generic for进入时保存iterator function、invariant state与initial control，并在每轮用首返回值更新control直到nil。">generic-for iterator triple</Term>把generator syntax还原为普通call protocol。Lua 5.3的核心语义以这三个values理解；更新版语言可能加入close value，不应倒灌到本书baseline。
+把generator syntax还原为普通call protocol。Lua 5.3的核心语义以这三个values理解；更新版语言可能加入close value，不应倒灌到本书baseline。
 
 ## Iterators and Closures
 
-Closure iterator factory创建private state并返回next function。每次调用推进position、返回item；结束时首结果nil。<Term def="Iterator每次调用要么严格推进到新状态并返回item，要么以首结果nil永久结束，不能停留在同一可返回状态。">iterator progress invariant</Term>防止malformed input或empty match造成infinite loop。
+Closure iterator factory创建private state并返回next function。每次调用推进position、返回item；结束时首结果nil。防止malformed input或empty match造成infinite loop。
 
 每次factory call创建独立upvalues；同一个iterator function被多个consumers调用则共享并交错state。Stateful iterator通常不可rewind/reentrant，API应命名为new/make并记录single-consumer。若closure捕获file handle，loop提前break不会自动通知iterator cleanup；owner需with-iterator helper、explicit close或更合适的resource protocol。
 
@@ -56,23 +46,12 @@ assert(table.concat(values, ",") == "1,3,5")
 
 Range这里仅返回iterator，generic for把缺少的state/control视为nil并反复调用closure。Untrusted bounds需限制iteration count与integer overflow；`current=current+step`溢出可能让termination失效。
 
-<PilIteratorClosureLab />
-
-<Stepper>
-  <Step title="切换Factory、Yield Value、Finish和Reset/Reuse"><PilIteratorClosureLab /></Step>
-  <Step title="画State Timeline">记录每次factory产生的binding、每次call前后position和first result；两个consumers共享时交错标色。</Step>
-  <Step title="注入Lifecycle Exit">覆盖normal EOF、break、body error和abandoned iterator，验证captured resource由谁关闭及最后reference何时释放。</Step>
-</Stepper>
-
-<Callout type="trap" title="把同一个Iterator Function放进两个for循环会各自从头开始">
-Closure的state属于function/upvalues，不属于for loop。两个loops调用同一个closure会交错消费；需要独立遍历就各自调用factory创建新iterator triple。
-</Callout>
 
 ## The Semantics of the Generic for
 
 Generic form的expression list只求值一次，得到iterator、state和control。概念展开如下：保存三元组；循环调用iterator(state, control)；把results赋给fresh loop locals；首结果赋给hidden control；若首结果nil则break；否则执行body。
 
-<Term def="Iterator首返回值同时是本轮第一loop value和下一轮control，只有nil终止，false、0与empty string都继续。">first-result control</Term>要求data如果可能nil，改用separate non-nil key/control并把data放后续result。Additional results可以nil，不影响termination。
+要求data如果可能nil，改用separate non-nil key/control并把data放后续result。Additional results可以nil，不影响termination。
 
 ```lua
 local function step(state, control)
@@ -94,25 +73,18 @@ assert(seen[1] == false and seen[3] == "c")
 
 若step错误地写`if value then return ... end`，false element会提前停止；正确termination检查index/range或`value ~= nil`。Body中修改index local不改变hidden control，因为下一control来自iterator首结果。
 
-<PilGenericForProtocolLab />
-
-<Stepper>
-  <Step title="切换Evaluate、Call、Update和Terminate"><PilGenericForProtocolLab /></Step>
-  <Step title="手工展开Loop">把一个generic for改写为while三元协议，逐轮记录state、incoming control、results和body locals。</Step>
-  <Step title="做First-result Matrix">首结果依次为1、false、0、empty string、nil，后续data含nil；验证只有first nil停止。</Step>
-</Stepper>
 
 ## Stateless Iterators
 
 Stateless iterator不把iteration state存upvalue，全部由invariant state与control提供，因此同一iterator function可服务多个loops。`next(table, key)`返回下一个key/value，key nil从头开始；`pairs`通常提供next、table、nil。Order unspecified且mutation policy有限。
 
-Ipairs-style iterator用sequence作为state、index作为control：next index加一，读取value，value为nil时结束。<Term def="Stateless iterator的下一步完全由显式invariant state和control决定，function自身不保存每个遍历实例的mutable position。">stateless iterator protocol</Term>使reentrancy更清晰，但underlying table mutation仍可能破坏结果。
+Ipairs-style iterator用sequence作为state、index作为control：next index加一，读取value，value为nil时结束。使reentrancy更清晰，但underlying table mutation仍可能破坏结果。
 
 Iterator function可复用不等于state thread-safe。两个loops遍历同一mutable table时，修改可见性取决于collection contract。需要snapshot就先copy keys/values；需要live view则限制allowed mutations。
 
 ## Traversing Tables in Order
 
-Pairs不承诺order。有序遍历先collect keys到sequence，按total comparator排序，再用closure/stateless iterator依次返回key与current value。<Term def="Ordered table traversal先固定key snapshot与total order，再声明source在迭代期间mutation时使用snapshot key还是snapshot value。">ordered traversal snapshot</Term>区分两种语义：只snapshot keys时删除key会返回nil、新key不出现；snapshot key-value pairs则完全稳定但复制更多。
+Pairs不承诺order。有序遍历先collect keys到sequence，按total comparator排序，再用closure/stateless iterator依次返回key与current value。区分两种语义：只snapshot keys时删除key会返回nil、新key不出现；snapshot key-value pairs则完全稳定但复制更多。
 
 ```lua
 local function ordered_pairs(source)
@@ -139,21 +111,10 @@ Mixed key types不能直接`table.sort(keys)`，必须schema禁止或提供type-
 
 ## True Iterators
 
-原书把由traversal function控制循环、对每个item调用callback的形式称true iterator。Generator把control交给caller的for body；true iterator持有control：`all_words(function(word) ... end)`。<Term def="True iterator由遍历函数主动调用consumer callback，并显式规定callback result、early stop、error propagation与reentrancy。">callback-driven iterator</Term>可避免每item generator state transfer，但control composition更困难。
+原书把由traversal function控制循环、对每个item调用callback的形式称true iterator。Generator把control交给caller的for body；true iterator持有control：`all_words(function(word) ... end)`。可避免每item generator state transfer，但control composition更困难。
 
 Early stop可让callback返回false/tag，或raise专用sentinel再在边界捕获；前者更清晰。Callback error默认传播，traversal必须cleanup resources。Nested traversal与yieldability按runtime测试。若caller需要普通break、多loop clauses和generic algorithms，generator通常更符合Lua习惯。
 
-<PilIteratorStyleLab />
-
-<Stepper>
-  <Step title="切换Stateless、Ordered、Generator和True Iterator"><PilIteratorStyleLab /></Step>
-  <Step title="比较Control Owner">记录谁推进、谁能break、谁cleanup、callback/error result shape与per-item call cost，按workflow选择style。</Step>
-  <Step title="验证Mutation Policy">Ordered keys snapshot期间删除/添加/改value，分别测试key-snapshot与value-snapshot；stateless live iterator限制mutation。</Step>
-</Stepper>
-
-<Callout type="trap" title="Sorted Keys Iterator意味着整个遍历是Immutable Snapshot">
-若只复制keys，values仍从source实时读取：删除会得到nil，修改会见新值；新增keys不出现。需要完整snapshot就复制key-value pairs并明确memory cost。
-</Callout>
 
 ## Iterator Errors、Resources与Testing
 
@@ -170,31 +131,7 @@ Property tests比较iterator输出与reference sequence，并断言调用次数�
 5. True iterator主动调用callback，early stop、error、cleanup和reentrancy需专门协议。
 6. 所有iterator都要证明strict progress、bounded work与resource lifecycle。
 
-<Exercises>
-
-**问题 1：Iterator首Result为False时Generic for为何继续？**
-
-<Answer>Generic for只用首result是否为nil判断termination，false是合法control/loop value。若实现用truthiness会丢false data；按index/range或`value ~= nil`判断，并测试false、0、empty string。</Answer>
-
-**问题 2：怎样让Ordered Traversal成为完整Snapshot？**
-
-<Answer>Collect时保存records `{key=...,value=...}`，按key total comparator排序，iterator只读records，不再lookup source。这样后续source add/remove/update不影响结果；代价是复制values/references与O(n) memory。</Answer>
-
-**问题 3：File-backed Iterator遇到Break时谁Close？**
-
-<Answer>Lua 5.3 ordinary closure iterator没有break通知。让外层owner打开handle并用protected cleanup包住整个loop，或提供explicit iterator:close/with_lines API；normal EOF、break、body/iterator error都测试close outcome。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="generic-for iterator triple" definition="Generic for保存iterator、invariant state与initial control的三元状态。" />
-  <GlossaryItem term="iterator progress invariant" definition="每次调用严格推进或首result nil永久结束的迭代约束。" />
-  <GlossaryItem term="first-result control" definition="首result既是loop value又更新control且只有nil终止的规则。" />
-  <GlossaryItem term="stateless iterator protocol" definition="Next step只由显式state和control决定且function不存实例位置的协议。" />
-  <GlossaryItem term="ordered traversal snapshot" definition="先固定sorted keys/values并声明mutation可见性的遍历快照。" />
-  <GlossaryItem term="callback-driven iterator" definition="Traversal主动调用consumer并规定early stop、error和cleanup的迭代器。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 18: Iterators and the Generic for" adaptedUrl="https://www.lua.org/pil/" />

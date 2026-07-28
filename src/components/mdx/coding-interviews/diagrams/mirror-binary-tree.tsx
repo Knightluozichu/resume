@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "完整树",
@@ -85,8 +83,4 @@ export function MirrorSourceGuardDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">仓库递归版漏写right为空比较；修正后才与迭代版和题意一致。</figcaption>
     </figure>
   );
-}
-
-export function MirrorOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者五组树形，核对完整树、左右斜树、空树和单节点。" />;
 }

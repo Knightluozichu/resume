@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["目标", "22"], ["路径1", "10→5→7"], ["路径2", "10→12"], ["结果", "2条"]] },
   { label: "Test2", fields: [["目标", "15"], ["前缀", "10→5和为15"], ["叶子条件", "5不是叶子"], ["结果", "0条"]] },
@@ -78,8 +76,4 @@ export function RootLeafConditionMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">“和命中”与“到达叶子”是两个必须同时成立的条件；不能在内部节点提前接受。</figcaption>
     </figure>
   );
-}
-
-export function PathInTreeOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者6组测试，核对双路径、内部前缀误命中、左右链、单点和空树。" />;
 }

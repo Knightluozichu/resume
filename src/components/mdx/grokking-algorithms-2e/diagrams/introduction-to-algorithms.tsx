@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -218,35 +216,5 @@ export function IntroductionToAlgorithmsDiagram() {
         中点过小就移动左边界，中点过大就移动右边界；命中或区间为空时结束。
       </figcaption>
     </figure>
-  );
-}
-
-export function BinarySearchTraceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={traceCases}
-      caption="目标13的查找轨迹显示low、high和mid如何共同维护候选区间。"
-      tone="cyan"
-    />
-  );
-}
-
-export function BinarySearchContractLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={contractCases}
-      caption="命中、猜小、猜大与不存在覆盖循环的四种结果；边界更新必须排除已经比较的中点。"
-      tone="emerald"
-    />
-  );
-}
-
-export function AlgorithmGrowthLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={growthCases}
-      caption="从常数到阶乘，增长率决定输入扩大后算法是否仍可执行。"
-      tone="violet"
-    />
   );
 }

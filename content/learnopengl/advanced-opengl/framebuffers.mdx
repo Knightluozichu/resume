@@ -10,13 +10,14 @@ sourceUrl: https://learnopengl.com/Advanced-OpenGL/Framebuffers
 draft: false
 ---
 
-import {
-  FramebufferAttachmentDiagram,
-  FramebufferDemo,
-  FramebufferPassContractDiagram,
-  KernelDiagram,
-  TwoPassDiagram,
-} from "@/components/mdx/learnopengl/diagrams/framebuffers";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-71，高级OpenGL 篇第 5 篇）：原书「帧缓冲 Framebuffers」。重心是代码对照(§6 覆盖≥80% 关键代码)：①建 FBO + 颜色纹理附件 + 深度 renderbuffer 附件 + checkFramebufferStatus 完整性检查；②第一遍绑 FBO 渲场景、第二遍绑回默认帧缓冲(0/null)渲全屏四边形采样纹理；③后处理片段着色器(核采样)。math:false 省略 §4。承接深度/模板/混合篇（同 section 工厂流水线：之前都在「同一块画布」上做测试与混合，本章是「另开一块离屏画板」先渲成图再后期）。沿用「工厂流水线 / 离屏画板」类比。主 viz 两个：FramebufferDemo 渲到纹理后处理可玩(5 个核分段选择) + Stepper 两遍渲染流程(每步带 TwoPassDiagram)。draft:true，老板验收后才发布(硬规则 7)。 */}
 
@@ -62,7 +63,6 @@ import {
 
 第二类是 <Term def="由 renderbuffer 提供存储的附件。renderbuffer 不能在 shader 中直接作为纹理采样，适合只作为渲染目标的颜色、深度或模板数据，也原生支持多重采样存储；需要 shader 读取深度时则应改用纹理附件。">渲染缓冲附件</Term>——本章用来存**深度**（和模板）。离屏渲染立方体时，前后面仍靠深度测试判遮挡，因此 FBO 要有深度存储。这里后续不在 shader 采样深度，选 renderbuffer 能准确表达“只作为渲染目标”的用途；它是否比纹理更快取决于实现，不能当成普遍保证。下面这张图把「FBO 这个框 + 挂上去的两个附件」画清楚：
 
-<FramebufferAttachmentDiagram />
 
 ## 帧缓冲完整性：挂齐了才能用
 
@@ -82,7 +82,6 @@ import {
 
 更有意思的是要看**周围像素**的效果，靠 <Term def="一个 3×3（也可更大）的小权重表，对当前像素及其周围 8 个邻居采样，分别乘上表里对应位置的权重再相加，得到这个像素的新颜色。换不同的权重表就得到不同效果：每格 1/9 是模糊（取邻域平均），中心大、四周负是边缘检测（突出明暗突变处）。">卷积核</Term>（kernel）：拿一张 3×3 的小权重表，对当前像素和它周围 8 个邻居各采一次样，分别乘上表里对应的权重再加起来，就是新颜色。换不同的权重表，就是不同滤镜——每格都填 `1/9` 是**模糊**（取邻域平均、抹平细节），中心填大数、四周填负数是**边缘检测**（突出明暗突变、描出轮廓）。下面这张图把「核怎么对邻域加权求和」拆开：
 
-<KernelDiagram />
 
 {/* 4. 数学推导：math:false，整节省略（spec §四）。 */}
 
@@ -94,7 +93,6 @@ import {
 
 这块画布严格走了**两遍渲染**：第一遍把自转立方体渲进帧缓冲的颜色纹理附件（开了深度测试、挂了深度 renderbuffer，所以前后面遮挡正确），第二遍画一个全屏四边形采样这张纹理，按你选的核处理后上屏。切换下面的核，盯着同一个立方体怎么被加工：
 
-<FramebufferDemo caption="一个自转彩色立方体，先被渲进离屏帧缓冲的颜色纹理（第一遍），再由全屏四边形采样、按所选后处理核处理后上屏（第二遍）。切『反相』整体颜色翻转（像底片）；切『灰度』变黑白；切『模糊』细节被 3×3 均值核抹平、边缘发糊；切『边缘检测』只剩立方体轮廓线、平坦的面变黑（边缘核突出明暗突变处）。点重置回到『原图』。" />
 
 切到**反相**，颜色全部翻转、像看底片；切到**灰度**，立方体变成黑白；切到**模糊**，每个像素被换成它和邻居的平均色、细节糊掉、边缘发虚；切到**边缘检测**最明显——平坦的面因为「邻域都一样、加权求和接近 0」变黑，只有颜色突变的**棱边**被留下，整个立方体被描成了线框轮廓。后三种都是 3×3 卷积核在起作用，区别只在那张权重表填了什么。
 
@@ -108,7 +106,6 @@ import {
 
 <Stepper>
   <Step title="① 第一遍：把场景渲进帧缓冲的纹理">
-    <TwoPassDiagram step={1} />
     第一遍是<strong>离屏</strong>的：先<code>绑定</code>自己创建的
     <strong>帧缓冲</strong>，再把场景里的彩色立方体照常画一遍（开
     <strong>深度测试</strong>，靠挂上去的深度附件判前后遮挡）。但这一遍的画面
@@ -116,14 +113,12 @@ import {
     ——整个场景被存成了一张「图」。
   </Step>
   <Step title="② 绑回默认帧缓冲，取出那张离屏纹理">
-    <TwoPassDiagram step={2} />
     把绑定<strong>切回默认帧缓冲</strong>（屏幕那块，编号 0 / WebGL 里
     null）。第一遍渲好的那张<strong>颜色纹理</strong>现在存着完整画面， 把它
     <strong>取出来</strong>，准备贴到一个铺满整个屏幕的
     <strong>全屏四边形</strong>上。这一步还没画，只是切换目标、备好那张图。
   </Step>
   <Step title="③ 第二遍：全屏四边形采样纹理 + 后处理 → 上屏">
-    <TwoPassDiagram step={3} />
     第二遍才<strong>上屏</strong>：画那个全屏四边形，它的片段着色器逐像素
     <strong>采样</strong>那张离屏纹理，顺手套上一个<strong>后处理核</strong>
     （图里示意「边缘检测」描边），处理后的结果显示到屏幕。两遍走完，「先渲成图、再后期贴回」就完成了。
@@ -134,7 +129,6 @@ import {
 
 两遍之间不只是换一次绑定。每一遍都要明确当前 render target、viewport、深度状态和资源读写方向：
 
-<FramebufferPassContractDiagram />
 
 最危险的是把 `texColor` 仍挂在当前绘制 FBO 上，同时又在 shader 中采样它。这样一次 draw 同时读写同一图像，形成 feedback loop，结果未定义。正确做法是第二遍先绑定默认帧缓冲或另一只 FBO，再把第一遍颜色纹理作为只读输入。
 

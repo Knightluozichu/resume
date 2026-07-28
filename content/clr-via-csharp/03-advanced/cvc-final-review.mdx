@@ -7,23 +7,13 @@ description: "以load、execute、retain、coordinate四条证据链串联第四
 demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { CvcRuntimeMechanismLab, CvcIncidentTriageLab, CvcAcceptanceGateLab } from "@/components/mdx/clr-via-csharp/diagrams/cvc-final-review";
-
-<Objectives>
-
-- 能绘制load、execute、retain、coordinate四条跨章证据链，并从现象定位到30章中的责任单元
-- 能分析错误实现、内存滞留、慢或卡住任务及边界故障，选择最低成本且有区分力的证据
-- 能设计包含解释、实现、诊断与迁移的最终验收，证明CLR知识可用于陌生生产问题
-
-</Objectives>
 
 ## 从生产症状开始重建Runtime Evidence Graph
 
-前三十章已经给出局部机制。最终任务是把程序集身份、类型、调用、对象图、异常、加载、序列化、线程、异步和同步连接成 <Term def="把运行时状态、生产者、消费者和可观测证据连接起来，用于从症状反推机制的跨章节图。">runtime evidence graph</Term>。图中的节点不是书名术语，而是可验证状态：实际加载了哪个assembly；调用目标是哪张method table；对象被哪条root path保留；work在queue、running还是waiting；permit或lock由谁持有。
+前三十章已经给出局部机制。最终任务是把程序集身份、类型、调用、对象图、异常、加载、序列化、线程、异步和同步连接成。图中的节点不是书名术语，而是可验证状态：实际加载了哪个assembly；调用目标是哪张method table；对象被哪条root path保留；work在queue、running还是waiting；permit或lock由谁持有。
 
 一个生产故障往往跨Part：plugin加载成功但调用旧方法，涉及assembly identity、type loading、reflection与exception；event subscriber让cache对象无法回收，涉及delegate、event、GC roots与lifetime；request timeout但CPU很低，涉及async I/O、thread pool、blocking和synchronization。只背单章定义会把这些问题误判为“CLR偶发”。
 
@@ -31,13 +21,6 @@ import { CvcRuntimeMechanismLab, CvcIncidentTriageLab, CvcAcceptanceGateLab } fr
 
 ## 四条重复出现的机制链
 
-<CvcRuntimeMechanismLab />
-
-<Stepper>
-  <Step title="切换Load、Execute、Retain、Coordinate"><CvcRuntimeMechanismLab /></Step>
-  <Step title="把30章放进四条链">每章至少归入一条主链并写交叉边：reflection同时连接load/execute，delegate连接execute/retain，serialization连接load/boundary。</Step>
-  <Step title="给每条链指定Evidence">Load用identity/binding；execute用IL/stack/dispatch；retain用allocation/root；coordinate用queue/thread/wait timeline。</Step>
-</Stepper>
 
 ### Load：从Assembly Bytes到Type Identity
 
@@ -68,13 +51,13 @@ public static object InvokeChecked(object target, MethodInfo method, object?[] a
 
 ### Retain：从Allocation到Root、Generation与Cleanup
 
-Value/reference、array、string、delegate、nullable决定allocation与reference shape；managed heap/GC章解释root、generation、finalization、pinning和large object；hosting/loading又可能延长整个type/assembly graph生命周期。<Term def="从存活对象沿field、delegate、handle、static、thread或loader引用回到GC root的保留因果路径。">memory retention path</Term>比“Gen2很大”更能定位owner。
+Value/reference、array、string、delegate、nullable决定allocation与reference shape；managed heap/GC章解释root、generation、finalization、pinning和large object；hosting/loading又可能延长整个type/assembly graph生命周期。比“Gen2很大”更能定位owner。
 
 先区分high allocation rate与retention：前者看allocation stack/bytes per operation，后者比较多次full collection后的survivors/root path。Dispose释放外部资源但不让managed object自动不可达；finalizer是延迟安全网而非主清理；event/static cache/Timer/Task continuation都可能形成意外root。
 
 ### Coordinate：从Work Classification到Result与Visibility
 
-Part V先区分CPU-bound、I/O-bound，再讨论primitive和hybrid synchronization。核心是 <Term def="从接收工作、排队、执行、完成或取消，到观察结果、释放permit和关闭资源的连续责任链。">ownership chain</Term>：谁接受work；queue是否bounded；谁观察result/exception；谁发cancel；谁release；shutdown如何拒绝新work、drain和await。
+Part V先区分CPU-bound、I/O-bound，再讨论primitive和hybrid synchronization。核心是：谁接受work；queue是否bounded；谁观察result/exception；谁发cancel；谁release；shutdown如何拒绝新work、drain和await。
 
 Task是operation result，不等于thread；async组合等待，不保证并行；I/O completion期间无需占一条waiting thread；lock保护state invariant，不保护“代码看起来像一段”。Monitor condition必须在同一lock内用while重检predicate，Semaphore permit只有acquire成功后才release，ReaderWriterLockSlim要用真实ratio和critical-section成本验证。
 
@@ -92,13 +75,6 @@ public static async Task<T> WithPermitAsync<T>(
 
 ## 从现象反推章节与第一份证据
 
-<CvcIncidentTriageLab />
-
-<Stepper>
-  <Step title="切换四类生产症状"><CvcIncidentTriageLab /></Step>
-  <Step title="做Competing Hypotheses表">每个症状写至少三个候选原因，以及能最快排除其中两个的证据；先采证再改参数。</Step>
-  <Step title="闭合Owner与Invariant">证据指向具体assembly、object root、queue、thread、lock或boundary owner，并写修复前后不变量。</Step>
-</Stepper>
 
 ### Case A：Wrong Implementation或Missing Method
 
@@ -110,7 +86,7 @@ public static async Task<T> WithPermitAsync<T>(
 
 把“内存高”拆成allocation rate、live managed heap、native resource、committed/reserved和working set。抓至少两个时间点的heap，强制full collection只用于诊断对比，不作为生产修复。对增长type查看root path；若根来自event、cache、Timer或pending Task，回到ownership chain解除订阅、加capacity/expiry或完成operation。
 
-<Term def="把总耗时拆为queue、running CPU、I/O wait、lock/permit wait和continuation delay以区分瓶颈的时间模型。">latency decomposition</Term>也适用于GC pause：先证明请求时间实际落在pause、allocation pressure或suspension，而不是只看到同一时间窗口有GC事件。
+也适用于GC pause：先证明请求时间实际落在pause、allocation pressure或suspension，而不是只看到同一时间窗口有GC事件。
 
 ### Case C：请求慢、CPU低、Queue增长
 
@@ -129,42 +105,12 @@ public sealed record BoundaryProbe(
     string EvidenceId);
 ```
 
-<Callout type="trap" title="把ThreadPool或GC参数调大，指标下降就算找到根因">
-参数变化可能只移动queue、pause或memory成本。没有latency decomposition、root path、running/waiting stack或controlled comparison，相关性不能证明因果。先定位owner和限制，再决定是否调参。
-</Callout>
-
-<Callout type="trap" title="30章都达到分数，书就自动可部署">
-章节分数之外还可能有旧抽样页、重复导航、缺失题目、stale import、MDX/TypeScript错误或未登记section。最终门必须验证页面集合、题库AST、引用零残留和全局检查；部署只发生在全部225本完成后的全库门之后。
-</Callout>
 
 ## 本章回顾：掌握标准
 
 对任一问题，先说出runtime state和competing hypotheses；再选择能区分原因的最小证据；接着定位owner、boundary与invariant；修复同时覆盖success、fault、cancel、pressure/race和shutdown；最后把同一模型迁移到不同领域。能完成这一链条，才说明第四版30章从知识点变成了工程判断力。
 
-<Exercises>
-
-**问题 1：一个Plugin LoadContext无法卸载，怎样跨章定位？**
-
-<Answer>先保留WeakReference并触发诊断性full GC确认确实存活，再查root path。常见根是host static/event delegate、Timer、thread、AsyncLocal、pending Task或native handle。对应检查assembly/load context、delegate/event、thread lifetime和GC章节；停止新work、取消/drain、退订、Dispose并清除host引用，再证明WeakReference失活及重复reload内存稳定。</Answer>
-
-**问题 2：请求p99升高但CPU与GC都不高，第一轮证据是什么？**
-
-<Answer>按request关联enqueue/start、CPU running、I/O await、lock/permit wait、continuation和complete，形成latency decomposition；同时采pool queue/worker injection、waiting stacks与lock owner。它能区分pool starvation、sync I/O、外部I/O、lock convoy和admission queue，优先级高于盲调MinThreads或GC mode。</Answer>
-
-**问题 3：什么结果才允许这本书进入最终全库发布门？**
-
-<Answer>官方5部分30章全部独立覆盖，导学和总复习形成32个active pages且逐页100；64道题与chapter keys一一对应；旧抽样页/题/图零引用；section导航正确；MDX、TypeScript、ESLint、diff及AST验证全部通过。还需完成一个跨Part incident transfer。之后只标记本书完成，仍需等待225本全局门才push和部署。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="runtime evidence graph" definition="用状态、生产消费关系与证据连接30章的诊断图。" />
-  <GlossaryItem term="memory retention path" definition="从存活对象回溯到GC root的引用与owner因果路径。" />
-  <GlossaryItem term="ownership chain" definition="工作从接收、执行、完成到取消、释放与关闭的责任链。" />
-  <GlossaryItem term="latency decomposition" definition="将总延迟拆成queue、CPU、I/O、同步和continuation时间。" />
-  <GlossaryItem term="deployment acceptance gate" definition="目录、质量、导航题库、静态检查和迁移能力的联合发布门。" />
-</Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapters 1-30 integrated review" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

@@ -59,38 +59,3 @@ export function EppDataConversionFlow() {
     </figure>
   );
 }
-
-const numericCases = [
-  { label: "整数除法", expression: "5 / 2", prediction: "both operands int → result 2", repair: "convert before division: 5.0 / 2", evidence: "operand types + output precision" },
-  { label: "有符号溢出", expression: "INT_MAX + 1", prediction: "result not representable; behavior is undefined", repair: "validate bound or use wider checked type", evidence: "numeric_limits + boundary test" },
-  { label: "浮点精度", expression: "0.1 + 0.2 == 0.3", prediction: "binary approximations may compare unequal", repair: "compare with domain tolerance", evidence: "setprecision + absolute/relative error" },
-  { label: "窄化", expression: "int n = 3.9", prediction: "fraction discarded; n becomes 3", repair: "validate and make conversion explicit; braces reject", evidence: "source range + target range" },
-] as const;
-
-export function EppNumericBoundaryLab() {
-  const [active, setActive] = useState(0);
-  const current = numericCases[active];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
-        <div role="tablist" aria-label="选择数值边界实验" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {numericCases.map((item, index) => (
-            <button key={item.label} type="button" role="tab" aria-selected={active === index} onClick={() => setActive(index)} className={`min-h-12 border px-3 py-2 text-sm transition-colors ${active === index ? "border-accent bg-accent/15 text-primary" : "border-border bg-background text-secondary hover:text-primary"}`}>{item.label}</button>
-          ))}
-        </div>
-        <section role="tabpanel" className="mt-4 min-h-80 border border-border bg-background/60 p-4 sm:p-5">
-          <code className="block break-words text-base text-accent">{current.expression}</code>
-          <div className="mt-5 grid gap-3 lg:grid-cols-3">
-            <div className="min-h-36 border border-amber-500/35 bg-amber-500/10 p-4"><strong className="text-sm text-primary">预测</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.prediction}</p></div>
-            <div className="min-h-36 border border-emerald-500/35 bg-emerald-500/10 p-4"><strong className="text-sm text-primary">修复</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.repair}</p></div>
-            <div className="min-h-36 border border-cyan-500/35 bg-cyan-500/10 p-4"><strong className="text-sm text-primary">证据</strong><p className="mb-0 mt-3 text-xs text-secondary">{current.evidence}</p></div>
-          </div>
-        </section>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        切换四类数值陷阱，先写类型级预测再运行；观察到一个数字并不能说明行为在边界上有定义。
-      </figcaption>
-    </figure>
-  );
-}

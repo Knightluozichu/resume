@@ -7,29 +7,19 @@ description: "构建下载、正文提取、去标签和normalization流水线�
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyTextPipelineLab, RubyGrepExtensionsLab, RubyContextWindowLab } from "@/components/mdx/ruby-programming/diagrams/text-processing";
-
-<Objectives>
-
-- 能设计有URL/size/encoding门禁的下载、DOM正文提取、去标签与normalization流水线
-- 能实现匹配次数、匹配片段和target-aware高亮，并保持MatchData offset证据
-- 能计算固定/可变前后文窗口，处理边界、overlap、streaming与总输出预算
-
-</Objectives>
 
 ## 从“下载HTML后gsub标签”开始纠正
 
-Text processing不是一个Regexp串联，而是bytes acquisition、decode、document parse、content selection、text extraction、normalization和search。<Term def="每阶段声明input/output shape、trust、encoding、loss与source offset是否保留。">text processing pipeline contract</Term>防止后一步无法解释结果来源。
+Text processing不是一个Regexp串联，而是bytes acquisition、decode、document parse、content selection、text extraction、normalization和search。防止后一步无法解释结果来源。
 
 先预测：`html.gsub(/<[^>]+>/, "")`能否可靠去标签？不能处理`>`出现在attribute、script/style、entity、comments和malformed HTML，也会把段落粘连。HTML用parser，Regexp只处理已提取plain text。
 
 ## 准备文本：下载文件
 
-下载器接受allowlisted URI，设置connect/read timeout、redirect、status/content-type和最大bytes，保存raw bytes与response metadata。<Term def="Remote text acquisition限制scheme/host/IP、redirect、timeout、status、type、size与raw evidence。">text download boundary</Term>避免SSRF和unbounded memory。
+下载器接受allowlisted URI，设置connect/read timeout、redirect、status/content-type和最大bytes，保存raw bytes与response metadata。避免SSRF和unbounded memory。
 
 ```ruby
 require "open-uri"
@@ -45,13 +35,13 @@ end
 
 ### 获取正文
 
-先用HTML parser构造DOM，再通过site-specific selector选择article/main/body，删除nav/aside/script/style。<Term def="正文选择规则声明selector优先级、缺失/多个候选和保留结构节点。">document selection contract</Term>不能把整个body视为正文。
+先用HTML parser构造DOM，再通过site-specific selector选择article/main/body，删除nav/aside/script/style。不能把整个body视为正文。
 
 Parser library/version是dependency；malformed input、巨大DOM和entity处理需限制。Selector失效要报错/metrics，不应静默返回空文本并被当“文章无内容”。
 
 ### 删除标签
 
-DOM text extraction解码entities并应在block/paragraph/list之间插入separator。<Term def="HTML到plain text的转换保留哪些结构换行、丢弃哪些节点，并记录不可逆loss。">markup removal contract</Term>。
+DOM text extraction解码entities并应在block/paragraph/list之间插入separator。。
 
 ```ruby
 # Pseudocode around an HTML parser API:
@@ -62,21 +52,10 @@ text = paragraphs.reject(&:empty?).join("\n")
 
 不要直接渲染提取text为HTML，输出target仍需escape。若search result要回链source offsets，DOM extraction/normalization必须建立mapping；否则只声明offset属于normalized text。
 
-<RubyTextPipelineLab />
-
-<Stepper>
-  <Step title="切换Download、Select、Remove和Normalize"><RubyTextPipelineLab /></Step>
-  <Step title="写Evidence ledger">每阶段记录bytes/encoding、selector、removed nodes、normalization与offset coordinate。</Step>
-  <Step title="注入Malformed/oversized HTML"><RubyTextPipelineLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="Regexp删除HTML标签足以得到正文">
-HTML是嵌套语法，Regexp替换会误处理attributes/script/entities并丢结构。使用受限HTML parser与selector，明确text extraction和loss。
-</Callout>
 
 ## 扩展simple_grep.rb：显示匹配次数
 
-Count必须定义是match occurrences、matching lines还是files；Regexp zero-length match还要保证scan progress。<Term def="匹配计数声明单位、overlap、zero-length、per-source aggregation与上限。">match counting contract</Term>。
+Count必须定义是match occurrences、matching lines还是files；Regexp zero-length match还要保证scan progress。。
 
 ```ruby
 def count_matches(text, pattern)
@@ -92,7 +71,7 @@ Scan默认non-overlapping；overlapping需求使用lookahead或手动position并
 
 ## 显示匹配的部分
 
-MatchData提供full match、captures和begin/end offsets。<Term def="匹配片段结果包含source id、coordinate unit、start/end、text与capture schema。">match span contract</Term>让caller无需重跑Regexp。
+MatchData提供full match、captures和begin/end offsets。让caller无需重跑Regexp。
 
 ```ruby
 def spans(text, pattern)
@@ -113,7 +92,7 @@ Global last match容易被嵌套Regexp覆盖；在loop首行保存local match。
 
 ### 突出匹配到的位置
 
-不要直接gsub插ANSI/HTML后继续使用旧offset；先基于original spans切segments，再由renderer输出。<Term def="Highlight renderer针对terminal/HTML/plain target分别escape并插style，不改变match evidence。">highlight rendering contract</Term>。
+不要直接gsub插ANSI/HTML后继续使用旧offset；先基于original spans切segments，再由renderer输出。。
 
 ```ruby
 def highlight_terminal(text, span)
@@ -126,17 +105,10 @@ end
 
 Untrusted text含ANSI escape时terminal injection，先strip/escape control codes或提供plain mode；HTML必须escape all text segments后加markup。Multiple spans按sorted non-overlap一次构造，避免offset drift。
 
-<RubyGrepExtensionsLab />
-
-<Stepper>
-  <Step title="切换Count、Part、Highlight和Context"><RubyGrepExtensionsLab /></Step>
-  <Step title="分离Evidence与Render">先产spans，再分别渲染plain/terminal/HTML，验证escaping和offset不变。</Step>
-  <Step title="注入ANSI和HTML字符"><RubyGrepExtensionsLab /></Step>
-</Stepper>
 
 ## 显示前后各10个字符
 
-Window start为`max(match_start - 10, 0)`，finish为`min(match_end + 10, text.length)`。<Term def="Context窗口按声明unit在String边界clamp，并标注prefix/suffix是否被截断。">context window contract</Term>防negative range从尾部取值。
+Window start为`max(match_start - 10, 0)`，finish为`min(match_end + 10, text.length)`。防negative range从尾部取值。
 
 ```ruby
 def context_for(text, span, radius: 10)
@@ -155,25 +127,14 @@ end
 
 ### 让前后的字符数可变更
 
-CLI解析non-negative Integer并限制max radius和total output。<Term def="可变context radius有输入上限，多个match窗口的overlap/merge与输出budget固定。">context budget contract</Term>避免N×matches爆炸。
+CLI解析non-negative Integer并限制max radius和total output。避免N×matches爆炸。
 
 Nearby windows可merge为一个snippet并在内含多个spans；或逐match输出但重复context，policy需稳定。Streaming input用ring buffer保留before，match后继续读足够after；跨chunk Regexp和multibyte boundary需encoding-safe decoder。
 
-<RubyContextWindowLab />
-
-<Stepper>
-  <Step title="切换Fixed、Variable、Overlap和Streaming"><RubyContextWindowLab /></Step>
-  <Step title="计算四类边界">Match在开头、中间、末尾、相邻overlap，逐项写start/finish/truncation和output bytes。</Step>
-  <Step title="把Radius设为超大值"><RubyContextWindowLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="String负索引会自动clamp到0">
-Negative index可能从尾部计数，导致开头match取到错误文本。显式max(...,0)/min(...,length)，并测试start/end与空match。
-</Callout>
 
 ## 工具整合与验收
 
-CLI adapter处理URL/file/stdin、pattern/options/radius与output format；pipeline返回structured results，renderer不重跑search。<Term def="工具核心输出结构化match records，CLI只映射输入、renderer与exit status。">text tool architecture</Term>支持测试与扩展。
+CLI adapter处理URL/file/stdin、pattern/options/radius与output format；pipeline返回structured results，renderer不重跑search。支持测试与扩展。
 
 Exit status可区分found、not found、invalid invocation、partial source failure。Golden tests固定normalized text与spans，property tests验证span bounds/non-overlap，security tests覆盖URL/HTML/ANSI/Regexp resource limits。
 
@@ -185,35 +146,7 @@ Exit status可区分found、not found、invalid invocation、partial source fail
 4. Highlight由target-aware renderer escape并切segments，不在原文gsub后继续用旧offset。
 5. Context clamp边界、限制radius/total output，overlap与streaming策略明确。
 
-<Exercises>
-
-**问题 1：怎样证明HTML正文提取不是静默空结果？**
-
-<Answer>Selector返回0/1/多候选分别处理，记录site/version/selector和removed nodes；0抛ExtractionError或标partial，不能当空文章。Fixture覆盖正常、模板变化、malformed、script/style和entities。</Answer>
-
-**问题 2：多处match高亮怎样避免offset漂移？**
-
-<Answer>先在original text收集sorted non-overlapping spans，再单次按cursor切normal/matched segments；renderer分别escape。不要从前向后原地插markup，测试adjacent/overlap/Unicode和target control chars。</Answer>
-
-**问题 3：可变context如何防资源放大？**
-
-<Answer>验证radius非负且`radius <= max`，限制matches和total output bytes；overlap windows merge或明确重复policy。Large input用ring buffer streaming并处理跨chunk/encoding boundary，超限返回清楚status。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="text processing pipeline contract" definition="各阶段shape、trust、encoding、loss与offset约定。" />
-  <GlossaryItem term="text download boundary" definition="URI、timeout、status、type、size与raw evidence门禁。" />
-  <GlossaryItem term="document selection contract" definition="正文selector、候选与结构节点规则。" />
-  <GlossaryItem term="markup removal contract" definition="DOM到plain text的结构保留与loss约定。" />
-  <GlossaryItem term="match counting contract" definition="Occurrence/line/file、overlap和zero-length计数规则。" />
-  <GlossaryItem term="match span contract" definition="Source、coordinate、start/end、text与capture证据。" />
-  <GlossaryItem term="highlight rendering contract" definition="按terminal/HTML/plain escape和style的展示协议。" />
-  <GlossaryItem term="context window contract" definition="按unit clamp并标truncation的上下文窗口。" />
-  <GlossaryItem term="context budget contract" definition="Radius、overlap、matches与total output预算。" />
-  <GlossaryItem term="text tool architecture" definition="Structured match core与CLI/renderer边界。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第22章 文本处理" adaptedUrl="https://tanoshiiruby.github.io/5/" />

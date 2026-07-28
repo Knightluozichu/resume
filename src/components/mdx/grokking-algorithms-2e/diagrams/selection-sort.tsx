@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -205,35 +203,5 @@ export function SelectionSortMemoryDiagram() {
         渐近复杂度只描述步骤增长；连续布局带来的缓存局部性还会影响实际运行常数。
       </figcaption>
     </figure>
-  );
-}
-
-export function ArrayListTradeoffLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={tradeoffCases}
-      caption="切换操作，区分数据布局、定位成本和真正修改结构的成本。"
-      tone="emerald"
-    />
-  );
-}
-
-export function SelectionSortTraceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={traceCases}
-      caption="在[5, 3, 6, 2, 10]上逐轮找最小值；扫描时只记位置，轮末才交换。"
-      tone="cyan"
-    />
-  );
-}
-
-export function SelectionSortCostLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={costCases}
-      caption="比较次数、交换次数、稳定性和数据结构是四个不同维度，不能用一个O符号概括。"
-      tone="violet"
-    />
   );
 }

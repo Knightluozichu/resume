@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "中间目标",
@@ -86,8 +84,4 @@ export function KthBoundaryDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">三类防御检查分别保护空结构、非法计数和先行越界。</figcaption>
     </figure>
   );
-}
-
-export function KthOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者六组测试，核对中间、头尾、长度不足、k为0与空链表。" />;
 }

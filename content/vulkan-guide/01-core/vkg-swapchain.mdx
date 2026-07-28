@@ -7,39 +7,13 @@ description: "从 surface 合同到 acquire、submit、present、同步对象重
 demo: true
 math: false
 sourceUrl: "https://docs.vulkan.org/guide/latest/wsi.html"
-draft: true
+draft: false
 ---
 
-import {
-  VkgSwapchainDiagram,
-  VkgSwapchainResultDiagram,
-} from "@/components/mdx/vulkan-guide/diagrams/vkg-swapchain";
-import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能描述 surface、swapchain image、image view 与窗口合成器之间的所有权关系
-- 能实现 format、color space、extent、image count、usage、transform、alpha 与 present mode 的完整选择器
-- 能比较 frame index 与 acquired image index 对同步对象和资源复用的不同约束
-- 能解释 SUCCESS、SUBOPTIMAL、OUT_OF_DATE 与 SURFACE_LOST 如何驱动重建状态机
-
-</Objectives>
 
 ## 交换链不是普通图像数组
 
-<Term def="Vulkan WSI 对原生窗口或显示目标的实例级抽象，是查询呈现支持和创建交换链的目标">VkSurfaceKHR</Term>连接 Vulkan 与窗口系统。<Term def="由 WSI 管理的一组可获取、渲染并交回呈现引擎的图像及其呈现合同">VkSwapchainKHR</Term>则属于 device，但其中的 VkImage 由交换链拥有：应用取得句柄并创建 image view，不分配或释放这些 image 的内存，也不能调用 vkDestroyImage 销毁它们。
+连接 Vulkan 与窗口系统。则属于 device，但其中的 VkImage 由交换链拥有：应用取得句柄并创建 image view，不分配或释放这些 image 的内存，也不能调用 vkDestroyImage 销毁它们。
 
 应用通过 acquire 暂时获得某个图像的使用权，建立 layout 和访问依赖后渲染，再由 present 把图像交还呈现引擎。被 acquire 的 `imageIndex`由 WSI 决定，不保证轮流递增，也不等于 CPU 使用的 `frameIndex`。
 
@@ -105,7 +79,7 @@ SwapchainChoice chooseSwapchain(
 
 ## Present mode 是调度策略
 
-<Term def="规定呈现请求如何进入显示引擎队列以及是否允许撕裂的 WSI 调度模式">Present mode</Term>必须从 surface 返回集合中选择：
+必须从 surface 返回集合中选择：
 
 | 模式 | 核心行为 | 选择考虑 |
 |---|---|---|
@@ -154,7 +128,6 @@ dynamic rendering 的 graphics pipeline 仍要声明与 swapchain view 匹配的
 
 `vkAcquireNextImageKHR`返回 image index，并在图像可供应用使用时 signal 一个 binary semaphore 或 fence。使用 semaphore 可让 queue submission 在 GPU/WSI 边界等待，不要求 host 阻塞；使用 fence 则允许 host 等待 acquire 完成，但通常减少并行性。两者不是“合法/非法”差别，而是调度选择。
 
-<VkgSwapchainDiagram />
 
 每帧资源与每图像资源应分开：
 
@@ -204,7 +177,6 @@ submission 在首次访问 swapchain image 的 stage 等待 acquire semaphore。
 
 ## 返回码驱动状态机
 
-<VkgSwapchainResultDiagram />
 
 `VK_SUBOPTIMAL_KHR`表示 swapchain 仍可使用，但 surface 属性已不完全匹配；应用可完成当前帧并安排重建。`VK_ERROR_OUT_OF_DATE_KHR`表示当前 swapchain 已不兼容，应停止该 acquire/present 路径并重建。`VK_ERROR_SURFACE_LOST_KHR`更进一步，要求重建 surface 后再重建 swapchain。
 
@@ -225,92 +197,12 @@ submission 在首次访问 swapchain image 的 stage 等待 acquire semaphore。
 
 ## 三步实现 WSI 生命周期
 
-<Stepper>
-<Step title="第一步：形成 SurfaceSnapshot">
-
-查询 capabilities、formats、present modes、queue present support 与 framebuffer 像素尺寸，并在零 extent 时暂停。
-
-<VkgStepFlowDiagram
-  caption="每次创建和重建都从新的 surface 快照开始。"
-  stage={1}
-  stages={["SurfaceSnapshot：capabilities、formats、present modes、queues"]}
-/>
-
-</Step>
-<Step title="第二步：创建一代交换链资源">
-
-选择完整参数，传入 oldSwapchain，取得实际 images，为每图像创建 view、layout 状态和 present-wait semaphore。
-
-<VkgStepFlowDiagram
-  caption="交换链 generation 把 image、view、格式和同步对象作为一个生命周期单元。"
-  stage={2}
-  stages={[
-    "SurfaceSnapshot：capabilities、formats、present modes、queues",
-    "Generation：swapchain、images、views、formats 与 image semaphores",
-  ]}
-/>
-
-</Step>
-<Step title="第三步：用返回码驱动切换">
-
-每帧检查 acquire/present 结果；SUBOPTIMAL 标记重建，OUT_OF_DATE 终止当前路径，SURFACE_LOST 重建 surface，并延后回收旧 generation。
-
-<VkgStepFlowDiagram
-  caption="呈现循环和重建器通过显式状态连接，而不是在回调里随时销毁资源。"
-  stage={3}
-  stages={[
-    "SurfaceSnapshot：capabilities、formats、present modes、queues",
-    "Generation：swapchain、images、views、formats 与 image semaphores",
-    "State machine：acquire、submit、present、retire old generation",
-  ]}
-/>
-
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 两帧并发时偶发 validation 报 binary semaphore 仍被 present 等待。
-**原因 →** renderFinished 只按 frameIndex 轮转，CPU frame fence 不证明 presentation engine 已消费该 semaphore。
-**修法 →** 将 present-wait semaphore 按 acquired imageIndex 分配，利用再次 acquire 同一图像保证其前次 present 使用已完成。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 高 DPI 窗口只渲染左下角，最小化时反复重建失败。
-**原因 →** 使用逻辑窗口尺寸而非 framebuffer 像素尺寸，且没有把零 extent 当暂停状态。
-**修法 →** 在 currentExtent 未固定时钳制 framebuffer size；尺寸为零时等待事件，不创建 swapchain。
-</Callout>
-
-<Callout type="trap">
-**现象 →** resize 后虽然重建成功，dynamic rendering 开始时仍报告 format 不匹配。
-**原因 →** 新 surface format 改变，但 pipeline 的 VkPipelineRenderingCreateInfo 仍声明旧 attachment format。
-**修法 →** 将 format 相关 pipeline 纳入 swapchain generation；只有 format 兼容且动态 viewport/scissor 时才复用。
-</Callout>
 
 ## 练习
 
-<Exercises>
-
-1. **索引审计：** 两帧并发、三张 swapchain image。frameIndex=1 时 acquire 返回 imageIndex=0。各下标应选择哪些资源？
-
-<Answer>
-command pool/buffer、frame fence、imageAvailable semaphore 和该帧 CPU arena 使用 frameIndex=1；swapchain image/view、layout 历史和 renderFinished semaphore 使用 imageIndex=0。提交等待 imageAvailable[1]、录制到 image[0]、signal renderFinished[0]，present 等待 renderFinished[0]。
-</Answer>
-
-2. **参数选择：** capabilities 的 minImageCount=2、maxImageCount=0、currentExtent=UINT32_MAX，framebuffer 为 3000×2000，max extent 为 2560×1440。应请求什么？
-
-<Answer>
-图像数量可请求 min+1=3；maxImageCount=0 表示没有声明上限，不需要向 0 钳制。extent 应把 framebuffer 像素尺寸分别钳制到范围，因此在最小范围允许时选择 2560×1440。仍需从支持列表选择 format/present mode，并检查所需 imageUsage、transform 和 compositeAlpha。
-</Answer>
-
-3. **重建策略：** acquire 返回 SUBOPTIMAL，present 随后返回 SUCCESS。是否必须丢弃当前帧并立即 vkDeviceWaitIdle？
-
-<Answer>
-不必。SUBOPTIMAL 表示交换链仍可使用，当前帧通常可完成；应用应标记在安全边界重建。可以用简单策略 vkDeviceWaitIdle 后重建，也可以创建新 generation、依据 fences/timeline/present completion 延后回收旧资源。无论哪种，都要重新查询 surface 合同，并处理最小化零 extent。
-</Answer>
-
-</Exercises>
 
 ## 本章检查清单
 
@@ -321,10 +213,4 @@ command pool/buffer、frame fence、imageAvailable semaphore 和该帧 CPU arena
 
 ## 术语表
 
-<Glossary>
-<GlossaryItem term="VkSurfaceKHR">Vulkan WSI 对原生窗口或显示目标的实例级抽象。</GlossaryItem>
-<GlossaryItem term="VkSwapchainKHR">由 WSI 管理、供应用 acquire 和 present 的图像集合及呈现合同。</GlossaryItem>
-<GlossaryItem term="Present mode">规定呈现请求进入显示引擎的排队、替换和撕裂行为的模式。</GlossaryItem>
-</Glossary>
 
-<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/wsi.html" />

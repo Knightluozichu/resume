@@ -7,19 +7,9 @@ description: "使用LuaSocket、coroutine dispatcher和select把多个网页下�
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilSocketDownloadLab, PilCoroutineDispatcherLab, PilSelectMultiplexerLab } from "@/components/mdx/lua-programming/diagrams/multithreading-coroutines";
-
-<Objectives>
-
-- 能解释顺序LuaSocket下载在哪里阻塞，并追踪resolve、connect、send、receive与close的所有权
-- 能实现以typed yield request驱动的coroutine dispatcher，处理partial I/O、error、timeout、cancel和fairness
-- 能设计基于socket.select的read/write wait sets与deadline调度，验证高并发下的backpressure和资源上限
-
-</Objectives>
 
 ## 为什么Multithreading先从Blocking Timeline开始
 
@@ -27,7 +17,7 @@ import { PilSocketDownloadLab, PilCoroutineDispatcherLab, PilSelectMultiplexerLa
 
 先预测：三个网站分别在100、300、500 ms后返回时，顺序下载总等待是多少；把body放入三个coroutines但`receive`仍blocking会不会更快；non-blocking `receive(4096)`返回`nil,"timeout",partial`时能否丢弃partial；`select`说readable是否等于完整HTTP响应已到达；一个网站持续高速返回会不会饿死其它tasks。
 
-<Term def="I/O concurrency window是多个请求同时处于外部等待、Lua线程可转去推进其他请求的时间区间。">I/O concurrency window</Term>只有在所有等待点可交还控制时才存在。
+只有在所有等待点可交还控制时才存在。
 
 ## Downloading Web pages with LuaSocket
 
@@ -57,25 +47,14 @@ end
 
 真实HTTP还要处理status line、headers、content length、chunked encoding、redirect、TLS与body limit；这些不是靠coroutine自动解决。示例使用HTTP/1.0让server close可作为结束信号，但production client应使用成熟HTTP/TLS library。
 
-<Term def="Partial I/O contract要求调用者在timeout或would-block发生时仍消费已传输前缀，并保存剩余offset后再等待。">partial I/O contract</Term>同时适用于receive和send。非阻塞send可能只写一部分，重试必须从正确位置继续，不能重复整份request。
+同时适用于receive和send。非阻塞send可能只写一部分，重试必须从正确位置继续，不能重复整份request。
 
-<PilSocketDownloadLab />
-
-<Stepper>
-  <Step title="切换Resolve、Connect、Send、Receive和Close"><PilSocketDownloadLab /></Step>
-  <Step title="画Blocking Timeline">为每个host标出外部等待与Lua运行区间，比较sequential、busy polling和readiness-driven三种总时长。</Step>
-  <Step title="注入Network边界">覆盖partial send、partial receive、timeout、peer close、malformed response和cancel，验证socket只关闭一次。</Step>
-</Stepper>
-
-<Callout type="trap" title="把Blocking Download放进Coroutine就会并发">
-Coroutine不会抢占正在阻塞的C call。若`receive`没有non-blocking timeout并在would-block时yield，第一个task仍冻结整个Lua线程；connect、send和DNS也要逐一审计。
-</Callout>
 
 ## A coroutine dispatcher
 
 Dispatcher拥有task list/ready queue和socket registrations。Task不直接poll其它tasks，只执行到下一次等待并yield一个descriptor，例如`{kind="read", socket=c}`。Dispatcher检查descriptor，登记wait；socket ready或deadline到达后，再以typed result恢复同一个task。
 
-<Term def="Coroutine dispatcher ownership规定scheduler唯一拥有resume权、wait registration、deadline、cancellation和terminal cleanup。">coroutine dispatcher ownership</Term>避免两个callbacks同时resume同一thread，也让失败后能找到socket owner。
+避免两个callbacks同时resume同一thread，也让失败后能找到socket owner。
 
 ```lua
 local function receive_chunk(connection, size)
@@ -100,13 +79,6 @@ end
 
 最简单dispatcher可round-robin resume所有suspended tasks。它演示coroutine交错，却会在没有socket ready时busy loop，CPU高且每轮扫描所有tasks。Ready queue只存可运行task，waiting tasks留在read/write wait set，避免无效resume。
 
-<PilCoroutineDispatcherLab />
-
-<Stepper>
-  <Step title="切换Spawn、Ready、Waiting和Terminal"><PilCoroutineDispatcherLab /></Step>
-  <Step title="验证Single Owner">为每个task记录owner、status、wait descriptor与resource set，拒绝double resume和重复registration。</Step>
-  <Step title="测试Fairness与Cleanup">让一个task持续ready、一个slow、一个error、一个cancel，验证FIFO quantum、traceback、deregister和close。</Step>
-</Stepper>
 
 ## 从Busy Polling到Readiness Queue
 
@@ -118,7 +90,7 @@ end
 
 `socket.select(read_set, write_set, timeout)`让OS等待一批sockets，只返回当前可read/write的成员。Dispatcher按socket映射到等待task；结果先进入ready queue，再逐个bounded resume。没有ready socket时，select阻塞到最近deadline，避免busy polling。
 
-<Term def="Readiness wait set是按期望操作方向登记sockets、由select返回可推进成员而非已完成操作的集合。">readiness wait set</Term>必须区分read与write：receive等待readable，partial send与non-blocking connect通常等待writable，然后重试操作并检查实际结果。
+必须区分read与write：receive等待readable，partial send与non-blocking connect通常等待writable，然后重试操作并检查实际结果。
 
 ```lua
 local function dispatch(tasks)
@@ -146,19 +118,8 @@ end
 
 示意代码省略了`keys`、错误返回、write set、timers和高效queue；关键不变量是task在ready或一个wait set中，而不是两处。`select`返回readable只代表下一次receive不会以相同方式阻塞，仍可能读到部分数据、EOF或error。
 
-<Term def="Bounded readiness batch是在大量sockets同时ready时，每轮只执行受限resume工作并把剩余任务公平排队。">bounded readiness batch</Term>防止hot connection独占事件循环。Queue与body buffer都要上限；producer快于consumer时暂停read interest、拒绝新task或向上游传播backpressure。
+防止hot connection独占事件循环。Queue与body buffer都要上限；producer快于consumer时暂停read interest、拒绝新task或向上游传播backpressure。
 
-<PilSelectMultiplexerLab />
-
-<Stepper>
-  <Step title="切换Read Set、Write Set、Timeout和Batch"><PilSelectMultiplexerLab /></Step>
-  <Step title="推导Select Timeout">从所有task deadlines取最近值，扣除当前monotonic time，处理0、spurious readiness和clock advance。</Step>
-  <Step title="压测Multiplexer">同时运行大量idle、slow、hot、half-closed sockets，观测CPU、queue depth、latency percentile和open-handle上限。</Step>
-</Stepper>
-
-<Callout type="trap" title="Select返回Readable表示一个完整Response已准备好">
-Readiness只是“现在可能取得进展”。一次receive仍可能给partial bytes、EOF或协议错误；应用层必须持续解析frame/body边界，并在下一次would-block时重新登记。
-</Callout>
 
 ## Errors、Timeouts与Backpressure
 
@@ -175,30 +136,7 @@ Task每次resume都先检查首boolean；false时保存`debug.traceback(task,err
 5. Readiness不等于operation或HTTP message完成，task必须重试并继续协议解析。
 6. 公平batch、buffer/connection limits与backpressure决定并发系统能否稳定运行。
 
-<Exercises>
-
-**问题 1：Non-blocking Receive返回Partial加Timeout时该怎么处理？**
-
-<Answer>先把partial追加到该task的协议buffer，再把socket登记到read wait set并yield；ready后从剩余边界继续解析。丢弃partial会损坏数据，直接重试完整请求可能重复消费协议。</Answer>
-
-**问题 2：为什么最简单的Round-robin Dispatcher会占满CPU？**
-
-<Answer>它反复resume尚无I/O可读的tasks，task立即再次yield，形成busy polling。应把waiting tasks移出ready queue，使用select阻塞到socket ready或最近deadline。</Answer>
-
-**问题 3：如何避免一个Hot Socket饿死其他下载？**
-
-<Answer>将select结果加入FIFO ready queue，每次resume限制bytes、messages或CPU work；达到buffer上限时暂停read interest并传播backpressure，同时监控queue depth和latency。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="I/O concurrency window" definition="多个请求同时外部等待、Lua可推进其他任务的时间区间。" />
-  <GlossaryItem term="partial I/O contract" definition="Would-block时仍消费已传输前缀并保存剩余offset的收发协议。" />
-  <GlossaryItem term="coroutine dispatcher ownership" definition="Scheduler唯一管理resume、wait、deadline、取消和清理的所有权。" />
-  <GlossaryItem term="readiness wait set" definition="按read/write方向登记并由select返回可推进socket的集合。" />
-  <GlossaryItem term="bounded readiness batch" definition="大量I/O同时ready时限制单轮工作并公平排队的批处理策略。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 26: Interlude: Multithreading with Coroutines" adaptedUrl="https://www.lua.org/pil/" />

@@ -7,29 +7,19 @@ description: "比较block、Proc、lambda与Method的object、arity和return语�
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyCallableKindsLab, RubyProcBoundaryLab, RubyProcMethodsLab } from "@/components/mdx/ruby-programming/diagrams/proc";
-
-<Objectives>
-
-- 能比较block、Proc.new、lambda与Method在对象化、arity、return和lifetime上的差异
-- 能实现`&block`捕获/转发、`&proc`传递与`to_proc`协议，并验证argument shape
-- 能分析closure retention、Proc实例方法、curry/compose和并发mutable capture风险
-
-</Objectives>
 
 ## 从“Proc就是可保存的block”开始深化
 
-Proc确实把behavior变成object，但Proc.new与lambda在arity和return control上不同；Method又绑定receiver。<Term def="Callable声明创建方式、参数/keyword shape、返回控制、side effects、失败与可存活多久。">callable behavior contract</Term>不能只写“响应call”。
+Proc确实把behavior变成object，但Proc.new与lambda在arity和return control上不同；Method又绑定receiver。不能只写“响应call”。
 
 先预测：lambda内`return`会返回哪里？只结束lambda call；普通Proc中的return可能尝试离开定义Proc的method，若method已返回会抛LocalJumpError。这个差异决定callback能否安全延迟。
 
 ## Proc类是什么
 
-Proc是可调用object，封装code与lexical environment。`Proc.new {}`与`proc {}`通常创建non-lambda Proc，`lambda {}`/`-> {}`创建lambda Proc；`lambda?`可检查。<Term def="Proc object同时保存可执行body和被捕获lexical bindings，延长其lifetime。">closure object boundary</Term>影响memory和thread safety。
+Proc是可调用object，封装code与lexical environment。`Proc.new {}`与`proc {}`通常创建non-lambda Proc，`lambda {}`/`-> {}`创建lambda Proc；`lambda?`可检查。影响memory和thread safety。
 
 ```ruby
 factor = 3
@@ -44,7 +34,7 @@ Closure捕获binding而非immutable snapshot。需要snapshot时复制/冻结val
 
 ### lambda表达式
 
-Lambda检查arity更像method，return局部结束lambda；non-lambda Proc对缺/多positional args更宽松并可能nil填/丢弃。<Term def="Lambda严格参数且return局部，non-lambda Proc参数宽松且return可能non-local。">lambda Proc control contract</Term>是选择依据。
+Lambda检查arity更像method，return局部结束lambda；non-lambda Proc对缺/多positional args更宽松并可能nil填/丢弃。是选择依据。
 
 ```ruby
 strict = ->(left, right) { left + right }
@@ -56,21 +46,10 @@ p loose.call(1)
 
 Public callback pipeline通常偏好lambda或明确object，避免silent arity mismatch。Ruby 2.3 keyword与Hash转换会影响Proc forwarding，跨版本测试required。
 
-<RubyCallableKindsLab />
-
-<Stepper>
-  <Step title="切换Block、Proc、Lambda和Method"><RubyCallableKindsLab /></Step>
-  <Step title="生成Control矩阵">覆盖缺/多参数、return、break、定义method已结束、raise与deferred call。</Step>
-  <Step title="延迟调用Non-lambda return"><RubyCallableKindsLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="Proc与lambda只有写法不同">
-Lambda arity严格且return局部；普通Proc positional arity宽松，return可能跨出定义method。Callback boundary要按控制语义选择并测试。
-</Callout>
 
 ## 通过Proc参数接收块
 
-Method parameter `&block`把implicit block捕获成Proc，未给block时nil；调用处`&callable`执行to_proc并作为唯一block传入。<Term def="Method在implicit block channel与Proc object之间转换，并明确block required/optional。">block Proc conversion boundary</Term>只在要保存、转发或晚调用时捕获。
+Method parameter `&block`把implicit block捕获成Proc，未给block时nil；调用处`&callable`执行to_proc并作为唯一block传入。只在要保存、转发或晚调用时捕获。
 
 ```ruby
 def build_transform(&block)
@@ -86,7 +65,7 @@ p transform.call(" ruby ")
 
 ## to_proc方法
 
-`&object`调用object.to_proc，Symbol#to_proc让`items.map(&:upcase)`把每个item作为receiver调用symbol method。<Term def="to_proc把对象转换为一个具有明确receiver/argument映射的Proc。">to_proc adaptation contract</Term>不是任意魔法。
+`&object`调用object.to_proc，Symbol#to_proc让`items.map(&:upcase)`把每个item作为receiver调用symbol method。不是任意魔法。
 
 ```ruby
 words = %w[ruby proc lambda]
@@ -98,17 +77,10 @@ p upcase.call("ruby")
 
 Symbol shorthand适合无额外复杂policy的单method call；需要arguments、nil handling、logging或多步逻辑时写显式block。Custom to_proc要保持可预测arity/result，并避免每次转换创建重资源。
 
-<RubyProcBoundaryLab />
-
-<Stepper>
-  <Step title="切换&block、&proc、to_proc和Closure"><RubyProcBoundaryLab /></Step>
-  <Step title="画Behavior流">标implicit block、Proc object、to_proc、captured bindings、调用时arguments和result。</Step>
-  <Step title="让Symbol shorthand遇nil"><RubyProcBoundaryLab /></Step>
-</Stepper>
 
 ## Proc的特征
 
-Proc有identity，可放入Array/Hash、作为strategy/callback传递，闭包捕获locals。<Term def="Callable的owner决定谁注册、调用、取消和释放，以及捕获state是否线程安全。">callback lifecycle contract</Term>避免listener泄漏。
+Proc有identity，可放入Array/Hash、作为strategy/callback传递，闭包捕获locals。避免listener泄漏。
 
 长期event subscription需返回unsubscribe token或owner close；否则Proc被publisher引用，连同captured graph永久存活。Weak reference并非默认解决方案，lifecycle应显式。
 
@@ -120,7 +92,7 @@ Cancellation也不是删除Array中Proc这么简单：调用可能已经开始�
 
 ## Proc类的实例方法
 
-`call`、`[]`、`.()`执行；`arity`给参数数量编码，`parameters`提供kind/name introspection，`source_location`辅助诊断，`binding`/`lambda?`等按版本。<Term def="Arity/parameters只描述调用shape，不表达value type、domain、effects或failure。">callable introspection limit</Term>禁止把reflection当完整validation。
+`call`、`[]`、`.()`执行；`arity`给参数数量编码，`parameters`提供kind/name introspection，`source_location`辅助诊断，`binding`/`lambda?`等按版本。禁止把reflection当完整validation。
 
 ```ruby
 operation = ->(left, right = 0) { left + right }
@@ -136,7 +108,7 @@ Negative arity编码optional/rest细节，具体解释按Ruby version。调用�
 
 ### curry与组合
 
-Curry把多参数Proc变成分步application，`Proc#>>`/`Proc#<<` composition是较新版本特性，Ruby 2.3不应假定；可显式构造lambda pipeline。<Term def="Callable组合保持argument/result shape、异常传播、执行顺序和side-effect次数。">callable composition contract</Term>。
+Curry把多参数Proc变成分步application，`Proc#>>`/`Proc#<<` composition是较新版本特性，Ruby 2.3不应假定；可显式构造lambda pipeline。。
 
 ```ruby
 normalize = ->(text) { text.strip.downcase }
@@ -148,17 +120,6 @@ p pipeline.call(" Ruby ")
 
 当pipeline有conditional、state、retry、metrics和lifecycle时，命名class比嵌套Procs更可维护。Proc适合窄policy，不是消除domain objects的理由。
 
-<RubyProcMethodsLab />
-
-<Stepper>
-  <Step title="切换call、arity、parameters和compose"><RubyProcMethodsLab /></Step>
-  <Step title="建立Callable contract">记录params/keywords、result、effects、exception、thread/reentry、owner和cancel。</Step>
-  <Step title="让Composition中段失败"><RubyProcMethodsLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="respond_to?(:call)就证明callback兼容">
-Call只证明surface；arity/keywords、返回shape、error、side effects、thread/reentry与lifetime仍可能不兼容。使用共享contract tests验证实际行为。
-</Callout>
 
 ## 本章回顾：Behavior成为Object后，控制与生命周期更重要
 
@@ -168,33 +129,7 @@ Call只证明surface；arity/keywords、返回shape、error、side effects、thr
 4. Closure捕获bindings并延长graph lifetime；callback必须有owner、cancel、thread/reentry policy。
 5. Arity/parameters不是完整contract，组合还要保持shape、顺序、异常和side-effect次数。
 
-<Exercises>
-
-**问题 1：如何选择Proc.new还是lambda作为延迟callback？**
-
-<Answer>通常选lambda：arity严格且return只离开lambda，适合定义method结束后调用。只有明确需要Proc宽松参数/non-local控制才用Proc.new，并做延迟、return、异常和多次调用测试。</Answer>
-
-**问题 2：如何避免event callback造成memory leak？**
-
-<Answer>Publisher返回subscription token，owner close/unsubscribe；Proc只捕获必要immutable values，不捕获整个request/self graph。测试owner结束后callback count/reference释放，并处理并发unsubscribe/reentry。</Answer>
-
-**问题 3：自定义to_proc需要验证什么？**
-
-<Answer>明确第一个yield值如何映射receiver、剩余arguments/keywords、result与异常；多次to_proc是否创建state。用真实iterator测试0/1/多参数、nil、wrong receiver和Ruby版本keyword behavior。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="callable behavior contract" definition="Callable参数、return控制、effects、failure与lifetime约定。" />
-  <GlossaryItem term="closure object boundary" definition="Proc保存body与lexical bindings并延长lifetime。" />
-  <GlossaryItem term="lambda Proc control contract" definition="Lambda严格/局部return与Proc宽松/non-local差异。" />
-  <GlossaryItem term="block Proc conversion boundary" definition="Implicit block与Proc object间的&转换边界。" />
-  <GlossaryItem term="to_proc adaptation contract" definition="Object映射为Proc的receiver/argument协议。" />
-  <GlossaryItem term="callback lifecycle contract" definition="Callback注册、调用、取消、释放和线程owner。" />
-  <GlossaryItem term="callable introspection limit" definition="Arity/parameters不表达domain behavior的限制。" />
-  <GlossaryItem term="callable composition contract" definition="组合的shape、顺序、异常与side-effect规则。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第21章 Proc类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

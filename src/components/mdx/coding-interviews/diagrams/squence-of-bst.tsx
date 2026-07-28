@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["序列", "4,8,6,12,16,14,10"], ["根", "10"], ["左右段", "4,8,6 / 12,16,14"], ["结果", "true"]] },
   { label: "Test2", fields: [["序列", "4,6,7,5"], ["根", "5"], ["结构", "左4；右7的左6"], ["结果", "true"]] },
@@ -79,8 +77,4 @@ export function BstPostorderFailureDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">非法证据是“已进入右段后又出现小于当前根的值”，可能跨越多个相邻位置。</figcaption>
     </figure>
   );
-}
-
-export function BstPostorderOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者8组测试，核对完整树、左右单链、单点、两种跨分区反例与空输入契约。" />;
 }

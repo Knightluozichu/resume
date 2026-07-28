@@ -7,29 +7,19 @@ description: "把邮政编码数据获取、严格CSV解析、SQLite schema/inde
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyPostalSourceLab, RubyPostalImportLab, RubyPostalQueryLab } from "@/components/mdx/ruby-programming/diagrams/postal-code-search";
-
-<Objectives>
-
-- 能设计带版本、checksum、encoding与row quarantine的邮政编码数据获取/CSV解析流程
-- 能实现SQLite schema/index与事务prepared bulk import，并验证后原子激活新版本
-- 能实现参数化exact/prefix/name查询，限制结果、稳定排序并区分空结果与数据库错误
-
-</Objectives>
 
 ## 从“CSV导入数据库后select”开始扩展
 
-可维护检索工具需要可追溯source、strict parsing、schema version、atomic rebuild、query contract与可重复verification。<Term def="数据集从versioned source到activated database的每一步都有hash、row count、error和rollback证据。">dataset provenance contract</Term>让结果可解释。
+可维护检索工具需要可追溯source、strict parsing、schema version、atomic rebuild、query contract与可重复verification。让结果可解释。
 
 先预测：导入到一半进程崩溃，reader会看到半张表吗？若直接清空live table逐行insert，会；正确做法是在transaction/新database中完整构建、validate后一次切换。
 
 ## 获取邮政编码
 
-原书使用日本邮政编码数据。实现应从官方versioned source获取，记录URL、download timestamp、license、content length与cryptographic checksum；限制timeout/redirect/max bytes。<Term def="数据获取固定官方来源、版本、license、size与checksum，并保留raw immutable artifact。">postal source boundary</Term>支持重建和审计。
+原书使用日本邮政编码数据。实现应从官方versioned source获取，记录URL、download timestamp、license、content length与cryptographic checksum；限制timeout/redirect/max bytes。支持重建和审计。
 
 ```ruby
 require "digest"
@@ -45,21 +35,10 @@ p metadata
 
 Raw archive/CSV不可覆盖同名无版本文件；使用content hash/version目录。Network acquisition与import分开，测试可用固定fixture，offline rebuild仍有证据。
 
-<RubyPostalSourceLab />
-
-<Stepper>
-  <Step title="切换Acquire、Decode、Parse和Normalize"><RubyPostalSourceLab /></Step>
-  <Step title="建立Provenance ledger">记录URL/version/hash/bytes/encoding、rows read/accepted/rejected和normalization version。</Step>
-  <Step title="注入Checksum与Encoding错误"><RubyPostalSourceLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="下载成功且HTTP 200就能直接导入">
-还需验证来源/redirect、size、checksum、content type、archive entries、encoding、headers与column schema。Raw artifact保留，坏数据不进入live index。
-</Callout>
 
 ## csv库
 
-CSV允许quoted commas、embedded newlines与escaped quotes，不能String#split。Ruby csv库逐row解析并可设置encoding/header。<Term def="CSV parser声明headers、列数、quote/newline、encoding、空值、row locator与错误隔离。">CSV row schema contract</Term>先于field normalization。
+CSV允许quoted commas、embedded newlines与escaped quotes，不能String#split。Ruby csv库逐row解析并可设置encoding/header。先于field normalization。
 
 ```ruby
 require "csv"
@@ -78,11 +57,11 @@ end
 
 实际column mapping按数据版本官方schema固定；示例index仅展示方法。Decode invalid row时保存row number/byte locator与raw quarantine，不silent replace关键code/name。Quoted multiline会让physical line与CSV row不同，使用parser提供locator。
 
-Normalization保留original display fields，并生成canonical postal digits、Unicode normalization/case/search key。<Term def="Canonical fields用于lookup，original fields用于display/provenance，normalization有独立version。">postal normalization contract</Term>避免不可逆覆盖原文。
+Normalization保留original display fields，并生成canonical postal digits、Unicode normalization/case/search key。避免不可逆覆盖原文。
 
 ## sqlite3库
 
-SQLite是embedded transactional database；Ruby使用sqlite3 gem，需要在Gemfile/lock固定版本及native dependency。<Term def="Database file、schema version、sqlite/gem version、pragmas与migration/rebuild策略共同固定。">SQLite deployment contract</Term>不只`require "sqlite3"`。
+SQLite是embedded transactional database；Ruby使用sqlite3 gem，需要在Gemfile/lock固定版本及native dependency。不只`require "sqlite3"`。
 
 ```ruby
 require "sqlite3"
@@ -104,17 +83,10 @@ SQL
 
 Postal code不一定是单行唯一，schema不要想当然UNIQUE；source record key/version决定identity。Index由query pattern驱动，使用EXPLAIN QUERY PLAN与realistic benchmark验证，过多index拖慢import并增文件。
 
-<RubyPostalImportLab />
-
-<Stepper>
-  <Step title="切换Schema、Index、Transaction和Swap"><RubyPostalImportLab /></Step>
-  <Step title="注入Import failure">在第0、中间、最后、validate和activate阶段失败，确认old live DB可用且temp被清理。</Step>
-  <Step title="查看Query plan"><RubyPostalImportLab /></Step>
-</Stepper>
 
 ## 插入数据
 
-Bulk import在一个transaction中使用prepared statement，逐row bind values；不要字符串拼SQL。<Term def="Import以prepared values和transaction写入，任一invalid/failure回滚整个candidate dataset。">atomic import contract</Term>避免partial live state。
+Bulk import在一个transaction中使用prepared statement，逐row bind values；不要字符串拼SQL。避免partial live state。
 
 ```ruby
 database.transaction
@@ -148,13 +120,13 @@ Ruby/sqlite3 transaction API细节按locked version验证；block-form transacti
 
 ### 导入后验证与原子激活
 
-Validate row counts、required fields、duplicate distribution、sample exact queries、SQLite integrity_check、source metadata和schema version。<Term def="Candidate只有通过structural、count、integrity与query checks才替换live version。">dataset activation gate</Term>。
+Validate row counts、required fields、duplicate distribution、sample exact queries、SQLite integrity_check、source metadata和schema version。。
 
 Build到same filesystem temp DB，close/flush后atomic rename/symlink pointer swap；reader connection lifecycle决定何时打开新版本。保留previous version用于rollback与retention。
 
 ## 检索数据
 
-Query input先normalize/validate，SQL values用placeholders。<Term def="查询声明input grammar、match mode、limit、stable order、result schema与no-result semantics。">postal query contract</Term>。
+Query input先normalize/validate，SQL values用placeholders。。
 
 ```ruby
 def find_by_postal_code(database, input, limit: 20)
@@ -175,25 +147,14 @@ SQL placeholder是否可用于LIMIT由driver/version验证；必要时严格Inte
 
 ### 前缀与地名检索
 
-Prefix search需escape LIKE `%`/`_`或用range query；name search受Unicode normalization、tokenization和ranking，可能用FTS extension/normalized index。<Term def="模糊检索明确escape、normalization、ranking、ambiguity与最大候选。">search ambiguity contract</Term>防全表/无限结果。
+Prefix search需escape LIKE `%`/`_`或用range query；name search受Unicode normalization、tokenization和ranking，可能用FTS extension/normalized index。防全表/无限结果。
 
 Stable ORDER BY包含tie-breaker，pagination使用keyset或明确offset consistency。Result带source version，让用户/日志知道基于哪个dataset。
 
-<RubyPostalQueryLab />
-
-<Stepper>
-  <Step title="切换Exact、Prefix、Name和No result"><RubyPostalQueryLab /></Step>
-  <Step title="生成Query矩阵">覆盖valid/invalid、0/1/many、wildcards、Unicode variants、limit、stable ties和database failure。</Step>
-  <Step title="尝试SQL/LIKE注入"><RubyPostalQueryLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="用SQL placeholder就能动态传表名和ORDER BY字段">
-Placeholder只绑定values；identifier和sort direction必须来自固定allowlist/branch，不能拼用户文本。LIKE wildcards还需单独escape或改range策略。
-</Callout>
 
 ## 小结：从Raw data到可解释结果
 
-端到端验收保存source metadata、raw hash、normalization/schema version、import report、integrity result、query contract和active DB id。<Term def="一次查询结果可追到active dataset、source hash、normalization和schema version。">query provenance chain</Term>完成项目闭环。
+端到端验收保存source metadata、raw hash、normalization/schema version、import report、integrity result、query contract和active DB id。完成项目闭环。
 
 CLI normal output输出rows/JSON，stderr输出diagnostics，status区分found/not-found/invalid/system failure。Tests使用small fixture覆盖quoted CSV、多行、invalid encoding、duplicates、transaction rollback、index plan和deterministic query。
 
@@ -205,35 +166,7 @@ CLI normal output输出rows/JSON，stderr输出diagnostics，status区分found/n
 4. Candidate在transaction中prepared bulk import，验证后原子activate，old version可rollback。
 5. Query参数化values、allowlist identifiers、限制/稳定排序并保留dataset provenance。
 
-<Exercises>
-
-**问题 1：如何证明一次失败导入没有污染线上查询？**
-
-<Answer>导入独立candidate DB/transaction，在中间注入异常后断言rollback、candidate未activate、live DB version/hash/rows/query结果不变；temp cleanup且failure report保留。</Answer>
-
-**问题 2：CSV数据为什么要同时保存原字段和normalized字段？**
-
-<Answer>Normalization用于稳定lookup但可能丢display/区别；original用于展示、审计和重建。记录normalization version，升级时从raw/original重建并比较collision/row changes。</Answer>
-
-**问题 3：怎样防止前缀/地名查询拖垮数据库？**
-
-<Answer>Validate length/grammar，escape LIKE或用indexed range，建立匹配index/FTS，hard limit与timeout，stable order；EXPLAIN/benchmark realistic common/worst queries，禁止leading wildcard全表扫描或异步隔离。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="dataset provenance contract" definition="Source到active DB的hash、count、error与rollback证据。" />
-  <GlossaryItem term="postal source boundary" definition="官方来源、版本、license、size、checksum与raw保存。" />
-  <GlossaryItem term="CSV row schema contract" definition="Header、列数、quote/newline、encoding与row locator。" />
-  <GlossaryItem term="postal normalization contract" definition="Original display与versioned canonical lookup fields。" />
-  <GlossaryItem term="SQLite deployment contract" definition="DB file、schema、gem、pragmas与rebuild策略。" />
-  <GlossaryItem term="atomic import contract" definition="Prepared transaction import失败时完整rollback。" />
-  <GlossaryItem term="dataset activation gate" definition="Count/integrity/query验证后才activate candidate。" />
-  <GlossaryItem term="postal query contract" definition="Input、match、limit、order、result与empty语义。" />
-  <GlossaryItem term="search ambiguity contract" definition="Fuzzy search的escape、normalization、ranking与候选上限。" />
-  <GlossaryItem term="query provenance chain" definition="Result追到dataset/source/normalization/schema版本。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第23章 检索邮政编码" adaptedUrl="https://tanoshiiruby.github.io/5/" />

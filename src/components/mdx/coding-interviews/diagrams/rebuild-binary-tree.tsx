@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traceCases = [
   { label: "根节点1", fields: [["前序首项", "1"], ["中序位置", "4,7,2 | 1 | 5,3,8,6"], ["左节点数", "3"], ["子问题", "左前3项与右后4项"]] },
   { label: "左根2", fields: [["左前序", "2,4,7"], ["左中序", "4,7 | 2"], ["左节点数", "2"], ["结果", "2没有右子树"]] },
@@ -52,12 +50,4 @@ export function IntervalInvariantMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">递归不是只找根：每一层都要验证两种遍历描述的是同一批节点。</figcaption>
     </figure>
   );
-}
-
-export function ReconstructionTraceLab() {
-  return <CodingInterviewLab cases={traceCases} caption="沿官方8节点样例逐层切分前序与中序区间。" />;
-}
-
-export function TreeShapeTestLab() {
-  return <CodingInterviewLab cases={testCases} caption="普通、退化、最小和非法输入覆盖不同重建失效模式。" />;
 }

@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cancellationSteps = [
   { index: 0, value: 1, candidate: 1, times: 1, action: "用首元素初始化候选" },
   { index: 1, value: 2, candidate: 1, times: 0, action: "异值抵消，票数归零" },
@@ -224,8 +222,4 @@ export function MajorityInputContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function MoreThanHalfOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者6组测试，核对两种解法共同的返回值和全局无效标志。" />;
 }

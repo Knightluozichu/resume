@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -147,17 +145,6 @@ export function KnapsackGridDiagram() {
     </figure>
   );
 }
-
-export function KnapsackDecisionLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={decisionCases}
-      caption="每格比较“不选当前物品”与“选择当前物品并加上剩余容量最优值”。"
-      tone="cyan"
-    />
-  );
-}
-
 export function StringMatchGridDiagram() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
@@ -215,15 +202,5 @@ export function StringMatchGridDiagram() {
         两类字符串DP使用相似网格，但状态含义与不匹配转移完全不同。
       </figcaption>
     </figure>
-  );
-}
-
-export function DpDesignMap() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={designCases}
-      caption="新增物品、改变行顺序、调整列粒度和一维压缩都会改变表格实现，但不能改变状态语义。"
-      tone="violet"
-    />
   );
 }

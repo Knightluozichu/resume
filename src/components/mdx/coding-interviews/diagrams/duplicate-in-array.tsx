@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traceCases = [
   {
     label: "起点 i=0",
@@ -105,12 +103,4 @@ export function ContractMatrixMap() {
       <figcaption className="mt-2 text-center text-sm text-secondary">值可作下标和允许修改输入，是原地方案的两个核心前提。</figcaption>
     </figure>
   );
-}
-
-export function DuplicateTraceLab() {
-  return <CodingInterviewLab cases={traceCases} caption="逐步重放[2,3,1,0,2,5,3]，观察每次交换如何让一个值归位。" />;
-}
-
-export function InPlaceTestLab() {
-  return <CodingInterviewLab cases={testCases} caption="作者测试覆盖最小值、最大值、多个重复、无重复和非法输入。" />;
 }

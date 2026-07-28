@@ -10,12 +10,13 @@ sourceUrl: https://learnopengl.com/Model-Loading/Assimp
 draft: false
 ---
 
-import {
-  AssimpImportFlowDiagram,
-  AssimpImportStagesDiagram,
-  AssimpOwnershipDiagram,
-  AssimpSceneGraphDiagram,
-} from "@/components/mdx/learnopengl/diagrams/assimp";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* A 概念型章（HEL-59，M5 模型加载篇第 1 篇，新建 model-loading/ section 目录）：模型加载篇开篇。承接光照篇（已能给手写的方块/容器打 Phong 光照），本章解决「怎么把别人在 Blender/Maya 里做好的真实模型读进来」这件事。本章不写渲染、不写真正的 Mesh 类（留给后续「网格」「模型」两篇），只把 Assimp 这个加载库「是什么、把模型整理成什么数据结构、你怎么把它读进内存」讲透——尤其是「节点树只存索引、数据集中存在 aiScene」这条最易误解的核心。A 型：概念讲解为重心（spec §3 重），math:false 整节省略（§4 省），代码对照选讲（§6 选，只贴 ReadFile + flags + 检查，不造 WebGL 端——Assimp 是 C++ 库浏览器跑不了），常见误区 ≥2（§7，本章给 3 个）。本章无交互 ShaderDemo（demo:false），用两个静态 SVG 图示组件 AssimpSceneGraphDiagram / AssimpImportFlowDiagram 替代「玩懂」——A 概念型靠图把数据结构掰碎即满足 §5 的可视化精神。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -51,7 +52,6 @@ import {
 
 为什么这件事值钱？因为格式差异是个无底洞——每种格式的字节布局、坐标约定、材质写法都不同。有了 Assimp，你只管说「帮我读这个文件」，至于它是 obj 还是 fbx，库内部消化，吐给你的永远是同一套结构。下面这张图就是这条「格式各异、产物划一」的流水：
 
-<AssimpImportFlowDiagram />
 
 也就是说，**加载这一步处在「磁盘文件 → 内存结构 → （后续）送进渲染管线」的最前端**：先把外部文件变成内存里我们认得的数据，后面才谈得上拿它去画。本章只讲到「变成内存结构」为止，怎么把它送进管线画出来，是后面「网格」「模型」两篇的事。
 
@@ -65,7 +65,6 @@ import {
 
 把这三层串起来看下面这张图：**树只存索引，网格和材质的真身集中堆在 aiScene 里，节点靠下标去引用**。读懂这张图，本章的核心就拿下了。
 
-<AssimpSceneGraphDiagram />
 
 为什么要绕这么一道「索引引用」而不让节点直接抱着数据？因为同一块网格、同一个材质可能被场景里多个地方用到（想想一棵树上几十片一模一样的叶子）。集中存一份、各处用下标引用，既省内存，又能表达「这些位置共用同一块网格」。这正是 `mNumMeshes` / `mMeshes` 在节点里是「一串下标」而不是「一堆网格」的原因。
 
@@ -73,7 +72,6 @@ import {
 
 `ReadFile` 返回的 `const aiScene*` 指向 **Importer 内部拥有的内存**。只要 `Assimp::Importer importer` 仍然存活，scene、node、mesh、material 指针才有效；Importer 离开作用域析构后，这些指针都不能继续保存和访问。
 
-<AssimpOwnershipDiagram />
 
 因此常见 `Model::loadModel` 会在函数内创建 Importer，立即递归遍历 scene，把顶点、索引、纹理路径复制到应用自己的 `std::vector<Vertex>`、`std::vector<unsigned int>` 与 Mesh 对象中。函数返回后 Importer 可以销毁，因为渲染阶段使用的是已复制的数据，而不是 Assimp 的裸指针。
 
@@ -114,21 +112,17 @@ target_link_libraries(model_viewer PRIVATE assimp::assimp)
   <Step title="先让构建系统找到并链接 Assimp">
     用 `find_package` 找到配置，用 `target_link_libraries` 把库目标链接到实际可执行目标。编译通过但链接失败时，优先检查 target 与架构是否一致。
 
-    <AssimpImportStagesDiagram step={1} />
   </Step>
   <Step title="ReadFile 并验证完整场景">
     传入路径和后处理 flags，随后同时检查空指针、`AI_SCENE_FLAGS_INCOMPLETE` 与根节点。失败时记录 `GetErrorString()` 并立即返回。
 
-    <AssimpImportStagesDiagram step={2} />
   </Step>
   <Step title="在 Importer 存活期间复制数据">
     从根节点递归取 mesh 索引，再从 scene 数组读取 aiMesh/aiMaterial，把需要的数据复制到自己的对象；不要把 Assimp 裸指针作为长期成员保存。
 
-    <AssimpImportStagesDiagram step={3} />
   </Step>
 </Stepper>
 
-<AssimpImportStagesDiagram />
 
 ## 代码：ReadFile 与那句不能省的检查
 

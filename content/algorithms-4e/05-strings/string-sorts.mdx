@@ -7,35 +7,22 @@ description: "按官方5.1重建字符表成本模型、稳定键索引计数、
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/51radix/"
-draft: true
+draft: false
 ---
 
-import { Algs4AlphabetCostMap, Algs4KeyIndexedCountingLab, Algs4StabilityLab, Algs4LsdRadixLab, Algs4SignedIntegerRadixLab, Algs4MsdRadixLab, Algs4SentinelPrefixLab, Algs4Quick3StringLab, Algs4StringSortCostLab, Algs4StringSortCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/string-sorts";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释string sorts、alphabet radix、key-indexed counting、stability、sentinel与lexicographic order
-- 能计算frequency、cumulative starts、LSD passes、MSD bucket ranges与three-way partition boundaries
-- 能实现稳定键索引计数、固定长度LSD、变长MSD、signed-int radix与三向字符串快速排序
-- 能分析不稳定distribution、大R空bucket成本、prefix inversion、Unicode code-unit与signed-byte错误
-- 能设计sortedness、permutation、stability、input promise与字符访问量的独立验收
-
-</Objectives>
 
 ## 从“比较字符串，不必每次都从第一个字符重读”开始
 
-Comparison sort把string当作atomic key，每次 `compareTo` 从左向右找first differing character。若大量strings共享长prefix，同一批字符会被反复读取。字符串排序（<Term def="利用字符串由alphabet characters组成的内部结构，按digit或prefix组织排序工作的算法族。">字符串排序</Term>，string sorts）直接利用key representation，把“比较两个完整对象”改成“按某个digit分组”。
+Comparison sort把string当作atomic key，每次 `compareTo` 从左向右找first differing character。若大量strings共享长prefix，同一批字符会被反复读取。字符串排序（，string sorts）直接利用key representation，把“比较两个完整对象”改成“按某个digit分组”。
 
 先预测：数组已经按最后一个字符稳定排序，再按倒数第二个字符排序时，能否随便打乱同字符元素？不能。Equal current digit的相对顺序承载了上一轮的less-significant suffix order；一旦打乱，LSD radix sort的归纳不变量立即失效。
 
 本节从统一的键索引计数开始，再分成两条路线：固定长度keys从least significant digit向左推进；变长strings从most significant digit向右递归。三向字符串快速排序则不用R-sized count array，而是围绕一个pivot character做less/equal/greater partition。
 
-<Algs4AlphabetCostMap />
 
 ## 5.1.1 Alphabet与成本模型：R不是装饰常数
 
-Alphabet（<Term def="允许出现在strings中的characters集合，radix R是其可编码keys数量。">字符表</Term>，alphabet）提供character-to-index mapping，通常把字符映射到0至R-1。DNA的R为4，extended ASCII常取256；若直接按全部Unicode code points建立dense count array，R超过一百万，每个小subarray都清空该数组会压倒真正的数据扫描。
+Alphabet（，alphabet）提供character-to-index mapping，通常把字符映射到0至R-1。DNA的R为4，extended ASCII常取256；若直接按全部Unicode code points建立dense count array，R超过一百万，每个小subarray都清空该数组会压倒真正的数据扫描。
 
 String sort分析需要区分三个量：
 
@@ -49,7 +36,7 @@ Engineering alphabet contract还要决定“character”含义。Java `charAt`�
 
 ## 5.1.2 Key-indexed counting：四个阶段建立stable buckets
 
-键索引计数（<Term def="对small integer keys做frequency、cumulative indices、stable distribution与copy-back的linear sorting primitive。">键索引计数</Term>，key-indexed counting）处理每个record带一个0至R-1 integer key的情形。它不做pairwise comparisons，而是计算每个key的bucket边界。
+键索引计数（，key-indexed counting）处理每个record带一个0至R-1 integer key的情形。它不做pairwise comparisons，而是计算每个key的bucket边界。
 
 四阶段：
 
@@ -73,7 +60,6 @@ for (int i = 0; i < N; i++)
     a[i] = aux[i];
 ```
 
-<Algs4KeyIndexedCountingLab />
 
 Frequency结束后，若 \(f_r\) 是key r的数量，则bucket r的initial start为：
 
@@ -89,9 +75,8 @@ Time为Theta(N+R)，extra space为Theta(N+R)。若R远大于N，大量zero count
 
 ## 5.1.3 Stability：equal key records保留original order
 
-稳定性（<Term def="Sort后equal keys的records保持input中的relative order。">稳定性</Term>，stability）来自distribution从left to right扫描input，并让每个bucket的next index单调增加。第一个见到的equal-key record先占较小position。
+稳定性（，stability）来自distribution从left to right扫描input，并让每个bucket的next index单调增加。第一个见到的equal-key record先占较小position。
 
-<Algs4StabilityLab />
 
 稳定性不是所有sorting client都需要，但LSD correctness必须依赖它。假设某一轮前array已按suffix \(d+1\ldots W-1\) sorted；按digit d稳定分组后：
 
@@ -100,13 +85,10 @@ Time为Theta(N+R)，extra space为Theta(N+R)。若R远大于N，大量zero count
 
 于是array按suffix \(d\ldots W-1\) sorted。这是从rightmost digit向left归纳的核心。
 
-<Callout type="trap" title="每轮按当前字符分桶正确，就认为LSD最终正确">
-若distribution在equal bucket内reverse或任意shuffle，上一轮建立的suffix order会被破坏。每轮单看current digit都“分对了”，最终full strings仍可能逆序；必须验证stability而非只看bucket membership。
-</Callout>
 
 ## 5.1.4 LSD radix sort：固定width从右向左
 
-低位优先字符串排序（<Term def="对fixed-width strings从rightmost digit到leftmost digit反复执行stable key-indexed counting。">低位优先字符串排序</Term>，LSD radix sort）要求所有strings长度均为W。它对 \(d=W-1,W-2,\ldots,0\) 各执行一次stable counting。
+低位优先字符串排序（，LSD radix sort）要求所有strings长度均为W。它对 \(d=W-1,W-2,\ldots,0\) 各执行一次stable counting。
 
 ```java
 public static void sort(String[] a, int W) {
@@ -127,7 +109,6 @@ public static void sort(String[] a, int W) {
 }
 ```
 
-<Algs4LsdRadixLab />
 
 Pass invariant可写成：
 
@@ -150,13 +131,12 @@ Fixed-width identifiers、dates、IP-like packed fields与machine integers适合
 
 Official LSD也把32-bit int看作四个base-256 digits。前三个bytes按0至255排序没有问题；most significant byte同时携带sign。Two's-complement negative numbers的MSB在0x80至0xFF，若按unsigned bucket放在0x00至0x7F之后，会把negative numbers排到positive之后。
 
-<Algs4SignedIntegerRadixLab />
 
 最后一轮必须旋转MSB buckets，让0x80至0xFF先于0x00至0x7F；或把MSB mapping转换成signed rank。验收不能只测nonnegative样例，应覆盖minimum int、-1、0、positive及跨byte boundaries的值。
 
 ## 5.1.5 MSD radix sort：变长strings按prefix递归
 
-高位优先字符串排序（<Term def="从leftmost digit开始用key-indexed counting分buckets，再对每个character bucket递归下一digit。">高位优先字符串排序</Term>，MSD radix sort）先按d=0分组，随后只在same first character bucket内比较d=1，以此类推。不同prefix一旦分开，永远无需读取更后面的characters。
+高位优先字符串排序（，MSD radix sort）先按d=0分组，随后只在same first character bucket内比较d=1，以此类推。不同prefix一旦分开，永远无需读取更后面的characters。
 
 变长strings需要结束哨兵：
 
@@ -189,11 +169,9 @@ private static void sort(String[] a, int lo, int hi, int d, String[] aux) {
 }
 ```
 
-<Algs4MsdRadixLab />
 
 Sentinel bucket不递归：这些strings已经结束，且自然排在same-prefix longer strings之前。其余每个character bucket只在内部递归d+1。Recursive invariant是进入 `sort(lo,hi,d)` 时，subarray共享相同length-d prefix；完成后它按suffix from d lexicographically sorted。
 
-<Algs4SentinelPrefixLab />
 
 MSD只读取区分keys所需的characters，但每个recursive call仍初始化R-sized counters。若data产生很多tiny buckets，大R overhead严重，所以official implementation在small subarrays切换到从digit d开始比较的insertion sort。Cutoff不是correctness条件，而是降低recursion与counter setup常数。
 
@@ -207,7 +185,7 @@ $$
 
 ## 5.1.6 Three-way string quicksort：用partition避开R-sized arrays
 
-三向字符串快速排序（<Term def="在digit d按pivot character划分less、equal、greater三区，仅equal区递归d+1的in-place string quicksort。">三向字符串快速排序</Term>，three-way string quicksort）把3-way quicksort与MSD按digit推进结合起来。
+三向字符串快速排序（，three-way string quicksort）把3-way quicksort与MSD按digit推进结合起来。
 
 ```java
 private static void sort(String[] a, int lo, int hi, int d) {
@@ -230,7 +208,6 @@ private static void sort(String[] a, int lo, int hi, int d) {
 }
 ```
 
-<Algs4Quick3StringLab />
 
 Partition后：
 
@@ -250,7 +227,6 @@ Key-indexed counting的Theta(N) aux space可通过cycle-leader placement减少�
 
 ## 5.1.8 成本选择：先看input promise，再看benchmark
 
-<Algs4StringSortCostLab />
 
 选择顺序：
 
@@ -262,9 +238,6 @@ Key-indexed counting的Theta(N) aux space可通过cycle-leader placement减少�
 
 普通comparison sort仍有价值：它只需comparator contract，不依赖alphabet mapping，library implementation成熟。Radix方法突破comparison lower bound，是因为它使用key digits的额外结构；若digit extraction或normalization很昂贵，理论优势可能被representation cost抵消。
 
-<Callout type="trap" title="把Java char顺序当成用户语言的字典序">
-UTF-16 code-unit order不会自动处理supplementary code points、combining marks、大小写与locale collation。必须明确排序语义并统一normalization；否则算法可能内部完全正确，却输出不符合产品契约的顺序。
-</Callout>
 
 ## 5.1.9 Independent certificate：sorted还不够
 
@@ -284,7 +257,6 @@ for (Record record : output) counts.merge(record, -1, Integer::sum);
 boolean permutation = counts.values().stream().allMatch(value -> value == 0);
 ```
 
-<Algs4StringSortCertificateLab />
 
 LSD还应在每一pass检查“processed suffix sorted”；MSD应检查每个recursive bucket的shared prefix与range边界；Quick3应检查less/equal/greater partition。Local invariants能把错误定位到某一轮，而不是等最终数组失败后再猜。
 
@@ -292,26 +264,6 @@ Benchmark需同时记录elapsed time、allocated bytes、characters examined与i
 
 ## 5.1.10 逐步运行路线
 
-<Stepper>
-  <Step title="定义alphabet contract" description="确定R、character mapping、sentinel以及是否需要locale collation。">
-    <Algs4AlphabetCostMap />
-  </Step>
-  <Step title="运行stable counting primitive" description="逐阶段核对frequency、cumulates、distribution与equal-key order。">
-    <Algs4KeyIndexedCountingLab />
-    <Algs4StabilityLab />
-  </Step>
-  <Step title="验证fixed-width LSD" description="从rightmost digit向左，检查每一轮processed suffix仍sorted。">
-    <Algs4LsdRadixLab />
-    <Algs4SignedIntegerRadixLab />
-  </Step>
-  <Step title="验证variable-length recursion" description="观察MSD buckets、结束哨兵和Quick3 less/equal/greater递归方向。">
-    <Algs4MsdRadixLab />
-    <Algs4Quick3StringLab />
-  </Step>
-  <Step title="独立验收output" description="同时检查lexicographic order、permutation与required stability。">
-    <Algs4StringSortCertificateLab />
-  </Step>
-</Stepper>
 
 ## 小结
 
@@ -322,53 +274,4 @@ Benchmark需同时记录elapsed time、allocated bytes、characters examined与i
 - Three-way string quicksort以pivot character划分三区，仅equal region前进到next digit，避免R-sized count arrays。
 - Independent certificate至少检查sortedness与permutation；LSD或stable client还必须检查equal-key relative order。
 
-<Exercises>
 
-1. 对keys `B,D,A,C,B,A` 手算frequency、cumulative starts和stable distribution output，并给每个record加identity证明stability。
-2. 给出两个长度为3的strings，构造“每轮current digit bucket正确但使用unstable distribution后LSD最终错误”的例子。
-3. 解释MSD中 `charAt("sea",3)=-1` 为何必须小于 `charAt("seashells",3)`，并说明sentinel bucket为何不能递归。
-4. 为含ASCII、emoji、combining accent与大小写的产品字段设计排序contract和测试矩阵，说明何时先生成collation key。
-
-<Answer>
-
-Frequencies为A=2、B=2、C=1、D=1，starts为A=0、B=2、C=4、D=5。若identity依次为B₀,D₀,A₀,C₀,B₁,A₁，stable output为A₀,A₁,B₀,B₁,C₀,D₀；同key identities仍按input order。
-
-</Answer>
-
-<Answer>
-
-可用 `12` 与 `11` 再配合另一条current digit相同的record演示：先按ones得到正确order，按tens分到同一bucket时若reverse，ones order被翻转。更直接地，任何same most-significant digit、different least-significant digit的pair，在最后一轮被unstable equal bucket反转都会使full key逆序。
-
-</Answer>
-
-<Answer>
-
-两者前三个characters相同，digit 3时短string已结束。令sentinel -1小于任何actual character，才能满足lexicographic rule：一个string是另一个的proper prefix时，shorter first。Sentinel bucket中的strings都已无下一digit，递归只会越界或制造无意义work。
-
-</Answer>
-
-<Answer>
-
-先规定normalization form、case sensitivity、locale、numeric collation与emoji/code-point策略；测试canonically equivalent strings、supplementary pairs、combining sequences、case variants和prefixes。若目标是用户语言顺序，应由locale collator生成stable collation keys，再对这些byte/string keys做radix或comparison sort，而不是直接按UTF-16 charAt。
-
-</Answer>
-
-</Exercises>
-
-<Glossary>
-  <GlossaryItem term="字符串排序">利用key characters内部结构按digit或prefix组织工作的sorting algorithms。</GlossaryItem>
-  <GlossaryItem term="字符表">允许字符集合及其dense index mapping，radix R表示key数量。</GlossaryItem>
-  <GlossaryItem term="键索引计数">以frequency、cumulates和distribution对small integer keys排序的primitive。</GlossaryItem>
-  <GlossaryItem term="稳定性">Equal keys在output中保持input relative order。</GlossaryItem>
-  <GlossaryItem term="低位优先字符串排序">Fixed-width keys从rightmost digit向left做stable counting passes。</GlossaryItem>
-  <GlossaryItem term="高位优先字符串排序">Variable strings从leftmost digit分bucket并递归next digit。</GlossaryItem>
-  <GlossaryItem term="三向字符串快速排序">按pivot character分less/equal/greater，equal region才前进digit的quicksort。</GlossaryItem>
-  <GlossaryItem term="结束哨兵">String结束时返回且小于所有actual character的special key，通常为-1。</GlossaryItem>
-</Glossary>
-
-<Attribution
-  name="Algorithms, 4th Edition · Section 5.1 String Sorts"
-  href="https://algs4.cs.princeton.edu/51radix/"
-  author="Robert Sedgewick and Kevin Wayne"
-  license="本章按官方5.1与当前LSD、MSD、Quick3string、AmericanFlag实现重构key-indexed counting、radix passes、sentinel、cutoff与signed-integer处理；代码为教学化摘写与重新组织。"
-/>

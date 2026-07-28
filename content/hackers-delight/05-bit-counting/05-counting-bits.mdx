@@ -7,27 +7,15 @@ description: "按Hacker's Delight第二版第5章重建1位计数、奇偶校验
 demo: true
 math: true
 sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
-draft: true
+draft: false
 ---
 
-import { HD5PopcountScanLab, HD5KernighanLab, HD5SwarLab, HD5LookupLab, HD5ParityFoldLab, HD5ParityRelationLab, HD5LeadingZeroLab, HD5ClzSearchLab, HD5TrailingZeroLab, HD5CtzPopcountLab, HD5DeBruijnLab, HD5DensityChoiceLab, HD5ZeroPolicyLab, HD5CountingCertificateLab } from "@/components/mdx/hackers-delight/diagrams/05-counting-bits";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释counting 1-bits的scan、clear-lowest-one、lookup与SWAR reduction invariants
-- 能计算parity与population count modulo two的关系，并推导XOR folding
-- 能实现counting leading zeros的linear scan、binary group search和bit-length mapping
-- 能分析counting trailing zeros的lowbit、popcount mask与De Bruijn indexing
-- 能设计统一zero-input contract、small-width oracle与target primitive verification
-
-</Objectives>
 
 ## 从“计数”与“定位”其实是同一件事开始
 
 先预测：8-bit pattern `00101100`有3个1-bits、2个leading zeros、2个trailing zeros，parity为odd。Counting Bits看似包含四个不同functions，但它们共享两种结构：reduction把许多bits压成一个small integer，selection先定位某个distinguished 1-bit再把position编码成integer。
 
-令word $x$的bits为$x_{w-1}\ldots x_0$。<Term def="一个word中value为1的bit数量，也称Hamming weight或population count。">总体计数</Term>（population count）定义
+令word $x$的bits为$x_{w-1}\ldots x_0$。（population count）定义
 
 $$
 \operatorname{pop}(x)
@@ -35,7 +23,7 @@ $$
 \sum_{i=0}^{w-1}x_i.
 $$
 
-<Term def="从most significant side开始连续0-bits的数量；nonzero input可据此定位highest one。">前导零计数</Term>与<Term def="从least significant side开始连续0-bits的数量；nonzero input可据此定位rightmost one。">尾随零计数</Term>则返回positions。Zero没有highest或rightmost one，所以CLZ和CTZ必须另外规定结果。
+与则返回positions。Zero没有highest或rightmost one，所以CLZ和CTZ必须另外规定结果。
 
 ## 5.1 Counting 1-bits
 
@@ -43,7 +31,6 @@ $$
 
 最直接算法逐bit累加`x & 1`再logical shift，执行$w$轮，成本与data无关。
 
-<HD5PopcountScanLab />
 
 利用Chapter 2的identity，$x\mathbin{\&}(x-1)$每次恰好clear一个rightmost 1。因此循环次数正好等于population count：
 
@@ -60,25 +47,21 @@ static unsigned popcount_sparse_u32(uint32_t x) {
 }
 ```
 
-<HD5KernighanLab />
 
 Invariant是每轮开始时，`count + pop(x)`等于original population。Loop结束时$x=0$，于是count就是answer。Sparse data时iterations很少；dense all-ones word则执行$w$轮，还形成serial dependency chain。
 
-<HD5DensityChoiceLab />
 
 ### Lookup by chunks
 
 把word拆为bytes，可预计算256-entry table，再对每个byte lookup并相加。4-bit table更小但lookups更多；16-bit table有65536 entries，可能增加cache pressure。
 
-<HD5LookupLab />
 
 Lookup correctness来自additivity：disjoint bit fields的population counts可相加。Performance则依赖table residency、loads、extract instructions与memory subsystem，不能只数source operations。
 
 ### SWAR: a reduction tree inside a word
 
-<Term def="把一个word分成多个small lanes，在同一integer register内并行执行lane-wise reduction的技术。">字内并行</Term>（SWAR）先在每2-bit lane内计数，再合并为4-bit、8-bit、16-bit partial sums。Masks阻止相邻lanes互相污染。
+（SWAR）先在每2-bit lane内计数，再合并为4-bit、8-bit、16-bit partial sums。Masks阻止相邻lanes互相污染。
 
-<HD5SwarLab />
 
 32-bit经典结构为：
 
@@ -100,7 +83,7 @@ Width改变时，masks、stage count与final result width都要改。对于stand
 
 ## 5.2 Parity
 
-<Term def="population count对2取模的single bit，one count为odd时是1，为even时是0。">奇偶校验位</Term>（parity）满足
+（parity）满足
 
 $$
 \operatorname{parity}(x)
@@ -110,7 +93,6 @@ $$
 x_0\oplus x_1\oplus\cdots\oplus x_{w-1}.
 $$
 
-<HD5ParityRelationLab />
 
 因为XOR associative且相同bit成对抵消，可把word halves不断fold：
 
@@ -123,7 +105,6 @@ $$
 
 最终low bit就是all input bits XOR。
 
-<HD5ParityFoldLab />
 
 ```c
 static unsigned parity_u32(uint32_t x) {
@@ -156,7 +137,6 @@ w-1-\operatorname{clz}(x),
 w-\operatorname{clz}(x).
 $$
 
-<HD5LeadingZeroLab />
 
 CLZ同时服务normalization、integer logarithm、priority encoding、floating-point construction与next-power calculation。对$x=0$，bit length常定义为0，因此令$\operatorname{clz}(0)=w$很方便；但某些hardware primitives对zero保留undefined或special result，wrapper必须统一。
 
@@ -164,7 +144,6 @@ CLZ同时服务normalization、integer logarithm、priority encoding、floating-
 
 Linear reference从most significant mask开始，遇到first one即停止。Binary search先测试upper half是否为zero，再选择half，随后测试quarter、eighth，经过$\log_2w$个group decisions定位。
 
-<HD5ClzSearchLab />
 
 ```c
 static unsigned clz_reference_u32(uint32_t x) {
@@ -205,7 +184,6 @@ $$
 
 把position问题变成one-hot integer logarithm。
 
-<HD5TrailingZeroLab />
 
 再减一会得到恰好$\operatorname{ctz}(x)$个low ones：
 
@@ -216,55 +194,26 @@ $$
 \qquad x\ne0.
 $$
 
-<HD5CtzPopcountLab />
 
 这条identity可复用popcount primitive，却不是说它一定比direct CTZ instruction便宜。它的重要性是proof composition：isolate one-hot、convert exponent to low-ones count、reduce。
 
 ### De Bruijn indexing
 
-<Term def="长度2的k次方的cyclic bit sequence，其中每个k-bit pattern恰出现一次，可把one-hot positions映射到unique indices。">德布鲁因序列</Term>可把32个possible one-hot positions映射到5-bit table index。对isolated lowbit乘一个chosen 32-bit constant，取product high 5 bits，再lookup original position。
+可把32个possible one-hot positions映射到5-bit table index。对isolated lowbit乘一个chosen 32-bit constant，取product high 5 bits，再lookup original position。
 
-<HD5DeBruijnLab />
 
 Correctness依赖三个width-specific objects共同匹配：multiplication modulo $2^{32}$、constant与32-entry table。把constant复制到64-bit code，或让language用unbounded multiplication，都可能破坏mapping。Zero也不在one-hot domain，必须先guard。
 
 ### Zero policy is part of the API
 
-<Term def="明确规定CLZ或CTZ在zero input时返回word width、sentinel、error或保持precondition的接口约定。">零输入约定</Term>不能由caller猜测。Returning $w$常使bit length与range loops方便；precondition nonzero可匹配某些intrinsics；optional/status则最明确。
+不能由caller猜测。Returning $w$常使bit length与range loops方便；precondition nonzero可匹配某些intrinsics；optional/status则最明确。
 
-<HD5ZeroPolicyLab />
 
 跨target wrapper至少测试zero、one、highest bit、all ones和每个one-hot position。若underlying primitive在zero undefined，wrapper必须在调用之前branch，不能先调用再覆盖result。
 
-<Callout type="trap" title="CLZ和CTZ在zero时自然等于word width">
-这是常用且有用的wrapper contract，却不是所有instruction或intrinsic的automatic guarantee。修法是查清primitive contract，并在call之前显式处理zero。
-</Callout>
-
-<Callout type="trap" title="手写bit trick一定比标准primitive快">
-Compiler可能把primitive直接映射到POPCNT、CLZ或CTZ instruction，也可能识别手写pattern；实际差异受ISA、latency与surrounding code影响。修法是优先表达intent，再检查generated code和benchmark。
-</Callout>
 
 ## 一条从identity到target primitive的验收链
 
-<Stepper>
-<Step title="固定word与zero contract">
-声明unsigned width、zero result和signed conversion，先预测one-hot、all-ones与zero cases。
-
-<HD5ZeroPolicyLab />
-</Step>
-<Step title="证明reduction或selection">
-Population/parity维护partial-count invariant；CLZ/CTZ证明highest或rightmost one到position的mapping。
-
-<HD5SwarLab />
-</Step>
-<Step title="用reference审计target">
-Small widths exhaustive compare，再核对standard primitive、compiler output与representative bit density。
-
-<HD5CountingCertificateLab />
-</Step>
-</Stepper>
-
-<HD5CountingCertificateLab />
 
 ## 小结
 
@@ -274,42 +223,4 @@ Parity是population modulo two，可用XOR folding计算。Counting leading zero
 
 所有算法都必须固定unsigned width，尤其要明确CLZ/CTZ的zero behavior。正确的交付顺序是identity、reference、boundary oracle、target mapping，而不是从magic constant直接跳到performance claim。
 
-<Exercises>
 
-**问题 1**：对8-bit x为10110100，clear-rightmost-one loop执行几轮？每轮维护什么invariant？
-
-<Answer>
-Pattern含4个one bits，所以执行4轮。每轮恰好clear一个one并把count增加1，因此current count加remaining population始终等于original population；x变zero时count就是4。
-</Answer>
-
-**问题 2**：为什么XOR folding能计算parity，却不能直接给出population count？
-
-<Answer>
-XOR只保留每组one count的modulo-two结果，两个ones会抵消，因此恰好保留parity。Population count需要保留carry和更宽partial sums，SWAR才会为每个lane分配足够bits承载count。
-</Answer>
-
-**问题 3**：8-bit x为00101100时，CLZ、CTZ、bit length与highest-one position分别是多少？
-
-<Answer>
-前两个bits为zero，所以CLZ是2；low side有两个zeros，所以CTZ是2；bit length为8减2等于6；highest one position从zero计数为5，也等于bit length减1。
-</Answer>
-
-**问题 4**：De Bruijn CTZ为什么必须先isolate lowbit，并且constant/table不能跨width照搬？
-
-<Answer>
-Mapping只保证每个one-hot input乘constant后产生unique index；multi-one word不在domain。Constant、modulo multiplication width和lookup table共同编码position，改变width会改变possible positions与product high bits，必须重新选择并验证。
-</Answer>
-
-</Exercises>
-
-<Glossary>
-<GlossaryItem term="总体计数">一个word中value为1的bit数量，也称Hamming weight或population count。</GlossaryItem>
-<GlossaryItem term="前导零计数">从most significant side开始连续0-bits的数量；nonzero input可据此定位highest one。</GlossaryItem>
-<GlossaryItem term="尾随零计数">从least significant side开始连续0-bits的数量；nonzero input可据此定位rightmost one。</GlossaryItem>
-<GlossaryItem term="字内并行">把一个word分成多个small lanes，在同一integer register内并行执行lane-wise reduction的技术。</GlossaryItem>
-<GlossaryItem term="奇偶校验位">population count对2取模的single bit，one count为odd时是1，为even时是0。</GlossaryItem>
-<GlossaryItem term="德布鲁因序列">长度2的k次方的cyclic bit sequence，其中每个k-bit pattern恰出现一次，可把one-hot positions映射到unique indices。</GlossaryItem>
-<GlossaryItem term="零输入约定">明确规定CLZ或CTZ在zero input时返回word width、sentinel、error或保持precondition的接口约定。</GlossaryItem>
-</Glossary>
-
-<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 5 · Counting Bits" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

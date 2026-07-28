@@ -1,72 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const trace = [
-  { index: 0, char: "a", previous: -1, distance: "-", before: 0, after: 1, window: "a", best: 1, branch: "首次出现，长度加1" },
-  { index: 1, char: "b", previous: -1, distance: "-", before: 1, after: 2, window: "ab", best: 2, branch: "首次出现，长度加1" },
-  { index: 2, char: "c", previous: -1, distance: "-", before: 2, after: 3, window: "abc", best: 3, branch: "首次出现，长度加1" },
-  { index: 3, char: "a", previous: 0, distance: "3", before: 3, after: 3, window: "bca", best: 3, branch: "旧a在当前后缀内，长度改为3" },
-  { index: 4, char: "c", previous: 2, distance: "2", before: 3, after: 2, window: "ac", best: 3, branch: "旧c在当前后缀内，长度改为2" },
-  { index: 5, char: "f", previous: -1, distance: "-", before: 2, after: 3, window: "acf", best: 3, branch: "首次出现，长度加1" },
-  { index: 6, char: "r", previous: -1, distance: "-", before: 3, after: 4, window: "acfr", best: 4, branch: "首次出现，长度加1" },
-  { index: 7, char: "a", previous: 3, distance: "4", before: 4, after: 4, window: "cfra", best: 4, branch: "距离等于后缀长度，仍需排除旧a" },
-  { index: 8, char: "r", previous: 6, distance: "2", before: 4, after: 2, window: "ar", best: 4, branch: "旧r在当前后缀内，长度改为2" },
-] as const;
-
-const officialCases = [
-  { label: "重复在前", fields: [["输入", "abcacfrar"], ["期望", "4"], ["代表子串", "acfr"], ["覆盖", "多次回退"]] },
-  { label: "重复在后", fields: [["输入", "acfrarabc"], ["期望", "4"], ["代表子串", "acfr / rabc"], ["覆盖", "最优在两端"]] },
-  { label: "错位重复", fields: [["输入", "arabcacfr"], ["期望", "4"], ["代表子串", "acfr"], ["覆盖", "状态重建"]] },
-  { label: "全相同", fields: [["输入", "aaaa"], ["期望", "1"], ["窗口", "任一a"], ["覆盖", "连续重复"]] },
-  { label: "全不同", fields: [["输入", "abcdefg"], ["期望", "7"], ["窗口", "全串"], ["覆盖", "只增长"]] },
-  { label: "分段重复", fields: [["输入", "aaabbbccc"], ["期望", "2"], ["代表子串", "ab / bc"], ["覆盖", "跨段边界"]] },
-  { label: "回文形", fields: [["输入", "abcdcba"], ["期望", "4"], ["代表子串", "abcd / dcba"], ["覆盖", "中心重复"]] },
-  { label: "边界旧字符", fields: [["输入", "abcdaef"], ["期望", "6"], ["代表子串", "bcdaef"], ["覆盖", "距离等于窗口"]] },
-  { label: "单字符", fields: [["输入", "a"], ["期望", "1"], ["窗口", "a"], ["覆盖", "最小非空"]] },
-  { label: "空字符串", fields: [["输入", "空串"], ["期望", "0"], ["循环", "不进入"], ["覆盖", "空边界"]] },
-] as const;
-
-export function LongestSubstringTraceLab() {
-  const [cursor, setCursor] = useState(trace.length - 1);
-  const current = trace[cursor];
-
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-9 gap-1.5">
-          {trace.map((item, index) => (
-            <button
-              key={item.index}
-              type="button"
-              onClick={() => setCursor(index)}
-              aria-label={"查看下标" + item.index + "字符" + item.char}
-              aria-pressed={cursor === index}
-              className={"flex h-12 items-center justify-center border text-base font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}
-            >
-              {item.char}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">上次位置</div><div className="mt-1 font-semibold text-primary">{current.previous}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">距离</div><div className="mt-1 font-semibold text-primary">{current.distance}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">当前长度</div><div className="mt-1 font-semibold text-primary">{current.before} → {current.after}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">历史最大</div><div className="mt-1 font-semibold text-success">{current.best}</div></div>
-        </div>
-        <div className="mt-3 border border-border bg-background p-3 text-sm text-secondary">
-          当前无重复后缀：<strong className="text-primary">{current.window}</strong>。{current.branch}
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        点击abcacfrar中的字符，观察curLength如何由上次位置和当前后缀共同决定。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function DuplicateDecisionDiagram() {
   const branches = [
     { condition: "从未出现", example: "prev = -1（如 f）", result: "curLength + 1", meaning: "不会制造重复", color: "var(--success)" },
@@ -165,8 +99,4 @@ export function LowercaseAlphabetContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function LongestSubstringOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者main实际执行的10组输入；蛮力法和动态规划法都与同一期望值比较。" />;
 }

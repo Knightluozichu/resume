@@ -1,42 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const visits = [
-  { value: 5, rank: 1, remaining: 4, action: "k 从 4 减到 3" },
-  { value: 6, rank: 2, remaining: 3, action: "k 从 3 减到 2" },
-  { value: 7, rank: 3, remaining: 2, action: "k 从 2 减到 1" },
-  { value: 8, rank: 4, remaining: 1, action: "k 等于 1，返回节点 8" },
-  { value: 9, rank: 5, remaining: 0, action: "目标已找到，不再访问" },
-  { value: 10, rank: 6, remaining: 0, action: "目标已找到，不再访问" },
-  { value: 11, rank: 7, remaining: 0, action: "目标已找到，不再访问" },
-] as const;
-
-const officialCases = [
-  {
-    label: "完整平衡树 A",
-    fields: [["节点", "5,6,7,8,9,10,11"], ["k=1..7", "依次返回 5..11"], ["非法", "k=0 / 8 返回空"], ["断言数", "9"]],
-  },
-  {
-    label: "纯左链 B",
-    fields: [["根到叶", "5,4,3,2,1"], ["中序", "1,2,3,4,5"], ["非法", "k=0 / 6 返回空"], ["断言数", "7"]],
-  },
-  {
-    label: "纯右链 C",
-    fields: [["根到叶", "1,2,3,4,5"], ["中序", "1,2,3,4,5"], ["非法", "k=0 / 6 返回空"], ["断言数", "7"]],
-  },
-  {
-    label: "单节点 D",
-    fields: [["节点", "1"], ["k=1", "返回 1"], ["非法", "k=0 / 2 返回空"], ["断言数", "3"]],
-  },
-  {
-    label: "空树 E",
-    fields: [["根", "nullptr"], ["k=0", "返回空"], ["k=1", "返回空"], ["断言数", "2"]],
-  },
-] as const;
-
 export function KthNodeBstOrderDiagram() {
   const order = [5, 6, 7, 8, 9, 10, 11];
   const N = ({ x, y, label, hot = false }: { x: number; y: number; label: number; hot?: boolean }) => (
@@ -93,50 +57,6 @@ export function KthNodeBstOrderDiagram() {
     </figure>
   );
 }
-
-export function KthNodeTraversalLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = visits[cursor];
-  const found = state.rank === 4;
-  const skipped = state.rank > 4;
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-7 gap-2">
-          {visits.map((item, index) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setCursor(index)}
-              aria-pressed={cursor === index}
-              className={
-                "h-12 border text-sm font-semibold " +
-                (cursor === index
-                  ? "border-accent bg-accent/15 text-accent"
-                  : index > 3
-                    ? "border-border bg-muted/10 text-muted"
-                    : "border-border bg-background text-secondary")
-              }
-            >
-              {item.value}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">中序排名</div><div className="mt-1 font-semibold text-primary">{state.rank}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">节点值</div><div className="mt-1 font-semibold text-primary">{state.value}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">访问前 k</div><div className="mt-1 font-semibold text-primary">{state.remaining}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">状态</div><div className={"mt-1 font-semibold " + (found ? "text-success" : skipped ? "text-muted" : "text-accent")}>{found ? "命中" : skipped ? "已剪枝" : "继续"}</div></div>
-        </div>
-        <p className="mb-0 mt-3 border-l-4 border-accent bg-background p-3 text-sm text-secondary">{state.action}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        以 k=4 为例，访问到节点 8 时命中；9、10、11 不再递归访问。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function KthNodeCounterFlowDiagram() {
   const phases = [
     ["递归左子树", "先取得更小节点", "target 可能被左侧设置"],
@@ -185,14 +105,5 @@ export function KthNodeContractMap() {
         题面“第 k 大”与源码升序计数不一致；本表按可执行代码和断言定义行为。
       </figcaption>
     </figure>
-  );
-}
-
-export function KthNodeOfficialCaseLab() {
-  return (
-    <CodingInterviewLab
-      cases={officialCases}
-      caption="作者按 5 种树形执行 28 个断言：完整树、两种单链、单节点与空树，并覆盖 k=0 和越界。"
-    />
   );
 }

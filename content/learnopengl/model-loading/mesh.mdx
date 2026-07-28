@@ -10,12 +10,13 @@ sourceUrl: https://learnopengl.com/Model-Loading/Mesh
 draft: false
 ---
 
-import {
-  MeshDataLayoutDiagram,
-  MeshLifecycleDiagram,
-  MeshSetupStagesDiagram,
-  MeshTextureBindingDiagram,
-} from "@/components/mdx/learnopengl/diagrams/mesh";
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型章（HEL-60，M5 模型加载篇第 2 篇）：主题是 Mesh——把「一组顶点 + 一组索引 + 一组纹理」打包成一个能自己 setupMesh（建好 VAO/VBO/EBO）、能自己 Draw（按命名约定绑纹理后 glDrawElements）的 C++ 类。承接上一章（用 Assimp 把模型文件读进内存，得到一堆 aiMesh）、启下一章（Model 类把多个 Mesh 串起来）。C 型：代码对照为重心（§6 覆盖 Vertex/Texture 结构体、Mesh 成员+构造、setupMesh 用 offsetof 设顶点属性指针、Draw 按 type 拼 uniform 名绑纹理单元再 glDrawElements，≥80% 关键代码），math:false 整节省略。本篇 Mesh 类是 C++（OpenGL），无 WebGL2 等价物——不用 CodeTabs 双栏、不硬造 WebGL 端，§6 用带逐段讲解的 C++ 代码块覆盖。两个静态 SVG 图示：MeshDataLayoutDiagram（offsetof/stride 怎么对应结构体字段）、MeshTextureBindingDiagram（命名约定怎么自动绑纹理）。demo:false（无交互 Demo，C 型实战重代码而非可调 uniform）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -43,7 +44,6 @@ import {
 
 这一章就是造这本说明书——一个叫「网格」的小盒子。每个零件装进一个盒子，盒子自带「我怎么进显存」和「我怎么画自己」两套本领。配齐了，主程序只要对每个盒子喊一声「画」，整个模型就出来了；配不齐，你就得为每个零件手写一遍重复又易错的摆数据代码。
 
-<MeshLifecycleDiagram />
 
 {/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 §6 代码；顺序 是什么 → 为什么 → 在管线/模型组织中的位置。新核心概念克制（Mesh / Vertex 结构体 / Texture 结构体 / offsetof+interleaved / 命名约定，承接已学的 VAO/VBO/EBO、纹理单元，≤5 个核心新概念）。 */}
 
@@ -57,7 +57,6 @@ import {
 
 一个顶点不止有位置，还带着法线（用于光照）和纹理坐标（用于采样贴图）。我们用一个结构体把它们打包：
 
-<MeshDataLayoutDiagram />
 
 关键在于这几样在内存里是 <Term def="把一个顶点的各个属性（位置、法线、纹理坐标）紧挨着连续存放，而不是把所有位置存一片、所有法线存另一片。一个顶点的数据是一个连续的小块，下一个顶点紧跟其后。好处是上传一个 VBO 就够了，GPU 读一个顶点时数据就在一起。">interleaved</Term>（交错排列）的：一个顶点的位置、法线、纹理坐标紧挨着，下一个顶点紧跟其后，全挤在一条连续内存上。这样只用一个缓冲就能装下所有顶点。代价是：告诉 GPU「位置从哪个字节开始、法线从哪个字节开始」时，得算出每个属性在结构体里的**字节偏移**。手算很容易错（位置占 12 字节、法线又占 12……），所以我们交给 `offsetof` 去算——这是 §6 的重点。
 
@@ -81,21 +80,17 @@ import {
   <Step title="上传连续的顶点与索引字节">
     先生成 VAO/VBO/EBO，再用 `vector.data()` 与实际字节数上传。空容器应传 `nullptr` 或 `.data()`，不能解引用不存在的第 0 个元素。
 
-    <MeshSetupStagesDiagram step={1} />
   </Step>
   <Step title="让 VAO 记录真实结构体布局">
     在 VAO 绑定期间绑定 EBO，并用 `sizeof(Vertex)` 与 `offsetof` 描述属性。不要假设 GLM 类型在所有编译配置下都没有 padding。
 
-    <MeshSetupStagesDiagram step={2} />
   </Step>
   <Step title="绑定纹理单元并按索引绘制">
     激活 shader，检查纹理单元容量，按 type 拼 sampler 名，最后绑定 VAO 调 `glDrawElements`。调用者与 Mesh 必须明确谁负责恢复 OpenGL 状态。
 
-    <MeshSetupStagesDiagram step={3} />
   </Step>
 </Stepper>
 
-<MeshSetupStagesDiagram />
 
 ### 第一步：Vertex 结构体
 
@@ -242,7 +237,6 @@ void Mesh::setupMesh() {
 
 第二段核心代码。难点不在画三角形（那只是最后一行 `glDrawElements`），而在**画之前怎么把这堆纹理接到着色器的采样器上**。我们靠一套<Term def="网格的纹理 type 和着色器里 sampler 的 uniform 名遵守同一套起名规则：漫反射图叫 texture_diffuse 加序号（texture_diffuse1、texture_diffuse2…），镜面图叫 texture_specular 加序号。Draw 按这套规则机械地拼出名字、把第 i 张纹理接到同名 sampler，不必为每个网格手写绑定。">采样器命名约定（texture_diffuseN）</Term>来自动化：
 
-<MeshTextureBindingDiagram />
 
 ```cpp
 void Mesh::Draw(Shader &shader) {

@@ -1,28 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const postorderStates = [
-  { node: "叶 4", left: 0, right: 0, depth: 1, balanced: true, note: "两个空孩子平衡，叶节点深度为 1" },
-  { node: "叶 7", left: 0, right: 0, depth: 1, balanced: true, note: "返回平衡与深度 1" },
-  { node: "节点 5", left: 1, right: 0, depth: 2, balanced: true, note: "深度差 1，仍然平衡" },
-  { node: "节点 2", left: 1, right: 2, depth: 3, balanced: true, note: "两个孩子先完成，再汇总当前节点" },
-  { node: "节点 3", left: 0, right: 1, depth: 2, balanced: true, note: "深度差 1，返回深度 2" },
-  { node: "根 1", left: 3, right: 2, depth: 4, balanced: true, note: "根深度差 1，整棵树平衡" },
-] as const;
-
-const officialCases = [
-  { label: "完全二叉树", fields: [["节点", "1 到 7"], ["每层", "全部填满"], ["期望", "true"], ["两方案", "均通过"]] },
-  { label: "非完全但平衡", fields: [["最长深度", "4"], ["根左右深度", "3 / 2"], ["期望", "true"], ["关键", "完全不等于平衡"]] },
-  { label: "局部失衡", fields: [["节点 1", "左深 3 / 右深 1"], ["差值", "2"], ["期望", "false"], ["传播", "向根返回失败"]] },
-  { label: "纯左链", fields: [["节点", "1→2→3→4→5"], ["根差值", "4"], ["期望", "false"], ["方向", "左"]] },
-  { label: "纯右链", fields: [["节点", "1→2→3→4→5"], ["根差值", "-4"], ["期望", "false"], ["方向", "右"]] },
-  { label: "单节点", fields: [["左右深度", "0 / 0"], ["自身深度", "1"], ["期望", "true"], ["最小非空", "覆盖"]] },
-  { label: "空树", fields: [["根", "nullptr"], ["深度", "0"], ["期望", "true"], ["基例", "覆盖"]] },
-] as const;
-
 export function BalancedBinaryTreeLocalRuleDiagram() {
   const cases = [
     { title: "完全树", left: 2, right: 2, diff: 0, ok: true, x: 150 },
@@ -78,32 +56,6 @@ export function BalancedBinaryTreeLocalRuleDiagram() {
     </figure>
   );
 }
-
-export function BalancedBinaryTreePostorderLab() {
-  const [cursor, setCursor] = useState(0);
-  const state = postorderStates[cursor];
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {postorderStates.map((item, index) => <button key={item.node} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"h-11 border text-xs font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{item.node}</button>)}
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-5">
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">节点</div><div className="mt-1 font-semibold text-primary">{state.node}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">左深度</div><div className="mt-1 font-semibold text-primary">{state.left}</div></div>
-          <div className="border border-border bg-background p-3"><div className="text-xs text-muted">右深度</div><div className="mt-1 font-semibold text-primary">{state.right}</div></div>
-          <div className="border border-success bg-success/10 p-3"><div className="text-xs text-muted">自身深度</div><div className="mt-1 font-semibold text-success">{state.depth}</div></div>
-          <div className="border border-success bg-success/10 p-3"><div className="text-xs text-muted">平衡</div><div className="mt-1 font-semibold text-success">{state.balanced ? "是" : "否"}</div></div>
-        </div>
-        <p className="mb-0 mt-3 border-l-4 border-accent bg-background p-3 text-sm text-secondary">{state.note}</p>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        后序遍历先得到左右深度与状态，再一次性计算当前节点结果。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function BalancedBinaryTreeWorkDiagram() {
   const rows = [
     ["方案一", "当前节点先各求一次左右深度", "再递归检查两个孩子", "同一子树可能被反复求深度"],
@@ -137,8 +89,4 @@ export function BalancedBinaryTreeContractMap() {
       </figcaption>
     </figure>
   );
-}
-
-export function BalancedBinaryTreeOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="作者用 7 种树形同时检验两套方案，共 14 次结果核对。" />;
 }

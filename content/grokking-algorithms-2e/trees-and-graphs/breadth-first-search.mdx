@@ -10,34 +10,24 @@ sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition
 draft: false
 ---
 
-import { GraphDirectionDiagram, BfsShortestPathDiagram, MangoSellerQueueLab, TopologicalSortLab } from "@/components/mdx/grokking-algorithms-2e/diagrams/breadth-first-search";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GraphDirectionDiagram, BfsShortestPathDiagram } from "@/components/mdx/grokking-algorithms-2e/diagrams/breadth-first-search";
 
-<Objectives>
-
-- 能解释节点、边、邻接关系以及有向图与无向图的区别
-- 能用散列表邻接表实现图，并绘制BFS队列的入队与出队轨迹
-- 能证明BFS为何回答路径是否存在并找到无权图的最少边数路径
-- 能实现已搜索集合和父节点记录，处理环、重复发现与路径重建
-- 能分析BFS的O(V+E)复杂度，并实现有向无环图的拓扑排序
-
-</Objectives>
 
 ## 从最少换乘路线开始
 
 先预测：从Twin Peaks乘公交到Golden Gate Bridge，目标是换乘次数最少。你会先检查所有“一班车直达”的站点，再检查“两班车可达”的站点，还是沿任意一条线路一路坐到底？
 
-<Term def="由节点和连接节点的边构成，用于表达对象及其关系的数据结构。">图</Term>不是坐标曲线。图由节点和边组成：<Term def="图中表示对象、状态或位置的基本单元。">节点</Term>可以是车站、人物或单词状态，<Term def="连接两个节点并表示关系或可达动作的结构。">边</Term>可以是公交线路、社交关系或一次编辑。
+不是坐标曲线。图由节点和边组成：可以是车站、人物或单词状态，可以是公交线路、社交关系或一次编辑。
 
-<Term def="一个节点直接连接到哪些其他节点的关系。">邻接关系</Term>表示连接。公交换乘、拼写纠正、社交网络、网页爬取都能先建模为图，再根据“最短”究竟指边数、距离还是费用选择算法。
+表示连接。公交换乘、拼写纠正、社交网络、网页爬取都能先建模为图，再根据“最短”究竟指边数、距离还是费用选择算法。
 
 <GraphDirectionDiagram />
 
 ## 有向图、无向图与邻接表
 
-<Term def="每条边带方向，只允许从起点沿箭头到终点的图。">有向图</Term>中的“you关注alice”不自动推出“alice关注you”。<Term def="每条边可双向通行，连接关系对两个端点对称的图。">无向图</Term>中的“车站A与B相连”意味着两边都能到达；实现时通常在两个节点的邻居列表里都保存对方。
+中的“you关注alice”不自动推出“alice关注you”。中的“车站A与B相连”意味着两边都能到达；实现时通常在两个节点的邻居列表里都保存对方。
 
-<Term def="为每个节点保存直接邻居集合的图表示。">邻接表</Term>适合稀疏图。用散列表表示邻接表，就是把节点名称映射到邻居列表：
+适合稀疏图。用散列表表示邻接表，就是把节点名称映射到邻居列表：
 
 ```python
 graph: dict[str, list[str]] = {
@@ -56,52 +46,35 @@ assert graph["you"] == ["alice", "bob", "claire"]
 
 这个图是有向的：字典中保存 `you → alice` 不会自动添加 `alice → you`。节点即使没有出边，也显式映射到空列表，能让遍历契约更清楚；实现也可以用 `graph.get(node, [])` 兼容缺省叶节点。
 
-<Stepper>
-  <Step title="列出节点"><GraphDirectionDiagram />先确定人物、车站或状态是什么，不要把属性误当成独立节点。</Step>
-  <Step title="定义边的语义">说明边表示关注、通行、依赖还是一步变换，并判断关系是否有方向。</Step>
-  <Step title="写成邻接表">为每个节点列出直接邻居；无向边在两个端点中各保存一次。</Step>
-  <Step title="检查孤立与叶节点">确保无邻居节点仍能被表示，避免遍历访问缺失键时中断。</Step>
-</Stepper>
-
-<Callout type="trap" title="一条关系在邻接表里出现一次，所以它一定是无向边">
-出现次数是实现细节，方向来自业务语义。无向图通常把一条边写成两个邻接项；有向图只记录箭头方向。建模错误会改变可达性和最短路径答案。
-</Callout>
 
 ## BFS回答两个问题
 
-<Term def="使用先进先出队列，从起点按边数逐层探索图的算法。">广度优先搜索</Term>回答：
+回答：
 
 1. 从起点到目标是否存在路径？
 2. 若存在，在每条边成本相同的图上，哪条路径经过的边最少？
 
 广度优先搜索回答是否存在路径，只要搜索结束前命中目标即可。广度优先搜索寻找无权图最短路径，则依赖更强的层次不变量：距离0的起点先处理，所有距离1节点先于距离2节点，所有距离2节点先于距离3节点。
 
-<Term def="由若干相邻边首尾相接形成的节点序列。">路径</Term>描述怎样从起点走到终点；<Term def="在本章无权模型中经过边数最少的可达路径。">最短路径</Term>不等同于公里数、时间或费用最低。若边权不同，BFS首次发现的路径只保证边数少，应改用适合权重条件的算法。
+描述怎样从起点走到终点；不等同于公里数、时间或费用最低。若边权不同，BFS首次发现的路径只保证边数少，应改用适合权重条件的算法。
 
 <BfsShortestPathDiagram />
 
 ## 队列保证先近后远
 
-<Term def="只能从尾部加入、从头部移除的先进先出容器。">队列</Term>是BFS的顺序保证。队列是先进先出：先发现的节点先处理。把节点加入队尾叫<Term def="把元素添加到队列尾部。">入队</Term>，移除队首叫<Term def="从队列头部取出最早加入的元素。">出队</Term>。
+是BFS的顺序保证。队列是先进先出：先发现的节点先处理。把节点加入队尾叫，移除队首叫。
 
 邻居按发现顺序进入队列。起点的一度邻居先全部入队，它们必然排在任何二度邻居之前，因此算法先检查一度关系再检查二度关系。即使同层内部顺序随邻接列表顺序变化，层与层的距离顺序不会被打乱。
 
-<MangoSellerQueueLab />
 
 原章的芒果销售商示例把“是否为销售商”写成一个谓词。BFS从 `you` 的一度关系开始，若无人命中，再检查二度关系。示例中用名字是否以字母m结尾只是教学规则；真实程序应使用可靠业务字段。
 
-<Stepper>
-  <Step title="起点进入队列"><BfsShortestPathDiagram />把距离0节点入队并立即标记已发现，初始化父节点为空。</Step>
-  <Step title="队首出队并检查"><MangoSellerQueueLab />只处理最早发现的节点；若目标谓词命中，可立即停止。</Step>
-  <Step title="发现新邻居">按邻接表顺序扫描，未发现邻居立即标记、记录父节点并加入队尾。</Step>
-  <Step title="重复至命中或为空">命中时沿父节点重建路径；队列空仍未命中表示起点不可达目标。</Step>
-</Stepper>
 
 ## 实现芒果销售商搜索与路径重建
 
-<Term def="记录已经发现或处理过的节点，避免重复入队和环路的集合。">已搜索集合</Term>必须在节点**入队时**更新。若等到出队才标记，同一节点可能被多个前驱重复加入队列，占用额外时间和空间。
+必须在节点**入队时**更新。若等到出队才标记，同一节点可能被多个前驱重复加入队列，占用额外时间和空间。
 
-<Term def="记录节点第一次由哪个前驱发现，用于从终点逆向恢复最短路径的映射。">父节点映射</Term>只在第一次发现节点时写入。因为BFS按距离递增发现节点，这个第一次前驱对应一条最少边数路径。
+只在第一次发现节点时写入。因为BFS按距离递增发现节点，这个第一次前驱对应一条最少边数路径。
 
 ```python
 from collections import deque
@@ -143,9 +116,6 @@ assert result == ("thom", ["you", "claire", "thom"])
 
 已搜索集合避免重复处理，也就是已搜索集合防止环导致无限循环。若 `peggy` 同时是 `alice` 和 `bob` 的邻居，她只会在第一次发现时入队；后来的边仍会被检查，但不会制造第二份队列条目。
 
-<Callout type="trap" title="节点出队后再加入已搜索集合也一样">
-在菱形图中，两个同层父节点可能先后发现同一子节点。若发现时不标记，子节点会重复入队；更密集的图会放大队列。正确时机是首次入队之前或同时。
-</Callout>
 
 ## 为什么第一次发现就是最少边数
 
@@ -163,11 +133,10 @@ BFS维护不变量：队列中的节点按非递减距离排列。处理距离 `
 
 ## 拓扑排序：让依赖先于被依赖者
 
-第2版还引入<Term def="把有向无环图节点排成线性顺序，使每条边的起点都出现在终点之前。">拓扑排序</Term>。它不是按数值大小排序，而是暴露依赖关系。例如“需求→设计→实现→测试”要求前置工作先出现。
+第2版还引入。它不是按数值大小排序，而是暴露依赖关系。例如“需求→设计→实现→测试”要求前置工作先出现。
 
-<Term def="没有有向环的有向图，简称DAG。">有向无环图</Term>才存在完整拓扑序。Kahn算法统计每个节点的<Term def="指向某节点的有向边数量。">入度</Term>，把所有入度为0的节点加入队列；每取出一个节点，就删除它的出边并降低后继入度。新变成0的节点继续入队。
+才存在完整拓扑序。Kahn算法统计每个节点的，把所有入度为0的节点加入队列；每取出一个节点，就删除它的出边并降低后继入度。新变成0的节点继续入队。
 
-<TopologicalSortLab />
 
 ```python
 from collections import deque
@@ -203,16 +172,6 @@ def topological_sort(graph: Mapping[str, Sequence[str]]) -> list[str]:
 
 Kahn算法同样逐节点、逐边处理：初始化入度扫描全部邻接项，之后每条边只在前驱输出时再访问一次，所以时间也是 `O(V+E)`，入度表、队列与输出占 `O(V)` 附加空间。它和BFS都使用队列，但排序候选由“入度变为0”决定，而BFS候选由“从当前层首次发现”决定，不能因为容器相同就把两个算法混为一谈。
 
-<Stepper>
-  <Step title="统计所有节点入度"><TopologicalSortLab />把只出现在邻居列表中的叶节点也纳入，逐边累加终点入度。</Step>
-  <Step title="入度为零者入队">这些节点没有未完成前置依赖，可以作为当前合法候选。</Step>
-  <Step title="输出并移除出边">每输出一个节点就降低后继入度，新变为零的后继加入队列。</Step>
-  <Step title="比较输出数量">全部输出即得到拓扑序；若仍有节点，报告有向环而不是返回残缺顺序。</Step>
-</Stepper>
-
-<Callout type="trap" title="任何有向图都能拓扑排序">
-有向环表示一组相互等待的依赖，没有节点能先开始。拓扑排序要求DAG；检测到输出数量不足时必须显式报告环。
-</Callout>
 
 ## 原章概念回查
 
@@ -239,50 +198,7 @@ BFS时间复杂度O(V+E)，因为每个可达节点至多入队一次，每条�
 11. 拓扑排序让每条依赖边的起点先于终点。
 12. 只有有向无环图存在覆盖全部节点的拓扑序。
 
-<Exercises>
-
-**问题 1：为什么BFS要在入队时而不是出队时标记节点？**
-
-<Answer>多个已出队父节点可能在同一轮发现同一邻居。入队时标记能让后续父节点跳过它，保证每个节点只入队一次；出队时才标记会制造重复队列项和冗余处理。</Answer>
-
-**问题 2：BFS找到经过2条边的路线和经过3条边但总路程更短的路线，会返回哪条？**
-
-<Answer>普通BFS返回最先发现的2边路线，因为本章“最短”定义为边数最少。若边表示不同距离或费用，应使用满足权重条件的最短路径算法，不能把BFS结果解释为总路程最低。</Answer>
-
-**问题 3：无向图有V个节点、E条边，邻接表保存2E个邻接项，为什么仍写O(V+E)？**
-
-<Answer>每条无向边只带来两个方向的常数倍存储与检查，复杂度忽略固定系数2，所以节点初始化与邻接扫描总计仍为 `O(V+E)`。</Answer>
-
-**问题 4：Kahn拓扑排序输出数量少于节点总数说明什么？**
-
-<Answer>说明剩余子图中没有入度为0的节点，至少存在一个有向环；环中节点彼此等待，无法形成满足全部依赖边的完整线性顺序。算法应报告错误而非返回残缺结果。</Answer>
-
-</Exercises>
 
 ## 名词解释
 
-<Glossary>
-  <GlossaryItem term="图">由节点和边组成、用于表达对象关系的数据结构。</GlossaryItem>
-  <GlossaryItem term="节点">图中表示对象、位置或状态的单元。</GlossaryItem>
-  <GlossaryItem term="边">连接节点并表示关系或可达动作的结构。</GlossaryItem>
-  <GlossaryItem term="邻接关系">一个节点与哪些节点直接相连的关系。</GlossaryItem>
-  <GlossaryItem term="有向图">边带方向、只能沿箭头通行的图。</GlossaryItem>
-  <GlossaryItem term="无向图">边可双向通行、关系对端点对称的图。</GlossaryItem>
-  <GlossaryItem term="邻接表">为每个节点保存直接邻居集合的图表示。</GlossaryItem>
-  <GlossaryItem term="广度优先搜索">用先进先出队列从起点逐层探索图的算法。</GlossaryItem>
-  <GlossaryItem term="路径">由相邻边首尾连接形成的节点序列。</GlossaryItem>
-  <GlossaryItem term="最短路径">本章中经过边数最少的可达路径。</GlossaryItem>
-  <GlossaryItem term="队列">从尾部加入、从头部移除的先进先出容器。</GlossaryItem>
-  <GlossaryItem term="入队">把元素添加到队列尾部。</GlossaryItem>
-  <GlossaryItem term="出队">从队首取出最早加入的元素。</GlossaryItem>
-  <GlossaryItem term="已搜索集合">记录已发现节点并防止重复入队的集合。</GlossaryItem>
-  <GlossaryItem term="父节点映射">记录首次发现前驱并用于重建路径的映射。</GlossaryItem>
-  <GlossaryItem term="拓扑排序">让DAG每条边起点先于终点的线性排列。</GlossaryItem>
-  <GlossaryItem term="有向无环图">不包含有向环的有向图。</GlossaryItem>
-  <GlossaryItem term="入度">指向某节点的有向边数量。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 6: Breadth-first search"
-  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-6"
-/>

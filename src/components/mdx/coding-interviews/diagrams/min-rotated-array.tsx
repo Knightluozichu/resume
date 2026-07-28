@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const traces = [
   {
     label: "[3,4,5,1,2]",
@@ -82,8 +80,4 @@ export function DuplicateRotationAmbiguityDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">重复值不会破坏正确性，但会让最坏时间从对数退化为线性。</figcaption>
     </figure>
   );
-}
-
-export function RotatedMinimumTraceLab() {
-  return <CodingInterviewLab cases={traces} caption="切换作者官方代表输入，观察二分收缩、退化与边界出口。" />;
 }

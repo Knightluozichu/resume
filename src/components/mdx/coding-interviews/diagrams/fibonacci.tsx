@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const methodCases = [
   {
     label: "朴素递归",
@@ -84,11 +82,6 @@ export function FibonacciRollingStateMap() {
     </figure>
   );
 }
-
-export function FibonacciMethodLab() {
-  return <CodingInterviewLab cases={methodCases} caption="比较作者三种实现的状态、时间、空间与数值边界。" />;
-}
-
 export function FrogStepCorrespondenceDiagram() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">

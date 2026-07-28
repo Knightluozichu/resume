@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const cases = [
   {
     label: "普通与小数",
@@ -90,8 +88,4 @@ export function DecimalExponentFlowDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">阶段内失败或最终还有残留字符，都会拒绝整个输入。</figcaption>
     </figure>
   );
-}
-
-export function NumericOfficialCaseLab() {
-  return <CodingInterviewLab cases={cases} caption="切换作者21组测试中的代表输入，核对小数、指数、符号、杂质与空边界。" />;
 }

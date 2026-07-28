@@ -7,35 +7,9 @@ description: "以 Khronos Vulkan Guide 和 Vulkan 1.4 教程为基线，从能�
 demo: true
 math: false
 sourceUrl: "https://docs.vulkan.org/guide/latest/"
-draft: true
+draft: false
 ---
 
-import {
-  VkgLearningMapDiagram,
-  VkgSubmissionChainDiagram,
-} from "@/components/mdx/vulkan-guide/diagrams/vkg-learning-map";
-import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
-
-<Objectives>
-
-- 能解释 Vulkan 的显式控制如何转化为能力、内存、资源状态、命令和同步责任
-- 能描述从 loader/instance 到 device、swapchain、dynamic rendering、submit2 和 present 的依赖链
-- 能比较 binary semaphore、timeline semaphore 与 fence 在 WSI、GPU 和 CPU 同步中的边界
-- 能实现不使用每帧 queueWaitIdle 的现代首帧骨架，并列出验证与回归证据
-
-</Objectives>
 
 ## 直觉引入
 
@@ -56,7 +30,7 @@ Khronos 现行 Vulkan Tutorial 以 Vulkan 1.4、dynamic rendering、timeline sem
 
 ## 显式 API 的五类责任
 
-<Term def="把过去由驱动推断的设备能力、内存、资源状态、命令和同步决策交给应用声明的 API 模型">显式 API</Term>至少包含五类责任：
+至少包含五类责任：
 
 1. **能力**：实例版本、设备 feature、extension、format、limit 和 queue family 都要先查询再启用。
 2. **内存**：buffer/image 创建与 memory allocation/binding 分开，应用选择 memory type、对齐和 suballocation。
@@ -68,7 +42,7 @@ Vulkan 的对象多，不是为了增加仪式，而是把生命周期和并行�
 
 ## 能力协商先于设备创建
 
-<Term def="查询版本、属性、feature、extension、format 和 queue family，再只启用满足路径需求的集合">能力协商</Term>把“这块 GPU 大概支持”变成结构化契约。
+把“这块 GPU 大概支持”变成结构化契约。
 
 ```cpp
 uint32_t loaderVersion = VK_API_VERSION_1_0;
@@ -103,7 +77,6 @@ VK_CHECK(vkCreateInstance(&instanceInfo, nullptr, &instance));
 
 ## 第一帧不是固定五步
 
-<VkgLearningMapDiagram />
 
 一个可呈现三角形通常需要：
 
@@ -111,7 +84,7 @@ VK_CHECK(vkCreateInstance(&instanceInfo, nullptr, &instance));
 2. 物理设备能力合同、graphics/present queue family 和逻辑设备；
 3. swapchain format/present mode/extent/image views；
 4. memory allocator、vertex/index/uniform buffer 与 image；
-5. shader 编译为<Term def="Vulkan shader 模块消费的标准中间表示，可由 GLSL、HLSL、Slang 等前端产生">SPIR-V</Term>，建立 descriptor/pipeline layout；
+5. shader 编译为，建立 descriptor/pipeline layout；
 6. graphics pipeline 与 dynamic state；
 7. command pool/buffer 和每帧资源；
 8. layout/access barrier、dynamic rendering、bind/draw 命令；
@@ -137,7 +110,7 @@ VK_CHECK(vkCreateInstance(&instanceInfo, nullptr, &instance));
 
 ## 资源状态是同步的一部分
 
-<Term def="某个 buffer/image 子资源当前可由哪些队列、阶段和访问类型使用，以及 image 所处 layout 的组合">资源状态</Term>不能只用 image layout 表示。一个 barrier 至少回答：
+不能只用 image layout 表示。一个 barrier 至少回答：
 
 - 前一个访问在哪些 pipeline stage、以何种 access 发生；
 - 后一个访问在哪些 stage、以何种 access 发生；
@@ -209,9 +182,8 @@ dynamic rendering 省掉 VkRenderPass/VkFramebuffer 对象，不省同步。附�
 
 ## Acquire、Submit2 与 Present
 
-<VkgSubmissionChainDiagram />
 
-<Term def="建立前后操作的执行顺序、内存可用性与可见性，并约束资源何时可安全复用的关系">同步依赖</Term>不能只记“fence 给 CPU、semaphore 给 GPU”：
+不能只记“fence 给 CPU、semaphore 给 GPU”：
 
 - binary semaphore 只有未 signal/signal 的一次性状态，WSI acquire/present 使用它；
 - timeline semaphore 有单调递增值，适合应用内部跨提交、跨队列进度；
@@ -272,77 +244,12 @@ renderFinished 按 swapchain image 管理能避免在呈现引擎尚未消费 wa
 
 先预测：validation layer 全绿、三角形也出现，是否足以证明同步正确且性能合理？
 
-<Stepper>
-<Step title="第一步：建立能力与资源契约">
-<VkgStepFlowDiagram
-  caption="第 1 步：只有查询、启用与格式探针都成立，设备和资源创建才有依据。"
-  stage={1}
-  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
-/>
-
-记录 loader/instance/device 版本、feature/extension/format/limit、queue family 和内存类型；创建资源时保存 owner queue、subresource 和最后状态。
-</Step>
-<Step title="第二步：录制准确依赖">
-<VkgStepFlowDiagram
-  caption="第 2 步：barrier2、dynamic rendering、pipeline/descriptor 和 draw 共同描述 GPU 工作。"
-  stage={2}
-  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
-/>
-
-对每个读写声明 producer/consumer stage、access 和 layout；beginRendering 的 attachment format 与 pipeline 创建信息一致；命令缓冲生命周期属于对应 pool/thread。
-</Step>
-<Step title="第三步：验证正确性与并行度">
-<VkgStepFlowDiagram
-  caption="第 3 步：validation、固定像素、时间线进度和 CPU/GPU 时间共同证明首帧。"
-  stage={3}
-  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
-/>
-
-全绿 validation 只证明已覆盖规则未报错；还要测试 resize/out-of-date、资源复用、跨帧图像、device lost 路径，并确认没有 queueWaitIdle 造成 GPU 空洞。
-</Step>
-</Stepper>
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 每帧 acquire、submit 后调用 vkQueueWaitIdle，画面正确但 CPU/GPU 无法重叠。
-**原因 →** 用全队列空闲代替 per-frame 生命周期同步，把所有 frames-in-flight 串行化。
-**修法 →** 为 frame slot 使用 fence/timeline，WSI 使用 binary semaphore；只等待即将复用的 slot，teardown/诊断才使用 waitIdle。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 使用 vkCmdBeginRendering 后删除所有 render pass dependency，却出现附件读写竞争。
-**原因 →** dynamic rendering 只动态描述附件，不自动建立外部同步，也不替代 barrier。
-**修法 →** 用 synchronization2 明确前后 stage/access/layout；跨 queue 时再处理 semaphore 与 ownership transfer。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 只看 API 版本就启用 feature，vkCreateDevice 失败或后续命令触发 validation。
-**原因 →** 核心版本、extension、feature bit、format property 和 limit 是不同层证据，且查询到还必须在 pNext 中启用。
-**修法 →** 把路径需求写成命名断言，逐项查询并只启用支持集合；输出失败原因与设备报告。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1**：为什么 dynamic rendering 不能替代 synchronization2？从写 swapchain image 到 present 至少要表达哪些状态？
-
-<Answer>
-dynamic rendering 描述本次 rendering 的附件、load/store 和 render area，不建立前后命令的 execution/memory dependency。写 swapchain image 前要把实际 old layout 转到 COLOR_ATTACHMENT_OPTIMAL，目标 stage/access 覆盖颜色附件写；结束后再把颜色写同步到呈现所需状态并转 PRESENT_SRC_KHR。跨提交还要由 semaphore 建立 acquire、graphics、present 顺序。
-</Answer>
-
-**问题 2**：binary semaphore、timeline semaphore 和 fence 在一帧中分别适合什么？为什么 present wait 不能直接换成 timeline semaphore？
-
-<Answer>
-WSI 的 vkAcquireNextImageKHR signal 和 vkQueuePresentKHR wait 使用 binary semaphore；应用内部可用 timeline semaphore 的递增值表达跨提交/队列进度；fence 由 submission signal，host 等待后安全复用 frame slot 的 pool 和 CPU 数据。WSI 接口按规范接收 binary semaphore 语义，不能把 present wait 任意替换为 timeline。
-</Answer>
-
-**问题 3**：validation 全绿但 GPU 利用率低，列出三个可能仍然错误或低效的设计和对应证据。
-
-<Answer>
-可能每帧 queueWaitIdle 导致串行，可看 CPU/GPU 时间线空洞；barrier 使用 ALL_COMMANDS/MEMORY_READ_WRITE 过宽，可用同步可视化和逐步收窄比较；资源逐个 allocation 或频繁 pipeline 重建造成 CPU/内存开销，可记录 allocation/pipeline 数和帧尖峰。validation 主要检查规则正确性，不证明算法意图和性能最优。
-</Answer>
-</Exercises>
 
 ## 小结
 
@@ -352,15 +259,4 @@ WSI 的 vkAcquireNextImageKHR signal 和 vkQueuePresentKHR wait 使用 binary se
 - WSI acquire/present 使用 binary semaphore，应用进度可用 timeline，host 复用资源用 fence/timeline。
 - validation、固定图像、resize/out-of-date、资源复用和 CPU/GPU 时间共同构成首帧验收。
 
-<Glossary>
-<GlossaryItem term="显式 API">把设备能力、内存、资源状态、命令和同步决策交给应用声明的 API 模型。</GlossaryItem>
-<GlossaryItem term="能力协商">查询版本、属性、feature、extension、format 和 queue family，再启用满足路径需求的集合。</GlossaryItem>
-<GlossaryItem term="SPIR-V">Vulkan shader module 消费的标准中间表示，可由 GLSL、HLSL、Slang 等前端生成。</GlossaryItem>
-<GlossaryItem term="资源状态">buffer/image 子资源的 owner queue、pipeline stage、access 类型和 image layout 组合。</GlossaryItem>
-<GlossaryItem term="同步依赖">建立执行顺序、内存可用性/可见性，并约束资源何时可安全复用的关系。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  adaptedFrom="Khronos Vulkan Guide, Vulkan 1.4 Tutorial, and Vulkan Specification"
-  adaptedUrl="https://docs.vulkan.org/guide/latest/"
-/>

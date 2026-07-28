@@ -7,23 +7,13 @@ description: "建立Lua 5.3的chunk加载执行模型，掌握词法规则、loc
 demo: true
 math: false
 sourceUrl: "https://www.lua.org/pil/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { PilChunkExecutionLab, PilLexicalScopeLab, PilInterpreterTruthLab } from "@/components/mdx/lua-programming/diagrams/getting-started";
-
-<Objectives>
-
-- 能描述file/string/module chunk从source、compile/load到protected execution的状态与错误边界
-- 能分析identifier、comment、local block与global `_ENV`解析，复现拼写错误泄漏为全局变量的故障
-- 能设计独立解释器实验，区分nil、false、0和空字符串，并验证value拥有type而variable只保存value
-
-</Objectives>
 
 ## 从一个Chunk开始，而不是从一行立即执行开始
 
-Lua把一段可执行source称为chunk。文件、交互式输入、`load`接收的字符串以及module loader最终都要形成chunk；实现会先解析/编译成可调用函数，再执行函数体。<Term def="Source先被加载编译成函数，再由明确caller执行并观察结果或错误的两阶段责任。">chunk execution contract</Term>要求把syntax error与runtime error分开，也要求说明environment、arguments、results和error owner。
+Lua把一段可执行source称为chunk。文件、交互式输入、`load`接收的字符串以及module loader最终都要形成chunk；实现会先解析/编译成可调用函数，再执行函数体。要求把syntax error与runtime error分开，也要求说明environment、arguments、results和error owner。
 
 先预测：`load("return missing + 1")`是否立刻报错？答案是不一定。Source语法合法时`load`返回function；直到调用时才读取global `missing`并在算术处失败。相反，`load("return )")`在load阶段就返回失败。若不分阶段，错误日志只会写“脚本失败”，无法判断是source、binding还是execution。
 
@@ -46,13 +36,6 @@ assert(ok and result == "hello, Lua")
 
 File chunk由stand-alone interpreter或host读取；string chunk由`load`编译；`require`通过`package.searchers`找到loader、执行并缓存module value；function call才产生side effects和results。`dofile`近似“load file并执行”，不缓存；`loadfile`只准备function。选错API会导致重复side effect、环境泄漏或module状态不一致。
 
-<PilChunkExecutionLab />
-
-<Stepper>
-  <Step title="切换File、String、Function和Require"><PilChunkExecutionLab /></Step>
-  <Step title="画两阶段Timeline">标出source owner、chunk name、mode、environment、load result、call arguments、side effects、results和error observer。</Step>
-  <Step title="注入两类Failure">分别制造syntax error与合法但运行失败的chunk，断言日志能区分load/call并保留chunk name与traceback。</Step>
-</Stepper>
 
 Chunk可以包含definitions、statements和return values。Lua不要求每个文件声明main；file顶层本身就是function body。Host可多次调用同一compiled chunk，每次有新的local activation，但其environment/upvalues是否共享取决于创建方式。不要把source file等同于singleton object。
 
@@ -62,11 +45,11 @@ Identifier由字母、数字、下划线组成且不能以数字开头，区分�
 
 短comment从`--`到行末；long comment使用long brackets，并可用等号level处理内容中已有`]]`的情况。Long string也使用同一delimiter机制，不处理普通escape，适合嵌入配置、模板与测试fixture。Source encoding与identifier字符策略应由项目固定，不能依赖编辑器猜测。
 
-<Term def="名字在tokenization后按最近lexical local、upvalue和当前environment逐级解析的边界。">lexical name boundary</Term>提醒我们，拼写相似不是同一binding，comment/string delimiter也影响parser看到的token。静态检查与小chunk测试应覆盖shadowing、case与long-bracket level。
+提醒我们，拼写相似不是同一binding，comment/string delimiter也影响parser看到的token。静态检查与小chunk测试应覆盖shadowing、case与long-bracket level。
 
 ## Global Variables是Environment Table访问
 
-在Lua 5.3中，未解析为local/upvalue的free name经当前`_ENV`处理；概念上`score = 10`接近`_ENV.score = 10`。<Term def="未命中lexical binding的名字通过当前_ENV table读取或写入，因而具有可替换、可审计也可误拼写的语义。">environment-backed global</Term>说明global不是VM中独立的神秘槽，而是environment capability。
+在Lua 5.3中，未解析为local/upvalue的free name经当前`_ENV`处理；概念上`score = 10`接近`_ENV.score = 10`。说明global不是VM中独立的神秘槽，而是environment capability。
 
 ```lua
 local function new_strict_environment(allowed)
@@ -88,21 +71,10 @@ assert(not pcall(chunk)) -- message拼错/未提供，在边界失败
 
 默认global方便REPL和小脚本，却让typo变成远处故障：`total = toal + price`可能读nil后失败，也可能污染已有global。Production module默认`local`，明确导出table；动态source给capability-limited environment。`_G`通常指初始global table，但替换局部`_ENV`不要求修改`_G`。
 
-<PilLexicalScopeLab />
-
-<Stepper>
-  <Step title="切换Identifier、Comment、Local和Global"><PilLexicalScopeLab /></Step>
-  <Step title="建立Name Resolution表">为每个name记录declaration、scope、capture、environment key和writer；对shadowing与case mismatch做标记。</Step>
-  <Step title="启用Strict Probe">将chunk放入拒绝未知读写的environment，运行正常、typo、optional capability和nested function用例。</Step>
-</Stepper>
-
-<Callout type="trap" title="Lua变量默认全局，所以少写local更简洁">
-默认global把模块内部状态暴露为共享可变environment key，typo也可能静默创建新key。除明确导出或host注入外先声明local；用module return table表达public surface。
-</Callout>
 
 ## Types and Values：变量没有固定Type
 
-Lua是动态类型语言：type属于value，variable是保存value的binding。一个local先保存number再保存string是合法的，但每个时刻value仍有确定runtime type。<Term def="Runtime type附着在value而非variable declaration，assignment只改变binding指向的value。">value-owned type</Term>不等于没有类型约束；operator、library和host API仍检查实际value。
+Lua是动态类型语言：type属于value，variable是保存value的binding。一个local先保存number再保存string是合法的，但每个时刻value仍有确定runtime type。不等于没有类型约束；operator、library和host API仍检查实际value。
 
 第四版开篇逐步引入nil、boolean，后续章节再展开number、string、table、function、userdata与thread。`type(value)`返回type name string，可用于诊断，但大量手工type switch常表示缺少data contract。Boundary应验证shape并给出上下文，内部代码依赖已建立的不变量。
 
@@ -116,7 +88,7 @@ Table、function、thread和full userdata具有identity/reference-like行为；n
 
 ## Booleans与Lua Truth Contract
 
-只有false与nil为false；number 0、empty string、empty table和所有其它values都为true。<Term def="条件上下文中仅nil和false为假，0与空字符串仍为真的语言不变量。">Lua truth contract</Term>是从C、JavaScript、Python迁移时最早的高风险差异。
+只有false与nil为false；number 0、empty string、empty table和所有其它values都为true。是从C、JavaScript、Python迁移时最早的高风险差异。
 
 `and`与`or`返回operand value而非强制boolean，因此可写`value = supplied or default`，但supplied为false时也会被default替换。若false是合法业务值，必须用nil检查。`not`才总返回boolean。逻辑operator短路，可用于guard，但不要把side effect藏在难读的链里。
 
@@ -135,17 +107,6 @@ assert(wrong == true and correct == false)
 
 Table literal无法用`ipairs`保留开头nil，因此实验把nil单独测试；这本身就是nil影响sequence shape的证据。
 
-<PilInterpreterTruthLab />
-
-<Stepper>
-  <Step title="切换Nil、False、Zero和Empty String"><PilInterpreterTruthLab /></Step>
-  <Step title="预测Condition与Storage">对每个value写condition结果、table是否保留entry、`type`输出和`or` fallback结果，再运行验证。</Step>
-  <Step title="迁移到配置读取">实现false可覆盖默认值、missing才fallback的resolver，并覆盖nil/false/0/empty string四类输入。</Step>
-</Stepper>
-
-<Callout type="trap" title="0和空字符串在多数语言里是假，Lua也一样">
-Lua中二者都为真。`if count then`不能判断count是否非零，`name or default`也不会替换空字符串。把业务validity与language truth分开写显式predicate。
-</Callout>
 
 ## The Stand-Alone Interpreter
 
@@ -164,30 +125,7 @@ Lua中二者都为真。`if count then`不能判断count是否非零，`name or 
 5. Nil表达absence并删除table key，只有nil与false为假；0和空string都为真。
 6. Stand-alone interpreter适合实验，但version、path、libraries与capabilities必须记录。
 
-<Exercises>
-
-**问题 1：`load`成功后调用仍报错，怎样证明不是编译失败？**
-
-<Answer>分别保存load返回的function/error与pcall返回的status/result。给chunk命名并记录environment；用一个syntax-invalid source证明load阶段失败，再用syntax-valid但读取缺失global的source证明call阶段失败。日志应含phase、chunk name和traceback，不能合并成同一错误。</Answer>
-
-**问题 2：配置项允许显式false，怎样避免`value or default`覆盖它？**
-
-<Answer>只在value为nil时fallback，例如先判断`if value == nil then value = default end`。测试nil得到default，false保持false，0保持0，空字符串是否允许由业务validation决定。Lua truth contract只定义条件真假，不替代配置schema。</Answer>
-
-**问题 3：如何发现大型脚本中的意外global？**
-
-<Answer>首先默认所有内部binding用local并运行Lua静态检查；对动态chunk传入带`__index`/`__newindex`门禁的显式environment，只allow host capabilities。测试typo read/write、合法export、nested closure和module load；日志记录unknown key与chunk/line。不要只在结束后遍历_G，因为污染可能已影响行为。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="chunk execution contract" definition="Source加载编译与函数执行分阶段并各自明确结果、错误和owner。" />
-  <GlossaryItem term="lexical name boundary" definition="Tokenized名字按local、upvalue与environment逐层解析的边界。" />
-  <GlossaryItem term="environment-backed global" definition="Free name通过当前_ENV table进行的global读写。" />
-  <GlossaryItem term="value-owned type" definition="Type属于runtime value，variable binding可保存不同类型values。" />
-  <GlossaryItem term="Lua truth contract" definition="只有nil和false为假，0与空字符串仍为真。" />
-</Glossary>
 
-<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 1: Getting Started" adaptedUrl="https://www.lua.org/pil/" />

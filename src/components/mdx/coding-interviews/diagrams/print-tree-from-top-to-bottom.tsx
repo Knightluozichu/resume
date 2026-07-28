@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["树形", "根10；6/14；4,8,12,16"], ["输出", "10,6,14,4,8,12,16"], ["层数", "3"], ["覆盖", "完整左右孩子"]] },
   { label: "Test2", fields: [["树形", "5→左4→左3→左2→左1"], ["输出", "5,4,3,2,1"], ["最大队列", "1"], ["覆盖", "全左偏斜"]] },
@@ -72,8 +70,4 @@ export function LevelOrderWidthDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">时间取决于节点总数n，辅助队列取决于某一时刻并存的层前沿，最坏由树宽W控制。</figcaption>
     </figure>
   );
-}
-
-export function PrintTreeLevelOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者5组测试，核对完整树、左右偏斜、单节点和空树的不分行输出。" />;
 }

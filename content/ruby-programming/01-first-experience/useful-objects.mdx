@@ -7,23 +7,13 @@ description: "用Array组织有序元素，用Symbol与Hash表达键值数据，
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyArrayShapeLab, RubyHashSymbolLab, RubyRegexpMatchLab } from "@/components/mdx/ruby-programming/diagrams/useful-objects";
-
-<Objectives>
-
-- 能实现数组的创建、索引读写、大小检查和稳定循环，并识别越界返回nil的后果
-- 能区分Symbol与String键，设计具有明确缺失策略的Hash并遍历键值对
-- 能实现基于Regexp、MatchData、capture与anchor的可解释文本匹配
-
-</Objectives>
 
 ## 从单个对象转向数据形状开始
 
-第一章的变量一次引用一个对象；真实程序还要表达“按顺序的一批对象”“由名字查值的记录”和“满足某种文本语法的片段”。Array、Hash和Regexp分别承担这三类责任。<Term def="集合允许的元素组织方式、访问规则、缺失语义与修改边界。">collection shape contract</Term>要求选择容器时先问顺序、唯一性、key类型、missing行为和mutation owner，而不是只看写法短不短。
+第一章的变量一次引用一个对象；真实程序还要表达“按顺序的一批对象”“由名字查值的记录”和“满足某种文本语法的片段”。Array、Hash和Regexp分别承担这三类责任。要求选择容器时先问顺序、唯一性、key类型、missing行为和mutation owner，而不是只看写法短不短。
 
 先预测：`["a", "b"][8]`会抛异常还是返回nil？普通`[]`返回nil；`fetch(8)`才抛`IndexError`。便利API常把错误变成absence，因此边界代码要主动选择“容忍缺失”还是“缺失即错误”。
 
@@ -44,7 +34,7 @@ Range、String split和enumerator也可产生数组，但“能转成Array”不
 
 ### 元素引用、dup与浅复制
 
-Array保存的是对象引用。`copy = original.dup`会复制外层数组，使追加、删除或替换某个槽位不再影响original；但两边对应槽位仍可能指向同一个mutable对象。若`original[0]`是String，执行`copy[0].upcase!`仍会通过共享String反映到original。<Term def="只复制最外层容器，内部元素继续共享原对象引用的复制语义。">shallow collection copy</Term>不能自动提供隔离。
+Array保存的是对象引用。`copy = original.dup`会复制外层数组，使追加、删除或替换某个槽位不再影响original；但两边对应槽位仍可能指向同一个mutable对象。若`original[0]`是String，执行`copy[0].upcase!`仍会通过共享String反映到original。不能自动提供隔离。
 
 所谓deep copy必须先定义对象graph中哪些节点归谁、遇到cycle怎么办、IO或Proc等不可复制资源如何处理。通用序列化往返有类型、性能与安全限制，不应作为默认答案。更可靠的做法是让value object不可变、在业务边界显式重建需要复制的结构，并为共享identity写测试。
 
@@ -52,7 +42,7 @@ Array保存的是对象引用。`copy = original.dup`会复制外层数组，使
 
 ## 数组元素的读取与保存
 
-索引从0开始，负索引从末尾反向计算；`array[index]`缺失返回nil，`array.fetch(index)`缺失默认抛错，也可显式给default或block。<Term def="一个索引操作对合法范围、负索引、缺失结果和修改扩容的完整约定。">index access contract</Term>帮助区分“该位置可选”和“数据结构已损坏”。
+索引从0开始，负索引从末尾反向计算；`array[index]`缺失返回nil，`array.fetch(index)`缺失默认抛错，也可显式给default或block。帮助区分“该位置可选”和“数据结构已损坏”。
 
 ```ruby
 queue = ["compile", "test"]
@@ -73,17 +63,6 @@ p queue
 
 `length`与`size`返回元素槽数量，`empty?`表达是否为空。不要用`if array.length`判断非空，因为Ruby中的0也truthy；写`unless array.empty?`或业务predicate。元素可能包含nil，因此size不等于“有效数据条目数”。
 
-<RubyArrayShapeLab />
-
-<Stepper>
-  <Step title="切换Create、Read、Store和Iterate"><RubyArrayShapeLab /></Step>
-  <Step title="记录Shape变化">对每次操作写出length、目标index、返回值、是否修改原数组以及nil是否代表缺失。</Step>
-  <Step title="比较[]与fetch"><RubyArrayShapeLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="Array.new(n, [])会创建n个互不相关的数组">
-第二个参数只是同一个对象引用，修改任意一格会在所有位置可见。需要独立mutable元素时使用`Array.new(n) { [] }`，并用`equal?`写回归测试。
-</Callout>
 
 ## 数组的循环
 
@@ -101,17 +80,17 @@ expensive = taxed.select { |price| price >= 150 }
 p taxed: taxed, expensive: expensive
 ```
 
-遍历期间追加、删除或重排同一数组，会让哪些元素被访问变得难以推理。<Term def="遍历期间集合结构保持稳定，变更写入另一个结果或推迟到遍历结束的规则。">stable traversal boundary</Term>建议先`select`出目标，再统一修改；若确需原地删除，使用语义明确的`delete_if`并测试相邻元素。
+遍历期间追加、删除或重排同一数组，会让哪些元素被访问变得难以推理。建议先`select`出目标，再统一修改；若确需原地删除，使用语义明确的`delete_if`并测试相邻元素。
 
 ## 什么是符号
 
-Symbol literal如`:status`、`:ready`是不可变、name-like的值，常用于Hash key、method name和API option。<Term def="用于表示程序内部稳定名称，而不是面向用户可编辑文本的不可变值。">symbol key identity</Term>提醒我们，Symbol不是“更快的String”这种泛化替代品。
+Symbol literal如`:status`、`:ready`是不可变、name-like的值，常用于Hash key、method name和API option。提醒我们，Symbol不是“更快的String”这种泛化替代品。
 
 `:status`与`"status"`内容看似相近，却是不同对象和不同Hash key；JSON解析通常产生String key，keyword arguments与Ruby内部options常使用Symbol key。边界处应只做一次显式转换，并限制允许的key集合。不要把任意用户输入无条件转Symbol来掩盖schema缺失。
 
 ## 散列的创建与使用
 
-Hash用key定位value。`{ status: "ready" }`是`{ :status => "ready" }`的简写；任意对象都可作key，但key的`hash`与`eql?`行为必须稳定。<Term def="Hash对key类型、equality、missing default与允许字段的明确约束。">hash key contract</Term>决定lookup是否可靠。
+Hash用key定位value。`{ status: "ready" }`是`{ :status => "ready" }`的简写；任意对象都可作key，但key的`hash`与`eql?`行为必须稳定。决定lookup是否可靠。
 
 ```ruby
 job = {
@@ -140,21 +119,10 @@ Default block不应执行网络请求、随机逻辑或难以观察的side effec
 
 `each do |key, value|`逐对遍历；只要key用`each_key`，只要value用`each_value`。现代Ruby Hash保留插入顺序，但这不等于业务排序；报告需要按key、value或其它字段排序时应显式调用`sort_by`。
 
-<RubyHashSymbolLab />
-
-<Stepper>
-  <Step title="切换Symbol、Hash、Key type和each"><RubyHashSymbolLab /></Step>
-  <Step title="验证Missing策略">对`[]`、`key?`、`fetch`、static default和block default分别记录结果与是否写入key。</Step>
-  <Step title="注入String/Symbol错配"><RubyHashSymbolLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="record[:name]会自动读取JSON里的name字段">
-JSON对象通常解析成String key，`record[:name]`与`record["name"]`是两个lookup。应在parser边界固定schema和转换策略，不要在深层业务代码里同时尝试两种key。
-</Callout>
 
 ## 正则表达式
 
-Regexp literal写成`/pattern/options`。`regexp.match(string)`成功返回MatchData，失败返回nil；`=~`返回起始index或nil。<Term def="一次匹配成功究竟证明了整个输入、某个子串还是一组capture成立的范围。">match evidence boundary</Term>防止把“找到一段数字”误当成“输入是合法整数”。
+Regexp literal写成`/pattern/options`。`regexp.match(string)`成功返回MatchData，失败返回nil；`=~`返回起始index或nil。防止把“找到一段数字”误当成“输入是合法整数”。
 
 ```ruby
 line = "user=alice score=42"
@@ -174,13 +142,6 @@ end
 
 调试匹配时不要只打印true/false：记录pattern版本、输入长度、match起止位置和named captures，但对密码、token等敏感输入只保留经过脱敏的metadata。这样既能证明match evidence boundary，也避免诊断日志成为数据泄漏源。
 
-<RubyRegexpMatchLab />
-
-<Stepper>
-  <Step title="切换Match、No match、Capture和Scan"><RubyRegexpMatchLab /></Step>
-  <Step title="画Evidence范围">标出pattern消费的substring、未消费前后缀、capture和最终转换步骤。</Step>
-  <Step title="加入Anchors再验证"><RubyRegexpMatchLab /></Step>
-</Stepper>
 
 ## 本章回顾：顺序、键与模式
 
@@ -190,32 +151,7 @@ end
 4. Hash使用`key?`和`fetch`区分missing、nil与default，并把业务排序写出来。
 5. Regexp匹配返回evidence；只有完整anchor、capture与后续转换共同满足，才能宣称输入有效。
 
-<Exercises>
-
-**问题 1：为什么`Array.new(3, [])`中修改一格会影响三格？**
-
-<Answer>构造器把同一个Array对象引用复制到三个槽位。用`equal?`可证明三格是同一对象；改用`Array.new(3) { [] }`会执行三次block并创建三个独立对象。测试既比较value，也比较identity。</Answer>
-
-**问题 2：怎样可靠地区分Hash中“字段缺失”和“字段值为nil”？**
-
-<Answer>用`key?`判断presence，用`fetch`表达缺失策略；`hash[key]`单独只能看到nil。Schema边界应同时约束允许key、key类型和value是否可nil，并测试String/Symbol错配。</Answer>
-
-**问题 3：`/\d+/`匹配成功为什么不能证明输入是整数？**
-
-<Answer>它只证明某个substring含一段数字，例如`"x12"`也成功。用`\A[+-]?\d+\z`约束整个字符串，再交给`Integer(text, 10)`做语义转换，并处理`ArgumentError`和范围限制。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="collection shape contract" definition="集合的顺序、访问、缺失与修改规则。" />
-  <GlossaryItem term="index access contract" definition="索引对范围、负值、缺失和扩容的约定。" />
-  <GlossaryItem term="shallow collection copy" definition="只复制外层容器、内部元素仍共享引用的复制语义。" />
-  <GlossaryItem term="stable traversal boundary" definition="遍历期间保持集合结构稳定的边界。" />
-  <GlossaryItem term="symbol key identity" definition="Symbol作为稳定内部名称而非用户文本的身份。" />
-  <GlossaryItem term="hash key contract" definition="Hash key类型、等值、默认值和字段集合的约束。" />
-  <GlossaryItem term="match evidence boundary" definition="匹配成功实际覆盖整个输入或局部片段的证据范围。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第2章 便利的对象" adaptedUrl="https://tanoshiiruby.github.io/5/" />

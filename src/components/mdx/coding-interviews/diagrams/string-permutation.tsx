@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "nullptr", fields: [["输入", "nullptr"], ["外层", "直接return"], ["输出行", "0"], ["覆盖", "空指针"]] },
   { label: "空串", fields: [["输入", '可写数组""'], ["基例", "首字符就是终止符"], ["输出行", "1个空排列"], ["表现", "打印一个空行"]] },
@@ -106,8 +104,4 @@ export function PermutationDuplicatePolicyDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">去重是可选扩展，不是作者源码行为；必须先定义结果按字符值还是按位置身份计数。</figcaption>
     </figure>
   );
-}
-
-export function StringPermutationOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者5组打印测试，核对空指针、空排列、单字符、双字符与abc的实际输出顺序。" />;
 }

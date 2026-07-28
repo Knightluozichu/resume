@@ -1,49 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
-import { CodingInterviewLab } from "./official-lab";
-
-const pairCases = [
-  { left: "3", right: "32", lr: "332", rl: "323", first: "32", reason: "323更小" },
-  { left: "32", right: "321", lr: "32321", rl: "32132", first: "321", reason: "32132更小" },
-  { left: "3", right: "323", lr: "3323", rl: "3233", first: "323", reason: "3233更小" },
-  { left: "323", right: "32123", lr: "32332123", rl: "32123323", first: "32123", reason: "32123323更小" },
-  { left: "1", right: "11", lr: "111", rl: "111", first: "等价", reason: "两种拼接相同" },
-] as const;
-
-const officialCases = [
-  { label: "普通一位数", fields: [["输入", "3,5,1,4,2"], ["排序", "1,2,3,4,5"], ["期望", "12345"], ["验证", "人工打印"]] },
-  { label: "前缀嵌套", fields: [["输入", "3,32,321"], ["排序", "321,32,3"], ["期望", "321323"], ["验证", "人工打印"]] },
-  { label: "长前缀", fields: [["输入", "3,323,32123"], ["排序", "32123,323,3"], ["期望", "321233233"], ["验证", "人工打印"]] },
-  { label: "拼接等价", fields: [["输入", "1,11,111"], ["两两拼接", "均为重复1"], ["期望", "111111"], ["验证", "人工打印"]] },
-  { label: "单元素", fields: [["输入", "321"], ["排序", "无需比较"], ["期望", "321"], ["验证", "人工打印"]] },
-  { label: "空指针", fields: [["输入", "nullptr,0"], ["函数", "直接return"], ["期望", "不打印数字"], ["验证", "人工观察"]] },
-] as const;
-
-export function MinNumberComparatorLab() {
-  const [cursor, setCursor] = useState(0);
-  const item = pairCases[cursor];
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="border border-border bg-elevated p-4 sm:p-5">
-        <div className="grid grid-cols-5 gap-2">
-          {pairCases.map((pair, index) => <button key={pair.left + pair.right} type="button" onClick={() => setCursor(index)} aria-pressed={cursor === index} className={"h-10 border text-sm font-semibold " + (cursor === index ? "border-accent bg-accent/15 text-accent" : "border-border bg-background text-secondary")}>{pair.left} / {pair.right}</button>)}
-        </div>
-        <div className="mt-4 grid min-h-[88px] grid-cols-4 gap-2 border-y border-border py-3 text-center">
-          <div><div className="text-xs text-muted">m+n</div><div className="mt-1 font-semibold text-primary">{item.lr}</div></div>
-          <div><div className="text-xs text-muted">n+m</div><div className="mt-1 font-semibold text-primary">{item.rl}</div></div>
-          <div><div className="text-xs text-muted">应在前</div><div className="mt-1 font-semibold text-accent">{item.first}</div></div>
-          <div><div className="text-xs text-muted">依据</div><div className="mt-1 font-semibold text-success">{item.reason}</div></div>
-        </div>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        不比较单个数值大小，只比较两种相邻拼接；相等时两个顺序产生同一子串。
-      </figcaption>
-    </figure>
-  );
-}
-
 export function MinNumberSortDiagram() {
   const cellW = 88;
   const cellH = 46;
@@ -147,8 +104,4 @@ export function MinNumberMemoryContractDiagram() {
       </figcaption>
     </figure>
   );
-}
-
-export function SortArrayMinNumberOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者6组打印测试，核对普通、前缀、等价、单元素与空输入输出。" />;
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -196,35 +194,5 @@ export function HashFunctionArrayDiagram() {
         散列表由散列函数和数组组成；冲突发生后，同一槽位必须保存并区分多个键值对。
       </figcaption>
     </figure>
-  );
-}
-
-export function HashUseCasesLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={useCaseCases}
-      caption="价格表、成员去重、缓存和DNS都可抽象为从键到值或成员状态的查找。"
-      tone="emerald"
-    />
-  );
-}
-
-export function CollisionResolutionLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={collisionCases}
-      caption="链地址和开放寻址以不同方式保存冲突条目，但都必须比较原始键保证正确性。"
-      tone="cyan"
-    />
-  );
-}
-
-export function HashPerformanceLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={performanceCases}
-      caption="装载因子、散列分布和扩容策略共同决定平均常数时间能否维持。"
-      tone="violet"
-    />
   );
 }

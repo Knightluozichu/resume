@@ -14,28 +14,7 @@ import {
   DogOpenglArchitectureDiagram,
   DogStateCaptureDiagram,
 } from "@/components/mdx/deep-opengl/diagrams/dog-opengl-architecture";
-import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
-import {
-  Objectives,
-  Callout,
-  Attribution,
-  Glossary,
-  GlossaryItem,
-  Term,
-  Exercises,
-  Answer,
-  Stepper,
-  Step,
-} from "@/components/mdx/mdx-components";
 
-<Objectives>
-
-- 能解释上下文当前性、对象共享和上下文丢失对资源生命周期的影响
-- 能区分对象名、绑定点、对象存储与 VAO 状态分别位于哪里
-- 能分析 vertexAttribPointer 与 ELEMENT_ARRAY_BUFFER 的不同记录语义
-- 能复现并定位由程序、VAO、测试开关或帧缓冲残留造成的状态泄漏
-
-</Objectives>
 
 ## 直觉引入
 
@@ -45,7 +24,7 @@ import {
 
 ## 上下文是命令执行边界
 
-<Term def="保存当前渲染状态并为命令提供执行环境的 API 实例">渲染上下文</Term>是 OpenGL 命令的前提。在原生 OpenGL 中，上下文必须由窗口系统接口创建，并在调用线程上成为 current；同一线程通常一次只有一个当前上下文。WebGL 则通过 canvas.getContext 返回上下文对象，JavaScript 调用明确落到该对象，不暴露原生的线程 current 操作。
+是 OpenGL 命令的前提。在原生 OpenGL 中，上下文必须由窗口系统接口创建，并在调用线程上成为 current；同一线程通常一次只有一个当前上下文。WebGL 则通过 canvas.getContext 返回上下文对象，JavaScript 调用明确落到该对象，不暴露原生的线程 current 操作。
 
 上下文至少决定三类边界：
 
@@ -57,18 +36,18 @@ import {
 
 ## 对象名不是对象内容
 
-原生 OpenGL 的 glGen* 或 WebGL 的 create* 首先得到一个<Term def="应用引用 GPU API 对象的句柄；它不等同于已经分配并填充的数据存储">对象名</Term>。对象经历“创建名字 → 绑定或附加 → 分配存储 → 填充数据 → 被其他状态引用 → 删除”的生命周期。
+原生 OpenGL 的 glGen* 或 WebGL 的 create* 首先得到一个。对象经历“创建名字 → 绑定或附加 → 分配存储 → 填充数据 → 被其他状态引用 → 删除”的生命周期。
 
 - VBO 是 buffer 对象的一种用途：当它被绑定到 ARRAY_BUFFER 后，bufferData 为它分配并上传顶点数据。
 - EBO 仍是 buffer 对象；当它被绑定到 ELEMENT_ARRAY_BUFFER 时，drawElements 把它解释为索引数据。
 - 同一个 buffer 对象的本质不是被名字永久标记成“VBO”或“EBO”，而是命令通过目标与关联决定如何解释它。
 - deleteBuffer 表示应用不再需要该名字；若对象仍被有效引用，规范定义的删除与解绑规则决定何时真正释放。不要把 delete 等同于 CPU 语言里立即清空所有外部引用。
 
-<Term def="上下文中供命令选择当前对象或目标的状态位置">绑定点</Term>是命令的隐式参数。bufferData 没有 buffer 参数，因为它修改当前绑定到目标的 buffer；drawElements 也没有 EBO 参数，因为它从当前 VAO 的 element array binding 读取索引。
+是命令的隐式参数。bufferData 没有 buffer 参数，因为它修改当前绑定到目标的 buffer；drawElements 也没有 EBO 参数，因为它从当前 VAO 的 element array binding 读取索引。
 
 ## VAO 到底记录什么
 
-<Term def="保存顶点属性启用状态、格式、属性缓冲关联以及索引缓冲绑定的对象">VAO</Term>解决的是“如何把若干缓冲解释成顶点输入”，而不是保存顶点数据本身。它至少包含：
+解决的是“如何把若干缓冲解释成顶点输入”，而不是保存顶点数据本身。它至少包含：
 
 - 每个属性槽是否启用；
 - size、type、normalized、stride、offset 等属性格式；
@@ -97,41 +76,12 @@ import {
 4. **逐片元状态**：深度、模板、混合、颜色掩码和采样状态是否允许片元写入。
 5. **输出目标**：当前 framebuffer 是否完整，draw buffers 和附件格式是否正确。
 
-程序员看到的是一个 draw call，驱动看到的是一组完整状态快照。所谓<Term def="前一个绘制阶段留下的隐式状态意外影响后续绘制结果">状态泄漏</Term>，就是后一个绘制没有显式建立自己的前置条件，却读取了前一个绘制留下的状态。
+程序员看到的是一个 draw call，驱动看到的是一组完整状态快照。所谓，就是后一个绘制没有显式建立自己的前置条件，却读取了前一个绘制留下的状态。
 
 ## 分步配置可索引几何
 
 先预测：配置 VAO 后，如果在 VAO 仍绑定时执行 bindBuffer(ELEMENT_ARRAY_BUFFER, null)，后续再绑定这个 VAO，还能使用原来的索引缓冲吗？
 
-<Stepper>
-<Step title="第一步：创建名字与分配存储">
-<DogStepFlowDiagram
-  caption="第 1 步：名字只提供引用；bufferData 才建立并填充实际存储。"
-  stage={1}
-  stages={["创建对象名并分配数据存储", "把属性格式与缓冲关联记录进 VAO", "建立绘制状态并提交可验证结果"]}
-/>
-
-创建 program、VAO 和两个 buffer。先验证创建结果，再分别上传顶点与索引数据；此时对象已有内容，但 VAO 尚未描述如何解释顶点。
-</Step>
-<Step title="第二步：把接口记录进 VAO">
-<DogStepFlowDiagram
-  caption="第 2 步：属性指针与 EBO 绑定以不同方式进入当前 VAO。"
-  stage={2}
-  stages={["创建对象名并分配数据存储", "把属性格式与缓冲关联记录进 VAO", "建立绘制状态并提交可验证结果"]}
-/>
-
-绑定 VAO，再绑定 ARRAY_BUFFER 并调用 vertexAttribPointer；该调用把此刻的 VBO 关联写入属性槽。随后绑定 EBO，它的绑定直接成为 VAO 状态。解绑 EBO 必须在解绑 VAO之后，不能在当前 VAO 上把它清掉。
-</Step>
-<Step title="第三步：建立完整绘制前置条件">
-<DogStepFlowDiagram
-  caption="第 3 步：程序、VAO、测试状态和目标共同构成 drawElements 的输入。"
-  stage={3}
-  stages={["创建对象名并分配数据存储", "把属性格式与缓冲关联记录进 VAO", "建立绘制状态并提交可验证结果"]}
-/>
-
-绘制函数显式绑定 program 与 VAO，并设置深度、混合、颜色掩码和视口。这样每个 pass 都声明自身依赖，不把正确性寄托在调用顺序留下的偶然状态上。
-</Step>
-</Stepper>
 
 ## 可复现对象配置
 
@@ -237,45 +187,9 @@ function render() {
 
 ## 常见误区
 
-<Callout type="trap">
-**现象 →** 认为“VAO 会捕获当前 VBO”，所以绑定 VAO 后直接调用 vertexAttribPointer，结果属性关联到另一个缓冲。
-**原因 →** ARRAY_BUFFER 绑定本身不随 VAO 整体恢复；vertexAttribPointer 读取的是调用当时上下文中的 ARRAY_BUFFER。
-**修法 →** 配置每个属性前明确绑定对应 VBO，再调用 vertexAttribPointer；用帧捕获检查属性槽实际关联的 buffer。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 配置完 VAO 后习惯性解绑 EBO，绘制时报 INVALID_OPERATION 或没有几何。
-**原因 →** ELEMENT_ARRAY_BUFFER 绑定属于当前 VAO；在 VAO 仍绑定时解绑 EBO，就是把 VAO 的索引缓冲清空。
-**修法 →** 先 bindVertexArray(null)，再做其他清理；更简单的是不做没有正确性价值的“全解绑”仪式。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 透明 pass 后面的不透明物体消失或颜色异常，重新上传 VBO 也无效。
-**原因 →** 问题不在几何数据，而在 blend、depthMask、colorMask 或 framebuffer 等状态泄漏。
-**修法 →** 为每类 pass 建立显式状态基线，并按 program、VAO、光栅化、逐片元状态、输出目标五组检查。
-</Callout>
 
 ## 练习
 
-<Exercises>
-**问题 1**：为什么“绑定 VAO 会恢复 VBO”是不准确的？请分别说明 ARRAY_BUFFER、属性缓冲关联和 ELEMENT_ARRAY_BUFFER 位于哪里。
-
-<Answer>
-ARRAY_BUFFER 的当前绑定是上下文状态，绑定 VAO不会把某个全局 ARRAY_BUFFER 绑定一起恢复。vertexAttribPointer 会读取调用当时的 ARRAY_BUFFER，并把那个缓冲关联连同格式写入当前 VAO 的属性槽；ELEMENT_ARRAY_BUFFER 的绑定则直接属于当前 VAO。因而绑定 VAO 能恢复属性槽关联与 EBO，但新的 vertexAttribPointer 仍依赖此刻显式绑定的 ARRAY_BUFFER。
-</Answer>
-
-**问题 2**：一个 drawElements 成功执行但没有像素输出，应该按什么顺序检查？
-
-<Answer>
-先检查当前 program 及其接口，再检查 VAO 属性槽、缓冲范围、EBO、索引类型与数量；然后检查 viewport、裁剪、正反面和剔除；再检查深度、模板、混合与写掩码；最后检查 framebuffer 完整性、draw buffers 和附件。这个顺序从数据入口走到输出目标，比随机切换开关更容易定位第一处断点。
-</Answer>
-
-**问题 3**：为什么上下文恢复后不能继续使用旧的 program、VBO 和 VAO？工程上应怎样设计才能重建？
-
-<Answer>
-上下文丢失使旧 GPU 对象所属的执行环境失效，恢复得到的是需要重新建立资源的上下文。工程上应保留 CPU 侧的着色器源码、顶点数据、纹理来源和资源描述，把它们与临时 GPU 句柄分离；恢复事件中按依赖顺序重新编译程序、上传缓冲和纹理、配置 VAO/FBO，再恢复渲染循环。
-</Answer>
-</Exercises>
 
 ## 小结
 
@@ -285,15 +199,4 @@ ARRAY_BUFFER 的当前绑定是上下文状态，绑定 VAO不会把某个全局
 - drawElements 消费程序、顶点获取、光栅化、逐片元状态和输出目标，状态泄漏必须按这五组定位。
 - CPU 资源描述与 GPU 句柄分离，才能在上下文丢失或重建时恢复完整渲染状态。
 
-<Glossary>
-<GlossaryItem term="渲染上下文">保存当前渲染状态并为命令提供执行环境的 API 实例；原生平台还有线程 current 与共享组规则。</GlossaryItem>
-<GlossaryItem term="对象名">应用引用 OpenGL/WebGL 对象的句柄，不代表对象已经分配存储或填入有效数据。</GlossaryItem>
-<GlossaryItem term="绑定点">上下文中让后续命令选择当前对象的状态位置，相当于一部分隐式函数参数。</GlossaryItem>
-<GlossaryItem term="VAO">保存顶点属性启用、格式、属性缓冲关联、divisor 和 EBO 绑定的顶点输入对象。</GlossaryItem>
-<GlossaryItem term="状态泄漏">某个 pass 没有建立自己的前置条件，意外读取了前一个 pass 留下的程序、开关、掩码或目标状态。</GlossaryItem>
-</Glossary>
 
-<Attribution
-  adaptedFrom="Khronos OpenGL 4.6 Core Profile Specification: Context and State"
-  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
-/>

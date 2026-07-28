@@ -1,7 +1,5 @@
 "use client";
 
-import { CodingInterviewLab } from "./official-lab";
-
 const officialCases = [
   { label: "Test1", fields: [["树形", "8；6/10；5,7,9,11"], ["第1行", "8"], ["第2行", "10,6"], ["第3行", "5,7,9,11"]] },
   { label: "Test2", fields: [["树形", "5→左4→左3→左2"], ["输出", "5 / 4 / 3 / 2"], ["方向可见性", "每层仅1个节点"], ["覆盖", "全左链"]] },
@@ -77,8 +75,4 @@ export function ZigzagStackSwapDiagram() {
       <figcaption className="mt-2 text-center text-sm text-secondary">本层处理期间只从current弹、只向next压；current清空后才交换角色。</figcaption>
     </figure>
   );
-}
-
-export function PrintTreeZigzagOfficialCaseLab() {
-  return <CodingInterviewLab cases={officialCases} caption="切换作者7组测试，核对三层、偏斜、单点、空树、稀疏链与四层满树的交替方向。" />;
 }

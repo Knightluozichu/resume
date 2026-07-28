@@ -1,7 +1,5 @@
 "use client";
 
-import { GrokkingAlgorithmsLab } from "./official-lab";
-
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
@@ -142,17 +140,6 @@ export function FruitFeatureDiagram() {
     </figure>
   );
 }
-
-export function KnnVoteLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={voteCases}
-      caption="水果分类依次完成特征提取、距离计算、选择k个邻居和标签投票。"
-      tone="cyan"
-    />
-  );
-}
-
 export function RecommendationFeatureMap() {
   const users = [
     { name: "Priya", values: [5, 1, 4, 1, 5], tone: accent },
@@ -199,15 +186,5 @@ export function RecommendationFeatureMap() {
         特征提取决定“相似”的含义，距离只是在该表示上完成比较。
       </figcaption>
     </figure>
-  );
-}
-
-export function KSelectionLab() {
-  return (
-    <GrokkingAlgorithmsLab
-      cases={tuningCases}
-      caption="k、特征尺度与查询实现共同决定预测的偏差、方差、延迟和内存成本。"
-      tone="violet"
-    />
   );
 }

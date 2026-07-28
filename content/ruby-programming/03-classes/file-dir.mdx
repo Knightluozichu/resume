@@ -7,29 +7,19 @@ description: "掌握文件重命名/复制/删除、目录遍历/创建/删除�
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
-draft: true
+draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubyFileOperationsLab, RubyDirectoryOperationsLab, RubyFilesystemLibrariesLab } from "@/components/mdx/ruby-programming/diagrams/file-dir";
-
-<Objectives>
-
-- 能比较rename、copy、delete与atomic replace的内容、metadata、filesystem和crash语义
-- 能实现有trust root、symlink、order、depth和count限制的目录遍历/创建/删除
-- 能设计基于File path helpers、Find、Tempfile和FileUtils的受控流程，并处理partial failure与cleanup
-
-</Objectives>
 
 ## 从“路径字符串指向一个稳定文件”开始纠正
 
-Path是namespace中的name，不是稳定object capability；检查后到操作前，它可被替换、重命名或经symlink指向别处。<Term def="文件系统操作明确可信根、路径解析、symlink、权限、竞态和资源上限。">filesystem trust boundary</Term>先于File API。
+Path是namespace中的name，不是稳定object capability；检查后到操作前，它可被替换、重命名或经symlink指向别处。先于File API。
 
 先预测：`File.file?(path)`为true后再delete是否安全？不保证；另一个process可在两步间替换path。普通工具尽量直接执行目标operation并处理exception；高敏感场景使用directory handle/sandbox/platform secure API减少TOCTOU。
 
 ## File类：变更、复制与删除文件
 
-File继承IO能力并增加path/metadata operations。`File.rename`更改directory entry，同filesystem上常可作为atomic replacement基础，但cross-device会失败，overwrite与open-handle behavior因OS不同。<Term def="Rename声明source/destination filesystem、overwrite、atomicity与failure后哪一侧仍存在。">rename transaction contract</Term>必须按部署平台验证。
+File继承IO能力并增加path/metadata operations。`File.rename`更改directory entry，同filesystem上常可作为atomic replacement基础，但cross-device会失败，overwrite与open-handle behavior因OS不同。必须按部署平台验证。
 
 ```ruby
 source = "draft.txt"
@@ -53,25 +43,14 @@ Size相等不是内容完整证明；关键artifact用digest并注意读取期�
 
 ### 删除文件
 
-`File.delete`/`unlink`移除name，missing/permission抛异常；打开handle在Unix/Windows表现不同。<Term def="删除操作规定missing是否错误、处理symlink本身还是target、是否可恢复与审计。">file deletion contract</Term>避免`rescue nil`吞错。
+`File.delete`/`unlink`移除name，missing/permission抛异常；打开handle在Unix/Windows表现不同。避免`rescue nil`吞错。
 
 批量删除先固定root与manifest，逐项记录result，支持dry-run；不要`rm_rf`拼接用户input。需要trash/recovery不是unlink，而是move到受控区并管理retention。
 
-<RubyFileOperationsLab />
-
-<Stepper>
-  <Step title="切换Rename、Copy、Delete和Atomic write"><RubyFileOperationsLab /></Step>
-  <Step title="画Failure状态">每一步列source/temp/destination是否存在、bytes是否完整、metadata与cleanup owner。</Step>
-  <Step title="模拟Cross-device和中途失败"><RubyFileOperationsLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="先File.exist?再操作就能避免异常">
-Existence是瞬时snapshot，检查后仍可变化。直接执行operation并处理specific errors；安全敏感场景还需防symlink/TOCTOU，不靠字符串检查。
-</Callout>
 
 ## 目录的操作：目录内容的读取
 
-`Dir.entries`包含`.`/`..`，`Dir.children`/`each_child`在支持版本排除；Ruby 2.3 availability需验证，可手工reject。返回names通常相对dir，顺序来自filesystem，不是sorted contract。<Term def="目录enumeration声明是否含dot entries、name/path shape、order、隐藏项与错误策略。">directory enumeration contract</Term>保证输出可复现。
+`Dir.entries`包含`.`/`..`，`Dir.children`/`each_child`在支持版本排除；Ruby 2.3 availability需验证，可手工reject。返回names通常相对dir，顺序来自filesystem，不是sorted contract。保证输出可复现。
 
 ```ruby
 entries = Dir.entries(".")
@@ -85,27 +64,20 @@ Enumerate后entry可消失/改变；逐项operation处理ENOENT。Huge directory
 
 ### 目录的创建与删除
 
-`Dir.mkdir(path, mode)`创建一层，FileUtils.mkdir_p创建parents；mode还受umask。Existing path可能是file/symlink/directory，不能统一当success。<Term def="目录创建声明parent policy、existing path type、mode/umask与并发creator结果。">directory creation contract</Term>。
+`Dir.mkdir(path, mode)`创建一层，FileUtils.mkdir_p创建parents；mode还受umask。Existing path可能是file/symlink/directory，不能统一当success。。
 
 `Dir.rmdir`只删empty directory；recursive remove由FileUtils.rm_r/rm_rf，但危险面大。Required root不可为`/`、home或empty expansion；解析absolute/canonical policy并使用allowlisted workspace。递归删除遇symlink应删除link不跟随target，目标API需测试。
 
 ## 文件与目录的属性
 
-`File.stat`跟随symlink，`lstat`查看link本身；Stat提供type、size、mode、uid/gid和times。Predicate `file?`、`directory?`、`symlink?`方便，但都是snapshot。<Term def="Metadata来自某一瞬间且stat/lstat是否跟随symlink必须显式。">filesystem metadata snapshot</Term>不能当长期授权证据。
+`File.stat`跟随symlink，`lstat`查看link本身；Stat提供type、size、mode、uid/gid和times。Predicate `file?`、`directory?`、`symlink?`方便，但都是snapshot。不能当长期授权证据。
 
 Permission check如readable?也可能与实际open race，且ACL/container privileges复杂；直接open并处理error。Size用于budget初筛但file可增长，读取仍需hard cap。
 
-<RubyDirectoryOperationsLab />
-
-<Stepper>
-  <Step title="切换Read、Create、Remove和Attributes"><RubyDirectoryOperationsLab /></Step>
-  <Step title="注入Filesystem变化">Enumerate后删除/替换entry，stat后换symlink，mkdir并发，recursive remove遇permission。</Step>
-  <Step title="固定Stable sort"><RubyDirectoryOperationsLab /></Step>
-</Stepper>
 
 ## 文件名的操作
 
-`File.join`按platform separator构造，`basename`、`dirname`、`extname`拆name，`expand_path`解析relative path。<Term def="Path操作使用结构API，并明确relative base、canonical root、case sensitivity与separator。">path normalization contract</Term>不使用字符串拼`"root/" + input`。
+`File.join`按platform separator构造，`basename`、`dirname`、`extname`拆name，`expand_path`解析relative path。不使用字符串拼`"root/" + input`。
 
 `expand_path`消除`.`/`..`但不等于解析所有symlink；`realpath`要求存在并解析links，仍有之后race。判断path在root内不能只用prefix（`/safe2`前缀问题），应比较path components/Pathname ancestry，并针对case-insensitive platform测试。
 
@@ -115,7 +87,7 @@ Extension不是可信file type，basename可能为空/特殊，Windows reserved 
 
 ### find库
 
-Find.find递归yield paths，`Find.prune`跳过subtree。<Term def="递归遍历限制root、symlink follow、depth、entry count、bytes、permission errors与cancel。">recursive traversal budget</Term>防cycle和资源耗尽。
+Find.find递归yield paths，`Find.prune`跳过subtree。防cycle和资源耗尽。
 
 ```ruby
 require "find"
@@ -133,25 +105,14 @@ Predicate仍有race；不要跟随untrusted symlink。输出排序若要求稳�
 
 ### tempfile库
 
-Tempfile以unique restrictive file减少name collision，block/create形式自动cleanup更可靠。<Term def="临时文件规定directory、permissions、close/unlink、crash cleanup与是否需同filesystem rename。">temporary file lifecycle</Term>。
+Tempfile以unique restrictive file减少name collision，block/create形式自动cleanup更可靠。。
 
 Atomic replace的temp应位于destination同directory/filesystem，写完flush/fsync、chmod/chown policy、rename，并必要时sync directory。Tempfile path不应泄露敏感data，异常后ensure cleanup。
 
 ### fileutils库
 
-FileUtils提供cp/mv/mkdir_p/rm_r等high-level operations，但不会替你选择trust root、conflict、rollback和durability。<Term def="FileUtils只封装mechanics，caller仍负责安全根、覆盖、partial failure和审计。">filesystem operation policy</Term>。
+FileUtils提供cp/mv/mkdir_p/rm_r等high-level operations，但不会替你选择trust root、conflict、rollback和durability。。
 
-<RubyFilesystemLibrariesLab />
-
-<Stepper>
-  <Step title="切换Path、Find、Tempfile和FileUtils"><RubyFilesystemLibrariesLab /></Step>
-  <Step title="构造Atomic replace">同目录temp、write、flush/fsync、validate、rename、directory sync、cleanup逐步注入failure。</Step>
-  <Step title="尝试Path逃逸与Symlink race"><RubyFilesystemLibrariesLab /></Step>
-</Stepper>
-
-<Callout type="trap" title="expand_path后前缀是root就绝对安全">
-字符串prefix会误收相似目录，symlink还可逃逸，检查后也可能替换。比较路径组件/真实根并对敏感操作使用更强目录handle或sandbox边界。
-</Callout>
 
 ## 本章回顾：Path是变化的namespace，不是稳定capability
 
@@ -161,35 +122,7 @@ FileUtils提供cp/mv/mkdir_p/rm_r等high-level operations，但不会替你选�
 4. Path helpers替代字符串拼接，但canonicalization不自动解决symlink race与platform差异。
 5. Find有traversal budget，Tempfile有lifecycle，FileUtils只封装mechanics不承担security policy。
 
-<Exercises>
-
-**问题 1：怎样实现较可靠的原子配置文件替换？**
-
-<Answer>在destination同目录创建restrictive temp，写完flush/fsync并验证，设置mode/owner，再rename替换；按durability需求sync directory，ensure清理未提交temp。测试每一步失败、cross-device和并发reader。</Answer>
-
-**问题 2：为什么realpath/expand_path检查仍不能完全消除逃逸？**
-
-<Answer>检查与操作之间path/symlink可变化，且expand_path不解析links。敏感场景用directory-handle相对操作、禁止/固定symlink、sandbox/chroot/container或平台secure API；普通场景仍直接处理operation error。</Answer>
-
-**问题 3：递归扫描不可信目录至少限制什么？**
-
-<Answer>固定root，不跟随symlink，限制depth、entry count、累计bytes、单文件size、时间/cancel；处理permission/vanish，prune特殊目录，并决定stable ordering。记录errors而不把全部path泄露日志。</Answer>
-
-</Exercises>
 
 ## 术语表
 
-<Glossary>
-  <GlossaryItem term="filesystem trust boundary" definition="可信根、路径、symlink、权限、竞态与预算边界。" />
-  <GlossaryItem term="rename transaction contract" definition="Rename的filesystem、overwrite、atomicity与失败状态。" />
-  <GlossaryItem term="file deletion contract" definition="删除的missing、symlink、恢复与审计约定。" />
-  <GlossaryItem term="directory enumeration contract" definition="Dot entries、shape、order、隐藏项与错误规则。" />
-  <GlossaryItem term="directory creation contract" definition="Parent、existing type、mode/umask与并发结果。" />
-  <GlossaryItem term="filesystem metadata snapshot" definition="Stat/lstat在某一瞬间提供且可立即变化的属性。" />
-  <GlossaryItem term="path normalization contract" definition="Relative base、canonical root、case与separator规则。" />
-  <GlossaryItem term="recursive traversal budget" definition="Root、symlink、depth、count、bytes与cancel限制。" />
-  <GlossaryItem term="temporary file lifecycle" definition="Temp directory、permission、close/unlink与rename生命周期。" />
-  <GlossaryItem term="filesystem operation policy" definition="High-level操作仍需安全根、覆盖与partial failure策略。" />
-</Glossary>
 
-<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第18章 File类与Dir类" adaptedUrl="https://tanoshiiruby.github.io/5/" />
