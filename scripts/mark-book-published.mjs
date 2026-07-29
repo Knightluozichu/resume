@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import path from "node:path";
+
+import {
+  loadPublicationState,
+  validateBookEligibility,
+} from "./lib/publication-quality.mjs";
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -19,21 +23,27 @@ if (!bookSlug || (!checkOnly && (!release || !commit))) {
       : "必须提供 --book、--release 与 --commit",
   );
 }
-const ledgerPath = path.join(process.cwd(), "quality/remediation-ledger.json");
-const ledger = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
+if (!checkOnly && !/^[0-9a-f]{7,40}$/i.test(commit))
+  throw new Error(`非法 commit SHA: ${commit}`);
+const state = loadPublicationState();
+const { ledger } = state;
 const publishedAt = new Date().toISOString();
 const entries = Object.entries(ledger.chapters).filter(([id]) =>
   id.startsWith(`${bookSlug}/`),
 );
-if (entries.length === 0) throw new Error(`台账中不存在图书：${bookSlug}`);
-const invalid = entries.filter(
-  ([, entry]) => !["passed", "published"].includes(entry.status),
-);
-if (invalid.length > 0) {
-  throw new Error(`仍有 ${invalid.length} 章未通过，不允许标记发布`);
+const { failures, chapterCount } = validateBookEligibility(state, bookSlug, {
+  requireApproved: true,
+});
+if (failures.length > 0) {
+  throw new Error(
+    `发布资格检查失败（${failures.length} 项）：\n${failures
+      .slice(0, 100)
+      .map((failure) => `- ${failure}`)
+      .join("\n")}`,
+  );
 }
 if (checkOnly) {
-  console.log(`发布资格检查通过：${bookSlug} 共 ${entries.length} 章。`);
+  console.log(`发布资格检查通过：${bookSlug} 共 ${chapterCount} 章。`);
   process.exit(0);
 }
 for (const [, entry] of entries) {
@@ -43,7 +53,7 @@ for (const [, entry] of entries) {
   entry.publishedCommit = commit;
 }
 ledger.generatedAt = publishedAt;
-fs.writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
+fs.writeFileSync(state.ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`);
 console.log(
   `已标记 ${bookSlug} 的 ${entries.length} 章为 published（${release}）。`,
 );

@@ -4,9 +4,12 @@ type: A
 section: CPU眼里的C/C++ · 官方第4章
 order: 4
 description: 对齐原书第4章 4.1-4.7：解剖 this、构造函数、虚函数、多态、模板、malloc/new 和依赖反转从对象语义到机器调用的实现边界。
-demo: false
+demo: true
 math: false
 sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
@@ -16,6 +19,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { CpuCppFeaturesLab } from "@/components/mdx/cpu-eye-cpp/cpp-features";
 
 <Objectives>
 
@@ -25,17 +29,23 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 </Objectives>
 
+<CpuCppFeaturesLab />
+
 ## 从“对象语义如何落到地址与调用目标”开始
 
 C++ class 把 data、lifetime 和 operations 绑定起来，但 CPU 仍只取 instruction、计算 address、读写 bytes 和改变 control flow。编译器要把隐式对象参数、constructor sequencing、virtual dispatch 和 template instantiation 翻译成目标 ABI 能执行的形式。主流实现常见 `this` register、vptr/vtable 与 allocation function，但 C++ 标准不规定这些名字和固定 layout。
 
-<Term def="class 操作必须保持的有效状态约束，通常在构造完成后建立并由公开成员维护。">类不变量</Term>
+<Term def="class 操作必须保持的有效状态约束，通常在构造完成后建立并由公开成员维护。">
+  类不变量
+</Term>
 
 先预测同一个 member call 在 non-virtual、virtual 与 template 三种形式下的 target 何时确定，再检查 optimized output。不要只数 instruction；同时记录 object lifetime、ownership、possible target set 和 compiler 已知事实。
 
 ## 4.1 CPU眼里的this
 
-<Term def="非静态成员函数中的隐式对象参数，指向当前对象或当前基类子对象。">this 指针</Term>
+<Term def="非静态成员函数中的隐式对象参数，指向当前对象或当前基类子对象。">
+  this 指针
+</Term>
 
 源码 `account.deposit(10)` 可理解为把 `account` 的 object identity 与显式 argument 一起传给 member function。函数体中的 `balance` 实际相对 `this` 定位；ABI 通常把 `this` 放入某个 integer argument register，但具体 register、adjustment 和 name mangling 由平台决定。
 
@@ -55,7 +65,9 @@ static member function 没有 `this`，不能直接访问某个实例的 non-sta
 
 ## 4.2 CPU眼里的构造函数
 
-<Term def="在已取得 storage 上按基类和成员顺序开始对象生命周期、建立不变量的特殊成员函数。">构造函数</Term>
+<Term def="在已取得 storage 上按基类和成员顺序开始对象生命周期、建立不变量的特殊成员函数。">
+  构造函数
+</Term>
 
 construction 不是“先有完整对象再调用普通函数”。先取得满足 size/alignment 的 storage，再按语言规则构造 virtual bases、direct bases、members，最后执行 constructor body。member 初始化顺序由 declaration order 决定，不由 initializer-list 的书写顺序决定。
 
@@ -70,7 +82,6 @@ private:
     std::string name_;
 };
 ```
-
 
 主流 virtual ABI 会在 construction/destruction 不同阶段设置相应 vptr，使 virtual call 反映当前已构造层次；但具体写入次数与 layout 不是标准保证。constructor 内 virtual call 不会像完整 most-derived object 那样分派到尚未构造的 derived override，这是 lifetime model 的必要结果。
 
@@ -87,7 +98,9 @@ private:
 
 ## 4.3 CPU眼里的虚函数
 
-<Term def="允许通过 base interface 在运行时选择 most-derived override 的成员函数机制。">虚函数</Term>
+<Term def="允许通过 base interface 在运行时选择 most-derived override 的成员函数机制。">
+  虚函数
+</Term>
 
 当 static type 不能唯一决定 target 时，主流 ABI 常让 polymorphic object 含 vptr，指向该 dynamic type 的 vtable；slot 保存 override target 或 adjustment thunk。调用路径变成 load vptr、load slot、indirect call。C++ 标准只规定 dispatch behavior，不规定必须存在一张表，也不规定 vptr 在 object 第一个 word。
 
@@ -108,7 +121,9 @@ virtual destructor 让通过 base pointer 删除 derived object 时选择正确 
 
 ## 4.4 CPU眼里的多态
 
-<Term def="同一接口表达式根据对象动态类型选择不同实现，常通过 virtual dispatch 实现。">动态多态</Term>
+<Term def="同一接口表达式根据对象动态类型选择不同实现，常通过 virtual dispatch 实现。">
+  动态多态
+</Term>
 
 static type 决定源码可见 interface，dynamic type 决定 virtual override target。reference/pointer 保留 object identity；按值把 derived object 复制到 base object 会发生 slicing，derived members 和 dynamic identity 不再属于新 base object。
 
@@ -120,12 +135,13 @@ void drawAll(std::span<Renderer* const> renderers) {
 }
 ```
 
-
 dynamic polymorphism 适合 runtime open set、插件或 stable ABI；代价包括 object metadata、indirect target 和 ownership complexity。`std::variant` + visitor、function object、type erasure 或 template 可提供不同 tradeoff。选择机制应从 target set、binary boundary、code size 和 update frequency出发，不以“虚函数一定慢”代替 measurement。
 
 ## 4.5 CPU眼里的模板
 
-<Term def="以类型或值为参数生成声明和定义实例的编译期机制，可实现静态多态。">模板实例化</Term>
+<Term def="以类型或值为参数生成声明和定义实例的编译期机制，可实现静态多态。">
+  模板实例化
+</Term>
 
 template source 本身通常不是一个可直接 call 的 runtime function。compiler 在需要时用 concrete arguments 形成 specialization，完成 overload resolution、type checking 和 code generation。每个不同 instantiation 可能生成独立 code，也可能被 linker identical-code folding 合并。
 
@@ -142,9 +158,13 @@ explicit instantiation 可集中 code generation，extern template 可减少重�
 
 ## 4.6 CPU眼里的malloc和new
 
-<Term def="只获取一块可用原始 storage 的 C allocation API，不自动执行 C++ constructor。">malloc</Term>
+<Term def="只获取一块可用原始 storage 的 C allocation API，不自动执行 C++ constructor。">
+  malloc
+</Term>
 
-<Term def="先调用 allocation function 获取 storage，再在其中初始化对象的 C++ expression；失败与清理遵循语言规则。">new expression</Term>
+<Term def="先调用 allocation function 获取 storage，再在其中初始化对象的 C++ expression；失败与清理遵循语言规则。">
+  new expression
+</Term>
 
 `malloc(bytes)` 返回 raw storage 或 null，调用者负责 size overflow、alignment suitability、object lifetime 和 `free` 配对。`new T(args)` 通常调用 `operator new(sizeof(T))`，成功后在 storage 上构造 T；若 constructor 抛异常，对应 deallocation function 被调用。普通 throwing new 分配失败时抛 `std::bad_alloc`，不是返回 null。
 
@@ -159,7 +179,6 @@ if (raw != nullptr) {
 auto owned = std::make_unique<Session>(7, "render");
 ```
 
-
 `new[]/delete[]` 可能使用实现 metadata 追踪 element count，placement new 只开始 object lifetime、不拥有 storage，over-aligned type 需要匹配 alignment-aware allocation。混用 `malloc/delete` 或 `new/free` 会破坏 destructor 和 allocator contract。
 
 现代业务代码优先 value semantics、container 和 smart pointer，把 raw allocation 封装在 ownership boundary。`make_unique` 同时表达 exclusive owner 和 exception-safe construction；custom arena/pool 仍应明确 destruction 与 storage release 是两件事。
@@ -172,7 +191,9 @@ auto owned = std::make_unique<Session>(7, "render");
 
 ## 4.7 面向对象实践依赖反转
 
-<Term def="高层策略与低层细节都依赖稳定抽象，使具体实现从外部注入而非被高层直接创建。">依赖反转</Term>
+<Term def="高层策略与低层细节都依赖稳定抽象，使具体实现从外部注入而非被高层直接创建。">
+  依赖反转
+</Term>
 
 依赖反转不是“到处加虚函数”。高层 module 持有业务 invariant，它应面向 renderer/storage/clock 等 capability contract；低层 OpenGL、file 或 system implementation 实现该 contract。composition root 负责选择实现与 ownership，使 high-level policy 不必 `new ConcreteRenderer`。
 

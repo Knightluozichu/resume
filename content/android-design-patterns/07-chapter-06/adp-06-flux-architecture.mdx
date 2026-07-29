@@ -8,6 +8,9 @@ draft: false
 math: false
 sourceUrl: "https://peaks.cc/books/architecture_patterns"
 demo: true
+qualityVersion: 2
+sourceMode: "independent-rewrite"
+practiceMode: "code"
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,12 +20,17 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { Adp06FluxArchitectureLab } from "@/components/mdx/android-design-patterns/adp-06-flux-architecture";
+import {
+  AndroidDecisionMap,
+  AndroidFailureTimeline,
+} from "@/components/mdx/android-design-patterns/android-architecture-lab";
 
 # 第6章 Flux 架构
 
 本页依据PEAKS最终商品页、官方样章完整目录和书中指定样例仓库重构。正式书由日高正博、小西裕介、藤原聖、吉岡毅、今井智章合著，2018年1月31日发行，224页；本课程严格保留出版时的Android技术语境。
 
-本页位于 **第II部 生きた設計を見る**。 从单向数据流出发，建立Action、Dispatcher、Store、View与Repository的完整轨迹。核心任务是让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View。先把结论写成可被反例推翻的预测，再阅读机制与案例。
+本页位于 **第 II 部：观察真实设计**。 从单向数据流出发，建立Action、Dispatcher、Store、View与Repository的完整轨迹。核心任务是让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View。先把结论写成可被反例推翻的预测，再阅读机制与案例。
 
 <Objectives>
 
@@ -33,136 +41,140 @@ import { Attribution } from "@/components/mdx/attribution";
 
 </Objectives>
 
+<Adp06FluxArchitectureLab />
+
+<AndroidDecisionMap
+  title="第6章 Flux 架构 的责任路径"
+  input="用户 Action、外部结果、Dispatcher 顺序与 Store 初始状态。"
+  owner="Store 是唯一状态写入口，Repository 只把 I/O 结果变成动作。"
+  output="动作日志能够重放出相同状态和界面结果。"
+/>
+
+<AndroidFailureTimeline
+  scenario="第6章 Flux 架构 的失败验证"
+  baseline="按顺序提交请求与成功动作。"
+  fault="旧请求晚于新请求完成。"
+  guard="动作携带请求身份，Store 拒绝过期结果。"
+  verdict="最终状态对应最新意图且日志可完整解释。"
+/>
+
+<Callout type="trap" title="第6章 Flux 架构 的反例">
+  单向数据流不自动解决乱序请求；没有请求身份或版本，旧结果仍可能覆盖新状态。
+</Callout>
+
 ## 从一个可证伪的问题开始
 
 先预测：如果只更换类名或框架，而没有改变责任、依赖方向和状态所有者，把EventBus的任意事件都称为Flux会形成多向广播；若Store互相写入或View直接更新模型，顺序、重放和故障定位都会失效。把预测落实为同一输入下的两条运行轨迹，不要把“能编译”“页面能打开”当成架构正确。
-
-本书的核心不是宣布唯一正确架构，而是建立讨论土台。项目规模、Android生命周期、既有代码、交付期限和团队结构都会改变最合适的选择。为此，本页始终保留业务控制变量，只修改一个设计因素，观察变更扩散、测试隔离、恢复行为和认知成本。
 
 验收不变量是：状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流。若结论无法由代码快照、调用/状态轨迹、失败注入和团队交付事实共同支持，就只能记为待验证假设。
 
 ## 核心词汇与2018年边界
 
-<Term def="Action是本页第1个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">Action</Term>、<Term def="Dispatcher是本页第2个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">Dispatcher</Term>、<Term def="Store是本页第3个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">Store</Term>、<Term def="单向数据流是本页第4个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">单向数据流</Term>、<Term def="Repository是本页第5个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">Repository</Term>
+<Term def="Action是本页第1个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Action
+</Term>
+
+<Term def="Dispatcher是本页第2个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Dispatcher
+</Term>
+
+<Term def="Store是本页第3个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Store
+</Term>
+
+<Term def="单向数据流是本页第4个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  单向数据流
+</Term>
+
+<Term def="Repository是本页第5个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Repository
+</Term>
 
 以上词汇都要回答五个问题：谁拥有状态、谁可以修改、Android生命周期如何影响它、失败从哪里传播、怎样证明恢复正确。Compose、Flow、Hilt、Navigation Compose以及后来的Jetpack最佳实践可作为迁移对照，但不能改写2018年正式目录的含义。
 
 ## 原书目录逐节点重构
 
-### 第II部 生きた設計を見る
+### 第 II 部：观察真实设计
 
-该部标题是正式目录层级，不是装饰。它规定本页是在建立共同基础、读取真实案例，还是评估新组件。
+### 6.1 为什么选择 Flux 架构
 
-### 6.1 なぜFluxアーキテクチャなのか
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+### 6.2 架构全貌
 
-本节要把“6.1 なぜFluxアーキテクチャなのか”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+6.2 架构全貌 的复核需要落到实际对象：标明输入、状态所有者、调用或数据方向、生命周期边界和失败后的恢复结果，并保存一条能够推翻当前判断的反例；只有名称或类图不足以证明设计成立。
 
-### 6.2 アーキテクチャの全体像
+#### 6.2.1 核心思想：单向数据流
 
-把“アーキテクチャの全体像”放回让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-本节要把“6.2 アーキテクチャの全体像”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+#### 6.2.2 从 View 出发的数据流：Dispatcher 充当枢纽
 
-#### 6.2.1 中心的な考え：単一方向のデータフロー
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+### 6.3 应用于 Android 应用
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+6.3 应用于 Android 应用 的复核需要落到实际对象：标明输入、状态所有者、调用或数据方向、生命周期边界和失败后的恢复结果，并保存一条能够推翻当前判断的反例；只有名称或类图不足以证明设计成立。
 
-#### 6.2.2 Viewからのデータフロー：Dispatcherがハブとなる
+#### 6.3.1 承担 View 角色的 Activity 与 Fragment
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+Android组件只负责装配、生命周期桥接、渲染和转发意图，业务判断进入可替换的Presenter、ViewModel或Store。
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+#### 6.3.2 Action 与 Action Creator
 
-### 6.3 Androidアプリに適用する
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-把“Androidアプリに適用する”放回让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+#### 6.3.3 使用发布订阅库实现 Dispatcher
 
-本节要把“6.3 Androidアプリに適用する”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-#### 6.3.1 Viewの役割をもつActivityとFragment
+#### 6.3.4 Store 的角色
 
-Android组件只负责装配、生命周期桥接、渲染和转发意图，业务判断进入可替换的Presenter、ViewModel或Store。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+#### 6.3.5 Android 中 Flux 架构的全貌
 
-#### 6.3.2 Action（Action Creator）
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+### 6.4 产品实现
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+6.4 产品实现 的复核需要落到实际对象：标明输入、状态所有者、调用或数据方向、生命周期边界和失败后的恢复结果，并保存一条能够推翻当前判断的反例；只有名称或类图不足以证明设计成立。
 
-#### 6.3.3 Pub/Sub型のライブラリをDispatcherとして使う
+#### 6.4.1 Repository 与 Action 的实现
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+Repository隐藏本地、缓存和远端来源，但必须公开成功、为空、失败、取消和新旧数据竞争的语义。
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+#### 6.4.2 Dispatcher 与 Store 的实现
 
-#### 6.3.4 Storeの役割
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
+#### 6.4.3 产品实例
 
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+6.4.3 产品实例 的复核需要落到实际对象：标明输入、状态所有者、调用或数据方向、生命周期边界和失败后的恢复结果，并保存一条能够推翻当前判断的反例；只有名称或类图不足以证明设计成立。
 
-#### 6.3.5 AndroidにおけるFluxアーキテクチャの全体像
+### 6.5 Flux 架构的优点与缺点
 
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
-
-### 6.4 プロダクトでの実装
-
-把“プロダクトでの実装”放回让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-本节要把“6.4 プロダクトでの実装”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
-
-#### 6.4.1 RepositoryおよびActionの実装
-
-Repository隐藏本地、缓存和远端来源，但必须公开成功、为空、失败、取消和新旧数据竞争的语义。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
-
-#### 6.4.2 DispatcherとStoreの実装
-
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
-
-#### 6.4.3 プロダクトにおける実例
-
-把“プロダクトにおける実例”放回让用户动作和外部结果都形成Action，经Dispatcher按序进入Store，由Store产生新状态再通知View这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
-
-### 6.5 Fluxアーキテクチャのメリットとデメリット
-
-所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以状态只能在Store内改变；每次变化都能追溯到Action，View不绕过Action直接改Store，异步副作用不制造第二条隐式数据流作为验收不变量。
-
-本节要把“6.5 Fluxアーキテクチャのメリットとデメリット”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。
 
 ## 完整节点清单与覆盖门
 
 本页承担下列15个目录或检索节点；正文、图解、实验和题目必须都能反向定位这些节点：
 
-- 6.1 なぜFluxアーキテクチャなのか
-- 6.2 アーキテクチャの全体像
-- 6.2.1 中心的な考え：単一方向のデータフロー
-- 6.2.2 Viewからのデータフロー：Dispatcherがハブとなる
-- 6.3 Androidアプリに適用する
-- 6.3.1 Viewの役割をもつActivityとFragment
-- 6.3.2 Action（Action Creator）
-- 6.3.3 Pub/Sub型のライブラリをDispatcherとして使う
-- 6.3.4 Storeの役割
-- 6.3.5 AndroidにおけるFluxアーキテクチャの全体像
-- 6.4 プロダクトでの実装
-- 6.4.1 RepositoryおよびActionの実装
-- 6.4.2 DispatcherとStoreの実装
-- 6.4.3 プロダクトにおける実例
-- 6.5 Fluxアーキテクチャのメリットとデメリット
-
+- 6.1 为什么选择 Flux 架构
+- 6.2 架构全貌
+- 6.2.1 核心思想：单向数据流
+- 6.2.2 从 View 出发的数据流：Dispatcher 充当枢纽
+- 6.3 应用于 Android 应用
+- 6.3.1 承担 View 角色的 Activity 与 Fragment
+- 6.3.2 Action 与 Action Creator
+- 6.3.3 使用发布订阅库实现 Dispatcher
+- 6.3.4 Store 的角色
+- 6.3.5 Android 中 Flux 架构的全貌
+- 6.4 产品实现
+- 6.4.1 Repository 与 Action 的实现
+- 6.4.2 Dispatcher 与 Store 的实现
+- 6.4.3 产品实例
+- 6.5 Flux 架构的优点与缺点
 
 ## 分步推导：从结构到运行事实
 
@@ -175,12 +187,12 @@ Repository隐藏本地、缓存和远端来源，但必须公开成功、为空�
   </Step>
   <Step title="最后关闭证据门">
     对照正常与失败轨迹，确认业务不变量、释放、恢复、回退和责任人。缺一项就不能把“偏好”升级为“决策”。
-    </Step>
+  </Step>
 </Stepper>
 
 ## 可复现实验与记录格式
 
-以下三个片段分别固定版本/结构、运行轨迹和证据表。它们是实验协议，不是要求照抄的生产模板：
+围绕“第6章 Flux 架构”，下面分别保存结构快照、运行轨迹和判定表；这些记录用于复现本页结论，而不是生产代码模板：
 
 ```java
 dispatcher.dispatch(new LoadStarted(id));
@@ -195,11 +207,7 @@ View -> ActionCreator -> Dispatcher -> Store -> immutable state -> View
 actionId | previousStateHash | nextStateHash | effect | timestamp
 ```
 
-动手试：用同一TODO或章节案例分别运行正常、旋转/重建、后台、迟到成功、迟到失败五条路径。每条路径记录输入、对象实例、线程/调度、状态前后值、UI结果和释放点。若是团队案例，再增加变更文件数、评审往返和回退耗时。
-
-<Callout type="trap" title="把模式名当成证据">
-  类叫ViewModel、Presenter或Store并不证明满足该模式。必须检查依赖方向、状态写权限、生命周期和运行轨迹；否则只是重新命名原来的耦合。
-</Callout>
+动手试（第6章 Flux 架构）：用同一TODO或章节案例分别运行正常、旋转/重建、后台、迟到成功、迟到失败五条路径。每条路径记录输入、对象实例、线程/调度、状态前后值、UI结果和释放点。若是团队案例，再增加变更文件数、评审往返和回退耗时。
 
 <Callout type="trap" title="用现代结论覆盖历史版本">
   本页对应2018年成书与2017年前后样例。现代Android方案可放在迁移备注中比较，但不能替换正式节点、作者当时的约束或样例行为。
@@ -207,16 +215,17 @@ actionId | previousStateHash | nextStateHash | effect | timestamp
 
 ## 独立证据门
 
-证据包至少包含：正式目录映射、来源URL、出版前代码提交、角色与依赖图、生命周期轨迹、一个单变量失败实验、测试输出、业务/团队指标、停止条件、回退步骤和复核人。图和代码必须使用相同角色命名，否则无法交叉验证。
+“第6章 Flux 架构”的“第6章 Flux 架构”的“第6章 Flux 架构”的“第6章 Flux 架构”的“第6章 Flux 架构”的“第6章 Flux 架构”的证据包至少包含：正式目录映射、来源URL、出版前代码提交、角色与依赖图、生命周期轨迹、一个单变量失败实验、测试输出、业务/团队指标、停止条件、回退步骤和复核人。图和代码必须使用相同角色命名，否则无法交叉验证。
 
 ## 练习
 
 <Exercises>
 
-**问题 1：为什么本页必须以同一业务规格作为控制变量？**
+**问题 1：在“第6章 Flux 架构”中，为什么要先固定业务规格或案例边界？**
 
 <Answer>
-  只有业务输入、功能和数据语义不变，观察到的差异才能归因于职责分配、依赖方向或生命周期策略；否则无法判断是架构还是需求变化造成结果。
+  在“第6章 Flux
+  架构”中，只有输入、功能和数据语义保持不变，差异才可归因于职责、依赖或生命周期策略；若同时改需求，就无法识别变化来源。
 </Answer>
 
 **问题 2：怎样构造“把EventBus的任意事件都称为Flux会形成多向广播；若Store互相写入或View直接更新模型，顺序、重放和故障定位都会失效”的最小反例？**
@@ -258,6 +267,6 @@ actionId | previousStateHash | nextStateHash | effect | timestamp
 [← 上一页：第5章 OSS 中设计者的角色](/learn/android-design-patterns/06-chapter-05/adp-05-designer-role-in-oss) · [下一页：第7章 团队与架构 →](/learn/android-design-patterns/08-chapter-07/adp-07-team-and-architecture)
 
 <Attribution
-  adaptedFrom="日高正博、小西裕介、藤原聖、吉岡毅、今井智章《Android アプリ設計パターン入門》2018年正式版"
+  adaptedFrom="日高正博、小西裕介、藤原聖、吉岡毅、今井智章《Android 应用设计模式入门》2018年正式版"
   adaptedUrl="https://peaks.cc/books/architecture_patterns"
 />

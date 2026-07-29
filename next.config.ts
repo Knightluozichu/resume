@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import { availableParallelism } from "node:os";
 
 const nextConfig: NextConfig = {
+  // 本地视觉审计会从 127.0.0.1 驱动开发服务器。Next 默认把该主机视为
+  // 与 localhost 不同的开发来源并阻止 HMR/客户端水合资源，因此显式只放行
+  // 两个 loopback 主机；不扩大到局域网或任意来源。
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   // 部署产物：.next/standalone（deploy.sh rsync 到服务器，pm2 托管 server.js）
   output: "standalone",
   // 本站需要预渲染 2400+ 章节；按当前机器可用 CPU 并行生成静态页，避免 Next

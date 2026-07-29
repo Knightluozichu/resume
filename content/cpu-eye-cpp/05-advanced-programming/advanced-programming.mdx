@@ -4,9 +4,12 @@ type: A
 section: CPU眼里的C/C++ · 官方第5章
 order: 5
 description: 对齐原书第5章 5.1-5.9：从虚拟内存和进程地址映射延伸到 volatile、常量、系统调用、大小端、上下文与锁的机器边界。
-demo: false
+demo: true
 math: false
 sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
 draft: false
 ---
 
@@ -16,6 +19,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { CpuAdvancedProgrammingLab } from "@/components/mdx/cpu-eye-cpp/advanced-programming";
 
 <Objectives>
 
@@ -25,11 +29,15 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 </Objectives>
 
+<CpuAdvancedProgrammingLab />
+
 ## 从“CPU 地址为何不是内存条位置”开始
 
 用户程序中的 pointer 通常是当前进程 virtual address。CPU load/store 先经过 address translation 和 permission check，再进入 cache/memory hierarchy；映射缺失时触发 fault，由 kernel 决定分配 frame、读取 file-backed page、建立 copy-on-write，或向进程报告错误。高级编程的核心不是背一张固定地址图，而是追踪“当前执行上下文、翻译表、权限与 backing”四个条件。
 
-<Term def="进程使用的地址抽象，由 MMU 和操作系统映射到物理页、文件或其他 backing。">虚拟内存</Term>
+<Term def="进程使用的地址抽象，由 MMU 和操作系统映射到物理页、文件或其他 backing。">
+  虚拟内存
+</Term>
 
 先预测两个进程打印出的同一个数值地址是否指向同一物理页，再用 `/proc` maps、debugger 或系统 tracing 验证。相同 virtual address、相同 bytes 和相同 object identity 是三件不同的事。
 
@@ -37,7 +45,9 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 virtual memory 为每个 process 提供独立 address space、page-level permissions、按需加载和共享映射。地址空间很大不表示等量 RAM 已分配；未触碰 anonymous pages 可能只保留 mapping metadata，file-backed pages 可按需读入，clean pages 还能丢弃后重载。
 
-<Term def="把 virtual page number 映射到 physical frame 与访问权限的分层数据结构。">页表</Term>
+<Term def="把 virtual page number 映射到 physical frame 与访问权限的分层数据结构。">
+  页表
+</Term>
 
 ```cpp
 auto* region = static_cast<std::byte*>(
@@ -50,7 +60,9 @@ TLB cache 最近使用的 translations；TLB miss 不等于 page fault，它可�
 
 ## 5.2 坐井观天的进程
 
-<Term def="一个进程可直接寻址的 virtual mappings、权限与用户态执行状态集合。">进程地址空间</Term>
+<Term def="一个进程可直接寻址的 virtual mappings、权限与用户态执行状态集合。">
+  进程地址空间
+</Term>
 
 进程像“坐井观天”：普通 pointer 只能表达自己的 address space。另一个 process 即使拥有数值相同的 pointer，也会通过另一套 page tables 翻译。进程隔离阻止用户态直接读写 kernel 和其他 process pages；跨进程通信必须经过 shared memory、pipe/socket、file 或受控 kernel API。
 
@@ -60,10 +72,11 @@ ASLR 让 executable、library、heap 和 stack base 在不同 run 中变化，�
 
 ## 5.3 CPU眼里的地址映射
 
-<Term def="用 page tables 将 virtual page 转为 physical frame，并保留 offset 完成最终访问的过程。">地址映射</Term>
+<Term def="用 page tables 将 virtual page 转为 physical frame，并保留 offset 完成最终访问的过程。">
+  地址映射
+</Term>
 
 virtual address 可拆为 virtual page number 与 page offset。TLB hit 直接提供 frame translation；miss 触发 page-table walk。entry 还携带 readable/writable/executable、user/kernel、present 等 attributes。得到 physical address 后，cache hierarchy 通常按 cache line 处理访问。
-
 
 ```text
 virtual address -> TLB -> page tables -> physical frame + offset
@@ -82,7 +95,9 @@ memory-mapped file 让 file offset 通过 mapping 参与地址翻译；dirty sha
 
 ## 5.4 CPU眼里的volatile
 
-<Term def="要求实现把对该 glvalue 的访问作为可观察操作处理的限定；不自动提供原子性或线程 happens-before。">volatile</Term>
+<Term def="要求实现把对该 glvalue 的访问作为可观察操作处理的限定；不自动提供原子性或线程 happens-before。">
+  volatile
+</Term>
 
 在 C++ 中，volatile 常用于 memory-mapped I/O、与 signal handler 交互的受限对象或实现定义的硬件场景，使 compiler 不随意合并/删除指定 accesses。它不保证一次宽访问不可撕裂，不提供 cache coherence 指令，不建立跨线程 ordering，也不把 `counter++` 变成 atomic read-modify-write。
 
@@ -97,7 +112,9 @@ hardware register 还需要 platform-specific barriers、width/alignment 和 acc
 
 ## 5.5 CPU眼里的常量
 
-<Term def="通过某个表达式不能修改对象的类型约束；不等同于编译期常量，也不固定存储区域。">const 对象</Term>
+<Term def="通过某个表达式不能修改对象的类型约束；不等同于编译期常量，也不固定存储区域。">
+  const 对象
+</Term>
 
 `const` 约束 mutation interface，`constexpr` 要求值可用于 constant evaluation 的相应上下文；literal、immediate operand、read-only data 和 runtime const object 是不同层。compiler 可把已知 value constant-fold 进 instructions，也可为取地址的 const object 分配 storage。
 
@@ -111,7 +128,9 @@ int tiles = runtimeLimit / tileSize;
 
 ## 5.6 CPU眼里的系统调用
 
-<Term def="用户态通过受控 ISA/ABI 入口请求内核执行文件、内存、进程或设备操作的边界。">系统调用</Term>
+<Term def="用户态通过受控 ISA/ABI 入口请求内核执行文件、内存、进程或设备操作的边界。">
+  系统调用
+</Term>
 
 library function 不等于 system call。`std::fread` 可在 user-space buffer 满足请求，allocator fast path 也可不进 kernel；真正 syscall wrapper 按 kernel ABI 放置 number/arguments，执行特权边界 instruction，kernel 验证 pointers、permissions 和 resources，完成后返回 result/error。
 
@@ -127,16 +146,19 @@ if (count < 0) {
 
 ## 5.7 CPU眼里的大端、小端
 
-<Term def="多字节数值在递增内存地址中的 byte 排列次序；little-endian 低有效字节在低地址，big-endian 相反。">字节序</Term>
+<Term def="多字节数值在递增内存地址中的 byte 排列次序；little-endian 低有效字节在低地址，big-endian 相反。">
+  字节序
+</Term>
 
 数值 `0x12345678` 的四个 bytes 是 `12 34 56 78`。little-endian memory 从低地址看到 `78 56 34 12`，big-endian 则看到 `12 34 56 78`。endianness 描述 byte order，不等于每个 byte 内 bit printing 顺序，也不影响单 byte character。
-
 
 network protocols 常规定 network byte order，file formats 也应显式声明。序列化不能直接 dump native struct：除了 endian，还有 padding、alignment、enum width 和 ABI layout。应逐字段使用 fixed-width types 与 encode/decode helpers，边界处转换一次，内部保持 host representation。
 
 ## 5.8 CPU眼里的上下文
 
-<Term def="让执行流暂停后可恢复的 program counter、stack pointer、registers、address-space 与调度状态。">线程上下文</Term>
+<Term def="让执行流暂停后可恢复的 program counter、stack pointer、registers、address-space 与调度状态。">
+  线程上下文
+</Term>
 
 thread context switch 通常保存 outgoing registers/PC/SP，选择 runnable thread，切换必要的 address-space or protection state，再恢复 incoming context。并非每次 switch 都完整清空 cache/TLB；同 process threads 可共享 address space，CPU 也有 tagged TLB 等优化，但 working-set interference 仍会造成 cache effects。
 
@@ -146,10 +168,11 @@ context 也包含 language runtime state，例如 thread-local storage base、si
 
 ## 5.9 CPU眼里的锁
 
-<Term def="在同一时刻只允许一个 owner 进入临界区，并通过 acquire/release 建立共享数据可见性的同步对象。">互斥锁</Term>
+<Term def="在同一时刻只允许一个 owner 进入临界区，并通过 acquire/release 建立共享数据可见性的同步对象。">
+  互斥锁
+</Term>
 
 mutex fast path 常用 atomic compare/exchange 尝试从 unlocked 变为 locked；成功后 acquire semantics 约束后续 accesses，unlock 的 release semantics 发布临界区 writes。竞争时 implementation 可先 spin，再通过 futex/parking 等机制进入 kernel wait；unlock 可能唤醒 waiter。
-
 
 ```cpp
 std::mutex mutex;

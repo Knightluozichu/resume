@@ -42,6 +42,176 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Algs4ReductionMap: module0.Algs4ReductionMap,
     } as ChapterMdxComponents;
   },
+  "android-design-patterns/00-official-learning-map/adp-official-learning-map":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-official-learning-map"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        AdpOfficialLearningMapLab: modules[0].AdpOfficialLearningMapLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/01-preface/adp-preface": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/android-design-patterns/adp-preface"),
+      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+    ]);
+    return {
+      AdpPrefaceLab: modules[0].AdpPrefaceLab,
+      AndroidDecisionMap: modules[1].AndroidDecisionMap,
+      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+    } as ChapterMdxComponents;
+  },
+  "android-design-patterns/02-chapter-01/adp-01-android-app-basic-structure":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-01-android-app-basic-structure"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp01AndroidAppBasicStructureLab:
+          modules[0].Adp01AndroidAppBasicStructureLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/03-chapter-02/adp-02-mvvm-application-structure":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-02-mvvm-application-structure"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp02MvvmApplicationStructureLab:
+          modules[0].Adp02MvvmApplicationStructureLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/04-chapter-03/adp-03-mvp-application-structure":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-03-mvp-application-structure"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp03MvpApplicationStructureLab:
+          modules[0].Adp03MvpApplicationStructureLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/05-chapter-04/adp-04-incremental-development-design":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-04-incremental-development-design"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp04IncrementalDevelopmentDesignLab:
+          modules[0].Adp04IncrementalDevelopmentDesignLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/06-chapter-05/adp-05-designer-role-in-oss":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-05-designer-role-in-oss"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp05DesignerRoleInOssLab: modules[0].Adp05DesignerRoleInOssLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/07-chapter-06/adp-06-flux-architecture":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-06-flux-architecture"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp06FluxArchitectureLab: modules[0].Adp06FluxArchitectureLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/08-chapter-07/adp-07-team-and-architecture":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-07-team-and-architecture"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp07TeamAndArchitectureLab: modules[0].Adp07TeamAndArchitectureLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/09-chapter-08/adp-08-android-architecture-components":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-08-android-architecture-components"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        Adp08AndroidArchitectureComponentsLab:
+          modules[0].Adp08AndroidArchitectureComponentsLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/10-afterword/adp-afterword": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/android-design-patterns/adp-afterword"),
+      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+    ]);
+    return {
+      AdpAfterwordLab: modules[0].AdpAfterwordLab,
+      AndroidDecisionMap: modules[1].AndroidDecisionMap,
+      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+    } as ChapterMdxComponents;
+  },
+  "android-design-patterns/11-index/adp-index": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/android-design-patterns/adp-index"),
+      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+    ]);
+    return {
+      AdpIndexLab: modules[0].AdpIndexLab,
+      AndroidDecisionMap: modules[1].AndroidDecisionMap,
+      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+    } as ChapterMdxComponents;
+  },
+  "android-design-patterns/12-author-profiles/adp-author-profiles":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-author-profiles"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        AdpAuthorProfilesLab: modules[0].AdpAuthorProfilesLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-design-patterns/13-official-final-review/adp-official-final-review":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/android-design-patterns/adp-official-final-review"),
+        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
+      ]);
+      return {
+        AdpOfficialFinalReviewLab: modules[0].AdpOfficialFinalReviewLab,
+        AndroidDecisionMap: modules[1].AndroidDecisionMap,
+        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
   "auto-why-car-runs/01-whole-car/whole-car-system": async () => {
     const module0 =
       await import("@/components/mdx/auto-why-car-runs/labs/whole-car-system");
@@ -815,6 +985,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EppMoveStateFlow: module0.EppMoveStateFlow,
     } as ChapterMdxComponents;
   },
+  "cpu-eye-cpp/00-intro/learning-map": async () => {
+    const module0 = await import("@/components/mdx/cpu-eye-cpp/learning-map");
+    return {
+      CpuLearningMapLab: module0.CpuLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/01-prerequisites/prerequisites": async () => {
+    const module0 = await import("@/components/mdx/cpu-eye-cpp/prerequisites");
+    return {
+      CpuPrerequisitesLab: module0.CpuPrerequisitesLab,
+    } as ChapterMdxComponents;
+  },
   "cpu-eye-cpp/02-basic-syntax/basic-syntax": async () => {
     const module0 =
       await import("@/components/mdx/cpu-eye-cpp/diagrams/basic-syntax");
@@ -823,6 +1005,39 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CpuEyeIncrementConversionCostMap:
         module0.CpuEyeIncrementConversionCostMap,
       CpuEyePointerArrayAddressMap: module0.CpuEyePointerArrayAddressMap,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/03-function-principles/function-principles": async () => {
+    const module0 =
+      await import("@/components/mdx/cpu-eye-cpp/function-principles");
+    return {
+      CpuFunctionPrinciplesLab: module0.CpuFunctionPrinciplesLab,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/04-cpp-features/cpp-features": async () => {
+    const module0 = await import("@/components/mdx/cpu-eye-cpp/cpp-features");
+    return {
+      CpuCppFeaturesLab: module0.CpuCppFeaturesLab,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/05-advanced-programming/advanced-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/cpu-eye-cpp/advanced-programming");
+    return {
+      CpuAdvancedProgrammingLab: module0.CpuAdvancedProgrammingLab,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/06-interview-challenges/interview-challenges": async () => {
+    const module0 =
+      await import("@/components/mdx/cpu-eye-cpp/interview-challenges");
+    return {
+      CpuInterviewChallengesLab: module0.CpuInterviewChallengesLab,
+    } as ChapterMdxComponents;
+  },
+  "cpu-eye-cpp/07-review/final-review": async () => {
+    const module0 = await import("@/components/mdx/cpu-eye-cpp/final-review");
+    return {
+      CpuFinalReviewLab: module0.CpuFinalReviewLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
@@ -942,14 +1157,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EmcppVectorConstructionSemanticsMap,
       } as ChapterMdxComponents;
     },
-  "global-illumination/01-core/gil-direct-indirect": async () => {
-    const module0 =
-      await import("@/components/mdx/global-illumination/diagrams/gil-direct-indirect");
-    return {
-      GilRadiometryBalanceDiagram: module0.GilRadiometryBalanceDiagram,
-      GilHemisphereMeasureDiagram: module0.GilHemisphereMeasureDiagram,
-    } as ChapterMdxComponents;
-  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
@@ -1646,14 +1853,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");
     return {
       PP2ThreeProblemsMap: module0.PP2ThreeProblemsMap,
-    } as ChapterMdxComponents;
-  },
-  "real-time-rendering-4e/02-advanced/rtr-optimization": async () => {
-    const module0 =
-      await import("@/components/mdx/real-time-rendering-4e/diagrams/rtr-optimization");
-    return {
-      RtrAccelerationDiagram: module0.RtrAccelerationDiagram,
-      RtrRealtimeSystemsDiagram: module0.RtrRealtimeSystemsDiagram,
     } as ChapterMdxComponents;
   },
 };

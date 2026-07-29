@@ -16,9 +16,10 @@ import { visit } from "unist-util-visit";
 const ROOT = process.cwd();
 const CONTENT_DIR = path.join(ROOT, "content");
 const MANIFEST_PATH = path.join(ROOT, "quality/fidelity-manifests.json");
-const LEDGER_PATH = path.join(ROOT, "quality/remediation-ledger.json");
+const LEDGER_PATH = path.join(ROOT, "quality/publication-ledger.json");
 const VISUAL_RESULTS_PATH = path.join(ROOT, "quality/visual-results.json");
 const REPORT_DIR = path.join(ROOT, "quality/v2/reports");
+const AUDIT_RULES_VERSION = 3;
 const SCORE_THRESHOLD = 90;
 const DIMENSION_FLOORS = {
   source: 12,
@@ -48,7 +49,10 @@ const GENERIC_PATTERNS = [
     "generic-quality-prose",
     /冻结输入、上下文、版本和成功标准|第一条证据分叉|单故障样本/,
   ],
-  ["placeholder-copy", /\b(?:TODO|TBD)\b|待补充|占位内容|lorem ipsum/i],
+  [
+    "placeholder-copy",
+    /\bTBD\b|(?:^|\n)\s*(?:<!--\s*)?TODO(?:\s*[:：]|(?:\s*-->)?\s*$)|待补充|占位内容|lorem ipsum/im,
+  ],
 ];
 const VISUAL_NAME =
   /(Diagram|Viz|Figure|Demo|Chart|Scene|Canvas|Slider|Timeline|Anatomy|Flow|Lab|Map)$/;
@@ -183,10 +187,21 @@ val value = raw.toDoubleOrNull()
   );
   assert.equal(
     regressionBlockers(
-      validKotlinIdentifier.replace("val value", "TODO val value"),
+      validKotlinIdentifier.replace("val value", "TODO: val value"),
     ).includes("placeholder-copy"),
     true,
   );
+  assert.equal(japaneseKanaCount("TODO App は、画面の状態を保持します。"), 6);
+  assert.equal(
+    japaneseKanaCount("TODO App 是示例应用名，不应按日文正文处理。"),
+    0,
+  );
+  const hiddenChapter = `{/* 编辑备注
+## 被意外注释的正文
+这一节不会渲染。
+*/}`;
+  assert.equal(commentedOutHeadingCount(hiddenChapter), 1);
+  assert.equal(stripJsxComments(hiddenChapter).trim(), "");
 
   const repeated =
     "同一段模板话术如果跨三章反复出现，就必须作为跨章复制阻断，而不能用字数平均掉。";
@@ -249,6 +264,8 @@ export function TopicLab() {
         "cross-chapter-copy-detected",
         "within-chapter-template-copy-detected",
         "placeholder-boundary-detected-without-kotlin-false-positive",
+        "japanese-kana-residue-counted-without-todo-app-false-positive",
+        "commented-out-chapter-content-detected",
         "synthetic-visual-score-hard-fails",
         "dedicated-shared-visual-allowed",
         "title-substitution-visual-hard-fails",
@@ -323,6 +340,24 @@ function removeOutlineListing(source) {
 
 function countMatches(value, pattern) {
   return [...value.matchAll(pattern)].length;
+}
+
+function japaneseKanaCount(value) {
+  return countMatches(String(value ?? ""), /[\u3040-\u30ff]/gu);
+}
+
+function stripJsxComments(value) {
+  return String(value ?? "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+}
+
+function commentedOutHeadingCount(value) {
+  let count = 0;
+  for (const comment of String(value ?? "").matchAll(
+    /\{\/\*([\s\S]*?)\*\/\}/g,
+  )) {
+    count += countMatches(comment[1], /^#{2,5}\s+\S+/gm);
+  }
+  return count;
 }
 
 function scoreByThreshold(value, thresholds) {
@@ -473,7 +508,9 @@ function parseChapter(filePath, manifests, visualResults) {
   const id = `${bookSlug}/${sectionSlug}/${chapterSlug}`;
   const raw = fs.readFileSync(filePath, "utf8");
   const parsed = matter(raw);
-  const source = parsed.content;
+  const rawSource = parsed.content;
+  const hiddenHeadingCount = commentedOutHeadingCount(rawSource);
+  const source = stripJsxComments(rawSource);
   const sourceWithoutOutline = removeOutlineListing(source);
   let tree = null;
   let parseError = null;
@@ -765,6 +802,8 @@ function parseChapter(filePath, manifests, visualResults) {
     headings,
     sentenceFingerprints: sentenceFingerprint(paragraphs),
     withinChapterTemplateCopies: maxWithinChapterTemplateCopies(paragraphs),
+    japaneseKanaCount: japaneseKanaCount(paragraphs.join("\n")),
+    hiddenHeadingCount,
     uniqueVisuals,
     interactiveComponents,
     imports,
@@ -801,6 +840,12 @@ function scoreChapter(chapter, sentenceOwners) {
   const repeatedSentences = chapter.sentenceFingerprints.filter(
     (sentence) => (sentenceOwners.get(normalized(sentence))?.size ?? 0) >= 3,
   );
+  const crossBookRepeatedSentences = repeatedSentences.filter((sentence) => {
+    const owners = sentenceOwners.get(normalized(sentence)) ?? new Set();
+    return (
+      new Set([...owners].map((chapterId) => chapterId.split("/")[0])).size >= 2
+    );
+  });
   const hardBlockers = [...chapter.genericFlags];
   if (chapter.parseError) hardBlockers.push("mdx-ast-parse-error");
   if (chapter.objectiveBlocks !== 1)
@@ -809,8 +854,14 @@ function scoreChapter(chapter, sentenceOwners) {
     hardBlockers.push("attribution-block-count");
   if (repeatedSentences.length >= 3)
     hardBlockers.push("cross-chapter-template-copy");
+  if (crossBookRepeatedSentences.length >= 3)
+    hardBlockers.push("cross-book-template-copy");
   if (chapter.withinChapterTemplateCopies >= 10)
     hardBlockers.push("within-chapter-template-copy");
+  if (chapter.japaneseKanaCount >= 20)
+    hardBlockers.push("japanese-language-residue");
+  if (chapter.hiddenHeadingCount > 0)
+    hardBlockers.push("commented-out-chapter-content");
   if (chapter.qualityVersion !== 2) hardBlockers.push("quality-v2-unreviewed");
   if (chapter.qualityVersion === 2 && !chapter.practiceMode)
     hardBlockers.push("practice-mode-missing");
@@ -981,6 +1032,7 @@ function scoreChapter(chapter, sentenceOwners) {
   return {
     ...chapter,
     repeatedSentences,
+    crossBookRepeatedSentences,
     hardBlockers: [...new Set(hardBlockers)],
     dimensions,
     dimensionFailures,
@@ -1024,7 +1076,7 @@ function baselinePassedIds(base) {
   try {
     const raw = execFileSync(
       "git",
-      ["show", `${base}:quality/remediation-ledger.json`],
+      ["show", `${base}:quality/publication-ledger.json`],
       {
         cwd: ROOT,
         encoding: "utf8",
@@ -1099,8 +1151,11 @@ function ledgerEntry(chapter, previous, generatedAt) {
       explainedRatio: chapter.explainedRatio,
       visualEvidenceRatio: chapter.visualEvidenceRatio,
       practiceEvidenceRatio: chapter.practiceEvidenceRatio,
+      japaneseKanaCount: chapter.japaneseKanaCount,
+      hiddenHeadingCount: chapter.hiddenHeadingCount,
     },
     repeatedSentenceCount: chapter.repeatedSentences.length,
+    crossBookRepeatedSentenceCount: chapter.crossBookRepeatedSentences.length,
     visualEvidence: chapter.visualResult?.evidence ?? [],
     contentHash: chapter.contentHash,
     auditedAt: unchanged ? previousEntry.auditedAt : generatedAt,
@@ -1134,6 +1189,7 @@ function writeOutputs(chapters, generatedAt, selectedIds = null) {
   }
   const ledger = {
     version: 2,
+    auditRulesVersion: AUDIT_RULES_VERSION,
     generatedAt,
     totalChapters: chapters.length,
     chapters: entries,
@@ -1267,6 +1323,7 @@ console.log(
   JSON.stringify(
     {
       version: 2,
+      auditRulesVersion: AUDIT_RULES_VERSION,
       inventory: summary.totals,
       selected: selected.length,
       selectedFailures: selectedFailures.length,
