@@ -38,7 +38,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={w / 2}
             y={42}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -78,13 +78,13 @@ export function InheritanceHierarchyDiagram() {
             stroke={border}
             strokeWidth={1}
           />
-          <text x={194} y={108} fontSize={10} fill={secondary}>
+          <text x={194} y={108} fontSize={11} fill={secondary}>
             private:
           </text>
           <text
             x={200}
             y={124}
-            fontSize={10}
+            fontSize={11}
             fill={primary}
             fontFamily="monospace"
           >
@@ -93,7 +93,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={200}
             y={138}
-            fontSize={10}
+            fontSize={11}
             fill={primary}
             fontFamily="monospace"
           >
@@ -111,7 +111,7 @@ export function InheritanceHierarchyDiagram() {
             stroke={warn}
             strokeWidth={1}
           />
-          <text x={194} y={166} fontSize={10} fill={warn}>
+          <text x={194} y={166} fontSize={11} fill={warn}>
             protected: （派生类可访问，用户不可访问）
           </text>
 
@@ -126,13 +126,13 @@ export function InheritanceHierarchyDiagram() {
             stroke={good}
             strokeWidth={1}
           />
-          <text x={194} y={194} fontSize={10} fill={good}>
+          <text x={194} y={194} fontSize={11} fill={good}>
             public:
           </text>
           <text
             x={200}
             y={208}
-            fontSize={10}
+            fontSize={11}
             fill={primary}
             fontFamily="monospace"
           >
@@ -148,7 +148,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={390}
             y={246}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             fontFamily="monospace"
           >
@@ -187,13 +187,13 @@ export function InheritanceHierarchyDiagram() {
             stroke={border}
             strokeWidth={1}
           />
-          <text x={124} y={308} fontSize={10} fill={secondary}>
+          <text x={124} y={308} fontSize={11} fill={secondary}>
             private:
           </text>
           <text
             x={130}
             y={324}
-            fontSize={10}
+            fontSize={11}
             fill={primary}
             fontFamily="monospace"
           >
@@ -202,7 +202,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={130}
             y={338}
-            fontSize={10}
+            fontSize={11}
             fill={primary}
             fontFamily="monospace"
           >
@@ -220,22 +220,22 @@ export function InheritanceHierarchyDiagram() {
             stroke={good}
             strokeWidth={1}
           />
-          <text x={124} y={364} fontSize={10} fill={good}>
+          <text x={124} y={364} fontSize={11} fill={good}>
             public:
           </text>
           <text
             x={130}
             y={380}
-            fontSize={10}
+            fontSize={11}
             fill={good}
             fontFamily="monospace"
           >
             double net_price(size_t) const override;
           </text>
-          <text x={430} y={380} fontSize={9} fill={accent}>
+          <text x={430} y={380} fontSize={11} fill={accent}>
             overrides the base virtual function
           </text>
-          <text x={130} y={396} fontSize={9} fill={secondary}>
+          <text x={130} y={396} fontSize={11} fill={secondary}>
             &#47;&#47; isbn() and other non-virtual members inherited as-is
           </text>
 
@@ -253,7 +253,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={360}
             y={430}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -262,7 +262,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={360}
             y={444}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -284,7 +284,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={655}
             y={82}
-            fontSize={10}
+            fontSize={11}
             fontWeight={700}
             fill={accent}
             textAnchor="middle"
@@ -308,7 +308,7 @@ export function InheritanceHierarchyDiagram() {
             fill={good}
             opacity={0.12}
           />
-          <text x={655} y={108} fontSize={9} fill={good} textAnchor="middle">
+          <text x={655} y={108} fontSize={11} fill={good} textAnchor="middle">
             public
           </text>
           <rect
@@ -320,7 +320,7 @@ export function InheritanceHierarchyDiagram() {
             fill={warn}
             opacity={0.12}
           />
-          <text x={655} y={128} fontSize={9} fill={warn} textAnchor="middle">
+          <text x={655} y={128} fontSize={11} fill={warn} textAnchor="middle">
             protected
           </text>
           <rect
@@ -335,7 +335,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={655}
             y={148}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -344,7 +344,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={655}
             y={170}
-            fontSize={8}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -353,7 +353,7 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={655}
             y={182}
-            fontSize={8}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -362,14 +362,14 @@ export function InheritanceHierarchyDiagram() {
           <text
             x={655}
             y={194}
-            fontSize={8}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
             to derived
           </text>
 
-          <text x={360} y={490} fontSize={10} fill={accent} textAnchor="middle">
+          <text x={360} y={490} fontSize={11} fill={accent} textAnchor="middle">
             Core rule: base class private members exist in derived objects but
             are not directly accessible
           </text>

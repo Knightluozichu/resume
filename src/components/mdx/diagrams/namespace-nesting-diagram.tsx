@@ -12,7 +12,9 @@ interface NamespaceNestingDiagramProps {
   step?: 1 | 2 | 3;
 }
 
-export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramProps) {
+export function NamespaceNestingDiagram({
+  step = 1,
+}: NamespaceNestingDiagramProps) {
   const accent = "var(--accent)";
   const primary = "var(--text-primary)";
   const secondary = "var(--text-secondary)";
@@ -39,7 +41,7 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
   const steps = [
     "① 嵌套命名空间——outer::middle::inner 三层逐级嵌套",
     "② using 声明——只导入一个名字到当前作用域",
-    '③ using namespace 指令——整个命名空间的名字提升一级',
+    "③ using namespace 指令——整个命名空间的名字提升一级",
   ];
 
   return (
@@ -51,73 +53,209 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
           aria-label="C++ 命名空间嵌套与 using 声明影响范围图——展示三层命名空间嵌套结构和 using/using namespace 的区别"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x={w / 2} y={24} fontSize={15} fontWeight={700} fill={primary} textAnchor="middle">
+          <text
+            x={w / 2}
+            y={24}
+            fontSize={15}
+            fontWeight={700}
+            fill={primary}
+            textAnchor="middle"
+          >
             命名空间嵌套与可见性
           </text>
 
           {/* ===== Left side: main / func scope ===== */}
-          <rect x={mainRt.x} y={mainRt.y} width={mainRt.w} height={mainRt.h} rx={8} fill={elevated} stroke={border} strokeWidth={1} />
-          <text x={mainRt.x + 16} y={mainRt.y + 22} fontSize={11} fontWeight={600} fill={primary} fontFamily="monospace">
+          <rect
+            x={mainRt.x}
+            y={mainRt.y}
+            width={mainRt.w}
+            height={mainRt.h}
+            rx={8}
+            fill={elevated}
+            stroke={border}
+            strokeWidth={1}
+          />
+          <text
+            x={mainRt.x + 16}
+            y={mainRt.y + 22}
+            fontSize={11}
+            fontWeight={600}
+            fill={primary}
+            fontFamily="monospace"
+          >
             main() 函数作用域
           </text>
 
-          <rect x={funcRt.x} y={funcRt.y} width={funcRt.w} height={funcRt.h} rx={6} fill={bg} stroke={border} strokeWidth={1} />
-          <text x={funcRt.x + 16} y={funcRt.y + 22} fontSize={10} fill={secondary} fontFamily="monospace">
+          <rect
+            x={funcRt.x}
+            y={funcRt.y}
+            width={funcRt.w}
+            height={funcRt.h}
+            rx={6}
+            fill={bg}
+            stroke={border}
+            strokeWidth={1}
+          />
+          <text
+            x={funcRt.x + 16}
+            y={funcRt.y + 22}
+            fontSize={11}
+            fill={secondary}
+            fontFamily="monospace"
+          >
             inner_func() 作用域
           </text>
 
           {/* ===== Right side: namespace nesting ===== */}
-          <rect x={outerRt.x} y={outerRt.y} width={outerRt.w} height={outerRt.h} rx={8} fill={elevated} stroke={accent} strokeWidth={1.5} />
-          <text x={outerRt.x + 16} y={outerRt.y + 22} fontSize={11} fontWeight={600} fill={accent} fontFamily="monospace">
-            namespace outer {'{'}
+          <rect
+            x={outerRt.x}
+            y={outerRt.y}
+            width={outerRt.w}
+            height={outerRt.h}
+            rx={8}
+            fill={elevated}
+            stroke={accent}
+            strokeWidth={1.5}
+          />
+          <text
+            x={outerRt.x + 16}
+            y={outerRt.y + 22}
+            fontSize={11}
+            fontWeight={600}
+            fill={accent}
+            fontFamily="monospace"
+          >
+            namespace outer {"{"}
           </text>
 
-          <rect x={midRt.x} y={midRt.y} width={midRt.w} height={midRt.h} rx={6} fill={bg} stroke={blue} strokeWidth={1} />
-          <text x={midRt.x + 16} y={midRt.y + 18} fontSize={10} fill={blue} fontFamily="monospace">
-            namespace middle {'{'}
+          <rect
+            x={midRt.x}
+            y={midRt.y}
+            width={midRt.w}
+            height={midRt.h}
+            rx={6}
+            fill={bg}
+            stroke={blue}
+            strokeWidth={1}
+          />
+          <text
+            x={midRt.x + 16}
+            y={midRt.y + 18}
+            fontSize={11}
+            fill={blue}
+            fontFamily="monospace"
+          >
+            namespace middle {"{"}
           </text>
 
-          <rect x={innerRt.x} y={innerRt.y} width={innerRt.w} height={innerRt.h} rx={4} fill={elevated} stroke={orange} strokeWidth={1} />
-          <text x={innerRt.x + 16} y={innerRt.y + 18} fontSize={10} fill={orange} fontFamily="monospace">
-            namespace inner {'{'}
+          <rect
+            x={innerRt.x}
+            y={innerRt.y}
+            width={innerRt.w}
+            height={innerRt.h}
+            rx={4}
+            fill={elevated}
+            stroke={orange}
+            strokeWidth={1}
+          />
+          <text
+            x={innerRt.x + 16}
+            y={innerRt.y + 18}
+            fontSize={11}
+            fill={orange}
+            fontFamily="monospace"
+          >
+            namespace inner {"{"}
           </text>
-          <text x={innerRt.x + 16} y={innerRt.y + 40} fontSize={10} fill={primary} fontFamily="monospace">
+          <text
+            x={innerRt.x + 16}
+            y={innerRt.y + 40}
+            fontSize={11}
+            fill={primary}
+            fontFamily="monospace"
+          >
             int value = 42;
           </text>
 
           {/* Step 1: basic nesting explanation */}
           {step === 1 && (
             <>
-              <text x={outerRt.x + 16} y={outerRt.y + 172} fontSize={10} fill={secondary} fontFamily="monospace">
-                {'}'}
+              <text
+                x={outerRt.x + 16}
+                y={outerRt.y + 172}
+                fontSize={11}
+                fill={secondary}
+                fontFamily="monospace"
+              >
+                {"}"}
               </text>
-              <text x={midRt.x + 16} y={midRt.y + 112} fontSize={10} fill={secondary} fontFamily="monospace">
-                {'}'}
+              <text
+                x={midRt.x + 16}
+                y={midRt.y + 112}
+                fontSize={11}
+                fill={secondary}
+                fontFamily="monospace"
+              >
+                {"}"}
               </text>
-              <text x={innerRt.x + 16} y={innerRt.y + 62} fontSize={10} fill={secondary} fontFamily="monospace">
-                {'}'}
+              <text
+                x={innerRt.x + 16}
+                y={innerRt.y + 62}
+                fontSize={11}
+                fill={secondary}
+                fontFamily="monospace"
+              >
+                {"}"}
               </text>
 
               {/* full access path */}
-              <text x={mainRt.x + 16} y={funcRt.y + 78} fontSize={10} fill={green} fontFamily="monospace">
-                outer::middle::inner::value  // 完整路径
+              <text
+                x={mainRt.x + 16}
+                y={funcRt.y + 78}
+                fontSize={11}
+                fill={green}
+                fontFamily="monospace"
+              >
+                outer::middle::inner::value // 完整路径
               </text>
 
               {/* Step explanation */}
               <g transform={`translate(30, ${h - 140})`}>
-                <rect x={0} y={0} width={w - 60} height={110} rx={8} fill={accent + "08"} stroke={border} strokeWidth={1} />
-                <text x={16} y={24} fontSize={12} fontWeight={600} fill={accent}>
+                <rect
+                  x={0}
+                  y={0}
+                  width={w - 60}
+                  height={110}
+                  rx={8}
+                  fill={accent + "08"}
+                  stroke={border}
+                  strokeWidth={1}
+                />
+                <text
+                  x={16}
+                  y={24}
+                  fontSize={12}
+                  fontWeight={600}
+                  fill={accent}
+                >
                   嵌套命名空间（C++11）
                 </text>
-                <text x={16} y={46} fontSize={10} fill={primary} fontFamily="monospace">
-                  namespace outer {'{'} namespace middle {'{'} namespace inner {'{'} ... {'}'} {'}'} {'}'}
-                  {' '}
+                <text
+                  x={16}
+                  y={46}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  namespace outer {"{"} namespace middle {"{"} namespace inner{" "}
+                  {"{"} ... {"}"} {"}"} {"}"}{" "}
                 </text>
-                <text x={16} y={66} fontSize={10} fill={secondary}>
+                <text x={16} y={66} fontSize={11} fill={secondary}>
                   C++11 逐层书写 namespace 定义；限定名仍用 :: 表示查找路径。
                 </text>
-                <text x={16} y={86} fontSize={10} fill={blue}>
-                  完整路径 outer::middle::inner::value 可以精确访问每一层中的名字，绝无歧义。
+                <text x={16} y={86} fontSize={11} fill={blue}>
+                  完整路径 outer::middle::inner::value
+                  可以精确访问每一层中的名字，绝无歧义。
                 </text>
               </g>
             </>
@@ -127,8 +265,22 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
           {step === 2 && (
             <>
               {/* using declaration visual */}
-              <rect x={innerRt.x} y={innerRt.y + 50} width={200} height={12} fill={green + "30"} rx={3} />
-              <text x={innerRt.x + 100} y={innerRt.y + 61} fontSize={9} fill={green} textAnchor="middle" fontFamily="monospace">
+              <rect
+                x={innerRt.x}
+                y={innerRt.y + 50}
+                width={200}
+                height={12}
+                fill={green + "30"}
+                rx={3}
+              />
+              <text
+                x={innerRt.x + 100}
+                y={innerRt.y + 61}
+                fontSize={11}
+                fill={green}
+                textAnchor="middle"
+                fontFamily="monospace"
+              >
                 using outer::middle::inner::value;
               </text>
 
@@ -141,30 +293,74 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
                 strokeDasharray="4,3"
               />
 
-              <text x={funcRt.x + 16} y={funcRt.y + 78} fontSize={10} fill={green} fontFamily="monospace">
-                value  ✓ 可用（imported）
+              <text
+                x={funcRt.x + 16}
+                y={funcRt.y + 78}
+                fontSize={11}
+                fill={green}
+                fontFamily="monospace"
+              >
+                value ✓ 可用（imported）
               </text>
 
               {/* Step explanation */}
               <g transform={`translate(30, ${h - 160})`}>
-                <rect x={0} y={0} width={w - 60} height={130} rx={8} fill={green + "06"} stroke={green} strokeWidth={1} />
+                <rect
+                  x={0}
+                  y={0}
+                  width={w - 60}
+                  height={130}
+                  rx={8}
+                  fill={green + "06"}
+                  stroke={green}
+                  strokeWidth={1}
+                />
                 <text x={16} y={24} fontSize={12} fontWeight={600} fill={green}>
                   using 声明——只把「一个名字」导入当前作用域
                 </text>
-                <text x={16} y={48} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'void inner_func() {'}
+                <text
+                  x={16}
+                  y={48}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {"void inner_func() {"}
                 </text>
-                <text x={16} y={66} fontSize={10} fill={green} fontFamily="monospace">
-                  {'    using outer::middle::inner::value;  // 只导入 value 这一个名字'}
+                <text
+                  x={16}
+                  y={66}
+                  fontSize={11}
+                  fill={green}
+                  fontFamily="monospace"
+                >
+                  {
+                    "    using outer::middle::inner::value;  // 只导入 value 这一个名字"
+                  }
                 </text>
-                <text x={16} y={84} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'    std::cout << value;  // OK——value 已经像本地变量一样可用'}
+                <text
+                  x={16}
+                  y={84}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {
+                    "    std::cout << value;  // OK——value 已经像本地变量一样可用"
+                  }
                 </text>
-                <text x={16} y={102} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'}'}
+                <text
+                  x={16}
+                  y={102}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {"}"}
                 </text>
-                <text x={16} y={120} fontSize={9} fill={secondary}>
-                  using 声明只导入一个名字，不会把整个命名空间拖进来。如果名字冲突，编译期报错。
+                <text x={16} y={120} fontSize={11} fill={secondary}>
+                  using
+                  声明只导入一个名字，不会把整个命名空间拖进来。如果名字冲突，编译期报错。
                 </text>
               </g>
             </>
@@ -174,8 +370,22 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
           {step === 3 && (
             <>
               {/* using namespace directive visual */}
-              <rect x={innerRt.x} y={innerRt.y + 50} width={200} height={12} fill={orange + "30"} rx={3} />
-              <text x={innerRt.x + 100} y={innerRt.y + 61} fontSize={9} fill={orange} textAnchor="middle" fontFamily="monospace">
+              <rect
+                x={innerRt.x}
+                y={innerRt.y + 50}
+                width={200}
+                height={12}
+                fill={orange + "30"}
+                rx={3}
+              />
+              <text
+                x={innerRt.x + 100}
+                y={innerRt.y + 61}
+                fontSize={11}
+                fill={orange}
+                textAnchor="middle"
+                fontFamily="monospace"
+              >
                 using namespace outer::middle::inner;
               </text>
 
@@ -188,41 +398,122 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
                 strokeDasharray="4,3"
               />
 
-              <text x={funcRt.x + 16} y={funcRt.y + 78} fontSize={10} fill={orange} fontFamily="monospace">
+              <text
+                x={funcRt.x + 16}
+                y={funcRt.y + 78}
+                fontSize={11}
+                fill={orange}
+                fontFamily="monospace"
+              >
                 inner 所有名字 ✓ 可用
               </text>
 
               {/* Step explanation */}
               <g transform={`translate(30, ${h - 175})`}>
-                <rect x={0} y={0} width={w - 60} height={145} rx={8} fill={orange + "06"} stroke={orange} strokeWidth={1} />
-                <text x={16} y={24} fontSize={12} fontWeight={600} fill={orange}>
-                  using namespace 指令——整个命名空间的名字提升到「最近外层作用域」
+                <rect
+                  x={0}
+                  y={0}
+                  width={w - 60}
+                  height={145}
+                  rx={8}
+                  fill={orange + "06"}
+                  stroke={orange}
+                  strokeWidth={1}
+                />
+                <text
+                  x={16}
+                  y={24}
+                  fontSize={12}
+                  fontWeight={600}
+                  fill={orange}
+                >
+                  using namespace
+                  指令——整个命名空间的名字提升到「最近外层作用域」
                 </text>
-                <text x={16} y={48} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'void inner_func() {'}
+                <text
+                  x={16}
+                  y={48}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {"void inner_func() {"}
                 </text>
-                <text x={16} y={66} fontSize={10} fill={orange} fontFamily="monospace">
-                  {'    using namespace outer::middle::inner;  // inner 里所有名字都可见'}
+                <text
+                  x={16}
+                  y={66}
+                  fontSize={11}
+                  fill={orange}
+                  fontFamily="monospace"
+                >
+                  {
+                    "    using namespace outer::middle::inner;  // inner 里所有名字都可见"
+                  }
                 </text>
-                <text x={16} y={84} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'    std::cout << value;  // OK——value 来自 inner'}
+                <text
+                  x={16}
+                  y={84}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {"    std::cout << value;  // OK——value 来自 inner"}
                 </text>
-                <text x={16} y={102} fontSize={10} fill={primary} fontFamily="monospace">
-                  {'}'}
+                <text
+                  x={16}
+                  y={102}
+                  fontSize={11}
+                  fill={primary}
+                  fontFamily="monospace"
+                >
+                  {"}"}
                 </text>
 
                 {/* Warning about ambiguity */}
-                <rect x={16} y={112} width={w - 92} height={24} rx={4} fill={red + "12"} stroke={red} strokeWidth={0.5} />
-                <text x={w / 2 - 46} y={130} fontSize={9} fill={red} textAnchor="middle">
-                  ⚠ using namespace 可能引入名字冲突——如果有多个命名空间定义了同名 value，编译期会产生歧义错误
+                <rect
+                  x={16}
+                  y={112}
+                  width={w - 92}
+                  height={24}
+                  rx={4}
+                  fill={red + "12"}
+                  stroke={red}
+                  strokeWidth={0.5}
+                />
+                <text
+                  x={w / 2 - 46}
+                  y={130}
+                  fontSize={11}
+                  fill={red}
+                  textAnchor="middle"
+                >
+                  ⚠ using namespace
+                  可能引入名字冲突——如果有多个命名空间定义了同名
+                  value，编译期会产生歧义错误
                 </text>
               </g>
             </>
           )}
 
           {/* Step indicator bar at bottom */}
-          <rect x={w / 2 - 200} y={h - 26} width={400} height={20} rx={6} fill={accent + "06"} stroke={border} strokeWidth={0.5} />
-          <text x={w / 2} y={h - 10} fontSize={10} fill={accent} textAnchor="middle" fontFamily="monospace">
+          <rect
+            x={w / 2 - 200}
+            y={h - 26}
+            width={400}
+            height={20}
+            rx={6}
+            fill={accent + "06"}
+            stroke={border}
+            strokeWidth={0.5}
+          />
+          <text
+            x={w / 2}
+            y={h - 10}
+            fontSize={11}
+            fill={accent}
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
             {steps[step - 1]}
           </text>
         </svg>

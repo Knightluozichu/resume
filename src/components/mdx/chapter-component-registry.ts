@@ -311,6 +311,156 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       AutoFinalReviewLab: module0.AutoFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "c-primer-plus/c-advanced/advanced-data": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/advanced-data");
+    return {
+      AdvancedDataDecisionLab: module0.AdvancedDataDecisionLab,
+      AdvancedDataMechanismMap: module0.AdvancedDataMechanismMap,
+      AdvancedDataFailureDiagram: module0.AdvancedDataFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-advanced/bit-fiddling": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/bit-fiddling");
+    return {
+      BitFiddlingDecisionLab: module0.BitFiddlingDecisionLab,
+      BitFiddlingMechanismMap: module0.BitFiddlingMechanismMap,
+      BitFiddlingFailureDiagram: module0.BitFiddlingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-advanced/file-io": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/file-io");
+    return {
+      FileIoDecisionLab: module0.FileIoDecisionLab,
+      FileIoMechanismMap: module0.FileIoMechanismMap,
+      FileIoFailureDiagram: module0.FileIoFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-advanced/preprocessor": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/preprocessor");
+    return {
+      PreprocessorDecisionLab: module0.PreprocessorDecisionLab,
+      PreprocessorMechanismMap: module0.PreprocessorMechanismMap,
+      PreprocessorFailureDiagram: module0.PreprocessorFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-advanced/storage-linkage-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/storage-linkage-memory");
+    return {
+      StorageLinkageMemoryDecisionLab: module0.StorageLinkageMemoryDecisionLab,
+      StorageLinkageMemoryMechanismMap:
+        module0.StorageLinkageMemoryMechanismMap,
+      StorageLinkageMemoryFailureDiagram:
+        module0.StorageLinkageMemoryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-advanced/structures": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/structures");
+    return {
+      StructuresDecisionLab: module0.StructuresDecisionLab,
+      StructuresMechanismMap: module0.StructuresMechanismMap,
+      StructuresFailureDiagram: module0.StructuresFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-basics/data-and-c": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/data-and-c");
+    return {
+      DataAndCDecisionLab: module0.DataAndCDecisionLab,
+      DataAndCMechanismMap: module0.DataAndCMechanismMap,
+      DataAndCFailureDiagram: module0.DataAndCFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-basics/getting-ready": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/getting-ready");
+    return {
+      GettingReadyDecisionLab: module0.GettingReadyDecisionLab,
+      GettingReadyMechanismMap: module0.GettingReadyMechanismMap,
+      GettingReadyFailureDiagram: module0.GettingReadyFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-basics/introducing-c": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/introducing-c");
+    return {
+      IntroducingCDecisionLab: module0.IntroducingCDecisionLab,
+      IntroducingCMechanismMap: module0.IntroducingCMechanismMap,
+      IntroducingCFailureDiagram: module0.IntroducingCFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-basics/operators-expressions": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/operators-expressions");
+    return {
+      OperatorsExpressionsDecisionLab: module0.OperatorsExpressionsDecisionLab,
+      OperatorsExpressionsMechanismMap:
+        module0.OperatorsExpressionsMechanismMap,
+      OperatorsExpressionsFailureDiagram:
+        module0.OperatorsExpressionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-basics/strings-io": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/strings-io");
+    return {
+      StringsIoDecisionLab: module0.StringsIoDecisionLab,
+      StringsIoMechanismMap: module0.StringsIoMechanismMap,
+      StringsIoFailureDiagram: module0.StringsIoFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-control-io/char-io-validation": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/char-io-validation");
+    return {
+      CharIoValidationDecisionLab: module0.CharIoValidationDecisionLab,
+      CharIoValidationMechanismMap: module0.CharIoValidationMechanismMap,
+      CharIoValidationFailureDiagram: module0.CharIoValidationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-control-io/control-branching": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/control-branching");
+    return {
+      ControlBranchingDecisionLab: module0.ControlBranchingDecisionLab,
+      ControlBranchingMechanismMap: module0.ControlBranchingMechanismMap,
+      ControlBranchingFailureDiagram: module0.ControlBranchingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-control-io/control-loops": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/control-loops");
+    return {
+      ControlLoopsDecisionLab: module0.ControlLoopsDecisionLab,
+      ControlLoopsMechanismMap: module0.ControlLoopsMechanismMap,
+      ControlLoopsFailureDiagram: module0.ControlLoopsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-func-array-ptr/arrays-pointers": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/arrays-pointers");
+    return {
+      ArraysPointersDecisionLab: module0.ArraysPointersDecisionLab,
+      ArraysPointersMechanismMap: module0.ArraysPointersMechanismMap,
+      ArraysPointersFailureDiagram: module0.ArraysPointersFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-func-array-ptr/functions": async () => {
+    const module0 = await import("@/components/mdx/c-primer-plus/functions");
+    return {
+      FunctionsDecisionLab: module0.FunctionsDecisionLab,
+      FunctionsMechanismMap: module0.FunctionsMechanismMap,
+      FunctionsFailureDiagram: module0.FunctionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "c-primer-plus/c-func-array-ptr/strings-functions": async () => {
+    const module0 =
+      await import("@/components/mdx/c-primer-plus/strings-functions");
+    return {
+      StringsFunctionsDecisionLab: module0.StringsFunctionsDecisionLab,
+      StringsFunctionsMechanismMap: module0.StringsFunctionsMechanismMap,
+      StringsFunctionsFailureDiagram: module0.StringsFunctionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");
@@ -1068,44 +1218,419 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ChpProfilerEvidenceMap: module0.ChpProfilerEvidenceMap,
     } as ChapterMdxComponents;
   },
-  "cpp-primer-5e/cpp-class-design/overloaded-operations": async () => {
+  "cpp-primer-5e/cpp-advanced/large-programs": async () => {
     const module0 =
-      await import("@/components/mdx/cpp-primer-5e/diagrams/overloaded-operations");
+      await import("@/components/mdx/cpp-primer-5e/large-programs");
     return {
+      LargeProgramsDecisionLab: module0.LargeProgramsDecisionLab,
+      LargeProgramsMechanismMap: module0.LargeProgramsMechanismMap,
+      LargeProgramsFailureDiagram: module0.LargeProgramsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-advanced/library-appendix": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/library-appendix");
+    return {
+      LibraryAppendixDecisionLab: module0.LibraryAppendixDecisionLab,
+      LibraryAppendixMechanismMap: module0.LibraryAppendixMechanismMap,
+      LibraryAppendixFailureDiagram: module0.LibraryAppendixFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-advanced/specialized-library": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/specialized-library");
+    return {
+      SpecializedLibraryDecisionLab: module0.SpecializedLibraryDecisionLab,
+      SpecializedLibraryMechanismMap: module0.SpecializedLibraryMechanismMap,
+      SpecializedLibraryFailureDiagram:
+        module0.SpecializedLibraryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-advanced/specialized-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/specialized-tools");
+    return {
+      SpecializedToolsDecisionLab: module0.SpecializedToolsDecisionLab,
+      SpecializedToolsMechanismMap: module0.SpecializedToolsMechanismMap,
+      SpecializedToolsFailureDiagram: module0.SpecializedToolsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/classes": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/classes");
+    return {
+      ClassesDecisionLab: module0.ClassesDecisionLab,
+      ClassesMechanismMap: module0.ClassesMechanismMap,
+      ClassesFailureDiagram: module0.ClassesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/expressions": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/expressions");
+    return {
+      ExpressionsDecisionLab: module0.ExpressionsDecisionLab,
+      ExpressionsMechanismMap: module0.ExpressionsMechanismMap,
+      ExpressionsFailureDiagram: module0.ExpressionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/functions": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/functions");
+    return {
+      FunctionsDecisionLab: module0.FunctionsDecisionLab,
+      FunctionsMechanismMap: module0.FunctionsMechanismMap,
+      FunctionsFailureDiagram: module0.FunctionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/getting-started": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/getting-started");
+    return {
+      GettingStartedDecisionLab: module0.GettingStartedDecisionLab,
+      GettingStartedMechanismMap: module0.GettingStartedMechanismMap,
+      GettingStartedFailureDiagram: module0.GettingStartedFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/statements": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/statements");
+    return {
+      StatementsDecisionLab: module0.StatementsDecisionLab,
+      StatementsMechanismMap: module0.StatementsMechanismMap,
+      StatementsFailureDiagram: module0.StatementsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/strings-vectors-and-arrays": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/strings-vectors-and-arrays");
+    return {
+      StringsVectorsAndArraysDecisionLab:
+        module0.StringsVectorsAndArraysDecisionLab,
+      StringsVectorsAndArraysMechanismMap:
+        module0.StringsVectorsAndArraysMechanismMap,
+      StringsVectorsAndArraysFailureDiagram:
+        module0.StringsVectorsAndArraysFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-basics/variables-and-types": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/variables-and-types");
+    return {
+      VariablesAndTypesDecisionLab: module0.VariablesAndTypesDecisionLab,
+      VariablesAndTypesMechanismMap: module0.VariablesAndTypesMechanismMap,
+      VariablesAndTypesFailureDiagram: module0.VariablesAndTypesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-class-design/copy-control": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/copy-control");
+    return {
+      CopyControlDecisionLab: module0.CopyControlDecisionLab,
+      CopyControlMechanismMap: module0.CopyControlMechanismMap,
+      CopyControlFailureDiagram: module0.CopyControlFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-class-design/oop": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/oop");
+    return {
+      OopDecisionLab: module0.OopDecisionLab,
+      OopMechanismMap: module0.OopMechanismMap,
+      OopFailureDiagram: module0.OopFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-class-design/overloaded-operations": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-primer-5e/overloaded-operations"),
+      import("@/components/mdx/cpp-primer-5e/diagrams/overloaded-operations"),
+    ]);
+    return {
+      OverloadedOperationsDecisionLab:
+        modules[0].OverloadedOperationsDecisionLab,
+      OverloadedOperationsMechanismMap:
+        modules[0].OverloadedOperationsMechanismMap,
+      OverloadedOperationsFailureDiagram:
+        modules[0].OverloadedOperationsFailureDiagram,
       CppOperatorAndConversionContractDiagram:
-        module0.CppOperatorAndConversionContractDiagram,
+        modules[1].CppOperatorAndConversionContractDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-class-design/templates": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/templates");
+    return {
+      TemplatesDecisionLab: module0.TemplatesDecisionLab,
+      TemplatesMechanismMap: module0.TemplatesMechanismMap,
+      TemplatesFailureDiagram: module0.TemplatesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-library/associative-containers": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/associative-containers");
+    return {
+      AssociativeContainersDecisionLab:
+        module0.AssociativeContainersDecisionLab,
+      AssociativeContainersMechanismMap:
+        module0.AssociativeContainersMechanismMap,
+      AssociativeContainersFailureDiagram:
+        module0.AssociativeContainersFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-library/dynamic-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/dynamic-memory");
+    return {
+      DynamicMemoryDecisionLab: module0.DynamicMemoryDecisionLab,
+      DynamicMemoryMechanismMap: module0.DynamicMemoryMechanismMap,
+      DynamicMemoryFailureDiagram: module0.DynamicMemoryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-library/generic-algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/generic-algorithms");
+    return {
+      GenericAlgorithmsDecisionLab: module0.GenericAlgorithmsDecisionLab,
+      GenericAlgorithmsMechanismMap: module0.GenericAlgorithmsMechanismMap,
+      GenericAlgorithmsFailureDiagram: module0.GenericAlgorithmsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-library/io-library": async () => {
+    const module0 = await import("@/components/mdx/cpp-primer-5e/io-library");
+    return {
+      IoLibraryDecisionLab: module0.IoLibraryDecisionLab,
+      IoLibraryMechanismMap: module0.IoLibraryMechanismMap,
+      IoLibraryFailureDiagram: module0.IoLibraryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-5e/cpp-library/sequential-containers": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-5e/sequential-containers");
+    return {
+      SequentialContainersDecisionLab: module0.SequentialContainersDecisionLab,
+      SequentialContainersMechanismMap:
+        module0.SequentialContainersMechanismMap,
+      SequentialContainersFailureDiagram:
+        module0.SequentialContainersFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/learning-map");
+    return {
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/01-official/getting-started-with-cpp": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/getting-started-with-cpp");
+    return {
+      GettingStartedWithCppDecisionLab:
+        module0.GettingStartedWithCppDecisionLab,
+      GettingStartedWithCppMechanismMap:
+        module0.GettingStartedWithCppMechanismMap,
+      GettingStartedWithCppFailureDiagram:
+        module0.GettingStartedWithCppFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/02-official/setting-out-to-cpp": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/setting-out-to-cpp");
+    return {
+      SettingOutToCppDecisionLab: module0.SettingOutToCppDecisionLab,
+      SettingOutToCppMechanismMap: module0.SettingOutToCppMechanismMap,
+      SettingOutToCppFailureDiagram: module0.SettingOutToCppFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/03-advanced/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpp-primer-plus/03-official/dealing-with-data": async () => {
-    const module0 =
-      await import("@/components/mdx/cpp-primer-plus/diagrams/dealing-with-data");
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-primer-plus/dealing-with-data"),
+      import("@/components/mdx/cpp-primer-plus/diagrams/dealing-with-data"),
+    ]);
     return {
-      EppDataConversionFlow: module0.EppDataConversionFlow,
-      EppDataRepresentationMap: module0.EppDataRepresentationMap,
+      DealingWithDataDecisionLab: modules[0].DealingWithDataDecisionLab,
+      DealingWithDataMechanismMap: modules[0].DealingWithDataMechanismMap,
+      DealingWithDataFailureDiagram: modules[0].DealingWithDataFailureDiagram,
+      EppDataConversionFlow: modules[1].EppDataConversionFlow,
+      EppDataRepresentationMap: modules[1].EppDataRepresentationMap,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/04-official/compound-types": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/compound-types");
+    return {
+      CompoundTypesDecisionLab: module0.CompoundTypesDecisionLab,
+      CompoundTypesMechanismMap: module0.CompoundTypesMechanismMap,
+      CompoundTypesFailureDiagram: module0.CompoundTypesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/05-official/loops-and-relational-expressions": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/loops-and-relational-expressions");
+    return {
+      LoopsAndRelationalExpressionsDecisionLab:
+        module0.LoopsAndRelationalExpressionsDecisionLab,
+      LoopsAndRelationalExpressionsMechanismMap:
+        module0.LoopsAndRelationalExpressionsMechanismMap,
+      LoopsAndRelationalExpressionsFailureDiagram:
+        module0.LoopsAndRelationalExpressionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/06-official/branching-statements-and-logical-operators":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-primer-plus/branching-statements-and-logical-operators");
+      return {
+        BranchingStatementsAndLogicalOperatorsDecisionLab:
+          module0.BranchingStatementsAndLogicalOperatorsDecisionLab,
+        BranchingStatementsAndLogicalOperatorsMechanismMap:
+          module0.BranchingStatementsAndLogicalOperatorsMechanismMap,
+        BranchingStatementsAndLogicalOperatorsFailureDiagram:
+          module0.BranchingStatementsAndLogicalOperatorsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-primer-plus/07-official/functions-programming-modules": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/functions-programming-modules");
+    return {
+      FunctionsProgrammingModulesDecisionLab:
+        module0.FunctionsProgrammingModulesDecisionLab,
+      FunctionsProgrammingModulesMechanismMap:
+        module0.FunctionsProgrammingModulesMechanismMap,
+      FunctionsProgrammingModulesFailureDiagram:
+        module0.FunctionsProgrammingModulesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/08-official/adventures-in-functions": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/adventures-in-functions");
+    return {
+      AdventuresInFunctionsDecisionLab:
+        module0.AdventuresInFunctionsDecisionLab,
+      AdventuresInFunctionsMechanismMap:
+        module0.AdventuresInFunctionsMechanismMap,
+      AdventuresInFunctionsFailureDiagram:
+        module0.AdventuresInFunctionsFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpp-primer-plus/09-official/memory-models-and-namespaces": async () => {
-    const module0 =
-      await import("@/components/mdx/cpp-primer-plus/diagrams/memory-models-and-namespaces");
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-primer-plus/memory-models-and-namespaces"),
+      import("@/components/mdx/cpp-primer-plus/diagrams/memory-models-and-namespaces"),
+    ]);
     return {
-      EppStorageScopeLinkageFlow: module0.EppStorageScopeLinkageFlow,
-      EppTranslationUnitBuildMap: module0.EppTranslationUnitBuildMap,
+      MemoryModelsAndNamespacesDecisionLab:
+        modules[0].MemoryModelsAndNamespacesDecisionLab,
+      MemoryModelsAndNamespacesMechanismMap:
+        modules[0].MemoryModelsAndNamespacesMechanismMap,
+      MemoryModelsAndNamespacesFailureDiagram:
+        modules[0].MemoryModelsAndNamespacesFailureDiagram,
+      EppStorageScopeLinkageFlow: modules[1].EppStorageScopeLinkageFlow,
+      EppTranslationUnitBuildMap: modules[1].EppTranslationUnitBuildMap,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/10-official/objects-and-classes": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/objects-and-classes");
+    return {
+      ObjectsAndClassesDecisionLab: module0.ObjectsAndClassesDecisionLab,
+      ObjectsAndClassesMechanismMap: module0.ObjectsAndClassesMechanismMap,
+      ObjectsAndClassesFailureDiagram: module0.ObjectsAndClassesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/11-official/working-with-classes": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/working-with-classes");
+    return {
+      WorkingWithClassesDecisionLab: module0.WorkingWithClassesDecisionLab,
+      WorkingWithClassesMechanismMap: module0.WorkingWithClassesMechanismMap,
+      WorkingWithClassesFailureDiagram:
+        module0.WorkingWithClassesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/12-official/classes-and-dynamic-memory-allocation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-primer-plus/classes-and-dynamic-memory-allocation");
+      return {
+        ClassesAndDynamicMemoryAllocationDecisionLab:
+          module0.ClassesAndDynamicMemoryAllocationDecisionLab,
+        ClassesAndDynamicMemoryAllocationMechanismMap:
+          module0.ClassesAndDynamicMemoryAllocationMechanismMap,
+        ClassesAndDynamicMemoryAllocationFailureDiagram:
+          module0.ClassesAndDynamicMemoryAllocationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-primer-plus/13-official/class-inheritance": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/class-inheritance");
+    return {
+      ClassInheritanceDecisionLab: module0.ClassInheritanceDecisionLab,
+      ClassInheritanceMechanismMap: module0.ClassInheritanceMechanismMap,
+      ClassInheritanceFailureDiagram: module0.ClassInheritanceFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/14-official/reusing-code-in-cpp": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/reusing-code-in-cpp");
+    return {
+      ReusingCodeInCppDecisionLab: module0.ReusingCodeInCppDecisionLab,
+      ReusingCodeInCppMechanismMap: module0.ReusingCodeInCppMechanismMap,
+      ReusingCodeInCppFailureDiagram: module0.ReusingCodeInCppFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpp-primer-plus/15-official/friends-exceptions-and-more": async () => {
-    const module0 =
-      await import("@/components/mdx/cpp-primer-plus/diagrams/friends-exceptions-and-more");
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-primer-plus/friends-exceptions-and-more"),
+      import("@/components/mdx/cpp-primer-plus/diagrams/friends-exceptions-and-more"),
+    ]);
     return {
-      EppExceptionUnwindFlow: module0.EppExceptionUnwindFlow,
-      EppFriendAccessMap: module0.EppFriendAccessMap,
+      FriendsExceptionsAndMoreDecisionLab:
+        modules[0].FriendsExceptionsAndMoreDecisionLab,
+      FriendsExceptionsAndMoreMechanismMap:
+        modules[0].FriendsExceptionsAndMoreMechanismMap,
+      FriendsExceptionsAndMoreFailureDiagram:
+        modules[0].FriendsExceptionsAndMoreFailureDiagram,
+      EppExceptionUnwindFlow: modules[1].EppExceptionUnwindFlow,
+      EppFriendAccessMap: modules[1].EppFriendAccessMap,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/16-official/string-class-and-stl": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/string-class-and-stl");
+    return {
+      StringClassAndStlDecisionLab: module0.StringClassAndStlDecisionLab,
+      StringClassAndStlMechanismMap: module0.StringClassAndStlMechanismMap,
+      StringClassAndStlFailureDiagram: module0.StringClassAndStlFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-primer-plus/17-official/input-output-and-files": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-primer-plus/input-output-and-files");
+    return {
+      InputOutputAndFilesDecisionLab: module0.InputOutputAndFilesDecisionLab,
+      InputOutputAndFilesMechanismMap: module0.InputOutputAndFilesMechanismMap,
+      InputOutputAndFilesFailureDiagram:
+        module0.InputOutputAndFilesFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpp-primer-plus/18-official/visiting-new-cpp-standard": async () => {
-    const module0 =
-      await import("@/components/mdx/cpp-primer-plus/diagrams/visiting-new-cpp-standard");
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-primer-plus/visiting-new-cpp-standard"),
+      import("@/components/mdx/cpp-primer-plus/diagrams/visiting-new-cpp-standard"),
+    ]);
     return {
-      EppModernFeatureMap: module0.EppModernFeatureMap,
-      EppMoveStateFlow: module0.EppMoveStateFlow,
+      VisitingNewCppStandardDecisionLab:
+        modules[0].VisitingNewCppStandardDecisionLab,
+      VisitingNewCppStandardMechanismMap:
+        modules[0].VisitingNewCppStandardMechanismMap,
+      VisitingNewCppStandardFailureDiagram:
+        modules[0].VisitingNewCppStandardFailureDiagram,
+      EppModernFeatureMap: modules[1].EppModernFeatureMap,
+      EppMoveStateFlow: modules[1].EppMoveStateFlow,
     } as ChapterMdxComponents;
   },
   "cpp-server-essence/00-intro/cse-learning-map": async () => {

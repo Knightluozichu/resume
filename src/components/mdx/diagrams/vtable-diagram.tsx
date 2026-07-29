@@ -36,7 +36,7 @@ export function VTableDiagram({ step = 1 }: { step?: number }) {
           <text
             x={w / 2}
             y={42}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >

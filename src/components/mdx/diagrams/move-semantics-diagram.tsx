@@ -53,7 +53,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={w / 2}
               y={40}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -86,7 +86,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={170}
               y={100}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -96,7 +96,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={170}
               y={120}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -128,7 +128,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={170}
               y={192}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -172,7 +172,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={510}
               y={100}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -182,7 +182,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={510}
               y={120}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -214,7 +214,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             >
               target.ptr = source.ptr; source.ptr = nullptr;
             </text>
-            <text x={340} y={258} fontSize={9} fill={warn} textAnchor="middle">
+            <text x={340} y={258} fontSize={11} fill={warn} textAnchor="middle">
               ← 两步原子操作：先接管指针，再把源指针置空
             </text>
           </g>
@@ -245,7 +245,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={170}
               y={325}
-              fontSize={10}
+              fontSize={11}
               fill={warn}
               textAnchor="middle"
               fontFamily="monospace"
@@ -255,7 +255,7 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={170}
               y={345}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -286,14 +286,14 @@ export function MoveSemanticsDiagram({ step = 0 }: MoveSemanticsDiagramProps) {
             <text
               x={510}
               y={325}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
             >
               ptr = 0x1000 | size = 100
             </text>
-            <text x={510} y={345} fontSize={9} fill={good} textAnchor="middle">
+            <text x={510} y={345} fontSize={11} fill={good} textAnchor="middle">
               接管了堆资源的所有权 ✓ — 负责释放
             </text>
 

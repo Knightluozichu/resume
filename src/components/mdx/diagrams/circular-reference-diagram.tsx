@@ -63,7 +63,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={44}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -82,7 +82,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={82}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -133,7 +133,7 @@ export function CircularReferenceDiagram() {
             <text
               x={95}
               y={168}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -165,7 +165,7 @@ export function CircularReferenceDiagram() {
             <text
               x={263}
               y={168}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -203,7 +203,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={272}
-              fontSize={10}
+              fontSize={11}
               fontWeight={600}
               fill={danger}
               textAnchor="middle"
@@ -213,7 +213,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={286}
-              fontSize={10}
+              fontSize={11}
               fill={danger}
               textAnchor="middle"
             >
@@ -223,7 +223,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={320}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -233,7 +233,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={336}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -266,7 +266,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={44}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -285,7 +285,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={82}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -336,7 +336,7 @@ export function CircularReferenceDiagram() {
             <text
               x={95}
               y={168}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -368,7 +368,7 @@ export function CircularReferenceDiagram() {
             <text
               x={263}
               y={168}
-              fontSize={9}
+              fontSize={11}
               fill={accent}
               textAnchor="middle"
               fontFamily="monospace"
@@ -406,21 +406,21 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={272}
-              fontSize={10}
+              fontSize={11}
               fontWeight={600}
               fill={good}
               textAnchor="middle"
             >
               spA/spB 离开作用域后→ A 的引用计数 = 1（只有 spA）
             </text>
-            <text x={179} y={286} fontSize={10} fill={good} textAnchor="middle">
+            <text x={179} y={286} fontSize={11} fill={good} textAnchor="middle">
               → 先析构 A（spA 释放）→ B 的计数变 0 → 再析构 B
             </text>
 
             <text
               x={179}
               y={320}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -430,7 +430,7 @@ export function CircularReferenceDiagram() {
             <text
               x={179}
               y={336}
-              fontSize={9}
+              fontSize={11}
               fill={good}
               textAnchor="middle"
               fontFamily="monospace"
@@ -442,7 +442,7 @@ export function CircularReferenceDiagram() {
           <text
             x={w / 2}
             y={h - 10}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >

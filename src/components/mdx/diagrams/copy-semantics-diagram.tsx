@@ -64,7 +64,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={46}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -95,7 +95,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={100}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -105,7 +105,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={114}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -137,7 +137,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={218}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -147,7 +147,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={232}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -180,7 +180,7 @@ export function CopySemanticsDiagram() {
             <text
               x={290}
               y={140}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -190,7 +190,7 @@ export function CopySemanticsDiagram() {
             <text
               x={290}
               y={160}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -200,7 +200,7 @@ export function CopySemanticsDiagram() {
             <text
               x={290}
               y={178}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -237,7 +237,7 @@ export function CopySemanticsDiagram() {
             <text
               x={205}
               y={286}
-              fontSize={10}
+              fontSize={11}
               fontWeight={600}
               fill={danger}
               textAnchor="middle"
@@ -247,7 +247,7 @@ export function CopySemanticsDiagram() {
             <text
               x={205}
               y={304}
-              fontSize={10}
+              fontSize={11}
               fill={danger}
               textAnchor="middle"
             >
@@ -258,7 +258,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={346}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -268,7 +268,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={362}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -301,7 +301,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={46}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -332,7 +332,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={100}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -342,7 +342,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={114}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -374,7 +374,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={218}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -384,7 +384,7 @@ export function CopySemanticsDiagram() {
             <text
               x={115}
               y={232}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -417,7 +417,7 @@ export function CopySemanticsDiagram() {
             <text
               x={280}
               y={112}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -427,7 +427,7 @@ export function CopySemanticsDiagram() {
             <text
               x={280}
               y={132}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -459,7 +459,7 @@ export function CopySemanticsDiagram() {
             <text
               x={280}
               y={215}
-              fontSize={10}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -469,7 +469,7 @@ export function CopySemanticsDiagram() {
             <text
               x={280}
               y={235}
-              fontSize={10}
+              fontSize={11}
               fill={primary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -506,14 +506,14 @@ export function CopySemanticsDiagram() {
             <text
               x={205}
               y={286}
-              fontSize={10}
+              fontSize={11}
               fontWeight={600}
               fill={good}
               textAnchor="middle"
             >
               obj2 修改 *ptr → obj1 不受影响 ✓
             </text>
-            <text x={205} y={304} fontSize={10} fill={good} textAnchor="middle">
+            <text x={205} y={304} fontSize={11} fill={good} textAnchor="middle">
               各自析构各自释放 → 无双重释放 ✓
             </text>
 
@@ -521,7 +521,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={346}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -531,7 +531,7 @@ export function CopySemanticsDiagram() {
             <text
               x={185}
               y={362}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
               fontFamily="monospace"
@@ -544,7 +544,7 @@ export function CopySemanticsDiagram() {
           <text
             x={w / 2}
             y={460}
-            fontSize={10}
+            fontSize={11}
             fill={accent}
             textAnchor="middle"
           >

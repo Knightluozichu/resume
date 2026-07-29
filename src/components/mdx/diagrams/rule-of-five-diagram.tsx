@@ -12,7 +12,6 @@ export function RuleOfFiveDiagram() {
   const primary = "var(--text-primary)";
   const secondary = "var(--text-secondary)";
   const border = "var(--border)";
-  const bg = "var(--bg)";
   const elevated = "var(--bg-elevated)";
   const good = "rgb(63,185,127)";
 
@@ -41,7 +40,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={w / 2}
             y={42}
-            fontSize={10}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -84,7 +83,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={350}
             y={432}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -146,7 +145,7 @@ export function RuleOfFiveDiagram() {
             <text
               x={160}
               y={180}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -188,7 +187,7 @@ export function RuleOfFiveDiagram() {
             <text
               x={160}
               y={280}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -243,7 +242,7 @@ export function RuleOfFiveDiagram() {
             <text
               x={540}
               y={180}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -285,7 +284,7 @@ export function RuleOfFiveDiagram() {
             <text
               x={540}
               y={280}
-              fontSize={9}
+              fontSize={11}
               fill={secondary}
               textAnchor="middle"
             >
@@ -313,7 +312,7 @@ export function RuleOfFiveDiagram() {
             fill={accent}
             opacity={0.08}
           />
-          <text x={160} y={98} fontSize={10} fill={accent} textAnchor="middle">
+          <text x={160} y={98} fontSize={11} fill={accent} textAnchor="middle">
             📋 左值拷贝语义 —— 不修改源
           </text>
 
@@ -326,7 +325,7 @@ export function RuleOfFiveDiagram() {
             fill={good}
             opacity={0.08}
           />
-          <text x={540} y={98} fontSize={10} fill={good} textAnchor="middle">
+          <text x={540} y={98} fontSize={11} fill={good} textAnchor="middle">
             🔄 右值移动语义 —— 窃取资源
           </text>
 
@@ -334,7 +333,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={230}
             y={300}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -343,7 +342,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={230}
             y={314}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -353,7 +352,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={470}
             y={300}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -362,7 +361,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={470}
             y={314}
-            fontSize={9}
+            fontSize={11}
             fill={secondary}
             textAnchor="middle"
           >
@@ -373,7 +372,7 @@ export function RuleOfFiveDiagram() {
           <text
             x={w / 2}
             y={60}
-            fontSize={10}
+            fontSize={11}
             fill={accent}
             textAnchor="middle"
           >

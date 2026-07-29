@@ -44,28 +44,105 @@ export function ExceptionHierarchyDiagram() {
   const logicColR = logicSec.x + 208; // 223
   const logicRow = secY + 110;
   const logicChildren = [
-    { name: "invalid_argument", desc: "无效参数", x: logicColL, y: logicRow, ww: 124 },
-    { name: "out_of_range", desc: "越界访问", x: logicColR, y: logicRow, ww: 124 },
-    { name: "length_error", desc: "长度超限", x: logicColL, y: logicRow + 60, ww: 124 },
-    { name: "domain_error", desc: "定义域错误", x: logicColR, y: logicRow + 60, ww: 124 },
+    {
+      name: "invalid_argument",
+      desc: "无效参数",
+      x: logicColL,
+      y: logicRow,
+      ww: 124,
+    },
+    {
+      name: "out_of_range",
+      desc: "越界访问",
+      x: logicColR,
+      y: logicRow,
+      ww: 124,
+    },
+    {
+      name: "length_error",
+      desc: "长度超限",
+      x: logicColL,
+      y: logicRow + 60,
+      ww: 124,
+    },
+    {
+      name: "domain_error",
+      desc: "定义域错误",
+      x: logicColR,
+      y: logicRow + 60,
+      ww: 124,
+    },
   ];
 
   // runtime 子节点：容器内单列堆叠
   const runtimeRow = secY + 110;
   const runtimeChildren = [
-    { name: "range_error", desc: "范围错误", x: runtimeHeadX, y: runtimeRow, ww: 200 },
-    { name: "overflow_error", desc: "上溢", x: runtimeHeadX, y: runtimeRow + 56, ww: 200 },
-    { name: "underflow_error", desc: "下溢", x: runtimeHeadX, y: runtimeRow + 112, ww: 200 },
+    {
+      name: "range_error",
+      desc: "范围错误",
+      x: runtimeHeadX,
+      y: runtimeRow,
+      ww: 200,
+    },
+    {
+      name: "overflow_error",
+      desc: "上溢",
+      x: runtimeHeadX,
+      y: runtimeRow + 56,
+      ww: 200,
+    },
+    {
+      name: "underflow_error",
+      desc: "下溢",
+      x: runtimeHeadX,
+      y: runtimeRow + 112,
+      ww: 200,
+    },
   ];
 
   // 语言支持类：中列单列堆叠（直接从 exception 派生）
   const otherRow = secY + 36;
   const otherChildren = [
-    { name: "bad_alloc", desc: "内存分配失败", x: otherHeadX, y: otherRow, color: red, ww: 200 },
-    { name: "bad_cast", desc: "dynamic_cast 失败", x: otherHeadX, y: otherRow + 52, color: red, ww: 200 },
-    { name: "bad_typeid", desc: "typeid 失败", x: otherHeadX, y: otherRow + 104, color: orange, ww: 200 },
-    { name: "bad_exception", desc: "异常规格违规", x: otherHeadX, y: otherRow + 156, color: orange, ww: 200 },
-    { name: "bad_function_call", desc: "空 function 调用", x: otherHeadX, y: otherRow + 208, color: orange, ww: 200 },
+    {
+      name: "bad_alloc",
+      desc: "内存分配失败",
+      x: otherHeadX,
+      y: otherRow,
+      color: red,
+      ww: 200,
+    },
+    {
+      name: "bad_cast",
+      desc: "dynamic_cast 失败",
+      x: otherHeadX,
+      y: otherRow + 52,
+      color: red,
+      ww: 200,
+    },
+    {
+      name: "bad_typeid",
+      desc: "typeid 失败",
+      x: otherHeadX,
+      y: otherRow + 104,
+      color: orange,
+      ww: 200,
+    },
+    {
+      name: "bad_exception",
+      desc: "异常规格违规",
+      x: otherHeadX,
+      y: otherRow + 156,
+      color: orange,
+      ww: 200,
+    },
+    {
+      name: "bad_function_call",
+      desc: "空 function 调用",
+      x: otherHeadX,
+      y: otherRow + 208,
+      color: orange,
+      ww: 200,
+    },
   ];
 
   function drawNode(
@@ -74,7 +151,7 @@ export function ExceptionHierarchyDiagram() {
     label: string,
     desc: string,
     nodeColor: string,
-    ww = 150
+    ww = 150,
   ) {
     return (
       <g key={label}>
@@ -91,7 +168,7 @@ export function ExceptionHierarchyDiagram() {
         <text
           x={x}
           y={y + 15}
-          fontSize={10}
+          fontSize={11}
           fontWeight={600}
           fill={nodeColor}
           textAnchor="middle"
@@ -99,16 +176,36 @@ export function ExceptionHierarchyDiagram() {
         >
           {label}
         </text>
-        <text x={x} y={y + 30} fontSize={9} fill={secondary} textAnchor="middle">
+        <text
+          x={x}
+          y={y + 30}
+          fontSize={11}
+          fill={secondary}
+          textAnchor="middle"
+        >
           {desc}
         </text>
       </g>
     );
   }
 
-  function drawLine(x1: number, y1: number, x2: number, y2: number, color: string) {
+  function drawLine(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color: string,
+  ) {
     return (
-      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={1} opacity={0.6} />
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={color}
+        strokeWidth={1}
+        opacity={0.6}
+      />
     );
   }
 
@@ -121,7 +218,14 @@ export function ExceptionHierarchyDiagram() {
           aria-label="C++ 标准异常类继承树：exception 为根，logic_error / runtime_error 两大分支及其子类"
           className="mx-auto block h-auto w-full max-w-[900px]"
         >
-          <text x={w / 2} y={26} fontSize={15} fontWeight={700} fill={primary} textAnchor="middle">
+          <text
+            x={w / 2}
+            y={26}
+            fontSize={15}
+            fontWeight={700}
+            fill={primary}
+            textAnchor="middle"
+          >
             C++ 标准异常类继承树
           </text>
 
@@ -165,14 +269,29 @@ export function ExceptionHierarchyDiagram() {
             strokeWidth={1}
             strokeDasharray="4,3"
           />
-          <text x={logicSec.x + 12} y={logicSec.y + 16} fontSize={9.5} fontWeight={700} fill={blue}>
+          <text
+            x={logicSec.x + 12}
+            y={logicSec.y + 16}
+            fontSize={11}
+            fontWeight={700}
+            fill={blue}
+          >
             逻辑错误——程序启动前可发现
           </text>
-          {drawNode(logicHeadX, headY, "logic_error", "逻辑错误基类", blue, 160)}
+          {drawNode(
+            logicHeadX,
+            headY,
+            "logic_error",
+            "逻辑错误基类",
+            blue,
+            160,
+          )}
           {/* connectors head → children */}
           {drawLine(logicHeadX, headY + 36, logicColL, logicRow, blue)}
           {drawLine(logicHeadX, headY + 36, logicColR, logicRow, blue)}
-          {logicChildren.map((c) => drawNode(c.x, c.y, c.name, c.desc, blue, c.ww))}
+          {logicChildren.map((c) =>
+            drawNode(c.x, c.y, c.name, c.desc, blue, c.ww),
+          )}
 
           {/* ===== Other / language-support section (center) ===== */}
           <rect
@@ -186,10 +305,18 @@ export function ExceptionHierarchyDiagram() {
             strokeWidth={1}
             strokeDasharray="4,3"
           />
-          <text x={otherSec.x + 12} y={otherSec.y + 16} fontSize={9.5} fontWeight={700} fill={green}>
+          <text
+            x={otherSec.x + 12}
+            y={otherSec.y + 16}
+            fontSize={11}
+            fontWeight={700}
+            fill={green}
+          >
             语言支持类——直接从 exception 派生
           </text>
-          {otherChildren.map((c) => drawNode(c.x, c.y, c.name, c.desc, c.color, c.ww))}
+          {otherChildren.map((c) =>
+            drawNode(c.x, c.y, c.name, c.desc, c.color, c.ww),
+          )}
 
           {/* ===== Runtime error section (right) ===== */}
           <rect
@@ -206,15 +333,24 @@ export function ExceptionHierarchyDiagram() {
           <text
             x={runtimeSec.x + 12}
             y={runtimeSec.y + 16}
-            fontSize={9.5}
+            fontSize={11}
             fontWeight={700}
             fill={orange}
           >
             运行时错误——运行后才发生
           </text>
-          {drawNode(runtimeHeadX, headY, "runtime_error", "运行时错误基类", orange, 200)}
+          {drawNode(
+            runtimeHeadX,
+            headY,
+            "runtime_error",
+            "运行时错误基类",
+            orange,
+            200,
+          )}
           {drawLine(runtimeHeadX, headY + 36, runtimeHeadX, runtimeRow, orange)}
-          {runtimeChildren.map((c) => drawNode(c.x, c.y, c.name, c.desc, orange, c.ww))}
+          {runtimeChildren.map((c) =>
+            drawNode(c.x, c.y, c.name, c.desc, orange, c.ww),
+          )}
 
           {/* Custom exception note */}
           <rect
@@ -229,19 +365,29 @@ export function ExceptionHierarchyDiagram() {
             strokeDasharray="4,3"
           />
           <text x={450} y={491} fontSize={11} fill={green} textAnchor="middle">
-            你的自定义异常应继承自 logic_error 或 runtime_error——不要直接继承 exception
+            你的自定义异常应继承自 logic_error 或 runtime_error——不要直接继承
+            exception
           </text>
 
           {/* What/constructor note */}
-          <text x={450} y={522} fontSize={10} fill={secondary} textAnchor="middle">
-            exception 公开非虚成员函数 const char* what() const noexcept —— 返回异常描述字符串
+          <text
+            x={450}
+            y={522}
+            fontSize={11}
+            fill={secondary}
+            textAnchor="middle"
+          >
+            exception 公开非虚成员函数 const char* what() const noexcept ——
+            返回异常描述字符串
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C++ 标准库异常类继承树。exception 是根类；logic_error 分支代表程序逻辑错误（可预判），
-        runtime_error 分支代表运行时错误；bad_alloc / bad_cast 等语言支持异常直接从 exception 派生。
-        自定义异常建议继承自 logic_error 或 runtime_error，而不是直接继承 exception。
+        C++ 标准库异常类继承树。exception 是根类；logic_error
+        分支代表程序逻辑错误（可预判）， runtime_error
+        分支代表运行时错误；bad_alloc / bad_cast 等语言支持异常直接从 exception
+        派生。 自定义异常建议继承自 logic_error 或 runtime_error，而不是直接继承
+        exception。
       </figcaption>
     </figure>
   );

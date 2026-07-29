@@ -12,7 +12,6 @@ export function ContainerOperationTable() {
   const primary = "var(--text-primary)";
   const secondary = "var(--text-secondary)";
   const border = "var(--border)";
-  const elevated = "var(--bg-elevated)";
   const warn = "rgb(229,181,103)";
 
   const w = 800;
@@ -273,7 +272,7 @@ export function ContainerOperationTable() {
                       key={ci}
                       x={leftPad + (ci + 0.5) * colW}
                       y={y + rowH / 2 + 4}
-                      fontSize={text.length > 8 ? "10" : "11"}
+                      fontSize="11"
                       fill={color}
                       textAnchor="middle"
                       fontFamily={
