@@ -265,6 +265,373 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Aad8OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "android-advanced-light/00-official-learning-map/aal-17-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-official-learning-map");
+      return {
+        Aal17OfficialLearningMapDecisionLab:
+          module0.Aal17OfficialLearningMapDecisionLab,
+        Aal17OfficialLearningMapMechanismMap:
+          module0.Aal17OfficialLearningMapMechanismMap,
+        Aal17OfficialLearningMapFailureDiagram:
+          module0.Aal17OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/01-android-features/aal-17-01-android-features":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-01-android-features");
+      return {
+        Aal1701AndroidFeaturesDecisionLab:
+          module0.Aal1701AndroidFeaturesDecisionLab,
+        Aal1701AndroidFeaturesMechanismMap:
+          module0.Aal1701AndroidFeaturesMechanismMap,
+        Aal1701AndroidFeaturesFailureDiagram:
+          module0.Aal1701AndroidFeaturesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/02-material-design/aal-17-02-material-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-02-material-design");
+      return {
+        Aal1702MaterialDesignDecisionLab:
+          module0.Aal1702MaterialDesignDecisionLab,
+        Aal1702MaterialDesignMechanismMap:
+          module0.Aal1702MaterialDesignMechanismMap,
+        Aal1702MaterialDesignFailureDiagram:
+          module0.Aal1702MaterialDesignFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/03-view-custom-view/aal-17-03-view-custom-view":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-03-view-custom-view");
+      return {
+        Aal1703ViewCustomViewDecisionLab:
+          module0.Aal1703ViewCustomViewDecisionLab,
+        Aal1703ViewCustomViewMechanismMap:
+          module0.Aal1703ViewCustomViewMechanismMap,
+        Aal1703ViewCustomViewFailureDiagram:
+          module0.Aal1703ViewCustomViewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/04-multithreading/aal-17-04-multithreading":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-04-multithreading");
+      return {
+        Aal1704MultithreadingDecisionLab:
+          module0.Aal1704MultithreadingDecisionLab,
+        Aal1704MultithreadingMechanismMap:
+          module0.Aal1704MultithreadingMechanismMap,
+        Aal1704MultithreadingFailureDiagram:
+          module0.Aal1704MultithreadingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/05-network-frameworks/aal-17-05-network-frameworks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-05-network-frameworks");
+      return {
+        Aal1705NetworkFrameworksDecisionLab:
+          module0.Aal1705NetworkFrameworksDecisionLab,
+        Aal1705NetworkFrameworksMechanismMap:
+          module0.Aal1705NetworkFrameworksMechanismMap,
+        Aal1705NetworkFrameworksFailureDiagram:
+          module0.Aal1705NetworkFrameworksFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/06-design-patterns/aal-17-06-design-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-06-design-patterns");
+      return {
+        Aal1706DesignPatternsDecisionLab:
+          module0.Aal1706DesignPatternsDecisionLab,
+        Aal1706DesignPatternsMechanismMap:
+          module0.Aal1706DesignPatternsMechanismMap,
+        Aal1706DesignPatternsFailureDiagram:
+          module0.Aal1706DesignPatternsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/07-event-bus/aal-17-07-event-bus": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-light/aal-17-07-event-bus");
+    return {
+      Aal1707EventBusDecisionLab: module0.Aal1707EventBusDecisionLab,
+      Aal1707EventBusMechanismMap: module0.Aal1707EventBusMechanismMap,
+      Aal1707EventBusFailureDiagram: module0.Aal1707EventBusFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-light/08-rxjava/aal-17-08-rxjava": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-light/aal-17-08-rxjava");
+    return {
+      Aal1708RxjavaDecisionLab: module0.Aal1708RxjavaDecisionLab,
+      Aal1708RxjavaMechanismMap: module0.Aal1708RxjavaMechanismMap,
+      Aal1708RxjavaFailureDiagram: module0.Aal1708RxjavaFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-light/09-annotations-di/aal-17-09-annotations-di":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-09-annotations-di");
+      return {
+        Aal1709AnnotationsDiDecisionLab:
+          module0.Aal1709AnnotationsDiDecisionLab,
+        Aal1709AnnotationsDiMechanismMap:
+          module0.Aal1709AnnotationsDiMechanismMap,
+        Aal1709AnnotationsDiFailureDiagram:
+          module0.Aal1709AnnotationsDiFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/10-app-architecture/aal-17-10-app-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-10-app-architecture");
+      return {
+        Aal1710AppArchitectureDecisionLab:
+          module0.Aal1710AppArchitectureDecisionLab,
+        Aal1710AppArchitectureMechanismMap:
+          module0.Aal1710AppArchitectureMechanismMap,
+        Aal1710AppArchitectureFailureDiagram:
+          module0.Aal1710AppArchitectureFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/11-system-mediaplayer/aal-17-11-system-mediaplayer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-11-system-mediaplayer");
+      return {
+        Aal1711SystemMediaplayerDecisionLab:
+          module0.Aal1711SystemMediaplayerDecisionLab,
+        Aal1711SystemMediaplayerMechanismMap:
+          module0.Aal1711SystemMediaplayerMechanismMap,
+        Aal1711SystemMediaplayerFailureDiagram:
+          module0.Aal1711SystemMediaplayerFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-light/12-official-final-review/aal-17-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-light/aal-17-official-final-review");
+      return {
+        Aal17OfficialFinalReviewDecisionLab:
+          module0.Aal17OfficialFinalReviewDecisionLab,
+        Aal17OfficialFinalReviewMechanismMap:
+          module0.Aal17OfficialFinalReviewMechanismMap,
+        Aal17OfficialFinalReviewFailureDiagram:
+          module0.Aal17OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/00-official-learning-map/adae15-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-official-learning-map");
+      return {
+        Adae15OfficialLearningMapDecisionLab:
+          module0.Adae15OfficialLearningMapDecisionLab,
+        Adae15OfficialLearningMapMechanismMap:
+          module0.Adae15OfficialLearningMapMechanismMap,
+        Adae15OfficialLearningMapFailureDiagram:
+          module0.Adae15OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/01-activity/adae15-01-activity-lifecycle-launch-mode":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-01-activity-lifecycle-launch-mode");
+      return {
+        Adae1501ActivityLifecycleLaunchModeDecisionLab:
+          module0.Adae1501ActivityLifecycleLaunchModeDecisionLab,
+        Adae1501ActivityLifecycleLaunchModeMechanismMap:
+          module0.Adae1501ActivityLifecycleLaunchModeMechanismMap,
+        Adae1501ActivityLifecycleLaunchModeFailureDiagram:
+          module0.Adae1501ActivityLifecycleLaunchModeFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/02-ipc/adae15-02-ipc": async () => {
+    const module0 =
+      await import("@/components/mdx/android-art-exploration/adae15-02-ipc");
+    return {
+      Adae1502IpcDecisionLab: module0.Adae1502IpcDecisionLab,
+      Adae1502IpcMechanismMap: module0.Adae1502IpcMechanismMap,
+      Adae1502IpcFailureDiagram: module0.Adae1502IpcFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-art-exploration/03-view-system/adae15-03-view-event-system":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-03-view-event-system");
+      return {
+        Adae1503ViewEventSystemDecisionLab:
+          module0.Adae1503ViewEventSystemDecisionLab,
+        Adae1503ViewEventSystemMechanismMap:
+          module0.Adae1503ViewEventSystemMechanismMap,
+        Adae1503ViewEventSystemFailureDiagram:
+          module0.Adae1503ViewEventSystemFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/03-view-system/adae15-04-view-working-principles":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-04-view-working-principles");
+      return {
+        Adae1504ViewWorkingPrinciplesDecisionLab:
+          module0.Adae1504ViewWorkingPrinciplesDecisionLab,
+        Adae1504ViewWorkingPrinciplesMechanismMap:
+          module0.Adae1504ViewWorkingPrinciplesMechanismMap,
+        Adae1504ViewWorkingPrinciplesFailureDiagram:
+          module0.Adae1504ViewWorkingPrinciplesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/04-cross-process-ui/adae15-05-remoteviews":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-05-remoteviews");
+      return {
+        Adae1505RemoteviewsDecisionLab: module0.Adae1505RemoteviewsDecisionLab,
+        Adae1505RemoteviewsMechanismMap:
+          module0.Adae1505RemoteviewsMechanismMap,
+        Adae1505RemoteviewsFailureDiagram:
+          module0.Adae1505RemoteviewsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/04-cross-process-ui/adae15-06-drawable":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-06-drawable");
+      return {
+        Adae1506DrawableDecisionLab: module0.Adae1506DrawableDecisionLab,
+        Adae1506DrawableMechanismMap: module0.Adae1506DrawableMechanismMap,
+        Adae1506DrawableFailureDiagram: module0.Adae1506DrawableFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/04-cross-process-ui/adae15-07-animation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-07-animation");
+      return {
+        Adae1507AnimationDecisionLab: module0.Adae1507AnimationDecisionLab,
+        Adae1507AnimationMechanismMap: module0.Adae1507AnimationMechanismMap,
+        Adae1507AnimationFailureDiagram:
+          module0.Adae1507AnimationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/05-framework-internals/adae15-08-window-windowmanager":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-08-window-windowmanager");
+      return {
+        Adae1508WindowWindowmanagerDecisionLab:
+          module0.Adae1508WindowWindowmanagerDecisionLab,
+        Adae1508WindowWindowmanagerMechanismMap:
+          module0.Adae1508WindowWindowmanagerMechanismMap,
+        Adae1508WindowWindowmanagerFailureDiagram:
+          module0.Adae1508WindowWindowmanagerFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/05-framework-internals/adae15-09-four-components":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-09-four-components");
+      return {
+        Adae1509FourComponentsDecisionLab:
+          module0.Adae1509FourComponentsDecisionLab,
+        Adae1509FourComponentsMechanismMap:
+          module0.Adae1509FourComponentsMechanismMap,
+        Adae1509FourComponentsFailureDiagram:
+          module0.Adae1509FourComponentsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/05-framework-internals/adae15-10-message-mechanism":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-10-message-mechanism");
+      return {
+        Adae1510MessageMechanismDecisionLab:
+          module0.Adae1510MessageMechanismDecisionLab,
+        Adae1510MessageMechanismMechanismMap:
+          module0.Adae1510MessageMechanismMechanismMap,
+        Adae1510MessageMechanismFailureDiagram:
+          module0.Adae1510MessageMechanismFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/06-resources-performance/adae15-11-threads-pools":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-11-threads-pools");
+      return {
+        Adae1511ThreadsPoolsDecisionLab:
+          module0.Adae1511ThreadsPoolsDecisionLab,
+        Adae1511ThreadsPoolsMechanismMap:
+          module0.Adae1511ThreadsPoolsMechanismMap,
+        Adae1511ThreadsPoolsFailureDiagram:
+          module0.Adae1511ThreadsPoolsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/06-resources-performance/adae15-12-bitmap-cache":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-12-bitmap-cache");
+      return {
+        Adae1512BitmapCacheDecisionLab: module0.Adae1512BitmapCacheDecisionLab,
+        Adae1512BitmapCacheMechanismMap:
+          module0.Adae1512BitmapCacheMechanismMap,
+        Adae1512BitmapCacheFailureDiagram:
+          module0.Adae1512BitmapCacheFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/06-resources-performance/adae15-13-integrated-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-13-integrated-techniques");
+      return {
+        Adae1513IntegratedTechniquesDecisionLab:
+          module0.Adae1513IntegratedTechniquesDecisionLab,
+        Adae1513IntegratedTechniquesMechanismMap:
+          module0.Adae1513IntegratedTechniquesMechanismMap,
+        Adae1513IntegratedTechniquesFailureDiagram:
+          module0.Adae1513IntegratedTechniquesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/07-native-boundary/adae15-14-jni-ndk": async () => {
+    const module0 =
+      await import("@/components/mdx/android-art-exploration/adae15-14-jni-ndk");
+    return {
+      Adae1514JniNdkDecisionLab: module0.Adae1514JniNdkDecisionLab,
+      Adae1514JniNdkMechanismMap: module0.Adae1514JniNdkMechanismMap,
+      Adae1514JniNdkFailureDiagram: module0.Adae1514JniNdkFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-art-exploration/08-performance/adae15-15-performance-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-15-performance-optimization");
+      return {
+        Adae1515PerformanceOptimizationDecisionLab:
+          module0.Adae1515PerformanceOptimizationDecisionLab,
+        Adae1515PerformanceOptimizationMechanismMap:
+          module0.Adae1515PerformanceOptimizationMechanismMap,
+        Adae1515PerformanceOptimizationFailureDiagram:
+          module0.Adae1515PerformanceOptimizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-art-exploration/16-official-final-review/adae15-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-art-exploration/adae15-official-final-review");
+      return {
+        Adae15OfficialFinalReviewDecisionLab:
+          module0.Adae15OfficialFinalReviewDecisionLab,
+        Adae15OfficialFinalReviewMechanismMap:
+          module0.Adae15OfficialFinalReviewMechanismMap,
+        Adae15OfficialFinalReviewFailureDiagram:
+          module0.Adae15OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "android-component-arch/00-official-learning-map/aca18-official-learning-map":
     async () => {
       const module0 =
@@ -3410,6 +3777,180 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EmcppInitializerListPreferenceMap,
         EmcppVectorConstructionSemanticsMap:
           module0.EmcppVectorConstructionSemanticsMap,
+      } as ChapterMdxComponents;
+    },
+  "first-line-android/00-official-learning-map/fla3-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/first-line-android/fla3-official-learning-map");
+      return {
+        Fla3OfficialLearningMapDecisionLab:
+          module0.Fla3OfficialLearningMapDecisionLab,
+        Fla3OfficialLearningMapMechanismMap:
+          module0.Fla3OfficialLearningMapMechanismMap,
+        Fla3OfficialLearningMapFailureDiagram:
+          module0.Fla3OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "first-line-android/01-first-code/fla3-01-first-code": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-01-first-code");
+    return {
+      Fla301FirstCodeDecisionLab: module0.Fla301FirstCodeDecisionLab,
+      Fla301FirstCodeMechanismMap: module0.Fla301FirstCodeMechanismMap,
+      Fla301FirstCodeFailureDiagram: module0.Fla301FirstCodeFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/02-kotlin/fla3-02-kotlin": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-02-kotlin");
+    return {
+      Fla302KotlinDecisionLab: module0.Fla302KotlinDecisionLab,
+      Fla302KotlinMechanismMap: module0.Fla302KotlinMechanismMap,
+      Fla302KotlinFailureDiagram: module0.Fla302KotlinFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/03-activity/fla3-03-activity": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-03-activity");
+    return {
+      Fla303ActivityDecisionLab: module0.Fla303ActivityDecisionLab,
+      Fla303ActivityMechanismMap: module0.Fla303ActivityMechanismMap,
+      Fla303ActivityFailureDiagram: module0.Fla303ActivityFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/04-ui/fla3-04-ui": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-04-ui");
+    return {
+      Fla304UiDecisionLab: module0.Fla304UiDecisionLab,
+      Fla304UiMechanismMap: module0.Fla304UiMechanismMap,
+      Fla304UiFailureDiagram: module0.Fla304UiFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/05-fragment/fla3-05-fragment": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-05-fragment");
+    return {
+      Fla305FragmentDecisionLab: module0.Fla305FragmentDecisionLab,
+      Fla305FragmentMechanismMap: module0.Fla305FragmentMechanismMap,
+      Fla305FragmentFailureDiagram: module0.Fla305FragmentFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/06-broadcast/fla3-06-broadcast": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-06-broadcast");
+    return {
+      Fla306BroadcastDecisionLab: module0.Fla306BroadcastDecisionLab,
+      Fla306BroadcastMechanismMap: module0.Fla306BroadcastMechanismMap,
+      Fla306BroadcastFailureDiagram: module0.Fla306BroadcastFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/07-persistence/fla3-07-persistence": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-07-persistence");
+    return {
+      Fla307PersistenceDecisionLab: module0.Fla307PersistenceDecisionLab,
+      Fla307PersistenceMechanismMap: module0.Fla307PersistenceMechanismMap,
+      Fla307PersistenceFailureDiagram: module0.Fla307PersistenceFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/08-content-provider/fla3-08-content-provider":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/first-line-android/fla3-08-content-provider");
+      return {
+        Fla308ContentProviderDecisionLab:
+          module0.Fla308ContentProviderDecisionLab,
+        Fla308ContentProviderMechanismMap:
+          module0.Fla308ContentProviderMechanismMap,
+        Fla308ContentProviderFailureDiagram:
+          module0.Fla308ContentProviderFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "first-line-android/09-multimedia/fla3-09-multimedia": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-09-multimedia");
+    return {
+      Fla309MultimediaDecisionLab: module0.Fla309MultimediaDecisionLab,
+      Fla309MultimediaMechanismMap: module0.Fla309MultimediaMechanismMap,
+      Fla309MultimediaFailureDiagram: module0.Fla309MultimediaFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/10-service/fla3-10-service": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-10-service");
+    return {
+      Fla310ServiceDecisionLab: module0.Fla310ServiceDecisionLab,
+      Fla310ServiceMechanismMap: module0.Fla310ServiceMechanismMap,
+      Fla310ServiceFailureDiagram: module0.Fla310ServiceFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/11-network/fla3-11-network": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-11-network");
+    return {
+      Fla311NetworkDecisionLab: module0.Fla311NetworkDecisionLab,
+      Fla311NetworkMechanismMap: module0.Fla311NetworkMechanismMap,
+      Fla311NetworkFailureDiagram: module0.Fla311NetworkFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/12-material/fla3-12-material": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-12-material");
+    return {
+      Fla312MaterialDecisionLab: module0.Fla312MaterialDecisionLab,
+      Fla312MaterialMechanismMap: module0.Fla312MaterialMechanismMap,
+      Fla312MaterialFailureDiagram: module0.Fla312MaterialFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/13-jetpack/fla3-13-jetpack": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-13-jetpack");
+    return {
+      Fla313JetpackDecisionLab: module0.Fla313JetpackDecisionLab,
+      Fla313JetpackMechanismMap: module0.Fla313JetpackMechanismMap,
+      Fla313JetpackFailureDiagram: module0.Fla313JetpackFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/14-advanced/fla3-14-advanced": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-14-advanced");
+    return {
+      Fla314AdvancedDecisionLab: module0.Fla314AdvancedDecisionLab,
+      Fla314AdvancedMechanismMap: module0.Fla314AdvancedMechanismMap,
+      Fla314AdvancedFailureDiagram: module0.Fla314AdvancedFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/15-weather-app/fla3-15-weather-app": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-15-weather-app");
+    return {
+      Fla315WeatherAppDecisionLab: module0.Fla315WeatherAppDecisionLab,
+      Fla315WeatherAppMechanismMap: module0.Fla315WeatherAppMechanismMap,
+      Fla315WeatherAppFailureDiagram: module0.Fla315WeatherAppFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/16-permissionx/fla3-16-permissionx": async () => {
+    const module0 =
+      await import("@/components/mdx/first-line-android/fla3-16-permissionx");
+    return {
+      Fla316PermissionxDecisionLab: module0.Fla316PermissionxDecisionLab,
+      Fla316PermissionxMechanismMap: module0.Fla316PermissionxMechanismMap,
+      Fla316PermissionxFailureDiagram: module0.Fla316PermissionxFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "first-line-android/17-official-final-review/fla3-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/first-line-android/fla3-official-final-review");
+      return {
+        Fla3OfficialFinalReviewDecisionLab:
+          module0.Fla3OfficialFinalReviewDecisionLab,
+        Fla3OfficialFinalReviewMechanismMap:
+          module0.Fla3OfficialFinalReviewMechanismMap,
+        Fla3OfficialFinalReviewFailureDiagram:
+          module0.Fla3OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {

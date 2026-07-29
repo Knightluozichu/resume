@@ -137,19 +137,33 @@ function explainCSharpConcept(label, unitTitle, bookSlug) {
 function explainAndroidConcept(label, unitTitle, bookSlug) {
   const context = `${unitTitle}中的${label}`;
   if (bookSlug === "android-advanced-decryption") {
-    if (/init|Zygote|SystemServer|Launcher|进程|Binder|线程池|消息循环/u.test(label)) {
+    if (
+      /init|Zygote|SystemServer|Launcher|进程|Binder|线程池|消息循环/u.test(
+        label,
+      )
+    ) {
       return `${context}要沿 Android 8.0 的真实启动或 IPC 链路解释：先定位入口源码与调用者，再标出进程、线程、Binder 对象、状态写入和完成回调。固定 AOSP 标签后，用 PID/TID、调用栈、关键日志与一个进程未就绪或回调延迟样本核对先后关系。`;
     }
-    if (/Activity|Service|广播|Content ?Provider|Context|AMS|Window|WMS/u.test(label)) {
+    if (
+      /Activity|Service|广播|Content ?Provider|Context|AMS|Window|WMS/u.test(
+        label,
+      )
+    ) {
       return `${context}由 framework 对象、system_server 状态和应用进程回调共同完成，API 返回不等于系统状态已经落定。应跟踪 token/record、目标进程与线程、生命周期回调和最终窗口或组件状态，并用无效 token、进程重建或迟到回调验证拒绝与恢复路径。`;
     }
-    if (/JNI|Java虚拟机|ClassLoader|Dalvik|ART|类|对象|引用|垃圾|GC/u.test(label)) {
+    if (
+      /JNI|Java虚拟机|ClassLoader|Dalvik|ART|类|对象|引用|垃圾|GC/u.test(label)
+    ) {
       return `${context}涉及 Java、Native、加载器身份与运行时内存边界；同名类型、引用或方法在不同加载器和线程中并不自动等价。用源码符号、类加载日志、JNI 引用计数、堆/GC 轨迹或正反加载案例验证对象身份、生命周期和释放条件。`;
     }
     if (/热修复|Hook|代理|插件|动态加载|VirtualApk|Instant Run/u.test(label)) {
       return `${context}通过改变加载、查找或分发路径实现，必须区分 Android 8.0 的可行机制、隐藏实现依赖与现代平台限制。记录被替换的入口、原对象和代理对象身份、加载顺序与回滚点，再用补丁缺失、签名不符或进程重建样本确认失败不会静默污染状态。`;
     }
-    if (/绘制|GPU|Systrace|Traceview|内存|泄漏|Allocation|Heap|MAT|LeakCanary/u.test(label)) {
+    if (
+      /绘制|GPU|Systrace|Traceview|内存|泄漏|Allocation|Heap|MAT|LeakCanary/u.test(
+        label,
+      )
+    ) {
       return `${context}需要把工具读数连接到用户可见结果与责任对象，而不是把一张截图当作根因。固定场景并保存帧时间或堆基线，单独改变布局、分配或引用路径，再用 P50/P95/P99、GC Root、过度绘制或首帧状态交叉验证。`;
     }
     return `${context}必须落回 Android 8.0 源码中的入口、对象、进程/线程、状态变化与完成点。固定版本和输入，先预测正常链路，再只注入一个失败条件，以源码符号、运行日志和最终系统状态三方核对。`;
@@ -159,10 +173,18 @@ function explainAndroidConcept(label, unitTitle, bookSlug) {
     if (/依赖|聚合|解耦|模块|层级|组件化|基础架构/u.test(label)) {
       return `${context}要用允许与禁止的依赖边表达组件边界，而不是以 Gradle module 数量代替解耦。固定工程后导出依赖图和公开 API，加入一个反向依赖或重复类反例，确认构建能拒绝越界且业务实现仍可替换。`;
     }
-    if (/Manifest|资源|Gradle|编译|Instant Run|Freeline|构建|混淆|多渠道/u.test(label)) {
+    if (
+      /Manifest|资源|Gradle|编译|Instant Run|Freeline|构建|混淆|多渠道/u.test(
+        label,
+      )
+    ) {
       return `${context}属于从源码与资源输入到 APK/AAR 产物的构建变换，结论受 2018 年 Gradle/AGP 版本约束。保存任务图、合并/生成报告与产物校验和，分别改变代码、资源或插件配置，核对增量命中、冲突诊断和冷构建结果。`;
     }
-    if (/Activity|Fragment|View|Application|广播|事件|路由|反射|权限|生命周期|分发/u.test(label)) {
+    if (
+      /Activity|Fragment|View|Application|广播|事件|路由|反射|权限|生命周期|分发/u.test(
+        label,
+      )
+    ) {
       return `${context}跨越运行时注册、查找与生命周期所有权，成功调用一次不能证明进程重建或迟到回调仍正确。记录组件标识、进程线程、注册/释放次序与路由结果，并注入缺失实现、重复初始化或 owner 销毁验证显式失败。`;
     }
     if (/Maven|AAR|JCenter|SDK|仓库|流通|发布|缓存/u.test(label)) {
@@ -174,10 +196,93 @@ function explainAndroidConcept(label, unitTitle, bookSlug) {
     return `${context}要贯通源码合同、构建任务、运行所有者与发布制品四层。固定工具链和最小工程，只改变一个依赖、合并、路由或仓库条件，用自动拒绝、运行日志、产物校验和与回滚结果证明边界。`;
   }
 
+  if (bookSlug === "android-advanced-light") {
+    if (/Material|View|布局|绘制|触摸|动画|控件|UI/u.test(label)) {
+      return `${context}要沿输入事件、测量、布局、绘制与帧提交说明可见结果，样式名称不能代替运行机制。固定设备和界面状态后，改变一个尺寸、触摸序列或过度绘制条件，保存层级、回调顺序与帧时间验证。`;
+    }
+    if (/线程|AsyncTask|Handler|Looper|消息|并发|同步/u.test(label)) {
+      return `${context}涉及任务调度、共享状态、取消和生命周期所有权，回调成功一次不代表旋转或销毁后仍安全。记录线程、消息队列、owner 状态与资源释放，并注入取消、迟到回调或竞争复现失败路径。`;
+    }
+    if (/网络|Volley|OkHttp|请求|缓存|HTTP/u.test(label)) {
+      return `${context}要明确请求身份、超时/取消、缓存键、重试幂等与响应解析边界。用可控服务端分别返回成功、慢响应、断网和错误数据，核对网络日志、缓存状态、线程切换和用户可见结果。`;
+    }
+    if (/设计模式|单例|Builder|观察者|适配器|代理|事件总线|otto/u.test(label)) {
+      return `${context}只有在参与者、状态所有者与变化点明确时才是设计机制，而不是类名套用。以最小对象图记录事件注册/注销、调用方向和替换点，再用重复注册、缺失订阅者或生命周期结束样本检验耦合与泄漏。`;
+    }
+    if (/RxJava|响应式|Observable|Subscriber|操作符/u.test(label)) {
+      return `${context}由订阅关系、线程调度、事件序列与终止信号共同定义。用 TestScheduler 或确定事件源复现 next/error/complete、取消和背压边界，保存订阅释放与观察线程，避免只看最终输出。`;
+    }
+    if (/注解|ButterKnife|Dagger|依赖注入|Data Binding/u.test(label)) {
+      return `${context}跨越源码注解、生成代码、对象图与生命周期，框架隐藏的创建顺序仍需可追踪。保存生成源码和依赖图，比较缺失绑定、作用域错配与重复创建，确认编译诊断和对象身份符合合同。`;
+    }
+    if (/架构|MVC|MVP|MVVM|MediaPlayer|系统/u.test(label)) {
+      return `${context}要分离视图状态、业务状态、平台服务和资源所有权，并标明 Android 5–7 时代 API 边界。跟踪一次用户动作到状态更新、系统调用与释放，用进程重建、播放错误或配置变化验证恢复。`;
+    }
+    return `${context}应固定 Android 5.0–7.0、Java 与旧 Support Library 语境，写出输入、状态、线程、生命周期和失败结果。以最小实现和单变量反例保存日志、状态快照与迁移差异。`;
+  }
+
+  if (bookSlug === "android-art-exploration") {
+    if (/Activity|生命周期|启动模式|任务栈|Intent/u.test(label)) {
+      return `${context}由 ActivityRecord/任务栈、实例状态和应用回调共同决定，方法调用不等于目标界面已恢复。记录实例、Intent、栈位置和回调序列，并用旋转、进程重建和不同 launchMode 样本核对状态。`;
+    }
+    if (/IPC|Binder|AIDL|Messenger|Bundle|Parcel|跨进程/u.test(label)) {
+      return `${context}跨越进程身份、序列化、Binder 线程池和死亡通知，Java 引用外观不能代表同一对象。保存调用方向、PID/TID、事务数据与错误返回，并注入大对象、服务死亡或并发请求验证边界。`;
+    }
+    if (/View|事件|滑动|触摸|measure|layout|draw|绘制/u.test(label)) {
+      return `${context}要沿触摸分发或 measure—layout—draw 因果链解释，父子协商与坐标转换会改变结果。固定 View 层级后改变一个拦截、MeasureSpec 或尺寸条件，记录回调次序、几何状态和帧输出。`;
+    }
+    if (/RemoteViews|Drawable|动画|Window|WindowManager/u.test(label)) {
+      return `${context}跨越受限视图操作、资源状态或窗口 token，局部对象变化不一定已经提交到系统显示。跟踪宿主、token、属性更新与最终像素/窗口状态，用无效上下文、进程边界或动画取消验证失败。`;
+    }
+    if (
+      /四大组件|Service|广播|ContentProvider|消息|Handler|Looper/u.test(label)
+    ) {
+      return `${context}需要区分请求入口、system_server/消息队列状态、目标线程与完成回调。用 PID/TID、token/record、队列时序和最终组件状态交叉验证，并注入进程未启动或迟到消息。`;
+    }
+    if (/线程|线程池|Bitmap|Cache|缓存|性能|优化/u.test(label)) {
+      return `${context}要同时证明用户结果、调度/内存成本和生命周期释放。固定输入与设备状态，记录队列、分配、命中率和 P50/P95/P99，再改变线程数、缓存容量或引用路径验证反例。`;
+    }
+    if (/JNI|NDK|Native|C\\+\\+/u.test(label)) {
+      return `${context}涉及 Java/Native 类型转换、线程附着、引用与 ABI，跨界调用本身也有成本。保存 JNI 注册、异常和引用释放轨迹，以错误签名、不同 ABI 或本地失败样本确认回退与清理。`;
+    }
+    return `${context}必须放回 Android 5.0/Java 基线的应用调用—framework 代理—Binder/消息队列—目标对象—回调链路。固定版本，先预测状态变化，再以源码符号、运行轨迹和一个失败样本复核。`;
+  }
+
+  if (bookSlug === "first-line-android") {
+    if (/Kotlin|函数|类|Lambda|空指针|集合/u.test(label)) {
+      return `${context}要把语言写法连接到类型、可空性、对象状态与生成调用，简洁语法不能替代契约。用可编译/应拒绝案例和边界输入核对推断、空值、集合变化与 Java 互操作。`;
+    }
+    if (
+      /Activity|Fragment|生命周期|Intent|任务栈|UI|控件|布局|Material/u.test(
+        label,
+      )
+    ) {
+      return `${context}由组件 owner、保存状态、事件回调与视图层级共同决定。固定用户操作后记录实例、回调和界面状态，并用旋转、后台回收、重复导航或不同屏幕尺寸验证恢复与释放。`;
+    }
+    if (/广播|ContentProvider|权限|PermissionX|跨程序/u.test(label)) {
+      return `${context}跨越组件导出、调用者身份、运行时授权和数据边界，声明权限不等于操作必然允许。用已授权、拒绝、撤销和不同调用包样本核对系统返回、用户提示与最小数据暴露。`;
+    }
+    if (/数据|存储|文件|SQLite|Room|持久/u.test(label)) {
+      return `${context}要定义数据模式、事务、升级和失败恢复，成功写入一次不能证明旧版本或异常中断安全。保存迁移前后数据、事务结果与查询输出，注入磁盘/解析失败或跨版本升级验证。`;
+    }
+    if (/多媒体|相机|音频|视频|Service|后台|线程/u.test(label)) {
+      return `${context}涉及系统资源、后台限制、线程与生命周期释放。记录句柄、任务状态和用户可见结果，用权限拒绝、组件销毁、播放错误或系统回收样本确认取消与清理。`;
+    }
+    if (/网络|HTTP|Retrofit|天气|JSON|请求/u.test(label)) {
+      return `${context}要明确请求输入、超时/取消、解析、缓存与错误呈现。以可控响应复现成功、慢网、断网和畸形数据，核对请求日志、持久状态、重试上限及界面恢复。`;
+    }
+    if (/Jetpack|ViewModel|LiveData|Navigation|Repository/u.test(label)) {
+      return `${context}通过明确状态所有者和生命周期感知分发减少界面耦合，但不能自动解决进程重建或数据一致性。记录 owner、状态来源和订阅释放，以旋转、返回栈和进程恢复样本验证。`;
+    }
+    return `${context}要在 Android 10/Kotlin 基线中写清用户任务、平台合同、状态 owner、线程与资源释放，再单列现代 targetSdk 差异。用正常、拒绝和生命周期重建三类样本核对最终行为。`;
+  }
+
   if (/Java|斐波|缓存|API|数据结构|SQLite|事务|查询|算法/u.test(label)) {
     return `${context}先保证优化前后结果、异常与线程语义等价，再讨论时间或分配。固定输入规模、构建和设备状态，完成预热与交错采样，并用边界输入、缓存失效或查询计划证明收益不是偶然数据或错误结果造成的。`;
   }
-  if (/NDK|JNI|C\\+\\+|本地|ARM|NEON|汇编|指令|内联|循环展开|预读取/u.test(label)) {
+  if (
+    /NDK|JNI|C\\+\\+|本地|ARM|NEON|汇编|指令|内联|循环展开|预读取/u.test(label)
+  ) {
     return `${context}同时包含 Java/Native 跨界成本、ABI 与具体 CPU 能力，局部指令更快不代表端到端更快。记录 ABI、编译参数、JNI 转换与工作量，用支持和不支持目标特性的设备/模拟输入比较总耗时、正确性与回退实现。`;
   }
   if (/内存|垃圾|GC|泄漏|引用|数组|布局/u.test(label)) {
@@ -192,7 +297,11 @@ function explainAndroidConcept(label, unitTitle, bookSlug) {
   if (/电池|广播|网络|位置|传感器|提醒|WakeLock|功耗/u.test(label)) {
     return `${context}取决于唤醒次数、无线电尾能耗、采样频率和资源释放，短时 CPU 降低不一定减少总能耗。固定功能结果和时间窗，记录唤醒、传输、定位/传感器注册与电量变化，并注入离线、后台或未注销监听器场景。`;
   }
-  if (/图形|布局|OpenGL|纹理|Mipmap|渲染|RenderScript|Allocation|rsForEach/u.test(label)) {
+  if (
+    /图形|布局|OpenGL|纹理|Mipmap|渲染|RenderScript|Allocation|rsForEach/u.test(
+      label,
+    )
+  ) {
     return `${context}要连接 CPU 准备、GPU 工作、内存带宽和帧截止时间。固定场景与设备，比较基线、优化和错误图像，保存帧时间、过度绘制、上传/分配与热状态；历史 RenderScript 结果另列现代替代 API 的迁移差异。`;
   }
   return `${context}必须在 2012 年 Android 工具链和设备语境中解释，再单列现代迁移。先写结果等价与资源预算，固定环境后只改变一个实现条件，用原始时间、分配、线程、能耗或帧证据验证。`;
@@ -476,13 +585,117 @@ const BOOKS = {
       "先保存2012年Dalvik、NDK、TraceView、AsyncTask和RenderScript机制，再一次只改变运行时、工具或API之一并比较行为。",
     ],
     explainConcept(label, unitTitle) {
-      return explainAndroidConcept(label, unitTitle, "android-perf-optimization");
+      return explainAndroidConcept(
+        label,
+        unitTitle,
+        "android-perf-optimization",
+      );
     },
     failure(label) {
       return `若优化「${label}」时没有等价性断言、固定测量协议和资源边界，一次更快数字可能来自错误结果、热状态、缓存或插桩偏差。`;
     },
     evidence(label) {
       return `固定设备、版本、构建、输入与热状态，对「${label}」做预热和交错重复采样，同时保存正确性、P50/P95/P99 与分配、线程、能耗或帧证据。`;
+    },
+  },
+  "android-advanced-light": {
+    sourceUrl: "https://www.bookschina.com/7533720.htm",
+    sourceName: "刘望舒《Android进阶之光》",
+    unitIds: manifestIdentityUnits("android-advanced-light"),
+    pruneOutline: {
+      heading: "权威目录逐节点映射",
+      endMarker: "## 最小实现与边界",
+    },
+    normalizeInlineBlocks: true,
+    contextualSentences: [
+      "原书处在Android 5.0至7.0、Java与Support Library时代",
+      "本页依据刘望舒《Android进阶之光》独立重构，不复制原文。版本锁定电子工业出版社2017年7月首版、492页、ISBN 9787121315305；正式结构为11章、190个章/节/小节节点。",
+      "实现后用固定输入记录输出、线程名、生命周期、异常和资源释放。再构造错误输入、取消、旋转、后台切前台及低版本设备，验证便利框架没有隐藏所有权问题。",
+      "原书API按2017年语境讲解。现代AndroidX、协程、Flow、Hilt或Compose只进入迁移账本，不能删除原书正式目录。",
+      "第四份证据是迁移对照。现代API解决的问题可能相同，但取消、缓存、状态恢复、线程和错误语义未必一致。",
+    ],
+    contextualParagraphMarkers: [
+      '<Term def="解释技术结论所依赖的Android、库和工具版本边界">版本语境</Term>',
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "android-advanced-light");
+    },
+    failure(label) {
+      return `若把「${label}」只写成旧框架 API 示例而不说明线程、生命周期、状态所有者与现代迁移边界，正常演示会在取消、重建或版本升级后失效。`;
+    },
+    evidence(label) {
+      return `在固定 Android 5–7 基线运行「${label}」的正常与单变量失败样本，保存回调线程、状态快照、资源释放和 AndroidX/现代 API 迁移对照。`;
+    },
+  },
+  "android-art-exploration": {
+    sourceUrl:
+      "https://www.dedao.cn/ebook/detail?id=ORa2P4NNLqmQPG2178z5gvkDndlOxWy6eq3ajK6BEVXYRrJpA9M4oybeZpqAKQgj",
+    sourceName: "任玉刚《Android开发艺术探索》",
+    unitIds: manifestIdentityUnits("android-art-exploration"),
+    pruneOutline: {
+      heading: "权威目录逐节点映射",
+      endMarker: "## 最小可执行切片",
+    },
+    normalizeInlineBlocks: true,
+    contextualSentences: [
+      "课程先准确解释出版时机制，再单独建立现代targetSdk迁移账本；不会用Compose、协程或当前Jetpack替换原书目录后仍声称一比一覆盖。",
+      "每个实验先找",
+      "现代迁移一次只改变targetSdk、组件导出、后台限制、存储、权限、通知、构建插件或替代API之一，比较构建、调用链、用户行为、测试与回滚。",
+      "本页依据任玉刚《Android开发艺术探索》完整目录独立重构，不复制原文。版本锁定电子工业出版社2015年9月第1版、507页、ISBN 9787121269394，原书机制以Android 5.0与Java应用层/源码分析为基线。",
+      "主线程、Binder线程池、HandlerThread、线程池和原生线程有不同责任。",
+      "下面的Java片段只抓住本章核心合同。先预测线程、状态和失败，再在匹配Android 5.0语境的样例工程中运行；代码所依赖的上下文和导入应在工程中显式声明。",
+      "三段材料分别约束源码机制、环境重放和用户可见结果。若日志没有线程名、进程号、输入标识和阶段，或测试只断言“没有崩溃”，就无法证明真正经过目标调用链。",
+      "framework实现会随Android版本变化。引用源码必须标版本与调用分支；现代API只能作为迁移对照，不能冒充2015年原书内容。",
+      "IPC、崩溃、动态加载、反编译与JNI实验只使用自有样例和合成数据。日志、转储、APK与原生崩溃文件不得包含真实账号、令牌、位置或用户内容。",
+      "先按Android 5.0保存原书行为基线，再一次只改变平台、targetSdk、插件、权限、后台、存储或替代API之一，记录行为、测试和回滚差异。",
+    ],
+    contextualParagraphMarkers: [
+      "**调用层。**",
+      "**线程与进程层。**",
+      "**状态与资源层。**",
+      "**源码版本错位。**",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "android-art-exploration");
+    },
+    failure(label) {
+      return `若分析「${label}」时只停留在 API 调用而不追踪 framework、Binder/消息、目标对象和生命周期回调，表面成功会掩盖跨线程或进程状态错误。`;
+    },
+    evidence(label) {
+      return `固定 Android 5.0/Java 基线，沿源码与运行链追踪「${label}」，保存 PID/TID、对象或 token、状态前后值、最终行为及一个故障注入。`;
+    },
+  },
+  "first-line-android": {
+    sourceUrl: "https://read.douban.com/ebook/337721450/",
+    sourceName: "郭霖《第一行代码 Android（第3版）》",
+    unitIds: manifestIdentityUnits("first-line-android"),
+    pruneOutline: {
+      heading: "官方目录逐节点复刻",
+      endMarker: "## 最小可执行切片",
+    },
+    normalizeInlineBlocks: true,
+    addPedagogyBridge: true,
+    contextualSentences: [
+      "书中的kotlin-android-extensions、IntentService、jcenter及部分权限、存储、后台和通知做法具有历史边界，现代目标SDK必须另查官方资料，不能反向改写原书语境。",
+      "网络重试必须有上限、退避和幂等；数据库升级必须覆盖所有受支持旧版本；文件和媒体句柄在取消与异常路径释放；组件回调不持有超过生命周期的View或Context。",
+      "启动不仅看首帧，还要检查可交互时刻；列表不仅看平均帧率，还要检查滚动卡顿和绑定分配；后台工作不仅看是否完成，还要检查电量、约束与系统调度；网络不仅看成功耗时，还要检查超时、取消和错误恢复。",
+      "版本迁移分两步：先在Android 10/Kotlin语境下还原书中机制，再对目标compileSdk、targetSdk和设备API查询当前官方合同。",
+      "三段代码分别承担状态模型、环境重放和行为断言。真实工程还需静态检查、单元测试、仪器测试、截图或无障碍检查，以及发布构建验证；不要用日志输出代替断言，也不要让测试依赖本机IDE缓存。",
+      "保持其他变量不变，分别注入旋转、进程死亡、权限拒绝、断网、无效输入和目标SDK变化；任何状态丢失、崩溃、泄漏或越权都推翻完成结论。",
+      "先按原书还原机制，再查询目标SDK官方合同；一次只迁移存储、权限、后台、通知、依赖或发布之一，比较构建、行为、测试和回滚。",
+    ],
+    contextualParagraphMarkers: [
+      "**历史示例不等于当前最佳实践。**",
+      "**数据与设备安全。**",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "first-line-android");
+    },
+    failure(label) {
+      return `若学习「${label}」只复制顺利路径代码而不处理权限、生命周期、线程、持久状态和资源释放，应用会在拒绝、旋转、进程重建或弱网时丢失行为。`;
+    },
+    evidence(label) {
+      return `在 Android 10/Kotlin 基线上复现「${label}」，用正常、权限拒绝/弱网和组件重建样本核对界面状态、持久数据、线程与资源释放。`;
     },
   },
   "csharp-functional-programming": {
@@ -570,7 +783,11 @@ const BOOKS = {
       "csharp-8-and-beyond": "cid4-15",
     },
     explainConcept(label, unitTitle) {
-      return explainCSharpConcept(label, unitTitle, "deep-understanding-csharp");
+      return explainCSharpConcept(
+        label,
+        unitTitle,
+        "deep-understanding-csharp",
+      );
     },
     failure(label) {
       return `若解释「${label}」时混淆语言规范、编译器降级、运行时和类库责任，版本变化后就会把实现细节误当作 C# 语义保证。`;
@@ -586,7 +803,11 @@ const BOOKS = {
     unitIds: manifestIdentityUnits("illustrated-server-network"),
     pruneNodeTemplate: true,
     explainConcept(label, unitTitle) {
-      return explainNetworkConcept(label, unitTitle, "illustrated-server-network");
+      return explainNetworkConcept(
+        label,
+        unitTitle,
+        "illustrated-server-network",
+      );
     },
     failure(label) {
       return `若只记住「${label}」的设备名称而不追踪流量路径、故障域和容量边界，拓扑在切换、拥塞或链路中断时会暴露单点。`;
@@ -601,7 +822,11 @@ const BOOKS = {
     unitIds: manifestIdentityUnits("computer-networks-top-down"),
     pruneNodeTemplate: true,
     explainConcept(label, unitTitle) {
-      return explainNetworkConcept(label, unitTitle, "computer-networks-top-down");
+      return explainNetworkConcept(
+        label,
+        unitTitle,
+        "computer-networks-top-down",
+      );
     },
     failure(label) {
       return `若把「${label}」当成孤立协议名而忽略分层接口、时序和端到端状态，丢包、重传或路由变化后就难以解释观测结果。`;
@@ -631,7 +856,11 @@ const BOOKS = {
     unitIds: manifestIdentityUnits("wireshark-packet-analysis"),
     pruneNodeTemplate: true,
     explainConcept(label, unitTitle) {
-      return explainNetworkConcept(label, unitTitle, "wireshark-packet-analysis");
+      return explainNetworkConcept(
+        label,
+        unitTitle,
+        "wireshark-packet-analysis",
+      );
     },
     failure(label) {
       return `若分析「${label}」时忽略捕获位置、时间基准和协议上下文，重传、校验和卸载或非对称路径会被误判为真实故障。`;
@@ -671,10 +900,7 @@ function pruneRepeatedNodeTemplate(source, chapter) {
     /\n## 原书目录逐节点重构\n[\s\S]*?(?=\n## 本页完整节点清单\n)/,
     "\n",
   );
-  result = result.replace(
-    "\n## 本页完整节点清单\n",
-    "\n## 原书目录核对清单\n",
-  );
+  result = result.replace("\n## 本页完整节点清单\n", "\n## 原书目录核对清单\n");
   result = result.replace(
     /^.*最小证据包包含：/gm,
     `${chapter.title} 的最小证据包包含：`,
@@ -715,7 +941,10 @@ function pruneOutlineSection(source, outline) {
   const headingMarker = `\n## ${outline.heading}\n`;
   const start = source.indexOf(headingMarker);
   if (start === -1) return source;
-  const end = source.indexOf(`\n${outline.endMarker}`, start + headingMarker.length);
+  const end = source.indexOf(
+    `\n${outline.endMarker}`,
+    start + headingMarker.length,
+  );
   if (end === -1) {
     throw new Error(
       `Outline end marker missing: ${outline.heading} -> ${outline.endMarker}`,
@@ -727,14 +956,66 @@ function pruneOutlineSection(source, outline) {
   );
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function contextualizeSharedSentences(source, chapter) {
+  const quotedTitle = chapter.title.startsWith("《")
+    ? chapter.title
+    : `《${chapter.title}》`;
+  const prefix = `在${quotedTitle}中，`;
   for (const sentence of chapter.book.contextualSentences ?? []) {
-    const replacement = `在《${chapter.title}》中，${sentence}`;
-    if (!source.includes(replacement)) {
-      source = source.replaceAll(sentence, replacement);
-    }
+    const replacement = `${prefix}${sentence}`;
+    const repeatedContext = new RegExp(
+      `(?:在[^\\n。！？]{0,120}?中，)*${escapeRegExp(sentence)}`,
+      "g",
+    );
+    source = source.replace(repeatedContext, replacement);
   }
   return source;
+}
+
+function contextualizeParagraphMarkers(source, chapter) {
+  const quotedTitle = chapter.title.startsWith("《")
+    ? chapter.title
+    : `《${chapter.title}》`;
+  const prefix = `在${quotedTitle}中，`;
+  for (const marker of chapter.book.contextualParagraphMarkers ?? []) {
+    const paragraphStart = new RegExp(`^(\\s*)${escapeRegExp(marker)}`, "gm");
+    source = source.replace(paragraphStart, `$1${prefix}${marker}`);
+  }
+  return source;
+}
+
+function addAndroidPedagogyBridge(source, chapter) {
+  const quotedTitle = chapter.title.startsWith("《")
+    ? chapter.title
+    : `《${chapter.title}》`;
+  const predictionSentence =
+    "直觉检验只改变一个条件：旋转、进程重建、拒绝权限、断网或目标 SDK。";
+  source = source.replace(
+    new RegExp(
+      `(?:${escapeRegExp(`${quotedTitle}的`)})*${escapeRegExp(predictionSentence)}`,
+      "g",
+    ),
+    `${quotedTitle}的${predictionSentence}`,
+  );
+  if (source.includes("## 先建立直觉")) return source;
+  const marker = "\n## 最小可执行切片\n";
+  if (!source.includes(marker)) {
+    throw new Error(
+      `Executable slice marker missing: ${chapter.bookSlug}/${chapter.slug}`,
+    );
+  }
+  const bridge = `
+## 先建立直觉
+
+在${quotedTitle}中，先把<Term def="由系统回调驱动、决定组件何时创建、可见、停止与释放的状态机">生命周期</Term>看成系统与应用之间的时序合同，再把<Term def="Android版本、targetSdk、设备形态和权限政策共同限定的行为适用范围">版本边界</Term>看成这份合同的坐标。API 名称只是入口；真正要追踪的是输入由谁接收、状态由谁保存、任务由谁取消，以及失败后用户看到什么。
+
+${quotedTitle}的直觉检验只改变一个条件：旋转、进程重建、拒绝权限、断网或目标 SDK。若结果随隐藏缓存或旧对象身份漂移，就回到状态所有者和平台合同定位首个分叉，而不是继续堆补丁。
+`;
+  return source.replace(marker, `${bridge}${marker}`);
 }
 
 function normalizeInlineBlockComponents(source) {
@@ -753,7 +1034,9 @@ function addPredictionCue(source, chapter) {
   if (/猜一猜|先预测|动手试|试一试|观察.*变化/.test(source)) return source;
   const marker = "\n## 本章回顾\n";
   if (!source.includes(marker)) {
-    throw new Error(`Summary marker missing: ${chapter.bookSlug}/${chapter.slug}`);
+    throw new Error(
+      `Summary marker missing: ${chapter.bookSlug}/${chapter.slug}`,
+    );
   }
   const cue = `
 ## 测量前预测
@@ -1104,6 +1387,10 @@ for (const [bookSlug, book] of Object.entries(BOOKS)) {
       source = pruneOutlineSection(source, book.pruneOutline);
     }
     source = contextualizeSharedSentences(source, chapter);
+    source = contextualizeParagraphMarkers(source, chapter);
+    if (book.addPedagogyBridge) {
+      source = addAndroidPedagogyBridge(source, chapter);
+    }
     if (book.normalizeInlineBlocks) {
       source = normalizeInlineBlockComponents(source);
     }
