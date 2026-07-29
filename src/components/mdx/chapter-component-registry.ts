@@ -212,6 +212,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
       } as ChapterMdxComponents;
     },
+  "auto-why-car-runs/00-learning-map/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/auto-why-car-runs/labs/learning-map");
+    return {
+      AutoLearningMapLab: module0.AutoLearningMapLab,
+    } as ChapterMdxComponents;
+  },
   "auto-why-car-runs/01-whole-car/whole-car-system": async () => {
     const module0 =
       await import("@/components/mdx/auto-why-car-runs/labs/whole-car-system");
