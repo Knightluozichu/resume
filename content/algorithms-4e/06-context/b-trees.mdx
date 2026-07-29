@@ -1,24 +1,66 @@
 ---
-title: "6.2 B-Trees：页访问、多路查找、分裂与结构证书"
+title: 6.2 B-Trees：页访问、多路查找、分裂与结构证书
 type: B
-section: "上下文"
+section: 上下文
 order: 25
-description: "按官方6.2与当前BTree.java重建外存成本模型、page-sized多路节点、查找路由、插入分裂、root growth、M=4实现布局与全局不变量证书。"
+description: 6.2 · B-trees覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/62btree/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-6.2
 ---
 
+import {
+  BTreesModelLab,
+  BTreesTraceLab,
+  BTreesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/b-trees";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“6.2 · B-trees”如何以磁盘页为成本单位，用多路节点、查找、插入与分裂控制外存访问
+- 能逐项核对 B树、外存查找、多路查找节点、页访问成本、B树查找、插入与分裂，并区分作者站内容与本页独立补充
+- 能按“M 阶 B 树高度为 O(log_M N)，一次查找读取从根到叶的一页序列”手算一个最小输入，逐步检查“除根外节点保持规定的最小/最大占用，所有叶位于同一深度，键分隔子树范围”
+- 能注入“满节点分裂时提升了错误中位键，或只更新兄弟页而漏写父页的子指针”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“6·2 · B-trees”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/62btree/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“6·2 · B-trees”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“6·2 · B-trees”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：6.2 · B-trees
+
+- **1. B树**：在本页通过“读取根页”连接解释、交互状态和练习验收。
+- **2. 外存查找**：在本页通过“页内定位区间”连接解释、交互状态和练习验收。
+- **3. 多路查找节点**：在本页通过“下降到子页”连接解释、交互状态和练习验收。
+- **4. 页访问成本**：在本页通过“插入并检测溢出”连接解释、交互状态和练习验收。
+- **5. B树查找、插入与分裂**：在本页通过“分裂提升并核对叶深”连接解释、交互状态和练习验收。
 
 ## 从“一次磁盘页访问，应该多带回几百个分支”开始
 
-B树（，B-trees）不是为了减少CPU comparisons，而是为了减少slow storage与fast memory之间的page transfers。
+B树（B-trees）不是为了减少CPU comparisons，而是为了减少slow storage与fast memory之间的page transfers。
 
 先预测：有十亿keys时，binary search tree高度约30；若一个8 KiB page能容纳约300个separator/pointer pairs，B-tree可能只需4层左右。即使每层在page内比较若干keys，昂贵I/O次数仍从几十次降到几次。
 
-外存查找（，external-memory search）把数据分成pages。Root与hot upper levels可能cache在memory，访问lower child通常触发I/O。
-
+外存查找（external-memory search）把数据分成pages。Root与hot upper levels可能cache在memory，访问lower child通常触发I/O。
 
 ## 6.2.1 Page model：fanout由format决定
 
@@ -30,8 +72,7 @@ $$
 
 实际layout还受prefix compression、variable-length records、alignment、checksums、sibling links与fill factor影响，但公式揭示核心：一个page携带many routes。
 
-
-页访问成本（，page access cost）近似tree height。若branching factor为m、records为N：
+页访问成本（page access cost）近似tree height。若branching factor为m、records为N：
 
 $$
 H=O(\log_m N)
@@ -41,7 +82,7 @@ Page变大可提高fanout，却增加read amplification与split write size；key
 
 ## 6.2.2 Multiway search nodes：separator partition key space
 
-多路查找节点（，multiway search nodes）把key space切成ordered ranges。
+多路查找节点（multiway search nodes）把key space切成ordered ranges。
 
 对于separators \(k_1\lt k_2\lt\cdots\lt k_q\)，q+1 children分别负责：
 
@@ -50,7 +91,6 @@ $$
 $$
 
 Exact inclusive/exclusive convention由implementation定义；关键是每个search key只进入one child，并且所有descendant keys满足该child range。
-
 
 Page内route可linear scan、binary search或SIMD search。它影响CPU cost，不改变每层只读取一个child page的I/O path。Variable-length keys还需明确comparison/collation与separator truncation rules。
 
@@ -64,7 +104,6 @@ Page内route可linear scan、binary search或SIMD search。它影响CPU cost，�
 4. 除root外，每个node至少half full、至多full。
 5. All leaves位于same depth。
 6. Root可有较低occupancy；empty tree是special root。
-
 
 定义“order”“degree”“keys per node”在教材和数据库间并不统一。验收不能只写“minimum degree t”，必须把max keys、max children、min occupancy、separator ownership和leaf payload placement逐项列出。
 
@@ -91,7 +130,6 @@ private Value search(Node x, Key key, int ht) {
 }
 ```
 
-
 Correctness invariant：进入node x时，target属于x的range。Sorted separator scan选择唯一containing child；induction到leaf后，exact key comparison决定found/absent。
 
 Search certificate应记录page ids、separator interval与chosen slot。只返回value无法定位bad separator是否恰好被sample绕过。
@@ -106,7 +144,6 @@ Abstract 2-3-4 style insertion：
 4. 把median或right-page lower bound作为separator插入parent。
 5. Parent也可能overflow，继续向上。
 6. Root split时创建new root，height加一。
-
 
 ```java
 Node u = insert(root, key, value, height);
@@ -123,14 +160,13 @@ if (u != null) {
 
 ## 6.2.6 Split：restore occupancy并保持key ranges
 
-节点分裂（）发生在node达到overflow capacity时，必须同时维护：
+节点分裂发生在node达到overflow capacity时，必须同时维护：
 
 - Left/right entries各自sorted。
 - 两边occupancy合法。
 - Parent新增separator正确划分ranges。
 - Internal children不丢失、不重复。
 - Leaf depth不变。
-
 
 通用B-tree常把median key提升到parent；B+ tree通常把records都留在leaves并复制right lower bound到parent。Official implementation采用entry-array convention：M=4且M必须even，node到4 entries时：
 
@@ -146,11 +182,9 @@ private Node split(Node h) {
 
 Left保留前2 entries，returned right持有后2；caller用right first key建立parent entry。Stable node在下一次overflow前最多3 entries。
 
-
 ## 6.2.7 Root growth与height
 
 Only root split增加height。New root指向old left root与new right page；所有existing leaves相对new root同时加深一层，所以equal leaf depth保持。
-
 
 若N records、effective branching m，page probes大致：
 
@@ -159,7 +193,6 @@ $$
 $$
 
 其中1是否单列取决于height definition：官方empty/single external root的height为0，但search仍访问root page。报告成本时应区分edge height与pages visited。
-
 
 Root通常resident in cache；physical I/O可能少于logical probes。相反，copy-on-write、WAL与split可增加writes。Read height bound不能直接当update latency。
 
@@ -170,7 +203,6 @@ Current `BTree.java`使用一个`Entry` type复用两种角色：
 - Internal node：使用`key`和`next`，`val` unused。
 - External node：使用`key`和`val`，`next` unused。
 
-
 Node.m表示active entries count，array capacity M=4。Search/insert递归显式携带remaining height，因此不需要在node存leaf flag。
 
 这份代码是教学骨架，不是完整storage engine：
@@ -180,7 +212,6 @@ Node.m表示active entries count，array capacity M=4。Search/insert递归显�
 - No deletion/rebalancing implementation。
 - Null-value-as-delete的文档与实际put path不一致。
 - `put`没有先查existing key：它会插入duplicate、每次n++，与“replace old value”的symbol-table contract不一致。
-
 
 ## 6.2.9 Page engineering beyond the skeleton
 
@@ -203,7 +234,7 @@ Node.m表示active entries count，array capacity M=4。Search/insert递归显�
 ```ts
 function validate(node, low, high, depth) {
   assert(strictlySorted(node.keys));
-  assert(node.keys.every(key => low < key && key < high));
+  assert(node.keys.every((key) => low < key && key < high));
   assert(validOccupancy(node));
   if (node.isLeaf) recordLeafDepth(depth);
   else {
@@ -215,11 +246,86 @@ function validate(node, low, high, depth) {
 assert(allRecordedLeafDepthsEqual());
 ```
 
-
 Insert differential test还应与trusted ordered map对照：random unique keys、sorted/reverse input、duplicates、root split、cascading split和missing lookup。每次mutation后立刻跑structural validator，能把first broken operation定位出来。
 
 ## 6.2.11 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“6.2 · B-trees”的两个最小情境间切换，再逐项选择正式概念。预测“M 阶 B 树高度为 O(log_M N)，一次查找读取从根到叶的一页序列”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <BTreesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存页 id、页内键、child 指针、占用率、split WAL 顺序、页读取次数与有序扫描预言机，并检查“除根外节点保持规定的最小/最大占用，所有叶位于同一深度，键分隔子树范围”仍然成立。
+
+    <BTreesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“满节点分裂时提升了错误中位键，或只更新兄弟页而漏写父页的子指针”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <BTreesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="6.2 · B-trees 的首要反例">
+  满节点分裂时提升了错误中位键，或只更新兄弟页而漏写父页的子指针。它会破坏“除根外节点保持规定的最小/最大占用，所有叶位于同一深度，键分隔子树范围”；应从页
+  id、页内键、child 指针、占用率、split WAL
+  顺序、页读取次数与有序扫描预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “M 阶 B 树高度为 O(log_M
+  N)，一次查找读取从根到叶的一页序列”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“6.2 ·
+  B-trees”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对页
+  id、页内键、child 指针、占用率、split WAL 顺序、页读取次数与有序扫描预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **B树**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **外存查找**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **多路查找节点**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **页访问成本**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **B树查找、插入与分裂**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“6.2 · B-trees”作者页为分母，逐项定位
+  B树、外存查找、多路查找节点、页访问成本、B树查找、插入与分裂。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“M 阶 B 树高度为 O(log_M N)，一次查找读取从根到叶的一页序列”不是孤立结论？
+
+<Answer>
+  选择“页访问”的输入：每页容纳 4 个分支，在三层树中查找键 K。按 读取根页 →
+  页内定位区间 → 下降到子页 → 插入并检测溢出 → 分裂提升并核对叶深
+  保存状态，并用“成本按读取的页数计，不按页内每次比较等同于一次磁盘
+  I/O”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“满节点分裂时提升了错误中位键，或只更新兄弟页而漏写父页的子指针”已经修复？
+
+<Answer>
+  保存页 id、页内键、child 指针、占用率、split WAL
+  顺序、页读取次数与有序扫描预言机作为正常基线；注入该故障并标记第一个违反“除根外节点保持规定的最小/最大占用，所有叶位于同一深度，键分隔子树范围”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -233,4 +339,9 @@ Insert differential test还应与trusted ordered map对照：random unique keys�
 - 教学实现没有真实pages、deletion/recovery，且duplicate update语义需补齐。
 - Independent certificate必须检查sorted keys、occupancy、arity、separator ranges与equal leaf depth。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/62btree/"
+/>

@@ -1,19 +1,62 @@
 ---
-title: "5.3 Substring Search：暴力、KMP、Boyer-Moore与Rabin-Karp"
+title: 5.3 Substring Search：暴力、KMP、Boyer-Moore与Rabin-Karp
 type: B
-section: "字符串"
+section: 字符串
 order: 21
-description: "按官方5.3重建精确子串查找、暴力对齐、KMP DFA与重启状态、Boyer-Moore坏字符跳跃、Rabin-Karp滚动指纹及独立证书。"
+description: 5.3 · Substring Search覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/53substring/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-5.3
 ---
 
+import {
+  SubstringSearchModelLab,
+  SubstringSearchTraceLab,
+  SubstringSearchCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/substring-search";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“5.3 · Substring Search”如何比较暴力、KMP、Boyer-Moore 与 Rabin-Karp 如何复用失败信息减少文本回退
+- 能逐项核对 子字符串查找、暴力子字符串查找、KMP算法、Boyer-Moore算法、Rabin-Karp算法，并区分作者站内容与本页独立补充
+- 能按“KMP 在 DFA/前缀函数预处理后搜索 Θ(N)；Rabin-Karp 以滚动散列常数时间更新窗口”手算一个最小输入，逐步检查“任一时刻 j 表示模式前 j 个字符已与当前文本后缀匹配；报告位置必须通过字符验证”
+- 能注入“KMP 失配后错误地把文本指针和模式指针都回退，或 Rabin-Karp 命中哈希后不验字符”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“5·3 · Substring Search”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/53substring/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“5·3 · Substring Search”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“5·3 · Substring Search”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：5.3 · Substring Search
+
+- **1. 子字符串查找**：在本页通过“预处理模式”连接解释、交互状态和练习验收。
+- **2. 暴力子字符串查找**：在本页通过“扫描文本字符”连接解释、交互状态和练习验收。
+- **3. KMP算法**：在本页通过“命中或计算失配跳转”连接解释、交互状态和练习验收。
+- **4. Boyer-Moore算法**：在本页通过“验证候选窗口”连接解释、交互状态和练习验收。
+- **5. Rabin-Karp算法**：在本页通过“返回位置或 N”连接解释、交互状态和练习验收。
 
 ## 从“失配以后，哪些已经比较过的字符还能复用”开始
 
-给定length N的text和length M的pattern，子字符串查找（，substring search）返回最小offset i，使：
+给定length N的text和length M的pattern，子字符串查找（substring search）返回最小offset i，使：
 
 $$
 \forall\,0\le j<M,\qquad text[i+j]=pattern[j]
@@ -22,7 +65,6 @@ $$
 先预测：某个alignment已经匹配pattern前5个字符，第6个失配，下一步是否一定只把pattern右移1并从j=0重比？暴力算法如此；KMP会利用已匹配prefix的border直接切到可行restart state；Boyer-Moore从右向左观察bad character并可能跳过多个alignments；Rabin-Karp则根本不逐字符比较大多数windows，只滚动更新fingerprint。
 
 四种算法的区别不是“是否看字符”，而是失配或窗口移动时保存了什么information。统一验收仍然简单：candidate offset必须in bounds，length-M window逐字符等于pattern，并满足API要求的leftmost语义。
-
 
 ## 5.3.1 Search contract与边界
 
@@ -40,7 +82,7 @@ Search preprocessing是否可复用也影响API设计。若同一pattern查询�
 
 ## 5.3.2 Brute-force substring search：每个alignment重新开始
 
-暴力子字符串查找（，brute-force substring search）枚举i从0到N-M：
+暴力子字符串查找（brute-force substring search）枚举i从0到N-M：
 
 ```java
 public static int search(String pattern, String text) {
@@ -56,7 +98,6 @@ public static int search(String pattern, String text) {
 }
 ```
 
-
 Correctness直接：每个smaller offset都被完整排除，first full match就是leftmost。Extra space constant，no preprocessing。Worst case每个alignment匹配M-1 characters后才失配：
 
 $$
@@ -69,7 +110,7 @@ Repeated characters制造典型bad case，例如pattern `AAAAAAAB` 与一长串A
 
 ## 5.3.3 KMP的核心：已匹配prefix的border也是suffix
 
-Knuth-Morris-Pratt（，Knuth-Morris-Pratt）把state j定义为“刚读取的text suffix与pattern length-j prefix相等”。读入next character c后，transition告诉我们新的longest valid prefix length。
+Knuth-Morris-Pratt（Knuth-Morris-Pratt）把state j定义为“刚读取的text suffix与pattern length-j prefix相等”。读入next character c后，transition告诉我们新的longest valid prefix length。
 
 若在j处失配，不必把j清零。此前matched substring可能有proper suffix同时是pattern prefix，这个border可作为restart。Pattern `ABABAC`在某些失配后仍保留 `AB` 或 `ABAB` 状态。
 
@@ -87,7 +128,6 @@ for (int x = 0, j = 1; j < M; j++) {
 }
 ```
 
-
 复制restart transitions保留了所有可能的prefix/suffix overlap，而不是只记一个“失败就回几步”的magic number。DFA state M是accepting state，无需再建outgoing column。
 
 ### Search：text index严格单调前进
@@ -101,7 +141,6 @@ if (j == M) return i - M;
 return N;
 ```
 
-
 每个text character只做一次transition，i从不回退。Official dense-DFA implementation：
 
 $$
@@ -111,7 +150,6 @@ S_{\mathrm{KMP}}=\Theta(RM)
 $$
 
 `KMPplus`或prefix-function/failure-function版本可把preprocessing和space降到Theta(M)，独立于R。Dense DFA在small fixed alphabet和多次reuse pattern时简单直接；large Unicode alphabet不应盲目分配R×M table。
-
 
 ## 5.3.4 KMP correctness：state是可检验的suffix certificate
 
@@ -132,7 +170,7 @@ Testing可在每一步用naive suffix oracle重算j，与DFA state对照。这�
 
 ## 5.3.5 Boyer-Moore：从右向左，用bad character跳过alignments
 
-Boyer-Moore算法（，Boyer-Moore）预处理 `right[c]`：character c在pattern中的rightmost index，不出现则为-1。
+Boyer-Moore算法（Boyer-Moore）预处理 `right[c]`：character c在pattern中的rightmost index，不出现则为-1。
 
 At alignment i，从j=M-1向0比较。若pattern[j]与text[i+j]失配，bad character为c，安全skip：
 
@@ -155,14 +193,13 @@ for (int i = 0; i <= N - M; i += skip) {
 }
 ```
 
-
 Official Section 5.3 implementation只有bad-character rule，不包含strong good-suffix rule。Typical text可一次跳过多个characters并少于N次比较；但bad-character-only worst case仍可到O(NM)。不能把完整Boyer-Moore的更强heuristics或average observations误写成该代码的guarantee。
 
 它天然需要查看当前M-length window右端，适合random-access text；strict one-character-at-a-time stream上，KMP更自然。Large R时right table也可用map，只存pattern出现的characters。
 
 ## 5.3.6 Rabin-Karp：把M次比较变成rolling fingerprint
 
-Rabin-Karp算法（，Rabin-Karp）把M-character string当base-R integer并mod prime Q：
+Rabin-Karp算法（Rabin-Karp）把M-character string当base-R integer并mod prime Q：
 
 $$
 h(s)=\left(\sum_{j=0}^{M-1}s_jR^{M-1-j}\right)\bmod Q
@@ -184,22 +221,18 @@ if (patHash == txtHash && check(txt, i - M + 1))
     return i - M + 1;
 ```
 
-
 每次window move只做constant modular arithmetic，因此expected search Theta(N)，preprocess Theta(M)，extra state constant（不计pattern）。它特别适合multiple equal-length patterns：把all pattern hashes放入set，rolling text hit后再查candidate bucket并verify。
 
 ## 5.3.7 Collision：fingerprint相等不是string相等
 
-指纹碰撞（，fingerprint collision）不可由modular hash完全消除。Two policies：
+指纹碰撞（fingerprint collision）不可由modular hash完全消除。Two policies：
 
 - Monte Carlo：hash equal直接接受，速度稳定但有small false-positive probability。
 - Las Vegas：hash equal后逐字符check，结果永远正确；collision只增加时间。
 
-
 官方当前代码描述为Las Vegas version。选择large random prime可让collision罕见，但independent result certificate仍应检查window equality。Security/adversarial input不能把普通rolling hash当cryptographic integrity proof；攻击者可构造collisions或触发大量verifications。
 
-
 ## 5.3.8 算法选择与真实成本
-
 
 选择建议：
 
@@ -221,13 +254,91 @@ Leftmost search candidate offset k的验收：
 3. `text.substring(k,k+M)`逐character等于pattern。
 4. `text[0..k)`中不存在更早full match。
 
-
 这个validator与算法无关，能拒绝Rabin-Karp collision、Boyer skip过头、KMP restart过大或brute off-by-one。对very large text，测试oracle可只在CI小样本全扫；production result至少复核returned window和bounds。
 
 All matches API还要定义overlap。Found at k后，naive next search若从k+M开始会漏overlapping matches；应从k+1继续，或让KMP接受state转到proper border。Result list需strictly increasing、每个window valid且相邻matches允许overlap。
 
 ## 5.3.10 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“5.3 · Substring Search”的两个最小情境间切换，再逐项选择正式概念。预测“KMP 在 DFA/前缀函数预处理后搜索 Θ(N)；Rabin-Karp 以滚动散列常数时间更新窗口”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <SubstringSearchModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存pattern/text、i/j、DFA 或前缀表、bad-character skip、窗口哈希、候选位置与朴素预言机，并检查“任一时刻 j 表示模式前 j 个字符已与当前文本后缀匹配；报告位置必须通过字符验证”仍然成立。
+
+    <SubstringSearchTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“KMP 失配后错误地把文本指针和模式指针都回退，或 Rabin-Karp 命中哈希后不验字符”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <SubstringSearchCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="5.3 · Substring Search 的首要反例">
+  KMP 失配后错误地把文本指针和模式指针都回退，或 Rabin-Karp
+  命中哈希后不验字符。它会破坏“任一时刻 j 表示模式前 j
+  个字符已与当前文本后缀匹配；报告位置必须通过字符验证”；应从pattern/text、i/j、DFA
+  或前缀表、bad-character
+  skip、窗口哈希、候选位置与朴素预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “KMP 在 DFA/前缀函数预处理后搜索 Θ(N)；Rabin-Karp
+  以滚动散列常数时间更新窗口”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“5.3 · Substring
+  Search”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对pattern/text、i/j、DFA
+  或前缀表、bad-character skip、窗口哈希、候选位置与朴素预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **子字符串查找**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **暴力子字符串查找**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **KMP算法**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **Boyer-Moore算法**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **Rabin-Karp算法**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“5.3 · Substring Search”作者页为分母，逐项定位
+  子字符串查找、暴力子字符串查找、KMP算法、Boyer-Moore算法、Rabin-Karp算法。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“KMP 在 DFA/前缀函数预处理后搜索 Θ(N)；Rabin-Karp 以滚动散列常数时间更新窗口”不是孤立结论？
+
+<Answer>
+  选择“重叠模式”的输入：在 ABABABAC 中查找 ABABAC。按 预处理模式 → 扫描文本字符
+  → 命中或计算失配跳转 → 验证候选窗口 → 返回位置或 N 保存状态，并用“KMP
+  用已知前后缀继续，不重新比较已经确认的文本前缀”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“KMP 失配后错误地把文本指针和模式指针都回退，或 Rabin-Karp 命中哈希后不验字符”已经修复？
+
+<Answer>
+  保存pattern/text、i/j、DFA 或前缀表、bad-character
+  skip、窗口哈希、候选位置与朴素预言机作为正常基线；注入该故障并标记第一个违反“任一时刻
+  j 表示模式前 j
+  个字符已与当前文本后缀匹配；报告位置必须通过字符验证”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -238,4 +349,9 @@ All matches API还要定义overlap。Found at k后，naive next search若从k+M�
 - Rabin-Karp以rolling modular hash在constant work更新window，Las Vegas版本在hash hit后exact verify。
 - Independent certificate检查bounds、window equality与leftmost；algorithm internal state或fingerprint都不能替代最终证据。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/53substring/"
+/>

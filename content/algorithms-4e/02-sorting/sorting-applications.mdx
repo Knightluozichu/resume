@@ -1,24 +1,66 @@
 ---
-title: "2.5 Sorting Applications：排序选择、稳定性与问题归约"
+title: 2.5 Sorting Applications：排序选择、稳定性与问题归约
 type: B
-section: "排序"
+section: 排序
 order: 9
-description: "按官方2.5把Comparable与Comparator、多键稳定排序、间接排序、算法选型、dedup/frequency/Kendall tau/selection/PQ归约及行业应用连成决策体系。"
+description: 2.5 · Sorting Applications覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/25applications/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-2.5
 ---
 
+import {
+  SortingApplicationsModelLab,
+  SortingApplicationsTraceLab,
+  SortingApplicationsCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/sorting-applications";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“2.5 · Sorting Applications”如何依据数据类型、稳定性、内存、输入分布与归约目标选择排序实现
+- 能逐项核对 排序应用、不同类型数据排序、排序算法选择、归约、稳定性与间接排序，并区分作者站内容与本页独立补充
+- 能按“比较排序最坏比较下界为 ceil(log2(N!)) = Θ(N log N)”手算一个最小输入，逐步检查“输出必须全序且保持输入多重集；若合同要求稳定，相等键的原始次序也必须保持”
+- 能注入“比较器违反传递性，或把 equals 与 compareTo 不一致的数据交给依赖全序的客户端”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“2·5 · Sorting Applications”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/25applications/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“2·5 · Sorting Applications”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“2·5 · Sorting Applications”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：2.5 · Sorting Applications
+
+- **1. 排序应用**：在本页通过“声明排序合同”连接解释、交互状态和练习验收。
+- **2. 不同类型数据排序**：在本页通过“选择比较器”连接解释、交互状态和练习验收。
+- **3. 排序算法选择**：在本页通过“选择排序实现”连接解释、交互状态和练习验收。
+- **4. 归约**：在本页通过“执行应用归约”连接解释、交互状态和练习验收。
+- **5. 稳定性与间接排序**：在本页通过“核对全序与稳定性”连接解释、交互状态和练习验收。
 
 ## 从“按城市分组后，时间顺序还在吗”开始
 
-排序应用（，sorting applications）关注的不是再写一个sort loop，而是先定义数据顺序，再按真实约束选择算法，最后把sorted order转化为业务答案。
+排序应用（sorting applications）关注的不是再写一个sort loop，而是先定义数据顺序，再按真实约束选择算法，最后把sorted order转化为业务答案。
 
 先预测一批transactions原本按time到达，再按city排序后，同一city内是否仍按time。只有stable sort才能保证。若使用quicksort或heapsort，equal city records可能重排；结果按city正确，却丢掉隐含secondary key。稳定性在多阶段数据处理里不是装饰属性，而是可组合语义。
 
 官方2.5依次讨论 **Sorting various types of data、Which sorting algorithm should I use、Reductions、A brief survey of sorting applications**。本节把这四部分连接成同一链：ordering contract、algorithm constraints、reduction proof、domain interpretation。
-
 
 ## 2.5.1 Sorting various types of data：顺序来自哪里
 
@@ -40,7 +82,7 @@ public final class Transaction implements Comparable<Transaction> {
 }
 ```
 
-比较器契约（）不能用“差值很小就相等”破坏transitivity。例如a近似b、b近似c却a明显大于c，会让sort没有一致目标。Integer comparison也不应直接 `return a-b`，因为overflow可反转order；使用 `Integer.compare`。
+比较器契约不能用“差值很小就相等”破坏transitivity。例如a近似b、b近似c却a明显大于c，会让sort没有一致目标。Integer comparison也不应直接 `return a-b`，因为overflow可反转order；使用 `Integer.compare`。
 
 Pointer sorting在Java中移动object references，而不复制large record payload；因此exchange通常便宜。Key应immutable：sort结束后client若修改参与comparison的field，array可能立即不再sorted。若业务需要mutable records，应排序immutable projection、defensive copy或在mutation后重新建立order。
 
@@ -48,12 +90,11 @@ Primitive-specific sort避免boxing、virtual callback与reference indirection�
 
 ## 2.5.2 Stability and indirect sorting：保留identity与旧顺序
 
-稳定性与间接排序（，stability and indirect sorting）解决两个不同问题。Stability保护已有次序；indirect sort保护原数据布局。
-
+稳定性与间接排序（stability and indirect sorting）解决两个不同问题。Stability保护已有次序；indirect sort保护原数据布局。
 
 若先按secondary key稳定排序，再按primary key稳定排序，最终order等价于lexicographic `(primary, secondary)`。官方本章算法中insertion sort与mergesort稳定；selection、Shellsort、quicksort和heapsort不稳定。不能只看平均速度表后忽略这个contract。
 
-间接排序（，indirect sorting）可实现：
+间接排序（indirect sorting）可实现：
 
 ```java
 Integer[] permutation = IntStream.range(0, records.length)
@@ -65,14 +106,11 @@ Arrays.sort(permutation, Comparator
     .thenComparingInt(i -> i));
 ```
 
-
 Explicit original-index tie break可得到deterministic stable view，即使underlying sort不稳定；代价是额外N indices与indirection。一个dataset可同时持有by-date、by-location、by-amount多个permutations，避免复制或反复搬动records。
-
 
 ## 2.5.3 Sorting algorithm selection：约束决定起点
 
-排序算法选择（，sorting algorithm selection）没有单一答案。官方经验指出quicksort通常是最快general-purpose sort；但“通常”依赖不要求stability、随机化可接受、worst-case概率风险可接受。
-
+排序算法选择（sorting algorithm selection）没有单一答案。官方经验指出quicksort通常是最快general-purpose sort；但“通常”依赖不要求stability、随机化可接受、worst-case概率风险可接受。
 
 选择时逐项问：
 
@@ -85,11 +123,9 @@ Explicit original-index tie break可得到deterministic stable view，即使unde
 
 System sort的具体实现会随runtime版本变化，不能把某一历史Java选择当永久API contract；应查当前platform docs并以observable requirements验收。稳定性、exception behavior、parallelism与primitive/reference overload都比内部algorithm name更可靠。
 
-
 ## 2.5.4 Reductions：先排序，再线性扫描
 
-归约（，reductions）让sorting成为通用primitive。Proof要覆盖三步：transform保留什么语义、solver满足什么contract、output如何解释；只说“先sort”不够。
-
+归约（reductions）让sorting成为通用primitive。Proof要覆盖三步：transform保留什么语义、solver满足什么contract、output如何解释；只说“先sort”不够。
 
 Dedup、distinct count、mode/frequency都利用equal keys在sorted array中连续。典型frequency scan：
 
@@ -115,8 +151,7 @@ Frequency descending还需再排序distinct runs或放入priority queue。Memory
 
 ## 2.5.5 Rankings：Kendall tau归约为逆序计数
 
-Kendall tau distance（）衡量两个permutations的pairwise disagreement。先构建第二ranking的inverse positions，再把第一ranking映射成position sequence；分歧pairs恰是该sequence inversions。
-
+Kendall tau distance衡量两个permutations的pairwise disagreement。先构建第二ranking的inverse positions，再把第一ranking映射成position sequence；分歧pairs恰是该sequence inversions。
 
 对rankings p与q：
 
@@ -141,7 +176,6 @@ while (hi > lo) {
 return a[lo];
 ```
 
-
 其expected recurrence把每层linear partition与平均缩小subproblem相加：
 
 $$
@@ -162,7 +196,6 @@ Multiway merge为M个sorted streams各放一个head到min-PQ，删除最小head�
 
 ## 2.5.7 Brief survey：排序进入其他算法
 
-
 商业计算按name、account、time、location、postal code或file date组织records；sorted order再支持binary search与group scans。Operations research中SPT按processing time升序最小化single-machine平均completion time；LPT按descending jobs并把next job交给最早available processor，为NP-hard load balancing提供近似。
 
 Event-driven simulation用priority queue取next chronological event。Graph algorithms中Kruskal先按edge weight排序，Prim与Dijkstra用indexed PQ。Huffman compression反复合并两个minimum frequencies。String processing先排序domains、suffixes或reversed words，把共同prefix/suffix结构变成相邻关系。
@@ -171,6 +204,78 @@ Event-driven simulation用priority queue取next chronological event。Graph algo
 
 ## 统一验收：从ordering contract到domain answer
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“2.5 · Sorting Applications”的两个最小情境间切换，再逐项选择正式概念。预测“比较排序最坏比较下界为 ceil(log2(N!)) = Θ(N log N)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <SortingApplicationsModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存数据类型、比较器、原始序号、排序结果、稳定性、峰值空间与归约后的答案，并检查“输出必须全序且保持输入多重集；若合同要求稳定，相等键的原始次序也必须保持”仍然成立。
+
+    <SortingApplicationsTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“比较器违反传递性，或把 equals 与 compareTo 不一致的数据交给依赖全序的客户端”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <SortingApplicationsCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="2.5 · Sorting Applications 的首要反例">
+  比较器违反传递性，或把 equals 与 compareTo
+  不一致的数据交给依赖全序的客户端。它会破坏“输出必须全序且保持输入多重集；若合同要求稳定，相等键的原始次序也必须保持”；应从数据类型、比较器、原始序号、排序结果、稳定性、峰值空间与归约后的答案中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “比较排序最坏比较下界为 ceil(log2(N!)) = Θ(N log
+  N)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“2.5 · Sorting
+  Applications”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对数据类型、比较器、原始序号、排序结果、稳定性、峰值空间与归约后的答案。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **排序应用**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **不同类型数据排序**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **排序算法选择**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **归约**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **稳定性与间接排序**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“2.5 · Sorting Applications”作者页为分母，逐项定位
+  排序应用、不同类型数据排序、排序算法选择、归约、稳定性与间接排序。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“比较排序最坏比较下界为 ceil(log2(N!)) = Θ(N log N)”不是孤立结论？
+
+<Answer>
+  选择“稳定多键”的输入：先按姓名排序，再稳定地按部门排序。按 声明排序合同 →
+  选择比较器 → 选择排序实现 → 执行应用归约 → 核对全序与稳定性
+  保存状态，并用“部门相同记录仍保持姓名顺序，形成多键结果”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“比较器违反传递性，或把 equals 与 compareTo 不一致的数据交给依赖全序的客户端”已经修复？
+
+<Answer>
+  保存数据类型、比较器、原始序号、排序结果、稳定性、峰值空间与归约后的答案作为正常基线；注入该故障并标记第一个违反“输出必须全序且保持输入多重集；若合同要求稳定，相等键的原始次序也必须保持”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -182,7 +287,9 @@ Event-driven simulation用priority queue取next chronological event。Graph algo
 6. Kendall tau通过inverse ranking映射为inversion count；quickselect只追踪rank k一侧。
 7. TopM与multiway merge用size-M PQ把时间降到N log M并保持streaming。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/25applications/"
+/>

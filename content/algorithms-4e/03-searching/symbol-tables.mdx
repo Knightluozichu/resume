@@ -1,28 +1,70 @@
 ---
-title: "3.1 Symbol Tables：关联数组、顺序查找与有序数组二分"
+title: 3.1 Symbol Tables：关联数组、顺序查找与有序数组二分
 type: B
-section: "查找"
+section: 查找
 order: 10
-description: "按官方3.1重建symbol-table key-value语义、null/delete与equality契约、ordered API、frequency client、linked-list sequential search及parallel-array binary search。"
+description: 3.1 · Symbol Tables覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/31elementary/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-3.1
 ---
 
+import {
+  SymbolTablesModelLab,
+  SymbolTablesTraceLab,
+  SymbolTablesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/symbol-tables";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3.1 · Symbol Tables”如何用键值 API、顺序查找和有序数组二分建立符号表的语义与成本基线
+- 能逐项核对 符号表、符号表API、有序符号表、顺序查找、有序数组二分查找，并区分作者站内容与本页独立补充
+- 能按“有序数组查询 O(log N)，插入最坏 O(N)；无序链表查询和插入最坏 O(N)”手算一个最小输入，逐步检查“每个键至多关联一个当前值，put 已有键只更新值而不增加 size”
+- 能注入“用 null 同时表示缺失和值，或二分 rank 的返回语义与插入位置语义混淆”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3·1 · Symbol Tables”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/31elementary/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“3·1 · Symbol Tables”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“3·1 · Symbol Tables”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：3.1 · Symbol Tables
+
+- **1. 符号表**：在本页通过“解析键值操作”连接解释、交互状态和练习验收。
+- **2. 符号表API**：在本页通过“查找已有键”连接解释、交互状态和练习验收。
+- **3. 有序符号表**：在本页通过“决定更新或插入”连接解释、交互状态和练习验收。
+- **4. 顺序查找**：在本页通过“维护有序表示”连接解释、交互状态和练习验收。
+- **5. 有序数组二分查找**：在本页通过“核对 size 与返回值”连接解释、交互状态和练习验收。
 
 ## 从“同一个单词第二次出现”开始
 
-符号表（，symbol tables）回答“这个key当前关联什么value”。Frequency counter读到单词 `the` 时，不是新增第二个 `the` node，而是取得旧count并写回加1；同一key始终只对应一个current value。
+符号表（symbol tables）回答“这个key当前关联什么value”。Frequency counter读到单词 `the` 时，不是新增第二个 `the` node，而是取得旧count并写回加1；同一key始终只对应一个current value。
 
 先预测 `put("S", 0)` 后再 `put("S", 3)`，size会不会从1变2。不会，第二次put覆盖旧association，size保持1。若实现每次都插新node，get会依赖遍历顺序，keys会重复，已不满足associative-array contract。
 
 官方3.1按 **Symbol table、API、Ordered symbol tables、Sample clients、Sequential search in an unordered linked list、Binary search in an ordered array** 展开。它用两个最简单representation揭示核心权衡：无序链表更新结构便宜但search线性；有序数组search logarithmic却为新key搬移linear items。
 
-
 ## 3.1.1 Symbol table API：association的精确定义
 
-符号表API（，symbol table API）把key type与value type参数化：
+符号表API（symbol table API）把key type与value type参数化：
 
 ```java
 void put(Key key, Value val)
@@ -36,15 +78,13 @@ Iterable<Key> keys()
 
 官方约定禁止null key；null value也不能成为合法association，因为 `get(key)==null` 表示absent，`put(key,null)` 等价于delete。这样contains可由get实现，但也意味着不能区分“key不存在”和“key存在且value为null”。不同Map API可能允许null，client不能跨contract想当然。
 
-
 删除可lazy或eager。Lazy deletion保留key并标null，之后再清理；eager deletion立即移除pair。由于本API把null定义为absence，任何keys/size都必须排除deleted keys。重复delete不存在key应保持idempotent，不改变size。
 
 Key equality必须是equivalence relation：reflexive、symmetric、transitive、consistent，且 `x.equals(null)` 为false。Key最好immutable；若插入后影响equals的fields改变，已有node可能再也无法由逻辑相同query找到。
 
-
 ## 3.1.2 Ordered symbol tables：order扩展了问题空间
 
-有序符号表（，ordered symbol tables）在basic API上增加：
+有序符号表（ordered symbol tables）在basic API上增加：
 
 - `min` / `max`：最小与最大key；
 - `floor(k)`：不大于k的最大key，`ceiling(k)`：不小于k的最小key；
@@ -52,8 +92,7 @@ Key equality必须是equivalence relation：reflexive、symmetric、transitive�
 - `keys(lo,hi)` 与 `size(lo,hi)`：inclusive range；
 - `deleteMin` / `deleteMax`。
 
-
-Rank（，rank）连接几乎所有operations。若query在table中，`select(rank(query))` 返回同key；若不在，rank是插入点，ceiling在该index，floor在前一index。Boundary不存在时，官方key-returning methods抛exception，而不是返回一个伪key。
+Rank（rank）连接几乎所有operations。若query在table中，`select(rank(query))` 返回同key；若不在，rank是插入点，ceiling在该index，floor在前一index。Boundary不存在时，官方key-returning methods抛exception，而不是返回一个伪key。
 
 Range size可由rank组成。对inclusive `[lo,hi]`：
 
@@ -86,12 +125,11 @@ for (String word : st.keys())
     if (st.get(word) > st.get(max)) max = word;
 ```
 
-
 这段client把filter、count与argmax职责分开。Performance取决于get/put sequence，而不只N words：`contains` 后再 `get` 可能做两次search；提供getOrDefault或一次get缓存可减少lookup，但必须保留null convention。Tie时返回哪个max取决于iteration order，若需要deterministic lexicographic tie-break应明确编码。
 
 ## 3.1.4 Sequential search：无序链表逐项比较
 
-顺序查找（，sequential search）在每个Node存key、value、next。Get linear scan；put先scan，命中就update value，miss才在head插新node。
+顺序查找（sequential search）在每个Node存key、value、next。Get linear scan；put先scan，命中就update value，miss才在head插新node。
 
 ```java
 public Value get(Key key) {
@@ -111,7 +149,6 @@ public void put(Key key, Value val) {
 }
 ```
 
-
 Miss、新key insert与tail hit都需要N compares；successful search worst case也是N。向empty table依次插入N个distinct keys时，第k次先扫描k个old nodes：
 
 $$
@@ -122,7 +159,7 @@ Head insertion本身constant，但“确认key不存在”不是。Current offic
 
 ## 3.1.5 Binary search in an ordered array：rank是核心
 
-有序数组二分查找（，binary search in an ordered array）维护两条parallel arrays：`keys[0..n)` strictly ordered，`vals[i]` 与 `keys[i]` 的association必须同index。
+有序数组二分查找（binary search in an ordered array）维护两条parallel arrays：`keys[0..n)` strictly ordered，`vals[i]` 与 `keys[i]` 的association必须同index。
 
 ```java
 public int rank(Key key) {
@@ -138,7 +175,6 @@ public int rank(Key key) {
     return lo;
 }
 ```
-
 
 Loop invariant是：所有index小于lo的keys严格小于query，所有index大于hi的keys严格大于query；若exact key存在，它在candidate interval。Miss时interval empty，lo恰是lower bound。Worst-case comparisons：
 
@@ -168,7 +204,6 @@ vals[i] = val;
 n++;
 ```
 
-
 正向右移会用 `keys[i]` 覆盖 `keys[i+1]`，随后复制的已是重复值；必须back-to-front。Delete反向左移、n减1、把old tail的key/value设null避免loitering，并在quarter-full时halve。
 
 New key插入worst case约移动N pairs，每pair读写key/value，官方给出约2N array accesses的数量级：
@@ -179,12 +214,90 @@ A_{\mathrm{new\ put}}(N)\sim 2N,
 A_{\mathrm{build}}(N)=\Theta(N^2)
 $$
 
-
 因此BinarySearchST适合read-heavy、update-light ordered data。它让get、contains、rank、floor、ceiling logarithmic，min/max/select constant；new put/delete仍linear。下一节BST尝试让ordered search与update都由tree path承担。
-
 
 ## 统一验收：从association到rank/select逆关系
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“3.1 · Symbol Tables”的两个最小情境间切换，再逐项选择正式概念。预测“有序数组查询 O(log N)，插入最坏 O(N)；无序链表查询和插入最坏 O(N)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <SymbolTablesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存键值序列、比较器、rank、size、数组移动、命中状态与朴素 Map 预言机，并检查“每个键至多关联一个当前值，put 已有键只更新值而不增加 size”仍然成立。
+
+    <SymbolTablesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“用 null 同时表示缺失和值，或二分 rank 的返回语义与插入位置语义混淆”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <SymbolTablesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="3.1 · Symbol Tables 的首要反例">
+  用 null 同时表示缺失和值，或二分 rank
+  的返回语义与插入位置语义混淆。它会破坏“每个键至多关联一个当前值，put
+  已有键只更新值而不增加
+  size”；应从键值序列、比较器、rank、size、数组移动、命中状态与朴素 Map
+  预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “有序数组查询 O(log N)，插入最坏 O(N)；无序链表查询和插入最坏
+  O(N)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“3.1 · Symbol
+  Tables”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对键值序列、比较器、rank、size、数组移动、命中状态与朴素
+  Map 预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **符号表**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **符号表API**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **有序符号表**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **顺序查找**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **有序数组二分查找**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“3.1 · Symbol Tables”作者页为分母，逐项定位
+  符号表、符号表API、有序符号表、顺序查找、有序数组二分查找。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“有序数组查询 O(log N)，插入最坏 O(N)；无序链表查询和插入最坏 O(N)”不是孤立结论？
+
+<Answer>
+  选择“更新已有键”的输入：put(A,1) 后再 put(A,2)。按 解析键值操作 → 查找已有键 →
+  决定更新或插入 → 维护有序表示 → 核对 size 与返回值 保存状态，并用“size 保持
+  1，get(A) 返回
+  2”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“用 null 同时表示缺失和值，或二分 rank 的返回语义与插入位置语义混淆”已经修复？
+
+<Answer>
+  保存键值序列、比较器、rank、size、数组移动、命中状态与朴素 Map
+  预言机作为正常基线；注入该故障并标记第一个违反“每个键至多关联一个当前值，put
+  已有键只更新值而不增加
+  size”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -196,7 +309,9 @@ $$
 6. Ordered array get快，但new put/delete要同步移动pairs，worst-case linear。
 7. Representation验收既要检查structure invariant，也要与association-level reference oracle比较。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/31elementary/"
+/>

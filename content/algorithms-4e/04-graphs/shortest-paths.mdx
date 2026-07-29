@@ -1,31 +1,74 @@
 ---
-title: "4.4 Shortest Paths：松弛、Dijkstra、DAG与Bellman-Ford"
+title: 4.4 Shortest Paths：松弛、Dijkstra、DAG与Bellman-Ford
 type: B
-section: "图"
+section: 图
 order: 18
-description: "按官方4.4重建加权有向图、edgeTo/distTo与松弛、Dijkstra、DAG最短/最长路径、关键路径、Bellman-Ford及负权环证书。"
+description: 4.4 · Shortest Paths覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/44sp/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-4.4
 ---
 
-import { Algs4WeightedDigraphModelMap} from "@/components/mdx/algorithms-4e/diagrams/shortest-paths";
+import {
+  ShortestPathsModelLab,
+  ShortestPathsTraceLab,
+  ShortestPathsCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/shortest-paths";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import { Algs4WeightedDigraphModelMap } from "@/components/mdx/algorithms-4e/diagrams/shortest-paths";
 
+<Objectives>
+
+- 能解释“4.4 · Shortest Paths”如何以松弛为统一操作，按非负权、DAG 或一般权重前提选择 Dijkstra、拓扑序或 Bellman-Ford
+- 能逐项核对 最短路径、加权有向图、松弛、Dijkstra算法、无环图最短路径、Bellman-Ford算法与负权环，并区分作者站内容与本页独立补充
+- 能按“relax(v→w)：若 dist[w] > dist[v]+weight(v,w)，同时更新 dist[w] 与 edgeTo[w]”手算一个最小输入，逐步检查“所有边满足三角不等式，edgeTo 紧边链从可达顶点回到源点且路径权重等于 dist”
+- 能注入“在存在可达负权边时仍把 Dijkstra 出队顶点永久 settle，或只更新 dist 不更新 edgeTo”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“4·4 · Shortest Paths”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/44sp/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“4·4 · Shortest Paths”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“4·4 · Shortest Paths”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：4.4 · Shortest Paths
+
+- **1. 最短路径**：在本页通过“初始化源点标签”连接解释、交互状态和练习验收。
+- **2. 加权有向图**：在本页通过“选择待松弛顶点”连接解释、交互状态和练习验收。
+- **3. 松弛**：在本页通过“计算候选距离”连接解释、交互状态和练习验收。
+- **4. Dijkstra算法**：在本页通过“更新标签与前驱”连接解释、交互状态和练习验收。
+- **5. 无环图最短路径**：在本页通过“验证路径或负环”连接解释、交互状态和练习验收。
+- **6. Bellman-Ford算法与负权环**：在本页通过“初始化源点标签”连接解释、交互状态和练习验收。
 
 ## 从“到达同一点的两条路线，哪条才值得保留”开始
 
-导航、网络路由、任务调度与货币兑换都在问同一个问题：从source s出发，到target t的所有directed paths中，哪一条total weight最小？最短路径（，shortest paths）并不是“边最少”的路径；weight可以表示距离、时间、费用、风险或损失。
+导航、网络路由、任务调度与货币兑换都在问同一个问题：从source s出发，到target t的所有directed paths中，哪一条total weight最小？最短路径（shortest paths）并不是“边最少”的路径；weight可以表示距离、时间、费用、风险或损失。
 
 先预测：已知从s到v的best known distance为0.7，edge v→w权重0.2，而当前distTo[w]是1.3，应该改成多少？候选path为0.9，因此同时把distTo[w]改成0.9，并把edgeTo[w]改成v→w。若只改distance不改predecessor，之后无法重建certificate；若只改predecessor不改distance，两者不再相等。
 
-本节的统一核心不是某个priority queue，而是松弛（，relaxation）。Dijkstra's algorithm、acyclic shortest paths与Bellman-Ford algorithm只是在不同输入前提下安排relaxation order，并决定何时可以宣布某个label最终正确。
+本节的统一核心不是某个priority queue，而是松弛（relaxation）。Dijkstra's algorithm、acyclic shortest paths与Bellman-Ford algorithm只是在不同输入前提下安排relaxation order，并决定何时可以宣布某个label最终正确。
 
 <Algs4WeightedDigraphModelMap />
 
 ## 4.4.1 Edge-weighted digraphs：direction决定path能否继续
 
-加权有向图（，edge-weighted digraphs）把edge表示为ordered triple \((v,w,weight)\)。与4.3的undirected `Edge`不同，`DirectedEdge`不提供 `either/other`，而是明确提供 `from/to`：
+加权有向图（edge-weighted digraphs）把edge表示为ordered triple \((v,w,weight)\)。与4.3的undirected `Edge`不同，`DirectedEdge`不提供 `either/other`，而是明确提供 `from/to`：
 
 ```java
 public final class DirectedEdge {
@@ -72,7 +115,7 @@ Shortest-path input的边界必须先说清：
 
 ## 4.4.2 Shortest-path tree：distTo是数值，edgeTo是可复查结构
 
-给定source s，shortest-path tree（，SPT）由两个vertex-indexed arrays表示：
+给定source s，shortest-path tree（SPT）由两个vertex-indexed arrays表示：
 
 - `distTo[v]`：当前已知s到v的minimum path weight上界。
 - `edgeTo[v]`：实现当前distTo[v]的最后一条directed edge。
@@ -128,7 +171,6 @@ $$
 distTo[w]\le distTo[v]+w(v,w)
 $$
 
-
 Vertex relaxation只是依次relax某个v的全部outgoing edges。若distTo[v]仍是infinity，所有candidate仍是infinity，不会产生伪reachability。
 
 为什么local inequalities足以认证global shortest paths？任取从s到t的path \(s=v_0\to v_1\to\cdots\to v_k=t\)。若所有edges都满足inequality，逐项相加可得：
@@ -148,17 +190,17 @@ Optimal substructure解释edgeTo为何可组成tree：若s到t的shortest path�
 
 不同算法通过输入结构减少“还需再看哪些edges”的不确定性：
 
-| input promise | relaxation schedule | finalize rule | worst-case time |
-|---|---|---|---|
-| nonnegative weights | minimum distTo first | delMin后settled | \(O(E\log V)\) |
-| edge-weighted DAG | topological order once | order经过即完成 | \(\Theta(V+E)\) |
-| no reachable negative cycle | repeated / changed queue | no update or cycle certificate | \(O(VE)\) |
+| input promise               | relaxation schedule      | finalize rule                  | worst-case time |
+| --------------------------- | ------------------------ | ------------------------------ | --------------- |
+| nonnegative weights         | minimum distTo first     | delMin后settled                | \(O(E\log V)\)  |
+| edge-weighted DAG           | topological order once   | order经过即完成                | \(\Theta(V+E)\) |
+| no reachable negative cycle | repeated / changed queue | no update or cycle certificate | \(O(VE)\)       |
 
 不存在一个不检查前提就能套用的“万能最快版本”。算法选择本身是correctness contract。
 
 ## 4.4.5 Dijkstra's algorithm：minimum label何时可以settle
 
-Dijkstra算法（，Dijkstra's algorithm）初始化source key为0，其余为infinity。IndexMinPQ只保存尚未settled且有finite label的vertices；每轮 `delMin` 得到v，relax `adj(v)`，successful update执行 `decreaseKey` 或首次insert。
+Dijkstra算法（Dijkstra's algorithm）初始化source key为0，其余为infinity。IndexMinPQ只保存尚未settled且有finite label的vertices；每轮 `delMin` 得到v，relax `adj(v)`，successful update执行 `decreaseKey` 或首次insert。
 
 ```java
 distTo[s] = 0.0;
@@ -177,9 +219,7 @@ while (!pq.isEmpty()) {
 }
 ```
 
-
 正确性关键是nonnegative weights。设v是当前minimum-key non-tree vertex。任何尚未被发现、之后绕回v的path，必须先从settled set跨到某个unsettled x；到x的prefix不小于当前minimum distTo[v]，后续nonnegative edges又不能降低weight，所以无法产生更短的s-to-v path。于是v一经 `delMin` 就可settle。
-
 
 每条edge最多引发一次relaxation attempt；每个vertex最多一次insert与delMin，successful improvement触发decreaseKey。Binary-heap IndexMinPQ给出：
 
@@ -188,7 +228,6 @@ T_{\mathrm{Dijkstra}}=O((V+E)\log V)=O(E\log V)
 $$
 
 最后一步使用connected reachability相关的 \(E\ge V-1\)；不连通部分根本不进PQ。Extra space为Theta(V)加graph storage。
-
 
 ### Dijkstra不是Prim
 
@@ -201,7 +240,7 @@ Dijkstra输出shortest-path tree，不保证tree edge total minimum；Prim输出
 
 ## 4.4.6 Acyclic shortest paths：拓扑序让一次扫描足够
 
-无环图最短路径（，acyclic shortest paths）不要求weights nonnegative。DAG没有edge返回已完成topological prefix；处理v时，所有进入v的possible predecessor paths都已经处理，所以distTo[v]已最终正确。
+无环图最短路径（acyclic shortest paths）不要求weights nonnegative。DAG没有edge返回已完成topological prefix；处理v时，所有进入v的possible predecessor paths都已经处理，所以distTo[v]已最终正确。
 
 ```java
 distTo[s] = 0.0;
@@ -212,7 +251,6 @@ for (int v : topological.order())
     for (DirectedEdge e : G.adj(v))
         relax(e);
 ```
-
 
 Topological sort加一次all-edge scan，time与extra state为：
 
@@ -228,12 +266,11 @@ DAG longest paths只需把non-source labels初始化为negative infinity，并�
 
 Critical Path Method把precedence-constrained jobs转成edge-weighted DAG：每个job拆为start/end vertices，duration edge从start指向end；precedence constraint用zero-weight edge连接前一job end与后一job start；super-source连所有starts，所有ends连super-sink。Source到job start的longest distance就是earliest start。
 
-
 Project makespan是source-to-sink longest distance；构成该distance的jobs是critical path。推迟critical job会推迟project finish，而非critical job可能有slack。验收schedule时应逐constraint检查finish(predecessor)不晚于start(successor)，再核对critical path tight equalities。
 
 ## 4.4.7 Negative edges与negative cycles：问题可能没有finite答案
 
-负权环（，negative cycle）与单条negative edge不同。Negative edge仍可能有well-defined shortest paths；reachable negative cycle允许path绕行k次：
+负权环（negative cycle）与单条negative edge不同。Negative edge仍可能有well-defined shortest paths；reachable negative cycle允许path绕行k次：
 
 $$
 w(P_k)=w(P_0)+k\,w(C)
@@ -242,7 +279,6 @@ w(P_k)=w(P_0)+k\,w(C)
 $$
 
 所以对cycle及其downstream vertices不存在finite shortest path。与source不连通的negative cycle不影响该source的single-source query；检测结论必须带reachability范围。
-
 
 Shortest path从s到v存在，当且仅当至少有一条s-to-v directed path，并且任何可位于s-to-v route上的vertex都不受reachable negative cycle影响。Unreachable vertex与negative-cycle-affected vertex都没有finite shortest distance，但原因和API结果不同，不能混成同一个infinity状态而不附status。
 
@@ -273,7 +309,6 @@ while (!queue.isEmpty() && !hasNegativeCycle()) {
 }
 ```
 
-
 `onQ`只表示当前是否已排队，不表示settled。Vertex可以在dequeue后因其他edge改善而再次入队。漏掉这一点会让negative-edge propagation过早停止；允许同一vertex在尚未dequeue时重复入队又会制造大量冗余。
 
 Worst case time为 \(O(VE)\)，extra space为Theta(V)。Queue optimization常减少实际relaxations，但不改变worst-case guarantee。若输入是DAG，优先使用linear topological algorithm；若全部nonnegative，Dijkstra提供更强bound。
@@ -288,7 +323,6 @@ Cycle certificate应满足：
 2. 每条edge确实来自original graph。
 3. Cycle从source可达。
 4. Edge weights之和strictly negative。
-
 
 ### Arbitrage：乘法收益转成加法negative cycle
 
@@ -329,7 +363,6 @@ for (int w = 0; w < G.V(); w++) {
 }
 ```
 
-
 Floating-point implementation应使用一致的EPS policy，但不能让tolerance大到接受实质改进。还应在algorithm entry拒绝NaN weights；NaN会让所有ordered comparisons失去可靠语义。
 
 若candidate声明有negative cycle，则走另一套certificate：验证cycle connectivity与negative total。若两类certificate都给不出，结果不能仅凭“程序结束了”通过验收。
@@ -343,6 +376,83 @@ Floating-point implementation应使用一致的EPS policy，但不能让toleranc
 - Edge-weighted DAG，允许negative：topological shortest paths，Theta(V+E)。
 - General digraph，允许negative且需检测negative cycle：Bellman-Ford，\(O(VE)\)。
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“4.4 · Shortest Paths”的两个最小情境间切换，再逐项选择正式概念。预测“relax(v→w)：若 dist[w] > dist[v]+weight(v,w)，同时更新 dist[w] 与 edgeTo[w]”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <ShortestPathsModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存图与源点、distTo、edgeTo、松弛次序、优先队列、负环证书与全边校验器，并检查“所有边满足三角不等式，edgeTo 紧边链从可达顶点回到源点且路径权重等于 dist”仍然成立。
+
+    <ShortestPathsTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“在存在可达负权边时仍把 Dijkstra 出队顶点永久 settle，或只更新 dist 不更新 edgeTo”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <ShortestPathsCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="4.4 · Shortest Paths 的首要反例">
+  在存在可达负权边时仍把 Dijkstra 出队顶点永久 settle，或只更新 dist 不更新
+  edgeTo。它会破坏“所有边满足三角不等式，edgeTo
+  紧边链从可达顶点回到源点且路径权重等于
+  dist”；应从图与源点、distTo、edgeTo、松弛次序、优先队列、负环证书与全边校验器中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “relax(v→w)：若 dist[w] > dist[v]+weight(v,w)，同时更新 dist[w] 与 edgeTo[w]”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“4.4 · Shortest
+  Paths”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对图与源点、distTo、edgeTo、松弛次序、优先队列、负环证书与全边校验器。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **最短路径**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **加权有向图**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **松弛**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **Dijkstra算法**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **无环图最短路径**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **Bellman-Ford算法与负权环**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“4.4 · Shortest Paths”作者页为分母，逐项定位
+  最短路径、加权有向图、松弛、Dijkstra算法、无环图最短路径、Bellman-Ford算法与负权环。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“relax(v→w)：若 dist[w] > dist[v]+weight(v,w)，同时更新 dist[w] 与 edgeTo[w]”不是孤立结论？
+
+<Answer>
+  选择“非负权图”的输入：s→a=2、s→b=5、a→b=1。按 初始化源点标签 → 选择待松弛顶点
+  → 计算候选距离 → 更新标签与前驱 → 验证路径或负环 保存状态，并用“Dijkstra 先
+  settle a，再把 b 从 5 改进为
+  3”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“在存在可达负权边时仍把 Dijkstra 出队顶点永久 settle，或只更新 dist 不更新 edgeTo”已经修复？
+
+<Answer>
+  保存图与源点、distTo、edgeTo、松弛次序、优先队列、负环证书与全边校验器作为正常基线；注入该故障并标记第一个违反“所有边满足三角不等式，edgeTo
+  紧边链从可达顶点回到源点且路径权重等于
+  dist”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -353,4 +463,9 @@ Floating-point implementation应使用一致的EPS policy，但不能让toleranc
 - Bellman-Ford algorithm允许labels反复下降，用queue避免无关扫描，并在worst case \(O(VE)\) 内求解或给出reachable negative cycle。
 - Independent certificate检查source label、all-edge inequalities、tight predecessor chain；negative-cycle结果则检查closed reachable cycle与negative sum。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/44sp/"
+/>

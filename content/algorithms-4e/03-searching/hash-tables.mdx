@@ -1,19 +1,63 @@
 ---
-title: "3.4 Hash Tables：散列函数、碰撞策略与负载控制"
+title: 3.4 Hash Tables：散列函数、碰撞策略与负载控制
 type: B
-section: "查找"
+section: 查找
 order: 13
-description: "按官方3.4重建hash function契约与uniform assumption、separate chaining、linear probing成本、cluster-safe deletion及扩缩容rehash。"
+description: 3.4 · Hash Tables覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/34hash/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-3.4
 ---
 
+import {
+  HashTablesModelLab,
+  HashTablesTraceLab,
+  HashTablesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/hash-tables";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3.4 · Hash Tables”如何从 hashCode/equals 合同、均匀散列假设、拉链法与线性探测推导负载控制
+- 能逐项核对 散列表、散列函数、均匀散列假设、拉链法、线性探测、散列表扩缩容，并区分作者站内容与本页独立补充
+- 能按“拉链平均链长 α=N/M；线性探测命中/未命中成本随 α→1 急剧上升”手算一个最小输入，逐步检查“equals 相等的键必须有相同 hashCode；所有键可由当前表容量和探测规则重新找到”
+- 能注入“键入表后发生可影响 hashCode 的变更，或删除线性探测槽位却不重建后续簇”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3·4 · Hash Tables”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/34hash/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“3·4 · Hash Tables”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“3·4 · Hash Tables”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：3.4 · Hash Tables
+
+- **1. 散列表**：在本页通过“计算一致哈希”连接解释、交互状态和练习验收。
+- **2. 散列函数**：在本页通过“映射到桶或槽”连接解释、交互状态和练习验收。
+- **3. 均匀散列假设**：在本页通过“处理碰撞”连接解释、交互状态和练习验收。
+- **4. 拉链法**：在本页通过“按负载扩缩容”连接解释、交互状态和练习验收。
+- **5. 线性探测**：在本页通过“核对全部键值”连接解释、交互状态和练习验收。
+- **6. 散列表扩缩容**：在本页通过“计算一致哈希”连接解释、交互状态和练习验收。
 
 ## 从“直接算出地址”开始
 
-前两节search tree通过comparison逐层排除范围；散列表（，hash tables）尝试直接算出key应从哪个array位置开始查。理想情况一次indexing命中，但key universe通常远大于M个slots，所以不同keys映射到同一index的collision不可避免。
+前两节search tree通过comparison逐层排除范围；散列表（hash tables）尝试直接算出key应从哪个array位置开始查。理想情况一次indexing命中，但key universe通常远大于M个slots，所以不同keys映射到同一index的collision不可避免。
 
 先预测两个keys得到相同hashCode时，table是否可以把它们视作相等。不能。Hash equality只说明它们进入同一collision-resolution区域；仍必须调用 `equals()` 区分。反过来，若 `a.equals(b)` 为true，两者hashCode必须相同，否则lookup会去另一个bucket，连比较a与b的机会都没有。
 
@@ -22,10 +66,9 @@ Hashing由两个独立部分组成：
 1. Hash function把任意key压缩成0到M减1的array index。
 2. Collision policy在同一index容纳多个distinct keys，本节比较separate chaining与linear probing。
 
-
 ## 3.4.1 Hash functions：从object到array index
 
-散列函数（，hash functions）既依赖key type，也依赖table size M。Positive integer常取mod M；String可按radix R逐character滚动：
+散列函数（hash functions）既依赖key type，也依赖table size M。Positive integer常取mod M；String可按radix R逐character滚动：
 
 $$
 h_i=(R h_{i-1}+s_i)\bmod M
@@ -43,7 +86,6 @@ Mask sign bit比 `Math.abs(hashCode())` 安全，因为32-bit minimum integer的
 
 Hash function有三个要求：deterministic；计算快；uniformly distribute实际keys。第一项是correctness contract，后两项决定performance。Constant hashCode在Java语义上可以合法，因为equal keys当然同hash，但它把所有operations退化成collision list或long probe cluster。
 
-
 Java contract必须精确理解：
 
 - `a.equals(b)` 为true，必须有 `a.hashCode()==b.hashCode()`。
@@ -51,10 +93,9 @@ Java contract必须精确理解：
 - 参与hashCode与equals的fields在key位于table期间不能改变，否则association留在old bucket，new hash从别处开始。
 - `equals(Object)` 必须真正override，而不是只写一个parameter type更窄的overload。
 
-
 ## 3.4.2 Uniform hashing assumption：性能前提不是事实
 
-均匀散列假设（，uniform hashing assumption）是官方Assumption J：hash function把keys均匀分布在M个indices。它让average analysis可计算，却不提供adversarial worst-case guarantee。
+均匀散列假设（uniform hashing assumption）是官方Assumption J：hash function把keys均匀分布在M个indices。它让average analysis可计算，却不提供adversarial worst-case guarantee。
 
 若N个keys进入M个buckets，平均load为：
 
@@ -68,7 +109,7 @@ Hash table expected O(1)的完整条件是：hash计算本身bounded；distribut
 
 ## 3.4.3 Separate chaining：array of small symbol tables
 
-拉链法（，separate chaining）使用M个 `SequentialSearchST`。Get/put/delete先hash到唯一chain，再把association operation委托给该chain：
+拉链法（separate chaining）使用M个 `SequentialSearchST`。Get/put/delete先hash到唯一chain，再把association operation委托给该chain：
 
 ```java
 private SequentialSearchST<Key, Value>[] st;
@@ -86,7 +127,6 @@ public void put(Key key, Value val) {
 }
 ```
 
-
 Separate-chaining load factor N/M是average chain length，可以大于1。Under uniform hashing，search与insert equality tests proportional to N/M；M越大，chains越短但empty-list objects与array references占更多memory。
 
 Duplicate put必须覆盖value而不增加N。Delete只有key存在才decrement N。Current implementation在average chain length达到10时double chains，降到2以下且capacity大于initial时halve；不同threshold形成hysteresis，避免N在boundary附近让table来回resize。
@@ -95,7 +135,7 @@ Separate chaining容忍较高load，delete简单，也允许table不预留empty 
 
 ## 3.4.4 Linear probing：empty slot同时是storage与stop signal
 
-线性探测（，linear probing）把keys与values直接放在parallel arrays中。它从home index开始有三种结果：
+线性探测（linear probing）把keys与values直接放在parallel arrays中。它从home index开始有三种结果：
 
 1. Slot key equal query：hit或覆盖value。
 2. Slot为null：miss，put可在此insert。
@@ -117,7 +157,6 @@ public void put(Key key, Value val) {
 }
 ```
 
-
 Open-addressing load factoralpha=N/M是occupied fraction，必须小于1。Consecutive occupied slots形成cluster；任何hash落入cluster start到end的key都会延长cluster，称primary clustering。Array locality很好，但clusters让probe成本随load非线性增长。
 
 Under uniform hashing，官方Proposition M给average probes：
@@ -130,13 +169,11 @@ $$
 E[\mathrm{miss/insert}]\sim\frac{1}{2}\left(1+\frac{1}{(1-\alpha)^2}\right)
 $$
 
-
 当alpha为0.5，hit约1.5 probes，miss/insert约2.5；当alpha逼近1，denominator趋近0，miss成本爆发。Current implementation在50% full之前double table，主动用space换稳定probe count。
 
 ## 3.4.5 Linear-probing deletion：不能在cluster中间留null
 
 Linear probing的null不只是“unused”，还是get判定search miss的证据：从home到目标之间若出现null，目标不可能位于更后方。因此直接把deleted slot设null会切断cluster，让后续仍存在的keys变成unreachable。
-
 
 正确delete先找到target置null，然后向右扫描同一continuous cluster；每个后继association先取出、slot清空、N减1，再调用put从其home重新insert。最后再为target本身减N：
 
@@ -157,13 +194,11 @@ while (keys[i] != null) {
 n--;
 ```
 
-
 Delete scan看似可能很长，但在load受控与uniform assumption下expected cost仍constant。Worst case所有keys形成一个cluster时仍可linear；这再次说明hash table不是balanced BST那种comparison-based worst-case guarantee。
 
 ## 3.4.6 Hash-table resizing：capacity改变就必须rehash
 
-散列表扩缩容（，hash-table resizing）不能用array copy完成，因为index formula包含M。原来 `hash % 8` 的位置不一定等于 `hash % 16`；linear-probing placement还受new collision order影响。
-
+散列表扩缩容（hash-table resizing）不能用array copy完成，因为index formula包含M。原来 `hash % 8` 的位置不一定等于 `hash % 16`；linear-probing placement还受new collision order影响。
 
 Resize创建new empty table，逐key调用put，再替换arrays与M。Doubling的总搬移成本形成geometric series：
 
@@ -191,6 +226,84 @@ Expected O(1)不能只用wall-clock证明；要记录equals count、probe count�
 
 ## 统一验收：把hash、collision与load分开验证
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“3.4 · Hash Tables”的两个最小情境间切换，再逐项选择正式概念。预测“拉链平均链长 α=N/M；线性探测命中/未命中成本随 α→1 急剧上升”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <HashTablesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存键及哈希值、M/N/α、桶或探测轨迹、resize 前后位置、命中结果与 Map 预言机，并检查“equals 相等的键必须有相同 hashCode；所有键可由当前表容量和探测规则重新找到”仍然成立。
+
+    <HashTablesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“键入表后发生可影响 hashCode 的变更，或删除线性探测槽位却不重建后续簇”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <HashTablesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="3.4 · Hash Tables 的首要反例">
+  键入表后发生可影响 hashCode
+  的变更，或删除线性探测槽位却不重建后续簇。它会破坏“equals 相等的键必须有相同
+  hashCode；所有键可由当前表容量和探测规则重新找到”；应从键及哈希值、M/N/α、桶或探测轨迹、resize
+  前后位置、命中结果与 Map 预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “拉链平均链长 α=N/M；线性探测命中/未命中成本随 α→1
+  急剧上升”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“3.4 · Hash
+  Tables”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对键及哈希值、M/N/α、桶或探测轨迹、resize
+  前后位置、命中结果与 Map 预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **散列表**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **散列函数**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **均匀散列假设**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **拉链法**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **线性探测**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **散列表扩缩容**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“3.4 · Hash Tables”作者页为分母，逐项定位
+  散列表、散列函数、均匀散列假设、拉链法、线性探测、散列表扩缩容。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“拉链平均链长 α=N/M；线性探测命中/未命中成本随 α→1 急剧上升”不是孤立结论？
+
+<Answer>
+  选择“拉链碰撞”的输入：让 A、K、U 映射到同一桶。按 计算一致哈希 → 映射到桶或槽
+  → 处理碰撞 → 按负载扩缩容 → 核对全部键值 保存状态，并用“桶内仍用 equals
+  区分键，碰撞不会覆盖不同键”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“键入表后发生可影响 hashCode 的变更，或删除线性探测槽位却不重建后续簇”已经修复？
+
+<Answer>
+  保存键及哈希值、M/N/α、桶或探测轨迹、resize 前后位置、命中结果与 Map
+  预言机作为正常基线；注入该故障并标记第一个违反“equals 相等的键必须有相同
+  hashCode；所有键可由当前表容量和探测规则重新找到”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -203,7 +316,9 @@ Expected O(1)不能只用wall-clock证明；要记录equals count、probe count�
 7. Capacity改变会改变index，resize必须rehash所有keys；hysteresis避免thrashing。
 8. Hash table提供expected constant unordered operations，不替代有worst-case log guarantee与ordered API的red-black BST。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/34hash/"
+/>

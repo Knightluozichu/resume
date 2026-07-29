@@ -1,24 +1,67 @@
 ---
-title: "6.4 Maximum Flow：残量网络、增广路径与最小割证书"
+title: 6.4 Maximum Flow：残量网络、增广路径与最小割证书
 type: B
-section: "上下文"
+section: 上下文
 order: 27
-description: "按官方6.4重建flow feasibility、FlowEdge双向残量、Edmonds-Karp增广、bottleneck更新、maxflow-mincut证明、二分图匹配归约与primal-dual证书。"
+description: 6.4 · Maxflow覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/64maxflow/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-6.4
 ---
 
+import {
+  MaxflowModelLab,
+  MaxflowTraceLab,
+  MaxflowCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/maxflow";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“6.4 · Maxflow”如何用容量、流量、残量网络与增广路径建立最大流和最小割的双向证书
+- 能逐项核对 最大流、最小s-t割、残量网络、增广路径、最大流最小割定理、二分图匹配，并区分作者站内容与本页独立补充
+- 能按“残量 r(e)=capacity-flow（正向）或 flow（反向）；增广量为路径最小残量”手算一个最小输入，逐步检查“每条边满足 0≤flow≤capacity，非源汇点流量守恒，最终残量图中汇点不可达”
+- 能注入“只保留正向剩余容量而遗漏反向残量边，使早期错误选择无法撤销”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“6·4 · Maxflow”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/64maxflow/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“6·4 · Maxflow”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“6·4 · Maxflow”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：6.4 · Maxflow
+
+- **1. 最大流**：在本页通过“初始化零流”连接解释、交互状态和练习验收。
+- **2. 最小s-t割**：在本页通过“在残量图找 s-t 路径”连接解释、交互状态和练习验收。
+- **3. 残量网络**：在本页通过“计算瓶颈”连接解释、交互状态和练习验收。
+- **4. 增广路径**：在本页通过“更新正反向残量”连接解释、交互状态和练习验收。
+- **5. 最大流最小割定理**：在本页通过“验证守恒与最小割”连接解释、交互状态和练习验收。
+- **6. 二分图匹配**：在本页通过“初始化零流”连接解释、交互状态和练习验收。
 
 ## 从“走错的流量能不能撤回来”开始
 
-最大流（，maximum flow）不是简单找一条widest path。Flow可同时走many paths，而且early path choice可能占用后续更重要的capacity。
+最大流（maximum flow）不是简单找一条widest path。Flow可同时走many paths，而且early path choice可能占用后续更重要的capacity。
 
 先预测：若第一次把5 units送过edge u→v，后来发现更好solution需要把其中2 units改走另一branch，algorithm是否必须从头重算？不必。Residual network提供v→u的backward capacity 5，让下一条增广路径撤销一部分旧flow。
 
 一个flow state必须先可行，再谈optimal。Flow value是source net outflow，也等于sink net inflow。
-
 
 ## 6.4.1 Flow network与feasible flow
 
@@ -47,7 +90,6 @@ $$
 
 Official `FlowNetwork`把同一`FlowEdge` object加入both endpoints的adjacency lists，因为residual traversal必须从tail和head都能看到它。Parallel edges与self-loops允许；遍历all edges时要避免把同一edge重复计数。
 
-
 ## 6.4.2 FlowEdge：一个original edge，两种residual directions
 
 对original edge \(e=v\to w\)：
@@ -63,7 +105,6 @@ c_f(w,v)=f(e)
 $$
 
 是backward residual capacity，可取消已有flow。
-
 
 Official API以destination endpoint表达direction：
 
@@ -85,24 +126,21 @@ void addResidualFlowTo(int vertex, double delta) {
 
 ## 6.4.3 Residual networks：当前flow还能怎样改变
 
-残量网络（，residual networks）记作 \(G_f\)。
-
+残量网络（residual networks）记作 \(G_f\)。
 
 Residual path不等于original directed path。若path从w沿backward arc到v，augmentation会减少original \(v\to w\) flow。Cancellation是Ford-Fulkerson correctness的关键；没有backward arcs，greedy first path可永久锁死suboptimal decision。
 
 Residual adjacency在official implementation中遍历`G.adj(v)`，对incident edge取`other(v)`，再问`residualCapacityTo(w)`。只有strictly positive residual capacity的arc可搜索。
 
-
 ## 6.4.4 Augmenting path与bottleneck
 
-增广路径（，augmenting paths）P可增加的maximum amount是bottleneck：
+增广路径（augmenting paths）P可增加的maximum amount是bottleneck：
 
 $$
 \Delta=\min_{e\in P}c_f(e)
 $$
 
 沿P每个forward residual arc增加 \(\Delta\)，每个backward residual arc减少 \(\Delta\)。至少一条residual arc被saturate，flow value增加 \(\Delta\)。
-
 
 ```java
 double bottle = Double.POSITIVE_INFINITY;
@@ -144,7 +182,6 @@ while (!queue.isEmpty() && !marked[t]) {
 }
 ```
 
-
 BFS一次O(E+V)。Edmonds-Karp augmentation count O(VE)，total：
 
 $$
@@ -153,12 +190,11 @@ $$
 
 Connected/sparse conventions下常写O(VE²)。Official section概括为 \(E^2V\)，current class documentation给更完整 \(EV(E+V)\)。Extra `marked`、`edgeTo`与queue O(V)。
 
-
 If all capacities/initial flows areintegers，bottleneck integer，all intermediate flows保持integer，得到integral maxflow。Official floating implementation说明：若integer arithmetic exact且maxflow不超过 \(2^{52}\)，double能精确表示这些integers；一般real capacities需审慎tolerance。
 
 ## 6.4.6 Minimum s-t cut：任何cut都是flow上界
 
-最小s-t割（，minimum s-t cut）\((S,T)\) 的capacity：
+最小s-t割（minimum s-t cut）\((S,T)\) 的capacity：
 
 $$
 c(S,T)=\sum_{e:\,e.from\in S,\ e.to\in T}c(e)
@@ -176,7 +212,6 @@ Proof：Internal flows在S内cancel，net离开S的flow等于flow value；S→T 
 
 Algorithm终止时，令S为residual network中从s reachable的vertices，T为其余vertices。T含sink，因为无augmenting path。
 
-
 对every original edge crossing S→T，forward residual必须0，否则head也reachable，所以它saturated。对every edge crossing T→S，backward residual必须0，否则tail可被reached，所以其flow为0。
 
 因此：
@@ -191,8 +226,7 @@ Feasible flow达到某cut upper bound，二者同时optimal。
 
 ## 6.4.8 Maxflow-mincut theorem与双证书
 
-最大流最小割定理（，maxflow-mincut theorem）给出比“algorithm停止”更强的可检验证据。
-
+最大流最小割定理（maxflow-mincut theorem）给出比“algorithm停止”更强的可检验证据。
 
 Certificate由两部分组成：
 
@@ -203,12 +237,11 @@ Verifier不必重跑maxflow；只需O(E+V)检查feasibility、partition与equali
 
 ## 6.4.9 Bipartite matching reduction
 
-二分图匹配（，bipartite matching）可归约为unit-capacity maxflow：
+二分图匹配（bipartite matching）可归约为unit-capacity maxflow：
 
 1. 新建source s，向每个left vertex连capacity 1。
 2. 每条allowed left-right edge设capacity 1。
 3. 每个right vertex向sink t连capacity 1。
-
 
 Integral maxflow中的unit flow left→right edges形成matching：left/source edge与right/sink edge capacity 1阻止重复使用vertex。反过来，size-k matching可构造value-k flow，所以maximum values equal。
 
@@ -232,24 +265,99 @@ Floating residual comparison `> 0`可能把tiny numerical noise当path。Officia
 ## 6.4.11 Independent certificate
 
 ```ts
-for (const edge of edges)
-  assert(0 <= edge.flow && edge.flow <= edge.capacity);
+for (const edge of edges) assert(0 <= edge.flow && edge.flow <= edge.capacity);
 
 for (const vertex of internalVertices)
   assert(nearlyEqual(inflow(vertex), outflow(vertex)));
 
 assert(cut.has(source) && !cut.has(sink));
 const cutCapacity = edges
-  .filter(e => cut.has(e.from) && !cut.has(e.to))
+  .filter((e) => cut.has(e.from) && !cut.has(e.to))
   .reduce((sum, e) => sum + e.capacity, 0);
 assert(nearlyEqual(flowValue, cutCapacity));
 ```
-
 
 Mutation tests应覆盖capacity violation、internal leak、wrong reported value、cut未分离s/t、wrong cut membership、missing parallel edge与backward residual update sign。只检查no augmenting path不够，因为candidate initial flow可能本身infeasible。
 
 ## 6.4.12 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“6.4 · Maxflow”的两个最小情境间切换，再逐项选择正式概念。预测“残量 r(e)=capacity-flow（正向）或 flow（反向）；增广量为路径最小残量”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <MaxflowModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存容量/流量、残量边、增广路径、瓶颈、守恒差、最终 s-cut 与 cut capacity，并检查“每条边满足 0≤flow≤capacity，非源汇点流量守恒，最终残量图中汇点不可达”仍然成立。
+
+    <MaxflowTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“只保留正向剩余容量而遗漏反向残量边，使早期错误选择无法撤销”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <MaxflowCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="6.4 · Maxflow 的首要反例">
+  只保留正向剩余容量而遗漏反向残量边，使早期错误选择无法撤销。它会破坏“每条边满足
+  0≤flow≤capacity，非源汇点流量守恒，最终残量图中汇点不可达”；应从容量/流量、残量边、增广路径、瓶颈、守恒差、最终
+  s-cut 与 cut capacity中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “残量 r(e)=capacity-flow（正向）或
+  flow（反向）；增广量为路径最小残量”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“6.4 ·
+  Maxflow”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对容量/流量、残量边、增广路径、瓶颈、守恒差、最终
+  s-cut 与 cut capacity。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **最大流**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **最小s-t割**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **残量网络**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **增广路径**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **最大流最小割定理**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **二分图匹配**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“6.4 · Maxflow”作者页为分母，逐项定位
+  最大流、最小s-t割、残量网络、增广路径、最大流最小割定理、二分图匹配。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“残量 r(e)=capacity-flow（正向）或 flow（反向）；增广量为路径最小残量”不是孤立结论？
+
+<Answer>
+  选择“撤销旧流”的输入：早期增广占用了后续更优路径需要的边。按 初始化零流 →
+  在残量图找 s-t 路径 → 计算瓶颈 → 更新正反向残量 → 验证守恒与最小割
+  保存状态，并用“反向残量边允许减少旧流并重新路由”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“只保留正向剩余容量而遗漏反向残量边，使早期错误选择无法撤销”已经修复？
+
+<Answer>
+  保存容量/流量、残量边、增广路径、瓶颈、守恒差、最终 s-cut 与 cut
+  capacity作为正常基线；注入该故障并标记第一个违反“每条边满足
+  0≤flow≤capacity，非源汇点流量守恒，最终残量图中汇点不可达”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -263,4 +371,9 @@ Mutation tests应覆盖capacity violation、internal leak、wrong reported value
 - Unit-capacity network把bipartite matching归约为integral maxflow。
 - Parallel edges、floating tolerance与model transformation必须写进contract。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/64maxflow/"
+/>

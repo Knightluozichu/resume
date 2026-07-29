@@ -1,21 +1,64 @@
 ---
-title: "4.2 Directed Graphs：可达性、DAG拓扑序与强连通分量"
+title: 4.2 Directed Graphs：可达性、DAG拓扑序与强连通分量
 type: B
-section: "图"
+section: 图
 order: 16
-description: "按官方4.2重建Digraph表示与reverse、DirectedDFS、onStack cycle detection、DFS orders、topological sort、Kosaraju-Sharir SCC及transitive closure。"
+description: 4.2 · Directed Graphs覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/42digraph/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-4.2
 ---
 
-import { Algs4DirectedGraphModelMap} from "@/components/mdx/algorithms-4e/diagrams/directed-graphs";
+import {
+  DirectedGraphsModelLab,
+  DirectedGraphsTraceLab,
+  DirectedGraphsCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/directed-graphs";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import { Algs4DirectedGraphModelMap } from "@/components/mdx/algorithms-4e/diagrams/directed-graphs";
 
+<Objectives>
+
+- 能解释“4.2 · Directed Graphs”如何用有向可达、环检测、拓扑序与强连通分量区分方向性结构问题
+- 能逐项核对 有向图、有向图表示、有向可达性、环与有向无环图、拓扑顺序、强连通性，并区分作者站内容与本页独立补充
+- 能按“DFS/BFS、拓扑排序与 Kosaraju-Sharir SCC 都可在线性 Θ(V+E) 时间完成”手算一个最小输入，逐步检查“拓扑序要求每条边 v→w 都满足 order(v) 小于 order(w)；同一 SCC 内顶点两两可达”
+- 能注入“检测有向环时递归返回后未清除 onStack，或 SCC 第一遍没有在反向图上取逆后序”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“4·2 · Directed Graphs”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/42digraph/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“4·2 · Directed Graphs”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“4·2 · Directed Graphs”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：4.2 · Directed Graphs
+
+- **1. 有向图**：在本页通过“建立有向邻接”连接解释、交互状态和练习验收。
+- **2. 有向图表示**：在本页通过“执行可达搜索”连接解释、交互状态和练习验收。
+- **3. 有向可达性**：在本页通过“检测回边或生成逆后序”连接解释、交互状态和练习验收。
+- **4. 环与有向无环图**：在本页通过“分配 SCC”连接解释、交互状态和练习验收。
+- **5. 拓扑顺序**：在本页通过“验证拓扑或互达”连接解释、交互状态和练习验收。
+- **6. 强连通性**：在本页通过“建立有向邻接”连接解释、交互状态和练习验收。
 
 ## 从“能去，不代表能回”开始
 
-有向图（，directed graphs）把web links、task dependencies、data flow、call relation、one-way roads与state transitions建模为arrows。与undirected graph最根本的差别不是画了箭头，而是reachability不再symmetric：v可到w，不推出w可到v。
+有向图（directed graphs）把web links、task dependencies、data flow、call relation、one-way roads与state transitions建模为arrows。与undirected graph最根本的差别不是画了箭头，而是reachability不再symmetric：v可到w，不推出w可到v。
 
 先预测从2能到4且4能到5，是否说明5也能到2。不会。只有若5到2也存在directed path，三者才可能落在同一strong component。Directed relation迫使我们区分out-neighbors、in-neighbors、source-to-target path和mutual reachability。
 
@@ -25,7 +68,7 @@ import { Algs4DirectedGraphModelMap} from "@/components/mdx/algorithms-4e/diagra
 
 ## 4.2.1 Digraph representation：edge只进入from的adjacency list
 
-有向图表示（，digraph representation）与4.1 Graph相似，但 `addEdge(v,w)` 只写 `adj[v]`：
+有向图表示（digraph representation）与4.1 Graph相似，但 `addEdge(v,w)` 只写 `adj[v]`：
 
 ```java
 public void addEdge(int v, int w) {
@@ -65,7 +108,7 @@ Reverse是本节的核心变换：`w reachable from v in G` 等价于 `v reachab
 
 ## 4.2.2 Directed reachability：只沿outgoing edges
 
-有向可达性（，directed reachability）可直接复用DFS，但必须使用Digraph的outgoing adj：
+有向可达性（directed reachability）可直接复用DFS，但必须使用Digraph的outgoing adj：
 
 ```java
 private void dfs(Digraph G, int v) {
@@ -76,11 +119,9 @@ private void dfs(Digraph G, int v) {
 }
 ```
 
-
 Single-source `marked[w]` 回答source到w；它不回答w到source。后者应在reverse(G)从source运行DFS，或在G从w运行DFS。Strong connectivity正是两个方向都true。
 
 Multi-source DirectedDFS接受sources iterable，对每个尚未marked source启动同一DFS；最终marked set是所有source reachability sets的union。它适合正则表达式NFA中的current states、multiple entry points或contagion sources。
-
 
 DFS只进入每个reachable vertex一次并scan其outgoing list，whole digraph worst：
 
@@ -92,10 +133,9 @@ $$
 
 ## 4.2.3 Cycles and DAGs：onStack区分back edge与finished edge
 
-环与有向无环图（cycles and DAGs）需要比marked更多的信息。Directed cycle是沿arrows回到start的nonempty path；DAG（，directed acyclic graph）允许tasks按依赖顺序线性安排。
+环与有向无环图（cycles and DAGs）需要比marked更多的信息。Directed cycle是沿arrows回到start的nonempty path；DAG（directed acyclic graph）允许tasks按依赖顺序线性安排。
 
 仅看到edge指向marked vertex不能判cycle。Marked vertex可能早已完成，edge只是cross/forward edge。DirectedCycle额外维护 `onStack[v]`：vertex enter设true，所有descendants完成后设false；edge指向onStack vertex才是back edge。
-
 
 ```java
 private void dfs(Digraph G, int v) {
@@ -119,7 +159,6 @@ private void dfs(Digraph G, int v) {
 
 Cycle certificate应首尾相同，每个consecutive pair是actual directed edge，intermediate vertices不重复。`onStack`是当前active recursion path，不是“访问过”；漏掉return时clear会把finished subtree错当active ancestor。
 
-
 ## 4.2.4 DFS orders：enter、finish与reverse finish
 
 DepthFirstOrder在DFS生命周期的三个时点记录vertex：
@@ -128,19 +167,17 @@ DepthFirstOrder在DFS生命周期的三个时点记录vertex：
 - Postorder：所有out-neighbors完成后enqueue。
 - Reverse postorder：把postorder反转。
 
-
 Postorder反映“descendants先完成，ancestor后完成”。在DAG中，若有edge \(v\to w\)，DFS要么由v进入w并让w先finish，要么w已在其他search中finish；v不会在w仍active时由edge回到w，否则存在cycle。因此reverse post让v排在w之前。
 
 Pre/post arrays还支持constant-time interval reasoning：在DFS tree中，ancestor的pre早且post晚。不过general digraph edge classification需结合tree structure，不能只看一个order list。
 
 ## 4.2.5 Topological order：所有arrows都向前
 
-拓扑顺序（，topological order）是dependency schedule。若rank记录position，certificate是：
+拓扑顺序（topological order）是dependency schedule。若rank记录position，certificate是：
 
 $$
 \forall(v\to w)\in E,\quad rank(v)<rank(w)
 $$
-
 
 关键定理有两部分：
 
@@ -153,10 +190,9 @@ Official `Topological`先运行DirectedCycle；无cycle才计算DepthFirstOrder.
 
 Queue-based Kahn algorithm是另一证书：初始化所有indegrees，将zero-indegree sources入queue，逐个remove并decrement outgoing destinations；若最终processed count小于V，remaining subgraph含cycle。它同样linear，并适合显式追踪ready tasks。
 
-
 ## 4.2.6 Strong connectivity：mutual reachability的equivalence classes
 
-强连通性（，strong connectivity）要求两个方向都可达：
+强连通性（strong connectivity）要求两个方向都可达：
 
 $$
 v\sim w
@@ -171,7 +207,6 @@ Kosaraju-Sharir algorithm只需两轮DFS：
 1. 在reverse(G)上计算reverse postorder。
 2. 按该order在G上对每个unmarked vertex运行DFS；每次search得到一个SCC并赋同一id。
 
-
 为什么first-pass order重要？把每个SCC收缩为kernel DAG。Reverse graph把kernel arrows反向；其reverse postorder让第二遍优先从original kernel的sink-side component启动，该DFS不会越过cross edge进入尚未处理component，因此一次search恰好封闭一个SCC。随意用preorder没有这一保证。
 
 Total work是两次DFS加一次reverse：
@@ -185,7 +220,6 @@ $$
 ## 4.2.7 Kernel DAG：先压缩cycles，再分析global flow
 
 将每个SCC contraction为single vertex，保留不同components之间的arrows并deduplicate，得到kernel DAG（condensation graph）。它必定acyclic：若components间形成cycle，cycle上components彼此可达，本应合并为一个SCC。
-
 
 Kernel DAG把local cyclic behavior与global one-way flow分开。可在其上做topological schedule、source/sink analysis、2-SAT assignment或reachable-core reasoning。任意original path映射成component path；同component内部可自由mutually reach。
 
@@ -207,13 +241,92 @@ public boolean reachable(int v, int w) {
 }
 ```
 
-
 Preprocessing timeTheta(V(V+E))、spaceTheta(V squared)，之后query constant。它适合static medium graph与大量queries；large sparse graph若queries少，按需DFS更节省。Dynamic edge updates会使closure maintenance复杂，不能继续假设一次build永久有效。
 
 Closure certificate包含reflexive reachability、每条original edge可达、transitivity：若v可达w且w可达x，则v可达x。SCC在closure matrix中表现为互相全true的diagonal blocks。
 
 ## 统一验收：每增加一种state就增加一种certificate
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“4.2 · Directed Graphs”的两个最小情境间切换，再逐项选择正式概念。预测“DFS/BFS、拓扑排序与 Kosaraju-Sharir SCC 都可在线性 Θ(V+E) 时间完成”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <DirectedGraphsModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存原图/反向图、marked、onStack、edgeTo、逆后序、component id 与可达矩阵预言机，并检查“拓扑序要求每条边 v→w 都满足 order(v) 小于 order(w)；同一 SCC 内顶点两两可达”仍然成立。
+
+    <DirectedGraphsTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“检测有向环时递归返回后未清除 onStack，或 SCC 第一遍没有在反向图上取逆后序”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <DirectedGraphsCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="4.2 · Directed Graphs 的首要反例">
+  检测有向环时递归返回后未清除 onStack，或 SCC
+  第一遍没有在反向图上取逆后序。它会破坏“拓扑序要求每条边 v→w 都满足 order(v)
+  小于 order(w)；同一 SCC
+  内顶点两两可达”；应从原图/反向图、marked、onStack、edgeTo、逆后序、component
+  id 与可达矩阵预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “DFS/BFS、拓扑排序与 Kosaraju-Sharir SCC 都可在线性 Θ(V+E)
+  时间完成”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“4.2 · Directed
+  Graphs”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对原图/反向图、marked、onStack、edgeTo、逆后序、component
+  id 与可达矩阵预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **有向图**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **有向图表示**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **有向可达性**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **环与有向无环图**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **拓扑顺序**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **强连通性**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“4.2 · Directed Graphs”作者页为分母，逐项定位
+  有向图、有向图表示、有向可达性、环与有向无环图、拓扑顺序、强连通性。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“DFS/BFS、拓扑排序与 Kosaraju-Sharir SCC 都可在线性 Θ(V+E) 时间完成”不是孤立结论？
+
+<Answer>
+  选择“拓扑前提”的输入：加入边 0→1、1→2、2→0。按 建立有向邻接 → 执行可达搜索 →
+  检测回边或生成逆后序 → 分配 SCC → 验证拓扑或互达
+  保存状态，并用“检测到有向环后拒绝输出拓扑序”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“检测有向环时递归返回后未清除 onStack，或 SCC 第一遍没有在反向图上取逆后序”已经修复？
+
+<Answer>
+  保存原图/反向图、marked、onStack、edgeTo、逆后序、component id
+  与可达矩阵预言机作为正常基线；注入该故障并标记第一个违反“拓扑序要求每条边 v→w
+  都满足 order(v) 小于 order(w)；同一 SCC
+  内顶点两两可达”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -226,7 +339,9 @@ Closure certificate包含reflexive reachability、每条original edge可达、tr
 7. Kosaraju先在reverse graph定order，再在original graph逐DFS划分SCC，整体linear。
 8. SCC contraction形成kernel DAG；transitive closure则用quadratic space换constant reachability query。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/42digraph/"
+/>

@@ -1,28 +1,70 @@
 ---
-title: "3.2 Binary Search Trees：路径查找、有序操作与Hibbard删除"
+title: 3.2 Binary Search Trees：路径查找、有序操作与Hibbard删除
 type: B
-section: "查找"
+section: 查找
 order: 11
-description: "按官方3.2重建BST ordering与subtree-size不变量、get/put、随机与退化shape分析、floor/rank/select/range、deleteMin及Hibbard deletion。"
+description: 3.2 · Binary Search Trees覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/32bst/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-3.2
 ---
 
+import {
+  BinarySearchTreesModelLab,
+  BinarySearchTreesTraceLab,
+  BinarySearchTreesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/binary-search-trees";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3.2 · Binary Search Trees”如何沿根到键的路径实现查找、插入、有序操作、范围查询与 Hibbard 删除
+- 能逐项核对 二叉搜索树、BST查找与插入、BST分析、有序操作、BST删除，并区分作者站内容与本页独立补充
+- 能按“rank(x)=size(left(x))+rank(x.right,key)（当 key>x.key）”手算一个最小输入，逐步检查“每个节点左子树键更小、右子树键更大，size=1+size(left)+size(right)”
+- 能注入“Hibbard 删除后只修复局部链接却没有自底向上重算 size”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3·2 · Binary Search Trees”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/32bst/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“3·2 · Binary Search Trees”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“3·2 · Binary Search Trees”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：3.2 · Binary Search Trees
+
+- **1. 二叉搜索树**：在本页通过“从根比较键”连接解释、交互状态和练习验收。
+- **2. BST查找与插入**：在本页通过“选择左或右子树”连接解释、交互状态和练习验收。
+- **3. BST分析**：在本页通过“执行更新或删除”连接解释、交互状态和练习验收。
+- **4. 有序操作**：在本页通过“重算子树大小”连接解释、交互状态和练习验收。
+- **5. BST删除**：在本页通过“核对中序与 rank”连接解释、交互状态和练习验收。
 
 ## 从“有序数组插入太贵”开始
 
-二叉搜索树（，binary search trees）尝试结合linked insertion的灵活性与ordered search的方向性。它不搬移整段array；每次comparison决定向left还是right，只修改一条root-to-null path上的links。
+二叉搜索树（binary search trees）尝试结合linked insertion的灵活性与ordered search的方向性。它不搬移整段array；每次comparison决定向left还是right，只修改一条root-to-null path上的links。
 
 先预测按A、B、C、D顺序插入是否得到balanced tree。不会。每个新key都大于当前所有nodes，只沿right links下降，BST退化为linked list；search与put从logarithmic直觉退成linear。普通BST的性能由shape决定，而shape又由insertion order决定。
 
 官方3.2按 **Basic implementation、Analysis、Order-based methods and deletion** 展开。所有operation的统一成本参数不是N本身，而是height h；所有ordered operation的统一支点是node的subtree `size`。
 
-
 ## 3.2.1 BST invariant与node anatomy
 
-BST不变量（）是全subtree约束，不只是“left child小、right child大”。若root为10、left child为5，但5的right descendant为12，parent-child两条edge看似合理，整棵树仍不是BST。
+BST不变量是全subtree约束，不只是“left child小、right child大”。若root为10、left child为5，但5的right descendant为12，parent-child两条edge看似合理，整棵树仍不是BST。
 
 Official node保存key、value、left、right、size：
 
@@ -46,7 +88,7 @@ private int size(Node x) {
 }
 ```
 
-子树大小（，subtree size）必须满足：
+子树大小（subtree size）必须满足：
 
 $$
 size(x)=1+size(x.left)+size(x.right)
@@ -78,14 +120,13 @@ private Node put(Node x, Key key, Value val) {
 }
 ```
 
-
 Recursive method返回subtree root至关重要：caller必须把结果重新赋给 `x.left` 或 `x.right`，因为insert空link、delete或rotation都可能改变child root。Public put仍遵守3.1的null contract：null key拒绝，null value转delete。
 
 Correctness用recursive invariant证明。进入call时x所代表subtree是BST；comparison只递归唯一可能包含key的一侧；recursive result仍是BST且keys范围未跨越x；接回后重算size，整个subtree恢复两类invariant。
 
 ## 3.2.3 BST analysis：随机平均不等于worst guarantee
 
-BST分析（，BST analysis）不能只说“binary所以log N”。对N个random distinct keys或random insertion order，官方命题给search hit、insert和miss平均约：
+BST分析（BST analysis）不能只说“binary所以log N”。对N个random distinct keys或random insertion order，官方命题给search hit、insert和miss平均约：
 
 $$
 \mathbb E[C_N]\sim 2\ln N\approx1.39\lg N
@@ -97,15 +138,13 @@ $$
 \lfloor\lg N\rfloor\le h\le N-1
 $$
 
-
 同一key set产生的shape由insertion order决定。Random assumption必须来自真实input model或显式shuffle；按timestamp、自增ID、sorted file导入常会形成坏树。下一节balanced search trees加入结构修复，提供height guarantee。
 
 Recursive implementation额外stack与height同阶；退化tree不仅慢，还可能stack overflow。Iterative get/put可避免call stack，却不能改善comparison path，必须区分implementation safety与data-structure balance。
 
-
 ## 3.2.4 Order-based methods：沿path保留candidate
 
-有序操作（，order-based methods）都只访问可能包含答案的paths/subtrees。
+有序操作（order-based methods）都只访问可能包含答案的paths/subtrees。
 
 Minimum沿left links到null-left node，maximum沿right。Floor query若小于x.key，只能在left；若大于x.key，先去right找更大但仍不超过query的candidate，right无解才退回x。Ceiling左右对称。
 
@@ -120,7 +159,6 @@ private Node floor(Node x, Key key) {
 }
 ```
 
-
 Rank与select利用left size t：
 
 $$
@@ -128,7 +166,6 @@ rank(x.key)=size(x.left)
 $$
 
 Select(k)若 `k<t` 去left；若 `k==t` 返回x；若 `k>t` 去right并把local rank改为 `k-t-1`。Rank(query)向right时必须累加 `1+size(left)`，因为这些keys都严格小于query。
-
 
 Inverse certificate是：
 
@@ -142,9 +179,9 @@ Stale subtree size最容易被这组checks捕获。Floor/ceiling还需测below-m
 
 ## 3.2.5 BST deletion：零/一子节点与Hibbard两子节点
 
-BST删除（，BST deletion）对零或一child直接返回non-null child。DeleteMin沿left到 `x.left==null`，返回x.right替代x，因为right中的所有keys仍落在parent允许范围。
+BST删除（BST deletion）对零或一child直接返回non-null child。DeleteMin沿left到 `x.left==null`，返回x.right替代x，因为right中的所有keys仍落在parent允许范围。
 
-两children时使用Hibbard deletion（）：
+两children时使用Hibbard deletion：
 
 ```java
 private Node delete(Node x, Key key) {
@@ -165,16 +202,13 @@ private Node delete(Node x, Key key) {
 }
 ```
 
-
 Successor是right subtree minimum，没有left child；移除它后，其right child接到原位置。Successor key大于old left所有keys、又不大于old right其余keys，因此接回两侧保持order。Size必须从successor新root开始重算，并由ancestor return path继续向上。
 
 Hibbard deletion总选successor而不随机在successor/predecessor间对称选择，长期random delete/insert会让tree产生偏斜；它正确但不提供balance guarantee。Deletion tests要覆盖leaf、only-left、only-right、two-child、root、missing与重复delete。
 
-
 ## 3.2.6 Inorder与range search：order自然流出
 
 Inorder traversal先left、再node、再right，由BST invariant直接得到ascending keys。Range `[lo,hi]` 可prune：若lo小于x.key才需探left；若x在range就enqueue；若hi大于x.key才需探right。
-
 
 ```java
 private void keys(Node x, Queue<Key> out, Key lo, Key hi) {
@@ -193,6 +227,81 @@ Certification至少包含三项：global min/max bounds验证isBST；recursive s
 
 ## 统一验收：把一条path和整棵tree同时核查
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“3.2 · Binary Search Trees”的两个最小情境间切换，再逐项选择正式概念。预测“rank(x)=size(left(x))+rank(x.right,key)（当 key>x.key）”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <BinarySearchTreesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存搜索路径、节点键值、左右链接、子树 size、中序序列与有序数组预言机，并检查“每个节点左子树键更小、右子树键更大，size=1+size(left)+size(right)”仍然成立。
+
+    <BinarySearchTreesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“Hibbard 删除后只修复局部链接却没有自底向上重算 size”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <BinarySearchTreesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="3.2 · Binary Search Trees 的首要反例">
+  Hibbard 删除后只修复局部链接却没有自底向上重算
+  size。它会破坏“每个节点左子树键更小、右子树键更大，size=1+size(left)+size(right)”；应从搜索路径、节点键值、左右链接、子树
+  size、中序序列与有序数组预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “rank(x)=size(left(x))+rank(x.right,key)（当 key>x.key）”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“3.2 · Binary Search
+  Trees”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对搜索路径、节点键值、左右链接、子树
+  size、中序序列与有序数组预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **二叉搜索树**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **BST查找与插入**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **BST分析**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **有序操作**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **BST删除**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“3.2 · Binary Search Trees”作者页为分母，逐项定位
+  二叉搜索树、BST查找与插入、BST分析、有序操作、BST删除。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“rank(x)=size(left(x))+rank(x.right,key)（当 key>x.key）”不是孤立结论？
+
+<Answer>
+  选择“路径查找”的输入：在键 [S,E,X,A,R,C,H] 构成的 BST 中查找 R。按 从根比较键
+  → 选择左或右子树 → 执行更新或删除 → 重算子树大小 → 核对中序与 rank
+  保存状态，并用“每次比较只排除一侧子树，轨迹可由根到 R
+  重放”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“Hibbard 删除后只修复局部链接却没有自底向上重算 size”已经修复？
+
+<Answer>
+  保存搜索路径、节点键值、左右链接、子树
+  size、中序序列与有序数组预言机作为正常基线；注入该故障并标记第一个违反“每个节点左子树键更小、右子树键更大，size=1+size(left)+size(right)”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -204,7 +313,9 @@ Certification至少包含三项：global min/max bounds验证isBST；recursive s
 6. Inorder自然输出ascending keys，range traversal可按lo/hi剪枝。
 7. isBST、size consistency、rank/select inverse与reference map共同组成可靠验收。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/32bst/"
+/>

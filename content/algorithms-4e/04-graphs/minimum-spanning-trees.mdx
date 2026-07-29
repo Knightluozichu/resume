@@ -1,21 +1,64 @@
 ---
-title: "4.3 Minimum Spanning Trees：切分定理、Prim、Kruskal与最优性证书"
+title: 4.3 Minimum Spanning Trees：切分定理、Prim、Kruskal与最优性证书
 type: B
-section: "图"
+section: 图
 order: 17
-description: "按官方4.3重建加权无向图与Edge API、MST基本原理、切分定理和交换证明、Lazy/Eager Prim、Kruskal、复杂度及最优性认证。"
+description: 4.3 · Minimum Spanning Trees覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/43mst/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-4.3
 ---
 
-import { Algs4WeightedGraphModelMap} from "@/components/mdx/algorithms-4e/diagrams/minimum-spanning-trees";
+import {
+  MinimumSpanningTreesModelLab,
+  MinimumSpanningTreesTraceLab,
+  MinimumSpanningTreesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/minimum-spanning-trees";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import { Algs4WeightedGraphModelMap } from "@/components/mdx/algorithms-4e/diagrams/minimum-spanning-trees";
 
+<Objectives>
+
+- 能解释“4.3 · Minimum Spanning Trees”如何用切分定理统一 Lazy/Eager Prim 与 Kruskal，并给出最优性可检查证书
+- 能逐项核对 最小生成树、加权无向图、切分定理、Prim算法、Kruskal算法、最小生成树最优性，并区分作者站内容与本页独立补充
+- 能按“Kruskal 时间 O(E log E)；带索引堆的 Eager Prim 时间 O(E log V)”手算一个最小输入，逐步检查“已选边始终无环；对每个选择步骤，所取边是某个尊重当前森林切分的最轻跨边”
+- 能注入“没有处理相同权重的合法多解，或 Eager Prim 保留过期 crossing edge 却未 decreaseKey”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“4·3 · Minimum Spanning Trees”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/43mst/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“4·3 · Minimum Spanning Trees”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“4·3 · Minimum Spanning Trees”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：4.3 · Minimum Spanning Trees
+
+- **1. 最小生成树**：在本页通过“建立加权无向图”连接解释、交互状态和练习验收。
+- **2. 加权无向图**：在本页通过“形成尊重森林的切分”连接解释、交互状态和练习验收。
+- **3. 切分定理**：在本页通过“选择最轻跨边”连接解释、交互状态和练习验收。
+- **4. Prim算法**：在本页通过“合并分量”连接解释、交互状态和练习验收。
+- **5. Kruskal算法**：在本页通过“验证树与总权重”连接解释、交互状态和练习验收。
+- **6. 最小生成树最优性**：在本页通过“建立加权无向图”连接解释、交互状态和练习验收。
 
 ## 从“连通所有点，但不要多花一条边”开始
 
-铺设光纤、电网、道路或芯片布线时，常见目标不是让任意两点都有直接连接，而是从已有候选连接中选出一组边：所有站点互相可达、没有冗余环路，并让总成本最低。这就是最小生成树（，minimum spanning trees）问题。
+铺设光纤、电网、道路或芯片布线时，常见目标不是让任意两点都有直接连接，而是从已有候选连接中选出一组边：所有站点互相可达、没有冗余环路，并让总成本最低。这就是最小生成树（minimum spanning trees）问题。
 
 先预测：若每次都拿全图中当前最轻、且尚未选过的edge，最终一定是MST吗？不一定。轻边也可能在已连接区域内部形成cycle；算法必须说明当前edge跨越了哪一个cut，或用Union-Find证明它连接两个不同components。MST的greedy choice不是“看到小就拿”，而是“在明确的feasibility invariant下拿安全边”。
 
@@ -25,7 +68,7 @@ import { Algs4WeightedGraphModelMap} from "@/components/mdx/algorithms-4e/diagra
 
 ## 4.3.1 Edge-weighted graphs：一条edge同时属于两个adjacency lists
 
-加权无向图（，edge-weighted graphs）由vertices、unordered endpoint pairs与weights组成。`Edge`必须回答三个问题：任取一个endpoint、给定一个endpoint返回另一个、按weight比较。
+加权无向图（edge-weighted graphs）由vertices、unordered endpoint pairs与weights组成。`Edge`必须回答三个问题：任取一个endpoint、给定一个endpoint返回另一个、按weight比较。
 
 ```java
 public final class Edge implements Comparable<Edge> {
@@ -94,9 +137,9 @@ $$
 
 ## 4.3.3 Cut property：安全边必须跨过尊重当前forest的cut
 
-切分（，cut）将vertices分为S与V-S。一个endpoint在S、另一个在V-S的edge称跨切边（，crossing edge）。
+切分（cut）将vertices分为S与V-S。一个endpoint在S、另一个在V-S的edge称跨切边（crossing edge）。
 
-若当前已选edges集合A是一片forest，一个cut“尊重A”表示A中没有edge跨过该cut。切分定理（，cut property）给出generic greedy choice：
+若当前已选edges集合A是一片forest，一个cut“尊重A”表示A中没有edge跨过该cut。切分定理（cut property）给出generic greedy choice：
 
 $$
 e=\operatorname*{arg\,min}_{x\in\delta(S)}w(x),\quad A\cap\delta(S)=\varnothing
@@ -105,7 +148,6 @@ A\cup\{e\}\text{ is contained in an MST}
 $$
 
 其中 $\delta(S)$ 是cut的crossing-edge set。若weights distinct，minimum crossing edge不仅safe，而且属于唯一MST。
-
 
 切分定理不能省略“尊重A”。若cut已被A中的edge跨过，再加一个minimum crossing edge可能把A闭合成cycle。算法每轮真正维护的是invariant：已选A无cycle，并且存在某棵MST包含A。
 
@@ -119,7 +161,6 @@ w(T')=w(T)+w(e)-w(f)\le w(T)
 $$
 
 T本来最优，所以T'同样最优，并包含 $A\cup\{e\}$。这就是exchange argument：每一步greedy choice都能交换进某个global optimum，而不破坏此前选择。
-
 
 若 $w(e)\lt w(f)$，任何包含f而不含e的tree都可被strictly improved；这也解释了distinct weights为何导出unique MST。若weights相等，交换后权重不变，可能存在多棵MST，但算法返回其中任意一棵都正确。
 
@@ -136,7 +177,7 @@ Prim固定“tree vertices与non-tree vertices”这一动态cut；Kruskal让当
 
 ## 4.3.5 Lazy Prim：允许失效边留在priority queue
 
-Prim算法（，Prim's algorithm）维护marked set S，即当前MST tree的vertices。所有一端marked、一端unmarked的edges跨越cut $(S,V-S)$。Lazy implementation把每次新vertex的eligible incident edges全部压入MinPQ：
+Prim算法（Prim's algorithm）维护marked set S，即当前MST tree的vertices。所有一端marked、一端unmarked的edges跨越cut $(S,V-S)$。Lazy implementation把每次新vertex的eligible incident edges全部压入MinPQ：
 
 ```java
 private void prim(EdgeWeightedGraph G, int s) {
@@ -161,9 +202,7 @@ private void scan(EdgeWeightedGraph G, int v) {
 
 “Lazy”指失效处理推迟到 `delMin`：edge插入时跨cut，之后它的两个endpoints可能都进入tree，edge便不再crossing，但仍留在PQ。弹出时若两端marked，必须discard；否则它是当前cut的minimum crossing edge，由cut property安全。
 
-
 每条edge最多插入一次、删除一次，PQ最多 $\Theta(E)$，time为 $O(E\log E)$，space为 $O(E)$。对connected graph，accepted edges恰好V-1；若PQ提前为空而数量不足，输入不连通，不能把partial tree报告成MST。
-
 
 ## 4.3.6 Eager Prim：每个non-tree vertex只保留最佳连接
 
@@ -187,14 +226,13 @@ private void scan(EdgeWeightedGraph G, int v) {
 
 `distTo`不是source-to-vertex path distance；它只是一条从当前tree跨cut连接w的edge weight。每次 `delMin` 取到global best vertex connection，对应edge就是current cut的minimum crossing edge。Vertex进入tree后，其key永久settled。
 
-
 每条edge被scan常数次，最多触发一次successful decrease per direction；binary heap的insert、decreaseKey、delMin均 $\log V$，因此time为 $O(E\log V)$，extra space为 $O(V)$。它与Lazy Prim得到相同MST weight；equal weights时具体tree可能因tie order不同。
 
 Eager状态的验收重点不是PQ长短，而是对每个unmarked w验证：`edgeTo[w]`确实跨当前cut，并且其weight等于所有从marked side到w edges的minimum。若scan漏边或decreaseKey方向写反，算法可能仍输出spanning tree，却失去MST optimality。
 
 ## 4.3.7 Kruskal：按global weight order合并components
 
-Kruskal算法（，Kruskal's algorithm）不增长单棵tree，而是让forest components并行合并。先将所有edges按weight放入MinPQ或排序，再用Union-Find判定两个endpoints是否已connected：
+Kruskal算法（Kruskal's algorithm）不增长单棵tree，而是让forest components并行合并。先将所有edges按weight放入MinPQ或排序，再用Union-Find判定两个endpoints是否已connected：
 
 ```java
 MinPQ<Edge> pq = new MinPQ<>();
@@ -213,20 +251,17 @@ while (!pq.isEmpty() && mst.size() < G.V() - 1) {
 
 若v与w属于不同components，取v所在component为S。当前forest没有edge跨这个cut，否则两components早已connected；由于所有更轻edges已处理，e是尚可用crossing edges中的minimum，所以cut property成立。若两端已connected，加入e会在该component内形成cycle，必须skip。
 
-
 Sorting dominates，time为 $O(E\log E)$；weighted quick-union with path compression提供近常数amortized connectivity operations，space为 $O(V+E)$（若edges已经按序流入，可降到forest与UF storage）。Kruskal特别适合edges可统一排序、graph sparse或需要观察component merging的场景。
-
 
 ## 4.3.8 三种实现的成本与选择
 
 三种算法共享同一个correctness theorem，但保存候选集的方式不同：
 
-| algorithm | frontier state | stale candidate | main bound | extra space |
-|---|---|---|---|---|
-| Lazy Prim | 所有见过的crossing edges | 留到delMin丢弃 | $O(E\log E)$ | $O(E)$ |
-| Eager Prim | 每个non-tree vertex一个best edge | decreaseKey替换 | $O(E\log V)$ | $O(V)$ |
-| Kruskal | 全部edges按global weight | UF拒绝成环 | $O(E\log E)$ | $O(V+E)$ |
-
+| algorithm  | frontier state                   | stale candidate | main bound   | extra space |
+| ---------- | -------------------------------- | --------------- | ------------ | ----------- |
+| Lazy Prim  | 所有见过的crossing edges         | 留到delMin丢弃  | $O(E\log E)$ | $O(E)$      |
+| Eager Prim | 每个non-tree vertex一个best edge | decreaseKey替换 | $O(E\log V)$ | $O(V)$      |
+| Kruskal    | 全部edges按global weight         | UF拒绝成环      | $O(E\log E)$ | $O(V+E)$    |
 
 因为simple connected graph满足 $E\le V^2$，所以 $\log E\le 2\log V$，两个log bounds在asymptotic层面相近；实际差别来自PQ size、cache behavior、edge input形式与是否已有排序。Dense graph也可用array-based eager Prim做到 $O(V^2)$，避免heap overhead。
 
@@ -234,7 +269,7 @@ Sorting dominates，time为 $O(E\log E)$；weighted quick-union with path compre
 
 ## 4.3.9 MST optimality：不信任构造过程，只检查certificate
 
-MST最优性（，MST optimality）需要分两层：先证明是spanning tree，再证明它minimum。
+MST最优性（MST optimality）需要分两层：先证明是spanning tree，再证明它minimum。
 
 结构检查：
 
@@ -250,13 +285,89 @@ $$
 w(e)=\min\{w(f): f\text{ crosses the cut induced by }T-e\}
 $$
 
-
 这个certificate与构造算法独立：即使Prim/Kruskal实现内部state错了，validator仍可发现cycle、disconnection、weight mismatch或nonoptimal replacement。Naive validation对每条tree edge扫描所有graph edges，约 $O(VE)$，适合测试和小图；生产级可用path maximum queries等技术加速。
 
 Cut certificate也解释edge sensitivity。若降低non-tree edge f的weight，它与tree path形成cycle；当f比该path上的maximum-weight tree edge更轻时，应交换进入MST。若提高tree edge e的weight，应在删除e形成的cut上重新寻找minimum crossing replacement。
 
 ## 4.3.10 手工运行与验收路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“4.3 · Minimum Spanning Trees”的两个最小情境间切换，再逐项选择正式概念。预测“Kruskal 时间 O(E log E)；带索引堆的 Eager Prim 时间 O(E log V)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <MinimumSpanningTreesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存加权边集、切分、候选队列、森林分量、总权重、环检查与逐边 cut optimality，并检查“已选边始终无环；对每个选择步骤，所取边是某个尊重当前森林切分的最轻跨边”仍然成立。
+
+    <MinimumSpanningTreesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“没有处理相同权重的合法多解，或 Eager Prim 保留过期 crossing edge 却未 decreaseKey”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <MinimumSpanningTreesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="4.3 · Minimum Spanning Trees 的首要反例">
+  没有处理相同权重的合法多解，或 Eager Prim 保留过期 crossing edge 却未
+  decreaseKey。它会破坏“已选边始终无环；对每个选择步骤，所取边是某个尊重当前森林切分的最轻跨边”；应从加权边集、切分、候选队列、森林分量、总权重、环检查与逐边
+  cut optimality中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “Kruskal 时间 O(E log E)；带索引堆的 Eager Prim 时间 O(E log
+  V)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“4.3 · Minimum Spanning
+  Trees”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对加权边集、切分、候选队列、森林分量、总权重、环检查与逐边
+  cut optimality。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **最小生成树**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **加权无向图**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **切分定理**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **Prim算法**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **Kruskal算法**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **最小生成树最优性**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“4.3 · Minimum Spanning Trees”作者页为分母，逐项定位
+  最小生成树、加权无向图、切分定理、Prim算法、Kruskal算法、最小生成树最优性。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“Kruskal 时间 O(E log E)；带索引堆的 Eager Prim 时间 O(E log V)”不是孤立结论？
+
+<Answer>
+  选择“切分安全边”的输入：切分 A/B 与 C/D 的跨边权重为 2、5、7。按
+  建立加权无向图 → 形成尊重森林的切分 → 选择最轻跨边 → 合并分量 → 验证树与总权重
+  保存状态，并用“权重 2 的最轻跨边可安全加入某棵
+  MST”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“没有处理相同权重的合法多解，或 Eager Prim 保留过期 crossing edge 却未 decreaseKey”已经修复？
+
+<Answer>
+  保存加权边集、切分、候选队列、森林分量、总权重、环检查与逐边 cut
+  optimality作为正常基线；注入该故障并标记第一个违反“已选边始终无环；对每个选择步骤，所取边是某个尊重当前森林切分的最轻跨边”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -267,4 +378,9 @@ Cut certificate也解释edge sensitivity。若降低non-tree edge f的weight，�
 - Kruskal's algorithm按global weight order扫描，并用Union-Find拒绝same-component cycle edge。
 - MST optimality不能只看edge count或total weight；应先验证spanning-tree structure，再验证每条tree edge的cut minimum certificate。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/43mst/"
+/>

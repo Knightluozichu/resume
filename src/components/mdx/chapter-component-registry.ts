@@ -553,40 +553,301 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ToolDesignEvidenceLab: module0.ToolDesignEvidenceLab,
     } as ChapterMdxComponents;
   },
-  "algorithms-4e/04-graphs/directed-graphs": async () => {
+  "algorithms-4e/01-fundamentals/analysis-of-algorithms": async () => {
     const module0 =
-      await import("@/components/mdx/algorithms-4e/diagrams/directed-graphs");
+      await import("@/components/mdx/algorithms-4e/v2/analysis-of-algorithms");
     return {
-      Algs4DirectedGraphModelMap: module0.Algs4DirectedGraphModelMap,
+      AnalysisOfAlgorithmsModelLab: module0.AnalysisOfAlgorithmsModelLab,
+      AnalysisOfAlgorithmsTraceLab: module0.AnalysisOfAlgorithmsTraceLab,
+      AnalysisOfAlgorithmsCounterexampleLab:
+        module0.AnalysisOfAlgorithmsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/01-fundamentals/bags-queues-stacks": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/bags-queues-stacks");
+    return {
+      BagsQueuesStacksModelLab: module0.BagsQueuesStacksModelLab,
+      BagsQueuesStacksTraceLab: module0.BagsQueuesStacksTraceLab,
+      BagsQueuesStacksCounterexampleLab:
+        module0.BagsQueuesStacksCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/01-fundamentals/basic-programming-model": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/basic-programming-model");
+    return {
+      BasicProgrammingModelModelLab: module0.BasicProgrammingModelModelLab,
+      BasicProgrammingModelTraceLab: module0.BasicProgrammingModelTraceLab,
+      BasicProgrammingModelCounterexampleLab:
+        module0.BasicProgrammingModelCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/01-fundamentals/data-abstraction": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/data-abstraction");
+    return {
+      DataAbstractionModelLab: module0.DataAbstractionModelLab,
+      DataAbstractionTraceLab: module0.DataAbstractionTraceLab,
+      DataAbstractionCounterexampleLab:
+        module0.DataAbstractionCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/01-fundamentals/union-find": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/union-find");
+    return {
+      UnionFindModelLab: module0.UnionFindModelLab,
+      UnionFindTraceLab: module0.UnionFindTraceLab,
+      UnionFindCounterexampleLab: module0.UnionFindCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/02-sorting/elementary-sorts": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/elementary-sorts");
+    return {
+      ElementarySortsModelLab: module0.ElementarySortsModelLab,
+      ElementarySortsTraceLab: module0.ElementarySortsTraceLab,
+      ElementarySortsCounterexampleLab:
+        module0.ElementarySortsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/02-sorting/mergesort": async () => {
+    const module0 = await import("@/components/mdx/algorithms-4e/v2/mergesort");
+    return {
+      MergesortModelLab: module0.MergesortModelLab,
+      MergesortTraceLab: module0.MergesortTraceLab,
+      MergesortCounterexampleLab: module0.MergesortCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/02-sorting/priority-queues": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/priority-queues");
+    return {
+      PriorityQueuesModelLab: module0.PriorityQueuesModelLab,
+      PriorityQueuesTraceLab: module0.PriorityQueuesTraceLab,
+      PriorityQueuesCounterexampleLab: module0.PriorityQueuesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/02-sorting/quicksort": async () => {
+    const module0 = await import("@/components/mdx/algorithms-4e/v2/quicksort");
+    return {
+      QuicksortModelLab: module0.QuicksortModelLab,
+      QuicksortTraceLab: module0.QuicksortTraceLab,
+      QuicksortCounterexampleLab: module0.QuicksortCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/02-sorting/sorting-applications": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/sorting-applications");
+    return {
+      SortingApplicationsModelLab: module0.SortingApplicationsModelLab,
+      SortingApplicationsTraceLab: module0.SortingApplicationsTraceLab,
+      SortingApplicationsCounterexampleLab:
+        module0.SortingApplicationsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/03-searching/balanced-search-trees": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/balanced-search-trees");
+    return {
+      BalancedSearchTreesModelLab: module0.BalancedSearchTreesModelLab,
+      BalancedSearchTreesTraceLab: module0.BalancedSearchTreesTraceLab,
+      BalancedSearchTreesCounterexampleLab:
+        module0.BalancedSearchTreesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/03-searching/binary-search-trees": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/binary-search-trees");
+    return {
+      BinarySearchTreesModelLab: module0.BinarySearchTreesModelLab,
+      BinarySearchTreesTraceLab: module0.BinarySearchTreesTraceLab,
+      BinarySearchTreesCounterexampleLab:
+        module0.BinarySearchTreesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/03-searching/hash-tables": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/hash-tables");
+    return {
+      HashTablesModelLab: module0.HashTablesModelLab,
+      HashTablesTraceLab: module0.HashTablesTraceLab,
+      HashTablesCounterexampleLab: module0.HashTablesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/03-searching/searching-applications": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/searching-applications");
+    return {
+      SearchingApplicationsModelLab: module0.SearchingApplicationsModelLab,
+      SearchingApplicationsTraceLab: module0.SearchingApplicationsTraceLab,
+      SearchingApplicationsCounterexampleLab:
+        module0.SearchingApplicationsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/03-searching/symbol-tables": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/symbol-tables");
+    return {
+      SymbolTablesModelLab: module0.SymbolTablesModelLab,
+      SymbolTablesTraceLab: module0.SymbolTablesTraceLab,
+      SymbolTablesCounterexampleLab: module0.SymbolTablesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/04-graphs/directed-graphs": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/algorithms-4e/v2/directed-graphs"),
+      import("@/components/mdx/algorithms-4e/diagrams/directed-graphs"),
+    ]);
+    return {
+      DirectedGraphsModelLab: modules[0].DirectedGraphsModelLab,
+      DirectedGraphsTraceLab: modules[0].DirectedGraphsTraceLab,
+      DirectedGraphsCounterexampleLab:
+        modules[0].DirectedGraphsCounterexampleLab,
+      Algs4DirectedGraphModelMap: modules[1].Algs4DirectedGraphModelMap,
     } as ChapterMdxComponents;
   },
   "algorithms-4e/04-graphs/minimum-spanning-trees": async () => {
-    const module0 =
-      await import("@/components/mdx/algorithms-4e/diagrams/minimum-spanning-trees");
+    const modules = await Promise.all([
+      import("@/components/mdx/algorithms-4e/v2/minimum-spanning-trees"),
+      import("@/components/mdx/algorithms-4e/diagrams/minimum-spanning-trees"),
+    ]);
     return {
-      Algs4WeightedGraphModelMap: module0.Algs4WeightedGraphModelMap,
+      MinimumSpanningTreesModelLab: modules[0].MinimumSpanningTreesModelLab,
+      MinimumSpanningTreesTraceLab: modules[0].MinimumSpanningTreesTraceLab,
+      MinimumSpanningTreesCounterexampleLab:
+        modules[0].MinimumSpanningTreesCounterexampleLab,
+      Algs4WeightedGraphModelMap: modules[1].Algs4WeightedGraphModelMap,
     } as ChapterMdxComponents;
   },
   "algorithms-4e/04-graphs/shortest-paths": async () => {
-    const module0 =
-      await import("@/components/mdx/algorithms-4e/diagrams/shortest-paths");
+    const modules = await Promise.all([
+      import("@/components/mdx/algorithms-4e/v2/shortest-paths"),
+      import("@/components/mdx/algorithms-4e/diagrams/shortest-paths"),
+    ]);
     return {
-      Algs4WeightedDigraphModelMap: module0.Algs4WeightedDigraphModelMap,
+      ShortestPathsModelLab: modules[0].ShortestPathsModelLab,
+      ShortestPathsTraceLab: modules[0].ShortestPathsTraceLab,
+      ShortestPathsCounterexampleLab: modules[0].ShortestPathsCounterexampleLab,
+      Algs4WeightedDigraphModelMap: modules[1].Algs4WeightedDigraphModelMap,
     } as ChapterMdxComponents;
   },
   "algorithms-4e/04-graphs/undirected-graphs": async () => {
-    const module0 =
-      await import("@/components/mdx/algorithms-4e/diagrams/undirected-graphs");
+    const modules = await Promise.all([
+      import("@/components/mdx/algorithms-4e/v2/undirected-graphs"),
+      import("@/components/mdx/algorithms-4e/diagrams/undirected-graphs"),
+    ]);
     return {
-      Algs4UndirectedGraphModelMap: module0.Algs4UndirectedGraphModelMap,
-      Algs4DfsApplicationMap: module0.Algs4DfsApplicationMap,
+      UndirectedGraphsModelLab: modules[0].UndirectedGraphsModelLab,
+      UndirectedGraphsTraceLab: modules[0].UndirectedGraphsTraceLab,
+      UndirectedGraphsCounterexampleLab:
+        modules[0].UndirectedGraphsCounterexampleLab,
+      Algs4UndirectedGraphModelMap: modules[1].Algs4UndirectedGraphModelMap,
+      Algs4DfsApplicationMap: modules[1].Algs4DfsApplicationMap,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/05-strings/data-compression": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/data-compression");
+    return {
+      DataCompressionModelLab: module0.DataCompressionModelLab,
+      DataCompressionTraceLab: module0.DataCompressionTraceLab,
+      DataCompressionCounterexampleLab:
+        module0.DataCompressionCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/05-strings/regular-expressions": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/regular-expressions");
+    return {
+      RegularExpressionsModelLab: module0.RegularExpressionsModelLab,
+      RegularExpressionsTraceLab: module0.RegularExpressionsTraceLab,
+      RegularExpressionsCounterexampleLab:
+        module0.RegularExpressionsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/05-strings/string-sorts": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/string-sorts");
+    return {
+      StringSortsModelLab: module0.StringSortsModelLab,
+      StringSortsTraceLab: module0.StringSortsTraceLab,
+      StringSortsCounterexampleLab: module0.StringSortsCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/05-strings/substring-search": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/substring-search");
+    return {
+      SubstringSearchModelLab: module0.SubstringSearchModelLab,
+      SubstringSearchTraceLab: module0.SubstringSearchTraceLab,
+      SubstringSearchCounterexampleLab:
+        module0.SubstringSearchCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/05-strings/tries": async () => {
+    const module0 = await import("@/components/mdx/algorithms-4e/v2/tries");
+    return {
+      TriesModelLab: module0.TriesModelLab,
+      TriesTraceLab: module0.TriesTraceLab,
+      TriesCounterexampleLab: module0.TriesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/06-context/b-trees": async () => {
+    const module0 = await import("@/components/mdx/algorithms-4e/v2/b-trees");
+    return {
+      BTreesModelLab: module0.BTreesModelLab,
+      BTreesTraceLab: module0.BTreesTraceLab,
+      BTreesCounterexampleLab: module0.BTreesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/06-context/event-driven-simulation": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/event-driven-simulation");
+    return {
+      EventDrivenSimulationModelLab: module0.EventDrivenSimulationModelLab,
+      EventDrivenSimulationTraceLab: module0.EventDrivenSimulationTraceLab,
+      EventDrivenSimulationCounterexampleLab:
+        module0.EventDrivenSimulationCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/06-context/intractability": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/intractability");
+    return {
+      IntractabilityModelLab: module0.IntractabilityModelLab,
+      IntractabilityTraceLab: module0.IntractabilityTraceLab,
+      IntractabilityCounterexampleLab: module0.IntractabilityCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/06-context/maxflow": async () => {
+    const module0 = await import("@/components/mdx/algorithms-4e/v2/maxflow");
+    return {
+      MaxflowModelLab: module0.MaxflowModelLab,
+      MaxflowTraceLab: module0.MaxflowTraceLab,
+      MaxflowCounterexampleLab: module0.MaxflowCounterexampleLab,
     } as ChapterMdxComponents;
   },
   "algorithms-4e/06-context/reductions": async () => {
-    const module0 =
-      await import("@/components/mdx/algorithms-4e/diagrams/reductions");
+    const modules = await Promise.all([
+      import("@/components/mdx/algorithms-4e/v2/reductions"),
+      import("@/components/mdx/algorithms-4e/diagrams/reductions"),
+    ]);
     return {
-      Algs4ReductionMap: module0.Algs4ReductionMap,
+      ReductionsModelLab: modules[0].ReductionsModelLab,
+      ReductionsTraceLab: modules[0].ReductionsTraceLab,
+      ReductionsCounterexampleLab: modules[0].ReductionsCounterexampleLab,
+      Algs4ReductionMap: modules[1].Algs4ReductionMap,
+    } as ChapterMdxComponents;
+  },
+  "algorithms-4e/06-context/suffix-arrays": async () => {
+    const module0 =
+      await import("@/components/mdx/algorithms-4e/v2/suffix-arrays");
+    return {
+      SuffixArraysModelLab: module0.SuffixArraysModelLab,
+      SuffixArraysTraceLab: module0.SuffixArraysTraceLab,
+      SuffixArraysCounterexampleLab: module0.SuffixArraysCounterexampleLab,
     } as ChapterMdxComponents;
   },
   "android-advanced-decryption/00-official-learning-map/aad8-official-learning-map":

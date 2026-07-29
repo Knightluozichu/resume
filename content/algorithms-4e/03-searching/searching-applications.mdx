@@ -1,19 +1,63 @@
 ---
-title: "3.5 Searching Applications：集合、字典、索引与稀疏计算"
+title: 3.5 Searching Applications：集合、字典、索引与稀疏计算
 type: B
-section: "查找"
+section: 查找
 order: 14
-description: "按官方3.5重建SET clients、CSV dictionary、bidirectional/inverted indexing、sparse vector/matrix及Java system symbol-table选型。"
+description: 3.5 · Searching Applications覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/35applications/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-3.5
 ---
 
+import {
+  SearchingApplicationsModelLab,
+  SearchingApplicationsTraceLab,
+  SearchingApplicationsCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/searching-applications";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3.5 · Searching Applications”如何把集合、字典、倒排索引、稀疏向量与系统符号表归结为键值操作组合
+- 能逐项核对 查找应用、集合API、字典客户端、索引客户端、稀疏向量与矩阵、系统符号表，并区分作者站内容与本页独立补充
+- 能按“稀疏向量点积可按较小非零集合迭代，成本 O(nnz_small × lookup)”手算一个最小输入，逐步检查“应用结果必须与所选 Set/Map 语义一致，缺失键与显式零值不得混淆”
+- 能注入“在遍历索引时原地修改同一符号表，或把重复词频误压成集合存在性”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3·5 · Searching Applications”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/35applications/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“3·5 · Searching Applications”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“3·5 · Searching Applications”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：3.5 · Searching Applications
+
+- **1. 查找应用**：在本页通过“选择集合或映射”连接解释、交互状态和练习验收。
+- **2. 集合API**：在本页通过“规范化输入键”连接解释、交互状态和练习验收。
+- **3. 字典客户端**：在本页通过“构建正向或倒排索引”连接解释、交互状态和练习验收。
+- **4. 索引客户端**：在本页通过“执行查询组合”连接解释、交互状态和练习验收。
+- **5. 稀疏向量与矩阵**：在本页通过“核对应用语义”连接解释、交互状态和练习验收。
+- **6. 系统符号表**：在本页通过“选择集合或映射”连接解释、交互状态和练习验收。
 
 ## 从“同一张表，不同的key/value含义”开始
 
-查找应用（，searching applications）不是在3.1到3.4之外再发明一种表。它要求先回答：client究竟需要membership、one value、a set of values、ordered range，还是只存nonzero coordinates；再选择满足contract的API与implementation。
+查找应用（searching applications）不是在3.1到3.4之外再发明一种表。它要求先回答：client究竟需要membership、one value、a set of values、ordered range，还是只存nonzero coordinates；再选择满足contract的API与implementation。
 
 先预测“电影到演员”索引能否直接回答“某演员演过哪些电影”。若只建立 `movie -> SET<person>`，reverse query必须扫描所有movies。要让两个方向都按key查询，构建阶段必须同步维护 `movie -> people` 与 `person -> movies` 两张ST；额外space换来query cost从全量扫描降为一次lookup。
 
@@ -26,14 +70,13 @@ draft: false
 
 ## 3.5.1 Set APIs：只保留keys，不伪造dummy values
 
-集合API（，set APIs）适用于client不关心associated value的场景。Duplicate add不改变set；contains只返回membership。
+集合API（set APIs）适用于client不关心associated value的场景。Duplicate add不改变set；contains只返回membership。
 
 典型stream clients只差一个predicate：
 
 - `DeDup`：第一次看到key时输出并add，以后contains为true就跳过。
 - Allowlist：policy SET contains才输出。
 - Blocklist：policy SET不contains才输出。
-
 
 ```java
 SET<String> seen = new SET<String>();
@@ -52,13 +95,11 @@ $$
 T_{\cap}=\Theta(\min(A,B)\cdot C_{\mathrm{contains}})
 $$
 
-
 Ordered SET还可提供min/max/floor/ceiling；unordered HashSet不能承诺iteration顺序。API命名相似不代表capabilities相同，client若需要range就必须把ordering写入contract。
-
 
 ## 3.5.2 Dictionary clients：build once，lookup many
 
-字典客户端（，dictionary clients）是最直接的ST应用。`LookupCSV`从command line取得file、key field与value field，逐row提取association，再读取queries：
+字典客户端（dictionary clients）是最直接的ST应用。`LookupCSV`从command line取得file、key field与value field，逐row提取association，再读取queries：
 
 ```java
 int keyField = Integer.parseInt(args[1]);
@@ -77,7 +118,6 @@ while (!StdIn.isEmpty()) {
 }
 ```
 
-
 Key field不是无害configuration：若file里key重复，standard ST语义让later row覆盖earlier value。若domain需要保留全部records，value应改为list/SET，或duplicate直接报错。CSV example用简单split展示algorithm，但production CSV含quoted commas、escaping与newlines，应使用真正parser。
 
 Build cost是R次put，R为records；query cost是Q次contains/get。Official client先contains再get可能做两次lookup；若API能以nullable或optional result区分absent，可一次get，但必须先确认null-value contract。
@@ -86,10 +126,9 @@ Dictionary correctness不只测happy hit。要覆盖missing key、duplicate poli
 
 ## 3.5.3 Indexing clients：value本身可以是SET
 
-索引客户端（，indexing clients）表面上是“一个key对应多个values”，实际仍遵守one value per key：value是一个集合。
+索引客户端（indexing clients）表面上是“一个key对应多个values”，实际仍遵守one value per key：value是一个集合。
 
 `FileIndex`对每个file读取words，并维护 `ST<String, SET<File>>`。Term第一次出现时创建empty SET，随后add file；同一term在同一file重复出现不会产生duplicate posting。
-
 
 ```java
 if (!index.contains(word)) index.put(word, new SET<File>());
@@ -106,15 +145,13 @@ movie\mapsto\{people\},
 person\mapsto\{movies\}
 $$
 
-
 两张表必须在同一record处理内一致更新。Round-trip certificate可检查：若person出现在movieToPeople[movie]，movie必须也出现在personToMovies[person]。只更新一侧不会立刻crash，却会让reverse results静默缺失。
 
 Index build还要定义tokenization、case folding、stopwords、Unicode normalization与document identity。Client logic正确但normalization不一致，仍会把视觉相同的term拆成不同keys。
 
 ## 3.5.4 Sparse vectors and matrices：absence就是zero
 
-稀疏向量与矩阵（，sparse vectors and matrices）把dimension d与nonzero count nnz分开。Dense vector保存d个numbers；SparseVector保存 `ST<Integer, Double>` 中的nonzeros，memory proportional to nnz。
-
+稀疏向量与矩阵（sparse vectors and matrices）把dimension d与nonzero count nnz分开。Dense vector保存d个numbers；SparseVector保存 `ST<Integer, Double>` 中的nonzeros，memory proportional to nnz。
 
 `put(i, 0.0)`必须delete association，否则zero entries会逐渐填满ST并让“sparse”退化。Get missing index返回0：
 
@@ -144,33 +181,30 @@ T_{\mathrm{dot}}=
 O\!\left(\min(nnz(a),nnz(b))\cdot C_{\mathrm{lookup}}\right)
 $$
 
-
 若另一operand是dense array，只遍历当前sparse ST keys并直接访问 `that[i]`，成本proportional to nnz。Vector addition先copy this nonzeros，再遍历that并put sum；sum变0时put contract自动删除。
 
 Sparse matrix可表示为rows array，每row是一条SparseVector。Matrix-vector multiply对每row做sparse dot；matrix addition逐row plus。是否按row、column或双索引存储取决于operation mix，不能看到“sparse”就默认一种layout。
 
-
 ## 3.5.5 System symbol table：从client contract选择容器
 
-系统符号表（，system symbol table）让production code通常不必重写BST或hash table，但实现选择仍决定语义：
+系统符号表（system symbol table）让production code通常不必重写BST或hash table，但实现选择仍决定语义：
 
 - Java `TreeMap`基于red-black tree，exact/ordered operations worst-case logarithmic，并提供navigation/range views。
 - `HashMap`提供expected constant exact lookup，不保证sorted iteration。
 - `TreeSet`与`HashSet`分别对应ordered与hashed membership。
 - Concurrent variants还改变atomicity、iteration consistency与null policy。
 
-
 Textbook `ST`约定null value等价delete，而Java collections可能允许null key/value；不能把一种API的absence convention直接搬到另一种。`Map.get()`返回null时，若null values合法，必须用containsKey区分absent。
 
 Implementation choice应从required operations倒推：
 
-| Client requirement | Suitable API property | Typical implementation |
-| --- | --- | --- |
-| exact get/put only | unordered map | HashMap |
-| floor/ceiling/range | ordered navigable map | TreeMap |
-| membership only | set | HashSet or TreeSet |
-| one-to-many relation | map to set/list | HashMap plus HashSet |
-| sparse coordinate iteration | map index to nonzero | TreeMap or hash map by traversal need |
+| Client requirement          | Suitable API property | Typical implementation                |
+| --------------------------- | --------------------- | ------------------------------------- |
+| exact get/put only          | unordered map         | HashMap                               |
+| floor/ceiling/range         | ordered navigable map | TreeMap                               |
+| membership only             | set                   | HashSet or TreeSet                    |
+| one-to-many relation        | map to set/list       | HashMap plus HashSet                  |
+| sparse coordinate iteration | map index to nonzero  | TreeMap or hash map by traversal need |
 
 Never依赖unspecified iteration order。Test在small dataset看起来保持insert order，换runtime、resize或hash seed后可能改变。若output必须deterministic，应显式sort或选择ordered collection。
 
@@ -190,6 +224,85 @@ Space也应按logical relation计算。Inverted index至少保存unique term-fil
 
 ## 统一验收：从domain relation回到API observable behavior
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“3.5 · Searching Applications”的两个最小情境间切换，再逐项选择正式概念。预测“稀疏向量点积可按较小非零集合迭代，成本 O(nnz_small × lookup)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <SearchingApplicationsModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存输入记录、规范化键、索引 postings、非零坐标、查询轨迹与朴素扫描结果，并检查“应用结果必须与所选 Set/Map 语义一致，缺失键与显式零值不得混淆”仍然成立。
+
+    <SearchingApplicationsTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“在遍历索引时原地修改同一符号表，或把重复词频误压成集合存在性”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <SearchingApplicationsCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="3.5 · Searching Applications 的首要反例">
+  在遍历索引时原地修改同一符号表，或把重复词频误压成集合存在性。它会破坏“应用结果必须与所选
+  Set/Map 语义一致，缺失键与显式零值不得混淆”；应从输入记录、规范化键、索引
+  postings、非零坐标、查询轨迹与朴素扫描结果中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “稀疏向量点积可按较小非零集合迭代，成本 O(nnz_small ×
+  lookup)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“3.5 · Searching
+  Applications”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对输入记录、规范化键、索引
+  postings、非零坐标、查询轨迹与朴素扫描结果。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **查找应用**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **集合API**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **字典客户端**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **索引客户端**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **稀疏向量与矩阵**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **系统符号表**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“3.5 · Searching Applications”作者页为分母，逐项定位
+  查找应用、集合API、字典客户端、索引客户端、稀疏向量与矩阵、系统符号表。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“稀疏向量点积可按较小非零集合迭代，成本 O(nnz_small × lookup)”不是孤立结论？
+
+<Answer>
+  选择“倒排索引”的输入：文档 d1=[A,B]、d2=[B,C]，查询 B。按 选择集合或映射 →
+  规范化输入键 → 构建正向或倒排索引 → 执行查询组合 → 核对应用语义
+  保存状态，并用“返回 postings d1 与
+  d2，并保持文档标识去重规则”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“在遍历索引时原地修改同一符号表，或把重复词频误压成集合存在性”已经修复？
+
+<Answer>
+  保存输入记录、规范化键、索引
+  postings、非零坐标、查询轨迹与朴素扫描结果作为正常基线；注入该故障并标记第一个违反“应用结果必须与所选
+  Set/Map
+  语义一致，缺失键与显式零值不得混淆”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -202,7 +315,9 @@ Space也应按logical relation计算。Inverted index至少保存unique term-fil
 7. TreeMap/HashMap等system symbol tables的ordering、null与cost contracts不同。
 8. 组合结构需同步维护cross-invariants，并用round-trip或reference implementation验收。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/35applications/"
+/>

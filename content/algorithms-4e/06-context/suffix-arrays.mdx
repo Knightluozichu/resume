@@ -1,15 +1,58 @@
 ---
-title: "6.3 Suffix Arrays：后缀排序、LCP、LRS与KWIC"
+title: 6.3 Suffix Arrays：后缀排序、LCP、LRS与KWIC
 type: B
-section: "上下文"
+section: 上下文
 order: 26
-description: "按官方6.3重建offset-based suffix array、suffix ordering、index/select/rank/lcp API、最长重复子串、KWIC连续区间、3-way优化、成本边界与独立证书。"
+description: 6.3 · Suffix Arrays覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/63suffix/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-6.3
 ---
 
+import {
+  SuffixArraysModelLab,
+  SuffixArraysTraceLab,
+  SuffixArraysCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/suffix-arrays";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“6.3 · Suffix Arrays”如何以排序后缀与 LCP 支持最长重复子串、上下文关键词和最长公共前缀查询
+- 能逐项核对 后缀数组、后缀排序、最长重复子串、上下文关键词查找、最长公共前缀，并区分作者站内容与本页独立补充
+- 能按“二分后缀数组定位长度 M 模式需 O(M log N) 字符比较，匹配输出另计”手算一个最小输入，逐步检查“suffix array 是 0..N-1 的全排列且对应后缀字典序递增；LCP 与相邻后缀一致”
+- 能注入“后缀比较器把 substring 分配成本藏在常数里，或 LCP 索引偏移一位越过文本末端”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“6·3 · Suffix Arrays”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/63suffix/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“6·3 · Suffix Arrays”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“6·3 · Suffix Arrays”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：6.3 · Suffix Arrays
+
+- **1. 后缀数组**：在本页通过“生成后缀索引”连接解释、交互状态和练习验收。
+- **2. 后缀排序**：在本页通过“按字符比较后缀”连接解释、交互状态和练习验收。
+- **3. 最长重复子串**：在本页通过“形成有序 SA”连接解释、交互状态和练习验收。
+- **4. 上下文关键词查找**：在本页通过“计算相邻 LCP”连接解释、交互状态和练习验收。
+- **5. 最长公共前缀**：在本页通过“执行 LRS/KWIC 查询”连接解释、交互状态和练习验收。
 
 ## 从“所有substring问题，都能转成suffix之间的邻近关系吗”开始
 
@@ -19,10 +62,9 @@ $$
 S_i=text[i..N),\qquad 0\le i\lt N
 $$
 
-后缀数组（，suffix arrays）把重叠的strings变成一个ordered index。
+后缀数组（suffix arrays）把重叠的strings变成一个ordered index。
 
 先预测：`BANANA` 的最长重复substring `ANA` 出现在offsets 1与3。为何不必比较all \(O(N^2)\) suffix pairs？因为共享long prefix的suffixes在lexicographic order中聚在一起；最优重复prefix一定能在某对adjacent sorted suffixes之间看到。
-
 
 ## 6.3.1 Offset view：不要复制N个suffix strings
 
@@ -35,7 +77,6 @@ $$
 characters，space quadratic。Modern Java的`substring()`也不保证constant-time shared backing storage，所以不能依赖old Java 6 behavior。
 
 Official `SuffixArray`用small `Suffix` object保存same text reference和offset；`SuffixArrayX`更进一步只保存`int[] index`。Character access为 `text.charAt(offset + d)`。
-
 
 ```java
 private static class Suffix implements Comparable<Suffix> {
@@ -51,7 +92,7 @@ Index itself是O(N) offsets；原文另占O(N)。`select(i)`若materialize strin
 
 ## 6.3.2 Suffix sorting：lexicographic order与sentinel
 
-后缀排序（，suffix sorting）比较两个offset i、j：
+后缀排序（suffix sorting）比较两个offset i、j：
 
 1. 从d=0逐character比较 `text[i+d]` 与 `text[j+d]`。
 2. First mismatch决定order。
@@ -67,7 +108,6 @@ int compareSuffix(int i, int j) {
     return (text.length() - i) - (text.length() - j);
 }
 ```
-
 
 SuffixArray API：
 
@@ -108,15 +148,13 @@ sort(gt + 1, hi, d);
 
 它追加NUL sentinel并要求input不含NUL；equal partition才进入next character depth。
 
-
 该实现practice中快、memory少，但对N copies of same character可表现很差。Manber-Myers repeated doubling维护length \(2^k\) prefixes的ranks，每轮按rank pairs排序；配合合适sort可达O(N log N)。Kasai algorithm在suffix array已知后可O(N)构建完整LCP array。
-
 
 不能只标“suffix array O(N log N)”而不说明construction algorithm、alphabet、comparison cost与workspace。
 
 ## 6.3.4 Longest common prefix array
 
-最长公共前缀（，longest common prefix）：
+最长公共前缀（longest common prefix）：
 
 $$
 \operatorname{lcp}(i)
@@ -137,18 +175,16 @@ int lcp(int leftOffset, int rightOffset) {
 }
 ```
 
-
 Exact LCP certificate需证明两面：
 
 1. 前length个characters确实equal。
 2. 下一characters different，或至少一个suffix结束。
 
-
 只检查first condition会接受under-reported LCP，导致LRS过短；只检查next mismatch会接受prefix内部已不同的nonsense value。
 
 ## 6.3.5 Longest repeated substring：最大adjacent LCP
 
-最长重复子串（，longest repeated substring）等于maximum adjacent LCP。
+最长重复子串（longest repeated substring）等于maximum adjacent LCP。
 
 ```java
 String best = "";
@@ -160,7 +196,6 @@ for (int i = 1; i < N; i++) {
 }
 ```
 
-
 Why adjacent suffices：假设substring P是two suffixes A、B的common prefix。所有以P开头的suffixes在sorted order中形成contiguous interval；该interval中至少一对adjacent suffixes也共享P。因此global optimum出现在某个adjacent LCP。
 
 Overlapping occurrences合法，例如nine A characters的LRS是eight A characters。若application要求non-overlap，maximum LCP还不够，需同时约束offset distance：
@@ -170,7 +205,6 @@ $$
 $$
 
 并可能考虑非adjacent witnesses。
-
 
 ## 6.3.6 Rank：query在suffix order中的lower bound
 
@@ -188,14 +222,13 @@ while (lo <= hi) {
 return lo;
 ```
 
-
 Query length K，每次comparison最多K characters，binary search O(log N) comparisons，所以basic cost O(K log N)。若缓存query与lo/hi suffix的LCP，可跳过已知equal prefixes；更完整LCP/RMQ machinery可实现O(K+log N) query。
 
 Rank不是substring occurrence本身；它给first possible lexicographic location。必须再检查suffix是否starts with query。
 
 ## 6.3.7 Keyword in context：prefix matches形成连续区间
 
-上下文关键词查找（，keyword in context）也称KWIC/KWIK。
+上下文关键词查找（keyword in context）也称KWIC/KWIK。
 
 Algorithm：
 
@@ -214,9 +247,7 @@ for (int i = suffixArray.rank(query); i < N; i++) {
 }
 ```
 
-
 All query-prefix suffixes contiguous，因为lexicographic order把same prefix聚在一起。Output order是suffix lexicographic order，不是original offset order；若UI要求document order，应收集offsets后numeric sort。
-
 
 Text normalization也是contract。Official KWIK把whitespace runs压成single spaces，因此reported offsets属于normalized text，不是original file bytes。若需source highlighting，必须维护normalization-to-source offset map。
 
@@ -249,15 +280,91 @@ for (let i = 1; i < N; i++) {
   assert(compareSuffix(sa[i - 1], sa[i]) < 0);
   assert(lcp[i] === referenceLcp(sa[i - 1], sa[i]));
 }
-for (let i = 0; i < N; i++)
-  assert(rank(text.slice(sa[i])) === i);
+for (let i = 0; i < N; i++) assert(rank(text.slice(sa[i])) === i);
 ```
-
 
 Differential corpus应含empty、single character、all same, periodic, all distinct, NUL boundary、Unicode surrogate pairs与large repetitive text。Empty suffix是否included必须明确；official API只索引N个nonempty suffixes。
 
 ## 6.3.10 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“6.3 · Suffix Arrays”的两个最小情境间切换，再逐项选择正式概念。预测“二分后缀数组定位长度 M 模式需 O(M log N) 字符比较，匹配输出另计”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <SuffixArraysModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存文本哈希、SA 排列、相邻后缀、LCP、二分区间、匹配位置与朴素后缀排序预言机，并检查“suffix array 是 0..N-1 的全排列且对应后缀字典序递增；LCP 与相邻后缀一致”仍然成立。
+
+    <SuffixArraysTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“后缀比较器把 substring 分配成本藏在常数里，或 LCP 索引偏移一位越过文本末端”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <SuffixArraysCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="6.3 · Suffix Arrays 的首要反例">
+  后缀比较器把 substring 分配成本藏在常数里，或 LCP
+  索引偏移一位越过文本末端。它会破坏“suffix array 是 0..N-1
+  的全排列且对应后缀字典序递增；LCP 与相邻后缀一致”；应从文本哈希、SA
+  排列、相邻后缀、LCP、二分区间、匹配位置与朴素后缀排序预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “二分后缀数组定位长度 M 模式需 O(M log N)
+  字符比较，匹配输出另计”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“6.3 · Suffix
+  Arrays”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对文本哈希、SA
+  排列、相邻后缀、LCP、二分区间、匹配位置与朴素后缀排序预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **后缀数组**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **后缀排序**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **最长重复子串**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **上下文关键词查找**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **最长公共前缀**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“6.3 · Suffix Arrays”作者页为分母，逐项定位
+  后缀数组、后缀排序、最长重复子串、上下文关键词查找、最长公共前缀。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“二分后缀数组定位长度 M 模式需 O(M log N) 字符比较，匹配输出另计”不是孤立结论？
+
+<Answer>
+  选择“最长重复”的输入：文本 banana。按 生成后缀索引 → 按字符比较后缀 → 形成有序
+  SA → 计算相邻 LCP → 执行 LRS/KWIC 查询 保存状态，并用“相邻后缀的最大 LCP 为
+  ana，并能返回对应两个起点”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“后缀比较器把 substring 分配成本藏在常数里，或 LCP 索引偏移一位越过文本末端”已经修复？
+
+<Answer>
+  保存文本哈希、SA
+  排列、相邻后缀、LCP、二分区间、匹配位置与朴素后缀排序预言机作为正常基线；注入该故障并标记第一个违反“suffix
+  array 是 0..N-1 的全排列且对应后缀字典序递增；LCP
+  与相邻后缀一致”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -271,4 +378,9 @@ Differential corpus应含empty、single character、all same, periodic, all dist
 - Basic comparison sort、3-way radix和doubling algorithms有不同worst cases与memory tradeoffs。
 - Independent certificate检查offset permutation、strict suffix order、exact LCP和rank/select inverse。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/63suffix/"
+/>

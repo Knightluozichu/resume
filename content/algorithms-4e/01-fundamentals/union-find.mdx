@@ -1,24 +1,67 @@
 ---
-title: "1.5 Union-Find：动态连通、加权与路径压缩"
+title: 1.5 Union-Find：动态连通、加权与路径压缩
 type: B
-section: "基础"
+section: 基础
 order: 4
-description: "按官方1.5以tinyUF pair流比较quick-find、quick-union、size weighting与当前rank加path halving实现及成本模型。"
+description: "1.5 · Case Study: Union-Find覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。"
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/15uf/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-1.5
 ---
 
+import {
+  UnionFindModelLab,
+  UnionFindTraceLab,
+  UnionFindCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/union-find";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“1.5 · Case Study: Union-Find”如何在动态连通问题中比较 quick-find、quick-union、加权合并与路径压缩
+- 能逐项核对 动态连通性、并查集API、快速查找、快速合并、加权快速合并、路径压缩，并区分作者站内容与本页独立补充
+- 能按“加权 quick-union 树高 ≤ floor(log2 N)；加路径压缩后 M 次操作为近线性成本”手算一个最小输入，逐步检查“connected(p,q) 当且仅当 root(p)=root(q)，每次 union 只连接两个不同根”
+- 能注入“把非根节点接到另一棵树，或按节点编号而不是树大小决定连接方向”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“1·5 · Case Study: Union-Find”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/15uf/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“1·5 · Case Study: Union-Find”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“1·5 · Case Study: Union-Find”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：1.5 · Case Study: Union-Find
+
+- **1. 动态连通性**：在本页通过“读取节点对”连接解释、交互状态和练习验收。
+- **2. 并查集API**：在本页通过“寻找两个根”连接解释、交互状态和练习验收。
+- **3. 快速查找**：在本页通过“比较树大小”连接解释、交互状态和练习验收。
+- **4. 快速合并**：在本页通过“连接较小根”连接解释、交互状态和练习验收。
+- **5. 加权快速合并**：在本页通过“压缩路径并核对分量”连接解释、交互状态和练习验收。
+- **6. 路径压缩**：在本页通过“读取节点对”连接解释、交互状态和练习验收。
 
 ## 从“两个点现在是否连通”开始
 
-动态连通性（，dynamic connectivity）把输入看作一串pairs。初始N个sites互不相连；`union(p,q)` 合并两个components；`find(p)` 返回p所在set的canonical representative。Connections只增加不删除，因此components只会合并。
+动态连通性（dynamic connectivity）把输入看作一串pairs。初始N个sites互不相连；`union(p,q)` 合并两个components；`find(p)` 返回p所在set的canonical representative。Connections只增加不删除，因此components只会合并。
 
 先预测重复输入已经连通的pair是否还应让component count减1。不能。Count表示当前partition中的sets数量，只有两个不同roots真正合并才减1；重复union是idempotent。若不先比较roots，count会与parent forest失配，即使部分connectivity queries仍看似正确。
 
 官方1.5按 **Dynamic connectivity、Union-Find API、Implementations、Union-find cost model** 展开。Implementation从quick-find到quick-union，再以weighting和path compression把操作序列降到近常数。Current official `UF` 具体采用rank weighting与path compression by halving。
-
 
 ## 1.5.1 Dynamic connectivity：partition是核心state
 
@@ -30,13 +73,13 @@ $$
 C_i\cap C_j=\varnothing\ (i\ne j)
 $$
 
-连接relation应满足reflexive、symmetric、transitive，因此是equivalence relation。Union只改变partition，不承诺保留某个固定root。Canonical representative（）可能在union后改变，不应被当作业务持久ID。
+连接relation应满足reflexive、symmetric、transitive，因此是equivalence relation。Union只改变partition，不承诺保留某个固定root。Canonical representative可能在union后改变，不应被当作业务持久ID。
 
 TinyUF client先读N，再逐pair检查roots；若不同就union并打印accepted pair，最后输出count。输入validation要求site落在0到N-1，错误index应立即失败，不能读取任意array memory。
 
 ## 1.5.2 Union-Find API：同一契约，多种成本分配
 
-并查集API（，union-find API）只有少量operations：
+并查集API（union-find API）只有少量operations：
 
 ```java
 UF(int n)
@@ -45,14 +88,13 @@ void union(int p, int q)
 int count()
 ```
 
-
 `find(p) == find(q)` 表示connected；current code保留的 `connected` method已deprecated，建议直接两次find。API不规定array layout，也不规定representative取最小site。它规定的是partition semantics、valid domain和count。
 
 Correctness invariants包括：每个site恰属一个component；find对同component返回相同root；不同component roots不同；union后的partition是两个sets并集；count等于distinct roots数量。Optimization不能改变这些observable facts。
 
 ## 1.5.3 Quick-find：读快，合并扫描全表
 
-快速查找（，quick-find）初始化 `id[i]=i`。Find返回 `id[p]`；union先保存pID/qID，再扫描全array，把所有pID改为qID。
+快速查找（quick-find）初始化 `id[i]=i`。Find返回 `id[p]`；union先保存pID/qID，再扫描全array，把所有pID改为qID。
 
 ```java
 public int find(int p) {
@@ -70,7 +112,6 @@ public void union(int p, int q) {
 }
 ```
 
-
 Official cost model按array accesses计：find constant；union至少扫描N entries，约N到2N+常数accesses，取决于matching writes。处理M个主要是union的connections可达quadratic scale。
 
 $$
@@ -80,10 +121,9 @@ $$
 
 必须先保存pID。若loop中直接反复读 `id[p]`，当i走到p并把它改为qID后，后续比较目标改变，只会重写旧component的一部分，造成partition分裂。
 
-
 ## 1.5.4 Quick-union：component变成parent forest
 
-快速合并（，quick-union）使用 `parent[i]=i` 标记root。Find沿path；union先求两个roots，若不同只改一个parent。
+快速合并（quick-union）使用 `parent[i]=i` 标记root。Find沿path；union先求两个roots，若不同只改一个parent。
 
 ```java
 public int find(int p) {
@@ -102,12 +142,11 @@ public void union(int p, int q) {
 }
 ```
 
-
 Union rewiring是constant，但find cost等于path length。若依次把large tree root挂到single node，可形成length N-1 chain，find/union worst-case linear。Parent representation invariant要求indices valid、每个tree恰有一个self-parent root、不存在非root cycle；只验证count不足以发现cycle。
 
 ## 1.5.5 Weighted quick-union：小树挂大树
 
-加权快速合并（，weighted quick-union）用size array只对roots有意义。两个roots合并时更新winning root size；nonroot stale size不能用于未来decision。
+加权快速合并（weighted quick-union）用size array只对roots有意义。两个roots合并时更新winning root size；nonroot stale size不能用于未来decision。
 
 ```java
 if (size[rootP] < size[rootQ]) {
@@ -126,12 +165,11 @@ $$
 depth\le\lfloor\log_2 N\rfloor
 $$
 
-
 这给weighted quick-union的find/union worst-case logarithmic bound。Current `WeightedQuickUnionUF` 是by size且不做path compression；不要把它与current `UF` 的rank byte和path halving混成同一implementation。
 
 ## 1.5.6 Path compression by halving：find顺便缩路
 
-路径压缩（，path compression）把未来queries的cost提前优化。Current official `UF.find` 使用path halving：
+路径压缩（path compression）把未来queries的cost提前优化。Current official `UF.find` 使用path halving：
 
 ```java
 while (p != parent[p]) {
@@ -140,7 +178,6 @@ while (p != parent[p]) {
 }
 return p;
 ```
-
 
 每轮让p跳到grandparent，visited path约减半。Union by rank只在equal ranks时提升winner rank；rank不是精确size或当前height，compression后也不回减。把rank当实时height更新会增加复杂度且容易破坏bound proof。
 
@@ -154,8 +191,7 @@ $$
 
 ## 1.5.7 Union-find cost model：比较sequence，不只比较一行
 
-并查集成本模型（，union-find cost model）能分离machine timing noise。Quick-find把成本放在union；quick-union可能把成本放在deep find；weighting限制depth；compression利用历史queries修改未来structure。
-
+并查集成本模型（union-find cost model）能分离machine timing noise。Quick-find把成本放在union；quick-union可能把成本放在deep find；weighting限制depth；compression利用历史queries修改未来structure。
 
 $$
 \begin{array}{c|c|c}
@@ -167,11 +203,89 @@ $$
 \end{array}
 $$
 
-
 验收应使用independent graph oracle：把accepted pairs建成undirected graph，以DFS/BFS计算components，再与UF partition交叉。还要检查all roots、parent cycles、component sizes/ranks、count、invalid indices和duplicate unions。
 
 ## 统一验收：从pair stream核对partition与成本
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“1.5 · Case Study: Union-Find”的两个最小情境间切换，再逐项选择正式概念。预测“加权 quick-union 树高 ≤ floor(log2 N)；加路径压缩后 M 次操作为近线性成本”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <UnionFindModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存id/parent 数组、size、root 路径、component count、访问次数与朴素图连通预言机，并检查“connected(p,q) 当且仅当 root(p)=root(q)，每次 union 只连接两个不同根”仍然成立。
+
+    <UnionFindTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“把非根节点接到另一棵树，或按节点编号而不是树大小决定连接方向”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <UnionFindCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="1.5 · Case Study: Union-Find 的首要反例">
+  把非根节点接到另一棵树，或按节点编号而不是树大小决定连接方向。它会破坏“connected(p,q)
+  当且仅当 root(p)=root(q)，每次 union 只连接两个不同根”；应从id/parent
+  数组、size、root 路径、component
+  count、访问次数与朴素图连通预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “加权 quick-union 树高 ≤ floor(log2 N)；加路径压缩后 M
+  次操作为近线性成本”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“1.5 · Case Study:
+  Union-Find”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对id/parent
+  数组、size、root 路径、component count、访问次数与朴素图连通预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **动态连通性**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **并查集API**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **快速查找**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **快速合并**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **加权快速合并**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **路径压缩**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“1.5 · Case Study: Union-Find”作者页为分母，逐项定位
+  动态连通性、并查集API、快速查找、快速合并、加权快速合并、路径压缩。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“加权 quick-union 树高 ≤ floor(log2 N)；加路径压缩后 M 次操作为近线性成本”不是孤立结论？
+
+<Answer>
+  选择“链式退化”的输入：按 0-1、1-2、2-3、3-4 合并。按 读取节点对 → 寻找两个根 →
+  比较树大小 → 连接较小根 → 压缩路径并核对分量 保存状态，并用“quick-union
+  可能形成长链，加权策略限制树高”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“把非根节点接到另一棵树，或按节点编号而不是树大小决定连接方向”已经修复？
+
+<Answer>
+  保存id/parent 数组、size、root 路径、component
+  count、访问次数与朴素图连通预言机作为正常基线；注入该故障并标记第一个违反“connected(p,q)
+  当且仅当 root(p)=root(q)，每次 union
+  只连接两个不同根”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -183,7 +297,9 @@ $$
 6. Current official UF按rank union并在find中做path halving，混合序列为O(M alpha(N))。
 7. Correctness要核查partition、forest、count与invalid inputs，performance要按array-access sequence分析。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/15uf/"
+/>

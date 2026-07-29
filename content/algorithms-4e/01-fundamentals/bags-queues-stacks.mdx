@@ -1,28 +1,70 @@
 ---
 title: "1.3 Bags, Queues, and Stacks：访问顺序与表示选择"
 type: C
-section: "基础"
+section: 基础
 order: 2
-description: "按官方1.3重建Bag、Queue、Stack API，扩缩容数组、链表实现、泛型迭代与Dijkstra双栈求值。"
+description: "1.3 · Bags, Queues, and Stacks覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。"
 demo: true
 math: false
 sourceUrl: "https://algs4.cs.princeton.edu/13stacks/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-1.3
 ---
 
+import {
+  BagsQueuesStacksModelLab,
+  BagsQueuesStacksTraceLab,
+  BagsQueuesStacksCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/bags-queues-stacks";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“1.3 · Bags, Queues, and Stacks”如何从访问顺序、迭代合同与表示成本选择背包、队列、栈及其数组或链表实现
+- 能逐项核对 背包、队列与栈、集合API、动态调整数组、链表、迭代，并区分作者站内容与本页独立补充
+- 能按“动态数组扩容采用 2N、缩容采用 N/2 且低水位为 1/4，可得摊还常数操作”手算一个最小输入，逐步检查“栈保持后进先出，队列保持先进先出，背包迭代不承诺删除或特定顺序”
+- 能注入“出队后不清除失效引用造成对象游离，或在 1/2 负载时反复扩缩产生抖动”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“1·3 · Bags, Queues, and Stacks”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/13stacks/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“1·3 · Bags, Queues, and Stacks”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“1·3 · Bags, Queues, and Stacks”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：1.3 · Bags, Queues, and Stacks
+
+- **1. 背包、队列与栈**：在本页通过“选择访问合同”连接解释、交互状态和练习验收。
+- **2. 集合API**：在本页通过“执行插入操作”连接解释、交互状态和练习验收。
+- **3. 动态调整数组**：在本页通过“触发扩容或链接”连接解释、交互状态和练习验收。
+- **4. 链表**：在本页通过“执行删除操作”连接解释、交互状态和练习验收。
+- **5. 迭代**：在本页通过“核对迭代次序”连接解释、交互状态和练习验收。
 
 ## 从“同样存三个items，为什么不能只用一个List”开始
 
-背包、队列与栈（，bags, queues, and stacks）都能保存items，却表达不同算法语义。Bag只承诺收集和遍历；Queue按first-in-first-out处理arrival；Stack按last-in-first-out处理nested或需要反向恢复的工作。
+背包、队列与栈（bags, queues, and stacks）都能保存items，却表达不同算法语义。Bag只承诺收集和遍历；Queue按first-in-first-out处理arrival；Stack按last-in-first-out处理nested或需要反向恢复的工作。
 
 先预测依次加入A、B、C后，三者的foreach是否都应输出A、B、C。Queue是FIFO，通常如此；Stack的official iterator按LIFO输出C、B、A；Bag client根本不应依赖顺序。若用一个通用List却把访问policy留给每个caller，算法正确性会散落在index convention里，API无法替你守住order invariant。
 
 官方1.3依次覆盖 **APIs、Array and resizing array implementations of collections、Linked lists、Linked-list implementations of collections、Iteration**。Applications还包括Dijkstra双栈算术表达式求值。这里从abstract policy走到两种representation，再回到client-visible iteration。
 
-
 ## 1.3.1 Collection APIs：把访问顺序写进operation names
 
-集合API（，collection APIs）应让错误operation难以表达。Stack使用 `push/pop`，Queue使用 `enqueue/dequeue`，Bag只提供 `add`；如果都暴露 `remove(int index)`，policy就不再由ADT保证。
+集合API（collection APIs）应让错误operation难以表达。Stack使用 `push/pop`，Queue使用 `enqueue/dequeue`，Bag只提供 `add`；如果都暴露 `remove(int index)`，policy就不再由ADT保证。
 
 ```java
 public interface Stack<Item> {
@@ -48,8 +90,7 @@ Bag常用于不需要removal的统计或graph adjacency collection；Queue用于
 
 ## 1.3.2 Resizing array：用几何扩缩容获得均摊常数
 
-动态调整数组（，resizing arrays）保持items在 `a[0..n-1]`。Push在 `n == a.length` 时分配double capacity并复制；pop清空slot，若size降到quarter capacity则halve。
-
+动态调整数组（resizing arrays）保持items在 `a[0..n-1]`。Push在 `n == a.length` 时分配double capacity并复制；pop清空slot，若size降到quarter capacity则halve。
 
 ```java
 public void push(Item item) {
@@ -69,14 +110,13 @@ public Item pop() {
 
 单次resize是linear copy，但capacity doubling意味着连续push中，每个旧item被复制的总次数受geometric series约束，push是amortized constant time。Pop若在half-full立即halve，下一次push可能马上double，交替操作造成resize thrashing；quarter-full才halve保留hysteresis，并让capacity维持在size的常数倍。
 
-对象游离（，loitering）解释为什么要把removed slot设为null。Logical size已经减小并不自动清除reference；长期stack若保留large objects会形成memory leak-like retention。
-
+对象游离（loitering）解释为什么要把removed slot设为null。Logical size已经减小并不自动清除reference；长期stack若保留large objects会形成memory leak-like retention。
 
 Java不能直接 `new Item[capacity]`，因为generic type erasure与reified arrays不兼容。Official code创建 `new Object[capacity]` 后做受控cast；安全依赖private array只通过Item-typed API进入，不能把它暴露成可写Object array。
 
 ## 1.3.3 Linked lists：节点与局部pointer rewiring
 
-链表（，linked lists）把capacity问题换成每item node overhead和pointer locality。Singly linked stack把top保存在 `first`，push在head插入，pop移除head：
+链表（linked lists）把capacity问题换成每item node overhead和pointer locality。Singly linked stack把top保存在 `first`，push在head插入，pop移除head：
 
 ```java
 private Node<Item> first;
@@ -99,13 +139,11 @@ public Item pop() {
 }
 ```
 
-
 每个operation只改constant number of references，因此worst-case constant time，不需要amortization。Representation invariant包括：`n == 0` iff `first == null`；沿next恰好走到n个nodes后到null；不存在cycle。只测push/pop outputs无法发现错误n或隐藏cycle，invariant checker应独立遍历。
 
 ## 1.3.4 Linked queue：first与last必须同步
 
 Queue需要在tail插入、head删除，因此同时保存 `first` 与 `last`。Enqueue到empty queue时二者指向same new node；dequeue最后一个item后，`first` 变null，也必须把 `last` 设null。
-
 
 ```java
 public void enqueue(Item item) {
@@ -129,10 +167,9 @@ public Item dequeue() {
 
 如果遗漏最后一行，logical queue虽empty，`last` 仍引用removed node；下一次enqueue的empty branch会重设first/last，功能测试可能暂时通过，但representation不干净并保留旧object。应核查empty iff first和last都null，nonempty时last.next为null。
 
-
 ## 1.3.5 Iteration：暴露顺序，不暴露representation
 
-迭代（，iteration）由 `Iterable<Item>` 与 `Iterator<Item>` 协作。Collection的 `iterator()` 创建独立cursor；`hasNext` 判断，`next` 返回item并推进。Array stack从 `n-1` 倒着走，linked stack从first沿next走，二者都给LIFO order。
+迭代（iteration）由 `Iterable<Item>` 与 `Iterator<Item>` 协作。Collection的 `iterator()` 创建独立cursor；`hasNext` 判断，`next` 返回item并推进。Array stack从 `n-1` 倒着走，linked stack从first沿next走，二者都给LIFO order。
 
 ```java
 private class ReverseArrayIterator implements Iterator<Item> {
@@ -146,13 +183,11 @@ private class ReverseArrayIterator implements Iterator<Item> {
 }
 ```
 
-
 Iterator封装traversal mechanics，但order仍是behavior。Queue official iterator给FIFO；Stack给LIFO；Bag只保证visit all items，client不应把当前linked implementation的reverse insertion order当永久contract。Concurrent modification policy也要明确；本节minimal iterators不是fail-fast correctness guarantee。
 
 ## 1.3.6 Dijkstra双栈求值：ADT policy直接成为算法
 
 Fully parenthesized arithmetic expression可用两个stacks单遍求值：operator压入ops，number压入vals；遇右括号时弹出一个operator和所需operands，计算后把result压回vals。LIFO正好匹配最近尚未完成的nested operation。
-
 
 ```java
 Stack<String> ops = new Stack<String>();
@@ -177,6 +212,78 @@ Official `Evaluate` 支持 `+ - * / sqrt`，并要求tokens由whitespace分开�
 
 ## 统一验收：从访问policy到representation invariant
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“1.3 · Bags, Queues, and Stacks”的两个最小情境间切换，再逐项选择正式概念。预测“动态数组扩容采用 2N、缩容采用 N/2 且低水位为 1/4，可得摊还常数操作”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <BagsQueuesStacksModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存操作序列、头尾索引、容量、元素次序、失效引用与摊还复制次数，并检查“栈保持后进先出，队列保持先进先出，背包迭代不承诺删除或特定顺序”仍然成立。
+
+    <BagsQueuesStacksTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“出队后不清除失效引用造成对象游离，或在 1/2 负载时反复扩缩产生抖动”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <BagsQueuesStacksCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="1.3 · Bags, Queues, and Stacks 的首要反例">
+  出队后不清除失效引用造成对象游离，或在 1/2
+  负载时反复扩缩产生抖动。它会破坏“栈保持后进先出，队列保持先进先出，背包迭代不承诺删除或特定顺序”；应从操作序列、头尾索引、容量、元素次序、失效引用与摊还复制次数中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “动态数组扩容采用 2N、缩容采用 N/2 且低水位为
+  1/4，可得摊还常数操作”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“1.3 · Bags, Queues, and
+  Stacks”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对操作序列、头尾索引、容量、元素次序、失效引用与摊还复制次数。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **背包、队列与栈**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **集合API**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **动态调整数组**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **链表**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **迭代**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“1.3 · Bags, Queues, and Stacks”作者页为分母，逐项定位
+  背包、队列与栈、集合API、动态调整数组、链表、迭代。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“动态数组扩容采用 2N、缩容采用 N/2 且低水位为 1/4，可得摊还常数操作”不是孤立结论？
+
+<Answer>
+  选择“括号匹配”的输入：依次读取 [ ( ) ] 并在遇到右括号时弹栈。按 选择访问合同 →
+  执行插入操作 → 触发扩容或链接 → 执行删除操作 → 核对迭代次序
+  保存状态，并用“栈顶必须是最近尚未配对的左括号”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“出队后不清除失效引用造成对象游离，或在 1/2 负载时反复扩缩产生抖动”已经修复？
+
+<Answer>
+  保存操作序列、头尾索引、容量、元素次序、失效引用与摊还复制次数作为正常基线；注入该故障并标记第一个违反“栈保持后进先出，队列保持先进先出，背包迭代不承诺删除或特定顺序”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -188,7 +295,9 @@ Official `Evaluate` 支持 `+ - * / sqrt`，并要求tokens由whitespace分开�
 6. Iteration隐藏traversal mechanics，但client-visible order仍需明确。
 7. Dijkstra two-stack evaluation说明LIFO policy如何直接支撑nested expression algorithm。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/13stacks/"
+/>

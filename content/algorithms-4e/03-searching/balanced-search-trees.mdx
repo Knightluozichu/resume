@@ -1,34 +1,76 @@
 ---
-title: "3.3 Balanced Search Trees：2-3树、左倾红黑树与对数级删除"
+title: 3.3 Balanced Search Trees：2-3树、左倾红黑树与对数级删除
 type: B
-section: "查找"
+section: 查找
 order: 12
-description: "按官方3.3重建2-3 search tree等高不变量、LLRB红链接编码、rotations/color flips、插入修复、black-height证明与top-down red-black deletion。"
+description: 3.3 · Balanced Search Trees覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/33balanced/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-3.3
 ---
 
+import {
+  BalancedSearchTreesModelLab,
+  BalancedSearchTreesTraceLab,
+  BalancedSearchTreesCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/balanced-search-trees";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3.3 · Balanced Search Trees”如何把 2-3 树等价表示为左倾红黑树，并用旋转与颜色翻转维持对数高度
+- 能逐项核对 平衡搜索树、2-3搜索树、红黑二叉搜索树、旋转与颜色翻转、红黑树删除，并区分作者站内容与本页独立补充
+- 能按“含 N 个节点的左倾红黑树高度不超过 2 log2 N”手算一个最小输入，逐步检查“红链接左倾、任一路径不连续两条红链接、根到空链接的黑链接数相同”
+- 能注入“旋转时漏掉颜色或子树 size 转移，导致局部次序看似正确但黑高和 rank 已损坏”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3·3 · Balanced Search Trees”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/33balanced/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“3·3 · Balanced Search Trees”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“3·3 · Balanced Search Trees”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：3.3 · Balanced Search Trees
+
+- **1. 平衡搜索树**：在本页通过“按 BST 插入”连接解释、交互状态和练习验收。
+- **2. 2-3搜索树**：在本页通过“修复右倾红链接”连接解释、交互状态和练习验收。
+- **3. 红黑二叉搜索树**：在本页通过“拆分连续红链接”连接解释、交互状态和练习验收。
+- **4. 旋转与颜色翻转**：在本页通过“向上传播颜色”连接解释、交互状态和练习验收。
+- **5. 红黑树删除**：在本页通过“核对黑高与中序”连接解释、交互状态和练习验收。
 
 ## 从“随机平均很快还不够”开始
 
-上一节普通BST在随机插入下平均很快，但ascending keys会把它拉成一条chain。平衡搜索树（，balanced search trees）要解决的不是average case，而是无论input order如何都限制root-to-null path。
+上一节普通BST在随机插入下平均很快，但ascending keys会把它拉成一条chain。平衡搜索树（balanced search trees）要解决的不是average case，而是无论input order如何都限制root-to-null path。
 
 先预测把A到J依次插入红黑树是否仍得到height 9。不会。每次put先按BST规则落到null link，再在recursive return path做constant-size rotations与color flips；sorted order也会被折叠成near-perfect shape。Search仍完全沿用BST comparison code，因为color只解释结构，不改变symmetric order。
 
 官方3.3先用2-3 tree定义理想balance，再用left-leaning red-black BST把multi-key node编码回binary links，最后给出insertion、deletion与最坏界。核心桥梁是：**red link把两个binary nodes粘成一个logical 3-node；black links才对应2-3 tree层数。**
 
-
 ## 3.3.1 2-3 search trees：允许一个node暂存两个keys
 
-2-3搜索树（，2-3 search trees）不是“每个node有两三个children”的模糊分类，而有严格interval semantics：
+2-3搜索树（2-3 search trees）不是“每个node有两三个children”的模糊分类，而有严格interval semantics：
 
 - 2-node `[M]` 的left subtree只含小于M的keys，right只含大于M的keys。
 - 3-node `[E | M]` 的left、middle、right分别对应小于E、E与M之间、大于M三个interval。
 - 所有root-to-null paths link count相同，这就是perfect balance。
 
-Search在一个node内比较一到两个keys，然后只进入唯一可能包含query的interval。Insert先执行unsuccessful search，但不在bottom挂一个更深leaf：若命中2-node，就把它扩为3-node；若命中3-node，就暂时形成含三个keys的4-node（，temporary 4-node）。
+Search在一个node内比较一到两个keys，然后只进入唯一可能包含query的interval。Insert先执行unsuccessful search，但不在bottom挂一个更深leaf：若命中2-node，就把它扩为3-node；若命中3-node，就暂时形成含三个keys的4-node（temporary 4-node）。
 
 4-node split把smallest与largest各留在一个2-node，把middle key交给parent。Parent是2-node时吸收后停止；parent也是3-node时形成新的temporary 4-node并继续向上；若传播到root，split root会让tree height整体增加1，所以所有leaves仍同步加深。
 
@@ -48,8 +90,7 @@ $$
 
 ## 3.3.2 Red-black BSTs：用left red link编码3-node
 
-红黑二叉搜索树（，red-black BSTs）把3-node `[E | M]` 表示成M node与其left child E，连接E的parent link标为red。普通2-node则由black parent link表示。
-
+红黑二叉搜索树（red-black BSTs）把3-node `[E | M]` 表示成M node与其left child E，连接E的parent link标为red。普通2-node则由black parent link表示。
 
 颜色存放在child node字段中，含义是“parent指向我的link是什么颜色”。Root没有parent但约定black；null links也视为black。Left-leaning red-black BST（LLRB）在每次public operation结束时满足四项不变量：
 
@@ -60,7 +101,7 @@ $$
 
 把每条left-red link画平并collapse其两端，就一一对应到perfectly balanced 2-3 tree。反向展开每个3-node也唯一得到一个left-leaning encoding。这解释了为什么search、floor、rank与range code无需读取color：它们只依赖BST order；color只参与updates与certificate。
 
-Black height（，black height）不是普通height。Red nodes可插在black levels之间，但不能连续，因此ordinary path最多把每个black level扩成两条binary links。
+Black height（black height）不是普通height。Red nodes可插在black levels之间，但不能连续，因此ordinary path最多把每个black level扩成两条binary links。
 
 ## 3.3.3 Rotations and color flips：三种local rewrite
 
@@ -69,7 +110,6 @@ Black height（，black height）不是普通height。Red nodes可插在black le
 - `rotateLeft`：right child由red link接入时，让它升为subtree root，并把旧root改成left-red child。
 - `rotateRight`：出现两条连续left-red links时，让middle node升为root。
 - `flipColors`：black parent有两个red children，等价于temporary 4-node；parent变red、children变black，把middle key向上一层传递。
-
 
 Rotation必须同时迁移middle subtree、继承old parent color、把old root parent link改red，并更新两层size。以left rotation为例：
 
@@ -87,7 +127,6 @@ private Node rotateLeft(Node h) {
 ```
 
 Inorder在rotation前后不变。若old order是 `A < h < B < x < C`，rotation后仍按A、h、B、x、C排列；改变的是root和red-link orientation，不是key intervals。Caller必须接收返回的新subtree root，否则links会被局部改了，ancestor却仍指向old root。
-
 
 ## 3.3.4 Red-black insertion：return path上的固定修复顺序
 
@@ -110,7 +149,6 @@ private Node put(Node h, Key key, Value val) {
 }
 ```
 
-
 第一条把isolated right-red规范成left-red；第二条拆解连续left-red；第三条split temporary 4-node。顺序不能随意交换，因为前一项为后一项建立canonical shape。Public `put`最后强制 `root.color = BLACK`；若root在color flip中变red，这一步等价于2-3 tree split root后增加新black level。
 
 每个level至多constant number of tests与rotations，访问levels数量受height限制。令collapsed 2-3 tree black height为b，则至少有：
@@ -127,10 +165,9 @@ $$
 
 于是get、put、min/max、floor/ceiling、rank/select都在worst case Theta(log N)，而不是普通BST依赖random-order的expected guarantee。官方还给出random red-black BST从root到node的平均path约为 `1.00 lg N`，但这是平均常数，不应与worst height bound混写。
 
-
 ## 3.3.5 Red-black deletion：下降前先保证“可删除”
 
-红黑树删除（，red-black deletion）比insertion难，因为从2-node直接删唯一key会留下empty node并破坏perfect balance。策略不是删完才盲修，而是在下降到child前维持：
+红黑树删除（red-black deletion）比insertion难，因为从2-node直接删唯一key会留下empty node并破坏perfect balance。策略不是删完才盲修，而是在下降到child前维持：
 
 > Current subtree root不是2-node；要进入的child本身为red，或它有red child可供借用。
 
@@ -156,14 +193,11 @@ private Node deleteMin(Node h) {
 }
 ```
 
-
 Public `deleteMin`若root两children都black，先把root暂设red，让第一步允许从root借出一个black level；结束后若tree非空再置root black。`deleteMax`方向近似对称，但LLRB有left-leaning偏向：向right前若left red，先rotateRight，确保最大key可能落在可安全移除的位置。
-
 
 ## 3.3.6 Arbitrary delete：top-down balance与successor替换结合
 
 任意key删除仍使用BST comparison path。向left时准备left side；向right或命中时，若left-red先rotateRight。目标是leaf且right null可直接移除；目标有right subtree则用right minimum successor覆盖key/value，再对right subtree执行red-black `deleteMin`。
-
 
 ```java
 private Node delete(Node h, Key key) {
@@ -202,13 +236,88 @@ Production implementation还必须处理API contract：null key拒绝、missing 
 3. `isBalanced`：先沿一条path取得black count，再要求每条root-to-null path消耗相同count。
 4. `isSizeConsistent`：每个node满足stored size equation。
 
-
 还应复用3.2的rank/select inverse，并把随机put/delete sequence与reference ordered map差分比较。每次operation后核对sorted keys、values、size、min/max、floor/ceiling与range result；再加入ascending、descending、duplicate update、delete root、delete absent和反复deleteMin/deleteMax。
 
 只测inorder能发现order corruption，却发现不了black-height mismatch；只测height小于bound，可能放过right-red或stale size；只测颜色又可能放过lost subtree。证书必须拆维度，失败时才能定位是association、ordering、encoding、balance还是metadata。
 
 ## 统一验收：从logical 2-3 tree到binary implementation
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“3.3 · Balanced Search Trees”的两个最小情境间切换，再逐项选择正式概念。预测“含 N 个节点的左倾红黑树高度不超过 2 log2 N”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <BalancedSearchTreesModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存键序列、链接颜色、旋转/翻色轨迹、每路黑高、树高、size 与中序预言机，并检查“红链接左倾、任一路径不连续两条红链接、根到空链接的黑链接数相同”仍然成立。
+
+    <BalancedSearchTreesTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“旋转时漏掉颜色或子树 size 转移，导致局部次序看似正确但黑高和 rank 已损坏”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <BalancedSearchTreesCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="3.3 · Balanced Search Trees 的首要反例">
+  旋转时漏掉颜色或子树 size 转移，导致局部次序看似正确但黑高和 rank
+  已损坏。它会破坏“红链接左倾、任一路径不连续两条红链接、根到空链接的黑链接数相同”；应从键序列、链接颜色、旋转/翻色轨迹、每路黑高、树高、size
+  与中序预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “含 N 个节点的左倾红黑树高度不超过 2 log2
+  N”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“3.3 · Balanced Search
+  Trees”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对键序列、链接颜色、旋转/翻色轨迹、每路黑高、树高、size
+  与中序预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **平衡搜索树**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **2-3搜索树**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **红黑二叉搜索树**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **旋转与颜色翻转**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **红黑树删除**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“3.3 · Balanced Search Trees”作者页为分母，逐项定位
+  平衡搜索树、2-3搜索树、红黑二叉搜索树、旋转与颜色翻转、红黑树删除。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“含 N 个节点的左倾红黑树高度不超过 2 log2 N”不是孤立结论？
+
+<Answer>
+  选择“递增插入”的输入：依次插入 A、B、C。按 按 BST 插入 → 修复右倾红链接 →
+  拆分连续红链接 → 向上传播颜色 → 核对黑高与中序 保存状态，并用“旋转和翻色把临时
+  4-node 拆分，避免退化为长度 3
+  的链”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“旋转时漏掉颜色或子树 size 转移，导致局部次序看似正确但黑高和 rank 已损坏”已经修复？
+
+<Answer>
+  保存键序列、链接颜色、旋转/翻色轨迹、每路黑高、树高、size
+  与中序预言机作为正常基线；注入该故障并标记第一个违反“红链接左倾、任一路径不连续两条红链接、根到空链接的黑链接数相同”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -221,7 +330,9 @@ Production implementation还必须处理API contract：null key拒绝、missing 
 7. Delete在下降前通过moveRedLeft/moveRedRight保证child可删，回程balance恢复canonical form。
 8. Order、2-3 encoding、black balance与subtree sizes必须独立认证。
 
-
-## 名词解释
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/33balanced/"
+/>

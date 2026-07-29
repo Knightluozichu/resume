@@ -65,9 +65,22 @@ function WeightedDigraphCanvas({
   const currentKey = current ? edgeKey(current) : null;
 
   return (
-    <svg viewBox="0 0 620 300" className="h-auto w-full border border-border bg-background" role="img" aria-label="edge-weighted digraph">
+    <svg
+      viewBox="0 0 620 300"
+      className="h-auto w-full border border-border bg-background"
+      role="img"
+      aria-label="edge-weighted digraph"
+    >
       <defs>
-        <marker id={markerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker
+          id={markerId}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
           <path d="M 0 0 L 10 5 L 0 10 z" className="fill-current" />
         </marker>
       </defs>
@@ -81,7 +94,13 @@ function WeightedDigraphCanvas({
         const uy = dy / length;
         const active = highlightedKeys.has(edgeKey(edge));
         const selected = currentKey === edgeKey(edge);
-        const strokeClass = selected ? "text-warning" : active ? "text-success" : edge.weight < 0 ? "text-danger" : "text-border";
+        const strokeClass = selected
+          ? "text-warning"
+          : active
+            ? "text-success"
+            : edge.weight < 0
+              ? "text-danger"
+              : "text-border";
         return (
           <g key={edgeKey(edge)} className={strokeClass}>
             <line
@@ -97,7 +116,7 @@ function WeightedDigraphCanvas({
               x={(start.x + end.x) / 2 + uy * 9}
               y={(start.y + end.y) / 2 - ux * 9}
               textAnchor="middle"
-              className="fill-primary stroke-background text-[10px] font-mono"
+              className="fill-primary stroke-background text-[11px] font-mono"
               strokeWidth="5"
               style={{ paintOrder: "stroke" }}
             >
@@ -108,9 +127,35 @@ function WeightedDigraphCanvas({
       })}
       {graphPoints.map((point, vertex) => (
         <g key={vertex}>
-          <circle cx={point.x} cy={point.y} r="22" className={settled.includes(vertex) ? "fill-accent/20 stroke-accent" : "fill-background stroke-border"} strokeWidth="2" />
-          <text x={point.x} y={point.y + (distances ? 0 : 4)} textAnchor="middle" className="fill-primary text-xs font-semibold">{vertex}</text>
-          {distances ? <text x={point.x} y={point.y + 14} textAnchor="middle" className="fill-secondary text-[9px] font-mono">{formatDistance(distances[vertex])}</text> : null}
+          <circle
+            cx={point.x}
+            cy={point.y}
+            r="22"
+            className={
+              settled.includes(vertex)
+                ? "fill-accent/20 stroke-accent"
+                : "fill-background stroke-border"
+            }
+            strokeWidth="2"
+          />
+          <text
+            x={point.x}
+            y={point.y + (distances ? 0 : 4)}
+            textAnchor="middle"
+            className="fill-primary text-xs font-semibold"
+          >
+            {vertex}
+          </text>
+          {distances ? (
+            <text
+              x={point.x}
+              y={point.y + 14}
+              textAnchor="middle"
+              className="fill-secondary text-[11px] font-mono"
+            >
+              {formatDistance(distances[vertex])}
+            </text>
+          ) : null}
         </g>
       ))}
     </svg>
@@ -135,7 +180,12 @@ function dijkstraTrace() {
   while (true) {
     let vertex = -1;
     for (let candidate = 0; candidate < points.length; candidate++) {
-      if (!settled[candidate] && Number.isFinite(dist[candidate]) && (vertex === -1 || dist[candidate] < dist[vertex])) vertex = candidate;
+      if (
+        !settled[candidate] &&
+        Number.isFinite(dist[candidate]) &&
+        (vertex === -1 || dist[candidate] < dist[vertex])
+      )
+        vertex = candidate;
     }
     if (vertex === -1) break;
     settled[vertex] = true;
@@ -170,20 +220,42 @@ export function Algs4WeightedDigraphModelMap() {
       <div className="border border-border bg-elevated p-4 sm:p-5">
         <label className="text-sm font-semibold text-primary">
           DirectedEdge = {edgeLabel(edge)}
-          <input className="mt-2 w-full accent-current" type="range" min="0" max={edges.length - 1} value={edgeIndex} onChange={(event) => setEdgeIndex(Number(event.target.value))} />
+          <input
+            className="mt-2 w-full accent-current"
+            type="range"
+            min="0"
+            max={edges.length - 1}
+            value={edgeIndex}
+            onChange={(event) => setEdgeIndex(Number(event.target.value))}
+          />
         </label>
-        <div className="mt-4"><WeightedDigraphCanvas current={edge} /></div>
+        <div className="mt-4">
+          <WeightedDigraphCanvas current={edge} />
+        </div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-secondary">
-          <div className="border border-accent p-3">from()<div className="font-mono text-accent">{edge.from}</div></div>
-          <div className="border border-warning p-3">to()<div className="font-mono text-warning">{edge.to}</div></div>
-          <div className="border border-success p-3">weight()<div className="font-mono text-success">{edge.weight.toFixed(2)}</div></div>
+          <div className="border border-accent p-3">
+            from()<div className="font-mono text-accent">{edge.from}</div>
+          </div>
+          <div className="border border-warning p-3">
+            to()<div className="font-mono text-warning">{edge.to}</div>
+          </div>
+          <div className="border border-success p-3">
+            weight()
+            <div className="font-mono text-success">
+              {edge.weight.toFixed(2)}
+            </div>
+          </div>
         </div>
         <div className="mt-3 border border-border bg-background p-3 text-xs text-secondary">
-          adj({edge.from}) = <span className="font-mono text-primary">{outgoing.map(edgeLabel).join(" · ")}</span>
+          adj({edge.from}) ={" "}
+          <span className="font-mono text-primary">
+            {outgoing.map(edgeLabel).join(" · ")}
+          </span>
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        DirectedEdge只有from端的outgoing adjacency list持有它；direction与weight都是path contract的一部分。
+        DirectedEdge只有from端的outgoing adjacency
+        list持有它；direction与weight都是path contract的一部分。
       </figcaption>
     </figure>
   );
@@ -212,7 +284,12 @@ const dagEdges: DirectedEdge[] = [
 function dagShortestTrace() {
   const dist = Array(dagPoints.length).fill(Number.POSITIVE_INFINITY);
   const edgeTo: (DirectedEdge | null)[] = Array(dagPoints.length).fill(null);
-  const states: { current: number; dist: number[]; edgeTo: (DirectedEdge | null)[]; changed: DirectedEdge[] }[] = [];
+  const states: {
+    current: number;
+    dist: number[];
+    edgeTo: (DirectedEdge | null)[];
+    changed: DirectedEdge[];
+  }[] = [];
   dist[0] = 0;
   for (let vertex = 0; vertex < dagPoints.length; vertex++) {
     const changed: DirectedEdge[] = [];
@@ -224,7 +301,12 @@ function dagShortestTrace() {
         changed.push(edge);
       }
     }
-    states.push({ current: vertex, dist: [...dist], edgeTo: [...edgeTo], changed });
+    states.push({
+      current: vertex,
+      dist: [...dist],
+      edgeTo: [...edgeTo],
+      changed,
+    });
   }
   return states;
 }
@@ -240,7 +322,11 @@ function computeEarliestStarts() {
   for (let index = 0; index < jobs.length; index++) {
     const prerequisites = jobs[index].prerequisites;
     if (prerequisites.length > 0) {
-      starts[index] = Math.max(...prerequisites.map((vertex) => starts[vertex] + jobs[vertex].duration));
+      starts[index] = Math.max(
+        ...prerequisites.map(
+          (vertex) => starts[vertex] + jobs[vertex].duration,
+        ),
+      );
     }
   }
   return starts;
@@ -276,7 +362,9 @@ type BellmanState = {
 
 function bellmanFordQueueTrace() {
   const dist = Array(bellmanPoints.length).fill(Number.POSITIVE_INFINITY);
-  const edgeTo: (DirectedEdge | null)[] = Array(bellmanPoints.length).fill(null);
+  const edgeTo: (DirectedEdge | null)[] = Array(bellmanPoints.length).fill(
+    null,
+  );
   const queue = [0];
   const onQueue = Array(bellmanPoints.length).fill(false);
   const states: BellmanState[] = [];
@@ -301,7 +389,13 @@ function bellmanFordQueueTrace() {
         }
       }
     }
-    states.push({ current: vertex, dist: [...dist], edgeTo: [...edgeTo], queue: [...queue], changed });
+    states.push({
+      current: vertex,
+      dist: [...dist],
+      edgeTo: [...edgeTo],
+      queue: [...queue],
+      changed,
+    });
   }
   return states;
 }

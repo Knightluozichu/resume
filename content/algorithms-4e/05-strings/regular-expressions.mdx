@@ -1,23 +1,66 @@
 ---
-title: "5.4 Regular Expressions：Thompson NFA、epsilon closure与GREP"
+title: 5.4 Regular Expressions：Thompson NFA、epsilon closure与GREP
 type: B
-section: "字符串"
+section: 字符串
 order: 22
-description: "按官方5.4重建正则表达式到Thompson NFA的构造、空字符转换图、epsilon closure、状态集模拟、GREP包装、复杂度边界与独立证书。"
+description: 5.4 · Regular Expressions覆盖 5 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/54regexp/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-5.4
 ---
 
+import {
+  RegularExpressionsModelLab,
+  RegularExpressionsTraceLab,
+  RegularExpressionsCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/regular-expressions";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“5.4 · Regular Expressions”如何把正则表达式编译为 Thompson NFA，并以 epsilon 闭包和字符转换执行识别
+- 能逐项核对 正则表达式、非确定有限状态自动机、空字符转换、NFA模拟、正则表达式grep，并区分作者站内容与本页独立补充
+- 能按“NFA 模拟对长度 M 的正则和长度 N 的文本最坏时间 O(MN)，空间 O(M)”手算一个最小输入，逐步检查“每轮状态集恰为读完当前文本前缀后可达的 NFA 状态 epsilon 闭包”
+- 能注入“构造交替或闭包时操作符栈配对错误，或字符转换后没有再次求 epsilon 闭包”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“5·4 · Regular Expressions”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/54regexp/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“5·4 · Regular Expressions”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“5·4 · Regular Expressions”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：5.4 · Regular Expressions
+
+- **1. 正则表达式**：在本页通过“解析正则 token”连接解释、交互状态和练习验收。
+- **2. 非确定有限状态自动机**：在本页通过“建立 epsilon 转换”连接解释、交互状态和练习验收。
+- **3. 空字符转换**：在本页通过“求初始闭包”连接解释、交互状态和练习验收。
+- **4. NFA模拟**：在本页通过“消费一个文本字符”连接解释、交互状态和练习验收。
+- **5. 正则表达式grep**：在本页通过“再闭包并判断接受”连接解释、交互状态和练习验收。
 
 ## 从“同一个输入位置，可以同时有多条合法路径”开始
 
-正则表达式（，regular expressions）不是“逐字符照着走的一条路线”，而是一张允许分支、跳过和循环的程序图。表达式 `(A*B|AC)D` 描述两类strings：零个或多个A后接BD，或者ACD。
+正则表达式（regular expressions）不是“逐字符照着走的一条路线”，而是一张允许分支、跳过和循环的程序图。表达式 `(A*B|AC)D` 描述两类strings：零个或多个A后接BD，或者ACD。
 
-先预测：输入 `ACD` 读到第一个A以后，应立刻断定走 `A*B` branch，还是同时保留“继续A*”与“转到AC”两种可能？若贪心地只猜一条路径，后续C可能让第一次选择失败；非确定有限状态自动机保留整个possible-state set，直到输入提供足够证据。
+先预测：输入 `ACD` 读到第一个A以后，应立刻断定走 `A*B` branch，还是同时保留“继续A\*”与“转到AC”两种可能？若贪心地只猜一条路径，后续C可能让第一次选择失败；非确定有限状态自动机保留整个possible-state set，直到输入提供足够证据。
 
-表达式E所描述的正则语言（）记作 \(L(E)\)。三种核心组合的集合语义是：
+表达式E所描述的正则语言记作 \(L(E)\)。三种核心组合的集合语义是：
 
 $$
 \begin{aligned}
@@ -29,18 +72,16 @@ $$
 
 Dot `.` 匹配任意一个character；parentheses控制分组。官方`NFA` recognizer判断**整个input**是否属于language，而不是默认寻找任意substring。
 
-
 ## 5.4.1 从regexp位置到NFA states
 
-非确定有限状态自动机（，nondeterministic finite automata）为length M的regexp建立M+1个states：
+非确定有限状态自动机（nondeterministic finite automata）为length M的regexp建立M+1个states：
 
 - State i对应regexp character `re[i]`。
 - Literal或dot在匹配当前input character后从i进入i+1。
 - Parenthesis、alternation和star不消费input，它们由epsilon edges表达控制流。
 - State M是accept state；只有输入全部消费后M仍reachable才接受。
 
-字符边无需存进digraph，因为从state i读到匹配字符时目标固定为i+1。Digraph只保存空字符转换（，epsilon transitions）。
-
+字符边无需存进digraph，因为从state i读到匹配字符时目标固定为i+1。Digraph只保存空字符转换（epsilon transitions）。
 
 形式上，若当前states为S，读字符c后先计算character move：
 
@@ -78,7 +119,6 @@ if (re[i] == '(' || re[i] == '|') {
 }
 ```
 
-
 这段官方代码一次只处理parenthesized group中的single alternation。`(A|B)`可用；`(A|B|C)`不能直接假定正确，因为到`)`时stack上有多个`|`，需要扩展构造逻辑或改写为nested alternation。
 
 ### Kleene star的forward与back edges
@@ -94,14 +134,13 @@ if (re[i] == '(' || re[i] == '*' || re[i] == ')')
     graph.addEdge(i, i + 1);
 ```
 
-Forward edge允许zero copies，back edge允许one more copy；`*`本身的pass-through edge允许退出循环。闭包（）作用于前一个atom或parenthesized expression，不是“任意字符”。
-
+Forward edge允许zero copies，back edge允许one more copy；`*`本身的pass-through edge允许退出循环。闭包作用于前一个atom或parenthesized expression，不是“任意字符”。
 
 每个regexp position只进出stack常数次，也只添加constant number of epsilon edges。因此合法expression的构图时间与space都是 \(O(M)\)。Production parser还应在构图前拒绝unbalanced parentheses、dangling operators和非法metacharacters；不能让stack underflow成为用户可见语义。
 
 ## 5.4.3 Epsilon closure：不读字符也能到达哪里
 
-Epsilon闭包（）是NFA simulation的基本操作。给定source set S：
+Epsilon闭包是NFA simulation的基本操作。给定source set S：
 
 $$
 \varepsilon\text{-closure}(S)
@@ -124,7 +163,6 @@ while (!stack.isEmpty()) {
 }
 ```
 
-
 Visited set不可省略：star会制造epsilon cycles，不标记会无限遍历。Closure还必须包含source自身，否则literal state没有outgoing epsilon edge时会凭空消失。
 
 一个可单独测试的closure certificate包含三条：
@@ -135,7 +173,7 @@ Visited set不可省略：star会制造epsilon cycles，不标记会无限遍历
 
 ## 5.4.4 NFA simulation：字符一步，再做闭包
 
-NFA模拟（，NFA simulation）从state 0的epsilon closure开始。每个input character执行两个阶段：
+NFA模拟（NFA simulation）从state 0的epsilon closure开始。每个input character执行两个阶段：
 
 ```java
 DirectedDFS dfs = new DirectedDFS(graph, 0);
@@ -154,7 +192,6 @@ for (int i = 0; i < txt.length(); i++) {
 return pc.contains(M);
 ```
 
-
 读完input prefix $x_0\ldots x_{j-1}$ 后，possible set P的invariant是：
 
 $$
@@ -171,7 +208,6 @@ input\in L(re)\quad\Longleftrightarrow\quad M\in P_N
 $$
 
 不能只问“某一步曾到过M吗”。若M在input尚未结束时reachable，而后续character无法消费，full-string recognizer仍必须reject。
-
 
 另一个常见错误是只在initialization做一次epsilon closure。Alternation join、group exit和star loop都可能发生在任何character move之后，所以每次consume之后都必须重新闭包。
 
@@ -190,14 +226,13 @@ T_{\mathrm{recognize}}=O(MN),\qquad
 S=O(M)
 $$
 
-
 Naive backtracking engine按path递归，ambiguous repetitions可能产生指数数量的选择序列。Thompson simulation把同一input position上抵达同一state的paths合并成一个set member，相当于memoize `(state, input-index)` pairs；最多只有 \((M+1)(N+1)\) 个pair。
 
 这不是说所有工业regex engine都指数，也不是说Thompson支持全部工业语法。Backreferences等feature不能由普通finite automaton直接表达；lookaround、captures和Unicode character classes也需要额外状态或engine machinery。本节保证只属于这里定义的regular subset。
 
 ## 5.4.6 GREP：把substring query变成full-string language
 
-正则表达式grep（，regular-expression grep）要判断“line中某个substring匹配query”。官方做法是包装：
+正则表达式grep（regular-expression grep）要判断“line中某个substring匹配query”。官方做法是包装：
 
 ```java
 String regexp = "(.*" + args[0] + ".*)";
@@ -209,7 +244,6 @@ while (StdIn.hasNextLine()) {
 ```
 
 前后 `.*` 分别消费match之前与之后的任意characters，使whole-line recognition等价于substring search。GREP的contract仍应说明line boundaries、empty query、metacharacters与input encoding。
-
 
 若query来自untrusted literal search，不能直接拼进regexp；A、parentheses、dot等是否是syntax必须由API明确。Literal grep应escape metacharacters，regex grep才把query解释为pattern。
 
@@ -245,11 +279,89 @@ function verifyCandidate(re, corpus, expectedEdges, candidate) {
 }
 ```
 
-
 Mutation tests尤其有效：删除star back edge应让multiple repetitions失败；伪造false accept应被negative corpus抓到；删除one branch应被accepted corpus抓到。Certificate使用图结构与external decisions，而不是复述candidate自己的trace。
 
 ## 5.4.9 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“5.4 · Regular Expressions”的两个最小情境间切换，再逐项选择正式概念。预测“NFA 模拟对长度 M 的正则和长度 N 的文本最坏时间 O(MN)，空间 O(M)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <RegularExpressionsModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存正则 token、操作符栈、epsilon 边、当前状态集、字符步、接受状态与小型枚举预言机，并检查“每轮状态集恰为读完当前文本前缀后可达的 NFA 状态 epsilon 闭包”仍然成立。
+
+    <RegularExpressionsTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“构造交替或闭包时操作符栈配对错误，或字符转换后没有再次求 epsilon 闭包”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <RegularExpressionsCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="5.4 · Regular Expressions 的首要反例">
+  构造交替或闭包时操作符栈配对错误，或字符转换后没有再次求 epsilon
+  闭包。它会破坏“每轮状态集恰为读完当前文本前缀后可达的 NFA 状态 epsilon
+  闭包”；应从正则 token、操作符栈、epsilon
+  边、当前状态集、字符步、接受状态与小型枚举预言机中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “NFA 模拟对长度 M 的正则和长度 N 的文本最坏时间 O(MN)，空间
+  O(M)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“5.4 · Regular
+  Expressions”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对正则
+  token、操作符栈、epsilon 边、当前状态集、字符步、接受状态与小型枚举预言机。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **正则表达式**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **非确定有限状态自动机**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **空字符转换**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **NFA模拟**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **正则表达式grep**：在实验 2 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“5.4 · Regular Expressions”作者页为分母，逐项定位
+  正则表达式、非确定有限状态自动机、空字符转换、NFA模拟、正则表达式grep。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“NFA 模拟对长度 M 的正则和长度 N 的文本最坏时间 O(MN)，空间 O(M)”不是孤立结论？
+
+<Answer>
+  选择“闭包路径”的输入：正则 A*B，文本 AAAB。按 解析正则 token → 建立 epsilon
+  转换 → 求初始闭包 → 消费一个文本字符 → 再闭包并判断接受 保存状态，并用“每次 A
+  后都可经 epsilon 返回闭包，最终 B
+  到达接受状态”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“构造交替或闭包时操作符栈配对错误，或字符转换后没有再次求 epsilon 闭包”已经修复？
+
+<Answer>
+  保存正则 token、操作符栈、epsilon
+  边、当前状态集、字符步、接受状态与小型枚举预言机作为正常基线；注入该故障并标记第一个违反“每轮状态集恰为读完当前文本前缀后可达的
+  NFA 状态 epsilon
+  闭包”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -262,4 +374,9 @@ Mutation tests尤其有效：删除star back edge应让multiple repetitions失�
 - 官方实现是明确的regex subset；`+`、multiway-or、classes和工业regex features不能被悄悄假定支持。
 - Independent certificate同时核对epsilon graph、closure invariants、positive/negative corpus与whole-input contract。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/54regexp/"
+/>

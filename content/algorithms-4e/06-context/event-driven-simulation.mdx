@@ -1,28 +1,71 @@
 ---
-title: "6.1 Event-Driven Simulation：碰撞预测、失效事件与弹性证书"
+title: 6.1 Event-Driven Simulation：碰撞预测、失效事件与弹性证书
 type: B
-section: "上下文"
+section: 上下文
 order: 24
-description: "按官方6.1重建hard-disc模型、future-event MinPQ、墙面与粒子碰撞预测、collision-count惰性失效、弹性响应、主循环与守恒量证书。"
+description: 6.1 · Event-Driven Simulation覆盖 6 个作者站正式主题，以章专属状态模型、逐步轨迹、反例恢复和独立预言机验收。
 demo: true
 math: true
 sourceUrl: "https://algs4.cs.princeton.edu/61event/"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: algs4-6.1
 ---
 
+import {
+  EventDrivenSimulationModelLab,
+  EventDrivenSimulationTraceLab,
+  EventDrivenSimulationCounterexampleLab,
+} from "@/components/mdx/algorithms-4e/v2/event-driven-simulation";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“6.1 · Event-Driven Simulation”如何用未来事件优先队列、碰撞预测和失效检测推进硬盘粒子系统
+- 能逐项核对 事件驱动模拟、硬盘粒子模型、碰撞预测、碰撞响应、未来事件优先队列、失效事件，并区分作者站内容与本页独立补充
+- 能按“每次有效碰撞更新 O(1) 粒子并安排 O(N) 新预测；队列操作为 O(log Q)”手算一个最小输入，逐步检查“模拟时钟单调前进；只有参与粒子的碰撞计数仍与预测时一致的事件才有效”
+- 能注入“粒子发生一次碰撞后仍执行队列中基于旧速度预测的后续事件”，保存基线、首个分叉、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ALGORITHMS_4E_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“6·1 · Event-Driven Simulation”对应 Robert Sedgewick 与 Kevin Wayne 的 _Algorithms, Fourth Edition_（Addison-Wesley Professional，2011）。对这一节，[作者维护的本节页面](https://algs4.cs.princeton.edu/61event/)提供与教材协同的浓缩正文、Java 实现、图示、习题和部分答案；[全书作者站](https://algs4.cs.princeton.edu/home/)给出 6 章、30 节的完整结构，并明确区分在线资料与纸质教材的学习用途。
+
+“6·1 · Event-Driven Simulation”的作者页公开经授权的在线节选和配套资源，但不是整本教材全文。因此“6·1 · Event-Driven Simulation”采用 **independent-rewrite / authorized-sample**：中文讲解、推导与实验独立组织，不声称逐段翻译；算法名称、API 和示例边界以作者页、[官方代码索引](https://algs4.cs.princeton.edu/code/)及[官方勘误](https://algs4.cs.princeton.edu/errata/)交叉核对。
+
+### 作者站章节坐标：6.1 · Event-Driven Simulation
+
+- **1. 事件驱动模拟**：在本页通过“预测未来碰撞”连接解释、交互状态和练习验收。
+- **2. 硬盘粒子模型**：在本页通过“插入最早事件”连接解释、交互状态和练习验收。
+- **3. 碰撞预测**：在本页通过“移动全部粒子”连接解释、交互状态和练习验收。
+- **4. 碰撞响应**：在本页通过“验证并响应碰撞”连接解释、交互状态和练习验收。
+- **5. 未来事件优先队列**：在本页通过“作废旧事件并重预测”连接解释、交互状态和练习验收。
+- **6. 失效事件**：在本页通过“预测未来碰撞”连接解释、交互状态和练习验收。
 
 ## 从“没有事件发生时，模拟器不必醒来”开始
 
-事件驱动模拟（，event-driven simulation）把计算集中到状态真正改变的时刻。对于没有外力的hard discs，粒子在两次碰撞之间保持constant velocity，因此可以直接从当前clock跳到下一次collision。
+事件驱动模拟（event-driven simulation）把计算集中到状态真正改变的时刻。对于没有外力的hard discs，粒子在两次碰撞之间保持constant velocity，因此可以直接从当前clock跳到下一次collision。
 
 先预测：如果time-driven simulator每0.1秒检查一次，而两个small discs在0.04秒相撞、0.08秒已经彼此穿过，0.1秒snapshot还能发现碰撞吗？不能。减小dt可降低漏检，却让每个empty interval也执行 $N^2$ overlap checks。
 
-Event-driven版本维护未来事件优先队列（，priority queue of future events），每次delete-min、验证、推进、响应、局部重预测。
-
+Event-driven版本维护未来事件优先队列（priority queue of future events），每次delete-min、验证、推进、响应、局部重预测。
 
 ## 6.1.1 Hard-disc model：碰撞之间是解析直线
 
-硬盘粒子模型（，hard-disc model）中，particle i具有：
+硬盘粒子模型（hard-disc model）中，particle i具有：
 
 $$
 \mathbf r_i=(r_{x,i},r_{y,i}),\quad
@@ -36,7 +79,6 @@ $$
 \mathbf r_i(t+\Delta t)=\mathbf r_i(t)+\Delta t\,\mathbf v_i(t)
 $$
 
-
 Model assumptions必须写进contract：
 
 - Initial discs不重叠，也不穿墙。
@@ -49,7 +91,7 @@ Model assumptions必须写进contract：
 
 ## 6.1.2 Wall collision prediction
 
-碰撞预测（，collision prediction）先处理wall。
+碰撞预测（collision prediction）先处理wall。
 
 Particle center x必须位于 $[\sigma,1-\sigma]$。若 $v_x\gt0$，到right vertical wall的time：
 
@@ -72,7 +114,6 @@ double timeToHitVerticalWall() {
     return Double.POSITIVE_INFINITY;
 }
 ```
-
 
 只把finite event且 $clock+\Delta t\le limit$ 插入MinPQ。Absolute time而非delta作为key，保证来自不同prediction moments的events可直接排序。
 
@@ -122,7 +163,6 @@ double dt = -(dvdr + Math.sqrt(d)) / dvdv;
 return dt > 0 ? dt : INFINITY;
 ```
 
-
 Floating-point near-tangent cases可能让理论zero的D变成tiny negative。Tolerance若使用，应scale-aware且测试记录；盲目clamp所有negative D会制造不存在的collision。
 
 ## 6.1.4 Future-event queue：预测的是“如果什么都不先发生”
@@ -141,12 +181,11 @@ Floating-point near-tangent cases可能让理论zero的D变成tiny negative。To
 - 只有b：horizontal-wall collision。
 - 都null：redraw。
 
-
 Queue中的collision不是promise，只是基于当前straight-line assumptions的candidate。若A原预计在t=4撞B，但A在t=2先撞墙改变velocity，t=4的A/B event就不再代表physical collision。
 
 ## 6.1.5 Invalidated events：collision count作为version stamp
 
-失效事件（，invalidated events）不必在heap内部主动查找删除。Event creation保存：
+失效事件（invalidated events）不必在heap内部主动查找删除。Event creation保存：
 
 ```java
 countA = a == null ? -1 : a.count();
@@ -159,15 +198,13 @@ boolean isValid() {
 }
 ```
 
-
 每次真实collision后，参与particles的count增加。旧event出heap时比较snapshot，mismatch就discard；这就是lazy invalidation。
-
 
 Why counts suffice：在该model中，particle trajectory只会因collision改变。Count未变意味着position可由same start state与velocity外推，prediction assumptions仍成立；count改变则无论new velocity碰巧相同与否，都保守invalid。
 
 ## 6.1.6 Collision resolution：impulse更新velocity
 
-碰撞响应（，collision resolution）发生在所有particles都已推进到event time以后。
+碰撞响应（collision resolution）发生在所有particles都已推进到event time以后。
 
 ### Wall response
 
@@ -199,7 +236,6 @@ $$
 \end{aligned}
 $$
 
-
 Impulse只作用在normal direction；frictionless tangential components保持。Correct implementation同时守恒pair linear momentum与kinetic energy：
 
 $$
@@ -211,7 +247,6 @@ $$
 \frac12m_i\|\mathbf v_i\|^2+\frac12m_j\|\mathbf v_j\|^2
 =\frac12m_i\|\mathbf v_i'\|^2+\frac12m_j\|\mathbf v_j'\|^2
 $$
-
 
 ## 6.1.7 Main loop：验证后推进，再局部修复future
 
@@ -235,7 +270,6 @@ while (!pq.isEmpty()) {
 }
 ```
 
-
 Main-loop invariant：
 
 1. Clock t never decreases。
@@ -246,7 +280,6 @@ Main-loop invariant：
 Redraw也放入same queue，使visualization遵守simulation clock，而不是用separate timer篡改physics。Official HZ=0.5，在每个redraw后安排 $t+1/HZ$ 的next redraw。
 
 ## 6.1.8 Work model与扩展边界
-
 
 Baseline `predict(a)`扫描N particles，花O(N) pair predictions；initialization对all particles约O(N²)，每个pair collision后重算a与b各O(N)，heap insertion/deletion另有logarithmic cost。实际queue含duplicates与invalidated events，memory和work取决于collision density。
 
@@ -277,11 +310,83 @@ for (const event of processedEvents) {
 }
 ```
 
-
 Testing还应含one particle wall bounce、two equal masses head-on、unequal masses、glancing collision、parallel trajectories、near tangent、event invalidation chain与time-reversal experiment。Roundoff drift要报告，不应用large epsilon掩盖systematic energy leak。
 
 ## 6.1.10 逐步运行路线
 
+## 先预测，再操作三个本节实验
+
+<Stepper>
+  <Step title="1. 对象、操作与成本模型">
+    先在“6.1 · Event-Driven Simulation”的两个最小情境间切换，再逐项选择正式概念。预测“每次有效碰撞更新 O(1) 粒子并安排 O(N) 新预测；队列操作为 O(log Q)”在哪个前提下成立，并解释输入、操作和证书之间的关系。
+
+    <EventDrivenSimulationModelLab />
+
+  </Step>
+  <Step title="2. 逐状态执行">
+    按真实控制顺序推进，不跳过中间状态。每一步都要保存粒子位置/速度、模拟时钟、事件时间、碰撞计数、有效标记、能量动量与重放轨迹，并检查“模拟时钟单调前进；只有参与粒子的碰撞计数仍与预测时一致的事件才有效”仍然成立。
+
+    <EventDrivenSimulationTraceLab />
+
+  </Step>
+  <Step title="3. 反例、拒绝与恢复">
+    固定同一输入，注入“粒子发生一次碰撞后仍执行队列中基于旧速度预测的后续事件”。先定位首个分叉，再撤销故障并重放；最终结果相同但中间证据不同，仍不能判定恢复完成。
+
+    <EventDrivenSimulationCounterexampleLab />
+
+  </Step>
+</Stepper>
+
+## 本节易错边界与可重放合同
+
+<Callout type="trap" title="6.1 · Event-Driven Simulation 的首要反例">
+  粒子发生一次碰撞后仍执行队列中基于旧速度预测的后续事件。它会破坏“模拟时钟单调前进；只有参与粒子的碰撞计数仍与预测时一致的事件才有效”；应从粒子位置/速度、模拟时钟、事件时间、碰撞计数、有效标记、能量动量与重放轨迹中找首个不一致状态，而不是只看最终输出。
+</Callout>
+
+<Callout type="trap" title="复杂度结论必须带前提">
+  “每次有效碰撞更新 O(1) 粒子并安排 O(N) 新预测；队列操作为 O(log
+  Q)”只对本节声明的输入表示、操作单位和算法版本成立。若字符表、图权、比较器、随机化、存储层次或预处理边界改变，必须重新推导，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="实现互比不等于独立正确">
+  对“6.1 · Event-Driven
+  Simulation”而言，两个实现可能共享同一边界错误。交付前既要比较作者代码合同，也要用小规模朴素预言机或数学证书独立核对粒子位置/速度、模拟时钟、事件时间、碰撞计数、有效标记、能量动量与重放轨迹。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：目录与状态映射。** 对下列正式概念逐项指出正文解释、交互状态和练习证据：
+
+- **事件驱动模拟**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **硬盘粒子模型**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **碰撞预测**：在实验 3 中指出对应状态，并写出一个通过条件。
+- **碰撞响应**：在实验 1 中指出对应状态，并写出一个通过条件。
+- **未来事件优先队列**：在实验 2 中指出对应状态，并写出一个通过条件。
+- **失效事件**：在实验 3 中指出对应状态，并写出一个通过条件。
+
+<Answer>
+  先以“6.1 · Event-Driven Simulation”作者页为分母，逐项定位
+  事件驱动模拟、硬盘粒子模型、碰撞预测、碰撞响应、未来事件优先队列、失效事件。每项都必须同时出现在解释段、组件模型与本题清单中；缺任一层就不能把该概念记为完整覆盖。
+</Answer>
+
+**问题 2：最小推演。** 怎样证明“每次有效碰撞更新 O(1) 粒子并安排 O(N) 新预测；队列操作为 O(log Q)”不是孤立结论？
+
+<Answer>
+  选择“失效事件”的输入：粒子 A 先与 B 碰撞，队列里仍有旧预测 A-C。按
+  预测未来碰撞 → 插入最早事件 → 移动全部粒子 → 验证并响应碰撞 →
+  作废旧事件并重预测 保存状态，并用“A 的碰撞计数变化使旧 A-C
+  事件失效”核对方向；随后只改变一个变量，检查公式的前提和边界是否仍成立。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“粒子发生一次碰撞后仍执行队列中基于旧速度预测的后续事件”已经修复？
+
+<Answer>
+  保存粒子位置/速度、模拟时钟、事件时间、碰撞计数、有效标记、能量动量与重放轨迹作为正常基线；注入该故障并标记第一个违反“模拟时钟单调前进；只有参与粒子的碰撞计数仍与预测时一致的事件才有效”的状态；撤销后用完全相同的输入、版本和随机种子重放。只有全部状态与独立预言机重新一致，才可发布修复结论。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -295,4 +400,9 @@ Testing还应含one particle wall bounce、two equal masses head-on、unequal ma
 - 处理有效event后只需repredict涉及changed particles的future collisions。
 - Baseline initialization O(N²)、每次响应O(N) reprediction；cell methods可缩小candidate neighborhood。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Algorithms, Fourth Edition"
+  adaptedUrl="https://algs4.cs.princeton.edu/61event/"
+/>
