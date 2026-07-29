@@ -3860,6 +3860,266 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Dak14OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "deep-android-volumes/00-official-learning-map/dav-series-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-series-official-learning-map");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/01-v1-01/dav-v1-01-preparation": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-01-preparation");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/02-v1-02/dav-v1-02-jni": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-02-jni");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/03-v1-03/dav-v1-03-init": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-03-init");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/04-v1-04/dav-v1-04-zygote": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-04-zygote");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/05-v1-05/dav-v1-05-common-classes": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-05-common-classes");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/06-v1-06/dav-v1-06-binder-native": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-06-binder-native");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/07-v1-07/dav-v1-07-audio-native": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-07-audio-native");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/08-v1-08/dav-v1-08-surface": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-08-surface");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/09-v1-09/dav-v1-09-vold-rild": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-09-vold-rild");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/10-v1-10/dav-v1-10-media-scanner": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v1-10-media-scanner");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/11-v2-01/dav-v2-01-source-environment": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-01-source-environment");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/12-v2-02/dav-v2-02-java-binder-messagequeue":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-02-java-binder-messagequeue");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/13-v2-03/dav-v2-03-system-server": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-03-system-server");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/14-v2-04/dav-v2-04-package-manager-service":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-04-package-manager-service");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/15-v2-05/dav-v2-05-power-manager-service": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-05-power-manager-service");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/16-v2-06/dav-v2-06-activity-manager-service":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-06-activity-manager-service");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/17-v2-07/dav-v2-07-content-provider": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-07-content-provider");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/18-v2-08/dav-v2-08-content-account-sync": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v2-08-content-account-sync");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/19-v3-01/dav-v3-01-development-environment":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-01-development-environment");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/20-v3-02/dav-v3-02-java-binder-messagequeue":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-02-java-binder-messagequeue");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/21-v3-03/dav-v3-03-audio-service": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-03-audio-service");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/22-v3-04/dav-v3-04-window-manager-service":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-04-window-manager-service");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-volumes/23-v3-05/dav-v3-05-input-system": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-05-input-system");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/24-v3-06/dav-v3-06-view-system": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-06-view-system");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/25-v3-07/dav-v3-07-system-ui": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-07-system-ui");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/26-v3-08/dav-v3-08-wallpaper": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-volumes/diagrams/dav-v3-08-wallpaper");
+    return {
+      DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+      DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+      DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-volumes/27-official-final-review/dav-series-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-volumes/diagrams/dav-series-official-final-review");
+      return {
+        DavSeriesPipelineLab: module0.DavSeriesPipelineLab,
+        DavSeriesExperimentLab: module0.DavSeriesExperimentLab,
+        DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/diagrams/dog-learning-map");

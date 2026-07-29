@@ -339,7 +339,22 @@ function extractLegacyProfile(filePath, parsed, order) {
 
 function insightFor(concept, profile) {
   const value = concept.toLocaleLowerCase();
+  const context = `${profile.title} ${profile.focus}`.toLocaleLowerCase();
   const subject = `${concept}在“${profile.focus}”中的责任`;
+  const binderInsight = `${subject}要沿代理、事务数据、驱动或服务端线程追踪一次请求。记录调用方与接收方身份、同步语义、句柄或对象引用，并用死亡或错误事务验证回收。`;
+  const messageInsight = `${subject}由队列头时间、消费线程和唤醒源共同决定。固定消息与时钟后延迟一次消费，比较入队、唤醒、执行和释放四个时间点，不能把容器结构当调度语义。`;
+  const audioInsight = `${subject}要区分控制策略与音频数据平面。保存流、设备、缓冲区指针、处理线程和回调结果，注入欠载或路由变化后检查声音之外的状态恢复。`;
+  const surfaceInsight = `${subject}横跨窗口身份、缓冲区所有权与合成时序。以同一帧记录生产、提交、层级、消费和移除，改变Z序或所有者后检查旧Surface是否仍可见或占用资源。`;
+  const daemonInsight = `${subject}必须分清内核事件、守护进程状态机和异步基带协议。给事件或请求编号，保存状态迁移、回调线程、超时和恢复，禁止因两个守护进程并列就假定相同语义。`;
+  const dataInsight = `${subject}要追踪数据从入口到持久化或观察者回调的完整闭环。固定URI、文件或账户样本，记录事务、远端资源、通知与关闭结果，再用重复输入验证幂等和泄漏。`;
+  const packageInsight = `${subject}属于包扫描、身份验证或持久状态的一环。保留扫描次序、证书、UID、候选集和packages状态，使用升级或冲突样本证明失败不会留下半安装数据。`;
+  const powerInsight = `${subject}由电源状态、持有者、超时和UID归因共同约束。只改变一个WakeLock或用户活动输入，比较屏幕、CPU、计时和释放记录，避免把“亮屏”当作唯一结果。`;
+  const activityInsight = `${subject}要连接system_server记录、调度队列和目标进程回调。保存记录对象与进程身份，制造超时或死亡后检查队列推进、死亡清理和后续请求是否恢复。`;
+  const inputInsight = `${subject}从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。`;
+  const viewInsight = `${subject}必须放回窗口会话、遍历调度和渲染后端。以同一View树对比测量、布局、绘制和输入消费，检查脏区、DisplayList与焦点变化是否形成闭环。`;
+  const systemUiInsight = `${subject}连接系统服务状态、SystemUI进程和系统窗口。记录图标或disable位的发送者、Binder回调、窗口变化与重启恢复，不能按普通Activity页面解释。`;
+  const wallpaperInsight = `${subject}涉及服务绑定、Engine Surface和WMS特殊窗口策略。切换静态或动态壁纸后记录可见性、偏移、Z序和资源释放，确认旧Engine不再提交帧。`;
+  const initInsight = `${subject}必须落到创建者、触发条件和服务状态。用同一配置分别触发成功与重启路径，核对PID、属性、退出码和父子关系，防止把声明文件误当顺序脚本。`;
   if (/概述|小结|总结|初识|你彻底明白|拓展思考/.test(value))
     return `${subject}是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用${profile.evidence}排除只凭类名或流程图得出的结论。`;
   if (
@@ -347,54 +362,73 @@ function insightFor(concept, profile) {
   )
     return `${subject}是把源码标签、主机工具链、产品目标和运行映像绑定成可复现坐标。产物、符号与设备指纹必须都指向${profile.edition.tag}，否则立即停止比较。`;
   if (
-    /binder|aidl|parcel|service manager|servicemanager|ipc|跨进程/.test(value)
+    /binder|aidl|parcel|service manager|servicemanager|processstate|ipcthreadstate|transact|transaction|死亡通知|death notification|bpbinder|bbinder|ipc|跨进程/.test(
+      value,
+    )
   )
-    return `${subject}要沿代理、事务数据、驱动或服务端线程追踪一次请求。记录调用方与接收方身份、同步语义、句柄或对象引用，并用死亡或错误事务验证回收。`;
-  if (/message|looper|handler|thread|线程|队列|epoll|poll/.test(value))
-    return `${subject}由队列头时间、消费线程和唤醒源共同决定。固定消息与时钟后延迟一次消费，比较入队、唤醒、执行和释放四个时间点，不能把容器结构当调度语义。`;
+    return binderInsight;
   if (/zygote|systemserver|system server|fork|watchdog|虚拟机/.test(value))
     return `${subject}处在预加载、进程分裂或系统服务启动边界。比较fork前后PID、共享页与分支职责，并在子进程失败时确认父进程和system_server状态没有被静默污染。`;
-  if (/audio|声音|音量|焦点|alsa|采样|混音|路由/.test(value))
-    return `${subject}要区分控制策略与音频数据平面。保存流、设备、缓冲区指针、处理线程和回调结果，注入欠载或路由变化后检查声音之外的状态恢复。`;
-  if (/surface|window|窗口|layer|动画|布局|绘制|buffer|display/.test(value))
-    return `${subject}横跨窗口身份、缓冲区所有权与合成时序。以同一帧记录生产、提交、层级、消费和移除，改变Z序或所有者后检查旧Surface是否仍可见或占用资源。`;
+  if (
+    /audio|声音|音量|焦点|alsa|采样|混音|路由|audiotrack|audioflinger/.test(
+      value,
+    ) ||
+    (!/binder/.test(context) && /mediaplayer|mediaserver/.test(value))
+  )
+    return audioInsight;
+  if (
+    /surface|window|窗口|(^|[^a-z])layer|动画|布局|绘制|buffer|display/.test(
+      value,
+    )
+  )
+    return surfaceInsight;
   if (/vold|volume|存储|rild|ril|射频|uevent|netlink/.test(value))
-    return `${subject}必须分清内核事件、守护进程状态机和异步基带协议。给事件或请求编号，保存状态迁移、回调线程、超时和恢复，禁止因两个守护进程并列就假定相同语义。`;
+    return daemonInsight;
   if (
     /scanner|媒体|provider|sqlite|cursor|content|account|sync|observer/.test(
       value,
     )
   )
-    return `${subject}要追踪数据从入口到持久化或观察者回调的完整闭环。固定URI、文件或账户样本，记录事务、远端资源、通知与关闭结果，再用重复输入验证幂等和泄漏。`;
+    return dataInsight;
   if (/package|apk|intent|安装|installd|uid|证书/.test(value))
-    return `${subject}属于包扫描、身份验证或持久状态的一环。保留扫描次序、证书、UID、候选集和packages状态，使用升级或冲突样本证明失败不会留下半安装数据。`;
-  if (/power|wake|电源|电池|亮度/.test(value))
-    return `${subject}由电源状态、持有者、超时和UID归因共同约束。只改变一个WakeLock或用户活动输入，比较屏幕、CPU、计时和释放记录，避免把“亮屏”当作唯一结果。`;
-  if (/activity|broadcast|service|process|进程|anr|crash/.test(value))
-    return `${subject}要连接system_server记录、调度队列和目标进程回调。保存记录对象与进程身份，制造超时或死亡后检查队列推进、死亡清理和后续请求是否恢复。`;
+    return packageInsight;
+  if (/power|wake|电源|电池|亮度/.test(value)) return powerInsight;
+  if (/activity|broadcast|anr|crash/.test(value)) return activityInsight;
   if (/input|eventhub|reader|dispatcher|channel|触摸|按键/.test(value))
-    return `${subject}从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。`;
+    return inputInsight;
   if (/view|控件|measure|draw|phonewindow|viewroot/.test(value))
-    return `${subject}必须放回窗口会话、遍历调度和渲染后端。以同一View树对比测量、布局、绘制和输入消费，检查脏区、DisplayList与焦点变化是否形成闭环。`;
+    return viewInsight;
   if (/systemui|状态栏|导航栏|通知|visibility|disable/.test(value))
-    return `${subject}连接系统服务状态、SystemUI进程和系统窗口。记录图标或disable位的发送者、Binder回调、窗口变化与重启恢复，不能按普通Activity页面解释。`;
+    return systemUiInsight;
   if (/wallpaper|壁纸|engine|imagewallpaper/.test(value))
-    return `${subject}涉及服务绑定、Engine Surface和WMS特殊窗口策略。切换静态或动态壁纸后记录可见性、偏移、Z序和资源释放，确认旧Engine不再提交帧。`;
-  if (/init|property|service|启动|服务/.test(value))
-    return `${subject}必须落到创建者、触发条件和服务状态。用同一配置分别触发成功与重启路径，核对PID、属性、退出码和父子关系，防止把声明文件误当顺序脚本。`;
+    return wallpaperInsight;
+  if (/init|property|启动/.test(value)) return initInsight;
+  if (/message|looper|handler|messagequeue|队列|epoll|poll/.test(value))
+    return messageInsight;
+  if (/binder/.test(context) && !/messagequeue/.test(context))
+    return binderInsight;
+  if (/audio|声音/.test(context)) return audioInsight;
+  if (/surface|window|窗口/.test(context)) return surfaceInsight;
+  if (/vold|rild|ril/.test(context)) return daemonInsight;
+  if (/scanner|provider|content|account|sync/.test(context)) return dataInsight;
+  if (/package/.test(context)) return packageInsight;
+  if (/power/.test(context)) return powerInsight;
+  if (/input/.test(context)) return inputInsight;
+  if (/view/.test(context)) return viewInsight;
+  if (/systemui/.test(context)) return systemUiInsight;
+  if (/wallpaper|壁纸/.test(context)) return wallpaperInsight;
+  if (/init/.test(context)) return initInsight;
+  if (/activity|system_server|system server/.test(context))
+    return activityInsight;
+  if (/thread|线程/.test(value)) return messageInsight;
+  if (/service|process|进程|服务/.test(value)) return activityInsight;
   return `${subject}要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由${profile.evidence}复核。`;
 }
 
-function nodeSection(concept, index, profile) {
-  const stage = profile.stages[index % profile.stages.length];
-  const next = profile.stages[(index + 1) % profile.stages.length];
+function nodeSection(concept, profile) {
   return `### ${concept}
 
-${insightFor(concept, profile)}
-
-处理 ${concept} 时先执行“${stage}”：在 ${profile.edition.tag} 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“${next}”后仅改变一个条件，观察${profile.evidence}中哪一项先偏离。
-
-该节点的四级证据是：保留 ${concept} 这一目录坐标；解释它如何参与${profile.focus}；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭${profile.evidence}恢复同输入结果。`;
+${insightFor(concept, profile)}`;
 }
 
 function termDefinition(term, profile, index) {
@@ -471,7 +505,7 @@ function contentFor(entry, previous, next) {
   );
   const snippet = snippetFor(profile);
   const deepDive = concepts
-    .map((concept, index) => nodeSection(concept, index, profile))
+    .map((concept) => nodeSection(concept, profile))
     .join("\n\n");
   const termLine = profile.terms
     .map(
@@ -563,23 +597,23 @@ ${termLine}。这六项把${profile.focus}落到${profile.evidence}，防止目�
 
 ## 先预测，再操作三个专属实验
 
-预测本页哪一个对象最先改变、故障应在哪个边界暴露、恢复后哪份证据必须回到原值；然后按全节点、版本因果、故障恢复的顺序操作。
+围绕${profile.title}，先预测哪一个对象最先改变、“${profile.trap}”应在哪个边界暴露，以及恢复后${profile.evidence}中的哪份证据必须回到原值；然后按全节点、版本因果、故障恢复的顺序操作。
 
 <Stepper>
   <Step title="1. 全节点机制与可执行探针">
-    选择任一目录节点与处理阶段，比较章专属机制说明和探针；列表完整保留，不截断节点。
+    从${profile.title}的 ${concepts.length} 个正式坐标中选择任一节点与处理阶段，比较章专属机制说明和探针；列表完整保留，不截断节点。
 
     <DavSeriesPipelineLab />
 
   </Step>
   <Step title="2. 同输入版本与故障边界">
-    保持输入不变，只切换正常、标签错配、所有者死亡或线程停滞，解释可见结果为何变化。
+    保持${profile.focus}的输入不变，只切换正常、标签错配、所有者死亡或线程停滞，解释可见结果为何变化。
 
     <DavSeriesExperimentLab />
 
   </Step>
   <Step title="3. 基线、首错、恢复与复位">
-    保存首个分叉后恢复历史合同，以同输入重放；点击重置，确认状态和输出都回到初始值。
+    保存${profile.title}的首个分叉后恢复${edition.tag}合同，以同输入重放；点击重置，确认状态和输出都回到初始值。
 
     <DavSeriesEvidenceLab />
 
@@ -587,6 +621,8 @@ ${termLine}。这六项把${profile.focus}落到${profile.evidence}，防止目�
 </Stepper>
 
 ## 正式目录逐项深读
+
+下面保留 ${concepts.length} 个正式目录坐标，但不重复套用实验流程。每个条目只回答它在${profile.focus}中的独立责任；共同的定位、单变量注错、恢复和重放动作统一由上方实验与下方练习验收。
 
 ${deepDive}
 
@@ -596,7 +632,7 @@ ${deepDive}
 ${snippet.code}
 \`\`\`
 
-运行前保存主机工具链、manifest与产品目标；这些历史分支通常需要隔离的旧工具链环境。诊断命令只在可恢复模拟器或测试机执行，账号、媒体与设备标识使用隔离样本；现代设备输出不得冒充${edition.tag}结果。
+复现${profile.title}前先保存主机工具链、manifest与产品目标；${edition.tag}历史分支通常需要隔离的旧工具链环境。与${profile.focus}有关的诊断命令只在可恢复模拟器或测试机执行，账号、媒体与设备标识使用隔离样本；现代设备输出不得冒充${edition.tag}结果。
 
 <Callout type="trap" title="本章核心陷阱">
   ${profile.trap}。先恢复${edition.tag}的真实入口、对象身份和失败返回，再讨论当前Android迁移。
@@ -607,7 +643,7 @@ ${snippet.code}
 </Callout>
 
 <Callout type="warning" title="系统实验安全边界">
-  刷机、Root、系统映像、gdb、getevent与输入注入仅用于可恢复测试环境。先备份，再记录回滚条件；任何真实用户数据都不得进入截图、日志或练习答案。
+  ${profile.title}涉及的刷机、Root、系统映像、gdb、getevent与输入注入仅用于可恢复测试环境。先备份，再记录回滚条件；任何真实用户数据都不得进入截图、日志或练习答案。
 </Callout>
 
 ## 练习、答案与四级证据
@@ -726,6 +762,8 @@ const entries = rawEntries.map(({ filePath, parsed }) => {
     concepts,
   };
 });
+
+fs.mkdirSync(COMPONENT_DIR, { recursive: true });
 
 for (const [index, entry] of entries.entries()) {
   const content = contentFor(
