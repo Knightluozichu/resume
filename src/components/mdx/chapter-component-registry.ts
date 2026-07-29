@@ -5130,6 +5130,354 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       HfdStateDiagram: module0.HfdStateDiagram,
     } as ChapterMdxComponents;
   },
+  "http-definitive-guide/00-hdg1-official-learning-map/hdg1-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/http-definitive-guide/v2/hdg1-official-learning-map");
+      return {
+        Hdg1OfficialLearningMapMessageLab:
+          module0.Hdg1OfficialLearningMapMessageLab,
+        Hdg1OfficialLearningMapFlowLab: module0.Hdg1OfficialLearningMapFlowLab,
+        Hdg1OfficialLearningMapEvidenceLab:
+          module0.Hdg1OfficialLearningMapEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "http-definitive-guide/01-hdg1-part-1/hdg1-part-1": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-1");
+    return {
+      Hdg1Part1MessageLab: module0.Hdg1Part1MessageLab,
+      Hdg1Part1FlowLab: module0.Hdg1Part1FlowLab,
+      Hdg1Part1EvidenceLab: module0.Hdg1Part1EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/02-hdg1-01/hdg1-01": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-01");
+    return {
+      Hdg101MessageLab: module0.Hdg101MessageLab,
+      Hdg101FlowLab: module0.Hdg101FlowLab,
+      Hdg101EvidenceLab: module0.Hdg101EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/03-hdg1-02/hdg1-02": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-02");
+    return {
+      Hdg102MessageLab: module0.Hdg102MessageLab,
+      Hdg102FlowLab: module0.Hdg102FlowLab,
+      Hdg102EvidenceLab: module0.Hdg102EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/04-hdg1-03/hdg1-03": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-03");
+    return {
+      Hdg103MessageLab: module0.Hdg103MessageLab,
+      Hdg103FlowLab: module0.Hdg103FlowLab,
+      Hdg103EvidenceLab: module0.Hdg103EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/05-hdg1-04/hdg1-04": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-04");
+    return {
+      Hdg104MessageLab: module0.Hdg104MessageLab,
+      Hdg104FlowLab: module0.Hdg104FlowLab,
+      Hdg104EvidenceLab: module0.Hdg104EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/06-hdg1-part-2/hdg1-part-2": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-2");
+    return {
+      Hdg1Part2MessageLab: module0.Hdg1Part2MessageLab,
+      Hdg1Part2FlowLab: module0.Hdg1Part2FlowLab,
+      Hdg1Part2EvidenceLab: module0.Hdg1Part2EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/07-hdg1-05/hdg1-05": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-05");
+    return {
+      Hdg105MessageLab: module0.Hdg105MessageLab,
+      Hdg105FlowLab: module0.Hdg105FlowLab,
+      Hdg105EvidenceLab: module0.Hdg105EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/08-hdg1-06/hdg1-06": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-06");
+    return {
+      Hdg106MessageLab: module0.Hdg106MessageLab,
+      Hdg106FlowLab: module0.Hdg106FlowLab,
+      Hdg106EvidenceLab: module0.Hdg106EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/09-hdg1-07/hdg1-07": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-07");
+    return {
+      Hdg107MessageLab: module0.Hdg107MessageLab,
+      Hdg107FlowLab: module0.Hdg107FlowLab,
+      Hdg107EvidenceLab: module0.Hdg107EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/10-hdg1-08/hdg1-08": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-08");
+    return {
+      Hdg108MessageLab: module0.Hdg108MessageLab,
+      Hdg108FlowLab: module0.Hdg108FlowLab,
+      Hdg108EvidenceLab: module0.Hdg108EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/11-hdg1-09/hdg1-09": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-09");
+    return {
+      Hdg109MessageLab: module0.Hdg109MessageLab,
+      Hdg109FlowLab: module0.Hdg109FlowLab,
+      Hdg109EvidenceLab: module0.Hdg109EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/12-hdg1-10/hdg1-10": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-10");
+    return {
+      Hdg110MessageLab: module0.Hdg110MessageLab,
+      Hdg110FlowLab: module0.Hdg110FlowLab,
+      Hdg110EvidenceLab: module0.Hdg110EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/13-hdg1-part-3/hdg1-part-3": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-3");
+    return {
+      Hdg1Part3MessageLab: module0.Hdg1Part3MessageLab,
+      Hdg1Part3FlowLab: module0.Hdg1Part3FlowLab,
+      Hdg1Part3EvidenceLab: module0.Hdg1Part3EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/14-hdg1-11/hdg1-11": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-11");
+    return {
+      Hdg111MessageLab: module0.Hdg111MessageLab,
+      Hdg111FlowLab: module0.Hdg111FlowLab,
+      Hdg111EvidenceLab: module0.Hdg111EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/15-hdg1-12/hdg1-12": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-12");
+    return {
+      Hdg112MessageLab: module0.Hdg112MessageLab,
+      Hdg112FlowLab: module0.Hdg112FlowLab,
+      Hdg112EvidenceLab: module0.Hdg112EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/16-hdg1-13/hdg1-13": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-13");
+    return {
+      Hdg113MessageLab: module0.Hdg113MessageLab,
+      Hdg113FlowLab: module0.Hdg113FlowLab,
+      Hdg113EvidenceLab: module0.Hdg113EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/17-hdg1-14/hdg1-14": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-14");
+    return {
+      Hdg114MessageLab: module0.Hdg114MessageLab,
+      Hdg114FlowLab: module0.Hdg114FlowLab,
+      Hdg114EvidenceLab: module0.Hdg114EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/18-hdg1-part-4/hdg1-part-4": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-4");
+    return {
+      Hdg1Part4MessageLab: module0.Hdg1Part4MessageLab,
+      Hdg1Part4FlowLab: module0.Hdg1Part4FlowLab,
+      Hdg1Part4EvidenceLab: module0.Hdg1Part4EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/19-hdg1-15/hdg1-15": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-15");
+    return {
+      Hdg115MessageLab: module0.Hdg115MessageLab,
+      Hdg115FlowLab: module0.Hdg115FlowLab,
+      Hdg115EvidenceLab: module0.Hdg115EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/20-hdg1-16/hdg1-16": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-16");
+    return {
+      Hdg116MessageLab: module0.Hdg116MessageLab,
+      Hdg116FlowLab: module0.Hdg116FlowLab,
+      Hdg116EvidenceLab: module0.Hdg116EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/21-hdg1-17/hdg1-17": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-17");
+    return {
+      Hdg117MessageLab: module0.Hdg117MessageLab,
+      Hdg117FlowLab: module0.Hdg117FlowLab,
+      Hdg117EvidenceLab: module0.Hdg117EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/22-hdg1-part-5/hdg1-part-5": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-5");
+    return {
+      Hdg1Part5MessageLab: module0.Hdg1Part5MessageLab,
+      Hdg1Part5FlowLab: module0.Hdg1Part5FlowLab,
+      Hdg1Part5EvidenceLab: module0.Hdg1Part5EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/23-hdg1-18/hdg1-18": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-18");
+    return {
+      Hdg118MessageLab: module0.Hdg118MessageLab,
+      Hdg118FlowLab: module0.Hdg118FlowLab,
+      Hdg118EvidenceLab: module0.Hdg118EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/24-hdg1-19/hdg1-19": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-19");
+    return {
+      Hdg119MessageLab: module0.Hdg119MessageLab,
+      Hdg119FlowLab: module0.Hdg119FlowLab,
+      Hdg119EvidenceLab: module0.Hdg119EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/25-hdg1-20/hdg1-20": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-20");
+    return {
+      Hdg120MessageLab: module0.Hdg120MessageLab,
+      Hdg120FlowLab: module0.Hdg120FlowLab,
+      Hdg120EvidenceLab: module0.Hdg120EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/26-hdg1-21/hdg1-21": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-21");
+    return {
+      Hdg121MessageLab: module0.Hdg121MessageLab,
+      Hdg121FlowLab: module0.Hdg121FlowLab,
+      Hdg121EvidenceLab: module0.Hdg121EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/27-hdg1-part-6/hdg1-part-6": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-part-6");
+    return {
+      Hdg1Part6MessageLab: module0.Hdg1Part6MessageLab,
+      Hdg1Part6FlowLab: module0.Hdg1Part6FlowLab,
+      Hdg1Part6EvidenceLab: module0.Hdg1Part6EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/28-hdg1-appendix-a/hdg1-appendix-a": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-a");
+    return {
+      Hdg1AppendixAMessageLab: module0.Hdg1AppendixAMessageLab,
+      Hdg1AppendixAFlowLab: module0.Hdg1AppendixAFlowLab,
+      Hdg1AppendixAEvidenceLab: module0.Hdg1AppendixAEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/29-hdg1-appendix-b/hdg1-appendix-b": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-b");
+    return {
+      Hdg1AppendixBMessageLab: module0.Hdg1AppendixBMessageLab,
+      Hdg1AppendixBFlowLab: module0.Hdg1AppendixBFlowLab,
+      Hdg1AppendixBEvidenceLab: module0.Hdg1AppendixBEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/30-hdg1-appendix-c/hdg1-appendix-c": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-c");
+    return {
+      Hdg1AppendixCMessageLab: module0.Hdg1AppendixCMessageLab,
+      Hdg1AppendixCFlowLab: module0.Hdg1AppendixCFlowLab,
+      Hdg1AppendixCEvidenceLab: module0.Hdg1AppendixCEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/31-hdg1-appendix-d/hdg1-appendix-d": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-d");
+    return {
+      Hdg1AppendixDMessageLab: module0.Hdg1AppendixDMessageLab,
+      Hdg1AppendixDFlowLab: module0.Hdg1AppendixDFlowLab,
+      Hdg1AppendixDEvidenceLab: module0.Hdg1AppendixDEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/32-hdg1-appendix-e/hdg1-appendix-e": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-e");
+    return {
+      Hdg1AppendixEMessageLab: module0.Hdg1AppendixEMessageLab,
+      Hdg1AppendixEFlowLab: module0.Hdg1AppendixEFlowLab,
+      Hdg1AppendixEEvidenceLab: module0.Hdg1AppendixEEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/33-hdg1-appendix-f/hdg1-appendix-f": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-f");
+    return {
+      Hdg1AppendixFMessageLab: module0.Hdg1AppendixFMessageLab,
+      Hdg1AppendixFFlowLab: module0.Hdg1AppendixFFlowLab,
+      Hdg1AppendixFEvidenceLab: module0.Hdg1AppendixFEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/34-hdg1-appendix-g/hdg1-appendix-g": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-g");
+    return {
+      Hdg1AppendixGMessageLab: module0.Hdg1AppendixGMessageLab,
+      Hdg1AppendixGFlowLab: module0.Hdg1AppendixGFlowLab,
+      Hdg1AppendixGEvidenceLab: module0.Hdg1AppendixGEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/35-hdg1-appendix-h/hdg1-appendix-h": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-appendix-h");
+    return {
+      Hdg1AppendixHMessageLab: module0.Hdg1AppendixHMessageLab,
+      Hdg1AppendixHFlowLab: module0.Hdg1AppendixHFlowLab,
+      Hdg1AppendixHEvidenceLab: module0.Hdg1AppendixHEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/36-hdg1-index/hdg1-index": async () => {
+    const module0 =
+      await import("@/components/mdx/http-definitive-guide/v2/hdg1-index");
+    return {
+      Hdg1IndexMessageLab: module0.Hdg1IndexMessageLab,
+      Hdg1IndexFlowLab: module0.Hdg1IndexFlowLab,
+      Hdg1IndexEvidenceLab: module0.Hdg1IndexEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "http-definitive-guide/37-hdg1-official-final-review/hdg1-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/http-definitive-guide/v2/hdg1-official-final-review");
+      return {
+        Hdg1OfficialFinalReviewMessageLab:
+          module0.Hdg1OfficialFinalReviewMessageLab,
+        Hdg1OfficialFinalReviewFlowLab: module0.Hdg1OfficialFinalReviewFlowLab,
+        Hdg1OfficialFinalReviewEvidenceLab:
+          module0.Hdg1OfficialFinalReviewEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "illustrated-http/00-official-learning-map/ilh-official-learning-map":
     async () => {
       const module0 =
