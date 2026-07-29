@@ -1,202 +1,171 @@
 ---
-title: "OpenGL 架构与状态机"
+title: OpenGL 架构与状态机
 type: A
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 1
-description: "从上下文、对象生命周期和精确绑定语义理解一次绘制如何读取完整状态"
+description: OpenGL 架构与状态机：区分上下文状态、对象存储、绑定点与VAO捕获关系，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+math: true
+sourceUrl: 'https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf'
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dog-01
 ---
-
+import { DogOpenglArchitectureStateLab, DogOpenglArchitectureFaultLab, DogOpenglArchitectureEvidenceLab } from "@/components/mdx/deep-opengl/v2/dog-opengl-architecture";
 import {
-  DogOpenglArchitectureDiagram,
-  DogStateCaptureDiagram,
-} from "@/components/mdx/deep-opengl/diagrams/dog-opengl-architecture";
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 直觉引入
+- 能说明“OpenGL 架构与状态机”中的区分上下文状态、对象存储、绑定点与VAO捕获关系，并给出对应对象、状态或概率边界
+- 能用正常基线与“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”反例定位当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照中的首个差异
+- 能操作三个章专属实验，让context、state machine、vao、vbo具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“OpenGL 架构与状态机的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
-把 OpenGL 想成一间按“当前工位”工作的实验室。bindBuffer 不是把缓冲永久塞进某个全局盒子，而是先把对象放到一个工位；下一条命令再决定读取这个工位、修改对象内容，还是把工位上的对象关联记录到另一个对象中。只记住“先 bind 再操作”能写出样例，却解释不了为什么换一个 VAO 后 EBO 会变、而 ARRAY_BUFFER 看起来没有一起恢复。
+</Objectives>
 
-一次 drawElements 也不是只消费“顶点 + 索引”。它读取当前程序、当前 VAO、VAO 中的属性槽和索引缓冲、纹理单元、uniform、视口、剔除、深度、混合、颜色掩码与目标帧缓冲。任何一个残留状态都能让几何消失或颜色异常；这正是 **状态机** 模型，也是学习状态所有权比背 API 更重要的原因。
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-## 上下文是命令执行边界
+## 从一个可推翻的运行假设开始
 
-是 OpenGL 命令的前提。在原生 OpenGL 中，上下文必须由窗口系统接口创建，并在调用线程上成为 current；同一线程通常一次只有一个当前上下文。WebGL 则通过 canvas.getContext 返回上下文对象，JavaScript 调用明确落到该对象，不暴露原生的线程 current 操作。
+“OpenGL 架构与状态机”先固定一个问题：如何证明区分上下文状态、对象存储、绑定点与VAO捕获关系？先写下预期对象、状态或像素，再运行正常基线；若当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-上下文至少决定三类边界：
+本页不变量是：OpenGL 架构与状态机的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
-1. **状态边界**：当前程序、绑定点、开关、视口和帧缓冲绑定属于上下文状态。
-2. **对象命名空间**：缓冲、纹理、程序等对象由上下文创建；原生平台可建立 share group 共享部分对象，但 VAO、默认帧缓冲等状态不能笼统视为可共享。
-3. **生命周期边界**：上下文销毁或 WebGL context lost 后，旧 GPU 资源不能继续使用，恢复时必须重建程序、缓冲、纹理、VAO 和 FBO。
+## 来源、版本与课程边界
 
-因此，“对象是全局的”是危险表述。更准确的模型是：命令总在某个上下文状态上执行，对象是否能跨上下文访问取决于对象类型和创建时的共享规则。
+“OpenGL 架构与状态机”不是某本同名原书的翻译，也不把四套API规范拼成虚构目录。OpenGL状态与对象语义以[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)核对，着色语言以[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)核对，移动端与浏览器边界分别以[OpenGL ES 3.2规范](https://registry.khronos.org/OpenGL/specs/es/3.2/es_spec_3.2.pdf)和[WebGL 2规范](https://registry.khronos.org/webgl/specs/latest/2.0/)核对。八个正式单元是独立课程分类。
 
-## 对象名不是对象内容
+## 六个检查词
 
-原生 OpenGL 的 glGen* 或 WebGL 的 create* 首先得到一个。对象经历“创建名字 → 绑定或附加 → 分配存储 → 填充数据 → 被其他状态引用 → 删除”的生命周期。
+在“OpenGL 架构与状态机”的六词核对中，<Term def="context在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">context</Term>、<Term def="state machine在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">state machine</Term>、<Term def="vao在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">vao</Term>、<Term def="vbo在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">vbo</Term>、<Term def="状态所有权决定哪一个上下文或对象保存该值。">state ownership</Term>、<Term def="绑定把对象选为后续命令的隐式参数。">binding</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
 
-- VBO 是 buffer 对象的一种用途：当它被绑定到 ARRAY_BUFFER 后，bufferData 为它分配并上传顶点数据。
-- EBO 仍是 buffer 对象；当它被绑定到 ELEMENT_ARRAY_BUFFER 时，drawElements 把它解释为索引数据。
-- 同一个 buffer 对象的本质不是被名字永久标记成“VBO”或“EBO”，而是命令通过目标与关联决定如何解释它。
-- deleteBuffer 表示应用不再需要该名字；若对象仍被有效引用，规范定义的删除与解绑规则决定何时真正释放。不要把 delete 等同于 CPU 语言里立即清空所有外部引用。
+## 正式单元与机制解释
 
-是命令的隐式参数。bufferData 没有 buffer 参数，因为它修改当前绑定到目标的 buffer；drawElements 也没有 EBO 参数，因为它从当前 VAO 的 element array binding 读取索引。
+### OpenGL Context, Objects, and State
 
-## VAO 到底记录什么
+在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中，OpenGL命令在当前context上执行，buffer、texture与program等对象保存存储或可执行内容，binding把对象选为后续命令的隐式参数。在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中，VAO记录属性格式、属性缓冲关联与element array binding，但不会把所有全局状态冻结成快照。
 
-解决的是“如何把若干缓冲解释成顶点输入”，而不是保存顶点数据本身。它至少包含：
+在“OpenGL 架构与状态机”本页，正式坐标是context、state machine、vao、vbo。在“OpenGL 架构与状态机”的反例核对中，反事实为“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”；应从当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照找到第一个分叉。
 
-- 每个属性槽是否启用；
-- size、type、normalized、stride、offset 等属性格式；
-- vertexAttribPointer 调用时 ARRAY_BUFFER 上的缓冲关联；
-- WebGL2/OpenGL 对应的属性 divisor；
-- ELEMENT_ARRAY_BUFFER 的当前绑定。
+$$
+Draw=F(Ctx,Program,VAO,FBO,State)
+$$
 
-最容易混淆的差异是：**ARRAY_BUFFER 绑定本身是上下文状态，不是整体 VAO 状态**；但 vertexAttribPointer 会在调用时读取 ARRAY_BUFFER 绑定，并把那个缓冲关联记录进当前 VAO 的属性槽。相反，ELEMENT_ARRAY_BUFFER 绑定本身直接属于当前 VAO。
+## 先预测，再操作三个章专属实验
 
-<DogStateCaptureDiagram />
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
 
-因此，以下两句话只有第二句准确：
+    <DogOpenglArchitectureStateLab />
 
-- 错误简化：“绑定 VAO 会恢复当时的 ARRAY_BUFFER。”
-- 准确描述：“绑定 VAO 会恢复属性槽中已记录的缓冲关联和 EBO；后续 vertexAttribPointer 仍会读取调用当时的 ARRAY_BUFFER。”
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
 
-## 一次绘制读取哪些状态
+    <DogOpenglArchitectureFaultLab />
 
-<DogOpenglArchitectureDiagram />
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，撤销后以相同输入重放并重置。
 
-调用 drawElements 时，可把输入分成五组检查：
+    <DogOpenglArchitectureEvidenceLab />
 
-1. **程序接口**：当前 program 是否链接成功，顶点输入位置、uniform 与采样器是否匹配。
-2. **顶点获取**：当前 VAO 是否启用正确属性，格式、步长、偏移和缓冲范围是否有效，EBO 的索引类型与数量是否正确。
-3. **光栅化状态**：viewport、scissor、frontFace、cullFace 与 primitive 类型是否让图元实际覆盖屏幕。
-4. **逐片元状态**：深度、模板、混合、颜色掩码和采样状态是否允许片元写入。
-5. **输出目标**：当前 framebuffer 是否完整，draw buffers 和附件格式是否正确。
+  </Step>
+</Stepper>
 
-程序员看到的是一个 draw call，驱动看到的是一组完整状态快照。所谓，就是后一个绘制没有显式建立自己的前置条件，却读取了前一个绘制留下的状态。
+## 最小可重现实验
 
-## 分步配置可索引几何
-
-先预测：配置 VAO 后，如果在 VAO 仍绑定时执行 bindBuffer(ELEMENT_ARRAY_BUFFER, null)，后续再绑定这个 VAO，还能使用原来的索引缓冲吗？
-
-
-## 可复现对象配置
-
-下面的 WebGL2 示例用交错数组保存位置和颜色。顶点着色器应使用 layout(location=0) 的 vec2 位置和 layout(location=1) 的 vec3 颜色。
-
-```js
-const vertices = new Float32Array([
-  // x, y,       r, g, b
-  -0.7, -0.6,    1, 0, 0,
-   0.7, -0.6,    0, 1, 0,
-   0.0,  0.7,    0, 0, 1,
-]);
-const indices = new Uint16Array([0, 1, 2]);
-
-const vao = gl.createVertexArray();
-const vbo = gl.createBuffer();
-const ebo = gl.createBuffer();
-if (!vao || !vbo || !ebo) throw new Error("创建几何对象失败");
-
+```cpp
 gl.bindVertexArray(vao);
-
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-const stride = 5 * Float32Array.BYTES_PER_ELEMENT;
-gl.enableVertexAttribArray(0);
-gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride, 0);
-gl.enableVertexAttribArray(1);
-gl.vertexAttribPointer(
-  1,
-  3,
-  gl.FLOAT,
-  false,
-  stride,
-  2 * Float32Array.BYTES_PER_ELEMENT,
-);
-
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-gl.bindVertexArray(null);
-gl.bindBuffer(gl.ARRAY_BUFFER, null);
-// 不要在 vao 绑定时把 ELEMENT_ARRAY_BUFFER 设为 null。
+gl.bindBuffer(gl.ARRAY_BUFFER, vertices);
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
 ```
 
-配置结束后解绑 ARRAY_BUFFER 不会破坏 VAO 属性槽中已经记录的 VBO 关联。反过来，如果在 vao 仍是当前 VAO 时解绑 ELEMENT_ARRAY_BUFFER，就会修改 vao 自己的索引缓冲状态。
+运行“OpenGL 架构与状态机”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
 
-## 显式绘制基线
+<Callout type="trap" title="本页核心误区">
+  把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关。它会破坏“OpenGL 架构与状态机的输入、状态、输出与恢复结果可用同一证据包重放”，应先由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照定位。
+</Callout>
 
-下面的绘制函数不依赖上一个 pass 是否开启混合、是否关闭深度写入。对大型渲染器，更适合由状态缓存层比较差异后发命令，但该缓存层仍必须拥有一份明确的目标状态。
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “OpenGL 架构与状态机”中的OpenGL/WebGL状态机只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
+</Callout>
 
-```js
-function drawOpaqueTriangle(gl, program, vao, indexCount) {
-  gl.useProgram(program);
-  gl.bindVertexArray(vao);
+## 练习与答案
 
-  gl.disable(gl.BLEND);
-  gl.enable(gl.DEPTH_TEST);
-  gl.depthFunc(gl.LESS);
-  gl.depthMask(true);
-  gl.colorMask(true, true, true, true);
-  gl.disable(gl.CULL_FACE);
+<Exercises>
 
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0);
+**问题 1：公式边界。** 在“OpenGL 架构与状态机”中，如何用一个可手算样本验证 $Draw=F(Ctx,Program,VAO,FBO,State)$，并标明每个量属于哪一对象、stage、空间或时间点？
 
-  const error = gl.getError();
-  if (error !== gl.NO_ERROR) {
-    throw new Error(`drawElements failed: 0x${error.toString(16)}`);
-  }
-}
-```
+<Answer>
+  针对“OpenGL 架构与状态机”固定最小输入，逐项记录当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
+</Answer>
 
-getError 适合教学和开发期边界检查，不应无差别放进高频发布循环：它可能迫使实现同步或增加 CPU 开销。生产调试应结合调试回调、帧捕获和精确的 pass 标签。
+**问题 2：正式坐标。** 在“OpenGL 架构与状态机”中，context、state machine、vao、vbo如何进入可操作验证？
 
-## 上下文丢失与重建
+<Answer>
+  1. **context**：在“OpenGL 架构与状态机”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，恢复后以相同输入重放。
+  2. **state machine**：在“OpenGL 架构与状态机”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，恢复后以相同输入重放。
+  3. **vao**：在“OpenGL 架构与状态机”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，恢复后以相同输入重放。
+  4. **vbo**：在“OpenGL 架构与状态机”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，恢复后以相同输入重放。
+</Answer>
 
-WebGL 上下文可能因 GPU 重置、资源压力或浏览器策略丢失。旧对象在恢复后不可继续沿用；把 CPU 侧资源描述与 GPU 对象分离，才能可靠重建。
+**问题 3：恢复证据。** 怎样证明“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”已真正修复？
 
-```js
-let running = true;
-let resources = null;
+<Answer>
+  保存正常基线，注入故障并标记当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照中的首个分叉；撤销故障后以完全相同输入重放。只有OpenGL 架构与状态机的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
+</Answer>
 
-canvas.addEventListener("webglcontextlost", (event) => {
-  event.preventDefault();
-  running = false;
-  resources = null;
-});
+</Exercises>
 
-canvas.addEventListener("webglcontextrestored", () => {
-  resources = createAllGpuResources(gl); // 重新编译程序、上传缓冲与纹理
-  running = true;
-  requestAnimationFrame(render);
-});
+## 本章回顾
 
-function render() {
-  if (!running || !resources) return;
-  drawFrame(gl, resources);
-  requestAnimationFrame(render);
-}
-```
+掌握“OpenGL 架构与状态机”意味着能把“区分上下文状态、对象存储、绑定点与VAO捕获关系”落到具体对象、状态与输出，能制造“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”，还能凭当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照恢复同输入结果。
 
-原生平台同样要把窗口表面、上下文和 GPU 对象生命周期分层。窗口 resize 可能只要求更新 viewport 和附件；上下文真正重建则要求重新创建其拥有或引用的 GPU 状态。
+<Glossary>
+  <GlossaryItem term="context">
+    context在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="state machine">
+    state machine在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="vao">
+    vao在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="vbo">
+    vbo在“OpenGL 架构与状态机”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="state ownership">
+    状态所有权决定哪一个上下文或对象保存该值。
+  </GlossaryItem>
+  <GlossaryItem term="binding">
+    绑定把对象选为后续命令的隐式参数。
+  </GlossaryItem>
+</Glossary>
 
-## 常见误区
+## 阅读导航
 
+[← 深入理解 OpenGL WebGL OpenGL ES 全书学习地图](/learn/deep-opengl/00-fundamentals/dog-learning-map) · [OpenGL ES 移动端适配 →](/learn/deep-opengl/01-core/dog-opengl-es)
 
-## 练习
-
-
-## 小结
-
-- 上下文拥有当前状态，对象能否共享取决于平台、对象类型和创建规则，不能视为进程全局资源。
-- 对象名只是句柄；绑定点为命令提供隐式对象参数，存储分配和数据上传才建立对象内容。
-- VAO 保存属性格式、属性缓冲关联和 EBO 绑定，但不整体保存上下文的 ARRAY_BUFFER 绑定。
-- drawElements 消费程序、顶点获取、光栅化、逐片元状态和输出目标，状态泄漏必须按这五组定位。
-- CPU 资源描述与 GPU 句柄分离，才能在上下文丢失或重建时恢复完整渲染状态。
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos OpenGL / OpenGL ES / GLSL / WebGL 规范课程"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+/>

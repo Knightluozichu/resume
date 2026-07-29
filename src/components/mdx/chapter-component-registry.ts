@@ -4280,51 +4280,96 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-learning-map");
+      await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
     return {
-      DogApiBaselineDiagram: module0.DogApiBaselineDiagram,
+      DogLearningMapStateLab: module0.DogLearningMapStateLab,
+      DogLearningMapFaultLab: module0.DogLearningMapFaultLab,
+      DogLearningMapEvidenceLab: module0.DogLearningMapEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/01-core/dog-opengl-architecture": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-opengl-architecture");
+      await import("@/components/mdx/deep-opengl/v2/dog-opengl-architecture");
     return {
-      DogStateCaptureDiagram: module0.DogStateCaptureDiagram,
+      DogOpenglArchitectureStateLab: module0.DogOpenglArchitectureStateLab,
+      DogOpenglArchitectureFaultLab: module0.DogOpenglArchitectureFaultLab,
+      DogOpenglArchitectureEvidenceLab:
+        module0.DogOpenglArchitectureEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-opengl/01-core/dog-opengl-es": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-opengl/v2/dog-opengl-es");
+    return {
+      DogOpenglEsStateLab: module0.DogOpenglEsStateLab,
+      DogOpenglEsFaultLab: module0.DogOpenglEsFaultLab,
+      DogOpenglEsEvidenceLab: module0.DogOpenglEsEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/01-core/dog-shader-language": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-shader-language");
+      await import("@/components/mdx/deep-opengl/v2/dog-shader-language");
     return {
-      DogShaderInterfaceDiagram: module0.DogShaderInterfaceDiagram,
+      DogShaderLanguageStateLab: module0.DogShaderLanguageStateLab,
+      DogShaderLanguageFaultLab: module0.DogShaderLanguageFaultLab,
+      DogShaderLanguageEvidenceLab: module0.DogShaderLanguageEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/01-core/dog-webgl-basics": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-webgl-basics");
+      await import("@/components/mdx/deep-opengl/v2/dog-webgl-basics");
     return {
-      DogCanvasSizeDiagram: module0.DogCanvasSizeDiagram,
+      DogWebglBasicsStateLab: module0.DogWebglBasicsStateLab,
+      DogWebglBasicsFaultLab: module0.DogWebglBasicsFaultLab,
+      DogWebglBasicsEvidenceLab: module0.DogWebglBasicsEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/02-advanced/dog-cross-platform": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-cross-platform");
+      await import("@/components/mdx/deep-opengl/v2/dog-cross-platform");
     return {
-      DogCapabilityContractDiagram: module0.DogCapabilityContractDiagram,
+      DogCrossPlatformStateLab: module0.DogCrossPlatformStateLab,
+      DogCrossPlatformFaultLab: module0.DogCrossPlatformFaultLab,
+      DogCrossPlatformEvidenceLab: module0.DogCrossPlatformEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-opengl/02-advanced/dog-debugging-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-opengl/v2/dog-debugging-tools");
+    return {
+      DogDebuggingToolsStateLab: module0.DogDebuggingToolsStateLab,
+      DogDebuggingToolsFaultLab: module0.DogDebuggingToolsFaultLab,
+      DogDebuggingToolsEvidenceLab: module0.DogDebuggingToolsEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/02-advanced/dog-fbo-techniques": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-fbo-techniques");
+      await import("@/components/mdx/deep-opengl/v2/dog-fbo-techniques");
     return {
-      DogFboCompletenessDiagram: module0.DogFboCompletenessDiagram,
+      DogFboTechniquesStateLab: module0.DogFboTechniquesStateLab,
+      DogFboTechniquesFaultLab: module0.DogFboTechniquesFaultLab,
+      DogFboTechniquesEvidenceLab: module0.DogFboTechniquesEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-opengl/02-advanced/dog-rendering-optimization": async () => {
     const module0 =
-      await import("@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization");
+      await import("@/components/mdx/deep-opengl/v2/dog-rendering-optimization");
     return {
-      DogBottleneckDecisionDiagram: module0.DogBottleneckDecisionDiagram,
+      DogRenderingOptimizationStateLab:
+        module0.DogRenderingOptimizationStateLab,
+      DogRenderingOptimizationFaultLab:
+        module0.DogRenderingOptimizationFaultLab,
+      DogRenderingOptimizationEvidenceLab:
+        module0.DogRenderingOptimizationEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-opengl/03-review/dog-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-opengl/v2/dog-final-review");
+    return {
+      DogFinalReviewStateLab: module0.DogFinalReviewStateLab,
+      DogFinalReviewFaultLab: module0.DogFinalReviewFaultLab,
+      DogFinalReviewEvidenceLab: module0.DogFinalReviewEvidenceLab,
     } as ChapterMdxComponents;
   },
   "deep-understanding-csharp/00-evolution/dcs-learning-map": async () => {
@@ -6327,6 +6372,174 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UnixInterfaceDecisionLab: module0.UnixInterfaceDecisionLab,
       UnixInterfaceMechanismMap: module0.UnixInterfaceMechanismMap,
       UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/01-introduction/vkg-ch01-vulkan-intro": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch01-vulkan-intro");
+    return {
+      VkgCh01VulkanIntroExecutionLab: module0.VkgCh01VulkanIntroExecutionLab,
+      VkgCh01VulkanIntroHazardLab: module0.VkgCh01VulkanIntroHazardLab,
+      VkgCh01VulkanIntroEvidenceLab: module0.VkgCh01VulkanIntroEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/01-introduction/vkg-ch02-first-program": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch02-first-program");
+    return {
+      VkgCh02FirstProgramExecutionLab: module0.VkgCh02FirstProgramExecutionLab,
+      VkgCh02FirstProgramHazardLab: module0.VkgCh02FirstProgramHazardLab,
+      VkgCh02FirstProgramEvidenceLab: module0.VkgCh02FirstProgramEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/02-device-setup/vkg-ch03-hardware-device": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch03-hardware-device");
+    return {
+      VkgCh03HardwareDeviceExecutionLab:
+        module0.VkgCh03HardwareDeviceExecutionLab,
+      VkgCh03HardwareDeviceHazardLab: module0.VkgCh03HardwareDeviceHazardLab,
+      VkgCh03HardwareDeviceEvidenceLab:
+        module0.VkgCh03HardwareDeviceEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/02-device-setup/vkg-ch04-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch04-debugging");
+    return {
+      VkgCh04DebuggingExecutionLab: module0.VkgCh04DebuggingExecutionLab,
+      VkgCh04DebuggingHazardLab: module0.VkgCh04DebuggingHazardLab,
+      VkgCh04DebuggingEvidenceLab: module0.VkgCh04DebuggingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/03-memory-resources/vkg-ch05-command-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch05-command-memory");
+    return {
+      VkgCh05CommandMemoryExecutionLab:
+        module0.VkgCh05CommandMemoryExecutionLab,
+      VkgCh05CommandMemoryHazardLab: module0.VkgCh05CommandMemoryHazardLab,
+      VkgCh05CommandMemoryEvidenceLab: module0.VkgCh05CommandMemoryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/03-memory-resources/vkg-ch06-image-swapchain": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch06-image-swapchain");
+    return {
+      VkgCh06ImageSwapchainExecutionLab:
+        module0.VkgCh06ImageSwapchainExecutionLab,
+      VkgCh06ImageSwapchainHazardLab: module0.VkgCh06ImageSwapchainHazardLab,
+      VkgCh06ImageSwapchainEvidenceLab:
+        module0.VkgCh06ImageSwapchainEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/04-pipeline-rendering/vkg-ch07-buffer-renderpass": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch07-buffer-renderpass");
+    return {
+      VkgCh07BufferRenderpassExecutionLab:
+        module0.VkgCh07BufferRenderpassExecutionLab,
+      VkgCh07BufferRenderpassHazardLab:
+        module0.VkgCh07BufferRenderpassHazardLab,
+      VkgCh07BufferRenderpassEvidenceLab:
+        module0.VkgCh07BufferRenderpassEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/04-pipeline-rendering/vkg-ch08-spirv-pipeline": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch08-spirv-pipeline");
+    return {
+      VkgCh08SpirvPipelineExecutionLab:
+        module0.VkgCh08SpirvPipelineExecutionLab,
+      VkgCh08SpirvPipelineHazardLab: module0.VkgCh08SpirvPipelineHazardLab,
+      VkgCh08SpirvPipelineEvidenceLab: module0.VkgCh08SpirvPipelineEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/04-pipeline-rendering/vkg-ch09-draw-geometry": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch09-draw-geometry");
+    return {
+      VkgCh09DrawGeometryExecutionLab: module0.VkgCh09DrawGeometryExecutionLab,
+      VkgCh09DrawGeometryHazardLab: module0.VkgCh09DrawGeometryHazardLab,
+      VkgCh09DrawGeometryEvidenceLab: module0.VkgCh09DrawGeometryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/05-textures-binding/vkg-ch10-textures-samplers": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch10-textures-samplers");
+    return {
+      VkgCh10TexturesSamplersExecutionLab:
+        module0.VkgCh10TexturesSamplersExecutionLab,
+      VkgCh10TexturesSamplersHazardLab:
+        module0.VkgCh10TexturesSamplersHazardLab,
+      VkgCh10TexturesSamplersEvidenceLab:
+        module0.VkgCh10TexturesSamplersEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/05-textures-binding/vkg-ch11-descriptor-binding": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch11-descriptor-binding");
+    return {
+      VkgCh11DescriptorBindingExecutionLab:
+        module0.VkgCh11DescriptorBindingExecutionLab,
+      VkgCh11DescriptorBindingHazardLab:
+        module0.VkgCh11DescriptorBindingHazardLab,
+      VkgCh11DescriptorBindingEvidenceLab:
+        module0.VkgCh11DescriptorBindingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/06-sync-compute/vkg-ch12-synchronization": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch12-synchronization");
+    return {
+      VkgCh12SynchronizationExecutionLab:
+        module0.VkgCh12SynchronizationExecutionLab,
+      VkgCh12SynchronizationHazardLab: module0.VkgCh12SynchronizationHazardLab,
+      VkgCh12SynchronizationEvidenceLab:
+        module0.VkgCh12SynchronizationEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/06-sync-compute/vkg-ch13-compute-pipeline": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch13-compute-pipeline");
+    return {
+      VkgCh13ComputePipelineExecutionLab:
+        module0.VkgCh13ComputePipelineExecutionLab,
+      VkgCh13ComputePipelineHazardLab: module0.VkgCh13ComputePipelineHazardLab,
+      VkgCh13ComputePipelineEvidenceLab:
+        module0.VkgCh13ComputePipelineEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/07-advanced-topics/vkg-ch14-multithreading": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch14-multithreading");
+    return {
+      VkgCh14MultithreadingExecutionLab:
+        module0.VkgCh14MultithreadingExecutionLab,
+      VkgCh14MultithreadingHazardLab: module0.VkgCh14MultithreadingHazardLab,
+      VkgCh14MultithreadingEvidenceLab:
+        module0.VkgCh14MultithreadingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/07-advanced-topics/vkg-ch15-advanced-rendering": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch15-advanced-rendering");
+    return {
+      VkgCh15AdvancedRenderingExecutionLab:
+        module0.VkgCh15AdvancedRenderingExecutionLab,
+      VkgCh15AdvancedRenderingHazardLab:
+        module0.VkgCh15AdvancedRenderingHazardLab,
+      VkgCh15AdvancedRenderingEvidenceLab:
+        module0.VkgCh15AdvancedRenderingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "vulkan-guide/07-advanced-topics/vkg-ch16-mobile-vulkan": async () => {
+    const module0 =
+      await import("@/components/mdx/vulkan-guide/v2/vkg-ch16-mobile-vulkan");
+    return {
+      VkgCh16MobileVulkanExecutionLab: module0.VkgCh16MobileVulkanExecutionLab,
+      VkgCh16MobileVulkanHazardLab: module0.VkgCh16MobileVulkanHazardLab,
+      VkgCh16MobileVulkanEvidenceLab: module0.VkgCh16MobileVulkanEvidenceLab,
     } as ChapterMdxComponents;
   },
   "wireshark-packet-analysis/00-ppa3-official-learning-map/ppa3-official-learning-map":

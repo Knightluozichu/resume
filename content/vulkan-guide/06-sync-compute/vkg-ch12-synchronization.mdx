@@ -1,255 +1,175 @@
 ---
-title: "同步原语：栅栏、信号量与事件"
+title: 同步原语：栅栏、信号量与事件
 type: B
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 12
-description: "Vulkan同步模型、Fence、Semaphore、Event、管线屏障与内存依赖"
+description: >-
+  同步原语：栅栏、信号量与事件：用execution dependency与memory
+  dependency修复真实资源hazard，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://docs.vulkan.org/guide/latest/"
+math: true
+sourceUrl: 'https://docs.vulkan.org/guide/latest/'
 draft: false
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
+officialUnitId: vkg-08
 ---
-
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { VkgCh12SynchronizationExecutionLab, VkgCh12SynchronizationHazardLab, VkgCh12SynchronizationEvidenceLab } from "@/components/mdx/vulkan-guide/v2/vkg-ch12-synchronization";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释同步原语：栅栏、信号量与事件的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Vulkan同步模型与Fence之间的关系是什么？
+- 能说明“同步原语：栅栏、信号量与事件”中的用execution dependency与memory dependency修复真实资源hazard，并给出对应对象、状态或概率边界
+- 能用正常基线与“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”反例定位资源、生产者stage/access、消费者stage/access、layout、队列和信号值中的首个差异
+- 能操作三个章专属实验，让synchronization2、pipeline barrier、memory dependency、timeline semaphore、binary semaphore、fence具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“同步原语：栅栏、信号量与事件的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
 </Objectives>
 
-## 为什么需要同步原语：栅栏、信号量与事件
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-Learning Vulkan将同步原语：栅栏、信号量与事件作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+## 从一个可推翻的运行假设开始
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+“同步原语：栅栏、信号量与事件”先固定一个问题：如何证明用execution dependency与memory dependency修复真实资源hazard？先写下预期对象、状态或像素，再运行正常基线；若资源、生产者stage/access、消费者stage/access、layout、队列和信号值不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+本页不变量是：同步原语：栅栏、信号量与事件的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 来源、版本与课程边界
 
-Vulkan同步模型、Fence、Semaphore、Event、管线屏障与内存依赖正是这一哲学在特定领域的具体体现。
+“同步原语：栅栏、信号量与事件”以[Khronos Vulkan Guide latest](https://docs.vulkan.org/guide/latest/)这套持续更新的官方完整指南为主，并由[Vulkan规范](https://docs.vulkan.org/spec/latest/)和[官方Samples](https://docs.vulkan.org/samples/latest/)核对VUID、对象合同与可运行路径。课程的16页是教学聚合，不宣称它们是官方固定章节。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+## 六个检查词
+
+在“同步原语：栅栏、信号量与事件”的六词核对中，<Term def="synchronization2在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">synchronization2</Term>、<Term def="pipeline barrier在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">pipeline barrier</Term>、<Term def="memory dependency在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">memory dependency</Term>、<Term def="timeline semaphore在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">timeline semaphore</Term>、<Term def="binary semaphore在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">binary semaphore</Term>、<Term def="fence在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。">fence</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
+
+## 正式单元与机制解释
+
+### Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences
+
+在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中，barrier同时描述源/目标stage与源/目标access，只有覆盖生产者写入和消费者访问才建立正确可见性。在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中，binary/timeline semaphore协调提交，fence让host观察完成；它们不能替代资源layout和access范围。
+
+在“同步原语：栅栏、信号量与事件”本页，正式坐标是synchronization2、pipeline barrier、memory dependency、timeline semaphore、binary semaphore、fence。在“同步原语：栅栏、信号量与事件”的反例核对中，反事实为“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”；应从资源、生产者stage/access、消费者stage/access、layout、队列和信号值找到第一个分叉。
+
+$$
+Write\xrightarrow[access]{stage}Barrier\xrightarrow[access]{stage}Read
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
+
+    <VkgCh12SynchronizationExecutionLab />
+
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
+
+    <VkgCh12SynchronizationHazardLab />
+
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，撤销后以相同输入重放并重置。
+
+    <VkgCh12SynchronizationEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+VkImageMemoryBarrier2 barrier = imageBarrier(
+  COLOR_ATTACHMENT_OUTPUT, COLOR_ATTACHMENT_WRITE,
+  FRAGMENT_SHADER, SHADER_SAMPLED_READ,
+  COLOR_ATTACHMENT_OPTIMAL, SHADER_READ_ONLY_OPTIMAL);
+vkCmdPipelineBarrier2(cmd, &dependencyInfo(barrier));
+```
+
+运行“同步原语：栅栏、信号量与事件”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
+
+<Callout type="trap" title="本页核心误区">
+  只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障。它会破坏“同步原语：栅栏、信号量与事件的输入、状态、输出与恢复结果可用同一证据包重放”，应先由资源、生产者stage/access、消费者stage/access、layout、队列和信号值定位。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把同步原语：栅栏、信号量与事件从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。同步原语：栅栏、信号量与事件涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用同步原语：栅栏、信号量与事件相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与同步原语：栅栏、信号量与事件相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “同步原语：栅栏、信号量与事件”中的Vulkan显式对象与同步只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
-</Callout>
-
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
-
-## 性能考量
-
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，同步原语：栅栏、信号量与事件相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. 同步原语：栅栏、信号量与事件是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出同步原语：栅栏、信号量与事件涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：公式边界。** 在“同步原语：栅栏、信号量与事件”中，如何用一个可手算样本验证 $Write\xrightarrow[access]{stage}Barrier\xrightarrow[access]{stage}Read$，并标明每个量属于哪一对象、stage、空间或时间点？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  针对“同步原语：栅栏、信号量与事件”固定最小输入，逐项记录资源、生产者stage/access、消费者stage/access、layout、队列和信号值；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
 </Answer>
 
+**问题 2：正式坐标。** 在“同步原语：栅栏、信号量与事件”中，synchronization2、pipeline barrier、memory dependency、timeline semaphore、binary semaphore、fence如何进入可操作验证？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  1. **synchronization2**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+  2. **pipeline barrier**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+  3. **memory dependency**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+  4. **timeline semaphore**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+  5. **binary semaphore**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+  6. **fence**：在“同步原语：栅栏、信号量与事件”章专属实验中保存资源、生产者stage/access、消费者stage/access、layout、队列和信号值，注入“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，恢复后以相同输入重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记资源、生产者stage/access、消费者stage/access、layout、队列和信号值中的首个分叉；撤销故障后以完全相同输入重放。只有同步原语：栅栏、信号量与事件的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
 </Answer>
 
 </Exercises>
 
+## 本章回顾
+
+掌握“同步原语：栅栏、信号量与事件”意味着能把“用execution dependency与memory dependency修复真实资源hazard”落到具体对象、状态与输出，能制造“只使用TOP/BOTTOM泛化stage，或等待semaphore却遗漏图像layout与访问屏障”，还能凭资源、生产者stage/access、消费者stage/access、layout、队列和信号值恢复同输入结果。
+
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+  <GlossaryItem term="synchronization2">
+    synchronization2在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
+  <GlossaryItem term="pipeline barrier">
+    pipeline barrier在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
+  <GlossaryItem term="memory dependency">
+    memory dependency在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
+  <GlossaryItem term="timeline semaphore">
+    timeline semaphore在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
+  <GlossaryItem term="binary semaphore">
+    binary semaphore在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
+  <GlossaryItem term="fence">
+    fence在“同步原语：栅栏、信号量与事件”的“Synchronization2, Barriers, Binary and Timeline Semaphores, and Fences”检查中用于用execution dependency与memory dependency修复真实资源hazard；应由资源、生产者stage/access、消费者stage/access、layout、队列和信号值确认。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《Learning Vulkan》（https://docs.vulkan.org/guide/latest/）第 12 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+## 阅读导航
+
+[← 描述符集与资源绑定](/learn/vulkan-guide/05-textures-binding/vkg-ch11-descriptor-binding) · [计算流水线 →](/learn/vulkan-guide/06-sync-compute/vkg-ch13-compute-pipeline)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos Vulkan Guide"
+  adaptedUrl="https://docs.vulkan.org/guide/latest/"
+/>

@@ -1,230 +1,170 @@
 ---
-title: "渲染优化策略"
+title: 渲染优化策略
 type: C
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 5
-description: "用 CPU/GPU/带宽/同步证据选择批处理、实例化、状态排序、剔除和资源格式"
+description: 渲染优化策略：用提交、状态切换和带宽证据优化绘制而不改变结果，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
+math: true
+sourceUrl: 'https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf'
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dog-06
 ---
-
+import { DogRenderingOptimizationStateLab, DogRenderingOptimizationFaultLab, DogRenderingOptimizationEvidenceLab } from "@/components/mdx/deep-opengl/v2/dog-rendering-optimization";
 import {
-  DogRenderingOptimizationDiagram,
-  DogBottleneckDecisionDiagram,
-} from "@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization";
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 直觉引入
+- 能说明“渲染优化策略”中的用提交、状态切换和带宽证据优化绘制而不改变结果，并给出对应对象、状态或概率边界
+- 能用正常基线与“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”反例定位CPU/GPU时间戳、draw数、状态切换、带宽和图像差异中的首个差异
+- 能操作三个章专属实验，让draw call、instancing、state sorting、bandwidth具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“渲染优化策略的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
-“减少 draw call”不是渲染优化的同义词。若主线程每帧花 8 ms 提交一万个小 draw，实例化可能有效；若 GPU 已被全屏片元着色占满，把一万个 draw 合成一个 draw 仍不会减少像素数量，甚至可能因更粗的剔除粒度画更多不可见几何。优化必须先回答“谁在等谁、哪类工作量超预算”。
+</Objectives>
 
-平均 FPS 也会隐藏问题。60、60、60、15 ms 四帧的平均值可能看起来尚可，但交互会周期性卡顿。工程验收应看 CPU 与 GPU 帧时间分布、P50/P95/P99、draw/triangle/fragment 数、带宽和同步空洞，并固定分辨率、相机路径和资源版本。
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-## 从帧预算开始
+## 从一个可推翻的运行假设开始
 
-把目标从“更快”变成可验证约束。60 Hz 一帧约 16.67 ms，120 Hz 约 8.33 ms，但 CPU 与 GPU 可能流水并行，不能把二者时间简单相加。应分别测量：
+“渲染优化策略”先固定一个问题：如何证明用提交、状态切换和带宽证据优化绘制而不改变结果？先写下预期对象、状态或像素，再运行正常基线；若CPU/GPU时间戳、draw数、状态切换、带宽和图像差异不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-- CPU 更新、剔除、排序、命令编码与提交耗时；
-- GPU 各 pass 时间以及顶点、片元和 compute 工作量；
-- 纹理与附件读写、缓存、分辨率和格式；
-- readPixels、gl.finish、查询结果过早读取等同步；
-- 移动设备的频率、功耗和温度稳态。
+本页不变量是：渲染优化策略的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
-<DogBottleneckDecisionDiagram />
+## 来源、版本与课程边界
 
-### 1. CPU 提交瓶颈
+“渲染优化策略”不是某本同名原书的翻译，也不把四套API规范拼成虚构目录。OpenGL状态与对象语义以[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)核对，着色语言以[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)核对，移动端与浏览器边界分别以[OpenGL ES 3.2规范](https://registry.khronos.org/OpenGL/specs/es/3.2/es_spec_3.2.pdf)和[WebGL 2规范](https://registry.khronos.org/webgl/specs/latest/2.0/)核对。八个正式单元是独立课程分类。
 
-常表现为 CPU 帧时间高、GPU 有空洞，降低分辨率几乎无改善，而减少 draw 数或状态切换后 CPU 明显下降。批处理、实例化、状态缓存和预生成命令数据适合这一类问题。
+## 六个检查词
 
-### 2. 顶点与片元瓶颈
+在“渲染优化策略”的六词核对中，<Term def="draw call在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。">draw call</Term>、<Term def="instancing在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。">instancing</Term>、<Term def="state sorting在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。">state sorting</Term>、<Term def="bandwidth在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。">bandwidth</Term>、<Term def="状态所有权决定哪一个上下文或对象保存该值。">state ownership</Term>、<Term def="绑定把对象选为后续命令的隐式参数。">binding</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
 
-顶点瓶颈对模型细分、阴影级联、重复几何和无效实例敏感，可用 LOD、视锥/遮挡剔除、索引复用和更紧凑顶点布局降低工作。片元瓶颈对分辨率、屏幕覆盖、透明层、采样次数和 shader 复杂度敏感，降低渲染比例或替换常量色 shader 是很好的归因实验。
+## 正式单元与机制解释
 
-### 3. 带宽与同步瓶颈
+### Draw-call and Rendering Optimization
 
-受纹理/附件格式、分辨率、mip、过滤、压缩和访问局部性影响。纹理图集主要减少 bind 和扩大批次，不会自动减少每个采样读取的字节；图集过大、mip padding 不足或访问离散还可能降低缓存效率。
+在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中，draw call成本包含CPU提交、驱动验证与GPU工作；instancing减少重复提交，state sorting减少昂贵切换，但透明对象仍受顺序约束。在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中，优化必须同时比较帧时间、提交数、带宽与像素结果。
 
-同步瓶颈会同时让 CPU 和 GPU 看似“不忙”：CPU 等 GPU readback，GPU 又因命令饥饿出现空洞。应延迟读取 timer/query 结果、使用异步资源管线，并移除热路径中的 gl.finish/readPixels。
+在“渲染优化策略”本页，正式坐标是draw call、instancing、state sorting、bandwidth。在“渲染优化策略”的反例核对中，反事实为“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”；应从CPU/GPU时间戳、draw数、状态切换、带宽和图像差异找到第一个分叉。
 
-## 建立非阻塞测量
+$$
+T_{frame}=T_{cpu}+T_{gpu}+T_{sync}
+$$
 
-WebGL2 可用 EXT_disjoint_timer_query_webgl2 测 GPU 时间。结果必须隔几帧轮询，并检查 GPU_DISJOINT_EXT；立即读取只会把异步 GPU 重新变成同步等待。
+## 先预测，再操作三个章专属实验
 
-```js
-class GpuTimer {
-  constructor(gl) {
-    this.gl = gl;
-    this.ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
-    this.pending = [];
-  }
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
 
-  begin(label) {
-    if (!this.ext) return null;
-    const query = this.gl.createQuery();
-    if (!query) return null;
-    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, query);
-    return { label, query };
-  }
+    <DogRenderingOptimizationStateLab />
 
-  end(sample) {
-    if (!sample) return;
-    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
-    this.pending.push(sample);
-  }
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
 
-  poll() {
-    const ready = [];
-    this.pending = this.pending.filter((sample) => {
-      const available = this.gl.getQueryParameter(
-        sample.query,
-        this.gl.QUERY_RESULT_AVAILABLE,
-      );
-      const disjoint = this.gl.getParameter(this.ext.GPU_DISJOINT_EXT);
-      if (!available || disjoint) return true;
-      const nanoseconds = this.gl.getQueryParameter(
-        sample.query,
-        this.gl.QUERY_RESULT,
-      );
-      ready.push({ label: sample.label, milliseconds: nanoseconds / 1e6 });
-      this.gl.deleteQuery(sample.query);
-      return false;
-    });
-    return ready;
-  }
-}
+    <DogRenderingOptimizationFaultLab />
+
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，撤销后以相同输入重放并重置。
+
+    <DogRenderingOptimizationEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+GpuTimer timer("opaque-pass");
+sortByPipelineAndMaterial(draws);
+drawInstanced(batches);
+compareImage(reference, output, tolerance);
 ```
 
-同时在 CPU 侧记录每帧 drawCount、programBinds、textureBinds、triangles、visibleInstances 和 uploadedBytes。计数器不等于耗时，但能解释“为什么变快”：若 GPU 时间下降而片元覆盖不变，可能是 shader/带宽改善；若 CPU 时间下降且 draw 数减少，才支持提交优化结论。
+运行“渲染优化策略”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
 
-## 批处理与实例化的边界
+<Callout type="trap" title="本页核心误区">
+  只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时。它会破坏“渲染优化策略的输入、状态、输出与恢复结果可用同一证据包重放”，应先由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异定位。
+</Callout>
 
-批处理把多个几何拼进共享 buffer，以一次或较少 draw 提交。它适合材质兼容、更新频率接近且空间相邻的对象，但代价包括：
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “渲染优化策略”中的OpenGL/WebGL状态机只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
+</Callout>
 
-- 合并时的 CPU 拷贝和额外内存；
-- 单个对象变化可能要求更新大块 buffer；
-- 剔除粒度从对象变成整个 batch，可能增加 GPU 工作；
-- 不同材质、混合顺序和阴影状态会拆分 batch。
+## 练习与答案
 
-不复制基础网格，适合大量相同拓扑。实例数量太少、每实例数据太大或可见实例稀疏时，收益也可能不抵上传和 shader 读取成本，必须测 break-even 点。
+<Exercises>
 
-<DogRenderingOptimizationDiagram />
+**问题 1：公式边界。** 在“渲染优化策略”中，如何用一个可手算样本验证 $T_{frame}=T_{cpu}+T_{gpu}+T_{sync}$，并标明每个量属于哪一对象、stage、空间或时间点？
 
-## 可复现的 mat4 实例化
+<Answer>
+  针对“渲染优化策略”固定最小输入，逐项记录CPU/GPU时间戳、draw数、状态切换、带宽和图像差异；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
+</Answer>
 
-一个 mat4 占四个 vec4 属性槽。每个槽都要设置 divisor=1，且这些调用要在目标 VAO 绑定时完成。
+**问题 2：正式坐标。** 在“渲染优化策略”中，draw call、instancing、state sorting、bandwidth如何进入可操作验证？
 
-```js
-function attachInstanceMatrices(gl, vao, matrices, firstLocation = 4) {
-  const buffer = gl.createBuffer();
-  if (!buffer) throw new Error("create instance buffer failed");
+<Answer>
+  1. **draw call**：在“渲染优化策略”章专属实验中保存CPU/GPU时间戳、draw数、状态切换、带宽和图像差异，注入“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，恢复后以相同输入重放。
+  2. **instancing**：在“渲染优化策略”章专属实验中保存CPU/GPU时间戳、draw数、状态切换、带宽和图像差异，注入“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，恢复后以相同输入重放。
+  3. **state sorting**：在“渲染优化策略”章专属实验中保存CPU/GPU时间戳、draw数、状态切换、带宽和图像差异，注入“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，恢复后以相同输入重放。
+  4. **bandwidth**：在“渲染优化策略”章专属实验中保存CPU/GPU时间戳、draw数、状态切换、带宽和图像差异，注入“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，恢复后以相同输入重放。
+</Answer>
 
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.DYNAMIC_DRAW);
+**问题 3：恢复证据。** 怎样证明“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”已真正修复？
 
-  const bytesPerMatrix = 16 * Float32Array.BYTES_PER_ELEMENT;
-  for (let column = 0; column < 4; column += 1) {
-    const location = firstLocation + column;
-    gl.enableVertexAttribArray(location);
-    gl.vertexAttribPointer(
-      location,
-      4,
-      gl.FLOAT,
-      false,
-      bytesPerMatrix,
-      column * 4 * Float32Array.BYTES_PER_ELEMENT,
-    );
-    gl.vertexAttribDivisor(location, 1);
-  }
+<Answer>
+  保存正常基线，注入故障并标记CPU/GPU时间戳、draw数、状态切换、带宽和图像差异中的首个分叉；撤销故障后以完全相同输入重放。只有渲染优化策略的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
+</Answer>
 
-  gl.bindVertexArray(null);
-  return buffer;
-}
+</Exercises>
 
-function drawInstances(gl, vao, indexCount, visibleInstanceCount) {
-  gl.bindVertexArray(vao);
-  gl.drawElementsInstanced(
-    gl.TRIANGLES,
-    indexCount,
-    gl.UNSIGNED_SHORT,
-    0,
-    visibleInstanceCount,
-  );
-}
-```
+## 本章回顾
 
-验收时比较 1、4、16、64、256、1024 个实例的 CPU/GPU 时间。实例化通常减少 CPU 提交，但 GPU 顶点数仍约等于 indexCount × visibleInstanceCount；不可见实例如果没有在 CPU 或 GPU 剔除，仍会执行顶点工作。
+掌握“渲染优化策略”意味着能把“用提交、状态切换和带宽证据优化绘制而不改变结果”落到具体对象、状态与输出，能制造“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”，还能凭CPU/GPU时间戳、draw数、状态切换、带宽和图像差异恢复同输入结果。
 
-## 状态排序不是单一排序键
+<Glossary>
+  <GlossaryItem term="draw call">
+    draw call在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。
+  </GlossaryItem>
+  <GlossaryItem term="instancing">
+    instancing在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。
+  </GlossaryItem>
+  <GlossaryItem term="state sorting">
+    state sorting在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。
+  </GlossaryItem>
+  <GlossaryItem term="bandwidth">
+    bandwidth在“渲染优化策略”的“Draw-call and Rendering Optimization”检查中用于用提交、状态切换和带宽证据优化绘制而不改变结果；应由CPU/GPU时间戳、draw数、状态切换、带宽和图像差异确认。
+  </GlossaryItem>
+  <GlossaryItem term="state ownership">
+    状态所有权决定哪一个上下文或对象保存该值。
+  </GlossaryItem>
+  <GlossaryItem term="binding">
+    绑定把对象选为后续命令的隐式参数。
+  </GlossaryItem>
+</Glossary>
 
-要服从渲染语义：
+## 阅读导航
 
-- 不透明物体可先按 pass/program/material 分桶，再在桶内适度前向后排序，兼顾状态切换与早期深度；
-- 透明物体通常需要后向前排序或使用专门 OIT，不能为了少 bind 任意重排；
-- 阴影、深度预 pass 和 G-buffer 使用不同 program/附件，应分别建立 render list；
-- 状态缓存只在目标状态不同才调用 GL，但每个 pass 仍需声明完整目标状态。
+[← FBO 与后处理技术](/learn/deep-opengl/02-advanced/dog-fbo-techniques) · [深入理解 OpenGL WebGL OpenGL ES 总复习 →](/learn/deep-opengl/03-review/dog-final-review)
 
-```js
-function renderOpaque(gl, items, state) {
-  items.sort((a, b) =>
-    a.pipelineKey - b.pipelineKey ||
-    a.materialKey - b.materialKey ||
-    a.cameraDepth - b.cameraDepth
-  );
-
-  for (const item of items) {
-    if (state.program !== item.program) {
-      gl.useProgram(item.program);
-      state.program = item.program;
-      state.programBinds += 1;
-    }
-    if (state.texture !== item.texture) {
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, item.texture);
-      state.texture = item.texture;
-      state.textureBinds += 1;
-    }
-    gl.bindVertexArray(item.vao);
-    gl.drawElements(gl.TRIANGLES, item.indexCount, item.indexType, 0);
-    state.drawCount += 1;
-  }
-}
-```
-
-排序前后应同时比较 program/texture bind 数、CPU 排序成本、GPU early-depth 收益与最终图像。状态切换减少但透明顺序错误，不是优化成功。
-
-## 纹理与附件带宽
-
-纹理图集的真实价值是把多张小纹理放进同一对象，允许更多物体共享一次绑定和一次 batch。它需要为每个子图保留 mip padding，限制 repeat wrap，并处理不同颜色空间和压缩块边界。若纹理尺寸一致且 WebGL2 可用，texture array 往往比图集更容易保持 mip 和 wrap 语义。
-
-直接降低带宽的手段包括：
-
-- 选择设备支持的 ASTC/ETC 等压缩纹理，并准备格式回退；
-- 为远处采样生成正确 mip，减少高频访问与缓存浪费；
-- 按误差预算选择 RGBA8、RGB10_A2、RG16F、RGBA16F 等附件；
-- 降低阴影、反射和后处理分辨率，避免全分辨率临时附件；
-- 对不再使用的 tile/depth 附件 invalidate，减少无意义 store；
-- 避免每帧重传静态数据，动态 buffer 使用分段/轮转避免覆盖 GPU 尚在读取的区域。
-
-## 分步优化闭环
-
-先预测：把 2000 个 draw 合成 20 个后，CPU 时间下降 4 ms，但 GPU 时间上升 6 ms，因为 batch 无法逐对象剔除。这项改动是否应合入？
-
-
-## 常见误区
-
-
-## 练习
-
-
-## 小结
-
-- 优化从帧预算与瓶颈证据开始，draw call 只是 CPU 提交类指标之一。
-- 批处理与实例化减少提交，但可能增加内存、上传、GPU 工作或降低剔除粒度。
-- 状态排序必须服从不透明/透明正确性，状态缓存也不能省略 pass 的目标状态声明。
-- 图集主要减少绑定；压缩、mip、附件格式和分辨率才直接改变大量采样与存储带宽。
-- 非阻塞 GPU query、固定场景、P50/P95 和工作量计数共同构成可归因的优化闭环。
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos OpenGL / OpenGL ES / GLSL / WebGL 规范课程"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+/>

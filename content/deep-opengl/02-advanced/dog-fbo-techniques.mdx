@@ -1,221 +1,171 @@
 ---
-title: "FBO 与后处理技术"
+title: FBO 与后处理技术
 type: C
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 6
-description: "从附件完整性、离屏 pass 契约和多采样 resolve，到无反馈环的多遍后处理"
+description: FBO 与后处理技术：用完整FBO附件合同实现可复算的多遍后处理，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
+math: true
+sourceUrl: 'https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf'
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dog-05
 ---
-
+import { DogFboTechniquesStateLab, DogFboTechniquesFaultLab, DogFboTechniquesEvidenceLab } from "@/components/mdx/deep-opengl/v2/dog-fbo-techniques";
 import {
-  DogFboTechniquesDiagram,
-  DogFboCompletenessDiagram,
-} from "@/components/mdx/deep-opengl/diagrams/dog-fbo-techniques";
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 直觉引入
+- 能说明“FBO 与后处理技术”中的用完整FBO附件合同实现可复算的多遍后处理，并给出对应对象、状态或概率边界
+- 能用正常基线与“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”反例定位完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素中的首个差异
+- 能操作三个章专属实验，让framebuffer、color attachment、depth attachment、post-processing具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“FBO 与后处理技术的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
-帧缓冲对象不是一张图片，而是一张“输出接线表”。它把片元着色器的颜色输出接到纹理或 renderbuffer，把深度/模板测试接到对应附件。真正保存像素的是附件；FBO 只描述本次绘制要写到哪里。
+</Objectives>
 
-后处理之所以需要 FBO，不是因为默认帧缓冲绝对不能被读取，而是应用需要可控格式、尺寸、生命周期和采样方式的中间图像。场景先写入离屏颜色纹理，后续 pass 把它作为输入，再写到另一张纹理或默认帧缓冲。这个“读 A、写 B”的方向必须明确，不能一边采样 A 一边又把 A 作为当前输出。
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-## FBO 与附件所有权
+## 从一个可推翻的运行假设开始
 
-本身不拥有附件存储。删除 FBO 不会自动删除独立创建并挂接的 texture/renderbuffer；资源管理器应分别跟踪并销毁。
+“FBO 与后处理技术”先固定一个问题：如何证明用完整FBO附件合同实现可复算的多遍后处理？先写下预期对象、状态或像素，再运行正常基线；若完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-有两类常见载体：
+本页不变量是：FBO 与后处理技术的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
-- texture 可在后续 shader 中采样，适合颜色、深度采样、后处理和 shadow map；
-- renderbuffer 面向渲染目标存储，不能直接被 shader 采样，适合只在 pass 内用于深度/模板或多采样附件。
+## 来源、版本与课程边界
 
-深度附件不是 FBO 完整的必需条件。纯颜色后处理 FBO 可以只有颜色附件；若 3D pass 需要近处遮挡远处，才要提供深度存储。没有深度附件时，即使代码启用 DEPTH_TEST，也没有可保留的深度缓冲来产生预期遮挡结果，但这不等同于 framebuffer 不完整。
+“FBO 与后处理技术”不是某本同名原书的翻译，也不把四套API规范拼成虚构目录。OpenGL状态与对象语义以[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)核对，着色语言以[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)核对，移动端与浏览器边界分别以[OpenGL ES 3.2规范](https://registry.khronos.org/OpenGL/specs/es/3.2/es_spec_3.2.pdf)和[WebGL 2规范](https://registry.khronos.org/webgl/specs/latest/2.0/)核对。八个正式单元是独立课程分类。
 
-## 完整性只验证目标组合
+## 六个检查词
 
-由 checkFramebufferStatus 检查。FRAMEBUFFER_COMPLETE 证明附件组合可用，不证明：
+在“FBO 与后处理技术”的六词核对中，<Term def="framebuffer在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。">framebuffer</Term>、<Term def="color attachment在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。">color attachment</Term>、<Term def="depth attachment在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。">depth attachment</Term>、<Term def="post-processing在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。">post-processing</Term>、<Term def="状态所有权决定哪一个上下文或对象保存该值。">state ownership</Term>、<Term def="绑定把对象选为后续命令的隐式参数。">binding</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
 
-- viewport 与目标尺寸一致；
-- shader 输出 location 与 drawBuffers 映射正确；
-- pass 已清除或加载了期望内容；
-- 采样器没有读取正在写入的附件；
-- 颜色空间、混合、深度和写掩码符合算法。
+## 正式单元与机制解释
 
-<DogFboCompletenessDiagram />
+### Framebuffer and Post-processing
 
-常见不完整来源包括附件对象或层级无效、尺寸为零、格式不可渲染、相关附件 sample 数不一致，以及 drawBuffers 指向未挂接颜色位置。浮点纹理“可以采样”不代表“可以作为颜色附件”，WebGL2 中仍需按格式与 EXT_color_buffer_float 等能力验证。
+在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中，framebuffer把颜色、深度和模板attachment组成渲染目标；完整性取决于附件尺寸、样本数、格式和层级等条件。在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中，后处理先渲染到离屏颜色附件，再以纹理输入执行下一pass，必须防止读写同一子资源的反馈环。
 
-## 创建可采样颜色目标
+在“FBO 与后处理技术”本页，正式坐标是framebuffer、color attachment、depth attachment、post-processing。在“FBO 与后处理技术”的反例核对中，反事实为“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”；应从完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素找到第一个分叉。
 
-使用 texStorage2D 建立不可变 RGBA8 颜色存储，配一个 DEPTH_COMPONENT24 renderbuffer。不可变纹理不能原地改尺寸，resize 时应创建一套新资源，成功后再替换旧套件。
+$$
+Pass_{n+1}=Shader(Texture(Pass_n))
+$$
 
-```js
-function createSceneTarget(gl, width, height) {
-  const framebuffer = gl.createFramebuffer();
-  const color = gl.createTexture();
-  const depth = gl.createRenderbuffer();
-  if (!framebuffer || !color || !depth) {
-    throw new Error("create framebuffer resources failed");
-  }
+## 先预测，再操作三个章专属实验
 
-  gl.bindTexture(gl.TEXTURE_2D, color);
-  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
 
-  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
-  gl.renderbufferStorage(
-    gl.RENDERBUFFER,
-    gl.DEPTH_COMPONENT24,
-    width,
-    height,
-  );
+    <DogFboTechniquesStateLab />
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    color,
-    0,
-  );
-  gl.framebufferRenderbuffer(
-    gl.FRAMEBUFFER,
-    gl.DEPTH_ATTACHMENT,
-    gl.RENDERBUFFER,
-    depth,
-  );
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
 
-  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  if (status !== gl.FRAMEBUFFER_COMPLETE) {
-    gl.deleteFramebuffer(framebuffer);
-    gl.deleteTexture(color);
-    gl.deleteRenderbuffer(depth);
-    throw new Error(`incomplete framebuffer: 0x${status.toString(16)}`);
-  }
-  return { framebuffer, color, depth, width, height };
-}
+    <DogFboTechniquesFaultLab />
+
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，撤销后以相同输入重放并重置。
+
+    <DogFboTechniquesEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+glBindFramebuffer(GL_FRAMEBUFFER, offscreen);
+assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+drawScene();
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+drawPostProcess(colorAttachment);
 ```
 
-如果有多个颜色输出，依次挂 COLOR_ATTACHMENT0+n，并调用 drawBuffers 指定映射。片元 shader 的 layout(location=n) 输出最终写入 drawBuffers 列表中对应的附件；只挂纹理但不配置输出映射，不能构成完整 MRT pass。
+运行“FBO 与后处理技术”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
 
-## 每个 pass 都有状态契约
+<Callout type="trap" title="本页核心误区">
+  FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入。它会破坏“FBO 与后处理技术的输入、状态、输出与恢复结果可用同一证据包重放”，应先由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素定位。
+</Callout>
 
-FBO 切换不仅是 bindFramebuffer。每个 pass 至少声明 framebuffer、viewport/scissor、drawBuffers、clear/load 语义、深度/模板/混合、颜色掩码、program、VAO 和输入纹理。
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “FBO 与后处理技术”中的OpenGL/WebGL状态机只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
+</Callout>
 
-<DogFboTechniquesDiagram />
+## 练习与答案
 
-场景 pass 写离屏目标，合成 pass 再把颜色纹理画到默认帧缓冲。全屏三角形只需三个顶点，可由 gl_VertexID 在顶点 shader 中生成，避免四边形中间对角线和额外顶点。
+<Exercises>
 
-```js
-function renderScenePass(gl, target) {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
-  gl.viewport(0, 0, target.width, target.height);
-  gl.enable(gl.DEPTH_TEST);
-  gl.depthMask(true);
-  gl.disable(gl.BLEND);
-  gl.clearColor(0, 0, 0, 1);
-  gl.clearDepth(1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  drawScene(gl);
-}
+**问题 1：公式边界。** 在“FBO 与后处理技术”中，如何用一个可手算样本验证 $Pass_{n+1}=Shader(Texture(Pass_n))$，并标明每个量属于哪一对象、stage、空间或时间点？
 
-function renderCompositePass(gl, sourceTexture, canvas) {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  gl.disable(gl.DEPTH_TEST);
-  gl.depthMask(false);
-  gl.disable(gl.BLEND);
-  gl.useProgram(compositeProgram);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
-  gl.uniform1i(sourceLocation, 0);
-  gl.bindVertexArray(fullscreenVao);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-}
-```
+<Answer>
+  针对“FBO 与后处理技术”固定最小输入，逐项记录完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
+</Answer>
 
-默认帧缓冲尺寸应取 drawingBufferWidth/Height，而不是只读 CSS clientWidth。离屏目标可按渲染比例使用不同尺寸，但投影、采样 texel size 和 viewport 必须使用各自实际尺寸。
+**问题 2：正式坐标。** 在“FBO 与后处理技术”中，framebuffer、color attachment、depth attachment、post-processing如何进入可操作验证？
 
-## 反馈环路与 ping-pong
+<Answer>
+  1. **framebuffer**：在“FBO 与后处理技术”章专属实验中保存完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素，注入“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，恢复后以相同输入重放。
+  2. **color attachment**：在“FBO 与后处理技术”章专属实验中保存完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素，注入“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，恢复后以相同输入重放。
+  3. **depth attachment**：在“FBO 与后处理技术”章专属实验中保存完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素，注入“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，恢复后以相同输入重放。
+  4. **post-processing**：在“FBO 与后处理技术”章专属实验中保存完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素，注入“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，恢复后以相同输入重放。
+</Answer>
 
-在 WebGL/OpenGL 渲染中不可作为普通后处理手段。读取与写入同一图像会产生禁止或未定义的反馈，不能假设 GPU 按像素顺序“原地更新”。
+**问题 3：恢复证据。** 怎样证明“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”已真正修复？
 
-让第 n 遍读 source、写 destination，完成后交换引用。可分离高斯模糊常用一遍水平、一遍垂直；每遍只采一维邻域。
+<Answer>
+  保存正常基线，注入故障并标记完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素中的首个分叉；撤销故障后以完全相同输入重放。只有FBO 与后处理技术的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
+</Answer>
 
-```js
-function blurPingPong(gl, input, targets, passCount) {
-  let source = input;
-  for (let pass = 0; pass < passCount; pass += 1) {
-    const destination = targets[pass % 2];
-    if (destination.color === source) {
-      throw new Error("read/write framebuffer feedback loop");
-    }
+</Exercises>
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, destination.framebuffer);
-    gl.viewport(0, 0, destination.width, destination.height);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.useProgram(blurProgram);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.uniform1i(blurSourceLocation, 0);
-    gl.uniform2f(
-      texelSizeLocation,
-      1 / destination.width,
-      1 / destination.height,
-    );
-    gl.uniform1i(horizontalLocation, pass % 2 === 0 ? 1 : 0);
-    gl.bindVertexArray(fullscreenVao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    source = destination.color;
-  }
-  return source;
-}
-```
+## 本章回顾
 
-两个目标必须尺寸和格式符合算法，且 input 不应与第一遍 destination 相同。更复杂的 render graph 可以根据资源生存期自动分配临时纹理，但底层仍遵守“同一 pass 读写资源不冲突”。
+掌握“FBO 与后处理技术”意味着能把“用完整FBO附件合同实现可复算的多遍后处理”落到具体对象、状态与输出，能制造“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”，还能凭完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素恢复同输入结果。
 
-## 多采样与 resolve
+<Glossary>
+  <GlossaryItem term="framebuffer">
+    framebuffer在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。
+  </GlossaryItem>
+  <GlossaryItem term="color attachment">
+    color attachment在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。
+  </GlossaryItem>
+  <GlossaryItem term="depth attachment">
+    depth attachment在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。
+  </GlossaryItem>
+  <GlossaryItem term="post-processing">
+    post-processing在“FBO 与后处理技术”的“Framebuffer and Post-processing”检查中用于用完整FBO附件合同实现可复算的多遍后处理；应由完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素确认。
+  </GlossaryItem>
+  <GlossaryItem term="state ownership">
+    状态所有权决定哪一个上下文或对象保存该值。
+  </GlossaryItem>
+  <GlossaryItem term="binding">
+    绑定把对象选为后续命令的隐式参数。
+  </GlossaryItem>
+</Glossary>
 
-WebGL2 的多采样 renderbuffer 可用 renderbufferStorageMultisample 创建，但普通 sampler2D 不能直接采样它。常见链路是：
+## 阅读导航
 
-1. 场景写入多采样颜色/深度 renderbuffer FBO；
-2. 把它绑定为 READ_FRAMEBUFFER，把单采样纹理 FBO 绑定为 DRAW_FRAMEBUFFER；
-3. 用 blitFramebuffer resolve 颜色；
-4. 后处理采样单采样颜色纹理。
+[← 调试与性能分析](/learn/deep-opengl/02-advanced/dog-debugging-tools) · [渲染优化策略 →](/learn/deep-opengl/02-advanced/dog-rendering-optimization)
 
-resolve 的源/目标尺寸、格式、过滤和 mask 受规范约束。若只为后处理而不需要 MSAA，应先测量其额外存储与 resolve 成本；移动设备上也可评估更便宜的抗锯齿路径。
-
-## 分步构建后处理链
-
-先预测：场景 FBO 的颜色纹理尺寸是 960×540，切回 1920×1080 默认帧缓冲后忘记更新 viewport，最终会发生什么？
-
-
-## Resize 与资源重建
-
-窗口尺寸或渲染比例变化时，所有依赖尺寸的纹理、renderbuffer、MSAA resolve 目标和 texel-size uniform 都要更新。使用 texStorage2D 的不可变纹理应重建，而不是对旧对象再次分配。
-
-稳妥做法是先创建 nextTarget，检查完整后原子替换 currentTarget，再删除旧资源。若新尺寸超过设备限制或分配失败，保留旧目标并降低渲染比例，避免半套附件导致后续 pass 崩溃。
-
-## 常见误区
-
-
-## 练习
-
-
-## 小结
-
-- FBO 是附件接线状态，不保存像素；texture/renderbuffer 生命周期必须独立管理。
-- 缺深度附件不等于不完整，是否需要深度由 pass 的遮挡、采样和后续使用决定。
-- FRAMEBUFFER_COMPLETE 只证明目标组合可绘制，viewport、drawBuffers、反馈和状态仍需检查。
-- 多采样目标通常先 resolve 到单采样纹理，再进入普通后处理。
-- ping-pong、pass 状态契约和原子 resize 重建共同保证多遍链路可移植、可诊断。
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos OpenGL / OpenGL ES / GLSL / WebGL 规范课程"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+/>

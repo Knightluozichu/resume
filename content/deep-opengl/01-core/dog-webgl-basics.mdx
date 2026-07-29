@@ -1,211 +1,170 @@
 ---
-title: "WebGL 基础与上下文"
+title: WebGL 基础与上下文
 type: C
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 3
-description: "从明确版本选择、canvas 像素尺寸和能力探测，到可测试的上下文丢失恢复"
+description: WebGL 基础与上下文：管理WebGL上下文创建、版本能力、丢失与资源重建，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
+math: true
+sourceUrl: 'https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf'
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dog-03
 ---
-
+import { DogWebglBasicsStateLab, DogWebglBasicsFaultLab, DogWebglBasicsEvidenceLab } from "@/components/mdx/deep-opengl/v2/dog-webgl-basics";
 import {
-  DogWebglBasicsDiagram,
-  DogCanvasSizeDiagram,
-} from "@/components/mdx/deep-opengl/diagrams/dog-webgl-basics";
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 直觉引入
+- 能说明“WebGL 基础与上下文”中的管理WebGL上下文创建、版本能力、丢失与资源重建，并给出对应对象、状态或概率边界
+- 能用正常基线与“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”反例定位上下文版本、扩展集合、lost/restored事件和重建对象计数中的首个差异
+- 能操作三个章专属实验，让webgl context、webgl1、webgl2、context lost具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“WebGL 基础与上下文的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
-canvas 同时活在两个坐标系统里：CSS 决定它在页面上显示多大，width/height 属性决定 WebGL 实际拥有多少像素。如果只把 CSS 设成 800×450，而绘图缓冲仍是默认 300×150，浏览器会把低分辨率图像拉伸到大区域；画面能出现，却会模糊并改变宽高比。
+</Objectives>
 
-WebGL 上下文也不只是“浏览器里的 OpenGL”。它是浏览器为某个 canvas 建立的受安全约束执行环境。版本选择、上下文属性、初始化、跨域资源、能力限制和丢失恢复都属于契约。页面切到后台可能暂停 requestAnimationFrame，但不等于一定丢失上下文；真正丢失必须由 webglcontextlost 事件确认。
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-## 明确选择版本路径
+## 从一个可推翻的运行假设开始
 
-由 canvas.getContext 创建。应用应先定义能力需求，再选择版本：
+“WebGL 基础与上下文”先固定一个问题：如何证明管理WebGL上下文创建、版本能力、丢失与资源重建？先写下预期对象、状态或像素，再运行正常基线；若上下文版本、扩展集合、lost/restored事件和重建对象计数不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-- 只支持 WebGL2：请求 webgl2，失败时显示明确的不支持信息；
-- 同时支持 WebGL1：为 GLSL ES 1.00、VAO/实例化扩展、纹理格式和功能降级维护独立适配层；
-- 不要把 getContext("webgl2") || getContext("webgl") 当作完整回退，因为返回类型变了，后续同一套 WebGL2 命令仍会失败。
+本页不变量是：WebGL 基础与上下文的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
-WebGL2 以 OpenGL ES 3.0 为基线，核心包含 VAO、实例化、3D/数组纹理、uniform buffer、transform feedback、多 draw buffer 与整数能力。WebGL1 以 ES 2.0 为基线，VAO、实例化、MRT、浮点纹理可渲染性等能力往往需要不同扩展，而且扩展名称与调用入口也可能不同。
+## 来源、版本与课程边界
 
-```js
-function createRendererContext(canvas, mode = "webgl2") {
-  const requested = {
-    alpha: false,
-    depth: true,
-    stencil: false,
-    antialias: true,
-    premultipliedAlpha: false,
-    preserveDrawingBuffer: false,
-    powerPreference: "high-performance",
-  };
+“WebGL 基础与上下文”不是某本同名原书的翻译，也不把四套API规范拼成虚构目录。OpenGL状态与对象语义以[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)核对，着色语言以[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)核对，移动端与浏览器边界分别以[OpenGL ES 3.2规范](https://registry.khronos.org/OpenGL/specs/es/3.2/es_spec_3.2.pdf)和[WebGL 2规范](https://registry.khronos.org/webgl/specs/latest/2.0/)核对。八个正式单元是独立课程分类。
 
-  const gl = canvas.getContext(mode, requested);
-  if (!gl) throw new Error(`${mode} context creation failed`);
+## 六个检查词
 
-  const actual = gl.getContextAttributes();
-  if (!actual) throw new Error("context is already lost");
+在“WebGL 基础与上下文”的六词核对中，<Term def="webgl context在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。">webgl context</Term>、<Term def="webgl1在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。">webgl1</Term>、<Term def="webgl2在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。">webgl2</Term>、<Term def="context lost在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。">context lost</Term>、<Term def="状态所有权决定哪一个上下文或对象保存该值。">state ownership</Term>、<Term def="绑定把对象选为后续命令的隐式参数。">binding</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
 
-  return {
-    gl,
-    actual,
-    version: gl.getParameter(gl.VERSION),
-    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-    extensions: gl.getSupportedExtensions() ?? [],
-  };
-}
+## 正式单元与机制解释
 
-const canvas = document.querySelector("#viewport");
-if (!(canvas instanceof HTMLCanvasElement)) throw new Error("missing canvas");
-const context = createRendererContext(canvas, "webgl2");
-console.log(context);
+### WebGL Context and WebGL 1/2
+
+在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中，WebGL通过canvas.在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中，getContext取得明确对象；WebGL 1与2暴露的核心能力不同，扩展也必须逐项查询。在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中，context lost后旧GPU对象失效，应用应阻止默认处理、暂停渲染，并依据CPU侧资源描述完整重建。
+
+在“WebGL 基础与上下文”本页，正式坐标是webgl context、webgl1、webgl2、context lost。在“WebGL 基础与上下文”的反例核对中，反事实为“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”；应从上下文版本、扩展集合、lost/restored事件和重建对象计数找到第一个分叉。
+
+$$
+Ready=Context\land Capabilities\land Resources
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
+
+    <DogWebglBasicsStateLab />
+
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
+
+    <DogWebglBasicsFaultLab />
+
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，撤销后以相同输入重放并重置。
+
+    <DogWebglBasicsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+const gl = canvas.getContext("webgl2");
+if (!gl) throw new Error("WebGL2 unavailable");
+canvas.addEventListener("webglcontextlost", e => e.preventDefault());
+canvas.addEventListener("webglcontextrestored", rebuildResources);
 ```
 
-是请求而非全部强制保证。应用应读取 getContextAttributes 的实际结果。preserveDrawingBuffer=false 通常更利于浏览器复用交换资源，也意味着合成后不能依赖默认帧缓冲旧内容长期保留；需要截图或跨帧积累时，应渲染到自己的 FBO 或在正确时机读取。
+运行“WebGL 基础与上下文”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
 
-## CSS 像素、设备像素与 viewport
+<Callout type="trap" title="本页核心误区">
+  假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄。它会破坏“WebGL 基础与上下文的输入、状态、输出与恢复结果可用同一证据包重放”，应先由上下文版本、扩展集合、lost/restored事件和重建对象计数定位。
+</Callout>
 
-尺寸不等于 CSS 尺寸。高 DPI 屏幕上，一个 CSS 像素可能对应多个设备像素。稳定流程是：
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “WebGL 基础与上下文”中的OpenGL/WebGL状态机只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
+</Callout>
 
-1. 读取 canvas.clientWidth/clientHeight；
-2. 乘以受控的 devicePixelRatio，并按性能预算限制最大倍率；
-3. 只有尺寸变化时更新 canvas.width/height；
-4. 使用 gl.drawingBufferWidth/Height 设置 viewport；
-5. 把实际宽高比传给投影矩阵和后处理。
+## 练习与答案
 
-<DogCanvasSizeDiagram />
+<Exercises>
 
-```js
-function resizeDrawingBuffer(gl, canvas, maxPixelRatio = 2) {
-  const ratio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
-  const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
-  const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+**问题 1：公式边界。** 在“WebGL 基础与上下文”中，如何用一个可手算样本验证 $Ready=Context\land Capabilities\land Resources$，并标明每个量属于哪一对象、stage、空间或时间点？
 
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
+<Answer>
+  针对“WebGL 基础与上下文”固定最小输入，逐项记录上下文版本、扩展集合、lost/restored事件和重建对象计数；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
+</Answer>
 
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  return gl.drawingBufferWidth / gl.drawingBufferHeight;
-}
+**问题 2：正式坐标。** 在“WebGL 基础与上下文”中，webgl context、webgl1、webgl2、context lost如何进入可操作验证？
 
-function renderFrame() {
-  const aspect = resizeDrawingBuffer(gl, canvas);
-  updateProjection(aspect);
-  drawScene();
-  requestAnimationFrame(renderFrame);
-}
-```
+<Answer>
+  1. **webgl context**：在“WebGL 基础与上下文”章专属实验中保存上下文版本、扩展集合、lost/restored事件和重建对象计数，注入“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，恢复后以相同输入重放。
+  2. **webgl1**：在“WebGL 基础与上下文”章专属实验中保存上下文版本、扩展集合、lost/restored事件和重建对象计数，注入“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，恢复后以相同输入重放。
+  3. **webgl2**：在“WebGL 基础与上下文”章专属实验中保存上下文版本、扩展集合、lost/restored事件和重建对象计数，注入“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，恢复后以相同输入重放。
+  4. **context lost**：在“WebGL 基础与上下文”章专属实验中保存上下文版本、扩展集合、lost/restored事件和重建对象计数，注入“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，恢复后以相同输入重放。
+</Answer>
 
-盲目使用完整 devicePixelRatio 可能把 4K 手机上的像素数量放大四倍以上，填充率和后处理带宽随面积增长。限制倍率、动态分辨率或离屏低分辨率路径都应建立在实际 drawing buffer 尺寸上。
+**问题 3：恢复证据。** 怎样证明“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”已真正修复？
 
-## 能力探测而非版本猜测
+<Answer>
+  保存正常基线，注入故障并标记上下文版本、扩展集合、lost/restored事件和重建对象计数中的首个分叉；撤销故障后以完全相同输入重放。只有WebGL 基础与上下文的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
+</Answer>
 
-至少回答：
+</Exercises>
 
-- 最大纹理尺寸、数组层数、顶点属性数和 uniform block 限制是多少；
-- 有多少颜色附件和 draw buffer；
-- 所需浮点/半浮点格式能否采样、过滤并作为颜色附件；
-- timer query、压缩纹理、各向异性过滤等扩展是否存在；
-- shader 精度、program 链接和 framebuffer 完整性是否通过真实测试。
+## 本章回顾
 
-getSupportedExtensions 只说明可请求的扩展名称；必须再调用 getExtension 获得对象并检查返回值。核心 API 中“有某个格式枚举”也不自动证明该格式可渲染，应创建最小纹理/FBO 并检查 FRAMEBUFFER_COMPLETE。
+掌握“WebGL 基础与上下文”意味着能把“管理WebGL上下文创建、版本能力、丢失与资源重建”落到具体对象、状态与输出，能制造“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”，还能凭上下文版本、扩展集合、lost/restored事件和重建对象计数恢复同输入结果。
 
-| 能力 | WebGL1 | WebGL2 |
-| --- | --- | --- |
-| VAO | OES_vertex_array_object | 核心 |
-| 实例化 | ANGLE_instanced_arrays | 核心 |
-| MRT | WEBGL_draw_buffers | 核心 drawBuffers |
-| UBO | 无核心能力 | 核心 |
-| GLSL ES | 1.00 | 3.00 |
-| 3D/数组纹理 | 无核心能力 | 核心 |
+<Glossary>
+  <GlossaryItem term="webgl context">
+    webgl context在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。
+  </GlossaryItem>
+  <GlossaryItem term="webgl1">
+    webgl1在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。
+  </GlossaryItem>
+  <GlossaryItem term="webgl2">
+    webgl2在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。
+  </GlossaryItem>
+  <GlossaryItem term="context lost">
+    context lost在“WebGL 基础与上下文”的“WebGL Context and WebGL 1/2”检查中用于管理WebGL上下文创建、版本能力、丢失与资源重建；应由上下文版本、扩展集合、lost/restored事件和重建对象计数确认。
+  </GlossaryItem>
+  <GlossaryItem term="state ownership">
+    状态所有权决定哪一个上下文或对象保存该值。
+  </GlossaryItem>
+  <GlossaryItem term="binding">
+    绑定把对象选为后续命令的隐式参数。
+  </GlossaryItem>
+</Glossary>
 
-这张表只说明规范入口，不能替代限制值、扩展和格式可用性的实际检查。
+## 阅读导航
 
-## 上下文丢失不是页面隐藏
+[← GLSL ES 着色器语言](/learn/deep-opengl/01-core/dog-shader-language) · [跨平台兼容性 →](/learn/deep-opengl/02-advanced/dog-cross-platform)
 
-可能由 GPU 重置、驱动问题、浏览器资源策略或测试扩展触发。document.visibilityState 变化只表示页面可见性变化；它适合暂停动画和节能，但不能作为资源失效证据。
-
-发生 webglcontextlost 后：
-
-- 立即停止提交 GL 命令和 requestAnimationFrame 循环；
-- 在事件中 preventDefault，表示应用希望浏览器在可能时恢复；这不是恢复时间或成功的保证；
-- 丢弃 program、shader、buffer、texture、VAO、FBO、query 及所有 location 缓存；
-- 保留 CPU 侧 shader 源码、网格、图片来源、材质和资源描述；
-- 等 webglcontextrestored 到来后，按依赖顺序重建全部资源与非默认状态。
-
-<DogWebglBasicsDiagram />
-
-## 分步设计可恢复渲染器
-
-先预测：上下文恢复后重新链接了同一份 shader，旧的 WebGLUniformLocation 是否还能继续传给 uniformMatrix4fv？
-
-
-## 可测试的丢失恢复实现
-
-```js
-let frameId = 0;
-let generation = 0;
-let resources = createResources(gl, descriptors);
-
-function schedule() {
-  frameId = requestAnimationFrame(frame);
-}
-
-function frame() {
-  draw(gl, resources);
-  schedule();
-}
-
-canvas.addEventListener("webglcontextlost", (event) => {
-  event.preventDefault();
-  cancelAnimationFrame(frameId);
-  resources = null;
-});
-
-canvas.addEventListener("webglcontextrestored", () => {
-  try {
-    generation += 1;
-    const next = createResources(gl, descriptors);
-    next.generation = generation;
-    resources = next;
-    schedule();
-  } catch (error) {
-    showFatalError("WebGL 资源恢复失败", error);
-  }
-});
-
-// 仅用于自动化测试，不作为生产恢复机制。
-const lose = gl.getExtension("WEBGL_lose_context");
-lose?.loseContext();
-setTimeout(() => lose?.restoreContext(), 1000);
-```
-
-program 重新链接后，attribute/uniform 位置和 WebGLUniformLocation 都属于新 program，旧缓存必须丢弃并重查。恢复测试应验证三件事：lost 期间绘制计数停止；restored 后资源 generation 增加；固定基准场景重新出现且无错误。
-
-## 浏览器安全边界
-
-WebGL 规范要求实现避免把其他进程或旧资源数据泄露给页面，因此未初始化资源、越界访问和着色器行为受到比原生 API 更严格的约束。上传跨域图片到纹理还需要服务器允许 CORS；仅仅能在 img 标签显示，并不表示能安全读取到 WebGL 纹理。
-
-开发服务器与生产 CDN 应共同验证 Access-Control-Allow-Origin、图片解码失败、纹理尺寸和颜色空间。安全约束导致的 INVALID_VALUE 或纹理上传异常，不能靠禁用浏览器策略解决。
-
-## 常见误区
-
-
-## 练习
-
-
-## 小结
-
-- WebGL1 回退是独立后端适配，不是 getContext 调用后的自动兼容。
-- 上下文属性是请求，实际缓冲配置要通过 getContextAttributes 和能力查询确认。
-- CSS 尺寸、受控像素倍率、绘图缓冲、viewport 与投影宽高比必须同步。
-- 页面隐藏不等于上下文丢失；只有 lost/restored 事件决定 GPU 资源代生命周期。
-- CPU 资源描述与集中创建函数使初始化和恢复复用同一链路，自动化丢失测试才能证明它有效。
-
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos OpenGL / OpenGL ES / GLSL / WebGL 规范课程"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+/>

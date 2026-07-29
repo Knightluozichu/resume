@@ -1,222 +1,280 @@
 ---
-title: "深入理解 OpenGL WebGL OpenGL ES 总复习"
+title: 深入理解 OpenGL WebGL OpenGL ES 总复习
 type: D
-section: "计算机图形学与渲染"
+section: 计算机图形学与渲染
 order: 9
-description: "用六段帧契约和症状到回归的证据闭环，整合状态、着色器、FBO、移动、兼容与调试"
+description: >-
+  深入理解 OpenGL WebGL OpenGL ES 总复习：区分上下文状态、对象存储、绑定点与VAO捕获关系；用GLSL
+  ES阶段接口、精度与uniform合同连接顶点和片元；管理WebGL上下文创建、版本能力、丢失与资源重建；在EGL、OpenGL ES与tile-based
+  GPU边界内控制带宽和精度；用完整FBO附件合同实现可复算的多遍后处理；用提交、状态切换和带宽证据优化绘制而不改变结果；按版本、扩展与限制查询构造跨平台能力降级图；用调试回调、帧捕获与GPU计时定位首个错误事件，以章专属交互与可重放证据独立重写。
 demo: true
-math: false
-sourceUrl: "https://registry.khronos.org/OpenGL/"
+math: true
+sourceUrl: 'https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf'
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitIds:
+  - dog-01
+  - dog-02
+  - dog-03
+  - dog-04
+  - dog-05
+  - dog-06
+  - dog-07
+  - dog-08
 ---
+import { DogFinalReviewStateLab, DogFinalReviewFaultLab, DogFinalReviewEvidenceLab } from "@/components/mdx/deep-opengl/v2/dog-final-review";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 直觉引入
+- 能说明“深入理解 OpenGL WebGL OpenGL ES 总复习”中的区分上下文状态、对象存储、绑定点与VAO捕获关系；用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；管理WebGL上下文创建、版本能力、丢失与资源重建；在EGL、OpenGL ES与tile-based GPU边界内控制带宽和精度；用完整FBO附件合同实现可复算的多遍后处理；用提交、状态切换和带宽证据优化绘制而不改变结果；按版本、扩展与限制查询构造跨平台能力降级图；用调试回调、帧捕获与GPU计时定位首个错误事件，并给出对应对象、状态或概率边界
+- 能用正常基线与“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”反例定位当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳中的首个差异
+- 能操作三个章专属实验，让context、state machine、vao、vbo、glsl es、uniform、in/out、precision、webgl context、webgl1、webgl2、context lost、opengl es、egl、precision qualifier、tile、framebuffer、color attachment、depth attachment、post-processing、draw call、instancing、state sorting、bandwidth、feature detection、extension、fallback、compatibility、glgeterror、khr_debug、renderdoc、profil具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“深入理解 OpenGL WebGL OpenGL ES 总复习的输入、状态、输出与恢复结果可用同一证据包重放”是否恢复
 
-全书不是一串 API，而是一份关于“绘制为何成立”的契约。drawElements 只是最后一个提交动作；它之前已经选定上下文和能力，链接 program，配置 VAO 与资源，建立光栅化/逐片元状态并绑定输出目标。它之后还要呈现、测量和在上下文丢失时重建。任意一段缺失，最终都可能只显示成黑屏。
+</Objectives>
 
-总复习的目标不是背出所有枚举，而是建立两种能力：从代码正向证明一帧的每个前置条件；从症状反向找到第一处断点，并留下可回归证据。这样 OpenGL、OpenGL ES 与 WebGL 的差异会落在具体边界上，而不是变成三套互不关联的记忆。
+{/* GRAPHICS_API_ENGINES_QUALITY_V2 */}
 
-## 六段帧契约
+## 从一个可推翻的运行假设开始
 
-分六段：
+“深入理解 OpenGL WebGL OpenGL ES 总复习”先固定一个问题：如何证明区分上下文状态、对象存储、绑定点与VAO捕获关系；用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；管理WebGL上下文创建、版本能力、丢失与资源重建；在EGL、OpenGL ES与tile-based GPU边界内控制带宽和精度；用完整FBO附件合同实现可复算的多遍后处理；用提交、状态切换和带宽证据优化绘制而不改变结果；按版本、扩展与限制查询构造跨平台能力降级图；用调试回调、帧捕获与GPU计时定位首个错误事件？先写下预期对象、状态或像素，再运行正常基线；若当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳不能指出第一个分叉，最终画面看起来正确也不能通过。
 
-1. **上下文与能力**：后端版本、核心限制、扩展对象、格式探针、绘图缓冲尺寸和当前资源代都有效。
-2. **程序接口**：shader 分别编译、program 链接，attribute/uniform/sampler/输出位置属于当前 program。
-3. **顶点获取**：VAO 属性启用、格式、VBO 关联、EBO 和实例 divisor 与 shader 输入一致。
-4. **光栅化与逐片元状态**：viewport、scissor、front face、剔除、深度、模板、混合和写掩码明确。
-5. **输出目标**：默认/FBO、附件、drawBuffers、多采样 resolve 和读写资源集合有效且无反馈环。
-6. **提交与证据**：draw 参数合法，错误/日志可追踪，CPU/GPU 查询异步，结果进入回归。
+本页不变量是：深入理解 OpenGL WebGL OpenGL ES 总复习的输入、状态、输出与恢复结果可用同一证据包重放。故障模式“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”每次只改变一个条件，正常、故障、恢复三次运行必须共享输入与版本。
 
+## 来源、版本与课程边界
 
-这六段同样适用于三个 API 家族，只是实现边界不同：原生 OpenGL 要处理线程 current 与窗口系统；OpenGL ES 常通过 EGL 管理 Surface/Context；WebGL 把上下文绑定到 canvas 并增加浏览器安全与 context-lost 生命周期。
+“深入理解 OpenGL WebGL OpenGL ES 总复习”不是某本同名原书的翻译，也不把四套API规范拼成虚构目录。OpenGL状态与对象语义以[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)核对，着色语言以[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)核对，移动端与浏览器边界分别以[OpenGL ES 3.2规范](https://registry.khronos.org/OpenGL/specs/es/3.2/es_spec_3.2.pdf)和[WebGL 2规范](https://registry.khronos.org/webgl/specs/latest/2.0/)核对。八个正式单元是独立课程分类。
 
-## 八个规范单元如何汇合
+## 六个检查词
 
-- **Context, Objects, and State** 提供对象生命周期、绑定点和 draw 的隐式输入模型；
-- **GLSL ES Shaders** 定义类型、精度、阶段接口、uniform 与采样器；
-- **WebGL Context and WebGL 1/2** 补上 canvas 像素、上下文属性、安全和丢失恢复；
-- **OpenGL ES Mobile Runtime** 把 EGL Surface/Context、tile 带宽和热稳态纳入帧契约；
-- **Framebuffer and Post-processing** 管理附件完整性、pass 目标、resolve 与 ping-pong；
-- **Draw-call and Rendering Optimization** 用 CPU/GPU/带宽/同步证据决定实例化、排序、剔除和格式；
-- **Feature Detection and Extensions** 用能力契约与格式探针选择可解释路径；
-- **Debugging and GPU Profiling** 用错误、日志、帧抓取和非阻塞计时完成证据链。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的六词核对中，<Term def="context在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">context</Term>、<Term def="state machine在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">state machine</Term>、<Term def="vao在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">vao</Term>、<Term def="vbo在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。">vbo</Term>、<Term def="glsl es在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中用于用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；应由编译日志、链接日志、接口位置、uniform值和参考像素确认。">glsl es</Term>、<Term def="uniform在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中用于用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；应由编译日志、链接日志、接口位置、uniform值和参考像素确认。">uniform</Term>。术语只有进入公式、交互状态、代码和可重放输出，才算真正覆盖。
 
-学习地图和本章不替代这八个单元：前者建立依赖，本章把故障和工程决策重新映射回它们。
+## 正式单元与机制解释
 
-## 从零设计渲染器的关键决策
+### OpenGL Context, Objects, and State
 
-### 1. 后端与能力
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中，OpenGL命令在当前context上执行，buffer、texture与program等对象保存存储或可执行内容，binding把对象选为后续命令的隐式参数。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中，VAO记录属性格式、属性缓冲关联与element array binding，但不会把所有全局状态冻结成快照。
 
-先决定最低后端：只支持 WebGL2/ES3，还是维护 WebGL1/ES2 适配。输出，再选 forward/deferred、HDR/LDR、实例化和后处理路径。版本字符串不能代替限制和最小 FBO/shader 探针。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是context、state machine、vao、vbo。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关”；应从当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照找到第一个分叉。
 
-### 2. 资源描述与资源代
+$$
+Draw=F(Ctx,Program,VAO,FBO,State)
+$$
 
-CPU 侧保存 shader 源码、网格、纹理来源、材质和 pass 描述；GPU 句柄只属于当前。WebGL restored 或 EGL_CONTEXT_LOST 后创建新一代 program、位置、buffer、texture、VAO/FBO，成功后原子替换。
+### GLSL ES Shaders
 
-### 3. Pass 描述与状态所有权
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中，GLSL ES编译单个shader stage，program link再核对跨阶段in/out接口。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中，uniform由应用更新而不是逐顶点插值，precision qualifier在移动实现尤其影响范围与误差。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中，链接成功仍不保证坐标空间和数值精度正确。
 
-每个 pass 声明输入、输出、尺寸、program、VAO、clear/load、深度/模板/混合和 draw。状态缓存可以少发重复命令，但不能让 pass 依赖“前一个调用刚好留下”的状态。Render graph 还应拒绝同一纹理图像在一个 pass 中同时读写。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是glsl es、uniform、in/out、precision。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度”；应从编译日志、链接日志、接口位置、uniform值和参考像素找到第一个分叉。
 
-### 4. 测量与验收
+$$
+gl\_Position=M_{clip\leftarrow model}p
+$$
 
-正确性用固定三角形、已知纹理、像素差异和上下文丢失测试；性能用固定相机、P50/P95、CPU marker、disjoint GPU query 和工作量计数；移动端还要进入热稳态。优化只有在画质、总帧和资源预算都通过时成立。
+### WebGL Context and WebGL 1/2
 
-## 用数据描述 pass
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“WebGL Context and WebGL 1/2”检查中，WebGL通过canvas.在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“WebGL Context and WebGL 1/2”检查中，getContext取得明确对象；WebGL 1与2暴露的核心能力不同，扩展也必须逐项查询。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“WebGL Context and WebGL 1/2”检查中，context lost后旧GPU对象失效，应用应阻止默认处理、暂停渲染，并依据CPU侧资源描述完整重建。
 
-下面的结构不是完整引擎，但它强迫每个 pass 显式声明目标、尺寸、状态和资源代。提交前验证比 draw 后猜黑屏更便宜。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是webgl context、webgl1、webgl2、context lost。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄”；应从上下文版本、扩展集合、lost/restored事件和重建对象计数找到第一个分叉。
 
-```js
-function validatePass(gl, pass, generation) {
-  if (pass.generation !== generation) {
-    throw new Error(`${pass.name}: stale GPU resource generation`);
-  }
-  if (!pass.program || !pass.vao) {
-    throw new Error(`${pass.name}: missing program or VAO`);
-  }
-  if (pass.width < 1 || pass.height < 1) {
-    throw new Error(`${pass.name}: invalid viewport`);
-  }
-  const outputTextures = new Set(pass.outputs.map((item) => item.texture));
-  for (const input of pass.inputs) {
-    if (outputTextures.has(input.texture)) {
-      throw new Error(`${pass.name}: framebuffer feedback loop`);
-    }
-  }
-  if (pass.framebuffer) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
-    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-    if (status !== gl.FRAMEBUFFER_COMPLETE) {
-      throw new Error(`${pass.name}: incomplete FBO 0x${status.toString(16)}`);
-    }
-  }
-}
+$$
+Ready=Context\land Capabilities\land Resources
+$$
 
-function executePass(gl, pass, generation) {
-  validatePass(gl, pass, generation);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
-  gl.viewport(0, 0, pass.width, pass.height);
-  applyRasterState(gl, pass.rasterState);
-  gl.useProgram(pass.program);
-  gl.bindVertexArray(pass.vao);
-  bindInputs(gl, pass.inputs);
-  issueDraw(gl, pass.draw);
-}
-```
+### OpenGL ES Mobile Runtime
 
-真实实现还要验证附件输出映射、索引范围和 uniform 接口，但这个边界已能捕获旧资源代、反馈环、零尺寸和缺失对象四类常见问题。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL ES Mobile Runtime”检查中，OpenGL ES保留可编程管线核心，但平台通常通过EGL建立display、surface与context。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL ES Mobile Runtime”检查中，移动GPU常按tile处理片元，频繁读回、无意义store或超大中间附件会消耗外部带宽；精度限定也必须按数值范围选择。
 
-## 症状必须转换成可证伪假设
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是opengl es、egl、precision qualifier、tile。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件”；应从EGL配置、ES版本、附件load/store、外部带宽与shader精度范围找到第一个分叉。
 
-不接受“可能是驱动”这种无法验证的终点。
+$$
+Cost\approx B_{external}+N_{tiles}C_{tile}
+$$
 
-### 黑屏或错误颜色
+### Framebuffer and Post-processing
 
-- 先看已知清屏色；看不到则查 surface/canvas、目标、viewport 和呈现；
-- 固定裁剪空间三角形 + 常量色；失败则查 program/输出/合法状态；
-- 恢复 VAO；失败则查属性、VBO/EBO、索引和 divisor；
-- 恢复矩阵/纹理/深度/混合；第一处变化就是断点；
-- Spector.js/RenderDoc 保存异常 draw 的状态和资源证据。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Framebuffer and Post-processing”检查中，framebuffer把颜色、深度和模板attachment组成渲染目标；完整性取决于附件尺寸、样本数、格式和层级等条件。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Framebuffer and Post-processing”检查中，后处理先渲染到离屏颜色附件，再以纹理输入执行下一pass，必须防止读写同一子资源的反馈环。
 
-### 性能差或尖峰
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是framebuffer、color attachment、depth attachment、post-processing。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入”；应从完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素找到第一个分叉。
 
-- CPU 高、GPU 有空洞：提交、排序、上传或同步；
-- 降分辨率明显改善：片元或带宽；
-- 常量 shader 明显改善：着色/采样；
-- 降附件位宽/数量改善：带宽/load-store；
-- 移除 readback/finish/立即 query 改善：同步；
-- 移动冷机快、数分钟后慢：热降频与持续功耗。
+$$
+Pass_{n+1}=Shader(Texture(Pass_n))
+$$
 
-### 兼容或恢复失败
+### Draw-call and Rendering Optimization
 
-- 保存能力报告、路径断言和格式探针，不只保存 VERSION；
-- 上下文恢复后 location/VAO/FBO 都属于新资源代，禁止复用旧句柄；
-- shader 后端、API 包装和资源格式必须随 WebGL1/2 或 ES 版本一起切换；
-- 黑名单必须含设备/驱动范围、证据和复测到期条件。
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Draw-call and Rendering Optimization”检查中，draw call成本包含CPU提交、驱动验证与GPU工作；instancing减少重复提交，state sorting减少昂贵切换，但透明对象仍受顺序约束。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Draw-call and Rendering Optimization”检查中，优化必须同时比较帧时间、提交数、带宽与像素结果。
 
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是draw call、instancing、state sorting、bandwidth。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时”；应从CPU/GPU时间戳、draw数、状态切换、带宽和图像差异找到第一个分叉。
 
-## 分步完成一次故障闭环
+$$
+T_{frame}=T_{cpu}+T_{gpu}+T_{sync}
+$$
 
-先预测：FBO resize 后画面黑屏，checkFramebufferStatus 完整，getError 也为 NO_ERROR。此时优先修改 shader，还是先检查 viewport、附件尺寸和 texel-size uniform？
+### Feature Detection and Extensions
 
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Feature Detection and Extensions”检查中，feature detection先查询版本、extension与limit，再选择实现路径；桌面OpenGL、ES和WebGL名称相似但核心集合、着色语言与安全约束不同。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Feature Detection and Extensions”检查中，fallback必须保持结果合同或明确降级质量。
 
-## 黑屏探针可以自动化
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是feature detection、extension、fallback、compatibility。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“用厂商字符串猜能力，或扩展存在却未检查对应限制与入口”；应从版本、扩展、限制、选择路径和降级输出差异找到第一个分叉。
 
-```js
-async function isolateBlackFrame(renderer) {
-  const probes = [
-    ["clear-default", () => renderer.clearDefault([1, 0, 1, 1])],
-    ["clear-target", () => renderer.clearSceneTarget([0, 1, 1, 1])],
-    ["constant-triangle", () => renderer.drawConstantTriangle()],
-    ["real-vao", () => renderer.drawRealGeometryWithConstantColor()],
-    ["real-material", () => renderer.drawRealMaterial()],
-    ["post-process", () => renderer.drawPostProcess()],
-  ];
+$$
+Path=select(Core,Extensions,Limits)
+$$
 
-  const evidence = [];
-  for (const [name, run] of probes) {
-    run();
-    const pixel = renderer.readProbePixel();
-    const errors = renderer.drainErrors();
-    evidence.push({ name, pixel, errors });
-    if (!renderer.matchesExpected(name, pixel, errors)) break;
-  }
-  return evidence;
+### Debugging and GPU Profiling
+
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Debugging and GPU Profiling”检查中，glGetError只提供有限错误队列且可能扰动热路径；KHR_debug能携带source、type、severity与对象标签。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“Debugging and GPU Profiling”检查中，RenderDoc或Spector帧捕获展示资源和命令状态，timer query则把GPU区间与CPU提交时间分开。
+
+在“深入理解 OpenGL WebGL OpenGL ES 总复习”本页，正式坐标是glgeterror、khr_debug、renderdoc、profil。在“深入理解 OpenGL WebGL OpenGL ES 总复习”的反例核对中，反事实为“只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”；应从debug message、对象标签、捕获事件、资源快照与GPU时间戳找到第一个分叉。
+
+$$
+Fault=first(Event_{actual}\ne Event_{expected})
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 对象与执行路径">
+    选择任一正式坐标，沿真实对象、状态、队列或像素路径查看因果关系。
+
+    <DogFinalReviewStateLab />
+
+  </Step>
+  <Step title="2. 单变量故障">
+    保持其余条件不变，只切换一个绑定、能力、访问或同步错误，预测首个差异。
+
+    <DogFinalReviewFaultLab />
+
+  </Step>
+  <Step title="3. 证据与恢复">
+    保存基线，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，撤销后以相同输入重放并重置。
+
+    <DogFinalReviewEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+for (const Case& c : conformanceCases) {
+  resetState(c.baseline);
+  auto result = replay(c.commands);
+  require(result.evidence == c.expectedEvidence);
 }
 ```
 
-自动化 readPixels 会同步，只应在离线回归或小探针区域使用，不应进入生产帧。它的价值是保存“最后正确步骤/第一错误步骤”，减少人工随机试错。
+运行“深入理解 OpenGL WebGL OpenGL ES 总复习”时记录API/规范版本、设备或浏览器能力、固定输入、关键中间状态与输出摘要。不得用一次漂亮截图替代对象合同、验证消息、时间戳或像素差异。
 
-## 优化回归同时保护画质
+<Callout type="trap" title="本页核心误区">
+  把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询。它会破坏“深入理解 OpenGL WebGL OpenGL ES 总复习的输入、状态、输出与恢复结果可用同一证据包重放”，应先由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳定位。
+</Callout>
 
-应同时比较时间和输出。
+<Callout type="trap" title="不要跨API套生命周期模板">
+  “深入理解 OpenGL WebGL OpenGL ES 总复习”中的OpenGL/WebGL状态机只在自己的规范语义内解释本页。不能把另一套API的Buffer、Fence、bind或隐式同步模型换上标题后当作正文。
+</Callout>
 
-```js
-function percentile(sorted, p) {
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
-}
+## 练习与答案
 
-function summarize(samples) {
-  const values = [...samples].sort((a, b) => a - b);
-  return {
-    p50: percentile(values, 0.50),
-    p95: percentile(values, 0.95),
-    p99: percentile(values, 0.99),
-  };
-}
+<Exercises>
 
-function acceptExperiment(before, after, limits) {
-  const cpu = summarize(after.cpuMs);
-  const gpu = summarize(after.gpuMs.filter((sample) => !sample.disjoint));
-  return {
-    pass:
-      cpu.p95 <= limits.cpuP95 &&
-      gpu.p95 <= limits.gpuP95 &&
-      after.imageDifference <= limits.imageDifference &&
-      after.memoryBytes <= limits.memoryBytes,
-    before: {
-      cpu: summarize(before.cpuMs),
-      gpu: summarize(before.gpuMs.filter((sample) => !sample.disjoint)),
-    },
-    after: { cpu, gpu },
-  };
-}
-```
+**问题 1：公式边界。** 在“深入理解 OpenGL WebGL OpenGL ES 总复习”中，如何用一个可手算样本验证 $Draw=F(Ctx,Program,VAO,FBO,State)$，并标明每个量属于哪一对象、stage、空间或时间点？
 
-只降低 drawCount 但 GPU P95、内存或图像误差超限，应拒绝；只看一台冷机设备也不足以证明移动优化。
+<Answer>
+  针对“深入理解 OpenGL WebGL OpenGL ES 总复习”固定最小输入，逐项记录当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳；只扰动一个量并比较变化方向。若公式、验证消息和输出不一致，先拒绝实现再调查隐藏状态。
+</Answer>
 
-## 常见误区
+**问题 2：正式坐标。** 在“深入理解 OpenGL WebGL OpenGL ES 总复习”中，context、state machine、vao、vbo、glsl es、uniform、in/out、precision、webgl context、webgl1、webgl2、context lost、opengl es、egl、precision qualifier、tile、framebuffer、color attachment、depth attachment、post-processing、draw call、instancing、state sorting、bandwidth、feature detection、extension、fallback、compatibility、glgeterror、khr_debug、renderdoc、profil如何进入可操作验证？
 
+<Answer>
+  1. **context**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  2. **state machine**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  3. **vao**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  4. **vbo**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  5. **glsl es**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  6. **uniform**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  7. **in/out**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  8. **precision**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  9. **webgl context**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  10. **webgl1**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  11. **webgl2**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  12. **context lost**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  13. **opengl es**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  14. **egl**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  15. **precision qualifier**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  16. **tile**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  17. **framebuffer**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  18. **color attachment**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  19. **depth attachment**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  20. **post-processing**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  21. **draw call**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  22. **instancing**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  23. **state sorting**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  24. **bandwidth**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  25. **feature detection**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  26. **extension**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  27. **fallback**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  28. **compatibility**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  29. **glgeterror**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  30. **khr_debug**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  31. **renderdoc**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+  32. **profil**：在“深入理解 OpenGL WebGL OpenGL ES 总复习”章专属实验中保存当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳，注入“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，恢复后以相同输入重放。
+</Answer>
 
-## 练习
+**问题 3：恢复证据。** 怎样证明“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”已真正修复？
 
+<Answer>
+  保存正常基线，注入故障并标记当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳中的首个分叉；撤销故障后以完全相同输入重放。只有深入理解 OpenGL WebGL OpenGL ES 总复习的输入、状态、输出与恢复结果可用同一证据包重放重新成立且重置回到初值，修复才可交接。
+</Answer>
 
-## 小结
+</Exercises>
 
-- 六段帧契约把上下文、程序、顶点、状态、目标和证据串成可正向证明的绘制链。
-- 八个规范单元分别补足语言、平台、后处理、优化、兼容和调试边界，共享模型但不共享错误假设。
-- 症状必须转成单一可证伪假设，再用已知输出、帧抓取、能力探针或单变量实验取得证据。
-- GPU 对象属于资源代，上下文恢复和后端切换都要重建 program、位置、VAO/FBO 与状态。
-- 修复和优化只有进入图像、性能、内存、设备范围与生命周期回归，才算完成闭环。
+## 本章回顾
 
+掌握“深入理解 OpenGL WebGL OpenGL ES 总复习”意味着能把“区分上下文状态、对象存储、绑定点与VAO捕获关系；用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；管理WebGL上下文创建、版本能力、丢失与资源重建；在EGL、OpenGL ES与tile-based GPU边界内控制带宽和精度；用完整FBO附件合同实现可复算的多遍后处理；用提交、状态切换和带宽证据优化绘制而不改变结果；按版本、扩展与限制查询构造跨平台能力降级图；用调试回调、帧捕获与GPU计时定位首个错误事件”落到具体对象、状态与输出，能制造“把ARRAY_BUFFER当前绑定误当成VAO整体状态，或依赖上一个pass残留开关；顶点输出与片元输入位置或类型不一致，或片元高光计算使用过低精度；假设WebGL2或扩展必定存在，或context restored后继续复用旧句柄；把桌面扩展当作ES核心能力，或每个pass都强制保存不会再读取的附件；FBO不完整仍绘制，或把当前颜色附件同时绑定为采样输入；只减少draw call却增加过度绘制或带宽，或用glFinish制造虚假稳定计时；用厂商字符串猜能力，或扩展存在却未检查对应限制与入口；只在帧尾调用glGetError，或用CPU墙钟时间替代GPU查询”，还能凭当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照、编译日志、链接日志、接口位置、uniform值和参考像素、上下文版本、扩展集合、lost/restored事件和重建对象计数、EGL配置、ES版本、附件load/store、外部带宽与shader精度范围、完整性状态、附件尺寸/样本数、draw buffers和逐pass参考像素、CPU/GPU时间戳、draw数、状态切换、带宽和图像差异、版本、扩展、限制、选择路径和降级输出差异、debug message、对象标签、捕获事件、资源快照与GPU时间戳恢复同输入结果。
 
+<Glossary>
+  <GlossaryItem term="context">
+    context在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="state machine">
+    state machine在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="vao">
+    vao在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="vbo">
+    vbo在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“OpenGL Context, Objects, and State”检查中用于区分上下文状态、对象存储、绑定点与VAO捕获关系；应由当前context、program、VAO属性槽、EBO、FBO与逐片元状态快照确认。
+  </GlossaryItem>
+  <GlossaryItem term="glsl es">
+    glsl es在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中用于用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；应由编译日志、链接日志、接口位置、uniform值和参考像素确认。
+  </GlossaryItem>
+  <GlossaryItem term="uniform">
+    uniform在“深入理解 OpenGL WebGL OpenGL ES 总复习”的“GLSL ES Shaders”检查中用于用GLSL ES阶段接口、精度与uniform合同连接顶点和片元；应由编译日志、链接日志、接口位置、uniform值和参考像素确认。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 渲染优化策略](/learn/deep-opengl/02-advanced/dog-rendering-optimization)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Khronos OpenGL / OpenGL ES / GLSL / WebGL 规范课程"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf"
+/>
