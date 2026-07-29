@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T18:59:06.813Z；旧版分数不迁移。
+> 2026-07-29T19:17:59.831Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：3491
-- queued：500
-- passed：505
+- queued：484
+- passed：521
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -198,40 +198,40 @@
 | 185 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
 | 186 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
 | 187 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 188 | pbrt-book | 16 | 0 | 16 | 0 | 16 |
-| 189 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 190 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 191 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 192 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 193 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 194 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 195 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 196 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 197 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 198 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 199 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
-| 200 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
-| 201 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
-| 202 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
-| 203 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
-| 204 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 205 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
-| 206 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
-| 207 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
-| 208 | crazy-android | 21 | 0 | 0 | 21 | 0 |
-| 209 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
-| 210 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
-| 211 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
-| 212 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
-| 213 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
-| 214 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
-| 215 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
-| 216 | first-line-android | 18 | 0 | 0 | 18 | 0 |
-| 217 | global-illumination | 12 | 0 | 0 | 12 | 0 |
-| 218 | illustrated-http | 13 | 0 | 0 | 13 | 0 |
-| 219 | illustrated-server-network | 8 | 0 | 0 | 8 | 0 |
-| 220 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
-| 221 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
+| 188 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 189 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 190 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 191 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 192 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 193 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 194 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 195 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 196 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 197 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 198 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
+| 199 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
+| 200 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
+| 201 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
+| 202 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
+| 203 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
+| 204 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
+| 205 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
+| 206 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 207 | crazy-android | 21 | 0 | 0 | 21 | 0 |
+| 208 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
+| 209 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
+| 210 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
+| 211 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
+| 212 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
+| 213 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
+| 214 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
+| 215 | first-line-android | 18 | 0 | 0 | 18 | 0 |
+| 216 | global-illumination | 12 | 0 | 0 | 12 | 0 |
+| 217 | illustrated-http | 13 | 0 | 0 | 13 | 0 |
+| 218 | illustrated-server-network | 8 | 0 | 0 | 8 | 0 |
+| 219 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
+| 220 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
+| 221 | pbrt-book | 16 | 0 | 0 | 16 | 0 |
 | 222 | ray-tracing-weekend | 12 | 0 | 0 | 12 | 0 |
 | 223 | the-c-programming-language | 10 | 0 | 0 | 10 | 0 |
 | 224 | vulkan-guide | 16 | 0 | 0 | 16 | 0 |

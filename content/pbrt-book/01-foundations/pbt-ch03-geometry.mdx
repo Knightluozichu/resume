@@ -1,0 +1,176 @@
+---
+title: 第 3 章 Geometry and Transformations
+type: B
+section: 计算机图形学与渲染
+order: 3
+description: 第 3 章 Geometry and Transformations：区分点、向量、法线、射线、包围盒及其坐标变换合同，依据PBRT 4e完整正文独立重写。
+demo: true
+math: true
+sourceUrl: 'https://www.pbr-book.org/4ed/Geometry_and_Transformations'
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pbrt-03
+---
+import { PbtCh03GeometryPathLab, PbtCh03GeometryEstimatorLab, PbtCh03GeometryEvidenceLab } from "@/components/mdx/pbrt-book/v2/pbt-ch03-geometry";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明“第 3 章 Geometry and Transformations”如何区分点、向量、法线、射线、包围盒及其坐标变换合同
+- 能逐项核对coordinate system、vector、normal、ray、bounding box、transformation在对象、测度、空间或执行阶段中的归属
+- 能用章专属路径图与估计量实验制造“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”并找到source space、target space、matrix、ray interval、normal dot tangent与bounds中的首个分叉
+- 能修改最小实现、固定随机种子，并验证“第 3 章 Geometry and Transformations的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”
+
+</Objectives>
+
+{/* PBRT_BOOK_QUALITY_V2 */}
+
+## 从一个像素样本开始
+
+“第 3 章 Geometry and Transformations”先固定scene hash、pixel、sample index和随机种子，再预测一条路径或一个估计量的中间状态。若source space、target space、matrix、ray interval、normal dot tangent与bounds不能解释首个差异，即使最终图像看起来合理也不能通过。
+
+本页不变量是：第 3 章 Geometry and Transformations的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放。正常、故障、恢复三次运行共享场景、版本、采样序列与质量目标，只允许改变一个机制条件。
+
+## 来源、版本与重写边界
+
+本页依据开放在线的 [PBRT 4e 官方完整正文](https://www.pbr-book.org/4ed/Geometry_and_Transformations)独立重写，并用[官方总目录](https://www.pbr-book.org/4ed/contents)核对章节与小节边界。正文不复刻原书段落；公式、接口名和机制结论以第4版正文与[pbrt-v4官方源代码](https://github.com/mmp/pbrt-v4)交叉检查。
+
+第4版正式结构是16个编号章与A–C三个附录。本课程保持16个页面；最终综合页显式映射第16章和三个实现附录，不再把旧版章节顺序、Vulkan API或虚构“Rendering System”当作第4版目录。
+
+## 六个检查词
+
+在“第 3 章 Geometry and Transformations”的术语核对中，<Term def="coordinate system在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">coordinate system</Term>、<Term def="vector在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">vector</Term>、<Term def="normal在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">normal</Term>、<Term def="ray在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">ray</Term>、<Term def="bounding box在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">bounding box</Term>、<Term def="transformation在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。">transformation</Term>。术语必须进入公式、路径状态、代码和可重放输出，不能只在目录里出现。
+
+## 原版单元、机制与边界
+
+### 3 Geometry and Transformations
+
+在“第 3 章 Geometry and Transformations”的本单元核对中，点受平移影响而向量不受，法线必须用逆转置矩阵以维持与切向量正交；Ray还携带时间和介质信息。包围盒求交既要处理零方向分量，也要把浮点舍入误差纳入保守边界。
+
+本单元的可推翻反例是“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”。若发生分叉，按source space、target space、matrix、ray interval、normal dot tangent与bounds定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+p(t)=o+t\,d
+$$
+
+#### 官方小节覆盖
+
+- **Coordinate Systems**：在“第 3 章 Geometry and Transformations”中以区分点、向量、法线、射线、包围盒及其坐标变换合同的对象、测度或执行合同核对。
+- **Vectors, Points, and Normals**：在“第 3 章 Geometry and Transformations”中以区分点、向量、法线、射线、包围盒及其坐标变换合同的对象、测度或执行合同核对。
+- **Rays and Bounding Boxes**：在“第 3 章 Geometry and Transformations”中以区分点、向量、法线、射线、包围盒及其坐标变换合同的对象、测度或执行合同核对。
+- **Spherical Geometry**：在“第 3 章 Geometry and Transformations”中以区分点、向量、法线、射线、包围盒及其坐标变换合同的对象、测度或执行合同核对。
+- **Transformations and Interactions**：在“第 3 章 Geometry and Transformations”中以区分点、向量、法线、射线、包围盒及其坐标变换合同的对象、测度或执行合同核对。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 路径空间与对象归属">
+    调整路径顶点与下一事件估计，观察本章对象如何改变throughput和贡献。
+
+    <PbtCh03GeometryPathLab />
+
+  </Step>
+  <Step title="2. 估计量、PDF 与方差">
+    固定被积函数和随机序列，只切换采样策略与样本数，比较标准误差。
+
+    <PbtCh03GeometryEstimatorLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定seed，注入“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”，保存首个分叉，撤销后以同一输入重放。
+
+    <PbtCh03GeometryEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+Point3f p = ray(tHit);
+Normal3f n = Normalize(Transpose(Inverse(m)) * nObject);
+CHECK_LT(AbsDot(n, dpdu), epsilon);
+```
+
+运行“第 3 章 Geometry and Transformations”时保存PBRT版本、场景hash、像素/样本、波长样本、关键对象状态和输出摘要。截图只能证明最终外观，不能替代路径顶点、PDF、throughput、错误界或队列身份。
+
+<Callout type="trap" title="本章首要反例">
+  把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点。它会破坏“第 3 章 Geometry and Transformations的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”，应先从source space、target space、matrix、ray interval、normal dot tangent与bounds定位，而不是调参掩盖。
+</Callout>
+
+<Callout type="trap" title="不要再套 Vulkan 生命周期模板">
+  “第 3 章 Geometry and Transformations”讨论的是PBRT的几何、测度、散射、积分或系统组织。VkBuffer、Fence、Validation Layer和命令提交不是解释这些章节的通用正文。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式边界。** 在“第 3 章 Geometry and Transformations”中，如何用固定小样本验证 $p(t)=o+t\,d$，并标明每个量的对象、测度、空间和时间点？
+
+<Answer>
+  先固定scene、pixel、sample和seed，逐项记录source space、target space、matrix、ray interval、normal dot tangent与bounds；手算一个最小样本，再与实现输出比较。只扰动一个量，若方向、PDF、权重或量纲不一致，先拒绝实现结论。
+</Answer>
+
+**问题 2：正式坐标。** coordinate system、vector、normal、ray、bounding box、transformation怎样进入可操作验证？
+
+<Answer>
+  1. **3 Geometry and Transformations（coordinate system、vector、normal、ray、bounding box、transformation）**：在“第 3 章 Geometry and Transformations”中固定seed和输入，保存source space、target space、matrix、ray interval、normal dot tangent与bounds，注入“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”后再恢复重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记source space、target space、matrix、ray interval、normal dot tangent与bounds中的首个分叉；撤销后以完全相同场景、seed、pixel和sample重放。只有路径状态、估计量输出与重置状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握“第 3 章 Geometry and Transformations”意味着能把“区分点、向量、法线、射线、包围盒及其坐标变换合同”落到真实PBRT对象、数学测度和执行阶段，能主动制造“把法线当向量直接变换，或让包围盒舍入误差漏掉真实交点”，并凭source space、target space、matrix、ray interval、normal dot tangent与bounds恢复同输入结果。
+
+<Glossary>
+  <GlossaryItem term="coordinate system">
+    coordinate system在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+  <GlossaryItem term="vector">
+    vector在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+  <GlossaryItem term="normal">
+    normal在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+  <GlossaryItem term="ray">
+    ray在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+  <GlossaryItem term="bounding box">
+    bounding box在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+  <GlossaryItem term="transformation">
+    transformation在“第 3 章 Geometry and Transformations”的“3 Geometry and Transformations”中用于区分点、向量、法线、射线、包围盒及其坐标变换合同；由source space、target space、matrix、ray interval、normal dot tangent与bounds核对。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 第 2 章 Monte Carlo Integration](/learn/pbrt-book/01-foundations/pbt-ch02-monte-carlo) · [第 4 章 Radiometry, Spectra, and Color →](/learn/pbrt-book/01-foundations/pbt-ch04-radiometry)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Physically Based Rendering: From Theory to Implementation, 4th Edition"
+  adaptedUrl="https://www.pbr-book.org/4ed/Geometry_and_Transformations"
+/>

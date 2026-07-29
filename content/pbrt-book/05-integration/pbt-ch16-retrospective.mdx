@@ -1,0 +1,240 @@
+---
+title: 第 16 章 Retrospective、Future 与实现附录
+type: B
+section: 计算机图形学与渲染
+order: 16
+description: >-
+  第 16 章 Retrospective、Future 与实现附录：把第16章的设计回顾与采样、工具、场景解析三个实现附录接成完整系统边界，依据PBRT
+  4e完整正文独立重写。
+demo: true
+math: true
+sourceUrl: 'https://www.pbr-book.org/4ed/Retrospective_and_the_Future'
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitIds:
+  - pbrt-16
+  - pbrt-A
+  - pbrt-B
+  - pbrt-C
+---
+import { PbtCh16RetrospectivePathLab, PbtCh16RetrospectiveEstimatorLab, PbtCh16RetrospectiveEvidenceLab } from "@/components/mdx/pbrt-book/v2/pbt-ch16-retrospective";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明“第 16 章 Retrospective、Future 与实现附录”如何把第16章的设计回顾与采样、工具、场景解析三个实现附录接成完整系统边界
+- 能逐项核对retrospective、design alternatives、emerging topics、future、alias method、reservoir sampling、rejection method、piecewise constant distribution、Allocator、parallelism、image、statistics、memory management、scene description、ParserTarget、BasicSceneBuilder、BasicScene、object creation在对象、测度、空间或执行阶段中的归属
+- 能用章专属路径图与估计量实验制造“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”并找到质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份中的首个分叉
+- 能修改最小实现、固定随机种子，并验证“第 16 章 Retrospective、Future 与实现附录的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”
+
+</Objectives>
+
+{/* PBRT_BOOK_QUALITY_V2 */}
+
+## 从一个像素样本开始
+
+“第 16 章 Retrospective、Future 与实现附录”先固定scene hash、pixel、sample index和随机种子，再预测一条路径或一个估计量的中间状态。若质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份不能解释首个差异，即使最终图像看起来合理也不能通过。
+
+本页不变量是：第 16 章 Retrospective、Future 与实现附录的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放。正常、故障、恢复三次运行共享场景、版本、采样序列与质量目标，只允许改变一个机制条件。
+
+## 来源、版本与重写边界
+
+本页依据开放在线的 [PBRT 4e 官方完整正文](https://www.pbr-book.org/4ed/Retrospective_and_the_Future)独立重写，并用[官方总目录](https://www.pbr-book.org/4ed/contents)核对章节与小节边界。正文不复刻原书段落；公式、接口名和机制结论以第4版正文与[pbrt-v4官方源代码](https://github.com/mmp/pbrt-v4)交叉检查。
+
+第4版正式结构是16个编号章与A–C三个附录。本课程保持16个页面；最终综合页显式映射第16章和三个实现附录，不再把旧版章节顺序、Vulkan API或虚构“Rendering System”当作第4版目录。
+
+## 六个检查词
+
+在“第 16 章 Retrospective、Future 与实现附录”的术语核对中，<Term def="retrospective在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。">retrospective</Term>、<Term def="design alternatives在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。">design alternatives</Term>、<Term def="emerging topics在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。">emerging topics</Term>、<Term def="future在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。">future</Term>、<Term def="alias method在“第 16 章 Retrospective、Future 与实现附录”的“Appendix A Sampling Algorithms”中用于用alias、reservoir、rejection与多维分布实现可验证离散和连续采样；由weights、normalization、sample u、selected index/value、returned pdf与frequency test核对。">alias method</Term>、<Term def="reservoir sampling在“第 16 章 Retrospective、Future 与实现附录”的“Appendix A Sampling Algorithms”中用于用alias、reservoir、rejection与多维分布实现可验证离散和连续采样；由weights、normalization、sample u、selected index/value、returned pdf与frequency test核对。">reservoir sampling</Term>。术语必须进入公式、路径状态、代码和可重放输出，不能只在目录里出现。
+
+## 原版单元、机制与边界
+
+### 16 Retrospective and the Future
+
+在“第 16 章 Retrospective、Future 与实现附录”的本单元核对中，回顾不是功能清单，而是比较接口稳定性、可读性、CPU/GPU共享与性能成本。任何未来方案都应在相同场景、随机种子和误差指标下与现有积分器比较，不能只用单张图或峰值吞吐下结论。
+
+本单元的可推翻反例是“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”。若发生分叉，按version、scene、quality target、time、memory、error metric、hardware与design rationale定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+Choice=argmin(Error,Cost,Complexity)
+$$
+
+#### 官方小节覆盖
+
+- **pbrt over the Years**：在“第 16 章 Retrospective、Future 与实现附录”中以用历代设计取舍、替代方案与新硬件约束评估渲染系统演进的对象、测度或执行合同核对。
+- **Design Alternatives**：在“第 16 章 Retrospective、Future 与实现附录”中以用历代设计取舍、替代方案与新硬件约束评估渲染系统演进的对象、测度或执行合同核对。
+- **Emerging Topics**：在“第 16 章 Retrospective、Future 与实现附录”中以用历代设计取舍、替代方案与新硬件约束评估渲染系统演进的对象、测度或执行合同核对。
+- **The Future**：在“第 16 章 Retrospective、Future 与实现附录”中以用历代设计取舍、替代方案与新硬件约束评估渲染系统演进的对象、测度或执行合同核对。
+- **Conclusion**：在“第 16 章 Retrospective、Future 与实现附录”中以用历代设计取舍、替代方案与新硬件约束评估渲染系统演进的对象、测度或执行合同核对。
+
+### Appendix A Sampling Algorithms
+
+在“第 16 章 Retrospective、Future 与实现附录”的本单元核对中，附录A把正文使用的采样工具落到实现合同：每个Sample函数都要返回与实际分布一致的PDF，并处理零质量与数值边界。统计验收至少比较频数、期望值和归一化误差。
+
+本单元的可推翻反例是“采样频数与返回PDF不一致，或零权重分布产生NaN”。若发生分叉，按weights、normalization、sample u、selected index/value、returned pdf与frequency test定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+\sum_i p_i=1
+$$
+
+#### 官方小节覆盖
+
+- **The Alias Method**：在“第 16 章 Retrospective、Future 与实现附录”中以用alias、reservoir、rejection与多维分布实现可验证离散和连续采样的对象、测度或执行合同核对。
+- **Reservoir Sampling**：在“第 16 章 Retrospective、Future 与实现附录”中以用alias、reservoir、rejection与多维分布实现可验证离散和连续采样的对象、测度或执行合同核对。
+- **The Rejection Method**：在“第 16 章 Retrospective、Future 与实现附录”中以用alias、reservoir、rejection与多维分布实现可验证离散和连续采样的对象、测度或执行合同核对。
+- **Sampling 1D Functions**：在“第 16 章 Retrospective、Future 与实现附录”中以用alias、reservoir、rejection与多维分布实现可验证离散和连续采样的对象、测度或执行合同核对。
+- **Sampling Multidimensional Functions**：在“第 16 章 Retrospective、Future 与实现附录”中以用alias、reservoir、rejection与多维分布实现可验证离散和连续采样的对象、测度或执行合同核对。
+
+### Appendix B Utilities
+
+在“第 16 章 Retrospective、Future 与实现附录”的本单元核对中，附录B的基础设施支撑所有正文代码：Allocator决定CPU/GPU可见内存，ParallelFor约束任务粒度，Image负责颜色编码和边界，统计计数器提供性能证据。工具层错误会跨章节扩散，必须用单元测试隔离。
+
+本单元的可推翻反例是“容器移动后假设allocator也被替换，或并行任务写入共享非线程安全状态”。若发生分叉，按allocation owner、address space、task id、thread id、image encoding、counter与unit test定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+Total=Compute+Memory+Scheduling
+$$
+
+#### 官方小节覆盖
+
+- **System Startup, Cleanup, and Options**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **Mathematical Infrastructure**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **User Interaction**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **Containers and Memory Management**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **Images**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **Parallelism**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+- **Statistics**：在“第 16 章 Retrospective、Future 与实现附录”中以把数学、内存、图像、并行与统计基础设施变成可观测系统合同的对象、测度或执行合同核对。
+
+### Appendix C Processing the Scene Description
+
+在“第 16 章 Retrospective、Future 与实现附录”的本单元核对中，附录C补齐场景文本到运行对象的来源链：Tokenizer产生语法项，ParserTarget接收语句，BasicSceneBuilder维护当前图形状态，BasicScene再为CPU或GPU创建最终对象。错误报告必须保留文件、行列和参数上下文。
+
+本单元的可推翻反例是“解析时丢失图形状态栈，或创建对象后无法追溯原始文件与参数”。若发生分叉，按file/line、token、parser callback、graphics state、entity parameters、object id与render backend定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+Text\to Tokens\to Builder\to BasicScene\to Objects
+$$
+
+#### 官方小节覆盖
+
+- **Tokenizing and Parsing**：在“第 16 章 Retrospective、Future 与实现附录”中以追踪文本token到ParserTarget、BasicSceneBuilder、BasicScene和最终渲染对象的对象、测度或执行合同核对。
+- **Managing the Scene Description**：在“第 16 章 Retrospective、Future 与实现附录”中以追踪文本token到ParserTarget、BasicSceneBuilder、BasicScene和最终渲染对象的对象、测度或执行合同核对。
+- **BasicScene and Final Object Creation**：在“第 16 章 Retrospective、Future 与实现附录”中以追踪文本token到ParserTarget、BasicSceneBuilder、BasicScene和最终渲染对象的对象、测度或执行合同核对。
+- **Adding New Object Implementations**：在“第 16 章 Retrospective、Future 与实现附录”中以追踪文本token到ParserTarget、BasicSceneBuilder、BasicScene和最终渲染对象的对象、测度或执行合同核对。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 路径空间与对象归属">
+    调整路径顶点与下一事件估计，观察本章对象如何改变throughput和贡献。
+
+    <PbtCh16RetrospectivePathLab />
+
+  </Step>
+  <Step title="2. 估计量、PDF 与方差">
+    固定被积函数和随机序列，只切换采样策略与样本数，比较标准误差。
+
+    <PbtCh16RetrospectiveEstimatorLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定seed，注入“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”，保存首个分叉，撤销后以同一输入重放。
+
+    <PbtCh16RetrospectiveEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+RenderResult baseline = Render(cpuIntegrator, fixedScene, fixedSeed);
+RenderResult candidate = Render(newIntegrator, fixedScene, fixedSeed);
+Compare(baseline, candidate, {time, memory, mse});
+```
+
+运行“第 16 章 Retrospective、Future 与实现附录”时保存PBRT版本、场景hash、像素/样本、波长样本、关键对象状态和输出摘要。截图只能证明最终外观，不能替代路径顶点、PDF、throughput、错误界或队列身份。
+
+<Callout type="trap" title="本章首要反例">
+  用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益。它会破坏“第 16 章 Retrospective、Future 与实现附录的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”，应先从质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份定位，而不是调参掩盖。
+</Callout>
+
+<Callout type="trap" title="不要再套 Vulkan 生命周期模板">
+  “第 16 章 Retrospective、Future 与实现附录”讨论的是PBRT的几何、测度、散射、积分或系统组织。VkBuffer、Fence、Validation Layer和命令提交不是解释这些章节的通用正文。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式边界。** 在“第 16 章 Retrospective、Future 与实现附录”中，如何用固定小样本验证 $Choice=argmin(Error,Cost,Complexity)$，并标明每个量的对象、测度、空间和时间点？
+
+<Answer>
+  先固定scene、pixel、sample和seed，逐项记录质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份；手算一个最小样本，再与实现输出比较。只扰动一个量，若方向、PDF、权重或量纲不一致，先拒绝实现结论。
+</Answer>
+
+**问题 2：正式坐标。** retrospective、design alternatives、emerging topics、future、alias method、reservoir sampling、rejection method、piecewise constant distribution、Allocator、parallelism、image、statistics、memory management、scene description、ParserTarget、BasicSceneBuilder、BasicScene、object creation怎样进入可操作验证？
+
+<Answer>
+  1. **16 Retrospective and the Future（retrospective、design alternatives、emerging topics、future）**：在“第 16 章 Retrospective、Future 与实现附录”中固定seed和输入，保存version、scene、quality target、time、memory、error metric、hardware与design rationale，注入“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”后再恢复重放。
+  2. **Appendix A Sampling Algorithms（alias method、reservoir sampling、rejection method、piecewise constant distribution）**：在“第 16 章 Retrospective、Future 与实现附录”中固定seed和输入，保存weights、normalization、sample u、selected index/value、returned pdf与frequency test，注入“采样频数与返回PDF不一致，或零权重分布产生NaN”后再恢复重放。
+  3. **Appendix B Utilities（Allocator、parallelism、image、statistics、memory management）**：在“第 16 章 Retrospective、Future 与实现附录”中固定seed和输入，保存allocation owner、address space、task id、thread id、image encoding、counter与unit test，注入“容器移动后假设allocator也被替换，或并行任务写入共享非线程安全状态”后再恢复重放。
+  4. **Appendix C Processing the Scene Description（scene description、ParserTarget、BasicSceneBuilder、BasicScene、object creation）**：在“第 16 章 Retrospective、Future 与实现附录”中固定seed和输入，保存file/line、token、parser callback、graphics state、entity parameters、object id与render backend，注入“解析时丢失图形状态栈，或创建对象后无法追溯原始文件与参数”后再恢复重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份中的首个分叉；撤销后以完全相同场景、seed、pixel和sample重放。只有路径状态、估计量输出与重置状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握“第 16 章 Retrospective、Future 与实现附录”意味着能把“把第16章的设计回顾与采样、工具、场景解析三个实现附录接成完整系统边界”落到真实PBRT对象、数学测度和执行阶段，能主动制造“用不同质量目标比较两种架构，或把硬件峰值当成端到端渲染收益”，并凭质量指标、采样频数、分配/线程归属、解析来源链与最终对象身份恢复同输入结果。
+
+<Glossary>
+  <GlossaryItem term="retrospective">
+    retrospective在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。
+  </GlossaryItem>
+  <GlossaryItem term="design alternatives">
+    design alternatives在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。
+  </GlossaryItem>
+  <GlossaryItem term="emerging topics">
+    emerging topics在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。
+  </GlossaryItem>
+  <GlossaryItem term="future">
+    future在“第 16 章 Retrospective、Future 与实现附录”的“16 Retrospective and the Future”中用于用历代设计取舍、替代方案与新硬件约束评估渲染系统演进；由version、scene、quality target、time、memory、error metric、hardware与design rationale核对。
+  </GlossaryItem>
+  <GlossaryItem term="alias method">
+    alias method在“第 16 章 Retrospective、Future 与实现附录”的“Appendix A Sampling Algorithms”中用于用alias、reservoir、rejection与多维分布实现可验证离散和连续采样；由weights、normalization、sample u、selected index/value、returned pdf与frequency test核对。
+  </GlossaryItem>
+  <GlossaryItem term="reservoir sampling">
+    reservoir sampling在“第 16 章 Retrospective、Future 与实现附录”的“Appendix A Sampling Algorithms”中用于用alias、reservoir、rejection与多维分布实现可验证离散和连续采样；由weights、normalization、sample u、selected index/value、returned pdf与frequency test核对。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 第 15 章 Wavefront Rendering on GPUs](/learn/pbrt-book/05-integration/pbt-ch15-wavefront-gpu)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Physically Based Rendering: From Theory to Implementation, 4th Edition"
+  adaptedUrl="https://www.pbr-book.org/4ed/Retrospective_and_the_Future"
+/>

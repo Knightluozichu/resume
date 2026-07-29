@@ -1,0 +1,176 @@
+---
+title: 第 15 章 Wavefront Rendering on GPUs
+type: B
+section: 计算机图形学与渲染
+order: 15
+description: >-
+  第 15 章 Wavefront Rendering on GPUs：把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价，依据PBRT
+  4e完整正文独立重写。
+demo: true
+math: true
+sourceUrl: 'https://www.pbr-book.org/4ed/Wavefront_Rendering_on_GPUs'
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pbrt-15
+---
+import { PbtCh15WavefrontGpuPathLab, PbtCh15WavefrontGpuEstimatorLab, PbtCh15WavefrontGpuEvidenceLab } from "@/components/mdx/pbrt-book/v2/pbt-ch15-wavefront-gpu";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明“第 15 章 Wavefront Rendering on GPUs”如何把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价
+- 能逐项核对wavefront、gpu path tracing、work queue、structure of arrays、unified memory、ray tracing hardware在对象、测度、空间或执行阶段中的归属
+- 能用章专属路径图与估计量实验制造“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”并找到queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output中的首个分叉
+- 能修改最小实现、固定随机种子，并验证“第 15 章 Wavefront Rendering on GPUs的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”
+
+</Objectives>
+
+{/* PBRT_BOOK_QUALITY_V2 */}
+
+## 从一个像素样本开始
+
+“第 15 章 Wavefront Rendering on GPUs”先固定scene hash、pixel、sample index和随机种子，再预测一条路径或一个估计量的中间状态。若queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output不能解释首个差异，即使最终图像看起来合理也不能通过。
+
+本页不变量是：第 15 章 Wavefront Rendering on GPUs的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放。正常、故障、恢复三次运行共享场景、版本、采样序列与质量目标，只允许改变一个机制条件。
+
+## 来源、版本与重写边界
+
+本页依据开放在线的 [PBRT 4e 官方完整正文](https://www.pbr-book.org/4ed/Wavefront_Rendering_on_GPUs)独立重写，并用[官方总目录](https://www.pbr-book.org/4ed/contents)核对章节与小节边界。正文不复刻原书段落；公式、接口名和机制结论以第4版正文与[pbrt-v4官方源代码](https://github.com/mmp/pbrt-v4)交叉检查。
+
+第4版正式结构是16个编号章与A–C三个附录。本课程保持16个页面；最终综合页显式映射第16章和三个实现附录，不再把旧版章节顺序、Vulkan API或虚构“Rendering System”当作第4版目录。
+
+## 六个检查词
+
+在“第 15 章 Wavefront Rendering on GPUs”的术语核对中，<Term def="wavefront在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">wavefront</Term>、<Term def="gpu path tracing在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">gpu path tracing</Term>、<Term def="work queue在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">work queue</Term>、<Term def="structure of arrays在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">structure of arrays</Term>、<Term def="unified memory在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">unified memory</Term>、<Term def="ray tracing hardware在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。">ray tracing hardware</Term>。术语必须进入公式、路径状态、代码和可重放输出，不能只在目录里出现。
+
+## 原版单元、机制与边界
+
+### 15 Wavefront Rendering on GPUs
+
+在“第 15 章 Wavefront Rendering on GPUs”的本单元核对中，WavefrontPathIntegrator按求交、介质、材质和阴影工作拆队列，让相似任务批量执行并改善SIMT一致性。队列中的pixel、sample、depth、beta与ray必须保持同一路径身份，否则高吞吐会掩盖错误归属。
+
+本单元的可推翻反例是“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”。若发生分叉，按queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+Q_{k+1}=Stage_k(Q_k)
+$$
+
+#### 官方小节覆盖
+
+- **Mapping Path Tracing to the GPU**：在“第 15 章 Wavefront Rendering on GPUs”中以把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价的对象、测度或执行合同核对。
+- **Implementation Foundations**：在“第 15 章 Wavefront Rendering on GPUs”中以把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价的对象、测度或执行合同核对。
+- **Path Tracer Implementation**：在“第 15 章 Wavefront Rendering on GPUs”中以把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价的对象、测度或执行合同核对。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 路径空间与对象归属">
+    调整路径顶点与下一事件估计，观察本章对象如何改变throughput和贡献。
+
+    <PbtCh15WavefrontGpuPathLab />
+
+  </Step>
+  <Step title="2. 估计量、PDF 与方差">
+    固定被积函数和随机序列，只切换采样策略与样本数，比较标准误差。
+
+    <PbtCh15WavefrontGpuEstimatorLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定seed，注入“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”，保存首个分叉，撤销后以同一输入重放。
+
+    <PbtCh15WavefrontGpuEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+rayQueue.Push({pixelIndex, sampleIndex, ray, beta});
+IntersectKernel(rayQueue, hitQueue, missQueue);
+MaterialKernel(hitQueue, nextRayQueue, shadowRayQueue);
+```
+
+运行“第 15 章 Wavefront Rendering on GPUs”时保存PBRT版本、场景hash、像素/样本、波长样本、关键对象状态和输出摘要。截图只能证明最终外观，不能替代路径顶点、PDF、throughput、错误界或队列身份。
+
+<Callout type="trap" title="本章首要反例">
+  队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度。它会破坏“第 15 章 Wavefront Rendering on GPUs的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”，应先从queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output定位，而不是调参掩盖。
+</Callout>
+
+<Callout type="trap" title="不要再套 Vulkan 生命周期模板">
+  “第 15 章 Wavefront Rendering on GPUs”讨论的是PBRT的几何、测度、散射、积分或系统组织。VkBuffer、Fence、Validation Layer和命令提交不是解释这些章节的通用正文。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式边界。** 在“第 15 章 Wavefront Rendering on GPUs”中，如何用固定小样本验证 $Q_{k+1}=Stage_k(Q_k)$，并标明每个量的对象、测度、空间和时间点？
+
+<Answer>
+  先固定scene、pixel、sample和seed，逐项记录queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output；手算一个最小样本，再与实现输出比较。只扰动一个量，若方向、PDF、权重或量纲不一致，先拒绝实现结论。
+</Answer>
+
+**问题 2：正式坐标。** wavefront、gpu path tracing、work queue、structure of arrays、unified memory、ray tracing hardware怎样进入可操作验证？
+
+<Answer>
+  1. **15 Wavefront Rendering on GPUs（wavefront、gpu path tracing、work queue、structure of arrays、unified memory、ray tracing hardware）**：在“第 15 章 Wavefront Rendering on GPUs”中固定seed和输入，保存queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output，注入“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”后再恢复重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output中的首个分叉；撤销后以完全相同场景、seed、pixel和sample重放。只有路径状态、估计量输出与重置状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握“第 15 章 Wavefront Rendering on GPUs”意味着能把“把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价”落到真实PBRT对象、数学测度和执行阶段，能主动制造“队列压缩时打乱路径状态，或CPU/GPU实现消费不同的随机维度”，并凭queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output恢复同输入结果。
+
+<Glossary>
+  <GlossaryItem term="wavefront">
+    wavefront在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+  <GlossaryItem term="gpu path tracing">
+    gpu path tracing在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+  <GlossaryItem term="work queue">
+    work queue在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+  <GlossaryItem term="structure of arrays">
+    structure of arrays在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+  <GlossaryItem term="unified memory">
+    unified memory在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+  <GlossaryItem term="ray tracing hardware">
+    ray tracing hardware在“第 15 章 Wavefront Rendering on GPUs”的“15 Wavefront Rendering on GPUs”中用于把路径追踪状态拆成GPU队列，并保持各阶段数据布局与路径语义等价；由queue name、slot、pixel/sample、path depth、ray、beta、random dimension与stage output核对。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 第 14 章 Light Transport II: Volume Rendering](/learn/pbrt-book/05-integration/pbt-ch14-volume-transport) · [第 16 章 Retrospective、Future 与实现附录 →](/learn/pbrt-book/05-integration/pbt-ch16-retrospective)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Physically Based Rendering: From Theory to Implementation, 4th Edition"
+  adaptedUrl="https://www.pbr-book.org/4ed/Wavefront_Rendering_on_GPUs"
+/>

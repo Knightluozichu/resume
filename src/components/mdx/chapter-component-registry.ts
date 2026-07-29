@@ -5604,6 +5604,159 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       OpcSearchSortDecisionMap: module0.OpcSearchSortDecisionMap,
     } as ChapterMdxComponents;
   },
+  "pbrt-book/01-foundations/pbt-ch01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch01-introduction");
+    return {
+      PbtCh01IntroductionPathLab: module0.PbtCh01IntroductionPathLab,
+      PbtCh01IntroductionEstimatorLab: module0.PbtCh01IntroductionEstimatorLab,
+      PbtCh01IntroductionEvidenceLab: module0.PbtCh01IntroductionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/01-foundations/pbt-ch02-monte-carlo": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch02-monte-carlo");
+    return {
+      PbtCh02MonteCarloPathLab: module0.PbtCh02MonteCarloPathLab,
+      PbtCh02MonteCarloEstimatorLab: module0.PbtCh02MonteCarloEstimatorLab,
+      PbtCh02MonteCarloEvidenceLab: module0.PbtCh02MonteCarloEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/01-foundations/pbt-ch03-geometry": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch03-geometry");
+    return {
+      PbtCh03GeometryPathLab: module0.PbtCh03GeometryPathLab,
+      PbtCh03GeometryEstimatorLab: module0.PbtCh03GeometryEstimatorLab,
+      PbtCh03GeometryEvidenceLab: module0.PbtCh03GeometryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/01-foundations/pbt-ch04-radiometry": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch04-radiometry");
+    return {
+      PbtCh04RadiometryPathLab: module0.PbtCh04RadiometryPathLab,
+      PbtCh04RadiometryEstimatorLab: module0.PbtCh04RadiometryEstimatorLab,
+      PbtCh04RadiometryEvidenceLab: module0.PbtCh04RadiometryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/02-sampling/pbt-ch05-cameras": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch05-cameras");
+    return {
+      PbtCh05CamerasPathLab: module0.PbtCh05CamerasPathLab,
+      PbtCh05CamerasEstimatorLab: module0.PbtCh05CamerasEstimatorLab,
+      PbtCh05CamerasEvidenceLab: module0.PbtCh05CamerasEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/02-sampling/pbt-ch06-shapes": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch06-shapes");
+    return {
+      PbtCh06ShapesPathLab: module0.PbtCh06ShapesPathLab,
+      PbtCh06ShapesEstimatorLab: module0.PbtCh06ShapesEstimatorLab,
+      PbtCh06ShapesEvidenceLab: module0.PbtCh06ShapesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/02-sampling/pbt-ch07-acceleration": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch07-acceleration");
+    return {
+      PbtCh07AccelerationPathLab: module0.PbtCh07AccelerationPathLab,
+      PbtCh07AccelerationEstimatorLab: module0.PbtCh07AccelerationEstimatorLab,
+      PbtCh07AccelerationEvidenceLab: module0.PbtCh07AccelerationEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/02-sampling/pbt-ch08-sampling": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch08-sampling");
+    return {
+      PbtCh08SamplingPathLab: module0.PbtCh08SamplingPathLab,
+      PbtCh08SamplingEstimatorLab: module0.PbtCh08SamplingEstimatorLab,
+      PbtCh08SamplingEvidenceLab: module0.PbtCh08SamplingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/03-reflection/pbt-ch09-reflection": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch09-reflection");
+    return {
+      PbtCh09ReflectionPathLab: module0.PbtCh09ReflectionPathLab,
+      PbtCh09ReflectionEstimatorLab: module0.PbtCh09ReflectionEstimatorLab,
+      PbtCh09ReflectionEvidenceLab: module0.PbtCh09ReflectionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/03-reflection/pbt-ch10-textures-materials": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch10-textures-materials");
+    return {
+      PbtCh10TexturesMaterialsPathLab: module0.PbtCh10TexturesMaterialsPathLab,
+      PbtCh10TexturesMaterialsEstimatorLab:
+        module0.PbtCh10TexturesMaterialsEstimatorLab,
+      PbtCh10TexturesMaterialsEvidenceLab:
+        module0.PbtCh10TexturesMaterialsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/04-transport/pbt-ch11-volume-scattering": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch11-volume-scattering");
+    return {
+      PbtCh11VolumeScatteringPathLab: module0.PbtCh11VolumeScatteringPathLab,
+      PbtCh11VolumeScatteringEstimatorLab:
+        module0.PbtCh11VolumeScatteringEstimatorLab,
+      PbtCh11VolumeScatteringEvidenceLab:
+        module0.PbtCh11VolumeScatteringEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/04-transport/pbt-ch12-light-sources": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch12-light-sources");
+    return {
+      PbtCh12LightSourcesPathLab: module0.PbtCh12LightSourcesPathLab,
+      PbtCh12LightSourcesEstimatorLab: module0.PbtCh12LightSourcesEstimatorLab,
+      PbtCh12LightSourcesEvidenceLab: module0.PbtCh12LightSourcesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/05-integration/pbt-ch13-surface-transport": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch13-surface-transport");
+    return {
+      PbtCh13SurfaceTransportPathLab: module0.PbtCh13SurfaceTransportPathLab,
+      PbtCh13SurfaceTransportEstimatorLab:
+        module0.PbtCh13SurfaceTransportEstimatorLab,
+      PbtCh13SurfaceTransportEvidenceLab:
+        module0.PbtCh13SurfaceTransportEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/05-integration/pbt-ch14-volume-transport": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch14-volume-transport");
+    return {
+      PbtCh14VolumeTransportPathLab: module0.PbtCh14VolumeTransportPathLab,
+      PbtCh14VolumeTransportEstimatorLab:
+        module0.PbtCh14VolumeTransportEstimatorLab,
+      PbtCh14VolumeTransportEvidenceLab:
+        module0.PbtCh14VolumeTransportEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/05-integration/pbt-ch15-wavefront-gpu": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch15-wavefront-gpu");
+    return {
+      PbtCh15WavefrontGpuPathLab: module0.PbtCh15WavefrontGpuPathLab,
+      PbtCh15WavefrontGpuEstimatorLab: module0.PbtCh15WavefrontGpuEstimatorLab,
+      PbtCh15WavefrontGpuEvidenceLab: module0.PbtCh15WavefrontGpuEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "pbrt-book/05-integration/pbt-ch16-retrospective": async () => {
+    const module0 =
+      await import("@/components/mdx/pbrt-book/v2/pbt-ch16-retrospective");
+    return {
+      PbtCh16RetrospectivePathLab: module0.PbtCh16RetrospectivePathLab,
+      PbtCh16RetrospectiveEstimatorLab:
+        module0.PbtCh16RetrospectiveEstimatorLab,
+      PbtCh16RetrospectiveEvidenceLab: module0.PbtCh16RetrospectiveEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "poeaa-enterprise-patterns/00-map/poeaa24-official-learning-map":
     async () => {
       const module0 =

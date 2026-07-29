@@ -1,0 +1,172 @@
+---
+title: 第 11 章 Volume Scattering
+type: B
+section: 计算机图形学与渲染
+order: 11
+description: 第 11 章 Volume Scattering：用吸收、外散射、内散射与相函数描述参与介质中的路径事件，依据PBRT 4e完整正文独立重写。
+demo: true
+math: true
+sourceUrl: 'https://www.pbr-book.org/4ed/Volume_Scattering'
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pbrt-11
+---
+import { PbtCh11VolumeScatteringPathLab, PbtCh11VolumeScatteringEstimatorLab, PbtCh11VolumeScatteringEvidenceLab } from "@/components/mdx/pbrt-book/v2/pbt-ch11-volume-scattering";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明“第 11 章 Volume Scattering”如何用吸收、外散射、内散射与相函数描述参与介质中的路径事件
+- 能逐项核对volume scattering、transmittance、phase function、medium、majorant在对象、测度、空间或执行阶段中的归属
+- 能用章专属路径图与估计量实验制造“把相函数乘上表面余弦，或majorant低于真实消光系数”并找到segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance中的首个分叉
+- 能修改最小实现、固定随机种子，并验证“第 11 章 Volume Scattering的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”
+
+</Objectives>
+
+{/* PBRT_BOOK_QUALITY_V2 */}
+
+## 从一个像素样本开始
+
+“第 11 章 Volume Scattering”先固定scene hash、pixel、sample index和随机种子，再预测一条路径或一个估计量的中间状态。若segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance不能解释首个差异，即使最终图像看起来合理也不能通过。
+
+本页不变量是：第 11 章 Volume Scattering的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放。正常、故障、恢复三次运行共享场景、版本、采样序列与质量目标，只允许改变一个机制条件。
+
+## 来源、版本与重写边界
+
+本页依据开放在线的 [PBRT 4e 官方完整正文](https://www.pbr-book.org/4ed/Volume_Scattering)独立重写，并用[官方总目录](https://www.pbr-book.org/4ed/contents)核对章节与小节边界。正文不复刻原书段落；公式、接口名和机制结论以第4版正文与[pbrt-v4官方源代码](https://github.com/mmp/pbrt-v4)交叉检查。
+
+第4版正式结构是16个编号章与A–C三个附录。本课程保持16个页面；最终综合页显式映射第16章和三个实现附录，不再把旧版章节顺序、Vulkan API或虚构“Rendering System”当作第4版目录。
+
+## 六个检查词
+
+在“第 11 章 Volume Scattering”的术语核对中，<Term def="volume scattering在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。">volume scattering</Term>、<Term def="transmittance在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。">transmittance</Term>、<Term def="phase function在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。">phase function</Term>、<Term def="medium在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。">medium</Term>、<Term def="majorant在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。">majorant</Term>。术语必须进入公式、路径状态、代码和可重放输出，不能只在目录里出现。
+
+## 原版单元、机制与边界
+
+### 11 Volume Scattering
+
+在“第 11 章 Volume Scattering”的本单元核对中，介质沿射线以消光系数衰减辐亮度，并可能在体内产生散射事件；Transmittance是区间上的指数积分。相函数是方向分布而不是表面BRDF，非均匀介质采样还需要可验证的majorant上界。
+
+本单元的可推翻反例是“把相函数乘上表面余弦，或majorant低于真实消光系数”。若发生分叉，按segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+T_r(a\to b)=\exp(-\int_a^b\sigma_t(s)ds)
+$$
+
+#### 官方小节覆盖
+
+- **Volume Scattering Processes**：在“第 11 章 Volume Scattering”中以用吸收、外散射、内散射与相函数描述参与介质中的路径事件的对象、测度或执行合同核对。
+- **Transmittance**：在“第 11 章 Volume Scattering”中以用吸收、外散射、内散射与相函数描述参与介质中的路径事件的对象、测度或执行合同核对。
+- **Phase Functions**：在“第 11 章 Volume Scattering”中以用吸收、外散射、内散射与相函数描述参与介质中的路径事件的对象、测度或执行合同核对。
+- **Media**：在“第 11 章 Volume Scattering”中以用吸收、外散射、内散射与相函数描述参与介质中的路径事件的对象、测度或执行合同核对。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 路径空间与对象归属">
+    调整路径顶点与下一事件估计，观察本章对象如何改变throughput和贡献。
+
+    <PbtCh11VolumeScatteringPathLab />
+
+  </Step>
+  <Step title="2. 估计量、PDF 与方差">
+    固定被积函数和随机序列，只切换采样策略与样本数，比较标准误差。
+
+    <PbtCh11VolumeScatteringEstimatorLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定seed，注入“把相函数乘上表面余弦，或majorant低于真实消光系数”，保存首个分叉，撤销后以同一输入重放。
+
+    <PbtCh11VolumeScatteringEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+SampledSpectrum T = medium.Tr(ray.p(t0), ray.p(t1), lambda);
+auto event = medium.SampleTmaj(ray, tMax, u, rng);
+CHECK_LE(event.sigma_t.MaxComponentValue(), event.majorant);
+```
+
+运行“第 11 章 Volume Scattering”时保存PBRT版本、场景hash、像素/样本、波长样本、关键对象状态和输出摘要。截图只能证明最终外观，不能替代路径顶点、PDF、throughput、错误界或队列身份。
+
+<Callout type="trap" title="本章首要反例">
+  把相函数乘上表面余弦，或majorant低于真实消光系数。它会破坏“第 11 章 Volume Scattering的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”，应先从segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance定位，而不是调参掩盖。
+</Callout>
+
+<Callout type="trap" title="不要再套 Vulkan 生命周期模板">
+  “第 11 章 Volume Scattering”讨论的是PBRT的几何、测度、散射、积分或系统组织。VkBuffer、Fence、Validation Layer和命令提交不是解释这些章节的通用正文。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式边界。** 在“第 11 章 Volume Scattering”中，如何用固定小样本验证 $T_r(a\to b)=\exp(-\int_a^b\sigma_t(s)ds)$，并标明每个量的对象、测度、空间和时间点？
+
+<Answer>
+  先固定scene、pixel、sample和seed，逐项记录segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance；手算一个最小样本，再与实现输出比较。只扰动一个量，若方向、PDF、权重或量纲不一致，先拒绝实现结论。
+</Answer>
+
+**问题 2：正式坐标。** volume scattering、transmittance、phase function、medium、majorant怎样进入可操作验证？
+
+<Answer>
+  1. **11 Volume Scattering（volume scattering、transmittance、phase function、medium、majorant）**：在“第 11 章 Volume Scattering”中固定seed和输入，保存segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance，注入“把相函数乘上表面余弦，或majorant低于真实消光系数”后再恢复重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“把相函数乘上表面余弦，或majorant低于真实消光系数”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance中的首个分叉；撤销后以完全相同场景、seed、pixel和sample重放。只有路径状态、估计量输出与重置状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握“第 11 章 Volume Scattering”意味着能把“用吸收、外散射、内散射与相函数描述参与介质中的路径事件”落到真实PBRT对象、数学测度和执行阶段，能主动制造“把相函数乘上表面余弦，或majorant低于真实消光系数”，并凭segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance恢复同输入结果。
+
+<Glossary>
+  <GlossaryItem term="volume scattering">
+    volume scattering在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。
+  </GlossaryItem>
+  <GlossaryItem term="transmittance">
+    transmittance在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。
+  </GlossaryItem>
+  <GlossaryItem term="phase function">
+    phase function在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。
+  </GlossaryItem>
+  <GlossaryItem term="medium">
+    medium在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。
+  </GlossaryItem>
+  <GlossaryItem term="majorant">
+    majorant在“第 11 章 Volume Scattering”的“11 Volume Scattering”中用于用吸收、外散射、内散射与相函数描述参与介质中的路径事件；由segment、sigma_a、sigma_s、sigma_t、majorant、null/real event与transmittance核对。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 第 10 章 Textures and Materials](/learn/pbrt-book/03-reflection/pbt-ch10-textures-materials) · [第 12 章 Light Sources →](/learn/pbrt-book/04-transport/pbt-ch12-light-sources)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Physically Based Rendering: From Theory to Implementation, 4th Edition"
+  adaptedUrl="https://www.pbr-book.org/4ed/Volume_Scattering"
+/>

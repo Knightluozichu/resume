@@ -1,0 +1,178 @@
+---
+title: 第 8 章 Sampling and Reconstruction
+type: B
+section: 计算机图形学与渲染
+order: 8
+description: >-
+  第 8 章 Sampling and Reconstruction：把样本序列、维度消费与重建滤波器绑定到可复现像素估计，依据PBRT
+  4e完整正文独立重写。
+demo: true
+math: true
+sourceUrl: 'https://www.pbr-book.org/4ed/Sampling_and_Reconstruction'
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pbrt-08
+---
+import { PbtCh08SamplingPathLab, PbtCh08SamplingEstimatorLab, PbtCh08SamplingEvidenceLab } from "@/components/mdx/pbrt-book/v2/pbt-ch08-sampling";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明“第 8 章 Sampling and Reconstruction”如何把样本序列、维度消费与重建滤波器绑定到可复现像素估计
+- 能逐项核对sampling、sampler、halton、sobol、reconstruction filter、aliasing在对象、测度、空间或执行阶段中的归属
+- 能用章专属路径图与估计量实验制造“条件分支改变随机维度消费，或滤波时漏掉权重归一化”并找到pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate中的首个分叉
+- 能修改最小实现、固定随机种子，并验证“第 8 章 Sampling and Reconstruction的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”
+
+</Objectives>
+
+{/* PBRT_BOOK_QUALITY_V2 */}
+
+## 从一个像素样本开始
+
+“第 8 章 Sampling and Reconstruction”先固定scene hash、pixel、sample index和随机种子，再预测一条路径或一个估计量的中间状态。若pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate不能解释首个差异，即使最终图像看起来合理也不能通过。
+
+本页不变量是：第 8 章 Sampling and Reconstruction的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放。正常、故障、恢复三次运行共享场景、版本、采样序列与质量目标，只允许改变一个机制条件。
+
+## 来源、版本与重写边界
+
+本页依据开放在线的 [PBRT 4e 官方完整正文](https://www.pbr-book.org/4ed/Sampling_and_Reconstruction)独立重写，并用[官方总目录](https://www.pbr-book.org/4ed/contents)核对章节与小节边界。正文不复刻原书段落；公式、接口名和机制结论以第4版正文与[pbrt-v4官方源代码](https://github.com/mmp/pbrt-v4)交叉检查。
+
+第4版正式结构是16个编号章与A–C三个附录。本课程保持16个页面；最终综合页显式映射第16章和三个实现附录，不再把旧版章节顺序、Vulkan API或虚构“Rendering System”当作第4版目录。
+
+## 六个检查词
+
+在“第 8 章 Sampling and Reconstruction”的术语核对中，<Term def="sampling在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">sampling</Term>、<Term def="sampler在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">sampler</Term>、<Term def="halton在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">halton</Term>、<Term def="sobol在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">sobol</Term>、<Term def="reconstruction filter在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">reconstruction filter</Term>、<Term def="aliasing在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。">aliasing</Term>。术语必须进入公式、路径状态、代码和可重放输出，不能只在目录里出现。
+
+## 原版单元、机制与边界
+
+### 8 Sampling and Reconstruction
+
+在“第 8 章 Sampling and Reconstruction”的本单元核对中，Sampler按像素、样本编号和维度产生确定序列；调用顺序改变会移动后续维度，因此调试时必须记录维度消费。重建滤波器把连续图像估计投影到像素网格，负叶瓣与滤波半径会同时影响锐度、振铃和方差。
+
+本单元的可推翻反例是“条件分支改变随机维度消费，或滤波时漏掉权重归一化”。若发生分叉，按pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate定位，而不是把差异归因于“渲染有随机性”。
+
+$$
+\hat L_p=\frac{\sum_i f_iL_i}{\sum_i f_i}
+$$
+
+#### 官方小节覆盖
+
+- **Sampling Theory**：在“第 8 章 Sampling and Reconstruction”中以把样本序列、维度消费与重建滤波器绑定到可复现像素估计的对象、测度或执行合同核对。
+- **Sampling and Integration**：在“第 8 章 Sampling and Reconstruction”中以把样本序列、维度消费与重建滤波器绑定到可复现像素估计的对象、测度或执行合同核对。
+- **Sampling Interface**：在“第 8 章 Sampling and Reconstruction”中以把样本序列、维度消费与重建滤波器绑定到可复现像素估计的对象、测度或执行合同核对。
+- **Independent, Stratified, Halton, and Sobol’ Samplers**：在“第 8 章 Sampling and Reconstruction”中以把样本序列、维度消费与重建滤波器绑定到可复现像素估计的对象、测度或执行合同核对。
+- **Image Reconstruction**：在“第 8 章 Sampling and Reconstruction”中以把样本序列、维度消费与重建滤波器绑定到可复现像素估计的对象、测度或执行合同核对。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 路径空间与对象归属">
+    调整路径顶点与下一事件估计，观察本章对象如何改变throughput和贡献。
+
+    <PbtCh08SamplingPathLab />
+
+  </Step>
+  <Step title="2. 估计量、PDF 与方差">
+    固定被积函数和随机序列，只切换采样策略与样本数，比较标准误差。
+
+    <PbtCh08SamplingEstimatorLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定seed，注入“条件分支改变随机维度消费，或滤波时漏掉权重归一化”，保存首个分叉，撤销后以同一输入重放。
+
+    <PbtCh08SamplingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+sampler.StartPixelSample(pixel, sampleIndex, dimension);
+Point2f uFilm = sampler.Get2D();
+film.AddSample(pixel, L, filter.Evaluate(offset));
+```
+
+运行“第 8 章 Sampling and Reconstruction”时保存PBRT版本、场景hash、像素/样本、波长样本、关键对象状态和输出摘要。截图只能证明最终外观，不能替代路径顶点、PDF、throughput、错误界或队列身份。
+
+<Callout type="trap" title="本章首要反例">
+  条件分支改变随机维度消费，或滤波时漏掉权重归一化。它会破坏“第 8 章 Sampling and Reconstruction的固定输入、路径状态、估计量输出和恢复结果可由同一证据包重放”，应先从pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate定位，而不是调参掩盖。
+</Callout>
+
+<Callout type="trap" title="不要再套 Vulkan 生命周期模板">
+  “第 8 章 Sampling and Reconstruction”讨论的是PBRT的几何、测度、散射、积分或系统组织。VkBuffer、Fence、Validation Layer和命令提交不是解释这些章节的通用正文。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式边界。** 在“第 8 章 Sampling and Reconstruction”中，如何用固定小样本验证 $\hat L_p=\frac{\sum_i f_iL_i}{\sum_i f_i}$，并标明每个量的对象、测度、空间和时间点？
+
+<Answer>
+  先固定scene、pixel、sample和seed，逐项记录pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate；手算一个最小样本，再与实现输出比较。只扰动一个量，若方向、PDF、权重或量纲不一致，先拒绝实现结论。
+</Answer>
+
+**问题 2：正式坐标。** sampling、sampler、halton、sobol、reconstruction filter、aliasing怎样进入可操作验证？
+
+<Answer>
+  1. **8 Sampling and Reconstruction（sampling、sampler、halton、sobol、reconstruction filter、aliasing）**：在“第 8 章 Sampling and Reconstruction”中固定seed和输入，保存pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate，注入“条件分支改变随机维度消费，或滤波时漏掉权重归一化”后再恢复重放。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“条件分支改变随机维度消费，或滤波时漏掉权重归一化”已真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate中的首个分叉；撤销后以完全相同场景、seed、pixel和sample重放。只有路径状态、估计量输出与重置状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握“第 8 章 Sampling and Reconstruction”意味着能把“把样本序列、维度消费与重建滤波器绑定到可复现像素估计”落到真实PBRT对象、数学测度和执行阶段，能主动制造“条件分支改变随机维度消费，或滤波时漏掉权重归一化”，并凭pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate恢复同输入结果。
+
+<Glossary>
+  <GlossaryItem term="sampling">
+    sampling在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+  <GlossaryItem term="sampler">
+    sampler在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+  <GlossaryItem term="halton">
+    halton在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+  <GlossaryItem term="sobol">
+    sobol在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+  <GlossaryItem term="reconstruction filter">
+    reconstruction filter在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+  <GlossaryItem term="aliasing">
+    aliasing在“第 8 章 Sampling and Reconstruction”的“8 Sampling and Reconstruction”中用于把样本序列、维度消费与重建滤波器绑定到可复现像素估计；由pixel、sample index、dimension、u values、filter radius、weight sum与pixel estimate核对。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 第 7 章 Primitives and Intersection Acceleration](/learn/pbrt-book/02-sampling/pbt-ch07-acceleration) · [第 9 章 Reflection Models →](/learn/pbrt-book/03-reflection/pbt-ch09-reflection)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Physically Based Rendering: From Theory to Implementation, 4th Edition"
+  adaptedUrl="https://www.pbr-book.org/4ed/Sampling_and_Reconstruction"
+/>
