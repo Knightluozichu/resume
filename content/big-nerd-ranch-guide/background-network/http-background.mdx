@@ -3,7 +3,7 @@ title: HTTP与后台任务
 type: C
 section: 后台与网络
 order: 24
-description: 学会在 Android 上发起 HTTP 请求，掌握后台线程的基本模式，理解为什么 NetworkOnMainThreadException 是 Android 安全模型的保护机制。
+description: HTTP与后台任务：保留第四版正文机制，以所有者—状态—结果合同、事件轨迹和章专属故障完成可重放验收。
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
@@ -12,6 +12,12 @@ qualityVersion: 2
 practiceMode: simulation
 sourceMode: independent-rewrite
 ---
+
+import {
+  HttpBackgroundContractLab,
+  HttpBackgroundLifecycleLab,
+  HttpBackgroundFaultLab,
+} from "@/components/mdx/big-nerd-ranch-guide/v2/http-background";
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
@@ -23,11 +29,12 @@ import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型（《Android 编程权威指南》第24章改编）：重心在代码对照(§6)与常见误区(§7)。
-   知识点清单：1)Android网络权限（代码）2)主线程限制（Callout）
-   3)OkHttp基础用法（逐段代码）4)JSON解析（代码对照Gson/Moshi）
-   5)Thread+Handler后台模式（完整代码示例）6)AsyncTask历史（Callout trap） */}
+知识点清单：1)Android网络权限（代码）2)主线程限制（Callout）
+3)OkHttp基础用法（逐段代码）4)JSON解析（代码对照Gson/Moshi）
+5)Thread+Handler后台模式（完整代码示例）6)AsyncTask历史（Callout trap） */}
 
 {/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+
 <Objectives>
 
 - 能沿“HTTP与后台任务”的用户事件解释Android组件、状态所有者、线程与销毁边界。
@@ -38,6 +45,7 @@ import { Attribution } from "@/components/mdx/attribution";
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用工厂流水线 */}
+
 ## 为什么 Android 对网络请求管这么严？
 
 你的 App 想在主屏幕上显示天气——得先连网下载天气数据。如果你让主线程（负责渲染界面的那条流水线）去干这件事，会发生什么？网络可能很慢，甚至断掉——主线程卡在那里等数据，界面就会冻结。用户点什么都反应，几秒后系统弹出一个 "应用无响应（ANR）" 的对话框——你的 App 被用户卸载的日子就不远了。
@@ -47,6 +55,7 @@ import { Attribution } from "@/components/mdx/attribution";
 这章要解决的核心问题：**怎么在 Android 上安全地发起网络请求，同时保持界面流畅？**
 
 {/* 3. 概念讲解（spec §三） */}
+
 ## Android 的网络请求基础设施
 
 ### 第一步：声明网络权限
@@ -67,7 +76,10 @@ Android 从 3.0（Honeycomb）开始，强制规定：**不允许在主线程（
 - 主线程每 16ms 就要刷新一次界面（60fps）
 - 主线程一旦被网络请求卡住超过 5 秒 → ANR（Application Not Responding）
 
-<Term def="ANR（Application Not Responding）是 Android 系统的一种保护机制。当主线程被阻塞超过 5 秒（前台广播 10 秒、后台 Service 更长）时，系统会弹出对话框提示用户等待或强制关闭该应用。">ANR</Term> 是用户最讨厌的东西之一——比你 App 长得丑严重 100 倍。
+<Term def="ANR（Application Not Responding）是 Android 系统的一种保护机制。当主线程被阻塞超过 5 秒（前台广播 10 秒、后台 Service 更长）时，系统会弹出对话框提示用户等待或强制关闭该应用。">
+  ANR
+</Term>
+是用户最讨厌的东西之一——比你 App 长得丑严重 100 倍。
 
 {/* 主线程 vs 工作线程模型：为什么耗时活儿必须丢后台、更新界面才回主线程 */}
 
@@ -101,6 +113,7 @@ val body = response.body?.string()
 ```
 
 {/* 6. 代码对照（spec §六，C 型重心） */}
+
 ## 代码逐段拆解：完整的后台网络请求
 
 ### 方案 1：Thread + Handler（经典模式）
@@ -143,6 +156,7 @@ class MainActivity : AppCompatActivity() {
 ```
 
 关键点分析：
+
 - `thread { }` 是 Kotlin 的扩展函数，等价于 `Thread { ... }.start()`
 - 网络请求和 JSON 解析都在后台线程——主线程完全不受影响
 - `handler.post { }` 把 UI 更新投递到主线程的消息队列——这是 Android 唯一的合法更新 UI 方式
@@ -174,41 +188,70 @@ handler.post {
 
 <Stepper>
   <Step title="① 检查网络连接">
-    调用 `ConnectivityManager.getActiveNetworkInfo()` 检查当前网络是否可用。如果返回 `null`，直接提示用户"无网络连接"而不是让后续请求抛 `UnknownHostException`。建议封装为 `isNetworkAvailable(): Boolean` 工具方法。
+    调用 `ConnectivityManager.getActiveNetworkInfo()`
+    检查当前网络是否可用。如果返回
+    `null`，直接提示用户"无网络连接"而不是让后续请求抛
+    `UnknownHostException`。建议封装为 `isNetworkAvailable(): Boolean`
+    工具方法。
   </Step>
   <Step title="② 创建网络请求">
-    `OkHttpClient()` 创建客户端（全局复用一个实例），`Request.Builder().url("https://api.example.com/data").build()` 构建请求。GET 请求无需设置 method，POST 请求需额外调用 `.post(requestBody)` 并设置 `Content-Type` 头。
+    `OkHttpClient()`
+    创建客户端（全局复用一个实例），`Request.Builder().url("https://api.example.com/data").build()`
+    构建请求。GET 请求无需设置 method，POST 请求需额外调用 `.post(requestBody)`
+    并设置 `Content-Type` 头。
   </Step>
   <Step title="③ 在后台线程发起请求">
-    用 `thread { }` 或 `viewModelScope.launch(Dispatchers.IO) { }` 在后台执行 `client.newCall(request).execute()`。**绝对不能在主线程调用 `execute()`**——会立即抛出 `NetworkOnMainThreadException`。响应回来后在同一后台线程解析 JSON。
+    用 `thread {}` 或 `viewModelScope.launch(Dispatchers.IO) {}` 在后台执行
+    `client.newCall(request).execute()`。**绝对不能在主线程调用
+    `execute()`**——会立即抛出
+    `NetworkOnMainThreadException`。响应回来后在同一后台线程解析 JSON。
   </Step>
   <Step title="④ 解析 JSON → 切回主线程更新 UI">
-    用 Gson 的 `fromJson(json, DataClass::class.java)` 将响应体反序列化为 Kotlin 数据类。然后通过 `handler.post { }` 或 `withContext(Dispatchers.Main) { }` 切回主线程，用解析结果更新 TextView、ImageView 等 UI 控件。
+    用 Gson 的 `fromJson(json, DataClass::class.java)` 将响应体反序列化为 Kotlin
+    数据类。然后通过 `handler.post {}` 或 `withContext(Dispatchers.Main) {}`
+    切回主线程，用解析结果更新 TextView、ImageView 等 UI 控件。
   </Step>
 </Stepper>
 
 {/* 7. 常见误区（spec §七，C 型 ≥3） */}
+
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：用 `Thread` + `Handler` 写网络请求，旋转屏幕后数据丢了，或者 Activity 销毁后 Handler 还在试图更新已销毁的 View，导致崩溃。
-  **原因**：`Thread` 不理解 Activity 的生命周期。线程在跑的时候，Activity 可能因为配置变更被销毁重建了。旧的 Handler 仍然引用着旧的 Activity——内存泄漏 + 崩溃。
-  **修法**：简单的办法是转移到 ViewModel 中管理数据 + LiveData 观察，这样配置变更时数据不丢失。正式项目应使用 Retrofit + Coroutines/Flow 等生命周期感知的方案，而不是裸写 Thread。下一章会讲 Handler 内存泄漏的专门解法。
+  **现象**：用 `Thread` + `Handler` 写网络请求，旋转屏幕后数据丢了，或者
+  Activity 销毁后 Handler 还在试图更新已销毁的 View，导致崩溃。
+  **原因**：`Thread` 不理解 Activity 的生命周期。线程在跑的时候，Activity
+  可能因为配置变更被销毁重建了。旧的 Handler 仍然引用着旧的 Activity——内存泄漏 +
+  崩溃。 **修法**：简单的办法是转移到 ViewModel 中管理数据 + LiveData
+  观察，这样配置变更时数据不丢失。正式项目应使用 Retrofit + Coroutines/Flow
+  等生命周期感知的方案，而不是裸写 Thread。下一章会讲 Handler
+  内存泄漏的专门解法。
 </Callout>
 
 <Callout type="trap">
-  **现象**：网络请求在模拟器上正常，在真机上静默失败。Logcat 里有 `Cleartext HTTP traffic to xxx not permitted`。
-  **原因**：Android 9（API 28）开始，默认禁止所有明文（HTTP，非 HTTPS）的网络流量。这是网络安全配置的保护机制——防止中间人窃听。
-  **修法**：生产环境必须用 HTTPS。如果开发测试阶段确实需要 HTTP，可以在 `res/xml/network_security_config.xml` 中声明允许特定域名的明文流量，并在 Manifest 中引用。**永远不要对整个 App 全局放行明文——这是安全红线。**
+  **现象**：网络请求在模拟器上正常，在真机上静默失败。Logcat 里有 `Cleartext
+  HTTP traffic to xxx not permitted`。 **原因**：Android 9（API
+  28）开始，默认禁止所有明文（HTTP，非
+  HTTPS）的网络流量。这是网络安全配置的保护机制——防止中间人窃听。
+  **修法**：生产环境必须用 HTTPS。如果开发测试阶段确实需要 HTTP，可以在
+  `res/xml/network_security_config.xml` 中声明允许特定域名的明文流量，并在
+  Manifest 中引用。**永远不要对整个 App 全局放行明文——这是安全红线。**
 </Callout>
 
 <Callout type="trap">
-  **现象**：面试时还在说"我用 AsyncTask 做后台任务"，被面试官追问"你知道它什么时候被标记为 deprecated 吗？"
-  **原因**：AsyncTask 从 API 3 开始存在，到 API 30（Android 11）被正式标记为 deprecated。它的设计缺陷是系统性的：不理解 Activity 生命周期、默认所有任务串行执行（API 13 后）、容易造成内存泄漏、配置变更时状态丢失。这些东西改不了——所以官方选择了彻底废弃。
-  **修法**：新项目永远不要碰 AsyncTask。替代方案按场景选：简单的后台线程 → `Thread` + `Handler`（本章），需要生命周期感知 → `Coroutines` + `lifecycleScope`，需要可靠的后台任务 → `WorkManager`（第 27 章）。
+  **现象**：面试时还在说"我用 AsyncTask
+  做后台任务"，被面试官追问"你知道它什么时候被标记为 deprecated 吗？"
+  **原因**：AsyncTask 从 API 3 开始存在，到 API 30（Android 11）被正式标记为
+  deprecated。它的设计缺陷是系统性的：不理解 Activity
+  生命周期、默认所有任务串行执行（API 13
+  后）、容易造成内存泄漏、配置变更时状态丢失。这些东西改不了——所以官方选择了彻底废弃。
+  **修法**：新项目永远不要碰 AsyncTask。替代方案按场景选：简单的后台线程 →
+  `Thread` + `Handler`（本章），需要生命周期感知 → `Coroutines` +
+  `lifecycleScope`，需要可靠的后台任务 → `WorkManager`（第 27 章）。
 </Callout>
 
 {/* 8. 小结与练习（spec §八） */}
+
 ## 小结
 
 - Android 禁止主线程网络请求——违反抛出 `NetworkOnMainThreadException`，主线程阻塞超 5 秒触发 ANR
@@ -221,46 +264,69 @@ handler.post {
 
 **问题 1**：“第24章 HTTP and Background Tasks”覆盖哪些正式节点和项目主线？
 
-<Answer>覆盖12个节点，从“24. HTTP and Background Tasks”到“Challenge: Dynamically Adjusting the Number of Columns”。主线是以Retrofit合同、JSON反序列化、Repository、配置变化和列表呈现形成可取消网络切片，交付物是PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据。</Answer>
+<Answer>
+  覆盖12个节点，从“24. HTTP and Background Tasks”到“Challenge: Dynamically
+  Adjusting the Number of
+  Columns”。主线是以Retrofit合同、JSON反序列化、Repository、配置变化和列表呈现形成可取消网络切片，交付物是PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据。
+</Answer>
 
 **问题 2**：怎样建立本页最小可执行实验？
 
-<Answer>在“HTTP与后台任务”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+<Answer>
+  在“HTTP与后台任务”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。
+</Answer>
 
 **问题 3**：为什么只在正常点击路径运行不能证明完成？
 
-<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据核对。</Answer>
+<Answer>
+  它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据核对。
+</Answer>
 
 **问题 4**：怎样设计能推翻当前实现的反例？
 
-<Answer>在“HTTP与后台任务”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+<Answer>
+  在“HTTP与后台任务”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。
+</Answer>
 
 **问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
 
-<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+<Answer>
+  先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。
+</Answer>
 
 **问题 6**：本页达到独立交接标准需要什么？
 
-<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据重放。</Answer>
+<Answer>
+  需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭PhotoGallery请求记录、解析测试、旋转取消、分页和列数适配证据重放。
+</Answer>
 
 </Exercises>
 
 {/* 10. 名词解释（spec §十） */}
+
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="OkHttp">
-  Square 公司开发的 HTTP 客户端库。它给 Android 提供连接池复用（不用每次请求重新建连）、Gzip 压缩（省流量）、拦截器（统一加认证头或日志）等功能。Retrofit 的底层就是 OkHttp。详见本章"OkHttp"一节。
-</GlossaryItem>
-<GlossaryItem term="ANR（Application Not Responding）" id="term-anr">
-  当主线程被长时间阻塞（前台 Activity 5 秒、广播 10 秒、后台 Service 更长），系统弹出"应用无响应"对话框。这是用户最讨厌的东西——用 ANR 作为警钟，把耗时操作扔到后台线程。详见本章"主线程红线"一节。
-</GlossaryItem>
-<GlossaryItem term="NetworkOnMainThreadException">
-  Android 3.0 起强制抛出的异常。如果你在主线程发网络请求，系统直接 crash 你的 App——这是保护你远离 ANR 的"强制止损"。详见本章"主线程红线"一节。
-</GlossaryItem>
-<GlossaryItem term="Gson">
-  Google 开发的 JSON 解析库。一行代码就能把 JSON 字符串变成 Kotlin/Java 对象。`@SerializedName` 注解处理字段名不一致的问题（如下划线 vs 驼峰）。详见本章"用 Gson 替代 org.json"一节。
-</GlossaryItem>
+  <GlossaryItem term="OkHttp">
+    Square 公司开发的 HTTP 客户端库。它给 Android
+    提供连接池复用（不用每次请求重新建连）、Gzip
+    压缩（省流量）、拦截器（统一加认证头或日志）等功能。Retrofit 的底层就是
+    OkHttp。详见本章"OkHttp"一节。
+  </GlossaryItem>
+  <GlossaryItem term="ANR（Application Not Responding）" id="term-anr">
+    当主线程被长时间阻塞（前台 Activity 5 秒、广播 10 秒、后台 Service
+    更长），系统弹出"应用无响应"对话框。这是用户最讨厌的东西——用 ANR
+    作为警钟，把耗时操作扔到后台线程。详见本章"主线程红线"一节。
+  </GlossaryItem>
+  <GlossaryItem term="NetworkOnMainThreadException">
+    Android 3.0 起强制抛出的异常。如果你在主线程发网络请求，系统直接 crash 你的
+    App——这是保护你远离 ANR 的"强制止损"。详见本章"主线程红线"一节。
+  </GlossaryItem>
+  <GlossaryItem term="Gson">
+    Google 开发的 JSON 解析库。一行代码就能把 JSON 字符串变成 Kotlin/Java
+    对象。`@SerializedName` 注解处理字段名不一致的问题（如下划线 vs
+    驼峰）。详见本章"用 Gson 替代 org.json"一节。
+  </GlossaryItem>
 </Glossary>
 
 {/* BNR4_QUALITY_V2 */}
@@ -321,15 +387,45 @@ handler.post {
 
 在“HTTP与后台任务”中，“Challenge: Dynamically Adjusting the Number of Columns”用于推翻“学会在 Android 上发起 HTTP 请求，掌握后台线程的基本模式，理解为什么 NetworkOnMainThreadException 是 Android 安全模型的保护机制。”的顺利路径：先写预期，再引入一个边界输入、重建或平台差异，并用状态、日志与用户结果解释首个分叉。
 
-<Callout type="trap">在“HTTP与后台任务”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。</Callout>
+<Callout type="trap">
+  在“HTTP与后台任务”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。
+</Callout>
 
-<Callout type="trap">“HTTP与后台任务”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。</Callout>
+<Callout type="trap">
+  “HTTP与后台任务”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。
+</Callout>
 
 ## “HTTP与后台任务”验收回顾
 
 “HTTP与后台任务”只有在请求或消息时间线、取消、乱序与失败恢复能够从相同基线再次得到相同断言时才通过；第四版机制与现代平台政策分别记录，不用新API名称掩盖旧行为。
 
 [← 上一页：深入学习intent和任务](/learn/big-nerd-ranch-guide/background-network/more-intents-tasks) · [下一页：Looper、Handler和HandlerThread →](/learn/big-nerd-ranch-guide/background-network/looper-handler)
+
+{/* BNR4_VISUAL_V2_START */}
+
+## 章专属可重放状态实验
+
+先预测“发起请求、旋转、断网、重试、分页与快速切换查询”发生后，PhotoGallery Repository、网络 call 与界面状态所有者应怎样改变查询、请求 ID、加载状态、结果页、错误与取消；再操作三个实验。第四版示例与当前 Android 政策分别记录，实验不把新 API 名称倒填为原书内容。
+
+### 实验一：所有者—状态—结果合同
+
+选择任一正式目录节点和正常/边界场景，检查它是否真的进入本章状态合同。目录标题只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<HttpBackgroundContractLab />
+
+### 实验二：事件与生命周期轨迹
+
+沿五次转换逐步执行“发起请求、旋转、断网、重试、分页与快速切换查询”。每一步只允许PhotoGallery Repository、网络 call 与界面状态所有者按职责提交状态，并持续核对“旧请求不能覆盖新查询，离线和解析错误都有可恢复状态”。
+
+<HttpBackgroundLifecycleLab />
+
+### 实验三：章专属反例与同输入恢复
+
+注入“查询 B 已显示后，较慢的查询 A 回调覆盖当前列表”，保存第一个偏离点；撤销后以完全相同的 SDK、设备状态和用户事件重放。只有请求 ID、URL、HTTP 状态、解析错误、取消日志和列表断言一起恢复才算修复。
+
+<HttpBackgroundFaultLab />
+
+{/* BNR4_VISUAL_V2_END */}
 
 <Attribution
   mode="independent-rewrite"

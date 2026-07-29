@@ -3,551 +3,647 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { createProcessor } from "@mdx-js/mdx";
 import matter from "gray-matter";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import { visit } from "unist-util-visit";
+import prettier from "prettier";
 
 const ROOT = process.cwd();
 const BOOK = "big-nerd-ranch-guide";
-const BOOK_DIR = path.join(ROOT, "content", BOOK);
+const CONTENT_DIR = path.join(ROOT, "content", BOOK);
+const COMPONENT_DIR = path.join(ROOT, "src/components/mdx", BOOK, "v2");
 const MANIFEST_PATH = path.join(ROOT, "quality/fidelity-manifests.json");
 const PROFILE_PATH = path.join(
   ROOT,
   "quality/big-nerd-ranch-guide-v2-profiles.json",
 );
-const INFORMIT =
-  "https://www.informit.com/store/android-programming-the-big-nerd-ranch-guide-9780135245125";
-const OREILLY =
-  "https://www.oreilly.com/library/view/android-programming-the/9780135257555/";
-const ERRATA =
-  "https://github.com/bignerdranch/AndroidCourseResources/raw/master/4thEdition/Errata/4eAddendum.pdf";
-const ANDROID_DOCS = "https://developer.android.com/develop";
-const ACTIVITY_DOCS =
-  "https://developer.android.com/guide/components/activities/activity-lifecycle";
-const STATE_DOCS =
-  "https://developer.android.com/topic/libraries/architecture/saving-states";
-const FRAGMENT_DOCS = "https://developer.android.com/guide/fragments";
-const RECYCLER_DOCS =
-  "https://developer.android.com/develop/ui/views/layout/recyclerview";
-const ROOM_DOCS = "https://developer.android.com/training/data-storage/room";
-const INTENT_DOCS = "https://developer.android.com/guide/components/intents-filters";
-const ACCESSIBILITY_DOCS =
-  "https://developer.android.com/guide/topics/ui/accessibility";
-const BACKGROUND_DOCS =
-  "https://developer.android.com/develop/background-work/background-tasks";
-const WORK_DOCS =
-  "https://developer.android.com/topic/libraries/architecture/workmanager";
-const WEBVIEW_DOCS = "https://developer.android.com/develop/ui/views/layout/webapps/webview";
-const CUSTOM_VIEW_DOCS =
-  "https://developer.android.com/develop/ui/views/layout/custom-views/custom-components";
-const ANIMATION_DOCS =
-  "https://developer.android.com/develop/ui/views/animations/prop-animation";
-const WORK_TITLE =
-  "Bill Phillips, Chris Stewart, Kristin Marsicano, Brian Gardner, Android Programming: The Big Nerd Ranch Guide, Fourth Edition";
-const OLD_MARKER = "{/* BNR4_AUTHORITY_SUPPLEMENT */}";
-const V2_MARKER = "{/* BNR4_QUALITY_V2 */}";
-const LEGACY_SVG_FILES = [
-  "accessibility-tree-diagram.tsx",
-  "activity-lifecycle-diagram.tsx",
-  "android-project-structure-diagram.tsx",
-  "apk-anatomy-diagram.tsx",
-  "app-bar-menu-diagram.tsx",
-  "back-stack-diagram.tsx",
-  "broadcast-dispatch-diagram.tsx",
-  "camera-intent-flow-diagram.tsx",
-  "config-change-viewmodel-diagram.tsx",
-  "debug-loop-diagram.tsx",
-  "dialog-fragment-diagram.tsx",
-  "fragment-transaction-diagram.tsx",
-  "gradle-build-pipeline-diagram.tsx",
-  "implicit-intent-resolution-diagram.tsx",
-  "launch-mode-diagram.tsx",
-  "logcat-line-anatomy-diagram.tsx",
-  "message-loop-diagram.tsx",
-  "mvc-data-flow-diagram.tsx",
-  "mvvm-data-flow-diagram.tsx",
-  "nav-graph-diagram.tsx",
-  "property-animation-diagram.tsx",
-  "recyclerview-recycling-diagram.tsx",
-  "resource-qualifier-diagram.tsx",
-  "room-architecture-diagram.tsx",
-  "sdk-version-axis-diagram.tsx",
-  "search-flow-diagram.tsx",
-  "style-theme-inheritance-diagram.tsx",
-  "test-pyramid-diagram.tsx",
-  "thread-model-diagram.tsx",
-  "touch-event-sequence-diagram.tsx",
-  "view-hierarchy-diagram.tsx",
-  "web-view-anatomy-diagram.tsx",
-  "work-manager-diagram.tsx",
-  "xml-drawable-types-diagram.tsx",
-];
-const processor = createProcessor({
-  format: "mdx",
-  remarkPlugins: [remarkMath, remarkGfm],
-});
+const GENERATED_START = "{/* BNR4_VISUAL_V2_START */}";
+const GENERATED_END = "{/* BNR4_VISUAL_V2_END */}";
 
-function walkMdx(directory) {
-  const files = [];
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...walkMdx(entryPath));
-    else if (entry.name.endsWith(".mdx")) files.push(entryPath);
-  }
-  return files.sort();
+function design(task, owner, state, event, invariant, fault, evidence) {
+  return { task, owner, state, event, invariant, fault, evidence };
 }
 
-function normalizeLegacySvgText() {
-  const directory = path.join(ROOT, "src/components/mdx/diagrams");
-  for (const filename of LEGACY_SVG_FILES) {
-    const filePath = path.join(directory, filename);
-    if (!fs.existsSync(filePath)) throw new Error(`缺少BNR4图示：${filename}`);
-    let source = fs.readFileSync(filePath, "utf8");
-    source = source
-      .replace(/fontSize="(\d+(?:\.\d+)?)"/g, (match, value) =>
-        Number(value) < 11 ? 'fontSize="11"' : match,
-      )
-      .replace(/fontSize=\{(\d+(?:\.\d+)?)\}/g, (match, value) =>
-        Number(value) < 11 ? "fontSize={11}" : match,
-      );
-    fs.writeFileSync(filePath, source);
-  }
+const DESIGNS = {
+  "learning-map": design(
+    "把 GeoQuiz、CriminalIntent、BeatBox、PhotoGallery、NerdLauncher 与 DragAndDraw 串成 32 章可重放路线",
+    "每个示例应用的明确状态所有者",
+    "构建、界面、持久化、后台与外部合同",
+    "从第一章构建到最终独立项目的里程碑提交",
+    "每章都有章专属结果、反例、恢复路径和版本边界",
+    "只按类名打卡 32 章，却没有保存六个项目的状态轨迹和失败证据",
+    "项目提交、设备指纹、状态快照、失败测试和迁移差异",
+  ),
+  "first-app": design(
+    "从源码、资源、清单和 Gradle 配置生成可安装并可重复启动的 GeoQuiz 首帧",
+    "Gradle variant 与 MainActivity",
+    "资源 ID、组件声明、安装包和首帧 View 树",
+    "点击 Run 后执行编译、打包、安装与 Activity 创建",
+    "同一提交和依赖锁定后，干净构建产生同身份 APK 与同首帧断言",
+    "布局 XML 语法错误让 R 类生成失败，却继续使用旧 APK 截图验收",
+    "构建日志、APK 哈希、安装记录、资源映射与首帧断言",
+  ),
+  "android-mvc": design(
+    "让 GeoQuiz 的题目事实、界面表示和用户事件分别由 model、view 与 controller 承担",
+    "QuizViewModel 与 Activity controller",
+    "当前题号、答案事实、按钮可用性和反馈文本",
+    "用户选择答案或切换上一题与下一题",
+    "旋转和重复点击不能让题目事实与界面显示分叉",
+    "把答案和题号只存进 TextView，View 重建后 model 状态丢失",
+    "用户事件序列、题目索引、model 快照与界面断言",
+  ),
+  "activity-lifecycle": design(
+    "沿 Activity 回调解释前后台、旋转、多窗口和实例重建中的可见状态变化",
+    "Activity 实例与系统生命周期调度器",
+    "created、started、resumed、paused、stopped、destroyed",
+    "旋转设备、切到后台、返回应用与开启多窗口",
+    "回调顺序可观察，但 onDestroy 不能被当作持久化成功承诺",
+    "在 onDestroy 才保存答案，进程被杀后恢复到错误题目",
+    "实例 ID、时间戳、回调日志、配置值与界面状态",
+  ),
+  "ui-state-persistence": design(
+    "区分 View 临时状态、ViewModel 配置期状态、saved state 与持久事实",
+    "QuizViewModel、SavedStateHandle 与持久仓库",
+    "题号、作答记录、临时输入和可恢复事实",
+    "旋转、后台进程回收与冷启动恢复",
+    "每类状态只由适合其寿命的所有者恢复且不重复提交副作用",
+    "只用 ViewModel 保存答案并假设它可以跨进程死亡",
+    "保存键、序列化值、进程 ID、恢复轨迹和行为断言",
+  ),
+  debugging: design(
+    "从稳定失败、堆栈首个业务帧和设备状态定位 Android 缺陷",
+    "测试、Logcat、断点与问题工件的责任人",
+    "失败输入、线程、异常、调用栈和修复假设",
+    "重放最小失败用例并一次只改变一个原因",
+    "同一失败输入在修复前稳定失败、修复后稳定通过且邻近用例不回归",
+    "捕获异常或删除日志让界面不崩，却没有修复无效状态",
+    "失败测试、完整堆栈、断点快照、修复差异和回归结果",
+  ),
+  "second-activity": design(
+    "以显式 Intent 启动 CheatActivity，并用最小 extras 与结果合同交换数据",
+    "发送 Activity、目标 Activity 与 ActivityResult 合同",
+    "题目答案、作弊决定、返回结果和已处理标记",
+    "启动第二界面、旋转、返回与重复结果到达",
+    "缺失或重复结果不能让 GeoQuiz 错记作弊状态",
+    "目标 Activity 重建后再次返回同一结果，发送方重复提交",
+    "Intent extras、实例 ID、结果码、消费标记和题目状态",
+  ),
+  "sdk-compatibility": design(
+    "把 compileSdk、targetSdk、minSdk 与运行设备 API 的责任分开验证",
+    "构建配置、兼容库与运行时版本分支",
+    "可编译 API、可安装范围、行为政策和回退路径",
+    "在两个 API 级别安装并触发同一作弊提示",
+    "版本判断围绕真实行为差异，不用编译成功代替运行兼容",
+    "调用高版本 API 却只检查 compileSdk，低版本设备启动即崩溃",
+    "Gradle 配置、设备 API、分支日志、兼容测试和回退截图",
+  ),
+  "ui-fragments": design(
+    "区分 Fragment 实例与 Fragment View 生命周期，并由 FragmentManager 恢复结构",
+    "FragmentManager、Fragment 实例与 viewLifecycleOwner",
+    "fragment 状态、View binding、事务和容器内容",
+    "创建、替换、旋转及 onDestroyView",
+    "View 销毁后不再接收界面回调，Fragment 状态仍可按合同恢复",
+    "Fragment 保存已销毁 View binding，异步回调写入旧界面",
+    "Fragment/View 实例 ID、事务日志、回调序列和泄漏检查",
+  ),
+  recyclerview: design(
+    "让 Adapter 以稳定事实完整绑定复用 ViewHolder，而非依赖旧位置状态",
+    "Adapter 数据快照与每个 ViewHolder",
+    "item ID、类型、绑定内容、选择与可见位置",
+    "滚动复用、插入、删除、点击和数据刷新",
+    "每次 bind 覆盖全部可变视图，点击按当前 item 身份解释",
+    "复用后未重置 checkbox，上一行的选中状态泄漏到新数据",
+    "绑定日志、holder ID、item ID、diff 结果与滚动断言",
+  ),
+  "layouts-widgets": design(
+    "把 ConstraintLayout 约束、测量、布局与资源限定符落到多配置几何",
+    "View 树、ConstraintLayout 求解器与资源匹配器",
+    "约束、尺寸、边距、padding、文字和焦点顺序",
+    "切换小屏、横屏、长文本、大字体与 RTL",
+    "所有目标配置中信息不截断、控件不重叠且主要动作可达",
+    "只在单一 Pixel 模拟器检查，德语大字体下按钮被挤出屏幕",
+    "配置矩阵、Layout Inspector 几何、截图与可达性断言",
+  ),
+  "room-database": design(
+    "用 Entity、DAO、RoomDatabase 与 Repository 建立 CriminalIntent 单一事实源",
+    "Room 数据库和 Repository",
+    "schema、Crime 实体、查询流、事务和迁移版本",
+    "插入、更新、查询、进程重启和 schema 升级",
+    "持久事实由数据库拥有，界面观察结果不绕过 DAO 直接改写",
+    "升级 schema 后启用 destructive migration，用户案件无提示丢失",
+    "schema 导出、DAO 测试、迁移样本、事务日志和查询断言",
+  ),
+  "fragment-navigation": design(
+    "用 Fragment arguments、返回栈和数据库 ID 导航 CriminalIntent",
+    "FragmentManager、导航容器与 CrimeRepository",
+    "目的地、参数、返回栈、选中 Crime ID 和更新结果",
+    "列表点击、详情编辑、返回、旋转与进程重建",
+    "目的地只接收稳定 ID，并从事实源恢复详情而非携带整份可变对象",
+    "状态保存后继续提交事务，旋转时抛出 state loss 或显示重复 Fragment",
+    "事务、back stack、argument、实例 ID 和数据库更新断言",
+  ),
+  dialogs: design(
+    "让 DatePicker DialogFragment 通过稳定结果合同更新 Crime 日期",
+    "DialogFragment、调用 Fragment 与 FragmentResult",
+    "初始日期、选择值、结果键和已消费状态",
+    "打开、旋转、确认、取消与重复提交",
+    "对话框重建不丢初值，结果只消费一次且取消不改事实",
+    "旋转后旧监听器和新监听器都收到日期结果，数据库写入两次",
+    "dialog tag、结果 bundle、消费计数和 Crime 日期快照",
+  ),
+  "app-bar": design(
+    "把 CriminalIntent 的新增、删除、搜索和导航动作接入当前界面状态",
+    "MenuHost、当前 Fragment 与列表状态",
+    "菜单可见性、动作启用、空列表和导航结果",
+    "创建菜单、选择动作、数据变空与配置重建",
+    "菜单由当前状态派生，不能对已销毁目的地继续执行动作",
+    "返回列表后旧详情 Fragment 仍处理删除菜单，删错 Crime",
+    "menu item、目的地 ID、动作日志、列表快照和导航断言",
+  ),
+  "implicit-intents": design(
+    "为电话、联系人和分享动作构造最小隐式 Intent 并处理解析结果",
+    "Intent 发起方、PackageManager 与外部响应应用",
+    "action、URI、MIME、extras、授权和候选列表",
+    "点击嫌疑人或报告按钮并解析零个、一个或多个响应者",
+    "没有响应者时提供可理解回退，敏感数据只授予必要目标",
+    "无应用能处理 Intent 时仍直接 startActivity，导致崩溃",
+    "Intent 字段、resolve 结果、选择器、授权范围和返回轨迹",
+  ),
+  "taking-pictures": design(
+    "用 FileProvider URI 委托相机写入照片并按目标尺寸解码显示",
+    "CrimeRepository、FileProvider、相机应用与 ImageView",
+    "文件 URI、临时权限、照片字节、方向和解码尺寸",
+    "拍照、取消、旋转、返回及照片加载",
+    "只接受非空可解码文件，授权在任务结束后不继续扩大",
+    "把 file URI 暴露给外部相机或全尺寸解码导致权限异常与 OOM",
+    "URI grant、结果码、文件大小、EXIF、采样率和内存轨迹",
+  ),
+  localization: design(
+    "让资源匹配器按 locale、方向、尺寸与密度选择可回退资源",
+    "Android Resources 与 locale 配置",
+    "字符串、复数、日期格式、布局方向和候选资源",
+    "切换英语、中文、阿拉伯语、大字体与区域格式",
+    "用户可见文本来自资源和 locale 格式化，不拼接固定英语语序",
+    "把日期和数量手工拼进英文句子，阿拉伯语下语序和数字错误",
+    "配置值、资源命中、伪本地化截图、RTL 与格式断言",
+  ),
+  accessibility: design(
+    "让 TalkBack 用户以线性焦点、语义标签和可执行 action 完成同一任务",
+    "View 语义树、AccessibilityService 与应用状态",
+    "content description、role、state、action 和 announcement",
+    "启用 TalkBack，遍历列表、编辑字段并触发状态变化",
+    "非视觉用户获得与视觉用户等价的任务结果和变化反馈",
+    "自定义图片按钮没有名称，TalkBack 只读出“未标记的按钮”",
+    "无障碍节点树、焦点顺序、操作录制、Scanner 与任务断言",
+  ),
+  "data-binding-mvvm": design(
+    "区分 MVVM 表示状态、Jetpack ViewModel 寿命与 Data Binding 更新",
+    "BeatBoxViewModel、SoundViewModel 与 Binding",
+    "资产列表、显示文本、用户命令、观察值和 View 状态",
+    "加载资产、绑定列表、点击声音与旋转",
+    "状态所有者不持有已销毁 View，Binding 只渲染可观察事实",
+    "ViewModel 保存 Activity 或 Binding 引用，旋转后泄漏旧界面",
+    "实例 ID、绑定求值、资产状态、点击事件和泄漏检查",
+  ),
+  "audio-unit-testing": design(
+    "把 SoundPool 加载、播放、释放与可测试回调分离",
+    "BeatBox、SoundPool 与测试替身",
+    "sound ID、加载完成、播放请求、生命周期和释放状态",
+    "加载资产、点击播放、旋转、重复点击与退出",
+    "未加载完成不播放，释放后不再接收回调，同一事件不重复发声",
+    "旋转后两个 SoundPool 同时存活，同一次点击播放两遍",
+    "单元测试、load 回调、stream ID、实例计数和释放日志",
+  ),
+  "styles-themes": design(
+    "让颜色、style、theme 与属性覆盖形成可解释的资源继承链",
+    "Resources、Theme 与 View 属性解析器",
+    "主题属性、style 父级、局部覆盖、日夜模式和最终像素",
+    "切换 day/night、组件状态与局部 theme overlay",
+    "内容语义与主题解耦，最终颜色保持对比度和状态可辨性",
+    "在布局写死颜色，夜间主题下文字与背景对比度不足",
+    "属性解析链、资源 ID、日夜截图、对比度和状态断言",
+  ),
+  "xml-drawables": design(
+    "用 shape、selector、layer-list 与 9-patch 表达可缩放状态图形",
+    "Drawable 资源、View state 与资源匹配器",
+    "边角、描边、图层、pressed/disabled 状态和密度",
+    "按下、禁用、缩放、换密度与切换主题",
+    "图形状态与可点击语义一致，在目标密度不模糊或错位",
+    "selector 缺少 disabled 项，禁用按钮仍看起来可点击",
+    "drawable 命中、state set、像素边界、密度截图和交互断言",
+  ),
+  "more-intents-tasks": design(
+    "区分 Activity back stack、task、document 与进程，并验证 launch flags",
+    "ActivityTaskManager 与每个 task 返回栈",
+    "intent、task ID、Activity 实例、flags 和顶层目的地",
+    "从 NerdLauncher 启动、重复深链、Home 返回与 Back 导航",
+    "栈策略决定导航实例但不自动提供业务副作用幂等",
+    "滥用 CLEAR_TOP 修复重复界面，却让待保存编辑状态丢失",
+    "task dump、intent flags、实例 ID、返回序列和业务提交计数",
+  ),
+  "http-background": design(
+    "用 Retrofit 获取 Flickr JSON，在配置重建与取消中只提交当前响应",
+    "PhotoGallery Repository、网络 call 与界面状态所有者",
+    "查询、请求 ID、加载状态、结果页、错误与取消",
+    "发起请求、旋转、断网、重试、分页与快速切换查询",
+    "旧请求不能覆盖新查询，离线和解析错误都有可恢复状态",
+    "查询 B 已显示后，较慢的查询 A 回调覆盖当前列表",
+    "请求 ID、URL、HTTP 状态、解析错误、取消日志和列表断言",
+  ),
+  "looper-handler": design(
+    "用 Looper、Handler 与 HandlerThread 串行下载缩略图并安全回传主线程",
+    "ThumbnailDownloader、工作 Looper 与 viewLifecycleOwner",
+    "请求队列、token、目标 holder、bitmap 和取消状态",
+    "入队、后台下载、主线程回传、滚动复用与 View 销毁",
+    "回调只更新仍绑定同一请求的可见 View，销毁后队列可取消",
+    "Holder 已复用给新 URL，旧下载回调把错误图片写入当前行",
+    "post/execute 线程、token、URL、holder ID、取消与绑定日志",
+  ),
+  search: design(
+    "把 SearchView 输入、提交、防抖、SharedPreferences 与网络结果竞争分开",
+    "查询状态所有者、偏好存储与 PhotoGallery Repository",
+    "编辑文本、已提交查询、持久偏好、请求 ID 和结果",
+    "输入、提交、清空、旋转、冷启动和旧响应返回",
+    "轻量偏好只保存已确认查询，当前结果对应最新有效请求",
+    "每个字符都立即写偏好并发请求，旧响应覆盖新输入",
+    "输入事件、提交时刻、preference 值、请求 ID 和结果断言",
+  ),
+  workmanager: design(
+    "用 Worker、约束、唯一工作、通知与用户开关表达可靠可延期轮询",
+    "WorkManager 数据库、PollWorker 与用户设置",
+    "WorkSpec、约束、attempt、唯一名称、结果和取消状态",
+    "启用轮询、网络变化、进程重启、重试、通知与关闭轮询",
+    "关闭后唯一工作不存在，重复启用不产生并行轮询",
+    "把 PeriodicWorkRequest 当精确定时器，并重复入队多个同名任务",
+    "WorkInfo、约束切换、attempt、唯一队列、通知和取消测试",
+  ),
+  "broadcast-intents": design(
+    "区分普通 Intent 与广播，并把长任务从 Receiver 转交受约束工作",
+    "BroadcastReceiver、注册作用域与 WorkManager",
+    "action、extras、导出/权限、接收窗口和转交工作",
+    "前后台切换、动态注册、发送广播与进程回收",
+    "Receiver 只做短处理，外部广播受权限与导出边界约束",
+    "在 onReceive 中同步联网，超过生命周期窗口被系统终止",
+    "注册日志、发送方 UID、权限、onReceive 时长和转交 WorkInfo",
+  ),
+  webview: design(
+    "比较隐式 Intent、Custom Tabs 与 WebView 的导航、信任和生命周期边界",
+    "WebView、Activity 返回栈与受信任 URL 策略",
+    "当前 URL、历史、加载状态、Cookie、脚本与返回行为",
+    "打开页面、跳转、Back、旋转、离线与外部 scheme",
+    "只加载允许来源，Back 优先级和配置恢复不吞掉安全错误",
+    "无白名单启用 JavaScript bridge，让不可信页面调用本地对象",
+    "URL 链、WebView 历史、SSL/加载错误、配置轨迹和安全断言",
+  ),
+  "custom-views-touch": design(
+    "把 pointer 手势转换成 Box 几何，同时控制重绘、保存状态与无障碍操作",
+    "BoxDrawingView、手势状态机与 saved state",
+    "pointer ID、起止坐标、box 列表、绘制区域和语义节点",
+    "按下、移动、抬起、多指、旋转与键盘替代操作",
+    "每个手势只提交一个合法 box，重绘和状态恢复不依赖旧 Canvas",
+    "忽略 pointer ID，多指切换后 box 突然跳到另一根手指",
+    "MotionEvent 序列、pointer ID、box 快照、invalidate 区域和语义树",
+  ),
+  "property-animation": design(
+    "用 ObjectAnimator 与 AnimatorSet 改变真实属性并同步交互边界",
+    "Animator、View 属性与场景状态机",
+    "属性起止值、时长、插值、运行阶段和点击区域",
+    "启动、暂停、取消、组合动画、旋转与减少动态效果",
+    "动画结束后的视觉、布局点击区域和无障碍边界一致",
+    "只做 canvas 位移，按钮看似移动但点击区域仍留在原位",
+    "属性快照、animator 状态、点击坐标、取消轨迹和可访问性边界",
+  ),
+  afterword: design(
+    "把第四版跟做项目转化为可独立定义、构建、测试和发布的 Android 应用",
+    "学习者的产品需求、状态模型和发布负责人",
+    "用户任务、架构边界、依赖、测试矩阵和发布制品",
+    "从空仓库实现最终挑战并由另一人复核",
+    "项目在没有书中步骤提示时仍可重建、解释、失败和恢复",
+    "复制完成代码后只改包名，无法解释状态所有者和目标 SDK 差异",
+    "需求、设计决策、源码提交、测试、发布包和复盘记录",
+  ),
+  "final-review": design(
+    "从六个项目重放组件、状态、线程、存储、外部合同与现代目标 SDK 迁移",
+    "六个应用各自的事实源与生命周期所有者",
+    "32 章工件、正常轨迹、失败轨迹、恢复和迁移差异",
+    "干净构建六个项目并逐项注入章专属反例",
+    "每个项目能在同一输入下重放基线、故障和恢复且不混淆第四版与当前政策",
+    "只保留成功 APK 和截图，删除构建指纹、进程重建与失败测试",
+    "六项目提交、设备矩阵、状态轨迹、故障包、迁移记录和签核",
+  ),
+};
+
+function pascal(value) {
+  return value
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join("");
 }
 
-function addFrontmatterFields(raw, practiceMode) {
-  let next = raw;
-  if (!/^qualityVersion:\s*2\s*$/m.test(next)) {
-    const closing = next.indexOf("\n---", 3);
-    if (closing < 0) throw new Error("frontmatter 未闭合");
-    next = `${next.slice(0, closing)}\nqualityVersion: 2\npracticeMode: ${practiceMode}\nsourceMode: independent-rewrite${next.slice(closing)}`;
-  }
-  return next;
-}
-
-function practiceModeFor(title, order) {
-  if (order === 0 || order === 33 || /MVC|布局|主题|辅助|编后/.test(title))
-    return "design";
-  if (
-    /生命周期|状态|Fragment|导航|数据库|HTTP|Looper|任务|WorkManager|broadcast|网页|触摸|动画/.test(
-      title,
-    )
-  )
-    return "simulation";
-  return "code";
-}
-
-function conceptVariant(concept, variants) {
-  const seed = [...concept].reduce(
-    (sum, character) => sum + character.codePointAt(0),
-    0,
+async function writeFormatted(filePath, source) {
+  fs.writeFileSync(
+    filePath,
+    await prettier.format(source, { filepath: filePath }),
   );
-  return variants[seed % variants.length];
 }
 
-function explanationForConcept(concept, focus) {
-  const value = concept.toLowerCase();
-  const includes = (...needles) => needles.some((needle) => value.includes(needle));
-
-  if (includes("android project", "android studio", "build process", "first android"))
-    return `“${concept}”把源码、资源、清单和Gradle配置变成可安装APK；验证要从干净构建开始，保存variant、SDK、依赖与安装后的首帧，而不是只看IDE绿色三角。`;
-  if (includes("layout", "widget", "view hierarchy", "constraintlayout", "margins", "padding"))
-    return conceptVariant(concept, [
-      `“${concept}”把约束、测量与布局落实为View树几何；用小屏、长文本与大字体验证，不能用单一模拟器截图证明适配。`,
-      `分析“${concept}”先区分父约束、子测量和绘制边界，再检查触控目标、基线、RTL与系统栏插入量。`,
-      `验证“${concept}”固定内容，只改变屏宽、字体缩放或方向之一，记录每个View的bounds和首个溢出节点。`,
-      `“${concept}”的视觉正确性必须与语义树一致；看得见但读屏无名称、焦点不可达或点击区过小仍判失败。`,
-    ]);
-  if (includes("resource", "icon", "pixel dens", "drawable", "style", "theme", "asset studio"))
-    return conceptVariant(concept, [
-      `“${concept}”通过资源限定符和主题属性把内容与设备配置解耦；最终值由资源匹配和主题继承共同决定。`,
-      `分析“${concept}”要追踪资源ID、限定目录、密度缩放与属性解析，避免把预览器结果当成所有设备的合同。`,
-      `验证“${concept}”在日夜主题、不同密度和字体缩放下比较像素边界、对比度与状态反馈。`,
-      `“${concept}”的复用不能吞掉状态语义；pressed、focused、disabled与checked都要有可辨反馈。`,
-    ]);
-  if (includes("mvc", "mvvm", "architecture", "view model", "viewmodel", "data binding", "repository"))
-    return conceptVariant(concept, [
-      `“${concept}”按事实、界面表示和用户事件拆责任；状态所有者不能持有已销毁View，界面也不能绕过边界直接改持久数据。`,
-      `分析“${concept}”要画出事件进入、状态归约、数据源写入和UI重绘四条边，并指出配置变化时谁被重建。`,
-      `验证“${concept}”用同一事件序列比较旋转前后状态和副作用次数；界面相同但重复写入仍是不正确。`,
-      `“${concept}”的价值由依赖方向与可测试状态转换证明，而不是由类名是否含Model、View或Repository决定。`,
-    ]);
-  if (includes("activity lifecycle", "activity states", "logging the activity", "rotating", "multi-window"))
-    return conceptVariant(concept, [
-      `“${concept}”由系统驱动Activity在created、started、resumed等状态间迁移；日志必须同时记录实例ID和回调次序，才能区分返回与重建。`,
-      `分析“${concept}”要把用户动作映射到onPause/onStop/onDestroy与新实例创建，onDestroy并不是持久化成功的承诺。`,
-      `验证“${concept}”依次执行覆盖、返回、旋转与进程回收，比较旧实例、新实例和用户可见状态。`,
-      `“${concept}”在多窗口下不能用“可见”等同“可交互”；资源启停应服从实际生命周期状态与所有者。`,
-    ]);
-  if (includes("persisting ui state", "saving data", "saved instance", "repeat answers", "graded quiz"))
-    return `“${concept}”要求把临时UI状态、配置期状态与进程死亡后需恢复的最小事实分层；ViewModel跨配置但不跨进程，saved state必须小且可序列化。`;
-  if (includes("debug", "exception", "stack trace", "lint", "inspector", "profiler", "log level"))
-    return conceptVariant(concept, [
-      `“${concept}”从症状回溯首个异常帧、日志事件或状态分叉；修复证据必须包含可复现输入和失败前后的同一断言。`,
-      `分析“${concept}”区分编译、运行时、布局、线程与资源问题，避免在后续连锁报错处停止定位。`,
-      `验证“${concept}”先让测试稳定失败，再改变一个原因并重跑；只删除日志或捕获异常不算修复。`,
-      `“${concept}”输出可能含令牌、路径和个人数据，采证前要最小化样本并清理敏感字段。`,
-    ]);
-  if (includes("second activity", "starting an activity", "passing data", "intent extras", "result"))
-    return `“${concept}”通过显式Intent启动目标并以extras/result交换最小数据；发送方、接收方和进程重建都必须验证缺失、类型错误和重复返回。`;
-  if (includes("sdk version", "compatibility", "developer documentation", "limited cheats"))
-    return `“${concept}”区分minSdk、targetSdk、compileSdk与运行设备版本；可调用性、行为变化和兼容库回退要分别验证，不能只凭编译通过。`;
-  if (includes("fragment", "fragment manager", "fragment navigation", "single activity", "fragment arguments", "dialogfragment", "dialog"))
-    return conceptVariant(concept, [
-      `“${concept}”由FragmentManager保存结构和返回栈，而Fragment实例与其View拥有不同生命周期；视图绑定必须在onDestroyView前释放。`,
-      `分析“${concept}”要标出事务提交、参数写入、目标结果和返回栈变化，避免用活动中的临时字段传递可恢复状态。`,
-      `验证“${concept}”在旋转、后台恢复和快速连点下比较fragment列表、back stack与目标数据，只出现一次导航副作用。`,
-      `“${concept}”的容器替换不是简单换画面；状态保存后提交、重复tag与嵌套管理器都会改变恢复结果。`,
-    ]);
-  if (includes("recyclerview", "viewholder", "adapter", "recycling", "listview", "gridview", "viewtypes"))
-    return conceptVariant(concept, [
-      `“${concept}”只为可见项创建和绑定ViewHolder，回收时旧状态必须被新数据完整覆盖；稳定标识不能用易变位置冒充。`,
-      `分析“${concept}”分别统计创建、绑定、回收和差量更新，列表能滚动并不证明没有错位或全量重绘。`,
-      `验证“${concept}”用插入、删除、重排和多类型数据检查item身份、焦点与点击目标，记录首个错误绑定。`,
-      `“${concept}”的性能由帧时间、绑定分配与diff范围共同决定，不以单次滑动的主观流畅度验收。`,
-    ]);
-  if (includes("room", "database", "data access", "queries", "schema", "singleton", "livedata"))
-    return conceptVariant(concept, [
-      `“${concept}”把Entity模式、DAO合同和SQLite文件连接成单一事实源；编译期SQL校验不能替代迁移和真实数据反例。`,
-      `分析“${concept}”要区分数据库实例、事务线程、观察者和View生命周期，写入完成与UI收到新快照不是同一时刻。`,
-      `验证“${concept}”从空库、重复键、并发写与旧schema升级四条路径核对行数、约束、通知和回滚。`,
-      `“${concept}”必须导出schema并测试每条版本迁移；destructive fallback会通过启动却丢失用户事实。`,
-    ]);
-  if (includes("app bar", "menu", "action bar", "toolbar", "empty view"))
-    return `“${concept}”把顶层动作、导航和溢出菜单接入当前界面状态；菜单创建与选择回调要在窄屏、无数据和权限受限时仍有可理解反馈。`;
-  if (includes("implicit intent", "resolving", "format string", "contact", "more about intents", "task", "back stack", "home screen"))
-    return conceptVariant(concept, [
-      `“${concept}”以action、data、category和MIME描述能力，由系统解析匹配组件；发起前应检查响应者，接收后必须验证所有外部数据。`,
-      `分析“${concept}”要区分Activity返回栈、系统task与进程，flags改变栈行为但不会自动提供业务幂等。`,
-      `验证“${concept}”覆盖零个、一个和多个响应者，以及深链重复到达、目标被杀和无权限数据。`,
-      `“${concept}”跨应用边界时只授予完成任务所需的URI与组件权限，并在日志中移除联系人等个人信息。`,
-    ]);
-  if (includes("picture", "camera", "file storage", "fileprovider", "bitmap", "thumbnail"))
-    return `“${concept}”通过FileProvider URI把写入能力临时交给相机应用，再按目标尺寸解码；验证要覆盖无相机、取消、零字节文件、旋转和内存上限。`;
-  if (includes("localization", "localizing", "configuration qualifier", "alternative resource", "date"))
-    return `“${concept}”让资源匹配器根据locale与配置选择候选；字符串参数、复数、日期、RTL和回退链必须由目标locale实测，不能拼接英语语序。`;
-  if (includes("accessibility", "talkback", "content description", "comparable experience", "announcing"))
-    return conceptVariant(concept, [
-      `“${concept}”要求可访问性树表达与视觉界面等价的名称、角色、状态和操作；contentDescription不能重复可见文本或描述装饰。`,
-      `分析“${concept}”按TalkBack线性焦点顺序走完整任务，检查自定义控件是否暴露可执行action与状态变化。`,
-      `验证“${concept}”在大字体、触摸探索和无视觉条件下完成同一任务，并记录首个焦点陷阱或缺失播报。`,
-      `“${concept}”的通过条件是可比较体验，不是扫描器零告警；动态错误、超时与音频反馈仍需人工验证。`,
-    ]);
-  if (includes("soundpool", "audio", "unit test", "test class", "mocks", "integration", "playback"))
-    return `“${concept}”分离音频资源加载、播放ID、释放和可测试回调；单元测试验证状态与协作，设备测试再验证真实SoundPool时序和旋转后不重复播放。`;
-  if (includes("http", "retrofit", "json", "flickr", "network", "paging", "parser", "gson"))
-    return conceptVariant(concept, [
-      `“${concept}”把HTTP状态、响应体和解析错误转换为明确UI状态；成功码、空结果、超时、取消和畸形JSON必须走不同分支。`,
-      `分析“${concept}”沿请求参数、线程、仓库缓存、ViewModel与列表绑定追踪同一查询，避免旧响应覆盖新输入。`,
-      `验证“${concept}”固定查询，只改变网络延迟、分页边界或响应字段，核对请求次数、取消、去重和可恢复错误。`,
-      `“${concept}”的API密钥与用户数据不得进入仓库或截图；测试使用受控fixture并记录服务合同版本。`,
-    ]);
-  if (includes("looper", "handler", "handlerthread", "messages", "background thread", "strictmode", "preloading", "caching"))
-    return conceptVariant(concept, [
-      `“${concept}”让Looper从MessageQueue取任务交给Handler，HandlerThread只提供带Looper的线程；消息所有者销毁时必须取消待办。`,
-      `分析“${concept}”记录post线程、执行线程、队列时刻和回传目标，后台线程不能直接触碰已销毁View。`,
-      `验证“${concept}”用快速滚动、旋转和重复请求制造乱序，确认旧任务被取消、缓存键正确且主线程无磁盘网络。`,
-      `“${concept}”的线程安全不由Handler名称保证；共享状态、关闭顺序和回调引用仍需明确所有权。`,
-    ]);
-  if (includes("searchview", "sharedpreferences", "searching", "polishing"))
-    return `“${concept}”把查询输入、提交事件和轻量偏好持久化分开；防抖、空查询、进程重建与旧响应竞争都要用可重放事件序列验证。`;
-  if (includes("workmanager", "worker", "scheduling work", "polling", "notifying"))
-    return conceptVariant(concept, [
-      `“${concept}”描述可延迟且必须最终执行的持久工作；约束决定何时可运行，唯一工作策略决定重复入队如何合并。`,
-      `分析“${concept}”要记录WorkRequest ID、约束、attempt、输入输出与终态，Worker重试不应重复通知或写入。`,
-      `验证“${concept}”切换网络、电量与进程存活条件，观察ENQUEUED到RUNNING、SUCCEEDED或RETRY的真实迁移。`,
-      `“${concept}”不是精确定时器，也不适合立即UI工作；用户关闭轮询后必须取消唯一工作并验证队列为空。`,
-    ]);
-  if (includes("broadcast", "receiver", "ordered broadcast", "local events", "rxjava", "eventbus"))
-    return `“${concept}”把事件发送给匹配Receiver；静态与动态注册、导出权限和接收器短生命周期决定可达性，长任务应转交受约束后台工作。`;
-  if (includes("webview", "web", "javascript", "chrome custom", "browser history"))
-    return conceptVariant(concept, [
-      `“${concept}”在应用内承载不可信网页内容；URL允许列表、导航委托、JavaScript桥和文件访问必须按最小能力配置。`,
-      `分析“${concept}”区分WebView历史、Activity返回栈和配置重建，旋转保留页面不能靠吞掉所有configurationChanges。`,
-      `验证“${concept}”覆盖外部域、重定向、TLS错误、离线、后退与进程恢复，确认用户始终知道当前来源。`,
-      `“${concept}”若只需打开公开网页，受维护的浏览器或Custom Tabs通常比自建高权限WebView边界更清晰。`,
-    ]);
-  if (includes("custom view", "touch event", "motion", "ondraw", "gesture", "box", "canvas"))
-    return conceptVariant(concept, [
-      `“${concept}”把MotionEvent序列归约为模型，再由onDraw读取模型绘制；渲染函数不应偷偷改变业务状态。`,
-      `分析“${concept}”跟踪pointerId、actionMasked、坐标空间和父容器拦截，不能把数组索引当稳定手指标识。`,
-      `验证“${concept}”覆盖多指、取消、越界、旋转和辅助操作，比较模型框、Canvas输出与可访问性节点。`,
-      `“${concept}”必须只失效需要重绘的区域并避免每帧分配；正确图形还要有等价键盘/读屏操作。`,
-    ]);
-  if (includes("animation", "animator", "interpolator", "transition"))
-    return conceptVariant(concept, [
-      `“${concept}”随时间改变对象属性并触发重绘；起点、终点、插值器与取消终态共同构成可验证合同。`,
-      `分析“${concept}”区分View实际属性和仅绘制变换，动画结束后的点击区域与无障碍边界必须对齐视觉位置。`,
-      `验证“${concept}”在重复启动、反向、离开页面和reduced motion下比较终态，不能依赖最后一帧偶然落点。`,
-      `“${concept}”的多个Animator需显式定义依赖与取消传播；同时播放不代表生命周期会自动收束。`,
-    ]);
-  if (includes("afterword", "final challenge", "thank you", "shameless plugs"))
-    return `“${concept}”把六个示例应用收束为独立项目：学习者要自行定义用户任务、状态所有者、外部合同、测试矩阵与发布证据，而非再照抄步骤。`;
-  if (includes("challenge", "more curious"))
-    return `“${concept}”用于推翻“${focus}”的顺利路径：先写预期，再引入一个边界输入、重建或平台差异，并用状态、日志与用户结果解释首个分叉。`;
-  return conceptVariant(concept, [
-    `“${concept}”服务于“${focus}”；解释要落到用户事件、Android所有者、状态变化、线程和可观察结果，并给出一个会推翻实现的反例。`,
-    `分析“${concept}”先冻结设备API、targetSdk和输入，再沿回调与数据流寻找首个状态分叉，不能只描述最终页面。`,
-    `验证“${concept}”只改变一个生命周期或外部条件，保存操作、原始日志、状态快照和用户可见断言。`,
-    `“${concept}”若依赖第四版时期API，应分开说明原书机制与现代平台政策，并用Android官方文档核对迁移边界。`,
-  ]);
+async function writeMdxFormatted(filePath, source) {
+  const formatted = await prettier.format(source, { filepath: filePath });
+  fs.writeFileSync(
+    filePath,
+    formatted
+      .replaceAll("{/_", "{/*")
+      .replaceAll("_/}", "*/}")
+      .replaceAll("{/\\*", "{/*")
+      .replaceAll("\\*/}", "*/}")
+      .replaceAll(
+        '`if\n  (!searchView.isIconified) {(searchView.isIconified = true)} else{" "}\n  {super.onBackPressed()}`',
+        "`if (!searchView.isIconified) { searchView.isIconified = true } else { super.onBackPressed() }`",
+      ),
+  );
 }
 
-function evidenceFor(title) {
-  if (/Room|数据库/.test(title)) return "schema、DAO查询、迁移前后行数和观察者更新";
-  if (/WorkManager/.test(title)) return "WorkRequest状态、约束切换、attempt与唯一工作队列";
-  if (/生命周期|状态/.test(title)) return "实例ID、回调轨迹、旋转与进程恢复后的状态断言";
-  if (/RecyclerView|列表/.test(title)) return "创建/绑定/回收计数、item身份与帧时间";
-  if (/HTTP|Looper|搜索/.test(title)) return "请求或消息时间线、取消、乱序与失败恢复";
-  if (/intent|Activity|拍照|broadcast/.test(title)) return "Intent合同、解析目标、权限、返回结果和重复副作用";
-  if (/Web|网页/.test(title)) return "导航来源、URL边界、历史栈、离线与TLS失败";
-  if (/触摸|动画/.test(title)) return "输入序列、模型状态、渲染边界、取消和reduced-motion终态";
-  if (/辅助|本地化|样式|布局|drawable|AppBar|对话框/.test(title))
-    return "双视口、大字体、焦点顺序、状态语义和对比度截图";
-  return "构建指纹、用户操作、状态快照、原始日志和行为断言";
+function conceptLabel(group) {
+  return String(group[0]);
 }
 
-function rewriteObjectives(source, title, focus, evidence) {
-  const objectives = `<Objectives>\n\n- 能沿“${title}”的用户事件解释Android组件、状态所有者、线程与销毁边界。\n- 能围绕“${focus}”改出一个可运行结果，并用前后状态而非组件数量验收。\n- 能在旋转、进程重建、拒权、离线或无效输入中选择适用反例，定位首个状态分叉。\n- 能用${evidence}独立重放结论，并标明第四版机制与现代targetSdk政策的边界。\n\n</Objectives>`;
-  if (/<Objectives>[\s\S]*?<\/Objectives>/.test(source))
-    return source.replace(/<Objectives>[\s\S]*?<\/Objectives>/, objectives);
-  return source.replace(/\n(import[^\n]+\n)/, `\n$1\n${objectives}\n`);
+function sampleConcepts(concepts) {
+  const indexes = [0, 0.24, 0.49, 0.74, 1].map((position) =>
+    Math.min(concepts.length - 1, Math.round((concepts.length - 1) * position)),
+  );
+  return indexes.map((index) => concepts[index]);
 }
 
-function supplementFor({ title, focus, evidence, concepts, navigation, order }) {
-  const deepDive = concepts
-    .map(
-      (concept) =>
-        `### ${concept}\n\n在“${title}”中，${explanationForConcept(concept, focus)}`,
-    )
-    .join("\n\n");
-  const synthesisExercises =
-    order === 0 || order === 33
-      ? `\n\n<Exercises>\n\n**问题 1**：怎样证明32章不是一张只有标题的目录？\n\n<Answer>逐章检查269个正式节点是否都有解释，并把每章连接到专属视觉、可操作实验和带答案练习；任何节点只出现标题都不能计入覆盖。</Answer>\n\n**问题 2**：六条项目线怎样共享状态原则而不共享通用模板？\n\n<Answer>GeoQuiz、CriminalIntent、BeatBox、PhotoGallery、NerdLauncher与DragAndDraw分别保留自己的用户结果和故障模型，只复用“所有者—事实源—线程—恢复”的分析框架。</Answer>\n\n**问题 3**：第四版代码迁移到现代targetSdk时怎样避免同时改坏多个变量？\n\n<Answer>先锁定第四版行为基线，再一次只改变组件导出、权限、存储、后台、通知或依赖之一；每步保存构建、行为、测试与回滚差异。</Answer>\n\n</Exercises>`
-      : "";
-  return `\n\n${V2_MARKER}\n\n“${title}”不使用未获授权的纸书正文；[InformIT出版信息](${INFORMIT})与[授权电子版完整目录](${OREILLY})只用于确认第四版32章、269个正式目录节点和时代语境，[第四版官方勘误](${ERRATA})用于识别工具链变更。下列中文解释、图示、交互、代码与练习均为独立教学重写，平台行为再以[Android Developers](${ANDROID_DOCS})的一手文档复核。\n\n## 为什么“${title}”必须回到可观察状态\n\n“${title}”的学习结果不是记住类名，而是能预测“${focus}”在一次输入、一次重建和一次失败中的不同状态，并指出哪条Android合同产生差异。\n\n## 第四版机制逐项深读\n\n${deepDive}\n\n## 可操作机制实验\n\n“${title}”把“${focus}”拆成三个可观察层次：先选择目录节点并确认责任边界，再改变一个生命周期或外部条件，最后回到${evidence}。点击后的文字、状态与轨迹必须同步变化，重置后回到相同基线。\n\n<Steps>\n  <Step title="1. 选择机制节点">\n    选择一个正式节点，先预测它由谁拥有、在哪个线程执行、哪些状态需要恢复；右侧会显示本章专属的机制合同。\n\n    <BnrLifecycleLab />\n\n  </Step>\n  <Step title="2. 注入一个边界条件">\n    改变生命周期阶段、外部可用性或权限中的一项，观察回调、队列、数据或渲染结果怎样变化；不要用总风险分数代替因果。\n\n    <BnrFailureLab />\n\n  </Step>\n  <Step title="3. 复位并核对证据">\n    用${evidence}核对预测，随后执行重置；若基线不能复现，实验本身不通过。\n\n    <BnrEvidenceLab />\n\n  </Step>\n</Steps>\n\n<Callout type="trap">在“${title}”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。</Callout>\n\n<Callout type="trap">“${title}”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。</Callout>\n\n## “${title}”验收回顾\n\n“${title}”只有在${evidence}能够从相同基线再次得到相同断言时才通过；第四版机制与现代平台政策分别记录，不用新API名称掩盖旧行为。${synthesisExercises}\n\n${navigation}\n\n<Attribution\n  mode="independent-rewrite"\n  sourceBasis="authorized-sample"\n  workTitle=${JSON.stringify(WORK_TITLE)}\n  adaptedUrl=${JSON.stringify(OREILLY)}\n/>\n`;
+function transitionsFor(profile) {
+  const concepts = sampleConcepts(profile.concepts);
+  const actions = ["冻结入口", "触发事件", "提交状态", "重建边界", "核对交付"];
+  return concepts.map((concept, index) => ({
+    action: `${actions[index]}：${concept}`,
+    state:
+      index === 0
+        ? `记录${profile.owner}的初始${profile.state}`
+        : index === 1
+          ? `以“${profile.event}”改变${profile.state}`
+          : index === 2
+            ? `只由${profile.owner}提交新状态`
+            : index === 3
+              ? `在销毁、取消或重建后拒绝旧所有者回调`
+              : `以“${profile.invariant}”判断通过`,
+    evidence:
+      index === 4
+        ? profile.evidence
+        : `${profile.evidence}中的“${concept}”轨迹`,
+  }));
 }
 
-function nodeText(node) {
-  if (!node || typeof node !== "object") return "";
-  if (typeof node.value === "string") return node.value;
-  if (!Array.isArray(node.children)) return "";
-  return node.children.map(nodeText).join("");
+function scenariosFor(profile) {
+  return [
+    {
+      label: "正常任务",
+      input: `固定 SDK、设备配置和初始状态，触发“${profile.event}”`,
+      expected: `由${profile.owner}提交${profile.state}，并持续满足“${profile.invariant}”`,
+    },
+    {
+      label: "边界恢复",
+      input: `保持正常输入不变，仅注入“${profile.fault}”`,
+      expected: `找到首个状态分岔，撤销后以${profile.evidence}证明同输入恢复`,
+    },
+  ];
 }
 
-function sentencesFor(source) {
-  const tree = processor.parse(matter(source).content);
-  const sentences = [];
-  visit(tree, "paragraph", (node) => {
-    const value = nodeText(node).replace(/\s+/g, " ").trim();
-    sentences.push(
-      ...value
-        .split(/(?<=[。！？.!?])\s*/u)
-        .map((sentence) => sentence.trim())
-        .filter((sentence) => sentence.length >= 70 && sentence.length <= 500),
-    );
-  });
-  return [...new Set(sentences)];
+function augmentation(profile, componentBase) {
+  return `${GENERATED_START}
+
+## 章专属可重放状态实验
+
+先预测“${profile.event}”发生后，${profile.owner}应怎样改变${profile.state}；再操作三个实验。第四版示例与当前 Android 政策分别记录，实验不把新 API 名称倒填为原书内容。
+
+### 实验一：所有者—状态—结果合同
+
+选择任一正式目录节点和正常/边界场景，检查它是否真的进入本章状态合同。目录标题只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<${componentBase}ContractLab />
+
+### 实验二：事件与生命周期轨迹
+
+沿五次转换逐步执行“${profile.event}”。每一步只允许${profile.owner}按职责提交状态，并持续核对“${profile.invariant}”。
+
+<${componentBase}LifecycleLab />
+
+### 实验三：章专属反例与同输入恢复
+
+注入“${profile.fault}”，保存第一个偏离点；撤销后以完全相同的 SDK、设备状态和用户事件重放。只有${profile.evidence}一起恢复才算修复。
+
+<${componentBase}FaultLab />
+
+${GENERATED_END}`;
 }
 
-function prefixRepeatedPlainSentences(profiles) {
-  const owners = new Map();
-  for (const profile of profiles) {
-    const raw = fs.readFileSync(path.join(ROOT, profile.relativePath), "utf8");
-    for (const sentence of sentencesFor(raw)) {
-      if (!owners.has(sentence)) owners.set(sentence, new Set());
-      owners.get(sentence).add(profile.relativePath);
+function wrapperSource(profile) {
+  const slug = path.basename(profile.path);
+  const componentBase = pascal(slug);
+  const model = {
+    unitId: profile.unitId ?? profile.role,
+    title: profile.title,
+    task: profile.task,
+    owner: profile.owner,
+    state: profile.state,
+    event: profile.event,
+    invariant: profile.invariant,
+    fault: profile.fault,
+    evidence: profile.evidence,
+    concepts: profile.concepts,
+    transitions: transitionsFor(profile),
+    scenarios: scenariosFor(profile),
+  };
+  return `"use client";
+
+import {
+  AndroidStateLab,
+  type AndroidStateModel,
+} from "./android-state-lab";
+
+const model = ${JSON.stringify(model, null, 2)} satisfies AndroidStateModel;
+
+export function ${componentBase}ContractLab() {
+  return <AndroidStateLab model={model} view="contract" />;
+}
+
+export function ${componentBase}LifecycleLab() {
+  return <AndroidStateLab model={model} view="lifecycle" />;
+}
+
+export function ${componentBase}FaultLab() {
+  return <AndroidStateLab model={model} view="fault" />;
+}
+`;
+}
+
+function replaceBookManifest(source, bookSlug, value) {
+  const marker = `    ${JSON.stringify(bookSlug)}: `;
+  const markerStart = source.indexOf(marker);
+  if (markerStart < 0) throw new Error(`manifest 缺少书籍：${bookSlug}`);
+  const objectStart = source.indexOf("{", markerStart + marker.length);
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let objectEnd = -1;
+  for (let index = objectStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}" && --depth === 0) {
+      objectEnd = index;
+      break;
     }
   }
-  const repeated = new Set(
-    [...owners.entries()]
-      .filter(([, paths]) => paths.size >= 3)
-      .map(([sentence]) => sentence),
-  );
-  for (const profile of profiles) {
-    const filePath = path.join(ROOT, profile.relativePath);
-    let raw = fs.readFileSync(filePath, "utf8");
-    for (const sentence of sentencesFor(raw)) {
-      if (!repeated.has(sentence) || !raw.includes(sentence)) continue;
-      raw = raw.replaceAll(sentence, `在“${profile.title}”的验证中，${sentence}`);
-    }
-    fs.writeFileSync(filePath, raw);
-  }
+  if (objectEnd < 0) throw new Error(`manifest 对象未闭合：${bookSlug}`);
+  const serialized = JSON.stringify(value, null, 2)
+    .split("\n")
+    .map((line, index) => (index === 0 ? line : `    ${line}`))
+    .join("\n");
+  return `${source.slice(0, objectStart)}${serialized}${source.slice(objectEnd + 1)}`;
 }
 
-const manifestRoot = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
-const manifest = manifestRoot.books[BOOK];
-if (!manifest) throw new Error(`缺少 ${BOOK} manifest`);
+const manifestSource = fs.readFileSync(MANIFEST_PATH, "utf8");
+const document = JSON.parse(manifestSource);
+const manifest = document.books?.[BOOK];
+if (!manifest) throw new Error(`缺少 fidelity manifest：${BOOK}`);
+if (manifest.units.length !== 32)
+  throw new Error(`正式单元应为 32，实际 ${manifest.units.length}`);
 const formalNodes = manifest.units.reduce(
   (sum, unit) => sum + unit.concepts.length,
   0,
 );
-if (manifest.units.length !== 32 || formalNodes !== 269)
-  throw new Error(`BNR4 manifest 分母异常：${manifest.units.length}/${formalNodes}`);
+if (formalNodes !== 269)
+  throw new Error(`正式目录节点应为 269，实际 ${formalNodes}`);
 
-const entries = walkMdx(BOOK_DIR)
-  .map((filePath) => {
-    const raw = fs.readFileSync(filePath, "utf8");
-    const parsed = matter(raw);
-    const chapterSlug = path.basename(filePath, ".mdx");
-    const unitIndex = manifest.units.findIndex(
-      (unit) =>
-        unit.id.replace(/^bnr4-\d+-/, "") === chapterSlug ||
-        unit.chapterPath?.endsWith(`/${chapterSlug}`),
-    );
-    const bookOrder = chapterSlug === "bnr4-official-learning-map"
-      ? 0
-      : chapterSlug === "bnr4-official-final-review"
-        ? 33
-        : unitIndex + 1;
-    if (bookOrder < 0 || (bookOrder === 0 && chapterSlug !== "bnr4-official-learning-map"))
-      throw new Error(`无法映射BNR4页面顺序：${filePath}`);
-    return {
-      filePath,
-      title: String(parsed.data.title ?? path.basename(filePath, ".mdx")),
-      focus: String(parsed.data.description ?? parsed.data.title).replace(/\s+/g, " "),
-      order: bookOrder,
-      sectionOrder: Number(parsed.data.order ?? 0),
-      sectionSlug: path.basename(path.dirname(filePath)),
-      chapterSlug,
-    };
-  })
-  .sort((left, right) => left.order - right.order);
+const entries = [
+  {
+    role: "learning-map",
+    path: "00-official-learning-map/bnr4-official-learning-map",
+    concepts: manifest.units.map((unit) => unit.title),
+  },
+  ...manifest.units.map((unit) => ({
+    unitId: unit.id,
+    path: unit.chapterPath,
+    concepts: unit.concepts.map(conceptLabel),
+  })),
+  {
+    role: "final-review",
+    path: "33-official-final-review/bnr4-official-final-review",
+    concepts: manifest.units.map((unit) => unit.title),
+  },
+];
 
-if (entries.length !== 34 || entries[0].order !== 0 || entries.at(-1).order !== 33)
-  throw new Error("BNR4 页面或order分母异常");
-
-const chapterByOrder = new Map(entries.map((entry) => [entry.order, entry]));
-const unitByOrder = new Map(manifest.units.map((unit, index) => [index + 1, unit]));
+fs.mkdirSync(COMPONENT_DIR, { recursive: true });
 
 for (const entry of entries) {
-  const unit = unitByOrder.get(entry.order);
-  const concepts =
-    entry.order === 0 || entry.order === 33
-      ? manifest.units.map((item) => item.title)
-      : unit.concepts.flat().map(String);
-  const previous = chapterByOrder.get(entry.order - 1);
-  const next = chapterByOrder.get(entry.order + 1);
-  const linkFor = (item) =>
-    `/learn/${BOOK}/${item.sectionSlug}/${item.chapterSlug}`;
-  const navigation = [
-    previous ? `[← 上一页：${previous.title}](${linkFor(previous)})` : null,
-    next ? `[下一页：${next.title} →](${linkFor(next)})` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const evidence = evidenceFor(entry.title);
-  const practiceMode = practiceModeFor(entry.title, entry.order);
-  let raw = fs.readFileSync(entry.filePath, "utf8");
-  const markers = [raw.indexOf(OLD_MARKER), raw.indexOf(V2_MARKER)].filter(
-    (index) => index >= 0,
+  const designKey = entry.unitId ?? entry.role;
+  const pageDesign = DESIGNS[designKey];
+  if (!pageDesign) throw new Error(`缺少页面设计：${designKey}`);
+  const profile = Object.assign(entry, pageDesign);
+  const filePath = path.join(CONTENT_DIR, `${profile.path}.mdx`);
+  if (!fs.existsSync(filePath)) throw new Error(`缺少页面：${profile.path}`);
+  const parsed = matter(fs.readFileSync(filePath, "utf8"));
+  profile.title = String(parsed.data.title);
+  const slug = path.basename(profile.path);
+  const componentBase = pascal(slug);
+  const generatedImport = `import { ${componentBase}ContractLab, ${componentBase}LifecycleLab, ${componentBase}FaultLab } from "@/components/mdx/${BOOK}/v2/${slug}";`;
+  let body = parsed.content
+    .replace(
+      /^import\s+\{\s*[A-Za-z0-9]+ContractLab,\s*[A-Za-z0-9]+LifecycleLab,\s*[A-Za-z0-9]+FaultLab,?\s*\}\s+from\s+"@\/components\/mdx\/big-nerd-ranch-guide\/v2\/[^"]+";\n*/gm,
+      "",
+    )
+    .replace(
+      /\{\/\* BNR4_VISUAL_V2_START \*\/\}[\s\S]*?\{\/\* BNR4_VISUAL_V2_END \*\/\}\n*/g,
+      "",
+    )
+    .trimStart();
+  const experiment = augmentation(profile, componentBase);
+  if (!/<Attribution[\s\S]*?\/>\s*$/.test(body)) {
+    throw new Error(`页面缺少结尾 Attribution：${profile.path}`);
+  }
+  body = body.replace(/<Attribution[\s\S]*?\/>\s*$/, `${experiment}\n\n$&`);
+  body = `${generatedImport}\n\n${body}`;
+
+  const data = {
+    ...parsed.data,
+    description: `${profile.title}：保留第四版正文机制，以所有者—状态—结果合同、事件轨迹和章专属故障完成可重放验收。`,
+    demo: true,
+    draft: false,
+    qualityVersion: 2,
+    practiceMode: "simulation",
+    sourceMode: "independent-rewrite",
+  };
+  await writeMdxFormatted(filePath, matter.stringify(body, data));
+  await writeFormatted(
+    path.join(COMPONENT_DIR, `${slug}.tsx`),
+    wrapperSource(profile),
   );
-  if (markers.length) raw = raw.slice(0, Math.min(...markers));
-  raw = raw.replace(/\n<Attribution\b[\s\S]*?\/>\s*/g, "\n").trimEnd();
-  raw = addFrontmatterFields(raw, practiceMode);
-  raw = rewriteObjectives(raw, entry.title, entry.focus, evidence);
-  raw = raw
-    .replace(/([^\n])\n<Answer>/g, "$1\n\n<Answer>")
-    .replace(/<\/Answer>\n([^\n<])/g, "</Answer>\n\n$1")
-    .replace(/(\n {4}[^\n<][^\n]*)\n( {4}<Bnr[^\n]+Lab \/>)/g, "$1\n\n$2")
-    .replace(/(\n {4}<Bnr[^\n]+Lab \/>)\n( {2}<\/Step>)/g, "$1\n\n$2");
-  raw += supplementFor({
-    ...entry,
-    evidence,
-    concepts,
-    navigation,
-  });
-  fs.writeFileSync(entry.filePath, raw);
 }
 
-const profiles = entries.map((entry) => ({
-  title: entry.title,
-  order: entry.order,
-  practiceMode: practiceModeFor(entry.title, entry.order),
-  sectionSlug: entry.sectionSlug,
-  chapterSlug: entry.chapterSlug,
-  relativePath: path.relative(ROOT, entry.filePath).replaceAll(path.sep, "/"),
-}));
-prefixRepeatedPlainSentences(profiles);
-normalizeLegacySvgText();
-
-const factSources = {
-  informit: { label: "InformIT第四版出版信息", url: INFORMIT },
-  oreilly: { label: "授权电子版完整目录与试读", url: OREILLY },
-  errata: { label: "Big Nerd Ranch第四版勘误增补", url: ERRATA },
-  android: { label: "Android Developers开发指南", url: ANDROID_DOCS },
-  activity: { label: "Android Activity生命周期", url: ACTIVITY_DOCS },
-  state: { label: "Android UI状态保存", url: STATE_DOCS },
-  fragment: { label: "Android Fragment指南", url: FRAGMENT_DOCS },
-  recycler: { label: "Android RecyclerView指南", url: RECYCLER_DOCS },
-  room: { label: "Android Room指南", url: ROOM_DOCS },
-  intent: { label: "Android Intent与过滤器", url: INTENT_DOCS },
-  accessibility: { label: "Android无障碍指南", url: ACCESSIBILITY_DOCS },
-  background: { label: "Android后台任务指南", url: BACKGROUND_DOCS },
-  work: { label: "Android WorkManager指南", url: WORK_DOCS },
-  webview: { label: "Android WebView指南", url: WEBVIEW_DOCS },
-  customView: { label: "Android自定义View指南", url: CUSTOM_VIEW_DOCS },
-  animation: { label: "Android属性动画指南", url: ANIMATION_DOCS },
+manifest.unitMappingEvidence = PROFILE_PATH.replace(`${ROOT}/`, "");
+manifest.coverage = {
+  formalUnits: 32,
+  mappedUnits: 32,
+  ratio: 1,
+  outlineNodes: formalNodes,
+  pages: entries.length,
 };
-
-manifestRoot.books[BOOK] = {
-  ...manifest,
-  version: 2,
-  sourceKind:
-    "official-publisher-metadata-authorized-ebook-toc-official-errata-and-android-primary-docs",
-  sourceUrl: INFORMIT,
-  secondarySourceUrls: Object.values(factSources).map((source) => source.url),
-  status: "verified-authorized-sample-independent-rewrite",
-  verifiedAt: "2026-07-19",
-  sourceAccess: "authorized-sample",
-  sourceMode: "independent-rewrite",
-  defaultSourceMode: "independent-rewrite",
-  disclosureNote:
-    "InformIT确认第四版作者、出版时间、页数与ISBN；O'Reilly授权电子版完整目录确认正文实际为32章、269个章及正式小节节点，官方勘误核对工具链变化。课程不复现纸书正文，按目录独立中文重写，平台事实由Android Developers一手文档复核。",
-  factSources,
-  coverage: { formalUnits: 32, outlineNodes: 269, pages: 34 },
-  units: manifest.units.map((unit, index) => {
-    const page = chapterByOrder.get(index + 1);
-    if (!page) throw new Error(`manifest单元缺页面：${unit.id}`);
-    const title = unit.title.toLowerCase();
-    const factSourceIds = ["informit", "oreilly", "errata", "android"];
-    if (/activity|state|viewmodel/.test(title)) factSourceIds.push("activity", "state");
-    if (/fragment|dialog|app bar/.test(title)) factSourceIds.push("fragment");
-    if (/recycler/.test(title)) factSourceIds.push("recycler");
-    if (/database|room/.test(title)) factSourceIds.push("room");
-    if (/intent|task|picture|broadcast/.test(title)) factSourceIds.push("intent");
-    if (/accessibility/.test(title)) factSourceIds.push("accessibility");
-    if (/http|looper|search|workmanager|background/.test(title))
-      factSourceIds.push("background");
-    if (/workmanager/.test(title)) factSourceIds.push("work");
-    if (/webview/.test(title)) factSourceIds.push("webview");
-    if (/custom view|touch/.test(title)) factSourceIds.push("customView");
-    if (/animation/.test(title)) factSourceIds.push("animation");
-    return {
-      ...unit,
-      id: page.chapterSlug,
-      sourceUnitId: unit.sourceUnitId ?? unit.id,
-      chapterPath: `${page.sectionSlug}/${page.chapterSlug}`,
-      factSourceIds: [...new Set(factSourceIds)],
-    };
-  }),
-  unitMappingEvidence: "quality/remediation-ledger.json",
-  factSourcePolicy:
-    "授权电子版完整目录限定32章与269节点，合法试读和官方勘误提供时代语境；所有Android行为结论由Android Developers一手文档和可重放实验独立核对。",
+manifest.metrics = {
+  formalUnits: 32,
+  formalNodes,
+  coursePages: entries.length,
+  interactiveViews: entries.length * 3,
 };
-
-fs.writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifestRoot, null, 2)}\n`);
+manifest.visualImplementation = {
+  viewsPerPage: 3,
+  modes: ["contract", "lifecycle", "fault"],
+  sharedComponent:
+    "src/components/mdx/big-nerd-ranch-guide/v2/android-state-lab.tsx",
+  retainedExistingVisuals: true,
+};
 fs.writeFileSync(
+  MANIFEST_PATH,
+  replaceBookManifest(manifestSource, BOOK, manifest),
+);
+await writeFormatted(
   PROFILE_PATH,
   `${JSON.stringify(
     {
       version: 2,
       bookSlug: BOOK,
-      sourceAccess: "authorized-sample",
-      sourceMode: "independent-rewrite",
-      scope: { formalUnits: 32, outlineNodes: 269, pages: 34 },
-      profiles,
+      edition: manifest.edition,
+      sourceBoundary:
+        "InformIT metadata, authorized O'Reilly ebook TOC/sample and official errata define the fourth-edition boundary; Android Developers primary documentation verifies platform behavior; independent Chinese rewrite.",
+      historicalBoundary:
+        "The fourth edition is preserved as a 2019/2020 Kotlin and Android 5.0–8.1-era course. Current targetSdk policies are migration evidence, not silently backfilled original content.",
+      coverage: manifest.coverage,
+      metrics: manifest.metrics,
+      pages: entries.map((profile) => ({
+        role: profile.role,
+        unitId: profile.unitId,
+        path: profile.path,
+        title: profile.title,
+        concepts: profile.concepts,
+        task: profile.task,
+        owner: profile.owner,
+        state: profile.state,
+        event: profile.event,
+        invariant: profile.invariant,
+        fault: profile.fault,
+        evidence: profile.evidence,
+        model: {
+          transitions: transitionsFor(profile),
+          scenarios: scenariosFor(profile),
+        },
+      })),
     },
     null,
     2,
@@ -555,10 +651,5 @@ fs.writeFileSync(
 );
 
 console.log(
-  JSON.stringify({
-    book: BOOK,
-    pages: profiles.length,
-    formalUnits: manifest.units.length,
-    outlineNodes: formalNodes,
-  }),
+  `已为 ${entries.length} 页补齐 ${formalNodes} 个目录节点的 ${entries.length * 3} 个章专属交互视图。`,
 );

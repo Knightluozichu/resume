@@ -3,7 +3,7 @@ title: Looper、Handler和HandlerThread
 type: C
 section: 后台与网络
 order: 25
-description: 深入理解 Android 消息队列机制，学会用 Handler 在任意两个线程之间传递消息，并掌握 Handler 内存泄漏的经典解法。
+description: Looper、Handler和HandlerThread：保留第四版正文机制，以所有者—状态—结果合同、事件轨迹和章专属故障完成可重放验收。
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
@@ -12,6 +12,12 @@ qualityVersion: 2
 practiceMode: simulation
 sourceMode: independent-rewrite
 ---
+
+import {
+  LooperHandlerContractLab,
+  LooperHandlerLifecycleLab,
+  LooperHandlerFaultLab,
+} from "@/components/mdx/big-nerd-ranch-guide/v2/looper-handler";
 
 import { Objectives } from "@/components/mdx/objectives";
 import { MessageLoopDiagram } from "@/components/mdx/diagrams/message-loop-diagram";
@@ -23,12 +29,13 @@ import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型（《Android 编程权威指南》第25章改编）：重心在代码对照(§6)与常见误区(§7)。
-   知识点清单：1)消息队列模型（Stepper动画掰碎）
-   2)Looper/MessageQueue/Handler三角色（图示+Stepper）
-   3)HandlerThread用法（完整代码）4)跨线程消息传递（代码对照）
-   5)Handler内存泄漏与解法（static+WeakReference，Callout trap） */}
+知识点清单：1)消息队列模型（Stepper动画掰碎）
+2)Looper/MessageQueue/Handler三角色（图示+Stepper）
+3)HandlerThread用法（完整代码）4)跨线程消息传递（代码对照）
+5)Handler内存泄漏与解法（static+WeakReference，Callout trap） */}
 
 {/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+
 <Objectives>
 
 - 能沿“Looper、Handler和HandlerThread”的用户事件解释Android组件、状态所有者、线程与销毁边界。
@@ -39,6 +46,7 @@ import { Attribution } from "@/components/mdx/attribution";
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用工厂流水线 */}
+
 ## 为什么 Android 需要一套"消息队列"？
 
 想象你是工厂的前台文员（主线程），忙得不可开交——接电话、接待客户、整理文件。每隔 30 秒还得去仓库跑一趟取货。你跑仓库的这 5 分钟里，电话没人接、客户干等着——整个前台停摆。老板让你改进：在仓库那边安排一个搬运工（后台线程），需要取货就把"取货申请单"塞进一个筐子。搬运工从筐子里一份份拿出来处理，货到了放回前台——前台照常运转，拿到货后才展示给客户。
@@ -48,6 +56,7 @@ import { Attribution } from "@/components/mdx/attribution";
 没有这套机制，Android 的多线程通信会陷入混乱——你不知道该用什么方式安全地把数据从后台传到前台。
 
 {/* 3. 概念讲解（spec §三） */}
+
 ## 消息队列三件套：Looper、MessageQueue、Handler
 
 ### 一条消息的完整生命
@@ -76,11 +85,23 @@ import { Attribution } from "@/components/mdx/attribution";
 
 每个角色各司其职：
 
-- <Term def="MessageQueue 是每个有 Looper 的线程内部的消息队列数据结构。它是一个按时间戳排序的优先队列——先到的不一定先处理，核心看时间戳。只负责存和取，不负责执行。">**MessageQueue（消息队列）**</Term>：一个按时间戳排序的优先队列。只有放消息和取消息两个操作，不负责执行。每个有 Looper 的线程自动带一个。
+- <Term def="MessageQueue 是每个有 Looper 的线程内部的消息队列数据结构。它是一个按时间戳排序的优先队列——先到的不一定先处理，核心看时间戳。只负责存和取，不负责执行。">
+    **MessageQueue（消息队列）**
+  </Term>
+  ：一个按时间戳排序的优先队列。只有放消息和取消息两个操作，不负责执行。每个有
+  Looper 的线程自动带一个。
 
-- <Term def="Looper 是一个线程的消息循环引擎。它调用 Looper.prepare() 初始化自己和 MessageQueue，然后调用 Looper.loop() 进入无限循环——不停地从 MessageQueue 取消息，分发给目标 Handler 的 handleMessage()。没有 Looper 的线程不能处理消息。">**Looper（消息泵）**</Term>：线程的消息循环引擎。`Looper.prepare()` 初始化消息队列，`Looper.loop()` 进入无限循环——不停地从消息队列里取消息，分发给目标 Handler。
+- <Term def="Looper 是一个线程的消息循环引擎。它调用 Looper.prepare() 初始化自己和 MessageQueue，然后调用 Looper.loop() 进入无限循环——不停地从 MessageQueue 取消息，分发给目标 Handler 的 handleMessage()。没有 Looper 的线程不能处理消息。">
+    **Looper（消息泵）**
+  </Term>
+  ：线程的消息循环引擎。`Looper.prepare()` 初始化消息队列，`Looper.loop()`
+  进入无限循环——不停地从消息队列里取消息，分发给目标 Handler。
 
-- <Term def="Handler 是消息发送和处理的门面。它挂载在某个线程的 Looper 上——默认是创建它的那个线程的 Looper。通过它可以往关联线程的消息队列投递 Message 或 Runnable，消息处理回调 handleMessage() 也在关联线程上执行。">**Handler（消息收发器）**</Term>：消息发送和处理的门面。你通过它往关联线程的消息队列投递消息，消息到达时 `handleMessage()` 也在那个线程执行。
+- <Term def="Handler 是消息发送和处理的门面。它挂载在某个线程的 Looper 上——默认是创建它的那个线程的 Looper。通过它可以往关联线程的消息队列投递 Message 或 Runnable，消息处理回调 handleMessage() 也在关联线程上执行。">
+    **Handler（消息收发器）**
+  </Term>
+  ：消息发送和处理的门面。你通过它往关联线程的消息队列投递消息，消息到达时
+  `handleMessage()` 也在那个线程执行。
 
 ### 主线程为什么天然支持消息队列
 
@@ -97,6 +118,7 @@ val mainHandler = Handler(Looper.getMainLooper()) { msg ->
 ```
 
 {/* 5. 交互 Demo（spec §五）：C 型用 Stepper 掰碎消息发送流程 */}
+
 ## 动手看：一条消息从"发出"到"被执行"
 
 > 猜一猜：在后台线程创建一个不加 Looper 的 Handler，会怎么样？切到最后一步看答案。
@@ -130,6 +152,7 @@ val mainHandler = Handler(Looper.getMainLooper()) { msg ->
     }
     ```
     `sendMessage()` 投递 Message，`post()` 投递 Runnable。两者最终都会被 `Looper.loop()` 取出并在后台线程执行。
+
   </Step>
   <Step title="④ 销毁消息循环">
     ```kotlin
@@ -151,6 +174,7 @@ val mainHandler = Handler(Looper.getMainLooper()) { msg ->
 </Stepper>
 
 {/* 6. 代码对照（spec §六，C 型重心） */}
+
 ## 代码逐段拆解：跨线程通信的完整案例
 
 ### 场景：后台下载图片，主线程显示
@@ -201,11 +225,13 @@ class DownloadActivity : AppCompatActivity() {
 ```
 
 这段代码展示了经典的"双 Handler 模式"：
+
 - `downloadHandler` 挂载在 HandlerThread，负责后台下载
 - `mainHandler` 挂载在主线程，负责 UI 更新
 - 两个 Handler 通过消息投递完成线程切换——这就是 Android 多线程通信的基本范式
 
 {/* 7. 常见误区（spec §七，C 型 ≥3） */}
+
 ## 容易踩的坑
 
 <Callout type="trap">
@@ -216,17 +242,26 @@ class DownloadActivity : AppCompatActivity() {
 
 <Callout type="trap">
   **现象**：HandlerThread 忘了 `quit()`，App 退出后进程仍然存活。
-  **原因**：HandlerThread 的 `Looper.loop()` 是无限循环。Thread 的 `run()` 方法永远不会返回，即使 Activity 已经 `onDestroy()`。这个线程会一直占据内存直到进程被系统杀掉。
-  **修法**：在 `onDestroy()` 或合适的生命周期回调中调用 `handlerThread.quitSafely()`。`quitSafely()` 跟 `quit()` 的区别：前者会等待队列中已存在的消息全部处理完再退出，后者直接丢弃所有待处理消息立即退出。
+  **原因**：HandlerThread 的 `Looper.loop()` 是无限循环。Thread 的 `run()`
+  方法永远不会返回，即使 Activity 已经
+  `onDestroy()`。这个线程会一直占据内存直到进程被系统杀掉。 **修法**：在
+  `onDestroy()` 或合适的生命周期回调中调用
+  `handlerThread.quitSafely()`。`quitSafely()` 跟 `quit()`
+  的区别：前者会等待队列中已存在的消息全部处理完再退出，后者直接丢弃所有待处理消息立即退出。
 </Callout>
 
 <Callout type="trap">
   **现象**：在 `handleMessage()` 里做了耗时操作，发现后续消息都被卡住了。
-  **原因**：Looper 是单线程循环——同一时刻只处理一条消息。如果你在 `handleMessage()` 里睡 5 秒，那这 5 秒内队列里其他消息全在排队等待，包括主线程的 UI 绘制消息——界面直接卡死（老版 ANR ）。
-  **修法**：`handleMessage()` 必须快速返回（&lt;16ms 最佳）。耗时任务应该投递到自己内部再起子线程处理，或使用 `WorkManager`（第 27 章）。不要把 Handler 的"线程切换"和"任务并行" 搞混了。
+  **原因**：Looper 是单线程循环——同一时刻只处理一条消息。如果你在
+  `handleMessage()` 里睡 5 秒，那这 5
+  秒内队列里其他消息全在排队等待，包括主线程的 UI 绘制消息——界面直接卡死（老版
+  ANR ）。 **修法**：`handleMessage()` 必须快速返回（&lt;16ms
+  最佳）。耗时任务应该投递到自己内部再起子线程处理，或使用 `WorkManager`（第 27
+  章）。不要把 Handler 的"线程切换"和"任务并行" 搞混了。
 </Callout>
 
 {/* 8. 小结与练习（spec §八） */}
+
 ## 小结
 
 - Android 消息队列三件套：`Looper`（无限循环取消息）、`MessageQueue`（按时间排序存消息）、`Handler`（发送 + 处理消息）
@@ -239,46 +274,70 @@ class DownloadActivity : AppCompatActivity() {
 
 **问题 1**：“第25章 Loopers, Handlers, and HandlerThread”覆盖哪些正式节点和项目主线？
 
-<Answer>覆盖13个节点，从“25. Loopers, Handlers, and HandlerThread”到“Challenge: Preloading and Caching”。主线是用MessageQueue、Looper、Handler和HandlerThread解释跨线程调度，并把下载器绑定到View生命周期，交付物是缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告。</Answer>
+<Answer>
+  覆盖13个节点，从“25. Loopers, Handlers, and HandlerThread”到“Challenge:
+  Preloading and
+  Caching”。主线是用MessageQueue、Looper、Handler和HandlerThread解释跨线程调度，并把下载器绑定到View生命周期，交付物是缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告。
+</Answer>
 
 **问题 2**：怎样建立本页最小可执行实验？
 
-<Answer>在“Looper、Handler和HandlerThread”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+<Answer>
+  在“Looper、Handler和HandlerThread”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。
+</Answer>
 
 **问题 3**：为什么只在正常点击路径运行不能证明完成？
 
-<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告核对。</Answer>
+<Answer>
+  它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告核对。
+</Answer>
 
 **问题 4**：怎样设计能推翻当前实现的反例？
 
-<Answer>在“Looper、Handler和HandlerThread”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+<Answer>
+  在“Looper、Handler和HandlerThread”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。
+</Answer>
 
 **问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
 
-<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+<Answer>
+  先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。
+</Answer>
 
 **问题 6**：本页达到独立交接标准需要什么？
 
-<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告重放。</Answer>
+<Answer>
+  需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭缩略图下载状态机、消息轨迹、取消与缓存测试、StrictMode报告重放。
+</Answer>
 
 </Exercises>
 
 {/* 10. 名词解释（spec §十） */}
+
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="MessageQueue（消息队列）">
-  每个有 Looper 的线程内部的消息存储结构。它是一个按时间戳排序的优先队列——一条消息什么时候该被执行，取决于它的 `when` 字段。只负责存和取，不负责执行。详见本章"消息队列三件套"一节。
-</GlossaryItem>
-<GlossaryItem term="Looper（消息泵）">
-  线程的消息循环引擎。`Looper.prepare()` 创建 MessageQueue 并绑定当前线程，`Looper.loop()` 进入无限循环——不停从队列取消息，交给目标 Handler 处理。主线程的 Looper 由系统创建且永不退出。详见本章"消息队列三件套"一节。
-</GlossaryItem>
-<GlossaryItem term="Handler（消息收发器）">
-  挂载在某个线程 Looper 上的消息发送和处理器。`sendMessage()` 往关联线程的消息队列投 Message，`handleMessage()` 在关联线程上执行。一个线程可以有多个 Handler。详见本章"消息队列三件套"一节。
-</GlossaryItem>
-<GlossaryItem term="HandlerThread">
-  Android 封装好的自带 Looper + MessageQueue 的后台线程。不用手动 `Looper.prepare()` / `Looper.loop()`——`start()` 即进入消息循环。适合需要串行排队执行的后台任务。详见本章"HandlerThread"一节。
-</GlossaryItem>
+  <GlossaryItem term="MessageQueue（消息队列）">
+    每个有 Looper
+    的线程内部的消息存储结构。它是一个按时间戳排序的优先队列——一条消息什么时候该被执行，取决于它的
+    `when` 字段。只负责存和取，不负责执行。详见本章"消息队列三件套"一节。
+  </GlossaryItem>
+  <GlossaryItem term="Looper（消息泵）">
+    线程的消息循环引擎。`Looper.prepare()` 创建 MessageQueue
+    并绑定当前线程，`Looper.loop()` 进入无限循环——不停从队列取消息，交给目标
+    Handler 处理。主线程的 Looper
+    由系统创建且永不退出。详见本章"消息队列三件套"一节。
+  </GlossaryItem>
+  <GlossaryItem term="Handler（消息收发器）">
+    挂载在某个线程 Looper 上的消息发送和处理器。`sendMessage()`
+    往关联线程的消息队列投 Message，`handleMessage()`
+    在关联线程上执行。一个线程可以有多个 Handler。详见本章"消息队列三件套"一节。
+  </GlossaryItem>
+  <GlossaryItem term="HandlerThread">
+    Android 封装好的自带 Looper + MessageQueue 的后台线程。不用手动
+    `Looper.prepare()` / `Looper.loop()`——`start()`
+    即进入消息循环。适合需要串行排队执行的后台任务。详见本章"HandlerThread"一节。
+  </GlossaryItem>
 </Glossary>
 
 {/* BNR4_QUALITY_V2 */}
@@ -343,15 +402,45 @@ class DownloadActivity : AppCompatActivity() {
 
 在“Looper、Handler和HandlerThread”中，验证“Challenge: Preloading and Caching”用快速滚动、旋转和重复请求制造乱序，确认旧任务被取消、缓存键正确且主线程无磁盘网络。
 
-<Callout type="trap">在“Looper、Handler和HandlerThread”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。</Callout>
+<Callout type="trap">
+  在“Looper、Handler和HandlerThread”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。
+</Callout>
 
-<Callout type="trap">“Looper、Handler和HandlerThread”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。</Callout>
+<Callout type="trap">
+  “Looper、Handler和HandlerThread”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。
+</Callout>
 
 ## “Looper、Handler和HandlerThread”验收回顾
 
 “Looper、Handler和HandlerThread”只有在请求或消息时间线、取消、乱序与失败恢复能够从相同基线再次得到相同断言时才通过；第四版机制与现代平台政策分别记录，不用新API名称掩盖旧行为。
 
 [← 上一页：HTTP与后台任务](/learn/big-nerd-ranch-guide/background-network/http-background) · [下一页：搜索 →](/learn/big-nerd-ranch-guide/background-network/search)
+
+{/* BNR4_VISUAL_V2_START */}
+
+## 章专属可重放状态实验
+
+先预测“入队、后台下载、主线程回传、滚动复用与 View 销毁”发生后，ThumbnailDownloader、工作 Looper 与 viewLifecycleOwner应怎样改变请求队列、token、目标 holder、bitmap 和取消状态；再操作三个实验。第四版示例与当前 Android 政策分别记录，实验不把新 API 名称倒填为原书内容。
+
+### 实验一：所有者—状态—结果合同
+
+选择任一正式目录节点和正常/边界场景，检查它是否真的进入本章状态合同。目录标题只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<LooperHandlerContractLab />
+
+### 实验二：事件与生命周期轨迹
+
+沿五次转换逐步执行“入队、后台下载、主线程回传、滚动复用与 View 销毁”。每一步只允许ThumbnailDownloader、工作 Looper 与 viewLifecycleOwner按职责提交状态，并持续核对“回调只更新仍绑定同一请求的可见 View，销毁后队列可取消”。
+
+<LooperHandlerLifecycleLab />
+
+### 实验三：章专属反例与同输入恢复
+
+注入“Holder 已复用给新 URL，旧下载回调把错误图片写入当前行”，保存第一个偏离点；撤销后以完全相同的 SDK、设备状态和用户事件重放。只有post/execute 线程、token、URL、holder ID、取消与绑定日志一起恢复才算修复。
+
+<LooperHandlerFaultLab />
+
+{/* BNR4_VISUAL_V2_END */}
 
 <Attribution
   mode="independent-rewrite"

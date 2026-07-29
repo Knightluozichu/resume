@@ -3,15 +3,21 @@ title: 音频播放与单元测试
 type: C
 section: Intent与数据
 order: 20
-description: 掌握 MediaPlayer 音频播放和 JUnit 单元测试——用 Mockito 隔离依赖，写出可测试的代码。
+description: 音频播放与单元测试：保留第四版正文机制，以所有者—状态—结果合同、事件轨迹和章专属故障完成可重放验收。
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
 draft: false
 qualityVersion: 2
-practiceMode: code
+practiceMode: simulation
 sourceMode: independent-rewrite
 ---
+
+import {
+  AudioUnitTestingContractLab,
+  AudioUnitTestingLifecycleLab,
+  AudioUnitTestingFaultLab,
+} from "@/components/mdx/big-nerd-ranch-guide/v2/audio-unit-testing";
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Step, Stepper } from "@/components/mdx/stepper";
@@ -22,13 +28,14 @@ import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
 
 {/* 知识点清单：
-   1) MediaPlayer 生命周期 = 代码
-   2) SoundPool 短音效 = 对比
-   3) JUnit @Test/@Before = 代码
-   4) Mockito mock = 代码
-   5) release 防泄漏 = Callout
-   6) Room 内存库测 DAO = Callout
-*/}
+
+1.  MediaPlayer 生命周期 = 代码
+2.  SoundPool 短音效 = 对比
+3.  JUnit @Test/@Before = 代码
+4.  Mockito mock = 代码
+5.  release 防泄漏 = Callout
+6.  Room 内存库测 DAO = Callout
+    */}
 
 <Objectives>
 
@@ -81,19 +88,31 @@ SoundPool 预加载音频到内存，低延迟播放短音效——MediaPlayer �
 
 <Stepper>
   <Step title="① create">
-    `MediaPlayer.create(context, resId)` 是最简捷的创建方式——内部已调用 `setDataSource` + `prepare()`，创建后即可 `start()`。这也意味着它在 `create()` 阶段就可能因为资源不存在或格式不支持而抛异常。
+    `MediaPlayer.create(context, resId)` 是最简捷的创建方式——内部已调用
+    `setDataSource` + `prepare()`，创建后即可 `start()`。这也意味着它在
+    `create()` 阶段就可能因为资源不存在或格式不支持而抛异常。
   </Step>
   <Step title="② setDataSource + prepare">
-    如果不用 `create()`，则手动 `setDataSource(path)` 指定音频来源（本地文件/网络 URI），然后调用 `prepare()`（同步，阻塞当前线程）或 `prepareAsync()`（异步，推荐）。异步准备完毕后通过 `OnPreparedListener` 回调通知。
+    如果不用 `create()`，则手动 `setDataSource(path)`
+    指定音频来源（本地文件/网络 URI），然后调用
+    `prepare()`（同步，阻塞当前线程）或
+    `prepareAsync()`（异步，推荐）。异步准备完毕后通过 `OnPreparedListener`
+    回调通知。
   </Step>
   <Step title="③ start">
-    调用 `start()` 开始播放。播放完成后触发 `OnCompletionListener`——在此回调中决定是循环播放（`seekTo(0)` + `start()`）还是释放资源（`release()`）。
+    调用 `start()` 开始播放。播放完成后触发
+    `OnCompletionListener`——在此回调中决定是循环播放（`seekTo(0)` +
+    `start()`）还是释放资源（`release()`）。
   </Step>
   <Step title="④ pause / stop">
-    `pause()` 暂停播放，之后可以 `start()` 从暂停位置恢复。`stop()` 停止并重置到 Idle 状态——之后若想再播必须重新 `prepare()`。用 `isPlaying()` 检查当前到底在播还是暂停。
+    `pause()` 暂停播放，之后可以 `start()` 从暂停位置恢复。`stop()` 停止并重置到
+    Idle 状态——之后若想再播必须重新 `prepare()`。用 `isPlaying()`
+    检查当前到底在播还是暂停。
   </Step>
   <Step title="⑤ release">
-    调用 `release()` 彻底释放 MediaPlayer 持有的系统音频资源。**活动 onStop/onDestroy 中必须调用**——不释放会导致 AudioFlinger 资源泄漏，其他 App 可能无声音。每次 `create()` 新实例前也应先 `release()` 旧实例。
+    调用 `release()` 彻底释放 MediaPlayer 持有的系统音频资源。**活动
+    onStop/onDestroy 中必须调用**——不释放会导致 AudioFlinger 资源泄漏，其他 App
+    可能无声音。每次 `create()` 新实例前也应先 `release()` 旧实例。
   </Step>
 </Stepper>
 
@@ -149,15 +168,22 @@ Mockito 的 `mock()` 创建一个假对象，`when().thenReturn()` 控制它返�
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：MediaPlayer 播完一首歌再播下一首——无声或崩溃。**原因**：没有先 `release()` 旧的 MediaPlayer 就创建新的——系统音频资源耗尽。**修法**：每次 play 前先 `release()` 确保旧实例被清理。
+  **现象**：MediaPlayer 播完一首歌再播下一首——无声或崩溃。**原因**：没有先
+  `release()` 旧的 MediaPlayer 就创建新的——系统音频资源耗尽。**修法**：每次 play
+  前先 `release()` 确保旧实例被清理。
 </Callout>
 
 <Callout type="trap">
-  **现象**：测试跑到 Room DAO 那一层要 5 秒——因为真的在写数据库。**原因**：单元测试应该隔离数据库依赖。**修法**：Room DAO 的测试用 `Room.inMemoryDatabaseBuilder`（内存数据库），或直接 mock DAO 接口。
+  **现象**：测试跑到 Room DAO 那一层要 5
+  秒——因为真的在写数据库。**原因**：单元测试应该隔离数据库依赖。**修法**：Room
+  DAO 的测试用 `Room.inMemoryDatabaseBuilder`（内存数据库），或直接 mock DAO
+  接口。
 </Callout>
 
 <Callout type="trap">
-  **现象**：MediaPlayer 在 Activity destroy 后仍占音频焦点。**原因**：未在 onStop/onDestroy 调用 release()。**修法**：生命周期绑定点释放，或改用 ExoPlayer/Media3 更好管理。
+  **现象**：MediaPlayer 在 Activity destroy 后仍占音频焦点。**原因**：未在
+  onStop/onDestroy 调用 release()。**修法**：生命周期绑定点释放，或改用
+  ExoPlayer/Media3 更好管理。
 </Callout>
 
 ## 小结
@@ -172,38 +198,54 @@ Mockito 的 `mock()` 创建一个假对象，`when().thenReturn()` 控制它返�
 
 **问题 1**：“第20章 Unit Testing and Audio Playback”覆盖哪些正式节点和项目主线？
 
-<Answer>覆盖15个节点，从“20. Unit Testing and Audio Playback”到“Challenge: Play Sound Across Rotation”。主线是以SoundPool加载/播放/释放生命周期为被测边界，用测试替身核对对象交互和旋转行为，交付物是音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据。</Answer>
+<Answer>
+  覆盖15个节点，从“20. Unit Testing and Audio Playback”到“Challenge: Play Sound
+  Across
+  Rotation”。主线是以SoundPool加载/播放/释放生命周期为被测边界，用测试替身核对对象交互和旋转行为，交付物是音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据。
+</Answer>
 
 **问题 2**：怎样建立本页最小可执行实验？
 
-<Answer>在“音频播放与单元测试”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+<Answer>
+  在“音频播放与单元测试”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。
+</Answer>
 
 **问题 3**：为什么只在正常点击路径运行不能证明完成？
 
-<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据核对。</Answer>
+<Answer>
+  它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据核对。
+</Answer>
 
 **问题 4**：怎样设计能推翻当前实现的反例？
 
-<Answer>在“音频播放与单元测试”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+<Answer>
+  在“音频播放与单元测试”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。
+</Answer>
 
 **问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
 
-<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+<Answer>
+  先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。
+</Answer>
 
 **问题 6**：本页达到独立交接标准需要什么？
 
-<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据重放。</Answer>
+<Answer>
+  需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭音频资源清单、SoundPool状态机、单元测试、mock交互与资源释放证据重放。
+</Answer>
 
 </Exercises>
 
 <Glossary>
 
 <GlossaryItem term="SoundPool">
-  短音效播放器——预加载音频到内存，低延迟播放（&lt;10ms）。适合按钮点击声、通知铃声、游戏音效。不适合长音频（音乐用 MediaPlayer）。
+  短音效播放器——预加载音频到内存，低延迟播放（&lt;10ms）。适合按钮点击声、通知铃声、游戏音效。不适合长音频（音乐用
+  MediaPlayer）。
 </GlossaryItem>
 
 <GlossaryItem term="Mockito">
-  Java/Kotlin 的 mock 测试框架。`mock()` 创建假对象，`when().thenReturn()` 控制行为，`verify()` 验证方法是否被调用。隔离依赖、专注测试被测代码。
+  Java/Kotlin 的 mock 测试框架。`mock()` 创建假对象，`when().thenReturn()`
+  控制行为，`verify()` 验证方法是否被调用。隔离依赖、专注测试被测代码。
 </GlossaryItem>
 
 </Glossary>
@@ -278,15 +320,45 @@ Mockito 的 `mock()` 创建一个假对象，`when().thenReturn()` 控制它返�
 
 在“音频播放与单元测试”中，“Challenge: Play Sound Across Rotation”用于推翻“掌握 MediaPlayer 音频播放和 JUnit 单元测试——用 Mockito 隔离依赖，写出可测试的代码。”的顺利路径：先写预期，再引入一个边界输入、重建或平台差异，并用状态、日志与用户结果解释首个分叉。
 
-<Callout type="trap">在“音频播放与单元测试”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。</Callout>
+<Callout type="trap">
+  在“音频播放与单元测试”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。
+</Callout>
 
-<Callout type="trap">“音频播放与单元测试”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。</Callout>
+<Callout type="trap">
+  “音频播放与单元测试”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。
+</Callout>
 
 ## “音频播放与单元测试”验收回顾
 
 “音频播放与单元测试”只有在构建指纹、用户操作、状态快照、原始日志和行为断言能够从相同基线再次得到相同断言时才通过；第四版机制与现代平台政策分别记录，不用新API名称掩盖旧行为。
 
 [← 上一页：数据绑定与MVVM](/learn/big-nerd-ranch-guide/intent-data/data-binding-mvvm) · [下一页：样式与主题 →](/learn/big-nerd-ranch-guide/intent-data/styles-themes)
+
+{/* BNR4_VISUAL_V2_START */}
+
+## 章专属可重放状态实验
+
+先预测“加载资产、点击播放、旋转、重复点击与退出”发生后，BeatBox、SoundPool 与测试替身应怎样改变sound ID、加载完成、播放请求、生命周期和释放状态；再操作三个实验。第四版示例与当前 Android 政策分别记录，实验不把新 API 名称倒填为原书内容。
+
+### 实验一：所有者—状态—结果合同
+
+选择任一正式目录节点和正常/边界场景，检查它是否真的进入本章状态合同。目录标题只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<AudioUnitTestingContractLab />
+
+### 实验二：事件与生命周期轨迹
+
+沿五次转换逐步执行“加载资产、点击播放、旋转、重复点击与退出”。每一步只允许BeatBox、SoundPool 与测试替身按职责提交状态，并持续核对“未加载完成不播放，释放后不再接收回调，同一事件不重复发声”。
+
+<AudioUnitTestingLifecycleLab />
+
+### 实验三：章专属反例与同输入恢复
+
+注入“旋转后两个 SoundPool 同时存活，同一次点击播放两遍”，保存第一个偏离点；撤销后以完全相同的 SDK、设备状态和用户事件重放。只有单元测试、load 回调、stream ID、实例计数和释放日志一起恢复才算修复。
+
+<AudioUnitTestingFaultLab />
+
+{/* BNR4_VISUAL_V2_END */}
 
 <Attribution
   mode="independent-rewrite"

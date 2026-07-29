@@ -2990,6 +2990,320 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       TextureHolderFaultLab: module0.TextureHolderFaultLab,
     } as ChapterMdxComponents;
   },
+  "big-nerd-ranch-guide/00-official-learning-map/bnr4-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/big-nerd-ranch-guide/v2/bnr4-official-learning-map");
+      return {
+        Bnr4OfficialLearningMapContractLab:
+          module0.Bnr4OfficialLearningMapContractLab,
+        Bnr4OfficialLearningMapLifecycleLab:
+          module0.Bnr4OfficialLearningMapLifecycleLab,
+        Bnr4OfficialLearningMapFaultLab:
+          module0.Bnr4OfficialLearningMapFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "big-nerd-ranch-guide/33-official-final-review/bnr4-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/big-nerd-ranch-guide/v2/bnr4-official-final-review");
+      return {
+        Bnr4OfficialFinalReviewContractLab:
+          module0.Bnr4OfficialFinalReviewContractLab,
+        Bnr4OfficialFinalReviewLifecycleLab:
+          module0.Bnr4OfficialFinalReviewLifecycleLab,
+        Bnr4OfficialFinalReviewFaultLab:
+          module0.Bnr4OfficialFinalReviewFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "big-nerd-ranch-guide/advanced-ui-animation/afterword": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/afterword");
+    return {
+      AfterwordContractLab: module0.AfterwordContractLab,
+      AfterwordLifecycleLab: module0.AfterwordLifecycleLab,
+      AfterwordFaultLab: module0.AfterwordFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/advanced-ui-animation/custom-views-touch": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/custom-views-touch");
+    return {
+      CustomViewsTouchContractLab: module0.CustomViewsTouchContractLab,
+      CustomViewsTouchLifecycleLab: module0.CustomViewsTouchLifecycleLab,
+      CustomViewsTouchFaultLab: module0.CustomViewsTouchFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/advanced-ui-animation/property-animation": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/property-animation");
+    return {
+      PropertyAnimationContractLab: module0.PropertyAnimationContractLab,
+      PropertyAnimationLifecycleLab: module0.PropertyAnimationLifecycleLab,
+      PropertyAnimationFaultLab: module0.PropertyAnimationFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/advanced-ui-animation/webview": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/webview");
+    return {
+      WebviewContractLab: module0.WebviewContractLab,
+      WebviewLifecycleLab: module0.WebviewLifecycleLab,
+      WebviewFaultLab: module0.WebviewFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/broadcast-intents": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/broadcast-intents");
+    return {
+      BroadcastIntentsContractLab: module0.BroadcastIntentsContractLab,
+      BroadcastIntentsLifecycleLab: module0.BroadcastIntentsLifecycleLab,
+      BroadcastIntentsFaultLab: module0.BroadcastIntentsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/http-background": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/http-background");
+    return {
+      HttpBackgroundContractLab: module0.HttpBackgroundContractLab,
+      HttpBackgroundLifecycleLab: module0.HttpBackgroundLifecycleLab,
+      HttpBackgroundFaultLab: module0.HttpBackgroundFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/looper-handler": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/looper-handler");
+    return {
+      LooperHandlerContractLab: module0.LooperHandlerContractLab,
+      LooperHandlerLifecycleLab: module0.LooperHandlerLifecycleLab,
+      LooperHandlerFaultLab: module0.LooperHandlerFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/more-intents-tasks": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/more-intents-tasks");
+    return {
+      MoreIntentsTasksContractLab: module0.MoreIntentsTasksContractLab,
+      MoreIntentsTasksLifecycleLab: module0.MoreIntentsTasksLifecycleLab,
+      MoreIntentsTasksFaultLab: module0.MoreIntentsTasksFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/search": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/search");
+    return {
+      SearchContractLab: module0.SearchContractLab,
+      SearchLifecycleLab: module0.SearchLifecycleLab,
+      SearchFaultLab: module0.SearchFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/background-network/workmanager": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/workmanager");
+    return {
+      WorkmanagerContractLab: module0.WorkmanagerContractLab,
+      WorkmanagerLifecycleLab: module0.WorkmanagerLifecycleLab,
+      WorkmanagerFaultLab: module0.WorkmanagerFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/activity-lifecycle": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/activity-lifecycle");
+    return {
+      ActivityLifecycleContractLab: module0.ActivityLifecycleContractLab,
+      ActivityLifecycleLifecycleLab: module0.ActivityLifecycleLifecycleLab,
+      ActivityLifecycleFaultLab: module0.ActivityLifecycleFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/android-mvc": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/android-mvc");
+    return {
+      AndroidMvcContractLab: module0.AndroidMvcContractLab,
+      AndroidMvcLifecycleLab: module0.AndroidMvcLifecycleLab,
+      AndroidMvcFaultLab: module0.AndroidMvcFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/debugging");
+    return {
+      DebuggingContractLab: module0.DebuggingContractLab,
+      DebuggingLifecycleLab: module0.DebuggingLifecycleLab,
+      DebuggingFaultLab: module0.DebuggingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/first-app": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/first-app");
+    return {
+      FirstAppContractLab: module0.FirstAppContractLab,
+      FirstAppLifecycleLab: module0.FirstAppLifecycleLab,
+      FirstAppFaultLab: module0.FirstAppFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/sdk-compatibility": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/sdk-compatibility");
+    return {
+      SdkCompatibilityContractLab: module0.SdkCompatibilityContractLab,
+      SdkCompatibilityLifecycleLab: module0.SdkCompatibilityLifecycleLab,
+      SdkCompatibilityFaultLab: module0.SdkCompatibilityFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/second-activity": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/second-activity");
+    return {
+      SecondActivityContractLab: module0.SecondActivityContractLab,
+      SecondActivityLifecycleLab: module0.SecondActivityLifecycleLab,
+      SecondActivityFaultLab: module0.SecondActivityFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/basics/ui-state-persistence": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/ui-state-persistence");
+    return {
+      UiStatePersistenceContractLab: module0.UiStatePersistenceContractLab,
+      UiStatePersistenceLifecycleLab: module0.UiStatePersistenceLifecycleLab,
+      UiStatePersistenceFaultLab: module0.UiStatePersistenceFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/accessibility": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/accessibility");
+    return {
+      AccessibilityContractLab: module0.AccessibilityContractLab,
+      AccessibilityLifecycleLab: module0.AccessibilityLifecycleLab,
+      AccessibilityFaultLab: module0.AccessibilityFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/audio-unit-testing": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/audio-unit-testing");
+    return {
+      AudioUnitTestingContractLab: module0.AudioUnitTestingContractLab,
+      AudioUnitTestingLifecycleLab: module0.AudioUnitTestingLifecycleLab,
+      AudioUnitTestingFaultLab: module0.AudioUnitTestingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/data-binding-mvvm": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/data-binding-mvvm");
+    return {
+      DataBindingMvvmContractLab: module0.DataBindingMvvmContractLab,
+      DataBindingMvvmLifecycleLab: module0.DataBindingMvvmLifecycleLab,
+      DataBindingMvvmFaultLab: module0.DataBindingMvvmFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/implicit-intents": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/implicit-intents");
+    return {
+      ImplicitIntentsContractLab: module0.ImplicitIntentsContractLab,
+      ImplicitIntentsLifecycleLab: module0.ImplicitIntentsLifecycleLab,
+      ImplicitIntentsFaultLab: module0.ImplicitIntentsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/localization": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/localization");
+    return {
+      LocalizationContractLab: module0.LocalizationContractLab,
+      LocalizationLifecycleLab: module0.LocalizationLifecycleLab,
+      LocalizationFaultLab: module0.LocalizationFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/styles-themes": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/styles-themes");
+    return {
+      StylesThemesContractLab: module0.StylesThemesContractLab,
+      StylesThemesLifecycleLab: module0.StylesThemesLifecycleLab,
+      StylesThemesFaultLab: module0.StylesThemesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/taking-pictures": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/taking-pictures");
+    return {
+      TakingPicturesContractLab: module0.TakingPicturesContractLab,
+      TakingPicturesLifecycleLab: module0.TakingPicturesLifecycleLab,
+      TakingPicturesFaultLab: module0.TakingPicturesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/intent-data/xml-drawables": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/xml-drawables");
+    return {
+      XmlDrawablesContractLab: module0.XmlDrawablesContractLab,
+      XmlDrawablesLifecycleLab: module0.XmlDrawablesLifecycleLab,
+      XmlDrawablesFaultLab: module0.XmlDrawablesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/app-bar": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/app-bar");
+    return {
+      AppBarContractLab: module0.AppBarContractLab,
+      AppBarLifecycleLab: module0.AppBarLifecycleLab,
+      AppBarFaultLab: module0.AppBarFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/dialogs": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/dialogs");
+    return {
+      DialogsContractLab: module0.DialogsContractLab,
+      DialogsLifecycleLab: module0.DialogsLifecycleLab,
+      DialogsFaultLab: module0.DialogsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/fragment-navigation": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/fragment-navigation");
+    return {
+      FragmentNavigationContractLab: module0.FragmentNavigationContractLab,
+      FragmentNavigationLifecycleLab: module0.FragmentNavigationLifecycleLab,
+      FragmentNavigationFaultLab: module0.FragmentNavigationFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/layouts-widgets": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/layouts-widgets");
+    return {
+      LayoutsWidgetsContractLab: module0.LayoutsWidgetsContractLab,
+      LayoutsWidgetsLifecycleLab: module0.LayoutsWidgetsLifecycleLab,
+      LayoutsWidgetsFaultLab: module0.LayoutsWidgetsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/recyclerview": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/recyclerview");
+    return {
+      RecyclerviewContractLab: module0.RecyclerviewContractLab,
+      RecyclerviewLifecycleLab: module0.RecyclerviewLifecycleLab,
+      RecyclerviewFaultLab: module0.RecyclerviewFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/room-database": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/room-database");
+    return {
+      RoomDatabaseContractLab: module0.RoomDatabaseContractLab,
+      RoomDatabaseLifecycleLab: module0.RoomDatabaseLifecycleLab,
+      RoomDatabaseFaultLab: module0.RoomDatabaseFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "big-nerd-ranch-guide/ui-fragment/ui-fragments": async () => {
+    const module0 =
+      await import("@/components/mdx/big-nerd-ranch-guide/v2/ui-fragments");
+    return {
+      UiFragmentsContractLab: module0.UiFragmentsContractLab,
+      UiFragmentsLifecycleLab: module0.UiFragmentsLifecycleLab,
+      UiFragmentsFaultLab: module0.UiFragmentsFaultLab,
+    } as ChapterMdxComponents;
+  },
   "c-primer-plus/c-advanced/advanced-data": async () => {
     const module0 =
       await import("@/components/mdx/c-primer-plus/advanced-data");

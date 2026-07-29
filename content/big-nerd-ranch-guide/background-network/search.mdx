@@ -3,15 +3,21 @@ title: 搜索
 type: C
 section: 后台与网络
 order: 26
-description: 在 App 中添加搜索功能：使用 SearchView 控件、搜索建议提供器和 SharedPreferences 持久化搜索历史。
+description: 搜索：保留第四版正文机制，以所有者—状态—结果合同、事件轨迹和章专属故障完成可重放验收。
 demo: true
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
 draft: false
 qualityVersion: 2
-practiceMode: code
+practiceMode: simulation
 sourceMode: independent-rewrite
 ---
+
+import {
+  SearchContractLab,
+  SearchLifecycleLab,
+  SearchFaultLab,
+} from "@/components/mdx/big-nerd-ranch-guide/v2/search";
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
@@ -23,11 +29,11 @@ import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
 
 {/* C 实战型（《Android 编程权威指南》第26章改编）：重心在代码对照(§6)与常见误区(§7)。
-   知识点清单：1)SearchView控件（XML+代码配置）2)searchable.xml配置
-   3)搜索查询处理（onQueryTextSubmit）4)搜索建议（ContentProvider/SearchRecentSuggestionsProvider）
-   5)SharedPreferences存储搜索历史（代码） */}
+知识点清单：1)SearchView控件（XML+代码配置）2)searchable.xml配置3)搜索查询处理（onQueryTextSubmit）4)搜索建议（ContentProvider/SearchRecentSuggestionsProvider）
+5)SharedPreferences存储搜索历史（代码） */}
 
 {/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+
 <Objectives>
 
 - 能沿“搜索”的用户事件解释Android组件、状态所有者、线程与销毁边界。
@@ -38,6 +44,7 @@ import { Attribution } from "@/components/mdx/attribution";
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语 */}
+
 ## 为什么搜索不只是"一个输入框"？
 
 你用手机 App 时几乎每天都在用它：微信搜聊天记录、设置里搜 Wi-Fi、地图搜地址。看起来只是一个输入框，但背后的用户期待远超一个普通的输入框——它应该在应用栏的位置、有语音输入按钮、输入时弹出历史建议、点击搜索后键盘自动收起且显示结果。
@@ -47,11 +54,15 @@ import { Attribution } from "@/components/mdx/attribution";
 这章要解决的核心问题：**怎么给你的 App 加一个专业级的搜索功能，而不是只扔一个 EditText 了事。**
 
 {/* 3. 概念讲解（spec §三） */}
+
 ## SearchView 与搜索框架
 
 ### SearchView：应用栏里的专业搜索框
 
-<Term def="SearchView 是 Android 提供的搜索专用输入控件。它不只是个带图标的输入框——它内建了搜索建议下拉列表、语音搜索按钮、自动收起键盘、以及跟 SearchManager 的深度集成。通常放在 Toolbar 或 ActionBar 中。">SearchView</Term> 是 Android 为搜索场景深度定制的一个控件。它比普通 EditText 多了这些能力：
+<Term def="SearchView 是 Android 提供的搜索专用输入控件。它不只是个带图标的输入框——它内建了搜索建议下拉列表、语音搜索按钮、自动收起键盘、以及跟 SearchManager 的深度集成。通常放在 Toolbar 或 ActionBar 中。">
+  SearchView
+</Term>
+是 Android 为搜索场景深度定制的一个控件。它比普通 EditText 多了这些能力：
 
 - 搜索建议下拉列表（自动弹出、自动消失）
 - 语音搜索按钮（如果你的设备支持）
@@ -97,6 +108,7 @@ searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
 `onQueryTextSubmit` 只在用户确认搜索时触发一次。`onQueryTextChange` 每次输入变化都触发——如果你的数据集很大，不要在这里做全量查询。
 
 {/* 6. 代码对照（spec §六，C 型重心——逐段讲解） */}
+
 ## 代码逐段拆解：完整的搜索功能
 
 ### 第一步：在菜单中放置 SearchView
@@ -193,27 +205,42 @@ class SearchHistoryManager(context: Context) {
 <SearchFlowDiagram />
 
 {/* 7. 常见误区（spec §七，C 型 ≥3） */}
+
 ## 容易踩的坑
 
 <Callout type="trap">
   **现象**：SearchView 展开后，按返回键没有收起 SearchView，而是退出了当前页面。
-  **原因**：默认情况下 SearchView 展开不代表"进入了一个新界面"——按返回键会触发 Activity 的 `onBackPressed()`。如果你没有拦截处理，系统会按常规返回处理页面退出。
+  **原因**：默认情况下 SearchView 展开不代表"进入了一个新界面"——按返回键会触发
+  Activity 的
+  `onBackPressed()`。如果你没有拦截处理，系统会按常规返回处理页面退出。
   **修法**：在 `onBackPressed()` 中检查 SearchView 是否展开：`if (!searchView.isIconified) { searchView.isIconified = true } else { super.onBackPressed() }`——先收起搜索框，已经收起状态才退出页面。
 </Callout>
 
 <Callout type="trap">
-  **现象**：在 `onQueryTextChange()` 中做了耗时查询（如遍历大列表或数据库查询），输入时卡顿严重。
-  **原因**：`onQueryTextChange` 在用户每输入一个字符时都会被调用。如果你在回调里遍历一个 1000 条数据的列表或执行 SQL 查询，每次按键都会阻塞主线程几十到几百毫秒。
-  **修法**：用防抖（debounce）策略——将过滤操作延迟 300ms 执行，期间有新输入则重置计时器。或用 `RxJava / Flow.debounce()`。数据量大时应将查询移到后台线程（用上一章的 HandlerThread 模式）。
+  **现象**：在 `onQueryTextChange()`
+  中做了耗时查询（如遍历大列表或数据库查询），输入时卡顿严重。
+  **原因**：`onQueryTextChange`
+  在用户每输入一个字符时都会被调用。如果你在回调里遍历一个 1000
+  条数据的列表或执行 SQL 查询，每次按键都会阻塞主线程几十到几百毫秒。
+  **修法**：用防抖（debounce）策略——将过滤操作延迟 300ms
+  执行，期间有新输入则重置计时器。或用 `RxJava /
+  Flow.debounce()`。数据量大时应将查询移到后台线程（用上一章的 HandlerThread
+  模式）。
 </Callout>
 
 <Callout type="trap">
-  **现象**：搜索历史用 SharedPreferences 直接频繁写入，旋转屏幕后历史丢失，或写入时 ANR。
-  **原因**：SharedPreferences 的 `apply()` 虽然是异步写入磁盘，但首次加载时 `getSharedPreferences()` 会从磁盘解析 XML ——如果在主线程加载一个巨大的偏好文件，也造成卡顿。此外，`commit()` 方法是同步写盘，绝不能在主线程调。
-  **修法**：始终用 `apply()` 而非 `commit()` 写入偏好。搜索历史这种"丢了无所谓、不影响核心业务"的数据，用 SharedPreferences 没问题。但如果是关键业务数据（如用户草稿），请用 Room 数据库。
+  **现象**：搜索历史用 SharedPreferences
+  直接频繁写入，旋转屏幕后历史丢失，或写入时 ANR。 **原因**：SharedPreferences
+  的 `apply()` 虽然是异步写入磁盘，但首次加载时 `getSharedPreferences()`
+  会从磁盘解析 XML
+  ——如果在主线程加载一个巨大的偏好文件，也造成卡顿。此外，`commit()`
+  方法是同步写盘，绝不能在主线程调。 **修法**：始终用 `apply()` 而非 `commit()`
+  写入偏好。搜索历史这种"丢了无所谓、不影响核心业务"的数据，用 SharedPreferences
+  没问题。但如果是关键业务数据（如用户草稿），请用 Room 数据库。
 </Callout>
 
 {/* 8. 小结与练习（spec §八） */}
+
 ## 小结
 
 - SearchView 是 Android 为搜索定制的控件，通过菜单配置 `app:actionViewClass` 集成到应用栏
@@ -226,43 +253,67 @@ class SearchHistoryManager(context: Context) {
 
 **问题 1**：“第26章 SearchView and SharedPreferences”覆盖哪些正式节点和项目主线？
 
-<Answer>覆盖7个节点，从“26. SearchView and SharedPreferences”到“Challenge: Polishing Your App Some More”。主线是把SearchView事件、查询持久化和Android KTX编辑连接成可恢复搜索体验，交付物是查询状态表、SharedPreferences读写、进程恢复与界面打磨检查。</Answer>
+<Answer>
+  覆盖7个节点，从“26. SearchView and SharedPreferences”到“Challenge: Polishing
+  Your App Some More”。主线是把SearchView事件、查询持久化和Android
+  KTX编辑连接成可恢复搜索体验，交付物是查询状态表、SharedPreferences读写、进程恢复与界面打磨检查。
+</Answer>
 
 **问题 2**：怎样建立本页最小可执行实验？
 
-<Answer>在“搜索”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+<Answer>
+  在“搜索”的验证中，固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。
+</Answer>
 
 **问题 3**：为什么只在正常点击路径运行不能证明完成？
 
-<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用查询状态表、SharedPreferences读写、进程恢复与界面打磨检查核对。</Answer>
+<Answer>
+  它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用查询状态表、SharedPreferences读写、进程恢复与界面打磨检查核对。
+</Answer>
 
 **问题 4**：怎样设计能推翻当前实现的反例？
 
-<Answer>在“搜索”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+<Answer>
+  在“搜索”的验证中，保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。
+</Answer>
 
 **问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
 
-<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+<Answer>
+  先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。
+</Answer>
 
 **问题 6**：本页达到独立交接标准需要什么？
 
-<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭查询状态表、SharedPreferences读写、进程恢复与界面打磨检查重放。</Answer>
+<Answer>
+  需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭查询状态表、SharedPreferences读写、进程恢复与界面打磨检查重放。
+</Answer>
 
 </Exercises>
 
 {/* 10. 名词解释（spec §十） */}
+
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="SearchView">
-  Android 为搜索场景深度定制的输入控件，内建搜索建议下拉列表、语音搜索按钮、与键盘自动配合。通常放在 Toolbar 中，通过 `app:actionViewClass="android.widget.SearchView"` 配置。详见本章"SearchView"一节。
-</GlossaryItem>
-<GlossaryItem term="SharedPreferences">
-  Android 提供的一种轻量级键值对持久化存储方式。适合存储少量简单数据（如设置项、搜索历史），内部用 XML 文件存储。写入用 `apply()`（异步）或 `commit()`（同步，不推荐主线程）。详见本章"搜索历史"一节。
-</GlossaryItem>
-<GlossaryItem term="ContentProvider">
-  Android 四大组件之一，用于管理结构化数据并提供跨应用/跨进程的数据访问接口。搜索建议就是一种特殊的 ContentProvider 应用——SearchView 通过 ContentResolver 调用 ContentProvider.query() 来获取建议列表。详见本章"搜索建议"一节。
-</GlossaryItem>
+  <GlossaryItem term="SearchView">
+    Android
+    为搜索场景深度定制的输入控件，内建搜索建议下拉列表、语音搜索按钮、与键盘自动配合。通常放在
+    Toolbar 中，通过 `app:actionViewClass="android.widget.SearchView"`
+    配置。详见本章"SearchView"一节。
+  </GlossaryItem>
+  <GlossaryItem term="SharedPreferences">
+    Android
+    提供的一种轻量级键值对持久化存储方式。适合存储少量简单数据（如设置项、搜索历史），内部用
+    XML 文件存储。写入用 `apply()`（异步）或
+    `commit()`（同步，不推荐主线程）。详见本章"搜索历史"一节。
+  </GlossaryItem>
+  <GlossaryItem term="ContentProvider">
+    Android
+    四大组件之一，用于管理结构化数据并提供跨应用/跨进程的数据访问接口。搜索建议就是一种特殊的
+    ContentProvider 应用——SearchView 通过 ContentResolver 调用
+    ContentProvider.query() 来获取建议列表。详见本章"搜索建议"一节。
+  </GlossaryItem>
 </Glossary>
 
 {/* BNR4_QUALITY_V2 */}
@@ -303,15 +354,45 @@ class SearchHistoryManager(context: Context) {
 
 在“搜索”中，“Challenge: Polishing Your App Some More”把查询输入、提交事件和轻量偏好持久化分开；防抖、空查询、进程重建与旧响应竞争都要用可重放事件序列验证。
 
-<Callout type="trap">在“搜索”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。</Callout>
+<Callout type="trap">
+  在“搜索”中，正常点击成功只能证明一个样本。若重建、取消、无响应者、离线、旧schema或目标SDK变化会产生不同结果，就必须把该边界写进状态机与测试。
+</Callout>
 
-<Callout type="trap">“搜索”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。</Callout>
+<Callout type="trap">
+  “搜索”若只留下最终截图，就无法判断旧所有者是否收到回调、后台任务是否重复、状态是否来自错误层或复位是否真正清空实验。
+</Callout>
 
 ## “搜索”验收回顾
 
 “搜索”只有在请求或消息时间线、取消、乱序与失败恢复能够从相同基线再次得到相同断言时才通过；第四版机制与现代平台政策分别记录，不用新API名称掩盖旧行为。
 
 [← 上一页：Looper、Handler和HandlerThread](/learn/big-nerd-ranch-guide/background-network/looper-handler) · [下一页：WorkManager →](/learn/big-nerd-ranch-guide/background-network/workmanager)
+
+{/* BNR4_VISUAL_V2_START */}
+
+## 章专属可重放状态实验
+
+先预测“输入、提交、清空、旋转、冷启动和旧响应返回”发生后，查询状态所有者、偏好存储与 PhotoGallery Repository应怎样改变编辑文本、已提交查询、持久偏好、请求 ID 和结果；再操作三个实验。第四版示例与当前 Android 政策分别记录，实验不把新 API 名称倒填为原书内容。
+
+### 实验一：所有者—状态—结果合同
+
+选择任一正式目录节点和正常/边界场景，检查它是否真的进入本章状态合同。目录标题只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<SearchContractLab />
+
+### 实验二：事件与生命周期轨迹
+
+沿五次转换逐步执行“输入、提交、清空、旋转、冷启动和旧响应返回”。每一步只允许查询状态所有者、偏好存储与 PhotoGallery Repository按职责提交状态，并持续核对“轻量偏好只保存已确认查询，当前结果对应最新有效请求”。
+
+<SearchLifecycleLab />
+
+### 实验三：章专属反例与同输入恢复
+
+注入“每个字符都立即写偏好并发请求，旧响应覆盖新输入”，保存第一个偏离点；撤销后以完全相同的 SDK、设备状态和用户事件重放。只有输入事件、提交时刻、preference 值、请求 ID 和结果断言一起恢复才算修复。
+
+<SearchFaultLab />
+
+{/* BNR4_VISUAL_V2_END */}
 
 <Attribution
   mode="independent-rewrite"
