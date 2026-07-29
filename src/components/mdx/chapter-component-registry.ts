@@ -2627,6 +2627,150 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       FinalReviewFaultLab: module0.FinalReviewFaultLab,
     } as ChapterMdxComponents;
   },
+  "autosar-vehicle-controller/00-map/avc2-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-official-learning-map");
+    return {
+      Avc2OfficialLearningMapArtifactLab:
+        module0.Avc2OfficialLearningMapArtifactLab,
+      Avc2OfficialLearningMapTraceLab: module0.Avc2OfficialLearningMapTraceLab,
+      Avc2OfficialLearningMapFaultLab: module0.Avc2OfficialLearningMapFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "autosar-vehicle-controller/01-01-automotive-electronics/avc2-01-automotive-electronics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-01-automotive-electronics");
+      return {
+        Avc201AutomotiveElectronicsArtifactLab:
+          module0.Avc201AutomotiveElectronicsArtifactLab,
+        Avc201AutomotiveElectronicsTraceLab:
+          module0.Avc201AutomotiveElectronicsTraceLab,
+        Avc201AutomotiveElectronicsFaultLab:
+          module0.Avc201AutomotiveElectronicsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/02-02-autosar-foundations/avc2-02-autosar-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-02-autosar-foundations");
+      return {
+        Avc202AutosarFoundationsArtifactLab:
+          module0.Avc202AutosarFoundationsArtifactLab,
+        Avc202AutosarFoundationsTraceLab:
+          module0.Avc202AutosarFoundationsTraceLab,
+        Avc202AutosarFoundationsFaultLab:
+          module0.Avc202AutosarFoundationsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/03-03-example-solutions/avc2-03-example-solutions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-03-example-solutions");
+      return {
+        Avc203ExampleSolutionsArtifactLab:
+          module0.Avc203ExampleSolutionsArtifactLab,
+        Avc203ExampleSolutionsTraceLab: module0.Avc203ExampleSolutionsTraceLab,
+        Avc203ExampleSolutionsFaultLab: module0.Avc203ExampleSolutionsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/04-04-swc-development/avc2-04-swc-development":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-04-swc-development");
+      return {
+        Avc204SwcDevelopmentArtifactLab:
+          module0.Avc204SwcDevelopmentArtifactLab,
+        Avc204SwcDevelopmentTraceLab: module0.Avc204SwcDevelopmentTraceLab,
+        Avc204SwcDevelopmentFaultLab: module0.Avc204SwcDevelopmentFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/05-05-system-design-configuration/avc2-05-system-design-configuration":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-05-system-design-configuration");
+      return {
+        Avc205SystemDesignConfigurationArtifactLab:
+          module0.Avc205SystemDesignConfigurationArtifactLab,
+        Avc205SystemDesignConfigurationTraceLab:
+          module0.Avc205SystemDesignConfigurationTraceLab,
+        Avc205SystemDesignConfigurationFaultLab:
+          module0.Avc205SystemDesignConfigurationFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/06-06-rte-bsw/avc2-06-rte-bsw": async () => {
+    const module0 =
+      await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-06-rte-bsw");
+    return {
+      Avc206RteBswArtifactLab: module0.Avc206RteBswArtifactLab,
+      Avc206RteBswTraceLab: module0.Avc206RteBswTraceLab,
+      Avc206RteBswFaultLab: module0.Avc206RteBswFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "autosar-vehicle-controller/07-07-mcal/avc2-07-mcal": async () => {
+    const module0 =
+      await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-07-mcal");
+    return {
+      Avc207McalArtifactLab: module0.Avc207McalArtifactLab,
+      Avc207McalTraceLab: module0.Avc207McalTraceLab,
+      Avc207McalFaultLab: module0.Avc207McalFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "autosar-vehicle-controller/08-08-integration-debugging/avc2-08-integration-debugging":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-08-integration-debugging");
+      return {
+        Avc208IntegrationDebuggingArtifactLab:
+          module0.Avc208IntegrationDebuggingArtifactLab,
+        Avc208IntegrationDebuggingTraceLab:
+          module0.Avc208IntegrationDebuggingTraceLab,
+        Avc208IntegrationDebuggingFaultLab:
+          module0.Avc208IntegrationDebuggingFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/09-09-functional-safety/avc2-09-functional-safety":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-09-functional-safety");
+      return {
+        Avc209FunctionalSafetyArtifactLab:
+          module0.Avc209FunctionalSafetyArtifactLab,
+        Avc209FunctionalSafetyTraceLab: module0.Avc209FunctionalSafetyTraceLab,
+        Avc209FunctionalSafetyFaultLab: module0.Avc209FunctionalSafetyFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "autosar-vehicle-controller/10-10-outlook/avc2-10-outlook": async () => {
+    const module0 =
+      await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-10-outlook");
+    return {
+      Avc210OutlookArtifactLab: module0.Avc210OutlookArtifactLab,
+      Avc210OutlookTraceLab: module0.Avc210OutlookTraceLab,
+      Avc210OutlookFaultLab: module0.Avc210OutlookFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "autosar-vehicle-controller/11-references/avc2-references": async () => {
+    const module0 =
+      await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-references");
+    return {
+      Avc2ReferencesArtifactLab: module0.Avc2ReferencesArtifactLab,
+      Avc2ReferencesTraceLab: module0.Avc2ReferencesTraceLab,
+      Avc2ReferencesFaultLab: module0.Avc2ReferencesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "autosar-vehicle-controller/12-review/avc2-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/autosar-vehicle-controller/v2/avc2-official-final-review");
+      return {
+        Avc2OfficialFinalReviewArtifactLab:
+          module0.Avc2OfficialFinalReviewArtifactLab,
+        Avc2OfficialFinalReviewTraceLab:
+          module0.Avc2OfficialFinalReviewTraceLab,
+        Avc2OfficialFinalReviewFaultLab:
+          module0.Avc2OfficialFinalReviewFaultLab,
+      } as ChapterMdxComponents;
+    },
   "beginning-cpp-game-programming/00-fundamentals/classes-oop": async () => {
     const module0 =
       await import("@/components/mdx/beginning-cpp-game-programming/v2/classes-oop");
