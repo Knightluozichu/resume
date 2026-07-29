@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-5"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: ccia2-05
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -18,12 +22,13 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { MemoryOrderingLab, MemoryOrderingMechanismMap, MemoryOrderingFailureDiagram } from "@/components/mdx/cpp-concurrency/memory-ordering";
 
-{/* A 概念型·内存模型篇第二章（《C++ 并发编程实战》第2版 §6 改编重写）：全书最硬的一章，内存序极抽象，三张动画是生命线，务必把「重排序 / synchronizes-with / happens-before」掰碎成看得见的东西。承接 ch5（已讲单变量原子性+单变量修改顺序），本章讲跨变量、跨线程的可见性与顺序。重心是概念讲解(§3)与 acquire-release 配对同步动画(§5 主 Demo)，math:false，代码 1-3 关键段且务必能编译。隐喻沿用「餐厅后厨」：对讲机=release按/acquire听（一按一听连出同步专线）；中央大屏=seq_cst 全局全序；动作清单被旁观者看乱=重排序。draft:true 待总监 review。 */}
 
-{/* 知识点清单（动笔前先摊开，逐条标 viz；type A 新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 为什么需要内存序：编译器/CPU 重排序；relaxed 只保证单变量原子性+单变量修改顺序，不保证跨变量顺序/可见性 = MemoryReorderDiagram（anime）；2) 三档内存序：relaxed / acquire-release（acq_rel、acquire、release，配对建同步）/ seq_cst（最强，全局单一全序，默认）= 文字 + seq_cst 引第三图；3) 关系三件套：sequenced-before（单线程内）/ synchronizes-with（release→读到它的 acquire）/ happens-before（传递闭包）= HappensBeforeDAG（anime）；4) acquire-release 配对：release store 与「读到该值的」acquire load 之间 synchronizes-with → 使 release 之前的所有写对 acquire 之后可见（标志位+数据经典模式）= AcquireReleaseSyncDiagram（anime·主）；5) seq_cst 全局全序 + fence（atomic_thread_fence 把序约束单独下）+ release sequence（一句带过）= 代码 + 文字。核心术语：重排序 / memory_order_relaxed / acquire-release / memory_order_seq_cst / sequenced-before / synchronizes-with / happens-before / 内存栅栏fence。 */}
 
-{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在流程中的位置」——此处落为「能解释 acquire-release 配对如何建立 happens-before」；末条为可当场自测的检验问题。 */}
+
+
+
 
 <Objectives>
 
@@ -33,7 +38,13 @@ import { Attribution } from "@/components/mdx/attribution";
 
 </Objectives>
 
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
+<MemoryOrderingMechanismMap />
+
+<MemoryOrderingLab />
+
+<MemoryOrderingFailureDiagram />
+
+
 
 ## 从一条跨线程可见性证据开始
 
@@ -43,7 +54,7 @@ import { Attribution } from "@/components/mdx/attribution";
 
 后厨的解法很朴素：装一台对讲机。甲把菜全摆好之后**按一下对讲机**，乙**听到对讲机才开工**。这一按一听之间连出一条「专线」：乙一旦听到，就保证甲按之前做的事全都摆好了、且乙看得见。没有这条专线会怎样？乙凭感觉抢跑，照着半成品干活——读到的全是没准备好的乱数据。这一章就教你怎么在代码里「按对讲机、听对讲机」，把可靠的先后建起来。
 
-{/* 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在流程中的位置。 */}
+
 
 ## 重排序：你写的顺序，不是别人看到的顺序
 
@@ -118,9 +129,9 @@ acquire-release 只在「配对的那一对」之间建立局部顺序；不同�
 
 最后认识 <Term def="std::atomic_thread_fence 在不直接访问原子对象的情况下施加内存顺序约束。release fence 与 acquire fence 不会自行同步，必须由同一原子对象上的写和读建立规定的 read-from 连接。">内存栅栏（fence）</Term>。fence 只约束它前后的操作，**两道 fence 彼此不会凭空同步**。常见 fence-fence 模式要求 release fence 后有原子写 X；另一线程的原子读 Y 读到 X 写入的值，且 Y sequenced-before acquire fence。缺少这条载体关系，两个 fence 只是各在线程里立栏。
 
-{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
-{/* 5. 交互 Demo（spec §五）：主 Demo = AcquireReleaseSyncDiagram（已在 §3 作为带「猜一猜」的可控动画呈现，标志位+数据同步专线）；辅 Demo = HappensBeforeDAG + MemoryReorderDiagram（均已在 §3 引出并配「猜一猜」）。本节集中点玩法，不重复堆图。 */}
+
+
 
 ## 上手玩一玩这三张图
 
@@ -132,7 +143,7 @@ acquire-release 只在「配对的那一对」之间建立局部顺序；不同�
 
 玩熟这三张图，下一节每一句 `release` / `acquire` / `relaxed` / `atomic_thread_fence` 你都能对上图里某条边、某个动作。
 
-{/* 6. 代码对照（spec §六，A 型选，只贴最能说明概念的 1-3 段）：纯 cpp 块（本书无 WebGL 镜像，不用 CodeTabs）；单块 ≤30 行；两代码块间必有解说。每段务必能编译，内存序用法正确。 */}
+
 
 ## 代码：把内存序一段段写出来
 
@@ -237,7 +248,7 @@ void consumer_fence() {
 
 关键不是“两道栏看起来成对”，而是 consumer 的 relaxed load **读到** producer relaxed store 写入的 `true`。这条原子 read-from 连接位于两道 fence 之间，才让 release fence synchronizes-with acquire fence；随后读取 data 才有定义。
 
-{/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。此处放 3 个。 */}
+
 
 ## 容易踩的坑
 
@@ -271,7 +282,7 @@ void consumer_fence() {
   读端用数据，半成品才不可能被看到。
 </Callout>
 
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，A 型问答为主含 1 道「判断/解释」题，答案折叠。 */}
+
 
 ## 小结
 
@@ -358,7 +369,7 @@ void t2() {
 
 </Exercises>
 
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（重排序 / memory_order_relaxed / 内存序 / acquire-release / memory_order_seq_cst / sequenced-before / synchronizes-with / happens-before / 内存栅栏fence，共 9 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
 
 <Glossary>
 
@@ -431,9 +442,11 @@ void t2() {
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
+
 
 <Attribution
-  title="C++ Concurrency in Action, Second Edition, Chapter 5: The C++ memory model and operations on atomic types"
-  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-5"
+  adaptedFrom="C++ Concurrency in Action, Second Edition, Chapter 5: The C++ memory model and operations on atomic types"
+  adaptedUrl="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-5"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
 />

@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-9"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: ccia2-09
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -19,12 +23,13 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { ThreadPoolDesignLab, ThreadPoolDesignMechanismMap, ThreadPoolDesignFailureDiagram } from "@/components/mdx/cpp-concurrency/thread-pools";
 
-{/* C 实战型第十章（HEL-238，《C++ 并发编程实战》第2版 §9 改编重写，高级并发与工程篇第 2 章）：本章把前面所有零件（线程 / future / packaged_task / 线程安全队列）组装成「线程池」这个工程主力组件。重心是代码对照（type C §6 ≥80% 关键码，每块带 #include 实测 clang++ -std=c++17 -fsyntax-only 通过）+ ThreadPool「固定工人循环取任务」动画（§5 主 Demo）。math:false。沿用「餐厅后厨」隐喻：线程池=雇一队固定帮厨待命，活儿进单子筐（任务队列），谁空了抓一张做、做完再抓（线程复用，省去频繁建销）；工作窃取=自己筐空了去隔壁忙不过来的同事筐尾巴偷一张干；协作式中断=给帮厨发「下班」信号，他干到段落点（中断点）抬头看见信号才收工，不是强杀。承接 ch4（future/packaged_task）、ch7（线程安全队列）。draft:true 待总监 review。 */}
 
-{/* 知识点清单（动笔前先摊开，逐条标 viz；type C 新核心概念 ≤5；术语首现 Term 高亮，章末 Glossary 一一对应）：1) 为什么要线程池：避免频繁创建/销毁线程的开销，固定一队工作线程复用 = 文字 + ThreadPoolDiagram；2) 最简线程池：固定 N 个工作线程 + 一个线程安全任务队列，工作线程循环取任务执行 = 代码 + ThreadPoolDiagram(anime·主)；3) 等待任务结果：submit 用 packaged_task 包装、返回 future（承接 ch4）= 代码；4) 减少任务队列争用 + 工作窃取：每个工作线程自带本地双端队列，本端 push/pop、空了去别人队尾偷 = WorkStealingDiagram(anime) + 代码；5) 协作式中断：interrupt_flag + 中断点 interruption_point，线程到中断点检查标志、自行退出 = InterruptibleThreadDiagram(anime) + 代码。核心术语：线程池 / 任务队列 / 工作线程 / 工作窃取 / 双端队列 / 协作式中断 / 中断点。 */}
 
-{/* 1. 学习目标（spec §一）：C 型必含「能实现/能改出 ___」；末条为可当场自测的检验问题。 */}
+
+
+
 
 <Objectives>
 
@@ -34,7 +39,13 @@ import { Attribution } from "@/components/mdx/attribution";
 
 </Objectives>
 
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
+<ThreadPoolDesignMechanismMap />
+
+<ThreadPoolDesignLab />
+
+<ThreadPoolDesignFailureDiagram />
+
+
 
 ## 从“任务被接受后谁负责到底”开始
 
@@ -44,7 +55,7 @@ import { Attribution } from "@/components/mdx/attribution";
 
 没有这套机制会怎样？要么你为每道菜新雇/辞退一个厨师，光在「招人送人」上就把时间耗光（频繁建销线程的开销）；要么所有人都挤在同一个单子筐前抢单子（争用），或者有人累死、有人闲死（负载不均）。这一章就教你把这支「常备帮厨队」搭起来、调顺。
 
-{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩，篇幅让给 §6）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；引用 §5 Demo / §6 代码。 */}
+
 
 ## 为什么要线程池：固定一队工人，循环复用
 
@@ -99,9 +110,9 @@ C++17 的标准 future 没有 `.then`。可用三种协议表达依赖：把依�
 
 要点是：中断**不是**强杀。主线程只负责「按下开关」，停在哪、怎么收尾，由目标线程跑到下一个**中断点**时自己决定——这就是「协作式」三个字的全部含义。
 
-{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
-{/* 5. 交互 Demo（spec §五）：主 Demo = ThreadPoolDiagram（已在 §3「为什么要线程池」作为带「猜一猜」的交互呈现）；辅 Demo = WorkStealingDiagram + InterruptibleThreadDiagram（已在 §3 引出）。本节点玩法，不重复堆图。 */}
+
+
 
 ## 上手玩一玩这三张图
 
@@ -113,7 +124,7 @@ C++17 的标准 future 没有 `.then`。可用三种协议表达依赖：把依�
 
 玩熟这三张图，下一节每一句 `cv.wait` / `submit` / `try_steal` / `interruption_point` 你都能对上图里某个节点。
 
-{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键码）：纯 cpp 块（本书无 WebGL 镜像，不用 CodeTabs）；单块 ≤30 行；两代码块间必有解说。所有块各自 clang++ -std=c++17 -fsyntax-only 实测通过。陷阱用 Callout 标注。 */}
+
 
 ## 代码：一步步把线程池写出来
 
@@ -420,7 +431,7 @@ void worker_body() {
 
 主线程置位后，运行中的任务要到下一个 interruption_point 才退出。**原子标志不会自动唤醒 condition_variable**：若目标可能睡在 wait 中，请求停止必须在该 wait 的状态锁下记录 stop，再 `notify_all`，谓词检查 `stop || condition`；否则线程可能永远睡着。C++20 的 `std::jthread` 与 `stop_token` 标准化了停止请求和部分可中断等待，本章 C++17 版本仍需手工维护标志、唤醒对象与其生存期。
 
-{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含池内任务等池内任务死锁、池任务抛异常没接、全局队列争用、池析构没 join/没停。 */}
+
 
 ## 容易踩的坑
 
@@ -458,7 +469,7 @@ void worker_body() {
   调用者已退出对象生存期。
 </Callout>
 
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 3 题含 1 道改/实现题 + C 型分析题，答案折叠。 */}
+
 
 ## 小结
 
@@ -605,7 +616,7 @@ public:
 
 </Exercises>
 
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（线程池 / 工作线程 / 任务队列 / 双端队列 / 工作窃取 / 协作式中断 / 中断点，共 7 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
 
 <Glossary>
 
@@ -650,9 +661,11 @@ public:
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
+
 
 <Attribution
-  title="C++ Concurrency in Action, Second Edition, Chapter 9: Advanced thread management"
-  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-9"
+  adaptedFrom="C++ Concurrency in Action, Second Edition, Chapter 9: Advanced thread management"
+  adaptedUrl="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-9"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
 />

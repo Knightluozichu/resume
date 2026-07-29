@@ -943,6 +943,122 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         CAIBottleneckMap: module0.CAIBottleneckMap,
       } as ChapterMdxComponents;
     },
+  "cpp-concurrency/advanced/designing-concurrent-code": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/designing-concurrent-code");
+    return {
+      DesigningConcurrentCodeLab: module0.DesigningConcurrentCodeLab,
+      DesigningConcurrentCodeMechanismMap:
+        module0.DesigningConcurrentCodeMechanismMap,
+      DesigningConcurrentCodeFailureDiagram:
+        module0.DesigningConcurrentCodeFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/advanced/parallel-algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/parallel-algorithms");
+    return {
+      ParallelAlgorithmsLab: module0.ParallelAlgorithmsLab,
+      ParallelAlgorithmsMechanismMap: module0.ParallelAlgorithmsMechanismMap,
+      ParallelAlgorithmsFailureDiagram:
+        module0.ParallelAlgorithmsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/advanced/testing-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/testing-debugging");
+    return {
+      ConcurrencyTestingLab: module0.ConcurrencyTestingLab,
+      ConcurrencyTestingMechanismMap: module0.ConcurrencyTestingMechanismMap,
+      ConcurrencyTestingFailureDiagram:
+        module0.ConcurrencyTestingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/advanced/thread-pools": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/thread-pools");
+    return {
+      ThreadPoolDesignLab: module0.ThreadPoolDesignLab,
+      ThreadPoolDesignMechanismMap: module0.ThreadPoolDesignMechanismMap,
+      ThreadPoolDesignFailureDiagram: module0.ThreadPoolDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/data-structures/lock-based": async () => {
+    const module0 = await import("@/components/mdx/cpp-concurrency/lock-based");
+    return {
+      LockBasedStructuresLab: module0.LockBasedStructuresLab,
+      LockBasedStructuresMechanismMap: module0.LockBasedStructuresMechanismMap,
+      LockBasedStructuresFailureDiagram:
+        module0.LockBasedStructuresFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/data-structures/lock-free": async () => {
+    const module0 = await import("@/components/mdx/cpp-concurrency/lock-free");
+    return {
+      LockFreeStructuresLab: module0.LockFreeStructuresLab,
+      LockFreeStructuresMechanismMap: module0.LockFreeStructuresMechanismMap,
+      LockFreeStructuresFailureDiagram:
+        module0.LockFreeStructuresFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/fundamentals/hello-concurrency": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/hello-concurrency");
+    return {
+      HelloConcurrencyLab: module0.HelloConcurrencyLab,
+      HelloConcurrencyMechanismMap: module0.HelloConcurrencyMechanismMap,
+      HelloConcurrencyFailureDiagram: module0.HelloConcurrencyFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/fundamentals/managing-threads": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/managing-threads");
+    return {
+      ManagingThreadsLab: module0.ManagingThreadsLab,
+      ManagingThreadsMechanismMap: module0.ManagingThreadsMechanismMap,
+      ManagingThreadsFailureDiagram: module0.ManagingThreadsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/memory-model/atomic-types": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/atomic-types");
+    return {
+      AtomicTypesLab: module0.AtomicTypesLab,
+      AtomicTypesMechanismMap: module0.AtomicTypesMechanismMap,
+      AtomicTypesFailureDiagram: module0.AtomicTypesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/memory-model/memory-ordering": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/memory-ordering");
+    return {
+      MemoryOrderingLab: module0.MemoryOrderingLab,
+      MemoryOrderingMechanismMap: module0.MemoryOrderingMechanismMap,
+      MemoryOrderingFailureDiagram: module0.MemoryOrderingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/shared-data/protecting-shared-data": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/protecting-shared-data");
+    return {
+      ProtectingSharedDataLab: module0.ProtectingSharedDataLab,
+      ProtectingSharedDataMechanismMap:
+        module0.ProtectingSharedDataMechanismMap,
+      ProtectingSharedDataFailureDiagram:
+        module0.ProtectingSharedDataFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-concurrency/shared-data/synchronizing-operations": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-concurrency/synchronizing-operations");
+    return {
+      SynchronizingOperationsLab: module0.SynchronizingOperationsLab,
+      SynchronizingOperationsMechanismMap:
+        module0.SynchronizingOperationsMechanismMap,
+      SynchronizingOperationsFailureDiagram:
+        module0.SynchronizingOperationsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
   "cpp-high-performance/03-official/measuring-performance": async () => {
     const module0 =
       await import("@/components/mdx/cpp-high-performance/diagrams/measuring-performance");
@@ -990,6 +1106,126 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     return {
       EppModernFeatureMap: module0.EppModernFeatureMap,
       EppMoveStateFlow: module0.EppMoveStateFlow,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/00-intro/cse-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/cse-learning-map");
+    return {
+      CppServerLearningMapLab: module0.CppServerLearningMapLab,
+      CppServerLearningMapMechanismMap:
+        module0.CppServerLearningMapMechanismMap,
+      CppServerLearningMapFailureDiagram:
+        module0.CppServerLearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/01-official/cpp-must-know": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/cpp-must-know");
+    return {
+      CppOwnershipContractLab: module0.CppOwnershipContractLab,
+      CppOwnershipContractMechanismMap:
+        module0.CppOwnershipContractMechanismMap,
+      CppOwnershipContractFailureDiagram:
+        module0.CppOwnershipContractFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/02-official/backend-tools-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/backend-tools-debugging");
+    return {
+      BackendDebugEvidenceLab: module0.BackendDebugEvidenceLab,
+      BackendDebugEvidenceMechanismMap:
+        module0.BackendDebugEvidenceMechanismMap,
+      BackendDebugEvidenceFailureDiagram:
+        module0.BackendDebugEvidenceFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/03-engineering/cse-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/cse-final-review");
+    return {
+      CppServerFinalReviewLab: module0.CppServerFinalReviewLab,
+      CppServerFinalReviewMechanismMap:
+        module0.CppServerFinalReviewMechanismMap,
+      CppServerFinalReviewFailureDiagram:
+        module0.CppServerFinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/03-official/multithreading-resource-sync": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/multithreading-resource-sync");
+    return {
+      ServerSynchronizationLab: module0.ServerSynchronizationLab,
+      ServerSynchronizationMechanismMap:
+        module0.ServerSynchronizationMechanismMap,
+      ServerSynchronizationFailureDiagram:
+        module0.ServerSynchronizationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/04-official/network-programming-hard-points":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-server-essence/network-programming-hard-points");
+      return {
+        NetworkStateMachineLab: module0.NetworkStateMachineLab,
+        NetworkStateMachineMechanismMap:
+          module0.NetworkStateMachineMechanismMap,
+        NetworkStateMachineFailureDiagram:
+          module0.NetworkStateMachineFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-server-essence/05-official/network-troubleshooting-commands":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-server-essence/network-troubleshooting-commands");
+      return {
+        NetworkEvidenceCommandLab: module0.NetworkEvidenceCommandLab,
+        NetworkEvidenceCommandMechanismMap:
+          module0.NetworkEvidenceCommandMechanismMap,
+        NetworkEvidenceCommandFailureDiagram:
+          module0.NetworkEvidenceCommandFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-server-essence/06-official/network-protocol-design": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/network-protocol-design");
+    return {
+      ProtocolFramingLab: module0.ProtocolFramingLab,
+      ProtocolFramingMechanismMap: module0.ProtocolFramingMechanismMap,
+      ProtocolFramingFailureDiagram: module0.ProtocolFramingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/07-official/single-service-structure": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/single-service-structure");
+    return {
+      SingleServiceArchitectureLab: module0.SingleServiceArchitectureLab,
+      SingleServiceArchitectureMechanismMap:
+        module0.SingleServiceArchitectureMechanismMap,
+      SingleServiceArchitectureFailureDiagram:
+        module0.SingleServiceArchitectureFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-server-essence/08-official/redis-network-module-source-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-server-essence/redis-network-module-source-analysis");
+      return {
+        RedisEventLoopLab: module0.RedisEventLoopLab,
+        RedisEventLoopMechanismMap: module0.RedisEventLoopMechanismMap,
+        RedisEventLoopFailureDiagram: module0.RedisEventLoopFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-server-essence/09-official/common-server-module-design": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-server-essence/common-server-module-design");
+    return {
+      ServerModuleResilienceLab: module0.ServerModuleResilienceLab,
+      ServerModuleResilienceMechanismMap:
+        module0.ServerModuleResilienceMechanismMap,
+      ServerModuleResilienceFailureDiagram:
+        module0.ServerModuleResilienceFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpu-eye-cpp/00-intro/learning-map": async () => {
@@ -1141,6 +1377,79 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppHiddenVirtualWarningMap: module0.EcppHiddenVirtualWarningMap,
       EcppMultiCompilerWarningMap: module0.EcppMultiCompilerWarningMap,
       EcppWarningLifecycleMap: module0.EcppWarningLifecycleMap,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/00-habits/ecs-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/ecs-learning-map");
+    return {
+      EffectiveCSharpLearningMapLab: module0.EffectiveCSharpLearningMapLab,
+      EffectiveCSharpLearningMapMechanismMap:
+        module0.EffectiveCSharpLearningMapMechanismMap,
+      EffectiveCSharpLearningMapFailureDiagram:
+        module0.EffectiveCSharpLearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/01-official/language-idioms": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/language-idioms");
+    return {
+      LanguageIdiomsDecisionLab: module0.LanguageIdiomsDecisionLab,
+      LanguageIdiomsDecisionMechanismMap:
+        module0.LanguageIdiomsDecisionMechanismMap,
+      LanguageIdiomsDecisionFailureDiagram:
+        module0.LanguageIdiomsDecisionFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/02-official/resource-management": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/resource-management");
+    return {
+      ResourceManagementDecisionLab: module0.ResourceManagementDecisionLab,
+      ResourceManagementDecisionMechanismMap:
+        module0.ResourceManagementDecisionMechanismMap,
+      ResourceManagementDecisionFailureDiagram:
+        module0.ResourceManagementDecisionFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/03-concurrent/ecs-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/ecs-final-review");
+    return {
+      EffectiveCSharpFinalReviewLab: module0.EffectiveCSharpFinalReviewLab,
+      EffectiveCSharpFinalReviewMechanismMap:
+        module0.EffectiveCSharpFinalReviewMechanismMap,
+      EffectiveCSharpFinalReviewFailureDiagram:
+        module0.EffectiveCSharpFinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/03-official/working-with-generics": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/working-with-generics");
+    return {
+      GenericsContractLab: module0.GenericsContractLab,
+      GenericsContractMechanismMap: module0.GenericsContractMechanismMap,
+      GenericsContractFailureDiagram: module0.GenericsContractFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/04-official/working-with-linq": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/working-with-linq");
+    return {
+      LinqExecutionBoundaryLab: module0.LinqExecutionBoundaryLab,
+      LinqExecutionBoundaryMechanismMap:
+        module0.LinqExecutionBoundaryMechanismMap,
+      LinqExecutionBoundaryFailureDiagram:
+        module0.LinqExecutionBoundaryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "effective-csharp/05-official/exception-practices": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-csharp/exception-practices");
+    return {
+      ExceptionContractLab: module0.ExceptionContractLab,
+      ExceptionContractMechanismMap: module0.ExceptionContractMechanismMap,
+      ExceptionContractFailureDiagram: module0.ExceptionContractFailureDiagram,
     } as ChapterMdxComponents;
   },
   "effective-modern-cpp/00-intro/learning-map": async () => {

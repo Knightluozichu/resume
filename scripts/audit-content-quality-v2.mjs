@@ -146,6 +146,38 @@ function regressionBlockers(source, componentCorpus = "") {
   return blockers;
 }
 
+function selectManifestUnits({
+  manifestUnits,
+  officialUnitId,
+  chapterSlug,
+  chapterTitle,
+}) {
+  const idMatchedUnit = manifestUnits.find(
+    (unit) => unit.id === (officialUnitId || chapterSlug),
+  );
+  if (idMatchedUnit) {
+    return {
+      units: [idMatchedUnit],
+      directlyMappedIds: new Set([idMatchedUnit.id]),
+    };
+  }
+  if (officialUnitId) {
+    return { units: [], directlyMappedIds: new Set() };
+  }
+  const titleMatchedUnits = manifestUnits.filter(
+    (unit) =>
+      normalized(chapterTitle) === normalized(unit.title) ||
+      normalized(chapterTitle).startsWith(normalized(unit.title)) ||
+      normalized(unit.title).startsWith(normalized(chapterTitle)),
+  );
+  return titleMatchedUnits.length > 0
+    ? {
+        units: titleMatchedUnits,
+        directlyMappedIds: new Set(titleMatchedUnits.map((unit) => unit.id)),
+      }
+    : { units: manifestUnits, directlyMappedIds: new Set() };
+}
+
 function runRegressionSelfTest() {
   // 取自《汽车为什么会跑》v1 已确认的污染指纹；这类内容必须硬失败，
   // 不能再被正文长度、组件数量或标题替换掩盖。
@@ -202,6 +234,29 @@ val value = raw.toDoubleOrNull()
 */}`;
   assert.equal(commentedOutHeadingCount(hiddenChapter), 1);
   assert.equal(stripJsxComments(hiddenChapter).trim(), "");
+
+  const manifestUnits = [
+    { id: "book-01", title: "第一章", concepts: [["甲"]] },
+    { id: "book-02", title: "第二章", concepts: [["乙"]] },
+  ];
+  assert.deepEqual(
+    selectManifestUnits({
+      manifestUnits,
+      officialUnitId: "book-02",
+      chapterSlug: "split-course-page",
+      chapterTitle: "课程拆分页",
+    }).units.map((unit) => unit.id),
+    ["book-02"],
+  );
+  assert.deepEqual(
+    selectManifestUnits({
+      manifestUnits,
+      officialUnitId: "missing-unit",
+      chapterSlug: "split-course-page",
+      chapterTitle: "课程拆分页",
+    }).units,
+    [],
+  );
 
   const repeated =
     "同一段模板话术如果跨三章反复出现，就必须作为跨章复制阻断，而不能用字数平均掉。";
@@ -270,6 +325,7 @@ export function TopicLab() {
         "dedicated-shared-visual-allowed",
         "title-substitution-visual-hard-fails",
         "fragmented-term-sequence-hard-fails",
+        "explicit-official-unit-mapping-honored",
       ],
     }),
   );
@@ -622,6 +678,10 @@ function parseChapter(filePath, manifests, visualResults) {
   const qualityVersion = parsed.data.qualityVersion ?? 1;
   const practiceMode = parsed.data.practiceMode ?? null;
   const sourceMode = parsed.data.sourceMode ?? null;
+  const officialUnitId =
+    typeof parsed.data.officialUnitId === "string"
+      ? parsed.data.officialUnitId.trim()
+      : "";
   const manifest = manifests[bookSlug] ?? null;
   const sourceDomains = sourceDomainsFor(manifest);
   const factSourceLinks = [
@@ -653,19 +713,16 @@ function parseChapter(filePath, manifests, visualResults) {
     const manifestUnits = manifest?.units ?? [];
     // v2 manifest 的 unit id 与章节 slug 是稳定的一对一键。优先使用它，
     // 避免“表目录”误命中“核对表目录”之类的标题子串。
-    const idMatchedUnit = manifestUnits.find((unit) => unit.id === chapterSlug);
-    const titleMatchedUnits = idMatchedUnit
-      ? [idMatchedUnit]
-      : manifestUnits.filter(
-          (unit) =>
-            normalized(parsed.data.title) === normalized(unit.title) ||
-            normalized(parsed.data.title).startsWith(normalized(unit.title)) ||
-            normalized(unit.title).startsWith(normalized(parsed.data.title)),
-        );
-    for (const unit of titleMatchedUnits.length > 0
-      ? titleMatchedUnits
-      : manifestUnits) {
-      const titleMatch = titleMatchedUnits.includes(unit);
+    // 一本原书单元拆成多篇课程页时，用 frontmatter.officialUnitId 显式映射；
+    // 显式 ID 不存在时不再回退全文模糊匹配，让 official-unit-unmapped 硬阻断。
+    const { units: candidateUnits, directlyMappedIds } = selectManifestUnits({
+      manifestUnits,
+      officialUnitId,
+      chapterSlug,
+      chapterTitle: parsed.data.title,
+    });
+    for (const unit of candidateUnits) {
+      const titleMatch = directlyMappedIds.has(unit.id);
       const unitPresent =
         titleMatch ||
         unit.concepts.some((alternatives) =>
@@ -783,6 +840,7 @@ function parseChapter(filePath, manifests, visualResults) {
     qualityVersion,
     practiceMode,
     sourceMode,
+    officialUnitId: officialUnitId || null,
     factSourceLinks,
     sourceAccess,
     hasSourceUrl,

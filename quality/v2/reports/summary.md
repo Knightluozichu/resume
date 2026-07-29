@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T13:18:09.309Z；旧版分数不迁移。
+> 2026-07-29T13:48:55.476Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：3694
-- queued：766
-- passed：36
+- queued：736
+- passed：66
 - published：0
 
 | 优先级 | 书籍                              | 章节 | failed | queued | passed | 阻断项 |
@@ -227,12 +227,12 @@
 |    214 | cpp-high-performance              |   13 |      0 |     13 |      0 |     13 |
 |    215 | cpp-testing-recipes               |   13 |      0 |     13 |      0 |     13 |
 |    216 | modern-cpp-design                 |   13 |      0 |     13 |      0 |     13 |
-|    217 | cpp-concurrency                   |   12 |      0 |     12 |      0 |     12 |
-|    218 | ray-tracing-weekend               |   12 |      0 |     12 |      0 |     12 |
-|    219 | cpp-server-essence                |   11 |      0 |     11 |      0 |     11 |
-|    220 | the-c-programming-language        |   10 |      0 |     10 |      0 |     10 |
-|    221 | inside-cpp-object-model           |    9 |      0 |      9 |      0 |      9 |
-|    222 | effective-csharp                  |    7 |      0 |      7 |      0 |      7 |
-|    223 | android-design-patterns           |   14 |      0 |      0 |     14 |      0 |
-|    224 | auto-why-car-runs                 |   14 |      0 |      0 |     14 |      0 |
-|    225 | cpu-eye-cpp                       |    8 |      0 |      0 |      8 |      0 |
+|    217 | ray-tracing-weekend               |   12 |      0 |     12 |      0 |     12 |
+|    218 | the-c-programming-language        |   10 |      0 |     10 |      0 |     10 |
+|    219 | inside-cpp-object-model           |    9 |      0 |      9 |      0 |      9 |
+|    220 | android-design-patterns           |   14 |      0 |      0 |     14 |      0 |
+|    221 | auto-why-car-runs                 |   14 |      0 |      0 |     14 |      0 |
+|    222 | cpp-concurrency                   |   12 |      0 |      0 |     12 |      0 |
+|    223 | cpp-server-essence                |   11 |      0 |      0 |     11 |      0 |
+|    224 | cpu-eye-cpp                       |    8 |      0 |      0 |      8 |      0 |
+|    225 | effective-csharp                  |    7 |      0 |      0 |      7 |      0 |
