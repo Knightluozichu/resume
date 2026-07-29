@@ -2174,6 +2174,365 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CpuFinalReviewLab: module0.CpuFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
+    return {
+      CfpLearningMapDecisionLab: module0.CfpLearningMapDecisionLab,
+      CfpLearningMapMechanismMap: module0.CfpLearningMapMechanismMap,
+      CfpLearningMapFailureDiagram: module0.CfpLearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-functional-programming/01-official/introducing-functional-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/introducing-functional-programming");
+      return {
+        IntroducingFunctionalProgrammingDecisionLab:
+          module0.IntroducingFunctionalProgrammingDecisionLab,
+        IntroducingFunctionalProgrammingMechanismMap:
+          module0.IntroducingFunctionalProgrammingMechanismMap,
+        IntroducingFunctionalProgrammingFailureDiagram:
+          module0.IntroducingFunctionalProgrammingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/02-official/why-function-purity-matters":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/why-function-purity-matters");
+      return {
+        WhyFunctionPurityMattersDecisionLab:
+          module0.WhyFunctionPurityMattersDecisionLab,
+        WhyFunctionPurityMattersMechanismMap:
+          module0.WhyFunctionPurityMattersMechanismMap,
+        WhyFunctionPurityMattersFailureDiagram:
+          module0.WhyFunctionPurityMattersFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/03-official/designing-function-signatures-and-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/designing-function-signatures-and-types");
+      return {
+        DesigningFunctionSignaturesAndTypesDecisionLab:
+          module0.DesigningFunctionSignaturesAndTypesDecisionLab,
+        DesigningFunctionSignaturesAndTypesMechanismMap:
+          module0.DesigningFunctionSignaturesAndTypesMechanismMap,
+        DesigningFunctionSignaturesAndTypesFailureDiagram:
+          module0.DesigningFunctionSignaturesAndTypesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/03-practice/cfp-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-functional-programming/cfp-final-review");
+    return {
+      CfpFinalReviewDecisionLab: module0.CfpFinalReviewDecisionLab,
+      CfpFinalReviewMechanismMap: module0.CfpFinalReviewMechanismMap,
+      CfpFinalReviewFailureDiagram: module0.CfpFinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-functional-programming/04-official/patterns-in-functional-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/patterns-in-functional-programming");
+      return {
+        PatternsInFunctionalProgrammingDecisionLab:
+          module0.PatternsInFunctionalProgrammingDecisionLab,
+        PatternsInFunctionalProgrammingMechanismMap:
+          module0.PatternsInFunctionalProgrammingMechanismMap,
+        PatternsInFunctionalProgrammingFailureDiagram:
+          module0.PatternsInFunctionalProgrammingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/05-official/designing-programs-with-function-composition":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/designing-programs-with-function-composition");
+      return {
+        DesigningProgramsWithFunctionCompositionDecisionLab:
+          module0.DesigningProgramsWithFunctionCompositionDecisionLab,
+        DesigningProgramsWithFunctionCompositionMechanismMap:
+          module0.DesigningProgramsWithFunctionCompositionMechanismMap,
+        DesigningProgramsWithFunctionCompositionFailureDiagram:
+          module0.DesigningProgramsWithFunctionCompositionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/06-official/functional-error-handling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/functional-error-handling");
+      return {
+        FunctionalErrorHandlingDecisionLab:
+          module0.FunctionalErrorHandlingDecisionLab,
+        FunctionalErrorHandlingMechanismMap:
+          module0.FunctionalErrorHandlingMechanismMap,
+        FunctionalErrorHandlingFailureDiagram:
+          module0.FunctionalErrorHandlingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/07-official/structuring-an-application-with-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/structuring-an-application-with-functions");
+      return {
+        StructuringAnApplicationWithFunctionsDecisionLab:
+          module0.StructuringAnApplicationWithFunctionsDecisionLab,
+        StructuringAnApplicationWithFunctionsMechanismMap:
+          module0.StructuringAnApplicationWithFunctionsMechanismMap,
+        StructuringAnApplicationWithFunctionsFailureDiagram:
+          module0.StructuringAnApplicationWithFunctionsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/08-official/multi-argument-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/multi-argument-functions");
+      return {
+        MultiArgumentFunctionsDecisionLab:
+          module0.MultiArgumentFunctionsDecisionLab,
+        MultiArgumentFunctionsMechanismMap:
+          module0.MultiArgumentFunctionsMechanismMap,
+        MultiArgumentFunctionsFailureDiagram:
+          module0.MultiArgumentFunctionsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/09-official/thinking-about-data-functionally":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/thinking-about-data-functionally");
+      return {
+        ThinkingAboutDataFunctionallyDecisionLab:
+          module0.ThinkingAboutDataFunctionallyDecisionLab,
+        ThinkingAboutDataFunctionallyMechanismMap:
+          module0.ThinkingAboutDataFunctionallyMechanismMap,
+        ThinkingAboutDataFunctionallyFailureDiagram:
+          module0.ThinkingAboutDataFunctionallyFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/10-official/event-sourcing-functional-persistence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/event-sourcing-functional-persistence");
+      return {
+        EventSourcingFunctionalPersistenceDecisionLab:
+          module0.EventSourcingFunctionalPersistenceDecisionLab,
+        EventSourcingFunctionalPersistenceMechanismMap:
+          module0.EventSourcingFunctionalPersistenceMechanismMap,
+        EventSourcingFunctionalPersistenceFailureDiagram:
+          module0.EventSourcingFunctionalPersistenceFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/11-official/lazy-computations-continuations-monadic-composition":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/lazy-computations-continuations-monadic-composition");
+      return {
+        LazyComputationsContinuationsMonadicCompositionDecisionLab:
+          module0.LazyComputationsContinuationsMonadicCompositionDecisionLab,
+        LazyComputationsContinuationsMonadicCompositionMechanismMap:
+          module0.LazyComputationsContinuationsMonadicCompositionMechanismMap,
+        LazyComputationsContinuationsMonadicCompositionFailureDiagram:
+          module0.LazyComputationsContinuationsMonadicCompositionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/12-official/stateful-programs-and-computations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/stateful-programs-and-computations");
+      return {
+        StatefulProgramsAndComputationsDecisionLab:
+          module0.StatefulProgramsAndComputationsDecisionLab,
+        StatefulProgramsAndComputationsMechanismMap:
+          module0.StatefulProgramsAndComputationsMechanismMap,
+        StatefulProgramsAndComputationsFailureDiagram:
+          module0.StatefulProgramsAndComputationsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/13-official/asynchronous-computations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/asynchronous-computations");
+      return {
+        AsynchronousComputationsDecisionLab:
+          module0.AsynchronousComputationsDecisionLab,
+        AsynchronousComputationsMechanismMap:
+          module0.AsynchronousComputationsMechanismMap,
+        AsynchronousComputationsFailureDiagram:
+          module0.AsynchronousComputationsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/14-official/reactive-data-streams":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/reactive-data-streams");
+      return {
+        ReactiveDataStreamsDecisionLab: module0.ReactiveDataStreamsDecisionLab,
+        ReactiveDataStreamsMechanismMap:
+          module0.ReactiveDataStreamsMechanismMap,
+        ReactiveDataStreamsFailureDiagram:
+          module0.ReactiveDataStreamsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-functional-programming/15-official/message-passing-concurrency":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-functional-programming/message-passing-concurrency");
+      return {
+        MessagePassingConcurrencyDecisionLab:
+          module0.MessagePassingConcurrencyDecisionLab,
+        MessagePassingConcurrencyMechanismMap:
+          module0.MessagePassingConcurrencyMechanismMap,
+        MessagePassingConcurrencyFailureDiagram:
+          module0.MessagePassingConcurrencyFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-quality-code/00-syntax/cqc-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/cqc-learning-map");
+    return {
+      CqcLearningMapDecisionLab: module0.CqcLearningMapDecisionLab,
+      CqcLearningMapMechanismMap: module0.CqcLearningMapMechanismMap,
+      CqcLearningMapFailureDiagram: module0.CqcLearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/01-official/basic-language-elements": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/basic-language-elements");
+    return {
+      BasicLanguageElementsDecisionLab:
+        module0.BasicLanguageElementsDecisionLab,
+      BasicLanguageElementsMechanismMap:
+        module0.BasicLanguageElementsMechanismMap,
+      BasicLanguageElementsFailureDiagram:
+        module0.BasicLanguageElementsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/02-official/collections-and-linq": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/collections-and-linq");
+    return {
+      CollectionsAndLinqDecisionLab: module0.CollectionsAndLinqDecisionLab,
+      CollectionsAndLinqMechanismMap: module0.CollectionsAndLinqMechanismMap,
+      CollectionsAndLinqFailureDiagram:
+        module0.CollectionsAndLinqFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/03-eng/cqc-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/cqc-final-review");
+    return {
+      CqcFinalReviewDecisionLab: module0.CqcFinalReviewDecisionLab,
+      CqcFinalReviewMechanismMap: module0.CqcFinalReviewMechanismMap,
+      CqcFinalReviewFailureDiagram: module0.CqcFinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/03-official/generics-delegates-and-events": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/generics-delegates-and-events");
+    return {
+      GenericsDelegatesAndEventsDecisionLab:
+        module0.GenericsDelegatesAndEventsDecisionLab,
+      GenericsDelegatesAndEventsMechanismMap:
+        module0.GenericsDelegatesAndEventsMechanismMap,
+      GenericsDelegatesAndEventsFailureDiagram:
+        module0.GenericsDelegatesAndEventsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/04-official/resource-management-and-serialization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-quality-code/resource-management-and-serialization");
+      return {
+        ResourceManagementAndSerializationDecisionLab:
+          module0.ResourceManagementAndSerializationDecisionLab,
+        ResourceManagementAndSerializationMechanismMap:
+          module0.ResourceManagementAndSerializationMechanismMap,
+        ResourceManagementAndSerializationFailureDiagram:
+          module0.ResourceManagementAndSerializationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-quality-code/05-official/exceptions-and-custom-exceptions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-quality-code/exceptions-and-custom-exceptions");
+      return {
+        ExceptionsAndCustomExceptionsDecisionLab:
+          module0.ExceptionsAndCustomExceptionsDecisionLab,
+        ExceptionsAndCustomExceptionsMechanismMap:
+          module0.ExceptionsAndCustomExceptionsMechanismMap,
+        ExceptionsAndCustomExceptionsFailureDiagram:
+          module0.ExceptionsAndCustomExceptionsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-quality-code/06-official/asynchrony-multithreading-tasks-and-parallelism":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csharp-quality-code/asynchrony-multithreading-tasks-and-parallelism");
+      return {
+        AsynchronyMultithreadingTasksAndParallelismDecisionLab:
+          module0.AsynchronyMultithreadingTasksAndParallelismDecisionLab,
+        AsynchronyMultithreadingTasksAndParallelismMechanismMap:
+          module0.AsynchronyMultithreadingTasksAndParallelismMechanismMap,
+        AsynchronyMultithreadingTasksAndParallelismFailureDiagram:
+          module0.AsynchronyMultithreadingTasksAndParallelismFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "csharp-quality-code/07-official/member-design": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/member-design");
+    return {
+      MemberDesignDecisionLab: module0.MemberDesignDecisionLab,
+      MemberDesignMechanismMap: module0.MemberDesignMechanismMap,
+      MemberDesignFailureDiagram: module0.MemberDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/08-official/type-design": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/type-design");
+    return {
+      TypeDesignDecisionLab: module0.TypeDesignDecisionLab,
+      TypeDesignMechanismMap: module0.TypeDesignMechanismMap,
+      TypeDesignFailureDiagram: module0.TypeDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/09-official/security-design": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/security-design");
+    return {
+      SecurityDesignDecisionLab: module0.SecurityDesignDecisionLab,
+      SecurityDesignMechanismMap: module0.SecurityDesignMechanismMap,
+      SecurityDesignFailureDiagram: module0.SecurityDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/10-official/naming-conventions": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/naming-conventions");
+    return {
+      NamingConventionsDecisionLab: module0.NamingConventionsDecisionLab,
+      NamingConventionsMechanismMap: module0.NamingConventionsMechanismMap,
+      NamingConventionsFailureDiagram: module0.NamingConventionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/11-official/clean-code": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/clean-code");
+    return {
+      CleanCodeDecisionLab: module0.CleanCodeDecisionLab,
+      CleanCodeMechanismMap: module0.CleanCodeMechanismMap,
+      CleanCodeFailureDiagram: module0.CleanCodeFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "csharp-quality-code/12-official/development-practices": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-quality-code/development-practices");
+    return {
+      DevelopmentPracticesDecisionLab: module0.DevelopmentPracticesDecisionLab,
+      DevelopmentPracticesMechanismMap:
+        module0.DevelopmentPracticesMechanismMap,
+      DevelopmentPracticesFailureDiagram:
+        module0.DevelopmentPracticesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/diagrams/dog-learning-map");
@@ -2221,6 +2580,193 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization");
     return {
       DogBottleneckDecisionDiagram: module0.DogBottleneckDecisionDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/00-evolution/dcs-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/dcs-learning-map");
+    return {
+      DcsLearningMapDecisionLab: module0.DcsLearningMapDecisionLab,
+      DcsLearningMapMechanismMap: module0.DcsLearningMapMechanismMap,
+      DcsLearningMapFailureDiagram: module0.DcsLearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/01-official/survival-of-the-sharpest":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/survival-of-the-sharpest");
+      return {
+        SurvivalOfTheSharpestDecisionLab:
+          module0.SurvivalOfTheSharpestDecisionLab,
+        SurvivalOfTheSharpestMechanismMap:
+          module0.SurvivalOfTheSharpestMechanismMap,
+        SurvivalOfTheSharpestFailureDiagram:
+          module0.SurvivalOfTheSharpestFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/02-official/csharp-2": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/csharp-2");
+    return {
+      Csharp2DecisionLab: module0.Csharp2DecisionLab,
+      Csharp2MechanismMap: module0.Csharp2MechanismMap,
+      Csharp2FailureDiagram: module0.Csharp2FailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/03-modern/dcs-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/dcs-final-review");
+    return {
+      DcsFinalReviewDecisionLab: module0.DcsFinalReviewDecisionLab,
+      DcsFinalReviewMechanismMap: module0.DcsFinalReviewMechanismMap,
+      DcsFinalReviewFailureDiagram: module0.DcsFinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/03-official/csharp-3-linq": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/csharp-3-linq");
+    return {
+      Csharp3LinqDecisionLab: module0.Csharp3LinqDecisionLab,
+      Csharp3LinqMechanismMap: module0.Csharp3LinqMechanismMap,
+      Csharp3LinqFailureDiagram: module0.Csharp3LinqFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/04-official/csharp-4-interoperability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/csharp-4-interoperability");
+      return {
+        Csharp4InteroperabilityDecisionLab:
+          module0.Csharp4InteroperabilityDecisionLab,
+        Csharp4InteroperabilityMechanismMap:
+          module0.Csharp4InteroperabilityMechanismMap,
+        Csharp4InteroperabilityFailureDiagram:
+          module0.Csharp4InteroperabilityFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/05-official/writing-asynchronous-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/writing-asynchronous-code");
+      return {
+        WritingAsynchronousCodeDecisionLab:
+          module0.WritingAsynchronousCodeDecisionLab,
+        WritingAsynchronousCodeMechanismMap:
+          module0.WritingAsynchronousCodeMechanismMap,
+        WritingAsynchronousCodeFailureDiagram:
+          module0.WritingAsynchronousCodeFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/06-official/async-implementation": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/async-implementation");
+    return {
+      AsyncImplementationDecisionLab: module0.AsyncImplementationDecisionLab,
+      AsyncImplementationMechanismMap: module0.AsyncImplementationMechanismMap,
+      AsyncImplementationFailureDiagram:
+        module0.AsyncImplementationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/07-official/csharp-5-bonus-features": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/csharp-5-bonus-features");
+    return {
+      Csharp5BonusFeaturesDecisionLab: module0.Csharp5BonusFeaturesDecisionLab,
+      Csharp5BonusFeaturesMechanismMap:
+        module0.Csharp5BonusFeaturesMechanismMap,
+      Csharp5BonusFeaturesFailureDiagram:
+        module0.Csharp5BonusFeaturesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/08-official/super-sleek-properties": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/super-sleek-properties");
+    return {
+      SuperSleekPropertiesDecisionLab: module0.SuperSleekPropertiesDecisionLab,
+      SuperSleekPropertiesMechanismMap:
+        module0.SuperSleekPropertiesMechanismMap,
+      SuperSleekPropertiesFailureDiagram:
+        module0.SuperSleekPropertiesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/09-official/stringy-features": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/stringy-features");
+    return {
+      StringyFeaturesDecisionLab: module0.StringyFeaturesDecisionLab,
+      StringyFeaturesMechanismMap: module0.StringyFeaturesMechanismMap,
+      StringyFeaturesFailureDiagram: module0.StringyFeaturesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/10-official/concise-code-smorgasbord":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/concise-code-smorgasbord");
+      return {
+        ConciseCodeSmorgasbordDecisionLab:
+          module0.ConciseCodeSmorgasbordDecisionLab,
+        ConciseCodeSmorgasbordMechanismMap:
+          module0.ConciseCodeSmorgasbordMechanismMap,
+        ConciseCodeSmorgasbordFailureDiagram:
+          module0.ConciseCodeSmorgasbordFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/11-official/composition-using-tuples":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/composition-using-tuples");
+      return {
+        CompositionUsingTuplesDecisionLab:
+          module0.CompositionUsingTuplesDecisionLab,
+        CompositionUsingTuplesMechanismMap:
+          module0.CompositionUsingTuplesMechanismMap,
+        CompositionUsingTuplesFailureDiagram:
+          module0.CompositionUsingTuplesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/12-official/deconstruction-and-pattern-matching":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/deconstruction-and-pattern-matching");
+      return {
+        DeconstructionAndPatternMatchingDecisionLab:
+          module0.DeconstructionAndPatternMatchingDecisionLab,
+        DeconstructionAndPatternMatchingMechanismMap:
+          module0.DeconstructionAndPatternMatchingMechanismMap,
+        DeconstructionAndPatternMatchingFailureDiagram:
+          module0.DeconstructionAndPatternMatchingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/13-official/pass-by-reference-efficiency":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-csharp/pass-by-reference-efficiency");
+      return {
+        PassByReferenceEfficiencyDecisionLab:
+          module0.PassByReferenceEfficiencyDecisionLab,
+        PassByReferenceEfficiencyMechanismMap:
+          module0.PassByReferenceEfficiencyMechanismMap,
+        PassByReferenceEfficiencyFailureDiagram:
+          module0.PassByReferenceEfficiencyFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-understanding-csharp/14-official/concise-code-csharp-7": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/concise-code-csharp-7");
+    return {
+      ConciseCodeCsharp7DecisionLab: module0.ConciseCodeCsharp7DecisionLab,
+      ConciseCodeCsharp7MechanismMap: module0.ConciseCodeCsharp7MechanismMap,
+      ConciseCodeCsharp7FailureDiagram:
+        module0.ConciseCodeCsharp7FailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-understanding-csharp/15-official/csharp-8-and-beyond": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-understanding-csharp/csharp-8-and-beyond");
+    return {
+      Csharp8AndBeyondDecisionLab: module0.Csharp8AndBeyondDecisionLab,
+      Csharp8AndBeyondMechanismMap: module0.Csharp8AndBeyondMechanismMap,
+      Csharp8AndBeyondFailureDiagram: module0.Csharp8AndBeyondFailureDiagram,
     } as ChapterMdxComponents;
   },
   "dsa-cpp/01-linear-structures/lists-stacks-queues": async () => {

@@ -91,6 +91,49 @@ function explainNetworkConcept(label, unitTitle, bookSlug) {
   return `${context}需要落到明确的流量路径、责任设备和状态表，而不能停留在设备名称。画出正常与单故障路径，固定输入后只改变一个链路、表项或容量条件，再以双向抓包、设备状态、告警和恢复结果核对设计。`;
 }
 
+function explainCSharpConcept(label, unitTitle, bookSlug) {
+  const context = `${unitTitle}中的${label}`;
+  if (bookSlug === "csharp-functional-programming") {
+    if (/纯|副作用|状态|不可变|引用透明|函数/u.test(label)) {
+      return `${context}要从输入、返回值与外部状态三者的关系解释：相同输入是否产生相同结果，计算是否读写时钟、随机数、数据库或共享对象。可把副作用推到边界，以固定输入重复运行并比较返回值、状态快照和调用轨迹，验证核心计算是否可独立推理。`;
+    }
+    if (/类型|签名|泛型|Option|Either|错误|异常/u.test(label)) {
+      return `${context}通过类型表达允许的输入、成功结果和失败分支；类型只编码已声明的不变量，不能替代运行时校验。应准备能编译与必须被拒绝的调用案例，并以成功、空值/缺失和业务失败样本核对每个分支都被显式处理。`;
+    }
+    if (/组合|高阶|柯里|部分应用|Monad|延迟|continuation|续延/u.test(label)) {
+      return `${context}把小函数按类型兼容的输入输出连接起来，组合顺序会决定求值、短路和错误传播。用带事件记录的最小管线改变组合次序或失败位置，核对实际调用顺序、返回结构与未执行分支。`;
+    }
+    if (/异步|并发|消息|流|响应|observable|task/u.test(label)) {
+      return `${context}涉及时间、取消、背压或多执行主体，不能只凭最终值判断正确性。应以可控调度器或时间源复现完成、取消、超时与竞争，保存消息顺序、任务状态和资源释放轨迹，确认状态所有权与终止条件。`;
+    }
+    return `${context}应写成可组合的输入—输出契约，并把环境读取、状态改变与失败显式放在边界。用确定输入运行正常、空值和失败样本，同时记录返回值与副作用轨迹，证明结论不依赖隐藏状态。`;
+  }
+
+  if (bookSlug === "csharp-quality-code") {
+    if (/异步|线程|并行|Task|锁|并发/u.test(label)) {
+      return `${context}必须区分任务生命周期、线程调度、共享状态与异常传播，旧版本经验不能直接当作当前运行时保证。用受控取消、超时和竞争样本记录任务状态、异常与资源释放，并以压力测试确认结论在重复调度下仍成立。`;
+    }
+    if (/安全|序列化|异常|资源|释放|Dispose|密码|注入/u.test(label)) {
+      return `${context}跨越输入信任或资源生命周期边界，建议只有在明确威胁模型、所有权和失败路径后才成立。用恶意/畸形输入、失败注入和资源计数检查拒绝行为、敏感数据暴露与最终释放，而不是只验证顺利路径。`;
+    }
+    if (/性能|集合|LINQ|泛型|装箱|字符串/u.test(label)) {
+      return `${context}涉及类型语义、分配和枚举成本，不能凭代码长度或旧版微优化判断。固定运行时、构建模式和输入规模，用基准、分配统计与多组边界数据比较替代方案，同时验证结果语义一致。`;
+    }
+    return `${context}是一条需要上下文的工程建议，而不是无条件规则。先声明适用的语言/运行时版本、代码约束与反例，再以编译器诊断、分析器、自动化测试或基准结果证明采用该建议确实改善正确性、可维护性或性能。`;
+  }
+
+  if (/异步|await|Task|状态机|迭代器|yield/u.test(label)) {
+    return `${context}要区分源码语法、编译器降级生成的状态机与运行时调度行为。用包含正常完成、异常和取消的最小案例查看编译诊断或生成 IL，并记录续延线程、任务状态与 finally 执行次序。`;
+  }
+  if (/引用|ref|in|out|Span|值类型|元组|解构/u.test(label)) {
+    return `${context}涉及值的存储位置、复制语义与生命周期，语法简洁不代表没有别名或逃逸限制。准备可编译和应被编译器拒绝的样本，结合 IL、分配计数或地址/修改轨迹核对复制、别名与边界。`;
+  }
+  if (/模式|可空|属性|字符串|表达式|局部函数|lambda/u.test(label)) {
+    return `${context}先由语言规则确定匹配、求值和类型推断，再由编译器选择具体降级形式；不同版本可接受的语法与警告也可能不同。以明确 LangVersion 的正反编译案例、边界输入和生成 IL 核对语义，避免把语法糖误认为运行时特性。`;
+  }
+  return `${context}必须分清语言规范、编译器实现、运行时行为与基础类库 API 四层责任。固定 C# 语言版本和目标框架，用正向/负向编译案例、必要的 IL 或运行轨迹以及版本对照验证结论。`;
+}
+
 const BOOKS = {
   "c-primer-plus": {
     sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429",
@@ -297,6 +340,100 @@ const BOOKS = {
     },
     evidence(label) {
       return `保存红—绿—重构的最小提交与失败消息，用行为断言、替身交互和重复运行核对「${label}」是否提供快速反馈。`;
+    },
+  },
+  "csharp-functional-programming": {
+    sourceUrl:
+      "https://livebook.manning.com/book/functional-programming-in-c-sharp/table-of-contents",
+    sourceName: "Functional Programming in C#",
+    unitIds: {
+      "introducing-functional-programming": "fpc1-01",
+      "why-function-purity-matters": "fpc1-02",
+      "designing-function-signatures-and-types": "fpc1-03",
+      "patterns-in-functional-programming": "fpc1-04",
+      "designing-programs-with-function-composition": "fpc1-05",
+      "functional-error-handling": "fpc1-06",
+      "structuring-an-application-with-functions": "fpc1-07",
+      "multi-argument-functions": "fpc1-08",
+      "thinking-about-data-functionally": "fpc1-09",
+      "event-sourcing-functional-persistence": "fpc1-10",
+      "lazy-computations-continuations-monadic-composition": "fpc1-11",
+      "stateful-programs-and-computations": "fpc1-12",
+      "asynchronous-computations": "fpc1-13",
+      "reactive-data-streams": "fpc1-14",
+      "message-passing-concurrency": "fpc1-15",
+    },
+    explainConcept(label, unitTitle) {
+      return explainCSharpConcept(
+        label,
+        unitTitle,
+        "csharp-functional-programming",
+      );
+    },
+    failure(label) {
+      return `若把「${label}」只写成函数式术语而不隔离副作用、状态和失败分支，组合后的程序仍会依赖隐藏时序，无法从输入稳定推导结果。`;
+    },
+    evidence(label) {
+      return `以确定输入重复运行「${label}」的最小管线，用属性测试、状态快照和副作用调用轨迹核对返回值、失败传播与资源边界。`;
+    },
+  },
+  "csharp-quality-code": {
+    sourceUrl:
+      "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html",
+    sourceName: "编写高质量代码：改善 C# 程序的 157 个建议",
+    unitIds: {
+      "basic-language-elements": "cqc-01",
+      "collections-and-linq": "cqc-02",
+      "generics-delegates-and-events": "cqc-03",
+      "resource-management-and-serialization": "cqc-04",
+      "exceptions-and-custom-exceptions": "cqc-05",
+      "asynchrony-multithreading-tasks-and-parallelism": "cqc-06",
+      "member-design": "cqc-07",
+      "type-design": "cqc-08",
+      "security-design": "cqc-09",
+      "naming-conventions": "cqc-10",
+      "clean-code": "cqc-11",
+      "development-practices": "cqc-12",
+    },
+    explainConcept(label, unitTitle) {
+      return explainCSharpConcept(label, unitTitle, "csharp-quality-code");
+    },
+    failure(label) {
+      return `若把「${label}」当作脱离版本与上下文的硬规则，可能用过时的优化或风格替换了更重要的正确性、安全性与可维护性约束。`;
+    },
+    evidence(label) {
+      return `固定当前 .NET、语言版本和输入规模，用编译诊断、分析器、自动化测试、基准或安全失败样本复核「${label}」的收益与反例。`;
+    },
+  },
+  "deep-understanding-csharp": {
+    sourceUrl:
+      "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/table-of-contents",
+    sourceName: "C# in Depth, Fourth Edition",
+    unitIds: {
+      "survival-of-the-sharpest": "cid4-01",
+      "csharp-2": "cid4-02",
+      "csharp-3-linq": "cid4-03",
+      "csharp-4-interoperability": "cid4-04",
+      "writing-asynchronous-code": "cid4-05",
+      "async-implementation": "cid4-06",
+      "csharp-5-bonus-features": "cid4-07",
+      "super-sleek-properties": "cid4-08",
+      "stringy-features": "cid4-09",
+      "concise-code-smorgasbord": "cid4-10",
+      "composition-using-tuples": "cid4-11",
+      "deconstruction-and-pattern-matching": "cid4-12",
+      "pass-by-reference-efficiency": "cid4-13",
+      "concise-code-csharp-7": "cid4-14",
+      "csharp-8-and-beyond": "cid4-15",
+    },
+    explainConcept(label, unitTitle) {
+      return explainCSharpConcept(label, unitTitle, "deep-understanding-csharp");
+    },
+    failure(label) {
+      return `若解释「${label}」时混淆语言规范、编译器降级、运行时和类库责任，版本变化后就会把实现细节误当作 C# 语义保证。`;
+    },
+    evidence(label) {
+      return `以明确的 LangVersion 与目标框架构建「${label}」的正反案例，并用编译诊断、生成 IL、运行轨迹或分配数据核对实际边界。`;
     },
   },
   "illustrated-server-network": {

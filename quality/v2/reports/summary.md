@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T16:00:15.129Z；旧版分数不迁移。
+> 2026-07-29T16:19:58.095Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：3644
-- queued：621
-- passed：231
+- queued：573
+- passed：279
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -208,27 +208,27 @@
 | 195 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
 | 196 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
 | 197 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 198 | csharp-functional-programming | 17 | 0 | 17 | 0 | 17 |
-| 199 | deep-understanding-csharp | 17 | 0 | 17 | 0 | 17 |
-| 200 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 201 | pbrt-book | 16 | 0 | 16 | 0 | 16 |
-| 202 | vulkan-guide | 16 | 0 | 16 | 0 | 16 |
-| 203 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 204 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 205 | computer-graphics-4e | 14 | 0 | 14 | 0 | 14 |
-| 206 | csharp-quality-code | 14 | 0 | 14 | 0 | 14 |
-| 207 | ray-tracing-weekend | 12 | 0 | 12 | 0 | 12 |
-| 208 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 209 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 210 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 211 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
-| 212 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
-| 213 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
-| 214 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
-| 215 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 216 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
-| 217 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
-| 218 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 198 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 199 | pbrt-book | 16 | 0 | 16 | 0 | 16 |
+| 200 | vulkan-guide | 16 | 0 | 16 | 0 | 16 |
+| 201 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 202 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 203 | computer-graphics-4e | 14 | 0 | 14 | 0 | 14 |
+| 204 | ray-tracing-weekend | 12 | 0 | 12 | 0 | 12 |
+| 205 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 206 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 207 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 208 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
+| 209 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
+| 210 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
+| 211 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
+| 212 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
+| 213 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
+| 214 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
+| 215 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 216 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
+| 217 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
+| 218 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
 | 219 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
 | 220 | illustrated-http | 13 | 0 | 0 | 13 | 0 |
 | 221 | illustrated-server-network | 8 | 0 | 0 | 8 | 0 |
