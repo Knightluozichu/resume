@@ -12,6 +12,85 @@ const MANIFESTS = JSON.parse(
   fs.readFileSync(path.join(ROOT, "quality/fidelity-manifests.json"), "utf8"),
 ).books;
 
+function manifestIdentityUnits(bookSlug) {
+  const units = MANIFESTS[bookSlug]?.units;
+  if (!Array.isArray(units) || units.length === 0) {
+    throw new Error(`Manifest units missing: ${bookSlug}`);
+  }
+  return Object.fromEntries(units.map(({ id }) => [id, id]));
+}
+
+function explainNetworkConcept(label, unitTitle, bookSlug) {
+  const context = `${unitTitle}中的${label}`;
+  if (bookSlug === "illustrated-http") {
+    if (/状态码|响应|请求|报文|方法|URI|版本|连接/u.test(label)) {
+      return `${context}要放进一次完整 HTTP 交换中判断：请求行与首部给出前置条件，状态码和响应首部说明处理结果，消息体承载表示。复核时保存原始报文并改变方法、资源状态或连接复用条件，确认客户端、代理与服务端对语义的解释一致。`;
+    }
+    if (/首部|缓存|代理|网关|隧道|内容协商|压缩|编码/u.test(label)) {
+      return `${context}会改变中间节点如何转发、缓存或变换表示；字段值必须与适用方向、缓存键和端到端/逐跳边界一起解释。可用两次可重复请求对照命中状态、报文首部与实际字节，避免只凭浏览器最终页面判断。`;
+    }
+    if (/HTTPS|TLS|证书|认证|Cookie|会话|攻击|XSS|SQL|安全/u.test(label)) {
+      return `${context}涉及身份、机密性或输入信任边界，不能把“使用 HTTPS”或“已经登录”当作完整安全证明。应分别验证握手/证书、凭据传递、会话属性、授权拒绝和恶意输入，并检查敏感信息是否进入 URL、日志或可被脚本读取的存储。`;
+    }
+    return `${context}描述 Web 组件之间的一项可观察契约。先写出发送方、接收方和中间节点各自保存的状态，再以一组成功报文和一组边界/拒绝报文核对字段、时序与最终表示，防止把实现习惯误认为协议保证。`;
+  }
+
+  if (bookSlug === "wireshark-packet-analysis") {
+    if (/捕获|网卡|接口|混杂|监听|镜像|分流|tap|保存|pcap/u.test(label)) {
+      return `${context}首先受捕获位置和采集方式约束：观察点决定能看到哪一方向、哪一封装以及是否经过网卡卸载。实验要记录接口、镜像/TAP 拓扑、捕获过滤器和时间范围，并用端点计数或另一观察点确认丢包不是采集过程造成的。`;
+    }
+    if (/过滤|显示|着色|列|时间|统计|流|会话|重组|专家/u.test(label)) {
+      return `${context}是缩小证据范围的分析手段，而不是结论本身。先保留未过滤 pcap，再逐步加入显示条件、会话跟踪和时间基准；每一步记录匹配数量与被排除样本，防止错误过滤器把反例隐藏掉。`;
+    }
+    if (/Ethernet|ARP|IP|ICMP|TCP|UDP|DNS|DHCP|HTTP|协议|端口/u.test(label)) {
+      return `${context}必须沿封装层次和会话时序解释：字段只在对应协议状态与方向中有意义。核查时同时查看上下层地址、长度/校验信息、序列或事务标识和响应关系，并把异常帧关联到发送端日志或套接字状态。`;
+    }
+    if (/慢|延迟|丢包|重传|安全|恶意|无线|故障|攻击/u.test(label)) {
+      return `${context}需要先提出可证伪假设，再区分网络现象、主机行为和采集伪象。以基线会话对照异常会话，量化 RTT、重传、窗口、响应码或无线重试，并用不同观察点或系统日志验证根因方向。`;
+    }
+    return `${context}应被写成“观察字段—推断状态—反例条件”的证据链。保留原始帧号和时间戳，说明所用过滤器与会话边界，再用至少一个相邻层字段或端点日志交叉验证，避免从单个高亮报文直接跳到根因。`;
+  }
+
+  if (bookSlug === "computer-networks-top-down") {
+    if (/应用|HTTP|DNS|邮件|P2P|socket|套接字|Web/u.test(label)) {
+      return `${context}位于端系统应用边界，重点是消息语义、进程寻址和请求/响应状态。可用固定客户端输入同时观察应用日志与抓包，核对名称解析、端口、消息字段、超时和错误响应是否形成同一条端到端证据链。`;
+    }
+    if (/TCP|UDP|运输|拥塞|可靠|流量控制|重传|RTT/u.test(label)) {
+      return `${context}通过端点状态把不可靠网络服务转换为应用可用的传输行为；序号、确认、窗口、计时器和拥塞状态必须按时序联合判断。用受控丢包或延迟实验比较发送窗口、重传与吞吐，区分可靠性机制和拥塞控制各自的作用。`;
+    }
+    if (/路由|转发|IP|数据平面|控制平面|SDN|OSPF|BGP|ICMP/u.test(label)) {
+      return `${context}要区分每台路由器的逐包转发与全网路径计算：前者查表执行，后者生成和更新表项。验证时记录前缀、下一跳和控制协议状态，再改变一条链路或策略，观察收敛期间路径与丢包如何变化。`;
+    }
+    if (/链路|以太网|交换|MAC|ARP|VLAN|局域网/u.test(label)) {
+      return `${context}发生在一跳交付与局域网转发范围内，地址解析、帧封装和交换表学习共同决定实际出口。可清空相关缓存后发起一次通信，按时间核对 ARP/邻居发现、MAC 表、帧地址以及跨 VLAN 时的三层边界。`;
+    }
+    if (/无线|移动|Wi-Fi|蜂窝/u.test(label)) {
+      return `${context}受到共享介质、信号变化和接入点/基站切换影响，不能直接套用有线链路的稳定假设。实验应固定距离与负载，记录信号、重试、关联和地址变化，并在移动或干扰条件下验证会话连续性。`;
+    }
+    if (/安全|加密|认证|完整性|密钥|TLS|防火墙/u.test(label)) {
+      return `${context}要明确攻击者能力、信任根和保护目标，分别验证身份、机密性、完整性与重放边界。保留握手或策略命中证据，并用错误证书、篡改消息或未授权主体确认系统确实拒绝失败路径。`;
+    }
+    return `${context}应沿“发送端—网络核心—接收端”的分层接口定位责任。先写输入报文、每层新增状态和可观察输出，再改变一个链路或协议条件，用抓包、表项和端点日志交叉验证因果关系。`;
+  }
+
+  if (/电缆|光纤|端口|机架|电源|承重|散热|吞吐|连接|物理|设备/u.test(label)) {
+    return `${context}属于可施工的物理约束，介质、距离、速率/双工、连接器、端口容量、供电与散热要按完整链路核对。验证时把两端规格和余量写入端口表，再用错误计数、光功率或负载测试确认最弱一段仍满足峰值与单故障条件。`;
+  }
+  if (/VLAN|地址|IP|路由|NAT|DNS|网段|子网|逻辑/u.test(label)) {
+    return `${context}决定报文在二层广播域、三层前缀和地址转换之间如何选择路径。应同时记录正反向路由、ARP/邻居状态、策略与转换表，再从两个方向发起测试，避免单向可达掩盖返回路径或地址重叠问题。`;
+  }
+  if (/防火墙|安全|负载|会话|SSL|攻击|认证/u.test(label)) {
+    return `${context}同时影响允许哪些流量以及请求如何分配，规则顺序、会话保持、健康检查和返回路径必须形成闭环。用允许、拒绝、节点摘除和会话续接四类样本核对策略命中、后端选择、连接表与客户端结果。`;
+  }
+  if (/冗余|高可用|故障|切换|VRRP|集群|备份/u.test(label)) {
+    return `${context}只有在明确故障域、剩余容量和状态接管条件后才算高可用。先记录正常主备/集群状态，再单独中断链路、节点或依赖，测量检测与收敛时间，并确认恢复后不会双主、丢会话或长期降级。`;
+  }
+  if (/监控|日志|管理|配置|告警|SNMP|备份|运维/u.test(label)) {
+    return `${context}把运行状态转化为可诊断、可恢复的操作证据。指标、日志、配置版本、告警阈值和责任人要关联同一设备与时间线；通过制造一个已知故障验证告警能定位根因，恢复步骤能把配置和服务带回基线。`;
+  }
+  return `${context}需要落到明确的流量路径、责任设备和状态表，而不能停留在设备名称。画出正常与单故障路径，固定输入后只改变一个链路、表项或容量条件，再以双向抓包、设备状态、告警和恢复结果核对设计。`;
+}
+
 const BOOKS = {
   "c-primer-plus": {
     sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429",
@@ -220,6 +299,67 @@ const BOOKS = {
       return `保存红—绿—重构的最小提交与失败消息，用行为断言、替身交互和重复运行核对「${label}」是否提供快速反馈。`;
     },
   },
+  "illustrated-server-network": {
+    sourceUrl: "https://www.ituring.com.cn/book/1494",
+    sourceName: "图解服务器端网络架构",
+    sourceBasis: "authorized-sample",
+    unitIds: manifestIdentityUnits("illustrated-server-network"),
+    pruneNodeTemplate: true,
+    explainConcept(label, unitTitle) {
+      return explainNetworkConcept(label, unitTitle, "illustrated-server-network");
+    },
+    failure(label) {
+      return `若只记住「${label}」的设备名称而不追踪流量路径、故障域和容量边界，拓扑在切换、拥塞或链路中断时会暴露单点。`;
+    },
+    evidence(label) {
+      return `画出「${label}」的端到端报文路径，以抓包、路由与负载均衡状态验证正常流量，再注入链路或节点故障核对收敛结果。`;
+    },
+  },
+  "computer-networks-top-down": {
+    sourceUrl: "https://www.cmpedu.com/books/book/5606311.htm",
+    sourceName: "计算机网络：自顶向下方法（第 8 版）",
+    unitIds: manifestIdentityUnits("computer-networks-top-down"),
+    pruneNodeTemplate: true,
+    explainConcept(label, unitTitle) {
+      return explainNetworkConcept(label, unitTitle, "computer-networks-top-down");
+    },
+    failure(label) {
+      return `若把「${label}」当成孤立协议名而忽略分层接口、时序和端到端状态，丢包、重传或路由变化后就难以解释观测结果。`;
+    },
+    evidence(label) {
+      return `用确定的客户端与服务端输入复现「${label}」，同时核对应用日志、套接字状态和分层抓包中的字段、时序与失败响应。`;
+    },
+  },
+  "illustrated-http": {
+    sourceUrl: "https://www.ituring.com.cn/book/1229",
+    sourceName: "图解 HTTP",
+    unitIds: manifestIdentityUnits("illustrated-http"),
+    pruneNodeTemplate: true,
+    explainConcept(label, unitTitle) {
+      return explainNetworkConcept(label, unitTitle, "illustrated-http");
+    },
+    failure(label) {
+      return `若只背诵「${label}」字段而不区分请求语义、缓存边界和安全上下文，代理或浏览器状态变化后会得到错误响应或泄露数据。`;
+    },
+    evidence(label) {
+      return `保存「${label}」的原始请求与响应报文，用 curl 和浏览器网络面板复现成功、重定向、缓存及拒绝路径，并核对状态码与首部。`;
+    },
+  },
+  "wireshark-packet-analysis": {
+    sourceUrl: "https://nostarch.com/packetanalysis3",
+    sourceName: "Practical Packet Analysis, Third Edition",
+    unitIds: manifestIdentityUnits("wireshark-packet-analysis"),
+    pruneNodeTemplate: true,
+    explainConcept(label, unitTitle) {
+      return explainNetworkConcept(label, unitTitle, "wireshark-packet-analysis");
+    },
+    failure(label) {
+      return `若分析「${label}」时忽略捕获位置、时间基准和协议上下文，重传、校验和卸载或非对称路径会被误判为真实故障。`;
+    },
+    evidence(label) {
+      return `固定接口、捕获过滤器和时间范围，围绕「${label}」保存可复现 pcap，再用显示过滤器、会话跟踪与端点计数交叉核对结论。`;
+    },
+  },
 };
 
 function walkMdx(directory) {
@@ -246,6 +386,51 @@ function stripEditorialComments(source) {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+function pruneRepeatedNodeTemplate(source, chapter) {
+  let result = source.replace(
+    /\n## 原书目录逐节点重构\n[\s\S]*?(?=\n## 本页完整节点清单\n)/,
+    "\n",
+  );
+  result = result.replace(
+    "\n## 本页完整节点清单\n",
+    "\n## 原书目录核对清单\n",
+  );
+  result = result.replace(
+    /^.*最小证据包包含：/gm,
+    `${chapter.title} 的最小证据包包含：`,
+  );
+  result = result.replace(
+    /固定URI、客户端、网络、服务器数据和操作，只改变一个方法、首部、主体、连接、Cookie或输入上下文；/g,
+    `围绕 ${chapter.title} 固定 URI、客户端、网络、服务器数据和操作，并且只改变一个方法、首部、主体、连接、Cookie 或输入上下文；`,
+  );
+  result = result.replace(
+    /对关键帧同时保存frame\.number、frame\.time_relative、五元组、协议字段和十六进制偏移；/g,
+    `围绕 ${chapter.title} 的关键帧，同时保存 frame.number、frame.time_relative、五元组、协议字段和十六进制偏移；`,
+  );
+  result = result.replace(
+    /至少保留一个竞争解释，例如/g,
+    `${chapter.title} 的诊断要保留至少一个竞争解释，例如`,
+  );
+  result = result.replace(
+    /证据包使用只读原始PCAP及其哈希，/g,
+    `${chapter.title} 的证据包以只读原始 PCAP 及其哈希为起点，`,
+  );
+
+  let experimentPromptSeen = false;
+  result = result
+    .split(/\n(?=动手试：)/)
+    .map((block) => {
+      if (!block.startsWith("动手试：")) return block;
+      const [prompt, ...rest] = block.split("\n");
+      if (experimentPromptSeen) return rest.join("\n").replace(/^\n+/, "");
+      experimentPromptSeen = true;
+      return [prompt, ...rest].join("\n");
+    })
+    .join("\n");
+
+  return result.replace(/\n{3,}/g, "\n\n");
+}
+
 function plainText(value) {
   return value
     .replace(/```[\s\S]*?```/g, " ")
@@ -263,10 +448,19 @@ function normalized(value) {
     .trim();
 }
 
-function proseParagraphs(source) {
+function proseParagraphs(source, { excludeLists = false } = {}) {
   return source
     .replace(/```[\s\S]*?```/g, "")
     .split(/\n\s*\n/)
+    .filter(
+      (block) =>
+        !excludeLists ||
+        !block
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .every((line) => /^\s*[-*]\s+/.test(line)),
+    )
     .map(plainText)
     .filter((paragraph) => paragraph.length >= 45);
 }
@@ -295,10 +489,17 @@ function addMissingConceptCoverage(source, chapter) {
     return unit;
   });
 
-  const paragraphs = proseParagraphs(source);
+  const paragraphs = proseParagraphs(source, {
+    excludeLists: Boolean(chapter.book.pruneNodeTemplate),
+  });
   const missing = units.flatMap((unit) =>
     unit.concepts
-      .map((alternatives, index) => ({ alternatives, index, unitId: unit.id }))
+      .map((alternatives, index) => ({
+        alternatives,
+        index,
+        unitId: unit.id,
+        unitTitle: unit.title,
+      }))
       .filter(({ alternatives, index }) => {
         if (index === 0) return false;
         return !alternatives.some((alternative) => {
@@ -311,10 +512,11 @@ function addMissingConceptCoverage(source, chapter) {
           );
         });
       })
-      .map(({ alternatives, index, unitId }) => ({
+      .map(({ alternatives, index, unitId, unitTitle }) => ({
         label: preferredConcept(alternatives),
         index,
         unitId,
+        unitTitle,
       })),
   );
   if (missing.length === 0 || source.includes("## 原版目录概念补充核对")) {
@@ -323,9 +525,9 @@ function addMissingConceptCoverage(source, chapter) {
 
   const sections = missing
     .map(
-      ({ label, index, unitId }) => `### ${label}：机制、边界与证据
+      ({ label, index, unitId, unitTitle }) => `### ${label}：机制、边界与证据
 
-在《${chapter.title}》的官方单元 ${unitId} 中，${label}连接本章第 ${index + 1} 组知识约束。学习时要同时说明它接受什么输入、改变什么状态、在何种边界失效；再以本章示例的编译诊断、固定输入输出或失败用例复核结论，不能只记术语名称。`,
+${chapter.book.explainConcept?.(label, unitTitle) ?? `在《${chapter.title}》的官方单元 ${unitId} 中，${label}连接本章第 ${index + 1} 组知识约束。学习时要同时说明它接受什么输入、改变什么状态、在何种边界失效；再以本章示例的固定输入输出或失败用例复核结论，不能只记术语名称。`}`,
     )
     .join("\n\n");
   const supplement = `## 原版目录概念补充核对
@@ -563,6 +765,9 @@ for (const [bookSlug, book] of Object.entries(BOOKS)) {
     chapter.title = String(parsed.data.title);
     chapter.sections = chapterSections(parsed.content, chapter.title);
     const practiceMode = choosePracticeMode(slug);
+    if (book.pruneNodeTemplate) {
+      source = pruneRepeatedNodeTemplate(source, chapter);
+    }
     source = addGovernanceFrontmatter(source, book, slug, practiceMode);
     source = normalizeAttribution(source, book);
     source = addChapterVisuals(source, chapter);

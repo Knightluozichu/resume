@@ -1093,6 +1093,117 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         CAIBottleneckMap: module0.CAIBottleneckMap,
       } as ChapterMdxComponents;
     },
+  "computer-networks-top-down/00-cnt8-official-learning-map/cnt8-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-official-learning-map");
+      return {
+        Cnt8OfficialLearningMapDecisionLab:
+          module0.Cnt8OfficialLearningMapDecisionLab,
+        Cnt8OfficialLearningMapMechanismMap:
+          module0.Cnt8OfficialLearningMapMechanismMap,
+        Cnt8OfficialLearningMapFailureDiagram:
+          module0.Cnt8OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/01-cnt8-01-internet/cnt8-01-internet":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-01-internet");
+      return {
+        Cnt801InternetDecisionLab: module0.Cnt801InternetDecisionLab,
+        Cnt801InternetMechanismMap: module0.Cnt801InternetMechanismMap,
+        Cnt801InternetFailureDiagram: module0.Cnt801InternetFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/02-cnt8-02-application/cnt8-02-application":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-02-application");
+      return {
+        Cnt802ApplicationDecisionLab: module0.Cnt802ApplicationDecisionLab,
+        Cnt802ApplicationMechanismMap: module0.Cnt802ApplicationMechanismMap,
+        Cnt802ApplicationFailureDiagram:
+          module0.Cnt802ApplicationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/03-cnt8-03-transport/cnt8-03-transport":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-03-transport");
+      return {
+        Cnt803TransportDecisionLab: module0.Cnt803TransportDecisionLab,
+        Cnt803TransportMechanismMap: module0.Cnt803TransportMechanismMap,
+        Cnt803TransportFailureDiagram: module0.Cnt803TransportFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/04-cnt8-04-data-plane/cnt8-04-data-plane":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-04-data-plane");
+      return {
+        Cnt804DataPlaneDecisionLab: module0.Cnt804DataPlaneDecisionLab,
+        Cnt804DataPlaneMechanismMap: module0.Cnt804DataPlaneMechanismMap,
+        Cnt804DataPlaneFailureDiagram: module0.Cnt804DataPlaneFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/05-cnt8-05-control-plane/cnt8-05-control-plane":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-05-control-plane");
+      return {
+        Cnt805ControlPlaneDecisionLab: module0.Cnt805ControlPlaneDecisionLab,
+        Cnt805ControlPlaneMechanismMap: module0.Cnt805ControlPlaneMechanismMap,
+        Cnt805ControlPlaneFailureDiagram:
+          module0.Cnt805ControlPlaneFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/06-cnt8-06-link-lans/cnt8-06-link-lans":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-06-link-lans");
+      return {
+        Cnt806LinkLansDecisionLab: module0.Cnt806LinkLansDecisionLab,
+        Cnt806LinkLansMechanismMap: module0.Cnt806LinkLansMechanismMap,
+        Cnt806LinkLansFailureDiagram: module0.Cnt806LinkLansFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/07-cnt8-07-wireless-mobile/cnt8-07-wireless-mobile":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-07-wireless-mobile");
+      return {
+        Cnt807WirelessMobileDecisionLab:
+          module0.Cnt807WirelessMobileDecisionLab,
+        Cnt807WirelessMobileMechanismMap:
+          module0.Cnt807WirelessMobileMechanismMap,
+        Cnt807WirelessMobileFailureDiagram:
+          module0.Cnt807WirelessMobileFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/08-cnt8-08-security/cnt8-08-security":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-08-security");
+      return {
+        Cnt808SecurityDecisionLab: module0.Cnt808SecurityDecisionLab,
+        Cnt808SecurityMechanismMap: module0.Cnt808SecurityMechanismMap,
+        Cnt808SecurityFailureDiagram: module0.Cnt808SecurityFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "computer-networks-top-down/09-cnt8-official-final-review/cnt8-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-networks-top-down/cnt8-official-final-review");
+      return {
+        Cnt8OfficialFinalReviewDecisionLab:
+          module0.Cnt8OfficialFinalReviewDecisionLab,
+        Cnt8OfficialFinalReviewMechanismMap:
+          module0.Cnt8OfficialFinalReviewMechanismMap,
+        Cnt8OfficialFinalReviewFailureDiagram:
+          module0.Cnt8OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "cpp-concurrency/advanced/designing-concurrent-code": async () => {
     const module0 =
       await import("@/components/mdx/cpp-concurrency/designing-concurrent-code");
@@ -2375,6 +2486,255 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       HfdStateDiagram: module0.HfdStateDiagram,
     } as ChapterMdxComponents;
   },
+  "illustrated-http/00-official-learning-map/ilh-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-http/ilh-official-learning-map");
+      return {
+        IlhOfficialLearningMapDecisionLab:
+          module0.IlhOfficialLearningMapDecisionLab,
+        IlhOfficialLearningMapMechanismMap:
+          module0.IlhOfficialLearningMapMechanismMap,
+        IlhOfficialLearningMapFailureDiagram:
+          module0.IlhOfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-http/01-chapter-01/ilh-01-web-network-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-01-web-network-foundations");
+    return {
+      Ilh01WebNetworkFoundationsDecisionLab:
+        module0.Ilh01WebNetworkFoundationsDecisionLab,
+      Ilh01WebNetworkFoundationsMechanismMap:
+        module0.Ilh01WebNetworkFoundationsMechanismMap,
+      Ilh01WebNetworkFoundationsFailureDiagram:
+        module0.Ilh01WebNetworkFoundationsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/02-chapter-02/ilh-02-simple-http-protocol": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-02-simple-http-protocol");
+    return {
+      Ilh02SimpleHttpProtocolDecisionLab:
+        module0.Ilh02SimpleHttpProtocolDecisionLab,
+      Ilh02SimpleHttpProtocolMechanismMap:
+        module0.Ilh02SimpleHttpProtocolMechanismMap,
+      Ilh02SimpleHttpProtocolFailureDiagram:
+        module0.Ilh02SimpleHttpProtocolFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/03-chapter-03/ilh-03-http-message-information":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-http/ilh-03-http-message-information");
+      return {
+        Ilh03HttpMessageInformationDecisionLab:
+          module0.Ilh03HttpMessageInformationDecisionLab,
+        Ilh03HttpMessageInformationMechanismMap:
+          module0.Ilh03HttpMessageInformationMechanismMap,
+        Ilh03HttpMessageInformationFailureDiagram:
+          module0.Ilh03HttpMessageInformationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-http/04-chapter-04/ilh-04-http-status-codes": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-04-http-status-codes");
+    return {
+      Ilh04HttpStatusCodesDecisionLab: module0.Ilh04HttpStatusCodesDecisionLab,
+      Ilh04HttpStatusCodesMechanismMap:
+        module0.Ilh04HttpStatusCodesMechanismMap,
+      Ilh04HttpStatusCodesFailureDiagram:
+        module0.Ilh04HttpStatusCodesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/05-chapter-05/ilh-05-web-servers-cooperation": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-05-web-servers-cooperation");
+    return {
+      Ilh05WebServersCooperationDecisionLab:
+        module0.Ilh05WebServersCooperationDecisionLab,
+      Ilh05WebServersCooperationMechanismMap:
+        module0.Ilh05WebServersCooperationMechanismMap,
+      Ilh05WebServersCooperationFailureDiagram:
+        module0.Ilh05WebServersCooperationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/06-chapter-06/ilh-06-http-headers": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-06-http-headers");
+    return {
+      Ilh06HttpHeadersDecisionLab: module0.Ilh06HttpHeadersDecisionLab,
+      Ilh06HttpHeadersMechanismMap: module0.Ilh06HttpHeadersMechanismMap,
+      Ilh06HttpHeadersFailureDiagram: module0.Ilh06HttpHeadersFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/07-chapter-07/ilh-07-https-security": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-07-https-security");
+    return {
+      Ilh07HttpsSecurityDecisionLab: module0.Ilh07HttpsSecurityDecisionLab,
+      Ilh07HttpsSecurityMechanismMap: module0.Ilh07HttpsSecurityMechanismMap,
+      Ilh07HttpsSecurityFailureDiagram:
+        module0.Ilh07HttpsSecurityFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/08-chapter-08/ilh-08-user-authentication": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-08-user-authentication");
+    return {
+      Ilh08UserAuthenticationDecisionLab:
+        module0.Ilh08UserAuthenticationDecisionLab,
+      Ilh08UserAuthenticationMechanismMap:
+        module0.Ilh08UserAuthenticationMechanismMap,
+      Ilh08UserAuthenticationFailureDiagram:
+        module0.Ilh08UserAuthenticationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/09-chapter-09/ilh-09-http-extensions": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-09-http-extensions");
+    return {
+      Ilh09HttpExtensionsDecisionLab: module0.Ilh09HttpExtensionsDecisionLab,
+      Ilh09HttpExtensionsMechanismMap: module0.Ilh09HttpExtensionsMechanismMap,
+      Ilh09HttpExtensionsFailureDiagram:
+        module0.Ilh09HttpExtensionsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/10-chapter-10/ilh-10-web-content-technologies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-http/ilh-10-web-content-technologies");
+      return {
+        Ilh10WebContentTechnologiesDecisionLab:
+          module0.Ilh10WebContentTechnologiesDecisionLab,
+        Ilh10WebContentTechnologiesMechanismMap:
+          module0.Ilh10WebContentTechnologiesMechanismMap,
+        Ilh10WebContentTechnologiesFailureDiagram:
+          module0.Ilh10WebContentTechnologiesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-http/11-chapter-11/ilh-11-web-attack-techniques": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-http/ilh-11-web-attack-techniques");
+    return {
+      Ilh11WebAttackTechniquesDecisionLab:
+        module0.Ilh11WebAttackTechniquesDecisionLab,
+      Ilh11WebAttackTechniquesMechanismMap:
+        module0.Ilh11WebAttackTechniquesMechanismMap,
+      Ilh11WebAttackTechniquesFailureDiagram:
+        module0.Ilh11WebAttackTechniquesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-http/12-official-final-review/ilh-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-http/ilh-official-final-review");
+      return {
+        IlhOfficialFinalReviewDecisionLab:
+          module0.IlhOfficialFinalReviewDecisionLab,
+        IlhOfficialFinalReviewMechanismMap:
+          module0.IlhOfficialFinalReviewMechanismMap,
+        IlhOfficialFinalReviewFailureDiagram:
+          module0.IlhOfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/00-official-learning-map/isn-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-official-learning-map");
+      return {
+        IsnOfficialLearningMapDecisionLab:
+          module0.IsnOfficialLearningMapDecisionLab,
+        IsnOfficialLearningMapMechanismMap:
+          module0.IsnOfficialLearningMapMechanismMap,
+        IsnOfficialLearningMapFailureDiagram:
+          module0.IsnOfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/01-00-book-usage/isn-00-book-usage": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-server-network/isn-00-book-usage");
+    return {
+      Isn00BookUsageDecisionLab: module0.Isn00BookUsageDecisionLab,
+      Isn00BookUsageMechanismMap: module0.Isn00BookUsageMechanismMap,
+      Isn00BookUsageFailureDiagram: module0.Isn00BookUsageFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-server-network/02-01-physical-design/isn-01-physical-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-01-physical-design");
+      return {
+        Isn01PhysicalDesignDecisionLab: module0.Isn01PhysicalDesignDecisionLab,
+        Isn01PhysicalDesignMechanismMap:
+          module0.Isn01PhysicalDesignMechanismMap,
+        Isn01PhysicalDesignFailureDiagram:
+          module0.Isn01PhysicalDesignFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/03-02-logical-design/isn-02-logical-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-02-logical-design");
+      return {
+        Isn02LogicalDesignDecisionLab: module0.Isn02LogicalDesignDecisionLab,
+        Isn02LogicalDesignMechanismMap: module0.Isn02LogicalDesignMechanismMap,
+        Isn02LogicalDesignFailureDiagram:
+          module0.Isn02LogicalDesignFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/04-03-security-load-balancing/isn-03-security-load-balancing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-03-security-load-balancing");
+      return {
+        Isn03SecurityLoadBalancingDecisionLab:
+          module0.Isn03SecurityLoadBalancingDecisionLab,
+        Isn03SecurityLoadBalancingMechanismMap:
+          module0.Isn03SecurityLoadBalancingMechanismMap,
+        Isn03SecurityLoadBalancingFailureDiagram:
+          module0.Isn03SecurityLoadBalancingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/05-04-high-availability/isn-04-high-availability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-04-high-availability");
+      return {
+        Isn04HighAvailabilityDecisionLab:
+          module0.Isn04HighAvailabilityDecisionLab,
+        Isn04HighAvailabilityMechanismMap:
+          module0.Isn04HighAvailabilityMechanismMap,
+        Isn04HighAvailabilityFailureDiagram:
+          module0.Isn04HighAvailabilityFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/06-05-management-design/isn-05-management-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-05-management-design");
+      return {
+        Isn05ManagementDesignDecisionLab:
+          module0.Isn05ManagementDesignDecisionLab,
+        Isn05ManagementDesignMechanismMap:
+          module0.Isn05ManagementDesignMechanismMap,
+        Isn05ManagementDesignFailureDiagram:
+          module0.Isn05ManagementDesignFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-server-network/07-official-final-review/isn-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-server-network/isn-official-final-review");
+      return {
+        IsnOfficialFinalReviewDecisionLab:
+          module0.IsnOfficialFinalReviewDecisionLab,
+        IsnOfficialFinalReviewMechanismMap:
+          module0.IsnOfficialFinalReviewMechanismMap,
+        IsnOfficialFinalReviewFailureDiagram:
+          module0.IsnOfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "inside-cpp-object-model/00-foundations/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/inside-cpp-object-model/learning-map");
@@ -3256,6 +3616,238 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "wireshark-packet-analysis/00-ppa3-official-learning-map/ppa3-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-official-learning-map");
+      return {
+        Ppa3OfficialLearningMapDecisionLab:
+          module0.Ppa3OfficialLearningMapDecisionLab,
+        Ppa3OfficialLearningMapMechanismMap:
+          module0.Ppa3OfficialLearningMapMechanismMap,
+        Ppa3OfficialLearningMapFailureDiagram:
+          module0.Ppa3OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/01-ppa3-introduction/ppa3-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-introduction");
+      return {
+        Ppa3IntroductionDecisionLab: module0.Ppa3IntroductionDecisionLab,
+        Ppa3IntroductionMechanismMap: module0.Ppa3IntroductionMechanismMap,
+        Ppa3IntroductionFailureDiagram: module0.Ppa3IntroductionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/02-ppa3-01-packet-analysis-network-basics/ppa3-01-packet-analysis-network-basics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-01-packet-analysis-network-basics");
+      return {
+        Ppa301PacketAnalysisNetworkBasicsDecisionLab:
+          module0.Ppa301PacketAnalysisNetworkBasicsDecisionLab,
+        Ppa301PacketAnalysisNetworkBasicsMechanismMap:
+          module0.Ppa301PacketAnalysisNetworkBasicsMechanismMap,
+        Ppa301PacketAnalysisNetworkBasicsFailureDiagram:
+          module0.Ppa301PacketAnalysisNetworkBasicsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/03-ppa3-02-tapping-into-wire/ppa3-02-tapping-into-wire":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-02-tapping-into-wire");
+      return {
+        Ppa302TappingIntoWireDecisionLab:
+          module0.Ppa302TappingIntoWireDecisionLab,
+        Ppa302TappingIntoWireMechanismMap:
+          module0.Ppa302TappingIntoWireMechanismMap,
+        Ppa302TappingIntoWireFailureDiagram:
+          module0.Ppa302TappingIntoWireFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/04-ppa3-03-introduction-wireshark/ppa3-03-introduction-wireshark":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-03-introduction-wireshark");
+      return {
+        Ppa303IntroductionWiresharkDecisionLab:
+          module0.Ppa303IntroductionWiresharkDecisionLab,
+        Ppa303IntroductionWiresharkMechanismMap:
+          module0.Ppa303IntroductionWiresharkMechanismMap,
+        Ppa303IntroductionWiresharkFailureDiagram:
+          module0.Ppa303IntroductionWiresharkFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/05-ppa3-04-working-captured-packets/ppa3-04-working-captured-packets":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-04-working-captured-packets");
+      return {
+        Ppa304WorkingCapturedPacketsDecisionLab:
+          module0.Ppa304WorkingCapturedPacketsDecisionLab,
+        Ppa304WorkingCapturedPacketsMechanismMap:
+          module0.Ppa304WorkingCapturedPacketsMechanismMap,
+        Ppa304WorkingCapturedPacketsFailureDiagram:
+          module0.Ppa304WorkingCapturedPacketsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/06-ppa3-05-advanced-wireshark-features/ppa3-05-advanced-wireshark-features":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-05-advanced-wireshark-features");
+      return {
+        Ppa305AdvancedWiresharkFeaturesDecisionLab:
+          module0.Ppa305AdvancedWiresharkFeaturesDecisionLab,
+        Ppa305AdvancedWiresharkFeaturesMechanismMap:
+          module0.Ppa305AdvancedWiresharkFeaturesMechanismMap,
+        Ppa305AdvancedWiresharkFeaturesFailureDiagram:
+          module0.Ppa305AdvancedWiresharkFeaturesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/07-ppa3-06-command-line-analysis/ppa3-06-command-line-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-06-command-line-analysis");
+      return {
+        Ppa306CommandLineAnalysisDecisionLab:
+          module0.Ppa306CommandLineAnalysisDecisionLab,
+        Ppa306CommandLineAnalysisMechanismMap:
+          module0.Ppa306CommandLineAnalysisMechanismMap,
+        Ppa306CommandLineAnalysisFailureDiagram:
+          module0.Ppa306CommandLineAnalysisFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/08-ppa3-07-network-layer-protocols/ppa3-07-network-layer-protocols":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-07-network-layer-protocols");
+      return {
+        Ppa307NetworkLayerProtocolsDecisionLab:
+          module0.Ppa307NetworkLayerProtocolsDecisionLab,
+        Ppa307NetworkLayerProtocolsMechanismMap:
+          module0.Ppa307NetworkLayerProtocolsMechanismMap,
+        Ppa307NetworkLayerProtocolsFailureDiagram:
+          module0.Ppa307NetworkLayerProtocolsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/09-ppa3-08-transport-layer-protocols/ppa3-08-transport-layer-protocols":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-08-transport-layer-protocols");
+      return {
+        Ppa308TransportLayerProtocolsDecisionLab:
+          module0.Ppa308TransportLayerProtocolsDecisionLab,
+        Ppa308TransportLayerProtocolsMechanismMap:
+          module0.Ppa308TransportLayerProtocolsMechanismMap,
+        Ppa308TransportLayerProtocolsFailureDiagram:
+          module0.Ppa308TransportLayerProtocolsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/10-ppa3-09-upper-layer-protocols/ppa3-09-upper-layer-protocols":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-09-upper-layer-protocols");
+      return {
+        Ppa309UpperLayerProtocolsDecisionLab:
+          module0.Ppa309UpperLayerProtocolsDecisionLab,
+        Ppa309UpperLayerProtocolsMechanismMap:
+          module0.Ppa309UpperLayerProtocolsMechanismMap,
+        Ppa309UpperLayerProtocolsFailureDiagram:
+          module0.Ppa309UpperLayerProtocolsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/11-ppa3-10-real-world-scenarios/ppa3-10-real-world-scenarios":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-10-real-world-scenarios");
+      return {
+        Ppa310RealWorldScenariosDecisionLab:
+          module0.Ppa310RealWorldScenariosDecisionLab,
+        Ppa310RealWorldScenariosMechanismMap:
+          module0.Ppa310RealWorldScenariosMechanismMap,
+        Ppa310RealWorldScenariosFailureDiagram:
+          module0.Ppa310RealWorldScenariosFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/12-ppa3-11-fighting-slow-network/ppa3-11-fighting-slow-network":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-11-fighting-slow-network");
+      return {
+        Ppa311FightingSlowNetworkDecisionLab:
+          module0.Ppa311FightingSlowNetworkDecisionLab,
+        Ppa311FightingSlowNetworkMechanismMap:
+          module0.Ppa311FightingSlowNetworkMechanismMap,
+        Ppa311FightingSlowNetworkFailureDiagram:
+          module0.Ppa311FightingSlowNetworkFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/13-ppa3-12-security-analysis/ppa3-12-security-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-12-security-analysis");
+      return {
+        Ppa312SecurityAnalysisDecisionLab:
+          module0.Ppa312SecurityAnalysisDecisionLab,
+        Ppa312SecurityAnalysisMechanismMap:
+          module0.Ppa312SecurityAnalysisMechanismMap,
+        Ppa312SecurityAnalysisFailureDiagram:
+          module0.Ppa312SecurityAnalysisFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/14-ppa3-13-wireless-analysis/ppa3-13-wireless-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-13-wireless-analysis");
+      return {
+        Ppa313WirelessAnalysisDecisionLab:
+          module0.Ppa313WirelessAnalysisDecisionLab,
+        Ppa313WirelessAnalysisMechanismMap:
+          module0.Ppa313WirelessAnalysisMechanismMap,
+        Ppa313WirelessAnalysisFailureDiagram:
+          module0.Ppa313WirelessAnalysisFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "wireshark-packet-analysis/15-ppa3-appendix-a/ppa3-appendix-a": async () => {
+    const module0 =
+      await import("@/components/mdx/wireshark-packet-analysis/ppa3-appendix-a");
+    return {
+      Ppa3AppendixADecisionLab: module0.Ppa3AppendixADecisionLab,
+      Ppa3AppendixAMechanismMap: module0.Ppa3AppendixAMechanismMap,
+      Ppa3AppendixAFailureDiagram: module0.Ppa3AppendixAFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "wireshark-packet-analysis/16-ppa3-appendix-b/ppa3-appendix-b": async () => {
+    const module0 =
+      await import("@/components/mdx/wireshark-packet-analysis/ppa3-appendix-b");
+    return {
+      Ppa3AppendixBDecisionLab: module0.Ppa3AppendixBDecisionLab,
+      Ppa3AppendixBMechanismMap: module0.Ppa3AppendixBMechanismMap,
+      Ppa3AppendixBFailureDiagram: module0.Ppa3AppendixBFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "wireshark-packet-analysis/17-ppa3-index/ppa3-index": async () => {
+    const module0 =
+      await import("@/components/mdx/wireshark-packet-analysis/ppa3-index");
+    return {
+      Ppa3IndexDecisionLab: module0.Ppa3IndexDecisionLab,
+      Ppa3IndexMechanismMap: module0.Ppa3IndexMechanismMap,
+      Ppa3IndexFailureDiagram: module0.Ppa3IndexFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "wireshark-packet-analysis/18-ppa3-official-final-review/ppa3-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/wireshark-packet-analysis/ppa3-official-final-review");
+      return {
+        Ppa3OfficialFinalReviewDecisionLab:
+          module0.Ppa3OfficialFinalReviewDecisionLab,
+        Ppa3OfficialFinalReviewMechanismMap:
+          module0.Ppa3OfficialFinalReviewMechanismMap,
+        Ppa3OfficialFinalReviewFailureDiagram:
+          module0.Ppa3OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
 };
 
 export async function getChapterMdxComponents(
