@@ -3,307 +3,227 @@ title: 自主智能体：让模型在环境反馈里自己推进任务
 type: D
 section: 智能体模式
 order: 14
-description: 看懂什么时候该用固定工作流，什么时候才值得让模型在工具结果和环境反馈里自己推进多步任务。
+description: 自主智能体：让模型在环境反馈里自己推进任务：让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点，通过架构、轨迹和故障重放完成验收。
 demo: true
 math: false
-draft: false
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentapps-15
 ---
 
-import { CodeTabs, Tab } from "@/components/mdx/code-tabs";
+import {
+  AutonomousAgentsModelLab,
+  AutonomousAgentsTraceLab,
+  AutonomousAgentsEvidenceLab,
+} from "@/components/mdx/ai-agent-apps/v2/autonomous-agents";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握自主智能体：让模型在环境反馈里自己推进任务
+- 能解释“自主智能体：让模型在环境反馈里自己推进任务”如何让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点
+- 能区分自治 Agent、沙箱、检查点、误差累积、恢复策略，并指出控制权、数据与副作用边界
+- 能固定输入与版本，沿以下证据定位首个分叉：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态
+- 能注入“Agent 在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停”，完成阻断、恢复、复位和同输入重放
 
-学习“自主智能体：让模型在环境反馈里自己推进任务”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，自主智能体：让模型在环境反馈里自己推进任务的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从先打个比方开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_APPS_QUALITY_V2 */}
 
-机制验证要把先分清：固定工作流和自主智能体不是同一件事写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。自主智能体靠什么往前走：反馈，而不是自言自语不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“自主智能体：让模型在环境反馈里自己推进任务”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Anthropic《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)核对本单元机制；涉及 MCP 的控制权边界再由[MCP 2025-06-18 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是 Anthropic 出版的“19 章教材”。平台把公开文章、官方工具文档与协议规范重组为 19 个应用单元；下列 152 个节点是站内课程地图，不冒充原文目录。正文、代码、图表、实验和练习均为独立教学重写；产品接口、模型行为或协议版本变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“什么时候才值得放权给它”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **自主智能体：让模型在环境反馈里自己推进任务**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 1 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先打个比方**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 2 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先分清：固定工作流和自主智能体不是同一件事**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 3 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **自主智能体靠什么往前走：反馈，而不是自言自语**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 4 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **什么时候才值得放权给它**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 5 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **放权之前要先装刹车**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 6 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **动手看：什么时候固定步骤够用，什么时候进入 agent loop？**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 7 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **代码对照：固定工作流 vs agent loop**：这是“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的第 8 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“自主智能体：让模型在环境反馈里自己推进任务”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "自治 Agent",
+      def: "自治 Agent：模型在多轮环境反馈中动态决定过程和工具使用的系统；在“自主智能体：让模型在环境反馈里自己推进任务”中按以下证据核对：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。",
+    },
+    {
+      term: "沙箱",
+      def: "沙箱：限制代码、文件、网络和系统调用影响范围的环境；在“自主智能体：让模型在环境反馈里自己推进任务”中按以下证据核对：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。",
+    },
+    {
+      term: "检查点",
+      def: "检查点：暂停自动推进并允许人审查、批准或纠偏的位置；在“自主智能体：让模型在环境反馈里自己推进任务”中按以下证据核对：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。",
+    },
+    {
+      term: "误差累积",
+      def: "误差累积：早期错误经后续决策放大为更大偏离的现象；在“自主智能体：让模型在环境反馈里自己推进任务”中按以下证据核对：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。",
+    },
+    {
+      term: "恢复策略",
+      def: "恢复策略：遇到工具错误、阻塞或低置信时的重试、回退和接管规则；在“自主智能体：让模型在环境反馈里自己推进任务”中按以下证据核对：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：每轮行动都在最小权限内执行，可观察、可停止，并能把真实结果送回下一轮。任何“成功”结论都要保存以下证据：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态，模型生成的计划或自信不能替代环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 开放路径才值得自治
 
-## 权威目录与核心概念逐项对照
+若步骤可预写，工作流通常更便宜、更稳定；Agent 适合步骤数量和内容难以预测的任务。
 
-- 自主智能体：让模型在环境反馈里自己推进任务
-- 先打个比方
-- 先分清：固定工作流和自主智能体不是同一件事
-- 自主智能体靠什么往前走：反馈，而不是自言自语
-- 什么时候才值得放权给它
-- 放权之前要先装刹车
-- 动手看：什么时候固定步骤够用，什么时候进入 agent loop？
-- 代码对照：固定工作流 vs agent loop
+动手验证：对同一任务先尝试固定方案，记录其失败边界。
 
+### 环境反馈是 ground truth
 
-## 可复现的最小实现
+模型自评不能证明代码、订单或数据库已改变，必须读取真实环境。
 
-先把决策记录写成机器可读结构：
+动手验证：让执行器拒绝一次动作，确认下一轮能看到并处理拒绝。
 
-```json
-{
-  "unit": "自主智能体：让模型在环境反馈里自己推进任务",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 沙箱阻止错误扩散
 
-再用同一条执行链处理三类样本：
+广泛权限与多轮尝试组合会放大风险，应限制路径、网络、资源和动作类型。
+
+动手验证：尝试越界写入，确认在工具边界阻断。
+
+### 检查点处理不可逆动作
+
+付款、发送、删除与发布应在预览后等待明确授权。
+
+动手验证：验证批准前后副作用计数分别为零和一。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 架构与复杂度边界">
+    在“自主智能体：让模型在环境反馈里自己推进任务”中切换简单基线、受控工作流与自主循环，先预测“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”在哪个阶段需要增加控制权，再比较延迟、成本、可观测性和自主性。
+
+    <AutonomousAgentsModelLab />
+
+  </Step>
+  <Step title="2. 状态与决策轨迹">
+    固定任务、工具、权限和预算，沿澄清目标 → 制定计划 → 受控行动 → 吸收反馈 → 检查点与退出逐步推进；每一步只读取上一阶段已经通过的状态。
+
+    <AutonomousAgentsTraceLab />
+
+  </Step>
+  <Step title="3. 故障、恢复与重放">
+    注入“Agent 在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停”，观察以下证据的首个分叉：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。撤销后重置实验，并用相同输入与权限重放。
+
+    <AutonomousAgentsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+for (let step = 0; step < budget.maxSteps; step += 1) {
+  const action = await planNext(goal, trace);
+  const preview = await sandbox.preview(action);
+  if (preview.irreversible) await requireHumanApproval(preview);
+  const observation = await sandbox.execute(action);
+  trace.push({ action, observation });
+  if (acceptance.isSatisfied(observation, trace)) return done(trace);
 }
+return blocked("budget", trace);
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+这段切片只暴露“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”的最小运行合同。交付版本还要补齐超时、密钥隔离、结构化日志、幂等和批量评测；缺少计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态时，代码能运行也不代表本章结论成立。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  Agent
+  在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停。它会破坏“每轮行动都在最小权限内执行，可观察、可停止，并能把真实结果送回下一轮”；应从计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="不要把模型自评当作验收">
+  在“自主智能体：让模型在环境反馈里自己推进任务”中，模型解释只能提出候选原因；协议字段、工具结果、确定性断言和真实环境状态才能证明“让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点”是否成立。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="版本变化必须重跑">
+  “自主智能体：让模型在环境反馈里自己推进任务”依赖模型、工具、schema、协议或运行时接口。升级任一层后，应在冻结任务集上重新保存计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态，不能沿用旧截图或单次成功样例。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用最少样本证明“每轮行动都在最小权限内执行，可观察、可停止，并能把真实结果送回下一轮”？
+
+<Answer>
+  冻结模型、指令、工具、权限和预算，写出正常、边界与单故障三类预期，再保存计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。只要首个分叉未解释或失败样本产生副作用，就不能判定通过。
+</Answer>
+
+**问题 2：课程覆盖。** 自主智能体：让模型在环境反馈里自己推进任务、先打个比方、先分清：固定工作流和自主智能体不是同一件事、自主智能体靠什么往前走：反馈，而不是自言自语、什么时候才值得放权给它、放权之前要先装刹车、动手看：什么时候固定步骤够用，什么时候进入 agent loop？、代码对照：固定工作流 vs agent loop如何进入可操作验证？
+
+<Answer>
+  把八个坐标分别标到架构决策图、状态轨迹和故障证据链中。每个坐标至少拥有一个可观察状态、一个明确判断或一个失败样本；只在目录中出现不算覆盖。
+</Answer>
+
+**问题 3：恢复闭环。** 怎样证明“Agent 在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态中标出首个差异；撤销后复位全部控件，以完全相同的输入、版本、预算和权限重放。环境结果与停止状态都回到基线才算修复。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 自主智能体：让模型在环境反馈里自己推进任务必须绑定冻结输入和明确成功标准。
-- 先打个比方必须能画成结构并沿边追踪责任。
-- 先分清：固定工作流和自主智能体不是同一件事要由正常、边界和单故障样本共同验证。
-- 自主智能体靠什么往前走：反馈，而不是自言自语必须保存第一处偏离和清理重建步骤。
-- 什么时候才值得放权给它决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* 知识点清单：1. 固定工作流（Fixed workflow）（图：；进 Glossary）2. 自主智能体（Autonomous agent）（动画：；进 Glossary）3. 环境反馈（Environment feedback）（动画：；进 Glossary）4. 工具使用（Tool use）（代码对照：固定步骤 vs agent loop；进 Glossary）5. 真实标准（Ground truth）（图：；进 Glossary）6. 人工检查点（Human checkpoint）（图：；进 Glossary）7. 停机条件（Stop condition）（图：；进 Glossary）8. 沙盒（Sandbox）（图：；进 Glossary）9. 护栏（Guardrail）（图：；进 Glossary）。Term↔Glossary：固定工作流（Fixed workflow） / 自主智能体（Autonomous agent） / 环境反馈（Environment feedback） / 工具使用（Tool use） / 真实标准（Ground truth） / 人工检查点（Human checkpoint） / 停机条件（Stop condition） / 沙盒（Sandbox） / 护栏（Guardrail）。 */}
-
-
-## 先打个比方
-
-做一次紧急排障，有时像按检查表巡检：先看告警，再查日志，再重启某个服务。步骤清楚、顺序稳定，照着清单走就行。
-
-但也有些问题不是这样。你只知道“支付偶尔失败”，却不知道该先查网络、数据库、配置，还是最近改过的代码。每查一步都会改变下一步该怎么走。
-
-这一章解决的就是这种“路线无法提前写死”的任务。没有这样的安排，系统要么只能按死板清单走到黑，要么在看见新线索后仍不知道该改查哪里，最后把复杂问题做成机械流程。
-
-## 先分清：固定工作流和自主智能体不是同一件事
-
-适合路线清楚的任务：你能提前列出步骤、分支和输出格式。链式、路由、并行、编排-工作者、评估-优化都属于这一侧。它们可以很强，但强在“结构稳定、易测、可控”。
-
-则更适合开放任务。Anthropic 在《Building Effective Agents》里强调，agents
-通常用于开放、多步、难以预写固定路径的问题：模型会观察当前状态，选择下一步，调用工具，读取结果，再继续判断。
-
-
-看图时抓住一句话：**固定工作流是“按你写好的路走”，自主智能体是“边看路况边决定下一步”。** 这不是哪边更高级的问题，而是任务形状不同。路线能提前写清，就优先固定工作流；路线要靠运行中的线索逐步显现，才考虑自主智能体。
-
-## 自主智能体靠什么往前走：反馈，而不是自言自语
-
-真正让 agent 往前推进的，不是“多想几轮”，而是。
-没有反馈，模型只是把同一份上下文反复改写；有反馈，它才知道刚才那步有没有缩小问题范围。
-
-就是 agent 接触环境的手。比如修 bug
-时，它可以先读报错，再查相关文件，再跑测试，再根据失败信息改下一步。每个工具结果都像一张新的路况照片。
-
-
-这也是它和“评估-优化”的边界：评估-优化通常在同一个稿子上按 rubric 返工；自主智能体会把每次外部结果纳入下一步决策。一个是在固定环里打磨输出，一个是在开放环境里推进任务。
-
-## 什么时候才值得放权给它
-
-不要因为“任务复杂”就立刻上 agent。更稳的判断是先问两件事。
-
-第一，任务路径是否真的难以预写？如果你已经知道每次都要查三张表、跑两个校验、按固定模板汇总，那写成固定工作流更便宜、更可测。只有当下一步高度依赖刚刚拿到的线索，固定脚手架开始束手束脚时，自主智能体才有价值。
-
-第二，系统能不能得到可靠的？
-如果没有可验证信号，agent 很容易把“看起来合理”误当成“已经解决”。测试、日志、检索来源、人工确认，都可以成为它判断方向的依据。
-
-
-把这张图记成一个选型顺序：**能固定就固定；必须开放探索时，先确认有反馈、有标准、有边界，再放权。** Agent 的价值来自适配不确定路径，不来自让系统看起来更像人在思考。
-
-## 放权之前要先装刹车
-
-自主智能体的代价也来自它的自由度：它可能多查很多轮，调用很多工具，走错一步又把错误带到下一步。Anthropic 特别提醒，agent 带来的成本、延迟和错误累积都更高，所以工程上必须先把刹车装好。
-
-用于卡住高风险动作，例如“准备写入生产数据”“准备发送外部邮件”“准备删除文件”。低风险读取可以自动，高风险写入要停下来让人看一眼。
-
-用来防止系统无限探索。没有它，agent
-可以一直“再查一下”“再试一次”，成本和延迟会一起失控。
-
-和
-则负责把错误困在可承受范围内。它们不是上线后的装饰，而是 agent
-能不能安全运行的前提。
-
-## 动手看：什么时候固定步骤够用，什么时候进入 agent loop？
-
-> 猜一猜：如果任务是“每晚检查固定五个服务是否健康”，你会让系统自由探索吗？那如果任务是“用户偶发支付失败，找出根因并给出修复建议”，固定五步还够吗？
-
-
-判断可以压成三问：
-
-- 路线能否提前写清？能，就先用固定工作流。
-- 下一步是否强依赖刚拿到的新线索？是，才考虑自主智能体。
-- 是否已有真实标准、人工检查点、停机条件、沙盒和护栏？没有，就先补安全边界。
-
-## 代码对照：固定工作流 vs agent loop
-
-下面都用“排查支付偶发失败”这个任务。左边假设每次都按固定清单走；右边允许系统根据工具结果决定下一步。对照重点不是 API 名字，而是控制权放在哪里。
-
-### 第一步：固定工作流把路线写死
-
-<CodeTabs>
-  <Tab label="固定工作流：预先写好步骤">
-
-```ts
-export async function diagnosePaymentFixed(orderId: string) {
-  const logs = await readPaymentLogs(orderId);
-  const config = await readPaymentConfig();
-  const recentDeploys = await listRecentDeploys();
-
-  return callModel({
-    task: "按固定检查表给出结论",
-    checklist: ["logs", "config", "recentDeploys"],
-    evidence: { logs, config, recentDeploys },
-  });
-}
-```
-
-  </Tab>
-  <Tab label="Agent loop：下一步由反馈决定">
-
-```ts
-export async function diagnosePaymentAgent(goal: string) {
-  let state = await startRun(goal);
-  for (let step = 0; step < 8; step += 1) {
-    const action = await decideNextAction(state);
-    if (action.type === "finish") return action.report;
-    const result = await runTool(action.tool, action.input);
-    state = await updateState(state, { action, result });
-  }
-  return escalateToHuman(state);
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-左边的 `logs / config / recentDeploys` 在开工前就写好了，系统只是在固定材料上总结。右边每轮都先看当前状态，再决定下一步工具；工具结果回来后，才进入下一轮判断。这就是固定工作流和 agent loop 的分界。
-
-### 第二步：固定流程容易测，agent loop 必须限权
-
-固定流程的好处是稳定：它查什么、最多查几步、输出长什么样，都容易预测。Agent loop 的好处是灵活：如果日志指向数据库，它可以转去查连接池；如果测试复现失败，它可以换一条假设。但灵活也意味着必须限制权限和预算。
-
-<CodeTabs>
-  <Tab label="固定工作流：权限很窄">
-
-```ts
-const fixedTools = {
-  readPaymentLogs,
-  readPaymentConfig,
-  listRecentDeploys,
-};
-
-await diagnosePaymentFixed("ord_123");
-```
-
-  </Tab>
-  <Tab label="Agent loop：显式声明边界">
-
-```ts
-const agentPolicy = {
-  allowedTools: ["readFile", "runTest", "searchLogs"],
-  blockedPaths: ["/prod/secrets", "/billing/write"],
-  maxSteps: 8,
-  requireHumanFor: ["writeFile", "deploy", "sendEmail"],
-};
-
-await runAgent({ goal: "排查支付失败", policy: agentPolicy });
-```
-
-  </Tab>
-</CodeTabs>
-
-这段对照里，右边多出来的 `allowedTools / maxSteps / requireHumanFor` 不是细节，而是生命线。Agent 不是因为“更自主”就应该拿更多权限；恰恰相反，越自主，越要把可用工具、危险动作和停机线写清。
-
-
-<div className="not-prose my-6 grid gap-4 md:grid-cols-2">
-  <div className="rounded-card border border-border bg-elevated p-5">
-    <div className="mb-3 text-sm font-bold text-primary">
-      固定工作流的关键特征
-    </div>
-    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
-      <li>步骤、分支、停点由人提前写好</li>
-      <li>更便宜、更快、更容易测试</li>
-      <li>适合路径稳定、输入类型可预测的任务</li>
-    </ul>
-    <div className="mt-4 text-xs leading-relaxed text-secondary">
-      默认先选它。能写成清单，就不要为了“智能感”硬放权。
-    </div>
-  </div>
-  <div className="rounded-card border border-accent bg-elevated p-5">
-    <div className="mb-3 text-sm font-bold text-accent">
-      自主智能体的关键特征
-    </div>
-    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
-      <li>每轮根据工具结果和环境反馈选下一步</li>
-      <li>适合开放、多步、路径难预写的任务</li>
-      <li>必须配真实标准、停机条件、沙盒和护栏</li>
-    </ul>
-    <div className="mt-4 text-xs leading-relaxed text-secondary">
-      只在不确定路径真的带来价值时使用，并把风险先框住。
-    </div>
-  </div>
-</div>
-
-## 容易踩的坑
-
-
-## 小结
-
-- 固定工作流：路线预写，便宜、稳定、易测
-- 自主智能体：边看反馈边决定下一步
-- 适合开放、多步、路径难预写的任务
-- 没有真实标准和安全边界，不要放权
-- 成本、延迟、错误累积是 agent 的主要代价
-
-
-## 名词解释
-
-
+- “自主智能体：让模型在环境反馈里自己推进任务”的主问题是让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点。
+- 核心不变量是每轮行动都在最小权限内执行，可观察、可停止，并能把真实结果送回下一轮。
+- 首要反例是Agent 在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停。
+- 最小证据包包含计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+
+<Glossary>
+  <GlossaryItem term="自治 Agent">
+    模型在多轮环境反馈中动态决定过程和工具使用的系统。在“自主智能体：让模型在环境反馈里自己推进任务”中必须能按以下证据重新定位：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+  </GlossaryItem>
+  <GlossaryItem term="沙箱">
+    限制代码、文件、网络和系统调用影响范围的环境。在“自主智能体：让模型在环境反馈里自己推进任务”中必须能按以下证据重新定位：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+  </GlossaryItem>
+  <GlossaryItem term="检查点">
+    暂停自动推进并允许人审查、批准或纠偏的位置。在“自主智能体：让模型在环境反馈里自己推进任务”中必须能按以下证据重新定位：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+  </GlossaryItem>
+  <GlossaryItem term="误差累积">
+    早期错误经后续决策放大为更大偏离的现象。在“自主智能体：让模型在环境反馈里自己推进任务”中必须能按以下证据重新定位：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+  </GlossaryItem>
+  <GlossaryItem term="恢复策略">
+    遇到工具错误、阻塞或低置信时的重试、回退和接管规则。在“自主智能体：让模型在环境反馈里自己推进任务”中必须能按以下证据重新定位：计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 评估-优化：什么时候该先出稿，再迭代打磨](/learn/ai-agent-apps/agentic-patterns/evaluator-optimizer) · [组合与定制模式：把简单积木拼成合适系统 →](/learn/ai-agent-apps/agentic-patterns/combining-patterns)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents 与官方应用工程资料（站内十九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

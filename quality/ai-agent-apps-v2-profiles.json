@@ -1,0 +1,1120 @@
+{
+  "version": 2,
+  "book": "ai-agent-apps",
+  "courseDisclosure": "19 units and 152 nodes are a platform-authored application course map, not an original Anthropic table of contents.",
+  "sources": [
+    {
+      "id": "anthropic-agents",
+      "title": "Building effective agents",
+      "url": "https://www.anthropic.com/engineering/building-effective-agents"
+    },
+    {
+      "id": "anthropic-context",
+      "title": "Effective context engineering for AI agents",
+      "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+    },
+    {
+      "id": "anthropic-tools",
+      "title": "Writing effective tools for AI agents",
+      "url": "https://www.anthropic.com/engineering/writing-tools-for-agents"
+    },
+    {
+      "id": "claude-tool-use",
+      "title": "How tool use works",
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works"
+    },
+    {
+      "id": "mcp",
+      "title": "Model Context Protocol specification 2025-06-18",
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/server"
+    },
+    {
+      "id": "anthropic-evals",
+      "title": "Demystifying evals for AI agents",
+      "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+    }
+  ],
+  "pages": [
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "用控制权、环境反馈和停止条件区分模型调用、工作流与智能体",
+      "invariant": "每次自主决策都受工具权限、环境事实和显式停止条件约束",
+      "fault": "模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成",
+      "evidence": "任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因",
+      "stages": ["任务合同", "控制权选择", "工具行动", "环境反馈", "停止验收"],
+      "signals": ["控制权", "外部事实", "预算", "停止原因"],
+      "terms": [
+        ["工作流", "由代码预先规定模型和工具调用路径的系统"],
+        ["智能体", "由模型根据环境反馈动态决定下一步的系统"],
+        ["环境反馈", "来自工具、执行器或用户的可观察事实"],
+        ["自主性", "系统在既定权限内自行选择下一步的程度"],
+        ["停止条件", "完成、阻塞、预算耗尽或人工接管的退出合同"]
+      ],
+      "lessons": [
+        [
+          "控制流才是分界",
+          "两种系统都能调用工具；区别在路径由代码预写还是由模型根据中间结果选择。",
+          "把退款、翻译和未知故障分别放入三种实现，标出真正决定下一步的主体。"
+        ],
+        [
+          "自主性是一段区间",
+          "从单次调用、固定链到开放循环，自主性增加时成本、延迟和故障面也同步增加。",
+          "固定任务集，逐档比较成功率、尾延迟、调用数和人工接管率。"
+        ],
+        [
+          "外部事实推进循环",
+          "计划和解释只能提出候选动作，工具结果与环境状态才有资格改变任务状态。",
+          "让工具返回空结果，检查系统是否停止猜测并重新规划。"
+        ],
+        [
+          "完成必须可判定",
+          "最大轮数不是成功条件；系统还要区分 done、blocked、rejected 与 handoff。",
+          "注入永远无结果的工具，确认系统不会把预算耗尽伪装成完成。"
+        ]
+      ],
+      "code": "type Status = \"done\" | \"blocked\" | \"handoff\";\n\nasync function runAgent(task: Task, tools: Tool[], maxSteps = 6) {\n  const trace: Event[] = [];\n  for (let step = 0; step < maxSteps; step += 1) {\n    const decision = await decide(task, tools, trace);\n    if (decision.kind === \"final\") return { status: \"done\" as Status, trace };\n    trace.push(await executeAndObserve(decision, tools));\n  }\n  return { status: \"blocked\" as Status, reason: \"step_budget\", trace };\n}",
+      "id": "aiagentapps-01",
+      "title": "从 LLM 到 Agent：什么是智能体",
+      "concepts": [
+        "从 LLM 到 Agent：什么是智能体",
+        "先打个比方",
+        "第一个概念：裸 LLM 是个「只会背书的实习生」",
+        "第二个概念：智能体 = LLM 大脑 + 四件外挂",
+        "第三个概念：智能体 vs 工作流 vs 聊天机器人",
+        "第四个概念：自主性是一根可调的旋钮",
+        "动手看：一圈智能体循环长什么样",
+        "用代码看循环的骨架"
+      ],
+      "path": "foundations/what-is-an-agent",
+      "type": "A",
+      "section": "智能体基础",
+      "order": 0
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "把检索、工具与记忆作为可替换能力接到模型外部，并验证每种增强是否真的改善任务",
+      "invariant": "进入上下文或执行链的增强结果必须有来源、版本、权限和失败语义",
+      "fault": "检索返回过期资料、记忆混入其他用户状态，模型仍把它们当作可信上下文",
+      "evidence": "查询、命中文档、工具 schema、记忆键、来源时间、权限判定与最终引用",
+      "stages": ["请求分类", "按需检索", "工具选择", "记忆读写", "证据回答"],
+      "signals": ["命中来源", "工具契约", "记忆隔离", "引用一致"],
+      "terms": [
+        ["增强型 LLM", "接入检索、工具和记忆等外部能力的模型调用"],
+        ["检索", "按查询从外部语料取回与任务相关证据"],
+        ["工具", "让模型请求外部读取、计算或副作用的结构化接口"],
+        ["工作记忆", "当前任务期间保留并可清理的状态"],
+        ["长期记忆", "跨会话保存且必须有租户、权限和生命周期的状态"]
+      ],
+      "lessons": [
+        [
+          "增强发生在模型外",
+          "权重没有因一次检索或工具调用而改变；运行时只是把新证据送入下一次推理。",
+          "固定模型版本，切断检索后比较可用信息而不是宣称模型被训练。"
+        ],
+        [
+          "检索先验收再拼接",
+          "相关性、时效、权限和去重共同决定文档能否进入上下文。",
+          "混入一条高相似但过期文档，验证排序后的确定性过滤。"
+        ],
+        [
+          "工具结果也是不可信输入",
+          "网络响应、数据库字段和第三方文本都可能为空、超时或包含注入内容。",
+          "让工具返回缺字段对象，确认校验失败时不进入回答。"
+        ],
+        [
+          "记忆必须隔离和可撤销",
+          "跨会话状态需要命名空间、过期策略和用户可见的删除路径。",
+          "用两个租户写入同名键，验证读取结果不串线。"
+        ]
+      ],
+      "code": "async function augmentedCall(request: Request, actor: Actor) {\n  const documents = await retrieve(request.query, { actor, limit: 5 });\n  const memory = await loadMemory(actor.tenantId, request.sessionId);\n  const context = validateContext({ documents, memory });\n  const response = await model.generate({ request, context, tools: safeTools(actor) });\n  return { response, provenance: context.sources };\n}",
+      "id": "aiagentapps-02",
+      "title": "增强型 LLM：工具、检索与记忆",
+      "concepts": [
+        "增强型 LLM：工具、检索与记忆",
+        "先打个比方",
+        "第一个概念：增强，加的是外面的壳，不是里面的模型",
+        "第二个概念：检索——先捞对资料，再带着资料回答",
+        "第三个概念：工具——让它从「只会说」到「真能做」",
+        "第四个概念：记忆——关掉就忘的，和跨会话还记得的",
+        "动手看：三路增强如何汇成一次「强」调用",
+        "用代码看一次增强调用的骨架"
+      ],
+      "path": "foundations/augmented-llm",
+      "type": "A",
+      "section": "智能体基础",
+      "order": 1
+    },
+    {
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "focus": "实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因",
+      "invariant": "每个 tool_use 都由运行时执行并以匹配调用标识的 tool_result 回到下一轮",
+      "fault": "运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史",
+      "evidence": "消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数",
+      "stages": [
+        "发送请求",
+        "解析停止原因",
+        "执行工具",
+        "回灌结果",
+        "继续或退出"
+      ],
+      "signals": ["停止原因", "调用标识", "结果配对", "循环计数"],
+      "terms": [
+        ["agentic loop", "模型请求工具、运行时执行并把结果送回模型的循环"],
+        ["tool_use", "模型产生的结构化工具调用请求块"],
+        ["tool_result", "应用返回的工具执行结果块"],
+        ["stop_reason", "说明本轮为何结束或暂停的协议字段"],
+        ["调用标识", "配对请求与结果，防止并行工具响应串线的标识"]
+      ],
+      "lessons": [
+        [
+          "模型不直接执行客户端工具",
+          "模型只生成调用请求；数据库、文件和网络副作用发生在应用运行时。",
+          "记录模型输出与执行器日志，确认两者边界清晰。"
+        ],
+        [
+          "停止原因驱动状态机",
+          "tool_use、end_turn、max_tokens、refusal 和 pause_turn 不能都按最终答案处理。",
+          "逐个注入停止原因，断言状态机进入对应分支。"
+        ],
+        [
+          "并行结果按标识配对",
+          "返回顺序可能变化，数组位置不能替代 tool_use_id。",
+          "反转两个工具的完成顺序，验证下一轮消息仍正确配对。"
+        ],
+        [
+          "循环预算约束恢复",
+          "重试需要次数、总时长、成本和副作用幂等边界。",
+          "让同一工具连续超时，确认系统进入 blocked 而不是无限旋转。"
+        ]
+      ],
+      "code": "while (true) {\n  const response = await callModel(messages, tools);\n  messages.push(response.message);\n  if (response.stopReason !== \"tool_use\") return finish(response, messages);\n  const results = await Promise.all(response.toolUses.map(executeSafely));\n  messages.push(asToolResultMessage(results));\n}",
+      "id": "aiagentapps-03",
+      "title": "智能体循环：感知、思考与行动",
+      "concepts": [
+        "智能体循环：感知、思考与行动",
+        "先打个比方",
+        "第一个概念：为什么一次调用不够，得让它转圈",
+        "第二个概念：ReAct——把一圈拆成「想、做、看」三段",
+        "第三个概念：多轮迭代——结果喂回，思考随之改变",
+        "第四个概念：循环何时该停",
+        "动手看：一个任务怎么转 3 轮才办成",
+        "用代码看带刹车的循环骨架"
+      ],
+      "path": "foundations/agentic-loop",
+      "type": "A",
+      "section": "智能体基础",
+      "order": 2
+    },
+    {
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "focus": "用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体",
+      "invariant": "最小实现也必须分离模型决策、工具执行、权限检查和成功判定",
+      "fault": "把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用",
+      "evidence": "工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言",
+      "stages": ["注册工具", "模型选择", "校验参数", "受控执行", "验收退出"],
+      "signals": ["白名单", "参数校验", "执行日志", "退出状态"],
+      "terms": [
+        ["工具注册表", "从公开工具名到受控执行函数的显式映射"],
+        ["输入 schema", "限定参数字段、类型、枚举和必填项的合同"],
+        ["分发器", "校验调用后选择并执行白名单工具的运行时代码"],
+        ["执行结果", "包含成功值或结构化错误的工具回执"],
+        ["验收器", "根据环境事实判断任务是否真正完成的确定性逻辑"]
+      ],
+      "lessons": [
+        [
+          "先选无副作用切片",
+          "首个 Agent 应使用天气、计算或查询等只读工具，先证明协议闭环。",
+          "把工具替换为返回固定值的测试替身，验证消息序列。"
+        ],
+        [
+          "schema 不是授权",
+          "字段合法只说明形状正确，资源范围与操作者权限仍要单独判断。",
+          "提交格式正确但越权的资源标识，确认执行器拒绝。"
+        ],
+        [
+          "注册表阻断任意调用",
+          "模型产生的名称永远不能直接进入 eval、反射或 shell。",
+          "注入未注册工具名，断言零副作用并返回 structured error。"
+        ],
+        [
+          "验收独立于模型措辞",
+          "模型说“已经完成”不能替代数据库、文件或测试断言。",
+          "让模型错误声称完成，确认验收器仍返回 blocked。"
+        ]
+      ],
+      "code": "const registry = { get_weather: getWeather } satisfies ToolRegistry;\n\nasync function dispatch(call: ToolCall, actor: Actor) {\n  const tool = registry[call.name as keyof typeof registry];\n  if (!tool) return { ok: false, error: \"unknown_tool\" };\n  const args = tool.schema.parse(call.input);\n  await authorize(actor, call.name, args);\n  return { ok: true, value: await tool.run(args) };\n}",
+      "id": "aiagentapps-04",
+      "title": "你的第一个最小 Agent",
+      "concepts": [
+        "你的第一个最小 Agent",
+        "先说说这一章干嘛",
+        "最小 Agent，就是这四块拼起来",
+        "动手看：最小 agent 跑一次长什么样",
+        "一段段把它拼出来",
+        "第一段：定义一个工具",
+        "第二段：给工具写一份 schema",
+        "第三段：解析 LLM 的工具调用，并执行"
+      ],
+      "path": "foundations/first-agent",
+      "type": "C",
+      "section": "智能体基础",
+      "order": 3
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "focus": "把系统指令、任务输入、示例和输出合同分层组织，并用失败样本驱动迭代",
+      "invariant": "提示中的优先级、数据边界和成功标准必须可读、可测试且不依赖隐藏共享背景",
+      "fault": "把用户数据拼进系统指令区，导致数据中的命令覆盖任务合同",
+      "evidence": "提示版本、分区内容、测试样本、原始响应、评分维度与回归差异",
+      "stages": ["任务合同", "指令分区", "精选示例", "输出约束", "评测迭代"],
+      "signals": ["版本", "边界", "样本", "回归"],
+      "terms": [
+        ["系统指令", "定义角色、边界和长期行为的高优先级上下文"],
+        ["任务合同", "本次输入、期望输出、限制条件和成功标准"],
+        ["少样本示例", "用少量代表性输入输出展示期望行为"],
+        ["输出合同", "规定结果结构、字段和不允许出现内容的约束"],
+        ["提示评测", "在冻结数据集上衡量提示版本行为的过程"]
+      ],
+      "lessons": [
+        [
+          "正确高度介于僵硬与含糊之间",
+          "逐条硬编码所有路径会脆弱，只有口号又无法指导模型；应给清晰启发式和边界。",
+          "让同一任务分别使用过细、过宽和适中指令，比较边界失败。"
+        ],
+        [
+          "上下文分区表达信任边界",
+          "背景、指令、工具说明和用户数据应有明确分隔，避免内容角色混淆。",
+          "在用户数据中放置伪指令，验证它不会改变系统合同。"
+        ],
+        [
+          "示例要少而有代表性",
+          "堆满边角案例会挤压注意预算；应覆盖正常、边界与拒绝三类典型行为。",
+          "删除冗余示例后重跑冻结集，比较正确率与 token 成本。"
+        ],
+        [
+          "失败样本决定下一次改动",
+          "不要凭单次漂亮回答继续加句子；每次改动应绑定一个已观测失败簇。",
+          "保存版本 A/B 的逐样本评分，确认改善没有制造新回归。"
+        ]
+      ],
+      "code": "const prompt = [\n  section(\"background\", trustedBackground),\n  section(\"instructions\", taskContract),\n  section(\"tool_guidance\", toolRules),\n  section(\"examples\", canonicalExamples),\n  section(\"user_data\", untrustedInput),\n].join(\"\\n\\n\");\n\nconst result = await evaluatePrompt(prompt, frozenDataset);",
+      "id": "aiagentapps-05",
+      "title": "提示工程精要",
+      "concepts": [
+        "提示工程精要",
+        "先打个比方",
+        "第一个概念：提示工程，调的是「喂给模型的那段话」",
+        "第二个概念：清晰具体——同样一句话，模糊和具体差到天上",
+        "第三个概念：少样本——与其费劲描述，不如直接给个范例",
+        "第四个概念：思维链——让它先一步步想，再给答案",
+        "把四招连起来：系统提示 vs 单次任务提示",
+        "动手看：一个提示怎么一步步「精化」到能用"
+      ],
+      "path": "context-engineering/prompt-engineering",
+      "type": "A",
+      "section": "上下文工程",
+      "order": 4
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "focus": "把上下文视为有限注意预算，用按需检索、压缩和结构化笔记保留高信号信息",
+      "invariant": "压缩或裁剪后必须保留任务目标、关键决定、未解决问题和可追溯引用",
+      "fault": "按最旧消息直接截断，连同尚未解决的约束和工具错误一起删除",
+      "evidence": "token 预算、消息分类、保留清单、压缩前后事实断言、引用与任务结果",
+      "stages": ["信息盘点", "按需检索", "重要性排序", "压缩裁剪", "回归验证"],
+      "signals": ["预算", "保留项", "引用", "事实召回"],
+      "terms": [
+        ["上下文窗口", "一次推理时模型可接收的 token 集合"],
+        ["注意预算", "上下文增长时仍能可靠利用信息的有限能力"],
+        ["按需检索", "运行时只加载当前步骤需要的信息"],
+        ["压缩", "把长轨迹提炼为保留关键事实的较短表示"],
+        ["结构化笔记", "把目标、决定、证据和待办存为可持续更新的外部状态"]
+      ],
+      "lessons": [
+        [
+          "更长不等于更可靠",
+          "上下文增加会带来边际收益递减和注意分散，应优先提高信号密度。",
+          "固定模型和任务，逐档增加无关材料，测量关键事实召回。"
+        ],
+        [
+          "按需加载优于一次塞满",
+          "文件路径、查询和资源标识可作为轻量索引，真正内容在需要时获取。",
+          "比较预加载全库与逐步检索的 token、延迟和答案证据。"
+        ],
+        [
+          "压缩先追求召回",
+          "初版摘要应保留全部关键决定，再逐步去除冗余，不能一开始激进删减。",
+          "对压缩前后的事实清单做确定性断言。"
+        ],
+        [
+          "工具结果可以清理但要留结论",
+          "深层历史中的大段原始输出可移出窗口，同时保留来源、摘要和复取方式。",
+          "清掉旧结果后让智能体重放，确认能按引用重新取得证据。"
+        ]
+      ],
+      "code": "function compact(trace: Event[], budget: number) {\n  const mustKeep = trace.filter(isGoalDecisionOrOpenIssue);\n  const recent = trace.slice(-6);\n  const summary = summarizeWithCitations(trace.slice(0, -6));\n  const next = dedupe([...mustKeep, summary, ...recent]);\n  assertFactsPreserved(trace, next);\n  return fitTokenBudget(next, budget);\n}",
+      "id": "aiagentapps-06",
+      "title": "上下文窗口：预算、压缩与裁剪",
+      "concepts": [
+        "上下文窗口：预算、压缩与裁剪",
+        "先打个比方",
+        "第一个概念：上下文窗口，是一笔有限的 token 预算",
+        "第二个概念：窗口装满了，会出什么事",
+        "第三个概念：腾地方的两招——压缩 vs 裁剪",
+        "动手看：一个会涨的窗口，怎么「填满 → 压缩腾空 → 继续」",
+        "第四个概念：lost in the middle——别把关键信息埋在中间",
+        "用代码看一个「超长就压缩」的策略长什么样"
+      ],
+      "path": "context-engineering/context-window",
+      "type": "A",
+      "section": "上下文工程",
+      "order": 5
+    },
+    {
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "focus": "让模型结果经过语法、schema 和业务三层校验后才进入程序控制流",
+      "invariant": "只有完全验证的对象可以触发工具、数据库写入或后续自动化",
+      "fault": "从自由文本中正则截取 JSON 后直接执行，忽略缺字段、额外字段和业务边界",
+      "evidence": "schema 版本、原始响应、解析错误、字段错误、业务错误、修复次数与下游调用数",
+      "stages": ["生成请求", "语法解析", "schema 校验", "业务校验", "受控消费"],
+      "signals": ["原始响应", "schema", "业务规则", "下游调用"],
+      "terms": [
+        ["结构化输出", "按机器可验证合同生成的结果"],
+        ["JSON Schema", "描述对象字段、类型和约束的声明式规范"],
+        ["语法校验", "确认文本能否被 JSON 解析器接受"],
+        ["业务校验", "检查跨字段、权限和真实资源等领域规则"],
+        ["修复预算", "允许纠错请求消耗的次数、时间和 token 上限"]
+      ],
+      "lessons": [
+        [
+          "合法 JSON 仍可能不合 schema",
+          "解析成功不代表字段齐全、类型正确或没有多余属性。",
+          "分别输入截断、缺字段和额外字段样本，保存每层错误。"
+        ],
+        [
+          "schema 正确仍可能业务非法",
+          "结束时间早于开始时间、金额越权等规则需要确定性业务代码。",
+          "构造格式正确但越权的对象，确认业务层拒绝。"
+        ],
+        [
+          "修复必须有限且留原文",
+          "自动纠错可能掩盖模型回归；每轮都要保留原始响应与错误。",
+          "连续返回两次坏对象，验证达到预算后结构化失败。"
+        ],
+        [
+          "失败对象零副作用",
+          "不能先执行部分字段再补校验，否则会留下不可回滚状态。",
+          "监听工具注册表，确认所有失败样本的调用数为零。"
+        ]
+      ],
+      "code": "function decode(raw: string, schema: Schema) {\n  const parsed = JSON.parse(stripFence(raw));\n  const value = schema.parse(parsed);\n  validateBusinessRules(value);\n  return value;\n}\n\nconst value = decode(rawResponse, requestSchema);\nawait dispatchOnlyValidated(value);",
+      "id": "aiagentapps-07",
+      "title": "结构化输出与工具调用协议",
+      "concepts": [
+        "结构化输出与工具调用协议",
+        "先打个比方",
+        "第一个概念：为什么非要结构化",
+        "第二个概念：JSON 模式与 schema，约束的是两层",
+        "动手看：一次工具调用，消息是怎么来回走的",
+        "一段段把它写出来",
+        "第一段：定义一个带 schema 的结构化请求",
+        "第二段：解析 assistant 返回的 toolcalls"
+      ],
+      "path": "context-engineering/structured-output",
+      "type": "C",
+      "section": "上下文工程",
+      "order": 6
+    },
+    {
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "focus": "把工具调用实现为模型选接口、应用执行、结果回灌的显式协议",
+      "invariant": "模型只提出结构化调用，真正执行和授权始终属于应用运行时",
+      "fault": "把 tool_use 当成已经执行的事实，未运行工具就据此生成成功答复",
+      "evidence": "工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason",
+      "stages": ["暴露工具", "模型选择", "解析调用", "应用执行", "结果回灌"],
+      "signals": ["工具菜单", "调用块", "执行日志", "结果块"],
+      "terms": [
+        ["function calling", "模型输出结构化函数请求、应用负责执行的集成模式"],
+        ["工具描述", "帮助模型判断何时使用某个工具的自然语言合同"],
+        ["input_schema", "限定调用参数形状的 JSON Schema"],
+        ["tool_choice", "控制模型是否自动、强制或禁用工具选择的策略"],
+        ["tool_result", "应用执行后送回模型的结构化结果"]
+      ],
+      "lessons": [
+        [
+          "协议两侧职责不同",
+          "模型能看到名称、描述和 schema，看不到你的函数实现，也不会自动运行客户端代码。",
+          "把执行器替换为记录器，确认模型输出本身没有副作用。"
+        ],
+        [
+          "工具描述影响选择",
+          "名称相近或边界重叠会增加误选；描述要说明使用条件与禁用条件。",
+          "用相邻意图数据集测混淆矩阵，而不是只看一个成功例。"
+        ],
+        [
+          "并行调用仍要逐个验收",
+          "同一轮可有多个 tool_use，每个结果必须按标识配对并分别处理错误。",
+          "随机改变完成顺序，验证响应不会串线。"
+        ],
+        [
+          "所有停止原因都要处理",
+          "end_turn、max_tokens、refusal 与 pause_turn 不是同一种完成状态。",
+          "为每个停止原因写状态机测试。"
+        ]
+      ],
+      "code": "const response = await client.messages.create({ messages, tools });\nif (response.stop_reason === \"tool_use\") {\n  const calls = response.content.filter(isToolUse);\n  const results = await Promise.all(calls.map(validateAuthorizeAndRun));\n  messages.push(response, toToolResultMessage(results));\n} else {\n  return classifyStop(response.stop_reason);\n}",
+      "id": "aiagentapps-08",
+      "title": "Function Calling 原理",
+      "concepts": [
+        "Function Calling 原理",
+        "先打个比方",
+        "第一个概念：工具是怎么进入模型「视野」的",
+        "第二个概念：模型怎么从菜单里挑一个——工具选择",
+        "第三个概念：挑中之后，多个调用是并排发还是排队发",
+        "动手看：模型在工具菜单里挑中一个的全过程",
+        "用代码看那份「菜单」长什么样",
+        "容易踩的坑"
+      ],
+      "path": "tool-use/function-calling",
+      "type": "A",
+      "section": "工具使用",
+      "order": 7
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/writing-tools-for-agents",
+      "focus": "把工具设计成模型容易选、难以误用、结果紧凑且错误可恢复的操作界面",
+      "invariant": "工具名称、边界、参数和返回语义共同指向一个清晰动作，危险操作默认不可达",
+      "fault": "提供多个功能重叠的万能工具，参数含糊，错误只返回 internal error",
+      "evidence": "工具选择混淆矩阵、参数错误率、恢复率、token 成本、权限拒绝与任务成功率",
+      "stages": ["任务轨迹", "边界切分", "参数防错", "结果压缩", "评测迭代"],
+      "signals": ["误选率", "参数错误", "恢复率", "任务成功"],
+      "terms": [
+        ["ACI", "面向智能体设计的计算机操作界面"],
+        ["工具边界", "一个工具负责和明确不负责的动作范围"],
+        ["poka-yoke", "通过接口结构让常见错误更难发生的防错设计"],
+        ["结构化错误", "包含错误类型、可否重试和恢复提示的结果"],
+        ["工具评测", "在代表轨迹上测量选择、参数、结果理解和恢复的过程"]
+      ],
+      "lessons": [
+        [
+          "工具定义本身就是提示",
+          "模型依据名称、描述、参数和示例选择工具，它们需要与系统提示同等评测。",
+          "只改工具描述，在冻结任务集上比较选择混淆矩阵。"
+        ],
+        [
+          "贴近模型自然表达",
+          "要求复杂转义、手工行号或冗长 diff header 会制造格式错误。",
+          "比较整段重写与复杂补丁接口的首轮成功率。"
+        ],
+        [
+          "参数结构承担防错",
+          "绝对路径、枚举、互斥字段和资源标识可把错误挡在执行前。",
+          "提交相对路径或冲突参数，确认 schema 直接拒绝。"
+        ],
+        [
+          "结果只返回决策所需信息",
+          "原样倾倒大对象浪费上下文；应给摘要、稳定标识和按需深入入口。",
+          "比较原始响应与紧凑结果的 token 和下一步正确率。"
+        ]
+      ],
+      "code": "const readFileTool = defineTool({\n  name: \"read_file\",\n  description: \"读取工作区内一个绝对路径；目录请改用 list_directory\",\n  schema: z.object({ absolutePath: workspacePath }),\n  run: async ({ absolutePath }) => ({\n    content: await readLimited(absolutePath),\n    truncated: false,\n  }),\n});",
+      "id": "aiagentapps-09",
+      "title": "设计好用的工具",
+      "concepts": [
+        "设计好用的工具",
+        "先打个比方",
+        "先看全景：好工具的五个维度",
+        "第一个取舍：工具粒度——不大不小才好用",
+        "第二个关键：错误信息——决定 agent 能不能自己爬起来",
+        "第三个关键：返回值——给精料，别甩一地原料",
+        "动手看：错误信息的好坏，怎么让 agent 一个爬起来、一个躺平",
+        "代码对照：同一个工具，坏的写法 vs 好的写法"
+      ],
+      "path": "tool-use/tool-design",
+      "type": "D",
+      "section": "工具使用",
+      "order": 8
+    },
+    {
+      "source": "https://modelcontextprotocol.io/specification/2025-06-18/server",
+      "focus": "按 MCP 的 host、client、server 与三类原语边界集成外部上下文和动作",
+      "invariant": "协商后的能力、原语控制权和用户确认策略必须在每次调用中保持一致",
+      "fault": "客户端把 server 暴露的模型控制工具当作自动可信操作，绕过用户确认直接写外部系统",
+      "evidence": "协议版本、能力协商、tools/list、调用请求、用户确认、结果与权限日志",
+      "stages": [
+        "连接初始化",
+        "能力协商",
+        "发现原语",
+        "用户确认",
+        "调用与结果"
+      ],
+      "signals": ["协议版本", "能力", "确认", "调用结果"],
+      "terms": [
+        ["Host", "承载模型体验、权限和多个 MCP client 的应用"],
+        ["Client", "与一个 MCP server 维持协议连接的组件"],
+        ["Server", "通过协议暴露 prompts、resources 或 tools 的服务"],
+        ["Resources", "由应用控制并提供给模型的结构化上下文"],
+        ["Tools", "由模型发现和请求调用的可执行函数"]
+      ],
+      "lessons": [
+        [
+          "MCP 标准化连接而非信任",
+          "协议统一发现和调用方式，但不会自动证明 server、工具或结果安全。",
+          "接入同名恶意 server，确认 Host 仍执行来源和权限校验。"
+        ],
+        [
+          "三类原语控制权不同",
+          "prompts 由用户选择，resources 由应用管理，tools 可由模型请求。",
+          "为三类原语分别写 UI 与授权测试。"
+        ],
+        [
+          "初始化先协商能力",
+          "客户端不能假设所有 server 都支持工具、订阅或列表变更通知。",
+          "移除 tools capability，验证客户端隐藏相关操作。"
+        ],
+        [
+          "工具调用需要可见确认",
+          "高风险操作应展示工具、参数和影响范围，允许用户拒绝。",
+          "对写文件和发消息样本检查确认与取消路径。"
+        ]
+      ],
+      "code": "const session = await connect(serverUrl);\nconst initialized = await session.initialize({\n  protocolVersion: \"2025-06-18\",\n  capabilities: clientCapabilities,\n});\nif (!initialized.capabilities.tools) return { tools: [] };\nconst tools = await session.listTools();\nreturn tools.filter((tool) => policy.allowsDiscovery(tool));",
+      "id": "aiagentapps-10",
+      "title": "MCP：模型上下文协议",
+      "concepts": [
+        "MCP：模型上下文协议",
+        "先打个比方",
+        "第一个概念：MCP 是什么——「AI 接工具」的通用标准",
+        "第二个概念：MCP 的三层架构——Host / Client / Server",
+        "第三个概念：一个 Server 能暴露什么——三类能力",
+        "动手看：MCP 怎么把 N×M 的乱麻收成 M+N",
+        "用代码看一眼：一个 server 怎么声明一个 tool",
+        "容易踩的坑"
+      ],
+      "path": "tool-use/mcp",
+      "type": "A",
+      "section": "工具使用",
+      "order": 9
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "按路径可预知性、反馈需求和风险预算选择单次调用、工作流或智能体",
+      "invariant": "新增自主性必须在冻结评测集上证明收益大于延迟、成本和风险增量",
+      "fault": "因为任务有多个步骤就直接选择自治 Agent，忽略步骤其实完全可预写",
+      "evidence": "任务分类、简单基线、成功率、调用数、尾延迟、成本、故障率与接管率",
+      "stages": [
+        "任务分类",
+        "简单基线",
+        "工作流候选",
+        "Agent 候选",
+        "指标决策"
+      ],
+      "signals": ["可预知性", "基线", "收益", "风险"],
+      "terms": [
+        ["单次调用", "一次模型请求即可完成且不需要中间环境反馈的方案"],
+        ["工作流", "由代码预先安排步骤与分支的多步系统"],
+        ["智能体", "由模型根据中间结果动态选择后续路径的系统"],
+        ["复杂度门槛", "允许增加架构层次前必须满足的量化收益条件"],
+        ["人工接管率", "任务需要转由人完成或判断的比例"]
+      ],
+      "lessons": [
+        [
+          "步数不是分界",
+          "十步固定流程仍是工作流，两步若第二步取决于未知环境反馈也可能需要 Agent。",
+          "给任务画出决策点，标记哪些能在执行前确定。"
+        ],
+        [
+          "先建立最简单基线",
+          "没有单次调用或固定工作流基线，就无法证明自治循环值得。",
+          "在同一数据集上保存各方案的完整指标。"
+        ],
+        [
+          "工作流换来可预测性",
+          "路径明确时，显式代码更容易测试、限权和估算成本。",
+          "对退款审批写固定状态机并注入边界输入。"
+        ],
+        [
+          "Agent 换来适应性",
+          "步骤不可预知且环境能提供清晰反馈时，模型动态规划才可能有价值。",
+          "用未知代码故障任务比较固定脚本与反馈循环。"
+        ]
+      ],
+      "code": "function chooseArchitecture(task: Task, baseline: Metrics) {\n  if (!task.needsExternalFeedback) return \"single_call\";\n  if (task.pathCanBeEnumerated) return \"workflow\";\n  if (!baseline.agentGainExceedsRiskBudget) return \"workflow\";\n  return \"agent\";\n}",
+      "id": "aiagentapps-11",
+      "title": "工作流 vs 智能体：何时用哪个",
+      "concepts": [
+        "工作流 vs 智能体：何时用哪个",
+        "先打个比方",
+        "再辨析一次：差别不在步数，在「路是谁定的」",
+        "一个核心原则：先用最简单的，只在需要时加自主性",
+        "同一件事，多种自主性档位：智能体模式光谱",
+        "动手看：上不上 agent，是怎么一步步问出来的",
+        "代码对照：同一个任务，工作流写法 vs agent 写法",
+        "容易踩的坑"
+      ],
+      "path": "agentic-patterns/workflow-vs-agent",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 10
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "用提示链分解固定阶段，用路由把不同输入送入专用处理器，并为中间节点设置门禁",
+      "invariant": "链中每步都有输入输出合同，路由中的每类都有兜底和可测混淆边界",
+      "fault": "路由置信度不足时仍强行进入高风险专用分支，导致错误动作",
+      "evidence": "阶段输入输出、门禁结果、路由标签、置信度、混淆矩阵、兜底与最终指标",
+      "stages": ["入口校验", "链式分解", "分类路由", "专用处理", "结果门禁"],
+      "signals": ["中间合同", "路由标签", "置信度", "兜底"],
+      "terms": [
+        ["提示链", "让多个模型调用按固定顺序消费前一步输出的工作流"],
+        ["门禁", "在中间结果不合格时阻断或回退的确定性检查"],
+        ["路由", "先分类输入，再选择专用提示、模型或工具的工作流"],
+        ["混淆矩阵", "统计真实类别与预测类别组合的评测表"],
+        ["兜底分支", "类别未知或置信不足时采取的安全处理路径"]
+      ],
+      "lessons": [
+        [
+          "链式让每步更简单",
+          "把提纲、检查、成稿分开可提高可测性，但会增加往返延迟。",
+          "保存每步输出并定位首次不合格节点。"
+        ],
+        [
+          "门禁阻断错误放大",
+          "前一步输出不合格时继续执行，只会让后续模型把错误包装得更完整。",
+          "在提纲缺字段时确认成稿阶段不运行。"
+        ],
+        [
+          "路由需要清晰类别",
+          "类别重叠或分类不可测时，专用分支反而会增加错误。",
+          "用边界样本构建混淆矩阵并设置拒绝阈值。"
+        ],
+        [
+          "链与路由可以组合",
+          "先路由再走各自固定链，仍然是可预测工作流而非自治 Agent。",
+          "画出控制流并确认所有分支在运行前可枚举。"
+        ]
+      ],
+      "code": "async function handle(input: Input) {\n  const route = await classify(input);\n  if (route.confidence < 0.82) return safeFallback(input);\n  const outline = await handlers[route.label].outline(input);\n  assertOutline(outline);\n  return handlers[route.label].complete(outline);\n}",
+      "id": "aiagentapps-12",
+      "title": "链式与路由：把任务拆成更稳的工作流",
+      "concepts": [
+        "链式与路由：把任务拆成更稳的工作流",
+        "先打个比方",
+        "第一种拆法：同一批活都走同一串固定工序",
+        "第二种拆法：先分诊，再送去不同专科",
+        "它们都还是工作流，不是自主 agent",
+        "动手看：该串起来做，还是先分流再做？",
+        "代码对照：同一个入口，串起来写 vs 分流写",
+        "容易踩的坑"
+      ],
+      "path": "agentic-patterns/chaining-and-routing",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 11
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "区分预先可分的并行任务与由编排者动态拆解的工作者任务",
+      "invariant": "子任务边界、共享状态、合并规则和失败策略必须在执行前或规划后显式落盘",
+      "fault": "多个工作者同时写同一资源，合并器只保留最后完成者的结果",
+      "evidence": "任务图、依赖边、工作者输入输出、完成顺序、冲突、合并决策、耗时与成本",
+      "stages": ["依赖分析", "任务拆分", "并发执行", "结果合并", "冲突验收"],
+      "signals": ["依赖图", "完成顺序", "冲突", "合并结果"],
+      "terms": [
+        ["sectioning", "把预先已知且相互独立的子任务并行执行"],
+        ["voting", "对同一任务运行多个候选并按规则聚合"],
+        ["orchestrator", "根据具体输入动态拆分任务并综合结果的模型"],
+        ["worker", "执行一个明确子任务并返回结构化结果的模型或进程"],
+        ["合并器", "按依赖、冲突和质量规则整合多个结果的确定性组件"]
+      ],
+      "lessons": [
+        [
+          "并行的前提是独立",
+          "有写依赖或共享可变状态的任务不能只因技术上可并发就同时运行。",
+          "为子任务建立读写集合，检测冲突后再调度。"
+        ],
+        [
+          "投票需要聚合合同",
+          "多跑几次不自动提高可靠性；阈值、偏差和弃权必须预先定义。",
+          "改变票数与阈值，观察假阳性和假阴性。"
+        ],
+        [
+          "编排者动态决定子任务",
+          "与固定并行的关键差别是拆分结果依赖具体输入。",
+          "给两个规模不同的代码任务，比较生成的工作者计划。"
+        ],
+        [
+          "合并不是拼接",
+          "重复、矛盾、依赖顺序和质量门禁都要由合并器处理。",
+          "注入两个互斥补丁，确认系统阻断而不是 last-write-wins。"
+        ]
+      ],
+      "code": "const plan = await orchestrator.decompose(task);\nassertAcyclic(plan.dependencies);\nconst results = await scheduler.run(plan, {\n  maxConcurrency: 4,\n  isolateWrites: true,\n});\nconst merged = mergeWithConflicts(results);\nreturn verifyMergedResult(merged, task.acceptance);",
+      "id": "aiagentapps-13",
+      "title": "并行与编排-工作者：什么时候同时做，什么时候先拆再派",
+      "concepts": [
+        "并行与编排-工作者：什么时候同时做，什么时候先拆再派",
+        "先打个比方",
+        "并行：同一批活，预先分块后一起做",
+        "并行不只一种：分片（sectioning）和投票（voting）",
+        "编排-工作者：先看任务，再临场拆活",
+        "它们都像“多人一起干”，但差别在子任务是不是预先写死",
+        "动手看：该预先并行，还是让编排者临场拆活？",
+        "代码对照：同一任务，固定分工写法 vs 先规划再派工写法"
+      ],
+      "path": "agentic-patterns/parallelization-and-orchestrator-workers",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 12
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "在评价标准清晰且反馈能带来可测改进时运行生成—评价—修订循环",
+      "invariant": "评价器必须依据冻结 rubric 给出可执行反馈，并由预算和达标条件终止循环",
+      "fault": "评价器每轮改变标准，优化器只追逐措辞而质量指标没有提升",
+      "evidence": "rubric 版本、初稿、逐项评分、反馈、修订差异、轮次成本与停止原因",
+      "stages": [
+        "生成初稿",
+        "按 rubric 评分",
+        "定位差距",
+        "定向修订",
+        "达标或停止"
+      ],
+      "signals": ["rubric", "评分", "修订差异", "停止原因"],
+      "terms": [
+        ["evaluator", "按明确标准审查候选并给出反馈的模型或程序"],
+        ["optimizer", "根据反馈定向修订候选的模型调用"],
+        ["rubric", "列出评价维度、等级和通过阈值的固定标准"],
+        ["改进增量", "相邻两轮在冻结指标上的质量变化"],
+        ["停止规则", "达标、无改进、轮次或预算耗尽时退出的条件"]
+      ],
+      "lessons": [
+        [
+          "适配信号有两个",
+          "人能清楚给反馈，且候选根据反馈确实可改进，二者缺一都不适合循环。",
+          "先用少量样本验证人工反馈能否带来稳定增益。"
+        ],
+        [
+          "评价标准必须冻结",
+          "每轮改 rubric 会让分数不可比较，也可能让系统无限追逐新要求。",
+          "保存 rubric 哈希并拒绝循环内静默变更。"
+        ],
+        [
+          "反馈要可执行",
+          "“不够好”无法指导修订；应定位维度、证据和期望变化。",
+          "比较泛化反馈与逐项反馈的下一轮增量。"
+        ],
+        [
+          "无改进就停止",
+          "重复改写不是优化；连续低增益时应保留最佳版本并退出。",
+          "注入两轮同分结果，确认系统触发 plateau。"
+        ]
+      ],
+      "code": "let best = await generate(task);\nfor (let round = 0; round < 3; round += 1) {\n  const review = await evaluate(best, frozenRubric);\n  if (review.score >= 0.9) return { best, reason: \"threshold\" };\n  const next = await revise(best, review.actionableFeedback);\n  if ((await score(next)) <= (await score(best))) break;\n  best = next;\n}\nreturn { best, reason: \"plateau_or_budget\" };",
+      "id": "aiagentapps-14",
+      "title": "评估-优化：什么时候该先出稿，再迭代打磨",
+      "concepts": [
+        "评估-优化：什么时候该先出稿，再迭代打磨",
+        "先打个比方",
+        "这种模式在做什么：先出一版，再按标准返工",
+        "它仍是工作流，不是自主 agent",
+        "两个适配信号：标准清楚 + 返工真能变好",
+        "信号一：标准清楚，能说出“好稿子长什么样”",
+        "信号二：返工真的能让结果变好，而不是只会重写",
+        "动手看：这个任务该不该上评估-优化？"
+      ],
+      "path": "agentic-patterns/evaluator-optimizer",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 13
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "让模型在开放问题中依据真实环境反馈自主推进，同时保留沙箱、预算和人工检查点",
+      "invariant": "每轮行动都在最小权限内执行，可观察、可停止，并能把真实结果送回下一轮",
+      "fault": "Agent 在生产权限下反复尝试不可逆操作，错误随轮次累积且无人能暂停",
+      "evidence": "计划、工具参数、权限、环境结果、检查点、成本、首错位置、恢复与最终状态",
+      "stages": [
+        "澄清目标",
+        "制定计划",
+        "受控行动",
+        "吸收反馈",
+        "检查点与退出"
+      ],
+      "signals": ["目标", "权限", "环境结果", "检查点"],
+      "terms": [
+        ["自治 Agent", "模型在多轮环境反馈中动态决定过程和工具使用的系统"],
+        ["沙箱", "限制代码、文件、网络和系统调用影响范围的环境"],
+        ["检查点", "暂停自动推进并允许人审查、批准或纠偏的位置"],
+        ["误差累积", "早期错误经后续决策放大为更大偏离的现象"],
+        ["恢复策略", "遇到工具错误、阻塞或低置信时的重试、回退和接管规则"]
+      ],
+      "lessons": [
+        [
+          "开放路径才值得自治",
+          "若步骤可预写，工作流通常更便宜、更稳定；Agent 适合步骤数量和内容难以预测的任务。",
+          "对同一任务先尝试固定方案，记录其失败边界。"
+        ],
+        [
+          "环境反馈是 ground truth",
+          "模型自评不能证明代码、订单或数据库已改变，必须读取真实环境。",
+          "让执行器拒绝一次动作，确认下一轮能看到并处理拒绝。"
+        ],
+        [
+          "沙箱阻止错误扩散",
+          "广泛权限与多轮尝试组合会放大风险，应限制路径、网络、资源和动作类型。",
+          "尝试越界写入，确认在工具边界阻断。"
+        ],
+        [
+          "检查点处理不可逆动作",
+          "付款、发送、删除与发布应在预览后等待明确授权。",
+          "验证批准前后副作用计数分别为零和一。"
+        ]
+      ],
+      "code": "for (let step = 0; step < budget.maxSteps; step += 1) {\n  const action = await planNext(goal, trace);\n  const preview = await sandbox.preview(action);\n  if (preview.irreversible) await requireHumanApproval(preview);\n  const observation = await sandbox.execute(action);\n  trace.push({ action, observation });\n  if (acceptance.isSatisfied(observation, trace)) return done(trace);\n}\nreturn blocked(\"budget\", trace);",
+      "id": "aiagentapps-15",
+      "title": "自主智能体：让模型在环境反馈里自己推进任务",
+      "concepts": [
+        "自主智能体：让模型在环境反馈里自己推进任务",
+        "先打个比方",
+        "先分清：固定工作流和自主智能体不是同一件事",
+        "自主智能体靠什么往前走：反馈，而不是自言自语",
+        "什么时候才值得放权给它",
+        "放权之前要先装刹车",
+        "动手看：什么时候固定步骤够用，什么时候进入 agent loop？",
+        "代码对照：固定工作流 vs agent loop"
+      ],
+      "path": "agentic-patterns/autonomous-agents",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 14
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "按可测需求组合检索、路由、链式、并行、评价和自治环节，并保留透明回退路径",
+      "invariant": "每增加一个模式都对应独立失败假设、指标收益和可撤销边界",
+      "fault": "把所有模式堆进 mega-agent，无法定位质量提升来自哪一层，也无法单独回退",
+      "evidence": "架构版本、逐层消融指标、阶段轨迹、错误归属、成本增量与回退结果",
+      "stages": ["简单基线", "识别瓶颈", "增加一层", "消融评测", "保留或回退"],
+      "signals": ["基线", "增量", "归因", "回退"],
+      "terms": [
+        ["模式组合", "把多个简单构件按任务需要连接成透明系统"],
+        ["消融实验", "移除一个构件并观察指标变化以判断其真实贡献"],
+        ["复杂度预算", "系统允许承担的额外调用、延迟、成本和维护负担"],
+        ["回退路径", "新层失效或收益不足时恢复较简单方案的机制"],
+        ["可归因性", "能够把结果变化定位到具体架构层或输入差异的性质"]
+      ],
+      "lessons": [
+        [
+          "模式是积木不是处方",
+          "文章列出的模式不是成熟度阶梯，也不要求全部使用。",
+          "从单次调用开始，只针对首个失败簇选一个构件。"
+        ],
+        [
+          "一次只增加一个主要变量",
+          "同时加入路由、并行和评价会让收益不可归因。",
+          "按版本逐层评测并保存差异。"
+        ],
+        [
+          "组合边界需要显式合同",
+          "路由输出、链式中间物和工作者结果都应可独立校验。",
+          "让某一层输出缺字段，确认错误在边界处停止。"
+        ],
+        [
+          "回退比升级更重要",
+          "新模式在真实分布下退化时，系统要能恢复已知可用基线。",
+          "关闭新增层，用相同输入验证回退结果与历史基线一致。"
+        ]
+      ],
+      "code": "let system = singleCallBaseline;\nfor (const candidate of proposedLayers) {\n  const next = compose(system, candidate);\n  const delta = await evaluateDelta(system, next, frozenSuite);\n  if (delta.quality > 0 && delta.cost <= budget) system = next;\n  else recordRejectedLayer(candidate, delta);\n}\nreturn system;",
+      "id": "aiagentapps-16",
+      "title": "组合与定制模式：把简单积木拼成合适系统",
+      "concepts": [
+        "组合与定制模式：把简单积木拼成合适系统",
+        "先打个比方",
+        "这些模式是积木，不是处方",
+        "加复杂度之前，先让指标说话",
+        "透明组合比复杂框架更可靠",
+        "组合可以大胆，回退必须保守",
+        "动手看：从简单工作流爬到组合系统",
+        "代码对照：mega-agent vs 透明组合 workflow"
+      ],
+      "path": "agentic-patterns/combining-patterns",
+      "type": "D",
+      "section": "智能体模式",
+      "order": 15
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "focus": "用客服与编码场景验证 Agent 适配条件：对话加行动、清晰成功标准、反馈循环和人工监督",
+      "invariant": "场景必须同时提供可执行工具、可验证结果和可接管边界，不能只展示流畅对话",
+      "fault": "客服 Agent 在缺少订单事实与退款权限时仍承诺已退款，编码 Agent 在测试失败时仍提交结果",
+      "evidence": "任务类型、工具调用、环境状态、成功断言、用户确认、测试结果、接管与副作用",
+      "stages": ["识别场景", "取得事实", "执行动作", "验证结果", "人工审查"],
+      "signals": ["外部事实", "动作", "成功断言", "人工审查"],
+      "terms": [
+        ["解决率", "任务达到用户定义成功状态的比例"],
+        ["反馈循环", "执行结果进入下一轮决策并推动修正的机制"],
+        ["环境断言", "由数据库、测试或外部系统证明结果的确定性检查"],
+        ["人工监督", "人在关键检查点审查、批准或接管任务"],
+        ["副作用", "退款、写文件、提交代码等改变外部状态的动作"]
+      ],
+      "lessons": [
+        [
+          "客服同时需要对话和行动",
+          "理解诉求只是开始，查询订单、退款或更新工单才构成解决。",
+          "把只回答与实际执行两种系统放在同一解决率口径下比较。"
+        ],
+        [
+          "编码拥有强反馈",
+          "编译、测试、静态检查和 diff 为 Agent 提供可重复环境事实。",
+          "注入失败测试，确认系统继续定位而不是宣告完成。"
+        ],
+        [
+          "清晰成功标准降低漂移",
+          "“让用户满意”难以验收，订单状态或测试通过更适合闭环。",
+          "把模糊目标改写为可查询状态并运行断言。"
+        ],
+        [
+          "自动测试不能替代人工审查",
+          "功能通过仍可能违反架构、安全或产品意图。",
+          "在通过测试的补丁中注入越权变更，确认 review 门禁拦截。"
+        ]
+      ],
+      "code": "async function resolve(caseFile: CaseFile) {\n  const facts = await loadAuthorizedFacts(caseFile);\n  const action = await proposeAction(caseFile, facts);\n  const approved = action.risk === \"high\" ? await humanReview(action) : true;\n  if (!approved) return handoff(caseFile);\n  const result = await execute(action);\n  return assertEnvironmentState(result.expectedState);\n}",
+      "id": "aiagentapps-17",
+      "title": "真实场景解剖：客服智能体与编码智能体为什么适合 agent",
+      "concepts": [
+        "真实场景解剖：客服智能体与编码智能体为什么适合 agent",
+        "先打个比方",
+        "先看一张适配矩阵：为什么是客服和编码",
+        "客服案例：从回答问题到解决问题",
+        "编码案例：为什么代码特别适合反馈循环",
+        "风险图：能行动，也要能停下",
+        "动手看：普通回答、固定脚本、agent loop 差在哪",
+        "客服：只回答 vs 能行动"
+      ],
+      "path": "production/agents-in-practice",
+      "type": "D",
+      "section": "生产化",
+      "order": 16
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/writing-tools-for-agents",
+      "focus": "把工具定义当作可评测提示，迭代名称、描述、参数、返回与错误恢复",
+      "invariant": "工具改动必须在代表轨迹上同时验证选对、填对、读懂和恢复四个环节",
+      "fault": "只看工具函数单元测试通过，却从不测模型是否会选择和正确填写它",
+      "evidence": "工具定义版本、任务集、选择率、参数通过率、结果理解率、恢复率与失败轨迹",
+      "stages": ["收集轨迹", "定位误用", "改写接口", "批量评测", "发布或回退"],
+      "signals": ["选择率", "参数通过", "结果理解", "恢复率"],
+      "terms": [
+        ["工具提示工程", "通过迭代工具定义改善模型使用行为的过程"],
+        ["选择精度", "需要该工具的任务中模型正确选择它的比例"],
+        ["参数通过率", "模型生成参数一次通过 schema 与业务校验的比例"],
+        ["结果理解率", "模型能否依据工具返回做出正确下一步的比例"],
+        ["恢复率", "工具返回可恢复错误后模型能修正并继续的比例"]
+      ],
+      "lessons": [
+        [
+          "从真实失败轨迹开始",
+          "凭直觉润色描述容易优化错误问题，应先聚类误选、误填和误读。",
+          "标注一批失败轨迹并计算各类占比。"
+        ],
+        [
+          "边界描述比功能口号重要",
+          "“搜索数据”太宽，应该说明数据域、何时使用和与相邻工具的区别。",
+          "用相邻意图样本测误选率。"
+        ],
+        [
+          "参数名要消除歧义",
+          "抽象缩写、隐式单位和布尔开关会增加猜测，应改成语义明确的枚举和结构。",
+          "比较改名前后的首轮 schema 通过率。"
+        ],
+        [
+          "错误返回指导下一步",
+          "错误需说明缺什么、能否重试、何时转人工，不能只给内部代码。",
+          "注入缺权限、速率限制和不存在资源三类错误，测恢复路径。"
+        ]
+      ],
+      "code": "for (const version of toolDefinitionCandidates) {\n  const runs = await runToolEval(version, representativeTasks);\n  report(version, {\n    selection: precision(runs),\n    arguments: schemaPassRate(runs),\n    comprehension: nextStepAccuracy(runs),\n    recovery: recoveryRate(runs),\n  });\n}",
+      "id": "aiagentapps-18",
+      "title": "工具提示工程：让 agent 会用工具而不是猜工具",
+      "concepts": [
+        "工具提示工程：让 agent 会用工具而不是猜工具",
+        "先打个比方",
+        "工具定义就是给模型看的提示",
+        "描述要写边界，而不只写功能",
+        "参数 schema 要替模型消歧",
+        "返回结果语义会改变下一次选择",
+        "错误要帮助模型恢复",
+        "工具定义要靠 eval 迭代"
+      ],
+      "path": "production/tool-prompt-engineering",
+      "type": "D",
+      "section": "生产化",
+      "order": 17
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents",
+      "focus": "用简单性、透明轨迹、ACI、安全、评测、回滚和人工接管门禁决定 Agent 能否上线",
+      "invariant": "没有可重复评测、最小权限、停止恢复和回滚证据的系统不得进入生产",
+      "fault": "演示样本成功后直接开放生产写权限，没有回归集、监控、停机或回滚路径",
+      "evidence": "版本、评测集、通过阈值、权限矩阵、轨迹日志、告警、停机演练、回滚与审批记录",
+      "stages": [
+        "简单性审查",
+        "离线评测",
+        "沙箱试运行",
+        "灰度监控",
+        "回滚演练"
+      ],
+      "signals": ["评测", "权限", "监控", "回滚"],
+      "terms": [
+        ["生产门禁", "上线前必须满足且可审计的检查条件"],
+        ["离线评测", "在冻结任务集与环境中重复运行并评分"],
+        ["轨迹评测", "检查完整消息、工具和环境事件而非只看最终答案"],
+        ["灰度发布", "只向有限流量开放并持续观察的上线方式"],
+        ["回滚演练", "在受控环境验证能恢复上一稳定版本和状态的操作"]
+      ],
+      "lessons": [
+        [
+          "简单性是上线资产",
+          "层次越少越容易观察、限权、测试和回退；复杂度必须有评测收益。",
+          "移除一层框架做消融，确认是否真的降低质量。"
+        ],
+        [
+          "评测要看结果也看轨迹",
+          "最终答案偶然正确时，越权调用和无效绕路仍是生产缺陷。",
+          "为成功样本加入工具次数、权限和首错断言。"
+        ],
+        [
+          "安全边界要演练",
+          "文档里写有停机按钮不够，必须在沙箱和灰度中实际触发。",
+          "注入高风险调用，验证告警、暂停和人工接管。"
+        ],
+        [
+          "回滚包含代码与外部状态",
+          "退回旧版本不能自动撤销已发送消息或已写数据库，需要补偿和审计。",
+          "执行一次可逆副作用，演练补偿后核对环境状态。"
+        ]
+      ],
+      "code": "const gates = [\n  evaluate(frozenSuite),\n  verifyLeastPrivilege(permissionMatrix),\n  replayCriticalTraces(),\n  drillStopAndHandoff(),\n  drillRollbackAndCompensation(),\n];\n\nif (gates.some((gate) => !gate.pass)) throw new Error(\"release_blocked\");\nawait release.canary({ traffic: 0.01, monitors, rollbackPlan });",
+      "id": "aiagentapps-19",
+      "title": "生产化收官：简单、透明与 ACI 上线检查清单",
+      "concepts": [
+        "生产化收官：简单、透明与 ACI 上线检查清单",
+        "先打个比方",
+        "三条生产原则：先简单、再透明、最后打磨接口",
+        "复杂度升级门槛：不是能做，而是值得做",
+        "透明 planning / review：让人能看见它为什么这么做",
+        "ACI：把工具当成 agent 的操作界面",
+        "上线检查清单：能跑通，不等于能上线",
+        "动手看：四道闸门如何拦住黑盒 agent"
+      ],
+      "path": "production/production-readiness-checklist",
+      "type": "D",
+      "section": "生产化",
+      "order": 18
+    }
+  ]
+}

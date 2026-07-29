@@ -3,212 +3,243 @@ title: Function Calling 原理
 type: A
 section: 工具使用
 order: 7
-description: 模型怎么"看见"工具、又凭什么决定调哪个——拆开 function calling 的决策机制，而不只是消息格式。
+description: Function Calling 原理：把工具调用实现为模型选接口、应用执行、结果回灌的显式协议，通过架构、轨迹和故障重放完成验收。
 demo: true
 math: false
+sourceUrl: >-
+  https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
 draft: false
-sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentapps-08
 ---
 
-import { ToolsAsMenuDiagram } from "@/components/mdx/diagrams/tools-as-menu-diagram";
-import { ParallelVsSequentialDiagram } from "@/components/mdx/diagrams/parallel-vs-sequential-diagram";
+import {
+  FunctionCallingModelLab,
+  FunctionCallingTraceLab,
+  FunctionCallingEvidenceLab,
+} from "@/components/mdx/ai-agent-apps/v2/function-calling";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握Function Calling 原理
+- 能解释“Function Calling 原理”如何把工具调用实现为模型选接口、应用执行、结果回灌的显式协议
+- 能区分function calling、工具描述、input_schema、tool_choice、tool_result，并指出控制权、数据与副作用边界
+- 能固定输入与版本，沿以下证据定位首个分叉：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason
+- 能注入“把 tool_use 当成已经执行的事实，未运行工具就据此生成成功答复”，完成阻断、恢复、复位和同输入重放
 
-学习“Function Calling 原理”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，Function Calling 原理的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从先打个比方开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_APPS_QUALITY_V2 */}
 
-机制验证要把第一个概念：工具是怎么进入模型「视野」的写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。第二个概念：模型怎么从菜单里挑一个——工具选择不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“Function Calling 原理”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Claude Platform《How tool use works》](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)核对本单元机制；涉及 MCP 的控制权边界再由[MCP 2025-06-18 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是 Anthropic 出版的“19 章教材”。平台把公开文章、官方工具文档与协议规范重组为 19 个应用单元；下列 152 个节点是站内课程地图，不冒充原文目录。正文、代码、图表、实验和练习均为独立教学重写；产品接口、模型行为或协议版本变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“第三个概念：挑中之后，多个调用是并排发还是排队发”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **Function Calling 原理**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 1 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先打个比方**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 2 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第一个概念：工具是怎么进入模型「视野」的**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 3 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第二个概念：模型怎么从菜单里挑一个——工具选择**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 4 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第三个概念：挑中之后，多个调用是并排发还是排队发**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 5 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **动手看：模型在工具菜单里挑中一个的全过程**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 6 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **用代码看那份「菜单」长什么样**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 7 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **容易踩的坑**：这是“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的第 8 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“Function Calling 原理”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "function calling",
+      def: "function calling：模型输出结构化函数请求、应用负责执行的集成模式；在“Function Calling 原理”中按以下证据核对：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。",
+    },
+    {
+      term: "工具描述",
+      def: "工具描述：帮助模型判断何时使用某个工具的自然语言合同；在“Function Calling 原理”中按以下证据核对：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。",
+    },
+    {
+      term: "input_schema",
+      def: "input_schema：限定调用参数形状的 JSON Schema；在“Function Calling 原理”中按以下证据核对：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。",
+    },
+    {
+      term: "tool_choice",
+      def: "tool_choice：控制模型是否自动、强制或禁用工具选择的策略；在“Function Calling 原理”中按以下证据核对：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。",
+    },
+    {
+      term: "tool_result",
+      def: "tool_result：应用执行后送回模型的结构化结果；在“Function Calling 原理”中按以下证据核对：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：模型只提出结构化调用，真正执行和授权始终属于应用运行时。任何“成功”结论都要保存以下证据：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason，模型生成的计划或自信不能替代环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 协议两侧职责不同
 
-## 权威目录与核心概念逐项对照
+模型能看到名称、描述和 schema，看不到你的函数实现，也不会自动运行客户端代码。
 
-- Function Calling 原理
-- 先打个比方
-- 第一个概念：工具是怎么进入模型「视野」的
-- 第二个概念：模型怎么从菜单里挑一个——工具选择
-- 第三个概念：挑中之后，多个调用是并排发还是排队发
-- 动手看：模型在工具菜单里挑中一个的全过程
-- 用代码看那份「菜单」长什么样
-- 容易踩的坑
+动手验证：把执行器替换为记录器，确认模型输出本身没有副作用。
 
+### 工具描述影响选择
 
-## 可复现的最小实现
+名称相近或边界重叠会增加误选；描述要说明使用条件与禁用条件。
 
-先把决策记录写成机器可读结构：
+动手验证：用相邻意图数据集测混淆矩阵，而不是只看一个成功例。
 
-```json
-{
-  "unit": "Function Calling 原理",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 并行调用仍要逐个验收
 
-再用同一条执行链处理三类样本：
+同一轮可有多个 tool_use，每个结果必须按标识配对并分别处理错误。
+
+动手验证：随机改变完成顺序，验证响应不会串线。
+
+### 所有停止原因都要处理
+
+end_turn、max_tokens、refusal 与 pause_turn 不是同一种完成状态。
+
+动手验证：为每个停止原因写状态机测试。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 架构与复杂度边界">
+    在“Function Calling 原理”中切换简单基线、受控工作流与自主循环，先预测“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”在哪个阶段需要增加控制权，再比较延迟、成本、可观测性和自主性。
+
+    <FunctionCallingModelLab />
+
+  </Step>
+  <Step title="2. 状态与决策轨迹">
+    固定任务、工具、权限和预算，沿暴露工具 → 模型选择 → 解析调用 → 应用执行 → 结果回灌逐步推进；每一步只读取上一阶段已经通过的状态。
+
+    <FunctionCallingTraceLab />
+
+  </Step>
+  <Step title="3. 故障、恢复与重放">
+    注入“把 tool_use 当成已经执行的事实，未运行工具就据此生成成功答复”，观察以下证据的首个分叉：工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。撤销后重置实验，并用相同输入与权限重放。
+
+    <FunctionCallingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+const response = await client.messages.create({ messages, tools });
+if (response.stop_reason === "tool_use") {
+  const calls = response.content.filter(isToolUse);
+  const results = await Promise.all(calls.map(validateAuthorizeAndRun));
+  messages.push(response, toToolResultMessage(results));
+} else {
+  return classifyStop(response.stop_reason);
 }
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+这段切片只暴露“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”的最小运行合同。交付版本还要补齐超时、密钥隔离、结构化日志、幂等和批量评测；缺少工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason时，代码能运行也不代表本章结论成立。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  把 tool_use
+  当成已经执行的事实，未运行工具就据此生成成功答复。它会破坏“模型只提出结构化调用，真正执行和授权始终属于应用运行时”；应从工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+  stop_reason定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="不要把模型自评当作验收">
+  在“Function Calling
+  原理”中，模型解释只能提出候选原因；协议字段、工具结果、确定性断言和真实环境状态才能证明“把工具调用实现为模型选接口、应用执行、结果回灌的显式协议”是否成立。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="版本变化必须重跑">
+  “Function Calling
+  原理”依赖模型、工具、schema、协议或运行时接口。升级任一层后，应在冻结任务集上重新保存工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+  stop_reason，不能沿用旧截图或单次成功样例。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用最少样本证明“模型只提出结构化调用，真正执行和授权始终属于应用运行时”？
+
+<Answer>
+  冻结模型、指令、工具、权限和预算，写出正常、边界与单故障三类预期，再保存工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+  stop_reason。只要首个分叉未解释或失败样本产生副作用，就不能判定通过。
+</Answer>
+
+**问题 2：课程覆盖。** Function Calling 原理、先打个比方、第一个概念：工具是怎么进入模型「视野」的、第二个概念：模型怎么从菜单里挑一个——工具选择、第三个概念：挑中之后，多个调用是并排发还是排队发、动手看：模型在工具菜单里挑中一个的全过程、用代码看那份「菜单」长什么样、容易踩的坑如何进入可操作验证？
+
+<Answer>
+  把八个坐标分别标到架构决策图、状态轨迹和故障证据链中。每个坐标至少拥有一个可观察状态、一个明确判断或一个失败样本；只在目录中出现不算覆盖。
+</Answer>
+
+**问题 3：恢复闭环。** 怎样证明“把 tool_use 当成已经执行的事实，未运行工具就据此生成成功答复”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+  stop_reason中标出首个差异；撤销后复位全部控件，以完全相同的输入、版本、预算和权限重放。环境结果与停止状态都回到基线才算修复。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- Function Calling 原理必须绑定冻结输入和明确成功标准。
-- 先打个比方必须能画成结构并沿边追踪责任。
-- 第一个概念：工具是怎么进入模型「视野」的要由正常、边界和单故障样本共同验证。
-- 第二个概念：模型怎么从菜单里挑一个——工具选择必须保存第一处偏离和清理重建步骤。
-- 第三个概念：挑中之后，多个调用是并排发还是排队发决定方案是否可以进入下一阶段。
+- “Function Calling 原理”的主问题是把工具调用实现为模型选接口、应用执行、结果回灌的显式协议。
+- 核心不变量是模型只提出结构化调用，真正执行和授权始终属于应用运行时。
+- 首要反例是把 tool_use 当成已经执行的事实，未运行工具就据此生成成功答复。
+- 最小证据包包含工具列表、选择原因、调用块、参数校验、执行日志、结果块与 stop_reason。
 
+<Glossary>
+  <GlossaryItem term="function calling">
+    模型输出结构化函数请求、应用负责执行的集成模式。在“Function Calling
+    原理”中必须能按以下证据重新定位：工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+    stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="工具描述">
+    帮助模型判断何时使用某个工具的自然语言合同。在“Function Calling
+    原理”中必须能按以下证据重新定位：工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+    stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="input_schema">
+    限定调用参数形状的 JSON Schema。在“Function Calling
+    原理”中必须能按以下证据重新定位：工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+    stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="tool_choice">
+    控制模型是否自动、强制或禁用工具选择的策略。在“Function Calling
+    原理”中必须能按以下证据重新定位：工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+    stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="tool_result">
+    应用执行后送回模型的结构化结果。在“Function Calling
+    原理”中必须能按以下证据重新定位：工具列表、选择原因、调用块、参数校验、执行日志、结果块与
+    stop_reason。
+  </GlossaryItem>
+</Glossary>
 
-## 术语表
+## 阅读导航
 
+[← 结构化输出与工具调用协议](/learn/ai-agent-apps/context-engineering/structured-output) · [设计好用的工具 →](/learn/ai-agent-apps/tool-use/tool-design)
 
-{/* A 概念型章（第三篇「工具使用」开篇）：讲清「模型侧」function calling 的决策机制——工具怎么进入模型视野、模型凭什么从中挑一个、并行还是串行。区别于 Ch7「工具调用协议」讲的消息往返格式，本章绝不重复 tool_calls 解析/回填那套线路协议。主 viz = FunctionCallingDecisionDiagram（animotor 5 步：request→read-intent→match→pick→emit）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 工具怎么进入模型视野（schema 序列化注入上下文）→ <ToolsAsMenuDiagram />（静态：定义卡→注入→工具菜单）；2. 工具选择（拿意图比对 description 挑一个）【含「description 起什么作用」】→ 并入主 viz；3. 并行 vs 串行调用 → <ParallelVsSequentialDiagram />（静态两栏）；4. 模型怎么挑工具【主 viz·核心】→（animotor 5 步决策动画）。Term 高亮术语：Function Calling / 工具 schema 注入 tool-schema-injection / 工具选择 tool-selection / 并行工具调用 parallel-tool-calls / 串行工具调用 sequential-tool-calls → 均进章末 Glossary，id 对齐 */}
-
-{/* ===== 1. 学习目标｜spec §一：A 型必含「能解释 ___ 在智能体里的位置」；末条检验问题 ===== */}
-
-
-{/* ===== 2. 直觉引入｜spec §二：≤3 段 × 零术语；类比统一（工具箱清单/照活儿挑趁手的）===== */}
-
-## 先打个比方
-
-想象你递给一个新来的师傅一份**工具箱清单**：每一件工具旁边都写着一句话——「这把是拧十字螺丝的」「这把是剪铁丝的」「这把是量长度的」。师傅接到活儿，并不会把工具箱翻个底朝天，而是照着这份清单上的那句话，挑出最趁手的那件。
-
-挑得准不准，几乎全看那句话写得清不清楚。要是两件工具旁边都写着「拧东西用的」，师傅就只能瞎抓一件；要是清单上压根没有能干这活儿的工具，他就会停下来说「这活儿我手头没工具，我直接告诉你怎么办」。
-
-模型用工具——这套让模型自己决定调哪个工具的能力，叫——也是一模一样的道理。这一章不讲工具调用的消息格式（那是上一章的事），只盯一件事：模型到底**怎么「看见」那份清单、又凭什么从中挑出一件**。看不懂这一层，你就只会埋怨「模型怎么老挑错」，却不知道病根其实在你写的那句话上。
-
-{/* ===== 3. 概念讲解｜spec §三：一节一概念；术语首现：把每个工具的名字、参数、一句描述序列化成一段文字，注入上下文。下面这张图把这条路画了出来：
-
-<ToolsAsMenuDiagram />
-
-盯住从左到右这一程：左边是你写的工具定义，中间被序列化成文本注入上下文，右边模型就「看见」了一份**工具菜单**——每项 = 一个名字 + 一句描述。所以记住一句话：**模型对工具的全部认知，就来自菜单上那几行字。** 这几行写得清不清楚、准不准确，直接决定了模型能不能用对。这也是为什么后面要反复强调那句 description。
-
-## 第二个概念：模型怎么从菜单里挑一个——工具选择
-
-模型「看见」菜单之后，下一步就是：读懂用户到底想干嘛，再拿这份意图去对每个工具的描述，挑出最贴的那个。这里的关键抓手，就是工具定义里那句 **description**。
-
-description 是专门写给模型看的——它是模型判断「这个工具到底干嘛、什么时候该用」的主要依据。名字（name）只像菜单上的菜名，给模型一个对号的标签；真正说清用途、让模型拿意图去比对的，是那句描述。所以描述写得越清楚、越贴近真实用途，模型挑得越准；含糊或几个工具写得雷同，它就容易点错菜。**这一步具体怎么转，下一节的动画会一帧一帧演给你看。**
-
-## 第三个概念：挑中之后，多个调用是并排发还是排队发
-
-模型挑工具，有时一次只挑一个，有时一口气挑好几个。这就引出一对概念： 和。一张图分清：
-
-<ParallelVsSequentialDiagram />
-
-决定走哪条路的，就一件事——**调用之间有没有「数据依赖」**。查订单和查天气是两件互不相干的事，谁也不等谁，模型一轮里同时提议、一起拿回结果，省时间，这就是并行；而「先查到退货政策、再按政策看这单还在不在可退期内」，后一步要吃前一步的结果，就只能先 A 后 B 排成一条链，这就是串行。**彼此独立 → 并行；后者吃前者输出 → 串行。** 这个判断，正是评估一个 agent 设计好不好的常见考点。
-
-{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
-
-{/* ===== 5. 交互 Demo｜spec §五：主 viz = FunctionCallingDecisionDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
-
-## 动手看：模型在工具菜单里挑中一个的全过程
-
-前面三个概念里，**「模型怎么挑」**最难凭文字想象。下面这个动画把它一步步拆开——用一个具体场景：用户问「我的快递到哪了？」，菜单里有查订单、查天气、搜文档三个工具。
-
-> 猜一猜：动画第 ③ 步，模型拿用户意图逐个比对每个工具的 description。如果有**两个工具的 description 写得差不多**，到第 ④ 步它会怎样？是稳稳挑中一个，还是来回犹豫、随机挑一个？先想一想，再单步播放到 ③、④ 步对比着看。
-
-
-盯住这条决策链：① 用户意图 + 整份工具菜单一起进入模型视野 → ② 模型先读懂用户到底想要什么（「快递到哪了」= 想查订单状态）→ ③ 拿这份意图去逐个比对每个工具的 description，估匹配度 → ④ 挑中最贴的 `check_order`，其余压暗（**若都不贴 → 不调任何工具、直接用文字答**）→ ⑤ 产出调用意图「调 `check_order(order_id=…)`」。要害有两个：一是模型挑得准不准，全压在「比对 description」这一步，所以那句描述是你能攥在手里的方向盘；二是它自始至终只「**提议**」，从不自己执行——真去跑函数的是 app 的代码。
-
-{/* ===== 6. 代码对照｜spec §六：A 型只贴最能说明概念的 1–2 段；单块 ≤30 行；不重复 Ch7 的 tool_calls 解析/回填 ===== */}
-
-## 用代码看那份「菜单」长什么样
-
-A 型章不展开实现（解析、回填那套上一章已经讲透）。这里只贴最能说明本章概念的一段——你交给模型的 `tools` 列表里，两三个工具各自的 `name` 和 `description`：
-
-```python
-tools = [
-    {
-        "name": "check_order",
-        # description 才是模型选它的依据：写清「干嘛的 + 何时调」
-        "description": "查某一笔具体订单的实时状态（到货进度 / 能否退货）；问到「我的单到哪了 / 能退吗」时调",
-    },
-    {
-        "name": "search_docs",
-        # 与 check_order 划清边界：查通用政策条文，不针对具体某一单
-        "description": "搜通用帮助文档与政策条文（如退货规则、运费说明）；不针对某一笔具体订单",
-    },
-    {
-        "name": "get_weather",
-        "description": "查某城市的实时天气；问到天气、冷热、下不下雨时调",
-    },
-]
-```
-
-逐行对照前面那张菜单图看：模型看到的就是这几行字。`name` 只是标签，**真正让它分得清「这活儿该点哪道菜」的，是每条 `description`**——它写得清不清、几个工具之间边界划得开不开，直接决定模型挑得准不准。注意 `check_order` 和 `search_docs` 都跟「订单/退货」沾边，所以两句描述特意写成职责互斥（一个查「这一单的具体状态」、一个查「通用政策条文」），免得模型挑花眼。这一段没有任何调用解析或结果回填——那是上一章工具调用协议的事，本章只管「模型凭这几行字怎么挑」。
-
-{/* ===== 7. 常见误区｜spec §七：A 型 ≥2 个；固定 现象→原因→修法 三行格式 ===== */}
-
-## 容易踩的坑
-
-
-{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；含 1 道场景判断题；答案折叠 ===== */}
-
-## 小结
-
-- 模型不「内置」工具：靠工具 schema 注入，把名字 + 参数 + 描述当文本塞进上下文，它才「看见」一份工具菜单
-- 工具选择 = 读懂用户意图 → 拿意图逐个比对每个工具的 description → 挑最贴的；都不贴就不调、直接答
-- description 是模型选工具的主要依据：写得清不清、几个工具边界划得开不开，直接决定挑得准不准
-- 调用之间有没有数据依赖决定并行还是串行：彼此独立 → 并行省时间；后者吃前者输出 → 只能串行
-- 模型只「提议」调用、从不自己执行；工具太多或描述雷同会让它挑花眼、乱挑
-
-
-{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
-
-{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，id 对齐，零基础大白话 ===== */}
-
-## 名词解释
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents 与官方应用工程资料（站内十九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

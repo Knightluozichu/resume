@@ -3,136 +3,235 @@ title: 从 LLM 到 Agent：什么是智能体
 type: A
 section: 智能体基础
 order: 0
-description: 看懂智能体的本质——一个会在循环里自己调工具、自己决定下一步的 LLM。
+description: 从 LLM 到 Agent：什么是智能体：用控制权、环境反馈和停止条件区分模型调用、工作流与智能体，通过架构、轨迹和故障重放完成验收。
 demo: true
 math: false
-draft: false
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentapps-01
 ---
 
-import { AgentAnatomyDiagram } from "@/components/mdx/diagrams/agent-anatomy-diagram";
-import { AgentVsWorkflowDiagram } from "@/components/mdx/diagrams/agent-vs-workflow-diagram";
-import { AppAgentLoopDiagram } from "@/components/mdx/diagrams/app-agent-loop-diagram";
-import { AutonomySpectrumDiagram } from "@/components/mdx/diagrams/autonomy-spectrum-diagram";
+import {
+  WhatIsAnAgentModelLab,
+  WhatIsAnAgentTraceLab,
+  WhatIsAnAgentEvidenceLab,
+} from "@/components/mdx/ai-agent-apps/v2/what-is-an-agent";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握从 LLM 到 Agent：什么是智能体
+- 能解释“从 LLM 到 Agent：什么是智能体”如何用控制权、环境反馈和停止条件区分模型调用、工作流与智能体
+- 能区分工作流、智能体、环境反馈、自主性、停止条件，并指出控制权、数据与副作用边界
+- 能固定输入与版本，沿以下证据定位首个分叉：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因
+- 能注入“模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成”，完成阻断、恢复、复位和同输入重放
 
-学习“从 LLM 到 Agent：什么是智能体”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，从 LLM 到 Agent：什么是智能体的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从先打个比方开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_APPS_QUALITY_V2 */}
 
-机制验证要把第一个概念：裸 LLM 是个「只会背书的实习生」写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。第二个概念：智能体 = LLM 大脑 + 四件外挂不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“从 LLM 到 Agent：什么是智能体”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Anthropic《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)核对本单元机制；涉及 MCP 的控制权边界再由[MCP 2025-06-18 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是 Anthropic 出版的“19 章教材”。平台把公开文章、官方工具文档与协议规范重组为 19 个应用单元；下列 152 个节点是站内课程地图，不冒充原文目录。正文、代码、图表、实验和练习均为独立教学重写；产品接口、模型行为或协议版本变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“第三个概念：智能体 vs 工作流 vs 聊天机器人”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **从 LLM 到 Agent：什么是智能体**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 1 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先打个比方**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 2 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第一个概念：裸 LLM 是个「只会背书的实习生」**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 3 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第二个概念：智能体 = LLM 大脑 + 四件外挂**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 4 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第三个概念：智能体 vs 工作流 vs 聊天机器人**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 5 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第四个概念：自主性是一根可调的旋钮**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 6 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **动手看：一圈智能体循环长什么样**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 7 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **用代码看循环的骨架**：这是“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的第 8 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“从 LLM 到 Agent：什么是智能体”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "工作流",
+      def: "工作流：由代码预先规定模型和工具调用路径的系统；在“从 LLM 到 Agent：什么是智能体”中按以下证据核对：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。",
+    },
+    {
+      term: "智能体",
+      def: "智能体：由模型根据环境反馈动态决定下一步的系统；在“从 LLM 到 Agent：什么是智能体”中按以下证据核对：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。",
+    },
+    {
+      term: "环境反馈",
+      def: "环境反馈：来自工具、执行器或用户的可观察事实；在“从 LLM 到 Agent：什么是智能体”中按以下证据核对：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。",
+    },
+    {
+      term: "自主性",
+      def: "自主性：系统在既定权限内自行选择下一步的程度；在“从 LLM 到 Agent：什么是智能体”中按以下证据核对：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。",
+    },
+    {
+      term: "停止条件",
+      def: "停止条件：完成、阻塞、预算耗尽或人工接管的退出合同；在“从 LLM 到 Agent：什么是智能体”中按以下证据核对：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：每次自主决策都受工具权限、环境事实和显式停止条件约束。任何“成功”结论都要保存以下证据：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因，模型生成的计划或自信不能替代环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 控制流才是分界
 
-## 权威目录与核心概念逐项对照
+两种系统都能调用工具；区别在路径由代码预写还是由模型根据中间结果选择。
 
-- 从 LLM 到 Agent：什么是智能体
-- 先打个比方
-- 第一个概念：裸 LLM 是个「只会背书的实习生」
-- 第二个概念：智能体 = LLM 大脑 + 四件外挂
-- 第三个概念：智能体 vs 工作流 vs 聊天机器人
-- 第四个概念：自主性是一根可调的旋钮
-- 动手看：一圈智能体循环长什么样
-- 用代码看循环的骨架
+动手验证：把退款、翻译和未知故障分别放入三种实现，标出真正决定下一步的主体。
 
+### 自主性是一段区间
 
-## 可复现的最小实现
+从单次调用、固定链到开放循环，自主性增加时成本、延迟和故障面也同步增加。
 
-先把决策记录写成机器可读结构：
+动手验证：固定任务集，逐档比较成功率、尾延迟、调用数和人工接管率。
 
-```json
-{
-  "unit": "从 LLM 到 Agent：什么是智能体",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 外部事实推进循环
 
-再用同一条执行链处理三类样本：
+计划和解释只能提出候选动作，工具结果与环境状态才有资格改变任务状态。
+
+动手验证：让工具返回空结果，检查系统是否停止猜测并重新规划。
+
+### 完成必须可判定
+
+最大轮数不是成功条件；系统还要区分 done、blocked、rejected 与 handoff。
+
+动手验证：注入永远无结果的工具，确认系统不会把预算耗尽伪装成完成。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 架构与复杂度边界">
+    在“从 LLM 到 Agent：什么是智能体”中切换简单基线、受控工作流与自主循环，先预测“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”在哪个阶段需要增加控制权，再比较延迟、成本、可观测性和自主性。
+
+    <WhatIsAnAgentModelLab />
+
+  </Step>
+  <Step title="2. 状态与决策轨迹">
+    固定任务、工具、权限和预算，沿任务合同 → 控制权选择 → 工具行动 → 环境反馈 → 停止验收逐步推进；每一步只读取上一阶段已经通过的状态。
+
+    <WhatIsAnAgentTraceLab />
+
+  </Step>
+  <Step title="3. 故障、恢复与重放">
+    注入“模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成”，观察以下证据的首个分叉：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。撤销后重置实验，并用相同输入与权限重放。
+
+    <WhatIsAnAgentEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
+type Status = "done" | "blocked" | "handoff";
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+async function runAgent(task: Task, tools: Tool[], maxSteps = 6) {
+  const trace: Event[] = [];
+  for (let step = 0; step < maxSteps; step += 1) {
+    const decision = await decide(task, tools, trace);
+    if (decision.kind === "final") return { status: "done" as Status, trace };
+    trace.push(await executeAndObserve(decision, tools));
+  }
+  return { status: "blocked" as Status, reason: "step_budget", trace };
 }
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+这段切片只暴露“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”的最小运行合同。交付版本还要补齐超时、密钥隔离、结构化日志、幂等和批量评测；缺少任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因时，代码能运行也不代表本章结论成立。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成。它会破坏“每次自主决策都受工具权限、环境事实和显式停止条件约束”；应从任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="不要把模型自评当作验收">
+  在“从 LLM 到
+  Agent：什么是智能体”中，模型解释只能提出候选原因；协议字段、工具结果、确定性断言和真实环境状态才能证明“用控制权、环境反馈和停止条件区分模型调用、工作流与智能体”是否成立。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="版本变化必须重跑">
+  “从 LLM 到
+  Agent：什么是智能体”依赖模型、工具、schema、协议或运行时接口。升级任一层后，应在冻结任务集上重新保存任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因，不能沿用旧截图或单次成功样例。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用最少样本证明“每次自主决策都受工具权限、环境事实和显式停止条件约束”？
+
+<Answer>
+  冻结模型、指令、工具、权限和预算，写出正常、边界与单故障三类预期，再保存任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。只要首个分叉未解释或失败样本产生副作用，就不能判定通过。
+</Answer>
+
+**问题 2：课程覆盖。** 从 LLM 到 Agent：什么是智能体、先打个比方、第一个概念：裸 LLM 是个「只会背书的实习生」、第二个概念：智能体 = LLM 大脑 + 四件外挂、第三个概念：智能体 vs 工作流 vs 聊天机器人、第四个概念：自主性是一根可调的旋钮、动手看：一圈智能体循环长什么样、用代码看循环的骨架如何进入可操作验证？
+
+<Answer>
+  把八个坐标分别标到架构决策图、状态轨迹和故障证据链中。每个坐标至少拥有一个可观察状态、一个明确判断或一个失败样本；只在目录中出现不算覆盖。
+</Answer>
+
+**问题 3：恢复闭环。** 怎样证明“模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因中标出首个差异；撤销后复位全部控件，以完全相同的输入、版本、预算和权限重放。环境结果与停止状态都回到基线才算修复。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 从 LLM 到 Agent：什么是智能体必须绑定冻结输入和明确成功标准。
-- 先打个比方必须能画成结构并沿边追踪责任。
-- 第一个概念：裸 LLM 是个「只会背书的实习生」要由正常、边界和单故障样本共同验证。
-- 第二个概念：智能体 = LLM 大脑 + 四件外挂必须保存第一处偏离和清理重建步骤。
-- 第三个概念：智能体 vs 工作流 vs 聊天机器人决定方案是否可以进入下一阶段。
+- “从 LLM 到 Agent：什么是智能体”的主问题是用控制权、环境反馈和停止条件区分模型调用、工作流与智能体。
+- 核心不变量是每次自主决策都受工具权限、环境事实和显式停止条件约束。
+- 首要反例是模型只凭自己的上一段文字继续推演，却把没有工具证据的结论标成完成。
+- 最小证据包包含任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
 
+<Glossary>
+  <GlossaryItem term="工作流">
+    由代码预先规定模型和工具调用路径的系统。在“从 LLM 到
+    Agent：什么是智能体”中必须能按以下证据重新定位：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
+  </GlossaryItem>
+  <GlossaryItem term="智能体">
+    由模型根据环境反馈动态决定下一步的系统。在“从 LLM 到
+    Agent：什么是智能体”中必须能按以下证据重新定位：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
+  </GlossaryItem>
+  <GlossaryItem term="环境反馈">
+    来自工具、执行器或用户的可观察事实。在“从 LLM 到
+    Agent：什么是智能体”中必须能按以下证据重新定位：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
+  </GlossaryItem>
+  <GlossaryItem term="自主性">
+    系统在既定权限内自行选择下一步的程度。在“从 LLM 到
+    Agent：什么是智能体”中必须能按以下证据重新定位：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
+  </GlossaryItem>
+  <GlossaryItem term="停止条件">
+    完成、阻塞、预算耗尽或人工接管的退出合同。在“从 LLM 到
+    Agent：什么是智能体”中必须能按以下证据重新定位：任务合同、控制权归属、工具调用、环境结果、轮次预算与停止原因。
+  </GlossaryItem>
+</Glossary>
 
-## 术语表
+## 阅读导航
 
+← 本课程起点 · [增强型 LLM：工具、检索与记忆 →](/learn/ai-agent-apps/foundations/augmented-llm)
 
-{/* A 概念型章：核心是讲清「智能体是什么 / 它由哪几块拼成 / 它和近亲怎么区分」。主 viz = AppAgentLoopDiagram（animotor 分步动画）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 裸 LLM 的局限（只预测下一个词、无记忆、不能行动、不知训练后的新信息）→ 文字引子 + 并入 §3 解剖图前；2. Agent 解剖（LLM 大脑 + 工具 + 记忆 + 循环 + 指令）→ <AgentAnatomyDiagram />（静态 SVG）；3. Agent vs 工作流 vs 聊天机器人 → <AgentVsWorkflowDiagram />（静态 SVG 三栏对比）；4. 智能体循环 agentic loop【主 viz】→ <AppAgentLoopDiagram />（animotor 6 步动画）；5. 自主性光谱 → <AutonomySpectrumDiagram />（静态 SVG 横向光谱条）；6. 何时该用 Agent →
-
-{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条，与目标一一呼应；练习含 1 道改 Demo 题；答案折叠 ===== */}
-
-## 小结
-
-- 裸 LLM 只会预测下一个词，天生不能行动、没记忆、不知新事
-- 智能体 = LLM 大脑 + 四件外挂：工具（能动手）、记忆（记上下文）、指令（系统提示）、循环（反复想—做—看）
-- 三个近亲的区别：聊天机器人单轮问答、工作流路径写死、智能体在循环里自己决定下一步
-- 智能体循环是灵魂：在「思考→行动→观察」里转圈，由 LLM 自己决定何时调工具、何时结束
-- 自主性是可调旋钮，不是越大越好；固定任务用代码 / 工作流，开放任务才上自主 Agent
-
-
-{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
-
-{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，零基础大白话 ===== */}
-
-## 名词解释
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents 与官方应用工程资料（站内十九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

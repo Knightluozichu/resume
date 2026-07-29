@@ -3,283 +3,234 @@ title: 你的第一个最小 Agent
 type: C
 section: 智能体基础
 order: 3
-description: 把前三章拼起来——用几十行 Python 亲手搭一个能调工具、会循环、自己收尾的最小智能体。
+description: 你的第一个最小 Agent：用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体，通过架构、轨迹和故障重放完成验收。
 demo: true
 math: false
+sourceUrl: >-
+  https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
 draft: false
-sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentapps-04
 ---
 
-import { AgentSkeletonDiagram } from "@/components/mdx/diagrams/agent-skeleton-diagram";
+import {
+  FirstAgentModelLab,
+  FirstAgentTraceLab,
+  FirstAgentEvidenceLab,
+} from "@/components/mdx/ai-agent-apps/v2/first-agent";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握你的第一个最小 Agent
+- 能解释“你的第一个最小 Agent”如何用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体
+- 能区分工具注册表、输入 schema、分发器、执行结果、验收器，并指出控制权、数据与副作用边界
+- 能固定输入与版本，沿以下证据定位首个分叉：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言
+- 能注入“把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用”，完成阻断、恢复、复位和同输入重放
 
-学习“你的第一个最小 Agent”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，你的第一个最小 Agent的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从先说说这一章干嘛开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_APPS_QUALITY_V2 */}
 
-机制验证要把最小 Agent，就是这四块拼起来写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。动手看：最小 agent 跑一次长什么样不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“你的第一个最小 Agent”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Claude Platform《How tool use works》](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)核对本单元机制；涉及 MCP 的控制权边界再由[MCP 2025-06-18 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是 Anthropic 出版的“19 章教材”。平台把公开文章、官方工具文档与协议规范重组为 19 个应用单元；下列 152 个节点是站内课程地图，不冒充原文目录。正文、代码、图表、实验和练习均为独立教学重写；产品接口、模型行为或协议版本变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“一段段把它拼出来”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **你的第一个最小 Agent**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 1 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先说说这一章干嘛**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 2 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **最小 Agent，就是这四块拼起来**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 3 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **动手看：最小 agent 跑一次长什么样**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 4 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **一段段把它拼出来**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 5 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第一段：定义一个工具**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 6 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第二段：给工具写一份 schema**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 7 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第三段：解析 LLM 的工具调用，并执行**：这是“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的第 8 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“你的第一个最小 Agent”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "工具注册表",
+      def: "工具注册表：从公开工具名到受控执行函数的显式映射；在“你的第一个最小 Agent”中按以下证据核对：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。",
+    },
+    {
+      term: "输入 schema",
+      def: "输入 schema：限定参数字段、类型、枚举和必填项的合同；在“你的第一个最小 Agent”中按以下证据核对：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。",
+    },
+    {
+      term: "分发器",
+      def: "分发器：校验调用后选择并执行白名单工具的运行时代码；在“你的第一个最小 Agent”中按以下证据核对：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。",
+    },
+    {
+      term: "执行结果",
+      def: "执行结果：包含成功值或结构化错误的工具回执；在“你的第一个最小 Agent”中按以下证据核对：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。",
+    },
+    {
+      term: "验收器",
+      def: "验收器：根据环境事实判断任务是否真正完成的确定性逻辑；在“你的第一个最小 Agent”中按以下证据核对：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：最小实现也必须分离模型决策、工具执行、权限检查和成功判定。任何“成功”结论都要保存以下证据：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言，模型生成的计划或自信不能替代环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 先选无副作用切片
 
-## 权威目录与核心概念逐项对照
+首个 Agent 应使用天气、计算或查询等只读工具，先证明协议闭环。
 
-- 你的第一个最小 Agent
-- 先说说这一章干嘛
-- 最小 Agent，就是这四块拼起来
-- 动手看：最小 agent 跑一次长什么样
-- 一段段把它拼出来
-- 第一段：定义一个工具
-- 第二段：给工具写一份 schema
-- 第三段：解析 LLM 的工具调用，并执行
+动手验证：把工具替换为返回固定值的测试替身，验证消息序列。
 
+### schema 不是授权
 
-## 可复现的最小实现
+字段合法只说明形状正确，资源范围与操作者权限仍要单独判断。
 
-先把决策记录写成机器可读结构：
+动手验证：提交格式正确但越权的资源标识，确认执行器拒绝。
 
-```json
-{
-  "unit": "你的第一个最小 Agent",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 注册表阻断任意调用
 
-再用同一条执行链处理三类样本：
+模型产生的名称永远不能直接进入 eval、反射或 shell。
+
+动手验证：注入未注册工具名，断言零副作用并返回 structured error。
+
+### 验收独立于模型措辞
+
+模型说“已经完成”不能替代数据库、文件或测试断言。
+
+动手验证：让模型错误声称完成，确认验收器仍返回 blocked。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 架构与复杂度边界">
+    在“你的第一个最小 Agent”中切换简单基线、受控工作流与自主循环，先预测“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”在哪个阶段需要增加控制权，再比较延迟、成本、可观测性和自主性。
+
+    <FirstAgentModelLab />
+
+  </Step>
+  <Step title="2. 状态与决策轨迹">
+    固定任务、工具、权限和预算，沿注册工具 → 模型选择 → 校验参数 → 受控执行 → 验收退出逐步推进；每一步只读取上一阶段已经通过的状态。
+
+    <FirstAgentTraceLab />
+
+  </Step>
+  <Step title="3. 故障、恢复与重放">
+    注入“把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用”，观察以下证据的首个分叉：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。撤销后重置实验，并用相同输入与权限重放。
+
+    <FirstAgentEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
+const registry = { get_weather: getWeather } satisfies ToolRegistry;
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+async function dispatch(call: ToolCall, actor: Actor) {
+  const tool = registry[call.name as keyof typeof registry];
+  if (!tool) return { ok: false, error: "unknown_tool" };
+  const args = tool.schema.parse(call.input);
+  await authorize(actor, call.name, args);
+  return { ok: true, value: await tool.run(args) };
 }
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+这段切片只暴露“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”的最小运行合同。交付版本还要补齐超时、密钥隔离、结构化日志、幂等和批量评测；缺少工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言时，代码能运行也不代表本章结论成立。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用。它会破坏“最小实现也必须分离模型决策、工具执行、权限检查和成功判定”；应从工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="不要把模型自评当作验收">
+  在“你的第一个最小
+  Agent”中，模型解释只能提出候选原因；协议字段、工具结果、确定性断言和真实环境状态才能证明“用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体”是否成立。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="版本变化必须重跑">
+  “你的第一个最小
+  Agent”依赖模型、工具、schema、协议或运行时接口。升级任一层后，应在冻结任务集上重新保存工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言，不能沿用旧截图或单次成功样例。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用最少样本证明“最小实现也必须分离模型决策、工具执行、权限检查和成功判定”？
+
+<Answer>
+  冻结模型、指令、工具、权限和预算，写出正常、边界与单故障三类预期，再保存工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。只要首个分叉未解释或失败样本产生副作用，就不能判定通过。
+</Answer>
+
+**问题 2：课程覆盖。** 你的第一个最小 Agent、先说说这一章干嘛、最小 Agent，就是这四块拼起来、动手看：最小 agent 跑一次长什么样、一段段把它拼出来、第一段：定义一个工具、第二段：给工具写一份 schema、第三段：解析 LLM 的工具调用，并执行如何进入可操作验证？
+
+<Answer>
+  把八个坐标分别标到架构决策图、状态轨迹和故障证据链中。每个坐标至少拥有一个可观察状态、一个明确判断或一个失败样本；只在目录中出现不算覆盖。
+</Answer>
+
+**问题 3：恢复闭环。** 怎样证明“把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言中标出首个差异；撤销后复位全部控件，以完全相同的输入、版本、预算和权限重放。环境结果与停止状态都回到基线才算修复。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 你的第一个最小 Agent必须绑定冻结输入和明确成功标准。
-- 先说说这一章干嘛必须能画成结构并沿边追踪责任。
-- 最小 Agent，就是这四块拼起来要由正常、边界和单故障样本共同验证。
-- 动手看：最小 agent 跑一次长什么样必须保存第一处偏离和清理重建步骤。
-- 一段段把它拼出来决定方案是否可以进入下一阶段。
+- “你的第一个最小 Agent”的主问题是用一个只读工具、一个显式状态机和一个确定性验收器组装最小可运行智能体。
+- 核心不变量是最小实现也必须分离模型决策、工具执行、权限检查和成功判定。
+- 首要反例是把模型返回的工具名直接映射到任意函数，并允许未经校验的参数触发副作用。
+- 最小证据包包含工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
 
+<Glossary>
+  <GlossaryItem term="工具注册表">
+    从公开工具名到受控执行函数的显式映射。在“你的第一个最小
+    Agent”中必须能按以下证据重新定位：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
+  </GlossaryItem>
+  <GlossaryItem term="输入 schema">
+    限定参数字段、类型、枚举和必填项的合同。在“你的第一个最小
+    Agent”中必须能按以下证据重新定位：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
+  </GlossaryItem>
+  <GlossaryItem term="分发器">
+    校验调用后选择并执行白名单工具的运行时代码。在“你的第一个最小
+    Agent”中必须能按以下证据重新定位：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
+  </GlossaryItem>
+  <GlossaryItem term="执行结果">
+    包含成功值或结构化错误的工具回执。在“你的第一个最小
+    Agent”中必须能按以下证据重新定位：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
+  </GlossaryItem>
+  <GlossaryItem term="验收器">
+    根据环境事实判断任务是否真正完成的确定性逻辑。在“你的第一个最小
+    Agent”中必须能按以下证据重新定位：工具白名单、输入校验、执行日志、结果消息、退出状态与验收断言。
+  </GlossaryItem>
+</Glossary>
 
-## 术语表
+## 阅读导航
 
+[← 智能体循环：感知、思考与行动](/learn/ai-agent-apps/foundations/agentic-loop) · [提示工程精要 →](/learn/ai-agent-apps/context-engineering/prompt-engineering)
 
-{/* C 实战型章（第一篇收官）：把前三章的零件（裸 LLM → 增强型 LLM → 循环）亲手拼成一个能跑的最小 Agent（Python，~40-60 行）。代码为重心（§6 ≥80% 覆盖），但仍少文字重图重动画：用「代码↔运行轨迹」同步动画把代码和行为对起来。主 viz = AgentRunTraceDiagram（animotor 6 步，「北京今天穿什么」1 轮驱动，左侧高亮当前代码块、右侧逐条追加运行轨迹）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 最小 Agent 四块骨架（系统提示/工具表/LLM调用/带刹车的循环）→ <AgentSkeletonDiagram />（静态，四块拼成一个 agent + 各块对应代码角色）；2. 定义一个工具（函数 + schema：名字/描述/参数/实现）→（静态拆解四部分）+ 代码；3. 解析 LLM 工具调用 → 执行 → 回填 → §6 代码对照；4. 组装循环 + 终止（呼应 Ch3 for+max_steps）→ §6 代码；5. 跑一次完整执行【主 viz】→（animotor，代码↔轨迹同步）。Term 高亮术语：最小 Agent、系统提示、工具 schema、工具调用解析、回填、max_steps → 均进章末 Glossary */}
-
-{/* ===== 1. 学习目标｜spec §一：C 型含一条「能实现 / 能改出」；末条检验问题 ===== */}
-
-
-{/* ===== 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；承接前三章「零件→机器」 ===== */}
-
-## 先说说这一章干嘛
-
-前三章我们把零件一个个认全了：第 1 章看清了「会自己干活的 AI」长什么样，第 2 章给它配齐了资料柜、电话、笔记本，第 3 章弄懂了它怎么一圈圈转着把活办成。
-
-可零件摊了一桌子，它们到底怎么拧成一台能转的机器？这一章就干这件事——**亲手把零件拼起来**，用几十行代码搭一个真能跑的最小智能体：你给它一句话，它自己想该查什么、去调工具、看结果、再决定收不收尾。
-
-没有这一步，前面学的全是纸上谈兵。拼过一次，你就再不会觉得「智能体」是个玄乎的黑盒——它不过是几十行你能从头读懂的代码。
-
-{/* ===== 3. 概念讲解｜spec §三：C 型「是什么」压缩一两段；术语首现 不神秘，它就是四块骨架拼到一起：
-
-<AgentSkeletonDiagram />
-
-四块各管一摊，正好对上前三章学的东西：
-
-- **系统提示**：开头一段话，定下它的身份、目标和规矩——这是第 1 章说的「指令」外挂。
-- **工具表**：声明它能调哪些工具——这是第 2 章的「工具」增强。
-- **LLM 调用**：每一圈让模型看着上下文、决定下一步——这是那颗不变的「大脑」。
-- **带刹车的循环**：用 `for` + 步数上限把前三块反复转起来——这正是第 3 章的循环骨架。
-
-C 型章的「是什么」就压缩到这里。剩下的篇幅，全留给「怎么把这四块写成代码、拼起来跑通」——这才是本章的重头戏。
-
-{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
-
-{/* ===== 5. 交互 Demo｜spec §五：主 viz = AgentRunTraceDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
-
-## 动手看：最小 agent 跑一次长什么样
-
-写代码之前，先亲眼看它跑起来的样子。下面这个动画把「代码」和「它跑起来的行为」一行行对起来——左边是最小 agent 的代码骨架，右边是它真跑一次产生的运行轨迹。任务很简单：「北京今天适合穿什么」。
-
-> 猜一猜：动画第 ③ 步 agent 调了 `get_weather("北京")` 拿到天气。如果把循环的 `max_steps` 设成 `1`（最多只转一圈），它还能在第 ⑥ 步给出「建议穿外套」这个答案吗？先想一想——查天气和「拿着天气作答」是不是同一圈干的？再单步播放，数一数它一共转了几圈。
-
-
-盯住一件事：**左边每执行一块代码，右边就追加一条对应的行为轨迹**。LLM 调用产出「该查天气」（Thought），工具执行块跑出 `get_weather`（Action），回填块把「15°C」喂回去（Observation），下一圈 LLM 看到天气就收尾。代码和行为一一对上，这台机器就不再是黑盒了。接下来我们就把左边这些代码块，一段段亲手写出来。
-
-{/* ===== 6. 代码对照｜spec §六：C 型重心，≥80% 覆盖；逐步建构；单块≤30 行，块间有解说 ===== */}
-
-## 一段段把它拼出来
-
-下面我们用五段代码，从零拼出上面那个 agent。每一段都接着前一段往下写，读完你手里就有一个完整、能跑的最小 agent。例子用 OpenAI 风格的接口，但思路对任何能「调工具（function calling）」的模型都一样。
-
-### 第一段：定义一个工具
-
-先给 agent 一样能力。一个工具 = **一个真去干活的 Python 函数** + **一份给 LLM 看的说明书**。我们先写函数本身——它就是普通 Python，这里用一个写死的假天气，方便你不接真 API 也能跑通：
-
-```python
-def get_weather(city: str) -> str:
-    # 真实项目里这里会调天气 API；先用假数据，方便直接跑通
-    fake = {"北京": "15°C · 晴", "上海": "22°C · 多云"}
-    return fake.get(city, f"查不到「{city}」的天气")
-```
-
-函数有了，但 LLM 看不见它的函数体——它只能看到我们另外写的一份**说明书**。这份说明书就是下一步要讲的。
-
-### 第二段：给工具写一份 schema
-
-LLM 凭什么知道该调 `get_weather`、又该传什么进去？全靠这份 schema。把一个工具定义拆开看，它由四部分构成：
-
-
-前三部分（名字、描述、参数）就是写给 LLM 看的 schema，第四部分（实现）是上一段那个函数。我们把名字到函数的对应关系存进一张表，再把 schema 单独列出来：
-
-```python
-# 工具表：名字 → 真正执行的函数（给我们的代码用）
-TOOLS = {"get_weather": get_weather}
-
-# schema：写给 LLM 看的说明书（名字 / 描述 / 参数）
-TOOL_SCHEMAS = [{
-    "type": "function",
-    "function": {
-        "name": "get_weather",
-        "description": "查某个城市今天的天气，问到穿衣、出行、天气时调用",
-        "parameters": {
-            "type": "object",
-            "properties": {"city": {"type": "string", "description": "城市名"}},
-            "required": ["city"],
-        },
-    },
-}]
-```
-
-
-### 第三段：解析 LLM 的工具调用，并执行
-
-调一次 LLM，它的回复有两种可能：要么**直接给文字答案**，要么**要求调一个工具**。后者就是一次需要我们处理的。我们写一个小函数：从回复里解析出工具名和参数，去工具表里找到对应函数、真去执行，再把结果包成一条消息：
-
-```python
-import json
-
-def run_tool_call(tool_call) -> dict:
-    name = tool_call.function.name              # 解析：调哪个
-    args = json.loads(tool_call.function.arguments)  # 解析：传什么
-    result = TOOLS[name](**args)                # 执行：真去跑那个函数
-    # 包成一条 "tool" 角色的消息，准备回填给 LLM
-    return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
-```
-
-注意这条铁律：**LLM 自己不执行任何工具**——它只产出「我想调 `get_weather`，参数 `city=北京`」这个意图，真正去跑那个函数的，永远是 `TOOLS[name](**args)` 这一行我们自己的代码。
-
-### 第四段：组装带刹车的主循环
-
-零件齐了，现在把它们装进第 3 章学过的那个**带 刹车的 `for` 循环**。每一圈：调 LLM → 看它要不要调工具 → 要就执行并、不要就说明它答完了，收尾退出：
-
-```python
-def run_agent(user_input: str, max_steps: int = 5) -> str:
-    msgs = [
-        {"role": "system", "content": "你是贴心的生活助手，必要时调用工具再回答。"},
-        {"role": "user", "content": user_input},
-    ]
-    for _ in range(max_steps):                  # 刹车：最多转 max_steps 圈
-        reply = call_llm(msgs)                   # ① LLM 调用（思考）
-        if not reply.tool_calls:                 # ② 它没调工具 → 已经能直接答了
-            return reply.content                  #    正常出口：返回最终答案
-        msgs.append(reply)                        # 先把「它要调工具」这步记进上下文
-        for tc in reply.tool_calls:              # ③ 解析 + 执行每个工具调用
-            msgs.append(run_tool_call(tc))        # ④ 回填：结果 append 回 msgs
-    return "抱歉，我转了几圈仍没能完成。"          # 出口二：转满 max_steps 的兜底
-```
-
-先看开头的 `msgs`：第一条就是（role 为 `system` 的那条），定下 agent 的身份和规矩，第二条才是用户的问题。再逐句对照主 viz 看：`for _ in range(max_steps)` 是那个会转多圈、但最多转 `max_steps` 圈的环（左侧「主循环」块）；`call_llm(msgs)` 是每圈的思考（「LLM 调用」块）；`if not reply.tool_calls: return` 是 agent **自己**判断答完了、正常收尾（呼应第 3 章的 `is_done` 出口）；`run_tool_call(tc)` 是解析 + 执行（「工具执行」块）；`msgs.append(...)` 就是**回填**（「结果回填」块）——下一圈 `call_llm(msgs)` 才能看见刚查到的天气。
-
-### 第五段：补上 call_llm，跑一次
-
-最后补上调模型的 `call_llm`（这里用 OpenAI SDK 风格），再 `main` 里跑一次，整个最小 agent 就齐活了：
-
-```python
-from openai import OpenAI
-client = OpenAI()  # 读环境变量里的 API key
-
-def call_llm(msgs):
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini", messages=msgs, tools=TOOL_SCHEMAS,
-    )
-    return resp.choices[0].message
-
-if __name__ == "__main__":
-    print(run_agent("北京今天适合穿什么？"))
-    # 它会：思考 → 调 get_weather("北京") → 看到 15°C·晴 → 收尾答「偏凉，穿件外套」
-```
-
-加上前四段，这就是一个**完整、能跑**的最小 agent——总共不到 50 行。它有系统提示、有工具、会循环、自己收尾，前三章的概念全在这几十行里落了地。把 `call_llm` 换成任意能 function calling 的模型接口，整套逻辑原封不动。
-
-{/* ===== 7. 常见误区｜spec §七：C 型 ≥3 个；固定 现象→原因→修法 三行格式 ===== */}
-
-## 容易踩的坑
-
-
-{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；含 1 道独立实现题；答案折叠 ===== */}
-
-## 小结
-
-- 最小 Agent = 四块骨架：系统提示 + 工具表 + LLM 调用 + 带刹车的循环
-- 一个工具 = 真去干活的函数 + 给 LLM 看的 schema（名字 / 描述 / 参数）
-- LLM 自己不执行工具，只产出「调哪个、传什么」，由我们的代码解析后去跑
-- 每圈：调 LLM → 没调工具就收尾返回 → 调了就执行并把结果回填，进下一圈
-- 漏回填 → 失忆原地打转；漏 max_steps → 死循环；schema 含糊 → 工具不会用
-
-
-{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
-
-{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，零基础大白话；id 与 Term 对齐 ===== */}
-
-## 名词解释
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents 与官方应用工程资料（站内十九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

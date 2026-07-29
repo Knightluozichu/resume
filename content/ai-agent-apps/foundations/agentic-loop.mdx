@@ -3,238 +3,227 @@ title: 智能体循环：感知、思考与行动
 type: A
 section: 智能体基础
 order: 2
-description: 把一次调用变成多步自主——ReAct 推理与行动交替、多轮迭代累积上下文、循环何时该停。
+description: 智能体循环：感知、思考与行动：实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因，通过架构、轨迹和故障重放完成验收。
 demo: true
 math: false
+sourceUrl: >-
+  https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
 draft: false
-sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentapps-03
 ---
 
-import { ReActStepDiagram } from "@/components/mdx/diagrams/react-step-diagram";
-import { MultiTurnLoopDiagram } from "@/components/mdx/diagrams/multi-turn-loop-diagram";
-import { LoopTerminationDiagram } from "@/components/mdx/diagrams/loop-termination-diagram";
+import {
+  AgenticLoopModelLab,
+  AgenticLoopTraceLab,
+  AgenticLoopEvidenceLab,
+} from "@/components/mdx/ai-agent-apps/v2/agentic-loop";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握智能体循环：感知、思考与行动
+- 能解释“智能体循环：感知、思考与行动”如何实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因
+- 能区分agentic loop、tool_use、tool_result、stop_reason、调用标识，并指出控制权、数据与副作用边界
+- 能固定输入与版本，沿以下证据定位首个分叉：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数
+- 能注入“运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史”，完成阻断、恢复、复位和同输入重放
 
-学习“智能体循环：感知、思考与行动”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，智能体循环：感知、思考与行动的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从先打个比方开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_APPS_QUALITY_V2 */}
 
-机制验证要把第一个概念：为什么一次调用不够，得让它转圈写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。第二个概念：ReAct——把一圈拆成「想、做、看」三段不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“智能体循环：感知、思考与行动”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Claude Platform《How tool use works》](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)核对本单元机制；涉及 MCP 的控制权边界再由[MCP 2025-06-18 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是 Anthropic 出版的“19 章教材”。平台把公开文章、官方工具文档与协议规范重组为 19 个应用单元；下列 152 个节点是站内课程地图，不冒充原文目录。正文、代码、图表、实验和练习均为独立教学重写；产品接口、模型行为或协议版本变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“第三个概念：多轮迭代——结果喂回，思考随之改变”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **智能体循环：感知、思考与行动**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 1 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **先打个比方**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 2 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第一个概念：为什么一次调用不够，得让它转圈**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 3 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第二个概念：ReAct——把一圈拆成「想、做、看」三段**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 4 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第三个概念：多轮迭代——结果喂回，思考随之改变**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 5 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **第四个概念：循环何时该停**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 6 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **动手看：一个任务怎么转 3 轮才办成**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 7 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
+- **用代码看带刹车的循环骨架**：这是“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的第 8 个课程坐标；必须进入机制解释、实验观察或练习证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“智能体循环：感知、思考与行动”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "agentic loop",
+      def: "agentic loop：模型请求工具、运行时执行并把结果送回模型的循环；在“智能体循环：感知、思考与行动”中按以下证据核对：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。",
+    },
+    {
+      term: "tool_use",
+      def: "tool_use：模型产生的结构化工具调用请求块；在“智能体循环：感知、思考与行动”中按以下证据核对：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。",
+    },
+    {
+      term: "tool_result",
+      def: "tool_result：应用返回的工具执行结果块；在“智能体循环：感知、思考与行动”中按以下证据核对：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。",
+    },
+    {
+      term: "stop_reason",
+      def: "stop_reason：说明本轮为何结束或暂停的协议字段；在“智能体循环：感知、思考与行动”中按以下证据核对：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。",
+    },
+    {
+      term: "调用标识",
+      def: "调用标识：配对请求与结果，防止并行工具响应串线的标识；在“智能体循环：感知、思考与行动”中按以下证据核对：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：每个 tool_use 都由运行时执行并以匹配调用标识的 tool_result 回到下一轮。任何“成功”结论都要保存以下证据：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数，模型生成的计划或自信不能替代环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 模型不直接执行客户端工具
 
-## 权威目录与核心概念逐项对照
+模型只生成调用请求；数据库、文件和网络副作用发生在应用运行时。
 
-- 智能体循环：感知、思考与行动
-- 先打个比方
-- 第一个概念：为什么一次调用不够，得让它转圈
-- 第二个概念：ReAct——把一圈拆成「想、做、看」三段
-- 第三个概念：多轮迭代——结果喂回，思考随之改变
-- 第四个概念：循环何时该停
-- 动手看：一个任务怎么转 3 轮才办成
-- 用代码看带刹车的循环骨架
+动手验证：记录模型输出与执行器日志，确认两者边界清晰。
 
+### 停止原因驱动状态机
 
-## 可复现的最小实现
+tool_use、end_turn、max_tokens、refusal 和 pause_turn 不能都按最终答案处理。
 
-先把决策记录写成机器可读结构：
+动手验证：逐个注入停止原因，断言状态机进入对应分支。
 
-```json
-{
-  "unit": "智能体循环：感知、思考与行动",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 并行结果按标识配对
 
-再用同一条执行链处理三类样本：
+返回顺序可能变化，数组位置不能替代 tool_use_id。
+
+动手验证：反转两个工具的完成顺序，验证下一轮消息仍正确配对。
+
+### 循环预算约束恢复
+
+重试需要次数、总时长、成本和副作用幂等边界。
+
+动手验证：让同一工具连续超时，确认系统进入 blocked 而不是无限旋转。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 架构与复杂度边界">
+    在“智能体循环：感知、思考与行动”中切换简单基线、受控工作流与自主循环，先预测“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”在哪个阶段需要增加控制权，再比较延迟、成本、可观测性和自主性。
+
+    <AgenticLoopModelLab />
+
+  </Step>
+  <Step title="2. 状态与决策轨迹">
+    固定任务、工具、权限和预算，沿发送请求 → 解析停止原因 → 执行工具 → 回灌结果 → 继续或退出逐步推进；每一步只读取上一阶段已经通过的状态。
+
+    <AgenticLoopTraceLab />
+
+  </Step>
+  <Step title="3. 故障、恢复与重放">
+    注入“运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史”，观察以下证据的首个分叉：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。撤销后重置实验，并用相同输入与权限重放。
+
+    <AgenticLoopEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+while (true) {
+  const response = await callModel(messages, tools);
+  messages.push(response.message);
+  if (response.stopReason !== "tool_use") return finish(response, messages);
+  const results = await Promise.all(response.toolUses.map(executeSafely));
+  messages.push(asToolResultMessage(results));
 }
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+这段切片只暴露“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”的最小运行合同。交付版本还要补齐超时、密钥隔离、结构化日志、幂等和批量评测；缺少消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数时，代码能运行也不代表本章结论成立。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史。它会破坏“每个
+  tool_use 都由运行时执行并以匹配调用标识的 tool_result
+  回到下一轮”；应从消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="不要把模型自评当作验收">
+  在“智能体循环：感知、思考与行动”中，模型解释只能提出候选原因；协议字段、工具结果、确定性断言和真实环境状态才能证明“实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因”是否成立。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="版本变化必须重跑">
+  “智能体循环：感知、思考与行动”依赖模型、工具、schema、协议或运行时接口。升级任一层后，应在冻结任务集上重新保存消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数，不能沿用旧截图或单次成功样例。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用最少样本证明“每个 tool_use 都由运行时执行并以匹配调用标识的 tool_result 回到下一轮”？
+
+<Answer>
+  冻结模型、指令、工具、权限和预算，写出正常、边界与单故障三类预期，再保存消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。只要首个分叉未解释或失败样本产生副作用，就不能判定通过。
+</Answer>
+
+**问题 2：课程覆盖。** 智能体循环：感知、思考与行动、先打个比方、第一个概念：为什么一次调用不够，得让它转圈、第二个概念：ReAct——把一圈拆成「想、做、看」三段、第三个概念：多轮迭代——结果喂回，思考随之改变、第四个概念：循环何时该停、动手看：一个任务怎么转 3 轮才办成、用代码看带刹车的循环骨架如何进入可操作验证？
+
+<Answer>
+  把八个坐标分别标到架构决策图、状态轨迹和故障证据链中。每个坐标至少拥有一个可观察状态、一个明确判断或一个失败样本；只在目录中出现不算覆盖。
+</Answer>
+
+**问题 3：恢复闭环。** 怎样证明“运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数中标出首个差异；撤销后复位全部控件，以完全相同的输入、版本、预算和权限重放。环境结果与停止状态都回到基线才算修复。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 智能体循环：感知、思考与行动必须绑定冻结输入和明确成功标准。
-- 先打个比方必须能画成结构并沿边追踪责任。
-- 第一个概念：为什么一次调用不够，得让它转圈要由正常、边界和单故障样本共同验证。
-- 第二个概念：ReAct——把一圈拆成「想、做、看」三段必须保存第一处偏离和清理重建步骤。
-- 第三个概念：多轮迭代——结果喂回，思考随之改变决定方案是否可以进入下一阶段。
+- “智能体循环：感知、思考与行动”的主问题是实现“决策—工具执行—结果回灌—重新决策”的循环，并正确处理所有停止原因。
+- 核心不变量是每个 tool_use 都由运行时执行并以匹配调用标识的 tool_result 回到下一轮。
+- 首要反例是运行时漏回一个工具结果或错配调用标识，下一轮却继续消费不完整历史。
+- 最小证据包包含消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
 
+<Glossary>
+  <GlossaryItem term="agentic loop">
+    模型请求工具、运行时执行并把结果送回模型的循环。在“智能体循环：感知、思考与行动”中必须能按以下证据重新定位：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
+  </GlossaryItem>
+  <GlossaryItem term="tool_use">
+    模型产生的结构化工具调用请求块。在“智能体循环：感知、思考与行动”中必须能按以下证据重新定位：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
+  </GlossaryItem>
+  <GlossaryItem term="tool_result">
+    应用返回的工具执行结果块。在“智能体循环：感知、思考与行动”中必须能按以下证据重新定位：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
+  </GlossaryItem>
+  <GlossaryItem term="stop_reason">
+    说明本轮为何结束或暂停的协议字段。在“智能体循环：感知、思考与行动”中必须能按以下证据重新定位：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
+  </GlossaryItem>
+  <GlossaryItem term="调用标识">
+    配对请求与结果，防止并行工具响应串线的标识。在“智能体循环：感知、思考与行动”中必须能按以下证据重新定位：消息序列、stop_reason、tool_use_id、参数、tool_result、错误标记与循环计数。
+  </GlossaryItem>
+</Glossary>
 
-## 术语表
+## 阅读导航
 
+[← 增强型 LLM：工具、检索与记忆](/learn/ai-agent-apps/foundations/augmented-llm) · [你的第一个最小 Agent →](/learn/ai-agent-apps/foundations/first-agent)
 
-{/* A 概念型章：核心是把第 1 章高层引入的「智能体循环」深入掰碎——为什么需要循环、ReAct 三段构造、多轮迭代如何累积上下文、循环何时该停。主 viz = MultiTurnLoopDiagram（animotor 10 步多轮动画，订高铁票驱动 3 轮）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 为什么需要循环（单次增强调用 ≠ 多步任务）→ 文字引子 + 并入 ReActStepDiagram 前；2. ReAct 模式（一轮 = Thought→Action→Observation 三段交替）→ <ReActStepDiagram />（静态：清楚画出想→做→看三段构成一轮）；3. 多轮迭代【主 viz·核心】→ <MultiTurnLoopDiagram />（animotor：订票任务驱动 3 轮，observation 逐轮喂回、上下文越滚越长、下一轮思考基于上一轮变化）；4. 终止条件（LLM 判完成 / max steps 强制停 / 出错兜底）→ <LoopTerminationDiagram />（静态三出口并列 + 标注「没 max steps 会无限转」）；5. 失控循环（死循环）→ 并入 §7 误区。Term 高亮术语：智能体循环、ReAct、Thought 推理、Action 行动、Observation 观察、迭代、多轮迭代、max steps 步数上限、终止条件、死循环 → 均进章末 Glossary */}
-
-{/* ===== 1. 学习目标｜spec §一：A 型必含「能解释 ___ 在循环里的位置」；末条检验问题 ===== */}
-
-
-{/* ===== 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；承接前两章「实习生 / 同事」类比 ===== */}
-
-## 先打个比方
-
-还是那位帮你办事的同事。你让他「订明天去上海最便宜的高铁票」——这事他没法一步办完：得先查有哪些车次、看哪趟最便宜，再去下单。
-
-更现实的是，事情常常不顺：他挑中最便宜那趟去订，结果一看**售罄了**。这时靠谱的同事会怎么办？他不会卡死，也不会傻乎乎再订一遍同一趟，而是**改订次便宜的那趟**，订成了才回来交差。
-
-这一章讲的就是：怎么让 AI 像这位同事一样，**试一下、看结果、不行再换个法子，反复转到办成为止**。少了这种「反复转圈」的本事，AI 就只能一锤子买卖——查一次、订一次，一遇到「没票了」就当场卡住，啥也办不成。
-
-{/* ===== 3. 概念讲解｜spec §三：一节一概念；术语首现。第 1 章我们已经见过它转一圈的样子（查天气）；这一章要看的是它**反复转很多圈**、且每一圈都比上一圈更接近目标。每转一圈，做一次——一次不够，就再迭代一次。
-
-## 第二个概念：ReAct——把一圈拆成「想、做、看」三段
-
-那循环转的「一圈」里头，到底发生了什么？业界最经典的拆法叫，意思是 **Reason（推理）+ Act（行动）交替着来**。它把一圈拆成清清楚楚的三段：
-
-<ReActStepDiagram />
-
-这三段是循环里每一圈的内部构造：
-
-- 第一段是：LLM 盘算「下一步该干啥」，比如「先查有哪些车次」。
-- 第二段是：照思考选好的工具真去执行一次，比如调 `search_trains(明天, 上海)`。
-- 第三段是：看工具返回了什么，比如「G1、G7 都 553 元」。
-
-要害在最后那条**回流的箭头**：这一轮「看」到的结果，会喂回去支撑**下一轮的「想」**。正是这条回流，让循环不是机械重复，而是一圈比一圈聪明。
-
-## 第三个概念：多轮迭代——结果喂回，思考随之改变
-
-把上面这三段反复转好几圈，就是这一章的主角——。它和前两章最不一样的地方有两点，盯住它们就抓住了循环的精髓：
-
-- **每轮的观察都喂回上下文**——所以上下文**越滚越长**，智能体越转越「懂」当前任务。
-- **下一轮的思考基于上一轮的结果**——订 G1 失败了，下一轮才会改订 G7。这份「看了结果再随机应变」，就是循环区别于一锤子买卖的根本。
-
-这个过程光靠文字很难想象，下一节的交互动画会用「订高铁票」把它一圈圈拆开给你看。
-
-## 第四个概念：循环何时该停
-
-循环既然会一圈圈转，就必须有个**刹车**——否则它可能停不下来。智能体循环的 通常有三条出口：
-
-<LoopTerminationDiagram />
-
-- **正常退出**：LLM 自己判定任务办完了，主动收尾、给出答案。这是最理想的出口。
-- **强制停**：转够了预设的，不管完没完都硬性叫停、给个兜底回答。
-- **出错兜底**：工具报错、没法再继续时，退出循环、返回错误说明。
-
-前一条是「成功出口」，后两条是人留的**硬闸**。为什么不能只靠第一条？因为 LLM 有时**始终判断不出「完成」**——任务办不到、工具反复报错、或它陷入纠结。这时若没有 max steps 这道闸，它就会无限转下去，烧钱又卡死。这一点是下面误区里要专门点的坑。
-
-{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
-
-{/* ===== 5. 交互 Demo｜spec §五：主 viz = MultiTurnLoopDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
-
-## 动手看：一个任务怎么转 3 轮才办成
-
-前面讲了「多轮迭代」和「结果喂回」，但只有亲眼看它一圈圈转，才能真正抓住循环的精髓。下面这个动画用「帮我订明天去上海最便宜的高铁票」把它拆成 10 步——这事一次调用搞不定，得转整整 3 轮。
-
-> 猜一猜：动画第 ⑥ 步，第 2 轮订 G1 失败（「G1 已售罄」）。那么第 3 轮 LLM 的思考会变成什么？是再订一次 G1，还是改主意？先想一想——它能看到上一轮的结果吗？再单步播放，看它是不是基于「G1 没票」改订了 G7。
-
-<MultiTurnLoopDiagram />
-
-盯住两件事：一是**左侧的上下文栏每轮加一条、越滚越长**——每轮看到的结果都被喂了回去；二是**右侧的思考每轮都在变**，而且变化都源自上一轮看到的结果（看到 G1 最便宜 → 想订 G1；看到 G1 售罄 → 改订 G7）。是它**自己**根据结果一轮轮调整路线，最后自己判定「订成了」跳出循环。这一圈圈相关地转下去，就是「多轮迭代」的全部秘密。
-
-{/* ===== 6. 代码对照｜spec §六：A 型贴 1–2 段最能说明概念的伪代码；单块 ≤30 行，块间有解说；呼应多轮+终止 ===== */}
-
-## 用代码看带刹车的循环骨架
-
-上面的动画，落到代码里就是一个**带步数上限的 `for` 循环**。下面这段精简伪代码，是几乎所有智能体框架的共同骨架——把它读懂，多轮迭代和终止条件就都通了：
-
-```python
-def run_agent(user_goal, max_steps=10):
-    # 上下文 = 智能体的记忆，先放进系统提示和用户目标
-    context = [system_prompt, user_goal]
-
-    for step in range(max_steps):        # 最多转 max_steps 圈（刹车在此）
-        # ① 思考（Thought）：LLM 看着当前上下文，决定下一步
-        thought = llm(context)
-
-        # ② LLM 自己判断：任务办完了吗？办完就正常退出
-        if thought.is_done:
-            return thought.answer        # 出口一：LLM 判定完成
-
-        # ③ 行动（Action）：照 LLM 选的工具和参数真去执行
-        observation = act(thought.tool, thought.args)
-
-        # ④ 观察（Observation）：把结果喂回上下文，进入下一圈
-        context.append(thought)
-        context.append(observation)
-
-    # 转满 max_steps 还没收尾 → 强制停，给兜底回答
-    return "抱歉，我尝试了多轮仍没能完成这个任务。"  # 出口二：max steps
-```
-
-逐句对照动画看：`for step in range(max_steps)` 就是那个会转多圈、但**最多转 max_steps 圈**的环；`llm(context)` 是每一轮的**思考**；`if thought.is_done` 是 LLM **自己**判断何时收尾（出口一）；`act(...)` 是**行动**；`context.append(observation)` 是**观察喂回**——下一圈 `llm(context)` 就能看到它了，这正是「上下文越滚越长、下一轮基于上一轮」的代码落点。
-
-最后那行 `return "抱歉……"` 是第二个出口：`for` 转满 max_steps 还没等到 `is_done`，就强制停、返回兜底回答。两个出口缺一不可——少了第一个它不会主动收尾，少了第二个它可能无限转。至于第三个「出错兜底」出口，只需把 `act(...)` 包进 `try / except`，工具报错时也跳出循环即可，这里为聚焦先省略。
-
-{/* ===== 7. 常见误区｜spec §七：A 型 ≥2 个；固定 现象→原因→修法 三行格式 ===== */}
-
-## 容易踩的坑
-
-
-{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；练习含 1 道改循环思考题；答案折叠 ===== */}
-
-## 小结
-
-- 步数不定的开放任务一次调用搞不定，得靠循环一圈圈转着把活干完
-- ReAct 把一圈拆成三段：Thought 想下一步、Action 真去做、Observation 看结果
-- 多轮迭代的精髓：观察逐轮喂回（上下文越滚越长）、下一轮思考基于上一轮结果
-- 循环靠三条出口停下：LLM 判完成正常退出、转够 max steps 强制停、出错兜底退出
-- 没有 max steps / 不喂回结果 → 死循环或原地打转，是循环最常见的两个坑
-
-
-{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
-
-{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，零基础大白话；id 与 Term 对齐 ===== */}
-
-## 名词解释
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents 与官方应用工程资料（站内十九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

@@ -176,6 +176,184 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ConclusionEvidenceLab: module0.ConclusionEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "ai-agent-apps/agentic-patterns/autonomous-agents": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/autonomous-agents");
+    return {
+      AutonomousAgentsModelLab: module0.AutonomousAgentsModelLab,
+      AutonomousAgentsTraceLab: module0.AutonomousAgentsTraceLab,
+      AutonomousAgentsEvidenceLab: module0.AutonomousAgentsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/agentic-patterns/chaining-and-routing": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/chaining-and-routing");
+    return {
+      ChainingAndRoutingModelLab: module0.ChainingAndRoutingModelLab,
+      ChainingAndRoutingTraceLab: module0.ChainingAndRoutingTraceLab,
+      ChainingAndRoutingEvidenceLab: module0.ChainingAndRoutingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/agentic-patterns/combining-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/combining-patterns");
+    return {
+      CombiningPatternsModelLab: module0.CombiningPatternsModelLab,
+      CombiningPatternsTraceLab: module0.CombiningPatternsTraceLab,
+      CombiningPatternsEvidenceLab: module0.CombiningPatternsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/agentic-patterns/evaluator-optimizer": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/evaluator-optimizer");
+    return {
+      EvaluatorOptimizerModelLab: module0.EvaluatorOptimizerModelLab,
+      EvaluatorOptimizerTraceLab: module0.EvaluatorOptimizerTraceLab,
+      EvaluatorOptimizerEvidenceLab: module0.EvaluatorOptimizerEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/agentic-patterns/parallelization-and-orchestrator-workers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/ai-agent-apps/v2/parallelization-and-orchestrator-workers");
+      return {
+        ParallelizationAndOrchestratorWorkersModelLab:
+          module0.ParallelizationAndOrchestratorWorkersModelLab,
+        ParallelizationAndOrchestratorWorkersTraceLab:
+          module0.ParallelizationAndOrchestratorWorkersTraceLab,
+        ParallelizationAndOrchestratorWorkersEvidenceLab:
+          module0.ParallelizationAndOrchestratorWorkersEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "ai-agent-apps/agentic-patterns/workflow-vs-agent": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/workflow-vs-agent");
+    return {
+      WorkflowVsAgentModelLab: module0.WorkflowVsAgentModelLab,
+      WorkflowVsAgentTraceLab: module0.WorkflowVsAgentTraceLab,
+      WorkflowVsAgentEvidenceLab: module0.WorkflowVsAgentEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/context-engineering/context-window": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/context-window");
+    return {
+      ContextWindowModelLab: module0.ContextWindowModelLab,
+      ContextWindowTraceLab: module0.ContextWindowTraceLab,
+      ContextWindowEvidenceLab: module0.ContextWindowEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/context-engineering/prompt-engineering": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/prompt-engineering");
+    return {
+      PromptEngineeringModelLab: module0.PromptEngineeringModelLab,
+      PromptEngineeringTraceLab: module0.PromptEngineeringTraceLab,
+      PromptEngineeringEvidenceLab: module0.PromptEngineeringEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/context-engineering/structured-output": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/structured-output");
+    return {
+      StructuredOutputModelLab: module0.StructuredOutputModelLab,
+      StructuredOutputTraceLab: module0.StructuredOutputTraceLab,
+      StructuredOutputEvidenceLab: module0.StructuredOutputEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/foundations/agentic-loop": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/agentic-loop");
+    return {
+      AgenticLoopModelLab: module0.AgenticLoopModelLab,
+      AgenticLoopTraceLab: module0.AgenticLoopTraceLab,
+      AgenticLoopEvidenceLab: module0.AgenticLoopEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/foundations/augmented-llm": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/augmented-llm");
+    return {
+      AugmentedLlmModelLab: module0.AugmentedLlmModelLab,
+      AugmentedLlmTraceLab: module0.AugmentedLlmTraceLab,
+      AugmentedLlmEvidenceLab: module0.AugmentedLlmEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/foundations/first-agent": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/first-agent");
+    return {
+      FirstAgentModelLab: module0.FirstAgentModelLab,
+      FirstAgentTraceLab: module0.FirstAgentTraceLab,
+      FirstAgentEvidenceLab: module0.FirstAgentEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/foundations/what-is-an-agent": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/what-is-an-agent");
+    return {
+      WhatIsAnAgentModelLab: module0.WhatIsAnAgentModelLab,
+      WhatIsAnAgentTraceLab: module0.WhatIsAnAgentTraceLab,
+      WhatIsAnAgentEvidenceLab: module0.WhatIsAnAgentEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/production/agents-in-practice": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/agents-in-practice");
+    return {
+      AgentsInPracticeModelLab: module0.AgentsInPracticeModelLab,
+      AgentsInPracticeTraceLab: module0.AgentsInPracticeTraceLab,
+      AgentsInPracticeEvidenceLab: module0.AgentsInPracticeEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/production/production-readiness-checklist": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/production-readiness-checklist");
+    return {
+      ProductionReadinessChecklistModelLab:
+        module0.ProductionReadinessChecklistModelLab,
+      ProductionReadinessChecklistTraceLab:
+        module0.ProductionReadinessChecklistTraceLab,
+      ProductionReadinessChecklistEvidenceLab:
+        module0.ProductionReadinessChecklistEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/production/tool-prompt-engineering": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/tool-prompt-engineering");
+    return {
+      ToolPromptEngineeringModelLab: module0.ToolPromptEngineeringModelLab,
+      ToolPromptEngineeringTraceLab: module0.ToolPromptEngineeringTraceLab,
+      ToolPromptEngineeringEvidenceLab:
+        module0.ToolPromptEngineeringEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/tool-use/function-calling": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/function-calling");
+    return {
+      FunctionCallingModelLab: module0.FunctionCallingModelLab,
+      FunctionCallingTraceLab: module0.FunctionCallingTraceLab,
+      FunctionCallingEvidenceLab: module0.FunctionCallingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/tool-use/mcp": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-apps/v2/mcp");
+    return {
+      McpModelLab: module0.McpModelLab,
+      McpTraceLab: module0.McpTraceLab,
+      McpEvidenceLab: module0.McpEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-apps/tool-use/tool-design": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-apps/v2/tool-design");
+    return {
+      ToolDesignModelLab: module0.ToolDesignModelLab,
+      ToolDesignTraceLab: module0.ToolDesignTraceLab,
+      ToolDesignEvidenceLab: module0.ToolDesignEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "ai-agent/foundations/agent-anatomy": async () => {
     const module0 = await import("@/components/mdx/ai-agent/v2/agent-anatomy");
     return {
