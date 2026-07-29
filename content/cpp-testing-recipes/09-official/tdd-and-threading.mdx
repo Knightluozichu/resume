@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
 draft: false
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
+officialUnitId: mctdd-09
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,7 @@ import { Step, Stepper } from "@/components/mdx/stepper";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { TddAndThreadingDecisionLab, TddAndThreadingMechanismMap, TddAndThreadingFailureDiagram } from "@/components/mdx/cpp-testing-recipes/tdd-and-threading";
 
 <Objectives>
 
@@ -26,6 +31,12 @@ import { Attribution } from "@/components/mdx/attribution";
 
 </Objectives>
 
+<TddAndThreadingMechanismMap />
+
+<TddAndThreadingDecisionLab />
+
+<TddAndThreadingFailureDiagram />
+
 ## 并发测试先分离“算什么”和“何时算”
 
 GeoServer 接收位置查询并返回地理结果。查询计算本身可以是同步确定函数；只有吞吐或响应需求证明单线程不足时，才引入异步队列和线程池。若从一开始把领域逻辑、socket、队列和多个线程塞进同一测试，任何失败都难以定位。
@@ -33,7 +44,6 @@ GeoServer 接收位置查询并返回地理结果。查询计算本身可以是�
 <Term def="以失败测试逐步建立线程边界、同步协议和生命周期，而不是先写完整并发实现再用压力测试碰运气。">线程测试驱动</Term>
 
 测试驱动线程不意味着调度可完全预测。策略是把可确定的领域逻辑留在同步层，把并发层的契约收窄为任务接受、进度、互斥不变量、关闭和错误传播，再用受控同步点探索关键交错。
-
 
 ## GeoServer 先有同步正确性基线
 
@@ -54,7 +64,7 @@ TEST(GeoQueryTest, FindsNearestLocation) {
 
 <Term def="以吞吐、并发度、延迟分位、队列容量或关闭时限表达，并给出代表负载与环境的非功能契约。">性能需求</Term>
 
-“需要更快”不能驱动设计。写下基线与目标，例如：在 8 核参考环境、10000 个独立查询下，吞吐至少达到同步实现的 2 倍；队列满时 submit 在 10 ms 内返回拒绝；stop 后已接受任务全部完成并在 2 秒内 join。环境、负载和统计方法必须同时记录。
+性能需求不能只写“需要更快”，而要给出基线与目标，例如：在 8 核参考环境、10000 个独立查询下，吞吐至少达到同步实现的 2 倍；队列满时 submit 在 10 ms 内返回拒绝；stop 后已接受任务全部完成并在 2 秒内 join。环境、负载和统计方法必须同时记录。
 
 ```text
 functional: 每个 accepted request 恰好产生一个 success 或 failure
@@ -70,7 +80,7 @@ performance: p95 与 throughput 在固定基准环境持续记录
 
 <Term def="调用者提交任务后不在当前调用栈完成，由队列和 worker 在线程池中执行并通过 future、callback 或结果队列交付。">异步方案</Term>
 
-ThreadPool 至少需要回答：任务由谁拥有，队列满怎么办，异常如何传出，stop 是否 drain，析构是否 join，stop 与 submit 并发时哪个赢。没有这些契约，测试只能追逐偶发现象。
+异步方案中的 ThreadPool 至少需要回答：任务由谁拥有，队列满怎么办，异常如何传出，stop 是否 drain，析构是否 join，stop 与 submit 并发时哪个赢。没有这些契约，测试只能追逐偶发现象。
 
 ```cpp
 class ThreadPool {
@@ -135,7 +145,6 @@ TEST(ThreadPoolTest, StartsTwoTasksConcurrently) {
 
 一秒只是防止测试永久挂起的失败上限，正确性来自状态谓词确认两个任务都已开始，而不是“睡一秒后大概开始了”。代码在断言前先释放 latch，保证失败路径也不会让 worker 永久阻塞；更复杂 fixture 可把释放和 join 封装进 RAII 清理。
 
-
 ## 等待谓词必须抵抗虚假唤醒
 
 生产和测试都应使用带谓词的 condition variable 等待：在锁内检查队列非空或停止状态，循环处理虚假唤醒。测试不要断言一次 notify 就必定对应一个任务；调度器允许合并和提前通知。
@@ -182,7 +191,6 @@ for (int client = 0; client < clientCount; ++client) {
 <Term def="通过受控交错、高并发重复、状态计数和 sanitizer 主动放大数据竞争、丢任务、死锁或生命周期错误。">暴露并发问题</Term>
 
 普通成功路径多跑一千次仍可能从未触发危险交错。针对共享状态，在关键点放 barrier：两个线程同时读取旧值，再同时写入；针对锁顺序，让两个路径各持一把锁后再继续；针对 submit/stop，固定二者交叉点并核对接受契约。
-
 
 ThreadSanitizer 能发现数据 race，但不能证明无死锁、无丢任务或业务顺序正确；受控测试能证明特定契约，却不能枚举所有调度。两者与代码审查、压力/长稳测试互补。
 
@@ -278,4 +286,6 @@ BENCHMARK(GeoQueries)->Arg(1)->Arg(2)->Arg(4)->Arg(8);
 <Attribution
   adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 9 TDD and Threading"
   adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
 />

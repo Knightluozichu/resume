@@ -149,20 +149,34 @@ function regressionBlockers(source, componentCorpus = "") {
 function selectManifestUnits({
   manifestUnits,
   officialUnitId,
+  officialUnitIds = [],
   chapterSlug,
   chapterTitle,
 }) {
-  const idMatchedUnit = manifestUnits.find(
-    (unit) => unit.id === (officialUnitId || chapterSlug),
-  );
+  const explicitIds = [
+    ...new Set([
+      ...(officialUnitId ? [officialUnitId] : []),
+      ...officialUnitIds,
+    ]),
+  ];
+  if (explicitIds.length > 0) {
+    const matchedUnits = explicitIds
+      .map((id) => manifestUnits.find((unit) => unit.id === id))
+      .filter(Boolean);
+    if (matchedUnits.length !== explicitIds.length) {
+      return { units: [], directlyMappedIds: new Set() };
+    }
+    return {
+      units: matchedUnits,
+      directlyMappedIds: new Set(explicitIds),
+    };
+  }
+  const idMatchedUnit = manifestUnits.find((unit) => unit.id === chapterSlug);
   if (idMatchedUnit) {
     return {
       units: [idMatchedUnit],
       directlyMappedIds: new Set([idMatchedUnit.id]),
     };
-  }
-  if (officialUnitId) {
-    return { units: [], directlyMappedIds: new Set() };
   }
   const titleMatchedUnits = manifestUnits.filter(
     (unit) =>
@@ -251,6 +265,15 @@ val value = raw.toDoubleOrNull()
   assert.deepEqual(
     selectManifestUnits({
       manifestUnits,
+      officialUnitIds: ["book-01", "book-02"],
+      chapterSlug: "combined-course-page",
+      chapterTitle: "课程合并页",
+    }).units.map((unit) => unit.id),
+    ["book-01", "book-02"],
+  );
+  assert.deepEqual(
+    selectManifestUnits({
+      manifestUnits,
       officialUnitId: "missing-unit",
       chapterSlug: "split-course-page",
       chapterTitle: "课程拆分页",
@@ -326,6 +349,7 @@ export function TopicLab() {
         "title-substitution-visual-hard-fails",
         "fragmented-term-sequence-hard-fails",
         "explicit-official-unit-mapping-honored",
+        "explicit-multi-unit-mapping-honored",
       ],
     }),
   );
@@ -682,6 +706,12 @@ function parseChapter(filePath, manifests, visualResults) {
     typeof parsed.data.officialUnitId === "string"
       ? parsed.data.officialUnitId.trim()
       : "";
+  const officialUnitIds = Array.isArray(parsed.data.officialUnitIds)
+    ? parsed.data.officialUnitIds
+        .filter((value) => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : [];
   const manifest = manifests[bookSlug] ?? null;
   const sourceDomains = sourceDomainsFor(manifest);
   const factSourceLinks = [
@@ -718,6 +748,7 @@ function parseChapter(filePath, manifests, visualResults) {
     const { units: candidateUnits, directlyMappedIds } = selectManifestUnits({
       manifestUnits,
       officialUnitId,
+      officialUnitIds,
       chapterSlug,
       chapterTitle: parsed.data.title,
     });
@@ -841,6 +872,7 @@ function parseChapter(filePath, manifests, visualResults) {
     practiceMode,
     sourceMode,
     officialUnitId: officialUnitId || null,
+    officialUnitIds,
     factSourceLinks,
     sourceAccess,
     hasSourceUrl,
@@ -1195,6 +1227,8 @@ function ledgerEntry(chapter, previous, generatedAt) {
     sourceMode: chapter.sourceMode,
     practiceMode: chapter.practiceMode,
     qualityVersion: chapter.qualityVersion,
+    officialUnitId: chapter.officialUnitId,
+    officialUnitIds: chapter.officialUnitIds,
     unitEvidence,
     metrics: {
       objectiveItems: chapter.objectiveItems,

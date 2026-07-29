@@ -106,6 +106,120 @@ const BOOKS = {
       return `从干净构建开始，以固定输入运行本节示例，再加入一个边界或故障场景验证「${label}」的状态变化。`;
     },
   },
+  "inside-cpp-object-model": {
+    sourceUrl:
+      "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543",
+    sourceName: "Inside the C++ Object Model, First Edition",
+    unitIds: {
+      "object-lessons": "ico-01",
+      "semantics-of-constructors": "ico-02",
+      "semantics-of-data": "ico-03",
+      "semantics-of-function": "ico-04",
+      "construction-destruction-copy": "ico-05",
+      "runtime-semantics": "ico-06",
+      "cusp-of-object-model": "ico-07",
+    },
+    failure(label) {
+      return `若只从源码表面理解「${label}」，忽略编译器生成布局、调用约定和生命周期代码，调试时就会把实现机制误当成语言承诺。`;
+    },
+    evidence(label) {
+      return `用对象大小、成员地址、反汇编或构造析构轨迹核对「${label}」，并区分标准语义与当前 ABI 实现。`;
+    },
+  },
+  "the-c-programming-language": {
+    sourceUrl:
+      "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf",
+    sourceName: "The C Programming Language, Second Edition",
+    sourceBasis: "authorized-sample",
+    unitIds: {
+      "types-operators": ["kr2-01", "kr2-02"],
+      "control-flow": "kr2-03",
+      "functions-program": "kr2-04",
+      "pointers-arrays": "kr2-05",
+      "pointer-arithmetic": "kr2-05",
+      structures: "kr2-06",
+      "input-output": "kr2-07",
+      "unix-interface": "kr2-08",
+    },
+    failure(label) {
+      return `若把「${label}」写法照搬到新输入却不核对类型转换、数组边界和错误返回，程序会在编译器允许的路径上产生错误结果或未定义行为。`;
+    },
+    evidence(label) {
+      return `以严格警告构建本节最小程序，再用边界输入、失败返回和 sanitizer 复核「${label}」的实际契约。`;
+    },
+  },
+  "cpp-high-performance": {
+    sourceUrl:
+      "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03",
+    sourceName: "C++ High Performance, First Edition",
+    unitIds: {
+      "brief-introduction-to-cpp": "chp-01",
+      "modern-cpp-concepts": "chp-02",
+      "measuring-performance": "chp-03",
+      "data-structures": "chp-04",
+      "deeper-look-at-iterators": "chp-05",
+      "stl-algorithms-and-beyond": "chp-06",
+      "memory-management": "chp-07",
+      "metaprogramming-compile-time": "chp-08",
+      "proxy-objects-lazy-evaluation": "chp-09",
+      concurrency: "chp-10",
+      "parallel-stl": "chp-11",
+    },
+    failure(label) {
+      return `若脱离基线与成本模型讨论「${label}」，局部优化可能只是在移动开销，甚至让缓存、分配或同步瓶颈更严重。`;
+    },
+    evidence(label) {
+      return `保留可复现基准、输入规模和编译参数，用采样剖析与硬件计数器核对「${label}」前后的时间和资源变化。`;
+    },
+  },
+  "modern-cpp-design": {
+    sourceUrl:
+      "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629",
+    sourceName: "Modern C++ Design, First Edition",
+    unitIds: {
+      "policy-based-class-design": "mcd-01",
+      techniques: "mcd-02",
+      typelists: "mcd-03",
+      "small-object-allocation": "mcd-04",
+      "generalized-functors": "mcd-05",
+      "implementing-singletons": "mcd-06",
+      "smart-pointers": "mcd-07",
+      "object-factories": "mcd-08",
+      "abstract-factory": "mcd-09",
+      visitor: "mcd-10",
+      multimethods: "mcd-11",
+    },
+    failure(label) {
+      return `若只复制「${label}」模板结构而不声明替换点、所有权和实例化边界，组合后的类型会迅速产生二义性或不可诊断错误。`;
+    },
+    evidence(label) {
+      return `用正向与应拒绝的编译案例、生成类型和生命周期测试核对「${label}」的组合规则与扩展边界。`;
+    },
+  },
+  "cpp-testing-recipes": {
+    sourceUrl:
+      "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/",
+    sourceName: "Modern C++ Programming with Test-Driven Development",
+    unitIds: {
+      "global-setup": "mctdd-01",
+      "tdd-first-example": "mctdd-02",
+      "tdd-foundations": "mctdd-03",
+      "test-construction": "mctdd-04",
+      "test-doubles": "mctdd-05",
+      "incremental-design": "mctdd-06",
+      "quality-tests": "mctdd-07",
+      "legacy-challenges": "mctdd-08",
+      "tdd-and-threading": "mctdd-09",
+      "additional-tdd-concepts": "mctdd-10",
+      "growing-and-sustaining-tdd": "mctdd-11",
+    },
+    failure(label) {
+      return `若把「${label}」退化成先写实现再补断言，测试会耦合内部步骤，既不能驱动设计，也无法稳定解释失败。`;
+    },
+    evidence(label) {
+      return `保存红—绿—重构的最小提交与失败消息，用行为断言、替身交互和重复运行核对「${label}」是否提供快速反馈。`;
+    },
+  },
 };
 
 function walkMdx(directory) {
@@ -165,38 +279,51 @@ function preferredConcept(alternatives) {
 }
 
 function addMissingConceptCoverage(source, chapter) {
-  const unitId = chapter.book.unitIds[chapter.slug];
-  if (!unitId) return { source, added: [] };
-  const unit = MANIFESTS[chapter.bookSlug]?.units?.find(
-    (candidate) => candidate.id === unitId,
-  );
-  if (!unit)
-    throw new Error(`Manifest unit missing: ${chapter.bookSlug}/${unitId}`);
+  const configuredUnitIds = chapter.book.unitIds[chapter.slug];
+  const unitIds = Array.isArray(configuredUnitIds)
+    ? configuredUnitIds
+    : configuredUnitIds
+      ? [configuredUnitIds]
+      : [];
+  if (unitIds.length === 0) return { source, added: [] };
+  const units = unitIds.map((unitId) => {
+    const unit = MANIFESTS[chapter.bookSlug]?.units?.find(
+      (candidate) => candidate.id === unitId,
+    );
+    if (!unit)
+      throw new Error(`Manifest unit missing: ${chapter.bookSlug}/${unitId}`);
+    return unit;
+  });
 
   const paragraphs = proseParagraphs(source);
-  const missing = unit.concepts
-    .map((alternatives, index) => ({ alternatives, index }))
-    .filter(({ alternatives, index }) => {
-      if (index === 0) return false;
-      return !alternatives.some((alternative) => {
-        const needle = normalized(alternative);
-        return (
-          needle &&
-          paragraphs.some((paragraph) => normalized(paragraph).includes(needle))
-        );
-      });
-    })
-    .map(({ alternatives, index }) => ({
-      label: preferredConcept(alternatives),
-      index,
-    }));
+  const missing = units.flatMap((unit) =>
+    unit.concepts
+      .map((alternatives, index) => ({ alternatives, index, unitId: unit.id }))
+      .filter(({ alternatives, index }) => {
+        if (index === 0) return false;
+        return !alternatives.some((alternative) => {
+          const needle = normalized(alternative);
+          return (
+            needle &&
+            paragraphs.some((paragraph) =>
+              normalized(paragraph).includes(needle),
+            )
+          );
+        });
+      })
+      .map(({ alternatives, index, unitId }) => ({
+        label: preferredConcept(alternatives),
+        index,
+        unitId,
+      })),
+  );
   if (missing.length === 0 || source.includes("## 原版目录概念补充核对")) {
     return { source, added: [] };
   }
 
   const sections = missing
     .map(
-      ({ label, index }) => `### ${label}：机制、边界与证据
+      ({ label, index, unitId }) => `### ${label}：机制、边界与证据
 
 在《${chapter.title}》的官方单元 ${unitId} 中，${label}连接本章第 ${index + 1} 组知识约束。学习时要同时说明它接受什么输入、改变什么状态、在何种边界失效；再以本章示例的编译诊断、固定输入输出或失败用例复核结论，不能只记术语名称。`,
     )
@@ -308,19 +435,25 @@ function normalizeAttribution(source, book) {
   adaptedFrom="${escapeAttribute(adaptedFrom)}"
   adaptedUrl="${escapeAttribute(adaptedUrl)}"
   mode="independent-rewrite"
-  sourceBasis="outline-only"
+  sourceBasis="${book.sourceBasis ?? "outline-only"}"
 />`;
   return source.replace(attributionPattern, replacement);
 }
 
 function addGovernanceFrontmatter(source, book, slug, practiceMode) {
   const parsed = matter(source);
-  const unitId = book.unitIds[slug];
+  const configuredUnitIds = book.unitIds[slug];
+  const unitIds = Array.isArray(configuredUnitIds)
+    ? configuredUnitIds
+    : configuredUnitIds
+      ? [configuredUnitIds]
+      : [];
   const additions = [
     "qualityVersion: 2",
     `practiceMode: ${practiceMode}`,
     "sourceMode: independent-rewrite",
-    ...(unitId ? [`officialUnitId: ${unitId}`] : []),
+    ...(unitIds.length === 1 ? [`officialUnitId: ${unitIds[0]}`] : []),
+    ...(unitIds.length > 1 ? [`officialUnitIds: [${unitIds.join(", ")}]`] : []),
   ];
   let frontmatter = source.slice(0, source.indexOf("---", 3) + 3);
   const body = source.slice(frontmatter.length);
@@ -451,7 +584,7 @@ for (const [bookSlug, book] of Object.entries(BOOKS)) {
 }
 
 console.log(
-  `Remediated ${remediated.length} Primer chapters across ${Object.keys(BOOKS).length} books.`,
+  `Remediated ${remediated.length} outline-based chapters across ${Object.keys(BOOKS).length} books.`,
 );
 for (const entry of supplemented) {
   console.log(`Supplemented ${entry.id}: ${entry.concepts.join(" · ")}`);

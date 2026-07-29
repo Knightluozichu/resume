@@ -1209,13 +1209,145 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.SynchronizingOperationsFailureDiagram,
     } as ChapterMdxComponents;
   },
-  "cpp-high-performance/03-official/measuring-performance": async () => {
+  "cpp-high-performance/00-fundamentals/learning-map": async () => {
     const module0 =
-      await import("@/components/mdx/cpp-high-performance/diagrams/measuring-performance");
+      await import("@/components/mdx/cpp-high-performance/learning-map");
     return {
-      ChpComplexityScaleMap: module0.ChpComplexityScaleMap,
-      ChpMeasurementProtocolMap: module0.ChpMeasurementProtocolMap,
-      ChpProfilerEvidenceMap: module0.ChpProfilerEvidenceMap,
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/01-official/brief-introduction-to-cpp": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/brief-introduction-to-cpp");
+    return {
+      BriefIntroductionToCppDecisionLab:
+        module0.BriefIntroductionToCppDecisionLab,
+      BriefIntroductionToCppMechanismMap:
+        module0.BriefIntroductionToCppMechanismMap,
+      BriefIntroductionToCppFailureDiagram:
+        module0.BriefIntroductionToCppFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/02-official/modern-cpp-concepts": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/modern-cpp-concepts");
+    return {
+      ModernCppConceptsDecisionLab: module0.ModernCppConceptsDecisionLab,
+      ModernCppConceptsMechanismMap: module0.ModernCppConceptsMechanismMap,
+      ModernCppConceptsFailureDiagram: module0.ModernCppConceptsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/03-advanced/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/03-official/measuring-performance": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/cpp-high-performance/measuring-performance"),
+      import("@/components/mdx/cpp-high-performance/diagrams/measuring-performance"),
+    ]);
+    return {
+      MeasuringPerformanceDecisionLab:
+        modules[0].MeasuringPerformanceDecisionLab,
+      MeasuringPerformanceMechanismMap:
+        modules[0].MeasuringPerformanceMechanismMap,
+      MeasuringPerformanceFailureDiagram:
+        modules[0].MeasuringPerformanceFailureDiagram,
+      ChpComplexityScaleMap: modules[1].ChpComplexityScaleMap,
+      ChpMeasurementProtocolMap: modules[1].ChpMeasurementProtocolMap,
+      ChpProfilerEvidenceMap: modules[1].ChpProfilerEvidenceMap,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/04-official/data-structures": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/data-structures");
+    return {
+      DataStructuresDecisionLab: module0.DataStructuresDecisionLab,
+      DataStructuresMechanismMap: module0.DataStructuresMechanismMap,
+      DataStructuresFailureDiagram: module0.DataStructuresFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/05-official/deeper-look-at-iterators": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/deeper-look-at-iterators");
+    return {
+      DeeperLookAtIteratorsDecisionLab:
+        module0.DeeperLookAtIteratorsDecisionLab,
+      DeeperLookAtIteratorsMechanismMap:
+        module0.DeeperLookAtIteratorsMechanismMap,
+      DeeperLookAtIteratorsFailureDiagram:
+        module0.DeeperLookAtIteratorsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/06-official/stl-algorithms-and-beyond": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/stl-algorithms-and-beyond");
+    return {
+      StlAlgorithmsAndBeyondDecisionLab:
+        module0.StlAlgorithmsAndBeyondDecisionLab,
+      StlAlgorithmsAndBeyondMechanismMap:
+        module0.StlAlgorithmsAndBeyondMechanismMap,
+      StlAlgorithmsAndBeyondFailureDiagram:
+        module0.StlAlgorithmsAndBeyondFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/07-official/memory-management": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/memory-management");
+    return {
+      MemoryManagementDecisionLab: module0.MemoryManagementDecisionLab,
+      MemoryManagementMechanismMap: module0.MemoryManagementMechanismMap,
+      MemoryManagementFailureDiagram: module0.MemoryManagementFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/08-official/metaprogramming-compile-time": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/metaprogramming-compile-time");
+    return {
+      MetaprogrammingCompileTimeDecisionLab:
+        module0.MetaprogrammingCompileTimeDecisionLab,
+      MetaprogrammingCompileTimeMechanismMap:
+        module0.MetaprogrammingCompileTimeMechanismMap,
+      MetaprogrammingCompileTimeFailureDiagram:
+        module0.MetaprogrammingCompileTimeFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/09-official/proxy-objects-lazy-evaluation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cpp-high-performance/proxy-objects-lazy-evaluation");
+      return {
+        ProxyObjectsLazyEvaluationDecisionLab:
+          module0.ProxyObjectsLazyEvaluationDecisionLab,
+        ProxyObjectsLazyEvaluationMechanismMap:
+          module0.ProxyObjectsLazyEvaluationMechanismMap,
+        ProxyObjectsLazyEvaluationFailureDiagram:
+          module0.ProxyObjectsLazyEvaluationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "cpp-high-performance/10-official/concurrency": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/concurrency");
+    return {
+      ConcurrencyDecisionLab: module0.ConcurrencyDecisionLab,
+      ConcurrencyMechanismMap: module0.ConcurrencyMechanismMap,
+      ConcurrencyFailureDiagram: module0.ConcurrencyFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-high-performance/11-official/parallel-stl": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-high-performance/parallel-stl");
+    return {
+      ParallelStlDecisionLab: module0.ParallelStlDecisionLab,
+      ParallelStlMechanismMap: module0.ParallelStlMechanismMap,
+      ParallelStlFailureDiagram: module0.ParallelStlFailureDiagram,
     } as ChapterMdxComponents;
   },
   "cpp-primer-5e/cpp-advanced/large-programs": async () => {
@@ -1753,6 +1885,129 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.ServerModuleResilienceFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "cpp-testing-recipes/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/learning-map");
+    return {
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/01-official/global-setup": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/global-setup");
+    return {
+      GlobalSetupDecisionLab: module0.GlobalSetupDecisionLab,
+      GlobalSetupMechanismMap: module0.GlobalSetupMechanismMap,
+      GlobalSetupFailureDiagram: module0.GlobalSetupFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/02-official/tdd-first-example": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/tdd-first-example");
+    return {
+      TddFirstExampleDecisionLab: module0.TddFirstExampleDecisionLab,
+      TddFirstExampleMechanismMap: module0.TddFirstExampleMechanismMap,
+      TddFirstExampleFailureDiagram: module0.TddFirstExampleFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/03-official/tdd-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/tdd-foundations");
+    return {
+      TddFoundationsDecisionLab: module0.TddFoundationsDecisionLab,
+      TddFoundationsMechanismMap: module0.TddFoundationsMechanismMap,
+      TddFoundationsFailureDiagram: module0.TddFoundationsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/04-official/test-construction": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/test-construction");
+    return {
+      TestConstructionDecisionLab: module0.TestConstructionDecisionLab,
+      TestConstructionMechanismMap: module0.TestConstructionMechanismMap,
+      TestConstructionFailureDiagram: module0.TestConstructionFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/05-official/test-doubles": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/test-doubles");
+    return {
+      TestDoublesDecisionLab: module0.TestDoublesDecisionLab,
+      TestDoublesMechanismMap: module0.TestDoublesMechanismMap,
+      TestDoublesFailureDiagram: module0.TestDoublesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/06-official/incremental-design": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/incremental-design");
+    return {
+      IncrementalDesignDecisionLab: module0.IncrementalDesignDecisionLab,
+      IncrementalDesignMechanismMap: module0.IncrementalDesignMechanismMap,
+      IncrementalDesignFailureDiagram: module0.IncrementalDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/07-official/quality-tests": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/quality-tests");
+    return {
+      QualityTestsDecisionLab: module0.QualityTestsDecisionLab,
+      QualityTestsMechanismMap: module0.QualityTestsMechanismMap,
+      QualityTestsFailureDiagram: module0.QualityTestsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/08-official/legacy-challenges": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/legacy-challenges");
+    return {
+      LegacyChallengesDecisionLab: module0.LegacyChallengesDecisionLab,
+      LegacyChallengesMechanismMap: module0.LegacyChallengesMechanismMap,
+      LegacyChallengesFailureDiagram: module0.LegacyChallengesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/09-official/tdd-and-threading": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/tdd-and-threading");
+    return {
+      TddAndThreadingDecisionLab: module0.TddAndThreadingDecisionLab,
+      TddAndThreadingMechanismMap: module0.TddAndThreadingMechanismMap,
+      TddAndThreadingFailureDiagram: module0.TddAndThreadingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/10-official/additional-tdd-concepts": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/additional-tdd-concepts");
+    return {
+      AdditionalTddConceptsDecisionLab:
+        module0.AdditionalTddConceptsDecisionLab,
+      AdditionalTddConceptsMechanismMap:
+        module0.AdditionalTddConceptsMechanismMap,
+      AdditionalTddConceptsFailureDiagram:
+        module0.AdditionalTddConceptsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/11-official/growing-and-sustaining-tdd": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/growing-and-sustaining-tdd");
+    return {
+      GrowingAndSustainingTddDecisionLab:
+        module0.GrowingAndSustainingTddDecisionLab,
+      GrowingAndSustainingTddMechanismMap:
+        module0.GrowingAndSustainingTddMechanismMap,
+      GrowingAndSustainingTddFailureDiagram:
+        module0.GrowingAndSustainingTddFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "cpp-testing-recipes/99-review/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/cpp-testing-recipes/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
   "cpu-eye-cpp/00-intro/learning-map": async () => {
     const module0 = await import("@/components/mdx/cpu-eye-cpp/learning-map");
     return {
@@ -2118,6 +2373,221 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/head-first-design-patterns/diagrams/hfd-state");
     return {
       HfdStateDiagram: module0.HfdStateDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/00-foundations/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/learning-map");
+    return {
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/01-official/object-lessons": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/object-lessons");
+    return {
+      ObjectLessonsDecisionLab: module0.ObjectLessonsDecisionLab,
+      ObjectLessonsMechanismMap: module0.ObjectLessonsMechanismMap,
+      ObjectLessonsFailureDiagram: module0.ObjectLessonsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/02-official/semantics-of-constructors": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/semantics-of-constructors");
+    return {
+      SemanticsOfConstructorsDecisionLab:
+        module0.SemanticsOfConstructorsDecisionLab,
+      SemanticsOfConstructorsMechanismMap:
+        module0.SemanticsOfConstructorsMechanismMap,
+      SemanticsOfConstructorsFailureDiagram:
+        module0.SemanticsOfConstructorsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/02-runtime/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/03-official/semantics-of-data": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/semantics-of-data");
+    return {
+      SemanticsOfDataDecisionLab: module0.SemanticsOfDataDecisionLab,
+      SemanticsOfDataMechanismMap: module0.SemanticsOfDataMechanismMap,
+      SemanticsOfDataFailureDiagram: module0.SemanticsOfDataFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/04-official/semantics-of-function": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/semantics-of-function");
+    return {
+      SemanticsOfFunctionDecisionLab: module0.SemanticsOfFunctionDecisionLab,
+      SemanticsOfFunctionMechanismMap: module0.SemanticsOfFunctionMechanismMap,
+      SemanticsOfFunctionFailureDiagram:
+        module0.SemanticsOfFunctionFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/05-official/construction-destruction-copy":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/inside-cpp-object-model/construction-destruction-copy");
+      return {
+        ConstructionDestructionCopyDecisionLab:
+          module0.ConstructionDestructionCopyDecisionLab,
+        ConstructionDestructionCopyMechanismMap:
+          module0.ConstructionDestructionCopyMechanismMap,
+        ConstructionDestructionCopyFailureDiagram:
+          module0.ConstructionDestructionCopyFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "inside-cpp-object-model/06-official/runtime-semantics": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/runtime-semantics");
+    return {
+      RuntimeSemanticsDecisionLab: module0.RuntimeSemanticsDecisionLab,
+      RuntimeSemanticsMechanismMap: module0.RuntimeSemanticsMechanismMap,
+      RuntimeSemanticsFailureDiagram: module0.RuntimeSemanticsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "inside-cpp-object-model/07-official/cusp-of-object-model": async () => {
+    const module0 =
+      await import("@/components/mdx/inside-cpp-object-model/cusp-of-object-model");
+    return {
+      CuspOfObjectModelDecisionLab: module0.CuspOfObjectModelDecisionLab,
+      CuspOfObjectModelMechanismMap: module0.CuspOfObjectModelMechanismMap,
+      CuspOfObjectModelFailureDiagram: module0.CuspOfObjectModelFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/learning-map");
+    return {
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/01-official/policy-based-class-design": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/policy-based-class-design");
+    return {
+      PolicyBasedClassDesignDecisionLab:
+        module0.PolicyBasedClassDesignDecisionLab,
+      PolicyBasedClassDesignMechanismMap:
+        module0.PolicyBasedClassDesignMechanismMap,
+      PolicyBasedClassDesignFailureDiagram:
+        module0.PolicyBasedClassDesignFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/02-official/techniques": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/techniques");
+    return {
+      TechniquesDecisionLab: module0.TechniquesDecisionLab,
+      TechniquesMechanismMap: module0.TechniquesMechanismMap,
+      TechniquesFailureDiagram: module0.TechniquesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/03-official/typelists": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/typelists");
+    return {
+      TypelistsDecisionLab: module0.TypelistsDecisionLab,
+      TypelistsMechanismMap: module0.TypelistsMechanismMap,
+      TypelistsFailureDiagram: module0.TypelistsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/03-patterns/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/04-official/small-object-allocation": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/small-object-allocation");
+    return {
+      SmallObjectAllocationDecisionLab:
+        module0.SmallObjectAllocationDecisionLab,
+      SmallObjectAllocationMechanismMap:
+        module0.SmallObjectAllocationMechanismMap,
+      SmallObjectAllocationFailureDiagram:
+        module0.SmallObjectAllocationFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/05-official/generalized-functors": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/generalized-functors");
+    return {
+      GeneralizedFunctorsDecisionLab: module0.GeneralizedFunctorsDecisionLab,
+      GeneralizedFunctorsMechanismMap: module0.GeneralizedFunctorsMechanismMap,
+      GeneralizedFunctorsFailureDiagram:
+        module0.GeneralizedFunctorsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/06-official/implementing-singletons": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/implementing-singletons");
+    return {
+      ImplementingSingletonsDecisionLab:
+        module0.ImplementingSingletonsDecisionLab,
+      ImplementingSingletonsMechanismMap:
+        module0.ImplementingSingletonsMechanismMap,
+      ImplementingSingletonsFailureDiagram:
+        module0.ImplementingSingletonsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/07-official/smart-pointers": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/smart-pointers");
+    return {
+      SmartPointersDecisionLab: module0.SmartPointersDecisionLab,
+      SmartPointersMechanismMap: module0.SmartPointersMechanismMap,
+      SmartPointersFailureDiagram: module0.SmartPointersFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/08-official/object-factories": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/object-factories");
+    return {
+      ObjectFactoriesDecisionLab: module0.ObjectFactoriesDecisionLab,
+      ObjectFactoriesMechanismMap: module0.ObjectFactoriesMechanismMap,
+      ObjectFactoriesFailureDiagram: module0.ObjectFactoriesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/09-official/abstract-factory": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/abstract-factory");
+    return {
+      AbstractFactoryDecisionLab: module0.AbstractFactoryDecisionLab,
+      AbstractFactoryMechanismMap: module0.AbstractFactoryMechanismMap,
+      AbstractFactoryFailureDiagram: module0.AbstractFactoryFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/10-official/visitor": async () => {
+    const module0 = await import("@/components/mdx/modern-cpp-design/visitor");
+    return {
+      VisitorDecisionLab: module0.VisitorDecisionLab,
+      VisitorMechanismMap: module0.VisitorMechanismMap,
+      VisitorFailureDiagram: module0.VisitorFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "modern-cpp-design/11-official/multimethods": async () => {
+    const module0 =
+      await import("@/components/mdx/modern-cpp-design/multimethods");
+    return {
+      MultimethodsDecisionLab: module0.MultimethodsDecisionLab,
+      MultimethodsMechanismMap: module0.MultimethodsMechanismMap,
+      MultimethodsFailureDiagram: module0.MultimethodsFailureDiagram,
     } as ChapterMdxComponents;
   },
   "optimized-cpp/05-official/optimize-algorithms": async () => {
@@ -2694,6 +3164,96 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");
     return {
       PP2ThreeProblemsMap: module0.PP2ThreeProblemsMap,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/00-overview/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/learning-map");
+    return {
+      LearningMapDecisionLab: module0.LearningMapDecisionLab,
+      LearningMapMechanismMap: module0.LearningMapMechanismMap,
+      LearningMapFailureDiagram: module0.LearningMapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/01-types/types-operators": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/types-operators");
+    return {
+      TypesOperatorsDecisionLab: module0.TypesOperatorsDecisionLab,
+      TypesOperatorsMechanismMap: module0.TypesOperatorsMechanismMap,
+      TypesOperatorsFailureDiagram: module0.TypesOperatorsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/02-control/control-flow": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/control-flow");
+    return {
+      ControlFlowDecisionLab: module0.ControlFlowDecisionLab,
+      ControlFlowMechanismMap: module0.ControlFlowMechanismMap,
+      ControlFlowFailureDiagram: module0.ControlFlowFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/02-control/functions-program": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/functions-program");
+    return {
+      FunctionsProgramDecisionLab: module0.FunctionsProgramDecisionLab,
+      FunctionsProgramMechanismMap: module0.FunctionsProgramMechanismMap,
+      FunctionsProgramFailureDiagram: module0.FunctionsProgramFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/03-pointers/pointer-arithmetic": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/pointer-arithmetic");
+    return {
+      PointerArithmeticDecisionLab: module0.PointerArithmeticDecisionLab,
+      PointerArithmeticMechanismMap: module0.PointerArithmeticMechanismMap,
+      PointerArithmeticFailureDiagram: module0.PointerArithmeticFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/03-pointers/pointers-arrays": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/pointers-arrays");
+    return {
+      PointersArraysDecisionLab: module0.PointersArraysDecisionLab,
+      PointersArraysMechanismMap: module0.PointersArraysMechanismMap,
+      PointersArraysFailureDiagram: module0.PointersArraysFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/04-struct-io/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/final-review");
+    return {
+      FinalReviewDecisionLab: module0.FinalReviewDecisionLab,
+      FinalReviewMechanismMap: module0.FinalReviewMechanismMap,
+      FinalReviewFailureDiagram: module0.FinalReviewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/04-struct-io/input-output": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/input-output");
+    return {
+      InputOutputDecisionLab: module0.InputOutputDecisionLab,
+      InputOutputMechanismMap: module0.InputOutputMechanismMap,
+      InputOutputFailureDiagram: module0.InputOutputFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/04-struct-io/structures": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/structures");
+    return {
+      StructuresDecisionLab: module0.StructuresDecisionLab,
+      StructuresMechanismMap: module0.StructuresMechanismMap,
+      StructuresFailureDiagram: module0.StructuresFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "the-c-programming-language/04-struct-io/unix-interface": async () => {
+    const module0 =
+      await import("@/components/mdx/the-c-programming-language/unix-interface");
+    return {
+      UnixInterfaceDecisionLab: module0.UnixInterfaceDecisionLab,
+      UnixInterfaceMechanismMap: module0.UnixInterfaceMechanismMap,
+      UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
     } as ChapterMdxComponents;
   },
 };

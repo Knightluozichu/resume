@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T14:33:40.880Z；旧版分数不迁移。
+> 2026-07-29T15:02:57.983Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：3694
-- queued：679
-- passed：123
+- queued：621
+- passed：181
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -221,18 +221,18 @@
 | 208 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
 | 209 | computer-graphics-4e | 14 | 0 | 14 | 0 | 14 |
 | 210 | csharp-quality-code | 14 | 0 | 14 | 0 | 14 |
-| 211 | cpp-high-performance | 13 | 0 | 13 | 0 | 13 |
-| 212 | cpp-testing-recipes | 13 | 0 | 13 | 0 | 13 |
-| 213 | modern-cpp-design | 13 | 0 | 13 | 0 | 13 |
-| 214 | ray-tracing-weekend | 12 | 0 | 12 | 0 | 12 |
-| 215 | the-c-programming-language | 10 | 0 | 10 | 0 | 10 |
-| 216 | inside-cpp-object-model | 9 | 0 | 9 | 0 | 9 |
-| 217 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 218 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 219 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 220 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
-| 221 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
-| 222 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 223 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
-| 224 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
-| 225 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
+| 211 | ray-tracing-weekend | 12 | 0 | 12 | 0 | 12 |
+| 212 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 213 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 214 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 215 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
+| 216 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
+| 217 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
+| 218 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
+| 219 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
+| 220 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
+| 221 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 222 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
+| 223 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
+| 224 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
+| 225 | the-c-programming-language | 10 | 0 | 0 | 10 | 0 |
