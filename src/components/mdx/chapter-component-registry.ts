@@ -2502,6 +2502,131 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       AutoFinalReviewLab: module0.AutoFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "automotive-systems-specialization/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/automotive-systems-specialization/v2/learning-map");
+    return {
+      LearningMapSystemLab: module0.LearningMapSystemLab,
+      LearningMapTraceLab: module0.LearningMapTraceLab,
+      LearningMapFaultLab: module0.LearningMapFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "automotive-systems-specialization/01-engine-power/drivetrain-components":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/drivetrain-components");
+      return {
+        DrivetrainComponentsSystemLab: module0.DrivetrainComponentsSystemLab,
+        DrivetrainComponentsTraceLab: module0.DrivetrainComponentsTraceLab,
+        DrivetrainComponentsFaultLab: module0.DrivetrainComponentsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/01-engine-power/engine-performance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/engine-performance");
+      return {
+        EnginePerformanceSystemLab: module0.EnginePerformanceSystemLab,
+        EnginePerformanceTraceLab: module0.EnginePerformanceTraceLab,
+        EnginePerformanceFaultLab: module0.EnginePerformanceFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/01-engine-power/engine-thermodynamics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/engine-thermodynamics");
+      return {
+        EngineThermodynamicsSystemLab: module0.EngineThermodynamicsSystemLab,
+        EngineThermodynamicsTraceLab: module0.EngineThermodynamicsTraceLab,
+        EngineThermodynamicsFaultLab: module0.EngineThermodynamicsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/01-engine-power/transmission-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/transmission-types");
+      return {
+        TransmissionTypesSystemLab: module0.TransmissionTypesSystemLab,
+        TransmissionTypesTraceLab: module0.TransmissionTypesTraceLab,
+        TransmissionTypesFaultLab: module0.TransmissionTypesFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/02-chassis-control/steering-brake-systems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/steering-brake-systems");
+      return {
+        SteeringBrakeSystemsSystemLab: module0.SteeringBrakeSystemsSystemLab,
+        SteeringBrakeSystemsTraceLab: module0.SteeringBrakeSystemsTraceLab,
+        SteeringBrakeSystemsFaultLab: module0.SteeringBrakeSystemsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/02-chassis-control/suspension-systems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/suspension-systems");
+      return {
+        SuspensionSystemsSystemLab: module0.SuspensionSystemsSystemLab,
+        SuspensionSystemsTraceLab: module0.SuspensionSystemsTraceLab,
+        SuspensionSystemsFaultLab: module0.SuspensionSystemsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/03-electronics/body-electronics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/body-electronics");
+      return {
+        BodyElectronicsSystemLab: module0.BodyElectronicsSystemLab,
+        BodyElectronicsTraceLab: module0.BodyElectronicsTraceLab,
+        BodyElectronicsFaultLab: module0.BodyElectronicsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/03-electronics/ecu-can-bus": async () => {
+    const module0 =
+      await import("@/components/mdx/automotive-systems-specialization/v2/ecu-can-bus");
+    return {
+      EcuCanBusSystemLab: module0.EcuCanBusSystemLab,
+      EcuCanBusTraceLab: module0.EcuCanBusTraceLab,
+      EcuCanBusFaultLab: module0.EcuCanBusFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "automotive-systems-specialization/03-electronics/sensors-actuators":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/automotive-systems-specialization/v2/sensors-actuators");
+      return {
+        SensorsActuatorsSystemLab: module0.SensorsActuatorsSystemLab,
+        SensorsActuatorsTraceLab: module0.SensorsActuatorsTraceLab,
+        SensorsActuatorsFaultLab: module0.SensorsActuatorsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "automotive-systems-specialization/04-ev/battery-management": async () => {
+    const module0 =
+      await import("@/components/mdx/automotive-systems-specialization/v2/battery-management");
+    return {
+      BatteryManagementSystemLab: module0.BatteryManagementSystemLab,
+      BatteryManagementTraceLab: module0.BatteryManagementTraceLab,
+      BatteryManagementFaultLab: module0.BatteryManagementFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "automotive-systems-specialization/04-ev/ev-motor-controller": async () => {
+    const module0 =
+      await import("@/components/mdx/automotive-systems-specialization/v2/ev-motor-controller");
+    return {
+      EvMotorControllerSystemLab: module0.EvMotorControllerSystemLab,
+      EvMotorControllerTraceLab: module0.EvMotorControllerTraceLab,
+      EvMotorControllerFaultLab: module0.EvMotorControllerFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "automotive-systems-specialization/04-ev/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/automotive-systems-specialization/v2/final-review");
+    return {
+      FinalReviewSystemLab: module0.FinalReviewSystemLab,
+      FinalReviewTraceLab: module0.FinalReviewTraceLab,
+      FinalReviewFaultLab: module0.FinalReviewFaultLab,
+    } as ChapterMdxComponents;
+  },
   "c-primer-plus/c-advanced/advanced-data": async () => {
     const module0 =
       await import("@/components/mdx/c-primer-plus/advanced-data");
