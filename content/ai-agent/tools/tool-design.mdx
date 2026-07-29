@@ -1,325 +1,228 @@
 ---
 title: 工具设计与安全执行
-type: C
-section: 让智能体行动
-order: 8
-description: 读完能给 tinyagent 的工具系统补上参数校验、沙箱权限、结构化错误回灌，让 ReAct 循环安全地行动。
+type: A
+section: 工具与行动
+order: 2
+description: 通过清晰边界、参数防错、最小权限、沙箱、幂等与评测设计可被模型可靠使用的工具。
 demo: true
 math: false
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagent-09
 ---
 
-import { AaToolDesignContrastDiagram } from "@/components/mdx/ai-agent/tool-design-contrast-diagram";
-import { AaToolInvokeSafetyDiagram } from "@/components/mdx/ai-agent/tool-invoke-safety-diagram";
-import { AaToolSafetyPlayground } from "@/components/mdx/ai-agent/tool-safety-playground";
+import {
+  ToolDesignModelLab,
+  ToolDesignTraceLab,
+  ToolDesignEvidenceLab,
+} from "@/components/mdx/ai-agent/v2/tool-design";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握工具设计与安全执行
+- 能解释“工具设计与安全执行”如何把工具当作面向非确定性调用者的安全接口
+- 能区分agent-computer interface、参数防错、最小权限、沙箱、工具评测，并指出它们在请求、状态或执行边界中的位置
+- 能固定输入，沿以下证据定位首个分叉：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计
+- 能注入“工具接受任意路径与命令字符串，并以应用全部权限直接执行”，在同一预算和权限下完成故障、恢复与重放
 
-学习“工具设计与安全执行”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，工具设计与安全执行的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从给电话装防呆和保险丝开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_QUALITY_V2 */}
 
-机制验证要把工具设计：先让模型选得准写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。参数校验：第一道防呆不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“工具设计与安全执行”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Anthropic《Writing effective tools for agents》](https://www.anthropic.com/engineering/writing-tools-for-agents)核对本单元机制；工具与外部能力的角色再由[MCP 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本具有“官方九章目录”的纸质书。平台把公开文章中的 augmented LLM、工作流、智能体、上下文和工具工程重组为 9 个教学单元；下列 72 个节点是站内课程地图，不冒充 Anthropic 原文目录。正文、代码、图表和练习均为独立教学重写，产品或模型版本变化时应重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“结构化返回：让主循环不用猜”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **工具设计与安全执行**：作为“把工具当作面向非确定性调用者的安全接口”的第 1 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **工具边界**：作为“把工具当作面向非确定性调用者的安全接口”的第 2 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **参数防错**：作为“把工具当作面向非确定性调用者的安全接口”的第 3 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **结构化返回**：作为“把工具当作面向非确定性调用者的安全接口”的第 4 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **错误分类**：作为“把工具当作面向非确定性调用者的安全接口”的第 5 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **最小权限**：作为“把工具当作面向非确定性调用者的安全接口”的第 6 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **沙箱执行**：作为“把工具当作面向非确定性调用者的安全接口”的第 7 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **工具评测**：作为“把工具当作面向非确定性调用者的安全接口”的第 8 个课程坐标，必须进入正文解释、交互观察或练习证据。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与状态合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“工具设计与安全执行”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "agent-computer interface",
+      def: "agent-computer interface：为模型选择和使用工具而设计的交互界面；在“工具设计与安全执行”中按以下证据核对：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。",
+    },
+    {
+      term: "参数防错",
+      def: "参数防错：通过类型、枚举和结构让错误输入更难产生；在“工具设计与安全执行”中按以下证据核对：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。",
+    },
+    {
+      term: "最小权限",
+      def: "最小权限：主体只获得完成当前任务所必需的权限；在“工具设计与安全执行”中按以下证据核对：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。",
+    },
+    {
+      term: "沙箱",
+      def: "沙箱：限制代码、文件、网络和系统调用影响范围的执行环境；在“工具设计与安全执行”中按以下证据核对：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。",
+    },
+    {
+      term: "工具评测",
+      def: "工具评测：在代表任务轨迹上测量工具选择与使用效果；在“工具设计与安全执行”中按以下证据核对：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：任何模型请求都在副作用前完成参数、权限和风险校验，失败以最小必要信息返回。任何“成功”结论都要保存以下证据：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计，不能把模型口头确认当作环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 工具名称与描述要减少歧义
 
-## 权威目录与核心概念逐项对照
+一个高层任务通常有多种 API 表达。工具应围绕模型能理解的任务意图组织，明确何时使用、何时不用和相邻工具差异。
 
-- 工具设计与安全执行
-- 给电话装防呆和保险丝
-- 工具设计：先让模型选得准
-- 参数校验：第一道防呆
-- 结构化返回：让主循环不用猜
-- 错误回灌：失败也要变成回执
-- 沙箱与权限边界：保险丝只让安全电流通过
-- 三件套：看管线，也看翻车样本
+动手试：从真实失败轨迹提取误选样本，迭代名称、描述和示例后重跑评测。
 
+### 参数设计优先防错
 
-## 可复现的最小实现
+枚举、绝对路径、受限标识和分离的 dry-run 能让错误更难发生。只在描述里写“请小心”不能替代类型与运行时校验。
 
-先把决策记录写成机器可读结构：
+动手试：尝试相对路径、目录穿越、空枚举和超大范围，确认都在副作用前失败。
 
-```json
-{
-  "unit": "工具设计与安全执行",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
+### 权限与沙箱限制最坏影响
+
+工具身份只获得任务所需资源；文件、网络和命令在可观测边界中执行。高风险或不可逆动作需要明确审批和预览。
+
+动手试：在沙箱内请求越界文件和外网地址，保存拒绝原因与零副作用证明。
+
+### 工具质量由 agent 轨迹评测
+
+单元测试证明实现正确，却不能证明模型会选对和填对。还要在代表任务上测工具选择、参数错误、恢复率、token 成本和任务成功。
+
+动手试：把工具版本作为实验变量，对同一任务集比较端到端成功率和失败簇。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 模型与结构边界">
+    在“工具设计与安全执行”中先画出责任、数据或候选空间，再预测“把工具当作面向非确定性调用者的安全接口”会在哪个节点改变结果。
+
+    <ToolDesignModelLab />
+
+  </Step>
+  <Step title="2. 状态与执行轨迹">
+    固定输入与版本，沿以下证据逐步检查：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。不允许跳过中间状态只看最终回答。
+
+    <ToolDesignTraceLab />
+
+  </Step>
+  <Step title="3. 故障与恢复证据">
+    注入“工具接受任意路径与命令字符串，并以应用全部权限直接执行”，标记首个分叉，撤销后以相同输入、预算和权限重放。
+
+    <ToolDesignEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
+
+```python
+def invoke_tool(tool, raw_args, actor, approval=None):
+    args = tool.schema.validate(raw_args)
+    tool.policy.authorize(actor, args)
+    preview = tool.preview(args)
+    if preview.risk == "high" and approval != preview.approval_token:
+        return {"ok": False, "error": "approval_required", "preview": preview}
+    with sandbox(tool.permissions) as isolated:
+        return isolated.run(tool, args, idempotency_key=stable_key(args))
 ```
 
-再用同一条执行链处理三类样本：
+这段实现只负责暴露“把工具当作面向非确定性调用者的安全接口”的最小合同。交付版本还要补齐超时、日志、权限、密钥隔离和可重复评测；缺少以下证据时，代码能运行也不代表本章结论成立：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
 
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
+<Callout type="trap" title="本章首要反例">
+  工具接受任意路径与命令字符串，并以应用全部权限直接执行。它会破坏“任何模型请求都在副作用前完成参数、权限和风险校验，失败以最小必要信息返回”；应先从以下证据定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
+<Callout type="trap" title="不要把模型自信当作证据">
+  在“工具设计与安全执行”中，模型生成的解释只能提出候选原因；工具结果、确定性校验和环境状态才能证明“把工具当作面向非确定性调用者的安全接口”是否成立。
+</Callout>
 
-最后保存回归门禁，禁止失败样本静默通过：
+<Callout type="trap" title="版本变化必须重跑">
+  “工具设计与安全执行”依赖模型、工具、schema
+  或运行时接口。升级任何一层后，应在冻结任务集上重新保存工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计，不能沿用旧截图或单次成功样例。
+</Callout>
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+## 练习与答案
 
-用统一评分解释实验结果：
+<Exercises>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+**问题 1：系统边界。** 怎样用最小输入证明“任何模型请求都在副作用前完成参数、权限和风险校验，失败以最小必要信息返回”？
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+<Answer>
+  先冻结模型、指令、工具、权限和预算，再保存以下证据：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。手工写出预期状态，运行一次正常样本并与环境事实比较；任何首个分叉都应阻断最终成功结论。
+</Answer>
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+**问题 2：课程坐标。** 工具设计与安全执行、工具边界、参数防错、结构化返回、错误分类、最小权限、沙箱执行、工具评测如何进入可操作验证？
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+<Answer>
+  把八个坐标分别标到结构图、状态轨迹和证据实验中。每个坐标至少要有一个可观察状态、一个失败样本或一个确定性校验；仅在目录列表中出现不算掌握。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“工具接受任意路径与命令字符串，并以应用全部权限直接执行”已经修复？
+
+<Answer>
+  保存正常基线，注入该故障，并在以下证据中标记首个差异：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。撤销后用完全相同的输入、版本、预算和权限重放。只有环境结果与停止状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 工具设计与安全执行必须绑定冻结输入和明确成功标准。
-- 给电话装防呆和保险丝必须能画成结构并沿边追踪责任。
-- 工具设计：先让模型选得准要由正常、边界和单故障样本共同验证。
-- 参数校验：第一道防呆必须保存第一处偏离和清理重建步骤。
-- 结构化返回：让主循环不用猜决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* 知识点清单：工具设计=§3 AaToolDesignContrastDiagram+Glossary；参数校验=§3/§6 代码对照+Glossary；结构化返回=§5 AaToolInvokeSafetyDiagram+Glossary；错误回灌=§5 AaToolSafetyPlayground+Glossary；沙箱与权限边界=§3/§5 图示+Glossary；Tool.invoke()=§6 代码重心+Glossary。 */}
-
-{/* 1. 学习目标（spec §一）：C 实战型；末条为可当场自测的检验问题。 */}
-
-
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；延续小屋电话隐喻。 */}
-
-## 给电话装防呆和保险丝
-
-上一章里，小屋里的失忆天才已经会边想边打电话了。但如果电话簿上写着「万能号码：什么都能办」，他可能会把一张含糊纸条递出去，屋外的人也不知道该不该照做。
-
-更糟的是，纸条可能少写地址、写了超大数量，甚至要求翻进不该看的抽屉。天才不是坏人，但他会误会、会漏填，也会被别人诱导。
-
-这一章要做的，是给每个号码贴清楚标签，再给电话线加防呆和保险丝：纸条先检查，不合格就退回；真要行动也只能在划好的范围内行动。没有这层保护，这套电话系统越能干，出错时越危险。
-
-{/* 3. 概念讲解（spec §三）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary。 */}
-
-## 工具设计：先让模型选得准
-
-不是把现成函数随手注册进去，而是给失忆天才写一条不会误拨的电话簿词条。`name`
-要稳定短小，`description` 要说明何时用、何时不用，`parameters`
-要把必填、类型、范围写清楚。
-
-工具的粒度也很关键。`do_anything(payload)` 看似省事，其实把所有判断都丢给模型；运行时也很难知道该校验什么、该限制哪些权限。更好的做法是把能力拆成边界清楚的小工具，例如 `search_docs` 只搜公开文档，`read_note` 只读白名单目录，`send_email` 必须经过确认。
-
-<AaToolDesignContrastDiagram />
-
-## 参数校验：第一道防呆
-
-是 Tool.invoke()
-的第一道门。模型写来的参数只是输入，不是事实；它可能漏字段、把数字写成字符串、把
-`limit` 写成十万，或把路径写到允许范围之外。
-
-参数校验的位置必须在真实函数之前。它不依赖模型“自觉”，而依赖程序里确定的规则：必填字段是否存在、类型是否匹配、枚举值是否在白名单、数值是否越界。校验失败时，工具不执行，只返回一条清楚的错误。
-
-## 结构化返回：让主循环不用猜
-
-是运行时和 ReAct 循环之间的契约。成功时返回 `{ok: true, value: ...}`；失败时返回 `{ok: false, error: {code, message}}`。这样 `Agent.run` 不用靠字符串猜“这算成功还是失败”。
-
-固定形状还有一个好处：错误也能进入同一条管线。缺参数、越权、超时、真实函数异常，都可以包装成同一种结果对象，然后作为 Observation 回到模型上下文里。
-
-## 错误回灌：失败也要变成回执
-
-不是纵容模型继续乱试，而是让失败变成可处理的外部事实。比如模型漏了
-`path`，下一轮它可以补；比如路径越权，下一轮它应该换成允许范围，或向用户说明做不到。
-
-如果直接抛异常让程序退出，ReAct 循环会断在半路；如果只返回“失败了”，模型又不知道该怎么修。好的错误要短、明确、可行动：`VALIDATION_ERROR`、`PERMISSION_DENIED`、`TIMEOUT` 这类 code 比一大段堆栈更适合回灌。
-
-## 沙箱与权限边界：保险丝只让安全电流通过
-
-负责回答“就算参数长得合法，这件事也允许做吗”。`read_note(path="../local.env")`
-的类型是字符串，但它越过了允许目录；`send_email`
-的参数都齐，也仍然需要用户确认。
-
-这层边界属于运行时，不属于模型。模型可以提出请求，但运行时必须按最小权限执行：默认只读、路径白名单、网络域名白名单、危险动作二次确认、超时和结果截断。下一节的交互会把这些门按顺序跑一遍。
-
-{/* 5. 交互 Demo：三件套图示/交互，含猜一猜、可单步、可重置。 */}
-
-## 三件套：看管线，也看翻车样本
-
-先看 Tool.invoke() 的完整安全管线。注意“不合格拦下”和“真实执行失败”都会进入同一个结构化回灌出口。
-
-> 猜一猜：如果模型漏了必填参数，哪一步应该拦下？它会不会进入沙箱执行？
-
-<AaToolInvokeSafetyDiagram />
-
-再亲手切换四种调用样本。正常调用会读到结果；参数缺失、参数越界和危险路径都会变成可读的 Observation。
-
-> 猜一猜：`../local.env` 的类型没有错，为什么仍然不能执行？切到“危险操作”看是哪层拒绝。
-
-<AaToolSafetyPlayground />
-
-{/* 6. 代码对照（spec §六）：C 型重心；tinyagent 增量；单代码块 ≤30 行。 */}
-
-## 动手：给 tinyagent 加 Tool.invoke()
-
-上一章的 `Agent.run` 已经会查 `registry` 并执行工具。这一章只补一个增量：让每个工具自己拥有安全执行入口。先定义统一返回形状，再把校验、执行和异常捕获收进去：
-
-```python
-from dataclasses import dataclass
-from typing import Any, Callable
-
-@dataclass
-class ToolResult:
-    ok: bool
-    value: Any | None = None
-    error: dict[str, str] | None = None
-
-@dataclass
-class Tool:
-    name: str
-    schema: dict[str, Any]
-    func: Callable[..., Any]
-
-    def invoke(self, args: dict[str, Any]) -> ToolResult:
-        error = validate_args(self.schema, args)
-        if error:
-            return ToolResult(ok=False, error=error)
-        try:
-            return ToolResult(ok=True, value=self.func(**args))
-        except Exception as err:
-            return ToolResult(
-                ok=False,
-                error={"code": "TOOL_ERROR", "message": str(err)},
-            )
-```
-
-`invoke()` 的关键是：模型传来的参数永远先走 `validate_args`。只有校验通过，才会进入 `try` 执行真实函数；真实函数即使抛错，也会被包装成 `ToolResult`，而不是炸掉主循环。
-
-下面写一个最小校验器。它不是完整 JSON Schema，只覆盖 tinyagent 现在最需要的三类规则：必填、类型、范围。
-
-```python
-def validate_args(schema, args):
-    fields = schema["parameters"]
-    required = schema.get("required", [])
-
-    for name in required:
-        if name not in args:
-            return {"code": "VALIDATION_ERROR", "message": f"缺少 {name}"}
-
-    for name, rule in fields.items():
-        if name not in args:
-            continue
-        value = args[name]
-        if rule["type"] == "string" and not isinstance(value, str):
-            return {"code": "TYPE_ERROR", "message": f"{name} 必须是字符串"}
-        if rule["type"] == "integer" and not isinstance(value, int):
-            return {"code": "TYPE_ERROR", "message": f"{name} 必须是整数"}
-        if "min" in rule and value < rule["min"]:
-            return {"code": "RANGE_ERROR", "message": f"{name} 太小"}
-        if "max" in rule and value > rule["max"]:
-            return {"code": "RANGE_ERROR", "message": f"{name} 太大"}
-    return None
-```
-
-校验器故意返回短错误，而不是抛异常。因为“参数不合格”是模型经常会遇到的可修正状态，应该变成 Observation，让下一轮模型能补参数或缩小范围。
-
-只做参数校验还不够。像读取文件这类工具，还要把路径关进沙箱：参数类型对，不代表它有权访问任何路径。
-
-```python
-from pathlib import Path
-
-ROOT = Path("notes").resolve()
-
-def read_note(path: str, max_chars: int = 1000) -> str:
-    target = (ROOT / path).resolve()
-    if not target.is_relative_to(ROOT):
-        raise PermissionError("只能读取 notes/ 目录内的文件")
-    text = target.read_text(encoding="utf-8")
-    return text[:max_chars]
-
-read_note_tool = Tool(
-    name="read_note",
-    schema={
-        "parameters": {
-            "path": {"type": "string"},
-            "max_chars": {"type": "integer", "min": 1, "max": 2000},
-        },
-        "required": ["path"],
-    },
-    func=read_note,
-)
-```
-
-这里的 `Path.resolve()` 和 `is_relative_to()` 是保险丝：`../local.env` 即使是合法字符串，也会被挡在 `notes/` 之外。最后，把 `Agent.run` 里的直接函数调用替换成 `tool.invoke()`，并把结果回灌：
-
-```python
-class Agent:
-    def call_tool(self, name, args):
-        if name not in self.registry:
-            return {
-                "ok": False,
-                "error": {"code": "UNKNOWN_TOOL", "message": name},
-            }
-        result = self.registry[name].invoke(args)
-        return {"ok": result.ok, "value": result.value, "error": result.error}
-
-    def append_observation(self, messages, name, result):
-        messages.append({
-            "role": "tool",
-            "name": name,
-            "content": f"Observation: {result}",
-        })
-```
-
-这样 tinyagent 的安全边界就清楚了：模型负责提出 Action，`Agent.run` 负责查注册表，`Tool.invoke()` 负责校验、执行、捕获、结构化返回，Observation 负责把结果或错误带回下一轮 ReAct。
-
-{/* 7. 常见误区（spec §七）：C 型 ≥3；固定格式 现象→原因→修法。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结呼应目标；C 型含改 Demo 题和独立实现题。 */}
-
-## 小结
-
-- 好工具设计让模型选得准，也让运行时守得住边界
-- `Tool.invoke()` 统一校验、执行、捕获和结构化返回
-- 参数错误、权限拒绝和异常都应作为 Observation 回灌
-- 沙箱与最小权限负责拦住“类型合法但越权”的请求
-
-
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应，按首现顺序。 */}
-
-## 名词解释
-
-
+- “工具设计与安全执行”的主问题是把工具当作面向非确定性调用者的安全接口。
+- 核心不变量是任何模型请求都在副作用前完成参数、权限和风险校验，失败以最小必要信息返回。
+- 首要反例是工具接受任意路径与命令字符串，并以应用全部权限直接执行。
+- 最小证据包包含工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+
+<Glossary>
+  <GlossaryItem term="agent-computer interface">
+    为模型选择和使用工具而设计的交互界面。在“工具设计与安全执行”中必须能按以下证据重新定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+  </GlossaryItem>
+  <GlossaryItem term="参数防错">
+    通过类型、枚举和结构让错误输入更难产生。在“工具设计与安全执行”中必须能按以下证据重新定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+  </GlossaryItem>
+  <GlossaryItem term="最小权限">
+    主体只获得完成当前任务所必需的权限。在“工具设计与安全执行”中必须能按以下证据重新定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+  </GlossaryItem>
+  <GlossaryItem term="沙箱">
+    限制代码、文件、网络和系统调用影响范围的执行环境。在“工具设计与安全执行”中必须能按以下证据重新定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+  </GlossaryItem>
+  <GlossaryItem term="工具评测">
+    在代表任务轨迹上测量工具选择与使用效果。在“工具设计与安全执行”中必须能按以下证据重新定位：工具版本、描述、参数、校验、权限身份、沙箱策略、审批、结果、失败类别与评测统计。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← ReAct 循环](/learn/ai-agent/tools/react-loop) · 本课程终点 →
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents（站内九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

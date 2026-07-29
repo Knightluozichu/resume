@@ -201,7 +201,7 @@ export function AaChatbotWorkflowAgentDiagram() {
                 x={colCenter(1)}
                 y={wfY[k] + 35}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {b.sub}
@@ -249,7 +249,7 @@ export function AaChatbotWorkflowAgentDiagram() {
             x={agCx}
             y={brainY + 35}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             按情况决定下一步
@@ -280,7 +280,7 @@ export function AaChatbotWorkflowAgentDiagram() {
             x={agCx}
             y={toolY + 35}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             搜索 · 算账 · 写文件

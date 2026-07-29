@@ -1,339 +1,232 @@
 ---
 title: 采样与解码
-type: B
+type: A
 section: 驾驭大模型
-order: 4
-description: 读完能解释 temperature 和 top-p 怎样重塑下一个 token 的概率分布、能手推带温度的 softmax，并知道什么时候该调高/调低它们。
+order: 1
+description: 从 logits、softmax、温度与候选截断解释逐 token 选择，并用固定输入和重复采样区分随机性与回归。
 demo: true
 math: true
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagent-05
 ---
 
-import { AaSamplingStepsDiagram } from "@/components/mdx/ai-agent/sampling-steps-diagram";
-import { AaTemperatureCompareDiagram } from "@/components/mdx/ai-agent/temperature-compare-diagram";
-import { AaSamplingExplorer } from "@/components/mdx/ai-agent/sampling-explorer";
+import {
+  SamplingDecodingModelLab,
+  SamplingDecodingTraceLab,
+  SamplingDecodingEvidenceLab,
+} from "@/components/mdx/ai-agent/v2/sampling-decoding";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握采样与解码
+- 能解释“采样与解码”如何把解码参数与任务风险、可重复性和输出分布绑定
+- 能区分logits、softmax、温度、top-p、随机种子，并指出它们在请求、状态或执行边界中的位置
+- 能固定输入，沿以下证据定位首个分叉：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间
+- 能注入“只比较一次随机输出并把差异归因于提示回归”，在同一预算和权限下完成故障、恢复与重放
 
-学习“采样与解码”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，采样与解码的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从同一张纸条，凭什么有时它死板有时它发疯开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_QUALITY_V2 */}
 
-机制验证要把从一堆分数到一个字：先看「一次采样」的全过程写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。两条路：贪心永远挑最高，采样按概率掷骰子不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“采样与解码”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Anthropic《Effective context engineering for AI agents》](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)核对本单元机制；工具与外部能力的角色再由[MCP 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本具有“官方九章目录”的纸质书。平台把公开文章中的 augmented LLM、工作流、智能体、上下文和工具工程重组为 9 个教学单元；下列 72 个节点是站内课程地图，不冒充 Anthropic 原文目录。正文、代码、图表和练习均为独立教学重写，产品或模型版本变化时应重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“温度：把分布捏陡还是捏平”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **采样与解码**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 1 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **logits**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 2 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **softmax**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 3 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **温度**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 4 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **top-p**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 5 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **top-k**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 6 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **随机种子**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 7 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **分布评测**：作为“把解码参数与任务风险、可重复性和输出分布绑定”的第 8 个课程坐标，必须进入正文解释、交互观察或练习证据。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与状态合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“采样与解码”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "logits",
+      def: "logits：模型对下一 token 候选给出的未归一化分数；在“采样与解码”中按以下证据核对：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。",
+    },
+    {
+      term: "softmax",
+      def: "softmax：把 logits 转换为概率分布的归一化函数；在“采样与解码”中按以下证据核对：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。",
+    },
+    {
+      term: "温度",
+      def: "温度：控制候选概率分布尖锐程度的缩放参数；在“采样与解码”中按以下证据核对：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。",
+    },
+    {
+      term: "top-p",
+      def: "top-p：保留累计概率达到阈值的最小候选集合；在“采样与解码”中按以下证据核对：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。",
+    },
+    {
+      term: "随机种子",
+      def: "随机种子：用于重放伪随机选择序列的初始状态；在“采样与解码”中按以下证据核对：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：同一 logits、参数和随机种子必须重放同一选择，多种子结果应符合声明分布。任何“成功”结论都要保存以下证据：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间，不能把模型口头确认当作环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### softmax 把相对分数变成概率
 
-## 权威目录与核心概念逐项对照
+logits 只表达候选的相对偏好；softmax 归一化后才形成总和为一的分布。为数值稳定应先减去最大 logit。
 
-- 采样与解码
-- 同一张纸条，凭什么有时它死板有时它发疯
-- 从一堆分数到一个字：先看「一次采样」的全过程
-- 两条路：贪心永远挑最高，采样按概率掷骰子
-- 温度：把分布捏陡还是捏平
-- top-p 与 top-k：先把骰子的候选范围圈小
-- 一句话权衡：要稳调低，要花样调高
-- 数学：带温度的 softmax 到底在算什么
+动手试：手算三个 logits 的概率，再与稳定实现比较到约定误差。
 
+### 温度改变分布而非知识
 
-## 可复现的最小实现
+低温度放大高分候选差异，高温度让分布更平。它不能补充缺失事实，也不能把错误工具结果变正确。
 
-先把决策记录写成机器可读结构：
+动手试：固定 logits，绘制三个温度下的熵和最高候选概率。
 
-```json
-{
-  "unit": "采样与解码",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
+### top-p 与 top-k 先截断候选
+
+top-k 固定候选数量，top-p 保留累计概率达到阈值的最小集合。二者与温度的应用顺序必须由接口文档明确。
+
+动手试：构造长尾分布，比较固定 k 与固定 p 的候选集合大小。
+
+### 随机输出需要分布级验收
+
+单次输出不能证明解码回归；固定种子用于重放，多种子重复用于估计成功率和尾部失败。确定性任务仍应优先结构校验与工具事实。
+
+动手试：运行一百个种子，报告通过率、置信区间和最常见失败类型。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 模型与结构边界">
+    在“采样与解码”中先画出责任、数据或候选空间，再预测“把解码参数与任务风险、可重复性和输出分布绑定”会在哪个节点改变结果。
+
+    <SamplingDecodingModelLab />
+
+  </Step>
+  <Step title="2. 状态与执行轨迹">
+    固定输入与版本，沿以下证据逐步检查：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。不允许跳过中间状态只看最终回答。
+
+    <SamplingDecodingTraceLab />
+
+  </Step>
+  <Step title="3. 故障与恢复证据">
+    注入“只比较一次随机输出并把差异归因于提示回归”，标记首个分叉，撤销后以相同输入、预算和权限重放。
+
+    <SamplingDecodingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
+
+```python
+def probabilities(logits, temperature):
+    scaled = [x / temperature for x in logits]
+    peak = max(scaled)
+    weights = [math.exp(x - peak) for x in scaled]
+    total = sum(weights)
+    return [x / total for x in weights]
+
+def sample_many(logits, config, seeds):
+    return [sample(logits, config, seed) for seed in seeds]
 ```
 
-再用同一条执行链处理三类样本：
+这段实现只负责暴露“把解码参数与任务风险、可重复性和输出分布绑定”的最小合同。交付版本还要补齐超时、日志、权限、密钥隔离和可重复评测；缺少以下证据时，代码能运行也不代表本章结论成立：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
 
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
+<Callout type="trap" title="本章首要反例">
+  只比较一次随机输出并把差异归因于提示回归。它会破坏“同一
+  logits、参数和随机种子必须重放同一选择，多种子结果应符合声明分布”；应先从以下证据定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
+<Callout type="trap" title="不要把模型自信当作证据">
+  在“采样与解码”中，模型生成的解释只能提出候选原因；工具结果、确定性校验和环境状态才能证明“把解码参数与任务风险、可重复性和输出分布绑定”是否成立。
+</Callout>
 
-最后保存回归门禁，禁止失败样本静默通过：
+<Callout type="trap" title="版本变化必须重跑">
+  “采样与解码”依赖模型、工具、schema
+  或运行时接口。升级任何一层后，应在冻结任务集上重新保存模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间，不能沿用旧截图或单次成功样例。
+</Callout>
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+## 练习与答案
 
-用统一评分解释实验结果：
+<Exercises>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+**问题 1：系统边界。** 怎样用最小输入证明“同一 logits、参数和随机种子必须重放同一选择，多种子结果应符合声明分布”？
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+<Answer>
+  先冻结模型、指令、工具、权限和预算，再保存以下证据：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。手工写出预期状态，运行一次正常样本并与环境事实比较；任何首个分叉都应阻断最终成功结论。
+</Answer>
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+**问题 2：课程坐标。** 采样与解码、logits、softmax、温度、top-p、top-k、随机种子、分布评测如何进入可操作验证？
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+<Answer>
+  把八个坐标分别标到结构图、状态轨迹和证据实验中。每个坐标至少要有一个可观察状态、一个失败样本或一个确定性校验；仅在目录列表中出现不算掌握。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“只比较一次随机输出并把差异归因于提示回归”已经修复？
+
+<Answer>
+  保存正常基线，注入该故障，并在以下证据中标记首个差异：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。撤销后用完全相同的输入、版本、预算和权限重放。只有环境结果与停止状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 采样与解码必须绑定冻结输入和明确成功标准。
-- 同一张纸条，凭什么有时它死板有时它发疯必须能画成结构并沿边追踪责任。
-- 从一堆分数到一个字：先看「一次采样」的全过程要由正常、边界和单故障样本共同验证。
-- 两条路：贪心永远挑最高，采样按概率掷骰子必须保存第一处偏离和清理重建步骤。
-- 温度：把分布捏陡还是捏平决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* B 数学型·篇 2「驾驭大模型」第 2 章（《从零构建 AI Agent》原创改编）：重心是 §4 数学推导（带温度的 softmax，三种极限直觉，不跳步）+ §5 必配交互（拖 temperature/top-p 实时看分布几何）。§3 概念到位即可，§6 给 tinyagent 的 llm() 薄封装 + 可运行的 sample_next。延续全书隐喻「失忆天才小屋」：同一张纸条，温度高他越敢天马行空、温度低他越死板照搬。draft:false 已发布。 */}
-
-{/* 知识点清单（动笔前先摊开，逐条标 viz；新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 从概率分布到挑一个 token——贪心 greedy（永远挑最高）vs 采样 sampling（按概率掷骰子）= AaSamplingStepsDiagram → Glossary：贪心解码、采样；2) temperature 温度 T（T→0 趋贪心/确定，T→大趋均匀/发散）= §4 公式 + AaSamplingExplorer + AaTemperatureCompareDiagram → Glossary：温度；3) top-p / nucleus 核采样（只在累积概率前 p 的最小候选集里采）= AaSamplingExplorer + AaSamplingStepsDiagram → Glossary：top-p 核采样；4) top-k（只在前 k 个里采）= §3 文字 + 对比 → Glossary：top-k；5) 确定性↔多样性权衡（什么任务调高、什么调低）= AaTemperatureCompareDiagram + §7 → Glossary：确定性多样性权衡。旗舰动画 AaSamplingStepsDiagram 演「一次采样五步」；交互 AaSamplingExplorer 拖参数看分布；对照图 AaTemperatureCompareDiagram 低温 vs 高温。tinyagent 本章增量：sample_next(logits, temperature, top_p)（纯 Python 实现 softmax+top-p+抽样）+ llm(messages, temperature, top_p) 薄封装（§二地图 2.2）。 */}
-
-{/* 1. 学习目标（spec §一）：B 型必含一条「能推导/能手算 ___」；末条为可当场自测的检验问题。 */}
-
-
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；延续失忆天才小屋隐喻。专业名词最早 §3 才出现。类比库：①光与材质？这里用「掷骰子」属生活类比，不与四库冲突。 */}
-
-## 同一张纸条，凭什么有时它死板有时它发疯
-
-还是那位关在小屋里的失忆天才。你塞同一张纸条进去，他读完写回话。可你发现怪事：有时他像复读机，问十遍答得几乎一字不差；有时又像喝多了，同一个问题答得天马行空、每次都不一样。明明纸条没变，他怎么时而呆板时而放飞？
-
-秘密在于：他写每个字之前，脑子里其实是一**堆**候选词，各自带着「我有多想写这个」的分数。怎么从这堆候选里**挑一个**落笔——是永远挑分最高的，还是按分数高低「掷个骰子」碰运气——由几个旋钮控制。旋钮拧死板，他就复读；拧松了，他就放飞。
-
-这一章要弄清的就是这几个旋钮：它们怎么把「一堆带分数的候选」捏成最终落笔的那个字，什么时候该把它拧紧（要稳）、什么时候该松开（要花样）。搞懂了，你就能精准控制这位失忆天才的「脑回路松紧」。
-
-{/* 3. 概念讲解（spec §三）：B 型「到位即可」，篇幅让给 §4。一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo。新核心概念 ≤5。 */}
-
-## 从一堆分数到一个字：先看「一次采样」的全过程
-
-模型写每个字时，并不是直接蹦出一个词，而是先给词表里**每一个**候选 token 打一个原始分数（叫 logits，有正有负、还不是概率），再一步步把这堆分数变成「最终落笔的那一个」。下面这张可控动画，把这「一次采样」拆成五步演给你看——先整体过一遍，后面几节再逐个旋钮细讲：
-
-> 猜一猜：哪一步是真正「掷骰子」决定写哪个字的？温度和 top-p 分别在第几步动手脚？
-
-<AaSamplingStepsDiagram />
-
-播完你会看清五步的分工：① 原始 logits → ② softmax 归一成概率 → ③ 温度重塑分布陡平 → ④ top-p 砍掉长尾 → ⑤ 在剩下的候选里掷骰子。后面的旋钮，都是在第③、第④步动手脚。
-
-## 两条路：贪心永远挑最高，采样按概率掷骰子
-
-从一摞概率里挑一个 token，最简单的办法叫：闭着眼睛选概率最高的那个，绝不掺随机。它的好处是**确定**——同一张纸条问十遍，答得一模一样；坏处是死板，容易复读、没新意。
-
-另一条路叫：按各候选的概率「掷骰子」——概率 0.6 的候选大约六成机会被选，概率 0.1 的也有一成机会冒头。它带来**多样性**，但也带来不确定。本章后面所有旋钮（温度、top-p、top-k），调的都是「掷骰子」这件事：要么改骰子各面的大小，要么限制骰子只允许落在哪几个候选上。
-
-## 温度：把分布捏陡还是捏平
-
-第一个、也是最重要的旋钮是。它做的事一句话：在 softmax 之前，把每个候选的原始分数都除以 $T$，再算概率。
-
-- $T$ **小**（比如 0.2）：分数被放大，强者愈强——分布变得很**陡**，几乎总挑那个最高的，趋近贪心、输出确定。
-- $T$ **大**（比如 1.5）：分数被压扁，人人有份——分布变得很**平**，挑谁都有可能，输出发散、花样多。
-
-温度只改「挑 token 时的随机度」，**不改谁本来分高**。具体怎么改，下一节用公式推清楚。
-
-## top-p 与 top-k：先把骰子的候选范围圈小
-
-光有温度还不够：高温下连那些明显不靠谱的长尾候选也有机会被抽中，偶尔就蹦出奇怪的字。于是再加一道闸——先把候选范围圈小，只在「靠谱的那几个」里掷骰子。
-
-最常用的是：把候选按概率从高到低累加，只留累积概率刚够到 $p$ 的最小一撮（这一撮就叫「核」），剩下的长尾全砍掉，再在核里采。比如 `top-p=0.9` 就是「只在累积概率前 90% 的候选里掷骰子」。它的妙处是**自适应**——分布陡时核里就一两个，分布平时核里自动放宽到好几个。
-
-另一个常见旋钮是：简单粗暴，固定只留概率最高的前 $k$ 个，其余砍掉。它不像 top-p 自适应，所以实践中 top-p 更常用，常和温度搭配一起调。
-
-## 一句话权衡：要稳调低，要花样调高
-
-把上面几个旋钮合起来，本质是一道。要事实、要格式、要可复现（如解析 JSON、做数学题），就把温度调低、top-p 收紧，让它稳；要创意、要花样（如写诗、起名、头脑风暴），就把温度调高、top-p 放宽，让它放飞。下一节先把温度的数学讲透，再回到这个权衡。
-
-下面这张图把两端摆在一起看——同一道题，低温下这位失忆天才照本宣科、答得死板可复现，高温下它放飞自我、天马行空却也容易跑偏：
-
-<AaTemperatureCompareDiagram />
-
-{/* 4. 数学推导（spec §四，B 型重心）：节首符号表；每个 display 公式后一句人话翻译；不跳步；display ≤8 个；矩阵列主序（本章无矩阵）。B 型必配交互（§5 AaSamplingExplorer）。 */}
-
-## 数学：带温度的 softmax 到底在算什么
-
-### 符号表
-
-本节首次出现的符号，一行一个：
-
-- $z_i$：第 $i$ 个候选 token 的 **logit**（模型吐出的原始分数，有正有负，未归一）
-- $p_i$：第 $i$ 个候选被选中的**概率**（$0 \le p_i \le 1$，且全部相加为 1）
-- $T$：**温度**（一个正数，$T > 0$，控制分布陡平）
-- $V$：**词表**（所有候选 token 的集合）；$j$ 遍历 $V$ 里每个候选
-
-### 第一步：普通 softmax 把分数变概率
-
-logits 有正有负、又不相加为 1，没法直接当概率。softmax 干的就是「转成概率」这件事：
-
-$$
-p_i = \frac{\exp(z_i)}{\sum_{j \in V} \exp(z_j)}
-$$
-
-这个式子在说：把每个候选的分数 $z_i$ 取一次指数 $\exp$（让它一定为正、且分数越高放大越狠），再除以「所有候选指数之和」做归一——这样每个 $p_i$ 都落在 0 到 1 之间、全部相加恰好等于 1，成了一份合法的概率分布。
-
-### 第二步：除以温度，就得到带温度的 softmax
-
-温度做的事极简单：在取指数**之前**，把每个分数都除以 $T$。把上式里的 $z_i$ 换成 $z_i / T$：
-
-$$
-p_i = \frac{\exp(z_i / T)}{\sum_{j \in V} \exp(z_j / T)}
-$$
-
-这个式子在说：和普通 softmax 一模一样，只多了一步「先把每个分数除以温度 $T$ 再算」。$T=1$ 时它就退化成普通 softmax；$T$ 改了，整份分布的陡平就跟着变——下面看三种极限。
-
-### 三种极限：T 怎么影响分布的陡峭度
-
-把温度推到三个极端，就能摸清它的脾气。关键看**两个候选的分数差**在除以 $T$ 后被放大还是缩小。
-
-**极限一：$T \to 0$（温度趋零）。** 分数除以一个极小的数，差距被无限放大。设 $z_a$ 是最高分、$z_b$ 是次高分（$z_a > z_b$），看它俩概率的比值：
-
-$$
-\frac{p_a}{p_b} = \exp\!\left(\frac{z_a - z_b}{T}\right)
-$$
-
-这个式子在说：两个候选的概率之比，等于「它们分数差除以 $T$」再取指数。当 $T \to 0$，指数里的 $(z_a - z_b)/T \to +\infty$，所以比值 $\to +\infty$——最高分那个把概率几乎全占了，其余趋近 0。**分布塌成一根独大**，等价于贪心解码：永远挑最高的那个。
-
-**极限二：$T = 1$（温度为一）。** 公式退回普通 softmax，不做任何额外缩放——这是「原汁原味」的概率分布，既不额外变陡也不额外变平。
-
-**极限三：$T \to \infty$（温度趋大）。** 分数除以一个极大的数，所有 $z_j / T \to 0$，于是每个 $\exp(z_j / T) \to \exp(0) = 1$。代回公式，分子分母都成了「一堆 1」：
-
-$$
-p_i = \frac{\exp(z_i / T)}{\sum_{j \in V} \exp(z_j / T)} \;\longrightarrow\; \frac{1}{|V|}
-$$
-
-这个式子在说：温度推到无穷大时，每个候选的概率都趋近 $1 / |V|$（$|V|$ 是候选个数）——也就是**均匀分布**，谁的原始分数高已经无所谓了，挑谁都一样，输出最发散。
-
-一句话收口：**$T$ 越小越陡（趋贪心、确定），$T=1$ 是原始分布，$T$ 越大越平（趋均匀、发散）**。下一节你就能亲手拖这个 $T$，看分布条形图实时变陡变平。
-
-{/* 5. 交互 Demo（spec §五，B 型必配 MathViz 拖参数看几何）：旗舰交互 AaSamplingExplorer（本节）拖 temperature/top-p 看分布；Demo 前有「猜一猜」；控件 ≤5（2 滑块 + 1 按钮）；有重置；开箱即展示核心效果（T=1, top-p=0.9）。 */}
-
-## 动手玩：拖一拖温度和 top-p，看分布怎么变
-
-光看公式不如亲手拖。下面这个工具给了一组固定的候选 token（已经有各自的原始 logits），两个滑块就是上面讲的两个旋钮：**温度**捏分布的陡平，**top-p** 决定在前多少候选里采（被砍掉的灰显）。点「🎲 采一次」就按当前分布掷一次骰子，看这回抽中谁。
-
-> 猜一猜：把温度从 1.0 拖到 2.0，最高那根条会变高还是变矮？把 top-p 从 0.9 拖到 0.3，灰掉的候选会变多还是变少？
-
-<AaSamplingExplorer />
-
-多拖几次你会摸到规律：**温度越高，条形越「拉平」**（最高的矮下去、矮的顶上来，掷骰子结果越花样）；**top-p 越小，存活的候选越少**（只剩头部那一两根，采样越稳、越不会蹦出冷门字）。这正是上一节公式的几何样子——把抽象的 $T$ 和 $p$ 变成了眼睛能看见的高矮和灰白。
-
-{/* 6. 代码对照（spec §六，B 型「选」，但本书 tinyagent 增量必给）：① 可运行 sample_next（纯 Python 实现 softmax 带温度 + top-p 截断 + 按概率抽样，可设种子）；② llm() 薄封装签名（provider 抽象，stub 占位）。Python 单语言、不用 CodeTabs；单块 ≤30 行、块间有解说。已 python3 跑通：低温分布更陡、top-p 小候选更少、抽样能出结果。 */}
-
-## 动手：给 tinyagent 加上 sample_next 和 llm()
-
-上一章我们把「一份提示」组装成了 `messages`，但还没真把它喂给模型。这一章就补上「采样」这块砖，并把它收进 `llm()` 薄封装里。先把数学落成能跑的代码——一个纯 Python 的 `sample_next`，亲手实现带温度的 softmax：
-
-```python
-import math
-import random
-
-def softmax(logits, temperature):
-    # 带温度的 softmax：每个分数先除以 T，再做 softmax（§4 那个公式）
-    scaled = [z / temperature for z in logits]
-    m = max(scaled)  # 减最大值防 exp 溢出（数值稳定，不改结果）
-    exps = [math.exp(s - m) for s in scaled]
-    total = sum(exps)
-    return [e / total for e in exps]
-```
-
-`softmax` 就是 §4 公式的逐字翻译：先把每个 logit 除以 `temperature`（这一步是温度的全部魔法），再取指数、归一。减最大值 `m` 只是数值技巧——分子分母同乘一个常数，结果不变，却能避免大指数溢出。接着实现一次完整采样：
-
-```python
-def sample_next(logits, temperature=1.0, top_p=1.0, seed=None):
-    probs = softmax(logits, temperature)  # ① 带温度的概率分布
-    # ② top-p：按概率从高到低累加，只留累积刚够 top_p 的最小候选集
-    ranked = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
-    kept, acc = [], 0.0
-    for i in ranked:
-        kept.append(i)
-        acc += probs[i]
-        if acc >= top_p:
-            break
-    # ③ 在存活候选里按概率重新归一，再掷骰子抽一个
-    weights = [probs[i] for i in kept]
-    rng = random.Random(seed)  # 传 seed 可复现，便于调试
-    r = rng.random() * sum(weights)
-    for i, w in zip(kept, weights):
-        r -= w
-        if r <= 0:
-            return i
-    return kept[-1]
-```
-
-这就是动画五步的代码版：①`softmax` 出带温度的分布；②`top_p` 把候选从高到低累加、砍掉长尾留下「核」；③在核里按权重「掷骰子」（`r` 从 `[0, 权重和)` 里取一个随机点，沿权重走到哪根就抽中谁）。传 `seed` 能复现同一次抽样，方便调试。跑一遍验证三件事——低温分布更陡、`top_p` 越小存活候选越少、抽样确实能出结果：
-
-```python
-logits = [3.2, 2.6, 1.8, 1.1, 0.6, 0.2, -0.4, -1.0]
-p_low = softmax(logits, 0.3)   # 低温：最高概率 ≈ 0.87（很陡）
-p_high = softmax(logits, 1.5)  # 高温：最高概率 ≈ 0.36（很平）
-print(round(max(p_low), 2), round(max(p_high), 2))  # 0.87 0.36
-idx = sample_next(logits, temperature=1.0, top_p=0.9, seed=42)
-print("抽中下标:", idx)  # 抽中下标: 1
-```
-
-输出印证了公式：低温下最高概率 0.87（分布陡），高温下只剩 0.36（分布平）；`sample_next` 也确实掷出了一个候选。最后把它收进 `tinyagent` 的 `llm()` 薄封装——这层接口才是全书后面真正调用的入口，采样参数从这里透传给底层模型：
-
-```python
-def llm(messages, temperature=1.0, top_p=1.0):
-    """tinyagent 调模型的唯一入口：把 messages + 采样参数透传给底层 provider。
-
-    这里特意不绑死某家 SDK（OpenAI / Anthropic / 本地模型都行）——
-    全书只认 llm() 这层接口，换 provider 只改这一处，上层 Agent 代码不动。
-    """
-    # 真实接入时在此调底层 provider，并把 temperature / top_p 一并传下去，例如：
-    #   resp = provider.chat(messages, temperature=temperature, top_p=top_p)
-    #   return resp.content
-    raise NotImplementedError("接你的 provider；采样参数已就位")
-```
-
-关键在签名而非实现：`llm(messages, temperature, top_p)` 把「组装好的纸条」和「采样旋钮」一起收口成一个函数。上层 Agent 永远只调 `llm()`，不碰任何 provider 细节；换模型、换厂商，只改这一处的函数体。`temperature` 和 `top_p` 就是本章两个旋钮顺着这层接口流进底层模型的通道。
-
-{/* 7. 常见误区（spec §七，B 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字；用 Callout type=trap。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；B 型练习含 1 道推导/手算题；答案折叠。 */}
-
-## 小结
-
-- 从一堆 logits 到一个字要走五步：logits → softmax → 按温度重塑 → top-p 截断 → 掷骰子抽一个
-- 挑 token 有两条路：**贪心**永远挑最高（确定、死板）、**采样**按概率掷骰子（多样、不稳）
-- **温度 $T$** 捏分布陡平：$T \to 0$ 趋贪心/确定、$T=1$ 原始分布、$T \to \infty$ 趋均匀/发散
-- **top-p**（核采样）只在累积概率前 $p$ 的最小候选集里采，自适应砍长尾；**top-k** 固定留前 $k$ 个
-- 一句话权衡：要稳、要格式、要可复现就调低；要创意、要花样就调高——tinyagent 用 `sample_next` + `llm(messages, temperature, top_p)` 把这套落成代码
-
-
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（贪心解码 / 采样 / 温度 / top-p 核采样 / top-k / 确定性多样性权衡，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
-
-
-{/* 9. 出处声明（spec §九）：本书为原创改编，sourceUrl 为空，Attribution 空参自动渲染。缺失 = 必打回。 */}
-
+- “采样与解码”的主问题是把解码参数与任务风险、可重复性和输出分布绑定。
+- 核心不变量是同一 logits、参数和随机种子必须重放同一选择，多种子结果应符合声明分布。
+- 首要反例是只比较一次随机输出并把差异归因于提示回归。
+- 最小证据包包含模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+
+<Glossary>
+  <GlossaryItem term="logits">
+    模型对下一 token
+    候选给出的未归一化分数。在“采样与解码”中必须能按以下证据重新定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+  </GlossaryItem>
+  <GlossaryItem term="softmax">
+    把 logits
+    转换为概率分布的归一化函数。在“采样与解码”中必须能按以下证据重新定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+  </GlossaryItem>
+  <GlossaryItem term="温度">
+    控制候选概率分布尖锐程度的缩放参数。在“采样与解码”中必须能按以下证据重新定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+  </GlossaryItem>
+  <GlossaryItem term="top-p">
+    保留累计概率达到阈值的最小候选集合。在“采样与解码”中必须能按以下证据重新定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+  </GlossaryItem>
+  <GlossaryItem term="随机种子">
+    用于重放伪随机选择序列的初始状态。在“采样与解码”中必须能按以下证据重新定位：模型版本、logits、温度、top-p/top-k、随机种子、候选集合、采样结果与统计区间。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 提示工程基础](/learn/ai-agent/llm/prompt-engineering) · [结构化输出 →](/learn/ai-agent/llm/structured-output)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents（站内九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

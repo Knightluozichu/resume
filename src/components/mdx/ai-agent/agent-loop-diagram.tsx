@@ -393,7 +393,7 @@ export function AaAgentLoopDiagram() {
             x={CX}
             y={CY + 14}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             转到任务完成才停
@@ -449,7 +449,7 @@ export function AaAgentLoopDiagram() {
                   x={c.x}
                   y={y + 42}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {n.sub}

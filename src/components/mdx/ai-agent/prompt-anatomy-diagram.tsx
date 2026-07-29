@@ -148,7 +148,7 @@ export function AaPromptAnatomyDiagram() {
                   x={ZONE_LEFT - 50}
                   y={cy - 6}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-secondary)"
                 >

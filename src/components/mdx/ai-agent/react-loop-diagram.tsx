@@ -192,7 +192,7 @@ export function AaReactLoopDiagram() {
           x={cx}
           y={node.y + 62}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {node.sub}
@@ -295,7 +295,7 @@ export function AaReactLoopDiagram() {
             markerEnd="url(#aarl-arrow)"
             opacity="0.55"
           />
-          <text x="440" y="220" fontSize="10" fill="var(--accent)">
+          <text x="440" y="220" fontSize="11" fill="var(--accent)">
             需要更多信息就继续循环
           </text>
 

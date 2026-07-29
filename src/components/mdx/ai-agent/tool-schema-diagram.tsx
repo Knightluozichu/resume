@@ -201,7 +201,7 @@ export function AaToolSchemaDiagram() {
                     key={k}
                     x={RCOL_X + 12}
                     y={midY + 4 + (k - (arr.length - 1) / 2) * 14}
-                    fontSize="10.5"
+                    fontSize="11"
                     fill="var(--text-secondary)"
                   >
                     {ln}
@@ -242,7 +242,7 @@ export function AaToolSchemaDiagram() {
                   x={LCOL_X + LCOL_W - 26}
                   y={ry + 18}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {r.desc}

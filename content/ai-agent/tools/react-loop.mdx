@@ -1,316 +1,249 @@
 ---
 title: ReAct 循环
-type: C
-section: 让智能体行动
-order: 7
-description: 读完能用 tinyagent 写出会「想一步、调工具、读回执、继续想」的 Agent.run 主循环，并靠 Final Answer 正确停机。
+type: A
+section: 工具与行动
+order: 1
+description: 把决策摘要、工具行动、环境观察与停止判定组织成受控循环，不要求暴露模型隐藏思维过程。
 demo: true
 math: false
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagent-08
 ---
 
-import { AaReactLoopDiagram } from "@/components/mdx/ai-agent/react-loop-diagram";
-import { AaReactTraceDiagram } from "@/components/mdx/ai-agent/react-trace-diagram";
-import { AaReactStepThrough } from "@/components/mdx/ai-agent/react-step-through";
+import {
+  ReactLoopModelLab,
+  ReactLoopTraceLab,
+  ReactLoopEvidenceLab,
+} from "@/components/mdx/ai-agent/v2/react-loop";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握ReAct 循环
+- 能解释“ReAct 循环”如何让每轮行动由新观察推进，并以可判定停止条件收束
+- 能区分ReAct、决策摘要、Action、Observation、Final Answer，并指出它们在请求、状态或执行边界中的位置
+- 能固定输入，沿以下证据定位首个分叉：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批
+- 能注入“模型伪造 Observation 或在必要验证前输出 Final Answer”，在同一预算和权限下完成故障、恢复与重放
 
-学习“ReAct 循环”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，ReAct 循环的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从小屋里的天才终于会「边办边问」开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_QUALITY_V2 */}
 
-机制验证要把ReAct 循环：想和做交替出现写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。Thought：先想「下一通电话该打给谁」不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“ReAct 循环”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[ReAct 原始论文](https://arxiv.org/abs/2210.03629)核对本单元机制；工具与外部能力的角色再由[MCP 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本具有“官方九章目录”的纸质书。平台把公开文章中的 augmented LLM、工作流、智能体、上下文和工具工程重组为 9 个教学单元；下列 72 个节点是站内课程地图，不冒充 Anthropic 原文目录。正文、代码、图表和练习均为独立教学重写，产品或模型版本变化时应重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“Action：写出一次工具请求”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **ReAct 循环**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 1 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **决策摘要**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 2 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **Action**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 3 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **Observation**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 4 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **Final Answer**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 5 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **环境反馈**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 6 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **循环预算**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 7 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **人工检查点**：作为“让每轮行动由新观察推进，并以可判定停止条件收束”的第 8 个课程坐标，必须进入正文解释、交互观察或练习证据。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与状态合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“ReAct 循环”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "ReAct",
+      def: "ReAct：把任务推理与环境行动交错组织的智能体方法；在“ReAct 循环”中按以下证据核对：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。",
+    },
+    {
+      term: "决策摘要",
+      def: "决策摘要：可审计但不要求暴露隐藏思维过程的下一步理由；在“ReAct 循环”中按以下证据核对：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。",
+    },
+    {
+      term: "Action",
+      def: "Action：模型提出并由运行时审核的工具行动；在“ReAct 循环”中按以下证据核对：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。",
+    },
+    {
+      term: "Observation",
+      def: "Observation：工具或环境返回的结构化事实；在“ReAct 循环”中按以下证据核对：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。",
+    },
+    {
+      term: "Final Answer",
+      def: "Final Answer：满足完成或阻塞合同后产生的终止输出；在“ReAct 循环”中按以下证据核对：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：每轮 Action 都能指出所依据的 Observation，最终回答满足成功标准或明确阻塞。任何“成功”结论都要保存以下证据：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批，不能把模型口头确认当作环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### ReAct 交替推理与行动
 
-## 权威目录与核心概念逐项对照
+经典 ReAct 把任务推理与环境行动交错，使新观察能够纠正后续路径。工程实现关注可审计决策和动作，不需要向用户暴露隐藏 chain-of-thought。
 
-- ReAct 循环
-- 小屋里的天才终于会「边办边问」
-- ReAct 循环：想和做交替出现
-- Thought：先想「下一通电话该打给谁」
-- Action：写出一次工具请求
-- Observation：把电话那头的回执塞回去
-- Final Answer：循环的刹车
-- Agent.run：把循环收进一个入口
+动手试：保存短决策摘要、工具请求和观察，确认复核人能解释下一步依据。
 
+### Observation 必须来自环境
 
-## 可复现的最小实现
+模型自行编写的“搜索结果”不是观察。运行时只有在工具真正完成后才把结构化结果加入下一轮上下文。
 
-先把决策记录写成机器可读结构：
+动手试：阻断网络工具，确认观察记录为失败而不是生成一段伪结果。
 
-```json
-{
-  "unit": "ReAct 循环",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
+### Final Answer 是受条件保护的分支
+
+最终回答必须满足成功标准或清楚声明阻塞；模型仅输出 final 字样不能越过必要工具、测试或人工审批。
+
+动手试：让模型提前结束，检查运行时的完成判定是否拒绝。
+
+### 循环同时受预算与人工检查点控制
+
+最大轮数、token、工具费用、不可逆操作审批和重复调用检测共同防止失控。恢复策略要区分可重试与需要用户输入的阻塞。
+
+动手试：注入重复 action，确认检测器停止循环并保留完整轨迹。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 模型与结构边界">
+    在“ReAct 循环”中先画出责任、数据或候选空间，再预测“让每轮行动由新观察推进，并以可判定停止条件收束”会在哪个节点改变结果。
+
+    <ReactLoopModelLab />
+
+  </Step>
+  <Step title="2. 状态与执行轨迹">
+    固定输入与版本，沿以下证据逐步检查：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。不允许跳过中间状态只看最终回答。
+
+    <ReactLoopTraceLab />
+
+  </Step>
+  <Step title="3. 故障与恢复证据">
+    注入“模型伪造 Observation 或在必要验证前输出 Final Answer”，标记首个分叉，撤销后以相同输入、预算和权限重放。
+
+    <ReactLoopEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
+
+```python
+def run(task, runtime, max_turns=8):
+    trace = []
+    for turn in range(max_turns):
+        decision = runtime.decide(task, trace)
+        if decision.kind == "final":
+            if runtime.success_criteria_met(task, trace):
+                return {"status": "done", "answer": decision.answer, "trace": trace}
+            return {"status": "blocked", "reason": "premature_final", "trace": trace}
+        observation = runtime.execute(decision.action)
+        trace.append({"summary": decision.summary, "action": decision.action,
+                      "observation": observation})
+    return {"status": "blocked", "reason": "turn_budget", "trace": trace}
 ```
 
-再用同一条执行链处理三类样本：
+这段实现只负责暴露“让每轮行动由新观察推进，并以可判定停止条件收束”的最小合同。交付版本还要补齐超时、日志、权限、密钥隔离和可重复评测；缺少以下证据时，代码能运行也不代表本章结论成立：轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。
 
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
+<Callout type="trap" title="本章首要反例">
+  模型伪造 Observation 或在必要验证前输出 Final Answer。它会破坏“每轮 Action
+  都能指出所依据的
+  Observation，最终回答满足成功标准或明确阻塞”；应先从以下证据定位：轮次、决策摘要、Action、调用
+  id、Observation、预算变化、完成判定与人工审批，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
+<Callout type="trap" title="不要把模型自信当作证据">
+  在“ReAct
+  循环”中，模型生成的解释只能提出候选原因；工具结果、确定性校验和环境状态才能证明“让每轮行动由新观察推进，并以可判定停止条件收束”是否成立。
+</Callout>
 
-最后保存回归门禁，禁止失败样本静默通过：
+<Callout type="trap" title="版本变化必须重跑">
+  “ReAct 循环”依赖模型、工具、schema
+  或运行时接口。升级任何一层后，应在冻结任务集上重新保存轮次、决策摘要、Action、调用
+  id、Observation、预算变化、完成判定与人工审批，不能沿用旧截图或单次成功样例。
+</Callout>
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+## 练习与答案
 
-用统一评分解释实验结果：
+<Exercises>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+**问题 1：系统边界。** 怎样用最小输入证明“每轮 Action 都能指出所依据的 Observation，最终回答满足成功标准或明确阻塞”？
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+<Answer>
+  先冻结模型、指令、工具、权限和预算，再保存以下证据：轮次、决策摘要、Action、调用
+  id、Observation、预算变化、完成判定与人工审批。手工写出预期状态，运行一次正常样本并与环境事实比较；任何首个分叉都应阻断最终成功结论。
+</Answer>
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+**问题 2：课程坐标。** ReAct 循环、决策摘要、Action、Observation、Final Answer、环境反馈、循环预算、人工检查点如何进入可操作验证？
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+<Answer>
+  把八个坐标分别标到结构图、状态轨迹和证据实验中。每个坐标至少要有一个可观察状态、一个失败样本或一个确定性校验；仅在目录列表中出现不算掌握。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“模型伪造 Observation 或在必要验证前输出 Final Answer”已经修复？
+
+<Answer>
+  保存正常基线，注入该故障，并在以下证据中标记首个差异：轮次、决策摘要、Action、调用
+  id、Observation、预算变化、完成判定与人工审批。撤销后用完全相同的输入、版本、预算和权限重放。只有环境结果与停止状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- ReAct 循环必须绑定冻结输入和明确成功标准。
-- 小屋里的天才终于会「边办边问」必须能画成结构并沿边追踪责任。
-- ReAct 循环：想和做交替出现要由正常、边界和单故障样本共同验证。
-- Thought：先想「下一通电话该打给谁」必须保存第一处偏离和清理重建步骤。
-- Action：写出一次工具请求决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* 知识点清单：ReAct（Reasoning+Acting）=§3 AaReactLoopDiagram+Glossary；Thought/Action/Observation=§3 AaReactTraceDiagram+Glossary；为什么要循环=§2/§3 小屋电话隐喻+旗舰动画；与函数调用关系=§3/§6 代码对照；停止条件 Final Answer=§3 AaReactStepThrough+Glossary；tinyagent Agent.run=§6 代码重心+Glossary。 */}
-
-{/* 1. 学习目标（spec §一）：C 实战型；末条为可当场自测的检验问题。 */}
-
-
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；延续失忆天才小屋/电话隐喻。 */}
-
-## 小屋里的天才终于会「边办边问」
-
-上一章我们给失忆天才装了电话：他不会亲自出门，但能写纸条让屋外的人去查、去算、去办事。可是新问题来了：很多事不是打一通电话就能完成，查到一半还得看回执，再决定下一通该打给谁。
-
-比如「帮我订明早会议室」。他不能凭空说订好了，也不能一次写十个猜测步骤。他应该先想一步：查空闲；打电话；看回执；再想下一步：可用就预订，不可用就换时间。
-
-这一章要写的，就是屋外人的值班流程：反复把纸条递进去、拨电话、把回执塞回去，直到事情办成。没有这个循环，天才只会提出一次请求；遇到多步任务，就会卡在半路或开始编。
-
-{/* 3. 概念讲解（spec §三）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或 Demo。 */}
-
-## ReAct 循环：想和做交替出现
-
-先给本章主词定清楚：不是「模型一次性列完整计划」，而是「每轮只决定下一步」。Reasoning 是小屋里的天才在纸上想：现在缺什么信息？Acting 是他把要办的事写成工具请求：请拨哪通电话、带什么参数。
-
-为什么要循环？因为外部结果会改变下一步。查到会议室有空，下一步是预订；查到没空，下一步是换时间；工具报错，下一步可能是改参数或向用户澄清。下面这张动画把整条链路跑一遍：
-
-> 猜一猜：如果第三步回来的不是「10:00 有空」，而是「无空房」，下一轮应该继续做同一件事吗？
-
-<AaReactLoopDiagram />
-
-## Thought：先想「下一通电话该打给谁」
-
-第一个 trace 字段是。它像天才在纸条背面写的自言自语：我现在缺哪个事实？上一轮回执说明了什么？下一步该不该继续行动？
-
-Thought 的价值不是让它长篇大论，而是把「为什么要调这个工具」说清。对实现者来说，它也是排错线索：如果模型选错工具，先看 Thought 有没有误解任务。它在管线中属于模型输出的一部分，但不会直接执行任何外部动作。
-
-<AaReactTraceDiagram />
-
-## Action：写出一次工具请求
-
-第二个字段是。它和上一章的函数调用是一回事：模型写出 `calendar_search({"room":"A"})` 这样的结构化请求，运行时接住请求，查 `registry`，执行对应函数。
-
-所以 ReAct 和函数调用不是两套系统。函数调用解决「一次请求怎么结构化、怎么执行」；ReAct 解决「什么时候请求、请求后怎么把结果带回下一轮」。Action 仍然只是纸条，不是执行结果。
-
-## Observation：把电话那头的回执塞回去
-
-第三个字段是。这是屋外人打完电话后塞回门缝的回执：查到什么、算出什么、失败原因是什么。它不是模型凭空生成的，而应该来自真实工具返回值。
-
-Observation 一旦回到 `messages`，下一轮模型就能读到它，并改变后续行动。没有 Observation，模型只能靠旧上下文继续猜；有了 Observation，智能体才真的形成「办一步、看结果、再办下一步」的闭环。
-
-## Final Answer：循环的刹车
-
-最后一个字段是。它是停机信号：一旦模型输出 Final Answer，`Agent.run` 应该返回这段内容，而不是继续找 Action。
-
-这条刹车很重要。没有它，Agent 可能在工具调用里空转；太早触发它，又会把只办到一半的任务说成办完。下面的交互件让你逐步看一段 trace 如何增长，最后在哪里停：
-
-> 猜一猜：在哪一步之前，Agent 都不能把结果返回给用户？拖到最后看停止条件。
-
-<AaReactStepThrough />
-
-## Agent.run：把循环收进一个入口
-
-把上面四个字段落进 tinyagent，核心入口就是。它不是某个工具，也不是模型本身，而是模型外面的调度器：负责拼消息、调模型、执行工具、加刹车。
-
-这一层是安全边界。模型可以请求工具，但 `Agent.run` 决定是否执行、最多循环几轮、工具不存在怎么办、参数错怎么办、结果怎么回灌。接下来 §6 就逐段把它写出来。
-
-{/* 5. 交互 Demo：本章三件套已嵌入 §3：AaReactLoopDiagram 旗舰动画、AaReactTraceDiagram 解剖图、AaReactStepThrough 单步 trace。 */}
-
-{/* 6. 代码对照（spec §六）：C 实战型重心；Python tinyagent，单块≤30行；覆盖 Agent.run 主循环、假 llm、假 tool 多轮演示。 */}
-
-## 动手：写 tinyagent 的 Agent.run 主循环
-
-下面这些片段按顺序放进 `react_loop_demo.py` 就能跑通。我们先准备最小数据结构：`Tool` 保存真实函数，`registry` 保存工具名到函数的映射，`Agent` 持有 `llm` 和工具表。
-
-```python
-from dataclasses import dataclass
-import json
-
-@dataclass
-class Tool:
-    name: str
-    func: object
-
-class Agent:
-    def __init__(self, llm, registry):
-        self.llm = llm
-        self.registry = registry
-```
-
-`Agent` 不直接知道会议室怎么查、怎么预订；它只知道「当模型请求某个工具名时，我能不能在 registry 里找到它」。接着写 `run` 的外壳：先把用户任务和系统规则组装成 `messages`，再按 `max_steps` 开循环。
-
-```python
-SYSTEM = """你是一个 ReAct Agent。
-每轮只输出两种格式之一：
-Thought: 你的下一步判断
-Action: tool_name({"arg": "value"})
-或
-Final Answer: 给用户的最终结果
-"""
-
-class Agent(Agent):
-    def run(self, user_task, max_steps=6):
-        messages = [
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": user_task},
-        ]
-        for _ in range(max_steps):
-            reply = self.llm(messages)
-            messages.append({"role": "assistant", "content": reply})
-            if reply.startswith("Final Answer:"):
-                return reply.removeprefix("Final Answer:").strip()
-            name, args = parse_action(reply)
-            observation = self.call_tool(name, args)
-            messages.append({"role": "tool", "content": f"Observation: {observation}"})
-        raise RuntimeError("达到 max_steps 仍未得到 Final Answer")
-```
-
-这就是主循环骨架：每轮调一次模型；如果是 Final Answer，就返回；否则解析 Action、执行工具、把 Observation 回灌。注意循环上限是硬刹车，防止模型一直请求工具。`parse_action` 负责把模型文本里的工具名和 JSON 参数抠出来：
-
-```python
-def parse_action(text):
-    action_line = next(
-        line for line in text.splitlines() if line.startswith("Action:")
-    )
-    call = action_line.removeprefix("Action:").strip()
-    left = call.index("(")
-    right = call.rindex(")")
-    name = call[:left].strip()
-    args = json.loads(call[left + 1 : right])
-    return name, args
-```
-
-这里我们只支持一种简单格式：`Action: tool_name({...})`。真实项目可以换成上一章的结构化 JSON 输出，但思想不变：模型写请求，运行时解析请求。解析完以后，`Agent.run` 还需要真正执行工具：
-
-```python
-class Agent(Agent):
-    def call_tool(self, name, args):
-        if name not in self.registry:
-            return f"工具不存在：{name}"
-        try:
-            result = self.registry[name].func(**args)
-            return str(result)
-        except TypeError as err:
-            return f"参数错误：{err}"
-```
-
-故意把错误也转成 Observation，而不是直接崩掉：模型下一轮能读到「工具不存在」或「参数错误」，再决定修正 Action 还是向用户说明失败。现在注册两个假工具：一个查空闲时间，一个完成预订。
-
-```python
-def calendar_search(room, date, time):
-    return f"{room} 室 {date} {time} 可用"
-
-def calendar_book(room, date, time):
-    return f"预订成功：{room} 室 {date} {time}，确认号 R-1024"
-
-registry = {
-    "calendar_search": Tool("calendar_search", calendar_search),
-    "calendar_book": Tool("calendar_book", calendar_book),
-}
-```
-
-最后用一个假 `llm` 演示多轮：第一轮先 Thought + Action 查空闲，第二轮读到 Observation 后再 Thought + Action 预订，第三轮读到预订成功后输出 Final Answer。
-
-```python
-def fake_llm(messages):
-    tool_messages = [m for m in messages if m["role"] == "tool"]
-    if not tool_messages:
-        return """Thought: 我需要先查会议室是否可用。
-Action: calendar_search({"room": "A", "date": "明天", "time": "10:00"})"""
-    if "可用" in tool_messages[-1]["content"]:
-        return """Thought: 会议室可用，现在可以预订。
-Action: calendar_book({"room": "A", "date": "明天", "time": "10:00"})"""
-    return "Final Answer: 已帮你订好明天 10 点 A 会议室，确认号 R-1024。"
-
-agent = Agent(fake_llm, registry)
-print(agent.run("帮我订明天 10 点的 A 会议室"))
-```
-
-跑起来以后，`Agent.run` 的数据流是完整的：组装 prompt/messages → `llm` 输出 Thought + Action → 运行时执行 registry 工具 → Observation 回灌 → 下一轮 `llm` 再决定下一步 → 最后输出 Final Answer 停止。这里的 `fake_llm` 没有真正理解语言，它只是按 messages 里有没有工具回执来演示循环结构；换成真实 LLM 时，`Agent.run` 的职责仍然一样。
-
-{/* 7. 常见误区（spec §七）：C 型 ≥3；固定格式 现象→原因→修法。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结呼应目标；C 型含独立实现题/改 Demo 题。 */}
-
-## 小结
-
-- ReAct 解决多步行动：拿到回执后再决定下一步
-- Action 仍是函数调用请求，真正执行发生在运行时
-- Observation 必须回灌进 messages，下一轮 Thought 才有新事实
-- Final Answer 是停止条件，`max_steps` 是防空转硬刹车
-- `Agent.run` 把调模型、执行工具、回灌、停机收成一个入口
-
-
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应，按首现顺序。 */}
-
-## 名词解释
-
-
+- “ReAct 循环”的主问题是让每轮行动由新观察推进，并以可判定停止条件收束。
+- 核心不变量是每轮 Action 都能指出所依据的 Observation，最终回答满足成功标准或明确阻塞。
+- 首要反例是模型伪造 Observation 或在必要验证前输出 Final Answer。
+- 最小证据包包含轮次、决策摘要、Action、调用 id、Observation、预算变化、完成判定与人工审批。
+
+<Glossary>
+  <GlossaryItem term="ReAct">
+    把任务推理与环境行动交错组织的智能体方法。在“ReAct
+    循环”中必须能按以下证据重新定位：轮次、决策摘要、Action、调用
+    id、Observation、预算变化、完成判定与人工审批。
+  </GlossaryItem>
+  <GlossaryItem term="决策摘要">
+    可审计但不要求暴露隐藏思维过程的下一步理由。在“ReAct
+    循环”中必须能按以下证据重新定位：轮次、决策摘要、Action、调用
+    id、Observation、预算变化、完成判定与人工审批。
+  </GlossaryItem>
+  <GlossaryItem term="Action">
+    模型提出并由运行时审核的工具行动。在“ReAct
+    循环”中必须能按以下证据重新定位：轮次、决策摘要、Action、调用
+    id、Observation、预算变化、完成判定与人工审批。
+  </GlossaryItem>
+  <GlossaryItem term="Observation">
+    工具或环境返回的结构化事实。在“ReAct
+    循环”中必须能按以下证据重新定位：轮次、决策摘要、Action、调用
+    id、Observation、预算变化、完成判定与人工审批。
+  </GlossaryItem>
+  <GlossaryItem term="Final Answer">
+    满足完成或阻塞合同后产生的终止输出。在“ReAct
+    循环”中必须能按以下证据重新定位：轮次、决策摘要、Action、调用
+    id、Observation、预算变化、完成判定与人工审批。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 函数调用原理](/learn/ai-agent/tools/function-calling) · [工具设计与安全执行 →](/learn/ai-agent/tools/tool-design)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents（站内九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

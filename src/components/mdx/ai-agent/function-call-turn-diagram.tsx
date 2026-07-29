@@ -216,7 +216,7 @@ export function AaFunctionCallTurnDiagram() {
           x={cx}
           y={y + 64}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {n.sub}
@@ -294,7 +294,7 @@ export function AaFunctionCallTurnDiagram() {
           <text
             x="24"
             y={ROW_MODEL_Y + NODE_H / 2 + 12}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （只动嘴）
@@ -311,7 +311,7 @@ export function AaFunctionCallTurnDiagram() {
           <text
             x="24"
             y={ROW_RT_Y + NODE_H / 2 + 12}
-            fontSize="10"
+            fontSize="11"
             fill="var(--text-secondary)"
           >
             （真动手）

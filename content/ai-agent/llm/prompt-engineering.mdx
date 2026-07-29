@@ -1,297 +1,238 @@
 ---
 title: 提示工程基础
-type: C
+type: A
 section: 驾驭大模型
-order: 3
-description: >-
-  读完能写出带角色、指令清晰、配 few-shot 示例的提示，并能用 tinyagent 的 Message/messages
-  把一张'纸条'组装出来喂给模型。
+order: 0
+description: 用任务合同、消息角色、示例与评测组织提示，并通过固定数据集比较改写是否真正改善结果。
 demo: true
 math: false
 sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagent-04
 ---
 
-import { AaPromptAnatomyDiagram } from "@/components/mdx/ai-agent/prompt-anatomy-diagram";
-import { AaPromptComparePlayground } from "@/components/mdx/ai-agent/prompt-compare-playground";
-import { AaPromptAssemblyDiagram } from "@/components/mdx/ai-agent/prompt-assembly-diagram";
+import {
+  PromptEngineeringModelLab,
+  PromptEngineeringTraceLab,
+  PromptEngineeringEvidenceLab,
+} from "@/components/mdx/ai-agent/v2/prompt-engineering";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握提示工程基础
+- 能解释“提示工程基础”如何把提示当成可版本化、可评测的任务接口
+- 能区分系统指令、任务合同、few-shot、提示模板、提示评测，并指出它们在请求、状态或执行边界中的位置
+- 能固定输入，沿以下证据定位首个分叉：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本
+- 能注入“根据一个成功样例反复改词，却没有冻结评测集和失败定义”，在同一预算和权限下完成故障、恢复与重放
 
-学习“提示工程基础”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，提示工程基础的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从同一个问题，凭什么纸条写法不同答案天差地别开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_QUALITY_V2 */}
 
-机制验证要把三种纸条：system、user、assistant写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程编排与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。一条提示由什么组成：角色 + 清晰指令 + 输入不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“提示工程基础”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)为总纲，并用[Anthropic《Effective context engineering for AI agents》](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)核对本单元机制；工具与外部能力的角色再由[MCP 官方规范](https://modelcontextprotocol.io/specification/2025-06-18/server)交叉检查。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本具有“官方九章目录”的纸质书。平台把公开文章中的 augmented LLM、工作流、智能体、上下文和工具工程重组为 9 个教学单元；下列 72 个节点是站内课程地图，不冒充 Anthropic 原文目录。正文、代码、图表和练习均为独立教学重写，产品或模型版本变化时应重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个课程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“few-shot：与其讲一堆要求，不如给它几个范例”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **提示工程基础**：作为“把提示当成可版本化、可评测的任务接口”的第 1 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **系统指令**：作为“把提示当成可版本化、可评测的任务接口”的第 2 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **用户输入**：作为“把提示当成可版本化、可评测的任务接口”的第 3 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **任务合同**：作为“把提示当成可版本化、可评测的任务接口”的第 4 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **上下文**：作为“把提示当成可版本化、可评测的任务接口”的第 5 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **示例**：作为“把提示当成可版本化、可评测的任务接口”的第 6 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **输出约束**：作为“把提示当成可版本化、可评测的任务接口”的第 7 个课程坐标，必须进入正文解释、交互观察或练习证据。
+- **提示评测**：作为“把提示当成可版本化、可评测的任务接口”的第 8 个课程坐标，必须进入正文解释、交互观察或练习证据。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与状态合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“提示工程基础”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "系统指令",
+      def: "系统指令：描述稳定角色、策略和边界的高优先级消息；在“提示工程基础”中按以下证据核对：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。",
+    },
+    {
+      term: "任务合同",
+      def: "任务合同：可判定的目标、输入、成功标准和失败返回；在“提示工程基础”中按以下证据核对：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。",
+    },
+    {
+      term: "few-shot",
+      def: "few-shot：在上下文中提供少量输入输出示例的方法；在“提示工程基础”中按以下证据核对：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。",
+    },
+    {
+      term: "提示模板",
+      def: "提示模板：把稳定结构与受控变量分离的构造方式；在“提示工程基础”中按以下证据核对：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。",
+    },
+    {
+      term: "提示评测",
+      def: "提示评测：在冻结任务集和评分规则上比较提示版本；在“提示工程基础”中按以下证据核对：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：提示版本、输入数据、模型配置与评分规则共同冻结后，改写效果才可比较。任何“成功”结论都要保存以下证据：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本，不能把模型口头确认当作环境事实。
 
-本页用、
+## 关键机制与可推翻实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 角色分层避免指令与数据混淆
 
-## 权威目录与核心概念逐项对照
+稳定策略放系统消息，具体任务放用户消息，工具结果作为结构化观察加入历史。把不可信数据拼进高优先级指令会扩大注入风险。
 
-- 提示工程基础
-- 同一个问题，凭什么纸条写法不同答案天差地别
-- 三种纸条：system、user、assistant
-- 一条提示由什么组成：角色 + 清晰指令 + 输入
-- few-shot：与其讲一堆要求，不如给它几个范例
-- 提示模板：把变量填进固定骨架
-- 动手前先看一遍：一张纸条是怎么拼出来的
-- 动手：tinyagent 的第一块砖——Message 与 messages
+动手试：在用户文档中加入伪系统指令，验证它只被当作数据处理。
 
+### 任务合同必须可判定
 
-## 可复现的最小实现
+目标、输入边界、成功标准、允许动作和失败返回应能被测试。模糊要求可以产生顺畅文字，却无法决定任务是否完成。
 
-先把决策记录写成机器可读结构：
+动手试：把“写得更好”改成带长度、受众、事实源和验收样例的合同。
 
-```json
-{
-  "unit": "提示工程基础",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
+### 示例展示决策边界
+
+few-shot 示例不只是格式模板，还应覆盖正常、边界和拒绝样本。示例与指令冲突时会造成不稳定，必须作为同一版本一起评测。
+
+动手试：增加一个相邻边界反例，比较分类混淆矩阵而不是挑选单个漂亮输出。
+
+### 提示优化依赖评测集
+
+提示版本只能在冻结任务集、模型配置和评分规则下比较。凭一次对话调词容易过拟合样例，并把随机波动误认成提升。
+
+动手试：对两个提示版本重复运行同一评测集，报告成功率、方差、成本和失败簇。
+
+## 先预测，再操作三类证据
+
+<Stepper>
+  <Step title="1. 模型与结构边界">
+    在“提示工程基础”中先画出责任、数据或候选空间，再预测“把提示当成可版本化、可评测的任务接口”会在哪个节点改变结果。
+
+    <PromptEngineeringModelLab />
+
+  </Step>
+  <Step title="2. 状态与执行轨迹">
+    固定输入与版本，沿以下证据逐步检查：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。不允许跳过中间状态只看最终回答。
+
+    <PromptEngineeringTraceLab />
+
+  </Step>
+  <Step title="3. 故障与恢复证据">
+    注入“根据一个成功样例反复改词，却没有冻结评测集和失败定义”，标记首个分叉，撤销后以相同输入、预算和权限重放。
+
+    <PromptEngineeringEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行实现
+
+```python
+def build_messages(policy, task, examples):
+    return [
+        {"role": "system", "content": policy},
+        *examples,
+        {"role": "user", "content": task},
+    ]
+
+def evaluate(prompt_version, cases, grader):
+    return [grader(case, call_model(prompt_version, case)) for case in cases]
 ```
 
-再用同一条执行链处理三类样本：
+这段实现只负责暴露“把提示当成可版本化、可评测的任务接口”的最小合同。交付版本还要补齐超时、日志、权限、密钥隔离和可重复评测；缺少以下证据时，代码能运行也不代表本章结论成立：提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。
 
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
+<Callout type="trap" title="本章首要反例">
+  根据一个成功样例反复改词，却没有冻结评测集和失败定义。它会破坏“提示版本、输入数据、模型配置与评分规则共同冻结后，改写效果才可比较”；应先从以下证据定位：提示版本、消息角色、任务集
+  hash、模型参数、逐项评分、失败样本、成本与回滚版本，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
+<Callout type="trap" title="不要把模型自信当作证据">
+  在“提示工程基础”中，模型生成的解释只能提出候选原因；工具结果、确定性校验和环境状态才能证明“把提示当成可版本化、可评测的任务接口”是否成立。
+</Callout>
 
-最后保存回归门禁，禁止失败样本静默通过：
+<Callout type="trap" title="版本变化必须重跑">
+  “提示工程基础”依赖模型、工具、schema
+  或运行时接口。升级任何一层后，应在冻结任务集上重新保存提示版本、消息角色、任务集
+  hash、模型参数、逐项评分、失败样本、成本与回滚版本，不能沿用旧截图或单次成功样例。
+</Callout>
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+## 练习与答案
 
-用统一评分解释实验结果：
+<Exercises>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+**问题 1：系统边界。** 怎样用最小输入证明“提示版本、输入数据、模型配置与评分规则共同冻结后，改写效果才可比较”？
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+<Answer>
+  先冻结模型、指令、工具、权限和预算，再保存以下证据：提示版本、消息角色、任务集
+  hash、模型参数、逐项评分、失败样本、成本与回滚版本。手工写出预期状态，运行一次正常样本并与环境事实比较；任何首个分叉都应阻断最终成功结论。
+</Answer>
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+**问题 2：课程坐标。** 提示工程基础、系统指令、用户输入、任务合同、上下文、示例、输出约束、提示评测如何进入可操作验证？
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+<Answer>
+  把八个坐标分别标到结构图、状态轨迹和证据实验中。每个坐标至少要有一个可观察状态、一个失败样本或一个确定性校验；仅在目录列表中出现不算掌握。
+</Answer>
+
+**问题 3：故障恢复。** 怎样证明“根据一个成功样例反复改词，却没有冻结评测集和失败定义”已经修复？
+
+<Answer>
+  保存正常基线，注入该故障，并在以下证据中标记首个差异：提示版本、消息角色、任务集
+  hash、模型参数、逐项评分、失败样本、成本与回滚版本。撤销后用完全相同的输入、版本、预算和权限重放。只有环境结果与停止状态重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 提示工程基础必须绑定冻结输入和明确成功标准。
-- 同一个问题，凭什么纸条写法不同答案天差地别必须能画成结构并沿边追踪责任。
-- 三种纸条：system、user、assistant要由正常、边界和单故障样本共同验证。
-- 一条提示由什么组成：角色 + 清晰指令 + 输入必须保存第一处偏离和清理重建步骤。
-- few-shot：与其讲一堆要求，不如给它几个范例决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* C 实战型·篇 2「驾驭大模型」开篇（《从零构建 AI Agent》第2篇第1章·原创改编）：重心是 §6 代码对照——用 tinyagent 的 Message/messages 把一份提示组装出来（系列首段真实主线代码）。§3 概念压缩到位即可，math:false。延续全书隐喻「失忆天才小屋」：提示 = 塞进门缝的纸条，system = 给失忆天才的「岗位说明书」。draft:false 已发布。 */}
-
-{/* 知识点清单（动笔前先摊开，逐条标 viz；新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 消息角色 system/user/assistant（三种纸条：岗位说明书 / 本次任务 / 它的回话与历史）= AaPromptAssemblyDiagram + AaPromptAnatomyDiagram → Glossary：消息角色；2) 一条提示由什么组成（角色 + 清晰指令 + 输入）= AaPromptAnatomyDiagram（解剖图）→ Glossary：提示工程；3) few-shot 示例（给几个范例照做，对比 zero-shot）= AaPromptComparePlayground（交互件）+ AaPromptAssemblyDiagram → Glossary：few-shot 示例、zero-shot；4) 提示模板（变量填进固定骨架）= §6 build_messages 代码对照 → Glossary：提示模板。旗舰动画 AaPromptAssemblyDiagram 演「三段消息块叠成一份 messages 喂给模型」。tinyagent 本章增量：Message(role, content) + messages 列表 + build_messages 组装函数（§二地图 2.1）。 */}
-
-{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___ 效果」；末条为可当场自测的检验问题。 */}
-
-
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；延续失忆天才小屋隐喻。专业名词最早 §3 才出现。 */}
-
-## 同一个问题，凭什么纸条写法不同答案天差地别
-
-还是那位关在小屋里的失忆天才。你从门缝塞一张纸条进去，他读完写一段回复再塞出来。可你很快发现：同样想让他帮忙，纸条写「退货吗」和写清「你是客服、请按政策、用两行回答、这是我的订单」，得到的回话质量差着十万八千里。
-
-这一章要解决的就是：**怎么把这张纸条写好**。天才严重失忆——他不记得你上次交代过他是谁、该守什么规矩，每一次都得在纸条上从头说清。纸条写糊了，再聪明的脑袋也只能瞎猜、跑题、口气随机。
-
-弄清一张好纸条由哪几块拼成、每块管什么、怎么用代码一砖一瓦把它组装出来，本章的目的就达到了——而这，也是我们动手搭 `tinyagent` 写下的第一段真代码。
-
-{/* 3. 概念讲解（spec §三）：C 型把「是什么」压缩到位即可，篇幅让给 §6。一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo。新核心概念 ≤5。 */}
-
-## 三种纸条：system、user、assistant
-
-跟失忆天才打交道， 是绕不开的第一件事。一份提示不是一整块文字，而是一串带「身份标签」的纸条，每张标明「这话是谁说的」。常用的就三种：
-
-- **system（系统）**：给失忆天才的「**岗位说明书**」——你是谁、守什么规矩、用什么口气。它最该放在最前面、整轮都生效。
-- **user（用户）**：**本次任务**——这一轮你真正要它干的活，比如「我的订单还能退吗」。
-- **assistant（助手）**：模型**自己的回话**。它既是模型答出来的内容，也用来回填**历史**（把上一轮的问答塞回去，治失忆）和**范例**（给它看「该这么答」的样子）。
-
-记住这三张纸条的分工：**system 定身份、user 给任务、assistant 是回话与示范**。下面这张解剖图，把一条好提示拆成区块摊给你看：
-
-<AaPromptAnatomyDiagram />
-
-## 一条提示由什么组成：角色 + 清晰指令 + 输入
-
-把纸条写好，这门手艺有个正式名字叫。一条够用的提示，拆开看就三块：
-
-1. **角色**：用 system 告诉它「扮谁、守什么规矩」（解剖图第①区）。
-2. **清晰指令**：说清这次具体要做什么、有什么要求——别含糊（第②区）。
-3. **输入**：本次真正待处理的内容，用 user 给出（第④区）。
-
-这三块为什么缺一不可？失忆天才每次都是「白纸一张」：不给角色，他不知道该端着客服的谱还是随便聊；指令含糊，他只能猜你想要什么；没有输入，他无米下炊。三块齐了，他才扮对角色、做对事、答在点上。
-
-## few-shot：与其讲一堆要求，不如给它几个范例
-
-光靠文字描述要求，有时说不清。更省力的一招，是直接给它看几个「该这么答」的样本——这叫。比如想让它「条款翻大白话」，与其啰嗦解释，不如先给两三组「条款 → 大白话」的样板，它一看就懂照着学。
-
-与之相对的是：一个范例都不给，光靠指令硬答。简单任务 zero-shot 够用；但凡有特定格式、特定口气的活，塞几个 few-shot 范例几乎总能让输出更稳。
-
-> 猜一猜：把「给 few-shot 示例」这个开关打开，模型回话的稳定程度会怎么变？三个开关全关时，同一个问题问两遍，回答会一样吗？
-
-下面这个小工具，让你拨开关对比「随手写的差提示」和「带角色 + 清晰指令 + few-shot 的好提示」分别拼出什么 messages、输出大概会怎样：
-
-<AaPromptComparePlayground />
-
-多拨几次你会摸到规律：**角色、范例、格式每补一样，输出就更稳一分**。三样全关，模型不知扮谁、按什么标准答，同一问题问两遍可能南辕北辙；三样齐了，回话稳定规整、可直接拿来用。
-
-## 提示模板：把变量填进固定骨架
-
-真实场景里，你不会每来一个用户问题就手写一整套提示。聪明的做法是搭一个：固定的角色、指令、范例写死成骨架，只留「本次用户输入」这个空格，每次把变量一填，就生成一份完整提示。
-
-这正是下一节要用代码做的事——`tinyagent` 的 `build_messages` 函数，就是一个最朴素的提示模板。
-
-{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
-
-{/* 5. 交互 Demo（spec §五）：旗舰动画 AaPromptAssemblyDiagram（本节）演「三段消息块叠成一份 messages 喂给模型」；交互件 AaPromptComparePlayground（§3 few-shot 节）；解剖图 AaPromptAnatomyDiagram（§3 三种纸条节）。 */}
-
-## 动手前先看一遍：一张纸条是怎么拼出来的
-
-代码之前，先把「组装」这件事在脑子里过一遍。下面这张可控动画，演的就是 `tinyagent` 待会儿要干的活：把 **system（岗位说明书）→ few-shot（范例）→ user（本次任务）** 三段消息块依次落位、叠成一份完整的 `messages`，再喂给模型，模型按规矩回话。
-
-> 猜一猜：三段消息块按什么顺序叠？哪一段该放在最前面、整轮都生效？
-
-<AaPromptAssemblyDiagram />
-
-播完你会看清：一份提示不是一句话，而是几段带角色的纸条**按序叠起来**的一摞——这摞东西，在代码里就是一个 `messages` 列表。下一节我们就亲手把它搭出来。
-
-{/* 6. 代码对照（spec §六，C 型重心）：逐段讲 tinyagent 的 Message/messages/build_messages，单块 ≤30 行、块间有解说、覆盖 ≥80% 关键。Python 单语言、不用 CodeTabs。代码已 python3 跑通：len=4、roles=[system,user,assistant,user]。 */}
-
-## 动手：tinyagent 的第一块砖——Message 与 messages
-
-前三章都是认知铺垫，没写一行代码。从这里开始，我们一砖一瓦搭那个贯穿全书的 `tinyagent`。第一块砖，就是把「一张带角色的纸条」用代码表示出来。
-
-一条提示是一串纸条，那「一张纸条」自然就是一个对象：它只需两个字段——这话是**谁说的**（`role`）、**说了什么**（`content`）。我们用一个 `dataclass` 把它定下来：
-
-```python
-from dataclasses import dataclass
-
-@dataclass
-class Message:
-    role: str  # "system" | "user" | "assistant"，这话是谁说的
-    content: str  # 这张纸条上的内容
-```
-
-`Message` 就是 tinyagent 里最小的积木，整本书后面所有跟模型的对话都用它表示。`role` 取三个值之一，对应上一节的三种纸条；`content` 是这张纸条上的文字。简单到不能再简单——但全书的提示、历史、工具结果，最后都会被装进一个个 `Message` 里。
-
-## 一份提示 = 一串 Message
-
-有了单张纸条，「一份完整提示」就是把若干 `Message` 按顺序排成一个列表，习惯上就叫它 `messages`。最朴素的一份，是「system 定身份 + user 给任务」两张纸条：
-
-```python
-# 一份提示 = 一串 Message（按顺序排好）
-messages = [
-    Message(role="system", content="你是一位严谨的客服助理，只依据公司政策回答。"),
-    Message(role="user", content="我的订单还能退吗？"),
-]
-```
-
-这个 `messages` 列表，就是我们要塞给失忆天才的那摞纸条：第一张 system 说清他是谁、守什么规矩，第二张 user 给出这一轮的任务。顺序很重要——system 放最前、整轮生效，user 紧随其后。把这个列表交给模型（下一章才接真模型，本章只到「组装好」这一步），它就会读完整摞、按规矩回话。
-
-## 把组装写成模板：build_messages
-
-每来一个问题就手写一整个列表太笨。我们把固定部分（角色、范例）和变化部分（本次输入）分开，写成一个**提示模板**函数——这就是上一节说的 `build_messages`：
-
-```python
-def build_messages(system, examples, user):
-    # ① 先放 system「岗位说明书」（整轮生效）
-    msgs = [Message(role="system", content=system)]
-    # ② 再把 few-shot 范例逐组塞进去（user 问 → assistant 示范答）
-    for q, a in examples:
-        msgs.append(Message(role="user", content=q))
-        msgs.append(Message(role="assistant", content=a))
-    # ③ 最后写上本次真正的 user 任务
-    msgs.append(Message(role="user", content=user))
-    return msgs
-```
-
-这 9 行，正是旗舰动画里「三段依次落位」的代码版：先塞 system（第①步），再把每组 few-shot 范例拆成「user 问 + assistant 示范答」两张纸条塞进去（第②步，这就是用 `assistant` 角色给范例的用法），最后压上本次 user 任务（第③步）。固定的角色和范例由参数传入、只有 `user` 每次变——这就是一个最朴素的**提示模板**。
-
-## 跑一遍，看组装出的结构
-
-把模板用起来：给它一份 `system`、一组 few-shot 范例、一句本次问题，它就吐出一份完整的 `messages`：
-
-```python
-few_shot = [
-    ("能退货吗？", "可在签收 7 天内无理由退货。"),
-]
-prompt = build_messages(
-    system="你是一位严谨的客服助理，只依据公司政策回答。",
-    examples=few_shot,
-    user="我的订单还能退吗？",
-)
-
-for m in prompt:
-    print(f"{m.role}: {m.content}")
-```
-
-运行它，打印出的正是依次叠好的四张纸条：
-
-```text
-system: 你是一位严谨的客服助理，只依据公司政策回答。
-user: 能退货吗？
-assistant: 可在签收 7 天内无理由退货。
-user: 我的订单还能退吗？
-```
-
-四张纸条、角色依次是 `system → user → assistant → user`：岗位说明书打头，中间夹着一组 few-shot 范例（一问一答），本次任务收尾。这一摞 `messages`，就是我们组装好、准备喂给模型的完整提示——`tinyagent` 的第一块砖，到此就砌好了。下一章接上真正的 `llm()`，把这摞纸条塞进去拿回话。
-
-{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；用 Callout type=trap。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，C 型含 1 道改 Demo/改代码题，答案折叠。 */}
-
-## 小结
-
-- 一条提示是一串带角色的纸条：**system**（岗位说明书·定身份）、**user**（本次任务）、**assistant**（模型回话，也用来塞历史与范例）
-- 一条好提示 = **角色 + 清晰指令 + 输入**三块齐全，缺一块失忆天才就容易跑偏
-- **few-shot**（给几个范例照做）常比纯文字讲要求更稳；一个范例都不给的叫 **zero-shot**
-- **提示模板**把固定的角色 / 范例写成骨架、只留变量空格，每次填一下就生成完整提示
-- tinyagent 第一块砖：`Message(role, content)` + `messages` 列表 + `build_messages` 组装函数——把 system + few-shot + user 按序叠成一份提示
-
-
-{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（消息角色 / 提示工程 / few-shot 示例 / zero-shot / 提示模板，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
-
-
-{/* 9. 出处声明（spec §九）：本书为原创改编，sourceUrl 为空，Attribution 空参自动渲染。缺失 = 必打回。 */}
-
+- “提示工程基础”的主问题是把提示当成可版本化、可评测的任务接口。
+- 核心不变量是提示版本、输入数据、模型配置与评分规则共同冻结后，改写效果才可比较。
+- 首要反例是根据一个成功样例反复改词，却没有冻结评测集和失败定义。
+- 最小证据包包含提示版本、消息角色、任务集 hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+
+<Glossary>
+  <GlossaryItem term="系统指令">
+    描述稳定角色、策略和边界的高优先级消息。在“提示工程基础”中必须能按以下证据重新定位：提示版本、消息角色、任务集
+    hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+  </GlossaryItem>
+  <GlossaryItem term="任务合同">
+    可判定的目标、输入、成功标准和失败返回。在“提示工程基础”中必须能按以下证据重新定位：提示版本、消息角色、任务集
+    hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+  </GlossaryItem>
+  <GlossaryItem term="few-shot">
+    在上下文中提供少量输入输出示例的方法。在“提示工程基础”中必须能按以下证据重新定位：提示版本、消息角色、任务集
+    hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+  </GlossaryItem>
+  <GlossaryItem term="提示模板">
+    把稳定结构与受控变量分离的构造方式。在“提示工程基础”中必须能按以下证据重新定位：提示版本、消息角色、任务集
+    hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+  </GlossaryItem>
+  <GlossaryItem term="提示评测">
+    在冻结任务集和评分规则上比较提示版本。在“提示工程基础”中必须能按以下证据重新定位：提示版本、消息角色、任务集
+    hash、模型参数、逐项评分、失败样本、成本与回滚版本。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 智能体解剖图](/learn/ai-agent/foundations/agent-anatomy) · [采样与解码 →](/learn/ai-agent/llm/sampling-decoding)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Building effective agents（站内九单元课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

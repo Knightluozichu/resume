@@ -163,7 +163,7 @@ export function AaJsonSchemaDiagram() {
                   x={LCOL_X + LCOL_W - 14}
                   y={midY + 4}
                   textAnchor="end"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill={f.required ? "var(--danger)" : "var(--text-secondary)"}
                 >

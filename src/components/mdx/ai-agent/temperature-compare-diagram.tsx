@@ -171,7 +171,7 @@ export function AaTemperatureCompareDiagram() {
                   x={cx}
                   y={BARS_BASE + 18}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {c.id === "low"

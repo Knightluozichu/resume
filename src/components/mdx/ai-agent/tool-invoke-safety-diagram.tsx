@@ -167,7 +167,7 @@ export function AaToolInvokeSafetyDiagram() {
           x={cx}
           y={node.y + 50}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {node.sub}
@@ -263,10 +263,10 @@ export function AaToolInvokeSafetyDiagram() {
             strokeWidth="1.4"
             markerEnd="url(#aats-arrow)"
           />
-          <text x="382" y="151" fontSize="10" fill="var(--warning)">
+          <text x="382" y="151" fontSize="11" fill="var(--warning)">
             参数错误也回灌
           </text>
-          <text x="390" y="238" fontSize="10" fill="var(--success)">
+          <text x="390" y="238" fontSize="11" fill="var(--success)">
             合格才真正行动
           </text>
 

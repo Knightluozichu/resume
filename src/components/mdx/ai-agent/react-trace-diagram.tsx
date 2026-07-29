@@ -127,7 +127,7 @@ export function AaReactTraceDiagram() {
                 <text
                   x="42"
                   y={y + 42}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {row.owner}
@@ -152,7 +152,7 @@ export function AaReactTraceDiagram() {
                 <text
                   x="534"
                   y={y + 43}
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {row.note}
@@ -167,7 +167,7 @@ export function AaReactTraceDiagram() {
             stroke="var(--accent)"
             strokeDasharray="5 6"
           />
-          <text x="292" y="206" fontSize="10" fill="var(--accent)">
+          <text x="292" y="206" fontSize="11" fill="var(--accent)">
             Observation 进入下一轮 Thought
           </text>
         </svg>

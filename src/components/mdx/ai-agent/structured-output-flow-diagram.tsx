@@ -203,7 +203,7 @@ export function AaStructuredOutputFlowDiagram() {
           x={cx}
           y={y + 64}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fill="var(--text-secondary)"
         >
           {n.sub}

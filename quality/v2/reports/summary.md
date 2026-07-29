@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T19:57:32.964Z；旧版分数不迁移。
+> 2026-07-29T20:15:12.312Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：3437
+- failed：3428
 - queued：484
-- passed：575
+- passed：584
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -171,34 +171,34 @@
 | 158 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
 | 159 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 160 | car-structure-illustrated | 9 | 9 | 0 | 0 | 48 |
-| 161 | ai-agent | 9 | 9 | 0 | 0 | 45 |
-| 162 | frontend-engineering | 9 | 9 | 0 | 0 | 40 |
-| 163 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
-| 164 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 165 | unity-animation | 9 | 9 | 0 | 0 | 27 |
-| 166 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
-| 167 | org-problem-tools | 8 | 8 | 0 | 0 | 36 |
-| 168 | rl-deep-learning-c | 6 | 6 | 0 | 0 | 23 |
-| 169 | competitive-algorithms | 6 | 6 | 0 | 0 | 18 |
-| 170 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 171 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 172 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 173 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 174 | learnopengl | 41 | 0 | 41 | 0 | 41 |
-| 175 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 176 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 177 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 178 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 179 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 180 | beginning-cpp-game-programming | 23 | 0 | 23 | 0 | 23 |
-| 181 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 182 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 183 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
-| 184 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 185 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 186 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 187 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 188 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 161 | frontend-engineering | 9 | 9 | 0 | 0 | 40 |
+| 162 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
+| 163 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 164 | unity-animation | 9 | 9 | 0 | 0 | 27 |
+| 165 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
+| 166 | org-problem-tools | 8 | 8 | 0 | 0 | 36 |
+| 167 | rl-deep-learning-c | 6 | 6 | 0 | 0 | 23 |
+| 168 | competitive-algorithms | 6 | 6 | 0 | 0 | 18 |
+| 169 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 170 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 171 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 172 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 173 | learnopengl | 41 | 0 | 41 | 0 | 41 |
+| 174 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 175 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 176 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 177 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 178 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 179 | beginning-cpp-game-programming | 23 | 0 | 23 | 0 | 23 |
+| 180 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 181 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 182 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
+| 183 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 184 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 185 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 186 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 187 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 188 | ai-agent | 9 | 0 | 0 | 9 | 0 |
 | 189 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
 | 190 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
 | 191 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |

@@ -271,7 +271,7 @@ export function AaSamplingStepsDiagram() {
                   x={cx}
                   y={CARD_TOP + 40}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {s.sub}
@@ -328,7 +328,7 @@ export function AaSamplingStepsDiagram() {
                   x={cx}
                   y={CARD_TOP + CARD_H - 12}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fontWeight="600"
                   fill={s.color}
                 >

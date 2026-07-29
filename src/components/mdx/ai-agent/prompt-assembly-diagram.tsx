@@ -330,7 +330,7 @@ export function AaPromptAssemblyDiagram() {
                   x={LIST_LEFT + LIST_W / 2}
                   y={y + 52}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize="11"
                   fill="var(--text-secondary)"
                 >
                   {b.metaphor}
@@ -419,7 +419,7 @@ export function AaPromptAssemblyDiagram() {
               x={SRC_LEFT + (SRC_W + 60) / 2}
               y={MODEL_TOP + 42}
               textAnchor="middle"
-              fontSize="10"
+              fontSize="11"
               fill="var(--text-secondary)"
             >
               照着 system 的规矩与 few-shot 的样子答
