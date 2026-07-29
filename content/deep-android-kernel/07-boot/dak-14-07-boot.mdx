@@ -8,6 +8,10 @@ math: false
 sourceUrl: "https://www.yami.com/zh/p/android/3118057821"
 demo: true
 order: 0
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
+officialUnitId: dak-14-07-boot
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,12 +20,13 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import { Dak1407BootDecisionLab, Dak1407BootMechanismMap, Dak1407BootFailureDiagram } from "@/components/mdx/deep-android-kernel/dak-14-07-boot";
 
 # 第7章 Android启动过程简析
 
-本页依据林学森《深入理解Android内核设计思想》独立重构，不复制原文。版本锁定人民邮电出版社2014年5月首版、687页、ISBN 9787115348418，面向Android 4.3以上；全书为4篇22章、323个章/节/小节节点。
+在《第7章 Android启动过程简析》中，本页依据林学森《深入理解Android内核设计思想》独立重构，不复制原文。版本锁定人民邮电出版社2014年5月首版、687页、ISBN 9787115348418，面向Android 4.3以上；全书为4篇22章、323个章/节/小节节点。
 
-课程先复现首版Make构建、Binder、SurfaceFlinger、WMS、View、AudioFlinger、Ant与旧工具链，再用现代AOSP/Soong、Treble、ART和新调试工具建立迁移账本，绝不把第2版新增的虚拟机、安全与Gradle章节倒填进首版。
+在《第7章 Android启动过程简析》中，课程先复现首版Make构建、Binder、SurfaceFlinger、WMS、View、AudioFlinger、Ant与旧工具链，再用现代AOSP/Soong、Treble、ART和新调试工具建立迁移账本，绝不把第2版新增的虚拟机、安全与Gradle章节倒填进首版。
 
 <Objectives>
 
@@ -32,62 +37,27 @@ import { Attribution } from "@/components/mdx/attribution";
 
 </Objectives>
 
+<Dak1407BootMechanismMap />
+
+<Dak1407BootDecisionLab />
+
+<Dak1407BootFailureDiagram />
+
 ## 从版本与断点开始
 
-<Term def="记录AOSP标签、仓库、构建目标、文件路径和提交位置的溯源信息">源码版本卡</Term>、<Term def="从公开入口沿函数、线程、进程和语言边界到实际执行点的有序路径">调用链</Term>、<Term def="规定进程、对象、缓冲区、文件描述符和线程由谁创建、共享与释放的责任">资源所有权</Term>、<Term def="在跨线程、跨进程或跨层边界保存输入输出与身份信息的可复查位置">证据断点</Term>、<Term def="逐项记录首版机制、现代变化、行为差异、验证证据和回退条件的清单">迁移账本</Term>构成本页的分析协议。先预测入口会跨过哪些线程、进程、语言、驱动或硬件抽象边界，再在每个边界保存身份和输入输出；没有标签与证据断点的流程图不能复查。
+在《第7章 Android启动过程简析》中，<Term def="记录AOSP标签、仓库、构建目标、文件路径和提交位置的溯源信息">源码版本卡</Term>、<Term def="从公开入口沿函数、线程、进程和语言边界到实际执行点的有序路径">调用链</Term>、<Term def="规定进程、对象、缓冲区、文件描述符和线程由谁创建、共享与释放的责任">资源所有权</Term>、<Term def="在跨线程、跨进程或跨层边界保存输入输出与身份信息的可复查位置">证据断点</Term>、<Term def="逐项记录首版机制、现代变化、行为差异、验证证据和回退条件的清单">迁移账本</Term>构成本页的分析协议。先预测入口会跨过哪些线程、进程、语言、驱动或硬件抽象边界，再在每个边界保存身份和输入输出；没有标签与证据断点的流程图不能复查。
 
 本单元主线是追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列。交互管线逐项选择目录节点；反例实验切换基线、错误版本、线程停滞、所有者丢失和数据损坏；证据门要求目录、版本、调用、所有权与迁移全部通过。
 
-
-## 权威目录逐节点映射
-
-### 第7章 Android启动过程简析
-
-**章节合同 1/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.1 第一个系统进程（init）
-
-**机制边界 2/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.1.1 init.rc语法
-
-**源码检查点 3/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.1.2 init.rc实例分析
-
-**源码检查点 4/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.2 系统关键服务的启动简析
-
-**机制边界 5/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.2.1 Android的DNS服务器——ServiceManager
-
-**源码检查点 6/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.2.2 孕育新的线程和进程——Zygote
-
-**源码检查点 7/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-### 7.2.3 Android的系统服务——SystemServer
-
-**源码检查点 8/8。** 将本节点放入“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”主线。先锁定AOSP标签与入口，再记录线程、进程、对象、缓冲区或文件的所有权，最后用init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表验证成功和失败路径。
-
-<Callout type="trap">**核心陷阱。** 按日志时间猜启动因果，不核对init触发条件、进程父子关系和服务可用断点。修复先恢复版本、入口、边界与所有权证据。</Callout>
-
-<Callout type="trap">**版次错位。** 首版只有22章。第2版新增Android虚拟机、安全机制和IDE/Gradle等内容只能列入版本差异，不能伪装成首版目录。</Callout>
-
-<Callout type="warning">刷机、Root、串口和系统映像实验仅在可恢复测试设备或模拟器上进行。日志、媒体、系统分区与密钥不得来自真实用户设备。</Callout>
-
 ## 证据解释
 
-第一份证据是版本证据：AOSP标签、repo manifest、主机工具链、产品目标和产物哈希必须同时保存。Android源码长期重构，同名类和服务在不同分支可能承担不同职责；跨版本拼接得到的“完整流程”实际上无法编译，也无法在单一设备上运行。
+在《第7章 Android启动过程简析》中，第一份证据是版本证据：AOSP标签、repo manifest、主机工具链、产品目标和产物哈希必须同时保存。Android源码长期重构，同名类和服务在不同分支可能承担不同职责；跨版本拼接得到的“完整流程”实际上无法编译，也无法在单一设备上运行。
 
 第二份证据是调用证据。针对“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”，从真实公开入口前向追踪，每次跨线程、跨进程、跨Java/Native、跨HAL/驱动边界都记录双方、数据形态、事务或函数编号和错误返回。init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表要能让另一位读者在相同标签上停在相同断点。
 
-第三份证据是所有权证据。成功路径之外，主动让调用方退出、服务重启、缓冲区耗尽、输入损坏或超时发生，观察对象、引用计数、文件描述符、线程和映射是否释放。只画“谁调用谁”而不回答“谁负责释放”，无法解释系统泄漏、死锁和迟到回调。
+在《第7章 Android启动过程简析》中，第三份证据是所有权证据。成功路径之外，主动让调用方退出、服务重启、缓冲区耗尽、输入损坏或超时发生，观察对象、引用计数、文件描述符、线程和映射是否释放。只画“谁调用谁”而不回答“谁负责释放”，无法解释系统泄漏、死锁和迟到回调。
 
-第四份证据是迁移对照。现代AOSP可能以Soong、Treble、AIDL稳定接口、新渲染链或新调试工具替代首版机制。迁移时保持功能结果和故障样本不变，一次只替换一层；若线程、错误、性能或资源语义变化，先记录差异和回退，再更新结论。
+在《第7章 Android启动过程简析》中，第四份证据是迁移对照。现代AOSP可能以Soong、Treble、AIDL稳定接口、新渲染链或新调试工具替代首版机制。迁移时保持功能结果和故障样本不变，一次只替换一层；若线程、错误、性能或资源语义变化，先记录差异和回退，再更新结论。
 
 ```text
 历史节点: 第7章 Android启动过程简析
@@ -106,32 +76,86 @@ import { Attribution } from "@/components/mdx/attribution";
 
 <Exercises>
 **问题 1**：为什么必须保留8个正式节点？
-<Answer>这些节点共同组成“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”的完整入口、机制、边界与证据链，删去节点会造成调用或所有权断裂。</Answer>
-
+<Answer>
+  这些节点共同组成“追踪init.rc、ServiceManager、Zygote与SystemServer的系统关键服务启动序列”的完整入口、机制、边界与证据链，删去节点会造成调用或所有权断裂。
+</Answer>
 **问题 2**：最小正确性合同是什么？
-<Answer>同一源码标签、构建目标和输入下，功能结果、线程进程、错误与资源释放必须确定且可重放。</Answer>
-
+<Answer>
+  同一源码标签、构建目标和输入下，功能结果、线程进程、错误与资源释放必须确定且可重放。
+</Answer>
 **问题 3**：怎样构造有效反例？
-<Answer>主动让“按日志时间猜启动因果，不核对init触发条件、进程父子关系和服务可用断点”成立，再注入超时、服务退出、数据损坏或版本错配；出现死锁、泄漏、错位或不可复现即失败。</Answer>
-
+<Answer>
+  主动让“按日志时间猜启动因果，不核对init触发条件、进程父子关系和服务可用断点”成立，再注入超时、服务退出、数据损坏或版本错配；出现死锁、泄漏、错位或不可复现即失败。
+</Answer>
 **问题 4**：为什么类名和静态流程图不够？
-<Answer>它们不能证明标签、运行入口、线程进程、对象身份、错误路径和释放结果，必须结合构建产物与运行日志。</Answer>
-
+<Answer>
+  它们不能证明标签、运行入口、线程进程、对象身份、错误路径和释放结果，必须结合构建产物与运行日志。
+</Answer>
 **问题 5**：怎样迁移而不改写首版？
-<Answer>先保存Android 4.3首版行为基线，再一次替换一层，用相同输入和故障测试比较并记录差异与回退。</Answer>
-
+<Answer>
+  先保存Android 4.3首版行为基线，再一次替换一层，用相同输入和故障测试比较并记录差异与回退。
+</Answer>
 **问题 6**：独立交接需要什么？
-<Answer>需要源码版本卡、完整目录映射、构建命令与产物、init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表、失败实验、迁移账本和回退条件。</Answer>
+<Answer>
+  需要源码版本卡、完整目录映射、构建命令与产物、init动作与服务、进程PID、socket、Binder服务注册、zygote fork和SystemServer服务表、失败实验、迁移账本和回退条件。
+</Answer>
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="源码版本卡">记录AOSP标签、仓库、构建目标、文件路径和提交位置的溯源信息。</GlossaryItem>
-  <GlossaryItem term="调用链">从公开入口沿函数、线程、进程和语言边界到实际执行点的有序路径。</GlossaryItem>
-  <GlossaryItem term="资源所有权">规定进程、对象、缓冲区、文件描述符和线程由谁创建、共享与释放的责任。</GlossaryItem>
-  <GlossaryItem term="证据断点">在跨线程、跨进程或跨层边界保存输入输出与身份信息的可复查位置。</GlossaryItem>
-  <GlossaryItem term="迁移账本">逐项记录首版机制、现代变化、行为差异、验证证据和回退条件的清单。</GlossaryItem>
+  <GlossaryItem term="源码版本卡">
+    记录AOSP标签、仓库、构建目标、文件路径和提交位置的溯源信息。
+  </GlossaryItem>
+  <GlossaryItem term="调用链">
+    从公开入口沿函数、线程、进程和语言边界到实际执行点的有序路径。
+  </GlossaryItem>
+  <GlossaryItem term="资源所有权">
+    规定进程、对象、缓冲区、文件描述符和线程由谁创建、共享与释放的责任。
+  </GlossaryItem>
+  <GlossaryItem term="证据断点">
+    在跨线程、跨进程或跨层边界保存输入输出与身份信息的可复查位置。
+  </GlossaryItem>
+  <GlossaryItem term="迁移账本">
+    逐项记录首版机制、现代变化、行为差异、验证证据和回退条件的清单。
+  </GlossaryItem>
 </Glossary>
 
 [← 上一页：第6章 进程间通信——Binder](/learn/deep-android-kernel/06-binder/dak-14-06-binder) · [下一页：第8章 ActivityManagerService（AMS） →](/learn/deep-android-kernel/08-ams/dak-14-08-ams)
 
-<Attribution adaptedFrom="林学森《深入理解Android内核设计思想》" adaptedUrl="https://www.yami.com/zh/p/android/3118057821" />
+## 原版目录概念补充核对
+
+以下条目补齐官方目录中容易被示例主线掩盖的概念。它们不重复罗列目录，而是明确每项概念的机制、适用边界和验收证据。
+
+### 7.1 第一个系统进程（init）：机制、边界与证据
+
+第7章 Android启动过程简析中的7.1 第一个系统进程（init）要从 Linux 进程/线程、地址空间、调度和同步原语连接到 Android 运行结果。记录 PID/TID、优先级、等待点和资源 owner，用竞争、阻塞、退出或内存压力样本验证时序与释放。
+
+### 7.1.1 init.rc语法：机制、边界与证据
+
+第7章 Android启动过程简析中的7.1.1 init.rc语法要沿 init、Zygote、system_server、服务注册与应用进程入口标出先后依赖，日志出现类名不代表服务已可用。固定冷启动输入，保存进程、服务状态和关键时间戳，并用缺失服务或进程死亡验证恢复。
+
+### 7.1.2 init.rc实例分析：机制、边界与证据
+
+第7章 Android启动过程简析中的7.1.2 init.rc实例分析要沿 init、Zygote、system_server、服务注册与应用进程入口标出先后依赖，日志出现类名不代表服务已可用。固定冷启动输入，保存进程、服务状态和关键时间戳，并用缺失服务或进程死亡验证恢复。
+
+### 7.2 系统关键服务的启动简析：机制、边界与证据
+
+第7章 Android启动过程简析中的7.2 系统关键服务的启动简析要沿 init、Zygote、system_server、服务注册与应用进程入口标出先后依赖，日志出现类名不代表服务已可用。固定冷启动输入，保存进程、服务状态和关键时间戳，并用缺失服务或进程死亡验证恢复。
+
+### 7.2.1 Android的DNS服务器——ServiceManager：机制、边界与证据
+
+第7章 Android启动过程简析中的7.2.1 Android的DNS服务器——ServiceManager跨越代理、Parcel、Binder 驱动、线程池与服务对象，Java/C++ 引用外观不能代表同一身份。保存 PID/TID、事务码、缓冲区、引用计数和死亡通知，注入服务退出、大事务或畸形数据确认错误返回与清理。
+
+### 7.2.2 孕育新的线程和进程——Zygote：机制、边界与证据
+
+第7章 Android启动过程简析中的7.2.2 孕育新的线程和进程——Zygote要从 Linux 进程/线程、地址空间、调度和同步原语连接到 Android 运行结果。记录 PID/TID、优先级、等待点和资源 owner，用竞争、阻塞、退出或内存压力样本验证时序与释放。
+
+### 7.2.3 Android的系统服务——SystemServer：机制、边界与证据
+
+第7章 Android启动过程简析中的7.2.3 Android的系统服务——SystemServer要沿 init、Zygote、system_server、服务注册与应用进程入口标出先后依赖，日志出现类名不代表服务已可用。固定冷启动输入，保存进程、服务状态和关键时间戳，并用缺失服务或进程死亡验证恢复。
+
+<Attribution
+  adaptedFrom="林学森《深入理解Android内核设计思想》"
+  adaptedUrl="https://www.yami.com/zh/p/android/3118057821"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

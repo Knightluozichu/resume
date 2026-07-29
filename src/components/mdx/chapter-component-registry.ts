@@ -3043,6 +3043,222 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CpuFinalReviewLab: module0.CpuFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "crazy-android/00-official-learning-map/cra4-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/crazy-android/cra4-official-learning-map");
+      return {
+        Cra4OfficialLearningMapDecisionLab:
+          module0.Cra4OfficialLearningMapDecisionLab,
+        Cra4OfficialLearningMapMechanismMap:
+          module0.Cra4OfficialLearningMapMechanismMap,
+        Cra4OfficialLearningMapFailureDiagram:
+          module0.Cra4OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "crazy-android/01-environment/cra4-01-environment": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-01-environment");
+    return {
+      Cra401EnvironmentDecisionLab: module0.Cra401EnvironmentDecisionLab,
+      Cra401EnvironmentMechanismMap: module0.Cra401EnvironmentMechanismMap,
+      Cra401EnvironmentFailureDiagram: module0.Cra401EnvironmentFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/02-ui-programming/cra4-02-ui-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-02-ui-programming");
+    return {
+      Cra402UiProgrammingDecisionLab: module0.Cra402UiProgrammingDecisionLab,
+      Cra402UiProgrammingMechanismMap: module0.Cra402UiProgrammingMechanismMap,
+      Cra402UiProgrammingFailureDiagram:
+        module0.Cra402UiProgrammingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/03-event-mechanism/cra4-03-event-mechanism": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-03-event-mechanism");
+    return {
+      Cra403EventMechanismDecisionLab: module0.Cra403EventMechanismDecisionLab,
+      Cra403EventMechanismMechanismMap:
+        module0.Cra403EventMechanismMechanismMap,
+      Cra403EventMechanismFailureDiagram:
+        module0.Cra403EventMechanismFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/04-activity-fragment/cra4-04-activity-fragment": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-04-activity-fragment");
+    return {
+      Cra404ActivityFragmentDecisionLab:
+        module0.Cra404ActivityFragmentDecisionLab,
+      Cra404ActivityFragmentMechanismMap:
+        module0.Cra404ActivityFragmentMechanismMap,
+      Cra404ActivityFragmentFailureDiagram:
+        module0.Cra404ActivityFragmentFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/05-intent-filter/cra4-05-intent-filter": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-05-intent-filter");
+    return {
+      Cra405IntentFilterDecisionLab: module0.Cra405IntentFilterDecisionLab,
+      Cra405IntentFilterMechanismMap: module0.Cra405IntentFilterMechanismMap,
+      Cra405IntentFilterFailureDiagram:
+        module0.Cra405IntentFilterFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/06-application-resources/cra4-06-application-resources":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/crazy-android/cra4-06-application-resources");
+      return {
+        Cra406ApplicationResourcesDecisionLab:
+          module0.Cra406ApplicationResourcesDecisionLab,
+        Cra406ApplicationResourcesMechanismMap:
+          module0.Cra406ApplicationResourcesMechanismMap,
+        Cra406ApplicationResourcesFailureDiagram:
+          module0.Cra406ApplicationResourcesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "crazy-android/07-graphics-images/cra4-07-graphics-images": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-07-graphics-images");
+    return {
+      Cra407GraphicsImagesDecisionLab: module0.Cra407GraphicsImagesDecisionLab,
+      Cra407GraphicsImagesMechanismMap:
+        module0.Cra407GraphicsImagesMechanismMap,
+      Cra407GraphicsImagesFailureDiagram:
+        module0.Cra407GraphicsImagesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/08-storage-io/cra4-08-storage-io": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-08-storage-io");
+    return {
+      Cra408StorageIoDecisionLab: module0.Cra408StorageIoDecisionLab,
+      Cra408StorageIoMechanismMap: module0.Cra408StorageIoMechanismMap,
+      Cra408StorageIoFailureDiagram: module0.Cra408StorageIoFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/09-content-provider/cra4-09-content-provider": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-09-content-provider");
+    return {
+      Cra409ContentProviderDecisionLab:
+        module0.Cra409ContentProviderDecisionLab,
+      Cra409ContentProviderMechanismMap:
+        module0.Cra409ContentProviderMechanismMap,
+      Cra409ContentProviderFailureDiagram:
+        module0.Cra409ContentProviderFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/10-service-broadcast/cra4-10-service-broadcast": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-10-service-broadcast");
+    return {
+      Cra410ServiceBroadcastDecisionLab:
+        module0.Cra410ServiceBroadcastDecisionLab,
+      Cra410ServiceBroadcastMechanismMap:
+        module0.Cra410ServiceBroadcastMechanismMap,
+      Cra410ServiceBroadcastFailureDiagram:
+        module0.Cra410ServiceBroadcastFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/11-multimedia/cra4-11-multimedia": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-11-multimedia");
+    return {
+      Cra411MultimediaDecisionLab: module0.Cra411MultimediaDecisionLab,
+      Cra411MultimediaMechanismMap: module0.Cra411MultimediaMechanismMap,
+      Cra411MultimediaFailureDiagram: module0.Cra411MultimediaFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/12-opengl-3d/cra4-12-opengl-3d": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-12-opengl-3d");
+    return {
+      Cra412Opengl3dDecisionLab: module0.Cra412Opengl3dDecisionLab,
+      Cra412Opengl3dMechanismMap: module0.Cra412Opengl3dMechanismMap,
+      Cra412Opengl3dFailureDiagram: module0.Cra412Opengl3dFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/13-network/cra4-13-network": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-13-network");
+    return {
+      Cra413NetworkDecisionLab: module0.Cra413NetworkDecisionLab,
+      Cra413NetworkMechanismMap: module0.Cra413NetworkMechanismMap,
+      Cra413NetworkFailureDiagram: module0.Cra413NetworkFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/14-system-desktop/cra4-14-system-desktop": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-14-system-desktop");
+    return {
+      Cra414SystemDesktopDecisionLab: module0.Cra414SystemDesktopDecisionLab,
+      Cra414SystemDesktopMechanismMap: module0.Cra414SystemDesktopMechanismMap,
+      Cra414SystemDesktopFailureDiagram:
+        module0.Cra414SystemDesktopFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/15-sensors/cra4-15-sensors": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-15-sensors");
+    return {
+      Cra415SensorsDecisionLab: module0.Cra415SensorsDecisionLab,
+      Cra415SensorsMechanismMap: module0.Cra415SensorsMechanismMap,
+      Cra415SensorsFailureDiagram: module0.Cra415SensorsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/16-gps/cra4-16-gps": async () => {
+    const module0 = await import("@/components/mdx/crazy-android/cra4-16-gps");
+    return {
+      Cra416GpsDecisionLab: module0.Cra416GpsDecisionLab,
+      Cra416GpsMechanismMap: module0.Cra416GpsMechanismMap,
+      Cra416GpsFailureDiagram: module0.Cra416GpsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/17-amap/cra4-17-amap": async () => {
+    const module0 = await import("@/components/mdx/crazy-android/cra4-17-amap");
+    return {
+      Cra417AmapDecisionLab: module0.Cra417AmapDecisionLab,
+      Cra417AmapMechanismMap: module0.Cra417AmapMechanismMap,
+      Cra417AmapFailureDiagram: module0.Cra417AmapFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/18-metal-slug/cra4-18-metal-slug": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-18-metal-slug");
+    return {
+      Cra418MetalSlugDecisionLab: module0.Cra418MetalSlugDecisionLab,
+      Cra418MetalSlugMechanismMap: module0.Cra418MetalSlugMechanismMap,
+      Cra418MetalSlugFailureDiagram: module0.Cra418MetalSlugFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/19-auction-system/cra4-19-auction-system": async () => {
+    const module0 =
+      await import("@/components/mdx/crazy-android/cra4-19-auction-system");
+    return {
+      Cra419AuctionSystemDecisionLab: module0.Cra419AuctionSystemDecisionLab,
+      Cra419AuctionSystemMechanismMap: module0.Cra419AuctionSystemMechanismMap,
+      Cra419AuctionSystemFailureDiagram:
+        module0.Cra419AuctionSystemFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "crazy-android/20-official-final-review/cra4-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/crazy-android/cra4-official-final-review");
+      return {
+        Cra4OfficialFinalReviewDecisionLab:
+          module0.Cra4OfficialFinalReviewDecisionLab,
+        Cra4OfficialFinalReviewMechanismMap:
+          module0.Cra4OfficialFinalReviewMechanismMap,
+        Cra4OfficialFinalReviewFailureDiagram:
+          module0.Cra4OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
@@ -3402,6 +3618,248 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DevelopmentPracticesFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "deep-android-kernel/00-official-learning-map/dak-14-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-official-learning-map");
+      return {
+        Dak14OfficialLearningMapDecisionLab:
+          module0.Dak14OfficialLearningMapDecisionLab,
+        Dak14OfficialLearningMapMechanismMap:
+          module0.Dak14OfficialLearningMapMechanismMap,
+        Dak14OfficialLearningMapFailureDiagram:
+          module0.Dak14OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-kernel/01-system-introduction/dak-14-01-system-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-01-system-introduction");
+      return {
+        Dak1401SystemIntroductionDecisionLab:
+          module0.Dak1401SystemIntroductionDecisionLab,
+        Dak1401SystemIntroductionMechanismMap:
+          module0.Dak1401SystemIntroductionMechanismMap,
+        Dak1401SystemIntroductionFailureDiagram:
+          module0.Dak1401SystemIntroductionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-kernel/02-source-build/dak-14-02-source-build": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-02-source-build");
+    return {
+      Dak1402SourceBuildDecisionLab: module0.Dak1402SourceBuildDecisionLab,
+      Dak1402SourceBuildMechanismMap: module0.Dak1402SourceBuildMechanismMap,
+      Dak1402SourceBuildFailureDiagram:
+        module0.Dak1402SourceBuildFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/03-build-system/dak-14-03-build-system": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-03-build-system");
+    return {
+      Dak1403BuildSystemDecisionLab: module0.Dak1403BuildSystemDecisionLab,
+      Dak1403BuildSystemMechanismMap: module0.Dak1403BuildSystemMechanismMap,
+      Dak1403BuildSystemFailureDiagram:
+        module0.Dak1403BuildSystemFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/04-os-foundations/dak-14-04-os-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-04-os-foundations");
+      return {
+        Dak1404OsFoundationsDecisionLab:
+          module0.Dak1404OsFoundationsDecisionLab,
+        Dak1404OsFoundationsMechanismMap:
+          module0.Dak1404OsFoundationsMechanismMap,
+        Dak1404OsFoundationsFailureDiagram:
+          module0.Dak1404OsFoundationsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-kernel/05-process-thread/dak-14-05-process-thread":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-05-process-thread");
+      return {
+        Dak1405ProcessThreadDecisionLab:
+          module0.Dak1405ProcessThreadDecisionLab,
+        Dak1405ProcessThreadMechanismMap:
+          module0.Dak1405ProcessThreadMechanismMap,
+        Dak1405ProcessThreadFailureDiagram:
+          module0.Dak1405ProcessThreadFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-kernel/06-binder/dak-14-06-binder": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-06-binder");
+    return {
+      Dak1406BinderDecisionLab: module0.Dak1406BinderDecisionLab,
+      Dak1406BinderMechanismMap: module0.Dak1406BinderMechanismMap,
+      Dak1406BinderFailureDiagram: module0.Dak1406BinderFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/07-boot/dak-14-07-boot": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-07-boot");
+    return {
+      Dak1407BootDecisionLab: module0.Dak1407BootDecisionLab,
+      Dak1407BootMechanismMap: module0.Dak1407BootMechanismMap,
+      Dak1407BootFailureDiagram: module0.Dak1407BootFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/08-ams/dak-14-08-ams": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-08-ams");
+    return {
+      Dak1408AmsDecisionLab: module0.Dak1408AmsDecisionLab,
+      Dak1408AmsMechanismMap: module0.Dak1408AmsMechanismMap,
+      Dak1408AmsFailureDiagram: module0.Dak1408AmsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/09-surfaceflinger/dak-14-09-surfaceflinger":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-09-surfaceflinger");
+      return {
+        Dak1409SurfaceflingerDecisionLab:
+          module0.Dak1409SurfaceflingerDecisionLab,
+        Dak1409SurfaceflingerMechanismMap:
+          module0.Dak1409SurfaceflingerMechanismMap,
+        Dak1409SurfaceflingerFailureDiagram:
+          module0.Dak1409SurfaceflingerFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "deep-android-kernel/10-wms/dak-14-10-wms": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-10-wms");
+    return {
+      Dak1410WmsDecisionLab: module0.Dak1410WmsDecisionLab,
+      Dak1410WmsMechanismMap: module0.Dak1410WmsMechanismMap,
+      Dak1410WmsFailureDiagram: module0.Dak1410WmsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/11-view/dak-14-11-view": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-11-view");
+    return {
+      Dak1411ViewDecisionLab: module0.Dak1411ViewDecisionLab,
+      Dak1411ViewMechanismMap: module0.Dak1411ViewMechanismMap,
+      Dak1411ViewFailureDiagram: module0.Dak1411ViewFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/12-input/dak-14-12-input": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-12-input");
+    return {
+      Dak1412InputDecisionLab: module0.Dak1412InputDecisionLab,
+      Dak1412InputMechanismMap: module0.Dak1412InputMechanismMap,
+      Dak1412InputFailureDiagram: module0.Dak1412InputFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/13-audio/dak-14-13-audio": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-13-audio");
+    return {
+      Dak1413AudioDecisionLab: module0.Dak1413AudioDecisionLab,
+      Dak1413AudioMechanismMap: module0.Dak1413AudioMechanismMap,
+      Dak1413AudioFailureDiagram: module0.Dak1413AudioFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/14-intent/dak-14-14-intent": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-14-intent");
+    return {
+      Dak1414IntentDecisionLab: module0.Dak1414IntentDecisionLab,
+      Dak1414IntentMechanismMap: module0.Dak1414IntentMechanismMap,
+      Dak1414IntentFailureDiagram: module0.Dak1414IntentFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/15-resources/dak-14-15-resources": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-15-resources");
+    return {
+      Dak1415ResourcesDecisionLab: module0.Dak1415ResourcesDecisionLab,
+      Dak1415ResourcesMechanismMap: module0.Dak1415ResourcesMechanismMap,
+      Dak1415ResourcesFailureDiagram: module0.Dak1415ResourcesFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/16-encoding/dak-14-16-encoding": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-16-encoding");
+    return {
+      Dak1416EncodingDecisionLab: module0.Dak1416EncodingDecisionLab,
+      Dak1416EncodingMechanismMap: module0.Dak1416EncodingMechanismMap,
+      Dak1416EncodingFailureDiagram: module0.Dak1416EncodingFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/17-opengl/dak-14-17-opengl": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-17-opengl");
+    return {
+      Dak1417OpenglDecisionLab: module0.Dak1417OpenglDecisionLab,
+      Dak1417OpenglMechanismMap: module0.Dak1417OpenglMechanismMap,
+      Dak1417OpenglFailureDiagram: module0.Dak1417OpenglFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/18-systemui/dak-14-18-systemui": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-18-systemui");
+    return {
+      Dak1418SystemuiDecisionLab: module0.Dak1418SystemuiDecisionLab,
+      Dak1418SystemuiMechanismMap: module0.Dak1418SystemuiMechanismMap,
+      Dak1418SystemuiFailureDiagram: module0.Dak1418SystemuiFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/19-widget/dak-14-19-widget": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-19-widget");
+    return {
+      Dak1419WidgetDecisionLab: module0.Dak1419WidgetDecisionLab,
+      Dak1419WidgetMechanismMap: module0.Dak1419WidgetMechanismMap,
+      Dak1419WidgetFailureDiagram: module0.Dak1419WidgetFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/20-apk-build/dak-14-20-apk-build": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-20-apk-build");
+    return {
+      Dak1420ApkBuildDecisionLab: module0.Dak1420ApkBuildDecisionLab,
+      Dak1420ApkBuildMechanismMap: module0.Dak1420ApkBuildMechanismMap,
+      Dak1420ApkBuildFailureDiagram: module0.Dak1420ApkBuildFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/21-git/dak-14-21-git": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-21-git");
+    return {
+      Dak1421GitDecisionLab: module0.Dak1421GitDecisionLab,
+      Dak1421GitMechanismMap: module0.Dak1421GitMechanismMap,
+      Dak1421GitFailureDiagram: module0.Dak1421GitFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/22-debug-tools/dak-14-22-debug-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-android-kernel/dak-14-22-debug-tools");
+    return {
+      Dak1422DebugToolsDecisionLab: module0.Dak1422DebugToolsDecisionLab,
+      Dak1422DebugToolsMechanismMap: module0.Dak1422DebugToolsMechanismMap,
+      Dak1422DebugToolsFailureDiagram: module0.Dak1422DebugToolsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "deep-android-kernel/23-official-final-review/dak-14-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-android-kernel/dak-14-official-final-review");
+      return {
+        Dak14OfficialFinalReviewDecisionLab:
+          module0.Dak14OfficialFinalReviewDecisionLab,
+        Dak14OfficialFinalReviewMechanismMap:
+          module0.Dak14OfficialFinalReviewMechanismMap,
+        Dak14OfficialFinalReviewFailureDiagram:
+          module0.Dak14OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/diagrams/dog-learning-map");

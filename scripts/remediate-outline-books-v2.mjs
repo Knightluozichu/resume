@@ -277,6 +277,94 @@ function explainAndroidConcept(label, unitTitle, bookSlug) {
     return `${context}要在 Android 10/Kotlin 基线中写清用户任务、平台合同、状态 owner、线程与资源释放，再单列现代 targetSdk 差异。用正常、拒绝和生命周期重建三类样本核对最终行为。`;
   }
 
+  if (bookSlug === "crazy-android") {
+    if (/环境|Android Studio|SDK|Gradle|项目|HelloWorld|调试/u.test(label)) {
+      return `${context}要把 JDK、SDK、Gradle、插件、仓库、设备镜像与构建产物固定成环境指纹，IDE 绿色按钮不能代替构建理解。分别执行干净构建、安装、启动和日志采集，再破坏一个版本或依赖条件，确认诊断与回退可重放。`;
+    }
+    if (
+      /界面|View|布局|TextView|EditText|Button|Adapter|List|Dialog|菜单|ActionBar|控件/u.test(
+        label,
+      )
+    ) {
+      return `${context}由 View 树、MeasureSpec、布局结果、绘制、输入焦点和可恢复状态共同决定。固定屏幕、字体和数据后改变一个尺寸、配置或复用条件，保存层级、回调顺序、无障碍语义与帧结果，避免只看静态截图。`;
+    }
+    if (/事件|监听|回调|触摸|手势|按键/u.test(label)) {
+      return `${context}要沿输入源、分发、拦截、消费和状态更新解释时序，同一事件不能被未知对象重复处理。记录 MotionEvent/KeyEvent、目标 View、线程和消费返回值，并用取消、父级拦截或快速重复输入验证边界。`;
+    }
+    if (/Activity|Fragment|生命周期|任务栈/u.test(label)) {
+      return `${context}涉及实例、任务栈、保存状态和生命周期所有权，回调出现不等于用户任务已经恢复。保存实例标识、Intent、栈位置与状态来源，用旋转、后台回收、进程重建和重复导航核对恢复与释放。`;
+    }
+    if (/Intent|IntentFilter|组件通信|Bundle/u.test(label)) {
+      return `${context}要明确发送者身份、显式或隐式匹配条件、数据类型、大小和接收方导出边界。用匹配、无匹配、多个候选、畸形数据和未授权调用样本核对解析结果与用户反馈。`;
+    }
+    if (/资源|Resource|国际化|屏幕|样式|主题|XML/u.test(label)) {
+      return `${context}由资源限定符、设备配置、主题继承和运行时解析共同决定，文件存在不等于会被选中。固定 APK 后改变语言、密度、方向、夜间模式或 API，记录资源 ID、匹配路径和最终像素，并检查缺省回退。`;
+    }
+    if (/图形|图像|Canvas|Paint|Bitmap|Drawable|动画/u.test(label)) {
+      return `${context}要沿资源解码、内存布局、坐标变换、绘制命令和帧提交解释结果。使用固定图像和画布状态，比较缩放、裁剪、复用与释放，保存像素差、分配和帧时间，防止以 OOM 或失真换取表面速度。`;
+    }
+    if (
+      /存储|IO|文件|SQLite|SharedPreferences|ContentProvider|数据共享/u.test(
+        label,
+      )
+    ) {
+      return `${context}必须定义数据模式、事务、权限、URI 和升级恢复，成功读写一次不能证明中断或跨版本安全。保存迁移前后数据与查询计划，注入磁盘失败、并发更新、无权限或旧版本升级，验证原子性和最小暴露。`;
+    }
+    if (/Service|Broadcast|Receiver|后台|通知/u.test(label)) {
+      return `${context}要区分组件生命周期、任务线程、进程存活和系统后台政策，Service 本身不提供后台线程。记录启动来源、PID/TID、任务 owner 与停止点，用重复投递、进程回收、后台限制和迟到回调验证幂等与释放。`;
+    }
+    if (/多媒体|音频|视频|相机|Media/u.test(label)) {
+      return `${context}涉及权限、系统句柄、编解码状态、线程与生命周期释放。固定媒体样本后记录状态机和资源计数，分别注入拒权、格式错误、暂停恢复、组件销毁和设备能力缺失，确认错误可见且句柄归零。`;
+    }
+    if (/OpenGL|3D|纹理|着色|渲染/u.test(label)) {
+      return `${context}要明确 GL 上下文、线程、缓冲区、纹理、矩阵和帧边界，最终画面相似不代表状态安全。固定几何与资源，改变一个上下文丢失、尺寸或纹理条件，保存 GL 错误、像素差、帧时间和释放结果。`;
+    }
+    if (/网络|HTTP|Socket|WebView|下载|上传/u.test(label)) {
+      return `${context}要写清请求身份、超时、取消、重试幂等、缓存和解析边界。用可控服务端返回成功、慢响应、断网、重复响应和畸形数据，核对网络轨迹、线程切换、持久状态与用户可恢复结果。`;
+    }
+    if (/桌面|Widget|壁纸|系统服务/u.test(label)) {
+      return `${context}跨越应用进程、系统宿主、RemoteViews 或系统服务权限，本地对象变化不一定已提交到桌面。记录宿主身份、更新 token、频率和最终界面，用进程退出、无效上下文或系统重建验证恢复。`;
+    }
+    if (/传感器|Sensor|GPS|位置|高德|Map|地图/u.test(label)) {
+      return `${context}同时受权限、设备能力、采样时序、坐标系和外部服务约束。保存时间戳、精度、provider、坐标转换和授权状态，用拒权、无信号、异常值、暂停恢复与服务失败样本验证降级和隐私边界。`;
+    }
+    if (/合金弹头|游戏|拍卖|竞价|综合/u.test(label)) {
+      return `${context}应拆成用户任务、状态机、持久事实、并发/网络边界和可回滚交付，而不是把多个示例拼成“大项目”。固定一条端到端主路径，注入重复操作、断网、进程重建和数据冲突，用状态轨迹与服务端事实验收。`;
+    }
+    return `${context}要在 Android 9.x/Java 基线上写清入口、组件 owner、线程、可恢复状态、权限和外部失败。固定设备与输入，只改变一个生命周期或平台条件，用原始日志、状态快照和最终用户结果复核。`;
+  }
+
+  if (bookSlug === "deep-android-kernel") {
+    if (/系统简介|源码|编译|Make|构建系统|产品|模块/u.test(label)) {
+      return `${context}必须绑定 Android 4.3 标签、repo manifest、主机工具链、产品目标、模块依赖与产物哈希。执行一次最小增量构建并破坏一个依赖或配置，比较任务图、生成文件和失败诊断，避免跨版本拼接源码。`;
+    }
+    if (/操作系统|进程|线程|调度|同步|内存/u.test(label)) {
+      return `${context}要从 Linux 进程/线程、地址空间、调度和同步原语连接到 Android 运行结果。记录 PID/TID、优先级、等待点和资源 owner，用竞争、阻塞、退出或内存压力样本验证时序与释放。`;
+    }
+    if (/Binder|Parcel|ServiceManager|AIDL|IPC|智能指针|sp|wp/u.test(label)) {
+      return `${context}跨越代理、Parcel、Binder 驱动、线程池与服务对象，Java/C++ 引用外观不能代表同一身份。保存 PID/TID、事务码、缓冲区、引用计数和死亡通知，注入服务退出、大事务或畸形数据确认错误返回与清理。`;
+    }
+    if (/启动|init|Zygote|SystemServer|ActivityManager|AMS/u.test(label)) {
+      return `${context}要沿 init、Zygote、system_server、服务注册与应用进程入口标出先后依赖，日志出现类名不代表服务已可用。固定冷启动输入，保存进程、服务状态和关键时间戳，并用缺失服务或进程死亡验证恢复。`;
+    }
+    if (/SurfaceFlinger|WMS|Window|View|Input|GUI|显示|触摸/u.test(label)) {
+      return `${context}贯穿应用 View、窗口 token、Surface、合成与输入分发；局部调用返回不等于像素或事件已经提交。记录层级、buffer、transaction、坐标和回调时序，用无效 token、尺寸变化、队列阻塞或取消输入验证边界。`;
+    }
+    if (/音频|Audio|Media/u.test(label)) {
+      return `${context}跨越应用 API、AudioFlinger、轨道/混音、HAL 与设备，需区分控制状态和真实音频流。固定音频样本后记录线程、buffer、延迟和路由，注入格式错误、设备切换或服务重启，确认恢复与资源释放。`;
+    }
+    if (/Intent|匹配规则|资源适配|字符编码|编码格式/u.test(label)) {
+      return `${context}要把输入表示、匹配/解析规则、资源限定符或字符边界写成确定合同。使用正反例数据改变一个 MIME、category、locale、编码或设备配置，记录解析路径、错误位置和最终结果。`;
+    }
+    if (/OpenGL|SystemUI|Widget|小插件/u.test(label)) {
+      return `${context}涉及系统宿主、图形上下文、跨进程更新或全局 UI 状态，应用侧对象并非唯一 owner。保存宿主/token、线程、资源与最终像素，注入上下文丢失、进程退出或无效更新验证系统边界。`;
+    }
+    if (/APK|打包|签名|Git|版本管理|调试|工具|logcat|gdb/u.test(label)) {
+      return `${context}必须把源码提交连接到构建输入、APK/映像产物、签名或调试会话。保存提交、命令、环境、产物哈希和断点位置，再制造一个脏工作区、错误签名或符号错配，确认工具能定位首错并回退。`;
+    }
+    return `${context}必须锁定 Android 4.3 首版坐标，从真实入口跟踪线程、进程、语言与驱动边界，并标出对象和缓冲区所有权。使用同一构建和输入运行正常与单变量失败路径，保存版本卡、断点、日志和释放结果。`;
+  }
+
   if (/Java|斐波|缓存|API|数据结构|SQLite|事务|查询|算法/u.test(label)) {
     return `${context}先保证优化前后结果、异常与线程语义等价，再讨论时间或分配。固定输入规模、构建和设备状态，完成预热与交错采样，并用边界输入、缓存失效或查询计划证明收益不是偶然数据或错误结果造成的。`;
   }
@@ -698,6 +786,78 @@ const BOOKS = {
       return `在 Android 10/Kotlin 基线上复现「${label}」，用正常、权限拒绝/弱网和组件重建样本核对界面状态、持久数据、线程与资源释放。`;
     },
   },
+  "crazy-android": {
+    sourceUrl: "https://phei.com.cn/module/goods/wssd_content.jsp?bookid=53581",
+    sourceName: "李刚《疯狂Android讲义》第4版",
+    unitIds: manifestIdentityUnits("crazy-android"),
+    pruneOutline: {
+      heading: "出版社完整目录逐节点映射",
+      endMarker: "## 最小可执行切片",
+    },
+    normalizeInlineBlocks: true,
+    dedupeSupplementSections: true,
+    textReplacements: [["Android 9.x", "Android 9 系列"]],
+    contextualSentences: [
+      "本页依据电子工业出版社《疯狂Android讲义》第4版完整目录独立重构，不复制原文。",
+      "本书准确反映Android 9时代。",
+      "先按Android 9.x/Java保存原书行为基线，再一次只改变targetSdk、权限、后台、存储、通知、依赖或外部服务之一。",
+      "第4版以近百个实例和两个综合项目组织知识，不是零散API列表。",
+      "界面字段和进程单例不是可靠事实源。",
+      "三段代码分别约束状态模型、环境重放和行为结果。",
+      "主线程负责输入、生命周期分发和UI；文件、SQLite、网络、图片解码、OpenGL准备与长计算不得阻塞帧。",
+      "Intent、Provider、WebView、JSON、文件URI、地图Key、位置和传感器样本都按不可信输入处理。",
+      "校验action、scheme、MIME、大小、授权、时效和响应者；导出组件最小授权；日志、截图与数据库不得泄露联系人、短信、位置、令牌或签名密钥。",
+      "性能以用户任务衡量：界面看首帧和掉帧，列表看回收与分配，媒体和图形看帧时间与内存，网络看超时和取消，传感器看采样与耗电，后台工作看约束与重复调度。",
+      "现代迁移一次改变一个条件。",
+      "AsyncTask、IntentService、旧Fragment、外部存储、后台Service、隐式广播、HTTP明文、旧定位和地图SDK都需要查当前合同；先保存Android 9基线，再迁移并保留行为差异、测试和回滚。",
+      "把525个目录条目压成“UI、数据、服务、网络”几个概览页，会直接遗漏Intent、资源、Provider、OpenGL、桌面、传感器、GPS、地图和两个项目。",
+      "固定JDK、Android SDK、Gradle、设备API、语言、权限和输入，完成从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。",
+      "保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。",
+      "先按第4版锁定Java与Android 9行为基线，再查询当前平台合同；一次只迁移组件导出、存储、权限、后台、通知、位置或依赖之一，保存构建、行为、测试与回滚差异。",
+    ],
+    contextualParagraphMarkers: [
+      "**核心陷阱。**",
+      "**历史示例不等于当前平台政策。**",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "crazy-android");
+    },
+    failure(label) {
+      return `若学习「${label}」只复制正常路径示例而不声明组件 owner、线程、状态、权限与外部失败，应用会在旋转、进程重建、拒权或弱网时丢失行为。`;
+    },
+    evidence(label) {
+      return `在 Android 9.x/Java 基线上复现「${label}」，保存构建与设备指纹、操作、线程/生命周期轨迹、状态快照，并注入一个权限、重建或外部服务失败。`;
+    },
+  },
+  "deep-android-kernel": {
+    sourceUrl: "https://www.yami.com/zh/p/android/3118057821",
+    sourceName: "林学森《深入理解Android内核设计思想》",
+    unitIds: manifestIdentityUnits("deep-android-kernel"),
+    pruneOutline: {
+      heading: "权威目录逐节点映射",
+      endMarker: "## 证据解释",
+    },
+    normalizeInlineBlocks: true,
+    contextualSentences: [
+      "本页依据林学森《深入理解Android内核设计思想》独立重构，不复制原文。",
+      "课程先复现首版Make构建、Binder、SurfaceFlinger、WMS、View、AudioFlinger、Ant与旧工具链，再用现代AOSP/Soong、Treble、ART和新调试工具建立迁移账本，绝不把第2版新增的虚拟机、安全与Gradle章节倒填进首版。",
+      "第一份证据是版本证据：AOSP标签、repo manifest、主机工具链、产品目标和产物哈希必须同时保存。",
+      "第三份证据是所有权证据。",
+      "第四份证据是迁移对照。",
+    ],
+    contextualParagraphMarkers: [
+      '<Term def="记录AOSP标签、仓库、构建目标、文件路径和提交位置的溯源信息">源码版本卡</Term>',
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "deep-android-kernel");
+    },
+    failure(label) {
+      return `若研究「${label}」时混用 AOSP 版本、只画静态类图或遗漏线程进程与资源所有权，得到的调用链无法在单一构建上复现。`;
+    },
+    evidence(label) {
+      return `锁定 Android 4.3 标签与产品目标追踪「${label}」，保存源码符号、PID/TID、对象/缓冲区身份、正常与失败断点、产物哈希及最终释放结果。`;
+    },
+  },
   "csharp-functional-programming": {
     sourceUrl:
       "https://livebook.manning.com/book/functional-programming-in-c-sharp/table-of-contents",
@@ -1016,6 +1176,29 @@ function addAndroidPedagogyBridge(source, chapter) {
 ${quotedTitle}的直觉检验只改变一个条件：旋转、进程重建、拒绝权限、断网或目标 SDK。若结果随隐藏缓存或旧对象身份漂移，就回到状态所有者和平台合同定位首个分叉，而不是继续堆补丁。
 `;
   return source.replace(marker, `${bridge}${marker}`);
+}
+
+function dedupeSupplementSections(source) {
+  const marker = "\n## 原版目录概念补充核对\n";
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex === -1) return source;
+  const attributionIndex = source.indexOf("<Attribution", markerIndex);
+  if (attributionIndex === -1) return source;
+  const prefix = source.slice(0, markerIndex + marker.length);
+  const supplement = source.slice(
+    markerIndex + marker.length,
+    attributionIndex,
+  );
+  const suffix = source.slice(attributionIndex);
+  const seen = new Set();
+  const sections = supplement.split(/\n(?=### )/).filter((section) => {
+    if (!section.startsWith("### ")) return true;
+    const heading = normalized(section.split("\n", 1)[0]);
+    if (seen.has(heading)) return false;
+    seen.add(heading);
+    return true;
+  });
+  return `${prefix}${sections.join("\n")}${suffix}`;
 }
 
 function normalizeInlineBlockComponents(source) {
@@ -1386,10 +1569,16 @@ for (const [bookSlug, book] of Object.entries(BOOKS)) {
     if (book.pruneOutline) {
       source = pruneOutlineSection(source, book.pruneOutline);
     }
+    for (const [before, after] of book.textReplacements ?? []) {
+      source = source.replaceAll(before, after);
+    }
     source = contextualizeSharedSentences(source, chapter);
     source = contextualizeParagraphMarkers(source, chapter);
     if (book.addPedagogyBridge) {
       source = addAndroidPedagogyBridge(source, chapter);
+    }
+    if (book.dedupeSupplementSections) {
+      source = dedupeSupplementSections(source);
     }
     if (book.normalizeInlineBlocks) {
       source = normalizeInlineBlockComponents(source);
