@@ -3,11 +3,16 @@ title: 第 15 章：Run!、Factory 与组件式对象
 type: A
 section: Run! 项目
 order: 15
-description: 对齐官方第 3 版第 15 章：启动无尽跑酷 Run!，用继承多态定义 Update/Graphics 行为，以 Factory 组合 GameObject，并辨析组件模式与 ECS。
-demo: false
+description: 第 15 章：Run!、Factory 与组件式对象：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-15
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,30 +21,124 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  GameProjectPipelineLab,
+  GameProjectFrameLab,
+  GameProjectFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/game-project";
 
 <Objectives>
 
-- 能设计 Run! 的 GameObject 身份、Transform、Update 和 Graphics 组合边界，让新增实体不修改主循环
-- 能实现异常安全的 Factory 类，验证资源与生成参数后组装组件并以 unique_ptr 提交完整对象
-- 能比较继承多态、组件式对象和实体组件系统的身份、存储与更新差异，判断何时需要 ECS
+- 能解释“第 15 章：Run!、Factory 与组件式对象”如何让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象
+- 能逐项定位 无尽跑酷（endless runner）、factory 类（factory class）、继承与多态（inheritance and polymorphism）、设计模式（design patterns）、实体组件系统（entity component system），说明它们位于源码、运行状态还是可见输出边界
+- 能按 解析请求 → 加载依赖 → 组装组件 → 验证合同 → 提交所有权 重放“创建完整平台”，持续检查“半构造对象不可进入世界；每个 GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同”
+- 能注入“Factory 在资源加载完成前先把对象放入世界，随后失败留下缺少 Graphics 组件的实体”，从创建请求、资源查找结果、组件清单、unique_ptr 移交点和每帧接口调用找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 15 章：Run!、Factory 与组件式对象”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 15 章：Run!、Factory 与组件式对象”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“无尽跑酷（endless runner）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 15 章：Run!、Factory 与组件式对象”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 15 章：Run!、Factory 与组件式对象”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 15 章：Run!、Factory 与组件式对象”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+
+## 正式概念与运行状态合同
+
+### 无尽跑酷（endless runner）
+
+这个正式目录节点落在 **创建请求** 边界：实体类型、资源键与生成参数。在本页中，它参与“让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象”。验收时保存创建请求、资源查找结果、组件清单、unique_ptr 移交点和每帧接口调用，不能只凭最终画面判断。
+
+### factory 类（factory class）
+
+这个正式目录节点落在 **Factory 装配** 边界：Transform、Update、Graphics 与验证。在本页中，它参与“让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象”。验收时保存半构造对象不可进入世界；每个 GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同，不能只凭最终画面判断。
+
+### 继承与多态（inheritance and polymorphism）
+
+这个正式目录节点落在 **世界提交** 边界：unique_ptr 所有权和统一主循环。在本页中，它参与“让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象”。验收时保存创建请求、资源查找结果、组件清单、unique_ptr 移交点和每帧接口调用，不能只凭最终画面判断。
+
+### 设计模式（design patterns）
+
+这个正式目录节点落在 **创建请求** 边界：实体类型、资源键与生成参数。在本页中，它参与“让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象”。验收时保存半构造对象不可进入世界；每个 GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同，不能只凭最终画面判断。
+
+### 实体组件系统（entity component system）
+
+这个正式目录节点落在 **Factory 装配** 边界：Transform、Update、Graphics 与验证。在本页中，它参与“让 Factory 验证并组装 GameObject、Transform、Update 与 Graphics 行为，用 unique_ptr 原子提交完整对象”。验收时保存创建请求、资源查找结果、组件清单、unique_ptr 移交点和每帧接口调用，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                               |
+| -------------- | -------------------------------------------------------------------------------------- |
+| 最小正常场景   | Factory 收到合法类型、纹理与 Transform 参数                                            |
+| 边界或恢复场景 | 创建请求引用不存在的纹理键                                                             |
+| 必须保持       | 半构造对象不可进入世界；每个 GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同 |
+| 单一故障       | Factory 在资源加载完成前先把对象放入世界，随后失败留下缺少 Graphics 组件的实体         |
+| 可观察证据     | 创建请求、资源查找结果、组件清单、unique_ptr 移交点和每帧接口调用                      |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“创建完整平台”会怎样穿过 创建请求 → Factory 装配 → 世界提交，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<GameProjectPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 解析请求 → 加载依赖 → 组装组件 → 验证合同 → 提交所有权。每一步只选中一个阶段，并持续检查“半构造对象不可进入世界；每个 GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同”。
+
+<GameProjectFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“Factory 在资源加载完成前先把对象放入世界，随后失败留下缺少 Graphics 组件的实体”，定位第一项不一致；撤销后用完全相同的“缺失图形资源”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<GameProjectFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用创建请求、资源查找结果、组件清单、unique_ptr
+  移交点和每帧接口调用复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 15 章：Run!、Factory 与组件式对象”以 SFML 2.6.1 时代接口为基线。直接粘贴
+  SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“半构造对象不可进入世界；每个
+  GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“半构造对象不可进入世界；每个
+  GameObject 只有一个所有者，主循环只依赖统一更新与绘制合同”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“增加一种平台为何不该改主循环”开始
 
 第四个项目
 
-<Term def="本书的无尽跑酷项目，玩家必须持续前进并避开不断消失或生成的平台。">Run! 项目</Term>
+<Term def="本书的无尽跑酷项目，玩家必须持续前进并避开不断消失或生成的平台。">
+  Run! 项目
+</Term>
 包含玩家、平台、雨滴、火球、相机、菜单和动画。若每种对象都让 main 增加一组特殊
 if，项目会快速失控。本章先建立“对象组合行为，循环只调接口”的骨架。
 
-<Term def="把创建、更新、渲染和销毁的共同流程固定下来，而把具体行为交给可替换对象的架构。">组件式对象</Term>
+<Term def="把创建、更新、渲染和销毁的共同流程固定下来，而把具体行为交给可替换对象的架构。">
+  组件式对象
+</Term>
 允许同一循环处理不同实体，但书中的设计仍以 GameObject 为中心，不等同于完整 ECS。
-
 
 ## GameObject 的最小共同状态
 
-<Term def="Run 世界中的一个实体实例，拥有稳定 id、共享 Transform 和可选 Update/Graphics 行为。">GameObject</Term>
+<Term def="Run 世界中的一个实体实例，拥有稳定 id、共享 Transform 和可选 Update/Graphics 行为。">
+  GameObject
+</Term>
 不应成为塞满所有功能的基类。共同状态只放身份、位置、活动标志等真正跨行为共享的数据。
 
 ```cpp
@@ -67,15 +166,21 @@ private:
 };
 ```
 
-<Term def="对象在世界中的位置和缩放等共享空间状态，由更新行为修改、图形行为只读。">Transform</Term>
+<Term def="对象在世界中的位置和缩放等共享空间状态，由更新行为修改、图形行为只读。">
+  Transform
+</Term>
 由 GameObject 拥有，避免 Update 和 Graphics
 各存一份位置。组件指针独占拥有，销毁对象自动清理。
 
 ## 继承与多态只用于行为接口
 
-<Term def="派生类型复用或扩展基类型接口与实现的语言机制；应保持替换契约而非只为共享成员。">继承</Term>
+<Term def="派生类型复用或扩展基类型接口与实现的语言机制；应保持替换契约而非只为共享成员。">
+  继承
+</Term>
 与
-<Term def="通过基类引用或指针调用虚函数时，根据实际对象类型执行覆盖实现的机制。">多态</Term>
+<Term def="通过基类引用或指针调用虚函数时，根据实际对象类型执行覆盖实现的机制。">
+  多态
+</Term>
 让循环只依赖 UpdateBehavior/GraphicsBehavior。
 
 ```cpp
@@ -94,7 +199,9 @@ public:
 };
 ```
 
-<Term def="带有至少一个纯虚函数、用于规定派生实现必须满足调用契约的基类。">抽象接口</Term>
+<Term def="带有至少一个纯虚函数、用于规定派生实现必须满足调用契约的基类。">
+  抽象接口
+</Term>
 需要虚析构，因为通过基类 unique_ptr 销毁实际派生对象。接口不暴露 Game
 全局对象，使用小型 Context 传入只读依赖和命令出口。
 
@@ -106,7 +213,9 @@ public:
 
 不要建立 `Entity -> MovingEntity -> LivingEntity -> Player` 深链再让平台继承其中一半。Run 玩家可以组合 PlayerUpdate 与 AnimatedGraphics，平台组合 PlatformUpdate 与 TileGraphics，静态装饰只有 Graphics。
 
-<Term def="对象通过拥有多个协作成员获得功能，而不是把所有变化压入单一继承层次的设计。">组合</Term>
+<Term def="对象通过拥有多个协作成员获得功能，而不是把所有变化压入单一继承层次的设计。">
+  组合
+</Term>
 让更新和显示独立替换。代价是共享 Transform
 和事件通信必须显式设计，不能让组件互相保存悬空裸指针。
 
@@ -128,7 +237,9 @@ draw 为 const，图形行为不能推进动画时间；动画帧状态应在 up
 
 ## Factory 隐藏完整构造顺序
 
-<Term def="根据 archetype 请求验证参数、取得资源、组装行为并返回完整 GameObject 的创建组件。">Factory 类</Term>
+<Term def="根据 archetype 请求验证参数、取得资源、组装行为并返回完整 GameObject 的创建组件。">
+  Factory 类
+</Term>
 把构造复杂度从 main 移出，但不应成为能访问所有全局状态的万能对象。
 
 ```cpp
@@ -148,7 +259,6 @@ private:
 
 <Term def="用于选择一组组件、资源和默认参数的实体模板标识。">archetype</Term>
 不是 C++ 类型反射。资源 key、碰撞尺寸和速度可来自数据配置，Factory 验证后组装。
-
 
 ## 构造失败不发布半对象
 
@@ -178,12 +288,16 @@ std::unique_ptr<GameObject> GameObjectFactory::create(
 }
 ```
 
-<Term def="Factory 在局部完成全部组件与资源组装，成功后才把 unique_ptr 交给世界的过程。">工厂提交</Term>
+<Term def="Factory 在局部完成全部组件与资源组装，成功后才把 unique_ptr 交给世界的过程。">
+  工厂提交
+</Term>
 要求 id 唯一。世界容器接受前检查重复 id，避免事件寻址冲突。
 
 ## 主循环对实体类型保持关闭
 
-<Term def="游戏每帧遍历对象接口执行输入、更新、事件提交和绘制，而不按具体实体类型分支的循环。">通用主循环</Term>
+<Term def="游戏每帧遍历对象接口执行输入、更新、事件提交和绘制，而不按具体实体类型分支的循环。">
+  通用主循环
+</Term>
 只调用 update/draw：
 
 ```cpp
@@ -198,12 +312,16 @@ for (const auto& object : objects)
 
 新增 Fireball 或 Rain 只新增行为与 Factory 组装，不修改循环。删除仍在命令提交阶段，遍历中不 erase。对象 id 用于事件，unique_ptr 地址不作为存档身份。
 
-<Term def="软件实体对扩展开放、对修改关闭的设计目标；新增行为通过新实现和组合进入，不改稳定调度代码。">开闭原则</Term>
+<Term def="软件实体对扩展开放、对修改关闭的设计目标；新增行为通过新实现和组合进入，不改稳定调度代码。">
+  开闭原则
+</Term>
 不是绝对禁改，若接口契约本身不足，应正确演进而不是堆类型判断。
 
 ## 设计模式是约束语言
 
-<Term def="在特定上下文中反复出现的设计问题与权衡的命名方案，不是必须照抄的代码模板。">设计模式</Term>
+<Term def="在特定上下文中反复出现的设计问题与权衡的命名方案，不是必须照抄的代码模板。">
+  设计模式
+</Term>
 本章使用 Factory 封装构造、Strategy/Component 表达可替换行为、Command
 延迟世界修改。Observer 可用于声音/UI
 消费事件，但项目规模小时简单事件列表更清楚。
@@ -218,12 +336,16 @@ for (const auto& object : objects)
 
 ## 组件式对象与 ECS 不同
 
-<Term def="实体只是 id，组件按数据类型独立存储，系统批量处理具有所需组件集合的架构。">实体组件系统</Term>
+<Term def="实体只是 id，组件按数据类型独立存储，系统批量处理具有所需组件集合的架构。">
+  实体组件系统
+</Term>
 通常简称
-<Term def="Entity Component System 的缩写，由无行为实体 id、数据组件存储和批处理系统组成。">ECS</Term>。
+<Term def="Entity Component System 的缩写，由无行为实体 id、数据组件存储和批处理系统组成。">
+  ECS
+</Term>
+
 本书的 GameObject
 持有多态组件，状态和调度仍以对象为中心，是“组件模式”，不是严格 ECS。
-
 
 典型 ECS 中 Position/Velocity 是连续数组，MovementSystem 批量迭代两者，不为每个实体调用虚 update。它可改善大量同构实体的数据局部性，但带来查询、生命周期、调试、序列化和编辑器工具复杂度。
 
@@ -241,7 +363,9 @@ struct UpdateContext {
 };
 ```
 
-<Term def="在一次更新调用期显式提供只读依赖与命令出口的短生命周期参数对象。">UpdateContext</Term>
+<Term def="在一次更新调用期显式提供只读依赖与命令出口的短生命周期参数对象。">
+  UpdateContext
+</Term>
 不保存越过帧的引用。组件通过 commands
 请求生成/销毁/声音，世界在安全点提交，避免组件遍历中直接改容器。
 
@@ -249,7 +373,9 @@ struct UpdateContext {
 
 ## Run 项目的首个垂直切片
 
-<Term def="从输入、更新到绘制完整贯通的一小段可运行功能，用于证明架构而非一次搭完全部系统。">垂直切片</Term>
+<Term def="从输入、更新到绘制完整贯通的一小段可运行功能，用于证明架构而非一次搭完全部系统。">
+  垂直切片
+</Term>
 只创建 Player、一个 Platform 和背景。PlayerUpdate
 读取左右/跳跃输入，PlatformUpdate 暂为空或移动，Graphics
 绘制。窗口关闭和资源失败仍正确处理。
@@ -364,5 +490,5 @@ GameObject 拥有 id、Transform 和两个 unique_ptr；UpdateBehavior 经可写
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 15"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />

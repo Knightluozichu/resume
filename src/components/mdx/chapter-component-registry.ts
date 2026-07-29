@@ -2627,6 +2627,225 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       FinalReviewFaultLab: module0.FinalReviewFaultLab,
     } as ChapterMdxComponents;
   },
+  "beginning-cpp-game-programming/00-fundamentals/classes-oop": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/classes-oop");
+    return {
+      ClassesOopPipelineLab: module0.ClassesOopPipelineLab,
+      ClassesOopFrameLab: module0.ClassesOopFrameLab,
+      ClassesOopFaultLab: module0.ClassesOopFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/00-fundamentals/flow-control": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/flow-control");
+    return {
+      FlowControlPipelineLab: module0.FlowControlPipelineLab,
+      FlowControlFrameLab: module0.FlowControlFrameLab,
+      FlowControlFaultLab: module0.FlowControlFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/00-fundamentals/functions": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/functions");
+    return {
+      FunctionsPipelineLab: module0.FunctionsPipelineLab,
+      FunctionsFrameLab: module0.FunctionsFrameLab,
+      FunctionsFaultLab: module0.FunctionsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/00-fundamentals/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/learning-map");
+    return {
+      LearningMapPipelineLab: module0.LearningMapPipelineLab,
+      LearningMapFrameLab: module0.LearningMapFrameLab,
+      LearningMapFaultLab: module0.LearningMapFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/00-fundamentals/types-variables":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/beginning-cpp-game-programming/v2/types-variables");
+      return {
+        TypesVariablesPipelineLab: module0.TypesVariablesPipelineLab,
+        TypesVariablesFrameLab: module0.TypesVariablesFrameLab,
+        TypesVariablesFaultLab: module0.TypesVariablesFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "beginning-cpp-game-programming/01-game-basics/collision-detection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/beginning-cpp-game-programming/v2/collision-detection");
+      return {
+        CollisionDetectionPipelineLab: module0.CollisionDetectionPipelineLab,
+        CollisionDetectionFrameLab: module0.CollisionDetectionFrameLab,
+        CollisionDetectionFaultLab: module0.CollisionDetectionFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "beginning-cpp-game-programming/01-game-basics/game-loop": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/game-loop");
+    return {
+      GameLoopPipelineLab: module0.GameLoopPipelineLab,
+      GameLoopFrameLab: module0.GameLoopFrameLab,
+      GameLoopFaultLab: module0.GameLoopFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/01-game-basics/graphics-sfml": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/graphics-sfml");
+    return {
+      GraphicsSfmlPipelineLab: module0.GraphicsSfmlPipelineLab,
+      GraphicsSfmlFrameLab: module0.GraphicsSfmlFrameLab,
+      GraphicsSfmlFaultLab: module0.GraphicsSfmlFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/01-game-basics/timber-finale": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/timber-finale");
+    return {
+      TimberFinalePipelineLab: module0.TimberFinalePipelineLab,
+      TimberFinaleFrameLab: module0.TimberFinaleFrameLab,
+      TimberFinaleFaultLab: module0.TimberFinaleFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/01-game-basics/zombie-views": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/zombie-views");
+    return {
+      ZombieViewsPipelineLab: module0.ZombieViewsPipelineLab,
+      ZombieViewsFrameLab: module0.ZombieViewsFrameLab,
+      ZombieViewsFaultLab: module0.ZombieViewsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/final-review");
+    return {
+      FinalReviewPipelineLab: module0.FinalReviewPipelineLab,
+      FinalReviewFrameLab: module0.FinalReviewFrameLab,
+      FinalReviewFaultLab: module0.FinalReviewFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/fireballs-spatialization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/beginning-cpp-game-programming/v2/fireballs-spatialization");
+      return {
+        FireballsSpatializationPipelineLab:
+          module0.FireballsSpatializationPipelineLab,
+        FireballsSpatializationFrameLab:
+          module0.FireballsSpatializationFrameLab,
+        FireballsSpatializationFaultLab:
+          module0.FireballsSpatializationFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "beginning-cpp-game-programming/02-project/game-project": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/game-project");
+    return {
+      GameProjectPipelineLab: module0.GameProjectPipelineLab,
+      GameProjectFrameLab: module0.GameProjectFrameLab,
+      GameProjectFaultLab: module0.GameProjectFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/graphics-cameras-action":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/beginning-cpp-game-programming/v2/graphics-cameras-action");
+      return {
+        GraphicsCamerasActionPipelineLab:
+          module0.GraphicsCamerasActionPipelineLab,
+        GraphicsCamerasActionFrameLab: module0.GraphicsCamerasActionFrameLab,
+        GraphicsCamerasActionFaultLab: module0.GraphicsCamerasActionFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "beginning-cpp-game-programming/02-project/layered-hud": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/layered-hud");
+    return {
+      LayeredHudPipelineLab: module0.LayeredHudPipelineLab,
+      LayeredHudFrameLab: module0.LayeredHudFrameLab,
+      LayeredHudFaultLab: module0.LayeredHudFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/menu-rain": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/menu-rain");
+    return {
+      MenuRainPipelineLab: module0.MenuRainPipelineLab,
+      MenuRainFrameLab: module0.MenuRainFrameLab,
+      MenuRainFaultLab: module0.MenuRainFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/parallax-shaders": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/parallax-shaders");
+    return {
+      ParallaxShadersPipelineLab: module0.ParallaxShadersPipelineLab,
+      ParallaxShadersFrameLab: module0.ParallaxShadersFrameLab,
+      ParallaxShadersFaultLab: module0.ParallaxShadersFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/pickups-bullets": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/pickups-bullets");
+    return {
+      PickupsBulletsPipelineLab: module0.PickupsBulletsPipelineLab,
+      PickupsBulletsFrameLab: module0.PickupsBulletsFrameLab,
+      PickupsBulletsFaultLab: module0.PickupsBulletsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/platforms-player-animation-controls":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/beginning-cpp-game-programming/v2/platforms-player-animation-controls");
+      return {
+        PlatformsPlayerAnimationControlsPipelineLab:
+          module0.PlatformsPlayerAnimationControlsPipelineLab,
+        PlatformsPlayerAnimationControlsFrameLab:
+          module0.PlatformsPlayerAnimationControlsFrameLab,
+        PlatformsPlayerAnimationControlsFaultLab:
+          module0.PlatformsPlayerAnimationControlsFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "beginning-cpp-game-programming/02-project/pointers-stl": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/pointers-stl");
+    return {
+      PointersStlPipelineLab: module0.PointersStlPipelineLab,
+      PointersStlFrameLab: module0.PointersStlFrameLab,
+      PointersStlFaultLab: module0.PointersStlFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/sound-file-io": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/sound-file-io");
+    return {
+      SoundFileIoPipelineLab: module0.SoundFileIoPipelineLab,
+      SoundFileIoFrameLab: module0.SoundFileIoFrameLab,
+      SoundFileIoFaultLab: module0.SoundFileIoFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/sound-game-logic": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/sound-game-logic");
+    return {
+      SoundGameLogicPipelineLab: module0.SoundGameLogicPipelineLab,
+      SoundGameLogicFrameLab: module0.SoundGameLogicFrameLab,
+      SoundGameLogicFaultLab: module0.SoundGameLogicFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "beginning-cpp-game-programming/02-project/texture-holder": async () => {
+    const module0 =
+      await import("@/components/mdx/beginning-cpp-game-programming/v2/texture-holder");
+    return {
+      TextureHolderPipelineLab: module0.TextureHolderPipelineLab,
+      TextureHolderFrameLab: module0.TextureHolderFrameLab,
+      TextureHolderFaultLab: module0.TextureHolderFaultLab,
+    } as ChapterMdxComponents;
+  },
   "c-primer-plus/c-advanced/advanced-data": async () => {
     const module0 =
       await import("@/components/mdx/c-primer-plus/advanced-data");

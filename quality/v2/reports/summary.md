@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T22:32:28.758Z；旧版分数不迁移。
+> 2026-07-29T22:59:07.487Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：3306
-- queued：484
-- passed：706
+- queued：461
+- passed：729
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -183,29 +183,29 @@
 | 170 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
 | 171 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
 | 172 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 173 | beginning-cpp-game-programming | 23 | 0 | 23 | 0 | 23 |
-| 174 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 175 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 176 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
-| 177 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 178 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 179 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 180 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 181 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 182 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 183 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 184 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 185 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 186 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 187 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 188 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 189 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 190 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 191 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 192 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 193 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 194 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 195 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
+| 173 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 174 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 175 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
+| 176 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 177 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 178 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 179 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 180 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 181 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 182 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 183 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 184 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 185 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 186 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 187 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 188 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 189 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 190 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 191 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 192 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 193 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 194 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
+| 195 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
 | 196 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
 | 197 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
 | 198 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |

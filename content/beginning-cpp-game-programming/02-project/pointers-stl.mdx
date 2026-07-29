@@ -3,11 +3,16 @@ title: 第 10 章：指针、STL 与纹理管理
 type: A
 section: Zombie Arena 项目
 order: 10
-description: 对齐官方第 3 版第 10 章：掌握指针与生命周期、STL 容器和失效规则，构建可增长僵尸群并建立稳定纹理借用协议。
-demo: false
+description: 第 10 章：指针、STL 与纹理管理：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-10
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,27 +21,117 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  PointersStlPipelineLab,
+  PointersStlFrameLab,
+  PointersStlFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/pointers-stl";
 
 <Objectives>
 
-- 能解释指针的地址、空值、解引用、非拥有语义和容器操作导致的失效，判断何时改用值或智能指针
-- 能实现用 `std::vector` 构造、更新和安全删除僵尸群，并验证 reserve、迭代器和引用的失效边界
-- 能设计一份纹理只加载一次、Sprite 借用地址稳定、热重载与销毁顺序明确的纹理管理协议
+- 能解释“第 10 章：指针、STL 与纹理管理”如何区分拥有与观察指针，用 std::vector 管理可变实体集合，并把纹理生命周期提升到所有 Sprite 之上
+- 能逐项定位 指针（pointers）、标准模板库（standard template library）、容器（container）、纹理管理（texture management），说明它们位于源码、运行状态还是可见输出边界
+- 能按 创建所有者 → 加入 vector → 记录容量 → 更新实体 → 按序销毁 重放“生成一波僵尸”，持续检查“每个动态对象只有一个明确所有者，vector 变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久”
+- 能注入“保存 vector 元素指针后触发扩容，再通过旧地址更新僵尸”，从所有权图、vector size/capacity、扩容前后地址、析构日志及纹理/精灵寿命找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 10 章：指针、STL 与纹理管理”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 10 章：指针、STL 与纹理管理”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“指针（pointers）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 10 章：指针、STL 与纹理管理”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 10 章：指针、STL 与纹理管理”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 10 章：指针、STL 与纹理管理”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+
+## 正式概念与运行状态合同
+
+### 指针（pointers）
+
+这个正式目录节点落在 **所有权** 边界：对象创建、指针职责与析构。在本页中，它参与“区分拥有与观察指针，用 std::vector 管理可变实体集合，并把纹理生命周期提升到所有 Sprite 之上”。验收时保存所有权图、vector size/capacity、扩容前后地址、析构日志及纹理/精灵寿命，不能只凭最终画面判断。
+
+### 标准模板库（standard template library）
+
+这个正式目录节点落在 **集合变化** 边界：vector 容量、插入、擦除和迭代。在本页中，它参与“区分拥有与观察指针，用 std::vector 管理可变实体集合，并把纹理生命周期提升到所有 Sprite 之上”。验收时保存每个动态对象只有一个明确所有者，vector 变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久，不能只凭最终画面判断。
+
+### 容器（container）
+
+这个正式目录节点落在 **资源绑定** 边界：Texture 所有者与 Sprite 观察关系。在本页中，它参与“区分拥有与观察指针，用 std::vector 管理可变实体集合，并把纹理生命周期提升到所有 Sprite 之上”。验收时保存所有权图、vector size/capacity、扩容前后地址、析构日志及纹理/精灵寿命，不能只凭最终画面判断。
+
+### 纹理管理（texture management）
+
+这个正式目录节点落在 **所有权** 边界：对象创建、指针职责与析构。在本页中，它参与“区分拥有与观察指针，用 std::vector 管理可变实体集合，并把纹理生命周期提升到所有 Sprite 之上”。验收时保存每个动态对象只有一个明确所有者，vector 变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| 最小正常场景   | 预留足够容量后创建并加入固定数量实体                                                            |
+| 边界或恢复场景 | 保存元素地址后插入直到 vector 扩容                                                              |
+| 必须保持       | 每个动态对象只有一个明确所有者，vector 变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久 |
+| 单一故障       | 保存 vector 元素指针后触发扩容，再通过旧地址更新僵尸                                            |
+| 可观察证据     | 所有权图、vector size/capacity、扩容前后地址、析构日志及纹理/精灵寿命                           |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“生成一波僵尸”会怎样穿过 所有权 → 集合变化 → 资源绑定，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<PointersStlPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 创建所有者 → 加入 vector → 记录容量 → 更新实体 → 按序销毁。每一步只选中一个阶段，并持续检查“每个动态对象只有一个明确所有者，vector 变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久”。
+
+<PointersStlFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“保存 vector 元素指针后触发扩容，再通过旧地址更新僵尸”，定位第一项不一致；撤销后用完全相同的“触发重新分配”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<PointersStlFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用所有权图、vector
+  size/capacity、扩容前后地址、析构日志及纹理/精灵寿命复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 10 章：指针、STL 与纹理管理”以 SFML 2.6.1 时代接口为基线。直接粘贴 SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“每个动态对象只有一个明确所有者，vector
+  变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“每个动态对象只有一个明确所有者，vector
+  变更后不继续使用可能失效的元素地址，纹理活得比 Sprite 久”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“一千只僵尸是否要复制一千张纹理”开始
 
 Zombie Arena 要在运行期生成数量变化的敌人。第 10 章用
 
-<Term def="保存对象或函数地址的值类型，可为空且可改指向；它本身不说明所有权，也不延长目标生命周期。">指针</Term>
+<Term def="保存对象或函数地址的值类型，可为空且可改指向；它本身不说明所有权，也不延长目标生命周期。">
+  指针
+</Term>
 连接对象，用
-<Term def="C++ 标准库中容器、算法、迭代器和其他通用组件的集合。">标准模板库</Term>
+<Term def="C++ 标准库中容器、算法、迭代器和其他通用组件的集合。">
+  标准模板库
+</Term>
 管理可增长集合，并建立多只精灵共享一份 Texture 的资源协议。
 
 ## 地址、空指针与解引用
 
-<Term def="对象在其存储期内占据的内存位置，可用取地址运算符获得并保存到兼容指针。">对象地址</Term>
+<Term def="对象在其存储期内占据的内存位置，可用取地址运算符获得并保存到兼容指针。">
+  对象地址
+</Term>
 只有在对象存活且没有因移动、删除或容器重分配改变位置时才可使用。`Zombie* p =
 &zombie` 不复制 Zombie，也不让它活得更久。
 
@@ -48,12 +143,15 @@ if (target != nullptr)
     target->update(dt, player.position());
 ```
 
-<Term def="指针不指向任何对象的显式值，现代 C++ 写作 nullptr；它可检查但不可解引用。">空指针</Term>
+<Term def="指针不指向任何对象的显式值，现代 C++ 写作 nullptr；它可检查但不可解引用。">
+  空指针
+</Term>
 适合表达“当前没有目标”。非空仍不足以证明有效：目标可能已销毁，留下数值非零的悬空指针。
 
-<Term def="通过指针访问其目标对象或成员的操作；前置条件是指针指向有效且类型兼容的存活对象。">解引用</Term>
+<Term def="通过指针访问其目标对象或成员的操作；前置条件是指针指向有效且类型兼容的存活对象。">
+  解引用
+</Term>
 失败不是可靠异常，而通常是未定义行为。函数参数若必定需要对象，引用比可空指针更直接；若允许没有目标，指针配合明确检查合适。
-
 
 <Callout type="trap">
   **现象**：目标僵尸删除后锁定系统偶尔崩溃，指针值看起来仍非零。**原因**：非零只说明地址位模式没有清空，不说明对象仍在生命周期内。**修法**：由稳定
@@ -73,7 +171,9 @@ polymorphicHorde.push_back(std::make_unique<FastZombie>(spawn));
 
 当前 Zombie 若是同一具体类型，优先 `vector<Zombie>`：连续存储、所有权简单、少一次间接访问。只有需要运行时多态且对象身份必须稳定时，才考虑 `unique_ptr` 容器。不要手写 `new[]/delete[]` 管群体。
 
-<Term def="独占拥有动态对象的 RAII 智能指针，离开作用域自动 delete，所有权只能移动不能复制。">std::unique_ptr</Term>
+<Term def="独占拥有动态对象的 RAII 智能指针，离开作用域自动 delete，所有权只能移动不能复制。">
+  std::unique_ptr
+</Term>
 解决释放责任，不自动解决指向对象的所有观察者失效。
 
 ## vector：大小、容量与重分配
@@ -92,14 +192,17 @@ for (Zombie& zombie : horde)
     zombie.update(dt, player.position());
 ```
 
-<Term def="vector 容量不足时分配更大连续区域并移动或复制元素的过程，会使指向旧元素的指针、引用和迭代器失效。">重分配</Term>
+<Term def="vector 容量不足时分配更大连续区域并移动或复制元素的过程，会使指向旧元素的指针、引用和迭代器失效。">
+  重分配
+</Term>
 是最常见生命周期陷阱。reserve
 足够容量可推迟重分配，但后续超过容量仍会发生，不能把元素地址当永久 id。
 
-
 ## 迭代器与删除阶段
 
-<Term def="抽象容器位置并支持遍历的对象；其有效性受容器具体修改操作的失效规则约束。">迭代器</Term>
+<Term def="抽象容器位置并支持遍历的对象；其有效性受容器具体修改操作的失效规则约束。">
+  迭代器
+</Term>
 删除 vector
 元素会移动后续元素，使被删位置及之后的迭代器、引用和指针失效。不要在范围 for
 内直接 erase 当前元素。
@@ -122,12 +225,16 @@ C++20 `erase_if` 清楚表达过滤。更新阶段可先标记死亡，所有碰
 
 这些规则属于容器契约，不应靠一次调试地址“看起来没变”判断。启用标准库调试模式和 AddressSanitizer 可发现部分错误，但设计上应缩短观察指针生命周期：在一次循环内取得、使用，容器修改前丢弃。
 
-<Term def="对象已销毁或地址失效后仍保留的指针或引用，任何解引用都会产生未定义行为。">悬空指针</Term>
+<Term def="对象已销毁或地址失效后仍保留的指针或引用，任何解引用都会产生未定义行为。">
+  悬空指针
+</Term>
 即使内存尚未被覆盖也不合法。
 
 ## 纹理管理：加载一次，稳定借用
 
-<Term def="集中加载、复用和释放 Texture，使多个 Sprite 共享资源并保持引用地址稳定的生命周期协议。">纹理管理</Term>
+<Term def="集中加载、复用和释放 Texture，使多个 Sprite 共享资源并保持引用地址稳定的生命周期协议。">
+  纹理管理
+</Term>
 先解决原则，第 11 章再封装
 TextureHolder。生成一千只僵尸时，不应一千次从磁盘解码并上传相同纹理；所有 Zombie
 Sprite 可绑定同一个 Texture。
@@ -143,10 +250,11 @@ for (std::size_t index{0}; index < count; ++index)
     horde.emplace_back(zombieTexture, randomSpawn(randomEngine));
 ```
 
-<Term def="多个 Sprite 保存同一个 Texture 关联，各自拥有变换和游戏状态但不复制图像资源。">纹理共享</Term>
+<Term def="多个 Sprite 保存同一个 Texture 关联，各自拥有变换和游戏状态但不复制图像资源。">
+  纹理共享
+</Term>
 要求 Texture 比所有 Sprite 活得更久。声明顺序可让 texture 先构造、horde
 后构造，从而销毁时 horde 先、texture 后；更大项目由资源库显式控制。
-
 
 ## 资源容器的地址稳定性
 
@@ -268,5 +376,5 @@ Sprite 保存 Texture 关联，Texture 对象移动或销毁会让关联失效�
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 10"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />

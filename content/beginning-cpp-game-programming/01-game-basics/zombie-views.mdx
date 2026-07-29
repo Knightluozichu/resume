@@ -3,11 +3,16 @@ title: 第 8 章：Zombie Arena 与 SFML View
 type: A
 section: Zombie Arena 项目
 order: 8
-description: 对齐官方第 3 版第 8 章：规划 Zombie Arena，建立 Player 类和游戏引擎骨架，用 worldView 与 hudView 分离滚动世界和固定 HUD。
-demo: false
+description: 第 8 章：Zombie Arena 与 SFML View：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-08
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,20 +21,113 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  ZombieViewsPipelineLab,
+  ZombieViewsFrameLab,
+  ZombieViewsFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/zombie-views";
 
 <Objectives>
 
-- 能设计 Zombie Arena 的窗口、竞技场、Player、世界视图与 HUD 视图所有权边界
-- 能实现 Player 类的归一化移动、世界边界、精灵同步与世界坐标瞄准接口
-- 能解释 SFML View 如何映射世界到窗口，并写出先更新玩家、再跟随相机、最后分层绘制的主循环
+- 能解释“第 8 章：Zombie Arena 与 SFML View”如何用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口
+- 能逐项定位 僵尸竞技场（zombie arena）、player 类（player class）、相机视图（sfml view）、僵尸游戏引擎（zombie arena game engine）、主游戏循环（main game loop），说明它们位于源码、运行状态还是可见输出边界
+- 能按 更新玩家 → 设置 View → 裁剪世界 → 绘制对象 → 呈现窗口 重放“玩家向右移动”，持续检查“世界对象使用世界坐标更新，View 只改变观察映射；窗口事件和 HUD 不应被相机位置污染”
+- 能注入“移动相机时同时改写所有僵尸的世界坐标，导致逻辑碰撞与渲染位置分叉”，从Player 世界位置、View center/size/viewport、对象边界、窗口像素和映射结果找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 8 章：Zombie Arena 与 SFML View”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 8 章：Zombie Arena 与 SFML View”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“僵尸竞技场（zombie arena）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 8 章：Zombie Arena 与 SFML View”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 8 章：Zombie Arena 与 SFML View”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 8 章：Zombie Arena 与 SFML View”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+- [SFML 2.6.1：sf::View 官方参考](https://www.sfml-dev.org/documentation/2.6.1/classsf_1_1View.php)：在“第 8 章：Zombie Arena 与 SFML View”中，核对 source rectangle 到 target viewport 的映射、主视图、HUD 与雷达视图边界。
+
+## 正式概念与运行状态合同
+
+### 僵尸竞技场（zombie arena）
+
+这个正式目录节点落在 **世界模型** 边界：Player、僵尸和 Arena 的世界坐标。在本页中，它参与“用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口”。验收时保存Player 世界位置、View center/size/viewport、对象边界、窗口像素和映射结果，不能只凭最终画面判断。
+
+### player 类（player class）
+
+这个正式目录节点落在 **观察映射** 边界：sf::View 的 center、size 与 viewport。在本页中，它参与“用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口”。验收时保存世界对象使用世界坐标更新，View 只改变观察映射；窗口事件和 HUD 不应被相机位置污染，不能只凭最终画面判断。
+
+### 相机视图（sfml view）
+
+这个正式目录节点落在 **窗口输出** 边界：世界画面、事件和固定界面。在本页中，它参与“用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口”。验收时保存Player 世界位置、View center/size/viewport、对象边界、窗口像素和映射结果，不能只凭最终画面判断。
+
+### 僵尸游戏引擎（zombie arena game engine）
+
+这个正式目录节点落在 **世界模型** 边界：Player、僵尸和 Arena 的世界坐标。在本页中，它参与“用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口”。验收时保存世界对象使用世界坐标更新，View 只改变观察映射；窗口事件和 HUD 不应被相机位置污染，不能只凭最终画面判断。
+
+### 主游戏循环（main game loop）
+
+这个正式目录节点落在 **观察映射** 边界：sf::View 的 center、size 与 viewport。在本页中，它参与“用 Player、主游戏循环和 sf::View 把大于窗口的 Zombie Arena 世界映射到相机视口”。验收时保存Player 世界位置、View center/size/viewport、对象边界、窗口像素和映射结果，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                         |
+| -------------- | -------------------------------------------------------------------------------- |
+| 最小正常场景   | Player 世界 x 增加，相机跟随但 Arena 对象坐标不变                                |
+| 边界或恢复场景 | 改变窗口像素尺寸并保持同一 View 世界尺寸                                         |
+| 必须保持       | 世界对象使用世界坐标更新，View 只改变观察映射；窗口事件和 HUD 不应被相机位置污染 |
+| 单一故障       | 移动相机时同时改写所有僵尸的世界坐标，导致逻辑碰撞与渲染位置分叉                 |
+| 可观察证据     | Player 世界位置、View center/size/viewport、对象边界、窗口像素和映射结果         |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“玩家向右移动”会怎样穿过 世界模型 → 观察映射 → 窗口输出，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<ZombieViewsPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 更新玩家 → 设置 View → 裁剪世界 → 绘制对象 → 呈现窗口。每一步只选中一个阶段，并持续检查“世界对象使用世界坐标更新，View 只改变观察映射；窗口事件和 HUD 不应被相机位置污染”。
+
+<ZombieViewsFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“移动相机时同时改写所有僵尸的世界坐标，导致逻辑碰撞与渲染位置分叉”，定位第一项不一致；撤销后用完全相同的“窗口尺寸变化”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<ZombieViewsFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用Player
+  世界位置、View
+  center/size/viewport、对象边界、窗口像素和映射结果复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 8 章：Zombie Arena 与 SFML View”以 SFML 2.6.1 时代接口为基线。直接粘贴
+  SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“世界对象使用世界坐标更新，View
+  只改变观察映射；窗口事件和 HUD 不应被相机位置污染”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“世界对象使用世界坐标更新，View
+  只改变观察映射；窗口事件和 HUD 不应被相机位置污染”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“世界比屏幕大”开始
 
 Timber 和 Pong 的场地接近一个窗口大小。第三个项目
 
-<Term def="本书的僵尸生存射击项目，世界可扩展到多个屏幕，玩家在竞技场中移动、瞄准并对抗不断生成的僵尸。">Zombie Arena</Term>
+<Term def="本书的僵尸生存射击项目，世界可扩展到多个屏幕，玩家在竞技场中移动、瞄准并对抗不断生成的僵尸。">
+  Zombie Arena
+</Term>
 要求相机跟随玩家，同时分数、弹药和提示固定在屏幕上。解决办法不是移动所有地图对象，而是改变观察世界的
 View。
 
@@ -37,7 +135,9 @@ View。
 
 ## 项目边界与游戏引擎骨架
 
-<Term def="协调窗口、资源、输入、更新、视图和渲染阶段的 Zombie Arena 应用层，不替代 Player 等对象维护自身不变量。">僵尸游戏引擎</Term>
+<Term def="协调窗口、资源、输入、更新、视图和渲染阶段的 Zombie Arena 应用层，不替代 Player 等对象维护自身不变量。">
+  僵尸游戏引擎
+</Term>
 当前可以由 `main` 和少量函数组成，不必先设计庞大 Engine
 基类。窗口拥有图形上下文，游戏层拥有 Player
 与视图，资源对象比引用它们的精灵活得更久。
@@ -53,13 +153,17 @@ ZombieArena/
 
 构建目标列出 `main.cpp` 与 `Player.cpp`，资源复制到产物目录。初始化顺序是创建窗口、加载必需资源、构造有效竞技场和 Player、配置 View；任一步失败都不进入循环。
 
-<Term def="定义游戏世界合法位置范围的矩形，Player、僵尸与相机约束都使用同一世界坐标契约。">竞技场边界</Term>
+<Term def="定义游戏世界合法位置范围的矩形，Player、僵尸与相机约束都使用同一世界坐标契约。">
+  竞技场边界
+</Term>
 例如 3000x3000
 世界单位，不等于窗口像素尺寸。把边界作为值传给更新，而不是散落全局常量。
 
 ## Player 类：输入意图与世界状态分开
 
-<Term def="封装玩家位置、移动速度、朝向和精灵表示，并在世界边界内维护逻辑与视觉一致的对象。">Player 类</Term>
+<Term def="封装玩家位置、移动速度、朝向和精灵表示，并在世界边界内维护逻辑与视觉一致的对象。">
+  Player 类
+</Term>
 不直接读取全局键盘或窗口。主循环把设备状态转换成二维移动意图和世界瞄准点，Player
 只处理游戏数据，测试无需真实输入设备。
 
@@ -83,7 +187,6 @@ private:
 
 Player 的 Sprite 借用外部 Texture，因此游戏资源层必须覆盖 Player 生命周期。若不希望构造后纹理更换，构造参数和所有权文档要明确。返回 const Sprite 只用于绘制，外部不能绕过类移动它。
 
-
 ## 归一化移动避免斜向加速
 
 WASD 同时按两个正交方向时，原始向量 `(1,1)` 长度约 1.414。直接乘速度会让斜向比水平快。先在非零时归一化，再乘每秒速度和 dt。
@@ -103,7 +206,9 @@ if (lengthSquared > 0.0F) {
 }
 ```
 
-<Term def="把非零方向向量缩放为长度一，使多轴组合只改变方向而不改变移动速率。">方向归一化</Term>
+<Term def="把非零方向向量缩放为长度一，使多轴组合只改变方向而不改变移动速率。">
+  方向归一化
+</Term>
 不能对零向量除长度。相反方向键同时按下会互相抵消为零，符合明确规则。
 
 ## Player 更新、边界与朝向
@@ -133,7 +238,9 @@ void Player::update(float dt, sf::Vector2f moveIntent,
 }
 ```
 
-<Term def="玩家和游戏对象使用的逻辑位置空间，独立于窗口像素并由 View 映射到可见区域。">世界坐标</Term>
+<Term def="玩家和游戏对象使用的逻辑位置空间，独立于窗口像素并由 View 映射到可见区域。">
+  世界坐标
+</Term>
 中的 `aimWorld` 必须由当前 worldView 映射得到。竞技场小于玩家尺寸时 clamp
 上下界会反转，构造关卡时应拒绝该配置，而不是让 update 接受非法范围。
 
@@ -144,7 +251,9 @@ void Player::update(float dt, sf::Vector2f moveIntent,
 
 ## SFML View 改变观察，不改变世界
 
-<Term def="SFML 定义二维相机中心、尺寸、旋转和归一化视口的对象，用于把世界坐标映射到渲染目标区域。">SFML View</Term>
+<Term def="SFML 定义二维相机中心、尺寸、旋转和归一化视口的对象，用于把世界坐标映射到渲染目标区域。">
+  SFML View
+</Term>
 不会修改 Player 或地图坐标。`setCenter` 只是让之后在该 View
 下绘制的世界从另一个位置观察。
 
@@ -158,11 +267,14 @@ hudView.setSize(1280.0F, 720.0F);
 hudView.setCenter(640.0F, 360.0F);
 ```
 
-<Term def="以玩家或目标位置为中心、显示可滚动游戏世界的 View；地图和实体都在此视图下绘制。">worldView</Term>
+<Term def="以玩家或目标位置为中心、显示可滚动游戏世界的 View；地图和实体都在此视图下绘制。">
+  worldView
+</Term>
 每帧在 Player 更新后跟随。
-<Term def="使用固定逻辑屏幕坐标绘制分数、弹药和提示的 View，不随世界相机中心移动。">hudView</Term>
+<Term def="使用固定逻辑屏幕坐标绘制分数、弹药和提示的 View，不随世界相机中心移动。">
+  hudView
+</Term>
 保持固定。
-
 
 ## 世界相机边界
 
@@ -180,12 +292,16 @@ cameraCenter.y = std::clamp(cameraCenter.y,
 worldView.setCenter(cameraCenter);
 ```
 
-<Term def="限制相机中心使整个 View 保持在地图合法范围内，避免显示世界边界外区域。">相机钳制</Term>
+<Term def="限制相机中心使整个 View 保持在地图合法范围内，避免显示世界边界外区域。">
+  相机钳制
+</Term>
 前置条件是竞技场尺寸不小于 View；关卡配置阶段先验证，否则 clamp 范围无效。
 
 ## 像素到世界的输入映射
 
-<Term def="把窗口像素位置按指定 View 逆变换为逻辑坐标的过程，用于鼠标瞄准、选择和世界命中测试。">坐标映射</Term>
+<Term def="把窗口像素位置按指定 View 逆变换为逻辑坐标的过程，用于鼠标瞄准、选择和世界命中测试。">
+  坐标映射
+</Term>
 必须显式传 worldView。窗口当前激活 View 可能刚切到
 HUD，依赖隐式当前状态会导致调用顺序改变输入结果。
 
@@ -201,7 +317,9 @@ HUD 点击则用 hudView 映射。记录日志时标注 pixel/world/hud，不能
 
 ## 主游戏循环：先 Player，后相机
 
-<Term def="持续处理窗口事件、采样输入、更新玩家和世界、更新相机并分层绘制的 Zombie Arena 帧循环。">主游戏循环</Term>
+<Term def="持续处理窗口事件、采样输入、更新玩家和世界、更新相机并分层绘制的 Zombie Arena 帧循环。">
+  主游戏循环
+</Term>
 顺序很重要：若先设置 View 中心再更新
 Player，相机会永远落后一帧；高速移动时产生可见拖尾。
 
@@ -230,7 +348,6 @@ while (window.isOpen()) {
 ```
 
 示例中的 `moveIntent` 和 `clampedCameraCenter` 由前述逻辑产生。一次 clear、一次 display，中间按层切换 View；切 View 不会清空已绘制内容。
-
 
 ## 文件组织与职责
 
@@ -337,5 +454,5 @@ Player.hpp 只暴露构造、update 和查询；Player.cpp 包含数学与 SFML 
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 8"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />

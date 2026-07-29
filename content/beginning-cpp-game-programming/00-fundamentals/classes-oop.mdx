@@ -3,11 +3,16 @@ title: 第 6 章：OOP 与 Pong 的 Bat 类
 type: A
 section: Pong 项目
 order: 6
-description: 对齐官方第 3 版第 6 章：理解面向对象、类与封装，创建 Pong 项目，实现第一个 Bat 类并接入 main 游戏循环。
-demo: false
+description: 第 6 章：OOP 与 Pong 的 Bat 类：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-06
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,30 +21,124 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  ClassesOopPipelineLab,
+  ClassesOopFrameLab,
+  ClassesOopFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/classes-oop";
 
 <Objectives>
 
-- 能解释类、对象、public/private 与封装的职责，并写出始终满足速度和边界不变量的构造函数
-- 能实现 Pong `Bat` 类的输入命令、按秒移动、位置钳制和只读形状查询
-- 能设计 `main` 与 Bat 对象的协作顺序，验证左右边界、松键停止和不同 dt 下的移动
+- 能解释“第 6 章：OOP 与 Pong 的 Bat 类”如何用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong
+- 能逐项定位 面向对象编程（object-oriented programming）、乒乓球拍（pong bat）、创建 pong 项目（creating the pong project）、类（class）、main 函数（main function），说明它们位于源码、运行状态还是可见输出边界
+- 能按 构造 Bat → 接收意图 → 计算位移 → 夹取边界 → 同步形状 重放“向右移动”，持续检查“Bat 自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致”
+- 能注入“把 position 和 shape 同时暴露给 main 修改，导致逻辑坐标与绘制坐标分叉”，从构造参数、私有成员快照、公开方法调用、边界夹取和 shape.getPosition 结果找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 6 章：OOP 与 Pong 的 Bat 类”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 6 章：OOP 与 Pong 的 Bat 类”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“面向对象编程（object-oriented programming）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 6 章：OOP 与 Pong 的 Bat 类”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 6 章：OOP 与 Pong 的 Bat 类”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 6 章：OOP 与 Pong 的 Bat 类”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+
+## 正式概念与运行状态合同
+
+### 面向对象编程（object-oriented programming）
+
+这个正式目录节点落在 **对象合同** 边界：构造、公开方法与私有不变量。在本页中，它参与“用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong”。验收时保存构造参数、私有成员快照、公开方法调用、边界夹取和 shape.getPosition 结果，不能只凭最终画面判断。
+
+### 乒乓球拍（pong bat）
+
+这个正式目录节点落在 **状态更新** 边界：方向、速度、delta time 与边界。在本页中，它参与“用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong”。验收时保存Bat 自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致，不能只凭最终画面判断。
+
+### 创建 pong 项目（creating the pong project）
+
+这个正式目录节点落在 **Pong 输出** 边界：Bat 的 RectangleShape 位置与绘制。在本页中，它参与“用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong”。验收时保存构造参数、私有成员快照、公开方法调用、边界夹取和 shape.getPosition 结果，不能只凭最终画面判断。
+
+### 类（class）
+
+这个正式目录节点落在 **对象合同** 边界：构造、公开方法与私有不变量。在本页中，它参与“用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong”。验收时保存Bat 自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致，不能只凭最终画面判断。
+
+### main 函数（main function）
+
+这个正式目录节点落在 **状态更新** 边界：方向、速度、delta time 与边界。在本页中，它参与“用 Bat 类封装位置、速度和边界，通过构造、update 与 getShape 合同启动 Pong”。验收时保存构造参数、私有成员快照、公开方法调用、边界夹取和 shape.getPosition 结果，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                       |
+| -------------- | ------------------------------------------------------------------------------ |
+| 最小正常场景   | 按住右键一秒，窗口宽度足够容纳球拍                                             |
+| 边界或恢复场景 | 从靠近右边界的位置继续输入向右                                                 |
+| 必须保持       | Bat 自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致 |
+| 单一故障       | 把 position 和 shape 同时暴露给 main 修改，导致逻辑坐标与绘制坐标分叉          |
+| 可观察证据     | 构造参数、私有成员快照、公开方法调用、边界夹取和 shape.getPosition 结果        |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“向右移动”会怎样穿过 对象合同 → 状态更新 → Pong 输出，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<ClassesOopPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 构造 Bat → 接收意图 → 计算位移 → 夹取边界 → 同步形状。每一步只选中一个阶段，并持续检查“Bat 自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致”。
+
+<ClassesOopFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“把 position 和 shape 同时暴露给 main 修改，导致逻辑坐标与绘制坐标分叉”，定位第一项不一致；撤销后用完全相同的“触碰右边界”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<ClassesOopFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用构造参数、私有成员快照、公开方法调用、边界夹取和
+  shape.getPosition 结果复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 6 章：OOP 与 Pong 的 Bat 类”以 SFML 2.6.1 时代接口为基线。直接粘贴 SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“Bat
+  自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“Bat
+  自己维护合法位置，外部只通过公开接口表达意图，渲染读取的形状与内部位置一致”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“谁负责保证球拍不出界”开始
 
 Timber 项目主要把状态放在 `main` 附近。Pong 开始引入
 
-<Term def="把相关状态和操作状态的行为组织为对象，并让对象边界维护自身不变量的软件设计方式。">面向对象编程</Term>。
+<Term def="把相关状态和操作状态的行为组织为对象，并让对象边界维护自身不变量的软件设计方式。">
+  面向对象编程
+</Term>
+
 它不是“所有东西都继承一个基类”，本章也不需要多态；第一个目标只是让球拍对象自己负责位置、速度、方向和形状同步。
 
 如果主循环直接写球拍的 x、速度和 RectangleShape，任何调用点都可能忘记边界。把状态设为 private，只允许经命名操作修改，就能把“球拍始终位于场内”集中在一个更新函数中。
 
-
 ## 类与对象：类型定义和运行实例
 
-<Term def="用户定义类型，声明一组成员数据、成员函数和访问规则，用于描述对象可保持的状态和可执行的操作。">类</Term>
+<Term def="用户定义类型，声明一组成员数据、成员函数和访问规则，用于描述对象可保持的状态和可执行的操作。">
+  类
+</Term>
 是类型定义；
-<Term def="某个类在运行期的实例，拥有独立成员状态并经历构造、使用和销毁生命周期。">对象</Term>
+<Term def="某个类在运行期的实例，拥有独立成员状态并经历构造、使用和销毁生命周期。">
+  对象
+</Term>
 是具体值。两个 Bat 对象可共享同一类定义，却各有不同位置与方向。
 
 ```cpp
@@ -66,12 +165,18 @@ private:
 
 ## public、private 与封装
 
-<Term def="类向调用者开放的接口区域，外部只能依赖这里声明的稳定操作与查询。">public 接口</Term>
+<Term def="类向调用者开放的接口区域，外部只能依赖这里声明的稳定操作与查询。">
+  public 接口
+</Term>
 表达“向左、向右、停止、更新、取得形状”。
-<Term def="只允许类自身成员和友元访问的实现区域，用于隐藏表示并集中维护对象不变量。">private 状态</Term>
+<Term def="只允许类自身成员和友元访问的实现区域，用于隐藏表示并集中维护对象不变量。">
+  private 状态
+</Term>
 保存位置、速度、方向和形状。
 
-<Term def="把表示隐藏在类边界内，并让所有状态变化经过能维护不变量的公开操作。">封装</Term>
+<Term def="把表示隐藏在类边界内，并让所有状态变化经过能维护不变量的公开操作。">
+  封装
+</Term>
 的收益不是少看几行代码，而是减少能制造非法状态的入口。若 `speed_`
 公开，外部可写负数；若 `shape_` 可修改引用暴露，外部可移动形状却不更新
 `position_`，两套状态分叉。
@@ -87,7 +192,9 @@ private:
 
 ## 构造函数：一次建立可用 Bat
 
-<Term def="对象创建时执行的特殊成员函数，通过成员初始化列表建立成员初值并验证构造参数。">构造函数</Term>
+<Term def="对象创建时执行的特殊成员函数，通过成员初始化列表建立成员初值并验证构造参数。">
+  构造函数
+</Term>
 应让返回的对象已经可用。成员按类中声明顺序初始化，不按初始化列表书写顺序；列表最好与声明顺序一致，避免依赖尚未初始化成员。
 
 ```cpp
@@ -107,7 +214,9 @@ Bat::Bat(sf::Vector2f startPosition, sf::Vector2f size, float speed)
 
 构造失败抛异常，主程序可在初始化边界捕获并报告。也可用工厂返回错误状态，但不能悄悄把非法参数改成任意默认值。RectangleShape 自己拥有几何与颜色，不借用纹理，因此 Bat 没有额外资源所有权问题。
 
-<Term def="对象在所有公开操作前后都应保持的合法状态条件，例如速度非负、方向属于 -1/0/1、球拍包围盒位于场内。">类不变量</Term>
+<Term def="对象在所有公开操作前后都应保持的合法状态条件，例如速度非负、方向属于 -1/0/1、球拍包围盒位于场内。">
+  类不变量
+</Term>
 在构造后成立，`move/update/stop` 都要保持。
 
 ## 命令接口：用一个方向消除矛盾布尔值
@@ -131,7 +240,9 @@ void Bat::stop()
 }
 ```
 
-<Term def="告诉对象希望执行什么而不暴露内部表示的成员函数，例如 moveLeft、moveRight 和 stop。">命令方法</Term>
+<Term def="告诉对象希望执行什么而不暴露内部表示的成员函数，例如 moveLeft、moveRight 和 stop。">
+  命令方法
+</Term>
 不立即积分位置，只设置本帧意图；`update` 统一消费
 dt。这样按键处理次数不会直接决定移动距离。
 
@@ -139,7 +250,9 @@ dt。这样按键处理次数不会直接决定移动距离。
 
 ## update：积分、钳制与同步
 
-<Term def="对象按本帧时间推进逻辑状态、维护边界并同步可绘制表示的成员函数。">更新方法</Term>
+<Term def="对象按本帧时间推进逻辑状态、维护边界并同步可绘制表示的成员函数。">
+  更新方法
+</Term>
 接收 dt 和场地宽度。Bat 知道自身宽度，调用者无需重复右边界公式。
 
 ```cpp
@@ -154,9 +267,10 @@ void Bat::update(float dt, float arenaWidth)
 
 如果窗口比球拍还窄，`maxX` 先钳到零，避免给 `std::clamp` 传下界大于上界的无效范围。dt 由主循环统一采样并限幅；类不负责读全局时钟，否则多个对象无法共享同一帧时间。
 
-<Term def="把计算结果限制在合法闭区间内的操作；球拍 x 被限制在零到场宽减球拍宽度。">边界钳制</Term>
+<Term def="把计算结果限制在合法闭区间内的操作；球拍 x 被限制在零到场宽减球拍宽度。">
+  边界钳制
+</Term>
 按整个包围盒处理，不能只限制左上点到 arenaWidth，否则右半球拍仍会出界。
-
 
 ## const 查询：允许绘制但不允许绕过类
 
@@ -167,7 +281,9 @@ const sf::RectangleShape& Bat::shape() const noexcept
 }
 ```
 
-<Term def="承诺成员函数不修改对象可观察状态的限定，允许通过 const 对象或引用执行只读查询。">const 成员函数</Term>
+<Term def="承诺成员函数不修改对象可观察状态的限定，允许通过 const 对象或引用执行只读查询。">
+  const 成员函数
+</Term>
 让 `window.draw(bat.shape())` 可用，同时返回 `const`
 引用避免复制和外部修改。引用只在 Bat
 存活期间有效，调用者不能保存到对象销毁之后。
@@ -176,11 +292,15 @@ const sf::RectangleShape& Bat::shape() const noexcept
 
 ## 创建 Pong 项目与 main 函数
 
-<Term def="本书第二个游戏项目，从可移动球拍开始，下一章加入 Ball、AABB 碰撞、物理反弹与计分。">Pong 项目</Term>
+<Term def="本书第二个游戏项目，从可移动球拍开始，下一章加入 Ball、AABB 碰撞、物理反弹与计分。">
+  Pong 项目
+</Term>
 复用第 1 章构建与窗口经验，但使用独立资源目录和目标。当前垂直切片只验收窗口、Bat
 构造、持续输入、更新和绘制。
 
-<Term def="创建窗口和对象、管理事件输入更新渲染顺序并返回进程状态的程序入口。">main 函数</Term>
+<Term def="创建窗口和对象、管理事件输入更新渲染顺序并返回进程状态的程序入口。">
+  main 函数
+</Term>
 是协调者，不应重新实现 Bat 边界。
 
 ```cpp
@@ -213,7 +333,6 @@ while (window.isOpen()) {
 ```
 
 关闭事件后可再次检查 `window.isOpen()` 再更新绘制，与第 1 章保持一致。窗口 resize 时，场宽来自当前尺寸，但 View 映射策略也要同步；若使用固定逻辑分辨率，应传逻辑场宽而非像素宽。
-
 
 ## 文件边界与编译依赖
 
@@ -326,5 +445,5 @@ Bat.hpp 放类声明和必需类型定义，Bat.cpp 包含头并定义构造与�
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 6"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />

@@ -3,11 +3,16 @@ title: 第 18 章：平台、Player 控制与 Animator
 type: A
 section: Run! 项目
 order: 18
-description: 对齐官方第 3 版第 18 章：生成可达平台地形，实现 Player 控制和落地解算，并用 Animator 类、动画片段与动画帧驱动玩家动画。
-demo: false
+description: 第 18 章：平台、Player 控制与 Animator：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-18
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,31 +21,120 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import {
+  PlatformsPlayerAnimationControlsPipelineLab,
+  PlatformsPlayerAnimationControlsFrameLab,
+  PlatformsPlayerAnimationControlsFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/platforms-player-animation-controls";
 
 <Objectives>
 
-- 能设计满足最大跳距、宽度和高度约束的平台地形生成器，并安全提交、碰撞和回收平台
-- 能实现设备输入到 PlayerIntent、运动积分和落地解算的玩家控制链路，保证跳跃只触发一次
-- 能实现 Animator 类和动画片段，以 animation frames 表达玩家动画并正确处理循环、切换与完成事件
+- 能解释“第 18 章：平台、Player 控制与 Animator”如何把平台几何、玩家控制、Animator 帧选择与物理状态分离，使动画表现跟随已提交动作
+- 能逐项定位 平台地形（platforms）、玩家控制（player controls）、animator 类（animator class）、玩家动画（player animations），说明它们位于源码、运行状态还是可见输出边界
+- 能按 采样控制 → 计算物理 → 提交接触 → 选择动画 → 绘制当前帧 重放“地面奔跑”，持续检查“控制输入先形成意图，物理决定实际运动，Animator 根据已提交状态选帧；动画不能反向决定碰撞位置”
+- 能注入“按渲染帧数推进动画并用 sprite 帧宽修改碰撞体，造成帧率相关速度和碰撞抖动”，从输入意图、物理速度、接地标志、动画状态、累计时间、帧索引和碰撞体找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 18 章：平台、Player 控制与 Animator”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 18 章：平台、Player 控制与 Animator”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“平台地形（platforms）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 18 章：平台、Player 控制与 Animator”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 18 章：平台、Player 控制与 Animator”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 18 章：平台、Player 控制与 Animator”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+
+## 正式概念与运行状态合同
+
+### 平台地形（platforms）
+
+这个正式目录节点落在 **平台物理** 边界：地形边界、接触和玩家 Transform。在本页中，它参与“把平台几何、玩家控制、Animator 帧选择与物理状态分离，使动画表现跟随已提交动作”。验收时保存输入意图、物理速度、接地标志、动画状态、累计时间、帧索引和碰撞体，不能只凭最终画面判断。
+
+### 玩家控制（player controls）
+
+这个正式目录节点落在 **控制状态** 边界：左右、跳跃、速度和接地条件。在本页中，它参与“把平台几何、玩家控制、Animator 帧选择与物理状态分离，使动画表现跟随已提交动作”。验收时保存控制输入先形成意图，物理决定实际运动，Animator 根据已提交状态选帧；动画不能反向决定碰撞位置，不能只凭最终画面判断。
+
+### animator 类（animator class）
+
+这个正式目录节点落在 **动画表现** 边界：Animator、状态切换、帧时间与 sprite sheet。在本页中，它参与“把平台几何、玩家控制、Animator 帧选择与物理状态分离，使动画表现跟随已提交动作”。验收时保存输入意图、物理速度、接地标志、动画状态、累计时间、帧索引和碰撞体，不能只凭最终画面判断。
+
+### 玩家动画（player animations）
+
+这个正式目录节点落在 **平台物理** 边界：地形边界、接触和玩家 Transform。在本页中，它参与“把平台几何、玩家控制、Animator 帧选择与物理状态分离，使动画表现跟随已提交动作”。验收时保存控制输入先形成意图，物理决定实际运动，Animator 根据已提交状态选帧；动画不能反向决定碰撞位置，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| 最小正常场景   | 玩家接地并持续输入向右，提供固定 delta time                                                 |
+| 边界或恢复场景 | 玩家跳起后释放水平输入                                                                      |
+| 必须保持       | 控制输入先形成意图，物理决定实际运动，Animator 根据已提交状态选帧；动画不能反向决定碰撞位置 |
+| 单一故障       | 按渲染帧数推进动画并用 sprite 帧宽修改碰撞体，造成帧率相关速度和碰撞抖动                    |
+| 可观察证据     | 输入意图、物理速度、接地标志、动画状态、累计时间、帧索引和碰撞体                            |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“地面奔跑”会怎样穿过 平台物理 → 控制状态 → 动画表现，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<PlatformsPlayerAnimationControlsPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 采样控制 → 计算物理 → 提交接触 → 选择动画 → 绘制当前帧。每一步只选中一个阶段，并持续检查“控制输入先形成意图，物理决定实际运动，Animator 根据已提交状态选帧；动画不能反向决定碰撞位置”。
+
+<PlatformsPlayerAnimationControlsFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“按渲染帧数推进动画并用 sprite 帧宽修改碰撞体，造成帧率相关速度和碰撞抖动”，定位第一项不一致；撤销后用完全相同的“空中释放方向”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<PlatformsPlayerAnimationControlsFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用输入意图、物理速度、接地标志、动画状态、累计时间、帧索引和碰撞体复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 18 章：平台、Player 控制与 Animator”以 SFML 2.6.1 时代接口为基线。直接粘贴
+  SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“控制输入先形成意图，物理决定实际运动，Animator
+  根据已提交状态选帧；动画不能反向决定碰撞位置”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“控制输入先形成意图，物理决定实际运动，Animator
+  根据已提交状态选帧；动画不能反向决定碰撞位置”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“随机平台为何可能让游戏无解”开始
 
 Run! 的
 
-<Term def="承载玩家、参与从上方落地碰撞并随进程持续生成回收的地形对象。">平台地形</Term>
+<Term def="承载玩家、参与从上方落地碰撞并随进程持续生成回收的地形对象。">
+  平台地形
+</Term>
 
 不能只随机 x、y。若间隙超过 Player 的水平可达距离，程序仍能运行但关卡必死。生成器必须把物理参数转成约束，再在约束内加入变化。
 
-<Term def="在给定起跳速度、重力、水平速度和高度差下，Player 能安全落到下一平台的空间范围。">可达区域</Term>
+<Term def="在给定起跳速度、重力、水平速度和高度差下，Player 能安全落到下一平台的空间范围。">
+  可达区域
+</Term>
 
 是生成契约。先预测：提高重力但不改平台间距，哪一类平台组合会首先变得不可达？
 
-
 ## 从跳跃物理推导生成边界
 
-<Term def="规划下一平台起点、宽度和高度，并把合法候选交给 Factory 的服务。">PlatformGenerator</Term>
+<Term def="规划下一平台起点、宽度和高度，并把合法候选交给 Factory 的服务。">
+  PlatformGenerator
+</Term>
 
 使用与 PlayerUpdate 相同的配置来源。平地近似下，总腾空时间约为起跳上升和下落之和，最大水平距离还要乘安全系数，为输入延迟和边缘落脚留余量。
 
@@ -63,13 +157,17 @@ Reachability deriveReachability(const PlayerConfig& player)
 }
 ```
 
-<Term def="小于理论极限的倍率，为帧离散、反应时间和边缘碰撞误差保留可玩余量。">可达安全系数</Term>
+<Term def="小于理论极限的倍率，为帧离散、反应时间和边缘碰撞误差保留可玩余量。">
+  可达安全系数
+</Term>
 
 配置必须验证 gravity 为正。生成后再用离散模拟跑一次候选轨迹，能发现连续公式没有覆盖的固定步长误差。
 
 ## 平台提交与回收
 
-<Term def="描述平台类型、位置、尺寸和资源键，经过验证后在安全点生成对象的命令。">平台生成命令</Term>
+<Term def="描述平台类型、位置、尺寸和资源键，经过验证后在安全点生成对象的命令。">
+  平台生成命令
+</Term>
 
 由生成器追加，Factory 构造完整 GameObject，世界统一加入对象容器与碰撞索引。任何资源失败都不发布半平台。
 
@@ -87,7 +185,9 @@ void PlatformGenerator::ensureAhead(const Camera& camera,
 }
 ```
 
-<Term def="位于主相机后方一定距离的世界边界，越过后平台可请求销毁。">回收线</Term>
+<Term def="位于主相机后方一定距离的世界边界，越过后平台可请求销毁。">
+  回收线
+</Term>
 
 不能刚离屏就删除，因为雷达或短暂回看仍可能需要它。若使用对象池，复用前重置 Transform、碰撞状态、外观、旧 id 关联和事件标记；池化不应改变玩法语义。
 
@@ -99,7 +199,9 @@ void PlatformGenerator::ensureAhead(const Camera& camera,
 
 ## 玩家控制从设备状态变成意图
 
-<Term def="把键盘或手柄输入映射为水平轴和跳跃边沿，再交给 Player 规则的适配层。">玩家控制</Term>
+<Term def="把键盘或手柄输入映射为水平轴和跳跃边沿，再交给 Player 规则的适配层。">
+  玩家控制
+</Term>
 
 官方 player controls 不应散落在 Player、窗口循环和 Animator。InputMapper 读取设备，输出第 16 章的 PlayerIntent。
 
@@ -115,14 +217,17 @@ PlayerIntent InputMapper::sample(const InputState& input) const
 }
 ```
 
-<Term def="从未按到按下只持续一个逻辑帧的输入变化，用于跳跃等一次动作。">输入边沿</Term>
+<Term def="从未按到按下只持续一个逻辑帧的输入变化，用于跳跃等一次动作。">
+  输入边沿
+</Term>
 
 与“当前按住”分开。键位重映射只改 InputMapper；回放记录意图，不记录平台相关键码。
 
-
 ## 运动积分与落地解算
 
-<Term def="根据速度、重力和受限时间步计算 Player 候选位置的过程。">运动积分</Term>
+<Term def="根据速度、重力和受限时间步计算 Player 候选位置的过程。">
+  运动积分
+</Term>
 
 先保存上一帧脚底，计算候选位置，再查询可能接触的平台。落地要求上一帧脚底不低于平台顶面、当前帧跨过顶面、水平范围重叠且竖直速度向下。
 
@@ -139,7 +244,9 @@ if (velocity.y >= 0.0F &&
 }
 ```
 
-<Term def="碰撞解算确认 Player 由空中转为站在平台上的提交状态。">grounded 状态</Term>
+<Term def="碰撞解算确认 Player 由空中转为站在平台上的提交状态。">
+  grounded 状态
+</Term>
 
 不能由动画帧或按键设置。离开平台边缘后，若没有支撑接触则转为空中；状态边沿驱动声音与动画。
 
@@ -152,11 +259,15 @@ if (velocity.y >= 0.0F &&
 
 ## Animator 类管理时间，不决定玩法
 
-<Term def="保存当前动画片段、帧索引和累计时间，并按 dt 采样动画帧的组件。">Animator 类</Term>
+<Term def="保存当前动画片段、帧索引和累计时间，并按 dt 采样动画帧的组件。">
+  Animator 类
+</Term>
 
 Animator 不读取键盘，也不修改 grounded。它接收 Player 已提交的动画状态，输出 texture rect。
 
-<Term def="一组有序帧矩形、各帧时长以及循环策略，描述一个完整视觉动作。">AnimationClip</Term>
+<Term def="一组有序帧矩形、各帧时长以及循环策略，描述一个完整视觉动作。">
+  AnimationClip
+</Term>
 
 资源加载时验证帧非空、时长为正且矩形落在纹理范围内。
 
@@ -172,7 +283,9 @@ struct AnimationClip {
 };
 ```
 
-<Term def="精灵表中某一时刻使用的纹理矩形及持续时间，是动画片段的最小采样单元。">动画帧</Term>
+<Term def="精灵表中某一时刻使用的纹理矩形及持续时间，是动画片段的最小采样单元。">
+  动画帧
+</Term>
 
 不同帧可有不同持续时间。Graphics 只读取 Animator 当前矩形，不在 draw 中推进时间。
 
@@ -201,30 +314,39 @@ void Animator::update(float dt)
 }
 ```
 
-<Term def="非循环片段首次到达最后一帧时产生一次、用于切换后续表现的事实。">动画完成事件</Term>
+<Term def="非循环片段首次到达最后一帧时产生一次、用于切换后续表现的事实。">
+  动画完成事件
+</Term>
 
 不能每帧重复发送。极端 dt 应有最大循环次数保护，资源验证则保证 duration 不为零。
 
-
 ## 玩家动画状态机
 
-<Term def="根据已提交速度、grounded 和规则事件选择 Idle、Run、Jump、Fall、Land 片段的表现状态机。">玩家动画状态机</Term>
+<Term def="根据已提交速度、grounded 和规则事件选择 Idle、Run、Jump、Fall、Land 片段的表现状态机。">
+  玩家动画状态机
+</Term>
 
 玩家动画由玩法状态派生：grounded 且水平速度明显为零选 Idle；grounded 且移动选 Run；空中向上选 Jump；空中向下选 Fall；PlayerLanded 可触发一次 Land。
 
-<Term def="从一个 AnimationClip 切到另一个时，规定是否重置帧索引与累计时间的策略。">片段切换策略</Term>
+<Term def="从一个 AnimationClip 切到另一个时，规定是否重置帧索引与累计时间的策略。">
+  片段切换策略
+</Term>
 
 目标状态与当前状态相同就不重置，否则 Run 每帧都会回到首帧。进入一次性 Land 时重置；完成后回到 Idle 或 Run。面向方向只翻转 Graphics，不复制另一套动画资源。
 
 ## 三条链路的提交顺序
 
-<Term def="平台生成、Player 运动碰撞和动画选择在同一帧中的固定先后协议。">行动帧协议</Term>
+<Term def="平台生成、Player 运动碰撞和动画选择在同一帧中的固定先后协议。">
+  行动帧协议
+</Term>
 
 先采样意图；生成相机前方平台候选；更新 Player 候选运动；用已提交平台集合解算接触；集中提交移动、生成和回收；从最终速度与 grounded 派生动画状态；更新 Animator；最后生成 RenderSnapshot。这样新平台不会在碰撞查询中以半构造状态出现，动画也不会领先玩法。
 
 ## 测试与故障诊断
 
-<Term def="用大量随机种子验证每个连续平台组合都满足可达约束的自动化测试。">生成属性测试</Term>
+<Term def="用大量随机种子验证每个连续平台组合都满足可达约束的自动化测试。">
+  生成属性测试
+</Term>
 
 固定 PlayerConfig 生成上万段，断言尺寸合法、id 唯一、相邻平台通过离散轨迹验证。记录失败 seed，确保可复现。控制测试覆盖按住 jump 只产生一个边沿、空中跳跃被拒绝、离开边缘 grounded 清除、高速下落不穿透。
 
@@ -252,7 +374,7 @@ void Animator::update(float dt)
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 18"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />
 
 <Glossary>

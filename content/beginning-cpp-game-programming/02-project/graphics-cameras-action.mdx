@@ -3,11 +3,16 @@ title: 第 17 章：Graphics、Camera 与多视图行动
 type: A
 section: Run! 项目
 order: 17
-description: 对齐官方第 3 版第 17 章：把 Graphics 行为提交为 draw calls，实现 main view 与 radar view 的 Camera 类，并用独立 HUD View 显示 timer text。
-demo: false
+description: 第 17 章：Graphics、Camera 与多视图行动：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-17
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,31 +21,128 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import {
+  GraphicsCamerasActionPipelineLab,
+  GraphicsCamerasActionFrameLab,
+  GraphicsCamerasActionFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/graphics-cameras-action";
 
 <Objectives>
 
-- 能设计从 RenderSnapshot 到 draw calls 的收集、剔除、排序和执行管线，并用计数器定位渲染成本
-- 能实现独立的 Camera 类，以同一世界快照驱动 main view 与 radar view，并正确配置归一化 viewport
-- 能实现暂停语义明确的 timer text，完成固定宽度格式化、边界重算和 HUD 锚点布局
+- 能解释“第 17 章：Graphics、Camera 与多视图行动”如何集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界
+- 能逐项定位 绘制调用（draw calls）、相机类（camera classes）、主视图（main view）、雷达视图（radar view）、计时文本（timer text），说明它们位于源码、运行状态还是可见输出边界
+- 能按 提交世界 → 设置主 View → 绘制主画面 → 设置雷达 View → 绘制 HUD 重放“同帧主画面与雷达”，持续检查“同一世界快照可被不同 View 绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数”
+- 能注入“为雷达绘制再次调用 update，使对象在一个显示帧内推进两次”，从世界版本号、update 次数、draw call 序列、各 View 参数、viewport 和计时文本值找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 17 章：Graphics、Camera 与多视图行动”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 17 章：Graphics、Camera 与多视图行动”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“绘制调用（draw calls）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 17 章：Graphics、Camera 与多视图行动”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 17 章：Graphics、Camera 与多视图行动”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 17 章：Graphics、Camera 与多视图行动”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+- [SFML 2.6.1：sf::View 官方参考](https://www.sfml-dev.org/documentation/2.6.1/classsf_1_1View.php)：在“第 17 章：Graphics、Camera 与多视图行动”中，核对 source rectangle 到 target viewport 的映射、主视图、HUD 与雷达视图边界。
+
+## 正式概念与运行状态合同
+
+### 绘制调用（draw calls）
+
+这个正式目录节点落在 **世界快照** 边界：已提交的 GameObject 与游戏时间。在本页中，它参与“集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界”。验收时保存世界版本号、update 次数、draw call 序列、各 View 参数、viewport 和计时文本值，不能只凭最终画面判断。
+
+### 相机类（camera classes）
+
+这个正式目录节点落在 **观察系统** 边界：主相机、雷达 View、裁剪和 viewport。在本页中，它参与“集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界”。验收时保存同一世界快照可被不同 View 绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数，不能只凭最终画面判断。
+
+### 主视图（main view）
+
+这个正式目录节点落在 **绘制提交** 边界：draw calls、层次与 timer text。在本页中，它参与“集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界”。验收时保存世界版本号、update 次数、draw call 序列、各 View 参数、viewport 和计时文本值，不能只凭最终画面判断。
+
+### 雷达视图（radar view）
+
+这个正式目录节点落在 **世界快照** 边界：已提交的 GameObject 与游戏时间。在本页中，它参与“集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界”。验收时保存同一世界快照可被不同 View 绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数，不能只凭最终画面判断。
+
+### 计时文本（timer text）
+
+这个正式目录节点落在 **观察系统** 边界：主相机、雷达 View、裁剪和 viewport。在本页中，它参与“集中 GameObject 绘制调用，并让主相机、雷达 View 与计时文本共享世界状态但使用各自观察边界”。验收时保存世界版本号、update 次数、draw call 序列、各 View 参数、viewport 和计时文本值，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| 最小正常场景   | 固定一个世界快照，依次使用主 View 和雷达 View 绘制                                       |
+| 边界或恢复场景 | 暂停游戏但继续重绘窗口和相机                                                             |
+| 必须保持       | 同一世界快照可被不同 View 绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数 |
+| 单一故障       | 为雷达绘制再次调用 update，使对象在一个显示帧内推进两次                                  |
+| 可观察证据     | 世界版本号、update 次数、draw call 序列、各 View 参数、viewport 和计时文本值             |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“同帧主画面与雷达”会怎样穿过 世界快照 → 观察系统 → 绘制提交，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<GraphicsCamerasActionPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 提交世界 → 设置主 View → 绘制主画面 → 设置雷达 View → 绘制 HUD。每一步只选中一个阶段，并持续检查“同一世界快照可被不同 View 绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数”。
+
+<GraphicsCamerasActionFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“为雷达绘制再次调用 update，使对象在一个显示帧内推进两次”，定位第一项不一致；撤销后用完全相同的“暂停计时”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<GraphicsCamerasActionFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用世界版本号、update
+  次数、draw call 序列、各 View 参数、viewport 和计时文本值复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 17 章：Graphics、Camera 与多视图行动”以 SFML 2.6.1
+  时代接口为基线。直接粘贴 SFML 3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“同一世界快照可被不同
+  View
+  绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“同一世界快照可被不同
+  View
+  绘制，绘制不反向修改游戏状态，计时文本使用游戏时钟而非渲染次数”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“一个世界为何能被看两次”开始
 
 第 16 章在逻辑提交后生成稳定快照。本章的
 
-<Term def="把已提交世界状态转换成可见精灵、形状和文本的只读表现阶段。">Graphics 阶段</Term>
+<Term def="把已提交世界状态转换成可见精灵、形状和文本的只读表现阶段。">
+  Graphics 阶段
+</Term>
 
 不再推进 Player，也不重新判断碰撞。同一世界可以先通过主相机绘制，再通过雷达相机缩小绘制；两次观察不能让对象 update 两次。
 
-<Term def="一次向 RenderTarget 提交可绘制对象的操作，是测量渲染工作量的基本单位之一。">draw call</Term>
+<Term def="一次向 RenderTarget 提交可绘制对象的操作，是测量渲染工作量的基本单位之一。">
+  draw call
+</Term>
 
 数量重要但不是唯一指标。纹理切换、顶点数量、过度绘制和文字重建也可能更贵，优化前先测量。
 
-
 ## Graphics 行为提交数据而非控制窗口
 
-<Term def="GameObject 中读取 Transform 与外观状态、生成 DrawItem，但不拥有窗口或修改游戏逻辑的行为。">Graphics 行为</Term>
+<Term def="GameObject 中读取 Transform 与外观状态、生成 DrawItem，但不拥有窗口或修改游戏逻辑的行为。">
+  Graphics 行为
+</Term>
 
 若每个对象都直接 `window.setView()`，最终渲染顺序会取决于对象排列。让 Graphics 只提交带层级、材质和包围盒的数据，Renderer 决定在哪个相机下执行。
 
@@ -61,13 +163,17 @@ public:
 };
 ```
 
-<Term def="只包含绘制本帧所需位置、外观和可见性信息，不暴露可写玩法对象的值。">RenderSnapshot</Term>
+<Term def="只包含绘制本帧所需位置、外观和可见性信息，不暴露可写玩法对象的值。">
+  RenderSnapshot
+</Term>
 
 保证相机和渲染读取同一提交时刻。若 draw 直接读取正在被 update 改写的对象，多线程或分阶段渲染会出现半旧半新的撕裂状态。
 
 ## 收集、剔除、排序、执行
 
-<Term def="使用相机世界可见矩形排除完全位于视野外 DrawItem 的阶段。">视锥剔除</Term>
+<Term def="使用相机世界可见矩形排除完全位于视野外 DrawItem 的阶段。">
+  视锥剔除
+</Term>
 
 二维项目可用矩形相交完成。主视图和雷达范围不同，所以各自剔除；不能把主视图剔除结果直接复用给雷达。
 
@@ -88,7 +194,9 @@ void Renderer::draw(sf::RenderTarget& target,
 }
 ```
 
-<Term def="决定背景、平台、玩家、效果和前景覆盖顺序的语义层级。">RenderLayer</Term>
+<Term def="决定背景、平台、玩家、效果和前景覆盖顺序的语义层级。">
+  RenderLayer
+</Term>
 
 优先保证正确遮挡，再在同层按材质排序减少状态切换。透明对象不能随意重排；需要按混合语义或深度保持顺序。
 
@@ -101,7 +209,9 @@ void Renderer::draw(sf::RenderTarget& target,
 
 ## Camera 类封装观察规则
 
-<Term def="拥有 sf::View、世界可见范围和跟随策略，并把世界坐标映射到指定窗口 viewport 的对象。">Camera 类</Term>
+<Term def="拥有 sf::View、世界可见范围和跟随策略，并把世界坐标映射到指定窗口 viewport 的对象。">
+  Camera 类
+</Term>
 
 不拥有 Player，只接收目标的提交后位置。resize 时重新计算 View 尺寸和 viewport，玩法世界单位不因窗口像素改变。
 
@@ -121,13 +231,17 @@ private:
 };
 ```
 
-<Term def="在世界坐标中限定相机中心，防止视图越过关卡边界露出空白区域的约束。">相机边界</Term>
+<Term def="在世界坐标中限定相机中心，防止视图越过关卡边界露出空白区域的约束。">
+  相机边界
+</Term>
 
 钳制时要考虑半个 View 尺寸；若世界比 View 更小，应居中而不是让 min 大于 max。
 
 ## main view：跟随、前视与稳定性
 
-<Term def="占据窗口主体、跟随 Player 展示当前跑酷区域的世界视图。">main view</Term>
+<Term def="占据窗口主体、跟随 Player 展示当前跑酷区域的世界视图。">
+  main view
+</Term>
 
 可在移动方向增加少量前视，使玩家看到即将到来的平台。前视来自稳定速度或朝向，不应直接对单帧输入抖动响应。
 
@@ -141,13 +255,17 @@ void Camera::follow(sf::Vector2f target, float dt)
 }
 ```
 
-<Term def="用与帧率无关的指数插值让相机中心逐步接近目标，减弱位置离散变化造成的抖动。">平滑跟随</Term>
+<Term def="用与帧率无关的指数插值让相机中心逐步接近目标，减弱位置离散变化造成的抖动。">
+  平滑跟随
+</Term>
 
 暂停时相机通常冻结；恢复前重启帧时钟，避免超大 dt 让相机瞬移。若玩法要求精确观察，调试模式可关闭平滑。
 
 ## radar view：同一快照的第二次投影
 
-<Term def="以更大世界范围和右上角小 viewport 展示玩家、平台及关键威胁的辅助视图。">radar view</Term>
+<Term def="以更大世界范围和右上角小 viewport 展示玩家、平台及关键威胁的辅助视图。">
+  radar view
+</Term>
 
 并非把主画面截图缩小。它使用独立 Camera、独立可见范围和简化 Graphics 表现，只绘制对导航有意义的项目。
 
@@ -160,10 +278,11 @@ sf::View makeRadarView(sf::Vector2f center)
 }
 ```
 
-<Term def="以窗口宽高比例表示 sf::View 输出区域的位置与尺寸，取值相对窗口而非像素。">viewport</Term>
+<Term def="以窗口宽高比例表示 sf::View 输出区域的位置与尺寸，取值相对窗口而非像素。">
+  viewport
+</Term>
 
 使雷达随分辨率保持相对位置。雷达边框属于 HUD，应在 radar 世界内容后切回 HUD View 再绘制，避免边框随雷达缩放。
-
 
 <Callout type="trap">
   **现象**：雷达内容正确，但后续计时文本消失或出现在世界远处。**原因**：绘制
@@ -174,7 +293,9 @@ sf::View makeRadarView(sf::Vector2f center)
 
 ## timer text：时间状态与显示分离
 
-<Term def="从已提交游戏经过时间派生的分钟秒数字符串，固定显示在 HUD View 中。">timer text</Term>
+<Term def="从已提交游戏经过时间派生的分钟秒数字符串，固定显示在 HUD View 中。">
+  timer text
+</Term>
 
 真正状态只有 `elapsed`。分钟、秒和字符串都是派生值，避免多个计数器不同步。
 
@@ -193,28 +314,37 @@ void TimerHud::update(float elapsedSeconds)
 }
 ```
 
-<Term def="把分钟和秒格式化为固定字符宽度，减少数字位数变化引发的布局跳动。">固定宽度格式</Term>
+<Term def="把分钟和秒格式化为固定字符宽度，减少数字位数变化引发的布局跳动。">
+  固定宽度格式
+</Term>
 
 每次字符串变化后重算 local bounds，再以 HUD 逻辑宽度中心锚定。Font 由更长寿命资源所有者保存。
 
-
 ## 计时状态协议
 
-<Term def="规定 Playing、Paused、Home 和 GameOver 各阶段是否累加 elapsed 的规则。">计时协议</Term>
+<Term def="规定 Playing、Paused、Home 和 GameOver 各阶段是否累加 elapsed 的规则。">
+  计时协议
+</Term>
 
 通常只在 Playing 累加受限 dt；暂停、菜单和终局冻结。新局把 elapsed 清零，继续游戏不清零，重启帧时钟防止停留时间注入。若排行榜按真实完成时间计分，应明确暂停是否计时，不能由实现偶然决定。
 
-<Term def="以 HUD 逻辑屏幕边缘或中心为参考，在文本尺寸变化后重新计算稳定位置的布局方式。">HUD 锚点</Term>
+<Term def="以 HUD 逻辑屏幕边缘或中心为参考，在文本尺寸变化后重新计算稳定位置的布局方式。">
+  HUD 锚点
+</Term>
 
 让 timer text 在窗口 resize 后仍居中。先预测：若只在初始化时设置 origin，从 `09:59` 变成 `10:00` 时文本中心是否仍在同一点？
 
 ## 固定渲染顺序与测量
 
-<Term def="主世界、雷达世界、HUD 与覆盖层在每帧使用明确 View 和先后顺序执行的协议。">渲染通道</Term>
+<Term def="主世界、雷达世界、HUD 与覆盖层在每帧使用明确 View 和先后顺序执行的协议。">
+  渲染通道
+</Term>
 
 推荐顺序：clear；main Camera 剔除并绘制世界；radar Camera 绘制简化项目；HUD View 绘制雷达边框和 timer text；最后绘制暂停或终局覆盖层；display。整帧只 clear/display 一次。
 
-<Term def="记录候选项目、剔除项目、实际调用和材质切换，用于定位渲染瓶颈的一组数据。">渲染计数器</Term>
+<Term def="记录候选项目、剔除项目、实际调用和材质切换，用于定位渲染瓶颈的一组数据。">
+  渲染计数器
+</Term>
 
 分别记录 main 与 radar，避免把雷达的第二次绘制误判为重复 bug。性能回归测试使用同一快照和相机配置，比较实际 calls，而不是只凭肉眼看帧率。
 
@@ -247,7 +377,7 @@ void TimerHud::update(float elapsedSeconds)
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 17"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />
 
 <Glossary>

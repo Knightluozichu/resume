@@ -3,11 +3,16 @@ title: 第 11 章：TextureHolder 与僵尸群
 type: A
 section: Zombie Arena 项目
 order: 11
-description: 对齐官方第 3 版第 11 章：实现 TextureHolder 缓存、静态单实例访问与稳定纹理借用，并批量构建共享纹理的僵尸群。
-demo: false
+description: 第 11 章：TextureHolder 与僵尸群：保留第三版项目代码讲解，并以源码—状态—输出切片、确定性轨迹和故障重放完成验收。
+demo: true
 math: false
-sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bcgp3-11
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,27 +21,120 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  TextureHolderPipelineLab,
+  TextureHolderFrameLab,
+  TextureHolderFaultLab,
+} from "@/components/mdx/beginning-cpp-game-programming/v2/texture-holder";
 
 <Objectives>
 
-- 能实现加载失败不污染缓存、命中不重复加载且返回地址稳定引用的 `TextureHolder` 类
-- 能解释静态成员函数与单实例的构造、复制、线程和测试边界，判断何时改用显式资源依赖
-- 能设计有数量上限、出生安全距离和最大采样次数的僵尸群构建，并验证所有 Sprite 共享缓存纹理
+- 能解释“第 11 章：TextureHolder 与僵尸群”如何让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清
+- 能逐项定位 textureholder 类（textureholder class）、静态成员函数（static function）、单实例（single instance）、僵尸群（horde of zombies）、纹理缓存（texture cache），说明它们位于源码、运行状态还是可见输出边界
+- 能按 规范化键 → 查找缓存 → 加载纹理 → 原子插入 → 借出引用 重放“重复请求同一纹理”，持续检查“同一路径只加载一次，返回的 Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存”
+- 能注入“用 map 的 operator[] 先插入空纹理，再忽略 loadFromFile 失败并返回该条目”，从规范化资源键、缓存命中/未命中、加载返回值、Texture 地址和销毁顺序找到第一个不一致并用同输入恢复
 
 </Objectives>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_START */}
+
+## 第三版来源、工具链与版本边界
+
+“第 11 章：TextureHolder 与僵尸群”对齐 Packt 2024 年第三版的对应章节范围，并以官方公开代码仓库和 SFML 官方文档核对本页可公开验证的工程事实。本页是独立中文重写，不复现原书正文，也不把商品页、目录或代码仓库冒充完整原版。
+
+在“第 11 章：TextureHolder 与僵尸群”中，第三版示例使用 **SFML 2.6.1 时代 API**。本页保留与本章有关的 2.6 系列合同；SFML 3 的事件、角度、时长和构造接口差异不会被静默回填。升级工具链时必须单独记录本章迁移补丁，不能把版本不匹配误判为“textureholder 类（textureholder class）”概念错误。
+
+- [Packt：Beginning C++ Game Programming, Third Edition](https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258)：在“第 11 章：TextureHolder 与僵尸群”中，核对 2024 年第三版、C++20、SFML、四个项目、21 个正式教学章节及章节次序；不把商品页当作正文全文。
+- [PacktPublishing：第三版官方代码仓库](https://github.com/PacktPublishing/Beginning-C-Game-Programming-Third-Edition)：在“第 11 章：TextureHolder 与僵尸群”中，核对 Timber、Pong、ZombieShooter、Run 四个项目的公开代码与资源组织；代码许可证不等于原书正文授权。
+- [SFML 2.6 官方教程](https://www.sfml-dev.org/tutorials/2.6/)：在“第 11 章：TextureHolder 与僵尸群”中，核对本书使用的 SFML 2.6 系列 Window、Graphics、View、VertexArray、Shader 与 Audio API 语义。
+
+## 正式概念与运行状态合同
+
+### textureholder 类（textureholder class）
+
+这个正式目录节点落在 **资源请求** 边界：路径键、调用点与静态访问入口。在本页中，它参与“让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清”。验收时保存规范化资源键、缓存命中/未命中、加载返回值、Texture 地址和销毁顺序，不能只凭最终画面判断。
+
+### 静态成员函数（static function）
+
+这个正式目录节点落在 **缓存所有权** 边界：TextureHolder、map 与稳定对象寿命。在本页中，它参与“让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清”。验收时保存同一路径只加载一次，返回的 Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存，不能只凭最终画面判断。
+
+### 单实例（single instance）
+
+这个正式目录节点落在 **借用结果** 边界：Sprite 保存的 Texture 关系与加载错误。在本页中，它参与“让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清”。验收时保存规范化资源键、缓存命中/未命中、加载返回值、Texture 地址和销毁顺序，不能只凭最终画面判断。
+
+### 僵尸群（horde of zombies）
+
+这个正式目录节点落在 **资源请求** 边界：路径键、调用点与静态访问入口。在本页中，它参与“让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清”。验收时保存同一路径只加载一次，返回的 Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存，不能只凭最终画面判断。
+
+### 纹理缓存（texture cache）
+
+这个正式目录节点落在 **缓存所有权** 边界：TextureHolder、map 与稳定对象寿命。在本页中，它参与“让 TextureHolder 集中加载、缓存并借出纹理，同时把单实例便利性与隐藏全局状态的代价写清”。验收时保存规范化资源键、缓存命中/未命中、加载返回值、Texture 地址和销毁顺序，不能只凭最终画面判断。
+
+| 验收项         | 本页合同                                                                                |
+| -------------- | --------------------------------------------------------------------------------------- |
+| 最小正常场景   | 两个 Sprite 依次请求同一个规范化路径                                                    |
+| 边界或恢复场景 | 请求一个不存在的资源路径                                                                |
+| 必须保持       | 同一路径只加载一次，返回的 Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存 |
+| 单一故障       | 用 map 的 operator[] 先插入空纹理，再忽略 loadFromFile 失败并返回该条目                 |
+| 可观察证据     | 规范化资源键、缓存命中/未命中、加载返回值、Texture 地址和销毁顺序                       |
+
+## 先预测，再操作三个本页实验
+
+### 实验一：从源码到可见结果
+
+先预测“重复请求同一纹理”会怎样穿过 资源请求 → 缓存所有权 → 借用结果，再切换场景和正式概念。每次操作都必须能回到同一初始状态。
+
+<TextureHolderPipelineLab />
+
+### 实验二：逐步执行状态轨迹
+
+依次执行 规范化键 → 查找缓存 → 加载纹理 → 原子插入 → 借出引用。每一步只选中一个阶段，并持续检查“同一路径只加载一次，返回的 Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存”。
+
+<TextureHolderFrameLab />
+
+### 实验三：单一故障与同输入恢复
+
+注入“用 map 的 operator[] 先插入空纹理，再忽略 loadFromFile 失败并返回该条目”，定位第一项不一致；撤销后用完全相同的“纹理文件缺失”重放。只有中间状态和最终输出一起恢复才算修复。
+
+<TextureHolderFaultLab />
+
+## 易错边界与工程取舍
+
+<Callout type="trap" title="能显示不等于状态正确">
+  偶尔出现正确画面、声音或分数，不能证明所有权、时间步和阶段提交正确。必须用规范化资源键、缓存命中/未命中、加载返回值、Texture
+  地址和销毁顺序复算中间状态。
+</Callout>
+
+<Callout type="trap" title="API 版本不能混用">
+  “第 11 章：TextureHolder 与僵尸群”以 SFML 2.6.1 时代接口为基线。直接粘贴 SFML
+  3
+  示例可能改变本页依赖的事件、时长、角度或构造合同；迁移必须围绕“同一路径只加载一次，返回的
+  Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存”单独记录和验证。
+</Callout>
+
+<Callout type="trap" title="重置界面不等于恢复程序">
+  重置按钮必须恢复源码/资源假设、初始状态和输入序列。若只清空可见提示，却没有重新满足“同一路径只加载一次，返回的
+  Texture 引用在所有 Sprite 使用期间稳定有效，失败项不进入缓存”，故障仍然存在。
+</Callout>
+
+{/* BEGINNING_CPP_GAME_PROGRAMMING_QUALITY_V2_END */}
 
 ## 从“纹理缓存怎样保证永远只有一个事实来源”开始
 
 第 10 章建立了纹理共享原则。第 11 章把查找、加载、地址稳定与销毁规则封装进
 
-<Term def="按规范化资源键缓存 sf::Texture、命中时返回稳定只读引用并统一管理生命周期的类。">TextureHolder 类</Term>。
+<Term def="按规范化资源键缓存 sf::Texture、命中时返回稳定只读引用并统一管理生命周期的类。">
+  TextureHolder 类
+</Term>
+
 目标不是简单包一层
 map，而是让“加载一次、失败回滚、使用期不删除”成为无法绕过的接口不变量。
 
-
 ## 缓存接口与稳定容器
 
-<Term def="把已加载纹理按资源键保存，后续相同请求直接复用对象而不重复磁盘读取和 GPU 上传的机制。">纹理缓存</Term>
+<Term def="把已加载纹理按资源键保存，后续相同请求直接复用对象而不重复磁盘读取和 GPU 上传的机制。">
+  纹理缓存
+</Term>
 可使用节点式 `std::map` 保持元素地址在插入其他键时稳定。接口返回 `const
 sf::Texture&`，调用者能绑定 Sprite 但不能修改缓存纹理。
 
@@ -72,7 +170,9 @@ const sf::Texture& TextureHolder::get(const std::filesystem::path& rawPath)
 }
 ```
 
-<Term def="先在局部对象完成资源加载与验证，成功后一次插入缓存，失败保持旧缓存不变的过程。">候选提交</Term>
+<Term def="先在局部对象完成资源加载与验证，成功后一次插入缓存，失败保持旧缓存不变的过程。">
+  候选提交
+</Term>
 使异常路径可预测。示例未处理并发双重加载；本书约定纹理在渲染线程初始化阶段请求。
 
 <Callout type="trap">
@@ -82,9 +182,13 @@ const sf::Texture& TextureHolder::get(const std::filesystem::path& rawPath)
 
 ## 静态成员函数与单实例
 
-<Term def="不依赖某个对象 this 指针、通过类名调用的成员函数，只能直接访问静态成员或显式传入对象。">静态成员函数</Term>
+<Term def="不依赖某个对象 this 指针、通过类名调用的成员函数，只能直接访问静态成员或显式传入对象。">
+  静态成员函数
+</Term>
 可提供全局访问入口。
-<Term def="限制某类型在进程内只有一个可访问实例，并提供统一访问点的设计模式。">单实例模式</Term>
+<Term def="限制某类型在进程内只有一个可访问实例，并提供统一访问点的设计模式。">
+  单实例模式
+</Term>
 让所有 Sprite 从同一缓存取得纹理。
 
 ```cpp
@@ -108,16 +212,19 @@ private:
 };
 ```
 
-<Term def="函数内部以 static 声明、首次控制流经过时初始化并存活到进程正常终止的对象。">函数局部静态对象</Term>
+<Term def="函数内部以 static 声明、首次控制流经过时初始化并存活到进程正常终止的对象。">
+  函数局部静态对象
+</Term>
 自 C++11 起初始化本身线程安全，但后续对 map 和 SFML Texture
 的操作不因此自动线程安全。资源请求仍集中在渲染线程，或另加清楚同步协议。
-
 
 ## 单例的代价与测试边界
 
 全局访问隐藏函数依赖：`Zombie` 构造表面只接路径，内部却可能做文件 I/O、抛异常并访问图形资源。测试也难替换失败、占位纹理或内存资源。更透明的设计让 Game 拥有 TextureHolder，并向构造函数传 `TextureProvider&` 或直接传 `const Texture&`。
 
-<Term def="通过参数把资源提供者、时钟或随机源显式交给对象，而不是让对象内部访问全局实例的设计。">依赖注入</Term>
+<Term def="通过参数把资源提供者、时钟或随机源显式交给对象，而不是让对象内部访问全局实例的设计。">
+  依赖注入
+</Term>
 与本书单例并不冲突：应用入口可把 `TextureHolder::instance()`
 作为生产实现传给核心逻辑，测试传替身。
 
@@ -125,7 +232,9 @@ private:
 
 ## 纹理借用不等于资源所有权
 
-<Term def="Sprite 保存 Texture 关联并在绘制时使用，但不负责销毁 Texture 的非拥有关系。">纹理借用</Term>
+<Term def="Sprite 保存 Texture 关联并在绘制时使用，但不负责销毁 Texture 的非拥有关系。">
+  纹理借用
+</Term>
 要求缓存条目在所有关联 Sprite 销毁前保持地址和生命周期。TextureHolder
 不应公开任意 `erase`；关卡卸载要先销毁借用实体，再删除资源组。
 
@@ -142,12 +251,16 @@ Zombie 构造只借用已经成功加载的纹理，不执行 I/O。这样对象
 
 ## 规划僵尸群
 
-<Term def="当前波次中由容器拥有的一组 Zombie 对象，共享纹理但各自拥有位置、速度、血量和 Sprite。">僵尸群</Term>
+<Term def="当前波次中由容器拥有的一组 Zombie 对象，共享纹理但各自拥有位置、速度、血量和 Sprite。">
+  僵尸群
+</Term>
 构建前验证 count
 不超过玩法和性能上限，竞技场足够大，并定义玩家出生安全半径。已知数量先
 reserve，避免构造中重分配。
 
-<Term def="玩家出生点周围禁止生成敌人的最小世界距离，用于避免波次开始即发生不可反应碰撞。">出生安全距离</Term>
+<Term def="玩家出生点周围禁止生成敌人的最小世界距离，用于避免波次开始即发生不可反应碰撞。">
+  出生安全距离
+</Term>
 用距离平方比较，避免不必要开方。
 
 ```cpp
@@ -184,10 +297,11 @@ std::vector<Zombie> buildHorde(std::size_t count,
 }
 ```
 
-<Term def="拒绝采样为寻找合法点允许的最大次数，达到后显式失败以保证生成过程终止。">生成尝试上限</Term>
+<Term def="拒绝采样为寻找合法点允许的最大次数，达到后显式失败以保证生成过程终止。">
+  生成尝试上限
+</Term>
 是终止性契约。局部 vector 完整成功后按值返回；异常时自动销毁已构造
 Zombie，调用者旧群体不受影响。
-
 
 ## 构建一千只僵尸时真正共享什么
 
@@ -299,5 +413,5 @@ C++11 起首次初始化线程安全且进程中该访问点返回同一对象�
 
 <Attribution
   adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 11"
-  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+  adaptedUrl="https://www.packtpub.com/en-us/product/beginning-c-game-programming-9781835088258"
 />
