@@ -6,6 +6,176 @@ type ChapterMdxComponents = NonNullable<MDXRemoteProps["components"]>;
 type ChapterComponentLoader = () => Promise<ChapterMdxComponents>;
 
 const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
+  "advanced-algorithm-engineering/00-foundations/introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/advanced-algorithm-engineering/v2/introduction");
+    return {
+      IntroductionCostLab: module0.IntroductionCostLab,
+      IntroductionTraceLab: module0.IntroductionTraceLab,
+      IntroductionEvidenceLab: module0.IntroductionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "advanced-algorithm-engineering/00-foundations/warm-up": async () => {
+    const module0 =
+      await import("@/components/mdx/advanced-algorithm-engineering/v2/warm-up");
+    return {
+      WarmUpCostLab: module0.WarmUpCostLab,
+      WarmUpTraceLab: module0.WarmUpTraceLab,
+      WarmUpEvidenceLab: module0.WarmUpEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "advanced-algorithm-engineering/01-randomization-parallel/list-ranking":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/list-ranking");
+      return {
+        ListRankingCostLab: module0.ListRankingCostLab,
+        ListRankingTraceLab: module0.ListRankingTraceLab,
+        ListRankingEvidenceLab: module0.ListRankingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/01-randomization-parallel/random-sampling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/random-sampling");
+      return {
+        RandomSamplingCostLab: module0.RandomSamplingCostLab,
+        RandomSamplingTraceLab: module0.RandomSamplingTraceLab,
+        RandomSamplingEvidenceLab: module0.RandomSamplingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/dictionary-problem":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/dictionary-problem");
+      return {
+        DictionaryProblemCostLab: module0.DictionaryProblemCostLab,
+        DictionaryProblemTraceLab: module0.DictionaryProblemTraceLab,
+        DictionaryProblemEvidenceLab: module0.DictionaryProblemEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/searching-strings-by-prefix":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/searching-strings-by-prefix");
+      return {
+        SearchingStringsByPrefixCostLab:
+          module0.SearchingStringsByPrefixCostLab,
+        SearchingStringsByPrefixTraceLab:
+          module0.SearchingStringsByPrefixTraceLab,
+        SearchingStringsByPrefixEvidenceLab:
+          module0.SearchingStringsByPrefixEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/searching-strings-by-substring":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/searching-strings-by-substring");
+      return {
+        SearchingStringsBySubstringCostLab:
+          module0.SearchingStringsBySubstringCostLab,
+        SearchingStringsBySubstringTraceLab:
+          module0.SearchingStringsBySubstringTraceLab,
+        SearchingStringsBySubstringEvidenceLab:
+          module0.SearchingStringsBySubstringEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/set-intersection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/set-intersection");
+      return {
+        SetIntersectionCostLab: module0.SetIntersectionCostLab,
+        SetIntersectionTraceLab: module0.SetIntersectionTraceLab,
+        SetIntersectionEvidenceLab: module0.SetIntersectionEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/sorting-atomic-items":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/sorting-atomic-items");
+      return {
+        SortingAtomicItemsCostLab: module0.SortingAtomicItemsCostLab,
+        SortingAtomicItemsTraceLab: module0.SortingAtomicItemsTraceLab,
+        SortingAtomicItemsEvidenceLab: module0.SortingAtomicItemsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/02-sorting-search/sorting-strings":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/sorting-strings");
+      return {
+        SortingStringsCostLab: module0.SortingStringsCostLab,
+        SortingStringsTraceLab: module0.SortingStringsTraceLab,
+        SortingStringsEvidenceLab: module0.SortingStringsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/03-compression/block-sorting-compression":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/block-sorting-compression");
+      return {
+        BlockSortingCompressionCostLab: module0.BlockSortingCompressionCostLab,
+        BlockSortingCompressionTraceLab:
+          module0.BlockSortingCompressionTraceLab,
+        BlockSortingCompressionEvidenceLab:
+          module0.BlockSortingCompressionEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/03-compression/dictionary-based-compressors":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/dictionary-based-compressors");
+      return {
+        DictionaryBasedCompressorsCostLab:
+          module0.DictionaryBasedCompressorsCostLab,
+        DictionaryBasedCompressorsTraceLab:
+          module0.DictionaryBasedCompressorsTraceLab,
+        DictionaryBasedCompressorsEvidenceLab:
+          module0.DictionaryBasedCompressorsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/03-compression/integer-coding": async () => {
+    const module0 =
+      await import("@/components/mdx/advanced-algorithm-engineering/v2/integer-coding");
+    return {
+      IntegerCodingCostLab: module0.IntegerCodingCostLab,
+      IntegerCodingTraceLab: module0.IntegerCodingTraceLab,
+      IntegerCodingEvidenceLab: module0.IntegerCodingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "advanced-algorithm-engineering/03-compression/statistical-coding":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/statistical-coding");
+      return {
+        StatisticalCodingCostLab: module0.StatisticalCodingCostLab,
+        StatisticalCodingTraceLab: module0.StatisticalCodingTraceLab,
+        StatisticalCodingEvidenceLab: module0.StatisticalCodingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/04-succinct/compressed-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/advanced-algorithm-engineering/v2/compressed-data-structures");
+      return {
+        CompressedDataStructuresCostLab:
+          module0.CompressedDataStructuresCostLab,
+        CompressedDataStructuresTraceLab:
+          module0.CompressedDataStructuresTraceLab,
+        CompressedDataStructuresEvidenceLab:
+          module0.CompressedDataStructuresEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "advanced-algorithm-engineering/05-conclusion/conclusion": async () => {
+    const module0 =
+      await import("@/components/mdx/advanced-algorithm-engineering/v2/conclusion");
+    return {
+      ConclusionCostLab: module0.ConclusionCostLab,
+      ConclusionTraceLab: module0.ConclusionTraceLab,
+      ConclusionEvidenceLab: module0.ConclusionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "algorithms-4e/04-graphs/directed-graphs": async () => {
     const module0 =
       await import("@/components/mdx/algorithms-4e/diagrams/directed-graphs");

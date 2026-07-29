@@ -1,15 +1,57 @@
 ---
-title: "第3章 Random Sampling：随机抽样"
+title: 第3章 Random Sampling：随机抽样
 type: B
-section: "随机化与并行"
+section: 随机化与并行
 order: 2
-description: "在磁盘与单遍流模型中设计均匀无放回抽样，比较位置去重、随机键和蓄水池抽样的空间、I/O、随机数与概率证明。"
+description: 在磁盘与单遍流模型中设计均匀无放回抽样，比较位置去重、随机键和蓄水池抽样的空间、I/O、随机数与概率证明。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-03
 ---
 
+import {
+  RandomSamplingCostLab,
+  RandomSamplingTraceLab,
+  RandomSamplingEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/random-sampling";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“3 Random Sampling”如何在磁盘、已知长度流和未知长度流中保持等概率抽样合同
+- 能逐项核对Disk Model and Known Sequence Length、Streaming Model and Known Sequence Length、Streaming Model and Unknown Sequence Length，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“P(item i is retained after n arrivals) = m / n”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“3 Random Sampling”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“3 Random Sampling”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“在磁盘、已知长度流和未知长度流中保持等概率抽样合同”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：3 Random Sampling
+
+- **3.1 Disk Model and Known Sequence Length**：在本页正文中以“在磁盘、已知长度流和未知长度流中保持等概率抽样合同”的对象、状态、复杂度或工程边界核对。
+- **3.2 Streaming Model and Known Sequence Length**：在本页正文中以“在磁盘、已知长度流和未知长度流中保持等概率抽样合同”的对象、状态、复杂度或工程边界核对。
+- **3.3 Streaming Model and Unknown Sequence Length**：在本页正文中以“在磁盘、已知长度流和未知长度流中保持等概率抽样合同”的对象、状态、复杂度或工程边界核对。
 
 ## 从“每个样本等概率”究竟指什么开始
 
@@ -27,12 +69,11 @@ $$
 
 第一式描述联合分布，第二式描述单个位置的边缘包含概率。只验证每个位置大约出现 m/n 次还不充分：一个错误算法可能让各位置频率相同，却只产生少数特定组合。
 
-
 先预测两个边界：m等于1时，每项概率是1/n；m等于n时，唯一合法样本是整个序列，每项概率为1。算法还必须明确 m 大于 n、m 为0、空流以及项目重复值怎样处理。这里抽的是**位置**，相同值位于不同位置仍是不同项目。
 
 ## 评价抽样算法的四类资源
 
-原章同时比较 I/O、额外空间、CPU 时间和随机数数量。输入可能是磁盘文件，也可能是只能向前读取一次的 channel；n 可能预先知道，也可能直到流结束才知道。这些约束会改变可用算法。
+本页同时比较 I/O、额外空间、CPU 时间和随机数数量。输入可能是磁盘文件，也可能是只能向前读取一次的 channel；n 可能预先知道，也可能直到流结束才知道。这些约束会改变可用算法。
 
 抽中的位置若按升序输出，可以顺序扫描原文件提取项目，减少寻道和回看；还不必为变长字符串维护随机访问指针。若 m 能放入内部存储，位置排序可在内存完成；m 大于 M 时则需要后续章节的外存排序。
 
@@ -40,7 +81,7 @@ $$
 
 ## 磁盘模型与已知序列长度
 
-disk model and known sequence length（磁盘模型与已知序列长度）允许先生成位置，再从 S 取对象。原章依次改进三类方案。
+disk model and known sequence length（磁盘模型与已知序列长度）允许先生成位置，再从 S 取对象。本页依次改进三类方案。
 
 第一种方案复制一个指向全部 n 个项目的指针数组。每轮在尚未抽中的前缀中随机选一个位置，把它与末尾未抽中位置交换。Fisher-Yates 的前 m 步保证不重复，但指针数组占 Theta(n) 空间，而且在大数组上产生 Theta(m) 次随机访问。复制真实对象更糟：变长对象无法常数时间交换，空间也可能超过原文件。
 
@@ -82,9 +123,7 @@ $$
 
 当 m 远小于平方根 n 时碰撞稀少；达到平方根量级后，重复不能再忽略。因为位置是固定范围内的随机整数，还可用 m 个桶覆盖大小约 n/m 的区间，期望每桶常数项，再在桶内排序，把平均 CPU 成本降到 O(m)。
 
-
 位置有序后，若 m 个目标分散得很稀，直接随机读取需要 O(m) I/O；顺序扫描整个文件需要 O(n/B) I/O。因此可取两者较小的策略，达到 O(min(m,n/B)) 量级，同时还要考虑随机寻道和连续吞吐的现实差异。
-
 
 ## 流模型与已知序列长度
 
@@ -99,7 +138,6 @@ p_j
 $$
 
 的概率接受当前项。它正是“从剩余项目中均匀选出剩余名额”时当前项目被包含的组合概率。
-
 
 ```cpp
 template<class InputIt, class URBG>
@@ -139,7 +177,6 @@ auto sample_known_length(
 ## 未知长度流：随机键保留 top-m
 
 streaming model and unknown sequence length（流模型与未知序列长度）无法使用 n-j+1。一个通用办法是给每个到达项目生成独立连续，并用大小为 m 的最小堆保留 top-m。
-
 
 任意 n 个连续独立随机键的全排列等可能。某个大小为 m 的项目子集成为最大 m 个键的概率与其他子集相同，所以结果均匀。连续分布理论上不并列；有限位伪随机数可能碰撞，工程实现应把稳定唯一序号作为第二比较键，并分析这是否保持对称的并列规则。
 
@@ -186,7 +223,6 @@ void reservoir_consider(
 }
 ```
 
-
 处理第 j 项时，新项进入概率是 m/j。此前任一旧项在处理 j-1 项后位于池中的概率按归纳假设为 m/(j-1)；新项若进入，恰好替换这个旧项的概率是1/m，所以旧项被移除的无条件概率是1/j。它最终保留的概率为：
 
 $$
@@ -199,7 +235,6 @@ $$
 新旧项目在处理 j 项后都具有 m/j 的包含概率，归纳成立。进一步结合对称替换可证明所有大小为 m 的子集等概率，而不只是边缘概率相同。
 
 算法对每项做常数工作，O(n) 时间、O(n/B) I/O、恰好 O(m) 结果空间；它不知道 n，也不回看输入，因此在该模型下时间、空间和 I/O 都达到必要下界。
-
 
 ## 正确性之外还要验证随机性契约
 
@@ -214,6 +249,75 @@ $$
 
 伪随机生成器质量、种子来源和并行流拆分属于算法契约的一部分。密码学抽样还需要不可预测的安全随机源；普通模拟可优先选择速度与可复现性，但不能混用目标。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“3 Random Sampling”中先预测层级和访问模式如何改变“P(item i is retained after n arrivals) = m / n”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <RandomSamplingCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“3 Random Sampling”的官方目录坐标逐步推进，保存随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写。
+
+    <RandomSamplingTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率”，定位首个分叉，撤销后以同一输入重放。
+
+    <RandomSamplingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率。这会破坏“每个合法元素的入样概率只由
+  m 与 n
+  决定，不依赖到达位置”；应先从随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “3 Random Sampling”中的“P(item i is retained after n arrivals) = m /
+  n”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“在磁盘、已知长度流和未知长度流中保持等概率抽样合同”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“3 Random
+  Sampling”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率”。交付时必须同时保存随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写，并解释预测与实测的残差。
+</Callout>
+
+“3 Random Sampling”的实验必须保留：随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “3 Random Sampling”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“3 Random Sampling”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与3个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“P(item i is retained after n arrivals) = m / n”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率”已经修复？
+
+<Answer>
+  为“3 Random
+  Sampling”保存正常基线，注入“用有偏取模或错误的替换边界，让早到或晚到元素获得额外概率”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有随机种子、到达序号、抽样决策、频数分布、置信区间与磁盘读写重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -227,7 +331,11 @@ $$
 8. 蓄水池抽样以 m/j 接受第 j 项并均匀替换，保持所有项目对称。
 9. 随机数映射、种子、组合频率与边界测试都属于可复查的正确性证据。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

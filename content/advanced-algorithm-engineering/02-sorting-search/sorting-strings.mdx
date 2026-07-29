@@ -1,20 +1,62 @@
 ---
-title: "第7章 Sorting Strings：字符串排序"
+title: 第7章 Sorting Strings：字符串排序
 type: B
-section: "排序、集合与搜索"
+section: 排序、集合与搜索
 order: 6
-description: "以区分前缀刻画字符读取下界，比较 MSD/LSD 基数排序与多关键字快速排序，并分析变长字符串在两级存储中的拆分模型。"
+description: 以区分前缀刻画字符读取下界，比较 MSD/LSD 基数排序与多关键字快速排序，并分析变长字符串在两级存储中的拆分模型。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-07
 ---
 
+import {
+  SortingStringsCostLab,
+  SortingStringsTraceLab,
+  SortingStringsEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/sorting-strings";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“7 Sorting Strings”如何用区分前缀、基数分桶与多关键字快速排序减少字符检查
+- 能逐项核对A Lower Bound、RADIXSORT、Multi-key QUICKSORT、Some Observations on the Two-Level Memory Model∞，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“character work = Theta(D + n log n)”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“7 Sorting Strings”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“7 Sorting Strings”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：7 Sorting Strings
+
+- **7.1 A Lower Bound**：在本页正文中以“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的对象、状态、复杂度或工程边界核对。
+- **7.2 RADIXSORT**：在本页正文中以“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的对象、状态、复杂度或工程边界核对。
+- **7.3 Multi-key QUICKSORT**：在本页正文中以“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的对象、状态、复杂度或工程边界核对。
+- **7.4 Some Observations on the Two-Level Memory Model∞**：在本页正文中以“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的对象、状态、复杂度或工程边界核对。
 
 ## 从“交换指针很便宜”为何仍然很慢开始
 
-sorting strings（）与第5章原子项排序不同。字符串通常由指针数组引用，比较两个指针指向的正文时，要从头逐字符找首个 mismatch。
-
+sorting strings与第5章原子项排序不同。字符串通常由指针数组引用，比较两个指针指向的正文时，要从头逐字符找首个 mismatch。
 
 普通 Mergesort 或 Quicksort 做 Theta(n log n) 次字符串比较；若平均字符串长 L=N/n，每次最坏读 O(L) 字符，粗略上界达到 O(N log n)。更糟的是，同一公共前缀会在不同比较中反复读取，字符串正文与指针数组还会争夺缓存。
 
@@ -36,17 +78,15 @@ $$
 \Omega(d+n\log n)
 $$
 
-
 这可以小于读取全部 N 个字符。当字符串有很长、互不影响排序的尾部时，d 远小于 N。相反，n 个字符串共享很长前缀、只在末尾区分时，d 与 N 同阶；普通比较排序仍可能重复公共前缀达 log n 次，比下界多一个对数。
 
 下界中的字符“比较”还取决于编码与 collation 规则。按 UTF-8 字节排序、按 Unicode code point 排序、按语言区域排序会给出不同顺序；算法必须先固定字符命名和结束符次序。
 
 ## MSD-first 基数排序：只深入仍有冲突的桶
 
-RADIXSORT（）先把字母表命名为0到 sigma-1的有序整数。
+RADIXSORT先把字母表命名为0到 sigma-1的有序整数。
 
 MSD-first 从最显著字符，也就是字符串开头处理。按偏移 i 的 digit 分到 sigma 个桶；单元素桶已确定，只有多元素桶递归到 i+1。连接各桶即得到字典序。
-
 
 ```text
 MSDRadix(strings, offset):
@@ -62,13 +102,11 @@ MSDRadix(strings, offset):
 
 压缩连续单孩子路径可把 trie 结构空间进一步接近 O(n)，路径标签保存被压缩前缀长度；第9章会把它作为搜索结构展开。
 
-
 ## LSD-first 基数排序：稳定性把低位次序带到高位
 
 LSD-first 从最低位向最高位逐列排序。它适合等长字符串；变长字符串可在左侧逻辑补小于真实 digit 的哨兵，使短串与长串对齐，但实现必须与目标字典序一致。
 
 每一列必须使用。当前高位相等时，前一阶段按低位建立的相对顺序才能保留。
-
 
 长度都为 L、字母表大小 sigma 时，CountingSort 每轮 O(n+sigma)，总时间：
 
@@ -92,19 +130,17 @@ $$
 
 r 远小于 log n 时轮数过多；r 远大于 log n 时桶数组爆炸。取 r 为 Theta(log n) 平衡二者，时间约 O(bn/log n)，但 CountingSort 需要 Theta(n) 辅助空间。
 
-
 MSD 可在区分后跳过尾部，LSD 无论内容都扫描所有 digit；但 LSD 是规则的全量 pass，没有 trie 动态分配，连续内存上可能有更低常数。应根据 d/N、固定长度、字母表和内存预算选择。
 
 ## 多关键字快速排序：比较字符而不是整串
 
-multi-key QUICKSORT（）把第5章三路 Quicksort 提升到字符级。
+multi-key QUICKSORT把第5章三路 Quicksort 提升到字符级。
 
 对字符串集合 R 和偏移 i，随机选 pivot string p，以 p[i] 为 pivot 字符，划分：
 
 - R_less 的第 i 字符较小，递归仍用 i；
 - R_equal 的第 i 字符相同，递归推进 i+1；
 - R_greater 的第 i 字符较大，递归仍用 i。
-
 
 ```text
 MultikeyQS(R, i):
@@ -139,12 +175,11 @@ MSD RadixSort 构造 sigma 叉 trie；多关键字快排对应 ternary search tr
 
 ## 两级存储模型中字符串能否拆分很关键
 
-two-level memory model（两级存储模型）分析字符串时，变长记录是否可以在外存拆成字符不是小实现细节。原章区分：
+two-level memory model（两级存储模型）分析字符串时，变长记录是否可以在外存拆成字符不是小实现细节。本页区分：
 
 - Model A：字符串在外存基本不可分，只允许长串按 B 大块移动；
 - Model B：读入内部存储后可以拆字符，外存仍按完整记录/块管理；
 - Model C：内外存都可拆分，允许对片段做随机哈希等操作。
-
 
 Model A 倾向用多路 Mergesort 和内部 lazy trie 引导比较。令 n_s、N_s 为短于 B 的字符串数与总长，n_l、N_l 为长串对应量，其最优 I/O 包含排序短串字符、排序长串首块与读取全部数据三部分：
 
@@ -168,6 +203,77 @@ Unicode 必须先选语义：若目标是二进制键序，按 unsigned byte 比
 
 基准除时间外记录读取字符数、重复前缀字符数、分配次数、峰值空间、页读取、连续/随机比例与 d/N。这样才能验证算法是否真的接近区分前缀下界，而不是仅在短字符串样例上更快。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“7 Sorting Strings”中先预测层级和访问模式如何改变“character work = Theta(D + n log n)”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <SortingStringsCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“7 Sorting Strings”的官方目录坐标逐步推进，保存字符串集合、区分前缀 D、字符探测、桶边界、递归轨迹与排序预言机。
+
+    <SortingStringsTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒”，定位首个分叉，撤销后以同一输入重放。
+
+    <SortingStringsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒。这会破坏“输出按声明字符序全序排列，公共前缀只在必要的递归层重新读取”；应先从字符串集合、区分前缀
+  D、字符探测、桶边界、递归轨迹与排序预言机定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “7 Sorting Strings”中的“character work = Theta(D + n log
+  n)”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“用区分前缀、基数分桶与多关键字快速排序减少字符检查”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“7 Sorting
+  Strings”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒”。交付时必须同时保存字符串集合、区分前缀
+  D、字符探测、桶边界、递归轨迹与排序预言机，并解释预测与实测的残差。
+</Callout>
+
+“7 Sorting Strings”的实验必须保留：字符串集合、区分前缀 D、字符探测、桶边界、递归轨迹与排序预言机。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “7 Sorting Strings”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“7 Sorting Strings”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与4个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“character work = Theta(D + n log n)”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录字符串集合、区分前缀
+  D、字符探测、桶边界、递归轨迹与排序预言机；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒”已经修复？
+
+<Answer>
+  为“7 Sorting
+  Strings”保存正常基线，注入“终止符、字符编码或稳定性约定不一致，前缀串与长串次序被颠倒”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有字符串集合、区分前缀
+  D、字符探测、桶边界、递归轨迹与排序预言机重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -181,7 +287,11 @@ Unicode 必须先选语义：若目标是二进制键序，按 unsigned byte 比
 8. END 哨兵处理前缀和重复串，必须小于真实字符并停止递归。
 9. 外存模型 A/B/C 对字符串可拆分能力不同，决定可达 I/O 界。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

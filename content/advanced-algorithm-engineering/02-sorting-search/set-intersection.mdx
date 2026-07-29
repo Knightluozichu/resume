@@ -1,30 +1,72 @@
 ---
-title: "第6章 Set Intersection：有序集合交"
+title: 第6章 Set Intersection：有序集合交
 type: B
-section: "排序、集合与搜索"
+section: 排序、集合与搜索
 order: 5
-description: "从倒排索引的双指针归并出发，用相互分割与倍增搜索适配悬殊表长，再以两级块索引和差分压缩改善外存访问。"
+description: 从倒排索引的双指针归并出发，用相互分割与倍增搜索适配悬殊表长，再以两级块索引和差分压缩改善外存访问。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-06
 ---
 
+import {
+  SetIntersectionCostLab,
+  SetIntersectionTraceLab,
+  SetIntersectionEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/set-intersection";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“6 Set Intersection”如何根据集合规模比在归并、相互分割、倍增搜索与块索引间切换
+- 能逐项核对Merge-Based Approach、Mutual Partitioning、Doubling Search、Two-Level Storage Approach，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“work = O(m log(n/m))，m ≤ n”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“6 Set Intersection”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“6 Set Intersection”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：6 Set Intersection
+
+- **6.1 Merge-Based Approach**：在本页正文中以“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的对象、状态、复杂度或工程边界核对。
+- **6.2 Mutual Partitioning**：在本页正文中以“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的对象、状态、复杂度或工程边界核对。
+- **6.3 Doubling Search**：在本页正文中以“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的对象、状态、复杂度或工程边界核对。
+- **6.4 Two-Level Storage Approach**：在本页正文中以“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的对象、状态、复杂度或工程边界核对。
 
 ## 从搜索引擎的 AND 查询开始
 
 文本搜索引擎用保存每个词出现在哪些文档。查询 “abaco AND mathematics” 不必重扫文档集合，只需取两个词的 docID posting lists 并计算共同编号。
 
-
 先预测两种查询的最佳策略。若两个 posting list 都有一百万项，双指针虽然要处理约两百万个整数，却能连续读取并充分利用每个页面；若短表只有10项、长表仍有一百万项，完整扫描长表显然浪费，此时应让10个候选驱动定位。但若简单对每项都从长表中央重新二分，又会重复触碰相同缓存线和磁盘页。后续算法的目标正是同时利用“短表很短”和“两表都已递增”：已经证明不可能匹配的长表前缀永不再看，并尽量把跳跃控制在可顺序处理的局部块内。因此查询优化器至少要掌握列表长度、压缩块大小和缓存层级，才能在执行前选择合理路径。
 
-若两表无序，逐项两两比较需要 nm 次；常见词的列表可含数百万项，这个代价无法接受。预处理时把每个 posting list 按 docID 严格递增排列，问题变成 set intersection（）。
+若两表无序，逐项两两比较需要 nm 次；常见词的列表可含数百万项，这个代价无法接受。预处理时把每个 posting list 按 docID 严格递增排列，问题变成 set intersection。
 
 先明确语义：严格递增意味着输入是真集合，不含重复 docID。若输入允许重复，就必须选择集合交还是 multiset intersection；后者输出次数是两侧计数的较小值，算法和测试契约都不同。
 
 ## 归并式求交：每次丢掉一个不可能值
 
-merge-based approach（）从两表左端开始：
+merge-based approach从两表左端开始：
 
 - A[i] 小于 B[j] 时，A[i] 不可能与 B[j] 及其后更大值相等，推进 i；
 - A[i] 大于 B[j] 时，同理推进 j；
@@ -53,7 +95,6 @@ std::vector<int> intersect_sorted(
 }
 ```
 
-
 每次比较至少推进一个指针，故时间：
 
 $$
@@ -78,15 +119,13 @@ m\left(1+\log\frac{n}{m}\right)
 \right)
 $$
 
-当 m与n同阶，对数项为常数，退化到 O(n)；当 m 很小，则接近 m log n。原章给出相互分割和倍增搜索两种达到该比较界的算法。
-
+当 m与n同阶，对数项为常数，退化到 O(n)；当 m 很小，则接近 m log n。本页给出相互分割和倍增搜索两种达到该比较界的算法。
 
 ## 相互分割：用短表中位数同时切两表
 
-mutual partitioning（）先交换角色保证 B 较短，再取 B 中位数 p，在 A 中二分。
+mutual partitioning先交换角色保证 B 较短，再取 B 中位数 p，在 A 中二分。
 
 若 p 出现在 A 中就输出。p 把 B 近似对半，也把 A 分为小于与大于 p 两段；只需递归 A 左与 B 左、A 右与 B 右，跨侧元素不可能相等。
-
 
 ```text
 MutualIntersect(A, B):
@@ -118,7 +157,6 @@ $$
 doubling search（，也叫 galloping/exponential search）利用两表递增。处理完 B[j-1] 后，下一项 B[j] 只可能出现在 A 的当前位置右侧。
 
 从该位置起探测 A[i+1]、A[i+2]、A[i+4]、A[i+8]，直到越过 B[j] 或数组末端；再在最后包围窗口内二分。定位后把 i 推到 B[j] 的插入位置，下一项不再看左侧。
-
 
 ```cpp
 std::size_t gallop_lower_bound(
@@ -159,13 +197,11 @@ $$
 
 第二式由对数凹性得到，所以总时间仍是 O(m(1+log(n/m)))。它避免递归，却仍按指数位置跳过 A；对缓存和磁盘来说，这些跳跃可能一探测就换一页。
 
-
 ## 两级存储求交：先看块首，再顺扫候选块
 
-two-level storage approach（）把 A 切成长度 L 的 A_i，并把每块首元素复制到 A0。
+two-level storage approach把 A 切成长度 L 的 A_i，并把每块首元素复制到 A0。
 
 第一阶段归并 A0 与 B，把每个 B 项分配到可能所在的 A_i；第二阶段只对 B_i 非空的块做局部归并。最多有 m 个候选块。
-
 
 ```text
 TwoLevelIntersect(A0, blocks, B):
@@ -193,12 +229,11 @@ $$
 
 ## 随机置换与分桶让跳过更彻底
 
-原章还把所有列表的 docID 先用同一个可逆随机 permutation pi 映射，再按映射值高位分桶。若 z 同时属于 A、B，则 pi(z) 在两边相同；桶标签不同的子表无需读取。
+本页还把所有列表的 docID 先用同一个可逆随机 permutation pi 映射，再按映射值高位分桶。若 z 同时属于 A、B，则 pi(z) 在两边相同；桶标签不同的子表无需读取。
 
 随机映射让元素近似均匀落桶，控制最大 gap，块内差分需要的位数更小。查询命中 pi(z) 后必须用 pi 的逆映射恢复原 docID。
 
 这一路线的平均时间可降到 O(m+min(n,mL))，I/O 约 O(m+min(n/B,mL/B))，并能跳过 A 中没有对应 B 桶的整块。优势来自共同映射、桶目录和压缩一起设计，而不是单独“打乱更快”。
-
 
 ## 为查询分布选择自适应策略
 
@@ -210,6 +245,73 @@ $$
 
 性能基准同时记录比较数、解码整数数、读取块数、字节数、随机页数和中间结果大小。这样才能判断收益来自算法跳过、压缩减流量还是缓存偶然命中。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“6 Set Intersection”中先预测层级和访问模式如何改变“work = O(m log(n/m))，m ≤ n”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <SetIntersectionCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“6 Set Intersection”的官方目录坐标逐步推进，保存两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果。
+
+    <SetIntersectionTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问”，定位首个分叉，撤销后以同一输入重放。
+
+    <SetIntersectionEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问。这会破坏“结果只包含两边共有元素，保持排序并明确集合与多重集合语义”；应先从两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “6 Set Intersection”中的“work = O(m log(n/m))，m ≤
+  n”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“根据集合规模比在归并、相互分割、倍增搜索与块索引间切换”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“6 Set
+  Intersection”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问”。交付时必须同时保存两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果，并解释预测与实测的残差。
+</Callout>
+
+“6 Set Intersection”的实验必须保留：两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “6 Set Intersection”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“6 Set Intersection”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与4个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“work = O(m log(n/m))，m ≤ n”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问”已经修复？
+
+<Answer>
+  为“6 Set
+  Intersection”保存正常基线，注入“忽略重复键或越过倍增搜索边界，产生漏报、重复输出或越界访问”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有两表长度、探测位置、分割点、比较次数、块访问与朴素求交结果重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -223,7 +325,11 @@ $$
 8. 差分压缩可边解码边求交，减少外存字节流量。
 9. 共同可逆随机置换与分桶可跳过更多空配对块，但必须保持跨列表一致。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

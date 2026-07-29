@@ -1,23 +1,66 @@
 ---
-title: "第5章 Sorting Atomic Items：原子项排序"
+title: 第5章 Sorting Atomic Items：原子项排序
 type: B
-section: "排序、集合与搜索"
+section: 排序、集合与搜索
 order: 4
-description: "从外存多路归并与 Snow Plow 出发，推导排序和置换下界，再以三路、多路和双枢轴快排说明分布式范式与多磁盘冲突。"
+description: 从外存多路归并与 Snow Plow 出发，推导排序和置换下界，再以三路、多路和双枢轴快排说明分布式范式与多磁盘冲突。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-05
 ---
 
+import {
+  SortingAtomicItemsCostLab,
+  SortingAtomicItemsTraceLab,
+  SortingAtomicItemsEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/sorting-atomic-items";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“5 Sorting Atomic Items”如何比较归并、分布式排序、下界与多磁盘 I/O 组织
+- 能逐项核对The Merge-Based Sorting Paradigm、Lower Bounds、The Distribution-Based Sorting Paradigm、Sorting With Multi-Disks∞，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“Sort(N) = Theta((N/B) log\_(M/B)(N/B))”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“归并扇入超过可用缓冲页，模型声称的顺序 I/O 在实现中退化为抖动”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“5 Sorting Atomic Items”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“5 Sorting Atomic Items”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“比较归并、分布式排序、下界与多磁盘 I/O 组织”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：5 Sorting Atomic Items
+
+- **5.1 The Merge-Based Sorting Paradigm**：在本页正文中以“比较归并、分布式排序、下界与多磁盘 I/O 组织”的对象、状态、复杂度或工程边界核对。
+- **5.2 Lower Bounds**：在本页正文中以“比较归并、分布式排序、下界与多磁盘 I/O 组织”的对象、状态、复杂度或工程边界核对。
+- **5.3 The Distribution-Based Sorting Paradigm**：在本页正文中以“比较归并、分布式排序、下界与多磁盘 I/O 组织”的对象、状态、复杂度或工程边界核对。
+- **5.4 Sorting With Multi-Disks∞**：在本页正文中以“比较归并、分布式排序、下界与多磁盘 I/O 组织”的对象、状态、复杂度或工程边界核对。
 
 ## 从“比较很快，搬动很慢”开始
 
-sorting atomic items（）处理 n 个固定长度项目。字符串的比较成本依赖长度，将在第7章单独讨论；本章把每项视为一个不可拆分原子。
+sorting atomic items处理 n 个固定长度项目。字符串的比较成本依赖长度，将在第7章单独讨论；本章把每项视为一个不可拆分原子。
 
 RAM 中比较排序需要 Theta(n log n) 次比较，给定目标排列的 permuting（置换）只需 Theta(n) 次移动。先预测当 n 远大于内部存储 M、磁盘每次传输 B 项时，两者差距是否仍然存在：一次 I/O 搬一整页，任意目标排列会把原本连续的项目打散，数据移动本身可能与发现排序顺序一样困难。
 
-原章沿两条互补路线展开：merge-based sorting paradigm（基于归并的排序范式）先递归排好小段再融合；distribution-based sorting paradigm（基于分布的排序范式）先按枢轴分桶再递归。二者都要把二叉扇出扩到约 M/B，才能减少全量读写数据的层数。
+本页沿两条互补路线展开：merge-based sorting paradigm（基于归并的排序范式）先递归排好小段再融合；distribution-based sorting paradigm（基于分布的排序范式）先按枢轴分桶再递归。二者都要把二叉扇出扩到约 M/B，才能减少全量读写数据的层数。
 
 ## 二路归并先利用连续 I/O
 
@@ -34,7 +77,6 @@ $$
 
 工程阈值实际是 cM。原地 Heapsort 或 Quicksort 的 c 可接近1；内部 Mergesort 还需辅助数组，c 应明显小于1。渐进式里 c 是常数，真实系统中它会决定是否多做一次全量 pass。
 
-
 ## Snow Plow 让初始有序段平均翻倍
 
 通常每段最多 M 项。（雪犁）把 H 与冻结区 U 共同放进 M：
@@ -44,7 +86,6 @@ $$
 3. 若 next 不小于 min，放回 H，仍可属于当前递增 run；
 4. 若 next 小于 min，放入 U，留给下一 run；
 5. H 为空时当前 run 结束，U 恰好填满并成为下一阶段的堆。
-
 
 ```text
 SnowPlowPhase(H, input):
@@ -132,16 +173,13 @@ n,
 \right)
 $$
 
-
 在实际 B 通常远大于很小的对数层数时，min 中排序项更小，置换与排序具有相同 I/O 量级。结论是：瓶颈常在实现数据重排，而不是算出排序 permutation。
-
 
 ## 三路划分让重复键一次到位
 
 经典 Quicksort 选一个 pivot，把数组分成小于与大于两部分。固定取首项会被有序输入打成 n-1 与0，退化到 Theta(n 的二次方)。
 
 三路划分维护小于、等于、大于三段。扫描当前项时，用至多两次交换把它放入相应边界；等于 pivot 的整段已处最终值域，不再递归。重复键很多时，这比把等值项散到两边显著减少工作。
-
 
 ```cpp
 std::pair<std::size_t, std::size_t>
@@ -171,13 +209,11 @@ partition_three_way(
 
 真正实现还要控制栈。每次只递归较小分区，对较大分区用 while 继续，即 tail recursion elimination（尾递归消除）。递归子问题至多减半，栈深最坏 O(log n)；小于几十项时切换 InsertionSort，减少调用开销。
 
-
 ## 多路分布是多路归并的对偶
 
 Multi-way Quicksort 取 k-1 个枢轴，把一个输入流分到 k 个输出桶。内存布局与归并相反：一个输入页、k 个输出页。令 k 为 Theta(M/B)，每次分布读写全部 n 项，平衡时只需 log base k of (n/M) 层。
 
-
-难点是 k 个枢轴。随机抽取 (a+1)k-1 个样本，内部排序后每隔 a+1 项取一个 pivot。取 a+1=12 ln k 时，原章用 Chernoff 与 union bound 证明：每桶少于 4n/k 的概率至少1/2；失败就重抽，期望常数轮。
+难点是 k 个枢轴。随机抽取 (a+1)k-1 个样本，内部排序后每隔 a+1 项取一个 pivot。取 a+1=12 ln k 时，本页用 Chernoff 与 union bound 证明：每桶少于 4n/k 的概率至少1/2；失败就重抽，期望常数轮。
 
 ```text
 ChoosePivots(S, k, a):
@@ -190,7 +226,7 @@ ChoosePivots(S, k, a):
 
 这样多路分布同样达到 Theta((n/B) log base M/B of (n/M)) I/O。实际系统还要处理倾斜、重复 pivot、桶缓冲回压和样本排序是否真的放入 M。
 
-原章也讨论 dual-pivot Quicksort：两个 pivot p、q 把数组分成小于 p、位于二者之间、大于 q 三段。历史 Java 7 实现以约1.9n ln n比较换取约0.6n ln n交换，实测收益与分支预测、缓存和流水线有关。这说明渐进相同的算法仍需测量微架构成本。
+本页也讨论 dual-pivot Quicksort：两个 pivot p、q 把数组分成小于 p、位于二者之间、大于 q 三段。历史 Java 7 实现以约1.9n ln n比较换取约0.6n ln n交换，实测收益与分支预测、缓存和流水线有关。这说明渐进相同的算法仍需测量微架构成本。
 
 ## 多磁盘排序：带宽增加也带来冲突
 
@@ -207,7 +243,6 @@ $$
 
 注意底数仍是 M/B，而不是 M/(DB)。要达到它，每次必须从不同磁盘各读写一页。
 
-
 条带化保证顺扫单个 run 时可并行读 D 页，却不能保证多个输出桶同时满时，它们的下一块位于不同磁盘。若都指向 D2，本应一次完成的 D 块写入会串行成 D 次；多路归并读取多个 run 也有同类冲突。
 
 GreedSort 的思路是让每个磁盘独立选择两个“最好块”：一个有当前最小 minimum，一个有当前最小 maximum；合并后输出较小块，把较大块写回对应 run。局部选择避免跨盘争抢，先生成 L-regressive 的近似有序序列，再用可线性 I/O 处理短序列的 ColumnSort 滑窗完成排序。
@@ -222,6 +257,82 @@ GreedSort 的思路是让每个磁盘独立选择两个“最好块”：一个�
 
 Snow Plow 的2M、过采样的平衡概率、双枢轴的分支优势都依赖分布或硬件。理论上界决定不会怎样失控，实验决定目标数据上哪个常数真正主导。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“5 Sorting Atomic Items”中先预测层级和访问模式如何改变“Sort(N) = Theta((N/B) log_(M/B)(N/B))”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <SortingAtomicItemsCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“5 Sorting Atomic Items”的官方目录坐标逐步推进，保存初始 runs、扇入、M/B、比较数、块读写、校验和与排序预言机。
+
+    <SortingAtomicItemsTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“归并扇入超过可用缓冲页，模型声称的顺序 I/O 在实现中退化为抖动”，定位首个分叉，撤销后以同一输入重放。
+
+    <SortingAtomicItemsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  归并扇入超过可用缓冲页，模型声称的顺序 I/O
+  在实现中退化为抖动。这会破坏“输出全序、元素多重集不变，且每轮归并的输入缓冲与输出缓冲不超
+  M”；应先从初始
+  runs、扇入、M/B、比较数、块读写、校验和与排序预言机定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “5 Sorting Atomic Items”中的“Sort(N) = Theta((N/B)
+  log_(M/B)(N/B))”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“比较归并、分布式排序、下界与多磁盘
+  I/O 组织”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“5 Sorting Atomic
+  Items”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“归并扇入超过可用缓冲页，模型声称的顺序
+  I/O 在实现中退化为抖动”。交付时必须同时保存初始
+  runs、扇入、M/B、比较数、块读写、校验和与排序预言机，并解释预测与实测的残差。
+</Callout>
+
+“5 Sorting Atomic Items”的实验必须保留：初始 runs、扇入、M/B、比较数、块读写、校验和与排序预言机。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “5 Sorting Atomic Items”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“5 Sorting Atomic Items”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与4个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“Sort(N) = Theta((N/B) log\_(M/B)(N/B))”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录初始
+  runs、扇入、M/B、比较数、块读写、校验和与排序预言机；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“归并扇入超过可用缓冲页，模型声称的顺序 I/O 在实现中退化为抖动”已经修复？
+
+<Answer>
+  为“5 Sorting Atomic
+  Items”保存正常基线，注入“归并扇入超过可用缓冲页，模型声称的顺序 I/O
+  在实现中退化为抖动”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有初始
+  runs、扇入、M/B、比较数、块读写、校验和与排序预言机重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -235,7 +346,11 @@ Snow Plow 的2M、过采样的平衡概率、双枢轴的分支优势都依赖�
 8. 过采样以 Theta(k log k) 样本提高 k 个桶同时平衡的概率。
 9. 多磁盘条带化不自动最优；同盘冲突会让 D 路传输退化为串行。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

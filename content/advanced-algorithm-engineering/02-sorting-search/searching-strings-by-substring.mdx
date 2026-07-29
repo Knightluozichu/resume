@@ -1,19 +1,62 @@
 ---
-title: "第10章 Searching Strings by Substring：按子串搜索字符串"
+title: 第10章 Searching Strings by Substring：按子串搜索字符串
 type: B
-section: "排序、集合与搜索"
+section: 排序、集合与搜索
 order: 9
-description: "把子串出现归约为后缀前缀查询，系统讲解后缀数组、LCP/Kasai、Skew 构造、后缀树互转和 McCreight suffix links。"
+description: 把子串出现归约为后缀前缀查询，系统讲解后缀数组、LCP/Kasai、Skew 构造、后缀树互转和 McCreight suffix links。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-10
 ---
 
+import {
+  SearchingStringsBySubstringCostLab,
+  SearchingStringsBySubstringTraceLab,
+  SearchingStringsBySubstringEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/searching-strings-by-substring";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“10 Searching Strings by Substring”如何用后缀数组、LCP 与后缀树把子串查询变成有序区间定位
+- 能逐项核对Notation and Terminology、The Suffix Array、The Suffix Tree、Some Interesting Problems，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“suffix-array query = O(m log n + occ)”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“遗漏唯一终止符或混淆 LCP 下标，使构造、比较与区间边界不一致”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“10 Searching Strings by Substring”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“10 Searching Strings by Substring”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“用后缀数组、LCP 与后缀树把子串查询变成有序区间定位”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：10 Searching Strings by Substring
+
+- **10.1 Notation and Terminology**：在本页正文中以“用后缀数组、LCP 与后缀树把子串查询变成有序区间定位”的对象、状态、复杂度或工程边界核对。
+- **10.2 The Suffix Array**：在本页正文中以“用后缀数组、LCP 与后缀树把子串查询变成有序区间定位”的对象、状态、复杂度或工程边界核对。
+- **10.3 The Suffix Tree**：在本页正文中以“用后缀数组、LCP 与后缀树把子串查询变成有序区间定位”的对象、状态、复杂度或工程边界核对。
+- **10.4 Some Interesting Problems**：在本页正文中以“用后缀数组、LCP 与后缀树把子串查询变成有序区间定位”的对象、状态、复杂度或工程边界核对。
 
 ## 从“一次扫描为何不够”开始
 
-searching strings by substring（）的朴素方案把 P 与每个文本起点逐字符比较，最坏 O(np)。当文本近似静态、查询很多时，应先支付索引构造成本，再把每次查询降到与 p、occ 有关。
+searching strings by substring的朴素方案把 P 与每个文本起点逐字符比较，最坏 O(np)。当文本近似静态、查询很多时，应先支付索引构造成本，再把每次查询降到与 p、occ 有关。
 
 在 T 末尾追加全局最小且原文本未出现的 `$`。令 suffix(i)=T[i..n]。关键等价是：
 
@@ -25,14 +68,13 @@ $$
 
 因此把 T 的全部 n 个后缀组成字典 SUF(T)，子串搜索就变成第9章的前缀搜索；匹配后缀与出现位置 i 一一对应。
 
-
 先预测 `banana$` 中 `ana` 的出现位置。后缀 `anana$` 与 `ana$` 都以 `ana` 开头，起点分别为1和3；排序后它们连续，因此一个后缀范围同时给出计数和位置列表。
 
 终止符 `$` 保证所有后缀 prefix-free：短后缀不会停在内部节点或与长后缀混同。若文本本身可能含 `$`，实现必须选域外 sentinel 或先重编码字母表。
 
 ## 后缀数组：只保存有序后缀的起点
 
-suffix array（）不复制 n 条后缀。SA 含 n 个 0 到 n-1 的整数，占 O(n log n) 位；文本本身另占 O(n log sigma) 位。
+suffix array不复制 n 条后缀。SA 含 n 个 0 到 n-1 的整数，占 O(n log n) 位；文本本身另占 O(n log sigma) 位。
 
 $$
 \mathrm{suffix}(SA[0])
@@ -45,7 +87,6 @@ $$
 $$
 
 对 P 做 lower-bound，再把“P 已耗尽”作为上界 comparator 做第二次搜索，得到所有以 P 开头的后缀区间。区间元素 SA[j] 就是出现位置。
-
 
 普通二分做 O(log n) 次比较，每次最坏读 p 个字符：
 
@@ -79,13 +120,11 @@ $$
 
 Llcp/Rlcp 可按二分区间自底向上在线性时间构造，也可在 LCP 数组上建 RMQ，按需常数时间取得该最小值。
 
-
 ## 最长公共前缀数组与 Kasai 线性构造
 
-longest-common-prefix array（）有 n-1 项。逐对从头比较在 `aaaa...$` 这类文本上会反复扫描，最坏 Theta(n^2)。
+longest-common-prefix array有 n-1 项。逐对从头比较在 `aaaa...$` 这类文本上会反复扫描，最坏 Theta(n^2)。
 
 Kasai 先建 inverse SA：rank[i] 返回 suffix(i) 在 SA 中的位置。按文本起点 i 从左到右处理；若 suffix(i-1) 与其 SA 前驱共享 h 个字符，删除两者首字符后仍至少共享 max(h-1,0) 个字符。因此新比较可从 h-1 开始。
-
 
 ```text
 Kasai(T, SA):
@@ -117,7 +156,6 @@ Skew/DC3 把位置分为 residue 1 与 residue 2/0 两组：
 3. residue 1 后缀用 (T[i],rank[i+1]) 二元组基数排序；
 4. 归并两组时，按另一后缀 residue，用一或两个字符加采样 rank 常数时间比较。
 
-
 不对称 2/3:1/3 划分正是归并简单的原因：跨组比较平移1或2个字符后，总能落入已排序采样组。递推式：
 
 $$
@@ -138,18 +176,17 @@ Skew(T):
   merge sampled and residue-1 suffixes with constant-size keys
 ```
 
-原章还介绍 scan-based 构造：每次把一块文本放入内存，构建块内后缀顺序，再与磁盘上的旧 SA 顺序归并。它的渐进 I/O 高于 Skew，却以顺序 pass、预取、压缩和很少 seek 换取慢磁盘上的稳定吞吐。这体现算法工程中“最优 I/O 总量”与“设备偏好顺序流”并非同一目标。
+本页还介绍 scan-based 构造：每次把一块文本放入内存，构建块内后缀顺序，再与磁盘上的旧 SA 顺序归并。它的渐进 I/O 高于 Skew，却以顺序 pass、预取、压缩和很少 seek 换取慢磁盘上的稳定吞吐。这体现算法工程中“最优 I/O 总量”与“设备偏好顺序流”并非同一目标。
 
 ## 后缀树：全部后缀的压缩 Trie
 
-suffix tree（）有 n 个叶，每个内部节点至少两个孩子，因此总节点 O(n)。长边标签不复制字符，只引用 T 的起点和长度；根到叶拼出的字符串恰是对应后缀。
+suffix tree有 n 个叶，每个内部节点至少两个孩子，因此总节点 O(n)。长边标签不复制字符，只引用 T 的起点和长度；根到叶拼出的字符串恰是对应后缀。
 
 模式 P 从根沿唯一可能的边向下，逐字符消费长边标签：
 
 - 遇 mismatch，P 不出现；
 - P 在节点或边中间耗尽，得到 extended locus；
 - locus 下所有叶的起点就是 occ 个出现位置。
-
 
 节点出边用完美哈希索引首字符，可最坏 O(1) 分支：
 
@@ -171,7 +208,6 @@ $$
 
 反向由 SA、LCP 构树时，按 SA 顺序逐叶插入，并维护节点深度递增栈。下一个 LCP 小于栈顶时弹栈；大于当前父深度时拆边建立该 LCP 深度的内部节点；再把新叶挂到当前父节点。
 
-
 ```text
 BuildSuffixTree(SA, LCP):
   stack = [root at depth 0]
@@ -188,16 +224,15 @@ BuildSuffixTree(SA, LCP):
 
 ## McCreight：用 suffix links 直接线性构树
 
-McCreight algorithm（）按从长到短的 suffix(0)、suffix(1)... 插入。朴素增量构造每次从根扫描，在 `aaaa...$` 上达到 Theta(n^2)。
+McCreight algorithm按从长到短的 suffix(0)、suffix(1)... 插入。朴素增量构造每次从根扫描，在 `aaaa...$` 上达到 Theta(n^2)。
 
-suffix link（）满足：
+suffix link满足：
 
 $$
 s[z]
 =
 a\,s[\mathrm{SL}(z)]
 $$
-
 
 内部节点 z 至少是两条后缀的 LCA；把这两后缀起点同时加1，它们的 LCP 正好删除首字符，所以对应 locus 存在，suffix link 定义良好。链接深度严格下降，最终到根，不会形成环。
 
@@ -221,8 +256,7 @@ $$
 
 用期望常数哈希可降低实际分支成本。外存中树边跳转可能每步一次 I/O，所以直接 McCreight 不一定优于先建顺序 SA 再转树；平均 LCP 很短、树顶层可缓存时才可能有优势。
 
-
-## 原章延伸：近似匹配、压缩与文本挖掘
+## 独立教学延伸：近似匹配、压缩与文本挖掘
 
 ### k 个 substitution 的近似匹配
 
@@ -244,6 +278,81 @@ $$
 
 性能记录构造 CPU、峰值内存、顺序/随机 I/O、SA/LCP 字节、树节点/边/指针字节、查询字符比较、RMQ 次数、输出 occ 和缓存命中。只报告查询 O(p+occ) 会隐藏构造成本和后缀树常数。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“10 Searching Strings by Substring”中先预测层级和访问模式如何改变“suffix-array query = O(m log n + occ)”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <SearchingStringsBySubstringCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“10 Searching Strings by Substring”的官方目录坐标逐步推进，保存文本 hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机。
+
+    <SearchingStringsBySubstringTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“遗漏唯一终止符或混淆 LCP 下标，使构造、比较与区间边界不一致”，定位首个分叉，撤销后以同一输入重放。
+
+    <SearchingStringsBySubstringEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  遗漏唯一终止符或混淆 LCP
+  下标，使构造、比较与区间边界不一致。这会破坏“所有后缀恰出现一次并保持词典序，查询区间与朴素匹配结果一致”；应先从文本
+  hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “10 Searching Strings by Substring”中的“suffix-array query = O(m log n +
+  occ)”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“用后缀数组、LCP
+  与后缀树把子串查询变成有序区间定位”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“10 Searching Strings by
+  Substring”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“遗漏唯一终止符或混淆
+  LCP 下标，使构造、比较与区间边界不一致”。交付时必须同时保存文本
+  hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机，并解释预测与实测的残差。
+</Callout>
+
+“10 Searching Strings by Substring”的实验必须保留：文本 hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “10 Searching Strings by Substring”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“10 Searching Strings by Substring”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与4个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“suffix-array query = O(m log n + occ)”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录文本
+  hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“遗漏唯一终止符或混淆 LCP 下标，使构造、比较与区间边界不一致”已经修复？
+
+<Answer>
+  为“10 Searching Strings by Substring”保存正常基线，注入“遗漏唯一终止符或混淆
+  LCP
+  下标，使构造、比较与区间边界不一致”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有文本
+  hash、SA、LCP、比较区间、匹配位置、构造阶段与朴素预言机重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -258,7 +367,11 @@ $$
 9. McCreight suffix links 删除前缀首字符并复用 locus，避免二次扫描。
 10. LCP/RMQ/LCA 还支持 k-mismatch、重复发现、压缩和文本挖掘。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

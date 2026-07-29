@@ -1,19 +1,63 @@
 ---
-title: "第12章 Statistical Coding：统计编码"
+title: 第12章 Statistical Coding：统计编码
 type: B
-section: "压缩与编码"
+section: 压缩与编码
 order: 11
-description: "区分统计模型与编码器，推导 Huffman、Canonical Huffman、Arithmetic/Range Coding，并用 PPM 的上下文、escape 与排除原则改进概率估计。"
+description: >-
+  区分统计模型与编码器，推导 Huffman、Canonical Huffman、Arithmetic/Range Coding，并用 PPM
+  的上下文、escape 与排除原则改进概率估计。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-12
 ---
 
+import {
+  StatisticalCodingCostLab,
+  StatisticalCodingTraceLab,
+  StatisticalCodingEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/statistical-coding";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“12 Statistical Coding”如何从频率模型推导 Huffman、算术编码与 PPM 的码长和状态
+- 能逐项核对Huffman Coding、Arithmetic Coding、Prediction by Partial Matching∞，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“H0 = -sum_x p(x) log2 p(x)”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“更新频率的时点不同，导致算术区间或 PPM escape 状态在两端分叉”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“12 Statistical Coding”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“12 Statistical Coding”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“从频率模型推导 Huffman、算术编码与 PPM 的码长和状态”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：12 Statistical Coding
+
+- **12.1 Huffman Coding**：在本页正文中以“从频率模型推导 Huffman、算术编码与 PPM 的码长和状态”的对象、状态、复杂度或工程边界核对。
+- **12.2 Arithmetic Coding**：在本页正文中以“从频率模型推导 Huffman、算术编码与 PPM 的码长和状态”的对象、状态、复杂度或工程边界核对。
+- **12.3 Prediction by Partial Matching∞**：在本页正文中以“从频率模型推导 Huffman、算术编码与 PPM 的码长和状态”的对象、状态、复杂度或工程边界核对。
 
 ## 从“一符号一整数位”为何会浪费开始
 
-statistical coding（）不直接问“字符的编号是多少”，而问“在当前模型下它有多意外”。若事件概率为 p，理想信息量是：
+statistical coding不直接问“字符的编号是多少”，而问“在当前模型下它有多意外”。若事件概率为 p，理想信息量是：
 
 $$
 I(\sigma)=-\log_2 p_\sigma
@@ -21,8 +65,7 @@ $$
 
 先预测一个二元源：a 的概率是0.99，b 的概率是0.01。若坚持每个符号各用1 bit，平均仍是1 bit/symbol；理想平均信息量却只有约0.081 bits/symbol。问题不在字母表太大，而在“逐符号码长必须是整数”。
 
-原章先把系统拆成 model 与 coder。模型根据已见数据估计概率；编码器只负责把概率变成可逆 bitstream。0th-order model 只统计单个符号，忽略次序；kth-order model 则估计“给定前 k 个符号，下一个符号是什么”的条件概率。
-
+本页先把系统拆成 model 与 coder。模型根据已见数据估计概率；编码器只负责把概率变成可逆 bitstream。0th-order model 只统计单个符号，忽略次序；kth-order model 则估计“给定前 k 个符号，下一个符号是什么”的条件概率。
 
 静态模型先扫一遍输入，发送频率表或码表作为 preamble，再编码正文；动态模型让编码器与解码器按相同规则在线更新计数，可省预扫描，却必须严格同步。模型成本也要计入压缩率：短文本的 Huffman 树、频率表或上下文表可能比节省的正文还大。
 
@@ -38,10 +81,9 @@ $$
 
 ## Huffman Coding：每次合并两个最小权重
 
-Huffman coding（）把每个符号放在二叉树叶子。左、右边分别记0、1；从根到叶的路径就是 codeword。任何叶子都不是另一叶子的祖先，因此码字 prefix-free，解码器读到叶子即可切分。
+Huffman coding把每个符号放在二叉树叶子。左、右边分别记0、1；从根到叶的路径就是 codeword。任何叶子都不是另一叶子的祖先，因此码字 prefix-free，解码器读到叶子即可切分。
 
 对频率5、9、12、13、16、45，贪心算法每轮从优先队列取最小两个权重，建父节点并放回。合并成本等于新父节点权重；所有合并成本之和恰好等于 weighted path length。
-
 
 ```text
 BuildHuffman(frequencies):
@@ -71,11 +113,9 @@ $$
 
 频率相同会产生多棵平均长度相同的树，但 maximum codeword length 可能不同。工程上若解码表只允许某个最大位长，应在 tie-break 时优先控制树高，或使用 length-limited Huffman；直接截断长码会破坏 prefix-free 与最优性。
 
-
 ## Canonical Huffman：只传码长也能重建码字
 
-Canonical Huffman（）不改变每个符号的长度，因此平均码长与原树完全相同。它只规范同长度码字的排列：先按 length，再按 symbol 排序；同长度 code 连续递增，进入更长长度时先加一再左移。
-
+Canonical Huffman不改变每个符号的长度，因此平均码长与原树完全相同。它只规范同长度码字的排列：先按 length，再按 symbol 排序；同长度 code 连续递增，进入更长长度时先加一再左移。
 
 设 count[ℓ] 是长度 ℓ 的码字数，first[ℓ] 是该层第一个 canonical code。递推为：
 
@@ -105,7 +145,7 @@ BuildCanonical(lengths):
 
 ## Arithmetic Coding：用一个区间表示整条序列
 
-Arithmetic coding（）绕开逐符号整数码长。把按固定顺序排列的字母表映射到 [0,1) 的连续子区间。设符号 σ 的累计概率为 fσ，当前区间起点 li-1、宽度 si-1，则读入 S[i] 后：
+Arithmetic coding绕开逐符号整数码长。把按固定顺序排列的字母表映射到 [0,1) 的连续子区间。设符号 σ 的累计概率为 fσ，当前区间起点 li-1、宽度 si-1，则读入 S[i] 后：
 
 $$
 s_i=s_{i-1}P[S[i]],
@@ -115,14 +155,13 @@ $$
 
 例子 `abac` 使用 P[a]=1/2、P[b]=P[c]=1/4，最终区间为 [19/64,20/64)。解码器只要持有该区间中的数 x、相同概率模型和原序列长度，就能从 [0,1) 开始反向判断 x 落在哪个符号子区间，并逐步恢复 a、b、a、c。
 
-
 最终宽度为：
 
 $$
 s_n=\prod_{i=1}^{n}P[S[i]]
 $$
 
-若选择最短二进制前缀，使其 dyadic interval 完整落入最终区间，则原章定理12.3给出：
+若选择最短二进制前缀，使其 dyadic interval 完整落入最终区间，则标准算术编码界给出：
 
 $$
 |\operatorname{AC}(S)|
@@ -136,13 +175,11 @@ $$
 
 代价也很明确。一个输出 number 依赖此前全部符号，不能从任意 bit offset 开始解；随机访问通常要切块，并为每块保存 model checkpoint 或重置模型。块越短，访问和并行越好，header 与熵损失越大；块越长，压缩率越接近整段理论值，但错误传播、延迟和局部读取变差。
 
-
 ## Range Coding：整数端点、重归一化与流式输出
 
-Range Coding（）把 [0,1) 映射到 [0,M)，其中 M 是机器字范围。概率由整数 count 近似，累计计数 C[σ] 表示排在 σ 前的总次数；区间更新使用整数乘除，并保证每个非零计数都得到非空子区间。
+Range Coding把 [0,1) 映射到 [0,M)，其中 M 是机器字范围。概率由整数 count 近似，累计计数 C[σ] 表示排在 σ 前的总次数；区间更新使用整数乘除，并保证每个非零计数都得到非空子区间。
 
 当新 `[L,H)` 完全落在下半区，输出0并把端点乘2；完全落在上半区，输出1、减去半区起点后再乘2。若窄区间跨过中点却落在中间两四分位，会出现 underflow：暂不输出，围绕中点放大，并累计待补的互补位。
-
 
 ```text
 EncodeRange(symbol):
@@ -156,7 +193,7 @@ EncodeRange(symbol):
 
 解码器维护同宽 shift register v。它先把 v 映射到累计频率刻度，找出所属符号，再执行完全相同的区间更新与重归一化，并从输入补一位。二者必须统一半开区间、取整方向、端点是否含 high、EOF 终止方式和 count rescale 时机。
 
-有限精度要求 total count 不能无限增长，否则小概率子区间会被舍入成空。动态模型达到阈值后可把各计数除2并保留最小1；编码器与解码器必须在同一个已编码符号后触发。原章给出的 Range 方法经验损失很小，却换来定宽整数运算、边处理边输出和可控内存。
+有限精度要求 total count 不能无限增长，否则小概率子区间会被舍入成空。动态模型达到阈值后可把各计数除2并保留最小1；编码器与解码器必须在同一个已编码符号后触发。本页给出的 Range 方法经验损失很小，却换来定宽整数运算、边处理边输出和可控内存。
 
 ## Prediction by Partial Matching：让上下文改进概率
 
@@ -164,8 +201,7 @@ prediction by partial matching（，PPM）把0阶独立同分布模型提升到 
 
 若当前上下文曾见过目标符号，就用该条件概率交给 Arithmetic/Range coder；若没见过，就在该上下文编码 escape，降到短一阶模型。一路失败后进入 order -1：在完整字母表上均匀编码尚未出现的符号。escape 不是额外的原始 bit 标记，而是当前统计模型中的一个普通事件，因此解码器能同步选择相同后退路径。
 
-
-原章以 `abracadabra`、K=2 说明流程。前缀末尾 context 是 `ra`：若下一个是 c，order 2 已有 `ra → c`，直接命中；若是 d，先在 `ra` 编码 escape，再在 order 1 的 `a → d` 命中；若是未见过的 e，会继续经过 order 0，最后在 order -1 编码。
+本页以 `abracadabra`、K=2 说明流程。前缀末尾 context 是 `ra`：若下一个是 c，order 2 已有 `ra → c`，直接命中；若是 d，先在 `ra` 编码 escape，再在 order 1 的 `a → d` 命中；若是未见过的 e，会继续经过 order 0，最后在 order -1 编码。
 
 ### 排除原则
 
@@ -183,12 +219,11 @@ prediction by partial matching（，PPM）把0阶独立同分布模型提升到 
 
 不同方法形成 PPMA、PPMC、PPMD 等变体；它们没有对所有数据统一最优的先验答案。应把 escape 策略、exclusion 是否开启、字母表定义、K、更新时机与 rescale 一起写进格式。
 
-K 也不是越大越好。长上下文更具体，一旦重复就给出尖锐分布；但它更稀疏，会频繁支付多个 escapes，并占用更多 context nodes。原章实验指出4到5字符以后常不再改善。应在验证集上测压缩率、模型内存和速度，或用 context pruning/escape 代价决定是否保留节点。
+K 也不是越大越好。长上下文更具体，一旦重复就给出尖锐分布；但它更稀疏，会频繁支付多个 escapes，并占用更多 context nodes。本页实验指出4到5字符以后常不再改善。应在验证集上测压缩率、模型内存和速度，或用 context pruning/escape 代价决定是否保留节点。
 
 特别要区分：PPM 是 modeling technique，不是 bit coder。它输出“本层 symbol/escape 的概率分布”，真正把事件写入 bitstream 的仍是 Arithmetic Coding、Range Coding 或其他 statistical encoder。
 
 ## 方案选择：压缩率不是唯一坐标
-
 
 Canonical Huffman 适合解码吞吐高、静态 token 字典和需要从已知 codeword boundary 重启的场景；Arithmetic/Range 适合概率极偏或动态更新，能逼近熵却增加串行依赖；PPM 在重复文本上通过上下文降低条件熵，但模型内存与 escape 计算更重。
 
@@ -196,6 +231,82 @@ Canonical Huffman 适合解码吞吐高、静态 token 字典和需要从已知 
 
 正确性测试至少覆盖单符号字母表、空输入、所有频率相等、极端偏斜、count rescale 边界、underflow 连续发生、被截断码流、非法 Huffman lengths、块尾 padding 以及编码器/解码器模型更新顺序。对 adaptive coder，golden bitstream 比单纯 round-trip 更能发现双方一起犯同一错误。
 
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“12 Statistical Coding”中先预测层级和访问模式如何改变“H0 = -sum_x p(x) log2 p(x)”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <StatisticalCodingCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“12 Statistical Coding”的官方目录坐标逐步推进，保存符号频率、码长/区间、重归一化事件、escape、总位数与 round-trip。
+
+    <StatisticalCodingTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“更新频率的时点不同，导致算术区间或 PPM escape 状态在两端分叉”，定位首个分叉，撤销后以同一输入重放。
+
+    <StatisticalCodingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  更新频率的时点不同，导致算术区间或 PPM escape
+  状态在两端分叉。这会破坏“编码器与解码器使用同一概率模型，码流可逆且码长与模型预测可核对”；应先从符号频率、码长/区间、重归一化事件、escape、总位数与
+  round-trip定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “12 Statistical Coding”中的“H0 = -sum_x p(x) log2
+  p(x)”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“从频率模型推导
+  Huffman、算术编码与 PPM 的码长和状态”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“12 Statistical
+  Coding”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“更新频率的时点不同，导致算术区间或
+  PPM escape
+  状态在两端分叉”。交付时必须同时保存符号频率、码长/区间、重归一化事件、escape、总位数与
+  round-trip，并解释预测与实测的残差。
+</Callout>
+
+“12 Statistical Coding”的实验必须保留：符号频率、码长/区间、重归一化事件、escape、总位数与 round-trip。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “12 Statistical Coding”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“12 Statistical Coding”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与3个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“H0 = -sum_x p(x) log2 p(x)”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录符号频率、码长/区间、重归一化事件、escape、总位数与
+  round-trip；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“更新频率的时点不同，导致算术区间或 PPM escape 状态在两端分叉”已经修复？
+
+<Answer>
+  为“12 Statistical Coding”保存正常基线，注入“更新频率的时点不同，导致算术区间或
+  PPM escape
+  状态在两端分叉”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有符号频率、码长/区间、重归一化事件、escape、总位数与
+  round-trip重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -210,7 +321,11 @@ Canonical Huffman 适合解码吞吐高、静态 token 字典和需要从已知 
 9. PPM 从最长 context 开始，失败时编码 escape，最终退到 order -1。
 10. 排除原则利用高阶 escape 的负信息；escape 概率与 K 必须靠数据验证。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>

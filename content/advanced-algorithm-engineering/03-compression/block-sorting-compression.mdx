@@ -1,19 +1,65 @@
 ---
-title: "第14章 The Burrows-Wheeler Transform：块排序压缩"
+title: 第14章 The Burrows-Wheeler Transform：块排序压缩
 type: B
-section: "压缩与编码"
+section: 压缩与编码
 order: 13
-description: "构造并逆转 BWT，以 MTF、RLE0 和统计编码形成 bzip，继而推导 compression boosting 与 FM-index backward search。"
+description: >-
+  构造并逆转 BWT，以 MTF、RLE0 和统计编码形成 bzip，继而推导 compression boosting 与 FM-index
+  backward search。
 demo: true
 math: true
-sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+sourceUrl: >-
+  https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: pae-14
 ---
 
+import {
+  BlockSortingCompressionCostLab,
+  BlockSortingCompressionTraceLab,
+  BlockSortingCompressionEvidenceLab,
+} from "@/components/mdx/advanced-algorithm-engineering/v2/block-sorting-compression";
+import {
+  Objectives,
+  Callout,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“14 Block-Sorting Compression”如何跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计
+- 能逐项核对The Burrows–Wheeler Transform、Two Other Simple Transforms、The bzip Compressor、On Compression Boosting∞、On Compressed Indexing∞，不把平台页数或相邻章节主题冒充原版目录
+- 能固定输入和参数，按“LF(i) = C[L[i]] + Occ(L[i], i)”手算一个最小样例，并找到输出或成本的首个分叉
+- 能注入“丢失 primary index 或对相同字符使用不稳定次序，使 LF 环无法闭合”，保存基线、故障、恢复和同输入重放证据
+
+</Objectives>
+
+{/* ADVANCED_ALGORITHM_ENGINEERING_QUALITY_V2 */}
+
+## 来源、版次与独立重写边界
+
+“14 Block-Sorting Compression”对应 Paolo Ferragina 的 _Pearls of Algorithm Engineering_（Cambridge University Press，2023）。[出版社书籍页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2)确认作者、版次、ISBN、318页与算法工程定位；[官方目录页](https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/contents/6F143C716C0C559D0B34275914BC5858)和[官方前置信息 PDF](https://assets.cambridge.org/97810091/23280/frontmatter/9781009123280_frontmatter.pdf)共同给出16章、61个编号节与索引的正式顺序。
+
+对“14 Block-Sorting Compression”而言，当前公开可核验材料是出版社目录、前言与书籍说明，并非获授权完整正文。因此，下方中文讲解、公式推导、代码和实验是按公开目录坐标进行的独立教学重写，不声称逐段翻译原书；涉及“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的结论必须由本页的最小输入、预言机与成本记录重新证明。
+
+### 官方目录坐标：14 Block-Sorting Compression
+
+- **14.1 The Burrows–Wheeler Transform**：在本页正文中以“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的对象、状态、复杂度或工程边界核对。
+- **14.2 Two Other Simple Transforms**：在本页正文中以“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的对象、状态、复杂度或工程边界核对。
+- **14.3 The bzip Compressor**：在本页正文中以“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的对象、状态、复杂度或工程边界核对。
+- **14.4 On Compression Boosting∞**：在本页正文中以“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的对象、状态、复杂度或工程边界核对。
+- **14.5 On Compressed Indexing∞**：在本页正文中以“跟踪 BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的对象、状态、复杂度或工程边界核对。
 
 ## 从“可逆重排能否让普通编码器变聪明”开始
 
-block-sorting compression（）先做一件反直觉的事：它不立即删除 redundancy，而是重排字符，让相似 context 的前驱聚到一起。后续简单的 Move-To-Front、Run-Length Encoding 与 entropy coder 才能吃到这些 runs 和偏斜分布。
+block-sorting compression先做一件反直觉的事：它不立即删除 redundancy，而是重排字符，让相似 context 的前驱聚到一起。后续简单的 Move-To-Front、Run-Length Encoding 与 entropy coder 才能吃到这些 runs 和偏斜分布。
 
 先预测 `abracadabra` 的字符若只排序成 `aaaaabbcdrr` 是否够用。它压缩友好，却丢失所有次序，许多不同字符串会产生相同结果。目标必须同时满足两点：输出 locally homogeneous，又能无歧义恢复原串。
 
@@ -26,7 +72,6 @@ Burrows-Wheeler transform（，BWT）正好完成这个桥接。它是 permutati
 1. 构造 s$ 的全部 n+1 个 cyclic left rotations。
 2. 按从左到右的字典序排序这些 rows，得到矩阵 M'。
 3. 读取最后一列 L，并保存 `$` 的位置 r；也可把 `$` 从 L 去掉，返回 L-hat 与 r。
-
 
 对 `abracadabra$`，最后一列是 `ard$rcaaaabb`，删除 sentinel 得 `ardrcaaaabb`，r=3。结尾的 `aaaabb` 体现 local homogeneity：排序后，拥有相似右侧 context 的 rows 相邻，它们在 L 中对应的 preceding symbols 也被放在一个连续区域。
 
@@ -54,7 +99,6 @@ $$
 
 所以已有 Suffix Array 后只需线性扫描生成 L；总时间/IO 由 SA construction 决定，而不是构造旋转矩阵。
 
-
 ## Backward BWT：first-last property 与 LF mapping
 
 M' 的第一列 F 是 L 的 sorted permutation。只知道 F 不能还原次序；可逆性来自两个性质：
@@ -62,7 +106,7 @@ M' 的第一列 F 是 L 的 sorted permutation。只知道 F 不能还原次序�
 1. 同一 row 中，L[i] 是 F[i] 在原循环串中的 preceding symbol。
 2. 相同字符在 L 与 F 中的 occurrences 保持相同相对次序。
 
-LF mapping（）定义为：若 L[i] 的第 k 个 occurrence 对应 F[j] 的第 k 个 occurrence，则 LF[i]=j。
+LF mapping定义为：若 L[i] 的第 k 个 occurrence 对应 F[j] 的第 k 个 occurrence，则 LF[i]=j。
 
 设 C[c] 是小于 c 的字符总数，Rank(c,i) 计数 L[0,i) 中 c 的 occurrences，则：
 
@@ -71,7 +115,6 @@ LF(i)
 =
 C[L[i]]+\operatorname{Rank}(L[i],i)
 $$
-
 
 从 sentinel 对应 row 起，当前 L 字符是原串中当前位置的 predecessor；跳到 LF(row) 后再次读取 L，就向原串左移一个字符。重复 n 次可逆序填满 s，时间 O(n)。显式 LF array 占 O(n) words，也可用压缩 Rank structure 在线计算。
 
@@ -96,8 +139,7 @@ InvertBWT(L, sentinelRow):
 
 Move-To-Front（，MTF）初始化为 alphabet 的固定顺序。处理字符 c 时，输出它当前 index p，再把 c 移到 front。inverse 用同一 initial list：取 index p 处字符输出，再移到 front，双方始终同步。
 
-
-若 L 中同字符连续出现，第一个可能输出较大 index，之后都输出0；若一个小集合频繁交替，输出通常也只在0、1、2附近。不同局部区域即使使用不同字符，也统一变成 small-integer alphabet。原章例 `bananacocco` 从列表 `a,b,c,n,o` 得到 `11311134101`。
+若 L 中同字符连续出现，第一个可能输出较大 index，之后都输出0；若一个小集合频繁交替，输出通常也只在0、1、2附近。不同局部区域即使使用不同字符，也统一变成 small-integer alphabet。本页例 `bananacocco` 从列表 `a,b,c,n,o` 得到 `11311134101`。
 
 MTF 自己通常不缩短序列。它利用 locality of reference 改变 distribution，随后可用 Elias integer code、RLE 或统计 coder。它不与 Huffman“静态前缀码最优”矛盾：同一 symbol 在不同时间可能对应不同 index/codeword，MTF pipeline 不属于静态逐符号 prefix-code 类别。
 
@@ -114,13 +156,11 @@ $$
 \text{ 删除最高的 }1
 $$
 
-
 例如五个0：ℓ+1=6，binary 为110，删除 leading 1 后写10。decoder 读 maximal 0/1 sequence，补回 leading 1、转整数再减1。输出 digit 数不超过原0-run长度；长 run 越省。
 
 ## bzip Compressor：每一层为下一层制造分布
 
-bzip compressor（）的主链是：
-
+bzip compressor的主链是：
 
 1. BWT 把相似 context 的 preceding symbols 聚成局部同质 L。
 2. MTF 把重复/近邻字符变成0和 small integers。
@@ -131,11 +171,9 @@ preamble 还要保存 block original size、CRC、sentinel/primary index、使�
 
 bzip 按 block 工作，因为 forward BWT 与 inverse LF 的内存访问较分散，整文件全局排序昂贵。大 block 有更长 context 和更强 homogeneity，通常 compression ratio 更好；但 SA/BWT construction memory、compression latency 与 inverse cache misses 都增加。与 LZ window 不同，扩大 BWT block 也会明显拖慢 decompression。
 
-
 ## Compression Boosting：用多个0阶块模拟k阶模型
 
-compression boosting（）解释了 BWT 不只是“看起来 runs 多”。在 sorted rows 中，以同一 context w 开头的 rows 连续；其 L 区段 Lw 恰好收集原串中 w 的 preceding symbols。
-
+compression boosting解释了 BWT 不只是“看起来 runs 多”。在 sorted rows 中，以同一 context w 开头的 rows 连续；其 L 区段 Lw 恰好收集原串中 w 的 preceding symbols。
 
 若0阶 compressor C0 对任意 t 使用至多 |t|H0(t)+overhead(t) bits，把 L 按所有 k-context 分成 Lw 并逐块压缩，则主项：
 
@@ -151,7 +189,7 @@ $$
 
 ## Compressed Indexing：BWT 既能压，也能搜索
 
-compressed indexing（）沿用 BWT、C 与 Rank。FM-index 可理解为 compressed suffix array，也可理解为 searchable bzip representation。
+compressed indexing沿用 BWT、C 与 Rank。FM-index 可理解为 compressed suffix array，也可理解为 searchable bzip representation。
 
 核心操作：
 
@@ -167,7 +205,6 @@ first' &= C[c]+\operatorname{Rank}(c,first),\\
 last'  &= C[c]+\operatorname{Rank}(c,last+1)-1.
 \end{aligned}
 $$
-
 
 对 `abracadabra$` 的 pattern `ab`，先由 F 中 b 的范围得 [6,7]；再用 L 的 a-ranks 扩为 [2,3]，因此出现2次。每轮只做常数次 Rank，若 Rank O(1)，Count 时间 O(|P|)。
 
@@ -191,8 +228,85 @@ Rank 的定义有两种常见 convention：inclusive L[0..i] 或 half-open L[0..
 
 ## 端到端实现与验证
 
-
 性能报告至少包含 block size、bits/input-byte、BWT construction time、inverse time、peak memory、cache misses、MTF/RLE0 分布、Rank ns/query、Count µs/character 与 Locate occurrences/s。正确性覆盖空块、单字符、全相同、全不同、重复 sentinel byte 的 escaping、CRC、truncated metadata、corrupted run 与超大 primary index。
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 成本模型与工作集">
+    在“14 Block-Sorting Compression”中先预测层级和访问模式如何改变“LF(i) = C[L[i]] + Occ(L[i], i)”，再切换工作集与局部性；最终结果相同不代表代价相同。
+
+    <BlockSortingCompressionCostLab />
+
+  </Step>
+  <Step title="2. 状态、传输与正式节点">
+    沿“14 Block-Sorting Compression”的官方目录坐标逐步推进，保存旋转/后缀次序、L 列、primary、Occ、MTF/RLE 流与逆变换结果。
+
+    <BlockSortingCompressionTraceLab />
+
+  </Step>
+  <Step title="3. 单变量故障与恢复">
+    固定输入后注入“丢失 primary index 或对相同字符使用不稳定次序，使 LF 环无法闭合”，定位首个分叉，撤销后以同一输入重放。
+
+    <BlockSortingCompressionEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 可重放工程合同
+
+<Callout type="trap" title="本章首要反例">
+  丢失 primary index 或对相同字符使用不稳定次序，使 LF
+  环无法闭合。这会破坏“变换携带足够的 primary/sentinel
+  信息并能逐字节逆变换”；应先从旋转/后缀次序、L 列、primary、Occ、MTF/RLE
+  流与逆变换结果定位，不能用最终输出或一次耗时掩盖。
+</Callout>
+
+<Callout type="trap" title="成本模型也有适用域">
+  “14 Block-Sorting Compression”中的“LF(i) = C[L[i]] + Occ(L[i],
+  i)”只在本页声明的输入、存储与操作单位下成立。若工作集、块大小、字符模型或预处理边界变化，必须重新推导“跟踪
+  BWT、MTF、RLE 与熵编码如何逐层改变局部统计”的成本，不能沿用旧数字。
+</Callout>
+
+<Callout type="trap" title="一次基准不是工程结论">
+  对“14 Block-Sorting
+  Compression”只报告最快一次运行，会隐藏预热、随机种子、尾延迟与“丢失 primary
+  index 或对相同字符使用不稳定次序，使 LF
+  环无法闭合”。交付时必须同时保存旋转/后缀次序、L 列、primary、Occ、MTF/RLE
+  流与逆变换结果，并解释预测与实测的残差。
+</Callout>
+
+“14 Block-Sorting Compression”的实验必须保留：旋转/后缀次序、L 列、primary、Occ、MTF/RLE 流与逆变换结果。本章性能数据至少预热一次、重复多次并报告分布；正确性必须与独立预言机比较，不能只比较两个共享同一错误的优化实现。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：正式目录。** “14 Block-Sorting Compression”的公开目录边界是什么，平台如何证明没有把其他章主题混入？
+
+<Answer>
+  对“14 Block-Sorting Compression”，以 Cambridge
+  官方目录和前置信息为分母，逐项映射本页标题与5个编号节。当前只有 outline-only
+  访问，因此本页必须标为独立重写，不能声称复刻原书段落。
+</Answer>
+
+**问题 2：最小反例。** 怎样验证“LF(i) = C[L[i]] + Occ(L[i], i)”不是只写在页面上的公式？
+
+<Answer>
+  先固定一个可手算输入，记录旋转/后缀次序、L 列、primary、Occ、MTF/RLE
+  流与逆变换结果；再只改变一个规模、布局或算法参数。若手算、实现和独立预言机的方向或边界不一致，先拒绝性能结论。
+</Answer>
+
+**问题 3：恢复证据。** 怎样证明“丢失 primary index 或对相同字符使用不稳定次序，使 LF 环无法闭合”已经修复？
+
+<Answer>
+  为“14 Block-Sorting Compression”保存正常基线，注入“丢失 primary index
+  或对相同字符使用不稳定次序，使 LF
+  环无法闭合”并标记首个不同状态；撤销后用完全相同的输入、随机种子、机器与参数重放。只有旋转/后缀次序、L
+  列、primary、Occ、MTF/RLE 流与逆变换结果重新一致，修复才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -207,7 +321,11 @@ Rank 的定义有两种常见 convention：inclusive L[0..i] 或 half-open L[0..
 9. FM-index 的 backward search 用 C 与 Rank 在压缩 L 上维护 suffix-row interval。
 10. Locate 与 Extract 通过 LF sampling 以辅助空间换查询步数。
 
-
 ## 名词解释
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Pearls of Algorithm Engineering"
+  adaptedUrl="https://www.cambridge.org/core/books/pearls-of-algorithm-engineering/95061352D7263CCCBD4F243018236EB2"
+/>
