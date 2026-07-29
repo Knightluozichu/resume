@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-29T21:22:59.393Z；旧版分数不迁移。
+> 2026-07-29T21:44:08.921Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：3365
+- failed：3352
 - queued：484
-- passed：647
+- passed：660
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -134,77 +134,77 @@
 | 121 | ddia | 15 | 14 | 1 | 0 | 29 |
 | 122 | illustrated-nev | 13 | 13 | 0 | 0 | 75 |
 | 123 | autosar-vehicle-controller | 13 | 13 | 0 | 0 | 68 |
-| 124 | architecture-domain-design | 13 | 13 | 0 | 0 | 65 |
-| 125 | automotive-systems-specialization | 13 | 13 | 0 | 0 | 65 |
-| 126 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 65 |
-| 127 | deep-learning-nlp-advanced | 13 | 13 | 0 | 0 | 62 |
-| 128 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 60 |
-| 129 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 130 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 131 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 132 | langchain-programming | 13 | 13 | 0 | 0 | 39 |
-| 133 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 134 | windows-kernel-programming | 13 | 13 | 0 | 0 | 39 |
-| 135 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 136 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 137 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 138 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 139 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 140 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 141 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 55 |
-| 142 | deep-learning-from-scratch | 11 | 11 | 0 | 0 | 54 |
-| 143 | unity-vfx | 11 | 11 | 0 | 0 | 44 |
-| 144 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 145 | concrete-mathematics | 11 | 11 | 0 | 0 | 33 |
-| 146 | data-structures-visual | 11 | 11 | 0 | 0 | 33 |
-| 147 | game-network-core-tech | 11 | 11 | 0 | 0 | 33 |
-| 148 | go-in-action | 11 | 11 | 0 | 0 | 33 |
-| 149 | linear-algebra-done-right | 11 | 11 | 0 | 0 | 33 |
-| 150 | unity-advanced-programming | 11 | 11 | 0 | 0 | 33 |
-| 151 | nodejs-debugging-guide | 10 | 10 | 0 | 0 | 45 |
-| 152 | illustrated-dl | 10 | 10 | 0 | 0 | 34 |
-| 153 | css-secrets | 10 | 10 | 0 | 0 | 33 |
-| 154 | game-server-programming | 10 | 10 | 0 | 0 | 30 |
-| 155 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
-| 156 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 157 | car-structure-illustrated | 9 | 9 | 0 | 0 | 48 |
-| 158 | frontend-engineering | 9 | 9 | 0 | 0 | 40 |
-| 159 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
-| 160 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 161 | unity-animation | 9 | 9 | 0 | 0 | 27 |
-| 162 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
-| 163 | org-problem-tools | 8 | 8 | 0 | 0 | 36 |
-| 164 | rl-deep-learning-c | 6 | 6 | 0 | 0 | 23 |
-| 165 | competitive-algorithms | 6 | 6 | 0 | 0 | 18 |
-| 166 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 167 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 168 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 169 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 170 | learnopengl | 41 | 0 | 41 | 0 | 41 |
-| 171 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 172 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 173 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 174 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 175 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 176 | beginning-cpp-game-programming | 23 | 0 | 23 | 0 | 23 |
-| 177 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 178 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 179 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
-| 180 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 181 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 182 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 183 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 184 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 185 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 186 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 187 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 188 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 189 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 190 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 191 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 192 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 193 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 194 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 124 | automotive-systems-specialization | 13 | 13 | 0 | 0 | 65 |
+| 125 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 65 |
+| 126 | deep-learning-nlp-advanced | 13 | 13 | 0 | 0 | 62 |
+| 127 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 60 |
+| 128 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 129 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 130 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 131 | langchain-programming | 13 | 13 | 0 | 0 | 39 |
+| 132 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 133 | windows-kernel-programming | 13 | 13 | 0 | 0 | 39 |
+| 134 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 135 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 136 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 137 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 138 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 139 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 140 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 55 |
+| 141 | deep-learning-from-scratch | 11 | 11 | 0 | 0 | 54 |
+| 142 | unity-vfx | 11 | 11 | 0 | 0 | 44 |
+| 143 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 144 | concrete-mathematics | 11 | 11 | 0 | 0 | 33 |
+| 145 | data-structures-visual | 11 | 11 | 0 | 0 | 33 |
+| 146 | game-network-core-tech | 11 | 11 | 0 | 0 | 33 |
+| 147 | go-in-action | 11 | 11 | 0 | 0 | 33 |
+| 148 | linear-algebra-done-right | 11 | 11 | 0 | 0 | 33 |
+| 149 | unity-advanced-programming | 11 | 11 | 0 | 0 | 33 |
+| 150 | nodejs-debugging-guide | 10 | 10 | 0 | 0 | 45 |
+| 151 | illustrated-dl | 10 | 10 | 0 | 0 | 34 |
+| 152 | css-secrets | 10 | 10 | 0 | 0 | 33 |
+| 153 | game-server-programming | 10 | 10 | 0 | 0 | 30 |
+| 154 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
+| 155 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 156 | car-structure-illustrated | 9 | 9 | 0 | 0 | 48 |
+| 157 | frontend-engineering | 9 | 9 | 0 | 0 | 40 |
+| 158 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
+| 159 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 160 | unity-animation | 9 | 9 | 0 | 0 | 27 |
+| 161 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
+| 162 | org-problem-tools | 8 | 8 | 0 | 0 | 36 |
+| 163 | rl-deep-learning-c | 6 | 6 | 0 | 0 | 23 |
+| 164 | competitive-algorithms | 6 | 6 | 0 | 0 | 18 |
+| 165 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 166 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 167 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 168 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 169 | learnopengl | 41 | 0 | 41 | 0 | 41 |
+| 170 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 171 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 172 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 173 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 174 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 175 | beginning-cpp-game-programming | 23 | 0 | 23 | 0 | 23 |
+| 176 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 177 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 178 | easy-cpp-5e | 18 | 0 | 18 | 0 | 18 |
+| 179 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 180 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 181 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 182 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 183 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 184 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 185 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 186 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 187 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 188 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 189 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 190 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 191 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 192 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 193 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 194 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
 | 195 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
 | 196 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
 | 197 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |

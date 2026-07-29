@@ -1889,6 +1889,125 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Apo12OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "architecture-domain-design/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/learning-map");
+    return {
+      LearningMapBoundaryLab: module0.LearningMapBoundaryLab,
+      LearningMapTraceLab: module0.LearningMapTraceLab,
+      LearningMapViolationLab: module0.LearningMapViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/00-intro/what-is-architecture": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/what-is-architecture");
+    return {
+      WhatIsArchitectureBoundaryLab: module0.WhatIsArchitectureBoundaryLab,
+      WhatIsArchitectureTraceLab: module0.WhatIsArchitectureTraceLab,
+      WhatIsArchitectureViolationLab: module0.WhatIsArchitectureViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/01-principles/clean-architecture": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/clean-architecture");
+    return {
+      CleanArchitectureBoundaryLab: module0.CleanArchitectureBoundaryLab,
+      CleanArchitectureTraceLab: module0.CleanArchitectureTraceLab,
+      CleanArchitectureViolationLab: module0.CleanArchitectureViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/01-principles/dependency-inversion": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/dependency-inversion");
+    return {
+      DependencyInversionBoundaryLab: module0.DependencyInversionBoundaryLab,
+      DependencyInversionTraceLab: module0.DependencyInversionTraceLab,
+      DependencyInversionViolationLab: module0.DependencyInversionViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/01-principles/layered-architecture": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/layered-architecture");
+    return {
+      LayeredArchitectureBoundaryLab: module0.LayeredArchitectureBoundaryLab,
+      LayeredArchitectureTraceLab: module0.LayeredArchitectureTraceLab,
+      LayeredArchitectureViolationLab: module0.LayeredArchitectureViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/01-principles/solid-principles": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/solid-principles");
+    return {
+      SolidPrinciplesBoundaryLab: module0.SolidPrinciplesBoundaryLab,
+      SolidPrinciplesTraceLab: module0.SolidPrinciplesTraceLab,
+      SolidPrinciplesViolationLab: module0.SolidPrinciplesViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/02-ddd/bounded-context": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/bounded-context");
+    return {
+      BoundedContextBoundaryLab: module0.BoundedContextBoundaryLab,
+      BoundedContextTraceLab: module0.BoundedContextTraceLab,
+      BoundedContextViolationLab: module0.BoundedContextViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/02-ddd/ddd-fundamentals": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/ddd-fundamentals");
+    return {
+      DddFundamentalsBoundaryLab: module0.DddFundamentalsBoundaryLab,
+      DddFundamentalsTraceLab: module0.DddFundamentalsTraceLab,
+      DddFundamentalsViolationLab: module0.DddFundamentalsViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/02-ddd/strategic-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/strategic-patterns");
+    return {
+      StrategicPatternsBoundaryLab: module0.StrategicPatternsBoundaryLab,
+      StrategicPatternsTraceLab: module0.StrategicPatternsTraceLab,
+      StrategicPatternsViolationLab: module0.StrategicPatternsViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/02-ddd/tactical-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/tactical-patterns");
+    return {
+      TacticalPatternsBoundaryLab: module0.TacticalPatternsBoundaryLab,
+      TacticalPatternsTraceLab: module0.TacticalPatternsTraceLab,
+      TacticalPatternsViolationLab: module0.TacticalPatternsViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/03-practice/cqrs-event-sourcing": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/cqrs-event-sourcing");
+    return {
+      CqrsEventSourcingBoundaryLab: module0.CqrsEventSourcingBoundaryLab,
+      CqrsEventSourcingTraceLab: module0.CqrsEventSourcingTraceLab,
+      CqrsEventSourcingViolationLab: module0.CqrsEventSourcingViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/03-practice/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/final-review");
+    return {
+      FinalReviewBoundaryLab: module0.FinalReviewBoundaryLab,
+      FinalReviewTraceLab: module0.FinalReviewTraceLab,
+      FinalReviewViolationLab: module0.FinalReviewViolationLab,
+    } as ChapterMdxComponents;
+  },
+  "architecture-domain-design/03-practice/hexagonal-architecture": async () => {
+    const module0 =
+      await import("@/components/mdx/architecture-domain-design/v2/hexagonal-architecture");
+    return {
+      HexagonalArchitectureBoundaryLab:
+        module0.HexagonalArchitectureBoundaryLab,
+      HexagonalArchitectureTraceLab: module0.HexagonalArchitectureTraceLab,
+      HexagonalArchitectureViolationLab:
+        module0.HexagonalArchitectureViolationLab,
+    } as ChapterMdxComponents;
+  },
   "auto-why-car-runs/00-learning-map/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/auto-why-car-runs/labs/learning-map");
