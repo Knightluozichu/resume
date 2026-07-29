@@ -3,190 +3,244 @@ title: LLM：Agent 的大脑
 type: A
 section: 基础原理
 order: 1
-description: 读完能说清 LLM 怎么把文字拆成 token、上下文窗口为什么有上限、温度如何左右输出的随机性，并解释 Agent 为什么必须给大脑配上工具和记忆。
+description: LLM：Agent 的大脑：理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索，以架构、轨迹与故障重放完成工程验收。
 demo: true
 math: false
-sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+sourceUrl: >-
+  https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentdev-02
 ---
 
-import { TokenizationDiagram } from "@/components/mdx/diagrams/tokenization-diagram";
-import { ContextWindowBudget } from "@/components/mdx/demos/context-window-budget";
-import { TemperatureSamplingExplorer } from "@/components/mdx/demos/temperature-sampling-explorer";
+import {
+  LlmBrainModelLab,
+  LlmBrainTraceLab,
+  LlmBrainEvidenceLab,
+} from "@/components/mdx/ai-agent-dev/v2/llm-brain";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握LLM：Agent 的大脑
+- 能解释“LLM：Agent 的大脑”如何理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索
+- 能区分token、上下文窗口、logits、temperature、幻觉，并标出控制权、状态和副作用边界
+- 能冻结输入与版本，沿以下证据定位首个分叉：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果
+- 能注入“模型以高置信语气编造不存在的接口，运行时未检索或校验就执行后续步骤”，完成阻断、恢复、复位和同输入重放
 
-学习“LLM：Agent 的大脑”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，LLM：Agent 的大脑的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从小特的大脑，到底是怎么读你的话的开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_DEV_QUALITY_V2 */}
 
-机制验证要把大脑眼里没有「字」，只有 token写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程身份与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。一次能「看进」多少：上下文窗口不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“LLM：Agent 的大脑”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)建立工程总纲，并用[Anthropic《Effective context engineering for AI agents》](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)核对本章机制。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本名为《AI Agent 开发实战》的官方出版物，也不存在官方十四章目录。平台把公开工程文章、官方开发文档和原始论文重组为 14 个工程单元；下列 112 个节点是站内课程地图。正文、代码、图表、实验与练习均为独立教学重写，模型、API、协议或安全边界变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个工程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“它怎么「写」下一个字：采样与温度”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **LLM：Agent 的大脑**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 1 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **小特的大脑，到底是怎么读你的话的**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 2 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **大脑眼里没有「字」，只有 token**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 3 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **一次能「看进」多少：上下文窗口**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 4 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **它怎么「写」下一个字：采样与温度**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 5 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **它不是在查事实，它在「续写」：幻觉**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 6 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **承上启下：正因为大脑有这些短板，Agent 才要配工具和记忆**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 7 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **动手一：把对话堆满，看大脑怎么忘事**：这是“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的第 8 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“LLM：Agent 的大脑”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "token",
+      def: "token：模型处理文本时使用的离散单元；在“LLM：Agent 的大脑”中按以下证据核对：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。",
+    },
+    {
+      term: "上下文窗口",
+      def: "上下文窗口：一次推理能接收的 token 集合与上限；在“LLM：Agent 的大脑”中按以下证据核对：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。",
+    },
+    {
+      term: "logits",
+      def: "logits：模型对候选下一 token 给出的未归一化分数；在“LLM：Agent 的大脑”中按以下证据核对：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。",
+    },
+    {
+      term: "temperature",
+      def: "temperature：调节候选分布平坦程度的采样参数；在“LLM：Agent 的大脑”中按以下证据核对：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。",
+    },
+    {
+      term: "幻觉",
+      def: "幻觉：模型生成流畅但缺少可靠事实依据的内容；在“LLM：Agent 的大脑”中按以下证据核对：模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：模型输出只能作为概率候选，事实、结构和副作用必须由外部证据或确定性校验确认。任何“成功”结论都要保存模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果；模型自评、最终措辞和单次 demo 都不能替代环境事实。
 
-本页用、
+## 工程机制与反证实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 模型处理 token 而不是人类字符
 
-## 权威目录与核心概念逐项对照
+分词会影响长度、成本和边界，不能用字符数直接代替 token 预算。
 
-- LLM：Agent 的大脑
-- 小特的大脑，到底是怎么读你的话的
-- 大脑眼里没有「字」，只有 token
-- 一次能「看进」多少：上下文窗口
-- 它怎么「写」下一个字：采样与温度
-- 它不是在查事实，它在「续写」：幻觉
-- 承上启下：正因为大脑有这些短板，Agent 才要配工具和记忆
-- 动手一：把对话堆满，看大脑怎么忘事
+动手验证：对中英混合、代码和 emoji 分词，比较字符数与 token 数。
 
+### 上下文是有限工作区
 
-## 可复现的最小实现
+窗口能装下不等于模型能同等利用所有信息，长上下文还会稀释注意。
 
-先把决策记录写成机器可读结构：
+动手验证：移动关键事实的位置，测量同一问题的召回变化。
 
-```json
-{
-  "unit": "LLM：Agent 的大脑",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 采样改变分布而非知识
 
-再用同一条执行链处理三类样本：
+温度和 top-p 控制候选选择，不会把未知事实变成已知。
+
+动手验证：固定提示多次采样，比较多样性与事实校验通过率。
+
+### 流畅输出仍需验证
+
+下一 token 预测可以生成貌似合理的接口和引用，Agent 必须用工具取得 ground truth。
+
+动手验证：加入一个不存在的 API 名称，确认执行前被检索或注册表挡住。
+
+## 从架构到故障重放
+
+<Stepper>
+  <Step title="1. 架构复杂度实验">
+    在“LLM：Agent 的大脑”中切换简单基线、受控工作流和自主循环，先判断“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”是否真的需要更高自主性，再比较延迟、成本、可观测性与风险。
+
+    <LlmBrainModelLab />
+
+  </Step>
+  <Step title="2. 逐阶段运行轨迹">
+    固定模型、任务、工具、权限和预算，沿编码输入 → 组装上下文 → 生成分布 → 采样 token → 外部验证逐步推进；每个阶段只消费上一阶段已经验收的状态。
+
+    <LlmBrainTraceLab />
+
+  </Step>
+  <Step title="3. 单故障、恢复与复位">
+    注入“模型以高置信语气编造不存在的接口，运行时未检索或校验就执行后续步骤”，在模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果中标记首个分叉；撤销故障后重置控件，用完全相同的输入和权限重放。
+
+    <LlmBrainEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行切片
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
+const request = {
+  model: pinnedModel,
+  messages: fitContext(messages, tokenBudget),
+  temperature: 0.2,
+};
+const response = await model.generate(request);
+const claims = extractVerifiableClaims(response);
+const verified = await verifyWithTools(claims);
+return attachEvidence(response, verified);
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+切片只表达“理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索”的核心合同。生产实现还要补齐持久化、超时、密钥隔离、结构化日志、幂等和批量评测；如果不能重新取得模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果，代码跑通也不能证明机制正确。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  模型以高置信语气编造不存在的接口，运行时未检索或校验就执行后续步骤。它会破坏“模型输出只能作为概率候选，事实、结构和副作用必须由外部证据或确定性校验确认”；应从模型版本、消息、token
+  预算、采样参数、原始响应、来源检索与验证结果定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="结果正确也可能轨迹错误">
+  “LLM：Agent
+  的大脑”必须同时验收环境结果和完整轨迹。偶然得到正确文本，但发生越权调用、证据缺失、成本失控或错误停止，仍然是失败运行。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="升级后重新校准">
+  模型、提示、工具、向量、协议或运行时变化都可能改变“理解 token、上下文、逐
+  token
+  生成和采样边界，避免把语言流畅误当事实检索”的行为分布。升级后应在冻结任务集上重跑模型版本、消息、token
+  预算、采样参数、原始响应、来源检索与验证结果。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用正常、边界和单故障三类样本证明“模型输出只能作为概率候选，事实、结构和副作用必须由外部证据或确定性校验确认”？
+
+<Answer>
+  冻结模型、任务、工具、权限和预算，手工写出三类预期，再保存模型版本、消息、token
+  预算、采样参数、原始响应、来源检索与验证结果。任何未解释的首个分叉、未配对事件或失败副作用都应阻断通过。
+</Answer>
+
+**问题 2：节点覆盖。** LLM：Agent 的大脑、小特的大脑，到底是怎么读你的话的、大脑眼里没有「字」，只有 token、一次能「看进」多少：上下文窗口、它怎么「写」下一个字：采样与温度、它不是在查事实，它在「续写」：幻觉、承上启下：正因为大脑有这些短板，Agent 才要配工具和记忆、动手一：把对话堆满，看大脑怎么忘事如何从目录词变成工程证据？
+
+<Answer>
+  把八个坐标分别映射到架构决策、状态轨迹和故障重放。每个坐标至少对应一个可观察状态、一个确定性判断或一个反例；只出现在列表里不算掌握。
+</Answer>
+
+**问题 3：恢复验收。** 怎样证明“模型以高置信语气编造不存在的接口，运行时未检索或校验就执行后续步骤”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在模型版本、消息、token
+  预算、采样参数、原始响应、来源检索与验证结果中标出首个差异；撤销后复位全部状态，用相同输入、版本、预算和权限重放。结果、轨迹与停止状态都回到基线才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- LLM：Agent 的大脑必须绑定冻结输入和明确成功标准。
-- 小特的大脑，到底是怎么读你的话的必须能画成结构并沿边追踪责任。
-- 大脑眼里没有「字」，只有 token要由正常、边界和单故障样本共同验证。
-- 一次能「看进」多少：上下文窗口必须保存第一处偏离和清理重建步骤。
-- 它怎么「写」下一个字：采样与温度决定方案是否可以进入下一阶段。
+- “LLM：Agent 的大脑”解决的是理解 token、上下文、逐 token 生成和采样边界，避免把语言流畅误当事实检索。
+- 核心不变量是模型输出只能作为概率候选，事实、结构和副作用必须由外部证据或确定性校验确认。
+- 首要反例是模型以高置信语气编造不存在的接口，运行时未检索或校验就执行后续步骤。
+- 最小证据包包含模型版本、消息、token 预算、采样参数、原始响应、来源检索与验证结果。
 
+<Glossary>
+  <GlossaryItem term="token">
+    模型处理文本时使用的离散单元。在“LLM：Agent
+    的大脑”中必须能按以下证据重新定位：模型版本、消息、token
+    预算、采样参数、原始响应、来源检索与验证结果。
+  </GlossaryItem>
+  <GlossaryItem term="上下文窗口">
+    一次推理能接收的 token 集合与上限。在“LLM：Agent
+    的大脑”中必须能按以下证据重新定位：模型版本、消息、token
+    预算、采样参数、原始响应、来源检索与验证结果。
+  </GlossaryItem>
+  <GlossaryItem term="logits">
+    模型对候选下一 token 给出的未归一化分数。在“LLM：Agent
+    的大脑”中必须能按以下证据重新定位：模型版本、消息、token
+    预算、采样参数、原始响应、来源检索与验证结果。
+  </GlossaryItem>
+  <GlossaryItem term="temperature">
+    调节候选分布平坦程度的采样参数。在“LLM：Agent
+    的大脑”中必须能按以下证据重新定位：模型版本、消息、token
+    预算、采样参数、原始响应、来源检索与验证结果。
+  </GlossaryItem>
+  <GlossaryItem term="幻觉">
+    模型生成流畅但缺少可靠事实依据的内容。在“LLM：Agent
+    的大脑”中必须能按以下证据重新定位：模型版本、消息、token
+    预算、采样参数、原始响应、来源检索与验证结果。
+  </GlossaryItem>
+</Glossary>
 
-## 术语表
+## 阅读导航
 
+[← 什么是 AI Agent](/learn/ai-agent-dev/foundations/what-is-agent) · [提示工程与角色设定 →](/learn/ai-agent-dev/foundations/prompting-roles)
 
-{/* A 概念型·全书第 2 章：承接第 1 章四要素，单独拆开「大脑」LLM 把它讲透。重心在概念讲解(§3)与三大 viz，数学整节删(math:false)，代码只放一段调用 LLM 的 temperature/max_tokens 参数骨架。知识点清单：① Token 化 = <TokenizationDiagram /> anime.js 拆词旗舰动画 + 章末 Glossary；② 上下文窗口 = <ContextWindowBudget /> 窗口预算交互；③ 采样与温度 = <TemperatureSamplingExplorer /> 温度分布交互；④ 幻觉 = 具体例子(航班号) +
-## 承上启下：正因为大脑有这些短板，Agent 才要配工具和记忆
-
-把这一章的四件事连起来看，你会发现它们都指向同一个结论——**光有大脑（LLM）远远不够**：
-
-- 窗口**有上限** → 聊长了就会忘事，所以 Agent 要配 **记忆**（第 1 章的「本子」），把重要信息存到窗口之外，要用时再捞回来，突破这张桌子的物理上限。
-- 大脑**会幻觉、又不知道实时信息**（它不知道今天的票价、不知道现在几点） → 所以 Agent 要配 **工具**（第 1 章的「手」），让它能真去查 12306、真去算、真去读实时数据，而不是靠脑补。
-
-看出来了吗？第 1 章讲的四要素里，「工具」和「记忆」不是锦上添花，而是**专门来补大脑这两个洞的**。这就是为什么一个能办事的 Agent，从来不是「一个大脑」，而是「大脑 + 手 + 本子」的组合。
-
-{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
-
-{/* 5. 交互 Demo（spec §五）：放 <ContextWindowBudget /> 与 <TemperatureSamplingExplorer />，各带「猜一猜」。 */}
-
-## 动手一：把对话堆满，看大脑怎么忘事
-
-光读不如自己拖。下面这个 Demo 是一张容量 8000 token 的「上下文窗口」桌面：系统提示和当前问题钉死在两端，中间是会越堆越长的对话历史。拖「对话历史轮数」滑块加历史，看它什么时候顶破容量、最早的对话怎么被挤出去。
-
-> 猜一猜：历史堆到第 15 轮，最早那句话还在窗口里吗？再往上拖到 20 轮呢？先猜一个，再拖滑块验证。
-
-<ContextWindowBudget />
-
-你会看到：到某个轮数，总量一旦超过 8000，最早的对话就被挤出窗口标红——大脑从此看不到它了。这就是「断片」的真相：不是它不想记，是桌子摆不下了。
-
-## 动手二：拧温度旋钮，看它从「呆板」到「胡说」
-
-第二个 Demo 给你那根温度旋钮。前缀是「今天心情真 \_\_\_」，下面五个候选 token 各有基础概率。拖温度滑块，看分布怎么变；再点「采样一次」，按当前分布骰一个 token 出来。
-
-> 猜一猜：把温度拉到最高（2.0），它还会稳定说「好」吗？多点几次「采样一次」，看它会不会蹦出冷门的「晴」。
-
-<TemperatureSamplingExplorer />
-
-低温时分布是个尖峰，你点几十次「采样」几乎全是「好」——稳定但没惊喜；把温度拉满，分布被抹平，连概率最低的「晴」都可能蹦出来——这就是「高温更容易跑偏、甚至胡说」的直观来源。
-
-{/* 6. 代码对照（spec §六，A 型选，只贴 1 段最能说明概念的）：一段调用 LLM 时传 temperature/max_tokens 的 Python；块前后有解说。 */}
-
-## 代码长什么样：调用大脑时，你能拧哪些旋钮
-
-把上面两个旋钮落到代码里，其实就是调用 LLM 时多传两个参数。下面这段 Python（省了真实 SDK 细节）就是小特调用它大脑的样子：
-
-```python
-response = llm.chat(
-    messages=[
-        {"role": "system", "content": "你是订票助理小特"},  # 占用上下文窗口
-        {"role": "user", "content": "帮我订明天去上海的高铁票"},  # 也占窗口
-    ],
-    temperature=0.2,   # ① 温度旋钮：0.2 偏稳，几乎总挑最可能的 token
-    max_tokens=500,    # ② 最多生成 500 个 token（不是 500 个字！）就停
-)
-```
-
-`temperature=0.2` 就是把上面那根旋钮拧到偏低——办正经事（订票、报数字）要稳，就调低；写文案、想点子要花样，才调高。`max_tokens=500` 限制它最多**生成多少 token**——注意是 token 不是字，「上海」「高铁」可能各只算一个 token。而 `messages` 里的每条内容，连同之后所有来回，都得挤进那张有上限的上下文窗口里——这就是为什么对话越长，越要当心窗口被塞爆。
-
-{/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改 Demo 参数/算 token 题，答案折叠。 */}
-
-## 小结
-
-- LLM 读你的话先做 **token 化**：切成一块块带编号的 token，它眼里没有「字」只有编号——「token ≈ 字」是头号误会
-- **上下文窗口**是大脑一次能看进的 token 上限，像一张固定大小的桌子；塞满了最早的内容被挤出去，于是「断片」忘事
-- 它生成回答是逐 token **按概率采样**，**温度**是随机性旋钮：低温稳定呆板、高温多样但易跑偏
-- **幻觉**源于「概率续写而非查事实」：记不清就自信地圆一个，温度越高越敢胡说——调低温度治不了根
-- 正因窗口有限、会幻觉、不知实时信息，Agent 才必须给大脑配 **记忆**（突破窗口）和 **工具**（真查真算）——回收第 1 章四要素
-
-
-{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
-
-
-{/* 9. 出处声明（spec §九）：原创改编，sourceUrl 为空字符串，Attribution 空标签自动处理。 */}
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Anthropic Agent 工程资料与原始论文（站内十四单元开发课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

@@ -354,6 +354,128 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ToolDesignEvidenceLab: module0.ToolDesignEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "ai-agent-dev/core-mechanisms/memory": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-dev/v2/memory");
+    return {
+      MemoryModelLab: module0.MemoryModelLab,
+      MemoryTraceLab: module0.MemoryTraceLab,
+      MemoryEvidenceLab: module0.MemoryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/core-mechanisms/planning": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-dev/v2/planning");
+    return {
+      PlanningModelLab: module0.PlanningModelLab,
+      PlanningTraceLab: module0.PlanningTraceLab,
+      PlanningEvidenceLab: module0.PlanningEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/core-mechanisms/react-loop": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-dev/v2/react-loop");
+    return {
+      ReactLoopModelLab: module0.ReactLoopModelLab,
+      ReactLoopTraceLab: module0.ReactLoopTraceLab,
+      ReactLoopEvidenceLab: module0.ReactLoopEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/core-mechanisms/tool-calling": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/tool-calling");
+    return {
+      ToolCallingModelLab: module0.ToolCallingModelLab,
+      ToolCallingTraceLab: module0.ToolCallingTraceLab,
+      ToolCallingEvidenceLab: module0.ToolCallingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/enterprise/evaluation-observability": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/evaluation-observability");
+    return {
+      EvaluationObservabilityModelLab: module0.EvaluationObservabilityModelLab,
+      EvaluationObservabilityTraceLab: module0.EvaluationObservabilityTraceLab,
+      EvaluationObservabilityEvidenceLab:
+        module0.EvaluationObservabilityEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/enterprise/production-deployment": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/production-deployment");
+    return {
+      ProductionDeploymentModelLab: module0.ProductionDeploymentModelLab,
+      ProductionDeploymentTraceLab: module0.ProductionDeploymentTraceLab,
+      ProductionDeploymentEvidenceLab: module0.ProductionDeploymentEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/enterprise/safety-guardrails": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/safety-guardrails");
+    return {
+      SafetyGuardrailsModelLab: module0.SafetyGuardrailsModelLab,
+      SafetyGuardrailsTraceLab: module0.SafetyGuardrailsTraceLab,
+      SafetyGuardrailsEvidenceLab: module0.SafetyGuardrailsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/foundations/llm-brain": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-dev/v2/llm-brain");
+    return {
+      LlmBrainModelLab: module0.LlmBrainModelLab,
+      LlmBrainTraceLab: module0.LlmBrainTraceLab,
+      LlmBrainEvidenceLab: module0.LlmBrainEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/foundations/prompting-roles": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/prompting-roles");
+    return {
+      PromptingRolesModelLab: module0.PromptingRolesModelLab,
+      PromptingRolesTraceLab: module0.PromptingRolesTraceLab,
+      PromptingRolesEvidenceLab: module0.PromptingRolesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/foundations/what-is-agent": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/what-is-agent");
+    return {
+      WhatIsAgentModelLab: module0.WhatIsAgentModelLab,
+      WhatIsAgentTraceLab: module0.WhatIsAgentTraceLab,
+      WhatIsAgentEvidenceLab: module0.WhatIsAgentEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/knowledge-rag/context-engineering": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/context-engineering");
+    return {
+      ContextEngineeringModelLab: module0.ContextEngineeringModelLab,
+      ContextEngineeringTraceLab: module0.ContextEngineeringTraceLab,
+      ContextEngineeringEvidenceLab: module0.ContextEngineeringEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/knowledge-rag/rag": async () => {
+    const module0 = await import("@/components/mdx/ai-agent-dev/v2/rag");
+    return {
+      RagModelLab: module0.RagModelLab,
+      RagTraceLab: module0.RagTraceLab,
+      RagEvidenceLab: module0.RagEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/multi-agent/multi-agent-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/multi-agent-patterns");
+    return {
+      MultiAgentPatternsModelLab: module0.MultiAgentPatternsModelLab,
+      MultiAgentPatternsTraceLab: module0.MultiAgentPatternsTraceLab,
+      MultiAgentPatternsEvidenceLab: module0.MultiAgentPatternsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ai-agent-dev/multi-agent/orchestration": async () => {
+    const module0 =
+      await import("@/components/mdx/ai-agent-dev/v2/orchestration");
+    return {
+      OrchestrationModelLab: module0.OrchestrationModelLab,
+      OrchestrationTraceLab: module0.OrchestrationTraceLab,
+      OrchestrationEvidenceLab: module0.OrchestrationEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "ai-agent/foundations/agent-anatomy": async () => {
     const module0 = await import("@/components/mdx/ai-agent/v2/agent-anatomy");
     return {

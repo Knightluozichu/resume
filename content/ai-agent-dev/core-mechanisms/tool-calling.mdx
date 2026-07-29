@@ -3,322 +3,245 @@ title: 工具调用 Tool Calling
 type: C
 section: 核心机制
 order: 4
-description: >-
-  读完能定义一个带 JSON Schema 的工具、看懂 LLM 产出的结构化
-  tool_call、写出解析→执行→把结果回填给模型的完整一轮，并处理工具出错的情况。
+description: 工具调用 Tool Calling：实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机，以架构、轨迹与故障重放完成工程验收。
 demo: true
 math: false
-sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+sourceUrl: >-
+  https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: aiagentdev-05
 ---
 
-import { ToolSchemaAnatomy } from "@/components/mdx/demos/tool-schema-anatomy";
-import { ToolCallFlowDiagram } from "@/components/mdx/diagrams/tool-call-flow-diagram";
-import { ToolCallStateMachine } from "@/components/mdx/diagrams/tool-call-state-machine";
+import {
+  ToolCallingModelLab,
+  ToolCallingTraceLab,
+  ToolCallingEvidenceLab,
+} from "@/components/mdx/ai-agent-dev/v2/tool-calling";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  TermSequence,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
+<Objectives>
 
-## 为什么只记结论不足以掌握工具调用 Tool Calling
+- 能解释“工具调用 Tool Calling”如何实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机
+- 能区分工具定义、tool_use、tool_result、工具注册表、stop_reason，并标出控制权、状态和副作用边界
+- 能冻结输入与版本，沿以下证据定位首个分叉：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason
+- 能注入“执行器用反射运行任意工具名，并把未经业务校验的参数直接交给函数”，完成阻断、恢复、复位和同输入重放
 
-学习“工具调用 Tool Calling”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，工具调用 Tool Calling的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+</Objectives>
 
-结构分析从光说「我要查天气」没用，得真给它一部能打的电话开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+{/* AI_AGENT_DEV_QUALITY_V2 */}
 
-机制验证要把第一步：给小特一份「工具说明书」——工具定义 / Schema写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+## 来源、课程身份与适用边界
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。第二步：LLM 看完说明书，产出一个「结构化调用」不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+“工具调用 Tool Calling”以[Anthropic 公开全文《Building effective agents》](https://www.anthropic.com/engineering/building-effective-agents)建立工程总纲，并用[Claude Platform《How tool use works》](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works)核对本章机制。
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+这不是一本名为《AI Agent 开发实战》的官方出版物，也不存在官方十四章目录。平台把公开工程文章、官方开发文档和原始论文重组为 14 个工程单元；下列 112 个节点是站内课程地图。正文、代码、图表、实验与练习均为独立教学重写，模型、API、协议或安全边界变化时必须重新验证。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+## 本单元的八个工程坐标
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“第三步：程序解析 + 按名字找到函数 + 真去执行”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+- **工具调用 Tool Calling**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 1 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **光说「我要查天气」没用，得真给它一部能打的电话**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 2 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **第一步：给小特一份「工具说明书」——工具定义 / Schema**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 3 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **第二步：LLM 看完说明书，产出一个「结构化调用」**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 4 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **第三步：程序解析 + 按名字找到函数 + 真去执行**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 5 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **第四步：把结果回填给模型，它接着办；出错了也要回填**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 6 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **动手一：拆开一份工具说明书，看每个字段管什么**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 7 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
+- **动手二：执行成功 vs 出错，两条路怎么走**：这是“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的第 8 个工程坐标；必须进入机制解释、运行轨迹或故障证据，不能只停在目录。
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+## 术语与运行合同
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“工具调用 Tool Calling”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+<TermSequence
+  items={[
+    {
+      term: "工具定义",
+      def: "工具定义：提供给模型的名称、描述和输入 schema；在“工具调用 Tool Calling”中按以下证据核对：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。",
+    },
+    {
+      term: "tool_use",
+      def: "tool_use：模型发出的结构化工具调用块；在“工具调用 Tool Calling”中按以下证据核对：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。",
+    },
+    {
+      term: "tool_result",
+      def: "tool_result：应用送回模型的执行结果块；在“工具调用 Tool Calling”中按以下证据核对：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。",
+    },
+    {
+      term: "工具注册表",
+      def: "工具注册表：允许名称到受控实现的显式映射；在“工具调用 Tool Calling”中按以下证据核对：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。",
+    },
+    {
+      term: "stop_reason",
+      def: "stop_reason：说明一轮因工具、完成、拒绝或限制而停止的字段；在“工具调用 Tool Calling”中按以下证据核对：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。",
+    },
+  ]}
+  suffix="。"
+/>
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+本页不变量是：模型只生成调用请求，应用始终负责验证、授权、执行和返回真实结果。任何“成功”结论都要保存工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason；模型自评、最终措辞和单次 demo 都不能替代环境事实。
 
-本页用、
+## 工程机制与反证实验
 
-、、、建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+### 描述决定是否选对
 
-## 权威目录与核心概念逐项对照
+边界重叠的工具会让模型猜测，名称和描述要同时写适用与不适用场景。
 
-- 工具调用 Tool Calling
-- 光说「我要查天气」没用，得真给它一部能打的电话
-- 第一步：给小特一份「工具说明书」——工具定义 / Schema
-- 第二步：LLM 看完说明书，产出一个「结构化调用」
-- 第三步：程序解析 + 按名字找到函数 + 真去执行
-- 第四步：把结果回填给模型，它接着办；出错了也要回填
-- 动手一：拆开一份工具说明书，看每个字段管什么
-- 动手二：执行成功 vs 出错，两条路怎么走
+动手验证：用相邻意图构建工具选择混淆矩阵。
 
+### schema 不等于权限
 
-## 可复现的最小实现
+参数形状正确后仍要检查主体、资源范围和操作风险。
 
-先把决策记录写成机器可读结构：
+动手验证：提交合法但越权的资源 ID，确认执行器拒绝。
 
-```json
-{
-  "unit": "工具调用 Tool Calling",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
+### 注册表阻断任意执行
 
-再用同一条执行链处理三类样本：
+模型名称不能进入 eval、shell 或任意反射，应只匹配显式白名单。
+
+动手验证：请求未知工具，确认返回错误且零副作用。
+
+### 错误也必须回灌
+
+可恢复错误要用匹配 ID 的 tool_result 返回，下一轮才能改参数或换工具。
+
+动手验证：注入缺字段错误，检查模型是否按错误提示修复。
+
+## 从架构到故障重放
+
+<Stepper>
+  <Step title="1. 架构复杂度实验">
+    在“工具调用 Tool Calling”中切换简单基线、受控工作流和自主循环，先判断“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”是否真的需要更高自主性，再比较延迟、成本、可观测性与风险。
+
+    <ToolCallingModelLab />
+
+  </Step>
+  <Step title="2. 逐阶段运行轨迹">
+    固定模型、任务、工具、权限和预算，沿声明工具 → 模型选择 → 验证授权 → 执行函数 → 回灌与退出逐步推进；每个阶段只消费上一阶段已经验收的状态。
+
+    <ToolCallingTraceLab />
+
+  </Step>
+  <Step title="3. 单故障、恢复与复位">
+    注入“执行器用反射运行任意工具名，并把未经业务校验的参数直接交给函数”，在工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason中标记首个分叉；撤销故障后重置控件，用完全相同的输入和权限重放。
+
+    <ToolCallingEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可运行切片
 
 ```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+async function execute(call: ToolUse, actor: Actor) {
+  const tool = registry.get(call.name);
+  if (!tool) return toolError(call.id, "unknown_tool");
+  const args = tool.schema.parse(call.input);
+  await policy.authorize(actor, tool, args);
+  try {
+    return toolResult(call.id, await tool.run(args));
+  } catch (error) {
+    return toolError(call.id, classify(error));
+  }
 }
 ```
 
-最后保存回归门禁，禁止失败样本静默通过：
+切片只表达“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的核心合同。生产实现还要补齐持久化、超时、密钥隔离、结构化日志、幂等和批量评测；如果不能重新取得工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason，代码跑通也不能证明机制正确。
 
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
+<Callout type="trap" title="本章首要反例">
+  执行器用反射运行任意工具名，并把未经业务校验的参数直接交给函数。它会破坏“模型只生成调用请求，应用始终负责验证、授权、执行和返回真实结果”；应从工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+  与 stop_reason定位首个分叉，而不是追加提示词掩盖运行时缺陷。
+</Callout>
 
-用统一评分解释实验结果：
+<Callout type="trap" title="结果正确也可能轨迹错误">
+  “工具调用 Tool
+  Calling”必须同时验收环境结果和完整轨迹。偶然得到正确文本，但发生越权调用、证据缺失、成本失控或错误停止，仍然是失败运行。
+</Callout>
 
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
+<Callout type="trap" title="升级后重新校准">
+  模型、提示、工具、向量、协议或运行时变化都可能改变“实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机”的行为分布。升级后应在冻结任务集上重跑工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+  与 stop_reason。
+</Callout>
 
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
+## 练习与答案
 
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
+<Exercises>
 
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
+**问题 1：最小证明。** 怎样用正常、边界和单故障三类样本证明“模型只生成调用请求，应用始终负责验证、授权、执行和返回真实结果”？
+
+<Answer>
+  冻结模型、任务、工具、权限和预算，手工写出三类预期，再保存工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+  与 stop_reason。任何未解释的首个分叉、未配对事件或失败副作用都应阻断通过。
+</Answer>
+
+**问题 2：节点覆盖。** 工具调用 Tool Calling、光说「我要查天气」没用，得真给它一部能打的电话、第一步：给小特一份「工具说明书」——工具定义 / Schema、第二步：LLM 看完说明书，产出一个「结构化调用」、第三步：程序解析 + 按名字找到函数 + 真去执行、第四步：把结果回填给模型，它接着办；出错了也要回填、动手一：拆开一份工具说明书，看每个字段管什么、动手二：执行成功 vs 出错，两条路怎么走如何从目录词变成工程证据？
+
+<Answer>
+  把八个坐标分别映射到架构决策、状态轨迹和故障重放。每个坐标至少对应一个可观察状态、一个确定性判断或一个反例；只出现在列表里不算掌握。
+</Answer>
+
+**问题 3：恢复验收。** 怎样证明“执行器用反射运行任意工具名，并把未经业务校验的参数直接交给函数”已经修复？
+
+<Answer>
+  保存正常基线，注入故障并在工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+  与
+  stop_reason中标出首个差异；撤销后复位全部状态，用相同输入、版本、预算和权限重放。结果、轨迹与停止状态都回到基线才可交接。
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
-- 工具调用 Tool Calling必须绑定冻结输入和明确成功标准。
-- 光说「我要查天气」没用，得真给它一部能打的电话必须能画成结构并沿边追踪责任。
-- 第一步：给小特一份「工具说明书」——工具定义 / Schema要由正常、边界和单故障样本共同验证。
-- 第二步：LLM 看完说明书，产出一个「结构化调用」必须保存第一处偏离和清理重建步骤。
-- 第三步：程序解析 + 按名字找到函数 + 真去执行决定方案是否可以进入下一阶段。
-
-
-## 术语表
-
-
-{/* C 实战型·核心机制篇第 2 章：承接上一章 ReAct——上一章的 Action（小特写出 weather("上海")）只是「写出要调啥」，本章把它真正落到工程上：给小特一份工具「说明书」(schema)，它产出结构化 tool_call，程序解析→按名找函数→真去执行→把结果回填，模型续答；工具出错也要回填让它自纠。重心在代码对照(§6，真实 Python 覆盖≥80%)与三个 viz；数学整节删(math:false)。知识点清单：① 工具定义/Schema = <ToolSchemaAnatomy /> 交互拆解 + 代码 §6(a) + Glossary；② LLM 产出结构化 tool_call = <ToolCallFlowDiagram /> anime.js 旗舰第②阶段 + 代码 §6(b) + Glossary；③ 解析与执行 = <ToolCallFlowDiagram /> 第③④阶段 + 代码 §6(c) + Glossary；④ 结果回填+多轮+错误处理 = <ToolCallFlowDiagram /> 第⑤⑥阶段 + <ToolCallStateMachine /> 成功/失败路径 + 代码 §6(d)(e) + Glossary。承接：ReAct 的 Action/Observation，本章是它的工程实现。 */}
-
-{/* 1. 学习目标（spec §一）：C 型必含「能写出一个带 JSON Schema 的工具 + 解析执行回填的完整一轮」；末条是可当场自测的检验问题。 */}
-
-
-{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；光让小特说"我要查天气"没用，得真给它一部能打的电话 + 怎么用的说明。 */}
-
-## 光说「我要查天气」没用，得真给它一部能打的电话
-
-上一章小特学会了边想边干：想到「该查天气」，就写下「我要查天气」。可问题来了——他写下这句话，天气就自己飞过来了吗？当然不会。**说要查，和真查到，是两码事。**
-
-这一章就补上中间那一截：你得真给小特一部「能打的电话」（一个查天气的工具），还得给他一张**怎么用这部电话的说明书**——拨哪个号、要报哪些信息。他照说明书写下「拨 weather，报上海」，然后**你**替他真把电话打出去，再把对面的回话递回他手里，他才接着往下办。
-
-没有这一截会怎样？小特永远停在「我要查天气」那一步——光喊不动手，天气查不到，差事自然办不成。
-
-{/* 3. 概念讲解（spec §三，C 型可压缩，各概念简讲 + Term + 引用 viz）：核心新概念 4 个：工具定义/Schema、结构化 tool_call、解析与执行、结果回填+错误处理。 */}
-
-## 第一步：给小特一份「工具说明书」——工具定义 / Schema
-
-要让小特会用一个工具，先得告诉他：**有哪些工具、每个工具叫啥、什么时候用、要报哪些信息。** 这份说明书有标准格式，叫：用一段结构化的 JSON 写清四件事——`name`（叫啥）、`description`（啥时候用）、`parameters`（要传哪些参数）、`required`（哪些必填）。
-
-四个字段里 `description` 最关键：**模型全靠这句话判断「要不要调、什么时候调」。** 写得清楚，它该调时才会调；写得含糊或干脆不写，它就会漏调、错调。下面这个 Demo 把一份 weather 工具的 schema 摊开，点字段看每个字段到底告诉了 LLM 什么：
-
-<ToolSchemaAnatomy />
-
-## 第二步：LLM 看完说明书，产出一个「结构化调用」
-
-把这份 schema 连同你的问题一起发给小特的大脑，它看完不会回你一段自然语言「好的我去查上海天气哈」，而是吐出一个：一个机器能直接读的结构——**要调的函数名**（`weather`）加**一段 JSON 参数**（`arguments` 里写着 city 是上海）。
-
-这里有本章最容易搞混的一点：**模型产出 `tool_call`，不等于工具被执行了。** 它只是「写出要调啥、传啥」，就像小特写下「拨 weather，报上海」——电话还没拨呢。真去拨，是下一步你的代码的事。下面这张图把一整轮六个阶段都点亮给你看，注意哪些是 LLM 侧、哪些是程序侧：
-
-<ToolCallFlowDiagram />
-
-## 第三步：程序解析 + 按名字找到函数 + 真去执行
-
-拿到 `tool_call` 之后，轮到**你的代码**上场。这一步叫：先把 `arguments` 那段 JSON 文本解析成参数字典，再按 `name` 这个字符串**找到对应的真实函数**（你维护一张「名字 → 函数」的表），把参数传进去，**真把它跑一遍**，拿到返回值。
-
-这就是「电话真被拨出去」的一刻——而且是你的代码拨的，不是模型。模型给的只是「拨号指令」，照着指令真去拨、真去拿回话的，是你写的那几行 Python。
-
-## 第四步：把结果回填给模型，它接着办；出错了也要回填
-
-工具跑完拿到结果（比如「小雨，18℃」），还差最后一步：把这个结果**递回给模型**。做法是往对话里追加一条特殊的——`role` 是 `tool`，内容就是工具返回值。模型读到它，就「看见」了结果，于是接着办：要么给最终答案，要么再产出一个 `tool_call` 调下一个工具，**转下一轮**。
-
-但工具不总是顺的——参数非法、网络超时、对面报错都可能发生。这时关键的一条直觉是：——别把异常吞掉。用 `try/except` 兜住，把**错误信息**也回填成一条 `tool` 消息，模型看到错误，才能自己改参重试或降级。下面这个状态机把「执行」之后的两条分叉摆出来，拨开关看成功路径和失败路径：
-
-<ToolCallStateMachine />
-
-{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
-
-{/* 5. 交互 Demo（spec §五）：放 <ToolSchemaAnatomy /> 与 <ToolCallStateMachine />（已在 §3 引用，这里给「猜一猜」引导深入玩），各带「猜一猜」。 */}
-
-## 动手一：拆开一份工具说明书，看每个字段管什么
-
-光读不如自己点。下面这个 Demo 把那份 weather 工具的 JSON Schema 摊开，点上方四个字段标签（`name` / `description` / `parameters` / `required`），对应那段高亮，旁注告诉你这个字段到底告诉了 LLM 什么。
-
-> 猜一猜：四个字段里，哪一个写得好不好会**直接决定模型会不会、会不会正确地调用这个工具**？是那个看起来最像「注释」、最容易被人随便糊弄的字段吗？先猜一个，再点 `description` 验证。
-
-<ToolSchemaAnatomy />
-
-你会发现：`description` 根本不是注释，而是**模型唯一的判断依据**。它写「查某城市当天天气，用户问到天气/带伞/穿衣建议时调用」，模型才知道该在什么场景下拨这个号。糊一句「天气工具」上去，模型就常常该调不调、或该问 A 城市却传了 B。
-
-## 动手二：执行成功 vs 出错，两条路怎么走
-
-第二个 Demo 把焦点放在「执行」之后的分叉。两条路都先走共享的前三步（产出 `tool_call` → 解析 → 执行），到「执行」这里分岔：拨开关在「成功路径」和「失败路径」之间切换，看每条路怎么收尾。
-
-> 猜一猜：失败路径上，工具报了个错（比如城市名为空）。如果你的代码把这个错误**吞掉、什么都不回填**给模型，模型接下来会怎样？它能自己发现「刚才那次调用失败了、我得改改」吗？关掉开关切到「失败路径」看看。
-
-<ToolCallStateMachine />
-
-切到失败路径你会看到：正确的做法不是把错误藏起来，而是把**错误信息也回填**成一条 `tool` 消息。模型读到「出错了：城市名为空」，才能自我纠正——改参数重试，或换条路降级。要是把异常吞掉、什么都不回填，模型既看不到结果也看不到错误，就会原地卡死，傻等一个永远不来的回话。
-
-{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80%）：多段真实 Python——(a) 定义工具函数 + JSON schema；(b) 调 LLM 传 tools，拿回 tool_calls；(c) 解析 + 按 name dispatch 执行；(d) 结果回填再调 LLM 拿最终答；(e) 错误处理。每段≤30 行、块间有解说、两块不相邻、API 关键点用 Callout。 */}
-
-## 代码逐段拆解：把一整轮工具调用写成真实的 Python
-
-讲了这么多，落到代码里到底长什么样？我们一步步把「帮我查上海天气」这一轮用 Python 写出来。先是第一步——**定义工具**：写一个真实的 Python 函数，再为它配一份 JSON Schema（就是动手一里拆解的那份）。函数是真去干活的，schema 是给模型看的说明书：
-
-```python
-def get_weather(city: str) -> str:
-    """真去查天气的函数（这里用假数据示意）。"""
-    fake = {"上海": "小雨，18℃", "北京": "晴，22℃"}
-    return fake.get(city, f"查不到 {city} 的天气")
-
-# 这份 schema 会随请求一起发给模型，告诉它「有这个工具、怎么用」
-WEATHER_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "get_weather",
-        "description": "查询某城市当天天气。用户问天气/要不要带伞/穿衣建议时调用。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "city": {"type": "string", "description": "城市名，如「上海」"},
-            },
-            "required": ["city"],
-        },
-    },
-}
-```
-
-注意 `name` 字段的值 `get_weather` 必须和真实函数名能对得上——后面解析时就靠这个字符串找到函数。`description` 是模型判断「何时调」的唯一依据，要写清场景。
-
-
-第二步，把工具连同问题一起发给模型，拿回它产出的 `tool_call`。关键是给 `create` 多传一个 `tools` 参数（一个 schema 列表），模型才知道有哪些工具可用。模型如果决定调工具，回复里 `message.content` 往往是空的，真正的内容在 `message.tool_calls` 里：
-
-```python
-messages = [
-    {"role": "user", "content": "上海今天要不要带伞？"},
-]
-
-resp = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=messages,
-    tools=[WEATHER_TOOL],   # ← 把工具说明书一起发过去
-)
-
-msg = resp.choices[0].message
-tool_calls = msg.tool_calls    # ← 模型产出的结构化调用（可能不止一个）
-messages.append(msg)           # 把模型这条带 tool_calls 的回复也存进对话
-```
-
-`msg.tool_calls` 是一个列表——模型一次可能想调好几个工具。每个元素里有 `id`（这次调用的唯一编号）、`function.name`（要调哪个）、`function.arguments`（一段 **JSON 字符串**形式的参数）。
-
-
-第三步是解析 + 执行。我们维护一张 `TOOLS` 表把 `name` 映射到真实函数；然后遍历 `tool_calls`，对每个：`json.loads` 解析参数，按 `name` 从表里取出函数，真把它跑一遍：
-
-```python
-import json
-
-# 一张「名字 → 真实函数」的表，把 schema 的 name 和函数对起来
-TOOLS = {"get_weather": get_weather}
-
-for call in tool_calls:
-    name = call.function.name
-    args = json.loads(call.function.arguments)   # JSON 字符串 → 参数字典
-    func = TOOLS[name]                            # 按名字找到真实函数
-    result = func(**args)                         # 真去执行，拿到返回值
-    print(name, args, "→", result)               # get_weather {'city': '上海'} → 小雨，18℃
-```
-
-`func(**args)` 这一行就是「电话真被拨出去」的一刻——**由你的代码拨，不是模型**。模型只给了「拨 get_weather、报 city=上海」的指令，照着真去执行的是这几行 Python。
-
-执行拿到结果后，第四步——**回填结果，再调一次模型拿最终答案**。把每个工具的结果作为一条 `role:"tool"` 消息追加进对话（带上对应的 `tool_call_id`），然后再调一次 `create`，模型读到结果就给出最终回答：
-
-```python
-for call in tool_calls:
-    name = call.function.name
-    args = json.loads(call.function.arguments)
-    result = TOOLS[name](**args)
-    # 把结果作为 tool 消息回填，tool_call_id 对应是哪一次调用
-    messages.append({
-        "role": "tool",
-        "tool_call_id": call.id,
-        "content": result,
-    })
-
-# 带着回填的结果再调一次，模型这次给最终答案
-final = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
-print(final.choices[0].message.content)   # 「上海今天小雨、18℃，记得带伞」
-```
-
-这就是完整的一轮：发问题+工具 → 模型产出 `tool_call` → 解析执行 → 回填 → 模型给最终答。如果模型这次回复里**又**带了 `tool_calls`，就再走一遍解析-执行-回填，这就是**多轮**——把它包进 `while` 循环，直到模型不再要调工具、给出纯文本答案为止。
-
-
-最后一步——**错误处理**。工具可能抛异常（参数非法、网络超时……）。绝不能让它把整个程序搞崩，更不能默默吞掉。用 `try/except` 兜住，把**错误信息也回填**成一条 `tool` 消息，模型看到错误就能自纠：
-
-```python
-for call in tool_calls:
-    name = call.function.name
-    try:
-        args = json.loads(call.function.arguments)
-        result = TOOLS[name](**args)        # 正常执行
-    except Exception as e:
-        result = f"调用 {name} 出错：{e}"    # 把错误变成文本，准备回填
-    messages.append({
-        "role": "tool",
-        "tool_call_id": call.id,
-        "content": result,                  # 成功填结果，失败填错误——都要回填
-    })
-```
-
-关键就在 `except` 那行：错误没被吞掉，而是变成一条 `content` 回填给模型。模型下一轮看到「调用 get_weather 出错：city 不能为空」，就会自己改参数重试，或换个工具降级。**回填错误，是让模型自我纠正的前提**——这正是动手二失败路径讲的那条直觉的代码版本。
-
-{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
-
-## 容易踩的坑
-
-
-{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 3 题含 1 道独立实现题 + 1 道改 Demo 题，答案折叠。 */}
-
-## 小结
-
-- **一轮工具调用 = 六个阶段**：定义 schema（工具说明书）→ LLM 产出结构化 `tool_call` → 程序解析+按名找函数 → 真去执行 → 结果回填（`tool` 消息）→ 模型续答；模型回复又带 `tool_call` 就再转一轮（多轮）
-- 关键红线：**LLM 只「产出」调用，「执行」始终是你的代码**——`tool_call` 是拨号指令，不是已经拨完的电话
-- **工具定义靠 JSON Schema**（`name`/`description`/`parameters`/`required`）；`description` 是模型判断「何时调」的唯一依据，最该写清
-- **解析与执行**：`json.loads` 解析 `arguments`，按 `name` 从「名字→函数」表里取函数 `func(**args)` 真去跑；执行前要校验参数
-- **结果回填 + 错误处理**：成功把结果、失败把错误，**都**作为带 `tool_call_id` 的 `tool` 消息回填——回填错误是让模型自我纠正的前提，吞掉错误 = 模型卡死
-
-
-{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
-
-
-{/* 9. 出处声明（spec §九）：原创改编，sourceUrl 为空字符串，Attribution 空标签自动处理。 */}
-
+- “工具调用 Tool Calling”解决的是实现工具定义、模型选择、参数验证、应用执行、结果回灌和停止原因状态机。
+- 核心不变量是模型只生成调用请求，应用始终负责验证、授权、执行和返回真实结果。
+- 首要反例是执行器用反射运行任意工具名，并把未经业务校验的参数直接交给函数。
+- 最小证据包包含工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result 与 stop_reason。
+
+<Glossary>
+  <GlossaryItem term="工具定义">
+    提供给模型的名称、描述和输入 schema。在“工具调用 Tool
+    Calling”中必须能按以下证据重新定位：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+    与 stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="tool_use">
+    模型发出的结构化工具调用块。在“工具调用 Tool
+    Calling”中必须能按以下证据重新定位：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+    与 stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="tool_result">
+    应用送回模型的执行结果块。在“工具调用 Tool
+    Calling”中必须能按以下证据重新定位：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+    与 stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="工具注册表">
+    允许名称到受控实现的显式映射。在“工具调用 Tool
+    Calling”中必须能按以下证据重新定位：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+    与 stop_reason。
+  </GlossaryItem>
+  <GlossaryItem term="stop_reason">
+    说明一轮因工具、完成、拒绝或限制而停止的字段。在“工具调用 Tool
+    Calling”中必须能按以下证据重新定位：工具版本、描述、input_schema、tool_use、权限、执行日志、tool_result
+    与 stop_reason。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← ReAct：推理与行动循环](/learn/ai-agent-dev/core-mechanisms/react-loop) · [记忆系统 Memory →](/learn/ai-agent-dev/core-mechanisms/memory)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Anthropic Agent 工程资料与原始论文（站内十四单元开发课程改编）"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>
