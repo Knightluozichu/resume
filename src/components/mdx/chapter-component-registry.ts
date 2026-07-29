@@ -2008,6 +2008,401 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.HexagonalArchitectureViolationLab,
     } as ChapterMdxComponents;
   },
+  "art-of-unix-programming/00-map/taoup-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-official-learning-map");
+    return {
+      TaoupOfficialLearningMapTopologyLab:
+        module0.TaoupOfficialLearningMapTopologyLab,
+      TaoupOfficialLearningMapRepresentationLab:
+        module0.TaoupOfficialLearningMapRepresentationLab,
+      TaoupOfficialLearningMapEvidenceLab:
+        module0.TaoupOfficialLearningMapEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/01-preface/taoup-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-preface");
+    return {
+      TaoupPrefaceTopologyLab: module0.TaoupPrefaceTopologyLab,
+      TaoupPrefaceRepresentationLab: module0.TaoupPrefaceRepresentationLab,
+      TaoupPrefaceEvidenceLab: module0.TaoupPrefaceEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/02-part-01/taoup-part-01": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-part-01");
+    return {
+      TaoupPart01TopologyLab: module0.TaoupPart01TopologyLab,
+      TaoupPart01RepresentationLab: module0.TaoupPart01RepresentationLab,
+      TaoupPart01EvidenceLab: module0.TaoupPart01EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/03-chapter-01-philosophy/taoup-chapter-01-philosophy":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-01-philosophy");
+      return {
+        TaoupChapter01PhilosophyTopologyLab:
+          module0.TaoupChapter01PhilosophyTopologyLab,
+        TaoupChapter01PhilosophyRepresentationLab:
+          module0.TaoupChapter01PhilosophyRepresentationLab,
+        TaoupChapter01PhilosophyEvidenceLab:
+          module0.TaoupChapter01PhilosophyEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/04-chapter-02-history/taoup-chapter-02-history":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-02-history");
+      return {
+        TaoupChapter02HistoryTopologyLab:
+          module0.TaoupChapter02HistoryTopologyLab,
+        TaoupChapter02HistoryRepresentationLab:
+          module0.TaoupChapter02HistoryRepresentationLab,
+        TaoupChapter02HistoryEvidenceLab:
+          module0.TaoupChapter02HistoryEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/05-chapter-03-contrasts/taoup-chapter-03-contrasts":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-03-contrasts");
+      return {
+        TaoupChapter03ContrastsTopologyLab:
+          module0.TaoupChapter03ContrastsTopologyLab,
+        TaoupChapter03ContrastsRepresentationLab:
+          module0.TaoupChapter03ContrastsRepresentationLab,
+        TaoupChapter03ContrastsEvidenceLab:
+          module0.TaoupChapter03ContrastsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/06-part-02/taoup-part-02": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-part-02");
+    return {
+      TaoupPart02TopologyLab: module0.TaoupPart02TopologyLab,
+      TaoupPart02RepresentationLab: module0.TaoupPart02RepresentationLab,
+      TaoupPart02EvidenceLab: module0.TaoupPart02EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/07-chapter-04-modularity/taoup-chapter-04-modularity":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-04-modularity");
+      return {
+        TaoupChapter04ModularityTopologyLab:
+          module0.TaoupChapter04ModularityTopologyLab,
+        TaoupChapter04ModularityRepresentationLab:
+          module0.TaoupChapter04ModularityRepresentationLab,
+        TaoupChapter04ModularityEvidenceLab:
+          module0.TaoupChapter04ModularityEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/08-chapter-05-textuality/taoup-chapter-05-textuality":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-05-textuality");
+      return {
+        TaoupChapter05TextualityTopologyLab:
+          module0.TaoupChapter05TextualityTopologyLab,
+        TaoupChapter05TextualityRepresentationLab:
+          module0.TaoupChapter05TextualityRepresentationLab,
+        TaoupChapter05TextualityEvidenceLab:
+          module0.TaoupChapter05TextualityEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/09-chapter-06-transparency/taoup-chapter-06-transparency":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-06-transparency");
+      return {
+        TaoupChapter06TransparencyTopologyLab:
+          module0.TaoupChapter06TransparencyTopologyLab,
+        TaoupChapter06TransparencyRepresentationLab:
+          module0.TaoupChapter06TransparencyRepresentationLab,
+        TaoupChapter06TransparencyEvidenceLab:
+          module0.TaoupChapter06TransparencyEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/10-chapter-07-multiprogramming/taoup-chapter-07-multiprogramming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-07-multiprogramming");
+      return {
+        TaoupChapter07MultiprogrammingTopologyLab:
+          module0.TaoupChapter07MultiprogrammingTopologyLab,
+        TaoupChapter07MultiprogrammingRepresentationLab:
+          module0.TaoupChapter07MultiprogrammingRepresentationLab,
+        TaoupChapter07MultiprogrammingEvidenceLab:
+          module0.TaoupChapter07MultiprogrammingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/11-chapter-08-minilanguages/taoup-chapter-08-minilanguages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-08-minilanguages");
+      return {
+        TaoupChapter08MinilanguagesTopologyLab:
+          module0.TaoupChapter08MinilanguagesTopologyLab,
+        TaoupChapter08MinilanguagesRepresentationLab:
+          module0.TaoupChapter08MinilanguagesRepresentationLab,
+        TaoupChapter08MinilanguagesEvidenceLab:
+          module0.TaoupChapter08MinilanguagesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/12-chapter-09-generation/taoup-chapter-09-generation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-09-generation");
+      return {
+        TaoupChapter09GenerationTopologyLab:
+          module0.TaoupChapter09GenerationTopologyLab,
+        TaoupChapter09GenerationRepresentationLab:
+          module0.TaoupChapter09GenerationRepresentationLab,
+        TaoupChapter09GenerationEvidenceLab:
+          module0.TaoupChapter09GenerationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/13-chapter-10-configuration/taoup-chapter-10-configuration":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-10-configuration");
+      return {
+        TaoupChapter10ConfigurationTopologyLab:
+          module0.TaoupChapter10ConfigurationTopologyLab,
+        TaoupChapter10ConfigurationRepresentationLab:
+          module0.TaoupChapter10ConfigurationRepresentationLab,
+        TaoupChapter10ConfigurationEvidenceLab:
+          module0.TaoupChapter10ConfigurationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/14-chapter-11-interfaces/taoup-chapter-11-interfaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-11-interfaces");
+      return {
+        TaoupChapter11InterfacesTopologyLab:
+          module0.TaoupChapter11InterfacesTopologyLab,
+        TaoupChapter11InterfacesRepresentationLab:
+          module0.TaoupChapter11InterfacesRepresentationLab,
+        TaoupChapter11InterfacesEvidenceLab:
+          module0.TaoupChapter11InterfacesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/15-chapter-12-optimization/taoup-chapter-12-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-12-optimization");
+      return {
+        TaoupChapter12OptimizationTopologyLab:
+          module0.TaoupChapter12OptimizationTopologyLab,
+        TaoupChapter12OptimizationRepresentationLab:
+          module0.TaoupChapter12OptimizationRepresentationLab,
+        TaoupChapter12OptimizationEvidenceLab:
+          module0.TaoupChapter12OptimizationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/16-chapter-13-complexity/taoup-chapter-13-complexity":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-13-complexity");
+      return {
+        TaoupChapter13ComplexityTopologyLab:
+          module0.TaoupChapter13ComplexityTopologyLab,
+        TaoupChapter13ComplexityRepresentationLab:
+          module0.TaoupChapter13ComplexityRepresentationLab,
+        TaoupChapter13ComplexityEvidenceLab:
+          module0.TaoupChapter13ComplexityEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/17-part-03/taoup-part-03": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-part-03");
+    return {
+      TaoupPart03TopologyLab: module0.TaoupPart03TopologyLab,
+      TaoupPart03RepresentationLab: module0.TaoupPart03RepresentationLab,
+      TaoupPart03EvidenceLab: module0.TaoupPart03EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/18-chapter-14-languages/taoup-chapter-14-languages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-14-languages");
+      return {
+        TaoupChapter14LanguagesTopologyLab:
+          module0.TaoupChapter14LanguagesTopologyLab,
+        TaoupChapter14LanguagesRepresentationLab:
+          module0.TaoupChapter14LanguagesRepresentationLab,
+        TaoupChapter14LanguagesEvidenceLab:
+          module0.TaoupChapter14LanguagesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/19-chapter-15-tools/taoup-chapter-15-tools":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-15-tools");
+      return {
+        TaoupChapter15ToolsTopologyLab: module0.TaoupChapter15ToolsTopologyLab,
+        TaoupChapter15ToolsRepresentationLab:
+          module0.TaoupChapter15ToolsRepresentationLab,
+        TaoupChapter15ToolsEvidenceLab: module0.TaoupChapter15ToolsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/20-chapter-16-reuse/taoup-chapter-16-reuse":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-16-reuse");
+      return {
+        TaoupChapter16ReuseTopologyLab: module0.TaoupChapter16ReuseTopologyLab,
+        TaoupChapter16ReuseRepresentationLab:
+          module0.TaoupChapter16ReuseRepresentationLab,
+        TaoupChapter16ReuseEvidenceLab: module0.TaoupChapter16ReuseEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/21-part-04/taoup-part-04": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-part-04");
+    return {
+      TaoupPart04TopologyLab: module0.TaoupPart04TopologyLab,
+      TaoupPart04RepresentationLab: module0.TaoupPart04RepresentationLab,
+      TaoupPart04EvidenceLab: module0.TaoupPart04EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/22-chapter-17-portability/taoup-chapter-17-portability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-17-portability");
+      return {
+        TaoupChapter17PortabilityTopologyLab:
+          module0.TaoupChapter17PortabilityTopologyLab,
+        TaoupChapter17PortabilityRepresentationLab:
+          module0.TaoupChapter17PortabilityRepresentationLab,
+        TaoupChapter17PortabilityEvidenceLab:
+          module0.TaoupChapter17PortabilityEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/23-chapter-18-documentation/taoup-chapter-18-documentation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-18-documentation");
+      return {
+        TaoupChapter18DocumentationTopologyLab:
+          module0.TaoupChapter18DocumentationTopologyLab,
+        TaoupChapter18DocumentationRepresentationLab:
+          module0.TaoupChapter18DocumentationRepresentationLab,
+        TaoupChapter18DocumentationEvidenceLab:
+          module0.TaoupChapter18DocumentationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/24-chapter-19-open-source/taoup-chapter-19-open-source":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-19-open-source");
+      return {
+        TaoupChapter19OpenSourceTopologyLab:
+          module0.TaoupChapter19OpenSourceTopologyLab,
+        TaoupChapter19OpenSourceRepresentationLab:
+          module0.TaoupChapter19OpenSourceRepresentationLab,
+        TaoupChapter19OpenSourceEvidenceLab:
+          module0.TaoupChapter19OpenSourceEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/25-chapter-20-futures/taoup-chapter-20-futures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-20-futures");
+      return {
+        TaoupChapter20FuturesTopologyLab:
+          module0.TaoupChapter20FuturesTopologyLab,
+        TaoupChapter20FuturesRepresentationLab:
+          module0.TaoupChapter20FuturesRepresentationLab,
+        TaoupChapter20FuturesEvidenceLab:
+          module0.TaoupChapter20FuturesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/26-appendix-a-glossary-of-abbreviations/taoup-appendix-a-glossary-of-abbreviations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-appendix-a-glossary-of-abbreviations");
+      return {
+        TaoupAppendixAGlossaryOfAbbreviationsTopologyLab:
+          module0.TaoupAppendixAGlossaryOfAbbreviationsTopologyLab,
+        TaoupAppendixAGlossaryOfAbbreviationsRepresentationLab:
+          module0.TaoupAppendixAGlossaryOfAbbreviationsRepresentationLab,
+        TaoupAppendixAGlossaryOfAbbreviationsEvidenceLab:
+          module0.TaoupAppendixAGlossaryOfAbbreviationsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/27-appendix-b-references/taoup-appendix-b-references":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-appendix-b-references");
+      return {
+        TaoupAppendixBReferencesTopologyLab:
+          module0.TaoupAppendixBReferencesTopologyLab,
+        TaoupAppendixBReferencesRepresentationLab:
+          module0.TaoupAppendixBReferencesRepresentationLab,
+        TaoupAppendixBReferencesEvidenceLab:
+          module0.TaoupAppendixBReferencesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/28-appendix-c-contributors/taoup-appendix-c-contributors":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-appendix-c-contributors");
+      return {
+        TaoupAppendixCContributorsTopologyLab:
+          module0.TaoupAppendixCContributorsTopologyLab,
+        TaoupAppendixCContributorsRepresentationLab:
+          module0.TaoupAppendixCContributorsRepresentationLab,
+        TaoupAppendixCContributorsEvidenceLab:
+          module0.TaoupAppendixCContributorsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/29-appendix-d-rootless-root/taoup-appendix-d-rootless-root":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-appendix-d-rootless-root");
+      return {
+        TaoupAppendixDRootlessRootTopologyLab:
+          module0.TaoupAppendixDRootlessRootTopologyLab,
+        TaoupAppendixDRootlessRootRepresentationLab:
+          module0.TaoupAppendixDRootlessRootRepresentationLab,
+        TaoupAppendixDRootlessRootEvidenceLab:
+          module0.TaoupAppendixDRootlessRootEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "art-of-unix-programming/30-colophon/taoup-colophon": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-colophon");
+    return {
+      TaoupColophonTopologyLab: module0.TaoupColophonTopologyLab,
+      TaoupColophonRepresentationLab: module0.TaoupColophonRepresentationLab,
+      TaoupColophonEvidenceLab: module0.TaoupColophonEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/31-index/taoup-index": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-index");
+    return {
+      TaoupIndexTopologyLab: module0.TaoupIndexTopologyLab,
+      TaoupIndexRepresentationLab: module0.TaoupIndexRepresentationLab,
+      TaoupIndexEvidenceLab: module0.TaoupIndexEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "art-of-unix-programming/32-review/taoup-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/art-of-unix-programming/diagrams/taoup-official-final-review");
+    return {
+      TaoupOfficialFinalReviewTopologyLab:
+        module0.TaoupOfficialFinalReviewTopologyLab,
+      TaoupOfficialFinalReviewRepresentationLab:
+        module0.TaoupOfficialFinalReviewRepresentationLab,
+      TaoupOfficialFinalReviewEvidenceLab:
+        module0.TaoupOfficialFinalReviewEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "auto-why-car-runs/00-learning-map/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/auto-why-car-runs/labs/learning-map");

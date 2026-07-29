@@ -17,13 +17,19 @@ const PROFILE_PATH = path.join(
   ROOT,
   "quality/art-of-unix-programming-v2-profiles.json",
 );
-const OFFICIAL_URL = "http://www.catb.org/~esr/writings/taoup/html/";
+const OFFICIAL_URL = "https://www.catb.org/~esr/writings/taoup/html/index.html";
+const PUBLISHER_URL =
+  "https://www.pearson.com/en-ca/subject-catalog/p/art-of-unix-programming-the/P200000009077";
 const WORK_TITLE = "Eric S. Raymond《The Art of Unix Programming》作者送印版";
 
 const FACT_SOURCES = {
   official: {
     label: "作者官网完整送印版",
     url: OFFICIAL_URL,
+  },
+  publisher: {
+    label: "Pearson 第一版书目页",
+    url: PUBLISHER_URL,
   },
   posix: {
     label: "The Open Group Base Specifications Issue 8",
@@ -598,23 +604,14 @@ function actionsFor(profile) {
     {
       label: `收窄${a}`,
       detail: `只改变${a}，保留${b}与${c}的原始基线。`,
-      riskDelta: -16,
-      visibilityDelta: 10,
-      recoveryDelta: 8,
     },
     {
       label: `显式化${c}`,
       detail: `把${c}的输入、输出和失败状态写入可检查记录。`,
-      riskDelta: -8,
-      visibilityDelta: 18,
-      recoveryDelta: 11,
     },
     {
       label: `绕过${d}`,
       detail: `跳过${d}直接追求${e}，用来观察局部捷径的系统代价。`,
-      riskDelta: 18,
-      visibilityDelta: -14,
-      recoveryDelta: -20,
     },
   ];
 }
@@ -630,30 +627,25 @@ function wrapperSource(profile) {
       ? profile.concepts
       : profile.design.focuses,
     actions: actionsFor(profile),
-    metricLabels: [
-      `${profile.design.focuses[0]}风险`,
-      `${profile.design.focuses[2]}可见度`,
-      `${profile.design.focuses[4]}恢复度`,
-    ],
     boundaryNote: profile.design.boundary,
     faultNote: `拒绝原因：${profile.design.fault}。`,
   };
   const views = [
-    ["Topology", "topology", [42, 66, 64]],
-    ["Representation", "representation", [38, 62, 58]],
-    ["Evidence", "evidence", [34, 72, 68]],
+    ["Topology", "topology"],
+    ["Representation", "representation"],
+    ["Evidence", "evidence"],
   ];
   return `import { UnixDecisionLab } from "./unix-decision-lab";\n\nconst shared = ${JSON.stringify(common, null, 2)} as const;\n\n${views
     .map(
-      ([suffix, view, baseline]) =>
-        `export function ${base}${suffix}Lab() {\n  return <UnixDecisionLab {...shared} view=${JSON.stringify(view)} baseline={${JSON.stringify(baseline)}} />;\n}`,
+      ([suffix, view]) =>
+        `export function ${base}${suffix}Lab() {\n  return <UnixDecisionLab {...shared} view=${JSON.stringify(view)} />;\n}`,
     )
     .join("\n\n")}\n`;
 }
 
 function sourceCallout(profile) {
   const fact = FACT_SOURCES[profile.design.source] ?? FACT_SOURCES.official;
-  return `<Callout type="info" title="来源层级与时代边界">\n  **${profile.title}** 以 [作者官网完整送印版](${OFFICIAL_URL}) 核定正式章节、案例与时代语境，并用 [${fact.label}](${fact.url}) 复核仍在使用的接口、协议或协作边界。在线原作链接 CC BY-ND 1.0；本课程不据此声称改编授权，而是独立组织中文解释、实验和练习，不复制原文表述、插图或案例代码。\n</Callout>`;
+  return `<Callout type="info" title="来源层级与时代边界">\n  **${profile.title}** 以 [作者官网完整送印版](${OFFICIAL_URL}) 核定正式章节、案例与 2003 年语境，以 [Pearson 第一版书目页](${PUBLISHER_URL}) 交叉核对作者、版本和出版身份，并用 [${fact.label}](${fact.url}) 复核仍在使用的接口、协议或协作边界。在线原作采用 CC BY-ND 1.0；本课程不声称获得改编授权，而是独立组织中文解释、实验和练习，不复制原文表述、插图或案例代码。\n</Callout>`;
 }
 
 function renderTerms(profile) {
@@ -664,7 +656,7 @@ function renderTerms(profile) {
         (term, index) =>
           `<Term def={${JSON.stringify(`${term}在${profile.title}中对应${profile.design.nodes[index % profile.design.nodes.length]}的可复核状态。`)}}>${term}</Term>`,
       )
-      .join("、\n"),
+      .join(" · "),
     glossary: terms
       .map(
         (term, index) =>
@@ -708,7 +700,7 @@ qualityVersion: 2
 practiceMode: ${profile.design.practiceMode}
 sourceMode: independent-rewrite
 draft: false
----
+${profile.isFormal ? `officialUnitId: ${escapeYaml(profile.chapterSlug)}\n` : ""}---
 
 import {
   ${base}TopologyLab,
@@ -786,6 +778,14 @@ ${codeSection}
 
 <Callout type="trap" title="不要把 Unix 风格当成装饰">
   ${profile.title} 的典型误用是“${profile.design.fault}”。修正方法不是换一句格言，而是回到 ${profile.design.nodes[0]}，保持输入不变，只修改一项设计并重放到 ${profile.design.nodes.at(-1)}。
+</Callout>
+
+<Callout type="trap" title="不要把 2003 年工具选择当成永恒排名">
+  本章的案例和判断必须保留硬件、网络、许可与工具生态的时代条件。迁移到今天时，应先复核 ${profile.design.focuses[0]} 与 ${profile.design.focuses[4]}，再决定原则是否仍成立。
+</Callout>
+
+<Callout type="trap" title="不要用最终输出掩盖中间越界">
+  即使结果看似正确，只要“${profile.design.boundary}”没有保持，或故障“${profile.design.fault}”未被明确拒绝，本次设计仍不合格。
 </Callout>
 
 ## 术语
@@ -903,6 +903,7 @@ for (const unit of manifest.units) {
   profiles.push({
     ...page,
     title: unit.title,
+    isFormal: true,
     concepts: unit.concepts.map((alternatives) => alternatives[0]),
     conceptAlternatives: unit.concepts,
     design,
@@ -917,6 +918,7 @@ for (const [chapterSlug, design] of [
   if (!page) throw new Error(`缺少页面：${chapterSlug}`);
   profiles.push({
     ...page,
+    isFormal: false,
     concepts: manifest.units.map((unit) => unit.title),
     conceptAlternatives: [],
     design,
@@ -963,13 +965,22 @@ const upgradedManifest = {
   sourceMode: "independent-rewrite",
   sourceUrl: OFFICIAL_URL,
   factSources: FACT_SOURCES,
+  verifiedAt: "2026-07-30",
   coverage: { formalUnits: 31, outlineNodes: 383, pages: 33 },
+  unitMappingEvidence: "quality/art-of-unix-programming-v2-profiles.json",
+  factSourcePolicy:
+    "作者官网完整送印版核定章节、案例与时代语境，Pearson 核定版次身份；POSIX、RFC、Git 与 SPDX 只用于复核仍在使用的标准、工具和许可事实。",
   disclosureNote:
     "作者官网公开完整送印版用于核定31个正式单元、381个层级目录节点及时代语境；中文版另列Colophon与索引，课程共映射383个节点。在线原作链接CC BY-ND 1.0，因此课程不声称获得改编授权：正文、图示、实验、代码与练习均为独立教学重写，不复制原文表达、插图或案例代码。",
   units: manifest.units.map((unit) => ({
     ...unit,
+    sourceUnitId: unit.id,
     chapterPath: chapterPaths.get(unit.id),
-    factSourceIds: ["official", DESIGNS[unit.id].source],
+    sourceMode: "independent-rewrite",
+    sourceAccess: "full-text-primary",
+    factSourceIds: [
+      ...new Set(["official", "publisher", DESIGNS[unit.id].source]),
+    ],
   })),
 };
 fs.writeFileSync(
