@@ -6,7 +6,8 @@
  * 1. 优先读取 quality/original-toc.json；缺失时使用全库 fidelity manifest
  * 2. 扫描 content/<book>/ 统计实质章节数（排除 learning-map / final-review）
  * 3. 检查 section 目录名是否为通用模板（fundamentals/core/advanced/review）
- * 4. 计算覆盖率 = 平台章数 / 原版章数
+ * 4. 计算覆盖率 = 已映射且页面存在的正式单元数 / 原版单元数
+ *    （一本原书单元可合并到同一课程页，不能把“页面数”误当成“目录覆盖数”）
  * 5. 检查每章 MDX 行数是否 >= 200
  * 6. 输出分级报告 + 不合格清单
  *
@@ -26,17 +27,6 @@ const bookArg = process.argv.indexOf("--book");
 const singleBook = bookArg >= 0 ? process.argv[bookArg + 1] : null;
 
 // 通用四段式模板检测
-const GENERIC_SECTIONS = new Set([
-  "00-fundamentals",
-  "01-core",
-  "02-advanced",
-  "03-review",
-  "00-foundations",
-  "01-foundations",
-  "02-advanced",
-  "03-advanced",
-]);
-
 function isGenericTemplate(sectionDirs) {
   const names = sectionDirs.map((d) => d.toLowerCase());
   const genericCount = names.filter((n) =>
@@ -73,12 +63,20 @@ function countSubstantiveChapters(bookDir) {
   return { chapters, sections };
 }
 
-function gradeBook(
-  platformChapters,
-  originalChapters,
-  isGeneric,
-  shortChapters,
-) {
+function coveredManifestUnitCount(manifest, chapters) {
+  if (!Array.isArray(manifest?.units) || manifest.units.length === 0)
+    return null;
+  const chapterPaths = new Set(
+    chapters.map((chapter) => `${chapter.section}/${chapter.slug}`),
+  );
+  return manifest.units.filter(
+    (unit) =>
+      typeof unit.chapterPath === "string" &&
+      chapterPaths.has(unit.chapterPath.replace(/\.mdx$/, "")),
+  ).length;
+}
+
+function gradeBook(platformChapters, originalChapters, isGeneric) {
   if (!originalChapters || originalChapters <= 0)
     return { grade: "?", coverage: null };
 
@@ -130,6 +128,7 @@ for (const book of books) {
 
   const toc = tocData[book];
   const manifest = manifests[book] ?? null;
+  const mappedOriginalUnits = coveredManifestUnitCount(manifest, chapters);
   const originalChapters = toc
     ? toc.originalChapters
     : Array.isArray(manifest?.units)
@@ -142,15 +141,15 @@ for (const book of books) {
       : "missing";
 
   const { grade, coverage } = gradeBook(
-    platformCount,
+    mappedOriginalUnits ?? platformCount,
     originalChapters,
     isGeneric,
-    shortChapters,
   );
 
   results.push({
     book,
     platformChapters: platformCount,
+    mappedOriginalUnits,
     originalChapters,
     coverage: coverage !== null ? Math.round(coverage * 100) : null,
     grade,

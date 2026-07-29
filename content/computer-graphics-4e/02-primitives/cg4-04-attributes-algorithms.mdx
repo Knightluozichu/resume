@@ -1,0 +1,190 @@
+---
+title: >-
+  Attributes of Graphics Primitives × Implementation Algorithms for Graphics
+  Primitives and Attributes
+description: >-
+  Attributes of Graphics Primitives × Implementation Algorithms for Graphics
+  Primitives and
+  Attributes：让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值，以公式、章专属交互和可重放故障证据独立重写。
+type: B
+section: 计算机图形学第4版 · 独立机制课程 · primitives
+order: 4
+sourceUrl: >-
+  https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196
+demo: true
+math: true
+draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitIds:
+  - cg4-04
+  - cg4-05
+---
+import { Cg404AttributesAlgorithmsPipelineLab, Cg404AttributesAlgorithmsAlgorithmLab, Cg404AttributesAlgorithmsEvidenceLab } from "@/components/mdx/computer-graphics-4e/v2/cg4-04-attributes-algorithms";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中的“让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值”，并指出公式中每个量的空间、单位或概率含义
+- 能比较正常基线与“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”反例，定位端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含中的首个差异
+- 能操作三个章专属实验，让primitive attribute、line attribute、primitive implementation algorithm、bresenham同时具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“Attributes of Graphics Primitives的输入、公式中间量、输出与恢复结果可用同一基线复算，且Implementation Algorithms for Graphics Primitives and Attributes的输入、公式中间量、输出与恢复结果可用同一基线复算”是否重新成立
+
+</Objectives>
+
+{/* GRAPHICS_FOUNDATIONS_QUALITY_V2 */}
+
+## 从一个会失败的图像实验开始
+
+Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes要回答的不是“这个名词是什么”，而是：在固定输入下，如何验证“让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值”，并让一个反例可重复地推翻错误实现？先写下预期像素、几何或估计量，再运行基线；只要端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含无法指出差异来自哪一步，图像看起来正确也不能通过。
+
+本页的不变量是：Attributes of Graphics Primitives的输入、公式中间量、输出与恢复结果可用同一基线复算，且Implementation Algorithms for Graphics Primitives and Attributes的输入、公式中间量、输出与恢复结果可用同一基线复算。反例“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”只改变一个条件，因而正常、故障与恢复三次运行应能用同一输入直接比较。
+
+## 原版、版次与事实来源
+
+Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes只用[Pearson第4版书目与22章目录](https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196)确定原书单元；未取得正文，因此不宣称复现作者表述。以下机制、公式与代码按图形学定义独立编写，[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)与[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)只核对现代API事实，不替代原书历史内容。
+
+## 六个检查词
+
+<Term def="primitive attribute在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于让线宽、颜色和图案等属性在图元内按规则插值；应由端点属性、插值参数、连接处覆盖和裁剪前后结果确认，而不是只凭术语出现。">primitive attribute</Term>、<Term def="line attribute在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于让线宽、颜色和图案等属性在图元内按规则插值；应由端点属性、插值参数、连接处覆盖和裁剪前后结果确认，而不是只凭术语出现。">line attribute</Term>、<Term def="primitive implementation algorithm在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于用增量误差驱动图元光栅化而非重复浮点求值；应由像素序列、误差项、象限对称和端点包含确认，而不是只凭术语出现。">primitive implementation algorithm</Term>、<Term def="bresenham在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于用增量误差驱动图元光栅化而非重复浮点求值；应由像素序列、误差项、象限对称和端点包含确认，而不是只凭术语出现。">bresenham</Term>、<Term def="coordinate space：坐标空间声明数值当前属于模型、世界、观察、裁剪或设备阶段。">coordinate space</Term>、<Term def="raster state：光栅状态决定覆盖、深度、混合和面剔除等离散规则。">raster state</Term>。这些词共同约束让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值，每个词都必须落到公式、交互状态或可重放输出，不能只出现在术语表。
+
+## 原书单元与独立机制解释
+
+### Attributes of Graphics Primitives
+
+primitive attribute 描述颜色、宽度、样式与透明度等外观，line attribute 尤其受连接、端帽和像素覆盖影响。属性只有与图元参数化和插值位置绑定，才不会在裁剪或透视后失真。
+
+本单元的正式坐标是primitive attribute、line attribute。验证Attributes of Graphics Primitives时，先制造“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度”，再检查端点属性、插值参数、连接处覆盖和裁剪前后结果能否把错误定位到让线宽、颜色和图案等属性在图元内按规则插值的首个分叉。
+
+$$
+a(t)=(1-t)a_0+t a_1
+$$
+
+### Implementation Algorithms for Graphics Primitives and Attributes
+
+primitive implementation algorithm 决定连续图元如何遍历像素，bresenham 用整数增量维护理想线与候选像素的误差。正确实现应在各象限保持对称，并清楚处理陡斜率与端点。
+
+本单元的正式坐标是primitive implementation algorithm、bresenham。验证Implementation Algorithms for Graphics Primitives and Attributes时，先制造“只实现0到1斜率，或在象限变换后忘记恢复坐标”，再检查像素序列、误差项、象限对称和端点包含能否把错误定位到用增量误差驱动图元光栅化而非重复浮点求值的首个分叉。
+
+$$
+e_{k+1}=e_k+2\Delta y-2\Delta x\,I_{stepY}
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 概念与因果路径">
+    在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中选择任一正式坐标，沿机制链查看它的输入、状态变化和可推翻探针。
+
+    <Cg404AttributesAlgorithmsPipelineLab />
+
+  </Step>
+  <Step title="2. 单变量算法实验">
+    保持让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值的其余条件不变，只切换样本、坐标、路径或故障模式，并解释结果为何改变。
+
+    <Cg404AttributesAlgorithmsAlgorithmLab />
+
+  </Step>
+  <Step title="3. 基线、故障、恢复与复位">
+    保存Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes的首个分叉，撤销“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”，以同输入重放后点击重置核对初值。
+
+    <Cg404AttributesAlgorithmsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+for (int k = 0; k <= steps; ++k) {
+  double t = double(k) / steps;
+  Color c = (1-t)*c0 + t*c1;
+  double width = (1-t)*w0 + t*w1;
+  raster_line_sample(k, c, width);
+}
+```
+
+运行Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes时固定随机种子、输入几何、坐标约定和数值精度；记录编译命令或算法版本、输出摘要与失败条件。实验输出若依赖隐藏全局状态，必须先消除该依赖再比较。
+
+<Callout type="trap" title="本页核心误区">
+  在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标。这个错误会破坏“Attributes of Graphics Primitives的输入、公式中间量、输出与恢复结果可用同一基线复算，且Implementation Algorithms for Graphics Primitives and Attributes的输入、公式中间量、输出与恢复结果可用同一基线复算”，应先由端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含定位，再讨论性能或视觉风格。
+</Callout>
+
+<Callout type="trap" title="不要把别的图形API模板套进来">
+  Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes只解释让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值。若原始资料讨论纯C++路径追踪、OpenGL时代图形学或光传输积分，就不能用VkBuffer、Fence与Semaphore替代相应的几何、光栅化或蒙特卡洛机制。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式与边界。** 怎样用一个数值样本证明 $a(t)=(1-t)a_0+t a_1$ 中的量没有混用空间、单位或概率密度？
+
+<Answer>
+  先写出每个量的定义域与单位，选择能手算的输入，分别计算中间量和最终结果；再只扰动一个量。若端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含的变化方向与公式不一致，应拒绝实现而不是调整截图。
+</Answer>
+
+**问题 2：正式坐标。** primitive attribute、line attribute、primitive implementation algorithm、bresenham如何进入可操作验证？
+
+<Answer>
+  1. **primitive attribute**：在专属实验中选中该节点，保存输入与端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含，注入“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”后恢复并重放。
+  2. **line attribute**：在专属实验中选中该节点，保存输入与端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含，注入“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”后恢复并重放。
+  3. **primitive implementation algorithm**：在专属实验中选中该节点，保存输入与端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含，注入“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”后恢复并重放。
+  4. **bresenham**：在专属实验中选中该节点，保存输入与端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含，注入“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”后恢复并重放。
+</Answer>
+
+**问题 3：故障恢复。** 如何证明“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”已经真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含中的首个分叉；撤销故障后以完全相同输入重放。只有Attributes of Graphics Primitives的输入、公式中间量、输出与恢复结果可用同一基线复算，且Implementation Algorithms for Graphics Primitives and Attributes的输入、公式中间量、输出与恢复结果可用同一基线复算重新成立、结果可复现且实验重置回初值，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes意味着能将“让线宽、颜色和图案等属性在图元内按规则插值，并用增量误差驱动图元光栅化而非重复浮点求值”写成明确公式或算法，能操作正式坐标，能制造“在错误空间线性插值，或把线宽当成与分辨率无关的世界尺度；只实现0到1斜率，或在象限变换后忘记恢复坐标”，还能凭端点属性、插值参数、连接处覆盖和裁剪前后结果、像素序列、误差项、象限对称和端点包含恢复同输入结果，而不是把一段Vulkan生命周期模板换上本章标题。
+
+<Glossary>
+  <GlossaryItem term="primitive attribute">
+    primitive attribute在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于让线宽、颜色和图案等属性在图元内按规则插值；应由端点属性、插值参数、连接处覆盖和裁剪前后结果确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="line attribute">
+    line attribute在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于让线宽、颜色和图案等属性在图元内按规则插值；应由端点属性、插值参数、连接处覆盖和裁剪前后结果确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="primitive implementation algorithm">
+    primitive implementation algorithm在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于用增量误差驱动图元光栅化而非重复浮点求值；应由像素序列、误差项、象限对称和端点包含确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="bresenham">
+    bresenham在Attributes of Graphics Primitives × Implementation Algorithms for Graphics Primitives and Attributes中用于用增量误差驱动图元光栅化而非重复浮点求值；应由像素序列、误差项、象限对称和端点包含确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="coordinate space">
+    coordinate space：坐标空间声明数值当前属于模型、世界、观察、裁剪或设备阶段。
+  </GlossaryItem>
+  <GlossaryItem term="raster state">
+    raster state：光栅状态决定覆盖、深度、混合和面剔除等离散规则。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← Graphics Output Primitives](/learn/computer-graphics-4e/02-primitives/cg4-03-output-primitives) · [Two-Dimensional Geometric Transformations →](/learn/computer-graphics-4e/03-2d/cg4-05-2d-transformations)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Donald Hearn、M. Pauline Baker、Warren Carithers《Computer Graphics with OpenGL》第4版"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
+/>

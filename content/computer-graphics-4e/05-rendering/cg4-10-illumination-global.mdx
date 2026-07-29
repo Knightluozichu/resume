@@ -1,0 +1,185 @@
+---
+title: Illumination Models and Surface-Rendering Methods × Global Illumination
+description: >-
+  Illumination Models and Surface-Rendering Methods × Global
+  Illumination：分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像，以公式、章专属交互和可重放故障证据独立重写。
+type: B
+section: 计算机图形学第4版 · 独立机制课程 · rendering
+order: 10
+sourceUrl: >-
+  https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196
+demo: true
+math: true
+draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitIds:
+  - cg4-15
+  - cg4-19
+---
+import { Cg410IlluminationGlobalPipelineLab, Cg410IlluminationGlobalAlgorithmLab, Cg410IlluminationGlobalEvidenceLab } from "@/components/mdx/computer-graphics-4e/v2/cg4-10-illumination-global";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明Illumination Models and Surface-Rendering Methods × Global Illumination中的“分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像”，并指出公式中每个量的空间、单位或概率含义
+- 能比较正常基线与“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”反例，定位法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差中的首个差异
+- 能操作三个章专属实验，让illumination model、surface rendering、global illumination、radiosity同时具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“Illumination Models and Surface-Rendering Methods的输入、公式中间量、输出与恢复结果可用同一基线复算，且Global Illumination的输入、公式中间量、输出与恢复结果可用同一基线复算”是否重新成立
+
+</Objectives>
+
+{/* GRAPHICS_FOUNDATIONS_QUALITY_V2 */}
+
+## 从一个会失败的图像实验开始
+
+Illumination Models and Surface-Rendering Methods × Global Illumination要回答的不是“这个名词是什么”，而是：在固定输入下，如何验证“分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像”，并让一个反例可重复地推翻错误实现？先写下预期像素、几何或估计量，再运行基线；只要法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差无法指出差异来自哪一步，图像看起来正确也不能通过。
+
+本页的不变量是：Illumination Models and Surface-Rendering Methods的输入、公式中间量、输出与恢复结果可用同一基线复算，且Global Illumination的输入、公式中间量、输出与恢复结果可用同一基线复算。反例“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”只改变一个条件，因而正常、故障与恢复三次运行应能用同一输入直接比较。
+
+## 原版、版次与事实来源
+
+Illumination Models and Surface-Rendering Methods × Global Illumination只用[Pearson第4版书目与22章目录](https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196)确定原书单元；未取得正文，因此不宣称复现作者表述。以下机制、公式与代码按图形学定义独立编写，[OpenGL 4.6 Core规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)与[GLSL 4.60规范](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf)只核对现代API事实，不替代原书历史内容。
+
+## 六个检查词
+
+<Term def="illumination model在Illumination Models and Surface-Rendering Methods × Global Illumination中用于分解局部光照项并选择顶点或片元求值位置；应由法线、光向量、视向量、各光照项和插值位置确认，而不是只凭术语出现。">illumination model</Term>、<Term def="surface rendering在Illumination Models and Surface-Rendering Methods × Global Illumination中用于分解局部光照项并选择顶点或片元求值位置；应由法线、光向量、视向量、各光照项和插值位置确认，而不是只凭术语出现。">surface rendering</Term>、<Term def="global illumination在Illumination Models and Surface-Rendering Methods × Global Illumination中用于把表面之间的间接能量交换纳入图像；应由面片面积、形状因子和、发射项与迭代残差确认，而不是只凭术语出现。">global illumination</Term>、<Term def="radiosity在Illumination Models and Surface-Rendering Methods × Global Illumination中用于把表面之间的间接能量交换纳入图像；应由面片面积、形状因子和、发射项与迭代残差确认，而不是只凭术语出现。">radiosity</Term>、<Term def="coordinate space：坐标空间声明数值当前属于模型、世界、观察、裁剪或设备阶段。">coordinate space</Term>、<Term def="raster state：光栅状态决定覆盖、深度、混合和面剔除等离散规则。">raster state</Term>。这些词共同约束分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像，每个词都必须落到公式、交互状态或可重放输出，不能只出现在术语表。
+
+## 原书单元与独立机制解释
+
+### Illumination Models and Surface-Rendering Methods
+
+illumination model 把环境、漫反射与高光等局部项组合，surface rendering 决定法线、材质和光源在何处求值。Gouraud插值颜色，Phong插值法线，二者对小高光的保真度不同。
+
+本单元的正式坐标是illumination model、surface rendering。验证Illumination Models and Surface-Rendering Methods时，先制造“在非线性颜色空间累加光照，或插值后不重新归一化法线”，再检查法线、光向量、视向量、各光照项和插值位置能否把错误定位到分解局部光照项并选择顶点或片元求值位置的首个分叉。
+
+$$
+I=I_a k_a+I_l[k_d\max(0,n\cdot l)+k_s\max(0,r\cdot v)^p]
+$$
+
+### Global Illumination
+
+global illumination 计算光源经多次反射到达观察者的能量，radiosity 在漫反射假设下用面片间形状因子建立线性系统。局部光照无法产生颜色渗透等间接效应。
+
+本单元的正式坐标是global illumination、radiosity。验证Global Illumination时，先制造“形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”，再检查面片面积、形状因子和、发射项与迭代残差能否把错误定位到把表面之间的间接能量交换纳入图像的首个分叉。
+
+$$
+B_i=E_i+\rho_i\sum_j F_{ij}B_j
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 概念与因果路径">
+    在Illumination Models and Surface-Rendering Methods × Global Illumination中选择任一正式坐标，沿机制链查看它的输入、状态变化和可推翻探针。
+
+    <Cg410IlluminationGlobalPipelineLab />
+
+  </Step>
+  <Step title="2. 单变量算法实验">
+    保持分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像的其余条件不变，只切换样本、坐标、路径或故障模式，并解释结果为何改变。
+
+    <Cg410IlluminationGlobalAlgorithmLab />
+
+  </Step>
+  <Step title="3. 基线、故障、恢复与复位">
+    保存Illumination Models and Surface-Rendering Methods × Global Illumination的首个分叉，撤销“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”，以同输入重放后点击重置核对初值。
+
+    <Cg410IlluminationGlobalEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+vec3 n = normalize(normal);
+float diffuse = max(dot(n, lightDir), 0.0);
+float specular = pow(max(dot(reflect(-lightDir,n), viewDir),0.0), shininess);
+vec3 local = ambient + kd*diffuse + ks*specular;
+```
+
+运行Illumination Models and Surface-Rendering Methods × Global Illumination时固定随机种子、输入几何、坐标约定和数值精度；记录编译命令或算法版本、输出摘要与失败条件。实验输出若依赖隐藏全局状态，必须先消除该依赖再比较。
+
+<Callout type="trap" title="本页核心误区">
+  在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径。这个错误会破坏“Illumination Models and Surface-Rendering Methods的输入、公式中间量、输出与恢复结果可用同一基线复算，且Global Illumination的输入、公式中间量、输出与恢复结果可用同一基线复算”，应先由法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差定位，再讨论性能或视觉风格。
+</Callout>
+
+<Callout type="trap" title="不要把别的图形API模板套进来">
+  Illumination Models and Surface-Rendering Methods × Global Illumination只解释分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像。若原始资料讨论纯C++路径追踪、OpenGL时代图形学或光传输积分，就不能用VkBuffer、Fence与Semaphore替代相应的几何、光栅化或蒙特卡洛机制。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式与边界。** 怎样用一个数值样本证明 $I=I_a k_a+I_l[k_d\max(0,n\cdot l)+k_s\max(0,r\cdot v)^p]$ 中的量没有混用空间、单位或概率密度？
+
+<Answer>
+  先写出每个量的定义域与单位，选择能手算的输入，分别计算中间量和最终结果；再只扰动一个量。若法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差的变化方向与公式不一致，应拒绝实现而不是调整截图。
+</Answer>
+
+**问题 2：正式坐标。** illumination model、surface rendering、global illumination、radiosity如何进入可操作验证？
+
+<Answer>
+  1. **illumination model**：在专属实验中选中该节点，保存输入与法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差，注入“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”后恢复并重放。
+  2. **surface rendering**：在专属实验中选中该节点，保存输入与法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差，注入“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”后恢复并重放。
+  3. **global illumination**：在专属实验中选中该节点，保存输入与法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差，注入“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”后恢复并重放。
+  4. **radiosity**：在专属实验中选中该节点，保存输入与法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差，注入“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”后恢复并重放。
+</Answer>
+
+**问题 3：故障恢复。** 如何证明“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”已经真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差中的首个分叉；撤销故障后以完全相同输入重放。只有Illumination Models and Surface-Rendering Methods的输入、公式中间量、输出与恢复结果可用同一基线复算，且Global Illumination的输入、公式中间量、输出与恢复结果可用同一基线复算重新成立、结果可复现且实验重置回初值，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握Illumination Models and Surface-Rendering Methods × Global Illumination意味着能将“分解局部光照项并选择顶点或片元求值位置，并把表面之间的间接能量交换纳入图像”写成明确公式或算法，能操作正式坐标，能制造“在非线性颜色空间累加光照，或插值后不重新归一化法线；形状因子不守恒，或把仅适用于漫反射的radiosity用于镜面路径”，还能凭法线、光向量、视向量、各光照项和插值位置、面片面积、形状因子和、发射项与迭代残差恢复同输入结果，而不是把一段Vulkan生命周期模板换上本章标题。
+
+<Glossary>
+  <GlossaryItem term="illumination model">
+    illumination model在Illumination Models and Surface-Rendering Methods × Global Illumination中用于分解局部光照项并选择顶点或片元求值位置；应由法线、光向量、视向量、各光照项和插值位置确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="surface rendering">
+    surface rendering在Illumination Models and Surface-Rendering Methods × Global Illumination中用于分解局部光照项并选择顶点或片元求值位置；应由法线、光向量、视向量、各光照项和插值位置确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="global illumination">
+    global illumination在Illumination Models and Surface-Rendering Methods × Global Illumination中用于把表面之间的间接能量交换纳入图像；应由面片面积、形状因子和、发射项与迭代残差确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="radiosity">
+    radiosity在Illumination Models and Surface-Rendering Methods × Global Illumination中用于把表面之间的间接能量交换纳入图像；应由面片面积、形状因子和、发射项与迭代残差确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="coordinate space">
+    coordinate space：坐标空间声明数值当前属于模型、世界、观察、裁剪或设备阶段。
+  </GlossaryItem>
+  <GlossaryItem term="raster state">
+    raster state：光栅状态决定覆盖、深度、混合和面剔除等离散规则。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← Visible-Surface Detection Methods](/learn/computer-graphics-4e/05-rendering/cg4-09-visible-surfaces) · [Texturing and Surface-Detail Methods × Color Models and Color Applications →](/learn/computer-graphics-4e/05-rendering/cg4-11-texture-color)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Donald Hearn、M. Pauline Baker、Warren Carithers《Computer Graphics with OpenGL》第4版"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
+/>

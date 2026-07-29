@@ -1962,6 +1962,164 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         CAIBottleneckMap: module0.CAIBottleneckMap,
       } as ChapterMdxComponents;
     },
+  "computer-graphics-4e/01-foundations/cg4-01-hardware": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-01-hardware");
+    return {
+      Cg401HardwarePipelineLab: module0.Cg401HardwarePipelineLab,
+      Cg401HardwareAlgorithmLab: module0.Cg401HardwareAlgorithmLab,
+      Cg401HardwareEvidenceLab: module0.Cg401HardwareEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/01-foundations/cg4-02-systems-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-graphics-4e/v2/cg4-02-systems-applications");
+      return {
+        Cg402SystemsApplicationsPipelineLab:
+          module0.Cg402SystemsApplicationsPipelineLab,
+        Cg402SystemsApplicationsAlgorithmLab:
+          module0.Cg402SystemsApplicationsAlgorithmLab,
+        Cg402SystemsApplicationsEvidenceLab:
+          module0.Cg402SystemsApplicationsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "computer-graphics-4e/02-primitives/cg4-03-output-primitives": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-03-output-primitives");
+    return {
+      Cg403OutputPrimitivesPipelineLab:
+        module0.Cg403OutputPrimitivesPipelineLab,
+      Cg403OutputPrimitivesAlgorithmLab:
+        module0.Cg403OutputPrimitivesAlgorithmLab,
+      Cg403OutputPrimitivesEvidenceLab:
+        module0.Cg403OutputPrimitivesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/02-primitives/cg4-04-attributes-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-graphics-4e/v2/cg4-04-attributes-algorithms");
+      return {
+        Cg404AttributesAlgorithmsPipelineLab:
+          module0.Cg404AttributesAlgorithmsPipelineLab,
+        Cg404AttributesAlgorithmsAlgorithmLab:
+          module0.Cg404AttributesAlgorithmsAlgorithmLab,
+        Cg404AttributesAlgorithmsEvidenceLab:
+          module0.Cg404AttributesAlgorithmsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "computer-graphics-4e/03-2d/cg4-05-2d-transformations": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-05-2d-transformations");
+    return {
+      Cg4052dTransformationsPipelineLab:
+        module0.Cg4052dTransformationsPipelineLab,
+      Cg4052dTransformationsAlgorithmLab:
+        module0.Cg4052dTransformationsAlgorithmLab,
+      Cg4052dTransformationsEvidenceLab:
+        module0.Cg4052dTransformationsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/03-2d/cg4-06-2d-viewing": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-06-2d-viewing");
+    return {
+      Cg4062dViewingPipelineLab: module0.Cg4062dViewingPipelineLab,
+      Cg4062dViewingAlgorithmLab: module0.Cg4062dViewingAlgorithmLab,
+      Cg4062dViewingEvidenceLab: module0.Cg4062dViewingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/04-3d/cg4-07-3d-transformations": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-07-3d-transformations");
+    return {
+      Cg4073dTransformationsPipelineLab:
+        module0.Cg4073dTransformationsPipelineLab,
+      Cg4073dTransformationsAlgorithmLab:
+        module0.Cg4073dTransformationsAlgorithmLab,
+      Cg4073dTransformationsEvidenceLab:
+        module0.Cg4073dTransformationsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/04-3d/cg4-08-viewing-hierarchy": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-08-viewing-hierarchy");
+    return {
+      Cg408ViewingHierarchyPipelineLab:
+        module0.Cg408ViewingHierarchyPipelineLab,
+      Cg408ViewingHierarchyAlgorithmLab:
+        module0.Cg408ViewingHierarchyAlgorithmLab,
+      Cg408ViewingHierarchyEvidenceLab:
+        module0.Cg408ViewingHierarchyEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/05-rendering/cg4-09-visible-surfaces": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-09-visible-surfaces");
+    return {
+      Cg409VisibleSurfacesPipelineLab: module0.Cg409VisibleSurfacesPipelineLab,
+      Cg409VisibleSurfacesAlgorithmLab:
+        module0.Cg409VisibleSurfacesAlgorithmLab,
+      Cg409VisibleSurfacesEvidenceLab: module0.Cg409VisibleSurfacesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/05-rendering/cg4-10-illumination-global": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-10-illumination-global");
+    return {
+      Cg410IlluminationGlobalPipelineLab:
+        module0.Cg410IlluminationGlobalPipelineLab,
+      Cg410IlluminationGlobalAlgorithmLab:
+        module0.Cg410IlluminationGlobalAlgorithmLab,
+      Cg410IlluminationGlobalEvidenceLab:
+        module0.Cg410IlluminationGlobalEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/05-rendering/cg4-11-texture-color": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-11-texture-color");
+    return {
+      Cg411TextureColorPipelineLab: module0.Cg411TextureColorPipelineLab,
+      Cg411TextureColorAlgorithmLab: module0.Cg411TextureColorAlgorithmLab,
+      Cg411TextureColorEvidenceLab: module0.Cg411TextureColorEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/06-applications/cg4-12-animation-modeling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-graphics-4e/v2/cg4-12-animation-modeling");
+      return {
+        Cg412AnimationModelingPipelineLab:
+          module0.Cg412AnimationModelingPipelineLab,
+        Cg412AnimationModelingAlgorithmLab:
+          module0.Cg412AnimationModelingAlgorithmLab,
+        Cg412AnimationModelingEvidenceLab:
+          module0.Cg412AnimationModelingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "computer-graphics-4e/06-applications/cg4-13-input-shaders": async () => {
+    const module0 =
+      await import("@/components/mdx/computer-graphics-4e/v2/cg4-13-input-shaders");
+    return {
+      Cg413InputShadersPipelineLab: module0.Cg413InputShadersPipelineLab,
+      Cg413InputShadersAlgorithmLab: module0.Cg413InputShadersAlgorithmLab,
+      Cg413InputShadersEvidenceLab: module0.Cg413InputShadersEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "computer-graphics-4e/06-applications/cg4-14-objects-splines-visualization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/computer-graphics-4e/v2/cg4-14-objects-splines-visualization");
+      return {
+        Cg414ObjectsSplinesVisualizationPipelineLab:
+          module0.Cg414ObjectsSplinesVisualizationPipelineLab,
+        Cg414ObjectsSplinesVisualizationAlgorithmLab:
+          module0.Cg414ObjectsSplinesVisualizationAlgorithmLab,
+        Cg414ObjectsSplinesVisualizationEvidenceLab:
+          module0.Cg414ObjectsSplinesVisualizationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "computer-networks-top-down/00-cnt8-official-learning-map/cnt8-official-learning-map":
     async () => {
       const module0 =
@@ -4671,6 +4829,140 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Fla3OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "global-illumination/01-foundations/agi-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-01-introduction");
+    return {
+      Agi01IntroductionTransportLab: module0.Agi01IntroductionTransportLab,
+      Agi01IntroductionEstimatorLab: module0.Agi01IntroductionEstimatorLab,
+      Agi01IntroductionEvidenceLab: module0.Agi01IntroductionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/01-foundations/agi-02-physics-light-transport":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/global-illumination/v2/agi-02-physics-light-transport");
+      return {
+        Agi02PhysicsLightTransportTransportLab:
+          module0.Agi02PhysicsLightTransportTransportLab,
+        Agi02PhysicsLightTransportEstimatorLab:
+          module0.Agi02PhysicsLightTransportEstimatorLab,
+        Agi02PhysicsLightTransportEvidenceLab:
+          module0.Agi02PhysicsLightTransportEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "global-illumination/02-methods/agi-03-monte-carlo": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-03-monte-carlo");
+    return {
+      Agi03MonteCarloTransportLab: module0.Agi03MonteCarloTransportLab,
+      Agi03MonteCarloEstimatorLab: module0.Agi03MonteCarloEstimatorLab,
+      Agi03MonteCarloEvidenceLab: module0.Agi03MonteCarloEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/02-methods/agi-04-computing-light-transport":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/global-illumination/v2/agi-04-computing-light-transport");
+      return {
+        Agi04ComputingLightTransportTransportLab:
+          module0.Agi04ComputingLightTransportTransportLab,
+        Agi04ComputingLightTransportEstimatorLab:
+          module0.Agi04ComputingLightTransportEstimatorLab,
+        Agi04ComputingLightTransportEvidenceLab:
+          module0.Agi04ComputingLightTransportEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "global-illumination/03-algorithms/agi-05-stochastic-path-tracing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/global-illumination/v2/agi-05-stochastic-path-tracing");
+      return {
+        Agi05StochasticPathTracingTransportLab:
+          module0.Agi05StochasticPathTracingTransportLab,
+        Agi05StochasticPathTracingEstimatorLab:
+          module0.Agi05StochasticPathTracingEstimatorLab,
+        Agi05StochasticPathTracingEvidenceLab:
+          module0.Agi05StochasticPathTracingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "global-illumination/03-algorithms/agi-06-stochastic-radiosity": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-06-stochastic-radiosity");
+    return {
+      Agi06StochasticRadiosityTransportLab:
+        module0.Agi06StochasticRadiosityTransportLab,
+      Agi06StochasticRadiosityEstimatorLab:
+        module0.Agi06StochasticRadiosityEstimatorLab,
+      Agi06StochasticRadiosityEvidenceLab:
+        module0.Agi06StochasticRadiosityEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/03-algorithms/agi-07-hybrid-algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-07-hybrid-algorithms");
+    return {
+      Agi07HybridAlgorithmsTransportLab:
+        module0.Agi07HybridAlgorithmsTransportLab,
+      Agi07HybridAlgorithmsEstimatorLab:
+        module0.Agi07HybridAlgorithmsEstimatorLab,
+      Agi07HybridAlgorithmsEvidenceLab:
+        module0.Agi07HybridAlgorithmsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/04-frontiers/agi-08-realism-speed": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-08-realism-speed");
+    return {
+      Agi08RealismSpeedTransportLab: module0.Agi08RealismSpeedTransportLab,
+      Agi08RealismSpeedEstimatorLab: module0.Agi08RealismSpeedEstimatorLab,
+      Agi08RealismSpeedEvidenceLab: module0.Agi08RealismSpeedEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/04-frontiers/agi-09-conclusion": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-09-conclusion");
+    return {
+      Agi09ConclusionTransportLab: module0.Agi09ConclusionTransportLab,
+      Agi09ConclusionEstimatorLab: module0.Agi09ConclusionEstimatorLab,
+      Agi09ConclusionEvidenceLab: module0.Agi09ConclusionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/05-appendices/agi-a-class-library": async () => {
+    const module0 =
+      await import("@/components/mdx/global-illumination/v2/agi-a-class-library");
+    return {
+      AgiAClassLibraryTransportLab: module0.AgiAClassLibraryTransportLab,
+      AgiAClassLibraryEstimatorLab: module0.AgiAClassLibraryEstimatorLab,
+      AgiAClassLibraryEvidenceLab: module0.AgiAClassLibraryEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "global-illumination/05-appendices/agi-b-hemispherical-coordinates":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/global-illumination/v2/agi-b-hemispherical-coordinates");
+      return {
+        AgiBHemisphericalCoordinatesTransportLab:
+          module0.AgiBHemisphericalCoordinatesTransportLab,
+        AgiBHemisphericalCoordinatesEstimatorLab:
+          module0.AgiBHemisphericalCoordinatesEstimatorLab,
+        AgiBHemisphericalCoordinatesEvidenceLab:
+          module0.AgiBHemisphericalCoordinatesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "global-illumination/05-appendices/agi-c-stochastic-relaxation-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/global-illumination/v2/agi-c-stochastic-relaxation-analysis");
+      return {
+        AgiCStochasticRelaxationAnalysisTransportLab:
+          module0.AgiCStochasticRelaxationAnalysisTransportLab,
+        AgiCStochasticRelaxationAnalysisEstimatorLab:
+          module0.AgiCStochasticRelaxationAnalysisEstimatorLab,
+        AgiCStochasticRelaxationAnalysisEvidenceLab:
+          module0.AgiCStochasticRelaxationAnalysisEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
@@ -5831,6 +6123,120 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");
     return {
       PP2ThreeProblemsMap: module0.PP2ThreeProblemsMap,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/01-output/rtw-01-output-image": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-01-output-image");
+    return {
+      Rtw01OutputImageGeometryLab: module0.Rtw01OutputImageGeometryLab,
+      Rtw01OutputImageSamplingLab: module0.Rtw01OutputImageSamplingLab,
+      Rtw01OutputImageEvidenceLab: module0.Rtw01OutputImageEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/01-output/rtw-02-vec3": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-02-vec3");
+    return {
+      Rtw02Vec3GeometryLab: module0.Rtw02Vec3GeometryLab,
+      Rtw02Vec3SamplingLab: module0.Rtw02Vec3SamplingLab,
+      Rtw02Vec3EvidenceLab: module0.Rtw02Vec3EvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/02-rays/rtw-03-rays-camera-background": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-03-rays-camera-background");
+    return {
+      Rtw03RaysCameraBackgroundGeometryLab:
+        module0.Rtw03RaysCameraBackgroundGeometryLab,
+      Rtw03RaysCameraBackgroundSamplingLab:
+        module0.Rtw03RaysCameraBackgroundSamplingLab,
+      Rtw03RaysCameraBackgroundEvidenceLab:
+        module0.Rtw03RaysCameraBackgroundEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/02-rays/rtw-04-adding-sphere": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-04-adding-sphere");
+    return {
+      Rtw04AddingSphereGeometryLab: module0.Rtw04AddingSphereGeometryLab,
+      Rtw04AddingSphereSamplingLab: module0.Rtw04AddingSphereSamplingLab,
+      Rtw04AddingSphereEvidenceLab: module0.Rtw04AddingSphereEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/02-rays/rtw-05-normals-objects": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-05-normals-objects");
+    return {
+      Rtw05NormalsObjectsGeometryLab: module0.Rtw05NormalsObjectsGeometryLab,
+      Rtw05NormalsObjectsSamplingLab: module0.Rtw05NormalsObjectsSamplingLab,
+      Rtw05NormalsObjectsEvidenceLab: module0.Rtw05NormalsObjectsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/03-materials/rtw-07-diffuse": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-07-diffuse");
+    return {
+      Rtw07DiffuseGeometryLab: module0.Rtw07DiffuseGeometryLab,
+      Rtw07DiffuseSamplingLab: module0.Rtw07DiffuseSamplingLab,
+      Rtw07DiffuseEvidenceLab: module0.Rtw07DiffuseEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/03-materials/rtw-08-metal": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-08-metal");
+    return {
+      Rtw08MetalGeometryLab: module0.Rtw08MetalGeometryLab,
+      Rtw08MetalSamplingLab: module0.Rtw08MetalSamplingLab,
+      Rtw08MetalEvidenceLab: module0.Rtw08MetalEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/03-materials/rtw-09-dielectrics": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-09-dielectrics");
+    return {
+      Rtw09DielectricsGeometryLab: module0.Rtw09DielectricsGeometryLab,
+      Rtw09DielectricsSamplingLab: module0.Rtw09DielectricsSamplingLab,
+      Rtw09DielectricsEvidenceLab: module0.Rtw09DielectricsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/03-sampling/rtw-06-antialiasing": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-06-antialiasing");
+    return {
+      Rtw06AntialiasingGeometryLab: module0.Rtw06AntialiasingGeometryLab,
+      Rtw06AntialiasingSamplingLab: module0.Rtw06AntialiasingSamplingLab,
+      Rtw06AntialiasingEvidenceLab: module0.Rtw06AntialiasingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/04-camera/rtw-10-positionable-camera": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-10-positionable-camera");
+    return {
+      Rtw10PositionableCameraGeometryLab:
+        module0.Rtw10PositionableCameraGeometryLab,
+      Rtw10PositionableCameraSamplingLab:
+        module0.Rtw10PositionableCameraSamplingLab,
+      Rtw10PositionableCameraEvidenceLab:
+        module0.Rtw10PositionableCameraEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/04-camera/rtw-11-defocus-blur": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-11-defocus-blur");
+    return {
+      Rtw11DefocusBlurGeometryLab: module0.Rtw11DefocusBlurGeometryLab,
+      Rtw11DefocusBlurSamplingLab: module0.Rtw11DefocusBlurSamplingLab,
+      Rtw11DefocusBlurEvidenceLab: module0.Rtw11DefocusBlurEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "ray-tracing-weekend/05-final/rtw-12-final-render": async () => {
+    const module0 =
+      await import("@/components/mdx/ray-tracing-weekend/v2/rtw-12-final-render");
+    return {
+      Rtw12FinalRenderGeometryLab: module0.Rtw12FinalRenderGeometryLab,
+      Rtw12FinalRenderSamplingLab: module0.Rtw12FinalRenderSamplingLab,
+      Rtw12FinalRenderEvidenceLab: module0.Rtw12FinalRenderEvidenceLab,
     } as ChapterMdxComponents;
   },
   "the-c-programming-language/00-overview/learning-map": async () => {

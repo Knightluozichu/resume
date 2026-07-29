@@ -1,0 +1,187 @@
+---
+title: Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class
+description: >-
+  Surface Normals and Multiple Objects × Moving Camera Code Into Its Own
+  Class：把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口，以公式、章专属交互和可重放故障证据独立重写。
+type: B
+section: 周末光线追踪 · C++路径追踪 · rays
+order: 5
+sourceUrl: 'https://raytracing.github.io/books/RayTracingInOneWeekend.html'
+demo: true
+math: true
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitIds:
+  - rtw-05
+  - rtw-camera-class
+---
+import { Rtw05NormalsObjectsGeometryLab, Rtw05NormalsObjectsSamplingLab, Rtw05NormalsObjectsEvidenceLab } from "@/components/mdx/ray-tracing-weekend/v2/rtw-05-normals-objects";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中的“把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口”，并指出公式中每个量的空间、单位或概率含义
+- 能比较正常基线与“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”反例，定位front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希中的首个差异
+- 能操作三个章专属实验，让法线、hit_record、hittable_list、camera class、initialize、render同时具备解释、视觉和练习证据
+- 能修改最小实现、固定输入重放，并判断“Surface Normals and Multiple Objects的输入、公式中间量、输出与恢复结果可用同一基线复算，且Moving Camera Code Into Its Own Class的输入、公式中间量、输出与恢复结果可用同一基线复算”是否重新成立
+
+</Objectives>
+
+{/* GRAPHICS_FOUNDATIONS_QUALITY_V2 */}
+
+## 从一个会失败的图像实验开始
+
+Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class要回答的不是“这个名词是什么”，而是：在固定输入下，如何验证“把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口”，并让一个反例可重复地推翻错误实现？先写下预期像素、几何或估计量，再运行基线；只要front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希无法指出差异来自哪一步，图像看起来正确也不能通过。
+
+本页的不变量是：Surface Normals and Multiple Objects的输入、公式中间量、输出与恢复结果可用同一基线复算，且Moving Camera Code Into Its Own Class的输入、公式中间量、输出与恢复结果可用同一基线复算。反例“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”只改变一个条件，因而正常、故障与恢复三次运行应能用同一输入直接比较。
+
+## 原版、版次与事实来源
+
+Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class以[官方4.0.2全文](https://raytracing.github.io/books/RayTracingInOneWeekend.html)核对实现顺序、公式与调试边界，并以[官方源码仓库](https://github.com/RayTracing/raytracing.github.io)交叉检查可编译接口。课程示例为独立教学重写；固定版本后不把Vulkan、GPU管线或其他书的模板倒灌进这个纯C++路径追踪器。
+
+## 六个检查词
+
+<Term def="法线在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。">法线</Term>、<Term def="hit_record在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。">hit_record</Term>、<Term def="hittable_list在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。">hittable_list</Term>、<Term def="camera class在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。">camera class</Term>、<Term def="initialize在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。">initialize</Term>、<Term def="render在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。">render</Term>。这些词共同约束把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口，每个词都必须落到公式、交互状态或可重放输出，不能只出现在术语表。
+
+## 原书单元与独立机制解释
+
+### Surface Normals and Multiple Objects
+
+法线从球心指向交点，hit_record 保存t、位置、法线与正反面，hittable_list 逐对象缩短允许上界以保留最近命中。这样材质只消费稳定的命中记录，不再重复求交细节。
+
+本单元的正式坐标是法线、hit_record、hittable_list。验证Surface Normals and Multiple Objects时，先制造“不根据入射方向翻转法线，或遍历对象时没有收紧t上界”，再检查front_face、单位法线、对象身份和最近命中距离能否把错误定位到把交点几何、朝向和多对象最近命中统一成查询合同的首个分叉。
+
+$$
+n=\frac{P-C}{r},\qquad t_{\max}\leftarrow t_{\mathrm{closest}}
+$$
+
+### Moving Camera Code Into Its Own Class
+
+Moving Camera Code Into Its Own Class把分散在main中的视口计算、get_ray、ray_color与render循环迁入camera类。重构前后图像必须一致；initialize集中派生参数，render只负责按像素调度并写出结果。
+
+本单元的正式坐标是camera class、initialize、render。验证Moving Camera Code Into Its Own Class时，先制造“重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”，再检查公开参数、initialize派生量、首末像素射线和重构前后PPM哈希能否把错误定位到把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口的首个分叉。
+
+$$
+R=write(color(get\_ray(pixel)))
+$$
+
+## 先预测，再操作三个章专属实验
+
+<Stepper>
+  <Step title="1. 概念与因果路径">
+    在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中选择任一正式坐标，沿机制链查看它的输入、状态变化和可推翻探针。
+
+    <Rtw05NormalsObjectsGeometryLab />
+
+  </Step>
+  <Step title="2. 单变量算法实验">
+    保持把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口的其余条件不变，只切换样本、坐标、路径或故障模式，并解释结果为何改变。
+
+    <Rtw05NormalsObjectsSamplingLab />
+
+  </Step>
+  <Step title="3. 基线、故障、恢复与复位">
+    保存Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class的首个分叉，撤销“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”，以同输入重放后点击重置核对初值。
+
+    <Rtw05NormalsObjectsEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 最小可重现实验
+
+```cpp
+if (object.hit(r, interval(t_min, closest), rec)) {
+  closest = rec.t;
+  rec.set_face_normal(r, outward_normal);
+  nearest = rec;
+}
+```
+
+运行Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class时固定随机种子、输入几何、坐标约定和数值精度；记录编译命令或算法版本、输出摘要与失败条件。实验输出若依赖隐藏全局状态，必须先消除该依赖再比较。
+
+<Callout type="trap" title="本页核心误区">
+  不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移。这个错误会破坏“Surface Normals and Multiple Objects的输入、公式中间量、输出与恢复结果可用同一基线复算，且Moving Camera Code Into Its Own Class的输入、公式中间量、输出与恢复结果可用同一基线复算”，应先由front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希定位，再讨论性能或视觉风格。
+</Callout>
+
+<Callout type="trap" title="不要把别的图形API模板套进来">
+  Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class只解释把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口。若原始资料讨论纯C++路径追踪、OpenGL时代图形学或光传输积分，就不能用VkBuffer、Fence与Semaphore替代相应的几何、光栅化或蒙特卡洛机制。
+</Callout>
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：公式与边界。** 怎样用一个数值样本证明 $n=\frac{P-C}{r},\qquad t_{\max}\leftarrow t_{\mathrm{closest}}$ 中的量没有混用空间、单位或概率密度？
+
+<Answer>
+  先写出每个量的定义域与单位，选择能手算的输入，分别计算中间量和最终结果；再只扰动一个量。若front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希的变化方向与公式不一致，应拒绝实现而不是调整截图。
+</Answer>
+
+**问题 2：正式坐标。** 法线、hit_record、hittable_list、camera class、initialize、render如何进入可操作验证？
+
+<Answer>
+  1. **法线**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+  2. **hit_record**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+  3. **hittable_list**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+  4. **camera class**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+  5. **initialize**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+  6. **render**：在专属实验中选中该节点，保存输入与front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希，注入“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”后恢复并重放。
+</Answer>
+
+**问题 3：故障恢复。** 如何证明“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”已经真正修复？
+
+<Answer>
+  保存正常基线，注入故障并标记front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希中的首个分叉；撤销故障后以完全相同输入重放。只有Surface Normals and Multiple Objects的输入、公式中间量、输出与恢复结果可用同一基线复算，且Moving Camera Code Into Its Own Class的输入、公式中间量、输出与恢复结果可用同一基线复算重新成立、结果可复现且实验重置回初值，修复才可交接。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+掌握Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class意味着能将“把交点几何、朝向和多对象最近命中统一成查询合同，并把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口”写成明确公式或算法，能操作正式坐标，能制造“不根据入射方向翻转法线，或遍历对象时没有收紧t上界；重构时改变像素坐标或初始化顺序，导致相同场景输出发生漂移”，还能凭front_face、单位法线、对象身份和最近命中距离、公开参数、initialize派生量、首末像素射线和重构前后PPM哈希恢复同输入结果，而不是把一段Vulkan生命周期模板换上本章标题。
+
+<Glossary>
+  <GlossaryItem term="法线">
+    法线在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="hit_record">
+    hit_record在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="hittable_list">
+    hittable_list在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把交点几何、朝向和多对象最近命中统一成查询合同；应由front_face、单位法线、对象身份和最近命中距离确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="camera class">
+    camera class在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="initialize">
+    initialize在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。
+  </GlossaryItem>
+  <GlossaryItem term="render">
+    render在Surface Normals and Multiple Objects × Moving Camera Code Into Its Own Class中用于把相机初始化、射线生成、颜色求值与图像写出收拢为稳定接口；应由公开参数、initialize派生量、首末像素射线和重构前后PPM哈希确认，而不是只凭术语出现。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← Adding a Sphere](/learn/ray-tracing-weekend/02-rays/rtw-04-adding-sphere) · [Antialiasing →](/learn/ray-tracing-weekend/03-sampling/rtw-06-antialiasing)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="Peter Shirley、Trevor David Black、Steve Hollasch《Ray Tracing in One Weekend》4.0.2"
+  adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html"
+/>
