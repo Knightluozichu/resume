@@ -134,6 +134,70 @@ function explainCSharpConcept(label, unitTitle, bookSlug) {
   return `${context}必须分清语言规范、编译器实现、运行时行为与基础类库 API 四层责任。固定 C# 语言版本和目标框架，用正向/负向编译案例、必要的 IL 或运行轨迹以及版本对照验证结论。`;
 }
 
+function explainAndroidConcept(label, unitTitle, bookSlug) {
+  const context = `${unitTitle}中的${label}`;
+  if (bookSlug === "android-advanced-decryption") {
+    if (/init|Zygote|SystemServer|Launcher|进程|Binder|线程池|消息循环/u.test(label)) {
+      return `${context}要沿 Android 8.0 的真实启动或 IPC 链路解释：先定位入口源码与调用者，再标出进程、线程、Binder 对象、状态写入和完成回调。固定 AOSP 标签后，用 PID/TID、调用栈、关键日志与一个进程未就绪或回调延迟样本核对先后关系。`;
+    }
+    if (/Activity|Service|广播|Content ?Provider|Context|AMS|Window|WMS/u.test(label)) {
+      return `${context}由 framework 对象、system_server 状态和应用进程回调共同完成，API 返回不等于系统状态已经落定。应跟踪 token/record、目标进程与线程、生命周期回调和最终窗口或组件状态，并用无效 token、进程重建或迟到回调验证拒绝与恢复路径。`;
+    }
+    if (/JNI|Java虚拟机|ClassLoader|Dalvik|ART|类|对象|引用|垃圾|GC/u.test(label)) {
+      return `${context}涉及 Java、Native、加载器身份与运行时内存边界；同名类型、引用或方法在不同加载器和线程中并不自动等价。用源码符号、类加载日志、JNI 引用计数、堆/GC 轨迹或正反加载案例验证对象身份、生命周期和释放条件。`;
+    }
+    if (/热修复|Hook|代理|插件|动态加载|VirtualApk|Instant Run/u.test(label)) {
+      return `${context}通过改变加载、查找或分发路径实现，必须区分 Android 8.0 的可行机制、隐藏实现依赖与现代平台限制。记录被替换的入口、原对象和代理对象身份、加载顺序与回滚点，再用补丁缺失、签名不符或进程重建样本确认失败不会静默污染状态。`;
+    }
+    if (/绘制|GPU|Systrace|Traceview|内存|泄漏|Allocation|Heap|MAT|LeakCanary/u.test(label)) {
+      return `${context}需要把工具读数连接到用户可见结果与责任对象，而不是把一张截图当作根因。固定场景并保存帧时间或堆基线，单独改变布局、分配或引用路径，再用 P50/P95/P99、GC Root、过度绘制或首帧状态交叉验证。`;
+    }
+    return `${context}必须落回 Android 8.0 源码中的入口、对象、进程/线程、状态变化与完成点。固定版本和输入，先预测正常链路，再只注入一个失败条件，以源码符号、运行日志和最终系统状态三方核对。`;
+  }
+
+  if (bookSlug === "android-component-arch") {
+    if (/依赖|聚合|解耦|模块|层级|组件化|基础架构/u.test(label)) {
+      return `${context}要用允许与禁止的依赖边表达组件边界，而不是以 Gradle module 数量代替解耦。固定工程后导出依赖图和公开 API，加入一个反向依赖或重复类反例，确认构建能拒绝越界且业务实现仍可替换。`;
+    }
+    if (/Manifest|资源|Gradle|编译|Instant Run|Freeline|构建|混淆|多渠道/u.test(label)) {
+      return `${context}属于从源码与资源输入到 APK/AAR 产物的构建变换，结论受 2018 年 Gradle/AGP 版本约束。保存任务图、合并/生成报告与产物校验和，分别改变代码、资源或插件配置，核对增量命中、冲突诊断和冷构建结果。`;
+    }
+    if (/Activity|Fragment|View|Application|广播|事件|路由|反射|权限|生命周期|分发/u.test(label)) {
+      return `${context}跨越运行时注册、查找与生命周期所有权，成功调用一次不能证明进程重建或迟到回调仍正确。记录组件标识、进程线程、注册/释放次序与路由结果，并注入缺失实现、重复初始化或 owner 销毁验证显式失败。`;
+    }
+    if (/Maven|AAR|JCenter|SDK|仓库|流通|发布|缓存/u.test(label)) {
+      return `${context}依赖不可变制品坐标、依赖元数据、仓库可达性和消费者解析结果。发布时保存源码提交、版本、校验和与依赖树，再测试缓存损坏、仓库离线和版本冲突，确认能够定位来源并回滚到上一制品。`;
+    }
+    if (/模板|架构|注解|演化|进程化/u.test(label)) {
+      return `${context}只有在模板生成物和架构阶段都受可执行约束时才有价值。比较采用前后的依赖环、构建时间、初始化路径和发布故障，并用一个不适用模板的反例说明扩展边界，避免把统一目录当成统一设计。`;
+    }
+    return `${context}要贯通源码合同、构建任务、运行所有者与发布制品四层。固定工具链和最小工程，只改变一个依赖、合并、路由或仓库条件，用自动拒绝、运行日志、产物校验和与回滚结果证明边界。`;
+  }
+
+  if (/Java|斐波|缓存|API|数据结构|SQLite|事务|查询|算法/u.test(label)) {
+    return `${context}先保证优化前后结果、异常与线程语义等价，再讨论时间或分配。固定输入规模、构建和设备状态，完成预热与交错采样，并用边界输入、缓存失效或查询计划证明收益不是偶然数据或错误结果造成的。`;
+  }
+  if (/NDK|JNI|C\\+\\+|本地|ARM|NEON|汇编|指令|内联|循环展开|预读取/u.test(label)) {
+    return `${context}同时包含 Java/Native 跨界成本、ABI 与具体 CPU 能力，局部指令更快不代表端到端更快。记录 ABI、编译参数、JNI 转换与工作量，用支持和不支持目标特性的设备/模拟输入比较总耗时、正确性与回退实现。`;
+  }
+  if (/内存|垃圾|GC|泄漏|引用|数组|布局/u.test(label)) {
+    return `${context}要同时解释对象/缓冲区布局、分配速率、存活时间和回收停顿。固定业务结果与输入，保存分配、堆和 GC 基线，再改变一种数据布局或引用路径，用峰值内存、停顿与泄漏保留链验证。`;
+  }
+  if (/线程|同步|AsyncTask|Handler|Looper|并发|多核|生命周期/u.test(label)) {
+    return `${context}受调度、共享状态、取消和 Android 生命周期共同约束；平均更快可能掩盖竞争或迟到回调。用可控任务和重复压力样本记录线程、队列、锁等待、取消和 owner 状态，并验证异常、旋转/销毁及恢复路径。`;
+  }
+  if (/时间|测量|跟踪|TraceView|DDMS|日志|性能评测|剖析/u.test(label)) {
+    return `${context}是测量方法而不是性能结论。声明时钟、采样/插桩开销、预热、样本数和统计量，以空载基线和已知热点校准工具，再保存原始样本与 P50/P95/P99，防止只挑最快一次。`;
+  }
+  if (/电池|广播|网络|位置|传感器|提醒|WakeLock|功耗/u.test(label)) {
+    return `${context}取决于唤醒次数、无线电尾能耗、采样频率和资源释放，短时 CPU 降低不一定减少总能耗。固定功能结果和时间窗，记录唤醒、传输、定位/传感器注册与电量变化，并注入离线、后台或未注销监听器场景。`;
+  }
+  if (/图形|布局|OpenGL|纹理|Mipmap|渲染|RenderScript|Allocation|rsForEach/u.test(label)) {
+    return `${context}要连接 CPU 准备、GPU 工作、内存带宽和帧截止时间。固定场景与设备，比较基线、优化和错误图像，保存帧时间、过度绘制、上传/分配与热状态；历史 RenderScript 结果另列现代替代 API 的迁移差异。`;
+  }
+  return `${context}必须在 2012 年 Android 工具链和设备语境中解释，再单列现代迁移。先写结果等价与资源预算，固定环境后只改变一个实现条件，用原始时间、分配、线程、能耗或帧证据验证。`;
+}
+
 const BOOKS = {
   "c-primer-plus": {
     sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429",
@@ -340,6 +404,85 @@ const BOOKS = {
     },
     evidence(label) {
       return `保存红—绿—重构的最小提交与失败消息，用行为断言、替身交互和重复运行核对「${label}」是否提供快速反馈。`;
+    },
+  },
+  "android-advanced-decryption": {
+    sourceUrl:
+      "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=52919",
+    sourceName: "刘望舒《Android进阶解密》",
+    unitIds: manifestIdentityUnits("android-advanced-decryption"),
+    pruneNodeTemplate: true,
+    contextualSentences: [
+      "本课程对应刘望舒《Android进阶解密》，电子工业出版社2018年10月初版，468页、702千字，ISBN 9787121348389。",
+      "Android 7.0只在原书明确比较AMS家族时出现；Android 9以后反射/隐藏API限制、Android 10的ActivityTaskManager、现代Profiler/Perfetto等只能写进迁移备注，不能改写本页正式链路。",
+      "记录PID/TID、调用入口、对象或token、状态前后值、耗时、异常/返回码和最终可见结果；性能章再记录P50/P95/P99，内存章保留GC Root路径。",
+      "最小证据包包含：出版社目录、Android版本、源码文件和符号、调用/状态图、PID/TID或加载器身份、一条失败注入、日志/追踪/堆证据、最终结果、已知限制、停止、恢复、回退、责任人与复核人。",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(
+        label,
+        unitTitle,
+        "android-advanced-decryption",
+      );
+    },
+    failure(label) {
+      return `若只背诵「${label}」的类名而不固定 Android 8.0 源码、进程线程、对象身份和完成回调，跨 Binder、JNI 或加载边界后就会把请求误判为结果。`;
+    },
+    evidence(label) {
+      return `在固定 AOSP 8.0 标签上追踪「${label}」的入口与状态对象，用 PID/TID、源码符号、正常/单变量失败日志和最终系统状态交叉核对。`;
+    },
+  },
+  "android-component-arch": {
+    sourceUrl:
+      "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=51777",
+    sourceName: "苍王《Android组件化架构》",
+    unitIds: manifestIdentityUnits("android-component-arch"),
+    pruneOutline: {
+      heading: "权威目录逐节点映射",
+      endMarker: "## 最小垂直切片",
+    },
+    normalizeInlineBlocks: true,
+    contextualSentences: [
+      "课程先准确解释出版时的依赖、构建、分发和发布机制，再单列现代Android Gradle Plugin、Version Catalog、Build Cache、Jetpack Startup、Activity Result API与Maven Central迁移。",
+      "边界必须说明谁可以依赖谁、哪些类型公开、资源怎样命名、Manifest怎样合并、初始化由谁调度、制品由谁发布；编译器、构建系统和测试应能拒绝违规关系。",
+      "交互图把目录节点放入源码、构建、运行、制品和团队五层；故障实验一次只改变一个合并、路由、缓存或发布条件；证据门拒绝只展示“能够运行”的弱结论。",
+      "从一个业务组件的源码修改开始，跟踪它经过依赖解析、资源与Manifest合并、编译打包、壳工程初始化、页面或服务分发，直到发布AAR与消费者升级。",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "android-component-arch");
+    },
+    failure(label) {
+      return `若把「${label}」简化成拆分 Gradle module，却不约束依赖、构建输入、运行所有者与制品版本，集成成功也会在冲突、重建或回滚时失效。`;
+    },
+    evidence(label) {
+      return `以最小多模块工程验证「${label}」，保存依赖图、任务/合并报告、运行时序、产物校验和，并注入一个冲突或仓库失败样本。`;
+    },
+  },
+  "android-perf-optimization": {
+    sourceUrl:
+      "https://www.oreilly.com/library/view/pro-android-apps/9781430239994/",
+    sourceName: "Pro Android Apps Performance Optimization",
+    unitIds: manifestIdentityUnits("android-perf-optimization"),
+    pruneOutline: {
+      heading: "权威目录逐节点映射",
+      endMarker: '<Callout type="trap">',
+    },
+    normalizeInlineBlocks: true,
+    addPredictionToUnmapped: true,
+    contextualSentences: [
+      "本页依据Hervé Guihot《Pro Android Apps Performance Optimization》独立重构，不复制原文。",
+      "原版锁定Apress 2012年1月版、282页、ISBN 9781430239994；中文版锁定人民邮电出版社2012年10月第1版、白龙译、226页、ISBN 9787115272416。",
+      "交互管线连接Java、JNI/NDK、内存线程、设备图形与用户结果；实验面板切换基线、优化、错误结果、热状态和生命周期；证据门要求正确性、时间、资源、设备和版本全部可重放。",
+      "先保存2012年Dalvik、NDK、TraceView、AsyncTask和RenderScript机制，再一次只改变运行时、工具或API之一并比较行为。",
+    ],
+    explainConcept(label, unitTitle) {
+      return explainAndroidConcept(label, unitTitle, "android-perf-optimization");
+    },
+    failure(label) {
+      return `若优化「${label}」时没有等价性断言、固定测量协议和资源边界，一次更快数字可能来自错误结果、热状态、缓存或插桩偏差。`;
+    },
+    evidence(label) {
+      return `固定设备、版本、构建、输入与热状态，对「${label}」做预热和交错重复采样，同时保存正确性、P50/P95/P99 与分配、线程、能耗或帧证据。`;
     },
   },
   "csharp-functional-programming": {
@@ -566,6 +709,58 @@ function pruneRepeatedNodeTemplate(source, chapter) {
     .join("\n");
 
   return result.replace(/\n{3,}/g, "\n\n");
+}
+
+function pruneOutlineSection(source, outline) {
+  const headingMarker = `\n## ${outline.heading}\n`;
+  const start = source.indexOf(headingMarker);
+  if (start === -1) return source;
+  const end = source.indexOf(`\n${outline.endMarker}`, start + headingMarker.length);
+  if (end === -1) {
+    throw new Error(
+      `Outline end marker missing: ${outline.heading} -> ${outline.endMarker}`,
+    );
+  }
+  return `${source.slice(0, start)}\n\n${source.slice(end + 1)}`.replace(
+    /\n{3,}/g,
+    "\n\n",
+  );
+}
+
+function contextualizeSharedSentences(source, chapter) {
+  for (const sentence of chapter.book.contextualSentences ?? []) {
+    const replacement = `在《${chapter.title}》中，${sentence}`;
+    if (!source.includes(replacement)) {
+      source = source.replaceAll(sentence, replacement);
+    }
+  }
+  return source;
+}
+
+function normalizeInlineBlockComponents(source) {
+  return source.replace(
+    /^(\s*)<(Callout|Answer|GlossaryItem)(\b[^>]*)>(.+)<\/\2>\s*$/gm,
+    (_match, indent, name, attributes, body) =>
+      `${indent}<${name}${attributes}>\n${indent}  ${body.trim()}\n${indent}</${name}>`,
+  );
+}
+
+function addPredictionCue(source, chapter) {
+  const quotedTitle = chapter.title.startsWith("《")
+    ? chapter.title
+    : `《${chapter.title}》`;
+  source = source.replaceAll(`《${chapter.title}》`, quotedTitle);
+  if (/猜一猜|先预测|动手试|试一试|观察.*变化/.test(source)) return source;
+  const marker = "\n## 本章回顾\n";
+  if (!source.includes(marker)) {
+    throw new Error(`Summary marker missing: ${chapter.bookSlug}/${chapter.slug}`);
+  }
+  const cue = `
+## 测量前预测
+
+先预测${quotedTitle}中哪一段会成为主导成本，并写出结果等价、时间、分配、线程、能耗或帧指标的可推翻阈值；运行后保留不符合预测的原始样本，而不是只挑最快一次。
+`;
+  return source.replace(marker, `${cue}${marker}`);
 }
 
 function plainText(value) {
@@ -904,6 +1099,16 @@ for (const [bookSlug, book] of Object.entries(BOOKS)) {
     const practiceMode = choosePracticeMode(slug);
     if (book.pruneNodeTemplate) {
       source = pruneRepeatedNodeTemplate(source, chapter);
+    }
+    if (book.pruneOutline) {
+      source = pruneOutlineSection(source, book.pruneOutline);
+    }
+    source = contextualizeSharedSentences(source, chapter);
+    if (book.normalizeInlineBlocks) {
+      source = normalizeInlineBlockComponents(source);
+    }
+    if (book.addPredictionToUnmapped && !book.unitIds[slug]) {
+      source = addPredictionCue(source, chapter);
     }
     source = addGovernanceFrontmatter(source, book, slug, practiceMode);
     source = normalizeAttribution(source, book);

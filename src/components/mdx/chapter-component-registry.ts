@@ -42,6 +42,372 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Algs4ReductionMap: module0.Algs4ReductionMap,
     } as ChapterMdxComponents;
   },
+  "android-advanced-decryption/00-official-learning-map/aad8-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-official-learning-map");
+      return {
+        Aad8OfficialLearningMapDecisionLab:
+          module0.Aad8OfficialLearningMapDecisionLab,
+        Aad8OfficialLearningMapMechanismMap:
+          module0.Aad8OfficialLearningMapMechanismMap,
+        Aad8OfficialLearningMapFailureDiagram:
+          module0.Aad8OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/01-chapter-01/aad8-01-android-system-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-01-android-system-architecture");
+      return {
+        Aad801AndroidSystemArchitectureDecisionLab:
+          module0.Aad801AndroidSystemArchitectureDecisionLab,
+        Aad801AndroidSystemArchitectureMechanismMap:
+          module0.Aad801AndroidSystemArchitectureMechanismMap,
+        Aad801AndroidSystemArchitectureFailureDiagram:
+          module0.Aad801AndroidSystemArchitectureFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/02-chapter-02/aad8-02-android-system-startup":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-02-android-system-startup");
+      return {
+        Aad802AndroidSystemStartupDecisionLab:
+          module0.Aad802AndroidSystemStartupDecisionLab,
+        Aad802AndroidSystemStartupMechanismMap:
+          module0.Aad802AndroidSystemStartupMechanismMap,
+        Aad802AndroidSystemStartupFailureDiagram:
+          module0.Aad802AndroidSystemStartupFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/03-chapter-03/aad8-03-app-process-startup":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-03-app-process-startup");
+      return {
+        Aad803AppProcessStartupDecisionLab:
+          module0.Aad803AppProcessStartupDecisionLab,
+        Aad803AppProcessStartupMechanismMap:
+          module0.Aad803AppProcessStartupMechanismMap,
+        Aad803AppProcessStartupFailureDiagram:
+          module0.Aad803AppProcessStartupFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/04-chapter-04/aad8-04-four-components-workflow":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-04-four-components-workflow");
+      return {
+        Aad804FourComponentsWorkflowDecisionLab:
+          module0.Aad804FourComponentsWorkflowDecisionLab,
+        Aad804FourComponentsWorkflowMechanismMap:
+          module0.Aad804FourComponentsWorkflowMechanismMap,
+        Aad804FourComponentsWorkflowFailureDiagram:
+          module0.Aad804FourComponentsWorkflowFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/05-chapter-05/aad8-05-context": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-decryption/aad8-05-context");
+    return {
+      Aad805ContextDecisionLab: module0.Aad805ContextDecisionLab,
+      Aad805ContextMechanismMap: module0.Aad805ContextMechanismMap,
+      Aad805ContextFailureDiagram: module0.Aad805ContextFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-decryption/06-chapter-06/aad8-06-activity-manager-service":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-06-activity-manager-service");
+      return {
+        Aad806ActivityManagerServiceDecisionLab:
+          module0.Aad806ActivityManagerServiceDecisionLab,
+        Aad806ActivityManagerServiceMechanismMap:
+          module0.Aad806ActivityManagerServiceMechanismMap,
+        Aad806ActivityManagerServiceFailureDiagram:
+          module0.Aad806ActivityManagerServiceFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/07-chapter-07/aad8-07-window-manager":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-07-window-manager");
+      return {
+        Aad807WindowManagerDecisionLab: module0.Aad807WindowManagerDecisionLab,
+        Aad807WindowManagerMechanismMap:
+          module0.Aad807WindowManagerMechanismMap,
+        Aad807WindowManagerFailureDiagram:
+          module0.Aad807WindowManagerFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/08-chapter-08/aad8-08-window-manager-service":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-08-window-manager-service");
+      return {
+        Aad808WindowManagerServiceDecisionLab:
+          module0.Aad808WindowManagerServiceDecisionLab,
+        Aad808WindowManagerServiceMechanismMap:
+          module0.Aad808WindowManagerServiceMechanismMap,
+        Aad808WindowManagerServiceFailureDiagram:
+          module0.Aad808WindowManagerServiceFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/09-chapter-09/aad8-09-jni": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-decryption/aad8-09-jni");
+    return {
+      Aad809JniDecisionLab: module0.Aad809JniDecisionLab,
+      Aad809JniMechanismMap: module0.Aad809JniMechanismMap,
+      Aad809JniFailureDiagram: module0.Aad809JniFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-decryption/10-chapter-10/aad8-10-java-virtual-machine":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-10-java-virtual-machine");
+      return {
+        Aad810JavaVirtualMachineDecisionLab:
+          module0.Aad810JavaVirtualMachineDecisionLab,
+        Aad810JavaVirtualMachineMechanismMap:
+          module0.Aad810JavaVirtualMachineMechanismMap,
+        Aad810JavaVirtualMachineFailureDiagram:
+          module0.Aad810JavaVirtualMachineFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/11-chapter-11/aad8-11-dalvik-art": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-decryption/aad8-11-dalvik-art");
+    return {
+      Aad811DalvikArtDecisionLab: module0.Aad811DalvikArtDecisionLab,
+      Aad811DalvikArtMechanismMap: module0.Aad811DalvikArtMechanismMap,
+      Aad811DalvikArtFailureDiagram: module0.Aad811DalvikArtFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-decryption/12-chapter-12/aad8-12-class-loader":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-12-class-loader");
+      return {
+        Aad812ClassLoaderDecisionLab: module0.Aad812ClassLoaderDecisionLab,
+        Aad812ClassLoaderMechanismMap: module0.Aad812ClassLoaderMechanismMap,
+        Aad812ClassLoaderFailureDiagram:
+          module0.Aad812ClassLoaderFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/13-chapter-13/aad8-13-hotfix": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-decryption/aad8-13-hotfix");
+    return {
+      Aad813HotfixDecisionLab: module0.Aad813HotfixDecisionLab,
+      Aad813HotfixMechanismMap: module0.Aad813HotfixMechanismMap,
+      Aad813HotfixFailureDiagram: module0.Aad813HotfixFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-decryption/14-chapter-14/aad8-14-hook": async () => {
+    const module0 =
+      await import("@/components/mdx/android-advanced-decryption/aad8-14-hook");
+    return {
+      Aad814HookDecisionLab: module0.Aad814HookDecisionLab,
+      Aad814HookMechanismMap: module0.Aad814HookMechanismMap,
+      Aad814HookFailureDiagram: module0.Aad814HookFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-advanced-decryption/15-chapter-15/aad8-15-pluginization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-15-pluginization");
+      return {
+        Aad815PluginizationDecisionLab: module0.Aad815PluginizationDecisionLab,
+        Aad815PluginizationMechanismMap:
+          module0.Aad815PluginizationMechanismMap,
+        Aad815PluginizationFailureDiagram:
+          module0.Aad815PluginizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/16-chapter-16/aad8-16-rendering-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-16-rendering-optimization");
+      return {
+        Aad816RenderingOptimizationDecisionLab:
+          module0.Aad816RenderingOptimizationDecisionLab,
+        Aad816RenderingOptimizationMechanismMap:
+          module0.Aad816RenderingOptimizationMechanismMap,
+        Aad816RenderingOptimizationFailureDiagram:
+          module0.Aad816RenderingOptimizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/17-chapter-17/aad8-17-memory-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-17-memory-optimization");
+      return {
+        Aad817MemoryOptimizationDecisionLab:
+          module0.Aad817MemoryOptimizationDecisionLab,
+        Aad817MemoryOptimizationMechanismMap:
+          module0.Aad817MemoryOptimizationMechanismMap,
+        Aad817MemoryOptimizationFailureDiagram:
+          module0.Aad817MemoryOptimizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-advanced-decryption/18-official-final-review/aad8-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-advanced-decryption/aad8-official-final-review");
+      return {
+        Aad8OfficialFinalReviewDecisionLab:
+          module0.Aad8OfficialFinalReviewDecisionLab,
+        Aad8OfficialFinalReviewMechanismMap:
+          module0.Aad8OfficialFinalReviewMechanismMap,
+        Aad8OfficialFinalReviewFailureDiagram:
+          module0.Aad8OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/00-official-learning-map/aca18-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-official-learning-map");
+      return {
+        Aca18OfficialLearningMapDecisionLab:
+          module0.Aca18OfficialLearningMapDecisionLab,
+        Aca18OfficialLearningMapMechanismMap:
+          module0.Aca18OfficialLearningMapMechanismMap,
+        Aca18OfficialLearningMapFailureDiagram:
+          module0.Aca18OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/01-component-foundations/aca18-01-component-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-01-component-foundations");
+      return {
+        Aca1801ComponentFoundationsDecisionLab:
+          module0.Aca1801ComponentFoundationsDecisionLab,
+        Aca1801ComponentFoundationsMechanismMap:
+          module0.Aca1801ComponentFoundationsMechanismMap,
+        Aca1801ComponentFoundationsFailureDiagram:
+          module0.Aca1801ComponentFoundationsFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/02-component-programming/aca18-02-component-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-02-component-programming");
+      return {
+        Aca1802ComponentProgrammingDecisionLab:
+          module0.Aca1802ComponentProgrammingDecisionLab,
+        Aca1802ComponentProgrammingMechanismMap:
+          module0.Aca1802ComponentProgrammingMechanismMap,
+        Aca1802ComponentProgrammingFailureDiagram:
+          module0.Aca1802ComponentProgrammingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/03-component-optimization/aca18-03-component-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-03-component-optimization");
+      return {
+        Aca1803ComponentOptimizationDecisionLab:
+          module0.Aca1803ComponentOptimizationDecisionLab,
+        Aca1803ComponentOptimizationMechanismMap:
+          module0.Aca1803ComponentOptimizationMechanismMap,
+        Aca1803ComponentOptimizationFailureDiagram:
+          module0.Aca1803ComponentOptimizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/04-component-compilation/aca18-04-component-compilation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-04-component-compilation");
+      return {
+        Aca1804ComponentCompilationDecisionLab:
+          module0.Aca1804ComponentCompilationDecisionLab,
+        Aca1804ComponentCompilationMechanismMap:
+          module0.Aca1804ComponentCompilationMechanismMap,
+        Aca1804ComponentCompilationFailureDiagram:
+          module0.Aca1804ComponentCompilationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/05-component-distribution/aca18-05-component-distribution":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-05-component-distribution");
+      return {
+        Aca1805ComponentDistributionDecisionLab:
+          module0.Aca1805ComponentDistributionDecisionLab,
+        Aca1805ComponentDistributionMechanismMap:
+          module0.Aca1805ComponentDistributionMechanismMap,
+        Aca1805ComponentDistributionFailureDiagram:
+          module0.Aca1805ComponentDistributionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/06-component-circulation/aca18-06-component-circulation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-06-component-circulation");
+      return {
+        Aca1806ComponentCirculationDecisionLab:
+          module0.Aca1806ComponentCirculationDecisionLab,
+        Aca1806ComponentCirculationMechanismMap:
+          module0.Aca1806ComponentCirculationMechanismMap,
+        Aca1806ComponentCirculationFailureDiagram:
+          module0.Aca1806ComponentCirculationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/07-architecture-templates/aca18-07-architecture-templates":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-07-architecture-templates");
+      return {
+        Aca1807ArchitectureTemplatesDecisionLab:
+          module0.Aca1807ArchitectureTemplatesDecisionLab,
+        Aca1807ArchitectureTemplatesMechanismMap:
+          module0.Aca1807ArchitectureTemplatesMechanismMap,
+        Aca1807ArchitectureTemplatesFailureDiagram:
+          module0.Aca1807ArchitectureTemplatesFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/08-architecture-evolution/aca18-08-architecture-evolution":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-08-architecture-evolution");
+      return {
+        Aca1808ArchitectureEvolutionDecisionLab:
+          module0.Aca1808ArchitectureEvolutionDecisionLab,
+        Aca1808ArchitectureEvolutionMechanismMap:
+          module0.Aca1808ArchitectureEvolutionMechanismMap,
+        Aca1808ArchitectureEvolutionFailureDiagram:
+          module0.Aca1808ArchitectureEvolutionFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/09-appendix-a/aca18-appendix-a-thinking-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-appendix-a-thinking-architecture");
+      return {
+        Aca18AppendixAThinkingArchitectureDecisionLab:
+          module0.Aca18AppendixAThinkingArchitectureDecisionLab,
+        Aca18AppendixAThinkingArchitectureMechanismMap:
+          module0.Aca18AppendixAThinkingArchitectureMechanismMap,
+        Aca18AppendixAThinkingArchitectureFailureDiagram:
+          module0.Aca18AppendixAThinkingArchitectureFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-component-arch/10-official-final-review/aca18-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-component-arch/aca18-official-final-review");
+      return {
+        Aca18OfficialFinalReviewDecisionLab:
+          module0.Aca18OfficialFinalReviewDecisionLab,
+        Aca18OfficialFinalReviewMechanismMap:
+          module0.Aca18OfficialFinalReviewMechanismMap,
+        Aca18OfficialFinalReviewFailureDiagram:
+          module0.Aca18OfficialFinalReviewFailureDiagram,
+      } as ChapterMdxComponents;
+    },
   "android-design-patterns/00-official-learning-map/adp-official-learning-map":
     async () => {
       const modules = await Promise.all([
@@ -210,6 +576,142 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         AdpOfficialFinalReviewLab: modules[0].AdpOfficialFinalReviewLab,
         AndroidDecisionMap: modules[1].AndroidDecisionMap,
         AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/00-official-learning-map/apo12-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-official-learning-map");
+      return {
+        Apo12OfficialLearningMapDecisionLab:
+          module0.Apo12OfficialLearningMapDecisionLab,
+        Apo12OfficialLearningMapMechanismMap:
+          module0.Apo12OfficialLearningMapMechanismMap,
+        Apo12OfficialLearningMapFailureDiagram:
+          module0.Apo12OfficialLearningMapFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/01-optimizing-java/apo12-01-optimizing-java-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-01-optimizing-java-code");
+      return {
+        Apo1201OptimizingJavaCodeDecisionLab:
+          module0.Apo1201OptimizingJavaCodeDecisionLab,
+        Apo1201OptimizingJavaCodeMechanismMap:
+          module0.Apo1201OptimizingJavaCodeMechanismMap,
+        Apo1201OptimizingJavaCodeFailureDiagram:
+          module0.Apo1201OptimizingJavaCodeFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/02-ndk-start/apo12-02-getting-started-ndk":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-02-getting-started-ndk");
+      return {
+        Apo1202GettingStartedNdkDecisionLab:
+          module0.Apo1202GettingStartedNdkDecisionLab,
+        Apo1202GettingStartedNdkMechanismMap:
+          module0.Apo1202GettingStartedNdkMechanismMap,
+        Apo1202GettingStartedNdkFailureDiagram:
+          module0.Apo1202GettingStartedNdkFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/03-advanced-ndk/apo12-03-advanced-ndk":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-03-advanced-ndk");
+      return {
+        Apo1203AdvancedNdkDecisionLab: module0.Apo1203AdvancedNdkDecisionLab,
+        Apo1203AdvancedNdkMechanismMap: module0.Apo1203AdvancedNdkMechanismMap,
+        Apo1203AdvancedNdkFailureDiagram:
+          module0.Apo1203AdvancedNdkFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/04-memory/apo12-04-using-memory-efficiently":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-04-using-memory-efficiently");
+      return {
+        Apo1204UsingMemoryEfficientlyDecisionLab:
+          module0.Apo1204UsingMemoryEfficientlyDecisionLab,
+        Apo1204UsingMemoryEfficientlyMechanismMap:
+          module0.Apo1204UsingMemoryEfficientlyMechanismMap,
+        Apo1204UsingMemoryEfficientlyFailureDiagram:
+          module0.Apo1204UsingMemoryEfficientlyFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/05-multithreading/apo12-05-multithreading-synchronization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-05-multithreading-synchronization");
+      return {
+        Apo1205MultithreadingSynchronizationDecisionLab:
+          module0.Apo1205MultithreadingSynchronizationDecisionLab,
+        Apo1205MultithreadingSynchronizationMechanismMap:
+          module0.Apo1205MultithreadingSynchronizationMechanismMap,
+        Apo1205MultithreadingSynchronizationFailureDiagram:
+          module0.Apo1205MultithreadingSynchronizationFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/06-benchmarking/apo12-06-benchmarking-profiling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-06-benchmarking-profiling");
+      return {
+        Apo1206BenchmarkingProfilingDecisionLab:
+          module0.Apo1206BenchmarkingProfilingDecisionLab,
+        Apo1206BenchmarkingProfilingMechanismMap:
+          module0.Apo1206BenchmarkingProfilingMechanismMap,
+        Apo1206BenchmarkingProfilingFailureDiagram:
+          module0.Apo1206BenchmarkingProfilingFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/07-battery/apo12-07-maximizing-battery-life":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-07-maximizing-battery-life");
+      return {
+        Apo1207MaximizingBatteryLifeDecisionLab:
+          module0.Apo1207MaximizingBatteryLifeDecisionLab,
+        Apo1207MaximizingBatteryLifeMechanismMap:
+          module0.Apo1207MaximizingBatteryLifeMechanismMap,
+        Apo1207MaximizingBatteryLifeFailureDiagram:
+          module0.Apo1207MaximizingBatteryLifeFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/08-graphics/apo12-08-graphics": async () => {
+    const module0 =
+      await import("@/components/mdx/android-perf-optimization/apo12-08-graphics");
+    return {
+      Apo1208GraphicsDecisionLab: module0.Apo1208GraphicsDecisionLab,
+      Apo1208GraphicsMechanismMap: module0.Apo1208GraphicsMechanismMap,
+      Apo1208GraphicsFailureDiagram: module0.Apo1208GraphicsFailureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "android-perf-optimization/09-renderscript/apo12-09-renderscript":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-09-renderscript");
+      return {
+        Apo1209RenderscriptDecisionLab: module0.Apo1209RenderscriptDecisionLab,
+        Apo1209RenderscriptMechanismMap:
+          module0.Apo1209RenderscriptMechanismMap,
+        Apo1209RenderscriptFailureDiagram:
+          module0.Apo1209RenderscriptFailureDiagram,
+      } as ChapterMdxComponents;
+    },
+  "android-perf-optimization/10-official-final-review/apo12-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/android-perf-optimization/apo12-official-final-review");
+      return {
+        Apo12OfficialFinalReviewDecisionLab:
+          module0.Apo12OfficialFinalReviewDecisionLab,
+        Apo12OfficialFinalReviewMechanismMap:
+          module0.Apo12OfficialFinalReviewMechanismMap,
+        Apo12OfficialFinalReviewFailureDiagram:
+          module0.Apo12OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
   "auto-why-car-runs/00-learning-map/learning-map": async () => {
