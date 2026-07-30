@@ -9394,6 +9394,75 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Rtw12FinalRenderEvidenceLab: module0.Rtw12FinalRenderEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "rl-deep-learning-c/00-learning-map/rlc-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/rl-deep-learning-c/v2/rlc-official-learning-map");
+    return {
+      RlcOfficialLearningMapPipelineLab:
+        module0.RlcOfficialLearningMapPipelineLab,
+      RlcOfficialLearningMapReplayLab: module0.RlcOfficialLearningMapReplayLab,
+      RlcOfficialLearningMapFaultLab: module0.RlcOfficialLearningMapFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "rl-deep-learning-c/01-rl-deep-learning/rlc-01-rl-deep-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/rl-deep-learning-c/v2/rlc-01-rl-deep-learning");
+      return {
+        Rlc01RlDeepLearningPipelineLab: module0.Rlc01RlDeepLearningPipelineLab,
+        Rlc01RlDeepLearningReplayLab: module0.Rlc01RlDeepLearningReplayLab,
+        Rlc01RlDeepLearningFaultLab: module0.Rlc01RlDeepLearningFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "rl-deep-learning-c/02-reinforcement-implementation/rlc-02-reinforcement-implementation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/rl-deep-learning-c/v2/rlc-02-reinforcement-implementation");
+      return {
+        Rlc02ReinforcementImplementationPipelineLab:
+          module0.Rlc02ReinforcementImplementationPipelineLab,
+        Rlc02ReinforcementImplementationReplayLab:
+          module0.Rlc02ReinforcementImplementationReplayLab,
+        Rlc02ReinforcementImplementationFaultLab:
+          module0.Rlc02ReinforcementImplementationFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "rl-deep-learning-c/03-deep-learning-techniques/rlc-03-deep-learning-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/rl-deep-learning-c/v2/rlc-03-deep-learning-techniques");
+      return {
+        Rlc03DeepLearningTechniquesPipelineLab:
+          module0.Rlc03DeepLearningTechniquesPipelineLab,
+        Rlc03DeepLearningTechniquesReplayLab:
+          module0.Rlc03DeepLearningTechniquesReplayLab,
+        Rlc03DeepLearningTechniquesFaultLab:
+          module0.Rlc03DeepLearningTechniquesFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "rl-deep-learning-c/04-deep-reinforcement-learning/rlc-04-deep-reinforcement-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/rl-deep-learning-c/v2/rlc-04-deep-reinforcement-learning");
+      return {
+        Rlc04DeepReinforcementLearningPipelineLab:
+          module0.Rlc04DeepReinforcementLearningPipelineLab,
+        Rlc04DeepReinforcementLearningReplayLab:
+          module0.Rlc04DeepReinforcementLearningReplayLab,
+        Rlc04DeepReinforcementLearningFaultLab:
+          module0.Rlc04DeepReinforcementLearningFaultLab,
+      } as ChapterMdxComponents;
+    },
+  "rl-deep-learning-c/05-final-review/rlc-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/rl-deep-learning-c/v2/rlc-official-final-review");
+    return {
+      RlcOfficialFinalReviewPipelineLab:
+        module0.RlcOfficialFinalReviewPipelineLab,
+      RlcOfficialFinalReviewReplayLab: module0.RlcOfficialFinalReviewReplayLab,
+      RlcOfficialFinalReviewFaultLab: module0.RlcOfficialFinalReviewFaultLab,
+    } as ChapterMdxComponents;
+  },
   "the-c-programming-language/00-overview/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/the-c-programming-language/learning-map");
