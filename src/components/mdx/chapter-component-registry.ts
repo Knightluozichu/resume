@@ -8515,6 +8515,279 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.IlhOfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "illustrated-ml/00-guide/iml-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-official-learning-map");
+    return {
+      ImlOfficialLearningMapModelSpaceLab:
+        module0.ImlOfficialLearningMapModelSpaceLab,
+      ImlOfficialLearningMapFitTraceLab:
+        module0.ImlOfficialLearningMapFitTraceLab,
+      ImlOfficialLearningMapValidationGateLab:
+        module0.ImlOfficialLearningMapValidationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ml/01-introduction/iml-01-what-is-machine-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-01-what-is-machine-learning");
+      return {
+        Iml01WhatIsMachineLearningModelSpaceLab:
+          module0.Iml01WhatIsMachineLearningModelSpaceLab,
+        Iml01WhatIsMachineLearningFitTraceLab:
+          module0.Iml01WhatIsMachineLearningFitTraceLab,
+        Iml01WhatIsMachineLearningValidationGateLab:
+          module0.Iml01WhatIsMachineLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/01-introduction/iml-02-learning-models": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-02-learning-models");
+    return {
+      Iml02LearningModelsModelSpaceLab:
+        module0.Iml02LearningModelsModelSpaceLab,
+      Iml02LearningModelsFitTraceLab: module0.Iml02LearningModelsFitTraceLab,
+      Iml02LearningModelsValidationGateLab:
+        module0.Iml02LearningModelsValidationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ml/02-supervised-regression/iml-03-least-squares-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-03-least-squares-learning");
+      return {
+        Iml03LeastSquaresLearningModelSpaceLab:
+          module0.Iml03LeastSquaresLearningModelSpaceLab,
+        Iml03LeastSquaresLearningFitTraceLab:
+          module0.Iml03LeastSquaresLearningFitTraceLab,
+        Iml03LeastSquaresLearningValidationGateLab:
+          module0.Iml03LeastSquaresLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/02-supervised-regression/iml-04-constrained-least-squares":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-04-constrained-least-squares");
+      return {
+        Iml04ConstrainedLeastSquaresModelSpaceLab:
+          module0.Iml04ConstrainedLeastSquaresModelSpaceLab,
+        Iml04ConstrainedLeastSquaresFitTraceLab:
+          module0.Iml04ConstrainedLeastSquaresFitTraceLab,
+        Iml04ConstrainedLeastSquaresValidationGateLab:
+          module0.Iml04ConstrainedLeastSquaresValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/02-supervised-regression/iml-05-sparse-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-05-sparse-learning");
+      return {
+        Iml05SparseLearningModelSpaceLab:
+          module0.Iml05SparseLearningModelSpaceLab,
+        Iml05SparseLearningFitTraceLab: module0.Iml05SparseLearningFitTraceLab,
+        Iml05SparseLearningValidationGateLab:
+          module0.Iml05SparseLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/02-supervised-regression/iml-06-robust-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-06-robust-learning");
+      return {
+        Iml06RobustLearningModelSpaceLab:
+          module0.Iml06RobustLearningModelSpaceLab,
+        Iml06RobustLearningFitTraceLab: module0.Iml06RobustLearningFitTraceLab,
+        Iml06RobustLearningValidationGateLab:
+          module0.Iml06RobustLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/03-supervised-classification/iml-07-least-squares-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-07-least-squares-classification");
+      return {
+        Iml07LeastSquaresClassificationModelSpaceLab:
+          module0.Iml07LeastSquaresClassificationModelSpaceLab,
+        Iml07LeastSquaresClassificationFitTraceLab:
+          module0.Iml07LeastSquaresClassificationFitTraceLab,
+        Iml07LeastSquaresClassificationValidationGateLab:
+          module0.Iml07LeastSquaresClassificationValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/03-supervised-classification/iml-08-support-vector-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-08-support-vector-classification");
+      return {
+        Iml08SupportVectorClassificationModelSpaceLab:
+          module0.Iml08SupportVectorClassificationModelSpaceLab,
+        Iml08SupportVectorClassificationFitTraceLab:
+          module0.Iml08SupportVectorClassificationFitTraceLab,
+        Iml08SupportVectorClassificationValidationGateLab:
+          module0.Iml08SupportVectorClassificationValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/03-supervised-classification/iml-09-ensemble-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-09-ensemble-classification");
+      return {
+        Iml09EnsembleClassificationModelSpaceLab:
+          module0.Iml09EnsembleClassificationModelSpaceLab,
+        Iml09EnsembleClassificationFitTraceLab:
+          module0.Iml09EnsembleClassificationFitTraceLab,
+        Iml09EnsembleClassificationValidationGateLab:
+          module0.Iml09EnsembleClassificationValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/03-supervised-classification/iml-10-probabilistic-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-10-probabilistic-classification");
+      return {
+        Iml10ProbabilisticClassificationModelSpaceLab:
+          module0.Iml10ProbabilisticClassificationModelSpaceLab,
+        Iml10ProbabilisticClassificationFitTraceLab:
+          module0.Iml10ProbabilisticClassificationFitTraceLab,
+        Iml10ProbabilisticClassificationValidationGateLab:
+          module0.Iml10ProbabilisticClassificationValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/03-supervised-classification/iml-11-sequence-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-11-sequence-classification");
+      return {
+        Iml11SequenceClassificationModelSpaceLab:
+          module0.Iml11SequenceClassificationModelSpaceLab,
+        Iml11SequenceClassificationFitTraceLab:
+          module0.Iml11SequenceClassificationFitTraceLab,
+        Iml11SequenceClassificationValidationGateLab:
+          module0.Iml11SequenceClassificationValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/04-unsupervised-learning/iml-12-anomaly-detection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-12-anomaly-detection");
+      return {
+        Iml12AnomalyDetectionModelSpaceLab:
+          module0.Iml12AnomalyDetectionModelSpaceLab,
+        Iml12AnomalyDetectionFitTraceLab:
+          module0.Iml12AnomalyDetectionFitTraceLab,
+        Iml12AnomalyDetectionValidationGateLab:
+          module0.Iml12AnomalyDetectionValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/04-unsupervised-learning/iml-13-unsupervised-dimensionality-reduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-13-unsupervised-dimensionality-reduction");
+      return {
+        Iml13UnsupervisedDimensionalityReductionModelSpaceLab:
+          module0.Iml13UnsupervisedDimensionalityReductionModelSpaceLab,
+        Iml13UnsupervisedDimensionalityReductionFitTraceLab:
+          module0.Iml13UnsupervisedDimensionalityReductionFitTraceLab,
+        Iml13UnsupervisedDimensionalityReductionValidationGateLab:
+          module0.Iml13UnsupervisedDimensionalityReductionValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/04-unsupervised-learning/iml-14-clustering": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-14-clustering");
+    return {
+      Iml14ClusteringModelSpaceLab: module0.Iml14ClusteringModelSpaceLab,
+      Iml14ClusteringFitTraceLab: module0.Iml14ClusteringFitTraceLab,
+      Iml14ClusteringValidationGateLab:
+        module0.Iml14ClusteringValidationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ml/05-emerging-algorithms/iml-15-online-learning": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-15-online-learning");
+    return {
+      Iml15OnlineLearningModelSpaceLab:
+        module0.Iml15OnlineLearningModelSpaceLab,
+      Iml15OnlineLearningFitTraceLab: module0.Iml15OnlineLearningFitTraceLab,
+      Iml15OnlineLearningValidationGateLab:
+        module0.Iml15OnlineLearningValidationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ml/05-emerging-algorithms/iml-16-semi-supervised-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-16-semi-supervised-learning");
+      return {
+        Iml16SemiSupervisedLearningModelSpaceLab:
+          module0.Iml16SemiSupervisedLearningModelSpaceLab,
+        Iml16SemiSupervisedLearningFitTraceLab:
+          module0.Iml16SemiSupervisedLearningFitTraceLab,
+        Iml16SemiSupervisedLearningValidationGateLab:
+          module0.Iml16SemiSupervisedLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/05-emerging-algorithms/iml-17-supervised-dimensionality-reduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-17-supervised-dimensionality-reduction");
+      return {
+        Iml17SupervisedDimensionalityReductionModelSpaceLab:
+          module0.Iml17SupervisedDimensionalityReductionModelSpaceLab,
+        Iml17SupervisedDimensionalityReductionFitTraceLab:
+          module0.Iml17SupervisedDimensionalityReductionFitTraceLab,
+        Iml17SupervisedDimensionalityReductionValidationGateLab:
+          module0.Iml17SupervisedDimensionalityReductionValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/05-emerging-algorithms/iml-18-transfer-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-18-transfer-learning");
+      return {
+        Iml18TransferLearningModelSpaceLab:
+          module0.Iml18TransferLearningModelSpaceLab,
+        Iml18TransferLearningFitTraceLab:
+          module0.Iml18TransferLearningFitTraceLab,
+        Iml18TransferLearningValidationGateLab:
+          module0.Iml18TransferLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/05-emerging-algorithms/iml-19-multi-task-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ml/v2/iml-19-multi-task-learning");
+      return {
+        Iml19MultiTaskLearningModelSpaceLab:
+          module0.Iml19MultiTaskLearningModelSpaceLab,
+        Iml19MultiTaskLearningFitTraceLab:
+          module0.Iml19MultiTaskLearningFitTraceLab,
+        Iml19MultiTaskLearningValidationGateLab:
+          module0.Iml19MultiTaskLearningValidationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ml/06-conclusion/iml-20-summary-outlook": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-20-summary-outlook");
+    return {
+      Iml20SummaryOutlookModelSpaceLab:
+        module0.Iml20SummaryOutlookModelSpaceLab,
+      Iml20SummaryOutlookFitTraceLab: module0.Iml20SummaryOutlookFitTraceLab,
+      Iml20SummaryOutlookValidationGateLab:
+        module0.Iml20SummaryOutlookValidationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ml/07-review/iml-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ml/v2/iml-official-final-review");
+    return {
+      ImlOfficialFinalReviewModelSpaceLab:
+        module0.ImlOfficialFinalReviewModelSpaceLab,
+      ImlOfficialFinalReviewFitTraceLab:
+        module0.ImlOfficialFinalReviewFitTraceLab,
+      ImlOfficialFinalReviewValidationGateLab:
+        module0.ImlOfficialFinalReviewValidationGateLab,
+    } as ChapterMdxComponents;
+  },
   "illustrated-server-network/00-official-learning-map/isn-official-learning-map":
     async () => {
       const module0 =
