@@ -11379,6 +11379,277 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.RubTextProcessingBoundaryProbeLab,
     } as ChapterMdxComponents;
   },
+  "statistical-learning-methods/00-guide/slm-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-official-learning-map");
+      return {
+        SlmOfficialLearningMapDerivationPathLab:
+          module0.SlmOfficialLearningMapDerivationPathLab,
+        SlmOfficialLearningMapNumericalTraceLab:
+          module0.SlmOfficialLearningMapNumericalTraceLab,
+        SlmOfficialLearningMapClaimGateLab:
+          module0.SlmOfficialLearningMapClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/01-supervised-foundations/slm-01-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-01-introduction");
+      return {
+        Slm01IntroductionDerivationPathLab:
+          module0.Slm01IntroductionDerivationPathLab,
+        Slm01IntroductionNumericalTraceLab:
+          module0.Slm01IntroductionNumericalTraceLab,
+        Slm01IntroductionClaimGateLab: module0.Slm01IntroductionClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/01-supervised-foundations/slm-02-perceptron":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-02-perceptron");
+      return {
+        Slm02PerceptronDerivationPathLab:
+          module0.Slm02PerceptronDerivationPathLab,
+        Slm02PerceptronNumericalTraceLab:
+          module0.Slm02PerceptronNumericalTraceLab,
+        Slm02PerceptronClaimGateLab: module0.Slm02PerceptronClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/01-supervised-foundations/slm-03-knn":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-03-knn");
+      return {
+        Slm03KnnDerivationPathLab: module0.Slm03KnnDerivationPathLab,
+        Slm03KnnNumericalTraceLab: module0.Slm03KnnNumericalTraceLab,
+        Slm03KnnClaimGateLab: module0.Slm03KnnClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/01-supervised-foundations/slm-04-naive-bayes":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-04-naive-bayes");
+      return {
+        Slm04NaiveBayesDerivationPathLab:
+          module0.Slm04NaiveBayesDerivationPathLab,
+        Slm04NaiveBayesNumericalTraceLab:
+          module0.Slm04NaiveBayesNumericalTraceLab,
+        Slm04NaiveBayesClaimGateLab: module0.Slm04NaiveBayesClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/02-supervised-models/slm-05-decision-tree":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-05-decision-tree");
+      return {
+        Slm05DecisionTreeDerivationPathLab:
+          module0.Slm05DecisionTreeDerivationPathLab,
+        Slm05DecisionTreeNumericalTraceLab:
+          module0.Slm05DecisionTreeNumericalTraceLab,
+        Slm05DecisionTreeClaimGateLab: module0.Slm05DecisionTreeClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/02-supervised-models/slm-06-logistic-maxent":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-06-logistic-maxent");
+      return {
+        Slm06LogisticMaxentDerivationPathLab:
+          module0.Slm06LogisticMaxentDerivationPathLab,
+        Slm06LogisticMaxentNumericalTraceLab:
+          module0.Slm06LogisticMaxentNumericalTraceLab,
+        Slm06LogisticMaxentClaimGateLab:
+          module0.Slm06LogisticMaxentClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/02-supervised-models/slm-07-svm": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-07-svm");
+    return {
+      Slm07SvmDerivationPathLab: module0.Slm07SvmDerivationPathLab,
+      Slm07SvmNumericalTraceLab: module0.Slm07SvmNumericalTraceLab,
+      Slm07SvmClaimGateLab: module0.Slm07SvmClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/02-supervised-models/slm-08-boosting":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-08-boosting");
+      return {
+        Slm08BoostingDerivationPathLab: module0.Slm08BoostingDerivationPathLab,
+        Slm08BoostingNumericalTraceLab: module0.Slm08BoostingNumericalTraceLab,
+        Slm08BoostingClaimGateLab: module0.Slm08BoostingClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/03-supervised-latent-sequence/slm-09-em":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-09-em");
+      return {
+        Slm09EmDerivationPathLab: module0.Slm09EmDerivationPathLab,
+        Slm09EmNumericalTraceLab: module0.Slm09EmNumericalTraceLab,
+        Slm09EmClaimGateLab: module0.Slm09EmClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/03-supervised-latent-sequence/slm-10-hmm":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-10-hmm");
+      return {
+        Slm10HmmDerivationPathLab: module0.Slm10HmmDerivationPathLab,
+        Slm10HmmNumericalTraceLab: module0.Slm10HmmNumericalTraceLab,
+        Slm10HmmClaimGateLab: module0.Slm10HmmClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/03-supervised-latent-sequence/slm-11-crf":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-11-crf");
+      return {
+        Slm11CrfDerivationPathLab: module0.Slm11CrfDerivationPathLab,
+        Slm11CrfNumericalTraceLab: module0.Slm11CrfNumericalTraceLab,
+        Slm11CrfClaimGateLab: module0.Slm11CrfClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/03-supervised-latent-sequence/slm-12-supervised-summary":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-12-supervised-summary");
+      return {
+        Slm12SupervisedSummaryDerivationPathLab:
+          module0.Slm12SupervisedSummaryDerivationPathLab,
+        Slm12SupervisedSummaryNumericalTraceLab:
+          module0.Slm12SupervisedSummaryNumericalTraceLab,
+        Slm12SupervisedSummaryClaimGateLab:
+          module0.Slm12SupervisedSummaryClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/04-unsupervised-foundations/slm-13-unsupervised-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-13-unsupervised-introduction");
+      return {
+        Slm13UnsupervisedIntroductionDerivationPathLab:
+          module0.Slm13UnsupervisedIntroductionDerivationPathLab,
+        Slm13UnsupervisedIntroductionNumericalTraceLab:
+          module0.Slm13UnsupervisedIntroductionNumericalTraceLab,
+        Slm13UnsupervisedIntroductionClaimGateLab:
+          module0.Slm13UnsupervisedIntroductionClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/04-unsupervised-foundations/slm-14-clustering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-14-clustering");
+      return {
+        Slm14ClusteringDerivationPathLab:
+          module0.Slm14ClusteringDerivationPathLab,
+        Slm14ClusteringNumericalTraceLab:
+          module0.Slm14ClusteringNumericalTraceLab,
+        Slm14ClusteringClaimGateLab: module0.Slm14ClusteringClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/04-unsupervised-foundations/slm-15-svd":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-15-svd");
+      return {
+        Slm15SvdDerivationPathLab: module0.Slm15SvdDerivationPathLab,
+        Slm15SvdNumericalTraceLab: module0.Slm15SvdNumericalTraceLab,
+        Slm15SvdClaimGateLab: module0.Slm15SvdClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/04-unsupervised-foundations/slm-16-pca":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-16-pca");
+      return {
+        Slm16PcaDerivationPathLab: module0.Slm16PcaDerivationPathLab,
+        Slm16PcaNumericalTraceLab: module0.Slm16PcaNumericalTraceLab,
+        Slm16PcaClaimGateLab: module0.Slm16PcaClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/05-latent-semantics/slm-17-lsa": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-17-lsa");
+    return {
+      Slm17LsaDerivationPathLab: module0.Slm17LsaDerivationPathLab,
+      Slm17LsaNumericalTraceLab: module0.Slm17LsaNumericalTraceLab,
+      Slm17LsaClaimGateLab: module0.Slm17LsaClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/05-latent-semantics/slm-18-plsa": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-18-plsa");
+    return {
+      Slm18PlsaDerivationPathLab: module0.Slm18PlsaDerivationPathLab,
+      Slm18PlsaNumericalTraceLab: module0.Slm18PlsaNumericalTraceLab,
+      Slm18PlsaClaimGateLab: module0.Slm18PlsaClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/06-sampling-topics/slm-19-mcmc": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-19-mcmc");
+    return {
+      Slm19McmcDerivationPathLab: module0.Slm19McmcDerivationPathLab,
+      Slm19McmcNumericalTraceLab: module0.Slm19McmcNumericalTraceLab,
+      Slm19McmcClaimGateLab: module0.Slm19McmcClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/06-sampling-topics/slm-20-lda": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-20-lda");
+    return {
+      Slm20LdaDerivationPathLab: module0.Slm20LdaDerivationPathLab,
+      Slm20LdaNumericalTraceLab: module0.Slm20LdaNumericalTraceLab,
+      Slm20LdaClaimGateLab: module0.Slm20LdaClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/07-graph-summary/slm-21-pagerank": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-21-pagerank");
+    return {
+      Slm21PagerankDerivationPathLab: module0.Slm21PagerankDerivationPathLab,
+      Slm21PagerankNumericalTraceLab: module0.Slm21PagerankNumericalTraceLab,
+      Slm21PagerankClaimGateLab: module0.Slm21PagerankClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/07-graph-summary/slm-22-unsupervised-summary":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-22-unsupervised-summary");
+      return {
+        Slm22UnsupervisedSummaryDerivationPathLab:
+          module0.Slm22UnsupervisedSummaryDerivationPathLab,
+        Slm22UnsupervisedSummaryNumericalTraceLab:
+          module0.Slm22UnsupervisedSummaryNumericalTraceLab,
+        Slm22UnsupervisedSummaryClaimGateLab:
+          module0.Slm22UnsupervisedSummaryClaimGateLab,
+      } as ChapterMdxComponents;
+    },
+  "statistical-learning-methods/08-appendices/slm-appendices": async () => {
+    const module0 =
+      await import("@/components/mdx/statistical-learning-methods/v2/slm-appendices");
+    return {
+      SlmAppendicesDerivationPathLab: module0.SlmAppendicesDerivationPathLab,
+      SlmAppendicesNumericalTraceLab: module0.SlmAppendicesNumericalTraceLab,
+      SlmAppendicesClaimGateLab: module0.SlmAppendicesClaimGateLab,
+    } as ChapterMdxComponents;
+  },
+  "statistical-learning-methods/09-review/slm-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/statistical-learning-methods/v2/slm-official-final-review");
+      return {
+        SlmOfficialFinalReviewDerivationPathLab:
+          module0.SlmOfficialFinalReviewDerivationPathLab,
+        SlmOfficialFinalReviewNumericalTraceLab:
+          module0.SlmOfficialFinalReviewNumericalTraceLab,
+        SlmOfficialFinalReviewClaimGateLab:
+          module0.SlmOfficialFinalReviewClaimGateLab,
+      } as ChapterMdxComponents;
+    },
   "the-c-programming-language/00-overview/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/the-c-programming-language/learning-map");
