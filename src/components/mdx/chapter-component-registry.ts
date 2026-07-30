@@ -7626,6 +7626,207 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.DlsOfficialFinalReviewTrainingGateLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-gen-models/00-learning-map/dlg-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-official-learning-map");
+      return {
+        DlgOfficialLearningMapDistributionLedgerLab:
+          module0.DlgOfficialLearningMapDistributionLedgerLab,
+        DlgOfficialLearningMapLatentObjectiveTraceLab:
+          module0.DlgOfficialLearningMapLatentObjectiveTraceLab,
+        DlgOfficialLearningMapSamplingGateLab:
+          module0.DlgOfficialLearningMapSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/01-normal-distribution/dlg-01-normal-distribution":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-01-normal-distribution");
+      return {
+        Dlg01NormalDistributionDistributionLedgerLab:
+          module0.Dlg01NormalDistributionDistributionLedgerLab,
+        Dlg01NormalDistributionLatentObjectiveTraceLab:
+          module0.Dlg01NormalDistributionLatentObjectiveTraceLab,
+        Dlg01NormalDistributionSamplingGateLab:
+          module0.Dlg01NormalDistributionSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/02-maximum-likelihood/dlg-02-maximum-likelihood":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-02-maximum-likelihood");
+      return {
+        Dlg02MaximumLikelihoodDistributionLedgerLab:
+          module0.Dlg02MaximumLikelihoodDistributionLedgerLab,
+        Dlg02MaximumLikelihoodLatentObjectiveTraceLab:
+          module0.Dlg02MaximumLikelihoodLatentObjectiveTraceLab,
+        Dlg02MaximumLikelihoodSamplingGateLab:
+          module0.Dlg02MaximumLikelihoodSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/03-multivariate-normal/dlg-03-multivariate-normal":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-03-multivariate-normal");
+      return {
+        Dlg03MultivariateNormalDistributionLedgerLab:
+          module0.Dlg03MultivariateNormalDistributionLedgerLab,
+        Dlg03MultivariateNormalLatentObjectiveTraceLab:
+          module0.Dlg03MultivariateNormalLatentObjectiveTraceLab,
+        Dlg03MultivariateNormalSamplingGateLab:
+          module0.Dlg03MultivariateNormalSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/04-gaussian-mixture/dlg-04-gaussian-mixture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-04-gaussian-mixture");
+      return {
+        Dlg04GaussianMixtureDistributionLedgerLab:
+          module0.Dlg04GaussianMixtureDistributionLedgerLab,
+        Dlg04GaussianMixtureLatentObjectiveTraceLab:
+          module0.Dlg04GaussianMixtureLatentObjectiveTraceLab,
+        Dlg04GaussianMixtureSamplingGateLab:
+          module0.Dlg04GaussianMixtureSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/05-em-algorithm/dlg-05-em-algorithm": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-gen-models/v2/dlg-05-em-algorithm");
+    return {
+      Dlg05EmAlgorithmDistributionLedgerLab:
+        module0.Dlg05EmAlgorithmDistributionLedgerLab,
+      Dlg05EmAlgorithmLatentObjectiveTraceLab:
+        module0.Dlg05EmAlgorithmLatentObjectiveTraceLab,
+      Dlg05EmAlgorithmSamplingGateLab: module0.Dlg05EmAlgorithmSamplingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-gen-models/06-neural-network/dlg-06-neural-network":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-06-neural-network");
+      return {
+        Dlg06NeuralNetworkDistributionLedgerLab:
+          module0.Dlg06NeuralNetworkDistributionLedgerLab,
+        Dlg06NeuralNetworkLatentObjectiveTraceLab:
+          module0.Dlg06NeuralNetworkLatentObjectiveTraceLab,
+        Dlg06NeuralNetworkSamplingGateLab:
+          module0.Dlg06NeuralNetworkSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/07-vae/dlg-07-vae": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-gen-models/v2/dlg-07-vae");
+    return {
+      Dlg07VaeDistributionLedgerLab: module0.Dlg07VaeDistributionLedgerLab,
+      Dlg07VaeLatentObjectiveTraceLab: module0.Dlg07VaeLatentObjectiveTraceLab,
+      Dlg07VaeSamplingGateLab: module0.Dlg07VaeSamplingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-gen-models/08-diffusion-theory/dlg-08-diffusion-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-08-diffusion-theory");
+      return {
+        Dlg08DiffusionTheoryDistributionLedgerLab:
+          module0.Dlg08DiffusionTheoryDistributionLedgerLab,
+        Dlg08DiffusionTheoryLatentObjectiveTraceLab:
+          module0.Dlg08DiffusionTheoryLatentObjectiveTraceLab,
+        Dlg08DiffusionTheorySamplingGateLab:
+          module0.Dlg08DiffusionTheorySamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/09-diffusion-implementation/dlg-09-diffusion-implementation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-09-diffusion-implementation");
+      return {
+        Dlg09DiffusionImplementationDistributionLedgerLab:
+          module0.Dlg09DiffusionImplementationDistributionLedgerLab,
+        Dlg09DiffusionImplementationLatentObjectiveTraceLab:
+          module0.Dlg09DiffusionImplementationLatentObjectiveTraceLab,
+        Dlg09DiffusionImplementationSamplingGateLab:
+          module0.Dlg09DiffusionImplementationSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/10-diffusion-applications/dlg-10-diffusion-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-10-diffusion-applications");
+      return {
+        Dlg10DiffusionApplicationsDistributionLedgerLab:
+          module0.Dlg10DiffusionApplicationsDistributionLedgerLab,
+        Dlg10DiffusionApplicationsLatentObjectiveTraceLab:
+          module0.Dlg10DiffusionApplicationsLatentObjectiveTraceLab,
+        Dlg10DiffusionApplicationsSamplingGateLab:
+          module0.Dlg10DiffusionApplicationsSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/11-appendices/dlg-appendix-a-multivariate-mle":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-appendix-a-multivariate-mle");
+      return {
+        DlgAppendixAMultivariateMleDistributionLedgerLab:
+          module0.DlgAppendixAMultivariateMleDistributionLedgerLab,
+        DlgAppendixAMultivariateMleLatentObjectiveTraceLab:
+          module0.DlgAppendixAMultivariateMleLatentObjectiveTraceLab,
+        DlgAppendixAMultivariateMleSamplingGateLab:
+          module0.DlgAppendixAMultivariateMleSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/11-appendices/dlg-appendix-b-jensen": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-gen-models/v2/dlg-appendix-b-jensen");
+    return {
+      DlgAppendixBJensenDistributionLedgerLab:
+        module0.DlgAppendixBJensenDistributionLedgerLab,
+      DlgAppendixBJensenLatentObjectiveTraceLab:
+        module0.DlgAppendixBJensenLatentObjectiveTraceLab,
+      DlgAppendixBJensenSamplingGateLab:
+        module0.DlgAppendixBJensenSamplingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-gen-models/11-appendices/dlg-appendix-c-hierarchical-vae":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-appendix-c-hierarchical-vae");
+      return {
+        DlgAppendixCHierarchicalVaeDistributionLedgerLab:
+          module0.DlgAppendixCHierarchicalVaeDistributionLedgerLab,
+        DlgAppendixCHierarchicalVaeLatentObjectiveTraceLab:
+          module0.DlgAppendixCHierarchicalVaeLatentObjectiveTraceLab,
+        DlgAppendixCHierarchicalVaeSamplingGateLab:
+          module0.DlgAppendixCHierarchicalVaeSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/11-appendices/dlg-appendix-d-notation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-appendix-d-notation");
+      return {
+        DlgAppendixDNotationDistributionLedgerLab:
+          module0.DlgAppendixDNotationDistributionLedgerLab,
+        DlgAppendixDNotationLatentObjectiveTraceLab:
+          module0.DlgAppendixDNotationLatentObjectiveTraceLab,
+        DlgAppendixDNotationSamplingGateLab:
+          module0.DlgAppendixDNotationSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-gen-models/12-final-review/dlg-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-gen-models/v2/dlg-official-final-review");
+      return {
+        DlgOfficialFinalReviewDistributionLedgerLab:
+          module0.DlgOfficialFinalReviewDistributionLedgerLab,
+        DlgOfficialFinalReviewLatentObjectiveTraceLab:
+          module0.DlgOfficialFinalReviewLatentObjectiveTraceLab,
+        DlgOfficialFinalReviewSamplingGateLab:
+          module0.DlgOfficialFinalReviewSamplingGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-learning-nlp-advanced/00-guide/dna-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-official-learning-map");
