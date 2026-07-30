@@ -11237,6 +11237,196 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CuspOfObjectModelFailureDiagram: module0.CuspOfObjectModelFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "large-language-models/00-map/llm-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-official-learning-map");
+    return {
+      LlmOfficialLearningMapContextContractLab:
+        module0.LlmOfficialLearningMapContextContractLab,
+      LlmOfficialLearningMapComputeTraceLab:
+        module0.LlmOfficialLearningMapComputeTraceLab,
+      LlmOfficialLearningMapEvidenceGateLab:
+        module0.LlmOfficialLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/01-preface/llm-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-preface");
+    return {
+      LlmPrefaceContextContractLab: module0.LlmPrefaceContextContractLab,
+      LlmPrefaceComputeTraceLab: module0.LlmPrefaceComputeTraceLab,
+      LlmPrefaceEvidenceGateLab: module0.LlmPrefaceEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/02-debates-future/llm-01-debates-future": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-01-debates-future");
+    return {
+      Llm01DebatesFutureContextContractLab:
+        module0.Llm01DebatesFutureContextContractLab,
+      Llm01DebatesFutureComputeTraceLab:
+        module0.Llm01DebatesFutureComputeTraceLab,
+      Llm01DebatesFutureEvidenceGateLab:
+        module0.Llm01DebatesFutureEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/03-language-tokenization/llm-02-language-modeling-tokenization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-02-language-modeling-tokenization");
+      return {
+        Llm02LanguageModelingTokenizationContextContractLab:
+          module0.Llm02LanguageModelingTokenizationContextContractLab,
+        Llm02LanguageModelingTokenizationComputeTraceLab:
+          module0.Llm02LanguageModelingTokenizationComputeTraceLab,
+        Llm02LanguageModelingTokenizationEvidenceGateLab:
+          module0.Llm02LanguageModelingTokenizationEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/04-transformer/llm-03-transformer": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-03-transformer");
+    return {
+      Llm03TransformerContextContractLab:
+        module0.Llm03TransformerContextContractLab,
+      Llm03TransformerComputeTraceLab: module0.Llm03TransformerComputeTraceLab,
+      Llm03TransformerEvidenceGateLab: module0.Llm03TransformerEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-04-pretraining-decoding");
+      return {
+        Llm04PretrainingDecodingContextContractLab:
+          module0.Llm04PretrainingDecodingContextContractLab,
+        Llm04PretrainingDecodingComputeTraceLab:
+          module0.Llm04PretrainingDecodingComputeTraceLab,
+        Llm04PretrainingDecodingEvidenceGateLab:
+          module0.Llm04PretrainingDecodingEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/06-icl-finetuning/llm-05-icl-lightweight-finetuning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-05-icl-lightweight-finetuning");
+      return {
+        Llm05IclLightweightFinetuningContextContractLab:
+          module0.Llm05IclLightweightFinetuningContextContractLab,
+        Llm05IclLightweightFinetuningComputeTraceLab:
+          module0.Llm05IclLightweightFinetuningComputeTraceLab,
+        Llm05IclLightweightFinetuningEvidenceGateLab:
+          module0.Llm05IclLightweightFinetuningEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/07-training-scale/llm-06-training-larger-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-06-training-larger-models");
+      return {
+        Llm06TrainingLargerModelsContextContractLab:
+          module0.Llm06TrainingLargerModelsContextContractLab,
+        Llm06TrainingLargerModelsComputeTraceLab:
+          module0.Llm06TrainingLargerModelsComputeTraceLab,
+        Llm06TrainingLargerModelsEvidenceGateLab:
+          module0.Llm06TrainingLargerModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/08-sparse-moe/llm-07-sparse-moe": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-07-sparse-moe");
+    return {
+      Llm07SparseMoeContextContractLab:
+        module0.Llm07SparseMoeContextContractLab,
+      Llm07SparseMoeComputeTraceLab: module0.Llm07SparseMoeComputeTraceLab,
+      Llm07SparseMoeEvidenceGateLab: module0.Llm07SparseMoeEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/09-retrieval-augmented/llm-08-retrieval-augmented-lm":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-08-retrieval-augmented-lm");
+      return {
+        Llm08RetrievalAugmentedLmContextContractLab:
+          module0.Llm08RetrievalAugmentedLmContextContractLab,
+        Llm08RetrievalAugmentedLmComputeTraceLab:
+          module0.Llm08RetrievalAugmentedLmComputeTraceLab,
+        Llm08RetrievalAugmentedLmEvidenceGateLab:
+          module0.Llm08RetrievalAugmentedLmEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/10-preference-alignment/llm-09-human-preference-alignment":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-09-human-preference-alignment");
+      return {
+        Llm09HumanPreferenceAlignmentContextContractLab:
+          module0.Llm09HumanPreferenceAlignmentContextContractLab,
+        Llm09HumanPreferenceAlignmentComputeTraceLab:
+          module0.Llm09HumanPreferenceAlignmentComputeTraceLab,
+        Llm09HumanPreferenceAlignmentEvidenceGateLab:
+          module0.Llm09HumanPreferenceAlignmentEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/11-bias-toxicity/llm-10-bias-toxicity": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-10-bias-toxicity");
+    return {
+      Llm10BiasToxicityContextContractLab:
+        module0.Llm10BiasToxicityContextContractLab,
+      Llm10BiasToxicityComputeTraceLab:
+        module0.Llm10BiasToxicityComputeTraceLab,
+      Llm10BiasToxicityEvidenceGateLab:
+        module0.Llm10BiasToxicityEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/12-vision-language/llm-11-vision-language-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-11-vision-language-models");
+      return {
+        Llm11VisionLanguageModelsContextContractLab:
+          module0.Llm11VisionLanguageModelsContextContractLab,
+        Llm11VisionLanguageModelsComputeTraceLab:
+          module0.Llm11VisionLanguageModelsComputeTraceLab,
+        Llm11VisionLanguageModelsEvidenceGateLab:
+          module0.Llm11VisionLanguageModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/13-environment/llm-12-environmental-impact":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-language-models/v2/llm-12-environmental-impact");
+      return {
+        Llm12EnvironmentalImpactContextContractLab:
+          module0.Llm12EnvironmentalImpactContextContractLab,
+        Llm12EnvironmentalImpactComputeTraceLab:
+          module0.Llm12EnvironmentalImpactComputeTraceLab,
+        Llm12EnvironmentalImpactEvidenceGateLab:
+          module0.Llm12EnvironmentalImpactEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-language-models/14-references/llm-references": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-references");
+    return {
+      LlmReferencesContextContractLab: module0.LlmReferencesContextContractLab,
+      LlmReferencesComputeTraceLab: module0.LlmReferencesComputeTraceLab,
+      LlmReferencesEvidenceGateLab: module0.LlmReferencesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-language-models/15-review/llm-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/large-language-models/v2/llm-official-final-review");
+    return {
+      LlmOfficialFinalReviewContextContractLab:
+        module0.LlmOfficialFinalReviewContextContractLab,
+      LlmOfficialFinalReviewComputeTraceLab:
+        module0.LlmOfficialFinalReviewComputeTraceLab,
+      LlmOfficialFinalReviewEvidenceGateLab:
+        module0.LlmOfficialFinalReviewEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
   "learnopengl/advanced-lighting/blinn-phong": async () => {
     const module0 = await import("@/components/mdx/learnopengl/v2/blinn-phong");
     return {
