@@ -13151,6 +13151,115 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       MultimethodsFailureDiagram: module0.MultimethodsFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "nodejs-debugging-guide/00-guide/ndbg-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-official-learning-map");
+    return {
+      NdbgOfficialLearningMapHypothesisLadderLab:
+        module0.NdbgOfficialLearningMapHypothesisLadderLab,
+      NdbgOfficialLearningMapArtifactTriangulationLab:
+        module0.NdbgOfficialLearningMapArtifactTriangulationLab,
+      NdbgOfficialLearningMapMigrationGateLab:
+        module0.NdbgOfficialLearningMapMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/01-performance/ndbg-01-cpu": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-01-cpu");
+    return {
+      Ndbg01CpuHypothesisLadderLab: module0.Ndbg01CpuHypothesisLadderLab,
+      Ndbg01CpuArtifactTriangulationLab:
+        module0.Ndbg01CpuArtifactTriangulationLab,
+      Ndbg01CpuMigrationGateLab: module0.Ndbg01CpuMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/01-performance/ndbg-02-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-02-memory");
+    return {
+      Ndbg02MemoryHypothesisLadderLab: module0.Ndbg02MemoryHypothesisLadderLab,
+      Ndbg02MemoryArtifactTriangulationLab:
+        module0.Ndbg02MemoryArtifactTriangulationLab,
+      Ndbg02MemoryMigrationGateLab: module0.Ndbg02MemoryMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/02-code-tools/ndbg-03-code": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-03-code");
+    return {
+      Ndbg03CodeHypothesisLadderLab: module0.Ndbg03CodeHypothesisLadderLab,
+      Ndbg03CodeArtifactTriangulationLab:
+        module0.Ndbg03CodeArtifactTriangulationLab,
+      Ndbg03CodeMigrationGateLab: module0.Ndbg03CodeMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/02-code-tools/ndbg-04-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-04-tools");
+    return {
+      Ndbg04ToolsHypothesisLadderLab: module0.Ndbg04ToolsHypothesisLadderLab,
+      Ndbg04ToolsArtifactTriangulationLab:
+        module0.Ndbg04ToolsArtifactTriangulationLab,
+      Ndbg04ToolsMigrationGateLab: module0.Ndbg04ToolsMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/03-observability/ndbg-05-apm": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-05-apm");
+    return {
+      Ndbg05ApmHypothesisLadderLab: module0.Ndbg05ApmHypothesisLadderLab,
+      Ndbg05ApmArtifactTriangulationLab:
+        module0.Ndbg05ApmArtifactTriangulationLab,
+      Ndbg05ApmMigrationGateLab: module0.Ndbg05ApmMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/03-observability/ndbg-06-logging": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-06-logging");
+    return {
+      Ndbg06LoggingHypothesisLadderLab:
+        module0.Ndbg06LoggingHypothesisLadderLab,
+      Ndbg06LoggingArtifactTriangulationLab:
+        module0.Ndbg06LoggingArtifactTriangulationLab,
+      Ndbg06LoggingMigrationGateLab: module0.Ndbg06LoggingMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/04-operations/ndbg-07-monitoring": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-07-monitoring");
+    return {
+      Ndbg07MonitoringHypothesisLadderLab:
+        module0.Ndbg07MonitoringHypothesisLadderLab,
+      Ndbg07MonitoringArtifactTriangulationLab:
+        module0.Ndbg07MonitoringArtifactTriangulationLab,
+      Ndbg07MonitoringMigrationGateLab:
+        module0.Ndbg07MonitoringMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/04-operations/ndbg-08-applications": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-08-applications");
+    return {
+      Ndbg08ApplicationsHypothesisLadderLab:
+        module0.Ndbg08ApplicationsHypothesisLadderLab,
+      Ndbg08ApplicationsArtifactTriangulationLab:
+        module0.Ndbg08ApplicationsArtifactTriangulationLab,
+      Ndbg08ApplicationsMigrationGateLab:
+        module0.Ndbg08ApplicationsMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "nodejs-debugging-guide/05-review/ndbg-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/nodejs-debugging-guide/v2/ndbg-official-final-review");
+    return {
+      NdbgOfficialFinalReviewHypothesisLadderLab:
+        module0.NdbgOfficialFinalReviewHypothesisLadderLab,
+      NdbgOfficialFinalReviewArtifactTriangulationLab:
+        module0.NdbgOfficialFinalReviewArtifactTriangulationLab,
+      NdbgOfficialFinalReviewMigrationGateLab:
+        module0.NdbgOfficialFinalReviewMigrationGateLab,
+    } as ChapterMdxComponents;
+  },
   "optimized-cpp/05-official/optimize-algorithms": async () => {
     const module0 =
       await import("@/components/mdx/optimized-cpp/diagrams/optimize-algorithms");

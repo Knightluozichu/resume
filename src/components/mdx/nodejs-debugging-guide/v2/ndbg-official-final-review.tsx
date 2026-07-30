@@ -1,0 +1,291 @@
+"use client";
+
+import {
+  NodeDiagnosticsEvidenceLab,
+  type NodeDiagnosticsEvidenceModel,
+} from "@/components/mdx/nodejs-debugging-guide/v2/node-diagnostics-evidence-lab";
+
+const model = {
+  unitId: "finalReview",
+  title: "《Node.js调试指南》152坐标全书证据总复习",
+  question: "能否从一个生产症状反查最小假设、正确工具、原始工件和回归条件？",
+  concepts: [
+    "第1章 CPU",
+    "1.1 理解perf与火焰图（FlameGraph）",
+    "1.1.1 perf",
+    "1.1.2 火焰图",
+    "1.1.3 红蓝差分火焰图",
+    "1.2 使用v8-profiler分析CPU的使用情况",
+    "1.3 Tick Processor及Web UI",
+    "1.3.1 Tick Processor",
+    "1.3.2 Web UI",
+    "第2章 内存",
+    "2.1 gcore与llnode",
+    "2.1.1 Core和Core Dump",
+    "2.1.2 gcore",
+    "2.1.3 llnode",
+    "2.1.4 测试Core Dump",
+    "2.1.5 分析Core文件",
+    "2.1.6 --abort-on-uncaught-exception",
+    "2.1.7 小结",
+    "2.2 heapdump",
+    "2.2.1 使用heapdump",
+    "2.2.2 Chrome DevTools",
+    "2.2.3 对比快照",
+    "2.3 memwatch-next",
+    "2.3.1 使用memwatch-next",
+    "2.3.2 使用Heap Diff",
+    "2.3.3 结合heapdump使用",
+    "2.4 cpu-memory-monitor",
+    "2.4.1 使用cpu-memory-monitor",
+    "2.4.2 cpu-memory-monitor源码解读",
+    "第3章 代码",
+    "3.1 Promise",
+    "3.1.1 Promise/A规范",
+    "3.1.2 从零开始实现Promise",
+    "3.1.3 Promise的实现原理",
+    "3.1.4 safelyResolveThen",
+    "3.1.5 doResolve和doReject",
+    "3.1.6 Promise.prototype.then和Promise.prototype.catch",
+    "3.1.7 值穿透",
+    "3.1.8 Promise.resolve和Promise.reject",
+    "3.1.9 Promise.all",
+    "3.1.10 Promise.race",
+    "3.1.11 代码解析",
+    "3.2 Async Await",
+    "3.2.1 例1：async await",
+    "3.2.2 例2：co yield",
+    "3.2.3 例3：co yield*",
+    "3.2.4 例4：co bluebird",
+    "3.2.5 从yield转为yield*遇到的坑",
+    "3.2.6 async bluebird",
+    "3.3 Error Stack",
+    "3.3.1 Stack Trace",
+    "3.3.2 Error.captureStackTrace",
+    "3.3.3 captureStackTrace在Mongolass中的应用",
+    "3.3.4 Error.prepareStackTrace",
+    "3.3.5 Error.prepareStackTrace的其他用法",
+    "3.3.6 Error.stackTraceLimit",
+    "3.3.7 Long Stack Trace",
+    "3.4 node@8",
+    "3.4.1 Ignition TurboFan",
+    "3.4.2 版本的对应关系",
+    "3.4.3 try/catch",
+    "3.4.4 delete",
+    "3.4.5 arguments",
+    "3.4.6 async性能提升",
+    "3.4.7 不会优化的特性",
+    "3.5 Rust Addons",
+    "3.5.1 Rust",
+    "3.5.2 FFI",
+    "3.5.3 Neon",
+    "3.5.4 NAPI",
+    "3.6 Event Loop",
+    "3.6.1 什么是Event Loop",
+    "3.6.2 poll阶段",
+    "3.6.3 process.nextTick()",
+    "3.6.4 代码解析",
+    "3.7 处理uncaughtException",
+    "3.7.1 uncaughtException",
+    "3.7.2 使用llnode",
+    "3.7.3 ReDoS",
+    "第4章 工具",
+    "4.1 Source Map",
+    "4.1.1 uglify-es",
+    "4.1.2 TypeScript",
+    "4.1.3 source-map-support的高级用法",
+    "4.2 Chrome DevTools",
+    "4.2.1 使用Chrome DevTools",
+    "4.2.2 NIM",
+    "4.2.3 inspect-process",
+    "4.2.4 process._debugProcess",
+    "4.3 Visual Studio Code",
+    "4.3.1 基本调试",
+    "4.3.2 launch.json",
+    "4.3.3 技巧1：条件断点",
+    "4.3.4 技巧2：skipFiles",
+    "4.3.5 技巧3：自动重启",
+    "4.3.6 技巧4：对特定操作系统的设置",
+    "4.3.7 技巧5：多配置",
+    "4.3.8 总结",
+    "4.4 debug repl2 power-assert",
+    "4.4.1 debug",
+    "4.4.2 repl2",
+    "4.4.3 power-assert",
+    "4.5 supervisor-hot-reload",
+    "4.5.1 Proxy",
+    "4.5.2 用Proxy实现Hot Reload",
+    "4.5.3 supervisor-hot-reload",
+    "4.5.4 内存泄漏问题",
+    "第5章 APM",
+    "5.1 使用NewRelic",
+    "5.2 Elastic APM",
+    "5.2.1 什么是Elastic APM",
+    "5.2.2 启动ELK",
+    "5.2.3 启动APM Server",
+    "5.2.4 使用Elastic APM",
+    "5.2.5 错误日志",
+    "第6章 日志",
+    "6.1 koa-await-breakpoint",
+    "6.1.1 koa-await-breakpoint的实现原理",
+    "6.1.2 使用koa-await-breakpoint",
+    "6.1.3 自定义日志存储",
+    "6.2 使用async_hooks",
+    "6.3 ELK",
+    "6.3.1 安装ELK",
+    "6.3.2 使用ELK",
+    "6.4 OpenTracing Jaeger",
+    "6.4.1 什么是OpenTracing",
+    "6.4.2 什么是Jaeger",
+    "6.4.3 启动Jaeger及Jaeger UI",
+    "6.4.4 使用OpenTracing及Jaeger",
+    "6.4.5 koa-await-breakpoint-jaeger",
+    "6.5 使用Sentry",
+    "第7章 监控",
+    "7.1 Telegraf InfluxDB Grafana（上）",
+    "7.1.1 Telegraf（StatsD）InfluxDB Grafana简介",
+    "7.1.2 启动docker-statsd-influxdb-grafana",
+    "7.1.3 熟悉InfluxDB",
+    "7.1.4 配置Grafana",
+    "7.1.5 node-statsd",
+    "7.1.6 创建Grafana图表",
+    "7.1.7 模拟真实环境",
+    "7.2 Telegraf InfluxDB Grafana（下）",
+    "7.2.1 Grafana ELK",
+    "7.2.2 监控报警",
+    "7.2.3 脚本一键生成图表",
+    "第8章 应用",
+    "8.1 使用node-clinic",
+    "8.2 alinode",
+    "8.2.1 什么是alinode",
+    "8.2.2 创建alinode应用",
+    "8.2.3 安装alinode",
+    "8.2.4 使用alinode诊断内存泄漏",
+    "8.2.5 使用alinode诊断CPU性能瓶颈",
+  ],
+  symptom: "多个图表同时异常且存在相互竞争的根因解释",
+  invariant:
+    "全书裁决必须由稳定基线、单变量故障、至少两类独立工件与同输入恢复支持",
+  fault: "一次改变负载、版本、探针和代码，导致工件无法对齐",
+  artifact: "全书故障树、152坐标答辩、历史工具迁移矩阵、原始工件索引和发布门",
+  stages: [
+    {
+      label: "冻结症状与输入",
+      hypothesis:
+        "《Node.js调试指南》152坐标全书证据总复习先把“多个图表同时异常且存在相互竞争的根因解释”写成可重复条件，不预设工具结论",
+      capture: "用户时间线、固定请求集、并发、数据、启动/预热与成功判据",
+      identity: "Node 8.9.4、V8、Ubuntu 16.04、依赖锁与作者仓库固定提交",
+      falsifier: "同输入不能稳定重现症状，或基线自身漂移超过故障差分",
+    },
+    {
+      label: "采集低扰动基线",
+      hypothesis:
+        "《Node.js调试指南》152坐标全书证据总复习先用指标和运行时身份判断异常属于CPU、内存、队列、错误或依赖",
+      capture:
+        "全书故障树、152坐标答辩、历史工具迁移矩阵、原始工件索引和发布门中的低开销指标、日志和诊断报告",
+      identity: "PID、进程启动时间、构建哈希、主机/容器、时钟和采集配置",
+      falsifier: "工件来自不同进程、版本、时间窗口或请求集",
+    },
+    {
+      label: "缩小到原始工件",
+      hypothesis:
+        "《Node.js调试指南》152坐标全书证据总复习用剖析、快照、trace或错误事件区分至少两个竞争性解释",
+      capture: "带参数和时间窗口的CPU/堆/事件/trace原始文件，不只保存截图",
+      identity: "文件哈希、工具版本、采样率、过滤、符号、isolate与丢失计数",
+      falsifier: "独立工件不支持同一首个分岔，或采集扰动足以解释差异",
+    },
+    {
+      label: "单故障与同输入恢复",
+      hypothesis:
+        "《Node.js调试指南》152坐标全书证据总复习只注入“一次改变负载、版本、探针和代码，导致工件无法对齐”并用最小修复推翻根因假设",
+      capture: "参考、故障、恢复三条时间对齐轨迹与残留资源检查",
+      identity: "相同Node/依赖/主机/流量，唯一变量和回滚提交明确",
+      falsifier:
+        "撤销后仍不满足“全书裁决必须由稳定基线、单变量故障、至少两类独立工件与同输入恢复支持”，或其他变量同步变化",
+    },
+  ],
+  cases: [
+    {
+      name: "《Node.js调试指南》152坐标全书证据总复习作者原仓库复现",
+      input: "Node 8.9.4、Ubuntu 16.04、固定提交403f5c6",
+      historical:
+        "保留全书八类诊断入口的假设、三角校验、迁移和恢复在作者原公开章节中的工具身份、示例目的和时代限制。",
+      current: "当前轨道只建立迁移差分，不修改或假装更新作者原文。",
+      boundary:
+        "作者仓库没有LICENSE文件；公开可读不等于允许复制，本站只做独立表达和短引核对。",
+    },
+    {
+      name: "《Node.js调试指南》152坐标全书证据总复习当前内置能力迁移",
+      input: "目标Node构建、官方API文档、同一请求集与原始工件",
+      historical:
+        "记录v8-profiler、memwatch-next、私有接口、OpenTracing等当时为何被使用。",
+      current:
+        "优先评估内置CPU/heap profile、Inspector、diagnostic report、AsyncLocalStorage、Node-API与OpenTelemetry。",
+      boundary:
+        "新工具更受支持不等于历史实验错误；所有性能结论仍需在目标运行时重测。",
+    },
+    {
+      name: "《Node.js调试指南》152坐标全书证据总复习生产安全采集",
+      input: "数据分级、磁盘/内存预算、访问控制、停止条件和脱敏策略",
+      historical: "原作案例用于理解机制和工件，不直接复制命令到当前生产。",
+      current:
+        "先用低扰动信号缩小范围，快照、core、Inspector与高开销trace在副本或受控窗口执行。",
+      boundary:
+        "堆/core/report可能含密钥和用户数据；Inspector可执行任意代码，禁止公网暴露。",
+    },
+  ],
+  baselineTrace: [
+    "《Node.js调试指南》152坐标全书证据总复习基线1：冻结症状与输入，保存用户时间线、固定请求集、并发、数据、启动/预热与成功判据。",
+    "《Node.js调试指南》152坐标全书证据总复习基线2：采集低扰动基线，保存全书故障树、152坐标答辩、历史工具迁移矩阵、原始工件索引和发布门中的低开销指标、日志和诊断报告。",
+    "《Node.js调试指南》152坐标全书证据总复习基线3：缩小到原始工件，保存带参数和时间窗口的CPU/堆/事件/trace原始文件，不只保存截图。",
+    "《Node.js调试指南》152坐标全书证据总复习基线4：单故障与同输入恢复，保存参考、故障、恢复三条时间对齐轨迹与残留资源检查。",
+  ],
+  faultTrace: [
+    "《Node.js调试指南》152坐标全书证据总复习故障1：冻结症状与输入只改变“一次改变负载、版本、探针和代码，导致工件无法对齐”，检查同输入不能稳定重现症状，或基线自身漂移超过故障差分。",
+    "《Node.js调试指南》152坐标全书证据总复习故障2：采集低扰动基线只改变“一次改变负载、版本、探针和代码，导致工件无法对齐”，检查工件来自不同进程、版本、时间窗口或请求集。",
+    "《Node.js调试指南》152坐标全书证据总复习故障3：缩小到原始工件只改变“一次改变负载、版本、探针和代码，导致工件无法对齐”，检查独立工件不支持同一首个分岔，或采集扰动足以解释差异。",
+    "《Node.js调试指南》152坐标全书证据总复习故障4：单故障与同输入恢复只改变“一次改变负载、版本、探针和代码，导致工件无法对齐”，检查撤销后仍不满足“全书裁决必须由稳定基线、单变量故障、至少两类独立工件与同输入恢复支持”，或其他变量同步变化。",
+  ],
+  recoveryTrace: [
+    "《Node.js调试指南》152坐标全书证据总复习恢复1：冻结症状与输入以同一输入重放，核对Node 8.9.4、V8、Ubuntu 16.04、依赖锁与作者仓库固定提交。",
+    "《Node.js调试指南》152坐标全书证据总复习恢复2：采集低扰动基线以同一输入重放，核对PID、进程启动时间、构建哈希、主机/容器、时钟和采集配置。",
+    "《Node.js调试指南》152坐标全书证据总复习恢复3：缩小到原始工件以同一输入重放，核对文件哈希、工具版本、采样率、过滤、符号、isolate与丢失计数。",
+    "《Node.js调试指南》152坐标全书证据总复习恢复4：单故障与同输入恢复以同一输入重放，核对相同Node/依赖/主机/流量，唯一变量和回滚提交明确。",
+  ],
+  gates: [
+    {
+      label: "原作身份与许可门",
+      detail:
+        "《Node.js调试指南》152坐标全书证据总复习固定作者仓库提交、Node 8.9.4和Ubuntu 16.04；无LICENSE意味着只核对和独立重构，不复制原文、代码或图像。",
+    },
+    {
+      label: "工件身份与三角校验门",
+      detail:
+        "《Node.js调试指南》152坐标全书证据总复习保存PID、构建、时间、工具参数与文件哈希，并让指标、剖析/快照和事件至少两类工件互证。",
+    },
+    {
+      label: "采集扰动与数据安全门",
+      detail:
+        "《Node.js调试指南》152坐标全书证据总复习评估CPU、阻塞、额外内存、磁盘、隐私和远程执行风险；超出预算就降级或停止。",
+    },
+    {
+      label: "单变量与回归门",
+      detail:
+        "《Node.js调试指南》152坐标全书证据总复习只注入“一次改变负载、版本、探针和代码，导致工件无法对齐”，撤销后同一输入满足“全书裁决必须由稳定基线、单变量故障、至少两类独立工件与同输入恢复支持”并交付全书故障树、152坐标答辩、历史工具迁移矩阵、原始工件索引和发布门。",
+    },
+  ],
+} as const satisfies NodeDiagnosticsEvidenceModel;
+
+export function NdbgOfficialFinalReviewHypothesisLadderLab() {
+  return <NodeDiagnosticsEvidenceLab model={model} view="hypothesis-ladder" />;
+}
+
+export function NdbgOfficialFinalReviewArtifactTriangulationLab() {
+  return (
+    <NodeDiagnosticsEvidenceLab model={model} view="artifact-triangulation" />
+  );
+}
+
+export function NdbgOfficialFinalReviewMigrationGateLab() {
+  return <NodeDiagnosticsEvidenceLab model={model} view="migration-gate" />;
+}

@@ -1,0 +1,288 @@
+---
+title: 第 5 章 APM
+type: A
+section: 第 5 章 APM
+order: 6
+description: 第 5 章 APM覆盖8个正式坐标，用假设阶梯、工件三角校验与迁移门交付探针配置、事务/span映射、错误样本、采样账本、开销差分和数据发送边界
+demo: true
+math: false
+sourceUrl: "https://github.com/nswbmw/node-in-debugging"
+draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: ndbg-unit-05
+---
+
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Ndbg05ApmHypothesisLadderLab,
+  Ndbg05ApmArtifactTriangulationLab,
+  Ndbg05ApmMigrationGateLab,
+} from "@/components/mdx/nodejs-debugging-guide/v2/ndbg-05-apm";
+
+<Objectives>
+
+- 把New Relic与Elastic APM的探针、事务、span、错误和采样放进“症状—假设—原始工件—反证—恢复”诊断链
+- 只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”，定位第 5 章 APM相对稳定基线的首个分岔
+- 交付探针配置、事务/span映射、错误样本、采样账本、开销差分和数据发送边界，严格分开Node 8.9.4原作与当前Node迁移轨道
+
+</Objectives>
+
+## 为什么从这个症状开始
+
+第 5 章 APM围绕“APM探针的事务和span能否代表真实请求，又付出了多少开销？”建立贯穿任务：在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销。先把“APM显示慢事务或错误率上升”写成可重复症状，再对齐参考、单故障和恢复工件；只有守住“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”并交付探针配置、事务/span映射、错误样本、采样账本、开销差分和数据发送边界，工具输出才可能升级为根因证据。
+
+## 原版、版本与转载边界
+
+第 5 章 APM以[赵坤作者仓库](https://github.com/nswbmw/node-in-debugging)为原版一手基线：仓库公开30篇完整章节与配图索引，README明确开发环境为MacOS/Linux（Ubuntu 16.04 64位）和Node.js 8.9.4。本站将原版比较固定到[提交403f5c6](https://github.com/nswbmw/node-in-debugging/tree/403f5c6431c97459c4bf263d0e96974da05dc4e2)，该提交时间为2019年5月23日。
+
+第 5 章 APM同时用[版本记录](https://www.tenlong.com.tw/products/9787121341465)核对赵坤著、电子工业出版社、2018年5月、248页、ISBN 9787121341465及八章内容概述。作者仓库与版本描述共同证明原作先后是CPU、内存、代码、工具、APM、日志、监控、应用；本站旧清单曾把第5章日志与第6章APM对调，本次已按作者原版修正。
+
+第 5 章 APM的来源访问级别是 full-text-primary，但作者仓库没有LICENSE文件。公开可读不等于转载授权：本站不复制原文段落、示例代码、截图或图像，只用其核对原作问题、工具身份和历史语境，再以独立中文教学结构重写。
+
+第 5 章 APM把两个时代分轨：历史轨道保留Node 8.9.4、Ubuntu 16.04、v8-profiler、memwatch-next、process.\_debugProcess、OpenTracing和当时APM/平台；当前轨道以Node官方文档和维护方资料核对内置CPU/heap profile、Inspector、diagnostic report、AsyncLocalStorage、Node-API、OpenTelemetry以及各工具当前维护状态。当前能力不能倒灌成原作者观点。
+
+第 5 章 APM的heap snapshot可能阻塞事件循环并需要约两倍堆内存，core/heap/report可能含敏感数据，Inspector端点可执行任意代码。生产采集必须先做数据分级、磁盘/内存预算、访问控制、脱敏、停止条件和副本复现；页面是实验协议，不是盲目执行清单。
+
+### 本页独立事实来源
+
+- [赵坤《Node.js 调试指南》作者仓库](https://github.com/nswbmw/node-in-debugging)：第 5 章 APM用它核对30篇作者公开章节、示例、图像索引与原作工具身份。
+- [作者仓库固定提交403f5c6](https://github.com/nswbmw/node-in-debugging/tree/403f5c6431c97459c4bf263d0e96974da05dc4e2)：第 5 章 APM用它把原作比较固定到2019年5月23日最后提交，避免分支漂移。
+- [电子工业出版社版本书商记录](https://www.tenlong.com.tw/products/9787121341465)：第 5 章 APM用它核对赵坤、2018年5月、248页、ISBN和八章内容概述。
+- [New Relic Node.js Agent 文档](https://docs.newrelic.com/docs/apm/agents/nodejs-agent/getting-started/introduction-new-relic-nodejs/)：第 5 章 APM用它核对探针加载顺序、事务与数据发送边界。
+- [Elastic APM Node.js Agent 文档](https://www.elastic.co/docs/reference/apm/agents/nodejs)：第 5 章 APM用它核对探针初始化、事务、span、错误和版本支持。
+- [Node.js 异步上下文文档](https://nodejs.org/api/async_context.html)：第 5 章 APM用它核对稳定AsyncLocalStorage/AsyncResource传播语义。
+- [Node.js performance hooks 文档](https://nodejs.org/api/perf_hooks.html)：第 5 章 APM用它核对event-loop utilization/delay、直方图与用户计时。
+
+## 原版正式坐标逐项解释
+
+### 第5章 APM
+
+**坐标 1/8：第5章 APM。稳定证据键 NDBG-UNIT05-A。** 第 5 章 APM把第5章 APM设为诊断入口而非工具清单：先固定用户症状、请求集、运行时身份和安全预算，再选择章内工件。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.1 使用NewRelic
+
+**坐标 2/8：5·1 使用NewRelic。稳定证据键 NDBG-UNIT05-B。** 第 5 章 APM把5·1 使用NewRelic绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2 Elastic APM
+
+**坐标 3/8：5·2 Elastic APM。稳定证据键 NDBG-UNIT05-C。** 第 5 章 APM把5·2 Elastic APM绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2.1 什么是Elastic APM
+
+**坐标 4/8：5·2·1 什么是Elastic APM。稳定证据键 NDBG-UNIT05-D。** 第 5 章 APM把5·2·1 什么是Elastic APM绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2.2 启动ELK
+
+**坐标 5/8：5·2·2 启动ELK。稳定证据键 NDBG-UNIT05-E。** 第 5 章 APM把5·2·2 启动ELK绑定日志/trace/error信号、服务与发布身份、传播头、采样、脱敏和丢失统计；OpenTracing作为历史规范，当前迁移到OpenTelemetry。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2.3 启动APM Server
+
+**坐标 6/8：5·2·3 启动APM Server。稳定证据键 NDBG-UNIT05-F。** 第 5 章 APM把5·2·3 启动APM Server绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2.4 使用Elastic APM
+
+**坐标 7/8：5·2·4 使用Elastic APM。稳定证据键 NDBG-UNIT05-G。** 第 5 章 APM把5·2·4 使用Elastic APM绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+### 5.2.5 错误日志
+
+**坐标 8/8：5·2·5 错误日志。稳定证据键 NDBG-UNIT05-H。** 第 5 章 APM把5·2·5 错误日志绑定探针加载顺序、服务版本、事务/span边界、采样、错误与无探针基线；仪表盘建议必须回查原始请求。 第 5 章 APM在该坐标必须记录症状输入、竞争假设、进程/构建身份、采集参数、原始工件、首个分岔、推翻条件和恢复结果；工具截图、自动建议或综合分数都不能单独证明根因。
+
+## 三个可操作证据视图
+
+第 5 章 APM先预测：只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”时，指标、CPU/堆工件、异步事件、trace或报警中哪一类最先偏离？先选正式坐标和时代轨道，再重放参考、故障、恢复并打开迁移安全门。
+
+<Stepper>
+  <Step title="假设阶梯：从症状缩小到可推翻结论">
+    <Ndbg05ApmHypothesisLadderLab />
+  </Step>
+  <Step title="工件三角校验：对齐基线、故障与恢复">
+    <Ndbg05ApmArtifactTriangulationLab />
+  </Step>
+  <Step title="迁移门：保留原作身份并评估当前能力">
+    <Ndbg05ApmMigrationGateLab />
+  </Step>
+</Stepper>
+
+## 最小可重复诊断协议
+
+1. 第 5 章 APM冻结请求集、数据、并发、预热、成功率/延迟、Node/V8、依赖锁、构建哈希、主机/容器、时钟和采集预算。
+2. 第 5 章 APM先保存低扰动基线，再逐层升级到profile、heap/core、trace或调试会话；每份工件记录PID、起始/结束、参数、哈希和访问级别。
+3. 第 5 章 APM保持其余条件不变，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”，用至少两类独立工件寻找首个分岔并保留竞争性解释。
+4. 第 5 章 APM撤销变量或最小修复后以同一输入重放；无法满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”时，结论必须标为失败或未知。
+
+<Callout type="trap" title="第 5 章 APM误区一：作者原文等于当前操作手册">
+  第 5 章 APM的Node
+  8.9.4工具链是重要历史证据，但原生扩展、私有接口、探针协议和平台版本会漂移；当前执行必须重读目标版本官方文档。
+</Callout>
+
+<Callout type="trap" title="第 5 章 APM误区二：工具红色区域就是根因">
+  第 5 章 APM把火焰图、heap
+  diff、APM建议、报警和平台评分都视为假设生成器；只有对齐输入、工件身份、单变量反证和恢复才可裁决。
+</Callout>
+
+<Callout type="trap" title="第 5 章 APM误区三：采集没有副作用">
+  第 5 章
+  APM明确测量采样CPU、事件循环阻塞、heap额外内存、core磁盘、trace基数和Inspector权限；风险超过预算时必须降级、转移到副本或停止。
+</Callout>
+
+## 小结与上架门
+
+第 5 章 APM的核心不是记住更多调试工具，而是把New Relic与Elastic APM的探针、事务、span、错误和采样纳入同一条可证伪链：作者仓库准确限定原作，运行时/维护方文档限定当前能力，症状合同约束输入，原始工件与三角校验定位首错，迁移门、数据安全和同输入恢复决定结论能否发布。最终交付探针配置、事务/span映射、错误样本、采样账本、开销差分和数据发送边界并报告失败、未知项与采集扰动。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：第5章 APM**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-A 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明第5章 APM在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-A
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 2：5.1 使用NewRelic**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-B 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·1 使用NewRelic在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-B
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 3：5.2 Elastic APM**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-C 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2 Elastic APM在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-C
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 4：5.2.1 什么是Elastic APM**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-D 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2·1 什么是Elastic APM在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-D
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 5：5.2.2 启动ELK**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-E 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2·2 启动ELK在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-E
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 6：5.2.3 启动APM Server**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-F 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2·3 启动APM Server在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-F
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 7：5.2.4 使用Elastic APM**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-G 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2·4 使用Elastic APM在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-G
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 8：5.2.5 错误日志**
+
+为第 5 章 APM的稳定证据键 NDBG-UNIT05-H 设计一个固定症状、两个竞争假设、两类独立工件、一个单变量故障和一个恢复断言，并说明5·2·5 错误日志在Node 8.9.4与当前Node之间的迁移边界。
+
+<Answer>
+  先为第 5 章
+  APM冻结在无探针与有探针两组相同流量中对齐事务、span、错误、采样和资源开销所需的请求、数据、版本、构建、进程和采集参数；把
+  NDBG-UNIT05-H
+  映射到低扰动指标与CPU/堆/事件/trace中的第二类原始工件，只注入“探针加载过晚、事务边界错误或采样漏掉关键请求”。两类证据必须指向同一首个分岔，竞争假设有明确推翻条件，撤销后同输入重新满足“APM结论必须对齐原始请求、探针版本、采样决策、服务身份和无探针基线”；未覆盖的平台、运行时和生产数据风险保留为未知。
+</Answer>
+
+**问题 9：为什么完整作者仓库仍不能直接复制**
+
+第 5 章 APM已经能访问作者公开全文，为什么仍采用独立重构？
+
+<Answer>
+  第 5 章
+  APM把作者仓库视为full-text-primary，可准确核对原作问题、示例和工具身份；但仓库没有LICENSE文件，公开读取不产生转载或衍生授权。本站只保留必要来源标注与事实核对，正文、实验、图形、问题和答案均重新组织和表达。
+</Answer>
+
+**问题 10：为什么要三角校验**
+
+第 5 章 APM为什么不能只靠一个火焰图、heap snapshot、APM页面或报警裁决？
+
+<Answer>
+  第 5 章
+  APM中的单一工件可能受采样、过滤、预热、isolate、聚合、时钟、探针和采集开销影响。至少对齐低扰动指标与一份原始剖析/快照/事件工件，再用单变量反证和同输入恢复，才能把相关性收窄为可接受的局部因果结论。
+</Answer>
+
+</Exercises>
+
+## 六个诊断裁决术语
+
+第 5 章 APM使用<Term def="第 5 章 APM中固定用户现象、请求、数据、时序和成功判据的复现声明">症状合同</Term>、<Term def="第 5 章 APM中至少两个能解释同一症状且可分别推翻的根因候选">竞争假设</Term>、<Term def="第 5 章 APM中带版本、参数、时间、进程身份和哈希的profile、snapshot、core、trace或事件文件">原始工件</Term>、<Term def="第 5 章 APM中诊断工具对CPU、事件循环、内存、磁盘、网络与行为的改变">采集扰动</Term>、<Term def="第 5 章 APM的故障轨迹最早偏离同输入参考轨迹的位置">首个分岔</Term>、<Term def="第 5 章 APM把Node 8.9.4工具身份映射到当前受支持能力的显式变化表">迁移差分</Term>构成最小证据语言；每个术语都绑定真实输入、状态和工件，不制造置信度、根因分或装饰性排名。
+
+<Glossary>
+  <GlossaryItem term="症状合同">
+    第 5 章 APM中固定用户现象、请求、数据、时序和成功判据的复现声明。
+  </GlossaryItem>
+  <GlossaryItem term="竞争假设">
+    第 5 章 APM中至少两个能解释同一症状且可分别推翻的根因候选。
+  </GlossaryItem>
+  <GlossaryItem term="原始工件">
+    第 5 章
+    APM中带版本、参数、时间、进程身份和哈希的profile、snapshot、core、trace或事件文件。
+  </GlossaryItem>
+  <GlossaryItem term="采集扰动">
+    第 5 章 APM中诊断工具对CPU、事件循环、内存、磁盘、网络与行为的改变。
+  </GlossaryItem>
+  <GlossaryItem term="首个分岔">
+    第 5 章 APM的故障轨迹最早偏离同输入参考轨迹的位置。
+  </GlossaryItem>
+  <GlossaryItem term="迁移差分">
+    第 5 章 APM把Node 8.9.4工具身份映射到当前受支持能力的显式变化表。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="赵坤《Node.js调试指南（全彩）》"
+  adaptedUrl="https://github.com/nswbmw/node-in-debugging"
+/>
