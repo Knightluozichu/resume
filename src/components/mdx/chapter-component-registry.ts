@@ -8242,6 +8242,127 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Hdg1OfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "illustrated-dl/00-guide/idl-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-official-learning-map");
+    return {
+      IdlOfficialLearningMapSignalPathLab:
+        module0.IdlOfficialLearningMapSignalPathLab,
+      IdlOfficialLearningMapTrainingTraceLab:
+        module0.IdlOfficialLearningMapTrainingTraceLab,
+      IdlOfficialLearningMapExperimentGateLab:
+        module0.IdlOfficialLearningMapExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/01-introduction/idl-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-01-introduction");
+    return {
+      Idl01IntroductionSignalPathLab: module0.Idl01IntroductionSignalPathLab,
+      Idl01IntroductionTrainingTraceLab:
+        module0.Idl01IntroductionTrainingTraceLab,
+      Idl01IntroductionExperimentGateLab:
+        module0.Idl01IntroductionExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/02-neural-networks/idl-02-neural-networks": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-02-neural-networks");
+    return {
+      Idl02NeuralNetworksSignalPathLab:
+        module0.Idl02NeuralNetworksSignalPathLab,
+      Idl02NeuralNetworksTrainingTraceLab:
+        module0.Idl02NeuralNetworksTrainingTraceLab,
+      Idl02NeuralNetworksExperimentGateLab:
+        module0.Idl02NeuralNetworksExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/03-convolutional-networks/idl-03-convolutional-neural-networks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-dl/v2/idl-03-convolutional-neural-networks");
+      return {
+        Idl03ConvolutionalNeuralNetworksSignalPathLab:
+          module0.Idl03ConvolutionalNeuralNetworksSignalPathLab,
+        Idl03ConvolutionalNeuralNetworksTrainingTraceLab:
+          module0.Idl03ConvolutionalNeuralNetworksTrainingTraceLab,
+        Idl03ConvolutionalNeuralNetworksExperimentGateLab:
+          module0.Idl03ConvolutionalNeuralNetworksExperimentGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-dl/04-boltzmann-machines/idl-04-restricted-boltzmann-machines":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-dl/v2/idl-04-restricted-boltzmann-machines");
+      return {
+        Idl04RestrictedBoltzmannMachinesSignalPathLab:
+          module0.Idl04RestrictedBoltzmannMachinesSignalPathLab,
+        Idl04RestrictedBoltzmannMachinesTrainingTraceLab:
+          module0.Idl04RestrictedBoltzmannMachinesTrainingTraceLab,
+        Idl04RestrictedBoltzmannMachinesExperimentGateLab:
+          module0.Idl04RestrictedBoltzmannMachinesExperimentGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-dl/05-autoencoders/idl-05-autoencoders": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-05-autoencoders");
+    return {
+      Idl05AutoencodersSignalPathLab: module0.Idl05AutoencodersSignalPathLab,
+      Idl05AutoencodersTrainingTraceLab:
+        module0.Idl05AutoencodersTrainingTraceLab,
+      Idl05AutoencodersExperimentGateLab:
+        module0.Idl05AutoencodersExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/06-generalization/idl-06-improving-generalization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-dl/v2/idl-06-improving-generalization");
+      return {
+        Idl06ImprovingGeneralizationSignalPathLab:
+          module0.Idl06ImprovingGeneralizationSignalPathLab,
+        Idl06ImprovingGeneralizationTrainingTraceLab:
+          module0.Idl06ImprovingGeneralizationTrainingTraceLab,
+        Idl06ImprovingGeneralizationExperimentGateLab:
+          module0.Idl06ImprovingGeneralizationExperimentGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-dl/07-tools/idl-07-deep-learning-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-07-deep-learning-tools");
+    return {
+      Idl07DeepLearningToolsSignalPathLab:
+        module0.Idl07DeepLearningToolsSignalPathLab,
+      Idl07DeepLearningToolsTrainingTraceLab:
+        module0.Idl07DeepLearningToolsTrainingTraceLab,
+      Idl07DeepLearningToolsExperimentGateLab:
+        module0.Idl07DeepLearningToolsExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/08-present-future/idl-08-present-and-future": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-08-present-and-future");
+    return {
+      Idl08PresentAndFutureSignalPathLab:
+        module0.Idl08PresentAndFutureSignalPathLab,
+      Idl08PresentAndFutureTrainingTraceLab:
+        module0.Idl08PresentAndFutureTrainingTraceLab,
+      Idl08PresentAndFutureExperimentGateLab:
+        module0.Idl08PresentAndFutureExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-dl/09-review/idl-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-dl/v2/idl-official-final-review");
+    return {
+      IdlOfficialFinalReviewSignalPathLab:
+        module0.IdlOfficialFinalReviewSignalPathLab,
+      IdlOfficialFinalReviewTrainingTraceLab:
+        module0.IdlOfficialFinalReviewTrainingTraceLab,
+      IdlOfficialFinalReviewExperimentGateLab:
+        module0.IdlOfficialFinalReviewExperimentGateLab,
+    } as ChapterMdxComponents;
+  },
   "illustrated-http/00-official-learning-map/ilh-official-learning-map":
     async () => {
       const module0 =
