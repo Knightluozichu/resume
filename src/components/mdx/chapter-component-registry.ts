@@ -6063,6 +6063,118 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DevelopmentPracticesFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "css-secrets/00-guide/csec-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-official-learning-map");
+    return {
+      CsecOfficialLearningMapRenderProbe:
+        module0.CsecOfficialLearningMapRenderProbe,
+      CsecOfficialLearningMapCascadeTraceLab:
+        module0.CsecOfficialLearningMapCascadeTraceLab,
+      CsecOfficialLearningMapReleaseGateLab:
+        module0.CsecOfficialLearningMapReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/01-method/csec-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-01-introduction");
+    return {
+      Csec01IntroductionRenderProbe: module0.Csec01IntroductionRenderProbe,
+      Csec01IntroductionCascadeTraceLab:
+        module0.Csec01IntroductionCascadeTraceLab,
+      Csec01IntroductionReleaseGateLab:
+        module0.Csec01IntroductionReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/02-backgrounds-borders/csec-02-backgrounds-borders":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/css-secrets/v2/csec-02-backgrounds-borders");
+      return {
+        Csec02BackgroundsBordersRenderProbe:
+          module0.Csec02BackgroundsBordersRenderProbe,
+        Csec02BackgroundsBordersCascadeTraceLab:
+          module0.Csec02BackgroundsBordersCascadeTraceLab,
+        Csec02BackgroundsBordersReleaseGateLab:
+          module0.Csec02BackgroundsBordersReleaseGateLab,
+      } as ChapterMdxComponents;
+    },
+  "css-secrets/03-shapes-effects/csec-03-shapes": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-03-shapes");
+    return {
+      Csec03ShapesRenderProbe: module0.Csec03ShapesRenderProbe,
+      Csec03ShapesCascadeTraceLab: module0.Csec03ShapesCascadeTraceLab,
+      Csec03ShapesReleaseGateLab: module0.Csec03ShapesReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/03-shapes-effects/csec-04-visual-effects": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-04-visual-effects");
+    return {
+      Csec04VisualEffectsRenderProbe: module0.Csec04VisualEffectsRenderProbe,
+      Csec04VisualEffectsCascadeTraceLab:
+        module0.Csec04VisualEffectsCascadeTraceLab,
+      Csec04VisualEffectsReleaseGateLab:
+        module0.Csec04VisualEffectsReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/04-typography-ux/csec-05-typography": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-05-typography");
+    return {
+      Csec05TypographyRenderProbe: module0.Csec05TypographyRenderProbe,
+      Csec05TypographyCascadeTraceLab: module0.Csec05TypographyCascadeTraceLab,
+      Csec05TypographyReleaseGateLab: module0.Csec05TypographyReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/04-typography-ux/csec-06-user-experience": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-06-user-experience");
+    return {
+      Csec06UserExperienceRenderProbe: module0.Csec06UserExperienceRenderProbe,
+      Csec06UserExperienceCascadeTraceLab:
+        module0.Csec06UserExperienceCascadeTraceLab,
+      Csec06UserExperienceReleaseGateLab:
+        module0.Csec06UserExperienceReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/05-layout-motion/csec-07-structure-layout": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-07-structure-layout");
+    return {
+      Csec07StructureLayoutRenderProbe:
+        module0.Csec07StructureLayoutRenderProbe,
+      Csec07StructureLayoutCascadeTraceLab:
+        module0.Csec07StructureLayoutCascadeTraceLab,
+      Csec07StructureLayoutReleaseGateLab:
+        module0.Csec07StructureLayoutReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/05-layout-motion/csec-08-transitions-animations": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-08-transitions-animations");
+    return {
+      Csec08TransitionsAnimationsRenderProbe:
+        module0.Csec08TransitionsAnimationsRenderProbe,
+      Csec08TransitionsAnimationsCascadeTraceLab:
+        module0.Csec08TransitionsAnimationsCascadeTraceLab,
+      Csec08TransitionsAnimationsReleaseGateLab:
+        module0.Csec08TransitionsAnimationsReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "css-secrets/06-review/csec-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/css-secrets/v2/csec-official-final-review");
+    return {
+      CsecOfficialFinalReviewRenderProbe:
+        module0.CsecOfficialFinalReviewRenderProbe,
+      CsecOfficialFinalReviewCascadeTraceLab:
+        module0.CsecOfficialFinalReviewCascadeTraceLab,
+      CsecOfficialFinalReviewReleaseGateLab:
+        module0.CsecOfficialFinalReviewReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
   "deep-android-kernel/00-official-learning-map/dak-14-official-learning-map":
     async () => {
       const module0 =
