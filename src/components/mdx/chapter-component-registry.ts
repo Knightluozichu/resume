@@ -9944,6 +9944,142 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.FengOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "game-network-core-tech/00-guide/gnc-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/game-network-core-tech/v2/gnc-official-learning-map");
+    return {
+      GncOfficialLearningMapAuthorityContractLab:
+        module0.GncOfficialLearningMapAuthorityContractLab,
+      GncOfficialLearningMapTrafficBudgetLab:
+        module0.GncOfficialLearningMapTrafficBudgetLab,
+      GncOfficialLearningMapTraceGateLab:
+        module0.GncOfficialLearningMapTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-network-core-tech/01-foundations/gnc-00-quickstart-network-game-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-00-quickstart-network-game-programming");
+      return {
+        Gnc00QuickstartNetworkGameProgrammingAuthorityContractLab:
+          module0.Gnc00QuickstartNetworkGameProgrammingAuthorityContractLab,
+        Gnc00QuickstartNetworkGameProgrammingTrafficBudgetLab:
+          module0.Gnc00QuickstartNetworkGameProgrammingTrafficBudgetLab,
+        Gnc00QuickstartNetworkGameProgrammingTraceGateLab:
+          module0.Gnc00QuickstartNetworkGameProgrammingTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/01-foundations/gnc-01-history-evolution":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-01-history-evolution");
+      return {
+        Gnc01HistoryEvolutionAuthorityContractLab:
+          module0.Gnc01HistoryEvolutionAuthorityContractLab,
+        Gnc01HistoryEvolutionTrafficBudgetLab:
+          module0.Gnc01HistoryEvolutionTrafficBudgetLab,
+        Gnc01HistoryEvolutionTraceGateLab:
+          module0.Gnc01HistoryEvolutionTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/01-foundations/gnc-02-what-is-online-game":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-02-what-is-online-game");
+      return {
+        Gnc02WhatIsOnlineGameAuthorityContractLab:
+          module0.Gnc02WhatIsOnlineGameAuthorityContractLab,
+        Gnc02WhatIsOnlineGameTrafficBudgetLab:
+          module0.Gnc02WhatIsOnlineGameTrafficBudgetLab,
+        Gnc02WhatIsOnlineGameTraceGateLab:
+          module0.Gnc02WhatIsOnlineGameTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/02-architecture/gnc-03-online-game-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-03-online-game-architecture");
+      return {
+        Gnc03OnlineGameArchitectureAuthorityContractLab:
+          module0.Gnc03OnlineGameArchitectureAuthorityContractLab,
+        Gnc03OnlineGameArchitectureTrafficBudgetLab:
+          module0.Gnc03OnlineGameArchitectureTrafficBudgetLab,
+        Gnc03OnlineGameArchitectureTraceGateLab:
+          module0.Gnc03OnlineGameArchitectureTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/03-practice/gnc-04-cs-mmo-practice": async () => {
+    const module0 =
+      await import("@/components/mdx/game-network-core-tech/v2/gnc-04-cs-mmo-practice");
+    return {
+      Gnc04CsMmoPracticeAuthorityContractLab:
+        module0.Gnc04CsMmoPracticeAuthorityContractLab,
+      Gnc04CsMmoPracticeTrafficBudgetLab:
+        module0.Gnc04CsMmoPracticeTrafficBudgetLab,
+      Gnc04CsMmoPracticeTraceGateLab: module0.Gnc04CsMmoPracticeTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-network-core-tech/03-practice/gnc-05-p2p-mo-practice": async () => {
+    const module0 =
+      await import("@/components/mdx/game-network-core-tech/v2/gnc-05-p2p-mo-practice");
+    return {
+      Gnc05P2pMoPracticeAuthorityContractLab:
+        module0.Gnc05P2pMoPracticeAuthorityContractLab,
+      Gnc05P2pMoPracticeTrafficBudgetLab:
+        module0.Gnc05P2pMoPracticeTrafficBudgetLab,
+      Gnc05P2pMoPracticeTraceGateLab: module0.Gnc05P2pMoPracticeTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-network-core-tech/04-operations/gnc-06-auxiliary-systems": async () => {
+    const module0 =
+      await import("@/components/mdx/game-network-core-tech/v2/gnc-06-auxiliary-systems");
+    return {
+      Gnc06AuxiliarySystemsAuthorityContractLab:
+        module0.Gnc06AuxiliarySystemsAuthorityContractLab,
+      Gnc06AuxiliarySystemsTrafficBudgetLab:
+        module0.Gnc06AuxiliarySystemsTrafficBudgetLab,
+      Gnc06AuxiliarySystemsTraceGateLab:
+        module0.Gnc06AuxiliarySystemsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-network-core-tech/04-operations/gnc-07-operations-infrastructure":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-07-operations-infrastructure");
+      return {
+        Gnc07OperationsInfrastructureAuthorityContractLab:
+          module0.Gnc07OperationsInfrastructureAuthorityContractLab,
+        Gnc07OperationsInfrastructureTrafficBudgetLab:
+          module0.Gnc07OperationsInfrastructureTrafficBudgetLab,
+        Gnc07OperationsInfrastructureTraceGateLab:
+          module0.Gnc07OperationsInfrastructureTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/05-team/gnc-08-development-organization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-network-core-tech/v2/gnc-08-development-organization");
+      return {
+        Gnc08DevelopmentOrganizationAuthorityContractLab:
+          module0.Gnc08DevelopmentOrganizationAuthorityContractLab,
+        Gnc08DevelopmentOrganizationTrafficBudgetLab:
+          module0.Gnc08DevelopmentOrganizationTrafficBudgetLab,
+        Gnc08DevelopmentOrganizationTraceGateLab:
+          module0.Gnc08DevelopmentOrganizationTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-network-core-tech/06-review/gnc-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/game-network-core-tech/v2/gnc-official-final-review");
+    return {
+      GncOfficialFinalReviewAuthorityContractLab:
+        module0.GncOfficialFinalReviewAuthorityContractLab,
+      GncOfficialFinalReviewTrafficBudgetLab:
+        module0.GncOfficialFinalReviewTrafficBudgetLab,
+      GncOfficialFinalReviewTraceGateLab:
+        module0.GncOfficialFinalReviewTraceGateLab,
+    } as ChapterMdxComponents;
+  },
   "game-server-programming/00-guide/gsp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/game-server-programming/v2/gsp-official-learning-map");
