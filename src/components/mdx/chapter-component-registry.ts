@@ -8166,6 +8166,285 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.DlrOfficialFinalReviewEvaluationGateLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-textbook/00-learning-map/dlt-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-official-learning-map");
+      return {
+        DltOfficialLearningMapDependencyMapLab:
+          module0.DltOfficialLearningMapDependencyMapLab,
+        DltOfficialLearningMapComputationTraceLab:
+          module0.DltOfficialLearningMapComputationTraceLab,
+        DltOfficialLearningMapEvidenceGateLab:
+          module0.DltOfficialLearningMapEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/01-introduction/dlt-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-textbook/v2/dlt-01-introduction");
+    return {
+      Dlt01IntroductionDependencyMapLab:
+        module0.Dlt01IntroductionDependencyMapLab,
+      Dlt01IntroductionComputationTraceLab:
+        module0.Dlt01IntroductionComputationTraceLab,
+      Dlt01IntroductionEvidenceGateLab:
+        module0.Dlt01IntroductionEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-textbook/02-linear-algebra/dlt-02-linear-algebra":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-02-linear-algebra");
+      return {
+        Dlt02LinearAlgebraDependencyMapLab:
+          module0.Dlt02LinearAlgebraDependencyMapLab,
+        Dlt02LinearAlgebraComputationTraceLab:
+          module0.Dlt02LinearAlgebraComputationTraceLab,
+        Dlt02LinearAlgebraEvidenceGateLab:
+          module0.Dlt02LinearAlgebraEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/03-probability-information/dlt-03-probability-information":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-03-probability-information");
+      return {
+        Dlt03ProbabilityInformationDependencyMapLab:
+          module0.Dlt03ProbabilityInformationDependencyMapLab,
+        Dlt03ProbabilityInformationComputationTraceLab:
+          module0.Dlt03ProbabilityInformationComputationTraceLab,
+        Dlt03ProbabilityInformationEvidenceGateLab:
+          module0.Dlt03ProbabilityInformationEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/04-numerical-computation/dlt-04-numerical-computation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-04-numerical-computation");
+      return {
+        Dlt04NumericalComputationDependencyMapLab:
+          module0.Dlt04NumericalComputationDependencyMapLab,
+        Dlt04NumericalComputationComputationTraceLab:
+          module0.Dlt04NumericalComputationComputationTraceLab,
+        Dlt04NumericalComputationEvidenceGateLab:
+          module0.Dlt04NumericalComputationEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/05-machine-learning-basics/dlt-05-machine-learning-basics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-05-machine-learning-basics");
+      return {
+        Dlt05MachineLearningBasicsDependencyMapLab:
+          module0.Dlt05MachineLearningBasicsDependencyMapLab,
+        Dlt05MachineLearningBasicsComputationTraceLab:
+          module0.Dlt05MachineLearningBasicsComputationTraceLab,
+        Dlt05MachineLearningBasicsEvidenceGateLab:
+          module0.Dlt05MachineLearningBasicsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/06-feedforward-networks/dlt-06-feedforward-networks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-06-feedforward-networks");
+      return {
+        Dlt06FeedforwardNetworksDependencyMapLab:
+          module0.Dlt06FeedforwardNetworksDependencyMapLab,
+        Dlt06FeedforwardNetworksComputationTraceLab:
+          module0.Dlt06FeedforwardNetworksComputationTraceLab,
+        Dlt06FeedforwardNetworksEvidenceGateLab:
+          module0.Dlt06FeedforwardNetworksEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/07-regularization/dlt-07-regularization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-07-regularization");
+      return {
+        Dlt07RegularizationDependencyMapLab:
+          module0.Dlt07RegularizationDependencyMapLab,
+        Dlt07RegularizationComputationTraceLab:
+          module0.Dlt07RegularizationComputationTraceLab,
+        Dlt07RegularizationEvidenceGateLab:
+          module0.Dlt07RegularizationEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/08-optimization/dlt-08-optimization": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-textbook/v2/dlt-08-optimization");
+    return {
+      Dlt08OptimizationDependencyMapLab:
+        module0.Dlt08OptimizationDependencyMapLab,
+      Dlt08OptimizationComputationTraceLab:
+        module0.Dlt08OptimizationComputationTraceLab,
+      Dlt08OptimizationEvidenceGateLab:
+        module0.Dlt08OptimizationEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-textbook/09-convolutional-networks/dlt-09-convolutional-networks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-09-convolutional-networks");
+      return {
+        Dlt09ConvolutionalNetworksDependencyMapLab:
+          module0.Dlt09ConvolutionalNetworksDependencyMapLab,
+        Dlt09ConvolutionalNetworksComputationTraceLab:
+          module0.Dlt09ConvolutionalNetworksComputationTraceLab,
+        Dlt09ConvolutionalNetworksEvidenceGateLab:
+          module0.Dlt09ConvolutionalNetworksEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/10-sequence-modeling/dlt-10-sequence-modeling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-10-sequence-modeling");
+      return {
+        Dlt10SequenceModelingDependencyMapLab:
+          module0.Dlt10SequenceModelingDependencyMapLab,
+        Dlt10SequenceModelingComputationTraceLab:
+          module0.Dlt10SequenceModelingComputationTraceLab,
+        Dlt10SequenceModelingEvidenceGateLab:
+          module0.Dlt10SequenceModelingEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/11-practical-methodology/dlt-11-practical-methodology":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-11-practical-methodology");
+      return {
+        Dlt11PracticalMethodologyDependencyMapLab:
+          module0.Dlt11PracticalMethodologyDependencyMapLab,
+        Dlt11PracticalMethodologyComputationTraceLab:
+          module0.Dlt11PracticalMethodologyComputationTraceLab,
+        Dlt11PracticalMethodologyEvidenceGateLab:
+          module0.Dlt11PracticalMethodologyEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/12-applications/dlt-12-applications": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-textbook/v2/dlt-12-applications");
+    return {
+      Dlt12ApplicationsDependencyMapLab:
+        module0.Dlt12ApplicationsDependencyMapLab,
+      Dlt12ApplicationsComputationTraceLab:
+        module0.Dlt12ApplicationsComputationTraceLab,
+      Dlt12ApplicationsEvidenceGateLab:
+        module0.Dlt12ApplicationsEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-textbook/13-linear-factor-models/dlt-13-linear-factor-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-13-linear-factor-models");
+      return {
+        Dlt13LinearFactorModelsDependencyMapLab:
+          module0.Dlt13LinearFactorModelsDependencyMapLab,
+        Dlt13LinearFactorModelsComputationTraceLab:
+          module0.Dlt13LinearFactorModelsComputationTraceLab,
+        Dlt13LinearFactorModelsEvidenceGateLab:
+          module0.Dlt13LinearFactorModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/14-autoencoders/dlt-14-autoencoders": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-textbook/v2/dlt-14-autoencoders");
+    return {
+      Dlt14AutoencodersDependencyMapLab:
+        module0.Dlt14AutoencodersDependencyMapLab,
+      Dlt14AutoencodersComputationTraceLab:
+        module0.Dlt14AutoencodersComputationTraceLab,
+      Dlt14AutoencodersEvidenceGateLab:
+        module0.Dlt14AutoencodersEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-textbook/15-representation-learning/dlt-15-representation-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-15-representation-learning");
+      return {
+        Dlt15RepresentationLearningDependencyMapLab:
+          module0.Dlt15RepresentationLearningDependencyMapLab,
+        Dlt15RepresentationLearningComputationTraceLab:
+          module0.Dlt15RepresentationLearningComputationTraceLab,
+        Dlt15RepresentationLearningEvidenceGateLab:
+          module0.Dlt15RepresentationLearningEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/16-structured-probabilistic-models/dlt-16-structured-probabilistic-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-16-structured-probabilistic-models");
+      return {
+        Dlt16StructuredProbabilisticModelsDependencyMapLab:
+          module0.Dlt16StructuredProbabilisticModelsDependencyMapLab,
+        Dlt16StructuredProbabilisticModelsComputationTraceLab:
+          module0.Dlt16StructuredProbabilisticModelsComputationTraceLab,
+        Dlt16StructuredProbabilisticModelsEvidenceGateLab:
+          module0.Dlt16StructuredProbabilisticModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/17-monte-carlo/dlt-17-monte-carlo": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-textbook/v2/dlt-17-monte-carlo");
+    return {
+      Dlt17MonteCarloDependencyMapLab: module0.Dlt17MonteCarloDependencyMapLab,
+      Dlt17MonteCarloComputationTraceLab:
+        module0.Dlt17MonteCarloComputationTraceLab,
+      Dlt17MonteCarloEvidenceGateLab: module0.Dlt17MonteCarloEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-textbook/18-partition-function/dlt-18-partition-function":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-18-partition-function");
+      return {
+        Dlt18PartitionFunctionDependencyMapLab:
+          module0.Dlt18PartitionFunctionDependencyMapLab,
+        Dlt18PartitionFunctionComputationTraceLab:
+          module0.Dlt18PartitionFunctionComputationTraceLab,
+        Dlt18PartitionFunctionEvidenceGateLab:
+          module0.Dlt18PartitionFunctionEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/19-approximate-inference/dlt-19-approximate-inference":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-19-approximate-inference");
+      return {
+        Dlt19ApproximateInferenceDependencyMapLab:
+          module0.Dlt19ApproximateInferenceDependencyMapLab,
+        Dlt19ApproximateInferenceComputationTraceLab:
+          module0.Dlt19ApproximateInferenceComputationTraceLab,
+        Dlt19ApproximateInferenceEvidenceGateLab:
+          module0.Dlt19ApproximateInferenceEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/20-deep-generative-models/dlt-20-deep-generative-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-20-deep-generative-models");
+      return {
+        Dlt20DeepGenerativeModelsDependencyMapLab:
+          module0.Dlt20DeepGenerativeModelsDependencyMapLab,
+        Dlt20DeepGenerativeModelsComputationTraceLab:
+          module0.Dlt20DeepGenerativeModelsComputationTraceLab,
+        Dlt20DeepGenerativeModelsEvidenceGateLab:
+          module0.Dlt20DeepGenerativeModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-textbook/21-final-review/dlt-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-textbook/v2/dlt-official-final-review");
+      return {
+        DltOfficialFinalReviewDependencyMapLab:
+          module0.DltOfficialFinalReviewDependencyMapLab,
+        DltOfficialFinalReviewComputationTraceLab:
+          module0.DltOfficialFinalReviewComputationTraceLab,
+        DltOfficialFinalReviewEvidenceGateLab:
+          module0.DltOfficialFinalReviewEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
