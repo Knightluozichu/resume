@@ -3549,6 +3549,156 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Csi23OfficialFinalReviewBoundaryProbeLab,
       } as ChapterMdxComponents;
     },
+  "chatgpt-principles-practice/00-map/cgpt-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-official-learning-map");
+    return {
+      CgptOfficialLearningMapContextContractLab:
+        module0.CgptOfficialLearningMapContextContractLab,
+      CgptOfficialLearningMapComputeTraceLab:
+        module0.CgptOfficialLearningMapComputeTraceLab,
+      CgptOfficialLearningMapEvidenceGateLab:
+        module0.CgptOfficialLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/01-preface/cgpt-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-preface");
+    return {
+      CgptPrefaceContextContractLab: module0.CgptPrefaceContextContractLab,
+      CgptPrefaceComputeTraceLab: module0.CgptPrefaceComputeTraceLab,
+      CgptPrefaceEvidenceGateLab: module0.CgptPrefaceEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/02-understanding/cgpt-01-understanding-chatgpt":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-01-understanding-chatgpt");
+      return {
+        Cgpt01UnderstandingChatgptContextContractLab:
+          module0.Cgpt01UnderstandingChatgptContextContractLab,
+        Cgpt01UnderstandingChatgptComputeTraceLab:
+          module0.Cgpt01UnderstandingChatgptComputeTraceLab,
+        Cgpt01UnderstandingChatgptEvidenceGateLab:
+          module0.Cgpt01UnderstandingChatgptEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/03-principles/cgpt-02-principles": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-02-principles");
+    return {
+      Cgpt02PrinciplesContextContractLab:
+        module0.Cgpt02PrinciplesContextContractLab,
+      Cgpt02PrinciplesComputeTraceLab: module0.Cgpt02PrinciplesComputeTraceLab,
+      Cgpt02PrinciplesEvidenceGateLab: module0.Cgpt02PrinciplesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/04-pretrained-models/cgpt-03-pretrained-language-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-03-pretrained-language-models");
+      return {
+        Cgpt03PretrainedLanguageModelsContextContractLab:
+          module0.Cgpt03PretrainedLanguageModelsContextContractLab,
+        Cgpt03PretrainedLanguageModelsComputeTraceLab:
+          module0.Cgpt03PretrainedLanguageModelsComputeTraceLab,
+        Cgpt03PretrainedLanguageModelsEvidenceGateLab:
+          module0.Cgpt03PretrainedLanguageModelsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/05-reinforcement-learning/cgpt-04-reinforcement-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-04-reinforcement-learning");
+      return {
+        Cgpt04ReinforcementLearningContextContractLab:
+          module0.Cgpt04ReinforcementLearningContextContractLab,
+        Cgpt04ReinforcementLearningComputeTraceLab:
+          module0.Cgpt04ReinforcementLearningComputeTraceLab,
+        Cgpt04ReinforcementLearningEvidenceGateLab:
+          module0.Cgpt04ReinforcementLearningEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/06-prompt-emergence/cgpt-05-prompt-emergence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-05-prompt-emergence");
+      return {
+        Cgpt05PromptEmergenceContextContractLab:
+          module0.Cgpt05PromptEmergenceContextContractLab,
+        Cgpt05PromptEmergenceComputeTraceLab:
+          module0.Cgpt05PromptEmergenceComputeTraceLab,
+        Cgpt05PromptEmergenceEvidenceGateLab:
+          module0.Cgpt05PromptEmergenceEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/07-llm-pretraining/cgpt-06-llm-pretraining":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-06-llm-pretraining");
+      return {
+        Cgpt06LlmPretrainingContextContractLab:
+          module0.Cgpt06LlmPretrainingContextContractLab,
+        Cgpt06LlmPretrainingComputeTraceLab:
+          module0.Cgpt06LlmPretrainingComputeTraceLab,
+        Cgpt06LlmPretrainingEvidenceGateLab:
+          module0.Cgpt06LlmPretrainingEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/08-gpt-series/cgpt-07-gpt-series": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-07-gpt-series");
+    return {
+      Cgpt07GptSeriesContextContractLab:
+        module0.Cgpt07GptSeriesContextContractLab,
+      Cgpt07GptSeriesComputeTraceLab: module0.Cgpt07GptSeriesComputeTraceLab,
+      Cgpt07GptSeriesEvidenceGateLab: module0.Cgpt07GptSeriesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/09-ppo-rlhf/cgpt-08-ppo-rlhf": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-08-ppo-rlhf");
+    return {
+      Cgpt08PpoRlhfContextContractLab: module0.Cgpt08PpoRlhfContextContractLab,
+      Cgpt08PpoRlhfComputeTraceLab: module0.Cgpt08PpoRlhfComputeTraceLab,
+      Cgpt08PpoRlhfEvidenceGateLab: module0.Cgpt08PpoRlhfEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/10-private-practice/cgpt-09-chatgpt-practice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-09-chatgpt-practice");
+      return {
+        Cgpt09ChatgptPracticeContextContractLab:
+          module0.Cgpt09ChatgptPracticeContextContractLab,
+        Cgpt09ChatgptPracticeComputeTraceLab:
+          module0.Cgpt09ChatgptPracticeComputeTraceLab,
+        Cgpt09ChatgptPracticeEvidenceGateLab:
+          module0.Cgpt09ChatgptPracticeEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "chatgpt-principles-practice/11-trends/cgpt-10-trends": async () => {
+    const module0 =
+      await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-10-trends");
+    return {
+      Cgpt10TrendsContextContractLab: module0.Cgpt10TrendsContextContractLab,
+      Cgpt10TrendsComputeTraceLab: module0.Cgpt10TrendsComputeTraceLab,
+      Cgpt10TrendsEvidenceGateLab: module0.Cgpt10TrendsEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "chatgpt-principles-practice/12-review/cgpt-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-official-final-review");
+      return {
+        CgptOfficialFinalReviewContextContractLab:
+          module0.CgptOfficialFinalReviewContextContractLab,
+        CgptOfficialFinalReviewComputeTraceLab:
+          module0.CgptOfficialFinalReviewComputeTraceLab,
+        CgptOfficialFinalReviewEvidenceGateLab:
+          module0.CgptOfficialFinalReviewEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");

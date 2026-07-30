@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-30T09:49:39.397Z；旧版分数不迁移。
+> 2026-07-30T10:06:47.185Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2766
+- failed：2753
 - queued：402
-- passed：1328
+- passed：1341
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -117,65 +117,65 @@
 | 104 | ddia | 15 | 14 | 1 | 0 | 29 |
 | 105 | illustrated-nev | 13 | 13 | 0 | 0 | 75 |
 | 106 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 65 |
-| 107 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 60 |
-| 108 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 109 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 110 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 111 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 112 | windows-kernel-programming | 13 | 13 | 0 | 0 | 39 |
-| 113 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 114 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 115 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 116 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 117 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 118 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 119 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 55 |
-| 120 | unity-vfx | 11 | 11 | 0 | 0 | 44 |
-| 121 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 122 | concrete-mathematics | 11 | 11 | 0 | 0 | 33 |
-| 123 | data-structures-visual | 11 | 11 | 0 | 0 | 33 |
-| 124 | game-network-core-tech | 11 | 11 | 0 | 0 | 33 |
-| 125 | go-in-action | 11 | 11 | 0 | 0 | 33 |
-| 126 | unity-advanced-programming | 11 | 11 | 0 | 0 | 33 |
-| 127 | nodejs-debugging-guide | 10 | 10 | 0 | 0 | 45 |
-| 128 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
-| 129 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 130 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 131 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 132 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 133 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 134 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 135 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 136 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 137 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 138 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 139 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 140 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 141 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 142 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 143 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 144 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 145 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 146 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 147 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 148 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 149 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 150 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 151 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 152 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 153 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 154 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 155 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 156 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 157 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 158 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 159 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 160 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
-| 161 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
-| 162 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 163 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 164 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 165 | car-structure-illustrated | 9 | 0 | 0 | 9 | 0 |
+| 107 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 108 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 109 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 110 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 111 | windows-kernel-programming | 13 | 13 | 0 | 0 | 39 |
+| 112 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 113 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 114 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 115 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 116 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 117 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 118 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 55 |
+| 119 | unity-vfx | 11 | 11 | 0 | 0 | 44 |
+| 120 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 121 | concrete-mathematics | 11 | 11 | 0 | 0 | 33 |
+| 122 | data-structures-visual | 11 | 11 | 0 | 0 | 33 |
+| 123 | game-network-core-tech | 11 | 11 | 0 | 0 | 33 |
+| 124 | go-in-action | 11 | 11 | 0 | 0 | 33 |
+| 125 | unity-advanced-programming | 11 | 11 | 0 | 0 | 33 |
+| 126 | nodejs-debugging-guide | 10 | 10 | 0 | 0 | 45 |
+| 127 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
+| 128 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 129 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 130 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 131 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 132 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 133 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 134 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 135 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 136 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 137 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 138 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 139 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 140 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 141 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 142 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 143 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 144 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 145 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 146 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 147 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 148 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 149 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 150 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 151 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 152 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 153 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 154 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 155 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 156 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 157 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 158 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 159 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
+| 160 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
+| 161 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 162 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 163 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 164 | car-structure-illustrated | 9 | 0 | 0 | 9 | 0 |
+| 165 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
 | 166 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 167 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
 | 168 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
