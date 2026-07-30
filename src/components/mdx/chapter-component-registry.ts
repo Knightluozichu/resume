@@ -7316,6 +7316,102 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Fla3OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "frontend-engineering/00-guide/feng-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-official-learning-map");
+    return {
+      FengOfficialLearningMapArchitectureLab:
+        module0.FengOfficialLearningMapArchitectureLab,
+      FengOfficialLearningMapExecutionTraceLab:
+        module0.FengOfficialLearningMapExecutionTraceLab,
+      FengOfficialLearningMapReleaseGateLab:
+        module0.FengOfficialLearningMapReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/01-foundations/feng-01-history": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-01-history");
+    return {
+      Feng01HistoryArchitectureLab: module0.Feng01HistoryArchitectureLab,
+      Feng01HistoryExecutionTraceLab: module0.Feng01HistoryExecutionTraceLab,
+      Feng01HistoryReleaseGateLab: module0.Feng01HistoryReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/01-foundations/feng-02-scaffolding": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-02-scaffolding");
+    return {
+      Feng02ScaffoldingArchitectureLab:
+        module0.Feng02ScaffoldingArchitectureLab,
+      Feng02ScaffoldingExecutionTraceLab:
+        module0.Feng02ScaffoldingExecutionTraceLab,
+      Feng02ScaffoldingReleaseGateLab: module0.Feng02ScaffoldingReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/02-build/feng-03-build": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-03-build");
+    return {
+      Feng03BuildArchitectureLab: module0.Feng03BuildArchitectureLab,
+      Feng03BuildExecutionTraceLab: module0.Feng03BuildExecutionTraceLab,
+      Feng03BuildReleaseGateLab: module0.Feng03BuildReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/03-development-delivery/feng-04-local-dev-server":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/frontend-engineering/v2/feng-04-local-dev-server");
+      return {
+        Feng04LocalDevServerArchitectureLab:
+          module0.Feng04LocalDevServerArchitectureLab,
+        Feng04LocalDevServerExecutionTraceLab:
+          module0.Feng04LocalDevServerExecutionTraceLab,
+        Feng04LocalDevServerReleaseGateLab:
+          module0.Feng04LocalDevServerReleaseGateLab,
+      } as ChapterMdxComponents;
+    },
+  "frontend-engineering/03-development-delivery/feng-05-deployment":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/frontend-engineering/v2/feng-05-deployment");
+      return {
+        Feng05DeploymentArchitectureLab:
+          module0.Feng05DeploymentArchitectureLab,
+        Feng05DeploymentExecutionTraceLab:
+          module0.Feng05DeploymentExecutionTraceLab,
+        Feng05DeploymentReleaseGateLab: module0.Feng05DeploymentReleaseGateLab,
+      } as ChapterMdxComponents;
+    },
+  "frontend-engineering/04-workflow-future/feng-06-workflow": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-06-workflow");
+    return {
+      Feng06WorkflowArchitectureLab: module0.Feng06WorkflowArchitectureLab,
+      Feng06WorkflowExecutionTraceLab: module0.Feng06WorkflowExecutionTraceLab,
+      Feng06WorkflowReleaseGateLab: module0.Feng06WorkflowReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/04-workflow-future/feng-07-future": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-07-future");
+    return {
+      Feng07FutureArchitectureLab: module0.Feng07FutureArchitectureLab,
+      Feng07FutureExecutionTraceLab: module0.Feng07FutureExecutionTraceLab,
+      Feng07FutureReleaseGateLab: module0.Feng07FutureReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "frontend-engineering/05-review/feng-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/frontend-engineering/v2/feng-official-final-review");
+    return {
+      FengOfficialFinalReviewArchitectureLab:
+        module0.FengOfficialFinalReviewArchitectureLab,
+      FengOfficialFinalReviewExecutionTraceLab:
+        module0.FengOfficialFinalReviewExecutionTraceLab,
+      FengOfficialFinalReviewReleaseGateLab:
+        module0.FengOfficialFinalReviewReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
   "global-illumination/01-foundations/agi-01-introduction": async () => {
     const module0 =
       await import("@/components/mdx/global-illumination/v2/agi-01-introduction");

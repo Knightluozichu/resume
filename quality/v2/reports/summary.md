@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-30T02:22:03.861Z；旧版分数不迁移。
+> 2026-07-30T02:34:17.238Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：3194
+- failed：3185
 - queued：402
-- passed：900
+- passed：909
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -160,66 +160,66 @@
 | 147 | game-server-programming | 10 | 10 | 0 | 0 | 30 |
 | 148 | linux-kernel-essence | 10 | 10 | 0 | 0 | 30 |
 | 149 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 150 | frontend-engineering | 9 | 9 | 0 | 0 | 40 |
-| 151 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
-| 152 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 153 | unity-animation | 9 | 9 | 0 | 0 | 27 |
-| 154 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
-| 155 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 156 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 157 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 158 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 159 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 160 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 161 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 162 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 163 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 164 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 165 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 166 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 167 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 168 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 169 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 170 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 171 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 172 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 173 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 174 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 175 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 176 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 177 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 178 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 179 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 180 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 181 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 182 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 183 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 184 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
-| 185 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
-| 186 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 187 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 188 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 189 | car-structure-illustrated | 9 | 0 | 0 | 9 | 0 |
-| 190 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
-| 191 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
-| 192 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
-| 193 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
-| 194 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
-| 195 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
-| 196 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 197 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
-| 198 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
-| 199 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
-| 200 | crazy-android | 21 | 0 | 0 | 21 | 0 |
-| 201 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
-| 202 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
-| 203 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
-| 204 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
-| 205 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
-| 206 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
-| 207 | easy-cpp-5e | 18 | 0 | 0 | 18 | 0 |
-| 208 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
-| 209 | first-line-android | 18 | 0 | 0 | 18 | 0 |
+| 150 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 27 |
+| 151 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 152 | unity-animation | 9 | 9 | 0 | 0 | 27 |
+| 153 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
+| 154 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 155 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 156 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 157 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 158 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 159 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 160 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 161 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 162 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 163 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 164 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 165 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 166 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 167 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 168 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 169 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 170 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 171 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 172 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 173 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 174 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 175 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 176 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 177 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 178 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 179 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 180 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 181 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 182 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 183 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
+| 184 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
+| 185 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 186 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 187 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 188 | car-structure-illustrated | 9 | 0 | 0 | 9 | 0 |
+| 189 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
+| 190 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
+| 191 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
+| 192 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
+| 193 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
+| 194 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
+| 195 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
+| 196 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
+| 197 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
+| 198 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
+| 199 | crazy-android | 21 | 0 | 0 | 21 | 0 |
+| 200 | csharp-functional-programming | 17 | 0 | 0 | 17 | 0 |
+| 201 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
+| 202 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
+| 203 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
+| 204 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
+| 205 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
+| 206 | easy-cpp-5e | 18 | 0 | 0 | 18 | 0 |
+| 207 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
+| 208 | first-line-android | 18 | 0 | 0 | 18 | 0 |
+| 209 | frontend-engineering | 9 | 0 | 0 | 9 | 0 |
 | 210 | global-illumination | 12 | 0 | 0 | 12 | 0 |
 | 211 | http-definitive-guide | 38 | 0 | 0 | 38 | 0 |
 | 212 | illustrated-http | 13 | 0 | 0 | 13 | 0 |
