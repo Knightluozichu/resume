@@ -8292,6 +8292,139 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       TheoryFaultLab: module0.TheoryFaultLab,
     } as ChapterMdxComponents;
   },
+  "linear-algebra-done-right/00-guide/lad4-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/linear-algebra-done-right/v2/lad4-official-learning-map");
+    return {
+      Lad4OfficialLearningMapAssumptionLab:
+        module0.Lad4OfficialLearningMapAssumptionLab,
+      Lad4OfficialLearningMapProofLab: module0.Lad4OfficialLearningMapProofLab,
+      Lad4OfficialLearningMapCounterexampleLab:
+        module0.Lad4OfficialLearningMapCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "linear-algebra-done-right/01-vector-spaces/lad4-finite-dimensional-vector-spaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-finite-dimensional-vector-spaces");
+      return {
+        Lad4FiniteDimensionalVectorSpacesAssumptionLab:
+          module0.Lad4FiniteDimensionalVectorSpacesAssumptionLab,
+        Lad4FiniteDimensionalVectorSpacesProofLab:
+          module0.Lad4FiniteDimensionalVectorSpacesProofLab,
+        Lad4FiniteDimensionalVectorSpacesCounterexampleLab:
+          module0.Lad4FiniteDimensionalVectorSpacesCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/01-vector-spaces/lad4-vector-spaces": async () => {
+    const module0 =
+      await import("@/components/mdx/linear-algebra-done-right/v2/lad4-vector-spaces");
+    return {
+      Lad4VectorSpacesAssumptionLab: module0.Lad4VectorSpacesAssumptionLab,
+      Lad4VectorSpacesProofLab: module0.Lad4VectorSpacesProofLab,
+      Lad4VectorSpacesCounterexampleLab:
+        module0.Lad4VectorSpacesCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "linear-algebra-done-right/02-maps-polynomials/lad4-linear-maps":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-linear-maps");
+      return {
+        Lad4LinearMapsAssumptionLab: module0.Lad4LinearMapsAssumptionLab,
+        Lad4LinearMapsProofLab: module0.Lad4LinearMapsProofLab,
+        Lad4LinearMapsCounterexampleLab:
+          module0.Lad4LinearMapsCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/02-maps-polynomials/lad4-polynomials":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-polynomials");
+      return {
+        Lad4PolynomialsAssumptionLab: module0.Lad4PolynomialsAssumptionLab,
+        Lad4PolynomialsProofLab: module0.Lad4PolynomialsProofLab,
+        Lad4PolynomialsCounterexampleLab:
+          module0.Lad4PolynomialsCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/03-spectral-inner/lad4-eigenvalues-eigenvectors":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-eigenvalues-eigenvectors");
+      return {
+        Lad4EigenvaluesEigenvectorsAssumptionLab:
+          module0.Lad4EigenvaluesEigenvectorsAssumptionLab,
+        Lad4EigenvaluesEigenvectorsProofLab:
+          module0.Lad4EigenvaluesEigenvectorsProofLab,
+        Lad4EigenvaluesEigenvectorsCounterexampleLab:
+          module0.Lad4EigenvaluesEigenvectorsCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/03-spectral-inner/lad4-inner-product-spaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-inner-product-spaces");
+      return {
+        Lad4InnerProductSpacesAssumptionLab:
+          module0.Lad4InnerProductSpacesAssumptionLab,
+        Lad4InnerProductSpacesProofLab: module0.Lad4InnerProductSpacesProofLab,
+        Lad4InnerProductSpacesCounterexampleLab:
+          module0.Lad4InnerProductSpacesCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/04-operators/lad4-operators-complex-vector-spaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-operators-complex-vector-spaces");
+      return {
+        Lad4OperatorsComplexVectorSpacesAssumptionLab:
+          module0.Lad4OperatorsComplexVectorSpacesAssumptionLab,
+        Lad4OperatorsComplexVectorSpacesProofLab:
+          module0.Lad4OperatorsComplexVectorSpacesProofLab,
+        Lad4OperatorsComplexVectorSpacesCounterexampleLab:
+          module0.Lad4OperatorsComplexVectorSpacesCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/04-operators/lad4-operators-inner-product-spaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-operators-inner-product-spaces");
+      return {
+        Lad4OperatorsInnerProductSpacesAssumptionLab:
+          module0.Lad4OperatorsInnerProductSpacesAssumptionLab,
+        Lad4OperatorsInnerProductSpacesProofLab:
+          module0.Lad4OperatorsInnerProductSpacesProofLab,
+        Lad4OperatorsInnerProductSpacesCounterexampleLab:
+          module0.Lad4OperatorsInnerProductSpacesCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/05-multilinear/lad4-multilinear-algebra-determinants":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-multilinear-algebra-determinants");
+      return {
+        Lad4MultilinearAlgebraDeterminantsAssumptionLab:
+          module0.Lad4MultilinearAlgebraDeterminantsAssumptionLab,
+        Lad4MultilinearAlgebraDeterminantsProofLab:
+          module0.Lad4MultilinearAlgebraDeterminantsProofLab,
+        Lad4MultilinearAlgebraDeterminantsCounterexampleLab:
+          module0.Lad4MultilinearAlgebraDeterminantsCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "linear-algebra-done-right/06-review/lad4-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linear-algebra-done-right/v2/lad4-official-final-review");
+      return {
+        Lad4OfficialFinalReviewAssumptionLab:
+          module0.Lad4OfficialFinalReviewAssumptionLab,
+        Lad4OfficialFinalReviewProofLab:
+          module0.Lad4OfficialFinalReviewProofLab,
+        Lad4OfficialFinalReviewCounterexampleLab:
+          module0.Lad4OfficialFinalReviewCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
   "modern-cpp-design/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/modern-cpp-design/learning-map");

@@ -46,6 +46,10 @@ export interface AttributionProps {
   adaptedFrom?: string;
   /** 原作链接（如 Packt 图书页） */
   adaptedUrl?: string;
+  /** 授权改编所依据的许可证名称。 */
+  licenseName?: string;
+  /** 许可证全文或摘要链接。 */
+  licenseUrl?: string;
   /** v2 来源模式；旧章不传时按 URL 保守推断。 */
   mode?: "licensed-adaptation" | "independent-rewrite" | "original";
   /** independent-rewrite 模式下显示的参考书名。 */
@@ -58,6 +62,8 @@ export function Attribution({
   sourceUrl = "",
   adaptedFrom,
   adaptedUrl,
+  licenseName,
+  licenseUrl,
   mode,
   workTitle,
   sourceBasis = "outline-only",
@@ -154,7 +160,25 @@ export function Attribution({
           。教学结构与表述经 remuse 重写，非逐字翻译。
         </p>
         <p className="mt-2">
-          原作版权归原出版社及作者所有；本站改编内容仅供学习交流，请勿用于商业用途。
+          {licenseName ? (
+            <>
+              本改编遵循{" "}
+              {licenseUrl ? (
+                <a
+                  href={licenseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                >
+                  {licenseName}
+                </a>
+              ) : (
+                licenseName
+              )}
+              ；已标注来源与改动，且仅供非商业学习交流。
+            </>
+          ) : (
+            "原作版权归原出版社及作者所有；本站改编内容仅供学习交流，请勿用于商业用途。"
+          )}
         </p>
       </footer>
     );
