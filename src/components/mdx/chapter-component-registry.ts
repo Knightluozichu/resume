@@ -7524,6 +7524,120 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.FengOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "game-server-programming/00-guide/gsp-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-official-learning-map");
+    return {
+      GspOfficialLearningMapRequestPath:
+        module0.GspOfficialLearningMapRequestPath,
+      GspOfficialLearningMapFailureTraceLab:
+        module0.GspOfficialLearningMapFailureTraceLab,
+      GspOfficialLearningMapOperationalGateLab:
+        module0.GspOfficialLearningMapOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/01-foundations/gsp-01-network-programming-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-server-programming/v2/gsp-01-network-programming-foundations");
+      return {
+        Gsp01NetworkProgrammingFoundationsRequestPath:
+          module0.Gsp01NetworkProgrammingFoundationsRequestPath,
+        Gsp01NetworkProgrammingFoundationsFailureTraceLab:
+          module0.Gsp01NetworkProgrammingFoundationsFailureTraceLab,
+        Gsp01NetworkProgrammingFoundationsOperationalGateLab:
+          module0.Gsp01NetworkProgrammingFoundationsOperationalGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-server-programming/01-foundations/gsp-02-multithreading": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-02-multithreading");
+    return {
+      Gsp02MultithreadingRequestPath: module0.Gsp02MultithreadingRequestPath,
+      Gsp02MultithreadingFailureTraceLab:
+        module0.Gsp02MultithreadingFailureTraceLab,
+      Gsp02MultithreadingOperationalGateLab:
+        module0.Gsp02MultithreadingOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/02-communication-security/gsp-03-efficient-communication-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-server-programming/v2/gsp-03-efficient-communication-models");
+      return {
+        Gsp03EfficientCommunicationModelsRequestPath:
+          module0.Gsp03EfficientCommunicationModelsRequestPath,
+        Gsp03EfficientCommunicationModelsFailureTraceLab:
+          module0.Gsp03EfficientCommunicationModelsFailureTraceLab,
+        Gsp03EfficientCommunicationModelsOperationalGateLab:
+          module0.Gsp03EfficientCommunicationModelsOperationalGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-server-programming/02-communication-security/gsp-04-game-data-encryption":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-server-programming/v2/gsp-04-game-data-encryption");
+      return {
+        Gsp04GameDataEncryptionRequestPath:
+          module0.Gsp04GameDataEncryptionRequestPath,
+        Gsp04GameDataEncryptionFailureTraceLab:
+          module0.Gsp04GameDataEncryptionFailureTraceLab,
+        Gsp04GameDataEncryptionOperationalGateLab:
+          module0.Gsp04GameDataEncryptionOperationalGateLab,
+      } as ChapterMdxComponents;
+    },
+  "game-server-programming/03-systems/gsp-05-game-database": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-05-game-database");
+    return {
+      Gsp05GameDatabaseRequestPath: module0.Gsp05GameDatabaseRequestPath,
+      Gsp05GameDatabaseFailureTraceLab:
+        module0.Gsp05GameDatabaseFailureTraceLab,
+      Gsp05GameDatabaseOperationalGateLab:
+        module0.Gsp05GameDatabaseOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/03-systems/gsp-06-game-lobby": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-06-game-lobby");
+    return {
+      Gsp06GameLobbyRequestPath: module0.Gsp06GameLobbyRequestPath,
+      Gsp06GameLobbyFailureTraceLab: module0.Gsp06GameLobbyFailureTraceLab,
+      Gsp06GameLobbyOperationalGateLab:
+        module0.Gsp06GameLobbyOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/03-systems/gsp-07-gm-tool": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-07-gm-tool");
+    return {
+      Gsp07GmToolRequestPath: module0.Gsp07GmToolRequestPath,
+      Gsp07GmToolFailureTraceLab: module0.Gsp07GmToolFailureTraceLab,
+      Gsp07GmToolOperationalGateLab: module0.Gsp07GmToolOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/03-systems/gsp-08-auto-update": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-08-auto-update");
+    return {
+      Gsp08AutoUpdateRequestPath: module0.Gsp08AutoUpdateRequestPath,
+      Gsp08AutoUpdateFailureTraceLab: module0.Gsp08AutoUpdateFailureTraceLab,
+      Gsp08AutoUpdateOperationalGateLab:
+        module0.Gsp08AutoUpdateOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
+  "game-server-programming/04-review/gsp-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/game-server-programming/v2/gsp-official-final-review");
+    return {
+      GspOfficialFinalReviewRequestPath:
+        module0.GspOfficialFinalReviewRequestPath,
+      GspOfficialFinalReviewFailureTraceLab:
+        module0.GspOfficialFinalReviewFailureTraceLab,
+      GspOfficialFinalReviewOperationalGateLab:
+        module0.GspOfficialFinalReviewOperationalGateLab,
+    } as ChapterMdxComponents;
+  },
   "global-illumination/01-foundations/agi-01-introduction": async () => {
     const module0 =
       await import("@/components/mdx/global-illumination/v2/agi-01-introduction");
