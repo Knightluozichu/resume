@@ -1585,172 +1585,175 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "android-design-patterns/00-official-learning-map/adp-official-learning-map":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-official-learning-map"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-official-learning-map");
       return {
-        AdpOfficialLearningMapLab: modules[0].AdpOfficialLearningMapLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        AdpOfficialLearningMapResponsibilityContractLab:
+          module0.AdpOfficialLearningMapResponsibilityContractLab,
+        AdpOfficialLearningMapLifecycleTraceLab:
+          module0.AdpOfficialLearningMapLifecycleTraceLab,
+        AdpOfficialLearningMapMigrationGateLab:
+          module0.AdpOfficialLearningMapMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/01-preface/adp-preface": async () => {
-    const modules = await Promise.all([
-      import("@/components/mdx/android-design-patterns/adp-preface"),
-      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-    ]);
+    const module0 =
+      await import("@/components/mdx/android-design-patterns/v2/adp-preface");
     return {
-      AdpPrefaceLab: modules[0].AdpPrefaceLab,
-      AndroidDecisionMap: modules[1].AndroidDecisionMap,
-      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      AdpPrefaceResponsibilityContractLab:
+        module0.AdpPrefaceResponsibilityContractLab,
+      AdpPrefaceLifecycleTraceLab: module0.AdpPrefaceLifecycleTraceLab,
+      AdpPrefaceMigrationGateLab: module0.AdpPrefaceMigrationGateLab,
     } as ChapterMdxComponents;
   },
   "android-design-patterns/02-chapter-01/adp-01-android-app-basic-structure":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-01-android-app-basic-structure"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-01-android-app-basic-structure");
       return {
-        Adp01AndroidAppBasicStructureLab:
-          modules[0].Adp01AndroidAppBasicStructureLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp01AndroidAppBasicStructureResponsibilityContractLab:
+          module0.Adp01AndroidAppBasicStructureResponsibilityContractLab,
+        Adp01AndroidAppBasicStructureLifecycleTraceLab:
+          module0.Adp01AndroidAppBasicStructureLifecycleTraceLab,
+        Adp01AndroidAppBasicStructureMigrationGateLab:
+          module0.Adp01AndroidAppBasicStructureMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/03-chapter-02/adp-02-mvvm-application-structure":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-02-mvvm-application-structure"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-02-mvvm-application-structure");
       return {
-        Adp02MvvmApplicationStructureLab:
-          modules[0].Adp02MvvmApplicationStructureLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp02MvvmApplicationStructureResponsibilityContractLab:
+          module0.Adp02MvvmApplicationStructureResponsibilityContractLab,
+        Adp02MvvmApplicationStructureLifecycleTraceLab:
+          module0.Adp02MvvmApplicationStructureLifecycleTraceLab,
+        Adp02MvvmApplicationStructureMigrationGateLab:
+          module0.Adp02MvvmApplicationStructureMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/04-chapter-03/adp-03-mvp-application-structure":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-03-mvp-application-structure"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-03-mvp-application-structure");
       return {
-        Adp03MvpApplicationStructureLab:
-          modules[0].Adp03MvpApplicationStructureLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp03MvpApplicationStructureResponsibilityContractLab:
+          module0.Adp03MvpApplicationStructureResponsibilityContractLab,
+        Adp03MvpApplicationStructureLifecycleTraceLab:
+          module0.Adp03MvpApplicationStructureLifecycleTraceLab,
+        Adp03MvpApplicationStructureMigrationGateLab:
+          module0.Adp03MvpApplicationStructureMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/05-chapter-04/adp-04-incremental-development-design":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-04-incremental-development-design"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-04-incremental-development-design");
       return {
-        Adp04IncrementalDevelopmentDesignLab:
-          modules[0].Adp04IncrementalDevelopmentDesignLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp04IncrementalDevelopmentDesignResponsibilityContractLab:
+          module0.Adp04IncrementalDevelopmentDesignResponsibilityContractLab,
+        Adp04IncrementalDevelopmentDesignLifecycleTraceLab:
+          module0.Adp04IncrementalDevelopmentDesignLifecycleTraceLab,
+        Adp04IncrementalDevelopmentDesignMigrationGateLab:
+          module0.Adp04IncrementalDevelopmentDesignMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/06-chapter-05/adp-05-designer-role-in-oss":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-05-designer-role-in-oss"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-05-designer-role-in-oss");
       return {
-        Adp05DesignerRoleInOssLab: modules[0].Adp05DesignerRoleInOssLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp05DesignerRoleInOssResponsibilityContractLab:
+          module0.Adp05DesignerRoleInOssResponsibilityContractLab,
+        Adp05DesignerRoleInOssLifecycleTraceLab:
+          module0.Adp05DesignerRoleInOssLifecycleTraceLab,
+        Adp05DesignerRoleInOssMigrationGateLab:
+          module0.Adp05DesignerRoleInOssMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/07-chapter-06/adp-06-flux-architecture":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-06-flux-architecture"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-06-flux-architecture");
       return {
-        Adp06FluxArchitectureLab: modules[0].Adp06FluxArchitectureLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp06FluxArchitectureResponsibilityContractLab:
+          module0.Adp06FluxArchitectureResponsibilityContractLab,
+        Adp06FluxArchitectureLifecycleTraceLab:
+          module0.Adp06FluxArchitectureLifecycleTraceLab,
+        Adp06FluxArchitectureMigrationGateLab:
+          module0.Adp06FluxArchitectureMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/08-chapter-07/adp-07-team-and-architecture":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-07-team-and-architecture"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-07-team-and-architecture");
       return {
-        Adp07TeamAndArchitectureLab: modules[0].Adp07TeamAndArchitectureLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp07TeamAndArchitectureResponsibilityContractLab:
+          module0.Adp07TeamAndArchitectureResponsibilityContractLab,
+        Adp07TeamAndArchitectureLifecycleTraceLab:
+          module0.Adp07TeamAndArchitectureLifecycleTraceLab,
+        Adp07TeamAndArchitectureMigrationGateLab:
+          module0.Adp07TeamAndArchitectureMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/09-chapter-08/adp-08-android-architecture-components":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-08-android-architecture-components"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-08-android-architecture-components");
       return {
-        Adp08AndroidArchitectureComponentsLab:
-          modules[0].Adp08AndroidArchitectureComponentsLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        Adp08AndroidArchitectureComponentsResponsibilityContractLab:
+          module0.Adp08AndroidArchitectureComponentsResponsibilityContractLab,
+        Adp08AndroidArchitectureComponentsLifecycleTraceLab:
+          module0.Adp08AndroidArchitectureComponentsLifecycleTraceLab,
+        Adp08AndroidArchitectureComponentsMigrationGateLab:
+          module0.Adp08AndroidArchitectureComponentsMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/10-afterword/adp-afterword": async () => {
-    const modules = await Promise.all([
-      import("@/components/mdx/android-design-patterns/adp-afterword"),
-      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-    ]);
+    const module0 =
+      await import("@/components/mdx/android-design-patterns/v2/adp-afterword");
     return {
-      AdpAfterwordLab: modules[0].AdpAfterwordLab,
-      AndroidDecisionMap: modules[1].AndroidDecisionMap,
-      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      AdpAfterwordResponsibilityContractLab:
+        module0.AdpAfterwordResponsibilityContractLab,
+      AdpAfterwordLifecycleTraceLab: module0.AdpAfterwordLifecycleTraceLab,
+      AdpAfterwordMigrationGateLab: module0.AdpAfterwordMigrationGateLab,
     } as ChapterMdxComponents;
   },
   "android-design-patterns/11-index/adp-index": async () => {
-    const modules = await Promise.all([
-      import("@/components/mdx/android-design-patterns/adp-index"),
-      import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-    ]);
+    const module0 =
+      await import("@/components/mdx/android-design-patterns/v2/adp-index");
     return {
-      AdpIndexLab: modules[0].AdpIndexLab,
-      AndroidDecisionMap: modules[1].AndroidDecisionMap,
-      AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+      AdpIndexResponsibilityContractLab:
+        module0.AdpIndexResponsibilityContractLab,
+      AdpIndexLifecycleTraceLab: module0.AdpIndexLifecycleTraceLab,
+      AdpIndexMigrationGateLab: module0.AdpIndexMigrationGateLab,
     } as ChapterMdxComponents;
   },
   "android-design-patterns/12-author-profiles/adp-author-profiles":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-author-profiles"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-author-profiles");
       return {
-        AdpAuthorProfilesLab: modules[0].AdpAuthorProfilesLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        AdpAuthorProfilesResponsibilityContractLab:
+          module0.AdpAuthorProfilesResponsibilityContractLab,
+        AdpAuthorProfilesLifecycleTraceLab:
+          module0.AdpAuthorProfilesLifecycleTraceLab,
+        AdpAuthorProfilesMigrationGateLab:
+          module0.AdpAuthorProfilesMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-design-patterns/13-official-final-review/adp-official-final-review":
     async () => {
-      const modules = await Promise.all([
-        import("@/components/mdx/android-design-patterns/adp-official-final-review"),
-        import("@/components/mdx/android-design-patterns/android-architecture-lab"),
-      ]);
+      const module0 =
+        await import("@/components/mdx/android-design-patterns/v2/adp-official-final-review");
       return {
-        AdpOfficialFinalReviewLab: modules[0].AdpOfficialFinalReviewLab,
-        AndroidDecisionMap: modules[1].AndroidDecisionMap,
-        AndroidFailureTimeline: modules[1].AndroidFailureTimeline,
+        AdpOfficialFinalReviewResponsibilityContractLab:
+          module0.AdpOfficialFinalReviewResponsibilityContractLab,
+        AdpOfficialFinalReviewLifecycleTraceLab:
+          module0.AdpOfficialFinalReviewLifecycleTraceLab,
+        AdpOfficialFinalReviewMigrationGateLab:
+          module0.AdpOfficialFinalReviewMigrationGateLab,
       } as ChapterMdxComponents;
     },
   "android-perf-optimization/00-official-learning-map/apo12-official-learning-map":

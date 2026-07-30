@@ -389,7 +389,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "c-primer-plus": "C Primer Plus（第6版）",
   "coding-interviews": "剑指Offer：名企面试官精讲典型编程题（第2版）",
   "big-nerd-ranch-guide": "Android 编程权威指南（第4版）",
-  "android-design-patterns": "Android アプリ设计パターン入门",
+  "android-design-patterns": "Android 应用设计模式入门",
   "android-advanced-decryption": "Android进阶解密",
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity 游戏性能分析终极指南（Unity 6 第 2 版）",
