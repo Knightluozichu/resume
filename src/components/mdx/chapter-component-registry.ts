@@ -8242,6 +8242,205 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Hdg1OfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "illustrated-ai/00-guide/iai-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-official-learning-map");
+    return {
+      IaiOfficialLearningMapKnowledgeStateLab:
+        module0.IaiOfficialLearningMapKnowledgeStateLab,
+      IaiOfficialLearningMapExecutionTraceLab:
+        module0.IaiOfficialLearningMapExecutionTraceLab,
+      IaiOfficialLearningMapSystemGateLab:
+        module0.IaiOfficialLearningMapSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/01-foundations/iai-01-ai-past-present-future": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-01-ai-past-present-future");
+    return {
+      Iai01AiPastPresentFutureKnowledgeStateLab:
+        module0.Iai01AiPastPresentFutureKnowledgeStateLab,
+      Iai01AiPastPresentFutureExecutionTraceLab:
+        module0.Iai01AiPastPresentFutureExecutionTraceLab,
+      Iai01AiPastPresentFutureSystemGateLab:
+        module0.Iai01AiPastPresentFutureSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/01-foundations/iai-02-rule-systems-variants": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-02-rule-systems-variants");
+    return {
+      Iai02RuleSystemsVariantsKnowledgeStateLab:
+        module0.Iai02RuleSystemsVariantsKnowledgeStateLab,
+      Iai02RuleSystemsVariantsExecutionTraceLab:
+        module0.Iai02RuleSystemsVariantsExecutionTraceLab,
+      Iai02RuleSystemsVariantsSystemGateLab:
+        module0.Iai02RuleSystemsVariantsSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/01-foundations/iai-03-automata-artificial-life": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-03-automata-artificial-life");
+    return {
+      Iai03AutomataArtificialLifeKnowledgeStateLab:
+        module0.Iai03AutomataArtificialLifeKnowledgeStateLab,
+      Iai03AutomataArtificialLifeExecutionTraceLab:
+        module0.Iai03AutomataArtificialLifeExecutionTraceLab,
+      Iai03AutomataArtificialLifeSystemGateLab:
+        module0.Iai03AutomataArtificialLifeSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/02-weight-optimization/iai-04-weighting-optimal-solutions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-04-weighting-optimal-solutions");
+      return {
+        Iai04WeightingOptimalSolutionsKnowledgeStateLab:
+          module0.Iai04WeightingOptimalSolutionsKnowledgeStateLab,
+        Iai04WeightingOptimalSolutionsExecutionTraceLab:
+          module0.Iai04WeightingOptimalSolutionsExecutionTraceLab,
+        Iai04WeightingOptimalSolutionsSystemGateLab:
+          module0.Iai04WeightingOptimalSolutionsSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/02-weight-optimization/iai-05-weighting-optimization-programs":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-05-weighting-optimization-programs");
+      return {
+        Iai05WeightingOptimizationProgramsKnowledgeStateLab:
+          module0.Iai05WeightingOptimizationProgramsKnowledgeStateLab,
+        Iai05WeightingOptimizationProgramsExecutionTraceLab:
+          module0.Iai05WeightingOptimizationProgramsExecutionTraceLab,
+        Iai05WeightingOptimizationProgramsSystemGateLab:
+          module0.Iai05WeightingOptimizationProgramsSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/03-statistical-learning/iai-06-statistical-ml-probability-modeling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-06-statistical-ml-probability-modeling");
+      return {
+        Iai06StatisticalMlProbabilityModelingKnowledgeStateLab:
+          module0.Iai06StatisticalMlProbabilityModelingKnowledgeStateLab,
+        Iai06StatisticalMlProbabilityModelingExecutionTraceLab:
+          module0.Iai06StatisticalMlProbabilityModelingExecutionTraceLab,
+        Iai06StatisticalMlProbabilityModelingSystemGateLab:
+          module0.Iai06StatisticalMlProbabilityModelingSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/03-statistical-learning/iai-07-statistical-ml-supervised-unsupervised":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-07-statistical-ml-supervised-unsupervised");
+      return {
+        Iai07StatisticalMlSupervisedUnsupervisedKnowledgeStateLab:
+          module0.Iai07StatisticalMlSupervisedUnsupervisedKnowledgeStateLab,
+        Iai07StatisticalMlSupervisedUnsupervisedExecutionTraceLab:
+          module0.Iai07StatisticalMlSupervisedUnsupervisedExecutionTraceLab,
+        Iai07StatisticalMlSupervisedUnsupervisedSystemGateLab:
+          module0.Iai07StatisticalMlSupervisedUnsupervisedSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/04-modern-learning/iai-08-reinforcement-distributed-ai":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-08-reinforcement-distributed-ai");
+      return {
+        Iai08ReinforcementDistributedAiKnowledgeStateLab:
+          module0.Iai08ReinforcementDistributedAiKnowledgeStateLab,
+        Iai08ReinforcementDistributedAiExecutionTraceLab:
+          module0.Iai08ReinforcementDistributedAiExecutionTraceLab,
+        Iai08ReinforcementDistributedAiSystemGateLab:
+          module0.Iai08ReinforcementDistributedAiSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/04-modern-learning/iai-09-deep-learning": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-09-deep-learning");
+    return {
+      Iai09DeepLearningKnowledgeStateLab:
+        module0.Iai09DeepLearningKnowledgeStateLab,
+      Iai09DeepLearningExecutionTraceLab:
+        module0.Iai09DeepLearningExecutionTraceLab,
+      Iai09DeepLearningSystemGateLab: module0.Iai09DeepLearningSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/05-perception-language/iai-10-image-speech-pattern-recognition":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-10-image-speech-pattern-recognition");
+      return {
+        Iai10ImageSpeechPatternRecognitionKnowledgeStateLab:
+          module0.Iai10ImageSpeechPatternRecognitionKnowledgeStateLab,
+        Iai10ImageSpeechPatternRecognitionExecutionTraceLab:
+          module0.Iai10ImageSpeechPatternRecognitionExecutionTraceLab,
+        Iai10ImageSpeechPatternRecognitionSystemGateLab:
+          module0.Iai10ImageSpeechPatternRecognitionSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/05-perception-language/iai-11-nlp-machine-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-11-nlp-machine-learning");
+      return {
+        Iai11NlpMachineLearningKnowledgeStateLab:
+          module0.Iai11NlpMachineLearningKnowledgeStateLab,
+        Iai11NlpMachineLearningExecutionTraceLab:
+          module0.Iai11NlpMachineLearningExecutionTraceLab,
+        Iai11NlpMachineLearningSystemGateLab:
+          module0.Iai11NlpMachineLearningSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/06-knowledge-computing/iai-12-knowledge-representation-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-12-knowledge-representation-data-structures");
+      return {
+        Iai12KnowledgeRepresentationDataStructuresKnowledgeStateLab:
+          module0.Iai12KnowledgeRepresentationDataStructuresKnowledgeStateLab,
+        Iai12KnowledgeRepresentationDataStructuresExecutionTraceLab:
+          module0.Iai12KnowledgeRepresentationDataStructuresExecutionTraceLab,
+        Iai12KnowledgeRepresentationDataStructuresSystemGateLab:
+          module0.Iai12KnowledgeRepresentationDataStructuresSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/06-knowledge-computing/iai-13-distributed-computing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/illustrated-ai/v2/iai-13-distributed-computing");
+      return {
+        Iai13DistributedComputingKnowledgeStateLab:
+          module0.Iai13DistributedComputingKnowledgeStateLab,
+        Iai13DistributedComputingExecutionTraceLab:
+          module0.Iai13DistributedComputingExecutionTraceLab,
+        Iai13DistributedComputingSystemGateLab:
+          module0.Iai13DistributedComputingSystemGateLab,
+      } as ChapterMdxComponents;
+    },
+  "illustrated-ai/07-systems-future/iai-14-big-data-iot": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-14-big-data-iot");
+    return {
+      Iai14BigDataIotKnowledgeStateLab:
+        module0.Iai14BigDataIotKnowledgeStateLab,
+      Iai14BigDataIotExecutionTraceLab:
+        module0.Iai14BigDataIotExecutionTraceLab,
+      Iai14BigDataIotSystemGateLab: module0.Iai14BigDataIotSystemGateLab,
+    } as ChapterMdxComponents;
+  },
+  "illustrated-ai/08-review/iai-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/illustrated-ai/v2/iai-official-final-review");
+    return {
+      IaiOfficialFinalReviewKnowledgeStateLab:
+        module0.IaiOfficialFinalReviewKnowledgeStateLab,
+      IaiOfficialFinalReviewExecutionTraceLab:
+        module0.IaiOfficialFinalReviewExecutionTraceLab,
+      IaiOfficialFinalReviewSystemGateLab:
+        module0.IaiOfficialFinalReviewSystemGateLab,
+    } as ChapterMdxComponents;
+  },
   "illustrated-dl/00-guide/idl-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/illustrated-dl/v2/idl-official-learning-map");
