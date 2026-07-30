@@ -6460,6 +6460,120 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.CsecOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "data-structures-visual/00-intro/dsv-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/dsv-learning-map");
+    return {
+      DsvLearningMapRepresentationContractLab:
+        module0.DsvLearningMapRepresentationContractLab,
+      DsvLearningMapOperationCounterLab:
+        module0.DsvLearningMapOperationCounterLab,
+      DsvLearningMapTraceGateLab: module0.DsvLearningMapTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/01-foundations/algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/algorithms");
+    return {
+      AlgorithmsRepresentationContractLab:
+        module0.AlgorithmsRepresentationContractLab,
+      AlgorithmsOperationCounterLab: module0.AlgorithmsOperationCounterLab,
+      AlgorithmsTraceGateLab: module0.AlgorithmsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/01-foundations/data-structure-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/data-structures-visual/v2/data-structure-introduction");
+      return {
+        DataStructureIntroductionRepresentationContractLab:
+          module0.DataStructureIntroductionRepresentationContractLab,
+        DataStructureIntroductionOperationCounterLab:
+          module0.DataStructureIntroductionOperationCounterLab,
+        DataStructureIntroductionTraceGateLab:
+          module0.DataStructureIntroductionTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "data-structures-visual/02-linear/linear-list": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/linear-list");
+    return {
+      LinearListRepresentationContractLab:
+        module0.LinearListRepresentationContractLab,
+      LinearListOperationCounterLab: module0.LinearListOperationCounterLab,
+      LinearListTraceGateLab: module0.LinearListTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/02-linear/stacks-and-queues": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/stacks-and-queues");
+    return {
+      StacksAndQueuesRepresentationContractLab:
+        module0.StacksAndQueuesRepresentationContractLab,
+      StacksAndQueuesOperationCounterLab:
+        module0.StacksAndQueuesOperationCounterLab,
+      StacksAndQueuesTraceGateLab: module0.StacksAndQueuesTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/02-linear/strings": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/strings");
+    return {
+      StringsRepresentationContractLab:
+        module0.StringsRepresentationContractLab,
+      StringsOperationCounterLab: module0.StringsOperationCounterLab,
+      StringsTraceGateLab: module0.StringsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/03-algorithms/dsv-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/dsv-final-review");
+    return {
+      DsvFinalReviewRepresentationContractLab:
+        module0.DsvFinalReviewRepresentationContractLab,
+      DsvFinalReviewOperationCounterLab:
+        module0.DsvFinalReviewOperationCounterLab,
+      DsvFinalReviewTraceGateLab: module0.DsvFinalReviewTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/03-trees/graphs": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/graphs");
+    return {
+      GraphsRepresentationContractLab: module0.GraphsRepresentationContractLab,
+      GraphsOperationCounterLab: module0.GraphsOperationCounterLab,
+      GraphsTraceGateLab: module0.GraphsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/03-trees/trees": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/trees");
+    return {
+      TreesRepresentationContractLab: module0.TreesRepresentationContractLab,
+      TreesOperationCounterLab: module0.TreesOperationCounterLab,
+      TreesTraceGateLab: module0.TreesTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/04-algorithms/searching": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/searching");
+    return {
+      SearchingRepresentationContractLab:
+        module0.SearchingRepresentationContractLab,
+      SearchingOperationCounterLab: module0.SearchingOperationCounterLab,
+      SearchingTraceGateLab: module0.SearchingTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "data-structures-visual/04-algorithms/sorting": async () => {
+    const module0 =
+      await import("@/components/mdx/data-structures-visual/v2/sorting");
+    return {
+      SortingRepresentationContractLab:
+        module0.SortingRepresentationContractLab,
+      SortingOperationCounterLab: module0.SortingOperationCounterLab,
+      SortingTraceGateLab: module0.SortingTraceGateLab,
+    } as ChapterMdxComponents;
+  },
   "deep-android-kernel/00-official-learning-map/dak-14-official-learning-map":
     async () => {
       const module0 =
