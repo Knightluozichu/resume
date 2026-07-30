@@ -8539,6 +8539,302 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DogFinalReviewEvidenceLab: module0.DogFinalReviewEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "deep-reinforcement-learning/00-learning-map/drl-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-official-learning-map");
+      return {
+        DrlOfficialLearningMapEnvironmentContractLab:
+          module0.DrlOfficialLearningMapEnvironmentContractLab,
+        DrlOfficialLearningMapReturnUpdateTraceLab:
+          module0.DrlOfficialLearningMapReturnUpdateTraceLab,
+        DrlOfficialLearningMapEvaluationGateLab:
+          module0.DrlOfficialLearningMapEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/01-foundations/drl-01-machine-learning-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-01-machine-learning-foundations");
+      return {
+        Drl01MachineLearningFoundationsEnvironmentContractLab:
+          module0.Drl01MachineLearningFoundationsEnvironmentContractLab,
+        Drl01MachineLearningFoundationsReturnUpdateTraceLab:
+          module0.Drl01MachineLearningFoundationsReturnUpdateTraceLab,
+        Drl01MachineLearningFoundationsEvaluationGateLab:
+          module0.Drl01MachineLearningFoundationsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/01-foundations/drl-02-monte-carlo-method":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-02-monte-carlo-method");
+      return {
+        Drl02MonteCarloMethodEnvironmentContractLab:
+          module0.Drl02MonteCarloMethodEnvironmentContractLab,
+        Drl02MonteCarloMethodReturnUpdateTraceLab:
+          module0.Drl02MonteCarloMethodReturnUpdateTraceLab,
+        Drl02MonteCarloMethodEvaluationGateLab:
+          module0.Drl02MonteCarloMethodEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/01-foundations/drl-03-reinforcement-learning-concepts":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-03-reinforcement-learning-concepts");
+      return {
+        Drl03ReinforcementLearningConceptsEnvironmentContractLab:
+          module0.Drl03ReinforcementLearningConceptsEnvironmentContractLab,
+        Drl03ReinforcementLearningConceptsReturnUpdateTraceLab:
+          module0.Drl03ReinforcementLearningConceptsReturnUpdateTraceLab,
+        Drl03ReinforcementLearningConceptsEvaluationGateLab:
+          module0.Drl03ReinforcementLearningConceptsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/02-value-learning/drl-04-dqn-q-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-04-dqn-q-learning");
+      return {
+        Drl04DqnQLearningEnvironmentContractLab:
+          module0.Drl04DqnQLearningEnvironmentContractLab,
+        Drl04DqnQLearningReturnUpdateTraceLab:
+          module0.Drl04DqnQLearningReturnUpdateTraceLab,
+        Drl04DqnQLearningEvaluationGateLab:
+          module0.Drl04DqnQLearningEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/02-value-learning/drl-05-sarsa": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-reinforcement-learning/v2/drl-05-sarsa");
+    return {
+      Drl05SarsaEnvironmentContractLab:
+        module0.Drl05SarsaEnvironmentContractLab,
+      Drl05SarsaReturnUpdateTraceLab: module0.Drl05SarsaReturnUpdateTraceLab,
+      Drl05SarsaEvaluationGateLab: module0.Drl05SarsaEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-reinforcement-learning/02-value-learning/drl-06-advanced-value-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-06-advanced-value-learning");
+      return {
+        Drl06AdvancedValueLearningEnvironmentContractLab:
+          module0.Drl06AdvancedValueLearningEnvironmentContractLab,
+        Drl06AdvancedValueLearningReturnUpdateTraceLab:
+          module0.Drl06AdvancedValueLearningReturnUpdateTraceLab,
+        Drl06AdvancedValueLearningEvaluationGateLab:
+          module0.Drl06AdvancedValueLearningEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-07-policy-gradient":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-07-policy-gradient");
+      return {
+        Drl07PolicyGradientEnvironmentContractLab:
+          module0.Drl07PolicyGradientEnvironmentContractLab,
+        Drl07PolicyGradientReturnUpdateTraceLab:
+          module0.Drl07PolicyGradientReturnUpdateTraceLab,
+        Drl07PolicyGradientEvaluationGateLab:
+          module0.Drl07PolicyGradientEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-08-policy-gradient-baseline":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-08-policy-gradient-baseline");
+      return {
+        Drl08PolicyGradientBaselineEnvironmentContractLab:
+          module0.Drl08PolicyGradientBaselineEnvironmentContractLab,
+        Drl08PolicyGradientBaselineReturnUpdateTraceLab:
+          module0.Drl08PolicyGradientBaselineReturnUpdateTraceLab,
+        Drl08PolicyGradientBaselineEvaluationGateLab:
+          module0.Drl08PolicyGradientBaselineEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-09-advanced-policy-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-09-advanced-policy-learning");
+      return {
+        Drl09AdvancedPolicyLearningEnvironmentContractLab:
+          module0.Drl09AdvancedPolicyLearningEnvironmentContractLab,
+        Drl09AdvancedPolicyLearningReturnUpdateTraceLab:
+          module0.Drl09AdvancedPolicyLearningReturnUpdateTraceLab,
+        Drl09AdvancedPolicyLearningEvaluationGateLab:
+          module0.Drl09AdvancedPolicyLearningEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-10-continuous-control":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-10-continuous-control");
+      return {
+        Drl10ContinuousControlEnvironmentContractLab:
+          module0.Drl10ContinuousControlEnvironmentContractLab,
+        Drl10ContinuousControlReturnUpdateTraceLab:
+          module0.Drl10ContinuousControlReturnUpdateTraceLab,
+        Drl10ContinuousControlEvaluationGateLab:
+          module0.Drl10ContinuousControlEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-11-partial-observability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-11-partial-observability");
+      return {
+        Drl11PartialObservabilityEnvironmentContractLab:
+          module0.Drl11PartialObservabilityEnvironmentContractLab,
+        Drl11PartialObservabilityReturnUpdateTraceLab:
+          module0.Drl11PartialObservabilityReturnUpdateTraceLab,
+        Drl11PartialObservabilityEvaluationGateLab:
+          module0.Drl11PartialObservabilityEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/03-policy-learning/drl-12-imitation-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-12-imitation-learning");
+      return {
+        Drl12ImitationLearningEnvironmentContractLab:
+          module0.Drl12ImitationLearningEnvironmentContractLab,
+        Drl12ImitationLearningReturnUpdateTraceLab:
+          module0.Drl12ImitationLearningReturnUpdateTraceLab,
+        Drl12ImitationLearningEvaluationGateLab:
+          module0.Drl12ImitationLearningEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/04-multi-agent/drl-13-parallel-computing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-13-parallel-computing");
+      return {
+        Drl13ParallelComputingEnvironmentContractLab:
+          module0.Drl13ParallelComputingEnvironmentContractLab,
+        Drl13ParallelComputingReturnUpdateTraceLab:
+          module0.Drl13ParallelComputingReturnUpdateTraceLab,
+        Drl13ParallelComputingEvaluationGateLab:
+          module0.Drl13ParallelComputingEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/04-multi-agent/drl-14-multi-agent-systems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-14-multi-agent-systems");
+      return {
+        Drl14MultiAgentSystemsEnvironmentContractLab:
+          module0.Drl14MultiAgentSystemsEnvironmentContractLab,
+        Drl14MultiAgentSystemsReturnUpdateTraceLab:
+          module0.Drl14MultiAgentSystemsReturnUpdateTraceLab,
+        Drl14MultiAgentSystemsEvaluationGateLab:
+          module0.Drl14MultiAgentSystemsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/04-multi-agent/drl-15-cooperative-marl":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-15-cooperative-marl");
+      return {
+        Drl15CooperativeMarlEnvironmentContractLab:
+          module0.Drl15CooperativeMarlEnvironmentContractLab,
+        Drl15CooperativeMarlReturnUpdateTraceLab:
+          module0.Drl15CooperativeMarlReturnUpdateTraceLab,
+        Drl15CooperativeMarlEvaluationGateLab:
+          module0.Drl15CooperativeMarlEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/04-multi-agent/drl-16-noncooperative-marl":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-16-noncooperative-marl");
+      return {
+        Drl16NoncooperativeMarlEnvironmentContractLab:
+          module0.Drl16NoncooperativeMarlEnvironmentContractLab,
+        Drl16NoncooperativeMarlReturnUpdateTraceLab:
+          module0.Drl16NoncooperativeMarlReturnUpdateTraceLab,
+        Drl16NoncooperativeMarlEvaluationGateLab:
+          module0.Drl16NoncooperativeMarlEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/04-multi-agent/drl-17-attention-marl":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-17-attention-marl");
+      return {
+        Drl17AttentionMarlEnvironmentContractLab:
+          module0.Drl17AttentionMarlEnvironmentContractLab,
+        Drl17AttentionMarlReturnUpdateTraceLab:
+          module0.Drl17AttentionMarlReturnUpdateTraceLab,
+        Drl17AttentionMarlEvaluationGateLab:
+          module0.Drl17AttentionMarlEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/05-applications/drl-18-alphago-mcts":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-18-alphago-mcts");
+      return {
+        Drl18AlphagoMctsEnvironmentContractLab:
+          module0.Drl18AlphagoMctsEnvironmentContractLab,
+        Drl18AlphagoMctsReturnUpdateTraceLab:
+          module0.Drl18AlphagoMctsReturnUpdateTraceLab,
+        Drl18AlphagoMctsEvaluationGateLab:
+          module0.Drl18AlphagoMctsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/05-applications/drl-19-real-world-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-19-real-world-applications");
+      return {
+        Drl19RealWorldApplicationsEnvironmentContractLab:
+          module0.Drl19RealWorldApplicationsEnvironmentContractLab,
+        Drl19RealWorldApplicationsReturnUpdateTraceLab:
+          module0.Drl19RealWorldApplicationsReturnUpdateTraceLab,
+        Drl19RealWorldApplicationsEvaluationGateLab:
+          module0.Drl19RealWorldApplicationsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/06-appendices/drl-appendix-a-bellman-equations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-appendix-a-bellman-equations");
+      return {
+        DrlAppendixABellmanEquationsEnvironmentContractLab:
+          module0.DrlAppendixABellmanEquationsEnvironmentContractLab,
+        DrlAppendixABellmanEquationsReturnUpdateTraceLab:
+          module0.DrlAppendixABellmanEquationsReturnUpdateTraceLab,
+        DrlAppendixABellmanEquationsEvaluationGateLab:
+          module0.DrlAppendixABellmanEquationsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/06-appendices/drl-appendix-b-exercise-answers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-appendix-b-exercise-answers");
+      return {
+        DrlAppendixBExerciseAnswersEnvironmentContractLab:
+          module0.DrlAppendixBExerciseAnswersEnvironmentContractLab,
+        DrlAppendixBExerciseAnswersReturnUpdateTraceLab:
+          module0.DrlAppendixBExerciseAnswersReturnUpdateTraceLab,
+        DrlAppendixBExerciseAnswersEvaluationGateLab:
+          module0.DrlAppendixBExerciseAnswersEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-reinforcement-learning/07-final-review/drl-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-reinforcement-learning/v2/drl-official-final-review");
+      return {
+        DrlOfficialFinalReviewEnvironmentContractLab:
+          module0.DrlOfficialFinalReviewEnvironmentContractLab,
+        DrlOfficialFinalReviewReturnUpdateTraceLab:
+          module0.DrlOfficialFinalReviewReturnUpdateTraceLab,
+        DrlOfficialFinalReviewEvaluationGateLab:
+          module0.DrlOfficialFinalReviewEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-understanding-csharp/00-evolution/dcs-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-understanding-csharp/dcs-learning-map");

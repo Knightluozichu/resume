@@ -1,88 +1,176 @@
 ---
-title: "附录A 贝尔曼方程"
+title: 附录A 贝尔曼方程
 type: C
-section: "附录A 贝尔曼方程"
+section: 附录A 贝尔曼方程
 order: 20
-description: "附录A 贝尔曼方程逐项覆盖权威目录，以公式、轨迹、交互实验和失败对照重建深度强化学习证据链。"
+description: 从回报递推推导状态价值、动作价值、期望方程与最优贝尔曼方程；用环境合同、更新轨迹和独立评估门交付方程角色表、手算结果、残差与策略/最优边界
 demo: true
 math: true
 sourceUrl: "https://github.com/DeepRLChinese/DeepRL-Chinese"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: drl-appendix-a
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  DrlAppendixABellmanEquationsEnvironmentContractLab,
+  DrlAppendixABellmanEquationsReturnUpdateTraceLab,
+  DrlAppendixABellmanEquationsEvaluationGateLab,
+} from "@/components/mdx/deep-reinforcement-learning/v2/drl-appendix-a-bellman-equations";
 
-## 为什么先冻结环境、轨迹与参数版本
+<Objectives>
 
-、、、、、共同构成本页坐标。从回报的一步递归和全期望公式推导价值函数方程，再区分固定策略评价与最优控制中的max算子。
+- 能说明“附录A 贝尔曼方程”如何从回报递推推导状态价值、动作价值、期望方程与最优贝尔曼方程，并区分原版目录、作者代码映射、独立技术来源和本站重写
+- 能先预测“条件期望、策略加权与最大化分别作用在哪一层？”会改变哪一个环境、轨迹、回报、目标、策略或评估状态，再操作三类交互证据
+- 能只注入“把对动作的期望与最大化交换后仍称为同一策略价值”，定位首个偏离“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”的状态，并从同一快照完成恢复
 
-阅读时把环境状态、采样数据、学习目标、优化参数和评价策略分成五份账。每一条转移至少保存状态、动作、奖励、下一状态、终止与截断标记、行为概率和采集时的参数版本；每一次更新保存目标值、损失、梯度范数、更新前后参数摘要和随机种子。这样才能判断改进来自正确算法，而不是信息泄漏、状态污染或评价仍在学习。
+</Objectives>
 
+## 为什么从这个问题开始
 
-## 数学骨架
+“附录A 贝尔曼方程”围绕“条件期望、策略加权与最大化分别作用在哪一层？”建立贯穿任务：在两状态两动作MDP上逐项复算贝尔曼方程。先写下哪个环境、轨迹、回报、目标、策略或评估状态会最先变化，再运行参考、故障和恢复路径；运行后补理由不算预测。只有守住“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”并交付方程角色表、手算结果、残差与策略/最优边界，训练回报、策略价值、搜索统计或应用收益才构成机制证据。
 
-$$
-G_t=R_{t+1}+\gamma G_{t+1}
-$$
+## 原版书目、272个正式坐标与访问边界
 
-$$
-V^\pi(s)=\sum_a\pi(a|s)\sum_{s',r}p(s',r|s,a)[r+\gamma V^\pi(s')]
-$$
+“附录A 贝尔曼方程”以[作者官方代码仓库](https://github.com/DeepRLChinese/DeepRL-Chinese)核对王树森、黎彧君、张志华著《深度强化学习》的第1至19章及主要算法—实现映射，以[馆藏书目](https://lib2.buct.edu.cn/bookInfo_01h1336186.html)核对人民邮电出版社、2022年11月、294页和ISBN 9787115600691，再以[发行数字版完整目录](https://online.anyflip.com/sckew/oxjt/)核对5个部分、19章、233个编号节/小节、附录A、附录B与B.1至B.13，合计272个正式目录层级。
 
-$$
-V^*(s)=\max_a\sum_{s',r}p(s',r|s,a)[r+\gamma V^*(s')]
-$$
+作者仓库验证章节和算法实现确实对应，但仓库页面未提供可据以复用代码、图表或书稿的明确许可；发行数字版用于核对目录范围，不作为复制正文的授权。“附录A 贝尔曼方程”不翻译、摘编或改写原书正文，也不复制仓库代码；中文讲解、状态轨迹、反例、交互、练习与答案均为独立教学重写。
 
-$$
-\|\mathcal T V-\mathcal T U\|_\infty\le\gamma\|V-U\|_\infty
-$$
+[本页独立核对 1](http://incompleteideas.net/book/the-book-2nd.html)只用于独立核对本页算法、环境接口或实验边界，不能反向证明原书使用本站表述。Gymnasium、PyTorch、PettingZoo等当前API行为按2026-07-30核对并显式视为当前实现，不倒填为2022年原书内容。
 
-公式必须落实为shape与版本合同。奖励是标量，动作可以是离散索引或连续向量，终止转移的未来项固定为零；行为策略负责产生数据，目标策略负责定义学习目标，在线参数与冻结参数不能靠变量名猜测。先用一个两状态、两动作或两智能体样例手算，再运行批量训练。
+## 原版目录层级与可验证机制
 
-## 最小实现骨架
+### 附录A 贝尔曼方程
 
-```python
-def record_transition(env, policy, observation):
-    action, logp, policy_version = policy.sample(observation)
-    next_observation, reward, terminated, truncated, info = env.step(action)
-    return {
-        "observation": observation,
-        "action": action,
-        "reward": float(reward),
-        "next_observation": next_observation,
-        "terminated": bool(terminated),
-        "truncated": bool(truncated),
-        "behavior_logp": float(logp),
-        "policy_version": policy_version,
-    }
+<Term def="贝尔曼方程对应正式目录坐标“附录A 贝尔曼方程”，在“附录A 贝尔曼方程”中用于把方程或作答连接到条件变量、策略角色、推导步骤与反例，并受环境、轨迹、策略快照、随机性、评估与版本边界约束。">
+  贝尔曼方程
+</Term>
+
+**正式坐标 1/1。** 原版目录键 `附录A 贝尔曼方程`。在“附录A 贝尔曼方程”的第1个正式坐标中，「附录A 贝尔曼方程」通过把方程或作答连接到条件变量、策略角色、推导步骤与反例推进贝尔曼递推、条件期望与最优性；复核者保存方程角色表、逐步推导、残差、独立作答与订正记录，出现交换期望/最大化或先抄答案再反向补推导就撤回结论。
+
+## 先预测，再操作三个章专属实验
+
+<Callout type="info" title="先写出哪个状态会最先变化">
+  对“附录A
+  贝尔曼方程”先冻结在两状态两动作MDP上逐项复算贝尔曼方程的环境、轨迹、策略/对手快照、预算、随机性和评估口径，再操作三类实验；结果与预测不同就修改假设，不删除失败运行。
+</Callout>
+
+<Stepper>
+  <Step title="1. 环境与轨迹合同">
+    为“附录A 贝尔曼方程”选择正式目录坐标，在参考合同与单一反事实间切换，逐角色核对输入、状态变化、证据与即时裁决。
+
+    <DrlAppendixABellmanEquationsEnvironmentContractLab />
+
+  </Step>
+  <Step title="2. 回报、目标与更新轨迹">
+    保持“附录A 贝尔曼方程”的在两状态两动作MDP上逐项复算贝尔曼方程不变，只注入“把对动作的期望与最大化交换后仍称为同一策略价值”，逐步定位首个偏离“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”的位置。
+
+    <DrlAppendixABellmanEquationsReturnUpdateTraceLab />
+
+  </Step>
+  <Step title="3. 异策略与多智能体评估门">
+    在“附录A 贝尔曼方程”的基线、单故障和恢复案例间切换，展开结构、环境、更新和独立评估门后再决定是否交付。
+
+    <DrlAppendixABellmanEquationsEvaluationGateLab />
+
+  </Step>
+</Stepper>
+
+<Callout
+  type="trap"
+  title="本页单一故障：把对动作的期望与最大化交换后仍称为同一策略价值"
+>
+  “附录A
+  贝尔曼方程”遇到该故障时必须保持其余环境、轨迹、策略/对手版本、预算和随机序列不变；训练回报偶尔更高不能替代首个状态分岔与恢复证据。
+</Callout>
+
+<Callout type="trap" title="训练回报不等于独立策略价值">
+  “附录A
+  贝尔曼方程”的TD误差、代理目标、训练回报、搜索值或同代对战只回答各自合同；它们不能自动证明未见种子、冻结对手、真实用户或安全部署上的收益。
+</Callout>
+
+<Callout type="trap" title="可访问目录与代码映射不等于复用许可">
+  “附录A
+  贝尔曼方程”可以用作者仓库和发行版目录核对范围，但未发现可授权本站复制代码、图表或正文的明确许可；当前内容必须保持独立表达、独立技术核对与时间边界。
+</Callout>
+
+## 附录A 贝尔曼方程的可重放协议
+
+| 阶段                          | 允许动作                                                                                     | 必留证据                                         | 拒绝条件                                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 附录A 贝尔曼方程 · 环境与角色 | 冻结贝尔曼递推、条件期望与最优性所需的环境版本、观测/状态、动作、奖励和数据角色              | 附录A 贝尔曼方程的环境合同、策略快照与基线轨迹   | 未满足“附录A 贝尔曼方程的角色、时间索引、shape、终止和可见性没有错位”                      |
+| 附录A 贝尔曼方程 · 回报与目标 | 按从回报递推推导状态价值、动作价值、期望方程与最优贝尔曼方程构造回报、目标、估计量或搜索统计 | 附录A 贝尔曼方程的逐步回报、目标分量与中间状态   | 未满足“附录A 贝尔曼方程的目标可由同一轨迹、公式和随机状态复算”                             |
+| 附录A 贝尔曼方程 · 更新与策略 | 执行一次受控更新并记录策略、价值、梯度或联合决策的变化                                       | 附录A 贝尔曼方程的更新前后差、首个分岔和恢复路径 | 未满足“附录A 贝尔曼方程没有把代理损失、单次回报或训练内统计当作最终结论”                   |
+| 附录A 贝尔曼方程 · 独立评估   | 重放基线、单故障、恢复和边界案例                                                             | 附录A 贝尔曼方程的接受、回退或拒绝理由           | 未满足“附录A 贝尔曼方程满足“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”” |
+
+```yaml
+unit: "drl-appendix-a"
+question: "条件期望、策略加权与最大化分别作用在哪一层？"
+scenario: "在两状态两动作MDP上逐项复算贝尔曼方程"
+invariant: "条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确"
+fault: "把对动作的期望与最大化交换后仍称为同一策略价值"
+evidence: "方程角色表、手算结果、残差与策略/最优边界"
+reset: restore_concept_mode_stage_trace_step_case_gates_and_artifact
 ```
 
-```python
-def one_step_target(transition, bootstrap_value, gamma):
-    future = 0.0 if transition["terminated"] else bootstrap_value
-    return transition["reward"] + gamma * future
-```
+“附录A 贝尔曼方程”要求从同一环境、轨迹、策略/对手版本、预算和随机状态重放参考、故障与恢复路径。重置后若目录选择、合同模式、阶段、轨迹步骤、案例、证据门或交付包没有回到基线，本次比较已经混入状态泄漏。
 
-```python
-def audit_update(before, target, loss, gradient, after):
-    assert target.isfinite().all()
-    assert loss.isfinite().all()
-    assert gradient.isfinite().all()
-    return {"before": before.digest(), "target": target.detach(),
-            "grad_norm": gradient.norm(), "after": after.digest()}
-```
+## 本页回顾
 
-这三段代码不替代具体算法，而是固定共同边界：环境只产生事实，目标函数只读取冻结转移，优化器只在审计通过后更新。章节中的DQN、SARSA、策略梯度、A3C、MADDPG或MCTS都必须映射回这套生命周期。
+掌握“附录A 贝尔曼方程”不是背算法名或抄训练循环，而是围绕“条件期望、策略加权与最大化分别作用在哪一层？”重建环境、轨迹、回报、目标、更新、策略/对手快照与独立评估，并用“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”拒绝“把对动作的期望与最大化交换后仍称为同一策略价值”。最终交付为方程角色表、手算结果、残差与策略/最优边界。
 
-## 常见失败与回退
+## 练习与答案
 
+<Exercises>
 
-## 本章回顾
+1. **问题 1：实验合同。** “附录A 贝尔曼方程”为什么必须先冻结环境、轨迹、策略/对手版本、预算、随机性和评估口径？
 
-从回报的一步递归和全期望公式推导价值函数方程，再区分固定策略评价与最优控制中的max算子。 最终掌握标准不是复述算法名，而是能说明每个量来自哪里、由哪版策略产生、在哪个边界归零、如何手算，以及故障样本应在哪一步被发现。通过标准是：在两状态MDP上列出线性方程并求解，随后用迭代法收敛到同一结果；终止状态与折扣条件明确。
+<Answer>
+  若同时改变这些条件，相同回报可能来自不同状态分布、行为策略、目标、更新或对手；先冻结合同，才能把观测连接到单一机制并定位首差。
+</Answer>
 
+2. **问题 2：目录逐项覆盖。** 怎样证明“附录A 贝尔曼方程”的正式目录坐标已经进入机制、交互和练习？
 
-## 前后导航
+<Answer>
+  1. “附录A 贝尔曼方程”的目录项「附录A
+  贝尔曼方程」：以“把方程或作答连接到条件变量、策略角色、推导步骤与反例”解释作用，用“方程角色表、逐步推导、残差、独立作答与订正记录”提供复核。
+</Answer>
 
-- [第19章 现实世界中的应用](/learn/deep-reinforcement-learning/05-applications/drl-19-real-world-applications)
-- [附录B 习题答案](/learn/deep-reinforcement-learning/06-appendices/drl-appendix-b-exercise-answers)
+3. **问题 3：故障恢复。** 怎样证明“把对动作的期望与最大化交换后仍称为同一策略价值”已经被修正？
 
+<Answer>
+  为“附录A
+  贝尔曼方程”复用同一环境、轨迹、策略/对手快照、预算和随机流，重放参考路径后只注入该故障；记录首个偏离，撤销故障再运行。只有环境合同、更新轨迹、独立评估和方程角色表、手算结果、残差与策略/最优边界重新满足“条件变量、转移概率、奖励时标、折扣、策略概率与最大化位置正确”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="贝尔曼方程">
+    检索键 drl-A 对应正式目录坐标「附录A 贝尔曼方程」；在“附录A
+    贝尔曼方程”中用于把方程或作答连接到条件变量、策略角色、推导步骤与反例，需要连接结构范围、轨迹状态、更新证据、独立评估与不适用边界。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="author-official-code-map-plus-issued-edition-detailed-toc"
+  workTitle="王树森、黎彧君、张志华著《深度强化学习》"
+  adaptedUrl="https://github.com/DeepRLChinese/DeepRL-Chinese"
+/>
