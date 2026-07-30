@@ -10231,6 +10231,278 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Opt23OfficialFinalReviewEthicsProbeLab,
       } as ChapterMdxComponents;
     },
+  "pattern-recognition-ml/00-learning-map/prl-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-official-learning-map");
+      return {
+        PrlOfficialLearningMapProbabilisticModelLab:
+          module0.PrlOfficialLearningMapProbabilisticModelLab,
+        PrlOfficialLearningMapInferenceTraceLab:
+          module0.PrlOfficialLearningMapInferenceTraceLab,
+        PrlOfficialLearningMapPredictiveCheckLab:
+          module0.PrlOfficialLearningMapPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/01-introduction/prl-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/pattern-recognition-ml/v2/prl-01-introduction");
+    return {
+      Prl01IntroductionProbabilisticModelLab:
+        module0.Prl01IntroductionProbabilisticModelLab,
+      Prl01IntroductionInferenceTraceLab:
+        module0.Prl01IntroductionInferenceTraceLab,
+      Prl01IntroductionPredictiveCheckLab:
+        module0.Prl01IntroductionPredictiveCheckLab,
+    } as ChapterMdxComponents;
+  },
+  "pattern-recognition-ml/02-probability-distributions/prl-02-probability-distributions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-02-probability-distributions");
+      return {
+        Prl02ProbabilityDistributionsProbabilisticModelLab:
+          module0.Prl02ProbabilityDistributionsProbabilisticModelLab,
+        Prl02ProbabilityDistributionsInferenceTraceLab:
+          module0.Prl02ProbabilityDistributionsInferenceTraceLab,
+        Prl02ProbabilityDistributionsPredictiveCheckLab:
+          module0.Prl02ProbabilityDistributionsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/03-linear-regression/prl-03-linear-regression":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-03-linear-regression");
+      return {
+        Prl03LinearRegressionProbabilisticModelLab:
+          module0.Prl03LinearRegressionProbabilisticModelLab,
+        Prl03LinearRegressionInferenceTraceLab:
+          module0.Prl03LinearRegressionInferenceTraceLab,
+        Prl03LinearRegressionPredictiveCheckLab:
+          module0.Prl03LinearRegressionPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/04-linear-classification/prl-04-linear-classification":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-04-linear-classification");
+      return {
+        Prl04LinearClassificationProbabilisticModelLab:
+          module0.Prl04LinearClassificationProbabilisticModelLab,
+        Prl04LinearClassificationInferenceTraceLab:
+          module0.Prl04LinearClassificationInferenceTraceLab,
+        Prl04LinearClassificationPredictiveCheckLab:
+          module0.Prl04LinearClassificationPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/05-neural-networks/prl-05-neural-networks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-05-neural-networks");
+      return {
+        Prl05NeuralNetworksProbabilisticModelLab:
+          module0.Prl05NeuralNetworksProbabilisticModelLab,
+        Prl05NeuralNetworksInferenceTraceLab:
+          module0.Prl05NeuralNetworksInferenceTraceLab,
+        Prl05NeuralNetworksPredictiveCheckLab:
+          module0.Prl05NeuralNetworksPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/06-kernel-methods/prl-06-kernel-methods":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-06-kernel-methods");
+      return {
+        Prl06KernelMethodsProbabilisticModelLab:
+          module0.Prl06KernelMethodsProbabilisticModelLab,
+        Prl06KernelMethodsInferenceTraceLab:
+          module0.Prl06KernelMethodsInferenceTraceLab,
+        Prl06KernelMethodsPredictiveCheckLab:
+          module0.Prl06KernelMethodsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/07-sparse-kernel-machines/prl-07-sparse-kernel-machines":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-07-sparse-kernel-machines");
+      return {
+        Prl07SparseKernelMachinesProbabilisticModelLab:
+          module0.Prl07SparseKernelMachinesProbabilisticModelLab,
+        Prl07SparseKernelMachinesInferenceTraceLab:
+          module0.Prl07SparseKernelMachinesInferenceTraceLab,
+        Prl07SparseKernelMachinesPredictiveCheckLab:
+          module0.Prl07SparseKernelMachinesPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/08-graphical-models/prl-08-graphical-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-08-graphical-models");
+      return {
+        Prl08GraphicalModelsProbabilisticModelLab:
+          module0.Prl08GraphicalModelsProbabilisticModelLab,
+        Prl08GraphicalModelsInferenceTraceLab:
+          module0.Prl08GraphicalModelsInferenceTraceLab,
+        Prl08GraphicalModelsPredictiveCheckLab:
+          module0.Prl08GraphicalModelsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/09-mixture-models-em/prl-09-mixture-models-em":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-09-mixture-models-em");
+      return {
+        Prl09MixtureModelsEmProbabilisticModelLab:
+          module0.Prl09MixtureModelsEmProbabilisticModelLab,
+        Prl09MixtureModelsEmInferenceTraceLab:
+          module0.Prl09MixtureModelsEmInferenceTraceLab,
+        Prl09MixtureModelsEmPredictiveCheckLab:
+          module0.Prl09MixtureModelsEmPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/10-approximate-inference/prl-10-approximate-inference":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-10-approximate-inference");
+      return {
+        Prl10ApproximateInferenceProbabilisticModelLab:
+          module0.Prl10ApproximateInferenceProbabilisticModelLab,
+        Prl10ApproximateInferenceInferenceTraceLab:
+          module0.Prl10ApproximateInferenceInferenceTraceLab,
+        Prl10ApproximateInferencePredictiveCheckLab:
+          module0.Prl10ApproximateInferencePredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/11-sampling-methods/prl-11-sampling-methods":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-11-sampling-methods");
+      return {
+        Prl11SamplingMethodsProbabilisticModelLab:
+          module0.Prl11SamplingMethodsProbabilisticModelLab,
+        Prl11SamplingMethodsInferenceTraceLab:
+          module0.Prl11SamplingMethodsInferenceTraceLab,
+        Prl11SamplingMethodsPredictiveCheckLab:
+          module0.Prl11SamplingMethodsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/12-continuous-latent-variables/prl-12-continuous-latent-variables":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-12-continuous-latent-variables");
+      return {
+        Prl12ContinuousLatentVariablesProbabilisticModelLab:
+          module0.Prl12ContinuousLatentVariablesProbabilisticModelLab,
+        Prl12ContinuousLatentVariablesInferenceTraceLab:
+          module0.Prl12ContinuousLatentVariablesInferenceTraceLab,
+        Prl12ContinuousLatentVariablesPredictiveCheckLab:
+          module0.Prl12ContinuousLatentVariablesPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/13-sequential-data/prl-13-sequential-data":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-13-sequential-data");
+      return {
+        Prl13SequentialDataProbabilisticModelLab:
+          module0.Prl13SequentialDataProbabilisticModelLab,
+        Prl13SequentialDataInferenceTraceLab:
+          module0.Prl13SequentialDataInferenceTraceLab,
+        Prl13SequentialDataPredictiveCheckLab:
+          module0.Prl13SequentialDataPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/14-combining-models/prl-14-combining-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-14-combining-models");
+      return {
+        Prl14CombiningModelsProbabilisticModelLab:
+          module0.Prl14CombiningModelsProbabilisticModelLab,
+        Prl14CombiningModelsInferenceTraceLab:
+          module0.Prl14CombiningModelsInferenceTraceLab,
+        Prl14CombiningModelsPredictiveCheckLab:
+          module0.Prl14CombiningModelsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/15-appendix-a-data-sets/prl-appendix-a-data-sets":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-appendix-a-data-sets");
+      return {
+        PrlAppendixADataSetsProbabilisticModelLab:
+          module0.PrlAppendixADataSetsProbabilisticModelLab,
+        PrlAppendixADataSetsInferenceTraceLab:
+          module0.PrlAppendixADataSetsInferenceTraceLab,
+        PrlAppendixADataSetsPredictiveCheckLab:
+          module0.PrlAppendixADataSetsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/16-appendix-b-probability-distributions/prl-appendix-b-probability-distributions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-appendix-b-probability-distributions");
+      return {
+        PrlAppendixBProbabilityDistributionsProbabilisticModelLab:
+          module0.PrlAppendixBProbabilityDistributionsProbabilisticModelLab,
+        PrlAppendixBProbabilityDistributionsInferenceTraceLab:
+          module0.PrlAppendixBProbabilityDistributionsInferenceTraceLab,
+        PrlAppendixBProbabilityDistributionsPredictiveCheckLab:
+          module0.PrlAppendixBProbabilityDistributionsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/17-appendix-c-properties-matrices/prl-appendix-c-properties-matrices":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-appendix-c-properties-matrices");
+      return {
+        PrlAppendixCPropertiesMatricesProbabilisticModelLab:
+          module0.PrlAppendixCPropertiesMatricesProbabilisticModelLab,
+        PrlAppendixCPropertiesMatricesInferenceTraceLab:
+          module0.PrlAppendixCPropertiesMatricesInferenceTraceLab,
+        PrlAppendixCPropertiesMatricesPredictiveCheckLab:
+          module0.PrlAppendixCPropertiesMatricesPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/18-appendix-d-calculus-variations/prl-appendix-d-calculus-variations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-appendix-d-calculus-variations");
+      return {
+        PrlAppendixDCalculusVariationsProbabilisticModelLab:
+          module0.PrlAppendixDCalculusVariationsProbabilisticModelLab,
+        PrlAppendixDCalculusVariationsInferenceTraceLab:
+          module0.PrlAppendixDCalculusVariationsInferenceTraceLab,
+        PrlAppendixDCalculusVariationsPredictiveCheckLab:
+          module0.PrlAppendixDCalculusVariationsPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/19-appendix-e-lagrange-multipliers/prl-appendix-e-lagrange-multipliers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-appendix-e-lagrange-multipliers");
+      return {
+        PrlAppendixELagrangeMultipliersProbabilisticModelLab:
+          module0.PrlAppendixELagrangeMultipliersProbabilisticModelLab,
+        PrlAppendixELagrangeMultipliersInferenceTraceLab:
+          module0.PrlAppendixELagrangeMultipliersInferenceTraceLab,
+        PrlAppendixELagrangeMultipliersPredictiveCheckLab:
+          module0.PrlAppendixELagrangeMultipliersPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
+  "pattern-recognition-ml/20-final-review/prl-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pattern-recognition-ml/v2/prl-official-final-review");
+      return {
+        PrlOfficialFinalReviewProbabilisticModelLab:
+          module0.PrlOfficialFinalReviewProbabilisticModelLab,
+        PrlOfficialFinalReviewInferenceTraceLab:
+          module0.PrlOfficialFinalReviewInferenceTraceLab,
+        PrlOfficialFinalReviewPredictiveCheckLab:
+          module0.PrlOfficialFinalReviewPredictiveCheckLab,
+      } as ChapterMdxComponents;
+    },
   "pbrt-book/01-foundations/pbt-ch01-introduction": async () => {
     const module0 =
       await import("@/components/mdx/pbrt-book/v2/pbt-ch01-introduction");
