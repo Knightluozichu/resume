@@ -8839,6 +8839,109 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Lad4OfficialFinalReviewCounterexampleLab,
       } as ChapterMdxComponents;
     },
+  "llm-app-dev-essentials/00-map/lae-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-official-learning-map");
+    return {
+      LaeOfficialLearningMapRequestContractLab:
+        module0.LaeOfficialLearningMapRequestContractLab,
+      LaeOfficialLearningMapExecutionTraceLab:
+        module0.LaeOfficialLearningMapExecutionTraceLab,
+      LaeOfficialLearningMapAuthorizationGateLab:
+        module0.LaeOfficialLearningMapAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/01-preface/lae-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-preface");
+    return {
+      LaePrefaceRequestContractLab: module0.LaePrefaceRequestContractLab,
+      LaePrefaceExecutionTraceLab: module0.LaePrefaceExecutionTraceLab,
+      LaePrefaceAuthorizationGateLab: module0.LaePrefaceAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/02-essentials/lae-01-gpt4-chatgpt-essentials":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/llm-app-dev-essentials/v2/lae-01-gpt4-chatgpt-essentials");
+      return {
+        Lae01Gpt4ChatgptEssentialsRequestContractLab:
+          module0.Lae01Gpt4ChatgptEssentialsRequestContractLab,
+        Lae01Gpt4ChatgptEssentialsExecutionTraceLab:
+          module0.Lae01Gpt4ChatgptEssentialsExecutionTraceLab,
+        Lae01Gpt4ChatgptEssentialsAuthorizationGateLab:
+          module0.Lae01Gpt4ChatgptEssentialsAuthorizationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "llm-app-dev-essentials/03-api/lae-02-api-deep-dive": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-02-api-deep-dive");
+    return {
+      Lae02ApiDeepDiveRequestContractLab:
+        module0.Lae02ApiDeepDiveRequestContractLab,
+      Lae02ApiDeepDiveExecutionTraceLab:
+        module0.Lae02ApiDeepDiveExecutionTraceLab,
+      Lae02ApiDeepDiveAuthorizationGateLab:
+        module0.Lae02ApiDeepDiveAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/04-apps/lae-03-building-apps": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-03-building-apps");
+    return {
+      Lae03BuildingAppsRequestContractLab:
+        module0.Lae03BuildingAppsRequestContractLab,
+      Lae03BuildingAppsExecutionTraceLab:
+        module0.Lae03BuildingAppsExecutionTraceLab,
+      Lae03BuildingAppsAuthorizationGateLab:
+        module0.Lae03BuildingAppsAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/05-advanced/lae-04-advanced-techniques": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-04-advanced-techniques");
+    return {
+      Lae04AdvancedTechniquesRequestContractLab:
+        module0.Lae04AdvancedTechniquesRequestContractLab,
+      Lae04AdvancedTechniquesExecutionTraceLab:
+        module0.Lae04AdvancedTechniquesExecutionTraceLab,
+      Lae04AdvancedTechniquesAuthorizationGateLab:
+        module0.Lae04AdvancedTechniquesAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/06-frameworks/lae-05-langchain-plugins": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-05-langchain-plugins");
+    return {
+      Lae05LangchainPluginsRequestContractLab:
+        module0.Lae05LangchainPluginsRequestContractLab,
+      Lae05LangchainPluginsExecutionTraceLab:
+        module0.Lae05LangchainPluginsExecutionTraceLab,
+      Lae05LangchainPluginsAuthorizationGateLab:
+        module0.Lae05LangchainPluginsAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/07-glossary/lae-glossary": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-glossary");
+    return {
+      LaeGlossaryRequestContractLab: module0.LaeGlossaryRequestContractLab,
+      LaeGlossaryExecutionTraceLab: module0.LaeGlossaryExecutionTraceLab,
+      LaeGlossaryAuthorizationGateLab: module0.LaeGlossaryAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "llm-app-dev-essentials/08-review/lae-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/llm-app-dev-essentials/v2/lae-official-final-review");
+    return {
+      LaeOfficialFinalReviewRequestContractLab:
+        module0.LaeOfficialFinalReviewRequestContractLab,
+      LaeOfficialFinalReviewExecutionTraceLab:
+        module0.LaeOfficialFinalReviewExecutionTraceLab,
+      LaeOfficialFinalReviewAuthorizationGateLab:
+        module0.LaeOfficialFinalReviewAuthorizationGateLab,
+    } as ChapterMdxComponents;
+  },
   "modern-cpp-design/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/modern-cpp-design/learning-map");
