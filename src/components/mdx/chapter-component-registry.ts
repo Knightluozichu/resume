@@ -6690,6 +6690,161 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DsaAdtBoundaryDiagram: module0.DsaAdtBoundaryDiagram,
     } as ChapterMdxComponents;
   },
+  "easy-cpp-5e/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/learning-map");
+    return {
+      EasyCppLearningMapContractLab: module0.EasyCppLearningMapContractLab,
+      EasyCppLearningMapTraceLab: module0.EasyCppLearningMapTraceLab,
+      EasyCppLearningMapFaultLab: module0.EasyCppLearningMapFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/01-official/first-steps": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/first-steps");
+    return {
+      EasyCppFirstStepsContractLab: module0.EasyCppFirstStepsContractLab,
+      EasyCppFirstStepsTraceLab: module0.EasyCppFirstStepsTraceLab,
+      EasyCppFirstStepsFaultLab: module0.EasyCppFirstStepsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/02-official/cpp-basics": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/cpp-basics");
+    return {
+      EasyCppBasicsContractLab: module0.EasyCppBasicsContractLab,
+      EasyCppBasicsTraceLab: module0.EasyCppBasicsTraceLab,
+      EasyCppBasicsFaultLab: module0.EasyCppBasicsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/03-advanced/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/final-review");
+    return {
+      EasyCppFinalReviewContractLab: module0.EasyCppFinalReviewContractLab,
+      EasyCppFinalReviewTraceLab: module0.EasyCppFinalReviewTraceLab,
+      EasyCppFinalReviewFaultLab: module0.EasyCppFinalReviewFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/03-official/variables": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/variables");
+    return {
+      EasyCppVariablesContractLab: module0.EasyCppVariablesContractLab,
+      EasyCppVariablesTraceLab: module0.EasyCppVariablesTraceLab,
+      EasyCppVariablesFaultLab: module0.EasyCppVariablesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/04-official/expressions-and-operators": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/expressions-and-operators");
+    return {
+      EasyCppExpressionsContractLab: module0.EasyCppExpressionsContractLab,
+      EasyCppExpressionsTraceLab: module0.EasyCppExpressionsTraceLab,
+      EasyCppExpressionsFaultLab: module0.EasyCppExpressionsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/05-official/conditional-processing": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/conditional-processing");
+    return {
+      EasyCppConditionalsContractLab: module0.EasyCppConditionalsContractLab,
+      EasyCppConditionalsTraceLab: module0.EasyCppConditionalsTraceLab,
+      EasyCppConditionalsFaultLab: module0.EasyCppConditionalsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/06-official/repetition": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/repetition");
+    return {
+      EasyCppLoopsContractLab: module0.EasyCppLoopsContractLab,
+      EasyCppLoopsTraceLab: module0.EasyCppLoopsTraceLab,
+      EasyCppLoopsFaultLab: module0.EasyCppLoopsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/07-official/functions": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/functions");
+    return {
+      EasyCppFunctionsContractLab: module0.EasyCppFunctionsContractLab,
+      EasyCppFunctionsTraceLab: module0.EasyCppFunctionsTraceLab,
+      EasyCppFunctionsFaultLab: module0.EasyCppFunctionsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/08-official/pointers": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/pointers");
+    return {
+      EasyCppPointersContractLab: module0.EasyCppPointersContractLab,
+      EasyCppPointersTraceLab: module0.EasyCppPointersTraceLab,
+      EasyCppPointersFaultLab: module0.EasyCppPointersFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/09-official/arrays": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/arrays");
+    return {
+      EasyCppArraysContractLab: module0.EasyCppArraysContractLab,
+      EasyCppArraysTraceLab: module0.EasyCppArraysTraceLab,
+      EasyCppArraysFaultLab: module0.EasyCppArraysFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/10-official/building-large-programs": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/building-large-programs");
+    return {
+      EasyCppLargeProgramsContractLab: module0.EasyCppLargeProgramsContractLab,
+      EasyCppLargeProgramsTraceLab: module0.EasyCppLargeProgramsTraceLab,
+      EasyCppLargeProgramsFaultLab: module0.EasyCppLargeProgramsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/11-official/various-types": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/various-types");
+    return {
+      EasyCppVariousTypesContractLab: module0.EasyCppVariousTypesContractLab,
+      EasyCppVariousTypesTraceLab: module0.EasyCppVariousTypesTraceLab,
+      EasyCppVariousTypesFaultLab: module0.EasyCppVariousTypesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/12-official/class-basics": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/class-basics");
+    return {
+      EasyCppClassBasicsContractLab: module0.EasyCppClassBasicsContractLab,
+      EasyCppClassBasicsTraceLab: module0.EasyCppClassBasicsTraceLab,
+      EasyCppClassBasicsFaultLab: module0.EasyCppClassBasicsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/13-official/class-features": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/class-features");
+    return {
+      EasyCppClassFeaturesContractLab: module0.EasyCppClassFeaturesContractLab,
+      EasyCppClassFeaturesTraceLab: module0.EasyCppClassFeaturesTraceLab,
+      EasyCppClassFeaturesFaultLab: module0.EasyCppClassFeaturesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/14-official/new-classes": async () => {
+    const module0 = await import("@/components/mdx/easy-cpp-5e/v2/new-classes");
+    return {
+      EasyCppNewClassesContractLab: module0.EasyCppNewClassesContractLab,
+      EasyCppNewClassesTraceLab: module0.EasyCppNewClassesTraceLab,
+      EasyCppNewClassesFaultLab: module0.EasyCppNewClassesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/15-official/advanced-class-topics": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/advanced-class-topics");
+    return {
+      EasyCppAdvancedClassesContractLab:
+        module0.EasyCppAdvancedClassesContractLab,
+      EasyCppAdvancedClassesTraceLab: module0.EasyCppAdvancedClassesTraceLab,
+      EasyCppAdvancedClassesFaultLab: module0.EasyCppAdvancedClassesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "easy-cpp-5e/16-official/file-input-output": async () => {
+    const module0 =
+      await import("@/components/mdx/easy-cpp-5e/v2/file-input-output");
+    return {
+      EasyCppFileIoContractLab: module0.EasyCppFileIoContractLab,
+      EasyCppFileIoTraceLab: module0.EasyCppFileIoTraceLab,
+      EasyCppFileIoFaultLab: module0.EasyCppFileIoFaultLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/02-resource-management/item-15-raw-resource-access":
     async () => {
       const module0 =
