@@ -7626,6 +7626,159 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.DlsOfficialFinalReviewTrainingGateLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-nlp-advanced/00-guide/dna-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-official-learning-map");
+    return {
+      DnaOfficialLearningMapRepresentationLedgerLab:
+        module0.DnaOfficialLearningMapRepresentationLedgerLab,
+      DnaOfficialLearningMapSequenceTraceLab:
+        module0.DnaOfficialLearningMapSequenceTraceLab,
+      DnaOfficialLearningMapEvaluationGateLab:
+        module0.DnaOfficialLearningMapEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/01-neural-network-review/dna-01-neural-network-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-01-neural-network-review");
+      return {
+        Dna01NeuralNetworkReviewRepresentationLedgerLab:
+          module0.Dna01NeuralNetworkReviewRepresentationLedgerLab,
+        Dna01NeuralNetworkReviewSequenceTraceLab:
+          module0.Dna01NeuralNetworkReviewSequenceTraceLab,
+        Dna01NeuralNetworkReviewEvaluationGateLab:
+          module0.Dna01NeuralNetworkReviewEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/02-distributed-word-representations/dna-02-distributed-word-representations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-02-distributed-word-representations");
+      return {
+        Dna02DistributedWordRepresentationsRepresentationLedgerLab:
+          module0.Dna02DistributedWordRepresentationsRepresentationLedgerLab,
+        Dna02DistributedWordRepresentationsSequenceTraceLab:
+          module0.Dna02DistributedWordRepresentationsSequenceTraceLab,
+        Dna02DistributedWordRepresentationsEvaluationGateLab:
+          module0.Dna02DistributedWordRepresentationsEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/03-word2vec/dna-03-word2vec": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-03-word2vec");
+    return {
+      Dna03Word2vecRepresentationLedgerLab:
+        module0.Dna03Word2vecRepresentationLedgerLab,
+      Dna03Word2vecSequenceTraceLab: module0.Dna03Word2vecSequenceTraceLab,
+      Dna03Word2vecEvaluationGateLab: module0.Dna03Word2vecEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/04-word2vec-acceleration/dna-04-word2vec-acceleration":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-04-word2vec-acceleration");
+      return {
+        Dna04Word2vecAccelerationRepresentationLedgerLab:
+          module0.Dna04Word2vecAccelerationRepresentationLedgerLab,
+        Dna04Word2vecAccelerationSequenceTraceLab:
+          module0.Dna04Word2vecAccelerationSequenceTraceLab,
+        Dna04Word2vecAccelerationEvaluationGateLab:
+          module0.Dna04Word2vecAccelerationEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/05-rnn/dna-05-rnn": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-05-rnn");
+    return {
+      Dna05RnnRepresentationLedgerLab: module0.Dna05RnnRepresentationLedgerLab,
+      Dna05RnnSequenceTraceLab: module0.Dna05RnnSequenceTraceLab,
+      Dna05RnnEvaluationGateLab: module0.Dna05RnnEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/06-gated-rnn/dna-06-gated-rnn": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-06-gated-rnn");
+    return {
+      Dna06GatedRnnRepresentationLedgerLab:
+        module0.Dna06GatedRnnRepresentationLedgerLab,
+      Dna06GatedRnnSequenceTraceLab: module0.Dna06GatedRnnSequenceTraceLab,
+      Dna06GatedRnnEvaluationGateLab: module0.Dna06GatedRnnEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/07-rnn-text-generation/dna-07-rnn-text-generation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-07-rnn-text-generation");
+      return {
+        Dna07RnnTextGenerationRepresentationLedgerLab:
+          module0.Dna07RnnTextGenerationRepresentationLedgerLab,
+        Dna07RnnTextGenerationSequenceTraceLab:
+          module0.Dna07RnnTextGenerationSequenceTraceLab,
+        Dna07RnnTextGenerationEvaluationGateLab:
+          module0.Dna07RnnTextGenerationEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/08-attention/dna-08-attention": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-08-attention");
+    return {
+      Dna08AttentionRepresentationLedgerLab:
+        module0.Dna08AttentionRepresentationLedgerLab,
+      Dna08AttentionSequenceTraceLab: module0.Dna08AttentionSequenceTraceLab,
+      Dna08AttentionEvaluationGateLab: module0.Dna08AttentionEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/09-appendices/dna-appendix-a-activation-derivatives":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-appendix-a-activation-derivatives");
+      return {
+        DnaAppendixAActivationDerivativesRepresentationLedgerLab:
+          module0.DnaAppendixAActivationDerivativesRepresentationLedgerLab,
+        DnaAppendixAActivationDerivativesSequenceTraceLab:
+          module0.DnaAppendixAActivationDerivativesSequenceTraceLab,
+        DnaAppendixAActivationDerivativesEvaluationGateLab:
+          module0.DnaAppendixAActivationDerivativesEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/09-appendices/dna-appendix-b-wordnet":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-appendix-b-wordnet");
+      return {
+        DnaAppendixBWordnetRepresentationLedgerLab:
+          module0.DnaAppendixBWordnetRepresentationLedgerLab,
+        DnaAppendixBWordnetSequenceTraceLab:
+          module0.DnaAppendixBWordnetSequenceTraceLab,
+        DnaAppendixBWordnetEvaluationGateLab:
+          module0.DnaAppendixBWordnetEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-nlp-advanced/09-appendices/dna-appendix-c-gru": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-appendix-c-gru");
+    return {
+      DnaAppendixCGruRepresentationLedgerLab:
+        module0.DnaAppendixCGruRepresentationLedgerLab,
+      DnaAppendixCGruSequenceTraceLab: module0.DnaAppendixCGruSequenceTraceLab,
+      DnaAppendixCGruEvaluationGateLab:
+        module0.DnaAppendixCGruEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-nlp-advanced/10-review/dna-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-nlp-advanced/v2/dna-official-final-review");
+      return {
+        DnaOfficialFinalReviewRepresentationLedgerLab:
+          module0.DnaOfficialFinalReviewRepresentationLedgerLab,
+        DnaOfficialFinalReviewSequenceTraceLab:
+          module0.DnaOfficialFinalReviewSequenceTraceLab,
+        DnaOfficialFinalReviewEvaluationGateLab:
+          module0.DnaOfficialFinalReviewEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
