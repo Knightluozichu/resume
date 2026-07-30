@@ -7779,6 +7779,192 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.DnaOfficialFinalReviewEvaluationGateLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-rl-from-scratch/00-guide/dlr-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-official-learning-map");
+      return {
+        DlrOfficialLearningMapTransitionLedgerLab:
+          module0.DlrOfficialLearningMapTransitionLedgerLab,
+        DlrOfficialLearningMapReturnUpdateTraceLab:
+          module0.DlrOfficialLearningMapReturnUpdateTraceLab,
+        DlrOfficialLearningMapEvaluationGateLab:
+          module0.DlrOfficialLearningMapEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/01-bandit/dlr-01-bandit": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-01-bandit");
+    return {
+      Dlr01BanditTransitionLedgerLab: module0.Dlr01BanditTransitionLedgerLab,
+      Dlr01BanditReturnUpdateTraceLab: module0.Dlr01BanditReturnUpdateTraceLab,
+      Dlr01BanditEvaluationGateLab: module0.Dlr01BanditEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/02-mdp/dlr-02-mdp": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-02-mdp");
+    return {
+      Dlr02MdpTransitionLedgerLab: module0.Dlr02MdpTransitionLedgerLab,
+      Dlr02MdpReturnUpdateTraceLab: module0.Dlr02MdpReturnUpdateTraceLab,
+      Dlr02MdpEvaluationGateLab: module0.Dlr02MdpEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/03-bellman/dlr-03-bellman": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-03-bellman");
+    return {
+      Dlr03BellmanTransitionLedgerLab: module0.Dlr03BellmanTransitionLedgerLab,
+      Dlr03BellmanReturnUpdateTraceLab:
+        module0.Dlr03BellmanReturnUpdateTraceLab,
+      Dlr03BellmanEvaluationGateLab: module0.Dlr03BellmanEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/04-dynamic-programming/dlr-04-dynamic-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-04-dynamic-programming");
+      return {
+        Dlr04DynamicProgrammingTransitionLedgerLab:
+          module0.Dlr04DynamicProgrammingTransitionLedgerLab,
+        Dlr04DynamicProgrammingReturnUpdateTraceLab:
+          module0.Dlr04DynamicProgrammingReturnUpdateTraceLab,
+        Dlr04DynamicProgrammingEvaluationGateLab:
+          module0.Dlr04DynamicProgrammingEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/05-monte-carlo/dlr-05-monte-carlo":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-05-monte-carlo");
+      return {
+        Dlr05MonteCarloTransitionLedgerLab:
+          module0.Dlr05MonteCarloTransitionLedgerLab,
+        Dlr05MonteCarloReturnUpdateTraceLab:
+          module0.Dlr05MonteCarloReturnUpdateTraceLab,
+        Dlr05MonteCarloEvaluationGateLab:
+          module0.Dlr05MonteCarloEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/06-td/dlr-06-td": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-06-td");
+    return {
+      Dlr06TdTransitionLedgerLab: module0.Dlr06TdTransitionLedgerLab,
+      Dlr06TdReturnUpdateTraceLab: module0.Dlr06TdReturnUpdateTraceLab,
+      Dlr06TdEvaluationGateLab: module0.Dlr06TdEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/07-neural-q-learning/dlr-07-neural-q-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-07-neural-q-learning");
+      return {
+        Dlr07NeuralQLearningTransitionLedgerLab:
+          module0.Dlr07NeuralQLearningTransitionLedgerLab,
+        Dlr07NeuralQLearningReturnUpdateTraceLab:
+          module0.Dlr07NeuralQLearningReturnUpdateTraceLab,
+        Dlr07NeuralQLearningEvaluationGateLab:
+          module0.Dlr07NeuralQLearningEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/08-dqn/dlr-08-dqn": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-08-dqn");
+    return {
+      Dlr08DqnTransitionLedgerLab: module0.Dlr08DqnTransitionLedgerLab,
+      Dlr08DqnReturnUpdateTraceLab: module0.Dlr08DqnReturnUpdateTraceLab,
+      Dlr08DqnEvaluationGateLab: module0.Dlr08DqnEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/09-policy-gradient/dlr-09-policy-gradient":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-09-policy-gradient");
+      return {
+        Dlr09PolicyGradientTransitionLedgerLab:
+          module0.Dlr09PolicyGradientTransitionLedgerLab,
+        Dlr09PolicyGradientReturnUpdateTraceLab:
+          module0.Dlr09PolicyGradientReturnUpdateTraceLab,
+        Dlr09PolicyGradientEvaluationGateLab:
+          module0.Dlr09PolicyGradientEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/10-further/dlr-10-further": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-10-further");
+    return {
+      Dlr10FurtherTransitionLedgerLab: module0.Dlr10FurtherTransitionLedgerLab,
+      Dlr10FurtherReturnUpdateTraceLab:
+        module0.Dlr10FurtherReturnUpdateTraceLab,
+      Dlr10FurtherEvaluationGateLab: module0.Dlr10FurtherEvaluationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-rl-from-scratch/11-appendices/dlr-appendix-a-off-policy-mc":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-appendix-a-off-policy-mc");
+      return {
+        DlrAppendixAOffPolicyMcTransitionLedgerLab:
+          module0.DlrAppendixAOffPolicyMcTransitionLedgerLab,
+        DlrAppendixAOffPolicyMcReturnUpdateTraceLab:
+          module0.DlrAppendixAOffPolicyMcReturnUpdateTraceLab,
+        DlrAppendixAOffPolicyMcEvaluationGateLab:
+          module0.DlrAppendixAOffPolicyMcEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/11-appendices/dlr-appendix-b-n-step-td":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-appendix-b-n-step-td");
+      return {
+        DlrAppendixBNStepTdTransitionLedgerLab:
+          module0.DlrAppendixBNStepTdTransitionLedgerLab,
+        DlrAppendixBNStepTdReturnUpdateTraceLab:
+          module0.DlrAppendixBNStepTdReturnUpdateTraceLab,
+        DlrAppendixBNStepTdEvaluationGateLab:
+          module0.DlrAppendixBNStepTdEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/11-appendices/dlr-appendix-c-double-dqn":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-appendix-c-double-dqn");
+      return {
+        DlrAppendixCDoubleDqnTransitionLedgerLab:
+          module0.DlrAppendixCDoubleDqnTransitionLedgerLab,
+        DlrAppendixCDoubleDqnReturnUpdateTraceLab:
+          module0.DlrAppendixCDoubleDqnReturnUpdateTraceLab,
+        DlrAppendixCDoubleDqnEvaluationGateLab:
+          module0.DlrAppendixCDoubleDqnEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/11-appendices/dlr-appendix-d-policy-gradient-proof":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-appendix-d-policy-gradient-proof");
+      return {
+        DlrAppendixDPolicyGradientProofTransitionLedgerLab:
+          module0.DlrAppendixDPolicyGradientProofTransitionLedgerLab,
+        DlrAppendixDPolicyGradientProofReturnUpdateTraceLab:
+          module0.DlrAppendixDPolicyGradientProofReturnUpdateTraceLab,
+        DlrAppendixDPolicyGradientProofEvaluationGateLab:
+          module0.DlrAppendixDPolicyGradientProofEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-rl-from-scratch/12-review/dlr-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-rl-from-scratch/v2/dlr-official-final-review");
+      return {
+        DlrOfficialFinalReviewTransitionLedgerLab:
+          module0.DlrOfficialFinalReviewTransitionLedgerLab,
+        DlrOfficialFinalReviewReturnUpdateTraceLab:
+          module0.DlrOfficialFinalReviewReturnUpdateTraceLab,
+        DlrOfficialFinalReviewEvaluationGateLab:
+          module0.DlrOfficialFinalReviewEvaluationGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
