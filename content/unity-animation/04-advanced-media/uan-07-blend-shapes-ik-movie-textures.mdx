@@ -1,100 +1,223 @@
 ---
-title: "第 7 章 Blend Shapes, IK, and Movie Textures：三条高级表现链"
+title: "Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链"
 type: A
-section: "Unity 游戏动画设计 · 变形、IK 与视频"
+section: Unity 游戏动画设计 · 变形、IK 与视频
 order: 7
-description: "覆盖 Blend Shape 顶点变形、IK 末端约束和 Movie Texture 视频纹理，并给出 VideoPlayer 现代迁移。"
+description: >-
+  分别建立Blend Shape权重、Humanoid
+  IK目标与MovieTexture到VideoPlayer迁移链；用时间采样、状态轨迹和运行时门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uan-07
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uan07BlendShapesIkMovieTexturesTimelineSampler,
+  Uan07BlendShapesIkMovieTexturesStateTraceLab,
+  Uan07BlendShapesIkMovieTexturesRuntimeGateLab,
+} from "@/components/mdx/unity-animation/v2/uan-07-blend-shapes-ik-movie-textures";
 
-## 问题：为什么 Blend Shape、IK 和视频纹理能放在同一终章却不能混为一种动画
+<Objectives>
 
-先预测：改变表情、让手抓住把手、在场景屏幕播放影片，三者是否都在修改骨骼？不是。Blend Shape 改变同拓扑网格顶点，IK 从末端目标反求骨骼链，Movie Texture 解码预渲染像素。终章把三条非普通 Clip 路径并列，要求读者按数据载体、求值位置、输出对象和性能瓶颈分别诊断。
+- 能说明“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”如何分别建立Blend Shape权重、Humanoid IK目标与MovieTexture到VideoPlayer迁移链，并明确2015原书工作流与Unity 6现行资料的时代边界
+- 能先预测“怎样让形变、IK和视频各自使用正确资产与更新阶段，并明确MovieTexture的现代替代路径？”的时间或状态轨迹，再沿资产、绑定、时钟、状态、空间和输出逐阶段核对
+- 能注入“把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证”，用“Blend Shape索引与网格匹配，IK在有效Avatar和IK Pass下运行，视频源与输出目标可追溯”决定接受、修正或拒绝动画资产
 
-## 原书边界与官方小节
+</Objectives>
 
-官方目录只有三个核心专题：Blend Shapes、Inverse Kinematics、Movie textures。原书使用 Unity 5 的 MovieTexture 和 OGV 工作流；现代迁移必须保留视频作为纹理投射与音频同步问题，同时明确 API 已由 VideoPlayer 等方案替代。
+## 为什么从这个动画任务开始
 
-- **Blend Shapes**
-- **Inverse Kinematics**
-- **Movie textures**
+高级表现页不把三种技术揉成一条动画：形变修改网格权重，IK求解骨骼目标，视频由独立解码时钟驱动纹理输出。 “Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”使用的贯穿任务是：角色播放面部形变并伸手触及目标，场景材质同时播放视频；三条表现链分别注入资产错配。 操作前先预测哪个采样点或状态会先变化，播放后再补理由不算预测。
 
-这些小节按官方目录唯一归属。本站重新组织解释、代码与实验，不逐字复制原文；现代补充放在迁移段，不能替换或重复计算原始单元。
+本页围绕“怎样让形变、IK和视频各自使用正确资产与更新阶段，并明确MovieTexture的现代替代路径？”建立正常、故障与恢复路径。只有“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”保持“Blend Shape索引与网格匹配，IK在有效Avatar和IK Pass下运行，视频源与输出目标可追溯”并交付Blend Shape名称索引与权重、Avatar、IK Pass、目标与权重、VideoClip或URL、VideoPlayer输出、平台测试和迁移说明。，编辑器预览或运行画面才构成动画证据。
 
-## 顶点、骨骼和像素三类输出
+## 书目、34组条目与引擎时代
 
-Blend Shape 在同一顶点索引集合上按权重混合目标形状，适合表情与局部形变；IK 接收手脚目标和权重，在骨骼约束内求解中间关节；视频路径按时间解码帧，写入 RenderTexture 或材质并同步音频。三者分别受拓扑一致性、目标可达性和解码吞吐约束。统一控制面只应管理时间和权重，不能隐藏数据类型差异。
+“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”以[Packt官方书页](https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print)核对Alan Thorn著、2015年6月24日、第一版、200页、ISBN 9781782174813及七个内容章节和索引；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781782174998_A25206050/preview-9781782174998_A25206050.pdf)为“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”提供前言与详细目录交叉核对，[中文馆藏](https://opac.uibe.edu.cn/opac/book/a9eb591e52e545387e17168005244ab7)核对中文版ISBN 9787302442660。课程分母为七章合并后的34组公开目录条目。
 
-## 五个核心术语与责任边界
+“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”仅依据授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。合并目录组保留组内所有英文小节名，不能用一个现代主题替换。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”另以[技术核对 1](https://docs.unity3d.com/6000.0/Documentation/Manual/BlendShapes.html)、[技术核对 2](https://docs.unity3d.com/6000.0/Documentation/Manual/InverseKinematics.html)、[技术核对 3](https://docs.unity3d.com/6000.0/Documentation/Manual/class-VideoPlayer.html)核对现行技术事实。Mecanim、MovieTexture与2015编辑器步骤保留为原书时代轨；Unity 6的Animator、Blend Tree、Animation窗口和VideoPlayer只作稳定机制核验或迁移说明，不能反向证明2015年的面板位置、默认值和平台支持。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+## 公开目录条目与动画机制
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+### Blend Shapes
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+<Term def="Blend Shapes对应目录条目组“Blend Shapes”，在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”中用于按名称索引驱动SkinnedMeshRenderer形变权重，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  Blend Shapes
+</Term>
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+**公开坐标 1/3。** 在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”的坐标1中，Blend Shapes用于按名称索引驱动SkinnedMeshRenderer形变权重；先锁定场景与资产，再用网格、索引、权重端点和预览复核，出现模型更换后索引漂移时不得提交。
 
-术语若不能落到具体资产、时间点、对象属性和观测值，就仍停留在记忆层。读者应能为每个术语写出生产者、变化规则、消费者、正常样本和失败样本。
+### Inverse Kinematics
 
-## 关键对象与数据流
+<Term def="Inverse Kinematics对应目录条目组“Inverse Kinematics”，在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”中用于从末端目标反求有效Avatar骨骼姿势，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  Inverse Kinematics
+</Term>
 
-表情实验在 0、50、100 权重记录顶点和轮廓；IK 实验让手目标从可达区移动到超出臂长，记录末端误差、肘向和权重；视频实验固定分辨率、帧率与时长，等待 Prepare 完成后同时启动纹理和音频，记录首帧延迟、掉帧与声画偏差。三个实验共享时间轴，但分别保留网格、骨骼和解码证据。
+**公开坐标 2/3。** Inverse Kinematics进入“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”后要回答第2张采样卡：它怎样从末端目标反求有效Avatar骨骼姿势、改变哪个属性、由哪些IK Pass、目标、权重和OnAnimatorIK证明，并如何排除无Avatar仍假定IK生效。
 
-排查时从最早可控输入开始，逐段检查导入设置、中间状态和最终像素。最终画面正确但链路不符合预测，也不能立即签发，因为它可能依赖未记录的帧率、缓存、随机种子或编辑器状态。
+### Movie textures
 
-## 三条链共享时间，却拥有不同失败根因
+<Term def="Movie textures对应目录条目组“Movie textures”，在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”中用于把2015视频纹理流程迁移到VideoPlayer输出，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  Movie textures
+</Term>
 
-Blend Shape 的前提是基础网格与目标形状顶点拓扑一致，运行时只改变权重。权重范围和命名来自模型导入，多个表情同时启用时可能产生非线性组合或穿插。验收在零、中间和最大权重记录关键顶点或屏幕轮廓，并测试两个形状叠加；若重新导出模型改变顶点顺序，即使名称相同也不能假设结果等价。
+**公开坐标 3/3。** 围绕“怎样让形变、IK和视频各自使用正确资产与更新阶段，并明确MovieTexture的现代替代路径？”，条目3把Movie textures解释为把2015视频纹理流程迁移到VideoPlayer输出；复核者先读取源、时钟、输出目标和平台格式再判断动画，不能接受旧MovieTexture代码直接沿用。
 
-IK 在 Animator 求值后根据末端目标修正骨骼链。目标位置、旋转权重、Avatar 配置、层的 IK Pass 和回调时机都必须成立。目标超出手臂长度时，求解器只能尽量接近，角色根或肩部是否允许补偿要由设计决定。权重从零渐变到一可以避免跳变，但目标本身抖动仍会传入骨骼；测试要记录末端误差、权重、目标速度和关节极限。
+## 先预测，再操作三个动画实验
 
-视频路径先 Prepare，再按时间解码帧，输出到 RenderTexture、材质或相机平面，并单独路由音频。黑屏可能来自未准备、URL 不可访问、编解码器不支持、目标纹理未绑定或材质不显示；音画不同步则要继续检查时钟来源和跳帧策略。旧 MovieTexture 的 OGV 工作流不能直接映射为现代 VideoPlayer 的所有平台行为。
+<Callout type="info" title="先写出哪个采样点或状态会先变化">
+  对“Chapter 7. Blend Shapes, IK, and Movie
+  Textures：三条高级表现链”先选择版本化场景、动画资产、输入与预期属性，再操作时间采样、状态轨迹和运行时门；结果与预测不一致时应修改动画假设，不删除失败运行。
+</Callout>
 
-## 终章分项证据
+<Stepper>
+  <Step title="1. 时间轴与属性采样">
+    切换“面部权重、手部IK、视频输出”并逐步移动采样点，核对时钟、属性端点和当前进度怎样连接“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”。
 
-- Blend Shape：模型版本、形状索引、权重曲线、叠加组合和顶点结果。
-- IK：Avatar、IK Pass、目标 Transform、位置与旋转权重、末端误差和不可达样本。
-- 视频：源格式、准备耗时、分辨率、帧率、输出纹理、音频路由和平台结果。
-- 统一控制只管理时间、启停与权重，不得用一个“动画成功”状态隐藏三类错误。
-- 性能报告分别记录蒙皮或形变、IK 求解和视频解码成本。
+    <Uan07BlendShapesIkMovieTexturesTimelineSampler />
 
-综合实验让角色看向屏幕、抬手触碰目标并改变表情，同时播放视频。然后分别破坏拓扑身份、移远 IK 目标和更换不支持编码，验证每条链的最早失败信号互不混淆。
+  </Step>
+  <Step title="2. 正常与故障状态轨迹">
+    保持“角色播放面部形变并伸手触及目标，场景材质同时播放视频；三条表现链分别注入资产错配。”不变，切换正常和故障模式，定位“把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证”最先破坏资产、状态、时间或空间的位置。
 
-三条链同时运行时还要检查更新顺序和资源寿命。表情权重应在 Animator 覆盖前后选择一致写入点，IK 目标在角色根移动后更新，视频 RenderTexture 在场景卸载或分辨率变化时正确释放与重建。用时间戳记录输入、Animator 更新、IK 回调和视频帧到达顺序，并连续加载卸载场景比较资源数量，才能排除只在单次播放中不明显的延迟和泄漏。
+    <Uan07BlendShapesIkMovieTexturesStateTraceLab />
 
-暂停、跳转和恢复时再核对三条时间线，确认表情与 IK 不依赖视频解码帧率，视频音频也不会因游戏慢动作产生未声明漂移。
+  </Step>
+  <Step title="3. 运行时门与证据包">
+    分别切换资产绑定、时钟一致、权威写入与目标平台验证，展开Blend Shape名称索引与权重、Avatar、IK Pass、目标与权重、VideoClip或URL、VideoPlayer输出、平台测试和迁移说明。后决定是否提交。
 
-目标平台上的相同操作序列也要进入证据包，不能只以编辑器播放结果签发。
+    <Uan07BlendShapesIkMovieTexturesRuntimeGateLab />
 
-## 正常、边界与失败样本
+  </Step>
+</Stepper>
 
-每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+<Callout
+  type="trap"
+  title="本页动画故障：把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证"
+>
+  “Chapter 7. Blend Shapes, IK, and Movie
+  Textures：三条高级表现链”遇到该故障时应保持Unity版本、场景、资产、输入和初始状态不变，沿导入到输出方向寻找最早偏离；用最终画面看似正常掩盖中间双写或错绑，不能证明“Blend
+  Shape索引与网格匹配，IK在有效Avatar和IK Pass下运行，视频源与输出目标可追溯”。
+</Callout>
 
+<Callout type="trap" title="编辑器预览不等于目标构建">
+  角色播放面部形变并伸手触及目标，场景材质同时播放视频；三条表现链分别注入资产错配。
+  在Animation或Animator窗口能播放，只证明当前编辑器状态可预览；“Chapter 7. Blend
+  Shapes, IK, and Movie
+  Textures：三条高级表现链”仍需冷启动、不同帧率、状态中断和目标平台输出证据。
+</Callout>
 
-## 从 Unity 5 到现代 Unity
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 7. Blend Shapes, IK, and Movie
+  Textures：三条高级表现链”引用现行手册是为了核对稳定机制和迁移边界，不能把当前菜单、包、默认导入器或VideoPlayer宣称成原书原有内容。
+</Callout>
 
-Blend Shape 和 Animator IK 概念仍有效，现代项目还可使用 Animation Rigging 约束。MovieTexture 已被移除，VideoPlayer 可输出 Camera、RenderTexture、Material Override 或 API Only，并有独立音频输出模式。平台编解码能力、URL/StreamingAssets、准备阶段和色彩空间都必须重新验证，不能假定旧 OGV 建议仍通用。
+## Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链的可重放动画协议
 
-迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+| 阶段                    | 动画动作                                                                                                               | 必留证据                            | 拒绝条件                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| 验证形变网格与权重      | 在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”执行验证形变网格与权重，只允许声明组件写入属性      | Unity版本、场景、资产GUID与初始状态 | 资产或绑定不可追溯                                                                 |
+| 配置Avatar IK目标和回调 | 在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”执行配置Avatar IK目标和回调，只允许声明组件写入属性 | 关键帧、时钟、参数、状态与空间轨迹  | 把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证 |
+| 迁移视频源播放器与输出  | 在“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”执行迁移视频源播放器与输出，只允许声明组件写入属性  | 运行截图、平台输出、迁移与回退记录  | 无法重放或恢复基线                                                                 |
 
-## 验收证据
+```yaml
+unit: "uan-07"
+question: "怎样让形变、IK和视频各自使用正确资产与更新阶段，并明确MovieTexture的现代替代路径？"
+scenario: "角色播放面部形变并伸手触及目标，场景材质同时播放视频；三条表现链分别注入资产错配。"
+clips: ["面部权重", "手部IK", "视频输出"]
+stages:
+  ["验证形变网格与权重", "配置Avatar IK目标和回调", "迁移视频源播放器与输出"]
+invariant: "Blend Shape索引与网格匹配，IK在有效Avatar和IK Pass下运行，视频源与输出目标可追溯"
+fault: "把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证"
+evidence: "Blend Shape名称索引与权重、Avatar、IK Pass、目标与权重、VideoClip或URL、VideoPlayer输出、平台测试和迁移说明。"
+reset: restore_clip_frame_mode_step_gates_and_artifact
+```
 
-验收包含 Blend Shape 三权重截图与拓扑检查、IK 可达和不可达曲线、目标权重过渡，以及视频的编码信息、Prepare 时长、首帧延迟、平均掉帧、音频同步、循环点和至少一个目标平台结果。每条路径都有故意失败样本。
+该协议要求“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”在相同Unity版本、场景、资产、输入和初始状态下重放。重置后若剪辑、采样点、轨迹模式、验收门或证据显示没有回到基线，交互状态已经污染比较，不能作为动画证据。
 
-证据包同时记录场景路径、代码版本、资产 GUID、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是看过。
+## 本页回顾
 
-## 小结
+掌握“Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”不是记住编辑器点击顺序，而是能围绕“怎样让形变、IK和视频各自使用正确资产与更新阶段，并明确MovieTexture的现代替代路径？”重建动画状态，并用“Blend Shape索引与网格匹配，IK在有效Avatar和IK Pass下运行，视频源与输出目标可追溯”拒绝“把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证”。最终交付为Blend Shape名称索引与权重、Avatar、IK Pass、目标与权重、VideoClip或URL、VideoPlayer输出、平台测试和迁移说明。
 
-- Blend Shape、IK 与视频分别修改顶点、骨骼和像素
-- 权重统一了控制形式，但不能消除三类数据约束
-- IK 必须测试目标可达性、关节方向和权重过渡
-- MovieTexture 的现代复现必须迁移到 VideoPlayer 并验证平台解码
+## 练习与答案
 
+<Exercises>
 
+1. **问题 1：动画合同。** “Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”为什么必须先声明Unity版本、资产、时钟、空间与权威写入者？
+
+<Answer>
+  角色播放面部形变并伸手触及目标，场景材质同时播放视频；三条表现链分别注入资产错配。
+  若这些条件不固定，相同输入可能读取不同资产、时钟或状态；“Chapter 7. Blend
+  Shapes, IK, and Movie
+  Textures：三条高级表现链”先声明合同，才能把画面连接到可验证属性，并防止预览成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”的Blend
+  Shapes：以“按名称索引驱动SkinnedMeshRenderer形变权重”解释动画作用，用“网格、索引、权重端点和预览”提供复核。
+  2. “Chapter 7. Blend Shapes, IK, and Movie Textures：三条高级表现链”的Inverse
+  Kinematics：以“从末端目标反求有效Avatar骨骼姿势”解释动画作用，用“IK
+  Pass、目标、权重和OnAnimatorIK”提供复核。 3. “Chapter 7. Blend Shapes, IK, and
+  Movie Textures：三条高级表现链”的Movie
+  textures：以“把2015视频纹理流程迁移到VideoPlayer输出”解释动画作用，用“源、时钟、输出目标和平台格式”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“把2015年的MovieTexture代码直接用于Unity 6，既没有VideoPlayer迁移也没有平台格式验证”已经被修正？
+
+<Answer>
+  为“Chapter 7. Blend Shapes, IK, and Movie
+  Textures：三条高级表现链”复用同一Unity版本、场景、资产、输入和初始状态，重放正常路径后只注入“把2015年的MovieTexture代码直接用于Unity
+  6，既没有VideoPlayer迁移也没有平台格式验证”；记录最早偏离点，撤销故障并再次运行。只有时间采样、状态轨迹、空间结果和Blend
+  Shape名称索引与权重、Avatar、IK
+  Pass、目标与权重、VideoClip或URL、VideoPlayer输出、平台测试和迁移说明。重新满足“Blend
+  Shape索引与网格匹配，IK在有效Avatar和IK
+  Pass下运行，视频源与输出目标可追溯”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Blend Shapes">
+    对应“Blend Shapes”；在“Chapter 7. Blend Shapes, IK, and Movie
+    Textures：三条高级表现链”中用于按名称索引驱动SkinnedMeshRenderer形变权重，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="Inverse Kinematics">
+    对应“Inverse Kinematics”；在“Chapter 7. Blend Shapes, IK, and Movie
+    Textures：三条高级表现链”中用于从末端目标反求有效Avatar骨骼姿势，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="Movie textures">
+    对应“Movie textures”；在“Chapter 7. Blend Shapes, IK, and Movie
+    Textures：三条高级表现链”中用于把2015视频纹理流程迁移到VideoPlayer输出，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Alan Thorn《Unity Animation Essentials》"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print"
+/>

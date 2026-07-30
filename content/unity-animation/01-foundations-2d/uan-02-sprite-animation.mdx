@@ -1,98 +1,245 @@
 ---
-title: "第 2 章 Sprite Animation：导入、图集与帧序列诊断"
+title: Chapter 2. Sprite Animation：导入、图集与帧序列诊断
 type: A
-section: "Unity 游戏动画设计 · 基础与 2D"
+section: Unity 游戏动画设计 · 基础与 2D
 order: 2
-description: "覆盖独立精灵、Sprite Atlas 切分、帧序列动画，以及速度、循环和帧顺序三类常见错误。"
+description: 把Sprite导入、切片、图集、帧序列、速度、循环和顺序问题编成可诊断资产链；用时间采样、状态轨迹和运行时门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uan-02
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uan02SpriteAnimationTimelineSampler,
+  Uan02SpriteAnimationStateTraceLab,
+  Uan02SpriteAnimationRuntimeGateLab,
+} from "@/components/mdx/unity-animation/v2/uan-02-sprite-animation";
 
-## 问题：为什么图片都导入成功，动画仍可能倒序、跳帧或比例错误
+<Objectives>
 
-先预测：walk_1、walk_2、walk_10 按文件名字典序自动排列，会得到 1、10、2 还是 1、2、10？很可能是前者。第二章把动画问题前移到资产管线：Texture Type、Sprite Mode、切片矩形、Pivot、Pixels Per Unit、帧命名、采样率和 Wrap Mode 共同决定最终结果。播放错误不一定来自 Animator。
+- 能说明“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”如何把Sprite导入、切片、图集、帧序列、速度、循环和顺序问题编成可诊断资产链，并明确2015原书工作流与Unity 6现行资料的时代边界
+- 能先预测“怎样从纹理导入设置追到Animation Clip采样，定位播放过快、循环错误或帧顺序颠倒？”的时间或状态轨迹，再沿资产、绑定、时钟、状态、空间和输出逐阶段核对
+- 能注入“图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧”，用“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”决定接受、修正或拒绝动画资产
 
-## 原书边界与官方小节
+</Objectives>
 
-官方目录由 Sprites - importing and configuration 开始，区分 Individual sprites 与 The sprite atlas；随后进入 Animation with sprites，并用三个故障专题收束：Sprite animation is too slow or too fast、Animation shouldn't be looping、Frames play in the wrong order。
+## 为什么从这个动画任务开始
 
-- **Sprites - importing and configuration；Individual sprites；The sprite atlas**
-- **Animation with sprites**
-- **Sprite animation is too slow or too fast**
-- **Animation shouldn't be looping**
-- **Frames play in the wrong order**
+Sprite页把看似视觉问题还原成资产身份问题：帧是否存在、顺序如何、以何种采样率进入哪个剪辑。 “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”使用的贯穿任务是：导入一张角色Sprite图集，生成待机与行走剪辑，并对速度、loopTime和帧排序各注入一次错误。 操作前先预测哪个采样点或状态会先变化，播放后再补理由不算预测。
 
-这些小节按官方目录唯一归属。本站重新组织解释、代码与实验，不逐字复制原文；现代补充放在迁移段，不能替换或重复计算原始单元。
+本页围绕“怎样从纹理导入设置追到Animation Clip采样，定位播放过快、循环错误或帧顺序颠倒？”建立正常、故障与恢复路径。只有“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”保持“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”并交付纹理导入设置、切片矩形、轴心、帧清单、采样率、loopTime、控制器引用、运行录屏和故障对照。，编辑器预览或运行画面才构成动画证据。
 
-## 源像素到有序时间帧
+## 书目、34组条目与引擎时代
 
-Sprite 动画先把纹理切成具名矩形，再把 Sprite 引用按时间写入 SpriteRenderer 的 sprite 属性。Pixels Per Unit 决定世界尺度，Pivot 决定每帧对齐，命名和选中顺序决定帧序列，Clip sample rate 决定每秒推进多少采样，Loop Time 决定末尾行为。任何环节漂移都会表现为缩放跳动、脚底滑动、帧顺序错误或意外重复。
+“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”以[Packt官方书页](https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print)核对Alan Thorn著、2015年6月24日、第一版、200页、ISBN 9781782174813及七个内容章节和索引；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781782174998_A25206050/preview-9781782174998_A25206050.pdf)为“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”提供前言与详细目录交叉核对，[中文馆藏](https://opac.uibe.edu.cn/opac/book/a9eb591e52e545387e17168005244ab7)核对中文版ISBN 9787302442660。课程分母为七章合并后的34组公开目录条目。
 
-## 五个核心术语与责任边界
+“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”仅依据授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。合并目录组保留组内所有英文小节名，不能用一个现代主题替换。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”另以[技术核对 1](https://docs.unity3d.com/6000.0/Documentation/Manual/SpriteEditor.html)、[技术核对 2](https://docs.unity3d.com/6000.0/Documentation/Manual/AnimationClips.html)、[技术核对 3](https://docs.unity3d.com/6000.0/Documentation/Manual/class-AnimatorController.html)核对现行技术事实。Mecanim、MovieTexture与2015编辑器步骤保留为原书时代轨；Unity 6的Animator、Blend Tree、Animation窗口和VideoPlayer只作稳定机制核验或迁移说明，不能反向证明2015年的面板位置、默认值和平台支持。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+## 公开目录条目与动画机制
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+### Sprites - importing and configuration；Individual sprites；The sprite atlas
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+<Term def="动画条目1对应目录条目组“Sprites - importing and configuration；Individual sprites；The sprite atlas”，在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”中用于把纹理切片为带轴心和身份的Sprite资产，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目1
+</Term>
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+**公开坐标 1/5。** 在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的坐标1中，Sprites - importing and configuration；Individual sprites；The sprite atlas用于把纹理切片为带轴心和身份的Sprite资产；先锁定场景与资产，再用导入设置、切片矩形、轴心和图集复核，出现切片顺序隐式变化时不得提交。
 
-术语若不能落到具体资产、时间点、对象属性和观测值，就仍停留在记忆层。读者应能为每个术语写出生产者、变化规则、消费者、正常样本和失败样本。
+### Animation with sprites
 
-## 关键对象与数据流
+<Term def="动画条目2对应目录条目组“Animation with sprites”，在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”中用于用帧序列、采样率与循环设置生成剪辑，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目2
+</Term>
 
-从一张 4x2 图集开始，固定每格尺寸与底部中心 Pivot，切出八帧并使用零填充名称 walk_01 到 walk_08。按序创建 Clip，计算 duration = frameCount / sampleRate，再分别故意把采样率翻倍、开启不应存在的循环、打乱两帧。诊断时检查导入元数据、Clip 曲线关键帧时间与 Wrap 设置，而不是只看播放画面。
+**公开坐标 2/5。** Animation with sprites进入“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”后要回答第2张采样卡：它怎样用帧序列、采样率与循环设置生成剪辑、改变哪个属性、由哪些关键帧顺序、Samples和loopTime证明，并如何排除预览掩盖运行引用。
 
-排查时从最早可控输入开始，逐段检查导入设置、中间状态和最终像素。最终画面正确但链路不符合预测，也不能立即签发，因为它可能依赖未记录的帧率、缓存、随机种子或编辑器状态。
+### Sprite animation is too slow or too fast
 
-## Sprite 跳动通常在播放前已经发生
+<Term def="动画条目3对应目录条目组“Sprite animation is too slow or too fast”，在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”中用于按被驱动对象和求解方式分类动画，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目3
+</Term>
 
-图集切片得到的不只是矩形，还包含名称、Pivot、Border 和源纹理坐标。若每帧透明边界不同而使用自动中心 Pivot，角色脚底会左右或上下跳；若 Pixels Per Unit 不一致，帧切换会改变世界尺寸；若过滤模式和压缩改变像素边缘，像素画会出现模糊或色边。诊断先在 Sprite Editor 对比切片元数据，再看 Clip 引用和时间，最后才看 Animator。
+**公开坐标 3/5。** 围绕“怎样从纹理导入设置追到Animation Clip采样，定位播放过快、循环错误或帧顺序颠倒？”，条目3把Sprite animation is too slow or too fast解释为按被驱动对象和求解方式分类动画；复核者先读取资产、属性、时钟和权威写入者再判断动画，不能接受类型名称代替运行合同。
 
-帧顺序不能依赖未经约束的字典序。walk_1、walk_10、walk_2 会按文本排序成一、十、二；零填充名称或显式序列才能保持稳定。Clip 的持续时间由关键帧时间和采样率共同决定，八帧在每秒八帧下约一秒，在每秒十六帧下约半秒。循环还要检查最后一帧是否与第一帧重复，否则边界会多停一个采样或出现节奏突变。
+### Animation shouldn't be looping
 
-## 从资产到像素的检查顺序
+<Term def="动画条目4对应目录条目组“Animation shouldn't be looping”，在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”中用于用帧序列、采样率与循环设置生成剪辑，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目4
+</Term>
 
-- 原纹理尺寸、alpha、颜色空间、压缩和平台覆盖设置是否符合目标画面。
-- Sprite Mode、切片网格、名称、Pivot 与 Pixels Per Unit 是否跨帧一致。
-- AnimationClip 对象引用曲线是否按预期顺序和时间指向每个 Sprite。
-- Wrap Mode 或 Loop Time、Animator 速度和全局 timeScale 是否共同改变节奏。
-- SpriteRenderer 排序层、材质和对象缩放是否在播放时额外改变结果。
+**公开坐标 4/5。** 对“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”而言，Animation shouldn't be looping的最小合同是用帧序列、采样率与循环设置生成剪辑，第4次检查保存关键帧顺序、Samples和loopTime；若产生预览掩盖运行引用，就回到资产或状态上游。
 
-建立八帧标准样本后，分别注入不同 Pivot、错误 PPU、乱序名称、双倍采样率和错误循环。每次只改一项，保存导入元数据、Clip 曲线截图和关键时间点像素。现代 Sprite Atlas 打包方式可以变化，但单帧身份、序列顺序、时间采样和对齐契约仍是可迁移不变量。
+### Frames play in the wrong order
 
-图集重新打包还可能改变纹理页位置，但 Sprite 引用应通过资产身份而不是手写 UV 保持稳定。验收在启用旋转打包、紧密网格和平台压缩后重建图集，比较 Renderer 引用、批次、边缘采样与动画顺序。若业务代码依赖切片在源纹理中的固定坐标，应把这种额外契约显式记录，否则一次正常的打包优化就会破坏运行结果。
+<Term def="动画条目5对应目录条目组“Frames play in the wrong order”，在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”中用于把属性变化表示成可采样时间函数，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目5
+</Term>
 
-同时在目标设备验证内存、批次与首帧加载，确保打包收益没有以画质或启动抖动为代价。
+**公开坐标 5/5。** 第5个公开条目组Frames play in the wrong order服务于把Sprite导入、切片、图集、帧序列、速度、循环和顺序问题编成可诊断资产链，需要以属性、时间、关键帧和插值呈现把属性变化表示成可采样时间函数；帧等同固定时长会破坏“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”。
 
-## 正常、边界与失败样本
+## 先预测，再操作三个动画实验
 
-每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+<Callout type="info" title="先写出哪个采样点或状态会先变化">
+  对“Chapter 2. Sprite
+  Animation：导入、图集与帧序列诊断”先选择版本化场景、动画资产、输入与预期属性，再操作时间采样、状态轨迹和运行时门；结果与预测不一致时应修改动画假设，不删除失败运行。
+</Callout>
 
+<Stepper>
+  <Step title="1. 时间轴与属性采样">
+    切换“图集切片、待机序列、行走序列”并逐步移动采样点，核对时钟、属性端点和当前进度怎样连接“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”。
 
-## 从 Unity 5 到现代 Unity
+    <Uan02SpriteAnimationTimelineSampler />
 
-现代 Unity 仍使用 Sprite Editor、AnimationClip 和 SpriteRenderer，但 Sprite Atlas 工作流、2D 包与导入面板位置已变化。原书的故障分类仍适用。现代项目还应验证平台纹理压缩、Pixel Perfect Camera 与 Addressables 打包；这些是交付补充，不替代本章的导入、帧率、循环和顺序。
+  </Step>
+  <Step title="2. 正常与故障状态轨迹">
+    保持“导入一张角色Sprite图集，生成待机与行走剪辑，并对速度、loopTime和帧排序各注入一次错误。”不变，切换正常和故障模式，定位“图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧”最先破坏资产、状态、时间或空间的位置。
 
-迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+    <Uan02SpriteAnimationStateTraceLab />
 
-## 验收证据
+  </Step>
+  <Step title="3. 运行时门与证据包">
+    分别切换资产绑定、时钟一致、权威写入与目标平台验证，展开纹理导入设置、切片矩形、轴心、帧清单、采样率、loopTime、控制器引用、运行录屏和故障对照。后决定是否提交。
 
-验收包含原图与切片元数据、八帧名称列表、计算得到的 Clip 时长、三个关键时刻截图，以及过快、误循环、错序三个失败样本。重新导入后 GUID 与帧引用应保持稳定，脚底基准偏差需量化。
+    <Uan02SpriteAnimationRuntimeGateLab />
 
-证据包同时记录场景路径、代码版本、资产 GUID、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是看过。
+  </Step>
+</Stepper>
 
-## 小结
+<Callout
+  type="trap"
+  title="本页动画故障：图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧"
+>
+  “Chapter 2. Sprite
+  Animation：导入、图集与帧序列诊断”遇到该故障时应保持Unity版本、场景、资产、输入和初始状态不变，沿导入到输出方向寻找最早偏离；用最终画面看似正常掩盖中间双写或错绑，不能证明“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”。
+</Callout>
 
-- Sprite 动画从导入和切片开始，不是从 Animator 开始
-- PPU 与 Pivot 分别约束尺度和逐帧对齐
-- 帧数与采样率共同决定播放时长
-- 速度、循环和顺序问题都能落到具体资产配置
+<Callout type="trap" title="编辑器预览不等于目标构建">
+  导入一张角色Sprite图集，生成待机与行走剪辑，并对速度、loopTime和帧排序各注入一次错误。
+  在Animation或Animator窗口能播放，只证明当前编辑器状态可预览；“Chapter 2.
+  Sprite
+  Animation：导入、图集与帧序列诊断”仍需冷启动、不同帧率、状态中断和目标平台输出证据。
+</Callout>
 
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 2. Sprite
+  Animation：导入、图集与帧序列诊断”引用现行手册是为了核对稳定机制和迁移边界，不能把当前菜单、包、默认导入器或VideoPlayer宣称成原书原有内容。
+</Callout>
 
+## Chapter 2. Sprite Animation：导入、图集与帧序列诊断的可重放动画协议
+
+| 阶段                   | 动画动作                                                                                                  | 必留证据                            | 拒绝条件                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| 核对纹理切片和轴心     | 在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”执行核对纹理切片和轴心，只允许声明组件写入属性     | Unity版本、场景、资产GUID与初始状态 | 资产或绑定不可追溯                                           |
+| 生成帧序列与采样率     | 在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”执行生成帧序列与采样率，只允许声明组件写入属性     | 关键帧、时钟、参数、状态与空间轨迹  | 图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧 |
+| 验证循环顺序和运行引用 | 在“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”执行验证循环顺序和运行引用，只允许声明组件写入属性 | 运行截图、平台输出、迁移与回退记录  | 无法重放或恢复基线                                           |
+
+```yaml
+unit: "uan-02"
+question: "怎样从纹理导入设置追到Animation Clip采样，定位播放过快、循环错误或帧顺序颠倒？"
+scenario: "导入一张角色Sprite图集，生成待机与行走剪辑，并对速度、loopTime和帧排序各注入一次错误。"
+clips: ["图集切片", "待机序列", "行走序列"]
+stages: ["核对纹理切片和轴心", "生成帧序列与采样率", "验证循环顺序和运行引用"]
+invariant: "切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产"
+fault: "图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧"
+evidence: "纹理导入设置、切片矩形、轴心、帧清单、采样率、loopTime、控制器引用、运行录屏和故障对照。"
+reset: restore_clip_frame_mode_step_gates_and_artifact
+```
+
+该协议要求“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”在相同Unity版本、场景、资产、输入和初始状态下重放。重置后若剪辑、采样点、轨迹模式、验收门或证据显示没有回到基线，交互状态已经污染比较，不能作为动画证据。
+
+## 本页回顾
+
+掌握“Chapter 2. Sprite Animation：导入、图集与帧序列诊断”不是记住编辑器点击顺序，而是能围绕“怎样从纹理导入设置追到Animation Clip采样，定位播放过快、循环错误或帧顺序颠倒？”重建动画状态，并用“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”拒绝“图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧”。最终交付为纹理导入设置、切片矩形、轴心、帧清单、采样率、loopTime、控制器引用、运行录屏和故障对照。
+
+## 练习与答案
+
+<Exercises>
+
+1. **问题 1：动画合同。** “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”为什么必须先声明Unity版本、资产、时钟、空间与权威写入者？
+
+<Answer>
+  导入一张角色Sprite图集，生成待机与行走剪辑，并对速度、loopTime和帧排序各注入一次错误。
+  若这些条件不固定，相同输入可能读取不同资产、时钟或状态；“Chapter 2. Sprite
+  Animation：导入、图集与帧序列诊断”先声明合同，才能把画面连接到可验证属性，并防止预览成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的Sprites - importing
+  and configuration；Individual sprites；The sprite
+  atlas：以“把纹理切片为带轴心和身份的Sprite资产”解释动画作用，用“导入设置、切片矩形、轴心和图集”提供复核。
+  2. “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的Animation with
+  sprites：以“用帧序列、采样率与循环设置生成剪辑”解释动画作用，用“关键帧顺序、Samples和loopTime”提供复核。
+  3. “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的Sprite animation is
+  too slow or too
+  fast：以“按被驱动对象和求解方式分类动画”解释动画作用，用“资产、属性、时钟和权威写入者”提供复核。
+  4. “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的Animation shouldn't
+  be
+  looping：以“用帧序列、采样率与循环设置生成剪辑”解释动画作用，用“关键帧顺序、Samples和loopTime”提供复核。
+  5. “Chapter 2. Sprite Animation：导入、图集与帧序列诊断”的Frames play in the
+  wrong
+  order：以“把属性变化表示成可采样时间函数”解释动画作用，用“属性、时间、关键帧和插值”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧”已经被修正？
+
+<Answer>
+  为“Chapter 2. Sprite
+  Animation：导入、图集与帧序列诊断”复用同一Unity版本、场景、资产、输入和初始状态，重放正常路径后只注入“图集切片顺序与剪辑关键帧顺序不一致，预览和运行时出现倒序跳帧”；记录最早偏离点，撤销故障并再次运行。只有时间采样、状态轨迹、空间结果和纹理导入设置、切片矩形、轴心、帧清单、采样率、loopTime、控制器引用、运行录屏和故障对照。重新满足“切片结果、帧序列、采样率、循环设置与运行时控制器引用同一组版本化资产”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="动画条目1">
+    对应“Sprites - importing and configuration；Individual sprites；The sprite
+    atlas”；在“Chapter 2. Sprite
+    Animation：导入、图集与帧序列诊断”中用于把纹理切片为带轴心和身份的Sprite资产，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目2">
+    对应“Animation with sprites”；在“Chapter 2. Sprite
+    Animation：导入、图集与帧序列诊断”中用于用帧序列、采样率与循环设置生成剪辑，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目3">
+    对应“Sprite animation is too slow or too fast”；在“Chapter 2. Sprite
+    Animation：导入、图集与帧序列诊断”中用于按被驱动对象和求解方式分类动画，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目4">
+    对应“Animation shouldn't be looping”；在“Chapter 2. Sprite
+    Animation：导入、图集与帧序列诊断”中用于用帧序列、采样率与循环设置生成剪辑，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目5">
+    对应“Frames play in the wrong order”；在“Chapter 2. Sprite
+    Animation：导入、图集与帧序列诊断”中用于把属性变化表示成可采样时间函数，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Alan Thorn《Unity Animation Essentials》"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print"
+/>

@@ -10408,6 +10408,119 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "unity-animation/00-guide/uan-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-animation/v2/uan-official-learning-map");
+    return {
+      UanOfficialLearningMapTimelineSampler:
+        module0.UanOfficialLearningMapTimelineSampler,
+      UanOfficialLearningMapStateTraceLab:
+        module0.UanOfficialLearningMapStateTraceLab,
+      UanOfficialLearningMapRuntimeGateLab:
+        module0.UanOfficialLearningMapRuntimeGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-animation/01-foundations-2d/uan-01-animation-fundamentals":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-animation/v2/uan-01-animation-fundamentals");
+      return {
+        Uan01AnimationFundamentalsTimelineSampler:
+          module0.Uan01AnimationFundamentalsTimelineSampler,
+        Uan01AnimationFundamentalsStateTraceLab:
+          module0.Uan01AnimationFundamentalsStateTraceLab,
+        Uan01AnimationFundamentalsRuntimeGateLab:
+          module0.Uan01AnimationFundamentalsRuntimeGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-animation/01-foundations-2d/uan-02-sprite-animation": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-animation/v2/uan-02-sprite-animation");
+    return {
+      Uan02SpriteAnimationTimelineSampler:
+        module0.Uan02SpriteAnimationTimelineSampler,
+      Uan02SpriteAnimationStateTraceLab:
+        module0.Uan02SpriteAnimationStateTraceLab,
+      Uan02SpriteAnimationRuntimeGateLab:
+        module0.Uan02SpriteAnimationRuntimeGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-animation/02-native-mecanim/uan-03-native-animation": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-animation/v2/uan-03-native-animation");
+    return {
+      Uan03NativeAnimationTimelineSampler:
+        module0.Uan03NativeAnimationTimelineSampler,
+      Uan03NativeAnimationStateTraceLab:
+        module0.Uan03NativeAnimationStateTraceLab,
+      Uan03NativeAnimationRuntimeGateLab:
+        module0.Uan03NativeAnimationRuntimeGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-animation/02-native-mecanim/uan-04-noncharacter-animation-mecanim":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-animation/v2/uan-04-noncharacter-animation-mecanim");
+      return {
+        Uan04NoncharacterAnimationMecanimTimelineSampler:
+          module0.Uan04NoncharacterAnimationMecanimTimelineSampler,
+        Uan04NoncharacterAnimationMecanimStateTraceLab:
+          module0.Uan04NoncharacterAnimationMecanimStateTraceLab,
+        Uan04NoncharacterAnimationMecanimRuntimeGateLab:
+          module0.Uan04NoncharacterAnimationMecanimRuntimeGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-animation/03-character/uan-05-character-animation-fundamentals":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-animation/v2/uan-05-character-animation-fundamentals");
+      return {
+        Uan05CharacterAnimationFundamentalsTimelineSampler:
+          module0.Uan05CharacterAnimationFundamentalsTimelineSampler,
+        Uan05CharacterAnimationFundamentalsStateTraceLab:
+          module0.Uan05CharacterAnimationFundamentalsStateTraceLab,
+        Uan05CharacterAnimationFundamentalsRuntimeGateLab:
+          module0.Uan05CharacterAnimationFundamentalsRuntimeGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-animation/03-character/uan-06-advanced-character-animation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-animation/v2/uan-06-advanced-character-animation");
+      return {
+        Uan06AdvancedCharacterAnimationTimelineSampler:
+          module0.Uan06AdvancedCharacterAnimationTimelineSampler,
+        Uan06AdvancedCharacterAnimationStateTraceLab:
+          module0.Uan06AdvancedCharacterAnimationStateTraceLab,
+        Uan06AdvancedCharacterAnimationRuntimeGateLab:
+          module0.Uan06AdvancedCharacterAnimationRuntimeGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-animation/04-advanced-media/uan-07-blend-shapes-ik-movie-textures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-animation/v2/uan-07-blend-shapes-ik-movie-textures");
+      return {
+        Uan07BlendShapesIkMovieTexturesTimelineSampler:
+          module0.Uan07BlendShapesIkMovieTexturesTimelineSampler,
+        Uan07BlendShapesIkMovieTexturesStateTraceLab:
+          module0.Uan07BlendShapesIkMovieTexturesStateTraceLab,
+        Uan07BlendShapesIkMovieTexturesRuntimeGateLab:
+          module0.Uan07BlendShapesIkMovieTexturesRuntimeGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-animation/05-review/uan-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-animation/v2/uan-official-final-review");
+    return {
+      UanOfficialFinalReviewTimelineSampler:
+        module0.UanOfficialFinalReviewTimelineSampler,
+      UanOfficialFinalReviewStateTraceLab:
+        module0.UanOfficialFinalReviewStateTraceLab,
+      UanOfficialFinalReviewRuntimeGateLab:
+        module0.UanOfficialFinalReviewRuntimeGateLab,
+    } as ChapterMdxComponents;
+  },
   "vulkan-guide/01-introduction/vkg-ch01-vulkan-intro": async () => {
     const module0 =
       await import("@/components/mdx/vulkan-guide/v2/vkg-ch01-vulkan-intro");

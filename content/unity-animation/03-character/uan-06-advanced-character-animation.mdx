@@ -1,102 +1,251 @@
 ---
-title: "第 6 章 Advanced Character Animation：可控角色与 Blend Tree"
+title: Chapter 6. Advanced Character Animation：可控角色与 Blend Tree
 type: A
-section: "Unity 游戏动画设计 · 角色动画"
+section: Unity 游戏动画设计 · 角色动画
 order: 6
-description: "覆盖可控角色、Blend Tree、维度、浮点映射、脚本准备、Mecanim Blend Tree 驱动与测试。"
+description: 用维度、浮点参数、脚本映射与测试构建可控角色Blend Tree；用时间采样、状态轨迹和运行时门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+sourceUrl: >-
+  https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uan-06
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uan06AdvancedCharacterAnimationTimelineSampler,
+  Uan06AdvancedCharacterAnimationStateTraceLab,
+  Uan06AdvancedCharacterAnimationRuntimeGateLab,
+} from "@/components/mdx/unity-animation/v2/uan-06-advanced-character-animation";
 
-## 问题：为什么把速度直接写入 Blend Tree 不一定得到正确混合
+<Objectives>
 
-先预测：角色最大速度是 6 米每秒，而 Blend Tree 阈值设计为 0 到 1，把 6 直接写入参数会发生什么？参数长期落在边界，几乎只播放最后一个动作。第六章的核心不是拖入 Idle、Walk、Run，而是把输入和物理速度稳定映射到 Blend Tree 的一维或二维参数空间。
+- 能说明“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”如何用维度、浮点参数、脚本映射与测试构建可控角色Blend Tree，并明确2015原书工作流与Unity 6现行资料的时代边界
+- 能先预测“怎样把输入速度和方向映射到Blend Tree坐标，并证明阈值、阻尼和剪辑速度不会造成跳变？”的时间或状态轨迹，再沿资产、绑定、时钟、状态、空间和输出逐阶段核对
+- 能注入“脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和”，用“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”决定接受、修正或拒绝动画资产
 
-## 原书边界与官方小节
+</Objectives>
 
-官方目录依次为 Creating a controllable character、Blend Trees、Dimensions、Mapping floats、Preparing to script with Blend Tree animations、Scripting with Mecanim Blend Trees、Testing Mecanim Blend Trees。它延续第五章已导入角色，聚焦可控移动混合与验证。
+## 为什么从这个动画任务开始
 
-- **Creating a controllable character；Blend Trees**
-- **Dimensions**
-- **Mapping floats**
-- **Preparing to script with Blend Tree animations**
-- **Scripting with Mecanim Blend Trees；Testing Mecanim Blend Trees**
+高级角色页把Blend Tree视作参数到混合权重的函数；画面顺滑必须能追到单位、阈值和输入空间。 “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”使用的贯穿任务是：构建待机、行走、奔跑的1D树，再加入方向形成2D测试，记录五组边界输入的权重和根速度。 操作前先预测哪个采样点或状态会先变化，播放后再补理由不算预测。
 
-这些小节按官方目录唯一归属。本站重新组织解释、代码与实验，不逐字复制原文；现代补充放在迁移段，不能替换或重复计算原始单元。
+本页围绕“怎样把输入速度和方向映射到Blend Tree坐标，并证明阈值、阻尼和剪辑速度不会造成跳变？”建立正常、故障与恢复路径。只有“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”保持“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”并交付剪辑速度、Blend Type、参数单位、阈值、二维坐标、阻尼、输入样本、权重结果、根速度和边界测试。，编辑器预览或运行画面才构成动画证据。
 
-## 物理量到混合权重
+## 书目、34组条目与引擎时代
 
-Blend Tree 不切换离散状态，而是根据参数计算多个 Motion 权重。一维树适合速度轴，二维树同时表达前后与左右或速度与方向。脚本先把世界速度变换到角色局部空间，再按最大速度归一化，并用阻尼抑制输入噪声。阈值必须与参数单位一致；权重和应接近 1，边界外输入应钳制或有明确外推策略。
+“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”以[Packt官方书页](https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print)核对Alan Thorn著、2015年6月24日、第一版、200页、ISBN 9781782174813及七个内容章节和索引；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781782174998_A25206050/preview-9781782174998_A25206050.pdf)为“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”提供前言与详细目录交叉核对，[中文馆藏](https://opac.uibe.edu.cn/opac/book/a9eb591e52e545387e17168005244ab7)核对中文版ISBN 9787302442660。课程分母为七章合并后的34组公开目录条目。
 
-## 五个核心术语与责任边界
+“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”仅依据授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。合并目录组保留组内所有英文小节名，不能用一个现代主题替换。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”另以[技术核对 1](https://docs.unity3d.com/6000.0/Documentation/Manual/class-BlendTree.html)、[技术核对 2](https://docs.unity3d.com/6000.0/Documentation/Manual/class-Animator.html)、[技术核对 3](https://docs.unity3d.com/6000.0/Documentation/Manual/class-Transition.html)核对现行技术事实。Mecanim、MovieTexture与2015编辑器步骤保留为原书时代轨；Unity 6的Animator、Blend Tree、Animation窗口和VideoPlayer只作稳定机制核验或迁移说明，不能反向证明2015年的面板位置、默认值和平台支持。
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+## 公开目录条目与动画机制
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+### Creating a controllable character；Blend Trees
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+<Term def="动画条目1对应目录条目组“Creating a controllable character；Blend Trees”，在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”中用于把输入参数映射为剪辑混合权重，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目1
+</Term>
 
-必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+**公开坐标 1/5。** 在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”的坐标1中，Creating a controllable character；Blend Trees用于把输入参数映射为剪辑混合权重；先锁定场景与资产，再用维度、阈值、单位、样本和权重复核，出现参数空间与脚本单位不一致时不得提交。
 
-术语若不能落到具体资产、时间点、对象属性和观测值，就仍停留在记忆层。读者应能为每个术语写出生产者、变化规则、消费者、正常样本和失败样本。
+### Dimensions
 
-## 关键对象与数据流
+<Term def="Dimensions对应目录条目组“Dimensions”，在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”中用于把输入参数映射为剪辑混合权重，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  Dimensions
+</Term>
 
-建立 Idle、Walk、Run、TurnLeft、TurnRight 样本，先测量每段 Clip 的视觉速度与循环相位，再决定阈值。脚本读取实际速度而非只读按键，把世界向量转为局部 forward/right 分量，归一化并写入 Animator。测试从静止、缓慢、满速、反向和急转五类输入采样参数、当前 Clip 权重、角色位移和脚滑。
+**公开坐标 2/5。** Dimensions进入“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”后要回答第2张采样卡：它怎样把输入参数映射为剪辑混合权重、改变哪个属性、由哪些维度、阈值、单位、样本和权重证明，并如何排除参数空间与脚本单位不一致。
 
-排查时从最早可控输入开始，逐段检查导入设置、中间状态和最终像素。最终画面正确但链路不符合预测，也不能立即签发，因为它可能依赖未记录的帧率、缓存、随机种子或编辑器状态。
+### Mapping floats
 
-## Blend Tree 的输入必须与样本空间同单位
+<Term def="Mapping floats对应目录条目组“Mapping floats”，在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”中用于把输入参数映射为剪辑混合权重，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  Mapping floats
+</Term>
 
-一维树常以速度为参数，Idle、Walk、Run 的阈值可以使用真实米每秒，也可以归一化为零到一，但脚本输出和阈值必须采用同一单位。二维树把两个参数映射到平面，常见的是局部横向与前向速度。直接把世界 X、Z 写入角色参数会在角色转向后错位，应先用 InverseTransformDirection 转换到局部空间，再按最大速度归一化并钳制。
+**公开坐标 3/5。** 围绕“怎样把输入速度和方向映射到Blend Tree坐标，并证明阈值、阻尼和剪辑速度不会造成跳变？”，条目3把Mapping floats解释为把输入参数映射为剪辑混合权重；复核者先读取维度、阈值、单位、样本和权重再判断动画，不能接受参数空间与脚本单位不一致。
 
-权重来自参数点与 Motion 样本的关系。样本分布不均会造成某些方向突然切换，边界外输入可能长期压在最外样本。调试面板中的红点和权重列表应与脚本日志对照，在中心、轴向、对角和范围外分别采样。Damping 能平滑参数，却也增加响应延迟；参数阻尼、角色加速度和 Clip 自身节奏同时存在时，要逐项固定才能定位脚滑或迟滞。
+### Preparing to script with Blend Tree animations
 
-## 控制与动画的闭环
+<Term def="动画条目4对应目录条目组“Preparing to script with Blend Tree animations”，在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”中用于把输入参数映射为剪辑混合权重，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目4
+</Term>
 
-- 输入系统产生期望方向，不直接承诺实际速度。
-- CharacterController 或 Rigidbody 产生实际位移和速度，明确是否包含根运动。
-- 脚本把实际或期望速度转换为 Blend Tree 参数，并记录所选依据。
-- Blend Tree 计算 Motion 权重，Animator 输出姿态和可选根位移。
-- 结果回到对象移动与下一帧速度，避免代码位移和根运动重复叠加。
+**公开坐标 4/5。** 对“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”而言，Preparing to script with Blend Tree animations的最小合同是把输入参数映射为剪辑混合权重，第4次检查保存维度、阈值、单位、样本和权重；若产生参数空间与脚本单位不一致，就回到资产或状态上游。
 
-验收以静止、缓慢前进、全速、后退、横移、斜向和突然反向七组输入重放，记录局部速度、参数、每个 Motion 权重和脚底世界速度。故意交换横纵参数、把阈值单位放大十倍和取消钳制，确认诊断能在画面严重失真前从数值发现问题。
+### Scripting with Mecanim Blend Trees；Testing Mecanim Blend Trees
 
-二维树的样本布局还应覆盖参数空间，而不是只在四个轴端放 Clip 后假设对角运动自然成立。分别在中心、轴线中点、四个对角和外边界采样，记录权重和主要 Motion；若缺少斜向样本，要明确由哪些前进与横移 Clip 混合，以及上半身朝向是否可接受。多个 Animator Layer 叠加时同时保存层权重和 Avatar Mask，避免把上层覆盖误诊为 Blend Tree 本身错误。
+<Term def="动画条目5对应目录条目组“Scripting with Mecanim Blend Trees；Testing Mecanim Blend Trees”，在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”中用于用参数和过渡组织非角色状态机，并受Unity时代、资产、时钟、状态与空间边界约束。">
+  动画条目5
+</Term>
 
-网络同步项目还应区分本地输入、权威速度和插值速度，明确哪一个驱动动画参数；否则延迟补偿会被误判为 Blend Tree 阻尼。
+**公开坐标 5/5。** 第5个公开条目组Scripting with Mecanim Blend Trees；Testing Mecanim Blend Trees服务于用维度、浮点参数、脚本映射与测试构建可控角色Blend Tree，需要以状态、参数、条件、退出时间和中断呈现用参数和过渡组织非角色状态机；脚本与Animator双重驱动会破坏“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”。
 
-回放同一网络快照序列并比较权重轨迹，才能证明参数来源稳定。
+## 先预测，再操作三个动画实验
 
-结果还需覆盖低帧率和高延迟边界。
+<Callout type="info" title="先写出哪个采样点或状态会先变化">
+  对“Chapter 6. Advanced Character Animation：可控角色与 Blend
+  Tree”先选择版本化场景、动画资产、输入与预期属性，再操作时间采样、状态轨迹和运行时门；结果与预测不一致时应修改动画假设，不删除失败运行。
+</Callout>
 
-## 正常、边界与失败样本
+<Stepper>
+  <Step title="1. 时间轴与属性采样">
+    切换“待机行走跑、方向二维树、脚本输入轨”并逐步移动采样点，核对时钟、属性端点和当前进度怎样连接“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”。
 
-每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+    <Uan06AdvancedCharacterAnimationTimelineSampler />
 
+  </Step>
+  <Step title="2. 正常与故障状态轨迹">
+    保持“构建待机、行走、奔跑的1D树，再加入方向形成2D测试，记录五组边界输入的权重和根速度。”不变，切换正常和故障模式，定位“脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和”最先破坏资产、状态、时间或空间的位置。
 
-## 从 Unity 5 到现代 Unity
+    <Uan06AdvancedCharacterAnimationStateTraceLab />
 
-Animator Blend Tree、SetFloat 阻尼和局部速度映射仍适用。现代 Input System 只替换输入来源，角色控制器、根运动或网络预测会改变真实速度的所有者。Freeform Cartesian 与 Directional 等二维算法应按样本布局选择；不要把算法名称当成自动正确。
+  </Step>
+  <Step title="3. 运行时门与证据包">
+    分别切换资产绑定、时钟一致、权威写入与目标平台验证，展开剪辑速度、Blend Type、参数单位、阈值、二维坐标、阻尼、输入样本、权重结果、根速度和边界测试。后决定是否提交。
 
-迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+    <Uan06AdvancedCharacterAnimationRuntimeGateLab />
 
-## 验收证据
+  </Step>
+</Stepper>
 
-验收包含各 Clip 周期和视觉速度表、阈值图、局部参数映射公式、五类输入的参数与权重采样，以及脚滑和响应延迟。权重必须连续，静止时不抖动，最大速度时不超界，碰墙时动画应按实际策略响应。
+<Callout
+  type="trap"
+  title="本页动画故障：脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和"
+>
+  “Chapter 6. Advanced Character Animation：可控角色与 Blend
+  Tree”遇到该故障时应保持Unity版本、场景、资产、输入和初始状态不变，沿导入到输出方向寻找最早偏离；用最终画面看似正常掩盖中间双写或错绑，不能证明“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”。
+</Callout>
 
-证据包同时记录场景路径、代码版本、资产 GUID、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是看过。
+<Callout type="trap" title="编辑器预览不等于目标构建">
+  构建待机、行走、奔跑的1D树，再加入方向形成2D测试，记录五组边界输入的权重和根速度。
+  在Animation或Animator窗口能播放，只证明当前编辑器状态可预览；“Chapter 6.
+  Advanced Character Animation：可控角色与 Blend
+  Tree”仍需冷启动、不同帧率、状态中断和目标平台输出证据。
+</Callout>
 
-## 小结
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 6. Advanced Character Animation：可控角色与 Blend
+  Tree”引用现行手册是为了核对稳定机制和迁移边界，不能把当前菜单、包、默认导入器或VideoPlayer宣称成原书原有内容。
+</Callout>
 
-- Blend Tree 根据连续参数混合动作，不等同于状态转换
-- 维度和阈值必须与输入物理量的单位和范围一致
-- 世界速度需要转换到角色局部参数空间
-- 测试应同时观察参数、权重、位移、脚滑和延迟
+## Chapter 6. Advanced Character Animation：可控角色与 Blend Tree的可重放动画协议
 
+| 阶段               | 动画动作                                                                                                         | 必留证据                            | 拒绝条件                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| 选择维度剪辑与阈值 | 在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”执行选择维度剪辑与阈值，只允许声明组件写入属性 | Unity版本、场景、资产GUID与初始状态 | 资产或绑定不可追溯                                               |
+| 映射脚本浮点和阻尼 | 在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”执行映射脚本浮点和阻尼，只允许声明组件写入属性 | 关键帧、时钟、参数、状态与空间轨迹  | 脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和 |
+| 采样边界与过渡结果 | 在“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”执行采样边界与过渡结果，只允许声明组件写入属性 | 运行截图、平台输出、迁移与回退记录  | 无法重放或恢复基线                                               |
 
+```yaml
+unit: "uan-06"
+question: "怎样把输入速度和方向映射到Blend Tree坐标，并证明阈值、阻尼和剪辑速度不会造成跳变？"
+scenario: "构建待机、行走、奔跑的1D树，再加入方向形成2D测试，记录五组边界输入的权重和根速度。"
+clips: ["待机行走跑", "方向二维树", "脚本输入轨"]
+stages: ["选择维度剪辑与阈值", "映射脚本浮点和阻尼", "采样边界与过渡结果"]
+invariant: "参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样"
+fault: "脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和"
+evidence: "剪辑速度、Blend Type、参数单位、阈值、二维坐标、阻尼、输入样本、权重结果、根速度和边界测试。"
+reset: restore_clip_frame_mode_step_gates_and_artifact
+```
+
+该协议要求“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”在相同Unity版本、场景、资产、输入和初始状态下重放。重置后若剪辑、采样点、轨迹模式、验收门或证据显示没有回到基线，交互状态已经污染比较，不能作为动画证据。
+
+## 本页回顾
+
+掌握“Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”不是记住编辑器点击顺序，而是能围绕“怎样把输入速度和方向映射到Blend Tree坐标，并证明阈值、阻尼和剪辑速度不会造成跳变？”重建动画状态，并用“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”拒绝“脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和”。最终交付为剪辑速度、Blend Type、参数单位、阈值、二维坐标、阻尼、输入样本、权重结果、根速度和边界测试。
+
+## 练习与答案
+
+<Exercises>
+
+1. **问题 1：动画合同。** “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”为什么必须先声明Unity版本、资产、时钟、空间与权威写入者？
+
+<Answer>
+  构建待机、行走、奔跑的1D树，再加入方向形成2D测试，记录五组边界输入的权重和根速度。
+  若这些条件不固定，相同输入可能读取不同资产、时钟或状态；“Chapter 6. Advanced
+  Character Animation：可控角色与 Blend
+  Tree”先声明合同，才能把画面连接到可验证属性，并防止预览成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”的Creating
+  a controllable character；Blend
+  Trees：以“把输入参数映射为剪辑混合权重”解释动画作用，用“维度、阈值、单位、样本和权重”提供复核。
+  2. “Chapter 6. Advanced Character Animation：可控角色与 Blend
+  Tree”的Dimensions：以“把输入参数映射为剪辑混合权重”解释动画作用，用“维度、阈值、单位、样本和权重”提供复核。
+  3. “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”的Mapping
+  floats：以“把输入参数映射为剪辑混合权重”解释动画作用，用“维度、阈值、单位、样本和权重”提供复核。
+  4. “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”的Preparing
+  to script with Blend Tree
+  animations：以“把输入参数映射为剪辑混合权重”解释动画作用，用“维度、阈值、单位、样本和权重”提供复核。
+  5. “Chapter 6. Advanced Character Animation：可控角色与 Blend Tree”的Scripting
+  with Mecanim Blend Trees；Testing Mecanim Blend
+  Trees：以“用参数和过渡组织非角色状态机”解释动画作用，用“状态、参数、条件、退出时间和中断”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“脚本传入世界速度而Blend Tree按归一化局部速度设阈值，权重长期饱和”已经被修正？
+
+<Answer>
+  为“Chapter 6. Advanced Character Animation：可控角色与 Blend
+  Tree”复用同一Unity版本、场景、资产、输入和初始状态，重放正常路径后只注入“脚本传入世界速度而Blend
+  Tree按归一化局部速度设阈值，权重长期饱和”；记录最早偏离点，撤销故障并再次运行。只有时间采样、状态轨迹、空间结果和剪辑速度、Blend
+  Type、参数单位、阈值、二维坐标、阻尼、输入样本、权重结果、根速度和边界测试。重新满足“参数单位与范围固定，1D或2D维度选择有依据，输入到权重和最终运动的映射可采样”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="动画条目1">
+    对应“Creating a controllable character；Blend Trees”；在“Chapter 6. Advanced
+    Character Animation：可控角色与 Blend
+    Tree”中用于把输入参数映射为剪辑混合权重，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="Dimensions">
+    对应“Dimensions”；在“Chapter 6. Advanced Character Animation：可控角色与
+    Blend
+    Tree”中用于把输入参数映射为剪辑混合权重，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="Mapping floats">
+    对应“Mapping floats”；在“Chapter 6. Advanced Character Animation：可控角色与
+    Blend
+    Tree”中用于把输入参数映射为剪辑混合权重，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目4">
+    对应“Preparing to script with Blend Tree animations”；在“Chapter 6. Advanced
+    Character Animation：可控角色与 Blend
+    Tree”中用于把输入参数映射为剪辑混合权重，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+  <GlossaryItem term="动画条目5">
+    对应“Scripting with Mecanim Blend Trees；Testing Mecanim Blend
+    Trees”；在“Chapter 6. Advanced Character Animation：可控角色与 Blend
+    Tree”中用于用参数和过渡组织非角色状态机，需要连接Unity时代、资产、时钟、状态、空间与输出。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Alan Thorn《Unity Animation Essentials》"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813?type=print"
+/>
