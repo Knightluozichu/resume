@@ -11440,6 +11440,144 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CuspOfObjectModelFailureDiagram: module0.CuspOfObjectModelFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "langchain-programming/00-map/lcp-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-official-learning-map");
+    return {
+      LcpOfficialLearningMapVersionContractLab:
+        module0.LcpOfficialLearningMapVersionContractLab,
+      LcpOfficialLearningMapRunnableTraceLab:
+        module0.LcpOfficialLearningMapRunnableTraceLab,
+      LcpOfficialLearningMapReleaseGateLab:
+        module0.LcpOfficialLearningMapReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/01-preface/lcp-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-preface");
+    return {
+      LcpPrefaceVersionContractLab: module0.LcpPrefaceVersionContractLab,
+      LcpPrefaceRunnableTraceLab: module0.LcpPrefaceRunnableTraceLab,
+      LcpPrefaceReleaseGateLab: module0.LcpPrefaceReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/02-introduction/lcp-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-01-introduction");
+    return {
+      Lcp01IntroductionVersionContractLab:
+        module0.Lcp01IntroductionVersionContractLab,
+      Lcp01IntroductionRunnableTraceLab:
+        module0.Lcp01IntroductionRunnableTraceLab,
+      Lcp01IntroductionReleaseGateLab: module0.Lcp01IntroductionReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/03-quickstart/lcp-02-first-experience": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-02-first-experience");
+    return {
+      Lcp02FirstExperienceVersionContractLab:
+        module0.Lcp02FirstExperienceVersionContractLab,
+      Lcp02FirstExperienceRunnableTraceLab:
+        module0.Lcp02FirstExperienceRunnableTraceLab,
+      Lcp02FirstExperienceReleaseGateLab:
+        module0.Lcp02FirstExperienceReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/04-model-io/lcp-03-model-io": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-03-model-io");
+    return {
+      Lcp03ModelIoVersionContractLab: module0.Lcp03ModelIoVersionContractLab,
+      Lcp03ModelIoRunnableTraceLab: module0.Lcp03ModelIoRunnableTraceLab,
+      Lcp03ModelIoReleaseGateLab: module0.Lcp03ModelIoReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/05-chains/lcp-04-building-chains": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-04-building-chains");
+    return {
+      Lcp04BuildingChainsVersionContractLab:
+        module0.Lcp04BuildingChainsVersionContractLab,
+      Lcp04BuildingChainsRunnableTraceLab:
+        module0.Lcp04BuildingChainsRunnableTraceLab,
+      Lcp04BuildingChainsReleaseGateLab:
+        module0.Lcp04BuildingChainsReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/06-rag/lcp-05-rag": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-05-rag");
+    return {
+      Lcp05RagVersionContractLab: module0.Lcp05RagVersionContractLab,
+      Lcp05RagRunnableTraceLab: module0.Lcp05RagRunnableTraceLab,
+      Lcp05RagReleaseGateLab: module0.Lcp05RagReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/07-agents/lcp-06-agents": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-06-agents");
+    return {
+      Lcp06AgentsVersionContractLab: module0.Lcp06AgentsVersionContractLab,
+      Lcp06AgentsRunnableTraceLab: module0.Lcp06AgentsRunnableTraceLab,
+      Lcp06AgentsReleaseGateLab: module0.Lcp06AgentsReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/08-memory/lcp-07-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-07-memory");
+    return {
+      Lcp07MemoryVersionContractLab: module0.Lcp07MemoryVersionContractLab,
+      Lcp07MemoryRunnableTraceLab: module0.Lcp07MemoryRunnableTraceLab,
+      Lcp07MemoryReleaseGateLab: module0.Lcp07MemoryReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/09-callbacks/lcp-08-callbacks": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-08-callbacks");
+    return {
+      Lcp08CallbacksVersionContractLab:
+        module0.Lcp08CallbacksVersionContractLab,
+      Lcp08CallbacksRunnableTraceLab: module0.Lcp08CallbacksRunnableTraceLab,
+      Lcp08CallbacksReleaseGateLab: module0.Lcp08CallbacksReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/10-project/lcp-09-multimodal-bot": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-09-multimodal-bot");
+    return {
+      Lcp09MultimodalBotVersionContractLab:
+        module0.Lcp09MultimodalBotVersionContractLab,
+      Lcp09MultimodalBotRunnableTraceLab:
+        module0.Lcp09MultimodalBotRunnableTraceLab,
+      Lcp09MultimodalBotReleaseGateLab:
+        module0.Lcp09MultimodalBotReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/11-community/lcp-10-community-resources": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-10-community-resources");
+    return {
+      Lcp10CommunityResourcesVersionContractLab:
+        module0.Lcp10CommunityResourcesVersionContractLab,
+      Lcp10CommunityResourcesRunnableTraceLab:
+        module0.Lcp10CommunityResourcesRunnableTraceLab,
+      Lcp10CommunityResourcesReleaseGateLab:
+        module0.Lcp10CommunityResourcesReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "langchain-programming/12-review/lcp-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/langchain-programming/v2/lcp-official-final-review");
+    return {
+      LcpOfficialFinalReviewVersionContractLab:
+        module0.LcpOfficialFinalReviewVersionContractLab,
+      LcpOfficialFinalReviewRunnableTraceLab:
+        module0.LcpOfficialFinalReviewRunnableTraceLab,
+      LcpOfficialFinalReviewReleaseGateLab:
+        module0.LcpOfficialFinalReviewReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
   "large-language-models/00-map/llm-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/large-language-models/v2/llm-official-learning-map");
