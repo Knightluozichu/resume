@@ -6677,6 +6677,139 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-from-scratch/00-guide/dls-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch/v2/dls-official-learning-map");
+    return {
+      DlsOfficialLearningMapTensorPathLab:
+        module0.DlsOfficialLearningMapTensorPathLab,
+      DlsOfficialLearningMapGradientTraceLab:
+        module0.DlsOfficialLearningMapGradientTraceLab,
+      DlsOfficialLearningMapTrainingGateLab:
+        module0.DlsOfficialLearningMapTrainingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch/01-foundations/dls-01-python-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-01-python-introduction");
+      return {
+        Dls01PythonIntroductionTensorPathLab:
+          module0.Dls01PythonIntroductionTensorPathLab,
+        Dls01PythonIntroductionGradientTraceLab:
+          module0.Dls01PythonIntroductionGradientTraceLab,
+        Dls01PythonIntroductionTrainingGateLab:
+          module0.Dls01PythonIntroductionTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/01-foundations/dls-02-perceptron": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch/v2/dls-02-perceptron");
+    return {
+      Dls02PerceptronTensorPathLab: module0.Dls02PerceptronTensorPathLab,
+      Dls02PerceptronGradientTraceLab: module0.Dls02PerceptronGradientTraceLab,
+      Dls02PerceptronTrainingGateLab: module0.Dls02PerceptronTrainingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch/02-forward-learning/dls-03-neural-network":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-03-neural-network");
+      return {
+        Dls03NeuralNetworkTensorPathLab:
+          module0.Dls03NeuralNetworkTensorPathLab,
+        Dls03NeuralNetworkGradientTraceLab:
+          module0.Dls03NeuralNetworkGradientTraceLab,
+        Dls03NeuralNetworkTrainingGateLab:
+          module0.Dls03NeuralNetworkTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/02-forward-learning/dls-04-neural-network-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-04-neural-network-learning");
+      return {
+        Dls04NeuralNetworkLearningTensorPathLab:
+          module0.Dls04NeuralNetworkLearningTensorPathLab,
+        Dls04NeuralNetworkLearningGradientTraceLab:
+          module0.Dls04NeuralNetworkLearningGradientTraceLab,
+        Dls04NeuralNetworkLearningTrainingGateLab:
+          module0.Dls04NeuralNetworkLearningTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/03-backpropagation/dls-05-backpropagation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-05-backpropagation");
+      return {
+        Dls05BackpropagationTensorPathLab:
+          module0.Dls05BackpropagationTensorPathLab,
+        Dls05BackpropagationGradientTraceLab:
+          module0.Dls05BackpropagationGradientTraceLab,
+        Dls05BackpropagationTrainingGateLab:
+          module0.Dls05BackpropagationTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/04-training/dls-06-learning-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-06-learning-techniques");
+      return {
+        Dls06LearningTechniquesTensorPathLab:
+          module0.Dls06LearningTechniquesTensorPathLab,
+        Dls06LearningTechniquesGradientTraceLab:
+          module0.Dls06LearningTechniquesGradientTraceLab,
+        Dls06LearningTechniquesTrainingGateLab:
+          module0.Dls06LearningTechniquesTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/05-cnn/dls-07-cnn": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch/v2/dls-07-cnn");
+    return {
+      Dls07CnnTensorPathLab: module0.Dls07CnnTensorPathLab,
+      Dls07CnnGradientTraceLab: module0.Dls07CnnGradientTraceLab,
+      Dls07CnnTrainingGateLab: module0.Dls07CnnTrainingGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch/06-deep-learning/dls-08-deep-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-08-deep-learning");
+      return {
+        Dls08DeepLearningTensorPathLab: module0.Dls08DeepLearningTensorPathLab,
+        Dls08DeepLearningGradientTraceLab:
+          module0.Dls08DeepLearningGradientTraceLab,
+        Dls08DeepLearningTrainingGateLab:
+          module0.Dls08DeepLearningTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/07-appendix/dls-appendix-softmax-loss":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-appendix-softmax-loss");
+      return {
+        DlsAppendixSoftmaxLossTensorPathLab:
+          module0.DlsAppendixSoftmaxLossTensorPathLab,
+        DlsAppendixSoftmaxLossGradientTraceLab:
+          module0.DlsAppendixSoftmaxLossGradientTraceLab,
+        DlsAppendixSoftmaxLossTrainingGateLab:
+          module0.DlsAppendixSoftmaxLossTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch/08-review/dls-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch/v2/dls-official-final-review");
+      return {
+        DlsOfficialFinalReviewTensorPathLab:
+          module0.DlsOfficialFinalReviewTensorPathLab,
+        DlsOfficialFinalReviewGradientTraceLab:
+          module0.DlsOfficialFinalReviewGradientTraceLab,
+        DlsOfficialFinalReviewTrainingGateLab:
+          module0.DlsOfficialFinalReviewTrainingGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");
