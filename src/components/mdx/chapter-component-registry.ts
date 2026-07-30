@@ -9761,6 +9761,248 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.LaeOfficialFinalReviewAuthorizationGateLab,
     } as ChapterMdxComponents;
   },
+  "machine-learning-watermelon/00-guide/mlw-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-official-learning-map");
+      return {
+        MlwOfficialLearningMapDataProtocolLab:
+          module0.MlwOfficialLearningMapDataProtocolLab,
+        MlwOfficialLearningMapExperimentTraceLab:
+          module0.MlwOfficialLearningMapExperimentTraceLab,
+        MlwOfficialLearningMapAcceptanceGateLab:
+          module0.MlwOfficialLearningMapAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/01-foundations/mlw-01-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-01-introduction");
+      return {
+        Mlw01IntroductionDataProtocolLab:
+          module0.Mlw01IntroductionDataProtocolLab,
+        Mlw01IntroductionExperimentTraceLab:
+          module0.Mlw01IntroductionExperimentTraceLab,
+        Mlw01IntroductionAcceptanceGateLab:
+          module0.Mlw01IntroductionAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/01-foundations/mlw-02-model-assessment-selection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-02-model-assessment-selection");
+      return {
+        Mlw02ModelAssessmentSelectionDataProtocolLab:
+          module0.Mlw02ModelAssessmentSelectionDataProtocolLab,
+        Mlw02ModelAssessmentSelectionExperimentTraceLab:
+          module0.Mlw02ModelAssessmentSelectionExperimentTraceLab,
+        Mlw02ModelAssessmentSelectionAcceptanceGateLab:
+          module0.Mlw02ModelAssessmentSelectionAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/01-foundations/mlw-03-linear-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-03-linear-models");
+      return {
+        Mlw03LinearModelsDataProtocolLab:
+          module0.Mlw03LinearModelsDataProtocolLab,
+        Mlw03LinearModelsExperimentTraceLab:
+          module0.Mlw03LinearModelsExperimentTraceLab,
+        Mlw03LinearModelsAcceptanceGateLab:
+          module0.Mlw03LinearModelsAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/02-core-models-a/mlw-04-decision-trees":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-04-decision-trees");
+      return {
+        Mlw04DecisionTreesDataProtocolLab:
+          module0.Mlw04DecisionTreesDataProtocolLab,
+        Mlw04DecisionTreesExperimentTraceLab:
+          module0.Mlw04DecisionTreesExperimentTraceLab,
+        Mlw04DecisionTreesAcceptanceGateLab:
+          module0.Mlw04DecisionTreesAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/02-core-models-a/mlw-05-neural-networks":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-05-neural-networks");
+      return {
+        Mlw05NeuralNetworksDataProtocolLab:
+          module0.Mlw05NeuralNetworksDataProtocolLab,
+        Mlw05NeuralNetworksExperimentTraceLab:
+          module0.Mlw05NeuralNetworksExperimentTraceLab,
+        Mlw05NeuralNetworksAcceptanceGateLab:
+          module0.Mlw05NeuralNetworksAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/02-core-models-a/mlw-06-support-vector-machines":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-06-support-vector-machines");
+      return {
+        Mlw06SupportVectorMachinesDataProtocolLab:
+          module0.Mlw06SupportVectorMachinesDataProtocolLab,
+        Mlw06SupportVectorMachinesExperimentTraceLab:
+          module0.Mlw06SupportVectorMachinesExperimentTraceLab,
+        Mlw06SupportVectorMachinesAcceptanceGateLab:
+          module0.Mlw06SupportVectorMachinesAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/02-core-models-a/mlw-07-bayesian-classifiers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-07-bayesian-classifiers");
+      return {
+        Mlw07BayesianClassifiersDataProtocolLab:
+          module0.Mlw07BayesianClassifiersDataProtocolLab,
+        Mlw07BayesianClassifiersExperimentTraceLab:
+          module0.Mlw07BayesianClassifiersExperimentTraceLab,
+        Mlw07BayesianClassifiersAcceptanceGateLab:
+          module0.Mlw07BayesianClassifiersAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/03-core-models-b/mlw-08-ensemble-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-08-ensemble-learning");
+      return {
+        Mlw08EnsembleLearningDataProtocolLab:
+          module0.Mlw08EnsembleLearningDataProtocolLab,
+        Mlw08EnsembleLearningExperimentTraceLab:
+          module0.Mlw08EnsembleLearningExperimentTraceLab,
+        Mlw08EnsembleLearningAcceptanceGateLab:
+          module0.Mlw08EnsembleLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/03-core-models-b/mlw-09-clustering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-09-clustering");
+      return {
+        Mlw09ClusteringDataProtocolLab: module0.Mlw09ClusteringDataProtocolLab,
+        Mlw09ClusteringExperimentTraceLab:
+          module0.Mlw09ClusteringExperimentTraceLab,
+        Mlw09ClusteringAcceptanceGateLab:
+          module0.Mlw09ClusteringAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/03-core-models-b/mlw-10-dimensionality-reduction-metric-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-10-dimensionality-reduction-metric-learning");
+      return {
+        Mlw10DimensionalityReductionMetricLearningDataProtocolLab:
+          module0.Mlw10DimensionalityReductionMetricLearningDataProtocolLab,
+        Mlw10DimensionalityReductionMetricLearningExperimentTraceLab:
+          module0.Mlw10DimensionalityReductionMetricLearningExperimentTraceLab,
+        Mlw10DimensionalityReductionMetricLearningAcceptanceGateLab:
+          module0.Mlw10DimensionalityReductionMetricLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/04-advanced-a/mlw-11-feature-selection-sparse-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-11-feature-selection-sparse-learning");
+      return {
+        Mlw11FeatureSelectionSparseLearningDataProtocolLab:
+          module0.Mlw11FeatureSelectionSparseLearningDataProtocolLab,
+        Mlw11FeatureSelectionSparseLearningExperimentTraceLab:
+          module0.Mlw11FeatureSelectionSparseLearningExperimentTraceLab,
+        Mlw11FeatureSelectionSparseLearningAcceptanceGateLab:
+          module0.Mlw11FeatureSelectionSparseLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/04-advanced-a/mlw-12-computational-learning-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-12-computational-learning-theory");
+      return {
+        Mlw12ComputationalLearningTheoryDataProtocolLab:
+          module0.Mlw12ComputationalLearningTheoryDataProtocolLab,
+        Mlw12ComputationalLearningTheoryExperimentTraceLab:
+          module0.Mlw12ComputationalLearningTheoryExperimentTraceLab,
+        Mlw12ComputationalLearningTheoryAcceptanceGateLab:
+          module0.Mlw12ComputationalLearningTheoryAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/04-advanced-a/mlw-13-semi-supervised-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-13-semi-supervised-learning");
+      return {
+        Mlw13SemiSupervisedLearningDataProtocolLab:
+          module0.Mlw13SemiSupervisedLearningDataProtocolLab,
+        Mlw13SemiSupervisedLearningExperimentTraceLab:
+          module0.Mlw13SemiSupervisedLearningExperimentTraceLab,
+        Mlw13SemiSupervisedLearningAcceptanceGateLab:
+          module0.Mlw13SemiSupervisedLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/05-advanced-b/mlw-14-probabilistic-graphical-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-14-probabilistic-graphical-models");
+      return {
+        Mlw14ProbabilisticGraphicalModelsDataProtocolLab:
+          module0.Mlw14ProbabilisticGraphicalModelsDataProtocolLab,
+        Mlw14ProbabilisticGraphicalModelsExperimentTraceLab:
+          module0.Mlw14ProbabilisticGraphicalModelsExperimentTraceLab,
+        Mlw14ProbabilisticGraphicalModelsAcceptanceGateLab:
+          module0.Mlw14ProbabilisticGraphicalModelsAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/05-advanced-b/mlw-15-rule-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-15-rule-learning");
+      return {
+        Mlw15RuleLearningDataProtocolLab:
+          module0.Mlw15RuleLearningDataProtocolLab,
+        Mlw15RuleLearningExperimentTraceLab:
+          module0.Mlw15RuleLearningExperimentTraceLab,
+        Mlw15RuleLearningAcceptanceGateLab:
+          module0.Mlw15RuleLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/05-advanced-b/mlw-16-reinforcement-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-16-reinforcement-learning");
+      return {
+        Mlw16ReinforcementLearningDataProtocolLab:
+          module0.Mlw16ReinforcementLearningDataProtocolLab,
+        Mlw16ReinforcementLearningExperimentTraceLab:
+          module0.Mlw16ReinforcementLearningExperimentTraceLab,
+        Mlw16ReinforcementLearningAcceptanceGateLab:
+          module0.Mlw16ReinforcementLearningAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "machine-learning-watermelon/06-appendices/mlw-appendices": async () => {
+    const module0 =
+      await import("@/components/mdx/machine-learning-watermelon/v2/mlw-appendices");
+    return {
+      MlwAppendicesDataProtocolLab: module0.MlwAppendicesDataProtocolLab,
+      MlwAppendicesExperimentTraceLab: module0.MlwAppendicesExperimentTraceLab,
+      MlwAppendicesAcceptanceGateLab: module0.MlwAppendicesAcceptanceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "machine-learning-watermelon/07-review/mlw-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/machine-learning-watermelon/v2/mlw-official-final-review");
+      return {
+        MlwOfficialFinalReviewDataProtocolLab:
+          module0.MlwOfficialFinalReviewDataProtocolLab,
+        MlwOfficialFinalReviewExperimentTraceLab:
+          module0.MlwOfficialFinalReviewExperimentTraceLab,
+        MlwOfficialFinalReviewAcceptanceGateLab:
+          module0.MlwOfficialFinalReviewAcceptanceGateLab,
+      } as ChapterMdxComponents;
+    },
   "modern-cpp-design/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/modern-cpp-design/learning-map");
