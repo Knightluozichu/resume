@@ -189,15 +189,16 @@ export function SsaaVsMsaaDiagram() {
           </text>
           <circle cx="262" cy="204" r="3" fill="var(--success)" />
           <text x="272" y="208" fontSize="11" fill="var(--text-secondary)">
-            边缘样本（部分覆盖，形成过渡色）
+            边缘样本：部分覆盖
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         <strong>SSAA</strong> 把每个像素都拆成子像素、
         <strong>每个子像素都着色</strong>（着色量翻几倍，贵）；
-        <strong>MSAA</strong> 为每个像素保留多样本覆盖与存储，但通常仍是<strong>每像素一次片段着色</strong>；
-        只有<strong>几何边缘</strong>出现部分覆盖和过渡色，因此避免了 SSAA 的每样本着色。
+        <strong>MSAA</strong> 为每个像素保留多样本覆盖与存储，但通常仍是
+        <strong>每像素一次片段着色</strong>； 只有<strong>几何边缘</strong>
+        出现部分覆盖和过渡色，因此避免了 SSAA 的每样本着色。
       </figcaption>
     </figure>
   );

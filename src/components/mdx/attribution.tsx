@@ -64,15 +64,18 @@ export function Attribution({
 }: AttributionProps) {
   const cnUrl = sourceUrl?.trim();
 
-  const isLearnOpenGL = (() => {
+  const sourceHost = (() => {
     if (!cnUrl) return false;
     try {
-      const host = new URL(cnUrl).hostname;
-      return host === "learnopengl.com" || host === "learnopengl-cn.github.io";
+      return new URL(cnUrl).hostname;
     } catch {
       return false;
     }
   })();
+  const isLearnOpenGL =
+    sourceHost === "learnopengl.com" ||
+    sourceHost === "learnopengl-cn.github.io";
+  const isOfficialEnglish = sourceHost === "learnopengl.com";
   const resolvedMode =
     mode ??
     (adaptedFrom?.trim() || (cnUrl && !isLearnOpenGL)
@@ -169,7 +172,7 @@ export function Attribution({
       </footer>
     );
   }
-  const enUrl = toEnglishUrl(cnUrl);
+  const enUrl = isOfficialEnglish ? cnUrl : toEnglishUrl(cnUrl);
 
   return (
     <footer
@@ -178,14 +181,18 @@ export function Attribution({
     >
       <p className="mb-2 font-semibold text-primary">出处声明</p>
       <p>
-        本文为改编重写，改编自 LearnOpenGL。原文：
+        本文为改编重写，改编自 Joey de Vries 的 LearnOpenGL。原文：
         <a href={enUrl} target="_blank" rel="noopener noreferrer nofollow">
           learnopengl.com
         </a>
-        ；中文译版：
-        <a href={cnUrl} target="_blank" rel="noopener noreferrer nofollow">
-          learnopengl-cn.github.io
-        </a>
+        {isOfficialEnglish ? null : (
+          <>
+            ；中文译版：
+            <a href={cnUrl} target="_blank" rel="noopener noreferrer nofollow">
+              learnopengl-cn.github.io
+            </a>
+          </>
+        )}
         。
       </p>
       <p className="mt-2">

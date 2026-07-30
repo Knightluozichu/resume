@@ -7940,6 +7940,358 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CuspOfObjectModelFailureDiagram: module0.CuspOfObjectModelFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "learnopengl/advanced-lighting/blinn-phong": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/blinn-phong");
+    return {
+      BlinnPhongContractLab: module0.BlinnPhongContractLab,
+      BlinnPhongTraceLab: module0.BlinnPhongTraceLab,
+      BlinnPhongFaultLab: module0.BlinnPhongFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/bloom": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/bloom");
+    return {
+      BloomContractLab: module0.BloomContractLab,
+      BloomTraceLab: module0.BloomTraceLab,
+      BloomFaultLab: module0.BloomFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/deferred-shading": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/deferred-shading");
+    return {
+      DeferredShadingContractLab: module0.DeferredShadingContractLab,
+      DeferredShadingTraceLab: module0.DeferredShadingTraceLab,
+      DeferredShadingFaultLab: module0.DeferredShadingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/gamma-correction": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/gamma-correction");
+    return {
+      GammaCorrectionContractLab: module0.GammaCorrectionContractLab,
+      GammaCorrectionTraceLab: module0.GammaCorrectionTraceLab,
+      GammaCorrectionFaultLab: module0.GammaCorrectionFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/hdr": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/hdr");
+    return {
+      HdrContractLab: module0.HdrContractLab,
+      HdrTraceLab: module0.HdrTraceLab,
+      HdrFaultLab: module0.HdrFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/normal-mapping": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/normal-mapping");
+    return {
+      NormalMappingContractLab: module0.NormalMappingContractLab,
+      NormalMappingTraceLab: module0.NormalMappingTraceLab,
+      NormalMappingFaultLab: module0.NormalMappingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/parallax-mapping": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/parallax-mapping");
+    return {
+      ParallaxMappingContractLab: module0.ParallaxMappingContractLab,
+      ParallaxMappingTraceLab: module0.ParallaxMappingTraceLab,
+      ParallaxMappingFaultLab: module0.ParallaxMappingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/point-shadows": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/point-shadows");
+    return {
+      PointShadowsContractLab: module0.PointShadowsContractLab,
+      PointShadowsTraceLab: module0.PointShadowsTraceLab,
+      PointShadowsFaultLab: module0.PointShadowsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/shadow-mapping": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/shadow-mapping");
+    return {
+      ShadowMappingContractLab: module0.ShadowMappingContractLab,
+      ShadowMappingTraceLab: module0.ShadowMappingTraceLab,
+      ShadowMappingFaultLab: module0.ShadowMappingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-lighting/ssao": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/ssao");
+    return {
+      SsaoContractLab: module0.SsaoContractLab,
+      SsaoTraceLab: module0.SsaoTraceLab,
+      SsaoFaultLab: module0.SsaoFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/advanced-data": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/advanced-data");
+    return {
+      AdvancedDataContractLab: module0.AdvancedDataContractLab,
+      AdvancedDataTraceLab: module0.AdvancedDataTraceLab,
+      AdvancedDataFaultLab: module0.AdvancedDataFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/advanced-glsl": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/advanced-glsl");
+    return {
+      AdvancedGlslContractLab: module0.AdvancedGlslContractLab,
+      AdvancedGlslTraceLab: module0.AdvancedGlslTraceLab,
+      AdvancedGlslFaultLab: module0.AdvancedGlslFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/anti-aliasing": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/anti-aliasing");
+    return {
+      AntiAliasingContractLab: module0.AntiAliasingContractLab,
+      AntiAliasingTraceLab: module0.AntiAliasingTraceLab,
+      AntiAliasingFaultLab: module0.AntiAliasingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/blending": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/blending");
+    return {
+      BlendingContractLab: module0.BlendingContractLab,
+      BlendingTraceLab: module0.BlendingTraceLab,
+      BlendingFaultLab: module0.BlendingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/cubemaps": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/cubemaps");
+    return {
+      CubemapsContractLab: module0.CubemapsContractLab,
+      CubemapsTraceLab: module0.CubemapsTraceLab,
+      CubemapsFaultLab: module0.CubemapsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/depth-testing": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/depth-testing");
+    return {
+      DepthTestingContractLab: module0.DepthTestingContractLab,
+      DepthTestingTraceLab: module0.DepthTestingTraceLab,
+      DepthTestingFaultLab: module0.DepthTestingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/face-culling": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/face-culling");
+    return {
+      FaceCullingContractLab: module0.FaceCullingContractLab,
+      FaceCullingTraceLab: module0.FaceCullingTraceLab,
+      FaceCullingFaultLab: module0.FaceCullingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/framebuffers": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/framebuffers");
+    return {
+      FramebuffersContractLab: module0.FramebuffersContractLab,
+      FramebuffersTraceLab: module0.FramebuffersTraceLab,
+      FramebuffersFaultLab: module0.FramebuffersFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/geometry-shader": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/geometry-shader");
+    return {
+      GeometryShaderContractLab: module0.GeometryShaderContractLab,
+      GeometryShaderTraceLab: module0.GeometryShaderTraceLab,
+      GeometryShaderFaultLab: module0.GeometryShaderFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/instancing": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/instancing");
+    return {
+      InstancingContractLab: module0.InstancingContractLab,
+      InstancingTraceLab: module0.InstancingTraceLab,
+      InstancingFaultLab: module0.InstancingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/advanced-opengl/stencil-testing": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/stencil-testing");
+    return {
+      StencilTestingContractLab: module0.StencilTestingContractLab,
+      StencilTestingTraceLab: module0.StencilTestingTraceLab,
+      StencilTestingFaultLab: module0.StencilTestingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/camera": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/camera");
+    return {
+      CameraContractLab: module0.CameraContractLab,
+      CameraTraceLab: module0.CameraTraceLab,
+      CameraFaultLab: module0.CameraFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/coordinate-systems": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/coordinate-systems");
+    return {
+      CoordinateSystemsContractLab: module0.CoordinateSystemsContractLab,
+      CoordinateSystemsTraceLab: module0.CoordinateSystemsTraceLab,
+      CoordinateSystemsFaultLab: module0.CoordinateSystemsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/hello-triangle": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/hello-triangle");
+    return {
+      HelloTriangleContractLab: module0.HelloTriangleContractLab,
+      HelloTriangleTraceLab: module0.HelloTriangleTraceLab,
+      HelloTriangleFaultLab: module0.HelloTriangleFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/hello-window": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/hello-window");
+    return {
+      HelloWindowContractLab: module0.HelloWindowContractLab,
+      HelloWindowTraceLab: module0.HelloWindowTraceLab,
+      HelloWindowFaultLab: module0.HelloWindowFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/shaders": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/shaders");
+    return {
+      ShadersContractLab: module0.ShadersContractLab,
+      ShadersTraceLab: module0.ShadersTraceLab,
+      ShadersFaultLab: module0.ShadersFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/textures": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/textures");
+    return {
+      TexturesContractLab: module0.TexturesContractLab,
+      TexturesTraceLab: module0.TexturesTraceLab,
+      TexturesFaultLab: module0.TexturesFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/getting-started/transformations": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/transformations");
+    return {
+      TransformationsContractLab: module0.TransformationsContractLab,
+      TransformationsTraceLab: module0.TransformationsTraceLab,
+      TransformationsFaultLab: module0.TransformationsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/basic-lighting": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/basic-lighting");
+    return {
+      BasicLightingContractLab: module0.BasicLightingContractLab,
+      BasicLightingTraceLab: module0.BasicLightingTraceLab,
+      BasicLightingFaultLab: module0.BasicLightingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/colors": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/colors");
+    return {
+      ColorsContractLab: module0.ColorsContractLab,
+      ColorsTraceLab: module0.ColorsTraceLab,
+      ColorsFaultLab: module0.ColorsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/light-casters": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/light-casters");
+    return {
+      LightCastersContractLab: module0.LightCastersContractLab,
+      LightCastersTraceLab: module0.LightCastersTraceLab,
+      LightCastersFaultLab: module0.LightCastersFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/lighting-maps": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/lighting-maps");
+    return {
+      LightingMapsContractLab: module0.LightingMapsContractLab,
+      LightingMapsTraceLab: module0.LightingMapsTraceLab,
+      LightingMapsFaultLab: module0.LightingMapsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/materials": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/materials");
+    return {
+      MaterialsContractLab: module0.MaterialsContractLab,
+      MaterialsTraceLab: module0.MaterialsTraceLab,
+      MaterialsFaultLab: module0.MaterialsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/lighting/multiple-lights": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/multiple-lights");
+    return {
+      MultipleLightsContractLab: module0.MultipleLightsContractLab,
+      MultipleLightsTraceLab: module0.MultipleLightsTraceLab,
+      MultipleLightsFaultLab: module0.MultipleLightsFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/model-loading/assimp": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/assimp");
+    return {
+      AssimpContractLab: module0.AssimpContractLab,
+      AssimpTraceLab: module0.AssimpTraceLab,
+      AssimpFaultLab: module0.AssimpFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/model-loading/mesh": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/mesh");
+    return {
+      MeshContractLab: module0.MeshContractLab,
+      MeshTraceLab: module0.MeshTraceLab,
+      MeshFaultLab: module0.MeshFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/model-loading/model": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/model");
+    return {
+      ModelContractLab: module0.ModelContractLab,
+      ModelTraceLab: module0.ModelTraceLab,
+      ModelFaultLab: module0.ModelFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/pbr/ibl-diffuse-irradiance": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/ibl-diffuse-irradiance");
+    return {
+      IblDiffuseIrradianceContractLab: module0.IblDiffuseIrradianceContractLab,
+      IblDiffuseIrradianceTraceLab: module0.IblDiffuseIrradianceTraceLab,
+      IblDiffuseIrradianceFaultLab: module0.IblDiffuseIrradianceFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/pbr/ibl-specular": async () => {
+    const module0 =
+      await import("@/components/mdx/learnopengl/v2/ibl-specular");
+    return {
+      IblSpecularContractLab: module0.IblSpecularContractLab,
+      IblSpecularTraceLab: module0.IblSpecularTraceLab,
+      IblSpecularFaultLab: module0.IblSpecularFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/pbr/lighting": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/lighting");
+    return {
+      LightingContractLab: module0.LightingContractLab,
+      LightingTraceLab: module0.LightingTraceLab,
+      LightingFaultLab: module0.LightingFaultLab,
+    } as ChapterMdxComponents;
+  },
+  "learnopengl/pbr/theory": async () => {
+    const module0 = await import("@/components/mdx/learnopengl/v2/theory");
+    return {
+      TheoryContractLab: module0.TheoryContractLab,
+      TheoryTraceLab: module0.TheoryTraceLab,
+      TheoryFaultLab: module0.TheoryFaultLab,
+    } as ChapterMdxComponents;
+  },
   "modern-cpp-design/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/modern-cpp-design/learning-map");

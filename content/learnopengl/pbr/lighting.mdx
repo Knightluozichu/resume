@@ -3,12 +3,20 @@ title: PBR 光照、Cook-Torrance 与线性 HDR 输出
 type: C
 section: PBR
 order: 2
-description: 把上一章推导的 Cook-Torrance 反射率方程写进 GLSL——在片段着色器里跑起来，实时渲染一个 PBR 球阵（粗糙度×金属度梯度），亲手拖参数看 D/G/F 三项怎么把数学变成画面。
+description: >-
+  PBR 光照、Cook-Torrance 与线性 HDR 输出：保留 LearnOpenGL 3.3 Core 正文机制，以
+  context—资源—结果合同、GPU 轨迹和章专属单故障完成可重放验收。
 demo: true
 math: false
-sourceUrl: https://learnopengl.com/PBR/Lighting
+sourceUrl: 'https://learnopengl.com/PBR/Lighting'
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: licensed-adaptation
+officialUnitIds:
+  - logl-40
 ---
+import { LightingContractLab, LightingTraceLab, LightingFaultLab } from "@/components/mdx/learnopengl/v2/lighting";
 
 import { Objectives } from "@/components/mdx/objectives";
 import { Term } from "@/components/mdx/term";
@@ -438,13 +446,6 @@ PBR 的光照循环对每盏灯独立计算辐射度和 BRDF 贡献，然后**�
 
 {/* 9. 出处声明 */}
 
-<Attribution
-  title="PBR - 光照"
-  author="Joey de Vries"
-  url="https://learnopengl.com/PBR/Lighting"
-  license="CC BY-NC 4.0"
-/>
-
 {/* 10. 名词解释 */}
 
 <Glossary>
@@ -467,3 +468,56 @@ PBR 的光照循环对每盏灯独立计算辐射度和 BRDF 贡献，然后**�
     Gamma Correction：在线性空间完成光照计算后，通过 pow(c, 1/2.2) 将值转换到 sRGB 显示空间。显示器硬件做 2.2 次方的反转，两次抵消后人眼看到物理正确的亮度。
   </GlossaryItem>
 </Glossary>
+
+{/* LOGL_VISUAL_V2_START */}
+
+## 版本、来源与运行边界
+
+本章以 [Joey de Vries 的 LearnOpenGL 原章](https://learnopengl.com/PBR/Lighting) 为授权改编依据，教学运行基线是 **OpenGL 3.3 Core Profile**。Khronos 当前发布的规范参照是 [OpenGL 4.6 Core Profile](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)；这里用 4.6 规范核查术语和状态合同，但不把 4.6 API 偷偷倒填为原教程内容。GLFW、GLAD、Assimp 与驱动版本都属于运行环境，不能拿“编译通过”替代对 context、资源和 framebuffer 结果的验证。
+
+## 正式概念与状态责任
+
+- **reflectance equation**：在“PBR 光照、Cook-Torrance 与线性 HDR 输出”中由PBR fragment shader、点光数组与线性 HDR target负责解释其输入、受控状态和可观察结果；运行时以材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素定位它的第一处变化。
+- **metallic**：在“PBR 光照、Cook-Torrance 与线性 HDR 输出”中由PBR fragment shader、点光数组与线性 HDR target负责解释其输入、受控状态和可观察结果；运行时以材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素定位它的第一处变化。
+- **roughness**：在“PBR 光照、Cook-Torrance 与线性 HDR 输出”中由PBR fragment shader、点光数组与线性 HDR target负责解释其输入、受控状态和可观察结果；运行时以材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素定位它的第一处变化。
+- **radiance**：在“PBR 光照、Cook-Torrance 与线性 HDR 输出”中由PBR fragment shader、点光数组与线性 HDR target负责解释其输入、受控状态和可观察结果；运行时以材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素定位它的第一处变化。
+
+## 章专属 OpenGL 状态实验
+
+先预测“逐灯求 inverse-square radiance 与 BRDF，按 NdotL 累加 Lo，再 tone map”发生后，PBR fragment shader、点光数组与线性 HDR target应怎样改变albedo/metallic/roughness/ao、light radiance、NdotL、BRDF、Lo 和输出编码；再操作三个实验。实验不生成变化率或正确率等虚构总分，只显示真实 GL 状态、资源、命令和可观察结果。
+
+### 实验一：Context—资源—结果合同
+
+选择任一正式概念与基线/单故障场景，核对它是否进入本章状态合同。正式概念只有同时出现在解释、可视状态和交付证据中才算覆盖。
+
+<LightingContractLab />
+
+### 实验二：CPU 命令到 GPU 结果的五段轨迹
+
+逐段执行“逐灯求 inverse-square radiance 与 BRDF，按 NdotL 累加 Lo，再 tone map”，在每一步记录资源身份、状态变化与第一个可观察结果，并持续核对“albedo 在进入光照前线性化；roughness 保持有效下界；输出只编码一次”。
+
+<LightingTraceLab />
+
+### 实验三：单故障与同输入恢复
+
+注入“roughness 允许精确为 0，D/G 分母在对齐方向产生 Inf/NaN 像素”，保存首个分岔；撤销后沿用完全相同的 context、资源内容、uniform 和 draw 输入重放。只有材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素一起恢复才算修复。
+
+<LightingFaultLab />
+
+## 最小可重放检查
+
+```yaml
+unit: logl-40
+owner: PBR fragment shader、点光数组与线性 HDR target
+state_or_resource: albedo/metallic/roughness/ao、light radiance、NdotL、BRDF、Lo 和输出编码
+command: 逐灯求 inverse-square radiance 与 BRDF，按 NdotL 累加 Lo，再 tone map
+pass_invariant: albedo 在进入光照前线性化；roughness 保持有效下界；输出只编码一次
+single_fault: roughness 允许精确为 0，D/G 分母在对齐方向产生 Inf/NaN 像素
+required_evidence: 材质参数、逐灯 radiance、D/G/F、Lo HDR 值、finite 检查与 tone-map 像素
+```
+
+复核者先仅依据以上合同写出预期，再运行基线、单故障和清理后重放。若两次基线的资源身份、首个状态变化或 framebuffer 结果不同，必须保留差异，不能用最终截图相似掩盖中间状态错误。
+
+{/* LOGL_VISUAL_V2_END */}
+
+<Attribution mode="licensed-adaptation" sourceUrl="https://learnopengl.com/PBR/Lighting" />
