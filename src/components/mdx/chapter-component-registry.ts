@@ -6677,6 +6677,822 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         DavSeriesEvidenceLab: module0.DavSeriesEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "deep-learning-from-scratch-2/00-guide/dl2-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-official-learning-map");
+      return {
+        Dl2OfficialLearningMapGraphContractLab:
+          module0.Dl2OfficialLearningMapGraphContractLab,
+        Dl2OfficialLearningMapBackwardTraceLab:
+          module0.Dl2OfficialLearningMapBackwardTraceLab,
+        Dl2OfficialLearningMapFrameworkGateLab:
+          module0.Dl2OfficialLearningMapFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-01-variable-box":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-01-variable-box");
+      return {
+        Dl2Step01VariableBoxGraphContractLab:
+          module0.Dl2Step01VariableBoxGraphContractLab,
+        Dl2Step01VariableBoxBackwardTraceLab:
+          module0.Dl2Step01VariableBoxBackwardTraceLab,
+        Dl2Step01VariableBoxFrameworkGateLab:
+          module0.Dl2Step01VariableBoxFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-02-function-creator":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-02-function-creator");
+      return {
+        Dl2Step02FunctionCreatorGraphContractLab:
+          module0.Dl2Step02FunctionCreatorGraphContractLab,
+        Dl2Step02FunctionCreatorBackwardTraceLab:
+          module0.Dl2Step02FunctionCreatorBackwardTraceLab,
+        Dl2Step02FunctionCreatorFrameworkGateLab:
+          module0.Dl2Step02FunctionCreatorFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-03-function-chain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-03-function-chain");
+      return {
+        Dl2Step03FunctionChainGraphContractLab:
+          module0.Dl2Step03FunctionChainGraphContractLab,
+        Dl2Step03FunctionChainBackwardTraceLab:
+          module0.Dl2Step03FunctionChainBackwardTraceLab,
+        Dl2Step03FunctionChainFrameworkGateLab:
+          module0.Dl2Step03FunctionChainFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-04-numerical-differentiation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-04-numerical-differentiation");
+      return {
+        Dl2Step04NumericalDifferentiationGraphContractLab:
+          module0.Dl2Step04NumericalDifferentiationGraphContractLab,
+        Dl2Step04NumericalDifferentiationBackwardTraceLab:
+          module0.Dl2Step04NumericalDifferentiationBackwardTraceLab,
+        Dl2Step04NumericalDifferentiationFrameworkGateLab:
+          module0.Dl2Step04NumericalDifferentiationFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-05-backprop-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-05-backprop-theory");
+      return {
+        Dl2Step05BackpropTheoryGraphContractLab:
+          module0.Dl2Step05BackpropTheoryGraphContractLab,
+        Dl2Step05BackpropTheoryBackwardTraceLab:
+          module0.Dl2Step05BackpropTheoryBackwardTraceLab,
+        Dl2Step05BackpropTheoryFrameworkGateLab:
+          module0.Dl2Step05BackpropTheoryFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-06-manual-backprop":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-06-manual-backprop");
+      return {
+        Dl2Step06ManualBackpropGraphContractLab:
+          module0.Dl2Step06ManualBackpropGraphContractLab,
+        Dl2Step06ManualBackpropBackwardTraceLab:
+          module0.Dl2Step06ManualBackpropBackwardTraceLab,
+        Dl2Step06ManualBackpropFrameworkGateLab:
+          module0.Dl2Step06ManualBackpropFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-07-automatic-backprop":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-07-automatic-backprop");
+      return {
+        Dl2Step07AutomaticBackpropGraphContractLab:
+          module0.Dl2Step07AutomaticBackpropGraphContractLab,
+        Dl2Step07AutomaticBackpropBackwardTraceLab:
+          module0.Dl2Step07AutomaticBackpropBackwardTraceLab,
+        Dl2Step07AutomaticBackpropFrameworkGateLab:
+          module0.Dl2Step07AutomaticBackpropFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-08-recursion-to-loop":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-08-recursion-to-loop");
+      return {
+        Dl2Step08RecursionToLoopGraphContractLab:
+          module0.Dl2Step08RecursionToLoopGraphContractLab,
+        Dl2Step08RecursionToLoopBackwardTraceLab:
+          module0.Dl2Step08RecursionToLoopBackwardTraceLab,
+        Dl2Step08RecursionToLoopFrameworkGateLab:
+          module0.Dl2Step08RecursionToLoopFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-09-usable-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-09-usable-functions");
+      return {
+        Dl2Step09UsableFunctionsGraphContractLab:
+          module0.Dl2Step09UsableFunctionsGraphContractLab,
+        Dl2Step09UsableFunctionsBackwardTraceLab:
+          module0.Dl2Step09UsableFunctionsBackwardTraceLab,
+        Dl2Step09UsableFunctionsFrameworkGateLab:
+          module0.Dl2Step09UsableFunctionsFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/01-stage-1/dl2-step-10-testing": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-10-testing");
+    return {
+      Dl2Step10TestingGraphContractLab:
+        module0.Dl2Step10TestingGraphContractLab,
+      Dl2Step10TestingBackwardTraceLab:
+        module0.Dl2Step10TestingBackwardTraceLab,
+      Dl2Step10TestingFrameworkGateLab:
+        module0.Dl2Step10TestingFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-11-variadic-forward":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-11-variadic-forward");
+      return {
+        Dl2Step11VariadicForwardGraphContractLab:
+          module0.Dl2Step11VariadicForwardGraphContractLab,
+        Dl2Step11VariadicForwardBackwardTraceLab:
+          module0.Dl2Step11VariadicForwardBackwardTraceLab,
+        Dl2Step11VariadicForwardFrameworkGateLab:
+          module0.Dl2Step11VariadicForwardFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-12-variadic-improvements":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-12-variadic-improvements");
+      return {
+        Dl2Step12VariadicImprovementsGraphContractLab:
+          module0.Dl2Step12VariadicImprovementsGraphContractLab,
+        Dl2Step12VariadicImprovementsBackwardTraceLab:
+          module0.Dl2Step12VariadicImprovementsBackwardTraceLab,
+        Dl2Step12VariadicImprovementsFrameworkGateLab:
+          module0.Dl2Step12VariadicImprovementsFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-13-variadic-backward":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-13-variadic-backward");
+      return {
+        Dl2Step13VariadicBackwardGraphContractLab:
+          module0.Dl2Step13VariadicBackwardGraphContractLab,
+        Dl2Step13VariadicBackwardBackwardTraceLab:
+          module0.Dl2Step13VariadicBackwardBackwardTraceLab,
+        Dl2Step13VariadicBackwardFrameworkGateLab:
+          module0.Dl2Step13VariadicBackwardFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-14-reused-variable":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-14-reused-variable");
+      return {
+        Dl2Step14ReusedVariableGraphContractLab:
+          module0.Dl2Step14ReusedVariableGraphContractLab,
+        Dl2Step14ReusedVariableBackwardTraceLab:
+          module0.Dl2Step14ReusedVariableBackwardTraceLab,
+        Dl2Step14ReusedVariableFrameworkGateLab:
+          module0.Dl2Step14ReusedVariableFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-15-complex-graph-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-15-complex-graph-theory");
+      return {
+        Dl2Step15ComplexGraphTheoryGraphContractLab:
+          module0.Dl2Step15ComplexGraphTheoryGraphContractLab,
+        Dl2Step15ComplexGraphTheoryBackwardTraceLab:
+          module0.Dl2Step15ComplexGraphTheoryBackwardTraceLab,
+        Dl2Step15ComplexGraphTheoryFrameworkGateLab:
+          module0.Dl2Step15ComplexGraphTheoryFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-16-complex-graph-implementation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-16-complex-graph-implementation");
+      return {
+        Dl2Step16ComplexGraphImplementationGraphContractLab:
+          module0.Dl2Step16ComplexGraphImplementationGraphContractLab,
+        Dl2Step16ComplexGraphImplementationBackwardTraceLab:
+          module0.Dl2Step16ComplexGraphImplementationBackwardTraceLab,
+        Dl2Step16ComplexGraphImplementationFrameworkGateLab:
+          module0.Dl2Step16ComplexGraphImplementationFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-17-memory-cycles":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-17-memory-cycles");
+      return {
+        Dl2Step17MemoryCyclesGraphContractLab:
+          module0.Dl2Step17MemoryCyclesGraphContractLab,
+        Dl2Step17MemoryCyclesBackwardTraceLab:
+          module0.Dl2Step17MemoryCyclesBackwardTraceLab,
+        Dl2Step17MemoryCyclesFrameworkGateLab:
+          module0.Dl2Step17MemoryCyclesFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-18-memory-mode":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-18-memory-mode");
+      return {
+        Dl2Step18MemoryModeGraphContractLab:
+          module0.Dl2Step18MemoryModeGraphContractLab,
+        Dl2Step18MemoryModeBackwardTraceLab:
+          module0.Dl2Step18MemoryModeBackwardTraceLab,
+        Dl2Step18MemoryModeFrameworkGateLab:
+          module0.Dl2Step18MemoryModeFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-19-usable-variable":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-19-usable-variable");
+      return {
+        Dl2Step19UsableVariableGraphContractLab:
+          module0.Dl2Step19UsableVariableGraphContractLab,
+        Dl2Step19UsableVariableBackwardTraceLab:
+          module0.Dl2Step19UsableVariableBackwardTraceLab,
+        Dl2Step19UsableVariableFrameworkGateLab:
+          module0.Dl2Step19UsableVariableFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-20-operator-overload-one":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-20-operator-overload-one");
+      return {
+        Dl2Step20OperatorOverloadOneGraphContractLab:
+          module0.Dl2Step20OperatorOverloadOneGraphContractLab,
+        Dl2Step20OperatorOverloadOneBackwardTraceLab:
+          module0.Dl2Step20OperatorOverloadOneBackwardTraceLab,
+        Dl2Step20OperatorOverloadOneFrameworkGateLab:
+          module0.Dl2Step20OperatorOverloadOneFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-21-operator-overload-two":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-21-operator-overload-two");
+      return {
+        Dl2Step21OperatorOverloadTwoGraphContractLab:
+          module0.Dl2Step21OperatorOverloadTwoGraphContractLab,
+        Dl2Step21OperatorOverloadTwoBackwardTraceLab:
+          module0.Dl2Step21OperatorOverloadTwoBackwardTraceLab,
+        Dl2Step21OperatorOverloadTwoFrameworkGateLab:
+          module0.Dl2Step21OperatorOverloadTwoFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-22-operator-overload-three":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-22-operator-overload-three");
+      return {
+        Dl2Step22OperatorOverloadThreeGraphContractLab:
+          module0.Dl2Step22OperatorOverloadThreeGraphContractLab,
+        Dl2Step22OperatorOverloadThreeBackwardTraceLab:
+          module0.Dl2Step22OperatorOverloadThreeBackwardTraceLab,
+        Dl2Step22OperatorOverloadThreeFrameworkGateLab:
+          module0.Dl2Step22OperatorOverloadThreeFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-23-package": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-23-package");
+    return {
+      Dl2Step23PackageGraphContractLab:
+        module0.Dl2Step23PackageGraphContractLab,
+      Dl2Step23PackageBackwardTraceLab:
+        module0.Dl2Step23PackageBackwardTraceLab,
+      Dl2Step23PackageFrameworkGateLab:
+        module0.Dl2Step23PackageFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/02-stage-2/dl2-step-24-complex-derivatives":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-24-complex-derivatives");
+      return {
+        Dl2Step24ComplexDerivativesGraphContractLab:
+          module0.Dl2Step24ComplexDerivativesGraphContractLab,
+        Dl2Step24ComplexDerivativesBackwardTraceLab:
+          module0.Dl2Step24ComplexDerivativesBackwardTraceLab,
+        Dl2Step24ComplexDerivativesFrameworkGateLab:
+          module0.Dl2Step24ComplexDerivativesFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-25-graphviz-one":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-25-graphviz-one");
+      return {
+        Dl2Step25GraphvizOneGraphContractLab:
+          module0.Dl2Step25GraphvizOneGraphContractLab,
+        Dl2Step25GraphvizOneBackwardTraceLab:
+          module0.Dl2Step25GraphvizOneBackwardTraceLab,
+        Dl2Step25GraphvizOneFrameworkGateLab:
+          module0.Dl2Step25GraphvizOneFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-26-graphviz-two":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-26-graphviz-two");
+      return {
+        Dl2Step26GraphvizTwoGraphContractLab:
+          module0.Dl2Step26GraphvizTwoGraphContractLab,
+        Dl2Step26GraphvizTwoBackwardTraceLab:
+          module0.Dl2Step26GraphvizTwoBackwardTraceLab,
+        Dl2Step26GraphvizTwoFrameworkGateLab:
+          module0.Dl2Step26GraphvizTwoFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-27-taylor-derivative":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-27-taylor-derivative");
+      return {
+        Dl2Step27TaylorDerivativeGraphContractLab:
+          module0.Dl2Step27TaylorDerivativeGraphContractLab,
+        Dl2Step27TaylorDerivativeBackwardTraceLab:
+          module0.Dl2Step27TaylorDerivativeBackwardTraceLab,
+        Dl2Step27TaylorDerivativeFrameworkGateLab:
+          module0.Dl2Step27TaylorDerivativeFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-28-function-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-28-function-optimization");
+      return {
+        Dl2Step28FunctionOptimizationGraphContractLab:
+          module0.Dl2Step28FunctionOptimizationGraphContractLab,
+        Dl2Step28FunctionOptimizationBackwardTraceLab:
+          module0.Dl2Step28FunctionOptimizationBackwardTraceLab,
+        Dl2Step28FunctionOptimizationFrameworkGateLab:
+          module0.Dl2Step28FunctionOptimizationFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-29-manual-newton":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-29-manual-newton");
+      return {
+        Dl2Step29ManualNewtonGraphContractLab:
+          module0.Dl2Step29ManualNewtonGraphContractLab,
+        Dl2Step29ManualNewtonBackwardTraceLab:
+          module0.Dl2Step29ManualNewtonBackwardTraceLab,
+        Dl2Step29ManualNewtonFrameworkGateLab:
+          module0.Dl2Step29ManualNewtonFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-30-higher-order-preparation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-30-higher-order-preparation");
+      return {
+        Dl2Step30HigherOrderPreparationGraphContractLab:
+          module0.Dl2Step30HigherOrderPreparationGraphContractLab,
+        Dl2Step30HigherOrderPreparationBackwardTraceLab:
+          module0.Dl2Step30HigherOrderPreparationBackwardTraceLab,
+        Dl2Step30HigherOrderPreparationFrameworkGateLab:
+          module0.Dl2Step30HigherOrderPreparationFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-31-higher-order-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-31-higher-order-theory");
+      return {
+        Dl2Step31HigherOrderTheoryGraphContractLab:
+          module0.Dl2Step31HigherOrderTheoryGraphContractLab,
+        Dl2Step31HigherOrderTheoryBackwardTraceLab:
+          module0.Dl2Step31HigherOrderTheoryBackwardTraceLab,
+        Dl2Step31HigherOrderTheoryFrameworkGateLab:
+          module0.Dl2Step31HigherOrderTheoryFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-32-higher-order-implementation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-32-higher-order-implementation");
+      return {
+        Dl2Step32HigherOrderImplementationGraphContractLab:
+          module0.Dl2Step32HigherOrderImplementationGraphContractLab,
+        Dl2Step32HigherOrderImplementationBackwardTraceLab:
+          module0.Dl2Step32HigherOrderImplementationBackwardTraceLab,
+        Dl2Step32HigherOrderImplementationFrameworkGateLab:
+          module0.Dl2Step32HigherOrderImplementationFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-33-automatic-newton":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-33-automatic-newton");
+      return {
+        Dl2Step33AutomaticNewtonGraphContractLab:
+          module0.Dl2Step33AutomaticNewtonGraphContractLab,
+        Dl2Step33AutomaticNewtonBackwardTraceLab:
+          module0.Dl2Step33AutomaticNewtonBackwardTraceLab,
+        Dl2Step33AutomaticNewtonFrameworkGateLab:
+          module0.Dl2Step33AutomaticNewtonFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-34-sin-higher-order":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-34-sin-higher-order");
+      return {
+        Dl2Step34SinHigherOrderGraphContractLab:
+          module0.Dl2Step34SinHigherOrderGraphContractLab,
+        Dl2Step34SinHigherOrderBackwardTraceLab:
+          module0.Dl2Step34SinHigherOrderBackwardTraceLab,
+        Dl2Step34SinHigherOrderFrameworkGateLab:
+          module0.Dl2Step34SinHigherOrderFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-35-higher-order-graph":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-35-higher-order-graph");
+      return {
+        Dl2Step35HigherOrderGraphGraphContractLab:
+          module0.Dl2Step35HigherOrderGraphGraphContractLab,
+        Dl2Step35HigherOrderGraphBackwardTraceLab:
+          module0.Dl2Step35HigherOrderGraphBackwardTraceLab,
+        Dl2Step35HigherOrderGraphFrameworkGateLab:
+          module0.Dl2Step35HigherOrderGraphFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/03-stage-3/dl2-step-36-double-backprop":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-36-double-backprop");
+      return {
+        Dl2Step36DoubleBackpropGraphContractLab:
+          module0.Dl2Step36DoubleBackpropGraphContractLab,
+        Dl2Step36DoubleBackpropBackwardTraceLab:
+          module0.Dl2Step36DoubleBackpropBackwardTraceLab,
+        Dl2Step36DoubleBackpropFrameworkGateLab:
+          module0.Dl2Step36DoubleBackpropFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-37-tensor": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-37-tensor");
+    return {
+      Dl2Step37TensorGraphContractLab: module0.Dl2Step37TensorGraphContractLab,
+      Dl2Step37TensorBackwardTraceLab: module0.Dl2Step37TensorBackwardTraceLab,
+      Dl2Step37TensorFrameworkGateLab: module0.Dl2Step37TensorFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-38-reshape-transpose":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-38-reshape-transpose");
+      return {
+        Dl2Step38ReshapeTransposeGraphContractLab:
+          module0.Dl2Step38ReshapeTransposeGraphContractLab,
+        Dl2Step38ReshapeTransposeBackwardTraceLab:
+          module0.Dl2Step38ReshapeTransposeBackwardTraceLab,
+        Dl2Step38ReshapeTransposeFrameworkGateLab:
+          module0.Dl2Step38ReshapeTransposeFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-39-sum": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-39-sum");
+    return {
+      Dl2Step39SumGraphContractLab: module0.Dl2Step39SumGraphContractLab,
+      Dl2Step39SumBackwardTraceLab: module0.Dl2Step39SumBackwardTraceLab,
+      Dl2Step39SumFrameworkGateLab: module0.Dl2Step39SumFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-40-broadcast": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-40-broadcast");
+    return {
+      Dl2Step40BroadcastGraphContractLab:
+        module0.Dl2Step40BroadcastGraphContractLab,
+      Dl2Step40BroadcastBackwardTraceLab:
+        module0.Dl2Step40BroadcastBackwardTraceLab,
+      Dl2Step40BroadcastFrameworkGateLab:
+        module0.Dl2Step40BroadcastFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-41-matrix-product":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-41-matrix-product");
+      return {
+        Dl2Step41MatrixProductGraphContractLab:
+          module0.Dl2Step41MatrixProductGraphContractLab,
+        Dl2Step41MatrixProductBackwardTraceLab:
+          module0.Dl2Step41MatrixProductBackwardTraceLab,
+        Dl2Step41MatrixProductFrameworkGateLab:
+          module0.Dl2Step41MatrixProductFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-42-linear-regression":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-42-linear-regression");
+      return {
+        Dl2Step42LinearRegressionGraphContractLab:
+          module0.Dl2Step42LinearRegressionGraphContractLab,
+        Dl2Step42LinearRegressionBackwardTraceLab:
+          module0.Dl2Step42LinearRegressionBackwardTraceLab,
+        Dl2Step42LinearRegressionFrameworkGateLab:
+          module0.Dl2Step42LinearRegressionFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-43-neural-network":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-43-neural-network");
+      return {
+        Dl2Step43NeuralNetworkGraphContractLab:
+          module0.Dl2Step43NeuralNetworkGraphContractLab,
+        Dl2Step43NeuralNetworkBackwardTraceLab:
+          module0.Dl2Step43NeuralNetworkBackwardTraceLab,
+        Dl2Step43NeuralNetworkFrameworkGateLab:
+          module0.Dl2Step43NeuralNetworkFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-44-parameter-layer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-44-parameter-layer");
+      return {
+        Dl2Step44ParameterLayerGraphContractLab:
+          module0.Dl2Step44ParameterLayerGraphContractLab,
+        Dl2Step44ParameterLayerBackwardTraceLab:
+          module0.Dl2Step44ParameterLayerBackwardTraceLab,
+        Dl2Step44ParameterLayerFrameworkGateLab:
+          module0.Dl2Step44ParameterLayerFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-45-model-layer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-45-model-layer");
+      return {
+        Dl2Step45ModelLayerGraphContractLab:
+          module0.Dl2Step45ModelLayerGraphContractLab,
+        Dl2Step45ModelLayerBackwardTraceLab:
+          module0.Dl2Step45ModelLayerBackwardTraceLab,
+        Dl2Step45ModelLayerFrameworkGateLab:
+          module0.Dl2Step45ModelLayerFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-46-optimizer": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-46-optimizer");
+    return {
+      Dl2Step46OptimizerGraphContractLab:
+        module0.Dl2Step46OptimizerGraphContractLab,
+      Dl2Step46OptimizerBackwardTraceLab:
+        module0.Dl2Step46OptimizerBackwardTraceLab,
+      Dl2Step46OptimizerFrameworkGateLab:
+        module0.Dl2Step46OptimizerFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-47-softmax-cross-entropy":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-47-softmax-cross-entropy");
+      return {
+        Dl2Step47SoftmaxCrossEntropyGraphContractLab:
+          module0.Dl2Step47SoftmaxCrossEntropyGraphContractLab,
+        Dl2Step47SoftmaxCrossEntropyBackwardTraceLab:
+          module0.Dl2Step47SoftmaxCrossEntropyBackwardTraceLab,
+        Dl2Step47SoftmaxCrossEntropyFrameworkGateLab:
+          module0.Dl2Step47SoftmaxCrossEntropyFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-48-multiclass":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-48-multiclass");
+      return {
+        Dl2Step48MulticlassGraphContractLab:
+          module0.Dl2Step48MulticlassGraphContractLab,
+        Dl2Step48MulticlassBackwardTraceLab:
+          module0.Dl2Step48MulticlassBackwardTraceLab,
+        Dl2Step48MulticlassFrameworkGateLab:
+          module0.Dl2Step48MulticlassFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-49-dataset-preprocess":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-49-dataset-preprocess");
+      return {
+        Dl2Step49DatasetPreprocessGraphContractLab:
+          module0.Dl2Step49DatasetPreprocessGraphContractLab,
+        Dl2Step49DatasetPreprocessBackwardTraceLab:
+          module0.Dl2Step49DatasetPreprocessBackwardTraceLab,
+        Dl2Step49DatasetPreprocessFrameworkGateLab:
+          module0.Dl2Step49DatasetPreprocessFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-50-dataloader":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-50-dataloader");
+      return {
+        Dl2Step50DataloaderGraphContractLab:
+          module0.Dl2Step50DataloaderGraphContractLab,
+        Dl2Step50DataloaderBackwardTraceLab:
+          module0.Dl2Step50DataloaderBackwardTraceLab,
+        Dl2Step50DataloaderFrameworkGateLab:
+          module0.Dl2Step50DataloaderFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/04-stage-4/dl2-step-51-mnist": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-51-mnist");
+    return {
+      Dl2Step51MnistGraphContractLab: module0.Dl2Step51MnistGraphContractLab,
+      Dl2Step51MnistBackwardTraceLab: module0.Dl2Step51MnistBackwardTraceLab,
+      Dl2Step51MnistFrameworkGateLab: module0.Dl2Step51MnistFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-52-gpu": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-52-gpu");
+    return {
+      Dl2Step52GpuGraphContractLab: module0.Dl2Step52GpuGraphContractLab,
+      Dl2Step52GpuBackwardTraceLab: module0.Dl2Step52GpuBackwardTraceLab,
+      Dl2Step52GpuFrameworkGateLab: module0.Dl2Step52GpuFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-53-save-load": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-53-save-load");
+    return {
+      Dl2Step53SaveLoadGraphContractLab:
+        module0.Dl2Step53SaveLoadGraphContractLab,
+      Dl2Step53SaveLoadBackwardTraceLab:
+        module0.Dl2Step53SaveLoadBackwardTraceLab,
+      Dl2Step53SaveLoadFrameworkGateLab:
+        module0.Dl2Step53SaveLoadFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-54-dropout-test-mode":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-54-dropout-test-mode");
+      return {
+        Dl2Step54DropoutTestModeGraphContractLab:
+          module0.Dl2Step54DropoutTestModeGraphContractLab,
+        Dl2Step54DropoutTestModeBackwardTraceLab:
+          module0.Dl2Step54DropoutTestModeBackwardTraceLab,
+        Dl2Step54DropoutTestModeFrameworkGateLab:
+          module0.Dl2Step54DropoutTestModeFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-55-cnn-mechanism-one":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-55-cnn-mechanism-one");
+      return {
+        Dl2Step55CnnMechanismOneGraphContractLab:
+          module0.Dl2Step55CnnMechanismOneGraphContractLab,
+        Dl2Step55CnnMechanismOneBackwardTraceLab:
+          module0.Dl2Step55CnnMechanismOneBackwardTraceLab,
+        Dl2Step55CnnMechanismOneFrameworkGateLab:
+          module0.Dl2Step55CnnMechanismOneFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-56-cnn-mechanism-two":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-56-cnn-mechanism-two");
+      return {
+        Dl2Step56CnnMechanismTwoGraphContractLab:
+          module0.Dl2Step56CnnMechanismTwoGraphContractLab,
+        Dl2Step56CnnMechanismTwoBackwardTraceLab:
+          module0.Dl2Step56CnnMechanismTwoBackwardTraceLab,
+        Dl2Step56CnnMechanismTwoFrameworkGateLab:
+          module0.Dl2Step56CnnMechanismTwoFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-57-conv2d-pooling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-57-conv2d-pooling");
+      return {
+        Dl2Step57Conv2dPoolingGraphContractLab:
+          module0.Dl2Step57Conv2dPoolingGraphContractLab,
+        Dl2Step57Conv2dPoolingBackwardTraceLab:
+          module0.Dl2Step57Conv2dPoolingBackwardTraceLab,
+        Dl2Step57Conv2dPoolingFrameworkGateLab:
+          module0.Dl2Step57Conv2dPoolingFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-58-vgg16": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-58-vgg16");
+    return {
+      Dl2Step58Vgg16GraphContractLab: module0.Dl2Step58Vgg16GraphContractLab,
+      Dl2Step58Vgg16BackwardTraceLab: module0.Dl2Step58Vgg16BackwardTraceLab,
+      Dl2Step58Vgg16FrameworkGateLab: module0.Dl2Step58Vgg16FrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-59-rnn": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-59-rnn");
+    return {
+      Dl2Step59RnnGraphContractLab: module0.Dl2Step59RnnGraphContractLab,
+      Dl2Step59RnnBackwardTraceLab: module0.Dl2Step59RnnBackwardTraceLab,
+      Dl2Step59RnnFrameworkGateLab: module0.Dl2Step59RnnFrameworkGateLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-learning-from-scratch-2/05-stage-5/dl2-step-60-lstm-dataloader":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-step-60-lstm-dataloader");
+      return {
+        Dl2Step60LstmDataloaderGraphContractLab:
+          module0.Dl2Step60LstmDataloaderGraphContractLab,
+        Dl2Step60LstmDataloaderBackwardTraceLab:
+          module0.Dl2Step60LstmDataloaderBackwardTraceLab,
+        Dl2Step60LstmDataloaderFrameworkGateLab:
+          module0.Dl2Step60LstmDataloaderFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/06-appendices/dl2-appendix-a-in-place":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-appendix-a-in-place");
+      return {
+        Dl2AppendixAInPlaceGraphContractLab:
+          module0.Dl2AppendixAInPlaceGraphContractLab,
+        Dl2AppendixAInPlaceBackwardTraceLab:
+          module0.Dl2AppendixAInPlaceBackwardTraceLab,
+        Dl2AppendixAInPlaceFrameworkGateLab:
+          module0.Dl2AppendixAInPlaceFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/06-appendices/dl2-appendix-b-get-item":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-appendix-b-get-item");
+      return {
+        Dl2AppendixBGetItemGraphContractLab:
+          module0.Dl2AppendixBGetItemGraphContractLab,
+        Dl2AppendixBGetItemBackwardTraceLab:
+          module0.Dl2AppendixBGetItemBackwardTraceLab,
+        Dl2AppendixBGetItemFrameworkGateLab:
+          module0.Dl2AppendixBGetItemFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/06-appendices/dl2-appendix-c-colab":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-appendix-c-colab");
+      return {
+        Dl2AppendixCColabGraphContractLab:
+          module0.Dl2AppendixCColabGraphContractLab,
+        Dl2AppendixCColabBackwardTraceLab:
+          module0.Dl2AppendixCColabBackwardTraceLab,
+        Dl2AppendixCColabFrameworkGateLab:
+          module0.Dl2AppendixCColabFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
+  "deep-learning-from-scratch-2/07-review/dl2-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-learning-from-scratch-2/v2/dl2-official-final-review");
+      return {
+        Dl2OfficialFinalReviewGraphContractLab:
+          module0.Dl2OfficialFinalReviewGraphContractLab,
+        Dl2OfficialFinalReviewBackwardTraceLab:
+          module0.Dl2OfficialFinalReviewBackwardTraceLab,
+        Dl2OfficialFinalReviewFrameworkGateLab:
+          module0.Dl2OfficialFinalReviewFrameworkGateLab,
+      } as ChapterMdxComponents;
+    },
   "deep-learning-from-scratch/00-guide/dls-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-learning-from-scratch/v2/dls-official-learning-map");
