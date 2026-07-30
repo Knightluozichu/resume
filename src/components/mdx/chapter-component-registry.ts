@@ -16223,6 +16223,139 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.TbcOfficialFinalReviewVerificationGateLab,
     } as ChapterMdxComponents;
   },
+  "unity-advanced-programming/00-guide/u3ap-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-official-learning-map");
+      return {
+        U3apOfficialLearningMapVersionContractLab:
+          module0.U3apOfficialLearningMapVersionContractLab,
+        U3apOfficialLearningMapBudgetWorkbenchLab:
+          module0.U3apOfficialLearningMapBudgetWorkbenchLab,
+        U3apOfficialLearningMapCaptureGateLab:
+          module0.U3apOfficialLearningMapCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/01-language-architecture/u3ap-01-csharp-key-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-01-csharp-key-techniques");
+      return {
+        U3ap01CsharpKeyTechniquesVersionContractLab:
+          module0.U3ap01CsharpKeyTechniquesVersionContractLab,
+        U3ap01CsharpKeyTechniquesBudgetWorkbenchLab:
+          module0.U3ap01CsharpKeyTechniquesBudgetWorkbenchLab,
+        U3ap01CsharpKeyTechniquesCaptureGateLab:
+          module0.U3ap01CsharpKeyTechniquesCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/01-language-architecture/u3ap-02-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-02-architecture");
+      return {
+        U3ap02ArchitectureVersionContractLab:
+          module0.U3ap02ArchitectureVersionContractLab,
+        U3ap02ArchitectureBudgetWorkbenchLab:
+          module0.U3ap02ArchitectureBudgetWorkbenchLab,
+        U3ap02ArchitectureCaptureGateLab:
+          module0.U3ap02ArchitectureCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/02-data-ui/u3ap-03-data-tables": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-advanced-programming/v2/u3ap-03-data-tables");
+    return {
+      U3ap03DataTablesVersionContractLab:
+        module0.U3ap03DataTablesVersionContractLab,
+      U3ap03DataTablesBudgetWorkbenchLab:
+        module0.U3ap03DataTablesBudgetWorkbenchLab,
+      U3ap03DataTablesCaptureGateLab: module0.U3ap03DataTablesCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-advanced-programming/02-data-ui/u3ap-04-ui": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-advanced-programming/v2/u3ap-04-ui");
+    return {
+      U3ap04UiVersionContractLab: module0.U3ap04UiVersionContractLab,
+      U3ap04UiBudgetWorkbenchLab: module0.U3ap04UiBudgetWorkbenchLab,
+      U3ap04UiCaptureGateLab: module0.U3ap04UiCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-advanced-programming/03-assets-network/u3ap-05-models-animation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-05-models-animation");
+      return {
+        U3ap05ModelsAnimationVersionContractLab:
+          module0.U3ap05ModelsAnimationVersionContractLab,
+        U3ap05ModelsAnimationBudgetWorkbenchLab:
+          module0.U3ap05ModelsAnimationBudgetWorkbenchLab,
+        U3ap05ModelsAnimationCaptureGateLab:
+          module0.U3ap05ModelsAnimationCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/03-assets-network/u3ap-06-network-layer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-06-network-layer");
+      return {
+        U3ap06NetworkLayerVersionContractLab:
+          module0.U3ap06NetworkLayerVersionContractLab,
+        U3ap06NetworkLayerBudgetWorkbenchLab:
+          module0.U3ap06NetworkLayerBudgetWorkbenchLab,
+        U3ap06NetworkLayerCaptureGateLab:
+          module0.U3ap06NetworkLayerCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/04-rendering-ai/u3ap-07-rendering-graphics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-07-rendering-graphics");
+      return {
+        U3ap07RenderingGraphicsVersionContractLab:
+          module0.U3ap07RenderingGraphicsVersionContractLab,
+        U3ap07RenderingGraphicsBudgetWorkbenchLab:
+          module0.U3ap07RenderingGraphicsBudgetWorkbenchLab,
+        U3ap07RenderingGraphicsCaptureGateLab:
+          module0.U3ap07RenderingGraphicsCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/04-rendering-ai/u3ap-08-ai": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-advanced-programming/v2/u3ap-08-ai");
+    return {
+      U3ap08AiVersionContractLab: module0.U3ap08AiVersionContractLab,
+      U3ap08AiBudgetWorkbenchLab: module0.U3ap08AiBudgetWorkbenchLab,
+      U3ap08AiCaptureGateLab: module0.U3ap08AiCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-advanced-programming/05-navigation/u3ap-10-map-pathfinding":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-10-map-pathfinding");
+      return {
+        U3ap10MapPathfindingVersionContractLab:
+          module0.U3ap10MapPathfindingVersionContractLab,
+        U3ap10MapPathfindingBudgetWorkbenchLab:
+          module0.U3ap10MapPathfindingBudgetWorkbenchLab,
+        U3ap10MapPathfindingCaptureGateLab:
+          module0.U3ap10MapPathfindingCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-advanced-programming/06-review/u3ap-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-advanced-programming/v2/u3ap-official-final-review");
+      return {
+        U3apOfficialFinalReviewVersionContractLab:
+          module0.U3apOfficialFinalReviewVersionContractLab,
+        U3apOfficialFinalReviewBudgetWorkbenchLab:
+          module0.U3apOfficialFinalReviewBudgetWorkbenchLab,
+        U3apOfficialFinalReviewCaptureGateLab:
+          module0.U3apOfficialFinalReviewCaptureGateLab,
+      } as ChapterMdxComponents;
+    },
   "unity-animation/00-guide/uan-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/unity-animation/v2/uan-official-learning-map");
