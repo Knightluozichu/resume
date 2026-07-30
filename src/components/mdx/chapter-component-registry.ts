@@ -9022,6 +9022,209 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Csharp8AndBeyondFailureDiagram: module0.Csharp8AndBeyondFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
+    return {
+      DbcOfficialLearningMapPipelineContractLab:
+        module0.DbcOfficialLearningMapPipelineContractLab,
+      DbcOfficialLearningMapStateTraceLab:
+        module0.DbcOfficialLearningMapStateTraceLab,
+      DbcOfficialLearningMapVerificationGateLab:
+        module0.DbcOfficialLearningMapVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "dragon-book-compilers/01-foundations/dbc-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/dragon-book-compilers/v2/dbc-01-introduction");
+    return {
+      Dbc01IntroductionPipelineContractLab:
+        module0.Dbc01IntroductionPipelineContractLab,
+      Dbc01IntroductionStateTraceLab: module0.Dbc01IntroductionStateTraceLab,
+      Dbc01IntroductionVerificationGateLab:
+        module0.Dbc01IntroductionVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "dragon-book-compilers/01-foundations/dbc-02-simple-syntax-directed-translator":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-02-simple-syntax-directed-translator");
+      return {
+        Dbc02SimpleSyntaxDirectedTranslatorPipelineContractLab:
+          module0.Dbc02SimpleSyntaxDirectedTranslatorPipelineContractLab,
+        Dbc02SimpleSyntaxDirectedTranslatorStateTraceLab:
+          module0.Dbc02SimpleSyntaxDirectedTranslatorStateTraceLab,
+        Dbc02SimpleSyntaxDirectedTranslatorVerificationGateLab:
+          module0.Dbc02SimpleSyntaxDirectedTranslatorVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/01-foundations/dbc-03-lexical-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/dragon-book-compilers/v2/dbc-03-lexical-analysis");
+    return {
+      Dbc03LexicalAnalysisPipelineContractLab:
+        module0.Dbc03LexicalAnalysisPipelineContractLab,
+      Dbc03LexicalAnalysisStateTraceLab:
+        module0.Dbc03LexicalAnalysisStateTraceLab,
+      Dbc03LexicalAnalysisVerificationGateLab:
+        module0.Dbc03LexicalAnalysisVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "dragon-book-compilers/02-syntax-semantics/dbc-04-syntax-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-04-syntax-analysis");
+      return {
+        Dbc04SyntaxAnalysisPipelineContractLab:
+          module0.Dbc04SyntaxAnalysisPipelineContractLab,
+        Dbc04SyntaxAnalysisStateTraceLab:
+          module0.Dbc04SyntaxAnalysisStateTraceLab,
+        Dbc04SyntaxAnalysisVerificationGateLab:
+          module0.Dbc04SyntaxAnalysisVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/02-syntax-semantics/dbc-05-syntax-directed-translation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-05-syntax-directed-translation");
+      return {
+        Dbc05SyntaxDirectedTranslationPipelineContractLab:
+          module0.Dbc05SyntaxDirectedTranslationPipelineContractLab,
+        Dbc05SyntaxDirectedTranslationStateTraceLab:
+          module0.Dbc05SyntaxDirectedTranslationStateTraceLab,
+        Dbc05SyntaxDirectedTranslationVerificationGateLab:
+          module0.Dbc05SyntaxDirectedTranslationVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/02-syntax-semantics/dbc-06-intermediate-code-generation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-06-intermediate-code-generation");
+      return {
+        Dbc06IntermediateCodeGenerationPipelineContractLab:
+          module0.Dbc06IntermediateCodeGenerationPipelineContractLab,
+        Dbc06IntermediateCodeGenerationStateTraceLab:
+          module0.Dbc06IntermediateCodeGenerationStateTraceLab,
+        Dbc06IntermediateCodeGenerationVerificationGateLab:
+          module0.Dbc06IntermediateCodeGenerationVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/03-runtime-backend/dbc-07-runtime-environments":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-07-runtime-environments");
+      return {
+        Dbc07RuntimeEnvironmentsPipelineContractLab:
+          module0.Dbc07RuntimeEnvironmentsPipelineContractLab,
+        Dbc07RuntimeEnvironmentsStateTraceLab:
+          module0.Dbc07RuntimeEnvironmentsStateTraceLab,
+        Dbc07RuntimeEnvironmentsVerificationGateLab:
+          module0.Dbc07RuntimeEnvironmentsVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/03-runtime-backend/dbc-08-code-generation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-08-code-generation");
+      return {
+        Dbc08CodeGenerationPipelineContractLab:
+          module0.Dbc08CodeGenerationPipelineContractLab,
+        Dbc08CodeGenerationStateTraceLab:
+          module0.Dbc08CodeGenerationStateTraceLab,
+        Dbc08CodeGenerationVerificationGateLab:
+          module0.Dbc08CodeGenerationVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/04-optimization/dbc-09-machine-independent-optimizations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-09-machine-independent-optimizations");
+      return {
+        Dbc09MachineIndependentOptimizationsPipelineContractLab:
+          module0.Dbc09MachineIndependentOptimizationsPipelineContractLab,
+        Dbc09MachineIndependentOptimizationsStateTraceLab:
+          module0.Dbc09MachineIndependentOptimizationsStateTraceLab,
+        Dbc09MachineIndependentOptimizationsVerificationGateLab:
+          module0.Dbc09MachineIndependentOptimizationsVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/04-optimization/dbc-10-instruction-level-parallelism":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-10-instruction-level-parallelism");
+      return {
+        Dbc10InstructionLevelParallelismPipelineContractLab:
+          module0.Dbc10InstructionLevelParallelismPipelineContractLab,
+        Dbc10InstructionLevelParallelismStateTraceLab:
+          module0.Dbc10InstructionLevelParallelismStateTraceLab,
+        Dbc10InstructionLevelParallelismVerificationGateLab:
+          module0.Dbc10InstructionLevelParallelismVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/05-parallelism/dbc-11-parallelism-locality":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-11-parallelism-locality");
+      return {
+        Dbc11ParallelismLocalityPipelineContractLab:
+          module0.Dbc11ParallelismLocalityPipelineContractLab,
+        Dbc11ParallelismLocalityStateTraceLab:
+          module0.Dbc11ParallelismLocalityStateTraceLab,
+        Dbc11ParallelismLocalityVerificationGateLab:
+          module0.Dbc11ParallelismLocalityVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/05-parallelism/dbc-12-interprocedural-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-12-interprocedural-analysis");
+      return {
+        Dbc12InterproceduralAnalysisPipelineContractLab:
+          module0.Dbc12InterproceduralAnalysisPipelineContractLab,
+        Dbc12InterproceduralAnalysisStateTraceLab:
+          module0.Dbc12InterproceduralAnalysisStateTraceLab,
+        Dbc12InterproceduralAnalysisVerificationGateLab:
+          module0.Dbc12InterproceduralAnalysisVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/06-appendices/dbc-appendix-a-complete-front-end":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-appendix-a-complete-front-end");
+      return {
+        DbcAppendixACompleteFrontEndPipelineContractLab:
+          module0.DbcAppendixACompleteFrontEndPipelineContractLab,
+        DbcAppendixACompleteFrontEndStateTraceLab:
+          module0.DbcAppendixACompleteFrontEndStateTraceLab,
+        DbcAppendixACompleteFrontEndVerificationGateLab:
+          module0.DbcAppendixACompleteFrontEndVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/06-appendices/dbc-appendix-b-linear-independent-solutions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/dragon-book-compilers/v2/dbc-appendix-b-linear-independent-solutions");
+      return {
+        DbcAppendixBLinearIndependentSolutionsPipelineContractLab:
+          module0.DbcAppendixBLinearIndependentSolutionsPipelineContractLab,
+        DbcAppendixBLinearIndependentSolutionsStateTraceLab:
+          module0.DbcAppendixBLinearIndependentSolutionsStateTraceLab,
+        DbcAppendixBLinearIndependentSolutionsVerificationGateLab:
+          module0.DbcAppendixBLinearIndependentSolutionsVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "dragon-book-compilers/07-review/dbc-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-final-review");
+    return {
+      DbcOfficialFinalReviewPipelineContractLab:
+        module0.DbcOfficialFinalReviewPipelineContractLab,
+      DbcOfficialFinalReviewStateTraceLab:
+        module0.DbcOfficialFinalReviewStateTraceLab,
+      DbcOfficialFinalReviewVerificationGateLab:
+        module0.DbcOfficialFinalReviewVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
   "dsa-cpp/01-linear-structures/lists-stacks-queues": async () => {
     const module0 =
       await import("@/components/mdx/dsa-cpp/diagrams/lists-stacks-queues");
