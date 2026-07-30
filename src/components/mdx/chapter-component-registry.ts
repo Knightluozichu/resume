@@ -10521,6 +10521,110 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.UanOfficialFinalReviewRuntimeGateLab,
     } as ChapterMdxComponents;
   },
+  "unity-ui-design/00-guide/uid-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-official-learning-map");
+    return {
+      UidOfficialLearningMapLayoutProbe:
+        module0.UidOfficialLearningMapLayoutProbe,
+      UidOfficialLearningMapEventRouteLab:
+        module0.UidOfficialLearningMapEventRouteLab,
+      UidOfficialLearningMapReleaseGateLab:
+        module0.UidOfficialLearningMapReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/01-foundations/uid-01-looking-back-looking-forward":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/unity-ui-design/v2/uid-01-looking-back-looking-forward");
+      return {
+        Uid01LookingBackLookingForwardLayoutProbe:
+          module0.Uid01LookingBackLookingForwardLayoutProbe,
+        Uid01LookingBackLookingForwardEventRouteLab:
+          module0.Uid01LookingBackLookingForwardEventRouteLab,
+        Uid01LookingBackLookingForwardReleaseGateLab:
+          module0.Uid01LookingBackLookingForwardReleaseGateLab,
+      } as ChapterMdxComponents;
+    },
+  "unity-ui-design/01-foundations/uid-02-building-layouts": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-02-building-layouts");
+    return {
+      Uid02BuildingLayoutsLayoutProbe: module0.Uid02BuildingLayoutsLayoutProbe,
+      Uid02BuildingLayoutsEventRouteLab:
+        module0.Uid02BuildingLayoutsEventRouteLab,
+      Uid02BuildingLayoutsReleaseGateLab:
+        module0.Uid02BuildingLayoutsReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/02-controls/uid-03-control-control": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-03-control-control");
+    return {
+      Uid03ControlControlLayoutProbe: module0.Uid03ControlControlLayoutProbe,
+      Uid03ControlControlEventRouteLab:
+        module0.Uid03ControlControlEventRouteLab,
+      Uid03ControlControlReleaseGateLab:
+        module0.Uid03ControlControlReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/02-controls/uid-04-anchors-away": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-04-anchors-away");
+    return {
+      Uid04AnchorsAwayLayoutProbe: module0.Uid04AnchorsAwayLayoutProbe,
+      Uid04AnchorsAwayEventRouteLab: module0.Uid04AnchorsAwayEventRouteLab,
+      Uid04AnchorsAwayReleaseGateLab: module0.Uid04AnchorsAwayReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/03-space-source/uid-05-screen-world-camera": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-05-screen-world-camera");
+    return {
+      Uid05ScreenWorldCameraLayoutProbe:
+        module0.Uid05ScreenWorldCameraLayoutProbe,
+      Uid05ScreenWorldCameraEventRouteLab:
+        module0.Uid05ScreenWorldCameraEventRouteLab,
+      Uid05ScreenWorldCameraReleaseGateLab:
+        module0.Uid05ScreenWorldCameraReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/03-space-source/uid-06-working-with-ui-source": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-06-working-with-ui-source");
+    return {
+      Uid06WorkingWithUiSourceLayoutProbe:
+        module0.Uid06WorkingWithUiSourceLayoutProbe,
+      Uid06WorkingWithUiSourceEventRouteLab:
+        module0.Uid06WorkingWithUiSourceEventRouteLab,
+      Uid06WorkingWithUiSourceReleaseGateLab:
+        module0.Uid06WorkingWithUiSourceReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/03-space-source/uid-appendix-3d-scene-sample": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-appendix-3d-scene-sample");
+    return {
+      UidAppendix3dSceneSampleLayoutProbe:
+        module0.UidAppendix3dSceneSampleLayoutProbe,
+      UidAppendix3dSceneSampleEventRouteLab:
+        module0.UidAppendix3dSceneSampleEventRouteLab,
+      UidAppendix3dSceneSampleReleaseGateLab:
+        module0.UidAppendix3dSceneSampleReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-ui-design/04-review/uid-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-ui-design/v2/uid-official-final-review");
+    return {
+      UidOfficialFinalReviewLayoutProbe:
+        module0.UidOfficialFinalReviewLayoutProbe,
+      UidOfficialFinalReviewEventRouteLab:
+        module0.UidOfficialFinalReviewEventRouteLab,
+      UidOfficialFinalReviewReleaseGateLab:
+        module0.UidOfficialFinalReviewReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
   "vulkan-guide/01-introduction/vkg-ch01-vulkan-intro": async () => {
     const module0 =
       await import("@/components/mdx/vulkan-guide/v2/vkg-ch01-vulkan-intro");

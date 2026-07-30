@@ -1,75 +1,277 @@
 ---
-title: "第 5 章：屏幕空间、世界空间与相机"
+title: "Chapter 5. Screen Space, World Space, and the Camera"
 type: A
-section: "Unity UI 设计 · 空间与源码"
+section: Unity UI 设计 · 空间与源码
 order: 5
-description: "比较三种 Canvas 模式、渲染相机与事件相机，完成屏幕血条和 3D 世界 UI 的坐标与交互闭环。"
+description: >-
+  比较Screen Space Overlay、Screen Space Camera与World
+  Space的渲染和事件摄像机合同；用布局探针、事件路由和多分辨率发布门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+sourceUrl: "https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uid-05
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid05ScreenWorldCameraLayoutProbe,
+  Uid05ScreenWorldCameraEventRouteLab,
+  Uid05ScreenWorldCameraReleaseGateLab,
+} from "@/components/mdx/unity-ui-design/v2/uid-05-screen-world-camera";
 
-## 问题：为什么 UI 看得见却点不到，或跟随世界目标时不断漂移
+<Objectives>
 
-先预测：World Space Canvas 的 worldCamera 为空时，GraphicRaycaster 应用哪台相机解释指针？答案依赖 Canvas 模式和事件相机配置。第 5 章把视觉相机、事件相机、透视投影、屏幕血条与场景内 Canvas 放在一起，解决的正是“看见的像素”和“命中的几何”是否来自同一坐标链。
+- 能说明“Chapter 5. Screen Space, World Space, and the Camera”如何比较Screen Space Overlay、Screen Space Camera与World Space的渲染和事件摄像机合同，并明确2015年uGUI原书与Unity 6现行资料的时代边界
+- 能先预测“怎样为HUD、相机平面和世界血条选择Canvas模式，并证明深度、比例、朝向和事件摄像机一致？”的布局或事件结果，再沿层级、矩形、画布、相机、射线和处理器逐阶段核对
+- 能注入“World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击”，用“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”决定接受、修正或拒绝UI发布
 
-## 原书边界：Chapter 5 · Screen Space, World Space, and the Camera
+</Objectives>
 
-原书 Chapter 5 包含 The Canvas and Cameras、Screen Space and World Space、Render cameras、Event Cameras、Getting some perspective，以及 big game 示例：Sprite 2D、Screen Space-Camera health bar、Canvas 内容、状态判断、从世界到屏幕、flat/deep 两种呈现、把 Canvas 放进世界、showcase、scale 问题、改进方案和最终 Event Camera 说明。
+## 为什么从这个UI任务开始
 
-- **The Canvas and Cameras；Screen Space and World Space；Render cameras；Event Cameras**
-- **Getting some perspective；Setting up for the big game；Some prerequisites；Sprite 2D work**
-- **A Screen Space**：Camera health bar；What's in a Canvas?；Am I dead yet?
-- **Reaching in；It's all gone a bit flat；Going deep**
-- **Hang your Canvas wherever you like；The showcase；Build your UI and place it in the scene**
-- **Troubles with scale；A better way；A final word on Event Cameras**
+空间页把“看得见”和“点得到”分开验证：渲染相机决定画面，事件相机与Raycaster决定输入坐标如何命中。 “Chapter 5. Screen Space, World Space, and the Camera”使用的贯穿任务是：同时制作屏幕HUD、相机空间生命条和世界空间展柜标签，改变FOV、距离与遮挡进行复核。 操作前先预测哪个矩形、射线目标或事件处理器会变化，运行后再补理由不算预测。
 
-这些小节按出版社目录保持唯一归属；本站的实验、现代迁移与复习只是教学增强，不改变原章身份，也不拿一个现代主题重复补多个原始单元。
+本页围绕“怎样为HUD、相机平面和世界血条选择Canvas模式，并证明深度、比例、朝向和事件摄像机一致？”建立正常、故障与恢复路径。只有“Chapter 5. Screen Space, World Space, and the Camera”保持“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”并交付Canvas模式、Render Camera、Event Camera、Plane Distance、FOV、排序、世界尺寸、遮挡、射线结果和尺度对照。，编辑器画面才构成UI证据。
 
-## 核心模型：从对象到可观察结果
+## 书目、38组条目与UI时代
 
-Overlay Canvas 直接在屏幕空间末端合成，不需要渲染相机；Screen Space Camera 把 Canvas 放在指定相机前方平面，受 planeDistance、相机 viewport 和排序影响；World Space Canvas 是普通场景几何，尺寸、朝向、深度和遮挡都进入世界坐标。Render Camera 决定视觉投影，Event Camera 则让 GraphicRaycaster 把屏幕指针转换成 UI 平面射线，二者可能同一台但职责不同。
+“Chapter 5. Screen Space, World Space, and the Camera”以[作者公告](https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html)核对Simon Jackson在2014年发布的《Unity 3D UI Essentials》及其围绕Unity 4.6新UI、动态缩放、效果和世界空间界面的定位；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf)核对第一版详细目录，[中文版书页](https://e.dangdang.com/touch/products/1901049187.html)核对《Unity UI设计》出版信息。课程分母为六章与附录合并后的38组公开目录条目。
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+“Chapter 5. Screen Space, World Space, and the Camera”只依据作者公告、授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。每个合并目录组保留组内全部英文小节名，不能用一个现代主题替换。
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+“Chapter 5. Screen Space, World Space, and the Camera”另以[技术核对 1](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/UICanvas.html)、[技术核对 2](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/script-CanvasScaler.html)、[技术核对 3](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/Raycasters.html)、[技术核对 4](https://docs.unity3d.com/6000.0/Documentation/Manual/UI-system-compare.html)核对现行技术事实。2015年的旧GUI对照、uGUI初版面板和源码仓库流程保留为原书时代轨；Unity 6的uGUI 2.0与UI系统比较只验证稳定布局、画布和事件机制或说明迁移边界，不能反向证明原书当年的菜单、包和默认值。
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+## 公开目录条目与UI机制
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+### The Canvas and Cameras；Screen Space and World Space
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+<Term def="UI条目1对应目录条目组“The Canvas and Cameras；Screen Space and World Space”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目1
+</Term>
 
-## 关键对象与生产者到消费者链
+**公开坐标 1/6。** 在“Chapter 5. Screen Space, World Space, and the Camera”的坐标1中，The Canvas and Cameras；Screen Space and World Space用于由Canvas空间、排序、相机和组状态决定渲染与交互边界；先锁定场景和层级，再用Render Mode、相机、排序、透明度、射线与屏幕结果复核，出现画面可见就假定事件相机正确时不得发布。
 
-世界目标血条通常先用 Camera.WorldToScreenPoint 得到屏幕点，再由 RectTransformUtility.ScreenPointToLocalPointInRectangle 转换到 Canvas 本地坐标。若使用 World Space Canvas，则可以直接跟随目标位置并朝向相机，但要处理世界尺度、像素密度、遮挡和近远裁剪。还要检查目标在相机后方、离开 viewport、被遮挡或死亡时的显示规则，坐标正确只是第一层。
+### Render cameras；Event Cameras；Getting some perspective
 
-为了避免“改完好像对了”，先写下生产者、变换规则、消费者与可观测量。每个对象都必须能在层级、Inspector、事件日志、坐标记录或渲染结果中找到证据；没有观测点的解释不能进入结论。
+<Term def="Render cameras对应目录条目组“Render cameras；Event Cameras；Getting some perspective”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  Render cameras
+</Term>
 
-## 失败边界与常见误判
+**公开坐标 2/6。** Render cameras；Event Cameras；Getting some perspective进入“Chapter 5. Screen Space, World Space, and the Camera”后要回答第2张布局卡：它怎样由Canvas空间、排序、相机和组状态决定渲染与交互边界、改变哪个矩形或目标、由哪些Render Mode、相机、排序、透明度、射线与屏幕结果证明，并如何排除画面可见就假定事件相机正确。
 
+### A Screen Space - Camera health bar；What's in a Canvas?；Am I dead yet?
 
-失败样本要保留输入、层级、关键参数和日志。只保存一张错误截图，会丢掉父矩形、相机、输入模块、射线排序或版本差异这些真正决定行为的条件。
+<Term def="UI条目3对应目录条目组“A Screen Space - Camera health bar；What's in a Canvas?；Am I dead yet?”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目3
+</Term>
 
-## 从 Unity 4.6/5 到现代 Unity
+**公开坐标 3/6。** 围绕“怎样为HUD、相机平面和世界血条选择Canvas模式，并证明深度、比例、朝向和事件摄像机一致？”，条目3把A Screen Space - Camera health bar；What's in a Canvas?；Am I dead yet?解释为由Canvas空间、排序、相机和组状态决定渲染与交互边界；复核者先读取Render Mode、相机、排序、透明度、射线与屏幕结果再判断画面，不能接受画面可见就假定事件相机正确。
 
-现代 Unity 在 URP/HDRP、Camera Stack、XR 多眼和动态分辨率下增加了更多相机边界，但三种 Canvas 模式和视觉/事件相机分工仍适用。迁移时要在实际渲染管线与目标平台测排序、后处理、XR 眼纹理和 Input System 指针；不能用编辑器 Scene View 的可见性代替 Game Camera 证据。
+### Reaching in；It's all gone a bit flat；Going deep
 
-迁移报告采用四列：原书对象、稳定不变量、现代载体、已知差异。若现代载体改变事件模型、坐标空间或序列化方式，就应判为“功能近似，需要重新验收”，不能写成无差别替换。
+<Term def="Reaching in对应目录条目组“Reaching in；It's all gone a bit flat；Going deep”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于在屏幕、相机或世界坐标中校准生命条与展柜UI，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  Reaching in
+</Term>
 
-## 验收证据包
+**公开坐标 4/6。** 对“Chapter 5. Screen Space, World Space, and the Camera”而言，Reaching in；It's all gone a bit flat；Going deep的最小合同是在屏幕、相机或世界坐标中校准生命条与展柜UI，第4次检查保存对象绑定、相机、FOV、距离、深度、尺度、朝向与事件命中；若产生渲染相机与事件相机不一致，就回到层级、布局或事件上游。
 
-验收场景同时包含 Overlay HUD、Camera 模式菜单和 World Space 终端。记录目标 world position、WorldToScreenPoint 结果、Canvas local point、相机 viewport、planeDistance、sorting、eventCamera、raycast hit 与遮挡结果。移动相机、切换宽高比和把目标放到相机背后，确认失败规则可重放。
+### Hang your Canvas wherever you like；The showcase
 
-验收还要包含正常、边界和失败三类样本。正常样本证明主路径，边界样本证明约束，失败样本证明诊断方法确实能抓到错误。三者使用同一场景与记录格式，下一版本才能直接回归。
+<Term def="UI条目5对应目录条目组“Hang your Canvas wherever you like；The showcase”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于在屏幕、相机或世界坐标中校准生命条与展柜UI，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目5
+</Term>
 
-## 小结
+**公开坐标 5/6。** 第5个公开条目组Hang your Canvas wherever you like；The showcase服务于比较Screen Space Overlay、Screen Space Camera与World Space的渲染和事件摄像机合同，需要以对象绑定、相机、FOV、距离、深度、尺度、朝向与事件命中呈现在屏幕、相机或世界坐标中校准生命条与展柜UI；渲染相机与事件相机不一致会破坏“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”。
 
-- 三种 Canvas 模式决定 UI 位于屏幕链还是世界链
-- Render Camera 负责视觉，Event Camera 负责输入坐标解释
-- 世界跟随 UI 需要处理两段坐标转换和相机背面边界
-- 世界空间 UI 还要验收尺度、朝向、深度、遮挡与命中
+### Troubles with scale；A better way；A final word on Event Cameras
 
+<Term def="UI条目6对应目录条目组“Troubles with scale；A better way；A final word on Event Cameras”，在“Chapter 5. Screen Space, World Space, and the Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目6
+</Term>
 
+**公开坐标 6/6。** 学习者在“Chapter 5. Screen Space, World Space, and the Camera”中讨论Troubles with scale；A better way；A final word on Event Cameras前预测由Canvas空间、排序、相机和组状态决定渲染与交互边界会改变哪项布局或交互状态，再读取Render Mode、相机、排序、透明度、射线与屏幕结果；观察到画面可见就假定事件相机正确时保留失败轨迹。
+
+## 先预测，再操作三个UI实验
+
+<Callout type="info" title="先写出哪个矩形或事件跳会先变化">
+  对“Chapter 5. Screen Space, World Space, and the
+  Camera”先选择版本化场景、层级、视口、输入与预期目标，再操作布局探针、事件路由和发布门；结果与预测不一致时应修改UI假设，不删除失败运行。
+</Callout>
+
+<Stepper>
+  <Step title="1. 画布锚点与布局探针">
+    切换“屏幕HUD、相机生命条、世界展柜标签”以及手机竖屏、横屏和桌面窗口，核对Anchor Min/Max、Pivot、offset与安全区怎样连接“Chapter 5. Screen Space, World Space, and the Camera”。
+
+    <Uid05ScreenWorldCameraLayoutProbe />
+
+  </Step>
+  <Step title="2. 正常与故障事件路由">
+    保持“同时制作屏幕HUD、相机空间生命条和世界空间展柜标签，改变FOV、距离与遮挡进行复核。”不变，切换正常和故障模式，沿Input Module、Raycaster、目标与处理器定位“World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击”的第一处偏离。
+
+    <Uid05ScreenWorldCameraEventRouteLab />
+
+  </Step>
+  <Step title="3. 多分辨率发布门">
+    分别切换层级锚点、布局所有权、事件路由和目标构建验证，展开Canvas模式、Render Camera、Event Camera、Plane Distance、FOV、排序、世界尺寸、遮挡、射线结果和尺度对照。后决定是否提交。
+
+    <Uid05ScreenWorldCameraReleaseGateLab />
+
+  </Step>
+</Stepper>
+
+<Callout
+  type="trap"
+  title="本页UI故障：World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击"
+>
+  “Chapter 5. Screen Space, World Space, and the
+  Camera”遇到该故障时应保持Unity版本、场景、层级、视口、输入和初始状态不变，沿布局到事件方向寻找最早偏离；用最终截图看似正常掩盖双写、错相机或不可导航状态，不能证明“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”。
+</Callout>
+
+<Callout type="trap" title="Game视图截图不等于目标构建">
+  同时制作屏幕HUD、相机空间生命条和世界空间展柜标签，改变FOV、距离与遮挡进行复核。
+  在参考分辨率中看起来正确，只证明一个编辑器视口；“Chapter 5. Screen Space,
+  World Space, and the
+  Camera”仍需窄屏、超宽屏、安全区、多输入方式、冷启动和目标平台证据。
+</Callout>
+
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 5. Screen Space, World Space, and the
+  Camera”引用现行uGUI和UI系统比较资料是为了核对稳定机制及迁移边界，不能把UI
+  Toolkit、当前包结构或菜单宣称成原书已有内容。
+</Callout>
+
+## Chapter 5. Screen Space, World Space, and the Camera的可重放UI协议
+
+| 阶段                   | UI动作                                                                                                           | 必留证据                                    | 拒绝条件                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
+| 选择Canvas空间与相机   | 在“Chapter 5. Screen Space, World Space, and the Camera”执行选择Canvas空间与相机，只允许声明组件写入布局或状态   | Unity版本、场景层级、视口与初始状态         | 层级或对象身份不可追溯                                                         |
+| 校准透视深度和世界尺度 | 在“Chapter 5. Screen Space, World Space, and the Camera”执行校准透视深度和世界尺度，只允许声明组件写入布局或状态 | RectTransform、Canvas、相机、射线与事件轨迹 | World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击 |
+| 验证事件相机与遮挡     | 在“Chapter 5. Screen Space, World Space, and the Camera”执行验证事件相机与遮挡，只允许声明组件写入布局或状态     | 分辨率矩阵、构建截图、迁移与回退记录        | 无法重放或恢复基线                                                             |
+
+```yaml
+unit: "uid-05"
+question: "怎样为HUD、相机平面和世界血条选择Canvas模式，并证明深度、比例、朝向和事件摄像机一致？"
+scenario: "同时制作屏幕HUD、相机空间生命条和世界空间展柜标签，改变FOV、距离与遮挡进行复核。"
+panels: ["屏幕HUD", "相机生命条", "世界展柜标签"]
+stages: ["选择Canvas空间与相机", "校准透视深度和世界尺度", "验证事件相机与遮挡"]
+invariant: "渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射"
+fault: "World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击"
+evidence: "Canvas模式、Render Camera、Event Camera、Plane Distance、FOV、排序、世界尺寸、遮挡、射线结果和尺度对照。"
+reset: restore_viewport_panel_route_step_gates_and_artifact
+```
+
+该协议要求“Chapter 5. Screen Space, World Space, and the Camera”在相同Unity版本、场景、层级、视口、输入和初始状态下重放。重置后若视口、面板、路由模式、步骤、发布门或证据显示没有回到基线，交互状态已经污染比较，不能作为UI证据。
+
+## 本页回顾
+
+掌握“Chapter 5. Screen Space, World Space, and the Camera”不是记住编辑器点击顺序，而是能围绕“怎样为HUD、相机平面和世界血条选择Canvas模式，并证明深度、比例、朝向和事件摄像机一致？”重建UI状态，并用“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”拒绝“World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击”。最终交付为Canvas模式、Render Camera、Event Camera、Plane Distance、FOV、排序、世界尺寸、遮挡、射线结果和尺度对照。
+
+## 练习与答案
+
+<Exercises>
+
+1. **问题 1：UI合同。** “Chapter 5. Screen Space, World Space, and the Camera”为什么必须先声明Unity版本、场景层级、视口、布局写入者、相机与输入模块？
+
+<Answer>
+  同时制作屏幕HUD、相机空间生命条和世界空间展柜标签，改变FOV、距离与遮挡进行复核。
+  若这些条件不固定，相同输入可能读取不同矩形、相机、排序或处理器；“Chapter 5.
+  Screen Space, World Space, and the
+  Camera”先声明合同，才能把画面连接到可验证状态，并防止参考分辨率成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 5. Screen Space, World Space, and the Camera”的The Canvas and
+  Cameras；Screen Space and World
+  Space：以“由Canvas空间、排序、相机和组状态决定渲染与交互边界”解释UI作用，用“Render
+  Mode、相机、排序、透明度、射线与屏幕结果”提供复核。 2. “Chapter 5. Screen
+  Space, World Space, and the Camera”的Render cameras；Event Cameras；Getting
+  some
+  perspective：以“由Canvas空间、排序、相机和组状态决定渲染与交互边界”解释UI作用，用“Render
+  Mode、相机、排序、透明度、射线与屏幕结果”提供复核。 3. “Chapter 5. Screen
+  Space, World Space, and the Camera”的A Screen Space - Camera health
+  bar；What's in a Canvas?；Am I dead
+  yet?：以“由Canvas空间、排序、相机和组状态决定渲染与交互边界”解释UI作用，用“Render
+  Mode、相机、排序、透明度、射线与屏幕结果”提供复核。 4. “Chapter 5. Screen
+  Space, World Space, and the Camera”的Reaching in；It's all gone a bit
+  flat；Going
+  deep：以“在屏幕、相机或世界坐标中校准生命条与展柜UI”解释UI作用，用“对象绑定、相机、FOV、距离、深度、尺度、朝向与事件命中”提供复核。
+  5. “Chapter 5. Screen Space, World Space, and the Camera”的Hang your Canvas
+  wherever you like；The
+  showcase：以“在屏幕、相机或世界坐标中校准生命条与展柜UI”解释UI作用，用“对象绑定、相机、FOV、距离、深度、尺度、朝向与事件命中”提供复核。
+  6. “Chapter 5. Screen Space, World Space, and the Camera”的Troubles with
+  scale；A better way；A final word on Event
+  Cameras：以“由Canvas空间、排序、相机和组状态决定渲染与交互边界”解释UI作用，用“Render
+  Mode、相机、排序、透明度、射线与屏幕结果”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“World Space Canvas使用错误Event Camera，画面可见但射线从另一相机发出而无法点击”已经被修正？
+
+<Answer>
+  为“Chapter 5. Screen Space, World Space, and the
+  Camera”复用同一Unity版本、场景、层级、视口、输入和初始状态，重放正常路径后只注入“World
+  Space Canvas使用错误Event
+  Camera，画面可见但射线从另一相机发出而无法点击”；记录最早偏离点，撤销故障并再次运行。只有布局探针、事件路由、发布门和Canvas模式、Render
+  Camera、Event Camera、Plane
+  Distance、FOV、排序、世界尺寸、遮挡、射线结果和尺度对照。重新满足“渲染相机、事件相机、Canvas模式、排序、世界尺度和目标对象形成明确的一对一映射”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="UI条目1">
+    对应“The Canvas and Cameras；Screen Space and World Space”；在“Chapter 5.
+    Screen Space, World Space, and the
+    Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="Render cameras">
+    对应“Render cameras；Event Cameras；Getting some perspective”；在“Chapter 5.
+    Screen Space, World Space, and the
+    Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目3">
+    对应“A Screen Space - Camera health bar；What's in a Canvas?；Am I dead
+    yet?”；在“Chapter 5. Screen Space, World Space, and the
+    Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="Reaching in">
+    对应“Reaching in；It's all gone a bit flat；Going deep”；在“Chapter 5.
+    Screen Space, World Space, and the
+    Camera”中用于在屏幕、相机或世界坐标中校准生命条与展柜UI，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目5">
+    对应“Hang your Canvas wherever you like；The showcase”；在“Chapter 5. Screen
+    Space, World Space, and the
+    Camera”中用于在屏幕、相机或世界坐标中校准生命条与展柜UI，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目6">
+    对应“Troubles with scale；A better way；A final word on Event
+    Cameras”；在“Chapter 5. Screen Space, World Space, and the
+    Camera”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Simon Jackson《Unity 3D UI Essentials》"
+  adaptedUrl="https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
+/>

@@ -1,79 +1,281 @@
 ---
-title: "第 2 章 Building Layouts：Canvas、Rect Transform 与自动布局"
+title: Chapter 2. Building Layouts
 type: A
-section: "Unity UI 设计 · 基础与布局"
+section: Unity UI 设计 · 基础与布局
 order: 2
-description: "一对一覆盖 Rect Transform、Canvas、CanvasRenderer、布局组、尺寸适配、Scroll Rect、缩放和 UnityEvent 输入链。"
+description: 贯通RectTransform、Canvas组件、自动布局、尺寸适配、遮罩、缩放与EventSystem；用布局探针、事件路由和多分辨率发布门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+sourceUrl: "https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uid-02
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid02BuildingLayoutsLayoutProbe,
+  Uid02BuildingLayoutsEventRouteLab,
+  Uid02BuildingLayoutsReleaseGateLab,
+} from "@/components/mdx/unity-ui-design/v2/uid-02-building-layouts";
 
-## 问题：为什么拖拽出正确位置的界面在另一分辨率会立刻失效
+<Objectives>
 
-先预测：一个固定在父面板右上角的按钮，如果只记录本地坐标而不记录锚点，父面板宽度翻倍后它会去哪？第二章把“看起来在这里”改写成可计算约束。Rect Transform 的结果来自父矩形、anchorMin、anchorMax、pivot、sizeDelta 与 anchoredPosition；自动布局又会接管其中一部分属性。只靠 Scene 视图拖拽无法说明最终是谁拥有尺寸。
+- 能说明“Chapter 2. Building Layouts”如何贯通RectTransform、Canvas组件、自动布局、尺寸适配、遮罩、缩放与EventSystem，并明确2015年uGUI原书与Unity 6现行资料的时代边界
+- 能先预测“怎样确定锚点、Layout Group、Fitter与Canvas Scaler的唯一尺寸写入者，并让输入路由不受重排破坏？”的布局或事件结果，再沿层级、矩形、画布、相机、射线和处理器逐阶段核对
+- 能注入“Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建”，用“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”决定接受、修正或拒绝UI发布
 
-## 原书边界与小节库存
+</Objectives>
 
-原章依次覆盖 The Rect Transforms、Rect Tool、Rect Transform component、Scaling the Rect Transform、Canvas、Canvas Renderer、Canvas Groups；随后进入 Horizontal Layout Group、Vertical Layout Group、Grid Layout Group、Layout options、Layout Element、Content Size Fitter、Aspect Ratio Fitter、Scroll Rect 与 Masks；最后比较 Constant Pixel Size、Scale with Screen Size、Constant Physical Size，并连接 UnityEvent system、Raycasting、Input modules、Input events 与 Event Triggers。
+## 为什么从这个UI任务开始
 
-- **The Rect Transforms；Rect Tool；Rect Transform component；Scaling the Rect Transform**
-- **Canvas；Canvas Renderer；Canvas Groups**
-- **Horizontal Layout Group；Vertical Layout Group；Grid Layout Group；Layout options**
-- **Layout Element；Content Size Fitter；Aspect Ratio Fitter；Scroll Rect；Masks**
-- **Resolution and scaling；Constant Pixel Size；Scale with Screen Size；Constant Physical Size**
-- **UnityEvent system；Raycasting；Input modules；Input events；Event Triggers**
+布局页把自动重排视作尺寸依赖图；任何组件写宽高前，都必须说明输入、输出以及是否与父子布局循环。 “Chapter 2. Building Layouts”使用的贯穿任务是：构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas Scaler和点击目标。 操作前先预测哪个矩形、射线目标或事件处理器会变化，运行后再补理由不算预测。
 
-这份库存用于唯一归属，而不是逐字转载。每个条目只在一个原章中计数，页面用重新组织的解释、实验和图示复现其核心问题。读者应能从条目回到页面证据，也能从页面结论指出对应的原始范围。
+本页围绕“怎样确定锚点、Layout Group、Fitter与Canvas Scaler的唯一尺寸写入者，并让输入路由不受重排破坏？”建立正常、故障与恢复路径。只有“Chapter 2. Building Layouts”保持“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”并交付RectTransform矩阵、Canvas与Renderer层级、布局输入输出、Fitter所有权、遮罩边界、缩放样本和事件射线路径。，编辑器画面才构成UI证据。
 
-## 从父矩形到最终像素的约束求解
+## 书目、38组条目与UI时代
 
-当 anchorMin 与 anchorMax 相等时，锚点定义父矩形中的参考点，anchoredPosition 再给出轴心到参考点的偏移；当两者不等时，元素进入拉伸模式，左右或上下偏移代替固定尺寸。Layout Group 会读取子元素的 min、preferred、flexible 值并写入位置尺寸，Content Size Fitter 又根据布局输入调整自身。若同一轴的尺寸既由父布局写入又由自身 fitter 反向决定，就可能形成重建循环或抖动。
+“Chapter 2. Building Layouts”以[作者公告](https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html)核对Simon Jackson在2014年发布的《Unity 3D UI Essentials》及其围绕Unity 4.6新UI、动态缩放、效果和世界空间界面的定位；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf)核对第一版详细目录，[中文版书页](https://e.dangdang.com/touch/products/1901049187.html)核对《Unity UI设计》出版信息。课程分母为六章与附录合并后的38组公开目录条目。
 
-## 五个核心术语与责任边界
+“Chapter 2. Building Layouts”只依据作者公告、授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。每个合并目录组保留组内全部英文小节名，不能用一个现代主题替换。
 
-不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+“Chapter 2. Building Layouts”另以[技术核对 1](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/class-RectTransform.html)、[技术核对 2](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/UICanvas.html)、[技术核对 3](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/script-CanvasScaler.html)、[技术核对 4](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/UIAutoLayout.html)、[技术核对 5](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/EventSystem.html)核对现行技术事实。2015年的旧GUI对照、uGUI初版面板和源码仓库流程保留为原书时代轨；Unity 6的uGUI 2.0与UI系统比较只验证稳定布局、画布和事件机制或说明迁移边界，不能反向证明原书当年的菜单、包和默认值。
 
-不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+## 公开目录条目与UI机制
 
-不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+### The Rect Transforms；The Rect Transform component
 
-不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+<Term def="UI条目1对应目录条目组“The Rect Transforms；The Rect Transform component”，在“Chapter 2. Building Layouts”中用于以父矩形中的归一锚点、轴心和偏移计算UI矩形，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目1
+</Term>
 
-不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+**公开坐标 1/7。** 在“Chapter 2. Building Layouts”的坐标1中，The Rect Transforms；The Rect Transform component用于以父矩形中的归一锚点、轴心和偏移计算UI矩形；先锁定场景和层级，再用Anchor Min/Max、Pivot、offset、父尺寸与运行结果复核，出现只在参考分辨率拖出绝对坐标时不得发布。
 
-术语必须能落到对象和状态，而不能只背定义。阅读 Inspector、运行日志或源码时，为每个术语写出输入、拥有者、输出和失败信号；若无法指出责任对象，就还没有形成可调试的心智模型。
+### The Canvas；The Canvas Renderer；Canvas Groups
 
-## 关键对象与数据流
+<Term def="The Canvas对应目录条目组“The Canvas；The Canvas Renderer；Canvas Groups”，在“Chapter 2. Building Layouts”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  The Canvas
+</Term>
 
-布局与事件是两条相交但不能混淆的链。布局链从父 RectTransform 和 CanvasScaler 开始，经 LayoutGroup、LayoutElement、Fitter 写出最终矩形；事件链从 InputModule 生成 PointerEventData，经 GraphicRaycaster 检查最终矩形和 Raycast Target，再由 EventSystem 派发。元素位置错误先查布局写入者，点击错误先查射线列表，不能用同一套猜测排查。
+**公开坐标 2/7。** The Canvas；The Canvas Renderer；Canvas Groups进入“Chapter 2. Building Layouts”后要回答第2张布局卡：它怎样由Canvas空间、排序、相机和组状态决定渲染与交互边界、改变哪个矩形或目标、由哪些Render Mode、相机、排序、透明度、射线与屏幕结果证明，并如何排除画面可见就假定事件相机正确。
 
-同一个视觉现象可能来自不同链路：位置错误通常来自几何写入者，点击错误来自射线与事件，显示顺序来自 Canvas 和相机，版本错误来自历史载体与现代 API 混写。实验必须先选定要证明的链，再控制无关变量。
+### Horizontal Layout Group；Vertical Layout Group；Grid Layout Group
 
-## 正常、边界与失败样本
+<Term def="UI条目3对应目录条目组“Horizontal Layout Group；Vertical Layout Group；Grid Layout Group”，在“Chapter 2. Building Layouts”中用于把最小、首选与弹性尺寸沿布局依赖图分配给子项，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目3
+</Term>
 
-一个完整实验至少包含正常输入、极端输入和故意破坏配置。正常样本证明主路径可用，边界样本说明数值或设备范围，失败样本则暴露隐式依赖。只保留成功截图会让后续读者无法区分偶然成功和稳定契约。
+**公开坐标 3/7。** 围绕“怎样确定锚点、Layout Group、Fitter与Canvas Scaler的唯一尺寸写入者，并让输入路由不受重排破坏？”，条目3把Horizontal Layout Group；Vertical Layout Group；Grid Layout Group解释为把最小、首选与弹性尺寸沿布局依赖图分配给子项；复核者先读取布局输入、尺寸写入者、重建次数和最终矩形再判断画面，不能接受多个组件循环写同一宽高。
 
+### Layout Element；Content Size Fitter；Aspect Ratio Fitter
 
-## 从 2015 年到现代 Unity
+<Term def="Layout Element对应目录条目组“Layout Element；Content Size Fitter；Aspect Ratio Fitter”，在“Chapter 2. Building Layouts”中用于把最小、首选与弹性尺寸沿布局依赖图分配给子项，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  Layout Element
+</Term>
 
-现代 Unity 的 uGUI 布局核心仍与原章一致，但 Safe Area、设备旋转、动态字体与 TextMeshPro 的首选尺寸会增加新的输入。新 Input System 的 InputSystemUIInputModule 替代旧模块时，事件数据链保持不变，动作绑定和设备来源发生变化。迁移时不应把 ForceRebuildLayoutImmediate 当常规修复；它适合诊断或明确的同步读取点，长期方案仍是消除约束循环并减少无效重建。
+**公开坐标 4/7。** 对“Chapter 2. Building Layouts”而言，Layout Element；Content Size Fitter；Aspect Ratio Fitter的最小合同是把最小、首选与弹性尺寸沿布局依赖图分配给子项，第4次检查保存布局输入、尺寸写入者、重建次数和最终矩形；若产生多个组件循环写同一宽高，就回到层级、布局或事件上游。
 
-迁移记录必须把“原书说了什么”和“今天怎样实现”并排放置。允许替换 API、包和资源，不允许删除原问题或把新版能力倒写成 2015 年事实；无法等价时应保留差异和失败证据，而不是强行宣布一一对应。
+### Scroll Rect；Masks；Resolution and scaling
 
-## 验收证据
+<Term def="Scroll Rect对应目录条目组“Scroll Rect；Masks；Resolution and scaling”，在“Chapter 2. Building Layouts”中用于用视口裁剪内容并按产品度量政策缩放Canvas，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  Scroll Rect
+</Term>
 
-验收至少覆盖三种分辨率、两种长宽比和一次内容数量变化。每个元素都能回答“水平尺寸谁写、垂直尺寸谁写、射线是否参与、缩放由谁决定”。Profiler 或布局调试记录应证明没有持续重建，失败样本要保留 DPI 异常、透明遮挡和嵌套 fitter 抖动。
+**公开坐标 5/7。** 第5个公开条目组Scroll Rect；Masks；Resolution and scaling服务于贯通RectTransform、Canvas组件、自动布局、尺寸适配、遮罩、缩放与EventSystem，需要以视口、内容边界、缩放模式、参考分辨率、Match与安全区呈现用视口裁剪内容并按产品度量政策缩放Canvas；以单一16:9截图替代边界矩阵会破坏“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”。
 
-证据包还应包含 Unity 版本、目标平台、场景路径、复现步骤和预期结果。交给另一位读者后，他不需要猜测隐藏参数就能得到同样结论，才算从“理解文字”进入“掌握系统”。
+### Constant Pixel Size；Scale with Screen Size；Constant Physical Size
 
-## 小结
+<Term def="UI条目6对应目录条目组“Constant Pixel Size；Scale with Screen Size；Constant Physical Size”，在“Chapter 2. Building Layouts”中用于用视口裁剪内容并按产品度量政策缩放Canvas，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目6
+</Term>
 
-- Rect Transform 是父矩形、锚点、轴心和偏移共同决定的约束结果
-- 自动布局必须明确每个轴唯一的尺寸拥有者
-- CanvasScaler 决定参考尺寸到屏幕的映射，三种模式适用条件不同
-- 事件命中依赖最终几何、Raycast Target、Raycaster 和 Input Module
+**公开坐标 6/7。** 学习者在“Chapter 2. Building Layouts”中讨论Constant Pixel Size；Scale with Screen Size；Constant Physical Size前预测用视口裁剪内容并按产品度量政策缩放Canvas会改变哪项布局或交互状态，再读取视口、内容边界、缩放模式、参考分辨率、Match与安全区；观察到以单一16:9截图替代边界矩阵时保留失败轨迹。
 
+### The UnityEvent system；Raycasting；Input modules；Event Triggers
 
+<Term def="UI条目7对应目录条目组“The UnityEvent system；Raycasting；Input modules；Event Triggers”，在“Chapter 2. Building Layouts”中用于从活动输入模块经Raycaster生成事件数据并选择目标，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目7
+</Term>
+
+**公开坐标 7/7。** 构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas Scaler和点击目标。 在条目7处理The UnityEvent system；Raycasting；Input modules；Event Triggers时，要把从活动输入模块经Raycaster生成事件数据并选择目标写进UI合同，把输入样本、活动模块、RaycastResult排序、目标和事件日志写进运行记录，并把多个模块或错误相机竞争同一输入写进故障样本。
+
+## 先预测，再操作三个UI实验
+
+<Callout type="info" title="先写出哪个矩形或事件跳会先变化">
+  对“Chapter 2. Building
+  Layouts”先选择版本化场景、层级、视口、输入与预期目标，再操作布局探针、事件路由和发布门；结果与预测不一致时应修改UI假设，不删除失败运行。
+</Callout>
+
+<Stepper>
+  <Step title="1. 画布锚点与布局探针">
+    切换“商品网格、滚动视口、缩放基准条”以及手机竖屏、横屏和桌面窗口，核对Anchor Min/Max、Pivot、offset与安全区怎样连接“Chapter 2. Building Layouts”。
+
+    <Uid02BuildingLayoutsLayoutProbe />
+
+  </Step>
+  <Step title="2. 正常与故障事件路由">
+    保持“构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas Scaler和点击目标。”不变，切换正常和故障模式，沿Input Module、Raycaster、目标与处理器定位“Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建”的第一处偏离。
+
+    <Uid02BuildingLayoutsEventRouteLab />
+
+  </Step>
+  <Step title="3. 多分辨率发布门">
+    分别切换层级锚点、布局所有权、事件路由和目标构建验证，展开RectTransform矩阵、Canvas与Renderer层级、布局输入输出、Fitter所有权、遮罩边界、缩放样本和事件射线路径。后决定是否提交。
+
+    <Uid02BuildingLayoutsReleaseGateLab />
+
+  </Step>
+</Stepper>
+
+<Callout
+  type="trap"
+  title="本页UI故障：Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建"
+>
+  “Chapter 2. Building
+  Layouts”遇到该故障时应保持Unity版本、场景、层级、视口、输入和初始状态不变，沿布局到事件方向寻找最早偏离；用最终截图看似正常掩盖双写、错相机或不可导航状态，不能证明“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”。
+</Callout>
+
+<Callout type="trap" title="Game视图截图不等于目标构建">
+  构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas
+  Scaler和点击目标。 在参考分辨率中看起来正确，只证明一个编辑器视口；“Chapter 2.
+  Building Layouts”仍需窄屏、超宽屏、安全区、多输入方式、冷启动和目标平台证据。
+</Callout>
+
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 2. Building
+  Layouts”引用现行uGUI和UI系统比较资料是为了核对稳定机制及迁移边界，不能把UI
+  Toolkit、当前包结构或菜单宣称成原书已有内容。
+</Callout>
+
+## Chapter 2. Building Layouts的可重放UI协议
+
+| 阶段                 | UI动作                                                                                | 必留证据                                    | 拒绝条件                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| 声明层级和尺寸所有权 | 在“Chapter 2. Building Layouts”执行声明层级和尺寸所有权，只允许声明组件写入布局或状态 | Unity版本、场景层级、视口与初始状态         | 层级或对象身份不可追溯                                                            |
+| 组合布局遮罩与缩放   | 在“Chapter 2. Building Layouts”执行组合布局遮罩与缩放，只允许声明组件写入布局或状态   | RectTransform、Canvas、相机、射线与事件轨迹 | Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建 |
+| 追踪输入射线和事件   | 在“Chapter 2. Building Layouts”执行追踪输入射线和事件，只允许声明组件写入布局或状态   | 分辨率矩阵、构建截图、迁移与回退记录        | 无法重放或恢复基线                                                                |
+
+```yaml
+unit: "uid-02"
+question: "怎样确定锚点、Layout Group、Fitter与Canvas Scaler的唯一尺寸写入者，并让输入路由不受重排破坏？"
+scenario: "构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas Scaler和点击目标。"
+panels: ["商品网格", "滚动视口", "缩放基准条"]
+stages: ["声明层级和尺寸所有权", "组合布局遮罩与缩放", "追踪输入射线和事件"]
+invariant: "同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致"
+fault: "Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建"
+evidence: "RectTransform矩阵、Canvas与Renderer层级、布局输入输出、Fitter所有权、遮罩边界、缩放样本和事件射线路径。"
+reset: restore_viewport_panel_route_step_gates_and_artifact
+```
+
+该协议要求“Chapter 2. Building Layouts”在相同Unity版本、场景、层级、视口、输入和初始状态下重放。重置后若视口、面板、路由模式、步骤、发布门或证据显示没有回到基线，交互状态已经污染比较，不能作为UI证据。
+
+## 本页回顾
+
+掌握“Chapter 2. Building Layouts”不是记住编辑器点击顺序，而是能围绕“怎样确定锚点、Layout Group、Fitter与Canvas Scaler的唯一尺寸写入者，并让输入路由不受重排破坏？”重建UI状态，并用“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”拒绝“Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建”。最终交付为RectTransform矩阵、Canvas与Renderer层级、布局输入输出、Fitter所有权、遮罩边界、缩放样本和事件射线路径。
+
+## 练习与答案
+
+<Exercises>
+
+1. **问题 1：UI合同。** “Chapter 2. Building Layouts”为什么必须先声明Unity版本、场景层级、视口、布局写入者、相机与输入模块？
+
+<Answer>
+  构建可滚动商品栏，在横竖屏切换中检查网格、内容尺寸、遮罩、Canvas
+  Scaler和点击目标。
+  若这些条件不固定，相同输入可能读取不同矩形、相机、排序或处理器；“Chapter 2.
+  Building
+  Layouts”先声明合同，才能把画面连接到可验证状态，并防止参考分辨率成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 2. Building Layouts”的The Rect Transforms；The Rect Transform
+  component：以“以父矩形中的归一锚点、轴心和偏移计算UI矩形”解释UI作用，用“Anchor
+  Min/Max、Pivot、offset、父尺寸与运行结果”提供复核。 2. “Chapter 2. Building
+  Layouts”的The Canvas；The Canvas Renderer；Canvas
+  Groups：以“由Canvas空间、排序、相机和组状态决定渲染与交互边界”解释UI作用，用“Render
+  Mode、相机、排序、透明度、射线与屏幕结果”提供复核。 3. “Chapter 2. Building
+  Layouts”的Horizontal Layout Group；Vertical Layout Group；Grid Layout
+  Group：以“把最小、首选与弹性尺寸沿布局依赖图分配给子项”解释UI作用，用“布局输入、尺寸写入者、重建次数和最终矩形”提供复核。
+  4. “Chapter 2. Building Layouts”的Layout Element；Content Size Fitter；Aspect
+  Ratio
+  Fitter：以“把最小、首选与弹性尺寸沿布局依赖图分配给子项”解释UI作用，用“布局输入、尺寸写入者、重建次数和最终矩形”提供复核。
+  5. “Chapter 2. Building Layouts”的Scroll Rect；Masks；Resolution and
+  scaling：以“用视口裁剪内容并按产品度量政策缩放Canvas”解释UI作用，用“视口、内容边界、缩放模式、参考分辨率、Match与安全区”提供复核。
+  6. “Chapter 2. Building Layouts”的Constant Pixel Size；Scale with Screen
+  Size；Constant Physical
+  Size：以“用视口裁剪内容并按产品度量政策缩放Canvas”解释UI作用，用“视口、内容边界、缩放模式、参考分辨率、Match与安全区”提供复核。
+  7. “Chapter 2. Building Layouts”的The UnityEvent system；Raycasting；Input
+  modules；Event
+  Triggers：以“从活动输入模块经Raycaster生成事件数据并选择目标”解释UI作用，用“输入样本、活动模块、RaycastResult排序、目标和事件日志”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“Layout Group与Content Size Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建”已经被修正？
+
+<Answer>
+  为“Chapter 2. Building
+  Layouts”复用同一Unity版本、场景、层级、视口、输入和初始状态，重放正常路径后只注入“Layout
+  Group与Content Size
+  Fitter循环写入同一尺寸，编辑器预览稳定而运行时持续重建”；记录最早偏离点，撤销故障并再次运行。只有布局探针、事件路由、发布门和RectTransform矩阵、Canvas与Renderer层级、布局输入输出、Fitter所有权、遮罩边界、缩放样本和事件射线路径。重新满足“同一RectTransform属性只有一个权威布局写入者，缩放策略有参考分辨率，射线目标与可见层级一致”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="UI条目1">
+    对应“The Rect Transforms；The Rect Transform component”；在“Chapter 2.
+    Building
+    Layouts”中用于以父矩形中的归一锚点、轴心和偏移计算UI矩形，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="The Canvas">
+    对应“The Canvas；The Canvas Renderer；Canvas Groups”；在“Chapter 2. Building
+    Layouts”中用于由Canvas空间、排序、相机和组状态决定渲染与交互边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目3">
+    对应“Horizontal Layout Group；Vertical Layout Group；Grid Layout
+    Group”；在“Chapter 2. Building
+    Layouts”中用于把最小、首选与弹性尺寸沿布局依赖图分配给子项，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="Layout Element">
+    对应“Layout Element；Content Size Fitter；Aspect Ratio Fitter”；在“Chapter
+    2. Building
+    Layouts”中用于把最小、首选与弹性尺寸沿布局依赖图分配给子项，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="Scroll Rect">
+    对应“Scroll Rect；Masks；Resolution and scaling”；在“Chapter 2. Building
+    Layouts”中用于用视口裁剪内容并按产品度量政策缩放Canvas，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目6">
+    对应“Constant Pixel Size；Scale with Screen Size；Constant Physical
+    Size”；在“Chapter 2. Building
+    Layouts”中用于用视口裁剪内容并按产品度量政策缩放Canvas，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目7">
+    对应“The UnityEvent system；Raycasting；Input modules；Event
+    Triggers”；在“Chapter 2. Building
+    Layouts”中用于从活动输入模块经Raycaster生成事件数据并选择目标，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Simon Jackson《Unity 3D UI Essentials》"
+  adaptedUrl="https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
+/>

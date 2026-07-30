@@ -1,77 +1,284 @@
 ---
-title: "第 6 章：与 UI 源码协同工作"
+title: Chapter 6. Working with the UI Source
 type: A
-section: "Unity UI 设计 · 空间与源码"
+section: Unity UI 设计 · 空间与源码
 order: 6
-description: "拆解 EventSystem 循环、射线汇总、事件接口与 ExecuteEvents，并以可维护方式阅读、扩展和验证 UI 源码。"
+description: >-
+  拆解EventSystem循环、事件接口、ExecuteEvents、自定义事件数据与2015年uGUI源码工作流；用布局探针、事件路由和多分辨率发布门完成独立复核。
 demo: true
 math: false
-sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+sourceUrl: "https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: uid-06
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid06WorkingWithUiSourceLayoutProbe,
+  Uid06WorkingWithUiSourceEventRouteLab,
+  Uid06WorkingWithUiSourceReleaseGateLab,
+} from "@/components/mdx/unity-ui-design/v2/uid-06-working-with-ui-source";
 
-## 问题：为什么会写 onClick 还不足以调试一次丢失或重复的 UI 事件
+<Objectives>
 
-先预测：两个 Raycaster 都命中同一点时，谁决定最终目标？不是 Button 自己，而是 EventSystem 收集并排序 RaycastResult 后，由当前 Input Module 驱动 ExecuteEvents。第 6 章从 EventSystem loop、state、Raycast Marshalling 进入事件接口和自定义事件，再转向开源 UI 仓库、fork、更新、解决方案结构与把自定义版本接入项目。
+- 能说明“Chapter 6. Working with the UI Source”如何拆解EventSystem循环、事件接口、ExecuteEvents、自定义事件数据与2015年uGUI源码工作流，并明确2015年uGUI原书与Unity 6现行资料的时代边界
+- 能先预测“怎样从输入模块沿Raycaster、事件数据、接口和处理器重放一次事件，并区分历史源码仓库与现行包？”的布局或事件结果，再沿层级、矩形、画布、相机、射线和处理器逐阶段核对
+- 能注入“自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程”，用“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”决定接受、修正或拒绝UI发布
 
-## 原书边界：Chapter 6 · Working with the UI Source
+</Objectives>
 
-原书 Chapter 6 包含 Unravelling the Event System、Event System loop、Controlling state、Raycast Marshalling、Working with events、Using a parameter、Built-in event interfaces、Executing events、custom handler/event 的 Data Structure、Interface、static container 与 processing；Roll a Ball Derby 示例；随后是源码仓库、fork、下载、更新、solution、加入自定义 UI 和回馈上游。
+## 为什么从这个UI任务开始
 
-- **Unravelling the Event System；The Event System loop；Controlling state；Raycast Marshalling**
-- **Working with events；Using a parameter；Built-in event interfaces；Executing events**
-- **Building your own handlers or custom events；custom event Data Structure、Interface、static container、processing**
-- **The Roll a Ball Derby；Droid script；Alarm plates；Who watches the watchers?**
-- **Getting access to the source；repository；fork；download；keeping up to date**
-- **What is in the solution?；Adding your own version of UI；push it back to Unity**
+源码页先把事件当成可重放消息路由，再讨论扩展；2015年的Bitbucket式源码获取与现行包分发必须分别标注。 “Chapter 6. Working with the UI Source”使用的贯穿任务是：为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。 操作前先预测哪个矩形、射线目标或事件处理器会变化，运行后再补理由不算预测。
 
-为避免缩写丢失目录身份，四个自定义事件小节保留完整名称：**A custom event Data Structure**、**A custom event Interface**、**A custom event static container**、**Processing a custom event**。源码工作流同样保留 **Adding your own version of UI to your project** 与 **Extra credit, push it back to Unity**。这些名称只固定原书边界，正文实现仍用现代包管理说明迁移差异。
+本页围绕“怎样从输入模块沿Raycaster、事件数据、接口和处理器重放一次事件，并区分历史源码仓库与现行包？”建立正常、故障与恢复路径。只有“Chapter 6. Working with the UI Source”保持“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”并交付输入模块、PointerEventData、RaycastResult、目标排序、事件接口、ExecuteEvents、自定义数据、处理日志和源码版本说明。，编辑器画面才构成UI证据。
 
-这些小节按出版社目录保持唯一归属；本站的实验、现代迁移与复习只是教学增强，不改变原章身份，也不拿一个现代主题重复补多个原始单元。
+## 书目、38组条目与UI时代
 
-## 核心模型：从对象到可观察结果
+“Chapter 6. Working with the UI Source”以[作者公告](https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html)核对Simon Jackson在2014年发布的《Unity 3D UI Essentials》及其围绕Unity 4.6新UI、动态缩放、效果和世界空间界面的定位；[出版社授权预览](https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf)核对第一版详细目录，[中文版书页](https://e.dangdang.com/touch/products/1901049187.html)核对《Unity UI设计》出版信息。课程分母为六章与附录合并后的38组公开目录条目。
 
-EventSystem 每帧选择并更新当前 BaseInputModule，维护 currentSelectedGameObject、firstSelectedGameObject 与导航状态。Input Module 构造 BaseEventData 或 PointerEventData，调用 RaycastAll 汇总场景中各 BaseRaycaster 的结果并按模块、排序层、深度和距离排序，再用 ExecuteEvents 在目标层级执行对应接口。UnityEvent 是控件输出的一种监听容器，不等于底层事件派发本身。
+“Chapter 6. Working with the UI Source”只依据作者公告、授权样章和公开目录限定范围，不逐段改写原文；解释、状态模型、交互、练习与答案均为独立教学重写。每个合并目录组保留组内全部英文小节名，不能用一个现代主题替换。
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+“Chapter 6. Working with the UI Source”另以[技术核对 1](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/EventSystem.html)、[技术核对 2](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/MessagingSystem.html)、[技术核对 3](https://docs.unity3d.com/Packages/com.unity.ugui@2.0/manual/Raycasters.html)、[技术核对 4](https://docs.unity3d.com/6000.0/Documentation/Manual/UIE-Runtime-Event-System.html)核对现行技术事实。2015年的旧GUI对照、uGUI初版面板和源码仓库流程保留为原书时代轨；Unity 6的uGUI 2.0与UI系统比较只验证稳定布局、画布和事件机制或说明迁移边界，不能反向证明原书当年的菜单、包和默认值。
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+## 公开目录条目与UI机制
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+### The Event System loop；Controlling state；Raycast Marshalling
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+<Term def="UI条目1对应目录条目组“The Event System loop；Controlling state；Raycast Marshalling”，在“Chapter 6. Working with the UI Source”中用于从活动输入模块经Raycaster生成事件数据并选择目标，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目1
+</Term>
 
-用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+**公开坐标 1/7。** 在“Chapter 6. Working with the UI Source”的坐标1中，The Event System loop；Controlling state；Raycast Marshalling用于从活动输入模块经Raycaster生成事件数据并选择目标；先锁定场景和层级，再用输入样本、活动模块、RaycastResult排序、目标和事件日志复核，出现多个模块或错误相机竞争同一输入时不得发布。
 
-## 关键对象与生产者到消费者链
+### Working with events；Using a parameter；Built-in event interfaces
 
-自定义事件需要四个边界：EventData 保存本次语义数据；handler interface 规定消费者契约；ExecuteEvents.EventFunction 静态委托负责类型安全调用；producer 决定何时、向哪个层级 Execute 或 ExecuteHierarchy。Roll a Ball 示例用传感板、Droid 与观察者展示多个生产者和消费者。调试重复事件时要记录模块更新、pointerId、press/drag target、raycast 排序和执行目标。
+<Term def="UI条目2对应目录条目组“Working with events；Using a parameter；Built-in event interfaces”，在“Chapter 6. Working with the UI Source”中用于用类型化事件数据和接口把消息派发到明确处理器，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目2
+</Term>
 
-为了避免“改完好像对了”，先写下生产者、变换规则、消费者与可观测量。每个对象都必须能在层级、Inspector、事件日志、坐标记录或渲染结果中找到证据；没有观测点的解释不能进入结论。
+**公开坐标 2/7。** Working with events；Using a parameter；Built-in event interfaces进入“Chapter 6. Working with the UI Source”后要回答第2张布局卡：它怎样用类型化事件数据和接口把消息派发到明确处理器、改变哪个矩形或目标、由哪些事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志证明，并如何排除载荷类型与处理接口不匹配。
 
-## 失败边界与常见误判
+### Executing events；Building your own handlers or custom events
 
+<Term def="Executing events对应目录条目组“Executing events；Building your own handlers or custom events”，在“Chapter 6. Working with the UI Source”中用于用类型化事件数据和接口把消息派发到明确处理器，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  Executing events
+</Term>
 
-失败样本要保留输入、层级、关键参数和日志。只保存一张错误截图，会丢掉父矩形、相机、输入模块、射线排序或版本差异这些真正决定行为的条件。
+**公开坐标 3/7。** 围绕“怎样从输入模块沿Raycaster、事件数据、接口和处理器重放一次事件，并区分历史源码仓库与现行包？”，条目3把Executing events；Building your own handlers or custom events解释为用类型化事件数据和接口把消息派发到明确处理器；复核者先读取事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志再判断画面，不能接受载荷类型与处理接口不匹配。
 
-## 从 Unity 4.6/5 到现代 Unity
+### A custom event Data Structure；A custom event Interface；A custom event static container
 
-2015 年原书使用当时开源 UI 仓库和工程接入方式。现代 Unity 的 uGUI 通常以 com.unity.ugui 包及可见包源码存在，直接 fork 引擎 UI 的维护成本和流程已变化。优先通过组合、继承、事件接口或自定义 Graphic 扩展；只有需要修改内部实现时才嵌入包，并固定版本、保留差异补丁与升级测试。旧 Bitbucket 操作只作为历史载体。
+<Term def="UI条目4对应目录条目组“A custom event Data Structure；A custom event Interface；A custom event static container”，在“Chapter 6. Working with the UI Source”中用于用类型化事件数据和接口把消息派发到明确处理器，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目4
+</Term>
 
-迁移报告采用四列：原书对象、稳定不变量、现代载体、已知差异。若现代载体改变事件模型、坐标空间或序列化方式，就应判为“功能近似，需要重新验收”，不能写成无差别替换。
+**公开坐标 4/7。** 对“Chapter 6. Working with the UI Source”而言，A custom event Data Structure；A custom event Interface；A custom event static container的最小合同是用类型化事件数据和接口把消息派发到明确处理器，第4次检查保存事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志；若产生载荷类型与处理接口不匹配，就回到层级、布局或事件上游。
 
-## 验收证据包
+### The Roll a Ball Derby；The Droid script；The Alarm plates
 
-建立两个 Raycaster、一个可拖控件和一个自定义 AlarmEvent。日志按帧输出当前 Input Module、pointerId、RaycastResult 排序字段、press/drag/selected 目标与最终 handler。再禁用一个模块、改变 Canvas sorting、让父子都实现接口，验证 Execute 与 ExecuteHierarchy 的边界。源码扩展还要提供上游版本、补丁和回归场景。
+<Term def="UI条目5对应目录条目组“The Roll a Ball Derby；The Droid script；The Alarm plates”，在“Chapter 6. Working with the UI Source”中用于在版本化3D场景中连接压力板、角色、相机和UI事件，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目5
+</Term>
 
-验收还要包含正常、边界和失败三类样本。正常样本证明主路径，边界样本证明约束，失败样本证明诊断方法确实能抓到错误。三者使用同一场景与记录格式，下一版本才能直接回归。
+**公开坐标 5/7。** 第5个公开条目组The Roll a Ball Derby；The Droid script；The Alarm plates服务于拆解EventSystem循环、事件接口、ExecuteEvents、自定义事件数据与2015年uGUI源码工作流，需要以场景层级、碰撞层、对象身份、初始状态与冷启动轨迹呈现在版本化3D场景中连接压力板、角色、相机和UI事件；未保存场景基线而无法归因会破坏“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”。
 
-## 小结
+### Getting access to the source；The repository；Getting forked；Keeping up to date
 
-- EventSystem 选择输入模块并维护全局选择与导航状态
-- Raycast Marshalling 先汇总排序，ExecuteEvents 再调用消费者
-- 自定义事件由数据、接口、执行器和生产者四部分组成
-- 源码扩展必须把历史仓库操作映射到现代包管理与升级证据
+<Term def="UI条目6对应目录条目组“Getting access to the source；The repository；Getting forked；Keeping up to date”，在“Chapter 6. Working with the UI Source”中用于锁定2015源码版本、分叉、同步与项目集成边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目6
+</Term>
 
+**公开坐标 6/7。** 学习者在“Chapter 6. Working with the UI Source”中讨论Getting access to the source；The repository；Getting forked；Keeping up to date前预测锁定2015源码版本、分叉、同步与项目集成边界会改变哪项布局或交互状态，再读取仓库提交、Unity版本、差异补丁、升级记录与回馈说明；观察到把历史源码流程当成现行包升级步骤时保留失败轨迹。
 
+### Adding your own version of UI to your project；Extra credit, push it back to Unity
+
+<Term def="UI条目7对应目录条目组“Adding your own version of UI to your project；Extra credit, push it back to Unity”，在“Chapter 6. Working with the UI Source”中用于锁定2015源码版本、分叉、同步与项目集成边界，并受Unity时代、层级、矩形、画布、输入和相机边界约束。">
+  UI条目7
+</Term>
+
+**公开坐标 7/7。** 为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。 在条目7处理Adding your own version of UI to your project；Extra credit, push it back to Unity时，要把锁定2015源码版本、分叉、同步与项目集成边界写进UI合同，把仓库提交、Unity版本、差异补丁、升级记录与回馈说明写进运行记录，并把把历史源码流程当成现行包升级步骤写进故障样本。
+
+## 先预测，再操作三个UI实验
+
+<Callout type="info" title="先写出哪个矩形或事件跳会先变化">
+  对“Chapter 6. Working with the UI
+  Source”先选择版本化场景、层级、视口、输入与预期目标，再操作布局探针、事件路由和发布门；结果与预测不一致时应修改UI假设，不删除失败运行。
+</Callout>
+
+<Stepper>
+  <Step title="1. 画布锚点与布局探针">
+    切换“警报压力板、Droid接收器、事件日志”以及手机竖屏、横屏和桌面窗口，核对Anchor Min/Max、Pivot、offset与安全区怎样连接“Chapter 6. Working with the UI Source”。
+
+    <Uid06WorkingWithUiSourceLayoutProbe />
+
+  </Step>
+  <Step title="2. 正常与故障事件路由">
+    保持“为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。”不变，切换正常和故障模式，沿Input Module、Raycaster、目标与处理器定位“自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程”的第一处偏离。
+
+    <Uid06WorkingWithUiSourceEventRouteLab />
+
+  </Step>
+  <Step title="3. 多分辨率发布门">
+    分别切换层级锚点、布局所有权、事件路由和目标构建验证，展开输入模块、PointerEventData、RaycastResult、目标排序、事件接口、ExecuteEvents、自定义数据、处理日志和源码版本说明。后决定是否提交。
+
+    <Uid06WorkingWithUiSourceReleaseGateLab />
+
+  </Step>
+</Stepper>
+
+<Callout
+  type="trap"
+  title="本页UI故障：自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程"
+>
+  “Chapter 6. Working with the UI
+  Source”遇到该故障时应保持Unity版本、场景、层级、视口、输入和初始状态不变，沿布局到事件方向寻找最早偏离；用最终截图看似正常掩盖双写、错相机或不可导航状态，不能证明“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”。
+</Callout>
+
+<Callout type="trap" title="Game视图截图不等于目标构建">
+  为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。
+  在参考分辨率中看起来正确，只证明一个编辑器视口；“Chapter 6. Working with the
+  UI Source”仍需窄屏、超宽屏、安全区、多输入方式、冷启动和目标平台证据。
+</Callout>
+
+<Callout type="trap" title="Unity 6不能倒填2015步骤">
+  “Chapter 6. Working with the UI
+  Source”引用现行uGUI和UI系统比较资料是为了核对稳定机制及迁移边界，不能把UI
+  Toolkit、当前包结构或菜单宣称成原书已有内容。
+</Callout>
+
+## Chapter 6. Working with the UI Source的可重放UI协议
+
+| 阶段                   | UI动作                                                                                            | 必留证据                                    | 拒绝条件                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------- |
+| 跟踪循环状态与射线     | 在“Chapter 6. Working with the UI Source”执行跟踪循环状态与射线，只允许声明组件写入布局或状态     | Unity版本、场景层级、视口与初始状态         | 层级或对象身份不可追溯                                                      |
+| 实现类型化事件分发     | 在“Chapter 6. Working with the UI Source”执行实现类型化事件分发，只允许声明组件写入布局或状态     | RectTransform、Canvas、相机、射线与事件轨迹 | 自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程 |
+| 锁定源码版本和回馈路径 | 在“Chapter 6. Working with the UI Source”执行锁定源码版本和回馈路径，只允许声明组件写入布局或状态 | 分辨率矩阵、构建截图、迁移与回退记录        | 无法重放或恢复基线                                                          |
+
+```yaml
+unit: "uid-06"
+question: "怎样从输入模块沿Raycaster、事件数据、接口和处理器重放一次事件，并区分历史源码仓库与现行包？"
+scenario: "为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。"
+panels: ["警报压力板", "Droid接收器", "事件日志"]
+stages: ["跟踪循环状态与射线", "实现类型化事件分发", "锁定源码版本和回馈路径"]
+invariant: "活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致"
+fault: "自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程"
+evidence: "输入模块、PointerEventData、RaycastResult、目标排序、事件接口、ExecuteEvents、自定义数据、处理日志和源码版本说明。"
+reset: restore_viewport_panel_route_step_gates_and_artifact
+```
+
+该协议要求“Chapter 6. Working with the UI Source”在相同Unity版本、场景、层级、视口、输入和初始状态下重放。重置后若视口、面板、路由模式、步骤、发布门或证据显示没有回到基线，交互状态已经污染比较，不能作为UI证据。
+
+## 本页回顾
+
+掌握“Chapter 6. Working with the UI Source”不是记住编辑器点击顺序，而是能围绕“怎样从输入模块沿Raycaster、事件数据、接口和处理器重放一次事件，并区分历史源码仓库与现行包？”重建UI状态，并用“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”拒绝“自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程”。最终交付为输入模块、PointerEventData、RaycastResult、目标排序、事件接口、ExecuteEvents、自定义数据、处理日志和源码版本说明。
+
+## 练习与答案
+
+<Exercises>
+
+1. **问题 1：UI合同。** “Chapter 6. Working with the UI Source”为什么必须先声明Unity版本、场景层级、视口、布局写入者、相机与输入模块？
+
+<Answer>
+  为Roll-a-Ball警报板添加自定义事件，记录Droid与压力板处理器，再复盘源码分叉、同步和回馈边界。
+  若这些条件不固定，相同输入可能读取不同矩形、相机、排序或处理器；“Chapter 6.
+  Working with the UI
+  Source”先声明合同，才能把画面连接到可验证状态，并防止参考分辨率成功掩盖运行差异。
+</Answer>
+
+2. **问题 2：目录逐项覆盖。** 怎样证明公开条目组已经进入机制、交互和练习？
+
+<Answer>
+  1. “Chapter 6. Working with the UI Source”的The Event System loop；Controlling
+  state；Raycast
+  Marshalling：以“从活动输入模块经Raycaster生成事件数据并选择目标”解释UI作用，用“输入样本、活动模块、RaycastResult排序、目标和事件日志”提供复核。
+  2. “Chapter 6. Working with the UI Source”的Working with events；Using a
+  parameter；Built-in event
+  interfaces：以“用类型化事件数据和接口把消息派发到明确处理器”解释UI作用，用“事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志”提供复核。
+  3. “Chapter 6. Working with the UI Source”的Executing events；Building your
+  own handlers or custom
+  events：以“用类型化事件数据和接口把消息派发到明确处理器”解释UI作用，用“事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志”提供复核。
+  4. “Chapter 6. Working with the UI Source”的A custom event Data Structure；A
+  custom event Interface；A custom event static
+  container：以“用类型化事件数据和接口把消息派发到明确处理器”解释UI作用，用“事件类型、数据载荷、ExecuteEvents调用、接收者与副作用日志”提供复核。
+  5. “Chapter 6. Working with the UI Source”的The Roll a Ball Derby；The Droid
+  script；The Alarm
+  plates：以“在版本化3D场景中连接压力板、角色、相机和UI事件”解释UI作用，用“场景层级、碰撞层、对象身份、初始状态与冷启动轨迹”提供复核。
+  6. “Chapter 6. Working with the UI Source”的Getting access to the source；The
+  repository；Getting forked；Keeping up to
+  date：以“锁定2015源码版本、分叉、同步与项目集成边界”解释UI作用，用“仓库提交、Unity版本、差异补丁、升级记录与回馈说明”提供复核。
+  7. “Chapter 6. Working with the UI Source”的Adding your own version of UI to
+  your project；Extra credit, push it back to
+  Unity：以“锁定2015源码版本、分叉、同步与项目集成边界”解释UI作用，用“仓库提交、Unity版本、差异补丁、升级记录与回馈说明”提供复核。
+</Answer>
+
+3. **问题 3：故障恢复。** 怎样证明“自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity 6包升级流程”已经被修正？
+
+<Answer>
+  为“Chapter 6. Working with the UI
+  Source”复用同一Unity版本、场景、层级、视口、输入和初始状态，重放正常路径后只注入“自定义事件容器复用错误数据类型，同时把2015源码仓库操作当作Unity
+  6包升级流程”；记录最早偏离点，撤销故障并再次运行。只有布局探针、事件路由、发布门和输入模块、PointerEventData、RaycastResult、目标排序、事件接口、ExecuteEvents、自定义数据、处理日志和源码版本说明。重新满足“活动输入模块唯一，Raycaster结果可排序，事件数据类型匹配处理器，源码版本与项目Unity版本一致”，修正才可提交。
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="UI条目1">
+    对应“The Event System loop；Controlling state；Raycast
+    Marshalling”；在“Chapter 6. Working with the UI
+    Source”中用于从活动输入模块经Raycaster生成事件数据并选择目标，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目2">
+    对应“Working with events；Using a parameter；Built-in event
+    interfaces”；在“Chapter 6. Working with the UI
+    Source”中用于用类型化事件数据和接口把消息派发到明确处理器，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="Executing events">
+    对应“Executing events；Building your own handlers or custom
+    events”；在“Chapter 6. Working with the UI
+    Source”中用于用类型化事件数据和接口把消息派发到明确处理器，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目4">
+    对应“A custom event Data Structure；A custom event Interface；A custom event
+    static container”；在“Chapter 6. Working with the UI
+    Source”中用于用类型化事件数据和接口把消息派发到明确处理器，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目5">
+    对应“The Roll a Ball Derby；The Droid script；The Alarm plates”；在“Chapter
+    6. Working with the UI
+    Source”中用于在版本化3D场景中连接压力板、角色、相机和UI事件，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目6">
+    对应“Getting access to the source；The repository；Getting forked；Keeping
+    up to date”；在“Chapter 6. Working with the UI
+    Source”中用于锁定2015源码版本、分叉、同步与项目集成边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+  <GlossaryItem term="UI条目7">
+    对应“Adding your own version of UI to your project；Extra credit, push it
+    back to Unity”；在“Chapter 6. Working with the UI
+    Source”中用于锁定2015源码版本、分叉、同步与项目集成边界，需要连接Unity时代、层级、矩形、画布、输入与目标。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Simon Jackson《Unity 3D UI Essentials》"
+  adaptedUrl="https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
+/>
