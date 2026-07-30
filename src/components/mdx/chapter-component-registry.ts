@@ -14469,6 +14469,300 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "tiger-book-compiler/00-guide/tbc-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-official-learning-map");
+    return {
+      TbcOfficialLearningMapPipelineContractLab:
+        module0.TbcOfficialLearningMapPipelineContractLab,
+      TbcOfficialLearningMapStateTraceLab:
+        module0.TbcOfficialLearningMapStateTraceLab,
+      TbcOfficialLearningMapVerificationGateLab:
+        module0.TbcOfficialLearningMapVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/01-front-end/tbc-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-01-introduction");
+    return {
+      Tbc01IntroductionPipelineContractLab:
+        module0.Tbc01IntroductionPipelineContractLab,
+      Tbc01IntroductionStateTraceLab: module0.Tbc01IntroductionStateTraceLab,
+      Tbc01IntroductionVerificationGateLab:
+        module0.Tbc01IntroductionVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/01-front-end/tbc-02-lexical-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-02-lexical-analysis");
+    return {
+      Tbc02LexicalAnalysisPipelineContractLab:
+        module0.Tbc02LexicalAnalysisPipelineContractLab,
+      Tbc02LexicalAnalysisStateTraceLab:
+        module0.Tbc02LexicalAnalysisStateTraceLab,
+      Tbc02LexicalAnalysisVerificationGateLab:
+        module0.Tbc02LexicalAnalysisVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/01-front-end/tbc-03-parsing": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-03-parsing");
+    return {
+      Tbc03ParsingPipelineContractLab: module0.Tbc03ParsingPipelineContractLab,
+      Tbc03ParsingStateTraceLab: module0.Tbc03ParsingStateTraceLab,
+      Tbc03ParsingVerificationGateLab: module0.Tbc03ParsingVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/01-front-end/tbc-04-abstract-syntax": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-04-abstract-syntax");
+    return {
+      Tbc04AbstractSyntaxPipelineContractLab:
+        module0.Tbc04AbstractSyntaxPipelineContractLab,
+      Tbc04AbstractSyntaxStateTraceLab:
+        module0.Tbc04AbstractSyntaxStateTraceLab,
+      Tbc04AbstractSyntaxVerificationGateLab:
+        module0.Tbc04AbstractSyntaxVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/01-front-end/tbc-05-semantic-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-05-semantic-analysis");
+    return {
+      Tbc05SemanticAnalysisPipelineContractLab:
+        module0.Tbc05SemanticAnalysisPipelineContractLab,
+      Tbc05SemanticAnalysisStateTraceLab:
+        module0.Tbc05SemanticAnalysisStateTraceLab,
+      Tbc05SemanticAnalysisVerificationGateLab:
+        module0.Tbc05SemanticAnalysisVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/02-runtime-ir/tbc-06-activation-records": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-06-activation-records");
+    return {
+      Tbc06ActivationRecordsPipelineContractLab:
+        module0.Tbc06ActivationRecordsPipelineContractLab,
+      Tbc06ActivationRecordsStateTraceLab:
+        module0.Tbc06ActivationRecordsStateTraceLab,
+      Tbc06ActivationRecordsVerificationGateLab:
+        module0.Tbc06ActivationRecordsVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/02-runtime-ir/tbc-07-translation-intermediate-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-07-translation-intermediate-code");
+      return {
+        Tbc07TranslationIntermediateCodePipelineContractLab:
+          module0.Tbc07TranslationIntermediateCodePipelineContractLab,
+        Tbc07TranslationIntermediateCodeStateTraceLab:
+          module0.Tbc07TranslationIntermediateCodeStateTraceLab,
+        Tbc07TranslationIntermediateCodeVerificationGateLab:
+          module0.Tbc07TranslationIntermediateCodeVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/02-runtime-ir/tbc-08-basic-blocks-traces": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-08-basic-blocks-traces");
+    return {
+      Tbc08BasicBlocksTracesPipelineContractLab:
+        module0.Tbc08BasicBlocksTracesPipelineContractLab,
+      Tbc08BasicBlocksTracesStateTraceLab:
+        module0.Tbc08BasicBlocksTracesStateTraceLab,
+      Tbc08BasicBlocksTracesVerificationGateLab:
+        module0.Tbc08BasicBlocksTracesVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/03-back-end/tbc-09-instruction-selection": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-09-instruction-selection");
+    return {
+      Tbc09InstructionSelectionPipelineContractLab:
+        module0.Tbc09InstructionSelectionPipelineContractLab,
+      Tbc09InstructionSelectionStateTraceLab:
+        module0.Tbc09InstructionSelectionStateTraceLab,
+      Tbc09InstructionSelectionVerificationGateLab:
+        module0.Tbc09InstructionSelectionVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/03-back-end/tbc-10-liveness-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-10-liveness-analysis");
+    return {
+      Tbc10LivenessAnalysisPipelineContractLab:
+        module0.Tbc10LivenessAnalysisPipelineContractLab,
+      Tbc10LivenessAnalysisStateTraceLab:
+        module0.Tbc10LivenessAnalysisStateTraceLab,
+      Tbc10LivenessAnalysisVerificationGateLab:
+        module0.Tbc10LivenessAnalysisVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/03-back-end/tbc-11-register-allocation": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-11-register-allocation");
+    return {
+      Tbc11RegisterAllocationPipelineContractLab:
+        module0.Tbc11RegisterAllocationPipelineContractLab,
+      Tbc11RegisterAllocationStateTraceLab:
+        module0.Tbc11RegisterAllocationStateTraceLab,
+      Tbc11RegisterAllocationVerificationGateLab:
+        module0.Tbc11RegisterAllocationVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/03-back-end/tbc-12-putting-it-all-together":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-12-putting-it-all-together");
+      return {
+        Tbc12PuttingItAllTogetherPipelineContractLab:
+          module0.Tbc12PuttingItAllTogetherPipelineContractLab,
+        Tbc12PuttingItAllTogetherStateTraceLab:
+          module0.Tbc12PuttingItAllTogetherStateTraceLab,
+        Tbc12PuttingItAllTogetherVerificationGateLab:
+          module0.Tbc12PuttingItAllTogetherVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/04-runtime-languages/tbc-13-garbage-collection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-13-garbage-collection");
+      return {
+        Tbc13GarbageCollectionPipelineContractLab:
+          module0.Tbc13GarbageCollectionPipelineContractLab,
+        Tbc13GarbageCollectionStateTraceLab:
+          module0.Tbc13GarbageCollectionStateTraceLab,
+        Tbc13GarbageCollectionVerificationGateLab:
+          module0.Tbc13GarbageCollectionVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/04-runtime-languages/tbc-14-object-oriented-languages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-14-object-oriented-languages");
+      return {
+        Tbc14ObjectOrientedLanguagesPipelineContractLab:
+          module0.Tbc14ObjectOrientedLanguagesPipelineContractLab,
+        Tbc14ObjectOrientedLanguagesStateTraceLab:
+          module0.Tbc14ObjectOrientedLanguagesStateTraceLab,
+        Tbc14ObjectOrientedLanguagesVerificationGateLab:
+          module0.Tbc14ObjectOrientedLanguagesVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/04-runtime-languages/tbc-15-functional-languages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-15-functional-languages");
+      return {
+        Tbc15FunctionalLanguagesPipelineContractLab:
+          module0.Tbc15FunctionalLanguagesPipelineContractLab,
+        Tbc15FunctionalLanguagesStateTraceLab:
+          module0.Tbc15FunctionalLanguagesStateTraceLab,
+        Tbc15FunctionalLanguagesVerificationGateLab:
+          module0.Tbc15FunctionalLanguagesVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/04-runtime-languages/tbc-16-polymorphic-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-16-polymorphic-types");
+      return {
+        Tbc16PolymorphicTypesPipelineContractLab:
+          module0.Tbc16PolymorphicTypesPipelineContractLab,
+        Tbc16PolymorphicTypesStateTraceLab:
+          module0.Tbc16PolymorphicTypesStateTraceLab,
+        Tbc16PolymorphicTypesVerificationGateLab:
+          module0.Tbc16PolymorphicTypesVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/05-optimization/tbc-17-dataflow-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-17-dataflow-analysis");
+    return {
+      Tbc17DataflowAnalysisPipelineContractLab:
+        module0.Tbc17DataflowAnalysisPipelineContractLab,
+      Tbc17DataflowAnalysisStateTraceLab:
+        module0.Tbc17DataflowAnalysisStateTraceLab,
+      Tbc17DataflowAnalysisVerificationGateLab:
+        module0.Tbc17DataflowAnalysisVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/05-optimization/tbc-18-loop-optimizations": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-18-loop-optimizations");
+    return {
+      Tbc18LoopOptimizationsPipelineContractLab:
+        module0.Tbc18LoopOptimizationsPipelineContractLab,
+      Tbc18LoopOptimizationsStateTraceLab:
+        module0.Tbc18LoopOptimizationsStateTraceLab,
+      Tbc18LoopOptimizationsVerificationGateLab:
+        module0.Tbc18LoopOptimizationsVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
+  "tiger-book-compiler/05-optimization/tbc-19-static-single-assignment":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-19-static-single-assignment");
+      return {
+        Tbc19StaticSingleAssignmentPipelineContractLab:
+          module0.Tbc19StaticSingleAssignmentPipelineContractLab,
+        Tbc19StaticSingleAssignmentStateTraceLab:
+          module0.Tbc19StaticSingleAssignmentStateTraceLab,
+        Tbc19StaticSingleAssignmentVerificationGateLab:
+          module0.Tbc19StaticSingleAssignmentVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/06-machine-performance/tbc-20-scheduling-pipelining":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-20-scheduling-pipelining");
+      return {
+        Tbc20SchedulingPipeliningPipelineContractLab:
+          module0.Tbc20SchedulingPipeliningPipelineContractLab,
+        Tbc20SchedulingPipeliningStateTraceLab:
+          module0.Tbc20SchedulingPipeliningStateTraceLab,
+        Tbc20SchedulingPipeliningVerificationGateLab:
+          module0.Tbc20SchedulingPipeliningVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/06-machine-performance/tbc-21-memory-hierarchies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-21-memory-hierarchies");
+      return {
+        Tbc21MemoryHierarchiesPipelineContractLab:
+          module0.Tbc21MemoryHierarchiesPipelineContractLab,
+        Tbc21MemoryHierarchiesStateTraceLab:
+          module0.Tbc21MemoryHierarchiesStateTraceLab,
+        Tbc21MemoryHierarchiesVerificationGateLab:
+          module0.Tbc21MemoryHierarchiesVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/07-appendix/tbc-appendix-tiger-language-reference":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/tiger-book-compiler/v2/tbc-appendix-tiger-language-reference");
+      return {
+        TbcAppendixTigerLanguageReferencePipelineContractLab:
+          module0.TbcAppendixTigerLanguageReferencePipelineContractLab,
+        TbcAppendixTigerLanguageReferenceStateTraceLab:
+          module0.TbcAppendixTigerLanguageReferenceStateTraceLab,
+        TbcAppendixTigerLanguageReferenceVerificationGateLab:
+          module0.TbcAppendixTigerLanguageReferenceVerificationGateLab,
+      } as ChapterMdxComponents;
+    },
+  "tiger-book-compiler/08-review/tbc-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/tiger-book-compiler/v2/tbc-official-final-review");
+    return {
+      TbcOfficialFinalReviewPipelineContractLab:
+        module0.TbcOfficialFinalReviewPipelineContractLab,
+      TbcOfficialFinalReviewStateTraceLab:
+        module0.TbcOfficialFinalReviewStateTraceLab,
+      TbcOfficialFinalReviewVerificationGateLab:
+        module0.TbcOfficialFinalReviewVerificationGateLab,
+    } as ChapterMdxComponents;
+  },
   "unity-animation/00-guide/uan-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/unity-animation/v2/uan-official-learning-map");
