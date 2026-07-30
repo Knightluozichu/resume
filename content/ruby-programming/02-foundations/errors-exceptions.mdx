@@ -1,15 +1,55 @@
 ---
-title: "第10章 错误处理与异常"
+title: 第10章 错误处理与异常
 type: C
-section: "たのしいRuby 第5版 · Ruby的基础"
+section: Ruby基础教程（第5版）· Ruby 基础
 order: 10
-description: "区分正常absence与异常失败，掌握begin/rescue/else/ensure、限定捕获、异常类、raise与有界retry，保留cause和cleanup证据。"
+description: >-
+  区分正常absence与异常失败，掌握begin/rescue/else/ensure、限定捕获、异常类、raise与有界retry，保留cause和cleanup证据。
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
 draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: tr5-10
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  RubErrorsExceptionsObjectModelLab,
+  RubErrorsExceptionsControlTraceLab,
+  RubErrorsExceptionsBoundaryProbeLab,
+} from "@/components/mdx/ruby-programming/v2/errors-exceptions";
+
+{/* RUB_OBJECTIVES_V2_START */}
+
+<Objectives>
+
+- 能解释错误处理与begin、rescue与else在“第10章 错误处理与异常”中的责任边界
+- 能围绕“怎样划分异常的产生、传播、恢复与 ensure 清理责任？”运行正常与故障轨迹并定位首个分岔
+- 能用“第10章 错误处理与异常的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。”证明“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”
+
+</Objectives>
+{/* RUB_OBJECTIVES_V2_END */}
+
+{/* RUB_SOURCE_V2_START */}
+
+## 来源、版次与运行边界
+
+“第10章 错误处理与异常”以[作者维护的第 5 版支持页](https://tanoshiiruby.github.io/5/)核定 2016 年 3 月 12 日首刷、两位作者、松本行弘监修以及四部分 23 章目录；[逐章程序清单](https://tanoshiiruby.github.io/5/list/)、[练习答案](https://tanoshiiruby.github.io/5/answer/)和[勘误](https://tanoshiiruby.github.io/5/errata.html)只作为公开支持材料，不被冒充为原书全文。
+
+对“第10章 错误处理与异常”而言，中文解释、示例、交互、练习和答案均为独立教学重写；站内中文章名是与官方 23 章顺序对应的课程映射，不宣称是日文小节的逐字翻译，也不从公开程序清单复制整段实现。
+
+“第10章 错误处理与异常”固定在 Ruby 2.3 语境；[Ruby 2.3.0 官方文档](https://docs.ruby-lang.org/en/2.3.0/)与[稳定版发布说明](https://www.ruby-lang.org/en/news/2015/12/25/ruby-2-3-0-released/)用于核对当时可用的语言和标准库行为。现代 Ruby 的差异只能另列迁移说明，不能静默改变本页示例的版本结论。
+
+围绕“怎样划分异常的产生、传播、恢复与 ensure 清理责任？”，本页验收“第10章 错误处理与异常的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。”。先预测正常轨迹，再只注入“捕获过宽异常并返回成功值，掩盖状态已经不可信”；若无法定位第一处状态分岔，就拒绝当前解释。
+{/* RUB_SOURCE_V2_END */}
 
 ## 从“所有失败都rescue”这个反模式开始
 
@@ -22,7 +62,6 @@ draft: false
 Method contract应说明成功shape、正常absence、会抛哪些domain/standard exceptions、是否可重试、失败后state是否改变。防止每层重复log/rescue。
 
 底层I/O知道path和system error，中层知道业务operation，CLI知道stderr与exit status。每层可添加context并保留cause，但只在能恢复、转成稳定domain error或建立process boundary时rescue。不要把programming error伪装成空数据。
-
 
 ## 异常处理：begin、rescue与else
 
@@ -55,7 +94,6 @@ end
 ```
 
 错误message应带operation identity、非敏感input locator和期望，不要把token/password/完整payload写日志。Exception对象可以携带structured fields，避免caller解析message字符串。自定义异常在本章后面说明。
-
 
 ## ensure后处理
 
@@ -96,7 +134,6 @@ end
 
 例如`Integer(text) rescue nil`会把任何StandardError压成nil；更清楚写`Integer(text, 10)`并只rescue ArgumentError，或者使用明确parser method返回Result。极窄。
 
-
 ## 异常处理语法的补充与指定需要捕捉的异常
 
 一个rescue可列多个相关classes：`rescue IOError, SystemCallError => error`，但组合前确认恢复策略相同。Class matching使用inheritance，因此先写specific rescue；最后宽泛StandardError仅在process/job boundary统一报告与转换status。
@@ -119,6 +156,66 @@ Equality、serialization与cross-process传输不是Exception默认承诺；跨j
 
 Guard clause在副作用前验证并raise，使失败保持state不变。若部分副作用已发生，需要transaction/compensation并把partial state写进error context。Library不要随意`exit`；CLI adapter把domain exceptions映射成stderr与status，process boundary才决定退出。
 
+{/* RUB_EVIDENCE_V2_START */}
+
+## 正式节点与章专属证据
+
+- <Term def="在“第10章 错误处理与异常”中，错误处理必须连接输入、状态变化与可复核结果。">
+    错误处理
+  </Term>
+  ：第 1
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，begin、rescue与else必须连接输入、状态变化与可复核结果。">
+    begin、rescue与else
+  </Term>
+  ：第 2
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，ensure后处理必须连接输入、状态变化与可复核结果。">
+    ensure后处理
+  </Term>
+  ：第 3
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，retry重试必须连接输入、状态变化与可复核结果。">
+    retry重试
+  </Term>
+  ：第 4
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，rescue修饰符必须连接输入、状态变化与可复核结果。">
+    rescue修饰符
+  </Term>
+  ：第 5
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，指定需要捕捉的异常必须连接输入、状态变化与可复核结果。">
+    指定需要捕捉的异常
+  </Term>
+  ：第 6
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，异常类必须连接输入、状态变化与可复核结果。">
+    异常类
+  </Term>
+  ：第 7
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第10章 错误处理与异常”中，主动抛出异常必须连接输入、状态变化与可复核结果。">
+    主动抛出异常
+  </Term>
+  ：第 8
+  个正式节点要能回到“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”，并说明故障发生前后的第一处差异。
+
+<Callout
+  type="trap"
+  title="边界误区：捕获过宽异常并返回成功值，掩盖状态已经不可信"
+>
+  在“第10章
+  错误处理与异常”中，这个故障会破坏“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”。保持其余输入不变，只比较正常与失败轨迹；修复后使用每个交互右上角的重置控制恢复同一基线。
+</Callout>
+
+<RubErrorsExceptionsObjectModelLab />
+
+<RubErrorsExceptionsControlTraceLab />
+
+<RubErrorsExceptionsBoundaryProbeLab />
+{/* RUB_EVIDENCE_V2_END */}
+
 ## 本章回顾：只恢复真正拥有的失败
 
 1. 先区分正常absence、invalid input、transient failure与invariant violation，再选择value或exception。
@@ -127,7 +224,70 @@ Guard clause在副作用前验证并raise，使失败保持state不变。若部�
 4. Retry需要transient、bounded、backoff、cancel与idempotency；rescue modifier只用于极窄fallback。
 5. Exception hierarchy按caller recovery action设计，raise表示当前method无法履行contract。
 
+{/* RUB_PRACTICE_V2_START */}
 
-## 术语表
+## 练习与答案
 
+<Exercises>
+  1. **问题 1：建立正常轨迹。** 回答“怎样划分异常的产生、传播、恢复与 ensure 清理责任？”，并写出四步执行记录。
 
+<Answer question="怎样建立“第10章 错误处理与异常”的正常轨迹？">
+  先固定错误处理的输入与接收者，再执行begin、rescue与else，观察ensure后处理的返回或副作用，最后用主动抛出异常复核“只捕获当前层能够恢复的异常，资源清理覆盖成功和失败路径。”。每一步都保留前后状态，不能只抄最终输出。
+</Answer>
+
+2. **问题 2：注入单一故障。** 只制造“捕获过宽异常并返回成功值，掩盖状态已经不可信”，应从哪里开始定位？
+
+<Answer question="“第10章 错误处理与异常”的单一故障如何定位？">
+  复用问题 1
+  的输入和初值，仅打开故障开关；比较两条轨迹的第一处不同对象、控制位置或资源状态。第一处差异才是根因候选，后续报错或输出只是传播结果；修复后重置并复跑正常轨迹。
+</Answer>
+
+3. **问题 3：覆盖正式节点。** 用一个证据包串联错误处理、begin、rescue与else、ensure后处理、retry重试、rescue修饰符、指定需要捕捉的异常、异常类、主动抛出异常，说明为什么结论可由另一位读者独立复核。
+
+  <Answer question="“第10章 错误处理与异常”需要交付哪些复核材料？">第10章 错误处理与异常的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。证据包还应逐项标记错误处理、begin、rescue与else、ensure后处理、retry重试、rescue修饰符、指定需要捕捉的异常、异常类、主动抛出异常出现的位置，并同时保存正常、错误和复位结果。若任一正式节点只能由口头解释而不能回到输入、状态或输出，本章仍未验收。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="错误处理">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="begin、rescue与else">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="ensure后处理">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="retry重试">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="rescue修饰符">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="指定需要捕捉的异常">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="异常类">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="主动抛出异常">
+    “第10章
+    错误处理与异常”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Ruby 基础教程第 5 版作者支持资料"
+  adaptedUrl="https://tanoshiiruby.github.io/5/"
+/>
+{/* RUB_PRACTICE_V2_END */}

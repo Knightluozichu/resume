@@ -9618,6 +9618,252 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       RlcOfficialFinalReviewFaultLab: module0.RlcOfficialFinalReviewFaultLab,
     } as ChapterMdxComponents;
   },
+  "ruby-programming/00-basics/rub-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/rub-learning-map");
+    return {
+      RubRubLearningMapObjectModelLab: module0.RubRubLearningMapObjectModelLab,
+      RubRubLearningMapControlTraceLab:
+        module0.RubRubLearningMapControlTraceLab,
+      RubRubLearningMapBoundaryProbeLab:
+        module0.RubRubLearningMapBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/01-first-experience/building-command": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/building-command");
+    return {
+      RubBuildingCommandObjectModelLab:
+        module0.RubBuildingCommandObjectModelLab,
+      RubBuildingCommandControlTraceLab:
+        module0.RubBuildingCommandControlTraceLab,
+      RubBuildingCommandBoundaryProbeLab:
+        module0.RubBuildingCommandBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/01-first-experience/first-ruby": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/first-ruby");
+    return {
+      RubFirstRubyObjectModelLab: module0.RubFirstRubyObjectModelLab,
+      RubFirstRubyControlTraceLab: module0.RubFirstRubyControlTraceLab,
+      RubFirstRubyBoundaryProbeLab: module0.RubFirstRubyBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/01-first-experience/useful-objects": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/useful-objects");
+    return {
+      RubUsefulObjectsObjectModelLab: module0.RubUsefulObjectsObjectModelLab,
+      RubUsefulObjectsControlTraceLab: module0.RubUsefulObjectsControlTraceLab,
+      RubUsefulObjectsBoundaryProbeLab:
+        module0.RubUsefulObjectsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/blocks": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/blocks");
+    return {
+      RubBlocksObjectModelLab: module0.RubBlocksObjectModelLab,
+      RubBlocksControlTraceLab: module0.RubBlocksControlTraceLab,
+      RubBlocksBoundaryProbeLab: module0.RubBlocksBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/classes-modules": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/classes-modules");
+    return {
+      RubClassesModulesObjectModelLab: module0.RubClassesModulesObjectModelLab,
+      RubClassesModulesControlTraceLab:
+        module0.RubClassesModulesControlTraceLab,
+      RubClassesModulesBoundaryProbeLab:
+        module0.RubClassesModulesBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/conditional-judgment": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/conditional-judgment");
+    return {
+      RubConditionalJudgmentObjectModelLab:
+        module0.RubConditionalJudgmentObjectModelLab,
+      RubConditionalJudgmentControlTraceLab:
+        module0.RubConditionalJudgmentControlTraceLab,
+      RubConditionalJudgmentBoundaryProbeLab:
+        module0.RubConditionalJudgmentBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/errors-exceptions": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/errors-exceptions");
+    return {
+      RubErrorsExceptionsObjectModelLab:
+        module0.RubErrorsExceptionsObjectModelLab,
+      RubErrorsExceptionsControlTraceLab:
+        module0.RubErrorsExceptionsControlTraceLab,
+      RubErrorsExceptionsBoundaryProbeLab:
+        module0.RubErrorsExceptionsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/loops": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/loops");
+    return {
+      RubLoopsObjectModelLab: module0.RubLoopsObjectModelLab,
+      RubLoopsControlTraceLab: module0.RubLoopsControlTraceLab,
+      RubLoopsBoundaryProbeLab: module0.RubLoopsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/methods": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/methods");
+    return {
+      RubMethodsObjectModelLab: module0.RubMethodsObjectModelLab,
+      RubMethodsControlTraceLab: module0.RubMethodsControlTraceLab,
+      RubMethodsBoundaryProbeLab: module0.RubMethodsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/objects-variables-constants": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/objects-variables-constants");
+    return {
+      RubObjectsVariablesConstantsObjectModelLab:
+        module0.RubObjectsVariablesConstantsObjectModelLab,
+      RubObjectsVariablesConstantsControlTraceLab:
+        module0.RubObjectsVariablesConstantsControlTraceLab,
+      RubObjectsVariablesConstantsBoundaryProbeLab:
+        module0.RubObjectsVariablesConstantsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/02-foundations/operators": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/operators");
+    return {
+      RubOperatorsObjectModelLab: module0.RubOperatorsObjectModelLab,
+      RubOperatorsControlTraceLab: module0.RubOperatorsControlTraceLab,
+      RubOperatorsBoundaryProbeLab: module0.RubOperatorsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/arrays": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/arrays");
+    return {
+      RubArraysObjectModelLab: module0.RubArraysObjectModelLab,
+      RubArraysControlTraceLab: module0.RubArraysControlTraceLab,
+      RubArraysBoundaryProbeLab: module0.RubArraysBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/encoding": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/encoding");
+    return {
+      RubEncodingObjectModelLab: module0.RubEncodingObjectModelLab,
+      RubEncodingControlTraceLab: module0.RubEncodingControlTraceLab,
+      RubEncodingBoundaryProbeLab: module0.RubEncodingBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/file-dir": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/file-dir");
+    return {
+      RubFileDirObjectModelLab: module0.RubFileDirObjectModelLab,
+      RubFileDirControlTraceLab: module0.RubFileDirControlTraceLab,
+      RubFileDirBoundaryProbeLab: module0.RubFileDirBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/hashes": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/hashes");
+    return {
+      RubHashesObjectModelLab: module0.RubHashesObjectModelLab,
+      RubHashesControlTraceLab: module0.RubHashesControlTraceLab,
+      RubHashesBoundaryProbeLab: module0.RubHashesBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/io": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/io");
+    return {
+      RubIoObjectModelLab: module0.RubIoObjectModelLab,
+      RubIoControlTraceLab: module0.RubIoControlTraceLab,
+      RubIoBoundaryProbeLab: module0.RubIoBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/numeric": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/numeric");
+    return {
+      RubNumericObjectModelLab: module0.RubNumericObjectModelLab,
+      RubNumericControlTraceLab: module0.RubNumericControlTraceLab,
+      RubNumericBoundaryProbeLab: module0.RubNumericBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/proc": async () => {
+    const module0 = await import("@/components/mdx/ruby-programming/v2/proc");
+    return {
+      RubProcObjectModelLab: module0.RubProcObjectModelLab,
+      RubProcControlTraceLab: module0.RubProcControlTraceLab,
+      RubProcBoundaryProbeLab: module0.RubProcBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/regular-expressions": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/regular-expressions");
+    return {
+      RubRegularExpressionsObjectModelLab:
+        module0.RubRegularExpressionsObjectModelLab,
+      RubRegularExpressionsControlTraceLab:
+        module0.RubRegularExpressionsControlTraceLab,
+      RubRegularExpressionsBoundaryProbeLab:
+        module0.RubRegularExpressionsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/strings": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/strings");
+    return {
+      RubStringsObjectModelLab: module0.RubStringsObjectModelLab,
+      RubStringsControlTraceLab: module0.RubStringsControlTraceLab,
+      RubStringsBoundaryProbeLab: module0.RubStringsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-classes/time-date": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/time-date");
+    return {
+      RubTimeDateObjectModelLab: module0.RubTimeDateObjectModelLab,
+      RubTimeDateControlTraceLab: module0.RubTimeDateControlTraceLab,
+      RubTimeDateBoundaryProbeLab: module0.RubTimeDateBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/03-meta/rub-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/rub-final-review");
+    return {
+      RubRubFinalReviewObjectModelLab: module0.RubRubFinalReviewObjectModelLab,
+      RubRubFinalReviewControlTraceLab:
+        module0.RubRubFinalReviewControlTraceLab,
+      RubRubFinalReviewBoundaryProbeLab:
+        module0.RubRubFinalReviewBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/04-tools/postal-code-search": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/postal-code-search");
+    return {
+      RubPostalCodeSearchObjectModelLab:
+        module0.RubPostalCodeSearchObjectModelLab,
+      RubPostalCodeSearchControlTraceLab:
+        module0.RubPostalCodeSearchControlTraceLab,
+      RubPostalCodeSearchBoundaryProbeLab:
+        module0.RubPostalCodeSearchBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "ruby-programming/04-tools/text-processing": async () => {
+    const module0 =
+      await import("@/components/mdx/ruby-programming/v2/text-processing");
+    return {
+      RubTextProcessingObjectModelLab: module0.RubTextProcessingObjectModelLab,
+      RubTextProcessingControlTraceLab:
+        module0.RubTextProcessingControlTraceLab,
+      RubTextProcessingBoundaryProbeLab:
+        module0.RubTextProcessingBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
   "the-c-programming-language/00-overview/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/the-c-programming-language/learning-map");

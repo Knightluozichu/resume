@@ -1,15 +1,54 @@
 ---
-title: "第18章 File类与Dir类"
+title: 第18章 File类与Dir类
 type: C
-section: "たのしいRuby 第5版 · Ruby的类"
+section: Ruby基础教程（第5版）· 核心类
 order: 18
-description: "掌握文件重命名/复制/删除、目录遍历/创建/删除、属性和路径操作，并用Find、Tempfile、FileUtils建立受控递归与原子替换。"
+description: 掌握文件重命名/复制/删除、目录遍历/创建/删除、属性和路径操作，并用Find、Tempfile、FileUtils建立受控递归与原子替换。
 demo: true
 math: false
 sourceUrl: "https://tanoshiiruby.github.io/5/"
 draft: false
+qualityVersion: 2
+practiceMode: calculation
+sourceMode: independent-rewrite
+officialUnitId: tr5-18
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  RubFileDirObjectModelLab,
+  RubFileDirControlTraceLab,
+  RubFileDirBoundaryProbeLab,
+} from "@/components/mdx/ruby-programming/v2/file-dir";
+
+{/* RUB_OBJECTIVES_V2_START */}
+
+<Objectives>
+
+- 能解释变更、复制与删除文件与目录内容的读取在“第18章 File类与Dir类”中的责任边界
+- 能围绕“怎样让路径、目录遍历、临时文件和复制删除操作保持原子与可回退？”运行正常与故障轨迹并定位首个分岔
+- 能用“第18章 File类与Dir类的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。”证明“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”
+
+</Objectives>
+{/* RUB_OBJECTIVES_V2_END */}
+
+{/* RUB_SOURCE_V2_START */}
+
+## 来源、版次与运行边界
+
+“第18章 File类与Dir类”以[作者维护的第 5 版支持页](https://tanoshiiruby.github.io/5/)核定 2016 年 3 月 12 日首刷、两位作者、松本行弘监修以及四部分 23 章目录；[逐章程序清单](https://tanoshiiruby.github.io/5/list/)、[练习答案](https://tanoshiiruby.github.io/5/answer/)和[勘误](https://tanoshiiruby.github.io/5/errata.html)只作为公开支持材料，不被冒充为原书全文。
+
+对“第18章 File类与Dir类”而言，中文解释、示例、交互、练习和答案均为独立教学重写；站内中文章名是与官方 23 章顺序对应的课程映射，不宣称是日文小节的逐字翻译，也不从公开程序清单复制整段实现。
+
+“第18章 File类与Dir类”固定在 Ruby 2.3 语境；[Ruby 2.3.0 官方文档](https://docs.ruby-lang.org/en/2.3.0/)与[稳定版发布说明](https://www.ruby-lang.org/en/news/2015/12/25/ruby-2-3-0-released/)用于核对当时可用的语言和标准库行为。现代 Ruby 的差异只能另列迁移说明，不能静默改变本页示例的版本结论。
+
+围绕“怎样让路径、目录遍历、临时文件和复制删除操作保持原子与可回退？”，本页验收“第18章 File类与Dir类的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。”。先预测正常轨迹，再只注入“先删除目标再写新文件，中途失败后同时失去旧版本和新版本”；若无法定位第一处状态分岔，就拒绝当前解释。
+{/* RUB_SOURCE_V2_END */}
 
 ## 从“路径字符串指向一个稳定文件”开始纠正
 
@@ -47,7 +86,6 @@ Size相等不是内容完整证明；关键artifact用digest并注意读取期�
 
 批量删除先固定root与manifest，逐项记录result，支持dry-run；不要`rm_rf`拼接用户input。需要trash/recovery不是unlink，而是move到受控区并管理retention。
 
-
 ## 目录的操作：目录内容的读取
 
 `Dir.entries`包含`.`/`..`，`Dir.children`/`each_child`在支持版本排除；Ruby 2.3 availability需验证，可手工reject。返回names通常相对dir，顺序来自filesystem，不是sorted contract。保证输出可复现。
@@ -73,7 +111,6 @@ Enumerate后entry可消失/改变；逐项operation处理ENOENT。Huge directory
 `File.stat`跟随symlink，`lstat`查看link本身；Stat提供type、size、mode、uid/gid和times。Predicate `file?`、`directory?`、`symlink?`方便，但都是snapshot。不能当长期授权证据。
 
 Permission check如readable?也可能与实际open race，且ACL/container privileges复杂；直接open并处理error。Size用于budget初筛但file可增长，读取仍需hard cap。
-
 
 ## 文件名的操作
 
@@ -113,6 +150,65 @@ Atomic replace的temp应位于destination同directory/filesystem，写完flush/f
 
 FileUtils提供cp/mv/mkdir_p/rm_r等high-level operations，但不会替你选择trust root、conflict、rollback和durability。。
 
+{/* RUB_EVIDENCE_V2_START */}
+
+## 正式节点与章专属证据
+
+- <Term def="在“第18章 File类与Dir类”中，变更、复制与删除文件必须连接输入、状态变化与可复核结果。">
+    变更、复制与删除文件
+  </Term>
+  ：第 1
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，目录内容的读取必须连接输入、状态变化与可复核结果。">
+    目录内容的读取
+  </Term>
+  ：第 2
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，目录的创建与删除必须连接输入、状态变化与可复核结果。">
+    目录的创建与删除
+  </Term>
+  ：第 3
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，文件与目录的属性必须连接输入、状态变化与可复核结果。">
+    文件与目录的属性
+  </Term>
+  ：第 4
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，文件名的操作必须连接输入、状态变化与可复核结果。">
+    文件名的操作
+  </Term>
+  ：第 5
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，find库必须连接输入、状态变化与可复核结果。">
+    find库
+  </Term>
+  ：第 6
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，tempfile库必须连接输入、状态变化与可复核结果。">
+    tempfile库
+  </Term>
+  ：第 7
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+- <Term def="在“第18章 File类与Dir类”中，fileutils库必须连接输入、状态变化与可复核结果。">
+    fileutils库
+  </Term>
+  ：第 8
+  个正式节点要能回到“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”，并说明故障发生前后的第一处差异。
+
+<Callout
+  type="trap"
+  title="边界误区：先删除目标再写新文件，中途失败后同时失去旧版本和新版本"
+>
+  在“第18章
+  File类与Dir类”中，这个故障会破坏“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”。保持其余输入不变，只比较正常与失败轨迹；修复后使用每个交互右上角的重置控制恢复同一基线。
+</Callout>
+
+<RubFileDirObjectModelLab />
+
+<RubFileDirControlTraceLab />
+
+<RubFileDirBoundaryProbeLab />
+{/* RUB_EVIDENCE_V2_END */}
 
 ## 本章回顾：Path是变化的namespace，不是稳定capability
 
@@ -122,7 +218,70 @@ FileUtils提供cp/mv/mkdir_p/rm_r等high-level operations，但不会替你选�
 4. Path helpers替代字符串拼接，但canonicalization不自动解决symlink race与platform差异。
 5. Find有traversal budget，Tempfile有lifecycle，FileUtils只封装mechanics不承担security policy。
 
+{/* RUB_PRACTICE_V2_START */}
 
-## 术语表
+## 练习与答案
 
+<Exercises>
+  1. **问题 1：建立正常轨迹。** 回答“怎样让路径、目录遍历、临时文件和复制删除操作保持原子与可回退？”，并写出四步执行记录。
 
+<Answer question="怎样建立“第18章 File类与Dir类”的正常轨迹？">
+  先固定变更、复制与删除文件的输入与接收者，再执行目录内容的读取，观察目录的创建与删除的返回或副作用，最后用fileutils库复核“路径归属、符号链接策略、权限与替换顺序在每次文件变更前明确。”。每一步都保留前后状态，不能只抄最终输出。
+</Answer>
+
+2. **问题 2：注入单一故障。** 只制造“先删除目标再写新文件，中途失败后同时失去旧版本和新版本”，应从哪里开始定位？
+
+<Answer question="“第18章 File类与Dir类”的单一故障如何定位？">
+  复用问题 1
+  的输入和初值，仅打开故障开关；比较两条轨迹的第一处不同对象、控制位置或资源状态。第一处差异才是根因候选，后续报错或输出只是传播结果；修复后重置并复跑正常轨迹。
+</Answer>
+
+3. **问题 3：覆盖正式节点。** 用一个证据包串联变更、复制与删除文件、目录内容的读取、目录的创建与删除、文件与目录的属性、文件名的操作、find库、tempfile库、fileutils库，说明为什么结论可由另一位读者独立复核。
+
+  <Answer question="“第18章 File类与Dir类”需要交付哪些复核材料？">第18章 File类与Dir类的输入样本、接收者与方法、关键状态前后值、正常与失败输出、异常或退出状态，以及复位后的再次运行记录。证据包还应逐项标记变更、复制与删除文件、目录内容的读取、目录的创建与删除、文件与目录的属性、文件名的操作、find库、tempfile库、fileutils库出现的位置，并同时保存正常、错误和复位结果。若任一正式节点只能由口头解释而不能回到输入、状态或输出，本章仍未验收。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="变更、复制与删除文件">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="目录内容的读取">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="目录的创建与删除">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="文件与目录的属性">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="文件名的操作">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="find库">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="tempfile库">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+  <GlossaryItem term="fileutils库">
+    “第18章
+    File类与Dir类”中的正式节点；必须说明它接收什么、改变什么，以及用什么结果复核。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Ruby 基础教程第 5 版作者支持资料"
+  adaptedUrl="https://tanoshiiruby.github.io/5/"
+/>
+{/* RUB_PRACTICE_V2_END */}
