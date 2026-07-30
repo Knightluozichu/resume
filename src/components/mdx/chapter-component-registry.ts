@@ -3454,6 +3454,101 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       StringsFunctionsFailureDiagram: module0.StringsFunctionsFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "car-structure-illustrated/00-map/csi23-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-official-learning-map");
+    return {
+      Csi23OfficialLearningMapTopologyLab:
+        module0.Csi23OfficialLearningMapTopologyLab,
+      Csi23OfficialLearningMapPathTraceLab:
+        module0.Csi23OfficialLearningMapPathTraceLab,
+      Csi23OfficialLearningMapBoundaryProbeLab:
+        module0.Csi23OfficialLearningMapBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/01-book-guide/csi23-book-guide": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-book-guide");
+    return {
+      Csi23BookGuideTopologyLab: module0.Csi23BookGuideTopologyLab,
+      Csi23BookGuidePathTraceLab: module0.Csi23BookGuidePathTraceLab,
+      Csi23BookGuideBoundaryProbeLab: module0.Csi23BookGuideBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/02-prologue/csi23-prologue": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-prologue");
+    return {
+      Csi23PrologueTopologyLab: module0.Csi23PrologueTopologyLab,
+      Csi23ProloguePathTraceLab: module0.Csi23ProloguePathTraceLab,
+      Csi23PrologueBoundaryProbeLab: module0.Csi23PrologueBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/03-01-vehicle-structure/csi23-01-vehicle-structure":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/car-structure-illustrated/v2/csi23-01-vehicle-structure");
+      return {
+        Csi2301VehicleStructureTopologyLab:
+          module0.Csi2301VehicleStructureTopologyLab,
+        Csi2301VehicleStructurePathTraceLab:
+          module0.Csi2301VehicleStructurePathTraceLab,
+        Csi2301VehicleStructureBoundaryProbeLab:
+          module0.Csi2301VehicleStructureBoundaryProbeLab,
+      } as ChapterMdxComponents;
+    },
+  "car-structure-illustrated/04-02-production/csi23-02-production":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/car-structure-illustrated/v2/csi23-02-production");
+      return {
+        Csi2302ProductionTopologyLab: module0.Csi2302ProductionTopologyLab,
+        Csi2302ProductionPathTraceLab: module0.Csi2302ProductionPathTraceLab,
+        Csi2302ProductionBoundaryProbeLab:
+          module0.Csi2302ProductionBoundaryProbeLab,
+      } as ChapterMdxComponents;
+    },
+  "car-structure-illustrated/05-03-eco-cars/csi23-03-eco-cars": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-03-eco-cars");
+    return {
+      Csi2303EcoCarsTopologyLab: module0.Csi2303EcoCarsTopologyLab,
+      Csi2303EcoCarsPathTraceLab: module0.Csi2303EcoCarsPathTraceLab,
+      Csi2303EcoCarsBoundaryProbeLab: module0.Csi2303EcoCarsBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/06-final-future/csi23-final-future": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-final-future");
+    return {
+      Csi23FinalFutureTopologyLab: module0.Csi23FinalFutureTopologyLab,
+      Csi23FinalFuturePathTraceLab: module0.Csi23FinalFuturePathTraceLab,
+      Csi23FinalFutureBoundaryProbeLab:
+        module0.Csi23FinalFutureBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/07-index/csi23-index": async () => {
+    const module0 =
+      await import("@/components/mdx/car-structure-illustrated/v2/csi23-index");
+    return {
+      Csi23IndexTopologyLab: module0.Csi23IndexTopologyLab,
+      Csi23IndexPathTraceLab: module0.Csi23IndexPathTraceLab,
+      Csi23IndexBoundaryProbeLab: module0.Csi23IndexBoundaryProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "car-structure-illustrated/08-review/csi23-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/car-structure-illustrated/v2/csi23-official-final-review");
+      return {
+        Csi23OfficialFinalReviewTopologyLab:
+          module0.Csi23OfficialFinalReviewTopologyLab,
+        Csi23OfficialFinalReviewPathTraceLab:
+          module0.Csi23OfficialFinalReviewPathTraceLab,
+        Csi23OfficialFinalReviewBoundaryProbeLab:
+          module0.Csi23OfficialFinalReviewBoundaryProbeLab,
+      } as ChapterMdxComponents;
+    },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");
