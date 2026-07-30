@@ -16058,6 +16058,134 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.UidOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "unity-vfx/00-guide/uvf-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-official-learning-map");
+    return {
+      UvfOfficialLearningMapEffectContractLab:
+        module0.UvfOfficialLearningMapEffectContractLab,
+      UvfOfficialLearningMapBudgetModelLab:
+        module0.UvfOfficialLearningMapBudgetModelLab,
+      UvfOfficialLearningMapCaptureGateLab:
+        module0.UvfOfficialLearningMapCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/01-foundations/uvf-01-unity3d-engine-overview": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-01-unity3d-engine-overview");
+    return {
+      Uvf01Unity3dEngineOverviewEffectContractLab:
+        module0.Uvf01Unity3dEngineOverviewEffectContractLab,
+      Uvf01Unity3dEngineOverviewBudgetModelLab:
+        module0.Uvf01Unity3dEngineOverviewBudgetModelLab,
+      Uvf01Unity3dEngineOverviewCaptureGateLab:
+        module0.Uvf01Unity3dEngineOverviewCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/01-foundations/uvf-02-vfx-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-02-vfx-foundations");
+    return {
+      Uvf02VfxFoundationsEffectContractLab:
+        module0.Uvf02VfxFoundationsEffectContractLab,
+      Uvf02VfxFoundationsBudgetModelLab:
+        module0.Uvf02VfxFoundationsBudgetModelLab,
+      Uvf02VfxFoundationsCaptureGateLab:
+        module0.Uvf02VfxFoundationsCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/02-workflow/uvf-03-unity3d-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-03-unity3d-foundations");
+    return {
+      Uvf03Unity3dFoundationsEffectContractLab:
+        module0.Uvf03Unity3dFoundationsEffectContractLab,
+      Uvf03Unity3dFoundationsBudgetModelLab:
+        module0.Uvf03Unity3dFoundationsBudgetModelLab,
+      Uvf03Unity3dFoundationsCaptureGateLab:
+        module0.Uvf03Unity3dFoundationsCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/03-scene-max/uvf-04-scene-fire-snow": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-04-scene-fire-snow");
+    return {
+      Uvf04SceneFireSnowEffectContractLab:
+        module0.Uvf04SceneFireSnowEffectContractLab,
+      Uvf04SceneFireSnowBudgetModelLab:
+        module0.Uvf04SceneFireSnowBudgetModelLab,
+      Uvf04SceneFireSnowCaptureGateLab:
+        module0.Uvf04SceneFireSnowCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/03-scene-max/uvf-05-unity-max-weapon-buff-slash": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-05-unity-max-weapon-buff-slash");
+    return {
+      Uvf05UnityMaxWeaponBuffSlashEffectContractLab:
+        module0.Uvf05UnityMaxWeaponBuffSlashEffectContractLab,
+      Uvf05UnityMaxWeaponBuffSlashBudgetModelLab:
+        module0.Uvf05UnityMaxWeaponBuffSlashBudgetModelLab,
+      Uvf05UnityMaxWeaponBuffSlashCaptureGateLab:
+        module0.Uvf05UnityMaxWeaponBuffSlashCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/04-particle-cases/uvf-06-particle-hit-projectile-ui": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-06-particle-hit-projectile-ui");
+    return {
+      Uvf06ParticleHitProjectileUiEffectContractLab:
+        module0.Uvf06ParticleHitProjectileUiEffectContractLab,
+      Uvf06ParticleHitProjectileUiBudgetModelLab:
+        module0.Uvf06ParticleHitProjectileUiBudgetModelLab,
+      Uvf06ParticleHitProjectileUiCaptureGateLab:
+        module0.Uvf06ParticleHitProjectileUiCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/05-attack-cases/uvf-07-physical-attacks": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-07-physical-attacks");
+    return {
+      Uvf07PhysicalAttacksEffectContractLab:
+        module0.Uvf07PhysicalAttacksEffectContractLab,
+      Uvf07PhysicalAttacksBudgetModelLab:
+        module0.Uvf07PhysicalAttacksBudgetModelLab,
+      Uvf07PhysicalAttacksCaptureGateLab:
+        module0.Uvf07PhysicalAttacksCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/05-attack-cases/uvf-08-magic-attacks": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-08-magic-attacks");
+    return {
+      Uvf08MagicAttacksEffectContractLab:
+        module0.Uvf08MagicAttacksEffectContractLab,
+      Uvf08MagicAttacksBudgetModelLab: module0.Uvf08MagicAttacksBudgetModelLab,
+      Uvf08MagicAttacksCaptureGateLab: module0.Uvf08MagicAttacksCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/06-common-skills/uvf-09-common-skills": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-09-common-skills");
+    return {
+      Uvf09CommonSkillsEffectContractLab:
+        module0.Uvf09CommonSkillsEffectContractLab,
+      Uvf09CommonSkillsBudgetModelLab: module0.Uvf09CommonSkillsBudgetModelLab,
+      Uvf09CommonSkillsCaptureGateLab: module0.Uvf09CommonSkillsCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
+  "unity-vfx/07-review/uvf-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/unity-vfx/v2/uvf-official-final-review");
+    return {
+      UvfOfficialFinalReviewEffectContractLab:
+        module0.UvfOfficialFinalReviewEffectContractLab,
+      UvfOfficialFinalReviewBudgetModelLab:
+        module0.UvfOfficialFinalReviewBudgetModelLab,
+      UvfOfficialFinalReviewCaptureGateLab:
+        module0.UvfOfficialFinalReviewCaptureGateLab,
+    } as ChapterMdxComponents;
+  },
   "vulkan-guide/01-introduction/vkg-ch01-vulkan-intro": async () => {
     const module0 =
       await import("@/components/mdx/vulkan-guide/v2/vkg-ch01-vulkan-intro");
