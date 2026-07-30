@@ -4079,11 +4079,79 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   },
   "competitive-algorithms/00-foundations/01-welcome-to-algorithms":
     async () => {
-      const module0 =
-        await import("@/components/mdx/competitive-algorithms/diagrams/01-welcome-to-algorithms");
+      const modules = await Promise.all([
+        import("@/components/mdx/competitive-algorithms/diagrams/01-welcome-to-algorithms"),
+        import("@/components/mdx/competitive-algorithms/v2/01-welcome-to-algorithms"),
+      ]);
       return {
-        CAIContestLoopMap: module0.CAIContestLoopMap,
-        CAIBottleneckMap: module0.CAIBottleneckMap,
+        CAIContestLoopMap: modules[0].CAIContestLoopMap,
+        CAIBottleneckMap: modules[0].CAIBottleneckMap,
+        Cai01WelcomeToAlgorithmsConstraintMapLab:
+          modules[1].Cai01WelcomeToAlgorithmsConstraintMapLab,
+        Cai01WelcomeToAlgorithmsExecutionTraceLab:
+          modules[1].Cai01WelcomeToAlgorithmsExecutionTraceLab,
+        Cai01WelcomeToAlgorithmsCounterexampleLab:
+          modules[1].Cai01WelcomeToAlgorithmsCounterexampleLab,
+      } as ChapterMdxComponents;
+    },
+  "competitive-algorithms/01-strategies/02-exhaustive-and-greedy": async () => {
+    const module0 =
+      await import("@/components/mdx/competitive-algorithms/v2/02-exhaustive-and-greedy");
+    return {
+      Cai02ExhaustiveAndGreedyConstraintMapLab:
+        module0.Cai02ExhaustiveAndGreedyConstraintMapLab,
+      Cai02ExhaustiveAndGreedyExecutionTraceLab:
+        module0.Cai02ExhaustiveAndGreedyExecutionTraceLab,
+      Cai02ExhaustiveAndGreedyCounterexampleLab:
+        module0.Cai02ExhaustiveAndGreedyCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "competitive-algorithms/01-strategies/03-randomness": async () => {
+    const module0 =
+      await import("@/components/mdx/competitive-algorithms/v2/03-randomness");
+    return {
+      Cai03RandomnessConstraintMapLab: module0.Cai03RandomnessConstraintMapLab,
+      Cai03RandomnessExecutionTraceLab:
+        module0.Cai03RandomnessExecutionTraceLab,
+      Cai03RandomnessCounterexampleLab:
+        module0.Cai03RandomnessCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "competitive-algorithms/02-search-dp/04-search-and-ai": async () => {
+    const module0 =
+      await import("@/components/mdx/competitive-algorithms/v2/04-search-and-ai");
+    return {
+      Cai04SearchAndAiConstraintMapLab:
+        module0.Cai04SearchAndAiConstraintMapLab,
+      Cai04SearchAndAiExecutionTraceLab:
+        module0.Cai04SearchAndAiExecutionTraceLab,
+      Cai04SearchAndAiCounterexampleLab:
+        module0.Cai04SearchAndAiCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "competitive-algorithms/02-search-dp/05-dynamic-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/competitive-algorithms/v2/05-dynamic-programming");
+    return {
+      Cai05DynamicProgrammingConstraintMapLab:
+        module0.Cai05DynamicProgrammingConstraintMapLab,
+      Cai05DynamicProgrammingExecutionTraceLab:
+        module0.Cai05DynamicProgrammingExecutionTraceLab,
+      Cai05DynamicProgrammingCounterexampleLab:
+        module0.Cai05DynamicProgrammingCounterexampleLab,
+    } as ChapterMdxComponents;
+  },
+  "competitive-algorithms/03-divide-conquer/06-divide-and-conquer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/competitive-algorithms/v2/06-divide-and-conquer");
+      return {
+        Cai06DivideAndConquerConstraintMapLab:
+          module0.Cai06DivideAndConquerConstraintMapLab,
+        Cai06DivideAndConquerExecutionTraceLab:
+          module0.Cai06DivideAndConquerExecutionTraceLab,
+        Cai06DivideAndConquerCounterexampleLab:
+          module0.Cai06DivideAndConquerCounterexampleLab,
       } as ChapterMdxComponents;
     },
   "computer-graphics-4e/01-foundations/cg4-01-hardware": async () => {

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-07-30T01:30:49.332Z；旧版分数不迁移。
+> 2026-07-30T01:49:01.296Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：3217
+- failed：3211
 - queued：402
-- passed：877
+- passed：883
 - published：0
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -167,41 +167,41 @@
 | 154 | unity-animation | 9 | 9 | 0 | 0 | 27 |
 | 155 | unity-ui-design | 9 | 9 | 0 | 0 | 27 |
 | 156 | org-problem-tools | 8 | 8 | 0 | 0 | 36 |
-| 157 | competitive-algorithms | 6 | 6 | 0 | 0 | 18 |
-| 158 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 159 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 160 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 161 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 162 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 163 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 164 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 165 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 166 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 167 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 168 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 169 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 170 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 171 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 172 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 173 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 174 | ai-agent | 9 | 0 | 0 | 9 | 0 |
-| 175 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
-| 176 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
-| 177 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 178 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 179 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 180 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 181 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 182 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 183 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 184 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 185 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 186 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
-| 187 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
-| 188 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
-| 189 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 190 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 191 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 157 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 158 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 159 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 160 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 161 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 162 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 163 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 164 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 165 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 166 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 167 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 168 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 169 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 170 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 171 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 172 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 173 | ai-agent | 9 | 0 | 0 | 9 | 0 |
+| 174 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
+| 175 | ai-agent-dev | 14 | 0 | 0 | 14 | 0 |
+| 176 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 177 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 178 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 179 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 180 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 181 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 182 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 183 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 184 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 185 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
+| 186 | automotive-systems-specialization | 13 | 0 | 0 | 13 | 0 |
+| 187 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
+| 188 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 189 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 190 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 191 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 192 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
 | 193 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
 | 194 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
