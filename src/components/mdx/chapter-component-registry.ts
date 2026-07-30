@@ -4671,6 +4671,138 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cnt8OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "concrete-mathematics/00-guide/cm2-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/concrete-mathematics/v2/cm2-official-learning-map");
+    return {
+      Cm2OfficialLearningMapIdentityContractLab:
+        module0.Cm2OfficialLearningMapIdentityContractLab,
+      Cm2OfficialLearningMapExactWorkbenchLab:
+        module0.Cm2OfficialLearningMapExactWorkbenchLab,
+      Cm2OfficialLearningMapProofGateLab:
+        module0.Cm2OfficialLearningMapProofGateLab,
+    } as ChapterMdxComponents;
+  },
+  "concrete-mathematics/01-recurrences-sums/cm2-recurrent-problems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-recurrent-problems");
+      return {
+        Cm2RecurrentProblemsIdentityContractLab:
+          module0.Cm2RecurrentProblemsIdentityContractLab,
+        Cm2RecurrentProblemsExactWorkbenchLab:
+          module0.Cm2RecurrentProblemsExactWorkbenchLab,
+        Cm2RecurrentProblemsProofGateLab:
+          module0.Cm2RecurrentProblemsProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/01-recurrences-sums/cm2-sums": async () => {
+    const module0 =
+      await import("@/components/mdx/concrete-mathematics/v2/cm2-sums");
+    return {
+      Cm2SumsIdentityContractLab: module0.Cm2SumsIdentityContractLab,
+      Cm2SumsExactWorkbenchLab: module0.Cm2SumsExactWorkbenchLab,
+      Cm2SumsProofGateLab: module0.Cm2SumsProofGateLab,
+    } as ChapterMdxComponents;
+  },
+  "concrete-mathematics/02-integers-number-theory/cm2-integer-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-integer-functions");
+      return {
+        Cm2IntegerFunctionsIdentityContractLab:
+          module0.Cm2IntegerFunctionsIdentityContractLab,
+        Cm2IntegerFunctionsExactWorkbenchLab:
+          module0.Cm2IntegerFunctionsExactWorkbenchLab,
+        Cm2IntegerFunctionsProofGateLab:
+          module0.Cm2IntegerFunctionsProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/02-integers-number-theory/cm2-number-theory":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-number-theory");
+      return {
+        Cm2NumberTheoryIdentityContractLab:
+          module0.Cm2NumberTheoryIdentityContractLab,
+        Cm2NumberTheoryExactWorkbenchLab:
+          module0.Cm2NumberTheoryExactWorkbenchLab,
+        Cm2NumberTheoryProofGateLab: module0.Cm2NumberTheoryProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/03-combinatorial-numbers/cm2-binomial-coefficients":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-binomial-coefficients");
+      return {
+        Cm2BinomialCoefficientsIdentityContractLab:
+          module0.Cm2BinomialCoefficientsIdentityContractLab,
+        Cm2BinomialCoefficientsExactWorkbenchLab:
+          module0.Cm2BinomialCoefficientsExactWorkbenchLab,
+        Cm2BinomialCoefficientsProofGateLab:
+          module0.Cm2BinomialCoefficientsProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/03-combinatorial-numbers/cm2-special-numbers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-special-numbers");
+      return {
+        Cm2SpecialNumbersIdentityContractLab:
+          module0.Cm2SpecialNumbersIdentityContractLab,
+        Cm2SpecialNumbersExactWorkbenchLab:
+          module0.Cm2SpecialNumbersExactWorkbenchLab,
+        Cm2SpecialNumbersProofGateLab: module0.Cm2SpecialNumbersProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/04-generating-probability/cm2-discrete-probability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-discrete-probability");
+      return {
+        Cm2DiscreteProbabilityIdentityContractLab:
+          module0.Cm2DiscreteProbabilityIdentityContractLab,
+        Cm2DiscreteProbabilityExactWorkbenchLab:
+          module0.Cm2DiscreteProbabilityExactWorkbenchLab,
+        Cm2DiscreteProbabilityProofGateLab:
+          module0.Cm2DiscreteProbabilityProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/04-generating-probability/cm2-generating-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/concrete-mathematics/v2/cm2-generating-functions");
+      return {
+        Cm2GeneratingFunctionsIdentityContractLab:
+          module0.Cm2GeneratingFunctionsIdentityContractLab,
+        Cm2GeneratingFunctionsExactWorkbenchLab:
+          module0.Cm2GeneratingFunctionsExactWorkbenchLab,
+        Cm2GeneratingFunctionsProofGateLab:
+          module0.Cm2GeneratingFunctionsProofGateLab,
+      } as ChapterMdxComponents;
+    },
+  "concrete-mathematics/05-asymptotics/cm2-asymptotics": async () => {
+    const module0 =
+      await import("@/components/mdx/concrete-mathematics/v2/cm2-asymptotics");
+    return {
+      Cm2AsymptoticsIdentityContractLab:
+        module0.Cm2AsymptoticsIdentityContractLab,
+      Cm2AsymptoticsExactWorkbenchLab: module0.Cm2AsymptoticsExactWorkbenchLab,
+      Cm2AsymptoticsProofGateLab: module0.Cm2AsymptoticsProofGateLab,
+    } as ChapterMdxComponents;
+  },
+  "concrete-mathematics/06-review/cm2-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/concrete-mathematics/v2/cm2-official-final-review");
+    return {
+      Cm2OfficialFinalReviewIdentityContractLab:
+        module0.Cm2OfficialFinalReviewIdentityContractLab,
+      Cm2OfficialFinalReviewExactWorkbenchLab:
+        module0.Cm2OfficialFinalReviewExactWorkbenchLab,
+      Cm2OfficialFinalReviewProofGateLab:
+        module0.Cm2OfficialFinalReviewProofGateLab,
+    } as ChapterMdxComponents;
+  },
   "cpp-concurrency/advanced/designing-concurrent-code": async () => {
     const module0 =
       await import("@/components/mdx/cpp-concurrency/designing-concurrent-code");
