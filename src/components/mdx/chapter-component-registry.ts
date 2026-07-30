@@ -13066,6 +13066,258 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Lad4OfficialFinalReviewCounterexampleLab,
       } as ChapterMdxComponents;
     },
+  "linux-kernel-design/00-guide/lkd-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-official-learning-map");
+    return {
+      LkdOfficialLearningMapObjectVersionLab:
+        module0.LkdOfficialLearningMapObjectVersionLab,
+      LkdOfficialLearningMapExecutableProbeLab:
+        module0.LkdOfficialLearningMapExecutableProbeLab,
+      LkdOfficialLearningMapTraceGateLab:
+        module0.LkdOfficialLearningMapTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/01-foundations/lkd-01-linux-kernel-intro": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-01-linux-kernel-intro");
+    return {
+      Lkd01LinuxKernelIntroObjectVersionLab:
+        module0.Lkd01LinuxKernelIntroObjectVersionLab,
+      Lkd01LinuxKernelIntroExecutableProbeLab:
+        module0.Lkd01LinuxKernelIntroExecutableProbeLab,
+      Lkd01LinuxKernelIntroTraceGateLab:
+        module0.Lkd01LinuxKernelIntroTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/01-foundations/lkd-02-getting-started": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-02-getting-started");
+    return {
+      Lkd02GettingStartedObjectVersionLab:
+        module0.Lkd02GettingStartedObjectVersionLab,
+      Lkd02GettingStartedExecutableProbeLab:
+        module0.Lkd02GettingStartedExecutableProbeLab,
+      Lkd02GettingStartedTraceGateLab: module0.Lkd02GettingStartedTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/02-process-interface/lkd-03-process-management":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-03-process-management");
+      return {
+        Lkd03ProcessManagementObjectVersionLab:
+          module0.Lkd03ProcessManagementObjectVersionLab,
+        Lkd03ProcessManagementExecutableProbeLab:
+          module0.Lkd03ProcessManagementExecutableProbeLab,
+        Lkd03ProcessManagementTraceGateLab:
+          module0.Lkd03ProcessManagementTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/02-process-interface/lkd-04-process-scheduling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-04-process-scheduling");
+      return {
+        Lkd04ProcessSchedulingObjectVersionLab:
+          module0.Lkd04ProcessSchedulingObjectVersionLab,
+        Lkd04ProcessSchedulingExecutableProbeLab:
+          module0.Lkd04ProcessSchedulingExecutableProbeLab,
+        Lkd04ProcessSchedulingTraceGateLab:
+          module0.Lkd04ProcessSchedulingTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/02-process-interface/lkd-05-system-calls": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-05-system-calls");
+    return {
+      Lkd05SystemCallsObjectVersionLab:
+        module0.Lkd05SystemCallsObjectVersionLab,
+      Lkd05SystemCallsExecutableProbeLab:
+        module0.Lkd05SystemCallsExecutableProbeLab,
+      Lkd05SystemCallsTraceGateLab: module0.Lkd05SystemCallsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/03-structures-events/lkd-06-kernel-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-06-kernel-data-structures");
+      return {
+        Lkd06KernelDataStructuresObjectVersionLab:
+          module0.Lkd06KernelDataStructuresObjectVersionLab,
+        Lkd06KernelDataStructuresExecutableProbeLab:
+          module0.Lkd06KernelDataStructuresExecutableProbeLab,
+        Lkd06KernelDataStructuresTraceGateLab:
+          module0.Lkd06KernelDataStructuresTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/03-structures-events/lkd-07-interrupts": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-07-interrupts");
+    return {
+      Lkd07InterruptsObjectVersionLab: module0.Lkd07InterruptsObjectVersionLab,
+      Lkd07InterruptsExecutableProbeLab:
+        module0.Lkd07InterruptsExecutableProbeLab,
+      Lkd07InterruptsTraceGateLab: module0.Lkd07InterruptsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/03-structures-events/lkd-08-bottom-halves": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-08-bottom-halves");
+    return {
+      Lkd08BottomHalvesObjectVersionLab:
+        module0.Lkd08BottomHalvesObjectVersionLab,
+      Lkd08BottomHalvesExecutableProbeLab:
+        module0.Lkd08BottomHalvesExecutableProbeLab,
+      Lkd08BottomHalvesTraceGateLab: module0.Lkd08BottomHalvesTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/04-concurrency-time/lkd-09-sync-intro": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-09-sync-intro");
+    return {
+      Lkd09SyncIntroObjectVersionLab: module0.Lkd09SyncIntroObjectVersionLab,
+      Lkd09SyncIntroExecutableProbeLab:
+        module0.Lkd09SyncIntroExecutableProbeLab,
+      Lkd09SyncIntroTraceGateLab: module0.Lkd09SyncIntroTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/04-concurrency-time/lkd-10-sync-methods": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-10-sync-methods");
+    return {
+      Lkd10SyncMethodsObjectVersionLab:
+        module0.Lkd10SyncMethodsObjectVersionLab,
+      Lkd10SyncMethodsExecutableProbeLab:
+        module0.Lkd10SyncMethodsExecutableProbeLab,
+      Lkd10SyncMethodsTraceGateLab: module0.Lkd10SyncMethodsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/04-concurrency-time/lkd-11-timers-time": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-11-timers-time");
+    return {
+      Lkd11TimersTimeObjectVersionLab: module0.Lkd11TimersTimeObjectVersionLab,
+      Lkd11TimersTimeExecutableProbeLab:
+        module0.Lkd11TimersTimeExecutableProbeLab,
+      Lkd11TimersTimeTraceGateLab: module0.Lkd11TimersTimeTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/05-memory-address-space/lkd-12-memory-management":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-12-memory-management");
+      return {
+        Lkd12MemoryManagementObjectVersionLab:
+          module0.Lkd12MemoryManagementObjectVersionLab,
+        Lkd12MemoryManagementExecutableProbeLab:
+          module0.Lkd12MemoryManagementExecutableProbeLab,
+        Lkd12MemoryManagementTraceGateLab:
+          module0.Lkd12MemoryManagementTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/05-memory-address-space/lkd-15-process-address-space":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-15-process-address-space");
+      return {
+        Lkd15ProcessAddressSpaceObjectVersionLab:
+          module0.Lkd15ProcessAddressSpaceObjectVersionLab,
+        Lkd15ProcessAddressSpaceExecutableProbeLab:
+          module0.Lkd15ProcessAddressSpaceExecutableProbeLab,
+        Lkd15ProcessAddressSpaceTraceGateLab:
+          module0.Lkd15ProcessAddressSpaceTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/05-memory-address-space/lkd-16-page-cache-writeback":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-16-page-cache-writeback");
+      return {
+        Lkd16PageCacheWritebackObjectVersionLab:
+          module0.Lkd16PageCacheWritebackObjectVersionLab,
+        Lkd16PageCacheWritebackExecutableProbeLab:
+          module0.Lkd16PageCacheWritebackExecutableProbeLab,
+        Lkd16PageCacheWritebackTraceGateLab:
+          module0.Lkd16PageCacheWritebackTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/06-filesystems-io/lkd-13-vfs": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-13-vfs");
+    return {
+      Lkd13VfsObjectVersionLab: module0.Lkd13VfsObjectVersionLab,
+      Lkd13VfsExecutableProbeLab: module0.Lkd13VfsExecutableProbeLab,
+      Lkd13VfsTraceGateLab: module0.Lkd13VfsTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/06-filesystems-io/lkd-14-block-io": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-14-block-io");
+    return {
+      Lkd14BlockIoObjectVersionLab: module0.Lkd14BlockIoObjectVersionLab,
+      Lkd14BlockIoExecutableProbeLab: module0.Lkd14BlockIoExecutableProbeLab,
+      Lkd14BlockIoTraceGateLab: module0.Lkd14BlockIoTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/07-devices-debug/lkd-17-devices-modules": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-17-devices-modules");
+    return {
+      Lkd17DevicesModulesObjectVersionLab:
+        module0.Lkd17DevicesModulesObjectVersionLab,
+      Lkd17DevicesModulesExecutableProbeLab:
+        module0.Lkd17DevicesModulesExecutableProbeLab,
+      Lkd17DevicesModulesTraceGateLab: module0.Lkd17DevicesModulesTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/07-devices-debug/lkd-18-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-18-debugging");
+    return {
+      Lkd18DebuggingObjectVersionLab: module0.Lkd18DebuggingObjectVersionLab,
+      Lkd18DebuggingExecutableProbeLab:
+        module0.Lkd18DebuggingExecutableProbeLab,
+      Lkd18DebuggingTraceGateLab: module0.Lkd18DebuggingTraceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-design/08-portability-community/lkd-19-portability":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-19-portability");
+      return {
+        Lkd19PortabilityObjectVersionLab:
+          module0.Lkd19PortabilityObjectVersionLab,
+        Lkd19PortabilityExecutableProbeLab:
+          module0.Lkd19PortabilityExecutableProbeLab,
+        Lkd19PortabilityTraceGateLab: module0.Lkd19PortabilityTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/08-portability-community/lkd-20-patches-community":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/linux-kernel-design/v2/lkd-20-patches-community");
+      return {
+        Lkd20PatchesCommunityObjectVersionLab:
+          module0.Lkd20PatchesCommunityObjectVersionLab,
+        Lkd20PatchesCommunityExecutableProbeLab:
+          module0.Lkd20PatchesCommunityExecutableProbeLab,
+        Lkd20PatchesCommunityTraceGateLab:
+          module0.Lkd20PatchesCommunityTraceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "linux-kernel-design/09-review/lkd-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-design/v2/lkd-official-final-review");
+    return {
+      LkdOfficialFinalReviewObjectVersionLab:
+        module0.LkdOfficialFinalReviewObjectVersionLab,
+      LkdOfficialFinalReviewExecutableProbeLab:
+        module0.LkdOfficialFinalReviewExecutableProbeLab,
+      LkdOfficialFinalReviewTraceGateLab:
+        module0.LkdOfficialFinalReviewTraceGateLab,
+    } as ChapterMdxComponents;
+  },
   "linux-kernel-essence/00-guide/lke-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/linux-kernel-essence/v2/lke-official-learning-map");
