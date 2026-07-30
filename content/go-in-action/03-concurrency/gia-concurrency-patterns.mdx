@@ -1,56 +1,289 @@
 ---
-title: "第7章 并发模式"
+title: 第7章 并发模式
 type: C
-section: "Go实战 · 并发"
+section: 第7章 并发模式
 order: 7
-description: "用Runner控制超时和中断，用Pooling复用有限资源，用Work构建固定goroutine工作池。"
+description: >-
+  第7章 并发模式覆盖8个正式目录坐标，用版本合同、状态轨迹与发布门交付生命周期图、队列上限、deadline轨迹、首错传播、goroutine
+  profile和资源回收表
 demo: true
 math: false
-sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-7"
+sourceUrl: "https://livebook.manning.com/book/go-in-action/table-of-contents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: gia-07
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  GiaConcurrencyPatternsVersionContractLab,
+  GiaConcurrencyPatternsStateTraceLab,
+  GiaConcurrencyPatternsEvidenceGateLab,
+} from "@/components/mdx/go-in-action/v2/gia-concurrency-patterns";
 
-## 从并发机制到可复用生命周期开始
-先预测：worker阻塞在外部I/O时，仅关闭任务channel能否退出？不能，还需要取消、timeout或关闭底层资源。
-并发模式不是更多channel语法，而是对停止和资源责任的封装。。
+<Objectives>
 
-## Runner：控制程序寿命
-Runner顺序执行任务，同时select完成、timeout与interrupt。必须停止接收新工作并等待已启动任务。
+- 把Runner、程序寿命、timeout、interrupt、Pooling、资源池、Work与worker pool落实为版本化输入、程序状态、唯一迁移与可观察结果
+- 只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”，定位第7章 并发模式相对参考状态的首个分岔
+- 交付生命周期图、队列上限、deadline轨迹、首错传播、goroutine profile和资源回收表，明确分开2015首版与当前Go 1.26迁移轨道
 
-```go
-select { case <-done: case <-timeout: case <-interrupt: }
-```
+</Objectives>
 
+## 为什么从这个问题开始
 
-## Pooling：借出有限资源
-Buffered channel保存可用资源，Acquire借出，Release归还。防止池枯竭。
+第7章 并发模式围绕“Runner、Pool与Work怎样获得有界生命周期、所有权与失败传播？”建立贯穿任务：固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹。先预测程序状态，再重放参考、单故障与恢复；只有守住“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”并交付生命周期图、队列上限、deadline轨迹、首错传播、goroutine profile和资源回收表，目录标题、示例运行或工具输出才可能升级为可复核证据。
 
-```go
-resource := <-pool
-defer func(){ pool <- resource }()
-```
+## 原版、来源访问与时代边界
 
-## 损坏资源与关闭
-使用失败的连接不应归还；Pool关闭后拒绝新Acquire并关闭空闲资源。要求并发close幂等。
+第7章 并发模式以[Manning正式版本页](https://www.manning.com/books/go-in-action)核对 William Kennedy、Brian Ketelsen、Erik St· Martin 合著、2015年11月、264页与 ISBN 9781617291784；以[Manning liveBook公开目录](https://livebook.manning.com/book/go-in-action/table-of-contents)限定9章和本页正式坐标。来源访问级别是 outline-only：目录不能支持原书正文、图表、代码解释或作者判断。
 
+Manning版本页链接到[官方示例仓库](https://github.com/goinaction/code)。第7章 并发模式把历史代码核对固定到[提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)，该提交时间为2017年10月20日。第7章 并发模式核对的仓库含按章组织的Go示例，但没有LICENSE文件；公开可读不等于获得复制授权，本站不复制原文、示例代码或图像，只核对包路径、文件身份与历史实验范围。
 
-## Work：固定Goroutine工作池
-固定worker从队列消费，限制并发度并Wait。要处理worker panic和生产者提前退出。
+第7章 并发模式是中文独立教学重构，不是翻译、节译或原书替代品。第7章 并发模式的历史轨道保留首版的GOPATH、remote import、vendoring、gb、传统日志与当时并发模式；当前轨道依据Go官方规范和项目文档核对modules、generics、go1·22循环变量、fuzz、结构化日志及当前工具链。当前能力不能倒灌成2015作者观点。
 
-```go
-for i := 0; i < workers; i++ { go run(jobs, &wg) }
-close(jobs); wg.Wait()
-```
+第7章 并发模式的实验可能启动网络服务、并发任务、profile、race detector、fuzz或外部依赖下载。必须使用可丢弃工作目录、固定依赖和端口、明确超时、敏感数据隔离及停止条件；动态检测只覆盖实际执行路径，性能采集也可能扰动结果。
 
+### 本页独立事实来源
 
-## 验收实验：在每个边界注入停止
-Runner分别注入完成、timeout和interrupt；Pool测试创建失败、使用损坏、重复Release、Close后Acquire；Work测试空队列、队列满、worker panic和生产者提前结束。每次记录谁拥有资源、谁发送停止、谁关闭channel、谁等待完成，确保没有goroutine或句柄遗留。
+- [Manning liveBook 正式目录](https://livebook.manning.com/book/go-in-action/table-of-contents)：第7章 并发模式用它只核对9章及章内公开目录坐标，不承担原书正文事实。
+- [Manning 链接的官方示例仓库](https://github.com/goinaction/code)：第7章 并发模式用它核对首版示例的包路径、空白导入、并发模式与测试工件身份。
+- [官方示例仓库固定提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)：第7章 并发模式用它把历史示例核对固定到2017年10月20日最后提交；仓库无LICENSE。
+- [标准库 context 文档](https://pkg.go.dev/context)：第7章 并发模式用它核对取消、截止时间、值传播与API边界。
+- [标准库 sync 文档](https://pkg.go.dev/sync)：第7章 并发模式用它核对Mutex、WaitGroup、Pool与内存模型同步边。
+- [x/sync/errgroup 文档](https://pkg.go.dev/golang.org/x/sync/errgroup)：第7章 并发模式用它核对带错误传播与取消的goroutine组生命周期。
+- [Go 诊断文档](https://go.dev/doc/diagnostics)：第7章 并发模式用它核对profile、trace、执行追踪及采集扰动。
+- [Go 内存模型](https://go.dev/ref/mem)：第7章 并发模式用它核对happens-before、同步事件与无数据竞态程序保证。
 
-## 模式选择
-。三者可组合，但关闭顺序必须从入口到worker再到资源池。
+## 正式目录坐标逐项深读
 
+### Chapter 7 · Concurrency patterns
 
-## 本章回顾
-本章覆盖并发模式、Runner、程序生命周期超时与中断、Pooling、可复用资源池、Work和goroutine工作池。三种模式最终都必须回答正常、失败和关闭路径由谁收束，不能只展示启动代码。
-## 术语表
+**坐标 1/8：Chapter 7 · Concurrency patterns。稳定证据键 GIA-UNIT07-A。** 第7章 并发模式把Chapter 7 · Concurrency patterns分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### concurrency patterns
+
+**坐标 2/8：concurrency patterns。稳定证据键 GIA-UNIT07-B。** 第7章 并发模式把concurrency patterns分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### Runner
+
+**坐标 3/8：Runner。稳定证据键 GIA-UNIT07-C。** 第7章 并发模式把Runner规定创建者、并发上限、所有权、deadline、停止信号、首错和回收者；首版模式可复现，但当前实现还要评估context与errgroup。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### program lifetime timeout and interrupt
+
+**坐标 4/8：program lifetime timeout and interrupt。稳定证据键 GIA-UNIT07-D。** 第7章 并发模式把program lifetime timeout and interrupt规定创建者、并发上限、所有权、deadline、停止信号、首错和回收者；首版模式可复现，但当前实现还要评估context与errgroup。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### Pooling
+
+**坐标 5/8：Pooling。稳定证据键 GIA-UNIT07-E。** 第7章 并发模式把Pooling规定创建者、并发上限、所有权、deadline、停止信号、首错和回收者；首版模式可复现，但当前实现还要评估context与errgroup。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### reusable resource pool
+
+**坐标 6/8：reusable resource pool。稳定证据键 GIA-UNIT07-F。** 第7章 并发模式把reusable resource pool规定创建者、并发上限、所有权、deadline、停止信号、首错和回收者；首版模式可复现，但当前实现还要评估context与errgroup。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### Work
+
+**坐标 7/8：Work。稳定证据键 GIA-UNIT07-G。** 第7章 并发模式把Work规定创建者、并发上限、所有权、deadline、停止信号、首错和回收者；首版模式可复现，但当前实现还要评估context与errgroup。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### goroutine worker pool
+
+**坐标 8/8：goroutine worker pool。稳定证据键 GIA-UNIT07-H。** 第7章 并发模式把goroutine worker pool分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第7章 并发模式在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+## 三个可重放状态实验
+
+第7章 并发模式先写预测：若只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”，哪个包、值、goroutine、channel、资源或测试工件最先变化？选择正式坐标与时代轨道，再逐步重放参考、故障与恢复，最后逐项打开发布门。
+
+<Stepper>
+  <Step title="版本合同：选择坐标、时代与程序阶段">
+    <GiaConcurrencyPatternsVersionContractLab />
+  </Step>
+  <Step title="状态轨迹：比较基线、单故障与恢复">
+    <GiaConcurrencyPatternsStateTraceLab />
+  </Step>
+  <Step title="发布门：闭合来源、语义、证伪与恢复">
+    <GiaConcurrencyPatternsEvidenceGateLab />
+  </Step>
+</Stepper>
+
+## 最小可重现实验协议
+
+1. 第7章 并发模式先冻结源码提交、go.mod语言版本、实际工具链、GOOS/GOARCH、依赖图、环境变量、输入数据、端口、并发度与成功条件。
+2. 第7章 并发模式从干净构建和明确缓存身份建立参考状态，保存生命周期图、队列上限、deadline轨迹、首错传播、goroutine profile和资源回收表；参考状态不稳定就停止，不用故障结果解释语言机制。
+3. 第7章 并发模式保持其余条件不变，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”，记录首个分岔、传播路径、竞争性解释、检测覆盖与停止条件。
+4. 第7章 并发模式撤销受控变量，从干净状态以同一输入重建；结果、途中状态或资源残留没有一起恢复时，结论标记失败或未知。
+
+<Callout type="trap" title="第7章 并发模式误区一：目录或示例等于原书全文">
+  第7章
+  并发模式的outline-only来源只能证明公开目录范围；官方示例仓库也没有LICENSE。课程不能从标题虚构原书判断，更不能复制不可授权的正文、代码或图像。
+</Callout>
+
+<Callout type="trap" title="第7章 并发模式误区二：首版工具路径就是当前最佳实践">
+  第7章
+  并发模式保留GOPATH、vendoring、gb和首版模式的历史身份，但当前工程必须重新核对module、语言版本和官方文档；迁移结论属于本站独立解释。
+</Callout>
+
+<Callout type="trap" title="第7章 并发模式误区三：能运行或检测无报错就证明正确">
+  第7章
+  并发模式不以一次运行、PASS、-race静默或更低ns/op裁决；必须固定输入，只改变一个条件，保存首错、检测盲区、撤销和同输入恢复。
+</Callout>
+
+## 小结与上架门
+
+第7章 并发模式把Runner、程序寿命、timeout、interrupt、Pooling、资源池、Work与worker pool连接成可复核状态链：目录只给正式坐标，官方规范限定当前语义，双时间轨道防止时代错置，参考与单故障定位首错，原始工件和同输入恢复决定结论能否发布。最终交付生命周期图、队列上限、deadline轨迹、首错传播、goroutine profile和资源回收表，同时报告失败、检测盲区、资源残留与目标环境之外的未知项。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：Chapter 7 · Concurrency patterns**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-A 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Chapter 7 · Concurrency patterns在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-A
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 2：concurrency patterns**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-B 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明concurrency patterns在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-B
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 3：Runner**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-C 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Runner在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-C
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 4：program lifetime timeout and interrupt**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-D 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明program lifetime timeout and interrupt在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-D
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 5：Pooling**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-E 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Pooling在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-E
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 6：reusable resource pool**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-F 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明reusable resource pool在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-F
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 7：Work**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-G 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Work在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-G
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 8：goroutine worker pool**
+
+为第7章 并发模式的稳定证据键 GIA-UNIT07-H 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明goroutine worker pool在首版与当前轨道的边界。
+
+<Answer>
+  先为第7章
+  并发模式冻结固定任务数、资源数、deadline与第一个失败，比较首版模式和context/errgroup实现的启动、停止与回收轨迹所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT07-H
+  映射到参考状态、唯一迁移与预期观察，只注入“worker无界增长或首个错误后仍生产任务，导致取消不能收敛”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每个goroutine和资源都必须有创建者、停止信号、回收者、错误出口与有界等待”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 9：为什么要保留双时间轨道**
+
+第7章 并发模式为什么不能用当前modules、generics或测试能力静默改写首版GOPATH与示例？
+
+<Answer>
+  第7章
+  并发模式的历史轨道回答“2015正式目录和官方示例当时展示什么问题与工件”，当前轨道回答“目标go.mod语言版本和工具链现在保证什么”。二者只能通过显式迁移差分连接；当前支持更好不等于首版实验毫无价值，也不能把当前结论写成原作者观点。
+</Answer>
+
+**问题 10：什么时候必须缩小结论**
+
+第7章 并发模式在哪些情况下不能发布“正确”“无竞态”或“更快”的结论？
+
+<Answer>
+  第7章
+  并发模式缺少固定源码、工具链、依赖图、输入、平台、缓存身份、原始工件、覆盖路径、重复样本或同输入恢复中的任一项，就只能报告观察或未知。-race只覆盖运行路径，测试PASS可能来自缓存，benchmark受环境影响；这些限制必须和结果一起发布。
+</Answer>
+
+</Exercises>
+
+## 六个裁决术语
+
+第7章 并发模式使用<Term def="第7章 并发模式由go.mod的go指令及实际工具链共同限定的语义与可用能力">语言版本</Term>、<Term def="第7章 并发模式在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态">参考状态</Term>、<Term def="第7章 并发模式由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化">状态迁移</Term>、<Term def="第7章 并发模式的故障轨迹最早偏离参考轨迹的位置">首个分岔</Term>、<Term def="第7章 并发模式测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界">检测覆盖</Term>、<Term def="第7章 并发模式撤销唯一变量后从干净状态重建并恢复参考状态的断言">同输入恢复</Term>构成最小证据语言；它们都指向真实版本、程序状态或工件，不生成置信度、成熟度或风险分。
+
+<Glossary>
+  <GlossaryItem term="语言版本">
+    第7章 并发模式由go.mod的go指令及实际工具链共同限定的语义与可用能力。
+  </GlossaryItem>
+  <GlossaryItem term="参考状态">
+    第7章 并发模式在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态。
+  </GlossaryItem>
+  <GlossaryItem term="状态迁移">
+    第7章 并发模式由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化。
+  </GlossaryItem>
+  <GlossaryItem term="首个分岔">
+    第7章 并发模式的故障轨迹最早偏离参考轨迹的位置。
+  </GlossaryItem>
+  <GlossaryItem term="检测覆盖">
+    第7章
+    并发模式测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界。
+  </GlossaryItem>
+  <GlossaryItem term="同输入恢复">
+    第7章 并发模式撤销唯一变量后从干净状态重建并恢复参考状态的断言。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="William Kennedy、Brian Ketelsen、Erik St. Martin《Go in Action》第一版公开目录"
+  adaptedUrl="https://livebook.manning.com/book/go-in-action/table-of-contents"
+/>

@@ -10192,6 +10192,119 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.AgiCStochasticRelaxationAnalysisEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "go-in-action/00-guide/gia-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-learning-map");
+    return {
+      GiaLearningMapVersionContractLab:
+        module0.GiaLearningMapVersionContractLab,
+      GiaLearningMapStateTraceLab: module0.GiaLearningMapStateTraceLab,
+      GiaLearningMapEvidenceGateLab: module0.GiaLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/01-language/gia-go-philosophy": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-go-philosophy");
+    return {
+      GiaGoPhilosophyVersionContractLab:
+        module0.GiaGoPhilosophyVersionContractLab,
+      GiaGoPhilosophyStateTraceLab: module0.GiaGoPhilosophyStateTraceLab,
+      GiaGoPhilosophyEvidenceGateLab: module0.GiaGoPhilosophyEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/01-language/gia-packaging-tooling": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-packaging-tooling");
+    return {
+      GiaPackagingToolingVersionContractLab:
+        module0.GiaPackagingToolingVersionContractLab,
+      GiaPackagingToolingStateTraceLab:
+        module0.GiaPackagingToolingStateTraceLab,
+      GiaPackagingToolingEvidenceGateLab:
+        module0.GiaPackagingToolingEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/01-language/gia-quick-start": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-quick-start");
+    return {
+      GiaQuickStartVersionContractLab: module0.GiaQuickStartVersionContractLab,
+      GiaQuickStartStateTraceLab: module0.GiaQuickStartStateTraceLab,
+      GiaQuickStartEvidenceGateLab: module0.GiaQuickStartEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/02-data/gia-arrays-slices": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-arrays-slices");
+    return {
+      GiaArraysSlicesVersionContractLab:
+        module0.GiaArraysSlicesVersionContractLab,
+      GiaArraysSlicesStateTraceLab: module0.GiaArraysSlicesStateTraceLab,
+      GiaArraysSlicesEvidenceGateLab: module0.GiaArraysSlicesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/02-data/gia-map-struct": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-map-struct");
+    return {
+      GiaMapStructVersionContractLab: module0.GiaMapStructVersionContractLab,
+      GiaMapStructStateTraceLab: module0.GiaMapStructStateTraceLab,
+      GiaMapStructEvidenceGateLab: module0.GiaMapStructEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/03-concurrency/gia-concurrency-patterns": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-concurrency-patterns");
+    return {
+      GiaConcurrencyPatternsVersionContractLab:
+        module0.GiaConcurrencyPatternsVersionContractLab,
+      GiaConcurrencyPatternsStateTraceLab:
+        module0.GiaConcurrencyPatternsStateTraceLab,
+      GiaConcurrencyPatternsEvidenceGateLab:
+        module0.GiaConcurrencyPatternsEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/03-concurrency/gia-goroutines": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-goroutines");
+    return {
+      GiaGoroutinesVersionContractLab: module0.GiaGoroutinesVersionContractLab,
+      GiaGoroutinesStateTraceLab: module0.GiaGoroutinesStateTraceLab,
+      GiaGoroutinesEvidenceGateLab: module0.GiaGoroutinesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/04-engineering/gia-standard-lib": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-standard-lib");
+    return {
+      GiaStandardLibVersionContractLab:
+        module0.GiaStandardLibVersionContractLab,
+      GiaStandardLibStateTraceLab: module0.GiaStandardLibStateTraceLab,
+      GiaStandardLibEvidenceGateLab: module0.GiaStandardLibEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/04-engineering/gia-testing-packaging": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-testing-packaging");
+    return {
+      GiaTestingPackagingVersionContractLab:
+        module0.GiaTestingPackagingVersionContractLab,
+      GiaTestingPackagingStateTraceLab:
+        module0.GiaTestingPackagingStateTraceLab,
+      GiaTestingPackagingEvidenceGateLab:
+        module0.GiaTestingPackagingEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "go-in-action/05-review/gia-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/go-in-action/v2/gia-final-review");
+    return {
+      GiaFinalReviewVersionContractLab:
+        module0.GiaFinalReviewVersionContractLab,
+      GiaFinalReviewStateTraceLab: module0.GiaFinalReviewStateTraceLab,
+      GiaFinalReviewEvidenceGateLab: module0.GiaFinalReviewEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

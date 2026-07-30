@@ -1,70 +1,312 @@
 ---
-title: "第4章 数组、切片和映射"
+title: 第4章 数组、切片和映射
 type: C
-section: "Go实战 · 数据与类型"
+section: 第4章 数组、切片和映射
 order: 4
-description: "比较数组值语义、slice描述符与底层数组共享、append容量迁移，以及map初始化、迭代、删除和传参。"
+description: 第4章 数组、切片和映射覆盖9个正式目录坐标，用版本合同、状态轨迹与发布门交付别名图、len/cap轨迹、append分岔、map快照、边界测试与恢复记录
 demo: true
 math: false
-sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-4"
+sourceUrl: "https://livebook.manning.com/book/go-in-action/table-of-contents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: gia-04
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  GiaArraysSlicesVersionContractLab,
+  GiaArraysSlicesStateTraceLab,
+  GiaArraysSlicesEvidenceGateLab,
+} from "@/components/mdx/go-in-action/v2/gia-arrays-slices";
 
-## 从赋值后是否共享开始
-先预测：两个slice赋值后修改一个，另一个是否可见？若仍指向同一底层数组且索引重叠就可见；append迁移后则未必。
+<Objectives>
 
-数组、切片和映射语法相近，复制语义完全不同。是本章主线。
+- 把数组、slice、nil/empty、append、capacity、map内部语义与当前泛型辅助包落实为版本化输入、程序状态、唯一迁移与可观察结果
+- 只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”，定位第4章 数组、切片和映射相对参考状态的首个分岔
+- 交付别名图、len/cap轨迹、append分岔、map快照、边界测试与恢复记录，明确分开2015首版与当前Go 1.26迁移轨道
 
+</Objectives>
 
-## 数组内部实现与基础
+## 为什么从这个问题开始
 
-数组是固定长度连续值，长度属于类型；赋值复制全部元素，函数按值参数也复制。适合固定协议和小值。
+第4章 数组、切片和映射围绕“数组复制、slice别名、append扩容与map操作怎样改变共享状态？”建立贯穿任务：固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代。先预测程序状态，再重放参考、单故障与恢复；只有守住“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”并交付别名图、len/cap轨迹、append分岔、map快照、边界测试与恢复记录，目录标题、示例运行或工具输出才可能升级为可复核证据。
 
-```go
-a := [3]int{1, 2, 3}
-b := a
-b[0] = 9
-fmt.Println(a[0]) // 1
-```
+## 原版、来源访问与时代边界
 
-## 声明、初始化、多维与传参
+第4章 数组、切片和映射以[Manning正式版本页](https://www.manning.com/books/go-in-action)核对 William Kennedy、Brian Ketelsen、Erik St· Martin 合著、2015年11月、264页与 ISBN 9781617291784；以[Manning liveBook公开目录](https://livebook.manning.com/book/go-in-action/table-of-contents)限定9章和本页正式坐标。来源访问级别是 outline-only：目录不能支持原书正文、图表、代码解释或作者判断。
 
-`[...]T`由字面量推导长度，多维数组是数组元素仍为数组。大型数组传参优先指针或slice，但指针表达整个固定布局，slice表达动态视图。
+Manning版本页链接到[官方示例仓库](https://github.com/goinaction/code)。第4章 数组、切片和映射把历史代码核对固定到[提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)，该提交时间为2017年10月20日。第4章 数组、切片和映射核对的仓库含按章组织的Go示例，但没有LICENSE文件；公开可读不等于获得复制授权，本站不复制原文、示例代码或图像，只核对包路径、文件身份与历史实验范围。
 
-```go
-matrix := [2][2]int{{1, 2}, {3, 4}}
-```
+第4章 数组、切片和映射是中文独立教学重构，不是翻译、节译或原书替代品。第4章 数组、切片和映射的历史轨道保留首版的GOPATH、remote import、vendoring、gb、传统日志与当时并发模式；当前轨道依据Go官方规范和项目文档核对modules、generics、go1·22循环变量、fuzz、结构化日志及当前工具链。当前能力不能倒灌成2015作者观点。
 
-## Slice内部实现与基础
+第4章 数组、切片和映射的实验可能启动网络服务、并发任务、profile、race detector、fuzz或外部依赖下载。必须使用可丢弃工作目录、固定依赖和端口、明确超时、敏感数据隔离及停止条件；动态检测只覆盖实际执行路径，性能采集也可能扰动结果。
 
-Slice描述符含pointer、len、cap，多个slice可共享底层数组。要求len不大于cap。
+### 本页独立事实来源
 
-## Nil、空Slice与Append
+- [Manning liveBook 正式目录](https://livebook.manning.com/book/go-in-action/table-of-contents)：第4章 数组、切片和映射用它只核对9章及章内公开目录坐标，不承担原书正文事实。
+- [Manning 链接的官方示例仓库](https://github.com/goinaction/code)：第4章 数组、切片和映射用它核对首版示例的包路径、空白导入、并发模式与测试工件身份。
+- [官方示例仓库固定提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)：第4章 数组、切片和映射用它把历史示例核对固定到2017年10月20日最后提交；仓库无LICENSE。
+- [Go 当前语言规范](https://go.dev/ref/spec)：第4章 数组、切片和映射用它核对当前go1.26语言版本、类型、表达式、语句、包和并发语义。
+- [Go Slices：用法与内部机制](https://go.dev/blog/slices-intro)：第4章 数组、切片和映射用它核对slice header、底层数组、长度、容量与append别名。
+- [标准库 slices 文档](https://pkg.go.dev/slices)：第4章 数组、切片和映射用它核对当前泛型slice操作及其变更底层数组的契约。
+- [标准库 maps 文档](https://pkg.go.dev/maps)：第4章 数组、切片和映射用它核对当前泛型map辅助操作及迭代顺序边界。
 
-Nil slice和空slice长度都为0，但与nil比较和JSON编码可能不同。Append容量足够时写共享数组，否则迁移新数组；必须接收返回值。会改变别名关系。
+## 正式目录坐标逐项深读
 
-```go
-s := make([]int, 0, 1)
-s = append(s, 1)
-s = append(s, 2)
-```
+### Chapter 4 · Arrays, slices, and maps
 
+**坐标 1/9：Chapter 4 · Arrays, slices, and maps。稳定证据键 GIA-UNIT04-A。** 第4章 数组、切片和映射把Chapter 4 · Arrays, slices, and maps画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
-## Map内部实现与基础
+### arrays, slices, and maps
 
-Map变量指向运行时哈希结构；nil map可读取零值但写入panic，`make`后可写。要求不能只凭零值判断存在。
+**坐标 2/9：arrays, slices, and maps。稳定证据键 GIA-UNIT04-B。** 第4章 数组、切片和映射把arrays, slices, and maps画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
-## 迭代、删除与函数传递
+### array internals and fundamentals
 
-Map迭代顺序不稳定，`delete`不存在key安全；传参复制轻量header并共享内容。。普通map不支持无同步并发写。
+**坐标 3/9：array internals and fundamentals。稳定证据键 GIA-UNIT04-C。** 第4章 数组、切片和映射把array internals and fundamentals画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
+### declaring initializing and working with arrays
 
-## 验收实验：画出别名关系
-准备容量恰好与容量有余两组slice，各自建立子slice后append，再修改新旧索引；记录pointer、len、cap和观察结果。随后测试nil map读取、写入panic、comma-ok、随机迭代和排序输出。目标不是背诵“slice是引用”，而是每次append后重新判断是否共享，并解释函数传参为何复制描述符却共享数据。
+**坐标 4/9：declaring initializing and working with arrays。稳定证据键 GIA-UNIT04-D。** 第4章 数组、切片和映射把declaring initializing and working with arrays绑定目录、package声明、导入路径、初始化依赖和副作用；当前module路径与首版GOPATH路径必须分别记录。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
+### slice internals and fundamentals
 
-## 本章回顾
-本章覆盖数组、切片和映射，数组内部实现与基础、数组声明、初始化与操作，切片内部实现与基础、nil切片与空切片、append与容量，以及映射内部实现与基础、映射迭代、删除与函数传递。每一部分都必须回到复制或共享契约。
+**坐标 5/9：slice internals and fundamentals。稳定证据键 GIA-UNIT04-E。** 第4章 数组、切片和映射把slice internals and fundamentals画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
-## 术语表
+### nil and empty slices
+
+**坐标 6/9：nil and empty slices。稳定证据键 GIA-UNIT04-F。** 第4章 数组、切片和映射把nil and empty slices画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### append and capacity
+
+**坐标 7/9：append and capacity。稳定证据键 GIA-UNIT04-G。** 第4章 数组、切片和映射把append and capacity画出值复制、slice header、底层数组、len/cap和append前后别名；只有地址、元素变化与边界测试共同支持共享状态结论。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### map internals and fundamentals
+
+**坐标 8/9：map internals and fundamentals。稳定证据键 GIA-UNIT04-H。** 第4章 数组、切片和映射把map internals and fundamentals记录键可比较性、nil map、增删、迭代无序和并发访问边界；当前maps辅助包不改变语言本身的map契约。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### map iteration deletion and function passing
+
+**坐标 9/9：map iteration deletion and function passing。稳定证据键 GIA-UNIT04-I。** 第4章 数组、切片和映射把map iteration deletion and function passing记录键可比较性、nil map、增删、迭代无序和并发访问边界；当前maps辅助包不改变语言本身的map契约。 第4章 数组、切片和映射在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+## 三个可重放状态实验
+
+第4章 数组、切片和映射先写预测：若只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”，哪个包、值、goroutine、channel、资源或测试工件最先变化？选择正式坐标与时代轨道，再逐步重放参考、故障与恢复，最后逐项打开发布门。
+
+<Stepper>
+  <Step title="版本合同：选择坐标、时代与程序阶段">
+    <GiaArraysSlicesVersionContractLab />
+  </Step>
+  <Step title="状态轨迹：比较基线、单故障与恢复">
+    <GiaArraysSlicesStateTraceLab />
+  </Step>
+  <Step title="发布门：闭合来源、语义、证伪与恢复">
+    <GiaArraysSlicesEvidenceGateLab />
+  </Step>
+</Stepper>
+
+## 最小可重现实验协议
+
+1. 第4章 数组、切片和映射先冻结源码提交、go.mod语言版本、实际工具链、GOOS/GOARCH、依赖图、环境变量、输入数据、端口、并发度与成功条件。
+2. 第4章 数组、切片和映射从干净构建和明确缓存身份建立参考状态，保存别名图、len/cap轨迹、append分岔、map快照、边界测试与恢复记录；参考状态不稳定就停止，不用故障结果解释语言机制。
+3. 第4章 数组、切片和映射保持其余条件不变，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”，记录首个分岔、传播路径、竞争性解释、检测覆盖与停止条件。
+4. 第4章 数组、切片和映射撤销受控变量，从干净状态以同一输入重建；结果、途中状态或资源残留没有一起恢复时，结论标记失败或未知。
+
+<Callout
+  type="trap"
+  title="第4章 数组、切片和映射误区一：目录或示例等于原书全文"
+>
+  第4章
+  数组、切片和映射的outline-only来源只能证明公开目录范围；官方示例仓库也没有LICENSE。课程不能从标题虚构原书判断，更不能复制不可授权的正文、代码或图像。
+</Callout>
+
+<Callout
+  type="trap"
+  title="第4章 数组、切片和映射误区二：首版工具路径就是当前最佳实践"
+>
+  第4章
+  数组、切片和映射保留GOPATH、vendoring、gb和首版模式的历史身份，但当前工程必须重新核对module、语言版本和官方文档；迁移结论属于本站独立解释。
+</Callout>
+
+<Callout
+  type="trap"
+  title="第4章 数组、切片和映射误区三：能运行或检测无报错就证明正确"
+>
+  第4章
+  数组、切片和映射不以一次运行、PASS、-race静默或更低ns/op裁决；必须固定输入，只改变一个条件，保存首错、检测盲区、撤销和同输入恢复。
+</Callout>
+
+## 小结与上架门
+
+第4章 数组、切片和映射把数组、slice、nil/empty、append、capacity、map内部语义与当前泛型辅助包连接成可复核状态链：目录只给正式坐标，官方规范限定当前语义，双时间轨道防止时代错置，参考与单故障定位首错，原始工件和同输入恢复决定结论能否发布。最终交付别名图、len/cap轨迹、append分岔、map快照、边界测试与恢复记录，同时报告失败、检测盲区、资源残留与目标环境之外的未知项。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：Chapter 4 · Arrays, slices, and maps**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-A 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Chapter 4 · Arrays, slices, and maps在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-A
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 2：arrays, slices, and maps**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-B 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明arrays, slices, and maps在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-B
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 3：array internals and fundamentals**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-C 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明array internals and fundamentals在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-C
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 4：declaring initializing and working with arrays**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-D 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明declaring initializing and working with arrays在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-D
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 5：slice internals and fundamentals**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-E 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明slice internals and fundamentals在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-E
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 6：nil and empty slices**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-F 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明nil and empty slices在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-F
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 7：append and capacity**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-G 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明append and capacity在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-G
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 8：map internals and fundamentals**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-H 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明map internals and fundamentals在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-H
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 9：map iteration deletion and function passing**
+
+为第4章 数组、切片和映射的稳定证据键 GIA-UNIT04-I 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明map iteration deletion and function passing在首版与当前轨道的边界。
+
+<Answer>
+  先为第4章
+  数组、切片和映射冻结固定元素序列，记录数组值复制、slice长度容量与底层数组身份、append前后地址以及map增删迭代所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT04-I
+  映射到参考状态、唯一迁移与预期观察，只注入“把仍共享底层数组的slice当作独立副本并在调用方不可见处修改”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“每次集合操作都必须说明值复制、别名、长度、容量、键可比较性和迭代顺序边界”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 10：为什么要保留双时间轨道**
+
+第4章 数组、切片和映射为什么不能用当前modules、generics或测试能力静默改写首版GOPATH与示例？
+
+<Answer>
+  第4章
+  数组、切片和映射的历史轨道回答“2015正式目录和官方示例当时展示什么问题与工件”，当前轨道回答“目标go.mod语言版本和工具链现在保证什么”。二者只能通过显式迁移差分连接；当前支持更好不等于首版实验毫无价值，也不能把当前结论写成原作者观点。
+</Answer>
+
+**问题 11：什么时候必须缩小结论**
+
+第4章 数组、切片和映射在哪些情况下不能发布“正确”“无竞态”或“更快”的结论？
+
+<Answer>
+  第4章
+  数组、切片和映射缺少固定源码、工具链、依赖图、输入、平台、缓存身份、原始工件、覆盖路径、重复样本或同输入恢复中的任一项，就只能报告观察或未知。-race只覆盖运行路径，测试PASS可能来自缓存，benchmark受环境影响；这些限制必须和结果一起发布。
+</Answer>
+
+</Exercises>
+
+## 六个裁决术语
+
+第4章 数组、切片和映射使用<Term def="第4章 数组、切片和映射由go.mod的go指令及实际工具链共同限定的语义与可用能力">语言版本</Term>、<Term def="第4章 数组、切片和映射在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态">参考状态</Term>、<Term def="第4章 数组、切片和映射由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化">状态迁移</Term>、<Term def="第4章 数组、切片和映射的故障轨迹最早偏离参考轨迹的位置">首个分岔</Term>、<Term def="第4章 数组、切片和映射测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界">检测覆盖</Term>、<Term def="第4章 数组、切片和映射撤销唯一变量后从干净状态重建并恢复参考状态的断言">同输入恢复</Term>构成最小证据语言；它们都指向真实版本、程序状态或工件，不生成置信度、成熟度或风险分。
+
+<Glossary>
+  <GlossaryItem term="语言版本">
+    第4章 数组、切片和映射由go.mod的go指令及实际工具链共同限定的语义与可用能力。
+  </GlossaryItem>
+  <GlossaryItem term="参考状态">
+    第4章
+    数组、切片和映射在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态。
+  </GlossaryItem>
+  <GlossaryItem term="状态迁移">
+    第4章
+    数组、切片和映射由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化。
+  </GlossaryItem>
+  <GlossaryItem term="首个分岔">
+    第4章 数组、切片和映射的故障轨迹最早偏离参考轨迹的位置。
+  </GlossaryItem>
+  <GlossaryItem term="检测覆盖">
+    第4章
+    数组、切片和映射测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界。
+  </GlossaryItem>
+  <GlossaryItem term="同输入恢复">
+    第4章 数组、切片和映射撤销唯一变量后从干净状态重建并恢复参考状态的断言。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="William Kennedy、Brian Ketelsen、Erik St. Martin《Go in Action》第一版公开目录"
+  adaptedUrl="https://livebook.manning.com/book/go-in-action/table-of-contents"
+/>

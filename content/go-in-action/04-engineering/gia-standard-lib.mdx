@@ -1,57 +1,288 @@
 ---
-title: "第8章 标准库"
+title: 第8章 标准库
 type: C
-section: "Go实战 · 工程"
+section: 第8章 标准库
 order: 8
-description: "通过文档与源码理解标准库承诺，使用日志、JSON和io.Reader/io.Writer组合流式包。"
+description: >-
+  第8章
+  标准库覆盖8个正式目录坐标，用版本合同、状态轨迹与发布门交付日志schema、脱敏样本、JSON契约、Reader/Writer轨迹、短写/EOF测试和关闭记录
 demo: true
 math: false
-sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-8"
+sourceUrl: "https://livebook.manning.com/book/go-in-action/table-of-contents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: gia-08
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  GiaStandardLibVersionContractLab,
+  GiaStandardLibStateTraceLab,
+  GiaStandardLibEvidenceGateLab,
+} from "@/components/mdx/go-in-action/v2/gia-standard-lib";
 
-## 从标准库为何值得依赖开始
-先预测：Reader返回`n > 0`同时返回EOF时，是否丢弃这n字节？不能，应先处理数据再解释结束。
-标准库随Go发布、遵守兼容承诺并持续测试。仍需核对当前版本。
+<Objectives>
 
+- 把标准库源码与文档、logging、JSON、input/output、Reader/Writer及包间互操作落实为版本化输入、程序状态、唯一迁移与可观察结果
+- 只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”，定位第8章 标准库相对参考状态的首个分岔
+- 交付日志schema、脱敏样本、JSON契约、Reader/Writer轨迹、短写/EOF测试和关闭记录，明确分开2015首版与当前Go 1.26迁移轨道
 
-## 文档与源代码
-`go doc`看API，源码解释性能和错误细节，但未导出实现不是长期契约。。
+</Objectives>
 
-```sh
-go doc io.Reader
-go env GOROOT
-```
+## 为什么从这个问题开始
 
-## 日志
-日志记录事件、稳定字段和上下文；库返回error，main决定fatal退出。禁止泄露secret。
+第8章 标准库围绕“log、JSON与io接口怎样在组合时保留结构、边界和失败？”建立贯穿任务：让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链。先预测程序状态，再重放参考、单故障与恢复；只有守住“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”并交付日志schema、脱敏样本、JSON契约、Reader/Writer轨迹、短写/EOF测试和关闭记录，目录标题、示例运行或工具输出才可能升级为可复核证据。
 
-```go
-log.Printf("feed=%q status=%d", name, status)
-```
+## 原版、来源访问与时代边界
 
-## JSON编码与解码
-Decoder流式读取，struct tag映射字段。应在入口明确。
+第8章 标准库以[Manning正式版本页](https://www.manning.com/books/go-in-action)核对 William Kennedy、Brian Ketelsen、Erik St· Martin 合著、2015年11月、264页与 ISBN 9781617291784；以[Manning liveBook公开目录](https://livebook.manning.com/book/go-in-action/table-of-contents)限定9章和本页正式坐标。来源访问级别是 outline-only：目录不能支持原书正文、图表、代码解释或作者判断。
 
-```go
-dec := json.NewDecoder(r)
-dec.DisallowUnknownFields()
-if err := dec.Decode(&value); err != nil { return err }
-```
+Manning版本页链接到[官方示例仓库](https://github.com/goinaction/code)。第8章 标准库把历史代码核对固定到[提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)，该提交时间为2017年10月20日。第8章 标准库核对的仓库含按章组织的Go示例，但没有LICENSE文件；公开可读不等于获得复制授权，本站不复制原文、示例代码或图像，只核对包路径、文件身份与历史实验范围。
 
+第8章 标准库是中文独立教学重构，不是翻译、节译或原书替代品。第8章 标准库的历史轨道保留首版的GOPATH、remote import、vendoring、gb、传统日志与当时并发模式；当前轨道依据Go官方规范和项目文档核对modules、generics、go1·22循环变量、fuzz、结构化日志及当前工具链。当前能力不能倒灌成2015作者观点。
 
-## Input与Output
-Reader和Writer小接口让包互操作。支持Copy、buffer、gzip、hash与network组合。
+第8章 标准库的实验可能启动网络服务、并发任务、profile、race detector、fuzz或外部依赖下载。必须使用可丢弃工作目录、固定依赖和端口、明确超时、敏感数据隔离及停止条件；动态检测只覆盖实际执行路径，性能采集也可能扰动结果。
 
-## EOF、短写与Close
-Reader可同时返回n大于0和error；Writer可能partial write。。Close错误可能是flush失败，不能总忽略。
+### 本页独立事实来源
 
+- [Manning liveBook 正式目录](https://livebook.manning.com/book/go-in-action/table-of-contents)：第8章 标准库用它只核对9章及章内公开目录坐标，不承担原书正文事实。
+- [Manning 链接的官方示例仓库](https://github.com/goinaction/code)：第8章 标准库用它核对首版示例的包路径、空白导入、并发模式与测试工件身份。
+- [官方示例仓库固定提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)：第8章 标准库用它把历史示例核对固定到2017年10月20日最后提交；仓库无LICENSE。
+- [标准库 log/slog 文档](https://pkg.go.dev/log/slog)：第8章 标准库用它核对结构化日志记录、属性、handler与上下文。
+- [标准库 encoding/json 文档](https://pkg.go.dev/encoding/json)：第8章 标准库用它核对JSON编码解码、字段选择、未知字段与数值边界。
+- [标准库 io 文档](https://pkg.go.dev/io)：第8章 标准库用它核对Reader、Writer、EOF、短读写和组合契约。
+- [Go 开发安全最佳实践](https://go.dev/doc/security/best-practices)：第8章 标准库用它核对govulncheck、fuzz、race与供应链检查。
 
-## 验收实验：故障Reader与Writer
-实现一次只返回少量字节、最后同时返回数据和EOF的Reader，再实现partial write后报错的Writer；让io.Copy和自写循环处理并比较。JSON测试未知字段、两个顶层值、超大数字和空body；日志写入buffer并断言secret被遮蔽。由此证明包间互操作在短读写和错误时仍成立。
+## 正式目录坐标逐项深读
 
+### Chapter 8 · Standard library
 
-## 本章回顾
-本章覆盖标准库、文档与源代码、日志、JSON编码解码、输入与输出、io.Reader与io.Writer以及标准库包间互操作。短读、短写、EOF、flush和Close共同决定流式结果是否完整。
-## 术语表
+**坐标 1/8：Chapter 8 · Standard library。稳定证据键 GIA-UNIT08-A。** 第8章 标准库把Chapter 8 · Standard library把API文档、目标Go版本与源代码身份分开，并为日志字段、级别、handler和敏感数据建立schema；字符串出现不等于结构化事件正确。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### standard library
+
+**坐标 2/8：standard library。稳定证据键 GIA-UNIT08-B。** 第8章 标准库把standard library把API文档、目标Go版本与源代码身份分开，并为日志字段、级别、handler和敏感数据建立schema；字符串出现不等于结构化事件正确。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### documentation and source code
+
+**坐标 3/8：documentation and source code。稳定证据键 GIA-UNIT08-C。** 第8章 标准库把documentation and source code把API文档、目标Go版本与源代码身份分开，并为日志字段、级别、handler和敏感数据建立schema；字符串出现不等于结构化事件正确。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### logging
+
+**坐标 4/8：logging。稳定证据键 GIA-UNIT08-D。** 第8章 标准库把logging把API文档、目标Go版本与源代码身份分开，并为日志字段、级别、handler和敏感数据建立schema；字符串出现不等于结构化事件正确。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### encoding and decoding JSON
+
+**坐标 5/8：encoding and decoding JSON。稳定证据键 GIA-UNIT08-E。** 第8章 标准库把encoding and decoding JSON追踪字段、字节、短读写、EOF、关闭与错误传播；包间接口只有在双方都遵守Reader/Writer和数据契约时才可组合。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### input and output
+
+**坐标 6/8：input and output。稳定证据键 GIA-UNIT08-F。** 第8章 标准库把input and output追踪字段、字节、短读写、EOF、关闭与错误传播；包间接口只有在双方都遵守Reader/Writer和数据契约时才可组合。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### io.Reader and io.Writer
+
+**坐标 7/8：io·Reader and io·Writer。稳定证据键 GIA-UNIT08-G。** 第8章 标准库把io·Reader and io·Writer转换成版本化输入、可观察程序状态、唯一迁移、预期结果与同输入恢复，并明确首版目录和当前官方依据各自承担什么。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### interoperability between packages
+
+**坐标 8/8：interoperability between packages。稳定证据键 GIA-UNIT08-H。** 第8章 标准库把interoperability between packages绑定目录、package声明、导入路径、初始化依赖和副作用；当前module路径与首版GOPATH路径必须分别记录。 第8章 标准库在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+## 三个可重放状态实验
+
+第8章 标准库先写预测：若只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”，哪个包、值、goroutine、channel、资源或测试工件最先变化？选择正式坐标与时代轨道，再逐步重放参考、故障与恢复，最后逐项打开发布门。
+
+<Stepper>
+  <Step title="版本合同：选择坐标、时代与程序阶段">
+    <GiaStandardLibVersionContractLab />
+  </Step>
+  <Step title="状态轨迹：比较基线、单故障与恢复">
+    <GiaStandardLibStateTraceLab />
+  </Step>
+  <Step title="发布门：闭合来源、语义、证伪与恢复">
+    <GiaStandardLibEvidenceGateLab />
+  </Step>
+</Stepper>
+
+## 最小可重现实验协议
+
+1. 第8章 标准库先冻结源码提交、go.mod语言版本、实际工具链、GOOS/GOARCH、依赖图、环境变量、输入数据、端口、并发度与成功条件。
+2. 第8章 标准库从干净构建和明确缓存身份建立参考状态，保存日志schema、脱敏样本、JSON契约、Reader/Writer轨迹、短写/EOF测试和关闭记录；参考状态不稳定就停止，不用故障结果解释语言机制。
+3. 第8章 标准库保持其余条件不变，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”，记录首个分岔、传播路径、竞争性解释、检测覆盖与停止条件。
+4. 第8章 标准库撤销受控变量，从干净状态以同一输入重建；结果、途中状态或资源残留没有一起恢复时，结论标记失败或未知。
+
+<Callout type="trap" title="第8章 标准库误区一：目录或示例等于原书全文">
+  第8章
+  标准库的outline-only来源只能证明公开目录范围；官方示例仓库也没有LICENSE。课程不能从标题虚构原书判断，更不能复制不可授权的正文、代码或图像。
+</Callout>
+
+<Callout type="trap" title="第8章 标准库误区二：首版工具路径就是当前最佳实践">
+  第8章
+  标准库保留GOPATH、vendoring、gb和首版模式的历史身份，但当前工程必须重新核对module、语言版本和官方文档；迁移结论属于本站独立解释。
+</Callout>
+
+<Callout type="trap" title="第8章 标准库误区三：能运行或检测无报错就证明正确">
+  第8章
+  标准库不以一次运行、PASS、-race静默或更低ns/op裁决；必须固定输入，只改变一个条件，保存首错、检测盲区、撤销和同输入恢复。
+</Callout>
+
+## 小结与上架门
+
+第8章 标准库把标准库源码与文档、logging、JSON、input/output、Reader/Writer及包间互操作连接成可复核状态链：目录只给正式坐标，官方规范限定当前语义，双时间轨道防止时代错置，参考与单故障定位首错，原始工件和同输入恢复决定结论能否发布。最终交付日志schema、脱敏样本、JSON契约、Reader/Writer轨迹、短写/EOF测试和关闭记录，同时报告失败、检测盲区、资源残留与目标环境之外的未知项。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：Chapter 8 · Standard library**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-A 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Chapter 8 · Standard library在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-A
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 2：standard library**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-B 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明standard library在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-B
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 3：documentation and source code**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-C 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明documentation and source code在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-C
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 4：logging**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-D 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明logging在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-D
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 5：encoding and decoding JSON**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-E 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明encoding and decoding JSON在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-E
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 6：input and output**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-F 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明input and output在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-F
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 7：io.Reader and io.Writer**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-G 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明io·Reader and io·Writer在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-G
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 8：interoperability between packages**
+
+为第8章 标准库的稳定证据键 GIA-UNIT08-H 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明interoperability between packages在首版与当前轨道的边界。
+
+<Answer>
+  先为第8章
+  标准库冻结让同一事件经过结构化日志、JSON编码解码与故障Reader/Writer，保存字段、字节数、EOF和错误链所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT08-H
+  映射到参考状态、唯一迁移与预期观察，只注入“忽略短写、未知JSON字段或日志敏感属性，只根据最终字符串判断成功”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“标准库组合必须保留字段语义、字节计数、错误、资源关闭、敏感数据策略与版本身份”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 9：为什么要保留双时间轨道**
+
+第8章 标准库为什么不能用当前modules、generics或测试能力静默改写首版GOPATH与示例？
+
+<Answer>
+  第8章
+  标准库的历史轨道回答“2015正式目录和官方示例当时展示什么问题与工件”，当前轨道回答“目标go.mod语言版本和工具链现在保证什么”。二者只能通过显式迁移差分连接；当前支持更好不等于首版实验毫无价值，也不能把当前结论写成原作者观点。
+</Answer>
+
+**问题 10：什么时候必须缩小结论**
+
+第8章 标准库在哪些情况下不能发布“正确”“无竞态”或“更快”的结论？
+
+<Answer>
+  第8章
+  标准库缺少固定源码、工具链、依赖图、输入、平台、缓存身份、原始工件、覆盖路径、重复样本或同输入恢复中的任一项，就只能报告观察或未知。-race只覆盖运行路径，测试PASS可能来自缓存，benchmark受环境影响；这些限制必须和结果一起发布。
+</Answer>
+
+</Exercises>
+
+## 六个裁决术语
+
+第8章 标准库使用<Term def="第8章 标准库由go.mod的go指令及实际工具链共同限定的语义与可用能力">语言版本</Term>、<Term def="第8章 标准库在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态">参考状态</Term>、<Term def="第8章 标准库由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化">状态迁移</Term>、<Term def="第8章 标准库的故障轨迹最早偏离参考轨迹的位置">首个分岔</Term>、<Term def="第8章 标准库测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界">检测覆盖</Term>、<Term def="第8章 标准库撤销唯一变量后从干净状态重建并恢复参考状态的断言">同输入恢复</Term>构成最小证据语言；它们都指向真实版本、程序状态或工件，不生成置信度、成熟度或风险分。
+
+<Glossary>
+  <GlossaryItem term="语言版本">
+    第8章 标准库由go.mod的go指令及实际工具链共同限定的语义与可用能力。
+  </GlossaryItem>
+  <GlossaryItem term="参考状态">
+    第8章 标准库在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态。
+  </GlossaryItem>
+  <GlossaryItem term="状态迁移">
+    第8章 标准库由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化。
+  </GlossaryItem>
+  <GlossaryItem term="首个分岔">
+    第8章 标准库的故障轨迹最早偏离参考轨迹的位置。
+  </GlossaryItem>
+  <GlossaryItem term="检测覆盖">
+    第8章
+    标准库测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界。
+  </GlossaryItem>
+  <GlossaryItem term="同输入恢复">
+    第8章 标准库撤销唯一变量后从干净状态重建并恢复参考状态的断言。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="William Kennedy、Brian Ketelsen、Erik St. Martin《Go in Action》第一版公开目录"
+  adaptedUrl="https://livebook.manning.com/book/go-in-action/table-of-contents"
+/>

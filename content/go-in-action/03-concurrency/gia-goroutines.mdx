@@ -1,59 +1,304 @@
 ---
-title: "第6章 并发"
+title: 第6章 并发
 type: C
-section: "Go实战 · 并发"
+section: 第6章 并发
 order: 6
-description: "区分并发并行，理解goroutine调度，检测竞态，并用原子、互斥锁和无缓冲或有缓冲channel同步。"
+description: >-
+  第6章
+  并发覆盖9个正式目录坐标，用版本合同、状态轨迹与发布门交付goroutine图、happens-before边、race报告、channel状态、取消轨迹与泄漏检查
 demo: true
 math: false
-sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-6"
+sourceUrl: "https://livebook.manning.com/book/go-in-action/table-of-contents"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: gia-06
 ---
 
+import {
+  Objectives,
+  Term,
+  Callout,
+  Stepper,
+  Step,
+  Exercises,
+  Answer,
+  Glossary,
+  GlossaryItem,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+import {
+  GiaGoroutinesVersionContractLab,
+  GiaGoroutinesStateTraceLab,
+  GiaGoroutinesEvidenceGateLab,
+} from "@/components/mdx/go-in-action/v2/gia-goroutines";
 
-## 从独立函数怎样推进开始
-先预测：两个goroutine无同步递增共享计数器，最终值是否稳定？不稳定，并且属于data race。
-并发允许函数独立推进，并行允许同时执行。阻止把goroutine数量当吞吐。
+<Objectives>
 
+- 把并发与并行、goroutine、scheduler、竞态、atomic、Mutex及buffered/unbuffered channel落实为版本化输入、程序状态、唯一迁移与可观察结果
+- 只注入“并发send与close没有同步边，或共享状态在锁外读写”，定位第6章 并发相对参考状态的首个分岔
+- 交付goroutine图、happens-before边、race报告、channel状态、取消轨迹与泄漏检查，明确分开2015首版与当前Go 1.26迁移轨道
 
-## Goroutine与Go调度器
-G是goroutine，M是OS线程，P持有执行Go代码所需资源。调度次序不承诺。
+</Objectives>
 
-```go
-go func() { work() }()
-```
+## 为什么从这个问题开始
 
-## 竞态条件
-无同步共享读写且至少一方写会形成data race。用`go test -race ./...`获取证据。
+第6章 并发围绕“goroutine、scheduler、锁、原子操作与channel怎样建立happens-before？”建立贯穿任务：固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线。先预测程序状态，再重放参考、单故障与恢复；只有守住“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”并交付goroutine图、happens-before边、race报告、channel状态、取消轨迹与泄漏检查，目录标题、示例运行或工具输出才可能升级为可复核证据。
 
-```sh
-go test -race ./...
-```
+## 原版、来源访问与时代边界
 
-## 原子函数与互斥锁
-Atomic适合单值计数或flag，复合状态在同一Mutex临界区维护。还需统一锁顺序。
+第6章 并发以[Manning正式版本页](https://www.manning.com/books/go-in-action)核对 William Kennedy、Brian Ketelsen、Erik St· Martin 合著、2015年11月、264页与 ISBN 9781617291784；以[Manning liveBook公开目录](https://livebook.manning.com/book/go-in-action/table-of-contents)限定9章和本页正式坐标。来源访问级别是 outline-only：目录不能支持原书正文、图表、代码解释或作者判断。
 
-同步不仅避免两个写操作撞在一起，还建立内存可见性的先后关系。若一个goroutine写入数据后只修改普通布尔值，另一个goroutine看到布尔值时仍不能据此推导数据已可见；锁、原子操作或channel收发才提供可依赖的同步边。
+Manning版本页链接到[官方示例仓库](https://github.com/goinaction/code)。第6章 并发把历史代码核对固定到[提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)，该提交时间为2017年10月20日。第6章 并发核对的仓库含按章组织的Go示例，但没有LICENSE文件；公开可读不等于获得复制授权，本站不复制原文、示例代码或图像，只核对包路径、文件身份与历史实验范围。
 
+第6章 并发是中文独立教学重构，不是翻译、节译或原书替代品。第6章 并发的历史轨道保留首版的GOPATH、remote import、vendoring、gb、传统日志与当时并发模式；当前轨道依据Go官方规范和项目文档核对modules、generics、go1·22循环变量、fuzz、结构化日志及当前工具链。当前能力不能倒灌成2015作者观点。
 
-## Channel与CSP
-Channel传值并同步goroutine。要求发送方关闭，接收方不关闭。
+第6章 并发的实验可能启动网络服务、并发任务、profile、race detector、fuzz或外部依赖下载。必须使用可丢弃工作目录、固定依赖和端口、明确超时、敏感数据隔离及停止条件；动态检测只覆盖实际执行路径，性能采集也可能扰动结果。
 
-```go
-values := make(chan int, 1)
-values <- 7
-close(values)
-fmt.Println(<-values)
-```
+### 本页独立事实来源
 
-## 无缓冲与有缓冲
-无缓冲发送接收握手，有缓冲在容量内解耦；容量改变阻塞点，不消除背压与关闭。必须显式。
+- [Manning liveBook 正式目录](https://livebook.manning.com/book/go-in-action/table-of-contents)：第6章 并发用它只核对9章及章内公开目录坐标，不承担原书正文事实。
+- [Manning 链接的官方示例仓库](https://github.com/goinaction/code)：第6章 并发用它核对首版示例的包路径、空白导入、并发模式与测试工件身份。
+- [官方示例仓库固定提交49fc99e](https://github.com/goinaction/code/tree/49fc99e6affb9aa48cab1889505aa6631ee31ace)：第6章 并发用它把历史示例核对固定到2017年10月20日最后提交；仓库无LICENSE。
+- [Go 当前语言规范](https://go.dev/ref/spec)：第6章 并发用它核对当前go1.26语言版本、类型、表达式、语句、包和并发语义。
+- [Go 内存模型](https://go.dev/ref/mem)：第6章 并发用它核对happens-before、同步事件与无数据竞态程序保证。
+- [Go 数据竞态检测器](https://go.dev/doc/articles/race_detector)：第6章 并发用它核对-race的动态覆盖、支持平台与运行开销边界。
+- [标准库 sync 文档](https://pkg.go.dev/sync)：第6章 并发用它核对Mutex、WaitGroup、Pool与内存模型同步边。
+- [标准库 sync/atomic 文档](https://pkg.go.dev/sync/atomic)：第6章 并发用它核对原子操作、类型化原子值与适用边界。
+- [Go 1.22 循环变量语义说明](https://go.dev/blog/loopvar-preview)：第6章 并发用它核对每轮迭代变量变化和go.mod语言版本边界。
 
+## 正式目录坐标逐项深读
 
-## 验收实验：同一任务三种同步
-先让两个goroutine无同步更新计数并保存race报告；再分别用atomic和Mutex修复，说明atomic只覆盖单值，而锁可保护复合状态。最后改成channel转移owner，分别设容量0、1和有界值，记录发送阻塞点、关闭者与退出路径。三种实现结果相同，证明方式和背压位置不同。
+### Chapter 6 · Concurrency
 
+**坐标 1/9：Chapter 6 · Concurrency。稳定证据键 GIA-UNIT06-A。** 第6章 并发把Chapter 6 · Concurrency分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
 
-## 本章回顾
-本章覆盖并发与并行、goroutine、Go调度器、竞态条件、锁定共享资源、原子函数与互斥锁、通道，以及无缓冲与有缓冲通道。关闭、背压和退出与发送接收同等重要。
-## 术语表
+### concurrency versus parallelism
+
+**坐标 2/9：concurrency versus parallelism。稳定证据键 GIA-UNIT06-B。** 第6章 并发把concurrency versus parallelism分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### goroutines
+
+**坐标 3/9：goroutines。稳定证据键 GIA-UNIT06-C。** 第6章 并发把goroutines分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### Go scheduler
+
+**坐标 4/9：Go scheduler。稳定证据键 GIA-UNIT06-D。** 第6章 并发把Go scheduler分开任务结构、调度并行与同步可见性，记录goroutine创建、阻塞、唤醒、退出和happens-before边；“跑得更快”不是并发正确性的定义。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### race conditions
+
+**坐标 5/9：race conditions。稳定证据键 GIA-UNIT06-E。** 第6章 并发把race conditions定位到内存模型同步事件、共享位置和channel状态，使用-race覆盖目标路径；检测器没有报告不等于未执行路径不存在竞态。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### locking shared resources
+
+**坐标 6/9：locking shared resources。稳定证据键 GIA-UNIT06-F。** 第6章 并发把locking shared resources定位到内存模型同步事件、共享位置和channel状态，使用-race覆盖目标路径；检测器没有报告不等于未执行路径不存在竞态。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### atomic functions and mutexes
+
+**坐标 7/9：atomic functions and mutexes。稳定证据键 GIA-UNIT06-G。** 第6章 并发把atomic functions and mutexes映射为静态类型、表示、方法集、接口满足和编译诊断；当前类型参数属于显式迁移内容，不能冒充2015首版范围。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### channels
+
+**坐标 8/9：channels。稳定证据键 GIA-UNIT06-H。** 第6章 并发把channels定位到内存模型同步事件、共享位置和channel状态，使用-race覆盖目标路径；检测器没有报告不等于未执行路径不存在竞态。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+### unbuffered and buffered channels
+
+**坐标 9/9：unbuffered and buffered channels。稳定证据键 GIA-UNIT06-I。** 第6章 并发把unbuffered and buffered channels定位到内存模型同步事件、共享位置和channel状态，使用-race覆盖目标路径；检测器没有报告不等于未执行路径不存在竞态。 第6章 并发在这个坐标必须保存版本化输入、参考状态、唯一迁移、首个分岔、原始观察、撤销结果和时代边界；编译成功、一次PASS、单张截图或单次benchmark都不能独立证明主张。
+
+## 三个可重放状态实验
+
+第6章 并发先写预测：若只注入“并发send与close没有同步边，或共享状态在锁外读写”，哪个包、值、goroutine、channel、资源或测试工件最先变化？选择正式坐标与时代轨道，再逐步重放参考、故障与恢复，最后逐项打开发布门。
+
+<Stepper>
+  <Step title="版本合同：选择坐标、时代与程序阶段">
+    <GiaGoroutinesVersionContractLab />
+  </Step>
+  <Step title="状态轨迹：比较基线、单故障与恢复">
+    <GiaGoroutinesStateTraceLab />
+  </Step>
+  <Step title="发布门：闭合来源、语义、证伪与恢复">
+    <GiaGoroutinesEvidenceGateLab />
+  </Step>
+</Stepper>
+
+## 最小可重现实验协议
+
+1. 第6章 并发先冻结源码提交、go.mod语言版本、实际工具链、GOOS/GOARCH、依赖图、环境变量、输入数据、端口、并发度与成功条件。
+2. 第6章 并发从干净构建和明确缓存身份建立参考状态，保存goroutine图、happens-before边、race报告、channel状态、取消轨迹与泄漏检查；参考状态不稳定就停止，不用故障结果解释语言机制。
+3. 第6章 并发保持其余条件不变，只注入“并发send与close没有同步边，或共享状态在锁外读写”，记录首个分岔、传播路径、竞争性解释、检测覆盖与停止条件。
+4. 第6章 并发撤销受控变量，从干净状态以同一输入重建；结果、途中状态或资源残留没有一起恢复时，结论标记失败或未知。
+
+<Callout type="trap" title="第6章 并发误区一：目录或示例等于原书全文">
+  第6章
+  并发的outline-only来源只能证明公开目录范围；官方示例仓库也没有LICENSE。课程不能从标题虚构原书判断，更不能复制不可授权的正文、代码或图像。
+</Callout>
+
+<Callout type="trap" title="第6章 并发误区二：首版工具路径就是当前最佳实践">
+  第6章
+  并发保留GOPATH、vendoring、gb和首版模式的历史身份，但当前工程必须重新核对module、语言版本和官方文档；迁移结论属于本站独立解释。
+</Callout>
+
+<Callout type="trap" title="第6章 并发误区三：能运行或检测无报错就证明正确">
+  第6章
+  并发不以一次运行、PASS、-race静默或更低ns/op裁决；必须固定输入，只改变一个条件，保存首错、检测盲区、撤销和同输入恢复。
+</Callout>
+
+## 小结与上架门
+
+第6章 并发把并发与并行、goroutine、scheduler、竞态、atomic、Mutex及buffered/unbuffered channel连接成可复核状态链：目录只给正式坐标，官方规范限定当前语义，双时间轨道防止时代错置，参考与单故障定位首错，原始工件和同输入恢复决定结论能否发布。最终交付goroutine图、happens-before边、race报告、channel状态、取消轨迹与泄漏检查，同时报告失败、检测盲区、资源残留与目标环境之外的未知项。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：Chapter 6 · Concurrency**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-A 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Chapter 6 · Concurrency在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-A
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 2：concurrency versus parallelism**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-B 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明concurrency versus parallelism在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-B
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 3：goroutines**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-C 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明goroutines在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-C
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 4：Go scheduler**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-D 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明Go scheduler在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-D
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 5：race conditions**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-E 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明race conditions在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-E
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 6：locking shared resources**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-F 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明locking shared resources在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-F
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 7：atomic functions and mutexes**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-G 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明atomic functions and mutexes在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-G
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 8：channels**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-H 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明channels在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-H
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 9：unbuffered and buffered channels**
+
+为第6章 并发的稳定证据键 GIA-UNIT06-I 设计一个参考状态、一个单变量故障、一个可观察信号和一个恢复检查，并说明unbuffered and buffered channels在首版与当前轨道的边界。
+
+<Answer>
+  先为第6章
+  并发冻结固定一个共享计数与生产消费任务，分别用无同步、Mutex、atomic和channel运行并保存-race及事件时间线所需的源码、go语言版本、工具链、依赖、输入和停止条件；把
+  GIA-UNIT06-I
+  映射到参考状态、唯一迁移与预期观察，只注入“并发send与close没有同步边，或共享状态在锁外读写”。首个分岔必须能由该变量解释，撤销后从干净状态以同一输入重新满足“跨goroutine可见性必须由内存模型规定的同步事件支持，并由覆盖目标路径的-race运行辅助检查”；未执行路径、未固定环境和原书正文细节保留为未知。
+</Answer>
+
+**问题 10：为什么要保留双时间轨道**
+
+第6章 并发为什么不能用当前modules、generics或测试能力静默改写首版GOPATH与示例？
+
+<Answer>
+  第6章
+  并发的历史轨道回答“2015正式目录和官方示例当时展示什么问题与工件”，当前轨道回答“目标go.mod语言版本和工具链现在保证什么”。二者只能通过显式迁移差分连接；当前支持更好不等于首版实验毫无价值，也不能把当前结论写成原作者观点。
+</Answer>
+
+**问题 11：什么时候必须缩小结论**
+
+第6章 并发在哪些情况下不能发布“正确”“无竞态”或“更快”的结论？
+
+<Answer>
+  第6章
+  并发缺少固定源码、工具链、依赖图、输入、平台、缓存身份、原始工件、覆盖路径、重复样本或同输入恢复中的任一项，就只能报告观察或未知。-race只覆盖运行路径，测试PASS可能来自缓存，benchmark受环境影响；这些限制必须和结果一起发布。
+</Answer>
+
+</Exercises>
+
+## 六个裁决术语
+
+第6章 并发使用<Term def="第6章 并发由go.mod的go指令及实际工具链共同限定的语义与可用能力">语言版本</Term>、<Term def="第6章 并发在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态">参考状态</Term>、<Term def="第6章 并发由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化">状态迁移</Term>、<Term def="第6章 并发的故障轨迹最早偏离参考轨迹的位置">首个分岔</Term>、<Term def="第6章 并发测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界">检测覆盖</Term>、<Term def="第6章 并发撤销唯一变量后从干净状态重建并恢复参考状态的断言">同输入恢复</Term>构成最小证据语言；它们都指向真实版本、程序状态或工件，不生成置信度、成熟度或风险分。
+
+<Glossary>
+  <GlossaryItem term="语言版本">
+    第6章 并发由go.mod的go指令及实际工具链共同限定的语义与可用能力。
+  </GlossaryItem>
+  <GlossaryItem term="参考状态">
+    第6章 并发在固定源码、依赖、输入和环境下的包、值、goroutine与工件状态。
+  </GlossaryItem>
+  <GlossaryItem term="状态迁移">
+    第6章 并发由一次函数调用、赋值、同步、I/O或工具命令引起的可观察变化。
+  </GlossaryItem>
+  <GlossaryItem term="首个分岔">
+    第6章 并发的故障轨迹最早偏离参考轨迹的位置。
+  </GlossaryItem>
+  <GlossaryItem term="检测覆盖">
+    第6章 并发测试、race、fuzz、profile或静态工具实际检查到的路径和未覆盖边界。
+  </GlossaryItem>
+  <GlossaryItem term="同输入恢复">
+    第6章 并发撤销唯一变量后从干净状态重建并恢复参考状态的断言。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="William Kennedy、Brian Ketelsen、Erik St. Martin《Go in Action》第一版公开目录"
+  adaptedUrl="https://livebook.manning.com/book/go-in-action/table-of-contents"
+/>
