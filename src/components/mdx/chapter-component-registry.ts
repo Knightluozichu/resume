@@ -14469,6 +14469,297 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UnixInterfaceFailureDiagram: module0.UnixInterfaceFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "this-is-chatgpt/00-learning-map/tcg-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-official-learning-map");
+    return {
+      TcgOfficialLearningMapContextContractLab:
+        module0.TcgOfficialLearningMapContextContractLab,
+      TcgOfficialLearningMapComputeTraceLab:
+        module0.TcgOfficialLearningMapComputeTraceLab,
+      TcgOfficialLearningMapEvidenceGateLab:
+        module0.TcgOfficialLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-01-one-word-at-a-time");
+    return {
+      TcgMain01OneWordAtATimeContextContractLab:
+        module0.TcgMain01OneWordAtATimeContextContractLab,
+      TcgMain01OneWordAtATimeComputeTraceLab:
+        module0.TcgMain01OneWordAtATimeComputeTraceLab,
+      TcgMain01OneWordAtATimeEvidenceGateLab:
+        module0.TcgMain01OneWordAtATimeEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/01-main-essay/tcg-main-02-probabilities": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-02-probabilities");
+    return {
+      TcgMain02ProbabilitiesContextContractLab:
+        module0.TcgMain02ProbabilitiesContextContractLab,
+      TcgMain02ProbabilitiesComputeTraceLab:
+        module0.TcgMain02ProbabilitiesComputeTraceLab,
+      TcgMain02ProbabilitiesEvidenceGateLab:
+        module0.TcgMain02ProbabilitiesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/01-main-essay/tcg-main-03-model": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-03-model");
+    return {
+      TcgMain03ModelContextContractLab:
+        module0.TcgMain03ModelContextContractLab,
+      TcgMain03ModelComputeTraceLab: module0.TcgMain03ModelComputeTraceLab,
+      TcgMain03ModelEvidenceGateLab: module0.TcgMain03ModelEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-04-human-like-tasks");
+    return {
+      TcgMain04HumanLikeTasksContextContractLab:
+        module0.TcgMain04HumanLikeTasksContextContractLab,
+      TcgMain04HumanLikeTasksComputeTraceLab:
+        module0.TcgMain04HumanLikeTasksComputeTraceLab,
+      TcgMain04HumanLikeTasksEvidenceGateLab:
+        module0.TcgMain04HumanLikeTasksEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/01-main-essay/tcg-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-preface");
+    return {
+      TcgPrefaceContextContractLab: module0.TcgPrefaceContextContractLab,
+      TcgPrefaceComputeTraceLab: module0.TcgPrefaceComputeTraceLab,
+      TcgPrefaceEvidenceGateLab: module0.TcgPrefaceEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-05-neural-nets");
+    return {
+      TcgMain05NeuralNetsContextContractLab:
+        module0.TcgMain05NeuralNetsContextContractLab,
+      TcgMain05NeuralNetsComputeTraceLab:
+        module0.TcgMain05NeuralNetsComputeTraceLab,
+      TcgMain05NeuralNetsEvidenceGateLab:
+        module0.TcgMain05NeuralNetsEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-06-training-neural-nets");
+      return {
+        TcgMain06TrainingNeuralNetsContextContractLab:
+          module0.TcgMain06TrainingNeuralNetsContextContractLab,
+        TcgMain06TrainingNeuralNetsComputeTraceLab:
+          module0.TcgMain06TrainingNeuralNetsComputeTraceLab,
+        TcgMain06TrainingNeuralNetsEvidenceGateLab:
+          module0.TcgMain06TrainingNeuralNetsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/02-neural-models/tcg-main-07-training-practice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-07-training-practice");
+      return {
+        TcgMain07TrainingPracticeContextContractLab:
+          module0.TcgMain07TrainingPracticeContextContractLab,
+        TcgMain07TrainingPracticeComputeTraceLab:
+          module0.TcgMain07TrainingPracticeComputeTraceLab,
+        TcgMain07TrainingPracticeEvidenceGateLab:
+          module0.TcgMain07TrainingPracticeEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/02-neural-models/tcg-main-08-universal-network":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-08-universal-network");
+      return {
+        TcgMain08UniversalNetworkContextContractLab:
+          module0.TcgMain08UniversalNetworkContextContractLab,
+        TcgMain08UniversalNetworkComputeTraceLab:
+          module0.TcgMain08UniversalNetworkComputeTraceLab,
+        TcgMain08UniversalNetworkEvidenceGateLab:
+          module0.TcgMain08UniversalNetworkEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-09-embeddings");
+    return {
+      TcgMain09EmbeddingsContextContractLab:
+        module0.TcgMain09EmbeddingsContextContractLab,
+      TcgMain09EmbeddingsComputeTraceLab:
+        module0.TcgMain09EmbeddingsComputeTraceLab,
+      TcgMain09EmbeddingsEvidenceGateLab:
+        module0.TcgMain09EmbeddingsEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-10-inside-chatgpt");
+    return {
+      TcgMain10InsideChatgptContextContractLab:
+        module0.TcgMain10InsideChatgptContextContractLab,
+      TcgMain10InsideChatgptComputeTraceLab:
+        module0.TcgMain10InsideChatgptComputeTraceLab,
+      TcgMain10InsideChatgptEvidenceGateLab:
+        module0.TcgMain10InsideChatgptEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-11-training-chatgpt");
+      return {
+        TcgMain11TrainingChatgptContextContractLab:
+          module0.TcgMain11TrainingChatgptContextContractLab,
+        TcgMain11TrainingChatgptComputeTraceLab:
+          module0.TcgMain11TrainingChatgptComputeTraceLab,
+        TcgMain11TrainingChatgptEvidenceGateLab:
+          module0.TcgMain11TrainingChatgptEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-12-beyond-basic-training");
+      return {
+        TcgMain12BeyondBasicTrainingContextContractLab:
+          module0.TcgMain12BeyondBasicTrainingContextContractLab,
+        TcgMain12BeyondBasicTrainingComputeTraceLab:
+          module0.TcgMain12BeyondBasicTrainingComputeTraceLab,
+        TcgMain12BeyondBasicTrainingEvidenceGateLab:
+          module0.TcgMain12BeyondBasicTrainingEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-13-what-lets-it-work");
+      return {
+        TcgMain13WhatLetsItWorkContextContractLab:
+          module0.TcgMain13WhatLetsItWorkContextContractLab,
+        TcgMain13WhatLetsItWorkComputeTraceLab:
+          module0.TcgMain13WhatLetsItWorkComputeTraceLab,
+        TcgMain13WhatLetsItWorkEvidenceGateLab:
+          module0.TcgMain13WhatLetsItWorkEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/04-meaning-language/tcg-main-14-meaning-space": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-14-meaning-space");
+    return {
+      TcgMain14MeaningSpaceContextContractLab:
+        module0.TcgMain14MeaningSpaceContextContractLab,
+      TcgMain14MeaningSpaceComputeTraceLab:
+        module0.TcgMain14MeaningSpaceComputeTraceLab,
+      TcgMain14MeaningSpaceEvidenceGateLab:
+        module0.TcgMain14MeaningSpaceEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/04-meaning-language/tcg-main-15-semantic-grammar":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-15-semantic-grammar");
+      return {
+        TcgMain15SemanticGrammarContextContractLab:
+          module0.TcgMain15SemanticGrammarContextContractLab,
+        TcgMain15SemanticGrammarComputeTraceLab:
+          module0.TcgMain15SemanticGrammarComputeTraceLab,
+        TcgMain15SemanticGrammarEvidenceGateLab:
+          module0.TcgMain15SemanticGrammarEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/04-meaning-language/tcg-main-16-conclusion": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-main-16-conclusion");
+    return {
+      TcgMain16ConclusionContextContractLab:
+        module0.TcgMain16ConclusionContextContractLab,
+      TcgMain16ConclusionComputeTraceLab:
+        module0.TcgMain16ConclusionComputeTraceLab,
+      TcgMain16ConclusionEvidenceGateLab:
+        module0.TcgMain16ConclusionEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/05-resources/tcg-thanks-additional-resources": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-thanks-additional-resources");
+    return {
+      TcgThanksAdditionalResourcesContextContractLab:
+        module0.TcgThanksAdditionalResourcesContextContractLab,
+      TcgThanksAdditionalResourcesComputeTraceLab:
+        module0.TcgThanksAdditionalResourcesComputeTraceLab,
+      TcgThanksAdditionalResourcesEvidenceGateLab:
+        module0.TcgThanksAdditionalResourcesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/this-is-chatgpt/v2/tcg-wa-01-chatgpt-wolfram-alpha");
+      return {
+        TcgWa01ChatgptWolframAlphaContextContractLab:
+          module0.TcgWa01ChatgptWolframAlphaContextContractLab,
+        TcgWa01ChatgptWolframAlphaComputeTraceLab:
+          module0.TcgWa01ChatgptWolframAlphaComputeTraceLab,
+        TcgWa01ChatgptWolframAlphaEvidenceGateLab:
+          module0.TcgWa01ChatgptWolframAlphaEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-wa-02-basic-example");
+    return {
+      TcgWa02BasicExampleContextContractLab:
+        module0.TcgWa02BasicExampleContextContractLab,
+      TcgWa02BasicExampleComputeTraceLab:
+        module0.TcgWa02BasicExampleComputeTraceLab,
+      TcgWa02BasicExampleEvidenceGateLab:
+        module0.TcgWa02BasicExampleEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-wa-03-more-examples");
+    return {
+      TcgWa03MoreExamplesContextContractLab:
+        module0.TcgWa03MoreExamplesContextContractLab,
+      TcgWa03MoreExamplesComputeTraceLab:
+        module0.TcgWa03MoreExamplesComputeTraceLab,
+      TcgWa03MoreExamplesEvidenceGateLab:
+        module0.TcgWa03MoreExamplesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-wa-04-path-forward");
+    return {
+      TcgWa04PathForwardContextContractLab:
+        module0.TcgWa04PathForwardContextContractLab,
+      TcgWa04PathForwardComputeTraceLab:
+        module0.TcgWa04PathForwardComputeTraceLab,
+      TcgWa04PathForwardEvidenceGateLab:
+        module0.TcgWa04PathForwardEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "this-is-chatgpt/07-final-review/tcg-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/this-is-chatgpt/v2/tcg-official-final-review");
+    return {
+      TcgOfficialFinalReviewContextContractLab:
+        module0.TcgOfficialFinalReviewContextContractLab,
+      TcgOfficialFinalReviewComputeTraceLab:
+        module0.TcgOfficialFinalReviewComputeTraceLab,
+      TcgOfficialFinalReviewEvidenceGateLab:
+        module0.TcgOfficialFinalReviewEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
   "tiger-book-compiler/00-guide/tbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/tiger-book-compiler/v2/tbc-official-learning-map");
