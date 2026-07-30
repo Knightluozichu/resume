@@ -12571,6 +12571,115 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Lad4OfficialFinalReviewCounterexampleLab,
       } as ChapterMdxComponents;
     },
+  "linux-kernel-essence/00-guide/lke-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-official-learning-map");
+    return {
+      LkeOfficialLearningMapObjectContractLab:
+        module0.LkeOfficialLearningMapObjectContractLab,
+      LkeOfficialLearningMapSignalTraceLab:
+        module0.LkeOfficialLearningMapSignalTraceLab,
+      LkeOfficialLearningMapSafetyGateLab:
+        module0.LkeOfficialLearningMapSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/01-foundations/lke-01-kernel-intro": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-01-kernel-intro");
+    return {
+      Lke01KernelIntroObjectContractLab:
+        module0.Lke01KernelIntroObjectContractLab,
+      Lke01KernelIntroSignalTraceLab: module0.Lke01KernelIntroSignalTraceLab,
+      Lke01KernelIntroSafetyGateLab: module0.Lke01KernelIntroSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/02-resources/lke-02-resource-management": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-02-resource-management");
+    return {
+      Lke02ResourceManagementObjectContractLab:
+        module0.Lke02ResourceManagementObjectContractLab,
+      Lke02ResourceManagementSignalTraceLab:
+        module0.Lke02ResourceManagementSignalTraceLab,
+      Lke02ResourceManagementSafetyGateLab:
+        module0.Lke02ResourceManagementSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/03-storage-network/lke-03-filesystems": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-03-filesystems");
+    return {
+      Lke03FilesystemsObjectContractLab:
+        module0.Lke03FilesystemsObjectContractLab,
+      Lke03FilesystemsSignalTraceLab: module0.Lke03FilesystemsSignalTraceLab,
+      Lke03FilesystemsSafetyGateLab: module0.Lke03FilesystemsSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/03-storage-network/lke-04-networking": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-04-networking");
+    return {
+      Lke04NetworkingObjectContractLab:
+        module0.Lke04NetworkingObjectContractLab,
+      Lke04NetworkingSignalTraceLab: module0.Lke04NetworkingSignalTraceLab,
+      Lke04NetworkingSafetyGateLab: module0.Lke04NetworkingSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/04-virtual-power/lke-05-virtualization": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-05-virtualization");
+    return {
+      Lke05VirtualizationObjectContractLab:
+        module0.Lke05VirtualizationObjectContractLab,
+      Lke05VirtualizationSignalTraceLab:
+        module0.Lke05VirtualizationSignalTraceLab,
+      Lke05VirtualizationSafetyGateLab:
+        module0.Lke05VirtualizationSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/04-virtual-power/lke-06-power-saving": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-06-power-saving");
+    return {
+      Lke06PowerSavingObjectContractLab:
+        module0.Lke06PowerSavingObjectContractLab,
+      Lke06PowerSavingSignalTraceLab: module0.Lke06PowerSavingSignalTraceLab,
+      Lke06PowerSavingSafetyGateLab: module0.Lke06PowerSavingSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/05-diagnostics/lke-07-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-07-debugging");
+    return {
+      Lke07DebuggingObjectContractLab: module0.Lke07DebuggingObjectContractLab,
+      Lke07DebuggingSignalTraceLab: module0.Lke07DebuggingSignalTraceLab,
+      Lke07DebuggingSafetyGateLab: module0.Lke07DebuggingSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/05-diagnostics/lke-08-profiling-tracing": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-08-profiling-tracing");
+    return {
+      Lke08ProfilingTracingObjectContractLab:
+        module0.Lke08ProfilingTracingObjectContractLab,
+      Lke08ProfilingTracingSignalTraceLab:
+        module0.Lke08ProfilingTracingSignalTraceLab,
+      Lke08ProfilingTracingSafetyGateLab:
+        module0.Lke08ProfilingTracingSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
+  "linux-kernel-essence/06-review/lke-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/linux-kernel-essence/v2/lke-official-final-review");
+    return {
+      LkeOfficialFinalReviewObjectContractLab:
+        module0.LkeOfficialFinalReviewObjectContractLab,
+      LkeOfficialFinalReviewSignalTraceLab:
+        module0.LkeOfficialFinalReviewSignalTraceLab,
+      LkeOfficialFinalReviewSafetyGateLab:
+        module0.LkeOfficialFinalReviewSafetyGateLab,
+    } as ChapterMdxComponents;
+  },
   "llm-app-dev-essentials/00-map/lae-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/llm-app-dev-essentials/v2/lae-official-learning-map");
