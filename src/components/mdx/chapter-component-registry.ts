@@ -11918,6 +11918,171 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.LlmOfficialFinalReviewEvidenceGateLab,
     } as ChapterMdxComponents;
   },
+  "large-scale-llm-practice/00-map/lsl-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-official-learning-map");
+    return {
+      LslOfficialLearningMapContextContractLab:
+        module0.LslOfficialLearningMapContextContractLab,
+      LslOfficialLearningMapComputeTraceLab:
+        module0.LslOfficialLearningMapComputeTraceLab,
+      LslOfficialLearningMapEvidenceGateLab:
+        module0.LslOfficialLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/01-preface/lsl-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-preface");
+    return {
+      LslPrefaceContextContractLab: module0.LslPrefaceContextContractLab,
+      LslPrefaceComputeTraceLab: module0.LslPrefaceComputeTraceLab,
+      LslPrefaceEvidenceGateLab: module0.LslPrefaceEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/02-notation/lsl-mathematical-notation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-mathematical-notation");
+      return {
+        LslMathematicalNotationContextContractLab:
+          module0.LslMathematicalNotationContextContractLab,
+        LslMathematicalNotationComputeTraceLab:
+          module0.LslMathematicalNotationComputeTraceLab,
+        LslMathematicalNotationEvidenceGateLab:
+          module0.LslMathematicalNotationEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/03-introduction/lsl-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-01-introduction");
+    return {
+      Lsl01IntroductionContextContractLab:
+        module0.Lsl01IntroductionContextContractLab,
+      Lsl01IntroductionComputeTraceLab:
+        module0.Lsl01IntroductionComputeTraceLab,
+      Lsl01IntroductionEvidenceGateLab:
+        module0.Lsl01IntroductionEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/04-foundations/lsl-02-llm-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-02-llm-foundations");
+      return {
+        Lsl02LlmFoundationsContextContractLab:
+          module0.Lsl02LlmFoundationsContextContractLab,
+        Lsl02LlmFoundationsComputeTraceLab:
+          module0.Lsl02LlmFoundationsComputeTraceLab,
+        Lsl02LlmFoundationsEvidenceGateLab:
+          module0.Lsl02LlmFoundationsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/05-data/lsl-03-pretraining-data": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-03-pretraining-data");
+    return {
+      Lsl03PretrainingDataContextContractLab:
+        module0.Lsl03PretrainingDataContextContractLab,
+      Lsl03PretrainingDataComputeTraceLab:
+        module0.Lsl03PretrainingDataComputeTraceLab,
+      Lsl03PretrainingDataEvidenceGateLab:
+        module0.Lsl03PretrainingDataEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-04-distributed-training");
+      return {
+        Lsl04DistributedTrainingContextContractLab:
+          module0.Lsl04DistributedTrainingContextContractLab,
+        Lsl04DistributedTrainingComputeTraceLab:
+          module0.Lsl04DistributedTrainingComputeTraceLab,
+        Lsl04DistributedTrainingEvidenceGateLab:
+          module0.Lsl04DistributedTrainingEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-05-supervised-finetuning");
+      return {
+        Lsl05SupervisedFinetuningContextContractLab:
+          module0.Lsl05SupervisedFinetuningContextContractLab,
+        Lsl05SupervisedFinetuningComputeTraceLab:
+          module0.Lsl05SupervisedFinetuningComputeTraceLab,
+        Lsl05SupervisedFinetuningEvidenceGateLab:
+          module0.Lsl05SupervisedFinetuningEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-06-reinforcement-learning");
+      return {
+        Lsl06ReinforcementLearningContextContractLab:
+          module0.Lsl06ReinforcementLearningContextContractLab,
+        Lsl06ReinforcementLearningComputeTraceLab:
+          module0.Lsl06ReinforcementLearningComputeTraceLab,
+        Lsl06ReinforcementLearningEvidenceGateLab:
+          module0.Lsl06ReinforcementLearningEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/09-applications/lsl-07-llm-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/large-scale-llm-practice/v2/lsl-07-llm-applications");
+      return {
+        Lsl07LlmApplicationsContextContractLab:
+          module0.Lsl07LlmApplicationsContextContractLab,
+        Lsl07LlmApplicationsComputeTraceLab:
+          module0.Lsl07LlmApplicationsComputeTraceLab,
+        Lsl07LlmApplicationsEvidenceGateLab:
+          module0.Lsl07LlmApplicationsEvidenceGateLab,
+      } as ChapterMdxComponents;
+    },
+  "large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-08-llm-evaluation");
+    return {
+      Lsl08LlmEvaluationContextContractLab:
+        module0.Lsl08LlmEvaluationContextContractLab,
+      Lsl08LlmEvaluationComputeTraceLab:
+        module0.Lsl08LlmEvaluationComputeTraceLab,
+      Lsl08LlmEvaluationEvidenceGateLab:
+        module0.Lsl08LlmEvaluationEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/11-references/lsl-references": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-references");
+    return {
+      LslReferencesContextContractLab: module0.LslReferencesContextContractLab,
+      LslReferencesComputeTraceLab: module0.LslReferencesComputeTraceLab,
+      LslReferencesEvidenceGateLab: module0.LslReferencesEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/12-index/lsl-index": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-index");
+    return {
+      LslIndexContextContractLab: module0.LslIndexContextContractLab,
+      LslIndexComputeTraceLab: module0.LslIndexComputeTraceLab,
+      LslIndexEvidenceGateLab: module0.LslIndexEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "large-scale-llm-practice/13-review/lsl-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/large-scale-llm-practice/v2/lsl-official-final-review");
+    return {
+      LslOfficialFinalReviewContextContractLab:
+        module0.LslOfficialFinalReviewContextContractLab,
+      LslOfficialFinalReviewComputeTraceLab:
+        module0.LslOfficialFinalReviewComputeTraceLab,
+      LslOfficialFinalReviewEvidenceGateLab:
+        module0.LslOfficialFinalReviewEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
   "learnopengl/advanced-lighting/blinn-phong": async () => {
     const module0 = await import("@/components/mdx/learnopengl/v2/blinn-phong");
     return {
