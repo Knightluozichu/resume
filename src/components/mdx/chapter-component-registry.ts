@@ -8784,6 +8784,98 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       OpcSearchSortDecisionMap: module0.OpcSearchSortDecisionMap,
     } as ChapterMdxComponents;
   },
+  "org-problem-tools/00-official-learning-map/opt-23-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/org-problem-tools/v2/opt-23-official-learning-map");
+      return {
+        Opt23OfficialLearningMapSessionContractLab:
+          module0.Opt23OfficialLearningMapSessionContractLab,
+        Opt23OfficialLearningMapParticipationTraceLab:
+          module0.Opt23OfficialLearningMapParticipationTraceLab,
+        Opt23OfficialLearningMapEthicsProbeLab:
+          module0.Opt23OfficialLearningMapEthicsProbeLab,
+      } as ChapterMdxComponents;
+    },
+  "org-problem-tools/01-introduction/opt-23-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-introduction");
+    return {
+      Opt23IntroductionSessionContractLab:
+        module0.Opt23IntroductionSessionContractLab,
+      Opt23IntroductionParticipationTraceLab:
+        module0.Opt23IntroductionParticipationTraceLab,
+      Opt23IntroductionEthicsProbeLab: module0.Opt23IntroductionEthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/02-chapter-01/opt-23-chapter-01": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-chapter-01");
+    return {
+      Opt23Chapter01SessionContractLab:
+        module0.Opt23Chapter01SessionContractLab,
+      Opt23Chapter01ParticipationTraceLab:
+        module0.Opt23Chapter01ParticipationTraceLab,
+      Opt23Chapter01EthicsProbeLab: module0.Opt23Chapter01EthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/03-chapter-02/opt-23-chapter-02": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-chapter-02");
+    return {
+      Opt23Chapter02SessionContractLab:
+        module0.Opt23Chapter02SessionContractLab,
+      Opt23Chapter02ParticipationTraceLab:
+        module0.Opt23Chapter02ParticipationTraceLab,
+      Opt23Chapter02EthicsProbeLab: module0.Opt23Chapter02EthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/04-chapter-03/opt-23-chapter-03": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-chapter-03");
+    return {
+      Opt23Chapter03SessionContractLab:
+        module0.Opt23Chapter03SessionContractLab,
+      Opt23Chapter03ParticipationTraceLab:
+        module0.Opt23Chapter03ParticipationTraceLab,
+      Opt23Chapter03EthicsProbeLab: module0.Opt23Chapter03EthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/05-chapter-04/opt-23-chapter-04": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-chapter-04");
+    return {
+      Opt23Chapter04SessionContractLab:
+        module0.Opt23Chapter04SessionContractLab,
+      Opt23Chapter04ParticipationTraceLab:
+        module0.Opt23Chapter04ParticipationTraceLab,
+      Opt23Chapter04EthicsProbeLab: module0.Opt23Chapter04EthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/06-afterword/opt-23-afterword": async () => {
+    const module0 =
+      await import("@/components/mdx/org-problem-tools/v2/opt-23-afterword");
+    return {
+      Opt23AfterwordSessionContractLab:
+        module0.Opt23AfterwordSessionContractLab,
+      Opt23AfterwordParticipationTraceLab:
+        module0.Opt23AfterwordParticipationTraceLab,
+      Opt23AfterwordEthicsProbeLab: module0.Opt23AfterwordEthicsProbeLab,
+    } as ChapterMdxComponents;
+  },
+  "org-problem-tools/07-official-final-review/opt-23-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/org-problem-tools/v2/opt-23-official-final-review");
+      return {
+        Opt23OfficialFinalReviewSessionContractLab:
+          module0.Opt23OfficialFinalReviewSessionContractLab,
+        Opt23OfficialFinalReviewParticipationTraceLab:
+          module0.Opt23OfficialFinalReviewParticipationTraceLab,
+        Opt23OfficialFinalReviewEthicsProbeLab:
+          module0.Opt23OfficialFinalReviewEthicsProbeLab,
+      } as ChapterMdxComponents;
+    },
   "pbrt-book/01-foundations/pbt-ch01-introduction": async () => {
     const module0 =
       await import("@/components/mdx/pbrt-book/v2/pbt-ch01-introduction");
