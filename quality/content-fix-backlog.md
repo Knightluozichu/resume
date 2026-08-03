@@ -763,26 +763,26 @@
 
 ### 4.7 illustrated-ai（16 章 · 待修 16 章 · 16 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | illustrated-ai/00-guide/iai-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | illustrated-ai/01-foundations/iai-01-ai-past-present-future.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | illustrated-ai/01-foundations/iai-02-rule-systems-variants.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | illustrated-ai/01-foundations/iai-03-automata-artificial-life.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | illustrated-ai/02-weight-optimization/iai-04-weighting-optimal-solutions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | illustrated-ai/02-weight-optimization/iai-05-weighting-optimization-programs.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | illustrated-ai/03-statistical-learning/iai-06-statistical-ml-probability-modeling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | illustrated-ai/03-statistical-learning/iai-07-statistical-ml-supervised-unsupervised.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | illustrated-ai/04-modern-learning/iai-08-reinforcement-distributed-ai.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | illustrated-ai/04-modern-learning/iai-09-deep-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | illustrated-ai/05-perception-language/iai-10-image-speech-pattern-recognition.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | illustrated-ai/05-perception-language/iai-11-nlp-machine-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | illustrated-ai/06-knowledge-computing/iai-12-knowledge-representation-data-structures.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | illustrated-ai/06-knowledge-computing/iai-13-distributed-computing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | illustrated-ai/07-systems-future/iai-14-big-data-iot.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | illustrated-ai/08-review/iai-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | illustrated-ai/00-guide/iai-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | illustrated-ai/01-foundations/iai-01-ai-past-present-future.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | illustrated-ai/01-foundations/iai-02-rule-systems-variants.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | illustrated-ai/01-foundations/iai-03-automata-artificial-life.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | illustrated-ai/02-weight-optimization/iai-04-weighting-optimal-solutions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | illustrated-ai/02-weight-optimization/iai-05-weighting-optimization-programs.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | illustrated-ai/03-statistical-learning/iai-06-statistical-ml-probability-modeling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | illustrated-ai/03-statistical-learning/iai-07-statistical-ml-supervised-unsupervised.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | illustrated-ai/04-modern-learning/iai-08-reinforcement-distributed-ai.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | illustrated-ai/04-modern-learning/iai-09-deep-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | illustrated-ai/05-perception-language/iai-10-image-speech-pattern-recognition.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | illustrated-ai/05-perception-language/iai-11-nlp-machine-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | illustrated-ai/06-knowledge-computing/iai-12-knowledge-representation-data-structures.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | illustrated-ai/06-knowledge-computing/iai-13-distributed-computing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | illustrated-ai/07-systems-future/iai-14-big-data-iot.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | illustrated-ai/08-review/iai-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
