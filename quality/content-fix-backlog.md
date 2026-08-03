@@ -143,45 +143,45 @@
 
 ### 1.5 database-system-concepts（35 章 · 待修 35 章 · 35 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，35 章补小结 + Answer 嵌套修复）；⛔ 部署受阻：ledger failed（visual-evidence-missing）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | database-system-concepts/00-learning-map/dsc-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | database-system-concepts/01-introduction/dsc-ch01-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | database-system-concepts/02-relational-model/dsc-ch02-relational-model.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | database-system-concepts/03-introduction-to-sql/dsc-ch03-introduction-to-sql.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | database-system-concepts/04-intermediate-sql/dsc-ch04-intermediate-sql.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | database-system-concepts/05-advanced-sql/dsc-ch05-advanced-sql.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | database-system-concepts/06-er-design/dsc-ch06-er-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | database-system-concepts/07-relational-design/dsc-ch07-relational-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | database-system-concepts/08-complex-data-types/dsc-ch08-complex-data-types.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | database-system-concepts/09-application-development/dsc-ch09-application-development.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | database-system-concepts/10-big-data/dsc-ch10-big-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | database-system-concepts/11-data-analytics/dsc-ch11-data-analytics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | database-system-concepts/12-physical-storage/dsc-ch12-physical-storage.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | database-system-concepts/13-storage-structures/dsc-ch13-storage-structures.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | database-system-concepts/14-indexing/dsc-ch14-indexing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | database-system-concepts/15-query-processing/dsc-ch15-query-processing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | database-system-concepts/16-query-optimization/dsc-ch16-query-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | database-system-concepts/17-transactions/dsc-ch17-transactions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | database-system-concepts/18-concurrency-control/dsc-ch18-concurrency-control.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | database-system-concepts/19-recovery/dsc-ch19-recovery.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | database-system-concepts/20-architectures/dsc-ch20-architectures.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | database-system-concepts/21-parallel-distributed-storage/dsc-ch21-parallel-distributed-storage.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | database-system-concepts/22-parallel-distributed-query/dsc-ch22-parallel-distributed-query.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 24 | database-system-concepts/23-distributed-transactions/dsc-ch23-distributed-transactions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 25 | database-system-concepts/24-advanced-indexing/dsc-ch24-advanced-indexing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 26 | database-system-concepts/25-advanced-app-development/dsc-ch25-advanced-app-development.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 27 | database-system-concepts/26-blockchain-databases/dsc-ch26-blockchain-databases.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 28 | database-system-concepts/27-formal-query-languages/dsc-ch27-formal-query-languages.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 29 | database-system-concepts/28-advanced-relational-design/dsc-ch28-advanced-relational-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 30 | database-system-concepts/29-object-based-databases/dsc-ch29-object-based-databases.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 31 | database-system-concepts/30-xml/dsc-ch30-xml.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 32 | database-system-concepts/31-information-retrieval/dsc-ch31-information-retrieval.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 33 | database-system-concepts/32-postgresql/dsc-ch32-postgresql.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 34 | database-system-concepts/33-appendix-a/dsc-appendix-a-university-schema.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 35 | database-system-concepts/99-final-review/dsc-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | database-system-concepts/00-learning-map/dsc-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | database-system-concepts/01-introduction/dsc-ch01-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | database-system-concepts/02-relational-model/dsc-ch02-relational-model.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | database-system-concepts/03-introduction-to-sql/dsc-ch03-introduction-to-sql.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | database-system-concepts/04-intermediate-sql/dsc-ch04-intermediate-sql.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | database-system-concepts/05-advanced-sql/dsc-ch05-advanced-sql.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | database-system-concepts/06-er-design/dsc-ch06-er-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | database-system-concepts/07-relational-design/dsc-ch07-relational-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | database-system-concepts/08-complex-data-types/dsc-ch08-complex-data-types.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | database-system-concepts/09-application-development/dsc-ch09-application-development.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | database-system-concepts/10-big-data/dsc-ch10-big-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | database-system-concepts/11-data-analytics/dsc-ch11-data-analytics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | database-system-concepts/12-physical-storage/dsc-ch12-physical-storage.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | database-system-concepts/13-storage-structures/dsc-ch13-storage-structures.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | database-system-concepts/14-indexing/dsc-ch14-indexing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | database-system-concepts/15-query-processing/dsc-ch15-query-processing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | database-system-concepts/16-query-optimization/dsc-ch16-query-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | database-system-concepts/17-transactions/dsc-ch17-transactions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | database-system-concepts/18-concurrency-control/dsc-ch18-concurrency-control.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | database-system-concepts/19-recovery/dsc-ch19-recovery.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | database-system-concepts/20-architectures/dsc-ch20-architectures.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | database-system-concepts/21-parallel-distributed-storage/dsc-ch21-parallel-distributed-storage.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 23 | database-system-concepts/22-parallel-distributed-query/dsc-ch22-parallel-distributed-query.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 24 | database-system-concepts/23-distributed-transactions/dsc-ch23-distributed-transactions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 25 | database-system-concepts/24-advanced-indexing/dsc-ch24-advanced-indexing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 26 | database-system-concepts/25-advanced-app-development/dsc-ch25-advanced-app-development.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 27 | database-system-concepts/26-blockchain-databases/dsc-ch26-blockchain-databases.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 28 | database-system-concepts/27-formal-query-languages/dsc-ch27-formal-query-languages.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 29 | database-system-concepts/28-advanced-relational-design/dsc-ch28-advanced-relational-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 30 | database-system-concepts/29-object-based-databases/dsc-ch29-object-based-databases.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 31 | database-system-concepts/30-xml/dsc-ch30-xml.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 32 | database-system-concepts/31-information-retrieval/dsc-ch31-information-retrieval.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 33 | database-system-concepts/32-postgresql/dsc-ch32-postgresql.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 34 | database-system-concepts/33-appendix-a/dsc-appendix-a-university-schema.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 35 | database-system-concepts/99-final-review/dsc-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
