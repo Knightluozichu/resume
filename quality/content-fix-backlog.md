@@ -223,7 +223,7 @@
 
 ## 系列 02：网络与中间件系列（9 本 · 170 章待修 · 195 项）
 
-**系列状态**：待开始
+**系列状态**：✅ 规范修复完成（2026-08-03，9 本 170 章；5 本已上架书修复后重新部署上线，4 本未上架书仅修复）
 
 ### 2.1 illustrated-server-network（8 章 · 待修 8 章 · 8 项）
 
@@ -444,35 +444,35 @@
 
 ### 2.9 tcp-ip-illustrated-vol1（25 章 · 待修 25 章 · 50 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §8 小结 + §9 Attribution 修复完成（2026-08-03）；⛔ 部署受阻：ledger failed（模板复制、块计数、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | tcp-ip-illustrated-vol1/00-tip2-official-learning-map/tip2-official-learning-map.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | tcp-ip-illustrated-vol1/01-tip2-foreword/tip2-foreword.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | tcp-ip-illustrated-vol1/02-tip2-preface-second-edition/tip2-preface-second-edition.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | tcp-ip-illustrated-vol1/03-tip2-adapted-preface-first-edition/tip2-adapted-preface-first-edition.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | tcp-ip-illustrated-vol1/04-tip2-01-introduction/tip2-01-introduction.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | tcp-ip-illustrated-vol1/05-tip2-02-address-architecture/tip2-02-address-architecture.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | tcp-ip-illustrated-vol1/06-tip2-03-link-layer/tip2-03-link-layer.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | tcp-ip-illustrated-vol1/07-tip2-04-arp/tip2-04-arp.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | tcp-ip-illustrated-vol1/08-tip2-05-internet-protocol/tip2-05-internet-protocol.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | tcp-ip-illustrated-vol1/09-tip2-06-dhcp-autoconfiguration/tip2-06-dhcp-autoconfiguration.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | tcp-ip-illustrated-vol1/10-tip2-07-firewalls-nat/tip2-07-firewalls-nat.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | tcp-ip-illustrated-vol1/11-tip2-08-icmp/tip2-08-icmp.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | tcp-ip-illustrated-vol1/12-tip2-09-broadcast-multicast/tip2-09-broadcast-multicast.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | tcp-ip-illustrated-vol1/13-tip2-10-udp-fragmentation/tip2-10-udp-fragmentation.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | tcp-ip-illustrated-vol1/14-tip2-11-dns/tip2-11-dns.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | tcp-ip-illustrated-vol1/15-tip2-12-tcp-preliminaries/tip2-12-tcp-preliminaries.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | tcp-ip-illustrated-vol1/16-tip2-13-tcp-connection-management/tip2-13-tcp-connection-management.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 18 | tcp-ip-illustrated-vol1/17-tip2-14-tcp-timeout-retransmission/tip2-14-tcp-timeout-retransmission.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 19 | tcp-ip-illustrated-vol1/18-tip2-15-tcp-data-flow-window/tip2-15-tcp-data-flow-window.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 20 | tcp-ip-illustrated-vol1/19-tip2-16-tcp-congestion-control/tip2-16-tcp-congestion-control.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 21 | tcp-ip-illustrated-vol1/20-tip2-17-tcp-keepalive/tip2-17-tcp-keepalive.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 22 | tcp-ip-illustrated-vol1/21-tip2-18-security/tip2-18-security.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 23 | tcp-ip-illustrated-vol1/22-tip2-glossary-acronyms/tip2-glossary-acronyms.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 24 | tcp-ip-illustrated-vol1/23-tip2-index/tip2-index.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 25 | tcp-ip-illustrated-vol1/24-tip2-official-final-review/tip2-official-final-review.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | tcp-ip-illustrated-vol1/00-tip2-official-learning-map/tip2-official-learning-map.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 2 | tcp-ip-illustrated-vol1/01-tip2-foreword/tip2-foreword.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 3 | tcp-ip-illustrated-vol1/02-tip2-preface-second-edition/tip2-preface-second-edition.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 4 | tcp-ip-illustrated-vol1/03-tip2-adapted-preface-first-edition/tip2-adapted-preface-first-edition.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 5 | tcp-ip-illustrated-vol1/04-tip2-01-introduction/tip2-01-introduction.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 6 | tcp-ip-illustrated-vol1/05-tip2-02-address-architecture/tip2-02-address-architecture.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 7 | tcp-ip-illustrated-vol1/06-tip2-03-link-layer/tip2-03-link-layer.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 8 | tcp-ip-illustrated-vol1/07-tip2-04-arp/tip2-04-arp.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 9 | tcp-ip-illustrated-vol1/08-tip2-05-internet-protocol/tip2-05-internet-protocol.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 10 | tcp-ip-illustrated-vol1/09-tip2-06-dhcp-autoconfiguration/tip2-06-dhcp-autoconfiguration.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 11 | tcp-ip-illustrated-vol1/10-tip2-07-firewalls-nat/tip2-07-firewalls-nat.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 12 | tcp-ip-illustrated-vol1/11-tip2-08-icmp/tip2-08-icmp.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 13 | tcp-ip-illustrated-vol1/12-tip2-09-broadcast-multicast/tip2-09-broadcast-multicast.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 14 | tcp-ip-illustrated-vol1/13-tip2-10-udp-fragmentation/tip2-10-udp-fragmentation.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 15 | tcp-ip-illustrated-vol1/14-tip2-11-dns/tip2-11-dns.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 16 | tcp-ip-illustrated-vol1/15-tip2-12-tcp-preliminaries/tip2-12-tcp-preliminaries.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 17 | tcp-ip-illustrated-vol1/16-tip2-13-tcp-connection-management/tip2-13-tcp-connection-management.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 18 | tcp-ip-illustrated-vol1/17-tip2-14-tcp-timeout-retransmission/tip2-14-tcp-timeout-retransmission.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 19 | tcp-ip-illustrated-vol1/18-tip2-15-tcp-data-flow-window/tip2-15-tcp-data-flow-window.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 20 | tcp-ip-illustrated-vol1/19-tip2-16-tcp-congestion-control/tip2-16-tcp-congestion-control.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 21 | tcp-ip-illustrated-vol1/20-tip2-17-tcp-keepalive/tip2-17-tcp-keepalive.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 22 | tcp-ip-illustrated-vol1/21-tip2-18-security/tip2-18-security.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 23 | tcp-ip-illustrated-vol1/22-tip2-glossary-acronyms/tip2-glossary-acronyms.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 24 | tcp-ip-illustrated-vol1/23-tip2-index/tip2-index.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 25 | tcp-ip-illustrated-vol1/24-tip2-official-final-review/tip2-official-final-review.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
