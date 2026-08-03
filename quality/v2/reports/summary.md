@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T08:59:28.058Z；旧版分数不迁移。
+> 2026-08-03T09:38:52.976Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1413
-- published：63
+- passed：1375
+- published：101
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -201,7 +201,7 @@
 | 188 | game-server-programming | 10 | 0 | 0 | 10 | 0 |
 | 189 | global-illumination | 12 | 0 | 0 | 12 | 0 |
 | 190 | go-in-action | 11 | 0 | 0 | 11 | 0 |
-| 191 | http-definitive-guide | 38 | 0 | 0 | 38 | 0 |
+| 191 | http-definitive-guide | 38 | 0 | 0 | 0 | 0 |
 | 192 | illustrated-ai | 16 | 0 | 0 | 16 | 0 |
 | 193 | illustrated-dl | 10 | 0 | 0 | 10 | 0 |
 | 194 | illustrated-http | 13 | 0 | 0 | 0 | 0 |

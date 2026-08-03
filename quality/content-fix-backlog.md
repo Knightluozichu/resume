@@ -483,19 +483,19 @@
 
 ### 3.1 car-structure-illustrated（9 章 · 待修 9 章 · 9 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | car-structure-illustrated/00-map/csi23-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | car-structure-illustrated/01-book-guide/csi23-book-guide.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | car-structure-illustrated/02-prologue/csi23-prologue.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | car-structure-illustrated/03-01-vehicle-structure/csi23-01-vehicle-structure.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | car-structure-illustrated/04-02-production/csi23-02-production.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | car-structure-illustrated/05-03-eco-cars/csi23-03-eco-cars.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | car-structure-illustrated/06-final-future/csi23-final-future.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | car-structure-illustrated/07-index/csi23-index.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | car-structure-illustrated/08-review/csi23-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | car-structure-illustrated/00-map/csi23-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | car-structure-illustrated/01-book-guide/csi23-book-guide.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | car-structure-illustrated/02-prologue/csi23-prologue.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | car-structure-illustrated/03-01-vehicle-structure/csi23-01-vehicle-structure.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | car-structure-illustrated/04-02-production/csi23-02-production.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | car-structure-illustrated/05-03-eco-cars/csi23-03-eco-cars.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | car-structure-illustrated/06-final-future/csi23-final-future.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | car-structure-illustrated/07-index/csi23-index.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | car-structure-illustrated/08-review/csi23-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
