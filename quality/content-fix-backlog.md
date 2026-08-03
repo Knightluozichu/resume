@@ -637,16 +637,16 @@
 
 ### 4.1 rl-deep-learning-c（6 章 · 待修 6 章 · 6 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | rl-deep-learning-c/00-learning-map/rlc-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | rl-deep-learning-c/01-rl-deep-learning/rlc-01-rl-deep-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | rl-deep-learning-c/02-reinforcement-implementation/rlc-02-reinforcement-implementation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | rl-deep-learning-c/03-deep-learning-techniques/rlc-03-deep-learning-techniques.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | rl-deep-learning-c/04-deep-reinforcement-learning/rlc-04-deep-reinforcement-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | rl-deep-learning-c/05-final-review/rlc-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | rl-deep-learning-c/00-learning-map/rlc-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | rl-deep-learning-c/01-rl-deep-learning/rlc-01-rl-deep-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | rl-deep-learning-c/02-reinforcement-implementation/rlc-02-reinforcement-implementation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | rl-deep-learning-c/03-deep-learning-techniques/rlc-03-deep-learning-techniques.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | rl-deep-learning-c/04-deep-reinforcement-learning/rlc-04-deep-reinforcement-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | rl-deep-learning-c/05-final-review/rlc-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
