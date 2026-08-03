@@ -1,9 +1,9 @@
 ---
 title: "第8章 进程和线程通知"
 type: C
-section: "监控 · 系统通知"
+section: "通知 · 进程、对象与注册表"
 order: 8
-description: "实现进程创建/退出、线程和映像加载通知，把内核事件安全排队并提供给用户模式客户端消费。 覆盖10个本页目录坐标。"
+description: "注册进程、线程与映像加载通知回调，把内核事件经队列搬运到用户模式，并掌握回调短小、队列有界与卸载注销的完整纪律。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,179 +18,439 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp08ProcessThreadNotificationsVersionContextLab,
-  Wkp08ProcessThreadNotificationsExecutableProbeLab,
-  Wkp08ProcessThreadNotificationsSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-08-process-thread-notifications";
+import { Wkp08NotificationPipeLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-08-notification-pipe-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) 进程通知回调 = SVG 事件源按钮（进程创建/退出）+ 内核回调框（可点击）
+  2) 线程通知回调 = SVG 事件源按钮（线程创建/退出）+ 内核回调框（可点击）
+  3) 映像加载通知 = SVG 事件源按钮（映像加载）+ 内核回调框（可点击）
+  4) 事件队列 = SVG 队列面板 + 队列满开关（可交互观察丢弃计数）
+  5) 用户模式通道 = SVG 客户框（IOCTL 批量取走）
+  全章新概念 5 个（进程通知回调/线程通知回调/映像加载通知/事件队列/用户模式通道），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把进程通知、创建/退出、用户态数据、线程通知与映像加载通知落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“回调内阻塞、事件队列无界、PID复用误关联或Unload时回调仍可达”，定位本章相对签名参考驱动的首个分岔
-- 交付回调注册表、事件模式、队列/丢弃轨迹、用户态协议与注销证明，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能注册进程、线程、映像加载三种通知回调，并解释各自回调参数与运行上下文
+- 能改出"回调只登记、队列搬运、用户模式取走"的通知管道，并加入丢弃计数
+- 能回答：回调里直接调用 IoCreateFile 打开日志文件会发生什么？为什么通知回调必须短小？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用①空间与地图（大楼物业/保安室）。 */}
 
-本章的核心问题是：进程、线程与映像通知怎样以短回调、显式队列、丢弃统计和注销顺序送达用户态？
+## 为什么大楼要装"入住和搬离"的通知系统
 
-、、、、共同构成本页坐标。实现进程创建/退出、线程和映像加载通知，把内核事件安全排队并提供给用户模式客户端消费。
+想象你管理一栋大楼的安保。谁搬进来了、谁搬走了、谁带什么大件行李进门，这些信息你得第一时间知道——但你不能派保安站在每个房间门口盯着，那会堵死走廊。正确做法：物业系统在入住/搬离时自动发通知给保安室，保安只记一笔，攒一批再上报给监控中心。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+没有这套通知系统会怎样？你想统计"今晚楼里住了多少人"都得挨个敲门。而内核里，进程创建、线程开闭、程序加载都是高频事件——每秒钟几十上百次，没有一个高效的通知机制，安全软件、监控工具全都无从做起。
 
-## 来源合同与版本差异
+这一章装这套系统：注册三种自动通知（谁住进来、谁开新房间、谁搬大件）、在保安室只做快速登记（回调短小）、攒成队列再上报（用户模式通道），最后学会安全撤岗（卸载注销）。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## 进程通知回调：入住与搬离的自动登记
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="内核在进程创建或退出时调用的回调，通过 PsSetCreateProcessNotifyRoutineEx 注册，可附带创建标志">进程通知回调</Term> 是监控进程生死的入口。注册后，每次任何进程创建或退出，内核都会调用你的回调，参数包括新进程 ID、父进程 ID 和创建标志（是否成功创建）。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+回调的运行上下文接近 APC_LEVEL（第 6 章的 APC 机制），这意味着：不能等待、不能访问分页内存、动作必须极短。回调里唯一该做的是"填一条事件记录进队列"——把它当成保安室门口的登记簿，写一笔就完事。写文件、发网络请求这些重活，等搬进队列再说。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## 线程通知回调：更密集的房客变动
 
-### 本页独立事实来源
+<Term def="内核在线程创建或退出时调用的回调，通过 PsSetCreateThreadNotifyRoutine 注册，参数含进程 ID 与线程 ID">线程通知回调</Term> 与进程通知同类，但事件密度高一个量级：一个进程可能开几十个线程，线程的创建退出是系统里最频繁的内核事件之一。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft Windows内核DDI参考](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/)：本章用它核对目标build公开DDI、对象、IRP和例程合同。
-- [Microsoft ObCallback官方示例](https://learn.microsoft.com/en-us/samples/microsoft/windows-driver-samples/obcallback-callback-registration-driver/)：本章用它核对进程通知与对象回调的受支持示例边界。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
+它的参数只有进程 ID 和线程 ID——没有父线程信息，也没有创建标志。实现上与进程通知共用同一套"回调登记 + 队列搬运"管道，只是回调体必须更短、队列的丢弃策略必须更激进。想关联"哪个线程属于哪个进程"，用进程 ID 去查你自己维护的进程表。
 
-## 常见误区与故障注入
+## 映像加载通知：谁搬进了什么大件
 
-本章注入的故障是：回调内阻塞、事件队列无界、PID复用误关联或Unload时回调仍可达。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+<Term def="内核在进程加载可执行映像（EXE/DLL）时调用的回调，通过 PsSetLoadImageNotifyRoutine 注册，参数含映像路径与基址">映像加载通知</Term> 监控的是"程序把什么模块装进了自己的地址空间"。每次加载 EXE 或 DLL，回调收到完整映像路径（已带 `\SystemRoot` 前缀）和映像基址。
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+这个回调的价值在关联分析：结合进程通知，可以还原"哪个进程、什么时候、加载了什么模块"的完整时间线——这正是安全软件监控可疑 DLL 注入的标准手段。注意路径是内核格式，发给用户模式前要转成用户能读的形式；回调同样必须短小。
+
+## 事件队列：登记簿要排队上报
+
+回调不能阻塞、用户模式读取不能等，中间的缓冲就是<Term def="回调与用户模式之间的有界环形缓冲区，回调写入事件、后台线程批量取走，满时丢弃并计数">事件队列</Term>。它是典型的"生产者—消费者"：回调（生产者）只往队列尾写一条记录（自旋锁保护，第 6 章）；取走的线程（消费者）把一批记录打包交给用户模式。
+
+队列必须**有界**：事件爆发（如批量启动 100 个进程）时队列会满。满了怎么办？丢弃并计数——让客户端能从计数感知"中间丢了 N 条"。丢掉不可察觉是事故，丢掉可统计是设计。队列的容量、丢弃策略和序号字段，是协议的一部分，两端都要遵守。
+
+## 用户模式通道：监控中心的大屏幕
+
+队列里的数据最终要交给用户模式程序，通道是<Term def="用户程序通过设备 IOCTL 从驱动批量读取事件记录的协议，包含序号与丢弃计数">用户模式通道</Term>：客户端打开控制设备（第 4 章的设备对象），用 IOCTL 一次取走一批事件，循环轮询或等待"有新数据"事件。
+
+协议设计要点：每条记录带序号（发现空洞 = 有丢弃），响应里带丢弃计数（精确知道丢了多少），批次大小由客户端指定（控制单次拷贝量）。两侧只通过协议结构体交互，回调侧永远不直接触碰用户模式的内存。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：走一遍通知管道
+
+下面的可视化把整条通知管道画成图：事件源（三种通知类型）→ 内核回调 → 事件队列 → 用户模式客户 → 卸载注销。点事件源按钮观察回调与队列变化；打开"队列满"开关，再点事件源——观察丢弃计数增长。
+
+> 猜一猜：打开"队列满"后连续点击事件源按钮——新事件被丢弃时计数会变吗？用"丢弃可统计"的设计思路解释这个计数为什么必须存在。
+
+<Wkp08NotificationPipeLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：通知驱动的最小实现
+
+这一节按原书结构拆解通知驱动的核心代码：DriverEntry 注册、进程回调、队列与用户模式读取、Unload 注销。四个段覆盖驱动侧全部关键代码，完整工程见章末来源链接。
+
+### 段一：DriverEntry —— 注册三类回调
+
+入口做三件事：创建设备对象（用户模式取数据的门）、初始化队列和锁、注册三个通知回调。注册返回 NTSTATUS，失败要回滚已注册的回调——顺序注册、逆序回滚。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
+{
+    UNICODE_STRING devName = RTL_CONSTANT_STRING(L"\\Device\\Notify");
+    PDEVICE_OBJECT dev;
+    NTSTATUS st = IoCreateDevice(DriverObject, sizeof(CTX),
+        &devName, FILE_DEVICE_UNKNOWN, 0, FALSE, &dev);
+    if (!NT_SUCCESS(st)) return st;
+
+    InitQueue(&((CTX*)dev->DeviceExtension)->queue);
+
+    // 注册三个通知回调（逆序回滚）
+    st = PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, FALSE);
+    if (!NT_SUCCESS(st)) { IoDeleteDevice(dev); return st; }
+
+    st = PsSetCreateThreadNotifyRoutine(OnThreadNotify);
+    if (!NT_SUCCESS(st)) {
+        PsRemoveCreateProcessNotifyRoutine(OnProcessNotify);
+        IoDeleteDevice(dev); return st;
+    }
+
+    st = PsSetLoadImageNotifyRoutine(OnImageNotify);
+    if (!NT_SUCCESS(st)) { /* 同样逆序回滚 */ }
+
+    DriverObject->DriverUnload = OnUnload;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+DriverEntry
+  │
+  ├─→ IoCreateDevice（用户模式的取数门）
+  ├─→ InitQueue：队列 + 自旋锁 + 序号
+  ├─→ PsSetCreateProcessNotifyRoutineEx(OnProcessNotify)
+  ├─→ PsSetCreateThreadNotifyRoutine(OnThreadNotify)
+  ├─→ PsSetLoadImageNotifyRoutine(OnImageNotify)
+  │     注册失败 → 逆序回滚已注册的回调
+  └─→ DriverUnload = OnUnload
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异点：进程通知有新旧两版——<code>PsSetCreateProcessNotifyRoutine</code>（旧，回调拿不到创建结果）与 <code>PsSetCreateProcessNotifyRoutineEx</code>（新，多一个 CreateInfo 参数）。新代码用 Ex 版；线程和映像通知没有 Ex 版。三者都在 DriverEntry 里注册，卸载时用 PsRemove* 成对注销。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区二：接口同名就说明当前合同未变"
->
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：进程回调 —— 只登记，不干活
+
+回调体是整章纪律的浓缩：取参数 → 填一条记录 → 入队（可能被丢弃）→ 返回。绝不在这里做文件操作、内存分配或等待。`CreateInfo` 非空表示进程创建（含是否成功），为空表示退出——注意区分。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+VOID OnProcessNotify(PEPROCESS Process, HANDLE Pid,
+    PPS_CREATE_NOTIFY_INFO CreateInfo)
+{
+    UNREFERENCED_PARAMETER(Process);
+    CTX* ctx = GetCtx();               // 全局上下文
+    EVENT_REC rec = { 0 };
+
+    rec.kind = CreateInfo ? EV_PROC_CREATE : EV_PROC_EXIT;
+    rec.pid = (ULONG)(ULONG_PTR)Pid;
+    if (CreateInfo) {
+        rec.ppid = (ULONG)(ULONG_PTR)CreateInfo->ParentProcessId;
+        // 创建标志：CreateInfo->CreationStatus 非 0 表示创建失败
+    }
+
+    // 入队：满则丢弃并递增丢弃计数（生产者的唯一动作）
+    QueuePush(&ctx->queue, &rec);
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+任何进程创建/退出
+  │
+  ▼
+OnProcessNotify（APC_LEVEL）
+  │
+  ├─→ 组装 EVENT_REC（kind/pid/ppid）
+  ├─→ QueuePush（自旋锁保护）
+  │     ├─→ 队列有空位 → 写入，序号 +1
+  │     └─→ 队列已满   → 丢弃，丢弃计数 +1
+  │
+  └─→ 返回（全程无等待、无分页访问）
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段三：线程与映像回调 —— 同一管道的两种记录
+
+线程和映像回调复用同一队列。线程记录只有 pid/tid；映像记录带路径——路径是内核格式（`\SystemRoot\...`），存进队列前要复制到非分页缓冲（回调上下文不能碰分页内存）。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+VOID OnThreadNotify(HANDLE Pid, HANDLE Tid, BOOLEAN Create)
+{
+    CTX* ctx = GetCtx();
+    EVENT_REC rec = { 0 };
+    rec.kind = Create ? EV_THREAD_CREATE : EV_THREAD_EXIT;
+    rec.pid = (ULONG)(ULONG_PTR)Pid;
+    rec.tid = (ULONG)(ULONG_PTR)Tid;
+    QueuePush(&ctx->queue, &rec);
+}
+
+VOID OnImageNotify(PUNICODE_STRING FullImageName,
+    HANDLE Pid, PIMAGE_INFO ImageInfo)
+{
+    UNREFERENCED_PARAMETER(ImageInfo);
+    CTX* ctx = GetCtx();
+    EVENT_REC rec = { 0 };
+    rec.kind = EV_IMAGE_LOAD;
+    rec.pid = (ULONG)(ULONG_PTR)Pid;
+
+    if (FullImageName && FullImageName->Length < MAX_PATH * 2) {
+        // 路径复制到非分页记录缓冲（回调里不能访问分页内存）
+        RtlCopyMemory(rec.imagePath,
+            FullImageName->Buffer, FullImageName->Length);
+        rec.imageLen = FullImageName->Length;
+    }
+    QueuePush(&ctx->queue, &rec);
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+线程创建/退出（高频！）
+  │ → OnThreadNotify：pid/tid 一条，入队
+  │
+进程加载 EXE/DLL
+  │ → OnImageNotify：路径 + 基址 + pid
+  │     · 路径复制进非分页记录缓冲
+  │     · 入队（满则丢弃计数）
+  │
+共同点：回调极短，全部动作 = 组装 + 入队
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段四：用户模式读取与卸载注销
+
+用户模式通过 IOCTL 批量取走事件：驱动从队列头拷贝一批到输出缓冲，响应里带上丢弃计数。卸载时逆序注销三个回调——注销返回后内核保证不再调用，才能释放队列。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS GetEvents(PIRP Irp, PIO_STACK_LOCATION stack)
+{
+    CTX* ctx = GetCtx();
+    ULONG outLen = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    auto* out = (GET_EVENTS_OUT*)Irp->SystemBuffer;
+    if (outLen < sizeof(GET_EVENTS_OUT)) {
+        Irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    ULONG n = QueueDrain(&ctx->queue, out->records,
+        (outLen - sizeof(ULONG)) / sizeof(EVENT_REC));
+    out->dropped = ctx->queue.dropped;  // 丢弃计数随响应返回
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information =
+        sizeof(ULONG) + n * sizeof(EVENT_REC);
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+卸载部分逆序注销三个回调，注销返回后再排空队列、释放资源、删设备。
+
+```c
+VOID OnUnload(PDRIVER_OBJECT DriverObject)
+{
+    // 1. 先注销：内核保证不再调用回调
+    PsRemoveCreateProcessNotifyRoutine(OnProcessNotify);
+    PsRemoveCreateThreadNotifyRoutine(OnThreadNotify);
+    PsRemoveLoadImageNotifyRoutine(OnImageNotify);
+
+    // 2. 再排空队列、释放资源、删设备
+    QueueFree(&GetCtx()->queue);
+    IoDeleteDevice(DriverObject->DeviceObject);
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```c
+// 轮询取事件（或等"有新事件"信号再取）
+for (;;) {
+    GET_EVENTS_OUT out = { 0 };
+    DWORD returned = 0;
+    DeviceIoControl(h, IOCTL_GET_EVENTS,
+        nullptr, 0, &out, sizeof(out), &returned, nullptr);
+
+    if (out.dropped > lastDropped) {
+        // 丢弃计数变了 → 中间丢了 (out.dropped - lastDropped) 条
+        printf("丢失 %u 条事件\n", out.dropped - lastDropped);
+    }
+    lastDropped = out.dropped;
+    for (ULONG i = 0; i < returned / sizeof(EVENT_REC); i++) {
+        // 处理 out.records[i]（kind/pid/tid/路径）
+    }
+    Sleep(100);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  <strong>现象</strong>：回调里调用 IoCreateFile 写日志，系统蓝屏或回调线程崩溃。<strong>原因</strong>：通知回调运行在 APC_LEVEL 附近，文件操作需要等待 I/O 完成（PASSIVE_LEVEL 才行），且访问分页内存。<strong>修法</strong>：回调只登记事件入队；文件写入交给工作项（PASSIVE_LEVEL）或用户模式客户代写，回调里永远不做 I/O。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+<Callout type="trap">
+  <strong>现象</strong>：卸载后系统崩溃，或偶尔还收到回调。<strong>原因</strong>：没有注销回调就释放了队列与设备对象；注销调用本身也有竞态窗口——必须等 PsRemove* 返回后再释放。<strong>修法</strong>：卸载先逆序注销三个回调，确认返回后再排空队列、释放缓冲、删设备对象，顺序不可颠倒。
 </Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  <strong>现象</strong>：事件爆发时用户模式拿到的记录中间缺了一大段，客户端却毫无察觉。<strong>原因</strong>：队列满了直接丢弃且没有计数，客户端无法知道数据不完整。<strong>修法</strong>：队列满时丢弃并递增丢弃计数；记录带序号；IOCTL 响应携带 dropped 字段，客户端对比前后值即可精确感知丢失量。
+</Callout>
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+<Callout type="trap">
+  <strong>现象</strong>：映像回调里把路径字符串直接复制到分页缓冲，蓝屏。<strong>原因</strong>：回调上下文不能访问分页内存，分页缓冲可能在换页中。<strong>修法</strong>：路径先复制到非分页记录缓冲（长度受控），或干脆只在回调里记 pid，等用户模式取走后按需查询完整路径。
+</Callout>
 
-**本章验收不变量**：注册代次内事件不重不乱，丢弃可计数，停止新事件后队列与引用归零
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-**本章必查证据**：回调注册表、事件模式、队列/丢弃轨迹、用户态协议与注销证明
+## 小结
 
-## 交互实验 — 通知回调与队列
-
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
-
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp08ProcessThreadNotificationsVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp08ProcessThreadNotificationsExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp08ProcessThreadNotificationsSafetyGateLab />
-  </Step>
-</Stepper>
-
-## 练习
+- 三类通知：进程（含创建标志）、线程（高频）、映像（带路径基址）
+- 回调运行在 APC_LEVEL 附近：只登记入队，绝不等待与分页访问
+- 事件队列有界：满则丢弃并计数，客户端可感知丢失量
+- 用户模式经 IOCTL 批量取事件，协议含序号与丢弃计数
+- 卸载逆序注销回调，返回后再排空队列释放资源
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：进程、线程与映像通知怎样以短回调、显式队列、丢弃统计和注销顺序送达用户态？
+**问题 1：** 在 Demo 中打开"队列满"开关后连续点击事件源，观察丢弃计数。为什么"丢弃可统计"比"不丢事件"更符合内核回调的设计？
 
 <Answer>
-  实验必须满足不变量：注册代次内事件不重不乱，丢弃可计数，停止新事件后队列与引用归零。需要交付的证据包括：回调注册表、事件模式、队列/丢弃轨迹、用户态协议与注销证明。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"回调内阻塞、事件队列无界、PID复用误关联或Unload时回调仍可达"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+因为回调运行在 APC_LEVEL 附近且绝不能阻塞——如果回调因队列满而等待，会拖慢整个系统的进程创建路径，甚至死锁。所以队列满时唯一正确的动作是"丢并计数"。相比"保证不丢"（需要无限队列或无界等待），"丢弃可统计"让回调保持 O(1) 极短、零等待，同时把数据不完整这件事显式暴露给客户端（序号空洞 + dropped 计数），客户端可以感知、记录甚至触发告警。内核实时性优先，完整性靠协议层弥补。
+
 </Answer>
 
-**问题 2：故障识别与避免**
-
-如果在实验中观察到"回调内阻塞、事件队列无界、PID复用误关联或Unload时回调仍可达"，如何定位根因？如何避免？
+**问题 2：** 你的进程通知回调需要把事件写到文件。按本章纪律给出正确的实现方案（回调里怎么做、谁来做文件写入、怎么通知写入者）。
 
 <Answer>
-  定位方法：在回调注册表、事件模式、队列/丢弃轨迹、用户态协议与注销证明中检查是否违反不变量"注册代次内事件不重不乱，丢弃可计数，停止新事件后队列与引用归零"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保进程通知、创建/退出、用户态数据、线程通知与映像加载通知的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+方案：回调里只组装 EVENT_REC 并入队（自旋锁保护、满则丢弃计数）——这是回调的全部职责。文件写入由后台工作项承担：回调入队后设置一个事件（或直接 IoQueueWorkItem），工作项在 PASSIVE_LEVEL 下从队列批量取记录、追加写入文件。控制写入频率：每攒 N 条或每 T 毫秒写一批，避免每条事件一次 I/O。用户模式客户也可以代写（IOCTL 取走后自行落盘）。注意：文件句柄必须在工作项初始化时打开、卸载时在排空队列后关闭。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 实现线程通知回调与队列读取的协议部分：1）写出 OnThreadNotify 回调（组装 pid/tid 记录并入队）；2）写出 GetEvents 分发例程（校验输出长度、批量取走、返回丢弃计数）；3）写出用户模式解析响应的片段（感知丢弃并打印记录）。要求包含序号与丢弃计数两个协议字段。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+// 1) 回调：只登记
+VOID OnThreadNotify(HANDLE Pid, HANDLE Tid, BOOLEAN Create)
+{
+    CTX* ctx = GetCtx();
+    EVENT_REC rec = { 0 };
+    rec.kind = Create ? EV_THREAD_CREATE : EV_THREAD_EXIT;
+    rec.pid = (ULONG)(ULONG_PTR)Pid;
+    rec.tid = (ULONG)(ULONG_PTR)Tid;
+    QueuePush(&ctx->queue, &rec);   // 内部：序号++，满则丢弃计数++
+}
 
-什么情况下必须停止内核实验？
+// 2) 读取：批量取走 + 丢弃计数
+NTSTATUS GetEvents(PIRP Irp, PIO_STACK_LOCATION stack)
+{
+    ULONG outLen = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    auto* out = (GET_EVENTS_OUT*)Irp->SystemBuffer;
+    if (outLen < sizeof(GET_EVENTS_OUT))
+        { Irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL; return STATUS_BUFFER_TOO_SMALL; }
+    ULONG n = QueueDrain(&ctx->queue, out->records,
+        (outLen - sizeof(ULONG)) / sizeof(EVENT_REC));
+    out->dropped = ctx->queue.dropped;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = sizeof(ULONG) + n * sizeof(EVENT_REC);
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
+用户模式解析：取 `dropped` 与上次比较，差值即丢失量；遍历返回的记录，检查序号是否连续（空洞 = 内核侧丢弃但计数未更新，属协议 bug）。打印示例：`[thrd] PID=1234 TID=5678 create`。
+
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- 进程通知：连接“注册通知回调”的内核契约与证据。
-- 线程通知：连接“捕获创建退出”的内核契约与证据。
-- 映像加载通知：连接“复制稳定字段”的内核契约与证据。
-- 事件队列：连接“写入有界队列”的内核契约与证据。
-- 用户模式客户端：连接“客户端读取”的内核契约与证据。
-- 本页10个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：进程通知回调/线程通知回调/映像加载通知/事件队列/用户模式通道）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="进程通知">
-    进程通知是本章的入口概念。进程、线程与映像通知怎样以短回调、显式队列、丢弃统计和注销顺序送达用户态？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在回调注册表、事件模式、队列/丢弃轨迹、用户态协议与注销证明中留下可验证记录。
+  <GlossaryItem term="进程通知回调">
+    内核在进程创建或退出时调用的函数，用 PsSetCreateProcessNotifyRoutineEx 注册。回调拿到进程 ID、父进程 ID 和创建标志。相当于大楼物业在住户入住/搬离时自动通知保安室。
   </GlossaryItem>
-  <GlossaryItem term="创建/退出">
-    创建/退出在本章中用于构造可撤销反例。注入故障"回调内阻塞、事件队列无界、PID复用误关联或Unload时回调仍可达"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="线程通知回调">
+    内核在线程创建或退出时调用的函数，用 PsSetCreateThreadNotifyRoutine 注册，参数只有进程 ID 和线程 ID。事件频率比进程通知高一个量级，回调必须更短。
   </GlossaryItem>
-  <GlossaryItem term="用户态数据">
-    用户态数据必须满足不变量"注册代次内事件不重不乱，丢弃可计数，停止新事件后队列与引用归零"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+  <GlossaryItem term="映像加载通知">
+    内核在进程加载 EXE/DLL 时调用的函数，用 PsSetLoadImageNotifyRoutine 注册，参数含映像路径和基址。常用于还原"哪个进程什么时候加载了什么模块"的监控时间线。
   </GlossaryItem>
-  <GlossaryItem term="线程通知">
-    线程通知连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="事件队列">
+    回调与用户模式之间的有界环形缓冲区。回调（生产者）只往队尾写记录，取走方（消费者）批量读取；满时丢弃并计数。相当于保安室的登记簿：先快速记一笔，攒够了再统一上报。
+  </GlossaryItem>
+  <GlossaryItem term="用户模式通道">
+    用户程序通过设备 IOCTL 从驱动批量读取事件记录的协议，包含序号与丢弃计数字段。回调侧只写队列，用户侧只读队列，两侧互不阻塞。相当于监控中心的大屏幕：数据从登记簿批量同步过来。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

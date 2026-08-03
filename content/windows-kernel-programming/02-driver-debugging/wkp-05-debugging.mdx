@@ -3,7 +3,7 @@ title: "第5章 调试"
 type: C
 section: "实战 · 完整驱动与调试"
 order: 5
-description: "从Debugging Tools和WinDbg基础进入本地内核调试、主机/目标机完整内核调试和驱动级断点、栈、对象检查。 覆盖11个本页目录坐标。"
+description: "用宿主—目标架构搭建内核调试环境，通过符号、断点、调用栈与崩溃转储，把驱动故障从蓝屏定位到具体函数与指令。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,171 +18,365 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp05DebuggingVersionContextLab,
-  Wkp05DebuggingExecutableProbeLab,
-  Wkp05DebuggingSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging";
+import { Wkp05DebuggingLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) 宿主—目标架构 = SVG 左右两机 + 调试链路（可点击查看详情）
+  2) 符号文件 = SVG 调用栈面板 + 符号开关（关闭后函数名变地址）
+  3) 断点 = SVG 三个断点选择按钮 + 命令条（可点击切换）
+  4) 崩溃转储 = SVG 转储分析面板（!analyze -v 结果）
+  5) 单步执行 = SVG 连续/单步开关（可交互切换模式）
+  全章新概念 5 个（宿主—目标架构/符号文件/断点/崩溃转储/单步执行），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把调试工具、WinDbg、本地/完整内核调试、宿主、目标与驱动调试落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“符号错配、只做本地观察、Verifier致崩溃却无调试宿主或恢复方案”，定位本章相对签名参考驱动的首个分岔
-- 交付宿主/目标清单、符号验证、转储、调用栈、首错假设与恢复报告，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能配置目标机调试启动项并建立宿主—目标内核调试连接
+- 能改出在 DriverEntry 命中断点并查看调用栈的效果，说出栈顶三条记录的含义
+- 能回答：符号文件版本与驱动不匹配时，调用栈会变成什么样？为什么？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用③相机与摄影（观察窗/取景）。 */}
 
-本章的核心问题是：WinDbg、符号、宿主—目标、转储与可重复症状怎样定位首个内核分岔？
+## 为什么写驱动必须先学会"隔着一堵墙观察"
 
-、、、、共同构成本页坐标。从Debugging
-Tools和WinDbg基础进入本地内核调试、主机/目标机完整内核调试和驱动级断点、栈、对象检查。
+想象你在观察一座运行中的核电站。你不能站在反应堆旁边看——太危险，机器一出事你也会搭进去。正确做法是坐在隔壁的监控室，透过仪表和摄像头观察：哪里温度异常、哪个阀门先动、报警从哪一路传来。监控室就是本章的主角。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+没有监控室会怎样？你只能等电站炸了再冲进去看废墟——对应到驱动，就是等蓝屏后重启，对着重启前的一瞬猜测原因。猜中靠运气，猜不中只能反复炸、反复猜。
 
-## 来源合同与版本差异
+这一章教你搭监控室：把观察者与被观察者分开（两台机器）、装上仪表（调试工具）、给仪表标好刻度（符号）、设好报警点（断点）、学会看事故录像（转储）。搭好之后，驱动崩溃不再是玄学，而是一条可以回放的现场。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## 宿主—目标架构：监控室与车间
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+内核调试的基本架构是两台机器：<Term def="运行调试器、负责观察和控制的机器，不运行被测驱动">宿主机</Term>（host）运行 WinDbg，<Term def="实际运行被测驱动的机器，被调试器暂停、断点和读写内存">目标机</Term>（target）运行驱动。两台机器通过串口、网络或 USB 相连，目标机启动时由引导配置开启调试支持，内核在启动早期就等待调试器接管。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+为什么非要两台？因为内核崩溃时整个系统停摆，如果调试器在崩溃的机器上，连它一起停——等于监控室建在反应堆里。分开之后，目标机随便崩，宿主机完好无损，随时可以打断、检查、重启目标机。可丢弃的测试虚拟机就是最常用的目标机。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## 符号文件：照片上的坐标标注
 
-### 本页独立事实来源
+调试器看到的是二进制地址，而你要的是函数名和行号——中间靠 <Term def="把二进制地址映射回函数名、变量名和源行号的文件，后缀 .pdb，必须与二进制同版本">符号文件</Term>（.pdb）搭桥。WinDbg 加载符号后，调用栈从 `MyDriver+0x14` 变成 `MyDriver!MyDeviceControl+0x14`，可读性天差地别。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft Windows调试入门](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/getting-started-with-windows-debugging)：本章用它核对WinDbg、宿主—目标、符号和转储调试当前边界。
-- [Microsoft Driver Verifier指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/driver-verifier)：本章用它核对只在测试机启用、目标驱动选择、bug check、查询和reset恢复。
-- [Microsoft Windows内核DDI参考](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/)：本章用它核对目标build公开DDI、对象、IRP和例程合同。
+符号必须与 .sys 完全同版本。改了代码重新编译，就得重新加载新的 .pdb——用旧符号调试新二进制，函数名会错位，栈回溯全是"鬼影"。调试会话的第一步永远是核对符号版本，`lm` 命令列出模块时，符号状态一目了然。
 
-## 常见误区与故障注入
+## 断点：在关键路口设卡
 
-本章注入的故障是：符号错配、只做本地观察、Verifier致崩溃却无调试宿主或恢复方案。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+<Term def="让目标机在指定函数或地址暂停执行、把控制权交给调试器的机制">断点</Term>（breakpoint）是调试的基本手段。`bp MyDriver!MyDeviceControl` 表示：目标机一旦进入这个函数就暂停，控制权回到宿主机。此时你可以查看参数、寄存器、内存，然后 `g`（继续）或 `p`（单步）。
 
-<Callout type="trap" title="误区一：作者样章或二版等于中文版整书">
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+断点比 DbgPrint 日志强在"暂停现场"：日志只能告诉你"来过"，断点能让你在"刚来"的时刻把现场翻个底朝天。断点打在驱动生命周期关键点（DriverEntry、分发例程、Unload），配合调用栈就能回答"谁调了我、参数是什么、栈上还有什么"。
+
+## 崩溃转储：事故录像
+
+目标机蓝屏后，如果配置了转储文件，系统把崩溃瞬间的内存镜像存成 .dmp——这就是 <Term def="蓝屏时保存的内存镜像文件，可在宿主机离线分析崩溃原因">崩溃转储</Term>（crash dump）。它不需要目标机在线，宿主机随时打开分析。
+
+分析命令是 `!analyze -v`：自动给出 BugCheck 代码（如 0xD1 表示在错误 IRQL 访问内存）、首错地址、责任模块和调用栈。`!analyze -v` 是崩溃定位的第一站——它把"哪里崩了"变成"大概是谁崩的"，剩下的是顺着调用栈找到具体那行指令。
+
+## 单步执行：慢放每一帧
+
+<Term def="每按一次命令只执行一条指令或一个函数，逐帧观察程序状态">单步执行</Term>（stepping）把"暂停"变成"慢放"：断点命中后，`p` 执行一条指令、`t` 跟进函数内部，每步都能看寄存器与内存变化。适合确认"这行到底有没有执行""这个值是什么时候变的"。
+
+单步在内核里要小心：在 DISPATCH_LEVEL 及以上单步可能让目标机挂起，某些路径（中断、DPC）不能随意慢放。实战中通常是断点定位大范围、单步精查小范围。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：搭建调试工作台
+
+下面的可视化把宿主—目标架构画成工作台：左右两台机器、中间调试链路、下方断点选择、调用栈与转储分析面板。点任意区域看详情；切换断点位置观察命令与调用栈变化；关掉符号开关看"没有符号"的世界。
+
+> 猜一猜：把"符号"开关关掉，调用栈第一行会变成什么样子？用符号文件的概念解释为什么调试器"不认识"你的函数名。
+
+<Wkp05DebuggingLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：从开机配置到崩溃定位
+
+调试不是"点开 WinDbg"这么简单，它是一条完整的命令链：目标机配置 → 连接 → 断点 → 分析。四个代码段走完整条链。
+
+### 段一：目标机开启内核调试
+
+先在目标机上用 bcdedit 配置调试启动项。注意顺序：先开 debug，再设调试传输（这里是网络调试，hostip 指向宿主机），最后重启生效。配错了，目标机起来后 WinDbg 一直连不上。
+
+<CodeTabs>
+  <Tab label="目标机命令">
+
+```bat
+:: 目标机上以管理员身份运行
+bcdedit /debug on
+bcdedit /dbgsettings net hostip:192.168.1.10 port:50000 key:1.2.3.4.5
+bcdedit /enum {dbgsettings}   :: 核对配置
+
+:: 重启目标机，内核启动早期等待调试器连接
+shutdown /r /t 0
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+目标机 BIOS/EFI 启动
+  │
+  ├─→ 引导器读取 {dbgsettings}
+  │     ├─→ /debug on              开启调试支持
+  │     └─→ net hostip/port/key    网络调试参数
+  │
+  ├─→ 内核初始化早期：等待调试器
+  │     · 无调试器 → 正常启动（连接可后补）
+  │     · 有调试器 → 内核被托管，可随时打断
+  │
+  └─→ 系统就绪 → 可加载被测驱动
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  版本差异点：旧系统常用 <code>/debugport com1 /baudrate 115200</code> 串口调试；新系统优先 <code>net</code> 网络调试。调试密钥 <code>key</code> 是明文生成、可用于重连；调试口在 <code>sc start</code> 驱动时用宿主 WinDbg 的 <code>dbgcmd</code> 命令确认连接状态。
 </Callout>
 
-<Callout type="trap" title="误区二：接口同名就说明当前合同未变">
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：宿主机连接与断点
+
+宿主机启动 WinDbg（内核模式），选择网络调试并填目标机地址。连接后先配符号路径再重载模块——顺序反了符号白配。然后设断点、`g` 放行，目标机跑到断点就停。
+
+<CodeTabs>
+  <Tab label="宿主机命令">
+
+```text
+# WinDbg (内核模式) → 网络 → 目标 IP:端口 + 调试密钥
+
+# 1. 配置符号路径（Microsoft 公共符号 + 自己的 .pdb 目录）
+.sympath srv*C:\Symbols*https://msdl.microsoft.com/download/symbols;D:\MyDriver\x64
+
+# 2. 重载模块符号（确认 MyDriver 已加载且符号匹配）
+.reload
+lm m MyDriver     # 观察符号状态：deferred/loaded/mismatched
+
+# 3. 设断点并放行
+bp MyDriver!MyDeviceControl
+g
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+宿主机 WinDbg                   目标机
+  │ 连接（网络 + 密钥）            │
+  │ ←──────────────────────────→ │ 内核被托管
+  │ .sympath 配符号路径           │
+  │ .reload                      │ 核对每个模块的 .pdb 版本
+  │ bp MyDriver!MyDeviceControl  │ 断点登记到目标机
+  │ g（继续）                    │ 正常运行
+  │ ←── 断点命中 ─────────────── │ 停在 MyDeviceControl 入口
+  │ k（看栈）→ 参数、内存、寄存器 │ 现场冻结
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段三：断点命中后的现场勘察
+
+断点命中后，`k` 回溯调用栈，`r` 看寄存器，`dc` 看内存。栈顶是你断的函数，往下是"谁调了它"的完整链条。第 4 章的驱动断在 MyDeviceControl 时，栈里能看到 NtDeviceIoControlFile——证明请求来自用户模式的 DeviceIoControl。
+
+<CodeTabs>
+  <Tab label="宿主机命令">
+
+```text
+kd> k
+ # Child-SP          RetAddr           Call Site
+00 ffff8000`12345678 fffff800`2a1b4f51 MyDriver!MyDeviceControl+0x14
+01 ffff8000`12345680 fffff800`2a2ba1a1 nt!IofCallDriver+0x51
+02 ffff8000`123456c0 fffff800`2a2c302a nt!IopXxxControlFile+0xa1
+03 ffff8000`12345740 fffff800`2a1d5f25 nt!NtDeviceIoControlFile+0x2a
+04 ffff8000`12345740 00007ffa`12345678 nt!KiSystemServiceCopyEnd+0x25
+
+kd> r rcx, rdx          # 查看参数寄存器
+kd> dc poi(MyDriver!g_ctx)   # 查看设备扩展内容
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+栈帧 00  MyDriver!MyDeviceControl    ← 当前停在这里（断点位置）
+栈帧 01  nt!IofCallDriver            ← 内核把请求交给驱动的那一步
+栈帧 02  nt!IopXxxControlFile        ← DeviceIoControl 的内核实现
+栈帧 03  nt!NtDeviceIoControlFile    ← 系统服务入口
+栈帧 04  nt!KiSystemServiceCopyEnd   ← 从用户模式切进来的边界
+
+从上往下读：用户模式调用 → 系统服务 → 派发 → 你的驱动。
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段四：蓝屏后的转储分析
+
+目标机崩了不要慌——转储文件已经把现场保存好了。宿主机打开 .dmp，`!analyze -v` 自动给出首错信息。关键是看三行：BugCheck 代码（什么类型的错误）、Probably caused by（责任模块）、以及栈顶的模块+偏移（具体位置）。
+
+<CodeTabs>
+  <Tab label="宿主机命令">
+
+```text
+# 打开转储：WinDbg → File → Open Crash Dump
+kd> !analyze -v
+
+BugCheck 0xD1, {0, 2, 0, 0}
+DRIVER_IRQL_NOT_LESS_OR_EQUAL
+  *** WARNING: Unable to verify timestamp for MyDriver.sys
+
+Probably caused by : MyDriver.sys ( MyDriver!MyDeviceControl+14 )
+
+STACK_TEXT:
+MyDriver!MyDeviceControl+0x14
+nt!IofCallDriver+0x51
+...
+
+# 用 !irql 看崩溃时 IRQL，用 uf 反汇编定位偏移
+kd> !irql
+kd> uf MyDriver!MyDeviceControl
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+目标机蓝屏
+  │ 崩溃瞬间内存写入 .dmp
+  ▼
+宿主机打开转储（离线分析，目标机可关机）
+  │
+  ├─→ BugCheck 0xD1      = 在错误 IRQL 访问内存（类型）
+  ├─→ Probably caused by = MyDriver.sys（责任模块）
+  ├─→ MyDeviceControl+14 = 首错偏移（具体位置）
+  │
+  └─→ 对照规则：
+        DISPATCH_LEVEL 下访问分页内存？→ 第 3 章 IRQL 规则
+        缓冲区长度未校验？            → 第 4 章协议校验
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  调试纪律：<code>!analyze -v</code> 的"Probably caused by"只是猜测起点，不是裁决。责任模块可能只是"第一个被波及"的。必须用符号、调用栈和源码逐层核对，确认首错位置真实属于你的驱动，才能动手改代码。
 </Callout>
 
-<Callout type="trap" title="误区三：能加载、能蓝屏或有日志就证明机制">
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  <strong>现象</strong>：调用栈显示一堆 <code>MyDriver+0x14</code>、<code>nt+0x2a</code> 之类的裸地址，函数名全是问号。<strong>原因</strong>：.pdb 与 .sys 版本不匹配或路径没配对，调试器无法解析符号。<strong>修法</strong>：<code>.sympath</code> 加上自己驱动的 .pdb 目录，<code>.reload /f</code> 强制重载，用 <code>lm</code> 核对模块符号状态为 loaded 而非 mismatched。
 </Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  <strong>现象</strong>：目标机开着调试模式，但宿主机 WinDbg 一直转圈连不上。<strong>原因</strong>：bcdedit 配的 hostip/port/key 与宿主机填的不一致，或防火墙拦了调试端口。<strong>修法</strong>：<code>bcdedit /enum {dbgsettings}</code> 核对三项参数与 WinDbg 完全一致；网络调试改端口后必须重启目标机，<code>net start</code> 改配置不生效。
+</Callout>
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+<Callout type="trap">
+  <strong>现象</strong>：驱动蓝屏后重启，再也找不到当时的状态，只能凭记忆猜。<strong>原因</strong>：目标机没配转储文件（或配置为"无"），崩溃现场随重启蒸发。<strong>修法</strong>：目标机系统属性 → 启动和故障恢复 → 勾选"将事件写入系统日志"并选择内核内存转储；崩溃后把 .dmp 拷到宿主机用 <code>!analyze -v</code> 分析。
+</Callout>
 
-**本章验收不变量**：每份转储和轨迹都绑定目标build、驱动摘要、符号、输入与唯一故障
+<Callout type="trap">
+  <strong>现象</strong>：在 DISPATCH_LEVEL 上单步执行，目标机直接挂死，调试器也失控。<strong>原因</strong>：高 IRQL 下禁止等待与大部分操作，单步依赖的中断处理在高 IRQL 下行为不同，目标机进入死锁。<strong>修法</strong>：断点定位大范围、源码阅读精查小范围；确需单步时把 IRQL 降到 PASSIVE_LEVEL 再执行，或改用日志插桩（DbgPrint + 时间戳）。
+</Callout>
 
-**本章必查证据**：宿主/目标清单、符号验证、转储、调用栈、首错假设与恢复报告
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 交互实验 — 符号验证与转储分析
+## 小结
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
-
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp05DebuggingVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp05DebuggingExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp05DebuggingSafetyGateLab />
-  </Step>
-</Stepper>
-
-## 练习
+- 内核调试必须宿主—目标分离，目标机是可丢弃的测试环境
+- 符号文件把地址映射回函数名，版本错配会让调用栈变裸地址
+- 断点让目标机暂停在关键函数，配合 k/r 勘察现场
+- 崩溃转储保存蓝屏现场，!analyze -v 给出首错起点
+- 单步慢放适合低 IRQL 精查，高 IRQL 用日志插桩替代
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：WinDbg、符号、宿主—目标、转储与可重复症状怎样定位首个内核分岔？
+**问题 1：** 在 Demo 中关闭"符号"开关，观察调用栈变化。解释为什么符号版本不匹配时 `lm` 会显示 mismatched，以及 `.reload /f` 能解决什么问题。
 
 <Answer>
-  实验必须满足不变量：每份转储和轨迹都绑定目标build、驱动摘要、符号、输入与唯一故障。需要交付的证据包括：宿主/目标清单、符号验证、转储、调用栈、首错假设与恢复报告。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"符号错配、只做本地观察、Verifier致崩溃却无调试宿主或恢复方案"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+符号关闭/错配时，调用栈从 `MyDriver!MyDeviceControl+0x14` 变成 `MyDriver+0x14` 之类——函数名消失，只剩模块名加偏移。`lm` 显示 mismatched 表示调试器加载的 .pdb 与二进制时间戳/版本不一致。`.reload /f` 强制重新加载所有模块的符号：先删旧符号再重新从符号路径读取，能解决"符号路径后配、缓存了旧符号"的问题；但若 .pdb 本身版本不对，重载也没用，必须重新编译出匹配的符号。
+
 </Answer>
 
-**问题 2：故障识别与避免**
-
-如果在实验中观察到"符号错配、只做本地观察、Verifier致崩溃却无调试宿主或恢复方案"，如何定位根因？如何避免？
+**问题 2：** 你的驱动在 `MyDriver!MyWriteDispatch+0x20` 处蓝屏，BugCheck 是 0xD1。调用栈显示请求来自用户模式的 WriteFile。列出你下一步要做的三件事。
 
 <Answer>
-  定位方法：在宿主/目标清单、符号验证、转储、调用栈、首错假设与恢复报告中检查是否违反不变量"每份转储和轨迹都绑定目标build、驱动摘要、符号、输入与唯一故障"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保调试工具、WinDbg、本地/完整内核调试、宿主、目标与驱动调试的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+1）用 `!irql` 查看崩溃时 IRQL：0xD1 是"在错误 IRQL 访问内存"，若当前 IRQL > APC_LEVEL 且访问的是分页内存，直接命中第 3 章规则；2）用 `uf MyDriver!MyWriteDispatch` 反汇编偏移 +0x20 对应的指令，看它访问了什么地址（分页池？用户缓冲区？）；3）回到源码核对那条路径：Write 分发里是否在错误 IRQL 触碰了分页数据，或未校验缓冲区长度就解引用。核对无误后再改代码，改完同输入重放验证。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 写出在宿主机上完成以下任务的全部命令：1）设置符号路径包含 `D:\MyDriver\x64`；2）在 `MyDriver!DriverEntry` 设断点；3）继续执行；4）命中后回溯调用栈并查看参数寄存器。要求按调试顺序写出命令并注释每一步的目的。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```text
+# 1. 符号路径：公共符号 + 自己的 .pdb 目录
+.sympath srv*C:\Symbols*https://msdl.microsoft.com/download/symbols;D:\MyDriver\x64
+# 2. 强制重载所有模块符号，确保 MyDriver 符号匹配
+.reload /f
+# 3. 在 DriverEntry 入口设断点
+bp MyDriver!DriverEntry
+# 4. 放行：目标机继续运行直到断点命中
+g
+# 5. 命中后：回溯调用栈（栈顶应是 DriverEntry，往下是 IopLoadDriver 等）
+k
+# 6. 查看前两个参数寄存器：rcx=DriverObject，rdx=RegistryPath
+r rcx, rdx
+# 7. 用格式符查看注册表路径字符串（%wZ 打印 UNICODE_STRING）
+dq rdx L2
+```
 
-什么情况下必须停止内核实验？
+要点：符号路径必须在 .reload 之前配好；断点用模块!函数语法避免地址漂移；`k` 和 `r` 在断点命中后立刻执行才有意义——先勘察再放行，别急着 `g`。
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- WinDbg：连接“安装调试工具”的内核契约与证据。
-- 符号：连接“配置符号源码”的内核契约与证据。
-- 本地内核调试：连接“建立目标连接”的内核契约与证据。
-- 主机/目标机：连接“命中驱动断点”的内核契约与证据。
-- 崩溃转储：连接“检查栈与对象”的内核契约与证据。
-- 本页11个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：宿主机/目标机/符号文件/断点/崩溃转储/单步执行，宿主机与目标机合并叙述但各自成条）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="调试工具">
-    调试工具是本章的入口概念。WinDbg、符号、宿主—目标、转储与可重复症状怎样定位首个内核分岔？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在宿主/目标清单、符号验证、转储、调用栈、首错假设与恢复报告中留下可验证记录。
+  <GlossaryItem term="宿主机">
+    运行 WinDbg 调试器的机器，负责观察和控制目标机。它不运行被测驱动，目标机蓝屏也不影响它。相当于监控室：人坐在里面，事故发生在车间。
   </GlossaryItem>
-  <GlossaryItem term="WinDbg">
-    WinDbg在本章中用于构造可撤销反例。注入故障"符号错配、只做本地观察、Verifier致崩溃却无调试宿主或恢复方案"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="目标机">
+    实际运行被测驱动的机器，被调试器暂停、断点、读写内存。必须是可丢弃的测试环境（专用机器或虚拟机），因为内核调试随时可能把它弄蓝屏。相当于车间：出事的地方，但不是人待的地方。
   </GlossaryItem>
-  <GlossaryItem term="本地/完整内核调试">
-    本地/完整内核调试必须满足不变量"每份转储和轨迹都绑定目标build、驱动摘要、符号、输入与唯一故障"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+  <GlossaryItem term="符号文件">
+    把二进制地址映射回函数名、变量名和源行号的文件（.pdb）。调试器加载符号后调用栈才有人话可读。必须与 .sys 完全同版本，错配时函数名变裸地址。相当于照片上的坐标标注：没有它，照片只是一堆色块。
   </GlossaryItem>
-  <GlossaryItem term="宿主">
-    宿主连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="断点">
+    让目标机在指定函数或地址暂停执行、控制权交给调试器的机制。断点命中后可以看寄存器、内存、调用栈，然后继续或单步。相当于在关键路口设卡：车一到就拦下检查。
+  </GlossaryItem>
+  <GlossaryItem term="崩溃转储">
+    蓝屏时保存的内存镜像文件（.dmp），可在宿主机离线分析。!analyze -v 自动给出 BugCheck 代码、责任模块和调用栈。相当于事故录像：现场已封存，随时可以回放。
+  </GlossaryItem>
+  <GlossaryItem term="单步执行">
+    每按一次命令只执行一条指令或一个函数的调试方式，逐帧观察状态变化。适合低 IRQL 精查；高 IRQL 下单步可能挂死目标机，改用日志插桩。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

@@ -3,7 +3,7 @@ title: "第4章 驱动程序：从头到尾"
 type: C
 section: "实战 · 完整驱动与调试"
 order: 4
-description: "从初始化、注册表参数和设备对象进入客户端/驱动通信协议、Create/Close、DeviceIoControl、安装和端到端测试。 覆盖11个本页目录坐标。"
+description: "从 DriverEntry 初始化、注册表参数、SDDL 访问控制到 Create/Close 与 DeviceIoControl 分发例程，走完一个控制设备驱动的完整生命周期并实现 IOCTL 通信协议。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,180 +18,420 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp04DriverStartToFinishVersionContextLab,
-  Wkp04DriverStartToFinishExecutableProbeLab,
-  Wkp04DriverStartToFinishSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-04-driver-start-to-finish";
+import { Wkp04IoctlProtocolLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-04-ioctl-protocol-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) 控制设备 = SVG 设备对象框 + 符号链接（可点击查看详情）
+  2) 符号链接 = SVG 用户客户端到设备对象的箭头路径（可点击查看详情）
+  3) 通信协议 = SVG 请求按钮（CreateFile/DeviceIoControl/CloseHandle 三条路径）
+  4) 分发例程 = SVG 内核侧 Create/Close 与 DeviceIoControl 两个分发框（可点击）
+  5) SDDL = SVG 门禁开关（模拟打开被拒绝，观察 STATUS_ACCESS_DENIED）
+  全章新概念 5 个（控制设备/符号链接/通信协议/分发例程/SDDL），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把初始化、通信协议、设备对象、客户代码、分发、安装和测试落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“IOCTL长度或权限未验证、请求在途时卸载、符号链接和设备对象清理次序错误”，定位本章相对签名参考驱动的首个分岔
-- 交付生命周期状态机、SDDL/设备访问、IOCTL协议夹具、并发关闭与卸载轨迹，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能实现 DriverEntry 中的设备创建、符号链接暴露、SDDL 访问控制与分发例程注册
+- 能改出 DeviceIoControl 分发例程中校验输入长度并返回错误码的效果，并解释用户模式端收到什么
+- 能回答：驱动卸载时为什么必须先删符号链接再删设备对象？颠倒顺序会发生什么？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用①空间与地图（大楼前台/门禁）。 */}
 
-本章的核心问题是：DriverEntry、设备对象、访问控制、Create/Close、IOCTL与Unload怎样闭合一个驱动生命周期？
+## 为什么驱动和程序之间需要一扇正式的门
 
-、、、、共同构成本页坐标。从初始化、注册表参数和设备对象进入客户端/驱动通信协议、Create/Close、DeviceIoControl、安装和端到端测试。
+想象一栋大楼。每个来访者不能直接闯进机房，得先到前台登记、领一张门禁卡，凭卡进出特定楼层；用完还卡、注销权限。大楼的保安系统——门禁、登记表、访客权限——就是本章要建的"门"。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+没有这扇门会怎样？任何程序都能直接改驱动内部的数据：长度不检查、权限不校验，一次越界写入就能让整栋楼断电。而有了门，访问必须走固定流程：登记（打开）、办事（控制）、注销（关闭），每步都有保安检查。
 
-## 来源合同与版本差异
+这一章把驱动从头到尾建一遍：前台怎么建（初始化）、门禁规则怎么写（访问控制）、来访者怎么办事（通信协议）、下班怎么清场（卸载）。建完这扇门，后面的章节都在这扇门上装新功能。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## 控制设备与符号链接：大楼的前台
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="驱动创建的、用于接收用户模式 I/O 请求的特殊设备对象，本身不对应任何硬件">控制设备</Term> 是驱动与用户程序通信的入口。它不是真实硬件，而是一个纯粹的逻辑节点：用户程序对它发起打开、控制、关闭操作，内核把这些操作打包成请求交给驱动处理。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+控制设备在内核里叫 <Term def="设备对象">设备对象</Term>（Device Object），用户模式看不到它，因为它的名字在 `\Device\` 命名空间——那是内核的地盘。驱动再用 <Term def="用户模式能访问的别名，把内核命名空间的设备映射到 \??\ 下的可打开路径">符号链接</Term> 把它暴露出来：用户程序用 `CreateFile("\\\\.\\MyDriver")` 打开的就是这个链接。前台的位置图就是这样：设备对象是机房里的接待台，符号链接是大门口挂的指路牌。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## 通信协议：来访者与保安的暗号
 
-### 本页独立事实来源
+驱动和用户程序各说各话是行不通的，必须预先约定一套 <Term def="用户程序与驱动之间约定的请求格式，包括 IOCTL 码、输入/输出缓冲区布局和错误码语义">通信协议</Term>。协议的核心是 IOCTL 码：一个 32 位整数，编码了设备类型、功能号、缓冲区传输方法和访问权限。双方各自定义一个头文件，同一套结构体、同一组码值——驱动侧解析，用户侧构造。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft IRP型IOCTL与FSCTL传输方法](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/irp-based-ioctl-and-fsctl-operations)：本章用它核对METHOD_BUFFERED、DIRECT与NEITHER的缓冲区边界。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
-- [Microsoft KMDF架构](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/kernel-mode-driver-framework-architecture)：本章用它核对WDF对象、回调、队列和框架生命周期。
-- [Microsoft内核模式驱动架构指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/)：本章用它核对I/O、DPC、同步、PnP、电源和驱动编程当前路由。
+协议还规定缓冲区怎么传：输入放哪、输出写哪、长度怎么校验。双方必须对同一份协议实现达成一致，否则驱动以为输入在第 3 个字段，程序其实写在第 2 个——解码结果全是乱的。协议不健全是驱动安全事故的第一大来源。
 
-## 常见误区与故障注入
+## 分发例程：大楼里的三个办事窗口
 
-本章注入的故障是：IOCTL长度或权限未验证、请求在途时卸载、符号链接和设备对象清理次序错误。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+用户程序每次对控制设备发起操作，内核都会构造一个请求包，按操作类型查表调用驱动注册的处理函数，这些函数统称 <Term def="驱动注册在内核请求分发表中的处理函数，分别响应打开、关闭、控制等操作">分发例程</Term>（dispatch routines）。一个控制设备驱动最少有三个窗口：Create（来访者登记，发放句柄）、Close（还卡注销）、DeviceIoControl（办事窗口，处理真正的业务请求）。
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+分发例程是驱动的主战场：请求来了，检查协议、校验参数、执行操作、返回结果。请求包在后续章节会展开细讲，这里先把三个窗口的职责和顺序搞清楚。窗口职责错位（比如把业务逻辑写进 Create）是新手最常见的结构错误。
+
+## SDDL：门禁规则怎么写
+
+控制设备默认允许任何用户打开——这对很多驱动是事故。Windows 提供 <Term def="用一段字符串描述访问权限的语言，Device 对象用它声明谁能打开、能做什么操作">SDDL</Term>（Security Descriptor Definition Language）来写门禁规则：在创建设备对象时传入一段描述字符串，系统据此检查打开者的权限。
+
+SDDL 字符串长这样：`"D:P(A;;GA;;;SY)(A;;GA;;;BA)"`——括号每段是一个允许规则，`SY` 是系统账户、`BA` 是管理员组。写成"只有管理员能访问"，普通用户打开就会得到 `STATUS_ACCESS_DENIED`。门禁写在创建时，一次声明、内核强制，比驱动内部自己判断可靠得多。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：走一遍驱动生命周期与 IOCTL 协议流
+
+下面的可视化把整章内容串成一张图：上半部分是生命周期三阶段（初始化 → 运行 → 卸载），下半部分是用户模式的三种请求（打开、控制、关闭）如何流向对应的分发例程。点击任意区域看详情；点请求按钮观察路径；打开门禁开关模拟 SDDL 拒绝。
+
+> 猜一猜：先打开"拒绝打开"开关，再点"DeviceIoControl"按钮——请求会被哪个环节拦下？用户程序拿到的错误码是什么？动手试试再看下面的代码。
+
+<Wkp04IoctlProtocolLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：一个完整控制设备驱动
+
+这一节给出一个最小但完整的控制设备驱动，四个代码段对应生命周期的四个阶段：初始化（建前台+写门禁）、打开/关闭（登记/注销）、业务处理（IOCTL 分发）、卸载（清场）。完整的可运行工程（.sys + 客户端 .exe + INF）见章末来源链接，正文只放讲解段。
+
+### 段一：DriverEntry —— 建前台、挂门牌、写门禁
+
+DriverEntry 做四件事：从注册表参数读配置（协议号、缓冲上限）、用 `IoCreateDevice` 创建控制设备、用 `IoCreateSymbolicLink` 挂符号链接、把三个分发例程填进 DriverObject 的函数指针表。注意创建设备时传入的 SDDL 字符串——它同时锁定了打开权限。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
+    // 1. 从注册表读协议配置（上层服务键的 Parameters 子键）
+    UNICODE_STRING keyPath = RegistryPath->Buffer[0]
+        ? *RegistryPath : RTL_CONSTANT_STRING(L"");
+    RTL_QUERY_REGISTRY_TABLE table = {0};
+    ULONG maxBuf = 4096;                 // 协议缓冲上限，可被注册表覆盖
+    // ... RtlQueryRegistryValues 填充 maxBuf ...
+
+    // 2. 创建控制设备，附带 SDDL 门禁：只允许系统与管理
+    UNICODE_STRING devName = RTL_CONSTANT_STRING(L"\\Device\\MyDriver");
+    PDEVICE_OBJECT devObj = nullptr;
+    NTSTATUS st = IoCreateDevice(DriverObject, sizeof(MY_CONTEXT),
+        &devName, FILE_DEVICE_UNKNOWN, 0, FALSE, &devObj);
+    if (!NT_SUCCESS(st)) return st;
+
+    // 3. 挂符号链接，让用户模式能通过 \\.\MyDriver 打开
+    UNICODE_STRING linkName = RTL_CONSTANT_STRING(L"\\??\\MyDriver");
+    st = IoCreateSymbolicLink(&linkName, &devName);
+    if (!NT_SUCCESS(st)) { IoDeleteDevice(devObj); return st; }
+
+    // 4. 注册分发例程（三个办事窗口 + 兜底）
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = MyCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = MyCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = MyDeviceControl;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+NtLoadDriver 加载 .sys
+  │
+  ├─→ 读注册表 Parameters\MaxBuffer  → 协议上限
+  ├─→ IoCreateDevice(名字, SDDL)     → 建控制设备 + 门禁
+  ├─→ IoCreateSymbolicLink(\??\MyDriver → \Device\MyDriver)
+  │                                   → 用户模式可见的门牌
+  └─→ MajorFunction[CREATE/CLOSE/CONTROL] = 分发例程
+      │
+      └─→ 返回 STATUS_SUCCESS         → 驱动进入"运行"状态
+```
+
+  </Tab>
+</CodeTabs>
+
+注意失败路径：符号链接创建失败时必须回滚已创建设备，否则下次加载会撞名。入口处每个成功步骤都要有对应的失败清理——这是内核代码的纪律，用户模式程序可以偷懒，内核不行。
+
+<Callout type="warn">
+  API 差异点：<code>IoCreateDevice</code> 的最后一个参数 <code>FALSE</code> 表示不独占设备（不排他）。若想实现"一次只能一个客户端连接"，要传 <code>TRUE</code>（排他模式）。SDDL 字符串也可以后续用 <code>IoSetDeviceInterfaceSecurity</code> 调整，但推荐在创建时一次性声明。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区二：接口同名就说明当前合同未变"
->
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：Create / Close —— 登记与注销
+
+两个分发例程共用一个函数：`Create` 时检查是否已有客户端占用（排他协议）、初始化客户上下文；`Close` 时释放上下文。请求包里带着本次操作的类型，用 `IoGetCurrentIrpStackLocation` 取出来判断。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS MyCreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    MY_CONTEXT* ctx = (MY_CONTEXT*)DeviceObject->DeviceExtension;
+
+    if (stack->MajorFunction == IRP_MJ_CREATE) {
+        if (ctx->clientCount >= 1) {        // 排他协议：只许一个客户
+            Irp->IoStatus.Status = STATUS_ACCESS_DENIED;
+            Irp->IoStatus.Information = 0;
+            IoCompleteRequest(Irp, IO_NO_INCREMENT);
+            return STATUS_ACCESS_DENIED;
+        }
+        ctx->clientCount++;                 // 登记：占用计数 +1
+    } else {
+        ctx->clientCount--;                 // 注销：占用计数 -1
+    }
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```c
+// 打开控制设备（对应内核 IRP_MJ_CREATE）
+HANDLE h = CreateFileW(L"\\\\.\\MyDriver",
+    GENERIC_READ | GENERIC_WRITE,
+    0, nullptr, OPEN_EXISTING, 0, nullptr);
+if (h == INVALID_HANDLE_VALUE) {
+    // 第二个客户端在此失败：ERROR_ACCESS_DENIED
+}
+
+// 关闭控制设备（对应内核 IRP_MJ_CLOSE）
+CloseHandle(h);
+```
+
+  </Tab>
+</CodeTabs>
+
+排他检查要放在请求包完成之前。注意：`ctx` 来自设备扩展（DeviceExtension）——每个设备对象都自带一小块私有内存，是驱动存放每个设备状态的标准位置。
+
+### 段三：DeviceIoControl —— 业务窗口
+
+这是协议的核心实现。先用传输方法（METHOD_BUFFERED：输入输出都经过系统缓冲区）取出输入、计算长度，按 IOCTL 码分发到具体功能。**长度校验必须先于任何缓冲区访问**——输入长度大于协议上限就立即返回 `STATUS_BUFFER_TOO_SMALL`，绝不解引用。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS MyDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
+    ULONG inLen  = stack->Parameters.DeviceIoControl.InputBufferLength;
+    ULONG outLen = stack->Parameters.DeviceIoControl.OutputBufferLength;
+
+    ULONG info = 0;
+    NTSTATUS st = STATUS_SUCCESS;
+    switch (code) {
+    case IOCTL_MY_ADD: {                    // 自定义协议命令
+        auto* in = (MY_ADD_IN*)Irp->SystemBuffer;
+        if (inLen < sizeof(MY_ADD_IN)) { st = STATUS_BUFFER_TOO_SMALL; break; }
+        if (outLen < sizeof(MY_ADD_OUT)) { st = STATUS_BUFFER_TOO_SMALL; break; }
+        auto* out = (MY_ADD_OUT*)Irp->SystemBuffer;
+        out->sum = in->a + in->b;           // 真正的业务逻辑
+        info = sizeof(MY_ADD_OUT);
+        break;
+    }
+    default:
+        st = STATUS_INVALID_DEVICE_REQUEST; // 未知 IOCTL 码
+        break;
+    }
+    Irp->IoStatus.Status = st;
+    Irp->IoStatus.Information = info;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return st;
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```c
+// 客户端构造同样的协议结构体，调用一次设备控制
+MY_ADD_IN in = { .a = 5, .b = 7 };
+MY_ADD_OUT out = { 0 };
+DWORD returned = 0;
+BOOL ok = DeviceIoControl(h,
+    IOCTL_MY_ADD,           // 双方约定的 IOCTL 码
+    &in, sizeof(in),        // 输入缓冲区
+    &out, sizeof(out),      // 输出缓冲区
+    &returned, nullptr);
+if (!ok) {
+    // 失败时 GetLastError() 映射自驱动的 NTSTATUS
+}
+// 成功：out.sum == 12，returned == sizeof(MY_ADD_OUT)
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异点：本段用 <strong>METHOD_BUFFERED</strong>——输入和输出共用 <code>Irp->SystemBuffer</code>，先拷入后拷出，最简单也最安全。还有 <strong>METHOD_IN_DIRECT / METHOD_OUT_DIRECT</strong>（输出用 MDL 直接映射用户内存，适合大块数据）和 <strong>METHOD_NEITHER</strong>（直接给用户指针，驱动必须自己探测，最容易翻车）。新手从 BUFFERED 开始；<code>CTL_CODE</code> 宏的第 2 个参数（Method）决定用哪种。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+### 段四：Unload —— 清场顺序
+
+卸载是初始化的镜像，必须严格反向：先删符号链接（摘掉门牌，新访客进不来），再删设备对象（拆掉前台）。设备对象删掉后，任何未完成的请求都会失败——这正是我们要的：先断新客，再清旧账。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+void DriverUnload(PDRIVER_OBJECT DriverObject)
+{
+    PDEVICE_OBJECT devObj = DriverObject->DeviceObject;
+
+    // 1. 摘门牌：新客户端无法再打开
+    UNICODE_STRING linkName = RTL_CONSTANT_STRING(L"\\??\\MyDriver");
+    IoDeleteSymbolicLink(&linkName);
+
+    // 2. 拆前台：删除设备对象（含设备扩展内存）
+    if (devObj) {
+        IoDeleteDevice(devObj);
+        DriverObject->DeviceObject = nullptr;
+    }
+    // 3. 释放驱动级资源（池内存、事件、锁……）
+    // 每个客户端上下文应已在 Close 时释放完毕
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```bat
+:: 管理员命令行：卸载驱动
+sc stop MyDriver     :: 触发 DriverUnload
+sc delete MyDriver   :: 删除服务记录
+
+:: 若客户端句柄未关闭，sc stop 会失败或挂起——
+:: 驱动层应先排空所有打开句柄再执行卸载
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  卸载纪律：内核允许"请求在途时卸载"吗？不允许。如果卸载时还有句柄或未完成请求，系统会蓝屏（或驱动留下悬空引用）。正规做法是配合 <code>IRP_MJ_CLEANUP</code> / <code>IRP_MJ_CLOSE</code> 在请求层面排空，或用 KMDF 的引用计数机制。本章的简单驱动假设所有客户端都先关了句柄——真实驱动必须显式排空。
 </Callout>
 
-## 四类样本与验收
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+## 容易踩的坑
 
-**本章验收不变量**：停止新请求后所有句柄、IRP、引用、设备与命名对象按反向顺序归零
+<Callout type="trap">
+  <strong>现象</strong>：客户端传入超大输入长度，驱动未校验就访问缓冲区，蓝屏或内存损坏。<strong>原因</strong>：协议上信任了客户端声明的长度，未与协议上限比较就解引用。内核里任何长度都是不可信输入。<strong>修法</strong>：分发例程第一步就校验 <code>InputBufferLength</code>，超限返回 <code>STATUS_BUFFER_TOO_SMALL</code>，绝不访问未验证的缓冲区。
+</Callout>
 
-**本章必查证据**：生命周期状态机、SDDL/设备访问、IOCTL协议夹具、并发关闭与卸载轨迹
+<Callout type="trap">
+  <strong>现象</strong>：驱动还在服务客户端时执行卸载，系统蓝屏或驱动崩溃。<strong>原因</strong>：卸载时仍有打开的句柄或进行中的请求，设备对象被删除后请求还在引用它。<strong>修法</strong>：先停止接受新请求，排空所有句柄与未完成请求，再删符号链接、删设备对象，最后释放资源——与初始化严格反向。
+</Callout>
 
-## 交互实验 — 生命周期与IOCTL协议
+<Callout type="trap">
+  <strong>现象</strong>：任何用户都能打开驱动并执行危险操作。<strong>原因</strong>：创建控制设备时没写 SDDL，默认放行所有用户；权限判断全在驱动内部做，还容易漏。<strong>修法</strong>：<code>IoCreateDevice</code> 时用 SDDL 声明最小权限（如仅管理员），让内核在打开阶段就拦截，驱动内部不再重复判断身份。
+</Callout>
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
+<Callout type="trap">
+  <strong>现象</strong>：符号链接创建失败后直接返回错误，下次加载报"设备已存在"。<strong>原因</strong>：失败路径只返回错误码，没有回滚之前创建成功的设备对象，残留对象占住了名字。<strong>修法</strong>：DriverEntry 中每个成功步骤配一个失败清理：<code>IoCreateSymbolicLink</code> 失败就 <code>IoDeleteDevice</code>，保证失败后不留任何残留。
+</Callout>
 
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp04DriverStartToFinishVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp04DriverStartToFinishExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp04DriverStartToFinishSafetyGateLab />
-  </Step>
-</Stepper>
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 练习
+## 小结
+
+- DriverEntry 建控制设备、挂符号链接、写 SDDL 门禁并注册分发例程
+- 协议用 IOCTL 码 + 结构体约定，双方头文件共享，长度必须先校验
+- Create/Close 管理句柄计数与客户上下文，DeviceIoControl 是业务入口
+- 卸载严格反向：删链接、删设备、释放资源，先断新客再清旧账
+- SDDL 让内核在打开阶段就强制访问控制，不在驱动内部重复判断
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：DriverEntry、设备对象、访问控制、Create/Close、IOCTL与Unload怎样闭合一个驱动生命周期？
+**问题 1：** 在 Demo 中开启"拒绝打开"后点 DeviceIoControl，观察请求在哪里被拦下。用本章的 SDDL 知识解释：为什么门禁生效的位置在打开阶段而不是 IOCTL 分发阶段？
 
 <Answer>
-  实验必须满足不变量：停止新请求后所有句柄、IRP、引用、设备与命名对象按反向顺序归零。需要交付的证据包括：生命周期状态机、SDDL/设备访问、IOCTL协议夹具、并发关闭与卸载轨迹。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"IOCTL长度或权限未验证、请求在途时卸载、符号链接和设备对象清理次序错误"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+门禁（SDDL）在 `IoCreateDevice` 创建设备时写入设备的安全描述符，检查发生在内核的对象管理器打开设备那一刻——即 `CreateFile` 对应的 IRP_MJ_CREATE 之前。设备根本打不开，后续的 DeviceIoControl 请求就无从发起，分发例程甚至不会被调用。这正是"把安全前置到内核强制"的设计：权限判断只做一次、做在最早，而不是在每个 IOCTL 里重复检查身份。
+
 </Answer>
 
-**问题 2：故障识别与避免**
+**问题 2：** 以下 DriverEntry 片段有什么问题？列出至少两处。
 
-如果在实验中观察到"IOCTL长度或权限未验证、请求在途时卸载、符号链接和设备对象清理次序错误"，如何定位根因？如何避免？
+```c
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
+    UNICODE_STRING devName = RTL_CONSTANT_STRING(L"\\Device\\BadDriver");
+    PDEVICE_OBJECT dev;
+    IoCreateDevice(DriverObject, 0, &devName, FILE_DEVICE_UNKNOWN, 0, FALSE, &dev);
+    UNICODE_STRING link = RTL_CONSTANT_STRING(L"\\??\\BadDriver");
+    IoCreateSymbolicLink(&link, &devName);
+    DriverObject->DriverUnload = DriverUnload;
+    return STATUS_SUCCESS;
+}
+```
 
 <Answer>
-  定位方法：在生命周期状态机、SDDL/设备访问、IOCTL协议夹具、并发关闭与卸载轨迹中检查是否违反不变量"停止新请求后所有句柄、IRP、引用、设备与命名对象按反向顺序归零"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保初始化、通信协议、设备对象、客户代码、分发、安装和测试的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+两处问题：1）没有检查 `IoCreateDevice` 和 `IoCreateSymbolicLink` 的返回值——符号链接失败时设备残留，下次加载撞名；2）没有注册任何分发例程（`MajorFunction` 表全空），驱动加载成功但所有请求都会失败，且 CreateFile 打不开设备。修正：每个调用检查 `NT_SUCCESS`，失败时回滚已创建的设备；注册 `IRP_MJ_CREATE/CLOSE/DEVICE_CONTROL` 三个分发例程后再返回成功。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 为 `MyDeviceControl` 增加一个 `IOCTL_MY_QUERY` 命令：协议结构为 `MY_QUERY_OUT { ULONG version; ULONG maxBuffer; }`，输出缓冲区长度校验后填入版本号 1 和协议缓冲上限（注册表读到的 `maxBuf`）。要求：先校验长度再写缓冲区，设置正确的 `Information` 字段，未知 IOCTL 码返回 `STATUS_INVALID_DEVICE_REQUEST`。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+case IOCTL_MY_QUERY: {
+    if (outLen < sizeof(MY_QUERY_OUT)) { st = STATUS_BUFFER_TOO_SMALL; break; }
+    auto* out = (MY_QUERY_OUT*)Irp->SystemBuffer;
+    out->version = 1;
+    out->maxBuffer = ctx->maxBuffer;      // DriverEntry 读到的注册表值
+    info = sizeof(MY_QUERY_OUT);
+    break;
+}
+```
 
-什么情况下必须停止内核实验？
+要点：1）`outLen` 校验放在解引用之前，这是硬纪律；2）`Information` 必须填实际写出的字节数，客户端据此判断拿到了多少数据；3）未知码走 `default` 分支返回 `STATUS_INVALID_DEVICE_REQUEST`——客户端 `GetLastError()` 会得到对应的映射错误。把 `ctx` 里的 `maxBuffer` 存起来需要在 DriverEntry 初始化设备扩展。
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- 控制设备：连接“定义协议结构”的内核契约与证据。
-- IOCTL：连接“初始化驱动”的内核契约与证据。
-- DeviceIoControl：连接“创建设备符号链接”的内核契约与证据。
-- 分发例程：连接“打开关闭句柄”的内核契约与证据。
-- 通信协议：连接“分发IOCTL”的内核契约与证据。
-- 本页11个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：控制设备/设备对象/符号链接/通信协议/分发例程/SDDL，其中控制设备与设备对象可合并叙述但各自成条）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="初始化">
-    初始化是本章的入口概念。DriverEntry、设备对象、访问控制、Create/Close、IOCTL与Unload怎样闭合一个驱动生命周期？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在生命周期状态机、SDDL/设备访问、IOCTL协议夹具、并发关闭与卸载轨迹中留下可验证记录。
-  </GlossaryItem>
-  <GlossaryItem term="通信协议">
-    通信协议在本章中用于构造可撤销反例。注入故障"IOCTL长度或权限未验证、请求在途时卸载、符号链接和设备对象清理次序错误"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="控制设备">
+    驱动创建的、不对应任何硬件的特殊设备对象，是用户程序与驱动通信的入口。可以理解为大楼的前台：所有来访（打开、控制、关闭）都先到它这里登记。
   </GlossaryItem>
   <GlossaryItem term="设备对象">
-    设备对象必须满足不变量"停止新请求后所有句柄、IRP、引用、设备与命名对象按反向顺序归零"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+    内核中代表一个设备实例的数据结构，由 IoCreateDevice 创建。控制设备驱动用它接收 I/O 请求，每个设备对象自带一块设备扩展内存存放驱动私有状态。类比大楼里的接待台本身。
   </GlossaryItem>
-  <GlossaryItem term="客户代码">
-    客户代码连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="符号链接">
+    把内核命名空间（\Device\X）映射到用户模式可访问路径（\??\X）的别名，用户程序用 \\.\X 打开它。相当于大楼门口挂的指路牌——接待台在楼内，访客靠牌子找到门。
+  </GlossaryItem>
+  <GlossaryItem term="通信协议">
+    用户程序与驱动之间约定的请求格式：IOCTL 码、输入/输出结构体布局、长度与错误码语义。双方按同一份头文件实现，驱动解析、客户端构造。相当于来访者与保安约定好的暗号。
+  </GlossaryItem>
+  <GlossaryItem term="分发例程">
+    驱动注册到内核请求分发表里的处理函数，按请求类型分别响应：Create 登记、Close 注销、DeviceIoControl 办事。内核每次操作都查表调用对应的窗口。
+  </GlossaryItem>
+  <GlossaryItem term="SDDL">
+    用一段字符串描述访问权限的语言。创建设备对象时传入，内核在打开阶段强制检查。写成"D:P(A;;GA;;;SY)(A;;GA;;;BA)"只放行系统和管理员。相当于写在大门口的门禁规则，由保安（内核）强制执行。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

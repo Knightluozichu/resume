@@ -3,7 +3,7 @@ title: "第2章 开始内核开发"
 type: C
 section: "基础 · Windows内部与开发"
 order: 2
-description: "安装Visual Studio、WDK与调试工具，创建最小驱动项目，实现DriverEntry/Unload、部署、加载和安全跟踪。 覆盖7个本页目录坐标。"
+description: "安装 Visual Studio 与 WDK，创建最小 WDM 驱动项目，实现 DriverEntry 与 DriverUnload，完成签名、部署、加载、卸载与调试跟踪的完整生命周期。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -25,174 +25,295 @@ import {
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp02GettingStartedKernelDevelopmentVersionContextLab,
-  Wkp02GettingStartedKernelDevelopmentExecutableProbeLab,
-  Wkp02GettingStartedKernelDevelopmentSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-02-getting-started-kernel-development";
+import { Wkp02DriverLifecycleLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-02-driver-lifecycle-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) WDM 驱动模型 = SVG 七步流水线图整体（§5 可点击逐阶段查看）
+  2) DriverEntry = §6 CodeTabs C 内核代码 + 概念流程对照
+  3) DriverUnload = §6 CodeTabs C 内核代码 + 用户模式客户端对照
+  4) IRP / 派遣函数 = §6 CodeTabs DispatchDefault + 用户模式 DeviceIoControl 对照
+  5) 测试签名 = SVG 签名阶段 + 故障注入"未签名"开关
+  全章新概念 5 个（WDM / DriverEntry / DriverUnload / IRP / 测试签名），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把工具、驱动项目、DriverEntry、Unload、部署和跟踪落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“版本或架构错配、在日常主机直接部署、只保存一次成功加载截图”，定位本章相对签名参考驱动的首个分岔
-- 交付环境清单、SYS/INF/CAT摘要、签名验证、部署日志与恢复快照，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能安装配置 Visual Studio + WDK，创建并构建一个最小 WDM 驱动项目，产出 .sys 内核模块
+- 能改出 DriverEntry 中 DbgPrint 输出自定义字符串的效果，并在 DebugView 中观察到自己的日志
+- 能回答：为什么 64 位 Windows 加载未签名驱动会失败？整条生命周期中是哪一步出了问题？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用②工厂流水线。 */}
 
-本章的核心问题是：Windows build、SDK、WDK、Visual Studio、架构、驱动模型、签名与部署怎样组成可恢复构建链？
+## 为什么写内核驱动要先走通一整条流水线
 
-、、、、共同构成本页坐标。安装Visual
-Studio、WDK与调试工具，创建最小驱动项目，实现DriverEntry/Unload、部署、加载和安全跟踪。
+写一个驱动，就像把一块钢锭送进工厂流水线，最后变成一台能用的机器再回收拆解。原料要按对图纸，铸造要控好温度，出厂要盖章，运到现场装好才能通电运行，用完还得按规程拆解回收。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+这条流水线任何一环出岔，机器都跑不起来——或者更糟，跑起来后失控伤人。驱动和系统共用同一片电路，一处短路就可能让整台机器烧掉。
 
-## 来源合同与版本差异
+这一章带你从写第一行代码，走到把成品装进机器、再安全拆出来。把这条流水线完整走一遍，后面所有功能都是在这条线上加料。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## 驱动生命周期：七步流水线
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="Windows 驱动的经典模型，用 DriverEntry、Unload 回调和 IRP 派遣函数组织驱动代码">WDM</Term>（Windows Driver Model）是本章用的驱动模型。一个 WDM 驱动从写代码到卸载要依次走过七步：编写、构建、签名、部署、加载、运行、卸载。前四步在用户模式工具链里完成，后三步发生在内核里。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+流水线的起点和终点是两个回调函数。<Term def="驱动的入口函数，类似 C 的 main，加载时由内核调用，返回 STATUS_SUCCESS 才算加载成功">DriverEntry</Term> 在驱动加载时被内核调用，负责创建设备对象、注册<Term def="驱动卸载时内核调用的回调函数，负责释放所有资源">DriverUnload</Term>、设置派遣函数。DriverUnload 在卸载时被调用，负责删除设备、释放内存。这一进一出，定义了驱动的生命周期边界。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+中间的"运行"阶段，驱动通过 <Term def="I/O 请求包，内核把用户请求打包后交给驱动处理的标准化数据结构">IRP</Term>（I/O Request Packet）接收工作。用户程序调用 DeviceIoControl 时，内核构造 IRP 派发给驱动的派遣函数，驱动处理完标记完成，请求才返回用户模式。"签名"这一步则是 64 位 Windows 的强制要求——开发期用 <Term def="开发期临时关闭签名强制的模式，用 bcdedit /set testsigning on 开启，允许加载自签名驱动">测试签名</Term> 模式加载自签证书签名的驱动。下面的流水线图把七步串起来看。
 
-### 本页独立事实来源
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft KMDF架构](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/kernel-mode-driver-framework-architecture)：本章用它核对WDF对象、回调、队列和框架生命周期。
-- [Microsoft WDM与KMDF差异](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/differences-between-wdm-and-kmdf)：本章用它把一版WDM手工路径与当前优先考虑的框架路径显式分轨。
-- [Microsoft驱动签名指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing)：本章用它核对测试签名、发布签名和驱动包交付边界。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
 
-## 常见误区与故障注入
+## 动手：驱动生命周期流水线
 
-本章注入的故障是：版本或架构错配、在日常主机直接部署、只保存一次成功加载截图。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+下面的可视化把七步流水线画成一条可点击的管线。点任一阶段看详情；打开"注入故障"开关，高亮三个最常见的失败点：架构错配（构建）、未签名（签名）、忘记卸载（卸载）。
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+> 猜一猜：开启"注入故障"后，"签名"阶段会标红——未签名的驱动会在第 5 步加载时发生什么？动手看看，再对照下面的代码。
+
+<Wkp02DriverLifecycleLab />
+
+{/* 6. 代码对照｜spec §六（C 型重心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：DriverEntry 与 DriverUnload
+
+这一节给出最小可运行 WDM 驱动的完整代码。它做三件事：在 DriverEntry 里创建设备对象和符号链接、注册 Unload 和派遣函数；在 DriverUnload 里删除设备和符号链接；在 DispatchDefault 里完成所有 IRP。三个 CodeTabs 分别对应流水线的"加载入口""卸载出口""运行处理"。
+
+### 段一：DriverEntry —— 加载时内核第一个调用的函数
+
+DriverEntry 是内核调用驱动的地方。它先用 `IoCreateDevice` 建一个设备对象（驱动的"身份证"），再用 `IoCreateSymbolicLink` 给它起一个用户模式能访问的名字（`\\.\HelloDriver`）。然后把 DriverUnload 和 DispatchDefault 填进 DriverObject 的函数指针表。最后返回 STATUS_SUCCESS——返回任何错误码，驱动都不会被加载。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+#include <ntddk.h>
+
+#define DEVICE_NAME  L"\\Device\\HelloDriver"
+#define SYMLINK_NAME L"\\??\\HelloDriver"
+
+void DriverUnload(PDRIVER_OBJECT);
+NTSTATUS DispatchDefault(PDEVICE_OBJECT, PIRP);
+
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
+    UNREFERENCED_PARAMETER(RegistryPath);
+    DbgPrint("[HelloDriver] DriverEntry\n");
+
+    UNICODE_STRING devName = RTL_CONSTANT_STRING(DEVICE_NAME);
+    PDEVICE_OBJECT dev;
+    NTSTATUS st = IoCreateDevice(DriverObject, 0, &devName,
+        FILE_DEVICE_UNKNOWN, 0, FALSE, &dev);
+    if (!NT_SUCCESS(st)) return st;
+
+    UNICODE_STRING link = RTL_CONSTANT_STRING(SYMLINK_NAME);
+    IoCreateSymbolicLink(&link, &devName);
+
+    DriverObject->DriverUnload = DriverUnload;
+    for (int i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
+        DriverObject->MajorFunction[i] = DispatchDefault;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+内核 (NtLoadDriver)
+  │
+  │ 1. 为 .sys 分配内核内存、修正重定位
+  │ 2. 解析导入表（链接 ntoskrnl 导出）
+  │ 3. 调用 DriverEntry(DriverObject, RegistryPath)
+  │
+  ├─→ IoCreateDevice(...)           // 建 DeviceObject
+  ├─→ IoCreateSymbolicLink(...)     // 暴露给用户模式
+  ├─→ DriverObject->DriverUnload    // 注册卸载回调
+  ├─→ MajorFunction[i] = Dispatch   // 注册派遣
+  │
+  └─→ return STATUS_SUCCESS         // 成功；返回错误码则加载失败
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段二：DriverUnload —— 卸载时必须与入口对称
+
+DriverUnload 是 DriverEntry 的镜像：入口创建了什么，卸载就要删什么。这里删除符号链接和设备对象。如果忘了删除，这些内核对象会一直挂着，下次加载同名驱动会冲突。注意 DbgPrint 的输出可以在 DebugView 或 WinDbg 里看到——这是开发期跟踪驱动行为的主要手段。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+// 复用 DriverEntry 中的 DEVICE_NAME / SYMLINK_NAME
+void DriverUnload(PDRIVER_OBJECT DriverObject)
+{
+    DbgPrint("[HelloDriver] DriverUnload\n");
+
+    UNICODE_STRING link = RTL_CONSTANT_STRING(SYMLINK_NAME);
+    IoDeleteSymbolicLink(&link);
+    IoDeleteDevice(DriverObject->DeviceObject);
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```bat
+:: 管理员命令行
+sc stop   HelloDriver     :: 触发 DriverUnload
+sc delete HelloDriver     :: 从 SCM 删除服务记录
+
+:: 没注册 DriverUnload？sc stop 会静默失败，
+:: 驱动驻留内核，只能重启才能清掉
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段三：DispatchDefault —— 运行期处理 IRP
+
+驱动加载成功后就驻留内核等待工作。每次用户模式调用 DeviceIoControl，内核构造一个 IRP，根据请求类型查 MajorFunction 表派发给对应函数。这里的 DispatchDefault 把所有请求都标记为成功并完成。真实驱动会按 IO_STACK_LOCATION 里的 IoControlCode 分发到不同的处理分支。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS DispatchDefault(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+
+    DbgPrint("[HelloDriver] IRP major=%u\n", stack->MajorFunction);
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="用户模式客户端">
+
+```c
+HANDLE h = CreateFileW(L"\\\\.\\HelloDriver",
+    GENERIC_READ | GENERIC_WRITE, 0, NULL,
+    OPEN_EXISTING, 0, NULL);
+
+DWORD ret = 0;
+DeviceIoControl(h, 0x80000000, NULL, 0, NULL, 0, &ret, NULL);
+CloseHandle(h);
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="info">
+  上面是 <strong>WDM</strong> 写法——手动填 DriverObject 的函数指针表、手动建设备。现代驱动优先用 <strong>KMDF</strong>（基于 WDM 的框架）：用 <code>WdfDriverCreate</code> / <code>WdfDeviceCreate</code> 注册回调，框架代管 IRP 队列和电源状态。两套 API 目标一致，KMDF 把 WDM 的手工活包成了对象回调。本章先用 WDM 把生命周期看透，后续章节再切到 KMDF。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区二：接口同名就说明当前合同未变"
->
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+<Callout type="warn">
+  注意：内核代码里没有 C 运行时——<code>printf</code>、<code>malloc</code> 都不可用。输出日志用 <code>DbgPrint</code>，分配内存用 <code>ExAllocatePool2</code>。把用户模式的习惯带进内核是新手最常见的事故源。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  <strong>现象</strong>：驱动加载成功，但 sc stop 后 DriverUnload 没被调用，资源泄漏且无法重新加载。<strong>原因</strong>：DriverEntry 里漏写了 <code>DriverObject->DriverUnload = DriverUnload;</code>，系统认为驱动不支持卸载。<strong>修法</strong>：DriverEntry 必须注册 Unload 回调；未注册的驱动只能重启才能清掉。
 </Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  <strong>现象</strong>：sc start 报错"指定的路径格式无效"或加载失败，但代码没问题。<strong>原因</strong>：项目平台目标是 Win32/x86，目标系统是 x64（或反之）。内核 ABI 与 CPU 位宽绑定，.sys 不能跨架构加载。<strong>修法</strong>：项目属性把平台工具集与目标平台都设为 x64，与目标系统保持一致。
+</Callout>
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+<Callout type="trap">
+  <strong>现象</strong>：64 位 Windows 加载自签驱动返回 STATUS_INVALID_IMAGE_HASH，加载被拒。<strong>原因</strong>：内核代码完整性（CI）默认强制 Microsoft 受信任签名，开发期的自签证书不被接受。<strong>修法</strong>：管理员 cmd 跑 <code>bcdedit /set testsigning on</code>，重启，再用 signtool 签名 .cat 文件。
+</Callout>
 
-**本章验收不变量**：可重建驱动包只进入隔离测试目标且卸载、重启和快照恢复均可用
+<Callout type="trap">
+  <strong>现象</strong>：改了代码重新编译，sc create 报"服务已存在"，或 sc start 失败。<strong>原因</strong>：上次驱动还在运行（没 sc stop）或服务记录没删（没 sc delete），.sys 镜像仍被占用。<strong>修法</strong>：重部署前先 <code>sc stop</code> 再 <code>sc delete</code>，确认 DriverUnload 已释放全部资源。
+</Callout>
 
-**本章必查证据**：环境清单、SYS/INF/CAT摘要、签名验证、部署日志与恢复快照
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 交互实验 — 构建链与部署恢复
+## 小结
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
-
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp02GettingStartedKernelDevelopmentVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp02GettingStartedKernelDevelopmentExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp02GettingStartedKernelDevelopmentSafetyGateLab />
-  </Step>
-</Stepper>
-
-## 练习
+- WDM 驱动生命周期七步：编写、构建、签名、部署、加载、运行、卸载
+- DriverEntry 是入口，注册 Unload 和派遣函数，返回 STATUS_SUCCESS 才加载成功
+- DriverUnload 必须与入口对称，删除设备和符号链接，否则资源泄漏
+- IRP 是驱动接收工作的单位，用户模式用 DeviceIoControl 触发
+- 64 位强制签名；开发期用测试签名模式加载自签驱动
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：Windows build、SDK、WDK、Visual Studio、架构、驱动模型、签名与部署怎样组成可恢复构建链？
+**问题 1：** 为什么 64 位 Windows 加载未签名驱动会失败？测试签名模式解决了其中的什么问题？
 
 <Answer>
-  实验必须满足不变量：可重建驱动包只进入隔离测试目标且卸载、重启和快照恢复均可用。需要交付的证据包括：环境清单、SYS/INF/CAT摘要、签名验证、部署日志与恢复快照。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"版本或架构错配、在日常主机直接部署、只保存一次成功加载截图"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+64 位 Windows 的内核代码完整性（CI）默认强制要求内核驱动带有受信任的数字签名，未签名驱动在 NtLoadDriver 阶段会被拒绝，返回 STATUS_INVALID_IMAGE_HASH。测试签名模式（bcdedit /set testsigning on）临时关闭这一强制策略，允许加载用自签证书签名的驱动——它解决的是"开发期没有 Microsoft 受信任证书"的问题，不改变代码本身。发布时仍必须用正式 EV 证书走 Microsoft 仪表板签名。
+
 </Answer>
 
-**问题 2：故障识别与避免**
+**问题 2（独立实现题）：** 修改上面的 DriverEntry，在 DbgPrint 里输出你自己的名字（如 `"Hello from <你的名字>"`），并额外打印 RegistryPath 指向的注册表路径字符串内容。说明如何在 DebugView 中验证输出确实来自你的驱动。
 
-如果在实验中观察到"版本或架构错配、在日常主机直接部署、只保存一次成功加载截图"，如何定位根因？如何避免？
+提示：`PUNICODE_STRING` 的字符串内容在 `RegistryPath->Buffer`，长度（字节）在 `RegistryPath->Length`；可以用 `%wZ` 格式符直接打印 UNICODE_STRING。
 
 <Answer>
-  定位方法：在环境清单、SYS/INF/CAT摘要、签名验证、部署日志与恢复快照中检查是否违反不变量"可重建驱动包只进入隔离测试目标且卸载、重启和快照恢复均可用"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保工具、驱动项目、DriverEntry、Unload、部署和跟踪的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+修改后的 DriverEntry 开头：
+
+```c
+DbgPrint("[HelloDriver] Hello from <你的名字>\n");
+DbgPrint("[HelloDriver] RegistryPath: %wZ\n", RegistryPath);
+```
+
+验证步骤：1）构建驱动并签名；2）管理员 cmd 执行 `bcdedit /set testsigning on` 后重启；3）启动 DebugView，勾选 Capture Kernel 和 Enable Verbose Kernel；4）`sc create HelloDriver type= kernel binPath= "<绝对路径>.sys"` 后 `sc start HelloDriver`；5）在 DebugView 窗口里应能看到带 `[HelloDriver]` 前缀的两行日志，第二行显示类似 `\Registry\Machine\System\CurrentControlSet\Services\HelloDriver` 的路径。如果只看到自己的日志、没看到别人干扰，就说明输出来自你的驱动。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3：** 如果你 sc stop 一个没有注册 DriverUnload 的驱动会发生什么？为什么？如何恢复？
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+sc stop 不会触发任何卸载逻辑——系统发现 DriverObject->DriverUnload 为 NULL，会拒绝停止请求或静默失败，驱动继续驻留内核。原因是系统不知道该调用什么函数来清理资源，所以干脆不卸载。后果是 .sys 镜像仍被占用、SCM 服务记录仍在，无法 sc create 同名驱动，也无法重新加载。恢复方法只能重启系统；正确做法是每次都确保 DriverEntry 注册了 DriverUnload，且 DriverUnload 删除了入口创建的所有对象。
 
-什么情况下必须停止内核实验？
-
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- WDK：连接“冻结工具版本”的内核契约与证据。
-- 驱动项目：连接“创建驱动项目”的内核契约与证据。
-- DriverEntry：连接“实现入口卸载”的内核契约与证据。
-- Unload：连接“构建签名”的内核契约与证据。
-- 内核跟踪：连接“部署加载”的内核契约与证据。
-- 本页7个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：WDM / DriverEntry / DriverUnload / IRP / 测试签名）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="工具">
-    工具是本章的入口概念。Windows build、SDK、WDK、Visual Studio、架构、驱动模型、签名与部署怎样组成可恢复构建链？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在环境清单、SYS/INF/CAT摘要、签名验证、部署日志与恢复快照中留下可验证记录。
-  </GlossaryItem>
-  <GlossaryItem term="驱动项目">
-    驱动项目在本章中用于构造可撤销反例。注入故障"版本或架构错配、在日常主机直接部署、只保存一次成功加载截图"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="WDM">
+    Windows Driver Model，Windows 驱动的经典模型。它规定了一个驱动从加载到卸载怎么组织代码：入口函数 DriverEntry、卸载回调 DriverUnload、以及处理 I/O 请求的派遣函数。可以理解为"写 Windows 驱动的一套老规则"，本章用它把生命周期看透。
   </GlossaryItem>
   <GlossaryItem term="DriverEntry">
-    DriverEntry必须满足不变量"可重建驱动包只进入隔离测试目标且卸载、重启和快照恢复均可用"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+    驱动的入口函数，类似 C 程序的 main。驱动被加载时内核第一个调用它，它接收 DriverObject 指针和注册表路径。在这里创建设备、注册卸载和派遣函数。返回 STATUS_SUCCESS 才算加载成功，返回错误码驱动就不会被加载。
   </GlossaryItem>
-  <GlossaryItem term="Unload">
-    Unload连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="DriverUnload">
+    驱动卸载时内核调用的回调函数，是 DriverEntry 的镜像。入口创建了什么（设备、符号链接、回调、内存），卸载就要删什么。忘了实现或注册它，驱动将无法卸载，只能重启系统才能清掉。
+  </GlossaryItem>
+  <GlossaryItem term="IRP">
+    I/O Request Packet，I/O 请求包。内核把用户请求（读、写、设备控制等）打包成的标准数据结构，派发给驱动的派遣函数处理。驱动处理完必须标记 IRP 完成，请求才能返回用户模式。可以理解为"内核递给驱动的一张工单"。
+  </GlossaryItem>
+  <GlossaryItem term="测试签名">
+    开发期临时关闭 64 位 Windows 签名强制的模式。用 `bcdedit /set testsigning on` 开启并重启后，系统允许加载用自签证书签名的驱动。它只影响开发机，发布到生产环境仍必须用正式 EV 证书走 Microsoft 仪表板签名。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

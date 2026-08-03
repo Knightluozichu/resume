@@ -3,7 +3,7 @@ title: "第11章 其他主题"
 type: C
 section: "项目 · 过滤驱动与验证"
 order: 11
-description: "综合驱动签名、Driver Verifier、原生API、传统过滤驱动、设备监视器、驱动挂钩和内核库，明确支持边界。 覆盖20个本页目录坐标。"
+description: "收尾工具箱：驱动签名、Driver Verifier、Native API、传统过滤驱动与设备通知，以及三条技术路线的支持边界。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,179 +18,450 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp11MiscellaneousTopicsVersionContextLab,
-  Wkp11MiscellaneousTopicsExecutableProbeLab,
-  Wkp11MiscellaneousTopicsSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-11-miscellaneous-topics";
+import { Wkp11ToolboxMapLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-11-toolbox-map-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) 开发阶段 = SVG 流水线阶段框 ①（可点击）
+  2) Driver Verifier = SVG Verifier 工作台 + 三步骤 + 全局开关（可交互观察风险）
+  3) 驱动签名（测试/发布）= SVG 流水线阶段框 ③④（可点击）
+  4) 部署与设备通知 = SVG 流水线阶段框 ⑤（可点击）
+  5) 三条路线（Minifilter/传统过滤/SSDT 挂钩）= SVG 路线三列（可点击，联动颜色）
+  全章新概念 5 个（驱动签名/Driver Verifier/Native API/传统过滤驱动/设备通知），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把签名、Verifier、Native API、过滤驱动、设备监视、挂钩与内核库落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“生产机全局Verifier、测试代码生产签名、驱动挂钩或向用户态暴露任意内核访问”，定位本章相对签名参考驱动的首个分岔
-- 交付必要性决策、驱动包/签名/HVCI验证、Verifier设置与reset、过滤设备生命周期，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能解释驱动签名的测试/发布两条路径，以及 Driver Verifier 的使用边界（测试机 + 目标驱动）
+- 能改出"设备到达通知"的注册与回调，并完成用后注销
+- 能回答：为什么 SSDT 挂钩在现代 Windows 上不可行？新代码应该选哪条路线？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；类比固定用①空间与地图（大楼交付/物业，与第 8-10 章同一体系）。 */}
 
-本章的核心问题是：签名、Verifier、Native API、过滤器、设备监视与内核库怎样迁移到受支持且最小权限的当前实践？
+## 为什么大楼交付前要体检、发证、装监控
 
-、、、、共同构成本页坐标。综合驱动签名、Driver
-Verifier、原生API、传统过滤驱动、设备监视器、驱动挂钩和内核库，明确支持边界。
+想象大楼里新开一家公司（你的驱动要进驻系统）。搬进来之前有三道手续：体检（查身体有没有暗病——内存乱用、锁没锁好）、发通行证（没有有效证件，64 位大门直接拒入）、装监控（新设备接进来要有人知道）。大楼里还有几条老路和一条禁区：老路（旧式过滤驱动）还在但没人维护，禁区（改大楼结构图）一碰就触发警报。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+没有这些手续会怎样？带病上工的程序一次越界就把整栋楼搞崩；没证的程序根本进不了门；U 盘插进来没人响应，外设全成摆设。
 
-## 来源合同与版本差异
+这一章是收尾工具箱：体检（Driver Verifier）、发证（驱动签名）、近路（Native API）、旧地图（传统过滤驱动）、监控（设备通知），最后标出禁区（SSDT 挂钩）——知道什么不能做，和知道怎么做一样重要。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## 驱动签名：进 64 位大门的通行证
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="对驱动文件进行数字签名，64 位 Windows 强制要求，未签名驱动拒绝加载">驱动签名</Term> 是驱动的"身份证"。开发调试阶段用测试签名：`bcdedit /set testsigning on` 打开测试模式 + 自签证书签名——但这会永久降低这台机器的安全边界，只许用在可丢弃的测试机。发布阶段用正式签名：EV 证书签名后提交微软门户，拿回 attestation 签名（微软背书），这是兼容 HVCI（内存完整性）的唯一途径。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+一个常见混淆：测试签名的驱动换到生产机直接拒绝加载，报"无法验证此驱动软件的发布者"——因为生产机不认你的测试证书。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## Driver Verifier：内核自带的体检仪
 
-### 本页独立事实来源
+<Term def="Windows 内置的驱动验证工具，对目标驱动开启内存池、IRQL、锁、引用计数等规则检查，违规当场 bug check">Driver Verifier</Term> 把驱动放进"放大镜"下跑：内存越界、错误 IRQL、锁顺序问题、引用泄漏，任何一条规则被违反就当场蓝屏，并借崩溃转储定位到责任代码——与其在用户现场随机蓝屏，不如在测试机上有预谋地蓝屏。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
-- [Microsoft Driver Verifier指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/driver-verifier)：本章用它核对只在测试机启用、目标驱动选择、bug check、查询和reset恢复。
-- [Microsoft驱动签名指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing)：本章用它核对测试签名、发布签名和驱动包交付边界。
-- [Microsoft KMDF架构](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/kernel-mode-driver-framework-architecture)：本章用它核对WDF对象、回调、队列和框架生命周期。
-- [Microsoft文件系统过滤器验证](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/file-system-filter-verification)：本章用它核对callback data、context、名称信息与引用泄漏验证。
+铁律两条：只在测试机开（全局开启性能下降 3-5 倍甚至无法启动）；只对目标驱动开（`verifier /driver MyDriver.sys`）。违规转储用调试器的 `!analyze -v` 就能找到出错栈。
 
-## 常见误区与故障注入
+## Native API：绕开 Win32 的近路
 
-本章注入的故障是：生产机全局Verifier、测试代码生产签名、驱动挂钩或向用户态暴露任意内核访问。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+<Term def="内核导出的底层系统服务接口（Nt*/Zw* 函数），Win32 API 内部就是调用它们实现的">Native API</Term> 是 Win32 之下的"原始通道"：`CreateFile` 最终调用 `NtCreateFile`，`ReadFile` 最终调用 `NtReadFile`。用户模式程序可以直接调用 `ntdll.dll` 导出的这些函数，拿到 Win32 层不暴露的参数（如完整对象属性、标志位）。
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+风险在于：Native API 是未承诺稳定的内部接口，参数语义随版本变动，且签名行为与 Win32 不同（如不自动初始化 `OBJECT_ATTRIBUTES`）。能用 Win32 就用 Win32，Native API 只在确实需要底层控制时用。
+
+## 传统过滤驱动：还在但没人维护的老路
+
+<Term def="Minifilter 出现之前的老式文件系统过滤驱动，直接接管 IRP 分发例程，兼容性差、开发成本高">传统过滤驱动</Term> 是第 10 章 Minifilter 的前身：不依赖过滤器管理器，自己写整套 `MajorFunction` 分发例程，自己管理设备栈附加、IRP 传递、名字缓冲……所有基础设施都要手搓，与新版文件系统兼容性差。
+
+现在写新代码没有理由再走这条路：Minifilter 把基础设施全包了（第 10 章），传统过滤驱动只作为"读老代码"的迁移知识保留。判断标准很简单——新工程选受支持框架，老代码才谈迁移。
+
+## 设备通知：大楼的入住监控
+
+<Term def="驱动通过 IoRegisterPlugPlayNotification 注册回调，在设备到达、移除或接口变化时得到内核通知">设备通知</Term> 让驱动对热插拔有反应：U 盘插入 → 设备到达事件 → 你的回调被调用 → 打开设备接口、完成初始化。没有它，即插即用设备对驱动来说"来了也不知道"。
+
+注册时指定事件类别（设备接口变化）、设备接口 GUID（只关心某类设备）和回调函数；返回的通知句柄必须在卸载时 `IoUnregisterPlugPlayNotification` 注销——和前面所有回调一样，注销是纪律的一部分。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：走一遍交付流水线
+
+下面的可视化把整章工具画成一张图：上部是交付流水线五个阶段（开发 → Verifier → 测试签名 → 发布签名 → 部署通知），中部是 Verifier 工作台三步骤，下部是三条技术路线。点阶段框看说明；打开"全局 Verifier"开关模拟误操作；点路线三列看支持边界。
+
+> 猜一猜：把"全局 Verifier"开关打开——结果条会变成什么颜色？提示文字说明了什么恢复手段？为什么"只查目标驱动"才是正确姿势？
+
+<Wkp11ToolboxMapLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：五件工具的用法
+
+这一节按原书结构拆解五段：设备通知注册、Verifier 验证流程、测试/发布签名、Native API 调用、新旧两代过滤框架对比。五段覆盖本章全部工具的关键用法，完整工程见章末来源链接。
+
+### 段一：设备通知 —— 注册与回调
+
+设备通知三步：填订阅参数（回调 + 上下文）→ `IoRegisterPlugPlayNotification` 注册（声明关心"设备接口到达"事件、按 GUID 过滤设备类别）→ 卸载时用返回的句柄注销。回调里区分事件类型（到达/移除），到达时打开接口初始化。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+// 注册设备通知：只关心 USB 设备接口到达
+NTSTATUS RegisterDeviceNotification(PDRIVER_OBJECT Drv)
+{
+    DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS params = { 0 };
+    params.Callback = OnDeviceNotify;   // 通知回调
+    params.Context = nullptr;
+
+    return IoRegisterPlugPlayNotification(
+        EventCategoryDeviceInterfaceChange,
+        PNPNOTIFY_DEVICE_INTERFACE_ARRIVAL,
+        (PUNICODE_STRING)&GUID_DEVINTERFACE_USB_DEVICE,
+        Drv->DriverObject,
+        &params, &g_notifyHandle);      // 注销凭证
+}
+
+VOID OnDeviceNotify(PVOID Context,
+    PDEVICE_NOTIFY_CALLBACK_CONTEXT Ctx,
+    PDEVICE_NOTIFY_PARAMETERS Params)
+{
+    UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(Ctx);
+    if (Params->Event == DeviceInterfaceArrival) {
+        // 新设备到了：打开接口、完成初始化
+        DbgPrint("Device arrived: %wZ\n",
+            &Params->DeviceInterface);
+    }
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+RegisterDeviceNotification
+  │
+  ├─→ 填订阅参数：回调 + 上下文
+  ├─→ IoRegisterPlugPlayNotification(
+  │       事件类别 = 设备接口变化
+  │       子事件   = 接口到达
+  │       GUID     = 只关心 USB 设备
+  │       → &g_notifyHandle（注销凭证）
+  │
+运行：U 盘插入
+  │ → OnDeviceNotify：Event == 到达？→ 打开接口初始化
+  │
+卸载：IoUnregisterPlugPlayNotification(g_notifyHandle)
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异点：设备通知注册有两代签名——旧版 <code>IoRegisterPlugPlayNotification</code>（回调签名为 <code>PDRIVER_NOTIFICATION_CALLBACK</code>，参数是 <code>DEVICE_INTERFACE_CHANGE_NOTIFICATION</code>）与新版订阅式参数。旧回调的 <code>Event</code> 字段是 <code>GUID</code>（比较 GUID 值），别和新版的事件枚举混用。
 </Callout>
 
-<Callout type="trap" title="误区二：接口同名就说明当前合同未变">
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：Verifier —— 只查目标，违规即蓝
+
+Verifier 是命令行工具，没有内核 API。标准流程：测试机管理员对目标驱动开启（`/flags` 指定规则组合，`0x1` 是内存池检查）→ 跑测试场景 → 违规当场蓝屏 → 用转储定位责任代码 → `verifier /reset` 结束（重启生效）。
+
+<CodeTabs>
+  <Tab label="命令 / 工具">
+
+```text
+:: 测试机上，只验证目标驱动（管理员）
+verifier /flags 0x1 /driver MyDriver.sys
+
+:: 跑压力场景；违规时系统立即蓝屏
+:: 重启后收集崩溃转储：!analyze -v
+:: 转储中责任模块就是违规驱动
+
+:: 结束验证（重启后生效）
+verifier /reset
+
+:: 误开全局后无法启动：安全模式进入后
+verifier /bootmode 1   （或 /reset 恢复）
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+Driver Verifier 工作流程
+  │
+  ├─→ 选择目标：/driver MyDriver.sys（绝不 /all）
+  ├─→ 选择规则：池检查 / IRQL / 锁 / 引用计数
+  ├─→ 跑测试：违规 → 立即 bug check
+  │     转储分析：!analyze -v 定位责任驱动
+  └─→ 结束：/reset（重启生效）
+      误开全局 → 无法启动 → 安全模式 /reset
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段三：签名 —— 测试自签，发布走门户
+
+签名流程分两轨：测试轨（测试机开 testsigning + `signtool` 自签证书）与发布轨（EV 证书 SHA-256 签名 + 时间戳 + 提交微软门户拿 attestation 签名）。发布轨的 attestation 签名是 HVCI 兼容的前提，缺它驱动在开启内存完整性的机器上被拒。
+
+<CodeTabs>
+  <Tab label="命令 / 工具">
+
+```text
+:: 测试签名（仅测试机）
+bcdedit /set testsigning on
+signtool sign /f MyTestCert.pfx /p pass MyDriver.sys
+
+:: 发布签名（生产）：EV 证书 + SHA-256 + 时间戳
+signtool sign /fd sha256 /a /ph
+    /tr http://timestamp.digicert.com MyDriver.sys
+
+:: 提交微软硬件开发者门户 → attestation 签名
+:: （HVCI/内存完整性兼容的唯一途径）
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+测试轨：              发布轨：
+bcdedit testsigning    EV 证书
+  + 自签证书            + signtool SHA-256
+  ↓                    + 时间戳
+本机可加载             ↓
+（生产机拒绝）         提交微软门户
+                      → attestation 签名
+                      → 生产机 + HVCI 均可加载
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  差异点：测试签名降低的是整台机器的安全边界（<code>testsigning</code> 是全局开关），不是只影响你的驱动——这也是它被限定在可丢弃测试机的原因。发布签名路径里，SHA-256 摘要、RFC 3161 时间戳、attestation 三件事缺一不可，缺时间戳的驱动在证书过期后即失效。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+### 段四：Native API —— 用户模式直接走底层
+
+Win32 的 `CreateFile` 内部就是调 `NtCreateFile`。直接调用原生 API 能拿到 Win32 不暴露的参数（对象属性、标志位），但必须自己初始化 `OBJECT_ATTRIBUTES`、自己处理 `IO_STATUS_BLOCK`——接口未承诺稳定，能不用就不用。
+
+<CodeTabs>
+  <Tab label="用户模式 C 代码">
+
+```c
+// 用户模式直接调用原生 API（ntdll.dll）
+UNICODE_STRING name;
+RtlInitUnicodeString(&name, L"\\??\\C:\\tmp\\data.bin");
+
+OBJECT_ATTRIBUTES oa;
+InitializeObjectAttributes(&oa, &name,
+    OBJ_CASE_INSENSITIVE, nullptr, nullptr);
+
+IO_STATUS_BLOCK io;
+HANDLE hFile = nullptr;
+NTSTATUS st = NtCreateFile(&hFile,
+    FILE_GENERIC_READ, &oa, &io, nullptr,
+    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
+    FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT,
+    nullptr, 0);
+if (!NT_SUCCESS(st)) return st;
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+Win32 API（CreateFile）
+  │
+  ▼
+NtCreateFile（原生 API，ntdll.dll）
+  │
+  ├─ 参数更底层：OBJECT_ATTRIBUTES / 标志位
+  ├─ 自己初始化对象属性（Win32 会替你填）
+  └─ 返回 NTSTATUS（Win32 转成错误码）
+
+能用 Win32 就用 Win32；Native API 只用于
+需要底层参数控制的场景（未承诺稳定）
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段五：新旧两代过滤框架 —— 一个逻辑，两种写法
+
+传统过滤驱动与 Minifilter 实现的是同一件事（在文件 I/O 路径上插一手），但写法天差地别：老框架手写整套 `MajorFunction` 分发和 IRP 传递，新框架只声明回调表，基础设施全由过滤器管理器承包。
+
+<CodeTabs>
+  <Tab label="传统过滤驱动（旧）">
+
+```c
+// 老框架：接管 IRP 分发例程，全部手写
+NTSTATUS DriverEntry(PDRIVER_OBJECT Drv, PUNICODE_STRING)
+{
+    Drv->MajorFunction[IRP_MJ_CREATE] = FsFilterCreate;
+    Drv->MajorFunction[IRP_MJ_READ]   = FsFilterRead;
+    Drv->MajorFunction[IRP_MJ_WRITE]  = FsFilterWrite;
+    Drv->DriverUnload = FsFilterUnload;
+    return STATUS_SUCCESS;
+}
+
+// 每个分发例程都要：查栈位置 → 处理 →
+// IoCallDriver 下传 → IoCompletion 回调收尾
+```
+
+  </Tab>
+  <Tab label="Minifilter（新，第10章）">
+
+```c
+// 新框架：只声明关心的操作，其余框架承包
+FLT_OPERATION_REGISTRATION g_ops[] = {
+    { IRP_MJ_CREATE, 0, OnCreatePre, nullptr, nullptr },
+    { IRP_MJ_READ,   0, OnReadPre,   nullptr, nullptr },
+    { IRP_MJ_WRITE,  0, OnWritePre,  nullptr, nullptr },
+    { IRP_MJ_OPERATION_END }   // 表结束标记
+};
+
+// 注册两行：FltRegisterFilter + FltStartFiltering
+// 传参/完成/名字缓冲/上下文全由 FltMgr 处理
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  兼容性差异：传统过滤驱动在现有 Windows 上仍能加载（兼容层保留），但不再受支持，且与 Minifilter 混装时行为不可预测；新代码一律走 Minifilter（第 10 章）。SSDT 挂钩则完全相反——它改的是内核关键结构（系统服务表），被 PatchGuard 视为入侵，蓝屏（CRITICAL_STRUCTURE_CORRUPTION）只是时间问题，任何场景都不推荐。
 </Callout>
 
-## 四类样本与验收
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+## 容易踩的坑
 
-**本章验收不变量**：只有必要内核功能、受支持模型、最小权限、隔离验证、恢复与发布签名全部成立
+<Callout type="trap">
+  <strong>现象</strong>：测试机上开了 testsigning 后一切正常，于是顺手在生产机也开——之后系统被不明驱动频繁搞崩。<strong>原因</strong>：testsigning 是全局安全边界开关，开了等于告诉系统"任何自签驱动都可信"，恶意驱动趁虚而入。<strong>修法</strong>：测试签名只用于可丢弃测试机；生产机保持 testsigning off，驱动走 EV 签名 + 微软 attestation 通道发布。
+</Callout>
 
-**本章必查证据**：必要性决策、驱动包/签名/HVCI验证、Verifier设置与reset、过滤设备生命周期
+<Callout type="trap">
+  <strong>现象</strong>：用 verifier /standard /all 想"全面体检"，结果系统慢到鼠标都拖不动，重启后直接无法进入桌面。<strong>原因</strong>：全局验证对系统里所有驱动做全规则检查，开销放大数倍，且任一第三方驱动违规都会蓝屏。<strong>修法</strong>：只对目标驱动开（verifier /flags 0x1 /driver MyDriver.sys）；误开全局后进安全模式执行 verifier /reset 或 /bootmode 1 恢复。
+</Callout>
 
-## 交互实验 — 签名与Verifier
+<Callout type="trap">
+  <strong>现象</strong>：照老教程给系统服务表挂钩（SSDT hooking）实现"隐藏进程"，系统隔三差五蓝屏，错误码 CRITICAL_STRUCTURE_CORRUPTION。<strong>原因</strong>：PatchGuard（内核补丁保护）定期校验关键结构，发现被改写就强制蓝屏。<strong>修法</strong>：放弃挂钩路线——需要拦截进程行为用第 8、9 章的通知机制，需要拦截文件 I/O 用第 10 章的 Minifilter，全部是受支持接口。
+</Callout>
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
+<Callout type="trap">
+  <strong>现象</strong>：64 位系统上安装驱动报"无法验证发布者"，但同一份驱动在 32 位系统或关闭驱动签名强制时能装。<strong>原因</strong>：64 位 Windows 强制签名校验，测试证书或自签证书不在信任链上。<strong>修法</strong>：开发调试走测试签名流程（测试机 + testsigning）；交付走 EV 签名 + attestation；别在目标机上关强制签名（会连带关掉安全功能）。
+</Callout>
 
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp11MiscellaneousTopicsVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp11MiscellaneousTopicsExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp11MiscellaneousTopicsSafetyGateLab />
-  </Step>
-</Stepper>
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 练习
+## 小结
+
+- 驱动签名两轨：测试轨（testsigning + 自签）限测试机，发布轨（EV + attestation）才进生产
+- Driver Verifier 只对目标驱动开在测试机，违规当场蓝屏、转储定位
+- Native API 是 Win32 之下的底层通道，能用 Win32 就别直接用
+- 传统过滤驱动是遗留路线，新代码一律 Minifilter；SSDT 挂钩是 PatchGuard 禁区
+- 设备通知经 IoRegisterPlugPlayNotification 注册，卸载用句柄注销
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：签名、Verifier、Native API、过滤器、设备监视与内核库怎样迁移到受支持且最小权限的当前实践？
+**问题 1：** 在 Demo 中打开"全局 Verifier"开关，观察结果条与恢复提示。为什么"违规当场蓝屏"恰恰是 Verifier 的价值，而不是它的缺点？
 
 <Answer>
-  实验必须满足不变量：只有必要内核功能、受支持模型、最小权限、隔离验证、恢复与发布签名全部成立。需要交付的证据包括：必要性决策、驱动包/签名/HVCI验证、Verifier设置与reset、过滤设备生命周期。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"生产机全局Verifier、测试代码生产签名、驱动挂钩或向用户态暴露任意内核访问"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+Verifier 把驱动放进放大镜下，任何违规（内存越界、错误 IRQL、锁问题、引用泄漏）都当场蓝屏——这正是它存在的意义：问题在测试机上以"可定位"的方式爆发，而不是在生产用户现场以随机崩溃的形式爆发。蓝屏时系统写出崩溃转储，调试器 !analyze -v 能直接指出责任驱动和出错栈，开发者拿到的是"可控的失败 + 完整的证据"。相比之下，未开 Verifier 的驱动往往在压力下产生难以复现的随机崩溃，定位成本高一个量级。所以 Demo 中打开全局开关显示危险（拖垮系统），但正确用法（只查目标驱动）的价值恰恰是"有预谋地蓝屏"。
+
 </Answer>
 
-**问题 2：故障识别与避免**
-
-如果在实验中观察到"生产机全局Verifier、测试代码生产签名、驱动挂钩或向用户态暴露任意内核访问"，如何定位根因？如何避免？
+**问题 2：** 你的驱动要交付给开启 HVCI（内存完整性）的客户机器。给出完整的签名与发布检查清单，并说明为什么测试签名路径在这里不够用。
 
 <Answer>
-  定位方法：在必要性决策、驱动包/签名/HVCI验证、Verifier设置与reset、过滤设备生命周期中检查是否违反不变量"只有必要内核功能、受支持模型、最小权限、隔离验证、恢复与发布签名全部成立"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保签名、Verifier、Native API、过滤驱动、设备监视、挂钩与内核库的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+清单：1）开发阶段保留符号（PDB）并跑通 Verifier（只查目标驱动）；2）发布签名：EV 证书 + signtool SHA-256 摘要 + RFC 3161 时间戳签名；3）提交微软硬件开发者门户，获取 attestation 签名（微软背书）；4）在开启 HVCI 的测试机上验证加载与功能；5）生产机保持 testsigning off。测试签名不够用的原因：attestation 签名是 HVCI 兼容的前置条件——开启内存完整性的机器只信任微软背书的驱动，测试证书/自签证书既不在信任链上，其"允许加载"的机制（关闭强制签名或开 testsigning）也与 HVCI 的保护目标直接冲突。发布签名不是可选项，是硬件兼容性门槛。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 实现 USB 设备到达通知的三段：1）写出 RegisterDeviceNotification——订阅设备接口变化事件、按 USB 设备 GUID 过滤、保存通知句柄；2）写出 OnDeviceNotify 回调——到达时打印接口名、移除时打印移除；3）写出卸载注销片段——注销通知句柄并判空。要求回调区分到达/移除事件。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+// 1) 注册：只关心 USB 设备接口
+NTSTATUS RegisterDeviceNotification(PDRIVER_OBJECT Drv)
+{
+    DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS params = { 0 };
+    params.Callback = OnDeviceNotify;
+    params.Context = nullptr;
+    return IoRegisterPlugPlayNotification(
+        EventCategoryDeviceInterfaceChange,
+        PNPNOTIFY_DEVICE_INTERFACE_ARRIVAL,
+        (PUNICODE_STRING)&GUID_DEVINTERFACE_USB_DEVICE,
+        Drv->DriverObject,
+        &params, &g_notifyHandle);
+}
+```
 
-什么情况下必须停止内核实验？
+回调部分区分到达与移除两种事件，打印接口名；卸载部分先注销通知（判空），再删设备。
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
+```c
+// 2) 回调：区分到达与移除
+VOID OnDeviceNotify(PVOID Context,
+    PDEVICE_NOTIFY_CALLBACK_CONTEXT Ctx,
+    PDEVICE_NOTIFY_PARAMETERS Params)
+{
+    UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(Ctx);
+    if (Params->Event == DeviceInterfaceArrival) {
+        DbgPrint("USB arrived: %wZ\n", &Params->DeviceInterface);
+    } else if (Params->Event == DeviceInterfaceRemoval) {
+        DbgPrint("USB removed: %wZ\n", &Params->DeviceInterface);
+    }
+}
+
+// 3) 卸载：注销通知（判空）
+VOID OnUnload(PDRIVER_OBJECT DriverObject)
+{
+    if (g_notifyHandle)
+        IoUnregisterPlugPlayNotification(g_notifyHandle);
+    IoDeleteDevice(DriverObject->DeviceObject);
+}
+```
+
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- 驱动签名：连接“建立签名信任”的内核契约与证据。
-- Driver Verifier：连接“启用定向Verifier”的内核契约与证据。
-- Native API：连接“调用原生API”的内核契约与证据。
-- 过滤设备：连接“附加过滤设备”的内核契约与证据。
-- 驱动挂钩：连接“监视转发请求”的内核契约与证据。
-- 本页20个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：驱动签名/Driver Verifier/Native API/传统过滤驱动/设备通知）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="签名">
-    签名是本章的入口概念。签名、Verifier、Native API、过滤器、设备监视与内核库怎样迁移到受支持且最小权限的当前实践？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在必要性决策、驱动包/签名/HVCI验证、Verifier设置与reset、过滤设备生命周期中留下可验证记录。
+  <GlossaryItem term="驱动签名">
+    对驱动文件做数字签名，64 位 Windows 强制要求。测试签名（自签证书）只限测试机；发布签名（EV + 微软 attestation）才是生产通道。相当于大楼发的通行证：临时访客证只让进测试楼，正式员工证才能进生产区。
   </GlossaryItem>
-  <GlossaryItem term="Verifier">
-    Verifier在本章中用于构造可撤销反例。注入故障"生产机全局Verifier、测试代码生产签名、驱动挂钩或向用户态暴露任意内核访问"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="Driver Verifier">
+    Windows 内置的驱动验证工具：对目标驱动开启内存池、IRQL、锁、引用计数等规则检查，违规当场蓝屏并借转储定位。相当于大楼给员工做体检：有暗病当场查出来，总比入职后随时倒下强。
   </GlossaryItem>
   <GlossaryItem term="Native API">
-    Native API必须满足不变量"只有必要内核功能、受支持模型、最小权限、隔离验证、恢复与发布签名全部成立"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+    内核导出的底层系统服务接口（Nt*/Zw* 函数），Win32 API 内部就是调用它们实现的。相当于大楼的内部员工通道：Win32 是前台，Native API 是直达后台的楼梯——能用前台就走前台，内部通道不承诺稳定。
   </GlossaryItem>
-  <GlossaryItem term="过滤驱动">
-    过滤驱动连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="传统过滤驱动">
+    Minifilter 出现之前的老式文件系统过滤驱动：自己接管 IRP 分发例程、自己管理设备栈。相当于旧式仓库管理员：一个人管全部流程，费力且易错；现在有了分工明确的值班岗体系（Minifilter），新仓库不再用旧办法。
+  </GlossaryItem>
+  <GlossaryItem term="设备通知">
+    驱动通过 IoRegisterPlugPlayNotification 注册的回调机制，在设备到达、移除或接口变化时收到内核通知。相当于大楼的入住监控：新设备（U 盘）插进来，系统第一时间通知相关岗位，撤岗时注销通知。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

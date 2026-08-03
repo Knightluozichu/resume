@@ -1,9 +1,9 @@
 ---
 title: "第6章 内核机制"
 type: C
-section: "机制 · IRQL、同步与I/O"
+section: "机制 · 中断、同步与通知"
 order: 6
-description: "系统讲解IRQL、DPC、APC、SEH、崩溃转储、线程同步、分发器对象、高IRQL自旋锁和工作项。 覆盖25个本页目录坐标。"
+description: "用 DPC、APC、工作项、SEH 与同步原语构建内核执行机制，理解不同 IRQL 与上下文下"什么事能做、什么事不能做"的完整地图。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,174 +18,482 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp06KernelMechanismsVersionContextLab,
-  Wkp06KernelMechanismsExecutableProbeLab,
-  Wkp06KernelMechanismsSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-06-kernel-mechanisms";
+import { Wkp06MechanismRouterLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-06-mechanism-router-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) DPC = SVG 路由图第一个执行上下文框（可点击查看详情）
+  2) APC = SVG 路由图第二个执行上下文框（可点击查看详情）
+  3) 工作项 = SVG 路由图第三个执行上下文框（可点击查看详情）
+  4) SEH = SVG 异常处理框（可点击查看详情）
+  5) 同步原语 = SVG 低 IRQL 同步框 + 高 IRQL 自旋锁框（可点击）
+  全章新概念 5 个（DPC/APC/工作项/SEH/同步原语），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把IRQL、DPC、APC、SEH、系统崩溃、同步、高IRQL与工作项落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“把线程优先级当IRQL、在高IRQL等待或访问分页代码、锁序环和工作项卸载竞态”，定位本章相对签名参考驱动的首个分岔
-- 交付IRQL/CPU/线程轨迹、DPC与工作项队列、锁图、转储和同输入恢复，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能解释 DPC、APC、工作项各自的执行上下文（IRQL、线程归属）与适用场景
+- 能改出在 DPC 中排队工作项的效果，并说明为什么重活必须外包到 PASSIVE_LEVEL
+- 能回答：在 DISPATCH_LEVEL 上调用 KeWaitForSingleObject 等待事件会发生什么？为什么？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用②工厂流水线。 */}
 
-本章的核心问题是：IRQL、DPC、APC、异常、崩溃转储、同步原语、自旋锁与工作项怎样按上下文选择？
+## 为什么内核里"做事的时机"比"做什么"更重要
 
-、、、、共同构成本页坐标。系统讲解IRQL、DPC、APC、SEH、崩溃转储、线程同步、分发器对象、高IRQL自旋锁和工作项。
+想象一条工厂流水线。设备报警了，维修工不能扔下扳手直接修——他得先按下急停（短、快、必须立刻做），剩下的检修流程等工人回到工位再做（长、慢、可以排队）。还有一类活根本不该维修工干：比如补货、记账，直接派给后勤部门，谁有空谁干。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+内核也是这样。同一件事，在哪个"工位"（执行上下文）做，决定了你能等多久、能碰什么内存、能拿什么锁。搞错工位——比如在急停状态下等供应商送货——整条流水线直接锁死。
 
-## 来源合同与版本差异
+这一章把内核的"工位地图"画全：哪些活必须抢着做（中断处理）、哪些可以排队做（延迟调用）、哪些必须送回原工位做（定点投递）、哪些可以外包（工作项），以及工位之间怎么协调（同步）。记住这张地图，写内核代码才不会"在错误的工位干错事"。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## DPC：排队做，但别等
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="把中断后必须执行但不紧急的工作推迟到 IRQL DISPATCH_LEVEL 执行的内核机制">DPC</Term>（Deferred Procedure Call，延迟过程调用）解决"中断处理必须短"的约束。硬件中断到来时，ISR（中断服务例程）在高 IRQL 上运行，只能做必要操作（确认中断、读状态），剩下的工作排进 DPC 队列，系统在中断返回后、IRQL 降到 DISPATCH_LEVEL 时批量执行。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+DPC 的执行上下文很特殊：运行在**任意线程**的上下文（谁被中断就是谁），IRQL 是 DISPATCH_LEVEL——这意味着不能等待（等待会让系统死锁）、不能访问分页内存、不能长时间占用 CPU。DPC 适合 50 微秒级的小活；想干重活，看下面的工作项。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## APC：快递要送回原地址
 
-### 本页独立事实来源
+<Term def="投递到指定线程、在该线程可打断时执行的异步回调机制，运行在目标线程上下文">APC</Term>（Asynchronous Procedure Call，异步过程调用）是"定向投递"：每个线程有一条 APC 队列，别的代码可以往队列里投递一个函数，目标线程下次进入可打断状态（如等待事件）时执行它。APC 运行在**目标线程**的上下文，IRQL 是 APC_LEVEL。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft分发例程与IRQL](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/dispatch-routines-and-irqls)：本章用它核对PASSIVE/APC/DISPATCH与分页、阻塞和任意线程上下文限制。
-- [Microsoft内核模式驱动架构指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/)：本章用它核对I/O、DPC、同步、PnP、电源和驱动编程当前路由。
-- [Microsoft Windows调试入门](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/getting-started-with-windows-debugging)：本章用它核对WinDbg、宿主—目标、符号和转储调试当前边界。
-- [Microsoft Driver Verifier指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/driver-verifier)：本章用它核对只在测试机启用、目标驱动选择、bug check、查询和reset恢复。
+APC 的价值是"回到正确的人手里办事"：比如 I/O 完成后要更新发起者的数据结构，就得在发起线程的上下文里改，直接改可能撞上并发。内核 APC 还用于进程/线程通知回调（第 8 章的主角）。代价：目标线程必须活着且愿意被中断，投递不等于立即执行。
 
-## 常见误区与故障注入
+## 工作项：外包给后勤部门
 
-本章注入的故障是：把线程优先级当IRQL、在高IRQL等待或访问分页代码、锁序环和工作项卸载竞态。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+<Term def="把耗时任务排队到系统工作线程池、在 PASSIVE_LEVEL 下执行的内核机制">工作项</Term>（Work Item）是 DPC 的"重活出口"：DPC 里做不了的事（等待、访问分页内存、拿锁），可以排队成工作项，由系统工作线程在 PASSIVE_LEVEL 下执行——可等待、可分页、可持锁，什么都能干。
 
-<Callout type="trap" title="误区一：作者样章或二版等于中文版整书">
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+典型模式是"中断/DPC 里只登记，工作项里干重活"：比如网络驱动收到数据，DPC 里把数据挪进非分页缓冲区，排队工作项，工作线程里再慢慢做协议解析和用户态通知。代价是执行时机不确定（可能延迟几百微秒），实时性要求高的路径不能依赖它。
+
+## SEH：安全气囊
+
+<Term def="内核中用于捕获异常的机制，用 __try/__except 把崩溃点包起来，避免直接触发 bug check">SEH</Term>（Structured Exception Handling，结构化异常处理）是内核的安全气囊：代码访问了非法地址、除数为零，CPU 抛出异常——如果没接住，系统直接蓝屏；用 `__try/__except` 包住可疑代码，异常发生时控制流跳到 `__except` 块，可以检查现场、修正状态、继续执行或优雅返回错误码。
+
+注意：SEH 不是万能保险。捕获后系统可能处于部分更新状态（锁还握着、引用没释放），必须在异常块里恢复一致；而且许多崩溃（分页错误、高 IRQL 违规）根本不该捕获——那是逻辑 bug，该蓝屏暴露出来。SEH 用于处理**可预期的外部异常**（探测用户缓冲区），不是给代码 bug 兜底。
+
+## 同步原语：工位之间的红绿灯
+
+多个执行上下文（线程、DPC、中断）同时碰同一份数据时，必须有协调机制。内核提供两档红绿灯：低 IRQL（PASSIVE_LEVEL）用<Term def="可等待的内核同步对象，包括事件、互斥体、信号量等，线程可阻塞等待其信号">分发器对象</Term>——事件（通知）、互斥体（独占所有权）、信号量（固定名额）、执行体资源（读写分离），线程可以真正睡下去等；高 IRQL（DISPATCH_LEVEL 及以上）不能睡觉，只能用自旋锁（忙等，持有时间必须极短）和互锁操作（单条原子指令改整数）。
+
+选哪一档，取决于你的代码会在什么 IRQL 被访问：只有低 IRQL 访问 → 分发器对象；会被 DPC/中断访问 → 自旋锁或互锁。选错（高 IRQL 下等待）不是性能问题，是直接蓝屏。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：走一遍机制路由图
+
+下面的可视化把五种机制画成一张路由图：触发场景（中断、定时器、线程退出、I/O 完成）把工作路由到 DPC、APC 或工作项；下方是 SEH 与同步原语两个横条。点击任意区域看详情；点场景按钮看路由高亮。
+
+> 猜一猜：点"定时器到期"场景——定时器的回调运行在哪个 IRQL？如果回调里直接调用 KeWaitForSingleObject 等待一个事件，会发生什么？动手看看路由，再对照下面的代码。
+
+<Wkp06MechanismRouterLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：五种机制的最小实现
+
+这一节给出每个机制的最小可运行代码骨架。五个段对应：DPC 排队执行、工作项外包、SEH 捕获、事件同步、自旋锁保护。完整工程见章末来源链接。
+
+### 段一：DPC —— 中断后排队的小活
+
+初始化 DPC 对象 → 在需要时插入队列 → 系统在 DISPATCH_LEVEL 调用回调。回调里只做非分页的短小操作。注意 `KeInsertQueueDpc` 返回 FALSE 表示该 DPC 已在队列中——同一 DPC 不能重复排队。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+// 驱动对象里挂一个 DPC
+KDPC g_dpc;
+
+// 初始化：绑定回调函数（在 DriverEntry 中调用一次）
+VOID InitDpc(PDRIVER_OBJECT DriverObject)
+{
+    KeInitializeDpc(&g_dpc, OnDpc, DriverObject);
+}
+
+// DPC 回调：DISPATCH_LEVEL，任意线程上下文
+VOID OnDpc(KDPC* Dpc, PVOID Context, PVOID Arg1, PVOID Arg2)
+{
+    UNREFERENCED_PARAMETER(Dpc); UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(Arg1); UNREFERENCED_PARAMETER(Arg2);
+    // 只能做非分页、短小、不可等待的工作
+    InterlockedIncrement(&g_dpcCount);
+}
+
+// 某处需要延迟处理时（如 ISR 末尾）：
+VOID RequestDpc()
+{
+    KeInsertQueueDpc(&g_dpc, nullptr, nullptr);
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+硬件中断（IRQL >= DEVICE_LEVEL）
+  │
+  ├─→ ISR：只清中断、读状态（必须极短）
+  │
+  └─→ KeInsertQueueDpc(g_dpc)     排队
+        │
+        ▼
+中断返回后，IRQL 降到 DISPATCH_LEVEL
+  │
+  └─→ OnDpc 执行（任意线程上下文）
+        · 非分页内存：✓
+        · 等待事件：✗（系统死锁）
+        · 分页内存：✗（页错误 = bug check 0xA）
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异点：老代码用 <code>KeInitializeDpc</code> + <code>KeInsertQueueDpc</code>，定时器场景常配合 <code>KeSetTimer</code> 在到期时插入 DPC。新代码优先 <code>KeSetTimerEx</code> 的周期能力。DPC 回调的 <code>Arg1/Arg2</code> 是排队时传入的自定义数据——用它传递上下文，不要依赖全局变量猜状态。
 </Callout>
 
-<Callout type="trap" title="误区二：接口同名就说明当前合同未变">
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：工作项 —— 把重活外包
+
+DPC 里发现活太重（要等待、要碰分页内存），立即排队工作项。回调运行在系统工作线程、PASSIVE_LEVEL：可以等待、可以访问分页内存、可以拿分发器对象。代价是执行时机不保证。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+IO_WORKITEM* g_wi;   // DriverEntry 创建，Unload 释放
+
+VOID InitWorkItem(PDRIVER_OBJECT DriverObject)
+{
+    g_wi = IoAllocateWorkItem(DriverObject);
+    // 每次需要时插入队列（可多次插入）
+}
+
+// 在 DPC 或低 IRQL 路径调用：
+VOID ScheduleHeavyWork()
+{
+    IoQueueWorkItem(g_wi, OnHeavyWork,
+        CriticalWorkQueue, nullptr);
+}
+
+// 回调：PASSIVE_LEVEL，系统工作线程上下文
+VOID OnHeavyWork(PDEVICE_OBJECT DeviceObject, PVOID Context)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    UNREFERENCED_PARAMETER(Context);
+    // 可以等待、访问分页内存、拿分发器对象
+    KeWaitForSingleObject(&g_event, Executive,
+        KernelMode, FALSE, nullptr);
+    // ... 耗时处理 ...
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+DPC（DISPATCH_LEVEL）
+  │
+  ├─→ 发现需要等待/分页/持锁
+  │
+  └─→ IoQueueWorkItem(g_wi, OnHeavyWork, ...)   外包
+        │
+        ▼
+系统工作线程池（PASSIVE_LEVEL）
+  │
+  ├─→ OnHeavyWork 执行
+  │     · 等待事件：✓
+  │     · 分页内存：✓
+  │     · 持分发器对象：✓
+  │
+  └─→ 完成 → 通知发起者（事件/APC）
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  注意：<code>IoAllocateWorkItem</code> 创建的工作项可以多次排队（内部会处理排队状态），但释放前必须确保没有排队中的回调还在执行——卸载时先取消、再等排空、最后释放。DPC 排队的工作项在系统停止工作线程池（关机/卸载）时可能被丢弃，卸载路径上不要依赖它完成关键清理。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+### 段三：SEH —— 接住可预期的异常
+
+典型场景：用户模式传来的指针不可信，内核在访问前用 SEH 包一层。访问非法地址时异常被捕获，返回错误码而不是蓝屏。注意 `__try/__except` 只能在 C 函数里用，且不能跨越函数边界。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS SafeReadUserPtr(PVOID UserPtr, ULONG* OutValue)
+{
+    ULONG value = 0;
+    __try {
+        // 探测 + 读取用户指针（可能非法）
+        value = *(volatile ULONG*)UserPtr;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        // 捕获：返回错误，不蓝屏
+        return STATUS_ACCESS_VIOLATION;
+    }
+    *OutValue = value;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+访问非法地址
+  │
+  ├─→ CPU 抛异常（页面错误/访问违规）
+  │
+  ├─→ 内核检查异常表
+  │     ├─→ 有 __try/__except 包住？→ 跳 __except 块
+  │     │     · 返回错误码，系统继续
+  │     │     · 注意：锁/引用要在块内恢复
+  │     │
+  │     └─→ 没有保护 → bug check（蓝屏）
+  │
+  └─→ 记录 BugCheck 0xA / 0xD1 等
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  现代替代：新代码用 <code>ProbeForRead/ProbeForWrite</code>（低 IRQL 专用）在访问前探测用户缓冲区，再用 <code>__try/__except</code> 兜住竞态窗口。METHOD_BUFFERED 传输下系统已复制缓冲区，不需要探测（第 7 章详述）。SEH 是最后一道防线，不是第一道——先校验长度与对齐，再探测，最后才靠异常捕获。
 </Callout>
 
-## 四类样本与验收
+### 段四：事件 —— 低 IRQL 的等待与唤醒
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+发起者等待事件，完成者设置事件。这个模式贯穿内核：I/O 完成、工作项结束、通知到达，都用事件传递信号。注意等待只能在 PASSIVE_LEVEL（APC 级在特定条件下也可以），高 IRQL 等待 = 死锁蓝屏。
 
-**本章验收不变量**：可等待性、分页性、锁序、IRQL、队列与反向释放在所有执行路径匹配
+<CodeTabs>
+  <Tab label="C / 内核驱动">
 
-**本章必查证据**：IRQL/CPU/线程轨迹、DPC与工作项队列、锁图、转储和同输入恢复
+```c
+KEVENT g_event;      // 事件对象（全局或设备扩展）
 
-## 交互实验 — IRQL与同步原语
+VOID InitSync(PDEVICE_OBJECT DeviceObject)
+{
+    KeInitializeEvent(&g_event, NotificationEvent, FALSE);
+}
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
+// 线程 A（PASSIVE_LEVEL）：等待信号
+NTSTATUS WaitForWork(PDEVICE_OBJECT DeviceObject)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    return KeWaitForSingleObject(&g_event, Executive,
+        KernelMode, FALSE, nullptr);
+}
 
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp06KernelMechanismsVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp06KernelMechanismsExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp06KernelMechanismsSafetyGateLab />
-  </Step>
-</Stepper>
+// 线程 B：完成工作后发信号
+VOID SignalWorkDone()
+{
+    KeSetEvent(&g_event, IO_NO_INCREMENT, FALSE);
+}
+```
 
-## 练习
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+线程 A                        线程 B
+  │ WaitForSingleObject         │
+  │ ── 睡下去（让出 CPU）──→   │
+  │                             │ 干完活
+  │                             │ KeSetEvent → 亮灯
+  │ ←── 被唤醒 ────────────────│
+  │ 继续执行                     │
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段五：自旋锁 —— 高 IRQL 的短临界区
+
+数据会被 DPC（DISPATCH_LEVEL）访问时，普通等待不可用，只能用自旋锁：持锁线程空转等待。临界区必须极短（几十条指令），且**所有**访问路径必须按同一顺序拿锁——锁序不一致 = 多核死锁。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+KSPIN_LOCK g_lock;    // DriverEntry 中 KeInitializeSpinLock
+ULONG g_counter;      // 被保护的共享数据
+
+// 低 IRQL 路径
+VOID UpdateFromPassive()
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&g_lock, &irql);
+    g_counter++;                       // 临界区：极短
+    KeReleaseSpinLock(&g_lock, irql);
+}
+
+// DPC 路径（DISPATCH_LEVEL）
+VOID UpdateFromDpc()
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&g_lock, &irql); // DPC 里也可用
+    g_counter += 2;
+    KeReleaseSpinLock(&g_lock, irql);
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+CPU 0（普通线程）           CPU 1（DPC）
+  │ AcquireSpinLock           │ AcquireSpinLock
+  │ 拿到锁 ✓                  │ 拿不到 ✗
+  │ g_counter++               │ ── 空转等待（忙等）──
+  │ ReleaseSpinLock           │    （不能睡：DISPATCH_LEVEL）
+  │                           │ ← 锁释放
+  │                           │ 拿到锁 ✓ → 更新 → 释放
+```
+
+  </Tab>
+</CodeTabs>
+
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  <strong>现象</strong>：在 DPC 回调里调用 KeWaitForSingleObject，系统立即蓝屏或死锁。<strong>原因</strong>：DPC 运行在 DISPATCH_LEVEL，该级别禁止等待——等待需要调度器切换线程，而调度器在 DISPATCH_LEVEL 下不能运行。<strong>修法</strong>：DPC 里只做非分页短活；需要等待或重活时排队工作项（PASSIVE_LEVEL 再等），把等待挪到正确工位。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象</strong>：DPC 回调里访问了分页内存，蓝屏 BugCheck 0xA（IRQL_NOT_LESS_OR_EQUAL）。<strong>原因</strong>：分页内存可能被换出，访问触发页错误，而页错误处理（缺页中断）需要低于 DISPATCH_LEVEL 才能运行。<strong>修法</strong>：DPC 路径只访问非分页内存——分配时用非分页池（第 3 章），或把访问分页数据的代码放进工作项。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象</strong>：两个线程各持一把自旋锁再互取对方锁，系统彻底死锁（所有 CPU 空转）。<strong>原因</strong>：锁序环——线程 A 拿锁 1 等锁 2，线程 B 拿锁 2 等锁 1，谁也不放。<strong>修法</strong>：全局统一锁顺序（如按地址升序拿锁）；能不用多把锁就别用；用 Driver Verifier 的 Deadlock Detection 在测试期抓出环。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象</strong>：卸载时工作项还在队列里没执行，释放工作项后系统崩溃。<strong>原因</strong>：IoFreeWorkItem 时回调仍可能运行——它引用了已释放的设备对象或上下文。<strong>修法</strong>：卸载先停止排队新工作项，用事件等待已排队的回调完成（或跟踪引用计数），全部归零后再释放工作项与设备对象。
+</Callout>
+
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
+
+## 小结
+
+- DPC 在 DISPATCH_LEVEL 任意线程执行：非分页、短小、不可等待
+- APC 投递到目标线程上下文执行，等目标线程可打断
+- 工作项外包到 PASSIVE_LEVEL 系统线程：可等待可分页可持锁
+- SEH 捕获可预期异常，先校验探测再兜底，不替逻辑 bug 背锅
+- 低 IRQL 用可等待的分发器对象，高 IRQL 用自旋锁与互锁
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：IRQL、DPC、APC、异常、崩溃转储、同步原语、自旋锁与工作项怎样按上下文选择？
+**问题 1：** 在 Demo 中点"定时器到期"场景，定时器回调运行在什么 IRQL？为什么回调里不能等待事件？如果要等待，应该怎么做？
 
 <Answer>
-  实验必须满足不变量：可等待性、分页性、锁序、IRQL、队列与反向释放在所有执行路径匹配。需要交付的证据包括：IRQL/CPU/线程轨迹、DPC与工作项队列、锁图、转储和同输入恢复。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"把线程优先级当IRQL、在高IRQL等待或访问分页代码、锁序环和工作项卸载竞态"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+定时器 DPC 回调运行在 DISPATCH_LEVEL。该级别下等待会让系统死锁：等待需要调度器切换线程，而调度器在 DISPATCH_LEVEL 下无法运行，等待线程永远不会被唤醒，系统挂死。正确做法是：DPC 里只登记状态（如设置标志、递增计数），然后 IoQueueWorkItem 排队工作项，在工作项回调（PASSIVE_LEVEL）里再做等待类操作。
+
 </Answer>
 
-**问题 2：故障识别与避免**
+**问题 2：** 下面这段 DPC 回调有什么问题？至少列出两处并给出修正思路。
 
-如果在实验中观察到"把线程优先级当IRQL、在高IRQL等待或访问分页代码、锁序环和工作项卸载竞态"，如何定位根因？如何避免？
+```c
+VOID OnTimerDpc(KDPC* Dpc, PVOID Ctx, PVOID A1, PVOID A2)
+{
+    MY_DATA* data = (MY_DATA*)Ctx;
+    data->logBuffer = ExAllocatePool2(POOL_FLAG_PAGED, 4096, 'golM');
+    KeWaitForSingleObject(&data->lock, Executive, KernelMode, FALSE, nullptr);
+    memcpy(data->logBuffer, data->pending, 4096);
+    KeReleaseMutex(&data->lock, FALSE);
+}
+```
 
 <Answer>
-  定位方法：在IRQL/CPU/线程轨迹、DPC与工作项队列、锁图、转储和同输入恢复中检查是否违反不变量"可等待性、分页性、锁序、IRQL、队列与反向释放在所有执行路径匹配"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保IRQL、DPC、APC、SEH、系统崩溃、同步、高IRQL与工作项的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+三处问题：1）ExAllocatePool2 用了 POOL_FLAG_PAGED 分页池——DPC 在 DISPATCH_LEVEL 不能访问分页内存，应改 POOL_FLAG_NON_PAGED 或移到工作项；2）KeWaitForSingleObject 等待互斥体——DISPATCH_LEVEL 禁止等待，等待会死锁；3）KeReleaseMutex 配 KeWaitForSingleObject 拿的锁，同步对象配对混乱（等待事件却释放互斥体）。修正思路：DPC 里只做非分页登记（InterlockedXxx 或自旋锁），把分配、等待、拷贝全部移进工作项回调。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 实现一个"DPC 计数器"驱动功能：1）初始化一个 DPC，回调里用 InterlockedIncrement 递增全局计数；2）提供 ScheduleDpc() 函数插入 DPC（注意重复插入返回 FALSE 的处理）；3）用 KeInitializeSpinLock 加锁保护另一个共享 ULONG，提供加锁/解锁更新它的函数。写出完整代码骨架并注释每个函数的 IRQL 约束。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+KDPC g_dpc;
+LONG g_dpcHits = 0;
+KSPIN_LOCK g_lock;
+ULONG g_shared = 0;
 
-什么情况下必须停止内核实验？
+VOID OnDpc(KDPC* Dpc, PVOID Ctx, PVOID A1, PVOID A2) {
+    UNREFERENCED_PARAMETER(Dpc); UNREFERENCED_PARAMETER(Ctx);
+    UNREFERENCED_PARAMETER(A1); UNREFERENCED_PARAMETER(A2);
+    InterlockedIncrement(&g_dpcHits);   // 原子指令，任何 IRQL 安全
+}
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
+VOID InitCounters() {
+    KeInitializeDpc(&g_dpc, OnDpc, nullptr);
+    KeInitializeSpinLock(&g_lock);
+}
+
+NTSTATUS ScheduleDpc() {
+    // 已在队列返回 FALSE——调用方自行决定是否重试
+    return KeInsertQueueDpc(&g_dpc, nullptr, nullptr)
+        ? STATUS_SUCCESS : STATUS_DEVICE_BUSY;
+}
+
+VOID UpdateShared(ULONG delta) {
+    KIRQL irql;
+    KeAcquireSpinLock(&g_lock, &irql);  // 可被 DPC 访问，必须自旋锁
+    g_shared += delta;                  // 临界区极短
+    KeReleaseSpinLock(&g_lock, irql);
+}
+```
+
+IRQL 约束注释：OnDpc 在 DISPATCH_LEVEL 运行，只用 Interlocked（原子指令安全）；UpdateShared 可能在低 IRQL 或 DPC 被调用，所以用自旋锁而非分发器对象（等待类在 DISPATCH_LEVEL 非法）。
+
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- IRQL：连接“读取当前IRQL”的内核契约与证据。
-- DPC/APC：连接“选择延迟机制”的内核契约与证据。
-- SEH：连接“隔离异常路径”的内核契约与证据。
-- 分发器对象：连接“分析崩溃转储”的内核契约与证据。
-- 自旋锁与工作项：连接“选择同步原语”的内核契约与证据。
-- 本页25个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（5 个：DPC/APC/工作项/SEH/分发器对象）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="IRQL">
-    IRQL是本章的入口概念。IRQL、DPC、APC、异常、崩溃转储、同步原语、自旋锁与工作项怎样按上下文选择？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在IRQL/CPU/线程轨迹、DPC与工作项队列、锁图、转储和同输入恢复中留下可验证记录。
-  </GlossaryItem>
   <GlossaryItem term="DPC">
-    DPC在本章中用于构造可撤销反例。注入故障"把线程优先级当IRQL、在高IRQL等待或访问分页代码、锁序环和工作项卸载竞态"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+    Deferred Procedure Call，延迟过程调用。把中断后不紧急的工作排队，等 IRQL 降到 DISPATCH_LEVEL 再执行。运行在任意线程上下文，不能等待、不能碰分页内存、只能做短活。相当于车间广播：紧急但小的事，插队做。
   </GlossaryItem>
   <GlossaryItem term="APC">
-    APC必须满足不变量"可等待性、分页性、锁序、IRQL、队列与反向释放在所有执行路径匹配"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+    Asynchronous Procedure Call，异步过程调用。把函数投递到指定线程的队列，等那个线程可打断时执行，运行在目标线程上下文。相当于快递：必须送到指定收件人手里，收件人没空就等着。
+  </GlossaryItem>
+  <GlossaryItem term="工作项">
+    Work Item，把耗时任务排队给系统工作线程池执行，运行在 PASSIVE_LEVEL。可以等待、访问分页内存、拿锁。相当于把活外包给后勤部门：什么都能干，但时间不保证。
   </GlossaryItem>
   <GlossaryItem term="SEH">
-    SEH连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+    Structured Exception Handling，结构化异常处理。用 __try/__except 捕获代码中的异常，避免直接蓝屏。只适合接住可预期的外部异常（如非法用户指针），逻辑 bug 不该靠它兜底。相当于安全气囊：关键时刻弹开，但不能当安全带系。
+  </GlossaryItem>
+  <GlossaryItem term="分发器对象">
+    可等待的内核同步对象：事件、互斥体、信号量、执行体资源等。线程在 PASSIVE_LEVEL 下等它的信号，等到了被唤醒。相当于红绿灯：绿灯亮了车才走，但只能在低速区（低 IRQL）用，高速区（高 IRQL）没有红绿灯只有交警（自旋锁）。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

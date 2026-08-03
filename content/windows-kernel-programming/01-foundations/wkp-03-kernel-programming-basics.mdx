@@ -3,7 +3,7 @@ title: "第3章 内核程序设计基础"
 type: C
 section: "基础 · Windows内部与开发"
 order: 3
-description: "围绕异常、终止、返回值、IRQL、C++边界、构建配置、内核API、字符串、池、链表、驱动对象和设备对象建立契约。 覆盖17个本页目录坐标。"
+description: "IRQL 优先级阶梯、NTSTATUS 返回值契约、UNICODE_STRING 字符串操作、分页与非分页池内存分配、LIST_ENTRY 链表，以及驱动对象与设备对象的 C 实战代码。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -25,173 +25,467 @@ import {
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp03KernelProgrammingBasicsVersionContextLab,
-  Wkp03KernelProgrammingBasicsExecutableProbeLab,
-  Wkp03KernelProgrammingBasicsSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-03-kernel-programming-basics";
+import { Wkp03IrqlLadderLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-03-irql-ladder-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) IRQL = 交互组件 IRQL 阶梯图（可点击级别 + 操作检查器）
+  2) NTSTATUS = 代码对照 CodeTabs（C 内核代码 vs 概念流程）
+  3) UNICODE_STRING = 代码对照 CodeTabs（初始化 + 格式化操作）
+  4) 分页池 / 非分页池 = 代码对照 CodeTabs（ExAllocatePool2/ExFreePoolWithTag + 对比说明）
+  5) LIST_ENTRY = 代码对照 CodeTabs（侵入式链表完整操作 + 结构图示）
+  全章新概念 5 个（IRQL/NTSTATUS/UNICODE_STRING/内存池/LIST_ENTRY），≤5 限制。
+  DRIVER_OBJECT / DEVICE_OBJECT 在代码对照节出现，Term 高亮并进 Glossary。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把内核准则、异常、返回值、IRQL、C++、API、字符串、内存、链表与设备对象落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“高IRQL访问分页内存、忽略返回值、异常越过所有权或错误释放池对象”，定位本章相对签名参考驱动的首个分岔
-- 交付DDI/IRQL矩阵、池标签与分配轨迹、对象/链表不变量和失败注入，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能解释 IRQL 五个级别的含义和优先级关系，判断给定内核操作允许的最高 IRQL
+- 能改出在正确 IRQL 下使用 UNICODE_STRING、ExAllocatePool2 和 LIST_ENTRY 的内核 C 代码
+- 能回答：在 DISPATCH_LEVEL 下调用 ExAllocatePool2 分配分页池内存会发生什么？为什么？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用②工厂流水线。 */}
 
-本章的核心问题是：NTSTATUS、IRQL、字符串、池、链表、驱动对象和设备对象怎样形成失败安全的内核合同？
+## 为什么内核代码不能随便写
 
-、、、、共同构成本页坐标。围绕异常、终止、返回值、IRQL、C++边界、构建配置、内核API、字符串、池、链表、驱动对象和设备对象建立契约。
+想象一条工厂流水线。普通工人在自己的工位上干活，可以随时去仓库取料、等供应商送货。但紧急抢修工一响警报就必须放下手头工作冲过去——这时候他不能去仓库（仓库门可能锁着），也不能等送货（停机一秒损失巨大）。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+内核也是这条流水线。代码运行在不同的"优先级"上：低优先级时什么都能干，高优先级时手脚被绑——不能等、不能碰某些内存、不能调大部分接口。搞不清自己处在哪个级别就乱来，系统直接蓝屏。
 
-## 来源合同与版本差异
+这一章教你内核编程的基本工具：怎么报告错误、怎么操作字符串、怎么分配内存、怎么管理链表。每个工具都有使用前提，前提就是"你现在在哪个优先级"。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可压缩"是什么"）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## IRQL：内核的优先级阶梯
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="Interrupt Request Level，中断请求级别，是 Windows 内核中定义 CPU 当前执行优先级的整数数值，数值越高优先级越高">IRQL</Term> 是内核编程中最核心的约束概念。它不是一个队列，而是一个"当前优先级"标记：CPU 在任何时刻都处于某个 IRQL 上，只有更高 IRQL 的中断才能打断当前执行。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+Windows 定义了几个关键级别：**PASSIVE_LEVEL(0)** 是最低级别，用户模式代码和大多数驱动入口例程运行于此；**APC_LEVEL(1)** 用于异步过程调用；**DISPATCH_LEVEL(2)** 是调度器工作级别，DPC 和自旋锁持有者运行于此；更高级别（3-31）用于硬件中断和极端临界区。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+IRQL 的核心规则是：**IRQL 越高，能做的事越少**。在 PASSIVE_LEVEL 你可以访问分页内存、等待事件、调用几乎所有 API；到了 DISPATCH_LEVEL，访问分页内存会直接蓝屏，等待操作被禁止。下面的交互组件让你直观感受这个阶梯。
 
-### 本页独立事实来源
+## NTSTATUS：内核的返回值契约
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft Windows内核DDI参考](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/)：本章用它核对目标build公开DDI、对象、IRP和例程合同。
-- [Microsoft内核模式驱动架构指南](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/)：本章用它核对I/O、DPC、同步、PnP、电源和驱动编程当前路由。
-- [Microsoft分发例程与IRQL](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/dispatch-routines-and-irqls)：本章用它核对PASSIVE/APC/DISPATCH与分页、阻塞和任意线程上下文限制。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
+<Term def="Windows 内核 API 统一使用的 32 位返回值类型，用位域编码成功、信息、警告和错误">NTSTATUS</Term> 是所有内核 API 的标准返回类型。它不是简单的整数错误码，而是一个结构化的 32 位值：高位表示严重程度（成功/信息/警告/错误），低位表示具体代码。
 
-## 常见误区与故障注入
+判断成功用 `NT_SUCCESS(status)` 宏，它检查高位是否为 0。常见的返回值包括 `STATUS_SUCCESS`（成功）、`STATUS_INVALID_PARAMETER`（参数错误）、`STATUS_INSUFFICIENT_RESOURCES`（内存不足）等。内核 API 调用后**必须检查返回值**——忽略它是最常见的驱动崩溃原因之一。
 
-本章注入的故障是：高IRQL访问分页内存、忽略返回值、异常越过所有权或错误释放池对象。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+## UNICODE_STRING：内核的字符串
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+<Term def="Windows 内核中表示 Unicode 字符串的结构体，包含长度、最大长度和缓冲区指针三个字段，不以 null 结尾">UNICODE_STRING</Term> 是内核中字符串的标准表示。它不依赖 null 终止符，而是用 `Length`（当前字节长度）、`MaximumLength`（缓冲区容量）和 `Buffer`（指向 WCHAR 数组的指针）三个字段精确描述字符串。
+
+这种设计比 C 字符串更安全：长度是显式的，不需要遍历查找终止符，也不怕字符串中间出现零字节。初始化用 `RtlInitUnicodeString`，格式化用 `RtlStringCchPrintfW`（支持 `%wZ` 直接格式化 UNICODE_STRING）。
+
+## 内存池：分页与非分页
+
+内核内存分配的核心抉择是<Term def="可被换出到磁盘的内核内存池，只在 IRQL <= APC_LEVEL 时安全访问">分页池</Term>与<Term def="始终驻留物理内存的内核内存池，可在 DISPATCH_LEVEL 及更高 IRQL 安全访问">非分页池</Term>的选择。分页池的内存可能被换出到磁盘，访问时触发页错误——这在低 IRQL 下是正常的，但在 DISPATCH_LEVEL 会导致蓝屏。非分页池永远驻留在物理内存中，任何 IRQL 都能安全访问，代价是占用宝贵的物理内存。
+
+分配用 `ExAllocatePool2`（取代已废弃的 `ExAllocatePool`），释放用 `ExFreePoolWithTag`。每个分配都关联一个 4 字节标签（Tag），用于调试时追踪内存泄漏。
+
+## LIST_ENTRY：内核的链表
+
+<Term def="Windows 内核提供的侵入式双向链表节点结构，只含两个指针（Flink 和 Blink），需嵌入到自定义数据结构中使用">LIST_ENTRY</Term> 是内核链表的基础。它是一个"侵入式"设计：不存储数据，只维护前向指针（Flink）和后向指针（Blink）。你的自定义结构体把 LIST_ENTRY 作为成员嵌入，通过 `CONTAINING_RECORD` 宏从 LISTENTRY 指针反算出宿主结构的地址。
+
+核心操作：`InitializeListHead` 初始化链表头，`InsertTailList`/`InsertHeadList` 插入节点，`RemoveHeadList`/`RemoveEntryList` 移除节点，`IsListEmpty` 判断是否为空。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：探索 IRQL 优先级阶梯
+
+下面的可视化展示了 IRQL 的五个级别。点击每个横条查看该级别能做什么、不能做什么。然后试试"操作检查器"——点击一个操作，看哪些 IRQL 级别允许执行它。
+
+> 猜一猜：点击"访问分页内存"操作，观察哪些级别变绿（允许）、哪些变红（禁止）。DISPATCH_LEVEL 会是哪个颜色？动手试试再看答案。
+
+<Wkp03IrqlLadderLab />
+
+{/* 6. 代码对照｜spec §六（C 型重心）：逐段讲解，覆盖 ≥80% 关键代码；单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout 标注。 */}
+
+## 代码对照：内核编程核心操作
+
+### UNICODE_STRING 的初始化与格式化
+
+内核字符串操作的第一步是把 C 字符串字面量包装成 UNICODE_STRING，然后用 `RtlStringCchPrintfW` 格式化输出。
+
+<CodeTabs>
+  <Tab label="C 内核代码">
+
+```c
+#include <ntstrsafe.h>
+
+// 把字符串字面量包装成 UNICODE_STRING
+UNICODE_STRING devName;
+RtlInitUnicodeString(&devName, L"\\Device\\MyDevice");
+
+// 手动构造缓冲区并格式化
+WCHAR buffer[256];
+UNICODE_STRING result;
+result.Length = 0;
+result.MaximumLength = sizeof(buffer);
+result.Buffer = buffer;
+
+// %wZ 是 UNICODE_STRING 的格式说明符
+NTSTATUS status = RtlStringCchPrintfW(
+    buffer, sizeof(buffer) / sizeof(WCHAR),
+    L"Device: %wZ, PID: %d", &devName, 1234);
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+UNICODE_STRING 结构布局：
+  ┌──────────────────────────────────┐
+  │ USHORT Length        (已用字节)   │
+  │ USHORT MaximumLength (缓冲区容量) │
+  │ PWSTR  Buffer        ──→ WCHAR[]  │
+  └──────────────────────────────────┘
+
+RtlInitUnicodeString：
+  C 字符串 L"..."  →  自动算长度 + 设指针
+
+RtlStringCchPrintfW：
+  类似 swprintf，但保证不越界
+  %wZ = 直接格式化 UNICODE_STRING
+```
+
+  </Tab>
+</CodeTabs>
+
+`RtlInitUnicodeString` 不会复制字符串数据，只是让 `Buffer` 指向传入的字面量地址。如果原始字符串被修改或释放，UNICODE_STRING 也会受影响——字面量在只读段中所以安全，但动态字符串需要先分配缓冲区再复制。
+
+### ExAllocatePool2 与 ExFreePoolWithTag
+
+内核内存分配必须指定池类型和标签。标签是 4 字符的调试标识，用单引号语法写成字符常量。
+
+<CodeTabs>
+  <Tab label="C 内核代码">
+
+```c
+// 分配非分页内存（DISPATCH_LEVEL 可用）
+PVOID ptr = ExAllocatePool2(
+    POOL_FLAG_NON_PAGED,  // 非分页池
+    1024,                 // 字节数
+    'MyTg');              // 4 字符标签
+
+if (ptr == NULL) {
+    // 必须检查！分配可能失败
+    return STATUS_INSUFFICIENT_RESOURCES;
+}
+
+// ... 使用内存 ...
+
+// 释放时传入同一标签
+ExFreePoolWithTag(ptr, 'MyTg');
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+分页池 (POOL_FLAG_PAGED)    非分页池 (POOL_FLAG_NON_PAGED)
+  │                           │
+  ├─ 可被换出到磁盘            ├─ 始终驻留物理内存
+  ├─ IRQL <= APC_LEVEL        ├─ IRQL <= DISPATCH_LEVEL
+  ├─ 省物理内存                ├─ 耗物理内存
+  └─ 访问可能触发页错误        └─ 访问永不触发页错误
+
+标签 'MyTg'：
+  4 字符 ASCII，逆序存储
+  调试器中 !poolused 按标签统计泄漏
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  `ExAllocatePool2` 是新的推荐 API，取代了已废弃的 `ExAllocatePool` 和 `ExAllocatePoolWithTag`。新代码应一律使用 `ExAllocatePool2`，它的标志位用 `POOL_FLAG_*` 前缀，默认零初始化内存。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区二：接口同名就说明当前合同未变"
->
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### LIST_ENTRY 链表的完整操作
+
+链表是内核中最常用的数据结构之一。LIST_ENTRY 是侵入式的——它不包含你的数据，而是嵌入在你的结构体中。
+
+<CodeTabs>
+  <Tab label="C 内核代码">
+
+```c
+// 自定义结构体，内嵌 LIST_ENTRY
+typedef struct _MY_ITEM {
+    LIST_ENTRY ListEntry;  // 链表节点
+    ULONG Value;           // 业务数据
+} MY_ITEM, *PMY_ITEM;
+
+LIST_ENTRY g_ListHead;     // 全局链表头
+
+// 初始化
+InitializeListHead(&g_ListHead);
+
+// 分配并插入节点
+PMY_ITEM item = ExAllocatePool2(
+    POOL_FLAG_NON_PAGED, sizeof(MY_ITEM), 'Itm');
+if (item) {
+    item->Value = 42;
+    InsertTailList(&g_ListHead, &item->ListEntry);
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+侵入式链表结构：
+
+  g_ListHead ⇄ ItemA ⇄ ItemB ⇄ ItemC ⇄ g_Head
+                   ↑
+         MY_ITEM { ListEntry, Value }
+
+CONTAINING_RECORD 宏：
+  从 ListEntry 的地址
+  减去 ListEntry 在 MY_ITEM 中的偏移
+  = 得到 MY_ITEM 起始地址
+
+  等价于：container = (PMY_ITEM)
+    ((char*)entry - offsetof(MY_ITEM, ListEntry))
+```
+
+  </Tab>
+</CodeTabs>
+
+遍历和移除节点时，`CONTAINING_RECORD` 是关键宏——它从 LIST_ENTRY 指针反算出宿主结构的地址。
+
+<CodeTabs>
+  <Tab label="C 内核代码">
+
+```c
+// 遍历链表
+PLIST_ENTRY entry = g_ListHead.Flink;
+while (entry != &g_ListHead) {
+    PMY_ITEM myItem = CONTAINING_RECORD(
+        entry, MY_ITEM, ListEntry);
+    // 处理 myItem->Value ...
+    entry = entry->Flink;
+}
+
+// 逐个移除并释放
+while (!IsListEmpty(&g_ListHead)) {
+    PLIST_ENTRY head = RemoveHeadList(&g_ListHead);
+    PMY_ITEM myItem = CONTAINING_RECORD(
+        head, MY_ITEM, ListEntry);
+    ExFreePoolWithTag(myItem, 'Itm');
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+移除流程（必须先移除再释放）：
+
+  1. RemoveHeadList 从链表摘下节点
+     → 链表指针已修复，节点孤立
+  2. CONTAINING_RECORD 反算宿主地址
+  3. ExFreePoolWithTag 释放宿主结构
+
+错误顺序（先释放再移除）：
+  → 链表指针指向已释放内存
+  → 下次遍历 = use-after-free = 蓝屏
+```
+
+  </Tab>
+</CodeTabs>
+
+### 驱动对象与设备对象
+
+<Term def="内核中代表已加载驱动模块的结构体，包含入口点、卸载回调和 IRP 分发函数表">DRIVER_OBJECT</Term> 和 <Term def="内核中代表一个设备实例的结构体，驱动通过它接收 I/O 请求">DEVICE_OBJECT</Term> 是驱动程序的核心对象。DriverEntry 收到一个 DRIVER_OBJECT 指针，驱动用它注册回调并创建设备对象。
+
+<CodeTabs>
+  <Tab label="C 内核代码">
+
+```c
+NTSTATUS DriverEntry(
+    PDRIVER_OBJECT DriverObject,
+    PUNICODE_STRING RegistryPath)
+{
+    UNICODE_STRING devName;
+    RtlInitUnicodeString(&devName, L"\\Device\\MyDev");
+
+    PDEVICE_OBJECT devObj;
+    NTSTATUS status = IoCreateDevice(
+        DriverObject, 0, &devName,
+        FILE_DEVICE_UNKNOWN, 0, FALSE, &devObj);
+
+    if (!NT_SUCCESS(status))
+        return status;
+
+    // 注册卸载回调
+    DriverObject->DriverUnload = MyUnload;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+DRIVER_OBJECT（驱动对象）
+  ├─ DriverEntry    ← 系统调用入口
+  ├─ DriverUnload   ← 卸载时回调
+  ├─ MajorFunction[] ← IRP 分发表
+  │    [IRP_MJ_CREATE]
+  │    [IRP_MJ_READ]
+  │    [IRP_MJ_WRITE]
+  │    [IRP_MJ_CLOSE]
+  └─ DeviceObject ──→ DEVICE_OBJECT 链表
+                        ├─ DeviceExtension（自定义数据）
+                        ├─ DeviceType
+                        └─ DeviceName
+```
+
+  </Tab>
+</CodeTabs>
+
+### C++ 边界与构建配置
+
+内核驱动可以用 C++ 编写，但有严格限制。C++ 异常（try/catch）在内核中不可用——内核的异常处理机制（SEH）与 C++ 异常不兼容，使用异常会导致未定义行为。RTTI（运行时类型信息）默认禁用。全局 `operator new` / `operator delete` 需要自定义实现，默认版本调用 `ExAllocatePool` 行为不可控。
+
+构建配置方面，Debug 构建启用断言和驱动验证器支持，Release 构建开启优化。当前支持 x64 和 ARM64 两种目标架构，两者在调用约定和数据对齐上有差异。无论哪种配置，内核代码都不应使用 C++ 标准库（STL）。
+
+<Callout type="warn">
+  内核中不要使用 STL。字符串用 UNICODE_STRING，内存用 ExAllocatePool2，链表用 LIST_ENTRY——这些是内核的原生工具，与 IRQL 约束完美配合。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 DPC 例程或持有自旋锁时访问分页内存，系统立即蓝屏（Bug Check 0x50 PAGE_FAULT_IN_NONPAGED_AREA）。**原因**：DPC 和自旋锁运行在 DISPATCH_LEVEL(2)，此级别下页错误处理被禁用。访问已被换出的分页内存触发页错误，内核无法处理，直接崩溃。**修法**：在 DISPATCH_LEVEL 只能使用非分页池内存（POOL_FLAG_NON_PAGED）。所有可能在高 IRQL 访问的数据结构必须从非分页池分配。
 </Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  **现象**：释放链表节点后系统随机崩溃，WinDbg 显示访问已释放内存。**原因**：先调用 `ExFreePoolWithTag` 释放节点，再调用 `RemoveEntryList` 从链表移除。释放后 LIST_ENTRY 的 Flink/Blink 指针指向已失效内存，链表遍历踩到野指针。**修法**：顺序永远是先 `RemoveEntryList`（或 `RemoveHeadList`）从链表摘下节点，再用 `CONTAINING_RECORD` 取得宿主指针，最后 `ExFreePoolWithTag` 释放。先断链，再释放。
+</Callout>
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+<Callout type="trap">
+  **现象**：驱动中使用 C++ try/catch，编译通过但运行时行为不可预测，偶发蓝屏或异常被静默吞掉。**原因**：内核的异常处理基于 SEH（结构化异常处理），与 C++ 异常机制完全不同。C++ 异常需要运行时展开栈并调用析构函数，但内核 C++ 运行时未初始化此机制，行为未定义。**修法**：内核代码中禁用 C++ 异常（编译选项 /EHs-c-）。错误处理用 NTSTATUS 返回值，资源清理用 goto 集中清理标签或 RAII 风格的 C 结构。
+</Callout>
 
-**本章验收不变量**：每条成功与失败路径都满足IRQL、分页性、所有权、引用和反向清理
+<Callout type="trap">
+  **现象**：调用 `IoCreateDevice` 或 `ExAllocatePool2` 后直接使用返回的指针，偶发空指针蓝屏。**原因**：内核 API 分配或创建可能失败，返回 NULL 或错误状态码。不检查返回值就解引用指针，直接触发蓝屏。**修法**：每次调用内核 API 后立即检查：`ExAllocatePool2` 检查返回值是否为 NULL；`IoCreateDevice` 等用 `NT_SUCCESS(status)` 判断。失败时返回错误码并回滚已分配的资源。
+</Callout>
 
-**本章必查证据**：DDI/IRQL矩阵、池标签与分配轨迹、对象/链表不变量和失败注入
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 交互实验 — IRQL与池标签验证
+## 小结
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
-
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp03KernelProgrammingBasicsVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp03KernelProgrammingBasicsExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp03KernelProgrammingBasicsSafetyGateLab />
-  </Step>
-</Stepper>
-
-## 练习
+- IRQL 是内核优先级阶梯：PASSIVE 最宽松，DISPATCH 不能分页不能等待，更高是中断专属
+- NTSTATUS 是内核返回值契约：用 NT_SUCCESS 宏检查，忽略返回值是蓝屏常见原因
+- UNICODE_STRING 用长度+缓冲区描述字符串，RtlInitUnicodeString 初始化，%wZ 格式化
+- 分页池省内存但只能低 IRQL 用，非分页池随时可用但占物理内存，ExAllocatePool2 分配
+- LIST_ENTRY 是侵入式链表：先移除节点再释放内存，CONTAINING_RECORD 反算宿主地址
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：NTSTATUS、IRQL、字符串、池、链表、驱动对象和设备对象怎样形成失败安全的内核合同？
+**问题 1：** 在 IRQL 阶梯组件中点击"等待事件"操作。PASSIVE_LEVEL 和 APC_LEVEL 分别显示什么颜色？用 IRQL 的规则解释为什么。
 
 <Answer>
-  实验必须满足不变量：每条成功与失败路径都满足IRQL、分页性、所有权、引用和反向清理。需要交付的证据包括：DDI/IRQL矩阵、池标签与分配轨迹、对象/链表不变量和失败注入。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"高IRQL访问分页内存、忽略返回值、异常越过所有权或错误释放池对象"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+PASSIVE_LEVEL 显示绿色（允许），APC_LEVEL 及以上显示红色（禁止）。`KeWaitForSingleObject` 的阻塞等待要求 IRQL = PASSIVE_LEVEL。原因是阻塞等待会让当前线程休眠，调度器需要切换到其他线程。在 APC_LEVEL 或更高，调度器行为受限或被禁用，无法安全地挂起当前线程。虽然 APC_LEVEL 下某些非阻塞等待可能允许，但教学中的"等待事件"指阻塞等待，严格要求 PASSIVE_LEVEL。
+
 </Answer>
 
-**问题 2：故障识别与避免**
+**问题 2：** 以下代码有什么问题？指出错误并给出修正版本。
 
-如果在实验中观察到"高IRQL访问分页内存、忽略返回值、异常越过所有权或错误释放池对象"，如何定位根因？如何避免？
+```c
+PLIST_ENTRY entry = RemoveHeadList(&g_ListHead);
+PMY_ITEM item = CONTAINING_RECORD(entry, MY_ITEM, ListEntry);
+ExFreePoolWithTag(item, 'Itm');
+// 继续使用 entry 指针...
+item->Value = 0;
+```
 
 <Answer>
-  定位方法：在DDI/IRQL矩阵、池标签与分配轨迹、对象/链表不变量和失败注入中检查是否违反不变量"每条成功与失败路径都满足IRQL、分页性、所有权、引用和反向清理"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保内核准则、异常、返回值、IRQL、C++、API、字符串、内存、链表与设备对象的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+问题：释放内存后仍然通过 `item->Value = 0` 访问已释放的内存（use-after-free）。`ExFreePoolWithTag` 已经释放了 `item` 指向的内存，后续的 `item->Value = 0` 写入已回收的内存区域，可能导致蓝屏或数据损坏。修正：把 `item->Value = 0` 移到 `ExFreePoolWithTag` 之前，或者直接删除这行——如果需要在释放前清理数据，应该在释放前完成所有访问。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现）：** 编写一个内核函数 `AddItem`，它分配一个 `MY_ITEM` 结构（内含 LIST_ENTRY 和一个 ULONG Value 字段），从非分页池分配，设置 Value 为传入参数，插入到全局链表 `g_ListHead` 尾部。函数返回 NTSTATUS，分配失败时返回 `STATUS_INSUFFICIENT_RESOURCES`。要求：使用正确的标签，检查返回值。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+typedef struct _MY_ITEM {
+    LIST_ENTRY ListEntry;
+    ULONG Value;
+} MY_ITEM, *PMY_ITEM;
 
-什么情况下必须停止内核实验？
+LIST_ENTRY g_ListHead;  // 假设已 InitializeListHead
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
+NTSTATUS AddItem(ULONG value)
+{
+    PMY_ITEM item = ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
+        sizeof(MY_ITEM),
+        'Itm');
+
+    if (item == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    item->Value = value;
+    InsertTailList(&g_ListHead, &item->ListEntry);
+
+    return STATUS_SUCCESS;
+}
+```
+
+关键点：使用 `POOL_FLAG_NON_PAGED` 确保任何 IRQL 都能安全访问；检查 `ExAllocatePool2` 返回值是否为 NULL；标签 `'Itm'` 与释放时一致；先设置数据再插入链表，避免插入后被其他线程访问到未初始化的数据。
+
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- NTSTATUS：连接“检查调用约束”的内核契约与证据。
-- IRQL：连接“选择返回状态”的内核契约与证据。
-- UNICODE_STRING：连接“约束C++用法”的内核契约与证据。
-- 内存池：连接“分配标记内存”的内核契约与证据。
-- 设备对象：连接“组织链表对象”的内核契约与证据。
-- 本页17个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（8 个：IRQL/NTSTATUS/UNICODE_STRING/分页池/非分页池/LIST_ENTRY/DRIVER_OBJECT/DEVICE_OBJECT）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="内核准则">
-    内核准则是本章的入口概念。NTSTATUS、IRQL、字符串、池、链表、驱动对象和设备对象怎样形成失败安全的内核合同？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在DDI/IRQL矩阵、池标签与分配轨迹、对象/链表不变量和失败注入中留下可验证记录。
-  </GlossaryItem>
-  <GlossaryItem term="异常">
-    异常在本章中用于构造可撤销反例。注入故障"高IRQL访问分页内存、忽略返回值、异常越过所有权或错误释放池对象"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
-  </GlossaryItem>
-  <GlossaryItem term="返回值">
-    返回值必须满足不变量"每条成功与失败路径都满足IRQL、分页性、所有权、引用和反向清理"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
-  </GlossaryItem>
   <GlossaryItem term="IRQL">
-    IRQL连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+    Interrupt Request Level，中断请求级别。是 Windows 内核给 CPU 当前执行优先级打的"标签号"。号码越高，优先级越高，能被打断的越少，但能做的事也越少。PASSIVE_LEVEL(0) 最低最宽松，HIGH_LEVEL(31) 最高最受限。详见本章"IRQL：内核的优先级阶梯"一节。
+  </GlossaryItem>
+  <GlossaryItem term="NTSTATUS">
+    Windows 内核 API 的统一返回值类型，是一个 32 位整数。高位表示成功还是失败，低位表示具体原因。用 `NT_SUCCESS(status)` 宏判断是否成功。调用内核 API 后必须检查它，忽略返回值是驱动蓝屏的常见原因。
+  </GlossaryItem>
+  <GlossaryItem term="UNICODE_STRING">
+    内核中表示字符串的标准结构体，有三个字段：Length（已用字节）、MaximumLength（缓冲区容量）、Buffer（指向字符数组的指针）。不以 null 结尾，长度是显式记录的，比 C 字符串更安全。用 RtlInitUnicodeString 初始化，用 %wZ 在 printf 中直接格式化。
+  </GlossaryItem>
+  <GlossaryItem term="分页池">
+    一种内核内存池，分配的内存可能被系统换出到磁盘。优点是节省物理内存，缺点是访问时可能触发页错误。因此只能在 IRQL <= APC_LEVEL 时安全使用。用 ExAllocatePool2(POOL_FLAG_PAGED, ...) 分配。
+  </GlossaryItem>
+  <GlossaryItem term="非分页池">
+    始终驻留在物理内存中的内核内存池，永远不会被换出。任何 IRQL（包括 DISPATCH_LEVEL 和 ISR）都能安全访问。代价是占用宝贵的物理内存。用 ExAllocatePool2(POOL_FLAG_NON_PAGED, ...) 分配。
+  </GlossaryItem>
+  <GlossaryItem term="LIST_ENTRY">
+    内核提供的双向链表节点结构，只含两个指针：Flink（前向）和 Blink（后向）。它是"侵入式"的——不存储你的数据，而是嵌入到你的结构体中作为成员。用 CONTAINING_RECORD 宏从 LIST_ENTRY 地址反算出宿主结构的起始地址。
+  </GlossaryItem>
+  <GlossaryItem term="DRIVER_OBJECT">
+    内核中代表一个已加载驱动模块的结构体。系统加载驱动时创建它，把指针传给 DriverEntry。它包含驱动的入口点、卸载回调、IRP 分发函数表（MajorFunction 数组），以及该驱动创建的设备对象链表。
+  </GlossaryItem>
+  <GlossaryItem term="DEVICE_OBJECT">
+    内核中代表一个设备实例的结构体。驱动通过 IoCreateDevice 创建它，I/O 管理器通过它把请求（IRP）路由给驱动。每个设备对象有设备类型、名称和自定义大小的 DeviceExtension（驱动用来存自己的上下文数据）。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"

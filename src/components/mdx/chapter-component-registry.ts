@@ -17136,143 +17136,89 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/01-foundations/wkp-01-windows-internals-overview":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-01-windows-internals-overview");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-01-process-internals-lab");
       return {
-        Wkp01WindowsInternalsOverviewVersionContextLab:
-          module0.Wkp01WindowsInternalsOverviewVersionContextLab,
-        Wkp01WindowsInternalsOverviewExecutableProbeLab:
-          module0.Wkp01WindowsInternalsOverviewExecutableProbeLab,
-        Wkp01WindowsInternalsOverviewSafetyGateLab:
-          module0.Wkp01WindowsInternalsOverviewSafetyGateLab,
+        Wkp01ProcessInternalsLab: module0.Wkp01ProcessInternalsLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/01-foundations/wkp-02-getting-started-kernel-development":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-02-getting-started-kernel-development");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-02-driver-lifecycle-lab");
       return {
-        Wkp02GettingStartedKernelDevelopmentVersionContextLab:
-          module0.Wkp02GettingStartedKernelDevelopmentVersionContextLab,
-        Wkp02GettingStartedKernelDevelopmentExecutableProbeLab:
-          module0.Wkp02GettingStartedKernelDevelopmentExecutableProbeLab,
-        Wkp02GettingStartedKernelDevelopmentSafetyGateLab:
-          module0.Wkp02GettingStartedKernelDevelopmentSafetyGateLab,
+        Wkp02DriverLifecycleLab: module0.Wkp02DriverLifecycleLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/01-foundations/wkp-03-kernel-programming-basics":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-03-kernel-programming-basics");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-03-irql-ladder-lab");
       return {
-        Wkp03KernelProgrammingBasicsVersionContextLab:
-          module0.Wkp03KernelProgrammingBasicsVersionContextLab,
-        Wkp03KernelProgrammingBasicsExecutableProbeLab:
-          module0.Wkp03KernelProgrammingBasicsExecutableProbeLab,
-        Wkp03KernelProgrammingBasicsSafetyGateLab:
-          module0.Wkp03KernelProgrammingBasicsSafetyGateLab,
+        Wkp03IrqlLadderLab: module0.Wkp03IrqlLadderLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/02-driver-debugging/wkp-04-driver-start-to-finish":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-04-driver-start-to-finish");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-04-ioctl-protocol-lab");
       return {
-        Wkp04DriverStartToFinishVersionContextLab:
-          module0.Wkp04DriverStartToFinishVersionContextLab,
-        Wkp04DriverStartToFinishExecutableProbeLab:
-          module0.Wkp04DriverStartToFinishExecutableProbeLab,
-        Wkp04DriverStartToFinishSafetyGateLab:
-          module0.Wkp04DriverStartToFinishSafetyGateLab,
+        Wkp04IoctlProtocolLab: module0.Wkp04IoctlProtocolLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/02-driver-debugging/wkp-05-debugging":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging-lab");
       return {
-        Wkp05DebuggingVersionContextLab:
-          module0.Wkp05DebuggingVersionContextLab,
-        Wkp05DebuggingExecutableProbeLab:
-          module0.Wkp05DebuggingExecutableProbeLab,
-        Wkp05DebuggingSafetyGateLab: module0.Wkp05DebuggingSafetyGateLab,
+        Wkp05DebuggingLab: module0.Wkp05DebuggingLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/03-mechanisms/wkp-06-kernel-mechanisms":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-06-kernel-mechanisms");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-06-mechanism-router-lab");
       return {
-        Wkp06KernelMechanismsVersionContextLab:
-          module0.Wkp06KernelMechanismsVersionContextLab,
-        Wkp06KernelMechanismsExecutableProbeLab:
-          module0.Wkp06KernelMechanismsExecutableProbeLab,
-        Wkp06KernelMechanismsSafetyGateLab:
-          module0.Wkp06KernelMechanismsSafetyGateLab,
+        Wkp06MechanismRouterLab: module0.Wkp06MechanismRouterLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/03-mechanisms/wkp-07-io-request-packet":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-07-io-request-packet");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-07-irp-journey-lab");
       return {
-        Wkp07IoRequestPacketVersionContextLab:
-          module0.Wkp07IoRequestPacketVersionContextLab,
-        Wkp07IoRequestPacketExecutableProbeLab:
-          module0.Wkp07IoRequestPacketExecutableProbeLab,
-        Wkp07IoRequestPacketSafetyGateLab:
-          module0.Wkp07IoRequestPacketSafetyGateLab,
+        Wkp07IrpJourneyLab: module0.Wkp07IrpJourneyLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/04-notifications/wkp-08-process-thread-notifications":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-08-process-thread-notifications");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-08-notification-pipe-lab");
       return {
-        Wkp08ProcessThreadNotificationsVersionContextLab:
-          module0.Wkp08ProcessThreadNotificationsVersionContextLab,
-        Wkp08ProcessThreadNotificationsExecutableProbeLab:
-          module0.Wkp08ProcessThreadNotificationsExecutableProbeLab,
-        Wkp08ProcessThreadNotificationsSafetyGateLab:
-          module0.Wkp08ProcessThreadNotificationsSafetyGateLab,
+        Wkp08NotificationPipeLab: module0.Wkp08NotificationPipeLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/04-notifications/wkp-09-object-registry-notifications":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-09-object-registry-notifications");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-09-object-registry-lab");
       return {
-        Wkp09ObjectRegistryNotificationsVersionContextLab:
-          module0.Wkp09ObjectRegistryNotificationsVersionContextLab,
-        Wkp09ObjectRegistryNotificationsExecutableProbeLab:
-          module0.Wkp09ObjectRegistryNotificationsExecutableProbeLab,
-        Wkp09ObjectRegistryNotificationsSafetyGateLab:
-          module0.Wkp09ObjectRegistryNotificationsSafetyGateLab,
+        Wkp09ObjectRegistryLab: module0.Wkp09ObjectRegistryLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/05-filters/wkp-10-file-system-minifilters":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-10-file-system-minifilters");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-10-minifilter-stack-lab");
       return {
-        Wkp10FileSystemMinifiltersVersionContextLab:
-          module0.Wkp10FileSystemMinifiltersVersionContextLab,
-        Wkp10FileSystemMinifiltersExecutableProbeLab:
-          module0.Wkp10FileSystemMinifiltersExecutableProbeLab,
-        Wkp10FileSystemMinifiltersSafetyGateLab:
-          module0.Wkp10FileSystemMinifiltersSafetyGateLab,
+        Wkp10MinifilterStackLab: module0.Wkp10MinifilterStackLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/05-filters/wkp-11-miscellaneous-topics":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-11-miscellaneous-topics");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-11-toolbox-map-lab");
       return {
-        Wkp11MiscellaneousTopicsVersionContextLab:
-          module0.Wkp11MiscellaneousTopicsVersionContextLab,
-        Wkp11MiscellaneousTopicsExecutableProbeLab:
-          module0.Wkp11MiscellaneousTopicsExecutableProbeLab,
-        Wkp11MiscellaneousTopicsSafetyGateLab:
-          module0.Wkp11MiscellaneousTopicsSafetyGateLab,
+        Wkp11ToolboxMapLab: module0.Wkp11ToolboxMapLab,
       } as ChapterMdxComponents;
     },
   "windows-kernel-programming/06-review/wkp-official-final-review":

@@ -1,9 +1,9 @@
 ---
 title: "第7章 I/O请求包"
 type: C
-section: "机制 · IRQL、同步与I/O"
+section: "机制 · 中断、同步与通知"
 order: 7
-description: "从设备节点、IRP与I/O栈位置、分发和完成进入用户缓冲访问、缓冲/直接I/O，并以Zero驱动贯通读写。 覆盖16个本页目录坐标。"
+description: "跟踪 IRP 从创建、穿过设备栈各层栈位置、经分发例程处理到完成的完整旅程，并掌握 BUFFERED 与 DIRECT 两种用户缓冲区传输方法。"
 demo: true
 math: false
 sourceUrl: "https://leanpub.com/windowskernelprogramming"
@@ -18,177 +18,433 @@ import {
   Objectives,
   Term,
   Callout,
-  Stepper,
-  Step,
   Exercises,
   Answer,
   Glossary,
   GlossaryItem,
   Attribution,
+  CodeTabs,
+  Tab,
 } from "@/components/mdx/mdx-components";
-import {
-  Wkp07IoRequestPacketVersionContextLab,
-  Wkp07IoRequestPacketExecutableProbeLab,
-  Wkp07IoRequestPacketSafetyGateLab,
-} from "@/components/mdx/windows-kernel-programming/v2/wkp-07-io-request-packet";
+import { Wkp07IrpJourneyLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-07-irp-journey-lab";
+
+{/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
+  1) IRP = SVG 工作单对象 + 用户请求→IRP 箭头（可点击查看详情）
+  2) 设备栈 = SVG 三层设备栈（可点击切换当前层）
+  3) 栈位置 = SVG 当前层栈位置面板（随点击层变化）
+  4) 缓冲 I/O = SVG 传输方法切换（BUFFERED 路径高亮）
+  5) 直接 I/O = SVG 传输方法切换（DIRECT/MDL 路径高亮）
+  全章新概念 5 个（IRP/设备栈/栈位置/缓冲I/O/直接I/O），≤5 限制。
+*/}
+
+{/* 1. 学习目标｜spec §一：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 把IRP、设备节点、栈位置、分发、用户缓冲区、Zero驱动和测试程序落实为Windows build、驱动模型、内核对象、执行上下文、调用链与恢复条件
-- 只注入“METHOD_NEITHER未探测、长度溢出、双完成、遗失完成或pending/取消竞态”，定位本章相对签名参考驱动的首个分岔
-- 交付IRP/栈位置图、IOCTL传输方法表、边界夹具、取消与完成调用链，明确区分中文版一版、作者二版迁移轨与目标Microsoft平台轨
+- 能解释 IRP 从创建、穿过设备栈到完成的全过程，以及栈位置在逐层传递中的作用
+- 能改出 Zero 驱动的读分发例程：用 BUFFERED 方法正确计算可复制长度并完成 IRP 的效果
+- 能回答：一个 IRP 被两个驱动层各完成一次会发生什么？为什么每个 IRP 只能完成一次？
 
 </Objectives>
 
-## 直觉起点
+{/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用②工厂流水线。 */}
 
-本章的核心问题是：IRP、设备栈位置、分发、用户缓冲区、pending、取消与完成怎样保持唯一所有权？
+## 为什么请求要在流水线上"一站一站"走
 
-、、、、共同构成本页坐标。从设备节点、IRP与I/O栈位置、分发和完成进入用户缓冲访问、缓冲/直接I/O，并以Zero驱动贯通读写。
+想象一条流水线：订单从窗口进来，先经过质检员看一眼，再到装配工手里干活，最后到打包员手里装车。每道工序只看到订单上跟自己有关的那一行，干完在自己那栏签个字，订单继续往下传。谁也不能把订单留在自己手里不撒手，否则整条线卡死。
 
-内核编程必须同时画三张图：调用图说明用户请求、系统回调或I/O如何进入驱动；对象图说明DriverObject、DeviceObject、IRP、回调Cookie、上下文和池块由谁拥有；时间图说明注册、并发回调、注销、排空和卸载的先后。少一张图，表面可用的驱动也可能在压力或卸载时蓝屏。
+内核的 I/O 请求也是这样的一张"订单"。用户程序要读文件、写设备，系统把请求打成一张标准工单，沿着一条由多个驱动叠成的流水线逐层传递，每层只处理自己那一段，最后签收返回。
 
-## 来源合同与版本差异
+这一章拆开这张工单：它长什么样（结构）、流水线怎么排（设备栈）、每层看哪一行（栈位置）、怎么签收（完成）。看懂这张工单，你就看懂了内核一半的日常。
 
-本章以[作者一版Leanpub完整公开目录](https://leanpub.com/windowskernelprogramming)核对Pavel Yosifovich《Windows Kernel Programming》2020-12-10版本、455页和11章结构；中文版采用李亮译《Windows内核编程》，机械工业出版社2021年版，ISBN 9787111684756。中文版治理清单是11章185个正式坐标，章根已计入；作者一版公开目录按同口径是204个坐标，两者相差19项。
+{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
-[官方18页样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)开放一版身份、第一章目录以及进程、虚拟内存、线程和系统调用的局部正文，因此本站来源访问级别是authorized-sample。样章不授权其余正文、代码、图表或练习；本章是中文独立教学重构，不复制未开放内容。
+## IRP：内核的工作单
 
-本章登记的19项差异是：第1章：Thread Stacks；第2章：Exercises；第5章：Tutorial: User mode debugging basics；第6章：Using DPC with a Timer；第6章：Critical Regions and Guarded Regions；第6章：The Spin Lock；第7章：IRP Flow；第7章：Viewing IRP Information；第7章：Completing a Request；第8章：The User Mode Client；第8章：Exercises；第9章：Desktop Objects；第9章：Exercises；第10章：Pipes and Mailslots；第10章：Direct Access Volume (DAX or DAS)；第10章：Context Types；第10章：Managing Contexts；第10章：Exercises；第11章：Example Driver Verifier Sessions。它们可能来自译本底稿、修订时点或目录裁剪；没有出版社正文证据就保持“来源差异”，不补成中文版坐标，也不把作者页面的后续更新倒写给译者。
+<Term def="I/O 请求包，内核为每个用户 I/O 请求创建的标准数据结构，携带请求类型、参数、缓冲区和完成状态">IRP</Term>（I/O Request Packet）是驱动接收工作的单位。用户调用 ReadFile/WriteFile/DeviceIoControl 时，I/O 管理器创建 IRP：填上 MajorFunction（请求类型，如 IRP_MJ_READ）、参数（长度、偏移）、缓冲区引用，然后沿设备栈下发。
 
-本章把三条轨道分开：中文版/作者一版解释成书范围；[作者二版](https://leanpub.com/windowskernelprogrammingsecondedition/)及[MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)只做迁移参考；当前平台轨以Microsoft Learn和目标系统公开DDI核对。本章的实验必须记录完整Windows build、架构、SDK、WDK、Visual Studio、驱动模型、签名、VBS/HVCI、驱动包摘要和符号，不能只写Windows 11或latest。
+IRP 上有两个关键字段：`IoStatus.Status`（结果码，驱动处理完填）和 `IoStatus.Information`（传输字节数）。IRP 还挂着一串栈位置（下一节），以及按传输方法指向用户缓冲区的指针或 MDL。驱动拿到 IRP 就像工人拿到工单：看类型、看参数、干活、填结果、签收。
 
-本章涉及内核代码、驱动部署、回调、用户缓冲区、Minifilter、Verifier和故障调试。本章页面只给实验协议；执行仅允许在可丢弃VM或专用测试机，并预备快照、备份、宿主内核调试、崩溃转储、超时、恢复启动和Verifier reset。生产设备、日常主机和无法承受蓝屏或数据损坏的对象不在实验范围内。
+## 设备栈：叠起来的工位
 
-### 本页独立事实来源
+同一个设备可能被多个驱动共同服务：过滤驱动（检查/修改）、功能驱动（核心逻辑）、总线驱动（硬件通信）。它们各自的设备对象按"上层在下层之上"的顺序叠放，组成<Term def="处理同一设备 I/O 的多个设备对象按上下层关系组成的链条，IRP 从栈顶逐层下发">设备栈</Term>（device stack）。
 
-- [作者一版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogramming)：本章用它核对Pavel Yosifovich、2020-12-10版本、455页、11章公开目录与软件内核驱动范围。
-- [作者一版Leanpub官方18页授权样章](https://s3.amazonaws.com/samples.leanpub.com/windowskernelprogramming-sample.pdf)：本章用它局部核对一版身份、第一章目录及进程、虚拟内存、线程和系统调用开放正文；不扩大整书授权。
-- [作者二版Leanpub页面与完整公开目录](https://leanpub.com/windowskernelprogrammingsecondedition/)：本章用它建立二版迁移轨，识别新增章节和接口；不把二版倒写成2021年中文版。
-- [作者二版MIT示例仓库](https://github.com/zodiacon/windowskernelprogrammingbook2e)：本章用它核对当前作者示例的章节归属、提交与许可；仓库只对应二版。
-- [Microsoft分发例程中的IRP完成规则](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/when-to-complete-an-irp-in-a-dispatch-routine)：本章用它核对验证、下传、完成与状态/信息字段的所有权。
-- [Microsoft IRP型IOCTL与FSCTL传输方法](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/irp-based-ioctl-and-fsctl-operations)：本章用它核对METHOD_BUFFERED、DIRECT与NEITHER的缓冲区边界。
-- [Microsoft Windows内核DDI参考](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_kernel/)：本章用它核对目标build公开DDI、对象、IRP和例程合同。
-- [Microsoft驱动安全清单](https://learn.microsoft.com/en-us/windows-hardware/drivers/driversecurity/driver-security-checklist)：本章用它核对内核必要性、最小权限、WDF、HVCI、测试、签名和发布门。
+IRP 从栈顶进入，沿栈逐层向下：每层驱动先看请求，决定自己处理、修改还是原样传给下层。你的驱动通常附加为过滤设备（上层）或功能设备（中层）。设备栈让"多个驱动协作处理一个请求"成为可能——这也是第 10 章文件系统过滤驱动的基础。
 
-## 常见误区与故障注入
+## 栈位置：每层只看自己的那行
 
-本章注入的故障是：METHOD_NEITHER未探测、长度溢出、双完成、遗失完成或pending/取消竞态。在实验中，保持其余条件不变，只注入这个故障，记录首个分岔与竞争性解释。
+IRP 携带一串<Term def="IRP 中为设备栈每一层预留的参数区，各层通过它读取自己的请求参数">I/O 栈位置</Term>（IO_STACK_LOCATION），栈里每一层各占一个。驱动用 `IoGetCurrentIrpStackLocation(Irp)` 拿到自己的那格，读取 MajorFunction、IOCTL 码、长度等参数；向下传递时用 `IoSkipCurrentIrpStackLocation` 把"当前"标记让给下一层。
 
-<Callout
-  type="trap"
-  title="误区一：作者样章或二版等于中文版整书"
->
-  本章只把18页样章当开放页授权，把二版与MIT仓库当迁移来源；中文版185坐标与作者一版204坐标之间的19项差异必须单列，不能复制、补写或倒写。
+为什么要分格？因为多层驱动看到的是同一个 IRP，但每层的参数不同（过滤层关注是否拦截，功能层关注具体参数）。栈位置就是"各层工位的工作单副本"——各看各的，互不污染。驱动把参数写错格，下层就会读到错数据。
+
+## 缓冲 I/O：安全的两趟搬运
+
+访问用户缓冲区有三种传输方法，先在 CTL_CODE 宏第 2 参数里选定。第一种是<Term def="输入输出都经系统缓冲区中转的传输方法：用户数据先复制进 SystemBuffer，完成后输出再复制回去">缓冲 I/O</Term>（METHOD_BUFFERED）：I/O 管理器把用户输入复制到内核 `SystemBuffer`，驱动在 SystemBuffer 上干活，完成后系统把输出复制回用户缓冲区。
+
+特点：用户指针对驱动完全不可见——不存在"用户改地址"的竞态，最安全。代价是两次复制（进+出），大块数据（MB 级）开销明显。适合控制类小请求（IOCTL、小读写）。第 4 章的 IOCTL 例子用的就是它。
+
+## 直接 I/O：零复制的直通车
+
+第二种是<Term def="用 MDL 把用户缓冲区锁定并映射到内核，驱动直接读写的传输方法，避免复制">直接 I/O</Term>（METHOD_IN_DIRECT / METHOD_OUT_DIRECT）：I/O 管理器为输出缓冲区创建 <Term def="内存描述符表，描述一段用户内存的物理页面，驱动用它把用户缓冲区映射到内核空间">MDL</Term>（Memory Descriptor List），锁定页面并映射到内核，驱动经 `MmGetSystemAddressForMdlSafe` 拿到地址直接读写——零复制。
+
+适合大块数据传输（磁盘、网络、音视频）。注意：页面被锁定后不会换出，但内容是用户的，可能被并发修改；只映射一次，多次读写共享同一缓冲区。第三种 METHOD_NEITHER 直接把用户指针交给驱动（不复制不映射），最容易翻车，新代码极少用。
+
+{/* 4. 数学推导｜spec §四：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo｜spec §五：C 型主 Demo；猜一猜引导必有；控件 ≤5；必有重置；初始参数展示核心效果。 */}
+
+## 动手：跟踪一张 IRP 的旅程
+
+下面的可视化把 IRP 旅程画成一张图：用户请求 → IRP 创建 → 设备栈三层 → 栈位置 → 缓冲区传输 → 完成。点击设备栈的每一层，右侧的栈位置面板跟着变；切换传输方法，观察 BUFFERED 与 DIRECT 的缓冲区处理差异。
+
+> 猜一猜：把传输方法从"缓冲 I/O"切到"直接 I/O"，驱动访问用户缓冲区的路径会有什么不同？为什么大块数据要用直接 I/O？
+
+<Wkp07IrpJourneyLab />
+
+{/* 6. 代码对照｜spec §六（C 型核心）：单块 ≤30 行；两 Tab 同一逻辑段；API 差异用 Callout；逐段讲解覆盖 ≥80% 关键代码。 */}
+
+## 代码对照：Zero 驱动的读与写
+
+Zero 驱动是原书的经典示例：一个"什么都返回零"的演示驱动，把 IRP 处理流程压缩到最小。这一节按原书结构拆解 DriverEntry、读分发、写分发和测试应用，覆盖驱动侧全部关键代码。
+
+### 段一：DriverEntry —— 注册读写分发
+
+Zero 驱动的入口比第 4 章更简单：不建符号链接（用设备名访问），重点是把 IRP_MJ_READ 和 IRP_MJ_WRITE 注册到自己的分发例程。其余请求（CREATE/CLOSE/其他）走通用的兜底分发。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+#include <ntddk.h>
+
+#define DEVICE_NAME L"\\Device\\Zero"
+
+NTSTATUS CreateClose(PDEVICE_OBJECT, PIRP);
+NTSTATUS ReadWrite(PDEVICE_OBJECT, PIRP);
+
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING)
+{
+    PDEVICE_OBJECT dev;
+    UNICODE_STRING name = RTL_CONSTANT_STRING(DEVICE_NAME);
+
+    NTSTATUS st = IoCreateDevice(DriverObject, 0, &name,
+        FILE_DEVICE_UNKNOWN, 0, FALSE, &dev);
+    if (!NT_SUCCESS(st)) return st;
+
+    // 注册读写与其他请求的分发例程
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = CreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = CreateClose;
+    DriverObject->MajorFunction[IRP_MJ_READ] = ReadWrite;
+    DriverObject->MajorFunction[IRP_MJ_WRITE] = ReadWrite;
+
+    dev->Flags |= DO_BUFFERED_IO;   // 读/写走缓冲 I/O
+    dev->Flags &= ~DO_DEVICE_INITIALIZING;
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+DriverEntry
+  │
+  ├─→ IoCreateDevice(\Device\Zero)     建设备对象
+  ├─→ MajorFunction[CREATE/CLOSE] = CreateClose
+  ├─→ MajorFunction[READ/WRITE]  = ReadWrite
+  ├─→ Flags |= DO_BUFFERED_IO          读写用缓冲 I/O
+  └─→ Flags &= ~DO_DEVICE_INITIALIZING 完成初始化
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  关键点：<code>DO_BUFFERED_IO</code> 标志必须在清除 <code>DO_DEVICE_INITIALIZING</code> 之前设置——这是设备对象初始化窗口期的规定，顺序反了标志不生效，读/写会变成 METHOD_NEITHER（用户指针直传），极易蓝屏。
 </Callout>
 
-<Callout type="trap" title="误区二：接口同名就说明当前合同未变">
-  本章中的IRQL、池、WDM/KMDF、IRP、通知、Minifilter、签名和Verifier都必须回到目标build与当前Microsoft文档确认；Windows
-  11、x64或latest都不是足够身份。
+### 段二：读分发 —— 填零并完成
+
+读请求来了：栈位置里有请求长度，SystemBuffer 是系统复制好的缓冲区。把缓冲区全部填零（Zero 驱动名字的由来），设置 Information 为实际字节数，完成 IRP。注意先取栈位置、再动缓冲区、最后填 IoStatus 的顺序。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS ReadWrite(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG len = 0;
+
+    if (stack->MajorFunction == IRP_MJ_READ) {
+        // 请求长度就是可写的最大长度
+        len = stack->Parameters.Read.Length;
+        // 整个缓冲区填零（缓冲 I/O：直接写 SystemBuffer）
+        RtlZeroMemory(Irp->SystemBuffer, len);
+        Irp->IoStatus.Information = len;   // 实际返回的字节数
+    }
+    // 写请求：Zero 驱动忽略数据，同样"成功"
+    else {
+        len = stack->Parameters.Write.Length;
+        Irp->IoStatus.Information = len;   // 假装都"写"进去了
+    }
+
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="用户模式测试应用">
+
+```c
+HANDLE h = CreateFileW(L"\\\\.\\Zero",
+    GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+    OPEN_EXISTING, 0, nullptr);
+
+char buf[64];
+DWORD bytes = 0;
+
+// 读 64 字节 → 缓冲区应全是 0
+ReadFile(h, buf, sizeof(buf), &bytes, nullptr);
+for (int i = 0; i < 64; i++) {
+    if (buf[i] != 0) { /* 驱动没填零！ */ }
+}
+
+// 写 64 字节 → 返回成功，数据被忽略
+WriteFile(h, buf, sizeof(buf), &bytes, nullptr);
+CloseHandle(h);
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段三：CreateClose —— 打开与关闭的兜底
+
+Create/Close 走同一个函数：直接标记成功并完成。任何驱动都不能漏掉这两个分发，否则 CreateFile 会失败（没有 Create 处理 = 打开即失败）。
+
+<CodeTabs>
+  <Tab label="C / 内核驱动">
+
+```c
+NTSTATUS CreateClose(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+    UNREFERENCED_PARAMETER(DeviceObject);
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="概念流程">
+
+```text
+CreateFile(\\.\Zero)
+  │ IRP_MJ_CREATE 沿栈下发
+  ▼
+CreateClose
+  │ 直接成功 + 完成
+  ▼
+用户拿到句柄，后续 Read/Write 正常
+
+CloseHandle(h)
+  │ IRP_MJ_CLOSE
+  ▼
+CreateClose（同一函数）
+  │ 直接成功 + 完成
+```
+
+  </Tab>
+</CodeTabs>
+
+### 段四：缓冲区比较 —— BUFFERED 与 DIRECT 的关键差异
+
+同一个功能，两种传输方法写起来完全不同。BUFFERED 直接读写 `SystemBuffer`（系统已复制）；DIRECT 要先拿 MDL 映射地址（`MmGetSystemAddressForMdlSafe`），用完由系统解锁。逐字段对比：
+
+<CodeTabs>
+  <Tab label="C / 缓冲 I/O（Zero 驱动）">
+
+```c
+// DeviceObject->Flags |= DO_BUFFERED_IO（在 DriverEntry 设置）
+NTSTATUS ReadZero(PDEVICE_OBJECT, PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG len = stack->Parameters.Read.Length;
+
+    // SystemBuffer 就是你的工作区，直接读写
+    RtlZeroMemory(Irp->SystemBuffer, len);
+    Irp->IoStatus.Information = len;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+  <Tab label="C / 直接 I/O（对比写法）">
+
+```c
+// DeviceObject->Flags |= DO_DIRECT_IO（DriverEntry 设置）
+NTSTATUS ReadDirect(PDEVICE_OBJECT, PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG len = stack->Parameters.Read.Length;
+
+    // 拿 MDL 映射地址：DIRECT 下用户页已锁定
+    PVOID va = MmGetSystemAddressForMdlSafe(
+        Irp->MdlAddress, NormalPagePriority);
+    if (!va) {                      // 映射失败
+        Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    RtlZeroMemory(va, len);         // 直接写用户内存（零复制）
+    Irp->IoStatus.Information = len;
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异点：BUFFERED 的 <code>SystemBuffer</code> 由系统分配并复制，驱动完成后系统自动把输出拷回用户缓冲区；DIRECT 的 <code>MdlAddress</code> 描述用户页面，<code>MmGetSystemAddressForMdlSafe</code> 的返回必须判空（映射可能失败），且锁定的页面必须在 IRQL <= DISPATCH_LEVEL 访问。IOCTL 的传输方法在 CTL_CODE 里编码（第 4 章），读写的传输方法由设备对象 Flags 决定。
 </Callout>
 
-<Callout
-  type="trap"
-  title="误区三：能加载、能蓝屏或有日志就证明机制"
->
-  本章不以一次加载、最终bug
-  check、单条DbgPrint或综合分裁决；必须保存正确符号、稳定基线、唯一故障首错、竞争性解释、反向卸载和同输入恢复。
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+{/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  <strong>现象</strong>：驱动把同一个 IRP 完成了两次，系统崩溃（BugCheck 0xA 或对象损坏）。<strong>原因</strong>：IRP 完成意味着它的生命周期结束，I/O 管理器会释放它；二次完成访问已释放的内存。<strong>修法</strong>：每条代码路径只能调用一次 IoCompleteRequest；向下传递的 IRP 绝不在本层完成，本层完成的 IRP 绝不向下传——完成权是排他的。
 </Callout>
 
-## 四类样本与验收
+<Callout type="trap">
+  <strong>现象</strong>：请求返回成功但数据全错，或缓冲区被写穿。<strong>原因</strong>：METHOD_NEITHER 下直接用用户指针读写，没有探测与长度校验；或 BUFFERED 下访问了超出 SystemBuffer 的长度。<strong>修法</strong>：读写的长度以栈位置的 Length 为准，绝不越过它；IOCTL 优先 BUFFERED/DIRECT；NEITHER 必须 ProbeForRead/Write 并包 SEH。
+</Callout>
 
-| 样本 | 注入方式                   | 必查证据                 | 通过条件     |
-| ---- | -------------------------- | ------------------------ | ------------ |
-| 基线 | 固定快照、sys/PDB和输入    | 状态码、IRQL、对象与日志 | 与预测一致   |
-| 边界 | 空缓冲、短输出、断开客户端 | 长度、Information、引用  | 不越界不泄漏 |
-| 失败 | 错IRQL、竞态、Verifier规则 | 首错栈和责任层           | 故障可定位   |
-| 恢复 | 清理或快照后同输入重放     | 模块、服务、池、回调状态 | 回到基线     |
+<Callout type="trap">
+  <strong>现象</strong>：设置了 DO_BUFFERED_IO 但驱动读到的 SystemBuffer 是垃圾数据。<strong>原因</strong>：清除 DO_DEVICE_INITIALIZING 之后才设置 DO_BUFFERED_IO，标志不生效，实际走了 NEITHER 路径。<strong>修法</strong>：DeviceObject 标志必须在清除 DO_DEVICE_INITIALIZING 之前设好，顺序不可颠倒；用 WinDbg 的 <code>dt _DEVICE_OBJECT</code> 核对 Flags 位。
+</Callout>
 
-**本章验收不变量**：每个IRP只完成一次且状态、Information、缓冲区、引用与取消协议一致
+<Callout type="trap">
+  <strong>现象</strong>：驱动永远不完成 IRP，调用 ReadFile 的程序永久挂起。<strong>原因</strong>：某条错误路径忘记调用 IoCompleteRequest 直接 return，IRP 悬空。<strong>修法</strong>：分发例程所有路径（含错误返回）都以 IoCompleteRequest 收尾；用 Driver Verifier 的 IRP 检查或超时看门狗在测试期抓悬空 IRP。
+</Callout>
 
-**本章必查证据**：IRP/栈位置图、IOCTL传输方法表、边界夹具、取消与完成调用链
+{/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
 
-## 交互实验 — IRP栈位置与完成
+## 小结
 
-以下三个视图分别冻结版本合同、调整执行探针并重放安全门。每个视图都保留重置，不生成驱动成熟度、风险或性能综合分。
-
-<Stepper>
-  <Step title="版本合同：选择坐标、出版轨与IRQL">
-    <Wkp07IoRequestPacketVersionContextLab />
-  </Step>
-  <Step title="可执行探针：调整输入并复算对象状态">
-    <Wkp07IoRequestPacketExecutableProbeLab />
-  </Step>
-  <Step title="安全门：重放基线、单故障与恢复">
-    <Wkp07IoRequestPacketSafetyGateLab />
-  </Step>
-</Stepper>
-
-## 练习
+- IRP 是内核工作单：类型、参数、缓冲区、状态一单到底
+- 设备栈多层协作，IRP 从栈顶逐层下传，每层一个栈位置
+- 栈位置是各层的参数格，IoGetCurrentIrpStackLocation 取自己的
+- 缓冲 I/O 安全但两次复制，直接 I/O 用 MDL 零复制适合大块
+- 每个 IRP 只完成一次：完成权排他，双完成崩溃、不完成挂起
 
 <Exercises>
 
-**问题 1：实验设计**
-
-请围绕以下问题设计一个可重现实验：IRP、设备栈位置、分发、用户缓冲区、pending、取消与完成怎样保持唯一所有权？
+**问题 1：** 在 Demo 中分别点击设备栈的三层，观察栈位置面板的变化。为什么每层驱动看到的栈位置内容不同？用 IRP 与设备栈的概念解释。
 
 <Answer>
-  实验必须满足不变量：每个IRP只完成一次且状态、Information、缓冲区、引用与取消协议一致。需要交付的证据包括：IRP/栈位置图、IOCTL传输方法表、边界夹具、取消与完成调用链。先冻结完整build、架构、工具链、驱动包、签名、符号和输入；再注入唯一故障"METHOD_NEITHER未探测、长度溢出、双完成、遗失完成或pending/取消竞态"；记录首个分岔与竞争性解释；停止新请求并反向清理后以同输入重新验收不变量。无法恢复则标记失败或未知。
+
+IRP 创建时，I/O 管理器按设备栈的层数为它分配对应数量的 I/O 栈位置，每层各占一格。IoGetCurrentIrpStackLocation 返回的是"当前标记"指向的那格——驱动向下传递时用 IoSkipCurrentIrpStackLocation 把标记让给下一层。所以每层看到的是自己的参数格：过滤层看到的是"是否拦截"的视角，功能层看到的是具体的读写参数，总线层看到的是硬件操作参数。各层各看各的，互不干扰，这是多层驱动协作的基础。
+
 </Answer>
 
-**问题 2：故障识别与避免**
+**问题 2：** 下面的读分发例程有什么问题？至少列出两处。
 
-如果在实验中观察到"METHOD_NEITHER未探测、长度溢出、双完成、遗失完成或pending/取消竞态"，如何定位根因？如何避免？
+```c
+NTSTATUS BadRead(PDEVICE_OBJECT, PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    RtlCopyMemory(Irp->SystemBuffer, g_internalData,
+        stack->Parameters.Read.Length);
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = 0;
+    return STATUS_SUCCESS;   // 忘了完成！
+}
+```
 
 <Answer>
-  定位方法：在IRP/栈位置图、IOCTL传输方法表、边界夹具、取消与完成调用链中检查是否违反不变量"每个IRP只完成一次且状态、Information、缓冲区、引用与取消协议一致"。具体而言，比较故障轨迹与签名参考基线的首个分岔，记录NTSTATUS、IRQL和调用链差异。避免方法：确保IRP、设备节点、栈位置、分发、用户缓冲区、Zero驱动和测试程序的全部约束在每条执行路径上成立；不以一次成功加载或最终蓝屏替代完整调用链证据；安全卸载或恢复快照后以同输入重放验证恢复。
+
+两处问题：1）没有调用 IoCompleteRequest 就返回——IRP 悬空，调用方永久挂起，且返回值与 IoStatus.Status 不一致（这里都返回成功但意义不同）；2）Information 填 0，客户端认为没读到任何数据，即使复制成功也不可见；另外若缓冲区长度大于 g_internalData 的实际容量，还会越界读。修法：Information 填实际复制的字节数（并确保不超过内部数据长度），所有路径最后调用 IoCompleteRequest。
+
 </Answer>
 
-**问题 3：来源差异处理**
-
-中文版有185个目录坐标，作者一版有204个，两者相差19项。应如何处理这些差异？
+**问题 3（独立实现题）：** 写一个写分发例程：设备为 DIRECT I/O。要求：1）从栈位置取写长度；2）用 MmGetSystemAddressForMdlSafe 拿映射地址，失败返回 STATUS_INSUFFICIENT_RESOURCES；3）把用户数据复制到驱动内部缓冲区（长度取两者较小值，防越界）；4）Information 填实际复制字节数并完成 IRP。
 
 <Answer>
-  中文版185坐标是当前译本治理分母；作者一版204坐标用来发现19项差异；18页样章只支持开放页；二版和MIT仓库只支持迁移。必须把差异登记为待出版社正文核实，不能把作者更新、开放样章或二版示例冒充中文版缺失内容，也不把作者页面的后续更新倒写给译者。
-</Answer>
 
-**问题 4：安全边界与停止条件**
+```c
+#define MAX_DATA 4096
+UCHAR g_data[MAX_DATA];   // 驱动内部缓冲区
 
-什么情况下必须停止内核实验？
+NTSTATUS MyWrite(PDEVICE_OBJECT, PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG reqLen = stack->Parameters.Write.Length;
 
-<Answer>
-  缺少可丢弃VM或专用测试机、快照、备份、宿主内核调试器、转储、恢复启动、Verifier reset、正确符号、完整build/驱动包身份或稳定基线中的任一项就停止。生产设备、日常主机以及无法承受蓝屏、数据损坏、设备失联或启动失败的对象不在实验范围内。
+    // DIRECT：用户页已锁定，映射到内核空间
+    PVOID va = MmGetSystemAddressForMdlSafe(
+        Irp->MdlAddress, NormalPagePriority);
+    if (!va) {
+        Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+        Irp->IoStatus.Information = 0;
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    // 取较小值：不越过内部缓冲，也不越过用户长度
+    ULONG copyLen = min(reqLen, MAX_DATA);
+    RtlCopyMemory(g_data, va, copyLen);
+
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+    Irp->IoStatus.Information = copyLen;  // 实际接收字节数
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_SUCCESS;
+}
+```
+
+要点：MdGetSystemAddressForMdlSafe 返回值必须判空；copyLen 用 min 防双端越界；Information 填实际字节数而非请求长度——长度不匹配时客户端能感知截断。
+
 </Answer>
 
 </Exercises>
 
-## 小结
-
-- IRP：连接“接收IRP”的内核契约与证据。
-- I/O栈位置：连接“读取栈位置”的内核契约与证据。
-- IoCompleteRequest：连接“验证长度方法”的内核契约与证据。
-- 缓冲/直接I/O：连接“访问系统缓冲”的内核契约与证据。
-- Zero驱动：连接“设置完成状态”的内核契约与证据。
-- 本页16个目录坐标全部进入实验链，不以泛化驱动主题替代原书内容。
-
-- 来源合同：中文版185坐标与作者一版204坐标的19项差异已登记，三条轨道分开，互不倒写。
+{/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（6 个：IRP/设备栈/栈位置/缓冲I/O/直接I/O/MDL）；释义零基础大白话。 */}
 
 ## 术语表
 
 <Glossary>
   <GlossaryItem term="IRP">
-    IRP是本章的入口概念。IRP、设备栈位置、分发、用户缓冲区、pending、取消与完成怎样保持唯一所有权？从这个概念开始建立可调试关系。它必须绑定进程、build、架构与生命周期，并在IRP/栈位置图、IOCTL传输方法表、边界夹具、取消与完成调用链中留下可验证记录。
+    I/O Request Packet，I/O 请求包。内核为每个用户 I/O 请求创建的工作单：写清请求类型（读/写/控制）、参数、缓冲区和完成状态，沿设备栈逐层传递。驱动处理完必须调用 IoCompleteRequest 签收。相当于工厂里的订单：一单到底，各工序在单上签字。
   </GlossaryItem>
-  <GlossaryItem term="设备节点">
-    设备节点在本章中用于构造可撤销反例。注入故障"METHOD_NEITHER未探测、长度溢出、双完成、遗失完成或pending/取消竞态"后，它的状态变化是首个分岔的关键信号，必须与签名参考基线对比。
+  <GlossaryItem term="设备栈">
+    处理同一设备 I/O 的多个设备对象按上下层叠放的链条，IRP 从栈顶逐层下发。过滤驱动在上、功能驱动居中、总线驱动在下，各层都有机会处理或拦截请求。相当于一条流水线：多个工位串起来干同一件活。
   </GlossaryItem>
   <GlossaryItem term="栈位置">
-    栈位置必须满足不变量"每个IRP只完成一次且状态、Information、缓冲区、引用与取消协议一致"。在实验中，它的记录是验收通过的条件之一，不能以一次成功加载替代。
+    IO_STACK_LOCATION，IRP 里为设备栈每一层预留的参数格。各层用 IoGetCurrentIrpStackLocation 读自己的格子（请求类型、长度、IOCTL 码），向下传递时把当前标记让给下一层。相当于各工序只读订单上自己那一行。
   </GlossaryItem>
-  <GlossaryItem term="分发">
-    分发连接本章的目录坐标与实验链。不以泛化驱动主题替代原书内容，每个坐标都进入可复核的故障注入与恢复验收。
+  <GlossaryItem term="缓冲 I/O">
+    METHOD_BUFFERED，输入输出都经系统缓冲区中转的传输方法。用户数据先复制进 SystemBuffer，驱动在 SystemBuffer 干活，完成后输出再复制回去。安全但多两次复制，适合小数据控制类请求。
+  </GlossaryItem>
+  <GlossaryItem term="直接 I/O">
+    METHOD_IN_DIRECT / METHOD_OUT_DIRECT，用 MDL 把用户缓冲区锁定并映射到内核、驱动直接读写的传输方法。零复制，适合大块数据。页面已锁定不会换出，但内容仍可能被用户并发修改。
+  </GlossaryItem>
+  <GlossaryItem term="MDL">
+    Memory Descriptor List，内存描述符表。描述一段用户内存的物理页面布局，驱动通过它把用户缓冲区映射到内核空间直接访问。相当于给用户内存办了一张"内核临时通行证"。
   </GlossaryItem>
 </Glossary>
+
+{/* 9. 出处声明｜spec §九：Attribution 由组件统一渲染，禁止手写变体。 */}
 
 <Attribution
   mode="independent-rewrite"
