@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T09:38:52.976Z；旧版分数不迁移。
+> 2026-08-03T09:49:08.020Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1375
-- published：101
+- passed：1366
+- published：110
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -163,7 +163,7 @@
 | 150 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
 | 151 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
 | 152 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 153 | car-structure-illustrated | 9 | 0 | 0 | 9 | 0 |
+| 153 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
 | 154 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
 | 155 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 156 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |

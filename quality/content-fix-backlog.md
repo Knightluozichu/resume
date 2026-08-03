@@ -501,23 +501,23 @@
 
 ### 3.2 automotive-systems-specialization（13 章 · 待修 13 章 · 13 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | automotive-systems-specialization/00-intro/learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | automotive-systems-specialization/01-engine-power/drivetrain-components.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | automotive-systems-specialization/01-engine-power/engine-performance.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | automotive-systems-specialization/01-engine-power/engine-thermodynamics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | automotive-systems-specialization/01-engine-power/transmission-types.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | automotive-systems-specialization/02-chassis-control/steering-brake-systems.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | automotive-systems-specialization/02-chassis-control/suspension-systems.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | automotive-systems-specialization/03-electronics/body-electronics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | automotive-systems-specialization/03-electronics/ecu-can-bus.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | automotive-systems-specialization/03-electronics/sensors-actuators.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | automotive-systems-specialization/04-ev/battery-management.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | automotive-systems-specialization/04-ev/ev-motor-controller.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | automotive-systems-specialization/04-ev/final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | automotive-systems-specialization/00-intro/learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | automotive-systems-specialization/01-engine-power/drivetrain-components.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | automotive-systems-specialization/01-engine-power/engine-performance.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | automotive-systems-specialization/01-engine-power/engine-thermodynamics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | automotive-systems-specialization/01-engine-power/transmission-types.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | automotive-systems-specialization/02-chassis-control/steering-brake-systems.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | automotive-systems-specialization/02-chassis-control/suspension-systems.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | automotive-systems-specialization/03-electronics/body-electronics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | automotive-systems-specialization/03-electronics/ecu-can-bus.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | automotive-systems-specialization/03-electronics/sensors-actuators.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | automotive-systems-specialization/04-ev/battery-management.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | automotive-systems-specialization/04-ev/ev-motor-controller.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | automotive-systems-specialization/04-ev/final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
