@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T13:47:32.953Z；旧版分数不迁移。
+> 2026-08-03T14:06:05.538Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1154
-- published：322
+- passed：1131
+- published：345
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -190,7 +190,7 @@
 | 177 | deep-learning-rl-from-scratch | 16 | 0 | 0 | 0 | 0 |
 | 178 | deep-learning-textbook | 22 | 0 | 0 | 0 | 0 |
 | 179 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
-| 180 | deep-reinforcement-learning | 23 | 0 | 0 | 23 | 0 |
+| 180 | deep-reinforcement-learning | 23 | 0 | 0 | 0 | 0 |
 | 181 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
 | 182 | dragon-book-compilers | 16 | 0 | 0 | 16 | 0 |
 | 183 | easy-cpp-5e | 18 | 0 | 0 | 18 | 0 |
