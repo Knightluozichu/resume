@@ -316,7 +316,7 @@ export function Wkp07IrpJourneyLab() {
             <text x={64} y={548 - 26} fontSize={11} fill={C.primary}>
               完成：设置 IoStatus.Status / Information → IoCompleteRequest(Irp, IO_NO_INCREMENT)
             </text>
-            <text x={64} y={548 - 8} fontSize={10} fill={C.secondary}>
+            <text x={64} y={548 - 8} fontSize={11} fill={C.secondary}>
               每个 IRP 只完成一次；不完成 = 调用方永久挂起，双完成 = 系统崩溃
             </text>
           </g>

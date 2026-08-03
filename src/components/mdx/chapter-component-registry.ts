@@ -17136,7 +17136,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/01-foundations/wkp-01-windows-internals-overview":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-01-process-internals-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-01-windows-internals-overview");
       return {
         Wkp01ProcessInternalsLab: module0.Wkp01ProcessInternalsLab,
       } as ChapterMdxComponents;
@@ -17144,7 +17144,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/01-foundations/wkp-02-getting-started-kernel-development":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-02-driver-lifecycle-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-02-getting-started-kernel-development");
       return {
         Wkp02DriverLifecycleLab: module0.Wkp02DriverLifecycleLab,
       } as ChapterMdxComponents;
@@ -17152,7 +17152,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/01-foundations/wkp-03-kernel-programming-basics":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-03-irql-ladder-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-03-kernel-programming-basics");
       return {
         Wkp03IrqlLadderLab: module0.Wkp03IrqlLadderLab,
       } as ChapterMdxComponents;
@@ -17160,7 +17160,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/02-driver-debugging/wkp-04-driver-start-to-finish":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-04-ioctl-protocol-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-04-driver-start-to-finish");
       return {
         Wkp04IoctlProtocolLab: module0.Wkp04IoctlProtocolLab,
       } as ChapterMdxComponents;
@@ -17168,7 +17168,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/02-driver-debugging/wkp-05-debugging":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-05-debugging");
       return {
         Wkp05DebuggingLab: module0.Wkp05DebuggingLab,
       } as ChapterMdxComponents;
@@ -17176,7 +17176,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/03-mechanisms/wkp-06-kernel-mechanisms":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-06-mechanism-router-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-06-kernel-mechanisms");
       return {
         Wkp06MechanismRouterLab: module0.Wkp06MechanismRouterLab,
       } as ChapterMdxComponents;
@@ -17184,7 +17184,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/03-mechanisms/wkp-07-io-request-packet":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-07-irp-journey-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-07-io-request-packet");
       return {
         Wkp07IrpJourneyLab: module0.Wkp07IrpJourneyLab,
       } as ChapterMdxComponents;
@@ -17192,7 +17192,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/04-notifications/wkp-08-process-thread-notifications":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-08-notification-pipe-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-08-process-thread-notifications");
       return {
         Wkp08NotificationPipeLab: module0.Wkp08NotificationPipeLab,
       } as ChapterMdxComponents;
@@ -17200,7 +17200,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/04-notifications/wkp-09-object-registry-notifications":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-09-object-registry-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-09-object-registry-notifications");
       return {
         Wkp09ObjectRegistryLab: module0.Wkp09ObjectRegistryLab,
       } as ChapterMdxComponents;
@@ -17208,7 +17208,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/05-filters/wkp-10-file-system-minifilters":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-10-minifilter-stack-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-10-file-system-minifilters");
       return {
         Wkp10MinifilterStackLab: module0.Wkp10MinifilterStackLab,
       } as ChapterMdxComponents;
@@ -17216,7 +17216,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   "windows-kernel-programming/05-filters/wkp-11-miscellaneous-topics":
     async () => {
       const module0 =
-        await import("@/components/mdx/windows-kernel-programming/v2/wkp-11-toolbox-map-lab");
+        await import("@/components/mdx/windows-kernel-programming/v2/wkp-11-miscellaneous-topics");
       return {
         Wkp11ToolboxMapLab: module0.Wkp11ToolboxMapLab,
       } as ChapterMdxComponents;

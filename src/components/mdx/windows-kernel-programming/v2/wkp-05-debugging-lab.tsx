@@ -204,7 +204,7 @@ export function Wkp05DebuggingLab() {
             >
               调试链路
             </text>
-            <text x={360} y={168} textAnchor="middle" fontSize={10} fill={C.secondary}>
+            <text x={360} y={168} textAnchor="middle" fontSize={11} fill={C.secondary}>
               串口 / 网络 / USB
             </text>
           </g>
@@ -371,7 +371,7 @@ export function Wkp05DebuggingLab() {
               ? "单步模式：每按一次 g 执行一条指令（p）"
               : "连续模式：g 直接跑到下一个断点"}
           </text>
-          <text x={48} y={556} fontSize={10} fill={C.secondary}>
+          <text x={48} y={556} fontSize={11} fill={C.secondary}>
             提示：符号开关模拟 .sympath / .reload；真实调试需目标 build 同版本的 .pdb
           </text>
         </svg>

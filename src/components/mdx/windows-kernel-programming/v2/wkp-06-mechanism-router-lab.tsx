@@ -356,7 +356,7 @@ export function Wkp06MechanismRouterLab() {
               ? "锁视图：自旋锁在 DISPATCH_LEVEL 忙等，互锁操作单条原子指令"
               : "锁视图关闭：只看同步原语概览"}
           </text>
-          <text x={48} y={556} fontSize={10} fill={C.secondary}>
+          <text x={48} y={556} fontSize={11} fill={C.secondary}>
             提示：IRQL 选择规则见第 3 章；本图展示机制之间的路由关系
           </text>
         </svg>

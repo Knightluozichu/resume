@@ -386,7 +386,7 @@ export function Wkp10MinifilterStackLab() {
               ? `删除被拦截：ProtectFilter 的 pre 返回 FLT_PREOP_COMPLETE，${ops[op].mj} 不再下传，post 不执行`
               : `当前模拟：${ops[op].mj} 沿栈下传 → 各层 pre 依次执行 → 卷处理 → 返回时各层 post 逆序执行`}
           </text>
-          <text x={64} y={504} fontSize={10} fill={C.secondary}>
+          <text x={64} y={504} fontSize={11} fill={C.secondary}>
             {blocked
               ? "（层 0 的 Post 徽章显示 ✗：被拦截的请求没有回程）"
               : "（点击任意徽章 / 层 / 面板查看说明）"}

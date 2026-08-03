@@ -26,7 +26,7 @@ import {
   CodeTabs,
   Tab,
 } from "@/components/mdx/mdx-components";
-import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-10-minifilter-stack-lab";
+import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-10-file-system-minifilters";
 
 {/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
   1) Minifilter 注册与开始过滤 = SVG 栈标题 + 操作按钮（选择后沿栈下传）
@@ -43,7 +43,7 @@ import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-program
 <Objectives>
 
 - 能解释 Minifilter 的注册流程（FltRegisterFilter → FltStartFiltering）与高度、实例在 I/O 路径上的作用
-- 能改出"删除保护过滤器"：在操作前回调里拦截删除请求并返回 FLT_PREOP_COMPLETE
+- 能改出“删除保护过滤器”：在操作前回调里拦截删除请求并返回 FLT_PREOP_COMPLETE
 - 能回答：为什么 pre 返回 FLT_PREOP_COMPLETE 时，post 回调不会被调用？
 
 </Objectives>
@@ -52,41 +52,41 @@ import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-program
 
 ## 为什么文件仓库要设一排值班岗
 
-想象一座大楼的文件仓库（文件系统）。想拦下"把档案销毁"这类动作，最笨的办法是把整个仓库重建一遍——老式过滤驱动就接近这个思路：接管整条搬运通道，动辄伤筋动骨。而小过滤驱动的思路是：在仓库门口按职级排一排值班岗，每岗只看自己负责的事，搬进搬出的每件货物（每次文件操作）都要依次经过他们。
+想象一座大楼的文件仓库（文件系统）。想拦下“把档案销毁”这类动作，最笨的办法是把整个仓库重建一遍——老式过滤驱动就接近这个思路：接管整条搬运通道，动辄伤筋动骨。而小过滤驱动的思路是：在仓库门口按职级排一排值班岗，每岗只看自己负责的事，搬进搬出的每件货物（每次文件操作）都要依次经过他们。
 
-没有这套系统会怎样？想加一个"禁止删除某文件"的规则，要么改文件系统本身，要么写一个脆弱的老式过滤驱动——任何小改动都可能拖垮整个仓库的吞吐。
+没有这套系统会怎样？想加一个“禁止删除某文件”的规则，要么改文件系统本身，要么写一个脆弱的老式过滤驱动——任何小改动都可能拖垮整个仓库的吞吐。
 
 这一章排这一排值班岗：领岗（注册过滤器）、排位（高度）、站上岗位（实例）、检查货物（操作回调）、随身带工作牌（上下文）、和对讲机（通信端口），最后安全撤岗（卸载）。
 
-{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
+{/* 3. 概念讲解｜spec §三（C 型可把“是什么”压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
 ## Minifilter：站在文件系统旁边的值班岗
 
-<Term def="基于过滤器管理器（FltMgr）的小型文件系统过滤驱动，注册一组操作回调，按高度排序挂在卷上观察和干预文件 I/O">Minifilter</Term> 是第 7 章 I/O 路径的"插队者"：普通的 IRP 从用户模式直达文件系统，小过滤器在这条路上按高度排了一串岗位，每个岗位只处理自己关心的操作。
+<Term def="基于过滤器管理器（FltMgr）的小型文件系统过滤驱动，注册一组操作回调，按高度排序挂在卷上观察和干预文件 I/O">Minifilter</Term> 是第 7 章 I/O 路径的“插队者”：普通的 IRP 从用户模式直达文件系统，小过滤器在这条路上按高度排了一串岗位，每个岗位只处理自己关心的操作。
 
-生命周期只有三步：`FltRegisterFilter` 注册（交一份"岗位职责表"，声明关心哪些 IRP 主功能、各配什么回调）→ `FltStartFiltering` 开工（内核开始把过滤器实例附加到卷上）→ 卸载时 `FltUnregisterFilter` 撤岗。注册和开工之间还能改配置，开工之后回调才会被调用。
+生命周期只有三步：`FltRegisterFilter` 注册（交一份“岗位职责表”，声明关心哪些 IRP 主功能、各配什么回调）→ `FltStartFiltering` 开工（内核开始把过滤器实例附加到卷上）→ 卸载时 `FltUnregisterFilter` 撤岗。注册和开工之间还能改配置，开工之后回调才会被调用。
 
 ## 高度与实例：谁站前面，谁站上岗
 
-<Term def="唯一十进制数字字符串，决定过滤器在卷上的栈顺序：数字越大越靠近应用层，越小越靠近文件系统">高度</Term> 解决"值班岗怎么排队"：每个过滤器一个唯一高度，IRP 从栈顶（高高度）往下传。两个过滤器同高度会注册失败；正式产品的高度范围要向微软申请，开发调试用公开的示例范围即可。
+<Term def="唯一十进制数字字符串，决定过滤器在卷上的栈顺序：数字越大越靠近应用层，越小越靠近文件系统">高度</Term> 解决“值班岗怎么排队”：每个过滤器一个唯一高度，IRP 从栈顶（高高度）往下传。两个过滤器同高度会注册失败；正式产品的高度范围要向微软申请，开发调试用公开的示例范围即可。
 
-<Term def="过滤器附加到某个卷上的实体，一个过滤器在每个卷上有一个实例">实例</Term> 解决"站上哪个岗"：过滤器注册后，`FltStartFiltering` 按实例回调把过滤器附加到每个卷——附加成功才进入该卷的 I/O 路径。卷的实例链从高到低排列，删除保护的过滤器要抢在备份过滤器之前看到请求，就得靠高度排序。
+<Term def="过滤器附加到某个卷上的实体，一个过滤器在每个卷上有一个实例">实例</Term> 解决“站上哪个岗”：过滤器注册后，`FltStartFiltering` 按实例回调把过滤器附加到每个卷——附加成功才进入该卷的 I/O 路径。卷的实例链从高到低排列，删除保护的过滤器要抢在备份过滤器之前看到请求，就得靠高度排序。
 
 ## 操作回调：值班岗的检查动作
 
 <Term def="过滤器为 IRP 主功能注册的前后回调：pre 在操作发生前调用、可拦截，post 在操作完成后调用、只观察">操作回调</Term> 是值班岗的全部动作。pre 回调在 IRP 到达本层时先执行，有四种返回：`FLT_PREOP_SUCCESS_WITH_CALLBACK`（放行，并要求回程时调 post）、`FLT_PREOP_SUCCESS_WITHOUT_CALLBACK`（放行，不要 post）、`FLT_PREOP_COMPLETE`（就地完成，IRP 不再下传）、`FLT_PREOP_SYNCHRONIZE`（放行但要求同步处理）。
 
-删除保护就藏在 pre 里：`IRP_MJ_SET_INFORMATION` 的 `FileDispositionInformation` 参数表示"删除文件"，命中受保护文件就返回 `FLT_PREOP_COMPLETE` 并设 `STATUS_ACCESS_DENIED`——操作根本没到文件系统。被拦截的请求没有回程，post 不会执行。
+删除保护就藏在 pre 里：`IRP_MJ_SET_INFORMATION` 的 `FileDispositionInformation` 参数表示“删除文件”，命中受保护文件就返回 `FLT_PREOP_COMPLETE` 并设 `STATUS_ACCESS_DENIED`——操作根本没到文件系统。被拦截的请求没有回程，post 不会执行。
 
 ## 上下文：值班岗的随身工作牌
 
-<Term def="过滤器挂在文件、流、实例、卷等对象上的私有数据块，用 FltAllocateContext 分配、FltSetXxxContext 挂载、FltReleaseContext 释放">上下文</Term> 让值班岗"记住"它看过的货物：比如第一次打开某个文件时记下"此文件需要保护"，后续操作直接查上下文，不必每次做昂贵的查询。
+<Term def="过滤器挂在文件、流、实例、卷等对象上的私有数据块，用 FltAllocateContext 分配、FltSetXxxContext 挂载、FltReleaseContext 释放">上下文</Term> 让值班岗“记住”它看过的货物：比如第一次打开某个文件时记下“此文件需要保护”，后续操作直接查上下文，不必每次做昂贵的查询。
 
 上下文是引用计数制的：`FltAllocateContext` 返回的引用在挂载后由内核持有，你用 `FltGetStreamContext` 取用后必须 `FltReleaseContext`——谁取谁释放，漏一次就是引用泄漏，Filter Verifier 会在卸载时当场报错。上下文还分类型：文件上下文（整个文件）、流上下文（每个打开的句柄）等，别挂错对象。
 
 ## 通信端口：值班岗的对讲机
 
-<Term def="过滤器与用户模式客户端之间的消息通道：内核 FltCreateCommunicationPort 创建，客户端 FilterConnectCommunicationPort 连接">通信端口</Term> 让用户模式程序能指挥值班岗：下发"保护这些文件"的名单、接收"拦截了 X 次删除"的报告。内核侧 `FltSendMessage` 发消息，用户侧 `FilterGetMessage` 收、`FilterReplyMessage` 回。
+<Term def="过滤器与用户模式客户端之间的消息通道：内核 FltCreateCommunicationPort 创建，客户端 FilterConnectCommunicationPort 连接">通信端口</Term> 让用户模式程序能指挥值班岗：下发“保护这些文件”的名单、接收“拦截了 X 次删除”的报告。内核侧 `FltSendMessage` 发消息，用户侧 `FilterGetMessage` 收、`FilterReplyMessage` 回。
 
 端口生命周期和过滤器绑定：卸载先断开所有客户端连接，再关闭端口，最后 `FltUnregisterFilter`。端口句柄泄漏或客户端连接未断就卸载，都是 Verifier 能抓住的典型错误。
 
@@ -96,9 +96,9 @@ import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-program
 
 ## 动手：看 IRP 沿过滤器栈下传
 
-下面的可视化把 Minifilter 栈画成图：三个过滤器按高度从上到下排开，每个都有 Pre/Post 徽章。选一个操作（创建/删除/写入）看它沿栈下传；打开"删除保护"开关后再选"删除文件"——观察 ProtectFilter 的 Pre 徽章变成拦截、结果条变化、以及它的 Post 徽章为什么显示 ✗。
+下面的可视化把 Minifilter 栈画成图：三个过滤器按高度从上到下排开，每个都有 Pre/Post 徽章。选一个操作（创建/删除/写入）看它沿栈下传；打开“删除保护”开关后再选“删除文件”——观察 ProtectFilter 的 Pre 徽章变成拦截、结果条变化、以及它的 Post 徽章为什么显示 ✗。
 
-> 猜一猜：打开"删除保护"后点击"删除文件"——ProtectFilter 的 Pre 徽章会变成什么？为什么这一层 Post 徽章显示 ✗，而下面两层的 Pre 徽章没有变化？
+> 猜一猜：打开“删除保护”后点击“删除文件”——ProtectFilter 的 Pre 徽章会变成什么？为什么这一层 Post 徽章显示 ✗，而下面两层的 Pre 徽章没有变化？
 
 <Wkp10MinifilterStackLab />
 
@@ -110,7 +110,7 @@ import { Wkp10MinifilterStackLab } from "@/components/mdx/windows-kernel-program
 
 ### 段一：注册与开工 —— 交岗位职责表
 
-入口两步走：`FltRegisterFilter` 交"岗位职责表"（`FLT_REGISTRATION`：声明操作回调、卸载回调、实例回调），成功后再 `FltStartFiltering` 开工。注意这两步之间有状态：注册成功但开工失败，必须注销；开工成功后才开始接收 I/O。
+入口两步走：`FltRegisterFilter` 交“岗位职责表”（`FLT_REGISTRATION`：声明操作回调、卸载回调、实例回调），成功后再 `FltStartFiltering` 开工。注意这两步之间有状态：注册成功但开工失败，必须注销；开工成功后才开始接收 I/O。
 
 <CodeTabs>
   <Tab label="C / 内核驱动">
@@ -162,7 +162,7 @@ DriverEntry
 
 ### 段二：操作回调表 —— 声明关心什么
 
-操作回调表声明"我关心哪些操作、各配什么回调"。`IRP_MJ_CREATE` 配 pre+post（要观察创建结果），`IRP_MJ_SET_INFORMATION` 配 pre+post（删除拦截点）。`FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO` 表示分页 I/O 不经过本过滤器——备份/监控类过滤器通常跳过，避免拖慢页面换入换出。
+操作回调表声明“我关心哪些操作、各配什么回调”。`IRP_MJ_CREATE` 配 pre+post（要观察创建结果），`IRP_MJ_SET_INFORMATION` 配 pre+post（删除拦截点）。`FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO` 表示分页 I/O 不经过本过滤器——备份/监控类过滤器通常跳过，避免拖慢页面换入换出。
 
 <CodeTabs>
   <Tab label="C / 内核驱动">
@@ -199,7 +199,7 @@ g_ops[]（岗位职责表）
 
 ### 段三：pre 拦截 —— 删除保护的落点
 
-pre 回调三步：拿到参数（`FLT_PARAMETERS.SetFileInformation`）→ 判断是不是"删除文件"操作（`FileDispositionInformation`）→ 命中受保护文件则改状态为 `STATUS_ACCESS_DENIED` 并返回 `FLT_PREOP_COMPLETE`。回调数据里改 `IoStatus` 是就地完成的标准姿势——IRP 不会继续下传，文件系统根本看不到这个请求。
+pre 回调三步：拿到参数（`FLT_PARAMETERS.SetFileInformation`）→ 判断是不是“删除文件”操作（`FileDispositionInformation`）→ 命中受保护文件则改状态为 `STATUS_ACCESS_DENIED` 并返回 `FLT_PREOP_COMPLETE`。回调数据里改 `IoStatus` 是就地完成的标准姿势——IRP 不会继续下传，文件系统根本看不到这个请求。
 
 <CodeTabs>
   <Tab label="C / 内核驱动">
@@ -244,7 +244,7 @@ OnSetInfoPre（本层 pre 回调）
   </Tab>
 </CodeTabs>
 
-### 段四：上下文 —— 把"要保护"记在文件上
+### 段四：上下文 —— 把“要保护”记在文件上
 
 第一次打开文件时给流挂上下文（`FltSetStreamContext`），后续操作用 `FltGetStreamContext` 查——不用每次做路径查询。关键纪律是引用计数：`FltGetStreamContext` 返回的引用用完必须 `FltReleaseContext`，否则泄漏；`FltDeleteStreamContext` 主动删除，防止对象释放时再回调。
 
@@ -353,15 +353,15 @@ VOID OnFilterUnload(FLT_FILTER_UNLOAD_FLAGS)
 </Callout>
 
 <Callout type="trap">
-  <strong>现象</strong>：过滤器加载后好像"没干活"，一个操作回调都没被调用。<strong>原因</strong>：注册后忘了 FltStartFiltering，或实例回调拒绝附加——过滤器注册了但没有实例站在任何卷的 I/O 路径上。<strong>修法</strong>：检查 DriverEntry 里 FltStartFiltering 是否被调用且成功；调试时用 Fltmc 命令查看过滤器和实例列表，确认实例已附加到目标卷。
+  <strong>现象</strong>：过滤器加载后好像“没干活”，一个操作回调都没被调用。<strong>原因</strong>：注册后忘了 FltStartFiltering，或实例回调拒绝附加——过滤器注册了但没有实例站在任何卷的 I/O 路径上。<strong>修法</strong>：检查 DriverEntry 里 FltStartFiltering 是否被调用且成功；调试时用 Fltmc 命令查看过滤器和实例列表，确认实例已附加到目标卷。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象</strong>：Filter Verifier 报"上下文泄漏"，卸载时蓝屏。<strong>原因</strong>：FltGetStreamContext 取到的引用没有 FltReleaseContext——引用计数只增不减，内核释放上下文时发现引用未归零。<strong>修法</strong>：给取用的每一条路径配释放；用 Verifier 的上下文跟踪定位泄漏点；统一封装 Get/Release 成对函数，杜绝裸取不还。
+  <strong>现象</strong>：Filter Verifier 报“上下文泄漏”，卸载时蓝屏。<strong>原因</strong>：FltGetStreamContext 取到的引用没有 FltReleaseContext——引用计数只增不减，内核释放上下文时发现引用未归零。<strong>修法</strong>：给取用的每一条路径配释放；用 Verifier 的上下文跟踪定位泄漏点；统一封装 Get/Release 成对函数，杜绝裸取不还。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象</strong>：系统启动时第二个过滤器注册失败，或两个安全软件互相"看不见"对方的拦截结果。<strong>原因</strong>：两个过滤器用了相同的高度——高度必须全局唯一，同高度直接注册失败。<strong>修法</strong>：正式产品向微软申请分配的过滤管理器高度范围；调试期用文档公开的示例高度，并把高度写进 INF 的注册表项，安装时检查冲突。
+  <strong>现象</strong>：系统启动时第二个过滤器注册失败，或两个安全软件互相“看不见”对方的拦截结果。<strong>原因</strong>：两个过滤器用了相同的高度——高度必须全局唯一，同高度直接注册失败。<strong>修法</strong>：正式产品向微软申请分配的过滤管理器高度范围；调试期用文档公开的示例高度，并把高度写进 INF 的注册表项，安装时检查冲突。
 </Callout>
 
 {/* 8. 小结与练习｜spec §八：小结 ≤5 条 × ≤40 字，与学习目标一一呼应；练习 2-3 题含 1 道独立实现题，答案折叠。 */}
@@ -376,19 +376,19 @@ VOID OnFilterUnload(FLT_FILTER_UNLOAD_FLAGS)
 
 <Exercises>
 
-**问题 1：** 在 Demo 中打开"删除保护"后点击"删除文件"，观察层 0 的 Pre 徽章与 Post 徽章。为什么被拦截的请求"没有回程"？如果 pre 想放行但还要在完成后检查结果，应该返回什么？
+**问题 1：** 在 Demo 中打开“删除保护”后点击“删除文件”，观察层 0 的 Pre 徽章与 Post 徽章。为什么被拦截的请求“没有回程”？如果 pre 想放行但还要在完成后检查结果，应该返回什么？
 
 <Answer>
 
-被拦截（FLT_PREOP_COMPLETE）的请求在 pre 里就完成了：IRP 没有继续下传到文件系统，也就不存在"从文件系统返回"这一步，所以 post 永远不会被调用——这正是 Demo 中 Post 徽章显示 ✗ 的原因，同时下面两层的 Pre 也不会执行。如果 pre 要放行并观察结果，应返回 FLT_PREOP_SUCCESS_WITH_CALLBACK：IRP 继续下传，完成后 post 被调用，在 post 里检查 Data->IoStatus.Status 即可。返回 FLT_PREOP_SUCCESS_WITHOUT_CALLBACK 则放行且不要求 post——性能最好，但看不到结果。
+被拦截（FLT_PREOP_COMPLETE）的请求在 pre 里就完成了：IRP 没有继续下传到文件系统，也就不存在“从文件系统返回”这一步，所以 post 永远不会被调用——这正是 Demo 中 Post 徽章显示 ✗ 的原因，同时下面两层的 Pre 也不会执行。如果 pre 要放行并观察结果，应返回 FLT_PREOP_SUCCESS_WITH_CALLBACK：IRP 继续下传，完成后 post 被调用，在 post 里检查 Data->IoStatus.Status 即可。返回 FLT_PREOP_SUCCESS_WITHOUT_CALLBACK 则放行且不要求 post——性能最好，但看不到结果。
 
 </Answer>
 
-**问题 2：** 你的过滤器想按文件名决定是否拦截删除，但 pre 回调里文件名查询开销大。用上下文机制设计一个"首查缓存"方案：说明上下文挂在哪里、什么时候挂、拦截时怎么用。
+**问题 2：** 你的过滤器想按文件名决定是否拦截删除，但 pre 回调里文件名查询开销大。用上下文机制设计一个“首查缓存”方案：说明上下文挂在哪里、什么时候挂、拦截时怎么用。
 
 <Answer>
 
-方案：上下文挂在流对象上（FltSetStreamContext，挂到 FltObjects->FileObject）。首次打开文件（IRP_MJ_CREATE 的 pre）时做一次名字查询，把"是否受保护"的结果写进上下文并挂载；后续删除操作在 pre 回调里 FltGetStreamContext 直接读标记——O(1) 查表，不再做昂贵的名字查询。注意：名字可能随重命名变化，若需精确可配合 IRP_MJ_SET_INFORMATION 的重命名操作更新或删除上下文；上下文用后必须 FltReleaseContext；文件关闭时内核自动清理流上下文，无需手动删。缓存的好处是把"每次操作一次路径查询"降为"每文件一次查询"，吞吐提升明显。
+方案：上下文挂在流对象上（FltSetStreamContext，挂到 FltObjects->FileObject）。首次打开文件（IRP_MJ_CREATE 的 pre）时做一次名字查询，把“是否受保护”的结果写进上下文并挂载；后续删除操作在 pre 回调里 FltGetStreamContext 直接读标记——O(1) 查表，不再做昂贵的名字查询。注意：名字可能随重命名变化，若需精确可配合 IRP_MJ_SET_INFORMATION 的重命名操作更新或删除上下文；上下文用后必须 FltReleaseContext；文件关闭时内核自动清理流上下文，无需手动删。缓存的好处是把“每次操作一次路径查询”降为“每文件一次查询”，吞吐提升明显。
 
 </Answer>
 
@@ -441,6 +441,125 @@ VOID OnFilterUnload(FLT_FILTER_UNLOAD_FLAGS Flags)
 </Exercises>
 
 {/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（6 个：Minifilter/高度/实例/操作回调/上下文/通信端口）；释义零基础大白话。 */}
+
+## 知识点对照
+
+### 10.1 简介
+文件系统小过滤驱动挂载在卷设备栈上，能拦截并处理所有文件 I/O 请求，实现监控与防护，是文件系统监控的标准做法。
+
+### 10.2 装入与卸载
+装入与卸载由过滤管理器统一管理，驱动通过 FltRegisterFilter 完成注册并绑定卷实例。
+
+### 10.3 初始化
+初始化在 DriverEntry 中注册操作回调、设置高度并创建过滤器句柄，失败时返回错误并卸载。
+
+### 10.3.1 操作回调注册
+操作回调注册通过 FltRegisterFilter 传入回调结构，声明本驱动在过滤链上关注的操作集合。
+
+### 10.4.1 INF文件
+INF文件描述驱动服务、文件复制与高度等参数，是安装和注册小过滤驱动的基础配置文件，也用于卸载。
+
+### 10.5 处理I/O操作
+处理I/O操作在操作前回调和操作后回调中检查并修改文件请求，实现过滤、拦截与审计逻辑；回调里不能长时间等待。
+
+### 10.5.2 操作后回调
+操作后回调在 I/O 操作完成后执行，可检查结果状态并修改返回给上层的数据，实现审计功能。
+
+### 10.6 删除保护驱动程序
+删除保护驱动程序在创建与设置信息回调中拦截文件删除请求，并返回拒绝状态来阻止操作完成，这是文件保护工具的常见做法。
+
+### 10.6.1 处理创建前回调
+处理创建前回调检查文件打开方式与访问标志，发现删除或改名意图时返回拒绝状态，从而阻止操作完成。
+
+### 10.10 初始化I/O请求
+初始化I/O请求用 FltAllocateCallbackData 构造新请求并下发到卷栈。
+
+### 10.11 文件备份驱动程序
+文件备份驱动程序在创建后、写前与清理后回调中复制文件内容，实现文件的自动备份和恢复功能，备份到影子目录。
+
+### 10.12 用户模式通信
+用户模式通信通过通信端口建立过滤器与客户程序之间的连接，并交换控制、状态与数据等各类消息。
+
+### 10.12.1 创建通信端口
+创建通信端口用 FltCreateCommunicationPort 注册端口并等待客户连接。
+
+### 10.3.2 高度
+高度决定 Minifilter 在实例栈中的顺序，微软按功能类别划分区间，配置时不可随意选。
+
+### 10.4 安装
+安装小过滤驱动用 INF 文件注册服务、设置高度并复制驱动文件到系统目录，完成驱动的整体部署。
+
+### 10.4.2 安装驱动程序
+安装驱动程序用 fltmc load 或 rundll32 执行 INF 安装，再用 fltmc 查看实例附加状态。
+
+### 10.5.1 操作前回调
+操作前回调在 I/O 到达文件系统之前执行，可拦截、修改参数或直接完成请求并返回状态，这也是本章的核心要点。
+
+### 10.6.2 处理设置信息前回调
+处理设置信息前回调拦截文件信息修改请求，检查是否删除或改名并拒绝，从而保护文件，这也是本章的核心要点。
+
+### 10.6.3 重构
+重构把删除保护逻辑抽到公共函数中，创建与设置信息回调共享同一份判断代码并保持行为一致，这也是本章的核心要点。
+
+### 10.6.4 将驱动程序通用化
+将驱动程序通用化把保护名单做成可配置规则，客户程序可动态下发受保护的文件集合规则，这也是本章的核心要点。
+
+### 10.6.5 测试修改后的驱动程序
+测试修改后的驱动程序用客户程序下发名单，再尝试删除文件验证拦截是否真正生效并查看日志，这也是本章的核心要点。
+
+### 10.7 文件名
+文件名由卷路径、目录、名称与流组成，Minifilter 用 FltGetFileNameInformation 获取并解析。
+
+### 10.7.1 文件名的各个部分
+文件名的各个部分包括卷、目录、文件名与流名等，解析时按需获取不同粒度的路径组合，这也是本章的核心要点。
+
+### 10.7.2 RAII FLT_FILE_NAME_INFORMATION包装器
+RAII FLT_FILE_NAME_INFORMATION包装器在析构时自动释放名称结构资源，避免忘记释放泄漏。
+
+### 10.8 另一个删除保护驱动程序
+另一个删除保护驱动程序改用文件名匹配保护指定文件，演示名称解析的完整应用场景和技巧，这也是本章的核心要点。
+
+### 10.8.1 处理创建前回调和设置信息前回调
+处理创建前回调和设置信息前回调统一用名称比较判断是否为保护目标文件，并拦截非法操作，这也是本章的核心要点。
+
+### 10.8.2 测试驱动程序
+测试驱动程序写入受保护文件并尝试删除，确认返回拒绝状态且文件完整保留，验证通过，这也是本章的核心要点。
+
+### 10.9 上下文
+上下文把每文件、每实例的数据挂在 Minifilter 对象上，回调中快速取用并由框架自动管理释放。
+
+### 10.11.1 创建后回调
+创建后回调在文件创建成功后执行，备份驱动在此把原文件复制到备份目录，保存初始版本，这也是本章的核心要点。
+
+### 10.11.2 写前回调
+写前回调在文件被修改之前执行，备份驱动在此把当前内容保存为新版本的历史滚动副本，这也是本章的核心要点。
+
+### 10.11.3 清理后回调
+清理后回调在文件关闭之后执行，备份驱动在此完成最后一次备份并释放上下文资源收尾，这也是本章的核心要点。
+
+### 10.11.4 测试驱动程序
+测试驱动程序创建、修改并关闭文件，检查备份目录中是否生成对应的版本文件序列完整无误，这也是本章的核心要点。
+
+### 10.11.5 恢复备份
+恢复备份把备份目录中的版本文件复制回原位置，用户可按时间戳选择任意历史版本进行还原，这也是本章的核心要点。
+
+### 10.12.2 用户模式连接
+用户模式连接用 FilterConnectCommunicationPort 连接过滤器端口并获得通信句柄后开始收发。
+
+### 10.12.3 发送和接收消息
+发送和接收消息用 FilterSendMessage 与 FilterGetMessage 配对完成，内核用对应 Flt 接口回复。
+
+### 10.12.4 增强文件备份驱动程序
+增强文件备份驱动程序把备份事件通过通信端口实时通知用户模式客户程序，展示并记录日志，这也是本章的核心要点。
+
+### 10.12.5 用户模式客户程序
+用户模式客户程序连接端口、接收备份通知并展示事件，也可实时下发配置命令调整保护策略，这也是本章的核心要点。
+
+### 10.13 调试
+调试 Minifilter 用 `!fltkd` 扩展命令查看过滤器与实例状态，配合断点定位回调逻辑问题。
+
+### 10.15 总结
+本章总结了 Minifilter 的注册、回调、上下文与通信端口，覆盖了完整的实战链路和调试方法。
 
 ## 术语表
 

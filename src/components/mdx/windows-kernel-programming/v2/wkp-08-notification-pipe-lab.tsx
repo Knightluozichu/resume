@@ -239,7 +239,7 @@ export function Wkp08NotificationPipeLab() {
                 队列满 → 丢弃
               </text>
             )}
-            <text x={64} y={372 - 8} fontSize={10} fill={C.secondary}>
+            <text x={64} y={372 - 8} fontSize={11} fill={C.secondary}>
               丢弃计数：{dropped} 条（客户端可通过协议感知丢失）
             </text>
           </g>
@@ -309,7 +309,7 @@ export function Wkp08NotificationPipeLab() {
             <text x={64} y={540 - 30} fontSize={11} fill={C.primary}>
               卸载：先注销回调（PsRemove*NotifyRoutine）→ 再排空队列 → 最后释放缓冲区
             </text>
-            <text x={64} y={540 - 12} fontSize={10} fill={C.secondary}>
+            <text x={64} y={540 - 12} fontSize={11} fill={C.secondary}>
               注销返回后内核保证不再调用回调，此时才能安全释放资源
             </text>
           </g>

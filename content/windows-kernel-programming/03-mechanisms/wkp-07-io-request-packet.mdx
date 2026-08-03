@@ -26,7 +26,7 @@ import {
   CodeTabs,
   Tab,
 } from "@/components/mdx/mdx-components";
-import { Wkp07IrpJourneyLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-07-irp-journey-lab";
+import { Wkp07IrpJourneyLab } from "@/components/mdx/windows-kernel-programming/v2/wkp-07-io-request-packet";
 
 {/* 知识点清单（动笔前先摊开，每条标 viz 形态；全部知识点均配 viz，术语首现 Term 高亮、章末 Glossary 一一对应）：
   1) IRP = SVG 工作单对象 + 用户请求→IRP 箭头（可点击查看详情）
@@ -49,15 +49,15 @@ import { Wkp07IrpJourneyLab } from "@/components/mdx/windows-kernel-programming/
 
 {/* 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；回答「解决什么问题 / 没有它会怎样」；类比固定用②工厂流水线。 */}
 
-## 为什么请求要在流水线上"一站一站"走
+## 为什么请求要在流水线上“一站一站”走
 
 想象一条流水线：订单从窗口进来，先经过质检员看一眼，再到装配工手里干活，最后到打包员手里装车。每道工序只看到订单上跟自己有关的那一行，干完在自己那栏签个字，订单继续往下传。谁也不能把订单留在自己手里不撒手，否则整条线卡死。
 
-内核的 I/O 请求也是这样的一张"订单"。用户程序要读文件、写设备，系统把请求打成一张标准工单，沿着一条由多个驱动叠成的流水线逐层传递，每层只处理自己那一段，最后签收返回。
+内核的 I/O 请求也是这样的一张“订单”。用户程序要读文件、写设备，系统把请求打成一张标准工单，沿着一条由多个驱动叠成的流水线逐层传递，每层只处理自己那一段，最后签收返回。
 
 这一章拆开这张工单：它长什么样（结构）、流水线怎么排（设备栈）、每层看哪一行（栈位置）、怎么签收（完成）。看懂这张工单，你就看懂了内核一半的日常。
 
-{/* 3. 概念讲解｜spec §三（C 型可把"是什么"压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
+{/* 3. 概念讲解｜spec §三（C 型可把“是什么”压缩至一段，篇幅让给第六节）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；全章新概念 5 个 ≤5。 */}
 
 ## IRP：内核的工作单
 
@@ -67,21 +67,21 @@ IRP 上有两个关键字段：`IoStatus.Status`（结果码，驱动处理完�
 
 ## 设备栈：叠起来的工位
 
-同一个设备可能被多个驱动共同服务：过滤驱动（检查/修改）、功能驱动（核心逻辑）、总线驱动（硬件通信）。它们各自的设备对象按"上层在下层之上"的顺序叠放，组成<Term def="处理同一设备 I/O 的多个设备对象按上下层关系组成的链条，IRP 从栈顶逐层下发">设备栈</Term>（device stack）。
+同一个设备可能被多个驱动共同服务：过滤驱动（检查/修改）、功能驱动（核心逻辑）、总线驱动（硬件通信）。它们各自的设备对象按“上层在下层之上”的顺序叠放，组成<Term def="处理同一设备 I/O 的多个设备对象按上下层关系组成的链条，IRP 从栈顶逐层下发">设备栈</Term>（device stack）。
 
-IRP 从栈顶进入，沿栈逐层向下：每层驱动先看请求，决定自己处理、修改还是原样传给下层。你的驱动通常附加为过滤设备（上层）或功能设备（中层）。设备栈让"多个驱动协作处理一个请求"成为可能——这也是第 10 章文件系统过滤驱动的基础。
+IRP 从栈顶进入，沿栈逐层向下：每层驱动先看请求，决定自己处理、修改还是原样传给下层。你的驱动通常附加为过滤设备（上层）或功能设备（中层）。设备栈让“多个驱动协作处理一个请求”成为可能——这也是第 10 章文件系统过滤驱动的基础。
 
 ## 栈位置：每层只看自己的那行
 
-IRP 携带一串<Term def="IRP 中为设备栈每一层预留的参数区，各层通过它读取自己的请求参数">I/O 栈位置</Term>（IO_STACK_LOCATION），栈里每一层各占一个。驱动用 `IoGetCurrentIrpStackLocation(Irp)` 拿到自己的那格，读取 MajorFunction、IOCTL 码、长度等参数；向下传递时用 `IoSkipCurrentIrpStackLocation` 把"当前"标记让给下一层。
+IRP 携带一串<Term def="IRP 中为设备栈每一层预留的参数区，各层通过它读取自己的请求参数">I/O 栈位置</Term>（IO_STACK_LOCATION），栈里每一层各占一个。驱动用 `IoGetCurrentIrpStackLocation(Irp)` 拿到自己的那格，读取 MajorFunction、IOCTL 码、长度等参数；向下传递时用 `IoSkipCurrentIrpStackLocation` 把“当前”标记让给下一层。
 
-为什么要分格？因为多层驱动看到的是同一个 IRP，但每层的参数不同（过滤层关注是否拦截，功能层关注具体参数）。栈位置就是"各层工位的工作单副本"——各看各的，互不污染。驱动把参数写错格，下层就会读到错数据。
+为什么要分格？因为多层驱动看到的是同一个 IRP，但每层的参数不同（过滤层关注是否拦截，功能层关注具体参数）。栈位置就是“各层工位的工作单副本”——各看各的，互不污染。驱动把参数写错格，下层就会读到错数据。
 
 ## 缓冲 I/O：安全的两趟搬运
 
 访问用户缓冲区有三种传输方法，先在 CTL_CODE 宏第 2 参数里选定。第一种是<Term def="输入输出都经系统缓冲区中转的传输方法：用户数据先复制进 SystemBuffer，完成后输出再复制回去">缓冲 I/O</Term>（METHOD_BUFFERED）：I/O 管理器把用户输入复制到内核 `SystemBuffer`，驱动在 SystemBuffer 上干活，完成后系统把输出复制回用户缓冲区。
 
-特点：用户指针对驱动完全不可见——不存在"用户改地址"的竞态，最安全。代价是两次复制（进+出），大块数据（MB 级）开销明显。适合控制类小请求（IOCTL、小读写）。第 4 章的 IOCTL 例子用的就是它。
+特点：用户指针对驱动完全不可见——不存在“用户改地址”的竞态，最安全。代价是两次复制（进+出），大块数据（MB 级）开销明显。适合控制类小请求（IOCTL、小读写）。第 4 章的 IOCTL 例子用的就是它。
 
 ## 直接 I/O：零复制的直通车
 
@@ -97,7 +97,7 @@ IRP 携带一串<Term def="IRP 中为设备栈每一层预留的参数区，各�
 
 下面的可视化把 IRP 旅程画成一张图：用户请求 → IRP 创建 → 设备栈三层 → 栈位置 → 缓冲区传输 → 完成。点击设备栈的每一层，右侧的栈位置面板跟着变；切换传输方法，观察 BUFFERED 与 DIRECT 的缓冲区处理差异。
 
-> 猜一猜：把传输方法从"缓冲 I/O"切到"直接 I/O"，驱动访问用户缓冲区的路径会有什么不同？为什么大块数据要用直接 I/O？
+> 猜一猜：把传输方法从“缓冲 I/O”切到“直接 I/O”，驱动访问用户缓冲区的路径会有什么不同？为什么大块数据要用直接 I/O？
 
 <Wkp07IrpJourneyLab />
 
@@ -105,7 +105,7 @@ IRP 携带一串<Term def="IRP 中为设备栈每一层预留的参数区，各�
 
 ## 代码对照：Zero 驱动的读与写
 
-Zero 驱动是原书的经典示例：一个"什么都返回零"的演示驱动，把 IRP 处理流程压缩到最小。这一节按原书结构拆解 DriverEntry、读分发、写分发和测试应用，覆盖驱动侧全部关键代码。
+Zero 驱动是原书的经典示例：一个“什么都返回零”的演示驱动，把 IRP 处理流程压缩到最小。这一节按原书结构拆解 DriverEntry、读分发、写分发和测试应用，覆盖驱动侧全部关键代码。
 
 ### 段一：DriverEntry —— 注册读写分发
 
@@ -315,7 +315,7 @@ NTSTATUS ReadDirect(PDEVICE_OBJECT, PIRP Irp)
 </CodeTabs>
 
 <Callout type="warn">
-  API 差异点：BUFFERED 的 <code>SystemBuffer</code> 由系统分配并复制，驱动完成后系统自动把输出拷回用户缓冲区；DIRECT 的 <code>MdlAddress</code> 描述用户页面，<code>MmGetSystemAddressForMdlSafe</code> 的返回必须判空（映射可能失败），且锁定的页面必须在 IRQL <= DISPATCH_LEVEL 访问。IOCTL 的传输方法在 CTL_CODE 里编码（第 4 章），读写的传输方法由设备对象 Flags 决定。
+  API 差异点：BUFFERED 的 <code>SystemBuffer</code> 由系统分配并复制，驱动完成后系统自动把输出拷回用户缓冲区；DIRECT 的 <code>MdlAddress</code> 描述用户页面，<code>MmGetSystemAddressForMdlSafe</code> 的返回必须判空（映射可能失败），且锁定的页面必须在 IRQL 不高于 DISPATCH_LEVEL 时访问。IOCTL 的传输方法在 CTL_CODE 里编码（第 4 章），读写的传输方法由设备对象 Flags 决定。
 </Callout>
 
 {/* 7. 常见误区｜spec §七（C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。 */}
@@ -355,7 +355,7 @@ NTSTATUS ReadDirect(PDEVICE_OBJECT, PIRP Irp)
 
 <Answer>
 
-IRP 创建时，I/O 管理器按设备栈的层数为它分配对应数量的 I/O 栈位置，每层各占一格。IoGetCurrentIrpStackLocation 返回的是"当前标记"指向的那格——驱动向下传递时用 IoSkipCurrentIrpStackLocation 把标记让给下一层。所以每层看到的是自己的参数格：过滤层看到的是"是否拦截"的视角，功能层看到的是具体的读写参数，总线层看到的是硬件操作参数。各层各看各的，互不干扰，这是多层驱动协作的基础。
+IRP 创建时，I/O 管理器按设备栈的层数为它分配对应数量的 I/O 栈位置，每层各占一格。IoGetCurrentIrpStackLocation 返回的是“当前标记”指向的那格——驱动向下传递时用 IoSkipCurrentIrpStackLocation 把标记让给下一层。所以每层看到的是自己的参数格：过滤层看到的是“是否拦截”的视角，功能层看到的是具体的读写参数，总线层看到的是硬件操作参数。各层各看各的，互不干扰，这是多层驱动协作的基础。
 
 </Answer>
 
@@ -421,6 +421,32 @@ NTSTATUS MyWrite(PDEVICE_OBJECT, PIRP Irp)
 
 {/* 10. 名词解释｜spec §十：与正文 <Term> 高亮一一对应（6 个：IRP/设备栈/栈位置/缓冲I/O/直接I/O/MDL）；释义零基础大白话。 */}
 
+## 知识点对照
+
+### 7.1 IRP简介
+IRP简介：I/O 请求包是内核 I/O 请求的基本单位对象，封装请求并沿设备栈逐层传递。
+
+### 7.2 设备节点
+设备节点是设备栈在 PnP 树中的位置表示，由总线驱动枚举并逐层附加功能驱动程序组成，这也是本章的核心要点。
+
+### 7.3 IRP和I/O栈位置
+IRP和I/O栈位置配合使用：每个驱动用自己的栈位置存放各自的参数信息与完成例程，这也是本章的核心要点。
+
+### 7.5.3 IRP_MJ_DEVICE_CONTROL的用户缓冲区
+IRP_MJ_DEVICE_CONTROL的用户缓冲区按传输方式可分为缓冲、直接与两者混合的三种模式。
+
+### 7.6 汇总：Zero驱动程序
+汇总：Zero驱动程序示例演示读、写与设备控制的完整 IRP 处理流程以及各例程的具体职责。
+
+### 7.6.1 使用预编译头
+使用预编译头加速编译过程，把稳定的系统头文件放入预编译单元，避免重复解析浪费编译时间，这也是本章的核心要点。
+
+### 7.6.2 DriverEntry例程
+DriverEntry例程创建设备对象与符号链接，注册各分发例程并初始化全局状态和卸载例程。
+
+### 7.7 总结
+本章总结了 IRP 结构、分发例程与用户缓冲区访问的核心知识与 Zero 驱动的实战经验。
+
 ## 术语表
 
 <Glossary>
@@ -440,7 +466,7 @@ NTSTATUS MyWrite(PDEVICE_OBJECT, PIRP Irp)
     METHOD_IN_DIRECT / METHOD_OUT_DIRECT，用 MDL 把用户缓冲区锁定并映射到内核、驱动直接读写的传输方法。零复制，适合大块数据。页面已锁定不会换出，但内容仍可能被用户并发修改。
   </GlossaryItem>
   <GlossaryItem term="MDL">
-    Memory Descriptor List，内存描述符表。描述一段用户内存的物理页面布局，驱动通过它把用户缓冲区映射到内核空间直接访问。相当于给用户内存办了一张"内核临时通行证"。
+    Memory Descriptor List，内存描述符表。描述一段用户内存的物理页面布局，驱动通过它把用户缓冲区映射到内核空间直接访问。相当于给用户内存办了一张“内核临时通行证”。
   </GlossaryItem>
 </Glossary>
 

@@ -222,7 +222,7 @@ export function Wkp01ProcessInternalsLab() {
                   x={266 + i * 24}
                   y={194}
                   textAnchor="middle"
-                  fontSize={10}
+                  fontSize={11}
                   fill={C.secondary}
                 >
                   {i}
@@ -232,7 +232,7 @@ export function Wkp01ProcessInternalsLab() {
                     x={266 + i * 24}
                     y={208}
                     textAnchor="middle"
-                    fontSize={10}
+                    fontSize={11}
                     fill={C.accent}
                   >
                     {page.phys}

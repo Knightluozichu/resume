@@ -96,3 +96,5 @@ export function Wkp01WindowsInternalsOverviewExecutableProbeLab() {
 export function Wkp01WindowsInternalsOverviewSafetyGateLab() {
   return <WindowsKernelEvidenceLab model={model} view="safety-gate" />;
 }
+
+export { Wkp01ProcessInternalsLab } from "./wkp-01-process-internals-lab";
