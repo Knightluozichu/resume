@@ -285,27 +285,27 @@
 
 ### 2.4 rabbitmq-practice（17 章 · 待修 17 章 · 17 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；⛔ 部署受阻：ledger failed（模板复制、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | rabbitmq-practice/00-learning-map/rmq-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | rabbitmq-practice/01-pulling-rabbit-out-of-hat/rmq-01-pulling-rabbit-out-of-hat.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | rabbitmq-practice/02-understanding-messaging/rmq-02-understanding-messaging.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | rabbitmq-practice/03-running-administering-rabbit/rmq-03-running-administering-rabbit.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | rabbitmq-practice/04-coding-patterns/rmq-04-coding-patterns.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | rabbitmq-practice/05-clustering-failure/rmq-05-clustering-failure.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | rabbitmq-practice/06-surviving-failure/rmq-06-surviving-failure.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | rabbitmq-practice/07-warrens-shovels/rmq-07-warrens-shovels.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | rabbitmq-practice/08-web-administration/rmq-08-web-administration.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | rabbitmq-practice/09-rest-api/rmq-09-rest-api.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | rabbitmq-practice/10-monitoring/rmq-10-monitoring.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | rabbitmq-practice/11-performance-security/rmq-11-performance-security.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | rabbitmq-practice/12-extending-rabbitmq/rmq-12-extending-rabbitmq.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | rabbitmq-practice/13-appendix-a-java-dotnet/rmq-appendix-a-java-dotnet.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | rabbitmq-practice/14-appendix-b-online-resources/rmq-appendix-b-online-resources.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | rabbitmq-practice/15-appendix-c-windows-installation/rmq-appendix-c-windows-installation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | rabbitmq-practice/16-final-review/rmq-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | rabbitmq-practice/00-learning-map/rmq-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | rabbitmq-practice/01-pulling-rabbit-out-of-hat/rmq-01-pulling-rabbit-out-of-hat.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | rabbitmq-practice/02-understanding-messaging/rmq-02-understanding-messaging.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | rabbitmq-practice/03-running-administering-rabbit/rmq-03-running-administering-rabbit.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | rabbitmq-practice/04-coding-patterns/rmq-04-coding-patterns.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | rabbitmq-practice/05-clustering-failure/rmq-05-clustering-failure.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | rabbitmq-practice/06-surviving-failure/rmq-06-surviving-failure.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | rabbitmq-practice/07-warrens-shovels/rmq-07-warrens-shovels.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | rabbitmq-practice/08-web-administration/rmq-08-web-administration.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | rabbitmq-practice/09-rest-api/rmq-09-rest-api.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | rabbitmq-practice/10-monitoring/rmq-10-monitoring.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | rabbitmq-practice/11-performance-security/rmq-11-performance-security.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | rabbitmq-practice/12-extending-rabbitmq/rmq-12-extending-rabbitmq.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | rabbitmq-practice/13-appendix-a-java-dotnet/rmq-appendix-a-java-dotnet.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | rabbitmq-practice/14-appendix-b-online-resources/rmq-appendix-b-online-resources.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | rabbitmq-practice/15-appendix-c-windows-installation/rmq-appendix-c-windows-installation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | rabbitmq-practice/16-final-review/rmq-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
