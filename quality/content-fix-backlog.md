@@ -671,21 +671,21 @@
 
 ### 4.3 deep-learning-from-scratch（11 章 · 待修 11 章 · 11 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-learning-from-scratch/00-guide/dls-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-learning-from-scratch/01-foundations/dls-01-python-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-learning-from-scratch/01-foundations/dls-02-perceptron.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-learning-from-scratch/02-forward-learning/dls-03-neural-network.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-learning-from-scratch/02-forward-learning/dls-04-neural-network-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-learning-from-scratch/03-backpropagation/dls-05-backpropagation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-learning-from-scratch/04-training/dls-06-learning-techniques.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-learning-from-scratch/05-cnn/dls-07-cnn.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-learning-from-scratch/06-deep-learning/dls-08-deep-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-learning-from-scratch/07-appendix/dls-appendix-softmax-loss.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-learning-from-scratch/08-review/dls-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-learning-from-scratch/00-guide/dls-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-learning-from-scratch/01-foundations/dls-01-python-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-learning-from-scratch/01-foundations/dls-02-perceptron.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-learning-from-scratch/02-forward-learning/dls-03-neural-network.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-learning-from-scratch/02-forward-learning/dls-04-neural-network-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-learning-from-scratch/03-backpropagation/dls-05-backpropagation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-learning-from-scratch/04-training/dls-06-learning-techniques.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-learning-from-scratch/05-cnn/dls-07-cnn.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-learning-from-scratch/06-deep-learning/dls-08-deep-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-learning-from-scratch/07-appendix/dls-appendix-softmax-loss.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-learning-from-scratch/08-review/dls-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

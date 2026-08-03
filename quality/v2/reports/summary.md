@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T12:21:28.041Z；旧版分数不迁移。
+> 2026-08-03T12:28:58.001Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1320
-- published：156
+- passed：1310
+- published：166
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -203,7 +203,7 @@
 | 190 | go-in-action | 11 | 0 | 0 | 11 | 0 |
 | 191 | http-definitive-guide | 38 | 0 | 0 | 0 | 0 |
 | 192 | illustrated-ai | 16 | 0 | 0 | 16 | 0 |
-| 193 | illustrated-dl | 10 | 0 | 0 | 10 | 0 |
+| 193 | illustrated-dl | 10 | 0 | 0 | 0 | 0 |
 | 194 | illustrated-http | 13 | 0 | 0 | 0 | 0 |
 | 195 | illustrated-ml | 22 | 0 | 0 | 22 | 0 |
 | 196 | illustrated-server-network | 8 | 0 | 0 | 0 | 0 |
