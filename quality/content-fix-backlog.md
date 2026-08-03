@@ -338,29 +338,29 @@
 
 ### 2.6 wireshark-packet-analysis（19 章 · 待修 19 章 · 19 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | wireshark-packet-analysis/00-ppa3-official-learning-map/ppa3-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | wireshark-packet-analysis/01-ppa3-introduction/ppa3-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | wireshark-packet-analysis/02-ppa3-01-packet-analysis-network-basics/ppa3-01-packet-analysis-network-basics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | wireshark-packet-analysis/03-ppa3-02-tapping-into-wire/ppa3-02-tapping-into-wire.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | wireshark-packet-analysis/04-ppa3-03-introduction-wireshark/ppa3-03-introduction-wireshark.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | wireshark-packet-analysis/05-ppa3-04-working-captured-packets/ppa3-04-working-captured-packets.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | wireshark-packet-analysis/06-ppa3-05-advanced-wireshark-features/ppa3-05-advanced-wireshark-features.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | wireshark-packet-analysis/07-ppa3-06-command-line-analysis/ppa3-06-command-line-analysis.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | wireshark-packet-analysis/08-ppa3-07-network-layer-protocols/ppa3-07-network-layer-protocols.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | wireshark-packet-analysis/09-ppa3-08-transport-layer-protocols/ppa3-08-transport-layer-protocols.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | wireshark-packet-analysis/10-ppa3-09-upper-layer-protocols/ppa3-09-upper-layer-protocols.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | wireshark-packet-analysis/11-ppa3-10-real-world-scenarios/ppa3-10-real-world-scenarios.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | wireshark-packet-analysis/12-ppa3-11-fighting-slow-network/ppa3-11-fighting-slow-network.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | wireshark-packet-analysis/13-ppa3-12-security-analysis/ppa3-12-security-analysis.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | wireshark-packet-analysis/14-ppa3-13-wireless-analysis/ppa3-13-wireless-analysis.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | wireshark-packet-analysis/15-ppa3-appendix-a/ppa3-appendix-a.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | wireshark-packet-analysis/16-ppa3-appendix-b/ppa3-appendix-b.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | wireshark-packet-analysis/17-ppa3-index/ppa3-index.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | wireshark-packet-analysis/18-ppa3-official-final-review/ppa3-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | wireshark-packet-analysis/00-ppa3-official-learning-map/ppa3-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | wireshark-packet-analysis/01-ppa3-introduction/ppa3-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | wireshark-packet-analysis/02-ppa3-01-packet-analysis-network-basics/ppa3-01-packet-analysis-network-basics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | wireshark-packet-analysis/03-ppa3-02-tapping-into-wire/ppa3-02-tapping-into-wire.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | wireshark-packet-analysis/04-ppa3-03-introduction-wireshark/ppa3-03-introduction-wireshark.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | wireshark-packet-analysis/05-ppa3-04-working-captured-packets/ppa3-04-working-captured-packets.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | wireshark-packet-analysis/06-ppa3-05-advanced-wireshark-features/ppa3-05-advanced-wireshark-features.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | wireshark-packet-analysis/07-ppa3-06-command-line-analysis/ppa3-06-command-line-analysis.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | wireshark-packet-analysis/08-ppa3-07-network-layer-protocols/ppa3-07-network-layer-protocols.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | wireshark-packet-analysis/09-ppa3-08-transport-layer-protocols/ppa3-08-transport-layer-protocols.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | wireshark-packet-analysis/10-ppa3-09-upper-layer-protocols/ppa3-09-upper-layer-protocols.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | wireshark-packet-analysis/11-ppa3-10-real-world-scenarios/ppa3-10-real-world-scenarios.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | wireshark-packet-analysis/12-ppa3-11-fighting-slow-network/ppa3-11-fighting-slow-network.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | wireshark-packet-analysis/13-ppa3-12-security-analysis/ppa3-12-security-analysis.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | wireshark-packet-analysis/14-ppa3-13-wireless-analysis/ppa3-13-wireless-analysis.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | wireshark-packet-analysis/15-ppa3-appendix-a/ppa3-appendix-a.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | wireshark-packet-analysis/16-ppa3-appendix-b/ppa3-appendix-b.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | wireshark-packet-analysis/17-ppa3-index/ppa3-index.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | wireshark-packet-analysis/18-ppa3-official-final-review/ppa3-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
