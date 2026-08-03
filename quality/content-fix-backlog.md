@@ -590,21 +590,21 @@
 
 ### 3.6 soa-vehicle-architecture（11 章 · 待修 11 章 · 66 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ 深度修复完成（2026-08-03，11 章全补 CodeTabs/误区/小结/练习/独立题/Attribution，页面渲染验证 200）；⛔ 部署受阻：ledger failed（正文模板复制、块计数、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | soa-vehicle-architecture/00-map/aes23-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | soa-vehicle-architecture/01-foreword/aes23-foreword.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | soa-vehicle-architecture/02-preface/aes23-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | soa-vehicle-architecture/03-01-architecture/aes23-01-architecture.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | soa-vehicle-architecture/04-02-networks/aes23-02-networks.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | soa-vehicle-architecture/05-03-software/aes23-03-software.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | soa-vehicle-architecture/06-04-soa/aes23-04-soa.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | soa-vehicle-architecture/07-05-development-ota/aes23-05-development-ota.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | soa-vehicle-architecture/08-afterword/aes23-afterword.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | soa-vehicle-architecture/09-references/aes23-references.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | soa-vehicle-architecture/10-review/aes23-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | soa-vehicle-architecture/00-map/aes23-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 2 | soa-vehicle-architecture/01-foreword/aes23-foreword.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 3 | soa-vehicle-architecture/02-preface/aes23-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 4 | soa-vehicle-architecture/03-01-architecture/aes23-01-architecture.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 5 | soa-vehicle-architecture/04-02-networks/aes23-02-networks.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 6 | soa-vehicle-architecture/05-03-software/aes23-03-software.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 7 | soa-vehicle-architecture/06-04-soa/aes23-04-soa.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 8 | soa-vehicle-architecture/07-05-development-ota/aes23-05-development-ota.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 9 | soa-vehicle-architecture/08-afterword/aes23-afterword.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 10 | soa-vehicle-architecture/09-references/aes23-references.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 11 | soa-vehicle-architecture/10-review/aes23-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
