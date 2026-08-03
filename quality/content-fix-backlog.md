@@ -79,32 +79,32 @@
 
 ### 1.3 mysql-essentials（22 章 · 待修 22 章 · 22 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，22 章补小结 + Answer 嵌套修复）；⛔ 部署受阻：ledger failed（模板复制、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | mysql-essentials/00-learning-map/mse-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | mysql-essentials/01-database-overview/mse-ch01-database-overview.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | mysql-essentials/02-install-configuration/mse-ch02-install-configuration.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | mysql-essentials/03-database-operations/mse-ch03-database-operations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | mysql-essentials/04-engines-data-types/mse-ch04-engines-data-types.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | mysql-essentials/05-table-operations/mse-ch05-table-operations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | mysql-essentials/06-indexes/mse-ch06-indexes.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | mysql-essentials/07-views/mse-ch07-views.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | mysql-essentials/08-triggers/mse-ch08-triggers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | mysql-essentials/09-data-manipulation/mse-ch09-data-manipulation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | mysql-essentials/10-single-table-query/mse-ch10-single-table-query.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | mysql-essentials/11-multi-table-query/mse-ch11-multi-table-query.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | mysql-essentials/12-operators/mse-ch12-operators.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | mysql-essentials/13-functions/mse-ch13-functions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | mysql-essentials/14-routines/mse-ch14-routines.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | mysql-essentials/15-transactions/mse-ch15-transactions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | mysql-essentials/16-security/mse-ch16-security.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | mysql-essentials/17-logs/mse-ch17-logs.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | mysql-essentials/18-maintenance-performance/mse-ch18-maintenance-performance.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | mysql-essentials/19-java-bookstore/mse-ch19-java-bookstore.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | mysql-essentials/20-php-exam-system/mse-ch20-php-exam-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | mysql-essentials/99-final-review/mse-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | mysql-essentials/00-learning-map/mse-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | mysql-essentials/01-database-overview/mse-ch01-database-overview.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | mysql-essentials/02-install-configuration/mse-ch02-install-configuration.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | mysql-essentials/03-database-operations/mse-ch03-database-operations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | mysql-essentials/04-engines-data-types/mse-ch04-engines-data-types.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | mysql-essentials/05-table-operations/mse-ch05-table-operations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | mysql-essentials/06-indexes/mse-ch06-indexes.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | mysql-essentials/07-views/mse-ch07-views.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | mysql-essentials/08-triggers/mse-ch08-triggers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | mysql-essentials/09-data-manipulation/mse-ch09-data-manipulation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | mysql-essentials/10-single-table-query/mse-ch10-single-table-query.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | mysql-essentials/11-multi-table-query/mse-ch11-multi-table-query.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | mysql-essentials/12-operators/mse-ch12-operators.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | mysql-essentials/13-functions/mse-ch13-functions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | mysql-essentials/14-routines/mse-ch14-routines.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | mysql-essentials/15-transactions/mse-ch15-transactions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | mysql-essentials/16-security/mse-ch16-security.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | mysql-essentials/17-logs/mse-ch17-logs.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | mysql-essentials/18-maintenance-performance/mse-ch18-maintenance-performance.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | mysql-essentials/19-java-bookstore/mse-ch19-java-bookstore.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | mysql-essentials/20-php-exam-system/mse-ch20-php-exam-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | mysql-essentials/99-final-review/mse-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
