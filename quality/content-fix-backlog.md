@@ -227,7 +227,7 @@
 
 ### 2.1 illustrated-server-network（8 章 · 待修 8 章 · 8 项）
 
-**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，8 章补小结）；已上架书，走部署流程
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，8 章补小结）；🚀 已部署上线（2026-08-03 release-20260803T080827Z，8 章 published）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
@@ -240,7 +240,7 @@
 | 7 | illustrated-server-network/06-05-management-design/isn-05-management-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 | 8 | illustrated-server-network/07-official-final-review/isn-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
-**部署记录**：—
+**部署记录**：https://blog.luozichu.ink 已上线（2026-08-03）
 
 ### 2.2 computer-networks-top-down（10 章 · 待修 10 章 · 10 项）
 
