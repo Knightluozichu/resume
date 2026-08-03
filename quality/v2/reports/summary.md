@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T10:26:49.313Z；旧版分数不迁移。
+> 2026-08-03T11:29:51.486Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1353
-- published：123
+- passed：1340
+- published：136
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -159,7 +159,7 @@
 | 146 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
 | 147 | auto-why-car-runs | 14 | 0 | 0 | 14 | 0 |
 | 148 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
-| 149 | autosar-vehicle-controller | 13 | 0 | 0 | 13 | 0 |
+| 149 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
 | 150 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
 | 151 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
 | 152 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |

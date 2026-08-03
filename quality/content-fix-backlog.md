@@ -567,24 +567,24 @@
 
 ### 3.5 auto-why-car-runs（14 章 · 待修 14 章 · 14 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | auto-why-car-runs/00-learning-map/learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | auto-why-car-runs/01-whole-car/whole-car-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | auto-why-car-runs/02-body/body-structure.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | auto-why-car-runs/03-engine/engine-principles.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | auto-why-car-runs/04-transmission/transmission-principles.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | auto-why-car-runs/05-drivetrain/drivetrain-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | auto-why-car-runs/06-suspension/suspension-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | auto-why-car-runs/07-steering/steering-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | auto-why-car-runs/08-brake/brake-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | auto-why-car-runs/09-electronics/electronics-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | auto-why-car-runs/10-tires/tire-wheel-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | auto-why-car-runs/11-electric-drive/electric-drive-system.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | auto-why-car-runs/12-design-manufacturing/design-manufacturing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | auto-why-car-runs/13-final-review/final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | auto-why-car-runs/00-learning-map/learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | auto-why-car-runs/01-whole-car/whole-car-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | auto-why-car-runs/02-body/body-structure.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | auto-why-car-runs/03-engine/engine-principles.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | auto-why-car-runs/04-transmission/transmission-principles.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | auto-why-car-runs/05-drivetrain/drivetrain-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | auto-why-car-runs/06-suspension/suspension-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | auto-why-car-runs/07-steering/steering-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | auto-why-car-runs/08-brake/brake-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | auto-why-car-runs/09-electronics/electronics-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | auto-why-car-runs/10-tires/tire-wheel-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | auto-why-car-runs/11-electric-drive/electric-drive-system.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | auto-why-car-runs/12-design-manufacturing/design-manufacturing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | auto-why-car-runs/13-final-review/final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
