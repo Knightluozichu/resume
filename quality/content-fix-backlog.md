@@ -545,23 +545,23 @@
 
 ### 3.4 vehicle-software-intelligence（13 章 · 待修 13 章 · 13 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §9 Attribution 修复完成（2026-08-03）；⛔ 部署受阻：ledger failed（official-course-template、块计数、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | vehicle-software-intelligence/00-intro/learning-map.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 2 | vehicle-software-intelligence/01-cockpit/ivi-platform.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 3 | vehicle-software-intelligence/01-cockpit/smart-cockpit.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 4 | vehicle-software-intelligence/02-middleware/middleware.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 5 | vehicle-software-intelligence/02-middleware/ota-updates.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 6 | vehicle-software-intelligence/03-perception/perception-algorithms.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 7 | vehicle-software-intelligence/03-perception/perception-sensors.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 8 | vehicle-software-intelligence/03-perception/sensor-fusion.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 9 | vehicle-software-intelligence/04-planning-control/cybersecurity.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 10 | vehicle-software-intelligence/04-planning-control/final-review.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 11 | vehicle-software-intelligence/04-planning-control/functional-safety.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 12 | vehicle-software-intelligence/04-planning-control/path-planning.mdx | §9缺Attribution | ⬜ 待修复 | — |
-| 13 | vehicle-software-intelligence/04-planning-control/vehicle-control.mdx | §9缺Attribution | ⬜ 待修复 | — |
+| 1 | vehicle-software-intelligence/00-intro/learning-map.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 2 | vehicle-software-intelligence/01-cockpit/ivi-platform.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 3 | vehicle-software-intelligence/01-cockpit/smart-cockpit.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 4 | vehicle-software-intelligence/02-middleware/middleware.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 5 | vehicle-software-intelligence/02-middleware/ota-updates.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 6 | vehicle-software-intelligence/03-perception/perception-algorithms.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 7 | vehicle-software-intelligence/03-perception/perception-sensors.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 8 | vehicle-software-intelligence/03-perception/sensor-fusion.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 9 | vehicle-software-intelligence/04-planning-control/cybersecurity.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 10 | vehicle-software-intelligence/04-planning-control/final-review.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 11 | vehicle-software-intelligence/04-planning-control/functional-safety.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 12 | vehicle-software-intelligence/04-planning-control/path-planning.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
+| 13 | vehicle-software-intelligence/04-planning-control/vehicle-control.mdx | §9缺Attribution | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
