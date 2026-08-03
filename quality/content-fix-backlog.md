@@ -877,32 +877,32 @@
 
 ### 4.11 illustrated-ml（22 章 · 待修 22 章 · 22 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | illustrated-ml/00-guide/iml-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | illustrated-ml/01-introduction/iml-01-what-is-machine-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | illustrated-ml/01-introduction/iml-02-learning-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | illustrated-ml/02-supervised-regression/iml-03-least-squares-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | illustrated-ml/02-supervised-regression/iml-04-constrained-least-squares.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | illustrated-ml/02-supervised-regression/iml-05-sparse-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | illustrated-ml/02-supervised-regression/iml-06-robust-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | illustrated-ml/03-supervised-classification/iml-07-least-squares-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | illustrated-ml/03-supervised-classification/iml-08-support-vector-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | illustrated-ml/03-supervised-classification/iml-09-ensemble-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | illustrated-ml/03-supervised-classification/iml-10-probabilistic-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | illustrated-ml/03-supervised-classification/iml-11-sequence-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | illustrated-ml/04-unsupervised-learning/iml-12-anomaly-detection.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | illustrated-ml/04-unsupervised-learning/iml-13-unsupervised-dimensionality-reduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | illustrated-ml/04-unsupervised-learning/iml-14-clustering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | illustrated-ml/05-emerging-algorithms/iml-15-online-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | illustrated-ml/05-emerging-algorithms/iml-16-semi-supervised-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | illustrated-ml/05-emerging-algorithms/iml-17-supervised-dimensionality-reduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | illustrated-ml/05-emerging-algorithms/iml-18-transfer-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | illustrated-ml/05-emerging-algorithms/iml-19-multi-task-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | illustrated-ml/06-conclusion/iml-20-summary-outlook.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | illustrated-ml/07-review/iml-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | illustrated-ml/00-guide/iml-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | illustrated-ml/01-introduction/iml-01-what-is-machine-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | illustrated-ml/01-introduction/iml-02-learning-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | illustrated-ml/02-supervised-regression/iml-03-least-squares-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | illustrated-ml/02-supervised-regression/iml-04-constrained-least-squares.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | illustrated-ml/02-supervised-regression/iml-05-sparse-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | illustrated-ml/02-supervised-regression/iml-06-robust-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | illustrated-ml/03-supervised-classification/iml-07-least-squares-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | illustrated-ml/03-supervised-classification/iml-08-support-vector-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | illustrated-ml/03-supervised-classification/iml-09-ensemble-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | illustrated-ml/03-supervised-classification/iml-10-probabilistic-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | illustrated-ml/03-supervised-classification/iml-11-sequence-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | illustrated-ml/04-unsupervised-learning/iml-12-anomaly-detection.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | illustrated-ml/04-unsupervised-learning/iml-13-unsupervised-dimensionality-reduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | illustrated-ml/04-unsupervised-learning/iml-14-clustering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | illustrated-ml/05-emerging-algorithms/iml-15-online-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | illustrated-ml/05-emerging-algorithms/iml-16-semi-supervised-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | illustrated-ml/05-emerging-algorithms/iml-17-supervised-dimensionality-reduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | illustrated-ml/05-emerging-algorithms/iml-18-transfer-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | illustrated-ml/05-emerging-algorithms/iml-19-multi-task-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | illustrated-ml/06-conclusion/iml-20-summary-outlook.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | illustrated-ml/07-review/iml-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

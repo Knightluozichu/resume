@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T13:29:04.967Z；旧版分数不迁移。
+> 2026-08-03T13:38:09.502Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1198
-- published：278
+- passed：1176
+- published：300
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -188,7 +188,7 @@
 | 175 | deep-learning-gen-models | 16 | 0 | 0 | 0 | 0 |
 | 176 | deep-learning-nlp-advanced | 13 | 0 | 0 | 0 | 0 |
 | 177 | deep-learning-rl-from-scratch | 16 | 0 | 0 | 0 | 0 |
-| 178 | deep-learning-textbook | 22 | 0 | 0 | 22 | 0 |
+| 178 | deep-learning-textbook | 22 | 0 | 0 | 0 | 0 |
 | 179 | deep-opengl | 10 | 0 | 0 | 10 | 0 |
 | 180 | deep-reinforcement-learning | 23 | 0 | 0 | 23 | 0 |
 | 181 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
