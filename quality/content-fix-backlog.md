@@ -713,26 +713,26 @@
 
 ### 4.5 deep-learning-gen-models（16 章 · 待修 16 章 · 16 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-learning-gen-models/00-learning-map/dlg-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-learning-gen-models/01-normal-distribution/dlg-01-normal-distribution.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-learning-gen-models/02-maximum-likelihood/dlg-02-maximum-likelihood.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-learning-gen-models/03-multivariate-normal/dlg-03-multivariate-normal.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-learning-gen-models/04-gaussian-mixture/dlg-04-gaussian-mixture.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-learning-gen-models/05-em-algorithm/dlg-05-em-algorithm.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-learning-gen-models/06-neural-network/dlg-06-neural-network.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-learning-gen-models/07-vae/dlg-07-vae.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-learning-gen-models/08-diffusion-theory/dlg-08-diffusion-theory.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-learning-gen-models/09-diffusion-implementation/dlg-09-diffusion-implementation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-learning-gen-models/10-diffusion-applications/dlg-10-diffusion-applications.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-learning-gen-models/11-appendices/dlg-appendix-a-multivariate-mle.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-learning-gen-models/11-appendices/dlg-appendix-b-jensen.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-learning-gen-models/11-appendices/dlg-appendix-c-hierarchical-vae.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-learning-gen-models/11-appendices/dlg-appendix-d-notation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-learning-gen-models/12-final-review/dlg-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-learning-gen-models/00-learning-map/dlg-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-learning-gen-models/01-normal-distribution/dlg-01-normal-distribution.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-learning-gen-models/02-maximum-likelihood/dlg-02-maximum-likelihood.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-learning-gen-models/03-multivariate-normal/dlg-03-multivariate-normal.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-learning-gen-models/04-gaussian-mixture/dlg-04-gaussian-mixture.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-learning-gen-models/05-em-algorithm/dlg-05-em-algorithm.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-learning-gen-models/06-neural-network/dlg-06-neural-network.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-learning-gen-models/07-vae/dlg-07-vae.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-learning-gen-models/08-diffusion-theory/dlg-08-diffusion-theory.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-learning-gen-models/09-diffusion-implementation/dlg-09-diffusion-implementation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-learning-gen-models/10-diffusion-applications/dlg-10-diffusion-applications.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | deep-learning-gen-models/11-appendices/dlg-appendix-a-multivariate-mle.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | deep-learning-gen-models/11-appendices/dlg-appendix-b-jensen.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | deep-learning-gen-models/11-appendices/dlg-appendix-c-hierarchical-vae.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | deep-learning-gen-models/11-appendices/dlg-appendix-d-notation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | deep-learning-gen-models/12-final-review/dlg-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
