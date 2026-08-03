@@ -366,32 +366,32 @@
 
 ### 2.7 kong-gateway（22 章 · 待修 22 章 · 22 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；⛔ 部署受阻：ledger failed（模板复制、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | kong-gateway/00-learning-map/kga-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | kong-gateway/01-01-overview/kga-01-overview.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | kong-gateway/02-02-nginx/kga-02-nginx.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | kong-gateway/03-03-lua/kga-03-lua.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | kong-gateway/04-04-openresty/kga-04-openresty.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | kong-gateway/05-05-config-deployment/kga-05-config-deployment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | kong-gateway/06-06-cli/kga-06-cli.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | kong-gateway/07-07-proxy-auth/kga-07-proxy-auth.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | kong-gateway/08-08-load-balancing-health/kga-08-load-balancing-health.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | kong-gateway/09-09-plugins/kga-09-plugins.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | kong-gateway/10-10-logging/kga-10-logging.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | kong-gateway/11-11-operations/kga-11-operations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | kong-gateway/12-12-security-ha/kga-12-security-ha.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | kong-gateway/13-13-microservices-devops/kga-13-microservices-devops.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | kong-gateway/14-14-kubernetes/kga-14-kubernetes.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | kong-gateway/15-15-kuma/kga-15-kuma.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | kong-gateway/16-16-serverless/kga-16-serverless.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | kong-gateway/17-appendix-a-docker/kga-appendix-a-docker.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | kong-gateway/18-appendix-b-konga/kga-appendix-b-konga.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | kong-gateway/19-appendix-c-database/kga-appendix-c-database.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | kong-gateway/20-appendix-d-admin-api/kga-appendix-d-admin-api.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | kong-gateway/21-final-review/kga-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | kong-gateway/00-learning-map/kga-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | kong-gateway/01-01-overview/kga-01-overview.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | kong-gateway/02-02-nginx/kga-02-nginx.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | kong-gateway/03-03-lua/kga-03-lua.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | kong-gateway/04-04-openresty/kga-04-openresty.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | kong-gateway/05-05-config-deployment/kga-05-config-deployment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | kong-gateway/06-06-cli/kga-06-cli.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | kong-gateway/07-07-proxy-auth/kga-07-proxy-auth.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | kong-gateway/08-08-load-balancing-health/kga-08-load-balancing-health.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | kong-gateway/09-09-plugins/kga-09-plugins.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | kong-gateway/10-10-logging/kga-10-logging.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | kong-gateway/11-11-operations/kga-11-operations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | kong-gateway/12-12-security-ha/kga-12-security-ha.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | kong-gateway/13-13-microservices-devops/kga-13-microservices-devops.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | kong-gateway/14-14-kubernetes/kga-14-kubernetes.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | kong-gateway/15-15-kuma/kga-15-kuma.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | kong-gateway/16-16-serverless/kga-16-serverless.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | kong-gateway/17-appendix-a-docker/kga-appendix-a-docker.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | kong-gateway/18-appendix-b-konga/kga-appendix-b-konga.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | kong-gateway/19-appendix-c-database/kga-appendix-c-database.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | kong-gateway/20-appendix-d-admin-api/kga-appendix-d-admin-api.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | kong-gateway/21-final-review/kga-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
