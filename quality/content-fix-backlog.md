@@ -816,31 +816,31 @@
 
 ### 4.9 pattern-recognition-ml（21 章 · 待修 21 章 · 21 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | pattern-recognition-ml/00-learning-map/prl-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | pattern-recognition-ml/01-introduction/prl-01-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | pattern-recognition-ml/02-probability-distributions/prl-02-probability-distributions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | pattern-recognition-ml/03-linear-regression/prl-03-linear-regression.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | pattern-recognition-ml/04-linear-classification/prl-04-linear-classification.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | pattern-recognition-ml/05-neural-networks/prl-05-neural-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | pattern-recognition-ml/06-kernel-methods/prl-06-kernel-methods.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | pattern-recognition-ml/07-sparse-kernel-machines/prl-07-sparse-kernel-machines.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | pattern-recognition-ml/08-graphical-models/prl-08-graphical-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | pattern-recognition-ml/09-mixture-models-em/prl-09-mixture-models-em.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | pattern-recognition-ml/10-approximate-inference/prl-10-approximate-inference.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | pattern-recognition-ml/11-sampling-methods/prl-11-sampling-methods.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | pattern-recognition-ml/12-continuous-latent-variables/prl-12-continuous-latent-variables.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | pattern-recognition-ml/13-sequential-data/prl-13-sequential-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | pattern-recognition-ml/14-combining-models/prl-14-combining-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | pattern-recognition-ml/15-appendix-a-data-sets/prl-appendix-a-data-sets.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | pattern-recognition-ml/16-appendix-b-probability-distributions/prl-appendix-b-probability-distributions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | pattern-recognition-ml/17-appendix-c-properties-matrices/prl-appendix-c-properties-matrices.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | pattern-recognition-ml/18-appendix-d-calculus-variations/prl-appendix-d-calculus-variations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | pattern-recognition-ml/19-appendix-e-lagrange-multipliers/prl-appendix-e-lagrange-multipliers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | pattern-recognition-ml/20-final-review/prl-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | pattern-recognition-ml/00-learning-map/prl-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | pattern-recognition-ml/01-introduction/prl-01-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | pattern-recognition-ml/02-probability-distributions/prl-02-probability-distributions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | pattern-recognition-ml/03-linear-regression/prl-03-linear-regression.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | pattern-recognition-ml/04-linear-classification/prl-04-linear-classification.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | pattern-recognition-ml/05-neural-networks/prl-05-neural-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | pattern-recognition-ml/06-kernel-methods/prl-06-kernel-methods.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | pattern-recognition-ml/07-sparse-kernel-machines/prl-07-sparse-kernel-machines.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | pattern-recognition-ml/08-graphical-models/prl-08-graphical-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | pattern-recognition-ml/09-mixture-models-em/prl-09-mixture-models-em.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | pattern-recognition-ml/10-approximate-inference/prl-10-approximate-inference.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | pattern-recognition-ml/11-sampling-methods/prl-11-sampling-methods.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | pattern-recognition-ml/12-continuous-latent-variables/prl-12-continuous-latent-variables.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | pattern-recognition-ml/13-sequential-data/prl-13-sequential-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | pattern-recognition-ml/14-combining-models/prl-14-combining-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | pattern-recognition-ml/15-appendix-a-data-sets/prl-appendix-a-data-sets.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | pattern-recognition-ml/16-appendix-b-probability-distributions/prl-appendix-b-probability-distributions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | pattern-recognition-ml/17-appendix-c-properties-matrices/prl-appendix-c-properties-matrices.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | pattern-recognition-ml/18-appendix-d-calculus-variations/prl-appendix-d-calculus-variations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | pattern-recognition-ml/19-appendix-e-lagrange-multipliers/prl-appendix-e-lagrange-multipliers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | pattern-recognition-ml/20-final-review/prl-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

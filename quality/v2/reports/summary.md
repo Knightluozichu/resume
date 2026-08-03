@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T13:10:29.418Z；旧版分数不迁移。
+> 2026-08-03T13:19:53.906Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1238
-- published：238
+- passed：1219
+- published：257
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -216,7 +216,7 @@
 | 203 | linux-kernel-design | 22 | 0 | 0 | 22 | 0 |
 | 204 | linux-kernel-essence | 10 | 0 | 0 | 10 | 0 |
 | 205 | llm-app-dev-essentials | 9 | 0 | 0 | 9 | 0 |
-| 206 | machine-learning-watermelon | 19 | 0 | 0 | 19 | 0 |
+| 206 | machine-learning-watermelon | 19 | 0 | 0 | 0 | 0 |
 | 207 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
 | 208 | nodejs-debugging-guide | 10 | 0 | 0 | 10 | 0 |
 | 209 | org-problem-tools | 8 | 0 | 0 | 8 | 0 |
