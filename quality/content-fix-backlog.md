@@ -244,20 +244,20 @@
 
 ### 2.2 computer-networks-top-down（10 章 · 待修 10 章 · 10 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿，走部署流程
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | computer-networks-top-down/00-cnt8-official-learning-map/cnt8-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | computer-networks-top-down/01-cnt8-01-internet/cnt8-01-internet.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | computer-networks-top-down/02-cnt8-02-application/cnt8-02-application.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | computer-networks-top-down/03-cnt8-03-transport/cnt8-03-transport.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | computer-networks-top-down/04-cnt8-04-data-plane/cnt8-04-data-plane.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | computer-networks-top-down/05-cnt8-05-control-plane/cnt8-05-control-plane.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | computer-networks-top-down/06-cnt8-06-link-lans/cnt8-06-link-lans.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | computer-networks-top-down/07-cnt8-07-wireless-mobile/cnt8-07-wireless-mobile.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | computer-networks-top-down/08-cnt8-08-security/cnt8-08-security.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | computer-networks-top-down/09-cnt8-official-final-review/cnt8-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | computer-networks-top-down/00-cnt8-official-learning-map/cnt8-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | computer-networks-top-down/01-cnt8-01-internet/cnt8-01-internet.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | computer-networks-top-down/02-cnt8-02-application/cnt8-02-application.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | computer-networks-top-down/03-cnt8-03-transport/cnt8-03-transport.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | computer-networks-top-down/04-cnt8-04-data-plane/cnt8-04-data-plane.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | computer-networks-top-down/05-cnt8-05-control-plane/cnt8-05-control-plane.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | computer-networks-top-down/06-cnt8-06-link-lans/cnt8-06-link-lans.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | computer-networks-top-down/07-cnt8-07-wireless-mobile/cnt8-07-wireless-mobile.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | computer-networks-top-down/08-cnt8-08-security/cnt8-08-security.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | computer-networks-top-down/09-cnt8-official-final-review/cnt8-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
