@@ -53,27 +53,27 @@
 
 ### 1.2 high-performance-mysql（17 章 · 待修 17 章 · 17 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，17 章补小结 + 修复 Answer 嵌套）；⛔ 部署受阻：ledger failed（模板复制、未评审），需全面重写
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | high-performance-mysql/00-learning-map/hpm4-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | high-performance-mysql/01-mysql-architecture/hpm4-ch01-mysql-architecture.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | high-performance-mysql/02-reliability-monitoring/hpm4-ch02-reliability-monitoring.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | high-performance-mysql/03-performance-schema/hpm4-ch03-performance-schema.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | high-performance-mysql/04-os-hardware/hpm4-ch04-os-hardware.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | high-performance-mysql/05-server-settings/hpm4-ch05-server-settings.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | high-performance-mysql/06-schema-design/hpm4-ch06-schema-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | high-performance-mysql/07-indexing/hpm4-ch07-indexing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | high-performance-mysql/08-query-optimization/hpm4-ch08-query-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | high-performance-mysql/09-replication/hpm4-ch09-replication.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | high-performance-mysql/10-backup-recovery/hpm4-ch10-backup-recovery.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | high-performance-mysql/11-scaling/hpm4-ch11-scaling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | high-performance-mysql/12-mysql-cloud/hpm4-ch12-mysql-cloud.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | high-performance-mysql/13-compliance/hpm4-ch13-compliance.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | high-performance-mysql/14-appendix-a/hpm4-appendix-a-upgrading.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | high-performance-mysql/15-appendix-b/hpm4-appendix-b-kubernetes.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | high-performance-mysql/99-final-review/hpm4-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | high-performance-mysql/00-learning-map/hpm4-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | high-performance-mysql/01-mysql-architecture/hpm4-ch01-mysql-architecture.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | high-performance-mysql/02-reliability-monitoring/hpm4-ch02-reliability-monitoring.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | high-performance-mysql/03-performance-schema/hpm4-ch03-performance-schema.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | high-performance-mysql/04-os-hardware/hpm4-ch04-os-hardware.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | high-performance-mysql/05-server-settings/hpm4-ch05-server-settings.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | high-performance-mysql/06-schema-design/hpm4-ch06-schema-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | high-performance-mysql/07-indexing/hpm4-ch07-indexing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | high-performance-mysql/08-query-optimization/hpm4-ch08-query-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | high-performance-mysql/09-replication/hpm4-ch09-replication.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | high-performance-mysql/10-backup-recovery/hpm4-ch10-backup-recovery.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | high-performance-mysql/11-scaling/hpm4-ch11-scaling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | high-performance-mysql/12-mysql-cloud/hpm4-ch12-mysql-cloud.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | high-performance-mysql/13-compliance/hpm4-ch13-compliance.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | high-performance-mysql/14-appendix-a/hpm4-appendix-a-upgrading.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | high-performance-mysql/15-appendix-b/hpm4-appendix-b-kubernetes.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | high-performance-mysql/99-final-review/hpm4-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
