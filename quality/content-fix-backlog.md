@@ -691,23 +691,23 @@
 
 ### 4.4 deep-learning-nlp-advanced（13 章 · 待修 13 章 · 13 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-learning-nlp-advanced/00-guide/dna-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-learning-nlp-advanced/01-neural-network-review/dna-01-neural-network-review.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-learning-nlp-advanced/02-distributed-word-representations/dna-02-distributed-word-representations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-learning-nlp-advanced/03-word2vec/dna-03-word2vec.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-learning-nlp-advanced/04-word2vec-acceleration/dna-04-word2vec-acceleration.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-learning-nlp-advanced/05-rnn/dna-05-rnn.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-learning-nlp-advanced/06-gated-rnn/dna-06-gated-rnn.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-learning-nlp-advanced/07-rnn-text-generation/dna-07-rnn-text-generation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-learning-nlp-advanced/08-attention/dna-08-attention.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-learning-nlp-advanced/09-appendices/dna-appendix-a-activation-derivatives.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-learning-nlp-advanced/09-appendices/dna-appendix-b-wordnet.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-learning-nlp-advanced/09-appendices/dna-appendix-c-gru.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-learning-nlp-advanced/10-review/dna-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-learning-nlp-advanced/00-guide/dna-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-learning-nlp-advanced/01-neural-network-review/dna-01-neural-network-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-learning-nlp-advanced/02-distributed-word-representations/dna-02-distributed-word-representations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-learning-nlp-advanced/03-word2vec/dna-03-word2vec.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-learning-nlp-advanced/04-word2vec-acceleration/dna-04-word2vec-acceleration.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-learning-nlp-advanced/05-rnn/dna-05-rnn.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-learning-nlp-advanced/06-gated-rnn/dna-06-gated-rnn.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-learning-nlp-advanced/07-rnn-text-generation/dna-07-rnn-text-generation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-learning-nlp-advanced/08-attention/dna-08-attention.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-learning-nlp-advanced/09-appendices/dna-appendix-a-activation-derivatives.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-learning-nlp-advanced/09-appendices/dna-appendix-b-wordnet.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | deep-learning-nlp-advanced/09-appendices/dna-appendix-c-gru.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | deep-learning-nlp-advanced/10-review/dna-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

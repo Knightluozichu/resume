@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T12:28:58.001Z；旧版分数不迁移。
+> 2026-08-03T12:36:43.503Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1310
-- published：166
+- passed：1299
+- published：177
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -183,7 +183,7 @@
 | 170 | data-structures-visual | 11 | 0 | 0 | 11 | 0 |
 | 171 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
 | 172 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
-| 173 | deep-learning-from-scratch | 11 | 0 | 0 | 11 | 0 |
+| 173 | deep-learning-from-scratch | 11 | 0 | 0 | 0 | 0 |
 | 174 | deep-learning-from-scratch-2 | 65 | 0 | 0 | 65 | 0 |
 | 175 | deep-learning-gen-models | 16 | 0 | 0 | 16 | 0 |
 | 176 | deep-learning-nlp-advanced | 13 | 0 | 0 | 13 | 0 |
