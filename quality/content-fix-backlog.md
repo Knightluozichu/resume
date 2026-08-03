@@ -788,29 +788,29 @@
 
 ### 4.8 machine-learning-watermelon（19 章 · 待修 19 章 · 19 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | machine-learning-watermelon/00-guide/mlw-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | machine-learning-watermelon/01-foundations/mlw-01-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | machine-learning-watermelon/01-foundations/mlw-02-model-assessment-selection.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | machine-learning-watermelon/01-foundations/mlw-03-linear-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | machine-learning-watermelon/02-core-models-a/mlw-04-decision-trees.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | machine-learning-watermelon/02-core-models-a/mlw-05-neural-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | machine-learning-watermelon/02-core-models-a/mlw-06-support-vector-machines.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | machine-learning-watermelon/02-core-models-a/mlw-07-bayesian-classifiers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | machine-learning-watermelon/03-core-models-b/mlw-08-ensemble-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | machine-learning-watermelon/03-core-models-b/mlw-09-clustering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | machine-learning-watermelon/03-core-models-b/mlw-10-dimensionality-reduction-metric-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | machine-learning-watermelon/04-advanced-a/mlw-11-feature-selection-sparse-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | machine-learning-watermelon/04-advanced-a/mlw-12-computational-learning-theory.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | machine-learning-watermelon/04-advanced-a/mlw-13-semi-supervised-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | machine-learning-watermelon/05-advanced-b/mlw-14-probabilistic-graphical-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | machine-learning-watermelon/05-advanced-b/mlw-15-rule-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | machine-learning-watermelon/05-advanced-b/mlw-16-reinforcement-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | machine-learning-watermelon/06-appendices/mlw-appendices.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | machine-learning-watermelon/07-review/mlw-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | machine-learning-watermelon/00-guide/mlw-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | machine-learning-watermelon/01-foundations/mlw-01-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | machine-learning-watermelon/01-foundations/mlw-02-model-assessment-selection.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | machine-learning-watermelon/01-foundations/mlw-03-linear-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | machine-learning-watermelon/02-core-models-a/mlw-04-decision-trees.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | machine-learning-watermelon/02-core-models-a/mlw-05-neural-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | machine-learning-watermelon/02-core-models-a/mlw-06-support-vector-machines.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | machine-learning-watermelon/02-core-models-a/mlw-07-bayesian-classifiers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | machine-learning-watermelon/03-core-models-b/mlw-08-ensemble-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | machine-learning-watermelon/03-core-models-b/mlw-09-clustering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | machine-learning-watermelon/03-core-models-b/mlw-10-dimensionality-reduction-metric-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | machine-learning-watermelon/04-advanced-a/mlw-11-feature-selection-sparse-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | machine-learning-watermelon/04-advanced-a/mlw-12-computational-learning-theory.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | machine-learning-watermelon/04-advanced-a/mlw-13-semi-supervised-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | machine-learning-watermelon/05-advanced-b/mlw-14-probabilistic-graphical-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | machine-learning-watermelon/05-advanced-b/mlw-15-rule-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | machine-learning-watermelon/05-advanced-b/mlw-16-reinforcement-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | machine-learning-watermelon/06-appendices/mlw-appendices.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | machine-learning-watermelon/07-review/mlw-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
