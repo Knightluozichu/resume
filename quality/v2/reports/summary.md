@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T12:14:26.522Z；旧版分数不迁移。
+> 2026-08-03T12:21:28.041Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1326
-- published：150
+- passed：1320
+- published：156
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -223,7 +223,7 @@
 | 210 | pattern-recognition-ml | 21 | 0 | 0 | 21 | 0 |
 | 211 | pbrt-book | 16 | 0 | 0 | 16 | 0 |
 | 212 | ray-tracing-weekend | 12 | 0 | 0 | 12 | 0 |
-| 213 | rl-deep-learning-c | 6 | 0 | 0 | 6 | 0 |
+| 213 | rl-deep-learning-c | 6 | 0 | 0 | 0 | 0 |
 | 214 | ruby-programming | 25 | 0 | 0 | 25 | 0 |
 | 215 | statistical-learning-methods | 25 | 0 | 0 | 25 | 0 |
 | 216 | the-c-programming-language | 10 | 0 | 0 | 10 | 0 |

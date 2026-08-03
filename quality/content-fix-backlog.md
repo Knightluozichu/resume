@@ -652,20 +652,20 @@
 
 ### 4.2 illustrated-dl（10 章 · 待修 10 章 · 10 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | illustrated-dl/00-guide/idl-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | illustrated-dl/01-introduction/idl-01-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | illustrated-dl/02-neural-networks/idl-02-neural-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | illustrated-dl/03-convolutional-networks/idl-03-convolutional-neural-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | illustrated-dl/04-boltzmann-machines/idl-04-restricted-boltzmann-machines.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | illustrated-dl/05-autoencoders/idl-05-autoencoders.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | illustrated-dl/06-generalization/idl-06-improving-generalization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | illustrated-dl/07-tools/idl-07-deep-learning-tools.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | illustrated-dl/08-present-future/idl-08-present-and-future.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | illustrated-dl/09-review/idl-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | illustrated-dl/00-guide/idl-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | illustrated-dl/01-introduction/idl-01-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | illustrated-dl/02-neural-networks/idl-02-neural-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | illustrated-dl/03-convolutional-networks/idl-03-convolutional-neural-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | illustrated-dl/04-boltzmann-machines/idl-04-restricted-boltzmann-machines.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | illustrated-dl/05-autoencoders/idl-05-autoencoders.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | illustrated-dl/06-generalization/idl-06-improving-generalization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | illustrated-dl/07-tools/idl-07-deep-learning-tools.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | illustrated-dl/08-present-future/idl-08-present-and-future.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | illustrated-dl/09-review/idl-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
