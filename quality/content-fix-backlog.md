@@ -263,23 +263,23 @@
 
 ### 2.3 illustrated-http（13 章 · 待修 13 章 · 13 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | illustrated-http/00-official-learning-map/ilh-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | illustrated-http/01-chapter-01/ilh-01-web-network-foundations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | illustrated-http/02-chapter-02/ilh-02-simple-http-protocol.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | illustrated-http/03-chapter-03/ilh-03-http-message-information.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | illustrated-http/04-chapter-04/ilh-04-http-status-codes.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | illustrated-http/05-chapter-05/ilh-05-web-servers-cooperation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | illustrated-http/06-chapter-06/ilh-06-http-headers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | illustrated-http/07-chapter-07/ilh-07-https-security.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | illustrated-http/08-chapter-08/ilh-08-user-authentication.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | illustrated-http/09-chapter-09/ilh-09-http-extensions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | illustrated-http/10-chapter-10/ilh-10-web-content-technologies.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | illustrated-http/11-chapter-11/ilh-11-web-attack-techniques.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | illustrated-http/12-official-final-review/ilh-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | illustrated-http/00-official-learning-map/ilh-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | illustrated-http/01-chapter-01/ilh-01-web-network-foundations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | illustrated-http/02-chapter-02/ilh-02-simple-http-protocol.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | illustrated-http/03-chapter-03/ilh-03-http-message-information.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | illustrated-http/04-chapter-04/ilh-04-http-status-codes.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | illustrated-http/05-chapter-05/ilh-05-web-servers-cooperation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | illustrated-http/06-chapter-06/ilh-06-http-headers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | illustrated-http/07-chapter-07/ilh-07-https-security.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | illustrated-http/08-chapter-08/ilh-08-user-authentication.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | illustrated-http/09-chapter-09/ilh-09-http-extensions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | illustrated-http/10-chapter-10/ilh-10-web-content-technologies.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | illustrated-http/11-chapter-11/ilh-11-web-attack-techniques.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | illustrated-http/12-official-final-review/ilh-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

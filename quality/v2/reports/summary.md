@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T08:16:16.486Z；旧版分数不迁移。
+> 2026-08-03T08:25:51.908Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1455
-- published：21
+- passed：1445
+- published：31
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -167,7 +167,7 @@
 | 154 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
 | 155 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 156 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
-| 157 | computer-networks-top-down | 10 | 0 | 0 | 10 | 0 |
+| 157 | computer-networks-top-down | 10 | 0 | 0 | 0 | 0 |
 | 158 | concrete-mathematics | 11 | 0 | 0 | 11 | 0 |
 | 159 | cpp-concurrency | 12 | 0 | 0 | 12 | 0 |
 | 160 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
