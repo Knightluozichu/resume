@@ -311,28 +311,28 @@
 
 ### 2.5 kafka-definitive-guide（18 章 · 待修 18 章 · 18 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；⛔ 部署受阻：ledger failed（模板复制、未评审）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | kafka-definitive-guide/00-learning-map/kfk-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | kafka-definitive-guide/01-meet-kafka/kfk-01-meet-kafka.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | kafka-definitive-guide/02-installing-kafka/kfk-02-installing-kafka.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | kafka-definitive-guide/03-kafka-producers/kfk-03-kafka-producers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | kafka-definitive-guide/04-kafka-consumers/kfk-04-kafka-consumers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | kafka-definitive-guide/05-programmatic-administration/kfk-05-programmatic-administration.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | kafka-definitive-guide/06-kafka-internals/kfk-06-kafka-internals.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | kafka-definitive-guide/07-reliable-data-delivery/kfk-07-reliable-data-delivery.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | kafka-definitive-guide/08-exactly-once-semantics/kfk-08-exactly-once-semantics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | kafka-definitive-guide/09-building-data-pipelines/kfk-09-building-data-pipelines.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | kafka-definitive-guide/10-cross-cluster-mirroring/kfk-10-cross-cluster-mirroring.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | kafka-definitive-guide/11-securing-kafka/kfk-11-securing-kafka.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | kafka-definitive-guide/12-administering-kafka/kfk-12-administering-kafka.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | kafka-definitive-guide/13-monitoring-kafka/kfk-13-monitoring-kafka.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | kafka-definitive-guide/14-stream-processing/kfk-14-stream-processing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | kafka-definitive-guide/15-appendix-a-installation/kfk-appendix-a-installation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | kafka-definitive-guide/16-appendix-b-tools/kfk-appendix-b-tools.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | kafka-definitive-guide/17-final-review/kfk-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | kafka-definitive-guide/00-learning-map/kfk-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | kafka-definitive-guide/01-meet-kafka/kfk-01-meet-kafka.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | kafka-definitive-guide/02-installing-kafka/kfk-02-installing-kafka.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | kafka-definitive-guide/03-kafka-producers/kfk-03-kafka-producers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | kafka-definitive-guide/04-kafka-consumers/kfk-04-kafka-consumers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | kafka-definitive-guide/05-programmatic-administration/kfk-05-programmatic-administration.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | kafka-definitive-guide/06-kafka-internals/kfk-06-kafka-internals.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | kafka-definitive-guide/07-reliable-data-delivery/kfk-07-reliable-data-delivery.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | kafka-definitive-guide/08-exactly-once-semantics/kfk-08-exactly-once-semantics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | kafka-definitive-guide/09-building-data-pipelines/kfk-09-building-data-pipelines.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | kafka-definitive-guide/10-cross-cluster-mirroring/kfk-10-cross-cluster-mirroring.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | kafka-definitive-guide/11-securing-kafka/kfk-11-securing-kafka.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | kafka-definitive-guide/12-administering-kafka/kfk-12-administering-kafka.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | kafka-definitive-guide/13-monitoring-kafka/kfk-13-monitoring-kafka.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | kafka-definitive-guide/14-stream-processing/kfk-14-stream-processing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | kafka-definitive-guide/15-appendix-a-installation/kfk-appendix-a-installation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | kafka-definitive-guide/16-appendix-b-tools/kfk-appendix-b-tools.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | kafka-definitive-guide/17-final-review/kfk-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
