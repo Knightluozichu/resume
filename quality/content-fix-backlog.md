@@ -846,32 +846,32 @@
 
 ### 4.10 deep-learning-textbook（22 章 · 待修 22 章 · 22 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-learning-textbook/00-learning-map/dlt-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-learning-textbook/01-introduction/dlt-01-introduction.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-learning-textbook/02-linear-algebra/dlt-02-linear-algebra.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-learning-textbook/03-probability-information/dlt-03-probability-information.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-learning-textbook/04-numerical-computation/dlt-04-numerical-computation.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-learning-textbook/05-machine-learning-basics/dlt-05-machine-learning-basics.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-learning-textbook/06-feedforward-networks/dlt-06-feedforward-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-learning-textbook/07-regularization/dlt-07-regularization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-learning-textbook/08-optimization/dlt-08-optimization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-learning-textbook/09-convolutional-networks/dlt-09-convolutional-networks.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-learning-textbook/10-sequence-modeling/dlt-10-sequence-modeling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-learning-textbook/11-practical-methodology/dlt-11-practical-methodology.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-learning-textbook/12-applications/dlt-12-applications.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-learning-textbook/13-linear-factor-models/dlt-13-linear-factor-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-learning-textbook/14-autoencoders/dlt-14-autoencoders.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-learning-textbook/15-representation-learning/dlt-15-representation-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | deep-learning-textbook/16-structured-probabilistic-models/dlt-16-structured-probabilistic-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | deep-learning-textbook/17-monte-carlo/dlt-17-monte-carlo.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | deep-learning-textbook/18-partition-function/dlt-18-partition-function.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | deep-learning-textbook/19-approximate-inference/dlt-19-approximate-inference.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | deep-learning-textbook/20-deep-generative-models/dlt-20-deep-generative-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | deep-learning-textbook/21-final-review/dlt-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-learning-textbook/00-learning-map/dlt-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-learning-textbook/01-introduction/dlt-01-introduction.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-learning-textbook/02-linear-algebra/dlt-02-linear-algebra.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-learning-textbook/03-probability-information/dlt-03-probability-information.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-learning-textbook/04-numerical-computation/dlt-04-numerical-computation.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-learning-textbook/05-machine-learning-basics/dlt-05-machine-learning-basics.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-learning-textbook/06-feedforward-networks/dlt-06-feedforward-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-learning-textbook/07-regularization/dlt-07-regularization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-learning-textbook/08-optimization/dlt-08-optimization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-learning-textbook/09-convolutional-networks/dlt-09-convolutional-networks.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-learning-textbook/10-sequence-modeling/dlt-10-sequence-modeling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | deep-learning-textbook/11-practical-methodology/dlt-11-practical-methodology.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | deep-learning-textbook/12-applications/dlt-12-applications.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | deep-learning-textbook/13-linear-factor-models/dlt-13-linear-factor-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | deep-learning-textbook/14-autoencoders/dlt-14-autoencoders.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | deep-learning-textbook/15-representation-learning/dlt-15-representation-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | deep-learning-textbook/16-structured-probabilistic-models/dlt-16-structured-probabilistic-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | deep-learning-textbook/17-monte-carlo/dlt-17-monte-carlo.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | deep-learning-textbook/18-partition-function/dlt-18-partition-function.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | deep-learning-textbook/19-approximate-inference/dlt-19-approximate-inference.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | deep-learning-textbook/20-deep-generative-models/dlt-20-deep-generative-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | deep-learning-textbook/21-final-review/dlt-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
