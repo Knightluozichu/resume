@@ -397,48 +397,48 @@
 
 ### 2.8 http-definitive-guide（38 章 · 待修 38 章 · 38 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | http-definitive-guide/00-hdg1-official-learning-map/hdg1-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | http-definitive-guide/01-hdg1-part-1/hdg1-part-1.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | http-definitive-guide/02-hdg1-01/hdg1-01.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | http-definitive-guide/03-hdg1-02/hdg1-02.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | http-definitive-guide/04-hdg1-03/hdg1-03.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | http-definitive-guide/05-hdg1-04/hdg1-04.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | http-definitive-guide/06-hdg1-part-2/hdg1-part-2.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | http-definitive-guide/07-hdg1-05/hdg1-05.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | http-definitive-guide/08-hdg1-06/hdg1-06.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | http-definitive-guide/09-hdg1-07/hdg1-07.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | http-definitive-guide/10-hdg1-08/hdg1-08.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | http-definitive-guide/11-hdg1-09/hdg1-09.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | http-definitive-guide/12-hdg1-10/hdg1-10.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | http-definitive-guide/13-hdg1-part-3/hdg1-part-3.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | http-definitive-guide/14-hdg1-11/hdg1-11.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | http-definitive-guide/15-hdg1-12/hdg1-12.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | http-definitive-guide/16-hdg1-13/hdg1-13.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | http-definitive-guide/17-hdg1-14/hdg1-14.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | http-definitive-guide/18-hdg1-part-4/hdg1-part-4.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | http-definitive-guide/19-hdg1-15/hdg1-15.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | http-definitive-guide/20-hdg1-16/hdg1-16.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | http-definitive-guide/21-hdg1-17/hdg1-17.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | http-definitive-guide/22-hdg1-part-5/hdg1-part-5.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 24 | http-definitive-guide/23-hdg1-18/hdg1-18.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 25 | http-definitive-guide/24-hdg1-19/hdg1-19.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 26 | http-definitive-guide/25-hdg1-20/hdg1-20.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 27 | http-definitive-guide/26-hdg1-21/hdg1-21.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 28 | http-definitive-guide/27-hdg1-part-6/hdg1-part-6.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 29 | http-definitive-guide/28-hdg1-appendix-a/hdg1-appendix-a.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 30 | http-definitive-guide/29-hdg1-appendix-b/hdg1-appendix-b.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 31 | http-definitive-guide/30-hdg1-appendix-c/hdg1-appendix-c.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 32 | http-definitive-guide/31-hdg1-appendix-d/hdg1-appendix-d.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 33 | http-definitive-guide/32-hdg1-appendix-e/hdg1-appendix-e.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 34 | http-definitive-guide/33-hdg1-appendix-f/hdg1-appendix-f.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 35 | http-definitive-guide/34-hdg1-appendix-g/hdg1-appendix-g.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 36 | http-definitive-guide/35-hdg1-appendix-h/hdg1-appendix-h.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 37 | http-definitive-guide/36-hdg1-index/hdg1-index.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 38 | http-definitive-guide/37-hdg1-official-final-review/hdg1-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | http-definitive-guide/00-hdg1-official-learning-map/hdg1-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | http-definitive-guide/01-hdg1-part-1/hdg1-part-1.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | http-definitive-guide/02-hdg1-01/hdg1-01.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | http-definitive-guide/03-hdg1-02/hdg1-02.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | http-definitive-guide/04-hdg1-03/hdg1-03.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | http-definitive-guide/05-hdg1-04/hdg1-04.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | http-definitive-guide/06-hdg1-part-2/hdg1-part-2.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | http-definitive-guide/07-hdg1-05/hdg1-05.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | http-definitive-guide/08-hdg1-06/hdg1-06.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | http-definitive-guide/09-hdg1-07/hdg1-07.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | http-definitive-guide/10-hdg1-08/hdg1-08.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | http-definitive-guide/11-hdg1-09/hdg1-09.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | http-definitive-guide/12-hdg1-10/hdg1-10.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | http-definitive-guide/13-hdg1-part-3/hdg1-part-3.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | http-definitive-guide/14-hdg1-11/hdg1-11.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | http-definitive-guide/15-hdg1-12/hdg1-12.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | http-definitive-guide/16-hdg1-13/hdg1-13.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | http-definitive-guide/17-hdg1-14/hdg1-14.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | http-definitive-guide/18-hdg1-part-4/hdg1-part-4.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | http-definitive-guide/19-hdg1-15/hdg1-15.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | http-definitive-guide/20-hdg1-16/hdg1-16.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | http-definitive-guide/21-hdg1-17/hdg1-17.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 23 | http-definitive-guide/22-hdg1-part-5/hdg1-part-5.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 24 | http-definitive-guide/23-hdg1-18/hdg1-18.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 25 | http-definitive-guide/24-hdg1-19/hdg1-19.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 26 | http-definitive-guide/25-hdg1-20/hdg1-20.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 27 | http-definitive-guide/26-hdg1-21/hdg1-21.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 28 | http-definitive-guide/27-hdg1-part-6/hdg1-part-6.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 29 | http-definitive-guide/28-hdg1-appendix-a/hdg1-appendix-a.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 30 | http-definitive-guide/29-hdg1-appendix-b/hdg1-appendix-b.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 31 | http-definitive-guide/30-hdg1-appendix-c/hdg1-appendix-c.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 32 | http-definitive-guide/31-hdg1-appendix-d/hdg1-appendix-d.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 33 | http-definitive-guide/32-hdg1-appendix-e/hdg1-appendix-e.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 34 | http-definitive-guide/33-hdg1-appendix-f/hdg1-appendix-f.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 35 | http-definitive-guide/34-hdg1-appendix-g/hdg1-appendix-g.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 36 | http-definitive-guide/35-hdg1-appendix-h/hdg1-appendix-h.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 37 | http-definitive-guide/36-hdg1-index/hdg1-index.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 38 | http-definitive-guide/37-hdg1-official-final-review/hdg1-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
