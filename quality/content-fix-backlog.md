@@ -227,18 +227,18 @@
 
 ### 2.1 illustrated-server-network（8 章 · 待修 8 章 · 8 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，8 章补小结）；已上架书，走部署流程
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | illustrated-server-network/00-official-learning-map/isn-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | illustrated-server-network/01-00-book-usage/isn-00-book-usage.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | illustrated-server-network/02-01-physical-design/isn-01-physical-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | illustrated-server-network/03-02-logical-design/isn-02-logical-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | illustrated-server-network/04-03-security-load-balancing/isn-03-security-load-balancing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | illustrated-server-network/05-04-high-availability/isn-04-high-availability.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | illustrated-server-network/06-05-management-design/isn-05-management-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | illustrated-server-network/07-official-final-review/isn-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | illustrated-server-network/00-official-learning-map/isn-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | illustrated-server-network/01-00-book-usage/isn-00-book-usage.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | illustrated-server-network/02-01-physical-design/isn-01-physical-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | illustrated-server-network/03-02-logical-design/isn-02-logical-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | illustrated-server-network/04-03-security-load-balancing/isn-03-security-load-balancing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | illustrated-server-network/05-04-high-availability/isn-04-high-availability.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | illustrated-server-network/06-05-management-design/isn-05-management-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | illustrated-server-network/07-official-final-review/isn-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 

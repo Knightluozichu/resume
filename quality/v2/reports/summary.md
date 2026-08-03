@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T06:36:42.613Z；旧版分数不迁移。
+> 2026-08-03T08:08:01.366Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1476
-- published：0
+- passed：1463
+- published：13
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -234,5 +234,5 @@
 | 221 | unity-ui-design | 9 | 0 | 0 | 9 | 0 |
 | 222 | unity-vfx | 11 | 0 | 0 | 11 | 0 |
 | 223 | vulkan-guide | 16 | 0 | 0 | 16 | 0 |
-| 224 | windows-kernel-programming | 13 | 0 | 0 | 13 | 0 |
+| 224 | windows-kernel-programming | 13 | 0 | 0 | 0 | 0 |
 | 225 | wireshark-packet-analysis | 19 | 0 | 0 | 19 | 0 |
