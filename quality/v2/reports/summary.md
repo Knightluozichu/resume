@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-03T13:38:09.502Z；旧版分数不迁移。
+> 2026-08-03T13:47:32.953Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2618
 - queued：402
-- passed：1176
-- published：300
+- passed：1154
+- published：322
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -205,7 +205,7 @@
 | 192 | illustrated-ai | 16 | 0 | 0 | 0 | 0 |
 | 193 | illustrated-dl | 10 | 0 | 0 | 0 | 0 |
 | 194 | illustrated-http | 13 | 0 | 0 | 0 | 0 |
-| 195 | illustrated-ml | 22 | 0 | 0 | 22 | 0 |
+| 195 | illustrated-ml | 22 | 0 | 0 | 0 | 0 |
 | 196 | illustrated-server-network | 8 | 0 | 0 | 0 | 0 |
 | 197 | inside-cpp-object-model | 9 | 0 | 0 | 9 | 0 |
 | 198 | langchain-programming | 13 | 0 | 0 | 13 | 0 |

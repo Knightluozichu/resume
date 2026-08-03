@@ -908,33 +908,33 @@
 
 ### 4.12 deep-reinforcement-learning（23 章 · 待修 23 章 · 23 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-reinforcement-learning/00-learning-map/drl-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-reinforcement-learning/01-foundations/drl-01-machine-learning-foundations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-reinforcement-learning/01-foundations/drl-02-monte-carlo-method.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-reinforcement-learning/01-foundations/drl-03-reinforcement-learning-concepts.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-reinforcement-learning/02-value-learning/drl-04-dqn-q-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-reinforcement-learning/02-value-learning/drl-05-sarsa.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-reinforcement-learning/02-value-learning/drl-06-advanced-value-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-reinforcement-learning/03-policy-learning/drl-07-policy-gradient.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-reinforcement-learning/03-policy-learning/drl-08-policy-gradient-baseline.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-reinforcement-learning/03-policy-learning/drl-09-advanced-policy-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-reinforcement-learning/03-policy-learning/drl-10-continuous-control.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-reinforcement-learning/03-policy-learning/drl-11-partial-observability.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-reinforcement-learning/03-policy-learning/drl-12-imitation-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-reinforcement-learning/04-multi-agent/drl-13-parallel-computing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-reinforcement-learning/04-multi-agent/drl-14-multi-agent-systems.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-reinforcement-learning/04-multi-agent/drl-15-cooperative-marl.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | deep-reinforcement-learning/04-multi-agent/drl-16-noncooperative-marl.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | deep-reinforcement-learning/04-multi-agent/drl-17-attention-marl.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | deep-reinforcement-learning/05-applications/drl-18-alphago-mcts.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | deep-reinforcement-learning/05-applications/drl-19-real-world-applications.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | deep-reinforcement-learning/06-appendices/drl-appendix-a-bellman-equations.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | deep-reinforcement-learning/06-appendices/drl-appendix-b-exercise-answers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | deep-reinforcement-learning/07-final-review/drl-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-reinforcement-learning/00-learning-map/drl-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-reinforcement-learning/01-foundations/drl-01-machine-learning-foundations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-reinforcement-learning/01-foundations/drl-02-monte-carlo-method.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-reinforcement-learning/01-foundations/drl-03-reinforcement-learning-concepts.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-reinforcement-learning/02-value-learning/drl-04-dqn-q-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-reinforcement-learning/02-value-learning/drl-05-sarsa.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-reinforcement-learning/02-value-learning/drl-06-advanced-value-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-reinforcement-learning/03-policy-learning/drl-07-policy-gradient.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-reinforcement-learning/03-policy-learning/drl-08-policy-gradient-baseline.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-reinforcement-learning/03-policy-learning/drl-09-advanced-policy-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-reinforcement-learning/03-policy-learning/drl-10-continuous-control.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | deep-reinforcement-learning/03-policy-learning/drl-11-partial-observability.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | deep-reinforcement-learning/03-policy-learning/drl-12-imitation-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | deep-reinforcement-learning/04-multi-agent/drl-13-parallel-computing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | deep-reinforcement-learning/04-multi-agent/drl-14-multi-agent-systems.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | deep-reinforcement-learning/04-multi-agent/drl-15-cooperative-marl.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | deep-reinforcement-learning/04-multi-agent/drl-16-noncooperative-marl.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | deep-reinforcement-learning/04-multi-agent/drl-17-attention-marl.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | deep-reinforcement-learning/05-applications/drl-18-alphago-mcts.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | deep-reinforcement-learning/05-applications/drl-19-real-world-applications.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | deep-reinforcement-learning/06-appendices/drl-appendix-a-bellman-equations.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | deep-reinforcement-learning/06-appendices/drl-appendix-b-exercise-answers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 23 | deep-reinforcement-learning/07-final-review/drl-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
