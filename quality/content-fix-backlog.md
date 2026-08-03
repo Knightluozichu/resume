@@ -738,26 +738,26 @@
 
 ### 4.6 deep-learning-rl-from-scratch（16 章 · 待修 16 章 · 16 项）
 
-**书籍状态**：待修复
+**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03）；质量链全绿
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | deep-learning-rl-from-scratch/00-guide/dlr-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | deep-learning-rl-from-scratch/01-bandit/dlr-01-bandit.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | deep-learning-rl-from-scratch/02-mdp/dlr-02-mdp.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | deep-learning-rl-from-scratch/03-bellman/dlr-03-bellman.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | deep-learning-rl-from-scratch/04-dynamic-programming/dlr-04-dynamic-programming.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | deep-learning-rl-from-scratch/05-monte-carlo/dlr-05-monte-carlo.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | deep-learning-rl-from-scratch/06-td/dlr-06-td.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | deep-learning-rl-from-scratch/07-neural-q-learning/dlr-07-neural-q-learning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | deep-learning-rl-from-scratch/08-dqn/dlr-08-dqn.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | deep-learning-rl-from-scratch/09-policy-gradient/dlr-09-policy-gradient.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | deep-learning-rl-from-scratch/10-further/dlr-10-further.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-a-off-policy-mc.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-b-n-step-td.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-c-double-dqn.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-d-policy-gradient-proof.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | deep-learning-rl-from-scratch/12-review/dlr-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | deep-learning-rl-from-scratch/00-guide/dlr-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | deep-learning-rl-from-scratch/01-bandit/dlr-01-bandit.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | deep-learning-rl-from-scratch/02-mdp/dlr-02-mdp.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | deep-learning-rl-from-scratch/03-bellman/dlr-03-bellman.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | deep-learning-rl-from-scratch/04-dynamic-programming/dlr-04-dynamic-programming.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | deep-learning-rl-from-scratch/05-monte-carlo/dlr-05-monte-carlo.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | deep-learning-rl-from-scratch/06-td/dlr-06-td.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | deep-learning-rl-from-scratch/07-neural-q-learning/dlr-07-neural-q-learning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | deep-learning-rl-from-scratch/08-dqn/dlr-08-dqn.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | deep-learning-rl-from-scratch/09-policy-gradient/dlr-09-policy-gradient.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | deep-learning-rl-from-scratch/10-further/dlr-10-further.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-a-off-policy-mc.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-b-n-step-td.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-c-double-dqn.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | deep-learning-rl-from-scratch/11-appendices/dlr-appendix-d-policy-gradient-proof.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | deep-learning-rl-from-scratch/12-review/dlr-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
