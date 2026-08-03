@@ -25,7 +25,7 @@
 
 ## 系列 01：数据库系列（6 本 · 139 章待修 · 165 项）
 
-**系列状态**：待开始
+**系列状态**：✅ 规范修复完成（2026-08-03，6 本书 139 章全部补齐 §8 小结；部署均受阻于既有门禁失败，待全面重写后上架）
 
 ### 1.1 ddia（15 章 · 待修 15 章 · 15 项）
 
@@ -114,30 +114,30 @@
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | sql-ten-minutes/00-learning-map/sqt-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | sql-ten-minutes/01-understanding-sql/sqt-lesson01-understanding-sql.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | sql-ten-minutes/02-retrieving-data/sqt-lesson02-retrieving-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | sql-ten-minutes/03-sorting-data/sqt-lesson03-sorting-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | sql-ten-minutes/04-filtering-data/sqt-lesson04-filtering-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | sql-ten-minutes/05-advanced-filtering/sqt-lesson05-advanced-filtering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | sql-ten-minutes/06-wildcards/sqt-lesson06-wildcards.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | sql-ten-minutes/07-calculated-fields/sqt-lesson07-calculated-fields.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | sql-ten-minutes/08-functions/sqt-lesson08-functions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | sql-ten-minutes/09-summarizing-data/sqt-lesson09-summarizing-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | sql-ten-minutes/10-grouping-data/sqt-lesson10-grouping-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | sql-ten-minutes/11-subqueries/sqt-lesson11-subqueries.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | sql-ten-minutes/12-joining-tables/sqt-lesson12-joining-tables.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | sql-ten-minutes/13-advanced-joins/sqt-lesson13-advanced-joins.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | sql-ten-minutes/14-combining-queries/sqt-lesson14-combining-queries.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | sql-ten-minutes/15-inserting-data/sqt-lesson15-inserting-data.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | sql-ten-minutes/16-updating-deleting/sqt-lesson16-updating-deleting.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | sql-ten-minutes/17-tables/sqt-lesson17-tables.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | sql-ten-minutes/18-views/sqt-lesson18-views.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 20 | sql-ten-minutes/19-stored-procedures/sqt-lesson19-stored-procedures.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 21 | sql-ten-minutes/20-transactions/sqt-lesson20-transactions.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 22 | sql-ten-minutes/21-cursors/sqt-lesson21-cursors.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 23 | sql-ten-minutes/22-advanced-features/sqt-lesson22-advanced-features.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 24 | sql-ten-minutes/99-final-review/sqt-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | sql-ten-minutes/00-learning-map/sqt-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 2 | sql-ten-minutes/01-understanding-sql/sqt-lesson01-understanding-sql.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 3 | sql-ten-minutes/02-retrieving-data/sqt-lesson02-retrieving-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 4 | sql-ten-minutes/03-sorting-data/sqt-lesson03-sorting-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 5 | sql-ten-minutes/04-filtering-data/sqt-lesson04-filtering-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 6 | sql-ten-minutes/05-advanced-filtering/sqt-lesson05-advanced-filtering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 7 | sql-ten-minutes/06-wildcards/sqt-lesson06-wildcards.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 8 | sql-ten-minutes/07-calculated-fields/sqt-lesson07-calculated-fields.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 9 | sql-ten-minutes/08-functions/sqt-lesson08-functions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 10 | sql-ten-minutes/09-summarizing-data/sqt-lesson09-summarizing-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 11 | sql-ten-minutes/10-grouping-data/sqt-lesson10-grouping-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 12 | sql-ten-minutes/11-subqueries/sqt-lesson11-subqueries.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 13 | sql-ten-minutes/12-joining-tables/sqt-lesson12-joining-tables.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 14 | sql-ten-minutes/13-advanced-joins/sqt-lesson13-advanced-joins.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 15 | sql-ten-minutes/14-combining-queries/sqt-lesson14-combining-queries.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 16 | sql-ten-minutes/15-inserting-data/sqt-lesson15-inserting-data.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 17 | sql-ten-minutes/16-updating-deleting/sqt-lesson16-updating-deleting.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 18 | sql-ten-minutes/17-tables/sqt-lesson17-tables.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 19 | sql-ten-minutes/18-views/sqt-lesson18-views.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 20 | sql-ten-minutes/19-stored-procedures/sqt-lesson19-stored-procedures.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 21 | sql-ten-minutes/20-transactions/sqt-lesson20-transactions.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 22 | sql-ten-minutes/21-cursors/sqt-lesson21-cursors.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 23 | sql-ten-minutes/22-advanced-features/sqt-lesson22-advanced-features.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
+| 24 | sql-ten-minutes/99-final-review/sqt-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-03 |
 
 **部署记录**：—
 
