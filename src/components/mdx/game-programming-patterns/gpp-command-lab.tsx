@@ -128,9 +128,9 @@ export function GppCommandLab() {
           <g ref={concreteRef} style={{ opacity: 0 }}>
             <line x1={L_X + 36} y1={152} x2={L_X + 36} y2={132} stroke={LINE} strokeWidth={1} strokeDasharray="4,3" />
             <polygon points={`${L_X + 32},${136} ${L_X + 36},${132} ${L_X + 40},${136}`} fill={MUTE} />
-            <text x={L_X + 46} y={146} fontSize={10} fill={MUTE}>实现</text>
+            <text x={L_X + 46} y={146} fontSize={11} fill={MUTE}>实现</text>
             <line x1={L_X + 190} y1={214} x2={L_X + 190} y2={240} stroke={LINE} strokeWidth={1} />
-            <text x={L_X + 200} y={232} fontSize={10} fill={MUTE}>关联</text>
+            <text x={L_X + 200} y={232} fontSize={11} fill={MUTE}>关联</text>
           </g>
 
           {/* ═══ 右栏：执行泳道 ═══ */}
@@ -174,7 +174,7 @@ export function GppCommandLab() {
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <g key={i}>
               <circle cx={470 + i * 65} cy={356} r={3} fill={MUTE} />
-              <text x={470 + i * 65} y={372} textAnchor="middle" fontSize={10} fill={MUTE}>{i + 1}</text>
+              <text x={470 + i * 65} y={372} textAnchor="middle" fontSize={11} fill={MUTE}>{i + 1}</text>
             </g>
           ))}
         </svg>
