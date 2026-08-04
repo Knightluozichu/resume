@@ -10600,6 +10600,46 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GncOfficialFinalReviewTraceGateLab,
     } as ChapterMdxComponents;
   },
+  "game-programming-patterns/03-chapter-01-architecture-performance-games/gpp-chapter-01-architecture-performance-games":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-01-architecture-performance-games");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/05-chapter-02-command/gpp-chapter-02-command":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-02-command");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/10-chapter-07-state/gpp-chapter-07-state":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-07-state");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/13-chapter-09-game-loop/gpp-chapter-09-game-loop":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-09-game-loop");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/20-chapter-14-component/gpp-chapter-14-component":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-14-component");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
   "game-server-programming/00-guide/gsp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/game-server-programming/v2/gsp-official-learning-map");

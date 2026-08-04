@@ -1,6 +1,6 @@
 # 全书库质量 v2 基线
 
-> 2026-08-04T12:16:58.281Z；旧版分数不迁移。
+> 2026-08-04T12:54:49.069Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
@@ -24,9 +24,9 @@
 | 11 | lua-programming | 35 | 35 | 0 | 0 | 105 |
 | 12 | unity-shaderlab | 35 | 35 | 0 | 0 | 105 |
 | 13 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
-| 14 | game-programming-patterns | 29 | 29 | 0 | 0 | 87 |
-| 15 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
-| 16 | windows-journey | 29 | 29 | 0 | 0 | 87 |
+| 14 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
+| 15 | windows-journey | 29 | 29 | 0 | 0 | 87 |
+| 16 | game-programming-patterns | 29 | 29 | 0 | 0 | 58 |
 | 17 | out-of-control | 28 | 28 | 0 | 0 | 84 |
 | 18 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 19 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
