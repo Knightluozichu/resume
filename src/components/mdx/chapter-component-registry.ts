@@ -15787,28 +15787,28 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-12-event");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiEventLab: module0.RdiEventLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/13-client/rdi-13-client": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-13-client");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiClientLab: module0.RdiClientLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/14-server/rdi-14-server": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-14-server");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiServerLab: module0.RdiServerLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/15-replication/rdi-15-replication": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-15-replication");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiReplicationLab: module0.RdiReplicationLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/16-sentinel/rdi-16-sentinel": async () => {
@@ -15829,14 +15829,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-18-pubsub");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiPubsubLab: module0.RdiPubsubLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/19-transaction/rdi-19-transaction": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-19-transaction");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiTransactionLab: module0.RdiTransactionLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/20-lua/rdi-20-lua": async () => {
