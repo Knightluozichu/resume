@@ -197,8 +197,176 @@ function ArchViz({ fault }: { fault: boolean }) {
   );
 }
 
+// ─── Flyweight 模式：享元对象池图 ───
+function FlyweightViz({ fault }: { fault: boolean }) {
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Flyweight 模式享元对象池">
+      <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Flyweight 模式：共享对象池</text>
+      <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>内部状态（共享） + 外部状态（上下文传入）</text>
+      {/* 享元工厂 */}
+      <rect x={40} y={80} width={200} height={280} rx={10} fill={C.elevated} stroke={C.accent} strokeWidth={2} />
+      <text x={140} y={108} textAnchor="middle" fontSize={13} fontWeight={600} fill={C.accent}>FlyweightFactory</text>
+      <text x={140} y={128} textAnchor="middle" fontSize={11} fill={C.secondary}>getFlyweight(key)</text>
+      {/* 共享池 */}
+      {["Tree:Oak", "Tree:Pine", "Tree:Birch", "Grass", "Rock"].map((l, i) => (
+        <g key={i}>
+          <rect x={60} y={150+i*38} width={160} height={32} rx={6} fill={C.success} opacity={0.15} stroke={C.success} strokeWidth={1} />
+          <text x={140} y={171+i*38} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.success}>{l}</text>
+        </g>
+      ))}
+      {/* 客户端 */}
+      <rect x={360} y={80} width={160} height={50} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+      <text x={440} y={100} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Client</text>
+      <text x={440} y={120} textAnchor="middle" fontSize={11} fill={C.warning}>x=10, y=20, scale=1</text>
+      <rect x={360} y={150} width={160} height={50} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+      <text x={440} y={170} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Client</text>
+      <text x={440} y={190} textAnchor="middle" fontSize={11} fill={C.warning}>x=30, y=40, scale=1.5</text>
+      <rect x={360} y={220} width={160} height={50} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+      <text x={440} y={240} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Client</text>
+      <text x={440} y={260} textAnchor="middle" fontSize={11} fill={C.warning}>x=5, y=80, scale=0.8</text>
+      {/* 箭头 */}
+      <text x={320} y={105} textAnchor="middle" fontSize={14} fill={C.success}>⬅ 共享</text>
+      <text x={320} y={175} textAnchor="middle" fontSize={14} fill={C.success}>⬅ 共享</text>
+      <text x={320} y={245} textAnchor="middle" fontSize={14} fill={C.success}>⬅ 共享</text>
+      {/* 标签 */}
+      <text x={140} y={340} textAnchor="middle" fontSize={11} fill={C.secondary}>内部状态（共享，不可变）</text>
+      <text x={440} y={340} textAnchor="middle" fontSize={11} fill={C.warning}>外部状态（上下文，每个客户端不同）</text>
+      {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 未区别内部/外部状态：每个对象独立存储全部数据，内存爆炸。修法：提取共享部分到 Flyweight</text>}
+    </svg>
+  );
+}
+
+// ─── Observer 模式：订阅发布图 ───
+function ObserverViz({ fault }: { fault: boolean }) {
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Observer 模式订阅发布图">
+      <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Observer 模式：订阅发布通知流</text>
+      {/* Subject */}
+      <rect x={340} y={70} width={220} height={60} rx={10} fill={C.accent} opacity={0.9} />
+      <text x={450} y={96} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.bg}>Subject（主题）</text>
+      <text x={450} y={116} textAnchor="middle" fontSize={11} fill="rgba(255,255,255,0.85)">+ attach(obs) ; + detach(obs) ; + notify()</text>
+      {/* 观察者列表 */}
+      <text x={450} y={160} textAnchor="middle" fontSize={11} fill={C.secondary}>观察者列表</text>
+      {["Observer A: UI", "Observer B: Achievements", "Observer C: Analytics", "Observer D: Audio"].map((l, i) => (
+        <g key={i}>
+          <rect x={190+i*140} y={180} width={130} height={50} rx={8} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+          <text x={255+i*140} y={200} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l.split(":")[0]}</text>
+          <text x={255+i*140} y={220} textAnchor="middle" fontSize={11} fill={C.success}>{l.split(":")[1]}</text>
+          {/* 通知箭头 */}
+          <line x1={340+i*140+65} y1={130} x2={255+i*140} y2={180} stroke={C.accent} strokeWidth={1.5} markerEnd="url(#oba)" />
+        </g>
+      ))}
+      <defs><marker id="oba" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill={C.accent} /></marker></defs>
+      <text x={450} y={280} textAnchor="middle" fontSize={11} fill={C.secondary}>notify() 遍历观察者列表，逐个调用 update()</text>
+      {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 观察者太多或通知太频繁导致性能问题。修法：事件队列异步处理，或合并批量通知</text>}
+    </svg>
+  );
+}
+
+// ─── Prototype 模式：克隆流程 ───
+function PrototypeViz({ fault }: { fault: boolean }) {
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Prototype 模式克隆流程">
+      <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Prototype 模式：原型克隆</text>
+      <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>通过克隆现有对象创建新实例，避免子类爆炸</text>
+      {/* 原型接口 */}
+      <rect x={60} y={80} width={140} height={50} rx={8} fill={C.bg} stroke={C.accent} strokeWidth={1.5} />
+      <text x={130} y={100} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.accent}>«interface»</text>
+      <text x={130} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Prototype</text>
+      <text x={130} y={140} textAnchor="middle" fontSize={11} fill={C.accent}>+ clone()</text>
+      {/* 具体原型 */}
+      {["Monster_Skeleton", "Monster_Goblin", "Monster_Dragon", "Item_Sword"].map((l, i) => {
+        const x = 60 + (i%2) * 220; const y = 180 + Math.floor(i/2) * 80;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={200} height={60} rx={8} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+            <text x={x+100} y={y+24} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l}</text>
+            <text x={x+100} y={y+44} textAnchor="middle" fontSize={11} fill={C.success}>health=100, speed=2.5</text>
+            {/* 继承箭头 */}
+            <line x1={x+100-20} y1={y} x2={130} y2={130} stroke={C.success} strokeWidth={1.5} strokeDasharray="5,3" />
+            <polygon points={`${x+100-24},${134} ${x+100-20},${130} ${x+100-16},${134}`} fill={C.success} />
+          </g>
+        );
+      })}
+      {/* 克隆箭头 */}
+      <text x={420} y={370} textAnchor="middle" fontSize={11} fill={C.success}>新怪物 = prototype.clone() → 修改属性 → 快速生成</text>
+      {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 深拷贝 vs 浅拷贝陷阱：引用类型成员被共享修改。修法：实现深拷贝或使用写时复制</text>}
+    </svg>
+  );
+}
+
+// ─── Singleton 模式：唯一实例图 ───
+function SingletonViz({ fault }: { fault: boolean }) {
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Singleton 模式唯一实例">
+      <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Singleton 模式：确保全局唯一实例</text>
+      <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>静态实例 + 私有构造 + 全局访问点</text>
+      {/* 单例类 */}
+      <rect x={330} y={80} width={240} height={130} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+      <text x={450} y={110} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.accent}>GameManager</text>
+      <line x1={340} y1={120} x2={560} y2={120} stroke={C.border} strokeWidth={1} />
+      <text x={450} y={140} textAnchor="middle" fontSize={11} fill={C.secondary}>- instance: GameManager</text>
+      <text x={450} y={160} textAnchor="middle" fontSize={11} fill={C.secondary}>- score: int</text>
+      <text x={450} y={180} textAnchor="middle" fontSize={11} fill={C.secondary}>- player: Player</text>
+      <line x1={340} y1={188} x2={560} y2={188} stroke={C.border} strokeWidth={1} />
+      <text x={450} y={206} textAnchor="middle" fontSize={11} fill={C.accent}>+ getInstance(): GameManager</text>
+      {/* 静态实例访问 */}
+      {["UI System", "AI System", "Audio System", "Physics System", "Scripting", "Rendering"].map((l, i) => {
+        const x = 50 + (i%3) * 200; const y = 260 + Math.floor(i/3) * 60;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={170} height={40} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1} />
+            <text x={x+85} y={y+24} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l}</text>
+            <line x1={x+85} y1={y} x2={450} y2={210} stroke={C.border} strokeWidth={1} strokeDasharray="4,3" />
+          </g>
+        );
+      })}
+      <text x={450} y={390} textAnchor="middle" fontSize={11} fill={C.secondary}>所有子系统通过 GameManager.getInstance() 访问同一实例</text>
+      {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 全局状态使测试困难、并发不安全。修法：使用依赖注入或用参数传递，减少全局依赖</text>}
+    </svg>
+  );
+}
+
+// ─── Double Buffer 模式：缓冲区交换 ───
+function DoubleBufferViz({ fault }: { fault: boolean }) {
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Double Buffer 双缓冲交换">
+      <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Double Buffer 模式：交换缓冲区</text>
+      <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>写缓冲区 + 读缓冲区，交换避免撕裂</text>
+      {/* 缓冲区 A */}
+      <rect x={120} y={90} width={200} height={160} rx={10} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+      <text x={220} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.accent}>Buffer A</text>
+      <line x1={130} y1={130} x2={310} y2={130} stroke={C.border} strokeWidth={1} />
+      {[0,1,2,3,4,5].map(i => <rect key={i} x={130+i*30} y={140} width={28} height={28} rx={3} fill={C.accent} opacity={0.3} />)}
+      <text x={220} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>当前帧数据</text>
+      <text x={220} y={215} textAnchor="middle" fontSize={11} fill={C.accent}>⬆ 写入中</text>
+      {/* 交换箭头 */}
+      <text x={420} y={170} textAnchor="middle" fontSize={20} fill={C.warning}>⇄ swap</text>
+      <text x={420} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>每帧交换</text>
+      {/* 缓冲区 B */}
+      <rect x={520} y={90} width={200} height={160} rx={10} fill={C.bg} stroke={C.success} strokeWidth={2} />
+      <text x={620} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.success}>Buffer B</text>
+      <line x1={530} y1={130} x2={710} y2={130} stroke={C.border} strokeWidth={1} />
+      {[0,1,2,3,4,5].map(i => <rect key={i} x={530+i*30} y={140} width={28} height={28} rx={3} fill={C.success} opacity={0.3} />)}
+      <text x={620} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>上一帧数据</text>
+      <text x={620} y={215} textAnchor="middle" fontSize={11} fill={C.success}>⬇ 读取中</text>
+      {/* 阶段 */}
+      <rect x={120} y={280} width={600} height={70} rx={8} fill={C.bg} stroke={C.border} strokeWidth={1} />
+      {["1. 写入 Buffer A", "2. 交换 swap()", "3. 读取 Buffer B", "4. 重复"].map((l, i) => (
+        <g key={i}>
+          <rect x={130+i*150} y={290} width={140} height={30} rx={6} fill={C.elevated} stroke={C.accent} strokeWidth={1} />
+          <text x={200+i*150} y={310} textAnchor="middle" fontSize={11} fill={C.primary}>{l}</text>
+          {i < 3 && <text x={270+i*150} y={308} textAnchor="middle" fontSize={14} fill={C.border}>→</text>}
+        </g>
+      ))}
+      {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 单缓冲区：写入时被读取显示半帧数据（撕裂）。修法：双缓冲隔离读写操作</text>}
+    </svg>
+  );
+}
+
 const VIZ = {
   "01": ArchViz, "02": CommandViz, "07": StateViz, "09": GameLoopViz, "14": ComponentViz,
+  "03": FlyweightViz, "04": ObserverViz, "05": PrototypeViz, "06": SingletonViz, "08": DoubleBufferViz,
 };
 
 export function GppPatternLab({ chapter }: { chapter: string }) {

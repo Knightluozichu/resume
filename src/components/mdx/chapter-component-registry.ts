@@ -10616,10 +10616,50 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         GppPatternLab: module0.GppPatternLab,
       } as ChapterMdxComponents;
     },
+  "game-programming-patterns/06-chapter-03-flyweight/gpp-chapter-03-flyweight":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-03-flyweight");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/07-chapter-04-observer/gpp-chapter-04-observer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-04-observer");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/08-chapter-05-prototype/gpp-chapter-05-prototype":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-05-prototype");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/09-chapter-06-singleton/gpp-chapter-06-singleton":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-06-singleton");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
   "game-programming-patterns/10-chapter-07-state/gpp-chapter-07-state":
     async () => {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-07-state");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/12-chapter-08-double-buffer/gpp-chapter-08-double-buffer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-08-double-buffer");
       return {
         GppPatternLab: module0.GppPatternLab,
       } as ChapterMdxComponents;
