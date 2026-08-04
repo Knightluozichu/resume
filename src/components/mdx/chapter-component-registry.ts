@@ -15420,6 +15420,194 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Rtw12FinalRenderEvidenceLab: module0.Rtw12FinalRenderEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "redis-design-implementation/00-learning-map/rdi-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-official-learning-map");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
+  "redis-design-implementation/01-introduction/rdi-01-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-01-introduction");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
+  "redis-design-implementation/02-simple-dynamic-string/rdi-02-simple-dynamic-string":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-02-simple-dynamic-string");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
+  "redis-design-implementation/03-linked-list/rdi-03-linked-list": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-03-linked-list");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/04-dictionary/rdi-04-dictionary": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-04-dictionary");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/05-skiplist/rdi-05-skiplist": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-05-skiplist");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/06-integer-set/rdi-06-integer-set": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-06-integer-set");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/07-ziplist/rdi-07-ziplist": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-07-ziplist");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/08-object/rdi-08-object": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-08-object");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/09-database/rdi-09-database": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-09-database");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/10-rdb-persistence/rdi-10-rdb-persistence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-10-rdb-persistence");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
+  "redis-design-implementation/11-aof-persistence/rdi-11-aof-persistence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-11-aof-persistence");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
+  "redis-design-implementation/12-event/rdi-12-event": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-12-event");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/13-client/rdi-13-client": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-13-client");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/14-server/rdi-14-server": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-14-server");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/15-replication/rdi-15-replication": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-15-replication");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/16-sentinel/rdi-16-sentinel": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-16-sentinel");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/17-cluster/rdi-17-cluster": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-17-cluster");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/18-pubsub/rdi-18-pubsub": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-18-pubsub");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/19-transaction/rdi-19-transaction": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-19-transaction");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/20-lua/rdi-20-lua": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-20-lua");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/21-sort/rdi-21-sort": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-21-sort");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/22-bit-array/rdi-22-bit-array": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-22-bit-array");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/23-slow-log/rdi-23-slow-log": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-23-slow-log");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/24-monitor/rdi-24-monitor": async () => {
+    const module0 =
+      await import("@/components/mdx/redis-design-implementation/v2/rdi-24-monitor");
+    return {
+      RdiStructureLab: module0.RdiStructureLab,
+    } as ChapterMdxComponents;
+  },
+  "redis-design-implementation/99-final-review/rdi-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/redis-design-implementation/v2/rdi-official-final-review");
+      return {
+        RdiStructureLab: module0.RdiStructureLab,
+      } as ChapterMdxComponents;
+    },
   "rl-deep-learning-c/00-learning-map/rlc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/rl-deep-learning-c/v2/rlc-official-learning-map");

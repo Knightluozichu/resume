@@ -16,7 +16,18 @@ sourceMode: independent-rewrite
 ---
 
 
+import { RdiStructureLab } from "@/components/mdx/redis-design-implementation/v2/rdi-02-simple-dynamic-string";
+
 {/* RDI_QUALITY_V2 */}
+
+
+<Objectives>
+
+- 能画出 sdshdr 的 len、free、buf 三字段布局
+- 能解释二进制安全与 O(1) 取长的实现
+- 能分析预分配与惰性释放的内存权衡
+
+</Objectives>
 
 ## 为什么从“SDS字节与扩容轨迹台”开始
 
@@ -32,9 +43,10 @@ sourceMode: independent-rewrite
 
 ## 本章术语与源码合同
 
-、、、、、。
 
 第2章 简单动态字符串必须守住“字符串长度、终止字节和可用空间始终一致，扩容不会溢出，二进制数据不被截断”。观察同时记录SDS字节与扩容轨迹台一致率与空间状态分叉风险；只有结构快照、函数入口、运行结果和故障反例互相一致，才接受实现结论。
+
+<RdiStructureLab chapter="02" />
 
 ## 作者目录逐项深读
 
@@ -90,6 +102,20 @@ replay: same_version_same_input
 
 ## 三个必须主动触发的误区
 
+### 误区 1
+**现象 →** 把 SDS 当 C 字符串用
+**原因 →** 遇 \0 截断破坏二进制数据
+**修法 →** 用 len 字段语义处理任意字节
+
+### 误区 2
+**现象 →** 频繁 append 不管扩容
+**原因 →** 每次重分配拖慢写入
+**修法 →** 预估容量一次分配，或定期整理
+
+### 误区 3
+**现象 →** 忽视内存碎片
+**原因 →** 长短交替造成空间闲置
+**修法 →** 监控内存碎片率，必要时重启整理
 
 ## 小结
 
@@ -100,6 +126,28 @@ replay: same_version_same_input
 - 兼容部分 C 字符串函数
 
 ## 练习、答案与节点验证
+
+<Exercises>
+
+**问题 1：** SDS 为什么能 O(1) 取长度且二进制安全？
+
+<Answer>
+sdshdr 的 len 字段直接记录长度，无需扫描结束符；内容长度显式记录，字节流中允许出现任意字节。
+</Answer>
+
+**问题 2：** SDS 的预分配会带来什么副作用？
+
+<Answer>
+短字符串场景内存浪费：每个 SDS 多占一倍预留空间，海量小 key 时内存碎片率显著升高。
+</Answer>
+
+**问题 3：** 手写一个 SDS 追加函数，要求先检查 free 再决定是否扩容。（独立实现）
+
+<Answer>
+逻辑：if free >= addlen 直接 memcpy；否则按策略扩容（小于 1MB 翻倍，否则加 1MB）再拷贝，更新 len 与 free。
+</Answer>
+
+</Exercises>
 
 
 ## 术语复核与本章回顾
