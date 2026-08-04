@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-04T06:54:43.855Z；旧版分数不迁移。
+> 2026-08-04T07:24:33.482Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2530
 - queued：402
-- passed：1101
-- published：463
+- passed：1067
+- published：497
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -178,7 +178,7 @@
 | 165 | csharp-quality-code | 14 | 0 | 0 | 14 | 0 |
 | 166 | css-secrets | 10 | 0 | 0 | 10 | 0 |
 | 167 | data-structures-visual | 11 | 0 | 0 | 11 | 0 |
-| 168 | database-system-concepts | 35 | 0 | 0 | 35 | 0 |
+| 168 | database-system-concepts | 35 | 0 | 0 | 0 | 0 |
 | 169 | deep-android-kernel | 24 | 0 | 0 | 24 | 0 |
 | 170 | deep-android-volumes | 28 | 0 | 0 | 28 | 0 |
 | 171 | deep-learning-from-scratch | 11 | 0 | 0 | 0 | 0 |
@@ -222,7 +222,7 @@
 | 209 | pattern-recognition-ml | 21 | 0 | 0 | 0 | 0 |
 | 210 | pbrt-book | 16 | 0 | 0 | 16 | 0 |
 | 211 | ray-tracing-weekend | 12 | 0 | 0 | 12 | 0 |
-| 212 | redis-design-implementation | 26 | 0 | 0 | 0 | 0 |
+| 212 | redis-design-implementation | 26 | 0 | 0 | 1 | 0 |
 | 213 | rl-deep-learning-c | 6 | 0 | 0 | 0 | 0 |
 | 214 | ruby-programming | 25 | 0 | 0 | 25 | 0 |
 | 215 | statistical-learning-methods | 25 | 0 | 0 | 25 | 0 |

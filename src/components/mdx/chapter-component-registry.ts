@@ -15715,7 +15715,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/redis-design-implementation/v2/rdi-02-simple-dynamic-string");
       return {
-        RdiStructureLab: module0.RdiStructureLab,
+        RdiSdsLayoutLab: module0.RdiSdsLayoutLab,
       } as ChapterMdxComponents;
     },
   "redis-design-implementation/03-linked-list/rdi-03-linked-list": async () => {
