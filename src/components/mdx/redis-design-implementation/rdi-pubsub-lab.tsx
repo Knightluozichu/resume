@@ -21,7 +21,7 @@ export function RdiPubsubLab() {
   const [subs, setSubs] = useState<Subscriber[]>(INITIAL_SUBS);
   const [channel, setChannel] = useState("news");
   const [nextId, setNextId] = useState(5);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<{ channel: string; to: string[]; ts: number }[]>([]);
   const [log, setLog] = useState<string[]>([
     "发布订阅：PUBLISH 向频道广播，SUBSCRIBE/PSUBSCRIBE 订阅。消息即发即弃，无订阅者则丢弃。",
   ]);
