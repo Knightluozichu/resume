@@ -15736,7 +15736,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-05-skiplist");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiSkiplistVisualLab: module0.RdiSkiplistVisualLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/06-integer-set/rdi-06-integer-set": async () => {
