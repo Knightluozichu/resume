@@ -1341,7 +1341,9 @@
 
 **部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.10 multiagent-systems（27 章 · 待修 0 章 · 54 项） ✅
+### 6.10 multiagent-systems（27 章 · 待修 0 章 · 54 项）✅
+
+**书籍状态**：🚀 全面重写后部署上线（2026-08-04 release-20260804T054634Z，27 章 published）：补图解组件 MasInteractionLab + Objectives/练习/误区/小结/知识点对照/Term/Glossary，audit 27/27 passed
 
 **书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
