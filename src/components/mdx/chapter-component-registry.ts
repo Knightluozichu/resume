@@ -10613,7 +10613,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-02-command");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppCommandLab: module0.GppCommandLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/06-chapter-03-flyweight/gpp-chapter-03-flyweight":
