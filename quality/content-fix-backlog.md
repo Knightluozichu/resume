@@ -1127,65 +1127,65 @@
 
 ## 系列 06：AI/LLM 应用系列（11 本 · 176 章待修 · 293 项）
 
-**系列状态**：待开始
+**系列状态**：进行中（6.1-6.3 完成，6.4-6.11 待修）
 
-### 6.1 ai-agent（9 章 · 待修 9 章 · 9 项）
+### 6.1 ai-agent（9 章 · 待修 0 章 · 9 项） ✅
 
-**书籍状态**：待修复
-
-| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
-|---|---------|---------|------|---------|
-| 1 | ai-agent/foundations/agent-anatomy.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | ai-agent/foundations/chatbot-to-agent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | ai-agent/foundations/llm-as-brain.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | ai-agent/llm/prompt-engineering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | ai-agent/llm/sampling-decoding.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | ai-agent/llm/structured-output.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | ai-agent/tools/function-calling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | ai-agent/tools/react-loop.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | ai-agent/tools/tool-design.mdx | §8缺小结 | ⬜ 待修复 | — |
-
-**部署记录**：—
-
-### 6.2 llm-app-dev-essentials（9 章 · 待修 9 章 · 9 项）
-
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | llm-app-dev-essentials/00-map/lae-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | llm-app-dev-essentials/01-preface/lae-preface.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | llm-app-dev-essentials/02-essentials/lae-01-gpt4-chatgpt-essentials.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | llm-app-dev-essentials/03-api/lae-02-api-deep-dive.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | llm-app-dev-essentials/04-apps/lae-03-building-apps.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | llm-app-dev-essentials/05-advanced/lae-04-advanced-techniques.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | llm-app-dev-essentials/06-frameworks/lae-05-langchain-plugins.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | llm-app-dev-essentials/07-glossary/lae-glossary.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | llm-app-dev-essentials/08-review/lae-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | ai-agent/foundations/agent-anatomy.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 2 | ai-agent/foundations/chatbot-to-agent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 3 | ai-agent/foundations/llm-as-brain.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 4 | ai-agent/llm/prompt-engineering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 5 | ai-agent/llm/sampling-decoding.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 6 | ai-agent/llm/structured-output.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 7 | ai-agent/tools/function-calling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 8 | ai-agent/tools/react-loop.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 9 | ai-agent/tools/tool-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.3 langchain-programming（13 章 · 待修 13 章 · 13 项）
+### 6.2 llm-app-dev-essentials（9 章 · 待修 0 章 · 9 项） ✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | langchain-programming/00-map/lcp-official-learning-map.mdx | §8无要点 | ⬜ 待修复 | — |
-| 2 | langchain-programming/01-preface/lcp-preface.mdx | §8无要点 | ⬜ 待修复 | — |
-| 3 | langchain-programming/02-introduction/lcp-01-introduction.mdx | §8无要点 | ⬜ 待修复 | — |
-| 4 | langchain-programming/03-quickstart/lcp-02-first-experience.mdx | §8无要点 | ⬜ 待修复 | — |
-| 5 | langchain-programming/04-model-io/lcp-03-model-io.mdx | §8无要点 | ⬜ 待修复 | — |
-| 6 | langchain-programming/05-chains/lcp-04-building-chains.mdx | §8无要点 | ⬜ 待修复 | — |
-| 7 | langchain-programming/06-rag/lcp-05-rag.mdx | §8无要点 | ⬜ 待修复 | — |
-| 8 | langchain-programming/07-agents/lcp-06-agents.mdx | §8无要点 | ⬜ 待修复 | — |
-| 9 | langchain-programming/08-memory/lcp-07-memory.mdx | §8无要点 | ⬜ 待修复 | — |
-| 10 | langchain-programming/09-callbacks/lcp-08-callbacks.mdx | §8无要点 | ⬜ 待修复 | — |
-| 11 | langchain-programming/10-project/lcp-09-multimodal-bot.mdx | §8无要点 | ⬜ 待修复 | — |
-| 12 | langchain-programming/11-community/lcp-10-community-resources.mdx | §8无要点 | ⬜ 待修复 | — |
-| 13 | langchain-programming/12-review/lcp-official-final-review.mdx | §8无要点 | ⬜ 待修复 | — |
+| 1 | llm-app-dev-essentials/00-map/lae-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 2 | llm-app-dev-essentials/01-preface/lae-preface.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 3 | llm-app-dev-essentials/02-essentials/lae-01-gpt4-chatgpt-essentials.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 4 | llm-app-dev-essentials/03-api/lae-02-api-deep-dive.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 5 | llm-app-dev-essentials/04-apps/lae-03-building-apps.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 6 | llm-app-dev-essentials/05-advanced/lae-04-advanced-techniques.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 7 | llm-app-dev-essentials/06-frameworks/lae-05-langchain-plugins.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 8 | llm-app-dev-essentials/07-glossary/lae-glossary.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 9 | llm-app-dev-essentials/08-review/lae-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
+
+### 6.3 langchain-programming（13 章 · 待修 0 章 · 13 项） ✅
+
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
+
+| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
+|---|---------|---------|------|---------|
+| 1 | langchain-programming/00-map/lcp-official-learning-map.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 2 | langchain-programming/01-preface/lcp-preface.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 3 | langchain-programming/02-introduction/lcp-01-introduction.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 4 | langchain-programming/03-quickstart/lcp-02-first-experience.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 5 | langchain-programming/04-model-io/lcp-03-model-io.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 6 | langchain-programming/05-chains/lcp-04-building-chains.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 7 | langchain-programming/06-rag/lcp-05-rag.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 8 | langchain-programming/07-agents/lcp-06-agents.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 9 | langchain-programming/08-memory/lcp-07-memory.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 10 | langchain-programming/09-callbacks/lcp-08-callbacks.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 11 | langchain-programming/10-project/lcp-09-multimodal-bot.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 12 | langchain-programming/11-community/lcp-10-community-resources.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 13 | langchain-programming/12-review/lcp-official-final-review.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
 ### 6.4 chatgpt-principles-practice（13 章 · 待修 13 章 · 13 项）
 
