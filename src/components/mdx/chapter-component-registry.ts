@@ -15722,7 +15722,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-03-linked-list");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiLinkedListLab: module0.RdiLinkedListLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/04-dictionary/rdi-04-dictionary": async () => {
@@ -15743,28 +15743,28 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-06-integer-set");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiIntsetLab: module0.RdiIntsetLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/07-ziplist/rdi-07-ziplist": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-07-ziplist");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiZiplistLab: module0.RdiZiplistLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/08-object/rdi-08-object": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-08-object");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiObjectLab: module0.RdiObjectLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/09-database/rdi-09-database": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-09-database");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiDatabaseLab: module0.RdiDatabaseLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/10-rdb-persistence/rdi-10-rdb-persistence":
