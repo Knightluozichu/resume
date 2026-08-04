@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下三段骨架覆盖交易验证、区块追加与证据门禁，帮助你在扩容实验中核对吞吐提升是否改变了验证边界。
+
+<CodeTabs>
+<Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+</Tab>
+<Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -147,8 +156,51 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 把资产从主链转移到侧链后，侧链锚定节点集体作恶，资产无法退出——你可以亲手翻车：模拟3个锚定节点中2个被控制，用户提交退出请求被拒绝。
+**原因 →** 侧链安全性依赖锚定机制和退出假设，吞吐提升不会免费继承主链的全部安全性。
+**修法 →** 评估侧链时必须显式列出锚定信任模型、退出窗口和争议机制，不能只看TPS提升。
+
+**现象 →** 闪电网络用户长期离线，回来发现通道余额被对手用旧状态关闭，资金被盗。
+**原因 →** 闪电网络要求参与者在线监控通道状态并及时提交惩罚交易，离线期间旧状态可能被恶意提交。
+**修法 →** 部署看塔（Watchtower）服务代理监控，或确保在争议窗口内上线提交最新状态。
+
+**现象 →** 闪电网络支付路由显示成功，但对方声称未收到，以为支付已完成。
+**原因 →** "收到交易"不等于"最终结算"，闪电网络支付在通道关闭并上链确认前并非最终到账。
+**修法 →** 区分路由成功与通道结算两个阶段，大额支付应在主链确认后才视为最终完成。
+
+## 小结
+
+- 扩容改变数据量、验证位置或结算频率，不免费继承主链安全
+- 侧链需要锚定和退出假设，吞吐提升伴随信任边界转移
+- 闪电网络需要通道资金、路由和在线监控
+- 多链交互必须验证对方最终性，不能假设跨链即时结算
+- "收到交易"不等于"最终结算"，确认依赖深度和规范链
+
+<Exercises>
+
+**问题 1**
+
+假设Alice和Bob通过闪电网络建立支付通道，初始余额分别为 Alice=5、Bob=3。请独立实现一个函数 `update_channel(state, sender, amount)` 更新链下余额状态，并实现 `close_channel(state)` 生成分配最终余额的关闭交易。要求：构造一个旧状态（Alice=4, Bob=4）和当前状态（Alice=2, Bob=6），验证关闭交易使用的是最新状态而非旧状态。
+
+<Answer>
+
+关键点：通道状态需带版本号或序列号，关闭时双方签名最新状态；惩罚机制保证提交旧状态者被罚没。`update_channel` 检查发送方余额充足后更新双方余额和版本号，`close_channel` 输出当前余额分配并锁定争议窗口。
+
+</Answer>
+
+**问题 2**
+
+将比特币区块大小从1MB提升到2MB，理论吞吐翻倍。请分析这一扩容方案把哪些成本转移到了哪里（验证、存储、传播、数据可用性），以及为什么不能说"吞吐翻倍且安全性不变"。
+
+<Answer>
+
+区块翻倍后：全节点存储和传播带宽翻倍，轻节点SPV验证的欺诈证明数据可用性风险增加，出块传播延迟可能导致更高孤儿率。安全性虽然共识机制不变，但网络分叉概率上升、全节点门槛提高导致去中心化程度下降，因此不能说安全性完全不变。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -159,4 +211,11 @@ def evidence_gate(run):
 
 - [上一页：第4章 区块链灵魂：共识算法](/learn/blockchain-plain/06-04-consensus/bp-04-consensus)
 - [下一页：第6章 区块链开发平台：以太坊](/learn/blockchain-plain/08-06-ethereum/bp-06-ethereum)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

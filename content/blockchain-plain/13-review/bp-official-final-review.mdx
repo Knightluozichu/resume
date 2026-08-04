@@ -45,6 +45,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示贯穿全书的核心验证骨架：前两个函数检查交易合法性与区块链接完整性，第三个函数对复习实验记录做结构化门禁。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
@@ -62,12 +67,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -183,8 +194,90 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 能背出"PoW""PBFT""Merkle树"等术语，但从零实现时无法写出正确的哈希链接验证函数。
+**原因 →** 把记忆概念等同于掌握协议，跳过了从空目录构建最小系统的验证步骤。
+**修法 →** 每个概念都落到一个可运行的最小代码片段，先手算再运行；你可以试着不看参考实现一个 append_block 函数，看能否正确拒绝断链。
+
+**现象 →** 用账户模型的 nonce 逻辑去验证 UTXO 交易，或用 UTXO 的未花费检查去验证账户转账，结果都"看起来对"但规则错位。
+**原因 →** UTXO 检查引用与未花费性，账户检查发送者、nonce 与余额，两者不能共用一个含糊的"余额正确"断言。
+**修法 →** 复习时为每章明确标注状态模型，验证函数与状态模型绑定，不混用。
+
+**现象 →** 按原书命令下载旧版客户端，连接后报错或连到已废弃的网络参数。
+**原因 →** 原书记录的是2017年前后的软件版本和网络配置，今天已经演进或废弃，直接照抄会失败。
+**修法 →** 建立原书术语-历史行为-当前替代-验证方法的对应表，在隔离环境复现历史行为，另列现代迁移路径。
+
+## 小结
+
+- 区块链本质是候选状态经独立验证、排序、共识后写入历史
+- 密码学提供授权与摘要，不提供保密或业务合法性
+- 共识结论依赖故障模型与网络假设，非协议名称
+- 扩容改变验证位置或结算频率，不免费继承主链安全性
+- 掌握标准是能从空环境重建可审计的最小实验
+
+<Exercises>
+
+**问题 1：** UTXO 模型和账户模型在验证交易时，各自需要检查哪些不同条件？为什么不能共用一个"余额正确"断言？
+
+<Answer>
+
+UTXO 模型检查：（1）输入引用的 UTXO 是否存在且未花费；（2）输入是否有对应签名解锁；（3）输入总价值大于等于输出总价值。账户模型检查：（1）发送者余额是否足够；（2）nonce 是否等于账户当前 nonce（防重放）；（3）签名是否匹配发送者。不能共用"余额正确"断言的原因：UTXO 模型中"余额"是未花费输出的派生视图，核心是引用有效性；账户模型中"余额"是显式状态字段，核心是 nonce 顺序和余额扣减。混用会导致 UTXO 交易漏检重复引用，或账户交易漏检 nonce 重放。
+
+</Answer>
+
+**问题 2：** 共识算法的安全性和活性分别是保证什么？FLP 不可能定理对实际系统设计有什么启示？
+
+<Answer>
+
+安全性保证：不会做出错误决定（如不会最终确认冲突交易）。活性保证：系统最终能做出决定（非故障节点不会永远等待）。FLP 不可能定理指出，在异步网络中如果存在哪怕一个节点可能崩溃，就不存在同时满足安全性和活性的确定性共识协议。实际启示：现实系统必须放宽假设——要么假设同步超时（如 PBFT 的视图切换超时），要么引入随机性（如 PoW 的 nonce 搜索），要么容忍概率性终止（如 PoW 的概率最终性）。没有"完美"的共识，只有特定假设下的权衡。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个完整的微链验证流程：给定创世块哈希、一组待验证交易和候选区块，依次执行（1）逐笔交易验证，（2）区块链接验证（前块哈希是否等于当前链尾哈希），（3）通过后更新 UTXO 集合并返回新链。任一步失败则返回原因且不修改原状态。
+
+<Answer>
+
+```python
+import hashlib, json
+
+def hash_block(block):
+    payload = json.dumps(block, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+def verify_tx(tx, utxos, verify_sig):
+    inputs = [utxos.get(ref) for ref in tx["inputs"]]
+    if None in inputs:
+        return False, "missing-utxo"
+    if len(set(tx["inputs"])) != len(tx["inputs"]):
+        return False, "duplicate-input"
+    if not verify_sig(tx):
+        return False, "bad-signature"
+    if sum(inputs) < sum(tx["outputs"]):
+        return False, "insufficient-value"
+    return True, None
+
+def process_block(chain, block, utxos, verify_sig):
+    for tx in block["transactions"]:
+        ok, reason = verify_tx(tx, utxos, verify_sig)
+        if not ok:
+            return {"accepted": False, "reason": reason, "chain": chain, "utxos": utxos}
+    if block["previous"] != hash_block(chain[-1]):
+        return {"accepted": False, "reason": "broken-link", "chain": chain, "utxos": utxos}
+    new_utxos = dict(utxos)
+    for tx in block["transactions"]:
+        for ref in tx["inputs"]:
+            del new_utxos[ref]
+        for i, out in enumerate(tx["outputs"]):
+            new_utxos[f"{hash_block(tx)}:{i}"] = out
+    return {"accepted": True, "chain": [*chain, block], "utxos": new_utxos, "reason": None}
+```
+
+验证要点：构造一笔重复引用同一输入的交易，应返回 "duplicate-input" 且原链不变；构造一个前块哈希错误的区块，应返回 "broken-link" 且 UTXO 集合不变。这正是全书反复强调的核心原则：失败时不修改原状态。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -194,4 +287,11 @@ def evidence_gate(run):
 ## 前后导航
 
 - [上一页：后记 区块链与可编程社会](/learn/blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下三段骨架从交易验证、区块追加到证据门禁构成最小闭环，帮助你在Fabric实验中追踪背书、排序与提交的证据链。
+
+<CodeTabs>
+<Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+</Tab>
+<Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -189,8 +198,51 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 联盟链中所有成员都有许可身份，于是默认信任对方不做验证——你可以亲手翻车：让一个背书节点签名伪造的读写集，提交节点如果不验证签名就直接写入世界状态。
+**原因 →** 许可身份只解决"你是谁"，不等于"你不会作恶"；背书策略和读写集版本检查是独立的安全层。
+**修法 →** 提交节点必须验证每个背书签名有效且数量满足策略，同时检查读写集版本号与当前世界状态一致。
+
+**现象 →** 背书策略配置为只需1个节点背书即可提交，单节点被攻破后篡改账本数据。
+**原因 →** 背书策略决定了多少节点签名才能提交交易；策略过松等于把信任集中在单点。
+**修法 →** 根据业务安全等级设置 `AND` 或 `OutOf` 策略，关键操作至少要求多数背书节点签名。
+
+**现象 →** 照书中2017年的Fabric安装命令和配置文件操作，全部报错。
+**原因 →** Fabric架构已从Solo/Kafka排序演进到Raft排序，链码从Docker容器模式演进为外部构建器，证书服务和配置工具均不兼容。
+**修法 →** 建立版本对应表，用现代Fabric二进制和fabric-samples重建实验环境，书中命令仅作历史参考。
+
+## 小结
+
+- Fabric把执行、排序和验证三阶段分开
+- 背书节点模拟并签名读写集，排序服务形成批次
+- 提交节点检查背书策略与版本冲突后更新世界状态
+- 许可身份不等于自动可信，背书策略必须显式配置
+- 2017年安装命令已失效，需用现代Fabric重建实验
+
+<Exercises>
+
+**问题 1**
+
+假设Fabric网络中有3个背书节点 Org1Peer、Org2Peer、Org3Peer，背书策略为 `OutOf(2, [Org1, Org2, Org3])`。请独立实现一个函数 `validate_endorsement(proposal_response, policy, world_state)`，验证：(1) 背书签名有效；(2) 背书节点数量满足策略；(3) 读写集版本号与世界状态一致。要求：构造一个背书数量不足的样本和一个读写集版本冲突的样本，验证函数均返回拒绝原因。
+
+<Answer>
+
+关键点：函数需分别检查三个条件——签名验证、策略匹配（至少2个组织背书）、MVCC版本检查。拒绝原因应区分 `insufficient-endorsements`、`invalid-signature` 和 `mvcc-conflict`，便于定位失败环节。读写集版本冲突模拟：在背书后、提交前修改世界状态版本号。
+
+</Answer>
+
+**问题 2**
+
+请按顺序追踪一笔Fabric交易从发起到提交的完整路径，列出每个阶段的参与角色、输入和输出证据：客户端 -> 背书节点 -> 排序服务 -> 提交节点。
+
+<Answer>
+
+1. 客户端：输入=交易提案（链码名、函数、参数）；输出=签名后的提案。2. 背书节点：输入=提案；输出=签名读写集（读集版本+写集新值+背书签名）。3. 排序服务：输入=多笔背书交易；输出=排序后的区块批次。4. 提交节点：输入=区块；验证背书策略和MVCC后输出=世界状态更新和账本提交结果。每个阶段的输出即下一阶段的输入证据。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -201,4 +253,11 @@ def evidence_gate(run):
 
 - [上一页：第6章 区块链开发平台：以太坊](/learn/blockchain-plain/08-06-ethereum/bp-06-ethereum)
 - [下一页：第8章 动手做个实验：搭建微链](/learn/blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

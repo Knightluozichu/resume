@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示应用比较的两层视角：核心逻辑层验证链上状态转移，证据门禁层区分链上证明与链外履约的边界。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -225,8 +234,72 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 把商品溯源数据写入区块链就声称商品保真。
+**原因 →** 内容寻址只证明取回一致，不证明传感器或标签真实。
+**修法 →** 链外资产须通过身份、审计、预言机、争议和法律执行闭环。你可以亲自试一下：把一条假仓单写入IPFS，观察链上摘要仍验证通过。
+
+**现象 →** 只看TPS就判定某数字货币更优。
+**原因 →** 未固定安全预算、确认定义和隐私泄漏面。
+**修法 →** 比较时固定节点可验证成本、安全预算和确认定义。
+
+**现象 →** 链上确认后认为法币也已到账。
+**原因 →** 链上确认只覆盖协议内状态，法币账户在链外。
+**修法 →** 明确最终性与追索规则，区分清算与结算。
+
+## 小结
+
+- 数字货币比较须固定安全预算、确认定义和隐私泄漏面
+- 智能合约确定性不保证业务意图或权限配置正确
+- 链上确认只覆盖协议内状态，法币追索仍在链外
+- 内容寻址证明取回一致，不证明链外事实真实
+- 通过标准：能为业务场景画出链上状态、链外事实与争议处置
+
+<Exercises>
+
+**问题 1：** IPFS的内容寻址能证明什么，不能证明什么？
+
+<Answer>
+
+IPFS的内容寻址能证明取回的数据与给定摘要一致（数据完整性），也能通过时间戳证明某摘要曾出现。但不能自动证明传感器读数、仓单记录或商品标签的真实性——这些是链外事实，需要身份、审计、预言机和法律执行来闭环。
+
+</Answer>
+
+**问题 2（独立实现）：** 独立实现一个链上链外边界检查器，输入应用场景描述，输出哪些是链上可验证状态、哪些是链外事实，并标注每个链外事实所需的信任假设。
+
+<Answer>
+
+```python
+def boundary_checker(scenario):
+    on_chain = []
+    off_chain = []
+    for item in scenario:
+        if item["type"] in ("state_transfer", "signature", "block_hash"):
+            on_chain.append(item["name"])
+        else:
+            off_chain.append({
+                "name": item["name"],
+                "trust_assumption": item.get("trust", "unspecified"),
+            })
+    return {"on_chain": on_chain, "off_chain": off_chain}
+
+# 测试：溯源场景
+scenario = [
+    {"name": "仓单上链哈希", "type": "block_hash"},
+    {"name": "传感器温度读数", "type": "oracle", "trust": "传感器未被篡改"},
+    {"name": "商品物理交接", "type": "physical", "trust": "物流方诚实"},
+    {"name": "所有权转移签名", "type": "signature"},
+]
+result = boundary_checker(scenario)
+assert "仓单上链哈希" in result["on_chain"]
+assert "所有权转移签名" in result["on_chain"]
+assert any(o["name"] == "传感器温度读数" for o in result["off_chain"])
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -237,4 +310,11 @@ def evidence_gate(run):
 
 - [上一页：第1章 初识区块链](/learn/blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain)
 - [下一页：第3章 区块链骨骼：密码算法](/learn/blockchain-plain/05-03-cryptography/bp-03-cryptography)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

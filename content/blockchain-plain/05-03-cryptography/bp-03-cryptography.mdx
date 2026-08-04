@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下三段骨架将哈希链接、签名验证与证据门禁串成可运行的最小闭环，帮助你把密码学概念落到代码验证。
+
+<CodeTabs>
+<Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+</Tab>
+<Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -201,8 +210,51 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 把Base58编码后的私钥存在公开文件里，以为编码就等于加密。
+**原因 →** Base58只是可逆表示，任何人都能解码还原原文，它不提供任何保密性。
+**修法 →** 私钥必须用加密方案（如AES）或硬件钱包保护，编码仅用于人机传递和抄录校验。
+
+**现象 →** 交易签名验证通过，节点却拒绝该交易——你可以亲手用一段Python代码复现这个翻车：只验签名不查UTXO是否未花费，双花交易签名完全正确却被拒绝。
+**原因 →** 签名只证明私钥授权，不代表输入尚未消费；价值守恒和未花费约束是独立检查项。
+**修法 →** 验证函数必须同时检查签名、UTXO存在性、重复引用和价值守恒，四项缺一不可。
+
+**现象 →** 修改区块内交易金额后重算Merkle根和区块摘要，单块内部看起来一致，整条链却断裂。
+**原因 →** 后续区块引用的是修改前的摘要，改一个字段就破坏了哈希链接的完整性。
+**修法 →** 任何字段变更必须从该区块起重算所有后续摘要，并重新经过共识确认，不能只做局部修补。
+
+## 小结
+
+- 哈希提供完整性校验，不提供保密性或身份证明
+- 公私钥把授权绑定到私钥，公钥负责公开验证
+- 数字签名证明私钥授权，但不代表交易业务合法
+- Base64/Base58是可逆编码，Base58Check加校验和防抄录错误
+- 编码不是加密，哈希不是签名，三者职责不可混用
+
+<Exercises>
+
+**问题 1**
+
+给定一个区块包含 `previous_hash`、`merkle_root`、`timestamp` 和 `nonce` 四个字段，请独立实现一个函数 `compute_block_hash(block)` 计算区块摘要，并实现 `verify_chain(chain)` 验证整条链的哈希链接完整性。要求：篡改任意一个区块的任意字段后，`verify_chain` 必须返回 `False`。
+
+<Answer>
+
+关键点：将四个字段按固定顺序拼接后哈希，验证时逐块检查 `block["previous_hash"] == hash(prev_block)`。篡改字段会导致当前块摘要变化，从而与后一块的 `previous_hash` 不匹配。
+
+</Answer>
+
+**问题 2**
+
+Base58Check 在 Base58 的基础上增加了4字节校验和。请解释为什么 Base58Check 能检测出单字符抄录错误，而普通 Base58 不能。如果两个字符被同时抄错且恰好抵消，校验和是否仍然可靠？
+
+<Answer>
+
+Base58Check 对原始数据做两次SHA-256后取前4字节作为校验和，任何单字符变化都会改变校验和值从而被检测。若两个字符同时出错且恰好使校验和不变，概率仅为 1/2^32，在实际抄录场景中可忽略不计，但不为零。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -213,4 +265,11 @@ def evidence_gate(run):
 
 - [上一页：第2章 区块链应用发展](/learn/blockchain-plain/04-02-application-development/bp-02-application-development)
 - [下一页：第4章 区块链灵魂：共识算法](/learn/blockchain-plain/06-04-consensus/bp-04-consensus)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示区块链定义的两层视角：核心逻辑层从交易验证到区块链接构建共同账本，证据门禁层确保实验记录可被独立复核。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -219,8 +228,84 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 以为广播后所有节点自然接受同一状态。
+**原因 →** 混淆数据复制与状态验证，广播只传播候选数据。
+**修法 →** 区分广播与验证，验证才是把候选写入本地认可历史。你可以亲自试一下：构造一笔签名错误的交易广播，观察节点拒绝行为。
+
+**现象 →** 钱包显示1个确认就认为交易不可逆。
+**原因 →** 未区分确认深度与规范链选择。
+**修法 →** confirmed(T,k)依赖valid、depth和canonical三者同时成立。
+
+**现象 →** 以为矿工能替他人发起交易。
+**原因 →** 混淆排序权与所有权。
+**修法 →** 钱包构造签名，矿工只能选择合法交易排序，全节点独立验证。
+
+## 小结
+
+- 共同账本关键是节点依同一规则独立接受状态转移
+- 技术栈含数据结构、密码、P2P、共识、激励、脚本、接口
+- 公有联盟私有差异首先来自准入和失败模型
+- 比特币组合UTXO、签名、工作量与最长累计工作链
+- 通过标准：能追踪UTXO交易从签名到确认的完整状态变化
+
+<Exercises>
+
+**问题 1：** 比特币系统中钱包、全节点和矿工各自的职责边界是什么？
+
+<Answer>
+
+钱包负责构造并签名候选交易；全节点负责独立验证交易和区块的共识规则；矿工只能选择合法交易排序并打包成区块，不能替其他所有者签名。三者职责分离，排序权不等于所有权。
+
+</Answer>
+
+**问题 2（独立实现）：** 独立实现一个最小共同账本模拟器，包含创世区块、交易构造签名、节点独立验证和区块追加，并能在交易无效或链接断裂时返回拒绝原因。
+
+<Answer>
+
+```python
+import hashlib
+
+def hash_block(block):
+    return hashlib.sha256(str(block).encode()).hexdigest()
+
+def verify_transaction(tx, utxos):
+    inputs = [utxos.get(ref) for ref in tx["inputs"]]
+    if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
+        return False
+    return tx.get("signed", False) and sum(inputs) >= sum(tx["outputs"])
+
+def append_block(chain, block, utxos):
+    if not chain:
+        return {"accepted": True, "chain": [block]}
+    if block["previous"] != hash_block(chain[-1]):
+        return {"accepted": False, "reason": "broken-link"}
+    if not all(verify_transaction(tx, utxos) for tx in block["transactions"]):
+        return {"accepted": False, "reason": "invalid-transaction"}
+    return {"accepted": True, "chain": [*chain, block]}
+
+# 创世区块
+genesis = {"previous": "", "transactions": []}
+utxos = {"u1": 7, "u2": 4}
+chain = [genesis]
+
+# 正常交易
+tx = {"inputs": ["u1", "u2"], "outputs": [8, 3], "signed": True}
+block = {"previous": hash_block(genesis), "transactions": [tx]}
+result = append_block(chain, block, utxos)
+assert result["accepted"] is True
+
+# 链接断裂
+bad_block = {"previous": "wrong", "transactions": []}
+result = append_block(chain, bad_block, utxos)
+assert result["accepted"] is False
+assert result["reason"] == "broken-link"
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -231,4 +316,11 @@ def evidence_gate(run):
 
 - [上一页：前言](/learn/blockchain-plain/02-preface/bp-preface)
 - [下一页：第2章 区块链应用发展](/learn/blockchain-plain/04-02-application-development/bp-02-application-development)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下三段骨架把交易验证、区块追加与证据门禁串成最小闭环，帮助你在以太坊实验中重放状态转移与失败回滚。
+
+<CodeTabs>
+<Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+</Tab>
+<Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -171,8 +180,51 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 调用合约时Gas不足导致交易回滚，但发起方账户余额仍然减少——你可以亲手翻车：设置Gas Limit为10000调用一个消耗50000 Gas的合约，交易失败但Gas费照扣。
+**原因 →** EVM在Gas耗尽时回滚状态变更，但已消耗的Gas用于补偿矿工计算成本，不退还。
+**修法 →** 估算Gas时预留20%余量，使用 `eth_estimateGas` 后再手动增加缓冲，避免因边界波动导致回滚。
+
+**现象 →** 照书中2017年的步骤安装以太坊钱包和客户端，命令报错或网络参数不匹配。
+**原因 →** 以太坊共识已从PoW迁移到PoS，旧版钱包和命令已失效，网络标识和创世配置均已变更。
+**修法 →** 建立历史命令与现代替代的对应表，实验使用隔离测试环境，不照抄已失效的下载地址和默认配置。
+
+**现象 →** 合约部署成功且单元测试通过，上线后却被攻击者利用权限漏洞转走全部资金。
+**原因 →** 代码确定性只保证相同输入得到相同输出，不保证业务意图、权限配置或外部价格数据正确。
+**修法 →** 上线前做权限审计和形式化验证，检查所有 `external` 和 `public` 函数的调用者限制，预言机数据需设价格偏差熔断。
+
+## 小结
+
+- 以太坊把交易扩展为确定性状态机调用
+- Gas限制资源消耗，回滚保护原子性
+- 代码确定性不保证业务意图或权限配置正确
+- 2017年钱包和命令仅作历史坐标，不可直接照用
+- 测试链实验需冻结客户端、网络标识和创世配置
+
+<Exercises>
+
+**问题 1**
+
+请独立实现一个简化的EVM调用函数 `execute_call(state, caller, to, value, gas_limit, bytecode)`，要求：扣除调用者Gas预算，执行状态变更，Gas耗尽时回滚全部状态变更并返回 `out-of-gas`，执行成功时返回后状态和实际Gas消耗。要求：构造一个会消耗全部Gas的循环字节码和一个正常转账调用，验证前者回滚、后者状态更新。
+
+<Answer>
+
+关键点：维护一个 `gas_remaining` 计数器，每条指令扣费；Gas耗尽时恢复到调用前状态快照（深拷贝），成功时提交变更并返回 `gas_used = gas_limit - gas_remaining`。状态对象至少包含账户余额和nonce。
+
+</Answer>
+
+**问题 2**
+
+给定一笔代币合约的 `transfer(from, to, amount)` 交易，请列出哪些字段进入执行证据（前状态、调用者、输入、读写集、事件、后状态），哪些属于2017年的历史工具产物（旧钱包界面截图、旧网络参数）。
+
+<Answer>
+
+执行证据：调用者地址、`to` 合约地址、`transfer` 函数选择器和参数、from余额前值、to余额前值、Transfer事件日志、from和to余额后值、Gas消耗。历史产物：2017年Mist钱包界面截图、旧测试网ChainID、已弃用的geth命令行参数——这些仅作历史坐标，不进入执行证据。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -183,4 +235,11 @@ def evidence_gate(run):
 
 - [上一页：第5章 区块链扩展：扩容、侧链和闪电网络](/learn/blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning)
 - [下一页：第7章 区块链开发平台：超级账本](/learn/blockchain-plain/09-07-hyperledger/bp-07-hyperledger)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

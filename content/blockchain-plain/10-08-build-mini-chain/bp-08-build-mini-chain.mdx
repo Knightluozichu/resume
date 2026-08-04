@@ -45,6 +45,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示微链的核心验证逻辑与证据门禁：前两个函数检查交易合法性与区块链接完整性，第三个函数对实验记录做结构化门禁。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
@@ -62,12 +67,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -165,8 +176,61 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 微链能接受交易、链接区块，看起来运行正常，但同一笔UTXO被花了两次，余额对不上。
+**原因 →** verify_transaction 只检查签名和价值守恒，漏掉了 UTXO 集合在提交后的更新，已花费输入未被标记。
+**修法 →** 在 append_block 成功后原子地更新 UTXO 集合，将已花费输入移除；你可以亲手构造一笔重复引用同一输入的交易，看微链是否拒绝。
+
+**现象 →** 篡改某个历史区块的交易金额后，链仍然能正常追加新块，没有报错。
+**原因 →** append_block 只验证新区块的前块摘要，没有在同步时逐块重算全链哈希校验历史完整性。
+**修法 →** 节点同步时逐块重算哈希并比对，存储层用原子提交避免半写状态，不以最后一个哈希正确代替全链正确。
+
+**现象 →** 微链在实验中"跑通了"，移植到多节点网络后立即被伪造区块攻破。
+**原因 →** 教学实现省略了签名、共识、网络认证和持久化原子性，单机验证通过不等于多方安全。
+**修法 →** 明确标注省略项清单，生产迁移时逐项补齐并做威胁建模，不以教学代码作为安全基线。
+
+## 小结
+
+- 微链用最少对象暴露协议骨架：区块、哈希链接、交易验证
+- 验证函数必须独立检查签名、未花费性和价值守恒
+- 存储层原子提交，失败时不修改原链
+- 节点同步拒绝无效候选，不以一次收敛证明活性
+- 教学实现须公开省略的签名、共识和网络攻击面
+
+<Exercises>
+
+**问题 1：** 微链的 append_block 函数先检查前块链接再检查交易合法性。如果交换这两个检查的顺序，会有什么风险？
+
+<Answer>
+
+如果先检查交易合法性再检查前块链接，可能把一笔合法交易追加到一个"断链"区块上。此时交易本身虽然有效，但区块不属于规范历史，后续节点同步时会拒绝整条链。更严重的是，如果交易验证通过后链已被修改（例如原链被覆盖），即使链接检查失败也可能留下脏状态。正确顺序是先验证结构完整性（链接），再验证内容合法性（交易），失败时不修改原链。
+
+</Answer>
+
+**问题 2（独立实现）：** 独立实现一个 create_block 函数：给定交易列表（Python list）、前块哈希（字符串）和时间戳（整数），使用 hashlib.sha256 计算区块哈希（输入为前块哈希 + 交易列表 JSON 序列化 + 时间戳的 UTF-8 拼接），返回包含 previous、transactions、timestamp 和 hash 四个字段的区块字典。
+
+<Answer>
+
+```python
+import hashlib, json
+
+def create_block(transactions, previous_hash, timestamp):
+    payload = previous_hash + json.dumps(transactions, sort_keys=True) + str(timestamp)
+    block_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return {
+        "previous": previous_hash,
+        "transactions": transactions,
+        "timestamp": timestamp,
+        "hash": block_hash,
+    }
+```
+
+验证要点：改变 transactions 中任意一笔交易的任何字段、改变 previous_hash 或 timestamp，都会导致 block_hash 改变。这就是哈希链接的篡改检测基础——任一历史字段变动都会传播到后续所有区块。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -177,4 +241,11 @@ def evidence_gate(run):
 
 - [上一页：第7章 区块链开发平台：超级账本](/learn/blockchain-plain/09-07-hyperledger/bp-07-hyperledger)
 - [下一页：第9章 潜在的问题](/learn/blockchain-plain/11-09-potential-problems/bp-09-potential-problems)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

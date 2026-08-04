@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下三段骨架从交易验证、区块追加到证据门禁构成最小闭环，帮助你在共识实验中定位安全性与活性的边界。
+
+<CodeTabs>
+<Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+</Tab>
+<Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -195,8 +204,51 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 在需要容忍恶意节点的场景中用Raft替代PBFT，以为都是共识算法就能安全——你可以亲手翻车：让一个Raft节点伪造日志条目，其他节点因为不验证签名而直接接受。
+**原因 →** Raft只处理崩溃故障，假设所有节点诚实；PBFT显式验证每条消息签名，才能容忍有限拜占庭副本。
+**修法 →** 先确定故障模型（崩溃 vs 拜占庭），再选协议；恶意场景必须使用带消息签名验证的BFT类协议。
+
+**现象 →** 网络分区期间PoW暂时不出块，立刻判定"共识失败"并触发人工干预。
+**原因 →** PoW在分区时牺牲活性（暂时不出块）来保证安全性（不会接受冲突账本），这是设计预期而非故障。
+**修法 →** 区分安全性和活性两个指标，分区恢复后活性自动恢复才算正常行为；只有长期不出块才需告警。
+
+**现象 →** 用单一TPS指标比较PoW和PBFT，得出"PBFT更快所以更好"的结论。
+**原因 →** TPS只反映吞吐，忽略了准入门槛、去中心化程度、最终性延迟、惩罚机制和治理模型等维度。
+**修法 →** 至少同时比较准入、集中化、惩罚、最终性和治理五个维度，不以单一速度或能耗指标下结论。
+
+## 小结
+
+- 共识结论依赖故障模型、网络时序和成员身份三类假设
+- Paxos/Raft处理崩溃故障，PBFT显式容忍有限恶意副本
+- FLP证明异步网络中无法同时保证安全性和活性
+- PoW用计算成本约束重写，PoS用可罚没权益约束验证者
+- 安全性和活性必须分别验证，不能只用TPS下结论
+
+<Exercises>
+
+**问题 1**
+
+假设系统有 n=3f+1 个节点，其中最多 f 个为拜占庭节点。请独立实现一个简化的PBFT投票函数 `check_endorsements(endorsements, n, f)`，当且仅当收集到至少 2f+1 个有效签名背书时返回 `True`。要求：构造 f 个恶意签名和 2f 个诚实签名，验证函数返回 `True`；再减少一个诚实签名，验证返回 `False`。
+
+<Answer>
+
+关键点：2f+1 是PBFT的法定人数门槛，保证至少 f+1 个诚实节点参与，使两个冲突的法定人数集合必然相交。函数需检查签名数量是否 >= 2f+1 且签名来自不同节点。
+
+</Answer>
+
+**问题 2**
+
+给定一个网络分区场景：网络被分为两个不连通的子集，各子集内部通信正常。请分别分析在此场景下 PoW 和 PBFT 各自失去的是安全性还是活性，以及分区恢复后会发生什么。
+
+<Answer>
+
+PoW在分区时失去活性（可能两侧都暂不出块或各自出块），但分区恢复后通过最长链规则选择一条链，保证最终安全性。PBFT在分区时如果任一侧不足 2f+1 则失去活性；如果一侧恰好达到 2f+1 则保持安全性和活性，另一侧暂停。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -207,4 +259,11 @@ def evidence_gate(run):
 
 - [上一页：第3章 区块链骨骼：密码算法](/learn/blockchain-plain/05-03-cryptography/bp-03-cryptography)
 - [下一页：第5章 区块链扩展：扩容、侧链和闪电网络](/learn/blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

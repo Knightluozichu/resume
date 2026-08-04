@@ -45,6 +45,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示与安全风险对应的最小验证骨架：前两个函数检查交易合法性与区块链接，第三个函数对威胁模型实验记录做结构化门禁。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
@@ -62,12 +67,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -183,8 +194,72 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** SPV 轻钱包显示交易已确认 6 个区块，但全节点查不到这笔交易，余额凭空消失。
+**原因 →** 轻钱包只验证 Merkle 证明包含性，不独立验证区块头工作量，恶意全节点可以伪造一条头链骗过轻钱包。
+**修法 →** 轻钱包应从多个独立节点获取区块头并校验累计工作量；你可以用两个节点返回不同头链来亲眼看到轻钱包被骗的差异。
+
+**现象 →** 交易广播后钱包显示"已发送"，几分钟后交易从内存池消失，余额恢复原值。
+**原因 →** 交易只进入内存池尚未打包确认，可能因手续费过低被丢弃或被双花交易抢先确认。
+**修法 →** 用确认深度而非广播成功判断结算，至少等待 k 个区块后才认为不可逆，并记录内存池状态变化。
+
+**现象 →** 链遭 51% 攻击重组后，旧交易被"撤销"，但新链中的所有交易仍通过验证规则。
+**原因 →** 共识攻击改变的是区块排序和历史选择，不改变本地验证规则；合法交易仍合法，只是被放入不同位置或被排除。
+**修法 →** 区分"交易非法"和"交易被重组撤销"，高价值交易使用更多确认深度或等待最终性工具。
+
+## 小结
+
+- 分叉影响规则兼容，共识攻击影响历史排序而非交易合法性
+- 轻钱包依赖诚实证明源，需多节点交叉校验区块头
+- 私钥丢失可能不可逆，密钥生命周期必须审计
+- 合约确定性不保证业务意图和权限配置正确
+- 拥堵和数据增长需要容量治理和确认策略，非仅扩容
+
+<Exercises>
+
+**问题 1：** 软分叉和硬分叉在规则兼容性上有什么本质区别？各举一个例子说明对旧节点的影响。
+
+<Answer>
+
+软分叉是新规则比旧规则更严格，旧节点仍能接受新规则产出的区块（因为旧节点验证通过的范围更大），但旧节点可能接受被新规则拒绝的区块，导致临时分叉。例如比特币 SegWit 升级：旧节点不理解见证数据但仍接受区块。硬分叉是新规则与旧规则不兼容，旧节点会拒绝新规则产出的区块，导致永久分叉。例如以太坊 TheDAO 硬分叉：不支持回滚代码的节点继续在原链（ETC）上运行。
+
+</Answer>
+
+**问题 2：** 为什么 51% 攻击不能伪造任意交易？攻击者实际能做到什么？
+
+<Answer>
+
+51% 攻击控制的是出块权（排序），不是交易验证权。攻击者无法伪造他人签名，因此不能凭空创造交易或盗用他人 UTXO。攻击者实际能做到的是：（1）重组历史，把自己的交易从已确认区块中撤销（双花）；（2）审查交易，拒绝打包特定交易；（3）临时阻止其他矿工的区块被确认。但所有新区块中的交易仍必须通过每个节点的本地验证规则。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版 SPV 验证函数：给定交易哈希、Merkle 路径（兄弟节点哈希列表）、区块头 Merkle 根和方向标记列表（0=左兄弟，1=右兄弟），验证交易是否包含在该区块中。返回 True 或 False。
+
+<Answer>
+
+```python
+import hashlib
+
+def verify_merkle_proof(tx_hash, sibling_hashes, merkle_root, directions):
+    current = tx_hash
+    for sibling, direction in zip(sibling_hashes, directions):
+        if direction == 0:
+            current = hashlib.sha256(
+                (sibling + current).encode("utf-8")
+            ).hexdigest()
+        else:
+            current = hashlib.sha256(
+                (current + sibling).encode("utf-8")
+            ).hexdigest()
+    return current == merkle_root
+```
+
+验证要点：改变 tx_hash、任一 sibling_hash 或 directions 中的任一方向标记，结果应从 True 变为 False。这正是 SPV 轻钱包验证交易包含性的核心逻辑——不需要下载全部交易，只需 O(log n) 大小的 Merkle 路径。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -195,4 +270,11 @@ def evidence_gate(run):
 
 - [上一页：第8章 动手做个实验：搭建微链](/learn/blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain)
 - [下一页：后记 区块链与可编程社会](/learn/blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

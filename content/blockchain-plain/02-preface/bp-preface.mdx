@@ -45,15 +45,18 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示学习契约的两层视角：核心逻辑层定义从交易到区块的验证路径，证据门禁层确保九章递进的每步都有可复核证据。
+
+<CodeTabs>
+  <Tab label="Python / 核心逻辑">
+
 ```python
 def verify_transaction(tx, utxos, verify_signature):
     inputs = [utxos.get(ref) for ref in tx["inputs"]]
     if None in inputs or len(set(tx["inputs"])) != len(tx["inputs"]):
         return False
     return verify_signature(tx) and sum(inputs) >= sum(tx["outputs"])
-```
 
-```python
 def append_block(chain, block, hash_block, valid_tx):
     if block["previous"] != hash_block(chain[-1]):
         return {"accepted": False, "reason": "broken-link"}
@@ -62,12 +65,18 @@ def append_block(chain, block, hash_block, valid_tx):
     return {"accepted": True, "chain": [*chain, block]}
 ```
 
+  </Tab>
+  <Tab label="Python / 证据门禁">
+
 ```python
 def evidence_gate(run):
     required = {"source", "version", "input", "trace", "output", "failure"}
     missing = sorted(required.difference(run))
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段验证交易引用、重复输入、签名和价值约束；生产实现还要检查脚本、费用、锁定时间与整数范围。第二段先检查前块链接再检查交易，失败时不修改原链。第三段对实验记录做结构门禁，使成功轨迹和失败证据使用同一版本合同。
 
@@ -121,8 +130,68 @@ def evidence_gate(run):
 
 独立复核者从空目录读取来源与配置，先手算最小状态，再运行正常、边界和单故障样本。哈希、签名、事件、余额、拒绝原因和最终状态逐项一致后才发布；任何缺失证据都进入隔离清单而非静默跳过。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 直接学平台章节却无法重放基础交易。
+**原因 →** 前置证据缺失被后续平台演示掩盖。
+**修法 →** 前言规定九章递进验收，任一前置缺失应停机补足再继续。
+
+**现象 →** 来源版次不明仍继续实验，结果偏差无法归因。
+**原因 →** 未遵守前言的停机规则。
+**修法 →** 版次不明、命令未隔离、前后状态无法解释时立即停止。你可以亲自试一下：用错误版本号跑实验，观察结果偏差。
+
+**现象 →** 重放后只看余额正确就认为全部成功。
+**原因 →** 漏掉重复消费、错误签名缓存和回滚未清理等中间错误。
+**修法 →** 按构造到提交的全链路记录每步输入输出，不停在最终余额。
+
+## 小结
+
+- 前言是学习契约，冻结九章递进和证据顺序
+- 九章依次回答是什么、能做什么、为何可信、怎样扩展、如何实现、哪里会失败
+- 阅读设停机条件：版次不明、命令未隔离、状态无法解释时停止
+- 修复后先重放原失败，再回到相邻正常和边界样本
+- 通过标准：能说明九章为何按此顺序排列
+
+<Exercises>
+
+**问题 1：** 前言为九章设定的递进验收标准中，第一章和第八章分别要求能做什么？
+
+<Answer>
+
+第一章要求能重放交易和区块，第八章要求能从空目录实现微链。九章依次递进，任一前置证据缺失时不用后续平台演示掩盖基础概念断裂。
+
+</Answer>
+
+**问题 2（独立实现）：** 独立实现一个学习契约检查器，输入章节编号和该章证据清单，判断是否满足前言的递进前置条件，不满足则返回缺失的前置章节。
+
+<Answer>
+
+```python
+PREREQUISITES = {
+    1: [],
+    2: [1],
+    3: [1, 2],
+    4: [1, 2, 3],
+    5: [1, 2, 3, 4],
+    6: [1, 2, 3, 4, 5],
+    7: [1, 2, 3, 4, 5, 6],
+    8: [1, 2, 3, 4, 5, 6, 7],
+    9: [1, 2, 3, 4, 5, 6, 7, 8],
+}
+
+def check_prerequisite(chapter, completed_chapters):
+    missing = [c for c in PREREQUISITES.get(chapter, []) if c not in completed_chapters]
+    return {"ok": not missing, "missing": missing}
+
+# 测试：学第8章但未完成第3章
+result = check_prerequisite(8, {1, 2, 4, 5, 6, 7})
+assert result["ok"] is False
+assert 3 in result["missing"]
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -133,4 +202,11 @@ def evidence_gate(run):
 
 - [上一页：技术审校](/learn/blockchain-plain/01-technical-review/bp-technical-review)
 - [下一页：第1章 初识区块链](/learn/blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="蒋勇、文颜成、李浩、李耀军《白话区块链》机械工业出版社 / 2017"
+  adaptedUrl="https://e.dangdang.com/products/1901310198.html"
+/>
 

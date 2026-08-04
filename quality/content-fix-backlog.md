@@ -1072,28 +1072,28 @@
 
 **部署记录**：仅规范修复并推送，未部署（ledger failed）
 
-### 5.3 blockchain-plain（14 章 · 待修 14 章 · 84 项）
+### 5.3 blockchain-plain（14 章 · 待修 0 章 · 84 项）✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：ledger failed（generic-quality-prose, within-chapter-template-copy, quality-v2-unreviewed）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | blockchain-plain/00-map/bp-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | blockchain-plain/01-technical-review/bp-technical-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | blockchain-plain/02-preface/bp-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | blockchain-plain/04-02-application-development/bp-02-application-development.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | blockchain-plain/05-03-cryptography/bp-03-cryptography.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | blockchain-plain/06-04-consensus/bp-04-consensus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | blockchain-plain/08-06-ethereum/bp-06-ethereum.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | blockchain-plain/09-07-hyperledger/bp-07-hyperledger.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | blockchain-plain/11-09-potential-problems/bp-09-potential-problems.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | blockchain-plain/13-review/bp-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | blockchain-plain/00-map/bp-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | blockchain-plain/01-technical-review/bp-technical-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | blockchain-plain/02-preface/bp-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | blockchain-plain/04-02-application-development/bp-02-application-development.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | blockchain-plain/05-03-cryptography/bp-03-cryptography.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | blockchain-plain/06-04-consensus/bp-04-consensus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | blockchain-plain/08-06-ethereum/bp-06-ethereum.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | blockchain-plain/09-07-hyperledger/bp-07-hyperledger.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | blockchain-plain/11-09-potential-problems/bp-09-potential-problems.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | blockchain-plain/13-review/bp-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（ledger failed）
 
 ### 5.4 mastering-bitcoin（20 章 · 待修 20 章 · 120 项）
 
