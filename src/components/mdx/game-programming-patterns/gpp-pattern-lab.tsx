@@ -994,10 +994,343 @@ function EventQueueViz({ fault }: { fault: boolean }) {
   );
 }
 
+// ═══════════ Ch16 Service Locator：服务定位 ═══════════
+const SL_STEPS: readonly TeachingStep[] = [
+  { label: "register", caption: "① 服务（音频/渲染/网络）注册到定位器" },
+  { label: "request", caption: "② 客户端向定位器请求服务，不必知道实现" },
+  { label: "dispatch", caption: "③ 定位器返回服务实例：解耦客户端与具体实现" },
+];
+const SL_LABEL: Record<string, string> = Object.fromEntries(SL_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function ServiceLocatorViz({ fault }: { fault: boolean }) {
+  const regRef = useRef<SVGGElement>(null);
+  const reqRef = useRef<SVGGElement>(null);
+  const dispRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: SL_STEPS,
+    build: (tl) => {
+      tl.add(regRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("register", 0);
+      tl.add(reqRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("request", T);
+      tl.add(dispRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("dispatch", T * 2);
+    },
+  });
+  const services = ["AudioService", "RenderService", "NetworkService", "SaveService"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Service Locator 模式动画。服务注册、客户端请求、定位器分发三步依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Service Locator：全局服务访问点</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>服务注册到定位器，客户端按名获取，无需知道实现</text>
+        <g ref={regRef} style={{ opacity: 0 }}>
+          <rect x={60} y={90} width={300} height={220} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={210} y={122} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.accent}>ServiceLocator</text>
+          <text x={210} y={142} textAnchor="middle" fontSize={11} fill={C.secondary}>服务注册表</text>
+          <line x1={70} y1={154} x2={350} y2={154} stroke={C.border} strokeWidth={1} />
+          {services.map((s, i) => (
+            <text key={s} x={80} y={182+i*30} fontSize={11} fontFamily="monospace" fill={C.primary}>▸ {s}</text>
+          ))}
+        </g>
+        <g ref={reqRef} style={{ opacity: 0 }}>
+          <rect x={500} y={110} width={200} height={80} rx={10} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+          <text x={600} y={140} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.warning}>客户端（关卡/UI/逻辑）</text>
+          <text x={600} y={170} textAnchor="middle" fontSize={11} fill={C.secondary}>locator.get("Audio")</text>
+          <line x1={500} y1={150} x2={360} y2={150} stroke={C.border} strokeWidth={1.5} strokeDasharray="4,3" />
+          <text x={430} y={140} textAnchor="middle" fontSize={11} fill={C.accent}>请求</text>
+        </g>
+        <g ref={dispRef} style={{ opacity: 0 }}>
+          <line x1={360} y1={180} x2={500} y2={180} stroke={C.success} strokeWidth={1.5} />
+          <polygon points={`${496},${176} ${500},${180} ${496},${184}`} fill={C.success} />
+          <text x={430} y={196} textAnchor="middle" fontSize={11} fill={C.success}>返回实例</text>
+          <rect x={60} y={330} width={820} height={50} rx={10} fill={C.success} opacity={0.08} stroke={C.success} strokeWidth={1.6} />
+          <text x={450} y={358} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.success}>换实现（如 Audio 从 OpenAL 换成 DirectSound）只需改注册，客户端代码不动</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 客户端直接 new 服务：换实现要改所有调用点。修法：统一走 ServiceLocator 获取</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={SL_LABEL} caption="定位器是服务的「电话簿」：客户端只认名字，具体实现可随时替换。" />
+    </>
+  );
+}
+
+// ═══════════ Ch17 Data Locality：内存局部性 ═══════════
+const DL_STEPS: readonly TeachingStep[] = [
+  { label: "scatter", caption: "① 分散存储：每个实体携带全部属性，跳跃访问" },
+  { label: "cache", caption: "② 缓存局部性差：频繁未命中，CPU 停顿等待内存" },
+  { label: "contig", caption: "③ 连续存储：属性按列分离，逐块扫描" },
+  { label: "fast", caption: "④ 顺序访问：预取命中，吞吐量大幅提升" },
+];
+const DL_LABEL: Record<string, string> = Object.fromEntries(DL_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function DataLocalityViz({ fault }: { fault: boolean }) {
+  const scatterRef = useRef<SVGGElement>(null);
+  const cacheRef = useRef<SVGGElement>(null);
+  const contigRef = useRef<SVGGElement>(null);
+  const fastRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: DL_STEPS,
+    build: (tl) => {
+      tl.add(scatterRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("scatter", 0);
+      tl.add(cacheRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("cache", T);
+      tl.add(contigRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("contig", T * 2);
+      tl.add(fastRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("fast", T * 3);
+    },
+  });
+  const ents = ["E1", "E2", "E3", "E4", "E5", "E6"];
+  const mem = ["pos", "hp", "sprite", "pos", "hp", "sprite", "pos", "hp"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Data Locality 模式动画。分散存储、缓存未命中、连续存储、顺序访问四步依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Data Locality：让数据排列贴近访问模式</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>缓存局部性是游戏性能的隐形引擎</text>
+        <g ref={scatterRef} style={{ opacity: 0 }}>
+          <text x={60} y={86} fontSize={11} fontWeight={600} fill={C.danger}>✗ 分散存储（每实体一块）</text>
+          <rect x={40} y={96} width={820} height={60} rx={8} fill={C.bg} stroke={C.border} strokeWidth={1} />
+          {mem.map((m, i) => (
+            <g key={i}>
+              <rect x={48+i*100} y={104} width={92} height={44} rx={5} fill={C.warning} opacity={0.15} stroke={C.warning} strokeWidth={1} />
+              <text x={94+i*100} y={130} textAnchor="middle" fontSize={11} fill={C.warning}>{m}</text>
+            </g>
+          ))}
+        </g>
+        <g ref={cacheRef} style={{ opacity: 0 }}>
+          <rect x={40} y={170} width={820} height={40} rx={8} fill={C.danger} opacity={0.1} stroke={C.danger} strokeWidth={1.2} />
+          <text x={450} y={196} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.danger}>遍历所有实体只取 pos → 每步跳 2 块内存 → 缓存几乎全未命中</text>
+        </g>
+        <g ref={contigRef} style={{ opacity: 0 }}>
+          <text x={60} y={250} fontSize={11} fontWeight={600} fill={C.success}>✓ 连续存储（pos 数组单独一块）</text>
+          <rect x={40} y={260} width={820} height={44} rx={8} fill={C.bg} stroke={C.border} strokeWidth={1} />
+          {ents.map((e, i) => (
+            <g key={e}>
+              <rect x={48+i*130} y={266} width={122} height={32} rx={5} fill={C.success} opacity={0.15} stroke={C.success} strokeWidth={1} />
+              <text x={109+i*130} y={287} textAnchor="middle" fontSize={11} fill={C.success}>{e}.pos</text>
+            </g>
+          ))}
+        </g>
+        <g ref={fastRef} style={{ opacity: 0 }}>
+          <rect x={40} y={318} width={820} height={40} rx={8} fill={C.success} opacity={0.1} stroke={C.success} strokeWidth={1.2} />
+          <text x={450} y={344} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.success}>顺序扫描一块连续内存 → 硬件预取生效 → 吞吐量可提升数倍</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 面向对象地把所有属性打包进一个对象：遍历时缓存抖动脉冲。修法：属性按列分离成数组</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={DL_LABEL} caption="把同属性的数据排成连续数组，遍历就变成顺序内存访问——缓存友好。" />
+    </>
+  );
+}
+
+// ═══════════ Ch18 Dirty Flag：脏标志 ═══════════
+const DF_STEPS: readonly TeachingStep[] = [
+  { label: "state", caption: "① 对象状态变化：位置/朝向改变" },
+  { label: "dirty", caption: "② 置脏标志：标记「需要重算」" },
+  { label: "ask", caption: "③ 询问时未变脏：直接返回缓存结果，零重算" },
+  { label: "recompute", caption: "④ 询问时已变脏：重算并清标志" },
+];
+const DF_LABEL: Record<string, string> = Object.fromEntries(DF_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function DirtyFlagViz({ fault }: { fault: boolean }) {
+  const stateRef = useRef<SVGGElement>(null);
+  const dirtyRef = useRef<SVGGElement>(null);
+  const askRef = useRef<SVGGElement>(null);
+  const recomputeRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: DF_STEPS,
+    build: (tl) => {
+      tl.add(stateRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("state", 0);
+      tl.add(dirtyRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("dirty", T);
+      tl.add(askRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("ask", T * 2);
+      tl.add(recomputeRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("recompute", T * 3);
+    },
+  });
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Dirty Flag 模式动画。状态变化、置脏、缓存命中、重算四步依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Dirty Flag：变了才重算</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>用脏标志跳过未变化的重复计算</text>
+        <g ref={stateRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={300} height={90} rx={10} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+          <text x={190} y={108} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.warning}>Transform</text>
+          <text x={190} y={134} textAnchor="middle" fontSize={11} fontFamily="monospace" fill={C.primary}>pos=(10,20) rot=45°</text>
+          <text x={190} y={156} textAnchor="middle" fontSize={11} fill={C.secondary}>setPosition() 改变状态</text>
+        </g>
+        <g ref={dirtyRef} style={{ opacity: 0 }}>
+          <text x={430} y={120} textAnchor="middle" fontSize={16} fill={C.danger}>⟶</text>
+          <rect x={500} y={80} width={260} height={90} rx={10} fill={C.danger} opacity={0.1} stroke={C.danger} strokeWidth={2} />
+          <text x={630} y={110} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.danger}>dirty = true ⚑</text>
+          <text x={630} y={134} textAnchor="middle" fontSize={11} fill={C.secondary}>本地矩阵失效，等待重算</text>
+          <text x={630} y={156} textAnchor="middle" fontSize={11} fill={C.secondary}>（无需立刻计算）</text>
+        </g>
+        <g ref={askRef} style={{ opacity: 0 }}>
+          <rect x={40} y={210} width={380} height={90} rx={10} fill={C.success} opacity={0.1} stroke={C.success} strokeWidth={2} />
+          <text x={230} y={240} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.success}>getLocalMatrix()：未变脏</text>
+          <text x={230} y={264} textAnchor="middle" fontSize={11} fill={C.secondary}>直接返回缓存矩阵 ✓ 零开销</text>
+          <text x={230} y={286} textAnchor="middle" fontSize={11} fill={C.secondary}>渲染器每帧询问都不重算</text>
+        </g>
+        <g ref={recomputeRef} style={{ opacity: 0 }}>
+          <rect x={460} y={210} width={400} height={90} rx={10} fill={C.warning} opacity={0.12} stroke={C.warning} strokeWidth={2} />
+          <text x={660} y={240} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.warning}>getLocalMatrix()：已变脏</text>
+          <text x={660} y={264} textAnchor="middle" fontSize={11} fill={C.secondary}>重算矩阵 → 清 dirty 标志</text>
+          <text x={660} y={286} textAnchor="middle" fontSize={11} fill={C.secondary}>只在真正需要时才花算力</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 每帧无条件重算矩阵：昂贵的 sin/cos 全浪费。修法：状态变化才置脏，询问时才重算</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={DF_LABEL} caption="渲染器每帧问「需要重算吗？」，绝大多数帧的答案都是否——省下大量无用计算。" />
+    </>
+  );
+}
+
+// ═══════════ Ch19 Object Pool：对象池 ═══════════
+const OP_STEPS: readonly TeachingStep[] = [
+  { label: "alloc", caption: "① 新弹幕：从池中取出空闲对象（无 malloc）" },
+  { label: "use", caption: "② 使用中：弹幕飞行并渲染" },
+  { label: "free", caption: "③ 爆炸后放回池：标记空闲待复用" },
+  { label: "reuse", caption: "④ 再次需要时复用同一块内存：零碎片零分配" },
+];
+const OP_LABEL: Record<string, string> = Object.fromEntries(OP_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function ObjectPoolViz({ fault }: { fault: boolean }) {
+  const allocRef = useRef<SVGGElement>(null);
+  const inUseRef = useRef<SVGGElement>(null);
+  const freeSlotRef = useRef<SVGGElement>(null);
+  const reuseSlotRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: OP_STEPS,
+    build: (tl) => {
+      tl.add(allocRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("alloc", 0);
+      tl.add(inUseRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("use", T);
+      tl.add(freeSlotRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("free", T * 2);
+      tl.add(reuseSlotRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("reuse", T * 3);
+    },
+  });
+  const slots = ["⚪ 空闲", "🔴 使用中", "⚪ 空闲", "🔴 使用中", "⚪ 空闲", "⚪ 空闲"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Object Pool 模式动画。取出、使用、放回、复用四步依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Object Pool：对象复用池</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>频繁创建销毁的对象从池中取还，避免内存碎片</text>
+        <g ref={allocRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={820} height={110} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={450} y={106} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.accent}>BulletPool（预分配 6 个槽）</text>
+          {slots.map((s, i) => (
+            <g key={i}>
+              <rect x={60+i*130} y={120} width={120} height={50} rx={8} fill={s.includes("使用") ? C.danger : C.success} opacity={0.12} stroke={s.includes("使用") ? C.danger : C.success} strokeWidth={1.5} />
+              <text x={120+i*130} y={150} textAnchor="middle" fontSize={11} fill={C.primary}>{s}</text>
+            </g>
+          ))}
+        </g>
+        <g ref={inUseRef} style={{ opacity: 0 }}>
+          <rect x={120} y={220} width={220} height={70} rx={10} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+          <text x={230} y={248} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.warning}>发射：acquire()</text>
+          <text x={230} y={272} textAnchor="middle" fontSize={11} fill={C.secondary}>取空闲槽 → 初始化 → 使用</text>
+        </g>
+        <g ref={freeSlotRef} style={{ opacity: 0 }}>
+          <rect x={420} y={220} width={220} height={70} rx={10} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+          <text x={530} y={248} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.success}>爆炸：release()</text>
+          <text x={530} y={272} textAnchor="middle" fontSize={11} fill={C.secondary}>复位状态 → 标记空闲</text>
+        </g>
+        <g ref={reuseSlotRef} style={{ opacity: 0 }}>
+          <rect x={40} y={320} width={820} height={44} rx={10} fill={C.success} opacity={0.1} stroke={C.success} strokeWidth={1.4} />
+          <text x={450} y={347} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.success}>同一块内存反复使用：0 次 malloc、0 次 free、0 碎片——GC 压力归零</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 高频 new/delete 弹幕对象：内存碎片 + GC 卡顿。修法：预分配池化复用</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={OP_LABEL} caption="池子预分配好，运行时只做「取-还」：高频对象永远不碰堆分配。" />
+    </>
+  );
+}
+
+// ═══════════ Ch20 Spatial Partition：空间分区 ═══════════
+const SP_STEPS: readonly TeachingStep[] = [
+  { label: "brute", caption: "① 暴力检测：每对实体两两检测 O(N²)" },
+  { label: "grid", caption: "② 空间网格：把世界切成格子，实体登记到所在格" },
+  { label: "query", caption: "③ 查询：只检测同格/邻格实体，大幅剪枝" },
+  { label: "move", caption: "④ 实体移动后更新所属格：查询始终精确" },
+];
+const SP_LABEL: Record<string, string> = Object.fromEntries(SP_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function SpatialPartitionViz({ fault }: { fault: boolean }) {
+  const bruteRef = useRef<SVGGElement>(null);
+  const gridRef = useRef<SVGGElement>(null);
+  const queryRef = useRef<SVGGElement>(null);
+  const moveRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: SP_STEPS,
+    build: (tl) => {
+      tl.add(bruteRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("brute", 0);
+      tl.add(gridRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("grid", T);
+      tl.add(queryRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("query", T * 2);
+      tl.add(moveRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("move", T * 3);
+    },
+  });
+  const dots = [
+    { x: 120, y: 140 }, { x: 210, y: 110 }, { x: 300, y: 170 }, { x: 190, y: 230 },
+    { x: 520, y: 130 }, { x: 640, y: 160 }, { x: 580, y: 240 }, { x: 700, y: 220 },
+  ];
+  const target = { x: 240, y: 150 };
+  const gridLines = [];
+  for (let i = 1; i < 4; i++) { gridLines.push({ x: 100 + i * 110 }); gridLines.push({ y: 90 + i * 70 }); }
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Spatial Partition 模式动画。暴力检测、空间网格、邻格查询、移动更新四步依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Spatial Partition：空间网格加速查询</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>只查邻格，把 O(N²) 降到 O(N+碰撞对数)</text>
+        <g ref={bruteRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={340} height={230} rx={10} fill={C.bg} stroke={C.danger} strokeWidth={1.5} />
+          <text x={210} y={106} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.danger}>✗ 暴力：两两检测 28 对</text>
+          {dots.slice(0, 4).map((d, i) => (
+            <circle key={i} cx={d.x} cy={d.y} r={8} fill={C.warning} opacity={0.8} />
+          ))}
+          {dots.slice(0, 4).map((d1, i) => dots.slice(0, 4).map((d2, j) => {
+            if (i >= j) return null;
+            return <line key={`${i}-${j}`} x1={d1.x} y1={d1.y} x2={d2.x} y2={d2.y} stroke={C.danger} strokeWidth={0.6} opacity={0.4} />;
+          }))}
+        </g>
+        <g ref={gridRef} style={{ opacity: 0 }}>
+          <rect x={430} y={80} width={430} height={230} rx={10} fill={C.bg} stroke={C.accent} strokeWidth={1.5} />
+          <text x={645} y={106} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.accent}>✓ 网格：3×3 划分</text>
+          {gridLines.map((l, i) => l.x !== undefined
+            ? <line key={`v${i}`} x1={l.x} y1={90} x2={l.x} y2={310} stroke={C.border} strokeWidth={0.8} />
+            : <line key={`h${i}`} x1={430} y1={l.y} x2={860} y2={l.y} stroke={C.border} strokeWidth={0.8} />)}
+          {dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={7} fill={C.success} opacity={0.8} />)}
+        </g>
+        <g ref={queryRef} style={{ opacity: 0 }}>
+          <circle cx={target.x} cy={target.y} r={14} fill={C.danger} opacity={0.3} stroke={C.danger} strokeWidth={2} />
+          <text x={660} y={140} textAnchor="middle" fontSize={11} fill={C.warning}>← 只检测同格</text>
+          <text x={700} y={240} textAnchor="middle" fontSize={11} fill={C.warning}>邻格共 2 个</text>
+          <rect x={430} y={330} width={430} height={40} rx={8} fill={C.success} opacity={0.1} stroke={C.success} strokeWidth={1.2} />
+          <text x={645} y={355} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.success}>平均每格 1-2 实体：全图只需检测 ~4 对而非 28 对</text>
+        </g>
+        <g ref={moveRef} style={{ opacity: 0 }}>
+          <rect x={40} y={330} width={340} height={40} rx={8} fill={C.warning} opacity={0.1} stroke={C.warning} strokeWidth={1.2} />
+          <text x={210} y={355} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.warning}>实体每帧移动后更新所在格，查询始终精确</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 实体不入网格：每次查询全图扫描 O(N²)。修法：登记到空间网格，按格查询</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={SP_LABEL} caption="世界切成网格，实体只和同格邻居比碰撞——海量实体也只需局部计算。" />
+    </>
+  );
+}
+
 const VIZ: Record<string, (p: { fault: boolean }) => React.ReactNode> = {
   "01": ArchViz, "02": CommandViz, "03": FlyweightViz, "04": ObserverViz, "05": PrototypeViz,
   "06": SingletonViz, "07": StateViz, "08": DoubleBufferViz, "09": GameLoopViz, "10": UpdateMethodViz,
   "11": BytecodeViz, "12": SubclassSandboxViz, "13": TypeObjectViz, "14": ComponentViz, "15": EventQueueViz,
+  "16": ServiceLocatorViz, "17": DataLocalityViz, "18": DirtyFlagViz, "19": ObjectPoolViz, "20": SpatialPartitionViz,
 };
 
 export function GppPatternLab({ chapter }: { chapter: string }) {

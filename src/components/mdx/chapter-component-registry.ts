@@ -10720,6 +10720,46 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         GppPatternLab: module0.GppPatternLab,
       } as ChapterMdxComponents;
     },
+  "game-programming-patterns/22-chapter-16-service-locator/gpp-chapter-16-service-locator":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-16-service-locator");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/24-chapter-17-data-locality/gpp-chapter-17-data-locality":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-17-data-locality");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/25-chapter-18-dirty-flag/gpp-chapter-18-dirty-flag":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-18-dirty-flag");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/26-chapter-19-object-pool/gpp-chapter-19-object-pool":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-19-object-pool");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/27-chapter-20-spatial-partition/gpp-chapter-20-spatial-partition":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-20-spatial-partition");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
   "game-server-programming/00-guide/gsp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/game-server-programming/v2/gsp-official-learning-map");
