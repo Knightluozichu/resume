@@ -1015,36 +1015,36 @@
 
 ## 系列 05：区块链系列（4 本 · 71 章待修 · 286 项）
 
-**系列状态**：待开始
+**系列状态**：进行中（5.1 完成，5.2-5.4 待修）
 
-### 5.1 mastering-ethereum（20 章 · 待修 20 章 · 40 项）
+### 5.1 mastering-ethereum（20 章 · 待修 0 章 · 40 项）✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：ledger failed（generic-quality-prose, within-chapter-template-copy, quality-v2-unreviewed）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | mastering-ethereum/00-map/met2-official-learning-map.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | mastering-ethereum/01-preface/met2-preface.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | mastering-ethereum/02-01-what-is-ethereum/met2-01-what-is-ethereum.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | mastering-ethereum/03-02-ethereum-basics/met2-02-ethereum-basics.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | mastering-ethereum/04-03-ethereum-nodes/met2-03-ethereum-nodes.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | mastering-ethereum/05-04-cryptography/met2-04-cryptography.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | mastering-ethereum/06-05-wallets/met2-05-wallets.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | mastering-ethereum/07-06-transactions/met2-06-transactions.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | mastering-ethereum/08-07-smart-contracts-solidity/met2-07-smart-contracts-solidity.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | mastering-ethereum/09-08-smart-contracts-vyper/met2-08-smart-contracts-vyper.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | mastering-ethereum/10-09-smart-contract-security/met2-09-smart-contract-security.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | mastering-ethereum/11-10-tokens/met2-10-tokens.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | mastering-ethereum/12-11-oracles/met2-11-oracles.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | mastering-ethereum/13-12-decentralized-applications/met2-12-decentralized-applications.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | mastering-ethereum/14-13-decentralized-finance/met2-13-decentralized-finance.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | mastering-ethereum/15-14-ethereum-virtual-machine/met2-14-ethereum-virtual-machine.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | mastering-ethereum/16-15-consensus/met2-15-consensus.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 18 | mastering-ethereum/17-16-scaling-ethereum/met2-16-scaling-ethereum.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 19 | mastering-ethereum/18-17-zero-knowledge-proofs/met2-17-zero-knowledge-proofs.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 20 | mastering-ethereum/19-review/met2-official-final-review.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | mastering-ethereum/00-map/met2-official-learning-map.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | mastering-ethereum/01-preface/met2-preface.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | mastering-ethereum/02-01-what-is-ethereum/met2-01-what-is-ethereum.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | mastering-ethereum/03-02-ethereum-basics/met2-02-ethereum-basics.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | mastering-ethereum/04-03-ethereum-nodes/met2-03-ethereum-nodes.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | mastering-ethereum/05-04-cryptography/met2-04-cryptography.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | mastering-ethereum/06-05-wallets/met2-05-wallets.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | mastering-ethereum/07-06-transactions/met2-06-transactions.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | mastering-ethereum/08-07-smart-contracts-solidity/met2-07-smart-contracts-solidity.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | mastering-ethereum/09-08-smart-contracts-vyper/met2-08-smart-contracts-vyper.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | mastering-ethereum/10-09-smart-contract-security/met2-09-smart-contract-security.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | mastering-ethereum/11-10-tokens/met2-10-tokens.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | mastering-ethereum/12-11-oracles/met2-11-oracles.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | mastering-ethereum/13-12-decentralized-applications/met2-12-decentralized-applications.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 15 | mastering-ethereum/14-13-decentralized-finance/met2-13-decentralized-finance.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 16 | mastering-ethereum/15-14-ethereum-virtual-machine/met2-14-ethereum-virtual-machine.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 17 | mastering-ethereum/16-15-consensus/met2-15-consensus.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 18 | mastering-ethereum/17-16-scaling-ethereum/met2-16-scaling-ethereum.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 19 | mastering-ethereum/18-17-zero-knowledge-proofs/met2-17-zero-knowledge-proofs.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 20 | mastering-ethereum/19-review/met2-official-final-review.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（ledger failed）
 
 ### 5.2 blockchain-dev-practice（17 章 · 待修 17 章 · 42 项）
 
