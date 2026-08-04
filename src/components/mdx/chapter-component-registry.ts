@@ -10672,10 +10672,50 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         GppPatternLab: module0.GppPatternLab,
       } as ChapterMdxComponents;
     },
+  "game-programming-patterns/14-chapter-10-update-method/gpp-chapter-10-update-method":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-10-update-method");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/16-chapter-11-bytecode/gpp-chapter-11-bytecode":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-11-bytecode");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/17-chapter-12-subclass-sandbox/gpp-chapter-12-subclass-sandbox":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-12-subclass-sandbox");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/18-chapter-13-type-object/gpp-chapter-13-type-object":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-13-type-object");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
   "game-programming-patterns/20-chapter-14-component/gpp-chapter-14-component":
     async () => {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-14-component");
+      return {
+        GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/21-chapter-15-event-queue/gpp-chapter-15-event-queue":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-15-event-queue");
       return {
         GppPatternLab: module0.GppPatternLab,
       } as ChapterMdxComponents;

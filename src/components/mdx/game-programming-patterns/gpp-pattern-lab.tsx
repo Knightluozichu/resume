@@ -673,9 +673,331 @@ function DoubleBufferViz({ fault }: { fault: boolean }) {
   );
 }
 
+// ═══════════ Ch10 Update Method：逐实体更新 ═══════════
+const UM_STEPS: readonly TeachingStep[] = [
+  { label: "world", caption: "① 游戏世界：维护所有实体（敌人/弹幕/粒子）" },
+  { label: "e1", caption: "② 每帧遍历：敌人 A 调用 update() 推进自身状态" },
+  { label: "e2", caption: "③ 敌人 B / 弹幕 / 粒子逐个 update()" },
+  { label: "loop", caption: "④ 下一帧继续：所有实体同步推进" },
+];
+const UM_LABEL: Record<string, string> = Object.fromEntries(UM_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function UpdateMethodViz({ fault }: { fault: boolean }) {
+  const worldRef = useRef<SVGGElement>(null);
+  const entRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null)];
+  const loopRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: UM_STEPS,
+    build: (tl) => {
+      tl.add(worldRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("world", 0);
+      tl.add(entRefs[0].current!, { opacity: [0, 1], duration: T * 0.4, ease: "out(3)" }, T);
+      tl.label("e1", T);
+      entRefs.slice(1).forEach((r, i) => tl.add(r.current!, { opacity: [0, 1], duration: T * 0.4, ease: "out(3)" }, T * 2));
+      tl.label("e2", T * 2);
+      tl.add(loopRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("loop", T * 3);
+    },
+  });
+  const ents = [
+    { x: 140, label: "敌人 A", state: "追击中 → 已更新", icon: "👾" },
+    { x: 320, label: "敌人 B", state: "巡逻中 → 已更新", icon: "👾" },
+    { x: 500, label: "弹幕", state: "飞行中 → 已更新", icon: "💥" },
+    { x: 680, label: "粒子", state: "消散中 → 已更新", icon: "✨" },
+  ];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Update Method 模式动画。游戏世界先点亮，随后每个实体逐个调用 update，最后循环说明点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Update Method：每帧逐个更新实体</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>世界每帧遍历实体列表，调用每个实体的 update()</text>
+        <g ref={worldRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={820} height={90} rx={12} fill={C.accent} opacity={0.08} stroke={C.accent} strokeWidth={2} />
+          <text x={450} y={112} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.accent}>GameWorld</text>
+          <text x={450} y={134} textAnchor="middle" fontSize={11} fill={C.secondary}>实体列表：敌人 ×2 · 弹幕 ×1 · 粒子 ×1</text>
+          <text x={450} y={156} textAnchor="middle" fontSize={11} fill={C.secondary}>update(): for each entity → entity.update()</text>
+        </g>
+        {ents.map((e, i) => (
+          <g key={e.label} ref={entRefs[i]} style={{ opacity: 0 }}>
+            <rect x={e.x-80} y={220} width={160} height={90} rx={10} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+            <text x={e.x} y={252} textAnchor="middle" fontSize={26}>{e.icon}</text>
+            <text x={e.x} y={278} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>{e.label}</text>
+            <text x={e.x} y={298} textAnchor="middle" fontSize={11} fill={C.success}>{e.state}</text>
+          </g>
+        ))}
+        <g ref={loopRef} style={{ opacity: 0 }}>
+          <text x={VW/2} y={360} textAnchor="middle" fontSize={11} fill={C.secondary}>下一帧：再次遍历全部实体 → 世界状态连续推进（帧率无关，时间步一致）</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 实体状态更新依赖帧率：慢机器上角色移动更慢。修法：update(dt) 传入时间步长</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={UM_LABEL} caption="把每个实体自己的行为放进 update()：世界只负责遍历，实体自己决定如何推进。" />
+    </>
+  );
+}
+
+// ═══════════ Ch11 Bytecode：指令解释 ═══════════
+const BC_STEPS: readonly TeachingStep[] = [
+  { label: "code", caption: "① 游戏脚本：数据驱动定义行为（设法术伤害）" },
+  { label: "compile", caption: "② 编译器把脚本转成字节码指令流" },
+  { label: "run", caption: "③ 解释器逐条取指执行（取操作数 → 执行）" },
+  { label: "state", caption: "④ 执行结果改变虚拟状态机/角色属性" },
+];
+const BC_LABEL: Record<string, string> = Object.fromEntries(BC_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function BytecodeViz({ fault }: { fault: boolean }) {
+  const codeRef = useRef<SVGGElement>(null);
+  const compileRef = useRef<SVGGElement>(null);
+  const runRef = useRef<SVGGElement>(null);
+  const stateRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: BC_STEPS,
+    build: (tl) => {
+      tl.add(codeRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("code", 0);
+      tl.add(compileRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("compile", T);
+      tl.add(runRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("run", T * 2);
+      tl.add(stateRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("state", T * 3);
+    },
+  });
+  const instrs = ["LITERAL 25", "SET_HEALTH", "SET_SPEED 1.5", "CALL set_fire"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Bytecode 模式动画。脚本、编译、解释执行、状态变化四阶段依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Bytecode：数据驱动的指令解释</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>脚本 → 字节码 → 解释执行 → 状态变化</text>
+        <g ref={codeRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={240} height={140} rx={10} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+          <text x={160} y={108} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.warning}>法术脚本</text>
+          <text x={56} y={140} textAnchor="middle" fontSize={11} fontFamily="monospace" fill={C.primary}>health = 25</text>
+          <text x={56} y={162} textAnchor="middle" fontSize={11} fontFamily="monospace" fill={C.primary}>speed *= 1.5</text>
+          <text x={56} y={184} textAnchor="middle" fontSize={11} fontFamily="monospace" fill={C.primary}>cast fire</text>
+        </g>
+        <g ref={compileRef} style={{ opacity: 0 }}>
+          <text x={360} y={110} textAnchor="middle" fontSize={18} fill={C.accent}>⟶</text>
+          <text x={360} y={132} textAnchor="middle" fontSize={11} fill={C.secondary}>编译</text>
+          <rect x={420} y={80} width={200} height={140} rx={10} fill={C.bg} stroke={C.accent} strokeWidth={1.5} />
+          <text x={520} y={108} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.accent}>字节码指令流</text>
+          {instrs.map((ins, i) => (
+            <text key={ins} x={432} y={140+i*22} fontSize={11} fontFamily="monospace" fill={C.primary}>{i+1}. {ins}</text>
+          ))}
+        </g>
+        <g ref={runRef} style={{ opacity: 0 }}>
+          <text x={740} y={110} textAnchor="middle" fontSize={18} fill={C.success}>⟶</text>
+          <text x={740} y={132} textAnchor="middle" fontSize={11} fill={C.secondary}>取指执行</text>
+          <rect x={700} y={150} width={160} height={70} rx={10} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+          <text x={780} y={178} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.success}>VM 解释器</text>
+          <text x={780} y={200} textAnchor="middle" fontSize={11} fill={C.secondary}>while (ip &lt; code.len)</text>
+        </g>
+        <g ref={stateRef} style={{ opacity: 0 }}>
+          <rect x={40} y={250} width={820} height={70} rx={10} fill={C.success} opacity={0.08} stroke={C.success} strokeWidth={1.6} />
+          <text x={450} y={280} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.success}>效果：角色 health=25 · speed×1.5 · 附加火焰</text>
+          <text x={450} y={302} textAnchor="middle" fontSize={11} fill={C.secondary}>改技能 = 改数据脚本，无需重编译引擎——内容创作者可独立迭代</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 直接硬编码行为逻辑：每次加技能都要改引擎代码。修法：编译成字节码数据驱动</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={BC_LABEL} caption="游戏内容以数据（字节码）形式分发，引擎只提供解释器——加内容不动代码。" />
+    </>
+  );
+}
+
+// ═══════════ Ch12 Subclass Sandbox：沙箱基类 ═══════════
+const SS_STEPS: readonly TeachingStep[] = [
+  { label: "sandbox", caption: "① Sandbox 基类：提供受保护的「可调操作」" },
+  { label: "sub", caption: "② 子类在 activate() 里组合调用这些操作" },
+  { label: "run", caption: "③ 引擎调用 activate()：子类只与沙箱打交道" },
+];
+const SS_LABEL: Record<string, string> = Object.fromEntries(SS_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function SubclassSandboxViz({ fault }: { fault: boolean }) {
+  const sandboxRef = useRef<SVGGElement>(null);
+  const subRef = useRef<SVGGElement>(null);
+  const runRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: SS_STEPS,
+    build: (tl) => {
+      tl.add(sandboxRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("sandbox", 0);
+      tl.add(subRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("sub", T);
+      tl.add(runRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("run", T * 2);
+    },
+  });
+  const ops = ["playSound()", "spawnParticle()", "damageTarget()"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Subclass Sandbox 模式动画。沙箱基类先点亮，子类继承并组合操作，最后引擎调用激活流程点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Subclass Sandbox：基类给操作，子类给组合</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>子类只调用沙箱提供的保护操作，不直接触碰引擎</text>
+        <g ref={sandboxRef} style={{ opacity: 0 }}>
+          <rect x={50} y={80} width={300} height={220} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={200} y={112} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.accent}>Superpower（沙箱基类）</text>
+          <text x={200} y={132} textAnchor="middle" fontSize={11} fill={C.secondary}>protected: 可调操作</text>
+          <line x1={60} y1={144} x2={340} y2={144} stroke={C.border} strokeWidth={1} />
+          {ops.map((op, i) => (
+            <text key={op} x={70} y={176+i*34} fontSize={12} fontFamily="monospace" fill={C.primary}>{op}</text>
+          ))}
+          <text x={70} y={280} fontSize={11} fill={C.secondary}>abstract activate()</text>
+        </g>
+        <g ref={subRef} style={{ opacity: 0 }}>
+          <line x1={350} y1={160} x2={390} y2={160} stroke={C.success} strokeWidth={2} />
+          <polygon points={`${386},${154} ${390},${160} ${386},${166}`} fill={C.success} />
+          <rect x={390} y={80} width={300} height={220} rx={12} fill={C.bg} stroke={C.success} strokeWidth={2} />
+          <text x={540} y={112} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.success}>FireballPower（子类）</text>
+          <text x={540} y={132} textAnchor="middle" fontSize={11} fill={C.secondary}>override activate()</text>
+          <line x1={400} y1={144} x2={680} y2={144} stroke={C.border} strokeWidth={1} />
+          <text x={410} y={176} fontSize={12} fontFamily="monospace" fill={C.primary}>playSound("fire");</text>
+          <text x={410} y={210} fontSize={12} fontFamily="monospace" fill={C.primary}>spawnParticle("flame");</text>
+          <text x={410} y={244} fontSize={12} fontFamily="monospace" fill={C.primary}>damageTarget(25);</text>
+        </g>
+        <g ref={runRef} style={{ opacity: 0 }}>
+          <rect x={720} y={120} width={140} height={90} rx={10} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+          <text x={790} y={150} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.warning}>引擎</text>
+          <text x={790} y={172} textAnchor="middle" fontSize={11} fill={C.secondary}>power.activate()</text>
+          <text x={790} y={194} textAnchor="middle" fontSize={11} fill={C.secondary}>子类只碰沙箱</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 子类直接调用引擎 API：耦合爆炸、改引擎要改所有技能。修法：把引擎操作收进沙箱基类</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={SS_LABEL} caption="引擎把所有「能做的事」放进沙箱基类，子类只需组合这些操作实现自己的效果。" />
+    </>
+  );
+}
+
+// ═══════════ Ch13 Type Object：类型对象 ═══════════
+const TO_STEPS: readonly TeachingStep[] = [
+  { label: "type", caption: "① 类型对象：定义怪物的共享属性（生命/速度/技能）" },
+  { label: "inst", caption: "② 实例引用类型：每个怪物只存自己的位置/状态" },
+  { label: "share", caption: "③ 实例从类型对象读取属性：改类型=改所有实例" },
+];
+const TO_LABEL: Record<string, string> = Object.fromEntries(TO_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function TypeObjectViz({ fault }: { fault: boolean }) {
+  const typeRef = useRef<SVGGElement>(null);
+  const instRef = useRef<SVGGElement>(null);
+  const shareRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: TO_STEPS,
+    build: (tl) => {
+      tl.add(typeRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("type", 0);
+      tl.add(instRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("inst", T);
+      tl.add(shareRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("share", T * 2);
+    },
+  });
+  const types = [{ label: "GoblinType", hp: "hp=60", spd: "speed=3", skill: "投掷" }];
+  const insts = [
+    { label: "Goblin A", x: 120, pos: "x=10, y=20, hp=42" },
+    { label: "Goblin B", x: 340, pos: "x=30, y=80, hp=60" },
+    { label: "Goblin C", x: 560, pos: "x=50, y=15, hp=55" },
+  ];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Type Object 模式动画。类型对象先点亮，三个实例随后点亮，最后共享属性说明点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Type Object：类型对象共享定义</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>实例引用类型对象，共享属性只有一份</text>
+        <g ref={typeRef} style={{ opacity: 0 }}>
+          <rect x={300} y={80} width={300} height={120} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={450} y={108} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.accent}>{types[0].label}</text>
+          <line x1={310} y1={118} x2={590} y2={118} stroke={C.border} strokeWidth={1} />
+          <text x={330} y={144} fontSize={11} fontFamily="monospace" fill={C.primary}>{types[0].hp}</text>
+          <text x={440} y={144} fontSize={11} fontFamily="monospace" fill={C.primary}>{types[0].spd}</text>
+          <text x={550} y={144} fontSize={11} fontFamily="monospace" fill={C.primary}>技能:{types[0].skill}</text>
+          <text x={450} y={176} textAnchor="middle" fontSize={11} fill={C.secondary}>类型对象（共享，一份）</text>
+        </g>
+        {insts.map((ins, i) => (
+          <g key={ins.label} ref={instRef} style={{ opacity: 0 }}>
+            <rect x={ins.x-90} y={240} width={180} height={80} rx={10} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+            <text x={ins.x} y={270} textAnchor="middle" fontSize={13} fontWeight={600} fill={C.primary}>{ins.label}</text>
+            <text x={ins.x} y={296} textAnchor="middle" fontSize={11} fontFamily="monospace" fill={C.success}>{ins.pos}</text>
+          </g>
+        ))}
+        <g ref={shareRef} style={{ opacity: 0 }}>
+          <path d={`M 400 200 L ${insts[0].x} 240 M 450 200 L ${insts[1].x} 240 M 500 200 L ${insts[2].x} 240`} stroke={C.border} strokeWidth={1} strokeDasharray="4,3" />
+          <text x={VW/2} y={360} textAnchor="middle" fontSize={11} fill={C.secondary}>实例只存自身状态；把 GoblinType.hp 改成 80，所有哥布林同时变强</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 每个怪物独立存全部属性：加新怪种要写大量重复类。修法：类型对象共享定义</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={TO_LABEL} caption="类型即数据：把「是什么」存成对象，运行时改类型就能改变所有实例。" />
+    </>
+  );
+}
+
+// ═══════════ Ch15 Event Queue：事件队列 ═══════════
+const EQ_STEPS: readonly TeachingStep[] = [
+  { label: "producer", caption: "① 生产者：产生事件（音效、伤害、动画触发）" },
+  { label: "queue", caption: "② 事件入队：环形缓冲排队等待" },
+  { label: "consumer", caption: "③ 消费者：按序取出并处理事件" },
+  { label: "decouple", caption: "④ 解耦：生产/消费速率不同也能平滑衔接" },
+];
+const EQ_LABEL: Record<string, string> = Object.fromEntries(EQ_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function EventQueueViz({ fault }: { fault: boolean }) {
+  const prodRef = useRef<SVGGElement>(null);
+  const queueRef = useRef<SVGGElement>(null);
+  const consRef = useRef<SVGGElement>(null);
+  const decoupleRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: EQ_STEPS,
+    build: (tl) => {
+      tl.add(prodRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("producer", 0);
+      tl.add(queueRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("queue", T);
+      tl.add(consRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("consumer", T * 2);
+      tl.add(decoupleRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("decouple", T * 3);
+    },
+  });
+  const events = ["🔊 音效:命中", "💥 伤害:25", "🎬 动画:受击", "🩸 粒子:血花", "📊 成就:击杀"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Event Queue 模式动画。生产者、事件队列、消费者、解耦说明依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Event Queue：生产者-队列-消费者</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>事件不直接调用，先入队再按序处理</text>
+        <g ref={prodRef} style={{ opacity: 0 }}>
+          <rect x={40} y={100} width={200} height={140} rx={12} fill={C.bg} stroke={C.warning} strokeWidth={2} />
+          <text x={140} y={130} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.warning}>生产者</text>
+          <text x={140} y={156} textAnchor="middle" fontSize={11} fill={C.secondary}>碰撞检测</text>
+          <text x={140} y={180} textAnchor="middle" fontSize={11} fill={C.secondary}>输入系统</text>
+          <text x={140} y={204} textAnchor="middle" fontSize={11} fill={C.secondary}>AI 决策</text>
+          <text x={140} y={228} textAnchor="middle" fontSize={11} fill={C.secondary}>post(event)</text>
+        </g>
+        <g ref={queueRef} style={{ opacity: 0 }}>
+          <text x={450} y={112} textAnchor="middle" fontSize={13} fill={C.accent}>⟶ enqueue ⟶</text>
+          <rect x={330} y={130} width={240} height={90} rx={10} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={450} y={156} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.accent}>事件队列（环形缓冲）</text>
+          {events.slice(0, 3).map((ev, i) => (
+            <text key={ev} x={450} y={180+i*18} textAnchor="middle" fontSize={11} fill={C.primary}>{ev}</text>
+          ))}
+        </g>
+        <g ref={consRef} style={{ opacity: 0 }}>
+          <text x={750} y={112} textAnchor="middle" fontSize={13} fill={C.success}>⟵ dequeue ⟵</text>
+          <rect x={660} y={130} width={200} height={90} rx={12} fill={C.bg} stroke={C.success} strokeWidth={2} />
+          <text x={760} y={156} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.success}>消费者</text>
+          <text x={760} y={180} textAnchor="middle" fontSize={11} fill={C.secondary}>音频系统</text>
+          <text x={760} y={204} textAnchor="middle" fontSize={11} fill={C.secondary}>每帧取出处理</text>
+        </g>
+        <g ref={decoupleRef} style={{ opacity: 0 }}>
+          <rect x={40} y={260} width={820} height={60} rx={10} fill={C.success} opacity={0.08} stroke={C.success} strokeWidth={1.6} />
+          <text x={450} y={288} textAnchor="middle" fontSize={12} fontWeight={700} fill={C.success}>解耦：生产者瞬时入队不阻塞，消费者按自己的节奏处理</text>
+          <text x={450} y={308} textAnchor="middle" fontSize={11} fill={C.secondary}>即使某帧事件爆发，也只是队列变长——不丢事件、不卡帧</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 直接同步调用：某帧事件过多导致处理卡顿。修法：事件入队，按帧摊开处理</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={EQ_LABEL} caption="事件先入队、后处理：生产者与消费者彻底解耦，突发负载被队列吸收。" />
+    </>
+  );
+}
+
 const VIZ: Record<string, (p: { fault: boolean }) => React.ReactNode> = {
   "01": ArchViz, "02": CommandViz, "03": FlyweightViz, "04": ObserverViz, "05": PrototypeViz,
-  "06": SingletonViz, "07": StateViz, "08": DoubleBufferViz, "09": GameLoopViz, "14": ComponentViz,
+  "06": SingletonViz, "07": StateViz, "08": DoubleBufferViz, "09": GameLoopViz, "10": UpdateMethodViz,
+  "11": BytecodeViz, "12": SubclassSandboxViz, "13": TypeObjectViz, "14": ComponentViz, "15": EventQueueViz,
 };
 
 export function GppPatternLab({ chapter }: { chapter: string }) {
