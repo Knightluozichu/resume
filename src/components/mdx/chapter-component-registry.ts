@@ -15699,7 +15699,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/redis-design-implementation/v2/rdi-official-learning-map");
       return {
-        RdiStructureLab: module0.RdiStructureLab,
+        RdiReviewLab: module0.RdiReviewLab,
       } as ChapterMdxComponents;
     },
   "redis-design-implementation/01-introduction/rdi-01-introduction":
@@ -15707,7 +15707,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/redis-design-implementation/v2/rdi-01-introduction");
       return {
-        RdiStructureLab: module0.RdiStructureLab,
+        RdiReviewLab: module0.RdiReviewLab,
       } as ChapterMdxComponents;
     },
   "redis-design-implementation/02-simple-dynamic-string/rdi-02-simple-dynamic-string":
@@ -15772,7 +15772,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/redis-design-implementation/v2/rdi-10-rdb-persistence");
       return {
-        RdiStructureLab: module0.RdiStructureLab,
+        RdiRdbLab: module0.RdiRdbLab,
       } as ChapterMdxComponents;
     },
   "redis-design-implementation/11-aof-persistence/rdi-11-aof-persistence":
@@ -15879,7 +15879,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/redis-design-implementation/v2/rdi-official-final-review");
       return {
-        RdiStructureLab: module0.RdiStructureLab,
+        RdiReviewLab: module0.RdiReviewLab,
       } as ChapterMdxComponents;
     },
   "rl-deep-learning-c/00-learning-map/rlc-official-learning-map": async () => {
