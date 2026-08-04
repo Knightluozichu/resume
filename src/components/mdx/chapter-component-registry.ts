@@ -15843,35 +15843,35 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-20-lua");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiClusterDiscoveryLab: module0.RdiClusterDiscoveryLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/21-sort/rdi-21-sort": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-21-sort");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiClusterMsgLab: module0.RdiClusterMsgLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/22-bit-array/rdi-22-bit-array": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-22-bit-array");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiEvictionLab: module0.RdiEvictionLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/23-slow-log/rdi-23-slow-log": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-23-slow-log");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiSlowlogLab: module0.RdiSlowlogLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/24-monitor/rdi-24-monitor": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-24-monitor");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiClusterMigrateLab: module0.RdiClusterMigrateLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/99-final-review/rdi-official-final-review":
