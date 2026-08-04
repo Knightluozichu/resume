@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与PoW验证最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -85,6 +93,9 @@ def valid_header(header: bytes, target: int) -> bool:
     block_hash = sha256(sha256(header).digest()).digest()
     return int.from_bytes(block_hash, "little") < target
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -322,8 +333,55 @@ def valid_header(header: bytes, target: int) -> bool:
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 矿工产出的区块被全节点拒绝，误以为矿工可以决定共识规则。
+**原因 →** 矿工只提议区块，全节点独立验证全部交易和头部规则；无效区块即使有PoW也会被拒绝。你可以亲自试一下：在regtest上构造一个coinbase未成熟的区块，观察全节点拒绝。
+**修法 →** 区分提议权与验证权；实现时先做全节点验证再做链选择，不能假设矿工产出即有效。
+
+**现象 →** 从nBits计算target时得到错误值，PoW验证始终通过或始终失败。
+**原因 →** nBits是紧凑编码：高位1字节指数、低位3字节尾数，target=尾数×256^(指数-3)；大小端和位移方向搞错会得到完全不同的值。
+**修法 →** 按BIP定义严格解析指数与尾数，用已知区块头（如创世块nBits=0x1d00ffff）验证target计算。
+
+**现象 →** 把软分叉信号当作激活保证，认为矿工信号后规则自动生效。
+**原因 →** 软分叉激活分信号、锁入和激活多阶段；BIP9需阈值窗口内达标，BIP8可强制锁入；真正效力来自节点在激活点执行规则。
+**修法 →** 区分信号、锁入与激活三阶段，实现时按BIP状态机跟踪并测试各阶段节点行为。
+
+## 小结
+
+- 矿工提议区块，全节点独立验证是否接受
+- PoW要求block hash小于target，难度周期调整
+- coinbase创建补贴与费用，输出受成熟期约束
+- 链选择比较累计工作量，非最长高度
+- 软分叉收紧规则旧节点表面接受，硬分叉放宽则分裂
+
+<Exercises>
+
+**问题 1**（独立实现）编写函数解析4字节nBits紧凑编码，还原256位target值，并计算预期尝试次数$E \approx 2^{256}/(target+1)$。用创世块nBits=0x1d00ffff验证结果。
+
+<Answer>
+
+nBits=0x1d00ffff：指数=0x1d=29，尾数=0x00ffff=65535。target=65535×256^(29-3)=65535×256^26。预期尝试次数≈2^256/(target+1)。创世块target对应难度1，约为2^48次尝试。解析时注意nBits以大端4字节存储，尾数低3字节有效，最高位符号位在BIP中不使用。
+
+</Answer>
+
+**问题 2** 给定两条候选链A和B，A的高度更高但累计工作量更低，B的累计工作量更高但高度更低。全节点应选择哪条？为什么？
+
+<Answer>
+
+全节点选择累计工作量更大的B。比特币链选择规则是比较有效候选链的累计工作量（chainwork），而非最长高度。高度只是位置，低难度链可以快速堆高但工作量不足。只有当两条链都通过全部共识验证后，才在有效链间比较chainwork。
+
+</Answer>
+
+**问题 3** 比较BIP9与BIP8软分叉激活机制在信号阶段、锁入条件和强制激活上的差异。
+
+<Answer>
+
+BIP9以version位信号，在阈值窗口（通常2016块）内达标则锁入，否则失败需重新提议，无强制激活。BIP8类似但引入lockinontimeout参数，若设为true则在信号窗口结束时无论信号是否达标都强制锁入，保证规则最终激活。BIP8旨在防止矿工拖延，但也增加了争议性。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -334,4 +392,11 @@ def valid_header(header: bytes, target: int) -> bool:
 
 - [上一页：Chapter 11 The Blockchain](/learn/mastering-bitcoin/12-11-blockchain/mbt3-11-blockchain)
 - [下一页：Chapter 13 Bitcoin Security](/learn/mastering-bitcoin/14-13-security/mbt3-13-security)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

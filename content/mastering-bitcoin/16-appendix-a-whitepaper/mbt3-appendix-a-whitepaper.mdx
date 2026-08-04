@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示白皮书模型证据门禁与状态验证两层视角：TypeScript 把成功与失败统一进同一证据结构，Python 证明拒绝路径不污染原状态并复算价值守恒。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -76,14 +84,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 def verify_value_conservation(inputs, outputs, fee):
     if len(inputs) != len({item["outpoint"] for item in inputs}):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -195,7 +204,61 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
+
+**现象 →** 把白皮书当当前比特币协议的完整规格直接套用。
+**原因 →** 白皮书是设计起点，后续 BIP 与实现修正了许多细节。
+**修法 →** 以白皮书为历史坐标，共识细节交叉验证 BIP 与 Bitcoin Core。
+
+**现象 →** 以为 SPV 证明了交易就等于交易有效。
+**原因 →** SPV 只证明交易被有工作量区块承诺，不独立验证全部规则。
+**修法 →** 区分包含证明与规则验证，SPV 还依赖同伴诚实提供数据。你可以亲自试一下：用 SPV 验证一笔被同伴遗漏的交易，观察是否能发现数据缺失。
+
+**现象 →** 把白皮书的 PoW 概率计算当成精确安全保证。
+**原因 →** 计算基于独立性等简化假设，真实出块是高方差过程。
+**修法 →** 复算时显式标明假设，短期出块用统计区间而非确定值。
+
+## 小结
+
+- 白皮书用签名链、时间戳与 PoW 网络解决双重支付
+- 它是设计起点，当前规则需结合实现与勘误交叉验证
+- PoW 要求区块头哈希小于 target，难度周期调整速率
+- SPV 用区块头链与 Merkle 证明但不验证全部规则
+- 通过标准：能从所有权链推导到 PoW 选择与 SPV 证明
+
+<Exercises>
+
+**问题 1** 从白皮书的交易所有权链如何推导到 PoW 链选择与 SPV 证明？白皮书与当前 Bitcoin Core 行为有哪些边界？
+
+<Answer>
+
+交易以所有权签名链传递，时间戳服务器把交易顺序承诺进区块；PoW 要求区块头哈希小于 target，节点扩展累计工作量最大链；SPV 用区块头链与 Merkle 包含证明核对交易已被有工作量区块承诺。边界包括：白皮书未涵盖脚本、隔离见证、Taproot 等后续规则，PoW 计算用简化假设，SPV 不独立验证全部规则且依赖同伴数据。
+
+</Answer>
+
+**问题 2**（独立实现）实现累计工作量链选择模拟器：给定多条候选链的每块工作量，输出应选择的规范链索引与累计工作量证据。
+
+<Answer>
+
+```python
+def select_chain(chains):
+    cumulative = [sum(c) for c in chains]
+    best = max(range(len(cumulative)), key=lambda i: cumulative[i])
+    return {
+        "best_index": best,
+        "cumulative_work": cumulative[best],
+        "all": cumulative,
+    }
+
+chains = [[1, 1, 1], [1, 1, 1, 1], [1, 1]]
+result = select_chain(chains)
+assert result["best_index"] == 1
+assert result["cumulative_work"] == 4
+```
+
+</Answer>
+
+</Exercises>
 
 
 ## 本章回顾
@@ -207,4 +270,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 14 Second-Layer Applications](/learn/mastering-bitcoin/15-14-second-layer-applications/mbt3-14-second-layer-applications)
 - [下一页：Appendix B Errata to the Bitcoin Whitepaper](/learn/mastering-bitcoin/17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

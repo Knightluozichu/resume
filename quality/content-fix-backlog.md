@@ -1015,7 +1015,7 @@
 
 ## 系列 05：区块链系列（4 本 · 71 章待修 · 286 项）
 
-**系列状态**：进行中（5.1 完成，5.2-5.4 待修）
+**系列状态**：✅ 全系列完成（5.1-5.4 共71章286项全部修复，4本均未上架仅修复不部署）
 
 ### 5.1 mastering-ethereum（20 章 · 待修 0 章 · 40 项）✅
 
@@ -1095,34 +1095,34 @@
 
 **部署记录**：仅规范修复并推送，未部署（ledger failed）
 
-### 5.4 mastering-bitcoin（20 章 · 待修 20 章 · 120 项）
+### 5.4 mastering-bitcoin（20 章 · 待修 0 章 · 120 项）✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：ledger failed（generic-quality-prose, within-chapter-template-copy, quality-v2-unreviewed）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | mastering-bitcoin/00-map/mbt3-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | mastering-bitcoin/01-preface/mbt3-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | mastering-bitcoin/02-01-introduction/mbt3-01-introduction.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | mastering-bitcoin/03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | mastering-bitcoin/04-03-bitcoin-core/mbt3-03-bitcoin-core.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | mastering-bitcoin/05-04-keys-addresses/mbt3-04-keys-addresses.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | mastering-bitcoin/06-05-wallet-recovery/mbt3-05-wallet-recovery.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | mastering-bitcoin/07-06-transactions/mbt3-06-transactions.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | mastering-bitcoin/08-07-authorization-authentication/mbt3-07-authorization-authentication.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | mastering-bitcoin/10-09-transaction-fees/mbt3-09-transaction-fees.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | mastering-bitcoin/11-10-bitcoin-network/mbt3-10-bitcoin-network.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | mastering-bitcoin/12-11-blockchain/mbt3-11-blockchain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | mastering-bitcoin/13-12-mining-consensus/mbt3-12-mining-consensus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | mastering-bitcoin/14-13-security/mbt3-13-security.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | mastering-bitcoin/15-14-second-layer-applications/mbt3-14-second-layer-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | mastering-bitcoin/16-appendix-a-whitepaper/mbt3-appendix-a-whitepaper.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 18 | mastering-bitcoin/17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 19 | mastering-bitcoin/18-appendix-c-bips/mbt3-appendix-c-bips.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 20 | mastering-bitcoin/19-review/mbt3-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | mastering-bitcoin/00-map/mbt3-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | mastering-bitcoin/01-preface/mbt3-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | mastering-bitcoin/02-01-introduction/mbt3-01-introduction.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | mastering-bitcoin/03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | mastering-bitcoin/04-03-bitcoin-core/mbt3-03-bitcoin-core.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | mastering-bitcoin/05-04-keys-addresses/mbt3-04-keys-addresses.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | mastering-bitcoin/06-05-wallet-recovery/mbt3-05-wallet-recovery.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | mastering-bitcoin/07-06-transactions/mbt3-06-transactions.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | mastering-bitcoin/08-07-authorization-authentication/mbt3-07-authorization-authentication.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | mastering-bitcoin/10-09-transaction-fees/mbt3-09-transaction-fees.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | mastering-bitcoin/11-10-bitcoin-network/mbt3-10-bitcoin-network.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | mastering-bitcoin/12-11-blockchain/mbt3-11-blockchain.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | mastering-bitcoin/13-12-mining-consensus/mbt3-12-mining-consensus.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 15 | mastering-bitcoin/14-13-security/mbt3-13-security.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 16 | mastering-bitcoin/15-14-second-layer-applications/mbt3-14-second-layer-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 17 | mastering-bitcoin/16-appendix-a-whitepaper/mbt3-appendix-a-whitepaper.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 18 | mastering-bitcoin/17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 19 | mastering-bitcoin/18-appendix-c-bips/mbt3-appendix-c-bips.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 20 | mastering-bitcoin/19-review/mbt3-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（ledger failed）
 
 
 ## 系列 06：AI/LLM 应用系列（11 本 · 176 章待修 · 293 项）

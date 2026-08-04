@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币验证的两层视角：TypeScript 段把密钥与地址推导的证据统一为结构，Python 段证明拒绝路径不污染原状态，再用 hash160 校验公钥到地址的最小编码链，作为密钥与地址章节的最小可重放单元。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -76,14 +84,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 from hashlib import new, sha256
 
 def hash160(public_key: bytes) -> bytes:
     return new("ripemd160", sha256(public_key).digest()).digest()
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -225,8 +234,58 @@ def hash160(public_key: bytes) -> bytes:
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 把压缩公钥和非压缩公钥混用。
+**原因 →** 两种编码产生不同 HASH160，地址也不同，混用会导致资金无法用对应私钥花费。
+**修法 →** 全程使用压缩公钥并固定压缩标志，导入导出时核对 WIF 前缀。你可以亲自试一下：同一私钥分别用压缩与非压缩导出地址，比对差异。
+
+**现象 →** Bech32 和 Bech32m 常量混用。
+**原因 →** 见证版本 0 用 Bech32，版本 1+ 用 Bech32m，混用会产生看似合法但不可接受的地址。
+**修法 →** 按见证版本选择校验常量，解析后验证脚本类型与版本匹配。
+
+**现象 →** 把私钥截图或粘到在线工具生成地址。
+**原因 →** 任何在线复制都会扩大不可撤销的泄漏面。
+**修法 →** 私钥只在离线环境生成与使用，教学只用公开测试向量，主网密钥与教学代码物理隔离。
+
+## 小结
+
+- 私钥是 secp256k1 阶范围内的高熵整数
+- 公钥由 K=kG 推导，离散对数困难保证安全
+- 地址是输出脚本的网络编码提示，不是账户
+- Base58Check 能发现抄写错误但不提供认证
+- Bech32 与 Bech32m 按见证版本选择校验常量
+
+<Exercises>
+
+**问题 1**
+同一私钥分别用压缩和非压缩公钥生成 P2PKH 地址，结果是否相同？为什么？
+
+<Answer>
+
+不同。压缩与非压缩公钥的字节不同，经过 HASH160 后得到不同的哈希，再经 Base58Check 编码产生不同地址；若用一种编码生成地址却用另一种编码的花费脚本，资金将无法解锁，因此必须全程固定压缩标志。
+
+</Answer>
+
+**问题 2**
+独立实现 `hash160(public_key)`：先 SHA256 再做 RIPEMD160，返回字节串。并实现一个函数判断给定见证版本应使用 Bech32 还是 Bech32m 常量。
+
+<Answer>
+
+参考骨架：`return new("ripemd160", sha256(public_key).digest()).digest()`；版本 0 用 Bech32 常量 0x1，版本 1 及以上用 Bech32m 常量 0x2bc830a3。关键点是混用常量会产生看似合法但不可接受的地址，解析后还要验证脚本类型与版本匹配。
+
+</Answer>
+
+**问题 3**
+Base58Check 能发现哪些错误？它能否替代认证？
+
+<Answer>
+
+Base58Check 通过双 SHA256 校验片段能发现多数单字符抄写与换位错误，但不提供身份认证；解析后仍要验证网络前缀、载荷长度与脚本类型，不能因校验通过就认为地址属于预期接收方。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -237,4 +296,11 @@ def hash160(public_key: bytes) -> bytes:
 
 - [上一页：Chapter 3 Bitcoin Core: The Reference Implementation](/learn/mastering-bitcoin/04-03-bitcoin-core/mbt3-03-bitcoin-core)
 - [下一页：Chapter 5 Wallet Recovery](/learn/mastering-bitcoin/06-05-wallet-recovery/mbt3-05-wallet-recovery)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

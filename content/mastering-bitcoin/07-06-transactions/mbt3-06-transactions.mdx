@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与交易标识最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -85,6 +93,9 @@ def transaction_id(legacy_serialization: bytes) -> str:
     digest = sha256(sha256(legacy_serialization).digest()).digest()
     return digest[::-1].hex()
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -262,8 +273,55 @@ def transaction_id(legacy_serialization: bytes) -> str:
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 区块浏览器查到的txid与本地节点算出的不一致，广播后无法关联这笔交易。
+**原因 →** SegWit交易的wtxid与legacy txid不同；legacy txid不含见证数据，第三方篡改见证会改变wtxid但不改变txid。
+**修法 →** 用规范legacy序列化重算双SHA256并小端反转，明确区分txid与wtxid。你可以亲自试一下：对同一笔SegWit交易分别截断见证再算两次哈希，比较差异。
+
+**现象 →** 解析输出金额时得到一个远超21e14聪的天文数字。
+**原因 →** 比特币序列化使用小端字节序，若按大端读取8字节聪值会得到完全错误的数值。
+**修法 →** 固定使用小端解码并校验0到21e14聪范围，用一个已知输出反推验证字节序。
+
+**现象 →** 把sequence字段直接当作"替换信号"或"时间锁"使用，交易被节点拒绝。
+**原因 →** sequence承载多套历史语义，依赖交易版本、disable位、type位和共识规则，同一整数不能同时表示所有含义。
+**修法 →** 结合版本与BIP125、BIP68规则分别判断，写测试覆盖替换、相对时间锁和默认值三条分支。
+
+## 小结
+
+- txid是legacy序列化双SHA256，wtxid含见证数据
+- SegWit标记与见证改变编码但不改legacy txid
+- sequence承载替换信号与相对时间锁两套语义
+- coinbase无普通outpoint，输出受成熟期约束
+- 权重=4×base+witness，vbytes向上取weight/4
+
+<Exercises>
+
+**问题 1**（独立实现）给定一段含SegWit标记与见证的原始交易字节，编写解析器逐字段提取版本、输入、输出、见证与locktime，分别重算legacy txid与wtxid，并打印权重和vbytes。
+
+<Answer>
+
+先检测标记字节0x00与flag 0x01判断是否SegWit；legacy序列化时跳过标记与见证，对剩余字段做双SHA256再小端反转得txid；wtxid则对含见证的完整序列化做同样哈希。权重=4×baseSize+witnessSize，vbytes=(weight+3)//4。解析时必须先检查CompactSize长度与字段边界，再解释脚本与金额。
+
+</Answer>
+
+**问题 2** 一笔交易的baseSize为200字节、witnessSize为100字节，目标费率为20 sat/vbyte，求权重、vbytes和应缴费用。
+
+<Answer>
+
+weight=4×200+100=900；vbytes=(900+3)//4=225；费用=225×20=4500聪。注意vbytes按向上取整计算，不能直接用weight/4截断。
+
+</Answer>
+
+**问题 3** 解释SegWit如何解决第三方交易延展性，却无法消除第二方延展性。
+
+<Answer>
+
+SegWit把见证数据移出legacy序列化，第三方无法通过篡改签名改变txid；但签名者自身仍可在签名允许范围内（如SIGHASH变体、ECDSA-S等）构造不同交易，这是第二方延展性，共识无法消除。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -274,4 +332,11 @@ def transaction_id(legacy_serialization: bytes) -> str:
 
 - [上一页：Chapter 5 Wallet Recovery](/learn/mastering-bitcoin/06-05-wallet-recovery/mbt3-05-wallet-recovery)
 - [下一页：Chapter 7 Authorization and Authentication](/learn/mastering-bitcoin/08-07-authorization-authentication/mbt3-07-authorization-authentication)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

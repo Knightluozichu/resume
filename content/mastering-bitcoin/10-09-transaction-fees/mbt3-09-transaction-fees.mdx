@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与费用计算最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -83,6 +91,9 @@ def required_fee(weight: int, sat_per_vbyte: int) -> int:
     virtual_bytes = (weight + 3) // 4
     return virtual_bytes * sat_per_vbyte
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -164,8 +175,55 @@ def required_fee(weight: int, sat_per_vbyte: int) -> int:
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 交易费很高却迟迟不确认，而费率更低的其他交易先被打包。
+**原因 →** 矿工比较的是每vbyte费率而非总费用；一笔大体积高总费交易可能费率低于小体积交易。你可以亲自试一下：构造两笔交易，一笔总费高但费率低，另一笔相反，观察确认顺序。
+**修法 →** 始终以sat/vbyte为单位估算和比较，用weight计算vbytes后再乘费率得出应缴费用。
+
+**现象 →** 发起RBF替换后被节点拒绝，原交易仍在内存池。
+**原因 →** BIP125要求原交易sequence信号为可替换（至少一个输入sequence < 0xfffffffe），且替换交易总费必须高于原交易。
+**修法 →** 构造可替换交易时设置RBF信号，替换时递增总费并覆盖所有输入；用testmempoolaccept预检。
+
+**现象 →** 闪电通道承诺交易被对手用大量低费子交易钉死，无法及时提高费率。
+**原因 →** 交易钉死利用祖先包限制：攻击者构造大体积低费后代使包费率被稀释，CPFP也无法有效提升。
+**修法 →** 使用锚点输出（anchor output）为CPFP提供独立触发点，配合carve-out规则绕过祖先数量限制。
+
+## 小结
+
+- 费用=输入和减输出和，费率=费用/vbytes
+- RBF由签名者替换，需BIP125信号且费率递增
+- CPFP由输出所有者创建高费子交易提升包费率
+- 包中继允许父子交易一起传播与验证
+- 锚点输出为CPFP提供低价值触发点
+
+<Exercises>
+
+**问题 1**（独立实现）给定一个含父交易和两笔子交易的交易包，编写函数计算每笔交易的单独费率、整个包的总费率（包费率），并判断CPFP是否能使父交易被打包。
+
+<Answer>
+
+单独费率=各自费用/各自vbytes；包费率=（父费用+子费用之和）/（父vbytes+子vbytes之和）。若包费率高于当前区块目标费率，则CPFP有效。实现时需用weight=4×base+witnessSize，vbytes=(weight+3)//4，并注意祖先后代拓扑中不可遗漏中间交易。
+
+</Answer>
+
+**问题 2** 一笔已广播的交易总费为1000聪、vbytes为200（费率5 sat/vbyte），现需RBF替换。BIP125要求替换交易费率至少为多少？若替换交易vbytes为250，最低总费是多少？
+
+<Answer>
+
+BIP125要求替换交易总费高于原交易（增量需覆盖原交易在新包中的费用），最低总费须大于1000聪；若按费率递增规则，新费率须大于5 sat/vbyte，故250 vbytes时最低总费为250×5+1=1251聪（向上取整并至少高于原总费）。
+
+</Answer>
+
+**问题 3** 比较RBF与CPFP在所有权路径、适用前提和隐私影响上的差异。
+
+<Answer>
+
+RBF需原签名者参与并重新签名，替换会暴露原始交易意图；CPFP由输出接收方发起，无需原签名者配合，但额外子交易增大链上体积。RBF适合发送方主动提速，CPFP适合接收方催促到账。两者可组合使用。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -176,4 +234,11 @@ def required_fee(weight: int, sat_per_vbyte: int) -> int:
 
 - [上一页：Chapter 8 Digital Signatures](/learn/mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures)
 - [下一页：Chapter 10 The Bitcoin Network](/learn/mastering-bitcoin/11-10-bitcoin-network/mbt3-10-bitcoin-network)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

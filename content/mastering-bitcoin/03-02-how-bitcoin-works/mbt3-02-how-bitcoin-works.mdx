@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币验证的两层视角：TypeScript 段把一笔含输入、支付与找零的交易证据统一为结构，Python 段证明拒绝路径不污染原状态，再校验金额守恒与双花防护，作为在线商店案例的最小可重放单元。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -76,14 +84,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 def verify_value_conservation(inputs, outputs, fee):
     if len(inputs) != len({item["outpoint"] for item in inputs}):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -207,8 +216,58 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 构造交易时漏掉找零输出。
+**原因 →** 选币后只写了支付输出，剩余价值全部被当成矿工费。
+**修法 →** 选币后先算 `输入总和 - 支付 - 费用`，显式生成找零输出并核对其地址归属。你可以亲自试一下：用两个 UTXO 构造一笔支付，故意漏掉找零，看费用飙升多少。
+
+**现象 →** 以为交易哈希广播成功就等于结算。
+**原因 →** 把候选对象标识当成最终证明，忽略了传播、入块、确认与重组。
+**修法 →** 追踪交易从内存池到入块再到目标确认深度的全过程，并保留前后 UTXO 状态。
+
+**现象 →** 只验证签名不检查被引用输出。
+**原因 →** 误以为签名有效就万事大吉，忽略了双花、金额范围与脚本标准性。
+**修法 →** 节点要检查被引用输出存在、尚未花费、金额有效且脚本成功，四项缺一不可。
+
+## 小结
+
+- 交易消费旧输出并创建新输出，形成有向无环依赖图
+- 选币影响费用、隐私与未来可花费性
+- 漏掉找零会把差额全部作为矿工费
+- 广播不等于确认，要追踪入块与确认深度
+- 节点要同时检查输出存在、未花费、金额与脚本
+
+<Exercises>
+
+**问题 1**
+手算一笔含两个输入、支付与找零的交易：输入分别为 2 BTC 和 1 BTC，支付 2.5 BTC，费用 0.001 BTC，求找零金额并说明漏掉找零的后果。
+
+<Answer>
+
+找零 = (2 + 1) - 2.5 - 0.001 = 0.499 BTC。若漏掉找零输出，0.499 BTC 会全部作为矿工费被矿工收取，造成不可逆损失；选币后必须显式生成找零输出并核对其地址归属。
+
+</Answer>
+
+**问题 2**
+独立实现 `verify_value_conservation(inputs, outputs, fee)`：要求同时检查输入无重复 outpoint、金额非负，且输入总和等于输出总和加费用。返回布尔值与首个失败原因。
+
+<Answer>
+
+参考骨架：先用集合检测 outpoint 重复，再检查金额非负，最后比较 `sum(inputs) == sum(outputs) + fee`。关键点是金额守恒与双花防护必须同函数检查，任一失败返回原状态与首个拒绝规则，不能只验证签名。
+
+</Answer>
+
+**问题 3**
+为什么子交易在父交易未确认时会影响费用与包中继？
+
+<Answer>
+
+子交易依赖父交易输出，若父未确认，子交易无法独立验证通过；节点会按祖先包评估总费用与总 vbytes，祖先限制和钉死攻击会影响可用性，确认后仍要考虑链重组对整条链的影响。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -219,4 +278,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 1 Introduction](/learn/mastering-bitcoin/02-01-introduction/mbt3-01-introduction)
 - [下一页：Chapter 3 Bitcoin Core: The Reference Implementation](/learn/mastering-bitcoin/04-03-bitcoin-core/mbt3-03-bitcoin-core)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

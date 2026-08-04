@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币验证的两层视角：TypeScript 段把首次使用的收款与发送证据统一为结构，Python 段证明拒绝路径不污染原状态，再校验最小协议对象，作为首次使用闭环的最小可重放单元。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -76,14 +84,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 def verify_value_conservation(inputs, outputs, fee):
     if len(inputs) != len({item["outpoint"] for item in inputs}):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -183,8 +192,58 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 钱包显示"已收到"就当成最终结算。
+**原因 →** 把内存池候选当成确认，忽略了未确认交易可能被替换、双花或因重组消失。
+**修法 →** 按固定交易 ID 和区块哈希追踪确认深度，至少等到目标确认数再视为可花费。你可以亲自试一下：在测试链发一笔交易，断网观察它从"未确认"到"入块"的状态变化。
+
+**现象 →** 选钱包只看便利性，不查谁控制密钥。
+**原因 →** 把"能转账"等同于"拥有币"，托管钱包把控制权交给第三方却无感。
+**修法 →** 先判断是否控制密钥、是否独立验证，再比较便利性，恢复路径必须实地演练。
+
+**现象 →** 把法币价格当成链上事实。
+**原因 →** 价格来自链外市场，波动且与链上结算无关。
+**修法 →** 报价、地址验证、签名、广播、入块和确认分开处理，法币价格只作链外参考。
+
+## 小结
+
+- 首次使用的核心是理解谁控制密钥与如何恢复
+- 钱包不存放链上币，余额是 UTXO 视图
+- 地址是输出脚本的网络编码提示，不是账户
+- 收款要按交易 ID 和区块哈希追踪确认状态
+- 真实资产实验前先在测试环境完成全流程
+
+<Exercises>
+
+**问题 1**
+选择比特币钱包时，"是否控制密钥"与"是否独立验证"是两条不同的轴，请说明它们的区别与组合意义。
+
+<Answer>
+
+控制密钥决定资产归属（自托管 vs 托管），独立验证决定是否本地执行共识规则（全节点 vs 轻客户端）。两者正交：可以自托管却依赖轻节点，也可以托管却跑全节点；首次使用要同时评估便利性、验证能力与托管风险。
+
+</Answer>
+
+**问题 2**
+独立实现一个最小函数 `trackConfirmation(txid, blockHashes, target)`：给定交易 ID 和一组按顺序的区块哈希，判断该交易是否达到目标确认深度。要求返回确认数与是否达标。
+
+<Answer>
+
+参考骨架：遍历区块哈希列表，找到包含 txid 的区块后计数后续区块深度，返回 `{ confirmations: depth, reached: depth >= target }`。关键点在于确认深度依赖区块顺序与重组可能性，不能用单个"已入块"布尔值替代。
+
+</Answer>
+
+**问题 3**
+为什么钱包显示收到比特币也可能只是未确认候选？
+
+<Answer>
+
+钱包看到内存池交易只代表邻居转发了一个候选对象，并不等于所有节点接受或最终确认；交易可能因费用过低、双花、脚本失败或链重组被丢弃，必须按固定交易 ID 和区块哈希追踪确认状态。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -195,4 +254,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Preface](/learn/mastering-bitcoin/01-preface/mbt3-preface)
 - [下一页：Chapter 2 How Bitcoin Works](/learn/mastering-bitcoin/03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

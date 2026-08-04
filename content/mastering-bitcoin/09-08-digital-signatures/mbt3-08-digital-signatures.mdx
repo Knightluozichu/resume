@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与签名验证最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -84,6 +92,9 @@ def verify_value_conservation(inputs, outputs, fee):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -183,8 +194,55 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 两笔ECDSA交易使用相同nonce后私钥被攻击者恢复，资金被盗。
+**原因 →** ECDSA签名s=k⁻¹(z+rd)中k重复时，两个方程可联立解出k再反推私钥d。你可以亲自试一下：用相同k对两条不同消息签名，手工解线性方程组恢复d。
+**修法 →** 使用RFC6979确定性nonce或密码学安全RNG，永不在不同消息间复用nonce；Schnorr用BIP340确定性派生。
+
+**现象 →** 签名验证通过但节点拒绝交易，报签名哈希不匹配。
+**原因 →** SIGHASH类型决定签名覆盖哪些交易字段，用错类型（如SIGHASH_SINGLE配错对应输出索引）会产生无效承诺。
+**修法 →** 明确区分ALL/NONE/SINGLE及ANYONECANPAY组合，用测试向量逐字段验证摘要覆盖范围。
+
+**现象 →** 自行构造的ECDSA签名被节点拒绝，提示DER编码错误。
+**原因 →** 比特币要求严格DER编码：r/s高位为负时必须补0x00前缀，长度字节必须精确，不允许非规范编码。
+**修法 →** 使用经审计的密码库生成DER签名，测试时覆盖r/s高位为0xFF和0x80的边界样本。
+
+## 小结
+
+- 签名把私钥授权绑定到交易摘要，SIGHASH决定覆盖
+- Schnorr线性结构支持聚合与无脚本多签
+- ECDSA依赖安全nonce，重复nonce可泄私钥
+- DER编码要求r/s高位补零、严格长度
+- BIP340 Schnorr签名固定64字节，R只用x坐标
+
+<Exercises>
+
+**问题 1**（独立实现）使用RFC6979确定性nonce对一条测试消息摘要进行ECDSA签名与验签，打印nonce、r、s和DER编码，并验证篡改消息后验签失败。
+
+<Answer>
+
+RFC6979用私钥d和消息哈希z通过HMAC_DRBG派生确定性k，避免随机数源故障。签名后r=(kG).x mod n，s=k⁻¹(z+rd) mod n；DER编码需检查r/s高位补零。验签用公钥Q=dG验证w=s⁻¹、u1=zw、u2=rw，再比较R=u1G+u2Q的x坐标是否等于r。篡改任一字节后u1改变，R≠r。
+
+</Answer>
+
+**问题 2** 给定两笔ECDSA签名使用了相同nonce k，已知两条消息哈希z1、z2和签名(r, s1)、(r, s2)，写出恢复私钥d的计算步骤。
+
+<Answer>
+
+由s1=k⁻¹(z1+rd)和s2=k⁻¹(z2+rd)得s1-s2=k⁻¹(z1-z2)，故k=(z1-z2)/(s1-s2) mod n；再代入任一方程得d=(s1·k-z1)/r mod n。这证明了nonce复用的致命风险。
+
+</Answer>
+
+**问题 3** 解释SIGHASH_ALL、SIGHASH_SINGLE和SIGHASH_NONE在签名承诺上的覆盖差异，以及ANYONECANPAY的叠加效果。
+
+<Answer>
+
+ALL覆盖所有输入和输出，任何改动都使签名失效；SINGLE只承诺同索引的对应输出，其他输出可变；NONE不承诺任何输出，仅承诺输入。ANYONECANPAY叠加后仅签名当前输入，允许他人添加或替换其他输入，常用于众筹场景。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -195,4 +253,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 7 Authorization and Authentication](/learn/mastering-bitcoin/08-07-authorization-authentication/mbt3-07-authorization-authentication)
 - [下一页：Chapter 9 Transaction Fees](/learn/mastering-bitcoin/10-09-transaction-fees/mbt3-09-transaction-fees)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

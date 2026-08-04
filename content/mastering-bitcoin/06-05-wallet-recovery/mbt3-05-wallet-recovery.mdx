@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币验证的两层视角：TypeScript 段把钱包恢复的证据统一为结构，Python 段证明拒绝路径不污染原状态，再校验最小协议对象，作为 BIP32/BIP39 恢复演练的最小可重放单元。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -76,14 +84,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 def verify_value_conservation(inputs, outputs, fee):
     if len(inputs) != len({item["outpoint"] for item in inputs}):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -237,8 +246,58 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 只备份助记词，不记录派生路径和脚本类型。
+**原因 →** 误以为"词列表=全部钱包"，忽略了路径、脚本类型、账户元数据缺失会得到不同地址集。
+**修法 →** 备份同时保留恢复码、可选口令、派生路径、脚本类型与账户创建时间，并用已知地址校验。你可以亲自试一下：同一助记词分别用 P2PKH 和 Bech32 路径派生，看地址是否完全不同。
+
+**现象 →** 在网店服务器暴露扩展公钥却不限制派生深度。
+**原因 →** 扩展公钥支持只读派生，但配合泄漏的子私钥可反推非硬化父密钥。
+**修法 →** 网店只用硬化派生后的子公钥，或限制派生深度并审计泄漏组合。
+
+**现象 →** BIP39 口令设了却没做恢复演练。
+**原因 →** 每个口令都导出有效但不同的钱包，口令丢失等于资金丢失。
+**修法 →** 恢复演练必须验证已知地址而非只看词语合法，口令备份与助记词物理隔离。
+
+## 小结
+
+- 恢复需要种子、口令、派生路径、脚本类型与元数据一致
+- BIP32 从种子和链码派生扩展密钥树
+- 扩展公钥支持只读派生，但泄漏组合需审计
+- 硬化派生需要父私钥，防止子密钥反推父密钥
+- 备份要保留非密钥数据，不能盲目扫描无限路径
+
+<Exercises>
+
+**问题 1**
+为什么 BIP39 的每个口令都导出"有效但不同"的钱包？这对恢复演练意味着什么？
+
+<Answer>
+
+BIP39 用 PBKDF2 把助记词和可选口令一起生成种子，口令不同则种子、派生树与地址集都不同；每个口令都产生合法钱包，因此恢复演练必须验证已知地址是否匹配，而不能只看词语是否合法通过校验。
+
+</Answer>
+
+**问题 2**
+独立实现一个函数 `derivePath(seed, path)`：给定种子和 BIP32 路径（如 `m/84'/0'/0'/0/0`），返回派生后的子公钥。要求正确区分硬化（带 `'`）与非硬化索引。
+
+<Answer>
+
+参考骨架：解析路径按 `/` 分割，跳过 `m`，对每个段判断是否以 `'` 结尾决定硬化或非硬化派生，硬化索引需加 0x80000000 并用父私钥做 HMAC-SHA512。关键点是硬化派生必须用父私钥，非硬化可由扩展公钥派生，路径、索引与版本字节共同决定结果。
+
+</Answer>
+
+**问题 3**
+在网店服务器上使用扩展公钥有哪些风险？如何缓解？
+
+<Answer>
+
+扩展公钥支持只读派生所有子公钥，但若配合泄漏的某个非硬化子私钥，攻击者可反推父私钥进而控制整棵子树；缓解方法是用硬化派生后的子公钥、限制派生深度、审计泄漏组合，并对服务器暴露面最小化。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -249,4 +308,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 4 Keys and Addresses](/learn/mastering-bitcoin/05-04-keys-addresses/mbt3-04-keys-addresses)
 - [下一页：Chapter 6 Transactions](/learn/mastering-bitcoin/07-06-transactions/mbt3-06-transactions)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

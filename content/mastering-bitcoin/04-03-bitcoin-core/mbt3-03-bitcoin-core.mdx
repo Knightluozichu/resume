@@ -53,6 +53,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币验证的两层视角：TypeScript 段把节点重放证据统一为结构，Python 段证明拒绝路径不污染原状态，再校验最小协议对象，作为 Bitcoin Core 构建、配置与 RPC 探索的最小可复现单元。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -70,6 +75,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -77,14 +85,15 @@ def apply_candidate(state, candidate, verify):
     next_state = state.copy()
     next_state.update(candidate["changes"])
     return {"accepted": True, "state": next_state, "reason": None}
-```
 
-```python
 def verify_value_conservation(inputs, outputs, fee):
     if len(inputs) != len({item["outpoint"] for item in inputs}):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -238,8 +247,58 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 用 `git clone` 默认分支构建，不锁标签。
+**原因 →** 默认分支会随上游变动，导致构建结果不可复现，结论绑定不到固定哈希。
+**修法 →** 显式 `git checkout third_edition_print1` 或对应 release 标签，保存提交哈希、构建日志与二进制摘要。你可以亲自试一下：同一标签在两台机器构建，比对二进制摘要是否一致。
+
+**现象 →** 把 RPC 的 `decoderawtransaction` 结果当成交易有效性证明。
+**原因 →** 解码只解释字节，不证明交易合法，也不检查被引用输出与共识规则。
+**修法 →** 解码后还要用 `testmempoolaccept` 或全节点验证，并记录节点版本与区块上下文。
+
+**现象 →** 在主网数据目录跑教学 RPC，误广播真实交易。
+**原因 →** 数据目录混用，测试与主网配置没有物理隔离。
+**修法 →** 为教学用隔离的 regtest/signet 数据目录与配置文件，主网节点 RPC 暴露面最小化并加认证。
+
+## 小结
+
+- Bitcoin Core 是参考实现，协议由所有兼容节点约束
+- 可复现构建要冻结标签、依赖、编译器与配置
+- RPC 解码只解释字节，不证明交易有效
+- 查询 latest 会随重组变化，审计用固定哈希
+- 替代客户端选型看维护状态、测试向量与依赖锁
+
+<Exercises>
+
+**问题 1**
+为什么"Bitcoin Core 是参考实现"不等于"Bitcoin Core 就是协议"？
+
+<Answer>
+
+协议由所有兼容节点执行的共识规则约束，Bitcoin Core 只是其中一种实现；参考实现也可能有勘误或策略选择，版本、构建选项和运行网络必须记录，并以 BIP 和后续修正交叉验证。
+
+</Answer>
+
+**问题 2**
+独立实现一个最小 RPC 封装 `callRpc(method, params, nodeVersion, blockContext)`：返回包含方法、参数、节点版本、区块上下文、原始结果与错误的对象。要求成功与失败都返回完整证据。
+
+<Answer>
+
+参考骨架：`return { method, params, nodeVersion, blockContext, result, error }`，失败时 result 为 null 并填充 error。关键点是 RPC 调用必须记录节点版本与区块上下文，解码结果不等于有效性证明，查询 latest 要随重组变化因此审计用固定哈希。
+
+</Answer>
+
+**问题 3**
+为什么不同语言的比特币库默认网络、地址格式和序列化行为可能不同？选型时应依据什么？
+
+<Answer>
+
+各库的设计目标与默认配置不同，有的默认主网、有的默认 testnet，地址编码与序列化也可能差异；选型应依据维护状态、测试向量覆盖与依赖锁，而不是语言偏好，并在使用前显式指定网络与脚本类型。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -250,4 +309,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 2 How Bitcoin Works](/learn/mastering-bitcoin/03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works)
 - [下一页：Chapter 4 Keys and Addresses](/learn/mastering-bitcoin/05-04-keys-addresses/mbt3-04-keys-addresses)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

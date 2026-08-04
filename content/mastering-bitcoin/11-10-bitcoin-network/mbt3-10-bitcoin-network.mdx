@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与库存发现最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -83,6 +91,9 @@ def missing_inventory(announced, local_ids):
     seen = set(local_ids)
     return [item for item in announced if item not in seen]
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -224,8 +235,55 @@ def missing_inventory(announced, local_ids):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 钱包显示交易已确认，但另一个节点的内存池里看不到这笔交易。
+**原因 →** 内存池是各节点本地策略状态，不是全网共识；缺失父项、费用不足或资源限制都会让不同节点持有不同集合。你可以亲自试一下：在两台配置不同的节点上对比mempool内容。
+**修法 →** 以区块确认而非内存池传播为最终依据；监控多个节点并记录策略差异。
+
+**现象 →** SPV轻客户端用Bloom过滤器查询后，同伴节点推断出查询地址模式。
+**原因 →** Bloom过滤器由客户端发给服务器，服务器可观察命中模式推断关联地址；假阳性率低时几乎无隐私。
+**修法 →** 使用紧凑区块过滤器（BIP158）由全节点承诺固定集合，客户端本地匹配并可从多同伴交叉核对。
+
+**现象 →** 以为紧凑区块中继跳过了验证，导致轻量节点信任矿工构造的区块。
+**原因 →** 紧凑区块仅优化带宽：发送方用短ID代替完整交易，接收方从本地内存池重建后仍执行完整共识验证。
+**修法 →** 紧凑区块中继后必须对重建的完整区块做逐笔交易验证，缺失交易通过getblocktxn请求补取。
+
+## 小结
+
+- P2P网络传播候选对象，共识验证由节点本地执行
+- inventory通告标识，getdata请求缺失数据
+- 紧凑区块利用内存池重建，优化带宽不跳验证
+- Bloom过滤器由客户端发给服务器，易泄漏查询模式
+- 轻客户端以带宽换信任与隐私，全节点独立验证
+
+<Exercises>
+
+**问题 1**（独立实现）实现一个Bloom过滤器：给定位数组大小m、哈希函数数k和一组元素，计算插入与查询逻辑，并验证假阳性率公式$(1-e^{-kn/m})^k$与实测值吻合。
+
+<Answer>
+
+初始化m位位数组全为0；插入时对元素用k个独立哈希函数取模m，对应位置1；查询时检查所有k个位置是否均为1。假阳性率理论值为$(1-e^{-kn/m})^k$，当n增大时假阳性上升。实测时插入n个元素后查询m个不在集合中的元素统计假阳性比例，与公式比较。紧凑区块过滤器用GCS替代以获得更优压缩率。
+
+</Answer>
+
+**问题 2** 描述从节点握手到获取新区块的完整消息序列：version → verack → ... → block。
+
+<Answer>
+
+version交换版本与网络信息→verack确认握手→getblocks或inv通告已知区块→inv回复区块标识→getdata请求缺失区块→block发送完整区块。紧凑区块流程中block替换为cmpctblock，接收方用短ID重建后对缺失项发送getblocktxn，发送方回复blocktxn补全。
+
+</Answer>
+
+**问题 3** 比较Bloom过滤器与紧凑区块过滤器（BIP158）在隐私模型和信任假设上的差异。
+
+<Answer>
+
+Bloom过滤器由客户端发给服务器，服务器可见过滤内容推断查询模式，隐私差；BIP158过滤器由全节点按区块计算并承诺，客户端下载后本地匹配，不向服务器泄露查询内容，且可从多同伴交叉验证。BIP158假阳性只增加客户端下载量，不牺牲隐私。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -236,4 +294,11 @@ def missing_inventory(announced, local_ids):
 
 - [上一页：Chapter 9 Transaction Fees](/learn/mastering-bitcoin/10-09-transaction-fees/mbt3-09-transaction-fees)
 - [下一页：Chapter 11 The Blockchain](/learn/mastering-bitcoin/12-11-blockchain/mbt3-11-blockchain)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

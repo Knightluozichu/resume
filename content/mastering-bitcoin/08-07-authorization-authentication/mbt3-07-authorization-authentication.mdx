@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与脚本授权最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -84,6 +92,9 @@ def verify_value_conservation(inputs, outputs, fee):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -327,8 +338,55 @@ def verify_value_conservation(inputs, outputs, fee):
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 多签脚本验签时栈顶多出一个意外元素，CHECKMULTISIG结果错误。
+**原因 →** CHECKMULTISIG因历史bug会消耗一个额外栈项，赎回脚本必须在签名列表前补一个OP_0占位。
+**修法 →** 构造见证时按m+1项填充（首项为占位OP_0），逐栈打印验证。你可以亲自试一下：省略占位项看节点在哪一步报错。
+
+**现象 →** P2SH地址在主网与测试网之间复制后资金丢失。
+**原因 →** P2SH地址的Base58Check版本字节不同（主网0x05，测试网0xc4），网络前缀编码错误会导致地址指向不同网络。
+**修法 →** 解析地址时先验证版本字节与校验和，再转换为脚本公钥；跨网络操作前显式确认前缀。
+
+**现象 →** 用CLTV做相对时间锁或用CSV做绝对时间锁，脚本始终拒绝花费。
+**原因 →** CLTV绑定绝对高度或时间，CSV绑定被花费输出的确认年龄，两者语义不可互换。
+**修法 →** 区分绝对与相对场景选择操作码，测试时构造恰好达到阈值的确认深度和区块高度。
+
+## 小结
+
+- Script是无状态栈机，输入与输出脚本分别执行
+- P2SH承诺赎回脚本哈希，花费时揭示并执行
+- CHECKMULTISIG因历史bug消耗一个额外栈项
+- CLTV绑定绝对高度，CSV绑定确认年龄
+- Taproot聚合密钥路径与脚本树，密钥路径仅露一签名
+
+<Exercises>
+
+**问题 1**（独立实现）编写一个P2PKH栈执行模拟器：给定输出脚本`OP_DUP OP_HASH160 <pubkeyHash> OP_EQUALVERIFY OP_CHECKSIG`和输入提供的签名与公钥，逐步打印每条操作码执行后的栈状态，并在OP_CHECKSIG处返回最终结果。
+
+<Answer>
+
+模拟器依次执行：OP_DUP复制公钥→OP_HASH160将顶层公钥转为哈希→与脚本中的pubkeyHash做OP_EQUALVERIFY比较→OP_CHECKSIG用剩余公钥验证签名。每步打印栈快照；若EQUALVERIFY失败则脚本终止返回false。签名验证需对交易摘要做ECDSA验签，摘要范围由SIGHASH类型决定。
+
+</Answer>
+
+**问题 2** 给定一个2-of-3 P2WSH多签脚本，构造有效见证需要哪些元素？CHECKMULTISIG的额外栈项如何处理？
+
+<Answer>
+
+见证按从底到顶顺序压入：OP_0占位项、两个签名、赎回脚本。OP_0占位项补偿CHECKMULTISIG的历史bug。赎回脚本格式为`OP_2 <pk1> <pk2> <pk3> OP_3 OP_CHECKMULTISIG`，其SHA256哈希必须与P2WSH输出承诺一致。
+
+</Answer>
+
+**问题 3** 比较Taproot密钥路径花费与脚本路径花费在链上揭示信息和隐私方面的差异。
+
+<Answer>
+
+密钥路径仅揭示一个Schnorr签名，不暴露任何脚本树信息，隐私最佳；脚本路径花费需揭示所用叶脚本、Merkle分支证明和内部公钥调整，链上可推断出存在其他未使用分支。聚合密钥路径让普通支付与多签在链上不可区分。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -339,4 +397,11 @@ def verify_value_conservation(inputs, outputs, fee):
 
 - [上一页：Chapter 6 Transactions](/learn/mastering-bitcoin/07-06-transactions/mbt3-06-transactions)
 - [下一页：Chapter 8 Digital Signatures](/learn/mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 

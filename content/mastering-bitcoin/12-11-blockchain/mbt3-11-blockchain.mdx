@@ -52,6 +52,11 @@ $$
 
 ## 三段可运行骨架
 
+下面三段骨架分别承担证据门禁、状态转移与Merkle父哈希最小验证，可对照本页标题逐项扩展。
+
+<CodeTabs>
+<Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Evidence = {
   version: string;
@@ -69,6 +74,9 @@ function evidenceGate(run: Evidence) {
 }
 ```
 
+</Tab>
+<Tab label="Python / 状态验证">
+
 ```python
 def apply_candidate(state, candidate, verify):
     if not verify(state, candidate):
@@ -84,6 +92,9 @@ from hashlib import sha256
 def merkle_parent(left: bytes, right: bytes) -> bytes:
     return sha256(sha256(left + right).digest()).digest()
 ```
+
+</Tab>
+</CodeTabs>
 
 第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
 
@@ -195,8 +206,55 @@ def merkle_parent(left: bytes, right: bytes) -> bytes:
 
 先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 用区块高度作为唯一标识查找交易，重组后发现指向了不同的区块。
+**原因 →** 高度只是某条链中的位置，重组时同高度可对应不同哈希；哈希才是身份。你可以亲自试一下：在regtest上制造一次重组，观察同高度前后哈希变化。
+**修法 →** 用区块哈希作为唯一引用，高度仅作为辅助索引；保存区块头以验证前块链接。
+
+**现象 →** 构造Merkle包含证明时验证失败，根哈希不匹配。
+**原因 →** Merkle树使用双SHA256且成对拼接时需区分左右子节点；奇数层复制末项，字节序错误（内端序与大端序混用）会导致根不匹配。
+**修法 →** 严格使用内端序（little-endian）做哈希拼接，复制末项时用自身；测试覆盖奇数叶和单叶边界。
+
+**现象 →** 在testnet上开发的钱包误连主网后，测试币地址收到主网资金或交易被拒。
+**原因 →** testnet、signet、regtest与主网使用不同地址前缀和创世参数，网络选择错误会导致不可逆损失。
+**修法 →** 启动节点时显式指定chain参数（mainnet/testnet/signet/regtest），钱包初始化时校验网络魔数与创世哈希。
+
+## 小结
+
+- 区块头80字节，双SHA256结果是身份
+- 高度只是链中位置，重组时同高度对应不同哈希
+- Merkle树成对哈希txid，奇数层复制末项
+- 包含证明只需兄弟节点路径
+- testnet/signet/regtest出块与信任模型各不同
+
+<Exercises>
+
+**问题 1**（独立实现）给定80字节区块头，解析版本、前块哈希、Merkle根、时间、nBits和nonce六个字段，重算双SHA256得到block hash，并判断是否小于给定target。
+
+<Answer>
+
+区块头结构：version(4LE) + prevBlockHash(32) + merkleRoot(32) + time(4LE) + nBits(4LE) + nonce(4LE) = 80字节。blockHash=SHA256(SHA256(header))，结果按小端解释为uint256后与target比较。注意prevBlockHash和merkleRoot在头中以内端序存储，显示时需反转。验证通过则该区块满足PoW。
+
+</Answer>
+
+**问题 2** 给定4个txid，构造Merkle树并写出第3个交易的包含证明（兄弟节点路径）。
+
+<Answer>
+
+设txid为A、B、C、D。第一层：HAB=H(A‖B)、HCD=H(C‖D)；根=H(HAB‖HCD)。第3个交易C的包含证明为兄弟节点D（与C配对得HCD）和兄弟节点HAB（与HCD配对得根）。验证时依次H(C‖D)→H(HAB‖HCD)与根比较。奇数叶时末项自复制。
+
+</Answer>
+
+**问题 3** 比较testnet、signet和regtest三条测试链在出块机制、稳定性和开发适用场景上的差异。
+
+<Answer>
+
+testnet用真实PoW但难度可降至1，出块不稳定且币可被滥用；signet由可信签名者按固定间隔出块，节奏可控且区块有效，适合集成测试；regtest由本地按需出块，难度极低且可重置，适合确定性单元测试与共识规则实验。三者地址前缀与创世参数互不兼容。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -207,4 +265,11 @@ def merkle_parent(left: bytes, right: bytes) -> bytes:
 
 - [上一页：Chapter 10 The Bitcoin Network](/learn/mastering-bitcoin/11-10-bitcoin-network/mbt3-10-bitcoin-network)
 - [下一页：Chapter 12 Mining and Consensus](/learn/mastering-bitcoin/13-12-mining-consensus/mbt3-12-mining-consensus)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Andreas M. Antonopoulos《Mastering Bitcoin》3rd Edition / O'Reilly / 2023"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>
 
