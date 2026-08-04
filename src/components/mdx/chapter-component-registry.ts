@@ -15729,7 +15729,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-04-dictionary");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiDictRehashLab: module0.RdiDictRehashLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/05-skiplist/rdi-05-skiplist": async () => {
