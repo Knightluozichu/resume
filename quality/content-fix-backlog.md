@@ -143,7 +143,7 @@
 
 ### 1.5 database-system-concepts（35 章 · 待修 35 章 · 35 项）
 
-**书籍状态**：✅ §6–§9 规范修复完成（2026-08-03，35 章补小结 + Answer 嵌套修复）；⛔ 部署受阻：ledger failed（visual-evidence-missing）
+**书籍状态**：🚀 全面重写后部署上线（2026-08-04 release-20260804T065600Z，35 章 published）：补 DscConceptLab 图解，audit 35/35 passed
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
