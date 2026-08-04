@@ -56,6 +56,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示 bitcoin-cli RPC 调用的两层视角：TypeScript 侧定义命令调用与证据结构，Python 侧实现状态查询与交易构造验证。
+
+<CodeTabs>
+  <Tab label="TypeScript / RPC 证据">
+
 ```typescript
 type Trace = { before: string; input: string; after?: string; error?: string };
 
@@ -67,6 +72,9 @@ function evidenceGate(trace: Trace) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 交易验证">
+
 ```python
 def apply_transition(state, request, verify):
     if not verify(state, request):
@@ -74,14 +82,15 @@ def apply_transition(state, request, verify):
     candidate = state.copy()
     candidate[request["key"]] = request["value"]
     return {"accepted": True, "state": candidate, "reason": None}
-```
 
-```python
 def verify_utxo_transaction(inputs, outputs, fee, signatures):
     if len(inputs) != len(set(inputs)) or not all(signatures):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把UTXO价值守恒与签名落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
 
@@ -133,8 +142,78 @@ def verify_utxo_transaction(inputs, outputs, fee, signatures):
 
 测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 执行 `bitcoin-cli getbalance` 返回 0，但 `bitcoin-cli listunspent` 明明有未花费输出。
+**原因 →** 钱包未加载或使用了错误的 RPC 钱包上下文，`getbalance` 查询的是默认钱包而非目标钱包。
+**修法 →** 使用 `bitcoin-cli -rpcwallet=<walletname> getbalance` 显式指定钱包，或先执行 `loadwallet` 加载。
+
+**现象 →** `sendtoaddress` 返回交易哈希，但 `gettransaction` 查不到确认信息。
+**原因 →** 交易进入内存池但未被区块包含，或手续费过低被节点静默丢弃。
+**修法 →** 先用 `getrawmempool` 确认交易是否在内存池，再检查 `getmempoolentry` 的手续费率，必要时用 `bumpfee` 提高手续费。
+
+**现象 →** 在 regtest 环境中 `generatetoaddress` 后余额没有变化。
+**原因 →** 挖矿奖励有 100 个区块的成熟期（coinbase maturity），未成熟前不可花费。你可以亲自验证：生成 1 个区块后立即查余额，再生成 100 个区块后对比。
+**修法 →** 使用 `getblock` 查看区块中的 coinbase 交易，用 `gettxout` 确认成熟状态，至少等待 100 个确认。
+
+## 小结
+
+- bitcoin-cli 是 RPC 调用入口，不是共识规则本身
+- 命令须绑定节点、网络、钱包和参数类型
+- 发起交易要区分构造、签名、广播、内存池和确认
+- 交易哈希返回不等于执行成功，须轮询回执
+- 显式指定 `--chain` 和 `--datadir` 避免误连网络
+
+<Exercises>
+
+**问题 1：** `bitcoin-cli sendtoaddress` 和 `bitcoin-cli sendrawtransaction` 有什么区别？为什么说后者更安全？
+
+<Answer>
+
+`sendtoaddress` 是高层封装：节点自动构造交易、选择 UTXO、签名并广播，调用者无法控制输入选择和手续费计算细节。`sendrawtransaction` 只接受已签名的原始交易_hex 并广播，调用者需要自己构造、签名交易。后者更安全因为：（1）可以离线签名，私钥不暴露给节点；（2）可以精确控制输入选择和手续费；（3）签名后的交易可以在多个节点广播，避免单点依赖。
+
+</Answer>
+
+**问题 2：** 在 regtest 测试环境中，如何生成区块并验证 coinbase 成熟期？
+
+<Answer>
+
+使用 `generatetoaddress <n> <address>` 生成指定数量的区块到目标地址。生成后用 `getblock` 查看区块内容，用 `gettxout "txid" 0` 查看 coinbase 输出的成熟状态。coinbase 交易需要 100 个区块确认后才可花费（`coinbase maturity`）。在 regtest 中可以先生成 1 个区块观察未成熟状态，再生成 100 个区块后确认可花费。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版的 bitcoin-cli 交易广播状态追踪器：给定一笔已广播交易的 txid，模拟调用 `getrawmempool`、`gettransaction` 和 `getblockcount` 的结果，返回交易当前状态（内存池中/已确认/未找到）及确认深度。
+
+<Answer>
+
+```python
+def track_tx_status(txid, mempool, confirmed_txs, block_height):
+    # 检查是否在内存池中
+    if txid in mempool:
+        return {"status": "in_mempool", "confirmations": 0}
+    # 检查是否已确认
+    if txid in confirmed_txs:
+        tx_block = confirmed_txs[txid]["block_height"]
+        confirmations = block_height - tx_block + 1
+        return {
+            "status": "confirmed",
+            "confirmations": confirmations,
+            "block_height": tx_block,
+        }
+    # 未找到
+    return {"status": "not_found", "confirmations": 0}
+
+# 使用示例
+mempool = {"abc123": True}
+confirmed = {"def456": {"block_height": 100}}
+print(track_tx_status("abc123", mempool, confirmed, 105))  # in_mempool
+print(track_tx_status("def456", mempool, confirmed, 105))  # confirmed, 6 conf
+print(track_tx_status("xxx", mempool, confirmed, 105))      # not_found
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -145,4 +224,11 @@ def verify_utxo_transaction(inputs, outputs, fee, signatures):
 
 - [上一页：附录A 比特币的原理和运行方式](/learn/blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles)
 - [下一页：附录C 比特币系统的编程接口](/learn/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》机械工业出版社 / 2018"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
+/>
 

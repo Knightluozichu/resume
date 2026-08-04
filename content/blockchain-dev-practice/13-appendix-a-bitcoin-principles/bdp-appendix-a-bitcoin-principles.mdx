@@ -56,6 +56,11 @@ $$
 
 ## 三段可运行骨架
 
+以下代码展示比特币节点验证的两层视角：TypeScript 侧定义证据门禁结构，Python 侧实现状态转移与 UTXO 守恒验证。
+
+<CodeTabs>
+  <Tab label="TypeScript / 证据门禁">
+
 ```typescript
 type Trace = { before: string; input: string; after?: string; error?: string };
 
@@ -67,6 +72,9 @@ function evidenceGate(trace: Trace) {
 }
 ```
 
+  </Tab>
+  <Tab label="Python / 状态验证">
+
 ```python
 def apply_transition(state, request, verify):
     if not verify(state, request):
@@ -74,14 +82,15 @@ def apply_transition(state, request, verify):
     candidate = state.copy()
     candidate[request["key"]] = request["value"]
     return {"accepted": True, "state": candidate, "reason": None}
-```
 
-```python
 def verify_utxo_transaction(inputs, outputs, fee, signatures):
     if len(inputs) != len(set(inputs)) or not all(signatures):
         return False
     return sum(item["value"] for item in inputs) == sum(outputs) + fee
 ```
+
+  </Tab>
+</CodeTabs>
 
 第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把UTXO价值守恒与签名落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
 
@@ -151,8 +160,72 @@ def verify_utxo_transaction(inputs, outputs, fee, signatures):
 
 测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 启动节点后 `getblockchaininfo` 显示高度持续增长，但余额与预期不符。
+**原因 →** 节点连接了错误网络（如主网而非测试网），或数据目录混用了不同链的状态。
+**修法 →** 启动时显式指定 `--chain=test` 和 `--datadir`，首次同步后核对创世块哈希与链 ID。
+
+**现象 →** `sendtoaddress` 返回了交易哈希，但接收方始终看不到转账。
+**原因 →** 交易仅进入内存池，未被矿工打包，或手续费过低被丢弃。
+**修法 →** 用 `getrawmempool` 确认内存池状态，用 `gettransaction` 查询确认深度，至少等待 6 个区块确认。
+
+**现象 →** 导入相同助记词到不同钱包，得到的地址完全不同。
+**原因 →** 派生路径（BIP-44 path）不同，或使用了不同的网络前缀字节。
+**修法 →** 记录完整的派生路径 `m/44'/0'/0'/0/0`，连同曲线参数和版本字节一起保存。你可以亲自试一下：用同一组助记词在两个钱包里选择不同路径，看看地址是否不同。
+
+## 小结
+
+- 比特币节点独立验证交易与区块，以累积工作量选择规范链
+- UTXO 模型中余额是未花费输出的派生视图，不是账户字段
+- PoW 通过 nonce 迭代寻找满足难度的区块哈希
+- bitcoind 参数须区分网络、数据目录、索引和 RPC 暴露
+- 证据门禁乘法语义：来源×版本×重放×边界×故障缺一不可
+
+<Exercises>
+
+**问题 1：** 比特币交易中，如果输入总和为 1.5 BTC，输出总和为 1.4 BTC，手续费应该是多少？这笔交易的"找零"是如何处理的？
+
+<Answer>
+
+手续费 = 输入总和 - 输出总和 = 1.5 - 1.4 = 0.1 BTC。比特币没有显式的手续费字段，找零是隐式的：发送方在交易中额外创建一个指向自己地址的输出（找零输出），剩余未被任何输出引用的输入价值即为手续费。如果忘记添加找零输出，全部差额都会变成手续费。
+
+</Answer>
+
+**问题 2：** 为什么比特币节点需要验证 `proof-of-work`？一个没有 PoW 验证的节点会面临什么风险？
+
+<Answer>
+
+PoW 验证确保区块产生消耗了真实算力成本，使攻击者无法低成本地伪造历史。没有 PoW 验证的节点会接受任意伪造的区块，攻击者可以免费构造一条更长的链进行双重支付，因为篡改历史不需要重算工作量。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版的 UTXO 验证函数：给定输入列表（每个含 value 和 address）、输出列表、手续费和签名列表，验证（1）输入无重复引用，（2）所有输入有对应签名，（3）输入总和价值 ≥ 输出总和价值 + 手续费。返回验证结果和差额。
+
+<Answer>
+
+```python
+def verify_utxo(inputs, outputs, fee, signatures):
+    # (1) 检查输入无重复引用
+    input_ids = [i['address'] for i in inputs]
+    if len(input_ids) != len(set(input_ids)):
+        return False, "duplicate input"
+    # (2) 检查签名数量匹配
+    if len(signatures) != len(inputs):
+        return False, "signature count mismatch"
+    if not all(signatures):
+        return False, "missing signature"
+    # (3) 价值守恒检查
+    total_in = sum(i['value'] for i in inputs)
+    total_out = sum(outputs) + fee
+    if total_in < total_out:
+        return False, f"insufficient: short by {total_out - total_in}"
+    return True, total_in - total_out  # 返回差额（手续费 + 找零）
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -163,4 +236,11 @@ def verify_utxo_transaction(inputs, outputs, fee, signatures):
 
 - [上一页：第11章 以太坊DApps应用开发实战](/learn/blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice)
 - [下一页：附录B 比特币的bitcoin-cli模块详解](/learn/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》机械工业出版社 / 2018"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
+/>
 

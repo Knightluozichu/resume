@@ -1046,31 +1046,31 @@
 
 **部署记录**：仅规范修复并推送，未部署（ledger failed）
 
-### 5.2 blockchain-dev-practice（17 章 · 待修 17 章 · 42 项）
+### 5.2 blockchain-dev-practice（17 章 · 待修 0 章 · 42 项）✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：ledger failed（generic-quality-prose, within-chapter-template-copy, quality-v2-unreviewed）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | blockchain-dev-practice/00-map/bdp-official-learning-map.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | blockchain-dev-practice/01-preface/bdp-preface.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | blockchain-dev-practice/03-02-practice-preparation/bdp-02-practice-preparation.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | blockchain-dev-practice/04-03-ethereum-introduction/bdp-03-ethereum-introduction.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | blockchain-dev-practice/05-04-compile-install-run/bdp-04-compile-install-run.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | blockchain-dev-practice/06-05-private-chain/bdp-05-private-chain.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | blockchain-dev-practice/11-10-truffle/bdp-10-truffle.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | blockchain-dev-practice/16-review/bdp-official-final-review.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | blockchain-dev-practice/00-map/bdp-official-learning-map.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | blockchain-dev-practice/01-preface/bdp-preface.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | blockchain-dev-practice/03-02-practice-preparation/bdp-02-practice-preparation.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | blockchain-dev-practice/04-03-ethereum-introduction/bdp-03-ethereum-introduction.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | blockchain-dev-practice/05-04-compile-install-run/bdp-04-compile-install-run.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | blockchain-dev-practice/06-05-private-chain/bdp-05-private-chain.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | blockchain-dev-practice/11-10-truffle/bdp-10-truffle.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 15 | blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 16 | blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 17 | blockchain-dev-practice/16-review/bdp-official-final-review.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（ledger failed）
 
 ### 5.3 blockchain-plain（14 章 · 待修 14 章 · 84 项）
 
