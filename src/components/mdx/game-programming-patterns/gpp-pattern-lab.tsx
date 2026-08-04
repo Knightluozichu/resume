@@ -29,7 +29,7 @@ const CH = {
       { id: "c", label: "Command", title: "Command 接口", content: "声明 execute() 与 undo() 方法。每个命令封装一个操作及其参数，让调用者与执行者解耦。" },
       { id: "cc", label: "ConcreteCommand", title: "具体命令", content: "实现 Command 接口，绑定接收者与其操作的参数。例如 JumpCommand、FireCommand、MoveCommand。", failure: { title: "硬编码", desc: "直接在输入处理中调用角色方法，导致重绑定、回放和撤销互相缠绕。修法：把输入转为命令对象。" } },
       { id: "i", label: "Invoker", title: "调用者", content: "持有命令并决定何时执行。可以是输入处理器、AI 决策器或回放系统。" },
-      { id: "r", label: "Receiver", title: "接收者", title: "接收者", content: "知道如何执行实际操作。命令把请求转发给接收者，接收者完成具体逻辑。" },
+      { id: "r", label: "Receiver", title: "接收者", content: "知道如何执行实际操作。命令把请求转发给接收者，接收者完成具体逻辑。" },
     ],
   },
   "07": {
