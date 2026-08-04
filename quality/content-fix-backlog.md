@@ -6645,3 +6645,11 @@
 
 **部署记录**：—
 
+
+### game-programming-patterns（游戏编程模式）
+**书籍状态**：真可视化动画改造进行中（5 批 20/29 章）：
+- 批次1（Ch01/02/07/09/14）：架构、Command、State、GameLoop、Component — 动画版 ✅
+- 批次2（Ch03/04/05/06/08）：Flyweight、Observer、Prototype、Singleton、DoubleBuffer — 动画版 ✅
+- 批次3（Ch10/11/12/13/15）：UpdateMethod、Bytecode、SubclassSandbox、TypeObject、EventQueue — 动画版 ✅
+- 批次4（Ch16/17/18/19/20）：ServiceLocator、DataLocality、DirtyFlag、ObjectPool、SpatialPartition — 动画版 ✅
+全部使用 useTeachingTimeline + TimelineControls（播放/暂停/单步/拖动）；TSC=0、视觉巡检 29/29 PASS
