@@ -15815,14 +15815,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-16-sentinel");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiSentinelTimelineLab: module0.RdiSentinelTimelineLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/17-cluster/rdi-17-cluster": async () => {
     const module0 =
       await import("@/components/mdx/redis-design-implementation/v2/rdi-17-cluster");
     return {
-      RdiStructureLab: module0.RdiStructureLab,
+      RdiClusterSlotLab: module0.RdiClusterSlotLab,
     } as ChapterMdxComponents;
   },
   "redis-design-implementation/18-pubsub/rdi-18-pubsub": async () => {
