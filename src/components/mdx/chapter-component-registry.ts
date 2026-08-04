@@ -6574,6 +6574,280 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       SortingTraceGateLab: module0.SortingTraceGateLab,
     } as ChapterMdxComponents;
   },
+  "database-system-concepts/00-learning-map/dsc-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-official-learning-map");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/01-introduction/dsc-ch01-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch01-introduction");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/02-relational-model/dsc-ch02-relational-model":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch02-relational-model");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/03-introduction-to-sql/dsc-ch03-introduction-to-sql":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch03-introduction-to-sql");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/04-intermediate-sql/dsc-ch04-intermediate-sql":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch04-intermediate-sql");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/05-advanced-sql/dsc-ch05-advanced-sql":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch05-advanced-sql");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/06-er-design/dsc-ch06-er-design": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch06-er-design");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/07-relational-design/dsc-ch07-relational-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch07-relational-design");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/08-complex-data-types/dsc-ch08-complex-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch08-complex-data-types");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/09-application-development/dsc-ch09-application-development":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch09-application-development");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/10-big-data/dsc-ch10-big-data": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch10-big-data");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/11-data-analytics/dsc-ch11-data-analytics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch11-data-analytics");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/12-physical-storage/dsc-ch12-physical-storage":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch12-physical-storage");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/13-storage-structures/dsc-ch13-storage-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch13-storage-structures");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/14-indexing/dsc-ch14-indexing": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch14-indexing");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/15-query-processing/dsc-ch15-query-processing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch15-query-processing");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/16-query-optimization/dsc-ch16-query-optimization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch16-query-optimization");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/17-transactions/dsc-ch17-transactions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch17-transactions");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/18-concurrency-control/dsc-ch18-concurrency-control":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch18-concurrency-control");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/19-recovery/dsc-ch19-recovery": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch19-recovery");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/20-architectures/dsc-ch20-architectures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch20-architectures");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/21-parallel-distributed-storage/dsc-ch21-parallel-distributed-storage":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch21-parallel-distributed-storage");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/22-parallel-distributed-query/dsc-ch22-parallel-distributed-query":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch22-parallel-distributed-query");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/23-distributed-transactions/dsc-ch23-distributed-transactions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch23-distributed-transactions");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/24-advanced-indexing/dsc-ch24-advanced-indexing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch24-advanced-indexing");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/25-advanced-app-development/dsc-ch25-advanced-app-development":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch25-advanced-app-development");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/26-blockchain-databases/dsc-ch26-blockchain-databases":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch26-blockchain-databases");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/27-formal-query-languages/dsc-ch27-formal-query-languages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch27-formal-query-languages");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/28-advanced-relational-design/dsc-ch28-advanced-relational-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch28-advanced-relational-design");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/29-object-based-databases/dsc-ch29-object-based-databases":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch29-object-based-databases");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/30-xml/dsc-ch30-xml": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch30-xml");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/31-information-retrieval/dsc-ch31-information-retrieval":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-ch31-information-retrieval");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/32-postgresql/dsc-ch32-postgresql": async () => {
+    const module0 =
+      await import("@/components/mdx/database-system-concepts/v2/dsc-ch32-postgresql");
+    return {
+      DscConceptLab: module0.DscConceptLab,
+    } as ChapterMdxComponents;
+  },
+  "database-system-concepts/33-appendix-a/dsc-appendix-a-university-schema":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-appendix-a-university-schema");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
+  "database-system-concepts/99-final-review/dsc-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/database-system-concepts/v2/dsc-official-final-review");
+      return {
+        DscConceptLab: module0.DscConceptLab,
+      } as ChapterMdxComponents;
+    },
   "deep-android-kernel/00-official-learning-map/dak-14-official-learning-map":
     async () => {
       const module0 =
