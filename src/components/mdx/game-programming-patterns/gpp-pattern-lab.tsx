@@ -354,8 +354,328 @@ function ComponentViz({ fault }: { fault: boolean }) {
   );
 }
 
+// ═══════════ Ch03 Flyweight：共享池 ═══════════
+const FW_STEPS: readonly TeachingStep[] = [
+  { label: "factory", caption: "① FlyweightFactory：按 key 管理共享对象池" },
+  { label: "pool", caption: "② 共享池：Oak/Pine/Birch/Grass/Rock 各一份" },
+  { label: "c1", caption: "③ Client 1 共享 Tree:Oak：只传位置/缩放等外部状态" },
+  { label: "c2", caption: "④ Client 2 共享同一份 Tree:Oak，省内存" },
+  { label: "c3", caption: "⑤ Client 3 继续共享：N 棵树只需 1 份内部状态" },
+];
+const FW_LABEL: Record<string, string> = Object.fromEntries(FW_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function FlyweightViz({ fault }: { fault: boolean }) {
+  const factoryRef = useRef<SVGGElement>(null);
+  const poolRef = useRef<SVGGElement>(null);
+  const cRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null)];
+  const timeline = useTeachingTimeline({
+    steps: FW_STEPS,
+    build: (tl) => {
+      tl.add(factoryRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("factory", 0);
+      tl.add(poolRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("pool", T);
+      cRefs.forEach((r, i) => {
+        tl.add(r.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * (i + 2));
+        tl.label(FW_STEPS[i + 2].label, T * (i + 2));
+      });
+    },
+  });
+  const clients = [
+    { y: 80, pos: "x=10, y=20, scale=1" },
+    { y: 150, pos: "x=30, y=40, scale=1.5" },
+    { y: 220, pos: "x=5, y=80, scale=0.8" },
+  ];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Flyweight 模式享元对象池动画。工厂、共享池、三个客户端逐个点亮，展示内部状态共享与外部状态分离。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Flyweight 模式：共享对象池</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>内部状态（共享） + 外部状态（上下文传入）</text>
+        <g ref={factoryRef} style={{ opacity: 0 }}>
+          <rect x={40} y={80} width={200} height={280} rx={10} fill={C.elevated} stroke={C.accent} strokeWidth={2} />
+          <text x={140} y={108} textAnchor="middle" fontSize={13} fontWeight={600} fill={C.accent}>FlyweightFactory</text>
+          <text x={140} y={128} textAnchor="middle" fontSize={11} fill={C.secondary}>getFlyweight(key)</text>
+        </g>
+        <g ref={poolRef} style={{ opacity: 0 }}>
+          {["Tree:Oak", "Tree:Pine", "Tree:Birch", "Grass", "Rock"].map((l, i) => (
+            <g key={i}>
+              <rect x={60} y={150+i*38} width={160} height={32} rx={6} fill={C.success} opacity={0.15} stroke={C.success} strokeWidth={1} />
+              <text x={140} y={171+i*38} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.success}>{l}</text>
+            </g>
+          ))}
+        </g>
+        {clients.map((cl, i) => (
+          <g key={i} ref={cRefs[i]} style={{ opacity: 0 }}>
+            <rect x={360} y={cl.y} width={160} height={50} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1.5} />
+            <text x={440} y={cl.y+20} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Client {i+1}</text>
+            <text x={440} y={cl.y+40} textAnchor="middle" fontSize={11} fill={C.warning}>{cl.pos}</text>
+            <text x={320} y={cl.y+25} textAnchor="middle" fontSize={14} fill={C.success}>⬅ 共享</text>
+          </g>
+        ))}
+        <text x={140} y={380} textAnchor="middle" fontSize={11} fill={C.secondary}>内部状态（共享，不可变）</text>
+        <text x={440} y={380} textAnchor="middle" fontSize={11} fill={C.warning}>外部状态（每个客户端不同）</text>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 未区别内部/外部状态：每个对象独立存储全部数据，内存爆炸。修法：提取共享部分到 Flyweight</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={FW_LABEL} caption="一万棵橡树只占一份内部状态的内存；位置、缩放等外部状态由客户端持有。" />
+    </>
+  );
+}
+
+// ═══════════ Ch04 Observer：订阅发布 ═══════════
+const OB_STEPS: readonly TeachingStep[] = [
+  { label: "subject", caption: "① Subject 主题：维护观察者列表" },
+  { label: "obs-a", caption: "② Observer A（UI）订阅主题" },
+  { label: "obs-b", caption: "③ Observer B（成就）+ C（分析）订阅" },
+  { label: "obs-d", caption: "④ Observer D（音频）订阅" },
+  { label: "notify", caption: "⑤ notify()：向全部观察者广播 update()" },
+];
+const OB_LABEL: Record<string, string> = Object.fromEntries(OB_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function ObserverViz({ fault }: { fault: boolean }) {
+  const subjectRef = useRef<SVGGElement>(null);
+  const obsRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null)];
+  const notifyRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: OB_STEPS,
+    build: (tl) => {
+      tl.add(subjectRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("subject", 0);
+      obsRefs.forEach((r, i) => {
+        const stepIdx = i === 0 ? 1 : i === 1 || i === 2 ? 2 : 3;
+        tl.add(r.current!, { opacity: [0, 1], duration: T * 0.4, ease: "out(3)" }, T * stepIdx);
+        tl.label(OB_STEPS[stepIdx].label, T * stepIdx);
+      });
+      tl.add(notifyRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 4);
+      tl.label("notify", T * 4);
+    },
+  });
+  const obs = ["Observer A: UI", "Observer B: Achievements", "Observer C: Analytics", "Observer D: Audio"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Observer 模式订阅发布动画。主题先点亮，四个观察者逐个订阅，最后 notify 广播箭头点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Observer 模式：订阅发布通知流</text>
+        <defs><marker id="ob-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill={C.accent} /></marker></defs>
+        <g ref={subjectRef} style={{ opacity: 0 }}>
+          <rect x={340} y={70} width={220} height={60} rx={10} fill={C.accent} opacity={0.9} />
+          <text x={450} y={96} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.bg}>Subject（主题）</text>
+          <text x={450} y={116} textAnchor="middle" fontSize={11} fill="rgba(255,255,255,0.85)">+ attach(obs) ; + detach(obs) ; + notify()</text>
+        </g>
+        {obs.map((l, i) => (
+          <g key={l} ref={obsRefs[i]} style={{ opacity: 0 }}>
+            <rect x={190+i*140} y={180} width={130} height={50} rx={8} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+            <text x={255+i*140} y={200} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l.split(":")[0]}</text>
+            <text x={255+i*140} y={220} textAnchor="middle" fontSize={11} fill={C.success}>{l.split(":")[1]}</text>
+          </g>
+        ))}
+        <g ref={notifyRef} style={{ opacity: 0 }}>
+          {obs.map((_, i) => (
+            <line key={i} x1={340+i*140+65} y1={130} x2={255+i*140} y2={180} stroke={C.accent} strokeWidth={1.5} markerEnd="url(#ob-arrow)" />
+          ))}
+          <text x={450} y={280} textAnchor="middle" fontSize={11} fill={C.secondary}>notify() 遍历观察者列表，逐个调用 update()</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 观察者太多或通知太频繁导致性能问题。修法：事件队列异步处理，或合并批量通知</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={OB_LABEL} caption="主题变化自动通知所有观察者：UI、成就、分析、音频各自响应，互不干扰。" />
+    </>
+  );
+}
+
+// ═══════════ Ch05 Prototype：克隆层次 ═══════════
+const PT_STEPS: readonly TeachingStep[] = [
+  { label: "iface", caption: "① Prototype 接口：声明 clone() 方法" },
+  { label: "monster", caption: "② 怪物原型：Skeleton / Goblin / Dragon 继承接口" },
+  { label: "item", caption: "③ 道具原型：Item_Sword 也实现 clone()" },
+  { label: "clone", caption: "④ 新怪物 = prototype.clone()：免子类爆炸快速生成" },
+];
+const PT_LABEL: Record<string, string> = Object.fromEntries(PT_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function PrototypeViz({ fault }: { fault: boolean }) {
+  const ifaceRef = useRef<SVGGElement>(null);
+  const protoRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null), useRef<SVGGElement>(null)];
+  const cloneRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: PT_STEPS,
+    build: (tl) => {
+      tl.add(ifaceRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("iface", 0);
+      protoRefs.slice(0, 3).forEach((r, i) => {
+        tl.add(r.current!, { opacity: [0, 1], duration: T * 0.4, ease: "out(3)" }, T);
+      });
+      tl.label("monster", T);
+      tl.add(protoRefs[3].current!, { opacity: [0, 1], duration: T * 0.4, ease: "out(3)" }, T * 2);
+      tl.label("item", T * 2);
+      tl.add(cloneRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("clone", T * 3);
+    },
+  });
+  const protos = ["Monster_Skeleton", "Monster_Goblin", "Monster_Dragon", "Item_Sword"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Prototype 模式克隆层次动画。接口、四个具体原型、克隆说明依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Prototype 模式：原型克隆</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>通过克隆现有对象创建新实例，避免子类爆炸</text>
+        <g ref={ifaceRef} style={{ opacity: 0 }}>
+          <rect x={60} y={80} width={140} height={50} rx={8} fill={C.bg} stroke={C.accent} strokeWidth={1.5} />
+          <text x={130} y={100} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.accent}>«interface»</text>
+          <text x={130} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.primary}>Prototype</text>
+          <text x={130} y={140} textAnchor="middle" fontSize={11} fill={C.accent}>+ clone()</text>
+        </g>
+        {protos.map((l, i) => {
+          const x = 60 + (i%2) * 220; const y = 180 + Math.floor(i/2) * 80;
+          return (
+            <g key={l} ref={protoRefs[i]} style={{ opacity: 0 }}>
+              <line x1={x+100-20} y1={y} x2={130} y2={130} stroke={C.success} strokeWidth={1.5} strokeDasharray="5,3" />
+              <polygon points={`${x+100-24},${134} ${x+100-20},${130} ${x+100-16},${134}`} fill={C.success} />
+              <rect x={x} y={y} width={200} height={60} rx={8} fill={C.bg} stroke={C.success} strokeWidth={1.5} />
+              <text x={x+100} y={y+24} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l}</text>
+              <text x={x+100} y={y+44} textAnchor="middle" fontSize={11} fill={C.success}>health=100, speed=2.5</text>
+            </g>
+          );
+        })}
+        <g ref={cloneRef} style={{ opacity: 0 }}>
+          <rect x={40} y={350} width={820} height={40} rx={10} fill={C.success} opacity={0.08} stroke={C.success} strokeWidth={1.6} />
+          <text x={450} y={375} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.success}>新怪物 = prototype.clone() → 修改属性 → 快速生成</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 深拷贝 vs 浅拷贝陷阱：引用类型成员被共享修改。修法：实现深拷贝或使用写时复制</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={PT_LABEL} caption="每种怪物只需一个原型实例，运行时克隆并按需修改——新增怪物类型不再需要新子类。" />
+    </>
+  );
+}
+
+// ═══════════ Ch06 Singleton：唯一实例 ═══════════
+const SG_STEPS: readonly TeachingStep[] = [
+  { label: "class", caption: "① GameManager 类：静态实例 + 私有构造" },
+  { label: "access", caption: "② 子系统通过 getInstance() 获取同一实例" },
+  { label: "sharing", caption: "③ 全部系统共享一份全局状态" },
+];
+const SG_LABEL: Record<string, string> = Object.fromEntries(SG_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function SingletonViz({ fault }: { fault: boolean }) {
+  const classRef = useRef<SVGGElement>(null);
+  const accessRef = useRef<SVGGElement>(null);
+  const shareRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: SG_STEPS,
+    build: (tl) => {
+      tl.add(classRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("class", 0);
+      tl.add(accessRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("access", T);
+      tl.add(shareRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("sharing", T * 2);
+    },
+  });
+  const subs = ["UI System", "AI System", "Audio System", "Physics System", "Scripting", "Rendering"];
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Singleton 模式唯一实例动画。GameManager 类图先点亮，六个子系统访问线依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Singleton 模式：确保全局唯一实例</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>静态实例 + 私有构造 + 全局访问点</text>
+        <g ref={classRef} style={{ opacity: 0 }}>
+          <rect x={330} y={80} width={240} height={130} rx={12} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={450} y={110} textAnchor="middle" fontSize={14} fontWeight={700} fill={C.accent}>GameManager</text>
+          <line x1={340} y1={120} x2={560} y2={120} stroke={C.border} strokeWidth={1} />
+          <text x={450} y={140} textAnchor="middle" fontSize={11} fill={C.secondary}>- instance: GameManager</text>
+          <text x={450} y={160} textAnchor="middle" fontSize={11} fill={C.secondary}>- score: int</text>
+          <text x={450} y={180} textAnchor="middle" fontSize={11} fill={C.secondary}>- player: Player</text>
+          <line x1={340} y1={188} x2={560} y2={188} stroke={C.border} strokeWidth={1} />
+          <text x={450} y={206} textAnchor="middle" fontSize={11} fill={C.accent}>+ getInstance(): GameManager</text>
+        </g>
+        <g ref={accessRef} style={{ opacity: 0 }}>
+          {subs.map((l, i) => {
+            const x = 50 + (i%3) * 200; const y = 260 + Math.floor(i/3) * 60;
+            return (
+              <g key={l}>
+                <rect x={x} y={y} width={170} height={40} rx={8} fill={C.bg} stroke={C.warning} strokeWidth={1} />
+                <text x={x+85} y={y+24} textAnchor="middle" fontSize={11} fontWeight={600} fill={C.primary}>{l}</text>
+                <line x1={x+85} y1={y} x2={450} y2={210} stroke={C.border} strokeWidth={1} strokeDasharray="4,3" />
+              </g>
+            );
+          })}
+        </g>
+        <g ref={shareRef} style={{ opacity: 0 }}>
+          <text x={450} y={390} textAnchor="middle" fontSize={11} fill={C.secondary}>所有子系统通过 GameManager.getInstance() 访问同一实例</text>
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 全局状态使测试困难、并发不安全。修法：使用依赖注入或用参数传递，减少全局依赖</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={SG_LABEL} caption="全局唯一实例方便各处访问，但隐藏依赖会让测试与并发变难——用前需权衡。" />
+    </>
+  );
+}
+
+// ═══════════ Ch08 Double Buffer：缓冲交换 ═══════════
+const DB_STEPS: readonly TeachingStep[] = [
+  { label: "write", caption: "① 写入 Buffer A：新帧数据" },
+  { label: "read", caption: "② Buffer B 供读取：上一帧数据" },
+  { label: "swap", caption: "③ 交换：swap() 后 A 变可读、B 变可写" },
+  { label: "cycle", caption: "④ 四步循环：写入→交换→读取→重复" },
+];
+const DB_LABEL: Record<string, string> = Object.fromEntries(DB_STEPS.map((s) => [s.label, s.caption ?? s.label]));
+
+function DoubleBufferViz({ fault }: { fault: boolean }) {
+  const writeRef = useRef<SVGGElement>(null);
+  const readRef = useRef<SVGGElement>(null);
+  const swapRef = useRef<SVGGElement>(null);
+  const cycleRef = useRef<SVGGElement>(null);
+  const timeline = useTeachingTimeline({
+    steps: DB_STEPS,
+    build: (tl) => {
+      tl.add(writeRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, 0);
+      tl.label("write", 0);
+      tl.add(readRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T);
+      tl.label("read", T);
+      tl.add(swapRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 2);
+      tl.label("swap", T * 2);
+      tl.add(cycleRef.current!, { opacity: [0, 1], duration: T * 0.5, ease: "out(3)" }, T * 3);
+      tl.label("cycle", T * 3);
+    },
+  });
+  return (
+    <>
+      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" role="img" aria-label="Double Buffer 双缓冲交换动画。写入缓冲、读取缓冲、交换箭头、四阶段流程依次点亮。可播放、暂停、单步、拖动进度。">
+        <text x={VW/2} y={32} textAnchor="middle" fontSize={15} fill={C.primary} fontWeight={600}>Double Buffer 模式：交换缓冲区</text>
+        <text x={VW/2} y={52} textAnchor="middle" fontSize={11} fill={C.secondary}>写缓冲区 + 读缓冲区，交换避免撕裂</text>
+        <g ref={writeRef} style={{ opacity: 0 }}>
+          <rect x={120} y={90} width={200} height={160} rx={10} fill={C.bg} stroke={C.accent} strokeWidth={2} />
+          <text x={220} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.accent}>Buffer A</text>
+          <line x1={130} y1={130} x2={310} y2={130} stroke={C.border} strokeWidth={1} />
+          {[0,1,2,3,4,5].map(i => <rect key={i} x={130+i*30} y={140} width={28} height={28} rx={3} fill={C.accent} opacity={0.3} />)}
+          <text x={220} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>当前帧数据</text>
+          <text x={220} y={215} textAnchor="middle" fontSize={11} fill={C.accent}>⬆ 写入中</text>
+        </g>
+        <g ref={swapRef} style={{ opacity: 0 }}>
+          <text x={420} y={170} textAnchor="middle" fontSize={20} fill={C.warning}>⇄ swap</text>
+          <text x={420} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>每帧交换</text>
+        </g>
+        <g ref={readRef} style={{ opacity: 0 }}>
+          <rect x={520} y={90} width={200} height={160} rx={10} fill={C.bg} stroke={C.success} strokeWidth={2} />
+          <text x={620} y={120} textAnchor="middle" fontSize={12} fontWeight={600} fill={C.success}>Buffer B</text>
+          <line x1={530} y1={130} x2={710} y2={130} stroke={C.border} strokeWidth={1} />
+          {[0,1,2,3,4,5].map(i => <rect key={i} x={530+i*30} y={140} width={28} height={28} rx={3} fill={C.success} opacity={0.3} />)}
+          <text x={620} y={195} textAnchor="middle" fontSize={11} fill={C.secondary}>上一帧数据</text>
+          <text x={620} y={215} textAnchor="middle" fontSize={11} fill={C.success}>⬇ 读取中</text>
+        </g>
+        <g ref={cycleRef} style={{ opacity: 0 }}>
+          <rect x={120} y={280} width={600} height={70} rx={8} fill={C.bg} stroke={C.border} strokeWidth={1} />
+          {["1. 写入 Buffer A", "2. 交换 swap()", "3. 读取 Buffer B", "4. 重复"].map((l, i) => (
+            <g key={l}>
+              <rect x={130+i*150} y={290} width={140} height={30} rx={6} fill={C.elevated} stroke={C.accent} strokeWidth={1} />
+              <text x={200+i*150} y={310} textAnchor="middle" fontSize={11} fill={C.primary}>{l}</text>
+              {i < 3 && <text x={270+i*150} y={308} textAnchor="middle" fontSize={14} fill={C.border}>→</text>}
+            </g>
+          ))}
+        </g>
+        {fault && <text x={VW/2} y={VH-20} textAnchor="middle" fontSize={12} fill={C.danger} fontWeight={600}>⚠️ 单缓冲区：写入时被读取显示半帧数据（撕裂）。修法：双缓冲隔离读写操作</text>}
+      </svg>
+      <TimelineControls timeline={timeline} labelText={DB_LABEL} caption="读写各用一块缓冲，每帧交换角色——显示永远不会看到写了一半的帧。" />
+    </>
+  );
+}
+
 const VIZ: Record<string, (p: { fault: boolean }) => React.ReactNode> = {
-  "01": ArchViz, "02": CommandViz, "07": StateViz, "09": GameLoopViz, "14": ComponentViz,
+  "01": ArchViz, "02": CommandViz, "03": FlyweightViz, "04": ObserverViz, "05": PrototypeViz,
+  "06": SingletonViz, "07": StateViz, "08": DoubleBufferViz, "09": GameLoopViz, "14": ComponentViz,
 };
 
 export function GppPatternLab({ chapter }: { chapter: string }) {
