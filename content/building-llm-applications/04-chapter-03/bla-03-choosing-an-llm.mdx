@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -47,17 +54,44 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type Request = {
+  task: string;
+  model: string;
+  prompt: string;
+  dataHash: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(req: Request): Readonly<Request> {
+  return Object.freeze({ ...req });
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -66,6 +100,33 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RunRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(records: RunRecord[]): {
+  pass: boolean;
+  missing: number[];
+} {
+  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -209,8 +270,65 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 直接套用书中2024年的模型型号，今天已下线或行为大变。
+**原因 →** 书中型号是出版时坐标，未重新冻结当前可用版本。
+**修法 →** 选型重新冻结版本、质量、延迟、成本、隐私、许可和可部署性。
+
+**现象 →** 只比质量分数，忽略延迟和成本，上线后预算超支。
+**原因 →** 评测只看准确率，没把延迟和成本放入同一请求账本。
+**修法 →** 用成本公式把输入、输出、检索与工具成本同集合报告。
+
+**现象 →** 模型别名导致结果漂移。你可以亲自验证：用别名和显式版本号各跑一组金样本，diff逐字段输出。
+**原因 →** 服务端把别名指向不同快照，未固定模型版本。
+**修法 →** 记录提供方、模型版本、端点和快照ID，用金样本显现漂移。
+
+## 小结
+
+- 2024年专有开源模型坐标已过期
+- 选型重冻结质量延迟成本隐私许可
+- 历史型号结论带日期与失效条件
+- 决策框架要可复核并留存记录
+- 模型烘焙赛冻结任务与预算对照
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 为什么选型时不能直接套用书中2024年的模型型号？
+
+<Answer>
+
+书中的GPT-4、Gemini 1.5、Claude 2、LLaMA-2等是2024年出版时的技术坐标。模型会迭代、下线或改变行为，型号名不变但快照已变。选型必须重新冻结当前可用版本、质量、延迟、成本、隐私、许可和可部署性，结论带日期和失效条件。
+
+</Answer>
+
+**问题 2：实践应用。** 选型决策框架应包含哪些维度？
+
+<Answer>
+
+至少包含质量、延迟、成本、上下文长度、隐私、许可和可控性。质量和成本在同一请求集合上报告，平均值之外保留尾部失败；隐私和许可决定能否部署到目标环境；结论需带日期和失效条件以便复核。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版模型选型评分函数：输入各维度分数字典和权重字典，返回加权总分和最优模型名。
+
+<Answer>
+
+```python
+def score_models(models, weights):
+    best_name, best_score = None, -1
+    for name, scores in models.items():
+        total = sum(scores.get(k, 0) * w for k, w in weights.items())
+        if total > best_score:
+            best_name, best_score = name, total
+    return {"best": best_name, "score": best_score}
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -221,4 +339,11 @@ def release_gate(records):
 
 - [Chapter 2: LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
 - [Chapter 4: Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -48,17 +55,44 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type Request = {
+  task: string;
+  model: string;
+  prompt: string;
+  dataHash: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(req: Request): Readonly<Request> {
+  return Object.freeze({ ...req });
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -67,6 +101,33 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RunRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(records: RunRecord[]): {
+  pass: boolean;
+  missing: number[];
+} {
+  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -180,8 +241,71 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 用框架名（LangChain/Haystack）替代应用合同，升级后全线故障。
+**原因 →** 业务逻辑与框架接口耦合，没有可测试的薄适配器。
+**修法 →** 用适配器隔离模型与工具，框架升级只改适配器不改合同。
+
+**现象 →** 不隔离模型与工具接口，工具失败拖垮整个编排链。
+**原因 →** 调用图没有超时、回退和权限边界。
+**修法 →** 每次调用保存参数、响应、延迟、成本和错误类型，设超时与回退。
+
+**现象 →** 编排器升级后调用图悄悄变化。你可以亲自验证：记录升级前的调用顺序，升级后diff调用日志，找出新增或缺失的节点。
+**原因 →** 框架默认行为随版本改变，未冻结调用图。
+**修法 →** 用假模型假工具先验证编排，再接真实服务并冻结调用图。
+
+## 小结
+
+- LLM改变软件开发与Copilot形态
+- AI编排器拆成接口状态权限回退
+- 用假模型假工具先验证编排逻辑
+- 三框架在相同用例上受控比较
+- 框架名不能替代可测试接口合同
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** AI编排器的主要组件有哪些？
+
+<Answer>
+
+主要包括模型接口、提示模板、状态管理、工具调用、检索、记忆、调用图编排、权限控制、超时与回退。编排器把这些组件连成可执行链，并保存每次调用的参数、响应、延迟、成本和错误类型。
+
+</Answer>
+
+**问题 2：实践应用。** 为什么要用假模型和假工具先验证编排？
+
+<Answer>
+
+假模型和假工具提供确定性输入输出，先验证调用图、状态流转、权限边界和回退逻辑是否正确，排除真实服务的不稳定性。验证通过后再接真实服务，框架升级或服务端漂移会作为可见差异暴露出来。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版编排器调用记录器：输入调用名和参数，返回带时间戳和调用序号的记录字典。
+
+<Answer>
+
+```python
+import time
+
+class CallLogger:
+    def __init__(self):
+        self.seq = 0
+        self.log = []
+
+    def record(self, name, params):
+        self.seq += 1
+        entry = {"seq": self.seq, "name": name,
+                 "params": params, "ts": time.time()}
+        self.log.append(entry)
+        return entry
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -192,4 +316,11 @@ def release_gate(records):
 
 - [Chapter 1: Introduction to Large Language Models](/learn/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models)
 - [Chapter 3: Choosing an LLM for Your Application](/learn/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

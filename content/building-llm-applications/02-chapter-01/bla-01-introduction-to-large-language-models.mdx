@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -47,17 +54,44 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type Request = {
+  task: string;
+  model: string;
+  prompt: string;
+  dataHash: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(req: Request): Readonly<Request> {
+  return Object.freeze({ ...req });
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -66,6 +100,33 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RunRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(records: RunRecord[]): {
+  pass: boolean;
+  missing: number[];
+} {
+  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -197,8 +258,66 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 认为"模型更大一定更好"，换大模型后质量反降。
+**原因 →** 未在相同样本上做单变量对照，忽略提示与数据影响。
+**修法 →** 冻结任务、样本、提示和判定，只换模型，报告逐样本差异。
+
+**现象 →** 评估时不记录词元器和解码参数，分数无法复现。
+**原因 →** 词元器版本和温度、top-p等解码设置影响输出。
+**修法 →** 每次评估固定词元器、解码参数和随机种子并写入记录。
+
+**现象 →** 同一提示不同种子结果差异大。你可以亲自验证：固定提示，只改seed跑5次，看输出是否稳定。
+**原因 →** 采样解码引入随机性，未报告方差和尾部分布。
+**修法 →** 多种子运行，报告逐样本结果、均值、方差和尾延迟。
+
+## 小结
+
+- 区分基础模型与LLM的概念边界
+- Transformer靠注意力建模长程依赖
+- 训练评估需冻结数据切分与预算
+- 基础模型与定制模型能力成本不同
+- 手算条件概率和注意力验证理解
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 基础模型（foundation model）和LLM的区别是什么？
+
+<Answer>
+
+基础模型是经大规模预训练、可适配多种下游任务的通用模型；LLM是基础模型中专攻语言理解与生成的子类。LLM都是基础模型，但基础模型还包括视觉、多模态等非语言模型。
+
+</Answer>
+
+**问题 2：实践应用。** 为什么评估LLM时要冻结词元器和解码参数？
+
+<Answer>
+
+词元器决定输入如何切分，解码参数（温度、top-p、种子）决定输出随机性。不冻结这些，同一模型同一提示的分数也会漂移，无法把质量差异归因给模型本身而非采样噪声。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版注意力分数计算：给定查询向量q和键向量列表keys，返回softmax归一后的注意力权重。
+
+<Answer>
+
+```python
+import math
+
+def attention_weights(q, keys):
+    scores = [sum(qi * ki for qi, ki in zip(q, k)) for k in keys]
+    m = max(scores)
+    exps = [math.exp(s - m) for s in scores]
+    total = sum(exps)
+    return [e / total for e in exps]
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -209,4 +328,11 @@ def release_gate(records):
 
 - [Preface](/learn/building-llm-applications/01-preface/bla-preface)
 - [Chapter 2: LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

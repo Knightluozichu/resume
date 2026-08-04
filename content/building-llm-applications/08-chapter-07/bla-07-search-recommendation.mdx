@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -47,17 +54,51 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RequestContract = {
+  task: string;
+  model: string;
+  prompt: string;
+  data: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(
+  task: string,
+  model: string,
+  prompt: string,
+  dataHash: string,
+  tools: string[],
+  seed: number,
+): RequestContract {
+  return { task, model, prompt, data: dataHash, tools, seed };
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -66,6 +107,32 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type GateRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(
+  records: GateRecord[],
+): { pass: boolean; missing: number[] } {
+  const required = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -203,8 +270,68 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 离线评测 NDCG 很高，上线后推荐效果骤降，用户毫无点击。
+**原因 →** 切分未按时间，测试集含训练期之后的交互，未来信息泄漏到特征里。
+**修法 →** 按时间戳切分训练/测试，用户与物品 ID 冻结，报告时同时给出切分边界与泄漏检查。
+
+**现象 →** 冷启动场景下 LLM 推荐了目录中不存在的物品名，用户点击 404。
+**原因 →** LLM 直接生成物品文本，未约束到候选集合，缺乏物品存在性校验。
+**修法 →** 先召回合法候选集，再让 LLM 在候选内排序或生成理由，输出前校验物品 ID 是否在目录。
+
+**现象 →** 排序结果十条里有八条是同一部电影的相似条目，用户感到单调。
+**原因 →** 只按相关度排序，未引入多样性约束，长尾物品被头部压制。
+**修法 →** 在排序分数中加入 MMR 或类别配额约束，同时报告命中、排序与多样性指标。
+
+## 小结
+
+- 冻结用户、物品、时间切分，杜绝未来交互泄漏。
+- 区分召回、排序、生成三层，分别报告指标。
+- 冷启动场景须约束 LLM 输出到合法候选集。
+- 同时报告命中、排序、多样性、覆盖与延迟。
+- 传统基线与 LLM 方案在同一切分上对照比较。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 为什么推荐评测必须按时间切分而非随机切分？
+
+<Answer>
+
+推荐依赖用户历史交互预测未来行为；若测试集包含训练期之后的交互，模型相当于偷看未来，离线指标虚高，上线后骤降。按时间戳切分并冻结切分边界，才能反映真实时序泛化能力。
+
+</Answer>
+
+**问题 2：实践应用。** 如何避免冷启动时 LLM 推荐目录外的物品？
+
+<Answer>
+
+先用传统方法召回合法候选集，把候选 ID 与元数据注入提示，约束 LLM 只在候选内排序或生成推荐理由；输出前校验每个物品 ID 是否在目录中，越界直接过滤并记录失败。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版 MMR 多样性重排器：在相关度与已选物品最大相似度之间折中，选 k 条。
+
+<Answer>
+
+```python
+def mmr(candidates, rel, sim, lam=0.5, k=5):
+    selected = []
+    pool = list(candidates)
+    while pool and len(selected) < k:
+        best = max(pool, key=lambda c: lam * rel[c] -
+                   (1 - lam) * max((sim[c, s] for s in selected),
+                                   default=0))
+        selected.append(best)
+        pool.remove(best)
+    return selected
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -215,4 +342,11 @@ def release_gate(records):
 
 - [Chapter 6: Building Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
 - [Chapter 8: Using LLMs with Structured Data](/learn/building-llm-applications/09-chapter-08/bla-08-structured-data)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -47,17 +54,43 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type FrozenRequest = {
+  task: string; model: string; prompt: string;
+  data: string; tools: string[]; seed: number;
+};
+
+function freezeRequest(
+  task: string, model: string, prompt: string,
+  dataHash: string, tools: string[], seed: number
+): FrozenRequest {
+  return { task, model, prompt, data: dataHash, tools, seed };
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -66,6 +99,24 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type ReleaseGate = { pass: boolean; missing: number[] };
+
+function releaseGate(records: Record<string, unknown>[]): ReleaseGate {
+  const required = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -185,8 +236,62 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 微调后验证集准确率飙到0.99，上线却一塌糊涂。
+**原因 →** 训练集和验证集按用户随机切分，同段对话被拆到两边，模型背下用户习惯而非任务规律。
+**修法 →** 按 user_id 或时间分组切分，重跑后验证集降到0.72才接近真实。
+
+**现象 →** 微调两轮后，模型对新指令几乎不响应，旧能力也退化。
+**原因 →** 学习率照搬预训练值，权重被刷穿，发生灾难性遗忘。
+**修法 →** 用 1e-5 量级学习率加预热，保留基线检查点做逐样本对照。
+
+**现象 →** 微调收益看着比提示好，换数据集却反向。
+**原因 →** 只比平均分，没冻结词元器和评测样本，差异来自评测污染。
+**修法 →** 在同一冻结样本集上对比，报告逐样本结果与尾部分布。
+
+## 小结
+
+- 先冻结数据来源、切分与词元器，再谈微调收益
+- 提示与检索基线必须在同一样本上对比
+- 按用户或时间分组切分，防数据泄漏虚高
+- 学习率与预算单独记录，警惕灾难性遗忘
+- 保存检查点与逐样本输出，证明收益可复现
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 什么情况下微调才优于提示工程？
+
+<Answer>
+
+当任务需要稳定风格、低延迟或固定结构输出，且提示已穷尽、检索基线已冻结时，微调才值得；否则应先验证提示与检索，避免把提示能解决的问题推给微调。
+
+</Answer>
+
+**问题 2：实践应用。** 给定同一份训练数据，如何证明微调收益不是数据泄漏？
+
+<Answer>
+
+按用户或时间分组切分训练集与验证集，冻结词元器与评测样本，在隔离集上报告逐样本准确率与尾部分布，并与提示基线在同一集合上单变量对照。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版微调对照：给定预测、标签与训练/验证用户ID，计算准确率并检测是否存在验证集泄漏。
+
+<Answer>
+
+```python
+def evaluate_and_check_leak(predictions, labels, train_ids, eval_ids):
+    overlap = set(train_ids) & set(eval_ids)
+    correct = sum(p == l for p, l in zip(predictions, labels))
+    return {"accuracy": correct / len(labels), "leak": len(overlap) > 0}
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -197,4 +302,11 @@ def release_gate(records):
 
 - [Chapter 10: Building Multimodal Applications with LLMs](/learn/building-llm-applications/11-chapter-10/bla-10-multimodal-applications)
 - [Chapter 12: Responsible AI](/learn/building-llm-applications/13-chapter-12/bla-12-responsible-ai)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

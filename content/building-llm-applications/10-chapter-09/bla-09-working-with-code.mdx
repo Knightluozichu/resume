@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -48,17 +55,51 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RequestContract = {
+  task: string;
+  model: string;
+  prompt: string;
+  data: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(
+  task: string,
+  model: string,
+  prompt: string,
+  dataHash: string,
+  tools: string[],
+  seed: number,
+): RequestContract {
+  return { task, model, prompt, data: dataHash, tools, seed };
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -67,6 +108,32 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type GateRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(
+  records: GateRecord[],
+): { pass: boolean; missing: number[] } {
+  const required = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -180,8 +247,81 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** LLM 生成的代码偷偷 `requests.post` 把本地变量发到外部服务器，数据被窃取。
+**原因 →** 沙箱未禁用网络，代码执行无资源隔离，依赖与外联未审计。
+**修法 →** 沙箱无网络、限时限存，依赖白名单，执行前静态扫描网络与文件外联调用。
+
+**现象 →** 生成的排序函数通过了三组测试，上线后在重复元素上结果错误。
+**原因 →** 测试只覆盖正常升序，缺少重复、空数组与边界用例，文字解释与执行结果未分开记录。
+**修法 →** 补充正常、边界与恶意测试，逐样本断言，把模型解释与实际输出分开存档比对。
+
+**现象 →** 生成的 `while True` 循环把沙箱 CPU 跑满，整个服务挂起无响应。
+**原因 →** 沙箱未设 CPU 与内存上限和超时，无指令计数或循环熔断。
+**修法 →** 设硬超时与内存上限，加入指令计数熔断，超限直接 kill 并记录失败原因。
+
+## 小结
+
+- 生成代码先静态检查，再入无网络沙箱执行。
+- 测试覆盖正常、边界与恶意用例，逐样本断言。
+- 沙箱限时限存限指令，超限直接 kill 并记录。
+- 文字解释与实际执行结果分开存档比对。
+- 依赖与外联白名单审计，杜绝数据外泄。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 为什么代码执行沙箱必须禁用网络？
+
+<Answer>
+
+LLM 生成的代码可能包含恶意外联，把本地变量、密钥或数据发往外部服务器；禁用网络从物理层阻断数据外泄，配合依赖白名单与外联扫描，确保执行不产生副作用。
+
+</Answer>
+
+**问题 2：实践应用。** 如何设计测试避免"通过测试但逻辑错误"的假象？
+
+<Answer>
+
+测试须覆盖正常、边界（空数组、单元素、重复）与恶意（超大输入、注入）用例，逐样本断言而非只看平均通过率；把模型文字解释与实际输出分开存档，比对差异以发现隐性错误。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个带超时限制的简化版代码执行沙箱：超时即中止并返回失败。
+
+<Answer>
+
+```python
+import signal
+
+
+class Timeout(Exception):
+    pass
+
+
+def run_sandbox(code, timeout=2):
+    def handler(*_):
+        raise Timeout()
+
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(timeout)
+    g = {"__builtins__": {}}
+    try:
+        exec(code, g)
+        return {"ok": True, "out": g.get("result")}
+    except Timeout:
+        return {"ok": False, "err": "timeout"}
+    except Exception as e:
+        return {"ok": False, "err": str(e)}
+    finally:
+        signal.alarm(0)
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -192,4 +332,11 @@ def release_gate(records):
 
 - [Chapter 8: Using LLMs with Structured Data](/learn/building-llm-applications/09-chapter-08/bla-08-structured-data)
 - [Chapter 10: Building Multimodal Applications with LLMs](/learn/building-llm-applications/11-chapter-10/bla-10-multimodal-applications)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

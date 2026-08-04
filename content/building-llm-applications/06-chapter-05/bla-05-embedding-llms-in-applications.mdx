@@ -10,6 +10,13 @@ sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applicat
 draft: false
 ---
 
+import {
+  Exercises,
+  Answer,
+  Attribution,
+  CodeTabs,
+  Tab,
+} from "@/components/mdx/mdx-components";
 
 ## 为什么先冻结应用合同
 
@@ -48,17 +55,51 @@ $$
 
 ## 三段可运行骨架
 
+<CodeTabs>
+  <Tab label="Python / 实现验证">
+
 ```python
 def freeze_request(task, model, prompt, data_hash, tools, seed):
     return {"task": task, "model": model, "prompt": prompt,
             "data": data_hash, "tools": tools, "seed": seed}
 ```
 
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type RequestContract = {
+  task: string;
+  model: string;
+  prompt: string;
+  data: string;
+  tools: string[];
+  seed: number;
+};
+
+function freezeRequest(
+  task: string,
+  model: string,
+  prompt: string,
+  dataHash: string,
+  tools: string[],
+  seed: number,
+): RequestContract {
+  return { task, model, prompt, data: dataHash, tools, seed };
+}
+```
+
+  </Tab>
+</CodeTabs>
+
 ```python
 def compare_controlled(baseline, candidate, changed):
     assert len(changed) == 1, "one attributable change per experiment"
     return {key: candidate[key] - baseline[key] for key in baseline}
 ```
+
+<CodeTabs>
+  <Tab label="Python / 实现验证">
 
 ```python
 def release_gate(records):
@@ -67,6 +108,32 @@ def release_gate(records):
                if not required.issubset(record)]
     return {"pass": not missing, "missing": missing}
 ```
+
+  </Tab>
+  <Tab label="TypeScript / 类型定义">
+
+```typescript
+type GateRecord = {
+  input?: unknown;
+  config?: unknown;
+  output?: unknown;
+  judgment?: unknown;
+  limits?: unknown;
+};
+
+function releaseGate(
+  records: GateRecord[],
+): { pass: boolean; missing: number[] } {
+  const required = ["input", "config", "output", "judgment", "limits"];
+  const missing = records
+    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
+    .filter((i) => i >= 0);
+  return { pass: missing.length === 0, missing };
+}
+```
+
+  </Tab>
+</CodeTabs>
 
 第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
 
@@ -204,8 +271,63 @@ def release_gate(records):
 
 发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
 
-## 常见失败与回退
+## 容易踩的坑
 
+**现象 →** 把 Hugging Face token 写进 `.env` 后误提交到公开仓库，几小时内即被扫描器盗用。
+**原因 →** `.env` 未加入 `.gitignore`，token 权限为 write 且无过期时间，密钥随源码外泄。
+**修法 →** 立即吊销并重发只读 token，`.gitignore` 锁定 `.env`，密钥改用 secret manager 注入运行时。
+
+**现象 →** 切换 `sentence-transformers` 默认模型后，新向量维度变成 384，旧索引仍存 768 维，余弦相似度全 NaN。
+**原因 →** 模型别名指向新版本，嵌入维度未在合同中冻结，索引未随模型版本一起重建。
+**修法 →** 记录模型版本与维度到请求清单，重建索引前比对维度，版本不一致直接拒绝写入。
+
+**现象 →** 多用户共用一个 `ConversationBufferMemory`，A 的提问混入 B 的回答。
+**原因 →** 记忆对象按进程单例持有，未按 session_id 隔离，上下文未设所有者与生命周期。
+**修法 →** 用 session_id 作键的字典隔离每会话状态，设最大轮数与过期清理，越界降级为摘要。
+
+## 小结
+
+- 先冻结任务、样本、模型、提示与权限，再接真实服务。
+- 单变量对照：每轮只改一个因素并保留上一步基线。
+- 输出验证分语法、语义、来源、权限四层，缺一不可。
+- 密钥不入代码、日志或客户端，统一由 secret manager 注入。
+- 发布单元整体标记模型、提示、索引与工具，可一键回退。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：概念理解。** 为什么模型别名不能作为应用合同中的稳定标识？
+
+<Answer>
+
+模型别名由提供方维护，可能随版本更新指向不同权重；端点、词元器、上下文长度和解码默认值都会漂移。应记录模型版本号、端点 URL、词元器名和参数哈希，用金样本逐字段比对，把别名漂移暴露为可见差异，而非隐藏在平均分里。
+
+</Answer>
+
+**问题 2：实践应用。** 给定一份冻结的请求清单，如何设计一次只归因于提示变更的对照实验？
+
+<Answer>
+
+冻结基线后只改变提示模板这一个因素，其余字段（模型、数据、工具、种子）保持不变。对正常、边界和注入样本各跑多种子，报告逐样本结果、均值、方差与尾延迟；通过 `compare_controlled` 断言 `changed` 集合长度为 1，确保差异可归因到提示。
+
+</Answer>
+
+**问题 3（独立实现）：** 独立实现一个简化版的 `release_gate`：输入记录列表，返回缺失必需字段的记录下标，缺字段即判不通过。
+
+<Answer>
+
+```python
+def release_gate(records):
+    required = {"input", "config", "output", "judgment", "limits"}
+    missing = [i for i, r in enumerate(records)
+               if not required.issubset(r)]
+    return {"pass": not missing, "missing": missing}
+```
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -216,4 +338,11 @@ def release_gate(records):
 
 - [Chapter 4: Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
 - [Chapter 6: Building Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="publisher-catalog"
+  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
+  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+/>
 

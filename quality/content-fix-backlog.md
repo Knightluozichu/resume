@@ -1127,7 +1127,7 @@
 
 ## 系列 06：AI/LLM 应用系列（11 本 · 176 章待修 · 293 项）
 
-**系列状态**：进行中（6.1-6.3 完成，6.4-6.11 待修）
+**系列状态**：✅ 全系列完成（6.1-6.11 共176章293项全部修复，11本均未上架仅修复不部署）
 
 ### 6.1 ai-agent（9 章 · 待修 0 章 · 9 项） ✅
 
@@ -1187,222 +1187,222 @@
 
 **部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.4 chatgpt-principles-practice（13 章 · 待修 13 章 · 13 项）
+### 6.4 chatgpt-principles-practice（13 章 · 待修 0 章 · 13 项） ✅
 
-**书籍状态**：待修复
-
-| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
-|---|---------|---------|------|---------|
-| 1 | chatgpt-principles-practice/00-map/cgpt-official-learning-map.mdx | §8无要点 | ⬜ 待修复 | — |
-| 2 | chatgpt-principles-practice/01-preface/cgpt-preface.mdx | §8无要点 | ⬜ 待修复 | — |
-| 3 | chatgpt-principles-practice/02-understanding/cgpt-01-understanding-chatgpt.mdx | §8无要点 | ⬜ 待修复 | — |
-| 4 | chatgpt-principles-practice/03-principles/cgpt-02-principles.mdx | §8无要点 | ⬜ 待修复 | — |
-| 5 | chatgpt-principles-practice/04-pretrained-models/cgpt-03-pretrained-language-models.mdx | §8无要点 | ⬜ 待修复 | — |
-| 6 | chatgpt-principles-practice/05-reinforcement-learning/cgpt-04-reinforcement-learning.mdx | §8无要点 | ⬜ 待修复 | — |
-| 7 | chatgpt-principles-practice/06-prompt-emergence/cgpt-05-prompt-emergence.mdx | §8无要点 | ⬜ 待修复 | — |
-| 8 | chatgpt-principles-practice/07-llm-pretraining/cgpt-06-llm-pretraining.mdx | §8无要点 | ⬜ 待修复 | — |
-| 9 | chatgpt-principles-practice/08-gpt-series/cgpt-07-gpt-series.mdx | §8无要点 | ⬜ 待修复 | — |
-| 10 | chatgpt-principles-practice/09-ppo-rlhf/cgpt-08-ppo-rlhf.mdx | §8无要点 | ⬜ 待修复 | — |
-| 11 | chatgpt-principles-practice/10-private-practice/cgpt-09-chatgpt-practice.mdx | §8无要点 | ⬜ 待修复 | — |
-| 12 | chatgpt-principles-practice/11-trends/cgpt-10-trends.mdx | §8无要点 | ⬜ 待修复 | — |
-| 13 | chatgpt-principles-practice/12-review/cgpt-official-final-review.mdx | §8无要点 | ⬜ 待修复 | — |
-
-**部署记录**：—
-
-### 6.5 ai-agent-dev（14 章 · 待修 14 章 · 14 项）
-
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | ai-agent-dev/core-mechanisms/memory.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | ai-agent-dev/core-mechanisms/planning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | ai-agent-dev/core-mechanisms/react-loop.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | ai-agent-dev/core-mechanisms/tool-calling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | ai-agent-dev/enterprise/evaluation-observability.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | ai-agent-dev/enterprise/production-deployment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | ai-agent-dev/enterprise/safety-guardrails.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | ai-agent-dev/foundations/llm-brain.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | ai-agent-dev/foundations/prompting-roles.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | ai-agent-dev/foundations/what-is-agent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | ai-agent-dev/knowledge-rag/context-engineering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | ai-agent-dev/knowledge-rag/rag.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | ai-agent-dev/multi-agent/multi-agent-patterns.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | ai-agent-dev/multi-agent/orchestration.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | chatgpt-principles-practice/00-map/cgpt-official-learning-map.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 2 | chatgpt-principles-practice/01-preface/cgpt-preface.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 3 | chatgpt-principles-practice/02-understanding/cgpt-01-understanding-chatgpt.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 4 | chatgpt-principles-practice/03-principles/cgpt-02-principles.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 5 | chatgpt-principles-practice/04-pretrained-models/cgpt-03-pretrained-language-models.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 6 | chatgpt-principles-practice/05-reinforcement-learning/cgpt-04-reinforcement-learning.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 7 | chatgpt-principles-practice/06-prompt-emergence/cgpt-05-prompt-emergence.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 8 | chatgpt-principles-practice/07-llm-pretraining/cgpt-06-llm-pretraining.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 9 | chatgpt-principles-practice/08-gpt-series/cgpt-07-gpt-series.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 10 | chatgpt-principles-practice/09-ppo-rlhf/cgpt-08-ppo-rlhf.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 11 | chatgpt-principles-practice/10-private-practice/cgpt-09-chatgpt-practice.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 12 | chatgpt-principles-practice/11-trends/cgpt-10-trends.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 13 | chatgpt-principles-practice/12-review/cgpt-official-final-review.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.6 large-scale-llm-practice（14 章 · 待修 14 章 · 14 项）
+### 6.5 ai-agent-dev（14 章 · 待修 0 章 · 14 项） ✅
 
-**书籍状态**：待修复
-
-| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
-|---|---------|---------|------|---------|
-| 1 | large-scale-llm-practice/00-map/lsl-official-learning-map.mdx | §8无要点 | ⬜ 待修复 | — |
-| 2 | large-scale-llm-practice/01-preface/lsl-preface.mdx | §8无要点 | ⬜ 待修复 | — |
-| 3 | large-scale-llm-practice/02-notation/lsl-mathematical-notation.mdx | §8无要点 | ⬜ 待修复 | — |
-| 4 | large-scale-llm-practice/03-introduction/lsl-01-introduction.mdx | §8无要点 | ⬜ 待修复 | — |
-| 5 | large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx | §8无要点 | ⬜ 待修复 | — |
-| 6 | large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx | §8无要点 | ⬜ 待修复 | — |
-| 7 | large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx | §8无要点 | ⬜ 待修复 | — |
-| 8 | large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx | §8无要点 | ⬜ 待修复 | — |
-| 9 | large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning.mdx | §8无要点 | ⬜ 待修复 | — |
-| 10 | large-scale-llm-practice/09-applications/lsl-07-llm-applications.mdx | §8无要点 | ⬜ 待修复 | — |
-| 11 | large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation.mdx | §8无要点 | ⬜ 待修复 | — |
-| 12 | large-scale-llm-practice/11-references/lsl-references.mdx | §8无要点 | ⬜ 待修复 | — |
-| 13 | large-scale-llm-practice/12-index/lsl-index.mdx | §8无要点 | ⬜ 待修复 | — |
-| 14 | large-scale-llm-practice/13-review/lsl-official-final-review.mdx | §8无要点 | ⬜ 待修复 | — |
-
-**部署记录**：—
-
-### 6.7 large-language-models（16 章 · 待修 16 章 · 16 项）
-
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | large-language-models/00-map/llm-official-learning-map.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | large-language-models/01-preface/llm-preface.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | large-language-models/02-debates-future/llm-01-debates-future.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | large-language-models/03-language-tokenization/llm-02-language-modeling-tokenization.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | large-language-models/04-transformer/llm-03-transformer.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | large-language-models/06-icl-finetuning/llm-05-icl-lightweight-finetuning.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | large-language-models/07-training-scale/llm-06-training-larger-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | large-language-models/08-sparse-moe/llm-07-sparse-moe.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | large-language-models/09-retrieval-augmented/llm-08-retrieval-augmented-lm.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | large-language-models/10-preference-alignment/llm-09-human-preference-alignment.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | large-language-models/11-bias-toxicity/llm-10-bias-toxicity.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | large-language-models/12-vision-language/llm-11-vision-language-models.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | large-language-models/13-environment/llm-12-environmental-impact.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | large-language-models/14-references/llm-references.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | large-language-models/15-review/llm-official-final-review.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | ai-agent-dev/core-mechanisms/memory.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 2 | ai-agent-dev/core-mechanisms/planning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 3 | ai-agent-dev/core-mechanisms/react-loop.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 4 | ai-agent-dev/core-mechanisms/tool-calling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 5 | ai-agent-dev/enterprise/evaluation-observability.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 6 | ai-agent-dev/enterprise/production-deployment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 7 | ai-agent-dev/enterprise/safety-guardrails.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 8 | ai-agent-dev/foundations/llm-brain.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 9 | ai-agent-dev/foundations/prompting-roles.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 10 | ai-agent-dev/foundations/what-is-agent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 11 | ai-agent-dev/knowledge-rag/context-engineering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 12 | ai-agent-dev/knowledge-rag/rag.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 13 | ai-agent-dev/multi-agent/multi-agent-patterns.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 14 | ai-agent-dev/multi-agent/orchestration.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.8 ai-agent-apps（19 章 · 待修 19 章 · 19 项）
+### 6.6 large-scale-llm-practice（14 章 · 待修 0 章 · 14 项） ✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | ai-agent-apps/agentic-patterns/autonomous-agents.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 2 | ai-agent-apps/agentic-patterns/chaining-and-routing.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 3 | ai-agent-apps/agentic-patterns/combining-patterns.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 4 | ai-agent-apps/agentic-patterns/evaluator-optimizer.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 5 | ai-agent-apps/agentic-patterns/parallelization-and-orchestrator-workers.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 6 | ai-agent-apps/agentic-patterns/workflow-vs-agent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 7 | ai-agent-apps/context-engineering/context-window.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 8 | ai-agent-apps/context-engineering/prompt-engineering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 9 | ai-agent-apps/context-engineering/structured-output.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 10 | ai-agent-apps/foundations/agentic-loop.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 11 | ai-agent-apps/foundations/augmented-llm.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 12 | ai-agent-apps/foundations/first-agent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 13 | ai-agent-apps/foundations/what-is-an-agent.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 14 | ai-agent-apps/production/agents-in-practice.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 15 | ai-agent-apps/production/production-readiness-checklist.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 16 | ai-agent-apps/production/tool-prompt-engineering.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 17 | ai-agent-apps/tool-use/function-calling.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 18 | ai-agent-apps/tool-use/mcp.mdx | §8缺小结 | ⬜ 待修复 | — |
-| 19 | ai-agent-apps/tool-use/tool-design.mdx | §8缺小结 | ⬜ 待修复 | — |
+| 1 | large-scale-llm-practice/00-map/lsl-official-learning-map.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 2 | large-scale-llm-practice/01-preface/lsl-preface.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 3 | large-scale-llm-practice/02-notation/lsl-mathematical-notation.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 4 | large-scale-llm-practice/03-introduction/lsl-01-introduction.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 5 | large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 6 | large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 7 | large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 8 | large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 9 | large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 10 | large-scale-llm-practice/09-applications/lsl-07-llm-applications.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 11 | large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 12 | large-scale-llm-practice/11-references/lsl-references.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 13 | large-scale-llm-practice/12-index/lsl-index.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 14 | large-scale-llm-practice/13-review/lsl-official-final-review.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.9 this-is-chatgpt（24 章 · 待修 24 章 · 24 项）
+### 6.7 large-language-models（16 章 · 待修 0 章 · 16 项） ✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx | §8无要点 | ⬜ 待修复 | — |
-| 2 | this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time.mdx | §8无要点 | ⬜ 待修复 | — |
-| 3 | this-is-chatgpt/01-main-essay/tcg-main-02-probabilities.mdx | §8无要点 | ⬜ 待修复 | — |
-| 4 | this-is-chatgpt/01-main-essay/tcg-main-03-model.mdx | §8无要点 | ⬜ 待修复 | — |
-| 5 | this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx | §8无要点 | ⬜ 待修复 | — |
-| 6 | this-is-chatgpt/01-main-essay/tcg-preface.mdx | §8无要点 | ⬜ 待修复 | — |
-| 7 | this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets.mdx | §8无要点 | ⬜ 待修复 | — |
-| 8 | this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx | §8无要点 | ⬜ 待修复 | — |
-| 9 | this-is-chatgpt/02-neural-models/tcg-main-07-training-practice.mdx | §8无要点 | ⬜ 待修复 | — |
-| 10 | this-is-chatgpt/02-neural-models/tcg-main-08-universal-network.mdx | §8无要点 | ⬜ 待修复 | — |
-| 11 | this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings.mdx | §8无要点 | ⬜ 待修复 | — |
-| 12 | this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt.mdx | §8无要点 | ⬜ 待修复 | — |
-| 13 | this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt.mdx | §8无要点 | ⬜ 待修复 | — |
-| 14 | this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training.mdx | §8无要点 | ⬜ 待修复 | — |
-| 15 | this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work.mdx | §8无要点 | ⬜ 待修复 | — |
-| 16 | this-is-chatgpt/04-meaning-language/tcg-main-14-meaning-space.mdx | §8无要点 | ⬜ 待修复 | — |
-| 17 | this-is-chatgpt/04-meaning-language/tcg-main-15-semantic-grammar.mdx | §8无要点 | ⬜ 待修复 | — |
-| 18 | this-is-chatgpt/04-meaning-language/tcg-main-16-conclusion.mdx | §8无要点 | ⬜ 待修复 | — |
-| 19 | this-is-chatgpt/05-resources/tcg-thanks-additional-resources.mdx | §8无要点 | ⬜ 待修复 | — |
-| 20 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha.mdx | §8无要点 | ⬜ 待修复 | — |
-| 21 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example.mdx | §8无要点 | ⬜ 待修复 | — |
-| 22 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples.mdx | §8无要点 | ⬜ 待修复 | — |
-| 23 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward.mdx | §8无要点 | ⬜ 待修复 | — |
-| 24 | this-is-chatgpt/07-final-review/tcg-official-final-review.mdx | §8无要点 | ⬜ 待修复 | — |
+| 1 | large-language-models/00-map/llm-official-learning-map.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 2 | large-language-models/01-preface/llm-preface.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 3 | large-language-models/02-debates-future/llm-01-debates-future.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 4 | large-language-models/03-language-tokenization/llm-02-language-modeling-tokenization.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 5 | large-language-models/04-transformer/llm-03-transformer.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 6 | large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 7 | large-language-models/06-icl-finetuning/llm-05-icl-lightweight-finetuning.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 8 | large-language-models/07-training-scale/llm-06-training-larger-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 9 | large-language-models/08-sparse-moe/llm-07-sparse-moe.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 10 | large-language-models/09-retrieval-augmented/llm-08-retrieval-augmented-lm.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 11 | large-language-models/10-preference-alignment/llm-09-human-preference-alignment.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 12 | large-language-models/11-bias-toxicity/llm-10-bias-toxicity.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 13 | large-language-models/12-vision-language/llm-11-vision-language-models.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 14 | large-language-models/13-environment/llm-12-environmental-impact.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 15 | large-language-models/14-references/llm-references.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 16 | large-language-models/15-review/llm-official-final-review.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.10 multiagent-systems（27 章 · 待修 27 章 · 54 项）
+### 6.8 ai-agent-apps（19 章 · 待修 0 章 · 19 项） ✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | multiagent-systems/00-map/mas-official-learning-map.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | multiagent-systems/01-preface/mas-preface.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | multiagent-systems/02-part-01-setting-scene/mas-part-01-setting-scene.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | multiagent-systems/03-01-introduction/mas-01-introduction.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | multiagent-systems/04-part-02-intelligent-autonomous-agents/mas-part-02-intelligent-autonomous-agents.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | multiagent-systems/05-02-intelligent-agents/mas-02-intelligent-agents.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | multiagent-systems/06-03-deductive-reasoning-agents/mas-03-deductive-reasoning-agents.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | multiagent-systems/07-04-practical-reasoning-agents/mas-04-practical-reasoning-agents.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | multiagent-systems/08-05-reactive-hybrid-agents/mas-05-reactive-hybrid-agents.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | multiagent-systems/09-part-03-communication-cooperation/mas-part-03-communication-cooperation.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | multiagent-systems/10-06-understanding-each-other/mas-06-understanding-each-other.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | multiagent-systems/11-07-communicating/mas-07-communicating.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | multiagent-systems/12-08-working-together/mas-08-working-together.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | multiagent-systems/13-09-methodologies/mas-09-methodologies.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | multiagent-systems/14-10-applications/mas-10-applications.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | multiagent-systems/15-part-04-multiagent-decision-making/mas-part-04-multiagent-decision-making.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | multiagent-systems/16-11-multiagent-interactions/mas-11-multiagent-interactions.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 18 | multiagent-systems/17-12-making-group-decisions/mas-12-making-group-decisions.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 19 | multiagent-systems/18-13-forming-coalitions/mas-13-forming-coalitions.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 20 | multiagent-systems/19-14-allocating-scarce-resources/mas-14-allocating-scarce-resources.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 21 | multiagent-systems/20-15-bargaining/mas-15-bargaining.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 22 | multiagent-systems/21-16-arguing/mas-16-arguing.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 23 | multiagent-systems/22-17-logical-foundations/mas-17-logical-foundations.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 24 | multiagent-systems/23-coda/mas-coda.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 25 | multiagent-systems/24-appendix-a-history-lesson/mas-appendix-a-history-lesson.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 26 | multiagent-systems/25-appendix-b-afterword/mas-appendix-b-afterword.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
-| 27 | multiagent-systems/26-review/mas-official-final-review.mdx | §8缺小结 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | ai-agent-apps/agentic-patterns/autonomous-agents.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 2 | ai-agent-apps/agentic-patterns/chaining-and-routing.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 3 | ai-agent-apps/agentic-patterns/combining-patterns.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 4 | ai-agent-apps/agentic-patterns/evaluator-optimizer.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 5 | ai-agent-apps/agentic-patterns/parallelization-and-orchestrator-workers.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 6 | ai-agent-apps/agentic-patterns/workflow-vs-agent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 7 | ai-agent-apps/context-engineering/context-window.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 8 | ai-agent-apps/context-engineering/prompt-engineering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 9 | ai-agent-apps/context-engineering/structured-output.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 10 | ai-agent-apps/foundations/agentic-loop.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 11 | ai-agent-apps/foundations/augmented-llm.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 12 | ai-agent-apps/foundations/first-agent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 13 | ai-agent-apps/foundations/what-is-an-agent.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 14 | ai-agent-apps/production/agents-in-practice.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 15 | ai-agent-apps/production/production-readiness-checklist.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 16 | ai-agent-apps/production/tool-prompt-engineering.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 17 | ai-agent-apps/tool-use/function-calling.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 18 | ai-agent-apps/tool-use/mcp.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
+| 19 | ai-agent-apps/tool-use/tool-design.mdx | §8缺小结 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
-### 6.11 building-llm-applications（18 章 · 待修 18 章 · 108 项）
+### 6.9 this-is-chatgpt（24 章 · 待修 0 章 · 24 项） ✅
 
-**书籍状态**：待修复
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
 
 | # | 章节文件 | 不合格项 | 状态 | 完成日期 |
 |---|---------|---------|------|---------|
-| 1 | building-llm-applications/00-map/bla-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 2 | building-llm-applications/01-preface/bla-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 3 | building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 4 | building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 5 | building-llm-applications/04-chapter-03/bla-03-choosing-an-llm.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 6 | building-llm-applications/05-chapter-04/bla-04-prompt-engineering.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 7 | building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 8 | building-llm-applications/07-chapter-06/bla-06-conversational-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 9 | building-llm-applications/08-chapter-07/bla-07-search-recommendation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 10 | building-llm-applications/09-chapter-08/bla-08-structured-data.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 11 | building-llm-applications/10-chapter-09/bla-09-working-with-code.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 12 | building-llm-applications/11-chapter-10/bla-10-multimodal-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 13 | building-llm-applications/12-chapter-11/bla-11-fine-tuning.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 14 | building-llm-applications/13-chapter-12/bla-12-responsible-ai.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 15 | building-llm-applications/14-chapter-13/bla-13-emerging-trends.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 16 | building-llm-applications/15-other-books/bla-other-books.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 17 | building-llm-applications/16-index/bla-index.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
-| 18 | building-llm-applications/17-review/bla-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ⬜ 待修复 | — |
+| 1 | this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 2 | this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 3 | this-is-chatgpt/01-main-essay/tcg-main-02-probabilities.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 4 | this-is-chatgpt/01-main-essay/tcg-main-03-model.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 5 | this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 6 | this-is-chatgpt/01-main-essay/tcg-preface.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 7 | this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 8 | this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 9 | this-is-chatgpt/02-neural-models/tcg-main-07-training-practice.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 10 | this-is-chatgpt/02-neural-models/tcg-main-08-universal-network.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 11 | this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 12 | this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 13 | this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 14 | this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 15 | this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 16 | this-is-chatgpt/04-meaning-language/tcg-main-14-meaning-space.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 17 | this-is-chatgpt/04-meaning-language/tcg-main-15-semantic-grammar.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 18 | this-is-chatgpt/04-meaning-language/tcg-main-16-conclusion.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 19 | this-is-chatgpt/05-resources/tcg-thanks-additional-resources.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 20 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 21 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 22 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 23 | this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
+| 24 | this-is-chatgpt/07-final-review/tcg-official-final-review.mdx | §8无要点 | ✅ 已完成 | 2026-08-04 |
 
-**部署记录**：—
+**部署记录**：仅规范修复并推送，未部署（无ledger）
+
+### 6.10 multiagent-systems（27 章 · 待修 0 章 · 54 项） ✅
+
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
+
+| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
+|---|---------|---------|------|---------|
+| 1 | multiagent-systems/00-map/mas-official-learning-map.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | multiagent-systems/01-preface/mas-preface.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | multiagent-systems/02-part-01-setting-scene/mas-part-01-setting-scene.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | multiagent-systems/03-01-introduction/mas-01-introduction.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | multiagent-systems/04-part-02-intelligent-autonomous-agents/mas-part-02-intelligent-autonomous-agents.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | multiagent-systems/05-02-intelligent-agents/mas-02-intelligent-agents.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | multiagent-systems/06-03-deductive-reasoning-agents/mas-03-deductive-reasoning-agents.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | multiagent-systems/07-04-practical-reasoning-agents/mas-04-practical-reasoning-agents.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | multiagent-systems/08-05-reactive-hybrid-agents/mas-05-reactive-hybrid-agents.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | multiagent-systems/09-part-03-communication-cooperation/mas-part-03-communication-cooperation.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | multiagent-systems/10-06-understanding-each-other/mas-06-understanding-each-other.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | multiagent-systems/11-07-communicating/mas-07-communicating.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | multiagent-systems/12-08-working-together/mas-08-working-together.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | multiagent-systems/13-09-methodologies/mas-09-methodologies.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 15 | multiagent-systems/14-10-applications/mas-10-applications.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 16 | multiagent-systems/15-part-04-multiagent-decision-making/mas-part-04-multiagent-decision-making.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 17 | multiagent-systems/16-11-multiagent-interactions/mas-11-multiagent-interactions.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 18 | multiagent-systems/17-12-making-group-decisions/mas-12-making-group-decisions.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 19 | multiagent-systems/18-13-forming-coalitions/mas-13-forming-coalitions.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 20 | multiagent-systems/19-14-allocating-scarce-resources/mas-14-allocating-scarce-resources.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 21 | multiagent-systems/20-15-bargaining/mas-15-bargaining.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 22 | multiagent-systems/21-16-arguing/mas-16-arguing.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 23 | multiagent-systems/22-17-logical-foundations/mas-17-logical-foundations.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 24 | multiagent-systems/23-coda/mas-coda.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 25 | multiagent-systems/24-appendix-a-history-lesson/mas-appendix-a-history-lesson.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 26 | multiagent-systems/25-appendix-b-afterword/mas-appendix-b-afterword.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 27 | multiagent-systems/26-review/mas-official-final-review.mdx | §8缺小结 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+
+**部署记录**：仅规范修复并推送，未部署（无ledger）
+
+### 6.11 building-llm-applications（18 章 · 待修 0 章 · 108 项） ✅
+
+**书籍状态**：✅ 规范修复完成；⛔ 部署受阻：无ledger（未上架）
+
+| # | 章节文件 | 不合格项 | 状态 | 完成日期 |
+|---|---------|---------|------|---------|
+| 1 | building-llm-applications/00-map/bla-official-learning-map.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 2 | building-llm-applications/01-preface/bla-preface.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 3 | building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 4 | building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 5 | building-llm-applications/04-chapter-03/bla-03-choosing-an-llm.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 6 | building-llm-applications/05-chapter-04/bla-04-prompt-engineering.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 7 | building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 8 | building-llm-applications/07-chapter-06/bla-06-conversational-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 9 | building-llm-applications/08-chapter-07/bla-07-search-recommendation.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 10 | building-llm-applications/09-chapter-08/bla-08-structured-data.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 11 | building-llm-applications/10-chapter-09/bla-09-working-with-code.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 12 | building-llm-applications/11-chapter-10/bla-10-multimodal-applications.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 13 | building-llm-applications/12-chapter-11/bla-11-fine-tuning.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 14 | building-llm-applications/13-chapter-12/bla-12-responsible-ai.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 15 | building-llm-applications/14-chapter-13/bla-13-emerging-trends.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 16 | building-llm-applications/15-other-books/bla-other-books.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 17 | building-llm-applications/16-index/bla-index.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+| 18 | building-llm-applications/17-review/bla-official-final-review.mdx | §6缺CodeTabs §7缺误区 §8缺小结 §8缺练习 §8缺独立题 §9缺Attribution | ✅ 已完成 | 2026-08-04 |
+
+**部署记录**：仅规范修复并推送，未部署（无ledger）
 
 
 ## 系列 07：Android 系列（12 本 · 217 章待修 · 381 项）
