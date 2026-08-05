@@ -1133,33 +1133,73 @@ function scoreChapter(chapter, sentenceOwners) {
 }
 
 function changedFiles(base) {
-  try {
+  const gitDiff = (baseArg) => {
     const output = execFileSync(
       "git",
-      ["diff", "--name-only", `${base}...HEAD`],
+      ["diff", "--name-only", ...(baseArg ? [`${baseArg}...HEAD`] : [])],
       { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
-    return new Set(
-      output
-        .split(/\r?\n/)
-        .filter(
-          (value) => value.startsWith("content/") && value.endsWith(".mdx"),
-        ),
-    );
+    return output.split(/\r?\n/).filter(Boolean);
+  };
+  let changed;
+  try {
+    changed = gitDiff(base);
   } catch {
-    const output = execFileSync("git", ["diff", "--name-only"], {
-      cwd: ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return new Set(
-      output
-        .split(/\r?\n/)
-        .filter(
-          (value) => value.startsWith("content/") && value.endsWith(".mdx"),
-        ),
-    );
+    changed = gitDiff(null);
   }
+
+  // 1) 直接变更的章节 .mdx
+  const changedChapters = changed.filter(
+    (value) => value.startsWith("content/") && value.endsWith(".mdx"),
+  );
+  const result = new Set(changedChapters);
+
+  // 2) 共享组件变更 → 引用它的章节也要复验（方案 C：依赖链复验）
+  //    组件文件在 src/components/mdx/ 下。变更组件后，凡 import 该组件的
+  //    章节必须重新审计——否则组件回归会绕过 --changed 门禁。
+  const changedComponents = changed.filter(
+    (value) =>
+      value.startsWith("src/components/mdx/") && value.endsWith(".tsx"),
+  );
+  if (changedComponents.length > 0) {
+    // 组件 → 章节的依赖解析（两跳）：
+    //  章节 MDX import bridge（v2/*.tsx）→ bridge re-export 组件（*.lab.tsx 等）
+    //  因此用「组件导出名」匹配 bridge 的 re-export，再用 bridge 路径匹配章节 import。
+    const changedNames = new Set(
+      changedComponents.map((cp) => path.basename(cp, ".tsx")),
+    );
+    const chapters = walkMdx(CONTENT_DIR);
+    for (const file of chapters) {
+      const source = fs.readFileSync(file, "utf8");
+      const rel = path.relative(ROOT, file);
+      // 章节 import 的 bridge 路径（形如 v2/gpp-chapter-02-command）
+      const importedModules = [
+        ...source.matchAll(/from\s+["']@\/components\/mdx\/([^"']+)["']/g),
+      ].map((m) => m[1]);
+      for (const modulePath of importedModules) {
+        const bridgeFile = path.join(ROOT, "src/components/mdx", modulePath + ".tsx");
+        if (!fs.existsSync(bridgeFile)) continue;
+        const bridgeSource = fs.readFileSync(bridgeFile, "utf8");
+        // bridge re-export 了变更的组件（export { X } from \"../xxx-lab\"）
+        const bridgeExports = [
+          ...bridgeSource.matchAll(/from\s+["']([^"']+)["']/g),
+        ].map((m) => m[1]);
+        const refersChanged = bridgeExports.some((dep) =>
+          changedNames.has(path.basename(dep, ".tsx")),
+        );
+        // 直接 import 变更组件（无 bridge 的章节）
+        const directImport = changedComponents.some((cp) =>
+          source.includes(`@/components/mdx/${cp.replace(/^src\/components\/mdx\//, "").replace(/\.tsx$/, "")}`),
+        );
+        if (refersChanged || directImport) {
+          result.add(rel);
+          break;
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 function baselinePassedIds(base) {
