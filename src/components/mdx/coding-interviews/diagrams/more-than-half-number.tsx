@@ -52,7 +52,7 @@ export function MajorityPartitionDiagram() {
               <g key={i}>
                 <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--bg)"} fillOpacity={isMid ? 0.16 : isMajor ? 0.1 : 1} stroke={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--border)"} strokeWidth={isMid ? 2 : 1.2} />
                 <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="800" fontFamily="monospace" fill={isMid ? "var(--success)" : isMajor ? "var(--accent)" : "var(--text-primary)"}>{v}</text>
-                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{i}</text>
               </g>
             );
           })}
