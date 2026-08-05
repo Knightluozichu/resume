@@ -8,7 +8,20 @@ demo: true
 math: false
 sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/01_AssignmentOperator/AssignmentOperator.cpp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
+
+<Objectives>
+
+- 能写出返回引用、参数为常量引用的复制赋值运算符
+- 能解释深拷贝、自赋值与异常安全三个资源类核心问题
+- 能实现并对比 copy-and-swap 与直接写法的事务边界
+
+</Objectives>
+
+{/* CIV2_QUALITY */}
 
 import { AssignmentContractMap, OwnershipTransitionDiagram } from "@/components/mdx/coding-interviews/diagrams/assignment-operator";
 
@@ -25,17 +38,33 @@ import { AssignmentContractMap, OwnershipTransitionDiagram } from "@/components/
 
 ## 六项契约逐一拆开
 
-**返回当前对象的引用。** 函数结尾应返回`*this`。返回引用使结果仍指向左侧对象；返回值虽然也可能让某些表达式编译，却产生额外临时对象，并弱化与内置赋值一致的左值语义。
+<Term term="左值引用">**返回当前对象的引用**</Term>。 函数结尾应返回`*this`。返回引用使结果仍指向左侧对象；返回值虽然也可能让某些表达式编译，却产生额外临时对象，并弱化与内置赋值一致的左值语义。
 
-**参数是常量引用。** 赋值只读取源对象，不应修改它。按值传参是copy-and-swap的一个现代变体，但那是有意让参数副本承担事务性资源；若采用`const CMyString&`签名，就要在函数体内显式构造临时副本。
+**参数是常量引用。** 赋值只读取源对象，不应修改它。按值传参是<Term term="copy-and-swap">copy-and-swap</Term>的一个现代变体，但那是有意让参数副本承担事务性资源；若采用`const CMyString&`签名，就要在函数体内显式构造临时副本。
 
-**释放目标旧资源。** `str2`可能已经持有字符数组，覆盖指针前必须安排旧数组的释放，否则每次赋值都会泄漏。关键不是“尽早delete”，而是“新状态准备成功后，旧资源必定有人释放”。
+<Term term="深拷贝">**释放目标旧资源**</Term>。 `str2`可能已经持有字符数组，覆盖指针前必须安排旧数组的释放，否则每次赋值都会泄漏。关键不是“尽早delete”，而是“新状态准备成功后，旧资源必定有人释放”。
 
 **执行。** 源和目标的文本可以相同，但`m_pData`不能指向同一动态数组。赋值结束后销毁或修改其中一个对象，不应影响另一个。仅复制地址的浅拷贝违反独占所有权。
 
-**处理。** 直接实现通常先用`if (this == &other)`返回。若没有这一步，先释放`m_pData`后再从`other.m_pData`复制，读取的正是已经释放的内存。临时对象交换方案天然能安全处理自赋值，但保留快速判断可以省去一次无意义复制。
+<Term term="自赋值">**自赋值处理**</Term>。 直接实现通常先用`if (this == &other)`返回。若没有这一步，先释放`m_pData`后再从`other.m_pData`复制，读取的正是已经释放的内存。临时对象交换方案天然能安全处理自赋值，但保留快速判断可以省去一次无意义复制。
 
-**保持异常安全。** 动态分配可能抛出`std::bad_alloc`。若目标先删除旧数组，再申请新数组，失败后旧值已经丢失。函数没有泄漏不等于状态正确；资源类还应明确失败时对象处于什么状态。
+<Term term="异常安全">**保持异常安全**</Term>。 动态分配可能抛出`std::bad_alloc`。若目标先删除旧数组，再申请新数组，失败后旧值已经丢失。函数没有泄漏不等于状态正确；资源类还应明确失败时对象处于什么状态。
+
+<Callout type="trap" title="常见误区">
+
+- **现象**：只把源指针复制给目标，两个析构函数重复释放同一块内存。
+- **原因**：浅拷贝让源和目标共享独占缓冲区，违反独占所有权。
+- **修法**：资源类必须深拷贝，源和目标各自持有独立数组。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+- **现象**：先 `delete[] m_pData` 再 `new`，分配失败时对象变成空指针。
+- **原因**：破坏性操作在准备阶段就提交，异常安全被破坏。
+- **修法**：用临时对象先完成可失败的准备，交换提交，析构释放旧值（copy-and-swap）。
+
+</Callout>
 
 ## 直接写法为什么只完成了一半
 
@@ -126,7 +155,7 @@ CMyString& operator=(CMyString other) {
 
 ## 正确性来自对象不变式
 
-这个类的核心不变式可以写成：每个存活的`CMyString`独占一块可由`delete[]`释放、以空字符结尾的数组；`m_pData`不为空。构造函数建立它，复制构造和赋值保持它，析构函数终止对象生命周期。
+这个类的核心<Term term="不变式">不变式</Term>可以写成：每个存活的`CMyString`独占一块可由`delete[]`释放、以空字符结尾的数组；`m_pData`不为空。构造函数建立它，复制构造和赋值保持它，析构函数终止对象生命周期。
 
 若设计允许`m_pData == nullptr`，所有读取成员都必须显式处理空指针，类契约会更复杂。这里让空字符串也分配一个字符，能把“空字符串”和“无有效资源”分开。无论选择哪种不变式，都要让每个特殊成员函数保持一致。
 
@@ -175,9 +204,39 @@ void test_chained_assignment() {
 
 设源字符串长度为`n`。深拷贝需要分配`n + 1`字节并复制`n + 1`个字符，时间复杂度为`O(n)`，新资源的额外空间为`O(n)`。交换本身是`O(1)`。自赋值快速判断可以把显式`x = x`从`O(n)`降到`O(1)`，但真实程序更应优先保证语义正确。
 
-生产代码通常优先使用`std::string`、`std::vector`、`std::unique_ptr`等资源管理类型，让成员自己遵守RAII，从而采用Rule of Zero，避免手写析构、复制和赋值。面试题故意使用裸字符数组，是为了观察资源类的特殊成员函数，不是建议业务代码重新实现字符串。
+生产代码通常优先使用`std::string`、`std::vector`、`std::unique_ptr`等资源管理类型，让成员自己遵守RAII，从而采用<Term term="Rule of Zero">Rule of Zero</Term>，避免手写析构、复制和赋值。面试题故意使用裸字符数组，是为了观察资源类的特殊成员函数，不是建议业务代码重新实现字符串。
 
-若类手写析构、复制构造和复制赋值，就要检查Rule of Three；在C++11以后，若还需要高效转移资源，则同时考虑移动构造和移动赋值，形成Rule of Five。copy-and-swap并非所有类型的唯一答案：巨大缓冲区复用、`noexcept`要求和性能热点可能需要更细的实现，但任何优化都不能破坏所有权和异常契约。
+若类手写析构、复制构造和复制赋值，就要检查Rule of Three；在C++11以后，若还需要高效转移资源，则同时考虑<Term term="移动构造">移动构造</Term>和移动赋值，形成Rule of Five。copy-and-swap并非所有类型的唯一答案：巨大缓冲区复用、`noexcept`要求和性能热点可能需要更细的实现，但任何优化都不能破坏所有权和异常契约。
+
+## 本章练习
+
+<Exercises>
+
+**问题 1：** 为什么赋值运算符要返回 `CMyString&` 而不是 `void`？
+
+<Answer>
+
+返回 `*this` 的左值引用才能支持连续赋值 `str3 = str2 = str1`——与内置赋值表达式产生被赋值对象的语义一致；返回值会产生额外临时对象并弱化左值语义。
+
+</Answer>
+
+**问题 2：** copy-and-swap 如何同时解决自赋值与异常安全？
+
+<Answer>
+
+临时对象 `temp(other)` 先复制，失败则目标不变；成功后 `swap` 交换指针（noexcept）提交，函数结束时 `temp` 析构释放目标旧数组。自赋值时 `temp` 是独立副本，天然安全。
+
+</Answer>
+
+**问题 3：** 除了普通/自赋值/连续赋值，还需补哪两类测试？
+
+<Answer>
+
+独立所有权（源对象销毁后目标仍有效）与分配失败（注入分配器故障，确认旧值未变、资源计数平衡）。
+
+</Answer>
+
+</Exercises>
 
 ## 本章回顾
 
@@ -193,4 +252,18 @@ void test_chained_assignment() {
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="左值引用">赋值运算符返回的引用类型，使 `str3 = str2 = str1` 能连续赋值且结果仍指向左侧对象。</GlossaryItem>
+  <GlossaryItem term="深拷贝">为源对象的资源创建独立副本，使源和目标各自持有独占缓冲区，互不影响。</GlossaryItem>
+  <GlossaryItem term="自赋值">`x = x` 这种源和目标别名同一对象的情况，处理不当会访问已释放内存。</GlossaryItem>
+  <GlossaryItem term="异常安全">操作失败时对象仍处于有效、可继续使用的状态，不泄漏、不破坏不变式。</GlossaryItem>
+  <GlossaryItem term="copy-and-swap">先用临时对象复制，再交换指针提交、析构释放旧值的赋值实现模式。</GlossaryItem>
+  <GlossaryItem term="不变式">对象生命周期内始终成立的性质，如 `m_pData` 总指向可 `delete[]` 的空字符结尾数组。</GlossaryItem>
+  <GlossaryItem term="Rule of Zero">用 RAII 成员自动管理资源，手写零个特殊成员函数。</GlossaryItem>
+  <GlossaryItem term="移动构造">从右值对象"窃取"资源而非复制的构造函数，用于高效转移所有权。</GlossaryItem>
+</Glossary>
 
+<Attribution
+  adaptedFrom="何海涛《剑指 Offer——名企面试官精讲典型编程题（第2版）》"
+  adaptedUrl="https://cbjj.phei.com.cn/module/goods/wssd_content_comment.jsp?bookid=49304"
+/>
