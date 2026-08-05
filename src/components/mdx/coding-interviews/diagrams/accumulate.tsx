@@ -97,16 +97,16 @@ export function AccumulateRecursionDiagram() {
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
           <text x="150" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">递归下降（调用）</text>
-          <text x="560" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="#3FB97F">回溯累加（返回）</text>
+          <text x="560" y="40" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">回溯累加（返回）</text>
           {/* 下降调用栈 */}
           {calls.map((c, i) => {
             const y = topY + i * stepY;
             const isBase = i === calls.length - 1;
             return (
               <g key={c}>
-                <rect x={colL - 55} y={y - 18} width={110} height={34} rx="7" fill={isBase ? "#E5B567" : "var(--accent)"} fillOpacity={isBase ? 0.2 : 0.12} stroke={isBase ? "#E5B567" : "var(--accent)"} strokeWidth="1.4" />
-                <text x={colL} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill={isBase ? "#E5B567" : "var(--accent)"}>{c}</text>
-                {isBase && <text x={colL} y={y + 30} textAnchor="middle" fontSize="10" fontWeight="700" fill="#E5B567">基例：sum(1)=1</text>}
+                <rect x={colL - 55} y={y - 18} width={110} height={34} rx="7" fill={isBase ? "var(--warning)" : "var(--accent)"} fillOpacity={isBase ? 0.2 : 0.12} stroke={isBase ? "var(--warning)" : "var(--accent)"} strokeWidth="1.4" />
+                <text x={colL} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill={isBase ? "var(--warning)" : "var(--accent)"}>{c}</text>
+                {isBase && <text x={colL} y={y + 30} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--warning)">基例：sum(1)=1</text>}
                 {i < calls.length - 1 && <path d={`M ${colL} ${y + 16} L ${colL} ${y + stepY - 18}`} stroke="var(--accent)" strokeWidth="1.4" markerEnd="url(#accDown)" />}
               </g>
             );
@@ -116,9 +116,9 @@ export function AccumulateRecursionDiagram() {
             const y = topY + i * stepY;
             return (
               <g key={`r${i}`}>
-                <rect x={colR - 55} y={y - 18} width={110} height={34} rx="7" fill="#3FB97F" fillOpacity="0.14" stroke="#3FB97F" strokeWidth="1.4" />
-                <text x={colR} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="#3FB97F">返回 {v}</text>
-                {i > 0 && <path d={`M ${colR} ${y + stepY - 18} L ${colR} ${y + 16}`} stroke="#3FB97F" strokeWidth="1.4" markerEnd="url(#accUp)" />}
+                <rect x={colR - 55} y={y - 18} width={110} height={34} rx="7" fill="var(--success)" fillOpacity="0.14" stroke="var(--success)" strokeWidth="1.4" />
+                <text x={colR} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="monospace" fill="var(--success)">返回 {v}</text>
+                {i > 0 && <path d={`M ${colR} ${y + stepY - 18} L ${colR} ${y + 16}`} stroke="var(--success)" strokeWidth="1.4" markerEnd="url(#accUp)" />}
               </g>
             );
           })}
@@ -129,7 +129,7 @@ export function AccumulateRecursionDiagram() {
           })}
           <defs>
             <marker id="accDown" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1 1 L4 6 L7 1" fill="none" stroke="var(--accent)" strokeWidth="1.4" /></marker>
-            <marker id="accUp" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1 7 L4 2 L7 7" fill="none" stroke="#3FB97F" strokeWidth="1.4" /></marker>
+            <marker id="accUp" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1 7 L4 2 L7 7" fill="none" stroke="var(--success)" strokeWidth="1.4" /></marker>
           </defs>
           <text x="360" y={topY + 4 * stepY + 40} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">每层 sum(n) = n + sum(n-1) 的返回值；不用循环/条件，靠递归触底再回溯累加</text>
         </svg>

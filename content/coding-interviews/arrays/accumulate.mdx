@@ -8,7 +8,21 @@ demo: true
 math: true
 sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/64_Accumulate/Accumulate.cpp"
 draft: false
----
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: coi-64
+---<Objectives>
+
+- 能说出题目禁用的三类语法（乘除、循环、条件判断）及替代机制
+- 能解释构造函数副作用、虚函数分派、函数指针表、模板特化四种累加方案
+- 能说明四种方法共同依赖的递推式与各自的控制流载体
+
+</Objectives>
+
+{/* CIV2_QUALITY */}
+
+
 
 import { AccumulateConstraintDiagram, AccumulateDispatchMap, AccumulateTemplateDiagram, AccumulateRecursionDiagram } from "@/components/mdx/coding-interviews/diagrams/accumulate";
 
@@ -31,7 +45,7 @@ $$
 
 先预测四种方法在n等于0时如何停下：构造法创建零个对象；虚函数法选择返回0的基类对象；函数指针法选择终止函数；模板法命中参数0的特化。若某个方案还需要if判断0，它就没有满足题目约束。
 
-## 方法一：构造函数与静态成员
+## 方法一：<Term term="构造函数副作用">构造函数</Term>与静态成员
 
 Temp类用两个保存当前构造序号和累计结果。每构造一个Temp，构造函数先把N加一，再把新N加入Sum；构造n个对象自然执行n次。
 
@@ -90,7 +104,23 @@ unsigned int Sum_Solution1(
 代价是运行时O(n)、堆空间O(n)，并依赖共享可变状态。两个线程同时Reset和构造会互相污染；递归或回调重入也会破坏计数。它是语言机制演示，不是生产求和API的推荐写法。
 
 
-## 方法二：虚函数动态分派终止递归
+<Callout type="trap" title="常见误区">
+
+- **现象**：以为构造函数方案只能靠"数构造次数"，忽略数组创建与作用域。
+- **原因**：静态成员累计依赖"每个元素构造一次"的副作用，作用域外不保证顺序。
+- **修法**：明确 `new A[n]` 恰好触发 n 次构造；静态成员函数返回累计值。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+- **现象**：虚函数方案在递归终止分支忘记返回，导致无限递归或未定义行为。
+- **原因**：基类指针调用的虚函数必须能区分"终止"与"递推"两个分支。
+- **修法**：终止分支（n=0）返回 0，递推分支调虚函数继续——两个分支由派生类覆盖实现。
+
+</Callout>
+
+## 方法二：<Term term="虚函数">虚函数</Term>动态分派终止递归
 
 作者创建基类A和派生类B。A的Sum无条件返回0，充当终止体；B的Sum把n加到“n减1的结果”上。全局Array下标0指向A，下标1指向B。
 
@@ -141,7 +171,7 @@ Array是全局表，却保存函数内两个栈对象的地址。整个递归在
 
 运行时间O(n)、调用栈O(n)。n很大时会先耗尽栈；它用多态替代条件分支，并没有减少计算步骤。
 
-## 方法三：函数指针表终止递归
+## 方法三：<Term term="函数指针表">函数指针表</Term>终止递归
 
 第三种方法不需要类层次。作者定义两个同签名函数：终止函数总是返回0，递归函数继续求和；静态按双重逻辑非选择目标。
 
@@ -175,7 +205,7 @@ n等于0时，表达式仍会计算unsigned的n减1，得到UINT_MAX，再把它
 函数表初始化后不再修改，比虚函数方案的全局悬空对象指针更局部；但每层仍有间接调用和递归栈，时间与空间都是O(n)和O(n)栈。
 
 
-## 方法四：模板特化在编译期终止
+## 方法四：<Term term="模板特化">模板特化</Term>在编译期终止
 
 前三种方案的n可在运行时传入。第四种把n作为模板非类型参数，主模板用较小参数的N加当前n；参数1与0分别提供。
 
@@ -280,6 +310,36 @@ void testRuntimeSolutions() {
 测试预言机允许使用乘除，因为禁令只约束待测实现；静态扫描还应单独检查四个解法体内没有被禁关键字和条件运算符，数值断言本身无法证明语法约束成立。
 
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** 四种方法共同的递推式是什么？控制流分别由什么承载？
+
+<Answer>
+
+共同递推是 f(n)=f(n-1)+n。构造函数用"n 次构造的副作用"累计；虚函数用基类/派生类分派区分终止与递推；函数指针表用索引选择终止或递推函数；模板特化在编译期展开。
+
+</Answer>
+
+**问题 2：** 构造函数方案中，静态成员为什么能累计所有元素的构造？
+
+<Answer>
+
+`new A[n]` 触发 n 次构造函数调用，每次把当前计数加一并累加；静态成员属于类而非实例，跨所有对象共享，最终返回 1+2+…+n。
+
+</Answer>
+
+**问题 3：** 虚函数方案如何避免无限递归？
+
+<Answer>
+
+基类 `Sum` 的虚函数在 n=0 时返回 0（终止），派生类 `SumDerived` 覆盖为 n+f(n-1)（递推）。用基类指针调用时，n=0 命中终止分支，停止递归。
+
+</Answer>
+
+</Exercises>
+
 ## 本章回顾
 
 1. 求1+2到n的普通公式被题目禁用，只能作为测试预言机。
@@ -295,4 +355,14 @@ void testRuntimeSolutions() {
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="构造函数副作用">利用"每个对象构造时执行一次"的特性累计状态，是本题核心替代手段。</GlossaryItem>
+  <GlossaryItem term="虚函数">C++ 运行时多态机制，派生类覆盖基类实现，用于区分终止与递推分支。</GlossaryItem>
+  <GlossaryItem term="函数指针表">用数组下标选择函数指针，替代条件判断完成分支。</GlossaryItem>
+  <GlossaryItem term="模板特化">编译期为特定模板参数生成专门实现，递归在编译期展开。</GlossaryItem>
+</Glossary>
 
+<Attribution
+  adaptedFrom="何海涛《剑指 Offer——名企面试官精讲典型编程题（第2版）》"
+  adaptedUrl="https://cbjj.phei.com.cn/module/goods/wssd_content_comment.jsp?bookid=49304"
+/>
