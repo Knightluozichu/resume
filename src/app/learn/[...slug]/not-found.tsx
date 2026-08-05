@@ -10,9 +10,11 @@ import { getAllChapters } from "@/lib/content";
 export default async function LearnNotFound({
   params,
 }: {
-  params: Promise<{ slug: string[] }>;
+  params?: Promise<{ slug: string[] }>;
 }) {
-  const { slug } = await params;
+  // not-found 组件可能在无动态路由上下文时被全局调用（如顶层 404 兜底），
+  // params 可能为 undefined——此时退化为通用提示，不依赖 slug。
+  const slug = (await params?.catch(() => undefined))?.slug ?? [];
   const bookSlug = slug?.[0];
   const chapters = getAllChapters();
   const bookChapters = chapters
