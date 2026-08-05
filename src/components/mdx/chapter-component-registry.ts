@@ -10685,7 +10685,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-11-bytecode");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppBytecodeLab: module0.GppBytecodeLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/17-chapter-12-subclass-sandbox/gpp-chapter-12-subclass-sandbox":
@@ -10693,7 +10693,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-12-subclass-sandbox");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppSubclassSandboxLab: module0.GppSubclassSandboxLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/18-chapter-13-type-object/gpp-chapter-13-type-object":
@@ -10701,7 +10701,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-13-type-object");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppTypeObjectLab: module0.GppTypeObjectLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/20-chapter-14-component/gpp-chapter-14-component":
@@ -10717,7 +10717,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-15-event-queue");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppEventQueueLab: module0.GppEventQueueLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/22-chapter-16-service-locator/gpp-chapter-16-service-locator":
@@ -10725,7 +10725,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-16-service-locator");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppServiceLocatorLab: module0.GppServiceLocatorLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/24-chapter-17-data-locality/gpp-chapter-17-data-locality":

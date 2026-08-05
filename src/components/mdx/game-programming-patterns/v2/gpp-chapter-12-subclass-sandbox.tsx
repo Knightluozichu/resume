@@ -1,3 +1,3 @@
 "use client";
 
-export { GppPatternLab } from "../gpp-pattern-lab";
+export { GppSubclassSandboxLab } from "../gpp-subclass-sandbox-lab";

@@ -1,3 +1,3 @@
 "use client";
 
-export { GppPatternLab } from "../gpp-pattern-lab";
+export { GppEventQueueLab } from "../gpp-event-queue-lab";
