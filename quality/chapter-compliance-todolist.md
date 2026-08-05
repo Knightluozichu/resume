@@ -51,7 +51,7 @@
     - 路径：`content/coding-interviews/linked-lists/entry-node-of-loop.mdx`
 - [x] ✅ **linked-lists/reverse-list** — 已修复（2026-08-05，score 47→92，passed）
     - 路径：`content/coding-interviews/linked-lists/reverse-list.mdx`
-- [ ] 🔴 P1 **stacks-queues/stream-median** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+- [x] ✅ **stacks-queues/stream-median** — 已修复（2026-08-05，score 47→94，passed）
     - 路径：`content/coding-interviews/stacks-queues/stream-median.mdx`
 - [ ] 🔴 P1 **strings/left-rotate-string** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
     - 路径：`content/coding-interviews/strings/left-rotate-string.mdx`
