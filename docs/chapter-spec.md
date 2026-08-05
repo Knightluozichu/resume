@@ -198,3 +198,102 @@
 2. 逐节对照上述约束打 pass / fail，打回时注明节号与违反条款
 3. 全 pass → 批准 `draft: false`
 4. 同一约束被打回 3 次以上 → 说明约束不合理或缺工具，修订本规范而非硬扛
+
+---
+
+# 第二部分：全库章节规范（v2 门禁版）
+
+> 本节是 **全库 225 本书 4496 章的机器可检规范**，由 `scripts/audit-content-quality-v2.mjs` 执行。
+> 可视化组件的开发细节见 `.claude/skills/remuse-chapter-diagram/SKILL.md`；本文档只收录**门禁判定标准**。
+> 发布门禁：`scripts/mark-book-published.mjs` 要求全书每章 `hardBlockers=[]` 且 `dimensionFailures=[]` 且 `score≥90` 且 `visualResult.pass`。
+
+## 十一、硬阻断（hardBlockers，任一命中即不可发布）
+
+| 阻断码 | 判定 | 说明 |
+|---|---|---|
+| `mdx-ast-parse-error` | MDX 解析失败 | 裸 `<`、未闭合 JSX、acorn 解析错误等 |
+| `objectives-block-count` | `<Objectives>` ≠ 恰 1 个 | 学习目标块必须存在且唯一 |
+| `attribution-block-count` | `<Attribution>` ≠ 恰 1 个 | 出处声明必须存在且唯一 |
+| `cross-chapter-template-copy` | 跨章重复句 ≥3 处 | 与全库其他章节指纹相同的句子 |
+| `cross-book-template-copy` | 跨书重复句 ≥3 处 | 多书共用的模板句 |
+| `within-chapter-template-copy` | 章内重复句 ≥10 处 | 同章内逐字重复（如旧模板“因果解释从…开始”） |
+| `japanese-language-residue` | 日文假名 ≥20 字符 | 未翻译残留 |
+| `commented-out-chapter-content` | 隐藏标题数 >0 | 被注释掉的内容（`hiddenHeadingCount`） |
+| `quality-v2-unreviewed` | `qualityVersion ≠ 2` | 未升级到 v2 结构 |
+| `practice-mode-missing` | v2 且无 `practiceMode` | 缺实践模式声明 |
+| `source-mode-missing` | v2 且无 `sourceMode` | 缺来源模式声明 |
+| `license-or-source-claim-mismatch` | 授权与来源声明矛盾 | |
+| `official-unit-unmapped` | chapter 角色且无官方单元映射 | 未对齐原书目录 |
+| `visual-evidence-missing` | 无视觉巡检结果或 contentHash 不匹配 | 必须有截图/巡检证据 |
+| `visual-runtime-failed` | 视觉巡检运行失败 | |
+| `generic-official-course-lab` | 使用通用 `OfficialCourseLab` 模板 | 禁止通用模板（见 §十三） |
+| `synthetic-visual-score` | 组件含合成评分引擎 | 禁止假评分 |
+| `generic-shared-visual-shell` | 共享通用可视化外壳 | 每章必须专属可视化 |
+| `generic-title-substitution-visual` | 仅替换标题的假定制 | 必须真正换视觉结构 |
+| `fragmented-term-sequence` | `</Term>` 后紧跟标点再接 `<Term>` | 术语列表被标点割裂 |
+
+## 十二、维度地板（dimensionFailures，任一低于地板即不可发布）
+
+| 维度 | 满分 | 地板 | 判定依据 |
+|---|---|---|---|
+| source | 15 | 12 | 来源访问性（full-text/outline）、事实来源链接 |
+| knowledge | 20 | 16 | 正文字数、标题数、术语数、解释覆盖率 |
+| pedagogy | 15 | 12 | 目标条数、直觉引入、误区数(≥2)、小结、术语核对、Objectives+Attribution |
+| visual | 20 | 16 | 章节专属组件、可视化数量、非通用模板、巡检通过、步骤可视化 |
+| practice | 10 | 8 | 练习数、答案数、交互组件、预测引导 |
+| ux | 10 | 8 | 视觉巡检 UX 评分 |
+| engineering | 10 | 8 | 无解析错误、结构完整、来源声明 |
+
+总分 ≥90 且各维度 ≥ 地板 → `passed`。
+
+## 十三、可视化真图标准（v2 强制）
+
+### 13.1 每章专属，禁止通用模板
+- 每章必须有自己的可视化组件（`<RdiXxxLab>`/`<GppXxxLab>` 等专属 Lab），**禁止**多章共用一个参数化模板（如 `OfficialCourseLab`、`GppPatternLab` 配置化）。
+- 判定：`generic-shared-visual-shell` / `generic-title-substitution-visual` / `generic-official-course-lab` 任一命中即打回。
+
+### 13.2 SVG 铁律
+- **viewBox ≥ 330**（宽高任一维度），保证缩放一致性。
+- **fontSize ≥ 11**：所有 SVG 文本标签 ≥11px，禁止 8/10px 小字（`svg-text-too-small` 巡检项）。
+- 颜色全部走 DESIGN token（CSS 变量），禁止裸 hex 散落（`--accent`/`--text-primary` 等）。
+- 单 accent 系统：每图 1 个主 accent + 中性底；成功/警示色只在关键时刻出现。
+- **无 emoji 图标**：状态用几何标记（▷◇●）或图标库，禁用 ⌨️⚙️👾 等 emoji 当图标。
+
+### 13.3 教学动画标准（useTeachingTimeline）
+- 教学图必须基于 `useTeachingTimeline` + `TimelineControls`，支持 **播放/暂停/单步/拖进度**。
+- **label 时序铁律**：`tl.label(name, t)` 必须打在**该步动画的起始时刻**（步骤 k 的动画在 `[(k-1)T, kT)`，label 打在 `(k-1)T`）——否则字幕落后动画一步、最后一步不可达。
+- 初始状态**确定性**：禁止 `Math.random()`/`Date.now()` 等非确定函数（SSR hydration 失败）。
+- 每图必须含 `aria-label` 描述完整内容与交互。
+
+### 13.4 交互要求
+- 必须有用户可控交互（播放/步进/开关/输入），禁止纯静态 SVG。
+- 复杂状态转换必须有“故障注入/误区开关”或步骤推进。
+
+## 十四、内容对齐原书规则（v2 强制）
+
+### 14.1 结构完整性（机器可检）
+- `<Objectives>` 恰 1 个（2–5 条，可检验动词开头）。
+- `<Attribution>` 恰 1 个（章末，含原书信息）。
+- `<Term>` 术语高亮 + `<Glossary>` 词条**一一对应**（高亮过必进词条，漏一个 = 打回）。
+- `<Callout type="trap">` 误区 ≥2 个（每个章节）。
+- 正文含“猜一猜/先预测/动手试/试一试/观察…变化”预测引导。
+- `<Exercises>` 练习块含 `<Answer>`（每练习一个答案）。
+
+### 14.2 术语与占位符清理
+- **禁止 `、、、` 占位符残留**（旧模板的未填充术语占位）。
+- 禁止“因果解释从…开始 / 验证只改变一个条件”等模板句式逐字重复（章内 ≥10 处即打回）。
+
+### 14.3 对齐原书
+- `officialUnitId` 必须映射到原书目录单元（`official-unit-unmapped` 打回）。
+- 术语、概念、示例须与原书一致（人工 review 维度），禁止臆造章节或错误映射。
+
+## 十五、验收与门禁流程
+
+1. **audit**：`pnpm quality:audit -- --book <slug> --update-ledger` → 每章 `hardBlockers=[]`、`dimensionFailures=[]`、`score≥90`。
+2. **visual**：`pnpm quality:visual -- --book <slug>` → 每章巡检 PASS（含 fontSize/viewBox/渲染）。
+3. **tsc**：`npx tsc --noEmit` → 0 error。
+4. **发布**：`node scripts/mark-book-published.mjs --check --book <slug>` → 通过后 `./deploy.sh --book <slug>`。
+5. **全站内链**：`node scripts/audit-internal-links.mjs` → 0 失效链接。
+
+> 全库扫描：`pnpm quality:audit -- --update-ledger`（不带 --book）生成全库 ledger，
+> 由 `quality/content-fix-backlog.md` 跟踪每本书的待修复章节。

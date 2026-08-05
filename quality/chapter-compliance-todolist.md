@@ -1,0 +1,6510 @@
+# 全库章节规范符合性待办清单（TODOLIST）
+
+> 生成时间：2026-08-05
+> 规范依据：`docs/chapter-spec.md` 第二部分（v2 门禁版）+ `.claude/skills/remuse-chapter-diagram/SKILL.md`
+> 数据来源：`pnpm quality:audit -- --update-ledger` 全库 225 本书 4496 章
+
+## 总览
+
+| 状态 | 章节数 | 占比 |
+|---|---|---|
+| ✅ 已通过（passed/published） | 1462 | 32.5% |
+| ⚠️ 待发布（queued） | 401 | 8.9% |
+| ❌ 不合规（failed） | 2633 | 58.6% |
+
+**优先级说明**：
+- 🔴 P1 = 有硬阻断（hardBlockers，无法过门禁）
+- 🟠 P2 = 仅维度分数不足（无硬阻断但 score<90 或维度<地板）
+- 🟡 P3 = 已通过但未发布（queued）
+
+---
+
+## coding-interviews（81 章 · ❌81 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-interview-process/interview-process** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/coding-interviews/00-interview-process/interview-process.mdx`
+- [ ] 🔴 P1 **01-basics/assignment-operator** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/coding-interviews/01-basics/assignment-operator.mdx`
+- [ ] 🔴 P1 **01-basics/singleton** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/coding-interviews/01-basics/singleton.mdx`
+- [ ] 🔴 P1 **strings/string-to-int** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/coding-interviews/strings/string-to-int.mdx`
+- [ ] 🔴 P1 **linked-lists/kth-node-from-end** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/coding-interviews/linked-lists/kth-node-from-end.mdx`
+- [ ] 🔴 P1 **arrays/continous-cards** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/coding-interviews/arrays/continous-cards.mdx`
+- [ ] 🔴 P1 **math/number-of-1-bits** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/coding-interviews/math/number-of-1-bits.mdx`
+- [ ] 🔴 P1 **math/ugly-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/coding-interviews/math/ugly-number.mdx`
+- [ ] 🔴 P1 **arrays/accumulate** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/arrays/accumulate.mdx`
+- [ ] 🔴 P1 **arrays/continuous-sequence-with-sum** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/arrays/continuous-sequence-with-sum.mdx`
+- [ ] 🔴 P1 **arrays/k-least-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/arrays/k-least-numbers.mdx`
+- [ ] 🔴 P1 **arrays/more-than-half-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/arrays/more-than-half-number.mdx`
+- [ ] 🔴 P1 **arrays/spiral-matrix** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/arrays/spiral-matrix.mdx`
+- [ ] 🔴 P1 **linked-lists/entry-node-of-loop** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/linked-lists/entry-node-of-loop.mdx`
+- [ ] 🔴 P1 **linked-lists/reverse-list** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/linked-lists/reverse-list.mdx`
+- [ ] 🔴 P1 **stacks-queues/stream-median** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/stacks-queues/stream-median.mdx`
+- [ ] 🔴 P1 **strings/left-rotate-string** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/strings/left-rotate-string.mdx`
+- [ ] 🔴 P1 **strings/longest-substring-without-dup** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/strings/longest-substring-without-dup.mdx`
+- [ ] 🔴 P1 **strings/numeric-strings** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/strings/numeric-strings.mdx`
+- [ ] 🔴 P1 **strings/sort-array-for-min-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/strings/sort-array-for-min-number.mdx`
+- [ ] 🔴 P1 **trees/mirror-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/trees/mirror-binary-tree.mdx`
+- [ ] 🔴 P1 **trees/subtree-structure** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/trees/subtree-structure.mdx`
+- [ ] 🔴 P1 **trees/tree-depth** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/coding-interviews/trees/tree-depth.mdx`
+- [ ] 🔴 P1 **01-basics/duplicate-in-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/01-basics/duplicate-in-array.mdx`
+- [ ] 🔴 P1 **arrays/matrix-path** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/arrays/matrix-path.mdx`
+- [ ] 🔴 P1 **arrays/reorder-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/arrays/reorder-array.mdx`
+- [ ] 🔴 P1 **linked-lists/copy-complex-list** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/linked-lists/copy-complex-list.mdx`
+- [ ] 🔴 P1 **linked-lists/delete-node** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/linked-lists/delete-node.mdx`
+- [ ] 🔴 P1 **linked-lists/merge-sorted-lists** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/linked-lists/merge-sorted-lists.mdx`
+- [ ] 🔴 P1 **math/last-number-in-circle** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/math/last-number-in-circle.mdx`
+- [ ] 🔴 P1 **math/power** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/math/power.mdx`
+- [ ] 🔴 P1 **recursion/fibonacci** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/recursion/fibonacci.mdx`
+- [ ] 🔴 P1 **stacks-queues/min-stack** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/stacks-queues/min-stack.mdx`
+- [ ] 🔴 P1 **strings/first-not-repeating-char** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/strings/first-not-repeating-char.mdx`
+- [ ] 🔴 P1 **strings/replace-spaces** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/strings/replace-spaces.mdx`
+- [ ] 🔴 P1 **strings/reverse-words-in-sentence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/strings/reverse-words-in-sentence.mdx`
+- [ ] 🔴 P1 **strings/string-permutation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/strings/string-permutation.mdx`
+- [ ] 🔴 P1 **trees/balanced-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/trees/balanced-binary-tree.mdx`
+- [ ] 🔴 P1 **trees/common-parent-in-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/trees/common-parent-in-tree.mdx`
+- [ ] 🔴 P1 **trees/kth-node-in-bst** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/trees/kth-node-in-bst.mdx`
+- [ ] 🔴 P1 **trees/print-trees-in-lines** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/trees/print-trees-in-lines.mdx`
+- [ ] 🔴 P1 **trees/print-trees-in-zigzag** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/coding-interviews/trees/print-trees-in-zigzag.mdx`
+- [ ] 🔴 P1 **arrays/inverse-pairs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/arrays/inverse-pairs.mdx`
+- [ ] 🔴 P1 **arrays/maximal-profit** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/arrays/maximal-profit.mdx`
+- [ ] 🔴 P1 **arrays/two-numbers-with-sum** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/arrays/two-numbers-with-sum.mdx`
+- [ ] 🔴 P1 **linked-lists/first-common-nodes-in-lists** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/linked-lists/first-common-nodes-in-lists.mdx`
+- [ ] 🔴 P1 **math/cutting-rope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/math/cutting-rope.mdx`
+- [ ] 🔴 P1 **math/number-of-1** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/math/number-of-1.mdx`
+- [ ] 🔴 P1 **recursion/print-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/recursion/print-numbers.mdx`
+- [ ] 🔴 P1 **stacks-queues/stack-push-pop-order** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/stacks-queues/stack-push-pop-order.mdx`
+- [ ] 🔴 P1 **strings/first-character-in-stream** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/strings/first-character-in-stream.mdx`
+- [ ] 🔴 P1 **trees/squence-of-bst** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/trees/squence-of-bst.mdx`
+- [ ] 🔴 P1 **trees/symmetric-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/coding-interviews/trees/symmetric-binary-tree.mdx`
+- [ ] 🔴 P1 **arrays/greatest-sum-of-subarrays** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/arrays/greatest-sum-of-subarrays.mdx`
+- [ ] 🔴 P1 **arrays/min-rotated-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/arrays/min-rotated-array.mdx`
+- [ ] 🔴 P1 **arrays/number-of-k** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/arrays/number-of-k.mdx`
+- [ ] 🔴 P1 **linked-lists/delete-duplicated-node** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/linked-lists/delete-duplicated-node.mdx`
+- [ ] 🔴 P1 **linked-lists/print-list-reverse** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/linked-lists/print-list-reverse.mdx`
+- [ ] 🔴 P1 **math/dices-probability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/math/dices-probability.mdx`
+- [ ] 🔴 P1 **stacks-queues/max-in-sliding-window** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/stacks-queues/max-in-sliding-window.mdx`
+- [ ] 🔴 P1 **stacks-queues/queue-with-two-stacks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/stacks-queues/queue-with-two-stacks.mdx`
+- [ ] 🔴 P1 **strings/regular-expressions-matching** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/strings/regular-expressions-matching.mdx`
+- [ ] 🔴 P1 **trees/convert-binary-search-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/trees/convert-binary-search-tree.mdx`
+- [ ] 🔴 P1 **trees/path-in-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/trees/path-in-tree.mdx`
+- [ ] 🔴 P1 **trees/print-tree-from-top-to-bottom** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/trees/print-tree-from-top-to-bottom.mdx`
+- [ ] 🔴 P1 **trees/serialize-binary-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/coding-interviews/trees/serialize-binary-trees.mdx`
+- [ ] 🔴 P1 **01-basics/duplicate-in-array-no-edit** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/coding-interviews/01-basics/duplicate-in-array-no-edit.mdx`
+- [ ] 🔴 P1 **trees/next-node-in-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/coding-interviews/trees/next-node-in-binary-tree.mdx`
+- [ ] 🔴 P1 **trees/rebuild-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/coding-interviews/trees/rebuild-binary-tree.mdx`
+- [ ] 🔴 P1 **arrays/constuct-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/coding-interviews/arrays/constuct-array.mdx`
+- [ ] 🔴 P1 **arrays/find-in-matrix** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/coding-interviews/arrays/find-in-matrix.mdx`
+- [ ] 🔴 P1 **arrays/integer-identical-to-index** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/coding-interviews/arrays/integer-identical-to-index.mdx`
+- [ ] 🔴 P1 **arrays/max-value-of-gifts** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/arrays/max-value-of-gifts.mdx`
+- [ ] 🔴 P1 **arrays/missing-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/arrays/missing-number.mdx`
+- [ ] 🔴 P1 **arrays/number-appearing-once** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/arrays/number-appearing-once.mdx`
+- [ ] 🔴 P1 **arrays/numbers-appear-once** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/arrays/numbers-appear-once.mdx`
+- [ ] 🔴 P1 **linked-lists/add-two-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/linked-lists/add-two-numbers.mdx`
+- [ ] 🔴 P1 **math/digits-in-sequence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/math/digits-in-sequence.mdx`
+- [ ] 🔴 P1 **stacks-queues/queue-with-max** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/stacks-queues/queue-with-max.mdx`
+- [ ] 🔴 P1 **strings/translate-numbers-to-strings** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/coding-interviews/strings/translate-numbers-to-strings.mdx`
+- [ ] 🔴 P1 **recursion/robot-moving-count** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/coding-interviews/recursion/robot-moving-count.mdx`
+
+## poeaa-enterprise-patterns（78 章 · ❌78 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/poeaa24-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 60）
+    - 路径：`content/poeaa-enterprise-patterns/00-map/poeaa24-official-learning-map.mdx`
+- [ ] 🔴 P1 **03-pattern-list/poeaa24-pattern-list** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/poeaa-enterprise-patterns/03-pattern-list/poeaa24-pattern-list.mdx`
+- [ ] 🔴 P1 **27-pattern-10-identity-map/poeaa24-pattern-10-identity-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/poeaa-enterprise-patterns/27-pattern-10-identity-map/poeaa24-pattern-10-identity-map.mdx`
+- [ ] 🔴 P1 **06-chapter-01-layering/poeaa24-chapter-01-layering** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/poeaa-enterprise-patterns/06-chapter-01-layering/poeaa24-chapter-01-layering.mdx`
+- [ ] 🔴 P1 **13-chapter-08-putting-together/poeaa24-chapter-08-putting-together** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/13-chapter-08-putting-together/poeaa24-chapter-08-putting-together.mdx`
+- [ ] 🔴 P1 **15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns.mdx`
+- [ ] 🔴 P1 **16-pattern-01-transaction-script/poeaa24-pattern-01-transaction-script** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/16-pattern-01-transaction-script/poeaa24-pattern-01-transaction-script.mdx`
+- [ ] 🔴 P1 **17-pattern-02-domain-model/poeaa24-pattern-02-domain-model** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/17-pattern-02-domain-model/poeaa24-pattern-02-domain-model.mdx`
+- [ ] 🔴 P1 **19-pattern-04-service-layer/poeaa24-pattern-04-service-layer** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer.mdx`
+- [ ] 🔴 P1 **21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway.mdx`
+- [ ] 🔴 P1 **22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway.mdx`
+- [ ] 🔴 P1 **23-pattern-07-active-record/poeaa24-pattern-07-active-record** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/23-pattern-07-active-record/poeaa24-pattern-07-active-record.mdx`
+- [ ] 🔴 P1 **24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper.mdx`
+- [ ] 🔴 P1 **26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work.mdx`
+- [ ] 🔴 P1 **30-pattern-12-identity-field/poeaa24-pattern-12-identity-field** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/30-pattern-12-identity-field/poeaa24-pattern-12-identity-field.mdx`
+- [ ] 🔴 P1 **31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping.mdx`
+- [ ] 🔴 P1 **32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping.mdx`
+- [ ] 🔴 P1 **34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value.mdx`
+- [ ] 🔴 P1 **35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob.mdx`
+- [ ] 🔴 P1 **36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance.mdx`
+- [ ] 🔴 P1 **37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance.mdx`
+- [ ] 🔴 P1 **38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance.mdx`
+- [ ] 🔴 P1 **39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers.mdx`
+- [ ] 🔴 P1 **41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping.mdx`
+- [ ] 🔴 P1 **42-pattern-23-query-object/poeaa24-pattern-23-query-object** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/42-pattern-23-query-object/poeaa24-pattern-23-query-object.mdx`
+- [ ] 🔴 P1 **46-pattern-26-page-controller/poeaa24-pattern-26-page-controller** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/46-pattern-26-page-controller/poeaa24-pattern-26-page-controller.mdx`
+- [ ] 🔴 P1 **47-pattern-27-front-controller/poeaa24-pattern-27-front-controller** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/47-pattern-27-front-controller/poeaa24-pattern-27-front-controller.mdx`
+- [ ] 🔴 P1 **48-pattern-28-template-view/poeaa24-pattern-28-template-view** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/48-pattern-28-template-view/poeaa24-pattern-28-template-view.mdx`
+- [ ] 🔴 P1 **49-pattern-29-transform-view/poeaa24-pattern-29-transform-view** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/49-pattern-29-transform-view/poeaa24-pattern-29-transform-view.mdx`
+- [ ] 🔴 P1 **50-pattern-30-two-step-view/poeaa24-pattern-30-two-step-view** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/50-pattern-30-two-step-view/poeaa24-pattern-30-two-step-view.mdx`
+- [ ] 🔴 P1 **51-pattern-31-application-controller/poeaa24-pattern-31-application-controller** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/51-pattern-31-application-controller/poeaa24-pattern-31-application-controller.mdx`
+- [ ] 🔴 P1 **53-pattern-32-remote-facade/poeaa24-pattern-32-remote-facade** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/53-pattern-32-remote-facade/poeaa24-pattern-32-remote-facade.mdx`
+- [ ] 🔴 P1 **54-pattern-33-data-transfer-object/poeaa24-pattern-33-data-transfer-object** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/54-pattern-33-data-transfer-object/poeaa24-pattern-33-data-transfer-object.mdx`
+- [ ] 🔴 P1 **56-pattern-34-optimistic-offline-lock/poeaa24-pattern-34-optimistic-offline-lock** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/56-pattern-34-optimistic-offline-lock/poeaa24-pattern-34-optimistic-offline-lock.mdx`
+- [ ] 🔴 P1 **57-pattern-35-pessimistic-offline-lock/poeaa24-pattern-35-pessimistic-offline-lock** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/57-pattern-35-pessimistic-offline-lock/poeaa24-pattern-35-pessimistic-offline-lock.mdx`
+- [ ] 🔴 P1 **58-pattern-36-coarse-grained-lock/poeaa24-pattern-36-coarse-grained-lock** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/58-pattern-36-coarse-grained-lock/poeaa24-pattern-36-coarse-grained-lock.mdx`
+- [ ] 🔴 P1 **59-pattern-37-implicit-lock/poeaa24-pattern-37-implicit-lock** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/59-pattern-37-implicit-lock/poeaa24-pattern-37-implicit-lock.mdx`
+- [ ] 🔴 P1 **61-pattern-38-client-session-state/poeaa24-pattern-38-client-session-state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/61-pattern-38-client-session-state/poeaa24-pattern-38-client-session-state.mdx`
+- [ ] 🔴 P1 **62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state.mdx`
+- [ ] 🔴 P1 **63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state.mdx`
+- [ ] 🔴 P1 **65-pattern-41-gateway/poeaa24-pattern-41-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/65-pattern-41-gateway/poeaa24-pattern-41-gateway.mdx`
+- [ ] 🔴 P1 **66-pattern-42-mapper/poeaa24-pattern-42-mapper** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper.mdx`
+- [ ] 🔴 P1 **67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype.mdx`
+- [ ] 🔴 P1 **68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface.mdx`
+- [ ] 🔴 P1 **69-pattern-45-registry/poeaa24-pattern-45-registry** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/69-pattern-45-registry/poeaa24-pattern-45-registry.mdx`
+- [ ] 🔴 P1 **72-pattern-48-special-case/poeaa24-pattern-48-special-case** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/72-pattern-48-special-case/poeaa24-pattern-48-special-case.mdx`
+- [ ] 🔴 P1 **73-pattern-49-plugin/poeaa24-pattern-49-plugin** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/73-pattern-49-plugin/poeaa24-pattern-49-plugin.mdx`
+- [ ] 🔴 P1 **74-pattern-50-service-stub/poeaa24-pattern-50-service-stub** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/74-pattern-50-service-stub/poeaa24-pattern-50-service-stub.mdx`
+- [ ] 🔴 P1 **75-pattern-51-record-set/poeaa24-pattern-51-record-set** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/poeaa-enterprise-patterns/75-pattern-51-record-set/poeaa24-pattern-51-record-set.mdx`
+- [ ] 🔴 P1 **33-pattern-15-dependent-mapping/poeaa24-pattern-15-dependent-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/poeaa-enterprise-patterns/33-pattern-15-dependent-mapping/poeaa24-pattern-15-dependent-mapping.mdx`
+- [ ] 🔴 P1 **43-pattern-24-repository/poeaa24-pattern-24-repository** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/poeaa-enterprise-patterns/43-pattern-24-repository/poeaa24-pattern-24-repository.mdx`
+- [ ] 🔴 P1 **45-pattern-25-model-view-controller/poeaa24-pattern-25-model-view-controller** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/poeaa-enterprise-patterns/45-pattern-25-model-view-controller/poeaa24-pattern-25-model-view-controller.mdx`
+- [ ] 🔴 P1 **77-review/poeaa24-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/poeaa-enterprise-patterns/77-review/poeaa24-official-final-review.mdx`
+- [ ] 🔴 P1 **08-chapter-03-relational-mapping/poeaa24-chapter-03-relational-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/poeaa-enterprise-patterns/08-chapter-03-relational-mapping/poeaa24-chapter-03-relational-mapping.mdx`
+- [ ] 🔴 P1 **10-chapter-05-concurrency/poeaa24-chapter-05-concurrency** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/poeaa-enterprise-patterns/10-chapter-05-concurrency/poeaa24-chapter-05-concurrency.mdx`
+- [ ] 🔴 P1 **12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/poeaa-enterprise-patterns/12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies.mdx`
+- [ ] 🔴 P1 **11-chapter-06-session-state/poeaa24-chapter-06-session-state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/poeaa-enterprise-patterns/11-chapter-06-session-state/poeaa24-chapter-06-session-state.mdx`
+- [ ] 🔴 P1 **07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic.mdx`
+- [ ] 🔴 P1 **09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation.mdx`
+- [ ] 🔴 P1 **20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns.mdx`
+- [ ] 🔴 P1 **25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior.mdx`
+- [ ] 🔴 P1 **29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure.mdx`
+- [ ] 🔴 P1 **40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata.mdx`
+- [ ] 🔴 P1 **44-chapter-14-web-presentation-patterns/poeaa24-chapter-14-web-presentation-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/44-chapter-14-web-presentation-patterns/poeaa24-chapter-14-web-presentation-patterns.mdx`
+- [ ] 🔴 P1 **52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns.mdx`
+- [ ] 🔴 P1 **55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns.mdx`
+- [ ] 🔴 P1 **64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns.mdx`
+- [ ] 🔴 P1 **01-translator-preface/poeaa24-translator-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/01-translator-preface/poeaa24-translator-preface.mdx`
+- [ ] 🔴 P1 **02-preface/poeaa24-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/02-preface/poeaa24-preface.mdx`
+- [ ] 🔴 P1 **04-introduction/poeaa24-introduction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/04-introduction/poeaa24-introduction.mdx`
+- [ ] 🔴 P1 **05-part-01-narratives/poeaa24-part-01-narratives** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/05-part-01-narratives/poeaa24-part-01-narratives.mdx`
+- [ ] 🔴 P1 **14-part-02-patterns/poeaa24-part-02-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/14-part-02-patterns/poeaa24-part-02-patterns.mdx`
+- [ ] 🔴 P1 **18-pattern-03-table-module/poeaa24-pattern-03-table-module** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/18-pattern-03-table-module/poeaa24-pattern-03-table-module.mdx`
+- [ ] 🔴 P1 **28-pattern-11-lazy-load/poeaa24-pattern-11-lazy-load** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/28-pattern-11-lazy-load/poeaa24-pattern-11-lazy-load.mdx`
+- [ ] 🔴 P1 **60-chapter-17-session-state-patterns/poeaa24-chapter-17-session-state-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/60-chapter-17-session-state-patterns/poeaa24-chapter-17-session-state-patterns.mdx`
+- [ ] 🔴 P1 **70-pattern-46-value-object/poeaa24-pattern-46-value-object** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/70-pattern-46-value-object/poeaa24-pattern-46-value-object.mdx`
+- [ ] 🔴 P1 **71-pattern-47-money/poeaa24-pattern-47-money** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/71-pattern-47-money/poeaa24-pattern-47-money.mdx`
+- [ ] 🔴 P1 **76-references/poeaa24-references** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/poeaa-enterprise-patterns/76-references/poeaa24-references.mdx`
+
+## pragmatic-programmer（71 章 · ❌71 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/tpp20-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/pragmatic-programmer/00-map/tpp20-official-learning-map.mdx`
+- [ ] 🔴 P1 **70-review/tpp20-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/pragmatic-programmer/70-review/tpp20-official-final-review.mdx`
+- [ ] 🔴 P1 **55-chapter-08-before-project/tpp20-chapter-08-before-project** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project.mdx`
+- [ ] 🔴 P1 **56-topic-45-requirements-pit/tpp20-topic-45-requirements-pit** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/pragmatic-programmer/56-topic-45-requirements-pit/tpp20-topic-45-requirements-pit.mdx`
+- [ ] 🔴 P1 **01-foreword/tpp20-foreword** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/01-foreword/tpp20-foreword.mdx`
+- [ ] 🔴 P1 **02-second-edition-preface/tpp20-second-edition-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/02-second-edition-preface/tpp20-second-edition-preface.mdx`
+- [ ] 🔴 P1 **03-first-edition-preface/tpp20-first-edition-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/03-first-edition-preface/tpp20-first-edition-preface.mdx`
+- [ ] 🔴 P1 **04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy.mdx`
+- [ ] 🔴 P1 **05-topic-01-your-life/tpp20-topic-01-your-life** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/05-topic-01-your-life/tpp20-topic-01-your-life.mdx`
+- [ ] 🔴 P1 **06-topic-02-cat-ate-source-code/tpp20-topic-02-cat-ate-source-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/06-topic-02-cat-ate-source-code/tpp20-topic-02-cat-ate-source-code.mdx`
+- [ ] 🔴 P1 **07-topic-03-software-entropy/tpp20-topic-03-software-entropy** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/07-topic-03-software-entropy/tpp20-topic-03-software-entropy.mdx`
+- [ ] 🔴 P1 **08-topic-04-stone-soup-boiled-frogs/tpp20-topic-04-stone-soup-boiled-frogs** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/08-topic-04-stone-soup-boiled-frogs/tpp20-topic-04-stone-soup-boiled-frogs.mdx`
+- [ ] 🔴 P1 **09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software.mdx`
+- [ ] 🔴 P1 **10-topic-06-knowledge-portfolio/tpp20-topic-06-knowledge-portfolio** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/10-topic-06-knowledge-portfolio/tpp20-topic-06-knowledge-portfolio.mdx`
+- [ ] 🔴 P1 **11-topic-07-communicate/tpp20-topic-07-communicate** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/11-topic-07-communicate/tpp20-topic-07-communicate.mdx`
+- [ ] 🔴 P1 **12-chapter-02-pragmatic-approach/tpp20-chapter-02-pragmatic-approach** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/12-chapter-02-pragmatic-approach/tpp20-chapter-02-pragmatic-approach.mdx`
+- [ ] 🔴 P1 **13-topic-08-essence-good-design/tpp20-topic-08-essence-good-design** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/13-topic-08-essence-good-design/tpp20-topic-08-essence-good-design.mdx`
+- [ ] 🔴 P1 **14-topic-09-dry-duplication/tpp20-topic-09-dry-duplication** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/14-topic-09-dry-duplication/tpp20-topic-09-dry-duplication.mdx`
+- [ ] 🔴 P1 **15-topic-10-orthogonality/tpp20-topic-10-orthogonality** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/15-topic-10-orthogonality/tpp20-topic-10-orthogonality.mdx`
+- [ ] 🔴 P1 **16-topic-11-reversibility/tpp20-topic-11-reversibility** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/16-topic-11-reversibility/tpp20-topic-11-reversibility.mdx`
+- [ ] 🔴 P1 **17-topic-12-tracer-bullets/tpp20-topic-12-tracer-bullets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/17-topic-12-tracer-bullets/tpp20-topic-12-tracer-bullets.mdx`
+- [ ] 🔴 P1 **18-topic-13-prototypes-post-it-notes/tpp20-topic-13-prototypes-post-it-notes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/18-topic-13-prototypes-post-it-notes/tpp20-topic-13-prototypes-post-it-notes.mdx`
+- [ ] 🔴 P1 **19-topic-14-domain-languages/tpp20-topic-14-domain-languages** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/19-topic-14-domain-languages/tpp20-topic-14-domain-languages.mdx`
+- [ ] 🔴 P1 **20-topic-15-estimating/tpp20-topic-15-estimating** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/20-topic-15-estimating/tpp20-topic-15-estimating.mdx`
+- [ ] 🔴 P1 **21-chapter-03-basic-tools/tpp20-chapter-03-basic-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/21-chapter-03-basic-tools/tpp20-chapter-03-basic-tools.mdx`
+- [ ] 🔴 P1 **22-topic-16-power-plain-text/tpp20-topic-16-power-plain-text** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/22-topic-16-power-plain-text/tpp20-topic-16-power-plain-text.mdx`
+- [ ] 🔴 P1 **23-topic-17-shell-games/tpp20-topic-17-shell-games** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/23-topic-17-shell-games/tpp20-topic-17-shell-games.mdx`
+- [ ] 🔴 P1 **24-topic-18-power-editing/tpp20-topic-18-power-editing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/24-topic-18-power-editing/tpp20-topic-18-power-editing.mdx`
+- [ ] 🔴 P1 **25-topic-19-version-control/tpp20-topic-19-version-control** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/25-topic-19-version-control/tpp20-topic-19-version-control.mdx`
+- [ ] 🔴 P1 **26-topic-20-debugging/tpp20-topic-20-debugging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/26-topic-20-debugging/tpp20-topic-20-debugging.mdx`
+- [ ] 🔴 P1 **27-topic-21-text-manipulation/tpp20-topic-21-text-manipulation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/27-topic-21-text-manipulation/tpp20-topic-21-text-manipulation.mdx`
+- [ ] 🔴 P1 **28-topic-22-engineering-daybooks/tpp20-topic-22-engineering-daybooks** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/28-topic-22-engineering-daybooks/tpp20-topic-22-engineering-daybooks.mdx`
+- [ ] 🔴 P1 **29-chapter-04-pragmatic-paranoia/tpp20-chapter-04-pragmatic-paranoia** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/29-chapter-04-pragmatic-paranoia/tpp20-chapter-04-pragmatic-paranoia.mdx`
+- [ ] 🔴 P1 **30-topic-23-design-by-contract/tpp20-topic-23-design-by-contract** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/30-topic-23-design-by-contract/tpp20-topic-23-design-by-contract.mdx`
+- [ ] 🔴 P1 **31-topic-24-dead-programs-tell-no-lies/tpp20-topic-24-dead-programs-tell-no-lies** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/31-topic-24-dead-programs-tell-no-lies/tpp20-topic-24-dead-programs-tell-no-lies.mdx`
+- [ ] 🔴 P1 **32-topic-25-assertive-programming/tpp20-topic-25-assertive-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/32-topic-25-assertive-programming/tpp20-topic-25-assertive-programming.mdx`
+- [ ] 🔴 P1 **33-topic-26-balance-resources/tpp20-topic-26-balance-resources** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/33-topic-26-balance-resources/tpp20-topic-26-balance-resources.mdx`
+- [ ] 🔴 P1 **34-topic-27-headlights/tpp20-topic-27-headlights** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/34-topic-27-headlights/tpp20-topic-27-headlights.mdx`
+- [ ] 🔴 P1 **35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break.mdx`
+- [ ] 🔴 P1 **36-topic-28-decoupling/tpp20-topic-28-decoupling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/36-topic-28-decoupling/tpp20-topic-28-decoupling.mdx`
+- [ ] 🔴 P1 **37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world.mdx`
+- [ ] 🔴 P1 **38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming.mdx`
+- [ ] 🔴 P1 **39-topic-31-inheritance-tax/tpp20-topic-31-inheritance-tax** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/39-topic-31-inheritance-tax/tpp20-topic-31-inheritance-tax.mdx`
+- [ ] 🔴 P1 **40-topic-32-configuration/tpp20-topic-32-configuration** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/40-topic-32-configuration/tpp20-topic-32-configuration.mdx`
+- [ ] 🔴 P1 **41-chapter-06-concurrency/tpp20-chapter-06-concurrency** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/41-chapter-06-concurrency/tpp20-chapter-06-concurrency.mdx`
+- [ ] 🔴 P1 **42-topic-33-breaking-temporal-coupling/tpp20-topic-33-breaking-temporal-coupling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/42-topic-33-breaking-temporal-coupling/tpp20-topic-33-breaking-temporal-coupling.mdx`
+- [ ] 🔴 P1 **43-topic-34-shared-state/tpp20-topic-34-shared-state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/43-topic-34-shared-state/tpp20-topic-34-shared-state.mdx`
+- [ ] 🔴 P1 **44-topic-35-actors-processes/tpp20-topic-35-actors-processes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/44-topic-35-actors-processes/tpp20-topic-35-actors-processes.mdx`
+- [ ] 🔴 P1 **45-topic-36-blackboards/tpp20-topic-36-blackboards** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/45-topic-36-blackboards/tpp20-topic-36-blackboards.mdx`
+- [ ] 🔴 P1 **46-chapter-07-while-coding/tpp20-chapter-07-while-coding** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/46-chapter-07-while-coding/tpp20-chapter-07-while-coding.mdx`
+- [ ] 🔴 P1 **47-topic-37-lizard-brain/tpp20-topic-37-lizard-brain** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/47-topic-37-lizard-brain/tpp20-topic-37-lizard-brain.mdx`
+- [ ] 🔴 P1 **48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence.mdx`
+- [ ] 🔴 P1 **49-topic-39-algorithm-speed/tpp20-topic-39-algorithm-speed** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/49-topic-39-algorithm-speed/tpp20-topic-39-algorithm-speed.mdx`
+- [ ] 🔴 P1 **50-topic-40-refactoring/tpp20-topic-40-refactoring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/50-topic-40-refactoring/tpp20-topic-40-refactoring.mdx`
+- [ ] 🔴 P1 **51-topic-41-test-to-code/tpp20-topic-41-test-to-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/51-topic-41-test-to-code/tpp20-topic-41-test-to-code.mdx`
+- [ ] 🔴 P1 **52-topic-42-property-based-testing/tpp20-topic-42-property-based-testing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/52-topic-42-property-based-testing/tpp20-topic-42-property-based-testing.mdx`
+- [ ] 🔴 P1 **53-topic-43-stay-safe/tpp20-topic-43-stay-safe** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/53-topic-43-stay-safe/tpp20-topic-43-stay-safe.mdx`
+- [ ] 🔴 P1 **54-topic-44-naming-things/tpp20-topic-44-naming-things** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/54-topic-44-naming-things/tpp20-topic-44-naming-things.mdx`
+- [ ] 🔴 P1 **57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles.mdx`
+- [ ] 🔴 P1 **58-topic-47-working-together/tpp20-topic-47-working-together** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/58-topic-47-working-together/tpp20-topic-47-working-together.mdx`
+- [ ] 🔴 P1 **59-topic-48-essence-agility/tpp20-topic-48-essence-agility** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/59-topic-48-essence-agility/tpp20-topic-48-essence-agility.mdx`
+- [ ] 🔴 P1 **60-chapter-09-pragmatic-projects/tpp20-chapter-09-pragmatic-projects** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/60-chapter-09-pragmatic-projects/tpp20-chapter-09-pragmatic-projects.mdx`
+- [ ] 🔴 P1 **61-topic-49-pragmatic-teams/tpp20-topic-49-pragmatic-teams** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/61-topic-49-pragmatic-teams/tpp20-topic-49-pragmatic-teams.mdx`
+- [ ] 🔴 P1 **62-topic-50-coconuts-dont-cut-it/tpp20-topic-50-coconuts-dont-cut-it** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/62-topic-50-coconuts-dont-cut-it/tpp20-topic-50-coconuts-dont-cut-it.mdx`
+- [ ] 🔴 P1 **63-topic-51-starter-kit/tpp20-topic-51-starter-kit** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/63-topic-51-starter-kit/tpp20-topic-51-starter-kit.mdx`
+- [ ] 🔴 P1 **64-topic-52-delight-users/tpp20-topic-52-delight-users** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/64-topic-52-delight-users/tpp20-topic-52-delight-users.mdx`
+- [ ] 🔴 P1 **65-topic-53-pride-prejudice/tpp20-topic-53-pride-prejudice** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/65-topic-53-pride-prejudice/tpp20-topic-53-pride-prejudice.mdx`
+- [ ] 🔴 P1 **66-postface/tpp20-postface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/66-postface/tpp20-postface.mdx`
+- [ ] 🔴 P1 **67-bibliography/tpp20-bibliography** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/67-bibliography/tpp20-bibliography.mdx`
+- [ ] 🔴 P1 **68-exercise-answers/tpp20-exercise-answers** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/68-exercise-answers/tpp20-exercise-answers.mdx`
+- [ ] 🔴 P1 **69-translator-postface/tpp20-translator-postface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/pragmatic-programmer/69-translator-postface/tpp20-translator-postface.mdx`
+
+## coder-revolution（62 章 · ❌62 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/crv18-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/coder-revolution/00-map/crv18-official-learning-map.mdx`
+- [ ] 🔴 P1 **61-review/crv18-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/coder-revolution/61-review/crv18-official-final-review.mdx`
+- [ ] 🔴 P1 **07-section-01-05/crv18-section-01-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/07-section-01-05/crv18-section-01-05.mdx`
+- [ ] 🔴 P1 **08-section-01-06/crv18-section-01-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/08-section-01-06/crv18-section-01-06.mdx`
+- [ ] 🔴 P1 **09-section-01-07/crv18-section-01-07** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/09-section-01-07/crv18-section-01-07.mdx`
+- [ ] 🔴 P1 **10-section-01-08/crv18-section-01-08** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/10-section-01-08/crv18-section-01-08.mdx`
+- [ ] 🔴 P1 **12-section-01-10/crv18-section-01-10** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/12-section-01-10/crv18-section-01-10.mdx`
+- [ ] 🔴 P1 **18-section-02-01/crv18-section-02-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/18-section-02-01/crv18-section-02-01.mdx`
+- [ ] 🔴 P1 **19-section-02-02/crv18-section-02-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/19-section-02-02/crv18-section-02-02.mdx`
+- [ ] 🔴 P1 **20-section-02-03/crv18-section-02-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/20-section-02-03/crv18-section-02-03.mdx`
+- [ ] 🔴 P1 **21-section-02-04/crv18-section-02-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/21-section-02-04/crv18-section-02-04.mdx`
+- [ ] 🔴 P1 **22-section-02-05/crv18-section-02-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/22-section-02-05/crv18-section-02-05.mdx`
+- [ ] 🔴 P1 **23-section-02-06/crv18-section-02-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/23-section-02-06/crv18-section-02-06.mdx`
+- [ ] 🔴 P1 **24-section-02-07/crv18-section-02-07** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/24-section-02-07/crv18-section-02-07.mdx`
+- [ ] 🔴 P1 **27-section-02-10/crv18-section-02-10** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/27-section-02-10/crv18-section-02-10.mdx`
+- [ ] 🔴 P1 **28-section-02-11/crv18-section-02-11** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/28-section-02-11/crv18-section-02-11.mdx`
+- [ ] 🔴 P1 **31-section-02-14/crv18-section-02-14** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/31-section-02-14/crv18-section-02-14.mdx`
+- [ ] 🔴 P1 **35-section-03-03/crv18-section-03-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/35-section-03-03/crv18-section-03-03.mdx`
+- [ ] 🔴 P1 **37-section-03-05/crv18-section-03-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/37-section-03-05/crv18-section-03-05.mdx`
+- [ ] 🔴 P1 **38-section-03-06/crv18-section-03-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/38-section-03-06/crv18-section-03-06.mdx`
+- [ ] 🔴 P1 **42-section-03-10/crv18-section-03-10** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/42-section-03-10/crv18-section-03-10.mdx`
+- [ ] 🔴 P1 **44-section-04-01/crv18-section-04-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/44-section-04-01/crv18-section-04-01.mdx`
+- [ ] 🔴 P1 **45-section-04-02/crv18-section-04-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/45-section-04-02/crv18-section-04-02.mdx`
+- [ ] 🔴 P1 **50-section-05-01/crv18-section-05-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/50-section-05-01/crv18-section-05-01.mdx`
+- [ ] 🔴 P1 **53-section-05-04/crv18-section-05-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/53-section-05-04/crv18-section-05-04.mdx`
+- [ ] 🔴 P1 **57-section-06-02/crv18-section-06-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/57-section-06-02/crv18-section-06-02.mdx`
+- [ ] 🔴 P1 **58-section-06-03/crv18-section-06-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/58-section-06-03/crv18-section-06-03.mdx`
+- [ ] 🔴 P1 **60-section-06-05/crv18-section-06-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/coder-revolution/60-section-06-05/crv18-section-06-05.mdx`
+- [ ] 🔴 P1 **02-chapter-01/crv18-chapter-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/02-chapter-01/crv18-chapter-01.mdx`
+- [ ] 🔴 P1 **03-section-01-01/crv18-section-01-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/03-section-01-01/crv18-section-01-01.mdx`
+- [ ] 🔴 P1 **04-section-01-02/crv18-section-01-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/04-section-01-02/crv18-section-01-02.mdx`
+- [ ] 🔴 P1 **05-section-01-03/crv18-section-01-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/05-section-01-03/crv18-section-01-03.mdx`
+- [ ] 🔴 P1 **06-section-01-04/crv18-section-01-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/06-section-01-04/crv18-section-01-04.mdx`
+- [ ] 🔴 P1 **11-section-01-09/crv18-section-01-09** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/11-section-01-09/crv18-section-01-09.mdx`
+- [ ] 🔴 P1 **13-section-01-11/crv18-section-01-11** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/13-section-01-11/crv18-section-01-11.mdx`
+- [ ] 🔴 P1 **14-section-01-12/crv18-section-01-12** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/14-section-01-12/crv18-section-01-12.mdx`
+- [ ] 🔴 P1 **15-section-01-13/crv18-section-01-13** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/15-section-01-13/crv18-section-01-13.mdx`
+- [ ] 🔴 P1 **17-chapter-02/crv18-chapter-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/17-chapter-02/crv18-chapter-02.mdx`
+- [ ] 🔴 P1 **25-section-02-08/crv18-section-02-08** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/25-section-02-08/crv18-section-02-08.mdx`
+- [ ] 🔴 P1 **26-section-02-09/crv18-section-02-09** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/26-section-02-09/crv18-section-02-09.mdx`
+- [ ] 🔴 P1 **29-section-02-12/crv18-section-02-12** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/29-section-02-12/crv18-section-02-12.mdx`
+- [ ] 🔴 P1 **30-section-02-13/crv18-section-02-13** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/30-section-02-13/crv18-section-02-13.mdx`
+- [ ] 🔴 P1 **32-chapter-03/crv18-chapter-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/32-chapter-03/crv18-chapter-03.mdx`
+- [ ] 🔴 P1 **33-section-03-01/crv18-section-03-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/33-section-03-01/crv18-section-03-01.mdx`
+- [ ] 🔴 P1 **34-section-03-02/crv18-section-03-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/34-section-03-02/crv18-section-03-02.mdx`
+- [ ] 🔴 P1 **36-section-03-04/crv18-section-03-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/36-section-03-04/crv18-section-03-04.mdx`
+- [ ] 🔴 P1 **39-section-03-07/crv18-section-03-07** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/39-section-03-07/crv18-section-03-07.mdx`
+- [ ] 🔴 P1 **40-section-03-08/crv18-section-03-08** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/40-section-03-08/crv18-section-03-08.mdx`
+- [ ] 🔴 P1 **43-chapter-04/crv18-chapter-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/43-chapter-04/crv18-chapter-04.mdx`
+- [ ] 🔴 P1 **47-section-04-04/crv18-section-04-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/47-section-04-04/crv18-section-04-04.mdx`
+- [ ] 🔴 P1 **49-chapter-05/crv18-chapter-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/49-chapter-05/crv18-chapter-05.mdx`
+- [ ] 🔴 P1 **51-section-05-02/crv18-section-05-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/51-section-05-02/crv18-section-05-02.mdx`
+- [ ] 🔴 P1 **52-section-05-03/crv18-section-05-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/52-section-05-03/crv18-section-05-03.mdx`
+- [ ] 🔴 P1 **54-section-05-05/crv18-section-05-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/54-section-05-05/crv18-section-05-05.mdx`
+- [ ] 🔴 P1 **56-section-06-01/crv18-section-06-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/56-section-06-01/crv18-section-06-01.mdx`
+- [ ] 🔴 P1 **59-section-06-04/crv18-section-06-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/coder-revolution/59-section-06-04/crv18-section-06-04.mdx`
+- [ ] 🔴 P1 **01-preface/crv18-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/01-preface/crv18-preface.mdx`
+- [ ] 🔴 P1 **16-section-01-14/crv18-section-01-14** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/16-section-01-14/crv18-section-01-14.mdx`
+- [ ] 🔴 P1 **41-section-03-09/crv18-section-03-09** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/41-section-03-09/crv18-section-03-09.mdx`
+- [ ] 🔴 P1 **46-section-04-03/crv18-section-04-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/46-section-04-03/crv18-section-04-03.mdx`
+- [ ] 🔴 P1 **48-section-04-05/crv18-section-04-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/48-section-04-05/crv18-section-04-05.mdx`
+- [ ] 🔴 P1 **55-chapter-06/crv18-chapter-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/coder-revolution/55-chapter-06/crv18-chapter-06.mdx`
+
+## effective-cpp（57 章 · ❌0 ⚠️57 ✅0）
+
+- [ ] 🟡 P3 **03-designs-declarations/item-24-non-member-conversions** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 74）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-24-non-member-conversions.mdx`
+- [ ] 🟡 P3 **02-resource-management/item-15-raw-resource-access** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 73）
+    - 路径：`content/effective-cpp/02-resource-management/item-15-raw-resource-access.mdx`
+- [ ] 🟡 P3 **08-miscellaneous/item-53-compiler-warnings** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 72）
+    - 路径：`content/effective-cpp/08-miscellaneous/item-53-compiler-warnings.mdx`
+- [ ] 🟡 P3 **04-implementations/item-27-minimize-casting** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 71）
+    - 路径：`content/effective-cpp/04-implementations/item-27-minimize-casting.mdx`
+- [ ] 🟡 P3 **00-intro/learning-map** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/effective-cpp/00-intro/learning-map.mdx`
+- [ ] 🟡 P3 **04-misc/final-review** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/effective-cpp/04-misc/final-review.mdx`
+- [ ] 🟡 P3 **07-customizing-new-delete/item-52-placement-delete-with-placement-new** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-22-private-data-members** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-22-private-data-members.mdx`
+- [ ] 🟡 P3 **00-accustoming/item-03-use-const** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/00-accustoming/item-03-use-const.mdx`
+- [ ] 🟡 P3 **00-accustoming/item-04-initialize-objects** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/00-accustoming/item-04-initialize-objects.mdx`
+- [ ] 🟡 P3 **01-special-members/item-10-assignment-return-this** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/01-special-members/item-10-assignment-return-this.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-20-pass-by-reference-to-const** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-21-return-object-not-reference** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-21-return-object-not-reference.mdx`
+- [ ] 🟡 P3 **04-implementations/item-28-avoid-internal-handles** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/04-implementations/item-28-avoid-internal-handles.mdx`
+- [ ] 🟡 P3 **04-implementations/item-29-exception-safe-code** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/04-implementations/item-29-exception-safe-code.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-32-public-inheritance-is-a** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-32-public-inheritance-is-a.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-38-composition-has-a** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-38-composition-has-a.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-40-multiple-inheritance-judiciously** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-40-multiple-inheritance-judiciously.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-44-factor-template-parameter-independent-code** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-44-factor-template-parameter-independent-code.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-46-nonmember-functions-inside-templates** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-46-nonmember-functions-inside-templates.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-47-traits-classes-type-information** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-47-traits-classes-type-information.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-48-template-metaprogramming-awareness** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-48-template-metaprogramming-awareness.mdx`
+- [ ] 🟡 P3 **07-customizing-new-delete/item-51-conventions-writing-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete.mdx`
+- [ ] 🟡 P3 **00-accustoming/item-01-language-federation** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/00-accustoming/item-01-language-federation.mdx`
+- [ ] 🟡 P3 **00-accustoming/item-02-const-enum-inline** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/00-accustoming/item-02-const-enum-inline.mdx`
+- [ ] 🟡 P3 **01-special-members/item-05-compiler-generated-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-05-compiler-generated-functions.mdx`
+- [ ] 🟡 P3 **01-special-members/item-06-disallow-generated-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-06-disallow-generated-functions.mdx`
+- [ ] 🟡 P3 **01-special-members/item-07-virtual-destructor** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-07-virtual-destructor.mdx`
+- [ ] 🟡 P3 **01-special-members/item-08-destructor-exceptions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-08-destructor-exceptions.mdx`
+- [ ] 🟡 P3 **01-special-members/item-09-no-virtual-in-ctor-dtor** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-09-no-virtual-in-ctor-dtor.mdx`
+- [ ] 🟡 P3 **01-special-members/item-11-self-assignment** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-11-self-assignment.mdx`
+- [ ] 🟡 P3 **01-special-members/item-12-copy-all-parts** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/01-special-members/item-12-copy-all-parts.mdx`
+- [ ] 🟡 P3 **02-resource-management/item-14-resource-copying** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/02-resource-management/item-14-resource-copying.mdx`
+- [ ] 🟡 P3 **02-resource-management/item-16-match-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/02-resource-management/item-16-match-new-delete.mdx`
+- [ ] 🟡 P3 **02-resource-management/item-17-smart-pointer-statement** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/02-resource-management/item-17-smart-pointer-statement.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-18-easy-correct-interfaces** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-18-easy-correct-interfaces.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-19-class-design-type-design** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-19-class-design-type-design.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-23-non-member-non-friend** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-23-non-member-non-friend.mdx`
+- [ ] 🟡 P3 **03-designs-declarations/item-25-non-throwing-swap** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/03-designs-declarations/item-25-non-throwing-swap.mdx`
+- [ ] 🟡 P3 **04-implementations/item-26-postpone-variable-definitions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/04-implementations/item-26-postpone-variable-definitions.mdx`
+- [ ] 🟡 P3 **04-implementations/item-30-inline-ins-and-outs** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/04-implementations/item-30-inline-ins-and-outs.mdx`
+- [ ] 🟡 P3 **04-implementations/item-31-minimize-compilation-dependencies** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/04-implementations/item-31-minimize-compilation-dependencies.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names.mdx`
+- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-35-virtual-function-alternatives** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-35-virtual-function-alternatives.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-41-template-implicit-interfaces** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-41-template-implicit-interfaces.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-42-typename-two-meanings** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-42-typename-two-meanings.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-43-access-templatized-base-names** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-43-access-templatized-base-names.mdx`
+- [ ] 🟡 P3 **06-templates-generic-programming/item-45-member-function-templates-compatible-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/06-templates-generic-programming/item-45-member-function-templates-compatible-types.mdx`
+- [ ] 🟡 P3 **07-customizing-new-delete/item-49-understand-new-handler** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/07-customizing-new-delete/item-49-understand-new-handler.mdx`
+- [ ] 🟡 P3 **07-customizing-new-delete/item-50-when-replace-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/07-customizing-new-delete/item-50-when-replace-new-delete.mdx`
+- [ ] 🟡 P3 **08-miscellaneous/item-54-standard-library-tr1** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/08-miscellaneous/item-54-standard-library-tr1.mdx`
+- [ ] 🟡 P3 **08-miscellaneous/item-55-familiarize-boost** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-cpp/08-miscellaneous/item-55-familiarize-boost.mdx`
+- [ ] 🟡 P3 **02-resource-management/item-13-resource-managing-objects** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
+
+## code-complete-2e（51 章 · ❌51 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/cc2e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
+- [ ] 🔴 P1 **50-review/cc2e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/code-complete-2e/50-review/cc2e-official-final-review.mdx`
+- [ ] 🔴 P1 **07-construction-world/cc2e-01-construction-world** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/07-construction-world/cc2e-01-construction-world.mdx`
+- [ ] 🔴 P1 **08-software-metaphors/cc2e-02-software-metaphors** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors.mdx`
+- [ ] 🔴 P1 **09-prerequisites/cc2e-03-prerequisites** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/09-prerequisites/cc2e-03-prerequisites.mdx`
+- [ ] 🔴 P1 **10-construction-decisions/cc2e-04-construction-decisions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/10-construction-decisions/cc2e-04-construction-decisions.mdx`
+- [ ] 🔴 P1 **12-design-in-construction/cc2e-05-design-in-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction.mdx`
+- [ ] 🔴 P1 **13-working-classes/cc2e-06-working-classes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/13-working-classes/cc2e-06-working-classes.mdx`
+- [ ] 🔴 P1 **14-high-quality-routines/cc2e-07-high-quality-routines** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines.mdx`
+- [ ] 🔴 P1 **15-defensive-programming/cc2e-08-defensive-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/15-defensive-programming/cc2e-08-defensive-programming.mdx`
+- [ ] 🔴 P1 **16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process.mdx`
+- [ ] 🔴 P1 **18-general-variable-use/cc2e-10-general-variable-use** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use.mdx`
+- [ ] 🔴 P1 **19-power-of-variable-names/cc2e-11-power-of-variable-names** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names.mdx`
+- [ ] 🔴 P1 **20-fundamental-data-types/cc2e-12-fundamental-data-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/20-fundamental-data-types/cc2e-12-fundamental-data-types.mdx`
+- [ ] 🔴 P1 **21-unusual-data-types/cc2e-13-unusual-data-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/21-unusual-data-types/cc2e-13-unusual-data-types.mdx`
+- [ ] 🔴 P1 **23-straight-line-code/cc2e-14-straight-line-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code.mdx`
+- [ ] 🔴 P1 **24-conditionals/cc2e-15-conditionals** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/24-conditionals/cc2e-15-conditionals.mdx`
+- [ ] 🔴 P1 **25-loops/cc2e-16-loops** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/25-loops/cc2e-16-loops.mdx`
+- [ ] 🔴 P1 **26-unusual-control-structures/cc2e-17-unusual-control-structures** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/26-unusual-control-structures/cc2e-17-unusual-control-structures.mdx`
+- [ ] 🔴 P1 **27-table-driven-methods/cc2e-18-table-driven-methods** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/27-table-driven-methods/cc2e-18-table-driven-methods.mdx`
+- [ ] 🔴 P1 **28-general-control-issues/cc2e-19-general-control-issues** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/28-general-control-issues/cc2e-19-general-control-issues.mdx`
+- [ ] 🔴 P1 **30-software-quality-landscape/cc2e-20-software-quality-landscape** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/30-software-quality-landscape/cc2e-20-software-quality-landscape.mdx`
+- [ ] 🔴 P1 **31-collaborative-construction/cc2e-21-collaborative-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/31-collaborative-construction/cc2e-21-collaborative-construction.mdx`
+- [ ] 🔴 P1 **32-developer-testing/cc2e-22-developer-testing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/32-developer-testing/cc2e-22-developer-testing.mdx`
+- [ ] 🔴 P1 **33-debugging/cc2e-23-debugging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/33-debugging/cc2e-23-debugging.mdx`
+- [ ] 🔴 P1 **34-refactoring/cc2e-24-refactoring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/34-refactoring/cc2e-24-refactoring.mdx`
+- [ ] 🔴 P1 **35-code-tuning-strategies/cc2e-25-code-tuning-strategies** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/35-code-tuning-strategies/cc2e-25-code-tuning-strategies.mdx`
+- [ ] 🔴 P1 **36-code-tuning-techniques/cc2e-26-code-tuning-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques.mdx`
+- [ ] 🔴 P1 **38-program-size/cc2e-27-program-size** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/38-program-size/cc2e-27-program-size.mdx`
+- [ ] 🔴 P1 **39-managing-construction/cc2e-28-managing-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/39-managing-construction/cc2e-28-managing-construction.mdx`
+- [ ] 🔴 P1 **40-integration/cc2e-29-integration** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/40-integration/cc2e-29-integration.mdx`
+- [ ] 🔴 P1 **41-programming-tools/cc2e-30-programming-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/41-programming-tools/cc2e-30-programming-tools.mdx`
+- [ ] 🔴 P1 **43-layout-and-style/cc2e-31-layout-and-style** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style.mdx`
+- [ ] 🔴 P1 **44-self-documenting-code/cc2e-32-self-documenting-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/44-self-documenting-code/cc2e-32-self-documenting-code.mdx`
+- [ ] 🔴 P1 **45-personal-character/cc2e-33-personal-character** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/45-personal-character/cc2e-33-personal-character.mdx`
+- [ ] 🔴 P1 **46-software-craftsmanship/cc2e-34-software-craftsmanship** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/46-software-craftsmanship/cc2e-34-software-craftsmanship.mdx`
+- [ ] 🔴 P1 **47-more-information/cc2e-35-more-information** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/code-complete-2e/47-more-information/cc2e-35-more-information.mdx`
+- [ ] 🔴 P1 **01-preface/cc2e-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/01-preface/cc2e-preface.mdx`
+- [ ] 🔴 P1 **02-acknowledgments/cc2e-acknowledgments** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/02-acknowledgments/cc2e-acknowledgments.mdx`
+- [ ] 🔴 P1 **03-checklist-index/cc2e-checklist-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/03-checklist-index/cc2e-checklist-index.mdx`
+- [ ] 🔴 P1 **04-table-index/cc2e-table-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/04-table-index/cc2e-table-index.mdx`
+- [ ] 🔴 P1 **05-figure-index/cc2e-figure-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/05-figure-index/cc2e-figure-index.mdx`
+- [ ] 🔴 P1 **06-foundations/cc2e-part-01-foundations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/06-foundations/cc2e-part-01-foundations.mdx`
+- [ ] 🔴 P1 **11-high-quality-code/cc2e-part-02-high-quality-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/11-high-quality-code/cc2e-part-02-high-quality-code.mdx`
+- [ ] 🔴 P1 **17-variables/cc2e-part-03-variables** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/17-variables/cc2e-part-03-variables.mdx`
+- [ ] 🔴 P1 **22-statements/cc2e-part-04-statements** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/22-statements/cc2e-part-04-statements.mdx`
+- [ ] 🔴 P1 **29-code-improvement/cc2e-part-05-code-improvement** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/29-code-improvement/cc2e-part-05-code-improvement.mdx`
+- [ ] 🔴 P1 **37-system-considerations/cc2e-part-06-system-considerations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/37-system-considerations/cc2e-part-06-system-considerations.mdx`
+- [ ] 🔴 P1 **42-software-craftsmanship/cc2e-part-07-software-craftsmanship** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/42-software-craftsmanship/cc2e-part-07-software-craftsmanship.mdx`
+- [ ] 🔴 P1 **48-references/cc2e-references** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/48-references/cc2e-references.mdx`
+- [ ] 🔴 P1 **49-index/cc2e-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/code-complete-2e/49-index/cc2e-index.mdx`
+
+## math-girl（50 章 · ❌50 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **03-advanced/mgl-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 60）
+    - 路径：`content/math-girl/03-advanced/mgl-final-review.mdx`
+- [ ] 🔴 P1 **00-intro/mgl-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/math-girl/00-intro/mgl-learning-map.mdx`
+- [ ] 🔴 P1 **00-intro/mgl-number-theory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/00-intro/mgl-number-theory.mdx`
+- [ ] 🔴 P1 **01-algebra/mgl-equations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-algebra/mgl-equations.mdx`
+- [ ] 🔴 P1 **01-algebra/mgl-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-algebra/mgl-functions.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-fibonacci-generating-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-volume-1/mg1-fibonacci-generating-functions.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-formula-love-letter** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-volume-1/mg1-formula-love-letter.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-omega-waltz** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-volume-1/mg1-omega-waltz.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-partition-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-volume-1/mg1-partition-numbers.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-sequences-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/01-volume-1/mg1-sequences-models.mdx`
+- [ ] 🔴 P1 **02-discrete/mgl-combinatorics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/02-discrete/mgl-combinatorics.mdx`
+- [ ] 🔴 P1 **02-discrete/mgl-graph-theory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/02-discrete/mgl-graph-theory.mdx`
+- [ ] 🔴 P1 **02-discrete/mgl-probability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/02-discrete/mgl-probability.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-infinite-universe** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/02-volume-2/mg2-infinite-universe.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-pythagorean-theorem** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/02-volume-2/mg2-pythagorean-theorem.mdx`
+- [ ] 🔴 P1 **03-advanced/mgl-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/03-advanced/mgl-algorithms.mdx`
+- [ ] 🔴 P1 **03-advanced/mgl-machine-learning** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/math-girl/03-advanced/mgl-machine-learning.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-differentiation-and-difference** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/math-girl/01-volume-1/mg1-differentiation-and-difference.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-harmonic-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/math-girl/01-volume-1/mg1-harmonic-numbers.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-abelian-groups** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/math-girl/02-volume-2/mg2-abelian-groups.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-proof-by-contradiction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/math-girl/02-volume-2/mg2-proof-by-contradiction.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-convolution-catalan** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/math-girl/01-volume-1/mg1-convolution-catalan.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-taylor-basel** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/math-girl/01-volume-1/mg1-taylor-basel.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-coprime** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/math-girl/02-volume-2/mg2-coprime.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-infinite-descent** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/math-girl/02-volume-2/mg2-infinite-descent.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-expectation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/math-girl/04-randomized/mg4-expectation.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-exponential-solitude** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/math-girl/04-randomized/mg4-exponential-solitude.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-elusive-future** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/math-girl/04-randomized/mg4-elusive-future.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-linear-search** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/math-girl/04-randomized/mg4-linear-search.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-matrices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/math-girl/04-randomized/mg4-matrices.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-fermat-last-theorem** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/02-volume-2/mg2-fermat-last-theorem.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-modular-arithmetic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/02-volume-2/mg2-modular-arithmetic.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-bewildering-spiral** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/03-advanced/mg3-bewildering-spiral.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-epsilon-delta-language** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/03-advanced/mg3-epsilon-delta-language.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-limit-destination** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/03-advanced/mg3-limit-destination.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-two-solitudes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/03-advanced/mg3-two-solitudes.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-never-lose-gamble** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/04-randomized/mg4-never-lose-gamble.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-probability-axioms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/04-randomized/mg4-probability-axioms.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-randomized-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/04-randomized/mg4-randomized-algorithms.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-strong-correct-beautiful** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/math-girl/04-randomized/mg4-strong-correct-beautiful.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-galileos-hesitation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/math-girl/03-advanced/mg3-galileos-hesitation.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-leibniz-dream** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/math-girl/03-advanced/mg3-leibniz-dream.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-peano-arithmetic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/math-girl/03-advanced/mg3-peano-arithmetic.mdx`
+- [ ] 🔴 P1 **04-randomized/mg4-lonely-random-walk** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/math-girl/04-randomized/mg4-lonely-random-walk.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-euler-formula** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/math-girl/02-volume-2/mg2-euler-formula.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-goedel-incompleteness** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/math-girl/03-advanced/mg3-goedel-incompleteness.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-mirror-monologue** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/math-girl/03-advanced/mg3-mirror-monologue.mdx`
+- [ ] 🔴 P1 **01-volume-1/mg1-arithmetic-geometric-mean** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/math-girl/01-volume-1/mg1-arithmetic-geometric-mean.mdx`
+- [ ] 🔴 P1 **03-advanced/mg3-diagonal-argument** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/math-girl/03-advanced/mg3-diagonal-argument.mdx`
+- [ ] 🔴 P1 **02-volume-2/mg2-splitting-primes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/math-girl/02-volume-2/mg2-splitting-primes.mdx`
+
+## gpu-gems（48 章 · ❌48 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **01-natural-effects/gpugems-ch01** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
+- [ ] 🔴 P1 **01-natural-effects/gpugems-ch02** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch02.mdx`
+- [ ] 🔴 P1 **01-natural-effects/gpugems-ch03** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch03.mdx`
+- [ ] 🔴 P1 **01-natural-effects/gpugems-ch04** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch04.mdx`
+- [ ] 🔴 P1 **01-natural-effects/gpugems-ch05** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch05.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch06** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch06.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch07** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch07.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch08** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch08.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch09** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch09.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch10** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch10.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch11** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch11.mdx`
+- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch12** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch12.mdx`
+- [ ] 🔴 P1 **03-materials/gpugems-ch13** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/03-materials/gpugems-ch13.mdx`
+- [ ] 🔴 P1 **03-materials/gpugems-ch14** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/03-materials/gpugems-ch14.mdx`
+- [ ] 🔴 P1 **03-materials/gpugems-ch15** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/03-materials/gpugems-ch15.mdx`
+- [ ] 🔴 P1 **03-materials/gpugems-ch16** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/03-materials/gpugems-ch16.mdx`
+- [ ] 🔴 P1 **04-image-processing/gpugems-ch17** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/04-image-processing/gpugems-ch17.mdx`
+- [ ] 🔴 P1 **04-image-processing/gpugems-ch18** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/04-image-processing/gpugems-ch18.mdx`
+- [ ] 🔴 P1 **04-image-processing/gpugems-ch19** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/04-image-processing/gpugems-ch19.mdx`
+- [ ] 🔴 P1 **04-image-processing/gpugems-ch20** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/04-image-processing/gpugems-ch20.mdx`
+- [ ] 🔴 P1 **04-image-processing/gpugems-ch21** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/04-image-processing/gpugems-ch21.mdx`
+- [ ] 🔴 P1 **05-performance/gpugems-ch22** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/05-performance/gpugems-ch22.mdx`
+- [ ] 🔴 P1 **05-performance/gpugems-ch23** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/05-performance/gpugems-ch23.mdx`
+- [ ] 🔴 P1 **05-performance/gpugems-ch24** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/05-performance/gpugems-ch24.mdx`
+- [ ] 🔴 P1 **05-performance/gpugems-ch25** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/05-performance/gpugems-ch25.mdx`
+- [ ] 🔴 P1 **05-performance/gpugems-ch26** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/05-performance/gpugems-ch26.mdx`
+- [ ] 🔴 P1 **06-beyond-triangles/gpugems-ch27** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch27.mdx`
+- [ ] 🔴 P1 **06-beyond-triangles/gpugems-ch28** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch28.mdx`
+- [ ] 🔴 P1 **06-beyond-triangles/gpugems-ch29** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch29.mdx`
+- [ ] 🔴 P1 **06-beyond-triangles/gpugems-ch30** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch30.mdx`
+- [ ] 🔴 P1 **06-beyond-triangles/gpugems-ch31** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch31.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch32** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch32.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch33** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch33.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch34** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch34.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch35** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch35.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch36** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch36.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch37** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch37.mdx`
+- [ ] 🔴 P1 **07-simulation/gpugems-ch38** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/07-simulation/gpugems-ch38.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch39** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch39.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch40** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch40.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch41** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch41.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch42** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch42.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch43** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch43.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch44** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch44.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch45** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch45.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch46** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch46.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch47** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch47.mdx`
+- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch48** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch48.mdx`
+
+## effective-modern-cpp（44 章 · ❌0 ⚠️44 ✅0）
+
+- [ ] 🟡 P3 **00-intro/learning-map** — 未升级 v2、UX 不足（score 84）
+    - 路径：`content/effective-modern-cpp/00-intro/learning-map.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-07-parentheses-vs-braces** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 71）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-07-parentheses-vs-braces.mdx`
+- [ ] 🟡 P3 **04-concurrency/final-review** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/effective-modern-cpp/04-concurrency/final-review.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-12-override** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-12-override.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-28-reference-collapsing** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-28-reference-collapsing.mdx`
+- [ ] 🟡 P3 **05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-10-scoped-enums** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-10-scoped-enums.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-11-deleted-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-11-deleted-functions.mdx`
+- [ ] 🟡 P3 **03-smart-pointers/item-19-shared-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/03-smart-pointers/item-19-shared-ptr.mdx`
+- [ ] 🟡 P3 **03-smart-pointers/item-20-weak-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/03-smart-pointers/item-20-weak-ptr.mdx`
+- [ ] 🟡 P3 **03-smart-pointers/item-22-pimpl-special-members** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/03-smart-pointers/item-22-pimpl-special-members.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-24-forwarding-vs-rvalue-references** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-24-forwarding-vs-rvalue-references.mdx`
+- [ ] 🟡 P3 **00-deducing-types/item-01-template-type-deduction** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/00-deducing-types/item-01-template-type-deduction.mdx`
+- [ ] 🟡 P3 **00-deducing-types/item-02-auto-type-deduction** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/00-deducing-types/item-02-auto-type-deduction.mdx`
+- [ ] 🟡 P3 **00-deducing-types/item-04-view-deduced-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/00-deducing-types/item-04-view-deduced-types.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-09-alias-declarations** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-09-alias-declarations.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-16-const-thread-safe** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-16-const-thread-safe.mdx`
+- [ ] 🟡 P3 **03-smart-pointers/item-18-unique-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/03-smart-pointers/item-18-unique-ptr.mdx`
+- [ ] 🟡 P3 **03-smart-pointers/item-21-make-smart-pointers** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/03-smart-pointers/item-21-make-smart-pointers.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-25-move-rvalue-forward-universal** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-25-move-rvalue-forward-universal.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-26-avoid-forwarding-overloads** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-26-avoid-forwarding-overloads.mdx`
+- [ ] 🟡 P3 **05-lambda-expressions/item-31-avoid-default-capture-modes** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-31-avoid-default-capture-modes.mdx`
+- [ ] 🟡 P3 **05-lambda-expressions/item-34-prefer-lambdas-to-std-bind** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-34-prefer-lambdas-to-std-bind.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-35-prefer-task-based-programming** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-35-prefer-task-based-programming.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-37-make-threads-unjoinable** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-37-make-threads-unjoinable.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-38-thread-handle-destructor-behavior** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-38-thread-handle-destructor-behavior.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-40-atomic-vs-volatile** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-40-atomic-vs-volatile.mdx`
+- [ ] 🟡 P3 **07-tweaks/item-42-consider-emplacement** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/effective-modern-cpp/07-tweaks/item-42-consider-emplacement.mdx`
+- [ ] 🟡 P3 **00-deducing-types/item-03-understand-decltype** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/00-deducing-types/item-03-understand-decltype.mdx`
+- [ ] 🟡 P3 **01-auto/item-05-prefer-auto** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/01-auto/item-05-prefer-auto.mdx`
+- [ ] 🟡 P3 **01-auto/item-06-explicitly-typed-initializer** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/01-auto/item-06-explicitly-typed-initializer.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-08-prefer-nullptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-08-prefer-nullptr.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-13-const-iterators** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-13-const-iterators.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-14-noexcept** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-14-noexcept.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-15-constexpr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-15-constexpr.mdx`
+- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-17-special-member-generation** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-17-special-member-generation.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-23-move-forward** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-23-move-forward.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-27-forwarding-overload-alternatives** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-27-forwarding-overload-alternatives.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-29-assume-move-absent-costly-unused** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-29-assume-move-absent-costly-unused.mdx`
+- [ ] 🟡 P3 **04-rvalue-references/item-30-perfect-forwarding-failure-cases** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/04-rvalue-references/item-30-perfect-forwarding-failure-cases.mdx`
+- [ ] 🟡 P3 **05-lambda-expressions/item-32-init-capture-move-into-closures** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-32-init-capture-move-into-closures.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-36-specify-launch-async** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-36-specify-launch-async.mdx`
+- [ ] 🟡 P3 **06-concurrency/item-39-void-futures-one-shot-events** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/06-concurrency/item-39-void-futures-one-shot-events.mdx`
+- [ ] 🟡 P3 **07-tweaks/item-41-pass-by-value-cheap-move** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/effective-modern-cpp/07-tweaks/item-41-pass-by-value-cheap-move.mdx`
+
+## you-dont-know-js（42 章 · ❌42 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ydk-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/you-dont-know-js/00-guide/ydk-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/ydk-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/you-dont-know-js/07-review/ydk-official-final-review.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-01-what-is-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-01-what-is-scope.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-02-lexical-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-02-lexical-scope.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-03-function-vs-block-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-03-function-vs-block-scope.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-04-hoisting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-04-hoisting.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-05-scope-closures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-05-scope-closures.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill.mdx`
+- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-c-lexical-this** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-c-lexical-this.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-01-this-or-that** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-01-this-or-that.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-02-this-all-makes-sense** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-02-this-all-makes-sense.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-03-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-03-objects.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-04-mixing-class-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-04-mixing-class-objects.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-05-prototypes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-05-prototypes.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-06-behavior-delegation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-06-behavior-delegation.mdx`
+- [ ] 🔴 P1 **02-volume-one-this/ydk-this-appendix-a-es6-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-appendix-a-es6-class.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-01-types** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-01-types.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-02-values** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-02-values.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-03-natives** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-03-natives.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-04-coercion** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-04-coercion.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-05-grammar** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-05-grammar.mdx`
+- [ ] 🔴 P1 **03-volume-two-types/ydk-types-appendix-a-mixed-environment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-appendix-a-mixed-environment.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-01-now-and-later** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-01-now-and-later.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-02-callbacks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-02-callbacks.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-03-promises** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-03-promises.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-04-generators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-04-generators.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-05-program-performance** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-05-program-performance.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-06-benchmarking-tuning** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-06-benchmarking-tuning.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-appendix-a-asynquence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-appendix-a-asynquence.mdx`
+- [ ] 🔴 P1 **04-volume-two-async/ydk-async-appendix-b-advanced-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-appendix-b-advanced-patterns.mdx`
+- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-01-into-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-01-into-programming.mdx`
+- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-02-into-javascript** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-02-into-javascript.mdx`
+- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-03-into-ydkjs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-03-into-ydkjs.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-01-now-future** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-01-now-future.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-02-syntax** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-02-syntax.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-03-organization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-03-organization.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-04-async-flow-control** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-04-async-flow-control.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-05-collections** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-05-collections.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-06-api-additions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-06-api-additions.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-07-meta-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-07-meta-programming.mdx`
+- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-08-beyond-es6** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-08-beyond-es6.mdx`
+
+## introduction-to-algorithms（39 章 · ❌39 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **01-foundations/01-role-of-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/01-foundations/01-role-of-algorithms.mdx`
+- [ ] 🔴 P1 **01-foundations/02-getting-started** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/01-foundations/02-getting-started.mdx`
+- [ ] 🔴 P1 **01-foundations/05-probabilistic-analysis-randomized-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/01-foundations/05-probabilistic-analysis-randomized-algorithms.mdx`
+- [ ] 🔴 P1 **04-advanced-design-analysis/15-greedy-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/04-advanced-design-analysis/15-greedy-algorithms.mdx`
+- [ ] 🔴 P1 **04-advanced-design-analysis/16-amortized-analysis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/04-advanced-design-analysis/16-amortized-analysis.mdx`
+- [ ] 🔴 P1 **05-advanced-data-structures/17-augmenting-data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/05-advanced-data-structures/17-augmenting-data-structures.mdx`
+- [ ] 🔴 P1 **05-advanced-data-structures/18-b-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/05-advanced-data-structures/18-b-trees.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/20-elementary-graph-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/20-elementary-graph-algorithms.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/21-minimum-spanning-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/21-minimum-spanning-trees.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/23-all-pairs-shortest-paths** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/23-all-pairs-shortest-paths.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/24-maximum-flow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/24-maximum-flow.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/25-matchings-in-bipartite-graphs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/25-matchings-in-bipartite-graphs.mdx`
+- [ ] 🔴 P1 **07-selected-topics/26-parallel-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/26-parallel-algorithms.mdx`
+- [ ] 🔴 P1 **07-selected-topics/27-online-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/27-online-algorithms.mdx`
+- [ ] 🔴 P1 **07-selected-topics/28-matrix-operations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/28-matrix-operations.mdx`
+- [ ] 🔴 P1 **07-selected-topics/29-linear-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/29-linear-programming.mdx`
+- [ ] 🔴 P1 **07-selected-topics/30-polynomials-and-the-fft** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/30-polynomials-and-the-fft.mdx`
+- [ ] 🔴 P1 **07-selected-topics/33-machine-learning-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/33-machine-learning-algorithms.mdx`
+- [ ] 🔴 P1 **07-selected-topics/34-np-completeness** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/34-np-completeness.mdx`
+- [ ] 🔴 P1 **07-selected-topics/35-approximation-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/35-approximation-algorithms.mdx`
+- [ ] 🔴 P1 **08-mathematical-background/appendix-a-summations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/08-mathematical-background/appendix-a-summations.mdx`
+- [ ] 🔴 P1 **08-mathematical-background/appendix-b-sets-etc** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/08-mathematical-background/appendix-b-sets-etc.mdx`
+- [ ] 🔴 P1 **08-mathematical-background/appendix-c-counting-probability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/08-mathematical-background/appendix-c-counting-probability.mdx`
+- [ ] 🔴 P1 **08-mathematical-background/appendix-d-matrices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/introduction-to-algorithms/08-mathematical-background/appendix-d-matrices.mdx`
+- [ ] 🔴 P1 **07-selected-topics/31-number-theoretic-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/31-number-theoretic-algorithms.mdx`
+- [ ] 🔴 P1 **01-foundations/03-characterizing-running-times** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/introduction-to-algorithms/01-foundations/03-characterizing-running-times.mdx`
+- [ ] 🔴 P1 **07-selected-topics/32-string-matching** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/introduction-to-algorithms/07-selected-topics/32-string-matching.mdx`
+- [ ] 🔴 P1 **01-foundations/04-divide-and-conquer** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/introduction-to-algorithms/01-foundations/04-divide-and-conquer.mdx`
+- [ ] 🔴 P1 **02-sorting-order-statistics/08-sorting-in-linear-time** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/08-sorting-in-linear-time.mdx`
+- [ ] 🔴 P1 **03-data-structures/11-hash-tables** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/introduction-to-algorithms/03-data-structures/11-hash-tables.mdx`
+- [ ] 🔴 P1 **03-data-structures/13-red-black-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/introduction-to-algorithms/03-data-structures/13-red-black-trees.mdx`
+- [ ] 🔴 P1 **05-advanced-data-structures/19-data-structures-for-disjoint-sets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/introduction-to-algorithms/05-advanced-data-structures/19-data-structures-for-disjoint-sets.mdx`
+- [ ] 🔴 P1 **02-sorting-order-statistics/06-heapsort** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/06-heapsort.mdx`
+- [ ] 🔴 P1 **04-advanced-design-analysis/14-dynamic-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/introduction-to-algorithms/04-advanced-design-analysis/14-dynamic-programming.mdx`
+- [ ] 🔴 P1 **06-graph-algorithms/22-single-source-shortest-paths** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/introduction-to-algorithms/06-graph-algorithms/22-single-source-shortest-paths.mdx`
+- [ ] 🔴 P1 **03-data-structures/10-elementary-data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/introduction-to-algorithms/03-data-structures/10-elementary-data-structures.mdx`
+- [ ] 🔴 P1 **02-sorting-order-statistics/07-quicksort** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/07-quicksort.mdx`
+- [ ] 🔴 P1 **02-sorting-order-statistics/09-medians-order-statistics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/introduction-to-algorithms/02-sorting-order-statistics/09-medians-order-statistics.mdx`
+- [ ] 🔴 P1 **03-data-structures/12-binary-search-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/introduction-to-algorithms/03-data-structures/12-binary-search-trees.mdx`
+
+## unix-network-programming-vol1（38 章 · ❌38 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/unp-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unix-network-programming-vol1/00-guide/unp-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/unp-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unix-network-programming-vol1/07-review/unp-official-final-review.mdx`
+- [ ] 🔴 P1 **06-appendices/unp-appendix-a-internet-protocols** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unix-network-programming-vol1/06-appendices/unp-appendix-a-internet-protocols.mdx`
+- [ ] 🔴 P1 **06-appendices/unp-appendix-b-virtual-networks** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unix-network-programming-vol1/06-appendices/unp-appendix-b-virtual-networks.mdx`
+- [ ] 🔴 P1 **06-appendices/unp-appendix-c-debugging-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unix-network-programming-vol1/06-appendices/unp-appendix-c-debugging-techniques.mdx`
+- [ ] 🔴 P1 **06-appendices/unp-appendix-d-misc-source-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unix-network-programming-vol1/06-appendices/unp-appendix-d-misc-source-code.mdx`
+- [ ] 🔴 P1 **06-appendices/unp-appendix-e-selected-solutions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unix-network-programming-vol1/06-appendices/unp-appendix-e-selected-solutions.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-24-out-of-band-data** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-24-out-of-band-data.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-10-sctp-client-server-example** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-10-sctp-client-server-example.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-12-ipv4-ipv6-interoperability** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-12-ipv4-ipv6-interoperability.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-13-daemon-inetd** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-13-daemon-inetd.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-15-unix-domain-protocols** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-15-unix-domain-protocols.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-16-nonblocking-io** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-16-nonblocking-io.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-18-routing-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-18-routing-sockets.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-19-key-management-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-19-key-management-sockets.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-20-broadcasting** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-20-broadcasting.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-27-ip-options** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-27-ip-options.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-28-raw-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-28-raw-sockets.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-29-datalink-access** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-29-datalink-access.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-31-streams** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-31-streams.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-03-sockets-introduction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-03-sockets-introduction.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-17-ioctl-operations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-17-ioctl-operations.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-22-advanced-udp** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-22-advanced-udp.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-26-threads** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-26-threads.mdx`
+- [ ] 🔴 P1 **01-intro-tcpip/unp-01-introduction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unix-network-programming-vol1/01-intro-tcpip/unp-01-introduction.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-04-elementary-tcp-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-04-elementary-tcp-sockets.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-06-io-multiplexing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-06-io-multiplexing.mdx`
+- [ ] 🔴 P1 **03-advanced-core/unp-14-advanced-io-functions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unix-network-programming-vol1/03-advanced-core/unp-14-advanced-io-functions.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-25-signal-driven-io** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-25-signal-driven-io.mdx`
+- [ ] 🔴 P1 **01-intro-tcpip/unp-02-transport-layer** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/01-intro-tcpip/unp-02-transport-layer.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-07-socket-options** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-07-socket-options.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-09-elementary-sctp-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-09-elementary-sctp-sockets.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-21-multicasting** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-21-multicasting.mdx`
+- [ ] 🔴 P1 **04-advanced-transport/unp-23-advanced-sctp** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/04-advanced-transport/unp-23-advanced-sctp.mdx`
+- [ ] 🔴 P1 **05-concurrency-system/unp-30-client-server-design** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unix-network-programming-vol1/05-concurrency-system/unp-30-client-server-design.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-08-elementary-udp-sockets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-08-elementary-udp-sockets.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-05-tcp-client-server-example** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-05-tcp-client-server-example.mdx`
+- [ ] 🔴 P1 **02-elementary-sockets/unp-11-name-address-conversions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unix-network-programming-vol1/02-elementary-sockets/unp-11-name-address-conversions.mdx`
+
+## lua-programming（35 章 · ❌35 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-basics/lup-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/lua-programming/00-basics/lup-learning-map.mdx`
+- [ ] 🔴 P1 **03-metaprogramming/lup-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/lua-programming/03-metaprogramming/lup-final-review.mdx`
+- [ ] 🔴 P1 **02-real-programming/bits-bytes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/bits-bytes.mdx`
+- [ ] 🔴 P1 **02-real-programming/closures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/closures.mdx`
+- [ ] 🔴 P1 **02-real-programming/compilation-errors** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/compilation-errors.mdx`
+- [ ] 🔴 P1 **02-real-programming/data-files-serialization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/data-files-serialization.mdx`
+- [ ] 🔴 P1 **02-real-programming/data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/data-structures.mdx`
+- [ ] 🔴 P1 **02-real-programming/date-time** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/date-time.mdx`
+- [ ] 🔴 P1 **02-real-programming/iterators-generic-for** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/iterators-generic-for.mdx`
+- [ ] 🔴 P1 **02-real-programming/modules-packages** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/02-real-programming/modules-packages.mdx`
+- [ ] 🔴 P1 **03-lua-isms/coroutines** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/coroutines.mdx`
+- [ ] 🔴 P1 **03-lua-isms/environment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/environment.mdx`
+- [ ] 🔴 P1 **03-lua-isms/metatables-metamethods** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/metatables-metamethods.mdx`
+- [ ] 🔴 P1 **03-lua-isms/multithreading-coroutines** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/multithreading-coroutines.mdx`
+- [ ] 🔴 P1 **03-lua-isms/object-oriented-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/object-oriented-programming.mdx`
+- [ ] 🔴 P1 **03-lua-isms/reflection** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/03-lua-isms/reflection.mdx`
+- [ ] 🔴 P1 **04-c-api/c-api-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/c-api-overview.mdx`
+- [ ] 🔴 P1 **04-c-api/c-function-techniques** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/c-function-techniques.mdx`
+- [ ] 🔴 P1 **04-c-api/calling-c-from-lua** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/calling-c-from-lua.mdx`
+- [ ] 🔴 P1 **04-c-api/extending-application** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/extending-application.mdx`
+- [ ] 🔴 P1 **04-c-api/managing-resources** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/managing-resources.mdx`
+- [ ] 🔴 P1 **04-c-api/threads-states** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/lua-programming/04-c-api/threads-states.mdx`
+- [ ] 🔴 P1 **01-basics/filling-some-gaps** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/lua-programming/01-basics/filling-some-gaps.mdx`
+- [ ] 🔴 P1 **02-real-programming/pattern-matching** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/lua-programming/02-real-programming/pattern-matching.mdx`
+- [ ] 🔴 P1 **03-lua-isms/garbage** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/lua-programming/03-lua-isms/garbage.mdx`
+- [ ] 🔴 P1 **01-basics/external-world** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/lua-programming/01-basics/external-world.mdx`
+- [ ] 🔴 P1 **04-c-api/user-defined-types** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/lua-programming/04-c-api/user-defined-types.mdx`
+- [ ] 🔴 P1 **01-basics/tables** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/lua-programming/01-basics/tables.mdx`
+- [ ] 🔴 P1 **02-real-programming/markov-chain** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/lua-programming/02-real-programming/markov-chain.mdx`
+- [ ] 🔴 P1 **02-real-programming/most-frequent-words** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/lua-programming/02-real-programming/most-frequent-words.mdx`
+- [ ] 🔴 P1 **01-basics/getting-started** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/lua-programming/01-basics/getting-started.mdx`
+- [ ] 🔴 P1 **01-basics/strings** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/lua-programming/01-basics/strings.mdx`
+- [ ] 🔴 P1 **01-basics/eight-queen-puzzle** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/lua-programming/01-basics/eight-queen-puzzle.mdx`
+- [ ] 🔴 P1 **01-basics/functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/lua-programming/01-basics/functions.mdx`
+- [ ] 🔴 P1 **01-basics/numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/lua-programming/01-basics/numbers.mdx`
+
+## unity-shaderlab（35 章 · ❌35 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/usl-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-shaderlab/00-guide/usl-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/usl-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-shaderlab/08-review/usl-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/usl-02-unity-shader-forms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shaderlab/01-foundations/usl-02-unity-shader-forms.mdx`
+- [ ] 🔴 P1 **01-foundations/usl-01-shader-concept** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/01-foundations/usl-01-shader-concept.mdx`
+- [ ] 🔴 P1 **01-foundations/usl-03-coordinate-spaces** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/01-foundations/usl-03-coordinate-spaces.mdx`
+- [ ] 🔴 P1 **01-foundations/usl-04-basic-lighting-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/01-foundations/usl-04-basic-lighting-models.mdx`
+- [ ] 🔴 P1 **02-lighting/usl-05-first-executed-pass** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/02-lighting/usl-05-first-executed-pass.mdx`
+- [ ] 🔴 P1 **02-lighting/usl-06-vertexlit-path** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/02-lighting/usl-06-vertexlit-path.mdx`
+- [ ] 🔴 P1 **02-lighting/usl-07-forward-path** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/02-lighting/usl-07-forward-path.mdx`
+- [ ] 🔴 P1 **02-lighting/usl-08-baked-lightmaps** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/02-lighting/usl-08-baked-lightmaps.mdx`
+- [ ] 🔴 P1 **02-lighting/usl-09-light-probes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/02-lighting/usl-09-light-probes.mdx`
+- [ ] 🔴 P1 **03-shadows/usl-10-planar-shadows** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/03-shadows/usl-10-planar-shadows.mdx`
+- [ ] 🔴 P1 **03-shadows/usl-11-spherical-shadows** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/03-shadows/usl-11-spherical-shadows.mdx`
+- [ ] 🔴 P1 **03-shadows/usl-12-volume-shadows** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/03-shadows/usl-12-volume-shadows.mdx`
+- [ ] 🔴 P1 **03-shadows/usl-13-shadow-mapping** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/03-shadows/usl-13-shadow-mapping.mdx`
+- [ ] 🔴 P1 **03-shadows/usl-14-built-in-shadows** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/03-shadows/usl-14-built-in-shadows.mdx`
+- [ ] 🔴 P1 **04-shaders/usl-15-pass-state-commands** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/04-shaders/usl-15-pass-state-commands.mdx`
+- [ ] 🔴 P1 **04-shaders/usl-16-fixed-function-pipeline** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/04-shaders/usl-16-fixed-function-pipeline.mdx`
+- [ ] 🔴 P1 **04-shaders/usl-17-surface-shader** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/04-shaders/usl-17-surface-shader.mdx`
+- [ ] 🔴 P1 **05-effects/usl-18-bump-material** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-18-bump-material.mdx`
+- [ ] 🔴 P1 **05-effects/usl-19-toon-material** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-19-toon-material.mdx`
+- [ ] 🔴 P1 **05-effects/usl-20-mirror-material** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-20-mirror-material.mdx`
+- [ ] 🔴 P1 **05-effects/usl-21-translucent-material** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-21-translucent-material.mdx`
+- [ ] 🔴 P1 **05-effects/usl-22-volumetric-fog** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-22-volumetric-fog.mdx`
+- [ ] 🔴 P1 **05-effects/usl-23-wrap-model** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-23-wrap-model.mdx`
+- [ ] 🔴 P1 **05-effects/usl-24-area-light** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-24-area-light.mdx`
+- [ ] 🔴 P1 **05-effects/usl-25-volumetric-light** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/05-effects/usl-25-volumetric-light.mdx`
+- [ ] 🔴 P1 **06-scenes/usl-26-replacement-rendering** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/06-scenes/usl-26-replacement-rendering.mdx`
+- [ ] 🔴 P1 **06-scenes/usl-27-post-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/06-scenes/usl-27-post-effects.mdx`
+- [ ] 🔴 P1 **06-scenes/usl-28-terrain** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/06-scenes/usl-28-terrain.mdx`
+- [ ] 🔴 P1 **06-scenes/usl-29-projection** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/06-scenes/usl-29-projection.mdx`
+- [ ] 🔴 P1 **07-optimization/usl-30-organization-reuse** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/07-optimization/usl-30-organization-reuse.mdx`
+- [ ] 🔴 P1 **07-optimization/usl-31-rendering-concepts** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/07-optimization/usl-31-rendering-concepts.mdx`
+- [ ] 🔴 P1 **07-optimization/usl-32-render-path-optimization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/07-optimization/usl-32-render-path-optimization.mdx`
+- [ ] 🔴 P1 **07-optimization/usl-33-mobile-optimization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-shaderlab/07-optimization/usl-33-mobile-optimization.mdx`
+
+## javascript-pro-guide（34 章 · ❌34 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/jpg-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/javascript-pro-guide/00-guide/jpg-official-learning-map.mdx`
+- [ ] 🔴 P1 **09-review/jpg-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/javascript-pro-guide/09-review/jpg-official-final-review.mdx`
+- [ ] 🔴 P1 **06-data-network/jpg-23-json** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/javascript-pro-guide/06-data-network/jpg-23-json.mdx`
+- [ ] 🔴 P1 **01-foundations/jpg-01-what-is-javascript** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/javascript-pro-guide/01-foundations/jpg-01-what-is-javascript.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-07-iterators-generators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-07-iterators-generators.mdx`
+- [ ] 🔴 P1 **04-dom-events/jpg-15-dom-extensions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/javascript-pro-guide/04-dom-events/jpg-15-dom-extensions.mdx`
+- [ ] 🔴 P1 **04-dom-events/jpg-16-dom-levels-2-3** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/javascript-pro-guide/04-dom-events/jpg-16-dom-levels-2-3.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-05-basic-reference-types** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-05-basic-reference-types.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-06-collection-reference-types** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-06-collection-reference-types.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-10-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-10-functions.mdx`
+- [ ] 🔴 P1 **06-data-network/jpg-25-client-storage** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/javascript-pro-guide/06-data-network/jpg-25-client-storage.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-08-objects-classes-oop** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-08-objects-classes-oop.mdx`
+- [ ] 🔴 P1 **03-async-browser/jpg-12-browser-object-model** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/javascript-pro-guide/03-async-browser/jpg-12-browser-object-model.mdx`
+- [ ] 🔴 P1 **05-graphics-forms-api/jpg-18-animation-canvas** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/javascript-pro-guide/05-graphics-forms-api/jpg-18-animation-canvas.mdx`
+- [ ] 🔴 P1 **07-modules-workers-practice/jpg-26-modules** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/javascript-pro-guide/07-modules-workers-practice/jpg-26-modules.mdx`
+- [ ] 🔴 P1 **01-foundations/jpg-02-javascript-in-html** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/01-foundations/jpg-02-javascript-in-html.mdx`
+- [ ] 🔴 P1 **01-foundations/jpg-03-language-basics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/01-foundations/jpg-03-language-basics.mdx`
+- [ ] 🔴 P1 **01-foundations/jpg-04-variables-scope-memory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/01-foundations/jpg-04-variables-scope-memory.mdx`
+- [ ] 🔴 P1 **02-types-objects/jpg-09-proxies-reflect** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/02-types-objects/jpg-09-proxies-reflect.mdx`
+- [ ] 🔴 P1 **03-async-browser/jpg-11-promises-async-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/03-async-browser/jpg-11-promises-async-functions.mdx`
+- [ ] 🔴 P1 **04-dom-events/jpg-17-events** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/04-dom-events/jpg-17-events.mdx`
+- [ ] 🔴 P1 **05-graphics-forms-api/jpg-20-javascript-apis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/05-graphics-forms-api/jpg-20-javascript-apis.mdx`
+- [ ] 🔴 P1 **06-data-network/jpg-21-error-handling-debugging** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/06-data-network/jpg-21-error-handling-debugging.mdx`
+- [ ] 🔴 P1 **06-data-network/jpg-22-working-with-xml** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/06-data-network/jpg-22-working-with-xml.mdx`
+- [ ] 🔴 P1 **06-data-network/jpg-24-network-requests** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/06-data-network/jpg-24-network-requests.mdx`
+- [ ] 🔴 P1 **07-modules-workers-practice/jpg-28-best-practices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/javascript-pro-guide/07-modules-workers-practice/jpg-28-best-practices.mdx`
+- [ ] 🔴 P1 **03-async-browser/jpg-13-client-detection** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/03-async-browser/jpg-13-client-detection.mdx`
+- [ ] 🔴 P1 **04-dom-events/jpg-14-dom** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/04-dom-events/jpg-14-dom.mdx`
+- [ ] 🔴 P1 **05-graphics-forms-api/jpg-19-form-scripting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/05-graphics-forms-api/jpg-19-form-scripting.mdx`
+- [ ] 🔴 P1 **07-modules-workers-practice/jpg-27-workers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/07-modules-workers-practice/jpg-27-workers.mdx`
+- [ ] 🔴 P1 **08-appendices/jpg-appendix-a-es2018-es2019** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/08-appendices/jpg-appendix-a-es2018-es2019.mdx`
+- [ ] 🔴 P1 **08-appendices/jpg-appendix-c-libraries-frameworks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/08-appendices/jpg-appendix-c-libraries-frameworks.mdx`
+- [ ] 🔴 P1 **08-appendices/jpg-appendix-d-javascript-tools** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/javascript-pro-guide/08-appendices/jpg-appendix-d-javascript-tools.mdx`
+- [ ] 🔴 P1 **08-appendices/jpg-appendix-b-strict-mode** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/javascript-pro-guide/08-appendices/jpg-appendix-b-strict-mode.mdx`
+
+## clr-via-csharp（32 章 · ❌2 ⚠️30 ✅0）
+
+- [ ] 🔴 P1 **03-advanced/cvc-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/clr-via-csharp/03-advanced/cvc-final-review.mdx`
+- [ ] 🔴 P1 **00-clr/cvc-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/clr-via-csharp/00-clr/cvc-learning-map.mdx`
+- [ ] 🟡 P3 **05-threading/hybrid-thread-synchronization-constructs** — 未升级 v2、可视化不足、UX 不足（score 70）
+    - 路径：`content/clr-via-csharp/05-threading/hybrid-thread-synchronization-constructs.mdx`
+- [ ] 🟡 P3 **01-clr-basics/shared-strongly-named-assemblies** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/01-clr-basics/shared-strongly-named-assemblies.mdx`
+- [ ] 🟡 P3 **02-designing-types/constants-and-fields** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/constants-and-fields.mdx`
+- [ ] 🟡 P3 **02-designing-types/events** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/events.mdx`
+- [ ] 🟡 P3 **02-designing-types/interfaces** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/interfaces.mdx`
+- [ ] 🟡 P3 **02-designing-types/methods** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/methods.mdx`
+- [ ] 🟡 P3 **02-designing-types/primitive-reference-value-types** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/primitive-reference-value-types.mdx`
+- [ ] 🟡 P3 **02-designing-types/type-fundamentals** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/type-fundamentals.mdx`
+- [ ] 🟡 P3 **02-designing-types/type-member-basics** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/02-designing-types/type-member-basics.mdx`
+- [ ] 🟡 P3 **03-essential-types/arrays** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/03-essential-types/arrays.mdx`
+- [ ] 🟡 P3 **03-essential-types/custom-attributes** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/03-essential-types/custom-attributes.mdx`
+- [ ] 🟡 P3 **03-essential-types/delegates** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/03-essential-types/delegates.mdx`
+- [ ] 🟡 P3 **03-essential-types/enumerated-types-bit-flags** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/03-essential-types/enumerated-types-bit-flags.mdx`
+- [ ] 🟡 P3 **03-essential-types/nullable-value-types** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/03-essential-types/nullable-value-types.mdx`
+- [ ] 🟡 P3 **04-core-facilities/interoperating-winrt-components** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/04-core-facilities/interoperating-winrt-components.mdx`
+- [ ] 🟡 P3 **05-threading/compute-bound-asynchronous-operations** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/05-threading/compute-bound-asynchronous-operations.mdx`
+- [ ] 🟡 P3 **05-threading/io-bound-asynchronous-operations** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/05-threading/io-bound-asynchronous-operations.mdx`
+- [ ] 🟡 P3 **05-threading/primitive-thread-synchronization-constructs** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/05-threading/primitive-thread-synchronization-constructs.mdx`
+- [ ] 🟡 P3 **05-threading/thread-basics** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/clr-via-csharp/05-threading/thread-basics.mdx`
+- [ ] 🟡 P3 **01-clr-basics/building-packaging-deploying-types** — 未升级 v2、来源不足、可视化不足、UX 不足（score 68）
+    - 路径：`content/clr-via-csharp/01-clr-basics/building-packaging-deploying-types.mdx`
+- [ ] 🟡 P3 **02-designing-types/parameters** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/clr-via-csharp/02-designing-types/parameters.mdx`
+- [ ] 🟡 P3 **02-designing-types/properties** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/clr-via-csharp/02-designing-types/properties.mdx`
+- [ ] 🟡 P3 **02-designing-types/generics** — 未升级 v2、来源不足、可视化不足、UX 不足（score 67）
+    - 路径：`content/clr-via-csharp/02-designing-types/generics.mdx`
+- [ ] 🟡 P3 **04-core-facilities/assembly-loading-reflection** — 未升级 v2、来源不足、可视化不足、UX 不足（score 67）
+    - 路径：`content/clr-via-csharp/04-core-facilities/assembly-loading-reflection.mdx`
+- [ ] 🟡 P3 **04-core-facilities/clr-hosting-appdomains** — 未升级 v2、来源不足、可视化不足、UX 不足（score 67）
+    - 路径：`content/clr-via-csharp/04-core-facilities/clr-hosting-appdomains.mdx`
+- [ ] 🟡 P3 **04-core-facilities/managed-heap-garbage-collection** — 未升级 v2、来源不足、可视化不足、UX 不足（score 67）
+    - 路径：`content/clr-via-csharp/04-core-facilities/managed-heap-garbage-collection.mdx`
+- [ ] 🟡 P3 **04-core-facilities/exceptions-state-management** — 未升级 v2、来源不足、可视化不足、UX 不足（score 66）
+    - 路径：`content/clr-via-csharp/04-core-facilities/exceptions-state-management.mdx`
+- [ ] 🟡 P3 **01-clr-basics/clr-execution-model** — 未升级 v2、来源不足、可视化不足、UX 不足（score 65）
+    - 路径：`content/clr-via-csharp/01-clr-basics/clr-execution-model.mdx`
+- [ ] 🟡 P3 **03-essential-types/chars-strings-working-with-text** — 未升级 v2、来源不足、可视化不足、UX 不足（score 65）
+    - 路径：`content/clr-via-csharp/03-essential-types/chars-strings-working-with-text.mdx`
+- [ ] 🟡 P3 **04-core-facilities/runtime-serialization** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/clr-via-csharp/04-core-facilities/runtime-serialization.mdx`
+
+## taocp（30 章 · ❌0 ⚠️30 ✅0）
+
+- [ ] 🟡 P3 **vol1-info-structures/taocp-1-2-dynamic** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol1-info-structures/taocp-1-2-dynamic.mdx`
+- [ ] 🟡 P3 **vol1-info-structures/taocp-1-2-linear** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol1-info-structures/taocp-1-2-linear.mdx`
+- [ ] 🟡 P3 **vol1-info-structures/taocp-1-2-multilinked** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol1-info-structures/taocp-1-2-multilinked.mdx`
+- [ ] 🟡 P3 **vol1-info-structures/taocp-1-2-trees** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol1-info-structures/taocp-1-2-trees.mdx`
+- [ ] 🟡 P3 **vol2-arithmetic/taocp-2-4-multiple** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol2-arithmetic/taocp-2-4-multiple.mdx`
+- [ ] 🟡 P3 **vol2-arithmetic/taocp-2-4-polynomial** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol2-arithmetic/taocp-2-4-polynomial.mdx`
+- [ ] 🟡 P3 **vol3-searching/taocp-3-6-digital** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-searching/taocp-3-6-digital.mdx`
+- [ ] 🟡 P3 **vol3-searching/taocp-3-6-sequential** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-searching/taocp-3-6-sequential.mdx`
+- [ ] 🟡 P3 **vol3-searching/taocp-3-6-tree** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-searching/taocp-3-6-tree.mdx`
+- [ ] 🟡 P3 **vol3-sorting/taocp-3-5-external** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-sorting/taocp-3-5-external.mdx`
+- [ ] 🟡 P3 **vol3-sorting/taocp-3-5-internal** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-sorting/taocp-3-5-internal.mdx`
+- [ ] 🟡 P3 **vol3-sorting/taocp-3-5-optimum** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol3-sorting/taocp-3-5-optimum.mdx`
+- [ ] 🟡 P3 **vol4a-combinatorial/taocp-4-7-graph** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/taocp/vol4a-combinatorial/taocp-4-7-graph.mdx`
+- [ ] 🟡 P3 **vol1-basic-concepts/taocp-1-1-algorithms** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol1-basic-concepts/taocp-1-1-algorithms.mdx`
+- [ ] 🟡 P3 **vol1-basic-concepts/taocp-1-1-math** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol1-basic-concepts/taocp-1-1-math.mdx`
+- [ ] 🟡 P3 **vol1-basic-concepts/taocp-1-1-mix** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol1-basic-concepts/taocp-1-1-mix.mdx`
+- [ ] 🟡 P3 **vol2-arithmetic/taocp-2-4-position** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol2-arithmetic/taocp-2-4-position.mdx`
+- [ ] 🟡 P3 **vol2-arithmetic/taocp-2-4-radix** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol2-arithmetic/taocp-2-4-radix.mdx`
+- [ ] 🟡 P3 **vol2-random/taocp-2-3-random** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol2-random/taocp-2-3-random.mdx`
+- [ ] 🟡 P3 **vol3-searching/taocp-3-6-hashing** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol3-searching/taocp-3-6-hashing.mdx`
+- [ ] 🟡 P3 **vol4a-combinatorial/taocp-4-7-dancing-links** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol4a-combinatorial/taocp-4-7-dancing-links.mdx`
+- [ ] 🟡 P3 **vol4a-combinatorial/taocp-4-7-generating** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol4a-combinatorial/taocp-4-7-generating.mdx`
+- [ ] 🟡 P3 **vol4a-combinatorial/taocp-4-7-satisfiability** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol4a-combinatorial/taocp-4-7-satisfiability.mdx`
+- [ ] 🟡 P3 **vol4a-combinatorial/taocp-4-7-zeros-ones** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol4a-combinatorial/taocp-4-7-zeros-ones.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-network** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-network.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-backtracking** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-backtracking.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-branch-bound** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-branch-bound.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-heuristic** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-heuristic.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-matching** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-matching.mdx`
+- [ ] 🟡 P3 **vol4b-combinatorial/taocp-4-7-np** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/taocp/vol4b-combinatorial/taocp-4-7-np.mdx`
+
+## kotlin-definitive-guide（29 章 · ❌29 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/kdg1-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/kotlin-definitive-guide/00-official-learning-map/kdg1-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-official-final-review/kdg1-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/kotlin-definitive-guide/08-official-final-review/kdg1-official-final-review.mdx`
+- [ ] 🔴 P1 **01-introduction/kdg1-introducing-kotlin** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/01-introduction/kdg1-introducing-kotlin.mdx`
+- [ ] 🔴 P1 **02-language-foundations/kdg1-01-first-application** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/02-language-foundations/kdg1-01-first-application.mdx`
+- [ ] 🔴 P1 **02-language-foundations/kdg1-02-variables-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/02-language-foundations/kdg1-02-variables-types.mdx`
+- [ ] 🔴 P1 **02-language-foundations/kdg1-03-conditionals** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/02-language-foundations/kdg1-03-conditionals.mdx`
+- [ ] 🔴 P1 **03-functions-null-values/kdg1-04-functions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/03-functions-null-values/kdg1-04-functions.mdx`
+- [ ] 🔴 P1 **03-functions-null-values/kdg1-05-anonymous-functions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/03-functions-null-values/kdg1-05-anonymous-functions.mdx`
+- [ ] 🔴 P1 **03-functions-null-values/kdg1-06-null-safety-exceptions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/03-functions-null-values/kdg1-06-null-safety-exceptions.mdx`
+- [ ] 🔴 P1 **04-values-collections/kdg1-07-strings** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/04-values-collections/kdg1-07-strings.mdx`
+- [ ] 🔴 P1 **04-values-collections/kdg1-08-numbers** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/04-values-collections/kdg1-08-numbers.mdx`
+- [ ] 🔴 P1 **04-values-collections/kdg1-09-standard-functions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/04-values-collections/kdg1-09-standard-functions.mdx`
+- [ ] 🔴 P1 **04-values-collections/kdg1-10-lists-sets** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/04-values-collections/kdg1-10-lists-sets.mdx`
+- [ ] 🔴 P1 **04-values-collections/kdg1-11-maps** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/04-values-collections/kdg1-11-maps.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-12-defining-classes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-12-defining-classes.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-13-initialization** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-13-initialization.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-14-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-14-inheritance.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-15-objects** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-15-objects.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-16-interfaces-abstract-classes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-16-interfaces-abstract-classes.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-17-generics** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-17-generics.mdx`
+- [ ] 🔴 P1 **05-object-model/kdg1-18-extensions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/05-object-model/kdg1-18-extensions.mdx`
+- [ ] 🔴 P1 **06-integration/kdg1-19-functional-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/06-integration/kdg1-19-functional-programming.mdx`
+- [ ] 🔴 P1 **06-integration/kdg1-20-java-interoperability** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/06-integration/kdg1-20-java-interoperability.mdx`
+- [ ] 🔴 P1 **06-integration/kdg1-21-first-android-application** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/06-integration/kdg1-21-first-android-application.mdx`
+- [ ] 🔴 P1 **06-integration/kdg1-22-coroutines-introduction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/06-integration/kdg1-22-coroutines-introduction.mdx`
+- [ ] 🔴 P1 **07-reference/kdg1-23-afterword** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/kotlin-definitive-guide/07-reference/kdg1-23-afterword.mdx`
+- [ ] 🔴 P1 **07-reference/kdg1-appendix-a-more-challenges** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/kotlin-definitive-guide/07-reference/kdg1-appendix-a-more-challenges.mdx`
+- [ ] 🔴 P1 **07-reference/kdg1-glossary** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/kotlin-definitive-guide/07-reference/kdg1-glossary.mdx`
+- [ ] 🔴 P1 **07-reference/kdg1-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/kotlin-definitive-guide/07-reference/kdg1-index.mdx`
+
+## windows-journey（29 章 · ❌29 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/wj-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/windows-journey/00-guide/wj-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/wj-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/windows-journey/07-review/wj-official-final-review.mdx`
+- [ ] 🔴 P1 **01-dream-orientation/wj-01-game-development-landscape** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/01-dream-orientation/wj-01-game-development-landscape.mdx`
+- [ ] 🔴 P1 **02-windows-foundation/wj-02-visual-studio** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/02-windows-foundation/wj-02-visual-studio.mdx`
+- [ ] 🔴 P1 **02-windows-foundation/wj-03-windows-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/02-windows-foundation/wj-03-windows-programming.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-04-gdi-foundations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-04-gdi-foundations.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-05-gdi-drawing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-05-gdi-drawing.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-06-windows-animation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-06-windows-animation.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-07-input-messages** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-07-input-messages.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-08-physics-particles** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-08-physics-particles.mdx`
+- [ ] 🔴 P1 **03-gdi-2d/wj-09-turn-based-game** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/03-gdi-2d/wj-09-turn-based-game.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-10-directx-overview** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-10-directx-overview.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-11-direct3d-foundations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-11-direct3d-foundations.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-12-direct3d-drawing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-12-direct3d-drawing.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-13-four-transforms** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-13-four-transforms.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-14-lighting-materials** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-14-lighting-materials.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-15-directinput** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-15-directinput.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-16-texture-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-16-texture-mapping.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-17-mesh-loading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-17-mesh-loading.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-18-alpha-blending** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-18-alpha-blending.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-19-depth-z-buffer** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-19-depth-z-buffer.mdx`
+- [ ] 🔴 P1 **04-directx-foundation/wj-20-stencil-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/04-directx-foundation/wj-20-stencil-techniques.mdx`
+- [ ] 🔴 P1 **05-directx-application/wj-21-game-camera** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/05-directx-application/wj-21-game-camera.mdx`
+- [ ] 🔴 P1 **05-directx-application/wj-22-terrain** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/05-directx-application/wj-22-terrain.mdx`
+- [ ] 🔴 P1 **05-directx-application/wj-23-skybox** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/05-directx-application/wj-23-skybox.mdx`
+- [ ] 🔴 P1 **05-directx-application/wj-24-particle-system** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/05-directx-application/wj-24-particle-system.mdx`
+- [ ] 🔴 P1 **05-directx-application/wj-25-multi-model-loading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/05-directx-application/wj-25-multi-model-loading.mdx`
+- [ ] 🔴 P1 **06-engine-and-reading/wj-26-game-engines** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/06-engine-and-reading/wj-26-game-engines.mdx`
+- [ ] 🔴 P1 **06-engine-and-reading/wj-appendix-a-reading-guide** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/windows-journey/06-engine-and-reading/wj-appendix-a-reading-guide.mdx`
+
+## out-of-control（28 章 · ❌28 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/ooc16-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/out-of-control/00-official-learning-map/ooc16-official-learning-map.mdx`
+- [ ] 🔴 P1 **27-official-final-review/ooc16-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/out-of-control/27-official-final-review/ooc16-official-final-review.mdx`
+- [ ] 🔴 P1 **02-chapter-01/ooc16-chapter-01** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/02-chapter-01/ooc16-chapter-01.mdx`
+- [ ] 🔴 P1 **03-chapter-02/ooc16-chapter-02** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/03-chapter-02/ooc16-chapter-02.mdx`
+- [ ] 🔴 P1 **04-chapter-03/ooc16-chapter-03** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/04-chapter-03/ooc16-chapter-03.mdx`
+- [ ] 🔴 P1 **05-chapter-04/ooc16-chapter-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/05-chapter-04/ooc16-chapter-04.mdx`
+- [ ] 🔴 P1 **06-chapter-05/ooc16-chapter-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/06-chapter-05/ooc16-chapter-05.mdx`
+- [ ] 🔴 P1 **07-chapter-06/ooc16-chapter-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/07-chapter-06/ooc16-chapter-06.mdx`
+- [ ] 🔴 P1 **08-chapter-07/ooc16-chapter-07** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/08-chapter-07/ooc16-chapter-07.mdx`
+- [ ] 🔴 P1 **09-chapter-08/ooc16-chapter-08** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/09-chapter-08/ooc16-chapter-08.mdx`
+- [ ] 🔴 P1 **10-chapter-09/ooc16-chapter-09** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/10-chapter-09/ooc16-chapter-09.mdx`
+- [ ] 🔴 P1 **11-chapter-10/ooc16-chapter-10** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/11-chapter-10/ooc16-chapter-10.mdx`
+- [ ] 🔴 P1 **12-chapter-11/ooc16-chapter-11** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/12-chapter-11/ooc16-chapter-11.mdx`
+- [ ] 🔴 P1 **13-chapter-12/ooc16-chapter-12** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/13-chapter-12/ooc16-chapter-12.mdx`
+- [ ] 🔴 P1 **14-chapter-13/ooc16-chapter-13** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/14-chapter-13/ooc16-chapter-13.mdx`
+- [ ] 🔴 P1 **15-chapter-14/ooc16-chapter-14** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/15-chapter-14/ooc16-chapter-14.mdx`
+- [ ] 🔴 P1 **16-chapter-15/ooc16-chapter-15** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/16-chapter-15/ooc16-chapter-15.mdx`
+- [ ] 🔴 P1 **17-chapter-16/ooc16-chapter-16** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/17-chapter-16/ooc16-chapter-16.mdx`
+- [ ] 🔴 P1 **18-chapter-17/ooc16-chapter-17** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/18-chapter-17/ooc16-chapter-17.mdx`
+- [ ] 🔴 P1 **19-chapter-18/ooc16-chapter-18** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/19-chapter-18/ooc16-chapter-18.mdx`
+- [ ] 🔴 P1 **20-chapter-19/ooc16-chapter-19** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/20-chapter-19/ooc16-chapter-19.mdx`
+- [ ] 🔴 P1 **21-chapter-20/ooc16-chapter-20** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/21-chapter-20/ooc16-chapter-20.mdx`
+- [ ] 🔴 P1 **22-chapter-21/ooc16-chapter-21** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/22-chapter-21/ooc16-chapter-21.mdx`
+- [ ] 🔴 P1 **23-chapter-22/ooc16-chapter-22** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/23-chapter-22/ooc16-chapter-22.mdx`
+- [ ] 🔴 P1 **24-chapter-23/ooc16-chapter-23** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/24-chapter-23/ooc16-chapter-23.mdx`
+- [ ] 🔴 P1 **25-chapter-24/ooc16-chapter-24** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/out-of-control/25-chapter-24/ooc16-chapter-24.mdx`
+- [ ] 🔴 P1 **01-chinese-preface/ooc16-chinese-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/out-of-control/01-chinese-preface/ooc16-chinese-preface.mdx`
+- [ ] 🔴 P1 **26-translator-postscript/ooc16-translator-postscript** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/out-of-control/26-translator-postscript/ooc16-translator-postscript.mdx`
+
+## csharp-10-core（27 章 · ❌0 ⚠️27 ✅0）
+
+- [ ] 🟡 P3 **00-lang/ctc-learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/csharp-10-core/00-lang/ctc-learning-map.mdx`
+- [ ] 🟡 P3 **03-modern/ctc-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/csharp-10-core/03-modern/ctc-final-review.mdx`
+- [ ] 🟡 P3 **01-official/introducing-csharp-and-dotnet** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/01-official/introducing-csharp-and-dotnet.mdx`
+- [ ] 🟡 P3 **02-official/csharp-language-basics** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/02-official/csharp-language-basics.mdx`
+- [ ] 🟡 P3 **04-official/advanced-csharp** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/04-official/advanced-csharp.mdx`
+- [ ] 🟡 P3 **05-official/dotnet-overview** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/05-official/dotnet-overview.mdx`
+- [ ] 🟡 P3 **06-official/dotnet-fundamentals** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/06-official/dotnet-fundamentals.mdx`
+- [ ] 🟡 P3 **08-official/linq-queries** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/08-official/linq-queries.mdx`
+- [ ] 🟡 P3 **09-official/linq-operators** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/09-official/linq-operators.mdx`
+- [ ] 🟡 P3 **10-official/linq-to-xml** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/10-official/linq-to-xml.mdx`
+- [ ] 🟡 P3 **13-official/diagnostics** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/13-official/diagnostics.mdx`
+- [ ] 🟡 P3 **15-official/streams-and-io** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/15-official/streams-and-io.mdx`
+- [ ] 🟡 P3 **16-official/networking** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/16-official/networking.mdx`
+- [ ] 🟡 P3 **17-official/assemblies** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/17-official/assemblies.mdx`
+- [ ] 🟡 P3 **18-official/reflection-and-metadata** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/18-official/reflection-and-metadata.mdx`
+- [ ] 🟡 P3 **19-official/dynamic-programming** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/19-official/dynamic-programming.mdx`
+- [ ] 🟡 P3 **20-official/cryptography** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/20-official/cryptography.mdx`
+- [ ] 🟡 P3 **22-official/parallel-programming** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/22-official/parallel-programming.mdx`
+- [ ] 🟡 P3 **23-official/span-and-memory** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/23-official/span-and-memory.mdx`
+- [ ] 🟡 P3 **24-official/native-com-interoperability** — 未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/csharp-10-core/24-official/native-com-interoperability.mdx`
+- [ ] 🟡 P3 **03-official/creating-types-in-csharp** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/csharp-10-core/03-official/creating-types-in-csharp.mdx`
+- [ ] 🟡 P3 **07-official/collections** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/csharp-10-core/07-official/collections.mdx`
+- [ ] 🟡 P3 **11-official/xml-json-technologies** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/csharp-10-core/11-official/xml-json-technologies.mdx`
+- [ ] 🟡 P3 **12-official/disposal-and-garbage-collection** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/csharp-10-core/12-official/disposal-and-garbage-collection.mdx`
+- [ ] 🟡 P3 **14-official/concurrency-and-asynchrony** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/csharp-10-core/14-official/concurrency-and-asynchrony.mdx`
+- [ ] 🟡 P3 **25-official/regular-expressions** — 未升级 v2、来源不足、可视化不足、UX 不足（score 67）
+    - 路径：`content/csharp-10-core/25-official/regular-expressions.mdx`
+- [ ] 🟡 P3 **21-official/advanced-threading** — 未升级 v2、来源不足、可视化不足、UX 不足（score 66）
+    - 路径：`content/csharp-10-core/21-official/advanced-threading.mdx`
+
+## design-patterns（27 章 · ❌27 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-intro/learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/design-patterns/00-intro/learning-map.mdx`
+- [ ] 🔴 P1 **04-compound/compound-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/design-patterns/04-compound/compound-patterns.mdx`
+- [ ] 🔴 P1 **04-compound/final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+    - 路径：`content/design-patterns/04-compound/final-review.mdx`
+- [ ] 🔴 P1 **00-intro/intro** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/00-intro/intro.mdx`
+- [ ] 🔴 P1 **01-creational/abstract-factory** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/01-creational/abstract-factory.mdx`
+- [ ] 🔴 P1 **01-creational/builder** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/01-creational/builder.mdx`
+- [ ] 🔴 P1 **01-creational/factory-method** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/01-creational/factory-method.mdx`
+- [ ] 🔴 P1 **01-creational/prototype** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/01-creational/prototype.mdx`
+- [ ] 🔴 P1 **01-creational/singleton** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/01-creational/singleton.mdx`
+- [ ] 🔴 P1 **02-structural/adapter** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/adapter.mdx`
+- [ ] 🔴 P1 **02-structural/bridge** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/bridge.mdx`
+- [ ] 🔴 P1 **02-structural/composite** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/composite.mdx`
+- [ ] 🔴 P1 **02-structural/facade** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/facade.mdx`
+- [ ] 🔴 P1 **02-structural/flyweight** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/flyweight.mdx`
+- [ ] 🔴 P1 **02-structural/proxy** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/02-structural/proxy.mdx`
+- [ ] 🔴 P1 **03-behavioral/chain-of-responsibility** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/chain-of-responsibility.mdx`
+- [ ] 🔴 P1 **03-behavioral/command** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/command.mdx`
+- [ ] 🔴 P1 **03-behavioral/decorator** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/decorator.mdx`
+- [ ] 🔴 P1 **03-behavioral/interpreter** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/interpreter.mdx`
+- [ ] 🔴 P1 **03-behavioral/iterator** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/iterator.mdx`
+- [ ] 🔴 P1 **03-behavioral/mediator** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/mediator.mdx`
+- [ ] 🔴 P1 **03-behavioral/memento** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/memento.mdx`
+- [ ] 🔴 P1 **03-behavioral/observer** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/observer.mdx`
+- [ ] 🔴 P1 **03-behavioral/state** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/state.mdx`
+- [ ] 🔴 P1 **03-behavioral/strategy** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/strategy.mdx`
+- [ ] 🔴 P1 **03-behavioral/template-method** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/template-method.mdx`
+- [ ] 🔴 P1 **03-behavioral/visitor** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/design-patterns/03-behavioral/visitor.mdx`
+
+## java-core-tech（27 章 · ❌27 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-jct-14e-official-learning-map/jct-14e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/java-core-tech/00-jct-14e-official-learning-map/jct-14e-official-learning-map.mdx`
+- [ ] 🔴 P1 **26-jct-14e-official-final-review/jct-14e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/java-core-tech/26-jct-14e-official-final-review/jct-14e-official-final-review.mdx`
+- [ ] 🔴 P1 **01-jct-14e-v1-01-introduction-java/jct-14e-v1-01-introduction-java** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/01-jct-14e-v1-01-introduction-java/jct-14e-v1-01-introduction-java.mdx`
+- [ ] 🔴 P1 **02-jct-14e-v1-02-programming-environment/jct-14e-v1-02-programming-environment** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/02-jct-14e-v1-02-programming-environment/jct-14e-v1-02-programming-environment.mdx`
+- [ ] 🔴 P1 **03-jct-14e-v1-03-fundamental-structures/jct-14e-v1-03-fundamental-structures** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/03-jct-14e-v1-03-fundamental-structures/jct-14e-v1-03-fundamental-structures.mdx`
+- [ ] 🔴 P1 **04-jct-14e-v1-04-objects-classes/jct-14e-v1-04-objects-classes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/04-jct-14e-v1-04-objects-classes/jct-14e-v1-04-objects-classes.mdx`
+- [ ] 🔴 P1 **05-jct-14e-v1-05-inheritance/jct-14e-v1-05-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/05-jct-14e-v1-05-inheritance/jct-14e-v1-05-inheritance.mdx`
+- [ ] 🔴 P1 **06-jct-14e-v1-06-interfaces-lambdas-inner/jct-14e-v1-06-interfaces-lambdas-inner** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/06-jct-14e-v1-06-interfaces-lambdas-inner/jct-14e-v1-06-interfaces-lambdas-inner.mdx`
+- [ ] 🔴 P1 **07-jct-14e-v1-07-exceptions-assertions-logging/jct-14e-v1-07-exceptions-assertions-logging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/07-jct-14e-v1-07-exceptions-assertions-logging/jct-14e-v1-07-exceptions-assertions-logging.mdx`
+- [ ] 🔴 P1 **08-jct-14e-v1-08-generic-programming/jct-14e-v1-08-generic-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/08-jct-14e-v1-08-generic-programming/jct-14e-v1-08-generic-programming.mdx`
+- [ ] 🔴 P1 **09-jct-14e-v1-09-collections/jct-14e-v1-09-collections** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/09-jct-14e-v1-09-collections/jct-14e-v1-09-collections.mdx`
+- [ ] 🔴 P1 **10-jct-14e-v1-10-concurrency/jct-14e-v1-10-concurrency** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/10-jct-14e-v1-10-concurrency/jct-14e-v1-10-concurrency.mdx`
+- [ ] 🔴 P1 **11-jct-14e-v1-11-annotations/jct-14e-v1-11-annotations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/11-jct-14e-v1-11-annotations/jct-14e-v1-11-annotations.mdx`
+- [ ] 🔴 P1 **12-jct-14e-v1-12-modules/jct-14e-v1-12-modules** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/12-jct-14e-v1-12-modules/jct-14e-v1-12-modules.mdx`
+- [ ] 🔴 P1 **13-jct-14e-v2-01-streams/jct-14e-v2-01-streams** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/13-jct-14e-v2-01-streams/jct-14e-v2-01-streams.mdx`
+- [ ] 🔴 P1 **14-jct-14e-v2-02-input-output/jct-14e-v2-02-input-output** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/14-jct-14e-v2-02-input-output/jct-14e-v2-02-input-output.mdx`
+- [ ] 🔴 P1 **15-jct-14e-v2-03-xml/jct-14e-v2-03-xml** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/15-jct-14e-v2-03-xml/jct-14e-v2-03-xml.mdx`
+- [ ] 🔴 P1 **16-jct-14e-v2-04-networking/jct-14e-v2-04-networking** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/16-jct-14e-v2-04-networking/jct-14e-v2-04-networking.mdx`
+- [ ] 🔴 P1 **17-jct-14e-v2-05-database/jct-14e-v2-05-database** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/17-jct-14e-v2-05-database/jct-14e-v2-05-database.mdx`
+- [ ] 🔴 P1 **18-jct-14e-v2-06-date-time/jct-14e-v2-06-date-time** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/18-jct-14e-v2-06-date-time/jct-14e-v2-06-date-time.mdx`
+- [ ] 🔴 P1 **19-jct-14e-v2-07-internationalization/jct-14e-v2-07-internationalization** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/19-jct-14e-v2-07-internationalization/jct-14e-v2-07-internationalization.mdx`
+- [ ] 🔴 P1 **20-jct-14e-v2-08-compiling-scripting/jct-14e-v2-08-compiling-scripting** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/20-jct-14e-v2-08-compiling-scripting/jct-14e-v2-08-compiling-scripting.mdx`
+- [ ] 🔴 P1 **21-jct-14e-v2-09-security/jct-14e-v2-09-security** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/21-jct-14e-v2-09-security/jct-14e-v2-09-security.mdx`
+- [ ] 🔴 P1 **22-jct-14e-v2-10-gui-programming/jct-14e-v2-10-gui-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/22-jct-14e-v2-10-gui-programming/jct-14e-v2-10-gui-programming.mdx`
+- [ ] 🔴 P1 **23-jct-14e-v2-11-swing-components/jct-14e-v2-11-swing-components** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/23-jct-14e-v2-11-swing-components/jct-14e-v2-11-swing-components.mdx`
+- [ ] 🔴 P1 **24-jct-14e-v2-12-advanced-swing-graphics/jct-14e-v2-12-advanced-swing-graphics** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/24-jct-14e-v2-12-advanced-swing-graphics/jct-14e-v2-12-advanced-swing-graphics.mdx`
+- [ ] 🔴 P1 **25-jct-14e-v2-13-foreign-functions-memory/jct-14e-v2-13-foreign-functions-memory** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/java-core-tech/25-jct-14e-v2-13-foreign-functions-memory/jct-14e-v2-13-foreign-functions-memory.mdx`
+
+## fluent-python（26 章 · ❌26 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/flp-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/fluent-python/00-guide/flp-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/flp-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/fluent-python/06-review/flp-final-review.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-data-class-builders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-data-class-builders.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-data-model** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-data-model.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-dict-sets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-dict-sets.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-object-references** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-object-references.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-sequences** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-sequences.mdx`
+- [ ] 🔴 P1 **01-data-structures/flp-unicode-text-bytes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/01-data-structures/flp-unicode-text-bytes.mdx`
+- [ ] 🔴 P1 **02-functions/flp-closures-decorators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/02-functions/flp-closures-decorators.mdx`
+- [ ] 🔴 P1 **02-functions/flp-design-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/02-functions/flp-design-patterns.mdx`
+- [ ] 🔴 P1 **02-functions/flp-functions-first-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/02-functions/flp-functions-first-class.mdx`
+- [ ] 🔴 P1 **02-functions/flp-type-hints** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/02-functions/flp-type-hints.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-inheritance-mixins** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-inheritance-mixins.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-operator-overloading** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-operator-overloading.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-protocols-abc** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-protocols-abc.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-pythonic-object** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-pythonic-object.mdx`
+- [ ] 🔴 P1 **04-control-flow/flp-concurrency-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/04-control-flow/flp-concurrency-models.mdx`
+- [ ] 🔴 P1 **04-control-flow/flp-concurrent-executors** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/04-control-flow/flp-concurrent-executors.mdx`
+- [ ] 🔴 P1 **04-control-flow/flp-generators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/04-control-flow/flp-generators.mdx`
+- [ ] 🔴 P1 **04-control-flow/flp-with-match-else** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/04-control-flow/flp-with-match-else.mdx`
+- [ ] 🔴 P1 **05-metaprogramming/flp-class-metaprogramming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/05-metaprogramming/flp-class-metaprogramming.mdx`
+- [ ] 🔴 P1 **05-metaprogramming/flp-descriptors** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/05-metaprogramming/flp-descriptors.mdx`
+- [ ] 🔴 P1 **05-metaprogramming/flp-dynamic-attributes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/fluent-python/05-metaprogramming/flp-dynamic-attributes.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-more-type-hints** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-more-type-hints.mdx`
+- [ ] 🔴 P1 **03-classes-protocols/flp-special-methods-sequences** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/fluent-python/03-classes-protocols/flp-special-methods-sequences.mdx`
+- [ ] 🔴 P1 **04-control-flow/flp-async-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/fluent-python/04-control-flow/flp-async-programming.mdx`
+
+## jvm-troubleshooting（26 章 · ❌26 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-jvt-2e-official-learning-map/jvt-2e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/jvm-troubleshooting/00-jvt-2e-official-learning-map/jvt-2e-official-learning-map.mdx`
+- [ ] 🔴 P1 **25-jvt-2e-official-final-review/jvt-2e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/jvm-troubleshooting/25-jvt-2e-official-final-review/jvt-2e-official-final-review.mdx`
+- [ ] 🔴 P1 **02-jvt-2e-01-starting-to-know-apps/jvt-2e-01-starting-to-know-apps** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/02-jvt-2e-01-starting-to-know-apps/jvt-2e-01-starting-to-know-apps.mdx`
+- [ ] 🔴 P1 **03-jvt-2e-02-debugging-techniques/jvt-2e-02-debugging-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/03-jvt-2e-02-debugging-techniques/jvt-2e-02-debugging-techniques.mdx`
+- [ ] 🔴 P1 **04-jvt-2e-03-advanced-debugging/jvt-2e-03-advanced-debugging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/04-jvt-2e-03-advanced-debugging/jvt-2e-03-advanced-debugging.mdx`
+- [ ] 🔴 P1 **05-jvt-2e-04-logs-auditing/jvt-2e-04-logs-auditing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/05-jvt-2e-04-logs-auditing/jvt-2e-04-logs-auditing.mdx`
+- [ ] 🔴 P1 **07-jvt-2e-05-resource-profiling/jvt-2e-05-resource-profiling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/07-jvt-2e-05-resource-profiling/jvt-2e-05-resource-profiling.mdx`
+- [ ] 🔴 P1 **08-jvt-2e-06-hidden-profiling/jvt-2e-06-hidden-profiling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/08-jvt-2e-06-hidden-profiling/jvt-2e-06-hidden-profiling.mdx`
+- [ ] 🔴 P1 **09-jvt-2e-07-thread-locks/jvt-2e-07-thread-locks** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/09-jvt-2e-07-thread-locks/jvt-2e-07-thread-locks.mdx`
+- [ ] 🔴 P1 **10-jvt-2e-08-deadlocks-thread-dumps/jvt-2e-08-deadlocks-thread-dumps** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/10-jvt-2e-08-deadlocks-thread-dumps/jvt-2e-08-deadlocks-thread-dumps.mdx`
+- [ ] 🔴 P1 **12-jvt-2e-09-memory-profiling/jvt-2e-09-memory-profiling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/12-jvt-2e-09-memory-profiling/jvt-2e-09-memory-profiling.mdx`
+- [ ] 🔴 P1 **13-jvt-2e-10-heap-dumps/jvt-2e-10-heap-dumps** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/13-jvt-2e-10-heap-dumps/jvt-2e-10-heap-dumps.mdx`
+- [ ] 🔴 P1 **14-jvt-2e-11-gc-logs/jvt-2e-11-gc-logs** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/14-jvt-2e-11-gc-logs/jvt-2e-11-gc-logs.mdx`
+- [ ] 🔴 P1 **16-jvt-2e-12-system-failures/jvt-2e-12-system-failures** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/16-jvt-2e-12-system-failures/jvt-2e-12-system-failures.mdx`
+- [ ] 🔴 P1 **17-jvt-2e-13-consistency-transactions/jvt-2e-13-consistency-transactions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/17-jvt-2e-13-consistency-transactions/jvt-2e-13-consistency-transactions.mdx`
+- [ ] 🔴 P1 **22-jvt-2e-appendix-d-threads/jvt-2e-appendix-d-threads** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/22-jvt-2e-appendix-d-threads/jvt-2e-appendix-d-threads.mdx`
+- [ ] 🔴 P1 **23-jvt-2e-appendix-e-memory/jvt-2e-appendix-e-memory** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/jvm-troubleshooting/23-jvt-2e-appendix-e-memory/jvt-2e-appendix-e-memory.mdx`
+- [ ] 🔴 P1 **01-jvt-2e-part-1-foundation/jvt-2e-part-1-foundation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/01-jvt-2e-part-1-foundation/jvt-2e-part-1-foundation.mdx`
+- [ ] 🔴 P1 **06-jvt-2e-part-2-deep-diagnosing/jvt-2e-part-2-deep-diagnosing** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/06-jvt-2e-part-2-deep-diagnosing/jvt-2e-part-2-deep-diagnosing.mdx`
+- [ ] 🔴 P1 **11-jvt-2e-part-3-memory/jvt-2e-part-3-memory** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/11-jvt-2e-part-3-memory/jvt-2e-part-3-memory.mdx`
+- [ ] 🔴 P1 **15-jvt-2e-part-4-large-systems/jvt-2e-part-4-large-systems** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/15-jvt-2e-part-4-large-systems/jvt-2e-part-4-large-systems.mdx`
+- [ ] 🔴 P1 **18-jvt-2e-appendices/jvt-2e-appendices** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/18-jvt-2e-appendices/jvt-2e-appendices.mdx`
+- [ ] 🔴 P1 **19-jvt-2e-appendix-a-tools/jvt-2e-appendix-a-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/19-jvt-2e-appendix-a-tools/jvt-2e-appendix-a-tools.mdx`
+- [ ] 🔴 P1 **20-jvt-2e-appendix-b-opening-project/jvt-2e-appendix-b-opening-project** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/20-jvt-2e-appendix-b-opening-project/jvt-2e-appendix-b-opening-project.mdx`
+- [ ] 🔴 P1 **21-jvt-2e-appendix-c-reading/jvt-2e-appendix-c-reading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/21-jvt-2e-appendix-c-reading/jvt-2e-appendix-c-reading.mdx`
+- [ ] 🔴 P1 **24-jvt-2e-appendix-f-references/jvt-2e-appendix-f-references** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/jvm-troubleshooting/24-jvt-2e-appendix-f-references/jvt-2e-appendix-f-references.mdx`
+
+## mythical-man-month（26 章 · ❌26 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/tmm40-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/mythical-man-month/00-map/tmm40-official-learning-map.mdx`
+- [ ] 🔴 P1 **25-review/tmm40-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/mythical-man-month/25-review/tmm40-official-final-review.mdx`
+- [ ] 🔴 P1 **01-translator-preface/tmm40-translator-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/mythical-man-month/01-translator-preface/tmm40-translator-preface.mdx`
+- [ ] 🔴 P1 **02-20th-preface/tmm40-20th-anniversary-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/mythical-man-month/02-20th-preface/tmm40-20th-anniversary-preface.mdx`
+- [ ] 🔴 P1 **03-first-preface/tmm40-first-edition-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/mythical-man-month/03-first-preface/tmm40-first-edition-preface.mdx`
+- [ ] 🔴 P1 **23-notes-references/tmm40-notes-references** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/mythical-man-month/23-notes-references/tmm40-notes-references.mdx`
+- [ ] 🔴 P1 **04-01-tar-pit/tmm40-01-tar-pit** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mythical-man-month/04-01-tar-pit/tmm40-01-tar-pit.mdx`
+- [ ] 🔴 P1 **05-02-man-month/tmm40-02-man-month** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mythical-man-month/05-02-man-month/tmm40-02-man-month.mdx`
+- [ ] 🔴 P1 **09-06-passing-the-word/tmm40-06-passing-the-word** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mythical-man-month/09-06-passing-the-word/tmm40-06-passing-the-word.mdx`
+- [ ] 🔴 P1 **15-12-sharp-tools/tmm40-12-sharp-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mythical-man-month/15-12-sharp-tools/tmm40-12-sharp-tools.mdx`
+- [ ] 🔴 P1 **08-05-second-system-effect/tmm40-05-second-system-effect** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 26）
+    - 路径：`content/mythical-man-month/08-05-second-system-effect/tmm40-05-second-system-effect.mdx`
+- [ ] 🔴 P1 **06-03-surgical-team/tmm40-03-surgical-team** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/06-03-surgical-team/tmm40-03-surgical-team.mdx`
+- [ ] 🔴 P1 **07-04-conceptual-integrity/tmm40-04-conceptual-integrity** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/07-04-conceptual-integrity/tmm40-04-conceptual-integrity.mdx`
+- [ ] 🔴 P1 **10-07-babel/tmm40-07-babel** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/10-07-babel/tmm40-07-babel.mdx`
+- [ ] 🔴 P1 **12-09-ten-pounds/tmm40-09-ten-pounds** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/12-09-ten-pounds/tmm40-09-ten-pounds.mdx`
+- [ ] 🔴 P1 **13-10-documentary-hypothesis/tmm40-10-documentary-hypothesis** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/13-10-documentary-hypothesis/tmm40-10-documentary-hypothesis.mdx`
+- [ ] 🔴 P1 **16-13-whole-and-parts/tmm40-13-whole-and-parts** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/16-13-whole-and-parts/tmm40-13-whole-and-parts.mdx`
+- [ ] 🔴 P1 **17-14-hatching-catastrophe/tmm40-14-hatching-catastrophe** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/17-14-hatching-catastrophe/tmm40-14-hatching-catastrophe.mdx`
+- [ ] 🔴 P1 **18-15-other-face/tmm40-15-other-face** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/18-15-other-face/tmm40-15-other-face.mdx`
+- [ ] 🔴 P1 **19-16-no-silver-bullet/tmm40-16-no-silver-bullet** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/mythical-man-month/19-16-no-silver-bullet/tmm40-16-no-silver-bullet.mdx`
+- [ ] 🔴 P1 **11-08-calling-the-shot/tmm40-08-calling-the-shot** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 24）
+    - 路径：`content/mythical-man-month/11-08-calling-the-shot/tmm40-08-calling-the-shot.mdx`
+- [ ] 🔴 P1 **14-11-plan-to-throw-one-away/tmm40-11-plan-to-throw-one-away** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 24）
+    - 路径：`content/mythical-man-month/14-11-plan-to-throw-one-away/tmm40-11-plan-to-throw-one-away.mdx`
+- [ ] 🔴 P1 **20-17-no-silver-bullet-refired/tmm40-17-no-silver-bullet-refired** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 23）
+    - 路径：`content/mythical-man-month/20-17-no-silver-bullet-refired/tmm40-17-no-silver-bullet-refired.mdx`
+- [ ] 🔴 P1 **22-19-twenty-years-later/tmm40-19-twenty-years-later** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 23）
+    - 路径：`content/mythical-man-month/22-19-twenty-years-later/tmm40-19-twenty-years-later.mdx`
+- [ ] 🔴 P1 **24-appendix-practice/tmm40-appendix-practice** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 23）
+    - 路径：`content/mythical-man-month/24-appendix-practice/tmm40-appendix-practice.mdx`
+- [ ] 🔴 P1 **21-18-propositions/tmm40-18-propositions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 22）
+    - 路径：`content/mythical-man-month/21-18-propositions/tmm40-18-propositions.mdx`
+
+## unix-advanced-programming（26 章 · ❌26 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/uap-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unix-advanced-programming/00-guide/uap-official-learning-map.mdx`
+- [ ] 🔴 P1 **10-review/uap-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unix-advanced-programming/10-review/uap-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/uap-standards-implementations** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/01-foundations/uap-standards-implementations.mdx`
+- [ ] 🔴 P1 **01-foundations/uap-unix-basics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/01-foundations/uap-unix-basics.mdx`
+- [ ] 🔴 P1 **02-files-io/uap-file-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/02-files-io/uap-file-io.mdx`
+- [ ] 🔴 P1 **02-files-io/uap-files-directories** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/02-files-io/uap-files-directories.mdx`
+- [ ] 🔴 P1 **02-files-io/uap-standard-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/02-files-io/uap-standard-io.mdx`
+- [ ] 🔴 P1 **02-files-io/uap-system-data-information** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/02-files-io/uap-system-data-information.mdx`
+- [ ] 🔴 P1 **03-process/uap-process-control** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/03-process/uap-process-control.mdx`
+- [ ] 🔴 P1 **03-process/uap-process-environment** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/03-process/uap-process-environment.mdx`
+- [ ] 🔴 P1 **03-process/uap-process-relationships** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/03-process/uap-process-relationships.mdx`
+- [ ] 🔴 P1 **04-signals-threads/uap-signals** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/04-signals-threads/uap-signals.mdx`
+- [ ] 🔴 P1 **04-signals-threads/uap-thread-control** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/04-signals-threads/uap-thread-control.mdx`
+- [ ] 🔴 P1 **04-signals-threads/uap-threads** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/04-signals-threads/uap-threads.mdx`
+- [ ] 🔴 P1 **05-daemons-advanced-io/uap-advanced-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/05-daemons-advanced-io/uap-advanced-io.mdx`
+- [ ] 🔴 P1 **05-daemons-advanced-io/uap-daemon-processes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/05-daemons-advanced-io/uap-daemon-processes.mdx`
+- [ ] 🔴 P1 **06-ipc/uap-advanced-ipc** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/06-ipc/uap-advanced-ipc.mdx`
+- [ ] 🔴 P1 **06-ipc/uap-interprocess-communication** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/06-ipc/uap-interprocess-communication.mdx`
+- [ ] 🔴 P1 **06-ipc/uap-network-ipc-sockets** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/06-ipc/uap-network-ipc-sockets.mdx`
+- [ ] 🔴 P1 **07-terminals/uap-pseudo-terminals** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/07-terminals/uap-pseudo-terminals.mdx`
+- [ ] 🔴 P1 **07-terminals/uap-terminal-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/07-terminals/uap-terminal-io.mdx`
+- [ ] 🔴 P1 **08-applications/uap-database-library** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/08-applications/uap-database-library.mdx`
+- [ ] 🔴 P1 **08-applications/uap-network-printer** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/08-applications/uap-network-printer.mdx`
+- [ ] 🔴 P1 **09-appendices/uap-appendix-a-function-prototypes** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/09-appendices/uap-appendix-a-function-prototypes.mdx`
+- [ ] 🔴 P1 **09-appendices/uap-appendix-b-source-code** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/09-appendices/uap-appendix-b-source-code.mdx`
+- [ ] 🔴 P1 **09-appendices/uap-appendix-c-exercise-solutions** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unix-advanced-programming/09-appendices/uap-appendix-c-exercise-solutions.mdx`
+
+## cg-principles-practice（25 章 · ❌0 ⚠️25 ✅0）
+
+- [ ] 🟡 P3 **01-intro/cgpp-ch01** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 47）
+    - 路径：`content/cg-principles-practice/01-intro/cgpp-ch01.mdx`
+- [ ] 🟡 P3 **03-pipeline/cgpp-ch03** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/cg-principles-practice/03-pipeline/cgpp-ch03.mdx`
+- [ ] 🟡 P3 **17-color/cgpp-ch17** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/cg-principles-practice/17-color/cgpp-ch17.mdx`
+- [ ] 🟡 P3 **19-animation/cgpp-ch19** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/cg-principles-practice/19-animation/cgpp-ch19.mdx`
+- [ ] 🟡 P3 **23-radiosity/cgpp-ch23** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/cg-principles-practice/23-radiosity/cgpp-ch23.mdx`
+- [ ] 🟡 P3 **02-programming/cgpp-ch02** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/02-programming/cgpp-ch02.mdx`
+- [ ] 🟡 P3 **04-math/cgpp-ch04** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/04-math/cgpp-ch04.mdx`
+- [ ] 🟡 P3 **05-camera/cgpp-ch05** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/05-camera/cgpp-ch05.mdx`
+- [ ] 🟡 P3 **06-viewing/cgpp-ch06** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/06-viewing/cgpp-ch06.mdx`
+- [ ] 🟡 P3 **07-object/cgpp-ch07** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/07-object/cgpp-ch07.mdx`
+- [ ] 🟡 P3 **08-raster/cgpp-ch08** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/08-raster/cgpp-ch08.mdx`
+- [ ] 🟡 P3 **09-fragment/cgpp-ch09** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/09-fragment/cgpp-ch09.mdx`
+- [ ] 🟡 P3 **10-framebuffer/cgpp-ch10** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/10-framebuffer/cgpp-ch10.mdx`
+- [ ] 🟡 P3 **11-display/cgpp-ch11** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/11-display/cgpp-ch11.mdx`
+- [ ] 🟡 P3 **12-image/cgpp-ch12** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/12-image/cgpp-ch12.mdx`
+- [ ] 🟡 P3 **13-geometry/cgpp-ch13** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/13-geometry/cgpp-ch13.mdx`
+- [ ] 🟡 P3 **14-texture/cgpp-ch14** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/14-texture/cgpp-ch14.mdx`
+- [ ] 🟡 P3 **15-lighting/cgpp-ch15** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/15-lighting/cgpp-ch15.mdx`
+- [ ] 🟡 P3 **16-shading/cgpp-ch16** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/16-shading/cgpp-ch16.mdx`
+- [ ] 🟡 P3 **18-compositing/cgpp-ch18** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/18-compositing/cgpp-ch18.mdx`
+- [ ] 🟡 P3 **20-modeling/cgpp-ch20** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/20-modeling/cgpp-ch20.mdx`
+- [ ] 🟡 P3 **21-rendering/cgpp-ch21** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/21-rendering/cgpp-ch21.mdx`
+- [ ] 🟡 P3 **22-raytracing/cgpp-ch22** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/22-raytracing/cgpp-ch22.mdx`
+- [ ] 🟡 P3 **24-gi/cgpp-ch24** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/24-gi/cgpp-ch24.mdx`
+- [ ] 🟡 P3 **25-future/cgpp-ch25** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 43）
+    - 路径：`content/cg-principles-practice/25-future/cgpp-ch25.mdx`
+
+## crafting-compiler（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/crc-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/crafting-compiler/00-guide/crc-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/crc-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/crafting-compiler/08-review/crc-official-final-review.mdx`
+- [ ] 🔴 P1 **01-overview/crc-01-start-compiler** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/01-overview/crc-01-start-compiler.mdx`
+- [ ] 🔴 P1 **02-source-analysis/crc-03-parsing-overview** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/02-source-analysis/crc-03-parsing-overview.mdx`
+- [ ] 🔴 P1 **02-source-analysis/crc-04-lexical-analysis** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/02-source-analysis/crc-04-lexical-analysis.mdx`
+- [ ] 🔴 P1 **02-source-analysis/crc-05-javacc-parser** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/02-source-analysis/crc-05-javacc-parser.mdx`
+- [ ] 🔴 P1 **02-source-analysis/crc-06-syntax-analysis** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/02-source-analysis/crc-06-syntax-analysis.mdx`
+- [ ] 🔴 P1 **03-ast-ir/crc-07-javacc-actions-ast** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/03-ast-ir/crc-07-javacc-actions-ast.mdx`
+- [ ] 🔴 P1 **03-ast-ir/crc-08-build-ast** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/03-ast-ir/crc-08-build-ast.mdx`
+- [ ] 🔴 P1 **03-ast-ir/crc-09-reference-resolution** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/03-ast-ir/crc-09-reference-resolution.mdx`
+- [ ] 🔴 P1 **03-ast-ir/crc-10-static-type-checking** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/03-ast-ir/crc-10-static-type-checking.mdx`
+- [ ] 🔴 P1 **03-ast-ir/crc-11-ir-conversion** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/03-ast-ir/crc-11-ir-conversion.mdx`
+- [ ] 🔴 P1 **04-assembly/crc-12-x86-overview** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/04-assembly/crc-12-x86-overview.mdx`
+- [ ] 🔴 P1 **04-assembly/crc-13-x86-assembly** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/04-assembly/crc-13-x86-assembly.mdx`
+- [ ] 🔴 P1 **04-assembly/crc-14-functions-variables** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/04-assembly/crc-14-functions-variables.mdx`
+- [ ] 🔴 P1 **05-codegen/crc-15-compile-expressions-statements** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/05-codegen/crc-15-compile-expressions-statements.mdx`
+- [ ] 🔴 P1 **05-codegen/crc-16-stack-frame** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/05-codegen/crc-16-stack-frame.mdx`
+- [ ] 🔴 P1 **05-codegen/crc-17-optimization** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/05-codegen/crc-17-optimization.mdx`
+- [ ] 🔴 P1 **06-link-load/crc-18-object-files** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/06-link-load/crc-18-object-files.mdx`
+- [ ] 🔴 P1 **06-link-load/crc-19-linking-libraries** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/06-link-load/crc-19-linking-libraries.mdx`
+- [ ] 🔴 P1 **06-link-load/crc-20-program-loading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/06-link-load/crc-20-program-loading.mdx`
+- [ ] 🔴 P1 **06-link-load/crc-21-position-independent-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/06-link-load/crc-21-position-independent-code.mdx`
+- [ ] 🔴 P1 **06-link-load/crc-22-further-reading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/crafting-compiler/06-link-load/crc-22-further-reading.mdx`
+- [ ] 🔴 P1 **01-overview/crc-02-cflat-cbc** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/crafting-compiler/01-overview/crc-02-cflat-cbc.mdx`
+- [ ] 🔴 P1 **07-appendix/crc-appendix-resources** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/crafting-compiler/07-appendix/crc-appendix-resources.mdx`
+
+## deep-understanding-jvm（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-duj3-official-learning-map/duj3-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/deep-understanding-jvm/00-duj3-official-learning-map/duj3-official-learning-map.mdx`
+- [ ] 🔴 P1 **24-duj3-official-final-review/duj3-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review.mdx`
+- [ ] 🔴 P1 **07-duj3-05-tuning-cases/duj3-05-tuning-cases** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/deep-understanding-jvm/07-duj3-05-tuning-cases/duj3-05-tuning-cases.mdx`
+- [ ] 🔴 P1 **02-duj3-01-approaching-java/duj3-01-approaching-java** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/02-duj3-01-approaching-java/duj3-01-approaching-java.mdx`
+- [ ] 🔴 P1 **04-duj3-02-memory-areas/duj3-02-memory-areas** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/04-duj3-02-memory-areas/duj3-02-memory-areas.mdx`
+- [ ] 🔴 P1 **05-duj3-03-gc-allocation/duj3-03-gc-allocation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/05-duj3-03-gc-allocation/duj3-03-gc-allocation.mdx`
+- [ ] 🔴 P1 **06-duj3-04-monitoring-tools/duj3-04-monitoring-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/06-duj3-04-monitoring-tools/duj3-04-monitoring-tools.mdx`
+- [ ] 🔴 P1 **09-duj3-06-class-file/duj3-06-class-file** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/09-duj3-06-class-file/duj3-06-class-file.mdx`
+- [ ] 🔴 P1 **10-duj3-07-class-loading/duj3-07-class-loading** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/10-duj3-07-class-loading/duj3-07-class-loading.mdx`
+- [ ] 🔴 P1 **11-duj3-08-bytecode-engine/duj3-08-bytecode-engine** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/11-duj3-08-bytecode-engine/duj3-08-bytecode-engine.mdx`
+- [ ] 🔴 P1 **12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/12-duj3-09-loading-execution-cases/duj3-09-loading-execution-cases.mdx`
+- [ ] 🔴 P1 **14-duj3-10-frontend-compiler/duj3-10-frontend-compiler** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/14-duj3-10-frontend-compiler/duj3-10-frontend-compiler.mdx`
+- [ ] 🔴 P1 **15-duj3-11-backend-compiler/duj3-11-backend-compiler** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/15-duj3-11-backend-compiler/duj3-11-backend-compiler.mdx`
+- [ ] 🔴 P1 **17-duj3-12-memory-model-threads/duj3-12-memory-model-threads** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/17-duj3-12-memory-model-threads/duj3-12-memory-model-threads.mdx`
+- [ ] 🔴 P1 **18-duj3-13-thread-safety-locks/duj3-13-thread-safety-locks** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/deep-understanding-jvm/18-duj3-13-thread-safety-locks/duj3-13-thread-safety-locks.mdx`
+- [ ] 🔴 P1 **19-duj3-appendix-a-build-openjdk6/duj3-appendix-a-build-openjdk6** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/deep-understanding-jvm/19-duj3-appendix-a-build-openjdk6/duj3-appendix-a-build-openjdk6.mdx`
+- [ ] 🔴 P1 **01-duj3-part-1-approaching-java/duj3-part-1-approaching-java** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/01-duj3-part-1-approaching-java/duj3-part-1-approaching-java.mdx`
+- [ ] 🔴 P1 **03-duj3-part-2-memory-management/duj3-part-2-memory-management** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/03-duj3-part-2-memory-management/duj3-part-2-memory-management.mdx`
+- [ ] 🔴 P1 **08-duj3-part-3-execution-subsystem/duj3-part-3-execution-subsystem** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/08-duj3-part-3-execution-subsystem/duj3-part-3-execution-subsystem.mdx`
+- [ ] 🔴 P1 **13-duj3-part-4-compilation/duj3-part-4-compilation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/13-duj3-part-4-compilation/duj3-part-4-compilation.mdx`
+- [ ] 🔴 P1 **16-duj3-part-5-concurrency/duj3-part-5-concurrency** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/16-duj3-part-5-concurrency/duj3-part-5-concurrency.mdx`
+- [ ] 🔴 P1 **20-duj3-appendix-b-java-future-2013/duj3-appendix-b-java-future-2013** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/20-duj3-appendix-b-java-future-2013/duj3-appendix-b-java-future-2013.mdx`
+- [ ] 🔴 P1 **21-duj3-appendix-c-bytecode-table/duj3-appendix-c-bytecode-table** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/21-duj3-appendix-c-bytecode-table/duj3-appendix-c-bytecode-table.mdx`
+- [ ] 🔴 P1 **22-duj3-appendix-d-oql/duj3-appendix-d-oql** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/22-duj3-appendix-d-oql/duj3-appendix-d-oql.mdx`
+- [ ] 🔴 P1 **23-duj3-appendix-e-jdk-history/duj3-appendix-e-jdk-history** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/deep-understanding-jvm/23-duj3-appendix-e-jdk-history/duj3-appendix-e-jdk-history.mdx`
+
+## programmers-math（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/pm-series-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/programmers-math/00-guide/pm-series-learning-map.mdx`
+- [ ] 🔴 P1 **04-review/pm-series-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/programmers-math/04-review/pm-series-final-review.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-estimation-testing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-estimation-testing.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-counting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-counting.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-exponential-explosion** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-exponential-explosion.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-induction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-induction.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-logic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-logic.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-programmers-mathematics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-programmers-mathematics.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-recursion** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-recursion.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-remainder** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-remainder.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-undecidable-problems** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-undecidable-problems.mdx`
+- [ ] 🔴 P1 **01-mathematical-thinking/pm1-zero** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/01-mathematical-thinking/pm1-zero.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-applications** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-applications.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-continuous-distributions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-continuous-distributions.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-covariance-normal** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-covariance-normal.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-discrete-distributions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-discrete-distributions.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-multiple-random-variables** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-multiple-random-variables.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-probability-definition** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-probability-definition.mdx`
+- [ ] 🔴 P1 **02-probability-statistics/pm2-pseudorandom** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/02-probability-statistics/pm2-pseudorandom.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-eigenvalues-jordan** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-eigenvalues-jordan.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-lu-decomposition** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-lu-decomposition.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-motivation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-motivation.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-numerical-eigenvalues** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-numerical-eigenvalues.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-rank-inverse-equations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-rank-inverse-equations.mdx`
+- [ ] 🔴 P1 **03-linear-algebra/pm3-vectors-matrices-determinants** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/programmers-math/03-linear-algebra/pm3-vectors-matrices-determinants.mdx`
+
+## spring-in-action（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-sia-6e-official-learning-map/sia-6e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/spring-in-action/00-sia-6e-official-learning-map/sia-6e-official-learning-map.mdx`
+- [ ] 🔴 P1 **24-sia-6e-official-final-review/sia-6e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/spring-in-action/24-sia-6e-official-final-review/sia-6e-official-final-review.mdx`
+- [ ] 🔴 P1 **02-sia-6e-01-getting-started/sia-6e-01-getting-started** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/02-sia-6e-01-getting-started/sia-6e-01-getting-started.mdx`
+- [ ] 🔴 P1 **03-sia-6e-02-developing-web-applications/sia-6e-02-developing-web-applications** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/03-sia-6e-02-developing-web-applications/sia-6e-02-developing-web-applications.mdx`
+- [ ] 🔴 P1 **04-sia-6e-03-working-with-data/sia-6e-03-working-with-data** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/04-sia-6e-03-working-with-data/sia-6e-03-working-with-data.mdx`
+- [ ] 🔴 P1 **05-sia-6e-04-nonrelational-data/sia-6e-04-nonrelational-data** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/05-sia-6e-04-nonrelational-data/sia-6e-04-nonrelational-data.mdx`
+- [ ] 🔴 P1 **06-sia-6e-05-securing-spring/sia-6e-05-securing-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/06-sia-6e-05-securing-spring/sia-6e-05-securing-spring.mdx`
+- [ ] 🔴 P1 **07-sia-6e-06-configuration-properties/sia-6e-06-configuration-properties** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/07-sia-6e-06-configuration-properties/sia-6e-06-configuration-properties.mdx`
+- [ ] 🔴 P1 **09-sia-6e-07-creating-rest-services/sia-6e-07-creating-rest-services** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/09-sia-6e-07-creating-rest-services/sia-6e-07-creating-rest-services.mdx`
+- [ ] 🔴 P1 **10-sia-6e-08-securing-rest/sia-6e-08-securing-rest** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/10-sia-6e-08-securing-rest/sia-6e-08-securing-rest.mdx`
+- [ ] 🔴 P1 **11-sia-6e-09-asynchronous-messaging/sia-6e-09-asynchronous-messaging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/11-sia-6e-09-asynchronous-messaging/sia-6e-09-asynchronous-messaging.mdx`
+- [ ] 🔴 P1 **12-sia-6e-10-integrating-spring/sia-6e-10-integrating-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/12-sia-6e-10-integrating-spring/sia-6e-10-integrating-spring.mdx`
+- [ ] 🔴 P1 **14-sia-6e-11-introducing-reactor/sia-6e-11-introducing-reactor** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/14-sia-6e-11-introducing-reactor/sia-6e-11-introducing-reactor.mdx`
+- [ ] 🔴 P1 **15-sia-6e-12-reactive-apis/sia-6e-12-reactive-apis** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/15-sia-6e-12-reactive-apis/sia-6e-12-reactive-apis.mdx`
+- [ ] 🔴 P1 **16-sia-6e-13-reactive-persistence/sia-6e-13-reactive-persistence** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/16-sia-6e-13-reactive-persistence/sia-6e-13-reactive-persistence.mdx`
+- [ ] 🔴 P1 **17-sia-6e-14-working-with-rsocket/sia-6e-14-working-with-rsocket** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/17-sia-6e-14-working-with-rsocket/sia-6e-14-working-with-rsocket.mdx`
+- [ ] 🔴 P1 **19-sia-6e-15-spring-boot-actuator/sia-6e-15-spring-boot-actuator** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/19-sia-6e-15-spring-boot-actuator/sia-6e-15-spring-boot-actuator.mdx`
+- [ ] 🔴 P1 **20-sia-6e-16-administering-spring/sia-6e-16-administering-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/20-sia-6e-16-administering-spring/sia-6e-16-administering-spring.mdx`
+- [ ] 🔴 P1 **21-sia-6e-17-monitoring-with-jmx/sia-6e-17-monitoring-with-jmx** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/21-sia-6e-17-monitoring-with-jmx/sia-6e-17-monitoring-with-jmx.mdx`
+- [ ] 🔴 P1 **22-sia-6e-18-deploying-spring/sia-6e-18-deploying-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/22-sia-6e-18-deploying-spring/sia-6e-18-deploying-spring.mdx`
+- [ ] 🔴 P1 **23-sia-6e-appendix-bootstrapping/sia-6e-appendix-bootstrapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/spring-in-action/23-sia-6e-appendix-bootstrapping/sia-6e-appendix-bootstrapping.mdx`
+- [ ] 🔴 P1 **01-sia-6e-part-1-foundational-spring/sia-6e-part-1-foundational-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/spring-in-action/01-sia-6e-part-1-foundational-spring/sia-6e-part-1-foundational-spring.mdx`
+- [ ] 🔴 P1 **08-sia-6e-part-2-integrated-spring/sia-6e-part-2-integrated-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/spring-in-action/08-sia-6e-part-2-integrated-spring/sia-6e-part-2-integrated-spring.mdx`
+- [ ] 🔴 P1 **13-sia-6e-part-3-reactive-spring/sia-6e-part-3-reactive-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/spring-in-action/13-sia-6e-part-3-reactive-spring/sia-6e-part-3-reactive-spring.mdx`
+- [ ] 🔴 P1 **18-sia-6e-part-4-deployed-spring/sia-6e-part-4-deployed-spring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/spring-in-action/18-sia-6e-part-4-deployed-spring/sia-6e-part-4-deployed-spring.mdx`
+
+## tcp-ip-illustrated-vol1（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-tip2-official-learning-map/tip2-official-learning-map** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/tcp-ip-illustrated-vol1/00-tip2-official-learning-map/tip2-official-learning-map.mdx`
+- [ ] 🔴 P1 **24-tip2-official-final-review/tip2-official-final-review** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/tcp-ip-illustrated-vol1/24-tip2-official-final-review/tip2-official-final-review.mdx`
+- [ ] 🔴 P1 **01-tip2-foreword/tip2-foreword** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/01-tip2-foreword/tip2-foreword.mdx`
+- [ ] 🔴 P1 **02-tip2-preface-second-edition/tip2-preface-second-edition** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/02-tip2-preface-second-edition/tip2-preface-second-edition.mdx`
+- [ ] 🔴 P1 **03-tip2-adapted-preface-first-edition/tip2-adapted-preface-first-edition** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/03-tip2-adapted-preface-first-edition/tip2-adapted-preface-first-edition.mdx`
+- [ ] 🔴 P1 **04-tip2-01-introduction/tip2-01-introduction** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/04-tip2-01-introduction/tip2-01-introduction.mdx`
+- [ ] 🔴 P1 **05-tip2-02-address-architecture/tip2-02-address-architecture** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/05-tip2-02-address-architecture/tip2-02-address-architecture.mdx`
+- [ ] 🔴 P1 **06-tip2-03-link-layer/tip2-03-link-layer** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/06-tip2-03-link-layer/tip2-03-link-layer.mdx`
+- [ ] 🔴 P1 **07-tip2-04-arp/tip2-04-arp** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/07-tip2-04-arp/tip2-04-arp.mdx`
+- [ ] 🔴 P1 **08-tip2-05-internet-protocol/tip2-05-internet-protocol** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/08-tip2-05-internet-protocol/tip2-05-internet-protocol.mdx`
+- [ ] 🔴 P1 **09-tip2-06-dhcp-autoconfiguration/tip2-06-dhcp-autoconfiguration** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/09-tip2-06-dhcp-autoconfiguration/tip2-06-dhcp-autoconfiguration.mdx`
+- [ ] 🔴 P1 **10-tip2-07-firewalls-nat/tip2-07-firewalls-nat** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/10-tip2-07-firewalls-nat/tip2-07-firewalls-nat.mdx`
+- [ ] 🔴 P1 **11-tip2-08-icmp/tip2-08-icmp** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/11-tip2-08-icmp/tip2-08-icmp.mdx`
+- [ ] 🔴 P1 **12-tip2-09-broadcast-multicast/tip2-09-broadcast-multicast** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/12-tip2-09-broadcast-multicast/tip2-09-broadcast-multicast.mdx`
+- [ ] 🔴 P1 **13-tip2-10-udp-fragmentation/tip2-10-udp-fragmentation** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/13-tip2-10-udp-fragmentation/tip2-10-udp-fragmentation.mdx`
+- [ ] 🔴 P1 **14-tip2-11-dns/tip2-11-dns** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/14-tip2-11-dns/tip2-11-dns.mdx`
+- [ ] 🔴 P1 **15-tip2-12-tcp-preliminaries/tip2-12-tcp-preliminaries** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/15-tip2-12-tcp-preliminaries/tip2-12-tcp-preliminaries.mdx`
+- [ ] 🔴 P1 **16-tip2-13-tcp-connection-management/tip2-13-tcp-connection-management** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/16-tip2-13-tcp-connection-management/tip2-13-tcp-connection-management.mdx`
+- [ ] 🔴 P1 **17-tip2-14-tcp-timeout-retransmission/tip2-14-tcp-timeout-retransmission** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/17-tip2-14-tcp-timeout-retransmission/tip2-14-tcp-timeout-retransmission.mdx`
+- [ ] 🔴 P1 **18-tip2-15-tcp-data-flow-window/tip2-15-tcp-data-flow-window** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/18-tip2-15-tcp-data-flow-window/tip2-15-tcp-data-flow-window.mdx`
+- [ ] 🔴 P1 **19-tip2-16-tcp-congestion-control/tip2-16-tcp-congestion-control** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/19-tip2-16-tcp-congestion-control/tip2-16-tcp-congestion-control.mdx`
+- [ ] 🔴 P1 **20-tip2-17-tcp-keepalive/tip2-17-tcp-keepalive** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/20-tip2-17-tcp-keepalive/tip2-17-tcp-keepalive.mdx`
+- [ ] 🔴 P1 **21-tip2-18-security/tip2-18-security** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/21-tip2-18-security/tip2-18-security.mdx`
+- [ ] 🔴 P1 **22-tip2-glossary-acronyms/tip2-glossary-acronyms** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/tcp-ip-illustrated-vol1/22-tip2-glossary-acronyms/tip2-glossary-acronyms.mdx`
+- [ ] 🔴 P1 **23-tip2-index/tip2-index** — 缺/多 Objectives、未升级 v2、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/tcp-ip-illustrated-vol1/23-tip2-index/tip2-index.mdx`
+
+## unity-hmi（25 章 · ❌25 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-uhm-2024-official-learning-map/uhm-2024-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-hmi/00-uhm-2024-official-learning-map/uhm-2024-official-learning-map.mdx`
+- [ ] 🔴 P1 **24-uhm-2024-official-final-review/uhm-2024-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-hmi/24-uhm-2024-official-final-review/uhm-2024-official-final-review.mdx`
+- [ ] 🔴 P1 **06-uhm-2024-slide-06-model-performance-budget/uhm-2024-slide-06-model-performance-budget** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-hmi/06-uhm-2024-slide-06-model-performance-budget/uhm-2024-slide-06-model-performance-budget.mdx`
+- [ ] 🔴 P1 **07-uhm-2024-slide-07-soc-os-compatibility/uhm-2024-slide-07-soc-os-compatibility** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-hmi/07-uhm-2024-slide-07-soc-os-compatibility/uhm-2024-slide-07-soc-os-compatibility.mdx`
+- [ ] 🔴 P1 **20-uhm-2024-slide-20-capability-foundation/uhm-2024-slide-20-capability-foundation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-hmi/20-uhm-2024-slide-20-capability-foundation/uhm-2024-slide-20-capability-foundation.mdx`
+- [ ] 🔴 P1 **21-uhm-2024-slide-21-service-model/uhm-2024-slide-21-service-model** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-hmi/21-uhm-2024-slide-21-service-model/uhm-2024-slide-21-service-model.mdx`
+- [ ] 🔴 P1 **22-uhm-2024-slide-22-innovation-scenarios/uhm-2024-slide-22-innovation-scenarios** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-hmi/22-uhm-2024-slide-22-innovation-scenarios/uhm-2024-slide-22-innovation-scenarios.mdx`
+- [ ] 🔴 P1 **04-uhm-2024-slide-04-production-evidence/uhm-2024-slide-04-production-evidence** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/04-uhm-2024-slide-04-production-evidence/uhm-2024-slide-04-production-evidence.mdx`
+- [ ] 🔴 P1 **05-uhm-2024-slide-05-beijing-auto-show/uhm-2024-slide-05-beijing-auto-show** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/05-uhm-2024-slide-05-beijing-auto-show/uhm-2024-slide-05-beijing-auto-show.mdx`
+- [ ] 🔴 P1 **08-uhm-2024-slide-08-architecture-combinations/uhm-2024-slide-08-architecture-combinations** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/08-uhm-2024-slide-08-architecture-combinations/uhm-2024-slide-08-architecture-combinations.mdx`
+- [ ] 🔴 P1 **09-uhm-2024-slide-09-ecosystem/uhm-2024-slide-09-ecosystem** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/09-uhm-2024-slide-09-ecosystem/uhm-2024-slide-09-ecosystem.mdx`
+- [ ] 🔴 P1 **11-uhm-2024-slide-11-tuanjie-head-unit/uhm-2024-slide-11-tuanjie-head-unit** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/11-uhm-2024-slide-11-tuanjie-head-unit/uhm-2024-slide-11-tuanjie-head-unit.mdx`
+- [ ] 🔴 P1 **12-uhm-2024-slide-12-qnx-support/uhm-2024-slide-12-qnx-support** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/12-uhm-2024-slide-12-qnx-support/uhm-2024-slide-12-qnx-support.mdx`
+- [ ] 🔴 P1 **13-uhm-2024-slide-13-embedded-linux-support/uhm-2024-slide-13-embedded-linux-support** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/13-uhm-2024-slide-13-embedded-linux-support/uhm-2024-slide-13-embedded-linux-support.mdx`
+- [ ] 🔴 P1 **16-uhm-2024-slide-16-uras-unified-rendering/uhm-2024-slide-16-uras-unified-rendering** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/16-uhm-2024-slide-16-uras-unified-rendering/uhm-2024-slide-16-uras-unified-rendering.mdx`
+- [ ] 🔴 P1 **17-uhm-2024-slide-17-uras-view-isolation/uhm-2024-slide-17-uras-view-isolation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/17-uhm-2024-slide-17-uras-view-isolation/uhm-2024-slide-17-uras-view-isolation.mdx`
+- [ ] 🔴 P1 **19-uhm-2024-slide-19-timeline/uhm-2024-slide-19-timeline** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-hmi/19-uhm-2024-slide-19-timeline/uhm-2024-slide-19-timeline.mdx`
+- [ ] 🔴 P1 **02-uhm-2024-slide-02-new-chapter/uhm-2024-slide-02-new-chapter** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity-hmi/02-uhm-2024-slide-02-new-chapter/uhm-2024-slide-02-new-chapter.mdx`
+- [ ] 🔴 P1 **15-uhm-2024-slide-15-uras-architecture/uhm-2024-slide-15-uras-architecture** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity-hmi/15-uhm-2024-slide-15-uras-architecture/uhm-2024-slide-15-uras-architecture.mdx`
+- [ ] 🔴 P1 **23-uhm-2024-slide-23-evidence-closure/uhm-2024-slide-23-evidence-closure** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity-hmi/23-uhm-2024-slide-23-evidence-closure/uhm-2024-slide-23-evidence-closure.mdx`
+- [ ] 🔴 P1 **01-uhm-2024-slide-01-cover/uhm-2024-slide-01-cover** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity-hmi/01-uhm-2024-slide-01-cover/uhm-2024-slide-01-cover.mdx`
+- [ ] 🔴 P1 **03-uhm-2024-slide-03-made-with-unity/uhm-2024-slide-03-made-with-unity** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity-hmi/03-uhm-2024-slide-03-made-with-unity/uhm-2024-slide-03-made-with-unity.mdx`
+- [ ] 🔴 P1 **10-uhm-2024-slide-10-head-unit-edition/uhm-2024-slide-10-head-unit-edition** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity-hmi/10-uhm-2024-slide-10-head-unit-edition/uhm-2024-slide-10-head-unit-edition.mdx`
+- [ ] 🔴 P1 **14-uhm-2024-slide-14-tuanjie-engine/uhm-2024-slide-14-tuanjie-engine** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity-hmi/14-uhm-2024-slide-14-tuanjie-engine/uhm-2024-slide-14-tuanjie-engine.mdx`
+- [ ] 🔴 P1 **18-uhm-2024-slide-18-unity-china/uhm-2024-slide-18-unity-china** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity-hmi/18-uhm-2024-slide-18-unity-china/uhm-2024-slide-18-unity-china.mdx`
+
+## essential-csharp-7（24 章 · ❌0 ⚠️24 ✅0）
+
+- [ ] 🟡 P3 **00-basics/ec7-learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/essential-csharp-7/00-basics/ec7-learning-map.mdx`
+- [ ] 🟡 P3 **03-advanced/ec7-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/essential-csharp-7/03-advanced/ec7-final-review.mdx`
+- [ ] 🟡 P3 **01-official/introducing-csharp** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/essential-csharp-7/01-official/introducing-csharp.mdx`
+- [ ] 🟡 P3 **04-official/operators-and-control-flow** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/essential-csharp-7/04-official/operators-and-control-flow.mdx`
+- [ ] 🟡 P3 **09-official/value-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/essential-csharp-7/09-official/value-types.mdx`
+- [ ] 🟡 P3 **10-official/well-formed-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/essential-csharp-7/10-official/well-formed-types.mdx`
+- [ ] 🟡 P3 **19-official/multithreading** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/essential-csharp-7/19-official/multithreading.mdx`
+- [ ] 🟡 P3 **03-official/more-with-data-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/03-official/more-with-data-types.mdx`
+- [ ] 🟡 P3 **05-official/methods-and-parameters** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/05-official/methods-and-parameters.mdx`
+- [ ] 🟡 P3 **06-official/classes** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/06-official/classes.mdx`
+- [ ] 🟡 P3 **08-official/interfaces** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/08-official/interfaces.mdx`
+- [ ] 🟡 P3 **11-official/exception-handling** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/11-official/exception-handling.mdx`
+- [ ] 🟡 P3 **13-official/delegates-and-lambda-expressions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/13-official/delegates-and-lambda-expressions.mdx`
+- [ ] 🟡 P3 **14-official/events** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/14-official/events.mdx`
+- [ ] 🟡 P3 **16-official/linq-with-query-expressions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/16-official/linq-with-query-expressions.mdx`
+- [ ] 🟡 P3 **20-official/thread-synchronization** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/20-official/thread-synchronization.mdx`
+- [ ] 🟡 P3 **21-official/platform-interoperability-and-unsafe-code** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/21-official/platform-interoperability-and-unsafe-code.mdx`
+- [ ] 🟡 P3 **22-official/the-common-language-infrastructure** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/essential-csharp-7/22-official/the-common-language-infrastructure.mdx`
+- [ ] 🟡 P3 **02-official/data-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/02-official/data-types.mdx`
+- [ ] 🟡 P3 **07-official/inheritance** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/07-official/inheritance.mdx`
+- [ ] 🟡 P3 **12-official/generics** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/12-official/generics.mdx`
+- [ ] 🟡 P3 **15-official/collection-interfaces-with-standard-query-operators** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/15-official/collection-interfaces-with-standard-query-operators.mdx`
+- [ ] 🟡 P3 **17-official/building-custom-collections** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/17-official/building-custom-collections.mdx`
+- [ ] 🟡 P3 **18-official/reflection-attributes-and-dynamic-programming** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/essential-csharp-7/18-official/reflection-attributes-and-dynamic-programming.mdx`
+
+## gc-handbook（24 章 · ❌20 ⚠️4 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/gch1-official-learning-map** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/gc-handbook/00-official-learning-map/gch1-official-learning-map.mdx`
+- [ ] 🔴 P1 **23-official-final-review/gch1-official-final-review** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/gc-handbook/23-official-final-review/gch1-official-final-review.mdx`
+- [ ] 🔴 P1 **01-introduction/gch1-01-introduction** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/01-introduction/gch1-01-introduction.mdx`
+- [ ] 🔴 P1 **02-mark-sweep/gch1-02-mark-sweep** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/02-mark-sweep/gch1-02-mark-sweep.mdx`
+- [ ] 🔴 P1 **03-mark-compact/gch1-03-mark-compact** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/03-mark-compact/gch1-03-mark-compact.mdx`
+- [ ] 🔴 P1 **05-reference-counting/gch1-05-reference-counting** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/05-reference-counting/gch1-05-reference-counting.mdx`
+- [ ] 🔴 P1 **06-comparing-collectors/gch1-06-comparing-collectors** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/06-comparing-collectors/gch1-06-comparing-collectors.mdx`
+- [ ] 🔴 P1 **07-allocation/gch1-07-allocation** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/07-allocation/gch1-07-allocation.mdx`
+- [ ] 🔴 P1 **08-partitioning/gch1-08-partitioning** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/08-partitioning/gch1-08-partitioning.mdx`
+- [ ] 🔴 P1 **09-generational/gch1-09-generational** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/09-generational/gch1-09-generational.mdx`
+- [ ] 🔴 P1 **10-other-partitioned/gch1-10-other-partitioned** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/10-other-partitioned/gch1-10-other-partitioned.mdx`
+- [ ] 🔴 P1 **11-runtime-interface/gch1-11-runtime-interface** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/11-runtime-interface/gch1-11-runtime-interface.mdx`
+- [ ] 🔴 P1 **12-language-concerns/gch1-12-language-concerns** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/12-language-concerns/gch1-12-language-concerns.mdx`
+- [ ] 🔴 P1 **13-concurrency-preliminaries/gch1-13-concurrency-preliminaries** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/13-concurrency-preliminaries/gch1-13-concurrency-preliminaries.mdx`
+- [ ] 🔴 P1 **14-parallel/gch1-14-parallel** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/14-parallel/gch1-14-parallel.mdx`
+- [ ] 🔴 P1 **15-concurrent/gch1-15-concurrent** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/15-concurrent/gch1-15-concurrent.mdx`
+- [ ] 🔴 P1 **16-concurrent-mark-sweep/gch1-16-concurrent-mark-sweep** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/16-concurrent-mark-sweep/gch1-16-concurrent-mark-sweep.mdx`
+- [ ] 🔴 P1 **17-concurrent-copy-compact/gch1-17-concurrent-copy-compact** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/17-concurrent-copy-compact/gch1-17-concurrent-copy-compact.mdx`
+- [ ] 🔴 P1 **18-concurrent-reference-counting/gch1-18-concurrent-reference-counting** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/18-concurrent-reference-counting/gch1-18-concurrent-reference-counting.mdx`
+- [ ] 🔴 P1 **19-realtime/gch1-19-realtime** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/19-realtime/gch1-19-realtime.mdx`
+- [ ] 🟡 P3 **04-copying/gch1-04-copying** — 未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/04-copying/gch1-04-copying.mdx`
+- [ ] 🟡 P3 **20-glossary/gch1-glossary** — 未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/20-glossary/gch1-glossary.mdx`
+- [ ] 🟡 P3 **21-bibliography/gch1-bibliography** — 未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/21-bibliography/gch1-bibliography.mdx`
+- [ ] 🟡 P3 **22-index/gch1-index** — 未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/gc-handbook/22-index/gch1-index.mdx`
+
+## kubernetes-in-action（24 章 · ❌24 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/k8s-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kubernetes-in-action/00-learning-map/k8s-official-learning-map.mdx`
+- [ ] 🔴 P1 **23-final-review/k8s-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kubernetes-in-action/23-final-review/k8s-official-final-review.mdx`
+- [ ] 🔴 P1 **01-01-introduction/k8s-01-introduction** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/01-01-introduction/k8s-01-introduction.mdx`
+- [ ] 🔴 P1 **02-02-docker-first-app/k8s-02-docker-first-app** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/02-02-docker-first-app/k8s-02-docker-first-app.mdx`
+- [ ] 🔴 P1 **03-03-pods/k8s-03-pods** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/03-03-pods/k8s-03-pods.mdx`
+- [ ] 🔴 P1 **04-04-replication-controllers/k8s-04-replication-controllers** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/04-04-replication-controllers/k8s-04-replication-controllers.mdx`
+- [ ] 🔴 P1 **05-05-services/k8s-05-services** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/05-05-services/k8s-05-services.mdx`
+- [ ] 🔴 P1 **06-06-volumes/k8s-06-volumes** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/06-06-volumes/k8s-06-volumes.mdx`
+- [ ] 🔴 P1 **07-07-configmaps-secrets/k8s-07-configmaps-secrets** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/07-07-configmaps-secrets/k8s-07-configmaps-secrets.mdx`
+- [ ] 🔴 P1 **08-08-downward-api/k8s-08-downward-api** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/08-08-downward-api/k8s-08-downward-api.mdx`
+- [ ] 🔴 P1 **09-09-deployments/k8s-09-deployments** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/09-09-deployments/k8s-09-deployments.mdx`
+- [ ] 🔴 P1 **10-10-statefulsets/k8s-10-statefulsets** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/10-10-statefulsets/k8s-10-statefulsets.mdx`
+- [ ] 🔴 P1 **11-11-internals/k8s-11-internals** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/11-11-internals/k8s-11-internals.mdx`
+- [ ] 🔴 P1 **12-12-api-security/k8s-12-api-security** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/12-12-api-security/k8s-12-api-security.mdx`
+- [ ] 🔴 P1 **13-13-node-network-security/k8s-13-node-network-security** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/13-13-node-network-security/k8s-13-node-network-security.mdx`
+- [ ] 🔴 P1 **14-14-resources/k8s-14-resources** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/14-14-resources/k8s-14-resources.mdx`
+- [ ] 🔴 P1 **15-15-autoscaling/k8s-15-autoscaling** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/15-15-autoscaling/k8s-15-autoscaling.mdx`
+- [ ] 🔴 P1 **16-16-scheduling/k8s-16-scheduling** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/16-16-scheduling/k8s-16-scheduling.mdx`
+- [ ] 🔴 P1 **17-17-best-practices/k8s-17-best-practices** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/17-17-best-practices/k8s-17-best-practices.mdx`
+- [ ] 🔴 P1 **18-18-extension/k8s-18-extension** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/18-18-extension/k8s-18-extension.mdx`
+- [ ] 🔴 P1 **19-appendix-a-kubectl-multicluster/k8s-appendix-a-kubectl-multicluster** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/19-appendix-a-kubectl-multicluster/k8s-appendix-a-kubectl-multicluster.mdx`
+- [ ] 🔴 P1 **20-appendix-b-kubeadm/k8s-appendix-b-kubeadm** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/20-appendix-b-kubeadm/k8s-appendix-b-kubeadm.mdx`
+- [ ] 🔴 P1 **21-appendix-c-runtimes/k8s-appendix-c-runtimes** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/21-appendix-c-runtimes/k8s-appendix-c-runtimes.mdx`
+- [ ] 🔴 P1 **22-appendix-d-federation/k8s-appendix-d-federation** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kubernetes-in-action/22-appendix-d-federation/k8s-appendix-d-federation.mdx`
+
+## real-time-rendering-4e（24 章 · ❌0 ⚠️24 ✅0）
+
+- [ ] 🟡 P3 **01-pipeline/rtr-ch01-introduction** — 未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 53）
+    - 路径：`content/real-time-rendering-4e/01-pipeline/rtr-ch01-introduction.mdx`
+- [ ] 🟡 P3 **02-shading/rtr-ch07-shadows** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 49）
+    - 路径：`content/real-time-rendering-4e/02-shading/rtr-ch07-shadows.mdx`
+- [ ] 🟡 P3 **04-geometry/rtr-ch14-volumetric** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 49）
+    - 路径：`content/real-time-rendering-4e/04-geometry/rtr-ch14-volumetric.mdx`
+- [ ] 🟡 P3 **05-optimization/rtr-ch16-polygon** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 49）
+    - 路径：`content/real-time-rendering-4e/05-optimization/rtr-ch16-polygon.mdx`
+- [ ] 🟡 P3 **05-optimization/rtr-ch18-pipeline-opt** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 49）
+    - 路径：`content/real-time-rendering-4e/05-optimization/rtr-ch18-pipeline-opt.mdx`
+- [ ] 🟡 P3 **06-emerging/rtr-ch21-vr-ar** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 49）
+    - 路径：`content/real-time-rendering-4e/06-emerging/rtr-ch21-vr-ar.mdx`
+- [ ] 🟡 P3 **01-pipeline/rtr-ch02-pipeline** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/01-pipeline/rtr-ch02-pipeline.mdx`
+- [ ] 🟡 P3 **01-pipeline/rtr-ch03-gpu** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/01-pipeline/rtr-ch03-gpu.mdx`
+- [ ] 🟡 P3 **01-pipeline/rtr-ch04-transforms** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/01-pipeline/rtr-ch04-transforms.mdx`
+- [ ] 🟡 P3 **02-shading/rtr-ch05-shading-basics** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/02-shading/rtr-ch05-shading-basics.mdx`
+- [ ] 🟡 P3 **02-shading/rtr-ch06-texturing** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/02-shading/rtr-ch06-texturing.mdx`
+- [ ] 🟡 P3 **02-shading/rtr-ch08-light-color** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/02-shading/rtr-ch08-light-color.mdx`
+- [ ] 🟡 P3 **02-shading/rtr-ch09-pbs** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/02-shading/rtr-ch09-pbs.mdx`
+- [ ] 🟡 P3 **03-illumination/rtr-ch10-local** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/03-illumination/rtr-ch10-local.mdx`
+- [ ] 🟡 P3 **03-illumination/rtr-ch11-global** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/03-illumination/rtr-ch11-global.mdx`
+- [ ] 🟡 P3 **03-illumination/rtr-ch12-image-space** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/03-illumination/rtr-ch12-image-space.mdx`
+- [ ] 🟡 P3 **04-geometry/rtr-ch13-beyond-polygons** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/04-geometry/rtr-ch13-beyond-polygons.mdx`
+- [ ] 🟡 P3 **04-geometry/rtr-ch15-npr** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/04-geometry/rtr-ch15-npr.mdx`
+- [ ] 🟡 P3 **05-optimization/rtr-ch17-curves** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/05-optimization/rtr-ch17-curves.mdx`
+- [ ] 🟡 P3 **05-optimization/rtr-ch19-acceleration** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/05-optimization/rtr-ch19-acceleration.mdx`
+- [ ] 🟡 P3 **05-optimization/rtr-ch20-efficient-shading** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/05-optimization/rtr-ch20-efficient-shading.mdx`
+- [ ] 🟡 P3 **06-emerging/rtr-ch22-intersection** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/06-emerging/rtr-ch22-intersection.mdx`
+- [ ] 🟡 P3 **06-emerging/rtr-ch23-hardware** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/06-emerging/rtr-ch23-hardware.mdx`
+- [ ] 🟡 P3 **06-emerging/rtr-ch24-future** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/real-time-rendering-4e/06-emerging/rtr-ch24-future.mdx`
+
+## sql-ten-minutes（24 章 · ❌24 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/sqt-official-learning-map** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/sql-ten-minutes/00-learning-map/sqt-official-learning-map.mdx`
+- [ ] 🔴 P1 **99-final-review/sqt-official-final-review** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/sql-ten-minutes/99-final-review/sqt-official-final-review.mdx`
+- [ ] 🔴 P1 **01-understanding-sql/sqt-lesson01-understanding-sql** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/01-understanding-sql/sqt-lesson01-understanding-sql.mdx`
+- [ ] 🔴 P1 **03-sorting-data/sqt-lesson03-sorting-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/03-sorting-data/sqt-lesson03-sorting-data.mdx`
+- [ ] 🔴 P1 **07-calculated-fields/sqt-lesson07-calculated-fields** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/07-calculated-fields/sqt-lesson07-calculated-fields.mdx`
+- [ ] 🔴 P1 **11-subqueries/sqt-lesson11-subqueries** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/11-subqueries/sqt-lesson11-subqueries.mdx`
+- [ ] 🔴 P1 **16-updating-deleting/sqt-lesson16-updating-deleting** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/16-updating-deleting/sqt-lesson16-updating-deleting.mdx`
+- [ ] 🔴 P1 **19-stored-procedures/sqt-lesson19-stored-procedures** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/19-stored-procedures/sqt-lesson19-stored-procedures.mdx`
+- [ ] 🔴 P1 **20-transactions/sqt-lesson20-transactions** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/20-transactions/sqt-lesson20-transactions.mdx`
+- [ ] 🔴 P1 **21-cursors/sqt-lesson21-cursors** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/21-cursors/sqt-lesson21-cursors.mdx`
+- [ ] 🔴 P1 **22-advanced-features/sqt-lesson22-advanced-features** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/sql-ten-minutes/22-advanced-features/sqt-lesson22-advanced-features.mdx`
+- [ ] 🔴 P1 **02-retrieving-data/sqt-lesson02-retrieving-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/02-retrieving-data/sqt-lesson02-retrieving-data.mdx`
+- [ ] 🔴 P1 **04-filtering-data/sqt-lesson04-filtering-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/04-filtering-data/sqt-lesson04-filtering-data.mdx`
+- [ ] 🔴 P1 **05-advanced-filtering/sqt-lesson05-advanced-filtering** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/05-advanced-filtering/sqt-lesson05-advanced-filtering.mdx`
+- [ ] 🔴 P1 **06-wildcards/sqt-lesson06-wildcards** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/06-wildcards/sqt-lesson06-wildcards.mdx`
+- [ ] 🔴 P1 **08-functions/sqt-lesson08-functions** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/08-functions/sqt-lesson08-functions.mdx`
+- [ ] 🔴 P1 **09-summarizing-data/sqt-lesson09-summarizing-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/09-summarizing-data/sqt-lesson09-summarizing-data.mdx`
+- [ ] 🔴 P1 **10-grouping-data/sqt-lesson10-grouping-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/10-grouping-data/sqt-lesson10-grouping-data.mdx`
+- [ ] 🔴 P1 **12-joining-tables/sqt-lesson12-joining-tables** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/12-joining-tables/sqt-lesson12-joining-tables.mdx`
+- [ ] 🔴 P1 **13-advanced-joins/sqt-lesson13-advanced-joins** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/13-advanced-joins/sqt-lesson13-advanced-joins.mdx`
+- [ ] 🔴 P1 **14-combining-queries/sqt-lesson14-combining-queries** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/14-combining-queries/sqt-lesson14-combining-queries.mdx`
+- [ ] 🔴 P1 **15-inserting-data/sqt-lesson15-inserting-data** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/15-inserting-data/sqt-lesson15-inserting-data.mdx`
+- [ ] 🔴 P1 **17-tables/sqt-lesson17-tables** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/17-tables/sqt-lesson17-tables.mdx`
+- [ ] 🔴 P1 **18-views/sqt-lesson18-views** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/sql-ten-minutes/18-views/sqt-lesson18-views.mdx`
+
+## this-is-chatgpt（24 章 · ❌24 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/tcg-official-learning-map** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/00-learning-map/tcg-official-learning-map.mdx`
+- [ ] 🔴 P1 **01-main-essay/tcg-main-01-one-word-at-a-time** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-01-one-word-at-a-time.mdx`
+- [ ] 🔴 P1 **01-main-essay/tcg-main-02-probabilities** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-02-probabilities.mdx`
+- [ ] 🔴 P1 **01-main-essay/tcg-main-03-model** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-03-model.mdx`
+- [ ] 🔴 P1 **01-main-essay/tcg-main-04-human-like-tasks** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/01-main-essay/tcg-main-04-human-like-tasks.mdx`
+- [ ] 🔴 P1 **01-main-essay/tcg-preface** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/01-main-essay/tcg-preface.mdx`
+- [ ] 🔴 P1 **02-neural-models/tcg-main-05-neural-nets** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-05-neural-nets.mdx`
+- [ ] 🔴 P1 **02-neural-models/tcg-main-06-training-neural-nets** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-06-training-neural-nets.mdx`
+- [ ] 🔴 P1 **02-neural-models/tcg-main-07-training-practice** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice.mdx`
+- [ ] 🔴 P1 **02-neural-models/tcg-main-08-universal-network** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/02-neural-models/tcg-main-08-universal-network.mdx`
+- [ ] 🔴 P1 **03-chatgpt-inside/tcg-main-09-embeddings** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings.mdx`
+- [ ] 🔴 P1 **03-chatgpt-inside/tcg-main-10-inside-chatgpt** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-10-inside-chatgpt.mdx`
+- [ ] 🔴 P1 **03-chatgpt-inside/tcg-main-11-training-chatgpt** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-11-training-chatgpt.mdx`
+- [ ] 🔴 P1 **03-chatgpt-inside/tcg-main-12-beyond-basic-training** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/03-chatgpt-inside/tcg-main-12-beyond-basic-training.mdx`
+- [ ] 🔴 P1 **04-meaning-language/tcg-main-13-what-lets-it-work** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-13-what-lets-it-work.mdx`
+- [ ] 🔴 P1 **04-meaning-language/tcg-main-14-meaning-space** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-14-meaning-space.mdx`
+- [ ] 🔴 P1 **04-meaning-language/tcg-main-15-semantic-grammar** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-15-semantic-grammar.mdx`
+- [ ] 🔴 P1 **04-meaning-language/tcg-main-16-conclusion** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/04-meaning-language/tcg-main-16-conclusion.mdx`
+- [ ] 🔴 P1 **05-resources/tcg-thanks-additional-resources** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/05-resources/tcg-thanks-additional-resources.mdx`
+- [ ] 🔴 P1 **06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-01-chatgpt-wolfram-alpha.mdx`
+- [ ] 🔴 P1 **06-wolfram-alpha/tcg-wa-02-basic-example** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-02-basic-example.mdx`
+- [ ] 🔴 P1 **06-wolfram-alpha/tcg-wa-03-more-examples** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-03-more-examples.mdx`
+- [ ] 🔴 P1 **06-wolfram-alpha/tcg-wa-04-path-forward** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/06-wolfram-alpha/tcg-wa-04-path-forward.mdx`
+- [ ] 🔴 P1 **07-final-review/tcg-official-final-review** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/this-is-chatgpt/07-final-review/tcg-official-final-review.mdx`
+
+## unity-cpp-network-game（24 章 · ❌24 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ucn-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-cpp-network-game/00-guide/ucn-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/ucn-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-cpp-network-game/05-review/ucn-official-final-review.mdx`
+- [ ] 🔴 P1 **01-unity-basics/ucn-01-unity-environment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/01-unity-basics/ucn-01-unity-environment.mdx`
+- [ ] 🔴 P1 **01-unity-basics/ucn-02-hello-simulation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/01-unity-basics/ucn-02-hello-simulation.mdx`
+- [ ] 🔴 P1 **01-unity-basics/ucn-03-csharp-language** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/01-unity-basics/ucn-03-csharp-language.mdx`
+- [ ] 🔴 P1 **01-unity-basics/ucn-04-graphics-in-unity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/01-unity-basics/ucn-04-graphics-in-unity.mdx`
+- [ ] 🔴 P1 **01-unity-basics/ucn-05-unity-editor** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/01-unity-basics/ucn-05-unity-editor.mdx`
+- [ ] 🔴 P1 **02-unity-practice/ucn-06-simulation-architecture** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/02-unity-practice/ucn-06-simulation-architecture.mdx`
+- [ ] 🔴 P1 **02-unity-practice/ucn-07-character-development** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/02-unity-practice/ucn-07-character-development.mdx`
+- [ ] 🔴 P1 **02-unity-practice/ucn-08-scene-development** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/02-unity-practice/ucn-08-scene-development.mdx`
+- [ ] 🔴 P1 **02-unity-practice/ucn-09-assets-interactions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/02-unity-practice/ucn-09-assets-interactions.mdx`
+- [ ] 🔴 P1 **02-unity-practice/ucn-10-ngui-interaction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/02-unity-practice/ucn-10-ngui-interaction.mdx`
+- [ ] 🔴 P1 **03-cpp-network-basics/ucn-11-cpp-language** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/03-cpp-network-basics/ucn-11-cpp-language.mdx`
+- [ ] 🔴 P1 **03-cpp-network-basics/ucn-12-cpp-network-basics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/03-cpp-network-basics/ucn-12-cpp-network-basics.mdx`
+- [ ] 🔴 P1 **03-cpp-network-basics/ucn-13-threading-async-socket** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/03-cpp-network-basics/ucn-13-threading-async-socket.mdx`
+- [ ] 🔴 P1 **03-cpp-network-basics/ucn-14-mysql** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/03-cpp-network-basics/ucn-14-mysql.mdx`
+- [ ] 🔴 P1 **03-cpp-network-basics/ucn-15-protobuf** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/03-cpp-network-basics/ucn-15-protobuf.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-16-server-topology** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-16-server-topology.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-17-login-server** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-17-login-server.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-18-gate-server** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-18-gate-server.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-19-center-server** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-19-center-server.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-20-battle-server** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-20-battle-server.mdx`
+- [ ] 🔴 P1 **04-cpp-network-practice/ucn-21-hla-ai** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-cpp-network-game/04-cpp-network-practice/ucn-21-hla-ai.mdx`
+- [ ] 🔴 P1 **05-review/ucn-afterword-career-development** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/unity-cpp-network-game/05-review/ucn-afterword-career-development.mdx`
+
+## game-design-fundamentals（23 章 · ❌23 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-gdf-3e-official-learning-map/gdf-3e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-design-fundamentals/00-gdf-3e-official-learning-map/gdf-3e-official-learning-map.mdx`
+- [ ] 🔴 P1 **22-gdf-3e-official-final-review/gdf-3e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-design-fundamentals/22-gdf-3e-official-final-review/gdf-3e-official-final-review.mdx`
+- [ ] 🔴 P1 **01-gdf-3e-introduction/gdf-3e-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/01-gdf-3e-introduction/gdf-3e-introduction.mdx`
+- [ ] 🔴 P1 **02-gdf-3e-01-games-video-games/gdf-3e-01-games-video-games** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/02-gdf-3e-01-games-video-games/gdf-3e-01-games-video-games.mdx`
+- [ ] 🔴 P1 **03-gdf-3e-02-designing-developing-games/gdf-3e-02-designing-developing-games** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/03-gdf-3e-02-designing-developing-games/gdf-3e-02-designing-developing-games.mdx`
+- [ ] 🔴 P1 **04-gdf-3e-03-major-genres/gdf-3e-03-major-genres** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/04-gdf-3e-03-major-genres/gdf-3e-03-major-genres.mdx`
+- [ ] 🔴 P1 **05-gdf-3e-04-understanding-player/gdf-3e-04-understanding-player** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/05-gdf-3e-04-understanding-player/gdf-3e-04-understanding-player.mdx`
+- [ ] 🔴 P1 **06-gdf-3e-05-understanding-machine/gdf-3e-05-understanding-machine** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/06-gdf-3e-05-understanding-machine/gdf-3e-05-understanding-machine.mdx`
+- [ ] 🔴 P1 **07-gdf-3e-06-making-money/gdf-3e-06-making-money** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/07-gdf-3e-06-making-money/gdf-3e-06-making-money.mdx`
+- [ ] 🔴 P1 **08-gdf-3e-07-game-concepts/gdf-3e-07-game-concepts** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/08-gdf-3e-07-game-concepts/gdf-3e-07-game-concepts.mdx`
+- [ ] 🔴 P1 **09-gdf-3e-08-game-worlds/gdf-3e-08-game-worlds** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/09-gdf-3e-08-game-worlds/gdf-3e-08-game-worlds.mdx`
+- [ ] 🔴 P1 **10-gdf-3e-09-creative-expressive-play/gdf-3e-09-creative-expressive-play** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/10-gdf-3e-09-creative-expressive-play/gdf-3e-09-creative-expressive-play.mdx`
+- [ ] 🔴 P1 **11-gdf-3e-10-character-development/gdf-3e-10-character-development** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/11-gdf-3e-10-character-development/gdf-3e-10-character-development.mdx`
+- [ ] 🔴 P1 **12-gdf-3e-11-storytelling/gdf-3e-11-storytelling** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/12-gdf-3e-11-storytelling/gdf-3e-11-storytelling.mdx`
+- [ ] 🔴 P1 **13-gdf-3e-12-creating-user-experience/gdf-3e-12-creating-user-experience** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/13-gdf-3e-12-creating-user-experience/gdf-3e-12-creating-user-experience.mdx`
+- [ ] 🔴 P1 **14-gdf-3e-13-gameplay/gdf-3e-13-gameplay** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/14-gdf-3e-13-gameplay/gdf-3e-13-gameplay.mdx`
+- [ ] 🔴 P1 **15-gdf-3e-14-core-mechanics/gdf-3e-14-core-mechanics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/15-gdf-3e-14-core-mechanics/gdf-3e-14-core-mechanics.mdx`
+- [ ] 🔴 P1 **16-gdf-3e-15-game-balancing/gdf-3e-15-game-balancing** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/16-gdf-3e-15-game-balancing/gdf-3e-15-game-balancing.mdx`
+- [ ] 🔴 P1 **17-gdf-3e-16-level-design/gdf-3e-16-level-design** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/17-gdf-3e-16-level-design/gdf-3e-16-level-design.mdx`
+- [ ] 🔴 P1 **18-gdf-3e-17-online-gaming/gdf-3e-17-online-gaming** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/18-gdf-3e-17-online-gaming/gdf-3e-17-online-gaming.mdx`
+- [ ] 🔴 P1 **19-gdf-3e-glossary/gdf-3e-glossary** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/19-gdf-3e-glossary/gdf-3e-glossary.mdx`
+- [ ] 🔴 P1 **20-gdf-3e-references/gdf-3e-references** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/20-gdf-3e-references/gdf-3e-references.mdx`
+- [ ] 🔴 P1 **21-gdf-3e-index/gdf-3e-index** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-design-fundamentals/21-gdf-3e-index/gdf-3e-index.mdx`
+
+## head-first-java（23 章 · ❌23 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-hfj-3e-official-learning-map/hfj-3e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/head-first-java/00-hfj-3e-official-learning-map/hfj-3e-official-learning-map.mdx`
+- [ ] 🔴 P1 **22-hfj-3e-official-final-review/hfj-3e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/head-first-java/22-hfj-3e-official-final-review/hfj-3e-official-final-review.mdx`
+- [ ] 🔴 P1 **01-hfj-3e-intro/hfj-3e-intro** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/01-hfj-3e-intro/hfj-3e-intro.mdx`
+- [ ] 🔴 P1 **02-hfj-3e-01-breaking-surface/hfj-3e-01-breaking-surface** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/02-hfj-3e-01-breaking-surface/hfj-3e-01-breaking-surface.mdx`
+- [ ] 🔴 P1 **03-hfj-3e-02-classes-objects/hfj-3e-02-classes-objects** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/03-hfj-3e-02-classes-objects/hfj-3e-02-classes-objects.mdx`
+- [ ] 🔴 P1 **04-hfj-3e-03-primitives-references/hfj-3e-03-primitives-references** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/04-hfj-3e-03-primitives-references/hfj-3e-03-primitives-references.mdx`
+- [ ] 🔴 P1 **05-hfj-3e-04-methods-instance-variables/hfj-3e-04-methods-instance-variables** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/05-hfj-3e-04-methods-instance-variables/hfj-3e-04-methods-instance-variables.mdx`
+- [ ] 🔴 P1 **06-hfj-3e-05-writing-program/hfj-3e-05-writing-program** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/06-hfj-3e-05-writing-program/hfj-3e-05-writing-program.mdx`
+- [ ] 🔴 P1 **07-hfj-3e-06-java-api/hfj-3e-06-java-api** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/07-hfj-3e-06-java-api/hfj-3e-06-java-api.mdx`
+- [ ] 🔴 P1 **08-hfj-3e-07-inheritance-polymorphism/hfj-3e-07-inheritance-polymorphism** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/08-hfj-3e-07-inheritance-polymorphism/hfj-3e-07-inheritance-polymorphism.mdx`
+- [ ] 🔴 P1 **09-hfj-3e-08-interfaces-abstract-classes/hfj-3e-08-interfaces-abstract-classes** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/09-hfj-3e-08-interfaces-abstract-classes/hfj-3e-08-interfaces-abstract-classes.mdx`
+- [ ] 🔴 P1 **10-hfj-3e-09-constructors-gc/hfj-3e-09-constructors-gc** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/10-hfj-3e-09-constructors-gc/hfj-3e-09-constructors-gc.mdx`
+- [ ] 🔴 P1 **11-hfj-3e-10-numbers-statics/hfj-3e-10-numbers-statics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/11-hfj-3e-10-numbers-statics/hfj-3e-10-numbers-statics.mdx`
+- [ ] 🔴 P1 **12-hfj-3e-11-collections-generics/hfj-3e-11-collections-generics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/12-hfj-3e-11-collections-generics/hfj-3e-11-collections-generics.mdx`
+- [ ] 🔴 P1 **13-hfj-3e-12-lambdas-streams/hfj-3e-12-lambdas-streams** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/13-hfj-3e-12-lambdas-streams/hfj-3e-12-lambdas-streams.mdx`
+- [ ] 🔴 P1 **14-hfj-3e-13-exceptions/hfj-3e-13-exceptions** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/14-hfj-3e-13-exceptions/hfj-3e-13-exceptions.mdx`
+- [ ] 🔴 P1 **15-hfj-3e-14-gui/hfj-3e-14-gui** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/15-hfj-3e-14-gui/hfj-3e-14-gui.mdx`
+- [ ] 🔴 P1 **16-hfj-3e-15-swing/hfj-3e-15-swing** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/16-hfj-3e-15-swing/hfj-3e-15-swing.mdx`
+- [ ] 🔴 P1 **17-hfj-3e-16-serialization-io/hfj-3e-16-serialization-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/17-hfj-3e-16-serialization-io/hfj-3e-16-serialization-io.mdx`
+- [ ] 🔴 P1 **18-hfj-3e-17-networking-threads/hfj-3e-17-networking-threads** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/18-hfj-3e-17-networking-threads/hfj-3e-17-networking-threads.mdx`
+- [ ] 🔴 P1 **19-hfj-3e-18-concurrency-issues/hfj-3e-18-concurrency-issues** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/19-hfj-3e-18-concurrency-issues/hfj-3e-18-concurrency-issues.mdx`
+- [ ] 🔴 P1 **20-hfj-3e-appendix-a-final-code-kitchen/hfj-3e-appendix-a-final-code-kitchen** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/20-hfj-3e-appendix-a-final-code-kitchen/hfj-3e-appendix-a-final-code-kitchen.mdx`
+- [ ] 🔴 P1 **21-hfj-3e-appendix-b-top-ten-topics/hfj-3e-appendix-b-top-ten-topics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-java/21-hfj-3e-appendix-b-top-ten-topics/hfj-3e-appendix-b-top-ten-topics.mdx`
+
+## mfc-deep-dive（23 章 · ❌23 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mfc-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/mfc-deep-dive/00-guide/mfc-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/mfc-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/mfc-deep-dive/06-review/mfc-official-final-review.mdx`
+- [ ] 🔴 P1 **00-guide/mfc-00-reading-guide** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/00-guide/mfc-00-reading-guide.mdx`
+- [ ] 🔴 P1 **01-foundations/mfc-01-win32-program-concepts** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/01-foundations/mfc-01-win32-program-concepts.mdx`
+- [ ] 🔴 P1 **01-foundations/mfc-02-cpp-essential-properties** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/01-foundations/mfc-02-cpp-essential-properties.mdx`
+- [ ] 🔴 P1 **01-foundations/mfc-03-six-key-techniques-simulation** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/01-foundations/mfc-03-six-key-techniques-simulation.mdx`
+- [ ] 🔴 P1 **02-tools/mfc-04-visual-cpp-ide** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/02-tools/mfc-04-visual-cpp-ide.mdx`
+- [ ] 🔴 P1 **03-framework/mfc-05-application-framework-overview** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/03-framework/mfc-05-application-framework-overview.mdx`
+- [ ] 🔴 P1 **03-framework/mfc-06-program-lifecycle** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/03-framework/mfc-06-program-lifecycle.mdx`
+- [ ] 🔴 P1 **03-framework/mfc-07-framework-skeleton** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/03-framework/mfc-07-framework-skeleton.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-08-document-view** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-08-document-view.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-09-message-map-command-routing** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-09-message-map-command-routing.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-10-dialogs** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-10-dialogs.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-11-view-and-redraw** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-11-view-and-redraw.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-12-print-preview** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-12-print-preview.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-13-multiple-documents-views** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-13-multiple-documents-views.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-14-multithreading** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-14-multithreading.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-15-custom-appwizard** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-15-custom-appwizard.mdx`
+- [ ] 🔴 P1 **04-deep-mfc/mfc-16-components-activex** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/04-deep-mfc/mfc-16-components-activex.mdx`
+- [ ] 🔴 P1 **05-appendices/mfc-appendix-a-learning-roadmap** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/05-appendices/mfc-appendix-a-learning-roadmap.mdx`
+- [ ] 🔴 P1 **05-appendices/mfc-appendix-b-scribble-step5-source** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/05-appendices/mfc-appendix-b-scribble-step5-source.mdx`
+- [ ] 🔴 P1 **05-appendices/mfc-appendix-c-sample-catalog** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/05-appendices/mfc-appendix-c-sample-catalog.mdx`
+- [ ] 🔴 P1 **05-appendices/mfc-appendix-d-dbwin** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/mfc-deep-dive/05-appendices/mfc-appendix-d-dbwin.mdx`
+
+## os-concepts（23 章 · ❌23 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/osc-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/os-concepts/00-guide/osc-official-learning-map.mdx`
+- [ ] 🔴 P1 **10-review/osc-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/os-concepts/10-review/osc-official-final-review.mdx`
+- [ ] 🔴 P1 **01-overview/osc-01-introduction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/01-overview/osc-01-introduction.mdx`
+- [ ] 🔴 P1 **01-overview/osc-02-os-structures** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/01-overview/osc-02-os-structures.mdx`
+- [ ] 🔴 P1 **02-process-management/osc-03-processes** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/02-process-management/osc-03-processes.mdx`
+- [ ] 🔴 P1 **02-process-management/osc-04-threads-concurrency** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/02-process-management/osc-04-threads-concurrency.mdx`
+- [ ] 🔴 P1 **02-process-management/osc-05-cpu-scheduling** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/02-process-management/osc-05-cpu-scheduling.mdx`
+- [ ] 🔴 P1 **03-synchronization/osc-06-synchronization-tools** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/03-synchronization/osc-06-synchronization-tools.mdx`
+- [ ] 🔴 P1 **03-synchronization/osc-07-synchronization-examples** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/03-synchronization/osc-07-synchronization-examples.mdx`
+- [ ] 🔴 P1 **03-synchronization/osc-08-deadlocks** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/03-synchronization/osc-08-deadlocks.mdx`
+- [ ] 🔴 P1 **04-memory/osc-09-main-memory** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/04-memory/osc-09-main-memory.mdx`
+- [ ] 🔴 P1 **04-memory/osc-10-virtual-memory** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/04-memory/osc-10-virtual-memory.mdx`
+- [ ] 🔴 P1 **05-storage/osc-11-mass-storage** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/05-storage/osc-11-mass-storage.mdx`
+- [ ] 🔴 P1 **05-storage/osc-12-io-systems** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/05-storage/osc-12-io-systems.mdx`
+- [ ] 🔴 P1 **06-file-system/osc-13-file-system-interface** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/06-file-system/osc-13-file-system-interface.mdx`
+- [ ] 🔴 P1 **06-file-system/osc-14-file-system-implementation** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/06-file-system/osc-14-file-system-implementation.mdx`
+- [ ] 🔴 P1 **06-file-system/osc-15-file-system-internals** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/06-file-system/osc-15-file-system-internals.mdx`
+- [ ] 🔴 P1 **07-security/osc-16-security** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/07-security/osc-16-security.mdx`
+- [ ] 🔴 P1 **07-security/osc-17-protection** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/07-security/osc-17-protection.mdx`
+- [ ] 🔴 P1 **08-advanced/osc-18-virtual-machines** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/08-advanced/osc-18-virtual-machines.mdx`
+- [ ] 🔴 P1 **08-advanced/osc-19-network-distributed** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/08-advanced/osc-19-network-distributed.mdx`
+- [ ] 🔴 P1 **09-case-studies/osc-20-linux** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/09-case-studies/osc-20-linux.mdx`
+- [ ] 🔴 P1 **09-case-studies/osc-21-windows-10** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/os-concepts/09-case-studies/osc-21-windows-10.mdx`
+
+## rust-programming-language（23 章 · ❌0 ⚠️23 ✅0）
+
+- [ ] 🟡 P3 **00-basics/rpl-learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/rust-programming-language/00-basics/rpl-learning-map.mdx`
+- [ ] 🟡 P3 **03-concurrency/rpl-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/rust-programming-language/03-concurrency/rpl-final-review.mdx`
+- [ ] 🟡 P3 **05-official/using-structs-to-structure-related-data** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 64）
+    - 路径：`content/rust-programming-language/05-official/using-structs-to-structure-related-data.mdx`
+- [ ] 🟡 P3 **01-official/getting-started** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/01-official/getting-started.mdx`
+- [ ] 🟡 P3 **02-official/programming-a-guessing-game** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/02-official/programming-a-guessing-game.mdx`
+- [ ] 🟡 P3 **11-official/writing-automated-tests** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/11-official/writing-automated-tests.mdx`
+- [ ] 🟡 P3 **14-official/more-about-cargo-and-crates-io** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/14-official/more-about-cargo-and-crates-io.mdx`
+- [ ] 🟡 P3 **19-official/patterns-and-matching** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/19-official/patterns-and-matching.mdx`
+- [ ] 🟡 P3 **20-official/advanced-features** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/20-official/advanced-features.mdx`
+- [ ] 🟡 P3 **21-official/final-project-building-a-multithreaded-web-server** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/rust-programming-language/21-official/final-project-building-a-multithreaded-web-server.mdx`
+- [ ] 🟡 P3 **03-official/common-programming-concepts** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/03-official/common-programming-concepts.mdx`
+- [ ] 🟡 P3 **04-official/understanding-ownership** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/04-official/understanding-ownership.mdx`
+- [ ] 🟡 P3 **06-official/enums-and-pattern-matching** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/06-official/enums-and-pattern-matching.mdx`
+- [ ] 🟡 P3 **07-official/packages-crates-and-modules** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/07-official/packages-crates-and-modules.mdx`
+- [ ] 🟡 P3 **08-official/common-collections** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/08-official/common-collections.mdx`
+- [ ] 🟡 P3 **09-official/error-handling** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/09-official/error-handling.mdx`
+- [ ] 🟡 P3 **10-official/generic-types-traits-and-lifetimes** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/10-official/generic-types-traits-and-lifetimes.mdx`
+- [ ] 🟡 P3 **12-official/an-io-project** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/12-official/an-io-project.mdx`
+- [ ] 🟡 P3 **13-official/functional-language-features** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/13-official/functional-language-features.mdx`
+- [ ] 🟡 P3 **15-official/smart-pointers** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/15-official/smart-pointers.mdx`
+- [ ] 🟡 P3 **16-official/fearless-concurrency** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/16-official/fearless-concurrency.mdx`
+- [ ] 🟡 P3 **17-official/fundamentals-of-asynchronous-programming** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/17-official/fundamentals-of-asynchronous-programming.mdx`
+- [ ] 🟡 P3 **18-official/object-oriented-programming-features** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/rust-programming-language/18-official/object-oriented-programming-features.mdx`
+
+## unity-urp-shaders（23 章 · ❌23 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/uus-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-urp-shaders/00-guide/uus-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/uus-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-urp-shaders/07-review/uus-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundation/uus-01-package-topology** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/01-foundation/uus-01-package-topology.mdx`
+- [ ] 🔴 P1 **01-foundation/uus-02-shaderlab-pass-contract** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/01-foundation/uus-02-shaderlab-pass-contract.mdx`
+- [ ] 🔴 P1 **02-lit/uus-03-lit-input-material** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/02-lit/uus-03-lit-input-material.mdx`
+- [ ] 🔴 P1 **02-lit/uus-04-brdf-surface-data** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/02-lit/uus-04-brdf-surface-data.mdx`
+- [ ] 🔴 P1 **02-lit/uus-05-lit-forward-pass** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/02-lit/uus-05-lit-forward-pass.mdx`
+- [ ] 🔴 P1 **02-lit/uus-06-lit-gbuffer-pass** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/02-lit/uus-06-lit-gbuffer-pass.mdx`
+- [ ] 🔴 P1 **02-lit/uus-07-shared-utility-passes** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/02-lit/uus-07-shared-utility-passes.mdx`
+- [ ] 🔴 P1 **03-models/uus-08-simple-lit** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/03-models/uus-08-simple-lit.mdx`
+- [ ] 🔴 P1 **03-models/uus-09-complex-lit** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/03-models/uus-09-complex-lit.mdx`
+- [ ] 🔴 P1 **03-models/uus-10-baked-lit** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/03-models/uus-10-baked-lit.mdx`
+- [ ] 🔴 P1 **03-models/uus-11-unlit** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/03-models/uus-11-unlit.mdx`
+- [ ] 🔴 P1 **03-models/uus-12-particle-family** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/03-models/uus-12-particle-family.mdx`
+- [ ] 🔴 P1 **04-special/uus-13-terrain-family** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/04-special/uus-13-terrain-family.mdx`
+- [ ] 🔴 P1 **04-special/uus-14-nature-speedtree** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/04-special/uus-14-nature-speedtree.mdx`
+- [ ] 🔴 P1 **04-special/uus-15-renderer-2d** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/04-special/uus-15-renderer-2d.mdx`
+- [ ] 🔴 P1 **04-special/uus-16-decal-dbuffer** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/04-special/uus-16-decal-dbuffer.mdx`
+- [ ] 🔴 P1 **04-special/uus-17-postprocess-fullscreen** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/04-special/uus-17-postprocess-fullscreen.mdx`
+- [ ] 🔴 P1 **05-library/uus-18-core-input-transforms** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/05-library/uus-18-core-input-transforms.mdx`
+- [ ] 🔴 P1 **05-library/uus-19-lighting-realtime-gi** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/05-library/uus-19-lighting-realtime-gi.mdx`
+- [ ] 🔴 P1 **05-library/uus-20-shadows-ao-screen-inputs** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/05-library/uus-20-shadows-ao-screen-inputs.mdx`
+- [ ] 🔴 P1 **06-engineering/uus-21-variants-batching-xr-debug** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-urp-shaders/06-engineering/uus-21-variants-batching-xr-debug.mdx`
+
+## game-engine-architecture-3e（22 章 · ❌22 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/gea3-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-architecture-3e/00-official-learning-map/gea3-official-learning-map.mdx`
+- [ ] 🔴 P1 **21-official-final-review/gea3-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-architecture-3e/21-official-final-review/gea3-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/gea3-preface** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/01-preface/gea3-preface.mdx`
+- [ ] 🔴 P1 **02-chapter-01-introduction/gea3-chapter-01-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/02-chapter-01-introduction/gea3-chapter-01-introduction.mdx`
+- [ ] 🔴 P1 **03-chapter-02-tools-of-the-trade/gea3-chapter-02-tools-of-the-trade** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/03-chapter-02-tools-of-the-trade/gea3-chapter-02-tools-of-the-trade.mdx`
+- [ ] 🔴 P1 **04-chapter-03-software-engineering/gea3-chapter-03-software-engineering** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/04-chapter-03-software-engineering/gea3-chapter-03-software-engineering.mdx`
+- [ ] 🔴 P1 **05-chapter-04-parallelism-concurrency/gea3-chapter-04-parallelism-concurrency** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/05-chapter-04-parallelism-concurrency/gea3-chapter-04-parallelism-concurrency.mdx`
+- [ ] 🔴 P1 **06-chapter-05-3d-math/gea3-chapter-05-3d-math** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/06-chapter-05-3d-math/gea3-chapter-05-3d-math.mdx`
+- [ ] 🔴 P1 **07-chapter-06-engine-support/gea3-chapter-06-engine-support** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/07-chapter-06-engine-support/gea3-chapter-06-engine-support.mdx`
+- [ ] 🔴 P1 **08-chapter-07-resources-file-system/gea3-chapter-07-resources-file-system** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/08-chapter-07-resources-file-system/gea3-chapter-07-resources-file-system.mdx`
+- [ ] 🔴 P1 **09-chapter-08-game-loop/gea3-chapter-08-game-loop** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/09-chapter-08-game-loop/gea3-chapter-08-game-loop.mdx`
+- [ ] 🔴 P1 **10-chapter-09-human-interface/gea3-chapter-09-human-interface** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/10-chapter-09-human-interface/gea3-chapter-09-human-interface.mdx`
+- [ ] 🔴 P1 **11-chapter-10-debugging-development/gea3-chapter-10-debugging-development** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/11-chapter-10-debugging-development/gea3-chapter-10-debugging-development.mdx`
+- [ ] 🔴 P1 **12-chapter-11-rendering-engine/gea3-chapter-11-rendering-engine** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/12-chapter-11-rendering-engine/gea3-chapter-11-rendering-engine.mdx`
+- [ ] 🔴 P1 **13-chapter-12-animation-systems/gea3-chapter-12-animation-systems** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/13-chapter-12-animation-systems/gea3-chapter-12-animation-systems.mdx`
+- [ ] 🔴 P1 **14-chapter-13-collision-rigid-body/gea3-chapter-13-collision-rigid-body** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/14-chapter-13-collision-rigid-body/gea3-chapter-13-collision-rigid-body.mdx`
+- [ ] 🔴 P1 **15-chapter-14-audio/gea3-chapter-14-audio** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/15-chapter-14-audio/gea3-chapter-14-audio.mdx`
+- [ ] 🔴 P1 **16-chapter-15-gameplay-introduction/gea3-chapter-15-gameplay-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/16-chapter-15-gameplay-introduction/gea3-chapter-15-gameplay-introduction.mdx`
+- [ ] 🔴 P1 **17-chapter-16-runtime-gameplay/gea3-chapter-16-runtime-gameplay** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/17-chapter-16-runtime-gameplay/gea3-chapter-16-runtime-gameplay.mdx`
+- [ ] 🔴 P1 **18-chapter-17-more/gea3-chapter-17-more** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/18-chapter-17-more/gea3-chapter-17-more.mdx`
+- [ ] 🔴 P1 **19-bibliography/gea3-bibliography** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/19-bibliography/gea3-bibliography.mdx`
+- [ ] 🔴 P1 **20-index/gea3-index** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-architecture-3e/20-index/gea3-index.mdx`
+
+## kong-gateway（22 章 · ❌22 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/kga-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kong-gateway/00-learning-map/kga-official-learning-map.mdx`
+- [ ] 🔴 P1 **21-final-review/kga-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kong-gateway/21-final-review/kga-official-final-review.mdx`
+- [ ] 🔴 P1 **01-01-overview/kga-01-overview** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/01-01-overview/kga-01-overview.mdx`
+- [ ] 🔴 P1 **02-02-nginx/kga-02-nginx** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/02-02-nginx/kga-02-nginx.mdx`
+- [ ] 🔴 P1 **03-03-lua/kga-03-lua** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/03-03-lua/kga-03-lua.mdx`
+- [ ] 🔴 P1 **04-04-openresty/kga-04-openresty** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/04-04-openresty/kga-04-openresty.mdx`
+- [ ] 🔴 P1 **05-05-config-deployment/kga-05-config-deployment** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/05-05-config-deployment/kga-05-config-deployment.mdx`
+- [ ] 🔴 P1 **06-06-cli/kga-06-cli** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/06-06-cli/kga-06-cli.mdx`
+- [ ] 🔴 P1 **07-07-proxy-auth/kga-07-proxy-auth** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/07-07-proxy-auth/kga-07-proxy-auth.mdx`
+- [ ] 🔴 P1 **08-08-load-balancing-health/kga-08-load-balancing-health** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/08-08-load-balancing-health/kga-08-load-balancing-health.mdx`
+- [ ] 🔴 P1 **09-09-plugins/kga-09-plugins** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/09-09-plugins/kga-09-plugins.mdx`
+- [ ] 🔴 P1 **10-10-logging/kga-10-logging** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/10-10-logging/kga-10-logging.mdx`
+- [ ] 🔴 P1 **11-11-operations/kga-11-operations** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/11-11-operations/kga-11-operations.mdx`
+- [ ] 🔴 P1 **12-12-security-ha/kga-12-security-ha** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/12-12-security-ha/kga-12-security-ha.mdx`
+- [ ] 🔴 P1 **13-13-microservices-devops/kga-13-microservices-devops** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/13-13-microservices-devops/kga-13-microservices-devops.mdx`
+- [ ] 🔴 P1 **14-14-kubernetes/kga-14-kubernetes** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/14-14-kubernetes/kga-14-kubernetes.mdx`
+- [ ] 🔴 P1 **15-15-kuma/kga-15-kuma** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/15-15-kuma/kga-15-kuma.mdx`
+- [ ] 🔴 P1 **16-16-serverless/kga-16-serverless** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/16-16-serverless/kga-16-serverless.mdx`
+- [ ] 🔴 P1 **17-appendix-a-docker/kga-appendix-a-docker** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/17-appendix-a-docker/kga-appendix-a-docker.mdx`
+- [ ] 🔴 P1 **18-appendix-b-konga/kga-appendix-b-konga** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/18-appendix-b-konga/kga-appendix-b-konga.mdx`
+- [ ] 🔴 P1 **19-appendix-c-database/kga-appendix-c-database** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/19-appendix-c-database/kga-appendix-c-database.mdx`
+- [ ] 🔴 P1 **20-appendix-d-admin-api/kga-appendix-d-admin-api** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kong-gateway/20-appendix-d-admin-api/kga-appendix-d-admin-api.mdx`
+
+## mysql-essentials（22 章 · ❌22 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/mse-official-learning-map** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/mysql-essentials/00-learning-map/mse-official-learning-map.mdx`
+- [ ] 🔴 P1 **99-final-review/mse-official-final-review** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/mysql-essentials/99-final-review/mse-official-final-review.mdx`
+- [ ] 🔴 P1 **01-database-overview/mse-ch01-database-overview** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/01-database-overview/mse-ch01-database-overview.mdx`
+- [ ] 🔴 P1 **02-install-configuration/mse-ch02-install-configuration** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/02-install-configuration/mse-ch02-install-configuration.mdx`
+- [ ] 🔴 P1 **03-database-operations/mse-ch03-database-operations** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/03-database-operations/mse-ch03-database-operations.mdx`
+- [ ] 🔴 P1 **04-engines-data-types/mse-ch04-engines-data-types** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/04-engines-data-types/mse-ch04-engines-data-types.mdx`
+- [ ] 🔴 P1 **05-table-operations/mse-ch05-table-operations** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/05-table-operations/mse-ch05-table-operations.mdx`
+- [ ] 🔴 P1 **06-indexes/mse-ch06-indexes** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/06-indexes/mse-ch06-indexes.mdx`
+- [ ] 🔴 P1 **07-views/mse-ch07-views** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/07-views/mse-ch07-views.mdx`
+- [ ] 🔴 P1 **08-triggers/mse-ch08-triggers** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/08-triggers/mse-ch08-triggers.mdx`
+- [ ] 🔴 P1 **09-data-manipulation/mse-ch09-data-manipulation** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/09-data-manipulation/mse-ch09-data-manipulation.mdx`
+- [ ] 🔴 P1 **10-single-table-query/mse-ch10-single-table-query** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/10-single-table-query/mse-ch10-single-table-query.mdx`
+- [ ] 🔴 P1 **11-multi-table-query/mse-ch11-multi-table-query** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/11-multi-table-query/mse-ch11-multi-table-query.mdx`
+- [ ] 🔴 P1 **12-operators/mse-ch12-operators** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/12-operators/mse-ch12-operators.mdx`
+- [ ] 🔴 P1 **13-functions/mse-ch13-functions** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/13-functions/mse-ch13-functions.mdx`
+- [ ] 🔴 P1 **14-routines/mse-ch14-routines** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/14-routines/mse-ch14-routines.mdx`
+- [ ] 🔴 P1 **15-transactions/mse-ch15-transactions** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/15-transactions/mse-ch15-transactions.mdx`
+- [ ] 🔴 P1 **16-security/mse-ch16-security** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/16-security/mse-ch16-security.mdx`
+- [ ] 🔴 P1 **17-logs/mse-ch17-logs** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/17-logs/mse-ch17-logs.mdx`
+- [ ] 🔴 P1 **18-maintenance-performance/mse-ch18-maintenance-performance** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/18-maintenance-performance/mse-ch18-maintenance-performance.mdx`
+- [ ] 🔴 P1 **19-java-bookstore/mse-ch19-java-bookstore** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/19-java-bookstore/mse-ch19-java-bookstore.mdx`
+- [ ] 🔴 P1 **20-php-exam-system/mse-ch20-php-exam-system** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/mysql-essentials/20-php-exam-system/mse-ch20-php-exam-system.mdx`
+
+## python-crash-course（22 章 · ❌0 ⚠️22 ✅0）
+
+- [ ] 🟡 P3 **00-basics/pcc-learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/python-crash-course/00-basics/pcc-learning-map.mdx`
+- [ ] 🟡 P3 **03-projects/pcc-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/python-crash-course/03-projects/pcc-final-review.mdx`
+- [ ] 🟡 P3 **20-official/styling-and-deploying-an-app** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 64）
+    - 路径：`content/python-crash-course/20-official/styling-and-deploying-an-app.mdx`
+- [ ] 🟡 P3 **03-official/introducing-lists** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/03-official/introducing-lists.mdx`
+- [ ] 🟡 P3 **04-official/working-with-lists** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/04-official/working-with-lists.mdx`
+- [ ] 🟡 P3 **08-official/functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/08-official/functions.mdx`
+- [ ] 🟡 P3 **09-official/classes** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/09-official/classes.mdx`
+- [ ] 🟡 P3 **11-official/testing-your-code** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/11-official/testing-your-code.mdx`
+- [ ] 🟡 P3 **16-official/downloading-data** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/16-official/downloading-data.mdx`
+- [ ] 🟡 P3 **18-official/getting-started-with-django** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/18-official/getting-started-with-django.mdx`
+- [ ] 🟡 P3 **19-official/user-accounts** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/python-crash-course/19-official/user-accounts.mdx`
+- [ ] 🟡 P3 **01-official/getting-started** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/01-official/getting-started.mdx`
+- [ ] 🟡 P3 **02-official/variables-and-simple-data-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/02-official/variables-and-simple-data-types.mdx`
+- [ ] 🟡 P3 **05-official/if-statements** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/05-official/if-statements.mdx`
+- [ ] 🟡 P3 **06-official/dictionaries** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/06-official/dictionaries.mdx`
+- [ ] 🟡 P3 **07-official/user-input-and-while-loops** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/07-official/user-input-and-while-loops.mdx`
+- [ ] 🟡 P3 **10-official/files-and-exceptions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/10-official/files-and-exceptions.mdx`
+- [ ] 🟡 P3 **12-official/a-ship-that-fires-bullets** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/12-official/a-ship-that-fires-bullets.mdx`
+- [ ] 🟡 P3 **13-official/aliens** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/13-official/aliens.mdx`
+- [ ] 🟡 P3 **14-official/scoring** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/14-official/scoring.mdx`
+- [ ] 🟡 P3 **15-official/generating-data** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/15-official/generating-data.mdx`
+- [ ] 🟡 P3 **17-official/working-with-apis** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/python-crash-course/17-official/working-with-apis.mdx`
+
+## unity-shader-essentials（22 章 · ❌22 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/useb-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-shader-essentials/00-guide/useb-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/useb-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-shader-essentials/06-review/useb-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/useb-03-unity-shader-basics** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/01-foundations/useb-03-unity-shader-basics.mdx`
+- [ ] 🔴 P1 **03-intermediate/useb-09-complex-lighting** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/03-intermediate/useb-09-complex-lighting.mdx`
+- [ ] 🔴 P1 **04-advanced/useb-16-rendering-optimization** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/04-advanced/useb-16-rendering-optimization.mdx`
+- [ ] 🔴 P1 **05-extension/useb-17-surface-shader** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/05-extension/useb-17-surface-shader.mdx`
+- [ ] 🔴 P1 **05-extension/useb-18-physically-based-rendering** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/05-extension/useb-18-physically-based-rendering.mdx`
+- [ ] 🔴 P1 **05-extension/useb-19-unity5-changes** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/unity-shader-essentials/05-extension/useb-19-unity5-changes.mdx`
+- [ ] 🔴 P1 **01-foundations/useb-01-welcome-shader-world** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/01-foundations/useb-01-welcome-shader-world.mdx`
+- [ ] 🔴 P1 **01-foundations/useb-02-rendering-pipeline** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/01-foundations/useb-02-rendering-pipeline.mdx`
+- [ ] 🔴 P1 **01-foundations/useb-04-shader-mathematics** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/01-foundations/useb-04-shader-mathematics.mdx`
+- [ ] 🔴 P1 **02-beginner/useb-05-first-unity-shader** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/02-beginner/useb-05-first-unity-shader.mdx`
+- [ ] 🔴 P1 **02-beginner/useb-06-basic-lighting** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/02-beginner/useb-06-basic-lighting.mdx`
+- [ ] 🔴 P1 **02-beginner/useb-07-basic-textures** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/02-beginner/useb-07-basic-textures.mdx`
+- [ ] 🔴 P1 **02-beginner/useb-08-transparency** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/02-beginner/useb-08-transparency.mdx`
+- [ ] 🔴 P1 **03-intermediate/useb-10-advanced-textures** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/03-intermediate/useb-10-advanced-textures.mdx`
+- [ ] 🔴 P1 **03-intermediate/useb-11-animated-image** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/03-intermediate/useb-11-animated-image.mdx`
+- [ ] 🔴 P1 **04-advanced/useb-12-screen-post-effects** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/04-advanced/useb-12-screen-post-effects.mdx`
+- [ ] 🔴 P1 **04-advanced/useb-13-depth-normal-textures** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/04-advanced/useb-13-depth-normal-textures.mdx`
+- [ ] 🔴 P1 **04-advanced/useb-14-non-photorealistic-rendering** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/04-advanced/useb-14-non-photorealistic-rendering.mdx`
+- [ ] 🔴 P1 **04-advanced/useb-15-noise** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/04-advanced/useb-15-noise.mdx`
+- [ ] 🔴 P1 **05-extension/useb-20-more-to-learn** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/unity-shader-essentials/05-extension/useb-20-more-to-learn.mdx`
+
+## hackers-delight（21 章 · ❌21 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **01-foundations/01-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/01-foundations/01-introduction.mdx`
+- [ ] 🔴 P1 **02-bit-foundations/02-basics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/02-bit-foundations/02-basics.mdx`
+- [ ] 🔴 P1 **03-boundaries/03-power-of-2-boundaries** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/03-boundaries/03-power-of-2-boundaries.mdx`
+- [ ] 🔴 P1 **04-arithmetic-bounds/04-arithmetic-bounds** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/04-arithmetic-bounds/04-arithmetic-bounds.mdx`
+- [ ] 🔴 P1 **05-bit-counting/05-counting-bits** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/05-bit-counting/05-counting-bits.mdx`
+- [ ] 🔴 P1 **06-word-search/06-searching-words** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/06-word-search/06-searching-words.mdx`
+- [ ] 🔴 P1 **07-rearrangement/07-rearranging-bits-and-bytes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/07-rearrangement/07-rearranging-bits-and-bytes.mdx`
+- [ ] 🔴 P1 **08-multiplication/08-multiplication** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/08-multiplication/08-multiplication.mdx`
+- [ ] 🔴 P1 **09-integer-division/09-integer-division** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/09-integer-division/09-integer-division.mdx`
+- [ ] 🔴 P1 **10-constant-division/10-integer-division-by-constants** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/10-constant-division/10-integer-division-by-constants.mdx`
+- [ ] 🔴 P1 **11-elementary-functions/11-some-elementary-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/11-elementary-functions/11-some-elementary-functions.mdx`
+- [ ] 🔴 P1 **12-unusual-bases/12-unusual-bases-for-number-systems** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/12-unusual-bases/12-unusual-bases-for-number-systems.mdx`
+- [ ] 🔴 P1 **13-gray-code/13-gray-code** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/13-gray-code/13-gray-code.mdx`
+- [ ] 🔴 P1 **14-cyclic-redundancy-check/14-cyclic-redundancy-check** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/14-cyclic-redundancy-check/14-cyclic-redundancy-check.mdx`
+- [ ] 🔴 P1 **15-error-correcting-codes/15-error-correcting-codes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/15-error-correcting-codes/15-error-correcting-codes.mdx`
+- [ ] 🔴 P1 **16-hilberts-curve/16-hilberts-curve** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/16-hilberts-curve/16-hilberts-curve.mdx`
+- [ ] 🔴 P1 **19-appendix-a/appendix-a-arithmetic-tables-for-a-4-bit-machine** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/hackers-delight/19-appendix-a/appendix-a-arithmetic-tables-for-a-4-bit-machine.mdx`
+- [ ] 🔴 P1 **21-appendix-c/appendix-c-a-gallery-of-graphs-of-discrete-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/hackers-delight/21-appendix-c/appendix-c-a-gallery-of-graphs-of-discrete-functions.mdx`
+- [ ] 🔴 P1 **20-appendix-b/appendix-b-newtons-method** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/hackers-delight/20-appendix-b/appendix-b-newtons-method.mdx`
+- [ ] 🔴 P1 **17-floating-point/17-floating-point** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/hackers-delight/17-floating-point/17-floating-point.mdx`
+- [ ] 🔴 P1 **18-formulas-for-primes/18-formulas-for-primes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/hackers-delight/18-formulas-for-primes/18-formulas-for-primes.mdx`
+
+## shader-practice（21 章 · ❌21 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/psd-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/shader-practice/00-guide/psd-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/psd-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/shader-practice/05-review/psd-official-final-review.mdx`
+- [ ] 🔴 P1 **04-engines/psd-16-writing-shaders-unity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/shader-practice/04-engines/psd-16-writing-shaders-unity.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-01-hello-game-graphics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-01-hello-game-graphics.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-02-first-shaders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-02-first-shaders.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-03-using-textures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-03-using-textures.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-04-translucency-depth** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-04-translucency-depth.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-05-making-things-move** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-05-making-things-move.mdx`
+- [ ] 🔴 P1 **01-foundations/psd-06-cameras-coordinates** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/01-foundations/psd-06-cameras-coordinates.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-07-first-3d-project** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-07-first-3d-project.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-08-diffuse-lighting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-08-diffuse-lighting.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-09-first-lighting-model** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-09-first-lighting-model.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-10-normal-mapping** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-10-normal-mapping.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-11-cubemaps-skyboxes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-11-cubemaps-skyboxes.mdx`
+- [ ] 🔴 P1 **02-lighting/psd-12-lighting-in-depth** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/02-lighting/psd-12-lighting-in-depth.mdx`
+- [ ] 🔴 P1 **03-performance/psd-13-profiling-shaders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/03-performance/psd-13-profiling-shaders.mdx`
+- [ ] 🔴 P1 **03-performance/psd-14-optimizing-shaders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/03-performance/psd-14-optimizing-shaders.mdx`
+- [ ] 🔴 P1 **03-performance/psd-15-precision** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/03-performance/psd-15-precision.mdx`
+- [ ] 🔴 P1 **04-engines/psd-17-writing-shaders-ue4** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/04-engines/psd-17-writing-shaders-ue4.mdx`
+- [ ] 🔴 P1 **04-engines/psd-18-writing-shaders-godot** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/04-engines/psd-18-writing-shaders-godot.mdx`
+- [ ] 🔴 P1 **04-engines/psd-appendix-a-code-snippets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/shader-practice/04-engines/psd-appendix-a-code-snippets.mdx`
+
+## two-week-scripting-language（21 章 · ❌21 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/tws-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/two-week-scripting-language/00-guide/tws-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/tws-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/two-week-scripting-language/06-review/tws-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/tws-01-what-to-build** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/01-foundations/tws-01-what-to-build.mdx`
+- [ ] 🔴 P1 **01-foundations/tws-02-language-design** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/01-foundations/tws-02-language-design.mdx`
+- [ ] 🔴 P1 **01-foundations/tws-03-tokenization** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/01-foundations/tws-03-tokenization.mdx`
+- [ ] 🔴 P1 **01-foundations/tws-04-program-objects** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/01-foundations/tws-04-program-objects.mdx`
+- [ ] 🔴 P1 **01-foundations/tws-05-parser-design** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/01-foundations/tws-05-parser-design.mdx`
+- [ ] 🔴 P1 **02-interpreter/tws-06-interpreter-execution** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/02-interpreter/tws-06-interpreter-execution.mdx`
+- [ ] 🔴 P1 **02-interpreter/tws-07-functions-closures** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/02-interpreter/tws-07-functions-closures.mdx`
+- [ ] 🔴 P1 **02-interpreter/tws-08-java-interop** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/02-interpreter/tws-08-java-interop.mdx`
+- [ ] 🔴 P1 **02-interpreter/tws-09-object-oriented-language** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/02-interpreter/tws-09-object-oriented-language.mdx`
+- [ ] 🔴 P1 **02-interpreter/tws-10-arrays** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/02-interpreter/tws-10-arrays.mdx`
+- [ ] 🔴 P1 **03-optimization/tws-11-fast-variable-access** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/03-optimization/tws-11-fast-variable-access.mdx`
+- [ ] 🔴 P1 **03-optimization/tws-12-fast-object-access** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/03-optimization/tws-12-fast-object-access.mdx`
+- [ ] 🔴 P1 **04-vm-types/tws-13-bytecode-interpreter** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/04-vm-types/tws-13-bytecode-interpreter.mdx`
+- [ ] 🔴 P1 **04-vm-types/tws-14-static-types** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/04-vm-types/tws-14-static-types.mdx`
+- [ ] 🔴 P1 **05-self-study/tws-15-handwritten-lexer** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/05-self-study/tws-15-handwritten-lexer.mdx`
+- [ ] 🔴 P1 **05-self-study/tws-16-parsing-methods** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/05-self-study/tws-16-parsing-methods.mdx`
+- [ ] 🔴 P1 **05-self-study/tws-17-parser-library-internals** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/05-self-study/tws-17-parser-library-internals.mdx`
+- [ ] 🔴 P1 **05-self-study/tws-18-gluonj** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/05-self-study/tws-18-gluonj.mdx`
+- [ ] 🔴 P1 **05-self-study/tws-19-ast-design-patterns** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/two-week-scripting-language/05-self-study/tws-19-ast-design-patterns.mdx`
+
+## mastering-bitcoin（20 章 · ❌20 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/mbt3-official-learning-map** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/mastering-bitcoin/00-map/mbt3-official-learning-map.mdx`
+- [ ] 🔴 P1 **02-01-introduction/mbt3-01-introduction** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/mastering-bitcoin/02-01-introduction/mbt3-01-introduction.mdx`
+- [ ] 🔴 P1 **12-11-blockchain/mbt3-11-blockchain** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/mastering-bitcoin/12-11-blockchain/mbt3-11-blockchain.mdx`
+- [ ] 🔴 P1 **19-review/mbt3-official-final-review** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/mastering-bitcoin/19-review/mbt3-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/mbt3-preface** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/01-preface/mbt3-preface.mdx`
+- [ ] 🔴 P1 **03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/03-02-how-bitcoin-works/mbt3-02-how-bitcoin-works.mdx`
+- [ ] 🔴 P1 **04-03-bitcoin-core/mbt3-03-bitcoin-core** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/04-03-bitcoin-core/mbt3-03-bitcoin-core.mdx`
+- [ ] 🔴 P1 **05-04-keys-addresses/mbt3-04-keys-addresses** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/05-04-keys-addresses/mbt3-04-keys-addresses.mdx`
+- [ ] 🔴 P1 **06-05-wallet-recovery/mbt3-05-wallet-recovery** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/06-05-wallet-recovery/mbt3-05-wallet-recovery.mdx`
+- [ ] 🔴 P1 **07-06-transactions/mbt3-06-transactions** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/07-06-transactions/mbt3-06-transactions.mdx`
+- [ ] 🔴 P1 **08-07-authorization-authentication/mbt3-07-authorization-authentication** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/08-07-authorization-authentication/mbt3-07-authorization-authentication.mdx`
+- [ ] 🔴 P1 **09-08-digital-signatures/mbt3-08-digital-signatures** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures.mdx`
+- [ ] 🔴 P1 **10-09-transaction-fees/mbt3-09-transaction-fees** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/10-09-transaction-fees/mbt3-09-transaction-fees.mdx`
+- [ ] 🔴 P1 **11-10-bitcoin-network/mbt3-10-bitcoin-network** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/11-10-bitcoin-network/mbt3-10-bitcoin-network.mdx`
+- [ ] 🔴 P1 **13-12-mining-consensus/mbt3-12-mining-consensus** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/mastering-bitcoin/13-12-mining-consensus/mbt3-12-mining-consensus.mdx`
+- [ ] 🔴 P1 **14-13-security/mbt3-13-security** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/mastering-bitcoin/14-13-security/mbt3-13-security.mdx`
+- [ ] 🔴 P1 **15-14-second-layer-applications/mbt3-14-second-layer-applications** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/mastering-bitcoin/15-14-second-layer-applications/mbt3-14-second-layer-applications.mdx`
+- [ ] 🔴 P1 **16-appendix-a-whitepaper/mbt3-appendix-a-whitepaper** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/mastering-bitcoin/16-appendix-a-whitepaper/mbt3-appendix-a-whitepaper.mdx`
+- [ ] 🔴 P1 **17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/mastering-bitcoin/17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata.mdx`
+- [ ] 🔴 P1 **18-appendix-c-bips/mbt3-appendix-c-bips** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/mastering-bitcoin/18-appendix-c-bips/mbt3-appendix-c-bips.mdx`
+
+## mastering-ethereum（20 章 · ❌20 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/met2-official-learning-map** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/mastering-ethereum/00-map/met2-official-learning-map.mdx`
+- [ ] 🔴 P1 **19-review/met2-official-final-review** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/mastering-ethereum/19-review/met2-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/met2-preface** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/01-preface/met2-preface.mdx`
+- [ ] 🔴 P1 **02-01-what-is-ethereum/met2-01-what-is-ethereum** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/02-01-what-is-ethereum/met2-01-what-is-ethereum.mdx`
+- [ ] 🔴 P1 **03-02-ethereum-basics/met2-02-ethereum-basics** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/03-02-ethereum-basics/met2-02-ethereum-basics.mdx`
+- [ ] 🔴 P1 **04-03-ethereum-nodes/met2-03-ethereum-nodes** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/04-03-ethereum-nodes/met2-03-ethereum-nodes.mdx`
+- [ ] 🔴 P1 **05-04-cryptography/met2-04-cryptography** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/05-04-cryptography/met2-04-cryptography.mdx`
+- [ ] 🔴 P1 **06-05-wallets/met2-05-wallets** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/06-05-wallets/met2-05-wallets.mdx`
+- [ ] 🔴 P1 **07-06-transactions/met2-06-transactions** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/07-06-transactions/met2-06-transactions.mdx`
+- [ ] 🔴 P1 **08-07-smart-contracts-solidity/met2-07-smart-contracts-solidity** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/08-07-smart-contracts-solidity/met2-07-smart-contracts-solidity.mdx`
+- [ ] 🔴 P1 **09-08-smart-contracts-vyper/met2-08-smart-contracts-vyper** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/09-08-smart-contracts-vyper/met2-08-smart-contracts-vyper.mdx`
+- [ ] 🔴 P1 **10-09-smart-contract-security/met2-09-smart-contract-security** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/10-09-smart-contract-security/met2-09-smart-contract-security.mdx`
+- [ ] 🔴 P1 **11-10-tokens/met2-10-tokens** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/11-10-tokens/met2-10-tokens.mdx`
+- [ ] 🔴 P1 **12-11-oracles/met2-11-oracles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/12-11-oracles/met2-11-oracles.mdx`
+- [ ] 🔴 P1 **13-12-decentralized-applications/met2-12-decentralized-applications** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/13-12-decentralized-applications/met2-12-decentralized-applications.mdx`
+- [ ] 🔴 P1 **14-13-decentralized-finance/met2-13-decentralized-finance** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/14-13-decentralized-finance/met2-13-decentralized-finance.mdx`
+- [ ] 🔴 P1 **15-14-ethereum-virtual-machine/met2-14-ethereum-virtual-machine** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/15-14-ethereum-virtual-machine/met2-14-ethereum-virtual-machine.mdx`
+- [ ] 🔴 P1 **16-15-consensus/met2-15-consensus** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/16-15-consensus/met2-15-consensus.mdx`
+- [ ] 🔴 P1 **17-16-scaling-ethereum/met2-16-scaling-ethereum** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/17-16-scaling-ethereum/met2-16-scaling-ethereum.mdx`
+- [ ] 🔴 P1 **18-17-zero-knowledge-proofs/met2-17-zero-knowledge-proofs** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mastering-ethereum/18-17-zero-knowledge-proofs/met2-17-zero-knowledge-proofs.mdx`
+
+## phoenix-architecture（20 章 · ❌20 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/pha-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/phoenix-architecture/00-official-learning-map/pha-official-learning-map.mdx`
+- [ ] 🔴 P1 **19-official-final-review/pha-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/phoenix-architecture/19-official-final-review/pha-official-final-review.mdx`
+- [ ] 🔴 P1 **05-05-security/pha-05-security** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/phoenix-architecture/05-05-security/pha-05-security.mdx`
+- [ ] 🔴 P1 **01-01-architecture-evolution/pha-01-architecture-evolution** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/01-01-architecture-evolution/pha-01-architecture-evolution.mdx`
+- [ ] 🔴 P1 **02-02-remote-services/pha-02-remote-services** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/02-02-remote-services/pha-02-remote-services.mdx`
+- [ ] 🔴 P1 **03-03-transactions/pha-03-transactions** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/03-03-transactions/pha-03-transactions.mdx`
+- [ ] 🔴 P1 **04-04-diversion-system/pha-04-diversion-system** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/04-04-diversion-system/pha-04-diversion-system.mdx`
+- [ ] 🔴 P1 **06-06-consensus/pha-06-consensus** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/06-06-consensus/pha-06-consensus.mdx`
+- [ ] 🔴 P1 **07-07-library-to-service/pha-07-library-to-service** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/07-07-library-to-service/pha-07-library-to-service.mdx`
+- [ ] 🔴 P1 **08-08-traffic-governance/pha-08-traffic-governance** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/08-08-traffic-governance/pha-08-traffic-governance.mdx`
+- [ ] 🔴 P1 **09-09-reliable-communication/pha-09-reliable-communication** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/09-09-reliable-communication/pha-09-reliable-communication.mdx`
+- [ ] 🔴 P1 **10-10-observability/pha-10-observability** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/10-10-observability/pha-10-observability.mdx`
+- [ ] 🔴 P1 **11-11-containers/pha-11-containers** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/11-11-containers/pha-11-containers.mdx`
+- [ ] 🔴 P1 **12-12-container-network/pha-12-container-network** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/12-12-container-network/pha-12-container-network.mdx`
+- [ ] 🔴 P1 **13-13-persistent-storage/pha-13-persistent-storage** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/13-13-persistent-storage/pha-13-persistent-storage.mdx`
+- [ ] 🔴 P1 **14-14-resource-scheduling/pha-14-resource-scheduling** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/14-14-resource-scheduling/pha-14-resource-scheduling.mdx`
+- [ ] 🔴 P1 **15-15-service-mesh/pha-15-service-mesh** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/15-15-service-mesh/pha-15-service-mesh.mdx`
+- [ ] 🔴 P1 **16-16-forward-microservices/pha-16-forward-microservices** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/16-16-forward-microservices/pha-16-forward-microservices.mdx`
+- [ ] 🔴 P1 **17-appendix-a-projects/pha-appendix-a-projects** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/17-appendix-a-projects/pha-appendix-a-projects.mdx`
+- [ ] 🔴 P1 **18-appendix-b-kubernetes/pha-appendix-b-kubernetes** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/phoenix-architecture/18-appendix-b-kubernetes/pha-appendix-b-kubernetes.mdx`
+
+## vuejs-design-implementation（20 章 · ❌20 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/vdi-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/vuejs-design-implementation/00-guide/vdi-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/vdi-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/vuejs-design-implementation/07-review/vdi-official-final-review.mdx`
+- [ ] 🔴 P1 **02-reactivity/vdi-06-primitive-reactivity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/vuejs-design-implementation/02-reactivity/vdi-06-primitive-reactivity.mdx`
+- [ ] 🔴 P1 **05-compiler/vdi-17-compiler-optimization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/vuejs-design-implementation/05-compiler/vdi-17-compiler-optimization.mdx`
+- [ ] 🔴 P1 **01-framework/vdi-01-art-of-tradeoffs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/01-framework/vdi-01-art-of-tradeoffs.mdx`
+- [ ] 🔴 P1 **01-framework/vdi-02-core-elements-framework-design** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/01-framework/vdi-02-core-elements-framework-design.mdx`
+- [ ] 🔴 P1 **03-renderer/vdi-07-renderer-design** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/03-renderer/vdi-07-renderer-design.mdx`
+- [ ] 🔴 P1 **03-renderer/vdi-11-fast-diff** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/03-renderer/vdi-11-fast-diff.mdx`
+- [ ] 🔴 P1 **04-components/vdi-13-async-functional-components** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/04-components/vdi-13-async-functional-components.mdx`
+- [ ] 🔴 P1 **05-compiler/vdi-15-compiler-core-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-design-implementation/05-compiler/vdi-15-compiler-core-overview.mdx`
+- [ ] 🔴 P1 **01-framework/vdi-03-vue3-design-thinking** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/vuejs-design-implementation/01-framework/vdi-03-vue3-design-thinking.mdx`
+- [ ] 🔴 P1 **03-renderer/vdi-08-mount-update** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/vuejs-design-implementation/03-renderer/vdi-08-mount-update.mdx`
+- [ ] 🔴 P1 **03-renderer/vdi-09-simple-diff** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/vuejs-design-implementation/03-renderer/vdi-09-simple-diff.mdx`
+- [ ] 🔴 P1 **03-renderer/vdi-10-double-ended-diff** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/vuejs-design-implementation/03-renderer/vdi-10-double-ended-diff.mdx`
+- [ ] 🔴 P1 **06-ssr/vdi-18-isomorphic-rendering** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/vuejs-design-implementation/06-ssr/vdi-18-isomorphic-rendering.mdx`
+- [ ] 🔴 P1 **02-reactivity/vdi-04-reactivity-role-implementation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/vuejs-design-implementation/02-reactivity/vdi-04-reactivity-role-implementation.mdx`
+- [ ] 🔴 P1 **02-reactivity/vdi-05-non-primitive-reactivity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/vuejs-design-implementation/02-reactivity/vdi-05-non-primitive-reactivity.mdx`
+- [ ] 🔴 P1 **04-components/vdi-12-component-implementation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/vuejs-design-implementation/04-components/vdi-12-component-implementation.mdx`
+- [ ] 🔴 P1 **04-components/vdi-14-built-in-components-modules** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/vuejs-design-implementation/04-components/vdi-14-built-in-components-modules.mdx`
+- [ ] 🔴 P1 **05-compiler/vdi-16-parser** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/vuejs-design-implementation/05-compiler/vdi-16-parser.mdx`
+
+## ai-agent-apps（19 章 · ❌19 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **production/tool-prompt-engineering** — 缺视觉证据、UX 不足（score 86）
+    - 路径：`content/ai-agent-apps/production/tool-prompt-engineering.mdx`
+- [ ] 🔴 P1 **agentic-patterns/autonomous-agents** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/autonomous-agents.mdx`
+- [ ] 🔴 P1 **agentic-patterns/chaining-and-routing** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/chaining-and-routing.mdx`
+- [ ] 🔴 P1 **agentic-patterns/combining-patterns** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/combining-patterns.mdx`
+- [ ] 🔴 P1 **agentic-patterns/evaluator-optimizer** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/evaluator-optimizer.mdx`
+- [ ] 🔴 P1 **agentic-patterns/parallelization-and-orchestrator-workers** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/parallelization-and-orchestrator-workers.mdx`
+- [ ] 🔴 P1 **agentic-patterns/workflow-vs-agent** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/agentic-patterns/workflow-vs-agent.mdx`
+- [ ] 🔴 P1 **context-engineering/context-window** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/context-engineering/context-window.mdx`
+- [ ] 🔴 P1 **context-engineering/prompt-engineering** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/context-engineering/prompt-engineering.mdx`
+- [ ] 🔴 P1 **context-engineering/structured-output** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/context-engineering/structured-output.mdx`
+- [ ] 🔴 P1 **foundations/agentic-loop** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/foundations/agentic-loop.mdx`
+- [ ] 🔴 P1 **foundations/augmented-llm** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/foundations/augmented-llm.mdx`
+- [ ] 🔴 P1 **foundations/first-agent** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/foundations/first-agent.mdx`
+- [ ] 🔴 P1 **foundations/what-is-an-agent** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/foundations/what-is-an-agent.mdx`
+- [ ] 🔴 P1 **production/agents-in-practice** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/production/agents-in-practice.mdx`
+- [ ] 🔴 P1 **production/production-readiness-checklist** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/production/production-readiness-checklist.mdx`
+- [ ] 🔴 P1 **tool-use/function-calling** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/tool-use/function-calling.mdx`
+- [ ] 🔴 P1 **tool-use/mcp** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/tool-use/mcp.mdx`
+- [ ] 🔴 P1 **tool-use/tool-design** — 缺视觉证据、UX 不足（score 84）
+    - 路径：`content/ai-agent-apps/tool-use/tool-design.mdx`
+
+## javascript-definitive-guide（19 章 · ❌19 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/jdg-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/javascript-definitive-guide/00-guide/jdg-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/jdg-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/javascript-definitive-guide/06-review/jdg-official-final-review.mdx`
+- [ ] 🔴 P1 **01-language-control/jdg-01-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/01-language-control/jdg-01-introduction.mdx`
+- [ ] 🔴 P1 **01-language-control/jdg-02-lexical-structure** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/01-language-control/jdg-02-lexical-structure.mdx`
+- [ ] 🔴 P1 **01-language-control/jdg-03-types-values-variables** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/01-language-control/jdg-03-types-values-variables.mdx`
+- [ ] 🔴 P1 **01-language-control/jdg-04-expressions-operators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/01-language-control/jdg-04-expressions-operators.mdx`
+- [ ] 🔴 P1 **01-language-control/jdg-05-statements** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/01-language-control/jdg-05-statements.mdx`
+- [ ] 🔴 P1 **02-data-organization/jdg-06-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/02-data-organization/jdg-06-objects.mdx`
+- [ ] 🔴 P1 **02-data-organization/jdg-07-arrays** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/02-data-organization/jdg-07-arrays.mdx`
+- [ ] 🔴 P1 **02-data-organization/jdg-08-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/02-data-organization/jdg-08-functions.mdx`
+- [ ] 🔴 P1 **02-data-organization/jdg-09-classes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/02-data-organization/jdg-09-classes.mdx`
+- [ ] 🔴 P1 **02-data-organization/jdg-10-modules** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/02-data-organization/jdg-10-modules.mdx`
+- [ ] 🔴 P1 **03-library-advanced/jdg-11-standard-library** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/03-library-advanced/jdg-11-standard-library.mdx`
+- [ ] 🔴 P1 **03-library-advanced/jdg-12-iterators-generators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/03-library-advanced/jdg-12-iterators-generators.mdx`
+- [ ] 🔴 P1 **03-library-advanced/jdg-13-asynchronous-javascript** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/03-library-advanced/jdg-13-asynchronous-javascript.mdx`
+- [ ] 🔴 P1 **03-library-advanced/jdg-14-metaprogramming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/03-library-advanced/jdg-14-metaprogramming.mdx`
+- [ ] 🔴 P1 **04-browser-platform/jdg-15-web-browsers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/04-browser-platform/jdg-15-web-browsers.mdx`
+- [ ] 🔴 P1 **05-node-tools/jdg-16-node** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/05-node-tools/jdg-16-node.mdx`
+- [ ] 🔴 P1 **05-node-tools/jdg-17-tools-extensions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/javascript-definitive-guide/05-node-tools/jdg-17-tools-extensions.mdx`
+
+## kotlin-in-action（19 章 · ❌19 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/kia1-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kotlin-in-action/00-official-learning-map/kia1-official-learning-map.mdx`
+- [ ] 🔴 P1 **18-official-final-review/kia1-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kotlin-in-action/18-official-final-review/kia1-official-final-review.mdx`
+- [ ] 🔴 P1 **01-part-one/kia1-part1-kotlin-introduction** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/01-part-one/kia1-part1-kotlin-introduction.mdx`
+- [ ] 🔴 P1 **02-chapter-01/kia1-01-kotlin-what-and-why** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/02-chapter-01/kia1-01-kotlin-what-and-why.mdx`
+- [ ] 🔴 P1 **03-chapter-02/kia1-02-kotlin-basics** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/03-chapter-02/kia1-02-kotlin-basics.mdx`
+- [ ] 🔴 P1 **04-chapter-03/kia1-03-defining-calling-functions** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/04-chapter-03/kia1-03-defining-calling-functions.mdx`
+- [ ] 🔴 P1 **05-chapter-04/kia1-04-classes-objects-interfaces** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/05-chapter-04/kia1-04-classes-objects-interfaces.mdx`
+- [ ] 🔴 P1 **06-chapter-05/kia1-05-programming-with-lambdas** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/06-chapter-05/kia1-05-programming-with-lambdas.mdx`
+- [ ] 🔴 P1 **07-chapter-06/kia1-06-kotlin-type-system** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/07-chapter-06/kia1-06-kotlin-type-system.mdx`
+- [ ] 🔴 P1 **08-part-two/kia1-part2-embracing-kotlin** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/08-part-two/kia1-part2-embracing-kotlin.mdx`
+- [ ] 🔴 P1 **09-chapter-07/kia1-07-operator-overloading-conventions** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/09-chapter-07/kia1-07-operator-overloading-conventions.mdx`
+- [ ] 🔴 P1 **10-chapter-08/kia1-08-higher-order-functions** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/10-chapter-08/kia1-08-higher-order-functions.mdx`
+- [ ] 🔴 P1 **11-chapter-09/kia1-09-generics** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/11-chapter-09/kia1-09-generics.mdx`
+- [ ] 🔴 P1 **12-chapter-10/kia1-10-annotations-reflection** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/12-chapter-10/kia1-10-annotations-reflection.mdx`
+- [ ] 🔴 P1 **13-chapter-11/kia1-11-dsl-construction** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/13-chapter-11/kia1-11-dsl-construction.mdx`
+- [ ] 🔴 P1 **14-appendix-a/kia1-appendix-a-building-projects** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/14-appendix-a/kia1-appendix-a-building-projects.mdx`
+- [ ] 🔴 P1 **15-appendix-b/kia1-appendix-b-documenting-code** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/15-appendix-b/kia1-appendix-b-documenting-code.mdx`
+- [ ] 🔴 P1 **16-appendix-c/kia1-appendix-c-kotlin-ecosystem** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/16-appendix-c/kia1-appendix-c-kotlin-ecosystem.mdx`
+- [ ] 🔴 P1 **17-reference/kia1-index-figures-tables-listings** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kotlin-in-action/17-reference/kia1-index-figures-tables-listings.mdx`
+
+## mastering-rust-2e（19 章 · ❌19 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mrs-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/mastering-rust-2e/00-guide/mrs-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/mrs-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/mastering-rust-2e/06-review/mrs-final-review.mdx`
+- [ ] 🔴 P1 **01-engineering/mrs-managing-projects-cargo** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/01-engineering/mrs-managing-projects-cargo.mdx`
+- [ ] 🔴 P1 **01-engineering/mrs-tests-docs-benchmarks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/01-engineering/mrs-tests-docs-benchmarks.mdx`
+- [ ] 🔴 P1 **02-types-safety/mrs-memory-management-safety** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/02-types-safety/mrs-memory-management-safety.mdx`
+- [ ] 🔴 P1 **02-types-safety/mrs-types-generics-traits** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/02-types-safety/mrs-types-generics-traits.mdx`
+- [ ] 🔴 P1 **04-services/mrs-databases** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/04-services/mrs-databases.mdx`
+- [ ] 🔴 P1 **04-services/mrs-network-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/04-services/mrs-network-programming.mdx`
+- [ ] 🔴 P1 **05-platform-debug/mrs-desktop-applications** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/mastering-rust-2e/05-platform-debug/mrs-desktop-applications.mdx`
+- [ ] 🔴 P1 **05-platform-debug/mrs-debugging** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/mastering-rust-2e/05-platform-debug/mrs-debugging.mdx`
+- [ ] 🔴 P1 **02-types-safety/mrs-advanced-concepts** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mastering-rust-2e/02-types-safety/mrs-advanced-concepts.mdx`
+- [ ] 🔴 P1 **03-concurrency-low-level/mrs-metaprogramming-macros** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mastering-rust-2e/03-concurrency-low-level/mrs-metaprogramming-macros.mdx`
+- [ ] 🔴 P1 **03-concurrency-low-level/mrs-concurrency** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/mastering-rust-2e/03-concurrency-low-level/mrs-concurrency.mdx`
+- [ ] 🔴 P1 **04-services/mrs-web-applications** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/mastering-rust-2e/04-services/mrs-web-applications.mdx`
+- [ ] 🔴 P1 **02-types-safety/mrs-error-handling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mastering-rust-2e/02-types-safety/mrs-error-handling.mdx`
+- [ ] 🔴 P1 **03-concurrency-low-level/mrs-unsafe-ffi** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mastering-rust-2e/03-concurrency-low-level/mrs-unsafe-ffi.mdx`
+- [ ] 🔴 P1 **05-platform-debug/mrs-webassembly** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/mastering-rust-2e/05-platform-debug/mrs-webassembly.mdx`
+- [ ] 🔴 P1 **01-engineering/mrs-getting-started** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mastering-rust-2e/01-engineering/mrs-getting-started.mdx`
+- [ ] 🔴 P1 **04-services/mrs-logging** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/mastering-rust-2e/04-services/mrs-logging.mdx`
+
+## mobile-xr-web-optimization（19 章 · ❌19 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mxrw-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mobile-xr-web-optimization/00-guide/mxrw-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/mxrw-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mobile-xr-web-optimization/08-review/mxrw-official-final-review.mdx`
+- [ ] 🔴 P1 **00-guide/mxrw-01-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mobile-xr-web-optimization/00-guide/mxrw-01-introduction.mdx`
+- [ ] 🔴 P1 **01-foundations/mxrw-05-adaptive-performance** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mobile-xr-web-optimization/01-foundations/mxrw-05-adaptive-performance.mdx`
+- [ ] 🔴 P1 **07-xr/mxrw-17-xr** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/mobile-xr-web-optimization/07-xr/mxrw-17-xr.mdx`
+- [ ] 🔴 P1 **01-foundations/mxrw-02-choose-urp** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/mobile-xr-web-optimization/01-foundations/mxrw-02-choose-urp.mdx`
+- [ ] 🔴 P1 **01-foundations/mxrw-04-memory-management** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mobile-xr-web-optimization/01-foundations/mxrw-04-memory-management.mdx`
+- [ ] 🔴 P1 **02-assets-code/mxrw-06-assets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mobile-xr-web-optimization/02-assets-code/mxrw-06-assets.mdx`
+- [ ] 🔴 P1 **02-assets-code/mxrw-08-project-configuration** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mobile-xr-web-optimization/02-assets-code/mxrw-08-project-configuration.mdx`
+- [ ] 🔴 P1 **04-presentation/mxrw-12-audio** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/mobile-xr-web-optimization/04-presentation/mxrw-12-audio.mdx`
+- [ ] 🔴 P1 **03-rendering/mxrw-09-graphics-gpu** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mobile-xr-web-optimization/03-rendering/mxrw-09-graphics-gpu.mdx`
+- [ ] 🔴 P1 **04-presentation/mxrw-11-user-interface** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mobile-xr-web-optimization/04-presentation/mxrw-11-user-interface.mdx`
+- [ ] 🔴 P1 **04-presentation/mxrw-13-animation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mobile-xr-web-optimization/04-presentation/mxrw-13-animation.mdx`
+- [ ] 🔴 P1 **06-web/mxrw-16-unity-web** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/mobile-xr-web-optimization/06-web/mxrw-16-unity-web.mdx`
+- [ ] 🔴 P1 **01-foundations/mxrw-03-profiling-tips** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/mobile-xr-web-optimization/01-foundations/mxrw-03-profiling-tips.mdx`
+- [ ] 🔴 P1 **03-rendering/mxrw-10-shaders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/mobile-xr-web-optimization/03-rendering/mxrw-10-shaders.mdx`
+- [ ] 🔴 P1 **05-simulation/mxrw-15-workflow-collaboration** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/mobile-xr-web-optimization/05-simulation/mxrw-15-workflow-collaboration.mdx`
+- [ ] 🔴 P1 **02-assets-code/mxrw-07-programming-architecture** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mobile-xr-web-optimization/02-assets-code/mxrw-07-programming-architecture.mdx`
+- [ ] 🔴 P1 **05-simulation/mxrw-14-physics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/mobile-xr-web-optimization/05-simulation/mxrw-14-physics.mdx`
+
+## building-llm-applications（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/bla-official-learning-map** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 58）
+    - 路径：`content/building-llm-applications/00-map/bla-official-learning-map.mdx`
+- [ ] 🔴 P1 **17-review/bla-official-final-review** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 58）
+    - 路径：`content/building-llm-applications/17-review/bla-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/bla-preface** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/01-preface/bla-preface.mdx`
+- [ ] 🔴 P1 **02-chapter-01/bla-01-introduction-to-large-language-models** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models.mdx`
+- [ ] 🔴 P1 **03-chapter-02/bla-02-llms-for-ai-powered-applications** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications.mdx`
+- [ ] 🔴 P1 **04-chapter-03/bla-03-choosing-an-llm** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm.mdx`
+- [ ] 🔴 P1 **05-chapter-04/bla-04-prompt-engineering** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/05-chapter-04/bla-04-prompt-engineering.mdx`
+- [ ] 🔴 P1 **06-chapter-05/bla-05-embedding-llms-in-applications** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications.mdx`
+- [ ] 🔴 P1 **07-chapter-06/bla-06-conversational-applications** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/07-chapter-06/bla-06-conversational-applications.mdx`
+- [ ] 🔴 P1 **08-chapter-07/bla-07-search-recommendation** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/08-chapter-07/bla-07-search-recommendation.mdx`
+- [ ] 🔴 P1 **09-chapter-08/bla-08-structured-data** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/09-chapter-08/bla-08-structured-data.mdx`
+- [ ] 🔴 P1 **10-chapter-09/bla-09-working-with-code** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/10-chapter-09/bla-09-working-with-code.mdx`
+- [ ] 🔴 P1 **11-chapter-10/bla-10-multimodal-applications** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/11-chapter-10/bla-10-multimodal-applications.mdx`
+- [ ] 🔴 P1 **12-chapter-11/bla-11-fine-tuning** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/12-chapter-11/bla-11-fine-tuning.mdx`
+- [ ] 🔴 P1 **13-chapter-12/bla-12-responsible-ai** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/13-chapter-12/bla-12-responsible-ai.mdx`
+- [ ] 🔴 P1 **14-chapter-13/bla-13-emerging-trends** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/14-chapter-13/bla-13-emerging-trends.mdx`
+- [ ] 🔴 P1 **15-other-books/bla-other-books** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/15-other-books/bla-other-books.mdx`
+- [ ] 🔴 P1 **16-index/bla-index** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、UX 不足（score 54）
+    - 路径：`content/building-llm-applications/16-index/bla-index.mdx`
+
+## kafka-definitive-guide（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/kfk-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kafka-definitive-guide/00-learning-map/kfk-official-learning-map.mdx`
+- [ ] 🔴 P1 **17-final-review/kfk-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/kafka-definitive-guide/17-final-review/kfk-official-final-review.mdx`
+- [ ] 🔴 P1 **11-securing-kafka/kfk-11-securing-kafka** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/kafka-definitive-guide/11-securing-kafka/kfk-11-securing-kafka.mdx`
+- [ ] 🔴 P1 **01-meet-kafka/kfk-01-meet-kafka** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/01-meet-kafka/kfk-01-meet-kafka.mdx`
+- [ ] 🔴 P1 **02-installing-kafka/kfk-02-installing-kafka** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/02-installing-kafka/kfk-02-installing-kafka.mdx`
+- [ ] 🔴 P1 **03-kafka-producers/kfk-03-kafka-producers** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/03-kafka-producers/kfk-03-kafka-producers.mdx`
+- [ ] 🔴 P1 **04-kafka-consumers/kfk-04-kafka-consumers** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/04-kafka-consumers/kfk-04-kafka-consumers.mdx`
+- [ ] 🔴 P1 **05-programmatic-administration/kfk-05-programmatic-administration** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/05-programmatic-administration/kfk-05-programmatic-administration.mdx`
+- [ ] 🔴 P1 **06-kafka-internals/kfk-06-kafka-internals** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/06-kafka-internals/kfk-06-kafka-internals.mdx`
+- [ ] 🔴 P1 **07-reliable-data-delivery/kfk-07-reliable-data-delivery** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/07-reliable-data-delivery/kfk-07-reliable-data-delivery.mdx`
+- [ ] 🔴 P1 **08-exactly-once-semantics/kfk-08-exactly-once-semantics** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/08-exactly-once-semantics/kfk-08-exactly-once-semantics.mdx`
+- [ ] 🔴 P1 **09-building-data-pipelines/kfk-09-building-data-pipelines** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/09-building-data-pipelines/kfk-09-building-data-pipelines.mdx`
+- [ ] 🔴 P1 **10-cross-cluster-mirroring/kfk-10-cross-cluster-mirroring** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/10-cross-cluster-mirroring/kfk-10-cross-cluster-mirroring.mdx`
+- [ ] 🔴 P1 **12-administering-kafka/kfk-12-administering-kafka** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/12-administering-kafka/kfk-12-administering-kafka.mdx`
+- [ ] 🔴 P1 **13-monitoring-kafka/kfk-13-monitoring-kafka** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/13-monitoring-kafka/kfk-13-monitoring-kafka.mdx`
+- [ ] 🔴 P1 **14-stream-processing/kfk-14-stream-processing** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/14-stream-processing/kfk-14-stream-processing.mdx`
+- [ ] 🔴 P1 **15-appendix-a-installation/kfk-appendix-a-installation** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/15-appendix-a-installation/kfk-appendix-a-installation.mdx`
+- [ ] 🔴 P1 **16-appendix-b-tools/kfk-appendix-b-tools** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/kafka-definitive-guide/16-appendix-b-tools/kfk-appendix-b-tools.mdx`
+
+## nodejs-definitive-guide（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ndg-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/nodejs-definitive-guide/00-guide/ndg-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-cases-review/ndg-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/nodejs-definitive-guide/06-cases-review/ndg-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/ndg-01-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/01-foundations/ndg-01-introduction.mdx`
+- [ ] 🔴 P1 **01-foundations/ndg-02-repl** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/01-foundations/ndg-02-repl.mdx`
+- [ ] 🔴 P1 **01-foundations/ndg-03-foundations** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/01-foundations/ndg-03-foundations.mdx`
+- [ ] 🔴 P1 **01-foundations/ndg-04-modules-npm** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/01-foundations/ndg-04-modules-npm.mdx`
+- [ ] 🔴 P1 **02-data-files/ndg-05-buffer-binary** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/02-data-files/ndg-05-buffer-binary.mdx`
+- [ ] 🔴 P1 **02-data-files/ndg-06-filesystem** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/02-data-files/ndg-06-filesystem.mdx`
+- [ ] 🔴 P1 **03-network-process/ndg-07-tcp-udp** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/03-network-process/ndg-07-tcp-udp.mdx`
+- [ ] 🔴 P1 **03-network-process/ndg-08-http-https** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/03-network-process/ndg-08-http-https.mdx`
+- [ ] 🔴 P1 **03-network-process/ndg-09-process-child-process** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/03-network-process/ndg-09-process-child-process.mdx`
+- [ ] 🔴 P1 **04-reliability-modules/ndg-10-errors-assertions** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/04-reliability-modules/ndg-10-errors-assertions.mdx`
+- [ ] 🔴 P1 **04-reliability-modules/ndg-11-crypto-compression** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/04-reliability-modules/ndg-11-crypto-compression.mdx`
+- [ ] 🔴 P1 **04-reliability-modules/ndg-12-other-modules** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/04-reliability-modules/ndg-12-other-modules.mdx`
+- [ ] 🔴 P1 **05-web-apps/ndg-13-database-access** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/05-web-apps/ndg-13-database-access.mdx`
+- [ ] 🔴 P1 **05-web-apps/ndg-14-express-web-apps** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/05-web-apps/ndg-14-express-web-apps.mdx`
+- [ ] 🔴 P1 **05-web-apps/ndg-15-socketio-websocket** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/05-web-apps/ndg-15-socketio-websocket.mdx`
+- [ ] 🔴 P1 **06-cases-review/ndg-16-integrated-cases** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/nodejs-definitive-guide/06-cases-review/ndg-16-integrated-cases.mdx`
+
+## opengl-redbook（18 章 · ❌9 ⚠️9 ✅0）
+
+- [ ] 🔴 P1 **01-fundamentals/oglrb-ch04-viewing** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/01-fundamentals/oglrb-ch04-viewing.mdx`
+- [ ] 🔴 P1 **02-lighting-texture/oglrb-ch06-texturing** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/02-lighting-texture/oglrb-ch06-texturing.mdx`
+- [ ] 🔴 P1 **02-lighting-texture/oglrb-ch07-advanced-render** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/02-lighting-texture/oglrb-ch07-advanced-render.mdx`
+- [ ] 🔴 P1 **03-compute-geometry/oglrb-ch12-techniques** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/03-compute-geometry/oglrb-ch12-techniques.mdx`
+- [ ] 🔴 P1 **04-systems/oglrb-ch13-debug-perf** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch13-debug-perf.mdx`
+- [ ] 🔴 P1 **04-systems/oglrb-ch14-sync** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch14-sync.mdx`
+- [ ] 🔴 P1 **04-systems/oglrb-ch15-platform** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch15-platform.mdx`
+- [ ] 🔴 P1 **04-systems/oglrb-ch16-es** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch16-es.mdx`
+- [ ] 🔴 P1 **04-systems/oglrb-ch17-webgl** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch17-webgl.mdx`
+- [ ] 🟡 P3 **01-fundamentals/oglrb-ch01-intro** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 47）
+    - 路径：`content/opengl-redbook/01-fundamentals/oglrb-ch01-intro.mdx`
+- [ ] 🟡 P3 **01-fundamentals/oglrb-ch02-shaders** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 47）
+    - 路径：`content/opengl-redbook/01-fundamentals/oglrb-ch02-shaders.mdx`
+- [ ] 🟡 P3 **01-fundamentals/oglrb-ch03-drawing** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 47）
+    - 路径：`content/opengl-redbook/01-fundamentals/oglrb-ch03-drawing.mdx`
+- [ ] 🟡 P3 **03-compute-geometry/oglrb-ch09-compute** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 47）
+    - 路径：`content/opengl-redbook/03-compute-geometry/oglrb-ch09-compute.mdx`
+- [ ] 🟡 P3 **03-compute-geometry/oglrb-ch10-geometry-tess** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-redbook/03-compute-geometry/oglrb-ch10-geometry-tess.mdx`
+- [ ] 🟡 P3 **02-lighting-texture/oglrb-ch05-lighting** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/02-lighting-texture/oglrb-ch05-lighting.mdx`
+- [ ] 🟡 P3 **02-lighting-texture/oglrb-ch08-framebuffers** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/02-lighting-texture/oglrb-ch08-framebuffers.mdx`
+- [ ] 🟡 P3 **03-compute-geometry/oglrb-ch11-buffers** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/03-compute-geometry/oglrb-ch11-buffers.mdx`
+- [ ] 🟡 P3 **04-systems/oglrb-ch18-future** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 41）
+    - 路径：`content/opengl-redbook/04-systems/oglrb-ch18-future.mdx`
+
+## opengl-superbible（18 章 · ❌0 ⚠️18 ✅0）
+
+- [ ] 🟡 P3 **02-rendering/oglsb-ch06-shaders** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 50）
+    - 路径：`content/opengl-superbible/02-rendering/oglsb-ch06-shaders.mdx`
+- [ ] 🟡 P3 **03-textures/oglsb-ch09-texturing** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/opengl-superbible/03-textures/oglsb-ch09-texturing.mdx`
+- [ ] 🟡 P3 **04-advanced/oglsb-ch11-debugging** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 45）
+    - 路径：`content/opengl-superbible/04-advanced/oglsb-ch11-debugging.mdx`
+- [ ] 🟡 P3 **01-basics/oglsb-ch01-intro** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/01-basics/oglsb-ch01-intro.mdx`
+- [ ] 🟡 P3 **01-basics/oglsb-ch02-first-program** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/01-basics/oglsb-ch02-first-program.mdx`
+- [ ] 🟡 P3 **01-basics/oglsb-ch03-data-flow** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/01-basics/oglsb-ch03-data-flow.mdx`
+- [ ] 🟡 P3 **01-basics/oglsb-ch04-math** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/01-basics/oglsb-ch04-math.mdx`
+- [ ] 🟡 P3 **02-rendering/oglsb-ch05-3d-data** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/02-rendering/oglsb-ch05-3d-data.mdx`
+- [ ] 🟡 P3 **02-rendering/oglsb-ch07-vertex** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/02-rendering/oglsb-ch07-vertex.mdx`
+- [ ] 🟡 P3 **02-rendering/oglsb-ch08-fragment** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/02-rendering/oglsb-ch08-fragment.mdx`
+- [ ] 🟡 P3 **03-textures/oglsb-ch10-framebuffers** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/03-textures/oglsb-ch10-framebuffers.mdx`
+- [ ] 🟡 P3 **04-advanced/oglsb-ch12-performance** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/04-advanced/oglsb-ch12-performance.mdx`
+- [ ] 🟡 P3 **04-advanced/oglsb-ch13-geometry** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/04-advanced/oglsb-ch13-geometry.mdx`
+- [ ] 🟡 P3 **04-advanced/oglsb-ch14-shading** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/04-advanced/oglsb-ch14-shading.mdx`
+- [ ] 🟡 P3 **05-specialized/oglsb-ch15-compute** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/05-specialized/oglsb-ch15-compute.mdx`
+- [ ] 🟡 P3 **05-specialized/oglsb-ch16-techniques** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/05-specialized/oglsb-ch16-techniques.mdx`
+- [ ] 🟡 P3 **05-specialized/oglsb-ch17-mobile** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/05-specialized/oglsb-ch17-mobile.mdx`
+- [ ] 🟡 P3 **05-specialized/oglsb-ch18-future** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 44）
+    - 路径：`content/opengl-superbible/05-specialized/oglsb-ch18-future.mdx`
+
+## peak-deliberate-practice（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/pdp16-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/peak-deliberate-practice/00-map/pdp16-official-learning-map.mdx`
+- [ ] 🔴 P1 **17-review/pdp16-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/peak-deliberate-practice/17-review/pdp16-official-final-review.mdx`
+- [ ] 🔴 P1 **06-introduction/pdp16-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/peak-deliberate-practice/06-introduction/pdp16-introduction.mdx`
+- [ ] 🔴 P1 **01-copyright/pdp16-copyright** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/01-copyright/pdp16-copyright.mdx`
+- [ ] 🔴 P1 **02-to-readers/pdp16-to-readers** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/02-to-readers/pdp16-to-readers.mdx`
+- [ ] 🔴 P1 **03-praise/pdp16-praise** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/03-praise/pdp16-praise.mdx`
+- [ ] 🔴 P1 **04-recommendation/pdp16-recommendation** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/04-recommendation/pdp16-recommendation.mdx`
+- [ ] 🔴 P1 **05-author-statement/pdp16-author-statement** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/05-author-statement/pdp16-author-statement.mdx`
+- [ ] 🔴 P1 **07-chapter-01/pdp16-chapter-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/07-chapter-01/pdp16-chapter-01.mdx`
+- [ ] 🔴 P1 **08-chapter-02/pdp16-chapter-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/08-chapter-02/pdp16-chapter-02.mdx`
+- [ ] 🔴 P1 **09-chapter-03/pdp16-chapter-03** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/09-chapter-03/pdp16-chapter-03.mdx`
+- [ ] 🔴 P1 **10-chapter-04/pdp16-chapter-04** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/10-chapter-04/pdp16-chapter-04.mdx`
+- [ ] 🔴 P1 **11-chapter-05/pdp16-chapter-05** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/11-chapter-05/pdp16-chapter-05.mdx`
+- [ ] 🔴 P1 **12-chapter-06/pdp16-chapter-06** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/12-chapter-06/pdp16-chapter-06.mdx`
+- [ ] 🔴 P1 **13-chapter-07/pdp16-chapter-07** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/13-chapter-07/pdp16-chapter-07.mdx`
+- [ ] 🔴 P1 **14-chapter-08/pdp16-chapter-08** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/14-chapter-08/pdp16-chapter-08.mdx`
+- [ ] 🔴 P1 **15-chapter-09/pdp16-chapter-09** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/15-chapter-09/pdp16-chapter-09.mdx`
+- [ ] 🔴 P1 **16-references/pdp16-references-notes** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/peak-deliberate-practice/16-references/pdp16-references-notes.mdx`
+
+## python-ops（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-overview/pop-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/python-ops/00-overview/pop-learning-map.mdx`
+- [ ] 🔴 P1 **04-summary/pop-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/python-ops/04-summary/pop-final-review.mdx`
+- [ ] 🔴 P1 **01-system-basics/pop-quality-reports** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/01-system-basics/pop-quality-reports.mdx`
+- [ ] 🔴 P1 **01-system-basics/pop-service-monitoring** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/01-system-basics/pop-service-monitoring.mdx`
+- [ ] 🔴 P1 **01-system-basics/pop-system-information** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/01-system-basics/pop-system-information.mdx`
+- [ ] 🔴 P1 **01-system-basics/pop-system-security** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/01-system-basics/pop-system-security.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-ansible** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-ansible.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-big-data** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-big-data.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-fabric** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-fabric.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-func** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-func.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-pexpect** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-pexpect.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-saltstack** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-saltstack.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-ssh-paramiko** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-ssh-paramiko.mdx`
+- [ ] 🔴 P1 **02-batch-management/pop-webserver** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/02-batch-management/pop-webserver.mdx`
+- [ ] 🔴 P1 **03-platform-cases/pop-bs-ops-platform** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/03-platform-cases/pop-bs-ops-platform.mdx`
+- [ ] 🔴 P1 **03-platform-cases/pop-cs-ops-platform** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/03-platform-cases/pop-cs-ops-platform.mdx`
+- [ ] 🔴 P1 **03-platform-cases/pop-distributed-quality-monitoring** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/03-platform-cases/pop-distributed-quality-monitoring.mdx`
+- [ ] 🔴 P1 **03-platform-cases/pop-linux-security-audit** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/python-ops/03-platform-cases/pop-linux-security-audit.mdx`
+
+## shaderx（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/sxx-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/shaderx/00-guide/sxx-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/sxx-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/shaderx/05-review/sxx-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundation/sxx-animation-deformation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/01-foundation/sxx-animation-deformation.mdx`
+- [ ] 🔴 P1 **01-foundation/sxx-geometry-data** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/01-foundation/sxx-geometry-data.mdx`
+- [ ] 🔴 P1 **01-foundation/sxx-language-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/01-foundation/sxx-language-models.mdx`
+- [ ] 🔴 P1 **02-rendering/sxx-lighting-gi** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/02-rendering/sxx-lighting-gi.mdx`
+- [ ] 🔴 P1 **02-rendering/sxx-material-surface** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/02-rendering/sxx-material-surface.mdx`
+- [ ] 🔴 P1 **02-rendering/sxx-terrain-displacement** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/02-rendering/sxx-terrain-displacement.mdx`
+- [ ] 🔴 P1 **02-rendering/sxx-texture-representation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/02-rendering/sxx-texture-representation.mdx`
+- [ ] 🔴 P1 **03-effects/sxx-environment-weather** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/03-effects/sxx-environment-weather.mdx`
+- [ ] 🔴 P1 **03-effects/sxx-image-post** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/03-effects/sxx-image-post.mdx`
+- [ ] 🔴 P1 **03-effects/sxx-particles-volume** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/03-effects/sxx-particles-volume.mdx`
+- [ ] 🔴 P1 **03-effects/sxx-shadow-systems** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/03-effects/sxx-shadow-systems.mdx`
+- [ ] 🔴 P1 **03-effects/sxx-transparency-aa** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/03-effects/sxx-transparency-aa.mdx`
+- [ ] 🔴 P1 **04-engineering/sxx-engine-architecture** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/04-engineering/sxx-engine-architecture.mdx`
+- [ ] 🔴 P1 **04-engineering/sxx-gpgpu-simulation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/04-engineering/sxx-gpgpu-simulation.mdx`
+- [ ] 🔴 P1 **04-engineering/sxx-mobile-portability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/04-engineering/sxx-mobile-portability.mdx`
+- [ ] 🔴 P1 **04-engineering/sxx-tools-performance** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/shaderx/04-engineering/sxx-tools-performance.mdx`
+
+## unity5（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/u5-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity5/00-guide/u5-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/u5-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity5/08-review/u5-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/u5-01-unity5-introduction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/01-foundations/u5-01-unity5-introduction.mdx`
+- [ ] 🔴 P1 **01-foundations/u5-02-project-preparation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/01-foundations/u5-02-project-preparation.mdx`
+- [ ] 🔴 P1 **03-ui-architecture/u5-08-game-manager** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/03-ui-architecture/u5-08-game-manager.mdx`
+- [ ] 🔴 P1 **04-world-systems/u5-10-navigation-advanced** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/04-world-systems/u5-10-navigation-advanced.mdx`
+- [ ] 🔴 P1 **04-world-systems/u5-12-scene-split-merge** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/04-world-systems/u5-12-scene-split-merge.mdx`
+- [ ] 🔴 P1 **07-realism-data/u5-15-game-realism** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/07-realism-data/u5-15-game-realism.mdx`
+- [ ] 🔴 P1 **07-realism-data/u5-appendix-database** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity5/07-realism-data/u5-appendix-database.mdx`
+- [ ] 🔴 P1 **02-character-combat/u5-04-player-character** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unity5/02-character-combat/u5-04-player-character.mdx`
+- [ ] 🔴 P1 **02-character-combat/u5-06-enemy-character** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/unity5/02-character-combat/u5-06-enemy-character.mdx`
+- [ ] 🔴 P1 **01-foundations/u5-03-game-scene** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity5/01-foundations/u5-03-game-scene.mdx`
+- [ ] 🔴 P1 **06-photon/u5-14-photon-cloud** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity5/06-photon/u5-14-photon-cloud.mdx`
+- [ ] 🔴 P1 **04-world-systems/u5-09-raycasting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/unity5/04-world-systems/u5-09-raycasting.mdx`
+- [ ] 🔴 P1 **04-world-systems/u5-11-lightmaps-light-probes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/unity5/04-world-systems/u5-11-lightmaps-light-probes.mdx`
+- [ ] 🔴 P1 **05-built-in-network/u5-13-built-in-networking** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity5/05-built-in-network/u5-13-built-in-networking.mdx`
+- [ ] 🔴 P1 **02-character-combat/u5-05-projectile-effects** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity5/02-character-combat/u5-05-projectile-effects.mdx`
+- [ ] 🔴 P1 **03-ui-architecture/u5-07-unity-ui** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/unity5/03-ui-architecture/u5-07-unity-ui.mdx`
+
+## vuejs-practice（18 章 · ❌18 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/vjp-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/vuejs-practice/00-guide/vjp-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/vjp-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/vuejs-practice/06-review/vjp-official-final-review.mdx`
+- [ ] 🔴 P1 **05-appendices/vjp-appendix-b-npm** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/vuejs-practice/05-appendices/vjp-appendix-b-npm.mdx`
+- [ ] 🔴 P1 **05-appendices/vjp-appendix-c-webpack** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/vuejs-practice/05-appendices/vjp-appendix-c-webpack.mdx`
+- [ ] 🔴 P1 **05-appendices/vjp-appendix-d-closures-object-references** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/vuejs-practice/05-appendices/vjp-appendix-d-closures-object-references.mdx`
+- [ ] 🔴 P1 **05-appendices/vjp-appendix-e-ecmascript-6** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/vuejs-practice/05-appendices/vjp-appendix-e-ecmascript-6.mdx`
+- [ ] 🔴 P1 **05-appendices/vjp-appendix-a-git** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/vuejs-practice/05-appendices/vjp-appendix-a-git.mdx`
+- [ ] 🔴 P1 **03-mall/vjp-07-online-mall-one** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/vuejs-practice/03-mall/vjp-07-online-mall-one.mdx`
+- [ ] 🔴 P1 **03-mall/vjp-08-online-mall-two** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/vuejs-practice/03-mall/vjp-08-online-mall-two.mdx`
+- [ ] 🔴 P1 **04-projects/vjp-09-corporate-website** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/vuejs-practice/04-projects/vjp-09-corporate-website.mdx`
+- [ ] 🔴 P1 **04-projects/vjp-10-mobile-news** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/vuejs-practice/04-projects/vjp-10-mobile-news.mdx`
+- [ ] 🔴 P1 **02-options-project/vjp-04-vue-options** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/vuejs-practice/02-options-project/vjp-04-vue-options.mdx`
+- [ ] 🔴 P1 **02-options-project/vjp-05-built-in-components** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/vuejs-practice/02-options-project/vjp-05-built-in-components.mdx`
+- [ ] 🔴 P1 **02-options-project/vjp-06-projectization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/vuejs-practice/02-options-project/vjp-06-projectization.mdx`
+- [ ] 🔴 P1 **01-concepts/vjp-02-basic-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/vuejs-practice/01-concepts/vjp-02-basic-introduction.mdx`
+- [ ] 🔴 P1 **04-projects/vjp-11-svg-drawing-board** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/vuejs-practice/04-projects/vjp-11-svg-drawing-board.mdx`
+- [ ] 🔴 P1 **01-concepts/vjp-01-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-practice/01-concepts/vjp-01-introduction.mdx`
+- [ ] 🔴 P1 **01-concepts/vjp-03-vue-syntax** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/vuejs-practice/01-concepts/vjp-03-vue-syntax.mdx`
+
+## blender-3d（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/bl3-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/blender-3d/00-guide/bl3-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-extend-review/bl3-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/blender-3d/07-extend-review/bl3-official-final-review.mdx`
+- [ ] 🔴 P1 **01-basics/bl3-02-user-interface** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/blender-3d/01-basics/bl3-02-user-interface.mdx`
+- [ ] 🔴 P1 **01-basics/bl3-03-first-scene** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/blender-3d/01-basics/bl3-03-first-scene.mdx`
+- [ ] 🔴 P1 **03-modeling/bl3-07-character-modeling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/blender-3d/03-modeling/bl3-07-character-modeling.mdx`
+- [ ] 🔴 P1 **05-rig-animation/bl3-11-character-rigging** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/blender-3d/05-rig-animation/bl3-11-character-rigging.mdx`
+- [ ] 🔴 P1 **06-final/bl3-14-lighting-compositing-rendering** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/blender-3d/06-final/bl3-14-lighting-compositing-rendering.mdx`
+- [ ] 🔴 P1 **01-basics/bl3-01-what-you-need-know-about-blender** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/blender-3d/01-basics/bl3-01-what-you-need-know-about-blender.mdx`
+- [ ] 🔴 P1 **04-lookdev/bl3-10-materials-shaders** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/blender-3d/04-lookdev/bl3-10-materials-shaders.mdx`
+- [ ] 🔴 P1 **02-project-design/bl3-05-character-design** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/blender-3d/02-project-design/bl3-05-character-design.mdx`
+- [ ] 🔴 P1 **04-lookdev/bl3-08-unwrapping-uvs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/blender-3d/04-lookdev/bl3-08-unwrapping-uvs.mdx`
+- [ ] 🔴 P1 **04-lookdev/bl3-09-painting-textures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/blender-3d/04-lookdev/bl3-09-painting-textures.mdx`
+- [ ] 🔴 P1 **07-extend-review/bl3-15-other-features** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/blender-3d/07-extend-review/bl3-15-other-features.mdx`
+- [ ] 🔴 P1 **02-project-design/bl3-04-project-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/blender-3d/02-project-design/bl3-04-project-overview.mdx`
+- [ ] 🔴 P1 **03-modeling/bl3-06-modeling-tools** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/blender-3d/03-modeling/bl3-06-modeling-tools.mdx`
+- [ ] 🔴 P1 **05-rig-animation/bl3-12-animating-character** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/blender-3d/05-rig-animation/bl3-12-animating-character.mdx`
+- [ ] 🔴 P1 **06-final/bl3-13-camera-tracking** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/blender-3d/06-final/bl3-13-camera-tracking.mdx`
+
+## blockchain-dev-practice（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles.mdx`
+- [ ] 🔴 P1 **14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli.mdx`
+- [ ] 🔴 P1 **00-map/bdp-official-learning-map** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/blockchain-dev-practice/00-map/bdp-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-review/bdp-official-final-review** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/blockchain-dev-practice/16-review/bdp-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/bdp-preface** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/01-preface/bdp-preface.mdx`
+- [ ] 🔴 P1 **02-01-understand-blockchain/bdp-01-understand-blockchain** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain.mdx`
+- [ ] 🔴 P1 **03-02-practice-preparation/bdp-02-practice-preparation** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/03-02-practice-preparation/bdp-02-practice-preparation.mdx`
+- [ ] 🔴 P1 **04-03-ethereum-introduction/bdp-03-ethereum-introduction** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/04-03-ethereum-introduction/bdp-03-ethereum-introduction.mdx`
+- [ ] 🔴 P1 **05-04-compile-install-run/bdp-04-compile-install-run** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/05-04-compile-install-run/bdp-04-compile-install-run.mdx`
+- [ ] 🔴 P1 **06-05-private-chain/bdp-05-private-chain** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/06-05-private-chain/bdp-05-private-chain.mdx`
+- [ ] 🔴 P1 **07-06-programming-interfaces/bdp-06-programming-interfaces** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces.mdx`
+- [ ] 🔴 P1 **08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart.mdx`
+- [ ] 🔴 P1 **09-08-solidity-syntax/bdp-08-solidity-syntax** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax.mdx`
+- [ ] 🔴 P1 **10-09-contract-compile-deploy/bdp-09-contract-compile-deploy** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy.mdx`
+- [ ] 🔴 P1 **11-10-truffle/bdp-10-truffle** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/11-10-truffle/bdp-10-truffle.mdx`
+- [ ] 🔴 P1 **12-11-dapps-practice/bdp-11-dapps-practice** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice.mdx`
+- [ ] 🔴 P1 **15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis.mdx`
+
+## deep-nodejs（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/dnj-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/deep-nodejs/00-guide/dnj-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/dnj-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/deep-nodejs/07-review/dnj-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/dnj-01-node-introduction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/01-foundations/dnj-01-node-introduction.mdx`
+- [ ] 🔴 P1 **01-foundations/dnj-02-module-mechanism** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/01-foundations/dnj-02-module-mechanism.mdx`
+- [ ] 🔴 P1 **02-async-memory/dnj-03-async-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/02-async-memory/dnj-03-async-io.mdx`
+- [ ] 🔴 P1 **02-async-memory/dnj-04-async-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/02-async-memory/dnj-04-async-programming.mdx`
+- [ ] 🔴 P1 **02-async-memory/dnj-05-memory-control** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/02-async-memory/dnj-05-memory-control.mdx`
+- [ ] 🔴 P1 **03-data-network/dnj-06-buffer** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/03-data-network/dnj-06-buffer.mdx`
+- [ ] 🔴 P1 **03-data-network/dnj-07-network-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/03-data-network/dnj-07-network-programming.mdx`
+- [ ] 🔴 P1 **04-web-process/dnj-08-web-application** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/04-web-process/dnj-08-web-application.mdx`
+- [ ] 🔴 P1 **04-web-process/dnj-09-processes** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/04-web-process/dnj-09-processes.mdx`
+- [ ] 🔴 P1 **05-quality-production/dnj-10-testing** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/05-quality-production/dnj-10-testing.mdx`
+- [ ] 🔴 P1 **05-quality-production/dnj-11-productization** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/05-quality-production/dnj-11-productization.mdx`
+- [ ] 🔴 P1 **06-appendices/dnj-appendix-a-installation** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-a-installation.mdx`
+- [ ] 🔴 P1 **06-appendices/dnj-appendix-b-debugging** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-b-debugging.mdx`
+- [ ] 🔴 P1 **06-appendices/dnj-appendix-c-coding-style** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-c-coding-style.mdx`
+- [ ] 🔴 P1 **06-appendices/dnj-appendix-d-local-npm** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-d-local-npm.mdx`
+
+## dotnet-memory（17 章 · ❌0 ⚠️17 ✅0）
+
+- [ ] 🟡 P3 **03-advanced/dnm-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/dotnet-memory/03-advanced/dnm-final-review.mdx`
+- [ ] 🟡 P3 **07-official/garbage-collection-introduction** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/dotnet-memory/07-official/garbage-collection-introduction.mdx`
+- [ ] 🟡 P3 **08-official/garbage-collection-mark-phase** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/dotnet-memory/08-official/garbage-collection-mark-phase.mdx`
+- [ ] 🟡 P3 **01-official/basic-concepts** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/01-official/basic-concepts.mdx`
+- [ ] 🟡 P3 **02-official/low-level-memory-management** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/02-official/low-level-memory-management.mdx`
+- [ ] 🟡 P3 **04-official/dotnet-fundamentals** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/04-official/dotnet-fundamentals.mdx`
+- [ ] 🟡 P3 **06-official/memory-allocation** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/06-official/memory-allocation.mdx`
+- [ ] 🟡 P3 **09-official/garbage-collection-plan-phase** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/09-official/garbage-collection-plan-phase.mdx`
+- [ ] 🟡 P3 **12-official/object-lifetime** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/12-official/object-lifetime.mdx`
+- [ ] 🟡 P3 **14-official/advanced-techniques** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/14-official/advanced-techniques.mdx`
+- [ ] 🟡 P3 **15-official/programmatical-apis** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/dotnet-memory/15-official/programmatical-apis.mdx`
+- [ ] 🟡 P3 **00-fundamentals/dnm-memory-model** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/dotnet-memory/00-fundamentals/dnm-memory-model.mdx`
+- [ ] 🟡 P3 **03-official/memory-measurements** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/dotnet-memory/03-official/memory-measurements.mdx`
+- [ ] 🟡 P3 **05-official/memory-partitioning** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/dotnet-memory/05-official/memory-partitioning.mdx`
+- [ ] 🟡 P3 **10-official/garbage-collection-sweep-and-compact** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/dotnet-memory/10-official/garbage-collection-sweep-and-compact.mdx`
+- [ ] 🟡 P3 **13-official/miscellaneous-topics** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/dotnet-memory/13-official/miscellaneous-topics.mdx`
+- [ ] 🟡 P3 **11-official/gc-flavors-and-settings** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/dotnet-memory/11-official/gc-flavors-and-settings.mdx`
+
+## effective-java（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-ejv-3e-official-learning-map/ejv-3e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/effective-java/00-ejv-3e-official-learning-map/ejv-3e-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-ejv-3e-official-final-review/ejv-3e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/effective-java/16-ejv-3e-official-final-review/ejv-3e-official-final-review.mdx`
+- [ ] 🔴 P1 **01-ejv-3e-01-introduction/ejv-3e-01-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/01-ejv-3e-01-introduction/ejv-3e-01-introduction.mdx`
+- [ ] 🔴 P1 **02-ejv-3e-02-creating-destroying-objects/ejv-3e-02-creating-destroying-objects** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/02-ejv-3e-02-creating-destroying-objects/ejv-3e-02-creating-destroying-objects.mdx`
+- [ ] 🔴 P1 **03-ejv-3e-03-common-object-methods/ejv-3e-03-common-object-methods** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/03-ejv-3e-03-common-object-methods/ejv-3e-03-common-object-methods.mdx`
+- [ ] 🔴 P1 **04-ejv-3e-04-classes-interfaces/ejv-3e-04-classes-interfaces** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/04-ejv-3e-04-classes-interfaces/ejv-3e-04-classes-interfaces.mdx`
+- [ ] 🔴 P1 **05-ejv-3e-05-generics/ejv-3e-05-generics** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/05-ejv-3e-05-generics/ejv-3e-05-generics.mdx`
+- [ ] 🔴 P1 **06-ejv-3e-06-enums-annotations/ejv-3e-06-enums-annotations** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/06-ejv-3e-06-enums-annotations/ejv-3e-06-enums-annotations.mdx`
+- [ ] 🔴 P1 **07-ejv-3e-07-lambdas-streams/ejv-3e-07-lambdas-streams** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/07-ejv-3e-07-lambdas-streams/ejv-3e-07-lambdas-streams.mdx`
+- [ ] 🔴 P1 **08-ejv-3e-08-methods/ejv-3e-08-methods** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/08-ejv-3e-08-methods/ejv-3e-08-methods.mdx`
+- [ ] 🔴 P1 **09-ejv-3e-09-general-programming/ejv-3e-09-general-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/09-ejv-3e-09-general-programming/ejv-3e-09-general-programming.mdx`
+- [ ] 🔴 P1 **10-ejv-3e-10-exceptions/ejv-3e-10-exceptions** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/10-ejv-3e-10-exceptions/ejv-3e-10-exceptions.mdx`
+- [ ] 🔴 P1 **11-ejv-3e-11-concurrency/ejv-3e-11-concurrency** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/11-ejv-3e-11-concurrency/ejv-3e-11-concurrency.mdx`
+- [ ] 🔴 P1 **12-ejv-3e-12-serialization/ejv-3e-12-serialization** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/12-ejv-3e-12-serialization/ejv-3e-12-serialization.mdx`
+- [ ] 🔴 P1 **13-ejv-3e-second-edition-crosswalk/ejv-3e-second-edition-crosswalk** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/13-ejv-3e-second-edition-crosswalk/ejv-3e-second-edition-crosswalk.mdx`
+- [ ] 🔴 P1 **14-ejv-3e-references/ejv-3e-references** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/14-ejv-3e-references/ejv-3e-references.mdx`
+- [ ] 🔴 P1 **15-ejv-3e-index/ejv-3e-index** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/effective-java/15-ejv-3e-index/ejv-3e-index.mdx`
+
+## engineering-a-compiler（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/eac-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/engineering-a-compiler/00-guide/eac-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/eac-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/engineering-a-compiler/07-review/eac-official-final-review.mdx`
+- [ ] 🔴 P1 **01-front-end/eac-01-overview-compilation** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/01-front-end/eac-01-overview-compilation.mdx`
+- [ ] 🔴 P1 **01-front-end/eac-02-scanners** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/01-front-end/eac-02-scanners.mdx`
+- [ ] 🔴 P1 **01-front-end/eac-03-parsers** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/01-front-end/eac-03-parsers.mdx`
+- [ ] 🔴 P1 **01-front-end/eac-04-context-sensitive-analysis** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/01-front-end/eac-04-context-sensitive-analysis.mdx`
+- [ ] 🔴 P1 **02-ir-runtime/eac-05-intermediate-representations** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/02-ir-runtime/eac-05-intermediate-representations.mdx`
+- [ ] 🔴 P1 **02-ir-runtime/eac-06-procedure-abstraction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/02-ir-runtime/eac-06-procedure-abstraction.mdx`
+- [ ] 🔴 P1 **02-ir-runtime/eac-07-code-shape** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/02-ir-runtime/eac-07-code-shape.mdx`
+- [ ] 🔴 P1 **03-optimization/eac-08-introduction-optimization** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/03-optimization/eac-08-introduction-optimization.mdx`
+- [ ] 🔴 P1 **03-optimization/eac-09-data-flow-analysis** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/03-optimization/eac-09-data-flow-analysis.mdx`
+- [ ] 🔴 P1 **03-optimization/eac-10-scalar-optimizations** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/03-optimization/eac-10-scalar-optimizations.mdx`
+- [ ] 🔴 P1 **04-back-end/eac-11-instruction-selection** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/04-back-end/eac-11-instruction-selection.mdx`
+- [ ] 🔴 P1 **04-back-end/eac-12-instruction-scheduling** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/04-back-end/eac-12-instruction-scheduling.mdx`
+- [ ] 🔴 P1 **04-back-end/eac-13-register-allocation** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/04-back-end/eac-13-register-allocation.mdx`
+- [ ] 🔴 P1 **05-iloc/eac-appendix-a-iloc** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/05-iloc/eac-appendix-a-iloc.mdx`
+- [ ] 🔴 P1 **06-data-structures/eac-appendix-b-data-structures** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/engineering-a-compiler/06-data-structures/eac-appendix-b-data-structures.mdx`
+
+## game-engine-practice-vol2（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/gep2-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-practice-vol2/00-official-learning-map/gep2-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-official-final-review/gep2-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-practice-vol2/16-official-final-review/gep2-official-final-review.mdx`
+- [ ] 🔴 P1 **01-front-matter/gep2-front-matter** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/01-front-matter/gep2-front-matter.mdx`
+- [ ] 🔴 P1 **02-chapter-01-skeletal-skinning-basics/gep2-chapter-01-skeletal-skinning-basics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/02-chapter-01-skeletal-skinning-basics/gep2-chapter-01-skeletal-skinning-basics.mdx`
+- [ ] 🔴 P1 **03-chapter-02-animation-playback-slots/gep2-chapter-02-animation-playback-slots** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/03-chapter-02-animation-playback-slots/gep2-chapter-02-animation-playback-slots.mdx`
+- [ ] 🔴 P1 **04-chapter-03-animation-blending/gep2-chapter-03-animation-blending** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/04-chapter-03-animation-blending/gep2-chapter-03-animation-blending.mdx`
+- [ ] 🔴 P1 **05-chapter-04-morph-animation-blending/gep2-chapter-04-morph-animation-blending** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/05-chapter-04-morph-animation-blending/gep2-chapter-04-morph-animation-blending.mdx`
+- [ ] 🔴 P1 **06-chapter-05-ik-characters/gep2-chapter-05-ik-characters** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/06-chapter-05-ik-characters/gep2-chapter-05-ik-characters.mdx`
+- [ ] 🔴 P1 **07-chapter-06-lighting-rendering-history/gep2-chapter-06-lighting-rendering-history** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/07-chapter-06-lighting-rendering-history/gep2-chapter-06-lighting-rendering-history.mdx`
+- [ ] 🔴 P1 **08-chapter-07-renderer-interface/gep2-chapter-07-renderer-interface** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/08-chapter-07-renderer-interface/gep2-chapter-07-renderer-interface.mdx`
+- [ ] 🔴 P1 **09-chapter-08-materials/gep2-chapter-08-materials** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/09-chapter-08-materials/gep2-chapter-08-materials.mdx`
+- [ ] 🔴 P1 **10-chapter-09-render-pipeline-architecture/gep2-chapter-09-render-pipeline-architecture** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/10-chapter-09-render-pipeline-architecture/gep2-chapter-09-render-pipeline-architecture.mdx`
+- [ ] 🔴 P1 **11-chapter-10-lighting-materials/gep2-chapter-10-lighting-materials** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/11-chapter-10-lighting-materials/gep2-chapter-10-lighting-materials.mdx`
+- [ ] 🔴 P1 **12-chapter-11-post-effects/gep2-chapter-11-post-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/12-chapter-11-post-effects/gep2-chapter-11-post-effects.mdx`
+- [ ] 🔴 P1 **13-chapter-12-shadows/gep2-chapter-12-shadows** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/13-chapter-12-shadows/gep2-chapter-12-shadows.mdx`
+- [ ] 🔴 P1 **14-chapter-13-multithreading/gep2-chapter-13-multithreading** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/14-chapter-13-multithreading/gep2-chapter-13-multithreading.mdx`
+- [ ] 🔴 P1 **15-chapter-14-dynamic-buffers-profiler/gep2-chapter-14-dynamic-buffers-profiler** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol2/15-chapter-14-dynamic-buffers-profiler/gep2-chapter-14-dynamic-buffers-profiler.mdx`
+
+## game-math-3d（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gm3d-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/game-math-3d/00-guide/gm3d-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/gm3d-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/game-math-3d/07-review/gm3d-official-final-review.mdx`
+- [ ] 🔴 P1 **01-coordinate-vector/gm3d-cartesian-coordinate-systems** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/01-coordinate-vector/gm3d-cartesian-coordinate-systems.mdx`
+- [ ] 🔴 P1 **01-coordinate-vector/gm3d-multiple-coordinate-spaces** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/01-coordinate-vector/gm3d-multiple-coordinate-spaces.mdx`
+- [ ] 🔴 P1 **01-coordinate-vector/gm3d-vectors** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/01-coordinate-vector/gm3d-vectors.mdx`
+- [ ] 🔴 P1 **02-matrices-transforms/gm3d-introduction-to-matrices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/02-matrices-transforms/gm3d-introduction-to-matrices.mdx`
+- [ ] 🔴 P1 **02-matrices-transforms/gm3d-matrices-linear-transformations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/02-matrices-transforms/gm3d-matrices-linear-transformations.mdx`
+- [ ] 🔴 P1 **02-matrices-transforms/gm3d-more-on-matrices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/02-matrices-transforms/gm3d-more-on-matrices.mdx`
+- [ ] 🔴 P1 **03-orientation-geometry/gm3d-geometric-primitives** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/03-orientation-geometry/gm3d-geometric-primitives.mdx`
+- [ ] 🔴 P1 **03-orientation-geometry/gm3d-polar-coordinate-systems** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/03-orientation-geometry/gm3d-polar-coordinate-systems.mdx`
+- [ ] 🔴 P1 **03-orientation-geometry/gm3d-rotation-three-dimensions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/03-orientation-geometry/gm3d-rotation-three-dimensions.mdx`
+- [ ] 🔴 P1 **04-graphics-mechanics/gm3d-linear-kinematics-calculus** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/04-graphics-mechanics/gm3d-linear-kinematics-calculus.mdx`
+- [ ] 🔴 P1 **04-graphics-mechanics/gm3d-linear-rotational-dynamics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/04-graphics-mechanics/gm3d-linear-rotational-dynamics.mdx`
+- [ ] 🔴 P1 **04-graphics-mechanics/gm3d-mathematical-topics-graphics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/04-graphics-mechanics/gm3d-mathematical-topics-graphics.mdx`
+- [ ] 🔴 P1 **05-curves-next/gm3d-afterword** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/05-curves-next/gm3d-afterword.mdx`
+- [ ] 🔴 P1 **05-curves-next/gm3d-curves-in-3d** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/05-curves-next/gm3d-curves-in-3d.mdx`
+- [ ] 🔴 P1 **06-appendix/gm3d-geometric-tests** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/game-math-3d/06-appendix/gm3d-geometric-tests.mdx`
+
+## game-mechanics-advanced（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gma-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/game-mechanics-advanced/00-guide/gma-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/gma-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/game-mechanics-advanced/06-review/gma-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/gma-01-designing-game-mechanics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/01-foundations/gma-01-designing-game-mechanics.mdx`
+- [ ] 🔴 P1 **01-foundations/gma-02-emergence-progression** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/01-foundations/gma-02-emergence-progression.mdx`
+- [ ] 🔴 P1 **01-foundations/gma-03-complex-systems-emergence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/01-foundations/gma-03-complex-systems-emergence.mdx`
+- [ ] 🔴 P1 **02-economy-machinations/gma-05-machinations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/02-economy-machinations/gma-05-machinations.mdx`
+- [ ] 🔴 P1 **02-economy-machinations/gma-06-common-mechanisms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/02-economy-machinations/gma-06-common-mechanisms.mdx`
+- [ ] 🔴 P1 **03-patterns-balancing/gma-07-design-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/03-patterns-balancing/gma-07-design-patterns.mdx`
+- [ ] 🔴 P1 **03-patterns-balancing/gma-08-simulating-balancing-games** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/03-patterns-balancing/gma-08-simulating-balancing-games.mdx`
+- [ ] 🔴 P1 **03-patterns-balancing/gma-09-building-economies** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/03-patterns-balancing/gma-09-building-economies.mdx`
+- [ ] 🔴 P1 **04-progression-meaning/gma-10-level-design-mechanics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/04-progression-meaning/gma-10-level-design-mechanics.mdx`
+- [ ] 🔴 P1 **04-progression-meaning/gma-11-progression-mechanisms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/04-progression-meaning/gma-11-progression-mechanisms.mdx`
+- [ ] 🔴 P1 **04-progression-meaning/gma-12-meaningful-mechanics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/04-progression-meaning/gma-12-meaningful-mechanics.mdx`
+- [ ] 🔴 P1 **05-appendices/gma-appendix-a-machinations-reference** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/05-appendices/gma-appendix-a-machinations-reference.mdx`
+- [ ] 🔴 P1 **05-appendices/gma-appendix-c-machinations-start** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/game-mechanics-advanced/05-appendices/gma-appendix-c-machinations-start.mdx`
+- [ ] 🔴 P1 **02-economy-machinations/gma-04-internal-economy** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 24）
+    - 路径：`content/game-mechanics-advanced/02-economy-machinations/gma-04-internal-economy.mdx`
+- [ ] 🔴 P1 **05-appendices/gma-appendix-b-pattern-library** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 24）
+    - 路径：`content/game-mechanics-advanced/05-appendices/gma-appendix-b-pattern-library.mdx`
+
+## head-first-statistics（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/hfs-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/head-first-statistics/00-guide/hfs-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/hfs-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/head-first-statistics/05-review/hfs-official-final-review.mdx`
+- [ ] 🔴 P1 **01-descriptive/hfs-central-tendency** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/01-descriptive/hfs-central-tendency.mdx`
+- [ ] 🔴 P1 **01-descriptive/hfs-variability-spread** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/01-descriptive/hfs-variability-spread.mdx`
+- [ ] 🔴 P1 **01-descriptive/hfs-visualizing-information** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/01-descriptive/hfs-visualizing-information.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-calculating-probabilities** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-calculating-probabilities.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-discrete-probability-distributions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-discrete-probability-distributions.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-geometric-binomial-poisson** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-geometric-binomial-poisson.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-normal-beyond** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-normal-beyond.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-normal-distribution** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-normal-distribution.mdx`
+- [ ] 🔴 P1 **02-probability-distributions/hfs-permutations-combinations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/02-probability-distributions/hfs-permutations-combinations.mdx`
+- [ ] 🔴 P1 **03-sampling-inference/hfs-chi-square** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/03-sampling-inference/hfs-chi-square.mdx`
+- [ ] 🔴 P1 **03-sampling-inference/hfs-confidence-intervals** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/03-sampling-inference/hfs-confidence-intervals.mdx`
+- [ ] 🔴 P1 **03-sampling-inference/hfs-estimating-populations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/03-sampling-inference/hfs-estimating-populations.mdx`
+- [ ] 🔴 P1 **03-sampling-inference/hfs-hypothesis-tests** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/03-sampling-inference/hfs-hypothesis-tests.mdx`
+- [ ] 🔴 P1 **03-sampling-inference/hfs-statistical-sampling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/03-sampling-inference/hfs-statistical-sampling.mdx`
+- [ ] 🔴 P1 **04-correlation-regression/hfs-correlation-regression** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/head-first-statistics/04-correlation-regression/hfs-correlation-regression.mdx`
+
+## high-performance-mysql（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/hpm4-official-learning-map** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/high-performance-mysql/00-learning-map/hpm4-official-learning-map.mdx`
+- [ ] 🔴 P1 **99-final-review/hpm4-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/high-performance-mysql/99-final-review/hpm4-official-final-review.mdx`
+- [ ] 🔴 P1 **01-mysql-architecture/hpm4-ch01-mysql-architecture** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/01-mysql-architecture/hpm4-ch01-mysql-architecture.mdx`
+- [ ] 🔴 P1 **02-reliability-monitoring/hpm4-ch02-reliability-monitoring** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/02-reliability-monitoring/hpm4-ch02-reliability-monitoring.mdx`
+- [ ] 🔴 P1 **03-performance-schema/hpm4-ch03-performance-schema** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/03-performance-schema/hpm4-ch03-performance-schema.mdx`
+- [ ] 🔴 P1 **04-os-hardware/hpm4-ch04-os-hardware** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/04-os-hardware/hpm4-ch04-os-hardware.mdx`
+- [ ] 🔴 P1 **05-server-settings/hpm4-ch05-server-settings** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/05-server-settings/hpm4-ch05-server-settings.mdx`
+- [ ] 🔴 P1 **06-schema-design/hpm4-ch06-schema-design** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/06-schema-design/hpm4-ch06-schema-design.mdx`
+- [ ] 🔴 P1 **07-indexing/hpm4-ch07-indexing** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/07-indexing/hpm4-ch07-indexing.mdx`
+- [ ] 🔴 P1 **08-query-optimization/hpm4-ch08-query-optimization** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/08-query-optimization/hpm4-ch08-query-optimization.mdx`
+- [ ] 🔴 P1 **09-replication/hpm4-ch09-replication** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/09-replication/hpm4-ch09-replication.mdx`
+- [ ] 🔴 P1 **10-backup-recovery/hpm4-ch10-backup-recovery** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/10-backup-recovery/hpm4-ch10-backup-recovery.mdx`
+- [ ] 🔴 P1 **11-scaling/hpm4-ch11-scaling** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/11-scaling/hpm4-ch11-scaling.mdx`
+- [ ] 🔴 P1 **12-mysql-cloud/hpm4-ch12-mysql-cloud** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/12-mysql-cloud/hpm4-ch12-mysql-cloud.mdx`
+- [ ] 🔴 P1 **13-compliance/hpm4-ch13-compliance** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/13-compliance/hpm4-ch13-compliance.mdx`
+- [ ] 🔴 P1 **14-appendix-a/hpm4-appendix-a-upgrading** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/14-appendix-a/hpm4-appendix-a-upgrading.mdx`
+- [ ] 🔴 P1 **15-appendix-b/hpm4-appendix-b-kubernetes** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/high-performance-mysql/15-appendix-b/hpm4-appendix-b-kubernetes.mdx`
+
+## jvm-g1-tuning（17 章 · ❌10 ⚠️7 ✅0）
+
+- [ ] 🔴 P1 **00-jg1b-official-learning-map/jg1b-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/jvm-g1-tuning/00-jg1b-official-learning-map/jg1b-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-jg1b-official-final-review/jg1b-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/jvm-g1-tuning/16-jg1b-official-final-review/jg1b-official-final-review.mdx`
+- [ ] 🔴 P1 **01-jg1b-01-gc-overview/jg1b-01-gc-overview** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/01-jg1b-01-gc-overview/jg1b-01-gc-overview.mdx`
+- [ ] 🔴 P1 **02-jg1b-02-g1-basics/jg1b-02-g1-basics** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/02-jg1b-02-g1-basics/jg1b-02-g1-basics.mdx`
+- [ ] 🔴 P1 **03-jg1b-03-object-allocation/jg1b-03-object-allocation** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/03-jg1b-03-object-allocation/jg1b-03-object-allocation.mdx`
+- [ ] 🔴 P1 **04-jg1b-04-refine-thread/jg1b-04-refine-thread** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/04-jg1b-04-refine-thread/jg1b-04-refine-thread.mdx`
+- [ ] 🔴 P1 **05-jg1b-05-young-gc/jg1b-05-young-gc** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/05-jg1b-05-young-gc/jg1b-05-young-gc.mdx`
+- [ ] 🔴 P1 **06-jg1b-06-mixed-gc/jg1b-06-mixed-gc** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/06-jg1b-06-mixed-gc/jg1b-06-mixed-gc.mdx`
+- [ ] 🔴 P1 **07-jg1b-07-full-gc/jg1b-07-full-gc** — 章内模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/07-jg1b-07-full-gc/jg1b-07-full-gc.mdx`
+- [ ] 🔴 P1 **15-jg1b-appendix-c-cpp/jg1b-appendix-c-cpp** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/15-jg1b-appendix-c-cpp/jg1b-appendix-c-cpp.mdx`
+- [ ] 🟡 P3 **08-jg1b-08-reference-processing/jg1b-08-reference-processing** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/08-jg1b-08-reference-processing/jg1b-08-reference-processing.mdx`
+- [ ] 🟡 P3 **09-jg1b-09-string-dedup/jg1b-09-string-dedup** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/09-jg1b-09-string-dedup/jg1b-09-string-dedup.mdx`
+- [ ] 🟡 P3 **10-jg1b-10-safepoints/jg1b-10-safepoints** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/10-jg1b-10-safepoints/jg1b-10-safepoints.mdx`
+- [ ] 🟡 P3 **11-jg1b-11-collector-choice/jg1b-11-collector-choice** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/11-jg1b-11-collector-choice/jg1b-11-collector-choice.mdx`
+- [ ] 🟡 P3 **12-jg1b-12-next-collectors/jg1b-12-next-collectors** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/12-jg1b-12-next-collectors/jg1b-12-next-collectors.mdx`
+- [ ] 🟡 P3 **13-jg1b-appendix-a-debug-jvm/jg1b-appendix-a-debug-jvm** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/13-jg1b-appendix-a-debug-jvm/jg1b-appendix-a-debug-jvm.mdx`
+- [ ] 🟡 P3 **14-jg1b-appendix-b-nmt/jg1b-appendix-b-nmt** — 未升级 v2、可视化不足、UX 不足（score 68）
+    - 路径：`content/jvm-g1-tuning/14-jg1b-appendix-b-nmt/jg1b-appendix-b-nmt.mdx`
+
+## rabbitmq-practice（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-learning-map/rmq-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/rabbitmq-practice/00-learning-map/rmq-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-final-review/rmq-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/rabbitmq-practice/16-final-review/rmq-official-final-review.mdx`
+- [ ] 🔴 P1 **01-pulling-rabbit-out-of-hat/rmq-01-pulling-rabbit-out-of-hat** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/01-pulling-rabbit-out-of-hat/rmq-01-pulling-rabbit-out-of-hat.mdx`
+- [ ] 🔴 P1 **02-understanding-messaging/rmq-02-understanding-messaging** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/02-understanding-messaging/rmq-02-understanding-messaging.mdx`
+- [ ] 🔴 P1 **03-running-administering-rabbit/rmq-03-running-administering-rabbit** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/03-running-administering-rabbit/rmq-03-running-administering-rabbit.mdx`
+- [ ] 🔴 P1 **04-coding-patterns/rmq-04-coding-patterns** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/04-coding-patterns/rmq-04-coding-patterns.mdx`
+- [ ] 🔴 P1 **05-clustering-failure/rmq-05-clustering-failure** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/05-clustering-failure/rmq-05-clustering-failure.mdx`
+- [ ] 🔴 P1 **06-surviving-failure/rmq-06-surviving-failure** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/06-surviving-failure/rmq-06-surviving-failure.mdx`
+- [ ] 🔴 P1 **07-warrens-shovels/rmq-07-warrens-shovels** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/07-warrens-shovels/rmq-07-warrens-shovels.mdx`
+- [ ] 🔴 P1 **08-web-administration/rmq-08-web-administration** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/08-web-administration/rmq-08-web-administration.mdx`
+- [ ] 🔴 P1 **09-rest-api/rmq-09-rest-api** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/09-rest-api/rmq-09-rest-api.mdx`
+- [ ] 🔴 P1 **10-monitoring/rmq-10-monitoring** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/10-monitoring/rmq-10-monitoring.mdx`
+- [ ] 🔴 P1 **11-performance-security/rmq-11-performance-security** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/11-performance-security/rmq-11-performance-security.mdx`
+- [ ] 🔴 P1 **12-extending-rabbitmq/rmq-12-extending-rabbitmq** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/12-extending-rabbitmq/rmq-12-extending-rabbitmq.mdx`
+- [ ] 🔴 P1 **13-appendix-a-java-dotnet/rmq-appendix-a-java-dotnet** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/13-appendix-a-java-dotnet/rmq-appendix-a-java-dotnet.mdx`
+- [ ] 🔴 P1 **14-appendix-b-online-resources/rmq-appendix-b-online-resources** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/14-appendix-b-online-resources/rmq-appendix-b-online-resources.mdx`
+- [ ] 🔴 P1 **15-appendix-c-windows-installation/rmq-appendix-c-windows-installation** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/rabbitmq-practice/15-appendix-c-windows-installation/rmq-appendix-c-windows-installation.mdx`
+
+## real-time-collision-detection（17 章 · ❌17 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/rtcd-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/real-time-collision-detection/00-official-learning-map/rtcd-official-learning-map.mdx`
+- [ ] 🔴 P1 **16-official-final-review/rtcd-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/real-time-collision-detection/16-official-final-review/rtcd-official-final-review.mdx`
+- [ ] 🔴 P1 **01-front-matter/rtcd-front-matter** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/01-front-matter/rtcd-front-matter.mdx`
+- [ ] 🔴 P1 **02-chapter-01-introduction/rtcd-chapter-01-introduction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/02-chapter-01-introduction/rtcd-chapter-01-introduction.mdx`
+- [ ] 🔴 P1 **03-chapter-02-design-issues/rtcd-chapter-02-design-issues** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/03-chapter-02-design-issues/rtcd-chapter-02-design-issues.mdx`
+- [ ] 🔴 P1 **04-chapter-03-math-geometry-primer/rtcd-chapter-03-math-geometry-primer** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/04-chapter-03-math-geometry-primer/rtcd-chapter-03-math-geometry-primer.mdx`
+- [ ] 🔴 P1 **05-chapter-04-bounding-volumes/rtcd-chapter-04-bounding-volumes** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/05-chapter-04-bounding-volumes/rtcd-chapter-04-bounding-volumes.mdx`
+- [ ] 🔴 P1 **06-chapter-05-basic-primitive-tests/rtcd-chapter-05-basic-primitive-tests** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/06-chapter-05-basic-primitive-tests/rtcd-chapter-05-basic-primitive-tests.mdx`
+- [ ] 🔴 P1 **07-chapter-06-bounding-volume-hierarchies/rtcd-chapter-06-bounding-volume-hierarchies** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/07-chapter-06-bounding-volume-hierarchies/rtcd-chapter-06-bounding-volume-hierarchies.mdx`
+- [ ] 🔴 P1 **08-chapter-07-spatial-partitioning/rtcd-chapter-07-spatial-partitioning** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/08-chapter-07-spatial-partitioning/rtcd-chapter-07-spatial-partitioning.mdx`
+- [ ] 🔴 P1 **09-chapter-08-bsp-tree-hierarchies/rtcd-chapter-08-bsp-tree-hierarchies** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/09-chapter-08-bsp-tree-hierarchies/rtcd-chapter-08-bsp-tree-hierarchies.mdx`
+- [ ] 🔴 P1 **10-chapter-09-convexity-methods/rtcd-chapter-09-convexity-methods** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/10-chapter-09-convexity-methods/rtcd-chapter-09-convexity-methods.mdx`
+- [ ] 🔴 P1 **11-chapter-10-gpu-assisted/rtcd-chapter-10-gpu-assisted** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/11-chapter-10-gpu-assisted/rtcd-chapter-10-gpu-assisted.mdx`
+- [ ] 🔴 P1 **12-chapter-11-numerical-robustness/rtcd-chapter-11-numerical-robustness** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/12-chapter-11-numerical-robustness/rtcd-chapter-11-numerical-robustness.mdx`
+- [ ] 🔴 P1 **13-chapter-12-geometrical-robustness/rtcd-chapter-12-geometrical-robustness** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/13-chapter-12-geometrical-robustness/rtcd-chapter-12-geometrical-robustness.mdx`
+- [ ] 🔴 P1 **14-chapter-13-optimization/rtcd-chapter-13-optimization** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/14-chapter-13-optimization/rtcd-chapter-13-optimization.mdx`
+- [ ] 🔴 P1 **15-back-matter/rtcd-back-matter** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/real-time-collision-detection/15-back-matter/rtcd-back-matter.mdx`
+
+## game-engine-practice-vol1（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/gep1-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-practice-vol1/00-official-learning-map/gep1-official-learning-map.mdx`
+- [ ] 🔴 P1 **15-official-final-review/gep1-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-engine-practice-vol1/15-official-final-review/gep1-official-final-review.mdx`
+- [ ] 🔴 P1 **01-front-matter/gep1-front-matter** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/01-front-matter/gep1-front-matter.mdx`
+- [ ] 🔴 P1 **02-chapter-01-engine-conflict/gep1-chapter-01-engine-conflict** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/02-chapter-01-engine-conflict/gep1-chapter-01-engine-conflict.mdx`
+- [ ] 🔴 P1 **03-chapter-02-setting-sail/gep1-chapter-02-setting-sail** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/03-chapter-02-setting-sail/gep1-chapter-02-setting-sail.mdx`
+- [ ] 🔴 P1 **04-chapter-03-basic-system/gep1-chapter-03-basic-system** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/04-chapter-03-basic-system/gep1-chapter-03-basic-system.mdx`
+- [ ] 🔴 P1 **05-chapter-04-data-structures/gep1-chapter-04-data-structures** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/05-chapter-04-data-structures/gep1-chapter-04-data-structures.mdx`
+- [ ] 🔴 P1 **06-chapter-05-math-library/gep1-chapter-05-math-library** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/06-chapter-05-math-library/gep1-chapter-05-math-library.mdx`
+- [ ] 🔴 P1 **07-chapter-06-initialization-destruction/gep1-chapter-06-initialization-destruction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/07-chapter-06-initialization-destruction/gep1-chapter-06-initialization-destruction.mdx`
+- [ ] 🔴 P1 **08-chapter-07-application-framework/gep1-chapter-07-application-framework** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/08-chapter-07-application-framework/gep1-chapter-07-application-framework.mdx`
+- [ ] 🔴 P1 **09-chapter-08-object-system/gep1-chapter-08-object-system** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/09-chapter-08-object-system/gep1-chapter-08-object-system.mdx`
+- [ ] 🔴 P1 **10-chapter-09-resource-management/gep1-chapter-09-resource-management** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/10-chapter-09-resource-management/gep1-chapter-09-resource-management.mdx`
+- [ ] 🔴 P1 **11-chapter-10-design-philosophy/gep1-chapter-10-design-philosophy** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/11-chapter-10-design-philosophy/gep1-chapter-10-design-philosophy.mdx`
+- [ ] 🔴 P1 **12-chapter-11-scene-management/gep1-chapter-11-scene-management** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/12-chapter-11-scene-management/gep1-chapter-11-scene-management.mdx`
+- [ ] 🔴 P1 **13-chapter-12-models-textures/gep1-chapter-12-models-textures** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/13-chapter-12-models-textures/gep1-chapter-12-models-textures.mdx`
+- [ ] 🔴 P1 **14-chapter-13-lod/gep1-chapter-13-lod** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-engine-practice-vol1/14-chapter-13-lod/gep1-chapter-13-lod.mdx`
+
+## head-first-design-patterns（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-intro/hfd-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 60）
+    - 路径：`content/head-first-design-patterns/00-intro/hfd-learning-map.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-compound-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 60）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-compound-patterns.mdx`
+- [ ] 🔴 P1 **04-summary/hfd-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 58）
+    - 路径：`content/head-first-design-patterns/04-summary/hfd-final-review.mdx`
+- [ ] 🔴 P1 **02-composition/hfd-singleton** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/head-first-design-patterns/02-composition/hfd-singleton.mdx`
+- [ ] 🔴 P1 **03-state/hfd-adapter-facade** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/head-first-design-patterns/03-state/hfd-adapter-facade.mdx`
+- [ ] 🔴 P1 **04-summary/hfd-template-method** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/head-first-design-patterns/04-summary/hfd-template-method.mdx`
+- [ ] 🔴 P1 **01-variation/hfd-observer** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+    - 路径：`content/head-first-design-patterns/01-variation/hfd-observer.mdx`
+- [ ] 🔴 P1 **00-intro/hfd-strategy** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/head-first-design-patterns/00-intro/hfd-strategy.mdx`
+- [ ] 🔴 P1 **02-composition/hfd-factory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/head-first-design-patterns/02-composition/hfd-factory.mdx`
+- [ ] 🔴 P1 **03-state/hfd-command** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/head-first-design-patterns/03-state/hfd-command.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-proxy** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-proxy.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-state** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-state.mdx`
+- [ ] 🔴 P1 **01-variation/hfd-decorator** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/head-first-design-patterns/01-variation/hfd-decorator.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-iterator-composite** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-iterator-composite.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-real-world** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-real-world.mdx`
+- [ ] 🔴 P1 **04-advanced/hfd-leftover-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/head-first-design-patterns/04-advanced/hfd-leftover-patterns.mdx`
+
+## javascript-fullstack（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/jfs-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/javascript-fullstack/00-guide/jfs-official-learning-map.mdx`
+- [ ] 🔴 P1 **04-review/jfs-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/javascript-fullstack/04-review/jfs-official-final-review.mdx`
+- [ ] 🔴 P1 **01-language-core/jfs-01-javascript-introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/01-language-core/jfs-01-javascript-introduction.mdx`
+- [ ] 🔴 P1 **01-language-core/jfs-02-variables-expressions-statements** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/01-language-core/jfs-02-variables-expressions-statements.mdx`
+- [ ] 🔴 P1 **01-language-core/jfs-03-functions-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/01-language-core/jfs-03-functions-objects.mdx`
+- [ ] 🔴 P1 **01-language-core/jfs-04-object-oriented-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/01-language-core/jfs-04-object-oriented-programming.mdx`
+- [ ] 🔴 P1 **01-language-core/jfs-05-asynchronous-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/01-language-core/jfs-05-asynchronous-programming.mdx`
+- [ ] 🔴 P1 **02-browser/jfs-06-frontend-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/02-browser/jfs-06-frontend-overview.mdx`
+- [ ] 🔴 P1 **02-browser/jfs-07-dom-standard** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/02-browser/jfs-07-dom-standard.mdx`
+- [ ] 🔴 P1 **02-browser/jfs-08-dom-extensions-bom** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/02-browser/jfs-08-dom-extensions-bom.mdx`
+- [ ] 🔴 P1 **02-browser/jfs-09-frontend-events** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/02-browser/jfs-09-frontend-events.mdx`
+- [ ] 🔴 P1 **02-browser/jfs-10-ajax-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/02-browser/jfs-10-ajax-programming.mdx`
+- [ ] 🔴 P1 **03-node/jfs-11-nodejs-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/03-node/jfs-11-nodejs-overview.mdx`
+- [ ] 🔴 P1 **03-node/jfs-12-build-web-services** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/03-node/jfs-12-build-web-services.mdx`
+- [ ] 🔴 P1 **03-node/jfs-13-handle-client-requests** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/03-node/jfs-13-handle-client-requests.mdx`
+- [ ] 🔴 P1 **03-node/jfs-14-data-persistence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/javascript-fullstack/03-node/jfs-14-data-persistence.mdx`
+
+## large-language-models（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **05-pretraining-decoding/llm-04-pretraining-decoding** — 缺视觉证据、UX 不足（score 89）
+    - 路径：`content/large-language-models/05-pretraining-decoding/llm-04-pretraining-decoding.mdx`
+- [ ] 🔴 P1 **09-retrieval-augmented/llm-08-retrieval-augmented-lm** — 缺视觉证据、UX 不足（score 89）
+    - 路径：`content/large-language-models/09-retrieval-augmented/llm-08-retrieval-augmented-lm.mdx`
+- [ ] 🔴 P1 **11-bias-toxicity/llm-10-bias-toxicity** — 缺视觉证据、UX 不足（score 89）
+    - 路径：`content/large-language-models/11-bias-toxicity/llm-10-bias-toxicity.mdx`
+- [ ] 🔴 P1 **00-map/llm-official-learning-map** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/00-map/llm-official-learning-map.mdx`
+- [ ] 🔴 P1 **02-debates-future/llm-01-debates-future** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/02-debates-future/llm-01-debates-future.mdx`
+- [ ] 🔴 P1 **03-language-tokenization/llm-02-language-modeling-tokenization** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/03-language-tokenization/llm-02-language-modeling-tokenization.mdx`
+- [ ] 🔴 P1 **04-transformer/llm-03-transformer** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/04-transformer/llm-03-transformer.mdx`
+- [ ] 🔴 P1 **06-icl-finetuning/llm-05-icl-lightweight-finetuning** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/06-icl-finetuning/llm-05-icl-lightweight-finetuning.mdx`
+- [ ] 🔴 P1 **07-training-scale/llm-06-training-larger-models** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/07-training-scale/llm-06-training-larger-models.mdx`
+- [ ] 🔴 P1 **08-sparse-moe/llm-07-sparse-moe** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/08-sparse-moe/llm-07-sparse-moe.mdx`
+- [ ] 🔴 P1 **10-preference-alignment/llm-09-human-preference-alignment** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/10-preference-alignment/llm-09-human-preference-alignment.mdx`
+- [ ] 🔴 P1 **12-vision-language/llm-11-vision-language-models** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/12-vision-language/llm-11-vision-language-models.mdx`
+- [ ] 🔴 P1 **13-environment/llm-12-environmental-impact** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/13-environment/llm-12-environmental-impact.mdx`
+- [ ] 🔴 P1 **15-review/llm-official-final-review** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/large-language-models/15-review/llm-official-final-review.mdx`
+- [ ] 🔴 P1 **01-preface/llm-preface** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/large-language-models/01-preface/llm-preface.mdx`
+- [ ] 🔴 P1 **14-references/llm-references** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/large-language-models/14-references/llm-references.mdx`
+
+## multiplayer-game-programming（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mgp-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/multiplayer-game-programming/00-guide/mgp-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/mgp-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/multiplayer-game-programming/06-review/mgp-official-final-review.mdx`
+- [ ] 🔴 P1 **04-platform/mgp-11-real-world-engines** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/multiplayer-game-programming/04-platform/mgp-11-real-world-engines.mdx`
+- [ ] 🔴 P1 **01-foundations/mgp-01-overview-networked-games** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/multiplayer-game-programming/01-foundations/mgp-01-overview-networked-games.mdx`
+- [ ] 🔴 P1 **01-foundations/mgp-02-internet** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/01-foundations/mgp-02-internet.mdx`
+- [ ] 🔴 P1 **02-replication/mgp-04-object-serialization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/02-replication/mgp-04-object-serialization.mdx`
+- [ ] 🔴 P1 **02-replication/mgp-06-network-topologies** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/02-replication/mgp-06-network-topologies.mdx`
+- [ ] 🔴 P1 **03-quality/mgp-08-improved-latency-handling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/03-quality/mgp-08-improved-latency-handling.mdx`
+- [ ] 🔴 P1 **03-quality/mgp-09-scalability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/03-quality/mgp-09-scalability.mdx`
+- [ ] 🔴 P1 **03-quality/mgp-10-security** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/03-quality/mgp-10-security.mdx`
+- [ ] 🔴 P1 **04-platform/mgp-13-cloud-dedicated-servers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/04-platform/mgp-13-cloud-dedicated-servers.mdx`
+- [ ] 🔴 P1 **05-appendix/mgp-appendix-modern-cpp** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/multiplayer-game-programming/05-appendix/mgp-appendix-modern-cpp.mdx`
+- [ ] 🔴 P1 **01-foundations/mgp-03-berkeley-sockets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/multiplayer-game-programming/01-foundations/mgp-03-berkeley-sockets.mdx`
+- [ ] 🔴 P1 **02-replication/mgp-05-object-replication** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/multiplayer-game-programming/02-replication/mgp-05-object-replication.mdx`
+- [ ] 🔴 P1 **03-quality/mgp-07-latency-jitter-reliability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/multiplayer-game-programming/03-quality/mgp-07-latency-jitter-reliability.mdx`
+- [ ] 🔴 P1 **04-platform/mgp-12-gamer-services** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/multiplayer-game-programming/04-platform/mgp-12-gamer-services.mdx`
+
+## python-advanced（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/pya-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/python-advanced/00-guide/pya-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/pya-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/python-advanced/05-review/pya-final-review.mdx`
+- [ ] 🔴 P1 **01-language-api/pya-choosing-good-names** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/01-language-api/pya-choosing-good-names.mdx`
+- [ ] 🔴 P1 **01-language-api/pya-getting-started** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/01-language-api/pya-getting-started.mdx`
+- [ ] 🔴 P1 **01-language-api/pya-syntax-below-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/01-language-api/pya-syntax-below-class.mdx`
+- [ ] 🔴 P1 **02-packages-apps/pya-writing-application** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/02-packages-apps/pya-writing-application.mdx`
+- [ ] 🔴 P1 **02-packages-apps/pya-writing-package** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/02-packages-apps/pya-writing-package.mdx`
+- [ ] 🔴 P1 **02-packages-apps/pya-zc-buildout** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/02-packages-apps/pya-zc-buildout.mdx`
+- [ ] 🔴 P1 **03-lifecycle/pya-documenting-project** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/03-lifecycle/pya-documenting-project.mdx`
+- [ ] 🔴 P1 **03-lifecycle/pya-managing-code** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/03-lifecycle/pya-managing-code.mdx`
+- [ ] 🔴 P1 **03-lifecycle/pya-managing-life-cycle** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/03-lifecycle/pya-managing-life-cycle.mdx`
+- [ ] 🔴 P1 **03-lifecycle/pya-test-driven-development** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/03-lifecycle/pya-test-driven-development.mdx`
+- [ ] 🔴 P1 **04-performance-design/pya-optimization-profiling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/04-performance-design/pya-optimization-profiling.mdx`
+- [ ] 🔴 P1 **04-performance-design/pya-optimization-solutions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/04-performance-design/pya-optimization-solutions.mdx`
+- [ ] 🔴 P1 **04-performance-design/pya-useful-design-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/python-advanced/04-performance-design/pya-useful-design-patterns.mdx`
+- [ ] 🔴 P1 **01-language-api/pya-syntax-above-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/python-advanced/01-language-api/pya-syntax-above-class.mdx`
+
+## unity-core-tech（16 章 · ❌16 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/uct-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-core-tech/00-guide/uct-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/uct-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-core-tech/06-review/uct-official-final-review.mdx`
+- [ ] 🔴 P1 **05-delivery/uct-13-mobile-shader-techniques** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity-core-tech/05-delivery/uct-13-mobile-shader-techniques.mdx`
+- [ ] 🔴 P1 **01-math/uct-01-3d-math-unity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unity-core-tech/01-math/uct-01-3d-math-unity.mdx`
+- [ ] 🔴 P1 **05-delivery/uct-14-game-development-experience** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unity-core-tech/05-delivery/uct-14-game-development-experience.mdx`
+- [ ] 🔴 P1 **02-runtime-data/uct-02-avatar-outfit-system** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-core-tech/02-runtime-data/uct-02-avatar-outfit-system.mdx`
+- [ ] 🔴 P1 **02-runtime-data/uct-03-message-event-encapsulation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-core-tech/02-runtime-data/uct-03-message-event-encapsulation.mdx`
+- [ ] 🔴 P1 **03-ai-effects/uct-06-behavior-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-core-tech/03-ai-effects/uct-06-behavior-trees.mdx`
+- [ ] 🔴 P1 **03-ai-effects/uct-07-afterimage** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-core-tech/03-ai-effects/uct-07-afterimage.mdx`
+- [ ] 🔴 P1 **03-ai-effects/uct-09-mobile-ocean-simulation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-core-tech/03-ai-effects/uct-09-mobile-ocean-simulation.mdx`
+- [ ] 🔴 P1 **04-architecture/uct-10-mvc-architecture** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-core-tech/04-architecture/uct-10-mvc-architecture.mdx`
+- [ ] 🔴 P1 **04-architecture/uct-11-fsm-in-games** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-core-tech/04-architecture/uct-11-fsm-in-games.mdx`
+- [ ] 🔴 P1 **02-runtime-data/uct-05-text-file-encryption** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-core-tech/02-runtime-data/uct-05-text-file-encryption.mdx`
+- [ ] 🔴 P1 **03-ai-effects/uct-08-mobile-realtime-shadows** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-core-tech/03-ai-effects/uct-08-mobile-realtime-shadows.mdx`
+- [ ] 🔴 P1 **05-delivery/uct-12-mobile-hot-update** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-core-tech/05-delivery/uct-12-mobile-hot-update.mdx`
+- [ ] 🔴 P1 **02-runtime-data/uct-04-protobuf-in-games** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-core-tech/02-runtime-data/uct-04-protobuf-in-games.mdx`
+
+## csapp（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/cap-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/csapp/00-guide/cap-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/cap-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/csapp/06-review/cap-official-final-review.mdx`
+- [ ] 🔴 P1 **01-program-execution/cap-01-system-tour** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/01-program-execution/cap-01-system-tour.mdx`
+- [ ] 🔴 P1 **01-program-execution/cap-02-information** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/01-program-execution/cap-02-information.mdx`
+- [ ] 🔴 P1 **01-program-execution/cap-03-machine-level** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/01-program-execution/cap-03-machine-level.mdx`
+- [ ] 🔴 P1 **02-architecture-performance/cap-04-processor-architecture** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/02-architecture-performance/cap-04-processor-architecture.mdx`
+- [ ] 🔴 P1 **02-architecture-performance/cap-05-optimization** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/02-architecture-performance/cap-05-optimization.mdx`
+- [ ] 🔴 P1 **02-architecture-performance/cap-06-memory-hierarchy** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/02-architecture-performance/cap-06-memory-hierarchy.mdx`
+- [ ] 🔴 P1 **03-system-runtime/cap-07-linking** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/03-system-runtime/cap-07-linking.mdx`
+- [ ] 🔴 P1 **03-system-runtime/cap-08-exceptional-control** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/03-system-runtime/cap-08-exceptional-control.mdx`
+- [ ] 🔴 P1 **03-system-runtime/cap-09-virtual-memory** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/03-system-runtime/cap-09-virtual-memory.mdx`
+- [ ] 🔴 P1 **04-communication/cap-10-system-io** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/04-communication/cap-10-system-io.mdx`
+- [ ] 🔴 P1 **04-communication/cap-11-network-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/04-communication/cap-11-network-programming.mdx`
+- [ ] 🔴 P1 **04-communication/cap-12-concurrent-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/04-communication/cap-12-concurrent-programming.mdx`
+- [ ] 🔴 P1 **05-appendix/cap-appendix-a-error-handling** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/csapp/05-appendix/cap-appendix-a-error-handling.mdx`
+
+## ddia（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **13-glossary/ddi-glossary** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 78）
+    - 路径：`content/ddia/13-glossary/ddi-glossary.mdx`
+- [ ] 🔴 P1 **00-learning-map/ddi-official-learning-map** — 视觉巡检失败、未升级 v2、可视化不足（score 77）
+    - 路径：`content/ddia/00-learning-map/ddi-official-learning-map.mdx`
+- [ ] 🔴 P1 **99-final-review/ddi-official-final-review** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 77）
+    - 路径：`content/ddia/99-final-review/ddi-official-final-review.mdx`
+- [ ] 🔴 P1 **01-reliable-scalable-maintainable/ddi-01-reliable-scalable-maintainable-applications** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/01-reliable-scalable-maintainable/ddi-01-reliable-scalable-maintainable-applications.mdx`
+- [ ] 🔴 P1 **02-data-models-query-languages/ddi-02-data-models-query-languages** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/02-data-models-query-languages/ddi-02-data-models-query-languages.mdx`
+- [ ] 🔴 P1 **03-storage-retrieval/ddi-03-storage-retrieval** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/03-storage-retrieval/ddi-03-storage-retrieval.mdx`
+- [ ] 🔴 P1 **04-encoding-evolution/ddi-04-encoding-evolution** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/04-encoding-evolution/ddi-04-encoding-evolution.mdx`
+- [ ] 🔴 P1 **05-replication/ddi-05-replication** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/05-replication/ddi-05-replication.mdx`
+- [ ] 🔴 P1 **06-partitioning/ddi-06-partitioning** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/06-partitioning/ddi-06-partitioning.mdx`
+- [ ] 🔴 P1 **07-transactions/ddi-07-transactions** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/07-transactions/ddi-07-transactions.mdx`
+- [ ] 🔴 P1 **08-trouble-distributed-systems/ddi-08-trouble-distributed-systems** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/08-trouble-distributed-systems/ddi-08-trouble-distributed-systems.mdx`
+- [ ] 🔴 P1 **09-consistency-consensus/ddi-09-consistency-consensus** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/09-consistency-consensus/ddi-09-consistency-consensus.mdx`
+- [ ] 🔴 P1 **10-batch-processing/ddi-10-batch-processing** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/10-batch-processing/ddi-10-batch-processing.mdx`
+- [ ] 🔴 P1 **11-stream-processing/ddi-11-stream-processing** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/11-stream-processing/ddi-11-stream-processing.mdx`
+- [ ] 🔴 P1 **12-future-data-systems/ddi-12-future-data-systems** — 视觉巡检失败、章内模板重复、未升级 v2、可视化不足（score 75）
+    - 路径：`content/ddia/12-future-data-systems/ddi-12-future-data-systems.mdx`
+
+## game-server-architecture（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gsa-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-server-architecture/00-guide/gsa-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/gsa-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-server-architecture/06-review/gsa-official-final-review.mdx`
+- [ ] 🔴 P1 **05-distributed-selection/gsa-12-distributed-servers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-server-architecture/05-distributed-selection/gsa-12-distributed-servers.mdx`
+- [ ] 🔴 P1 **05-distributed-selection/gsa-appendix-language-comparison** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/game-server-architecture/05-distributed-selection/gsa-appendix-language-comparison.mdx`
+- [ ] 🔴 P1 **05-distributed-selection/gsa-11-capacity-client-optimization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/game-server-architecture/05-distributed-selection/gsa-11-capacity-client-optimization.mdx`
+- [ ] 🔴 P1 **01-network-server/gsa-03-server-practice** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/game-server-architecture/01-network-server/gsa-03-server-practice.mdx`
+- [ ] 🔴 P1 **03-architecture/gsa-07-server-interactions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/game-server-architecture/03-architecture/gsa-07-server-interactions.mdx`
+- [ ] 🔴 P1 **04-lobby-realtime/gsa-08-game-lobby** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/game-server-architecture/04-lobby-realtime/gsa-08-game-lobby.mdx`
+- [ ] 🔴 P1 **04-lobby-realtime/gsa-10-ladder-economy** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/game-server-architecture/04-lobby-realtime/gsa-10-ladder-economy.mdx`
+- [ ] 🔴 P1 **01-network-server/gsa-02-communication-encryption** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/game-server-architecture/01-network-server/gsa-02-communication-encryption.mdx`
+- [ ] 🔴 P1 **04-lobby-realtime/gsa-09-realtime-interaction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/game-server-architecture/04-lobby-realtime/gsa-09-realtime-interaction.mdx`
+- [ ] 🔴 P1 **02-storage-database/gsa-05-storage-solutions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/game-server-architecture/02-storage-database/gsa-05-storage-solutions.mdx`
+- [ ] 🔴 P1 **01-network-server/gsa-01-python-networking** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/game-server-architecture/01-network-server/gsa-01-python-networking.mdx`
+- [ ] 🔴 P1 **02-storage-database/gsa-04-basic-storage** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/game-server-architecture/02-storage-database/gsa-04-basic-storage.mdx`
+- [ ] 🔴 P1 **03-architecture/gsa-06-game-server-foundations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/game-server-architecture/03-architecture/gsa-06-game-server-foundations.mdx`
+
+## go-programming-language（15 章 · ❌0 ⚠️15 ✅0）
+
+- [ ] 🟡 P3 **00-basics/gpl-learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/go-programming-language/00-basics/gpl-learning-map.mdx`
+- [ ] 🟡 P3 **03-advanced/gpl-final-review** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/go-programming-language/03-advanced/gpl-final-review.mdx`
+- [ ] 🟡 P3 **08-official/goroutines-and-channels** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/go-programming-language/08-official/goroutines-and-channels.mdx`
+- [ ] 🟡 P3 **01-official/tutorial** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/01-official/tutorial.mdx`
+- [ ] 🟡 P3 **02-official/program-structure** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/02-official/program-structure.mdx`
+- [ ] 🟡 P3 **07-official/interfaces** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/07-official/interfaces.mdx`
+- [ ] 🟡 P3 **09-official/concurrency-with-shared-variables** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/09-official/concurrency-with-shared-variables.mdx`
+- [ ] 🟡 P3 **12-official/reflection** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/12-official/reflection.mdx`
+- [ ] 🟡 P3 **13-official/low-level-programming** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/go-programming-language/13-official/low-level-programming.mdx`
+- [ ] 🟡 P3 **03-official/basic-data-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/03-official/basic-data-types.mdx`
+- [ ] 🟡 P3 **04-official/composite-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/04-official/composite-types.mdx`
+- [ ] 🟡 P3 **05-official/functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/05-official/functions.mdx`
+- [ ] 🟡 P3 **06-official/methods** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/06-official/methods.mdx`
+- [ ] 🟡 P3 **10-official/packages-and-the-go-tool** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/10-official/packages-and-the-go-tool.mdx`
+- [ ] 🟡 P3 **11-official/testing** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/go-programming-language/11-official/testing.mdx`
+
+## how-programs-work（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/hpw-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/how-programs-work/00-guide/hpw-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/hpw-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/how-programs-work/06-review/hpw-official-final-review.mdx`
+- [ ] 🔴 P1 **01-cpu-data/hpw-01-cpu** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/01-cpu-data/hpw-01-cpu.mdx`
+- [ ] 🔴 P1 **01-cpu-data/hpw-02-binary** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/01-cpu-data/hpw-02-binary.mdx`
+- [ ] 🔴 P1 **01-cpu-data/hpw-03-floating-point** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/01-cpu-data/hpw-03-floating-point.mdx`
+- [ ] 🔴 P1 **02-memory-storage/hpw-04-memory** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/02-memory-storage/hpw-04-memory.mdx`
+- [ ] 🔴 P1 **02-memory-storage/hpw-05-memory-disk** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/02-memory-storage/hpw-05-memory-disk.mdx`
+- [ ] 🔴 P1 **02-memory-storage/hpw-06-compression** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/02-memory-storage/hpw-06-compression.mdx`
+- [ ] 🔴 P1 **03-runtime-build/hpw-07-runtime-environment** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/03-runtime-build/hpw-07-runtime-environment.mdx`
+- [ ] 🔴 P1 **03-runtime-build/hpw-08-source-executable** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/03-runtime-build/hpw-08-source-executable.mdx`
+- [ ] 🔴 P1 **03-runtime-build/hpw-09-os-applications** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/03-runtime-build/hpw-09-os-applications.mdx`
+- [ ] 🔴 P1 **04-assembly-hardware/hpw-10-assembly** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/04-assembly-hardware/hpw-10-assembly.mdx`
+- [ ] 🔴 P1 **04-assembly-hardware/hpw-11-hardware-control** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/04-assembly-hardware/hpw-11-hardware-control.mdx`
+- [ ] 🔴 P1 **05-thinking-language/hpw-12-thinking** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/05-thinking-language/hpw-12-thinking.mdx`
+- [ ] 🔴 P1 **05-thinking-language/hpw-appendix-c** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-programs-work/05-thinking-language/hpw-appendix-c.mdx`
+
+## make-it-stick（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/mis18-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/make-it-stick/00-map/mis18-official-learning-map.mdx`
+- [ ] 🔴 P1 **14-review/mis18-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/make-it-stick/14-review/mis18-official-final-review.mdx`
+- [ ] 🔴 P1 **02-recommendation-02/mis18-recommendation-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/02-recommendation-02/mis18-recommendation-02.mdx`
+- [ ] 🔴 P1 **03-preface/mis18-preface** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/03-preface/mis18-preface.mdx`
+- [ ] 🔴 P1 **04-chapter-01/mis18-chapter-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/04-chapter-01/mis18-chapter-01.mdx`
+- [ ] 🔴 P1 **05-chapter-02/mis18-chapter-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/05-chapter-02/mis18-chapter-02.mdx`
+- [ ] 🔴 P1 **06-chapter-03/mis18-chapter-03** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/06-chapter-03/mis18-chapter-03.mdx`
+- [ ] 🔴 P1 **07-chapter-04/mis18-chapter-04** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/07-chapter-04/mis18-chapter-04.mdx`
+- [ ] 🔴 P1 **08-chapter-05/mis18-chapter-05** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/08-chapter-05/mis18-chapter-05.mdx`
+- [ ] 🔴 P1 **09-chapter-06/mis18-chapter-06** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/09-chapter-06/mis18-chapter-06.mdx`
+- [ ] 🔴 P1 **10-chapter-07/mis18-chapter-07** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/10-chapter-07/mis18-chapter-07.mdx`
+- [ ] 🔴 P1 **12-suggested-reading/mis18-suggested-reading** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/12-suggested-reading/mis18-suggested-reading.mdx`
+- [ ] 🔴 P1 **13-acknowledgments/mis18-acknowledgments** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/make-it-stick/13-acknowledgments/mis18-acknowledgments.mdx`
+- [ ] 🔴 P1 **01-recommendation-01/mis18-recommendation-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/make-it-stick/01-recommendation-01/mis18-recommendation-01.mdx`
+- [ ] 🔴 P1 **11-chapter-08/mis18-chapter-08** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/make-it-stick/11-chapter-08/mis18-chapter-08.mdx`
+
+## microservices-patterns（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/msp-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/microservices-patterns/00-official-learning-map/msp-official-learning-map.mdx`
+- [ ] 🔴 P1 **14-official-final-review/msp-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/microservices-patterns/14-official-final-review/msp-official-final-review.mdx`
+- [ ] 🔴 P1 **01-01-escaping-monolithic-hell/msp-01-escaping-monolithic-hell** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/microservices-patterns/01-01-escaping-monolithic-hell/msp-01-escaping-monolithic-hell.mdx`
+- [ ] 🔴 P1 **05-05-designing-business-logic/msp-05-designing-business-logic** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/microservices-patterns/05-05-designing-business-logic/msp-05-designing-business-logic.mdx`
+- [ ] 🔴 P1 **11-11-production-ready-services/msp-11-production-ready-services** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+    - 路径：`content/microservices-patterns/11-11-production-ready-services/msp-11-production-ready-services.mdx`
+- [ ] 🔴 P1 **03-03-interprocess-communication/msp-03-interprocess-communication** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/03-03-interprocess-communication/msp-03-interprocess-communication.mdx`
+- [ ] 🔴 P1 **04-04-managing-transactions-with-sagas/msp-04-managing-transactions-with-sagas** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/04-04-managing-transactions-with-sagas/msp-04-managing-transactions-with-sagas.mdx`
+- [ ] 🔴 P1 **07-07-implementing-queries/msp-07-implementing-queries** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/07-07-implementing-queries/msp-07-implementing-queries.mdx`
+- [ ] 🔴 P1 **08-08-external-api-patterns/msp-08-external-api-patterns** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/08-08-external-api-patterns/msp-08-external-api-patterns.mdx`
+- [ ] 🔴 P1 **09-09-testing-part-1/msp-09-testing-part-1** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/09-09-testing-part-1/msp-09-testing-part-1.mdx`
+- [ ] 🔴 P1 **10-10-testing-part-2/msp-10-testing-part-2** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/10-10-testing-part-2/msp-10-testing-part-2.mdx`
+- [ ] 🔴 P1 **12-12-deploying-microservices/msp-12-deploying-microservices** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/12-12-deploying-microservices/msp-12-deploying-microservices.mdx`
+- [ ] 🔴 P1 **13-13-refactoring-to-microservices/msp-13-refactoring-to-microservices** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+    - 路径：`content/microservices-patterns/13-13-refactoring-to-microservices/msp-13-refactoring-to-microservices.mdx`
+- [ ] 🔴 P1 **02-02-decomposition-strategies/msp-02-decomposition-strategies** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 57）
+    - 路径：`content/microservices-patterns/02-02-decomposition-strategies/msp-02-decomposition-strategies.mdx`
+- [ ] 🔴 P1 **06-06-event-sourcing/msp-06-event-sourcing** — 跨章/书模板重复、未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 57）
+    - 路径：`content/microservices-patterns/06-06-event-sourcing/msp-06-event-sourcing.mdx`
+
+## modern-os（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mos-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/modern-os/00-guide/mos-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/mos-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/modern-os/06-review/mos-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/mos-01-introduction** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/01-foundations/mos-01-introduction.mdx`
+- [ ] 🔴 P1 **01-foundations/mos-02-processes-threads** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/01-foundations/mos-02-processes-threads.mdx`
+- [ ] 🔴 P1 **01-foundations/mos-03-memory-management** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/01-foundations/mos-03-memory-management.mdx`
+- [ ] 🔴 P1 **02-storage-io/mos-04-file-systems** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/02-storage-io/mos-04-file-systems.mdx`
+- [ ] 🔴 P1 **02-storage-io/mos-05-input-output** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/02-storage-io/mos-05-input-output.mdx`
+- [ ] 🔴 P1 **02-storage-io/mos-06-deadlocks** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/02-storage-io/mos-06-deadlocks.mdx`
+- [ ] 🔴 P1 **03-scale-security/mos-07-virtualization-cloud** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/03-scale-security/mos-07-virtualization-cloud.mdx`
+- [ ] 🔴 P1 **03-scale-security/mos-08-multiple-processor-systems** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/03-scale-security/mos-08-multiple-processor-systems.mdx`
+- [ ] 🔴 P1 **03-scale-security/mos-09-security** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/03-scale-security/mos-09-security.mdx`
+- [ ] 🔴 P1 **04-case-studies/mos-10-unix-linux-android** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/04-case-studies/mos-10-unix-linux-android.mdx`
+- [ ] 🔴 P1 **04-case-studies/mos-11-windows-8** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/04-case-studies/mos-11-windows-8.mdx`
+- [ ] 🔴 P1 **05-design-references/mos-12-os-design** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/05-design-references/mos-12-os-design.mdx`
+- [ ] 🔴 P1 **05-design-references/mos-13-bibliography** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/modern-os/05-design-references/mos-13-bibliography.mdx`
+
+## optimized-cpp（15 章 · ❌0 ⚠️15 ✅0）
+
+- [ ] 🟡 P3 **05-official/optimize-algorithms** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 74）
+    - 路径：`content/optimized-cpp/05-official/optimize-algorithms.mdx`
+- [ ] 🟡 P3 **00-intro/learning-map** — 未升级 v2、可视化不足、UX 不足（score 71）
+    - 路径：`content/optimized-cpp/00-intro/learning-map.mdx`
+- [ ] 🟡 P3 **09-official/searching-and-sorting** — 未升级 v2、来源不足、可视化不足、UX 不足（score 66）
+    - 路径：`content/optimized-cpp/09-official/searching-and-sorting.mdx`
+- [ ] 🟡 P3 **05-practice/final-review** — 未升级 v2、可视化不足、练习不足、UX 不足（score 65）
+    - 路径：`content/optimized-cpp/05-practice/final-review.mdx`
+- [ ] 🟡 P3 **02-official/computer-behavior** — 未升级 v2、来源不足、可视化不足、UX 不足（score 64）
+    - 路径：`content/optimized-cpp/02-official/computer-behavior.mdx`
+- [ ] 🟡 P3 **07-official/optimize-hot-statements** — 未升级 v2、来源不足、可视化不足、UX 不足（score 64）
+    - 路径：`content/optimized-cpp/07-official/optimize-hot-statements.mdx`
+- [ ] 🟡 P3 **12-official/optimize-concurrency** — 未升级 v2、来源不足、可视化不足、UX 不足（score 64）
+    - 路径：`content/optimized-cpp/12-official/optimize-concurrency.mdx`
+- [ ] 🟡 P3 **13-official/optimize-memory-management** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 63）
+    - 路径：`content/optimized-cpp/13-official/optimize-memory-management.mdx`
+- [ ] 🟡 P3 **03-official/measure-performance** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/optimized-cpp/03-official/measure-performance.mdx`
+- [ ] 🟡 P3 **04-official/optimize-string-use** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/optimized-cpp/04-official/optimize-string-use.mdx`
+- [ ] 🟡 P3 **06-official/dynamically-allocated-variables** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/optimized-cpp/06-official/dynamically-allocated-variables.mdx`
+- [ ] 🟡 P3 **08-official/use-better-libraries** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 62）
+    - 路径：`content/optimized-cpp/08-official/use-better-libraries.mdx`
+- [ ] 🟡 P3 **01-official/overview-of-optimization** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/optimized-cpp/01-official/overview-of-optimization.mdx`
+- [ ] 🟡 P3 **11-official/optimize-io** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+    - 路径：`content/optimized-cpp/11-official/optimize-io.mdx`
+- [ ] 🟡 P3 **10-official/optimize-data-structures** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+    - 路径：`content/optimized-cpp/10-official/optimize-data-structures.mdx`
+
+## profiling-unity-games（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/prof-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/profiling-unity-games/00-guide/prof-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/prof-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/profiling-unity-games/08-review/prof-official-final-review.mdx`
+- [ ] 🔴 P1 **06-deep-automation/prof-10-project-auditor-deep-profiling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/profiling-unity-games/06-deep-automation/prof-10-project-auditor-deep-profiling.mdx`
+- [ ] 🔴 P1 **06-deep-automation/prof-11-tool-selection-automation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/profiling-unity-games/06-deep-automation/prof-11-tool-selection-automation.mdx`
+- [ ] 🔴 P1 **07-platform/prof-12-native-tool-index** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/profiling-unity-games/07-platform/prof-12-native-tool-index.mdx`
+- [ ] 🔴 P1 **07-platform/prof-13-gpu-tools-resources** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/profiling-unity-games/07-platform/prof-13-gpu-tools-resources.mdx`
+- [ ] 🔴 P1 **02-bottlenecks/prof-03-cpu-render-worker-bounds** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/profiling-unity-games/02-bottlenecks/prof-03-cpu-render-worker-bounds.mdx`
+- [ ] 🔴 P1 **03-memory/prof-05-memory-budget-profiling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/profiling-unity-games/03-memory/prof-05-memory-budget-profiling.mdx`
+- [ ] 🔴 P1 **04-unity-tools/prof-07-profile-analyzer** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/profiling-unity-games/04-unity-tools/prof-07-profile-analyzer.mdx`
+- [ ] 🔴 P1 **04-unity-tools/prof-08-memory-profiler** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/profiling-unity-games/04-unity-tools/prof-08-memory-profiler.mdx`
+- [ ] 🔴 P1 **02-bottlenecks/prof-04-gpu-mobile-power** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/profiling-unity-games/02-bottlenecks/prof-04-gpu-mobile-power.mdx`
+- [ ] 🔴 P1 **04-unity-tools/prof-06-unity-profiler** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/profiling-unity-games/04-unity-tools/prof-06-unity-profiler.mdx`
+- [ ] 🔴 P1 **05-render-audit/prof-09-frame-rendering-debuggers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/profiling-unity-games/05-render-audit/prof-09-frame-rendering-debuggers.mdx`
+- [ ] 🔴 P1 **01-foundations/prof-01-profiling-101** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/profiling-unity-games/01-foundations/prof-01-profiling-101.mdx`
+- [ ] 🔴 P1 **01-foundations/prof-02-profiling-workflow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/profiling-unity-games/01-foundations/prof-02-profiling-workflow.mdx`
+
+## programming-pearls（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **01-preliminaries/02-aha-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/programming-pearls/01-preliminaries/02-aha-algorithms.mdx`
+- [ ] 🔴 P1 **01-preliminaries/01-cracking-the-oyster** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/01-preliminaries/01-cracking-the-oyster.mdx`
+- [ ] 🔴 P1 **01-preliminaries/03-data-structures-programs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/01-preliminaries/03-data-structures-programs.mdx`
+- [ ] 🔴 P1 **02-performance/06-perspective-on-performance** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/02-performance/06-perspective-on-performance.mdx`
+- [ ] 🔴 P1 **02-performance/08-algorithm-design-techniques** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/02-performance/08-algorithm-design-techniques.mdx`
+- [ ] 🔴 P1 **02-performance/10-squeezing-space** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/02-performance/10-squeezing-space.mdx`
+- [ ] 🔴 P1 **03-product/11-sorting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/03-product/11-sorting.mdx`
+- [ ] 🔴 P1 **03-product/14-heaps** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/03-product/14-heaps.mdx`
+- [ ] 🔴 P1 **03-product/15-strings-of-pearls** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/programming-pearls/03-product/15-strings-of-pearls.mdx`
+- [ ] 🔴 P1 **02-performance/07-the-back-of-the-envelope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/programming-pearls/02-performance/07-the-back-of-the-envelope.mdx`
+- [ ] 🔴 P1 **02-performance/09-code-tuning** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/programming-pearls/02-performance/09-code-tuning.mdx`
+- [ ] 🔴 P1 **01-preliminaries/05-a-small-matter-of-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/programming-pearls/01-preliminaries/05-a-small-matter-of-programming.mdx`
+- [ ] 🔴 P1 **03-product/12-a-sample-problem** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/programming-pearls/03-product/12-a-sample-problem.mdx`
+- [ ] 🔴 P1 **03-product/13-searching** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/programming-pearls/03-product/13-searching.mdx`
+- [ ] 🔴 P1 **01-preliminaries/04-writing-correct-programs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/programming-pearls/01-preliminaries/04-writing-correct-programs.mdx`
+
+## rust-way（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/rsw-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/rust-way/00-guide/rsw-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/rsw-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/rust-way/05-review/rsw-final-review.mdx`
+- [ ] 🔴 P1 **01-foundations/rsw-lifetimes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/01-foundations/rsw-lifetimes.mdx`
+- [ ] 🔴 P1 **02-ownership/rsw-functions-closures-iterators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/02-ownership/rsw-functions-closures-iterators.mdx`
+- [ ] 🔴 P1 **02-ownership/rsw-ownership-borrow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/02-ownership/rsw-ownership-borrow.mdx`
+- [ ] 🔴 P1 **02-ownership/rsw-strings-collections** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/02-ownership/rsw-strings-collections.mdx`
+- [ ] 🔴 P1 **02-ownership/rsw-structured-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/02-ownership/rsw-structured-programming.mdx`
+- [ ] 🔴 P1 **03-engineering/rsw-concurrency** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/03-engineering/rsw-concurrency.mdx`
+- [ ] 🔴 P1 **03-engineering/rsw-error-handling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/03-engineering/rsw-error-handling.mdx`
+- [ ] 🔴 P1 **03-engineering/rsw-modular-development** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/03-engineering/rsw-modular-development.mdx`
+- [ ] 🔴 P1 **04-boundary/rsw-macros** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/04-boundary/rsw-macros.mdx`
+- [ ] 🔴 P1 **04-boundary/rsw-unsafe-rust** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/rust-way/04-boundary/rsw-unsafe-rust.mdx`
+- [ ] 🔴 P1 **01-foundations/rsw-traits-generics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/rust-way/01-foundations/rsw-traits-generics.mdx`
+- [ ] 🔴 P1 **01-foundations/rsw-language-essentials** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+    - 路径：`content/rust-way/01-foundations/rsw-language-essentials.mdx`
+- [ ] 🔴 P1 **01-foundations/rsw-new-era-language** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/rust-way/01-foundations/rsw-new-era-language.mdx`
+
+## unity-scripting-game-dev（15 章 · ❌15 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/usg-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-scripting-game-dev/00-guide/usg-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/usg-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-scripting-game-dev/07-review/usg-official-final-review.mdx`
+- [ ] 🔴 P1 **03-presentation/usg-07-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unity-scripting-game-dev/03-presentation/usg-07-effects.mdx`
+- [ ] 🔴 P1 **03-presentation/usg-08-audio** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-scripting-game-dev/03-presentation/usg-08-audio.mdx`
+- [ ] 🔴 P1 **01-script-physics/usg-03-physics-system** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-scripting-game-dev/01-script-physics/usg-03-physics-system.mdx`
+- [ ] 🔴 P1 **02-math-ui/usg-04-game-math** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-scripting-game-dev/02-math-ui/usg-04-game-math.mdx`
+- [ ] 🔴 P1 **04-resource-data/usg-09-resource-management** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-scripting-game-dev/04-resource-data/usg-09-resource-management.mdx`
+- [ ] 🔴 P1 **04-resource-data/usg-10-save-load** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-scripting-game-dev/04-resource-data/usg-10-save-load.mdx`
+- [ ] 🔴 P1 **02-math-ui/usg-05-ui-system** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/unity-scripting-game-dev/02-math-ui/usg-05-ui-system.mdx`
+- [ ] 🔴 P1 **05-ai-project/usg-11-game-ai** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/unity-scripting-game-dev/05-ai-project/usg-11-game-ai.mdx`
+- [ ] 🔴 P1 **06-advanced/usg-13-advanced-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+    - 路径：`content/unity-scripting-game-dev/06-advanced/usg-13-advanced-programming.mdx`
+- [ ] 🔴 P1 **01-script-physics/usg-01-script-overview** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 26）
+    - 路径：`content/unity-scripting-game-dev/01-script-physics/usg-01-script-overview.mdx`
+- [ ] 🔴 P1 **01-script-physics/usg-02-concepts-scripting-shooter** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 26）
+    - 路径：`content/unity-scripting-game-dev/01-script-physics/usg-02-concepts-scripting-shooter.mdx`
+- [ ] 🔴 P1 **03-presentation/usg-06-animation-system** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/unity-scripting-game-dev/03-presentation/usg-06-animation-system.mdx`
+- [ ] 🔴 P1 **05-ai-project/usg-12-secret-commandos** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 25）
+    - 路径：`content/unity-scripting-game-dev/05-ai-project/usg-12-secret-commandos.mdx`
+
+## ai-agent-dev（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **core-mechanisms/memory** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/core-mechanisms/memory.mdx`
+- [ ] 🔴 P1 **core-mechanisms/planning** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/core-mechanisms/planning.mdx`
+- [ ] 🔴 P1 **core-mechanisms/react-loop** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/core-mechanisms/react-loop.mdx`
+- [ ] 🔴 P1 **core-mechanisms/tool-calling** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/core-mechanisms/tool-calling.mdx`
+- [ ] 🔴 P1 **enterprise/evaluation-observability** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/enterprise/evaluation-observability.mdx`
+- [ ] 🔴 P1 **enterprise/production-deployment** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/enterprise/production-deployment.mdx`
+- [ ] 🔴 P1 **enterprise/safety-guardrails** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/enterprise/safety-guardrails.mdx`
+- [ ] 🔴 P1 **foundations/llm-brain** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/foundations/llm-brain.mdx`
+- [ ] 🔴 P1 **foundations/prompting-roles** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/foundations/prompting-roles.mdx`
+- [ ] 🔴 P1 **foundations/what-is-agent** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/foundations/what-is-agent.mdx`
+- [ ] 🔴 P1 **knowledge-rag/context-engineering** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/knowledge-rag/context-engineering.mdx`
+- [ ] 🔴 P1 **knowledge-rag/rag** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/knowledge-rag/rag.mdx`
+- [ ] 🔴 P1 **multi-agent/multi-agent-patterns** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/multi-agent/multi-agent-patterns.mdx`
+- [ ] 🔴 P1 **multi-agent/orchestration** — 缺视觉证据、UX 不足（score 82）
+    - 路径：`content/ai-agent-dev/multi-agent/orchestration.mdx`
+
+## blockchain-plain（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **13-review/bp-official-final-review** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/blockchain-plain/13-review/bp-official-final-review.mdx`
+- [ ] 🔴 P1 **00-map/bp-official-learning-map** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/blockchain-plain/00-map/bp-official-learning-map.mdx`
+- [ ] 🔴 P1 **11-09-potential-problems/bp-09-potential-problems** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/blockchain-plain/11-09-potential-problems/bp-09-potential-problems.mdx`
+- [ ] 🔴 P1 **01-technical-review/bp-technical-review** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/01-technical-review/bp-technical-review.mdx`
+- [ ] 🔴 P1 **02-preface/bp-preface** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/02-preface/bp-preface.mdx`
+- [ ] 🔴 P1 **03-01-first-blockchain/bp-01-first-blockchain** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain.mdx`
+- [ ] 🔴 P1 **04-02-application-development/bp-02-application-development** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/04-02-application-development/bp-02-application-development.mdx`
+- [ ] 🔴 P1 **05-03-cryptography/bp-03-cryptography** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/05-03-cryptography/bp-03-cryptography.mdx`
+- [ ] 🔴 P1 **06-04-consensus/bp-04-consensus** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/06-04-consensus/bp-04-consensus.mdx`
+- [ ] 🔴 P1 **07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning.mdx`
+- [ ] 🔴 P1 **08-06-ethereum/bp-06-ethereum** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/08-06-ethereum/bp-06-ethereum.mdx`
+- [ ] 🔴 P1 **09-07-hyperledger/bp-07-hyperledger** — 缺/多 Objectives、章内模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/09-07-hyperledger/bp-07-hyperledger.mdx`
+- [ ] 🔴 P1 **10-08-build-mini-chain/bp-08-build-mini-chain** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain.mdx`
+- [ ] 🔴 P1 **12-afterword-programmable-society/bp-afterword-programmable-society** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society.mdx`
+
+## css-world（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/csw-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/css-world/00-guide/csw-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/csw-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/css-world/06-review/csw-official-final-review.mdx`
+- [ ] 🔴 P1 **01-world/csw-01-worldview-flow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/01-world/csw-01-worldview-flow.mdx`
+- [ ] 🔴 P1 **01-world/csw-02-terms-undefined-behavior** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/01-world/csw-02-terms-undefined-behavior.mdx`
+- [ ] 🔴 P1 **02-flow-size/csw-03-flow-elements-sizing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/02-flow-size/csw-03-flow-elements-sizing.mdx`
+- [ ] 🔴 P1 **02-flow-size/csw-04-box-dimensions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/02-flow-size/csw-04-box-dimensions.mdx`
+- [ ] 🔴 P1 **02-flow-size/csw-05-inline-flow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/02-flow-size/csw-05-inline-flow.mdx`
+- [ ] 🔴 P1 **03-layout-stack/csw-06-flow-breaking-protection** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/03-layout-stack/csw-06-flow-breaking-protection.mdx`
+- [ ] 🔴 P1 **03-layout-stack/csw-07-stacking-rules** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/03-layout-stack/csw-07-stacking-rules.mdx`
+- [ ] 🔴 P1 **04-text-visual/csw-08-text-processing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/04-text-visual/csw-08-text-processing.mdx`
+- [ ] 🔴 P1 **04-text-visual/csw-09-decoration** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/04-text-visual/csw-09-decoration.mdx`
+- [ ] 🔴 P1 **05-interface-direction/csw-10-display-visibility** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/05-interface-direction/csw-10-display-visibility.mdx`
+- [ ] 🔴 P1 **05-interface-direction/csw-11-user-interface** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/05-interface-direction/csw-11-user-interface.mdx`
+- [ ] 🔴 P1 **05-interface-direction/csw-12-writing-directions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/css-world/05-interface-direction/csw-12-writing-directions.mdx`
+
+## effective-executive（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/eex19-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/effective-executive/00-official-learning-map/eex19-official-learning-map.mdx`
+- [ ] 🔴 P1 **13-official-final-review/eex19-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+    - 路径：`content/effective-executive/13-official-final-review/eex19-official-final-review.mdx`
+- [ ] 🔴 P1 **01-recommendation-01/eex19-recommendation-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/01-recommendation-01/eex19-recommendation-01.mdx`
+- [ ] 🔴 P1 **02-recommendation-02/eex19-recommendation-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/02-recommendation-02/eex19-recommendation-02.mdx`
+- [ ] 🔴 P1 **03-recommendation-03/eex19-recommendation-03** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/03-recommendation-03/eex19-recommendation-03.mdx`
+- [ ] 🔴 P1 **04-preface/eex19-preface** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/04-preface/eex19-preface.mdx`
+- [ ] 🔴 P1 **05-chapter-01/eex19-chapter-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/05-chapter-01/eex19-chapter-01.mdx`
+- [ ] 🔴 P1 **06-chapter-02/eex19-chapter-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/06-chapter-02/eex19-chapter-02.mdx`
+- [ ] 🔴 P1 **07-chapter-03/eex19-chapter-03** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/07-chapter-03/eex19-chapter-03.mdx`
+- [ ] 🔴 P1 **08-chapter-04/eex19-chapter-04** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/08-chapter-04/eex19-chapter-04.mdx`
+- [ ] 🔴 P1 **09-chapter-05/eex19-chapter-05** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/09-chapter-05/eex19-chapter-05.mdx`
+- [ ] 🔴 P1 **10-chapter-06/eex19-chapter-06** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/10-chapter-06/eex19-chapter-06.mdx`
+- [ ] 🔴 P1 **11-chapter-07/eex19-chapter-07** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/11-chapter-07/eex19-chapter-07.mdx`
+- [ ] 🔴 P1 **12-chapter-08/eex19-chapter-08** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/effective-executive/12-chapter-08/eex19-chapter-08.mdx`
+
+## game-programmer-path（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-gmp17-official-learning-map/gmp17-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-programmer-path/00-gmp17-official-learning-map/gmp17-official-learning-map.mdx`
+- [ ] 🔴 P1 **13-gmp17-official-final-review/gmp17-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/game-programmer-path/13-gmp17-official-final-review/gmp17-official-final-review.mdx`
+- [ ] 🔴 P1 **05-gmp17-04-game-mathematics/gmp17-04-game-mathematics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/game-programmer-path/05-gmp17-04-game-mathematics/gmp17-04-game-mathematics.mdx`
+- [ ] 🔴 P1 **01-gmp17-00-programming-preschool/gmp17-00-programming-preschool** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/game-programmer-path/01-gmp17-00-programming-preschool/gmp17-00-programming-preschool.mdx`
+- [ ] 🔴 P1 **09-gmp17-08-game-audio/gmp17-08-game-audio** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/game-programmer-path/09-gmp17-08-game-audio/gmp17-08-game-audio.mdx`
+- [ ] 🔴 P1 **10-gmp17-09-game-physics-animation/gmp17-09-game-physics-animation** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/game-programmer-path/10-gmp17-09-game-physics-animation/gmp17-09-game-physics-animation.mdx`
+- [ ] 🔴 P1 **03-gmp17-02-programming-languages/gmp17-02-programming-languages** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/03-gmp17-02-programming-languages/gmp17-02-programming-languages.mdx`
+- [ ] 🔴 P1 **06-gmp17-05-game-programming/gmp17-05-game-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/06-gmp17-05-game-programming/gmp17-05-game-programming.mdx`
+- [ ] 🔴 P1 **07-gmp17-06-game-engine-development/gmp17-06-game-engine-development** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/07-gmp17-06-game-engine-development/gmp17-06-game-engine-development.mdx`
+- [ ] 🔴 P1 **08-gmp17-07-computer-graphics/gmp17-07-computer-graphics** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/08-gmp17-07-computer-graphics/gmp17-07-computer-graphics.mdx`
+- [ ] 🔴 P1 **11-gmp17-10-game-ai/gmp17-10-game-ai** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/11-gmp17-10-game-ai/gmp17-10-game-ai.mdx`
+- [ ] 🔴 P1 **12-gmp17-11-multiplayer-programming/gmp17-11-multiplayer-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/game-programmer-path/12-gmp17-11-multiplayer-programming/gmp17-11-multiplayer-programming.mdx`
+- [ ] 🔴 P1 **02-gmp17-01-computer-science/gmp17-01-computer-science** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/game-programmer-path/02-gmp17-01-computer-science/gmp17-01-computer-science.mdx`
+- [ ] 🔴 P1 **04-gmp17-03-software-development/gmp17-03-software-development** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/game-programmer-path/04-gmp17-03-software-development/gmp17-03-software-development.mdx`
+
+## gpu-pro（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gpo-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/gpu-pro/00-guide/gpo-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/gpo-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/gpu-pro/05-review/gpo-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundation/gpo-geometry-terrain** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/01-foundation/gpo-geometry-terrain.mdx`
+- [ ] 🔴 P1 **01-foundation/gpo-pipeline-visibility** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/01-foundation/gpo-pipeline-visibility.mdx`
+- [ ] 🔴 P1 **02-light/gpo-lighting-gi** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/02-light/gpo-lighting-gi.mdx`
+- [ ] 🔴 P1 **02-light/gpo-material-shading** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/02-light/gpo-material-shading.mdx`
+- [ ] 🔴 P1 **02-light/gpo-shadow-systems** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/02-light/gpo-shadow-systems.mdx`
+- [ ] 🔴 P1 **02-light/gpo-volume-environment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/02-light/gpo-volume-environment.mdx`
+- [ ] 🔴 P1 **03-screen/gpo-image-reconstruction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/03-screen/gpo-image-reconstruction.mdx`
+- [ ] 🔴 P1 **03-screen/gpo-transparency-raytracing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/03-screen/gpo-transparency-raytracing.mdx`
+- [ ] 🔴 P1 **04-engineering/gpo-compute-simulation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/04-engineering/gpo-compute-simulation.mdx`
+- [ ] 🔴 P1 **04-engineering/gpo-engine-tools** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/04-engineering/gpo-engine-tools.mdx`
+- [ ] 🔴 P1 **04-engineering/gpo-mobile-bandwidth** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/gpu-pro/04-engineering/gpo-mobile-bandwidth.mdx`
+- [ ] 🔴 P1 **01-foundation/gpo-data-compression** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/gpu-pro/01-foundation/gpo-data-compression.mdx`
+
+## how-computers-work（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/hcw-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/how-computers-work/00-guide/hcw-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/hcw-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/how-computers-work/06-review/hcw-official-final-review.mdx`
+- [ ] 🔴 P1 **01-hardware/hcw-01-three-principles** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/01-hardware/hcw-01-three-principles.mdx`
+- [ ] 🔴 P1 **01-hardware/hcw-02-build-computer** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/01-hardware/hcw-02-build-computer.mdx`
+- [ ] 🔴 P1 **02-programming/hcw-03-manual-assembly** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/02-programming/hcw-03-manual-assembly.mdx`
+- [ ] 🔴 P1 **02-programming/hcw-04-program-flow** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/02-programming/hcw-04-program-flow.mdx`
+- [ ] 🔴 P1 **02-programming/hcw-05-algorithms** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/02-programming/hcw-05-algorithms.mdx`
+- [ ] 🔴 P1 **03-data-oop/hcw-06-data-structures** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/03-data-oop/hcw-06-data-structures.mdx`
+- [ ] 🔴 P1 **03-data-oop/hcw-07-oop** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/03-data-oop/hcw-07-oop.mdx`
+- [ ] 🔴 P1 **03-data-oop/hcw-08-database** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/03-data-oop/hcw-08-database.mdx`
+- [ ] 🔴 P1 **04-network-data/hcw-09-tcp-ip** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/04-network-data/hcw-09-tcp-ip.mdx`
+- [ ] 🔴 P1 **04-network-data/hcw-10-encryption** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/04-network-data/hcw-10-encryption.mdx`
+- [ ] 🔴 P1 **04-network-data/hcw-11-xml** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/04-network-data/hcw-11-xml.mdx`
+- [ ] 🔴 P1 **05-system/hcw-12-system-engineering** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/how-computers-work/05-system/hcw-12-system-engineering.mdx`
+
+## large-scale-llm-practice（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/lsl-official-learning-map** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/00-map/lsl-official-learning-map.mdx`
+- [ ] 🔴 P1 **01-preface/lsl-preface** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/01-preface/lsl-preface.mdx`
+- [ ] 🔴 P1 **02-notation/lsl-mathematical-notation** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/02-notation/lsl-mathematical-notation.mdx`
+- [ ] 🔴 P1 **03-introduction/lsl-01-introduction** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/03-introduction/lsl-01-introduction.mdx`
+- [ ] 🔴 P1 **04-foundations/lsl-02-llm-foundations** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/04-foundations/lsl-02-llm-foundations.mdx`
+- [ ] 🔴 P1 **05-data/lsl-03-pretraining-data** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/05-data/lsl-03-pretraining-data.mdx`
+- [ ] 🔴 P1 **06-distributed-training/lsl-04-distributed-training** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/06-distributed-training/lsl-04-distributed-training.mdx`
+- [ ] 🔴 P1 **07-supervised-finetuning/lsl-05-supervised-finetuning** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/07-supervised-finetuning/lsl-05-supervised-finetuning.mdx`
+- [ ] 🔴 P1 **08-reinforcement-learning/lsl-06-reinforcement-learning** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/08-reinforcement-learning/lsl-06-reinforcement-learning.mdx`
+- [ ] 🔴 P1 **09-applications/lsl-07-llm-applications** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/09-applications/lsl-07-llm-applications.mdx`
+- [ ] 🔴 P1 **10-evaluation/lsl-08-llm-evaluation** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/10-evaluation/lsl-08-llm-evaluation.mdx`
+- [ ] 🔴 P1 **11-references/lsl-references** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/11-references/lsl-references.mdx`
+- [ ] 🔴 P1 **12-index/lsl-index** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/12-index/lsl-index.mdx`
+- [ ] 🔴 P1 **13-review/lsl-official-final-review** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/large-scale-llm-practice/13-review/lsl-official-final-review.mdx`
+
+## multiplayer-game-architecture（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/mga-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/multiplayer-game-architecture/00-guide/mga-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/mga-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/multiplayer-game-architecture/05-review/mga-official-final-review.mdx`
+- [ ] 🔴 P1 **01-network-foundations/mga-01-network-basics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/01-network-foundations/mga-01-network-basics.mdx`
+- [ ] 🔴 P1 **01-network-foundations/mga-02-io-multiplexing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/01-network-foundations/mga-02-io-multiplexing.mdx`
+- [ ] 🔴 P1 **02-framework-core/mga-03-threads-actor** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/02-framework-core/mga-03-threads-actor.mdx`
+- [ ] 🔴 P1 **02-framework-core/mga-04-account-login** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/02-framework-core/mga-04-account-login.mdx`
+- [ ] 🔴 P1 **02-framework-core/mga-05-performance-object-pool** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/02-framework-core/mga-05-performance-object-pool.mdx`
+- [ ] 🔴 P1 **02-framework-core/mga-06-ecs-framework** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/02-framework-core/mga-06-ecs-framework.mdx`
+- [ ] 🔴 P1 **03-data-components/mga-07-mysql** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/03-data-components/mga-07-mysql.mdx`
+- [ ] 🔴 P1 **03-data-components/mga-08-component-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/03-data-components/mga-08-component-programming.mdx`
+- [ ] 🔴 P1 **04-distributed-runtime/mga-09-app-manager-http** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/04-distributed-runtime/mga-09-app-manager-http.mdx`
+- [ ] 🔴 P1 **04-distributed-runtime/mga-10-distributed-login-redis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/04-distributed-runtime/mga-10-distributed-login-redis.mdx`
+- [ ] 🔴 P1 **04-distributed-runtime/mga-11-distributed-world-transfer** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/04-distributed-runtime/mga-11-distributed-world-transfer.mdx`
+- [ ] 🔴 P1 **04-distributed-runtime/mga-12-disconnect-dynamic-system** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/multiplayer-game-architecture/04-distributed-runtime/mga-12-disconnect-dynamic-system.mdx`
+
+## unity-master（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ums-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-master/00-guide/ums-official-learning-map.mdx`
+- [ ] 🔴 P1 **10-review/ums-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-master/10-review/ums-official-final-review.mdx`
+- [ ] 🔴 P1 **01-orientation/ums-00-prologue-creative-space** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/01-orientation/ums-00-prologue-creative-space.mdx`
+- [ ] 🔴 P1 **02-world/ums-01-creating-the-world** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/02-world/ums-01-creating-the-world.mdx`
+- [ ] 🔴 P1 **02-world/ums-02-thinking-and-structure** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/02-world/ums-02-thinking-and-structure.mdx`
+- [ ] 🔴 P1 **03-assets/ums-03-world-composition** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/03-assets/ums-03-world-composition.mdx`
+- [ ] 🔴 P1 **04-scripting/ums-04-scripting-foundations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/04-scripting/ums-04-scripting-foundations.mdx`
+- [ ] 🔴 P1 **05-animation-ui/ums-05-animation-and-characters** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/05-animation-ui/ums-05-animation-and-characters.mdx`
+- [ ] 🔴 P1 **05-animation-ui/ums-06-gui-and-audio** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/05-animation-ui/ums-06-gui-and-audio.mdx`
+- [ ] 🔴 P1 **06-output-expansion/ums-07-build-and-output** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/06-output-expansion/ums-07-build-and-output.mdx`
+- [ ] 🔴 P1 **06-output-expansion/ums-08-unity-possibilities** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/06-output-expansion/ums-08-unity-possibilities.mdx`
+- [ ] 🔴 P1 **07-visual-scripting/ums-09-playmaker-visual-scripting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/07-visual-scripting/ums-09-playmaker-visual-scripting.mdx`
+- [ ] 🔴 P1 **08-optimization/ums-10-optimization-and-pro** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/08-optimization/ums-10-optimization-and-pro.mdx`
+- [ ] 🔴 P1 **09-appendix/ums-appendix-tools-assets** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-master/09-appendix/ums-appendix-tools-assets.mdx`
+
+## unity-mmo-game（14 章 · ❌14 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/umm-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-mmo-game/00-guide/umm-official-learning-map.mdx`
+- [ ] 🔴 P1 **04-review/umm-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-mmo-game/04-review/umm-official-final-review.mdx`
+- [ ] 🔴 P1 **02-framework/umm-06-client-network-module** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-mmo-game/02-framework/umm-06-client-network-module.mdx`
+- [ ] 🔴 P1 **03-project/umm-08-tank-battle-project** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-mmo-game/03-project/umm-08-tank-battle-project.mdx`
+- [ ] 🔴 P1 **01-foundations/umm-02-async-multiplexing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-mmo-game/01-foundations/umm-02-async-multiplexing.mdx`
+- [ ] 🔴 P1 **03-project/umm-12-battle-sync** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-mmo-game/03-project/umm-12-battle-sync.mdx`
+- [ ] 🔴 P1 **01-foundations/umm-01-echo** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/01-foundations/umm-01-echo.mdx`
+- [ ] 🔴 P1 **01-foundations/umm-03-battle-royale** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/01-foundations/umm-03-battle-royale.mdx`
+- [ ] 🔴 P1 **01-foundations/umm-04-tcp-data-stream** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/01-foundations/umm-04-tcp-data-stream.mdx`
+- [ ] 🔴 P1 **01-foundations/umm-05-deep-tcp** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/01-foundations/umm-05-deep-tcp.mdx`
+- [ ] 🔴 P1 **02-framework/umm-07-server-framework** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/02-framework/umm-07-server-framework.mdx`
+- [ ] 🔴 P1 **03-project/umm-09-ui-module** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/03-project/umm-09-ui-module.mdx`
+- [ ] 🔴 P1 **03-project/umm-10-lobby-rooms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/03-project/umm-10-lobby-rooms.mdx`
+- [ ] 🔴 P1 **03-project/umm-11-battle-result** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 28）
+    - 路径：`content/unity-mmo-game/03-project/umm-11-battle-result.mdx`
+
+## chatgpt-principles-practice（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/cgpt-official-learning-map** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/00-map/cgpt-official-learning-map.mdx`
+- [ ] 🔴 P1 **01-preface/cgpt-preface** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/01-preface/cgpt-preface.mdx`
+- [ ] 🔴 P1 **02-understanding/cgpt-01-understanding-chatgpt** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/02-understanding/cgpt-01-understanding-chatgpt.mdx`
+- [ ] 🔴 P1 **03-principles/cgpt-02-principles** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/03-principles/cgpt-02-principles.mdx`
+- [ ] 🔴 P1 **04-pretrained-models/cgpt-03-pretrained-language-models** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/04-pretrained-models/cgpt-03-pretrained-language-models.mdx`
+- [ ] 🔴 P1 **05-reinforcement-learning/cgpt-04-reinforcement-learning** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/05-reinforcement-learning/cgpt-04-reinforcement-learning.mdx`
+- [ ] 🔴 P1 **06-prompt-emergence/cgpt-05-prompt-emergence** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/06-prompt-emergence/cgpt-05-prompt-emergence.mdx`
+- [ ] 🔴 P1 **07-llm-pretraining/cgpt-06-llm-pretraining** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/07-llm-pretraining/cgpt-06-llm-pretraining.mdx`
+- [ ] 🔴 P1 **08-gpt-series/cgpt-07-gpt-series** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/08-gpt-series/cgpt-07-gpt-series.mdx`
+- [ ] 🔴 P1 **09-ppo-rlhf/cgpt-08-ppo-rlhf** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/09-ppo-rlhf/cgpt-08-ppo-rlhf.mdx`
+- [ ] 🔴 P1 **10-private-practice/cgpt-09-chatgpt-practice** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/10-private-practice/cgpt-09-chatgpt-practice.mdx`
+- [ ] 🔴 P1 **11-trends/cgpt-10-trends** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/11-trends/cgpt-10-trends.mdx`
+- [ ] 🔴 P1 **12-review/cgpt-official-final-review** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/chatgpt-principles-practice/12-review/cgpt-official-final-review.mdx`
+
+## dsa-cpp（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **01-linear-structures/lists-stacks-queues** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/dsa-cpp/01-linear-structures/lists-stacks-queues.mdx`
+- [ ] 🔴 P1 **02-hashing-heaps/hashing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/dsa-cpp/02-hashing-heaps/hashing.mdx`
+- [ ] 🔴 P1 **03-algorithms/sorting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/dsa-cpp/03-algorithms/sorting.mdx`
+- [ ] 🔴 P1 **00-introduction/algorithm-analysis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/dsa-cpp/00-introduction/algorithm-analysis.mdx`
+- [ ] 🔴 P1 **04-design-analysis/algorithm-design-techniques** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/dsa-cpp/04-design-analysis/algorithm-design-techniques.mdx`
+- [ ] 🔴 P1 **04-design-analysis/amortized-analysis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/dsa-cpp/04-design-analysis/amortized-analysis.mdx`
+- [ ] 🔴 P1 **05-advanced/advanced-data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/dsa-cpp/05-advanced/advanced-data-structures.mdx`
+- [ ] 🔴 P1 **03-algorithms/graph-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/dsa-cpp/03-algorithms/graph-algorithms.mdx`
+- [ ] 🔴 P1 **00-introduction/introduction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/dsa-cpp/00-introduction/introduction.mdx`
+- [ ] 🔴 P1 **01-linear-structures/trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/dsa-cpp/01-linear-structures/trees.mdx`
+- [ ] 🔴 P1 **02-hashing-heaps/priority-queues-heaps** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/dsa-cpp/02-hashing-heaps/priority-queues-heaps.mdx`
+- [ ] 🔴 P1 **03-algorithms/disjoint-set-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/dsa-cpp/03-algorithms/disjoint-set-class.mdx`
+- [ ] 🔴 P1 **05-advanced/separate-compilation-class-templates** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/dsa-cpp/05-advanced/separate-compilation-class-templates.mdx`
+
+## grokking-algorithms-2e（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **next-steps/where-to-go-next** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/grokking-algorithms-2e/next-steps/where-to-go-next.mdx`
+- [ ] 🔴 P1 **strategy-and-planning/k-nearest-neighbors** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/grokking-algorithms-2e/strategy-and-planning/k-nearest-neighbors.mdx`
+- [ ] 🔴 P1 **trees-and-graphs/balanced-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/grokking-algorithms-2e/trees-and-graphs/balanced-trees.mdx`
+- [ ] 🔴 P1 **trees-and-graphs/dijkstras-algorithm** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/grokking-algorithms-2e/trees-and-graphs/dijkstras-algorithm.mdx`
+- [ ] 🔴 P1 **core-intuitions/hash-tables** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/grokking-algorithms-2e/core-intuitions/hash-tables.mdx`
+- [ ] 🔴 P1 **core-intuitions/selection-sort** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/grokking-algorithms-2e/core-intuitions/selection-sort.mdx`
+- [ ] 🔴 P1 **strategy-and-planning/greedy-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/grokking-algorithms-2e/strategy-and-planning/greedy-algorithms.mdx`
+- [ ] 🔴 P1 **trees-and-graphs/trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 47）
+    - 路径：`content/grokking-algorithms-2e/trees-and-graphs/trees.mdx`
+- [ ] 🔴 P1 **core-intuitions/quicksort** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/grokking-algorithms-2e/core-intuitions/quicksort.mdx`
+- [ ] 🔴 P1 **trees-and-graphs/breadth-first-search** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+    - 路径：`content/grokking-algorithms-2e/trees-and-graphs/breadth-first-search.mdx`
+- [ ] 🔴 P1 **core-intuitions/recursion** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+    - 路径：`content/grokking-algorithms-2e/core-intuitions/recursion.mdx`
+- [ ] 🔴 P1 **strategy-and-planning/dynamic-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/grokking-algorithms-2e/strategy-and-planning/dynamic-programming.mdx`
+- [ ] 🔴 P1 **core-intuitions/introduction-to-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+    - 路径：`content/grokking-algorithms-2e/core-intuitions/introduction-to-algorithms.mdx`
+
+## illustrated-nev（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/ine23-official-learning-map** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/illustrated-nev/00-map/ine23-official-learning-map.mdx`
+- [ ] 🔴 P1 **12-review/ine23-official-final-review** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/illustrated-nev/12-review/ine23-official-final-review.mdx`
+- [ ] 🔴 P1 **01-content-summary/ine23-content-summary** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/01-content-summary/ine23-content-summary.mdx`
+- [ ] 🔴 P1 **02-preface/ine23-preface** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/02-preface/ine23-preface.mdx`
+- [ ] 🔴 P1 **03-01-classification/ine23-01-classification** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/03-01-classification/ine23-01-classification.mdx`
+- [ ] 🔴 P1 **04-02-motors/ine23-02-motors** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/04-02-motors/ine23-02-motors.mdx`
+- [ ] 🔴 P1 **05-03-batteries/ine23-03-batteries** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/05-03-batteries/ine23-03-batteries.mdx`
+- [ ] 🔴 P1 **06-04-battery-electric-vehicles/ine23-04-battery-electric-vehicles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/06-04-battery-electric-vehicles/ine23-04-battery-electric-vehicles.mdx`
+- [ ] 🔴 P1 **07-05-hybrid-vehicles/ine23-05-hybrid-vehicles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/07-05-hybrid-vehicles/ine23-05-hybrid-vehicles.mdx`
+- [ ] 🔴 P1 **08-06-fuel-cell-vehicles/ine23-06-fuel-cell-vehicles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/08-06-fuel-cell-vehicles/ine23-06-fuel-cell-vehicles.mdx`
+- [ ] 🔴 P1 **09-07-natural-gas-vehicles/ine23-07-natural-gas-vehicles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/09-07-natural-gas-vehicles/ine23-07-natural-gas-vehicles.mdx`
+- [ ] 🔴 P1 **10-08-lpg-vehicles/ine23-08-lpg-vehicles** — 缺/多 Objectives、章内模板重复、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/10-08-lpg-vehicles/ine23-08-lpg-vehicles.mdx`
+- [ ] 🔴 P1 **11-references/ine23-references** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/illustrated-nev/11-references/ine23-references.mdx`
+
+## jetpack-compose（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-official-learning-map/jpc-22-official-learning-map** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/jetpack-compose/00-official-learning-map/jpc-22-official-learning-map.mdx`
+- [ ] 🔴 P1 **12-official-final-review/jpc-22-official-final-review** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 69）
+    - 路径：`content/jetpack-compose/12-official-final-review/jpc-22-official-final-review.mdx`
+- [ ] 🔴 P1 **01-new-android-ui/jpc-22-01-new-android-ui** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/01-new-android-ui/jpc-22-01-new-android-ui.mdx`
+- [ ] 🔴 P1 **02-common-ui-components/jpc-22-02-common-ui-components** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/02-common-ui-components/jpc-22-02-common-ui-components.mdx`
+- [ ] 🔴 P1 **03-custom-ui/jpc-22-03-custom-ui** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/03-custom-ui/jpc-22-03-custom-ui.mdx`
+- [ ] 🔴 P1 **04-state-recomposition/jpc-22-04-state-recomposition** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/04-state-recomposition/jpc-22-04-state-recomposition.mdx`
+- [ ] 🔴 P1 **05-rendering-pipeline/jpc-22-05-rendering-pipeline** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/05-rendering-pipeline/jpc-22-05-rendering-pipeline.mdx`
+- [ ] 🔴 P1 **06-animation/jpc-22-06-animation** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/06-animation/jpc-22-06-animation.mdx`
+- [ ] 🔴 P1 **07-gestures/jpc-22-07-gestures** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/07-gestures/jpc-22-07-gestures.mdx`
+- [ ] 🔴 P1 **08-navigation-hilt/jpc-22-08-navigation-hilt** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/08-navigation-hilt/jpc-22-08-navigation-hilt.mdx`
+- [ ] 🔴 P1 **09-third-party/jpc-22-09-third-party** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/09-third-party/jpc-22-09-third-party.mdx`
+- [ ] 🔴 P1 **10-tetris/jpc-22-10-tetris** — 章内模板重复、跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/10-tetris/jpc-22-10-tetris.mdx`
+- [ ] 🔴 P1 **11-chatty/jpc-22-11-chatty** — 跨章/书模板重复、未升级 v2、可视化不足、UX 不足（score 67）
+    - 路径：`content/jetpack-compose/11-chatty/jpc-22-11-chatty.mdx`
+
+## langchain-programming（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/lcp-official-learning-map** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/00-map/lcp-official-learning-map.mdx`
+- [ ] 🔴 P1 **01-preface/lcp-preface** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/01-preface/lcp-preface.mdx`
+- [ ] 🔴 P1 **02-introduction/lcp-01-introduction** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/02-introduction/lcp-01-introduction.mdx`
+- [ ] 🔴 P1 **03-quickstart/lcp-02-first-experience** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/03-quickstart/lcp-02-first-experience.mdx`
+- [ ] 🔴 P1 **04-model-io/lcp-03-model-io** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/04-model-io/lcp-03-model-io.mdx`
+- [ ] 🔴 P1 **05-chains/lcp-04-building-chains** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/05-chains/lcp-04-building-chains.mdx`
+- [ ] 🔴 P1 **06-rag/lcp-05-rag** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/06-rag/lcp-05-rag.mdx`
+- [ ] 🔴 P1 **07-agents/lcp-06-agents** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/07-agents/lcp-06-agents.mdx`
+- [ ] 🔴 P1 **08-memory/lcp-07-memory** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/08-memory/lcp-07-memory.mdx`
+- [ ] 🔴 P1 **09-callbacks/lcp-08-callbacks** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/09-callbacks/lcp-08-callbacks.mdx`
+- [ ] 🔴 P1 **10-project/lcp-09-multimodal-bot** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/10-project/lcp-09-multimodal-bot.mdx`
+- [ ] 🔴 P1 **11-community/lcp-10-community-resources** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/11-community/lcp-10-community-resources.mdx`
+- [ ] 🔴 P1 **12-review/lcp-official-final-review** — 缺视觉证据、UX 不足（score 90）
+    - 路径：`content/langchain-programming/12-review/lcp-official-final-review.mdx`
+
+## unity-game-cases（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ugc-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-game-cases/00-guide/ugc-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/ugc-official-final-review** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-game-cases/06-review/ugc-official-final-review.mdx`
+- [ ] 🔴 P1 **03-touch-action/ugc-05-tomb-coin-pusher** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/unity-game-cases/03-touch-action/ugc-05-tomb-coin-pusher.mdx`
+- [ ] 🔴 P1 **01-foundation/ugc-01-unity3d-foundation-environment** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/unity-game-cases/01-foundation/ugc-01-unity3d-foundation-environment.mdx`
+- [ ] 🔴 P1 **04-runner-vehicles/ugc-08-dog-runner** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-game-cases/04-runner-vehicles/ugc-08-dog-runner.mdx`
+- [ ] 🔴 P1 **04-runner-vehicles/ugc-09-3d-virtual-parking** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-game-cases/04-runner-vehicles/ugc-09-3d-virtual-parking.mdx`
+- [ ] 🔴 P1 **05-flight-racing/ugc-10-save-mushroom-village** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+    - 路径：`content/unity-game-cases/05-flight-racing/ugc-10-save-mushroom-village.mdx`
+- [ ] 🔴 P1 **02-physics-cases/ugc-02-3d-billiards** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/02-physics-cases/ugc-02-3d-billiards.mdx`
+- [ ] 🔴 P1 **02-physics-cases/ugc-03-3d-maze-box** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/02-physics-cases/ugc-03-3d-maze-box.mdx`
+- [ ] 🔴 P1 **03-touch-action/ugc-04-crossing-meridian** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/03-touch-action/ugc-04-crossing-meridian.mdx`
+- [ ] 🔴 P1 **03-touch-action/ugc-06-coke-cans** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/03-touch-action/ugc-06-coke-cans.mdx`
+- [ ] 🔴 P1 **03-touch-action/ugc-07-tank-battle** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/03-touch-action/ugc-07-tank-battle.mdx`
+- [ ] 🔴 P1 **05-flight-racing/ugc-11-baina-racing** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/unity-game-cases/05-flight-racing/ugc-11-baina-racing.mdx`
+
+## unity-screen-effects（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/usf-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-screen-effects/00-guide/usf-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/usf-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/unity-screen-effects/05-review/usf-official-final-review.mdx`
+- [ ] 🔴 P1 **01-surface/usf-01-diffuse-shading** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/01-surface/usf-01-diffuse-shading.mdx`
+- [ ] 🔴 P1 **01-surface/usf-02-texture-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/01-surface/usf-02-texture-effects.mdx`
+- [ ] 🔴 P1 **01-surface/usf-03-specular-reflection** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/01-surface/usf-03-specular-reflection.mdx`
+- [ ] 🔴 P1 **01-surface/usf-04-shader-reflections** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/01-surface/usf-04-shader-reflections.mdx`
+- [ ] 🔴 P1 **02-models/usf-05-custom-lighting-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/02-models/usf-05-custom-lighting-models.mdx`
+- [ ] 🔴 P1 **02-models/usf-06-transparency** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/02-models/usf-06-transparency.mdx`
+- [ ] 🔴 P1 **02-models/usf-07-vertex-magic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/02-models/usf-07-vertex-magic.mdx`
+- [ ] 🔴 P1 **03-engineering/usf-08-mobile-shader-optimization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/03-engineering/usf-08-mobile-shader-optimization.mdx`
+- [ ] 🔴 P1 **03-engineering/usf-09-cginclude-modularity** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/03-engineering/usf-09-cginclude-modularity.mdx`
+- [ ] 🔴 P1 **04-screen/usf-10-rendertexture-screen-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/04-screen/usf-10-rendertexture-screen-effects.mdx`
+- [ ] 🔴 P1 **04-screen/usf-11-gameplay-screen-effects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-screen-effects/04-screen/usf-11-gameplay-screen-effects.mdx`
+
+## vehicle-software-intelligence（13 章 · ❌13 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-intro/learning-map** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 62）
+    - 路径：`content/vehicle-software-intelligence/00-intro/learning-map.mdx`
+- [ ] 🔴 P1 **04-planning-control/final-review** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 62）
+    - 路径：`content/vehicle-software-intelligence/04-planning-control/final-review.mdx`
+- [ ] 🔴 P1 **01-cockpit/smart-cockpit** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 55）
+    - 路径：`content/vehicle-software-intelligence/01-cockpit/smart-cockpit.mdx`
+- [ ] 🔴 P1 **01-cockpit/ivi-platform** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 54）
+    - 路径：`content/vehicle-software-intelligence/01-cockpit/ivi-platform.mdx`
+- [ ] 🔴 P1 **02-middleware/middleware** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 54）
+    - 路径：`content/vehicle-software-intelligence/02-middleware/middleware.mdx`
+- [ ] 🔴 P1 **03-perception/perception-sensors** — 缺/多 Objectives、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足（score 54）
+    - 路径：`content/vehicle-software-intelligence/03-perception/perception-sensors.mdx`
+- [ ] 🔴 P1 **02-middleware/ota-updates** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 53）
+    - 路径：`content/vehicle-software-intelligence/02-middleware/ota-updates.mdx`
+- [ ] 🔴 P1 **04-planning-control/functional-safety** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 53）
+    - 路径：`content/vehicle-software-intelligence/04-planning-control/functional-safety.mdx`
+- [ ] 🔴 P1 **04-planning-control/path-planning** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 53）
+    - 路径：`content/vehicle-software-intelligence/04-planning-control/path-planning.mdx`
+- [ ] 🔴 P1 **04-planning-control/vehicle-control** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 53）
+    - 路径：`content/vehicle-software-intelligence/04-planning-control/vehicle-control.mdx`
+- [ ] 🔴 P1 **03-perception/perception-algorithms** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 52）
+    - 路径：`content/vehicle-software-intelligence/03-perception/perception-algorithms.mdx`
+- [ ] 🔴 P1 **03-perception/sensor-fusion** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 52）
+    - 路径：`content/vehicle-software-intelligence/03-perception/sensor-fusion.mdx`
+- [ ] 🔴 P1 **04-planning-control/cybersecurity** — 缺/多 Objectives、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足（score 52）
+    - 路径：`content/vehicle-software-intelligence/04-planning-control/cybersecurity.mdx`
+
+## geometric-data-structures（12 章 · ❌12 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gdscg-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/geometric-data-structures/00-guide/gdscg-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/gdscg-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+    - 路径：`content/geometric-data-structures/05-review/gdscg-official-final-review.mdx`
+- [ ] 🔴 P1 **01-spatial-hierarchies/gdscg-bsp-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/01-spatial-hierarchies/gdscg-bsp-trees.mdx`
+- [ ] 🔴 P1 **01-spatial-hierarchies/gdscg-orthogonal-queries** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/01-spatial-hierarchies/gdscg-orthogonal-queries.mdx`
+- [ ] 🔴 P1 **01-spatial-hierarchies/gdscg-quadtrees-octrees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/01-spatial-hierarchies/gdscg-quadtrees-octrees.mdx`
+- [ ] 🔴 P1 **02-bounds-and-fields/gdscg-bounding-volume-hierarchies** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/02-bounds-and-fields/gdscg-bounding-volume-hierarchies.mdx`
+- [ ] 🔴 P1 **02-bounds-and-fields/gdscg-distance-fields** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/02-bounds-and-fields/gdscg-distance-fields.mdx`
+- [ ] 🔴 P1 **03-proximity-structures/gdscg-geometric-proximity-graphs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/03-proximity-structures/gdscg-geometric-proximity-graphs.mdx`
+- [ ] 🔴 P1 **03-proximity-structures/gdscg-voronoi-diagrams** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/03-proximity-structures/gdscg-voronoi-diagrams.mdx`
+- [ ] 🔴 P1 **04-dynamic-and-robust/gdscg-degeneracy-robustness** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/04-dynamic-and-robust/gdscg-degeneracy-robustness.mdx`
+- [ ] 🔴 P1 **04-dynamic-and-robust/gdscg-dynamization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/04-dynamic-and-robust/gdscg-dynamization.mdx`
+- [ ] 🔴 P1 **04-dynamic-and-robust/gdscg-kinetic-data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+    - 路径：`content/geometric-data-structures/04-dynamic-and-robust/gdscg-kinetic-data-structures.mdx`
+
+## go-web-programming（12 章 · ❌12 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/gwp-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/go-web-programming/00-guide/gwp-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/gwp-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/go-web-programming/06-review/gwp-final-review.mdx`
+- [ ] 🔴 P1 **03-display-data/gwp-templates** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/go-web-programming/03-display-data/gwp-templates.mdx`
+- [ ] 🔴 P1 **04-service-testing/gwp-json-api** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/go-web-programming/04-service-testing/gwp-json-api.mdx`
+- [ ] 🔴 P1 **05-runtime-release/gwp-deployment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+    - 路径：`content/go-web-programming/05-runtime-release/gwp-deployment.mdx`
+- [ ] 🔴 P1 **02-request-response/gwp-processing-requests** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/go-web-programming/02-request-response/gwp-processing-requests.mdx`
+- [ ] 🔴 P1 **05-runtime-release/gwp-concurrency** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+    - 路径：`content/go-web-programming/05-runtime-release/gwp-concurrency.mdx`
+- [ ] 🔴 P1 **04-service-testing/gwp-testing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+    - 路径：`content/go-web-programming/04-service-testing/gwp-testing.mdx`
+- [ ] 🔴 P1 **01-foundations/gwp-chitchat** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/go-web-programming/01-foundations/gwp-chitchat.mdx`
+- [ ] 🔴 P1 **01-foundations/gwp-http-basics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/go-web-programming/01-foundations/gwp-http-basics.mdx`
+- [ ] 🔴 P1 **02-request-response/gwp-routing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/go-web-programming/02-request-response/gwp-routing.mdx`
+- [ ] 🔴 P1 **03-display-data/gwp-database** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 29）
+    - 路径：`content/go-web-programming/03-display-data/gwp-database.mdx`
+
+## mindset-growth（12 章 · ❌12 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/msg17-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mindset-growth/00-map/msg17-official-learning-map.mdx`
+- [ ] 🔴 P1 **11-review/msg17-official-final-review** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/mindset-growth/11-review/msg17-official-final-review.mdx`
+- [ ] 🔴 P1 **01-introduction/msg17-introduction** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/01-introduction/msg17-introduction.mdx`
+- [ ] 🔴 P1 **02-chapter-01/msg17-chapter-01** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/02-chapter-01/msg17-chapter-01.mdx`
+- [ ] 🔴 P1 **03-chapter-02/msg17-chapter-02** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/03-chapter-02/msg17-chapter-02.mdx`
+- [ ] 🔴 P1 **04-chapter-03/msg17-chapter-03** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/04-chapter-03/msg17-chapter-03.mdx`
+- [ ] 🔴 P1 **05-chapter-04/msg17-chapter-04** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/05-chapter-04/msg17-chapter-04.mdx`
+- [ ] 🔴 P1 **06-chapter-05/msg17-chapter-05** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/06-chapter-05/msg17-chapter-05.mdx`
+- [ ] 🔴 P1 **07-chapter-06/msg17-chapter-06** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/07-chapter-06/msg17-chapter-06.mdx`
+- [ ] 🔴 P1 **08-chapter-07/msg17-chapter-07** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/08-chapter-07/msg17-chapter-07.mdx`
+- [ ] 🔴 P1 **09-chapter-08/msg17-chapter-08** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/09-chapter-08/msg17-chapter-08.mdx`
+- [ ] 🔴 P1 **10-postscript/msg17-publishing-postscript** — 缺/多 Objectives、缺/多 Attribution、跨章/书模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/mindset-growth/10-postscript/msg17-publishing-postscript.mdx`
+
+## unity-game-optimization（12 章 · ❌2 ⚠️10 ✅0）
+
+- [ ] 🔴 P1 **00-guide/ugo-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-game-optimization/00-guide/ugo-official-learning-map.mdx`
+- [ ] 🔴 P1 **05-review/ugo-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-game-optimization/05-review/ugo-official-final-review.mdx`
+- [ ] 🟡 P3 **graphical-optimizations/faster-physics** — 未升级 v2、可视化不足、UX 不足（score 78）
+    - 路径：`content/unity-game-optimization/graphical-optimizations/faster-physics.mdx`
+- [ ] 🟡 P3 **base-scripting/scripting-strategies** — 未升级 v2、可视化不足、UX 不足（score 75）
+    - 路径：`content/unity-game-optimization/base-scripting/scripting-strategies.mdx`
+- [ ] 🟡 P3 **graphical-optimizations/optimizing-art-assets** — 未升级 v2、来源不足、可视化不足、UX 不足（score 75）
+    - 路径：`content/unity-game-optimization/graphical-optimizations/optimizing-art-assets.mdx`
+- [ ] 🟡 P3 **graphical-optimizations/benefits-of-batching** — 未升级 v2、来源不足、可视化不足、UX 不足（score 73）
+    - 路径：`content/unity-game-optimization/graphical-optimizations/benefits-of-batching.mdx`
+- [ ] 🟡 P3 **base-scripting/evaluating-performance-problems** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 72）
+    - 路径：`content/unity-game-optimization/base-scripting/evaluating-performance-problems.mdx`
+- [ ] 🟡 P3 **advanced-optimizations/memory-management** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 71）
+    - 路径：`content/unity-game-optimization/advanced-optimizations/memory-management.mdx`
+- [ ] 🟡 P3 **advanced-optimizations/xr-optimizations** — 未升级 v2、来源不足、可视化不足、UX 不足（score 71）
+    - 路径：`content/unity-game-optimization/advanced-optimizations/xr-optimizations.mdx`
+- [ ] 🟡 P3 **graphical-optimizations/dynamic-graphics** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 69）
+    - 路径：`content/unity-game-optimization/graphical-optimizations/dynamic-graphics.mdx`
+- [ ] 🟡 P3 **advanced-optimizations/data-oriented-technology-stack** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 68）
+    - 路径：`content/unity-game-optimization/advanced-optimizations/data-oriented-technology-stack.mdx`
+- [ ] 🟡 P3 **advanced-optimizations/tactical-tips-and-tricks** — 未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 57）
+    - 路径：`content/unity-game-optimization/advanced-optimizations/tactical-tips-and-tricks.mdx`
+
+## unity-scripting（12 章 · ❌12 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/usc-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-scripting/00-guide/usc-official-learning-map.mdx`
+- [ ] 🔴 P1 **06-review/usc-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/unity-scripting/06-review/usc-official-final-review.mdx`
+- [ ] 🔴 P1 **02-world-events/usc-04-event-driven-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/02-world-events/usc-04-event-driven-programming.mdx`
+- [ ] 🔴 P1 **03-render-data/usc-06-working-with-mono** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/03-render-data/usc-06-working-with-mono.mdx`
+- [ ] 🔴 P1 **04-ai-editor/usc-07-artificial-intelligence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/04-ai-editor/usc-07-artificial-intelligence.mdx`
+- [ ] 🔴 P1 **04-ai-editor/usc-08-customizing-unity-editor** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/04-ai-editor/usc-08-customizing-unity-editor.mdx`
+- [ ] 🔴 P1 **05-assets-delivery/usc-09-textures-models-2d** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/05-assets-delivery/usc-09-textures-models-2d.mdx`
+- [ ] 🔴 P1 **05-assets-delivery/usc-10-source-control-other-tips** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+    - 路径：`content/unity-scripting/05-assets-delivery/usc-10-source-control-other-tips.mdx`
+- [ ] 🔴 P1 **01-language-debug/usc-01-unity-csharp-refresher** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-scripting/01-language-debug/usc-01-unity-csharp-refresher.mdx`
+- [ ] 🔴 P1 **01-language-debug/usc-02-debugging** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-scripting/01-language-debug/usc-02-debugging.mdx`
+- [ ] 🔴 P1 **02-world-events/usc-03-singletons-statics-gameobjects-world** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+    - 路径：`content/unity-scripting/02-world-events/usc-03-singletons-statics-gameobjects-world.mdx`
+- [ ] 🔴 P1 **03-render-data/usc-05-cameras-rendering-scenes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+    - 路径：`content/unity-scripting/03-render-data/usc-05-cameras-rendering-scenes.mdx`
+
+## code-quality-refactoring（11 章 · ❌11 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-intro/learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/code-quality-refactoring/00-intro/learning-map.mdx`
+- [ ] 🔴 P1 **01-clean-code/classes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+    - 路径：`content/code-quality-refactoring/01-clean-code/classes.mdx`
+- [ ] 🔴 P1 **01-clean-code/functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/code-quality-refactoring/01-clean-code/functions.mdx`
+- [ ] 🔴 P1 **01-clean-code/naming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 51）
+    - 路径：`content/code-quality-refactoring/01-clean-code/naming.mdx`
+- [ ] 🔴 P1 **02-refactoring/refactoring-techniques** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 50）
+    - 路径：`content/code-quality-refactoring/02-refactoring/refactoring-techniques.mdx`
+- [ ] 🔴 P1 **00-intro/intro** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/code-quality-refactoring/00-intro/intro.mdx`
+- [ ] 🔴 P1 **01-clean-code/comments-format** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/code-quality-refactoring/01-clean-code/comments-format.mdx`
+- [ ] 🔴 P1 **01-clean-code/error-handling** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/code-quality-refactoring/01-clean-code/error-handling.mdx`
+- [ ] 🔴 P1 **01-clean-code/testing** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/code-quality-refactoring/01-clean-code/testing.mdx`
+- [ ] 🔴 P1 **02-refactoring/code-smells** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 49）
+    - 路径：`content/code-quality-refactoring/02-refactoring/code-smells.mdx`
+- [ ] 🔴 P1 **02-refactoring/final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/code-quality-refactoring/02-refactoring/final-review.mdx`
+
+## linux-os-practice（11 章 · ❌11 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-guide/lop-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/linux-os-practice/00-guide/lop-official-learning-map.mdx`
+- [ ] 🔴 P1 **07-review/lop-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+    - 路径：`content/linux-os-practice/07-review/lop-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foundation/lop-01-recognizing-linux** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/01-foundation/lop-01-recognizing-linux.mdx`
+- [ ] 🔴 P1 **01-foundation/lop-02-using-linux** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/01-foundation/lop-02-using-linux.mdx`
+- [ ] 🔴 P1 **02-administration/lop-03-user-management** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/02-administration/lop-03-user-management.mdx`
+- [ ] 🔴 P1 **02-administration/lop-04-software-management** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/02-administration/lop-04-software-management.mdx`
+- [ ] 🔴 P1 **03-development/lop-05-programming-environment** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/03-development/lop-05-programming-environment.mdx`
+- [ ] 🔴 P1 **04-network/lop-06-network-configuration** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/04-network/lop-06-network-configuration.mdx`
+- [ ] 🔴 P1 **05-automation/lop-07-shell-programming** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/05-automation/lop-07-shell-programming.mdx`
+- [ ] 🔴 P1 **05-automation/lop-08-regular-expressions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/05-automation/lop-08-regular-expressions.mdx`
+- [ ] 🔴 P1 **06-project/lop-09-tetris-project** — 缺/多 Objectives、缺/多 Attribution、章内模板重复、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+    - 路径：`content/linux-os-practice/06-project/lop-09-tetris-project.mdx`
+
+## soa-vehicle-architecture（11 章 · ❌11 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/aes23-official-learning-map** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/soa-vehicle-architecture/00-map/aes23-official-learning-map.mdx`
+- [ ] 🔴 P1 **10-review/aes23-official-final-review** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 56）
+    - 路径：`content/soa-vehicle-architecture/10-review/aes23-official-final-review.mdx`
+- [ ] 🔴 P1 **01-foreword/aes23-foreword** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/01-foreword/aes23-foreword.mdx`
+- [ ] 🔴 P1 **02-preface/aes23-preface** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/02-preface/aes23-preface.mdx`
+- [ ] 🔴 P1 **03-01-architecture/aes23-01-architecture** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/03-01-architecture/aes23-01-architecture.mdx`
+- [ ] 🔴 P1 **04-02-networks/aes23-02-networks** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/04-02-networks/aes23-02-networks.mdx`
+- [ ] 🔴 P1 **05-03-software/aes23-03-software** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/05-03-software/aes23-03-software.mdx`
+- [ ] 🔴 P1 **06-04-soa/aes23-04-soa** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/06-04-soa/aes23-04-soa.mdx`
+- [ ] 🔴 P1 **07-05-development-ota/aes23-05-development-ota** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/07-05-development-ota/aes23-05-development-ota.mdx`
+- [ ] 🔴 P1 **08-afterword/aes23-afterword** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/08-afterword/aes23-afterword.mdx`
+- [ ] 🔴 P1 **09-references/aes23-references** — 缺/多 Objectives、跨章/书模板重复、未升级 v2、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 53）
+    - 路径：`content/soa-vehicle-architecture/09-references/aes23-references.mdx`
+
+## ai-agent（9 章 · ❌9 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **foundations/agent-anatomy** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/foundations/agent-anatomy.mdx`
+- [ ] 🔴 P1 **foundations/chatbot-to-agent** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/foundations/chatbot-to-agent.mdx`
+- [ ] 🔴 P1 **foundations/llm-as-brain** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/foundations/llm-as-brain.mdx`
+- [ ] 🔴 P1 **llm/prompt-engineering** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/llm/prompt-engineering.mdx`
+- [ ] 🔴 P1 **llm/sampling-decoding** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/llm/sampling-decoding.mdx`
+- [ ] 🔴 P1 **llm/structured-output** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/llm/structured-output.mdx`
+- [ ] 🔴 P1 **tools/function-calling** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/tools/function-calling.mdx`
+- [ ] 🔴 P1 **tools/react-loop** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/tools/react-loop.mdx`
+- [ ] 🔴 P1 **tools/tool-design** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/ai-agent/tools/tool-design.mdx`
+
+## llm-app-dev-essentials（9 章 · ❌9 ⚠️0 ✅0）
+
+- [ ] 🔴 P1 **00-map/lae-official-learning-map** — 缺视觉证据、UX 不足（score 89）
+    - 路径：`content/llm-app-dev-essentials/00-map/lae-official-learning-map.mdx`
+- [ ] 🔴 P1 **08-review/lae-official-final-review** — 缺视觉证据、UX 不足（score 89）
+    - 路径：`content/llm-app-dev-essentials/08-review/lae-official-final-review.mdx`
+- [ ] 🔴 P1 **02-essentials/lae-01-gpt4-chatgpt-essentials** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/llm-app-dev-essentials/02-essentials/lae-01-gpt4-chatgpt-essentials.mdx`
+- [ ] 🔴 P1 **03-api/lae-02-api-deep-dive** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/llm-app-dev-essentials/03-api/lae-02-api-deep-dive.mdx`
+- [ ] 🔴 P1 **04-apps/lae-03-building-apps** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/llm-app-dev-essentials/04-apps/lae-03-building-apps.mdx`
+- [ ] 🔴 P1 **05-advanced/lae-04-advanced-techniques** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/llm-app-dev-essentials/05-advanced/lae-04-advanced-techniques.mdx`
+- [ ] 🔴 P1 **06-frameworks/lae-05-langchain-plugins** — 缺视觉证据、UX 不足（score 88）
+    - 路径：`content/llm-app-dev-essentials/06-frameworks/lae-05-langchain-plugins.mdx`
+- [ ] 🔴 P1 **01-preface/lae-preface** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/llm-app-dev-essentials/01-preface/lae-preface.mdx`
+- [ ] 🔴 P1 **07-glossary/lae-glossary** — 缺视觉证据、UX 不足（score 87）
+    - 路径：`content/llm-app-dev-essentials/07-glossary/lae-glossary.mdx`
+
+---
+
+## 统计
+
+- 涉及书籍：138 本
+- 待处理章节：3034 章
+- 处理顺序：按 P1（硬阻断）优先，P2 次之，P3 最后
