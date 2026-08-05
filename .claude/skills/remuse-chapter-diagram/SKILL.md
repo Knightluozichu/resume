@@ -229,6 +229,10 @@ curl -s -o /dev/null -w "render:%{http_code}\n" --max-time 90 "http://localhost:
 # 必须 render:200
 
 # 3. 视觉巡检
+# 修复单章：只巡检该章（秒级完成，其他章结果保留——audit 只查 hash 变化的章）
+pnpm quality:visual -- --book <book-slug> --chapter <chapter-slug>
+# 必须 checked=1 failed=0 PASS
+# 部署整书：必须全量巡检（发布门禁要求全书视觉证据）
 pnpm quality:visual -- --book <book-slug>
 # 必须 checked=N failed=0 全部 PASS
 

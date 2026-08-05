@@ -8,16 +8,29 @@ demo: true
 math: false
 sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/67_StringToInt/StringToInt.cpp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
+
+<Objectives>
+
+- 能解释"返回值+状态"接口如何区分合法 0 与转换失败
+- 能实现全串十进制解析（符号、逐位累加、32 位溢出判断）
+- 能说明负数沿负方向累加与上下界不对称的原因
+
+</Objectives>
+
+{/* CIV2_QUALITY */}
 
 import { StringToIntContractDiagram, StringToIntBoundaryMap, StringToIntValidityDiagram } from "@/components/mdx/coding-interviews/diagrams/string-to-int";
 
 
 ## 从“结果是0”为什么仍没有答案开始
 
-题目要求编写StrToInt，把字符串转换成整数，且不能使用atoi或类似库函数。真正困难的不是把字符减去字符0，而是先回答：输入“0”当然应得到0，那么空指针、空串、只有符号、夹杂字母或发生溢出时也返回0，调用者如何知道这次转换是否成功？
+题目要求编写StrToInt，把字符串转换成整数，且不能使用<Term term="atoi">atoi</Term>或类似库函数。真正困难的不是把字符减去字符0，而是先回答：输入“0”当然应得到0，那么空指针、空串、只有符号、夹杂字母或发生<Term term="溢出">溢出</Term>时也返回0，调用者如何知道这次转换是否成功？
 
-作者的答案是“返回值加状态”：函数返回整数，同时用全局变量g_nStatus记录kValid或kInvalid。输入“+0”和“-0”返回0且状态有效；输入空串和“1a33”也返回0，但状态无效。这个才补全了接口语义。
+作者的答案是“返回值加状态”：函数返回整数，同时用<Term term="状态码">全局变量 g_nStatus</Term>记录kValid或kInvalid。输入“+0”和“-0”返回0且状态有效；输入空串和“1a33”也返回0，但状态无效。这个才补全了接口语义。
 
 <StringToIntValidityDiagram />
 
@@ -35,11 +48,27 @@ import { StringToIntContractDiagram, StringToIntBoundaryMap, StringToIntValidity
 5. 目标整数位宽是多少，越界时返回错误、饱和、抛异常还是采用其他协议。
 6. 合法整数0与失败如何区分，接口是否允许状态、布尔值或结果类型。
 
-作者源码已经给出具体回答：目标是32位有符号int；允许一个开头符号；不接受任何空白或其他字符；必须消费完整字符串；越界和格式错误都返回0并置kInvalid。把每个字符都验证完才成功，称为。
+作者源码已经给出具体回答：目标是32位有符号int；允许一个开头符号；不接受任何空白或其他字符；必须消费完整字符串；越界和格式错误都返回0并置kInvalid。把每个字符都验证完才成功，称为<Term term="全串解析">全串解析</Term>。
 
 <StringToIntContractDiagram />
 
-这套合同与标准atoi并不相同。atoi会做空白和前缀处理，而且无法通过返回值报告错误；现代from_chars可以返回结束指针与错误码，但调用者仍要检查结束指针是否到达字符串末尾，才能实现作者的全串语义。面试沟通的目的就是先冻结这些差异。
+这套合同与标准atoi并不相同。atoi会做空白和前缀处理，而且无法通过返回值报告错误；现代<Term term="from_chars">from_chars</Term>可以返回结束指针与错误码，但调用者仍要检查结束指针是否到达字符串末尾，才能实现作者的全串语义。面试沟通的目的就是先冻结这些差异。
+
+<Callout type="trap" title="常见误区">
+
+- **现象**：空串、非法字符、溢出都返回 0，调用者无法区分"合法 0"与"转换失败"。
+- **原因**：只返回整数，丢了状态信息。
+- **修法**：用状态码（g_nStatus 或 Result 结构）显式表达转换是否有效。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+- **现象**：用"绝对值比较"判断溢出，正负上下界不对称导致漏判。
+- **原因**：32 位有符号整数正界比负界小 1（2147483647 vs -2147483648）。
+- **修法**：负数沿负方向累加，用负数下界统一判断，避免正界+1溢出。
+
+</Callout>
 
 ## 作者入口函数：默认失败，成功后再提交
 
@@ -127,7 +156,7 @@ long long StrToIntCore(
 
 作者先用long long承接累计值，再判断32位范围，因此首次越过int边界时long long仍足够容纳。不过源码把无符号十六进制常量0x80000000强制转成signed int，超出signed int正范围后的转换结果由实现定义；在作者使用的32位补码环境中得到INT_MIN，但可移植代码应直接使用INT_MIN或显式的固定宽度边界。
 
-## 上下界不是镜像
+## <Term term="边界">上下界</Term>不是镜像
 
 <StringToIntBoundaryMap />
 
@@ -282,6 +311,36 @@ void testAuthorContract() {
 ## 从需求到验证的完整路径
 
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** 为什么空串和合法 "0" 都返回 0 时，必须额外用状态区分？
+
+<Answer>
+
+只返回整数时，调用者无法区分"转换得到 0"与"转换失败"。用 g_nStatus（kValid/kInvalid）或 Result 结构显式表达，才能补全接口语义。
+
+</Answer>
+
+**问题 2：** 解释"负数沿负方向累加"如何统一处理溢出判断。
+
+<Answer>
+
+负数累加用负下界 -2147483648 判断，避免正界 2147483647 +1 自身溢出的问题；正负上下界不对称（差 1）由此天然处理。
+
+</Answer>
+
+**问题 3：** 列出至少 3 类必须覆盖的边界输入。
+
+<Answer>
+
+空指针/空串、只有符号（+/-）、前导空格、夹杂字母、正负 32 位边界（2147483647/-2147483648）、溢出输入等。
+
+</Answer>
+
+</Exercises>
+
 ## 本章回顾
 
 1. 把字符串转换成整数首先是协议题，其次才是字符累加题。
@@ -297,4 +356,16 @@ void testAuthorContract() {
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="状态码">记录转换是否有效的标志，如 g_nStatus 的 kValid/kInvalid，区分合法 0 与失败。</GlossaryItem>
+  <GlossaryItem term="溢出">结果超出目标类型可表示范围，32 位有符号整数正界 2147483647、负界 -2147483648。</GlossaryItem>
+  <GlossaryItem term="边界">输入或数值的极限情形，如空串、仅符号、正负最大值，决定解析正确性。</GlossaryItem>
+  <GlossaryItem term="全串解析">必须消费完整输入字符串才返回成功，任何未消费字符都视为失败。</GlossaryItem>
+  <GlossaryItem term="from_chars">C++17 字符转换函数，返回结束指针与错误码，仍需检查是否到达末尾。</GlossaryItem>
+  <GlossaryItem term="atoi">C 标准库字符串转整数函数，做空白和前缀处理，但无法报告转换错误。</GlossaryItem>
+</Glossary>
 
+<Attribution
+  adaptedFrom="何海涛《剑指 Offer——名企面试官精讲典型编程题（第2版）》"
+  adaptedUrl="https://cbjj.phei.com.cn/module/goods/wssd_content_comment.jsp?bookid=49304"
+/>

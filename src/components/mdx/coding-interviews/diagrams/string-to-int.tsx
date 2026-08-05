@@ -34,7 +34,7 @@ export function StringToIntContractDiagram() {
               <text x={cx(i) + 22} y={91} textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--accent)">{p.index}</text>
               <text x={cx(i) + 44} y={91} fontSize="13" fontWeight="800" fill="var(--text-primary)">{p.title}</text>
               <text x={cx(i) + cardW / 2} y={130} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="var(--accent)">{p.rule}</text>
-              <text x={cx(i) + cardW / 2} y={160} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{p.reason}</text>
+              <text x={cx(i) + cardW / 2} y={160} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{p.reason}</text>
               {i < phases.length - 1 && <path d={`M ${cx(i) + cardW} ${64 + cardH / 2} L ${cx(i + 1)} ${64 + cardH / 2}`} stroke="var(--accent)" strokeWidth="1.6" markerEnd="url(#si-arrow)" />}
             </g>
           ))}
@@ -63,7 +63,7 @@ export function StringToIntBoundaryMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[850px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["输入", "累加结果", "范围判断", "位置", "作者结果"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 4 ? (cell === "有效" ? "font-semibold text-success" : "font-semibold text-danger") : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 4 ? (cell === "有效" ? "font-semibold text-success" : "font-semibold text-danger") : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
