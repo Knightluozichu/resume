@@ -10709,7 +10709,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-14-component");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppComponentLab: module0.GppComponentLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/21-chapter-15-event-queue/gpp-chapter-15-event-queue":
@@ -10733,7 +10733,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-17-data-locality");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppDataLocalityLab: module0.GppDataLocalityLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/25-chapter-18-dirty-flag/gpp-chapter-18-dirty-flag":
@@ -10741,7 +10741,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-18-dirty-flag");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppDirtyFlagLab: module0.GppDirtyFlagLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/26-chapter-19-object-pool/gpp-chapter-19-object-pool":
@@ -10749,7 +10749,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-19-object-pool");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppObjectPoolLab: module0.GppObjectPoolLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/27-chapter-20-spatial-partition/gpp-chapter-20-spatial-partition":
@@ -10757,7 +10757,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-20-spatial-partition");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppSpatialPartitionLab: module0.GppSpatialPartitionLab,
       } as ChapterMdxComponents;
     },
   "game-server-programming/00-guide/gsp-official-learning-map": async () => {

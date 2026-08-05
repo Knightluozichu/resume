@@ -6659,3 +6659,5 @@
 - 批次R2（Ch06/07/08/09/10）：Singleton、State、DoubleBuffer、GameLoop、UpdateMethod — ✅
 - 批次R3（Ch11/12/13/15/16）：Bytecode、SubclassSandbox、TypeObject、EventQueue、ServiceLocator — ✅
 全部定制组件（专属隐喻+单accent）+ 4术语表 + 动画引导 + 练习矩阵；TSC=0、巡检 29/29 PASS
+
+- 批次R4（Ch14/17/18/19/20）：Component、DataLocality、DirtyFlag、ObjectPool、SpatialPartition - 全部 20 模式章节完成
