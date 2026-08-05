@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { compileMDX } from "next-mdx-remote/rsc";
 import rehypeKatex from "rehype-katex";
 import rehypePrettyCode, {
@@ -67,9 +67,17 @@ export function generateStaticParams(): Params[] {
   // 无法预览（getChapter / getChapterTree 已是同一 NODE_ENV 条件）。生产构建仍只产出
   // 非草稿章（includeDraft 默认 false），硬规则 7 不受影响。
   const includeDraft = process.env.NODE_ENV !== "production";
-  return getAllChapters({ includeDraft }).map((c) => ({
+  const chapters = getAllChapters({ includeDraft });
+  const params: Params[] = chapters.map((c) => ({
     slug: [c.bookSlug, c.sectionSlug, c.chapterSlug],
   }));
+  // 额外枚举书籍根路径（/learn/<book> 两段式）：让 resolveBookRoot 的
+  // redirect 逻辑可达——否则 dynamicParams=false 会在 params 解析阶段直接 404。
+  const books = new Set(chapters.map((c) => c.bookSlug));
+  for (const book of books) {
+    params.push({ slug: [book] });
+  }
+  return params;
 }
 
 function resolveChapter(slug: string[]) {
@@ -77,6 +85,22 @@ function resolveChapter(slug: string[]) {
   if (slug.length !== 3) return null;
   const [bookSlug, sectionSlug, chapterSlug] = slug;
   return getChapter(bookSlug, sectionSlug, chapterSlug);
+}
+
+/**
+ * 书籍根路径（/learn/<book>）兜底：重定向到该书第一个章节，
+ * 避免“书打不开”的误判（HEL-48 书化：目录页未建，根路径无独立页面）。
+ * 若该书不存在或没有章节，返回 null 走 404。
+ */
+function resolveBookRoot(slug: string[]) {
+  if (slug.length !== 1) return null;
+  const [bookSlug] = slug;
+  const chapters = getAllChapters({ includeDraft: process.env.NODE_ENV !== "production" });
+  const first = chapters
+    .filter((c) => c.bookSlug === bookSlug)
+    .sort((a, b) => a.frontmatter.order - b.frontmatter.order)[0];
+  if (!first) return null;
+  return `/learn/${first.bookSlug}/${first.sectionSlug}/${first.chapterSlug}`;
 }
 
 export async function generateMetadata({
@@ -99,6 +123,12 @@ export default async function ChapterPage({
   params: Promise<Params>;
 }) {
   const { slug } = await params;
+  // 书籍根路径 /learn/<book> → 跳转到该书第一章
+  if (slug.length === 1) {
+    const target = resolveBookRoot(slug);
+    if (target) redirect(target);
+    notFound();
+  }
   const chapter = resolveChapter(slug);
   if (!chapter) notFound();
 
