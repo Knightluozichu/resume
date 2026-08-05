@@ -61,7 +61,7 @@ export function BinaryExponentStateMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[680px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["轮次", "剩余指数", "累计结果", "当前因子"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index===2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index===2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">迭代版按指数二进制位选择因子，result始终保存已处理位的乘积。</figcaption>
@@ -82,7 +82,7 @@ export function PowerContractMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[740px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["输入分类", "动作", "边界", "契约"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index===3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index===3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">先分类定义域，再进入无符号指数核心，避免边界散落在循环中。</figcaption>

@@ -59,7 +59,7 @@ export function MirrorPairBoundaryMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[780px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["节点对", "语义", "返回/下一步"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">必须先比较空状态，再读取value和孩子，才能同时保证结构与内容对称。</figcaption>
@@ -79,7 +79,7 @@ export function SymmetricShapeCounterexampleDiagram() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[800px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["结构", "方向", "值", "结论"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">全值相同仍可能不对称；空孩子的镜像位置是结构信息的一部分。</figcaption>

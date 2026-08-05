@@ -49,7 +49,7 @@ export function PathBacktrackStateMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[860px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["事件", "currentSum", "path", "含义"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">进入节点时同时加和与压栈，离开节点时同时减和与弹栈；兄弟分支看见相同父路径状态。</figcaption>
@@ -70,7 +70,7 @@ export function RootLeafConditionMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[880px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["状态", "动作", "理由/用例"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 1 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">“和命中”与“到达叶子”是两个必须同时成立的条件；不能在内部节点提前接受。</figcaption>

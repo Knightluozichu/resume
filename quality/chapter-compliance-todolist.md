@@ -29,7 +29,7 @@
     - 路径：`content/coding-interviews/01-basics/singleton.mdx`
 - [x] ✅ **strings/string-to-int** — 已修复（2026-08-05，score 50→90，passed）
     - 路径：`content/coding-interviews/strings/string-to-int.mdx`
-- [ ] 🔴 P1 **linked-lists/kth-node-from-end** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 49）
+- [x] ✅ **linked-lists/kth-node-from-end** — 已修复（2026-08-05，score 49→90，passed）
     - 路径：`content/coding-interviews/linked-lists/kth-node-from-end.mdx`
 - [ ] 🔴 P1 **arrays/continous-cards** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
     - 路径：`content/coding-interviews/arrays/continous-cards.mdx`

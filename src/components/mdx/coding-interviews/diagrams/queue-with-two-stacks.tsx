@@ -96,7 +96,7 @@ export function QueueStateInvariantMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[720px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["状态", "队头位置", "deleteHead动作", "约束"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 2 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">两个栈共同表示一条逻辑队列，输出栈中的旧元素始终优先。</figcaption>

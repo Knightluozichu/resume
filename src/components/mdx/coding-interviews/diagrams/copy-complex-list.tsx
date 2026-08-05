@@ -44,7 +44,7 @@ export function ComplexSiblingMappingMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[880px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["原关系", "克隆赋值", "结论"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">随机指针可指向前方、后方、自身或形成环；只要目标属于next主链，紧邻映射都有效。</figcaption>
@@ -65,7 +65,7 @@ export function ComplexListSplitDiagram() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[900px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["阶段", "原链next", "克隆链next", "不变量"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={cell} className={"p-3 " + (index === 3 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 3 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">拆分不能只取奇数位；每次还要恢复原节点next，并把克隆节点next接到下一个克隆。</figcaption>

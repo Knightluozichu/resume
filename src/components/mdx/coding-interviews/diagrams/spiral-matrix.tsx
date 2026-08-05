@@ -75,7 +75,7 @@ export function SpiralEdgeConditionMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[860px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["边", "启用条件", "访问范围", "角点归属"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">四个条件并不对称：越晚打印的边，越要排除已被前面边覆盖的退化形状和角点。</figcaption>
@@ -95,7 +95,7 @@ export function SpiralStartInvariantDiagram() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[820px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["环编号", "起点", "终点", "含义"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rings.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 0 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rings.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 0 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">循环不变量：进入第start圈前，外侧start层已打印完，剩余区域左上角恰为(start,start)。</figcaption>

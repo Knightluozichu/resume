@@ -46,7 +46,7 @@ export function IntervalInvariantMap() {
   ] as const;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5"><table className="w-full min-w-[700px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">检查</th><th className="p-3 text-primary">前序</th><th className="p-3 text-primary">中序</th><th className="p-3 text-primary">要求</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,i) => <td key={cell} className={`p-3 ${i===3 ? "font-semibold text-accent" : "text-secondary"}`}>{cell}</td>)}</tr>)}</tbody></table></div>
+      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5"><table className="w-full min-w-[700px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">检查</th><th className="p-3 text-primary">前序</th><th className="p-3 text-primary">中序</th><th className="p-3 text-primary">要求</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,i) => <td key={`${row[0]}-${i}`} className={`p-3 ${i===3 ? "font-semibold text-accent" : "text-secondary"}`}>{cell}</td>)}</tr>)}</tbody></table></div>
       <figcaption className="mt-2 text-center text-sm text-secondary">递归不是只找根：每一层都要验证两种遍历描述的是同一批节点。</figcaption>
     </figure>
   );

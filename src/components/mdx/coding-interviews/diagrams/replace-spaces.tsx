@@ -60,7 +60,7 @@ export function CapacityFormulaMap() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
-        <table className="w-full min-w-[620px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">量</th><th className="p-3 text-primary">计算</th><th className="p-3 text-primary">边界含义</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, i) => <td key={cell} className={`p-3 ${i === 1 ? "font-mono text-accent" : "text-secondary"}`}>{cell}</td>)}</tr>)}</tbody></table>
+        <table className="w-full min-w-[620px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">量</th><th className="p-3 text-primary">计算</th><th className="p-3 text-primary">边界含义</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, i) => <td key={`${row[0]}-${i}`} className={`p-3 ${i === 1 ? "font-mono text-accent" : "text-secondary"}`}>{cell}</td>)}</tr>)}</tbody></table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">%20长度为3，但替换掉原有1个空格，所以每处只净增2；容量还要再留一个终止符。</figcaption>
     </figure>

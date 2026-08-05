@@ -80,7 +80,7 @@ export function StackTargetDecisionMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[860px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["状态", "唯一安全动作", "理由"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 1 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">模拟不是搜索全部操作树：目标与栈顶是否相等，已经决定了不会丢失解的动作。</figcaption>
@@ -101,7 +101,7 @@ export function StackSequenceCounterexampleDiagram() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[840px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["目标", "操作", "辅助栈", "状态"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 3 && (cell === "阻塞" || cell === "false") ? "font-semibold text-danger" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 3 && (cell === "阻塞" || cell === "false") ? "font-semibold text-danger" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">非法序列4,3,5,1,2的首个矛盾：2压在1上方，却要求1先弹出。</figcaption>

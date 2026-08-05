@@ -172,7 +172,7 @@ export function MajorityVerificationDiagram() {
             {rows.map((row) => (
               <tr key={row[0]} className="border-b border-border last:border-0">
                 {row.map((cell, index) => (
-                  <td key={cell} className={"p-3 " + (index === 3 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>
+                  <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 3 ? "font-semibold text-success" : "text-secondary")}>{cell}</td>
                 ))}
               </tr>
             ))}
@@ -210,7 +210,7 @@ export function MajorityInputContractDiagram() {
             {rows.map((row) => (
               <tr key={row[0]} className="border-b border-border last:border-0">
                 {row.map((cell, index) => (
-                  <td key={cell} className={"p-3 " + (index === 2 ? "font-semibold text-warning" : "text-secondary")}>{cell}</td>
+                  <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 2 ? "font-semibold text-warning" : "text-secondary")}>{cell}</td>
                 ))}
               </tr>
             ))}

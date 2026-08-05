@@ -515,7 +515,7 @@ export function PbtTransmittanceDiagram() {
               const heights = [44, 90, 56, 118, 72, 36];
               const h = heights[cell];
               return (
-                <g key={cell}>
+                <g key={`vol-${cell}`}>
                   <rect
                     x={26 + cell * 52}
                     y={165 - h}

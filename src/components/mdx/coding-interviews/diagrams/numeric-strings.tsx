@@ -31,7 +31,7 @@ export function NumericGrammarDiagram() {
         <div className="mb-4 text-center text-sm font-semibold text-primary">A[.[B]][e或EC]　或　.B[e或EC]</div>
         <table className="w-full min-w-[740px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["符号", "扫描器", "示例", "约束"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 0 ? "font-bold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 0 ? "font-bold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">A和C允许一个前导符号，B只扫描数字；小数点两侧至少一侧有数字。</figcaption>
@@ -52,7 +52,7 @@ export function NumericCursorInvariantMap() {
       <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5">
         <table className="w-full min-w-[780px] border-collapse text-left text-sm">
           <thead><tr className="border-b border-border">{["阶段", "进入时游标", "离开时游标", "不变量"].map((item) => <th key={item} className="p-3 text-primary">{item}</th>)}</tr></thead>
-          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={cell} className={"p-3 " + (index === 3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell, index) => <td key={`${row[0]}-${index}`} className={"p-3 " + (index === 3 ? "font-semibold text-accent" : "text-secondary")}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">每个扫描器既返回真假，也把共享游标推进到该语法单元之后。</figcaption>

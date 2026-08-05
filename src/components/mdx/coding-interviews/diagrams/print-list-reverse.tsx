@@ -46,7 +46,7 @@ export function OutputContractMap() {
   ] as const;
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5"><table className="w-full min-w-[620px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">维度</th><th className="p-3 text-primary">契约</th><th className="p-3 text-primary">验证</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell) => <td key={cell} className="p-3 text-secondary">{cell}</td>)}</tr>)}</tbody></table></div>
+      <div className="overflow-x-auto border border-border bg-elevated p-4 sm:p-5"><table className="w-full min-w-[620px] border-collapse text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-primary">维度</th><th className="p-3 text-primary">契约</th><th className="p-3 text-primary">验证</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell) => <td key={`${row[0]}-${cell}`} className="p-3 text-secondary">{cell}</td>)}</tr>)}</tbody></table></div>
       <figcaption className="mt-2 text-center text-sm text-secondary">把“打印”抽象为值序列或回调，才能测试顺序并与终端I/O解耦。</figcaption>
     </figure>
   );
