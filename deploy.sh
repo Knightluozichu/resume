@@ -40,8 +40,11 @@ COMMIT_SHA="$(git rev-parse HEAD)"
 RELEASE_ID="release-$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT_SHA:0:12}"
 RELEASE_DIR="${APP_DIR}/releases/${RELEASE_ID}"
 
-# 在耗时构建和远端切换前确认整本书已经通过门禁，避免发布完成后才发现
-# 本地台账不可登记。
+# 在耗时构建和远端切换前跑完整发布门禁（P0 方案 F）：
+#  invariants（白名单/ledger/内容一致）→ audit --check（实时）→ visual（渲染+hash）
+#  → tsc → internal-links。任一失败即停，杜绝“状态过期越狱”。
+node scripts/pre-publish-gate.mjs --book "$BOOK_SLUG"
+# 门禁通过后，再把书标记为可发布（check 模式验证 ledger 已更新到 passed）
 node scripts/mark-book-published.mjs --check --book "$BOOK_SLUG"
 
 SMOKE_PATHS=("/")
