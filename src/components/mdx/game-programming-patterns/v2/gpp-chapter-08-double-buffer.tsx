@@ -1,3 +1,3 @@
 "use client";
 
-export { GppPatternLab } from "../gpp-pattern-lab";
+export { GppDoubleBufferLab } from "../gpp-double-buffer-lab";

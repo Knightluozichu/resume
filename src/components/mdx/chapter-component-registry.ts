@@ -10645,7 +10645,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-06-singleton");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppSingletonLab: module0.GppSingletonLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/10-chapter-07-state/gpp-chapter-07-state":
@@ -10653,7 +10653,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-07-state");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppStateLab: module0.GppStateLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/12-chapter-08-double-buffer/gpp-chapter-08-double-buffer":
@@ -10661,7 +10661,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-08-double-buffer");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppDoubleBufferLab: module0.GppDoubleBufferLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/13-chapter-09-game-loop/gpp-chapter-09-game-loop":
@@ -10677,7 +10677,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-10-update-method");
       return {
-        GppPatternLab: module0.GppPatternLab,
+        GppUpdateMethodLab: module0.GppUpdateMethodLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/16-chapter-11-bytecode/gpp-chapter-11-bytecode":

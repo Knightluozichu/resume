@@ -1,3 +1,3 @@
 "use client";
 
-export { GppPatternLab } from "../gpp-pattern-lab";
+export { GppSingletonLab } from "../gpp-singleton-lab";
