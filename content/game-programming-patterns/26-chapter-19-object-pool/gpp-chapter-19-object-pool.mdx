@@ -20,11 +20,22 @@ import { GppObjectPoolLab } from "@/components/mdx/game-programming-patterns/v2/
 {/* GPP_QUALITY_V2 */}
 
 
+<Objectives>
+
+- 能画出池的取还流程
+- 能解释空闲列表的O(1)
+- 能制定复位契约与容量策略
+
+</Objectives>
+
 ## 为什么"19. Object Pool"从问题证据开始
 
 你的游戏要高频生成短命对象：弹幕、粒子、敌人尸体。最直觉的做法是"需要就 new，用完就 delete"。代码今天能跑，但两个问题浮现：**内存碎片**（频繁 new/delete 让堆变得坑坑洼洼，大对象分配变慢）、**GC/分配抖动**（有垃圾回收的语言，频繁分配触发 GC 暂停——游戏卡顿的来源）。
 
 本页把"无模式基线"定义为"高频 new/delete 短命对象"的代码，然后引入对象池作为候选机制，验证它是否真的让"分配与释放的开销消失"。通过条件是**对象创建不触发堆分配、销毁不触发堆释放**——而是从池里取、用、还。
+
+
+> 🔮 **猜一猜：并发子弹数超过池容量时，acquire 会怎样？**
 
 ## 来源、版本与独立重写边界
 
@@ -34,16 +45,36 @@ import { GppObjectPoolLab } from "@/components/mdx/game-programming-patterns/v2/
 
 理解 Object Pool 需要四个核心概念：
 
-- **对象池（object pool）**：预分配固定数量的对象槽位，运行时只做"取-还"——不碰堆。
+- <Term term="对象池">**对象池（object pool）**</Term>：预分配固定数量的对象槽位，运行时只做"取-还"——不碰堆。
 - **acquire/release**：从池中取空闲对象（acquire）与归还复位（release）——替代 new/delete。
-- **空闲列表（free list）**：池内"空闲槽"的链表/栈——O(1) 取还的关键结构。
-- **碎片化（fragmentation）**：高频 new/delete 导致堆内存零散——池化消灭它。
+- <Term term="空闲列表">**空闲列表（free list）**</Term>：池内"空闲槽"的链表/栈——O(1) 取还的关键结构。
+- <Term term="碎片化">**碎片化（fragmentation）**</Term>：高频 new/delete 导致堆内存零散——池化消灭它。
 
 四个概念共同约束"预分配固定槽位并复用短命对象，控制碎片和运行时分配"：任何结论都必须回到"运行时是否零分配、槽位是否够用、复用是否正确复位"三个可观察量。
 
 <GppObjectPoolLab />
 
 > 💡 **对着动画看**：动画上方是 BulletPool——预分配 6 个槽（白色=空闲，红色=使用中），下方"发射：acquire()"与"爆炸：release()"两个动作框。注意 acquire 取的是**空闲槽**（不是新内存），release 做的是**复位**（不是释放）。读"自由列表"一节时，想象池里 6 个槽被反复取还——同一块内存服务了成千上万颗子弹。
+
+<Callout type="trap" title="常见误区">
+
+对象池误区：release 不复位状态——复用时残留旧对象数据。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+池容量按平均值定的坑：峰值时 acquire 失败——按峰值定。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+池跨场景不重建的误区：菜单还占战斗内存——按场景重建。
+
+</Callout>
+
+
 
 ## 官方结构逐项深读
 
@@ -138,12 +169,63 @@ reset -> initial state
 
 ## 本章练习与节点验证矩阵
 
-| 练习 | 操作 | 验证判据 |
-|---|---|---|
-| 分配对比 | 对比 new/delete 与对象池各发射一万颗子弹的耗时 | 池化版本零堆操作 → 分配开销消失 |
-| 容量上限 | 让并发子弹数超过池容量，观察 acquire 失败行为 | 按策略拒绝而非崩溃 → 上限处理正确 |
-| 复位验证 | release 后立即 acquire，检查对象状态是否残留旧值 | 状态干净 → 复位契约成立 |
-| 空闲列表 | 实现"遍历找空闲"与"自由列表"两种 acquire，对比复杂度 | 自由列表 O(1) 显著更快 → 自由列表生效 |
+<Exercises>
+
+**问题 1**：分配对比。
+
+**操作**：对比 new/delete 与对象池各发射一万颗子弹的耗时
+
+<Answer>
+
+验证判据：池化版本零堆操作 → 分配开销消失
+
+</Answer>
+
+**问题 2**：容量上限。
+
+**操作**：让并发子弹数超过池容量，观察 acquire 失败行为
+
+<Answer>
+
+验证判据：按策略拒绝而非崩溃 → 上限处理正确
+
+</Answer>
+
+**问题 3**：复位验证。
+
+**操作**：release 后立即 acquire，检查对象状态是否残留旧值
+
+<Answer>
+
+验证判据：状态干净 → 复位契约成立
+
+</Answer>
+
+**问题 4**：空闲列表。
+
+**操作**：实现"遍历找空闲"与"自由列表"两种 acquire，对比复杂度
+
+<Answer>
+
+验证判据：自由列表 O(1) 显著更快 → 自由列表生效
+
+</Answer>
+
+</Exercises>
+
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="对象池" />
+  <GlossaryItem term="空闲列表" />
+  <GlossaryItem term="碎片化" />
+</Glossary>
+
+
+## 练习答案参考
+
+练习判据即答案：每个练习的"验证判据"列给出了通过标准——先自己动手，再对照判据核验。
 
 ## 术语复核与本章回顾
 
@@ -155,3 +237,8 @@ reset -> initial state
 
 [← 上一页：18. Dirty Flag](/learn/game-programming-patterns/25-chapter-18-dirty-flag/gpp-chapter-18-dirty-flag) · [下一页：20. Spatial Partition →](/learn/game-programming-patterns/27-chapter-20-spatial-partition/gpp-chapter-20-spatial-partition)
 [← 上一页：18. Dirty Flag](/learn/game-programming-patterns/25-chapter-18-dirty-flag/gpp-chapter-18-dirty-flag) · [下一页：20. Spatial Partition →](/learn/game-programming-patterns/27-chapter-20-spatial-partition/gpp-chapter-20-spatial-partition)
+
+<Attribution
+  adaptedFrom="Robert Nystrom《Game Programming Patterns》（游戏编程模式）"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>

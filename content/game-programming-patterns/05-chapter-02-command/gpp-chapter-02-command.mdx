@@ -21,11 +21,22 @@ import { GppCommandLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 {/* GPP_QUALITY_V2 */}
 
 
+<Objectives>
+
+- 能画出 Command 模式的类关系
+- 能解释命令对象如何支持重绑定与撤销
+- 能用历史栈实现命令回放
+
+</Objectives>
+
 ## 为什么"2. Command"从问题证据开始
 
 最直觉的输入处理是：按键按下 → 直接调用角色方法 `player.jump()`。这段代码今天能跑，但明天你遇到三个需求就卡住了——**按键重绑定**（玩家想用空格跳、用 X 跳、用手柄跳）、**输入回放**（录一段操作重放给 AI 或测试）、**撤销**（按错键想退回上一步）。这三个需求有一个共同点：它们都需要"把一次输入变成一个可以传递、存储、重放的东西"，而直接调用方法做不到。
 
 本页把"无模式基线"定义为"按键直接调用方法"的代码，然后引入命令对象作为候选机制，验证它是否真的让重绑定、回放、撤销三个需求变成可实现。通过条件是**同一段输入流可以重绑定到不同按键、可以被录制重放、可以撤销**——而不是接口数量增加。
+
+
+> 🔮 **先预测：让 Player 执行 3 个命令再逐个撤销，状态能否精确回到初始？**
 
 ## 来源、版本与独立重写边界
 
@@ -35,16 +46,36 @@ import { GppCommandLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 
 理解 Command 需要四个核心概念：
 
-- **命令对象（command object）**：把"一次动作"封装成对象，含接收者引用与参数，暴露统一的 execute() 接口。
-- **调用者（invoker）**：持有命令并决定何时执行它的对象——输入系统、AI、回放器都是调用者。
-- **接收者（receiver）**：知道如何执行真实操作的对象（如 Player），命令只做转发。
-- **解耦（decoupling）**：调用者不认识接收者，只认识命令接口——这是重绑定、回放、撤销三种能力共同的根基。
+- <Term term="命令对象">**命令对象（command object）**</Term>：把"一次动作"封装成对象，含接收者引用与参数，暴露统一的 execute() 接口。
+- <Term term="调用者">**调用者（invoker）**</Term>：持有命令并决定何时执行它的对象——输入系统、AI、回放器都是调用者。
+- <Term term="接收者">**接收者（receiver）**</Term>：知道如何执行真实操作的对象（如 Player），命令只做转发。
+- <Term term="解耦">**解耦（decoupling）**</Term>：调用者不认识接收者，只认识命令接口——这是重绑定、回放、撤销三种能力共同的根基。
 
 四个概念共同约束"把输入动作对象化后再决定目标、执行时刻、撤销和重放"：任何结论都必须回到"命令能否被重绑定、能否被存储重放、能否被逆序撤销"三个可观察量。
 
 <GppCommandLab />
 
 > 💡 **对着动画看**：动画左栏是类关系（interface 虚框 + 实现类 + 调用者/接收者），右栏是执行管道——注意 JumpCommand 卡片沿泳道从 InputHandler 滑向 Player 的过程。这就是"命令即票据"：输入被转成票据，票据被传递、被记录，最后接收者按票据执行。读"撤销与重做"一节时，想想如果每个票据都留一份底单（历史栈），撤销就只是逆序结算底单。
+
+<Callout type="trap" title="常见误区">
+
+撤销实现最常见误区：undo 不是"删掉修改"而是"执行逆操作"——只回滚状态不回滚副作用会漏。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+命令不保存必要参数的误区：execute 时才发现缺少目标信息——命令必须自包含。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+撤销只回滚状态不回滚副作用的坑：undo 后音效/粒子残留——逆操作要覆盖所有影响。
+
+</Callout>
+
+
 
 ## 官方结构逐项深读
 
@@ -87,11 +118,53 @@ reset -> initial state
 
 ## 本章练习与节点验证矩阵
 
-| 练习 | 操作 | 验证判据 |
-|---|---|---|
-| 重绑定实验 | 在动画中想象把"空格"换成"X"键触发 JumpCommand | 只改键位表一项数据，角色行为不变 → 重绑定成功 |
-| 撤销实验 | 让 Player 依次执行 3 个命令，再逐个 undo | 状态按逆序精确回退到初始 → 撤销闭环成立 |
-| 回放实验 | 把一局输入的命令序列保存，重放到空场景 | 重放产生与现场完全相同的操作序列 → 回放能力成立 |
+<Exercises>
+
+**问题 1**：重绑定实验。
+
+**操作**：在动画中想象把"空格"换成"X"键触发 JumpCommand
+
+<Answer>
+
+验证判据：只改键位表一项数据，角色行为不变 → 重绑定成功
+
+</Answer>
+
+**问题 2**：撤销实验。
+
+**操作**：让 Player 依次执行 3 个命令，再逐个 undo
+
+<Answer>
+
+验证判据：状态按逆序精确回退到初始 → 撤销闭环成立
+
+</Answer>
+
+**问题 3**：回放实验。
+
+**操作**：把一局输入的命令序列保存，重放到空场景
+
+<Answer>
+
+验证判据：重放产生与现场完全相同的操作序列 → 回放能力成立
+
+</Answer>
+
+</Exercises>
+
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="命令对象" />
+  <GlossaryItem term="调用者" />
+  <GlossaryItem term="接收者" />
+</Glossary>
+
+
+## 练习答案参考
+
+练习判据即答案：每个练习的"验证判据"列给出了通过标准——先自己动手，再对照判据核验。
 
 ## 术语复核与本章回顾
 
@@ -102,3 +175,8 @@ reset -> initial state
 ## 阅读导航
 
 [← 上一页：II. Design Patterns Revisited](/learn/game-programming-patterns/04-design-patterns-revisited/gpp-design-patterns-revisited) · [下一页：3. Flyweight →](/learn/game-programming-patterns/06-chapter-03-flyweight/gpp-chapter-03-flyweight)
+
+<Attribution
+  adaptedFrom="Robert Nystrom《Game Programming Patterns》（游戏编程模式）"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>

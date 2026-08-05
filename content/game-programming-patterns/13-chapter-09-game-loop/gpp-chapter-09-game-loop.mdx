@@ -21,6 +21,14 @@ import { GppPatternLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 {/* GPP_QUALITY_V2 */}
 
 
+<Objectives>
+
+- 能画出游戏循环三阶段
+- 能对比可变与固定时间步
+- 能解释累积器与死亡螺旋
+
+</Objectives>
+
 ## 为什么"9. Game Loop"从问题证据开始
 
 游戏和办公软件的根本区别在于：**游戏世界在玩家不操作时也必须继续运转**。敌人仍在巡逻、天气仍在变化、NPC 仍在生活——所以游戏不能像 Word 那样"等用户动作才醒"，它必须有个永不停歇的循环在后台推进世界。
@@ -28,6 +36,9 @@ import { GppPatternLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 假设你写了一个最简单的循环：每次循环角色向前移动固定距离。问题立刻出现——**处理器越快，每帧跑得越快，角色就跑得越快**。同一款游戏在 60Hz 老机器上是"散步"，在 144Hz 新机器上就成了"冲刺"。这既不公平也不可复现：玩家的通关录像在另一台机器上完全对不上。本页要解决的，正是"如何让游戏世界的推进速度与机器速度无关"。
 
 我们先用"无模式基线"（帧率相关的移动量）做实验，记录真实时间、模拟时间、更新次数三个量，再逐级引入候选机制（固定步长、累积器、插值），验证它们是否真的改变了可观察结果。通过条件是：**相同真实时长内的模拟推进量与机器速度无关**——而不是类或接口数量增加。
+
+
+> 🔮 **猜一猜：固定步长单独用，帧率低时世界会怎样？（提示：欠账）**
 
 ## 来源、版本与独立重写边界
 
@@ -37,10 +48,10 @@ import { GppPatternLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 
 游戏循环涉及五个关键术语，理解它们才能看懂后面的推导：
 
-- **真实时间（wall clock）**：墙上时钟走的绝对时间，用 `gettimeofday` 之类系统调用读取，游戏无法控制它。
-- **模拟时间（game time）**：游戏世界内部的时钟。模拟推进了多少步、每步多长，由循环决定——这正是我们要控制的变量。
-- **固定步长（fixed dt）**：每次更新模拟都推进同样的时间量（如 16ms）。帧率只影响"一帧内更新几次"，不影响"单步走多远"。
-- **累积器（accumulator）**：把真实时间流逝量"存起来"，凑满一个固定步长就消耗掉执行一次更新，实现"更新频率与渲染频率解耦"。
+- <Term term="真实时间">**真实时间（wall clock）**</Term>：墙上时钟走的绝对时间，用 `gettimeofday` 之类系统调用读取，游戏无法控制它。
+- <Term term="模拟时间">**模拟时间（game time）**</Term>：游戏世界内部的时钟。模拟推进了多少步、每步多长，由循环决定——这正是我们要控制的变量。
+- <Term term="固定步长">**固定步长（fixed dt）**</Term>：每次更新模拟都推进同样的时间量（如 16ms）。帧率只影响"一帧内更新几次"，不影响"单步走多远"。
+- <Term term="累积器">**累积器（accumulator）**</Term>：把真实时间流逝量"存起来"，凑满一个固定步长就消耗掉执行一次更新，实现"更新频率与渲染频率解耦"。
 - **插值（interpolation）**：渲染时刻通常落在两次更新之间，用相邻两次更新的状态按比例混合，消除画面抖动。
 
 五个术语共同约束"把游戏时间推进与输入到达、处理器速度和渲染频率解耦"，任何结论都必须回到真实时间、模拟时间、更新次数、插值比例与帧分位数。
@@ -48,6 +59,26 @@ import { GppPatternLab } from "@/components/mdx/game-programming-patterns/v2/gpp
 <GppPatternLab chapter="09" />
 
 > 💡 **对着动画看**：先播一遍了解 ProcessInput → Update → Render 的三步循环。然后反复"下一步"停在 Update 阶段，想象它变慢（拖累整帧）：如果单步移动量固定，帧率一降，角色每秒移动的总距离就变短——这就是帧率依赖问题。记住这个画面，读下面各节时你会看到三种解法依次登场。
+
+<Callout type="trap" title="常见误区">
+
+游戏循环最经典的坑：可变时间步长让物理抖动量不守恒——快机器上游戏变快。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+update 与 render 共用同一可变步长的误区：插值失效——两者要分离。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+累积器无限增长的坑：没设 MAX_FRAME_TIME——死亡螺旋卡死引擎。
+
+</Callout>
+
+
 
 ## 官方结构逐项深读
 
@@ -196,12 +227,58 @@ reset -> initial state
 
 ## 本章练习与节点验证矩阵
 
-| 练习 | 操作 | 验证判据 |
-|---|---|---|
-| 帧率依赖实验 | 在上方动画中想象 Update 变慢，或用可变步长代码分别以 30/60/144fps 跑同一场景 | 角色每秒移动距离随帧率变化 → 复现帧率依赖问题 |
-| 累积器实验 | 给循环加 `accumulator += elapsed; while (accumulator >= dt) update(dt);` | 不同帧率下角色每秒移动距离相同 → 通过 |
-| 死亡螺旋注入 | 故意让 update 耗时超过 dt（如 sleep 20ms 而 dt=16ms） | 观察累积器无限增长 → 需加 `min(accumulator, MAX_FRAME_TIME)` 守卫 |
-| 插值平滑实验 | 在固定步长基础上对渲染做 alpha 混合 | 对比插值前后运动是否从"步进"变"平滑" |
+<Exercises>
+
+**问题 1**：帧率依赖实验。
+
+**操作**：在上方动画中想象 Update 变慢，或用可变步长代码分别以 30/60/144fps 跑同一场景
+
+<Answer>
+
+验证判据：角色每秒移动距离随帧率变化 → 复现帧率依赖问题
+
+</Answer>
+
+**问题 2**：累积器实验。
+
+**操作**：给循环加 `accumulator += elapsed; while (accumulator >= dt) update(dt);`
+
+<Answer>
+
+验证判据：不同帧率下角色每秒移动距离相同 → 通过
+
+</Answer>
+
+**问题 3**：死亡螺旋注入。
+
+**操作**：故意让 update 耗时超过 dt（如 sleep 20ms 而 dt=16ms）
+
+<Answer>
+
+验证判据：观察累积器无限增长 → 需加 `min(accumulator, MAX_FRAME_TIME)` 守卫
+
+</Answer>
+
+**问题 4**：插值平滑实验。
+
+**操作**：在固定步长基础上对渲染做 alpha 混合
+
+<Answer>
+
+验证判据：对比插值前后运动是否从"步进"变"平滑"
+
+</Answer>
+
+</Exercises>
+
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="真实时间" />
+  <GlossaryItem term="固定步长" />
+  <GlossaryItem term="累积器" />
+</Glossary>
 
 ## 术语复核与本章回顾
 
@@ -212,3 +289,8 @@ reset -> initial state
 ## 阅读导航
 
 [← 上一页：8. Double Buffer](/learn/game-programming-patterns/12-chapter-08-double-buffer/gpp-chapter-08-double-buffer) · [下一页：10. Update Method →](/learn/game-programming-patterns/14-chapter-10-update-method/gpp-chapter-10-update-method)
+
+<Attribution
+  adaptedFrom="Robert Nystrom《Game Programming Patterns》（游戏编程模式）"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>

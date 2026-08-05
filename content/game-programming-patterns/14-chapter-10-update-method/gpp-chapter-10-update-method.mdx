@@ -23,11 +23,22 @@ import { GppUpdateMethodLab } from "@/components/mdx/game-programming-patterns/v
 {/* GPP_QUALITY_V2 */}
 
 
+<Objectives>
+
+- 能说明 update(dt) 的逐帧推进
+- 能管理跨帧状态书签
+- 能处理遍历中增删实体
+
+</Objectives>
+
 ## 为什么"10. Update Method"从问题证据开始
 
 游戏里每个活着的实体——敌人巡逻、弹幕飞行、粒子消散——都有"每一帧都在推进"的行为。最直觉的实现是把这些行为写进游戏循环：`for each enemy: enemy.advance(); for each bullet: bullet.fly(); ...`。代码今天能跑，但每个新实体类型都要改游戏循环；更糟的是，行为一旦跨多帧（巡逻 3 秒后追击），就要在循环里手工记录"巡逻到第几帧了"，状态管理散落各处。
 
 本页把"无模式基线"定义为"游戏循环直接驱动所有行为"的代码，然后引入更新方法作为候选机制，验证它是否真的让"新增实体类型不动循环代码、跨帧行为可管理"。通过条件是**实体各自负责自己的 update(dt)，循环只负责遍历**——而不是循环认识每个实体类型。
+
+
+> 🔮 **先预测：实体 A 的 update 能看到实体 B 本帧已更新的结果吗？**
 
 ## 来源、版本与独立重写边界
 
@@ -37,16 +48,36 @@ import { GppUpdateMethodLab } from "@/components/mdx/game-programming-patterns/v
 
 理解 Update Method 需要四个核心概念：
 
-- **更新方法（update method）**：实体上的 `update(dt)` 方法——每帧被调用一次，推进该实体一段行为。
-- **时间步（dt）**：更新方法的参数，表示本次更新推进的模拟时间量——保证行为与帧率无关。
-- **游戏世界（game world）**：持有实体列表、每帧遍历并逐个调用 update 的容器。
-- **逐帧片段（frame slice）**：把"巡逻 3 秒"这类长行为切成每帧一小段——update 里推进一小步，跨帧累积。
+- <Term term="更新方法">**更新方法（update method）**</Term>：实体上的 `update(dt)` 方法——每帧被调用一次，推进该实体一段行为。
+- <Term term="时间步">**时间步（dt）**</Term>：更新方法的参数，表示本次更新推进的模拟时间量——保证行为与帧率无关。
+- <Term term="游戏世界">**游戏世界（game world）**</Term>：持有实体列表、每帧遍历并逐个调用 update 的容器。
+- <Term term="逐帧片段">**逐帧片段（frame slice）**</Term>：把"巡逻 3 秒"这类长行为切成每帧一小段——update 里推进一小步，跨帧累积。
 
 四个概念共同约束"让每个活跃对象把长行为切成逐帧可恢复的更新片段"：任何结论都必须回到"新增实体是否不动循环、行为是否与帧率无关、状态是否可恢复"三个可观察量。
 
 <GppUpdateMethodLab />
 
 > 💡 **对着动画看**：动画顶部是 GameWorld 容器——它每帧做一件事：遍历实体列表，逐个调 `entity.update(dt)`。下方四个实体（敌人/弹幕/粒子）各自响应。注意"每帧遍历"小框——世界不认识具体实体类型，只认识 update() 接口。读"实体子类化"一节时，想想四个实体是如何各自实现这个接口的。
+
+<Callout type="trap" title="常见误区">
+
+Update Method 的坑：遍历实体列表时直接增删——迭代器失效踩空，应延迟修改。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+实体在 update 中 delete 自己的坑：栈上 this 悬空——延迟销毁。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+休眠实体仍在列表的误区：遍历开销白付——长休眠要移出。
+
+</Callout>
+
+
 
 ## 官方结构逐项深读
 
@@ -137,12 +168,63 @@ reset -> initial state
 
 ## 本章练习与节点验证矩阵
 
-| 练习 | 操作 | 验证判据 |
-|---|---|---|
-| 新增实体 | 在动画实体列表中"加入"一个"追踪弹"，观察世界代码是否需要改 | 世界零改动、新实体实现 update → 解耦成立 |
-| 帧率无关验证 | 用固定 dt 与可变 dt 分别跑同一实体行为，比较结果 | 固定 dt 结果确定可复现 → 固定步长胜 |
-| 跨帧状态 | 模拟"巡逻 3 秒后追击"，记录跨帧状态字段 | 下帧从书签恢复 → 状态保存正确 |
-| 列表修改 | 模拟实体在 update 中死亡（直接删列表）vs 延迟移除 | 直接删踩空/崩溃；延迟移除稳定 → 延迟修改正确 |
+<Exercises>
+
+**问题 1**：新增实体。
+
+**操作**：在动画实体列表中"加入"一个"追踪弹"，观察世界代码是否需要改
+
+<Answer>
+
+验证判据：世界零改动、新实体实现 update → 解耦成立
+
+</Answer>
+
+**问题 2**：帧率无关验证。
+
+**操作**：用固定 dt 与可变 dt 分别跑同一实体行为，比较结果
+
+<Answer>
+
+验证判据：固定 dt 结果确定可复现 → 固定步长胜
+
+</Answer>
+
+**问题 3**：跨帧状态。
+
+**操作**：模拟"巡逻 3 秒后追击"，记录跨帧状态字段
+
+<Answer>
+
+验证判据：下帧从书签恢复 → 状态保存正确
+
+</Answer>
+
+**问题 4**：列表修改。
+
+**操作**：模拟实体在 update 中死亡（直接删列表）vs 延迟移除
+
+<Answer>
+
+验证判据：直接删踩空/崩溃；延迟移除稳定 → 延迟修改正确
+
+</Answer>
+
+</Exercises>
+
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="更新方法" />
+  <GlossaryItem term="时间步" />
+  <GlossaryItem term="逐帧片段" />
+</Glossary>
+
+
+## 练习答案参考
+
+练习判据即答案：每个练习的"验证判据"列给出了通过标准——先自己动手，再对照判据核验。
 
 ## 术语复核与本章回顾
 
@@ -155,3 +237,8 @@ reset -> initial state
 [← 上一页：9. Game Loop](/learn/game-programming-patterns/13-chapter-09-game-loop/gpp-chapter-09-game-loop) · [下一页：IV. Behavioral Patterns →](/learn/game-programming-patterns/15-behavioral-patterns/gpp-behavioral-patterns)
 
 [← 上一页：9. Game Loop](/learn/game-programming-patterns/13-chapter-09-game-loop/gpp-chapter-09-game-loop) · [下一页：IV. Behavioral Patterns →](/learn/game-programming-patterns/15-behavioral-patterns/gpp-behavioral-patterns)
+
+<Attribution
+  adaptedFrom="Robert Nystrom《Game Programming Patterns》（游戏编程模式）"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>

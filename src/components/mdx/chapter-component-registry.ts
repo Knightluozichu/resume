@@ -10600,12 +10600,43 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GncOfficialFinalReviewTraceGateLab,
     } as ChapterMdxComponents;
   },
+  "game-programming-patterns/00-official-learning-map/gpp-official-learning-map":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-official-learning-map");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/01-acknowledgements/gpp-acknowledgements":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-acknowledgements");
+      return {
+        GppIntroLab: module0.GppIntroLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/02-introduction/gpp-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/game-programming-patterns/v2/gpp-introduction");
+    return {
+      GppIntroLab: module0.GppIntroLab,
+    } as ChapterMdxComponents;
+  },
   "game-programming-patterns/03-chapter-01-architecture-performance-games/gpp-chapter-01-architecture-performance-games":
     async () => {
       const module0 =
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-01-architecture-performance-games");
       return {
         GppPatternLab: module0.GppPatternLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/04-design-patterns-revisited/gpp-design-patterns-revisited":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-design-patterns-revisited");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/05-chapter-02-command/gpp-chapter-02-command":
@@ -10656,6 +10687,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         GppStateLab: module0.GppStateLab,
       } as ChapterMdxComponents;
     },
+  "game-programming-patterns/11-sequencing-patterns/gpp-sequencing-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-sequencing-patterns");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
+      } as ChapterMdxComponents;
+    },
   "game-programming-patterns/12-chapter-08-double-buffer/gpp-chapter-08-double-buffer":
     async () => {
       const module0 =
@@ -10678,6 +10717,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-10-update-method");
       return {
         GppUpdateMethodLab: module0.GppUpdateMethodLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/15-behavioral-patterns/gpp-behavioral-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-behavioral-patterns");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/16-chapter-11-bytecode/gpp-chapter-11-bytecode":
@@ -10704,6 +10751,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         GppTypeObjectLab: module0.GppTypeObjectLab,
       } as ChapterMdxComponents;
     },
+  "game-programming-patterns/19-decoupling-patterns/gpp-decoupling-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-decoupling-patterns");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
+      } as ChapterMdxComponents;
+    },
   "game-programming-patterns/20-chapter-14-component/gpp-chapter-14-component":
     async () => {
       const module0 =
@@ -10726,6 +10781,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-16-service-locator");
       return {
         GppServiceLocatorLab: module0.GppServiceLocatorLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/23-optimization-patterns/gpp-optimization-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-optimization-patterns");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
       } as ChapterMdxComponents;
     },
   "game-programming-patterns/24-chapter-17-data-locality/gpp-chapter-17-data-locality":
@@ -10758,6 +10821,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         await import("@/components/mdx/game-programming-patterns/v2/gpp-chapter-20-spatial-partition");
       return {
         GppSpatialPartitionLab: module0.GppSpatialPartitionLab,
+      } as ChapterMdxComponents;
+    },
+  "game-programming-patterns/28-official-final-review/gpp-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/game-programming-patterns/v2/gpp-official-final-review");
+      return {
+        GppSectionOverviewLab: module0.GppSectionOverviewLab,
       } as ChapterMdxComponents;
     },
   "game-server-programming/00-guide/gsp-official-learning-map": async () => {

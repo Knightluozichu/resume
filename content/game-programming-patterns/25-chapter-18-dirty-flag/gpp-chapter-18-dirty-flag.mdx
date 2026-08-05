@@ -20,6 +20,14 @@ import { GppDirtyFlagLab } from "@/components/mdx/game-programming-patterns/v2/g
 {/* GPP_QUALITY_V2 */}
 
 
+<Objectives>
+
+- 能说明脏标志的延迟重算
+- 能解释漏置脏的风险
+- 能选择标志清理时机与粒度
+
+</Objectives>
+
 ## 为什么"18. Dirty Flag"从问题证据开始
 
 你的游戏有场景树：父节点移动，子节点的"世界坐标"（本地坐标乘以父级变换）全部要重新计算。最直觉的实现是：**每次父节点变化，立刻重算所有子节点的世界坐标**。代码今天能跑，但性能问题浮现：一个子节点一帧内可能被访问多次（渲染、碰撞、拾取），每次访问如果都重算整条链，**同一个坐标被反复计算几十次**——而实际上只要算一次，存起来。
@@ -34,16 +42,36 @@ import { GppDirtyFlagLab } from "@/components/mdx/game-programming-patterns/v2/g
 
 理解 Dirty Flag 需要四个核心概念：
 
-- **主数据（source data）**：真正的数据源头（本地坐标、位置）——变化是重算的触发条件。
-- **派生数据（derived data）**：从主数据算出来的结果（世界坐标、变换矩阵）——昂贵且可缓存。
-- **脏标志（dirty flag）**：布尔标记，主数据变化时置位——提示"派生数据过期"。
-- **延迟重算（deferred recalculation）**：不立刻算，等派生数据被读取且标志为脏时才算——算一次用多次。
+- <Term term="主数据">**主数据（source data）**</Term>：真正的数据源头（本地坐标、位置）——变化是重算的触发条件。
+- <Term term="派生数据">**派生数据（derived data）**</Term>：从主数据算出来的结果（世界坐标、变换矩阵）——昂贵且可缓存。
+- <Term term="脏标志">**脏标志（dirty flag）**</Term>：布尔标记，主数据变化时置位——提示"派生数据过期"。
+- <Term term="延迟重算">**延迟重算（deferred recalculation）**</Term>：不立刻算，等派生数据被读取且标志为脏时才算——算一次用多次。
 
 四个概念共同约束"主数据变化时标脏，只有派生结果真正被读取前才重新计算"：任何结论都必须回到"重算次数、缓存命中、读取-重算时序"三个可观察量。
 
 <GppDirtyFlagLab />
 
 > 💡 **对着动画看**：动画左侧是 Transform（主数据，setPosition 时置脏），右上"dirty = true"框（等待重算），右下两个结果框——"未变脏：返回缓存 ✓ 零开销"与"已变脏：重算并清标志"。读"缓存的本地变换"一节时，记住关键动作：**变化只标脏，不立刻算；读取时才决定算不算**。
+
+<Callout type="trap" title="常见误区">
+
+脏标志最隐蔽的坑：漏置脏——某条修改路径没设标志，缓存静默返回过期数据。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+外部直接改主数据字段绕过 setter 的坑：漏置脏——字段私有化。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+批量处理时清理标志太早的误区：同批后续读取拿到旧缓存。
+
+</Callout>
+
+
 
 ## 官方结构逐项深读
 
@@ -138,12 +166,63 @@ reset -> initial state
 
 ## 本章练习与节点验证矩阵
 
-| 练习 | 操作 | 验证判据 |
-|---|---|---|
-| 重复计算对比 | 模拟父节点变一次、子坐标读 3 次：无缓存 vs 脏标志 | 脏标志只算 1 次、无缓存算 3 次 → 缓存省 2/3 |
-| 漏置脏注入 | 让某个 setter 漏置脏标志，再读取派生数据 | 返回过期数据 → 置脏必须在所有 setter 统一 |
-| 延迟语义 | 变化后立即读取 vs 变化后延迟读取，对比看到的新旧结果 | 延迟读取看到旧值 → 延迟语义生效，注意使用场景 |
-| 粒度选择 | 整对象粒度与字段级粒度各实现一次，对比重算范围 | 字段级只重算受影响部分 → 粒度精细的代价 |
+<Exercises>
+
+**问题 1**：重复计算对比。
+
+**操作**：模拟父节点变一次、子坐标读 3 次：无缓存 vs 脏标志
+
+<Answer>
+
+验证判据：脏标志只算 1 次、无缓存算 3 次 → 缓存省 2/3
+
+</Answer>
+
+**问题 2**：漏置脏注入。
+
+**操作**：让某个 setter 漏置脏标志，再读取派生数据
+
+<Answer>
+
+验证判据：返回过期数据 → 置脏必须在所有 setter 统一
+
+</Answer>
+
+**问题 3**：延迟语义。
+
+**操作**：变化后立即读取 vs 变化后延迟读取，对比看到的新旧结果
+
+<Answer>
+
+验证判据：延迟读取看到旧值 → 延迟语义生效，注意使用场景
+
+</Answer>
+
+**问题 4**：粒度选择。
+
+**操作**：整对象粒度与字段级粒度各实现一次，对比重算范围
+
+<Answer>
+
+验证判据：字段级只重算受影响部分 → 粒度精细的代价
+
+</Answer>
+
+</Exercises>
+
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="主数据" />
+  <GlossaryItem term="派生数据" />
+  <GlossaryItem term="脏标志" />
+</Glossary>
+
+
+## 练习答案参考
+
+练习判据即答案：每个练习的"验证判据"列给出了通过标准——先自己动手，再对照判据核验。
 
 ## 术语复核与本章回顾
 
@@ -155,3 +234,8 @@ reset -> initial state
 
 [← 上一页：17. Data Locality](/learn/game-programming-patterns/24-chapter-17-data-locality/gpp-chapter-17-data-locality) · [下一页：19. Object Pool →](/learn/game-programming-patterns/26-chapter-19-object-pool/gpp-chapter-19-object-pool)
 [← 上一页：17. Data Locality](/learn/game-programming-patterns/24-chapter-17-data-locality/gpp-chapter-17-data-locality) · [下一页：19. Object Pool →](/learn/game-programming-patterns/26-chapter-19-object-pool/gpp-chapter-19-object-pool)
+
+<Attribution
+  adaptedFrom="Robert Nystrom《Game Programming Patterns》（游戏编程模式）"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>
