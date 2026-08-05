@@ -6653,3 +6653,9 @@
 - 批次3（Ch10/11/12/13/15）：UpdateMethod、Bytecode、SubclassSandbox、TypeObject、EventQueue — 动画版 ✅
 - 批次4（Ch16/17/18/19/20）：ServiceLocator、DataLocality、DirtyFlag、ObjectPool、SpatialPartition — 动画版 ✅
 全部使用 useTeachingTimeline + TimelineControls（播放/暂停/单步/拖动）；TSC=0、视觉巡检 29/29 PASS
+
+### GPP 正文重写批次（原书教学标准）：
+- 批次R1（Ch01/02/03/04/05）：架构、Command、Flyweight、Observer、Prototype — ✅
+- 批次R2（Ch06/07/08/09/10）：Singleton、State、DoubleBuffer、GameLoop、UpdateMethod — ✅
+- 批次R3（Ch11/12/13/15/16）：Bytecode、SubclassSandbox、TypeObject、EventQueue、ServiceLocator — ✅
+全部定制组件（专属隐喻+单accent）+ 4术语表 + 动画引导 + 练习矩阵；TSC=0、巡检 29/29 PASS
