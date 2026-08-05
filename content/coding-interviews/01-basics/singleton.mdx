@@ -8,7 +8,20 @@ demo: true
 math: false
 sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/02_Singleton/Program.cs"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
+
+<Objectives>
+
+- 能说出 Singleton 的三个组成部分并解释 `sealed` 的作用
+- 能对比五种实现（无锁/加锁/双重检查/静态/嵌套）的并发与延迟特征
+- 能用 `Lazy<T>` 或嵌套类型写出线程安全的延迟单例
+
+</Objectives>
+
+{/* CIV2_QUALITY */}
 
 import { SingletonBoundaryMap, ConcurrencyRaceDiagram } from "@/components/mdx/coding-interviews/diagrams/singleton";
 
@@ -21,11 +34,27 @@ import { SingletonBoundaryMap, ConcurrencyRaceDiagram } from "@/components/mdx/c
 
 <SingletonBoundaryMap />
 
-`sealed`还能阻止通过派生类间接创建其他实例。它不是Singleton成立的全部条件，却能让“谁能构造”更明确。若类型允许继承，派生类构造必须调用基类构造，私有构造会直接阻断；把类声明为`sealed`则进一步表达设计意图。
+<Term term="sealed">`sealed`</Term>还能阻止通过派生类间接创建其他实例。它不是Singleton成立的全部条件，却能让“谁能构造”更明确。若类型允许继承，派生类构造必须调用基类构造，私有构造会直接阻断；把类声明为`sealed`则进一步表达设计意图。
+
+<Callout type="trap" title="常见误区">
+
+- **现象**：无锁实现里检查为空后创建，两个线程各自构造实例。
+- **原因**："检查为空"与"创建并写入"是多个步骤，并发下不是原子的。
+- **修法**：用锁、运行时类型初始化或 `Lazy<T>` 保证只构造一次。
+
+</Callout>
+
+<Callout type="trap" title="易错点">
+
+- **现象**：把 Singleton 当作集群全局唯一或连接池的替代品。
+- **原因**：静态字段只在进程内唯一；数据库连接需池化而非单连接。
+- **修法**：明确作用域；集群用分布式锁/租约，连接用连接池。
+
+</Callout>
 
 ## 版本一：无锁延迟创建
 
-第一种实现只有在`Instance`首次被读取时才创建对象，这叫：
+第一种实现只有在`Instance`首次被读取时才创建对象，这叫<Term term="懒汉式">懒汉式</Term>：
 
 ```csharp
 public sealed class Singleton1
@@ -84,7 +113,7 @@ public sealed class Singleton2
 
 锁对象必须是类型私有且只用于这条同步协议。锁住`this`、公开对象或字符串，会允许外部代码参与同一把锁，增加死锁和不可预测等待风险。`readonly`确保锁对象引用不会被替换。
 
-## 版本三：双重检查锁定
+## 版本三：<Term term="双重检查锁定">双重检查锁定</Term>
 
 作者第三种实现先在锁外检查一次，只有看到未初始化才进入锁，并在锁内再检查一次。这叫：
 
@@ -110,7 +139,7 @@ public static Singleton3 Instance
 
 在现代C#中，与其手写并争论发布细节，通常优先使用运行时类型初始化、`Lazy<T>`或依赖注入容器提供的单例生命周期。跨语言照搬双重检查尤其危险：Java、C++和C#的内存模型与安全惯用法并不完全相同，代码形状相似不代表保证相同。
 
-## 版本四：静态字段立即初始化
+## 版本四：<Term term="急切初始化">静态字段立即初始化</Term>
 
 第四种直接在静态字段声明处构造实例。C#运行时保证一个类型的静态初始化只执行一次，因此无需自己加锁：
 
@@ -135,7 +164,7 @@ public sealed class Singleton4
 
 “急切”不等于程序启动瞬间一定创建，具体触发受C#类型初始化规则影响；本题最关键的可观察差异是：外层类型普通静态方法的调用，会让该类型的静态字段进入初始化范围，而不必等到`Instance`属性被读取。
 
-## 版本五：嵌套类型延迟初始化
+## 版本五：<Term term="延迟初始化">嵌套类型延迟初始化</Term>
 
 第五种把实例字段放进嵌套类型`Nested`。读取外层`Singleton5.Instance`时才触及`Nested.instance`；调用外层`Singleton5.Print()`不会初始化嵌套类型，因此既依赖运行时获得线程安全，又保留延迟创建：
 
@@ -162,7 +191,7 @@ public sealed class Singleton5
 作者原代码给`Nested`写了显式空静态构造函数，用来控制类型初始化语义；现代写法也常用静态嵌套类承载只读实例。面试中要能解释“为什么调用外层`Print`不构造实例”，而不是只背类模板。
 
 
-## 现代`Lazy<T>`与依赖注入
+## 现代<Term term="Lazy">`Lazy<T>`</Term>与依赖注入
 
 标准库`Lazy<T>`直接表达“线程安全地在首次读取Value时构造”，减少手写同步代码：
 
@@ -222,6 +251,36 @@ public void Outer_static_method_does_not_touch_nested_instance()
 
 并发测试本身不能证明所有交错都安全，但可以验证实现和回归；正确性依据仍来自运行时保证与同步协议。测试若依赖静态类型只能初始化一次，还要隔离进程或加载上下文，否则先运行的测试会污染“首次访问”条件。
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** 为什么"检查为空后创建"的无锁单例在并发下会构造多个实例？
+
+<Answer>
+
+"检查为空"与"创建并写入"是多个独立步骤，线程 A 和 B 都可能先看到 null，然后各自执行构造。即使最后只保留一个引用，另一个实例也已存在，构造副作用可能已发布。
+
+</Answer>
+
+**问题 2：** 版本四（静态字段）与版本五（嵌套类型）在初始化时机上有何区别？
+
+<Answer>
+
+版本四调用外层任何静态成员都可能触发类型初始化；版本五把实例放进嵌套类型，只有读取 `Nested.instance` 才初始化，调用外层 `Print` 不会构造。
+
+</Answer>
+
+**问题 3：** 用 `Lazy<T>` 重写线程安全延迟单例，并说明异常策略。
+
+<Answer>
+
+`private static readonly Lazy<T> lazy = new(() => new T(), isThreadSafe: true); Instance => lazy.Value;`。需明确 `LazyThreadSafetyMode` 对并发与构造异常缓存的行为。
+
+</Answer>
+
+</Exercises>
+
 ## 本章回顾
 
 1. Singleton模式由私有构造、唯一静态引用和公共访问点构成，`sealed`表达不可派生。
@@ -237,4 +296,16 @@ public void Outer_static_method_does_not_touch_nested_instance()
 
 ## 名词解释
 
+<Glossary>
+  <GlossaryItem term="懒汉式">实例在首次访问时才创建的单例实现，通常需要并发同步。</GlossaryItem>
+  <GlossaryItem term="双重检查锁定">先在锁外检查、进锁后再次检查的并发优化，正确性依赖内存模型。</GlossaryItem>
+  <GlossaryItem term="急切初始化">静态字段声明处直接构造实例，由运行时保证只初始化一次。</GlossaryItem>
+  <GlossaryItem term="延迟初始化">把创建推迟到真正需要时，嵌套类型方案可兼顾线程安全与延迟。</GlossaryItem>
+  <GlossaryItem term="Lazy">.NET 标准库类型，用 `Value` 属性表达线程安全的首次访问构造。</GlossaryItem>
+  <GlossaryItem term="sealed">C# 关键字，声明类不可被继承，使"谁能构造"更明确。</GlossaryItem>
+</Glossary>
 
+<Attribution
+  adaptedFrom="何海涛《剑指 Offer——名企面试官精讲典型编程题（第2版）》"
+  adaptedUrl="https://cbjj.phei.com.cn/module/goods/wssd_content_comment.jsp?bookid=49304"
+/>
