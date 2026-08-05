@@ -67,7 +67,7 @@
     - 路径：`content/coding-interviews/trees/subtree-structure.mdx`
 - [x] ✅ **trees/tree-depth** — 已修复（2026-08-05，score 47→91，passed）
     - 路径：`content/coding-interviews/trees/tree-depth.mdx`
-- [ ] 🔴 P1 **01-basics/duplicate-in-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 46）
+- [x] ✅ **01-basics/duplicate-in-array** — 已修复（2026-08-05，score 46→91，passed）
     - 路径：`content/coding-interviews/01-basics/duplicate-in-array.mdx`
 - [ ] 🔴 P1 **arrays/matrix-path** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
     - 路径：`content/coding-interviews/arrays/matrix-path.mdx`
