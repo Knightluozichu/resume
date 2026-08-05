@@ -63,7 +63,7 @@
     - 路径：`content/coding-interviews/strings/sort-array-for-min-number.mdx`
 - [x] ✅ **trees/mirror-binary-tree** — 已修复（2026-08-05，score 47→92，passed）
     - 路径：`content/coding-interviews/trees/mirror-binary-tree.mdx`
-- [ ] 🔴 P1 **trees/subtree-structure** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+- [x] ✅ **trees/subtree-structure** — 已修复（2026-08-05，score 47→94，passed）
     - 路径：`content/coding-interviews/trees/subtree-structure.mdx`
 - [ ] 🔴 P1 **trees/tree-depth** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
     - 路径：`content/coding-interviews/trees/tree-depth.mdx`
