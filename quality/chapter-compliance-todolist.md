@@ -33,7 +33,7 @@
     - 路径：`content/coding-interviews/linked-lists/kth-node-from-end.mdx`
 - [x] ✅ **arrays/continous-cards** — 已修复（2026-08-05，score 48→92，passed）
     - 路径：`content/coding-interviews/arrays/continous-cards.mdx`
-- [ ] 🔴 P1 **math/number-of-1-bits** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
+- [x] ✅ **math/number-of-1-bits** — 已修复（2026-08-05，score 48→92，passed）
     - 路径：`content/coding-interviews/math/number-of-1-bits.mdx`
 - [ ] 🔴 P1 **math/ugly-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 48）
     - 路径：`content/coding-interviews/math/ugly-number.mdx`
