@@ -57,7 +57,7 @@
     - 路径：`content/coding-interviews/strings/left-rotate-string.mdx`
 - [x] ✅ **strings/longest-substring-without-dup** — 已修复（2026-08-05，score 47→93，passed）
     - 路径：`content/coding-interviews/strings/longest-substring-without-dup.mdx`
-- [ ] 🔴 P1 **strings/numeric-strings** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
+- [x] ✅ **strings/numeric-strings** — 已修复（2026-08-05，score 47→94，passed）
     - 路径：`content/coding-interviews/strings/numeric-strings.mdx`
 - [ ] 🔴 P1 **strings/sort-array-for-min-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 47）
     - 路径：`content/coding-interviews/strings/sort-array-for-min-number.mdx`
