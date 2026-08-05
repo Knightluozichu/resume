@@ -2,8 +2,35 @@
 
 import { useState } from "react";
 export function ContinuousCardsSortDiagram() {
-  const original = [0, 3, 2, 6, 4];
-  const sorted = [0, 2, 3, 4, 6];
+  const PRESETS = [
+    {
+      label: "缺 5 一张王补上",
+      original: [0, 3, 2, 6, 4],
+    },
+    {
+      label: "缺 2、5 王不够",
+      original: [0, 3, 1, 6, 4],
+    },
+    {
+      label: "非零对子直接失败",
+      original: [0, 3, 3, 6, 4],
+    },
+    {
+      label: "五张全王",
+      original: [0, 0, 0, 0, 0],
+    },
+  ];
+  const [presetIndex, setPresetIndex] = useState(0);
+  const original = PRESETS[presetIndex].original;
+  const sorted = [...original].sort((a, b) => a - b);
+  const jokers = sorted.filter((c) => c === 0).length;
+  const nonZero = sorted.filter((c) => c !== 0);
+  const hasDup = new Set(nonZero).size !== nonZero.length;
+  let gaps = 0;
+  for (let i = 1; i < nonZero.length; i += 1) {
+    gaps += nonZero[i] - nonZero[i - 1] - 1;
+  }
+  const isStraight = !hasDup && gaps <= jokers;
   const cardW = 60;
   const cardH = 52;
   const gapW = 10;
@@ -13,10 +40,30 @@ export function ContinuousCardsSortDiagram() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
       <div className="overflow-hidden border border-border bg-elevated p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {PRESETS.map((preset, i) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setPresetIndex(i)}
+              aria-pressed={i === presetIndex}
+              className={"rounded-control border px-3 py-1.5 text-sm transition-colors " + (i === presetIndex ? "border-accent text-accent" : "border-border text-secondary hover:border-accent")}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPresetIndex(0)}
+            className="rounded-control border border-border px-3 py-1.5 text-sm text-secondary transition-colors hover:border-accent hover:text-accent"
+          >
+            重置
+          </button>
+        </div>
         <svg
           viewBox="0 0 820 420"
           role="img"
-          aria-label="扑克牌顺子判定图。原始抽牌 0、3、2、6、4，排序后 0、2、3、4、6，大小王 0 被聚到最左。非零牌 2、3、4、6 在数轴上缺少 5，空缺为 1；恰好有 1 张王可以填补，所以是顺子。若出现重复非零牌则直接失败。"
+          aria-label={`扑克牌顺子判定交互图。当前牌组 ${original.join("、")}，排序后 ${sorted.join("、")}。王 ${jokers} 张，非零 ${nonZero.join("、")}${hasDup ? "，存在对子" : `，空缺 ${gaps}`}，判定${isStraight ? "为顺子" : "不是顺子"}。`}
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
           <defs>
@@ -24,7 +71,7 @@ export function ContinuousCardsSortDiagram() {
           </defs>
           <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">排序聚 0，再数空缺：王的张数 ≥ 空缺总数即顺子</text>
           {/* 原始顺序 */}
-          <text x="410" y="62" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">原始抽牌顺序</text>
+          <text x="410" y="62" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">原始抽牌顺序（点击上方按钮切换牌组）</text>
           {original.map((card, i) => (
             <g key={"o" + i}>
               <rect x={cx(i)} y={72} width={cardW} height={cardH} rx="6" fill={card === 0 ? "var(--success)" : "var(--bg)"} fillOpacity={card === 0 ? 0.12 : 1} stroke={card === 0 ? "var(--success)" : "var(--border)"} strokeWidth="1.4" />
@@ -43,25 +90,26 @@ export function ContinuousCardsSortDiagram() {
             </g>
           ))}
           {/* 数轴空缺 */}
-          <text x="410" y={lineY - 12} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">非零牌在数轴上的空缺：2、3、4、6 之间缺 5</text>
-          {[2, 3, 4, 5, 6].map((n) => {
-            const missing = n === 5;
-            const x = 250 + (n - 2) * 70;
-            return (
-              <g key={"n" + n}>
-                <rect x={x} y={lineY} width={58} height={46} rx="6" fill={missing ? "var(--danger)" : "var(--accent)"} fillOpacity={missing ? 0.08 : 0.1} stroke={missing ? "var(--danger)" : "var(--accent)"} strokeWidth={missing ? 1.6 : 1.2} strokeDasharray={missing ? "5 4" : undefined} />
-                <text x={x + 29} y={lineY + 29} textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="monospace" fill={missing ? "var(--danger)" : "var(--accent)"}>{missing ? "缺" : n}</text>
-              </g>
-            );
-          })}
-          {/* 王填补 */}
-          <path d="M 460 250 C 460 268 460 272 460 284" fill="none" stroke="var(--success)" strokeWidth="2" markerEnd="url(#cards-arrow)" />
-          <text x="410" y={lineY + 78} textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">空缺 = 1，王 = 1 → 恰好补齐，是顺子</text>
-          <text x="410" y={lineY + 102} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">排序后相邻非零牌相同→有对子，直接判负；王只能填点数，不能消除对子。</text>
+          <text x="410" y={lineY - 12} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">{hasDup ? "存在非零对子：直接判负" : `非零牌在数轴上的空缺：共 ${gaps} 处`}</text>
+          {nonZero.length > 0 && (
+            <g>
+              {nonZero.map((n, i) => {
+                const x = 250 + i * 70;
+                return (
+                  <g key={"nn" + i}>
+                    <rect x={x} y={lineY} width={58} height={46} rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
+                    <text x={x + 29} y={lineY + 29} textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="monospace" fill="var(--accent)">{n}</text>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+          <text x="410" y={lineY + 78} textAnchor="middle" fontSize="13" fontWeight="700" fill={isStraight ? "var(--success)" : "var(--danger)"}>{hasDup ? "非零重复 → 王无法消除对子，不是顺子" : `空缺 = ${gaps}，王 = ${jokers} → ${gaps <= jokers ? "恰好补齐，是顺子" : "王不够，不是顺子"}`}</text>
+          <text x="410" y={lineY + 102} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">条件：空缺数 ≤ 王数，且无非零对子。</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        排序把所有 0 聚到左侧，也让重复牌与相邻空缺能够一次线性扫描发现。
+        排序把所有 0 聚到左侧，也让重复牌与相邻空缺能够一次线性扫描发现；点击按钮可切换牌组验证判定。
       </figcaption>
     </figure>
   );
