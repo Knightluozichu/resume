@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-05T13:29:46.243Z；旧版分数不迁移。
+> 2026-08-05T13:33:41.474Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2608
+- failed：2607
 - queued：401
-- passed：944
+- passed：945
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -14,7 +14,7 @@
 | 1 | poeaa-enterprise-patterns | 78 | 78 | 0 | 0 | 234 |
 | 2 | pragmatic-programmer | 71 | 71 | 0 | 0 | 213 |
 | 3 | coder-revolution | 62 | 62 | 0 | 0 | 186 |
-| 4 | coding-interviews | 81 | 56 | 0 | 25 | 184 |
+| 4 | coding-interviews | 81 | 55 | 0 | 26 | 181 |
 | 5 | code-complete-2e | 51 | 51 | 0 | 0 | 153 |
 | 6 | math-girl | 50 | 50 | 0 | 0 | 150 |
 | 7 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
