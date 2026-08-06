@@ -141,7 +141,7 @@
     - 路径：`content/coding-interviews/math/dices-probability.mdx`
 - [x] ✅ **stacks-queues/max-in-sliding-window** — 已修复（2026-08-05，score 44→94，passed）
     - 路径：`content/coding-interviews/stacks-queues/max-in-sliding-window.mdx`
-- [ ] 🔴 P1 **stacks-queues/queue-with-two-stacks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+- [x] ✅ **stacks-queues/queue-with-two-stacks** — 已修复（2026-08-05，score 44→93，passed）
     - 路径：`content/coding-interviews/stacks-queues/queue-with-two-stacks.mdx`
 - [ ] 🔴 P1 **strings/regular-expressions-matching** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
     - 路径：`content/coding-interviews/strings/regular-expressions-matching.mdx`

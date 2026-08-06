@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T07:48:20.345Z；旧版分数不迁移。
+> 2026-08-06T07:55:37.643Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2573
+- failed：2572
 - queued：401
-- passed：979
+- passed：980
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -52,11 +52,11 @@
 | 39 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
 | 40 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
 | 41 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 42 | coding-interviews | 81 | 21 | 0 | 60 | 64 |
-| 43 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
-| 44 | shader-practice | 21 | 21 | 0 | 0 | 63 |
-| 45 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
-| 46 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 42 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 43 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 44 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
+| 45 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 46 | coding-interviews | 81 | 20 | 0 | 61 | 61 |
 | 47 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
 | 48 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
 | 49 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
