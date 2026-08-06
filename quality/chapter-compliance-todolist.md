@@ -151,7 +151,7 @@
     - 路径：`content/coding-interviews/trees/path-in-tree.mdx`
 - [x] ✅ **trees/print-tree-from-top-to-bottom** — 已修复（2026-08-05，score 44→91，passed）
     - 路径：`content/coding-interviews/trees/print-tree-from-top-to-bottom.mdx`
-- [ ] 🔴 P1 **trees/serialize-binary-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+- [x] ✅ **trees/serialize-binary-trees** — 已修复（2026-08-05，score 44→91，passed）
     - 路径：`content/coding-interviews/trees/serialize-binary-trees.mdx`
 - [ ] 🔴 P1 **01-basics/duplicate-in-array-no-edit** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/coding-interviews/01-basics/duplicate-in-array-no-edit.mdx`

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T08:19:15.914Z；旧版分数不迁移。
+> 2026-08-06T08:30:10.569Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2568
+- failed：2567
 - queued：401
-- passed：984
+- passed：985
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -85,17 +85,17 @@
 | 72 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
 | 73 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
 | 74 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 75 | coding-interviews | 81 | 16 | 0 | 65 | 49 |
-| 76 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 77 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 78 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 79 | python-advanced | 16 | 16 | 0 | 0 | 48 |
-| 80 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 81 | large-language-models | 16 | 16 | 0 | 0 | 16 |
-| 82 | csapp | 15 | 15 | 0 | 0 | 74 |
-| 83 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 84 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 85 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 75 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 76 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 77 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 78 | python-advanced | 16 | 16 | 0 | 0 | 48 |
+| 79 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 80 | large-language-models | 16 | 16 | 0 | 0 | 16 |
+| 81 | csapp | 15 | 15 | 0 | 0 | 74 |
+| 82 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 83 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 84 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 85 | coding-interviews | 81 | 15 | 0 | 66 | 45 |
 | 86 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
 | 87 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
 | 88 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
