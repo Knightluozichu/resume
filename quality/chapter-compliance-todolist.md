@@ -85,7 +85,7 @@
     - 路径：`content/coding-interviews/math/power.mdx`
 - [x] ✅ **recursion/fibonacci** — 已修复（2026-08-05，score 46→92，passed）
     - 路径：`content/coding-interviews/recursion/fibonacci.mdx`
-- [ ] 🔴 P1 **stacks-queues/min-stack** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+- [x] ✅ **stacks-queues/min-stack** — 已修复（2026-08-05，score 46→93，passed）
     - 路径：`content/coding-interviews/stacks-queues/min-stack.mdx`
 - [ ] 🔴 P1 **strings/first-not-repeating-char** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
     - 路径：`content/coding-interviews/strings/first-not-repeating-char.mdx`
