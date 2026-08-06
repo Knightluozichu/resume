@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T08:16:57.501Z；旧版分数不迁移。
+> 2026-08-06T08:19:15.914Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2569
+- failed：2568
 - queued：401
-- passed：983
+- passed：984
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -78,14 +78,14 @@
 | 65 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
 | 66 | effective-java | 17 | 17 | 0 | 0 | 73 |
 | 67 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 68 | coding-interviews | 81 | 17 | 0 | 64 | 52 |
-| 69 | blender-3d | 17 | 17 | 0 | 0 | 51 |
-| 70 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 71 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 72 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 73 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 74 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 75 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 68 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 69 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 70 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 71 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 72 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 73 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 74 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 75 | coding-interviews | 81 | 16 | 0 | 65 | 49 |
 | 76 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
 | 77 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
 | 78 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
