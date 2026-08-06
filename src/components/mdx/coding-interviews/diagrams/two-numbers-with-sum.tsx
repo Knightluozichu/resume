@@ -28,7 +28,7 @@ export function TwoNumbersWithSumPointerDiagram() {
               <g key={i}>
                 <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={end ? "var(--accent)" : "var(--bg)"} fillOpacity={end ? 0.1 : 1} stroke={end ? "var(--accent)" : "var(--border)"} strokeWidth={end ? 1.6 : 1.2} />
                 <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="700" fontFamily="monospace" fill={end ? "var(--accent)" : "var(--text-primary)"}>{v}</text>
-                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">下标 {i}</text>
+                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">下标 {i}</text>
               </g>
             );
           })}
