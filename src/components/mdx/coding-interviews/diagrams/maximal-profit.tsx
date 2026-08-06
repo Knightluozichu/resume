@@ -25,15 +25,15 @@ export function MaximalProfitTimelineDiagram() {
           {/* 坐标轴 */}
           <line x1="80" y1="280" x2="760" y2="280" stroke="var(--border)" strokeWidth="1.4" />
           <line x1="80" y1="50" x2="80" y2="280" stroke="var(--border)" strokeWidth="1.4" />
-          <text x="60" y="64" textAnchor="end" fontSize="10" fill="var(--text-secondary)">16</text>
-          <text x="60" y="284" textAnchor="end" fontSize="10" fill="var(--text-secondary)">1</text>
+          <text x="60" y="64" textAnchor="end" fontSize="11" fill="var(--text-secondary)">16</text>
+          <text x="60" y="284" textAnchor="end" fontSize="11" fill="var(--text-secondary)">1</text>
           {/* 价格折线 */}
           <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2.4" />
           {prices.map((p, i) => (
             <g key={i}>
               <circle cx={chartX(i)} cy={chartY(p)} r="4.5" fill={i === buyDay ? "var(--success)" : i === sellDay ? "var(--accent)" : "var(--bg)"} stroke={i === buyDay ? "var(--success)" : i === sellDay ? "var(--accent)" : "var(--border)"} strokeWidth="1.6" />
               <text x={chartX(i)} y={chartY(p) - 12} textAnchor="middle" fontSize="11" fontWeight="700" fontFamily="monospace" fill="var(--text-primary)">{p}</text>
-              <text x={chartX(i)} y={300} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">t{i}</text>
+              <text x={chartX(i)} y={300} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">t{i}</text>
             </g>
           ))}
           {/* 买入/卖出标注 */}
