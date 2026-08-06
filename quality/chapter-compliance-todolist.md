@@ -145,7 +145,7 @@
     - 路径：`content/coding-interviews/stacks-queues/queue-with-two-stacks.mdx`
 - [x] ✅ **strings/regular-expressions-matching** — 已修复（2026-08-05，score 44→95，passed）
     - 路径：`content/coding-interviews/strings/regular-expressions-matching.mdx`
-- [ ] 🔴 P1 **trees/convert-binary-search-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+- [x] ✅ **trees/convert-binary-search-tree** — 已修复（2026-08-05，score 44→92，passed）
     - 路径：`content/coding-interviews/trees/convert-binary-search-tree.mdx`
 - [ ] 🔴 P1 **trees/path-in-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
     - 路径：`content/coding-interviews/trees/path-in-tree.mdx`
