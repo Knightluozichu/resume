@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T08:30:10.569Z；旧版分数不迁移。
+> 2026-08-06T08:32:23.137Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2567
+- failed：2566
 - queued：401
-- passed：985
+- passed：986
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -95,18 +95,18 @@
 | 82 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
 | 83 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
 | 84 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 85 | coding-interviews | 81 | 15 | 0 | 66 | 45 |
-| 86 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 87 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 88 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 89 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 90 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 91 | ddia | 15 | 15 | 0 | 0 | 44 |
-| 92 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 93 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 94 | effective-executive | 14 | 14 | 0 | 0 | 56 |
-| 95 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 96 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 85 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 86 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 87 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 88 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 89 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 90 | ddia | 15 | 15 | 0 | 0 | 44 |
+| 91 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 92 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 93 | effective-executive | 14 | 14 | 0 | 0 | 56 |
+| 94 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 95 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 96 | coding-interviews | 81 | 14 | 0 | 67 | 42 |
 | 97 | css-world | 14 | 14 | 0 | 0 | 42 |
 | 98 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
 | 99 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
