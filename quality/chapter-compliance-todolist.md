@@ -161,7 +161,7 @@
     - 路径：`content/coding-interviews/trees/rebuild-binary-tree.mdx`
 - [x] ✅ **arrays/constuct-array** — 已修复（2026-08-05，score 33→94，passed）
     - 路径：`content/coding-interviews/arrays/constuct-array.mdx`
-- [ ] 🔴 P1 **arrays/find-in-matrix** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **arrays/find-in-matrix** — 已修复（2026-08-05，score 33→96，passed）
     - 路径：`content/coding-interviews/arrays/find-in-matrix.mdx`
 - [ ] 🔴 P1 **arrays/integer-identical-to-index** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
     - 路径：`content/coding-interviews/arrays/integer-identical-to-index.mdx`

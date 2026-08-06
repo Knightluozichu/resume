@@ -3777,6 +3777,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ConstuctArrayPrefixSuffixDiagram: module0.ConstuctArrayPrefixSuffixDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/find-in-matrix": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/find-in-matrix");
+    return {
+      FindInMatrixDiagram: module0.FindInMatrixDiagram,
+    } as ChapterMdxComponents;
+  },
+
 
   "coding-interviews/arrays/greatest-sum-of-subarrays": async () => {
     const module0 =
