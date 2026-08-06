@@ -36,7 +36,7 @@ export function FirstUniqueFrequencyDiagram() {
               <g key={i}>
                 <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={unique ? "var(--success)" : "var(--warning)"} fillOpacity={found ? 0.2 : 0.1} stroke={unique ? "var(--success)" : "var(--warning)"} strokeWidth={found ? 2.2 : 1.3} />
                 <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 7} textAnchor="middle" fontSize="20" fontWeight="800" fontFamily="monospace" fill={unique ? "var(--success)" : "var(--warning)"}>{c.ch}</text>
-                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+                <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{i}</text>
               </g>
             );
           })}
