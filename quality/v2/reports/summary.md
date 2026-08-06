@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T08:36:26.946Z；旧版分数不迁移。
+> 2026-08-06T08:38:38.435Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2565
+- failed：2564
 - queued：401
-- passed：987
+- passed：988
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -116,14 +116,14 @@
 | 103 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
 | 104 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
 | 105 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 106 | coding-interviews | 81 | 13 | 0 | 68 | 39 |
-| 107 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 108 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 109 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 110 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 111 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
-| 112 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 113 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 106 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 107 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 108 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 109 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 110 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
+| 111 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 112 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 113 | coding-interviews | 81 | 12 | 0 | 69 | 36 |
 | 114 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 115 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
 | 116 | unity-scripting | 12 | 12 | 0 | 0 | 36 |

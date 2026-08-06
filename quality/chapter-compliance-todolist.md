@@ -157,7 +157,7 @@
     - 路径：`content/coding-interviews/01-basics/duplicate-in-array-no-edit.mdx`
 - [x] ✅ **trees/next-node-in-binary-tree** — 已修复（2026-08-05，score 43→92，passed）
     - 路径：`content/coding-interviews/trees/next-node-in-binary-tree.mdx`
-- [ ] 🔴 P1 **trees/rebuild-binary-tree** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **trees/rebuild-binary-tree** — 已修复（2026-08-05，score 43→93，passed）
     - 路径：`content/coding-interviews/trees/rebuild-binary-tree.mdx`
 - [ ] 🔴 P1 **arrays/constuct-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
     - 路径：`content/coding-interviews/arrays/constuct-array.mdx`
