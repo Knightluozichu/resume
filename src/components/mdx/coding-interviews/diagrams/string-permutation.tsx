@@ -30,7 +30,7 @@ export function PermutationSwapTreeDiagram() {
           <text x="410" y="34" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">交换递归树：逐层固定首位，后缀继续排列（abc → 6 个）</text>
           {/* 根 */}
           <Node x={410} y={70} label="abc" tone="var(--accent)" />
-          <text x={470} y={66} fontSize="10" fill="var(--text-secondary)">begin=0</text>
+          <text x={470} y={66} fontSize="11" fill="var(--text-secondary)">begin=0</text>
           {/* 第一层 */}
           <Edge x1={410} y1={88} x2={180} y2={142} />
           <Edge x1={410} y1={88} x2={410} y2={142} />
@@ -38,9 +38,9 @@ export function PermutationSwapTreeDiagram() {
           <Node x={180} y={160} label="abc" tone="var(--accent)" />
           <Node x={410} y={160} label="bac" tone="var(--accent)" />
           <Node x={640} y={160} label="cba" tone="var(--accent)" />
-          <text x={180} y={192} textAnchor="middle" fontSize="10" fill="var(--accent)">固定 a</text>
-          <text x={410} y={192} textAnchor="middle" fontSize="10" fill="var(--accent)">swap(0,1) 固定 b</text>
-          <text x={640} y={192} textAnchor="middle" fontSize="10" fill="var(--accent)">swap(0,2) 固定 c</text>
+          <text x={180} y={192} textAnchor="middle" fontSize="11" fill="var(--accent)">固定 a</text>
+          <text x={410} y={192} textAnchor="middle" fontSize="11" fill="var(--accent)">swap(0,1) 固定 b</text>
+          <text x={640} y={192} textAnchor="middle" fontSize="11" fill="var(--accent)">swap(0,2) 固定 c</text>
           {/* 叶子 */}
           <Edge x1={180} y1={178} x2={120} y2={232} />
           <Edge x1={180} y1={178} x2={240} y2={232} />
