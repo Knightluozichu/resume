@@ -127,7 +127,7 @@
     - 路径：`content/coding-interviews/trees/squence-of-bst.mdx`
 - [x] ✅ **trees/symmetric-binary-tree** — 已修复（2026-08-05，score 45→91，passed）
     - 路径：`content/coding-interviews/trees/symmetric-binary-tree.mdx`
-- [ ] 🔴 P1 **arrays/greatest-sum-of-subarrays** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
+- [x] ✅ **arrays/greatest-sum-of-subarrays** — 已修复（2026-08-05，score 44→91，passed）
     - 路径：`content/coding-interviews/arrays/greatest-sum-of-subarrays.mdx`
 - [ ] 🔴 P1 **arrays/min-rotated-array** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
     - 路径：`content/coding-interviews/arrays/min-rotated-array.mdx`
