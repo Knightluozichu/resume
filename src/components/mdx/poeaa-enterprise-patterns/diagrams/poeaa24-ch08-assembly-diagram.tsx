@@ -6,6 +6,8 @@
  * 每层标注对应的 POEAA 模式名。
  *
  * 纯静态展示，无交互。Server Component。
+ *
+ * 概念：第8章 通盘考虑、8.1 从领域层开始、8.2 深入到数据源层、8.3 表示层、8.4 一些关于具体技术的建议、8.5 其他分层方式
  */
 
 import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";

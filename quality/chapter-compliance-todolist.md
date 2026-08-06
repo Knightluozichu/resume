@@ -194,7 +194,7 @@
     - 路径：`content/poeaa-enterprise-patterns/27-pattern-10-identity-map/poeaa24-pattern-10-identity-map.mdx`
 - [x] ✅ **06-chapter-01-layering/poeaa24-chapter-01-layering** — 已修复（2026-08-06，score 53→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/06-chapter-01-layering/poeaa24-chapter-01-layering.mdx`
-- [ ] 🔴 P1 **13-chapter-08-putting-together/poeaa24-chapter-08-putting-together** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **13-chapter-08-putting-together/poeaa24-chapter-08-putting-together** — 已修复（2026-08-06，score 52→95，passed）
     - 路径：`content/poeaa-enterprise-patterns/13-chapter-08-putting-together/poeaa24-chapter-08-putting-together.mdx`
 - [ ] 🔴 P1 **15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns.mdx`
