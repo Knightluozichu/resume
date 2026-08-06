@@ -27,7 +27,7 @@ export function MaxSlidingWindowCandidateDiagram() {
             <g key={i}>
               <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={inWindow(i) ? "var(--accent)" : "var(--bg)"} fillOpacity={inWindow(i) ? 0.1 : 1} stroke={inWindow(i) ? "var(--accent)" : "var(--border)"} strokeWidth={inWindow(i) ? 1.6 : 1.2} />
               <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="700" fontFamily="monospace" fill={inWindow(i) ? "var(--accent)" : "var(--text-primary)"}>{v}</text>
-              <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+              <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{i}</text>
             </g>
           ))}
           {/* max 标记 */}
