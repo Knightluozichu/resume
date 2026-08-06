@@ -27,7 +27,7 @@ export function OccurrenceSentinelDiagram() {
             <g key={s.value}>
               <circle cx={s.x} cy={cy} r={r} fill={s.color} fillOpacity="0.1" stroke={s.color} strokeWidth="1.8" />
               <text x={s.x} y={cy + 2} textAnchor="middle" fontSize="18" fontWeight="800" fontFamily="monospace" fill={s.color}>{s.value}</text>
-              <text x={s.x} y={cy + 24} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{s.label}</text>
+              <text x={s.x} y={cy + 24} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{s.label}</text>
             </g>
           ))}
           {/* 转移箭头 */}
@@ -37,7 +37,7 @@ export function OccurrenceSentinelDiagram() {
           <text x="550" y={cy - 22} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">第二次 Insert</text>
           {/* -2 自环 */}
           <path d={`M ${690 + r - 6} ${cy - 30} C ${760} ${cy - 60}, ${770} ${cy + 20}, ${690 + r - 4} ${cy + 24}`} fill="none" stroke="var(--warning)" strokeWidth="1.6" markerEnd="url(#occ-arrow)" />
-          <text x="720" y={cy + 60} textAnchor="middle" fontSize="10" fill="var(--warning)">后续 Insert</text>
+          <text x="720" y={cy + 60} textAnchor="middle" fontSize="11" fill="var(--warning)">后续 Insert</text>
           {/* 查询 */}
           <text x="410" y="240" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">查询：扫描 256 槽，取 occurrence 非负的最小位置 → 该字符</text>
           <text x="410" y="266" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">例 google：g、o 都转 -2，l@4、e@5 为非负，最小位置 4 → 返回 l</text>
