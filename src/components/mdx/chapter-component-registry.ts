@@ -4348,6 +4348,69 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       TreeDepthContractMap: module0.TreeDepthContractMap,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/max-value-of-gifts": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/max-value-of-gifts");
+    return {
+      MaxValueOfGiftsDiagram: module0.MaxValueOfGiftsDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/arrays/missing-number": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/missing-number");
+    return {
+      MissingNumberDiagram: module0.MissingNumberDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/arrays/number-appearing-once": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/number-appearing-once");
+    return {
+      NumberAppearingOnceDiagram: module0.NumberAppearingOnceDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/arrays/numbers-appear-once": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/numbers-appear-once");
+    return {
+      NumbersAppearOnceDiagram: module0.NumbersAppearOnceDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/linked-lists/add-two-numbers": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/add-two-numbers");
+    return {
+      AddTwoNumbersDiagram: module0.AddTwoNumbersDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/math/digits-in-sequence": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/digits-in-sequence");
+    return {
+      DigitsInSequenceDiagram: module0.DigitsInSequenceDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/stacks-queues/queue-with-max": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/queue-with-max");
+    return {
+      QueueWithMaxDiagram: module0.QueueWithMaxDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/strings/translate-numbers-to-strings": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/translate-numbers-to-strings");
+    return {
+      TranslateNumbersToStringsDiagram: module0.TranslateNumbersToStringsDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/recursion/robot-moving-count": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/robot-moving-count");
+    return {
+      RobotMovingCountDiagram: module0.RobotMovingCountDiagram,
+    } as ChapterMdxComponents;
+  },
   "competitive-algorithms/00-foundations/01-welcome-to-algorithms":
     async () => {
       const modules = await Promise.all([

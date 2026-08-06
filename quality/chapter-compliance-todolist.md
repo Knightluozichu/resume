@@ -165,23 +165,23 @@
     - 路径：`content/coding-interviews/arrays/find-in-matrix.mdx`
 - [x] ✅ **arrays/integer-identical-to-index** — 已修复（2026-08-05，score 33→92，passed）
     - 路径：`content/coding-interviews/arrays/integer-identical-to-index.mdx`
-- [ ] 🔴 P1 **arrays/max-value-of-gifts** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **arrays/max-value-of-gifts** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/arrays/max-value-of-gifts.mdx`
-- [ ] 🔴 P1 **arrays/missing-number** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **arrays/missing-number** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/arrays/missing-number.mdx`
-- [ ] 🔴 P1 **arrays/number-appearing-once** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **arrays/number-appearing-once** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/arrays/number-appearing-once.mdx`
-- [ ] 🔴 P1 **arrays/numbers-appear-once** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **arrays/numbers-appear-once** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/arrays/numbers-appear-once.mdx`
-- [ ] 🔴 P1 **linked-lists/add-two-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **linked-lists/add-two-numbers** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/linked-lists/add-two-numbers.mdx`
-- [ ] 🔴 P1 **math/digits-in-sequence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **math/digits-in-sequence** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/math/digits-in-sequence.mdx`
-- [ ] 🔴 P1 **stacks-queues/queue-with-max** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **stacks-queues/queue-with-max** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/stacks-queues/queue-with-max.mdx`
-- [ ] 🔴 P1 **strings/translate-numbers-to-strings** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **strings/translate-numbers-to-strings** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/strings/translate-numbers-to-strings.mdx`
-- [ ] 🔴 P1 **recursion/robot-moving-count** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+- [x] ✅ **recursion/robot-moving-count** — 已修复（2026-08-05，score →90+，passed）
     - 路径：`content/coding-interviews/recursion/robot-moving-count.mdx`
 
 ## poeaa-enterprise-patterns（78 章 · ❌78 ⚠️0 ✅0）

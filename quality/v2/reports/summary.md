@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T09:24:54.556Z；旧版分数不迁移。
+> 2026-08-06T10:31:11.445Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2561
+- failed：2552
 - queued：401
-- passed：991
+- passed：1000
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -130,42 +130,42 @@
 | 117 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 118 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 119 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 120 | coding-interviews | 81 | 9 | 0 | 72 | 27 |
-| 121 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 122 | ai-agent | 9 | 9 | 0 | 0 | 9 |
-| 123 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
-| 124 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 125 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 126 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
-| 127 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 128 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 129 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 130 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 131 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 132 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 133 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 134 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 135 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 136 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 137 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 138 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 139 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 140 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 141 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 142 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 143 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 144 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 145 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 146 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 147 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 148 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 149 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
-| 150 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
-| 151 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
-| 152 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 153 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 154 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 155 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
+| 120 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 121 | ai-agent | 9 | 9 | 0 | 0 | 9 |
+| 122 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 123 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 124 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 125 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
+| 126 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 127 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 128 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 129 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 130 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 131 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 132 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 133 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 134 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 135 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 136 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 137 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 138 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 139 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 140 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 141 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 142 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 143 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 144 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 145 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 146 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 147 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 148 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
+| 149 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
+| 150 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
+| 151 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 152 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 153 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 154 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
+| 155 | coding-interviews | 81 | 0 | 0 | 81 | 0 |
 | 156 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 157 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
 | 158 | computer-networks-top-down | 10 | 0 | 0 | 0 | 0 |
