@@ -167,6 +167,7 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
     if (
       message.type() === "error" &&
       !/cloudflareinsights\.com|cdn-cgi\/rum/.test(`${value} ${sourceUrl}`) &&
+      !/giscus\.app/.test(`${value} ${sourceUrl}`) &&
       !/attribute d: Expected number/.test(value)
     )
       consoleErrors.push(value.slice(0, 500));

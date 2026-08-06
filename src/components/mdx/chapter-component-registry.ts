@@ -3751,6 +3751,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       AccumulateRecursionDiagram: module0.AccumulateRecursionDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/constuct-array": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/constuct-array");
+    return {
+      ConstuctArrayPrefixSuffixDiagram:
+        module0.ConstuctArrayPrefixSuffixDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/arrays/continous-cards": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/continous-cards");
@@ -3770,29 +3778,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.ContinuousSequenceContractDiagram,
     } as ChapterMdxComponents;
   },
-  "coding-interviews/arrays/constuct-array": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/constuct-array");
-    return {
-      ConstuctArrayPrefixSuffixDiagram: module0.ConstuctArrayPrefixSuffixDiagram,
-    } as ChapterMdxComponents;
-  },
   "coding-interviews/arrays/find-in-matrix": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/find-in-matrix");
     return {
-      FindInMatrixDiagram: module0.FindInMatrixDiagram,
+      FindInMatrixSearchDiagram: module0.FindInMatrixSearchDiagram,
     } as ChapterMdxComponents;
   },
-  "coding-interviews/arrays/integer-identical-to-index": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/integer-identical-to-index");
-    return {
-      IntegerIdenticalToIndexDiagram: module0.IntegerIdenticalToIndexDiagram,
-    } as ChapterMdxComponents;
-  },
-
-
   "coding-interviews/arrays/greatest-sum-of-subarrays": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/greatest-sum-of-subarrays");
@@ -3800,6 +3792,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GreatestSumRecurrenceDiagram: module0.GreatestSumRecurrenceDiagram,
       GreatestSumAllNegativeDiagram: module0.GreatestSumAllNegativeDiagram,
       GreatestSumContractDiagram: module0.GreatestSumContractDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/arrays/integer-identical-to-index": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/integer-identical-to-index");
+    return {
+      IntegerIdenticalToIndexDiagram: module0.IntegerIdenticalToIndexDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/arrays/inverse-pairs": async () => {
@@ -3829,6 +3828,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       VisitedRollbackDiagram: module0.VisitedRollbackDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/max-value-of-gifts": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/max-value-of-gifts");
+    return {
+      MaxValueOfGiftsDiagram: module0.MaxValueOfGiftsDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/arrays/maximal-profit": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/maximal-profit");
@@ -3848,6 +3854,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DuplicateRotationAmbiguityDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/missing-number": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/missing-number");
+    return {
+      MissingNumberDiagram: module0.MissingNumberDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/arrays/more-than-half-number": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/more-than-half-number");
@@ -3858,12 +3871,26 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       MajorityInputContractDiagram: module0.MajorityInputContractDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/number-appearing-once": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/number-appearing-once");
+    return {
+      NumberAppearingOnceDiagram: module0.NumberAppearingOnceDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/arrays/number-of-k": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/number-of-k");
     return {
       NumberOfKSortedRunDiagram: module0.NumberOfKSortedRunDiagram,
       NumberOfKContractDiagram: module0.NumberOfKContractDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/arrays/numbers-appear-once": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/numbers-appear-once");
+    return {
+      NumbersAppearOnceDiagram: module0.NumbersAppearOnceDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/arrays/reorder-array": async () => {
@@ -3892,6 +3919,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       TwoNumbersWithSumEliminationMap: module0.TwoNumbersWithSumEliminationMap,
       TwoNumbersWithSumContractDiagram:
         module0.TwoNumbersWithSumContractDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/linked-lists/add-two-numbers": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/add-two-numbers");
+    return {
+      AddTwoNumbersDiagram: module0.AddTwoNumbersDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/linked-lists/copy-complex-list": async () => {
@@ -3993,6 +4027,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.DicesProbabilityDistributionChart,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/math/digits-in-sequence": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/digits-in-sequence");
+    return {
+      DigitsInSequenceDiagram: module0.DigitsInSequenceDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/math/last-number-in-circle": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/last-number-in-circle");
@@ -4057,6 +4098,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DigitEnumerationTreeDiagram: module0.DigitEnumerationTreeDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/recursion/robot-moving-count": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/robot-moving-count");
+    return {
+      RobotMovingCountDiagram: module0.RobotMovingCountDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/stacks-queues/max-in-sliding-window": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/max-in-sliding-window");
@@ -4074,6 +4122,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       MinStackSnapshotDiagram: module0.MinStackSnapshotDiagram,
       MinStackInvariantMap: module0.MinStackInvariantMap,
       MinStackOperationMap: module0.MinStackOperationMap,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/stacks-queues/queue-with-max": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/queue-with-max");
+    return {
+      QueueWithMaxDiagram: module0.QueueWithMaxDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/stacks-queues/queue-with-two-stacks": async () => {
@@ -4202,6 +4257,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       StringToIntContractDiagram: module0.StringToIntContractDiagram,
       StringToIntBoundaryMap: module0.StringToIntBoundaryMap,
       StringToIntValidityDiagram: module0.StringToIntValidityDiagram,
+    } as ChapterMdxComponents;
+  },
+  "coding-interviews/strings/translate-numbers-to-strings": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/translate-numbers-to-strings");
+    return {
+      TranslateNumbersToStringsDiagram:
+        module0.TranslateNumbersToStringsDiagram,
     } as ChapterMdxComponents;
   },
   "coding-interviews/trees/balanced-binary-tree": async () => {
@@ -4346,69 +4409,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       TreeDepthPathDiagram: module0.TreeDepthPathDiagram,
       TreeDepthCallStackDiagram: module0.TreeDepthCallStackDiagram,
       TreeDepthContractMap: module0.TreeDepthContractMap,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/arrays/max-value-of-gifts": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/max-value-of-gifts");
-    return {
-      MaxValueOfGiftsDiagram: module0.MaxValueOfGiftsDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/arrays/missing-number": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/missing-number");
-    return {
-      MissingNumberDiagram: module0.MissingNumberDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/arrays/number-appearing-once": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/number-appearing-once");
-    return {
-      NumberAppearingOnceDiagram: module0.NumberAppearingOnceDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/arrays/numbers-appear-once": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/numbers-appear-once");
-    return {
-      NumbersAppearOnceDiagram: module0.NumbersAppearOnceDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/linked-lists/add-two-numbers": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/add-two-numbers");
-    return {
-      AddTwoNumbersDiagram: module0.AddTwoNumbersDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/math/digits-in-sequence": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/digits-in-sequence");
-    return {
-      DigitsInSequenceDiagram: module0.DigitsInSequenceDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/stacks-queues/queue-with-max": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/queue-with-max");
-    return {
-      QueueWithMaxDiagram: module0.QueueWithMaxDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/strings/translate-numbers-to-strings": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/translate-numbers-to-strings");
-    return {
-      TranslateNumbersToStringsDiagram: module0.TranslateNumbersToStringsDiagram,
-    } as ChapterMdxComponents;
-  },
-  "coding-interviews/recursion/robot-moving-count": async () => {
-    const module0 =
-      await import("@/components/mdx/coding-interviews/diagrams/robot-moving-count");
-    return {
-      RobotMovingCountDiagram: module0.RobotMovingCountDiagram,
     } as ChapterMdxComponents;
   },
   "competitive-algorithms/00-foundations/01-welcome-to-algorithms":

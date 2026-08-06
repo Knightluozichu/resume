@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export function FindInMatrixDiagram() {
+export function FindInMatrixSearchDiagram() {
   const matrix = [
     [1, 2, 8, 9],
     [2, 4, 9, 12],
@@ -20,10 +20,10 @@ export function FindInMatrixDiagram() {
                 fill={ri === 0 && ci === 3 ? "var(--accent)" : "var(--bg)"}
                 stroke={ri === 0 && ci === 3 ? "var(--accent)" : "var(--border)"}
                 strokeWidth={ri === 0 && ci === 3 ? 2 : 1} />
-              <text x={80 + ci * 100} y={97 + ri * 80} textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--text-primary)">{val}</text>
+              <text x={80 + ci * 100} y={97 + ri * 80} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{val}</text>
             </g>
           )))}
-          <text x="250" y="400" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">二维数组中的查找：从右上角开始，向左减小，向下增大，每次排除一行或一列，O(m+n) 时间</text>
+          <text x="250" y="400" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">二维数组中的查找：从右上角开始，向左减小，向下增大，每次排除一行或一列，O(m+n) 时间</text>
         </svg>
       </div>
     </figure>

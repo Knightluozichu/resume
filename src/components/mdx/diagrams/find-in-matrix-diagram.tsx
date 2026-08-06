@@ -108,7 +108,7 @@ export function FindInMatrixDiagram() {
   };
 
   return (
-    <figure className="mdx-figure mx-auto my-6 max-w-[580px]">
+    <figure className="mdx-figure mx-auto my-6 max-w-[540px]">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
         <svg
           viewBox="0 0 540 320"
@@ -152,7 +152,7 @@ export function FindInMatrixDiagram() {
                 x={pos.x}
                 y="44"
                 textAnchor="middle"
-                fontSize="10px"
+                fontSize="11px"
                 fontWeight="600"
                 fill="var(--text-secondary)"
               >
@@ -170,7 +170,7 @@ export function FindInMatrixDiagram() {
                 x="22"
                 y={pos.y + 3.5}
                 textAnchor="middle"
-                fontSize="10px"
+                fontSize="11px"
                 fontWeight="600"
                 fill="var(--text-secondary)"
               >
@@ -390,7 +390,7 @@ export function FindInMatrixDiagram() {
             <text
               x="305"
               y="196"
-              fontSize="10px"
+              fontSize="11px"
               fontWeight="600"
               fill="var(--text-secondary)"
             >
