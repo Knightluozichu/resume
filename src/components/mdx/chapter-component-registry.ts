@@ -3770,6 +3770,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.ContinuousSequenceContractDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/constuct-array": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/constuct-array");
+    return {
+      ConstuctArrayPrefixSuffixDiagram: module0.ConstuctArrayPrefixSuffixDiagram,
+    } as ChapterMdxComponents;
+  },
+
   "coding-interviews/arrays/greatest-sum-of-subarrays": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/greatest-sum-of-subarrays");
