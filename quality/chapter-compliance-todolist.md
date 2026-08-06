@@ -119,7 +119,7 @@
     - 路径：`content/coding-interviews/math/number-of-1.mdx`
 - [x] ✅ **recursion/print-numbers** — 已修复（2026-08-05，score 45→93，passed）
     - 路径：`content/coding-interviews/recursion/print-numbers.mdx`
-- [ ] 🔴 P1 **stacks-queues/stack-push-pop-order** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+- [x] ✅ **stacks-queues/stack-push-pop-order** — 已修复（2026-08-05，score 45→90，passed）
     - 路径：`content/coding-interviews/stacks-queues/stack-push-pop-order.mdx`
 - [ ] 🔴 P1 **strings/first-character-in-stream** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
     - 路径：`content/coding-interviews/strings/first-character-in-stream.mdx`
