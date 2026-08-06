@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T07:55:37.643Z；旧版分数不迁移。
+> 2026-08-06T08:01:36.492Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2572
+- failed：2571
 - queued：401
-- passed：980
+- passed：981
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -56,11 +56,11 @@
 | 43 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 44 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 45 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 46 | coding-interviews | 81 | 20 | 0 | 61 | 61 |
-| 47 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 48 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 49 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 50 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 46 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 47 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 48 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 49 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 50 | coding-interviews | 81 | 19 | 0 | 62 | 58 |
 | 51 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
 | 52 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
 | 53 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
