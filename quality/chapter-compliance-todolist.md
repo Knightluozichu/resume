@@ -163,7 +163,7 @@
     - 路径：`content/coding-interviews/arrays/constuct-array.mdx`
 - [x] ✅ **arrays/find-in-matrix** — 已修复（2026-08-05，score 33→96，passed）
     - 路径：`content/coding-interviews/arrays/find-in-matrix.mdx`
-- [ ] 🔴 P1 **arrays/integer-identical-to-index** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **arrays/integer-identical-to-index** — 已修复（2026-08-05，score 33→92，passed）
     - 路径：`content/coding-interviews/arrays/integer-identical-to-index.mdx`
 - [ ] 🔴 P1 **arrays/max-value-of-gifts** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
     - 路径：`content/coding-interviews/arrays/max-value-of-gifts.mdx`

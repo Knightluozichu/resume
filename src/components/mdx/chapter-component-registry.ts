@@ -3784,6 +3784,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       FindInMatrixDiagram: module0.FindInMatrixDiagram,
     } as ChapterMdxComponents;
   },
+  "coding-interviews/arrays/integer-identical-to-index": async () => {
+    const module0 =
+      await import("@/components/mdx/coding-interviews/diagrams/integer-identical-to-index");
+    return {
+      IntegerIdenticalToIndexDiagram: module0.IntegerIdenticalToIndexDiagram,
+    } as ChapterMdxComponents;
+  },
 
 
   "coding-interviews/arrays/greatest-sum-of-subarrays": async () => {
