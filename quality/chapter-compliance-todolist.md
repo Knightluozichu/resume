@@ -79,7 +79,7 @@
     - 路径：`content/coding-interviews/linked-lists/delete-node.mdx`
 - [x] ✅ **linked-lists/merge-sorted-lists** — 已修复（2026-08-05，score 46→92，passed）
     - 路径：`content/coding-interviews/linked-lists/merge-sorted-lists.mdx`
-- [ ] 🔴 P1 **math/last-number-in-circle** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+- [x] ✅ **math/last-number-in-circle** — 已修复（2026-08-05，score 46→93，passed）
     - 路径：`content/coding-interviews/math/last-number-in-circle.mdx`
 - [ ] 🔴 P1 **math/power** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
     - 路径：`content/coding-interviews/math/power.mdx`
