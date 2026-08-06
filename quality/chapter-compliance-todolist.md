@@ -101,7 +101,7 @@
     - 路径：`content/coding-interviews/trees/common-parent-in-tree.mdx`
 - [x] ✅ **trees/kth-node-in-bst** — 已修复（2026-08-05，score 46→92，passed）
     - 路径：`content/coding-interviews/trees/kth-node-in-bst.mdx`
-- [ ] 🔴 P1 **trees/print-trees-in-lines** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
+- [x] ✅ **trees/print-trees-in-lines** — 已修复（2026-08-05，score 46→92，passed）
     - 路径：`content/coding-interviews/trees/print-trees-in-lines.mdx`
 - [ ] 🔴 P1 **trees/print-trees-in-zigzag** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 46）
     - 路径：`content/coding-interviews/trees/print-trees-in-zigzag.mdx`
