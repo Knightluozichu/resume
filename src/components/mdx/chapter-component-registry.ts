@@ -15333,10 +15333,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   },
   "poeaa-enterprise-patterns/00-map/poeaa24-official-learning-map":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-learning-map-diagram");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-learning-map-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-five-layer-viz"),
+      ]);
       return {
-        Poeaa24LearningMapDiagram: module0.Poeaa24LearningMapDiagram,
+        Poeaa24LearningMapDiagram: modules[0].Poeaa24LearningMapDiagram,
+        Poeaa24FiveLayerViz: modules[1].Poeaa24FiveLayerViz,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/03-pattern-list/poeaa24-pattern-list":

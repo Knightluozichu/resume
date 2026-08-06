@@ -1,17 +1,17 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T12:40:09.451Z；旧版分数不迁移。
+> 2026-08-06T14:20:16.900Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2552
+- failed：2551
 - queued：401
-- passed：1000
-- published：543
+- passed：920
+- published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
-| 1 | poeaa-enterprise-patterns | 78 | 78 | 0 | 0 | 234 |
+| 1 | poeaa-enterprise-patterns | 78 | 77 | 0 | 1 | 231 |
 | 2 | pragmatic-programmer | 71 | 71 | 0 | 0 | 213 |
 | 3 | coder-revolution | 62 | 62 | 0 | 0 | 186 |
 | 4 | code-complete-2e | 51 | 51 | 0 | 0 | 153 |
@@ -165,7 +165,7 @@
 | 152 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
 | 153 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
 | 154 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
-| 155 | coding-interviews | 81 | 0 | 0 | 81 | 0 |
+| 155 | coding-interviews | 81 | 0 | 0 | 0 | 0 |
 | 156 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |
 | 157 | computer-graphics-4e | 14 | 0 | 0 | 14 | 0 |
 | 158 | computer-networks-top-down | 10 | 0 | 0 | 0 | 0 |
