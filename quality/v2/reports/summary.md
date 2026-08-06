@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T06:55:30.891Z；旧版分数不迁移。
+> 2026-08-06T07:16:06.458Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2579
+- failed：2578
 - queued：401
-- passed：973
+- passed：974
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -26,10 +26,10 @@
 | 13 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 14 | windows-journey | 29 | 29 | 0 | 0 | 87 |
 | 15 | out-of-control | 28 | 28 | 0 | 0 | 84 |
-| 16 | coding-interviews | 81 | 27 | 0 | 54 | 84 |
-| 17 | design-patterns | 27 | 27 | 0 | 0 | 81 |
-| 18 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
-| 19 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 16 | design-patterns | 27 | 27 | 0 | 0 | 81 |
+| 17 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
+| 18 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 19 | coding-interviews | 81 | 26 | 0 | 55 | 81 |
 | 20 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 21 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 22 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
