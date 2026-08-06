@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-06T08:32:23.137Z；旧版分数不迁移。
+> 2026-08-06T08:36:26.946Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2566
+- failed：2565
 - queued：401
-- passed：986
+- passed：987
 - published：543
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -106,17 +106,17 @@
 | 93 | effective-executive | 14 | 14 | 0 | 0 | 56 |
 | 94 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
 | 95 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
-| 96 | coding-interviews | 81 | 14 | 0 | 67 | 42 |
-| 97 | css-world | 14 | 14 | 0 | 0 | 42 |
-| 98 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 99 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 100 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 101 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 102 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
-| 103 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 104 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 105 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 106 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 96 | css-world | 14 | 14 | 0 | 0 | 42 |
+| 97 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 98 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 99 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 100 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 101 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
+| 102 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
+| 103 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 104 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 105 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 106 | coding-interviews | 81 | 13 | 0 | 68 | 39 |
 | 107 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
 | 108 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
 | 109 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
