@@ -105,7 +105,7 @@
     - 路径：`content/coding-interviews/trees/print-trees-in-lines.mdx`
 - [x] ✅ **trees/print-trees-in-zigzag** — 已修复（2026-08-05，score 46→94，passed）
     - 路径：`content/coding-interviews/trees/print-trees-in-zigzag.mdx`
-- [ ] 🔴 P1 **arrays/inverse-pairs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
+- [x] ✅ **arrays/inverse-pairs** — 已修复（2026-08-05，score 45→92，passed）
     - 路径：`content/coding-interviews/arrays/inverse-pairs.mdx`
 - [ ] 🔴 P1 **arrays/maximal-profit** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 45）
     - 路径：`content/coding-interviews/arrays/maximal-profit.mdx`
