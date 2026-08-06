@@ -131,7 +131,7 @@
     - 路径：`content/coding-interviews/arrays/greatest-sum-of-subarrays.mdx`
 - [x] ✅ **arrays/min-rotated-array** — 已修复（2026-08-05，score 44→90，passed）
     - 路径：`content/coding-interviews/arrays/min-rotated-array.mdx`
-- [ ] 🔴 P1 **arrays/number-of-k** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 44）
+- [x] ✅ **arrays/number-of-k** — 已修复（2026-08-05，score 44→95，passed）
     - 路径：`content/coding-interviews/arrays/number-of-k.mdx`
 - [ ] 🔴 P1 **linked-lists/delete-duplicated-node** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、练习不足、UX 不足、工程结构不足（score 44）
     - 路径：`content/coding-interviews/linked-lists/delete-duplicated-node.mdx`

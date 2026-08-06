@@ -29,7 +29,7 @@ export function NumberOfKSortedRunDiagram() {
             <g key={i}>
               <rect x={cx(i)} y={64} width={cellW} height={cellH} rx="6" fill={inRun(i) ? "var(--success)" : "var(--bg)"} fillOpacity={inRun(i) ? 0.12 : 1} stroke={inRun(i) ? "var(--success)" : "var(--border)"} strokeWidth={inRun(i) ? 1.6 : 1.2} />
               <text x={cx(i) + cellW / 2} y={64 + cellH / 2 + 6} textAnchor="middle" fontSize="17" fontWeight="700" fontFamily="monospace" fill={inRun(i) ? "var(--success)" : "var(--text-primary)"}>{v}</text>
-              <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{i}</text>
+              <text x={cx(i) + cellW / 2} y={136} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{i}</text>
             </g>
           ))}
           {/* first / last 标记 */}
