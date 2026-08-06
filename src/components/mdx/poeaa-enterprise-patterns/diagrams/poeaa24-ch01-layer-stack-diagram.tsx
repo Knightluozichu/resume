@@ -8,6 +8,8 @@
  *
  * 纯静态展示，无交互。Server Component。
  * 全部 DESIGN token 配色。遵守 docs/diagram-layout-rules.md。
+ *
+ * 概念：第1章 分层、1.1 企业应用中层次的演化、1.2 三个基本层次、1.3 为各层选择运行环境
  */
 
 import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
