@@ -16178,6 +16178,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Chapter01DecisionBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/05-topic-01-your-life/tpp20-topic-01-your-life":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic01-choice-path-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic01-feedback-boundary-diagram"),
+      ]);
+      return {
+        Tpp20Topic01ChoicePathDiagram: modules[0].Tpp20Topic01ChoicePathDiagram,
+        Tpp20Topic01FeedbackBoundaryDiagram:
+          modules[1].Tpp20Topic01FeedbackBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
