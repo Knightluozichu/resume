@@ -15389,10 +15389,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch04-mvc-triangle");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch04-mvc-triangle"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch04-controller-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch04MvcTriangle: module0.Poeaa24Ch04MvcTriangle,
+        Poeaa24Ch04MvcTriangleDiagram: modules[0].Poeaa24Ch04MvcTriangleDiagram,
+        Poeaa24Ch04ControllerDecisionDiagram:
+          modules[1].Poeaa24Ch04ControllerDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/10-chapter-05-concurrency/poeaa24-chapter-05-concurrency":
