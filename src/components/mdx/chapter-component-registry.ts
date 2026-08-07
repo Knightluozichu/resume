@@ -16203,6 +16203,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic02OptionRecoveryDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/07-topic-03-software-entropy/tpp20-topic-03-software-entropy":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic03-entropy-loop-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic03-repair-guardrail-diagram"),
+      ]);
+      return {
+        Tpp20Topic03EntropyLoopDiagram:
+          modules[0].Tpp20Topic03EntropyLoopDiagram,
+        Tpp20Topic03RepairGuardrailDiagram:
+          modules[1].Tpp20Topic03RepairGuardrailDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
