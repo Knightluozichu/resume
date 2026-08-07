@@ -359,7 +359,7 @@
     - 路径：`content/pragmatic-programmer/02-second-edition-preface/tpp20-second-edition-preface.mdx`
 - [x] ✅ **03-first-edition-preface/tpp20-first-edition-preface** — 已修复（2026-08-07，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/03-first-edition-preface/tpp20-first-edition-preface.mdx`
-- [ ] 🔴 P1 **04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy** — 已修复（2026-08-07，score 42→95，passed）
     - 路径：`content/pragmatic-programmer/04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy.mdx`
 - [ ] 🔴 P1 **05-topic-01-your-life/tpp20-topic-01-your-life** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/05-topic-01-your-life/tpp20-topic-01-your-life.mdx`

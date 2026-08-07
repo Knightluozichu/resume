@@ -16165,6 +16165,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20FirstPrefaceReflectionDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/04-chapter-01-pragmatic-philosophy/tpp20-chapter-01-pragmatic-philosophy":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter01-pragmatic-chain-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter01-decision-boundary-diagram"),
+      ]);
+      return {
+        Tpp20Chapter01PragmaticChainDiagram:
+          modules[0].Tpp20Chapter01PragmaticChainDiagram,
+        Tpp20Chapter01DecisionBoundaryDiagram:
+          modules[1].Tpp20Chapter01DecisionBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
