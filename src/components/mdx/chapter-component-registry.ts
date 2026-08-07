@@ -16281,6 +16281,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Chapter02DecisionLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/13-topic-08-essence-good-design/tpp20-topic-08-essence-good-design":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic08-change-surface-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic08-design-comparison-diagram"),
+      ]);
+      return {
+        Tpp20Topic08ChangeSurfaceDiagram:
+          modules[0].Tpp20Topic08ChangeSurfaceDiagram,
+        Tpp20Topic08DesignComparisonDiagram:
+          modules[1].Tpp20Topic08DesignComparisonDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
