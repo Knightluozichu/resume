@@ -15565,8 +15565,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-15-dependent-mapping-diagram");
       return {
-        Poeaa24Pattern15DependentMapping:
-          module0.Poeaa24Pattern15DependentMapping,
+        Poeaa24Pattern15DependentMappingDiagram:
+          module0.Poeaa24Pattern15DependentMappingDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value":

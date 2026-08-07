@@ -7,61 +7,218 @@ description: "由拥有者类负责从属对象的数据库映射，把没有独
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-15-dependent-mapping
 draft: false
 ---
 
-import { Poeaa24Pattern15DependentMapping } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-15-dependent-mapping-diagram";
+import { Poeaa24Pattern15DependentMappingDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-15-dependent-mapping-diagram";
 
+<Objectives>
+
+- 能判断从属对象是否没有独立身份和生命周期，并解释为什么由拥有者统一负责映射
+- 能编写 TypeScript Mapper 共同加载、保存和删除拥有者及其从属对象，保持聚合边界一致
+- 能根据共享身份、查询形状、级联成本和独立访问需求，判断何时采用或拒绝依赖映射
+
+</Objectives>
 
 ## 为什么 12.4 依赖映射 值得单独学习
 
-由拥有者类负责从属对象的数据库映射，把没有独立身份和生命周期的子对象随聚合一起持久化。 12.4 依赖映射 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+由拥有者类负责从属对象的数据库映射，把没有独立身份和生命周期的子对象随聚合一起持久化。12.4 依赖映射的核心不是套用某个框架 API，而是回答：如何在对象身份、关联和写回之间保住一致语义，同时控制查询与映射成本。在订单聚合持久化中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
 
-本页以 2024 年中文版公开目录限定 **12.4 依赖映射** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+<Term def="由拥有者的映射器共同持久化没有独立身份和生命周期的从属对象的映射方式。">
+  依赖映射
+</Term>
+的价值不是让所有关联都级联，而是把真实的生命周期归属显式写进对象图和关系表。本页以
+2024 年中文版公开目录限定 **12.4 依赖映射** 的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-12.4 依赖映射 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：由拥有者类负责从属对象的数据库映射，把没有独立身份和生命周期的子对象随聚合一起持久化。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+12.4 依赖映射面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：拥有者 Mapper 负责从属行的加载、保存和删除，从属对象不能绕过拥有者独立写回。机制带来的收益必须与级联删除风险、批量查询成本和独立访问限制同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
 
-对 12.4 依赖映射，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能证明从属对象不能脱离拥有者独立存在，并在替换或删除聚合时维持生命周期一致”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 12.4 依赖映射。
-
+对 12.4 依赖映射，优先比较的替代路线是：关联表映射、独立对象 Mapper、嵌入值或显式聚合服务。只有在 <Term def="规定哪些对象能一起修改、保存和删除的业务一致性边界。">聚合边界</Term> 明确要求从属对象随拥有者生存，且从属对象不需要独立查询和权限时，才值得引入依赖映射；若实验只能显示结果而不能指出 <Term def="数据库行与内存对象在生命周期内被视为同一实例的业务识别依据。">独立身份</Term> 从何处越界，就不能据此选择 12.4 依赖映射。
 
 ## 目录单元到教学证据
 
 ### 12.4 依赖映射
 
-在 **12.4 依赖映射** 的学习边界里，12.4 依赖映射 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 12.4 依赖映射。
+在 **12.4 依赖映射** 的学习边界里，12.4 依赖映射不是待背诵的目录词，而是用来检查“订单对象图”是否把映射责任交给拥有者。对订单聚合持久化，学习者要记录身份、外键和生命周期的可观察变化，并说明它何时支持或否定 12.4 依赖映射。
 
 ## 专属设计案例：订单聚合持久化
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。12.4 依赖映射 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+把订单聚合持久化切成“订单拥有者 → 订单项从属对象 → 拥有者 Mapper → orders 与 order_items”四个观察点。12.4 依赖映射的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及身份、外键、聚合边界、值对象、继承策略中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-15-dependent-mapping**；模式族为 **mapping**；裁决是“能证明从属对象不能脱离拥有者独立存在，并在替换或删除聚合时维持生命周期一致”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 12.4 依赖映射 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-15-dependent-mapping**；模式族为 **mapping**；裁决是“能证明从属对象不能脱离拥有者独立存在，并在替换或删除聚合时维持生命周期一致”；观测项包括身份、外键、聚合边界、值对象、继承策略；拒绝条件是“从属行需要独立身份、独立权限或独立事务”。
 
-配置不是生产框架语法，而是一张评审卡。对 12.4 依赖映射 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+配置不是生产框架语法，而是一张评审卡。对 12.4 依赖映射的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
 
-## 三步交互实验
+# 结构解剖
 
-
-<Poeaa24Pattern15DependentMapping />
+<Poeaa24Pattern15DependentMappingDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 12.4 依赖映射 的证据        | 应拒绝或改用其他方案的信号                 |
-| -------- | -------------------------------- | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰  | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收            | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退 | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析         |
+| 评审问题 | 选择 12.4 依赖映射 的证据                | 应拒绝或改用其他方案的信号          |
+| -------- | ---------------------------------------- | ----------------------------------- |
+| 责任     | 拥有者 Mapper 统一加载、保存和删除从属行 | 从属对象绕过拥有者直接写数据库      |
+| 变化     | 聚合内结构变化可由一个映射边界吸收       | 从属数据需要独立发布、权限和事务    |
+| 失败     | 拥有者与从属写回失败可作为一个结果观测   | 级联删除或部分写回会留下孤儿数据    |
+| 替代     | 已与独立 Mapper、嵌入值和关联表映射比较  | 只因 ORM 默认级联就忽略真实生命周期 |
 
+## 代码实践：由拥有者 Mapper 维护订单项
+
+订单项没有自己的业务身份，离开订单就没有可解释的生命周期；因此加载、保存和删除都从 `OrderMapper` 进入。<Term def="由拥有者统一完成从属对象读取、写回和删除的映射责任。">拥有者映射责任</Term>必须和数据库外键约束、事务边界同时验证。
+
+```ts
+type OrderItem = {
+  product: string;
+  quantity: number;
+  unitCents: number;
+};
+
+type Order = {
+  id: string;
+  items: OrderItem[];
+};
+
+type OrderRow = {
+  id: string;
+};
+
+type OrderItemRow = {
+  orderId: string;
+  product: string;
+  quantity: number;
+  unitCents: number;
+};
+
+class OrderMapper {
+  constructor(
+    private readonly orderRows: OrderRow[],
+    private readonly itemRows: OrderItemRow[],
+  ) {}
+
+  load(id: string): Order {
+    const owner = this.orderRows.find((row) => row.id === id);
+    if (!owner) throw new Error("order not found");
+
+    return {
+      id: owner.id,
+      items: this.itemRows
+        .filter((row) => row.orderId === owner.id)
+        .map((row) => ({
+          product: row.product,
+          quantity: row.quantity,
+          unitCents: row.unitCents,
+        })),
+    };
+  }
+
+  save(order: Order): void {
+    const existing = this.orderRows.find((row) => row.id === order.id);
+    if (!existing) this.orderRows.push({ id: order.id });
+
+    for (let index = this.itemRows.length - 1; index >= 0; index -= 1) {
+      if (this.itemRows[index].orderId === order.id)
+        this.itemRows.splice(index, 1);
+    }
+    for (const item of order.items) {
+      this.itemRows.push({ orderId: order.id, ...item });
+    }
+  }
+
+  remove(orderId: string): void {
+    for (let index = this.itemRows.length - 1; index >= 0; index -= 1) {
+      if (this.itemRows[index].orderId === orderId)
+        this.itemRows.splice(index, 1);
+    }
+    const ownerIndex = this.orderRows.findIndex((row) => row.id === orderId);
+    if (ownerIndex >= 0) this.orderRows.splice(ownerIndex, 1);
+  }
+}
+```
+
+这段代码把从属行的读写和删除集中在拥有者 Mapper 中，避免订单项形成第二个生命周期入口。生产实现还应把 `save` 和 `remove` 放入同一事务，并用数据库外键防止孤儿行；如果订单项要独立查询或授权，应停止扩展这个 Mapper，重新划分聚合边界。
+
+## 常见误区
+
+<Callout type="trap" title="给从属对象偷偷增加独立身份">
+
+- **现象**：订单项拥有公开 ID、独立 API 和独立删除入口，却仍声称采用依赖映射。
+- **原因**：数据库主键存在就被误认为业务上拥有独立生命周期。
+- **修法**：区分技术主键与业务身份；若从属对象需要独立权限或事务，应改用独立 Mapper 或重新划分聚合。
+
+</Callout>
+
+<Callout type="trap" title="级联删除没有事务保护">
+
+- **现象**：订单删除成功但订单项删除失败，数据库留下孤儿行。
+- **原因**：把 ORM 的级联配置当成一致性边界，没有明确事务与外键策略。
+- **修法**：由拥有者 Mapper 在事务中完成删除，并让数据库外键、回滚测试和监控共同验证结果。
+
+</Callout>
+
+<Callout type="trap" title="加载拥有者时忽略从属集合变化">
+
+- **现象**：保存订单只更新 `orders`，旧订单项残留或新订单项没有写回。
+- **原因**：映射器只关心拥有者行，没有把从属集合视为同一聚合状态。
+- **修法**：明确集合替换、增删和排序语义，补齐加载后保存、删除和并发冲突测试。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+**问题 1：判断独立性。** 订单项需要单独授权给仓库人员，并能在多个订单之间复用。它还适合依赖映射吗？
+
+<Answer>
+
+不适合。独立授权和跨订单复用说明订单项拥有独立身份与生命周期，应使用独立实体和 Mapper，订单只保存关联关系。
+
+</Answer>
+
+**问题 2：检查删除。** `OrderMapper.remove` 只删除订单行，为什么会造成数据问题？
+
+<Answer>
+
+订单项的生命周期依附于订单，单独删除拥有者会留下孤儿行或破坏外键约束。删除必须在同一事务中先处理从属行或使用经过验证的外键级联，并测试失败回滚。
+
+</Answer>
+
+**问题 3：选择替代方案。** 订单项集合很大，订单详情页只需要其中一项，仍应每次加载完整聚合吗？
+
+<Answer>
+
+不一定。依赖映射表达的是生命周期归属，不要求所有查询都加载完整集合；可以为读场景提供专用查询或分页投影，但写入聚合时仍需尊重拥有者边界和并发规则。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="依赖映射">
+    由拥有者的映射器共同持久化没有独立身份和生命周期的从属对象的映射方式。
+  </GlossaryItem>
+  <GlossaryItem term="聚合边界">
+    规定哪些对象能一起修改、保存和删除的业务一致性边界。
+  </GlossaryItem>
+  <GlossaryItem term="独立身份">
+    数据库行与内存对象在生命周期内被视为同一实例的业务识别依据。
+  </GlossaryItem>
+  <GlossaryItem term="拥有者映射责任">
+    由拥有者统一完成从属对象读取、写回和删除的映射责任。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 12.4 依赖映射 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
-
+掌握 12.4 依赖映射的标志不是记住定义，而是能在订单聚合持久化中解释“订单拥有者 → 订单项从属对象 → 拥有者 Mapper → orders 与 order_items”的责任链，利用身份、外键、聚合边界、值对象、继承策略作出可证伪的选择，并在从属对象需要独立权限、事务或身份时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -74,3 +231,10 @@ import { Poeaa24Pattern15DependentMapping } from "@/components/mdx/poeaa-enterpr
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
