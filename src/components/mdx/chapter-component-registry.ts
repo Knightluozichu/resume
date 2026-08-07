@@ -16594,6 +16594,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Chapter06ConcurrencyLab: module0.Tpp20Chapter06ConcurrencyLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/42-topic-33-breaking-temporal-coupling/tpp20-topic-33-breaking-temporal-coupling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-33-breaking-temporal-coupling-diagram");
+      return {
+        Tpp20Topic33CriticalPathEvidenceDiagram:
+          module0.Tpp20Topic33CriticalPathEvidenceDiagram,
+        Tpp20Topic33TemporalCouplingFlowDiagram:
+          module0.Tpp20Topic33TemporalCouplingFlowDiagram,
+        Tpp20Topic33TemporalCouplingLab:
+          module0.Tpp20Topic33TemporalCouplingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

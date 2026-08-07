@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T21:45:02.795Z；旧版分数不迁移。
+> 2026-08-07T21:52:46.049Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2430
+- failed：2429
 - queued：401
-- passed：1041
+- passed：1042
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -26,11 +26,11 @@
 | 13 | out-of-control | 28 | 28 | 0 | 0 | 84 |
 | 14 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 15 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
-| 16 | pragmatic-programmer | 71 | 27 | 0 | 44 | 81 |
-| 17 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
-| 18 | fluent-python | 26 | 26 | 0 | 0 | 78 |
-| 19 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
-| 20 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 16 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 17 | fluent-python | 26 | 26 | 0 | 0 | 78 |
+| 18 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
+| 19 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 20 | pragmatic-programmer | 71 | 26 | 0 | 45 | 78 |
 | 21 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
 | 22 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
 | 23 | programmers-math | 25 | 25 | 0 | 0 | 75 |
