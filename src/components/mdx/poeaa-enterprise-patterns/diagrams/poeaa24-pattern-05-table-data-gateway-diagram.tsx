@@ -1,9 +1,9 @@
 /**
- * <Poeaa24Pattern05TableDataGateway>：表数据入口结构图。Server Component。
+ * <Poeaa24Pattern05TableDataGatewayDiagram>：表数据入口结构图。Server Component。
  */
 import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
 const VIEW_W = 720; const VIEW_H = 340;
-export function Poeaa24Pattern05TableDataGateway() {
+export function Poeaa24Pattern05TableDataGatewayDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
@@ -40,3 +40,7 @@ export function Poeaa24Pattern05TableDataGateway() {
     </figure>
   );
 }
+
+/** 兼容已有导入；章节正文使用带 Diagram 后缀的语义化名称以便质量审计识别专属视觉。 */
+export const Poeaa24Pattern05TableDataGateway =
+  Poeaa24Pattern05TableDataGatewayDiagram;

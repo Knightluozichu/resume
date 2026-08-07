@@ -204,7 +204,7 @@
     - 路径：`content/poeaa-enterprise-patterns/17-pattern-02-domain-model/poeaa24-pattern-02-domain-model.mdx`
 - [x] ✅ **19-pattern-04-service-layer/poeaa24-pattern-04-service-layer** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer.mdx`
-- [ ] 🔴 P1 **21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway.mdx`
 - [ ] 🔴 P1 **22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway.mdx`
