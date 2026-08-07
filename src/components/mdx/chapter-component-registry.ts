@@ -16242,6 +16242,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic05ThresholdTradeoffDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/10-topic-06-knowledge-portfolio/tpp20-topic-06-knowledge-portfolio":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic06-learning-portfolio-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic06-source-critique-diagram"),
+      ]);
+      return {
+        Tpp20Topic06LearningPortfolioDiagram:
+          modules[0].Tpp20Topic06LearningPortfolioDiagram,
+        Tpp20Topic06SourceCritiqueDiagram:
+          modules[1].Tpp20Topic06SourceCritiqueDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
