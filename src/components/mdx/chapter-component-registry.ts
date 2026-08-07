@@ -16570,6 +16570,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic31InheritanceTaxLab: module0.Tpp20Topic31InheritanceTaxLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/40-topic-32-configuration/tpp20-topic-32-configuration":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-32-configuration-diagram");
+      return {
+        Tpp20Topic32ConfigurationAuditDiagram:
+          module0.Tpp20Topic32ConfigurationAuditDiagram,
+        Tpp20Topic32ConfigurationLab: module0.Tpp20Topic32ConfigurationLab,
+        Tpp20Topic32ConfigurationPipelineDiagram:
+          module0.Tpp20Topic32ConfigurationPipelineDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

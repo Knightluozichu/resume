@@ -431,7 +431,7 @@
     - 路径：`content/pragmatic-programmer/38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming.mdx`
 - [x] ✅ **39-topic-31-inheritance-tax/tpp20-topic-31-inheritance-tax** — 已修复（2026-08-08，score 42→100，passed）
     - 路径：`content/pragmatic-programmer/39-topic-31-inheritance-tax/tpp20-topic-31-inheritance-tax.mdx`
-- [ ] 🔴 P1 **40-topic-32-configuration/tpp20-topic-32-configuration** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **40-topic-32-configuration/tpp20-topic-32-configuration** — 已修复（2026-08-08，score 42→92，passed）
     - 路径：`content/pragmatic-programmer/40-topic-32-configuration/tpp20-topic-32-configuration.mdx`
 - [ ] 🔴 P1 **41-chapter-06-concurrency/tpp20-chapter-06-concurrency** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/41-chapter-06-concurrency/tpp20-chapter-06-concurrency.mdx`
