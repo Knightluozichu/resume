@@ -15393,11 +15393,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/10-chapter-05-concurrency/poeaa24-chapter-05-concurrency":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch05-optimistic-vs-pessimistic");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch05-optimistic-vs-pessimistic"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch05-concurrency-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch05OptimisticVsPessimistic:
-          module0.Poeaa24Ch05OptimisticVsPessimistic,
+        Poeaa24Ch05OptimisticVsPessimisticDiagram:
+          modules[0].Poeaa24Ch05OptimisticVsPessimisticDiagram,
+        Poeaa24Ch05ConcurrencyDecisionDiagram:
+          modules[1].Poeaa24Ch05ConcurrencyDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/11-chapter-06-session-state/poeaa24-chapter-06-session-state":

@@ -14,11 +14,7 @@
  * 布局遵守 docs/diagram-layout-rules.md。
  */
 
-import {
-  T,
-  DiagramTitle,
-  DiagramCaption,
-} from "../poeaa-svg-primitives";
+import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
 
 const VIEW_W = 720;
 const VIEW_H = 520;
@@ -56,18 +52,22 @@ const PES_STEPS = [
   { text: "5. 释放锁", note: "COMMIT / ROLLBACK" },
 ] as const;
 
-export function Poeaa24Ch05OptimisticVsPessimistic() {
+export function Poeaa24Ch05OptimisticVsPessimisticDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label="乐观离线锁与悲观离线锁对比。左侧乐观：读取版本 v1、本地编辑、提交时检查版本是否仍为 v1，匹配则写入升到 v2，不匹配则拒绝提示冲突。右侧悲观：先获取排他锁、读取、本地编辑期间锁一直持有、提交写入无需版本检查、最后释放锁。底部对比：乐观代价是冲突时重试，适合低冲突；悲观代价是锁等待和死锁风险，适合高冲突或高损失场景。"
+          aria-label="乐观离线锁与悲观离线锁对比。左侧乐观：读取版本 v1、本地编辑、提交时检查版本是否仍为 v1，匹配则写入升到 v2，不匹配则拒绝提示冲突。右侧悲观：先获取排他锁、读取、本地编辑期间锁一直持有、提交写入无需版本检查、最后释放锁。底部对比：乐观代价是冲突时重试，适合低冲突；悲观代价是锁等待和死锁风险，适合高冲突或高损失场景。覆盖 5.1 并发问题、5.2 执行语境、5.3 隔离与不变性、5.4 乐观并发控制和悲观并发控制、5.5 事务、5.6 离线并发控制的模式、5.7 应用服务器并发、5.8 进一步阅读。"
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
           {/* 标题 */}
-          <DiagramTitle x={VIEW_W / 2} y={40} text="乐观 vs 悲观：离线并发控制的两条路径" />
+          <DiagramTitle
+            x={VIEW_W / 2}
+            y={40}
+            text="乐观 vs 悲观：离线并发控制的两条路径"
+          />
 
           {/* ===== 左面板：乐观 ===== */}
           <rect

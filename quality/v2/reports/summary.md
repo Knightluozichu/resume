@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T12:07:57.639Z；旧版分数不迁移。
+> 2026-08-07T12:15:54.952Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2498
+- failed：2497
 - queued：401
-- passed：973
+- passed：974
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -37,16 +37,16 @@
 | 24 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
 | 25 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
 | 26 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
-| 27 | poeaa-enterprise-patterns | 78 | 24 | 0 | 54 | 72 |
-| 28 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
-| 29 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
-| 30 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
-| 31 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
-| 32 | head-first-java | 23 | 23 | 0 | 0 | 111 |
-| 33 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
-| 34 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
-| 35 | os-concepts | 23 | 23 | 0 | 0 | 92 |
-| 36 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
+| 27 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
+| 28 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 29 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
+| 30 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
+| 31 | head-first-java | 23 | 23 | 0 | 0 | 111 |
+| 32 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
+| 33 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
+| 34 | os-concepts | 23 | 23 | 0 | 0 | 92 |
+| 35 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
+| 36 | poeaa-enterprise-patterns | 78 | 23 | 0 | 55 | 69 |
 | 37 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 38 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
 | 39 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
