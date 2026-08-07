@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T11:57:01.088Z；旧版分数不迁移。
+> 2026-08-07T12:07:57.639Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2499
+- failed：2498
 - queued：401
-- passed：972
+- passed：973
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -33,11 +33,11 @@
 | 20 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
 | 21 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
 | 22 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
-| 23 | poeaa-enterprise-patterns | 78 | 25 | 0 | 53 | 75 |
-| 24 | programmers-math | 25 | 25 | 0 | 0 | 75 |
-| 25 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
-| 26 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
-| 27 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 23 | programmers-math | 25 | 25 | 0 | 0 | 75 |
+| 24 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
+| 25 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
+| 26 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 27 | poeaa-enterprise-patterns | 78 | 24 | 0 | 54 | 72 |
 | 28 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
 | 29 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
 | 30 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |

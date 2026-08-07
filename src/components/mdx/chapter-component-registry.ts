@@ -15372,10 +15372,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/08-chapter-03-relational-mapping/poeaa24-chapter-03-relational-mapping":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch03-impedance-mismatch");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch03-impedance-mismatch"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch03-mapping-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch03ImpedanceMismatch: module0.Poeaa24Ch03ImpedanceMismatch,
+        Poeaa24Ch03ImpedanceMismatchDiagram:
+          modules[0].Poeaa24Ch03ImpedanceMismatchDiagram,
+        Poeaa24Ch03MappingDecisionDiagram:
+          modules[1].Poeaa24Ch03MappingDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation":
