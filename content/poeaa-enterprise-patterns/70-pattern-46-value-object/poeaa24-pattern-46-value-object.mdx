@@ -7,57 +7,222 @@ description: "以属性值而非对象身份定义相等的小对象，通常保
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-46-value-object
 draft: false
 ---
 
+import { Poeaa24Pattern46ValueObjectDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-46-value-object-diagram";
+import { Poeaa24Pattern46ValueObjectBoundaryDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-46-value-object-boundary-diagram";
 
-## 为什么 18.6 值对象 值得单独学习
+<Objectives>
 
-以属性值而非对象身份定义相等的小对象，通常保持不可变并承担相关校验。 18.6 值对象 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+- 能把订单系统中的地址、邮箱等无独立身份概念建模为不可变值对象
+- 能用值相等、构造校验、表示转换和原始类型执着比较值对象与裸字段
+- 能在序列化、复制、无效输入和业务规则变化场景中验证值对象，并识别何时不应引入
 
-本页以 2024 年中文版公开目录限定 **18.6 值对象** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+</Objectives>
 
-## 先建立直觉：问题、机制与代价
+## 为什么 18.6 值对象值得单独学习
 
-18.6 值对象 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：以属性值而非对象身份定义相等的小对象，通常保持不可变并承担相关校验。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="以属性值而非数据库身份定义相等的小对象，通常不可变并集中保护自己的语义约束。">
+  Value Object
+</Term>
+值对象不是“字段换成
+class”这么简单。两个独立创建的地址只要街道、城市和邮编相同，就可以互换；修改地址应产生新值，而不是让多个订单共享的对象悄悄变化。它适合没有独立生命周期、但需要稳定语义和校验的概念。
 
-对 18.6 值对象，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能证明相等值可互换、修改产生新值，并让无效组合无法构造”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.6 值对象。
+订单系统基础设施替换能暴露这个边界。`EmailAddress` 可以集中大小写、格式和序列化规则，数据库列、HTTP 请求和消息消费者都使用同一语义；但客户、订单和支付授权具有独立身份与生命周期，不能因为字段相似就改成值对象。
 
+<Term def="只比较值对象的组成属性，不比较内存地址、数据库主键或创建时间的相等规则。">
+  Value Equality
+</Term>
+值相等让同一语义的不同实例可互换，也让缓存键、测试断言和序列化比较更直观。
+
+<Term def="创建后不直接改变值对象内部属性，任何变化都通过构造或转换产生新的有效值。">
+  Immutability
+</Term>
+不可变性减少别名共享和并发读写风险，但不能代替业务事务；它只保证一个值在自身生命周期内不会被偷偷改写。
+
+## 先建立直觉：先确认语义，再决定封装
+
+<Term def="把外部字符串、数字或 JSON 转成经过校验的领域值，并在无效时拒绝构造的边界。">
+  Validation Boundary
+</Term>
+校验边界应靠近值对象构造处，避免每个调用者重复判断格式；跨字段或跨聚合规则仍需由更高层的领域规则负责。
+
+<Term def="把所有业务概念都留作字符串或数字，导致格式、单位和合法性规则在调用处重复的设计倾向。">
+  Primitive Obsession
+</Term>
+值对象可以消除一部分原始类型执着，但不应把每个字段都包装成类。稳定语义、共享约束和错误成本，是引入的证据。
+
+先预测：如果地址在三个订单、两个接口和一个消息中都以字符串传递，最容易发生的是格式分叉、空值语义分叉，还是数据库查询变慢？先列出可观察的重复规则和替换成本，再决定 `PostalAddress` 是否值得成为值对象。
 
 ## 目录单元到教学证据
 
 ### 18.6 值对象
 
-在 **18.6 值对象** 的学习边界里，18.6 值对象 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 18.6 值对象。
+在 **18.6 值对象** 的单元边界内，学习者要把订单系统基础设施替换拆成构造、比较、复制、序列化和变更五类证据。单元键为 **poeaa24-pattern-46-value-object**；核心证据是相同属性能值相等、无效组合不能构造、任何修改都不会影响已有订单，并且基础设施表示变化不会泄漏到业务调用方。
 
-## 专属设计案例：订单系统基础设施替换
+评审记录还要回答：这个概念是否有独立身份，哪些属性组成相等关系，校验失败如何报告，数据库与 API 如何转换，新增业务规则是否仍属于值自身。如果每个调用方都需要先清理字符串再创建对象，校验边界已经失效。
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。18.6 值对象 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+## 专属代码案例：地址值对象
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-46-value-object**；模式族为 **base**；裁决是“能证明相等值可互换、修改产生新值，并让无效组合无法构造”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 18.6 值对象 设定的边界”。
+下面的代码让地址在构造时成为有效值，并通过值相等和不可变更新表达语义。它不依赖 ORM 的实体身份，基础设施只需负责字符串列与值对象之间的转换。
 
-配置不是生产框架语法，而是一张评审卡。对 18.6 值对象 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type AddressInput = {
+  street: string;
+  city: string;
+  postalCode: string;
+};
 
-## 三步交互实验
+class PostalAddress {
+  readonly street: string;
+  readonly city: string;
+  readonly postalCode: string;
 
+  private constructor(input: AddressInput) {
+    this.street = input.street.trim();
+    this.city = input.city.trim();
+    this.postalCode = input.postalCode.trim().toUpperCase();
+  }
+
+  static create(input: AddressInput): PostalAddress {
+    if (
+      !input.street.trim() ||
+      !input.city.trim() ||
+      !/^\d{6}$/.test(input.postalCode.trim())
+    ) {
+      throw new Error("invalid postal address");
+    }
+    return new PostalAddress(input);
+  }
+
+  equals(other: PostalAddress): boolean {
+    return (
+      this.street === other.street &&
+      this.city === other.city &&
+      this.postalCode === other.postalCode
+    );
+  }
+
+  withCity(city: string): PostalAddress {
+    return PostalAddress.create({
+      street: this.street,
+      city,
+      postalCode: this.postalCode,
+    });
+  }
+}
+```
+
+这段代码提供四项证据：构造边界拒绝无效邮编，内部属性只读，equals 比较属性而不是身份，withCity 返回新值。生产实现还需定义国际化格式、空值语义、数据库转换和错误分类；值对象不应把跨订单唯一性或权限判断塞进自身。
+
+## 模式结构图
+
+<Poeaa24Pattern46ValueObjectDiagram />
+
+结构图把原始输入、校验边界、值对象和持久化表示分开，帮助评审确认基础设施转换不会破坏值语义。
+
+## 值对象的变化边界
+
+<Poeaa24Pattern46ValueObjectBoundaryDiagram />
+
+值对象内部承担字段组合、格式和相等规则；订单或聚合承担跨对象不变量；映射器承担数据库与 API 表示转换。边界清楚时，修改一个值不会悄悄影响其他引用。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 18.6 值对象 的证据        | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择值对象的证据                          | 应拒绝或暂缓的信号               |
+| -------- | ----------------------------------------- | -------------------------------- |
+| 身份     | 概念只由属性定义，没有独立生命周期        | 需要主键、审计历史或独立权限     |
+| 相等     | Value Equality 的字段集合明确且可测试     | 调用者各自决定哪些字段相等       |
+| 校验     | Validation Boundary 能拒绝无效组合        | 每个入口都先清理和判断字符串     |
+| 变化     | Immutability 让更新产生新值，不影响旧引用 | 需要原地变更并协调共享状态       |
+| 替代     | 已比较裸字段与实体对象，并保留撤回路径    | 只为“面向对象”或代码风格增加包装 |
 
+## 常见误区
+
+<Callout type="trap" title="用数据库主键决定值对象相等">
+
+- **现象**：两个内容相同的地址因为来自不同记录就被视为不同，或者复制后必须先保存才能比较。
+- **原因**：把实体身份和属性语义混在一起，忽略值对象没有独立生命周期。
+- **修法**：明确组成属性和规范化规则；只有需要独立历史、权限或生命周期时才改用实体。
+
+</Callout>
+
+<Callout type="trap" title="把跨对象规则塞进值对象">
+
+- **现象**：地址对象开始检查客户风险、订单总额和配送库存，任何变化都要加载整个聚合。
+- **原因**：把字段校验误解为拥有所有业务决定，没有区分值自身约束与聚合不变量。
+- **修法**：值对象只保护自身合法性；跨对象判断由订单、领域服务或应用服务协调。
+
+</Callout>
+
+<Callout type="trap" title="不可变只做表面 readonly">
+
+- **现象**：外层属性不能重新赋值，但内部数组或原始输入仍可被调用者修改。
+- **原因**：只限制引用而没有复制可变输入，也没有测试共享别名行为。
+- **修法**：在边界处规范化并复制可变数据；验证旧值在 with 方法后保持不变。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习围绕 **18.6 值对象**，要求把身份、相等、校验和变化边界写入同一张评审卡。
+
+**问题 1：判断是否引入。** 邮箱在用户、订单通知和审计消息中都以字符串出现，格式规则重复。值对象的证据是什么？
+
+<Answer>
+
+先列出重复的规范化、格式校验和序列化规则，再确认邮箱没有独立生命周期或权限历史。若同一语义需要值相等、无效输入统一拒绝且修改应产生新值，就有引入值对象的证据；若不同上下文有不同合法格式，应先拆分语义，而不是共享一个万能类。
+
+</Answer>
+
+**问题 2：处理更新。** 订单复制后把地址改为新城市，原订单和复制订单都引用同一个地址实例。应该原地修改吗？
+
+<Answer>
+
+不应原地修改。通过 withCity 或重新构造产生新值，让原订单保持原地址；测试应断言两个值的属性、值相等关系和引用隔离，避免共享可变状态产生隐蔽变化。
+
+</Answer>
+
+**问题 3：处理跨对象规则。** 地址值对象需要知道客户是否欠款才能决定是否允许配送。这个判断应该放在哪里？
+
+<Answer>
+
+不应放进地址值对象。地址只校验自身字段；订单聚合或领域服务结合客户信用、库存和配送规则作出跨对象决定，并把失败与事务边界记录在更高层评审证据中。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Value Object">
+    以属性值定义相等、通常不可变且没有独立生命周期的小对象。
+  </GlossaryItem>
+  <GlossaryItem term="Value Equality">
+    只比较组成属性而不比较对象身份的相等规则。
+  </GlossaryItem>
+  <GlossaryItem term="Immutability">
+    创建后不直接改变内部值，变化通过构造或转换产生新值的特性。
+  </GlossaryItem>
+  <GlossaryItem term="Validation Boundary">
+    把外部表示转换为经过校验的领域值并拒绝无效输入的边界。
+  </GlossaryItem>
+  <GlossaryItem term="Primitive Obsession">
+    过度使用字符串或数字表达业务概念，导致语义和校验规则在调用处重复的倾向。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 18.6 值对象 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
+掌握 18.6 值对象的标志，不是给每个字段增加一个类，而是能在订单系统基础设施替换中解释“外部表示 → 校验边界 → 值相等 → 不可变更新 → 持久化转换”的责任链。值对象适合没有独立身份、但有稳定语义和共享校验的概念；当规则跨对象、需要历史权限或必须原地协调状态时，应拒绝当前封装并选择实体、聚合或领域服务。
 
 ## 前后导航
 
@@ -67,6 +232,13 @@ draft: false
 ## 来源与改写范围
 
 - [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对 18.6 值对象的公开模式名称和相关模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
