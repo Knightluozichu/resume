@@ -16332,6 +16332,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic11ReversibleDecisionDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/17-topic-12-tracer-bullets/tpp20-topic-12-tracer-bullets":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic12-feedback-aim-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic12-tracer-path-diagram"),
+      ]);
+      return {
+        Tpp20Topic12FeedbackAimDiagram:
+          modules[0].Tpp20Topic12FeedbackAimDiagram,
+        Tpp20Topic12TracerPathDiagram: modules[1].Tpp20Topic12TracerPathDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
