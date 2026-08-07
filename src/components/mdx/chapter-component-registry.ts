@@ -15530,6 +15530,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Poeaa24Pattern02DomainModelDiagram,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/18-pattern-03-table-module/poeaa24-pattern-03-table-module":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-03-table-module-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-03-table-module-boundary-diagram"),
+      ]);
+      return {
+        Poeaa24Pattern03TableModuleDiagram:
+          modules[0].Poeaa24Pattern03TableModuleDiagram,
+        Poeaa24Pattern03TableModuleBoundaryDiagram:
+          modules[1].Poeaa24Pattern03TableModuleBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer":
     async () => {
       const module0 =
