@@ -16216,6 +16216,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic03RepairGuardrailDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/08-topic-04-stone-soup-boiled-frogs/tpp20-topic-04-stone-soup-boiled-frogs":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic04-catalyst-prototype-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic04-panorama-boundary-diagram"),
+      ]);
+      return {
+        Tpp20Topic04CatalystPrototypeDiagram:
+          modules[0].Tpp20Topic04CatalystPrototypeDiagram,
+        Tpp20Topic04PanoramaBoundaryDiagram:
+          modules[1].Tpp20Topic04PanoramaBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
