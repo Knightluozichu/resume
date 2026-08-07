@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T12:25:51.198Z；旧版分数不迁移。
+> 2026-08-07T12:32:34.996Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2496
+- failed：2495
 - queued：401
-- passed：975
+- passed：976
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -48,11 +48,11 @@
 | 35 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
 | 36 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 37 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 38 | poeaa-enterprise-patterns | 78 | 22 | 0 | 56 | 66 |
-| 39 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 40 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 41 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 42 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 38 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 39 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 40 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 41 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 42 | poeaa-enterprise-patterns | 78 | 21 | 0 | 57 | 63 |
 | 43 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 44 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 45 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |

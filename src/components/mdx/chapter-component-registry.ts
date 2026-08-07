@@ -15406,11 +15406,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/11-chapter-06-session-state/poeaa24-chapter-06-session-state":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch06-session-state-positions");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch06-session-state-positions"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch06-session-state-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch06SessionStatePositions:
-          module0.Poeaa24Ch06SessionStatePositions,
+        Poeaa24Ch06SessionStatePositionsDiagram:
+          modules[0].Poeaa24Ch06SessionStatePositionsDiagram,
+        Poeaa24Ch06SessionStateDecisionDiagram:
+          modules[1].Poeaa24Ch06SessionStateDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies":
