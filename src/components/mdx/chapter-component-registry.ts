@@ -16129,6 +16129,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Tpp20LearningEvidenceDiagram: modules[1].Tpp20LearningEvidenceDiagram,
     } as ChapterMdxComponents;
   },
+  "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-evidence-diagram"),
+    ]);
+    return {
+      Tpp20FinalReviewChainDiagram: modules[0].Tpp20FinalReviewChainDiagram,
+      Tpp20FinalReviewEvidenceDiagram:
+        modules[1].Tpp20FinalReviewEvidenceDiagram,
+    } as ChapterMdxComponents;
+  },
   "programming-pearls/01-preliminaries/02-aha-algorithms": async () => {
     const module0 =
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");
