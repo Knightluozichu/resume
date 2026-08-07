@@ -81,7 +81,7 @@ export type Poeaa24Pattern29TransformViewDiagramProps = {
   interactive?: boolean;
 };
 
-export function Poeaa24Pattern29TransformView({
+export function Poeaa24Pattern29TransformViewDiagram({
   focus = "input",
   interactive = true,
 }: Poeaa24Pattern29TransformViewDiagramProps) {
@@ -234,16 +234,40 @@ export function Poeaa24Pattern29TransformView({
           >
             呈现模型
           </text>
-          <text x="58" y="174" fontSize="12" fontFamily="monospace" fill={T.primary}>
-            {"{ id: \"42\" }"}
+          <text
+            x="58"
+            y="174"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
+            {'{ id: "42" }'}
           </text>
-          <text x="58" y="200" fontSize="12" fontFamily="monospace" fill={T.primary}>
-            {"customerName: \"林\""}
+          <text
+            x="58"
+            y="200"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
+            {'customerName: "林"'}
           </text>
-          <text x="58" y="226" fontSize="12" fontFamily="monospace" fill={T.primary}>
+          <text
+            x="58"
+            y="226"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
             {"total: 597"}
           </text>
-          <text x="58" y="252" fontSize="12" fontFamily="monospace" fill={T.primary}>
+          <text
+            x="58"
+            y="252"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
             {"items: [...]"}
           </text>
           <text x="58" y="288" fontSize="11" fill={T.secondary}>
@@ -287,13 +311,31 @@ export function Poeaa24Pattern29TransformView({
           >
             转换规则
           </text>
-          <text x="374" y="160" fontSize="12" fontFamily="monospace" fill={T.primary}>
+          <text
+            x="374"
+            y="160"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
             toHtml(model)
           </text>
-          <text x="374" y="188" fontSize="12" fontFamily="monospace" fill={T.primary}>
+          <text
+            x="374"
+            y="188"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
             escapeText(value)
           </text>
-          <text x="374" y="216" fontSize="12" fontFamily="monospace" fill={T.primary}>
+          <text
+            x="374"
+            y="216"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={T.primary}
+          >
             forEach(items)
           </text>
           <line
@@ -445,7 +487,13 @@ export function Poeaa24Pattern29TransformView({
               stroke={T.warning}
               strokeWidth="1.2"
             />
-            <text x="818" y="376" textAnchor="middle" fontSize="12" fill={T.warning}>
+            <text
+              x="818"
+              y="376"
+              textAnchor="middle"
+              fontSize="12"
+              fill={T.warning}
+            >
               同一输入，不同格式契约
             </text>
           </g>
@@ -542,7 +590,13 @@ export function Poeaa24Pattern29TransformView({
   );
 }
 
+export function Poeaa24Pattern29TransformView(
+  props: Poeaa24Pattern29TransformViewDiagramProps,
+) {
+  return <Poeaa24Pattern29TransformViewDiagram {...props} />;
+}
+
 // 保留既有注册表使用的函数名；命名空间成员让 MDX 能以专属 Diagram 名称复用同一实现。
 export namespace Poeaa24Pattern29TransformView {
-  export const Diagram = Poeaa24Pattern29TransformView;
+  export const Diagram = Poeaa24Pattern29TransformViewDiagram;
 }

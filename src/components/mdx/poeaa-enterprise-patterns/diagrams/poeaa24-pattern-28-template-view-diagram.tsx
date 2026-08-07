@@ -63,7 +63,7 @@ function stageOpacity(stage: TemplateViewStep, activeStep: TemplateViewStep) {
  * 填入 HTML 标记，最后由快照和输出边界检查收口。故障开关专门演示
  * “把业务规则/未转义输入塞进模板”为什么会破坏该边界。
  */
-export function Poeaa24Pattern28TemplateView({
+export function Poeaa24Pattern28TemplateViewDiagram({
   step = 1,
   interactive = true,
 }: Poeaa24Pattern28TemplateViewProps) {
@@ -205,10 +205,7 @@ export function Poeaa24Pattern28TemplateView({
             },
           )}
 
-          <g
-            ref={modelStageRef}
-            opacity={stageOpacity(1, activeStep)}
-          >
+          <g ref={modelStageRef} opacity={stageOpacity(1, activeStep)}>
             <rect
               x="32"
               y="146"
@@ -246,7 +243,13 @@ export function Poeaa24Pattern28TemplateView({
             >
               页面控制器
             </text>
-            <text x="50" y="205" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="50"
+              y="205"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               GET /orders/42
             </text>
             <text x="50" y="227" fontSize="11" fill={T.secondary}>
@@ -255,7 +258,13 @@ export function Poeaa24Pattern28TemplateView({
             <text x="50" y="249" fontSize="11" fill={T.secondary}>
               调用应用服务
             </text>
-            <text x="50" y="271" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="50"
+              y="271"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               return ViewModel
             </text>
             <text x="50" y="293" fontSize="11" fill={T.secondary}>
@@ -272,7 +281,13 @@ export function Poeaa24Pattern28TemplateView({
             strokeWidth="1.8"
             markerEnd={`url(#${markerId})`}
           />
-          <text x="232" y="215" textAnchor="middle" fontSize="11" fill={T.accent}>
+          <text
+            x="232"
+            y="215"
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.accent}
+          >
             提供
           </text>
 
@@ -314,13 +329,31 @@ export function Poeaa24Pattern28TemplateView({
             >
               Model
             </text>
-            <text x="268" y="205" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="268"
+              y="205"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               orderId: 42
             </text>
-            <text x="268" y="227" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="268"
+              y="227"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               total: 597.00
             </text>
-            <text x="268" y="249" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="268"
+              y="249"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               items: [2]
             </text>
             <text x="268" y="271" fontSize="11" fill={T.secondary}>
@@ -340,14 +373,17 @@ export function Poeaa24Pattern28TemplateView({
             strokeWidth="1.8"
             markerEnd={`url(#${markerId})`}
           />
-          <text x="432" y="215" textAnchor="middle" fontSize="11" fill={T.accent}>
+          <text
+            x="432"
+            y="215"
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.accent}
+          >
             绑定
           </text>
 
-          <g
-            ref={bindStageRef}
-            opacity={stageOpacity(2, activeStep)}
-          >
+          <g ref={bindStageRef} opacity={stageOpacity(2, activeStep)}>
             <rect
               x="452"
               y="146"
@@ -385,13 +421,31 @@ export function Poeaa24Pattern28TemplateView({
             >
               HTML 模板 + 引擎
             </text>
-            <text x="470" y="205" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="470"
+              y="205"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               &lt;h1&gt;{"{{orderId}}"}&lt;/h1&gt;
             </text>
-            <text x="470" y="227" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="470"
+              y="227"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               &lt;li&gt;{"{{item.name}}"}&lt;/li&gt;
             </text>
-            <text x="470" y="249" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="470"
+              y="249"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               escape(value)
             </text>
             <text x="470" y="271" fontSize="11" fill={T.secondary}>
@@ -411,14 +465,17 @@ export function Poeaa24Pattern28TemplateView({
             strokeWidth="1.8"
             markerEnd={`url(#${markerId})`}
           />
-          <text x="695" y="215" textAnchor="middle" fontSize="11" fill={T.accent}>
+          <text
+            x="695"
+            y="215"
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.accent}
+          >
             输出
           </text>
 
-          <g
-            ref={verifyStageRef}
-            opacity={stageOpacity(3, activeStep)}
-          >
+          <g ref={verifyStageRef} opacity={stageOpacity(3, activeStep)}>
             <rect
               x="714"
               y="146"
@@ -426,7 +483,13 @@ export function Poeaa24Pattern28TemplateView({
               height="164"
               rx="10"
               fill={T.bg}
-              stroke={faultInjected ? T.danger : activeStep === 3 ? T.success : T.border}
+              stroke={
+                faultInjected
+                  ? T.danger
+                  : activeStep === 3
+                    ? T.success
+                    : T.border
+              }
               strokeWidth={faultInjected || activeStep === 3 ? "2" : "1.2"}
             />
             <rect
@@ -456,19 +519,41 @@ export function Poeaa24Pattern28TemplateView({
             >
               HTTP 响应
             </text>
-            <text x="732" y="205" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="732"
+              y="205"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               &lt;h1&gt;订单 #42&lt;/h1&gt;
             </text>
-            <text x="732" y="227" fontSize="11" fontFamily="monospace" fill={T.primary}>
+            <text
+              x="732"
+              y="227"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.primary}
+            >
               &lt;p&gt;¥597.00&lt;/p&gt;
             </text>
-            <text x="732" y="249" fontSize="11" fill={faultInjected ? T.danger : T.secondary}>
+            <text
+              x="732"
+              y="249"
+              fontSize="11"
+              fill={faultInjected ? T.danger : T.secondary}
+            >
               {faultInjected ? "验收失败：模板越界" : "输入已转义"}
             </text>
             <text x="732" y="271" fontSize="11" fill={T.secondary}>
               快照可复现
             </text>
-            <text x="732" y="293" fontSize="11" fill={faultInjected ? T.danger : T.success}>
+            <text
+              x="732"
+              y="293"
+              fontSize="11"
+              fill={faultInjected ? T.danger : T.success}
+            >
               {faultInjected ? "拒绝发布" : "允许返回"}
             </text>
           </g>
@@ -484,15 +569,31 @@ export function Poeaa24Pattern28TemplateView({
             stroke={faultInjected ? T.danger : T.border}
             strokeWidth={faultInjected ? "1.8" : "1"}
           />
-          <text x="52" y="372" fontSize="12" fontWeight="700" fill={faultInjected ? T.danger : T.primary}>
+          <text
+            x="52"
+            y="372"
+            fontSize="12"
+            fontWeight="700"
+            fill={faultInjected ? T.danger : T.primary}
+          >
             {faultInjected ? "故障注入：模板边界被越过" : "模板责任边界"}
           </text>
-          <text x="52" y="398" fontSize="11" fill={faultInjected ? T.danger : T.secondary}>
+          <text
+            x="52"
+            y="398"
+            fontSize="11"
+            fill={faultInjected ? T.danger : T.secondary}
+          >
             {faultInjected
               ? "现象：模板直接查库、改状态或把未转义输入拼进 HTML；原因：把展示标记当成应用层。"
               : "模板可以做条件、循环和格式化；应用服务负责查询、授权与状态转换。"}
           </text>
-          <text x="52" y="422" fontSize="11" fill={faultInjected ? T.danger : T.secondary}>
+          <text
+            x="52"
+            y="422"
+            fontSize="11"
+            fill={faultInjected ? T.danger : T.secondary}
+          >
             {faultInjected
               ? "修法：把决定移回应用层，模板只消费 Model，并用转义测试与 HTML 快照锁定输出。"
               : "验收证据：输入转义、输出快照、模板不依赖数据库，换布局时业务测试仍然通过。"}
@@ -511,9 +612,15 @@ export function Poeaa24Pattern28TemplateView({
         {interactive && (
           <TimelineControls
             timeline={timeline}
-            labelText={Object.fromEntries(STEPS.map(({ label, caption }) => [label, caption ?? label]))}
+            labelText={Object.fromEntries(
+              STEPS.map(({ label, caption }) => [label, caption ?? label]),
+            )}
             caption="按步观察：数据、标记与输出各自承担什么责任。"
-            reset={{ label: "重置图示", ariaLabel: "重置模板视图图示", onClick: reset }}
+            reset={{
+              label: "重置图示",
+              ariaLabel: "重置模板视图图示",
+              onClick: reset,
+            }}
           />
         )}
       </div>
@@ -525,7 +632,13 @@ export function Poeaa24Pattern28TemplateView({
   );
 }
 
+export function Poeaa24Pattern28TemplateView(
+  props: Poeaa24Pattern28TemplateViewProps,
+) {
+  return <Poeaa24Pattern28TemplateViewDiagram {...props} />;
+}
+
 // 保留章节正文使用的命名导出，同时提供可审计的 Diagram 成员。
 export namespace Poeaa24Pattern28TemplateView {
-  export const Diagram = Poeaa24Pattern28TemplateView;
+  export const Diagram = Poeaa24Pattern28TemplateViewDiagram;
 }

@@ -15697,7 +15697,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-28-template-view-diagram");
       return {
-        Poeaa24Pattern28TemplateView: module0.Poeaa24Pattern28TemplateView,
+        Poeaa24Pattern28TemplateViewDiagram:
+          module0.Poeaa24Pattern28TemplateViewDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/49-pattern-29-transform-view/poeaa24-pattern-29-transform-view":
@@ -15705,7 +15706,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-29-transform-view-diagram");
       return {
-        Poeaa24Pattern29TransformView: module0.Poeaa24Pattern29TransformView,
+        Poeaa24Pattern29TransformViewDiagram:
+          module0.Poeaa24Pattern29TransformViewDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/50-pattern-30-two-step-view/poeaa24-pattern-30-two-step-view":
@@ -15713,7 +15715,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-30-two-step-view-diagram");
       return {
-        Poeaa24Pattern30TwoStepView: module0.Poeaa24Pattern30TwoStepView,
+        Poeaa24Pattern30TwoStepViewDiagram:
+          module0.Poeaa24Pattern30TwoStepViewDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/51-pattern-31-application-controller/poeaa24-pattern-31-application-controller":
@@ -15721,8 +15724,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-31-application-controller-diagram");
       return {
-        Poeaa24Pattern31ApplicationController:
-          module0.Poeaa24Pattern31ApplicationController,
+        Poeaa24Pattern31ApplicationControllerDiagram:
+          module0.Poeaa24Pattern31ApplicationControllerDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns":
