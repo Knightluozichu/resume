@@ -15591,8 +15591,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance-diagram");
       return {
-        Poeaa24Pattern18SingleTableInheritance:
-          module0.Poeaa24Pattern18SingleTableInheritance,
+        Poeaa24Pattern18SingleTableInheritanceDiagram:
+          module0.Poeaa24Pattern18SingleTableInheritanceDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance":
@@ -15618,8 +15618,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-21-inheritance-mappers-diagram");
       return {
-        Poeaa24Pattern21InheritanceMappers:
-          module0.Poeaa24Pattern21InheritanceMappers,
+        Poeaa24Pattern21InheritanceMappersDiagram:
+          module0.Poeaa24Pattern21InheritanceMappersDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata":

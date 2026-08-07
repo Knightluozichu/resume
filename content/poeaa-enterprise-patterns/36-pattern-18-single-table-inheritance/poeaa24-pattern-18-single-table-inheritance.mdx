@@ -14,7 +14,7 @@ officialUnitId: poeaa24-pattern-18-single-table-inheritance
 draft: false
 ---
 
-import { Poeaa24Pattern18SingleTableInheritance } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance-diagram";
+import { Poeaa24Pattern18SingleTableInheritanceDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance-diagram";
 
 <Objectives>
 
@@ -67,21 +67,29 @@ type EmployeeRow = {
 
 function hydrate(row: EmployeeRow) {
   if (row.kind === "engineer") {
-    if (!row.skill || row.budget_limit !== null) throw new Error("invalid engineer row");
+    if (!row.skill || row.budget_limit !== null)
+      throw new Error("invalid engineer row");
     return new Engineer(row.id, row.name, row.skill);
   }
-  if (row.budget_limit === null || row.skill !== null) throw new Error("invalid manager row");
+  if (row.budget_limit === null || row.skill !== null)
+    throw new Error("invalid manager row");
   return new Manager(row.id, row.name, row.budget_limit);
 }
 ```
 
-<Term def="一次查询能够返回 Employee 及其多个具体子类，并由映射器恢复正确运行时类型的查询">多态查询</Term>的便利来自同一张表：可以先按公共条件过滤，再按 `kind` 分组恢复对象。它不是“数据库自动懂继承”；映射器仍然要处理未知类型、缺失字段和数据库中绕过应用写入的坏行。尤其不能把未知 `kind` 静默当成基类，否则新子类上线时，旧服务可能把新数据当成错误的普通员工继续保存。
+<Term def="一次查询能够返回 Employee 及其多个具体子类，并由映射器恢复正确运行时类型的查询">
+  多态查询
+</Term>
+的便利来自同一张表：可以先按公共条件过滤，再按 `kind`
+分组恢复对象。它不是“数据库自动懂继承”；映射器仍然要处理未知类型、缺失字段和数据库中绕过应用写入的坏行。尤其不能把未知
+`kind`
+静默当成基类，否则新子类上线时，旧服务可能把新数据当成错误的普通员工继续保存。
 
 ## 专属可视化实验：从对象树走到约束边界
 
 先看主图的对象树，再播放到鉴别器路由，最后打开“注入错误类型”。观察同一行在三步里没有换表，但它的可接受条件逐步变得更严格。点“重置图示”后，应该回到第一步且错误开关关闭。
 
-<Poeaa24Pattern18SingleTableInheritance />
+<Poeaa24Pattern18SingleTableInheritanceDiagram />
 
 ### 三个阶段快照
 
@@ -93,7 +101,7 @@ function hydrate(row: EmployeeRow) {
 
 `Employee` 是调用方看到的稳定入口；`Engineer` 和 `Manager` 只扩展自己的字段。此时还没有决定数据库采用哪一种继承映射。
 
-<Poeaa24Pattern18SingleTableInheritance step={1} interactive={false} />
+<Poeaa24Pattern18SingleTableInheritanceDiagram step={1} interactive={false} />
 
 </Step>
 
@@ -101,7 +109,7 @@ function hydrate(row: EmployeeRow) {
 
 映射器读出鉴别器后选择构造器，并把公共字段和子类字段写回 `employees`。多态查询因此不需要为每个子类拼接一张表。
 
-<Poeaa24Pattern18SingleTableInheritance step={2} interactive={false} />
+<Poeaa24Pattern18SingleTableInheritanceDiagram step={2} interactive={false} />
 
 </Step>
 
@@ -109,7 +117,7 @@ function hydrate(row: EmployeeRow) {
 
 `kind=engineer` 不应同时拥有 `budget_limit`；如果子类字段不断增加，单表的 NULL 比例、索引数量和迁移范围也会成为拒绝信号。
 
-<Poeaa24Pattern18SingleTableInheritance step={3} interactive={false} />
+<Poeaa24Pattern18SingleTableInheritanceDiagram step={3} interactive={false} />
 
 </Step>
 
@@ -133,7 +141,11 @@ ALTER TABLE employees
 
 ## 宽表与演进：什么时候这张表开始反对你
 
-<Term def="继承层次中公共字段与各子类字段如何映射到关系表的整体方案，例如单表、类表或具体表继承">继承策略</Term>应该由稳定的查询和变化边界决定，而不是由 ORM 的默认配置决定。单表继承适合这些条件：子类数量有限，公共字段占主要宽度，经常需要查询整个员工集合，多态读取比子类字段独立查询更重要。
+<Term def="继承层次中公共字段与各子类字段如何映射到关系表的整体方案，例如单表、类表或具体表继承">
+  继承策略
+</Term>
+应该由稳定的查询和变化边界决定，而不是由 ORM
+的默认配置决定。单表继承适合这些条件：子类数量有限，公共字段占主要宽度，经常需要查询整个员工集合，多态读取比子类字段独立查询更重要。
 
 风险可以用一张评审卡记录，而不必假装有一个跨系统通用的阈值：登记列总数、每类的非空率、最常用的过滤字段、一次新增子类需要改动的约束和索引数量。若新增一个子类需要触碰所有旧服务的反序列化逻辑，或一行的可空列已经难以解释，就把“迁移到类表继承”列为明确的回退方案。
 
@@ -160,13 +172,13 @@ ALTER TABLE employees
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择单表继承的证据 | 应改用其他继承策略的信号 |
-| --- | --- | --- |
-| 查询 | 经常读取整个员工集合，多态查询不想 JOIN | 只有某一子类的字段被高频筛选或统计 |
-| 字段变化 | 子类数量少，字段集合相对稳定 | 新子类持续增加，表宽度与索引维护失控 |
-| 约束 | 每种 kind 的字段规则可以用 CHECK 表达 | 子类不变量复杂、跨表或需要独立生命周期 |
-| 空值 | NULL 只是其他类型的空位，含义可由 kind 解释 | NULL 组合无法解释，报表把空值当成业务状态 |
-| 迁移 | 新类型可以兼容部署并保留旧服务拒绝路径 | 每次迁移都必须同步改动许多不可同时发布的服务 |
+| 评审问题 | 选择单表继承的证据                          | 应改用其他继承策略的信号                     |
+| -------- | ------------------------------------------- | -------------------------------------------- |
+| 查询     | 经常读取整个员工集合，多态查询不想 JOIN     | 只有某一子类的字段被高频筛选或统计           |
+| 字段变化 | 子类数量少，字段集合相对稳定                | 新子类持续增加，表宽度与索引维护失控         |
+| 约束     | 每种 kind 的字段规则可以用 CHECK 表达       | 子类不变量复杂、跨表或需要独立生命周期       |
+| 空值     | NULL 只是其他类型的空位，含义可由 kind 解释 | NULL 组合无法解释，报表把空值当成业务状态    |
+| 迁移     | 新类型可以兼容部署并保留旧服务拒绝路径      | 每次迁移都必须同步改动许多不可同时发布的服务 |
 
 矩阵的用法是先找拒绝信号，再计算 JOIN 是否真的值得省掉。单表继承不是“性能更快”的承诺：它减少了某类查询的联接，却把稀疏列、约束和部署协调成本集中到一个表。评审记录至少要保留一条反例，以及从单表退出时的回退路径。
 

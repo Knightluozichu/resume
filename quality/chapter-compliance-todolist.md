@@ -224,13 +224,13 @@
     - 路径：`content/poeaa-enterprise-patterns/34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value.mdx`
 - [x] ✅ **35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob.mdx`
-- [ ] 🔴 P1 **36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance.mdx`
-- [ ] 🔴 P1 **37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance.mdx`
-- [ ] 🔴 P1 **38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance.mdx`
-- [ ] 🔴 P1 **39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers.mdx`
 - [ ] 🔴 P1 **41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping.mdx`
