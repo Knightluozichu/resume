@@ -16529,6 +16529,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Chapter05BendOrBreakLab: module0.Tpp20Chapter05BendOrBreakLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/36-topic-28-decoupling/tpp20-topic-28-decoupling":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-28-decoupling-diagram");
+      return {
+        Tpp20Topic28DecouplingDiagram: module0.Tpp20Topic28DecouplingDiagram,
+        Tpp20Topic28DecouplingLab: module0.Tpp20Topic28DecouplingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
