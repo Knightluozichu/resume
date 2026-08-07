@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T11:41:27.920Z；旧版分数不迁移。
+> 2026-08-07T11:45:57.643Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2502
+- failed：2501
 - queued：401
-- passed：969
+- passed：970
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -25,9 +25,9 @@
 | 12 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 13 | windows-journey | 29 | 29 | 0 | 0 | 87 |
 | 14 | out-of-control | 28 | 28 | 0 | 0 | 84 |
-| 15 | poeaa-enterprise-patterns | 78 | 28 | 0 | 50 | 84 |
-| 16 | design-patterns | 27 | 27 | 0 | 0 | 81 |
-| 17 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
+| 15 | design-patterns | 27 | 27 | 0 | 0 | 81 |
+| 16 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
+| 17 | poeaa-enterprise-patterns | 78 | 27 | 0 | 51 | 81 |
 | 18 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
 | 19 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 20 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
