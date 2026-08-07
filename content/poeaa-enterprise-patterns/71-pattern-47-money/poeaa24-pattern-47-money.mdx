@@ -7,57 +7,206 @@ description: "把金额与币种组合成值对象，集中舍入、比较和算
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-47-money
 draft: false
 ---
 
+import { Poeaa24Pattern47MoneyDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money-diagram";
+import { Poeaa24Pattern47MoneyRoundingDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money-rounding-diagram";
 
-## 为什么 18.7 货币 值得单独学习
+<Objectives>
 
-把金额与币种组合成值对象，集中舍入、比较和算术规则。 18.7 货币 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+- 能用金额、币种和最小单位表达订单价格，并拒绝跨币种直接算术
+- 能固定舍入、比较、分配和汇率边界，避免浮点漂移与隐式精度变化
+- 能在零值、负值、边界金额和换汇场景中验证货币对象，并说明何时拆出新的策略
 
-本页以 2024 年中文版公开目录限定 **18.7 货币** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+</Objectives>
 
-## 先建立直觉：问题、机制与代价
+## 为什么 18.7 货币值得单独学习
 
-18.7 货币 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：把金额与币种组合成值对象，集中舍入、比较和算术规则。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="把数值金额、币种和算术规则组合在一起的值对象，负责同币种计算与合法性检查。">
+  Money
+</Term>
+货币不是一个数字加一个字符串。`100.00 USD` 与 `100.00 CNY`
+的数值相同但语义不同，不能直接相加；金额的精度、舍入、负值和序列化也必须在一个可复核的边界内决定。
 
-对 18.7 货币，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能拒绝跨币种直接相加，固定舍入策略，并用边界金额验证无浮点漂移”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.7 货币。
+订单系统基础设施替换能暴露这个取舍。价格、折扣、税额和退款都需要同一套金额语义；如果它们在不同调用处使用浮点数，得到的总额可能因为二进制表示和不同舍入时机而分叉。把金额与币种组合成值对象，可以把错误从“结果看起来差一点”提前变成明确拒绝。
 
+<Term def="标识金额所属法定或业务计价体系的代码，例如 USD、CNY；它是货币对象相等和算术兼容性的组成部分。">
+  Currency
+</Term>
+币种必须参与相等和加减判断；汇率转换不是简单的类型转换，而是带有时间、来源和舍入策略的业务事件。
+
+<Term def="以整数表示货币最小可计量单位的数值，例如分或厘，用于避免浮点数表达金额。">
+  Minor Unit
+</Term>
+最小单位让加减和比较保持整数语义，但不同币种的最小单位可能不同，映射器需要保存币种精度而不是假设所有货币都两位小数。
+
+## 先建立直觉：精度规则必须有人负责
+
+<Term def="规定除法、税额、折扣或汇率结果在目标精度不足时如何取整，并要求相同场景使用同一规则。">
+  Rounding Policy
+</Term>
+舍入策略不能藏在数据库、语言运行时或格式化函数里。计算中间值、展示值和结算值可能有不同精度，但每个边界都要说明何时舍入以及差额由谁承担。
+
+<Term def="把一种币种的金额按给定时间、来源和方向转换为另一种币种的规则或结果。">
+  Exchange Rate
+</Term>
+汇率必须带来源、有效时间和适用方向；Money
+可以拒绝跨币种运算，但不应假装自己能凭一个数字完成换汇。
+
+先预测：订单含 `0.1`、`0.2` 和一笔 10% 折扣时，用浮点数先相加再舍入，和每行先舍入再相加会不会总是相同？把两条路径的最小单位、舍入时点和差额归属写出来，再决定货币对象的算术接口。
 
 ## 目录单元到教学证据
 
 ### 18.7 货币
 
-在 **18.7 货币** 的学习边界里，18.7 货币 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 18.7 货币。
+在 **18.7 货币** 的单元边界内，学习者要把订单系统基础设施替换拆成构造、同币种算术、跨币种拒绝、舍入和汇率转换五类证据。单元键为 **poeaa24-pattern-47-money**；核心证据是无浮点漂移、同币种操作可复核、跨币种操作必须显式换汇，并且零值、负值和边界金额都有测试。
 
-## 专属设计案例：订单系统基础设施替换
+评审记录还要回答：金额使用什么最小单位，币种精度从哪里来，Rounding Policy 由谁选择，汇率的时间和来源如何保存，数据库和 API 如何表示。若调用者可以直接取出裸数字再自由运算，货币语义已经泄漏。
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。18.7 货币 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+## 专属代码案例：整数最小单位的 Money
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-47-money**；模式族为 **base**；裁决是“能拒绝跨币种直接相加，固定舍入策略，并用边界金额验证无浮点漂移”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 18.7 货币 设定的边界”。
+下面的代码用整数最小单位表达金额，并在同币种加法时检查 Currency。它把跨币种计算留给显式的汇率服务，避免 Money 静默采用一个未说明的汇率。
 
-配置不是生产框架语法，而是一张评审卡。对 18.7 货币 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type CurrencyCode = "USD" | "CNY";
 
-# 结构解剖
+class Money {
+  private constructor(
+    readonly minorUnits: bigint,
+    readonly currency: CurrencyCode,
+  ) {}
 
+  static fromMinorUnits(minorUnits: bigint, currency: CurrencyCode): Money {
+    return new Money(minorUnits, currency);
+  }
+
+  add(other: Money): Money {
+    if (this.currency !== other.currency) {
+      throw new Error("currency mismatch");
+    }
+    return Money.fromMinorUnits(
+      this.minorUnits + other.minorUnits,
+      this.currency,
+    );
+  }
+
+  multiply(rate: bigint, divisor: bigint): Money {
+    const rounded = (this.minorUnits * rate + divisor / 2n) / divisor;
+    return Money.fromMinorUnits(rounded, this.currency);
+  }
+}
+```
+
+这段代码提供四项证据：金额以 Minor Unit 保存，同币种才能相加，跨币种操作明确失败，乘法在指定除数上采用固定舍入。生产实现还需按币种配置精度、定义负数舍入、保存汇率来源与时间，并测试分配余数不能凭浮点格式化掩盖。
+
+## 模式结构图
+
+<Poeaa24Pattern47MoneyDiagram />
+
+结构图把外部表示、金额对象、同币种算术和汇率服务分开，帮助评审确认 Money 不会自行猜测跨币种转换。
+
+## 舍入与换汇边界
+
+<Poeaa24Pattern47MoneyRoundingDiagram />
+
+货币计算应在金额对象、舍入策略和汇率来源之间保留可追踪证据。输入金额先规范化为最小单位，只有在明确的除法、税费或换汇边界执行 Rounding Policy，最后才格式化展示。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 18.7 货币 的证据          | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择货币对象的证据                         | 应拒绝当前方案的信号           |
+| -------- | ------------------------------------------ | ------------------------------ |
+| 表达     | 金额、币种和 Minor Unit 一起保存           | 调用者拿裸数字自由相加         |
+| 算术     | 同币种操作由 Money 检查兼容性              | 跨币种直接相加或比较           |
+| 精度     | Rounding Policy 的时机和归属明确           | 依赖浮点格式化或运行时默认舍入 |
+| 换汇     | Exchange Rate 有来源、时间、方向和舍入证据 | 用一个无来源数字隐式转换       |
+| 替代     | 已比较裸字段、Money 和专用汇率策略         | 只因数据库类型或框架默认而选择 |
 
+## 常见误区
+
+<Callout type="trap" title="用浮点数保存结算金额">
+
+- **现象**：单行价格看起来正确，汇总、折扣和税额在边界金额上出现一分钱差异。
+- **原因**：二进制浮点表示与货币精度不同，且各调用处在不同时间舍入。
+- **修法**：使用币种对应的 Minor Unit 或精确十进制；固定 Rounding Policy 并把舍入时机写入测试。
+
+</Callout>
+
+<Callout type="trap" title="跨币种相加时偷偷使用默认汇率">
+
+- **现象**：USD 与 CNY 可以直接相加，结果没有汇率时间和来源，重放时无法得到相同金额。
+- **原因**：把换汇误当成数字运算，忽略报价、有效期、方向和手续费。
+- **修法**：Money 直接拒绝跨币种算术；通过显式 Exchange Rate 服务完成转换并记录证据。
+
+</Callout>
+
+<Callout type="trap" title="展示精度代替结算精度">
+
+- **现象**：页面显示两位小数便被当成已经正确，数据库中的更多精度在退款和对账时重新出现。
+- **原因**：把格式化输出当成业务舍入，没区分内部计算、结算和展示边界。
+- **修法**：分别定义保存、计算、结算和展示精度；在每个边界记录舍入策略与差额归属。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习围绕 **18.7 货币**，要求把最小单位、舍入策略和汇率边界写入同一张评审卡。
+
+**问题 1：选择表示。** 订单服务需要计算价格、税额和退款，且要支持 USD 与 CNY。为什么不能只用 `number` 加 `currency` 字段？
+
+<Answer>
+
+裸字段允许调用者绕过币种兼容、精度和舍入规则。应使用 Money 或等价的精确表示，把 Currency 和 Minor Unit 作为同一语义边界；数据库和 API 可以有独立表示，但转换必须集中且可测试。
+
+</Answer>
+
+**问题 2：固定舍入。** 税额计算得到半个最小单位，应该在哪里决定向上、向下或银行家舍入？
+
+<Answer>
+
+由明确的 Rounding Policy 在税额或结算边界决定，并记录币种精度、输入金额、舍入时机和差额归属。不能交给页面格式化或数据库默认规则；相同业务场景要使用同一策略。
+
+</Answer>
+
+**问题 3：处理换汇。** 一个 USD 订单需要展示 CNY 预估价，结算时汇率可能变化。Money 应该直接保存两个币种吗？
+
+<Answer>
+
+Money 应保持单一币种并拒绝跨币种算术。显式汇率服务应保存报价来源、时间、方向、精度和舍入结果；预估价与结算价可以是不同的 Money 值，并在业务记录中说明采用哪一个。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Money">
+    将金额、币种和同币种算术规则组合在一起的值对象。
+  </GlossaryItem>
+  <GlossaryItem term="Currency">
+    标识金额所属计价体系、并参与相等和算术兼容性判断的代码。
+  </GlossaryItem>
+  <GlossaryItem term="Minor Unit">
+    以整数表示货币最小可计量单位的金额表示方式。
+  </GlossaryItem>
+  <GlossaryItem term="Rounding Policy">
+    规定精度不足时取整方式、时机和差额归属的规则。
+  </GlossaryItem>
+  <GlossaryItem term="Exchange Rate">
+    带有来源、时间、方向和舍入规则的跨币种转换依据。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 18.7 货币 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
+掌握 18.7 货币的标志，不是把金额格式化成两位小数，而是能在订单系统中解释“金额与币种 → 最小单位 → 同币种算术 → 舍入策略 → 显式换汇”的责任链。Money 应拒绝跨币种直接运算，Rounding Policy 应在明确边界执行，Exchange Rate 应记录来源与时间；当系统仍依赖浮点数、默认汇率或展示精度掩盖结算精度时，应拒绝当前方案。
 
 ## 前后导航
 
@@ -67,6 +216,13 @@ draft: false
 ## 来源与改写范围
 
 - [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对 18.7 货币的公开模式名称和相关模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

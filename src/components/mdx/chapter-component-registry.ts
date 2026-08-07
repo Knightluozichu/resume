@@ -16050,6 +16050,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Poeaa24Pattern46ValueObjectBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/71-pattern-47-money/poeaa24-pattern-47-money":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money-rounding-diagram"),
+      ]);
+      return {
+        Poeaa24Pattern47MoneyDiagram: modules[0].Poeaa24Pattern47MoneyDiagram,
+        Poeaa24Pattern47MoneyRoundingDiagram:
+          modules[1].Poeaa24Pattern47MoneyRoundingDiagram,
+      } as ChapterMdxComponents;
+    },
   "poeaa-enterprise-patterns/72-pattern-48-special-case/poeaa24-pattern-48-special-case":
     async () => {
       const module0 =
