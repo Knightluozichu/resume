@@ -16647,6 +16647,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Chapter07WhileCodingLab: module0.Tpp20Chapter07WhileCodingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/47-topic-37-lizard-brain/tpp20-topic-37-lizard-brain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-37-lizard-brain-diagram");
+      return {
+        Tpp20Topic37LizardBrainEvidenceDiagram:
+          module0.Tpp20Topic37LizardBrainEvidenceDiagram,
+        Tpp20Topic37LizardBrainLoopDiagram:
+          module0.Tpp20Topic37LizardBrainLoopDiagram,
+        Tpp20Topic37LizardBrainLab: module0.Tpp20Topic37LizardBrainLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

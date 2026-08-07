@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T22:38:51.304Z；旧版分数不迁移。
+> 2026-08-07T22:46:33.801Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2425
+- failed：2424
 - queued：401
-- passed：1046
+- passed：1047
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -47,11 +47,11 @@
 | 34 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
 | 35 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 36 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 37 | pragmatic-programmer | 71 | 22 | 0 | 49 | 66 |
-| 38 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 39 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 40 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 41 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 37 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 38 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 39 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 40 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 41 | pragmatic-programmer | 71 | 21 | 0 | 50 | 63 |
 | 42 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 43 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 44 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
