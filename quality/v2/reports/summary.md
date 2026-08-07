@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T13:42:16.327Z；旧版分数不迁移。
+> 2026-08-07T13:48:38.177Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2485
+- failed：2484
 - queued：401
-- passed：986
+- passed：987
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -128,7 +128,7 @@
 | 115 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
 | 116 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 117 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 118 | poeaa-enterprise-patterns | 78 | 11 | 0 | 67 | 33 |
+| 118 | poeaa-enterprise-patterns | 78 | 10 | 0 | 68 | 30 |
 | 119 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 120 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 121 | ai-agent | 9 | 9 | 0 | 0 | 9 |
