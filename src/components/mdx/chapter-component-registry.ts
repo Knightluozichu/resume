@@ -16153,6 +16153,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20SecondPrefaceMigrationDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/03-first-edition-preface/tpp20-first-edition-preface":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-first-preface-craft-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-first-preface-reflection-diagram"),
+      ]);
+      return {
+        Tpp20FirstPrefaceCraftDiagram: modules[0].Tpp20FirstPrefaceCraftDiagram,
+        Tpp20FirstPrefaceReflectionDiagram:
+          modules[1].Tpp20FirstPrefaceReflectionDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
