@@ -3,74 +3,222 @@ title: "16.3 粗粒度锁"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 58
-description: "用一个锁保护一组相关对象，按聚合不变量而非单行粒度协调离线并发。"
+description: "用一个锁保护同一业务边界内的相关对象，把完整性、等待范围与冲突恢复放在同一份协议中。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-36-coarse-grained-lock
 draft: false
 ---
 
-import { Poeaa24Pattern36CoarseGrainedLock } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-36-coarse-grained-lock-diagram";
+import { Poeaa24Pattern36CoarseGrainedLockDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-36-coarse-grained-lock-diagram";
 
+<Objectives>
 
-## 为什么 16.3 粗粒度锁 值得单独学习
+- 能解释粗粒度锁如何让订单边界内的读取、校验和提交共享同一份并发责任
+- 能修改订单锁协议的超时、版本检查和释放路径，并用可观察证据验证修改
+- 能回答：客服 A 与客服 B 同时编辑一个订单时，什么信号说明锁的边界已经过大？
 
-用一个锁保护一组相关对象，按聚合不变量而非单行粒度协调离线并发。 16.3 粗粒度锁 的核心不是套用某个框架 API，而是回答：如何保护跨多个系统事务的业务事务，在冲突检测、提前锁定和恢复成本间作出选择。在 两个客服并行修改订单 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **16.3 粗粒度锁** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么这一章需要一把大伞
 
-## 先建立直觉：问题、机制与代价
+想象两名客服同时打开同一张订单。订单金额、商品数量和付款状态都看起来可以分别编辑，但一次保存可能同时改变它们。若每个人只保护自己正在填写的那一格，最后保存的人就可能把另一人的决定覆盖掉。
 
-16.3 粗粒度锁 面对的具体压力是“冲突概率、业务事务时长、锁粒度、等待时间与回滚代价”。它采用的机制可以概括为：用一个锁保护一组相关对象，按聚合不变量而非单行粒度协调离线并发。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+没有一条共同规则时，两个请求都可能返回成功，订单却已经不再自洽。我们需要先说清哪些东西必须一起被保护，再决定等待、失败和重试怎样让用户看得见。
 
-对 16.3 粗粒度锁，优先比较的替代路线是：低冲突优先检测，高冲突或高损失场景再考虑悲观和粗粒度锁。本页的通过条件是“能证明聚合内对象共享同一锁根，既不漏锁也不过度扩大到无关对象”；若实验只能显示结果而不能指出 冲突概率 从何处越界，就不能据此选择 16.3 粗粒度锁。
+## 概念模型：边界、责任与证据
 
+<Term def="用一把锁覆盖同一业务边界内多个相关对象的并发控制方式。">粗粒度锁</Term>把保护范围放在一次业务决定需要的整体上，而不是放在每个字段或每一行上。它不是“锁得越大越安全”：范围必须刚好覆盖同一个业务决定，否则无关修改也会被迫排队。
 
-## 目录单元到教学证据
+锁的入口通常是<Term def="代表一组相关对象并负责维护整体业务规则的根对象。">聚合根</Term>。在本章的订单案例中，Order 是根，LineItem 和 Payment 是它需要共同协调的对象。所有写入都从根取得锁，再在锁内读取、校验和提交；子对象不能绕过根单独保存。
 
-### 16.3 粗粒度锁
+<Term def="一把锁一次覆盖的资源范围，范围越大，可能一起等待的请求越多。">锁粒度</Term>决定两种代价：太细会漏掉跨对象的业务关系，太粗会让互不相关的订单一起等待。评审时要把“同一个业务决定”写成可检查的边界，而不是直接照搬数据库表的边界。
 
-在 **16.3 粗粒度锁** 的学习边界里，16.3 粗粒度锁 不是待背诵的目录词，而是用来检查“读取”是否把责任交给正确对象。对 两个客服并行修改订单，学习者要记录 冲突概率 的可观察变化，并说明它何时支持或否定 16.3 粗粒度锁。
+订单能否保存，还要靠<Term def="必须始终成立的业务关系，例如已付款订单不能回到未付款状态。">不变量</Term>来验收。一次成功的数据库写入只能证明存储动作完成，不能证明整个不变量从读取到提交一直受到同一把锁保护。
 
-## 专属设计案例：两个客服并行修改订单
+### 三个阶段的代码责任
 
-把 两个客服并行修改订单 切成“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”五个观察点。16.3 粗粒度锁 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 冲突概率、锁粒度、等待、回滚、恢复 中哪个指标最先提示当前方案不再适用。
+把并发协议拆成“取得、锁内工作、提交释放”三段。<Term def="提交前比较快照与当前状态，确认读取期间没有被其他写入改变的检查。">版本检查</Term>负责识别旧快照；锁边界负责防止同一业务决定被两个写入者同时改写。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-36-coarse-grained-lock**；模式族为 **concurrency**；裁决是“能证明聚合内对象共享同一锁根，既不漏锁也不过度扩大到无关对象”；观测项包括 冲突概率、锁粒度、等待、回滚、恢复；拒绝条件是“冲突概率 超过团队为 16.3 粗粒度锁 设定的边界”。
+| 阶段 | 必须记录的证据 | 失败时的可见结果 |
+| --- | --- | --- |
+| 取得 | 订单键、持有者、等待开始和超时截止 | 返回忙碌或可重试，而不是无限等待 |
+| 锁内工作 | 快照版本、校验结果、修改对象 | 发现边界外写入时停止提交 |
+| 提交释放 | 新版本、提交结果、释放结果 | 成功、冲突和释放失败可以分别重放 |
 
-配置不是生产框架语法，而是一张评审卡。对 16.3 粗粒度锁 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+## 专属代码案例：两个客服并行修改订单
 
-## 三步交互实验
+下面的代码是可运行协议的最小骨架。锁包住读取和业务校验，版本检查提供第二道证据，`finally` 保证正常异常路径都尝试释放。真实系统还应把持有者、超时和恢复事件写入审计日志。
 
+```ts
+async function updateOrder(orderId: string, patch: OrderPatch) {
+  const lease = await orderLocks.acquire(orderId, { timeoutMs: 2_000 });
+  if (!lease) return { status: "busy" as const };
 
-<Poeaa24Pattern36CoarseGrainedLock />
+  try {
+    const snapshot = await orders.read(orderId);
+    const next = validateAndApply(snapshot, patch);
+    if (snapshot.version !== lease.version) {
+      return { status: "conflict" as const };
+    }
+    await orders.save({ ...next, version: snapshot.version + 1 });
+    return { status: "saved" as const };
+  } finally {
+    await orderLocks.release(lease.id);
+  }
+}
+```
+
+这里的关键不是某个锁服务的 API，而是责任顺序：先取得同一订单的锁，再读取完整快照；保存成功后释放；冲突和忙碌都返回给调用者。若只锁住 `orders.save`，两名客服仍可能基于不同快照作出互相矛盾的决定。
+
+## 三步可视化实验
+
+猜一猜：把锁从一个订单扩大到一批订单，会让不变量更安全吗，还是只会让等待变多？先在图中切换阶段，再打开“注入错误边界”，观察第二名客服能否绕过保护范围。
+
+<Poeaa24Pattern36CoarseGrainedLockDiagram />
+
+## 从取得到释放的三步证据链
+
+<Stepper>
+
+<Step title="1. 取得订单边界的锁">
+
+先预测：客服 A 读取订单 #42 后，客服 B 请求修改其中一条明细，应该看到什么？B 应等待同一个订单边界，而不能因为目标是子对象就直接写入。
+
+<Poeaa24Pattern36CoarseGrainedLockDiagram step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 在锁内读取并校验">
+
+再观察：A 在锁内读取金额、明细和付款状态，并检查版本。若把读取移到取得锁之前，A 使用的快照就可能已经落后。
+
+<Poeaa24Pattern36CoarseGrainedLockDiagram step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 提交、释放并处理冲突">
+
+最后注入：让两个编辑者都带着旧版本提交。只有一个提交能推进版本，另一个必须返回冲突并重新读取；若图中打开错误边界，则会暴露子对象绕过根的风险。
+
+<Poeaa24Pattern36CoarseGrainedLockDiagram step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="只锁住最后一次数据库写入">
+
+- **现象**：两个客服都显示保存成功，金额和付款状态却来自不同的业务快照。
+- **原因**：把一次存储调用当成整个业务决定，没有保护读取与校验之间的窗口。
+- **修法**：把取得、读取、校验和提交放进同一边界；记录快照版本和持有者。
+
+</Callout>
+
+<Callout type="trap" title="把整库或整批订单当成一个锁">
+
+- **现象**：修改订单 #42 会阻塞完全无关的订单，客服队列持续变长。
+- **原因**：只追求不漏锁，没有用业务不变量证明保护范围，也没有测量等待来源。
+- **修法**：以聚合根定义边界，记录锁粒度与等待分布；超过预算就拒绝扩大方案。
+
+</Callout>
+
+<Callout type="trap" title="认为锁成功就不需要版本检查">
+
+- **现象**：客户端断线恢复后，旧草稿覆盖了其他客服刚提交的新金额。
+- **原因**：锁的租约或所有权已经变化，旧客户端仍拿着没有世代信息的快照。
+- **修法**：提交时携带版本或租约世代；冲突先重读，不能用盲目重试掩盖旧写入。
+
+</Callout>
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 16.3 粗粒度锁 的证据        | 应拒绝或改用其他方案的信号                     |
-| -------- | -------------------------------- | ---------------------------------------------- |
-| 责任     | 读取 到 提交重试 的所有者清晰    | 业务处理 可以绕过边界直接改写状态              |
-| 变化     | 冲突概率 的变化被局部吸收        | 一次小改动同时触及 锁粒度、等待、回滚          |
-| 失败     | 故障能在 提交重试 前被识别并回退 | 只能看到最终错误，无法定位 冲突概率 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择粗粒度锁的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 边界 | 一个订单内的对象共同维护同一个不变量 | 订单之间没有关系，却被迫共用一把锁 |
+| 冲突 | 冲突损失高，且等待预算可接受 | 冲突少、合并便宜，或用户常常离线很久 |
+| 责任 | 取得、锁内工作、释放和恢复都有日志 | 只能说“框架会自动解锁” |
+| 替代 | 已与细粒度锁和版本重试比较 | 因为数据库提供锁 API 就直接采用 |
 
+粗粒度锁适合“必须一起决定”的对象集合，不适合用来代替所有业务建模。若等待时间主要来自互不相关的订单，应该先缩小边界；若用户会长时间离线，则应比较乐观版本重试、草稿合并或显式的业务队列。
 
 ## 本章小结
 
-掌握 16.3 粗粒度锁 的标志不是记住定义，而是能在 两个客服并行修改订单 中解释“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”的责任链，利用 冲突概率、锁粒度、等待、回滚、恢复 作出可证伪的选择，并在出现“把数据库单次提交成功误认为整个业务事务没有并发冲突”时明确拒绝当前实现。
+- 粗粒度锁保护一次业务决定，而不是任意扩大保护范围。
+- 聚合根负责统一取得锁，子对象不能绕过根写入。
+- 读取、校验、提交和释放必须形成可重放的责任链。
+- 锁粒度、等待分布和冲突损失共同决定是否拒绝该方案。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：记录证据。** 客服 A 和 B 同时编辑订单 #42，A 成功提交，B 返回冲突。请列出判断这次结果是否正确所需的四条日志证据。
+
+<Answer>
+
+至少要有 A 和 B 的订单键与持有者、两次读取的快照版本、锁取得与释放时间、最终提交结果。若有重试，还要记录 B 重读后的新版本；这样才能区分正常冲突、锁边界遗漏和重复提交。
+
+</Answer>
+
+**问题 2：修改 Demo 代码。** 下面的实现先读取再取得锁。请改成有限等待、锁内读取、版本检查和 `finally` 释放，并说明 B 应看到什么结果。
+
+```ts
+async function saveOrder(orderId: string, patch: OrderPatch) {
+  const snapshot = await orders.read(orderId);
+  const next = validateAndApply(snapshot, patch);
+  await orderLocks.acquire(orderId);
+  await orders.save(next);
+}
+```
+
+<Answer>
+
+先调用带超时的 `acquire`，取得成功后进入 `try`，再读取订单、校验版本并保存；在 `finally` 中释放返回的 lease。A 持锁时，B 应收到等待中或超时的可重试结果，不能直接保存旧快照。
+
+</Answer>
+
+**问题 3：选择边界。** 订单 #42 的三条明细互不共享规则，但付款状态必须与订单总额同时改变。你会把它们放进同一把锁吗？请指出至少一个应监控的拒绝信号。
+
+<Answer>
+
+付款状态、总额和会影响总额的明细应处在同一个订单边界；完全不影响该不变量的对象不必扩大进来。若无关明细的等待比例持续升高、锁持有时间超过预算，或冲突损失已经低于合并成本，就应缩小边界或改用版本重试。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="粗粒度锁">把同一个业务决定涉及的多个对象放在一把锁下，减少漏保护的机会，但会增加等待范围。</GlossaryItem>
+  <GlossaryItem term="聚合根">代表一组相关对象的入口；外部修改先找它，由它维护整组对象的规则。</GlossaryItem>
+  <GlossaryItem term="锁粒度">一把锁覆盖多大范围；范围越大，可能一起等待的请求越多。</GlossaryItem>
+  <GlossaryItem term="不变量">无论谁修改，业务都必须保持成立的关系，例如付款状态不能脱离订单总额。</GlossaryItem>
+  <GlossaryItem term="版本检查">提交前比较读取时的版本和当前版本，用来发现旧快照，而不是默默覆盖新修改。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：16.2 悲观离线锁](/learn/poeaa-enterprise-patterns/57-pattern-35-pessimistic-offline-lock/poeaa24-pattern-35-pessimistic-offline-lock)
 - [下一页：16.4 隐含锁](/learn/poeaa-enterprise-patterns/59-pattern-37-implicit-lock/poeaa24-pattern-37-implicit-lock)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对图书主题与章节范围。
+- [Martin Fowler：Patterns of Enterprise Application Architecture 模式目录](https://martinfowler.com/eaaCatalog/)：核对粗粒度锁的公开目录定位。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对出版信息。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

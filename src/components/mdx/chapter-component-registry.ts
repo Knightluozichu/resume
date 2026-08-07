@@ -15786,8 +15786,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-36-coarse-grained-lock-diagram");
       return {
-        Poeaa24Pattern36CoarseGrainedLock:
-          module0.Poeaa24Pattern36CoarseGrainedLock,
+        Poeaa24Pattern36CoarseGrainedLockDiagram:
+          module0.Poeaa24Pattern36CoarseGrainedLockDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/59-pattern-37-implicit-lock/poeaa24-pattern-37-implicit-lock":
