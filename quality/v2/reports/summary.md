@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T22:52:52.488Z；旧版分数不迁移。
+> 2026-08-07T22:59:45.391Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2423
+- failed：2422
 - queued：401
-- passed：1048
+- passed：1049
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -54,13 +54,13 @@
 | 41 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 42 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 43 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 44 | pragmatic-programmer | 71 | 20 | 0 | 51 | 60 |
-| 45 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 46 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 47 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 48 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 49 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 50 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 44 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 45 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 46 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 47 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 48 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 49 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 50 | pragmatic-programmer | 71 | 19 | 0 | 52 | 57 |
 | 51 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
 | 52 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
 | 53 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |

@@ -16672,6 +16672,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic38ProgrammingByCoincidenceLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/49-topic-39-algorithm-speed/tpp20-topic-39-algorithm-speed":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-39-algorithm-speed-diagram");
+      return {
+        Tpp20Topic39AlgorithmSpeedEvidenceDiagram:
+          module0.Tpp20Topic39AlgorithmSpeedEvidenceDiagram,
+        Tpp20Topic39AlgorithmSpeedLoopDiagram:
+          module0.Tpp20Topic39AlgorithmSpeedLoopDiagram,
+        Tpp20Topic39AlgorithmSpeedLab: module0.Tpp20Topic39AlgorithmSpeedLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
