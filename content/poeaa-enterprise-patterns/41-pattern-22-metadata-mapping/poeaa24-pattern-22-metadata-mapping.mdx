@@ -7,70 +7,323 @@ description: "把对象关系映射规则保存为元数据，由通用机制解
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-22-metadata-mapping
 draft: false
 ---
 
 import { Poeaa24Pattern22MetadataMapping } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-22-metadata-mapping-diagram";
 
+<Objectives>
 
-## 为什么 13.1 元数据映射 值得单独学习
+- 能实现一份包含对象、表、字段、关系和类型转换的映射规范，并在启动期拒绝无效列名
+- 能修改通用映射器，使同一份规范分别支持订单装载与写回，同时保留对象身份和事务责任
+- 能回答：给定 `total → total_cents` 但数据库只有 `amount_cents` 的配置，失败应在哪一步发生，为什么不能让引擎猜列名
 
-把对象关系映射规则保存为元数据，由通用机制解释字段、关系和类型转换。 13.1 元数据映射 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **13.1 元数据映射** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 13.1 元数据映射值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单编辑页里有一份订单对象，数据库里有订单表；两边都叫“订单”，却不一定共享字段名、数据类型或关联方向。系统若把这些差异散落在每个查询和保存函数中，小改一列就会同时触及列表页、后台任务和导入脚本，错误还可能只在某条数据被访问时才出现。
 
-13.1 元数据映射 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：把对象关系映射规则保存为元数据，由通用机制解释字段、关系和类型转换。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+本章解决的是“把转换规则放在哪里、谁来解释、何时拒绝”的问题。没有一个可检查的规则边界，通用机制就会变成黑盒：正常数据看起来能读写，配置写错时却只能等线上暴露。案例、TypeScript 片段、练习和图示均为本课程独立重写；公开资料只用来核对模式名称、目录位置与适用范围。
 
-对 13.1 元数据映射，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能由同一映射引擎处理两类对象，拒绝无效元数据，并证明配置错误在启动或测试期暴露”；若实验只能显示结果而不能指出 元数据校验 从何处越界，就不能据此选择 13.1 元数据映射。
+## 先建立直觉：把说明书和搬运工分开
 
+把一个订单从仓库搬到工作台，至少要有一张说明卡：订单放在哪个货架、哪些字段要搬、货架标签和工作台字段如何对应。搬运工按照说明卡工作，而不是为每一种货物重新编写一套搬运动作。说明卡写错时，应该先检查说明卡，不能让搬运工凭相似名称猜测。
+
+这条直觉对应本章的责任链：规则作为独立输入，校验器检查它是否能解释真实 schema；通用引擎负责重复的读写机制；领域对象和事务边界仍然负责业务不变量与失败回滚。模式的价值不是“少写几个类”，而是让变化集中在可审计的规则数据上。
 
 ## 目录单元到教学证据
 
 ### 13.1 元数据映射
 
-在 **13.1 元数据映射** 的学习边界里，13.1 元数据映射 不是待背诵的目录词，而是用来检查“领域意图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 元数据校验 的可观察变化，并说明它何时支持或否定 13.1 元数据映射。
+本章对应 manifest 中的精确单元 `poeaa24-pattern-22-metadata-mapping`，范围限定为：将对象、表、字段、关系和类型转换写成可解释的规则，再由通用机制驱动装载与写回。订单聚合持久化贯穿全文：同一份规则必须能说明 `Order.total` 与 `orders.amount_cents` 的转换，也必须能说明 `Order.customer` 和 `orders.customer_id` 的关系责任。
 
-## 专属设计案例：订单聚合持久化
+完成本单元的证据不是“画出一张配置表”，而是能在三个时点留下可追踪结果：无效规则在初始化或测试期被拒绝；合法规则能把一行恢复为完整对象；写回失败时工作单元不留下半次更新。若只能说“ORM 会自动处理”，就还没有完成模式级判断。
 
-把 订单聚合持久化 切成“领域意图 → 查询对象 → 映射元数据 → 执行 → 对象结果”五个观察点。13.1 元数据映射 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 元数据校验、查询组合、资源库边界、参数化、类型恢复 中哪个指标最先提示当前方案不再适用。
+## 元数据、校验与通用机制
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-22-metadata-mapping**；模式族为 **mapping**；裁决是“能由同一映射引擎处理两类对象，拒绝无效元数据，并证明配置错误在启动或测试期暴露”；观测项包括 元数据校验、查询组合、资源库边界、参数化、类型恢复；拒绝条件是“元数据校验 超过团队为 13.1 元数据映射 设定的边界”。
+### 规则先于代码分支
 
-配置不是生产框架语法，而是一张评审卡。对 13.1 元数据映射 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+<Term def="描述对象如何对应数据库表、列、关系和类型转换的数据，而不是某一次读写调用本身">
+  元数据
+</Term>
+是关于映射的描述数据。它可以来自
+JSON、YAML、XML、注解或构建期生成物；格式不是模式本身，关键是规则能被读取、验证、版本化和测试。
 
-## 三步交互实验
+订单的最小规则可以写成一个独立对象。<Term def="一份可执行的映射合同，明确对象字段、数据库列、关联、类型转换和写回方向">映射规范</Term>不包含“这次请求是否允许取消订单”这样的业务判断，它只描述对象与关系行如何互相翻译：
 
+```ts
+type MappingSpec = {
+  className: "Order";
+  table: "orders";
+  fields: {
+    id: { column: "order_id"; type: "number" };
+    total: { column: "amount_cents"; type: "money-cents" };
+    customerId: { column: "customer_id"; type: "foreign-key" };
+  };
+};
+
+const orderSpec: MappingSpec = {
+  className: "Order",
+  table: "orders",
+  fields: {
+    id: { column: "order_id", type: "number" },
+    total: { column: "amount_cents", type: "money-cents" },
+    customerId: { column: "customer_id", type: "foreign-key" },
+  },
+};
+```
+
+### 配置错误要在对象创建前暴露
+
+<Term def="对映射规范与真实 schema、类型转换和关系约束逐项比对的过程">
+  元数据校验
+</Term>
+是第一道边界。它至少要检查目标表存在、列名存在、必需关系有约束、类型转换有实现；校验通过后才允许通用引擎注册这份规范。这样
+`total → total_cents` 而 schema 只有 `amount_cents`
+时，错误会指向配置与迁移，而不是伪装成一个金额为零的 Order。
+
+```ts
+type Schema = { tables: Record<string, Set<string>> };
+
+function validate(spec: MappingSpec, schema: Schema) {
+  const columns = schema.tables[spec.table];
+  if (!columns) throw new Error(`missing table: ${spec.table}`);
+
+  for (const [field, mapping] of Object.entries(spec.fields)) {
+    if (!columns.has(mapping.column)) {
+      throw new Error(`invalid mapping: ${field} → ${mapping.column}`);
+    }
+  }
+}
+```
+
+校验不等于只检查字符串。它还应检查读写方向是否闭合：一个字段若能从数据库读出，却没有可逆或明确的写回策略，就不能宣称“同一映射支持保存”；一个关系若只声明了对象名称，没有外键或加载策略，也不能把关联对象当作已完成。启动期校验、契约测试和迁移检查可以共享同一份规则，但它们的失败信息要保留阶段与版本。
+
+### 通用引擎负责解释，不负责猜测
+
+<Term def="读取映射规范并执行字段转换、对象装载与写回的可复用机制">
+  通用映射器
+</Term>
+接收规范、行数据和对象，不接收某个页面的业务决定。它可以统一处理列名转换、金额单位、外键解析和空值策略；它不能在规范缺失时根据字段相似度猜一个列，也不能因为一个订单装载失败就把错误吞成默认对象。
+
+```ts
+type Order = { id: number; total: number; customerId: number | null };
+type OrderRow = Record<string, unknown>;
+
+function loadOrder(spec: MappingSpec, row: OrderRow): Order {
+  return {
+    id: Number(row[spec.fields.id.column]),
+    total: Number(row[spec.fields.total.column]) / 100,
+    customerId:
+      row[spec.fields.customerId.column] == null
+        ? null
+        : Number(row[spec.fields.customerId.column]),
+  };
+}
+
+function saveOrder(spec: MappingSpec, order: Order) {
+  return {
+    [spec.fields.id.column]: order.id,
+    [spec.fields.total.column]: Math.round(order.total * 100),
+    [spec.fields.customerId.column]: order.customerId,
+  };
+}
+```
+
+这里的 `loadOrder` 与 `saveOrder` 是机制的最小切片，不是生产 ORM。真正实现还要处理版本、脏字段、并发冲突和关系加载，但方向必须稳定：规则改变映射，业务对象仍然决定订单是否合法；引擎只负责把可接受的边界翻译成读写动作。
+
+## 专属可视化实验：从规则到可回滚写回
+
+主图先显示完整的五段关系：映射规范、元数据校验、通用映射器、Order 对象和 `orders` 表。点击三个阶段按钮，观察责任如何从“规则是否可接受”推进到“对象如何恢复”再推进到“写回如何封口”；点击“注入错误元数据”，让 `total_cents` 故意指向不存在的列，确认失败停在对象创建之前。
 
 <Poeaa24Pattern22MetadataMapping />
 
-## 选择与拒绝矩阵
+### 三个阶段快照
 
-| 评审问题 | 选择 13.1 元数据映射 的证据       | 应拒绝或改用其他方案的信号                       |
-| -------- | --------------------------------- | ------------------------------------------------ |
-| 责任     | 领域意图 到 对象结果 的所有者清晰 | 查询对象 可以绕过边界直接改写状态                |
-| 变化     | 元数据校验 的变化被局部吸收       | 一次小改动同时触及 查询组合、资源库边界、参数化  |
-| 失败     | 故障能在 对象结果 前被识别并回退  | 只能看到最终错误，无法定位 元数据校验 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析               |
+下面的 Stepper 把同一条链拆成三张证据快照。每一步都有图，而不是只用文字描述状态；阅读时先预测阶段的产物，再对照图中高亮边界。
 
+先预测：如果映射规范把 `total` 指向不存在的 `total_cents`，你认为错误会在“查询返回空值”“对象构造失败”还是“元数据校验”阶段出现？
+
+<Stepper>
+
+<Step title="1. 校验：先拒绝无法解释的规则">
+
+先让真实 schema 与 `MappingSpec` 做逐项比对。表、列、类型和关系都能找到时才登记规范；任何一项不匹配，都保留字段名、目标列和规范版本，供迁移或配置修复使用。
+
+<Poeaa24Pattern22MetadataMapping step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 装载：用同一规范恢复 Order">
+
+校验通过后，通用映射器读取 `order_id`、`amount_cents` 和 `customer_id`，按规则转成 `Order`。它复用列查找和类型转换机制，但不把订单取消、支付授权等业务决定塞进映射器。
+
+<Poeaa24Pattern22MetadataMapping step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 写回：把对象与表放进同一工作单元">
+
+保存时沿同一规范把金额恢复为整数分、把客户引用写成外键值，并在工作单元内提交。故意让写回其中一列失败，检查公共字段没有已经提交而关系字段仍待补写。
+
+<Poeaa24Pattern22MetadataMapping step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 读写合同：身份、关系与事务不能外包
+
+### 装载后仍要维护同一身份
+
+通用引擎把一行恢复为对象，却没有自动保证同一请求中两次读取 `orders.order_id = 42` 得到同一实例。<Term def="在一次工作范围内让同一个持久化 id 对应一个受控对象实例的机制">身份映射</Term>可以用请求级缓存或受控工厂实现，重点是后续修改、脏状态和关系引用不能各自指向不同副本。
+
+例如先加载 Order，再通过订单的客户外键加载 Customer，身份映射应让重复出现的 `Customer(7)` 回到同一个实例。它解决的是对象身份一致性，不等于缓存永不过期；版本检查、失效策略和事务隔离仍要由系统明确选择。
+
+### 写回不是“把对象整体序列化”
+
+元数据映射可以告诉引擎 `Order.customerId` 对应 `orders.customer_id`，却不应因此把 Customer 的姓名、地址和订单集合一起塞进订单行。关联的拥有方、空值语义、删除策略和加载范围都需要独立记录。规则清楚时，列表查询可以只取订单列，详情查询再按外键加载客户；这比一个自动展开的对象图更容易测量和回滚。
+
+### 用工作单元封住失败
+
+<Term def="收集一次业务操作产生的对象变更，并在同一事务语义下统一提交或回滚的边界">
+  工作单元
+</Term>
+把多个映射动作放进同一提交范围：先校验对象版本与身份，再按照规范生成待写列，最后提交订单和关联更新。若
+`amount_cents` 写入成功而 `customer_id`
+写入因约束失败，工作单元必须让前者也回滚，不能用“稍后补写”掩盖部分成功。
+
+```ts
+function saveOrderUnit(order: Order, spec: MappingSpec, db: Database) {
+  return db.transaction(() => {
+    validate(spec, db.schema());
+    const row = saveOrder(spec, order);
+    db.update(spec.table, row, { order_id: order.id });
+  });
+}
+```
+
+这段伪代码的重点是顺序与边界，而不是某个数据库 API：校验不能只在部署时运行，写回前也要保证当前 schema 和规范仍匹配；事务不能只包住最后一条 SQL，而要覆盖规范验证后产生的整组变更。
+
+## 配置演进与替代方案
+
+元数据映射适合规则变化频繁、对象种类较多、字段转换可描述且希望统一测试的边界。它不意味着所有对象都应该交给一个万能引擎。领域规则复杂、对象生命周期差异大或查询需要完全不同的聚合策略时，显式 Mapper、数据访问对象或手写查询可能更容易审计。
+
+| 评审问题 | 选择元数据映射的证据                     | 应拒绝或换方案的信号                             |
+| -------- | ---------------------------------------- | ------------------------------------------------ |
+| 变化     | 新增对象主要增加规范和契约测试           | 每个对象都有独特的业务分支，配置开始承载流程判断 |
+| 失败     | 无效列名、类型和关系能在启动或测试期失败 | 引擎只能到运行时猜列名，错误只能显示为空对象     |
+| 查询     | 多个对象共享稳定的字段转换与关系策略     | 查询计划必须手写，通用引擎反而隐藏索引与联接成本 |
+| 身份     | 规范与身份映射、版本条件有明确边界       | 同一 id 在多个缓存和 Mapper 中产生互相覆盖的副本 |
+| 写回     | 工作单元能让整组映射更新一起提交或回滚   | 保存被拆成异步片段，失败后只能人工修复半个聚合   |
+
+配置文件也需要演进纪律。添加一列时先让校验器认识兼容的 schema，再部署能读取旧列和新列的版本，最后切换写入；删除列时先停止写入、观察读流量，再移除规则和约束。每次规则变更都应有一个失败样本：旧服务遇到新列或新类型时应明确拒绝，而不是静默丢失字段。
+
+## 常见误区
+
+<Callout type="trap" title="把配置当成可信常量">
+
+- **现象**：配置把 `total` 映射到不存在的 `total_cents`，系统仍创建 Order，只是金额变成 `0` 或 `undefined`。
+- **原因**：把元数据当作不会出错的静态文件，跳过了 schema、类型转换和关系约束校验。
+- **修法**：在注册规范和每次迁移测试时执行元数据校验；列名、类型或关系不匹配就拒绝对象创建，并保留规范版本。
+
+</Callout>
+
+<Callout type="trap" title="让通用映射器吞掉业务失败">
+
+- **现象**：客户外键不存在时，引擎自动返回一个空 Customer；调用方继续保存订单，却失去了关联失败的原因。
+- **原因**：为了让通用流程“总能返回对象”，把关系缺失、权限拒绝和业务不变量都降级成默认值。
+- **修法**：引擎只翻译已声明的关系和类型；缺失关系返回可诊断错误，业务服务再决定重试、提示或拒绝保存。
+
+</Callout>
+
+<Callout type="trap" title="把读写分成两个无关配置">
+
+- **现象**：列表读取使用 `amount_cents`，保存配置却写到 `total_cents`；页面首次打开正常，编辑后金额丢失。
+- **原因**：把映射看成单向查询投影，没有检查字段转换和写回方向是否闭合。
+- **修法**：为每份规范写装载与写回契约测试，故意重放一条订单并比较关键字段；无法解释的单向映射必须显式标为只读。
+
+</Callout>
 
 ## 本章小结
 
-掌握 13.1 元数据映射 的标志不是记住定义，而是能在 订单聚合持久化 中解释“领域意图 → 查询对象 → 映射元数据 → 执行 → 对象结果”的责任链，利用 元数据校验、查询组合、资源库边界、参数化、类型恢复 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
+- 元数据把对象、表、字段、关系和类型转换写成可检查的规则。
+- 元数据校验应在通用映射器创建对象前拒绝无效配置。
+- 通用映射器解释规则，不猜列名，也不承载业务决定。
+- 身份映射和工作单元分别守住对象实例一致性与整组写回的回滚语义。
+- 当配置开始隐藏查询计划或业务流程时，应改用显式 Mapper、查询对象或手写 SQL。
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** `MappingSpec` 把 `Order.total` 指向 `total_cents`，但真实的 `orders` 表只有 `amount_cents`。请指出失败阶段，并写出测试至少要断言什么。
+
+<Answer>
+
+失败应发生在元数据校验或规范注册阶段，早于查询执行和 Order 对象创建。测试至少断言错误同时包含字段 `total`、目标列 `total_cents` 和规范版本；还应确认通用映射器没有被注册，不能以 `undefined`、零金额或默认列继续运行。
+
+</Answer>
+
+**问题 2：** 同一份规范要支持订单列表读取和订单编辑保存。你会如何证明金额与客户外键的读写方向闭合？
+
+<Answer>
+
+先用一行 `amount_cents=1299, customer_id=7` 装载出 `total=12.99, customerId=7`，再用同一对象生成写回行，断言金额恢复为 `1299`、外键仍为 `7`。另外覆盖空客户、类型转换失败和只读字段；若某字段只能读不能安全写回，就在规范中显式标记，而不是假装双向映射。
+
+</Answer>
+
+**问题 3：** 保存订单时金额列已生成，但客户外键因约束失败。请设计一个最小故障注入，证明工作单元保护了聚合。
+
+<Answer>
+
+在事务内部先让订单金额更新成功，再让 `customer_id` 指向不存在的客户并触发约束错误；捕获错误后重新读取 `orders`，断言金额和外键都保持提交前的版本。随后修复客户 id，用同一输入重放，确认整组字段一次提交；不能用后台补写把两次提交伪装成一个工作单元。
+
+</Answer>
+
+</Exercises>
 
 ## 前后导航
 
 - [上一页：第13章 对象-关系元数据映射模式](/learn/poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata)
 - [下一页：13.2 查询对象](/learn/poeaa-enterprise-patterns/42-pattern-23-query-object/poeaa24-pattern-23-query-object)
 
-## 来源与改写范围
+## 出处声明与独立改写
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+正文参考 [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)、[Martin Fowler 企业应用架构模式目录](https://martinfowler.com/eaaCatalog/) 与 [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)，用于核对原书主题、模式名称和公开目录范围。中文出版信息沿用 frontmatter 所示 2024 年中文版；本文为独立改写，不复现原书正文、插图或代码，CC BY-NC 4.0 仅适用于本站原创教学表述与结构。
 
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Martin Fowler《企业应用架构模式》"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="元数据">
+    描述对象怎样对应数据库结构的数据；它是可读取、可验证的规则，不是某次请求的业务决定。
+  </GlossaryItem>
+  <GlossaryItem term="映射规范">
+    一份把对象字段、数据库列、关系和类型转换写在一起的映射合同。
+  </GlossaryItem>
+  <GlossaryItem term="元数据校验">
+    把映射规范逐项和真实表、列、关系及转换实现比对，提前找出不能执行的配置。
+  </GlossaryItem>
+  <GlossaryItem term="通用映射器">
+    按映射规范执行装载、类型转换和写回的可复用引擎；它不负责猜测或决定业务规则。
+  </GlossaryItem>
+  <GlossaryItem term="身份映射">
+    让同一个持久化 id
+    在一次工作范围内对应同一个对象实例的机制，避免两个副本互相覆盖。
+  </GlossaryItem>
+  <GlossaryItem term="工作单元">
+    收集一次操作中的对象变化，并在同一事务语义下统一提交或回滚的边界。
+  </GlossaryItem>
+</Glossary>
