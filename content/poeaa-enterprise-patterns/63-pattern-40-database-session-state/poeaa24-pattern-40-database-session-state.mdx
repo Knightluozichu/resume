@@ -7,70 +7,249 @@ description: "把会话数据作为已提交记录存入数据库，以持久性
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-40-database-session-state
 draft: false
 ---
 
-import { Poeaa24Pattern40DatabaseSessionState } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-40-database-session-state-diagram";
+import { Poeaa24Pattern40DatabaseSessionStateDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-40-database-session-state-diagram";
 
+<Objectives>
 
-## 为什么 17.3 数据库会话状态 值得单独学习
+- 能解释数据库会话状态如何把会话记录交给共享数据库，并说清持久性、扩展性与数据库负担之间的取舍
+- 能编写带版本条件、过期检查和事务边界的 TypeScript 读写草图，拒绝旧版本覆盖新状态
+- 能根据会话大小、节点数量、恢复目标和热点指标，判断订单向导何时采用或拒绝数据库会话状态
 
-把会话数据作为已提交记录存入数据库，以持久性和共享访问换取数据库负担。 17.3 数据库会话状态 的核心不是套用某个框架 API，而是回答：如何选择会话状态的权威位置，并明确完整性、扩缩容、过期和恢复责任。在 订单向导会话 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **17.3 数据库会话状态** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 17.3 数据库会话状态值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单向导会跨越多个请求，可能经历节点重启、发布切换和重复提交。把会话放在进程内很快，却无法让下一台节点或重启后的服务看到同一份状态；把全部状态放进客户端，又会把隐私、大小和撤销责任推给不可信输入。数据库会话状态把记录交给共享数据库，换来持久性和节点独立性，同时新增 SQL、连接池、清理任务与热点治理。
 
-17.3 数据库会话状态 面对的具体压力是“状态大小、节点数量、粘性依赖、过期时间与恢复目标”。它采用的机制可以概括为：把会话数据作为已提交记录存入数据库，以持久性和共享访问换取数据库负担。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="把跨请求的会话记录持久化到共享数据库，由应用节点按会话键读写的会话状态方案。">
+  数据库会话状态
+</Term>
+的关键不在于“用了 ORM 还是
+SQL”，而在于确定谁拥有状态、何时提交、如何过期，以及数据库故障时请求应暂停、回退还是拒绝。数据库保存的是会话上下文，不是让会话记录替代订单、库存或权限等业务权威。
 
-对 17.3 数据库会话状态，优先比较的替代路线是：按安全、可用性和运维约束比较客户端、服务器与数据库会话状态。本页的通过条件是“能事务化读写会话、设置过期清理并测量数据库热点，说明何时不应使用”；若实验只能显示结果而不能指出 可信边界 从何处越界，就不能据此选择 17.3 数据库会话状态。
+本章只覆盖 2024 年中文版公开目录中的 **17.3 数据库会话状态**，依据作者图书页和公开模式目录独立重写。案例、实验、代码、练习和答案均为本课程原创，不复现原书正文、插图或代码。
 
+## 先建立直觉：共享存储换来恢复能力
+
+一次订单向导请求可以拆成“读键、校验版本、修改草稿、事务提交、设置过期”五个观察点。<Term def="用于定位一份会话记录、但不应单独承担身份授权的稳定标识。">会话键</Term>只负责找到记录；服务器仍要验证当前用户、租户和流程权限。若把会话键当成授权凭证，数据库再可靠也无法修复边界错误。
+
+数据库记录通常包含小型上下文、<Term def="用来阻止旧请求覆盖新写入的单调递增或等价版本标记。">乐观版本</Term>与到期时间。一次更新必须把读取、权限判断和写入的责任说清楚；发现版本冲突时，应返回可重试或重新读取的结果，而不是静默覆盖另一台节点刚提交的状态。
+
+持久化也会引入新的观测项：连接池等待、热点会话、慢查询、清理滞后和数据库不可用率。<Term def="同一条记录被频繁读写，导致锁等待、缓存失效或单分片压力集中的现象。">数据库热点</Term>不是“数据库方案必然错误”，却是提醒团队缩小会话、调整索引、分片或更换存储边界的证据。
 
 ## 目录单元到教学证据
 
 ### 17.3 数据库会话状态
 
-在 **17.3 数据库会话状态** 的学习边界里，17.3 数据库会话状态 不是待背诵的目录词，而是用来检查“请求”是否把责任交给正确对象。对 订单向导会话，学习者要记录 可信边界 的可观察变化，并说明它何时支持或否定 17.3 数据库会话状态。
+本章精确对应 manifest 单元 `poeaa24-pattern-40-database-session-state`。学习者要能用同一条订单向导责任链回答：哪个节点可以读取、哪个事务可以写入、旧版本如何拒绝、过期记录如何清理、数据库不可用时业务是否允许继续。
 
-## 专属设计案例：订单向导会话
+完成本单元要交出三样证据：一张标出客户端、应用节点和数据库责任的图；一段带版本与过期检查的读写代码；一个故障样本，证明冲突、热点或数据库不可用时系统会在明确边界停止，而不是把错误状态继续传播。
 
-把 订单向导会话 切成“请求 → 会话键 → 状态位置 → 更新 → 过期”五个观察点。17.3 数据库会话状态 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 可信边界、容量、多节点、持久性、清理 中哪个指标最先提示当前方案不再适用。
+## 专属案例：跨节点的订单向导
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-40-database-session-state**；模式族为 **session**；裁决是“能事务化读写会话、设置过期清理并测量数据库热点，说明何时不应使用”；观测项包括 可信边界、容量、多节点、持久性、清理；拒绝条件是“可信边界 超过团队为 17.3 数据库会话状态 设定的边界”。
+假设访客先保存配送地址，再在另一台应用节点选择付款方式。会话记录保存 `cartDraftId`、当前步骤、租户键和短期草稿；订单金额、库存、优惠资格与付款结果仍从权威服务读取。两台节点应该看到同一份已提交记录，但不能因为共享数据库就绕过当前用户的授权。
 
-配置不是生产框架语法，而是一张评审卡。对 17.3 数据库会话状态 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+评审卡记录如下：单元键为 **poeaa24-pattern-40-database-session-state**；模式族为 **session**；采用条件是“需要跨节点共享、可恢复且记录大小可控的会话”；观测项包括读写延迟、版本冲突率、连接池等待、热点键和过期清理滞后；拒绝条件是“会话成为大对象、数据库无法承受峰值，或故障时没有安全回退”。
 
-## 三步交互实验
+## 专属可视化实验：一条记录怎样跨节点生效
 
+先预测：节点 A 读到版本 7 后，节点 B 先提交版本 8，节点 A 再写入时应该发生什么？点击主图观察会话键如何定位记录、版本条件如何阻止旧写入，以及过期清理为什么是容量责任的一部分。再把数据库改成不可用，判断请求应返回可重试错误还是继续执行付款。
 
-<Poeaa24Pattern40DatabaseSessionState />
+<Poeaa24Pattern40DatabaseSessionStateDiagram />
+
+### 三个阶段快照
+
+下面的 Stepper 把主图拆成三个确定性阶段。先写下每一步的责任和失败结果，再对照图中的数据流，避免把“能读到记录”误认为“已经获得业务授权”。
+
+<Stepper>
+
+<Step title="1. 会话键定位权威记录">
+
+节点收到 `sid` 后只用它定位记录，再校验租户、用户和流程权限。会话键不是价格、角色或付款状态的来源。
+
+<Poeaa24Pattern40DatabaseSessionStateDiagram step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 事务提交并检查版本">
+
+节点读取版本 7，修改草稿并以 `WHERE version = 7` 的条件提交；若另一节点已提交版本 8，应返回冲突，让客户端重新读取，而不是覆盖新状态。
+
+<Poeaa24Pattern40DatabaseSessionStateDiagram step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 到期记录拒绝并清理">
+
+读取路径先检查 `expiresAt`，清理任务回收过期记录并记录滞后。数据库故障或清理延迟都必须有告警和可解释的业务回退。
+
+<Poeaa24Pattern40DatabaseSessionStateDiagram step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 代码实践：带版本和过期边界的读写
+
+下面的 TypeScript 草图把数据库适配器收窄成可测试接口。真实项目应使用参数化查询、事务、连接池和成熟的重试策略；这里的重点是权限、版本和过期检查的顺序。
+
+```ts
+type SessionRow = {
+  id: string;
+  ownerId: string;
+  tenantId: string;
+  step: 1 | 2 | 3;
+  cartDraftId: string;
+  version: number;
+  expiresAt: number;
+};
+
+type SessionStore = {
+  get(id: string): Promise<SessionRow | null>;
+  updateIfVersion(
+    id: string,
+    expectedVersion: number,
+    patch: Pick<SessionRow, "step" | "cartDraftId" | "expiresAt">,
+  ): Promise<"updated" | "conflict">>;
+};
+
+async function advanceWizard(
+  store: SessionStore,
+  input: { sessionId: string; ownerId: string; tenantId: string; now: number },
+): Promise<"ok" | "not-found" | "forbidden" | "expired" | "conflict"> {
+  const row = await store.get(input.sessionId);
+  if (!row) return "not-found";
+  if (row.ownerId !== input.ownerId || row.tenantId !== input.tenantId) {
+    return "forbidden";
+  }
+  if (row.expiresAt <= input.now) return "expired";
+
+  const result = await store.updateIfVersion(
+    row.id,
+    row.version,
+    { step: 2, cartDraftId: row.cartDraftId, expiresAt: input.now + 15 * 60_000 },
+  );
+  return result === "updated" ? "ok" : "conflict";
+}
+```
+
+四个代码边界可直接测试：不存在的键不能创建隐含授权；用户和租户必须匹配；过期记录不能进入业务动作；版本冲突不能被重试逻辑伪装成成功。若把 `updateIfVersion` 改成无条件 `UPDATE sessions SET ...`，就应把它标成会覆盖并发写入的拒绝样本。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 17.3 数据库会话状态 的证据 | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------- | ---------------------------------------------- |
-| 责任     | 请求 到 过期 的所有者清晰       | 会话键 可以绕过边界直接改写状态                |
-| 变化     | 可信边界 的变化被局部吸收       | 一次小改动同时触及 容量、多节点、持久性        |
-| 失败     | 故障能在 过期 前被识别并回退    | 只能看到最终错误，无法定位 可信边界 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径  | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 采用数据库会话状态的证据            | 应拒绝或改用其他方案的信号   |
+| -------- | ----------------------------------- | ---------------------------- |
+| 共享     | 任意节点都能读取同一份已提交记录    | 只能依赖粘性路由或进程内缓存 |
+| 完整性   | 权限、版本与事务边界可测试          | 会话键直接充当授权凭证       |
+| 容量     | 记录小、索引明确、清理可观测        | 大对象把数据库变成文件存储   |
+| 故障     | 数据库不可用时有安全回退和告警      | 连接池耗尽仍继续付款或发货   |
+| 生命周期 | `expiresAt`、清理任务和恢复路径明确 | 过期数据永久增长且没有责任人 |
 
+## 常见误区
+
+<Callout type="trap" title="共享数据库等于共享授权">
+
+- **现象**：请求只带 `sessionId`，任何知道键的人都能读取或修改会话。
+- **原因**：把“能定位一条记录”误当成“已验证所有者和租户”。
+- **修法**：在业务操作前校验身份、租户和流程权限；会话键只做定位，不能替代授权。
+
+</Callout>
+
+<Callout type="trap" title="无条件写入覆盖并发更新">
+
+- **现象**：节点 A 的旧表单覆盖了节点 B 刚保存的地址或付款方式。
+- **原因**：更新没有携带读取时的版本，也没有把冲突作为业务结果记录。
+- **修法**：用版本条件更新；冲突时重新读取并要求用户确认，不要静默覆盖。
+
+</Callout>
+
+<Callout type="trap" title="只加存储不加清理和故障策略">
+
+- **现象**：数据库会话表持续增长，峰值时连接池耗尽，服务仍尝试执行不可逆操作。
+- **原因**：只看到持久性收益，没有把过期、热点、备份恢复和数据库不可用纳入责任链。
+- **修法**：设置过期时间、清理指标和容量告警；数据库故障时返回可解释的可重试结果或安全降级。
+
+</Callout>
 
 ## 本章小结
 
-掌握 17.3 数据库会话状态 的标志不是记住定义，而是能在 订单向导会话 中解释“请求 → 会话键 → 状态位置 → 更新 → 过期”的责任链，利用 可信边界、容量、多节点、持久性、清理 作出可证伪的选择，并在出现“信任客户端状态却没有签名、版本和重放防护”时明确拒绝当前实现。
+- 数据库会话状态以共享、持久化和节点独立性换取 SQL、连接池、热点与清理责任。
+- 会话键只定位记录；权限、租户、版本和过期检查必须在业务动作前完成。
+- 乐观版本让并发冲突可见，事务和参数化查询让状态变化可审计、可测试。
+- 当会话很大、数据库无法承受峰值或故障没有安全回退时，应拒绝当前方案并重新划分状态边界。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：找出错误边界。** `advanceWizard` 只接收 `sessionId`，查到记录后就把 `step` 改成 3。请指出至少两个缺失检查，并说明它们防止什么问题。
+
+<Answer>
+
+至少缺少 owner/tenant 权限检查、过期检查和版本条件更新。权限检查防止知道键的请求读取他人会话，过期检查防止旧流程继续推进，版本条件防止并发旧表单覆盖新提交；三者都应发生在不可逆业务动作前。
+
+</Answer>
+
+**问题 2：解释冲突结果。** 节点 A 和 B 都读到版本 7，B 先提交版本 8，A 的更新返回 `conflict`。为什么不能直接重试同一个 patch？
+
+<Answer>
+
+因为 A 的 patch 可能基于已经过期的表单，直接重试会绕过用户对 B 修改的确认并重新覆盖状态。系统应重新读取版本 8，合并或要求用户确认；只有证明 patch 仍然适用于新版本时，才以新版本条件重试。
+
+</Answer>
+
+**问题 3：选择替代方案。** 会话包含 2MB 的草稿、强隐私字段，并要求数据库故障时付款仍继续。请给出三个拒绝信号和一个拆分方向。
+
+<Answer>
+
+2MB 已把会话表当成大对象存储，强隐私字段提高泄露与备份风险，且“数据库故障仍继续付款”没有可证明的业务权威。可以把短期步骤和草稿键留在轻量会话，把大草稿放对象存储，把隐私与付款状态留在权威业务服务；付款使用独立幂等和恢复流程，不在数据库会话缺失时盲目继续。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数据库会话状态">
+    把跨请求会话记录保存到共享数据库，由应用节点按键读写并承担事务、清理与故障责任。
+  </GlossaryItem>
+  <GlossaryItem term="会话键">
+    定位一条会话记录的标识；它不等于身份、租户或业务授权。
+  </GlossaryItem>
+  <GlossaryItem term="乐观版本">
+    随记录递增的版本标记，用条件更新发现旧请求并拒绝覆盖。
+  </GlossaryItem>
+  <GlossaryItem term="数据库热点">
+    同一记录或分片被频繁访问，造成锁等待、缓存失效或集中压力的现象。
+  </GlossaryItem>
+  <GlossaryItem term="过期清理">
+    依据到期时间删除或归档不再有效的会话记录，并以指标监控清理滞后。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：17.2 服务器会话状态](/learn/poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state)
 - [下一页：第18章 基本模式](/learn/poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节范围和模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对数据库会话状态的公开模式定位与模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

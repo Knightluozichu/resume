@@ -15822,8 +15822,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-40-database-session-state-diagram");
       return {
-        Poeaa24Pattern40DatabaseSessionState:
-          module0.Poeaa24Pattern40DatabaseSessionState,
+        Poeaa24Pattern40DatabaseSessionStateDiagram:
+          module0.Poeaa24Pattern40DatabaseSessionStateDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns":
