@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T23:05:26.724Z；旧版分数不迁移。
+> 2026-08-07T23:11:20.892Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2421
+- failed：2420
 - queued：401
-- passed：1050
+- passed：1051
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -67,20 +67,20 @@
 | 54 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
 | 55 | unity5 | 18 | 18 | 0 | 0 | 64 |
 | 56 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 57 | pragmatic-programmer | 71 | 18 | 0 | 53 | 54 |
-| 58 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 59 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 60 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 61 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 62 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
-| 63 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 64 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
-| 65 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 66 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 67 | blender-3d | 17 | 17 | 0 | 0 | 51 |
-| 68 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 69 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 70 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 57 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 58 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 59 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 60 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 61 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
+| 62 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 63 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
+| 64 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 65 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 66 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 67 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 68 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 69 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 70 | pragmatic-programmer | 71 | 17 | 0 | 54 | 51 |
 | 71 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
 | 72 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
 | 73 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |

@@ -16696,6 +16696,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic40RefactoringLab: module0.Tpp20Topic40RefactoringLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/51-topic-41-test-to-code/tpp20-topic-41-test-to-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-41-test-to-code-diagram");
+      return {
+        Tpp20Topic41TestToCodeEvidenceDiagram:
+          module0.Tpp20Topic41TestToCodeEvidenceDiagram,
+        Tpp20Topic41TestToCodeLoopDiagram:
+          module0.Tpp20Topic41TestToCodeLoopDiagram,
+        Tpp20Topic41TestToCodeLab: module0.Tpp20Topic41TestToCodeLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
