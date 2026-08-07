@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T23:46:47.512Z；旧版分数不迁移。
+> 2026-08-07T23:53:27.894Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2415
+- failed：2414
 - queued：401
-- passed：1056
+- passed：1057
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -123,11 +123,11 @@
 | 110 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
 | 111 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 112 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 113 | pragmatic-programmer | 71 | 12 | 0 | 59 | 36 |
-| 114 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 115 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 116 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 117 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 113 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 114 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 115 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 116 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 117 | pragmatic-programmer | 71 | 11 | 0 | 60 | 33 |
 | 118 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 119 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 120 | ai-agent | 9 | 9 | 0 | 0 | 9 |
