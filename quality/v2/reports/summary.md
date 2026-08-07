@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T13:30:25.261Z；旧版分数不迁移。
+> 2026-08-07T13:36:21.549Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2487
+- failed：2486
 - queued：401
-- passed：984
+- passed：985
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -117,14 +117,14 @@
 | 104 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
 | 105 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
 | 106 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 107 | poeaa-enterprise-patterns | 78 | 13 | 0 | 65 | 39 |
-| 108 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 109 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 110 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
-| 111 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 112 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 113 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 114 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 107 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 108 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 109 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
+| 110 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 111 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 112 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 113 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 114 | poeaa-enterprise-patterns | 78 | 12 | 0 | 66 | 36 |
 | 115 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 116 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
 | 117 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |

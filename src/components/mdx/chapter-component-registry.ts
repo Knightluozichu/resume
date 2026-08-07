@@ -15810,10 +15810,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-lock-strategies");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-lock-strategies"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-concurrency-boundary-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch16LockStrategies: module0.Poeaa24Ch16LockStrategies,
+        Poeaa24Ch16LockStrategiesDiagram:
+          modules[0].Poeaa24Ch16LockStrategiesDiagram,
+        Poeaa24Ch16ConcurrencyBoundaryDecisionDiagram:
+          modules[1].Poeaa24Ch16ConcurrencyBoundaryDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/56-pattern-34-optimistic-offline-lock/poeaa24-pattern-34-optimistic-offline-lock":

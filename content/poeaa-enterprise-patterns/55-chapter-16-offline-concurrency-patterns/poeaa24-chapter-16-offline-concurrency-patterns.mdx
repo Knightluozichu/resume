@@ -3,67 +3,218 @@ title: "第16章 离线并发模式"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 55
-description: "在跨多个系统事务的业务事务中选择检测冲突或提前锁定。"
+description: "在长事务的冲突检测、提前锁定与恢复成本之间做出可验证的选择。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-16-offline-concurrency-patterns
 draft: false
 ---
 
-import { Poeaa24Ch16LockStrategies } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-lock-strategies";
+import { Poeaa24Ch16LockStrategiesDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-lock-strategies";
+import { Poeaa24Ch16ConcurrencyBoundaryDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch16-concurrency-boundary-decision-diagram";
 
+<Objectives>
 
-## 为什么 第16章 离线并发模式 值得单独学习
+- 能区分 Optimistic Offline Lock、Pessimistic Offline Lock、Coarse-Grained Lock 与 Implicit Lock 的责任和代价
+- 能用 TypeScript 以版本检查、冲突结果和重试策略保护订单编辑提交
+- 能根据冲突概率、锁粒度、等待时间、回滚代价和恢复路径选择或拒绝离线并发方案
 
-在跨多个系统事务的业务事务中选择检测冲突或提前锁定。 第16章 离线并发模式 的核心不是套用某个框架 API，而是回答：如何保护跨多个系统事务的业务事务，在冲突检测、提前锁定和恢复成本间作出选择。在 两个客服并行修改订单 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第16章 离线并发模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第16章离线并发模式值得单独学习
 
-## 先建立直觉：问题、机制与代价
+第16章离线并发模式处理的是跨越用户思考时间的业务事务：客服读取订单，修改地址或金额，稍后才提交。期间另一个客服可能已经保存了新版本。数据库单次写入成功，不代表整个业务事务没有并发冲突；真正要决定的是谁发现冲突、谁拥有裁决权，以及用户怎样恢复自己的工作。
 
-第16章 离线并发模式 面对的具体压力是“冲突概率、业务事务时长、锁粒度、等待时间与回滚代价”。它采用的机制可以概括为：在跨多个系统事务的业务事务中选择检测冲突或提前锁定。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="读取时保存版本，提交时比较版本；发现版本变化就拒绝或要求重读合并，而不是覆盖他人的修改。">
+  Optimistic Offline Lock
+</Term>
+适合冲突较少、编辑时间较长且可以让用户重试或合并的场景。本页依据 2024
+年中文版公开目录限定第16章范围，并根据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
-对 第16章 离线并发模式，优先比较的替代路线是：低冲突优先检测，高冲突或高损失场景再考虑悲观和粗粒度锁。本页的通过条件是“能解释离线并发模式的边界与选择轴，逐项覆盖4个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 冲突概率 从何处越界，就不能据此选择 第16章 离线并发模式。
+<Term def="在读取或进入业务事务时先取得锁，直到提交或回滚才释放，以阻止其他事务同时修改同一资源。">
+  Pessimistic Offline Lock
+</Term>
+能降低冲突，却把等待、死锁、锁过期和持有者离线的成本放到了系统中。
 
+## 先建立直觉：检测、锁定与代价
+
+<Term def="一次锁住整个聚合或业务边界的策略，用更大的锁范围换取较简单的并发判断。">
+  Coarse-Grained Lock
+</Term>
+适合聚合内字段必须保持一致的场景，但会降低本来可以并行的编辑吞吐。
+
+<Term def="由框架、事务代理或持久化机制自动加锁和检查的策略，调用者不直接书写全部锁协议。">
+  Implicit Lock
+</Term>
+减少重复代码，却可能隐藏锁粒度、隔离级别和冲突异常，必须用运行证据补回可见性。
+
+<Term def="多个离线编辑者基于同一旧版本提交时，后提交者发现版本已变化而必须拒绝、合并或重新应用的状态。">
+  Conflict Detection
+</Term>
+是 Optimistic Offline Lock
+的核心，而不是一个可以被最后写入者胜出规则消除的异常。
+
+对第16章离线并发模式，优先比较的替代路线是：冲突少且编辑时间长时使用版本检查；冲突高且操作短、等待可控时使用悲观锁；聚合必须整体一致时考虑粗粒度锁；采用隐式锁时必须补充锁协议与观测。若方案只能展示“最后一次写入成功”，不能解释冲突检测和恢复路径，就不能据此选择离线并发模式。
 
 ## 目录单元到教学证据
 
-### 第16章 离线并发模式
+### 第16章离线并发模式
 
-在 **第16章 离线并发模式** 的学习边界里，第16章 离线并发模式 不是待背诵的目录词，而是用来检查“读取”是否把责任交给正确对象。对 两个客服并行修改订单，学习者要记录 冲突概率 的可观察变化，并说明它何时支持或否定 第16章 离线并发模式。
+第16章离线并发模式要求把并发策略变成六组可复核证据：冻结版次、应用切片与目录坐标；从问题和语境比较候选模式；手算远程或映射成本；验证正常样本与恰好边界；只注入一个故障并定位首差；让独立复核者重放结果并接入发布门禁。本文把这些证据映射到两个客服并行修改订单的读取、编辑、提交和恢复流程。
 
-## 专属设计案例：两个客服并行修改订单
+## 专属代码案例：两个客服并行修改订单
 
-把 两个客服并行修改订单 切成“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”五个观察点。第16章 离线并发模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 冲突概率、锁粒度、等待、回滚、恢复 中哪个指标最先提示当前方案不再适用。
+把两个客服并行修改订单切成“读取快照 → 离线编辑 → 版本检查 → 冲突裁决 → 重试或合并”五个观察点。设计草案必须写出谁拥有订单版本、谁决定字段合并、失败怎样传播，以及冲突概率、锁粒度、等待、回滚和恢复中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-16-offline-concurrency-patterns**；模式族为 **concurrency**；裁决是“能解释离线并发模式的边界与选择轴，逐项覆盖4个目录节点，并在同一应用切片中验证”；观测项包括 冲突概率、锁粒度、等待、回滚、恢复；拒绝条件是“冲突概率 超过团队为 第16章 离线并发模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-16-offline-concurrency-patterns**；模式族为 **concurrency**；裁决是“以版本检查保护长事务，以明确冲突结果和重试路径保护用户工作”；观测项包括冲突概率、锁粒度、等待、回滚、恢复；拒绝条件是“用最后写入者覆盖冲突，或把锁的所有权和过期规则隐藏在框架默认值中”。
 
-配置不是生产框架语法，而是一张评审卡。对 第16章 离线并发模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：客服 A 和客服 B 都读取版本 7，A 先提交，B 再提交时应该发生什么？哪些字段可以自动合并，哪些字段必须让用户重新确认？先写下版本、冲突载荷与恢复按钮，再阅读实现；验证时要能区分成功提交、版本冲突、重复提交和订单已被撤销四种结果。
 
-# 模式族地图
+```ts
+type OrderSnapshot = {
+  orderId: string;
+  version: number;
+  shippingAddress: string;
+  note: string;
+};
 
+type SaveOrderCommand = {
+  orderId: string;
+  expectedVersion: number;
+  shippingAddress: string;
+  note: string;
+};
 
-<Poeaa24Ch16LockStrategies />
+type SaveOrderResult =
+  | { status: "saved"; snapshot: OrderSnapshot }
+  | { status: "conflict"; current: OrderSnapshot; submitted: SaveOrderCommand }
+  | { status: "not-found" };
 
-**阅读路径**：冲突少 → Optimistic Lock；冲突多 → Pessimistic Lock；聚合边界清晰 → Coarse-Grained Lock；框架自动管理 → Implicit Lock。
+interface OrderStore {
+  read(orderId: string): OrderSnapshot | null;
+  save(command: SaveOrderCommand): SaveOrderResult;
+}
+
+class OfflineOrderEditor {
+  constructor(private readonly store: OrderStore) {}
+
+  submit(command: SaveOrderCommand): SaveOrderResult {
+    const current = this.store.read(command.orderId);
+    if (!current) return { status: "not-found" };
+    return this.store.save({ ...command, expectedVersion: current.version });
+  }
+}
+```
+
+示例强调了结果协议而不是某个 ORM API：生产实现应让客户端带回真正读取到的 `expectedVersion`，由存储层以原子条件更新完成版本检查；若版本已经变化，应返回当前快照和用户提交内容，让应用层决定字段合并或要求重做。不能在控制器里先读再无条件写，否则检查和提交之间仍然存在竞态。
+
+## 离线并发锁策略
+
+四种策略的关键差异在于锁何时取得、谁看见冲突以及失败后要付出什么恢复成本。图中把读取、编辑、提交和代价放在同一条时间轴上，便于复核策略是否真的匹配业务事务时长。
+
+<Poeaa24Ch16LockStrategiesDiagram />
+
+## 并发边界决策图
+
+先估计冲突概率和编辑时长，再看失败损失与恢复成本。没有高损失或强一致约束时不要用长时间持有的悲观锁；如果选择隐式锁，就必须把实际锁范围、超时和冲突异常写进测试与监控。
+
+<Poeaa24Ch16ConcurrencyBoundaryDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第16章 离线并发模式 的证据  | 应拒绝或改用其他方案的信号                     |
-| -------- | -------------------------------- | ---------------------------------------------- |
-| 责任     | 读取 到 提交重试 的所有者清晰    | 业务处理 可以绕过边界直接改写状态              |
-| 变化     | 冲突概率 的变化被局部吸收        | 一次小改动同时触及 锁粒度、等待、回滚          |
-| 失败     | 故障能在 提交重试 前被识别并回退 | 只能看到最终错误，无法定位 冲突概率 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择第16章离线并发模式的证据       | 应拒绝或改用其他方案的信号                 |
+| -------- | ---------------------------------- | ------------------------------------------ |
+| 冲突     | 冲突概率、编辑时长与损失有基线     | 只凭“数据库支持事务”猜测冲突很少           |
+| 锁定     | 锁范围、等待、过期和死锁处理可测试 | 远程用户持有无期限锁，其他人只能阻塞       |
+| 检测     | 版本比较与原子提交在同一存储边界   | 控制器先读再无条件写，检查和提交分离       |
+| 恢复     | 冲突载荷、合并规则和重试路径明确   | 用最后写入者覆盖用户工作，无法解释谁被丢弃 |
 
+## 常见误区
+
+<Callout type="trap" title="把最后写入者胜出当成并发策略">
+
+- **现象**：两个客服先后保存成功，系统没有冲突提示，但先提交的地址或备注消失。
+- **原因**：没有把读取版本带回提交，也没有在持久化边界执行条件更新。
+- **修法**：使用 Optimistic Offline Lock，在版本不匹配时返回 Conflict Detection 结果，让用户合并或重试。
+
+</Callout>
+
+<Callout type="trap" title="让离线用户无限期持有悲观锁">
+
+- **现象**：客服关闭浏览器后订单仍被锁住，其他操作排队，最终只能由管理员手工解锁。
+- **原因**：Pessimistic Offline Lock 没有租约、心跳、过期和恢复责任。
+- **修法**：只有短操作且等待可控时使用悲观锁；对长编辑优先版本检查，必要时将锁变成有期限的租约并记录持有者。
+
+</Callout>
+
+<Callout type="trap" title="相信隐式锁而不验证实际协议">
+
+- **现象**：升级 ORM 或切换事务代理后，冲突异常、锁粒度和隔离级别改变，代码却没有测试失败路径。
+- **原因**：Implicit Lock 隐藏了关键决定，团队把框架默认值当成业务协议。
+- **修法**：在集成测试中验证条件更新、冲突异常、锁范围、超时和回滚；把运行指标纳入发布门禁。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第16章离线并发模式，并要求把版本检查、锁粒度、等待和恢复映射到订单编辑切片。
+
+**问题 1：选择策略。** 两个客服平均编辑订单 8 分钟，冲突率低但修改内容需要人工确认，应该优先采用什么？
+
+<Answer>
+
+优先采用 Optimistic Offline Lock：读取时保存版本，提交时做原子版本比较；冲突时返回当前快照和提交内容，让用户合并或重新应用。长时间持有 Pessimistic Offline Lock 会把用户思考时间变成其他人的等待。
+
+</Answer>
+
+**问题 2：找出竞态。** 控制器先读取订单版本，再调用 `save` 写入新字段，但 `save` 没有携带期望版本，为什么仍然不安全？
+
+<Answer>
+
+读取和写入之间可能有另一个提交，控制器里的检查并不与写入原子绑定。应把 `expectedVersion` 交给存储层，在一次条件更新中比较并递增版本；条件不成立就返回冲突，而不是覆盖当前值。
+
+</Answer>
+
+**问题 3：恢复失败。** 订单备注可以自动合并，但收货地址不能自动合并；版本冲突时如何设计恢复？
+
+<Answer>
+
+返回当前快照、用户提交内容和冲突字段清单。备注可按字段规则合并，地址要求用户重新确认后以新的版本重试；记录原版本、当前版本和裁决结果。测试应覆盖重复提交、撤销订单和合并后再次冲突。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Optimistic Offline Lock">
+    读取时保存版本，提交时比较版本并在变化时拒绝、合并或重试的策略。
+  </GlossaryItem>
+  <GlossaryItem term="Pessimistic Offline Lock">
+    在业务事务开始时取得锁并持续到提交或回滚，以阻止并发修改的策略。
+  </GlossaryItem>
+  <GlossaryItem term="Coarse-Grained Lock">
+    一次锁住整个聚合或业务边界，以较低并发换取简单一致性的策略。
+  </GlossaryItem>
+  <GlossaryItem term="Implicit Lock">
+    由框架、代理或持久化机制自动管理锁和冲突检查的策略。
+  </GlossaryItem>
+  <GlossaryItem term="Conflict Detection">
+    发现提交所依据的旧版本已经变化，并触发拒绝、合并或重试的过程。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第16章 离线并发模式 的标志不是记住定义，而是能在 两个客服并行修改订单 中解释“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”的责任链，利用 冲突概率、锁粒度、等待、回滚、恢复 作出可证伪的选择，并在出现“把数据库单次提交成功误认为整个业务事务没有并发冲突”时明确拒绝当前实现。
-
+掌握第16章离线并发模式的标志不是记住四种锁策略，而是能在两个客服并行修改订单中解释“读取快照 → 离线编辑 → 版本检查 → 冲突裁决 → 重试或合并”的责任链。学习者应利用冲突概率、锁粒度、等待、回滚和恢复作出可证伪的选择，并在最后写入者覆盖、无限期悲观锁和未经验证的隐式锁时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -73,6 +224,13 @@ import { Poeaa24Ch16LockStrategies } from "@/components/mdx/poeaa-enterprise-pat
 ## 来源与改写范围
 
 - [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对离线并发锁策略的公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
