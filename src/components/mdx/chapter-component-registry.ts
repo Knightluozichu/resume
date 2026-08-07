@@ -16320,6 +16320,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic10LocalChangeDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/16-topic-11-reversibility/tpp20-topic-11-reversibility":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic11-exit-drill-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic11-reversible-decision-diagram"),
+      ]);
+      return {
+        Tpp20Topic11ExitDrillDiagram: modules[0].Tpp20Topic11ExitDrillDiagram,
+        Tpp20Topic11ReversibleDecisionDiagram:
+          modules[1].Tpp20Topic11ReversibleDecisionDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
