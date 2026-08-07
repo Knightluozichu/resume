@@ -16294,6 +16294,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic08DesignComparisonDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/14-topic-09-dry-duplication/tpp20-topic-09-dry-duplication":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic09-drift-repair-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic09-single-source-diagram"),
+      ]);
+      return {
+        Tpp20Topic09DriftRepairDiagram:
+          modules[0].Tpp20Topic09DriftRepairDiagram,
+        Tpp20Topic09SingleSourceDiagram:
+          modules[1].Tpp20Topic09SingleSourceDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
