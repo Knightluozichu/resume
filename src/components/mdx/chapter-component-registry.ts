@@ -16413,6 +16413,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic18PowerEditingLab: module0.Tpp20Topic18PowerEditingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/25-topic-19-version-control/tpp20-topic-19-version-control":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-19-version-control-diagram");
+      return {
+        Tpp20Topic19VersionControlDiagram:
+          module0.Tpp20Topic19VersionControlDiagram,
+        Tpp20Topic19VersionControlLab: module0.Tpp20Topic19VersionControlLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

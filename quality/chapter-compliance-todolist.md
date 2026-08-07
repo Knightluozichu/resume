@@ -401,7 +401,7 @@
     - 路径：`content/pragmatic-programmer/23-topic-17-shell-games/tpp20-topic-17-shell-games.mdx`
 - [x] ✅ **24-topic-18-power-editing/tpp20-topic-18-power-editing** — 已修复（2026-08-08，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/24-topic-18-power-editing/tpp20-topic-18-power-editing.mdx`
-- [ ] 🔴 P1 **25-topic-19-version-control/tpp20-topic-19-version-control** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **25-topic-19-version-control/tpp20-topic-19-version-control** — 已修复（2026-08-08，score 42→100，passed）
     - 路径：`content/pragmatic-programmer/25-topic-19-version-control/tpp20-topic-19-version-control.mdx`
 - [ ] 🔴 P1 **26-topic-20-debugging/tpp20-topic-20-debugging** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/26-topic-20-debugging/tpp20-topic-20-debugging.mdx`
