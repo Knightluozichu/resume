@@ -3,74 +3,292 @@ title: "15.2 数据传输对象"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 54
-description: "用可序列化的数据载体跨进程传输一组值，减少调用次数并隔离远程边界。"
+description: "用稳定、可序列化的数据契约跨进程传输一组值，减少往返并隔离内部对象模型。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
-sourceUrl: "https://martinfowler.com/books/eaa.html"
+sourceUrl: "https://martinfowler.com/eaaCatalog/dataTransferObject.html"
+officialUnitId: poeaa24-pattern-33-data-transfer-object
 draft: false
 ---
 
-import { Poeaa24Pattern33DataTransferObject } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-33-data-transfer-object-diagram";
+import { Poeaa24Pattern33DataTransferObjectDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-33-data-transfer-object-diagram";
 
+<Objectives>
 
-## 为什么 15.2 数据传输对象 值得单独学习
+- 能解释订单领域对象为什么不能直接越过进程边界，并画出一次 DTO 传输的责任链
+- 能修改 TypeScript 的 DTO 组装与版本校验代码，让调用次数、字段边界和兼容策略可测试
+- 能回答：当契约变化、网络失败或调用次数上升时，什么运行证据支持采用或拒绝数据传输对象
 
-用可序列化的数据载体跨进程传输一组值，减少调用次数并隔离远程边界。 15.2 数据传输对象 的核心不是套用某个框架 API，而是回答：如何承认网络延迟与部分失败，用粗粒度契约减少往返并避免泄漏内部对象模型。在 订单与结算跨进程调用 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **15.2 数据传输对象** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 15.2 数据传输对象值得单独学习
 
-## 先建立直觉：问题、机制与代价
+想象结算页面需要订单编号、买家姓名、金额和行项目。如果页面每要一个值就向另一台机器再问一次，页面会被网络等待切成很多小段；如果把整个订单对象原样交过去，接收方又会拿到不该依赖的内部关系。这个问题的关键不在于“多定义一个类型”，而在于决定一次请求到底承诺哪些数据。
 
-15.2 数据传输对象 面对的具体压力是“网络往返、载荷大小、超时比例、幂等键与兼容版本”。它采用的机制可以概括为：用可序列化的数据载体跨进程传输一组值，减少调用次数并隔离远程边界。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+没有清楚的传输边界时，字段小改动会沿着远程调用、数据库模型和客户端一起扩散。更糟的是，调用方可能以为自己拿到的是本地对象，实际却要面对超时、重试和半成功。我们需要一张窄而稳定的“数据清单”，让发送方和接收方都能检查自己的责任。
 
-对 15.2 数据传输对象，优先比较的替代路线是：能保持本地调用时不分布；必须跨进程时组合远程外观与数据传输对象。本页的通过条件是“能版本化DTO并批量传输所需数据，证明领域对象没有直接越过进程边界”；若实验只能显示结果而不能指出 契约粒度 从何处越界，就不能据此选择 15.2 数据传输对象。
+## 从订单请求建立概念模型
 
+### 只把需要的数据装进一次请求
+
+跨进程传输时，<Term def="只携带数据字段、可被编码后跨边界传输的对象；它不把领域行为和内部关联一起暴露给调用方。">数据传输对象</Term>（Data Transfer Object，简称 DTO）是一份专门为边界准备的值集合。它可以包含 `orderId`、`customerName` 和 `totalCents`，但不应带着 `Order` 的取消方法、数据库会话或延迟加载关系。
+
+DTO 的收益有两个可观察证据：一次请求可以带回一个用例所需的字段，客户端也只能依赖公开清单。它不是把所有字段复制一遍的仪式；字段应该从客户端用例倒推，隐藏的内部字段、密码、ORM 标记和未来可能变化的关系都应被排除。
+
+### 编码是边界的一部分
+
+在离开进程前，DTO 必须经过<Term def="把内存中的字段按双方约定转换成字节或文本，以便跨进程传输和还原。">序列化</Term>；到达接收方后再按契约还原。请注意序列化结果不是领域对象本身，而是带有字段名、类型和版本含义的载荷。
+
+一组四次 getter 调用可能产生四次网络往返；一个 DTO 可以把同一用例压缩成一次请求。减少往返并不等于无限增大载荷：如果每个页面都拿整张订单表，网络字节、隐私风险和缓存失效都会上升。判断标准是“这次用例是否一次拿齐恰好需要的数据”。
 
 ## 目录单元到教学证据
 
 ### 15.2 数据传输对象
 
-在 **15.2 数据传输对象** 的学习边界里，15.2 数据传输对象 不是待背诵的目录词，而是用来检查“客户端意图”是否把责任交给正确对象。对 订单与结算跨进程调用，学习者要记录 契约粒度 的可观察变化，并说明它何时支持或否定 15.2 数据传输对象。
+本章精确对应 manifest 单元 `poeaa24-pattern-33-data-transfer-object`，范围限定为：用专门的数据载体跨进程交付一组值，同时不让领域对象直接越过边界。订单与结算跨进程调用贯穿正文，学习证据不是记住 DTO 三个字，而是能交出一张字段清单、一段可测试的组装函数和一份失败样本。
 
-## 专属设计案例：订单与结算跨进程调用
+完成本单元需要同时回答三件事：谁决定字段，谁拥有业务行为，哪一步负责兼容旧客户端。若实验只显示“请求成功”，却无法指出一次改字段会影响哪个契约、哪个版本和哪一次重试，就还没有完成模式级判断。
 
-把 订单与结算跨进程调用 切成“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”五个观察点。15.2 数据传输对象 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 契约粒度、往返、序列化、版本、部分失败 中哪个指标最先提示当前方案不再适用。
+## 专属可视化实验：看数据如何过界
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-33-data-transfer-object**；模式族为 **distribution**；裁决是“能版本化DTO并批量传输所需数据，证明领域对象没有直接越过进程边界”；观测项包括 契约粒度、往返、序列化、版本、部分失败；拒绝条件是“契约粒度 超过团队为 15.2 数据传输对象 设定的边界”。
+先预测：如果客户端只需要订单摘要，把 `LineItem` 的内部关联也放进载荷，会让哪一个边界变得不稳定？如果把三个 getter 合成一次 DTO 请求，哪一个计数会下降？点击阶段按钮，再打开故障注入，观察“领域对象 → DTO → 网络 → 客户端”的责任如何变化。
 
-配置不是生产框架语法，而是一张评审卡。对 15.2 数据传输对象 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+<Poeaa24Pattern33DataTransferObjectDiagram />
 
-## 三步交互实验
+### 三个确定性阶段快照
 
+下面的三个快照把同一条数据流拆开。每步都保留字段、边界和证据，先写下预测，再用图核对；不要把图中“结果到达”误认为“领域对象已经跨过边界”。
 
-<Poeaa24Pattern33DataTransferObject />
+<Stepper>
 
-## 选择与拒绝矩阵
+<Step title="1. 选择用例字段">
 
-| 评审问题 | 选择 15.2 数据传输对象 的证据         | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------------- | ---------------------------------------------- |
-| 责任     | 客户端意图 到 服务端用例 的所有者清晰 | 远程外观 可以绕过边界直接改写状态              |
-| 变化     | 契约粒度 的变化被局部吸收             | 一次小改动同时触及 往返、序列化、版本          |
-| 失败     | 故障能在 服务端用例 前被识别并回退    | 只能看到最终错误，无法定位 契约粒度 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径        | 因框架内置或团队习惯而跳过问题分析             |
+服务端从订单聚合中挑出当前用例需要的字段。此时 `Order` 仍然只属于服务端，DTO 的字段清单是下一步要执行的边界决定。
 
+<Poeaa24Pattern33DataTransferObjectDiagram stage={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 组装并序列化 DTO">
+
+组装函数把领域对象映射为扁平数据，再进行序列化。任何未列入 DTO 的关系都不能靠“顺手带上”进入网络。
+
+<Poeaa24Pattern33DataTransferObjectDiagram stage={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 校验版本并消费数据">
+
+客户端只消费公开字段；版本校验和字段默认值决定旧客户端能否继续工作。打开主图的故障注入，可以看到把 `Order` 原样发送会让内部关系泄漏到边界。
+
+<Poeaa24Pattern33DataTransferObjectDiagram stage={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 代码实践：把领域对象压成可测试契约
+
+下面的 TypeScript 草图把领域对象和 DTO 分成两个类型。`toOrderSummaryDto` 是唯一的组装入口，因此可以断言它不会携带 `paymentToken`、`items` 关系或可调用的方法。
+
+```ts
+type Order = {
+  id: number;
+  customerName: string;
+  totalCents: number;
+  paymentToken: string;
+  items: Array<{ sku: string; quantity: number }>;
+};
+
+type OrderSummaryDto = {
+  schemaVersion: 1;
+  orderId: number;
+  customerName: string;
+  totalCents: number;
+};
+
+function toOrderSummaryDto(order: Order): OrderSummaryDto {
+  return {
+    schemaVersion: 1,
+    orderId: order.id,
+    customerName: order.customerName,
+    totalCents: order.totalCents,
+  };
+}
+```
+
+注意这里没有让 `OrderSummaryDto` 继承 `Order`。继承会把“当前需要的字段”变成“未来可能暴露的字段”；显式返回对象虽然多写几行，却把信息流锁在一个可以审查、可以测试的地方。
+
+再看服务端如何一次取得摘要，客户端如何拒绝未知的旧版本。示例中的 `fetchOrderSummary` 只代表一个远程调用；真实项目还要把超时、重试上限和请求幂等键写入接口契约。
+
+```ts
+type SummaryClient = {
+  getOrderSummary(id: number): Promise<OrderSummaryDto>;
+};
+
+function readSummary(dto: OrderSummaryDto) {
+  if (dto.schemaVersion !== 1) {
+    throw new Error("unsupported order summary version");
+  }
+  return `${dto.orderId}: ${dto.customerName} / ${dto.totalCents}`;
+}
+
+async function fetchOrderSummary(
+  client: SummaryClient,
+  id: number,
+): Promise<string> {
+  const dto = await client.getOrderSummary(id);
+  return readSummary(dto);
+}
+```
+
+这段代码的可验证性质很具体：mock `getOrderSummary` 后断言它只被调用一次；给 `readSummary` 一个版本号 `1` 的对象时得到摘要；给它一个不认识的版本时得到明确错误，而不是把未知字段静默当成正确数据。
+
+## 契约如何应对变化与失败
+
+### 用粗粒度契约减少远程往返
+
+<Term def="围绕一个完整用例组织字段与操作、让调用方不必逐字段远程读取的边界契约。">
+  粗粒度契约
+</Term>
+不是“字段越多越好”，而是一次调用覆盖一个有意义的用例。订单摘要适合一次取回；实时库存、支付授权和推荐列表可能有不同的生命周期，硬塞进同一个
+DTO 反而会把无关变化绑定在一起。
+
+可以用运行指标检查粒度是否合适：记录一次页面请求的远程调用次数、载荷字节数、P95 延迟和被客户端真正读取的字段比例。如果调用次数从 4 降到 1、载荷只增加必要字段且延迟下降，说明边界变粗带来了证据；如果一次小字段修改同时触发多个团队发布，契约已经过宽。
+
+### 让版本化成为显式策略
+
+DTO 不是永远不变的结构。增加可选字段通常可以由旧客户端忽略；删除字段、改变类型或改变含义则需要<Term def="为数据契约标出可识别的演进编号，并规定不同编号之间如何兼容。">版本化</Term>策略。可以选择 URL 版本、媒体类型版本或消息头版本，但必须把“谁校验、谁默认、谁停止支持”写进测试。
+
+新增字段时先保持旧字段可用，客户端只读取它声明依赖的字段；服务端在一段迁移窗口内同时接受旧格式和新格式。不要把数据库迁移版本直接当作 DTO 版本：数据库内部重构不一定改变外部字段，反过来也可能只改了展示含义就必须升级契约。
+
+### 把部分失败留在边界上
+
+网络调用可能在服务端已写入、响应却丢失；也可能 DTO 中某个可选字段生成失败，但摘要本身仍然可用。这类<Term def="一次跨边界操作只完成了部分步骤或只返回了部分数据，需要明确回退、重试或降级责任。">部分失败</Term>不能用“返回一个空对象”掩盖。
+
+为每个失败写出阶段和动作：序列化失败不应发送请求；超时只按幂等策略重试；版本不支持应快速拒绝并记录客户端版本；可选字段失败可以降级，但必需字段缺失必须失败。DTO 让这些判断有了窄边界，却不会替你决定业务补偿，补偿仍由用例服务负责。
+
+## 与远程外观的协作边界
+
+<Term def="在远程边界上提供面向用例的入口、把多次细粒度内部调用收拢为一次粗粒度请求的对象。">
+  远程外观
+</Term>
+负责“调用哪个用例”，DTO
+负责“这个用例传哪些值”。两者经常一起出现，但职责不同：外观可以调用订单服务并组装摘要，DTO
+不应该自己发网络请求或决定是否允许取消订单。
+
+评审时画出这条链：客户端意图 → 远程外观 → DTO 组装 → 序列化 → 服务端用例。客户端依赖 DTO 契约，服务端拥有领域对象和业务规则；任何让客户端拿到 `Order`、让 DTO 持有数据库连接、让外观复制业务规则的实现，都应该停下来重新分配责任。
+
+| 评审问题 | 采用 DTO 的证据                         | 应拒绝或改用其他方案的信号           |
+| -------- | --------------------------------------- | ------------------------------------ |
+| 粒度     | 一次用例请求拿齐需要字段，调用次数可测  | 每个 getter 都成为一次远程调用       |
+| 边界     | 领域对象不出服务端，载荷字段有清单      | 客户端能访问关联对象、方法或内部令牌 |
+| 演进     | schemaVersion、兼容窗口和弃用日期有测试 | 改一个字段就必须同时升级所有客户端   |
+| 失败     | 超时、版本拒绝和降级动作可区分          | 所有异常都变成空 DTO 或 200 响应     |
+
+## 常见误区
+
+<Callout type="trap" title="把领域对象原样当成 DTO">
+
+- **现象**：客户端收到 `Order` 后可以继续读取 `items`、调用取消方法，或看到支付令牌。
+- **原因**：为了少写映射代码，把内部对象的字段、行为和关联一起暴露到远程边界。
+- **修法**：为每个用例定义显式 DTO 和 `toDto` 函数；用序列化快照断言敏感字段与关联字段不出现。
+
+</Callout>
+
+<Callout type="trap" title="用一个巨型 DTO 解决所有页面">
+
+- **现象**：摘要、详情、导出和后台审核都依赖同一个几百字段载荷，小改动引发连锁发布。
+- **原因**：把“减少往返”误解成“把所有可能字段都装上”，没有从用例反推契约粒度。
+- **修法**：按用例拆成窄 DTO，记录实际读取字段比例和载荷大小；只有证据显示重复往返时才合并请求。
+
+</Callout>
+
+<Callout type="trap" title="只改 DTO 不写版本与失败测试">
+
+- **现象**：新字段上线后旧客户端显示空白；超时重试造成重复扣款，运维只能看到一次笼统的 500。
+- **原因**：把 DTO 当成静态数据结构，遗漏版本校验、幂等策略和必需/可选字段的失败责任。
+- **修法**：为旧版本、新版本、超时和重复请求分别写可重复测试，并明确降级或拒绝的动作。
+
+</Callout>
 
 ## 本章小结
 
-掌握 15.2 数据传输对象 的标志不是记住定义，而是能在 订单与结算跨进程调用 中解释“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”的责任链，利用 契约粒度、往返、序列化、版本、部分失败 作出可证伪的选择，并在出现“把本地细粒度对象接口原样暴露到网络”时明确拒绝当前实现。
+- DTO 只携带用例所需的数据，不携带领域行为、数据库关系或敏感内部字段。
+- 一次粗粒度请求可以减少往返，但载荷仍要保持窄、可审查、可测试。
+- 序列化、版本化和部分失败都属于边界契约，不能交给框架默认行为。
+- 远程外观组织用例，DTO 描述数据；领域对象和业务规则仍由服务端拥有。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：改 Demo 代码。** 在专属图的“选择用例字段”阶段，把 `customerName` 改成可选字段，并新增 `currency` 字段。请修改 `OrderSummaryDto` 与 `toOrderSummaryDto`，再写出两条断言：序列化结果必须包含 `currency`，且不能包含 `paymentToken` 或 `items`。
+
+<Answer>
+
+把 `currency: "CNY"` 加入 DTO 类型和显式返回对象，保留 `customerName?: string` 的可选标记；用 `JSON.stringify(toOrderSummaryDto(order))` 作为断言输入，检查 `JSON.parse` 后存在 `currency`，并用 `hasOwnProperty("paymentToken") === false`、`hasOwnProperty("items") === false` 锁住边界。最后在图中打开故障注入，确认错误模式仍显示“领域对象不应越界”，而不是把敏感字段画进客户端。
+
+</Answer>
+
+**问题 2：验证一次调用。** 给 `fetchOrderSummary` 注入一个 mock client，页面需要订单编号、客户名和总价。请写出最小测试检查远程方法只调用一次，并说明为什么不能分别调用 `getOrderId`、`getCustomerName` 和 `getTotal`。
+
+<Answer>
+
+让 mock 的 `getOrderSummary` 返回一个 `schemaVersion: 1` 的 DTO，调用 `await fetchOrderSummary(client, 42)` 后断言 `getOrderSummary` 的调用次数为 `1`，结果包含 `42` 和总价。分别调用三个 getter 会把一个用例拆成三次网络往返，放大延迟、超时和重试的组合风险；DTO 的验收点正是“一次请求交付一组值”。
+
+</Answer>
+
+**问题 3：诊断兼容与失败。** 服务器把 `totalCents` 改成字符串，旧客户端仍只接受版本 `1`；同时一次超时后服务端可能已经扣款。请分别给出版本处理和重试处理，并写出你要观察的两条运行证据。
+
+<Answer>
+
+不要静默把类型变化塞进版本 `1`：发布新 schema 版本，让客户端在版本不支持时快速拒绝，或在迁移窗口内由服务端提供明确的旧版本 DTO。扣款请求不能因为普通超时就盲目重试，应使用幂等键并查询服务端处理状态后再决定重试。运行证据至少包括“各版本请求的拒绝/成功计数”和“同一幂等键的服务端扣款次数”；两者都能证明失败没有被空 DTO 或重复副作用掩盖。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数据传输对象">
+    专门为跨边界准备的一组数据字段；它像一张寄送清单，只列出这次用例要交付的内容，不把原对象的行为和内部关系带出去。
+  </GlossaryItem>
+  <GlossaryItem term="序列化">
+    把内存里的字段变成可以通过网络发送的文本或字节；接收方按同一约定还原，而不是直接共享发送方的对象。
+  </GlossaryItem>
+  <GlossaryItem term="粗粒度契约">
+    围绕一个完整用例组织数据，让调用方一次拿到所需值；它不是无限膨胀的“大对象”。
+  </GlossaryItem>
+  <GlossaryItem term="版本化">
+    给契约的演进标出可识别的版本，并说明旧客户端遇到新字段或新类型时怎么办。
+  </GlossaryItem>
+  <GlossaryItem term="部分失败">
+    一次跨边界操作只完成了部分步骤或只返回了部分数据；系统必须明确重试、降级或补偿的责任。
+  </GlossaryItem>
+  <GlossaryItem term="远程外观">
+    面向用例提供远程入口的对象；它组织调用，但不应把领域对象或业务规则泄漏给客户端。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：15.1 远程外观](/learn/poeaa-enterprise-patterns/53-pattern-32-remote-facade/poeaa24-pattern-32-remote-facade)
 - [下一页：第16章 离线并发模式](/learn/poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Data Transfer Object 模式目录](https://martinfowler.com/eaaCatalog/dataTransferObject.html)：核对模式的公开摘要与基本边界。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对全书主题、模式族和章节范围。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/dataTransferObject.html"
+  sourceBasis="outline-only"
+/>

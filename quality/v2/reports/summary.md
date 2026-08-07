@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T10:07:45.917Z；旧版分数不迁移。
+> 2026-08-07T10:23:34.423Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2521
+- failed：2517
 - queued：401
-- passed：950
+- passed：954
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -16,7 +16,7 @@
 | 3 | code-complete-2e | 51 | 51 | 0 | 0 | 153 |
 | 4 | math-girl | 50 | 50 | 0 | 0 | 150 |
 | 5 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
-| 6 | poeaa-enterprise-patterns | 78 | 47 | 0 | 31 | 141 |
+| 6 | poeaa-enterprise-patterns | 78 | 43 | 0 | 35 | 129 |
 | 7 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 8 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 9 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |

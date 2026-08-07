@@ -15768,8 +15768,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-34-optimistic-offline-lock-diagram");
       return {
-        Poeaa24Pattern34OptimisticOfflineLock:
-          module0.Poeaa24Pattern34OptimisticOfflineLock,
+        Poeaa24Pattern34OptimisticOfflineLockDiagram:
+          module0.Poeaa24Pattern34OptimisticOfflineLockDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/57-pattern-35-pessimistic-offline-lock/poeaa24-pattern-35-pessimistic-offline-lock":
