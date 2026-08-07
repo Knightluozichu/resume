@@ -15630,6 +15630,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Poeaa24Pattern10IdentityMap: module0.Poeaa24Pattern10IdentityMap,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/28-pattern-11-lazy-load/poeaa24-pattern-11-lazy-load":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-11-lazy-load-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-11-lazy-load-boundary-diagram"),
+      ]);
+      return {
+        Poeaa24Pattern11LazyLoadDiagram:
+          modules[0].Poeaa24Pattern11LazyLoadDiagram,
+        Poeaa24Pattern11LazyLoadBoundaryDiagram:
+          modules[1].Poeaa24Pattern11LazyLoadBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "poeaa-enterprise-patterns/29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure":
     async () => {
       const modules = await Promise.all([
