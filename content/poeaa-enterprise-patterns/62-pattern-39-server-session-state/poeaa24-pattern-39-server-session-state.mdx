@@ -7,70 +7,248 @@ description: "在服务器系统中以序列化形式保存会话状态，由会
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: "poeaa24-pattern-39-server-session-state"
 sourceUrl: "https://martinfowler.com/books/eaa.html"
 draft: false
 ---
 
-import { Poeaa24Pattern39ServerSessionState } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-39-server-session-state-diagram";
+import { Poeaa24Pattern39ServerSessionStateDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-39-server-session-state-diagram";
 
+<Objectives>
+
+- 能实现一次订单向导请求的会话读写，让客户端只携带会话标识而不携带业务权威状态
+- 能解释服务器会话状态在序列化、过期、多节点访问和节点故障之间承担的责任
+- 能修改并排查会话代码，用证据判断应该保留服务器状态、改用集中存储，还是明确接受会话失效
+
+</Objectives>
 
 ## 为什么 17.2 服务器会话状态 值得单独学习
 
-在服务器系统中以序列化形式保存会话状态，由会话标识定位。 17.2 服务器会话状态 的核心不是套用某个框架 API，而是回答：如何选择会话状态的权威位置，并明确完整性、扩缩容、过期和恢复责任。在 订单向导会话 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+订单向导通常跨越地址、配送和付款确认多个请求。页面需要继续知道用户已经填写了什么，但每次请求又不应该把可篡改的购物车正文当成事实来源。<Term def="把跨请求的业务资料保存在服务端，并由请求中的会话标识找回它的状态管理方式。">服务器会话状态</Term>把“谁拥有事实”这个决定摆到架构台面上：客户端只负责带回定位线索，服务器负责读写、授权、过期和恢复语义。
 
-本页以 2024 年中文版公开目录限定 **17.2 服务器会话状态** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+这不是“把对象塞进内存”这么简单。会话记录要有清楚的<Term def="用来定位一次会话记录、但不应直接暴露会话业务资料的短标识。">会话标识</Term>，存储层要能保存可恢复的版本，节点之间还要约定读取不到记录时是重新开始、转移到副本，还是向用户报告失效。若这些决定只藏在框架默认值里，正常请求通过也不等于架构完成。
 
-## 先建立直觉：问题、机制与代价
+本页以 2024 年中文版公开目录限定 **17.2 服务器会话状态** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。下面的案例、实验、代码、判断题和答案均为本课程原创，不复现原书正文、插图或代码。
 
-17.2 服务器会话状态 面对的具体压力是“状态大小、节点数量、粘性依赖、过期时间与恢复目标”。它采用的机制可以概括为：在服务器系统中以序列化形式保存会话状态，由会话标识定位。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+## 先建立直觉：状态到底由谁保管
 
-对 17.2 服务器会话状态，优先比较的替代路线是：按安全、可用性和运维约束比较客户端、服务器与数据库会话状态。本页的通过条件是“能在多节点环境定位会话、处理失效与清理，并演练节点故障后的恢复或明确丢失语义”；若实验只能显示结果而不能指出 可信边界 从何处越界，就不能据此选择 17.2 服务器会话状态。
+先预测：如果请求只携带 `sid=abc123`，节点 A 读取服务器记录后把购物车数量从 2 更新为 3，下一次请求被路由到节点 B，哪一个对象必须能解释这次变化？答案应该是服务器端的会话存储，而不是 Cookie 中的一段未经保护的购物车正文。
 
+服务器保存状态时，至少要定义四个边界：定位凭证是否可验证，资料是否能被<Term def="把内存对象或结构化会话资料转换成可保存、可传输格式的过程。">序列化</Term>，旧记录怎样按<Term def="给会话记录设置的最长存活时间，到期后即使仍带有标识也不能继续使用。">TTL</Term>清理，以及多节点是否共享同一份权威记录。状态越敏感、越大或越需要跨请求一致，服务端边界越有价值；代价则是存储容量、网络往返、复制和恢复责任。
+
+这里的“服务器端”不等于“某一台应用进程的内存”。单节点内存能快速返回，却会把扩缩容和故障恢复变成隐形的<Term def="把同一用户的连续请求固定送到曾经持有其内存会话的节点上的路由方式。">粘性会话</Term>依赖。共享存储、复制内存或明确的丢失语义，才是多节点设计可以评审的选择。
 
 ## 目录单元到教学证据
 
 ### 17.2 服务器会话状态
 
-在 **17.2 服务器会话状态** 的学习边界里，17.2 服务器会话状态 不是待背诵的目录词，而是用来检查“请求”是否把责任交给正确对象。对 订单向导会话，学习者要记录 可信边界 的可观察变化，并说明它何时支持或否定 17.2 服务器会话状态。
+在 **17.2 服务器会话状态** 的学习边界里，问题不是记住某个框架的 Session API，而是把“请求 → 会话标识 → 状态位置 → 更新 → 过期”责任链画出来。对订单向导会话，学习者应能指出谁保存事实、谁作业务决定，以及记录消失后结果是否可解释。
 
-## 专属设计案例：订单向导会话
+## 专属代码案例：订单向导的会话边界
 
-把 订单向导会话 切成“请求 → 会话键 → 状态位置 → 更新 → 过期”五个观察点。17.2 服务器会话状态 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 可信边界、容量、多节点、持久性、清理 中哪个指标最先提示当前方案不再适用。
+下面的代码只展示模式边界，不绑定生产框架。会话存储接口返回服务器自己的记录；请求 DTO 只接收步骤输入，不能让客户端用整个对象覆盖存储记录。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-39-server-session-state**；模式族为 **session**；裁决是“能在多节点环境定位会话、处理失效与清理，并演练节点故障后的恢复或明确丢失语义”；观测项包括 可信边界、容量、多节点、持久性、清理；拒绝条件是“可信边界 超过团队为 17.2 服务器会话状态 设定的边界”。
+```ts
+type OrderSession = {
+  id: string;
+  version: number;
+  cartItemCount: number;
+  expiresAt: number;
+};
 
-配置不是生产框架语法，而是一张评审卡。对 17.2 服务器会话状态 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+type SessionStore = {
+  load(id: string): Promise<OrderSession | null>;
+  save(next: OrderSession, expectedVersion: number): Promise<void>;
+};
 
-## 三步交互实验
+export async function addItem(
+  store: SessionStore,
+  sessionId: string,
+): Promise<OrderSession> {
+  const current = await store.load(sessionId);
+  if (!current || current.expiresAt <= Date.now()) throw new Error("session-expired");
+  const next = { ...current, cartItemCount: current.cartItemCount + 1, version: current.version + 1 };
+  await store.save(next, current.version);
+  return next;
+}
+```
 
+这段代码有两个故意的约束：`sessionId` 只用于定位，购物车数量从服务端当前版本计算；`expectedVersion` 让存储层可以拒绝基于旧记录的覆盖。实际系统还要把会话标识绑定到登录主体、轮换凭证，并限制单条记录大小。
 
-<Poeaa24Pattern39ServerSessionState />
+主图把这条责任链拆成五个可观察事件。动手试：先点“下一步”预测记录怎样变化，再播放到过期和故障转移；随后打开错误模式，观察把 `cart=999` 放进请求正文为何越过了服务器权威边界。
+
+<Poeaa24Pattern39ServerSessionStateDiagram />
+
+### 三步快照：从定位到恢复
+
+下面的 Stepper 将主图压缩为三张确定性快照。每一步都嵌入同一章专属 Diagram，方便在暂停状态下核对对象、责任和失败语义。
+
+<Stepper>
+
+<Step title="1. 请求只带定位线索">
+
+先预测：请求中只有 `sid` 时，节点应从哪里取得 `cartItemCount`？它只能从服务器端记录读取，不能把请求正文当成权威快照。
+
+<Poeaa24Pattern39ServerSessionStateDiagram step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 更新服务器记录并推进版本">
+
+动手试：把购物车数量从 2 改成 3，并检查更新是否基于读取到的版本。若两个请求都拿到版本 7，至少一个写入必须被冲突检查拒绝，而不是静默覆盖。
+
+<Poeaa24Pattern39ServerSessionStateDiagram step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 过期与故障必须有结果">
+
+观察变化：TTL 到期后记录应被拒绝并清理；节点故障后，系统要么从副本恢复同一会话，要么明确告诉用户会话已失效，不能返回一个看似成功但没有事实依据的订单。
+
+<Poeaa24Pattern39ServerSessionStateDiagram step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 多节点、过期与恢复：把隐性代价写出来
+
+单节点内存适合短生命周期、低恢复要求的临时向导，但它会把会话定位绑定到节点。加负载均衡后，常见路线有三种：使用<Term def="把会话记录复制到多个可接收请求的节点或共享存储，使单节点故障仍有恢复机会的机制。">故障转移</Term>副本，改用集中式会话存储，或明确接受节点故障导致重新开始。选择哪一条，取决于会话资料是否可重建、用户能否接受丢失，以及复制成本是否低于恢复收益。
+
+过期不是一次定时删除就结束。读取路径必须拒绝过期记录，后台清理器负责回收容量，续期规则要防止活跃用户在中途被误删；写入路径还要防止旧请求在续期之后把新版本覆盖。记录 `sessionId`、版本、节点、过期时间和失败原因，才能把“用户突然回到第一步”定位成超时、路由、复制还是授权问题。
+
+如果状态包含付款意图、优惠资格或库存承诺，就不能只因为框架提供了 Session 就把它当成最终业务事实。会话可以保存向导草稿；提交订单时仍应重新读取关键业务数据，在事务边界内完成校验和写入。会话状态解决的是跨请求上下文，不自动解决业务一致性。
+
+## 代码实践：把客户端输入限制在步骤增量
+
+下面的处理器只接受当前步骤的增量字段，并让存储层负责版本冲突。它可以作为练习的起点：先让它返回 `session-expired`，再分别模拟节点不可达和版本冲突，观察调用方是否得到不同的恢复提示。
+
+```ts
+type StepInput = { address?: string; paymentToken?: string };
+type SessionResult =
+  | { ok: true; session: OrderSession }
+  | { ok: false; reason: "expired" | "conflict" | "unavailable" };
+
+async function updateWizard(
+  store: SessionStore,
+  sessionId: string,
+  input: StepInput,
+): Promise<SessionResult> {
+  try {
+    const current = await store.load(sessionId);
+    if (!current || current.expiresAt <= Date.now()) return { ok: false, reason: "expired" };
+    const next = { ...current, version: current.version + 1 };
+    await store.save(next, current.version);
+    return { ok: true, session: next };
+  } catch (error) {
+    if (error instanceof Error && error.message === "version-conflict") return { ok: false, reason: "conflict" };
+    return { ok: false, reason: "unavailable" };
+  }
+}
+```
+
+这里 `input` 只代表步骤增量；生产实现需要把地址和支付令牌校验后合并到服务器记录，并明确支付令牌的保管方式。若 `store.load` 和 `store.save` 跨越不同节点，存储实现还必须提供原子条件写或等价的并发控制。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 17.2 服务器会话状态 的证据 | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------- | ---------------------------------------------- |
-| 责任     | 请求 到 过期 的所有者清晰       | 会话键 可以绕过边界直接改写状态                |
-| 变化     | 可信边界 的变化被局部吸收       | 一次小改动同时触及 容量、多节点、持久性        |
-| 失败     | 故障能在 过期 前被识别并回退    | 只能看到最终错误，无法定位 可信边界 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径  | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 保留服务器会话状态的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 权威位置 | Cookie 只有可验证的会话标识，业务资料由服务端读取 | 客户端正文可以覆盖价格、权限或支付状态 |
+| 节点变化 | 共享记录、复制策略或明确的丢失语义已经演练 | 只能靠粘性会话，节点故障后没有恢复或提示 |
+| 过期清理 | 读取拒绝、后台清理、续期和容量指标都有证据 | 只在写入时检查 TTL，过期记录持续占满存储 |
+| 业务提交 | 会话保存草稿，提交时重新校验关键业务事实 | 把会话记录当成库存、付款或授权的最终事实 |
 
+## 常见误区
+
+<Callout type="trap" title="把整份会话对象交给客户端覆盖">
+
+- **现象**：请求携带 `cart=999`，服务端反序列化后直接替换当前会话。
+- **原因**：把会话标识和会话资料混成同一个输入，跳过了服务器权威边界。
+- **修法**：只接收当前步骤的增量字段，从服务端版本读取并用条件写更新。
+
+</Callout>
+
+<Callout type="trap" title="只靠粘性会话解决多节点">
+
+- **现象**：节点 A 重启后，用户被路由到节点 B，订单向导无提示地回到空白状态。
+- **原因**：把路由上的暂时固定误当成会话持久性，没有定义副本或失效语义。
+- **修法**：演练节点故障；选择共享/复制存储，或明确返回可恢复的会话失效结果。
+
+</Callout>
+
+<Callout type="trap" title="把 TTL 当成完整的过期策略">
+
+- **现象**：记录虽然过期，读取仍返回旧数据，后台存储也持续增长。
+- **原因**：只设置了一个时间字段，没有在读取拒绝、清理、续期和容量监控之间建立闭环。
+- **修法**：读取时强制检查 TTL，后台清理过期记录，并为续期和容量设置可观测指标。
+
+</Callout>
 
 ## 本章小结
 
-掌握 17.2 服务器会话状态 的标志不是记住定义，而是能在 订单向导会话 中解释“请求 → 会话键 → 状态位置 → 更新 → 过期”的责任链，利用 可信边界、容量、多节点、持久性、清理 作出可证伪的选择，并在出现“信任客户端状态却没有签名、版本和重放防护”时明确拒绝当前实现。
+- 会话标识只负责定位，服务器记录才是业务草稿的权威来源。
+- 序列化、版本和条件写共同保护跨请求更新。
+- 多节点设计必须说明共享、复制或明确丢失语义。
+- TTL 同时需要读取拒绝、后台清理、续期和容量观测。
+- 提交订单时要重新校验关键业务事实，不能盲信会话草稿。
 
+## 练习与答案
+
+<Exercises>
+
+**问题 1：实现边界。** `POST /wizard/step` 同时收到 `sessionId`、`address` 和 `cartItemCount`。请写出服务端应接受的字段，并指出为什么不能直接采用客户端的 `cartItemCount`。
+
+<Answer>
+
+接受 `sessionId` 和当前步骤允许的 `address` 增量；服务端先用会话标识读取自己的记录，再依据业务规则计算或校验购物车数量。客户端数量最多是提示，不能覆盖服务端事实，因为它可能被篡改、重放或来自旧版本。
+
+</Answer>
+
+**问题 2：故障演练。** 节点 A 的内存会话在重启后消失，下一次请求到达节点 B。请比较“改用共享存储”和“明确会话失效”两种结论各自需要的证据。
+
+<Answer>
+
+共享存储需要证明节点 B 能以同一个会话标识读取最新版本，复制或持久化延迟满足恢复目标，并且清理与容量成本可接受；明确失效则需要证明向导资料可重建、用户能接受重新开始，并返回可解释的恢复入口。两者都不能用“生产上目前有粘性路由”代替故障演练。
+
+</Answer>
+
+**问题 3：改 Demo 代码。** 修改 `updateWizard`，让 `store.save` 收到 `current.version` 作为条件，并把 `version-conflict` 映射成用户可以重试当前步骤的结果。你还会为哪个状态加测试？
+
+<Answer>
+
+保留 `await store.save(next, current.version)` 的条件写法，在 `catch` 中把 `version-conflict` 映射为 `{ ok: false, reason: "conflict" }`，调用方据此重新读取会话而不是覆盖别人刚写入的版本。还应测试过期读取被拒绝、存储不可用返回可诊断错误，以及同一 `sessionId` 的旧请求不会回写新版本。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="服务器会话状态">跨请求资料保存在服务器端，客户端只带能找到这份资料的线索；它适合不希望把业务正文交给客户端的向导。</GlossaryItem>
+  <GlossaryItem term="会话标识">定位一次会话的短键，例如 `sid=abc123`；它本身不应等同于购物车或付款资料。</GlossaryItem>
+  <GlossaryItem term="序列化">把内存中的对象转换成可以保存或传输的格式，读取时还要检查版本和安全边界。</GlossaryItem>
+  <GlossaryItem term="TTL">Time to Live 的缩写，表示记录最多能活多久；到期后读取必须失败，清理器再回收空间。</GlossaryItem>
+  <GlossaryItem term="粘性会话">把用户请求固定送到某个节点的路由办法；它减少共享存储需求，却把节点故障风险留在内存里。</GlossaryItem>
+  <GlossaryItem term="故障转移">原节点不可用时由副本或其他节点继续提供会话，或者明确返回会话失效；关键是结果必须可解释。</GlossaryItem>
+</Glossary>
+
+## 来源与改写范围
+
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题与模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、模式族与作者公开摘要。
+- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Martin Fowler《企业应用架构模式》"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
 
 ## 前后导航
 
 - [上一页：17.1 客户会话状态](/learn/poeaa-enterprise-patterns/61-pattern-38-client-session-state/poeaa24-pattern-38-client-session-state)
 - [下一页：17.3 数据库会话状态](/learn/poeaa-enterprise-patterns/63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state)
-
-## 来源与改写范围
-
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
-

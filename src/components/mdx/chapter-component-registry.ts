@@ -15795,7 +15795,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-37-implicit-lock-diagram");
       return {
-        Poeaa24Pattern37ImplicitLock: module0.Poeaa24Pattern37ImplicitLock,
+        Poeaa24Pattern37ImplicitLockDiagram:
+          module0.Poeaa24Pattern37ImplicitLockDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/61-pattern-38-client-session-state/poeaa24-pattern-38-client-session-state":
@@ -15812,8 +15813,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-39-server-session-state-diagram");
       return {
-        Poeaa24Pattern39ServerSessionState:
-          module0.Poeaa24Pattern39ServerSessionState,
+        Poeaa24Pattern39ServerSessionStateDiagram:
+          module0.Poeaa24Pattern39ServerSessionStateDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state":

@@ -7,70 +7,232 @@ description: "让框架或层超类型自动取得离线锁，降低调用者遗
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-37-implicit-lock
 draft: false
 ---
 
-import { Poeaa24Pattern37ImplicitLock } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-37-implicit-lock-diagram";
+import { Poeaa24Pattern37ImplicitLockDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-37-implicit-lock-diagram";
 
+<Objectives>
+
+- 能用 TypeScript 写出从读取、修改到提交的隐式锁责任链，并指出锁实际在哪里取得。
+- 能修改框架边界的故障开关与重试策略，用覆盖率、等待时间和冲突结果判断方案是否可靠。
+- 能回答：当某个修改入口绕过超类型而直接写库时，系统如何证明它不再满足隐含锁的保护承诺？
+
+</Objectives>
 
 ## 为什么 16.4 隐含锁 值得单独学习
 
-让框架或层超类型自动取得离线锁，降低调用者遗忘锁定协议的风险。 16.4 隐含锁 的核心不是套用某个框架 API，而是回答：如何保护跨多个系统事务的业务事务，在冲突检测、提前锁定和恢复成本间作出选择。在 两个客服并行修改订单 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+想象两名客服同时打开同一张订单。A 正在确认库存，B 也看到了旧金额；如果两个人都能直接保存，最后一次点击可能悄悄抹掉前一次决定。这里真正需要解决的是：谁负责把“这次修改必须先获得保护”这条规则放进每一条入口。
 
-本页以 2024 年中文版公开目录限定 **16.4 隐含锁** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+没有这层安排时，页面和接口都可能返回成功，订单金额、库存承诺和审计记录却互相矛盾。我们先把保护藏进所有修改都会经过的共同路径，再观察这种便利会不会让失败变得不透明。
 
-## 先建立直觉：问题、机制与代价
+## 先建立直觉：把保护放在必经路径
 
-16.4 隐含锁 面对的具体压力是“冲突概率、业务事务时长、锁粒度、等待时间与回滚代价”。它采用的机制可以概括为：让框架或层超类型自动取得离线锁，降低调用者遗忘锁定协议的风险。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+先猜一猜：如果业务代码只写 `order.setTotal(597)`，却没有出现 `lock()`，谁应该负责让它安全提交？若答案是“每个调用者自己记得补上”，新入口、批处理和异常重试迟早会漏掉；若答案是“共同的提交层负责”，就必须证明所有写入确实经过它。
 
-对 16.4 隐含锁，优先比较的替代路线是：低冲突优先检测，高冲突或高损失场景再考虑悲观和粗粒度锁。本页的通过条件是“能证明所有修改入口都会隐式锁定，并让只读路径、嵌套调用和锁失败行为显式可测”；若实验只能显示结果而不能指出 冲突概率 从何处越界，就不能据此选择 16.4 隐含锁。
+这就是本章的取舍：调用者更干净，规则更集中，但锁行为也更隐藏。隐藏不是免检通行证；只读路径、嵌套调用、绕过超类型的写入，以及锁失败后的返回结果，都要能从日志和测试中被看见。
 
+## 概念模型：隐含锁不是“自动成功”
 
-## 目录单元到教学证据
+<Term def="把取得和释放修改保护的责任放进框架、基类或共同提交层，让业务调用者不必在每个入口手写锁调用。">隐含锁</Term>把并发协议放在必经的共享层。业务对象只表达订单变化，提交层负责在正确时机取得保护、检查快照并释放资源；如果存在第二条写入路径，模式就已经出现缺口。
 
-### 16.4 隐含锁
+共享层通常是<Term def="把一次业务修改收集起来，并在统一提交点执行校验、持久化和清理的协作边界。">单元工作</Term>或数据映射器的超类型。它不应该只包装最后一个 `UPDATE`，而要包住读取到提交的业务窗口；否则 B 仍可能拿着旧快照作决定，再在提交时才发现保护没有覆盖前面的工作。
 
-在 **16.4 隐含锁** 的学习边界里，16.4 隐含锁 不是待背诵的目录词，而是用来检查“读取”是否把责任交给正确对象。对 两个客服并行修改订单，学习者要记录 冲突概率 的可观察变化，并说明它何时支持或否定 16.4 隐含锁。
+这里还需要<Term def="提交时比较读取快照与当前记录的世代或版本，用来拒绝已经过期的写入。">版本检查</Term>作为可见证据。即使框架自动取得锁，也要记录期望版本、实际版本和最终裁决；锁服务或客户端故障时，旧草稿不能凭“保存成功”覆盖新决定。
 
-## 专属设计案例：两个客服并行修改订单
+### 三个边界必须写进契约
 
-把 两个客服并行修改订单 切成“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”五个观察点。16.4 隐含锁 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 冲突概率、锁粒度、等待、回滚、恢复 中哪个指标最先提示当前方案不再适用。
+第一，所有修改入口都必须通过同一个提交层；第二，嵌套调用要复用当前保护，而不是悄悄再取一把；第三，失败必须返回可区分的忙碌、冲突或拒绝，而不是变成无穷重试。只读查询可以旁路锁，但一旦它返回可变对象，就必须明确它不能直接落库。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-37-implicit-lock**；模式族为 **concurrency**；裁决是“能证明所有修改入口都会隐式锁定，并让只读路径、嵌套调用和锁失败行为显式可测”；观测项包括 冲突概率、锁粒度、等待、回滚、恢复；拒绝条件是“冲突概率 超过团队为 16.4 隐含锁 设定的边界”。
+<Term def="一把保护覆盖的资源范围，例如一行订单、一个订单聚合或多个相互依赖的对象。">锁粒度</Term>决定等待的扩散范围。订单总额与付款状态必须一起改变时，订单根可能是合理边界；若一条无关备注也被迫等待，说明保护范围过大，应回到业务不变量而不是继续扩大锁。
 
-配置不是生产框架语法，而是一张评审卡。对 16.4 隐含锁 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+## 专属代码案例：两个客服并行修改订单
 
-## 三步交互实验
+固定观察订单 `#42`：客服 A 和 B 都读取版本 7，随后分别修改金额。业务层没有显式调用锁；共同的 `UnitOfWork` 在提交时拦截写入，按订单键取得保护，检查版本并决定谁可以推进到版本 8。这里的 `UnitOfWork` 是本章代码中的教学名称，不绑定任何具体框架。
 
+```ts
+type SaveResult =
+  | { status: "saved"; version: number }
+  | { status: "busy" | "conflict"; retryable: true };
 
-<Poeaa24Pattern37ImplicitLock />
+class OrderUnitOfWork {
+  async commit(order: Order, expectedVersion: number): Promise<SaveResult> {
+    const lease = await this.lockLayer.acquire(`order:${order.id}`, 2_000);
+    if (!lease) return { status: "busy", retryable: true };
+
+    try {
+      const current = await this.orders.read(order.id);
+      if (current.version !== expectedVersion) {
+        return { status: "conflict", retryable: true };
+      }
+      await this.orders.save({ ...order, version: expectedVersion + 1 });
+      return { status: "saved", version: expectedVersion + 1 };
+    } finally {
+      await this.lockLayer.release(lease.id);
+    }
+  }
+}
+```
+
+调用者只负责构造变更并交给共同提交层，锁的取得、读取、版本检查、保存和释放都在一个可审计的路径里。示例省略了依赖注入和数据库细节，但保留了关键的 `finally`；真正的实现还要证明批处理、后台任务和恢复接口也使用同一个超类型。
+
+若 B 在 A 完成前提交，结果不能只看 HTTP 状态。日志至少要关联订单键、入口名、快照版本、锁等待时长、提交裁决和释放结果；这样才能区分“保护生效后 B 忙碌”“版本落后而冲突”和“B 绕过框架直接写入”。
+
+## 三步交互实验：看见隐藏的保护
+
+猜一猜：把图中的“绕过共同提交层”开关打开后，为什么业务代码仍然看起来很干净，但系统已经不能声称所有修改都受保护？先在主图中逐步播放，再打开错误模式，观察哪一条证据链断开；点击“重置演示”应回到第一步。
+
+<Poeaa24Pattern37ImplicitLockDiagram />
+
+## 从读取到裁决的三步证据链
+
+<Stepper>
+
+<Step title="1. 读取快照，留下版本证据">
+
+先预测：客服 A 和 B 都读到订单 #42 的版本 7 时，系统现在还不能宣布谁会成功。图中只应出现两个独立快照，不能假装读取动作已经取得了唯一写入权。
+
+<Poeaa24Pattern37ImplicitLockDiagram step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 共同提交层隐式取得保护">
+
+再观察：A 调用 `uow.commit()` 后，保护由共同层取得，读取当前版本并进入裁决；B 的提交只能等待、超时或得到冲突，不能从另一个入口绕开同一边界。
+
+<Poeaa24Pattern37ImplicitLockDiagram step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 提交释放，错误入口必须暴露">
+
+最后注入：让 B 直接调用底层仓储。若这条路径仍能保存旧快照，图中的失败标记应指出“代码很干净”不等于“保护覆盖完整”；修法是收紧写入接口并为绕过路径加测试。
+
+<Poeaa24Pattern37ImplicitLockDiagram step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 16.4 隐含锁 的证据          | 应拒绝或改用其他方案的信号                     |
-| -------- | -------------------------------- | ---------------------------------------------- |
-| 责任     | 读取 到 提交重试 的所有者清晰    | 业务处理 可以绕过边界直接改写状态              |
-| 变化     | 冲突概率 的变化被局部吸收        | 一次小改动同时触及 锁粒度、等待、回滚          |
-| 失败     | 故障能在 提交重试 前被识别并回退 | 只能看到最终错误，无法定位 冲突概率 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择隐含锁的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 覆盖 | 所有写入入口都依赖共同提交层 | 批处理、迁移或恢复接口可以直接改库 |
+| 责任 | 超类型记录锁、版本、裁决与释放 | 团队只能说“框架应该会自动处理” |
+| 失败 | 忙碌、冲突、绕过和重复提交有不同结果 | 只有一个笼统的保存失败，无法定位责任 |
+| 粒度 | 锁范围刚好覆盖一个业务不变量 | 无关订单一起等待，等待预算持续超标 |
+| 替代 | 与显式锁、乐观版本重试比较过 | 因为框架默认开启而跳过覆盖率测试 |
 
+## 常见误区
+
+<Callout type="trap" title="把没有 lock() 调用当成没有并发控制">
+
+- **现象**：业务方法看不到锁，评审便认为这里没有保护。
+- **原因**：忽略了共同提交层可能在超类型或拦截器中取得锁，阅读错了责任边界。
+- **修法**：沿调用图追到实际提交点；用订单键、入口名和锁事件验证隐式路径。
+
+</Callout>
+
+<Callout type="trap" title="只保护共同基类，允许底层仓储公开写入">
+
+- **现象**：页面入口能报告冲突，批处理却成功覆盖客服刚保存的金额。
+- **原因**：把“主要入口”误当成“全部入口”，底层写接口没有被权限或类型系统收口。
+- **修法**：让写入只能从共同提交层发起；为后台任务和恢复接口增加绕过测试。
+
+</Callout>
+
+<Callout type="trap" title="锁生效后就吞掉所有失败并自动重试">
+
+- **现象**：客服看到保存成功，但审计记录无法说明曾经等待、冲突还是重复提交。
+- **原因**：用无界重试掩盖锁粒度、版本落后或租约失效，调用者失去可操作的失败信号。
+- **修法**：区分忙碌与冲突，设置次数和时间上限；重试前重新读取，并保留最终裁决。
+
+</Callout>
+
+## 何时拒绝这个模式
+
+隐含锁适合“所有修改都能穿过共同层，且集中策略确实能降低漏锁率”的系统。若写入路径由多个团队独立维护、数据库脚本经常直接运行，或者只读对象会被随手变更，隐藏的便利会变成审计盲区。此时应先收紧边界，或选用更显式的锁协议。
+
+还要衡量<Term def="同一资源在一段时间内发生竞争或互相覆盖的可能性，用于决定等待与重试是否值得。">冲突概率</Term>与恢复成本。冲突低且合并便宜时，显式版本重试可能更容易解释；冲突高且损失大时，隐含锁可以把责任集中到框架层，但前提仍是每个写入入口都能被枚举和测试。
+
+对外部重试还需要<Term def="让同一业务请求重复到达时仍只产生一次提交结果的稳定标识。">幂等键</Term>。它不能替代锁：幂等键防止重复执行同一请求，隐含锁解决多个请求同时修改同一订单；两者都缺一时，网络超时就可能制造无法归属的结果。
 
 ## 本章小结
 
-掌握 16.4 隐含锁 的标志不是记住定义，而是能在 两个客服并行修改订单 中解释“读取 → 业务处理 → 版本锁 → 冲突裁决 → 提交重试”的责任链，利用 冲突概率、锁粒度、等待、回滚、恢复 作出可证伪的选择，并在出现“把数据库单次提交成功误认为整个业务事务没有并发冲突”时明确拒绝当前实现。
+- 隐含锁把保护责任放进所有修改必经的共同层。
+- 单元工作必须覆盖读取、版本检查、保存和释放。
+- 入口覆盖率、锁粒度与失败可见性共同决定可信度。
+- 绕过超类型的写入是最直接的拒绝信号。
+- 隐含锁不是默认成功，所有裁决都要能从证据重放。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：证据链。** A 与 B 都读取订单 #42 的版本 7，A 返回 `saved(version=8)`，B 返回 `conflict`。请列出四类日志证据，证明 B 没有被静默覆盖。
+
+<Answer>
+
+至少要有两次读取的订单键与版本、共同提交层的入口名、锁等待/取得/释放事件，以及 B 的期望版本 7 与实际版本 8 的裁决结果。若有重试，还要记录重读后的新版本和幂等键，才能排除重复提交。
+
+</Answer>
+
+**问题 2：修改 Demo 代码。** 下面的入口绕过了共同提交层。请改成只允许 `OrderUnitOfWork.commit` 写入，并为直接仓储调用补一个会失败的测试断言。
+
+```ts
+async function saveFromBatch(order: Order) {
+  await orders.save(order);
+  return "saved";
+}
+```
+
+<Answer>
+
+批处理应调用 `uow.commit(order, order.version)`，而不是持有 `orders.save` 的公开写能力；仓储接口可以拆成只读查询和仅由 `OrderUnitOfWork` 注入的写入端口。测试应从批处理入口触发两个并发提交，断言一个得到 `saved`、另一个得到 `busy` 或 `conflict`，并断言绕过接口不可构造或直接写入会被拒绝。
+
+</Answer>
+
+**问题 3：选择边界。** 一个系统有网页、批处理、恢复任务三类写入入口。网页和批处理都经过共同层，但恢复任务可直接更新数据库；你会立即采用隐含锁吗？请给出拒绝条件和一个修复顺序。
+
+<Answer>
+
+不会立即采用。恢复任务是“所有写入口”承诺的反例，先把它改为使用同一提交层或封装成受控恢复命令，再用入口清单、静态依赖检查和并发测试证明没有公开直写路径；完成覆盖证明后，才评估等待预算、冲突概率和锁粒度是否仍支持隐含锁。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="隐含锁">业务代码不手写锁调用，由框架或共同提交层替所有写入口取得保护。</GlossaryItem>
+  <GlossaryItem term="单元工作">把一次修改集中起来，在统一提交点完成读取、检查、保存和清理。</GlossaryItem>
+  <GlossaryItem term="版本检查">提交前比较旧快照和当前记录的版本，发现过期写入就拒绝。</GlossaryItem>
+  <GlossaryItem term="锁粒度">一把保护覆盖的资源范围；范围越大，可能一起等待的请求越多。</GlossaryItem>
+  <GlossaryItem term="冲突概率">两个修改在时间上相遇并产生竞争或覆盖的可能性。</GlossaryItem>
+  <GlossaryItem term="幂等键">重复收到同一个请求时仍只产生一次业务结果的稳定标识。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：16.3 粗粒度锁](/learn/poeaa-enterprise-patterns/58-pattern-36-coarse-grained-lock/poeaa24-pattern-36-coarse-grained-lock)
 - [下一页：第17章 会话状态模式](/learn/poeaa-enterprise-patterns/60-chapter-17-session-state-patterns/poeaa24-chapter-17-session-state-patterns)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对图书主题、章节范围与模式语境。
+- [Martin Fowler：Patterns of Enterprise Application Architecture 模式目录](https://martinfowler.com/eaaCatalog/)：核对隐含锁的公开目录定位。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对出版信息。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
