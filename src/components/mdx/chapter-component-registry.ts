@@ -15779,11 +15779,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-callstack");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-callstack"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-boundary-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch15DistributionCallStack:
-          module0.Poeaa24Ch15DistributionCallStack,
+        Poeaa24Ch15DistributionCallStackDiagram:
+          modules[0].Poeaa24Ch15DistributionCallStackDiagram,
+        Poeaa24Ch15DistributionBoundaryDecisionDiagram:
+          modules[1].Poeaa24Ch15DistributionBoundaryDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/53-pattern-32-remote-facade/poeaa24-pattern-32-remote-facade":

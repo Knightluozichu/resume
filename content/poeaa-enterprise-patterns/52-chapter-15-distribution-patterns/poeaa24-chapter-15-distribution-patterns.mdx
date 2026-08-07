@@ -3,67 +3,210 @@ title: "第15章 分布模式"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 52
-description: "用粗粒度外观和数据载体控制网络往返与内部模型泄漏。"
+description: "用粗粒度外观和数据载体控制网络往返、失败传播与内部模型泄漏。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-15-distribution-patterns
 draft: false
 ---
 
-import { Poeaa24Ch15DistributionCallStack } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-callstack";
+import { Poeaa24Ch15DistributionCallStackDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-callstack";
+import { Poeaa24Ch15DistributionBoundaryDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch15-distribution-boundary-decision-diagram";
 
+<Objectives>
 
-## 为什么 第15章 分布模式 值得单独学习
+- 能解释 Remote Facade、Data Transfer Object 与远程调用边界各自承担的变化和成本
+- 能用 TypeScript 为订单结算调用设计粗粒度契约、DTO 校验、超时与幂等处理
+- 能根据所有权、部署独立性、往返画像和部分失败证据决定分布或保持本地
 
-用粗粒度外观和数据载体控制网络往返与内部模型泄漏。 第15章 分布模式 的核心不是套用某个框架 API，而是回答：如何承认网络延迟与部分失败，用粗粒度契约减少往返并避免泄漏内部对象模型。在 订单与结算跨进程调用 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第15章 分布模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第15章分布模式值得单独学习
+
+第15章分布模式的核心不是把本地接口搬到网络上，而是承认延迟、序列化、超时和部分失败会改变调用语义。订单服务调用结算服务时，如果客户端逐字段读取远程对象，三次成功的请求也可能在第四次超时；如果接口直接暴露内部实体，字段改名又会变成跨进程发布事故。
+
+<Term def="把多个远程操作组合成少数业务意图调用的边界，使客户端不必为一次用例往返多次。">
+  Remote Facade
+</Term>
+减少网络往返，但它必须保留清晰的业务意图，不能成为所有规则的无边界入口。本页依据
+2024 年中文版公开目录限定第15章范围，并根据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
+
+<Term def="在进程边界传输的稳定数据结构，只包含用例需要的字段，不暴露服务端内部实体和行为。">
+  Data Transfer Object
+</Term>
+把多个字段打包成一次传输，并为版本兼容提供显式边界。
 
 ## 先建立直觉：问题、机制与代价
 
-第15章 分布模式 面对的具体压力是“网络往返、载荷大小、超时比例、幂等键与兼容版本”。它采用的机制可以概括为：用粗粒度外观和数据载体控制网络往返与内部模型泄漏。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="把远程调用当作本地方法调用并逐项读取结果的接口风格，容易累积往返、放大延迟并泄漏远端对象。">
+  Remote Procedure Call
+</Term>
+看起来熟悉，却不能隐藏网络边界。调用次数、载荷大小、序列化时间和超时比例必须进入评审记录。
 
-对 第15章 分布模式，优先比较的替代路线是：能保持本地调用时不分布；必须跨进程时组合远程外观与数据传输对象。本页的通过条件是“能解释分布模式的边界与选择轴，逐项覆盖2个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 契约粒度 从何处越界，就不能据此选择 第15章 分布模式。
+<Term def="客户端为一次业务意图生成的稳定标识，服务端用它去重，避免重试把同一写操作执行多次。">
+  Idempotency Key
+</Term>
+让重试从“可能重复扣款”变成“可判断的同一请求”。
 
+<Term def="一次跨进程调用中部分步骤成功、部分步骤失败的状态，必须由协议明确恢复、补偿或人工介入路径。">
+  Partial Failure
+</Term>
+要求协议说明已经发生的副作用、可安全重试的范围和最终一致性的观察方式。
+
+对第15章分布模式，优先比较的替代路线是：没有部署独立性、所有权或故障隔离约束时保持本地；确实跨进程时用 Remote Facade 减少往返，用 Data Transfer Object 隔离模型，用超时、幂等键和可观测状态处理 Partial Failure。若实验只能证明一次成功响应，不能说明重试和兼容版本，就不能据此选择分布模式。
 
 ## 目录单元到教学证据
 
-### 第15章 分布模式
+### 第15章分布模式
 
-在 **第15章 分布模式** 的学习边界里，第15章 分布模式 不是待背诵的目录词，而是用来检查“客户端意图”是否把责任交给正确对象。对 订单与结算跨进程调用，学习者要记录 契约粒度 的可观察变化，并说明它何时支持或否定 第15章 分布模式。
+第15章分布模式要求把“远程调用是否值得承担网络成本”变成可观察的架构决定：先冻结版次、应用切片与目录坐标，再从问题与语境比较候选模式，手算远程调用和映射成本，验证正常样本与边界样本，注入一个故障并定位首差，最后让独立复核者重放结果。本文把这些证据映射到订单结算切片的契约、日志和测试中。
 
-## 专属设计案例：订单与结算跨进程调用
+## 专属代码案例：订单与结算跨进程调用
 
-把 订单与结算跨进程调用 切成“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”五个观察点。第15章 分布模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 契约粒度、往返、序列化、版本、部分失败 中哪个指标最先提示当前方案不再适用。
+把订单结算切成“客户端意图 → Remote Facade → DTO → 网络边界 → 结算用例”五个观察点。设计草案必须写出谁拥有订单状态、谁作出扣款决定、失败怎样传播，以及契约粒度、往返、序列化、版本和 Partial Failure 中哪个指标最先提示方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-15-distribution-patterns**；模式族为 **distribution**；裁决是“能解释分布模式的边界与选择轴，逐项覆盖2个目录节点，并在同一应用切片中验证”；观测项包括 契约粒度、往返、序列化、版本、部分失败；拒绝条件是“契约粒度 超过团队为 第15章 分布模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-15-distribution-patterns**；模式族为 **distribution**；裁决是“用一次粗粒度业务调用传输稳定 DTO，并把超时、幂等和失败状态显式化”；观测项包括契约粒度、往返、序列化、版本、部分失败；拒绝条件是“把本地细粒度实体接口原样暴露到网络”。
 
-配置不是生产框架语法，而是一张评审卡。对 第15章 分布模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：结算请求超时后，客户端能否直接重试？哪些字段应由 DTO 暴露，哪些状态必须由结算服务持有？先写下边界、幂等键和恢复路径，再阅读实现；验证时要能说明成功、重复提交、版本不兼容和服务端已扣款但响应丢失四种状态。
 
-# 模式族地图
+```ts
+type SettleOrderRequest = {
+  orderId: string;
+  amountCents: number;
+  currency: "CNY" | "USD";
+  idempotencyKey: string;
+};
 
+type SettleOrderResponse =
+  | { status: "settled"; receiptId: string }
+  | { status: "already-settled"; receiptId: string }
+  | { status: "rejected"; reason: "amount-mismatch" | "currency-unsupported" };
 
-<Poeaa24Ch15DistributionCallStack />
+interface SettlementApplication {
+  settle(request: SettleOrderRequest): SettleOrderResponse;
+}
 
-**阅读路径**：减少调用次数 → Remote Facade；减少传输次数 → Data Transfer Object。
+class OrderRemoteFacade {
+  constructor(private readonly application: SettlementApplication) {}
+
+  settleOrder(input: SettleOrderRequest): SettleOrderResponse {
+    if (input.amountCents <= 0 || input.idempotencyKey.length < 8) {
+      return { status: "rejected", reason: "amount-mismatch" };
+    }
+    return this.application.settle({ ...input });
+  }
+}
+```
+
+这段代码让 Remote Facade 负责稳定的业务意图入口和边界校验，让结算应用拥有扣款规则，让 DTO 只携带用例需要的数据。生产实现还需要在传输层设置超时、记录请求标识并返回可重放的状态；不能把内部订单实体、数据库连接或任意方法表面化为远程 API。
+
+## 分布模式调用栈
+
+订单客户端通过 Remote Facade 发起一次粗粒度调用，DTO 在网络边界前后完成序列化与反序列化，服务端再调用内部结算用例。图中的每一层都应有可测试的所有者；如果客户端需要连续调用多个 getter，说明契约粒度已经越过可接受边界。
+
+<Poeaa24Ch15DistributionCallStackDiagram />
+
+## 分布边界决策图
+
+先看是否存在部署独立性、团队所有权或故障隔离的硬约束；没有约束就保持本地。有约束时再看调用画像，集中处理 DTO、超时、幂等键和 Partial Failure，拒绝聊天式的细粒度远程调用。
+
+<Poeaa24Ch15DistributionBoundaryDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第15章 分布模式 的证据           | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------------- | ---------------------------------------------- |
-| 责任     | 客户端意图 到 服务端用例 的所有者清晰 | 远程外观 可以绕过边界直接改写状态              |
-| 变化     | 契约粒度 的变化被局部吸收             | 一次小改动同时触及 往返、序列化、版本          |
-| 失败     | 故障能在 服务端用例 前被识别并回退    | 只能看到最终错误，无法定位 契约粒度 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径        | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择第15章分布模式的证据                   | 应拒绝或改用其他方案的信号                 |
+| -------- | ------------------------------------------ | ------------------------------------------ |
+| 约束     | 所有权、部署独立性或故障隔离确实要求跨进程 | 只是因为框架或团队习惯而分布               |
+| 粒度     | 一次调用表达完整业务意图，往返次数有基线   | 客户端逐字段 getter 或逐步拼装远程实体     |
+| 数据     | DTO 只暴露稳定用例字段，版本规则可测试     | 远程接口直接返回内部实体和行为             |
+| 失败     | 超时、重试、幂等和补偿状态可观测           | 只能看到最终错误，无法知道副作用是否已发生 |
 
+## 常见误区
+
+<Callout type="trap" title="把远程调用伪装成本地对象">
+
+- **现象**：订单页面连续调用远程对象的 `getCustomer`、`getItems` 和 `getTotal`。
+- **原因**：Remote Procedure Call 保留了本地对象的表面，却没有把延迟与部分失败放进契约。
+- **修法**：以订单结算意图设计一次粗粒度 Remote Facade 调用，用 DTO 返回展示所需字段，并用调用计数测试验证往返预算。
+
+</Callout>
+
+<Callout type="trap" title="用重试掩盖不明确的副作用">
+
+- **现象**：扣款响应超时后无条件重试，结果出现重复扣款或无法解释的订单状态。
+- **原因**：没有 Idempotency Key，也没有区分“请求未到达”“已扣款但响应丢失”和“明确拒绝”。
+- **修法**：让服务端按幂等键记录结果，返回可重放状态；不可安全重试时进入补偿或人工核对路径。
+
+</Callout>
+
+<Callout type="trap" title="让 DTO 变成内部实体的镜像">
+
+- **现象**：数据库字段改名就要求所有远程客户端同步发布，内部关联对象也被暴露。
+- **原因**：Data Transfer Object 没有承载用例边界，接口只复制了持久化模型。
+- **修法**：按业务意图定义最小 DTO，给新增、弃用和未知字段写兼容测试，禁止客户端依赖内部对象关系。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第15章分布模式，并要求把远程粒度、DTO、版本和部分失败映射到订单结算切片。
+
+**问题 1：决定是否分布。** 订单与结算由同一团队维护、共享数据库且没有独立扩缩容需求，但客户端希望“更现代”的服务边界，应该如何判断？
+
+<Answer>
+
+先保持本地并记录反证：没有所有权、部署独立性或故障隔离的硬约束时，网络成本没有被业务收益抵消。只有出现明确约束，才继续比较 Remote Facade、DTO、超时、幂等和恢复路径。
+
+</Answer>
+
+**问题 2：设计一次粗粒度调用。** 结算页面需要订单金额、币种、优惠和当前支付状态，怎样避免四次远程往返？
+
+<Answer>
+
+定义一个表达页面意图的 Remote Facade 操作，例如 `getSettlementSummary(orderId)`，返回只包含页面需要字段的 Data Transfer Object。用请求计数和载荷快照测试往返次数、字段稳定性与版本兼容，不返回可继续调用的内部实体。
+
+</Answer>
+
+**问题 3：处理响应丢失。** 服务端可能已扣款但响应在网络中丢失，客户端如何恢复而不重复扣款？
+
+<Answer>
+
+客户端用稳定的 Idempotency Key 重放查询或同一请求；服务端按键返回已记录的 receipt，而不是再次执行扣款。测试应覆盖未到达、已扣款响应丢失、重复提交和明确拒绝，并记录 Partial Failure 的状态转移。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Remote Facade">
+    把多个远程操作组合成少数业务意图调用的边界，用于减少网络往返。
+  </GlossaryItem>
+  <GlossaryItem term="Data Transfer Object">
+    在进程边界传输的稳定数据结构，只包含用例需要的字段。
+  </GlossaryItem>
+  <GlossaryItem term="Remote Procedure Call">
+    把远程调用呈现为本地方法调用的接口风格，必须显式承认网络成本。
+  </GlossaryItem>
+  <GlossaryItem term="Idempotency Key">
+    让服务端识别同一业务请求并安全去重的稳定标识。
+  </GlossaryItem>
+  <GlossaryItem term="Partial Failure">
+    部分步骤成功、部分步骤失败且需要协议定义恢复路径的状态。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第15章 分布模式 的标志不是记住定义，而是能在 订单与结算跨进程调用 中解释“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”的责任链，利用 契约粒度、往返、序列化、版本、部分失败 作出可证伪的选择，并在出现“把本地细粒度对象接口原样暴露到网络”时明确拒绝当前实现。
-
+掌握第15章分布模式的标志不是记住两个英文名词，而是能在订单结算切片中解释“客户端意图 → Remote Facade → DTO → 网络边界 → 结算用例”的责任链。学习者应利用契约粒度、往返、序列化、版本、超时和 Partial Failure 作出可证伪的选择，并在没有硬约束、细粒度 getter、实体镜像和无条件重试时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -73,6 +216,13 @@ import { Poeaa24Ch15DistributionCallStack } from "@/components/mdx/poeaa-enterpr
 ## 来源与改写范围
 
 - [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对 Remote Facade、Data Transfer Object 与分布模式族的公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
