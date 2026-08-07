@@ -15855,7 +15855,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-43-layer-supertype-diagram");
       return {
-        Poeaa24Pattern43LayerSupertype: module0.Poeaa24Pattern43LayerSupertype,
+        Poeaa24Pattern43LayerSupertypeDiagram:
+          module0.Poeaa24Pattern43LayerSupertypeDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface":

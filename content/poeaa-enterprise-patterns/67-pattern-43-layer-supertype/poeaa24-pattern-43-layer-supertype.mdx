@@ -7,70 +7,217 @@ description: "为某一层的全部类型提供共同超类型，集中该层共
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-43-layer-supertype
 draft: false
 ---
 
-import { Poeaa24Pattern43LayerSupertype } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-43-layer-supertype-diagram";
+import { Poeaa24Pattern43LayerSupertypeDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-43-layer-supertype-diagram";
 
+<Objectives>
 
-## 为什么 18.3 层超类型 值得单独学习
+- 能识别同一层多个类型真正共享的身份、脏标记或版本机制，并说明为何不应共享业务行为
+- 能编写 TypeScript 层超类型及子类，验证继承边界、状态更新和并发版本规则
+- 能根据重复代码、类型边界和继承耦合的证据，判断何时采用或拒绝层超类型
 
-为某一层的全部类型提供共同超类型，集中该层共享的基础行为。 18.3 层超类型 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **18.3 层超类型** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 18.3 层超类型值得单独学习
 
-## 先建立直觉：问题、机制与代价
+客户、订单和商品对象可能都要记录数据库身份、是否修改以及乐观锁版本。如果每个类各自实现这些机制，修复一个持久化缺陷就要同步修改多个类型；但如果把所有便利方法、领域规则和外部服务都塞进基类，基类又会成为不可审查的上帝对象。
 
-18.3 层超类型 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：为某一层的全部类型提供共同超类型，集中该层共享的基础行为。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="为同一层多个类型提供共同基础机制的超类或共享抽象。">层超类型</Term>
+的边界是“同一层、同一责任、真正稳定的共同机制”。它可以集中
+ID、脏标记和版本检查，却不应让 Customer、Order 和 Product
+因为继承关系被迫拥有彼此无关的业务行为。
 
-对 18.3 层超类型，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能把真正跨层内类型的共同机制放入超类型，并拒绝与具体业务无关的便利方法膨胀”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.3 层超类型。
+本章只覆盖 2024 年中文版公开目录中的 **18.3 层超类型**，依据作者图书页和公开模式目录独立重写。案例、实验、代码、练习和答案均为本课程原创，不复现原书正文、插图或代码。
 
+## 先建立直觉：把重复机制放在正确楼层
+
+先比较三个类的变化原因：身份字段由持久化层约束，脏标记由变更跟踪约束，而“客户是否可下单”“订单是否可取消”分别由领域规则约束。只有前两类机制具有跨多个类型的同一语义，才有资格进入共同超类型。
+
+<Term def="同一层内多个类型都需要、且含义和生命周期一致的基础行为。">
+  共同机制
+</Term>
+需要通过三个问题验证：所有子类是否都需要它？删除它会不会让每个子类重复相同代码？它是否不依赖某个具体业务概念？任一问题回答为否，都应考虑组合、接口或保持局部实现。
+
+继承还带来<Term def="子类被迫依赖超类状态、初始化顺序或方法契约，导致修改基类会影响全部子类的风险。">继承耦合</Term>。层超类型不是免费复用；团队必须记录基类变化影响的类型数量、子类是否能独立测试，以及是否需要把共性机制替换成组合。
 
 ## 目录单元到教学证据
 
 ### 18.3 层超类型
 
-在 **18.3 层超类型** 的学习边界里，18.3 层超类型 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 18.3 层超类型。
+本章精确对应 manifest 单元 `poeaa24-pattern-43-layer-supertype`。案例用 Customer、Order 和 Product 表示同一领域层的三个类型，学习边界是把身份、脏标记和版本放入公共基础，同时让具体业务规则留在子类或领域服务。
 
-## 专属设计案例：订单系统基础设施替换
+完成本单元要交出三样证据：一张超类型与子类的责任图；一段带版本和脏标记的 TypeScript 代码；一个拒绝样本，证明业务便利方法进入基类后会造成继承耦合或语义污染。
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。18.3 层超类型 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+## 专属案例：持久化实体的共同基础
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-43-layer-supertype**；模式族为 **base**；裁决是“能把真正跨层内类型的共同机制放入超类型，并拒绝与具体业务无关的便利方法膨胀”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 18.3 层超类型 设定的边界”。
+订单系统的 Customer、Order 和 Product 都需要 `id`、`version` 与 `isDirty`。它们不应该都重新写 `markDirty` 和版本条件检查；但 Customer 的 `canPlaceOrder`、Order 的 `cancel` 和 Product 的 `reserve` 不共享同一语义，不能为了少写几行代码移动到基类。
 
-配置不是生产框架语法，而是一张评审卡。对 18.3 层超类型 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+评审卡记录如下：单元键为 **poeaa24-pattern-43-layer-supertype**；模式族为 **base**；采用条件是“同一层至少有多个类型拥有稳定、无业务特化的共同机制”；观测项包括重复实现数量、基类变化影响面、子类测试隔离和组合替代成本；拒绝条件是“基类需要知道具体业务类型，或子类只是为了继承便利方法而被迫接受无关状态”。
 
-## 三步交互实验
+## 专属可视化实验：看共性停在哪里
 
+先预测：`markDirty` 可以放进基类，但 `cancel()` 是否也应该放进去？观察图中的共同字段、继承关系和子类边界，再判断一个新类型是否真的属于同一层，而不是只因为它也有一个 ID。
 
-<Poeaa24Pattern43LayerSupertype />
+<Poeaa24Pattern43LayerSupertypeDiagram />
+
+## 代码实践：把基础机制限制在超类型
+
+下面的代码只把身份、版本和脏标记放入 `PersistentEntity`。子类保留自己的业务行为，测试可以验证基类机制而不要求基类了解订单或客户。
+
+```ts
+abstract class PersistentEntity {
+  private dirty = false;
+
+  constructor(
+    public readonly id: string,
+    public readonly version: number,
+  ) {}
+
+  protected markDirty(): void {
+    this.dirty = true;
+  }
+
+  isDirty(): boolean {
+    return this.dirty;
+  }
+
+  nextVersion(expected: number): number {
+    if (expected !== this.version) throw new Error("stale entity");
+    return this.version + 1;
+  }
+}
+
+class Customer extends PersistentEntity {
+  rename(name: string): void {
+    if (!name.trim()) throw new Error("name is required");
+    this.markDirty();
+  }
+}
+
+class Order extends PersistentEntity {
+  cancel(): void {
+    // 订单取消规则属于 Order，不属于所有持久化实体的共同机制。
+    this.markDirty();
+  }
+}
+```
+
+这个边界有四个可验收点：基类不导入 Customer 或 Order；共同状态可被所有子类复用；业务方法仍位于具体类型；旧版本写入会失败。若有人把 `sendEmail` 或 `calculateDiscount` 加到 `PersistentEntity`，应先要求说明它为何对每个子类都有同一语义。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 18.3 层超类型 的证据      | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 采用层超类型的证据             | 应拒绝或换方案的信号             |
+| -------- | ------------------------------ | -------------------------------- |
+| 范围     | 多个同层类型拥有同一基础机制   | 子类来自不同层或变化原因不同     |
+| 语义     | ID、版本和脏标记含义完全一致   | 同名字段在不同类型有不同生命周期 |
+| 耦合     | 基类不认识具体业务类型         | 基类依赖 Customer、Order 等细节  |
+| 测试     | 子类可独立测试，基类可单独验证 | 修改基类需要重跑所有业务场景     |
+| 替代     | 继承表达稳定的 is-a 关系       | 只是为了复用一两个便利函数       |
 
+## 常见误区
+
+<Callout type="trap" title="把所有共享代码都放进基类">
+
+- **现象**：基类出现邮件、折扣、库存和权限方法，所有子类都能调用它们。
+- **原因**：把文本重复或函数复用误当成语义共同性。
+- **修法**：只保留同一层、同一含义的基础机制；其余使用组合、领域服务或局部实现。
+
+</Callout>
+
+<Callout type="trap" title="同名字段就代表同一语义">
+
+- **现象**：Customer 和 Order 都有 `status`，基类却规定同一组状态和转换。
+- **原因**：忽略字段生命周期和业务规则可能不同。
+- **修法**：先比较语义、约束和变化原因；无法证明相同就不要提升到超类型。
+
+</Callout>
+
+<Callout type="trap" title="用继承隐藏持久化副作用">
+
+- **现象**：调用基类的 `save()` 会自动访问数据库，子类测试无法隔离存储。
+- **原因**：把实体共同状态与资源访问混在同一抽象里。
+- **修法**：超类型只管理内存中的共同机制；Repository、Mapper 和事务由外部协作者负责。
+
+</Callout>
 
 ## 本章小结
 
-掌握 18.3 层超类型 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
+- 层超类型集中同一层多个类型真正共享的基础机制，而不是所有可复用代码。
+- ID、版本和脏标记可以共享；订单取消、客户授权等业务规则必须留在具体类型。
+- 继承耦合、基类变化影响面和子类测试隔离是采用前必须观察的证据。
+- 不能证明共同语义时，应拒绝继承，改用组合、接口或局部实现。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：判断提升边界。** Customer、Order 和 Product 都有 `id` 与 `version`，但只有 Order 有 `cancel()`。哪些内容可以放进超类型，为什么？
+
+<Answer>
+
+`id`、`version` 和相同语义的版本检查可以放入超类型，因为三个类型都需要它们且生命周期一致。`cancel()` 只表达订单业务，不应进入超类型，否则 Customer 和 Product 会继承无意义的行为。
+
+</Answer>
+
+**问题 2：找出继承耦合。** 基类新增 `sendEmail()` 后，所有实体测试都要配置邮件客户端。请说明问题及一个替代方案。
+
+<Answer>
+
+基类把外部资源访问和实体共同机制混在一起，造成继承耦合与测试污染。应删除该方法，把通知放到应用服务或独立 NotificationSender，通过组合注入；超类型只保留可验证的内存状态。
+
+</Answer>
+
+**问题 3：决定是否采用。** 两个类只有一个相同的 `toLabel()` 函数，且未来变化方向不同。应采用层超类型吗？请给出理由。
+
+<Answer>
+
+不应采用。这里只有函数复用，没有被证明的共同语义和稳定变化轴；继承会绑定两个本来独立的类型。可以先保留局部实现，或在重复确实稳定后使用纯函数/组合，而不是引入基类。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="层超类型">
+    为同一层多个类型提供共同基础机制的超类或共享抽象。
+  </GlossaryItem>
+  <GlossaryItem term="共同机制">
+    同一层内多个类型都需要、且含义和生命周期一致的基础行为。
+  </GlossaryItem>
+  <GlossaryItem term="继承耦合">
+    子类被迫依赖超类状态、初始化或方法契约，基类变化会扩散到子类的风险。
+  </GlossaryItem>
+  <GlossaryItem term="脏标记">
+    表示对象自读取或持久化后发生过修改、需要进一步处理的状态。
+  </GlossaryItem>
+  <GlossaryItem term="变化轴">
+    会推动代码变化的独立原因，例如持久化机制与订单业务规则的变化。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：18.2 映射器](/learn/poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper)
 - [下一页：18.4 分离接口](/learn/poeaa-enterprise-patterns/68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节范围和模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对层超类型模式的公开定位与模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
