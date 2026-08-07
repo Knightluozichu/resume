@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T17:38:36.597Z；旧版分数不迁移。
+> 2026-08-07T17:52:51.096Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2448
+- failed：2447
 - queued：401
-- passed：1023
+- passed：1024
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -15,7 +15,7 @@
 | 2 | code-complete-2e | 51 | 51 | 0 | 0 | 153 |
 | 3 | math-girl | 50 | 50 | 0 | 0 | 150 |
 | 4 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
-| 5 | pragmatic-programmer | 71 | 45 | 0 | 26 | 135 |
+| 5 | pragmatic-programmer | 71 | 44 | 0 | 27 | 132 |
 | 6 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 7 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 8 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
