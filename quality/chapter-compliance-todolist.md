@@ -200,7 +200,7 @@
     - 路径：`content/poeaa-enterprise-patterns/15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns.mdx`
 - [x] ✅ **16-pattern-01-transaction-script/poeaa24-pattern-01-transaction-script** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/16-pattern-01-transaction-script/poeaa24-pattern-01-transaction-script.mdx`
-- [ ] 🔴 P1 **17-pattern-02-domain-model/poeaa24-pattern-02-domain-model** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **17-pattern-02-domain-model/poeaa24-pattern-02-domain-model** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/17-pattern-02-domain-model/poeaa24-pattern-02-domain-model.mdx`
 - [ ] 🔴 P1 **19-pattern-04-service-layer/poeaa24-pattern-04-service-layer** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer.mdx`

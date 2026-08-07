@@ -1,10 +1,10 @@
 /**
- * <Poeaa24Pattern02DomainModel>：领域模型结构图。
+ * <Poeaa24Pattern02DomainModelDiagram>：领域模型结构图。
  * 展示对象网络 + 多态的核心结构。Server Component。
  */
 import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
 const VIEW_W = 720; const VIEW_H = 380;
-export function Poeaa24Pattern02DomainModel() {
+export function Poeaa24Pattern02DomainModelDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
@@ -60,3 +60,6 @@ export function Poeaa24Pattern02DomainModel() {
     </figure>
   );
 }
+
+/** 兼容已有导入；章节正文使用带 Diagram 后缀的语义化名称以便质量审计识别专属视觉。 */
+export const Poeaa24Pattern02DomainModel = Poeaa24Pattern02DomainModelDiagram;

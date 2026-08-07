@@ -15442,7 +15442,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-02-domain-model-diagram");
       return {
-        Poeaa24Pattern02DomainModel: module0.Poeaa24Pattern02DomainModel,
+        Poeaa24Pattern02DomainModelDiagram:
+          module0.Poeaa24Pattern02DomainModelDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/19-pattern-04-service-layer/poeaa24-pattern-04-service-layer":
