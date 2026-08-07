@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T13:00:30.290Z；旧版分数不迁移。
+> 2026-08-07T13:07:19.908Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2491
+- failed：2490
 - queued：401
-- passed：980
+- passed：981
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -81,13 +81,13 @@
 | 68 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
 | 69 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
 | 70 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 71 | poeaa-enterprise-patterns | 78 | 17 | 0 | 61 | 51 |
-| 72 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 73 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 74 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 75 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 76 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 77 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 71 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 72 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 73 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 74 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 75 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 76 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 77 | poeaa-enterprise-patterns | 78 | 16 | 0 | 62 | 48 |
 | 78 | python-advanced | 16 | 16 | 0 | 0 | 48 |
 | 79 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
 | 80 | large-language-models | 16 | 16 | 0 | 0 | 16 |

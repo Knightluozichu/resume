@@ -15561,11 +15561,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-decision-tree");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-decision-tree"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-mapping-diagram"),
+      ]);
       return {
-        Poeaa24Ch12StructureDecisionTree:
-          module0.Poeaa24Ch12StructureDecisionTree,
+        Poeaa24Ch12StructureDecisionTreeDiagram:
+          modules[0].Poeaa24Ch12StructureDecisionTreeDiagram,
+        Poeaa24Ch12StructureMappingDiagram:
+          modules[1].Poeaa24Ch12StructureMappingDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/30-pattern-12-identity-field/poeaa24-pattern-12-identity-field":

@@ -7,63 +7,221 @@ description: "把对象身份、关联、值与继承结构映射到关系模式
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-12-object-relational-structure
 draft: false
 ---
 
-import { Poeaa24Ch12StructureDecisionTree } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-decision-tree";
+import { Poeaa24Ch12StructureDecisionTreeDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-decision-tree";
+import { Poeaa24Ch12StructureMappingDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch12-structure-mapping-diagram";
 
+<Objectives>
 
-## 为什么 第12章 对象-关系结构模式 值得单独学习
+- 能解释对象身份、关联、值对象和继承如何映射为可查询且可演化的关系结构
+- 能用 TypeScript 把订单聚合映射为 Identity Field、Foreign Key 与 Embedded Value 的明确边界
+- 能根据独立生命周期、查询需求和对象图复杂度，拒绝或选择关联表、依赖映射与 Serialized LOB
 
-把对象身份、关联、值与继承结构映射到关系模式。 第12章 对象-关系结构模式 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第12章 对象-关系结构模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第12章对象-关系结构模式值得单独学习
+
+第12章对象-关系结构模式的核心不是让 ORM 自动生成表，而是决定对象图中的哪些部分拥有独立身份、哪些部分依附父对象、哪些值应展开为列。订单聚合同时包含订单行、地址和标签集合；如果所有对象都塞进一列，查询和约束会消失，如果所有值都拆成独立表，又会制造不必要的身份和连接。
+
+<Term def="把对象或领域实体的稳定标识映射到关系表的主键，使对象生命周期可以跨请求、关联和写回被定位。">
+  标识字段
+</Term>
+是结构映射的起点。本页以 2024 年中文版公开目录限定第12章的范围，并依据 Martin
+Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-第12章 对象-关系结构模式 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：把对象身份、关联、值与继承结构映射到关系模式。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+对象关系结构需要先问“要不要独立查询和独立生命周期”，再选择表结构。<Term def="把父表主键复制到子表作为关联列，以表示一对多或多对一关系的映射方式。">外键映射</Term>适合可独立查询的子集合；<Term def="用一张中间表保存两个实体标识及其关系，适合多对多关系或关系本身带属性的映射方式。">关联表映射</Term>适合关系需要独立扩展；<Term def="让从属对象共享父对象生命周期，不为它建立独立身份或独立删除语义的映射方式。">依赖映射</Term>适合地址快照等从属值。
 
-对 第12章 对象-关系结构模式，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能解释对象-关系结构模式的边界与选择轴，逐项覆盖10个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 第12章 对象-关系结构模式。
+<Term def="把值对象的字段展开到拥有者表的列中，使值对象保持不可变语义但不拥有独立表行身份。">
+  嵌入值
+</Term>
+能让常用查询保持简单；
+<Term def="把复杂对象图序列化为一列，牺牲关系查询、约束和局部更新以换取写入结构简单的映射方式。">
+  Serialized LOB
+</Term>
+只适合整体读写且查询需求很弱的边界。继承映射也应根据查询、约束和演化成本选择单表、类表或具体表，而不是由
+ORM 默认值决定。
 
+对第12章对象-关系结构模式，优先比较的替代路线是：先用 Identity Field 固定身份，再按关联类型选择 Foreign Key 或 Association Table，按生命周期选择 Dependent Mapping 或 Embedded Value，最后才评估 Serialized LOB。若实验只能显示对象被保存，不能指出查询路径、独立生命周期和约束归属，就不能据此选择结构映射。
 
 ## 目录单元到教学证据
 
 ### 第12章 对象-关系结构模式
 
-在 **第12章 对象-关系结构模式** 的学习边界里，第12章 对象-关系结构模式 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 第12章 对象-关系结构模式。
+第12章对象-关系结构模式要求把“对象图如何落到关系结构”变成可观察的架构决定：先标出标识、关联、生命周期、值对象和继承边界，再用订单聚合的查询、删除、更新和迁移测试验证决定。只有映射后仍能表达必要约束并支持真实查询，结构模式才不是表生成器的偶然输出。
 
-## 专属设计案例：订单聚合持久化
+## 专属代码案例：订单聚合的结构映射
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。第12章 对象-关系结构模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+把订单聚合持久化切成“Identity Field → Foreign Key → Embedded Value → Association Table → 查询投影”五个观察点。第12章对象-关系结构模式的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及标识、外键、聚合边界、值对象和继承策略中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-12-object-relational-structure**；模式族为 **mapping**；裁决是“能解释对象-关系结构模式的边界与选择轴，逐项覆盖10个目录节点，并在同一应用切片中验证”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 第12章 对象-关系结构模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-12-object-relational-structure**；模式族为 **mapping**；裁决是“独立生命周期用身份和外键，从属值展开或依赖映射，多对多关系使用关联表，复杂图只有在整体读写时才序列化”；观测项包括标识、外键、聚合边界、值对象、继承策略；拒绝条件是“为方便生成表而牺牲必要查询、唯一约束或独立生命周期”。
 
-配置不是生产框架语法，而是一张评审卡。对 第12章 对象-关系结构模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：订单地址应该展开为订单表的列，还是成为独立地址实体？先写下地址是否独立复用、是否需要单独查询和是否随订单删除，再阅读实现；验证时要能说明 Embedded Value 与 Dependent Mapping 的边界，而不是只比较表数量。
 
-# 模式族地图
+```ts
+type Address = {
+  street: string;
+  city: string;
+  postalCode: string;
+};
 
+type Order = {
+  id: string;
+  customerId: string;
+  shippingAddress: Address;
+  tagIds: string[];
+};
 
-<Poeaa24Ch12StructureDecisionTree />
+type OrderRow = {
+  id: string;
+  customer_id: string;
+  shipping_street: string;
+  shipping_city: string;
+  shipping_postal_code: string;
+};
 
-**阅读路径**：身份 → Identity Field；一对多 → Foreign Key；多对多 → Association Table；从属 → Dependent Mapping；值对象 → Embedded Value；复杂图 → Serialized LOB。
+type OrderTagRow = { order_id: string; tag_id: string };
+
+function toOrder(row: OrderRow, tags: OrderTagRow[]): Order {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    shippingAddress: {
+      street: row.shipping_street,
+      city: row.shipping_city,
+      postalCode: row.shipping_postal_code,
+    },
+    tagIds: tags
+      .filter((tag) => tag.order_id === row.id)
+      .map((tag) => tag.tag_id),
+  };
+}
+
+function toRows(order: Order): { order: OrderRow; tags: OrderTagRow[] } {
+  return {
+    order: {
+      id: order.id,
+      customer_id: order.customerId,
+      shipping_street: order.shippingAddress.street,
+      shipping_city: order.shippingAddress.city,
+      shipping_postal_code: order.shippingAddress.postalCode,
+    },
+    tags: order.tagIds.map((tagId) => ({ order_id: order.id, tag_id: tagId })),
+  };
+}
+```
+
+这个映射把订单身份作为 Identity Field，把客户关系表达为 Foreign Key，把地址字段作为 Embedded Value，把标签集合表达为 Association Table。真实实现还要加唯一约束、外键删除规则、事务和增量更新；不要为了减少类或表而把需要独立查询的对象图塞进 Serialized LOB。
+
+## 对象-关系结构决策树
+
+结构映射的顺序是先确认身份，再判断关联是外键还是关联表，再判断从属值和复杂对象图。下面的决策树把 Identity Field、Foreign Key、Association Table、Dependent Mapping、Embedded Value 和 Serialized LOB 的入口放在同一张证据图中。
+
+<Poeaa24Ch12StructureDecisionTreeDiagram />
+
+决策树不是自动生成器：每个叶节点都要回到查询、约束、生命周期和迁移测试，确认选择没有把领域语义隐藏在数据库列或序列化字符串里。
+
+## 结构映射对比图
+
+面对地址、标签和订单行时，先比较独立生命周期与查询需求，再选择展开列、外键、关联表或序列化。越靠右的结构通常能保存更多对象形状，但可查询性、约束和局部更新会变差。
+
+<Poeaa24Ch12StructureMappingDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第12章 对象-关系结构模式 的证据 | 应拒绝或改用其他方案的信号                 |
-| -------- | ------------------------------------ | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰      | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收                | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退     | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径       | 因框架内置或团队习惯而跳过问题分析         |
+| 评审问题 | 选择结构映射的证据                 | 应拒绝当前方案的信号                       |
+| -------- | ---------------------------------- | ------------------------------------------ |
+| 身份     | 主键、唯一性和对象生命周期清晰     | 一个字段既当业务编号又当技术身份且无约束   |
+| 关联     | 一对多、多对多与关系属性分别可查询 | 为多对多关系复制列或隐藏在不可查询字符串中 |
+| 从属     | 删除、更新和父子边界经过测试       | 从属值意外拥有独立生命周期或无法级联清理   |
+| 演化     | 继承和序列化策略支持必要查询与迁移 | 为减少表数而放弃约束、索引和局部更新       |
 
+## 常见误区
+
+<Callout type="trap" title="把技术 ID 当作业务身份">
+
+- **现象**：订单号变更或导入数据后，关联、缓存和审计记录无法稳定定位订单。
+- **原因**：没有区分数据库主键、业务编号和外部引用，导致结构映射依赖可变字段。
+- **修法**：用稳定 Identity Field 固定持久化身份，业务编号单独建唯一约束并定义迁移规则。
+
+</Callout>
+
+<Callout type="trap" title="用字符串替代关联表">
+
+- **现象**：标签 ID 被拼成逗号分隔字段，查询、唯一约束和增量更新都变得脆弱。
+- **原因**：把多对多关系的结构成本隐藏在一列中，牺牲了关系查询和参照完整性。
+- **修法**：用 Association Table 保存两个外键及必要的关系属性，在事务中维护集合变化。
+
+</Callout>
+
+<Callout type="trap" title="把所有对象图序列化">
+
+- **现象**：订单详情可以整体读取，但无法按地址、订单行或状态查询，也无法局部更新。
+- **原因**：把 Serialized LOB 当作通用对象映射，忽略了查询、约束、索引和迁移需求。
+- **修法**：只有整体读写且查询弱的边界才使用 LOB；其余对象按身份、关联和生命周期拆成可约束结构。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第12章对象-关系结构模式，并要求把标识、外键、聚合边界、值对象和继承策略映射到订单聚合持久化。
+
+**问题 1：映射地址。** 订单地址只属于当前订单，随订单删除，不被其他聚合独立查询，应该优先比较什么？
+
+<Answer>
+
+优先比较 Embedded Value 或 Dependent Mapping：地址字段可展开到订单表，或作为依赖行共享父对象生命周期。应测试删除、更新和读取语义；没有独立身份与查询需求时不必创建独立地址实体。
+
+</Answer>
+
+**问题 2：映射标签。** 一个订单可以有多个标签，一个标签也可用于多个订单，且关系未来可能增加排序字段，应该怎么设计？
+
+<Answer>
+
+使用 Association Table 保存 `order_id`、`tag_id` 以及关系属性，并设置唯一约束和外键。不要把标签 ID 拼进字符串，否则无法可靠查询、约束和局部更新。
+
+</Answer>
+
+**问题 3：评估 Serialized LOB。** 订单历史快照只整体读取、不参与筛选和局部更新，可以直接序列化吗？
+
+<Answer>
+
+可以把 Serialized LOB 作为候选，但仍要定义版本、大小、迁移和完整性策略；如果未来需要按快照字段查询或审计单个值，就应选择可查询的关系结构。决策必须由查询与生命周期证据推动。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="标识字段">
+    把对象或领域实体的稳定标识映射到关系表主键，使对象生命周期可以被定位的结构映射。
+  </GlossaryItem>
+  <GlossaryItem term="外键映射">
+    把父表主键复制到子表作为关联列，以表示一对多或多对一关系的映射方式。
+  </GlossaryItem>
+  <GlossaryItem term="关联表映射">
+    用中间表保存两个实体标识及其关系，适合多对多关系或关系本身带属性的映射方式。
+  </GlossaryItem>
+  <GlossaryItem term="嵌入值">
+    把值对象字段展开到拥有者表列中，使值对象保持不可变语义但不拥有独立表行身份。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第12章 对象-关系结构模式 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
-
+掌握第12章对象-关系结构模式的标志不是记住表结构名称，而是能在订单聚合持久化中解释“Identity Field → Foreign Key → Embedded Value → Association Table → 查询投影”的责任链。学习者应利用标识、外键、聚合边界、值对象和继承策略作出可证伪的选择，并在失去必要查询、约束或独立生命周期时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -76,3 +234,10 @@ import { Poeaa24Ch12StructureDecisionTree } from "@/components/mdx/poeaa-enterpr
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
