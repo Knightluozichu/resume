@@ -326,7 +326,7 @@
     - 路径：`content/poeaa-enterprise-patterns/02-preface/poeaa24-preface.mdx`
 - [x] ✅ **04-introduction/poeaa24-introduction** — 已修复（2026-08-07，score 41→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/04-introduction/poeaa24-introduction.mdx`
-- [ ] 🔴 P1 **05-part-01-narratives/poeaa24-part-01-narratives** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **05-part-01-narratives/poeaa24-part-01-narratives** — 已修复（2026-08-07，score 41→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/05-part-01-narratives/poeaa24-part-01-narratives.mdx`
 - [ ] 🔴 P1 **14-part-02-patterns/poeaa24-part-02-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
     - 路径：`content/poeaa-enterprise-patterns/14-part-02-patterns/poeaa24-part-02-patterns.mdx`
