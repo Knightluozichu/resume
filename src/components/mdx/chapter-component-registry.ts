@@ -15483,10 +15483,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-gradient");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-gradient"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch10DataSourceGradient: module0.Poeaa24Ch10DataSourceGradient,
+        Poeaa24Ch10DataSourceGradientDiagram:
+          modules[0].Poeaa24Ch10DataSourceGradientDiagram,
+        Poeaa24Ch10DataSourceDecisionDiagram:
+          modules[1].Poeaa24Ch10DataSourceDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway":

@@ -7,63 +7,232 @@ description: "选择领域对象与数据源交互的入口和隔离程度。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-10-data-source-patterns
 draft: false
 ---
 
-import { Poeaa24Ch10DataSourceGradient } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-gradient";
+import { Poeaa24Ch10DataSourceGradientDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-gradient";
+import { Poeaa24Ch10DataSourceDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch10-datasource-decision-diagram";
 
+<Objectives>
 
-## 为什么 第10章 数据源架构模式 值得单独学习
+- 能解释数据源入口如何影响对象身份、查询职责、写回边界和测试隔离
+- 能用 TypeScript 实现带身份缓存和显式提交的订单数据源端口
+- 能根据领域行为复杂度、映射成本和查询形态，在 Gateway、Active Record 与 Data Mapper 之间作出选择
 
-选择领域对象与数据源交互的入口和隔离程度。 第10章 数据源架构模式 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第10章 数据源架构模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第10章数据源架构模式值得单独学习
+
+第10章数据源架构模式的核心不是选择一个 ORM，而是决定领域对象如何遇到数据库。订单聚合从一张表开始，后来可能增加订单行、折扣、付款状态和并发写回；如果每个调用者都自行拼 SQL、创建对象并决定保存时机，同一个数据库行就会在内存中出现多个互相矛盾的身份。
+
+<Term def="为领域代码提供查询、加载、更新和删除入口，并把数据库连接、SQL 或映射细节限制在明确边界内的组件。">
+  数据源入口
+</Term>
+不是越抽象越好；它的价值取决于是否隔离了真实变化。本文以 2024
+年中文版公开目录限定第10章的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-第10章 数据源架构模式 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：选择领域对象与数据源交互的入口和隔离程度。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+数据源模式需要同时回答四个问题：谁负责查询，谁拥有对象身份，谁决定写回，谁承担映射成本。简单 CRUD 可以由 Table Data Gateway 集中处理 SQL；一行数据有少量行为时可以考虑 Row Data Gateway 或 Active Record；当领域规则需要和关系结构独立演化时，Data Mapper 才值得承担额外间接层。
 
-对 第10章 数据源架构模式，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能解释数据源架构模式的边界与选择轴，逐项覆盖4个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 SQL隔离 从何处越界，就不能据此选择 第10章 数据源架构模式。
+<Term def="在一次加载范围内保证同一个持久化标识对应同一个内存对象实例的缓存，避免重复加载造成身份分裂。">
+  身份映射
+</Term>
+应与查询入口和事务边界一起评审。
+<Term def="把领域对象的新增、修改和删除集中收集，在一次明确提交中协调写回的边界。">
+  工作单元
+</Term>
+可以减少半成品写入，但也会增加生命周期、冲突和失败恢复责任；
+<Term def="独立翻译领域对象与关系记录，使领域对象不需要知道表结构、SQL 或数据库连接的持久化方式。">
+  数据映射器
+</Term>
+提供隔离，却需要维护映射规则和查询性能。
 
+对第10章数据源架构模式，优先比较的替代路线是：按查询形态选择 Table Data Gateway，按单行行为选择 Row Data Gateway 或 Active Record，按复杂聚合与测试隔离选择 Data Mapper；不要从 ORM 的功能清单反推领域结构。若实验只能显示一条记录读写成功，不能解释对象身份、事务提交和失败后的状态，就不能据此选择数据源模式。
 
 ## 目录单元到教学证据
 
 ### 第10章 数据源架构模式
 
-在 **第10章 数据源架构模式** 的学习边界里，第10章 数据源架构模式 不是待背诵的目录词，而是用来检查“领域调用”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 SQL隔离 的可观察变化，并说明它何时支持或否定 第10章 数据源架构模式。
+第10章数据源架构模式要求把“领域对象如何与数据源交互”变成可观察的架构决定：先标出查询入口、身份缓存、写回者和映射边界，再用订单聚合持久化的重复加载、修改冲突与回滚测试验证决定。只有持久化替换不会迫使领域规则重写，数据源边界才真正隔离了变化。
 
-## 专属设计案例：订单聚合持久化
+## 专属代码案例：订单聚合持久化
 
-把 订单聚合持久化 切成“领域调用 → 数据边界 → 查询命令 → 映射 → 持久化”五个观察点。第10章 数据源架构模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 SQL隔离、对象身份、行为位置、映射成本、测试替身 中哪个指标最先提示当前方案不再适用。
+把订单聚合持久化切成“领域调用 → 身份查找 → 数据映射 → 变更追踪 → 工作单元提交”五个观察点。第10章数据源架构模式的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 SQL 隔离、对象身份、行为位置、映射成本和测试替身中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-10-data-source-patterns**；模式族为 **mapping**；裁决是“能解释数据源架构模式的边界与选择轴，逐项覆盖4个目录节点，并在同一应用切片中验证”；观测项包括 SQL隔离、对象身份、行为位置、映射成本、测试替身；拒绝条件是“SQL隔离 超过团队为 第10章 数据源架构模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-10-data-source-patterns**；模式族为 **mapping**；裁决是“简单查询保持 Gateway，复杂领域行为使用映射器并集中提交”；观测项包括 SQL 隔离、对象身份、行为位置、映射成本、测试替身；拒绝条件是“同一订单在同一工作单元内被加载成多个可写实例”。
 
-配置不是生产框架语法，而是一张评审卡。对 第10章 数据源架构模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：如果一个请求两次加载订单 42，并分别修改两个实例，提交时可能出现什么问题？先写下身份缓存、脏对象集合和失败回滚的预期，再阅读实现；验证时要能说明映射器解决了什么隔离问题，以及它没有自动解决什么并发冲突。
 
-# 模式族地图
+```ts
+type OrderRow = {
+  id: string;
+  status: "open" | "paid";
+  totalCents: number;
+};
 
+type Order = {
+  id: string;
+  status: "open" | "paid";
+  totalCents: number;
+};
 
-<Poeaa24Ch10DataSourceGradient />
+interface OrderDatabase {
+  selectOrder(id: string): OrderRow | undefined;
+  updateOrder(row: OrderRow): void;
+}
 
-**阅读路径**：简单 CRUD → Table Data Gateway；一行一对象 → Row Data Gateway；对象带行为 → Active Record；领域与 DB 解耦 → Data Mapper。
+class OrderMapper {
+  toDomain(row: OrderRow): Order {
+    return { ...row };
+  }
+
+  toRow(order: Order): OrderRow {
+    return { ...order };
+  }
+}
+
+class OrderUnitOfWork {
+  private readonly identityMap = new Map<string, Order>();
+  private readonly dirty = new Set<string>();
+
+  constructor(
+    private readonly database: OrderDatabase,
+    private readonly mapper: OrderMapper,
+  ) {}
+
+  load(id: string): Order | undefined {
+    const cached = this.identityMap.get(id);
+    if (cached) return cached;
+    const row = this.database.selectOrder(id);
+    if (!row) return undefined;
+    const order = this.mapper.toDomain(row);
+    this.identityMap.set(id, order);
+    return order;
+  }
+
+  markDirty(order: Order): void {
+    this.dirty.add(order.id);
+  }
+
+  commit(): void {
+    for (const id of this.dirty) {
+      const order = this.identityMap.get(id);
+      if (order) this.database.updateOrder(this.mapper.toRow(order));
+    }
+    this.dirty.clear();
+  }
+}
+```
+
+这段代码把同一工作单元里的对象身份、映射和提交职责集中起来。真实数据库适配器还要处理事务、版本冲突、回滚和批量写入；Identity Map 只保证一次工作单元内的对象一致性，不能替代数据库隔离或跨请求并发控制。
+
+## 数据源模式族地图
+
+数据源模式不是从简单到复杂的必经升级路径。Table Data Gateway 让一类查询集中在表入口，Row Data Gateway 让一行数据成为对象，Active Record 在数据对象上增加行为，Data Mapper 则让领域对象完全不知道数据库。下面的梯度图把隔离能力、领域行为和映射成本放在同一张证据图中。
+
+<Poeaa24Ch10DataSourceGradientDiagram />
+
+选择时记录真实查询形态、对象行为和测试边界；如果只需要报表投影，就不要为了抽象领域对象而引入完整映射器。
+
+## 数据源模式决策图
+
+先问数据源访问是否只是结构化查询，再问对象是否拥有独立行为，最后问领域规则是否必须与表结构解耦。越靠右的方案隔离能力越强，但也需要承担映射、身份和事务管理成本。
+
+<Poeaa24Ch10DataSourceDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第10章 数据源架构模式 的证据 | 应拒绝或改用其他方案的信号                      |
-| -------- | --------------------------------- | ----------------------------------------------- |
-| 责任     | 领域调用 到 持久化 的所有者清晰   | 数据边界 可以绕过边界直接改写状态               |
-| 变化     | SQL隔离 的变化被局部吸收          | 一次小改动同时触及 对象身份、行为位置、映射成本 |
-| 失败     | 故障能在 持久化 前被识别并回退    | 只能看到最终错误，无法定位 SQL隔离 的首个异常   |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析              |
+| 评审问题 | 选择数据源模式的证据                   | 应拒绝当前方案的信号                    |
+| -------- | -------------------------------------- | --------------------------------------- |
+| 责任     | 查询、身份、映射和提交各有所有者       | 每个调用者都能自行拼 SQL 并写回对象     |
+| 身份     | 同一工作单元内同一标识只有一个可写实例 | 重复加载后不同实例互相覆盖              |
+| 隔离     | 领域对象可以在替换数据库后继续测试     | 业务规则依赖表字段、连接和 ORM 生命周期 |
+| 成本     | 映射器和工作单元解决了可测量的变化     | 只有未来可能复杂，却先引入完整间接层    |
 
+## 常见误区
+
+<Callout type="trap" title="把 ORM 实例当作身份保证">
+
+- **现象**：同一个订单被两个查询对象加载，两个实例分别修改后出现最后写入者覆盖。
+- **原因**：把 ORM 的查询结果误认为工作单元内的 Identity Map 和并发控制。
+- **修法**：定义身份缓存边界，集中变更追踪与提交，并另外设计版本检查或数据库事务隔离。
+
+</Callout>
+
+<Callout type="trap" title="让领域对象泄漏 SQL">
+
+- **现象**：订单实体直接持有连接、表名和查询条件，单元测试必须准备数据库。
+- **原因**：把数据源适配器和领域行为合并，导致表结构变化穿透领域边界。
+- **修法**：由 Gateway 或 Data Mapper 翻译记录，领域对象只表达行为和不变量，使用端口替身测试。
+
+</Callout>
+
+<Callout type="trap" title="用工作单元掩盖提交失败">
+
+- **现象**：批量提交中途失败，内存对象已经更新，但调用者仍认为整个订单聚合已保存。
+- **原因**：只实现 dirty 集合，没有定义事务、回滚、重试和结果报告语义。
+- **修法**：让 commit 返回明确结果，使用数据库事务和版本冲突处理，并在失败后清理或重新加载受影响对象。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第10章数据源架构模式，并要求把数据源入口、身份映射、工作单元、数据映射器和测试替身映射到订单聚合持久化。
+
+**问题 1：选择入口。** 一个后台报表只需要按状态查询订单投影，不修改领域对象，应该从哪种数据源模式开始？
+
+<Answer>
+
+可以从 Table Data Gateway 或专用查询端口开始，直接返回报表需要的投影。没有对象行为和写回需求时，不应为了未来可能出现的复杂规则引入完整 Data Mapper；选择要由查询形态和测试边界证明。
+
+</Answer>
+
+**问题 2：处理重复身份。** 同一工作单元两次加载订单 42 得到两个对象实例，分别修改后提交，应该补什么设计？
+
+<Answer>
+
+在工作单元内引入以标识为键的 Identity Map，保证同一订单返回同一个可写实例；同时集中 dirty 追踪和 commit。它只解决内存身份一致性，仍需用版本或数据库事务处理并发冲突。
+
+</Answer>
+
+**问题 3：评估映射器。** 订单规则跨订单、订单行和付款状态，团队希望替换数据库并隔离领域测试，是否值得采用 Data Mapper？
+
+<Answer>
+
+如果替换持久化和测试隔离是明确需求，值得比较 Data Mapper、工作单元与简单 Gateway 的成本。映射器应把表结构留在适配器，领域对象保持独立；评审还要验证查询性能、身份、事务和失败恢复，而不是只看类数量。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数据源入口">
+    为领域代码提供查询、加载、更新和删除入口，并把数据库细节限制在明确边界内的组件。
+  </GlossaryItem>
+  <GlossaryItem term="身份映射">
+    在一次加载范围内保证同一个持久化标识对应同一个内存对象实例的缓存。
+  </GlossaryItem>
+  <GlossaryItem term="工作单元">
+    把领域对象的新增、修改和删除集中收集，在一次明确提交中协调写回的边界。
+  </GlossaryItem>
+  <GlossaryItem term="数据映射器">
+    独立翻译领域对象与关系记录，使领域对象不需要知道表结构、SQL 或数据库连接。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第10章 数据源架构模式 的标志不是记住定义，而是能在 订单聚合持久化 中解释“领域调用 → 数据边界 → 查询命令 → 映射 → 持久化”的责任链，利用 SQL隔离、对象身份、行为位置、映射成本、测试替身 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
-
+掌握第10章数据源架构模式的标志不是记住 Gateway 或 Mapper 的名称，而是能在订单聚合持久化中解释“领域调用 → 身份查找 → 数据映射 → 变更追踪 → 工作单元提交”的责任链。学习者应利用数据源入口、身份映射、工作单元、数据映射器和测试替身作出可证伪的选择，并在对象身份分裂或提交失败没有恢复语义时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -76,3 +245,10 @@ import { Poeaa24Ch10DataSourceGradient } from "@/components/mdx/poeaa-enterprise
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
