@@ -7,70 +7,254 @@ description: "为每个具体类建立包含全部继承字段的表，用字段
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: poeaa24-pattern-20-concrete-table-inheritance
 sourceUrl: "https://martinfowler.com/books/eaa.html"
 draft: false
 ---
 
 import { Poeaa24Pattern20ConcreteTableInheritance } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-20-concrete-table-inheritance-diagram";
 
+<Objectives>
+
+- 能解释为什么 `Engineer` 与 `Manager` 各自成表时必须重复公共字段，并指出这种重复换来了什么
+- 能修改一段 TypeScript 映射代码，让具体类型安全地写入各自表，并保留统一标识
+- 能回答：当系统需要跨类型列表或频繁修改公共字段时，为什么应重新评估具体表继承
+
+</Objectives>
 
 ## 为什么 12.9 具体表继承 值得单独学习
 
-为每个具体类建立包含全部继承字段的表，用字段重复换取单类读取简单。 12.9 具体表继承 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+先想象一张员工档案：工程师和经理都需要姓名、入职日期和编号，但它们的专属信息不同。如果每次只查一种员工，档案可以放在一张完整的清单里，读取路径短；代价是两种清单都要重复维护那些共同信息。
 
-本页以 2024 年中文版公开目录限定 **12.9 具体表继承** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+这一章解决的是“共同信息放在哪里、不同类型怎样各自保存”的问题。没有清楚的落表规则，新增一个公共字段时可能只改了一张清单，读取两种员工便会得到不同版本；需要把所有员工放在一起时，也可能不得不拼接多张清单。
 
-## 先建立直觉：问题、机制与代价
+本页依据 Martin Fowler 的作者图书页与模式目录独立重写，不复现原书正文、插图或代码。目录只限定本页讨论的模式边界，下面的员工案例、实验、代码与练习均为课程原创。
 
-12.9 具体表继承 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：为每个具体类建立包含全部继承字段的表，用字段重复换取单类读取简单。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+## 先建立直觉：一棵继承树怎样落成两张表
 
-对 12.9 具体表继承，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能证明跨类型查询与字段演化仍一致，并量化重复列和标识生成的代价”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 12.9 具体表继承。
+固定一个很小的例子：`Employee` 只规定 `id`、`name` 和 `hiredAt`；`Engineer` 追加 `skill`，`Manager` 追加 `budget`. 如果对象必须独立读取，数据库可以分别拥有 `engineers` 和 `managers` 两张完整表，而不再建立一张保存 `Employee` 公共部分的父表。
 
+这种安排把一次读取变成“直接打开目标表”：查工程师不需要连接父表，也不会先取出一行再判断哪一列属于哪种类型。它也把维护责任复制了两份：公共字段的定义、索引和迁移必须在两张表上保持一致。图示会把这两个收益与代价放在同一条证据链上。
 
-## 目录单元到教学证据
+## 具体表继承的核心模型
 
-### 12.9 具体表继承
+### 每张具体表都携带公共字段
 
-在 **12.9 具体表继承** 的学习边界里，12.9 具体表继承 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 12.9 具体表继承。
+<Term def="为继承层次中的每个可实例化类型单独建表，并把父类型字段复制到每张具体表中的关系映射方式">具体表继承</Term>的关键是“具体类型独立成行”。`engineers` 保存 `id`、`name`、`hired_at` 和 `skill`；`managers` 保存同样的前三列，再加上 `budget`。没有 `employees` 父表，也不靠一条外键把两张表拼成一个对象。
 
-## 专属设计案例：订单聚合持久化
+重复不是疏忽，而是这条取舍的价格。单类型详情页可以直接命中一张表；公共字段却有多个物理来源，表约束、索引和迁移脚本必须把它们当成同一份契约来维护。
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。12.9 具体表继承 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+### 读取简单，公共字段变化变贵
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-20-concrete-table-inheritance**；模式族为 **mapping**；裁决是“能证明跨类型查询与字段演化仍一致，并量化重复列和标识生成的代价”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 12.9 具体表继承 设定的边界”。
+把公共列复制到多个具体表会形成<Term def="同一业务字段在多个具体表中各存一份，需要同步维护的结构成本">字段冗余</Term>。它不一定意味着坏数据：在边界清晰、类型数量稳定时，重复列可以换来直白的查询与更少的连接。
 
-配置不是生产框架语法，而是一张评审卡。对 12.9 具体表继承 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+真正危险的是演化。若 `hired_at` 从日期改成带时区的时间戳，迁移必须覆盖两张表；若只改了 `engineers`，同一个 `Employee` 概念就出现两套存储语义。公共字段越多、子类型越多，迁移的检查清单越长。
 
-## 三步交互实验
+### 跨类型读取必须显式拼接
 
+把工程师和经理放到同一个列表，需要一次<Term def="面向父类型读取多种具体子类型，并把各表结果合成统一形状的查询">多态查询</Term>。典型做法是让两张表各自投影出相同的公共列，再用<Term def="把多条查询结果直接追加且不去重的 SQL 组合操作">UNION ALL</Term>追加结果，并加上 `kind` 区分来源。
 
-<Poeaa24Pattern20ConcreteTableInheritance />
+这一步不是免费的抽象：每增加一种具体类型，就要扩展查询、分页排序和权限过滤。若跨类型列表是最主要的用例，直接把每种类型拆表的收益可能抵不过这个组合成本。
+
+## 设计实验：先看证据，再选映射
+
+### 目录单元到教学证据
+
+本章只覆盖目录单元 **12.9 具体表继承**，单元键为 **poeaa24-pattern-20-concrete-table-inheritance**，模式族为 **mapping**。证据不是“某次 INSERT 成功”，而是同时检查公共字段的一致性、具体类型的直接读取、跨类型组合查询和下一次迁移的覆盖范围。
+
+### 订单后台的员工列表
+
+把员工后台拆成三个验收问题：详情页是否只访问一个具体表；新增员工时公共字段是否写入正确表；跨类型列表是否能标出来源并稳定排序。下面的步进图保留同一组 `Employee → Engineer / Manager` 数据，只改变当前要验收的边界。
+
+先预测：如果在 `engineers` 表新增 `hired_at` 的时区约束，但忘记修改 `managers`，哪一个证据最先暴露不一致？动手切换每一步，观察“少一次 JOIN”如何同时带来“多一份迁移”的责任。
+
+<Stepper>
+
+<Step title="步骤 1：具体类型各自拥有完整表">
+
+先把 `Employee` 的公共字段和两个专属字段写在同一张草图上。`engineers` 与 `managers` 各自包含 `id`、`name`、`hired_at`，所以单类详情可以直接读一张表；图中没有父表，也没有等待拼接的外键。
+
+<Poeaa24Pattern20ConcreteTableInheritance.Diagram step={1} />
+
+</Step>
+
+<Step title="步骤 2：保存时保持统一身份与字段契约">
+
+观察变化：保存 `Engineer` 时，映射器把公共字段和 `skill` 一起写进 `engineers`；保存 `Manager` 时走另一张表，但 `id` 的生成策略和公共字段校验必须相同。修改代码前先问：新字段是否已经在两张表都准备好？
+
+<Poeaa24Pattern20ConcreteTableInheritance.Diagram step={2} />
+
+</Step>
+
+<Step title="步骤 3：跨类型列表显露 UNION 与迁移边界">
+
+试一试：把后台改成“所有员工按入职时间倒序”。两张表需要投影为同一列集合，再用 `UNION ALL` 追加并排序；如果公共字段持续增长或跨类型查询成为主路径，图中的警示就是改用父表、单表或专门读模型的信号。
+
+<Poeaa24Pattern20ConcreteTableInheritance.Diagram step={3} />
+
+</Step>
+
+</Stepper>
+
+## 代码对照：让每个具体表的映射可检查
+
+下面的 TypeScript 只表达映射边界，不绑定某个 ORM。`toRow` 保证每个具体对象带上 `kind` 和统一 `id`；持久化层再根据 `kind` 选择表。公共字段集中在 `base`，让代码审查时能看见两种写入是否遗漏同一列。
+
+```ts
+type Base = { id: string; name: string; hiredAt: string };
+type Employee =
+  | (Base & { kind: "engineer"; skill: string })
+  | (Base & { kind: "manager"; budget: number });
+
+function toRow(employee: Employee) {
+  const base = {
+    id: employee.id,
+    name: employee.name,
+    hired_at: employee.hiredAt,
+  };
+  return employee.kind === "engineer"
+    ? { table: "engineers", row: { ...base, skill: employee.skill } }
+    : { table: "managers", row: { ...base, budget: employee.budget } };
+}
+```
+
+这段代码没有试图把两张表伪装成一张表：它明确写出表名和类型分支。生产实现还应在数据库层为两张表声明相同的 `id`、`name` 和 `hired_at` 约束，并为跨类型列表提供单独的查询函数，而不是让每个调用方手写 UNION。
+
+## 常见误区
+
+<Callout type="trap" title="只给一张具体表添加公共字段">
+
+- **现象**：工程师能按时区读取 `hired_at`，经理仍按旧格式读取，跨类型列表出现不同时间语义。
+- **原因**：把重复列当成无关副本，没有把两张表视为同一份公共字段契约。
+- **修法**：公共字段迁移必须成对执行，并为每张具体表各写一条读写回归断言。
+
+</Callout>
+
+<Callout type="trap" title="用一个隐式查询假装存在父表">
+
+- **现象**：详情页为了找一名工程师，先扫所有表再猜类型，查询路径比单表方案更复杂。
+- **原因**：对象层有父类型，就误以为数据库也必须自动提供一张父表，丢掉了具体表继承的直接读取优势。
+- **修法**：单类型用例明确路由到具体表；只有确有跨类型需求时，才集中维护 UNION 查询或读模型。
+
+</Callout>
+
+<Callout type="trap" title="跨类型 UNION 忘记统一列语义">
+
+- **现象**：工程师的 `skill` 被当成经理的 `budget`，或者分页排序在不同类型间跳动。
+- **原因**：各表只返回自己的字段，没有先定义统一投影、来源标记和排序键。
+- **修法**：先投影公共列、补 `kind` 与空的专属列，再 UNION ALL，最后在外层统一排序和分页。
+
+</Callout>
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 12.9 具体表继承 的证据      | 应拒绝或改用其他方案的信号                 |
-| -------- | -------------------------------- | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰  | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收            | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退 | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析         |
+| 评审问题 | 选择具体表继承的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 单类读取 | 详情请求大多只针对一种具体类型，且不需要父表 JOIN | 最主要的页面总是混合展示所有子类型 |
+| 字段变化 | 子类型数量稳定，公共字段迁移可以成对审查 | 公共字段频繁改动，迁移常漏掉某张表 |
+| 查询 | 跨类型查询少，可以集中维护 UNION ALL | 跨类型筛选、排序和分页已经是核心路径 |
+| 身份 | 各表使用同一标识生成与唯一性策略 | 不同表的 ID 规则不同，合并结果无法稳定去重 |
+| 替代 | 已比较单表继承、类表继承或专门读模型 | 只是因为 ORM 默认配置而跳过成本评估 |
 
+选择的标准不是“有没有继承关系”，而是单类型读取的收益是否大于重复迁移和跨类型查询的成本。评审卡至少记录具体表数量、公共字段数量、跨类型列表比例和一次迁移需要触及的表数；这些数字变化时，重新做一次选择。
 
 ## 本章小结
 
-掌握 12.9 具体表继承 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
+- 具体表继承让每种具体类型拥有一张包含公共字段的完整表。
+- 单类型读取少一次 JOIN，但公共字段、约束和迁移要重复维护。
+- 跨类型列表需要统一投影并显式 UNION ALL，不能依赖隐式父表。
+- 统一标识和公共字段契约是多张具体表仍可协作的前提。
+- 公共字段变化频繁或跨类型查询变成主路径时，应重新评估映射策略。
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** `Employee` 有 `id`、`name`、`hiredAt`，`Engineer` 有 `skill`，`Manager` 有 `budget`。若使用具体表继承，请列出 `engineers` 和 `managers` 各自必须拥有的字段，并说明为什么不能只把公共字段放在 `employees` 表。
+
+<Answer>
+
+两张表都要有 `id`、`name`、`hired_at`；`engineers` 还要有 `skill`，`managers` 还要有 `budget`。具体表继承的直接读取前提是每张具体表本身就是一条完整记录，因此只把公共字段放进 `employees` 会重新引入父表 JOIN 和外键拼接，已经变成另一种映射策略。
+
+</Answer>
+
+**问题 2：** 修改下面的函数：当 `kind` 为 `manager` 时写入 `managers`，同时保留公共字段；当类型不是这两种时直接失败。
+
+```ts
+function persist(employee: Employee) {
+  const base = { id: employee.id, name: employee.name };
+  if (employee.kind === "engineer") {
+    return db.insert("engineers", { ...base, skill: employee.skill });
+  }
+  return db.insert("employees", base);
+}
+```
+
+<Answer>
+
+让联合类型承担穷尽检查，并为经理分支选择具体表：
+
+```ts
+function persist(employee: Employee) {
+  const base = {
+    id: employee.id,
+    name: employee.name,
+    hired_at: employee.hiredAt,
+  };
+  switch (employee.kind) {
+    case "engineer":
+      return db.insert("engineers", { ...base, skill: employee.skill });
+    case "manager":
+      return db.insert("managers", { ...base, budget: employee.budget });
+    default: {
+      const impossible: never = employee;
+      throw new Error(`unsupported employee: ${impossible}`);
+    }
+  }
+}
+```
+
+这样每种具体类型都保留公共字段，新增类型时 TypeScript 会把未处理的分支暴露出来；代码中的 `db` 代表已注入的持久化端口。
+
+</Answer>
+
+**问题 3：** 后台要求按 `hired_at` 展示所有员工。你会怎样组织跨类型查询？当公共字段迁移频繁时，哪一个信号会让你拒绝继续使用具体表继承？
+
+<Answer>
+
+先让两张表投影出 `id`、`name`、`hired_at` 和固定的 `kind`，再用 `UNION ALL` 合并，最后在外层按 `hired_at`、`id` 排序并分页。若公共字段经常变化、每次迁移都要修改多张表且容易漏改，说明字段冗余的维护成本已超过单类读取的收益，应比较单表继承、类表继承或专门读模型。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="具体表继承">
+    每一种可以创建的具体类型单独拥有一张表，并把父类型字段复制进去。
+  </GlossaryItem>
+  <GlossaryItem term="字段冗余">
+    同一个业务字段在多张表中各保存一份，需要一起修改和校验的结构成本。
+  </GlossaryItem>
+  <GlossaryItem term="多态查询">
+    面向共同父类型，把多个具体类型的记录整理成一个结果集的查询。
+  </GlossaryItem>
+  <GlossaryItem term="UNION ALL">
+    把多条查询结果直接追加在一起且不主动去重的 SQL 操作；使用前要保证列的含义和顺序一致。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：12.8 类表继承](/learn/poeaa-enterprise-patterns/37-pattern-19-class-table-inheritance/poeaa24-pattern-19-class-table-inheritance)
 - [下一页：12.10 继承映射器](/learn/poeaa-enterprise-patterns/39-pattern-21-inheritance-mappers/poeaa24-pattern-21-inheritance-mappers)
 
-## 来源与改写范围
-
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
-
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》，王怀民、周斌译，机械工业出版社，2024年2月"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
