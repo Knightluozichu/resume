@@ -15574,7 +15574,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-16-embedded-value-diagram");
       return {
-        Poeaa24Pattern16EmbeddedValue: module0.Poeaa24Pattern16EmbeddedValue,
+        Poeaa24Pattern16EmbeddedValueDiagram:
+          module0.Poeaa24Pattern16EmbeddedValueDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob":

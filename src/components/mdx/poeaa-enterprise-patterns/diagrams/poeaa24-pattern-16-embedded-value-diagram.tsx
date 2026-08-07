@@ -42,7 +42,7 @@ const LABEL_TEXT: Record<string, string> = Object.fromEntries(
 
 const PHASE_IDS = ["object", "columns", "round-trip", "fault"] as const;
 
-export function Poeaa24Pattern16EmbeddedValue({
+export function Poeaa24Pattern16EmbeddedValueDiagram({
   focus = "object",
   interactive = true,
 }: {
@@ -531,3 +531,6 @@ export function Poeaa24Pattern16EmbeddedValue({
     </figure>
   );
 }
+
+export const Poeaa24Pattern16EmbeddedValue =
+  Poeaa24Pattern16EmbeddedValueDiagram;

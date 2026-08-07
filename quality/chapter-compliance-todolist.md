@@ -216,13 +216,13 @@
     - 路径：`content/poeaa-enterprise-patterns/26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work.mdx`
 - [x] ✅ **30-pattern-12-identity-field/poeaa24-pattern-12-identity-field** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/30-pattern-12-identity-field/poeaa24-pattern-12-identity-field.mdx`
-- [ ] 🔴 P1 **31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping** — 已修复（2026-08-07，score 52→97，passed）
     - 路径：`content/poeaa-enterprise-patterns/31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping.mdx`
-- [ ] 🔴 P1 **32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping** — 已修复（2026-08-07，score 52→97，passed）
     - 路径：`content/poeaa-enterprise-patterns/32-pattern-14-association-table-mapping/poeaa24-pattern-14-association-table-mapping.mdx`
-- [ ] 🔴 P1 **34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/34-pattern-16-embedded-value/poeaa24-pattern-16-embedded-value.mdx`
-- [ ] 🔴 P1 **35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/35-pattern-17-serialized-lob/poeaa24-pattern-17-serialized-lob.mdx`
 - [ ] 🔴 P1 **36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance.mdx`
