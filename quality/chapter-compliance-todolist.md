@@ -407,7 +407,7 @@
     - 路径：`content/pragmatic-programmer/26-topic-20-debugging/tpp20-topic-20-debugging.mdx`
 - [ ] 🔴 P1 **27-topic-21-text-manipulation/tpp20-topic-21-text-manipulation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/27-topic-21-text-manipulation/tpp20-topic-21-text-manipulation.mdx`
-- [ ] 🔴 P1 **28-topic-22-engineering-daybooks/tpp20-topic-22-engineering-daybooks** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **28-topic-22-engineering-daybooks/tpp20-topic-22-engineering-daybooks** — 已修复（2026-08-08，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/28-topic-22-engineering-daybooks/tpp20-topic-22-engineering-daybooks.mdx`
 - [ ] 🔴 P1 **29-chapter-04-pragmatic-paranoia/tpp20-chapter-04-pragmatic-paranoia** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/29-chapter-04-pragmatic-paranoia/tpp20-chapter-04-pragmatic-paranoia.mdx`
