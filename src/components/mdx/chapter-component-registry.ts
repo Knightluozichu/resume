@@ -15742,7 +15742,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-32-remote-facade-diagram");
       return {
-        Poeaa24Pattern32RemoteFacade: module0.Poeaa24Pattern32RemoteFacade,
+        Poeaa24Pattern32RemoteFacadeDiagram:
+          module0.Poeaa24Pattern32RemoteFacadeDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/54-pattern-33-data-transfer-object/poeaa24-pattern-33-data-transfer-object":
@@ -15750,8 +15751,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-33-data-transfer-object-diagram");
       return {
-        Poeaa24Pattern33DataTransferObject:
-          module0.Poeaa24Pattern33DataTransferObject,
+        Poeaa24Pattern33DataTransferObjectDiagram:
+          module0.Poeaa24Pattern33DataTransferObjectDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns":
@@ -15776,8 +15777,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-35-pessimistic-offline-lock-diagram");
       return {
-        Poeaa24Pattern35PessimisticOfflineLock:
-          module0.Poeaa24Pattern35PessimisticOfflineLock,
+        Poeaa24Pattern35PessimisticOfflineLockDiagram:
+          module0.Poeaa24Pattern35PessimisticOfflineLockDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/58-pattern-36-coarse-grained-lock/poeaa24-pattern-36-coarse-grained-lock":

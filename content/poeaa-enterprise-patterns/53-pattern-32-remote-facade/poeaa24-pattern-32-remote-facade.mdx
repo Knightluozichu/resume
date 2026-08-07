@@ -1,76 +1,236 @@
 ---
 title: "15.1 远程外观"
-type: "B"
+type: "C"
 section: "企业应用架构模式（2024年中文版）"
 order: 53
-description: "在细粒度对象之上提供粗粒度远程外观，减少网络往返并隔离内部对象模型。"
+description: "在细粒度对象之上提供粗粒度远程接口，减少网络往返并隔离内部对象模型。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
-sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-32-remote-facade
+sourceUrl: "https://martinfowler.com/eaaCatalog/remoteFacade.html"
 draft: false
 ---
 
-import { Poeaa24Pattern32RemoteFacade } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-32-remote-facade-diagram";
+import { Poeaa24Pattern32RemoteFacadeDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-32-remote-facade-diagram";
 
+<Objectives>
 
-## 为什么 15.1 远程外观 值得单独学习
+- 能解释远程外观如何把多次细粒度网络请求收束为一次用例级调用，并指出领域规则仍由谁拥有
+- 能修改一个 TypeScript 远程外观，使内部服务调用被批量协调、返回数据传输对象，并保留超时与幂等边界
+- 能回答：面对延迟、重复提交和部分失败时，哪些运行证据支持采用远程外观，什么时候应该拒绝它
 
-在细粒度对象之上提供粗粒度远程外观，减少网络往返并隔离内部对象模型。 15.1 远程外观 的核心不是套用某个框架 API，而是回答：如何承认网络延迟与部分失败，用粗粒度契约减少往返并避免泄漏内部对象模型。在 订单与结算跨进程调用 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **15.1 远程外观** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么远程外观值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单详情页看起来只是一个页面，但它可能同时需要订单、库存、付款和配送信息。如果客户端逐个请求这些信息，页面会被每一次等待牵着走；其中一次超时，还会让调用方猜测哪些结果已经生效。
 
-15.1 远程外观 面对的具体压力是“网络往返、载荷大小、超时比例、幂等键与兼容版本”。它采用的机制可以概括为：在细粒度对象之上提供粗粒度远程外观，减少网络往返并隔离内部对象模型。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+本章解决的是“跨网络的一次业务意图应该如何表达”的问题。没有一个稳定的入口，客户端会把服务端内部对象和查询顺序暴露出去；有了它，客户端只描述用例，服务端负责在边界内协调细节。
 
-对 15.1 远程外观，优先比较的替代路线是：能保持本地调用时不分布；必须跨进程时组合远程外观与数据传输对象。本页的通过条件是“能把多次远程调用合并为用例级操作，测量往返下降，并保持远程外观不承载领域规则”；若实验只能显示结果而不能指出 契约粒度 从何处越界，就不能据此选择 15.1 远程外观。
+代价也很具体：多了一层接口、编排和版本责任。只有当一次调用确实代表一个稳定用例，并且能用测量证明减少等待与耦合时，增加这层边界才值得。
 
+## 先建立直觉：把很多次等待收束成一次意图
+
+把客户端想成取货窗口：它只需要说“我要完成订单 42 的结算”，不需要知道店员先找订单、再查库存、再询问支付。<Term def="位于远程边界上的粗粒度接口；客户端用一次用例调用它，由它在服务端协调多个细粒度对象。">远程外观</Term>就是这扇窗口。
+
+窗口不应该替店员制定业务规则。它需要一个稳定的 <Term def="一次调用表达完整业务意图、而不是把一个小对象的属性拆成多次网络请求的接口约定。">粗粒度契约</Term>，可以按用例顺序调用内部服务、组装结果并统一返回；但库存是否足够、付款是否允许等决定，仍应由相应的应用服务或领域对象拥有。
+
+判断收益时要记录三个可观察量：<Term def="一次请求从客户端发出到收到对应响应所经历的网络来回；网络调用次数增加通常会放大它。">往返</Term>次数、载荷大小和失败位置。如果把十次远程 getter 换成一个大接口，却没有测量响应时间和错误定位，不能称为完成了优化。
 
 ## 目录单元到教学证据
 
 ### 15.1 远程外观
 
-在 **15.1 远程外观** 的学习边界里，15.1 远程外观 不是待背诵的目录词，而是用来检查“客户端意图”是否把责任交给正确对象。对 订单与结算跨进程调用，学习者要记录 契约粒度 的可观察变化，并说明它何时支持或否定 15.1 远程外观。
+本章精确对应 manifest 单元 `poeaa24-pattern-32-remote-facade`，范围限定为：在细粒度对象之上提供粗粒度远程接口，隔离内部对象模型并减少网络往返。案例固定为订单与结算跨进程调用，所有判断都回到“客户端意图、接口契约、内部协调、失败传播”四个证据点。
 
-## 专属设计案例：订单与结算跨进程调用
+完成本单元的证据不是记住模式名称，而是能交出一段可测试的 TypeScript 接口、一张标出网络边界的图，以及一次正常/超时/重复提交的对照记录。若客户端仍然需要知道 `PaymentService` 的调用顺序，远程外观的边界就没有成立。
 
-把 订单与结算跨进程调用 切成“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”五个观察点。15.1 远程外观 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 契约粒度、往返、序列化、版本、部分失败 中哪个指标最先提示当前方案不再适用。
+## 代码实践：把客户端意图写成一次调用
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-32-remote-facade**；模式族为 **distribution**；裁决是“能把多次远程调用合并为用例级操作，测量往返下降，并保持远程外观不承载领域规则”；观测项包括 契约粒度、往返、序列化、版本、部分失败；拒绝条件是“契约粒度 超过团队为 15.1 远程外观 设定的边界”。
+案例是订单详情与结算。客户端只调用 `getOrderDetails` 或 `placeOrder`；远程外观在服务端内部协调订单、库存和支付服务，并返回稳定的 <Term def="只包含跨边界所需字段、可以序列化和版本化的数据载体；它不把服务端对象行为带到客户端。">数据传输对象</Term>。
 
-配置不是生产框架语法，而是一张评审卡。对 15.1 远程外观 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type OrderDetails = { id: string; totalCents: number; paid: boolean };
+type PlaceOrder = { orderId: string; idempotencyKey: string };
+type PaymentResult = { paid: boolean; reference?: string };
 
-## 三步交互实验
+interface OrderFacade {
+  getOrderDetails(orderId: string): Promise<OrderDetails>;
+  placeOrder(input: PlaceOrder): Promise<PaymentResult>;
+}
 
+class RemoteOrderFacade implements OrderFacade {
+  constructor(
+    private readonly orders: OrderService,
+    private readonly payments: PaymentService,
+  ) {}
 
-<Poeaa24Pattern32RemoteFacade />
+  async getOrderDetails(orderId: string): Promise<OrderDetails> {
+    const [order, payment] = await Promise.all([
+      this.orders.readSummary(orderId),
+      this.payments.readStatus(orderId),
+    ]);
+    return { id: order.id, totalCents: order.totalCents, paid: payment.paid };
+  }
 
-## 选择与拒绝矩阵
+  async placeOrder(input: PlaceOrder): Promise<PaymentResult> {
+    return this.payments.capture(input.orderId, input.idempotencyKey);
+  }
+}
+```
 
-| 评审问题 | 选择 15.1 远程外观 的证据             | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------------- | ---------------------------------------------- |
-| 责任     | 客户端意图 到 服务端用例 的所有者清晰 | 远程外观 可以绕过边界直接改写状态              |
-| 变化     | 契约粒度 的变化被局部吸收             | 一次小改动同时触及 往返、序列化、版本          |
-| 失败     | 故障能在 服务端用例 前被识别并回退    | 只能看到最终错误，无法定位 契约粒度 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径        | 因框架内置或团队习惯而跳过问题分析             |
+这个边界有三点可测试。第一，客户端只看到用例级方法，不需要知道内部服务的数量和顺序；第二，返回值是稳定的数据传输对象，不是能被远程调用的领域对象；第三，写操作携带幂等键，重试同一个请求时由支付服务判断是否已经处理过。
 
+远程外观可以减少客户端发出的网络调用，但它不能消除服务端内部的时间和失败。应记录一次请求包含哪些内部阶段、每个阶段的超时和最终状态；不要把“客户端只发一次”误报成“系统只做一次工作”。
+
+## 专属可视化实验：观察边界、协调和失败
+
+猜一猜：把客户端从三次远程调用改成一次 `getOrderDetails` 后，哪一类责任会移动到远程外观，哪一类责任仍不能移动？先写下你的预测，再用图切换阶段。
+
+<Poeaa24Pattern32RemoteFacadeDiagram />
+
+主图默认展示一次用例调用。可以逐步查看客户端请求、远程外观协调内部服务和返回 DTO 三个阶段；“注入部分失败”会让支付阶段超时，帮助你检查失败是否仍然能定位到内部阶段。点击“重置”后，阶段、故障状态和说明都回到初始值。
+
+<Stepper>
+
+<Step title="1. 客户端只表达用例">
+  客户端把“读取订单详情”作为一次远程请求发给远程外观，不再逐个访问订单、库存和支付对象。
+
+  <Poeaa24Pattern32RemoteFacadeDiagram step={1} interactive={false} />
+</Step>
+
+<Step title="2. 远程外观协调内部服务">
+  远程外观在网络边界之后并行或按依赖顺序调用内部服务；它组织调用，但不接管库存和支付的领域决定。
+
+  <Poeaa24Pattern32RemoteFacadeDiagram step={2} interactive={false} />
+</Step>
+
+<Step title="3. 返回 DTO 或显式失败">
+  成功时返回只含必要字段的数据传输对象；注入支付超时后，结果必须带出部分失败位置，不能伪装成完整成功。
+
+  <Poeaa24Pattern32RemoteFacadeDiagram step={3} interactive={false} />
+</Step>
+
+</Stepper>
+
+## 失败、重试与版本边界
+
+写操作不能只依赖网络层重试。<Term def="让同一个业务请求被处理一次或多次时，都不会产生额外非预期副作用的请求标识。">幂等键</Term>应由客户端为一次业务意图生成，并由拥有副作用的服务保存处理结果；远程外观负责透传并保持这个契约，而不是在自己这一层猜测付款是否成功。
+
+<Term def="一次跨服务用例中，部分步骤已返回结果、另一些步骤失败或超时的状态；它需要明确的回退、补偿或查询策略。">部分失败</Term>是分布式调用的常态。订单读取可以返回库存信息但缺少付款状态，结算也可能已经扣款却没有及时收到确认。接口需要区分“未执行”“执行中”“已成功但响应丢失”和“明确失败”，否则重试会制造重复副作用。
+
+远程外观的版本只承诺稳定的用例契约。新增可选字段通常比暴露一个新的内部服务方法安全；把数据库实体原样序列化、让客户端依赖内部类名或把所有内部字段塞进一个“万能响应”，都会让内部重构变成跨网络破坏性变更。
+
+| 评审问题 | 采用远程外观的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 粒度 | 一次调用对应一个稳定用例，内部细节可独立变化 | 方法只是把每个 getter 原样搬到网络上 |
+| 性能 | 基线与改造后都记录往返、载荷和 P95 延迟 | 只凭“请求次数变少”宣称一定更快 |
+| 失败 | 有超时、重复响应和部分失败的状态契约 | 只能返回一个模糊的 500，无法定位阶段 |
+| 边界 | 返回 DTO，领域规则仍由服务端拥有 | 客户端直接修改或缓存内部领域对象 |
+
+## 常见误区
+
+<Callout type="trap" title="把细粒度对象接口原样搬到网络上">
+
+- **现象**：客户端为了显示一个页面，依次调用十几个 getter，并且必须知道它们的顺序。
+- **原因**：只把本地对象换成远程代理，没有按用例重新设计接口粒度。
+- **修法**：以客户端意图为单位定义粗粒度方法，测量改造前后的往返和失败定位。
+
+</Callout>
+
+<Callout type="trap" title="远程外观接管领域规则">
+
+- **现象**：外观为了决定库存和付款，自己读取数据库并复制一套折扣或授权判断。
+- **原因**：把“协调调用”误解成“拥有所有业务决定”，服务边界被一层门面吞掉。
+- **修法**：外观只编排并转换结果；把不变量和业务决定留在对应应用服务或领域对象中。
+
+</Callout>
+
+<Callout type="trap" title="把超时当成失败后就盲目重试">
+
+- **现象**：付款请求超时后再次提交，订单被扣款两次，或客户端无法判断第一次是否已经成功。
+- **原因**：没有区分响应丢失与操作未执行，也没有把幂等键交给真正拥有副作用的服务。
+- **修法**：用幂等键、查询状态和明确的部分失败结果闭合重试路径，禁止由外观猜测副作用。
+
+</Callout>
 
 ## 本章小结
 
-掌握 15.1 远程外观 的标志不是记住定义，而是能在 订单与结算跨进程调用 中解释“客户端意图 → 远程外观 → DTO → 网络 → 服务端用例”的责任链，利用 契约粒度、往返、序列化、版本、部分失败 作出可证伪的选择，并在出现“把本地细粒度对象接口原样暴露到网络”时明确拒绝当前实现。
+- 远程外观把一次客户端意图表达为粗粒度远程调用。
+- 外观协调内部服务，但不拥有库存、付款等领域规则。
+- DTO 隔离内部对象；幂等键约束写操作重试。
+- 用往返、载荷、延迟和失败位置验证是否真的获得收益。
 
+## 练习与答案
+
+<Exercises>
+
+**问题 1：修改 Demo 代码。** 把示例中的 `getOrderDetails` 改成只暴露一次远程调用的批量查询，并为 `placeOrder` 增加“重复幂等键返回同一结果”的测试。你会把哪条规则放在远程外观，哪条规则放在支付服务？
+
+<Answer>
+
+`getOrderDetails` 应继续由外观作为一个用例级方法暴露，内部可以并行读取订单和支付状态，但返回值只保留稳定字段。幂等键的持久化和“已处理键返回原结果”必须放在支付服务，因为它拥有扣款副作用；外观只透传键并把超时、处理中和已完成状态交给客户端。测试至少覆盖同一键两次调用只产生一次扣款，并断言两次响应一致。
+
+</Answer>
+
+**问题 2：验证收益。** 改造前客户端发出 3 次远程请求，改造后发出 1 次，但 P95 延迟从 180 ms 变成 240 ms。你会如何判断这次改造是否仍然成立？
+
+<Answer>
+
+先按相同数据量、并发、超时和版本记录内部阶段耗时、响应载荷与错误率。一次外部往返下降不等于总延迟下降；如果并行协调、载荷过大或服务端串行化造成 P95 上升，应缩小 DTO、并行无依赖阶段或拆分用例。只有在用户目标、失败定位或整体成本有明确收益，并且契约边界仍稳定时才保留；不能只看请求数。
+
+</Answer>
+
+**问题 3：选择或拒绝。** 一个客户端只需要读取一个很小的本地值，但团队想先建立远程外观以“保持架构统一”。你会要求什么证据后再决定？
+
+<Answer>
+
+先确认调用是否真的跨进程、是否存在共享用例、是否有多个内部对象需要隔离，以及网络延迟、版本和部分失败是否已经是现实问题。如果调用是本地的、只有一个稳定值且没有远程边界，远程外观只会增加间接层，应拒绝并保持直接调用；只有多个客户端共享稳定用例契约，且基线测量显示粗粒度边界能降低耦合或往返，才值得采用。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="远程外观">
+    放在网络边界上的粗粒度入口；客户端调用一次用例，入口在服务端协调内部细节。
+  </GlossaryItem>
+  <GlossaryItem term="粗粒度契约">
+    一次调用携带一个完整业务意图，而不是把一个小对象的每个属性拆成多次网络请求。
+  </GlossaryItem>
+  <GlossaryItem term="往返">
+    请求从客户端到服务端再回到客户端的来回次数；网络越远、次数越多，等待通常越明显。
+  </GlossaryItem>
+  <GlossaryItem term="数据传输对象">
+    只装跨边界所需字段、可以序列化和版本化的数据载体，不把服务端对象行为暴露给客户端。
+  </GlossaryItem>
+  <GlossaryItem term="幂等键">
+    标记一次业务意图的请求标识；同一个键重试时，拥有副作用的服务应返回同一处理结果而不重复执行。
+  </GlossaryItem>
+  <GlossaryItem term="部分失败">
+    一次跨服务操作只有部分步骤完成或响应丢失的状态，需要查询、补偿或继续处理的明确规则。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：第15章 分布模式](/learn/poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns)
 - [下一页：15.2 数据传输对象](/learn/poeaa-enterprise-patterns/54-pattern-33-data-transfer-object/poeaa24-pattern-33-data-transfer-object)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Remote Facade 模式摘要](https://martinfowler.com/eaaCatalog/remoteFacade.html)：核对模式的公开定义与远程边界。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对图书主题、章节范围和模式目录关系。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对出版信息与目录范围。
 
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Patterns of Enterprise Application Architecture"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/remoteFacade.html"
+/>
