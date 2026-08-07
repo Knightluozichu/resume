@@ -16733,6 +16733,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic43StaySafeLab: module0.Tpp20Topic43StaySafeLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/54-topic-44-naming-things/tpp20-topic-44-naming-things":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-44-naming-things-diagram");
+      return {
+        Tpp20Topic44NamingThingsEvidenceDiagram:
+          module0.Tpp20Topic44NamingThingsEvidenceDiagram,
+        Tpp20Topic44NamingThingsLoopDiagram:
+          module0.Tpp20Topic44NamingThingsLoopDiagram,
+        Tpp20Topic44NamingThingsLab: module0.Tpp20Topic44NamingThingsLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

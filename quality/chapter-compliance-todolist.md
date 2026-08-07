@@ -459,7 +459,7 @@
     - 路径：`content/pragmatic-programmer/52-topic-42-property-based-testing/tpp20-topic-42-property-based-testing.mdx`
 - [x] ✅ **53-topic-43-stay-safe/tpp20-topic-43-stay-safe** — 已修复（2026-08-08，score 42→92，passed）
     - 路径：`content/pragmatic-programmer/53-topic-43-stay-safe/tpp20-topic-43-stay-safe.mdx`
-- [ ] 🔴 P1 **54-topic-44-naming-things/tpp20-topic-44-naming-things** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **54-topic-44-naming-things/tpp20-topic-44-naming-things** — 已修复（2026-08-08，score 42→93，passed）
     - 路径：`content/pragmatic-programmer/54-topic-44-naming-things/tpp20-topic-44-naming-things.mdx`
 - [ ] 🔴 P1 **57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles.mdx`
