@@ -15671,8 +15671,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-25-model-view-controller-diagram");
       return {
-        Poeaa24Pattern25ModelViewController:
-          module0.Poeaa24Pattern25ModelViewController,
+        Poeaa24Pattern25ModelViewControllerDiagram:
+          module0.Poeaa24Pattern25ModelViewControllerDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/46-pattern-26-page-controller/poeaa24-pattern-26-page-controller":

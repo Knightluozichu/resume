@@ -7,61 +7,197 @@ description: "把界面交互拆成模型、视图和控制器三种职责，使
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-25-model-view-controller
 draft: false
 ---
 
-import { Poeaa24Pattern25ModelViewController } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-25-model-view-controller-diagram";
+import { Poeaa24Pattern25ModelViewControllerDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-25-model-view-controller-diagram";
 
+<Objectives>
+
+- 能解释模型、视图和控制器如何分离输入处理、业务状态与呈现，并画出请求到响应的责任链
+- 能编写 TypeScript MVC 控制器，注入模型服务和视图，覆盖成功与错误响应
+- 能根据交互复杂度、状态归属、视图变体和测试隔离，判断何时采用或拒绝 MVC
+
+</Objectives>
 
 ## 为什么 14.1 模型-视图-控制器 值得单独学习
 
-把界面交互拆成模型、视图和控制器三种职责，使输入处理、领域状态和呈现可以独立变化。 14.1 模型-视图-控制器 的核心不是套用某个框架 API，而是回答：如何分开请求解释、页面导航、领域调用与输出渲染，使变化不会横跨所有页面。在 订单后台多视图 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+把界面交互拆成模型、视图和控制器三种职责，使输入处理、领域状态和呈现可以独立变化。14.1 模型-视图-控制器的核心不是套用某个框架 API，而是回答：如何分开请求解释、领域调用与输出渲染，使变化不会横跨所有页面。在订单后台多视图中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
 
-本页以 2024 年中文版公开目录限定 **14.1 模型-视图-控制器** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+<Term def="把输入控制、应用或领域状态、输出呈现分成可独立变化职责的交互结构。">
+  模型-视图-控制器
+</Term>
+的价值不是强迫每个页面拥有三层文件，而是让输入边界和领域状态的所有权可测试。本页以
+2024 年中文版公开目录限定 **14.1 模型-视图-控制器** 的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-14.1 模型-视图-控制器 面对的具体压力是“路由数量、重复控制逻辑、视图变体与导航状态”。它采用的机制可以概括为：把界面交互拆成模型、视图和控制器三种职责，使输入处理、领域状态和呈现可以独立变化。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+14.1 模型-视图-控制器面对的具体压力是“路由数量、重复控制逻辑、视图变体、导航状态与输入错误”。它采用的机制可以概括为：控制器解释请求并调用模型，视图只把模型状态转换为输出。机制带来的收益必须与新增间接层、状态同步和模板复杂度同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
 
-对 14.1 模型-视图-控制器，优先比较的替代路线是：分别比较页面控制、前端控制、模板、转换、两步视图和应用控制器。本页的通过条件是“能替换一种视图而不改模型，注入控制器测试请求，并证明三者依赖方向清楚”；若实验只能显示结果而不能指出 路由 从何处越界，就不能据此选择 14.1 模型-视图-控制器。
-
+对 14.1 模型-视图-控制器，优先比较的替代路线是：页面控制器、前端控制器、模板视图、转换器或两步视图。只有在请求处理、业务状态和呈现确实有不同变化轴时，才值得引入 MVC；<Term def="接收请求、校验输入、选择应用动作并决定响应的边界对象。">控制器边界</Term>若直接执行业务规则或拼接持久化查询，就不能据此选择 14.1 模型-视图-控制器。
 
 ## 目录单元到教学证据
 
 ### 14.1 模型-视图-控制器
 
-在 **14.1 模型-视图-控制器** 的学习边界里，14.1 模型-视图-控制器 不是待背诵的目录词，而是用来检查“HTTP请求”是否把责任交给正确对象。对 订单后台多视图，学习者要记录 路由 的可观察变化，并说明它何时支持或否定 14.1 模型-视图-控制器。
+在 **14.1 模型-视图-控制器** 的学习边界里，14.1 模型-视图-控制器不是待背诵的目录词，而是用来检查 HTTP 请求是否把责任交给正确对象。对订单后台多视图，学习者要记录路由、输入校验和视图替换的可观察变化，并说明它何时支持或否定 14.1 模型-视图-控制器。
 
 ## 专属设计案例：订单后台多视图
 
-把 订单后台多视图 切成“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”五个观察点。14.1 模型-视图-控制器 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 路由、输入校验、导航、模板转义、视图复用 中哪个指标最先提示当前方案不再适用。
+把订单后台多视图切成“HTTP 请求 → 控制器 → 应用模型 → 视图 → HTTP 响应”五个观察点。14.1 模型-视图-控制器的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及路由、输入校验、导航、模板转义、视图复用中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-25-model-view-controller**；模式族为 **web**；裁决是“能替换一种视图而不改模型，注入控制器测试请求，并证明三者依赖方向清楚”；观测项包括 路由、输入校验、导航、模板转义、视图复用；拒绝条件是“路由 超过团队为 14.1 模型-视图-控制器 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-25-model-view-controller**；模式族为 **web**；裁决是“能替换一种视图而不改模型，注入控制器测试请求，并证明三者依赖方向清楚”；观测项包括路由、输入校验、导航、模板转义、视图复用；拒绝条件是“视图或控制器开始拥有不可测试的业务状态”。
 
-配置不是生产框架语法，而是一张评审卡。对 14.1 模型-视图-控制器 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+配置不是生产框架语法，而是一张评审卡。对 14.1 模型-视图-控制器的任何实现都要能把运行证据重新映射到这张卡；如果更换 Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
 
-## 三步交互实验
+# 结构解剖
 
-
-<Poeaa24Pattern25ModelViewController />
+<Poeaa24Pattern25ModelViewControllerDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 14.1 模型-视图-控制器 的证据 | 应拒绝或改用其他方案的信号                  |
-| -------- | --------------------------------- | ------------------------------------------- |
-| 责任     | HTTP请求 到 HTTP响应 的所有者清晰 | 控制器 可以绕过边界直接改写状态             |
-| 变化     | 路由 的变化被局部吸收             | 一次小改动同时触及 输入校验、导航、模板转义 |
-| 失败     | 故障能在 HTTP响应 前被识别并回退  | 只能看到最终错误，无法定位 路由 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析          |
+| 评审问题 | 选择 14.1 模型-视图-控制器 的证据          | 应拒绝或改用其他方案的信号       |
+| -------- | ------------------------------------------ | -------------------------------- |
+| 责任     | 控制器解释输入，模型拥有状态，视图负责输出 | 模板直接访问数据库并修改订单状态 |
+| 变化     | 可替换 HTML、JSON 或移动视图而不改业务模型 | 视图变化迫使模型加入格式分支     |
+| 失败     | 输入错误、业务错误和渲染错误可分别观测     | 所有异常都在控制器中返回空页面   |
+| 替代     | 已与前端控制器、页面控制器和两步视图比较   | 仅因框架默认目录就机械拆成三层   |
 
+## 代码实践：注入模型与视图的订单控制器
+
+控制器只负责解析请求、调用模型服务并选择视图；模型服务不应知道 HTML，视图也不应重新决定业务状态。<Term def="模型持有的、由业务规则决定且不依赖某种输出格式的当前业务状态。">模型状态</Term>必须在控制器和视图之间以稳定数据传递。
+
+```ts
+type Request = {
+  method: "GET" | "POST";
+  path: string;
+  body: { status?: "paid" | "open" };
+};
+
+type OrderModel = {
+  id: string;
+  status: "paid" | "open";
+};
+
+interface OrderService {
+  load(id: string): OrderModel | undefined;
+  changeStatus(id: string, status: "paid" | "open"): OrderModel;
+}
+
+interface OrderView {
+  render(model: OrderModel): string;
+  renderNotFound(): string;
+}
+
+class HtmlOrderView implements OrderView {
+  render(model: OrderModel): string {
+    return `<main data-order-id="${model.id}">${model.status}</main>`;
+  }
+
+  renderNotFound(): string {
+    return "<main>not found</main>";
+  }
+}
+
+class OrderController {
+  constructor(
+    private readonly service: OrderService,
+    private readonly view: OrderView,
+  ) {}
+
+  handle(request: Request): string {
+    const id = request.path.split("/").at(-1);
+    if (!id) return this.view.renderNotFound();
+
+    const model =
+      request.method === "POST" && request.body.status
+        ? this.service.changeStatus(id, request.body.status)
+        : this.service.load(id);
+    return model ? this.view.render(model) : this.view.renderNotFound();
+  }
+}
+```
+
+这段代码可以把 `HtmlOrderView` 替换成 JSON 视图，而不改变控制器的模型调用。真实项目还应对输出做模板转义、对请求做集中校验，并让服务层处理权限、事务和业务规则；控制器测试只需注入假的 `OrderService` 与 `OrderView`。
+
+## 常见误区
+
+<Callout type="trap" title="控制器吞掉所有业务规则">
+
+- **现象**：控制器计算折扣、改变库存并拼接多个数据库查询。
+- **原因**：把“接收请求”误解成“拥有整个用例”，模型服务没有清晰责任。
+- **修法**：控制器只做输入协调和响应选择，把业务决策交给模型或应用服务，并用注入测试验证边界。
+
+</Callout>
+
+<Callout type="trap" title="视图反向修改模型">
+
+- **现象**：模板为了显示状态直接调用保存方法或修改订单字段。
+- **原因**：视图没有被限制为输出转换，模型状态所有权泄漏到呈现层。
+- **修法**：视图只读取经过准备的数据；所有状态变更通过控制器和模型服务的明确动作完成。
+
+</Callout>
+
+<Callout type="trap" title="三层拆分掩盖错误边界">
+
+- **现象**：项目有 Model、View、Controller 三个目录，却无法区分输入错误、业务错误和渲染错误。
+- **原因**：按文件名拆分而没有定义请求、状态和响应契约。
+- **修法**：先画请求到响应的责任链，再定义错误分类、状态所有权和测试替换点。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+**问题 1：替换视图。** 订单后台要同时提供 HTML 和 JSON 输出，应该修改模型吗？
+
+<Answer>
+
+不应为了格式增加业务分支。让控制器或响应协作者选择不同视图实现，两个视图消费同一模型状态；只有输出所需数据不同，才在应用边界准备明确的展示模型。
+
+</Answer>
+
+**问题 2：检查责任。** `OrderController` 直接执行 SQL 查询后把数据库行传给模板，违反了哪些边界？
+
+<Answer>
+
+它同时绕过了模型服务和映射边界，让控制器拥有持久化细节，视图又依赖数据库形状。应由模型或应用服务返回稳定状态，再由视图渲染；这样才能独立替换数据库和输出格式。
+
+</Answer>
+
+**问题 3：选择替代方案。** 单页应用已经由前端路由和状态容器管理所有交互，服务器只提供资源接口，还要强行使用服务器端 MVC 吗？
+
+<Answer>
+
+不必强行使用。服务器可以采用资源接口与应用服务，前端内部再按需要组织自己的模型、视图和控制器；应根据实际变化轴和测试收益选择边界，而不是重复两套无意义的分层。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="模型-视图-控制器">
+    把输入控制、应用或领域状态、输出呈现分成可独立变化职责的交互结构。
+  </GlossaryItem>
+  <GlossaryItem term="控制器边界">
+    接收请求、校验输入、选择应用动作并决定响应的边界对象。
+  </GlossaryItem>
+  <GlossaryItem term="模型状态">
+    由业务规则决定且不依赖某种输出格式的当前业务状态。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 14.1 模型-视图-控制器 的标志不是记住定义，而是能在 订单后台多视图 中解释“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”的责任链，利用 路由、输入校验、导航、模板转义、视图复用 作出可证伪的选择，并在出现“在模板里直接执行业务规则和数据库访问”时明确拒绝当前实现。
-
+掌握 14.1 模型-视图-控制器的标志不是记住定义，而是能在订单后台多视图中解释“HTTP 请求 → 控制器 → 应用模型 → 视图 → HTTP 响应”的责任链，利用路由、输入校验、导航、模板转义、视图复用作出可证伪的选择，并在模板直接执行业务规则或数据库访问时明确拒绝。
 
 ## 前后导航
 
@@ -74,3 +210,10 @@ import { Poeaa24Pattern25ModelViewController } from "@/components/mdx/poeaa-ente
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

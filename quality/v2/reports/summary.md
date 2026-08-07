@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T11:45:57.643Z；旧版分数不迁移。
+> 2026-08-07T11:50:34.010Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2501
+- failed：2500
 - queued：401
-- passed：970
+- passed：971
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -27,11 +27,11 @@
 | 14 | out-of-control | 28 | 28 | 0 | 0 | 84 |
 | 15 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 16 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
-| 17 | poeaa-enterprise-patterns | 78 | 27 | 0 | 51 | 81 |
-| 18 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
-| 19 | fluent-python | 26 | 26 | 0 | 0 | 78 |
-| 20 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
-| 21 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 17 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 18 | fluent-python | 26 | 26 | 0 | 0 | 78 |
+| 19 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
+| 20 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 21 | poeaa-enterprise-patterns | 78 | 26 | 0 | 52 | 78 |
 | 22 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
 | 23 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
 | 24 | programmers-math | 25 | 25 | 0 | 0 | 75 |
