@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T22:46:33.801Z；旧版分数不迁移。
+> 2026-08-07T22:52:52.488Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2424
+- failed：2423
 - queued：401
-- passed：1047
+- passed：1048
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -51,10 +51,10 @@
 | 38 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
 | 39 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
 | 40 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
-| 41 | pragmatic-programmer | 71 | 21 | 0 | 50 | 63 |
-| 42 | shader-practice | 21 | 21 | 0 | 0 | 63 |
-| 43 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
-| 44 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 41 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 42 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
+| 43 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 44 | pragmatic-programmer | 71 | 20 | 0 | 51 | 60 |
 | 45 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
 | 46 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
 | 47 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |

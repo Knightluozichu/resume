@@ -16659,6 +16659,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic37LizardBrainLab: module0.Tpp20Topic37LizardBrainLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-38-programming-by-coincidence-diagram");
+      return {
+        Tpp20Topic38ProgrammingByCoincidenceEvidenceDiagram:
+          module0.Tpp20Topic38ProgrammingByCoincidenceEvidenceDiagram,
+        Tpp20Topic38ProgrammingByCoincidenceLoopDiagram:
+          module0.Tpp20Topic38ProgrammingByCoincidenceLoopDiagram,
+        Tpp20Topic38ProgrammingByCoincidenceLab:
+          module0.Tpp20Topic38ProgrammingByCoincidenceLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

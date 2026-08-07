@@ -447,7 +447,7 @@
     - 路径：`content/pragmatic-programmer/46-chapter-07-while-coding/tpp20-chapter-07-while-coding.mdx`
 - [x] ✅ **47-topic-37-lizard-brain/tpp20-topic-37-lizard-brain** — 已修复（2026-08-08，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/47-topic-37-lizard-brain/tpp20-topic-37-lizard-brain.mdx`
-- [ ] 🔴 P1 **48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence** — 已修复（2026-08-08，score 42→95，passed）
     - 路径：`content/pragmatic-programmer/48-topic-38-programming-by-coincidence/tpp20-topic-38-programming-by-coincidence.mdx`
 - [ ] 🔴 P1 **49-topic-39-algorithm-speed/tpp20-topic-39-algorithm-speed** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/49-topic-39-algorithm-speed/tpp20-topic-39-algorithm-speed.mdx`
