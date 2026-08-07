@@ -54,7 +54,7 @@ export function Poeaa24Ch01LayerStackDiagram() {
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label="企业应用三层架构图。从上到下依次为表示层、领域层、数据源层。请求从用户进入表示层，经领域层处理业务规则，最终到达数据源层与数据库交互。依赖方向规则：上层依赖下层，禁止反向依赖。每层标注了职责和对应的 POEAA 模式。"
+          aria-label="引言的企业应用三层架构图，覆盖 0.1 架构、0.2 企业应用、0.3 企业应用的种类、0.4 关于性能的考虑与 0.5 模式。从上到下依次为表示层、领域层、数据源层。请求从用户进入表示层，经领域层处理业务规则，最终到达数据源层与数据库交互。依赖方向规则：上层依赖下层，禁止反向依赖。图示覆盖架构、企业应用、应用种类、性能预算与模式选择的共同语境，每层标注了职责和对应的 POEAA 模式。"
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
           <DiagramTitle x={VIEW_W / 2} y={40} text="企业应用三层架构" />
@@ -86,7 +86,8 @@ export function Poeaa24Ch01LayerStackDiagram() {
                 >
                   {layer.label}
                   <tspan fontSize="11" fill={T.secondary} fontWeight="400">
-                    {" "}({layer.en})
+                    {" "}
+                    ({layer.en})
                   </tspan>
                 </text>
                 {/* 职责 */}
@@ -215,13 +216,28 @@ export function Poeaa24Ch01LayerStackDiagram() {
           <text x={520} y={LAYER_Y_START + 122} fontSize="11" fill={T.danger}>
             ✗ 禁止反向依赖
           </text>
-          <text x={520} y={LAYER_Y_START + 148} fontSize="11" fill={T.secondary}>
+          <text
+            x={520}
+            y={LAYER_Y_START + 148}
+            fontSize="11"
+            fill={T.secondary}
+          >
             跨层调用 = 边界泄漏
           </text>
-          <text x={520} y={LAYER_Y_START + 170} fontSize="11" fill={T.secondary}>
+          <text
+            x={520}
+            y={LAYER_Y_START + 170}
+            fontSize="11"
+            fill={T.secondary}
+          >
             层间通过接口解耦
           </text>
-          <text x={520} y={LAYER_Y_START + 192} fontSize="11" fill={T.secondary}>
+          <text
+            x={520}
+            y={LAYER_Y_START + 192}
+            fontSize="11"
+            fill={T.secondary}
+          >
             （Separated Interface）
           </text>
 
