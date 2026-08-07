@@ -7,63 +7,225 @@ description: "以元数据、查询对象和资源库提升映射复用与领域
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-13-object-relational-metadata
 draft: false
 ---
 
-import { Poeaa24Ch13MetadataCompare } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-compare";
+import { Poeaa24Ch13MetadataCompareDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-compare";
+import { Poeaa24Ch13MetadataPipelineDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-pipeline-diagram";
 
+<Objectives>
 
-## 为什么 第13章 对象-关系元数据映射模式 值得单独学习
+- 能解释 Metadata Mapping、Query Object 与 Repository 如何分别隔离映射、查询和集合访问
+- 能用 TypeScript 编写带元数据校验、参数化条件和类型恢复的数据源适配边界
+- 能根据类型安全、映射复用、查询组合和领域隔离的证据选择代码驱动或元数据驱动方案
 
-以元数据、查询对象和资源库提升映射复用与领域表达。 第13章 对象-关系元数据映射模式 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第13章 对象-关系元数据映射模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第13章对象-关系元数据映射模式值得单独学习
+
+第13章对象-关系元数据映射模式的核心不是把表名换成配置文件，而是决定“对象如何被翻译”“查询意图如何组合”“集合如何被领域使用”。订单聚合的字段、筛选条件和集合操作往往在多个用例中重复；如果每个调用者都手写 SQL 和行对象转换，映射错误会分散在业务代码中，也无法统一验证。
+
+<Term def="用配置、注解或结构化描述表达对象字段与关系列的对应关系，再由通用映射器解释并生成读写动作的方式。">
+  元数据映射
+</Term>
+应把可变化的结构描述与领域行为分开，但也要承担运行时校验、调试和类型恢复成本。本文以
+2024 年中文版公开目录限定第13章的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-第13章 对象-关系元数据映射模式 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：以元数据、查询对象和资源库提升映射复用与领域表达。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="把筛选、排序和分页条件封装为可组合值对象，再交给数据源适配器解释的查询表达。">
+  查询对象
+</Term>
+让领域意图脱离 SQL 字符串。
+<Term def="把一组实体的查找、添加和移除操作包装为领域可理解的集合接口，并隐藏数据源查询细节。">
+  资源库
+</Term>
+则负责集合边界，不应偷偷变成跨聚合的万能查询器。
+<Term def="在启动或执行查询前检查元数据字段、列名、类型和参数规则是否与映射契约一致的保护步骤。">
+  元数据校验
+</Term>
+把配置错误尽早变成可定位的失败，而不是让错误行对象流入领域。
 
-对 第13章 对象-关系元数据映射模式，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能解释对象-关系元数据映射模式的边界与选择轴，逐项覆盖3个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 元数据校验 从何处越界，就不能据此选择 第13章 对象-关系元数据映射模式。
-
+对第13章对象-关系元数据映射模式，优先比较的替代路线是：小而稳定的模型使用代码驱动映射获得类型安全，映射规则重复且结构变化频繁时使用元数据映射；查询条件用 Query Object 组合，聚合集合用 Repository 暴露。若实验只能显示查询执行成功，不能说明元数据错误、参数化和类型恢复如何处理，就不能据此选择方案。
 
 ## 目录单元到教学证据
 
 ### 第13章 对象-关系元数据映射模式
 
-在 **第13章 对象-关系元数据映射模式** 的学习边界里，第13章 对象-关系元数据映射模式 不是待背诵的目录词，而是用来检查“领域意图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 元数据校验 的可观察变化，并说明它何时支持或否定 第13章 对象-关系元数据映射模式。
+第13章对象-关系元数据映射模式要求把“数据结构和领域意图如何连接”变成可观察的架构决定：先标出元数据所有者、查询组合者、资源库边界和类型恢复点，再用订单聚合的字段变更、筛选组合和错误输入测试验证决定。只有映射规则能被校验、查询能被组合、领域层不依赖列名，元数据边界才有意义。
 
-## 专属设计案例：订单聚合持久化
+## 专属代码案例：订单查询与资源库
 
-把 订单聚合持久化 切成“领域意图 → 查询对象 → 映射元数据 → 执行 → 对象结果”五个观察点。第13章 对象-关系元数据映射模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 元数据校验、查询组合、资源库边界、参数化、类型恢复 中哪个指标最先提示当前方案不再适用。
+把订单聚合持久化切成“领域意图 → 查询对象 → 元数据校验 → 参数化执行 → 类型结果”五个观察点。第13章对象-关系元数据映射模式的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及元数据校验、查询组合、资源库边界、参数化和类型恢复中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-13-object-relational-metadata**；模式族为 **mapping**；裁决是“能解释对象-关系元数据映射模式的边界与选择轴，逐项覆盖3个目录节点，并在同一应用切片中验证”；观测项包括 元数据校验、查询组合、资源库边界、参数化、类型恢复；拒绝条件是“元数据校验 超过团队为 第13章 对象-关系元数据映射模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-13-object-relational-metadata**；模式族为 **mapping**；裁决是“元数据只描述结构，Query Object 表达意图，Repository 隔离集合，领域层消费类型结果”；观测项包括元数据校验、查询组合、资源库边界、参数化、类型恢复；拒绝条件是“配置可以绕过校验，或 Repository 直接暴露 SQL 与表结构”。
 
-配置不是生产框架语法，而是一张评审卡。对 第13章 对象-关系元数据映射模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：如果把 `status` 改成数据库中的 `order_status`，哪些代码应该变化，哪些领域调用不应变化？先写下元数据、查询对象和资源库的责任，再阅读实现；验证时要能说明列名映射错误在哪里被发现，以及用户输入如何保持参数化。
 
-# 模式族地图
+```ts
+type Order = {
+  id: string;
+  status: "open" | "paid";
+  totalCents: number;
+};
 
+type OrderCriteria = {
+  status?: Order["status"];
+  minimumTotalCents?: number;
+};
 
-<Poeaa24Ch13MetadataCompare />
+type OrderRow = {
+  order_id: string;
+  order_status: string;
+  total_cents: number;
+};
 
-**阅读路径**：映射规则放哪里 → Metadata Mapping；查询条件封装 → Query Object；集合访问封装 → Repository。
+const orderMetadata = {
+  id: "order_id",
+  status: "order_status",
+  totalCents: "total_cents",
+} as const;
+
+function toOrder(row: OrderRow): Order {
+  if (row.order_status !== "open" && row.order_status !== "paid") {
+    throw new Error("invalid order status");
+  }
+  return {
+    id: row.order_id,
+    status: row.order_status,
+    totalCents: row.total_cents,
+  };
+}
+
+interface OrderRepository {
+  find(criteria: OrderCriteria): Order[];
+}
+
+class SqlOrderRepository implements OrderRepository {
+  find(criteria: OrderCriteria): Order[] {
+    const clauses: string[] = [];
+    const parameters: unknown[] = [];
+    if (criteria.status) {
+      clauses.push(`${orderMetadata.status} = ?`);
+      parameters.push(criteria.status);
+    }
+    if (criteria.minimumTotalCents !== undefined) {
+      clauses.push(`${orderMetadata.totalCents} >= ?`);
+      parameters.push(criteria.minimumTotalCents);
+    }
+    return executeParameterizedQuery(clauses, parameters).map(toOrder);
+  }
+}
+```
+
+这段代码让元数据集中描述列名，Query Object 只描述筛选意图，Repository 负责参数化执行并恢复为 `Order`。真实系统还要在启动时校验元数据完整性、限制可排序字段并记录查询计划；配置驱动不等于无需类型检查，也不等于允许用户输入拼接到 SQL。
+
+## 元数据驱动与代码驱动对比
+
+代码驱动映射通常类型安全、IDE 友好，但字段变化会产生重复修改；元数据驱动可以复用通用引擎，却需要启动校验、运行时诊断和类型恢复。下面的对比图同时展示 Query Object 与 Repository 如何补上查询和集合边界。
+
+<Poeaa24Ch13MetadataCompareDiagram />
+
+选择时记录字段变更次数、映射重复率、类型错误发现时机和调试成本；小项目不要仅因配置“看起来灵活”就接受运行时失败。
+
+## 元数据查询流水线
+
+一次安全的元数据查询应经过领域意图、条件组合、映射校验、参数化执行和类型恢复五步；任一步失败都应返回可定位结果，而不是把未经验证的行对象交给领域层。
+
+<Poeaa24Ch13MetadataPipelineDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第13章 对象-关系元数据映射模式 的证据 | 应拒绝或改用其他方案的信号                       |
-| -------- | ------------------------------------------ | ------------------------------------------------ |
-| 责任     | 领域意图 到 对象结果 的所有者清晰          | 查询对象 可以绕过边界直接改写状态                |
-| 变化     | 元数据校验 的变化被局部吸收                | 一次小改动同时触及 查询组合、资源库边界、参数化  |
-| 失败     | 故障能在 对象结果 前被识别并回退           | 只能看到最终错误，无法定位 元数据校验 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径             | 因框架内置或团队习惯而跳过问题分析               |
+| 评审问题 | 选择元数据映射方案的证据           | 应拒绝当前方案的信号                 |
+| -------- | ---------------------------------- | ------------------------------------ |
+| 复用     | 映射规则重复且可由统一校验覆盖     | 只有一两个类，却引入难调试的通用引擎 |
+| 查询     | Query Object 能组合、参数化并测试  | 查询条件散落为字符串拼接             |
+| 集合     | Repository 只暴露领域集合语义      | 领域层直接依赖表名、列名和 SQL       |
+| 失败     | 元数据错误在启动或适配器边界被发现 | 错误配置直到生产查询才变成类型异常   |
 
+## 常见误区
+
+<Callout type="trap" title="把元数据配置当成类型安全">
+
+- **现象**：列名或状态值拼写错误，程序启动成功，直到真实查询才把错误数据交给领域层。
+- **原因**：只读取配置生成 SQL，没有校验字段存在、枚举值和结果类型。
+- **修法**：启动或首次使用时校验元数据，映射后再做类型恢复，并让错误带上实体、字段和列名。
+
+</Callout>
+
+<Callout type="trap" title="把 Query Object 变成 SQL 字符串容器">
+
+- **现象**：查询对象直接拼接用户输入，排序和筛选条件可以注入任意 SQL。
+- **原因**：把查询意图和执行语法混在一起，没有白名单字段和参数绑定。
+- **修法**：Query Object 只保存受限值对象，Repository 生成固定片段并绑定参数，排序字段使用显式映射。
+
+</Callout>
+
+<Callout type="trap" title="Repository 变成万能数据访问层">
+
+- **现象**：一个资源库包含跨聚合报表、批处理和所有表的任意查询，领域边界逐渐消失。
+- **原因**：把集合语义误解为数据库入口，缺少聚合所有权和用例边界。
+- **修法**：按聚合或明确查询职责拆分资源库，复杂报表使用专用查询端口，不把底层 SQL 暴露给领域层。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第13章对象-关系元数据映射模式，并要求把元数据校验、查询组合、资源库边界、参数化和类型恢复映射到订单聚合持久化。
+
+**问题 1：决定驱动方式。** 只有两个实体、字段几乎不变但团队非常重视编译期类型检查，是否应该马上使用元数据驱动？
+
+<Answer>
+
+不应仅凭“可复用”选择。可以先用代码驱动映射获得类型安全；当映射重复、结构变化或多个适配器共享规则成为真实成本时，再比较元数据校验、调试和类型恢复的收益。
+
+</Answer>
+
+**问题 2：组合查询。** 订单筛选条件来自用户输入，Query Object 和 Repository 分别应该承担什么？
+
+<Answer>
+
+Query Object 只保存经过验证的状态筛选、金额范围和分页意图；Repository 把这些值映射为白名单列和参数化条件，执行后把行恢复为领域类型。用户输入不能直接拼接到 SQL。
+
+</Answer>
+
+**问题 3：定位配置错误。** 元数据把 `order_status` 错写成 `order_state`，应该在哪里失败？
+
+<Answer>
+
+优先在启动或适配器初始化的元数据校验阶段失败，并报告实体、字段和列名；如果数据库能力只能运行时发现，也必须在映射边界转换为带上下文的错误，不能让未知状态进入领域。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="元数据映射">
+    用配置、注解或结构化描述表达对象字段与关系列对应关系，再由通用映射器解释读写动作的方式。
+  </GlossaryItem>
+  <GlossaryItem term="查询对象">
+    把筛选、排序和分页条件封装为可组合值对象，再交给数据源适配器解释的查询表达。
+  </GlossaryItem>
+  <GlossaryItem term="资源库">
+    把一组实体的查找、添加和移除操作包装为领域集合接口并隐藏数据源细节的边界。
+  </GlossaryItem>
+  <GlossaryItem term="元数据校验">
+    在启动或执行查询前检查字段、列名、类型和参数规则是否符合映射契约的步骤。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第13章 对象-关系元数据映射模式 的标志不是记住定义，而是能在 订单聚合持久化 中解释“领域意图 → 查询对象 → 映射元数据 → 执行 → 对象结果”的责任链，利用 元数据校验、查询组合、资源库边界、参数化、类型恢复 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
-
+掌握第13章对象-关系元数据映射模式的标志不是记住配置文件格式，而是能在订单聚合持久化中解释“领域意图 → 查询对象 → 元数据校验 → 参数化执行 → 类型结果”的责任链。学习者应利用元数据校验、查询组合、资源库边界、参数化和类型恢复作出可证伪的选择，并在配置无校验、查询拼接用户输入或资源库泄漏 SQL 时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -76,3 +238,10 @@ import { Poeaa24Ch13MetadataCompare } from "@/components/mdx/poeaa-enterprise-pa
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

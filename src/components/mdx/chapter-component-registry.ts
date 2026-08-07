@@ -15663,10 +15663,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-compare");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-compare"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch13-metadata-pipeline-diagram"),
+      ]);
       return {
-        Poeaa24Ch13MetadataCompare: module0.Poeaa24Ch13MetadataCompare,
+        Poeaa24Ch13MetadataCompareDiagram:
+          modules[0].Poeaa24Ch13MetadataCompareDiagram,
+        Poeaa24Ch13MetadataPipelineDiagram:
+          modules[1].Poeaa24Ch13MetadataPipelineDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/41-pattern-22-metadata-mapping/poeaa24-pattern-22-metadata-mapping":
