@@ -7,70 +7,222 @@ description: "用对象封装对外部系统或资源的访问，把协议、错
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-41-gateway
 draft: false
 ---
 
-import { Poeaa24Pattern41Gateway } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-41-gateway-diagram";
+import { Poeaa24Pattern41GatewayDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-41-gateway-diagram";
 
+<Objectives>
 
-## 为什么 18.1 入口 值得单独学习
+- 能解释入口如何把外部协议、错误和供应商变化隔离在稳定的内部边界之后
+- 能编写 TypeScript Gateway 契约与适配实现，把超时、重试和外部错误翻译成应用可理解的结果
+- 能根据变化轴、测试隔离和调用者数量的证据，判断何时引入或拒绝 Gateway
 
-用对象封装对外部系统或资源的访问，把协议、错误和供应商细节隔离在边界。 18.1 入口 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **18.1 入口** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 18.1 入口值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单系统通常要发邮件、调用支付 API 或写入消息队列。若每个领域服务都直接拼接 URL、处理供应商错误并解释协议状态，外部变化会沿着调用链扩散，测试也不得不启动真实基础设施。Gateway 的价值是给内部代码一个稳定的语义入口，把外部协议留在边界对象里。
 
-18.1 入口 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：用对象封装对外部系统或资源的访问，把协议、错误和供应商细节隔离在边界。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="封装外部系统或资源访问、向内部调用者提供稳定语义契约的对象。">
+  入口
+</Term>
+不是“把所有依赖藏起来”的万能包装，而是一条有责任范围的边界：它可以翻译协议和错误，却不应替领域服务作出价格、权限或订单状态等业务决定。好的入口让变化局部可见，坏的入口只是把复杂度换了一个文件名。
 
-对 18.1 入口，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能以测试替身替换外部系统，统一翻译错误，并证明调用者只依赖内部契约”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.1 入口。
+本章只覆盖 2024 年中文版公开目录中的 **18.1 入口**，依据作者图书页和公开模式目录独立重写。案例、实验、代码、练习和答案均为本课程原创，不复现原书正文、插图或代码。
 
+## 先建立直觉：稳定契约隔离易变协议
+
+把一次通知拆成“调用者 → 内部契约 → Gateway → 外部协议 → 结果”五个观察点。<Term def="调用者依赖的内部方法、输入和结果语义，应该比外部供应商协议稳定。">稳定契约</Term>描述“发送订单确认”，而不是暴露 SMTP 状态码、HTTP header 或某家 SDK 的异常类型。
+
+Gateway 还承担<Term def="把供应商异常、状态码或网络失败转换成内部可判定错误类别的边界行为。">错误翻译</Term>。外部系统返回 429 时，调用者需要知道“可稍后重试”；返回无效收件人时，需要知道“不可重试并记录业务原因”。如果 Gateway 直接把第三方异常透传，调用者仍然被供应商绑定。
+
+边界的另一面是<Term def="从业务代码指向基础设施实现的依赖关系；理想情况下业务只依赖内部契约。">依赖方向</Term>。接口放在哪里、实现由谁组装、测试替身如何注入，都是设计证据。只有当外部变化真实存在、调用者足够多或测试隔离有收益时，间接层才值得付出维护成本。
 
 ## 目录单元到教学证据
 
 ### 18.1 入口
 
-在 **18.1 入口** 的学习边界里，18.1 入口 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 18.1 入口。
+本章精确对应 manifest 单元 `poeaa24-pattern-41-gateway`。学习边界是：用一个专属 Gateway 封装订单系统的外部通知，并通过稳定契约、错误翻译和可替换实现证明依赖方向。
 
-## 专属设计案例：订单系统基础设施替换
+完成本单元要交出三样证据：一张调用者、Gateway 和外部系统的责任图；一段可测试的 TypeScript 契约与适配实现；一个故障样本，证明超时、限流或供应商错误不会穿透成调用者必须理解的 SDK 细节。
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。18.1 入口 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+## 专属案例：订单确认通知
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-41-gateway**；模式族为 **base**；裁决是“能以测试替身替换外部系统，统一翻译错误，并证明调用者只依赖内部契约”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 18.1 入口 设定的边界”。
+订单服务只应提出“发送订单确认”这一内部意图。EmailGateway 负责把它转换为 SMTP 或第三方邮件 API 的请求，统一处理超时、限流和无效地址，并返回 `sent`、`retryable` 或 `rejected` 三类结果。订单服务仍负责决定是否允许发送、是否记录订单事件，以及重复发送是否幂等。
 
-配置不是生产框架语法，而是一张评审卡。对 18.1 入口 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+评审卡记录如下：单元键为 **poeaa24-pattern-41-gateway**；模式族为 **base**；采用条件是“外部协议易变、调用者超过一个且需要测试替身”；观测项包括外部错误分类、超时率、重试次数、调用者依赖数量和替身覆盖率；拒绝条件是“没有变化轴、入口开始承载业务规则，或只增加一层转发却没有隔离证据”。
 
-## 三步交互实验
+## 专属可视化实验：看依赖停在哪里
 
+先预测：当 SMTP 改成 HTTP 邮件 API 时，领域代码应不应修改？点击主图观察稳定契约如何停在 Gateway 左侧、协议细节如何被限制在右侧，以及测试替身为什么能在不启动外部系统的情况下验证调用者行为。
 
-<Poeaa24Pattern41Gateway />
+<Poeaa24Pattern41GatewayDiagram />
+
+## 代码实践：翻译协议而不是泄漏协议
+
+下面的 TypeScript 草图把外部客户端作为注入依赖。Gateway 只返回内部结果，不把供应商异常类型传给订单服务；重试策略仍应由明确的可靠性策略和幂等键约束。
+
+```ts
+type SendConfirmation = {
+  orderId: string;
+  email: string;
+  idempotencyKey: string;
+};
+
+type DeliveryResult =
+  | { kind: "sent"; providerId: string }
+  | { kind: "retryable"; reason: "timeout" | "rate-limited" }
+  | { kind: "rejected"; reason: "invalid-address" | "blocked" };
+
+type MailClient = {
+  send(input: { to: string; body: string; idempotencyKey: string }): Promise<{
+    status: number;
+    providerId?: string;
+  }>;
+};
+
+export class EmailGateway {
+  constructor(private readonly client: MailClient) {}
+
+  async sendConfirmation(input: SendConfirmation): Promise<DeliveryResult> {
+    try {
+      const response = await this.client.send({
+        to: input.email,
+        body: renderConfirmation(input.orderId),
+        idempotencyKey: input.idempotencyKey,
+      });
+      if (response.status === 202 && response.providerId) {
+        return { kind: "sent", providerId: response.providerId };
+      }
+      if (response.status === 408 || response.status === 429) {
+        return {
+          kind: "retryable",
+          reason: response.status === 408 ? "timeout" : "rate-limited",
+        };
+      }
+      return { kind: "rejected", reason: "blocked" };
+    } catch {
+      return { kind: "retryable", reason: "timeout" };
+    }
+  }
+}
+```
+
+这里有四个可验收边界：内部方法不暴露 SMTP 或 SDK 类型；外部状态被翻译为有限结果；请求带幂等键；Gateway 不决定订单是否已付款。若调用者开始捕获 `VendorRateLimitError`，或 Gateway 为了“方便”直接读取订单数据库，就应把它标成越界样本。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 18.1 入口 的证据          | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 采用入口的证据                       | 应拒绝或改用其他方案的信号     |
+| -------- | ------------------------------------ | ------------------------------ |
+| 变化     | 外部协议、供应商或资源访问确实会变   | 没有变化轴，只是为抽象而抽象   |
+| 契约     | 调用者依赖稳定语义和有限错误集合     | 调用者仍理解 SDK 异常和状态码  |
+| 测试     | 可注入 Fake/Stub，不启动真实基础设施 | 测试必须连接供应商才能验证业务 |
+| 责任     | 入口做协议适配，业务规则留在应用层   | 入口开始决定订单、权限或库存   |
+| 可靠性   | 超时、限流与幂等边界有指标           | 自动重试没有上限或重复副作用   |
 
+## 常见误区
+
+<Callout type="trap" title="把入口当作业务服务">
+
+- **现象**：Gateway 同时计算折扣、修改订单状态并调用外部 API。
+- **原因**：把“隔离基础设施”误解成“把所有流程塞进一个对象”。
+- **修法**：Gateway 只翻译协议、错误和资源访问；业务决策由应用服务或领域对象负责。
+
+</Callout>
+
+<Callout type="trap" title="只包一层却透传供应商类型">
+
+- **现象**：调用者仍捕获 SDK 异常、读取供应商状态码和依赖 SDK 的请求对象。
+- **原因**：入口没有定义稳定契约，只把调用语句移动到了另一个文件。
+- **修法**：设计有限的内部结果类型和错误分类，用测试验证调用者不需要知道供应商协议。
+
+</Callout>
+
+<Callout type="trap" title="重试没有幂等边界">
+
+- **现象**：超时后自动重发，用户收到两封确认邮件或外部扣款发生两次。
+- **原因**：把网络重试当成无副作用，忽略请求是否已在供应商侧成功。
+- **修法**：为可重试请求传递幂等键，限制次数和退避，并把不确定结果记录为可查询状态。
+
+</Callout>
 
 ## 本章小结
 
-掌握 18.1 入口 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
+- Gateway 用稳定内部契约隔离外部协议、供应商错误和基础设施变化。
+- 它可以翻译错误和处理可靠性边界，但不应接管订单、权限或库存等业务决定。
+- Fake/Stub、有限结果类型、超时分类和幂等键是可验证的工程证据。
+- 没有变化轴或没有测试隔离收益时，应拒绝额外间接层；透传 SDK 也不算完成隔离。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：找出泄漏。** `OrderService` 捕获 `VendorRateLimitError` 并根据 HTTP 429 决定重试。哪一层应拥有这段知识？
+
+<Answer>
+
+Gateway 应把供应商的 429 翻译成内部的 `retryable/rate-limited` 结果，OrderService 只依据内部契约决定是否安排重试。这样供应商从 HTTP API 换成 SDK 或消息队列时，业务代码不需要修改。
+
+</Answer>
+
+**问题 2：设计替身。** 请为 `EmailGateway` 写一个最小 Fake，验证订单服务传入幂等键，并在测试中模拟一次限流结果。
+
+<Answer>
+
+Fake 只需记录最后一次 `send` 输入，并返回 `{ status: 429 }`；测试断言输入包含预期 `idempotencyKey`，再断言 Gateway 输出 `{ kind: "retryable", reason: "rate-limited" }`。测试不应启动 SMTP，也不应断言供应商 SDK 的内部对象。
+
+</Answer>
+
+**问题 3：判断是否引入。** 一个内部函数只被一个调用者使用，协议稳定且测试不需要隔离。请给出拒绝 Gateway 的理由；若供应商下月宣布协议迁移，再列出两个新增证据。
+
+<Answer>
+
+当前没有明显变化轴、调用者复用或测试隔离收益，新增 Gateway 只会增加间接层。协议迁移后，应看到外部请求格式变化会影响多个调用点，或真实供应商连接使测试不稳定；再加上错误翻译和替身需求，才足以支持引入边界。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="入口">
+    封装外部系统或资源访问、向内部调用者提供稳定语义契约的对象。
+  </GlossaryItem>
+  <GlossaryItem term="稳定契约">
+    调用者依赖的输入和结果语义，独立于供应商协议与 SDK 类型。
+  </GlossaryItem>
+  <GlossaryItem term="错误翻译">
+    把外部状态码、异常和网络失败转换成内部有限错误分类的行为。
+  </GlossaryItem>
+  <GlossaryItem term="依赖方向">
+    代码从业务调用者指向基础设施实现的关系；边界应让业务依赖内部契约。
+  </GlossaryItem>
+  <GlossaryItem term="测试替身">
+    在测试中代替真实外部系统、可记录输入并返回确定结果的 Fake 或 Stub。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：第18章 基本模式](/learn/poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns)
 - [下一页：18.2 映射器](/learn/poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节范围和模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对入口模式的公开定位与模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

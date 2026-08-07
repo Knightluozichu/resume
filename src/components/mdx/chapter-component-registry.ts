@@ -15839,7 +15839,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-41-gateway-diagram");
       return {
-        Poeaa24Pattern41Gateway: module0.Poeaa24Pattern41Gateway,
+        Poeaa24Pattern41GatewayDiagram: module0.Poeaa24Pattern41GatewayDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper":

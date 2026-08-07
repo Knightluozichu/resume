@@ -266,7 +266,7 @@
     - 路径：`content/poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state.mdx`
 - [x] ✅ **63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/63-pattern-40-database-session-state/poeaa24-pattern-40-database-session-state.mdx`
-- [ ] 🔴 P1 **65-pattern-41-gateway/poeaa24-pattern-41-gateway** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **65-pattern-41-gateway/poeaa24-pattern-41-gateway** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/65-pattern-41-gateway/poeaa24-pattern-41-gateway.mdx`
 - [ ] 🔴 P1 **66-pattern-42-mapper/poeaa24-pattern-42-mapper** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper.mdx`
