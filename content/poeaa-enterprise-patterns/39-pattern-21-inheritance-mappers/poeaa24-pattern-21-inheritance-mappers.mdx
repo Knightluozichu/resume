@@ -7,70 +7,322 @@ description: "以映射器层次组织继承结构的持久化，让公共字段
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-21-inheritance-mappers
 draft: false
 ---
 
 import { Poeaa24Pattern21InheritanceMappers } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-21-inheritance-mappers-diagram";
 
+<Objectives>
+
+- 能实现父类映射器读取公共字段与鉴别器、子类映射器补齐特有字段的加载链
+- 能用类型分发、身份一致性和事务边界定位一次继承映射失败的首个责任点
+- 能比较单表继承、类表继承和具体表继承，并为选定方案写出可执行的拒绝条件
+
+</Objectives>
 
 ## 为什么 12.10 继承映射器 值得单独学习
 
-以映射器层次组织继承结构的持久化，让公共字段、具体类型和选择策略各有责任。 12.10 继承映射器 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+<Term term="继承映射器">继承映射器</Term>
+解决的不是“如何把一个类转换成一行记录”这么窄的问题，而是：领域里有
+`Employee`、`Engineer`、`Manager`
+这样的继承关系时，谁读取公共字段，谁决定具体类型，谁负责子类字段，谁在保存失败时收口。若所有责任都挤在一个巨大的
+`Mapper`
+里，正常数据也许能加载，但下一次新增子类时，分支、查询和测试会一起膨胀。
 
-本页以 2024 年中文版公开目录限定 **12.10 继承映射器** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+本章把一个订单后台中的员工审批切成可观察的 `Employee` 对象树和数据库映射链。案例、代码、图示、实验和练习均为本课程独立改写；Martin Fowler 的公开图书页与模式目录只用于核对 12.10 的名称、范围及其在对象—关系映射模式族中的位置。
 
-## 先建立直觉：问题、机制与代价
+这类映射器尤其值得单独学习，是因为“领域继承”和“存储继承”并不天然同构。对象树可以强调行为复用，关系模式却可能选择一张表、父子多张表或每个具体类一张表。映射器的任务不是强迫两棵树长得一模一样，而是把差异收束在可以测试、替换和回滚的边界内。
 
-12.10 继承映射器 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：以映射器层次组织继承结构的持久化，让公共字段、具体类型和选择策略各有责任。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+## 先建立直觉：父类知道什么，子类补充什么
 
-对 12.10 继承映射器，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能让父子映射器协作完成加载与保存，并避免映射器继承复制领域继承的全部耦合”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 12.10 继承映射器。
+先猜一猜：数据库返回 `id=7, name="Ada", type="Engineer"` 时，应用应该由控制器直接拼出 `Engineer`，还是让一个拥有类型知识的映射器完成选择？如果这个判断散落在控制器、查询服务和导出任务里，同一条记录就可能在不同入口被还原成不同的对象。可靠的做法是让父类映射器读取公共字段和类型线索，再把子类部分委托给对应的映射器。
 
+这里的<Term term="鉴别器">鉴别器</Term>是关系行中用于表达具体类型的受控值，例如 `type = "Engineer"`。它不是可以随意拼接的类名，也不能只靠字符串反射决定安全边界：映射器必须维护“允许的类型值 → 具体映射器”的显式表，并在未知值出现时拒绝加载。
+
+对象侧的责任可以先写成一条短规则：父类映射器负责 `id`、`name` 和鉴别器，子类映射器负责 `skill` 或 `budget`，应用服务只编排查询、事务和返回值。这样一来，新增 `Contractor` 时，变化主要落在类型注册、`ContractorMapper` 和对应测试，而不是每个调用入口都复制一遍 `if`。
 
 ## 目录单元到教学证据
 
 ### 12.10 继承映射器
 
-在 **12.10 继承映射器** 的学习边界里，12.10 继承映射器 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 12.10 继承映射器。
+在 **12.10 继承映射器** 的边界内，学习者要能把“领域类树”与“Mapper 树”同时画出来，并说明每一条委托边的输入、输出和失败语义。单元键为 **poeaa24-pattern-21-inheritance-mappers**；本章用员工审批记录验证这一点：加载一个 `Engineer` 必须同时得到公共字段和 `skill`，保存它必须在同一个身份和事务语义下完成。
 
-## 专属设计案例：订单聚合持久化
+评审记录至少回答五个问题：鉴别器由谁验证，公共字段由谁拥有，子类字段由谁加载，数据库行如何恢复为同一身份，以及哪一段失败时整个对象是否应该暴露给业务层。只要答案仍然是“ORM 默认会处理”，就还没有把模式变成可检验的代码设计。
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。12.10 继承映射器 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+## 专属代码案例：员工审批记录
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-21-inheritance-mappers**；模式族为 **mapping**；裁决是“能让父子映射器协作完成加载与保存，并避免映射器继承复制领域继承的全部耦合”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 12.10 继承映射器 设定的边界”。
+我们先用一个很小的类型集合说明合同。`EmployeeRow` 是关系查询返回的形状；`Employee` 是业务对象；两个子类 Mapper 只拥有各自的额外字段。代码刻意把“选择类型”和“填充字段”拆成两步，便于测试每条责任链。
 
-配置不是生产框架语法，而是一张评审卡。对 12.10 继承映射器 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type EmployeeType = "Engineer" | "Manager";
 
-## 三步交互实验
+type EmployeeRow = {
+  id: number;
+  name: string;
+  type: EmployeeType;
+};
 
+type Employee = {
+  id: number;
+  name: string;
+  type: EmployeeType;
+};
+
+type Engineer = Employee & { type: "Engineer"; skill: string };
+type Manager = Employee & { type: "Manager"; budget: number };
+
+interface EmployeeMapper<T extends Employee> {
+  load(id: number): T;
+  save(employee: T): void;
+}
+```
+
+真正的父类映射器不应该把所有子类字段都塞进返回值。它只做三件事：读取公共行、验证鉴别器、选择一个具体 Mapper。具体 Mapper 再调用父类的 `loadBase`，最后把自己的字段映射到对象上。这个顺序让每一步都能在日志和单元测试中留下证据。
+
+```ts
+class EmployeeMapper {
+  constructor(private readonly db: Database) {}
+
+  load(id: number): Employee {
+    const row = this.db.one(
+      "select id, name, type from employees where id = ?",
+      id,
+    );
+    const mapper = this.mapperFor(row.type);
+    return mapper.loadFromBase(row);
+  }
+
+  loadBase(row: EmployeeRow): Employee {
+    return { id: row.id, name: row.name, type: row.type };
+  }
+
+  private mapperFor(type: EmployeeType) {
+    if (type === "Engineer") return new EngineerMapper(this.db, this);
+    if (type === "Manager") return new ManagerMapper(this.db, this);
+    throw new UnknownEmployeeType(type);
+  }
+}
+```
+
+这个例子中的父类映射器不是领域父类的替身，而是持久化协作者。它可以共享查询、身份和错误翻译的机制，但不能因此接管工程师技能或经理预算的业务规则。子类 Mapper 的继承只应该复用稳定的映射步骤；如果两个 Mapper 共享的是业务变化而不是持久化机制，应重新评估领域对象或组合是否更合适。
+
+## 模式结构图
 
 <Poeaa24Pattern21InheritanceMappers />
 
+图中左侧是领域类树，右侧是映射器树；底部把一行关系数据和最终对象之间的验收条件放在同一条线上。注意图示的“镜像”只是责任的可追踪性，不承诺数据库一定要采用与类层次相同的表结构。
+
+## 三步代码实验：从加载到保存
+
+下面的实验每一步都修改同一条 `Employee(id=7)` 的证据链。先观察图，再写伪 SQL 或 TypeScript，让每一个结果都能回答“谁做了决定、谁承担失败”。
+
+<Stepper>
+
+<Step title="1. 读取鉴别器并分发到具体 Mapper">
+
+先实现父类映射器的 `mapperFor(type)`。对 `type = "Engineer"`，它应该返回 `EngineerMapper`；对未知类型，应该在对象创建前抛出错误。不要把未知类型静默当成 `Employee`，那会把脏数据伪装成合法的基类对象。
+
+```ts
+const mapper = employeeMapper.mapperFor(row.type);
+const employee = mapper.loadFromBase(row);
+```
+
+验收问题：日志必须能区分“查不到 id”和“查到但鉴别器未知”这两种失败。前者是数据不存在，后者是映射配置或迁移没有闭合；它们的恢复方式不同。
+
+<Poeaa24Pattern21InheritanceMappers step={1} />
+
+</Step>
+
+<Step title="2. 由父 Mapper 加载公共字段，再补齐子类字段">
+
+实现 `EngineerMapper.loadFromBase`：先调用父 Mapper 的 `loadBase(row)` 得到 `id`、`name` 和 `type`，再查询 `engineers.skill`。返回前检查两段数据的身份一致；如果子表没有对应行，不要返回一个字段缺失却看似完整的工程师。
+
+```ts
+loadFromBase(row: EmployeeRow): Engineer {
+  const base = this.parent.loadBase(row);
+  const subtype = this.db.one(
+    "select skill from engineers where employee_id = ?",
+    row.id,
+  );
+  return { ...base, type: "Engineer", skill: subtype.skill };
+}
+```
+
+观察变化：查询次数增加了，但责任边界也变得可见。若多态列表需要一次取回很多员工，可以把批量查询或预取策略放到 Mapper 层优化；不要为了少一次查询就让领域对象知道表名。
+
+<Poeaa24Pattern21InheritanceMappers step={2} />
+
+</Step>
+
+<Step title="3. 沿委托链保存，并把事务封口">
+
+保存时由 `EngineerMapper` 先写 `skill`，再委托父 Mapper 写公共字段；实际顺序要服从外键约束和数据库事务。无论选择哪一种表结构，`id`、鉴别器和子表行必须在同一次工作单元中保持一致，不能先提交一半再把另半段交给异步任务。
+
+```ts
+transaction(() => {
+  engineerMapper.saveSubtype(engineer);
+  employeeMapper.saveBase(engineer);
+});
+```
+
+验收问题：让 `saveSubtype` 故意失败，确认 `employees` 的公共字段没有留下半次更新；再让 `type` 与实际 Mapper 不一致，确认保存被拒绝。这样才能证明映射器层次保护的是可恢复语义，而不只是代码复用。
+
+<Poeaa24Pattern21InheritanceMappers step={3} />
+
+</Step>
+
+</Stepper>
+
+## 三种映射策略如何影响 Mapper
+
+继承映射器解决责任分配，不能替代数据库表设计。常见的三种<Term term="映射策略">映射策略</Term>会改变查询和保存的成本，但都可以由同一组父子 Mapper 合同承接：
+
+| 存储策略   | 读取路径                | 主要收益               | 主要代价                     |
+| ---------- | ----------------------- | ---------------------- | ---------------------------- |
+| 单表继承   | 一张表读公共列与子类列  | 多态读取直接，事务简单 | 子类列稀疏，约束容易变弱     |
+| 类表继承   | 父表加子表，按身份 JOIN | 字段归属清晰，重复少   | 多态查询与保存需要多段 SQL   |
+| 具体表继承 | 每个具体类一张完整表    | 单类型读取简单         | 公共字段重复，多态查询要合并 |
+
+选择策略时，先固定 Mapper 的可观察合同：给定合法 `id`，加载结果的运行时类型正确；保存后公共字段和子类字段一起可读；任一段失败时没有半个对象或半次写回泄漏。然后再用查询计划、字段约束和迁移成本比较表结构，而不是让 ORM 的默认继承选项替你作架构决定。
+
+## 继承映射器的两个关键边界
+
+### 多态加载不等于类型猜测
+
+<Term term="多态加载">多态加载</Term>
+是“根据持久化记录恢复正确的具体对象”，不是看到一个类名字符串就调用反射。类型注册表应该是显式的、可审计的，并能在启动测试中检查每个鉴别器值都有对应的
+Mapper。对外部输入或旧数据，未知类型必须成为明确的拒绝结果。
+
+### 身份在父子 Mapper 之间只能有一个来源
+
+<Term term="身份一致性">身份一致性</Term>要求父 Mapper、子
+Mapper、缓存和工作单元对同一个数据库 id 只承认同一对象身份。若父 Mapper 创建了
+`Employee(7)`，子 Mapper 又无条件创建一个
+`Engineer(7)`，对象图中就会出现两个互相覆盖的实例。可以用身份映射、请求级缓存或受控工厂避免重复创建，但不能把“对象相等”误当成“对象身份相同”。
+
+### 继承关系不应该复制业务规则
+
+<Term term="父类映射器">父类映射器</Term>
+适合集中公共列、主键和鉴别器的持久化机制；
+<Term term="子类映射器">子类映射器</Term>
+适合补齐特有列和保存委托。它们不应该复制 `Engineer.approve()` 或
+`Manager.approve()` 的业务判断。若子类 Mapper
+开始决定审批额度、权限或状态转换，应该把规则移回领域对象或领域服务，并让 Mapper
+只翻译状态。
+
+## 常见误区
+
+<Callout type="trap" title="让每个入口自己猜鉴别器">
+
+- **现象**：控制器把 `type` 拼成类名，批处理任务又维护一份不同的类型分支，同一行记录在不同入口还原成不同对象。
+- **原因**：把类型分发当成调用方细节，没有把允许的类型集合和错误语义集中到父类映射器。
+- **修法**：建立显式 `type → Mapper` 注册表；未知值在对象创建前失败，并为每个合法值写加载测试。
+
+</Callout>
+
+<Callout type="trap" title="父 Mapper 为了复用而拥有所有子类字段">
+
+- **现象**：`EmployeeMapper` 返回一个塞满 `skill`、`budget` 和未来字段的宽对象，子类 Mapper 只剩空壳。
+- **原因**：把“共享查询”误解成“共享全部责任”，结果公共层知道每一个子类，新增类型必然修改核心分发器。
+- **修法**：父 Mapper 只返回公共字段；子 Mapper 通过 `loadBase` 或组合接口补齐自己的字段，并用类型级测试保护边界。
+
+</Callout>
+
+<Callout type="trap" title="把子类保存和父类保存拆成两个提交">
+
+- **现象**：子表已经写入新技能，父表仍是旧类型或旧名称；重试后同一个 id 出现两个互相矛盾的对象。
+- **原因**：把 Mapper 委托当成异步流水线，没有把公共行、子表行和鉴别器放进同一个事务语义。
+- **修法**：让保存链共享事务或工作单元；注入一段失败并断言两张表都回滚，同时为重试设置幂等的身份条件。
+
+</Callout>
+
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 12.10 继承映射器 的证据     | 应拒绝或改用其他方案的信号                 |
-| -------- | -------------------------------- | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰  | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收            | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退 | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析         |
-
+| 评审问题 | 选择继承映射器的证据                         | 应拒绝或改用其他方案的信号                     |
+| -------- | -------------------------------------------- | ---------------------------------------------- |
+| 责任     | 公共字段、鉴别器和子类字段分别有明确拥有者   | 一个 Mapper 既做类型分发又执行全部业务决定     |
+| 变化     | 新增子类主要增加一个具体 Mapper 和注册测试   | 新增一个字段需要改动所有查询入口和所有保存分支 |
+| 一致性   | 同一 id 的加载、保存和缓存共享身份与事务边界 | 父子表可以独立提交，失败后只能人工修复         |
+| 查询     | 已用实际查询计划比较多态列表与单类型读取     | 只因 ORM 默认开启继承就跳过表结构和索引评审    |
+| 拒绝     | 未知鉴别器、缺失子行和类型不匹配都有显式错误 | 为了“尽量返回数据”而静默降级成基类对象         |
 
 ## 本章小结
 
-掌握 12.10 继承映射器 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
+继承映射器的价值不在于让 Mapper 类也形成一棵漂亮的继承树，而在于把继承持久化中的三个决定拆开：父类映射器验证鉴别器并处理公共字段，子类映射器加载和保存特有字段，事务与身份规则保证两段责任最后仍然描述同一个对象。表结构可以是单表、类表或具体表，但加载、保存、未知类型和失败回滚都必须有可运行的证据。
 
+如果一次新增子类仍然要求所有入口复制分支，说明分发边界没有收口；如果父 Mapper 不断吸收业务规则，说明复用已经越过了持久化职责。用类型测试、身份测试、故障注入和真实查询计划复核，才能决定 12.10 继承映射器是否值得保留。
+
+## 本章练习
+
+<Exercises>
+
+**问题 1：** `employees` 返回 `type = "Engineer"`，但 `engineers` 没有对应的 `employee_id` 行。加载器应该返回一个缺少 `skill` 的 `Engineer`，还是失败？请说明失败应发生在哪个边界。
+
+<Answer>
+
+应失败，而且失败应发生在子类 Mapper 完成字段装载、对象交给业务层之前。父 Mapper 已经证明公共行和鉴别器存在，但这不足以证明一个完整的 `Engineer` 存在；缺失子行通常表示迁移、写入事务或数据修复问题。错误中应带上 `id` 和具体类型，便于区分“没有员工”和“员工的继承部分不完整”。
+
+</Answer>
+
+**问题 2：** 你需要同时支持 `Engineer` 和 `Manager` 的多态列表。请写出一个不会把未知鉴别器静默降级为 `Employee` 的分发策略，并说明如何测试它。
+
+<Answer>
+
+维护显式的 `EmployeeType` 注册表或 `switch`，每个合法值返回对应的具体 Mapper，`default` 分支抛出 `UnknownEmployeeType`。测试至少覆盖两个合法类型、一个未知类型和一个缺少子行的类型；断言合法结果的运行时字段完整，未知类型在对象创建前失败，而不是返回一个看似可用的基类对象。
+
+</Answer>
+
+**问题 3：** `EngineerMapper.save()` 已写入 `skill`，随后 `EmployeeMapper.saveBase()` 因并发冲突失败。如何改造代码，使重试不会留下半个继承对象？
+
+<Answer>
+
+让两段保存共享一个事务或工作单元，在父行冲突时回滚子表写入；重试前重新读取版本、鉴别器和子类行，而不是复用一个可能过期的对象。为同一个 `id` 设置唯一约束和版本条件，并测试“子类写入成功、父类写入失败”的故障注入场景，确认数据库回到提交前状态且重试具备幂等结果。
+
+</Answer>
+
+</Exercises>
 
 ## 前后导航
 
 - [上一页：12.9 具体表继承](/learn/poeaa-enterprise-patterns/38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance)
 - [下一页：第13章 对象-关系元数据映射模式](/learn/poeaa-enterprise-patterns/40-chapter-13-object-relational-metadata/poeaa24-chapter-13-object-relational-metadata)
 
-## 来源与改写范围
+## 出处声明
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》，王怀民、周斌译，机械工业出版社，2024年2月"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
 
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="继承映射器">
+    把领域继承结构的公共字段、具体类型和子类字段分配给协作 Mapper
+    的持久化组织方式。
+  </GlossaryItem>
+  <GlossaryItem term="鉴别器">
+    关系行中标识具体子类的受控值，例如 Engineer 或 Manager；它必须经过显式验证。
+  </GlossaryItem>
+  <GlossaryItem term="父类映射器">
+    负责主键、公共列和类型分发，并把具体字段装载委托给子类 Mapper
+    的持久化协作者。
+  </GlossaryItem>
+  <GlossaryItem term="子类映射器">
+    负责某个具体类型的特有字段，并复用父 Mapper 的公共字段装载或保存步骤。
+  </GlossaryItem>
+  <GlossaryItem term="多态加载">
+    根据持久化记录恢复正确具体对象的过程，包含类型验证和子类字段完整性检查。
+  </GlossaryItem>
+  <GlossaryItem term="身份一致性">
+    同一个数据库 id 在父子
+    Mapper、缓存和工作单元中始终对应同一个受控对象身份的约束。
+  </GlossaryItem>
+  <GlossaryItem term="映射策略">
+    把继承结构落到单表、类表或具体表等关系模式时，对查询、约束与写回路径的选择。
+  </GlossaryItem>
+</Glossary>
