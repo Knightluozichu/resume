@@ -208,13 +208,13 @@
     - 路径：`content/poeaa-enterprise-patterns/21-pattern-05-table-data-gateway/poeaa24-pattern-05-table-data-gateway.mdx`
 - [x] ✅ **22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/22-pattern-06-row-data-gateway/poeaa24-pattern-06-row-data-gateway.mdx`
-- [ ] 🔴 P1 **23-pattern-07-active-record/poeaa24-pattern-07-active-record** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **23-pattern-07-active-record/poeaa24-pattern-07-active-record** — 已修复（2026-08-07，score 52→96，passed）
     - 路径：`content/poeaa-enterprise-patterns/23-pattern-07-active-record/poeaa24-pattern-07-active-record.mdx`
-- [ ] 🔴 P1 **24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/24-pattern-08-data-mapper/poeaa24-pattern-08-data-mapper.mdx`
-- [ ] 🔴 P1 **26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work** — 已修复（2026-08-07，score 52→99，passed）
     - 路径：`content/poeaa-enterprise-patterns/26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work.mdx`
-- [ ] 🔴 P1 **30-pattern-12-identity-field/poeaa24-pattern-12-identity-field** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **30-pattern-12-identity-field/poeaa24-pattern-12-identity-field** — 已修复（2026-08-07，score 52→100，passed）
     - 路径：`content/poeaa-enterprise-patterns/30-pattern-12-identity-field/poeaa24-pattern-12-identity-field.mdx`
 - [ ] 🔴 P1 **31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping.mdx`

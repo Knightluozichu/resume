@@ -15494,7 +15494,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-08-data-mapper-diagram");
       return {
-        Poeaa24Pattern08DataMapper: module0.Poeaa24Pattern08DataMapper,
+        Poeaa24Pattern08DataMapperDiagram:
+          module0.Poeaa24Pattern08DataMapperDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior":
@@ -15511,7 +15512,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-09-unit-of-work-diagram");
       return {
-        Poeaa24Pattern09UnitOfWork: module0.Poeaa24Pattern09UnitOfWork,
+        Poeaa24Pattern09UnitOfWorkDiagram:
+          module0.Poeaa24Pattern09UnitOfWorkDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/27-pattern-10-identity-map/poeaa24-pattern-10-identity-map":
@@ -15536,7 +15538,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-12-identity-field-diagram");
       return {
-        Poeaa24Pattern12IdentityField: module0.Poeaa24Pattern12IdentityField,
+        Poeaa24Pattern12IdentityFieldDiagram:
+          module0.Poeaa24Pattern12IdentityFieldDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/31-pattern-13-foreign-key-mapping/poeaa24-pattern-13-foreign-key-mapping":
