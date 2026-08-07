@@ -16476,6 +16476,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic23DesignByContractLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/31-topic-24-dead-programs-tell-no-lies/tpp20-topic-24-dead-programs-tell-no-lies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-24-dead-programs-tell-no-lies-diagram");
+      return {
+        Tpp20Topic24DeadProgramsTellNoLiesDiagram:
+          module0.Tpp20Topic24DeadProgramsTellNoLiesDiagram,
+        Tpp20Topic24DeadProgramsTellNoLiesLab:
+          module0.Tpp20Topic24DeadProgramsTellNoLiesLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
