@@ -322,7 +322,7 @@
     - 路径：`content/poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns.mdx`
 - [x] ✅ **01-translator-preface/poeaa24-translator-preface** — 已修复（2026-08-07，score 41→97，passed）
     - 路径：`content/poeaa-enterprise-patterns/01-translator-preface/poeaa24-translator-preface.mdx`
-- [ ] 🔴 P1 **02-preface/poeaa24-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **02-preface/poeaa24-preface** — 已修复（2026-08-07，score 41→97，passed）
     - 路径：`content/poeaa-enterprise-patterns/02-preface/poeaa24-preface.mdx`
 - [ ] 🔴 P1 **04-introduction/poeaa24-introduction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
     - 路径：`content/poeaa-enterprise-patterns/04-introduction/poeaa24-introduction.mdx`

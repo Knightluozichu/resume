@@ -15354,6 +15354,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Poeaa24TranslatorPrefaceReviewDecisionDiagram,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/02-preface/poeaa24-preface": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-learning-map-diagram"),
+      import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-preface-reading-loop-diagram"),
+    ]);
+    return {
+      Poeaa24LearningMapDiagram: modules[0].Poeaa24LearningMapDiagram,
+      Poeaa24PrefaceReadingLoopDiagram:
+        modules[1].Poeaa24PrefaceReadingLoopDiagram,
+    } as ChapterMdxComponents;
+  },
   "poeaa-enterprise-patterns/03-pattern-list/poeaa24-pattern-list":
     async () => {
       const module0 =
