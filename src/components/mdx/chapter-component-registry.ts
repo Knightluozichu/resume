@@ -16582,6 +16582,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic32ConfigurationPipelineDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/41-chapter-06-concurrency/tpp20-chapter-06-concurrency":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter-06-concurrency-diagram");
+      return {
+        Tpp20Chapter06ConcurrencyEvidenceDiagram:
+          module0.Tpp20Chapter06ConcurrencyEvidenceDiagram,
+        Tpp20Chapter06ConcurrencyFlowDiagram:
+          module0.Tpp20Chapter06ConcurrencyFlowDiagram,
+        Tpp20Chapter06ConcurrencyLab: module0.Tpp20Chapter06ConcurrencyLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
