@@ -16357,6 +16357,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic13ProductionGateDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/19-topic-14-domain-languages/tpp20-topic-14-domain-languages":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic14-domain-pipeline-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic14-error-localization-diagram"),
+      ]);
+      return {
+        Tpp20Topic14DomainPipelineDiagram:
+          modules[0].Tpp20Topic14DomainPipelineDiagram,
+        Tpp20Topic14ErrorLocalizationDiagram:
+          modules[1].Tpp20Topic14ErrorLocalizationDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
