@@ -16487,6 +16487,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic24DeadProgramsTellNoLiesLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/32-topic-25-assertive-programming/tpp20-topic-25-assertive-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-25-assertive-programming-diagram");
+      return {
+        Tpp20Topic25AssertiveProgrammingDiagram:
+          module0.Tpp20Topic25AssertiveProgrammingDiagram,
+        Tpp20Topic25AssertiveProgrammingLab:
+          module0.Tpp20Topic25AssertiveProgrammingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
