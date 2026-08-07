@@ -7,63 +7,228 @@ description: "分离请求处理、导航、模型和HTML生成的不同变化�
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-14-web-presentation-patterns
 draft: false
 ---
 
-import { Poeaa24Ch14WebPresentationMatrix } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-presentation-matrix";
+import { Poeaa24Ch14WebPresentationMatrixDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-presentation-matrix";
+import { Poeaa24Ch14WebFlowDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-flow-decision-diagram";
 
+<Objectives>
 
-## 为什么 第14章 Web表现模式 值得单独学习
+- 能区分 MVC、Page Controller、Front Controller、Application Controller 与三种视图变换的职责
+- 能用 TypeScript 把订单请求映射为可测试的 View Model，并隔离导航与模板输出
+- 能根据路由共享、跨页面流程、视图变体和模板安全要求选择 Web 表示模式
 
-分离请求处理、导航、模型和HTML生成的不同变化轴。 第14章 Web表现模式 的核心不是套用某个框架 API，而是回答：如何分开请求解释、页面导航、领域调用与输出渲染，使变化不会横跨所有页面。在 订单后台多视图 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第14章 Web表现模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第14章 Web表现模式值得单独学习
+
+第14章 Web表现模式的核心不是把框架目录换成另一套类名，而是把请求处理、导航、模型调用与 HTML 生成拆成不同的变化轴。订单后台可能同时有列表、详情、审批和导出；如果控制器既保存流程状态又拼 HTML，模板又直接访问数据库，一次路由或字段变化就会穿过整个应用。
+
+<Term def="把请求路由、输入校验、应用模型调用和输出选择连接起来的 Web 入口边界；它不应直接拥有持久化和核心业务规则。">
+  Web 控制器
+</Term>
+是请求变化与业务变化之间的隔离层。本页以 2024
+年中文版公开目录限定第14章的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-第14章 Web表现模式 面对的具体压力是“路由数量、重复控制逻辑、视图变体与导航状态”。它采用的机制可以概括为：分离请求处理、导航、模型和HTML生成的不同变化轴。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="为单个页面或用例提供输入处理、模型调用和响应选择的控制器，适合页面边界清晰且共享流程较少的场景。">
+  Page Controller
+</Term>
+适合把局部变化留在局部。
+<Term def="为多个请求提供统一入口，集中认证、路由、错误处理和通用上下文，再把请求分发给具体用例的控制器。">
+  Front Controller
+</Term>
+减少共享基础设施重复，但不能因此吞掉所有页面逻辑。
+<Term def="专门封装跨页面导航和应用流程状态的协调对象，例如审批向导和多步结算流程。">
+  Application Controller
+</Term>
+则拥有流程导航，不拥有每个页面的展示细节。
 
-对 第14章 Web表现模式，优先比较的替代路线是：分别比较页面控制、前端控制、模板、转换、两步视图和应用控制器。本页的通过条件是“能解释Web表现模式的边界与选择轴，逐项覆盖7个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 路由 从何处越界，就不能据此选择 第14章 Web表现模式。
+<Term def="把模型数据按模板占位符生成输出的视图组件，不应直接执行数据库访问或改变领域状态。">
+  Template View
+</Term>
+适合稳定页面结构；Transform View 把模型转换为另一种输出，Two Step View
+把内容与全局布局分成两步。选择要由路由共享、流程状态、视图变体和转义安全的证据推动，而不是由框架默认值推动。
 
+对第14章 Web表现模式，优先比较的替代路线是：页面边界局部时采用 Page Controller，认证和错误处理共享时采用 Front Controller，跨页面流程复杂时采用 Application Controller，输出格式变化时采用 Template View、Transform View 或 Two Step View。若实验只能显示一页 HTML，不能说明导航、输入校验和模板安全，就不能据此选择模式。
 
 ## 目录单元到教学证据
 
 ### 第14章 Web表现模式
 
-在 **第14章 Web表现模式** 的学习边界里，第14章 Web表现模式 不是待背诵的目录词，而是用来检查“HTTP请求”是否把责任交给正确对象。对 订单后台多视图，学习者要记录 路由 的可观察变化，并说明它何时支持或否定 第14章 Web表现模式。
+第14章 Web表现模式要求把“HTTP 请求如何变成安全且可导航的响应”变成可观察的架构决定：先标出路由、控制器、应用模型、视图与导航状态的所有者，再用订单后台多视图的路由测试、流程测试和输出快照验证决定。只有模板替换不会重写业务和导航，表示模式才真正隔离了变化。
 
-## 专属设计案例：订单后台多视图
+## 专属代码案例：订单审批后台
 
-把 订单后台多视图 切成“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”五个观察点。第14章 Web表现模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 路由、输入校验、导航、模板转义、视图复用 中哪个指标最先提示当前方案不再适用。
+把订单审批后台切成“HTTP 请求 → Front/Page Controller → 应用流程 → View Model → Template/Transform View”五个观察点。第14章 Web表现模式的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及路由、输入校验、导航、模板转义和视图复用中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-14-web-presentation-patterns**；模式族为 **web**；裁决是“能解释Web表现模式的边界与选择轴，逐项覆盖7个目录节点，并在同一应用切片中验证”；观测项包括 路由、输入校验、导航、模板转义、视图复用；拒绝条件是“路由 超过团队为 第14章 Web表现模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-14-web-presentation-patterns**；模式族为 **web**；裁决是“共享基础设施集中，页面输入局部，跨页状态独立，视图只消费已转义的 View Model”；观测项包括路由、输入校验、导航、模板转义、视图复用；拒绝条件是“模板直接查询数据库或控制器同时持有流程、业务规则和 HTML 字符串”。
 
-配置不是生产框架语法，而是一张评审卡。对 第14章 Web表现模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：订单审批从“详情”进入“确认”再进入“完成”，哪些状态属于 Application Controller，哪些内容属于 View？先写下导航、模型和模板边界，再阅读实现；验证时要能说明同一审批结果如何转换为 HTML 与 CSV，而不会重复权限和金额规则。
 
-# 模式族地图
+```ts
+type ApprovalRequest = {
+  userId: string;
+  orderId: string;
+  action: "approve" | "reject";
+};
 
+type ApprovalViewModel = {
+  heading: string;
+  nextPath: string;
+  notice: string;
+};
 
-<Poeaa24Ch14WebPresentationMatrix />
+interface ApprovalApplication {
+  approve(
+    userId: string,
+    orderId: string,
+  ): "approved" | "forbidden" | "missing";
+  reject(userId: string, orderId: string): "rejected" | "forbidden" | "missing";
+}
 
-**阅读路径**：请求分发 → Page/Front Controller；职责分离 → MVC；渲染方式 → Template/Transform View；布局分离 → Two Step View；跨页流程 → Application Controller。
+class ApprovalPageController {
+  constructor(private readonly application: ApprovalApplication) {}
+
+  handle(request: ApprovalRequest): ApprovalViewModel {
+    const result =
+      request.action === "approve"
+        ? this.application.approve(request.userId, request.orderId)
+        : this.application.reject(request.userId, request.orderId);
+
+    if (result === "forbidden") {
+      return {
+        heading: "Not allowed",
+        nextPath: "/orders",
+        notice: "权限不足",
+      };
+    }
+    if (result === "missing") {
+      return {
+        heading: "Order not found",
+        nextPath: "/orders",
+        notice: "订单不存在",
+      };
+    }
+    return {
+      heading: "Approval updated",
+      nextPath: `/orders/${request.orderId}`,
+      notice: result === "approved" ? "订单已批准" : "订单已拒绝",
+    };
+  }
+}
+```
+
+这段代码让 Page Controller 负责输入和响应模型，让应用层负责审批规则，让视图只消费 `ApprovalViewModel`。真实 Front Controller 可以在更外层统一认证、路由和错误记录；Template View 或 Transform View 再把同一 View Model 输出成 HTML 或 CSV，不能把用户输入直接拼入 HTML。
+
+## Web 表示模式职责矩阵
+
+控制器组解决请求路由和流程控制，视图组解决模型到输出的转换，MVC 负责把 Model、View、Controller 的职责放在可替换边界上。下面的矩阵覆盖七种模式及其核心职责。
+
+<Poeaa24Ch14WebPresentationMatrixDiagram />
+
+矩阵不是“每个项目都要用七个模式”的清单；它用于记录变化轴，帮助团队拒绝不必要的共享入口、隐式导航和模板业务逻辑。
+
+## Web 流程选择图
+
+先看共享认证、路由和错误处理，再看是否存在跨页面流程，最后看是否存在多个输出格式。每次集中化都要给出减少重复或保护状态的证据；没有证据时保持 Page Controller 和简单 Template View。
+
+<Poeaa24Ch14WebFlowDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第14章 Web表现模式 的证据    | 应拒绝或改用其他方案的信号                  |
-| -------- | --------------------------------- | ------------------------------------------- |
-| 责任     | HTTP请求 到 HTTP响应 的所有者清晰 | 控制器 可以绕过边界直接改写状态             |
-| 变化     | 路由 的变化被局部吸收             | 一次小改动同时触及 输入校验、导航、模板转义 |
-| 失败     | 故障能在 HTTP响应 前被识别并回退  | 只能看到最终错误，无法定位 路由 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析          |
+| 评审问题 | 选择 Web 表示模式的证据                 | 应拒绝当前方案的信号             |
+| -------- | --------------------------------------- | -------------------------------- |
+| 路由     | 页面与共享入口的边界可测试              | 一个巨型入口包含所有页面业务分支 |
+| 流程     | Application Controller 明确拥有跨页状态 | 控制器或模板用隐式变量猜测下一步 |
+| 输出     | View Model 可被 HTML、CSV 或布局复用    | 每个模板复制金额、权限和状态规则 |
+| 安全     | 输入校验、转义和错误路径有专门测试      | 用户输入直接进入 HTML 或 SQL     |
 
+## 常见误区
+
+<Callout type="trap" title="把 Front Controller 做成巨型应用">
+
+- **现象**：所有页面、审批规则和输出格式都堆在统一入口，任何改动都影响全站。
+- **原因**：把共享认证和路由误认为所有用例都应共享。
+- **修法**：Front Controller 只负责真正共享的基础设施，把页面用例和流程交给局部控制器或 Application Controller。
+
+</Callout>
+
+<Callout type="trap" title="模板拥有业务规则">
+
+- **现象**：HTML 模板计算订单金额、判断权限并访问数据库，CSV 模板又复制一套规则。
+- **原因**：没有稳定 View Model，视图被迫成为领域服务。
+- **修法**：应用模型提供已授权、已计算的结果，Template/Transform View 只负责展示和格式转换。
+
+</Callout>
+
+<Callout type="trap" title="把导航状态藏在请求参数里">
+
+- **现象**：用户可以跳过审批步骤或回到过期页面，系统无法解释当前流程状态。
+- **原因**：没有由 Application Controller 或服务端会话拥有流程状态，只信任页面传回的下一步。
+- **修法**：服务端验证当前步骤、身份和版本，集中记录流程转移，失败时返回明确可恢复路径。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第14章 Web表现模式，并要求把路由、输入校验、导航、模板转义和视图复用映射到订单后台多视图。
+
+**问题 1：选择入口。** 多个页面共享认证、错误处理和路由，但每个页面的业务用例不同，应该如何拆分？
+
+<Answer>
+
+使用 Front Controller 集中共享基础设施，再把页面用例分发给 Page Controller 或应用服务。不要把页面业务分支全部放进 Front Controller；用路由测试和错误路径测试验证集中入口确实减少重复。
+
+</Answer>
+
+**问题 2：处理跨页流程。** 订单审批需要详情、确认和完成三个步骤，下一步不能由客户端任意跳过，状态应由谁拥有？
+
+<Answer>
+
+由 Application Controller 或服务端流程对象拥有当前步骤、用户和订单版本，控制器只传递意图并返回下一步 View Model。服务端每次转移都验证状态，不能只相信请求参数里的 nextPath。
+
+</Answer>
+
+**问题 3：复用输出。** 同一审批结果需要 HTML 页面和 CSV 下载，如何避免视图复制规则？
+
+<Answer>
+
+让模型或应用层返回已授权的结果，控制器生成稳定 View Model；HTML 使用 Template View，CSV 使用 Transform View，Two Step View 可继续负责全局布局。模板和转换器不能重新计算金额或执行数据库访问。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Page Controller">
+    为单个页面或用例提供输入处理、模型调用和响应选择的局部控制器。
+  </GlossaryItem>
+  <GlossaryItem term="Front Controller">
+    为多个请求提供统一入口，集中认证、路由、错误处理和通用上下文的控制器。
+  </GlossaryItem>
+  <GlossaryItem term="Application Controller">
+    封装跨页面导航和应用流程状态的协调对象，不拥有每个页面的展示细节。
+  </GlossaryItem>
+  <GlossaryItem term="Template View">
+    使用模板占位符把模型数据生成输出的视图组件，不直接访问数据库或改变领域状态。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第14章 Web表现模式 的标志不是记住定义，而是能在 订单后台多视图 中解释“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”的责任链，利用 路由、输入校验、导航、模板转义、视图复用 作出可证伪的选择，并在出现“在模板里直接执行业务规则和数据库访问”时明确拒绝当前实现。
-
+掌握第14章 Web表现模式的标志不是记住七个模式名称，而是能在订单审批后台中解释“HTTP 请求 → 控制器 → 应用流程 → View Model → Template/Transform View”的责任链。学习者应利用路由、输入校验、导航、模板转义和视图复用作出可证伪的选择，并在巨型入口、模板业务逻辑或客户端控制流程时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -76,3 +241,10 @@ import { Poeaa24Ch14WebPresentationMatrix } from "@/components/mdx/poeaa-enterpr
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

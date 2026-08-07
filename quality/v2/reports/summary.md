@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T13:13:33.985Z；旧版分数不迁移。
+> 2026-08-07T13:20:27.354Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2489
+- failed：2488
 - queued：401
-- passed：982
+- passed：983
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -95,20 +95,20 @@
 | 82 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
 | 83 | modern-os | 15 | 15 | 0 | 0 | 57 |
 | 84 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 85 | poeaa-enterprise-patterns | 78 | 15 | 0 | 63 | 45 |
-| 86 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 87 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 88 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 89 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 90 | ddia | 15 | 15 | 0 | 0 | 44 |
-| 91 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 92 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 93 | effective-executive | 14 | 14 | 0 | 0 | 56 |
-| 94 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 95 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
-| 96 | css-world | 14 | 14 | 0 | 0 | 42 |
-| 97 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 98 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 85 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 86 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 87 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 88 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 89 | ddia | 15 | 15 | 0 | 0 | 44 |
+| 90 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 91 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 92 | effective-executive | 14 | 14 | 0 | 0 | 56 |
+| 93 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 94 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 95 | css-world | 14 | 14 | 0 | 0 | 42 |
+| 96 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 97 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 98 | poeaa-enterprise-patterns | 78 | 14 | 0 | 64 | 42 |
 | 99 | unity-master | 14 | 14 | 0 | 0 | 42 |
 | 100 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
 | 101 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |

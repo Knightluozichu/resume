@@ -15703,11 +15703,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/44-chapter-14-web-presentation-patterns/poeaa24-chapter-14-web-presentation-patterns":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-presentation-matrix");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-presentation-matrix"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch14-web-flow-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch14WebPresentationMatrix:
-          module0.Poeaa24Ch14WebPresentationMatrix,
+        Poeaa24Ch14WebPresentationMatrixDiagram:
+          modules[0].Poeaa24Ch14WebPresentationMatrixDiagram,
+        Poeaa24Ch14WebFlowDecisionDiagram:
+          modules[1].Poeaa24Ch14WebFlowDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/45-pattern-25-model-view-controller/poeaa24-pattern-25-model-view-controller":
