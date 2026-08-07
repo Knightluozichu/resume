@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T22:59:45.391Z；旧版分数不迁移。
+> 2026-08-07T23:05:26.724Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2422
+- failed：2421
 - queued：401
-- passed：1049
+- passed：1050
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -60,14 +60,14 @@
 | 47 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
 | 48 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
 | 49 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 50 | pragmatic-programmer | 71 | 19 | 0 | 52 | 57 |
-| 51 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 52 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
-| 53 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 54 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 55 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
-| 56 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 57 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 50 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 51 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
+| 52 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 53 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 54 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
+| 55 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 56 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 57 | pragmatic-programmer | 71 | 18 | 0 | 53 | 54 |
 | 58 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 59 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 60 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
