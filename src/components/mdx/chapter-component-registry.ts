@@ -16549,6 +16549,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic29JugglingRealWorldLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-30-transforming-programming-diagram");
+      return {
+        Tpp20Topic30TransformingProgrammingDiagram:
+          module0.Tpp20Topic30TransformingProgrammingDiagram,
+        Tpp20Topic30TransformingProgrammingLab:
+          module0.Tpp20Topic30TransformingProgrammingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
