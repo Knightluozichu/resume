@@ -463,7 +463,7 @@
     - 路径：`content/pragmatic-programmer/54-topic-44-naming-things/tpp20-topic-44-naming-things.mdx`
 - [x] ✅ **57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles** — 已修复（2026-08-08，score 42→95，passed）
     - 路径：`content/pragmatic-programmer/57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles.mdx`
-- [ ] 🔴 P1 **58-topic-47-working-together/tpp20-topic-47-working-together** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **58-topic-47-working-together/tpp20-topic-47-working-together** — 已修复（2026-08-08，score 42→94，passed）
     - 路径：`content/pragmatic-programmer/58-topic-47-working-together/tpp20-topic-47-working-together.mdx`
 - [ ] 🔴 P1 **59-topic-48-essence-agility/tpp20-topic-48-essence-agility** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/59-topic-48-essence-agility/tpp20-topic-48-essence-agility.mdx`
