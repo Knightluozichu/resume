@@ -15433,8 +15433,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-01-transaction-script-diagram");
       return {
-        Poeaa24Pattern01TransactionScript:
-          module0.Poeaa24Pattern01TransactionScript,
+        Poeaa24Pattern01TransactionScriptDiagram:
+          module0.Poeaa24Pattern01TransactionScriptDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/17-pattern-02-domain-model/poeaa24-pattern-02-domain-model":
