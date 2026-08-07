@@ -7,27 +7,39 @@ description: "用提供特殊行为的子类或对象表示缺失、未知等情
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-48-special-case
 draft: false
 ---
 
-import { Poeaa24Pattern48SpecialCase } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-48-special-case-diagram";
+import { Poeaa24Pattern48SpecialCaseDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-48-special-case-diagram";
 
+<Objectives>
+
+- 能区分可建模的缺失/未知情况与必须暴露的真实错误，并说明特殊对象的行为契约
+- 能编写 TypeScript Special Case 实现，消除重复空值分支，同时保留可观测的边界语义
+- 能根据默认值风险、调用者数量和错误可见性，判断何时采用或拒绝特殊情况
+
+</Objectives>
 
 ## 为什么 18.8 特殊情况 值得单独学习
 
 用提供特殊行为的子类或对象表示缺失、未知等情况，消除调用处重复条件分支。 18.8 特殊情况 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
 
-本页以 2024 年中文版公开目录限定 **18.8 特殊情况** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+<Term def="用一个遵守正常接口的对象表示可预期缺失、未知或默认情况，从而集中边界行为的模式。">
+  特殊情况
+</Term>
+的价值不是让所有异常都返回默认值，而是把“业务上可接受的缺失”变成可命名、可测试的行为。本页以
+2024 年中文版公开目录限定 **18.8 特殊情况** 的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
 18.8 特殊情况 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：用提供特殊行为的子类或对象表示缺失、未知等情况，消除调用处重复条件分支。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
 
-对 18.8 特殊情况，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能让特殊对象遵守同一接口，删除散落空值判断，并验证它不会掩盖真正错误”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.8 特殊情况。
-
+对 18.8 特殊情况，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能让特殊对象遵守同一接口，删除散落空值判断，并验证它不会掩盖真正错误”；若实验只能显示结果而不能指出 <Term def="调用者把对象交给同一接口、由多态分派选择正常或特殊行为的关系。">多态契约</Term>从何处越界，就不能据此选择 18.8 特殊情况。
 
 ## 目录单元到教学证据
 
@@ -45,8 +57,7 @@ import { Poeaa24Pattern48SpecialCase } from "@/components/mdx/poeaa-enterprise-p
 
 # 结构解剖
 
-
-<Poeaa24Pattern48SpecialCase />
+<Poeaa24Pattern48SpecialCaseDiagram />
 
 ## 选择与拒绝矩阵
 
@@ -57,11 +68,118 @@ import { Poeaa24Pattern48SpecialCase } from "@/components/mdx/poeaa-enterprise-p
 | 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
 | 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
 
+## 代码实践：让可接受缺失遵守同一契约
+
+订单查不到可选账单资料时，可以使用 `NoBillingPlan`；但付款失败、权限拒绝和数据损坏不能被伪装成“没有方案”。<Term def="特殊对象在边界处返回的、业务明确允许继续处理的结果，而不是任意错误的默认值。">安全默认值</Term>必须有文档、指标和测试。
+
+```ts
+type BillingPlan = {
+  name: string;
+  monthlyCents: number;
+  isAvailable(): boolean;
+};
+
+class NoBillingPlan implements BillingPlan {
+  name = "none";
+  monthlyCents = 0;
+
+  isAvailable(): boolean {
+    return false;
+  }
+}
+
+class Customer {
+  constructor(private readonly plan: BillingPlan | null) {}
+
+  billingPlan(): BillingPlan {
+    return this.plan ?? new NoBillingPlan();
+  }
+}
+
+function showPlan(customer: Customer) {
+  const plan = customer.billingPlan();
+  return plan.isAvailable() ? plan.name : "未选择方案";
+}
+```
+
+这段代码只把“没有可选方案”建模为特殊情况；如果数据库连接失败，调用者应收到错误并记录告警，而不是得到 `NoBillingPlan`。测试要同时覆盖真实方案、特殊方案和不可隐藏的异常。
+
+## 常见误区
+
+<Callout type="trap" title="把所有错误都变成默认对象">
+
+- **现象**：数据库超时也返回 `NullCustomer`，页面继续显示空购物车。
+- **原因**：把可预期缺失和基础设施故障混成同一种“没有数据”。
+- **修法**：只为业务允许的缺失定义 Special Case；连接失败、权限拒绝和数据损坏必须保持可见。
+
+</Callout>
+
+<Callout type="trap" title="特殊对象不遵守正常接口">
+
+- **现象**：调用者仍要先判断对象类型，或特殊对象抛出与正常对象不同的未声明异常。
+- **原因**：只创建了一个名字好听的默认类，没有定义多态契约。
+- **修法**：让正常与特殊对象共享同一接口，明确每个方法的安全默认语义并补齐契约测试。
+
+</Callout>
+
+<Callout type="trap" title="默认值掩盖数据质量问题">
+
+- **现象**：未知状态被静默改成“无方案”，运营无法发现上游数据已经损坏。
+- **原因**：为了减少分支而牺牲诊断信号，缺少指标和错误分类。
+- **修法**：对未知或损坏数据返回显式错误并告警；只有业务上定义的缺失才使用特殊情况。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+**问题 1：区分两种情况。** `findBillingPlan` 查不到客户方案时应返回 `NoBillingPlan`，但数据库连接超时也走同一分支。应如何改？
+
+<Answer>
+
+把“记录不存在”与“查询失败”分成不同结果：前者可以返回 `NoBillingPlan`，后者应返回错误或可重试结果并记录指标。否则调用者会把基础设施故障误认为客户没有方案。
+
+</Answer>
+
+**问题 2：检查契约。** `NoBillingPlan.isAvailable()` 返回 false，但 `monthlyCents` 抛异常。为什么这可能违反多态契约？
+
+<Answer>
+
+如果正常 `BillingPlan` 允许调用者读取 `monthlyCents`，特殊对象也应提供有文档的安全值或让接口明确该字段可能缺失。随意抛异常会迫使调用者重新判断类型；应根据业务契约选择 `0`、可选值或显式结果类型，并为其加测试。
+
+</Answer>
+
+**问题 3：决定是否使用。** 一个缺失值极少发生，且一旦发生就表示数据损坏。应采用 Special Case 吗？
+
+<Answer>
+
+不应直接采用。既然缺失代表数据损坏而不是可接受业务状态，就应返回显式错误、告警和修复路径。Special Case 适用于可预期、可解释且调用者确实能安全继续的缺失。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="特殊情况">
+    用遵守正常接口的对象表示可预期缺失、未知或默认情况的模式。
+  </GlossaryItem>
+  <GlossaryItem term="多态契约">
+    正常对象与特殊对象共同遵守的输入、结果和行为约束。
+  </GlossaryItem>
+  <GlossaryItem term="安全默认值">
+    业务明确允许继续处理、且不会掩盖真正错误的特殊结果。
+  </GlossaryItem>
+  <GlossaryItem term="可接受缺失">
+    业务语义允许出现、可以被记录并安全处理的不存在或未选择状态。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
 掌握 18.8 特殊情况 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
 
 ## 前后导航
 
@@ -74,3 +192,10 @@ import { Poeaa24Pattern48SpecialCase } from "@/components/mdx/poeaa-enterprise-p
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

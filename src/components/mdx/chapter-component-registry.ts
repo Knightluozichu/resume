@@ -15882,7 +15882,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-48-special-case-diagram");
       return {
-        Poeaa24Pattern48SpecialCase: module0.Poeaa24Pattern48SpecialCase,
+        Poeaa24Pattern48SpecialCaseDiagram:
+          module0.Poeaa24Pattern48SpecialCaseDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/73-pattern-49-plugin/poeaa24-pattern-49-plugin":
