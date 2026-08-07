@@ -3,74 +3,263 @@ title: "12.8 类表继承"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 37
-description: "为继承层次中的每个类建立一张表，通过共享身份连接父类与子类数据。"
+description: "为继承层次中的每个类建立一张表，以共享主键连接父类和子类数据，并用 JOIN 重建对象。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-19-class-table-inheritance
 draft: false
 ---
 
 import { Poeaa24Pattern19ClassTableInheritance } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-19-class-table-inheritance-diagram";
 
+<Objectives>
 
-## 为什么 12.8 类表继承 值得单独学习
+- 能把一个继承层次拆成父类表、子类表和共享主键外键，并解释每列的身份语义
+- 能编写插入、加载和删除类表继承对象的最小代码，明确 JOIN、事务与参照完整性的责任边界
+- 能依据多态查询、字段演化和写入事务成本，在类表继承、单表继承与具体表继承之间作出可验证的选择
 
-为继承层次中的每个类建立一张表，通过共享身份连接父类与子类数据。 12.8 类表继承 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **12.8 类表继承** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 12.8 类表继承值得单独学习
 
-## 先建立直觉：问题、机制与代价
+设想一个订单系统把员工分成 `Employee`、`Engineer` 和 `Manager`。对象侧希望复用 `Employee.id`、`name` 等公共状态，又希望工程师有 `skill`、经理有 `budget`。如果把所有字段塞进一张宽表，会得到很多与类型无关的空列；如果每个子类完全复制公共字段，又会把一次公共字段改名扩散到多张表。
 
-12.8 类表继承 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：为继承层次中的每个类建立一张表，通过共享身份连接父类与子类数据。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+本章解决的不是“ORM 怎样声明继承”，而是一个更小、更硬的问题：怎样让数据库中的多行仍然表示同一个对象身份。<Term def="为继承层次中的每个类建立一张表，并用父子表共享的主键重建对象结构">类表继承</Term>把公共状态放在父类表，把专属状态放在子类表；子类行通过同一个 ID 找回父类行。它用 JOIN 换取字段边界清晰，用事务和约束换取身份不被拆散。
 
-对 12.8 类表继承，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能正确连接多级表并保持身份唯一，同时测量读取联接和写入事务的成本”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 12.8 类表继承。
+本页依据 Martin Fowler 的作者图书页、模式目录和出版社目录独立重写，不复现原书正文、插图或代码。目录只限定学习范围；员工继承层次、SQL、TypeScript 映射、评审矩阵和交互图均为本课程原创教学材料。
 
+## 先建立直觉：一份身份如何分布在三张表里
+
+先猜一猜：如果 `Engineer` 对象的 `id` 是 42，`employees` 表里有 `(42, "Lin")`，那么 `engineers` 表应该使用什么值来指向它？答案不是再生成一个 9001，而是继续使用 42。这个值就是<Term def="父类表和子类表共同使用的同一个主键值；子类表中的该列同时承担外键作用">共享主键</Term>：它同时回答“这是哪个对象”和“它属于哪一行父类数据”。
+
+数据库中的三个层次可以这样读：`employees` 保存所有员工都有的字段，`engineers` 和 `managers` 只保存差异字段；当应用要恢复一个工程师时，映射器先按同一个 ID 连接两张表，再构造一个对象。这里的<Term def="把对象的类、字段和关系转换为关系表行，并负责加载与写回顺序的代码边界">映射器</Term>不是数据库的替代品：它负责翻译，数据库仍负责主键、外键和事务约束。
+
+如果父类还有一层抽象中间类，连接链会继续变长。例如 `StaffMember → Employee → Engineer` 对应三张表，最深的查询需要沿着共享 ID 逐层 JOIN。先观察图中的 ID 是否保持不变，再回答：你愿意为每次读取支付几次 JOIN，取决于这个继承层次是否真的有稳定的公共身份，而不是取决于 ORM 的默认配置。
+
+## 核心模型：父类表保存共性，子类表保存差异
+
+### 共享身份比字段复制更重要
+
+类表继承的最小模式是一组同名身份列：
+
+```sql
+CREATE TABLE employees (
+  id   BIGINT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE engineers (
+  id    BIGINT PRIMARY KEY REFERENCES employees(id),
+  skill VARCHAR(120) NOT NULL
+);
+
+CREATE TABLE managers (
+  id     BIGINT PRIMARY KEY REFERENCES employees(id),
+  budget DECIMAL(12, 2) NOT NULL
+);
+```
+
+子类表的 `id` 同时是主键和指向 `employees.id` 的外键。<Term def="要求外键值必须能在被引用表中找到对应主键的数据库规则">参照完整性</Term>因此拒绝两种错误：孤立的工程师行，以及没有对应子类行却被应用误构造成工程师的对象。公共字段不会在子类表重复，专属字段也不会污染不属于该类型的行。
+
+### 写入与删除必须有明确顺序
+
+创建工程师时，先插入父类行，再插入子类行；删除工程师时，先删除子类行，再删除父类行。两步必须位于同一个事务中，否则中途失败会留下只有父类、只有子类，或已经失去完整对象的半成品。数据库的外键会挡住非法顺序，但它不能替你决定事务何时开始、错误怎样返回。
+
+```ts
+type Engineer = { id: number; name: string; skill: string };
+
+async function insertEngineer(db: Db, engineer: Engineer) {
+  await db.transaction(async (tx) => {
+    await tx.employees.insert({ id: engineer.id, name: engineer.name });
+    await tx.engineers.insert({ id: engineer.id, skill: engineer.skill });
+  });
+}
+
+async function loadEngineer(db: Db, id: number): Promise<Engineer | null> {
+  const row = await db.queryOne(
+    `SELECT e.id, e.name, g.skill
+       FROM employees e
+       JOIN engineers g ON g.id = e.id
+      WHERE e.id = ?`,
+    [id],
+  );
+  return row ? { id: row.id, name: row.name, skill: row.skill } : null;
+}
+```
+
+这里的 `Db` 和 SQL 占位符只是说明持久化契约的伪接口，不绑定某个 ORM。可验收的行为是：父类插入失败时没有子类行；子类插入失败时整个事务回滚；加载只在两行都存在时返回完整的 `Engineer`。若需要允许“暂时没有具体类型”的员工，就必须显式定义状态，而不能靠一条缺失的子类行猜测类型。
+
+### 查询类型越宽，JOIN 代价越明显
+
+读取单一子类时，`employees JOIN engineers` 很直观。读取所有员工的<Term def="以父类接口读取多个具体子类实例，并在结果中保留其具体类型的查询场景">多态查询</Term>则需要决定数据库如何表达类型：可以对每个子类做 `LEFT JOIN`，再由 `CASE` 判断非空列；也可以分别查询每个子类并 `UNION ALL` 成统一结果。两者都必须记录缺失子类行的处理方式，不能把空结果默认为某个类型。
+
+多态查询不是类表继承的错误，而是它的账单：公共字段只存一份，代价是更长的读取计划和更复杂的结果组装。若系统几乎只按具体类型读取，这个账单通常可接受；若每个请求都要扫描十几种子类，选择前应把 JOIN 数量、索引命中和映射器代码量写进评审记录。
 
 ## 目录单元到教学证据
 
 ### 12.8 类表继承
 
-在 **12.8 类表继承** 的学习边界里，12.8 类表继承 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 12.8 类表继承。
+本章只覆盖一个官方目录单元：**12.8 类表继承**。单元键为 **poeaa24-pattern-19-class-table-inheritance**，模式族为 **mapping**。本章的证据链不是“表能建起来”，而是能从同一个 ID 追踪父子行，证明插入和删除的事务顺序，并在多态查询变宽时指出拒绝信号。
 
-## 专属设计案例：订单聚合持久化
+评审一份实现时，固定使用员工样本：`Employee(42, "Lin")`、`Engineer(42, "compiler")`、`Manager(77, 1200000)`。记录四个观察项：共享身份是否唯一，父子行是否一起提交，查询是否能恢复具体类型，新增公共字段是否只需要改父类表。任何一项没有可复现的 SQL、代码或截图证据，都不能只用“ORM 已处理”带过。
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。12.8 类表继承 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+## 专属代码案例：员工继承的映射边界
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-19-class-table-inheritance**；模式族为 **mapping**；裁决是“能正确连接多级表并保持身份唯一，同时测量读取联接和写入事务的成本”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 12.8 类表继承 设定的边界”。
+把一次员工保存切成“对象 → 父类行 → 子类行 → JOIN 恢复”四个观察点。领域代码拥有 `Engineer.skill` 的业务校验，映射器把对象翻译成两张表的行，数据库用外键保护共享身份；三者各自的失败都要能被定位。
 
-配置不是生产框架语法，而是一张评审卡。对 12.8 类表继承 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+一个实用的评审卡包含五项：模式键为 **poeaa24-pattern-19-class-table-inheritance**；当前裁决是“公共字段稳定、具体类型常被单独读取、共享主键可在事务内维护”；观测项包括 JOIN 深度、多态查询比例、公共字段迁移次数、父子写入失败率和索引命中；拒绝条件是“每个请求都必须扫描大量子类，或跨服务写入使父子行无法保持同一事务边界”。
 
-## 三步交互实验
+下面的图把这张卡拆成三步。动手试前先预测：第 2 步把 `skill` 从 `employees` 移到 `engineers` 后，哪一个 ID 必须保持不变；第 3 步加入“列出所有员工”后，查询复杂度会在哪个位置增加。切换步骤时观察变化，再用练习题写出你的选择理由。
 
+## 三步交互实验：从建表到多态查询
 
-<Poeaa24Pattern19ClassTableInheritance />
+<Stepper>
+
+<Step title="步骤 1：把继承层次落成共享身份">
+
+先固定 `Employee(42)` 和 `Engineer(42)`。图中父类表和子类表各有自己的字段，但两处 ID 必须相同；如果子类另造一个 ID，数据库就无法证明它们是同一个对象。
+
+<Poeaa24Pattern19ClassTableInheritance.Diagram step={1} />
+
+</Step>
+
+<Step title="步骤 2：按事务顺序写入，并用 JOIN 恢复">
+
+动手试：沿着图中的父表 → 子表箭头读一次保存顺序，再沿 JOIN 箭头反向读一次加载顺序。父类行先写、子类行后写；读取时两行按共享 ID 合并。观察变化：约束保护的是身份，映射器保护的是转换顺序。
+
+<Poeaa24Pattern19ClassTableInheritance.Diagram step={2} />
+
+</Step>
+
+<Step title="步骤 3：多态查询暴露选型边界">
+
+观察变化：现在要求一次列出工程师和经理。图中会同时显示多个子类读取路径；这不是凭空新增的字段，而是每个类型都要参与 JOIN 或 `UNION ALL`。如果具体类型很多且几乎每次都要全量扫描，应把测量结果带回单表继承、具体表继承或专用读模型的比较。
+
+<Poeaa24Pattern19ClassTableInheritance.Diagram step={3} />
+
+</Step>
+
+</Stepper>
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 12.8 类表继承 的证据        | 应拒绝或改用其他方案的信号                 |
-| -------- | -------------------------------- | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰  | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收            | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退 | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析         |
+| 评审问题 | 选择类表继承的证据 | 应拒绝或比较其他策略的信号 |
+| --- | --- | --- |
+| 身份 | 父子表可在同一事务中共享稳定主键 | 跨服务写入使父行和子行无法一起提交 |
+| 字段 | 公共字段需要唯一来源，子类差异字段有清晰边界 | 公共字段频繁变化，迁移要同时改很多外部表 |
+| 读取 | 具体类型查询多，JOIN 深度可测量且有索引 | 每个请求都必须扫描大量子类，且多态响应是主路径 |
+| 完整性 | 子表 FK 约束和删除顺序可以自动验收 | 应用靠“缺少子类行就当作某类型”猜测对象类型 |
+| 替代 | 已将 JOIN 成本与单表、具体表方案做过同一数据集对比 | 只因 ORM 的继承 API 方便就跳过 SQL 计划和事务评审 |
 
+和单表继承相比，类表继承减少了无关类型的空列，但读取需要 JOIN；和具体表继承相比，它避免复制公共字段，但多态读取不再是简单的单表查询。选择的依据应是实际读写比例和演化证据，不是“规范上更面向对象”。
+
+## 常见误区
+
+<Callout type="trap" title="把子类主键当成一枚新的身份">
+
+- **现象**：`employees.id = 42`，但插入 `engineers` 时另生成 `id = 9001`，加载工程师只能靠姓名或额外映射表拼接。
+- **原因**：把对象继承关系误当成两个独立对象，破坏了父子行表示同一实例的共享主键语义。
+- **修法**：子类行复用父类 ID，并把子类 ID 同时声明为主键和外键；在事务测试中断言两行 ID 相等。
+
+</Callout>
+
+<Callout type="trap" title="只插入子类表，期待 JOIN 自动补出父类">
+
+- **现象**：工程师表有 `skill`，但 `employees` 没有对应行；查询结果丢失姓名，删除时还可能留下孤儿记录。
+- **原因**：把 ORM 的对象构造顺序当成数据库事务，忽略了外键只能拒绝非法引用，不能替应用创建缺失的父类状态。
+- **修法**：父类行先插入、子类行后插入，二者放在一个事务里；删除时反过来，并为失败回滚写集成测试。
+
+</Callout>
+
+<Callout type="trap" title="把多态查询的 JOIN 隐藏成没有成本的魔法">
+
+- **现象**：接口每次返回所有员工，却没有记录参与的子类表、JOIN 数量和索引计划；新增一种子类后响应时间突然增长。
+- **原因**：只评估了对象模型的复用，没有把类表继承的读取账单纳入模式选择。
+- **修法**：分别测量具体类型读取和多态读取；当多态读取成为主路径时，比较 LEFT JOIN、UNION ALL、单表继承或专用读模型，并保留可回退的迁移方案。
+
+</Callout>
 
 ## 本章小结
 
-掌握 12.8 类表继承 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
+类表继承的关键不是“每个类都有一张表”，而是父类行与子类行用同一个主键表示同一对象。共享主键和参照完整性守住身份，事务顺序守住写入与删除，映射器通过 JOIN 把多行恢复成一个对象；多态查询则把额外读取成本明确暴露出来。
 
+因此，公共字段需要唯一来源、具体类型读取占主导且父子写入能保持同一事务时，类表继承是有证据支撑的选择。若多态扫描成为热路径，或父子行跨越无法协调的边界，应把测量结果带回单表继承、具体表继承或读写分离方案，而不是继续把 JOIN 藏在框架默认值后面。
+
+## 本章练习
+
+<Exercises>
+
+**问题 1：** `employees.id = 42`，要保存 `Engineer { id: 42, name: "Lin", skill: "compiler" }`。请写出两张表的插入顺序，并说明为什么不能先写 `engineers`。
+
+<Answer>
+
+先在 `employees` 插入 `(42, "Lin")`，再在 `engineers` 插入 `(42, "compiler")`，两步放在同一个事务中。因为 `engineers.id` 同时是指向 `employees.id` 的外键，父行不存在时子行会违反参照完整性；即使数据库允许延迟检查，也不应让提交过程暴露一个无法恢复的半对象。
+
+</Answer>
+
+**问题 2：** 下面的查询只返回员工公共字段，怎样把它改成只加载工程师，并保证没有子类行时不伪造一个 `Engineer`？
+
+```sql
+SELECT e.id, e.name, g.skill
+FROM employees e
+JOIN engineers g ON g.id = e.id
+WHERE e.id = 42;
+```
+
+<Answer>
+
+保留内连接，并把 `g.id` 的存在作为构造 `Engineer` 的前提；查询没有行时返回 `null` 或“不是工程师”，而不是用 `skill = NULL` 猜测类型。如果接口还要接受员工 ID，应先查询具体类型，或用显式的类型判定查询再选择对应的映射器。
+
+</Answer>
+
+**问题 3：** 团队发现“列出全部员工”占 70% 的读取量，而 `Engineer` 和 `Manager` 已经有 12 张子类表。你会继续扩展类表继承吗？请写出至少两项需要测量的证据。
+
+<Answer>
+
+不会直接扩展。应测量多态查询的 JOIN 或 `UNION ALL` 执行计划、各表索引命中与响应时间，以及新增公共字段和新增子类的迁移成本；再用同一批员工数据比较单表继承、具体表继承或专用读模型。若全量多态读取是主路径且 JOIN 成本持续上升，类表继承的字段去重收益可能已经不抵读取复杂度。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="类表继承">
+    继承层次中的每个类各有一张关系表；子类表用共享主键连接父类表，读取时再 JOIN 成对象。
+  </GlossaryItem>
+  <GlossaryItem term="共享主键">
+    父类表和子类表共同使用的同一个主键值；在子类表中通常同时承担外键作用。
+  </GlossaryItem>
+  <GlossaryItem term="映射器">
+    把对象字段和关系表行互相转换的代码边界，负责加载、写回和错误传播，不替代数据库约束。
+  </GlossaryItem>
+  <GlossaryItem term="参照完整性">
+    外键值必须能在被引用表中找到对应主键的数据库规则，用来阻止孤立的子类行。
+  </GlossaryItem>
+  <GlossaryItem term="多态查询">
+    以父类接口读取多个具体子类实例，并在结果中保留它们具体类型的查询场景。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：12.7 单表继承](/learn/poeaa-enterprise-patterns/36-pattern-18-single-table-inheritance/poeaa24-pattern-18-single-table-inheritance)
 - [下一页：12.9 具体表继承](/learn/poeaa-enterprise-patterns/38-pattern-20-concrete-table-inheritance/poeaa24-pattern-20-concrete-table-inheritance)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节定位与作者公开说明。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对 Class Table Inheritance 的模式名称与公开摘要。
+- [Pearson 出版社目录页](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Martin Fowler《企业应用架构模式》"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
