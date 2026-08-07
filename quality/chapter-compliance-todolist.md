@@ -425,7 +425,7 @@
     - 路径：`content/pragmatic-programmer/35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break.mdx`
 - [x] ✅ **36-topic-28-decoupling/tpp20-topic-28-decoupling** — 已修复（2026-08-08，score 42→100，passed）
     - 路径：`content/pragmatic-programmer/36-topic-28-decoupling/tpp20-topic-28-decoupling.mdx`
-- [ ] 🔴 P1 **37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world** — 已修复（2026-08-08，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world.mdx`
 - [ ] 🔴 P1 **38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/38-topic-30-transforming-programming/tpp20-topic-30-transforming-programming.mdx`

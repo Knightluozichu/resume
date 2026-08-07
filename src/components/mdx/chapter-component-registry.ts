@@ -16538,6 +16538,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic28DecouplingLab: module0.Tpp20Topic28DecouplingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/37-topic-29-juggling-real-world/tpp20-topic-29-juggling-real-world":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-29-juggling-real-world-diagram");
+      return {
+        Tpp20Topic29JugglingRealWorldDiagram:
+          module0.Tpp20Topic29JugglingRealWorldDiagram,
+        Tpp20Topic29JugglingRealWorldLab:
+          module0.Tpp20Topic29JugglingRealWorldLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
