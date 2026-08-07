@@ -16635,6 +16635,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic36BlackboardsLab: module0.Tpp20Topic36BlackboardsLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/46-chapter-07-while-coding/tpp20-chapter-07-while-coding":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter-07-while-coding-diagram");
+      return {
+        Tpp20Chapter07WhileCodingEvidenceDiagram:
+          module0.Tpp20Chapter07WhileCodingEvidenceDiagram,
+        Tpp20Chapter07WhileCodingLoopDiagram:
+          module0.Tpp20Chapter07WhileCodingLoopDiagram,
+        Tpp20Chapter07WhileCodingLab: module0.Tpp20Chapter07WhileCodingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
