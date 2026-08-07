@@ -16626,6 +16626,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic35ActorsProcessesLab: module0.Tpp20Topic35ActorsProcessesLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/45-topic-36-blackboards/tpp20-topic-36-blackboards":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-36-blackboards-diagram");
+      return {
+        Tpp20Topic36BlackboardsDiagram: module0.Tpp20Topic36BlackboardsDiagram,
+        Tpp20Topic36BlackboardsLab: module0.Tpp20Topic36BlackboardsLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

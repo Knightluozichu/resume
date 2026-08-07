@@ -441,7 +441,7 @@
     - 路径：`content/pragmatic-programmer/43-topic-34-shared-state/tpp20-topic-34-shared-state.mdx`
 - [x] ✅ **44-topic-35-actors-processes/tpp20-topic-35-actors-processes** — 已修复（2026-08-08，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/44-topic-35-actors-processes/tpp20-topic-35-actors-processes.mdx`
-- [ ] 🔴 P1 **45-topic-36-blackboards/tpp20-topic-36-blackboards** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **45-topic-36-blackboards/tpp20-topic-36-blackboards** — 已修复（2026-08-08，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/45-topic-36-blackboards/tpp20-topic-36-blackboards.mdx`
 - [ ] 🔴 P1 **46-chapter-07-while-coding/tpp20-chapter-07-while-coding** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/46-chapter-07-while-coding/tpp20-chapter-07-while-coding.mdx`
