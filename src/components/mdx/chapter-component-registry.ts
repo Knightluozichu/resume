@@ -15891,7 +15891,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-49-plugin-diagram");
       return {
-        Poeaa24Pattern49Plugin: module0.Poeaa24Pattern49Plugin,
+        Poeaa24Pattern49PluginDiagram: module0.Poeaa24Pattern49PluginDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/74-pattern-50-service-stub/poeaa24-pattern-50-service-stub":
