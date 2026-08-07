@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T23:31:12.689Z；旧版分数不迁移。
+> 2026-08-07T23:40:04.961Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2417
+- failed：2416
 - queued：401
-- passed：1054
+- passed：1055
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -107,16 +107,16 @@
 | 94 | css-world | 14 | 14 | 0 | 0 | 42 |
 | 95 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
 | 96 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 97 | pragmatic-programmer | 71 | 14 | 0 | 57 | 42 |
-| 98 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 99 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 100 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
-| 101 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 102 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 103 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 104 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 105 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 106 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 97 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 98 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 99 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
+| 100 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
+| 101 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 102 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 103 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 104 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 105 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 106 | pragmatic-programmer | 71 | 13 | 0 | 58 | 39 |
 | 107 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
 | 108 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
 | 109 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |

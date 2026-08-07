@@ -16771,6 +16771,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic45FeedbackLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/57-topic-46-impossible-puzzles/tpp20-topic-46-impossible-puzzles":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-46-impossible-puzzles-diagram");
+      return {
+        Tpp20Topic46ImpossiblePuzzlesEvidenceDiagram:
+          module0.Tpp20Topic46ImpossiblePuzzlesEvidenceDiagram,
+        Tpp20Topic46ImpossiblePuzzlesLoopDiagram:
+          module0.Tpp20Topic46ImpossiblePuzzlesLoopDiagram,
+        Tpp20Topic46ImpossiblePuzzlesLab:
+          module0.Tpp20Topic46ImpossiblePuzzlesLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
