@@ -16721,6 +16721,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic42PropertyBasedTestingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/53-topic-43-stay-safe/tpp20-topic-43-stay-safe":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-43-stay-safe-diagram");
+      return {
+        Tpp20Topic43StaySafeEvidenceDiagram:
+          module0.Tpp20Topic43StaySafeEvidenceDiagram,
+        Tpp20Topic43StaySafeLoopDiagram:
+          module0.Tpp20Topic43StaySafeLoopDiagram,
+        Tpp20Topic43StaySafeLab: module0.Tpp20Topic43StaySafeLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

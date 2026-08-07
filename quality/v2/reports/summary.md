@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T23:17:22.396Z；旧版分数不迁移。
+> 2026-08-07T23:23:20.653Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2419
+- failed：2418
 - queued：401
-- passed：1052
+- passed：1053
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -86,15 +86,15 @@
 | 73 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
 | 74 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
 | 75 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 76 | pragmatic-programmer | 71 | 16 | 0 | 55 | 48 |
-| 77 | python-advanced | 16 | 16 | 0 | 0 | 48 |
-| 78 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 79 | large-language-models | 16 | 16 | 0 | 0 | 16 |
-| 80 | csapp | 15 | 15 | 0 | 0 | 74 |
-| 81 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 82 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 83 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 84 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 76 | python-advanced | 16 | 16 | 0 | 0 | 48 |
+| 77 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 78 | large-language-models | 16 | 16 | 0 | 0 | 16 |
+| 79 | csapp | 15 | 15 | 0 | 0 | 74 |
+| 80 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 81 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 82 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 83 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 84 | pragmatic-programmer | 71 | 15 | 0 | 56 | 45 |
 | 85 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
 | 86 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
 | 87 | rust-way | 15 | 15 | 0 | 0 | 45 |
