@@ -16518,6 +16518,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic27HeadlightsLab: module0.Tpp20Topic27HeadlightsLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter-05-bend-or-break-diagram");
+      return {
+        Tpp20Chapter05BendChainDiagram: module0.Tpp20Chapter05BendChainDiagram,
+        Tpp20Chapter05BendFailureDiagram:
+          module0.Tpp20Chapter05BendFailureDiagram,
+        Tpp20Chapter05BendOrBreakLab: module0.Tpp20Chapter05BendOrBreakLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

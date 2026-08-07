@@ -421,7 +421,7 @@
     - 路径：`content/pragmatic-programmer/33-topic-26-balance-resources/tpp20-topic-26-balance-resources.mdx`
 - [x] ✅ **34-topic-27-headlights/tpp20-topic-27-headlights** — 已修复（2026-08-08，score 42→100，passed）
     - 路径：`content/pragmatic-programmer/34-topic-27-headlights/tpp20-topic-27-headlights.mdx`
-- [ ] 🔴 P1 **35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break** — 已修复（2026-08-08，score 42→100，passed）
     - 路径：`content/pragmatic-programmer/35-chapter-05-bend-or-break/tpp20-chapter-05-bend-or-break.mdx`
 - [ ] 🔴 P1 **36-topic-28-decoupling/tpp20-topic-28-decoupling** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/36-topic-28-decoupling/tpp20-topic-28-decoupling.mdx`
