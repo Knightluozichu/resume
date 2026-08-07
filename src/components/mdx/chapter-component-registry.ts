@@ -16129,6 +16129,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Tpp20LearningEvidenceDiagram: modules[1].Tpp20LearningEvidenceDiagram,
     } as ChapterMdxComponents;
   },
+  "pragmatic-programmer/01-foreword/tpp20-foreword": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-foreword-era-diagram"),
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-foreword-evidence-boundary-diagram"),
+    ]);
+    return {
+      Tpp20ForewordEraDiagram: modules[0].Tpp20ForewordEraDiagram,
+      Tpp20ForewordEvidenceBoundaryDiagram:
+        modules[1].Tpp20ForewordEvidenceBoundaryDiagram,
+    } as ChapterMdxComponents;
+  },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

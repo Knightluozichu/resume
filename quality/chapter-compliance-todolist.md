@@ -353,7 +353,7 @@
     - 路径：`content/pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project.mdx`
 - [x] ✅ **56-topic-45-requirements-pit/tpp20-topic-45-requirements-pit** — 已修复（2026-08-07，score 43→96，passed）
     - 路径：`content/pragmatic-programmer/56-topic-45-requirements-pit/tpp20-topic-45-requirements-pit.mdx`
-- [ ] 🔴 P1 **01-foreword/tpp20-foreword** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **01-foreword/tpp20-foreword** — 已修复（2026-08-07，score 42→99，passed）
     - 路径：`content/pragmatic-programmer/01-foreword/tpp20-foreword.mdx`
 - [ ] 🔴 P1 **02-second-edition-preface/tpp20-second-edition-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/02-second-edition-preface/tpp20-second-edition-preface.mdx`
