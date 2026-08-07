@@ -1,67 +1,270 @@
 ---
 title: "14.7 应用控制器"
-type: "B"
+type: "C"
 section: "企业应用架构模式（2024年中文版）"
 order: 51
-description: "集中处理屏幕导航和应用流程，把页面控制与用例流转从各控制器中抽离。"
+description: "把跨页面导航和应用流程集中成可测试的状态与事件决策，再把具体动作交给命令对象。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
-sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-31-application-controller
+sourceUrl: "https://martinfowler.com/eaaCatalog/applicationController.html"
 draft: false
 ---
 
-import { Poeaa24Pattern31ApplicationController } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-31-application-controller-diagram";
+import { Poeaa24Pattern31ApplicationControllerDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-31-application-controller-diagram";
 
+<Objectives>
 
-## 为什么 14.7 应用控制器 值得单独学习
+- 能解释应用控制器如何集中屏幕导航与应用流程，并说清它与页面控制器、领域规则的边界
+- 能修改一个 TypeScript 流程控制器，让状态、事件、命令和视图选择可以被单元测试
+- 能回答：一次非法跳转出现时，哪条状态证据应被拒绝，什么时候应该撤回应用控制器
 
-集中处理屏幕导航和应用流程，把页面控制与用例流转从各控制器中抽离。 14.7 应用控制器 的核心不是套用某个框架 API，而是回答：如何分开请求解释、页面导航、领域调用与输出渲染，使变化不会横跨所有页面。在 订单后台多视图 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **14.7 应用控制器** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 先建立直觉：把散落的去向收回一张流程卡
 
-## 先建立直觉：问题、机制与代价
+想象订单后台有三个窗口：选商品、填地址、确认支付。用户每做完一步，前台都要判断下一步去哪儿；如果每个窗口各自猜一次，窗口之间很快会出现互相矛盾的去向。
 
-14.7 应用控制器 面对的具体压力是“路由数量、重复控制逻辑、视图变体与导航状态”。它采用的机制可以概括为：集中处理屏幕导航和应用流程，把页面控制与用例流转从各控制器中抽离。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+这章解决的是“谁决定下一屏，以及这次决定依据什么”的问题。没有一个共同的流程记录时，返回按钮、刷新页面和失败重试都可能把用户送到不该到的地方；有了它，流程决定可以集中记录、测试和审查。
 
-对 14.7 应用控制器，优先比较的替代路线是：分别比较页面控制、前端控制、模板、转换、两步视图和应用控制器。本页的通过条件是“能用状态与事件驱动页面流转，测试非法跳转，并避免控制器复制领域状态机”；若实验只能显示结果而不能指出 路由 从何处越界，就不能据此选择 14.7 应用控制器。
+代价也很具体：多了一层流程协调代码。若所有页面都只是一次独立请求，这层代码反而会增加绕路；只有当多个页面共享一条有条件的流程时，集中决策才值得承担。
 
+## 14.7 应用控制器的边界
 
-## 目录单元到教学证据
+<Term def="集中决定屏幕导航和应用流程，并按当前上下文返回下一条命令与要显示的视图的协调对象。">应用控制器</Term> 位于输入页面和具体业务动作之间。它回答的是“当前上下文收到这个事件后，下一步允许做什么”，而不是“订单领域是否允许某个状态转换”。这正是它与前端控制器的差别：前端控制器集中所有请求的共同入口，应用控制器集中一条应用流程的去向。
 
-### 14.7 应用控制器
+它最适合向导式交互，也适合“前一步输入决定后续屏幕”的流程。页面控制器只需要报告用户事件并请求下一步；应用控制器依据上下文挑选命令和视图；命令或应用服务再执行具体工作。这样，页面数量增长时，导航规则不必复制到每个页面处理函数里。
 
-在 **14.7 应用控制器** 的学习边界里，14.7 应用控制器 不是待背诵的目录词，而是用来检查“HTTP请求”是否把责任交给正确对象。对 订单后台多视图，学习者要记录 路由 的可观察变化，并说明它何时支持或否定 14.7 应用控制器。
+在运行链上可以这样定位它：`输入页面 → 应用控制器 → 命令/应用服务 → 结果 → 应用控制器 → 下一视图`。控制器拥有的是流程上下文和导航决定，不是数据库连接、订单折扣或领域对象的全部生命周期。
+
+### 用状态和事件写出流程证据
+
+<Term def="描述用户当前处在哪个应用步骤以及该步骤附带输入的、可被测试的流程上下文。">应用状态</Term> 是流程的当前位置，例如 `address` 或 `confirm`；它不等于订单领域状态，也不应该偷偷复制领域状态机。<Term def="让流程从当前状态向下一状态推进的外部事实，例如提交地址或确认订单。">事件</Term> 是用户动作或应用结果，例如 `submitAddress`、`paymentAccepted`。
+
+把状态和事件分开，测试就能直接回答：在 `address` 收到 `submitAddress` 会产生什么？在 `done` 再收到同一事件应该拒绝什么？如果答案只能从几个页面处理函数的副作用里推测，流程边界还没有被写出来。
+
+### 命令执行，视图只负责呈现
+
+<Term def="封装一次流程动作的可调用对象，例如保存地址或创建支付请求，并把结果交回协调层。">命令对象</Term> 承接一次具体动作。<Term def="根据流程状态和命令结果选择下一屏，而不直接渲染页面内容的决定。">视图选择</Term> 只返回 `AddressView`、`ConfirmView` 或 `DoneView` 这样的结果，让真正的页面组件负责展示。
+
+与之相邻的是 <Term def="为一个具体页面或动作接收请求并编排该页面响应的控制器。">页面控制器</Term>。它仍然可以接收 HTTP 请求，但不应在每个页面里重复整条向导。页面控制器报告事件，应用控制器决定下一步，命令对象执行业务动作；三者的职责拆开后，非法跳转才有明确的拒绝点。
 
 ## 专属设计案例：订单后台多视图
 
-把 订单后台多视图 切成“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”五个观察点。14.7 应用控制器 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 路由、输入校验、导航、模板转义、视图复用 中哪个指标最先提示当前方案不再适用。
+本章用一个三步订单流程承载代码练习：`cart` 选择商品，`address` 填写配送信息，`confirm` 确认支付，成功后进入 `done`。我们只把页面导航放进应用控制器；订单金额、库存和支付授权仍由应用服务或领域模型负责。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-31-application-controller**；模式族为 **web**；裁决是“能用状态与事件驱动页面流转，测试非法跳转，并避免控制器复制领域状态机”；观测项包括 路由、输入校验、导航、模板转义、视图复用；拒绝条件是“路由 超过团队为 14.7 应用控制器 设定的边界”。
+先写一张可以被测试的流程表。每一行只回答“当前状态遇到事件后，返回哪个命令和视图”；不要在这张表里查询数据库，也不要把支付规则塞进导航条件。
 
-配置不是生产框架语法，而是一张评审卡。对 14.7 应用控制器 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type FlowState = "cart" | "address" | "confirm" | "done";
+type FlowEvent =
+  | { type: "chooseItems" }
+  | { type: "submitAddress" }
+  | { type: "paymentAccepted" }
+  | { type: "back" };
+type FlowCommand = "SaveAddress" | "CreatePayment" | "Noop";
+type FlowView = "CartView" | "AddressView" | "ConfirmView" | "DoneView";
 
-## 三步交互实验
+type Decision = {
+  state: FlowState;
+  command: FlowCommand;
+  view: FlowView;
+};
+```
 
+这些类型把可观察的输出固定下来：测试不需要启动浏览器，就能断言某个事件是否产生了正确的命令和下一屏。`Noop` 不是成功的业务动作，而是一个明确的“保持或拒绝”信号，实际项目可以把它替换成带原因的 `Rejected` 结果。
 
-<Poeaa24Pattern31ApplicationController />
+### 让决策保持纯粹
+
+实现时，把流程决策写成纯函数或无副作用的方法。它可以读取当前状态和事件，但不应在选择视图的同时修改订单、写数据库或发送支付请求。
+
+```ts
+export function decide(state: FlowState, event: FlowEvent): Decision {
+  if (state === "cart" && event.type === "chooseItems") {
+    return { state: "address", command: "Noop", view: "AddressView" };
+  }
+  if (state === "address" && event.type === "submitAddress") {
+    return { state: "confirm", command: "SaveAddress", view: "ConfirmView" };
+  }
+  if (state === "confirm" && event.type === "paymentAccepted") {
+    return { state: "done", command: "CreatePayment", view: "DoneView" };
+  }
+  if (event.type === "back" && state !== "cart") {
+    return { state: "cart", command: "Noop", view: "CartView" };
+  }
+  return { state, command: "Noop", view: "CartView" };
+}
+```
+
+这里故意保留一个可改进点：非法事件目前回到 `CartView`，真实代码应返回 `Rejected` 并保留原因，避免把错误伪装成首页。这个缺口会在下方主图的故障开关里显现出来。
+
+### 把副作用留给命令边界
+
+应用控制器可以调用一个命令执行器，但它只负责按 `Decision.command` 选择执行者。执行器返回成功或失败事件，再交回应用控制器进行下一次决策；这样网络失败、支付拒绝和用户返回都能成为可测试的输入，而不是散落在页面回调中的特殊分支。
+
+```ts
+export function handle(
+  state: FlowState,
+  event: FlowEvent,
+  run: (command: FlowCommand) => FlowEvent | null,
+): Decision {
+  const decision = decide(state, event);
+  if (decision.command === "Noop") return decision;
+  const result = run(decision.command);
+  return result ? decide(decision.state, result) : decision;
+}
+```
+
+这段代码的关键不在函数名，而在依赖方向：输入页面只发送事件，应用控制器只作流程决定，命令执行器才拥有副作用。若 `handle` 开始读取订单表或拼接 HTML，就应该把新增工作移回应用服务或视图层。
+
+## 四步交互实验：观察一次导航和一次非法跳转
+
+猜一猜：把当前应用状态从 `address` 改成 `confirm`，但不发送 `submitAddress`，应用控制器应该允许直接显示确认页吗？先在心里写下“允许”或“拒绝”，再用主图逐步播放检查理由。
+
+<Poeaa24Pattern31ApplicationControllerDiagram />
+
+主图支持播放、暂停、单步和拖动进度。点“注入非法跳转”后，红色路径会让页面控制器绕过应用控制器直接进入确认页；这不是更快的导航，而是丢失了状态证据。点“重置图示”后，再回到正常流程重新观察。
+
+<Stepper>
+  <Step title="1. 页面只报告事件">
+    购物页或地址页只报告用户动作；它不预先决定下一屏，也不直接调用支付命令。
+
+    <Poeaa24Pattern31ApplicationControllerDiagram focus="event" interactive={false} />
+  </Step>
+
+  <Step title="2. 控制器读取应用状态">
+    应用控制器把当前状态和事件放在一起，检查这条边是否存在，并准备一个可断言的决策。
+
+    <Poeaa24Pattern31ApplicationControllerDiagram focus="context" interactive={false} />
+  </Step>
+
+  <Step title="3. 命令与视图各司其职">
+    需要保存地址时执行命令，需要展示确认页时返回视图选择；导航层不代替领域服务计算金额。
+
+    <Poeaa24Pattern31ApplicationControllerDiagram focus="command" interactive={false} />
+  </Step>
+
+  <Step title="4. 非法跳转在边界被拒绝">
+    如果旧页面直接跳到确认页，应用状态没有经过合法事件推进。拒绝绕过路径，并为这条回归规则写测试。
+
+    <Poeaa24Pattern31ApplicationControllerDiagram focus="invalid" interactive={false} />
+  </Step>
+</Stepper>
+
+## 代码实践：把非法跳转变成测试
+
+一个最小单元测试不需要渲染四个页面，只需给决策函数不同的状态和事件。合法路径应产生预期的下一状态；非法路径应产生可识别的拒绝结果，不能偷偷回到某个默认页面。
+
+```ts
+const address = decide("address", { type: "submitAddress" });
+expect(address.state).toBe("confirm");
+expect(address.command).toBe("SaveAddress");
+
+const skipped = decide("address", { type: "paymentAccepted" });
+expect(skipped.command).toBe("Rejected");
+expect(skipped.reason).toBe("payment requires confirmation");
+```
+
+练习中的 `Rejected` 需要你把 `Decision` 扩展为联合类型。重要的是测试表达了流程契约：应用控制器允许哪些边，拒绝哪些边；页面组件只消费通过检查的视图选择。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 14.7 应用控制器 的证据       | 应拒绝或改用其他方案的信号                  |
-| -------- | --------------------------------- | ------------------------------------------- |
-| 责任     | HTTP请求 到 HTTP响应 的所有者清晰 | 控制器 可以绕过边界直接改写状态             |
-| 变化     | 路由 的变化被局部吸收             | 一次小改动同时触及 输入校验、导航、模板转义 |
-| 失败     | 故障能在 HTTP响应 前被识别并回退  | 只能看到最终错误，无法定位 路由 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析          |
+| 评审问题 | 采用应用控制器的证据 | 应拒绝或撤回的信号 |
+| --- | --- | --- |
+| 流程 | 多个屏幕共享有条件的导航，状态与事件可列举 | 每个页面都是一次独立请求，没有共享流程 |
+| 责任 | 控制器只决定命令和视图，领域规则在应用服务 | 控制器直接改订单、算金额或维护领域状态机 |
+| 失败 | 非法边返回可断言的拒绝结果，失败可再次决策 | 所有错误都被改写成默认首页，原因消失 |
+| 替代 | 页面控制器仍保留简单页面的局部编排 | 团队只是因为框架提供全局对象就强行集中 |
 
+## 常见误区
+
+<Callout type="trap" title="把应用控制器变成领域总管">
+
+- **现象**：流程控制器开始读取订单表、计算折扣，还维护“已支付/已发货”的完整领域状态机。
+- **原因**：把“决定下一屏”误当成“拥有所有业务决定”，导航上下文与领域状态没有分层。
+- **修法**：只保留应用状态、事件和命令/视图选择；把金额、库存和支付规则交给应用服务或领域模型。
+
+</Callout>
+
+<Callout type="trap" title="用默认页面掩盖非法跳转">
+
+- **现象**：任何未匹配的事件都返回 `CartView`，用户看似回到了安全页面，但测试无法知道跳转为什么失败。
+- **原因**：把拒绝结果压扁成普通视图，丢掉了非法边的原因和当前状态。
+- **修法**：返回带原因的 `Rejected` 联合类型，记录原状态和事件，并为每条禁止边写回归测试。
+
+</Callout>
+
+<Callout type="trap" title="让页面绕过流程协调层">
+
+- **现象**：地址页的按钮直接打开确认页，刷新或后退后出现没有地址的支付流程。
+- **原因**：页面控制器同时承担了导航决定，应用状态没有成为所有跳转的必经证据。
+- **修法**：页面只发送事件；由应用控制器返回下一视图。对旧直达链接加拒绝测试，而不是继续添加页面特判。
+
+</Callout>
 
 ## 本章小结
 
-掌握 14.7 应用控制器 的标志不是记住定义，而是能在 订单后台多视图 中解释“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”的责任链，利用 路由、输入校验、导航、模板转义、视图复用 作出可证伪的选择，并在出现“在模板里直接执行业务规则和数据库访问”时明确拒绝当前实现。
+- 应用控制器集中跨页面导航与应用流程的决定。
+- 应用状态记录流程位置，事件描述请求推进的事实。
+- 命令对象承接副作用，视图选择只表达下一屏。
+- 非法跳转应返回可测试的拒绝，而不是默认页面。
+- 只有共享流程足够复杂时，新增的协调层才值得保留。
 
+## 练习
+
+<Exercises>
+
+**问题 1：改 Demo 代码。** 把 `decide` 扩展为 `Decision` 联合类型，使非法事件返回 `{ state, command: "Rejected", reason }`，并让主图中的“非法跳转”对应这条结果。需要改哪些类型和分支？
+
+<Answer>
+
+新增 `RejectedDecision` 类型并把 `command` 联合类型扩展为 `"Rejected"`，在默认分支返回当前状态、`Rejected` 和稳定的原因字符串；执行器遇到 `Rejected` 时不调用任何命令。主图的红色绕过路径应标成被拒绝的证据，而不是成功的 `ConfirmView`。
+
+</Answer>
+
+**问题 2：写一条边界测试。** 给出一个测试，证明 `address + paymentAccepted` 不能直接进入 `done`，同时给出一个合法的 `address + submitAddress` 断言。
+
+<Answer>
+
+先断言非法事件的结果是 `command === "Rejected"`，状态仍为 `address`，原因说明必须先提交地址或完成确认；再断言合法事件产生 `state === "confirm"` 和 `command === "SaveAddress"`。两条断言一起锁住“禁止跳过”和“允许推进”两条边。
+
+</Answer>
+
+**问题 3：做一次方案选择。** 一个页面只有一次查询和一次响应，没有后续屏幕，也没有跨请求条件。你会保留应用控制器吗？如果不保留，应把编排放在哪里？
+
+<Answer>
+
+不保留。用页面控制器完成这次请求的局部编排即可；只有当多个页面共享条件导航、返回/重试或异步结果时，才把流程决定提升到应用控制器。这样避免为了一个直线请求引入无收益的间接层。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="应用控制器">
+    一张专门管理“下一步去哪儿”的流程卡；它选择命令和页面，但不替业务对象做所有决定。
+  </GlossaryItem>
+  <GlossaryItem term="应用状态">
+    用户当前处在流程哪一步以及该步输入的记录，例如正在填地址还是准备确认。
+  </GlossaryItem>
+  <GlossaryItem term="事件">
+    让流程发生变化的事实，例如用户提交地址或支付服务返回成功。
+  </GlossaryItem>
+  <GlossaryItem term="命令对象">
+    代表一次具体动作的对象，例如保存地址；它可以调用应用服务，但不负责决定下一屏。
+  </GlossaryItem>
+  <GlossaryItem term="视图选择">
+    一个说明“接下来展示哪一屏”的结果，不是页面 HTML，也不应该包含业务计算。
+  </GlossaryItem>
+  <GlossaryItem term="页面控制器">
+    负责接收某个页面请求并编排该页面响应的对象；简单页面可以只靠它，不必升级成全局流程协调层。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
@@ -70,7 +273,14 @@ import { Poeaa24Pattern31ApplicationController } from "@/components/mdx/poeaa-en
 
 ## 来源与改写范围
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Application Controller 模式摘要](https://martinfowler.com/eaaCatalog/applicationController.html)：核对集中处理屏幕导航、应用流程，以及输入控制器向其请求命令和视图的事实边界。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对第14章 Web Presentation Patterns 的主题范围。
+- [Martin Fowler：模式目录](https://martinfowler.com/eaaCatalog/)：核对 14.7 应用控制器在模式族中的位置。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对出版信息。
 
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/applicationController.html"
+  sourceBasis="outline-only"
+/>
