@@ -16229,6 +16229,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic04PanoramaBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic05-quality-contract-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic05-threshold-tradeoff-diagram"),
+      ]);
+      return {
+        Tpp20Topic05QualityContractDiagram:
+          modules[0].Tpp20Topic05QualityContractDiagram,
+        Tpp20Topic05ThresholdTradeoffDiagram:
+          modules[1].Tpp20Topic05ThresholdTradeoffDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

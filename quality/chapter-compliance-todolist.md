@@ -369,7 +369,7 @@
     - 路径：`content/pragmatic-programmer/07-topic-03-software-entropy/tpp20-topic-03-software-entropy.mdx`
 - [x] ✅ **08-topic-04-stone-soup-boiled-frogs/tpp20-topic-04-stone-soup-boiled-frogs** — 已修复（2026-08-07，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/08-topic-04-stone-soup-boiled-frogs/tpp20-topic-04-stone-soup-boiled-frogs.mdx`
-- [ ] 🔴 P1 **09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software** — 已修复（2026-08-07，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/09-topic-05-good-enough-software/tpp20-topic-05-good-enough-software.mdx`
 - [ ] 🔴 P1 **10-topic-06-knowledge-portfolio/tpp20-topic-06-knowledge-portfolio** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/10-topic-06-knowledge-portfolio/tpp20-topic-06-knowledge-portfolio.mdx`
