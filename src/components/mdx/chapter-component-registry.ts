@@ -16382,6 +16382,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic15EstimationLab: modules[1].Tpp20Topic15EstimationLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/22-topic-16-power-plain-text/tpp20-topic-16-power-plain-text":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic16-plain-text-map-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic16-plain-text-lab"),
+      ]);
+      return {
+        Tpp20Topic16PlainTextMapDiagram:
+          modules[0].Tpp20Topic16PlainTextMapDiagram,
+        Tpp20Topic16PlainTextLab: modules[1].Tpp20Topic16PlainTextLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
