@@ -16118,6 +16118,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Poeaa24OfficialFinalReviewDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/00-map/tpp20-official-learning-map": async () => {
+    const modules = await Promise.all([
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-official-learning-map-diagram"),
+      import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-learning-evidence-diagram"),
+    ]);
+    return {
+      Tpp20OfficialLearningMapDiagram:
+        modules[0].Tpp20OfficialLearningMapDiagram,
+      Tpp20LearningEvidenceDiagram: modules[1].Tpp20LearningEvidenceDiagram,
+    } as ChapterMdxComponents;
+  },
   "programming-pearls/01-preliminaries/02-aha-algorithms": async () => {
     const module0 =
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");

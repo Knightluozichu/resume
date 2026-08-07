@@ -345,7 +345,7 @@
 
 ## pragmatic-programmer（71 章 · ❌71 ⚠️0 ✅0）
 
-- [ ] 🔴 P1 **00-map/tpp20-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+- [x] ✅ **00-map/tpp20-official-learning-map** — 已修复（2026-08-07，score 48→100，passed）
     - 路径：`content/pragmatic-programmer/00-map/tpp20-official-learning-map.mdx`
 - [ ] 🔴 P1 **70-review/tpp20-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
     - 路径：`content/pragmatic-programmer/70-review/tpp20-official-final-review.mdx`
