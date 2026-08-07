@@ -15451,7 +15451,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-04-service-layer-diagram");
       return {
-        Poeaa24Pattern04ServiceLayer: module0.Poeaa24Pattern04ServiceLayer,
+        Poeaa24Pattern04ServiceLayerDiagram:
+          module0.Poeaa24Pattern04ServiceLayerDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns":

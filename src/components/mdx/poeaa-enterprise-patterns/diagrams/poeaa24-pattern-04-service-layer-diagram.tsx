@@ -1,9 +1,9 @@
 /**
- * <Poeaa24Pattern04ServiceLayer>：服务层结构图。Server Component。
+ * <Poeaa24Pattern04ServiceLayerDiagram>：服务层结构图。Server Component。
  */
 import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
 const VIEW_W = 720; const VIEW_H = 360;
-export function Poeaa24Pattern04ServiceLayer() {
+export function Poeaa24Pattern04ServiceLayerDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
@@ -37,3 +37,6 @@ export function Poeaa24Pattern04ServiceLayer() {
     </figure>
   );
 }
+
+/** 兼容已有导入；章节正文使用带 Diagram 后缀的语义化名称以便质量审计识别专属视觉。 */
+export const Poeaa24Pattern04ServiceLayer = Poeaa24Pattern04ServiceLayerDiagram;
