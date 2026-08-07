@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T13:36:21.549Z；旧版分数不迁移。
+> 2026-08-07T13:42:16.327Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2486
+- failed：2485
 - queued：401
-- passed：985
+- passed：986
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -124,11 +124,11 @@
 | 111 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
 | 112 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 113 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 114 | poeaa-enterprise-patterns | 78 | 12 | 0 | 66 | 36 |
-| 115 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 116 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 117 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 118 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 114 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 115 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 116 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 117 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 118 | poeaa-enterprise-patterns | 78 | 11 | 0 | 67 | 33 |
 | 119 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 120 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 121 | ai-agent | 9 | 9 | 0 | 0 | 9 |

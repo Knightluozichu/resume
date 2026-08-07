@@ -3,67 +3,221 @@ title: "第18章 基本模式"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 64
-description: "以网关、映射器、接口、值对象和插件等基础构件支撑上层模式。"
+description: "用网关、映射器、注册表和接口边界隔离基础设施变化与对象语义。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-18-base-patterns
 draft: false
 ---
 
-import { Poeaa24Ch18BasePatternsDeps } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-deps";
+import { Poeaa24Ch18BasePatternsDepsDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-deps";
+import { Poeaa24Ch18BasePatternsBoundaryDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-boundary-decision-diagram";
 
+<Objectives>
 
-## 为什么 第18章 基本模式 值得单独学习
+- 能区分 Gateway、Mapper、Registry、Layer Supertype 与 Separated Interface 的依赖责任和适用边界
+- 能用 TypeScript 把订单领域对象与外部存储表示隔离，并为替换基础设施保留可测试端口
+- 能根据变化轴、对象语义、配置和测试隔离成本决定是否引入基本模式
 
-以网关、映射器、接口、值对象和插件等基础构件支撑上层模式。 第18章 基本模式 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第18章 基本模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第18章基本模式值得单独学习
 
-## 先建立直觉：问题、机制与代价
+基本模式不是一组可以无条件堆叠的工具类，而是隔离变化轴的小型构件。订单系统要从旧仓储迁移到新 API 时，真正重要的问题不是“再加一个 Service 类”，而是调用者是否依赖了外部表示、对象创建方式和全局查找细节。
 
-第18章 基本模式 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：以网关、映射器、接口、值对象和插件等基础构件支撑上层模式。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="封装外部系统或资源访问的边界，让上层调用者依赖业务语义而不是数据库、文件或第三方 API 的细节。">
+  Gateway
+</Term>
+把外部变化留在边界内。本页依据 2024 年中文版公开目录限定第18章范围，并根据
+Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
-对 第18章 基本模式，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能解释基本模式的边界与选择轴，逐项覆盖11个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 第18章 基本模式。
+<Term def="在两种对象表示之间进行转换的组件，明确字段、身份和缺失值的映射，不让任一模型直接冒充另一模型。">
+  Mapper
+</Term>
+避免把数据库行、远程 JSON 和领域对象混成一个不稳定的类型。
 
+## 先建立直觉：小边界，大责任
+
+<Term def="按名称或键提供共享对象的集中查找点，调用者通过它取得实例，但必须承担全局状态和替换困难的代价。">
+  Registry
+</Term>
+适合确实需要运行时发现或共享生命周期的场景，不应成为默认的全局依赖入口。
+
+<Term def="让同一层的多个类继承公共行为或约束的基类，以减少重复，但也会引入继承耦合和演化限制。">
+  Layer Supertype
+</Term>
+只有当层内规则稳定且确实需要共享时才值得引入。
+
+<Term def="把接口放在使用它的边界一侧，把实现放在另一包或另一模块，使依赖方向由使用者控制。">
+  Separated Interface
+</Term>
+让领域层定义需要的端口，而不是让基础设施决定领域层的抽象。
+
+对第18章基本模式，优先比较的替代路线是：存在外部变化时使用 Gateway，存在对象表示变化时使用 Mapper，需要运行时发现时谨慎使用 Registry，层内规则稳定时才采用 Layer Supertype，跨包依赖需要由使用者控制时采用 Separated Interface。若没有明确变化轴却先创建全局入口、抽象工厂和多层映射，就不能据此选择基本模式。
 
 ## 目录单元到教学证据
 
-### 第18章 基本模式
+### 第18章基本模式
 
-在 **第18章 基本模式** 的学习边界里，第18章 基本模式 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 第18章 基本模式。
+第18章基本模式要求把构件选择变成可复核证据：冻结版次、应用切片与目录坐标；从问题和语境比较候选模式；手算转换和间接层成本；验证正常样本与边界样本；只注入一个替换故障并定位首差；让独立复核者重放结果并接入发布门禁。本文把这些证据映射到订单存储替换的端口、适配器、映射测试和依赖检查中。
 
-## 专属设计案例：订单系统基础设施替换
+## 专属代码案例：订单系统基础设施替换
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。第18章 基本模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+把订单查询切成“用例 → Separated Interface → Gateway → 外部记录 → Mapper → 领域对象”六个观察点。设计草案必须写出谁拥有领域规则、谁负责表示转换、失败怎样传播，以及依赖方向、对象语义、配置、测试隔离和表示转换中哪个指标最先提示方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-18-base-patterns**；模式族为 **base**；裁决是“能解释基本模式的边界与选择轴，逐项覆盖11个目录节点，并在同一应用切片中验证”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 第18章 基本模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-18-base-patterns**；模式族为 **base**；裁决是“让领域端口拥有语义，让 Gateway 和 Mapper 吸收基础设施变化，并让替换失败可在边界被定位”；观测项包括依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“全局 Registry 或 Mapper 让领域对象重新依赖外部记录结构”。
 
-配置不是生产框架语法，而是一张评审卡。对 第18章 基本模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：旧 API 返回 `snake_case` 记录而新 API 返回嵌套 JSON，订单用例应该修改哪里？如果测试替身要替换真实网关，接口应该由谁定义？先写下端口、映射和失败边界，再阅读实现；验证时要能说明替换外部系统不会改变领域对象的金额和状态语义。
 
-# 模式族地图
+```ts
+type OrderRecord = {
+  order_id: string;
+  total_cents: number;
+  state: "open" | "paid";
+};
 
+type Order = {
+  id: string;
+  totalCents: number;
+  state: "open" | "paid";
+};
 
-<Poeaa24Ch18BasePatternsDeps />
+interface OrderGateway {
+  find(orderId: string): Promise<OrderRecord | null>;
+}
 
-**阅读路径**：封装外部访问 → Gateway；对象间翻译 → Mapper；全局查找 → Registry；层内基类 → Layer Supertype；接口分包 → Separated Interface。
+class OrderMapper {
+  toDomain(record: OrderRecord): Order {
+    return {
+      id: record.order_id,
+      totalCents: record.total_cents,
+      state: record.state,
+    };
+  }
+}
+
+class FindOrder {
+  constructor(
+    private readonly gateway: OrderGateway,
+    private readonly mapper: OrderMapper,
+  ) {}
+
+  async execute(orderId: string): Promise<Order | null> {
+    const record = await this.gateway.find(orderId);
+    return record ? this.mapper.toDomain(record) : null;
+  }
+}
+```
+
+这里由 Separated Interface 让用例依赖 `OrderGateway`，由 Gateway 封装外部访问，由 Mapper 把记录转换为领域对象。替换旧 API 时只需要更换 Gateway 实现和必要的映射测试；不要让领域层直接读取 `order_id` 或把外部 JSON 作为领域实体传递。
+
+## 基本模式依赖关系
+
+Gateway 封装访问，Mapper 翻译表示，Registry 提供可控的查找点，Layer Supertype 共享层内稳定规则，Separated Interface 控制接口的归属。图中的箭头不是“模式越多越好”，而是用来检查依赖方向是否仍然由调用者的语义驱动。
+
+<Poeaa24Ch18BasePatternsDepsDiagram />
+
+## 基本模式边界决策图
+
+先问“哪条变化轴正在发生”，再问“边界是否能减少该变化的传播”。没有外部变化就不要加 Gateway，没有表示差异就不要加 Mapper，没有运行时发现需求就不要加 Registry；选择 Separated Interface 时要确保接口归使用者拥有。
+
+<Poeaa24Ch18BasePatternsBoundaryDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第18章 基本模式 的证据    | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 选择第18章基本模式的证据                         | 应拒绝或改用其他方案的信号                   |
+| -------- | ------------------------------------------------ | -------------------------------------------- |
+| 变化轴   | 外部访问、表示转换或模块依赖确实变化             | 没有变化轴却预先增加多层间接结构             |
+| 责任     | 用例拥有语义，Gateway 和 Mapper 拥有基础设施细节 | 领域对象直接读取外部字段或创建连接           |
+| 查找     | Registry 的生命周期和替换策略有测试              | 全局 Registry 隐藏所有依赖，测试只能依赖环境 |
+| 继承     | Layer Supertype 的规则稳定且只服务同一层         | 基类同时承载跨层状态和业务规则               |
 
+## 常见误区
+
+<Callout type="trap" title="让 Mapper 变成没有边界的万能转换器">
+
+- **现象**：一个 Mapper 同时转换数据库行、远程响应、领域对象和页面 View Model，任何字段变化都会影响所有调用者。
+- **原因**：没有按边界和用例拆分表示，Mapper 只按字段数量增长。
+- **修法**：按来源和目标模型划分映射职责，为身份、缺失值和金额单位写边界测试。
+
+</Callout>
+
+<Callout type="trap" title="把 Registry 当成依赖注入的替代品">
+
+- **现象**：用例从全局 Registry 取网关，测试必须先修改全局状态，运行顺序决定结果。
+- **原因**：Registry 隐藏了构造依赖，调用者无法表达它需要什么。
+- **修法**：优先通过构造函数传入 Separated Interface；只有运行时发现或共享生命周期是核心需求时才保留 Registry，并限制查找范围。
+
+</Callout>
+
+<Callout type="trap" title="用 Layer Supertype 聚合跨层业务规则">
+
+- **现象**：所有层都继承一个基类，基类同时处理审计、金额、数据库和 HTTP 上下文。
+- **原因**：把重复代码误认为应该通过继承共享，导致层之间形成隐式耦合。
+- **修法**：只在同一层有稳定公共不变量时使用 Layer Supertype；跨层规则改用明确的领域服务或组合。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第18章基本模式，并要求把 Gateway、Mapper、接口归属和测试隔离映射到订单替换切片。
+
+**问题 1：确定边界。** 旧订单 API 返回平面记录，新 API 返回嵌套 JSON，但领域用例的订单语义不变，应该修改哪里？
+
+<Answer>
+
+在各自 Gateway 内封装外部访问，并在边界 Mapper 中把两种表示转换为相同的领域订单。用例只依赖 Separated Interface，不应感知 `snake_case`、嵌套路径或 HTTP 客户端。
+
+</Answer>
+
+**问题 2：选择 Registry。** 测试中需要为每个用例传入不同的网关替身，但生产环境希望按租户动态选择实现，是否应该让所有用例直接访问全局 Registry？
+
+<Answer>
+
+不应该。用例继续通过构造函数接收接口；在更外层由一个有边界的解析器按租户选择实现，再把选定的 Gateway 注入用例。只有运行时发现是核心需求时才使用 Registry，并为生命周期、未知键和替换行为写测试。
+
+</Answer>
+
+**问题 3：评估基类。** 订单层和客户层都有 `createdAt`，是否应让所有领域对象继承一个包含数据库保存、审计和 HTTP 请求的 Layer Supertype？
+
+<Answer>
+
+不应把跨层和基础设施责任放进基类。只有同一层稳定且确实共享的不变量才适合 Layer Supertype；数据库保存、审计和 HTTP 上下文应通过 Gateway、端口或组合服务显式协作，以保持测试隔离。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Gateway">
+    封装外部系统或资源访问的边界，让上层依赖业务语义而不是基础设施细节。
+  </GlossaryItem>
+  <GlossaryItem term="Mapper">
+    在两种对象表示之间转换并明确字段、身份和缺失值规则的组件。
+  </GlossaryItem>
+  <GlossaryItem term="Registry">
+    按名称或键提供共享对象查找的集中入口，需要明确全局状态与生命周期代价。
+  </GlossaryItem>
+  <GlossaryItem term="Layer Supertype">
+    为同一层的多个类提供稳定公共行为或约束的基类。
+  </GlossaryItem>
+  <GlossaryItem term="Separated Interface">
+    把接口放在使用者边界一侧，把实现放在另一模块以控制依赖方向的做法。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第18章 基本模式 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
+掌握第18章基本模式的标志不是记住五个构件名称，而是能在订单系统基础设施替换中解释“用例 → Separated Interface → Gateway → 外部记录 → Mapper → 领域对象”的责任链。学习者应利用依赖方向、对象语义、配置、测试隔离和表示转换作出可证伪的选择，并在没有变化轴的间接层、万能 Mapper、全局 Registry 和跨层基类时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -73,6 +227,13 @@ import { Poeaa24Ch18BasePatternsDeps } from "@/components/mdx/poeaa-enterprise-p
 ## 来源与改写范围
 
 - [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对 Gateway、Mapper、Registry 与接口边界模式的公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

@@ -15886,10 +15886,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-deps");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-deps"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch18-base-patterns-boundary-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch18BasePatternsDeps: module0.Poeaa24Ch18BasePatternsDeps,
+        Poeaa24Ch18BasePatternsDepsDiagram:
+          modules[0].Poeaa24Ch18BasePatternsDepsDiagram,
+        Poeaa24Ch18BasePatternsBoundaryDecisionDiagram:
+          modules[1].Poeaa24Ch18BasePatternsBoundaryDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/65-pattern-41-gateway/poeaa24-pattern-41-gateway":

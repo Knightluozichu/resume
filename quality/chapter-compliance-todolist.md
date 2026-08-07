@@ -318,7 +318,7 @@
     - 路径：`content/poeaa-enterprise-patterns/52-chapter-15-distribution-patterns/poeaa24-chapter-15-distribution-patterns.mdx`
 - [x] ✅ **55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns** — 已修复（2026-08-07，score 43→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/55-chapter-16-offline-concurrency-patterns/poeaa24-chapter-16-offline-concurrency-patterns.mdx`
-- [ ] 🔴 P1 **64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns** — 已修复（2026-08-07，score 43→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/64-chapter-18-base-patterns/poeaa24-chapter-18-base-patterns.mdx`
 - [ ] 🔴 P1 **01-translator-preface/poeaa24-translator-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
     - 路径：`content/poeaa-enterprise-patterns/01-translator-preface/poeaa24-translator-preface.mdx`
