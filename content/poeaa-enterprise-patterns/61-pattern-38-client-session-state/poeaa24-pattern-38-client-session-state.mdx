@@ -7,70 +7,265 @@ description: "把会话状态编码在客户端，由请求携带回服务器，
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-38-client-session-state
 draft: false
 ---
 
-import { Poeaa24Pattern38ClientSessionState } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-38-client-session-state-diagram";
+import { Poeaa24Pattern38ClientSessionStateDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-38-client-session-state-diagram";
 
+<Objectives>
 
-## 为什么 17.1 客户会话状态 值得单独学习
+- 能解释客户会话状态如何在客户端保存、随请求往返，并指出服务器仍必须掌握哪些业务权威
+- 能修改 TypeScript 会话编码与校验代码，补上签名、过期和错误回退，并保持敏感状态不由客户端决定
+- 能根据大小、隐私、扩缩容和重放风险的运行证据，判断订单向导是否应采用或拒绝客户会话状态
 
-把会话状态编码在客户端，由请求携带回服务器，减轻服务端会话存储。 17.1 客户会话状态 的核心不是套用某个框架 API，而是回答：如何选择会话状态的权威位置，并明确完整性、扩缩容、过期和恢复责任。在 订单向导会话 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **17.1 客户会话状态** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 17.1 客户会话状态值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单向导经常需要记住当前步骤、购物车草稿和语言偏好。最直接的做法是把这些信息放进浏览器的 Cookie、隐藏字段或 URL，让每个请求自己带上上下文；服务器因此不必为每个访客维护一份会话表。但“能从请求恢复状态”不等于“请求里的每个字段都可信”。
 
-17.1 客户会话状态 面对的具体压力是“状态大小、节点数量、粘性依赖、过期时间与恢复目标”。它采用的机制可以概括为：把会话状态编码在客户端，由请求携带回服务器，减轻服务端会话存储。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="把跨请求的少量会话信息编码在客户端，并由客户端在后续请求中带回服务器的会话状态方案。">客户会话状态</Term>的真正决策，是划清谁保存什么、谁能作出业务决定，以及完整性、大小、过期和隐私由谁负责。订单金额、库存和权限仍应由服务器或其权威数据源裁决；客户端只适合携带可验证、可丢弃或可重新计算的上下文。
 
-对 17.1 客户会话状态，优先比较的替代路线是：按安全、可用性和运维约束比较客户端、服务器与数据库会话状态。本页的通过条件是“能防篡改、控制大小与过期，并证明敏感或权威状态没有交给客户端决定”；若实验只能显示结果而不能指出 可信边界 从何处越界，就不能据此选择 17.1 客户会话状态。
+本章以 2024 年中文版公开目录限定 **17.1 客户会话状态** 的范围，并依据 Martin Fowler 的作者图书页和公开模式目录独立重写。案例、代码、实验、判断题和答案均为本课程原创，不复现原书正文、插图或代码。
 
+## 先建立直觉：状态跟着请求走
+
+把一次订单向导请求拆成五个问题：状态放在哪里、请求带什么、服务器验证什么、状态何时过期、下一次请求如何得到更新后的版本。若答案只是“把对象序列化到 Cookie”，却没有限制大小和可信范围，方案实际上把安全与恢复责任悄悄交给了浏览器。
+
+客户端携带的通常是<Term def="随请求传输、描述会话上下文的有限序列化数据，例如步骤、草稿键和过期时间。">会话载荷</Term>，而不是整个订单。服务器收到载荷后要验证格式、<Term def="附在数据上的校验值，用来证明载荷由持有密钥的一方生成且未被改动。">签名</Term>和过期时间，再把价格、库存、权限等权威字段从服务器侧重新查出。签名能发现篡改，却不能把敏感数据变得适合放在客户端，也不能替代权限检查。
+
+另一个边界是<Term def="攻击者把曾经合法的旧请求再次发送，试图重复执行或恢复过期状态的行为。">重放攻击</Term>。如果“确认付款”之类的命令只依赖一个长期有效的载荷，攻击者可能重复提交旧请求；因此高风险操作应使用一次性令牌、服务端幂等键或服务器会话，而不是把所有责任压给客户会话状态。
 
 ## 目录单元到教学证据
 
 ### 17.1 客户会话状态
 
-在 **17.1 客户会话状态** 的学习边界里，17.1 客户会话状态 不是待背诵的目录词，而是用来检查“请求”是否把责任交给正确对象。对 订单向导会话，学习者要记录 可信边界 的可观察变化，并说明它何时支持或否定 17.1 客户会话状态。
+本章精确对应 manifest 单元 `poeaa24-pattern-38-client-session-state`，学习边界是：用客户端承载小型会话上下文，同时把验证、过期和业务权威留在服务器。订单向导贯穿正文，用同一份状态观察“请求是否携带了不该携带的字段”“节点是否能独立处理请求”“篡改、过期和重放是否有可解释结果”。
 
-## 专属设计案例：订单向导会话
+完成本单元要交出三样证据：一张标明客户端与服务器责任的图；一段可测试的 TypeScript 编解码与校验草图；一个故障样本，证明载荷过大、签名失效或重复提交时系统会在明确边界拒绝请求。只展示最终页面而说不出哪一方拥有金额和权限，就没有完成模式级判断。
 
-把 订单向导会话 切成“请求 → 会话键 → 状态位置 → 更新 → 过期”五个观察点。17.1 客户会话状态 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 可信边界、容量、多节点、持久性、清理 中哪个指标最先提示当前方案不再适用。
+## 专属案例：带购物车草稿的订单向导
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-38-client-session-state**；模式族为 **session**；裁决是“能防篡改、控制大小与过期，并证明敏感或权威状态没有交给客户端决定”；观测项包括 可信边界、容量、多节点、持久性、清理；拒绝条件是“可信边界 超过团队为 17.1 客户会话状态 设定的边界”。
+假设访客在订单向导中选择商品、填写配送偏好并逐步前进。适合放在客户端的是 `step`、短期 `cartDraftId` 和语言偏好；不适合放在客户端自行决定的是商品单价、库存、折扣资格和“是否已经付款”。请求可携带这份小型草稿，但服务器必须重新读取权威数据，并在更新时发回一份新的、有限期限的载荷。
 
-配置不是生产框架语法，而是一张评审卡。对 17.1 客户会话状态 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+评审卡可以这样记录：单元键为 **poeaa24-pattern-38-client-session-state**；模式族为 **session**；采用条件是“状态小、可验证、可过期且不承载不可替代的业务权威”；观测项包括载荷字节数、签名失败率、过期率、节点独立处理率和重复请求率；拒绝条件是“客户端开始决定金额、权限或不可逆操作”。
 
-## 三步交互实验
+## 专属可视化实验：看状态如何越过请求边界
 
+主图把同一个订单向导载荷拆成三个阶段：先在客户端形成有限状态，再由服务器验证并重建权威上下文，最后返回新的签名载荷。先预测：如果用户把 `role=user` 改成 `role=admin`，哪一步应拒绝？如果服务器节点完全不保存会话，为什么任意节点仍能处理下一次请求？点击阶段并注入篡改，再观察可信边界如何变化。
 
-<Poeaa24Pattern38ClientSessionState />
+<Poeaa24Pattern38ClientSessionStateDiagram />
 
-## 选择与拒绝矩阵
+### 三个阶段快照
 
-| 评审问题 | 选择 17.1 客户会话状态 的证据  | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 请求 到 过期 的所有者清晰      | 会话键 可以绕过边界直接改写状态                |
-| 变化     | 可信边界 的变化被局部吸收      | 一次小改动同时触及 容量、多节点、持久性        |
-| 失败     | 故障能在 过期 前被识别并回退   | 只能看到最终错误，无法定位 可信边界 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+下面的 Stepper 把主图拆成三个确定性快照。每一步都保留客户端载荷、验证责任和服务器权威，读者可以先写下预测，再用图核对。
 
+<Stepper>
+
+<Step title="1. 客户端形成有限载荷">
+
+先预测：客户端可以保存哪些字段？它只形成短小草稿和过期时间，并携带签名结果；价格、库存和权限不应由这份载荷自行决定。
+
+<Poeaa24Pattern38ClientSessionStateDiagram step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 服务器验证并重建上下文">
+
+再观察：服务器先验证格式、签名和过期时间，再根据 `cartDraftId` 读取权威商品信息。签名失败或载荷过期都应在业务执行前返回可解释的错误。
+
+<Poeaa24Pattern38ClientSessionStateDiagram step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 返回新版本并限制重放">
+
+最后动手试：服务器完成一次允许的向导更新后，发回新的过期载荷；确认付款等不可逆命令还要依靠幂等键或一次性令牌，不能只重放旧 Cookie。
+
+<Poeaa24Pattern38ClientSessionStateDiagram step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 代码实践：让载荷可验证、可过期
+
+下面的 TypeScript 草图把“客户端承载”限制在编码层，把“业务权威”留在服务器侧。真实项目应使用成熟的签名库和安全密钥管理；这里的 `sign`、`verify`、`encode` 和 `decode` 是可替换、可测试的边界。
+
+```ts
+type ClientSession = {
+  cartDraftId: string;
+  step: 1 | 2 | 3;
+  locale: "zh-CN" | "en-US";
+  expiresAt: number;
+};
+
+type SignedSession = {
+  payload: string;
+  signature: string;
+};
+
+function issueSession(
+  input: Omit<ClientSession, "expiresAt">,
+  now: number,
+  sign: (payload: string) => string,
+): SignedSession {
+  const session: ClientSession = {
+    ...input,
+    expiresAt: now + 15 * 60_000,
+  };
+  const payload = encodeBase64Url(JSON.stringify(session));
+  return { payload, signature: sign(payload) };
+}
+
+function readSession(
+  token: SignedSession,
+  now: number,
+  verify: (payload: string, signature: string) => boolean,
+):
+  | { ok: true; session: ClientSession }
+  | { ok: false; reason: "tampered" | "expired" | "invalid" } {
+  if (!verify(token.payload, token.signature)) {
+    return { ok: false, reason: "tampered" };
+  }
+
+  const session = decodeClientSession(token.payload);
+  if (!session) return { ok: false, reason: "invalid" };
+  if (session.expiresAt <= now) return { ok: false, reason: "expired" };
+  return { ok: true, session };
+}
+
+function addItem(
+  token: SignedSession,
+  productId: string,
+  now: number,
+): { status: "ok" | "rejected"; token?: SignedSession } {
+  const result = readSession(token, now, verifySignature);
+  if (!result.ok) return { status: "rejected" };
+
+  // 价格与库存从服务器权威数据源读取，不接受客户端传来的金额。
+  const product = catalog.find(productId);
+  if (!product || !product.inStock) return { status: "rejected" };
+
+  return {
+    status: "ok",
+    token: issueSession(
+      { ...result.session, step: 2 },
+      now,
+      signWithServerKey,
+    ),
+  };
+}
+```
+
+这里有四个可验收的代码边界：签名覆盖完整载荷；过期检查发生在业务逻辑之前；解码失败不会进入默认状态；商品价格和库存从服务器查询。把 `price` 加进 `ClientSession` 并直接使用，或让解码失败时返回 `{ step: 1 }`，都应被测试标成拒绝样本。
+
+## 容量、隐私与替代方案
+
+客户端方案把存储压力从服务器转移到每次请求的带宽和浏览器限制。载荷越大，Cookie 头越容易触及大小上限，代理和日志也可能复制这份数据；应记录字节数分布，而不是只看平均值。即使内容经过加密，也要把“客户端可看到并可丢失”当作基本假设，不要把身份证号、长期秘密或完整订单放进去。
+
+它适合小型、可重新计算、短期且能验证的上下文，并且多节点处理请求时不需要粘性会话。它不适合长流程草稿、强隐私数据、需要服务端撤销的权限，以及确认付款这种不可逆操作。服务器会话状态或数据库会话状态可以更好地承担撤销、审计和大对象存储，但要额外面对共享存储、失效清理和多节点故障转移。
+
+| 评审问题 | 采用客户会话状态的证据 | 应拒绝或改用其他方案的信号 |
+| --- | --- | --- |
+| 权威 | 服务器重查金额、库存和权限 | 直接相信请求中的价格、角色或付款状态 |
+| 完整性 | 签名、密钥轮换和失败指标清晰 | 只做 Base64 编码，或签名失败仍继续执行 |
+| 生命周期 | 有过期、刷新、失效和恢复路径 | 永不过期，或只能靠清空浏览器恢复 |
+| 规模 | 载荷有字节预算，节点无需共享会话表 | 载荷接近头部上限，或数据含大量敏感字段 |
+| 重复执行 | 高风险命令有幂等键或一次性令牌 | 重发旧请求会重复付款、发货或授予权限 |
+
+## 常见误区
+
+<Callout type="trap" title="只编码，不验证">
+
+- **现象**：开发者把 JSON 做 Base64 后放入 Cookie，用户改动 `role` 或 `price` 仍能完成下一步。
+- **原因**：把可逆编码误当成完整性保护，忘了客户端是可被用户控制的输入边界。
+- **修法**：对完整载荷做签名并在业务执行前验证；金额、库存和权限始终从服务器权威数据源读取。
+
+</Callout>
+
+<Callout type="trap" title="把长期或敏感状态塞进客户端">
+
+- **现象**：Cookie 越来越大，日志和代理复制了隐私字段，清除浏览器后流程还无法恢复或撤销。
+- **原因**：为了省掉服务端存储，把大对象、长期秘密和必须审计的状态一起序列化。
+- **修法**：只放小型可丢弃上下文；把敏感、可撤销或需要审计的状态移到服务器会话或数据库，并设置明确清理策略。
+
+</Callout>
+
+<Callout type="trap" title="签名有效就允许旧请求再次执行">
+
+- **现象**：攻击者重发一份仍在有效期内的旧载荷，重复确认订单或跳过当前步骤。
+- **原因**：签名只证明内容没有被改动，没有证明请求只应执行一次，也没有绑定版本或幂等键。
+- **修法**：对不可逆命令使用一次性令牌、幂等键或服务器侧版本检查；发现旧版本时明确拒绝，不要盲目重试。
+
+</Callout>
 
 ## 本章小结
 
-掌握 17.1 客户会话状态 的标志不是记住定义，而是能在 订单向导会话 中解释“请求 → 会话键 → 状态位置 → 更新 → 过期”的责任链，利用 可信边界、容量、多节点、持久性、清理 作出可证伪的选择，并在出现“信任客户端状态却没有签名、版本和重放防护”时明确拒绝当前实现。
+- 客户会话状态适合承载小型、短期、可验证的上下文，不等于把业务权威交给浏览器。
+- 会话载荷要有签名、过期和大小预算；服务器必须重新决定金额、库存、权限和不可逆操作。
+- 多节点扩展是收益之一，但重放、日志泄露、Cookie 上限和密钥轮换是必须观测的代价。
+- 当状态敏感、对象很大、需要服务端撤销或命令不可重复时，应拒绝客户端承载，改用服务器或数据库会话状态。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：修复校验顺序。** `readSession` 已验证签名，但代码在检查过期时间前就调用了 `checkout`。请说明应把哪个判断移到业务调用之前，以及为什么。
+
+<Answer>
+
+必须先完成签名、解码和 `expiresAt > now` 检查，再调用 `checkout`。过期载荷即使签名有效也不代表仍有资格执行；把过期判断放在业务调用之后会让旧流程进入不可逆操作，且无法统一统计拒绝原因。
+
+</Answer>
+
+**问题 2：找出不该信任的字段。** 客户端提交 `{ cartDraftId, step, price, role }`。请指出至少两个不能直接使用的字段，并写出服务器应如何替代它们。
+
+<Answer>
+
+`price` 和 `role` 不能直接作为业务决定：价格应根据 `cartDraftId` 和商品编号从服务器目录与库存重新计算，权限应由当前身份和服务器授权结果判断。`step` 也只能作为界面提示，服务器仍需检查当前流程是否允许前进；可验证的草稿键可以作为查找上下文，但不能代替权限。
+
+</Answer>
+
+**问题 3：选择或拒绝方案。** 一个结算流程平均会产生 12KB 的载荷，包含收货人电话和折扣资格，而且“确认付款”可以被重试。请给出三个拒绝信号，并提出更合适的拆分方向。
+
+<Answer>
+
+三个拒绝信号是载荷远超小型 Cookie 的预算、包含不应暴露在客户端的个人信息和折扣权威，以及付款命令存在重放风险。可以把短期步骤与草稿键留在客户端，把收货信息、折扣资格和审计记录放入服务器或数据库会话；付款使用服务器侧幂等键或一次性令牌，并在重试时返回同一结果而不是再次扣款。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="客户会话状态">把少量跨请求信息放在客户端，下一次请求再带回来；服务器仍要验证并决定真正的业务结果。</GlossaryItem>
+  <GlossaryItem term="会话载荷">请求里携带的那小段会话数据，例如当前步骤、草稿键和过期时间。</GlossaryItem>
+  <GlossaryItem term="签名">由服务器密钥生成的校验值；数据被改过时，服务器可以发现它不再匹配。</GlossaryItem>
+  <GlossaryItem term="重放攻击">把以前合法的旧请求重新发送，试图重复执行操作或恢复过期状态。</GlossaryItem>
+  <GlossaryItem term="可信边界">系统愿意相信某个输入到什么程度，以及超过边界时由谁验证、拒绝和记录的界线。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：第17章 会话状态模式](/learn/poeaa-enterprise-patterns/60-chapter-17-session-state-patterns/poeaa24-chapter-17-session-state-patterns)
 - [下一页：17.2 服务器会话状态](/learn/poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节范围和模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对客户会话状态的公开模式定位与模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

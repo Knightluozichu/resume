@@ -15803,8 +15803,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-38-client-session-state-diagram");
       return {
-        Poeaa24Pattern38ClientSessionState:
-          module0.Poeaa24Pattern38ClientSessionState,
+        Poeaa24Pattern38ClientSessionStateDiagram:
+          module0.Poeaa24Pattern38ClientSessionStateDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/62-pattern-39-server-session-state/poeaa24-pattern-39-server-session-state":
