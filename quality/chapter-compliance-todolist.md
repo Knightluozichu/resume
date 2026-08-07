@@ -300,7 +300,7 @@
     - 路径：`content/poeaa-enterprise-patterns/12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies.mdx`
 - [x] ✅ **11-chapter-06-session-state/poeaa24-chapter-06-session-state** — 已修复（2026-08-07，score 44→92，passed）
     - 路径：`content/poeaa-enterprise-patterns/11-chapter-06-session-state/poeaa24-chapter-06-session-state.mdx`
-- [ ] 🔴 P1 **07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic** — 已修复（2026-08-07，score 43→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic.mdx`
 - [ ] 🔴 P1 **09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation.mdx`

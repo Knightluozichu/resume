@@ -15363,11 +15363,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/07-chapter-02-organizing-domain-logic/poeaa24-chapter-02-organizing-domain-logic":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch02-domain-logic-strategies");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch02-domain-logic-strategies"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch02-domain-logic-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch02DomainLogicStrategies:
-          module0.Poeaa24Ch02DomainLogicStrategies,
+        Poeaa24Ch02DomainLogicStrategiesDiagram:
+          modules[0].Poeaa24Ch02DomainLogicStrategiesDiagram,
+        Poeaa24Ch02DomainLogicDecisionDiagram:
+          modules[1].Poeaa24Ch02DomainLogicDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/08-chapter-03-relational-mapping/poeaa24-chapter-03-relational-mapping":

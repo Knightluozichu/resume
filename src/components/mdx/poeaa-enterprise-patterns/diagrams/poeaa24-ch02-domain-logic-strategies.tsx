@@ -52,14 +52,14 @@ const STRATEGIES = [
   },
 ] as const;
 
-export function Poeaa24Ch02DomainLogicStrategies() {
+export function Poeaa24Ch02DomainLogicStrategiesDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label="领域逻辑三种组织策略对比。左：事务脚本，一个用例等于一个过程，适合规则少的场景，代价是规则增长后重复爆炸。中：领域模型，业务规则通过对象协作表达，适合规则复杂且频繁变化的场景，代价是学习曲线和映射开销。右：表模块，一个类管理一张表的所有行，适合结构化查询为主的场景，代价是复杂规则难以表达。底部标注迁移方向：规则增长时从事务脚本向领域模型迁移。"
+          aria-label="领域逻辑三种组织策略对比。覆盖第2章 组织领域逻辑、2.1 抉择、2.2 服务层。左：事务脚本，一个用例等于一个过程，适合规则少的场景，代价是规则增长后重复爆炸。中：领域模型，业务规则通过对象协作表达，适合规则复杂且频繁变化的场景，代价是学习曲线和映射开销。右：表模块，一个类管理一张表的所有行，适合结构化查询为主的场景，代价是复杂规则难以表达。底部标注迁移方向：规则增长时从事务脚本向领域模型迁移。"
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
           <DiagramTitle x={VIEW_W / 2} y={40} text="组织领域逻辑的三种策略" />
@@ -110,35 +110,85 @@ export function Poeaa24Ch02DomainLogicStrategies() {
                   strokeOpacity="0.4"
                 />
                 {/* 核心思想 */}
-                <text x={px + 14} y={PANEL_Y + 74} fontSize="11" fontWeight="600" fill={T.primary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 74}
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={T.primary}
+                >
                   核心思想
                 </text>
-                <text x={px + 14} y={PANEL_Y + 92} fontSize="11" fill={T.secondary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 92}
+                  fontSize="11"
+                  fill={T.secondary}
+                >
                   {s.idea}
                 </text>
                 {/* 结构 */}
-                <text x={px + 14} y={PANEL_Y + 118} fontSize="11" fontWeight="600" fill={T.primary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 118}
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={T.primary}
+                >
                   代码结构
                 </text>
-                <text x={px + 14} y={PANEL_Y + 136} fontSize="11" fill={T.secondary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 136}
+                  fontSize="11"
+                  fill={T.secondary}
+                >
                   {s.structure}
                 </text>
                 {/* 适用 */}
-                <text x={px + 14} y={PANEL_Y + 162} fontSize="11" fontWeight="600" fill={T.primary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 162}
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={T.primary}
+                >
                   适用场景
                 </text>
-                <text x={px + 14} y={PANEL_Y + 180} fontSize="11" fill={T.secondary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 180}
+                  fontSize="11"
+                  fill={T.secondary}
+                >
                   {s.fit}
                 </text>
                 {/* 代价 */}
-                <text x={px + 14} y={PANEL_Y + 206} fontSize="11" fontWeight="600" fill={T.primary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 206}
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={T.primary}
+                >
                   代价
                 </text>
-                <text x={px + 14} y={PANEL_Y + 224} fontSize="11" fill={T.danger}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 224}
+                  fontSize="11"
+                  fill={T.danger}
+                >
                   {s.cost}
                 </text>
                 {/* 示例 */}
-                <text x={px + 14} y={PANEL_Y + 254} fontSize="11" fontWeight="600" fill={T.primary}>
+                <text
+                  x={px + 14}
+                  y={PANEL_Y + 254}
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={T.primary}
+                >
                   典型代码
                 </text>
                 <text
@@ -176,7 +226,14 @@ export function Poeaa24Ch02DomainLogicStrategies() {
 
           {/* 复杂度轴 */}
           <defs>
-            <marker id="ch02-axis" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <marker
+              id="ch02-axis"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
               <path d="M0 0 L7 4 L0 8 z" fill={T.secondary} />
             </marker>
           </defs>
@@ -189,20 +246,48 @@ export function Poeaa24Ch02DomainLogicStrategies() {
             strokeWidth="1.2"
             markerEnd="url(#ch02-axis)"
           />
-          <text x={80} y={PANEL_Y + PANEL_H + 84} fontSize="11" fill={T.secondary}>
+          <text
+            x={80}
+            y={PANEL_Y + PANEL_H + 84}
+            fontSize="11"
+            fill={T.secondary}
+          >
             简单
           </text>
-          <text x={620} y={PANEL_Y + PANEL_H + 84} fontSize="11" fill={T.secondary}>
+          <text
+            x={620}
+            y={PANEL_Y + PANEL_H + 84}
+            fontSize="11"
+            fill={T.secondary}
+          >
             复杂
           </text>
           {/* 区间标注 */}
-          <text x={160} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill="#3FB97F">
+          <text
+            x={160}
+            y={PANEL_Y + PANEL_H + 64}
+            textAnchor="middle"
+            fontSize="11"
+            fill="#3FB97F"
+          >
             事务脚本
           </text>
-          <text x={360} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill="#E5B567">
+          <text
+            x={360}
+            y={PANEL_Y + PANEL_H + 64}
+            textAnchor="middle"
+            fontSize="11"
+            fill="#E5B567"
+          >
             表模块
           </text>
-          <text x={560} y={PANEL_Y + PANEL_H + 64} textAnchor="middle" fontSize="11" fill={T.accent}>
+          <text
+            x={560}
+            y={PANEL_Y + PANEL_H + 64}
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.accent}
+          >
             领域模型
           </text>
 
