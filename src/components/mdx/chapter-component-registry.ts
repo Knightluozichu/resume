@@ -15415,10 +15415,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/12-chapter-07-distribution-strategies/poeaa24-chapter-07-distribution-strategies":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch07-remote-call-cost");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch07-remote-call-cost"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch07-distribution-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch07RemoteCallCost: module0.Poeaa24Ch07RemoteCallCost,
+        Poeaa24Ch07RemoteCallCostDiagram:
+          modules[0].Poeaa24Ch07RemoteCallCostDiagram,
+        Poeaa24Ch07DistributionDecisionDiagram:
+          modules[1].Poeaa24Ch07DistributionDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/13-chapter-08-putting-together/poeaa24-chapter-08-putting-together":
