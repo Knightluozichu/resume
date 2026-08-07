@@ -16498,6 +16498,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic25AssertiveProgrammingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/33-topic-26-balance-resources/tpp20-topic-26-balance-resources":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-26-balance-resources-diagram");
+      return {
+        Tpp20Topic26BalanceResourcesDiagram:
+          module0.Tpp20Topic26BalanceResourcesDiagram,
+        Tpp20Topic26BalanceResourcesLab:
+          module0.Tpp20Topic26BalanceResourcesLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([

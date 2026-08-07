@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T19:41:51.293Z；旧版分数不迁移。
+> 2026-08-07T19:54:49.304Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2439
+- failed：2438
 - queued：401
-- passed：1032
+- passed：1033
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -18,8 +18,8 @@
 | 5 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 6 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 7 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
-| 8 | pragmatic-programmer | 71 | 36 | 0 | 35 | 108 |
-| 9 | lua-programming | 35 | 35 | 0 | 0 | 105 |
+| 8 | lua-programming | 35 | 35 | 0 | 0 | 105 |
+| 9 | pragmatic-programmer | 71 | 35 | 0 | 36 | 105 |
 | 10 | unity-shaderlab | 35 | 35 | 0 | 0 | 105 |
 | 11 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
 | 12 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
