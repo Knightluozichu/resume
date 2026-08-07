@@ -7,27 +7,39 @@ description: "提供众所周知的对象来查找公共对象与服务，以显
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-45-registry
 draft: false
 ---
 
-import { Poeaa24Pattern45Registry } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-45-registry-diagram";
+import { Poeaa24Pattern45RegistryDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-45-registry-diagram";
 
+<Objectives>
+
+- 能解释注册表如何提供受控的共享查找点，并说清它与依赖注入、裸全局变量的区别
+- 能编写带键类型、作用域和测试替换能力的 TypeScript Registry，拒绝未注册或错误类型的对象
+- 能根据生命周期、访问范围和隐式依赖的证据，判断何时采用或拒绝注册表
+
+</Objectives>
 
 ## 为什么 18.5 注册表 值得单独学习
 
 提供众所周知的对象来查找公共对象与服务，以显式入口管理受控的全局访问。 18.5 注册表 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
 
-本页以 2024 年中文版公开目录限定 **18.5 注册表** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+<Term def="提供众所周知的查找入口，通过受控键访问共享对象或服务的对象。">
+  注册表
+</Term>
+不是“把任何东西放进全局变量”的许可，而是一个需要明确作用域、键类型、生命周期和替换策略的边界。本页以
+2024 年中文版公开目录限定 **18.5 注册表** 的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
 18.5 注册表 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：提供众所周知的对象来查找公共对象与服务，以显式入口管理受控的全局访问。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
 
-对 18.5 注册表，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能限制注册表作用域和键类型，替换测试服务，并说明何时依赖注入更清楚”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.5 注册表。
-
+对 18.5 注册表，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能限制注册表作用域和键类型，替换测试服务，并说明何时依赖注入更清楚”；若实验只能显示结果而不能指出 <Term def="调用者不显式声明依赖、却通过名称从注册表取得对象的隐式依赖关系。">隐式依赖</Term>从何处越界，就不能据此选择 18.5 注册表。
 
 ## 目录单元到教学证据
 
@@ -45,8 +57,7 @@ import { Poeaa24Pattern45Registry } from "@/components/mdx/poeaa-enterprise-patt
 
 ## 三步交互实验
 
-
-<Poeaa24Pattern45Registry />
+<Poeaa24Pattern45RegistryDiagram />
 
 ## 选择与拒绝矩阵
 
@@ -57,11 +68,112 @@ import { Poeaa24Pattern45Registry } from "@/components/mdx/poeaa-enterprise-patt
 | 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
 | 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
 
+## 代码实践：限制键、作用域与替换能力
+
+注册表适合生命周期与应用一致、确实需要共享的对象；它不应成为隐藏所有依赖的服务定位器。<Term def="在测试或装配阶段用另一个实现替换已注册对象的能力。">可替换性</Term>和类型约束是最小安全边界。
+
+```ts
+type Services = {
+  clock: { now(): number };
+  payment: { charge(orderId: string): Promise<"ok" | "retry"> };
+};
+
+class AppRegistry {
+  constructor(private readonly services: Services) {}
+
+  get<K extends keyof Services>(key: K): Services[K] {
+    return this.services[key];
+  }
+}
+
+const registry = new AppRegistry({
+  clock: { now: () => Date.now() },
+  payment: new StripePayment(),
+});
+
+async function settleOrder(orderId: string) {
+  return registry.get("payment").charge(orderId);
+}
+```
+
+测试可以把 `payment` 换成 Fake，但更深的业务对象仍应优先通过参数或构造器声明依赖。若任何调用者都能注册同名键、覆盖生产服务或跨租户读取对象，注册表的“受控”边界已经消失。
+
+## 常见误区
+
+<Callout type="trap" title="把注册表当作万能服务定位器">
+
+- **现象**：业务代码到处调用 `Registry.get("anything")`，函数签名看不出真实依赖。
+- **原因**：用方便的全局查找替代显式装配，忽略隐式依赖和生命周期边界。
+- **修法**：限制键集合和作用域；核心业务优先使用构造器注入，注册表只承载确有共享理由的对象。
+
+</Callout>
+
+<Callout type="trap" title="允许任意调用者覆盖共享对象">
+
+- **现象**：测试、插件或请求代码可以重新注册 `payment`，影响其他请求或租户。
+- **原因**：注册和读取没有权限、初始化阶段或作用域约束。
+- **修法**：将注册限制在装配根，读取接口只读；按应用、租户或请求区分生命周期，禁止运行时随意覆盖。
+
+</Callout>
+
+<Callout type="trap" title="键名掩盖类型和版本变化">
+
+- **现象**：`Registry.get("db")` 返回类型依赖运行时约定，升级后才发现调用者拿到错误实现。
+- **原因**：字符串键没有类型约束、契约测试和迁移策略。
+- **修法**：使用 `keyof Services` 或显式 Token，固定返回契约，并为替换实现编写兼容测试。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+**问题 1：找出隐式依赖。** 一个函数内部调用 `Registry.get("payment")`，但签名没有任何参数。请说明一个风险和一个改进方向。
+
+<Answer>
+
+风险是调用者无法从签名知道付款依赖，测试和复用需要先配置全局状态，甚至可能跨请求污染。可以把 PaymentPort 通过构造器或函数参数注入；若确实需要应用级共享，再限制注册表只提供只读、类型化访问。
+
+</Answer>
+
+**问题 2：设计测试替换。** 生产注册表中的 payment 使用 Stripe，测试需要稳定返回 `retry`。应替换哪里，如何防止 Fake 泄漏到其他测试？
+
+<Answer>
+
+在测试装配阶段创建独立的 `AppRegistry`，传入 FakePayment，不修改共享生产实例。每个测试重新构造注册表或在 teardown 后恢复，避免一个测试的 Fake 覆盖其他测试的服务。
+
+</Answer>
+
+**问题 3：选择方案。** 一个对象只被单个 OrderService 使用，生命周期也随请求变化。为什么不应放进全局 Registry？
+
+<Answer>
+
+它没有共享需求，且请求级生命周期与应用级 Registry 不匹配；全局查找会增加隐式依赖和并发污染风险。应通过构造器或请求上下文显式传入，让生命周期和所有权可见。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="注册表">
+    提供受控查找入口，通过键访问共享对象或服务的对象。
+  </GlossaryItem>
+  <GlossaryItem term="隐式依赖">
+    调用者没有声明依赖，却通过全局名称或查找入口取得对象的关系。
+  </GlossaryItem>
+  <GlossaryItem term="可替换性">
+    在测试或装配阶段用另一实现替换已注册对象而不改调用者的能力。
+  </GlossaryItem>
+  <GlossaryItem term="作用域">
+    对象可被哪些请求、租户或模块访问，以及它应存活多久的边界。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
 掌握 18.5 注册表 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
 
 ## 前后导航
 
@@ -74,3 +186,10 @@ import { Poeaa24Pattern45Registry } from "@/components/mdx/poeaa-enterprise-patt
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
