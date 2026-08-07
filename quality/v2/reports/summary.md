@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T22:02:53.378Z；旧版分数不迁移。
+> 2026-08-07T22:11:01.425Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2428
+- failed：2427
 - queued：401
-- passed：1043
+- passed：1044
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -32,11 +32,11 @@
 | 19 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
 | 20 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
 | 21 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
-| 22 | pragmatic-programmer | 71 | 25 | 0 | 46 | 75 |
-| 23 | programmers-math | 25 | 25 | 0 | 0 | 75 |
-| 24 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
-| 25 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
-| 26 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 22 | programmers-math | 25 | 25 | 0 | 0 | 75 |
+| 23 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
+| 24 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
+| 25 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 26 | pragmatic-programmer | 71 | 24 | 0 | 47 | 72 |
 | 27 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
 | 28 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
 | 29 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
