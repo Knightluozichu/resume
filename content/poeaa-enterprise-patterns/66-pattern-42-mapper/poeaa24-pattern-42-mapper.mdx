@@ -7,70 +7,229 @@ description: "在两个彼此独立的对象之间建立通信，转换表示而
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-42-mapper
 draft: false
 ---
 
-import { Poeaa24Pattern42Mapper } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-42-mapper-diagram";
+import { Poeaa24Pattern42MapperDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-42-mapper-diagram";
 
+<Objectives>
 
-## 为什么 18.2 映射器 值得单独学习
+- 能解释映射器如何隔离两个模型的字段语义、生命周期和变化方向
+- 能编写 TypeScript 双向映射，并用往返校验检测字段遗漏与信息丢失
+- 能根据变化轴、信息丢失风险和业务行为边界，判断何时采用或拒绝映射器
 
-在两个彼此独立的对象之间建立通信，转换表示而不要求任一方了解另一方。 18.2 映射器 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **18.2 映射器** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 18.2 映射器值得单独学习
 
-## 先建立直觉：问题、机制与代价
+订单系统常常同时面对两种说法：业务人员说“客户已暂停”，存储系统却只接受一行列值和一个状态码。如果调用方直接拼出数据库字段，列名、空值规则和业务语义就会沿着每条调用路径扩散；一处改名，许多测试和查询都要一起修改。
 
-18.2 映射器 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：在两个彼此独立的对象之间建立通信，转换表示而不要求任一方了解另一方。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+这章解决的不是“怎样把对象复制到另一个对象”，而是“谁负责解释两种表示之间的差异”。没有这层责任边界，领域规则会被迫适应存储结构，读回来的数据也可能悄悄丢掉状态、身份或精度。
 
-对 18.2 映射器，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能双向映射两个模型并检测信息丢失，证明映射规则与任一模型的业务行为分离”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.2 映射器。
+## 先建立直觉：两本不同的通讯录
 
+想象团队有一本给人看的通讯录，另一本给快递系统看的通讯录。前者按姓名和联系偏好组织，后者按编号、字段长度和投递代码组织。每次交接都需要一张转换清单，但两本通讯录不必知道对方的页码。
+
+如果转换清单散落在每个调用者手里，新增一列就像让所有人同时改表；如果清单集中且能报告“有一项无法转换”，变化会停在边界上。映射器就是这张可测试、可审查的清单。
+
+## 概念模型：把表示转换变成一个责任
+
+### 是什么
+
+<Term def="集中负责两个独立模型之间双向字段转换、校验和缺失报告的对象。">映射器</Term> 不拥有订单或客户的业务决策，它只把一侧的表示变成另一侧能接受的表示，并把不可转换的情况显式报告出来。映射规则应该集中在一个可命名、可测试的地方，而不是散在控制器、查询和持久化代码中。
+
+### 为什么需要
+
+<Term def="表达业务身份、状态与行为的对象；它不应被数据库列名决定。">领域模型</Term> 关心客户能否下单、如何变更姓名以及哪些状态转换合法；<Term def="为数据库、消息队列或外部接口组织的字段集合；它优先满足存储或传输约束。">持久化模型</Term> 关心列名、编码、长度和索引。两者的变化理由不同，直接让其中一方模仿另一方会把无关变化绑定在一起。
+
+### 位置与边界
+
+<Term def="把一个模型的字段、编码和嵌套结构改写成另一个模型表示的过程。">表示转换</Term> 位于边界处：它可以拆分姓名、翻译状态码、补齐可选值，但不能替客户决定“是否允许下单”。如果转换前后不能保留必要语义，<Term def="转换后无法恢复、区分或验证的原始语义，例如未知状态被默默改成暂停。">信息丢失</Term> 必须成为失败或待人工处理的证据，而不能用默认值掩盖。
 
 ## 目录单元到教学证据
 
 ### 18.2 映射器
 
-在 **18.2 映射器** 的学习边界里，18.2 映射器 不是待背诵的目录词，而是用来检查“调用者”是否把责任交给正确对象。对 订单系统基础设施替换，学习者要记录 依赖方向 的可观察变化，并说明它何时支持或否定 18.2 映射器。
+本章精确对应 manifest 单元 `poeaa24-pattern-42-mapper`。案例围绕订单系统中的 `Customer` 与 `CustomerRow`：前者表达姓名和客户状态，后者表达数据库列。完成本单元需要交出三样证据：一张双向责任图、一段可测试的 TypeScript 转换、一次往返校验或故障样本。
 
-## 专属设计案例：订单系统基础设施替换
+评审卡记录如下：采用条件是“两种表示有独立变化轴，且转换规则需要集中校验”；观测项包括字段覆盖率、未知编码、往返一致性、业务行为是否越界和替换存储的成本；拒绝条件是“两个模型完全同构，或者映射器开始计算折扣、推进订单状态等业务规则”。
 
-把 订单系统基础设施替换 切成“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”五个观察点。18.2 映射器 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 依赖方向、对象语义、配置、测试隔离、表示转换 中哪个指标最先提示当前方案不再适用。
+## 专属可视化实验：追踪一条 Customer 的往返
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-42-mapper**；模式族为 **base**；裁决是“能双向映射两个模型并检测信息丢失，证明映射规则与任一模型的业务行为分离”；观测项包括 依赖方向、对象语义、配置、测试隔离、表示转换；拒绝条件是“依赖方向 超过团队为 18.2 映射器 设定的边界”。
+先预测：把 `status_code` 从 `A` 改成未知值，映射器应该把它默认为暂停，还是停止并报告信息丢失？点击阶段按钮观察“读取领域语义 → 转换字段 → 往返校验”的责任如何移动，再打开故障模式验证拒绝条件。
 
-配置不是生产框架语法，而是一张评审卡。对 18.2 映射器 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+<Poeaa24Pattern42MapperDiagram />
 
-## 三步交互实验
+## 代码实践：显式字段映射与业务解耦
 
+先定义两种模型，让类型本身暴露转换边界。`Customer` 可以拥有业务方法；`CustomerRow` 只描述存储形状。第一段代码刻意不把数据库列名带进领域对象。
 
-<Poeaa24Pattern42Mapper />
+```ts
+type Customer = {
+  id: string;
+  name: { first: string; last: string };
+  status: "active" | "suspended";
+};
+
+type CustomerRow = {
+  customer_id: string;
+  first_name: string;
+  last_name: string;
+  status_code: string;
+};
+
+const toRow = (customer: Customer): CustomerRow => ({
+  customer_id: customer.id,
+  first_name: customer.name.first,
+  last_name: customer.name.last,
+  status_code: customer.status === "active" ? "A" : "S",
+});
+```
+
+`toRow` 只负责表示转换，不调用数据库，也不决定客户能否变成暂停状态。读回时要反向验证状态码；把未知值静默映射到某个合法状态，会让信息丢失变成错误数据。
+
+```ts
+const fromRow = (row: CustomerRow): Customer => {
+  const status =
+    row.status_code === "A"
+      ? "active"
+      : row.status_code === "S"
+        ? "suspended"
+        : null;
+  if (!status) throw new Error(`Unknown status: ${row.status_code}`);
+
+  return {
+    id: row.customer_id,
+    name: { first: row.first_name, last: row.last_name },
+    status,
+  };
+};
+
+const source: Customer = {
+  id: "c-42",
+  name: { first: "Lin", last: "Mei" },
+  status: "active",
+};
+const restored = fromRow(toRow(source));
+if (JSON.stringify(restored) !== JSON.stringify(source)) {
+  throw new Error("Mapper lost customer meaning");
+}
+```
+
+这段往返测试验证的是“当前模型能否保留需要的语义”，不是保证所有对象永远逐字相等。若领域模型新增时区、精度或未知状态，测试应先迫使团队补充映射决策，再决定兼容、拒绝还是迁移。
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 18.2 映射器 的证据        | 应拒绝或改用其他方案的信号                     |
-| -------- | ------------------------------ | ---------------------------------------------- |
-| 责任     | 调用者 到 结果 的所有者清晰    | 抽象边界 可以绕过边界直接改写状态              |
-| 变化     | 依赖方向 的变化被局部吸收      | 一次小改动同时触及 对象语义、配置、测试隔离    |
-| 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
+| 评审问题 | 采用映射器的证据 | 应拒绝或换方案的信号 |
+| --- | --- | --- |
+| 变化 | 两种表示按不同理由演进，转换规则集中 | 两边字段完全同构，没有独立变化轴 |
+| 语义 | 状态码、空值和嵌套结构有明确规则 | 默认值掩盖未知值，无法报告丢失 |
+| 责任 | 映射器只做转换和校验 | 映射器计算价格、权限或订单状态 |
+| 测试 | 可用固定样本覆盖双向和往返 | 只能通过真实数据库才能验证字段规则 |
+| 成本 | 替换存储或接口时调用者保持稳定 | 每加一层都只是重复转发，没有边界收益 |
 
+## 常见误区
+
+<Callout type="trap" title="把数据库行当成领域对象">
+
+- **现象**：业务代码直接读取 `status_code`、`first_name`，并在各处拼接列名。
+- **原因**：认为字段相同就不需要边界，结果让存储命名成为业务语言。
+- **修法**：让映射器集中翻译列名和编码，领域代码只读取 `status`、`name` 等业务语义。
+
+</Callout>
+
+<Callout type="trap" title="用默认值掩盖未知字段">
+
+- **现象**：遇到未知 `status_code` 就默认为 `suspended`，往返测试仍然“通过”。
+- **原因**：把“程序不报错”误当成“信息被保留”，没有区分不可逆转换。
+- **修法**：校验允许值，未知值返回明确错误或待处理结果，并为该分支补测试样本。
+
+</Callout>
+
+<Callout type="trap" title="让映射器承载业务规则">
+
+- **现象**：`fromRow` 顺手计算折扣、发送通知或推进订单状态。
+- **原因**：转换入口容易被当成所有读取流程的服务层。
+- **修法**：映射器只构造和验证模型；把业务决定交给领域对象或应用服务。
+
+</Callout>
 
 ## 本章小结
 
-掌握 18.2 映射器 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
+- 映射器集中处理两个独立模型之间的字段与编码转换。
+- 领域模型表达业务语义，持久化模型表达存储约束，两者不互相依赖。
+- 双向转换必须校验未知值，并用往返样本暴露信息丢失。
+- 映射器不计算业务规则；没有独立变化轴时应拒绝额外间接层。
 
+## 可验证练习
+
+<Exercises>
+
+**问题 1：追踪责任。** `OrderService` 直接把 `Customer` 拼成数据库参数，并在遇到 `status_code = "X"` 时改写成暂停。请指出至少两处越界，并说明应该由哪一层负责。
+
+<Answer>
+
+列名和状态码转换应集中到 Mapper；未知编码应由 Mapper 校验并报告，而不是由 OrderService 默认为暂停。OrderService 只使用领域语义，并把业务决定交给领域模型或应用服务。
+
+</Answer>
+
+**问题 2：改 Demo 代码。** 在代码实践中为 `CustomerRow` 增加 `version: number`，让 `Customer` 也保留该值，并修改 `toRow`、`fromRow` 与往返断言，使版本不会在映射中丢失。
+
+<Answer>
+
+把 `version: number` 同时加入两个类型；`toRow` 返回 `version: customer.version`，`fromRow` 返回 `version: row.version`。最后的深比较会在任一方向遗漏版本时失败，这比在 Mapper 中塞入默认版本更安全。
+
+</Answer>
+
+**问题 3：作出选择。** 两个对象当前字段完全相同，只有一个调用者，且预计不会更换存储。此时是否应新增 Mapper？如果下季度要迁移到消息队列，请列出两个需要重新评估的证据。
+
+<Answer>
+
+当前没有独立变化轴、复用需求或测试隔离收益，新增 Mapper 可能只是重复转发，应先拒绝。迁移到消息队列后，需要重新评估消息载荷与领域语义是否有编码差异、未知字段如何处理，以及多个消费者是否需要一个稳定的转换契约。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="映射器">
+    集中把一个模型的字段和编码转换成另一个模型表示，并检查无法转换情况的对象。
+  </GlossaryItem>
+  <GlossaryItem term="领域模型">
+    用业务语言表达身份、状态和行为的对象，不应由数据库列名决定形状。
+  </GlossaryItem>
+  <GlossaryItem term="持久化模型">
+    为数据库或其他存储组织的字段集合，重点是列、编码、长度和索引等约束。
+  </GlossaryItem>
+  <GlossaryItem term="表示转换">
+    把字段、编码和嵌套结构从一种模型改写成另一种模型的过程。
+  </GlossaryItem>
+  <GlossaryItem term="信息丢失">
+    转换后无法恢复或验证原始语义，例如把未知状态悄悄改成合法状态。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：18.1 入口](/learn/poeaa-enterprise-patterns/65-pattern-41-gateway/poeaa24-pattern-41-gateway)
 - [下一页：18.3 层超类型](/learn/poeaa-enterprise-patterns/67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、章节范围和模式参考结构。
+- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对映射器模式的公开定位与模式族。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>
