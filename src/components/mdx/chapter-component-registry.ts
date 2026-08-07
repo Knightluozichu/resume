@@ -15913,6 +15913,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Poeaa24Pattern51RecordSetDiagram,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/77-review/poeaa24-official-final-review":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-official-final-review-diagram");
+      return {
+        Poeaa24OfficialFinalReviewDiagram:
+          module0.Poeaa24OfficialFinalReviewDiagram,
+      } as ChapterMdxComponents;
+    },
   "programming-pearls/01-preliminaries/02-aha-algorithms": async () => {
     const module0 =
       await import("@/components/mdx/programming-pearls/diagrams/02-aha-algorithms");
