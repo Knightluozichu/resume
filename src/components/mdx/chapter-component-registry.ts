@@ -15908,7 +15908,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-51-record-set-diagram");
       return {
-        Poeaa24Pattern51RecordSet: module0.Poeaa24Pattern51RecordSet,
+        Poeaa24Pattern51RecordSetDiagram:
+          module0.Poeaa24Pattern51RecordSetDiagram,
       } as ChapterMdxComponents;
     },
   "programming-pearls/01-preliminaries/02-aha-algorithms": async () => {
