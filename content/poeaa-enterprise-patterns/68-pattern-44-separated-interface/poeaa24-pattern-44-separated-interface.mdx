@@ -7,27 +7,39 @@ description: "把接口放在与实现不同的包中，使高层策略可以依
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-44-separated-interface
 draft: false
 ---
 
-import { Poeaa24Pattern44SeparatedInterface } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-44-separated-interface-diagram";
+import { Poeaa24Pattern44SeparatedInterfaceDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-44-separated-interface-diagram";
 
+<Objectives>
+
+- 能解释接口包如何让高层策略依赖抽象，并让实现包在部署和技术变化时保持可替换
+- 能编写 TypeScript 接口、实现与依赖注入装配代码，验证接口包不反向依赖实现
+- 能根据变化轴、包边界和测试隔离收益，判断何时采用或拒绝分离接口
+
+</Objectives>
 
 ## 为什么 18.4 分离接口 值得单独学习
 
 把接口放在与实现不同的包中，使高层策略可以依赖抽象而不依赖实现部署。 18.4 分离接口 的核心不是套用某个框架 API，而是回答：如何隔离变化、身份或特殊行为，让上层模式依赖稳定语义而非具体基础设施。在 订单系统基础设施替换 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
 
-本页以 2024 年中文版公开目录限定 **18.4 分离接口** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+<Term def="把接口定义放入独立包，使高层策略与具体实现包都依赖抽象的组织方式。">
+  分离接口
+</Term>
+的重点不是把每个函数都抽象化，而是让变化方向停在一个可发布、可测试的接口边界。本页以
+2024 年中文版公开目录限定 **18.4 分离接口** 的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
 18.4 分离接口 面对的具体压力是“调用方数量、实现变化率、替换范围与测试隔离成本”。它采用的机制可以概括为：把接口放在与实现不同的包中，使高层策略可以依赖抽象而不依赖实现部署。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
 
-对 18.4 分离接口，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能从高层模块替换一个实现，检查依赖方向，并证明接口包不反向引用实现”；若实验只能显示结果而不能指出 依赖方向 从何处越界，就不能据此选择 18.4 分离接口。
-
+对 18.4 分离接口，优先比较的替代路线是：仅在确有变化轴或语义约束时引入网关、映射器、接口、值对象等构件。本页的通过条件是“能从高层模块替换一个实现，检查依赖方向，并证明接口包不反向引用实现”；若实验只能显示结果而不能指出 <Term def="模块之间允许引用的方向；在本章中高层和实现都指向接口包。">依赖方向</Term>从何处越界，就不能据此选择 18.4 分离接口。
 
 ## 目录单元到教学证据
 
@@ -45,8 +57,7 @@ import { Poeaa24Pattern44SeparatedInterface } from "@/components/mdx/poeaa-enter
 
 ## 三步交互实验
 
-
-<Poeaa24Pattern44SeparatedInterface />
+<Poeaa24Pattern44SeparatedInterfaceDiagram />
 
 ## 选择与拒绝矩阵
 
@@ -57,11 +68,112 @@ import { Poeaa24Pattern44SeparatedInterface } from "@/components/mdx/poeaa-enter
 | 失败     | 故障能在 结果 前被识别并回退   | 只能看到最终错误，无法定位 依赖方向 的首个异常 |
 | 替代     | 已与同族候选比较并保留撤回路径 | 因框架内置或团队习惯而跳过问题分析             |
 
+## 代码实践：把端口放在高层可拥有的包
+
+接口包只描述稳定业务语义，实现包可以使用 Stripe、银行 SDK 或测试替身。<Term def="在装配根把具体实现提供给高层策略，而不是让高层直接 new 实现的方式。">依赖注入</Term>让部署选择留在边界。
+
+```ts
+export type PaymentPort = {
+  charge(input: {
+    orderId: string;
+    cents: number;
+  }): Promise<
+    | { kind: "charged"; reference: string }
+    | { kind: "retryable"; reason: "timeout" | "rate-limit" }
+    | { kind: "rejected"; reason: "declined" }
+  >;
+};
+
+export async function settleOrder(
+  payment: PaymentPort,
+  orderId: string,
+  cents: number,
+) {
+  return payment.charge({ orderId, cents });
+}
+
+// 装配根决定使用哪一个实现；领域代码不 import Stripe SDK。
+const payment: PaymentPort = new StripePayment(client);
+```
+
+接口包的验收条件是：高层只引用 `PaymentPort`，实现包实现它但不把实现类型反向暴露给高层，Fake 可以在测试中返回确定结果。若高层开始检查 `StripePayment` 的异常类，就说明分离接口已经被绕过。
+
+## 常见误区
+
+<Callout type="trap" title="接口包反向依赖实现包">
+
+- **现象**：接口类型的返回值包含 Stripe SDK 类型，或接口包 import 具体实现以提供默认值。
+- **原因**：只移动了文件，却没有让抽象真正拥有稳定语义。
+- **修法**：接口包只暴露内部结果类型；实现适配外部类型，装配根负责选择实现。
+
+</Callout>
+
+<Callout type="trap" title="每个函数都抽象化">
+
+- **现象**：只有一个调用者、没有变化轴的简单函数也被拆成接口和实现包。
+- **原因**：把抽象数量误当成架构质量，忽略包发布、版本和导航成本。
+- **修法**：先证明替换实现、测试隔离或独立部署的收益，再引入分离接口。
+
+</Callout>
+
+<Callout type="trap" title="接口只隔离名称没有隔离语义">
+
+- **现象**：接口方法叫 `charge`，但调用者仍需要理解供应商状态码、重试和 SDK 配置。
+- **原因**：接口契约泄漏了实现协议，边界没有翻译责任。
+- **修法**：用有限内部结果表达成功、可重试和拒绝；把协议错误留在实现适配层。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+**问题 1：检查包依赖。** 高层模块 import `PaymentPort`，接口包却 import `StripePayment`。这违反了什么边界？如何改？
+
+<Answer>
+
+接口包反向依赖实现，导致抽象包无法独立发布和测试。应把 `PaymentPort` 与内部结果类型留在接口包，把 Stripe 适配放在实现包，并由装配根注入实现。
+
+</Answer>
+
+**问题 2：补一个 Fake。** 请为 `PaymentPort` 写一个 Fake，使测试能模拟一次 `retryable`，而不启动真实支付服务。
+
+<Answer>
+
+Fake 可以实现 `charge` 并返回 `{ kind: "retryable", reason: "timeout" }`，同时记录输入的 `orderId` 和 `cents`。测试断言高层根据内部结果安排重试，不应断言 Stripe SDK 的请求格式。
+
+</Answer>
+
+**问题 3：决定是否拆包。** 一个稳定函数只有一个调用者，也没有独立部署或替换计划。请说明为什么应暂缓分离接口。
+
+<Answer>
+
+当前没有变化轴、替换实现或测试隔离收益，拆包会增加版本、导航和装配成本。等出现多个调用者、供应商迁移或真实外部依赖让测试不稳定时，再用证据支持分离接口。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="分离接口">
+    把接口放进独立包，使高层策略和具体实现都依赖抽象的组织方式。
+  </GlossaryItem>
+  <GlossaryItem term="依赖方向">
+    模块之间允许引用的方向；本章要求高层和实现都指向接口包。
+  </GlossaryItem>
+  <GlossaryItem term="依赖注入">
+    在装配根提供具体实现，让高层策略只依赖接口契约的方式。
+  </GlossaryItem>
+  <GlossaryItem term="接口契约">
+    调用者能够依赖的输入、结果和错误语义，不包含供应商实现细节。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
 掌握 18.4 分离接口 的标志不是记住定义，而是能在 订单系统基础设施替换 中解释“调用者 → 抽象边界 → 适配机制 → 协作者 → 结果”的责任链，利用 依赖方向、对象语义、配置、测试隔离、表示转换 作出可证伪的选择，并在出现“没有变化轴也预先增加全局入口和间接层”时明确拒绝当前实现。
-
 
 ## 前后导航
 
@@ -74,3 +186,10 @@ import { Poeaa24Pattern44SeparatedInterface } from "@/components/mdx/poeaa-enter
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

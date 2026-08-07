@@ -15864,8 +15864,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-44-separated-interface-diagram");
       return {
-        Poeaa24Pattern44SeparatedInterface:
-          module0.Poeaa24Pattern44SeparatedInterface,
+        Poeaa24Pattern44SeparatedInterfaceDiagram:
+          module0.Poeaa24Pattern44SeparatedInterfaceDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/69-pattern-45-registry/poeaa24-pattern-45-registry":

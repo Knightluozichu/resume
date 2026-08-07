@@ -272,7 +272,7 @@
     - 路径：`content/poeaa-enterprise-patterns/66-pattern-42-mapper/poeaa24-pattern-42-mapper.mdx`
 - [x] ✅ **67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype** — 已修复（2026-08-07，score 52→95，passed）
     - 路径：`content/poeaa-enterprise-patterns/67-pattern-43-layer-supertype/poeaa24-pattern-43-layer-supertype.mdx`
-- [ ] 🔴 P1 **68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
+- [x] ✅ **68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface** — 已修复（2026-08-07，score 52→95，passed）
     - 路径：`content/poeaa-enterprise-patterns/68-pattern-44-separated-interface/poeaa24-pattern-44-separated-interface.mdx`
 - [ ] 🔴 P1 **69-pattern-45-registry/poeaa24-pattern-45-registry** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 52）
     - 路径：`content/poeaa-enterprise-patterns/69-pattern-45-registry/poeaa24-pattern-45-registry.mdx`
