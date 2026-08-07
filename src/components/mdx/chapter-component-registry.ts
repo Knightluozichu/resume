@@ -16268,6 +16268,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic07DocumentationLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/12-chapter-02-pragmatic-approach/tpp20-chapter-02-pragmatic-approach":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter02-changeability-map-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-chapter02-decision-loop-diagram"),
+      ]);
+      return {
+        Tpp20Chapter02ChangeabilityMapDiagram:
+          modules[0].Tpp20Chapter02ChangeabilityMapDiagram,
+        Tpp20Chapter02DecisionLoopDiagram:
+          modules[1].Tpp20Chapter02DecisionLoopDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
