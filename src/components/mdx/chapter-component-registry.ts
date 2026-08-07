@@ -16142,6 +16142,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Chapter08FeedbackBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/56-topic-45-requirements-pit/tpp20-topic-45-requirements-pit":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic45-requirements-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic45-feedback-loop-diagram"),
+      ]);
+      return {
+        Tpp20Topic45RequirementsDiagram:
+          modules[0].Tpp20Topic45RequirementsDiagram,
+        Tpp20Topic45FeedbackLoopDiagram:
+          modules[1].Tpp20Topic45FeedbackLoopDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
