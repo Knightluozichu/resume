@@ -33,12 +33,19 @@ type TimelineControlsProps = {
    * 通常传 steps 的 caption。
    */
   labelText?: Readonly<Record<string, string>>;
+  /** 可选的教学状态重置按钮，放在与步进控件相同的交互容器内。 */
+  reset?: {
+    label: string;
+    ariaLabel?: string;
+    onClick: () => void;
+  };
 };
 
 export function TimelineControls({
   timeline,
   caption,
   labelText,
+  reset,
 }: TimelineControlsProps) {
   const {
     toggle,
@@ -135,16 +142,24 @@ export function TimelineControls({
       </div>
 
       {/* 当前步文案 */}
-      <p
-        className="mt-3 text-center text-xs text-secondary"
-        aria-live="polite"
-      >
+      <p className="mt-3 text-center text-xs text-secondary" aria-live="polite">
         {`第 ${currentStep + 1} / ${labels.length} 步`}
         {currentText ? ` · ${currentText}` : ""}
       </p>
 
       {caption && (
         <p className="mt-1 text-center text-xs text-secondary">{caption}</p>
+      )}
+
+      {reset && (
+        <button
+          type="button"
+          onClick={reset.onClick}
+          aria-label={reset.ariaLabel ?? reset.label}
+          className="mx-auto mt-3 block min-h-11 rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+        >
+          {reset.label}
+        </button>
       )}
     </div>
   );

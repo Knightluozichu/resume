@@ -15635,8 +15635,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-22-metadata-mapping-diagram");
       return {
-        Poeaa24Pattern22MetadataMapping:
-          module0.Poeaa24Pattern22MetadataMapping,
+        Poeaa24Pattern22MetadataMappingDiagram:
+          module0.Poeaa24Pattern22MetadataMappingDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/42-pattern-23-query-object/poeaa24-pattern-23-query-object":
@@ -15644,7 +15644,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-23-query-object-diagram");
       return {
-        Poeaa24Pattern23QueryObject: module0.Poeaa24Pattern23QueryObject,
+        Poeaa24Pattern23QueryObjectDiagram:
+          module0.Poeaa24Pattern23QueryObjectDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/43-pattern-24-repository/poeaa24-pattern-24-repository":
@@ -15678,7 +15679,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-26-page-controller-diagram");
       return {
-        Poeaa24Pattern26PageController: module0.Poeaa24Pattern26PageController,
+        Poeaa24Pattern26PageControllerDiagram:
+          module0.Poeaa24Pattern26PageControllerDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/47-pattern-27-front-controller/poeaa24-pattern-27-front-controller":
@@ -15686,8 +15688,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-27-front-controller-diagram");
       return {
-        Poeaa24Pattern27FrontController:
-          module0.Poeaa24Pattern27FrontController,
+        Poeaa24Pattern27FrontControllerDiagram:
+          module0.Poeaa24Pattern27FrontControllerDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/48-pattern-28-template-view/poeaa24-pattern-28-template-view":

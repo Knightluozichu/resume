@@ -37,7 +37,13 @@ const LABEL_TEXT: Readonly<Record<string, string>> = Object.fromEntries(
   TIMELINE_STEPS.map((step) => [step.label, step.caption ?? step.label]),
 );
 
-export function Poeaa24Pattern26PageControllerDiagram() {
+export type Poeaa24Pattern26PageControllerDiagramProps = {
+  interactive?: boolean;
+};
+
+export function Poeaa24Pattern26PageControllerDiagram({
+  interactive = true,
+}: Poeaa24Pattern26PageControllerDiagramProps) {
   const requestRef = useRef<SVGGElement>(null);
   const controllerRef = useRef<SVGGElement>(null);
   const delegationRef = useRef<SVGGElement>(null);
@@ -46,6 +52,8 @@ export function Poeaa24Pattern26PageControllerDiagram() {
   const timeline = useTeachingTimeline({
     steps: TIMELINE_STEPS,
     build: (tl) => {
+      if (!interactive) return;
+
       tl.add(
         requestRef.current!,
         { opacity: [0, 1], duration: BEAT * 0.55, ease: "out(3)" },
@@ -93,7 +101,7 @@ export function Poeaa24Pattern26PageControllerDiagram() {
           />
 
           {/* 第一步：请求与页面控制器。 */}
-          <g ref={requestRef} style={{ opacity: 0 }}>
+          <g ref={requestRef} style={{ opacity: interactive ? 0 : 1 }}>
             <rect
               x={48}
               y={96}
@@ -136,7 +144,7 @@ export function Poeaa24Pattern26PageControllerDiagram() {
             />
           </g>
 
-          <g ref={controllerRef} style={{ opacity: 0 }}>
+          <g ref={controllerRef} style={{ opacity: interactive ? 0 : 1 }}>
             <rect
               x={286}
               y={72}
@@ -199,7 +207,7 @@ export function Poeaa24Pattern26PageControllerDiagram() {
           </g>
 
           {/* 第二步：应用服务与视图模型。 */}
-          <g ref={delegationRef} style={{ opacity: 0 }}>
+          <g ref={delegationRef} style={{ opacity: interactive ? 0 : 1 }}>
             <PoeaaArrow
               x1={512}
               y1={116}
@@ -283,7 +291,7 @@ export function Poeaa24Pattern26PageControllerDiagram() {
           </g>
 
           {/* 第三步：视图选择与 HTTP 响应。 */}
-          <g ref={responseRef} style={{ opacity: 0 }}>
+          <g ref={responseRef} style={{ opacity: interactive ? 0 : 1 }}>
             <PoeaaArrow
               x1={683}
               y1={230}
@@ -392,30 +400,31 @@ export function Poeaa24Pattern26PageControllerDiagram() {
           />
         </svg>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p
-            role="status"
-            aria-live="polite"
-            className="text-xs text-secondary"
-          >
-            当前：{LABEL_TEXT[timeline.labels[timeline.currentStep]]}
-          </p>
-          <button
-            type="button"
-            onClick={() => timeline.goToStep(0)}
-            aria-label="重置页面控制器演示"
-            className="min-h-11 rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
-          >
-            重置
-          </button>
-        </div>
-        <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_input[type=range]]:min-h-11">
-          <TimelineControls
-            timeline={timeline}
-            labelText={LABEL_TEXT}
-            caption="按步骤检查责任归属；最后可重置并重放同一请求。"
-          />
-        </div>
+        {interactive && (
+          <div className="not-prose">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <p
+                role="status"
+                aria-live="polite"
+                className="text-xs text-secondary"
+              >
+                当前：{LABEL_TEXT[timeline.labels[timeline.currentStep]]}
+              </p>
+            </div>
+            <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_input[type=range]]:min-h-11">
+              <TimelineControls
+                timeline={timeline}
+                labelText={LABEL_TEXT}
+                caption="按步骤检查责任归属；最后可重置并重放同一请求。"
+                reset={{
+                  label: "重置",
+                  ariaLabel: "重置页面控制器演示",
+                  onClick: () => timeline.goToStep(0),
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
         页面控制器把请求契约、应用服务和视图选择串成一条可测试的责任链；
