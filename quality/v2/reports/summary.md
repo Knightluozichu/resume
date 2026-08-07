@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T21:52:46.049Z；旧版分数不迁移。
+> 2026-08-07T22:02:53.378Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2429
+- failed：2428
 - queued：401
-- passed：1042
+- passed：1043
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -30,9 +30,9 @@
 | 17 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 18 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 19 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
-| 20 | pragmatic-programmer | 71 | 26 | 0 | 45 | 78 |
-| 21 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
-| 22 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
+| 20 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
+| 21 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
+| 22 | pragmatic-programmer | 71 | 25 | 0 | 46 | 75 |
 | 23 | programmers-math | 25 | 25 | 0 | 0 | 75 |
 | 24 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
 | 25 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
