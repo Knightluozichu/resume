@@ -7,70 +7,178 @@ description: "为特定页面或动作设置控制器，由它接收请求、调
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: "poeaa24-pattern-26-page-controller"
 sourceUrl: "https://martinfowler.com/books/eaa.html"
 draft: false
 ---
 
 import { Poeaa24Pattern26PageController } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-26-page-controller-diagram";
 
+export const Poeaa24Pattern26PageControllerDiagram = Poeaa24Pattern26PageController;
 
-## 为什么 14.2 页面控制器 值得单独学习
+<Objectives>
 
-为特定页面或动作设置控制器，由它接收请求、调用模型并选择响应。 14.2 页面控制器 的核心不是套用某个框架 API，而是回答：如何分开请求解释、页面导航、领域调用与输出渲染，使变化不会横跨所有页面。在 订单后台多视图 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+- 能沿“HTTP 请求 → 页面控制器 → 应用服务 → 视图 → HTTP 响应”标出每个责任边界。
+- 能编写一个只编排输入校验、应用调用和响应选择的页面控制器，并让两个页面复用同一领域服务。
+- 能注入重复流程和越界访问两个反例，用日志、测试与响应状态判断何时应改用前端控制器。
 
-本页以 2024 年中文版公开目录限定 **14.2 页面控制器** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+</Objectives>
 
-## 先建立直觉：问题、机制与代价
+## 为什么页面控制器值得单独学习
 
-14.2 页面控制器 面对的具体压力是“路由数量、重复控制逻辑、视图变体与导航状态”。它采用的机制可以概括为：为特定页面或动作设置控制器，由它接收请求、调用模型并选择响应。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+页面控制器解决的是一个很具体的维护问题：订单详情页和订单编辑页都要接收请求，但它们的输入契约、导航结果和视图模型并不相同。把每个页面或动作的入口责任放到一个小控制器里，可以让变化停留在页面边界；控制器只负责编排，不把业务规则藏进模板，也不让路由处理器直接改数据库。
 
-对 14.2 页面控制器，优先比较的替代路线是：分别比较页面控制、前端控制、模板、转换、两步视图和应用控制器。本页的通过条件是“能让两个页面控制器复用领域服务却保持各自输入契约，并识别重复流程何时需要前端控制器”；若实验只能显示结果而不能指出 路由 从何处越界，就不能据此选择 14.2 页面控制器。
+这里先建立一个可验证的判断标准。一个页面控制器方案只有在“请求能被解释、业务能被调用、响应能被选择、失败能被定位”四件事都可观察时才算成立。猜一猜：如果把订单校验搬进模板，第一次失败会出现在哪一层？如果两个页面开始复制同一段认证、日志和路由分派，又该由谁统一它们？
 
+## 三个必须先排除的误区
 
-## 目录单元到教学证据
+<Callout type="trap" title="把页面控制器写成领域对象">
+  现象：控制器里出现库存扣减、价格计算和事务规则。<br />原因：把“接收请求”误解成“拥有业务决定”。<br />修法：把决定移到应用服务或领域模型，控制器只传递已验证的输入并选择响应。
+</Callout>
 
-### 14.2 页面控制器
+<Callout type="trap" title="让模板反向读取请求与数据库">
+  现象：视图为了显示一个按钮，自己查询订单并判断权限。<br />原因：没有先构造稳定的视图模型，导致输出层重新承担输入和数据访问。<br />修法：控制器调用应用服务生成视图模型，模板只渲染它并保持转义边界。
+</Callout>
 
-在 **14.2 页面控制器** 的学习边界里，14.2 页面控制器 不是待背诵的目录词，而是用来检查“HTTP请求”是否把责任交给正确对象。对 订单后台多视图，学习者要记录 路由 的可观察变化，并说明它何时支持或否定 14.2 页面控制器。
+<Callout type="trap" title="重复出现就立刻建前端控制器">
+  现象：两个页面都有少量公共检查，就把所有页面塞进一个巨型入口。<br />原因：没有区分横切策略与页面特有流程，中央入口逐渐拥有业务逻辑。<br />修法：只把认证、日志、错误映射等稳定横切职责集中；仍然保持页面控制器的输入契约和可测试边界。
+</Callout>
 
-## 专属设计案例：订单后台多视图
+## 术语与订单后台案例
 
-把 订单后台多视图 切成“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”五个观察点。14.2 页面控制器 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 路由、输入校验、导航、模板转义、视图复用 中哪个指标最先提示当前方案不再适用。
+在订单后台多视图中，<Term def="针对单个页面或动作接收请求、调用应用逻辑并选择响应的控制器">页面控制器</Term> 是每个页面的编排点；它不等于一个无边界的业务服务。请求进入后，<Term def="约束请求字段、身份和返回形状的可验证约定">请求契约</Term> 先把输入说清楚，<Term def="为一个用例协调领域对象和事务边界的可调用入口">应用服务</Term> 再完成用例编排。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-26-page-controller**；模式族为 **web**；裁决是“能让两个页面控制器复用领域服务却保持各自输入契约，并识别重复流程何时需要前端控制器”；观测项包括 路由、输入校验、导航、模板转义、视图复用；拒绝条件是“路由 超过团队为 14.2 页面控制器 设定的边界”。
+控制器不应把领域对象原样交给模板，而应生成 <Term def="专门为一个页面准备、只携带渲染所需字段的数据形状">视图模型</Term>。当保存成功要跳转列表页、校验失败要回到编辑页时，<Term def="由成功、失败和重定向共同构成的页面去向与状态">导航状态</Term> 必须被显式返回。若认证、日志和错误映射在许多页面重复，才考虑引入 <Term def="为站点全部请求提供统一入口并分派到具体动作的控制器">前端控制器</Term>，而不是提前牺牲页面边界。
 
-配置不是生产框架语法，而是一张评审卡。对 14.2 页面控制器 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+案例的单元键是 `poeaa24-pattern-26-page-controller`。本章固定五个观察点：HTTP 请求、控制器、应用服务、视图和 HTTP 响应。读者要记录路由、输入校验、导航、模板转义、视图复用五项证据；决定不是“用了某框架所以正确”，而是能否解释每一次变化由谁吸收、每一次失败在哪里停止。
 
-## 三步交互实验
+## 从请求到响应的责任链
 
+一次 `GET /orders/42` 应先由页面控制器解析路径参数，再调用查询用例，最后选择 `order-detail` 视图。一次 `POST /orders/42` 则需要验证表单、调用保存用例，并在成功与失败之间选择不同的导航状态。两个控制器可以共享 `OrderApplicationService`，但各自保留自己的输入类型和输出选择。
 
-<Poeaa24Pattern26PageController />
+这条链有三个可复核的不变量：控制器不直接写持久化细节；应用服务不依赖某一张 HTML 模板；视图不重新解释原始请求。动手试：在代码切片中故意删除输入校验，再观察错误是否仍然能在响应生成前被定位；随后把错误恢复为字段级反馈，确认控制器仍只承担编排。
 
-## 选择与拒绝矩阵
+## 专属代码切片：两个页面共享应用服务
 
-| 评审问题 | 选择 14.2 页面控制器 的证据       | 应拒绝或改用其他方案的信号                  |
-| -------- | --------------------------------- | ------------------------------------------- |
-| 责任     | HTTP请求 到 HTTP响应 的所有者清晰 | 控制器 可以绕过边界直接改写状态             |
-| 变化     | 路由 的变化被局部吸收             | 一次小改动同时触及 输入校验、导航、模板转义 |
-| 失败     | 故障能在 HTTP响应 前被识别并回退  | 只能看到最终错误，无法定位 路由 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析          |
+```ts
+type HttpRequest = {
+  path: Record<string, string | undefined>;
+  form: Record<string, string | undefined>;
+};
 
+type Response =
+  | { status: 200; view: "order-detail"; model: ViewModel }
+  | { status: 303; location: string }
+  | { status: 400 | 404; view: "order-edit" | "not-found"; errors?: string[] };
 
-## 本章小结
+class OrderPageController {
+  constructor(private readonly app: OrderApplicationService) {}
 
-掌握 14.2 页面控制器 的标志不是记住定义，而是能在 订单后台多视图 中解释“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”的责任链，利用 路由、输入校验、导航、模板转义、视图复用 作出可证伪的选择，并在出现“在模板里直接执行业务规则和数据库访问”时明确拒绝当前实现。
+  async get(request: HttpRequest): Promise<Response> {
+    const id = request.path.id;
+    if (!id) return { status: 400, view: "order-edit", errors: ["缺少订单编号"] };
 
+    const model = await this.app.detail(id);
+    return model
+      ? { status: 200, view: "order-detail", model }
+      : { status: 404, view: "not-found" };
+  }
 
-## 前后导航
+  async post(request: HttpRequest): Promise<Response> {
+    const id = request.path.id;
+    const quantity = Number(request.form.quantity);
+    if (!id || !Number.isInteger(quantity) || quantity < 1) {
+      return { status: 400, view: "order-edit", errors: ["数量必须是正整数"] };
+    }
+
+    await this.app.updateQuantity(id, quantity);
+    return { status: 303, location: `/orders/${id}` };
+  }
+}
+```
+
+这里的 `OrderPageController` 只做三件事：把请求翻译成用例参数、选择结果类型、决定页面去向。`OrderApplicationService` 可以被详情页和编辑页共同调用；如果控制器开始直接执行 SQL、计算折扣或读取模板内部状态，就已经越过了页面边界。
+
+## 三步交互实验：沿着一条请求逐层检查
+
+先预测：点击“下一步”时，哪一个对象会首先获得新的责任？如果把 `ViewModel` 换成数据库实体，哪一项输入契约会被破坏？按顺序操作下面三步，并在每一步写下“看到的状态—责任所有者—可推翻证据”。
+
+<Stepper>
+  <Step title="1. 锁定页面边界">
+    观察 URL、请求字段和页面控制器的输入契约。确认 `/orders/:id` 的缺失参数在控制器内被拒绝，而不是让模板或数据库猜测。
+
+    <Poeaa24Pattern26PageControllerDiagram />
+  </Step>
+  <Step title="2. 复用应用服务">
+    观察详情页和编辑页如何共享同一个应用服务，同时各自选择视图模型和导航结果。注意共享的是用例，不是页面输入类型。
+
+    <Poeaa24Pattern26PageControllerDiagram />
+  </Step>
+  <Step title="3. 注入反例并复位">
+    观察“模板直接查库”和“控制器复制横切逻辑”两条越界路径；用相同请求重放，确认错误在响应生成前可定位，再点击重置回到第一步。
+
+    <Poeaa24Pattern26PageControllerDiagram />
+  </Step>
+</Stepper>
+
+## 选择、拒绝与迁移信号
+
+| 评审问题 | 保留页面控制器的证据 | 应拒绝或迁移的信号 |
+| --- | --- | --- |
+| 输入 | 每个页面拥有清晰的请求契约，坏输入在入口处结束 | 多个页面被迫接受同一个含糊参数对象 |
+| 业务 | 控制器调用应用服务，不直接作领域决定 | 控制器包含价格、库存或事务规则 |
+| 输出 | 视图只接收视图模型，导航结果可测试 | 模板重新读取请求、数据库或权限上下文 |
+| 横切 | 公共认证与日志可由前端控制器统一 | 中央入口开始分派每个页面的业务分支 |
+
+如果两个页面只有少量重复的认证和日志，可以先抽出中间件或前端控制器的横切层；如果它们的请求字段、视图模型和失败导航不同，则应保留两个页面控制器。迁移的触发器不是“类变多”，而是同一横切策略无法一致执行，或入口分派已经成为不可测试的业务树。
+
+## 练习、答案与节点验证
+
+<Exercises>
+
+**问题 1：边界推理。** 订单编辑页提交非法数量时，为什么应由页面控制器返回字段错误，而不是让模板或领域对象读取原始表单？
+
+<Answer>
+  页面控制器拥有请求契约和响应选择，能在调用应用服务前拒绝不完整输入；应用服务只接收已验证的用例参数，模板则只渲染错误与视图模型。这样错误位置、责任归属和测试入口都可观察。
+</Answer>
+
+**问题 2：改 Demo 代码。** 修改上面的 `post` 方法，使 `updateQuantity` 失败时回到编辑页并保留错误，而不是把异常直接变成 500 响应；同时保持控制器不包含库存规则。
+
+<Answer>
+  让应用服务返回可辨认的领域结果，或捕获一个已定义的 `OrderUpdateError`，只在控制器中把它映射为 `{ status: 400, view: "order-edit", errors: ["..."] }`。库存是否允许修改仍由应用服务或领域模型决定，控制器只负责把失败结果翻译成页面响应。
+</Answer>
+
+**问题 3：场景选型。** 详情页、编辑页和删除页都重复认证、日志和错误映射，但输入与视图仍各不相同；此时应如何选择页面控制器与前端控制器的组合？
+
+<Answer>
+  用前端控制器或中间件集中稳定的认证、日志和错误映射，再把请求分派给三个页面控制器。页面控制器仍保留各自的输入契约、应用服务调用和视图选择；若中央入口开始包含删除规则或页面专属分支，就应把那段逻辑移回页面控制器。
+</Answer>
+
+</Exercises>
+
+## 术语复核与本章小结
+
+<Glossary>
+  <GlossaryItem term="页面控制器">面向一个页面或动作的请求入口，负责把输入交给用例，再选择返回什么。</GlossaryItem>
+  <GlossaryItem term="请求契约">一份可检查的输入约定，例如路径中必须有订单编号、数量必须是正整数。</GlossaryItem>
+  <GlossaryItem term="应用服务">协调一个用例的入口；它可以调用领域对象和事务，但不负责 HTML 排版。</GlossaryItem>
+  <GlossaryItem term="视图模型">为某个页面准备的数据形状，只带渲染所需字段，不把数据库实体原样暴露给模板。</GlossaryItem>
+  <GlossaryItem term="导航状态">成功、校验失败或重定向后页面要去哪里，以及用户能看到什么结果。</GlossaryItem>
+  <GlossaryItem term="前端控制器">一个站点级入口，适合集中稳定的认证、日志和错误映射，再分派到页面或动作。</GlossaryItem>
+</Glossary>
+
+掌握 14.2 页面控制器，意味着你能从请求契约出发画出责任链，能用代码让两个页面共享应用服务而不共享输入边界，也能在重复逻辑出现时区分“抽出横切策略”和“制造巨型入口”。观察到模板查库或控制器拥有领域规则时，应先拒绝该实现，再用可重放的错误响应证明修法有效。
+
+## 阅读导航
 
 - [上一页：14.1 模型-视图-控制器](/learn/poeaa-enterprise-patterns/45-pattern-25-model-view-controller/poeaa24-pattern-25-model-view-controller)
 - [下一页：14.3 前端控制器](/learn/poeaa-enterprise-patterns/47-pattern-27-front-controller/poeaa24-pattern-27-front-controller)
 
-## 来源与改写范围
-
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Martin Fowler，《Patterns of Enterprise Application Architecture》"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
