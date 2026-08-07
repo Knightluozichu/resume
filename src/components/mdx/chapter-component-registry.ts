@@ -16307,6 +16307,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic09SingleSourceDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/15-topic-10-orthogonality/tpp20-topic-10-orthogonality":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic10-coupling-matrix-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic10-local-change-diagram"),
+      ]);
+      return {
+        Tpp20Topic10CouplingMatrixDiagram:
+          modules[0].Tpp20Topic10CouplingMatrixDiagram,
+        Tpp20Topic10LocalChangeDiagram:
+          modules[1].Tpp20Topic10LocalChangeDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
