@@ -16708,6 +16708,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Tpp20Topic41TestToCodeLab: module0.Tpp20Topic41TestToCodeLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/52-topic-42-property-based-testing/tpp20-topic-42-property-based-testing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-42-property-based-testing-diagram");
+      return {
+        Tpp20Topic42PropertyBasedTestingEvidenceDiagram:
+          module0.Tpp20Topic42PropertyBasedTestingEvidenceDiagram,
+        Tpp20Topic42PropertyBasedTestingLoopDiagram:
+          module0.Tpp20Topic42PropertyBasedTestingLoopDiagram,
+        Tpp20Topic42PropertyBasedTestingLab:
+          module0.Tpp20Topic42PropertyBasedTestingLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
