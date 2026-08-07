@@ -1,67 +1,391 @@
 /**
- * <Poeaa24Pattern09UnitOfWork>：工作单元生命周期序列图。Server Component。
+ * <Poeaa24Pattern09UnitOfWorkDiagram>：工作单元三阶段状态图。Server Component。
+ *
+ * stage 让同一张专属图在 Stepper 的每一步显示不同的教学焦点：
+ * 1. 登记新增对象；2. 收集修改与删除；3. 按依赖顺序原子提交。
  */
-import { T, DiagramTitle, DiagramCaption } from "../poeaa-svg-primitives";
-const VIEW_W = 720; const VIEW_H = 420;
-export function Poeaa24Pattern09UnitOfWork() {
+import { T, DiagramCaption, DiagramTitle } from "../poeaa-svg-primitives";
+
+const VIEW_W = 720;
+const VIEW_H = 440;
+
+type Stage = 1 | 2 | 3;
+
+const STAGE_LABELS: Record<Stage, string> = {
+  1: "阶段一：登记新增对象，暂不写库",
+  2: "阶段二：收集修改与删除，形成变更集合",
+  3: "阶段三：按依赖顺序提交，失败则整体回滚",
+};
+
+function phaseTone(phase: Stage, activeStage: Stage): string {
+  return phase === activeStage ? T.accent : T.secondary;
+}
+
+function phaseOpacity(phase: Stage, activeStage: Stage): number {
+  return phase === activeStage ? 1 : 0.42;
+}
+
+export function Poeaa24Pattern09UnitOfWorkDiagram({
+  stage = 3,
+}: {
+  stage?: Stage;
+}) {
+  const activeStage = stage;
+  const activeTone = phaseTone(activeStage, activeStage);
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label="工作单元生命周期序列图。展示 UnitOfWork 在一次业务事务中如何跟踪新增、修改、删除对象，并在 commit 时按正确顺序统一写出。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <DiagramTitle x={VIEW_W / 2} y={36} text="Unit of Work：跟踪变更 → 原子提交" />
-          {/* 泳道标题 */}
-          <text x={120} y={68} textAnchor="middle" fontSize="11" fontWeight="700" fill="#3FB97F">业务代码</text>
-          <text x={360} y={68} textAnchor="middle" fontSize="11" fontWeight="700" fill={T.accent}>UnitOfWork</text>
-          <text x={600} y={68} textAnchor="middle" fontSize="11" fontWeight="700" fill="#E5B567">数据库</text>
-          {/* 生命线 */}
-          <line x1={120} y1={78} x2={120} y2={370} stroke="#3FB97F" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.5" />
-          <line x1={360} y1={78} x2={360} y2={370} stroke={T.accent} strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.5" />
-          <line x1={600} y1={78} x2={600} y2={370} stroke="#E5B567" strokeWidth="1" strokeDasharray="4 3" strokeOpacity="0.5" />
-          {/* Step 1: registerNew */}
-          <line x1={120} y1={100} x2={350} y2={100} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={94} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerNew(order)</text>
-          <rect x={340} y={104} width={40} height={20} rx="3" fill={T.accent} fillOpacity="0.15" stroke={T.accent} strokeWidth="0.8" />
-          <text x={360} y={118} textAnchor="middle" fontSize="11" fill={T.accent}>new[]</text>
-          {/* Step 2: registerDirty */}
-          <line x1={120} y1={148} x2={350} y2={148} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={142} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerDirty(customer)</text>
-          <rect x={340} y={152} width={40} height={20} rx="3" fill="#E5B567" fillOpacity="0.15" stroke="#E5B567" strokeWidth="0.8" />
-          <text x={360} y={166} textAnchor="middle" fontSize="11" fill="#E5B567">dirty[]</text>
-          {/* Step 3: registerRemoved */}
-          <line x1={120} y1={196} x2={350} y2={196} stroke={T.primary} strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={190} textAnchor="middle" fontSize="11" fontFamily="monospace" fill={T.primary}>registerRemoved(oldItem)</text>
-          <rect x={340} y={200} width={40} height={20} rx="3" fill={T.danger} fillOpacity="0.15" stroke={T.danger} strokeWidth="0.8" />
-          <text x={360} y={214} textAnchor="middle" fontSize="11" fill={T.danger}>del[]</text>
-          {/* Step 4: commit */}
-          <line x1={120} y1={252} x2={350} y2={252} stroke="#3FB97F" strokeWidth="1.5" markerEnd="url(#uow-arrow)" />
-          <text x={235} y={246} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="monospace" fill="#3FB97F">commit()</text>
-          {/* commit 内部：按顺序写出 */}
-          <line x1={370} y1={272} x2={590} y2={272} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={266} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">INSERT order</text>
-          <line x1={370} y1={296} x2={590} y2={296} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={290} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">UPDATE customer</text>
-          <line x1={370} y1={320} x2={590} y2={320} stroke="#E5B567" strokeWidth="1.2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={314} textAnchor="middle" fontSize="11" fontFamily="monospace" fill="#E5B567">DELETE oldItem</text>
-          {/* 顺序标注 */}
-          <text x={620} y={276} fontSize="11" fill={T.secondary}>①</text>
-          <text x={620} y={300} fontSize="11" fill={T.secondary}>②</text>
-          <text x={620} y={324} fontSize="11" fill={T.secondary}>③</text>
-          {/* 成功返回 */}
-          <line x1={590} y1={348} x2={370} y2={348} stroke="#3FB97F" strokeWidth="1" strokeDasharray="4 2" markerEnd="url(#uow-arrow)" />
-          <text x={480} y={344} textAnchor="middle" fontSize="11" fill="#3FB97F">全部成功 / 全部回滚</text>
-          {/* 箭头 marker */}
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          role="img"
+          aria-label={`工作单元第${activeStage}阶段：${STAGE_LABELS[activeStage]}。三条泳道分别表示业务代码、工作单元和数据库。`}
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
           <defs>
-            <marker id="uow-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-              <path d="M0,0 L8,3 L0,6" fill="none" stroke={T.primary} strokeWidth="1" />
+            <marker
+              id="uow-diagram-arrow"
+              markerWidth="10"
+              markerHeight="8"
+              refX="9"
+              refY="4"
+              orient="auto"
+            >
+              <path d="M0 0 L9 4 L0 8 Z" fill={T.primary} />
             </marker>
           </defs>
-          <DiagramCaption x={VIEW_W / 2} y={VIEW_H - 12} text="UoW 收集变更，commit 时按 INSERT → UPDATE → DELETE 顺序原子写出" />
+
+          <DiagramTitle
+            x={VIEW_W / 2}
+            y={30}
+            text="Unit of Work：登记变化 → 原子提交"
+          />
+          <text
+            x={VIEW_W / 2}
+            y={52}
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.secondary}
+          >
+            {STAGE_LABELS[activeStage]}
+          </text>
+
+          {/* 当前步骤条：让每个 Step 的图示状态一眼可辨。 */}
+          {[1, 2, 3].map((phase) => {
+            const current = phase as Stage;
+            const x = 40 + (current - 1) * 214;
+            const tone = phaseTone(current, activeStage);
+            return (
+              <g
+                key={`phase-${current}`}
+                opacity={phaseOpacity(current, activeStage)}
+              >
+                <rect
+                  x={x}
+                  y={68}
+                  width={190}
+                  height={28}
+                  rx="7"
+                  fill={tone}
+                  fillOpacity="0.08"
+                  stroke={tone}
+                  strokeWidth="1.2"
+                />
+                <text
+                  x={x + 95}
+                  y={87}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="700"
+                  fill={tone}
+                >
+                  {current}.{" "}
+                  {current === 1 ? "登记" : current === 2 ? "收集" : "提交"}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* 泳道标题与生命线。 */}
+          <text
+            x={120}
+            y={120}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fill={T.success}
+          >
+            业务代码
+          </text>
+          <text
+            x={360}
+            y={120}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fill={T.accent}
+          >
+            工作单元
+          </text>
+          <text
+            x={600}
+            y={120}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fill={T.warning}
+          >
+            数据库
+          </text>
+          <line
+            x1={120}
+            y1={130}
+            x2={120}
+            y2={374}
+            stroke={T.success}
+            strokeWidth="1"
+            strokeDasharray="5 4"
+            strokeOpacity="0.5"
+          />
+          <line
+            x1={360}
+            y1={130}
+            x2={360}
+            y2={374}
+            stroke={T.accent}
+            strokeWidth="1"
+            strokeDasharray="5 4"
+            strokeOpacity="0.5"
+          />
+          <line
+            x1={600}
+            y1={130}
+            x2={600}
+            y2={374}
+            stroke={T.warning}
+            strokeWidth="1"
+            strokeDasharray="5 4"
+            strokeOpacity="0.5"
+          />
+
+          {/* 阶段一：新增对象只进入 new[]。 */}
+          <g opacity={phaseOpacity(1, activeStage)}>
+            <line
+              x1={120}
+              y1={154}
+              x2={350}
+              y2={154}
+              stroke={T.success}
+              strokeWidth="1.5"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={235}
+              y={148}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.success}
+            >
+              registerNew(order)
+            </text>
+            <rect
+              x={326}
+              y={164}
+              width={68}
+              height={24}
+              rx="4"
+              fill={T.accent}
+              fillOpacity="0.12"
+              stroke={T.accent}
+              strokeWidth="1.2"
+            />
+            <text
+              x={360}
+              y={180}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={activeStage === 1 ? activeTone : T.accent}
+            >
+              new[]
+            </text>
+          </g>
+
+          {/* 阶段二：修改与删除分别登记，避免把意图压扁成一个列表。 */}
+          <g opacity={phaseOpacity(2, activeStage)}>
+            <line
+              x1={120}
+              y1={216}
+              x2={350}
+              y2={216}
+              stroke={T.success}
+              strokeWidth="1.5"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={235}
+              y={210}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.success}
+            >
+              registerDirty(customer)
+            </text>
+            <rect
+              x={326}
+              y={226}
+              width={68}
+              height={24}
+              rx="4"
+              fill={T.warning}
+              fillOpacity="0.12"
+              stroke={T.warning}
+              strokeWidth="1.2"
+            />
+            <text
+              x={360}
+              y={242}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.warning}
+            >
+              dirty[]
+            </text>
+
+            <line
+              x1={120}
+              y1={270}
+              x2={350}
+              y2={270}
+              stroke={T.success}
+              strokeWidth="1.5"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={235}
+              y={264}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.success}
+            >
+              registerRemoved(old)
+            </text>
+            <rect
+              x={326}
+              y={280}
+              width={68}
+              height={24}
+              rx="4"
+              fill={T.danger}
+              fillOpacity="0.12"
+              stroke={T.danger}
+              strokeWidth="1.2"
+            />
+            <text
+              x={360}
+              y={296}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.danger}
+            >
+              del[]
+            </text>
+          </g>
+
+          {/* 阶段三：一次封口，把已登记的集合按依赖关系交给数据库。 */}
+          <g opacity={phaseOpacity(3, activeStage)}>
+            <line
+              x1={120}
+              y1={330}
+              x2={350}
+              y2={330}
+              stroke={T.accent}
+              strokeWidth="1.8"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={235}
+              y={324}
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="700"
+              fontFamily="monospace"
+              fill={T.accent}
+            >
+              commit()
+            </text>
+            <line
+              x1={370}
+              y1={344}
+              x2={590}
+              y2={344}
+              stroke={T.warning}
+              strokeWidth="1.5"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={480}
+              y={338}
+              textAnchor="middle"
+              fontSize="11"
+              fontFamily="monospace"
+              fill={T.warning}
+            >
+              INSERT → UPDATE → DELETE
+            </text>
+            <line
+              x1={590}
+              y1={362}
+              x2={370}
+              y2={362}
+              stroke={T.success}
+              strokeWidth="1.2"
+              strokeDasharray="5 3"
+              markerEnd="url(#uow-diagram-arrow)"
+            />
+            <text
+              x={480}
+              y={378}
+              textAnchor="middle"
+              fontSize="11"
+              fill={T.success}
+            >
+              全部成功；失败则全部回滚
+            </text>
+          </g>
+
+          <text
+            x={VIEW_W / 2}
+            y={410}
+            textAnchor="middle"
+            fontSize="11"
+            fill={T.secondary}
+          >
+            当前焦点：
+            {activeStage === 1
+              ? "new[] 暂存订单"
+              : activeStage === 2
+                ? "new[] / dirty[] / del[] 三类意图"
+                : "一次 commit 封口"}
+          </text>
+          <DiagramCaption
+            x={VIEW_W / 2}
+            y={VIEW_H - 8}
+            text="工作单元把变化收集起来，再以可检查的顺序统一写出"
+          />
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        Unit of Work 在业务操作期间跟踪所有新增、修改、删除的对象，
-        commit 时按正确顺序统一写出，失败则全部回滚。
+        第 {activeStage} 步：{STAGE_LABELS[activeStage]}
+        。同一张专属图在分步实验中逐步突出登记、收集和提交状态。
       </figcaption>
     </figure>
   );
 }
+
+// 兼容总监稍后重新生成共享 chapter-component-registry 前的旧导出名。
+export const Poeaa24Pattern09UnitOfWork = Poeaa24Pattern09UnitOfWorkDiagram;
