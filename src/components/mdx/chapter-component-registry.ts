@@ -16190,6 +16190,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic01FeedbackBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/06-topic-02-cat-ate-source-code/tpp20-topic-02-cat-ate-source-code":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic02-incident-response-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic02-option-recovery-diagram"),
+      ]);
+      return {
+        Tpp20Topic02IncidentResponseDiagram:
+          modules[0].Tpp20Topic02IncidentResponseDiagram,
+        Tpp20Topic02OptionRecoveryDiagram:
+          modules[1].Tpp20Topic02OptionRecoveryDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
