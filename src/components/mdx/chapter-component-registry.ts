@@ -15477,7 +15477,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-06-row-data-gateway-diagram");
       return {
-        Poeaa24Pattern06RowDataGateway: module0.Poeaa24Pattern06RowDataGateway,
+        Poeaa24Pattern06RowDataGatewayDiagram:
+          module0.Poeaa24Pattern06RowDataGatewayDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/23-pattern-07-active-record/poeaa24-pattern-07-active-record":
