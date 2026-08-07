@@ -7,63 +7,212 @@ description: "协调一次事务中的身份、变更跟踪和按需加载。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-chapter-11-object-relational-behavior
 draft: false
 ---
 
-import { Poeaa24Ch11BehaviorCollaboration } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-collaboration";
+import { Poeaa24Ch11BehaviorCollaborationDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-collaboration";
+import { Poeaa24Ch11BehaviorDecisionDiagram } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-decision-diagram";
 
+<Objectives>
 
-## 为什么 第11章 对象-关系行为模式 值得单独学习
+- 能解释 Unit of Work、Identity Map 和 Lazy Load 分别解决何时写、是否重复和何时读的问题
+- 能用 TypeScript 实现一次工作单元内的身份缓存、变更追踪和显式提交
+- 能根据关联访问频率、事务边界和并发风险选择立即加载、延迟加载以及写回策略
 
-协调一次事务中的身份、变更跟踪和按需加载。 第11章 对象-关系行为模式 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **第11章 对象-关系行为模式** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么第11章对象-关系行为模式值得单独学习
+
+第11章对象-关系行为模式的核心不是打开 ORM 的自动跟踪开关，而是明确一次业务事务中对象何时读取、如何保持唯一身份、何时写回以及失败后如何恢复。订单聚合包含订单行、客户和付款状态；如果每次关联访问都无提示地查询，或者同一数据库行被创建成多个可写对象，内存行为就会与数据库行为分叉。
+
+<Term def="在一次业务或数据库事务中集中跟踪新建、修改和删除的对象，并在明确提交时协调持久化写回的边界。">
+  工作单元
+</Term>
+让写出时机成为可观察的决定，而不是让每个对象自行保存。本页以 2024
+年中文版公开目录限定第11章的范围，并依据 Martin Fowler
+的作者图书页和模式目录独立重写；目录只决定要讲什么，案例、实验、判断题和答案均为本课程原创。
 
 ## 先建立直觉：问题、机制与代价
 
-第11章 对象-关系行为模式 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：协调一次事务中的身份、变更跟踪和按需加载。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+<Term def="按持久化标识缓存已加载对象，保证同一工作范围内相同标识对应同一个内存实例的行为模式。">
+  标识映射
+</Term>
+解决“是否重复”，但不自动解决并发冲突。
+<Term def="把关联对象的查询推迟到首次访问，并以透明或显式方式触发加载的行为模式。">
+  延迟加载
+</Term>
+解决“何时读”，可以避免不需要的关联查询，却可能导致隐藏的 N+1
+查询和事务范围错误。
+<Term def="记录对象从加载到提交期间哪些字段或实体发生改变，以决定需要写回的集合。">
+  变更追踪
+</Term>
+则连接内存行为与提交结果，需要与回滚、版本检查和错误报告一起设计。
 
-对 第11章 对象-关系行为模式，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能解释对象-关系行为模式的边界与选择轴，逐项覆盖3个目录节点，并在同一应用切片中验证”；若实验只能显示结果而不能指出 工作单元 从何处越界，就不能据此选择 第11章 对象-关系行为模式。
-
+对第11章对象-关系行为模式，优先比较的替代路线是：事务短且关联稳定时使用显式加载，访问昂贵且确实按需时使用延迟加载，多个对象需要原子提交时使用工作单元，并以标识映射保证同一范围内的唯一实例。若实验只能显示查询返回，不能说明加载次数、提交集合和失败后的对象状态，就不能据此选择行为模式。
 
 ## 目录单元到教学证据
 
 ### 第11章 对象-关系行为模式
 
-在 **第11章 对象-关系行为模式** 的学习边界里，第11章 对象-关系行为模式 不是待背诵的目录词，而是用来检查“事务范围”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 工作单元 的可观察变化，并说明它何时支持或否定 第11章 对象-关系行为模式。
+第11章对象-关系行为模式要求把“对象生命周期如何跨越事务”变成可观察的架构决定：先标出事务范围、身份缓存、关联读取和写回所有者，再用订单聚合的重复加载、关联访问和提交失败测试验证决定。只有这些行为可以被测量和回滚，对象关系边界才不是 ORM 默认值的副作用。
 
-## 专属设计案例：订单聚合持久化
+## 专属代码案例：订单聚合的一次工作单元
 
-把 订单聚合持久化 切成“事务范围 → 身份缓存 → 对象访问 → 变更集合 → 提交”五个观察点。第11章 对象-关系行为模式 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 工作单元、唯一实例、加载时机、写出顺序、并发 中哪个指标最先提示当前方案不再适用。
+把订单聚合持久化切成“事务范围 → 身份缓存 → 关联访问 → 变更集合 → 提交结果”五个观察点。第11章对象-关系行为模式的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及工作单元、唯一实例、加载时机、写出顺序和并发中哪个指标最先提示当前方案不再适用。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-11-object-relational-behavior**；模式族为 **mapping**；裁决是“能解释对象-关系行为模式的边界与选择轴，逐项覆盖3个目录节点，并在同一应用切片中验证”；观测项包括 工作单元、唯一实例、加载时机、写出顺序、并发；拒绝条件是“工作单元 超过团队为 第11章 对象-关系行为模式 设定的边界”。
+设计记录采用五个可换行字段：单元键为 **poeaa24-chapter-11-object-relational-behavior**；模式族为 **mapping**；裁决是“工作单元集中写回，标识映射保证唯一实例，关联加载由访问画像决定”；观测项包括工作单元、唯一实例、加载时机、写出顺序、并发；拒绝条件是“对象可以脱离工作单元自行写回，或同一事务产生多个可写实例”。
 
-配置不是生产框架语法，而是一张评审卡。对 第11章 对象-关系行为模式 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+先预测：一个订单先访问 `customer` 再提交，另一个订单只访问金额；两者应该产生多少关联查询和写回动作？先写下 Identity Map、Lazy Load 和 Unit of Work 的预期，再阅读实现；验证时要能区分“没有访问所以不加载”和“隐藏查询导致的 N+1”。
 
-# 模式族地图
+```ts
+type Order = {
+  id: string;
+  customerId: string;
+  status: "open" | "paid";
+  totalCents: number;
+};
 
+interface OrderStore {
+  read(id: string): Order | undefined;
+  write(order: Order): "updated" | "conflict";
+}
 
-<Poeaa24Ch11BehaviorCollaboration />
+class OrderUnitOfWork {
+  private readonly identityMap = new Map<string, Order>();
+  private readonly dirtyIds = new Set<string>();
 
-**阅读路径**：何时写回 → Unit of Work；是否重复加载 → Identity Map；何时读取关联 → Lazy Load。
+  constructor(private readonly store: OrderStore) {}
+
+  load(id: string): Order | undefined {
+    const existing = this.identityMap.get(id);
+    if (existing) return existing;
+    const order = this.store.read(id);
+    if (order) this.identityMap.set(id, order);
+    return order;
+  }
+
+  markDirty(order: Order): void {
+    this.dirtyIds.add(order.id);
+  }
+
+  commit(): "committed" | "conflict" {
+    for (const id of this.dirtyIds) {
+      const order = this.identityMap.get(id);
+      if (order && this.store.write(order) === "conflict") return "conflict";
+    }
+    this.dirtyIds.clear();
+    return "committed";
+  }
+}
+```
+
+这段代码把一次工作单元里的对象身份和写回集合显式化。真实适配器还需要版本列、数据库事务、回滚和批量写出；Identity Map 不能替代并发控制，Lazy Load 也不能在事务已经关闭后继续偷偷访问数据库。提交失败必须让调用者知道哪些状态需要重新读取。
+
+## 三种行为协作解剖
+
+对象-关系行为模式可以用三个问题记忆：何时写由 Unit of Work 决定，是否重复由 Identity Map 保证，何时读由 Lazy Load 或显式加载决定。下面的协作图展示三者如何围绕同一个事务范围共同管理订单和客户。
+
+<Poeaa24Ch11BehaviorCollaborationDiagram />
+
+三者并不是自动绑定的套餐：小聚合可以显式加载并直接提交，关联昂贵时才按访问画像引入延迟加载，跨多个对象的原子修改才需要完整工作单元。
+
+## 对象行为决策图
+
+先标出事务是否需要原子写回，再测量同一标识的重复加载和关联访问频率；不要因为 ORM 支持 Lazy Load 就默认启用。每个选择都要给出查询次数、写回顺序和并发失败的观测方式。
+
+<Poeaa24Ch11BehaviorDecisionDiagram />
 
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 第11章 对象-关系行为模式 的证据 | 应拒绝或改用其他方案的信号                      |
-| -------- | ------------------------------------ | ----------------------------------------------- |
-| 责任     | 事务范围 到 提交 的所有者清晰        | 身份缓存 可以绕过边界直接改写状态               |
-| 变化     | 工作单元 的变化被局部吸收            | 一次小改动同时触及 唯一实例、加载时机、写出顺序 |
-| 失败     | 故障能在 提交 前被识别并回退         | 只能看到最终错误，无法定位 工作单元 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径       | 因框架内置或团队习惯而跳过问题分析              |
+| 评审问题 | 选择对象行为方案的证据               | 应拒绝当前方案的信号             |
+| -------- | ------------------------------------ | -------------------------------- |
+| 写回     | 工作单元、提交顺序和失败恢复清晰     | 每个对象自行保存，事务边界不可见 |
+| 身份     | 同一工作范围内相同 ID 只有一个实例   | 重复加载后两个对象都能写回       |
+| 读取     | 延迟或显式加载的查询次数可观测       | 页面循环访问关联却无法发现 N+1   |
+| 并发     | 版本冲突、回滚和重新加载路径经过测试 | 提交冲突被静默覆盖或只返回成功   |
 
+## 常见误区
+
+<Callout type="trap" title="让实体对象自行保存">
+
+- **现象**：一个订单的多个对象分别调用 `save`，中途失败后部分写回已经发生。
+- **原因**：没有集中工作单元，写出顺序和事务范围被对象内部偶然决定。
+- **修法**：收集 dirty 对象后统一提交，在数据库事务中处理顺序、回滚和冲突结果。
+
+</Callout>
+
+<Callout type="trap" title="把延迟加载当成免费读取">
+
+- **现象**：列表循环访问每个订单的客户和订单行，查询数量随列表大小增长。
+- **原因**：关联属性隐藏了查询，调用者没有把访问画像和事务范围纳入设计。
+- **修法**：对列表使用显式批量加载或投影，对确实按需的关联记录查询次数和事务生命周期。
+
+</Callout>
+
+<Callout type="trap" title="标识映射代替并发控制">
+
+- **现象**：同一请求内对象身份一致，但两个请求仍然互相覆盖最后写入。
+- **原因**：把进程内 Identity Map 当成跨请求版本检查或数据库隔离。
+- **修法**：保留标识映射解决重复实例，并额外使用版本、锁或冲突恢复处理跨事务并发。
+
+</Callout>
+
+## 可验证练习
+
+<Exercises>
+
+本组练习覆盖第11章对象-关系行为模式，并要求把工作单元、唯一实例、加载时机、写出顺序和并发映射到订单聚合持久化。
+
+**问题 1：集中写回。** 订单和订单行都被修改，为什么不让每个实体直接调用 `save`？
+
+<Answer>
+
+直接保存会让写出顺序、部分失败和事务边界分散到多个对象。应由 Unit of Work 收集新增、修改和删除，在明确的数据库事务中统一提交，并对冲突或回滚返回可恢复结果。
+
+</Answer>
+
+**问题 2：选择加载时机。** 订单详情页总是需要客户和订单行，但订单列表只显示摘要，应该如何安排加载？
+
+<Answer>
+
+详情页可以使用明确的批量加载或查询投影，避免多次隐藏查询；列表保持摘要查询，不要为未展示的关联触发加载。只有访问频率低且事务仍然有效时，Lazy Load 才值得承担透明查询的成本。
+
+</Answer>
+
+**问题 3：区分身份与并发。** Identity Map 已保证一个请求内订单只有一个实例，是否因此不会发生两个请求的覆盖？
+
+<Answer>
+
+不会。Identity Map 只保证一个工作范围内的内存身份；跨请求仍要用版本检查、锁或其他并发策略拒绝过期写入，并在冲突后重新加载或合并。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="工作单元">
+    在一次事务中集中跟踪对象变更，并在明确提交时协调持久化写回的边界。
+  </GlossaryItem>
+  <GlossaryItem term="标识映射">
+    按持久化标识缓存对象，保证同一工作范围内相同标识对应同一个内存实例的模式。
+  </GlossaryItem>
+  <GlossaryItem term="延迟加载">
+    把关联对象的查询推迟到首次访问，并在访问时触发加载的行为模式。
+  </GlossaryItem>
+  <GlossaryItem term="变更追踪">
+    记录对象从加载到提交期间发生的改变，以决定需要写回的对象集合。
+  </GlossaryItem>
+</Glossary>
 
 ## 本章小结
 
-掌握 第11章 对象-关系行为模式 的标志不是记住定义，而是能在 订单聚合持久化 中解释“事务范围 → 身份缓存 → 对象访问 → 变更集合 → 提交”的责任链，利用 工作单元、唯一实例、加载时机、写出顺序、并发 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
-
+掌握第11章对象-关系行为模式的标志不是记住三个模式名称，而是能在订单聚合持久化中解释“事务范围 → 身份缓存 → 关联访问 → 变更集合 → 提交结果”的责任链。学习者应利用工作单元、唯一实例、加载时机、写出顺序和并发作出可证伪的选择，并在对象自行写回、隐藏 N+1 或缺少冲突恢复时明确拒绝当前实现。
 
 ## 前后导航
 
@@ -76,3 +225,10 @@ import { Poeaa24Ch11BehaviorCollaboration } from "@/components/mdx/poeaa-enterpr
 - [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+<Attribution
+  adaptedFrom="Martin Fowler《企业应用架构模式》与公开模式目录"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/"
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  sourceBasis="outline-only"
+/>

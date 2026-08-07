@@ -15531,11 +15531,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     },
   "poeaa-enterprise-patterns/25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior":
     async () => {
-      const module0 =
-        await import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-collaboration");
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-collaboration"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-ch11-behavior-decision-diagram"),
+      ]);
       return {
-        Poeaa24Ch11BehaviorCollaboration:
-          module0.Poeaa24Ch11BehaviorCollaboration,
+        Poeaa24Ch11BehaviorCollaborationDiagram:
+          modules[0].Poeaa24Ch11BehaviorCollaborationDiagram,
+        Poeaa24Ch11BehaviorDecisionDiagram:
+          modules[1].Poeaa24Ch11BehaviorDecisionDiagram,
       } as ChapterMdxComponents;
     },
   "poeaa-enterprise-patterns/26-pattern-09-unit-of-work/poeaa24-pattern-09-unit-of-work":

@@ -306,7 +306,7 @@
     - 路径：`content/poeaa-enterprise-patterns/09-chapter-04-web-presentation/poeaa24-chapter-04-web-presentation.mdx`
 - [x] ✅ **20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns** — 已修复（2026-08-07，score 43→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/20-chapter-10-data-source-patterns/poeaa24-chapter-10-data-source-patterns.mdx`
-- [ ] 🔴 P1 **25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior** — 已修复（2026-08-07，score 43→93，passed）
     - 路径：`content/poeaa-enterprise-patterns/25-chapter-11-object-relational-behavior/poeaa24-chapter-11-object-relational-behavior.mdx`
 - [ ] 🔴 P1 **29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/poeaa-enterprise-patterns/29-chapter-12-object-relational-structure/poeaa24-chapter-12-object-relational-structure.mdx`
