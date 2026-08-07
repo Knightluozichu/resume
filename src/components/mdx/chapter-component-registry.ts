@@ -16560,6 +16560,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic30TransformingProgrammingLab,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/39-topic-31-inheritance-tax/tpp20-topic-31-inheritance-tax":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-31-inheritance-tax-diagram");
+      return {
+        Tpp20Topic31InheritanceTaxDiagram:
+          module0.Tpp20Topic31InheritanceTaxDiagram,
+        Tpp20Topic31InheritanceTaxLab: module0.Tpp20Topic31InheritanceTaxLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
