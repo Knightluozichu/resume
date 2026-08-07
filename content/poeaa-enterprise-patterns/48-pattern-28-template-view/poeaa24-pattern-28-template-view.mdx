@@ -3,74 +3,259 @@ title: "14.4 模板视图"
 type: "B"
 section: "企业应用架构模式（2024年中文版）"
 order: 48
-description: "在页面模板中嵌入标记并填充模型数据，以熟悉的文档结构生成HTML。"
+description: "在页面模板中嵌入动态标记并填充展示数据，用可测试的 HTML 输出承接页面结构。"
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
-sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-28-template-view
+sourceUrl: "https://martinfowler.com/eaaCatalog/templateView.html"
 draft: false
 ---
 
 import { Poeaa24Pattern28TemplateView } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-28-template-view-diagram";
 
+<Objectives>
 
-## 为什么 14.4 模板视图 值得单独学习
+- 能解释模板视图如何把页面结构、展示数据和业务决定分到不同边界
+- 能修改 TypeScript 模板渲染代码，使外部输入经过转义并能用快照验证最终 HTML
+- 能回答：当模板开始查询数据库或执行业务规则时，为什么应把职责移回应用层
 
-在页面模板中嵌入标记并填充模型数据，以熟悉的文档结构生成HTML。 14.4 模板视图 的核心不是套用某个框架 API，而是回答：如何分开请求解释、页面导航、领域调用与输出渲染，使变化不会横跨所有页面。在 订单后台多视图 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **14.4 模板视图** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 先从一张订单页面开始
 
-## 先建立直觉：问题、机制与代价
+想象一家工厂要每天装配一张订单单据。前面的人只负责确认“要装哪一单”和“这单允许做什么”；中间的人把编号、金额和商品清单准备好；最后的人拿一张已经印好版式的纸，把空白处填上。版式不会因为某一单金额不同就重新设计。
 
-14.4 模板视图 面对的具体压力是“路由数量、重复控制逻辑、视图变体与导航状态”。它采用的机制可以概括为：在页面模板中嵌入标记并填充模型数据，以熟悉的文档结构生成HTML。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+如果最后填空的人顺手去仓库查库存、决定是否退款，下一次改规则就得翻遍所有单据。我们需要的是一条清楚的流水线：前面准备事实，最后一站只负责把事实摆成可读页面。
 
-对 14.4 模板视图，优先比较的替代路线是：分别比较页面控制、前端控制、模板、转换、两步视图和应用控制器。本页的通过条件是“能对输出做转义与快照验证，限制模板中的业务逻辑，并比较复用布局的代价”；若实验只能显示结果而不能指出 路由 从何处越界，就不能据此选择 14.4 模板视图。
+## 模板视图解决的边界问题
 
+这条流水线对应的 <Term def="把 HTML 结构和动态标记放在模板中，再用展示数据填充它的 Web 表示模式。">模板视图</Term>，重点不是某个框架的文件后缀，而是三种责任的分离：控制器解释请求，应用层决定业务，页面模板负责把已经决定好的数据呈现出来。
 
-## 目录单元到教学证据
+它通常位于“应用服务已经返回展示数据”和“HTTP 响应发出”之间。模板包含固定的 HTML 结构，以及变量、条件和列表等标记；渲染时把数据填进去，生成一次完整的页面。模板可以决定“这一块是否显示”，但不应决定“订单是否能取消”。
 
-### 14.4 模板视图
+### 先把请求链画出来
 
-在 **14.4 模板视图** 的学习边界里，14.4 模板视图 不是待背诵的目录词，而是用来检查“HTTP请求”是否把责任交给正确对象。对 订单后台多视图，学习者要记录 路由 的可观察变化，并说明它何时支持或否定 14.4 模板视图。
+对订单详情页，先写出一条可追踪的链：
 
-## 专属设计案例：订单后台多视图
+`GET /orders/42` → 页面控制器 → 应用服务 → 展示数据 → HTML 模板 → HTTP 响应
 
-把 订单后台多视图 切成“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”五个观察点。14.4 模板视图 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 路由、输入校验、导航、模板转义、视图复用 中哪个指标最先提示当前方案不再适用。
+每个箭头都应该能回答一个问题：谁校验输入？谁读取订单？谁判断权限？谁把金额放到标题下？如果最后两个问题都由模板回答，模板就已经越过了表示边界。
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-28-template-view**；模式族为 **web**；裁决是“能对输出做转义与快照验证，限制模板中的业务逻辑，并比较复用布局的代价”；观测项包括 路由、输入校验、导航、模板转义、视图复用；拒绝条件是“路由 超过团队为 14.4 模板视图 设定的边界”。
+### 为什么不直接在控制器里拼 HTML
 
-配置不是生产框架语法，而是一张评审卡。对 14.4 模板视图 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+控制器里拼字符串看起来很快，但页面结构会和路由、错误处理、数据查询混在一起。加一个商品字段会同时影响业务测试和 HTTP 测试；设计人员也不能独立修改页面。
 
-## 三步交互实验
+模板视图把结构移到可阅读的文档中，让控制器只传递展示用数据。代价是多了一个模板运行时和一套标记语法，因此必须把模板渲染当作可测试的边界，而不是“字符串魔法”。
 
+## 三个核心部件
+
+### 1. Model 只携带展示事实
+
+页面使用的 <Term def="只携带页面所需展示数据的中间对象，不拥有查询、授权或状态转换流程。">Model</Term> 可以是订单编号、格式化后的金额、商品名称列表和导航状态。它不应该暴露数据库连接，也不应该让模板调用 `cancel()` 之类的业务方法。
+
+把展示数据单独整理出来还有一个好处：模板测试可以构造固定 Model，不需要启动数据库。Model 的字段变化会让编译器、快照或契约测试尽早提醒我们，而不是等浏览器打开页面才发现空白。
+
+### 2. 模板描述结构与显示条件
+
+模板文件保留 HTML 的文档形状，动态位置使用标记，例如 `{{orderId}}` 或 `{{#each items}}`。简单的条件和循环有助于描述“这组数据如何显示”；越过显示边界的查询、授权和状态转换应回到应用服务。
+
+不要把模板标记误认为完整编程语言。标记越强大，越容易在页面里藏进不可测试的规则；当一个条件需要读取多个聚合、写审计事件或决定事务边界时，它已经不属于模板。
+
+### 3. 模板引擎负责绑定与转义
+
+<Term def="读取模板标记、查找对应展示数据并生成最终 HTML 的渲染程序。">模板引擎</Term> 负责把 `{{orderId}}` 替换成 `42`，把商品列表展开成多个节点，并按约定执行 <Term def="把外部输入中的 HTML 特殊字符变成普通文本，避免输入被浏览器当作标签或脚本执行。">输出转义</Term>。
+
+转义不是业务规则，却是输出边界的安全契约。订单备注来自用户输入时，模板引擎应该把尖括号当作文字；只有经过明确审查的可信片段才允许使用特殊 HTML。应用层仍负责判断“备注能否保存”，模板层负责“备注怎样安全显示”。
+
+## 专属交互：观察一份 Model 如何变成 HTML
+
+先预测：把下面的“注入模板越界”打开，哪一段会先失去可测试性？是数据准备、标记绑定，还是最终响应？再按播放或单步观察责任从左到右的变化。
 
 <Poeaa24Pattern28TemplateView />
 
-## 选择与拒绝矩阵
+<Stepper>
+  <Step title="1. 控制器准备展示 Model">
+    页面控制器接收请求，应用服务完成查询、授权和状态判断，最后只交给模板一份展示数据。此时模板还没有碰到数据库，也没有机会替订单作决定。
 
-| 评审问题 | 选择 14.4 模板视图 的证据         | 应拒绝或改用其他方案的信号                  |
-| -------- | --------------------------------- | ------------------------------------------- |
-| 责任     | HTTP请求 到 HTTP响应 的所有者清晰 | 控制器 可以绕过边界直接改写状态             |
-| 变化     | 路由 的变化被局部吸收             | 一次小改动同时触及 输入校验、导航、模板转义 |
-| 失败     | 故障能在 HTTP响应 前被识别并回退  | 只能看到最终错误，无法定位 路由 的首个异常  |
-| 替代     | 已与同族候选比较并保留撤回路径    | 因框架内置或团队习惯而跳过问题分析          |
+    <Poeaa24Pattern28TemplateView step={1} interactive={false} />
 
+  </Step>
+
+  <Step title="2. 模板引擎绑定标记">
+    模板引擎读取固定的 HTML 结构，填充订单编号和商品列表。条件与循环只改变展示结构；外部输入在写入 HTML 前进行转义。
+
+    <Poeaa24Pattern28TemplateView step={2} interactive={false} />
+
+  </Step>
+
+  <Step title="3. 用输出证据收口">
+    最终 HTML 可以做快照测试，检查标题、金额、列表和转义结果。若快照变化来自模板改版，应能在 diff 中看见；若变化来自业务规则，则应由应用服务测试覆盖。
+
+    <Poeaa24Pattern28TemplateView step={3} interactive={false} />
+
+  </Step>
+</Stepper>
+
+## 代码实践：把渲染边界写成函数
+
+下面的 TypeScript 草图把原始订单转换成展示 Model。真正的系统还会在应用服务里完成权限与状态检查；这里故意只保留页面需要的字段，使模板无法借助对象引用反向访问持久化层。
+
+```ts
+type Order = {
+  id: number;
+  totalCents: number;
+  items: Array<{ name: string; quantity: number }>;
+};
+
+type OrderViewModel = {
+  orderId: string;
+  total: string;
+  items: Array<{ label: string }>;
+};
+
+export function toOrderViewModel(order: Order): OrderViewModel {
+  return {
+    orderId: String(order.id),
+    total: `¥${(order.totalCents / 100).toFixed(2)}`,
+    items: order.items.map((item) => ({
+      label: `${item.name} × ${item.quantity}`,
+    })),
+  };
+}
+```
+
+这里的 `OrderViewModel` 没有 `save`、`cancel` 或 `repository` 字段。模板收到它后只能消费数据，不能把数据库调用藏在一个“方便的属性”后面。
+
+渲染函数的关键不是自己发明一套模板语言，而是明确转义发生在哪里。以下伪实现把文本插值和 HTML 片段区分开：
+
+```ts
+function renderOrderPage(model: OrderViewModel): string {
+  const title = escapeHtml(`订单 #${model.orderId}`);
+  const total = escapeHtml(model.total);
+  const items = model.items
+    .map((item) => `<li>${escapeHtml(item.label)}</li>`)
+    .join("");
+
+  return orderTemplate
+    .replace("{{title}}", title)
+    .replace("{{total}}", total)
+    .replace("{{items}}", items);
+}
+```
+
+生产代码应使用经过审计的模板引擎，而不是依赖多个 `replace` 的顺序。测试至少要覆盖三件事：正常订单能得到稳定结构；商品名中的特殊字符只作为文本出现；模板不能通过隐式调用改变订单状态。
+
+## 选择、拒绝与相邻模式
+
+模板视图适合页面结构稳定、展示字段较多、需要让页面协作者直接编辑 HTML 的场景。它把“页面长什么样”放在模板中，比在控制器里拼接字符串更容易评审，也比让 Model 暴露完整领域对象更容易测试。
+
+它并不意味着所有页面都必须共享一份大模板。若多个页面重复导航和页脚，可以进一步考虑两步视图；若同一份结构化数据需要稳定地转换成 HTML、PDF 或邮件，转换视图可能更自然；若请求入口本身需要集中认证和路由，那是前端控制器的责任。
+
+| 评审问题 | 采用模板视图的证据 | 应拒绝的信号 |
+| --- | --- | --- |
+| 数据边界 | 模板消费窄 Model，查询在应用服务完成 | 模板持有 Repository 或领域对象 |
+| 输出安全 | 默认插值转义，可信 HTML 有明确审查 | 用户输入直接拼进 HTML |
+| 结构变化 | 页面协作者可修改模板并用快照验收 | 一个模板塞入多个页面的业务分支 |
+| 模式选择 | 主要输出是页面，结构与数据需要协作 | 需要多格式转换或独立全局布局 |
+
+## 常见误区
+
+<Callout type="trap" title="把模板当成应用服务">
+
+- **现象**：模板为了显示“可取消”按钮，直接读取订单、检查权限并写入取消状态。
+- **原因**：把“显示条件”与“业务决定”混成了同一个布尔表达式，模板失去纯展示边界。
+- **修法**：由应用服务计算 `canCancel` 和可用动作，模板只读取结果并渲染按钮。
+
+</Callout>
+
+<Callout type="trap" title="把外部输入当成可信 HTML">
+
+- **现象**：订单备注中的尖括号在浏览器里变成标签，快照测试却只检查了正常字符串。
+- **原因**：模板引擎关闭了默认转义，或调用了没有审查来源的原始 HTML 插值。
+- **修法**：默认走文本插值，给危险输入写回归测试；只有经过白名单清洗的片段才能显式放行。
+
+</Callout>
+
+<Callout type="trap" title="用一个模板吞掉所有页面">
+
+- **现象**：订单详情、报表和邮件共享一份模板，改一个标题会触发大量条件分支和快照变化。
+- **原因**：把复用理解成共享全部页面结构，没有划分局部模板、布局和格式输出的边界。
+- **修法**：拆出页面自己的模板；重复的导航交给布局或两步视图，不把业务差异继续塞进标记。
+
+</Callout>
 
 ## 本章小结
 
-掌握 14.4 模板视图 的标志不是记住定义，而是能在 订单后台多视图 中解释“HTTP请求 → 控制器 → 应用模型 → 视图 → HTTP响应”的责任链，利用 路由、输入校验、导航、模板转义、视图复用 作出可证伪的选择，并在出现“在模板里直接执行业务规则和数据库访问”时明确拒绝当前实现。
+- 模板视图让 HTML 结构和展示数据在渲染边界汇合。
+- Model 只携带页面事实，不暴露查询和业务动作。
+- 模板引擎负责绑定与转义，业务决定留在应用层。
+- 快照与安全输入测试为最终 HTML 提供可复现证据。
+- 模板拥有业务工作流时，应拆分职责或更换相邻模式。
 
+## 练习
+
+<Exercises>
+
+**问题 1：修改代码。** 给 `renderOrderPage` 增加一个订单备注字段。要求备注中的 `<` 和 `>` 仍显示为普通文字，并说明测试应断言什么。
+
+<Answer>
+
+先在 `OrderViewModel` 增加 `note`，由 `toOrderViewModel` 传入纯文本；渲染时使用 `escapeHtml(model.note)`，不要把备注包进“原始 HTML”插值。测试应传入包含尖括号的备注，断言输出包含转义后的文本而不是新的标签节点，并保留一个正常备注的快照断言。
+
+</Answer>
+
+**问题 2：诊断边界。** 设计人员希望在模板里调用 `order.isOverdue()`，以便决定是否显示“催款”按钮。你会保留这个调用吗？请指出它可能带来的两个问题。
+
+<Answer>
+
+不保留。这个方法可能触发懒加载或读取当前时间，使模板渲染依赖数据库和不可控时钟；它还把“逾期如何判定”的业务规则藏进页面，导致非页面用例无法复用或测试。应用服务应计算 `isOverdue` 和按钮文案，模板只负责条件显示。
+
+</Answer>
+
+**问题 3：选择方案。** 同一份订单数据要稳定输出 HTML 页面、PDF 和邮件正文，且三种输出由不同团队维护。应该继续扩展模板视图，还是评估转换视图？请给出判断证据。
+
+<Answer>
+
+应评估转换视图或按输出格式拆分转换规则。选择证据是输入数据相同、目标格式不止 HTML，而且团队希望把结构化数据转换成多种表示；继续扩展一个 HTML 模板会让格式差异、布局和转义策略缠在一起。若问题变成多个页面共享导航和页脚，则应另行评估两步视图，而不是把所有格式塞进同一模板。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="模板视图">
+    把 HTML 结构和动态标记放在页面模板中，再用展示数据填出最终页面的一种表示方式。
+  </GlossaryItem>
+  <GlossaryItem term="Model">
+    专门给页面使用的一小份数据，例如订单编号、金额和商品名称；它不负责查库或改变状态。
+  </GlossaryItem>
+  <GlossaryItem term="模板引擎">
+    读取模板标记、绑定数据并生成 HTML 的程序，通常也负责默认转义文本。
+  </GlossaryItem>
+  <GlossaryItem term="输出转义">
+    把输入里的特殊字符变成普通文字，避免浏览器把它误认为标签或脚本。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [上一页：14.3 前端控制器](/learn/poeaa-enterprise-patterns/47-pattern-27-front-controller/poeaa24-pattern-27-front-controller)
 - [下一页：14.5 转换视图](/learn/poeaa-enterprise-patterns/49-pattern-29-transform-view/poeaa24-pattern-29-transform-view)
 
-## 来源与改写范围
+## 参考资料
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
-- [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
+- [Martin Fowler：Template View 模式摘要](https://martinfowler.com/eaaCatalog/templateView.html)：核对模板标记填充展示数据的模式定义。
+- [Martin Fowler：Patterns of Enterprise Application Architecture](https://martinfowler.com/books/eaa.html)：核对 Web Presentation Patterns 的图书范围与模式关系。
+- [Pearson：Patterns of Enterprise Application Architecture](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对出版信息与章节目录。
 
+<Attribution
+  mode="independent-rewrite"
+  workTitle="Patterns of Enterprise Application Architecture"
+  adaptedUrl="https://martinfowler.com/eaaCatalog/templateView.html"
+  sourceBasis="outline-only"
+/>
