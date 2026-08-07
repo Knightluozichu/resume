@@ -15492,6 +15492,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Poeaa24Ch08AssemblyDiagram: module0.Poeaa24Ch08AssemblyDiagram,
       } as ChapterMdxComponents;
     },
+  "poeaa-enterprise-patterns/14-part-02-patterns/poeaa24-part-02-patterns":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-list-diagram"),
+        import("@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-part02-pattern-selection-diagram"),
+      ]);
+      return {
+        Poeaa24PatternListDiagram: modules[0].Poeaa24PatternListDiagram,
+        Poeaa24Part02PatternSelectionDiagram:
+          modules[1].Poeaa24Part02PatternSelectionDiagram,
+      } as ChapterMdxComponents;
+    },
   "poeaa-enterprise-patterns/15-chapter-09-domain-logic-patterns/poeaa24-chapter-09-domain-logic-patterns":
     async () => {
       const module0 =
