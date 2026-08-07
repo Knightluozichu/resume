@@ -16370,6 +16370,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           modules[1].Tpp20Topic14ErrorLocalizationDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/20-topic-15-estimating/tpp20-topic-15-estimating":
+    async () => {
+      const modules = await Promise.all([
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic15-estimation-chain-diagram"),
+        import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic15-estimation-lab"),
+      ]);
+      return {
+        Tpp20Topic15EstimationChainDiagram:
+          modules[0].Tpp20Topic15EstimationChainDiagram,
+        Tpp20Topic15EstimationLab: modules[1].Tpp20Topic15EstimationLab,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/55-chapter-08-before-project/tpp20-chapter-08-before-project":
     async () => {
       const modules = await Promise.all([
