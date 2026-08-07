@@ -387,7 +387,7 @@
     - 路径：`content/pragmatic-programmer/16-topic-11-reversibility/tpp20-topic-11-reversibility.mdx`
 - [x] ✅ **17-topic-12-tracer-bullets/tpp20-topic-12-tracer-bullets** — 已修复（2026-08-08，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/17-topic-12-tracer-bullets/tpp20-topic-12-tracer-bullets.mdx`
-- [ ] 🔴 P1 **18-topic-13-prototypes-post-it-notes/tpp20-topic-13-prototypes-post-it-notes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **18-topic-13-prototypes-post-it-notes/tpp20-topic-13-prototypes-post-it-notes** — 已修复（2026-08-08，score 42→94，passed）
     - 路径：`content/pragmatic-programmer/18-topic-13-prototypes-post-it-notes/tpp20-topic-13-prototypes-post-it-notes.mdx`
 - [ ] 🔴 P1 **19-topic-14-domain-languages/tpp20-topic-14-domain-languages** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/19-topic-14-domain-languages/tpp20-topic-14-domain-languages.mdx`

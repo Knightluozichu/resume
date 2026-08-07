@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-07T16:44:29.456Z；旧版分数不迁移。
+> 2026-08-07T16:49:55.452Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2453
+- failed：2452
 - queued：401
-- passed：1018
+- passed：1019
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -14,7 +14,7 @@
 | 1 | coder-revolution | 62 | 62 | 0 | 0 | 186 |
 | 2 | code-complete-2e | 51 | 51 | 0 | 0 | 153 |
 | 3 | math-girl | 50 | 50 | 0 | 0 | 150 |
-| 4 | pragmatic-programmer | 71 | 50 | 0 | 21 | 150 |
+| 4 | pragmatic-programmer | 71 | 49 | 0 | 22 | 147 |
 | 5 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
 | 6 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 7 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
