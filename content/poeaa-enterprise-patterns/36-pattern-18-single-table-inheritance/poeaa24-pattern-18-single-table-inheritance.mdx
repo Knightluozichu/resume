@@ -7,61 +7,228 @@ description: "用一张包含全部子类字段的表表示整个继承层次，
 demo: true
 math: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
 sourceUrl: "https://martinfowler.com/books/eaa.html"
+officialUnitId: poeaa24-pattern-18-single-table-inheritance
 draft: false
 ---
 
 import { Poeaa24Pattern18SingleTableInheritance } from "@/components/mdx/poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance-diagram";
 
+<Objectives>
 
-## 为什么 12.7 单表继承 值得单独学习
+- 能解释单表继承如何用鉴别器列把多个具体子类恢复到同一对象入口
+- 能实现类型字段与子类字段的表级约束，并用一条错误数据证明约束会拒绝它
+- 能回答：当查询、字段变化或迁移成本超过什么边界时，应改用类表继承或具体表继承
 
-用一张包含全部子类字段的表表示整个继承层次，并以类型标识区分具体类型。 12.7 单表继承 的核心不是套用某个框架 API，而是回答：如何在对象身份、关联、继承和写回之间保住一致语义，同时控制查询与映射成本。在 订单聚合持久化 中，如果无法说清责任、状态和失败由谁承担，即使正常请求能够返回，架构决定也没有完成。
+</Objectives>
 
-本页以 2024 年中文版公开目录限定 **12.7 单表继承** 的范围，并依据 Martin Fowler 的作者图书页和模式目录独立重写。它不复现原书正文、插图或代码；目录只决定“要讲什么”，这里的案例、实验、判断题和答案均为本课程原创。
+## 为什么 12.7 单表继承值得单独学习
 
-## 先建立直觉：问题、机制与代价
+一个 `Employee` 对象可能有 `Engineer` 和 `Manager` 两种具体形态。对象模型希望保留继承关系，让调用方通过同一个入口处理员工；关系数据库却更喜欢固定列。<Term def="把一个继承层次的公共字段与各子类字段放进同一张表，并用类型字段区分具体类型的映射模式">单表继承</Term>就是在这两个愿望之间设一道明确的映射边界：每行都有公共字段和一个类型标识，子类特有字段也位于同一张表中。
 
-12.7 单表继承 面对的具体压力是“同一身份实例数、查询次数、脏对象集合与关联装载范围”。它采用的机制可以概括为：用一张包含全部子类字段的表表示整个继承层次，并以类型标识区分具体类型。 机制带来的收益必须与新增间接层、同步责任或迁移成本同时记录，否则学习者只会得到一个没有拒绝条件的模式名称。
+它的收益很直接：读取一个员工集合通常不需要在多张子类表之间 JOIN，多态列表也能沿着一张表的索引完成。代价同样直接：每个子类都会给表增加自己的列，其他类型的行只能把这些列留空；约束、索引和迁移会随着继承树变宽。真正要学会的不是“所有字段塞进一张表”，而是能说清楚一行数据为什么会被恢复为某个子类，以及何时应该拒绝这条路。
 
-对 12.7 单表继承，优先比较的替代路线是：根据领域复杂度选择入口、活动记录、映射器、工作单元及结构映射组合。本页的通过条件是“能验证类型标识与字段约束，量化空列和宽表代价，并保证新增子类迁移可回退”；若实验只能显示结果而不能指出 标识 从何处越界，就不能据此选择 12.7 单表继承。
+本章以 `Employee → Engineer / Manager` 为固定例子，沿“对象树 → 鉴别器路由 → 单表约束”建立证据链。案例、代码、练习和 SVG 教具均为本课程独立重写；它们只用 Martin Fowler 的公开目录和模式摘要限定本章范围，不复现原书正文或插图。
 
+## 先建立直觉：一张表怎样承载一棵对象树
 
-## 目录单元到教学证据
+在对象侧，`Engineer` 和 `Manager` 共享 `id`、`name`、`version` 等基础状态，同时保留自己的 `skill` 或 `budgetLimit`。在表侧，`employees` 可以写成以下最小结构：
 
-### 12.7 单表继承
+```sql
+CREATE TABLE employees (
+  id            BIGINT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  skill         TEXT,
+  budget_limit  DECIMAL(12, 2),
+  version       INTEGER NOT NULL DEFAULT 0,
+  CHECK (kind IN ('engineer', 'manager'))
+);
+```
 
-在 **12.7 单表继承** 的学习边界里，12.7 单表继承 不是待背诵的目录词，而是用来检查“对象图”是否把责任交给正确对象。对 订单聚合持久化，学习者要记录 标识 的可观察变化，并说明它何时支持或否定 12.7 单表继承。
+这里的关键不是 `TEXT` 或 `DECIMAL` 的具体类型，而是 `kind` 不能由 `skill` 和 `budget_limit` 的空值组合推测。<Term def="记录当前行应恢复为哪一个具体子类的类型字段，例如 engineer 或 manager">鉴别器列</Term>是恢复对象的唯一入口：`kind=engineer` 就选择 Engineer 构造器，`kind=manager` 就选择 Manager 构造器，未知值应该返回可诊断错误。
 
-## 专属设计案例：订单聚合持久化
+先预测：如果一行数据的 `kind` 是 `engineer`，但 `budget_limit` 却有值，下面的映射器应该返回一个看似完整的 Engineer，还是在持久化边界拒绝它？把答案写下来，再用专属图的“注入错误类型”开关检查你的假设。
 
-把 订单聚合持久化 切成“对象图 → 身份 → 关联 → 继承 → 关系模式”五个观察点。12.7 单表继承 的设计草案必须写出谁拥有状态、谁作出业务决定、失败怎样传播，以及 标识、外键、聚合边界、值对象、继承策略 中哪个指标最先提示当前方案不再适用。
+## 对象到关系行：鉴别器必须先于构造器
 
-设计记录采用五个可换行字段：单元键为 **poeaa24-pattern-18-single-table-inheritance**；模式族为 **mapping**；裁决是“能验证类型标识与字段约束，量化空列和宽表代价，并保证新增子类迁移可回退”；观测项包括 标识、外键、聚合边界、值对象、继承策略；拒绝条件是“标识 超过团队为 12.7 单表继承 设定的边界”。
+加载流程不能先根据“哪些字段不为空”猜一个类，再把 `kind` 当作普通属性带过。可靠的顺序是：读取公共字段和鉴别器；按允许值选择构造器；校验该类型允许的字段；最后返回具体对象。这样，数据库行和内存对象之间是一条可测试的双向契约。
 
-配置不是生产框架语法，而是一张评审卡。对 12.7 单表继承 的任何实现都要能把运行证据重新映射到这张卡；如果更换 ORM、Web 框架或部署平台后无法回答同一组问题，说明决定依赖的是工具偶然行为而不是模式语义。
+```ts
+type EmployeeRow = {
+  id: number;
+  name: string;
+  kind: "engineer" | "manager";
+  skill: string | null;
+  budget_limit: number | null;
+};
 
-## 三步交互实验
+function hydrate(row: EmployeeRow) {
+  if (row.kind === "engineer") {
+    if (!row.skill || row.budget_limit !== null) throw new Error("invalid engineer row");
+    return new Engineer(row.id, row.name, row.skill);
+  }
+  if (row.budget_limit === null || row.skill !== null) throw new Error("invalid manager row");
+  return new Manager(row.id, row.name, row.budget_limit);
+}
+```
 
+<Term def="一次查询能够返回 Employee 及其多个具体子类，并由映射器恢复正确运行时类型的查询">多态查询</Term>的便利来自同一张表：可以先按公共条件过滤，再按 `kind` 分组恢复对象。它不是“数据库自动懂继承”；映射器仍然要处理未知类型、缺失字段和数据库中绕过应用写入的坏行。尤其不能把未知 `kind` 静默当成基类，否则新子类上线时，旧服务可能把新数据当成错误的普通员工继续保存。
+
+## 专属可视化实验：从对象树走到约束边界
+
+先看主图的对象树，再播放到鉴别器路由，最后打开“注入错误类型”。观察同一行在三步里没有换表，但它的可接受条件逐步变得更严格。点“重置图示”后，应该回到第一步且错误开关关闭。
 
 <Poeaa24Pattern18SingleTableInheritance />
 
+### 三个阶段快照
+
+下面的 Stepper 把主图拆成三张确定性的阶段证据。每一步都带有与正文对应的 Diagram，适合在暂停状态下逐项核对。
+
+<Stepper>
+
+<Step title="1. 对象侧：保留多态结构">
+
+`Employee` 是调用方看到的稳定入口；`Engineer` 和 `Manager` 只扩展自己的字段。此时还没有决定数据库采用哪一种继承映射。
+
+<Poeaa24Pattern18SingleTableInheritance step={1} interactive={false} />
+
+</Step>
+
+<Step title="2. 映射侧：由 kind 路由到一张表">
+
+映射器读出鉴别器后选择构造器，并把公共字段和子类字段写回 `employees`。多态查询因此不需要为每个子类拼接一张表。
+
+<Poeaa24Pattern18SingleTableInheritance step={2} interactive={false} />
+
+</Step>
+
+<Step title="3. 约束侧：拒绝错误组合与宽表风险">
+
+`kind=engineer` 不应同时拥有 `budget_limit`；如果子类字段不断增加，单表的 NULL 比例、索引数量和迁移范围也会成为拒绝信号。
+
+<Poeaa24Pattern18SingleTableInheritance step={3} interactive={false} />
+
+</Step>
+
+</Stepper>
+
+## 表级约束：把 NULL 变成可检查的规则
+
+仅有 `kind IN (...)` 还不够。每一个允许的鉴别器值都应该有自己的字段不变量。例如 Engineer 必须有 `skill`、不能有 `budget_limit`；Manager 必须有 `budget_limit`、不能有 `skill`。如果数据库支持 `CHECK`，把规则写进表；如果规则需要跨行或涉及复杂迁移，则在应用校验之外增加约束触发器或写入服务，并为两者保留同一组失败测试。
+
+```sql
+ALTER TABLE employees
+  ADD CONSTRAINT engineer_columns_match
+  CHECK (kind <> 'engineer' OR (skill IS NOT NULL AND budget_limit IS NULL));
+
+ALTER TABLE employees
+  ADD CONSTRAINT manager_columns_match
+  CHECK (kind <> 'manager' OR (skill IS NULL AND budget_limit IS NOT NULL));
+```
+
+约束的价值在于阻止“应用正常、数据已坏”的分裂状态：后台脚本、旧版本服务和手工 SQL 都可能绕过映射器。加载时仍要再次验证，因为迁移期间可能存在暂时状态，且错误信息需要回到具体行和具体字段。读取失败应停在映射边界，不能返回一个子类字段不完整的对象让业务层自行猜测。
+
+## 宽表与演进：什么时候这张表开始反对你
+
+<Term def="继承层次中公共字段与各子类字段如何映射到关系表的整体方案，例如单表、类表或具体表继承">继承策略</Term>应该由稳定的查询和变化边界决定，而不是由 ORM 的默认配置决定。单表继承适合这些条件：子类数量有限，公共字段占主要宽度，经常需要查询整个员工集合，多态读取比子类字段独立查询更重要。
+
+风险可以用一张评审卡记录，而不必假装有一个跨系统通用的阈值：登记列总数、每类的非空率、最常用的过滤字段、一次新增子类需要改动的约束和索引数量。若新增一个子类需要触碰所有旧服务的反序列化逻辑，或一行的可空列已经难以解释，就把“迁移到类表继承”列为明确的回退方案。
+
+新增子类时，先扩展允许的鉴别器值，再以兼容顺序部署读写代码和约束；回滚时必须保证旧服务遇到新类型会明确拒绝，而不是把它当成旧类。下面的迁移只展示顺序，不绑定某个 ORM：
+
+```sql
+-- 1. 先加列与索引，旧数据仍能被旧服务读取
+ALTER TABLE employees ADD COLUMN hourly_rate DECIMAL(10, 2);
+
+-- 2. 部署能识别 contractor 的读写代码后，再开放该 kind
+ALTER TABLE employees
+  DROP CONSTRAINT employees_kind_check;
+ALTER TABLE employees
+  ADD CONSTRAINT employees_kind_check
+  CHECK (kind IN ('engineer', 'manager', 'contractor'));
+
+-- 3. 最后补 contractor 的字段约束与回滚记录
+ALTER TABLE employees
+  ADD CONSTRAINT contractor_columns_match
+  CHECK (kind <> 'contractor' OR hourly_rate IS NOT NULL);
+```
+
+这段顺序揭示了单表继承的边界：加一个类型就要扩大允许值、增加列、更新恢复逻辑、调整约束，并安排旧服务的拒绝行为。如果子类变化频繁，类表继承把字段隔离在各自表中，具体表继承则把每个具体类的完整行分开；两者可能用 JOIN 或 UNION 换取更清晰的列语义。
+
 ## 选择与拒绝矩阵
 
-| 评审问题 | 选择 12.7 单表继承 的证据        | 应拒绝或改用其他方案的信号                 |
-| -------- | -------------------------------- | ------------------------------------------ |
-| 责任     | 对象图 到 关系模式 的所有者清晰  | 身份 可以绕过边界直接改写状态              |
-| 变化     | 标识 的变化被局部吸收            | 一次小改动同时触及 外键、聚合边界、值对象  |
-| 失败     | 故障能在 关系模式 前被识别并回退 | 只能看到最终错误，无法定位 标识 的首个异常 |
-| 替代     | 已与同族候选比较并保留撤回路径   | 因框架内置或团队习惯而跳过问题分析         |
+| 评审问题 | 选择单表继承的证据 | 应改用其他继承策略的信号 |
+| --- | --- | --- |
+| 查询 | 经常读取整个员工集合，多态查询不想 JOIN | 只有某一子类的字段被高频筛选或统计 |
+| 字段变化 | 子类数量少，字段集合相对稳定 | 新子类持续增加，表宽度与索引维护失控 |
+| 约束 | 每种 kind 的字段规则可以用 CHECK 表达 | 子类不变量复杂、跨表或需要独立生命周期 |
+| 空值 | NULL 只是其他类型的空位，含义可由 kind 解释 | NULL 组合无法解释，报表把空值当成业务状态 |
+| 迁移 | 新类型可以兼容部署并保留旧服务拒绝路径 | 每次迁移都必须同步改动许多不可同时发布的服务 |
 
+矩阵的用法是先找拒绝信号，再计算 JOIN 是否真的值得省掉。单表继承不是“性能更快”的承诺：它减少了某类查询的联接，却把稀疏列、约束和部署协调成本集中到一个表。评审记录至少要保留一条反例，以及从单表退出时的回退路径。
+
+## 常见误区
+
+<Callout type="trap" title="用 NULL 组合猜具体类型">
+
+- **现象**：`skill` 不为空就当成 Engineer，`budget_limit` 不为空就当成 Manager；两个字段都为空时仍返回一个默认子类。
+- **原因**：没有把鉴别器当成恢复对象的唯一入口，把布局结果误当成业务类型。
+- **修法**：先读取并校验 `kind`，再按类型检查字段；未知类型和冲突组合都在映射边界拒绝。
+
+</Callout>
+
+<Callout type="trap" title="只在应用层保护子类字段">
+
+- **现象**：应用测试都通过，但脚本写入 `kind=engineer` 与 `budget_limit` 后，读取器只能猜测这行数据。
+- **原因**：数据库、旧服务或迁移脚本可以绕过应用校验，单表因此出现无法恢复的混合状态。
+- **修法**：用 `CHECK` 或等价数据库约束表达类型字段不变量，并让映射器对历史坏数据给出可诊断错误。
+
+</Callout>
+
+<Callout type="trap" title="把省掉 JOIN 当成没有代价">
+
+- **现象**：每增加一个子类就增加一组可空列、索引和迁移，查询虽简单，表却已经无法解释。
+- **原因**：只计算了读取联接成本，没有记录稀疏列比例、约束复杂度和发布协调成本。
+- **修法**：持续记录列宽、非空率和新增类型的改动范围；超过评审边界就切换到类表或具体表继承。
+
+</Callout>
 
 ## 本章小结
 
-掌握 12.7 单表继承 的标志不是记住定义，而是能在 订单聚合持久化 中解释“对象图 → 身份 → 关联 → 继承 → 关系模式”的责任链，利用 标识、外键、聚合边界、值对象、继承策略 作出可证伪的选择，并在出现“把数据库行和内存对象的身份生命周期视为天然相同”时明确拒绝当前实现。
+单表继承把一棵对象继承树压到一张关系表中，`kind` 鉴别器决定每行恢复为何种子类。它的优势是公共查询和多态读取路径简单，代价是子类字段共存造成的可空列、表级约束和演进协调。选择它之前，必须能用失败样本证明三件事：未知类型会拒绝，类型字段与子类字段不会冲突，新增子类有兼容部署与回退路径。
 
+## 本章练习
+
+<Exercises>
+
+**问题 1：** 一行数据为 `kind=manager`、`skill=NULL`、`budget_limit=NULL`。映射器应如何处理？至少指出一条数据库约束。
+
+<Answer>
+
+它不能构造成合法 Manager，因为 Manager 必须有 `budget_limit`。映射器应返回可定位的校验错误；数据库可以加入 `CHECK (kind <> 'manager' OR budget_limit IS NOT NULL)`，并同时要求 Manager 的 `skill IS NULL`，防止应用之外的写入制造混合行。
+
+</Answer>
+
+**问题 2：** 产品要求“列出所有员工”与“按员工类型统计数量”，但很少只查询 `budget_limit`。为什么单表继承可能合适？还要补哪项证据？
+
+<Answer>
+
+两类请求都以公共字段和 `kind` 为入口，多态查询可以扫描一张表，不必把父表和每张子类表 JOIN 起来。还要证明子类数量和字段变化相对稳定，并用约束保证 Engineer、Manager 的专属字段不会互相污染；否则只是把联接成本换成了不可解释的 NULL 成本。
+
+</Answer>
+
+**问题 3：** 新增 Contractor 需要 `hourly_rate`，旧服务只认识 Engineer 和 Manager。请写出安全发布顺序，并说明回滚时旧服务应该怎样表现。
+
+<Answer>
+
+先加新列但不开放新 `kind`，部署能识别 Contractor 的读写代码，再放宽鉴别器约束并加入 Contractor 的字段约束，最后写入新数据。回滚到旧服务时，旧服务遇到 `kind=contractor` 应明确返回未知类型错误并停止写回；不能把它降级成 Employee 或 Manager，否则会丢失具体字段。
+
+</Answer>
+
+</Exercises>
 
 ## 前后导航
 
@@ -70,7 +237,32 @@ import { Poeaa24Pattern18SingleTableInheritance } from "@/components/mdx/poeaa-e
 
 ## 来源与改写范围
 
-- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题、教程与模式参考结构。
-- [Martin Fowler 模式目录](https://martinfowler.com/eaaCatalog/)：核对模式名称、所属模式族和作者公开摘要。
+- [Martin Fowler 作者图书页](https://martinfowler.com/books/eaa.html)：核对全书主题与模式参考范围。
+- [Martin Fowler 企业应用架构模式目录](https://martinfowler.com/eaaCatalog/)：核对 Single Table Inheritance 的公开模式摘要。
 - [Pearson 出版社页面](https://www.pearson.com/en-us/subject-catalog/p/patterns-of-enterprise-application-architecture/P200000009121/9780133065213)：交叉核对英文版出版信息与目录范围。
 
+本章不复现原书正文、插图或代码；上述资料只限定学习范围，员工继承案例、SQL/TypeScript 片段、评审矩阵、练习、答案与 SVG 图均为本课程独立重写。
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="单表继承">
+    把父类和所有子类的字段放进同一张表，再用一个类型字段决定每行应恢复成哪种对象。
+  </GlossaryItem>
+  <GlossaryItem term="鉴别器列">
+    记录具体类型的列，例如 `engineer` 或 `manager`；映射器先看它，再选择构造器。
+  </GlossaryItem>
+  <GlossaryItem term="多态查询">
+    用一个公共入口查询多个子类的对象集合，返回时仍能保留每个对象的具体类型。
+  </GlossaryItem>
+  <GlossaryItem term="继承策略">
+    决定对象继承层次如何落到关系表的整体方案，例如单表、类表或具体表继承。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Martin Fowler《企业应用架构模式》"
+  adaptedUrl="https://martinfowler.com/books/eaa.html"
+/>
