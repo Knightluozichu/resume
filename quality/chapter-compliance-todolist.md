@@ -679,7 +679,7 @@
     - 路径：`content/effective-cpp/01-special-members/item-05-compiler-generated-functions.mdx`
 - [x] ✅ **01-special-members/item-06-disallow-generated-functions** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/01-special-members/item-06-disallow-generated-functions.mdx`
-- [ ] 🟡 P3 **01-special-members/item-07-virtual-destructor** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **01-special-members/item-07-virtual-destructor** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/01-special-members/item-07-virtual-destructor.mdx`
 - [ ] 🟡 P3 **01-special-members/item-08-destructor-exceptions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/01-special-members/item-08-destructor-exceptions.mdx`

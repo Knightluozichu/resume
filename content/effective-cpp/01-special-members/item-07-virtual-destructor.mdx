@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
 draft: false
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
+officialUnitId: ecpp3-07
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,6 +20,10 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import {
+  EcppItem07VirtualDestructorLab,
+  EcppVirtualDestructorMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-07-virtual-destructor-lab";
 
 <Objectives>
 
@@ -24,6 +32,10 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 - 能设计计数、sanitizer、factory 和 ABI 测试，验证多态销毁完整且非多态值类型没有无意引入 virtual 布局
 
 </Objectives>
+
+<EcppVirtualDestructorMap />
+
+<EcppItem07VirtualDestructorLab />
 
 ## 从“删除成功为何仍可能未定义”开始
 
@@ -82,6 +94,11 @@ public:
   安全。**原因**：未定义行为可能只表现为派生资源泄漏，allocator
   恰好容忍。**修法**：声明 virtual destructor，并用派生析构计数和 sanitizer
   证明完整链，而不是依赖肉眼。
+</Callout>
+
+<Callout type="trap" title="陷阱：virtual destructor 和 destroy function 可以互相替代">
+  virtual destructor 负责同一对象层次的完整析构，destroy function 负责跨模块 allocator 与 ABI
+  配对；插件边界必须明确两者各自的 ownership 责任。
 </Callout>
 
 ## 何时必须声明 virtual destructor
@@ -321,15 +338,15 @@ struct Probe {
 </Glossary>
 
 <Exercises>
-  1. **问题 1：选择析构策略。** 为 factory 返回的 Plugin、栈上策略接口和 final Point 分别设计 destructor。
+  1. **问题 1：destructors virtual in polymorphic base classes。** 为 factory 返回的 Plugin、栈上策略接口和 final Point 分别设计 destructor。
 
   <Answer question="三类对象应选择什么 destructor 策略？">factory 返回 `unique_ptr<Plugin>` 且实际为派生，Plugin 使用 public virtual destructor；栈上策略接口若禁止外部通过 Base* 拥有删除，使用 protected non-virtual destructor，并由具体类型管理生命周期；final Point 不参与继承，保持普通 non-virtual destructor/rule of zero。选择由销毁所有权语义决定。</Answer>
 
-2. **问题 2：证明析构完整。** 设计一个不依赖“程序没崩”的多态删除测试。
+2. **问题 2：virtual destructor 与 delete through base pointer。** 设计一个不依赖“程序没崩”的多态删除测试。
 
   <Answer question="怎样证明 Base owner 完整销毁 Derived？">在 Derived 独有资源、Derived body、Base 成员与 Base body 放顺序 probe，经 factory 返回 `unique_ptr<Base>` 后 reset，断言每个 probe 恰好执行一次且顺序正确；资源计数归零；启用 ASan/LSan。再静态断言 `has_virtual_destructor<Base>`，并用非 virtual 对照在 sanitizer 下复现缺陷。</Answer>
 
-3. **问题 3：设计插件 ABI。** 对象由动态库创建、主程序持有，说明 virtual destructor 与 destroy function 如何取舍。
+3. **问题 3：virtual destructor 与 destroy function。** 对象由动态库创建、主程序持有，说明两者如何取舍。
 
   <Answer question="跨模块对象销毁为何常需要 destroy function？">主程序直接 delete 可能跨 allocator/CRT 边界，也可能受类 ABI 变化影响。库导出 create 与 noexcept destroy，调用方用 `unique_ptr<Base, deleter>` 保证回到创建模块释放；库内部 Base 仍应有 virtual destructor，确保 destroy 中 delete Base* 可完整销毁派生。测试加载、失败、卸载前销毁和 allocator 配对。</Answer>
 </Exercises>

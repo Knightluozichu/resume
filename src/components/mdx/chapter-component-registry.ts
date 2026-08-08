@@ -10782,6 +10782,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem06DisallowGeneratedLab: module0.EcppItem06DisallowGeneratedLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/01-special-members/item-07-virtual-destructor": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-07-virtual-destructor-lab");
+    return {
+      EcppItem07VirtualDestructorLab: module0.EcppItem07VirtualDestructorLab,
+      EcppVirtualDestructorMap: module0.EcppVirtualDestructorMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/01-special-members/item-10-assignment-return-this":
     async () => {
       const module0 =

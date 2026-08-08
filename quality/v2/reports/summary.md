@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T11:41:12.724Z；旧版分数不迁移。
+> 2026-08-08T11:47:03.745Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2341
-- queued：370
-- passed：1161
+- queued：369
+- passed：1162
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -135,8 +135,8 @@
 | 122 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
 | 123 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 124 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 125 | effective-cpp | 57 | 0 | 26 | 31 | 26 |
-| 126 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 125 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 126 | effective-cpp | 57 | 0 | 25 | 32 | 25 |
 | 127 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
 | 128 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
 | 129 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
