@@ -10943,6 +10943,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppTmpMap: module0.EcppTmpMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-51-allocation-convention-lab");
+      return {
+        EcppAllocationConventionMap: module0.EcppAllocationConventionMap,
+        EcppItem51AllocationLab: module0.EcppItem51AllocationLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
