@@ -16882,6 +16882,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic53PridePrejudiceLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/66-postface/tpp20-postface": async () => {
+    const module0 =
+      await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-postface-diagram");
+    return {
+      Tpp20PostfaceEvidenceDiagram: module0.Tpp20PostfaceEvidenceDiagram,
+      Tpp20PostfaceLab: module0.Tpp20PostfaceLab,
+      Tpp20PostfaceLoopDiagram: module0.Tpp20PostfaceLoopDiagram,
+    } as ChapterMdxComponents;
+  },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
