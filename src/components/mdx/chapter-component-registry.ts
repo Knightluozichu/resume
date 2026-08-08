@@ -10790,6 +10790,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppVirtualDestructorMap: module0.EcppVirtualDestructorMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/01-special-members/item-08-destructor-exceptions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-08-destructor-exceptions-lab");
+      return {
+        EcppDestructorExceptionsMap: module0.EcppDestructorExceptionsMap,
+        EcppItem08DestructorExceptionsLab:
+          module0.EcppItem08DestructorExceptionsLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/01-special-members/item-10-assignment-return-this":
     async () => {
       const module0 =
