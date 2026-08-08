@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T14:14:25.390Z；旧版分数不迁移。
+> 2026-08-08T14:32:07.399Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2341
-- queued：359
-- passed：1161
+- queued：355
+- passed：1165
 - published：635
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -142,9 +142,9 @@
 | 129 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
 | 130 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
 | 131 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 132 | effective-cpp | 57 | 0 | 15 | 42 | 15 |
-| 133 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 134 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 132 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 133 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 134 | effective-cpp | 57 | 0 | 11 | 46 | 11 |
 | 135 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
 | 136 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
 | 137 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |

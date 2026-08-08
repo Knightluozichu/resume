@@ -699,13 +699,13 @@
     - 路径：`content/effective-cpp/03-designs-declarations/item-18-easy-correct-interfaces.mdx`
 - [x] ✅ **03-designs-declarations/item-19-class-design-type-design** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/03-designs-declarations/item-19-class-design-type-design.mdx`
-- [ ] 🟡 P3 **03-designs-declarations/item-23-non-member-non-friend** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **03-designs-declarations/item-23-non-member-non-friend** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/03-designs-declarations/item-23-non-member-non-friend.mdx`
-- [ ] 🟡 P3 **03-designs-declarations/item-25-non-throwing-swap** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **03-designs-declarations/item-25-non-throwing-swap** — 已修复（2026-08-08，score 59→95，passed）
     - 路径：`content/effective-cpp/03-designs-declarations/item-25-non-throwing-swap.mdx`
-- [ ] 🟡 P3 **04-implementations/item-26-postpone-variable-definitions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-implementations/item-26-postpone-variable-definitions** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/04-implementations/item-26-postpone-variable-definitions.mdx`
-- [ ] 🟡 P3 **04-implementations/item-30-inline-ins-and-outs** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-implementations/item-30-inline-ins-and-outs** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/04-implementations/item-30-inline-ins-and-outs.mdx`
 - [ ] 🟡 P3 **04-implementations/item-31-minimize-compilation-dependencies** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/04-implementations/item-31-minimize-compilation-dependencies.mdx`
