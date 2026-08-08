@@ -10961,6 +10961,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/04-implementations/item-26-postpone-variable-definitions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-26-postpone-variable-definitions");
+      return {
+        EcppItem26LifetimeLab: module0.EcppItem26LifetimeLab,
+        EcppLoopLifecycleMap: module0.EcppLoopLifecycleMap,
+        EcppVariableDefinitionCostMap: module0.EcppVariableDefinitionCostMap,
+        EcppVariableScopeDecisionMap: module0.EcppVariableScopeDecisionMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/04-implementations/item-28-avoid-internal-handles":
     async () => {
       const module0 =

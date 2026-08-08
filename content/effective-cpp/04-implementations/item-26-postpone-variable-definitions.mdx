@@ -6,6 +6,10 @@ order: 26
 description: 对齐 Effective C++ 第三版 Item 26：把变量定义延后到具备有效初值且即将使用的位置，消除失败路径的构造析构和默认构造后赋值，并量化循环内外变量的成本与作用域取舍。
 demo: false
 math: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ecpp3-26
 sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
 draft: false
 ---
@@ -16,6 +20,13 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  EcppItem26LifetimeLab,
+  EcppLoopLifecycleMap,
+  EcppVariableDefinitionCostMap,
+  EcppVariableScopeDecisionMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-26-postpone-variable-definitions";
 
 <Objectives>
 
@@ -63,6 +74,24 @@ Item 26 的原则是 Postpone variable definitions as long as possible（尽可�
 <Term def="控制流在对象首次有意义使用前 return、throw 或跳过该分支，导致对象只构造和析构。">unused lifetime path</Term>
 
 先预测每个 guard clause 是否经过变量定义；只在真正需要对象的路径定义它。
+
+<Stepper>
+  <Step title="第 1 步：找到第一次必要使用">
+    把输入检查、对象定义和首次使用排成一条控制流；先问失败路径是否真的需要支付 constructor/destructor cost。
+
+    <EcppVariableDefinitionCostMap />
+  </Step>
+  <Step title="第 2 步：收紧作用域与保护边界">
+    将变量移到有效初值齐备的位置，但把 lock、transaction 等 protective RAII guard 留在它必须保护的第一条副作用之前。
+
+    <EcppVariableScopeDecisionMap />
+  </Step>
+  <Step title="第 3 步：用循环成本实验选择策略">
+    对循环外复用和每轮构造分别记录 constructor、destructor、assignment 与残留状态，再决定是否扩大 lifetime。
+
+    <EcppLoopLifecycleMap />
+  </Step>
+</Stepper>
 
 ## 延后到验证通过之后
 
@@ -180,6 +209,10 @@ auto it = cache_.find(key);
   RAII 保证的首个副作用。
 </Callout>
 
+<Callout type="trap" title="只比较构造次数">
+  **现象**：看到循环外只有一次 constructor 就直接复用对象。**原因**：忽略 assignment 处理旧资源、reset contract 和跨迭代状态。**修法**：同时 benchmark assignment 与 constructor/destructor，并用失败后下一轮测试 iteration isolation。
+</Callout>
+
 ## 循环变量有两种成本模型
 
 原书特别比较 loop variable（循环变量）。方案 A 在循环外定义并每轮赋值：
@@ -241,6 +274,8 @@ for (...) {
 
 性能优化必须同时测试重复顺序、失败后下一轮和不同输入组合。
 
+<EcppItem26LifetimeLab />
+
 ## 延后昂贵的 cold-path 对象
 
 日志字符串、诊断报告、回滚 snapshot 常只在错误路径需要，应在条件成立后构造。
@@ -301,11 +336,6 @@ const auto session = Session::connect(endpoint);
 - RAII guard 延后到最晚安全边界，但不能越过它必须保护的首个副作用
 - loop 外复用是一次构造加 n 次 assignment，loop 内定义是 n 次构造析构，应按语义和实测选择
 - 最小 scope 减少跨迭代状态、误用窗口和 cold-path 无效工作
-
-<Attribution
-  adaptedFrom="Effective C++, Third Edition, Item 26"
-  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
-/>
 
 <Glossary>
   <GlossaryItem term="object lifetime interval">
@@ -406,3 +436,8 @@ const auto session = Session::connect(endpoint);
 
   <Answer question="RAII guard 的延后边界如何确定？">不访问 shared state 的 key validation 可在 lock 前完成；guard 必须位于第一次 cache read/write 之前，并覆盖迭代器、引用和所有依赖共享 invariant 的操作。不能以“首次修改”为边界，因为无锁读取也可能 race。并发测试覆盖 validation failure、cache miss/hit、异常和提前 return，确认每个共享访问都在 guard lifetime 内。</Answer>
 </Exercises>
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 26"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
