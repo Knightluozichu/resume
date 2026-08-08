@@ -3702,6 +3702,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.CgptOfficialFinalReviewEvidenceGateLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/00-map/cc2e-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-official-learning-map");
+    return {
+      Cc2eOfficialLearningMapCoverageMap:
+        module0.Cc2eOfficialLearningMapCoverageMap,
+      Cc2eOfficialLearningMapFailureTraceLab:
+        module0.Cc2eOfficialLearningMapFailureTraceLab,
+      Cc2eOfficialLearningMapTraceLab: module0.Cc2eOfficialLearningMapTraceLab,
+    } as ChapterMdxComponents;
+  },
   "coder-revolution/00-map/crv18-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map-diagram");
@@ -11226,6 +11237,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem53WarningLab: module0.EcppItem53WarningLab,
       EcppMultiCompilerWarningMap: module0.EcppMultiCompilerWarningMap,
       EcppWarningLifecycleMap: module0.EcppWarningLifecycleMap,
+    } as ChapterMdxComponents;
+  },
+  "effective-cpp/08-miscellaneous/item-55-familiarize-boost": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-55-familiarize-boost");
+    return {
+      EcppItem55BoostAdoptionTimeline: module0.EcppItem55BoostAdoptionTimeline,
+      EcppItem55BoostLibraryMap: module0.EcppItem55BoostLibraryMap,
+      EcppItem55BoostMigrationLab: module0.EcppItem55BoostMigrationLab,
     } as ChapterMdxComponents;
   },
   "effective-csharp/00-habits/ecs-learning-map": async () => {
