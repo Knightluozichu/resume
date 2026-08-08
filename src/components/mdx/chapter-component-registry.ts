@@ -3790,6 +3790,24 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e08DefensiveProgrammingMechanismLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-09-pseudocode-programming-process");
+      return {
+        Cc2e09PseudocodeProgrammingProcessMechanismLab:
+          module0.Cc2e09PseudocodeProgrammingProcessMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-10-general-variable-use");
+      return {
+        Cc2e10GeneralVariableUseMechanismLab:
+          module0.Cc2e10GeneralVariableUseMechanismLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names":
     async () => {
       const module0 =

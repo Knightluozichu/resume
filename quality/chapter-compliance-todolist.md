@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌51 ⚠️0 ✅0）
+## code-complete-2e（51 章 · ❌38 ⚠️0 ✅13）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -752,13 +752,13 @@
     - 路径：`content/code-complete-2e/13-working-classes/cc2e-06-working-classes.mdx`
 - [x] ✅ **14-high-quality-routines/cc2e-07-high-quality-routines** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines.mdx`
-- [ ] 🔴 P1 **15-defensive-programming/cc2e-08-defensive-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **15-defensive-programming/cc2e-08-defensive-programming** — 已修复（2026-08-09，score 43→94，passed）
     - 路径：`content/code-complete-2e/15-defensive-programming/cc2e-08-defensive-programming.mdx`
-- [ ] 🔴 P1 **16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process** — 已修复（2026-08-09，score 43→97，passed）
     - 路径：`content/code-complete-2e/16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process.mdx`
-- [ ] 🔴 P1 **18-general-variable-use/cc2e-10-general-variable-use** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **18-general-variable-use/cc2e-10-general-variable-use** — 已修复（2026-08-09，score 43→97，passed）
     - 路径：`content/code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use.mdx`
-- [ ] 🔴 P1 **19-power-of-variable-names/cc2e-11-power-of-variable-names** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **19-power-of-variable-names/cc2e-11-power-of-variable-names** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names.mdx`
 - [ ] 🔴 P1 **20-fundamental-data-types/cc2e-12-fundamental-data-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/20-fundamental-data-types/cc2e-12-fundamental-data-types.mdx`
