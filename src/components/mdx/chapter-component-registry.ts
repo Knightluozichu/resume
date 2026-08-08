@@ -10734,6 +10734,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem03UseConstLab: module0.EcppItem03UseConstLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/00-accustoming/item-04-initialize-objects": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-04-initialize-objects-lab");
+    return {
+      EcppItem04InitializeObjectsLab: module0.EcppItem04InitializeObjectsLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-learning-map-lab");

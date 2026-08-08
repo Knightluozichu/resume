@@ -635,7 +635,7 @@
     - 路径：`content/effective-cpp/03-designs-declarations/item-22-private-data-members.mdx`
 - [x] ✅ **00-accustoming/item-03-use-const** — 已修复（2026-08-08，score 60→99，passed）
     - 路径：`content/effective-cpp/00-accustoming/item-03-use-const.mdx`
-- [ ] 🟡 P3 **00-accustoming/item-04-initialize-objects** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **00-accustoming/item-04-initialize-objects** — 已修复（2026-08-08，score 60→100，passed）
     - 路径：`content/effective-cpp/00-accustoming/item-04-initialize-objects.mdx`
 - [ ] 🟡 P3 **01-special-members/item-10-assignment-return-this** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/01-special-members/item-10-assignment-return-this.mdx`
