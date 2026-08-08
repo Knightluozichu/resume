@@ -3790,6 +3790,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e08DefensiveProgrammingMechanismLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-11-power-of-variable-names");
+      return {
+        Cc2e11VariableNamingLab: module0.Cc2e11VariableNamingLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
