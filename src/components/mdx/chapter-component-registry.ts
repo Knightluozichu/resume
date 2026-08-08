@@ -3890,6 +3890,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cc2e13UnusualDataTypesLab: module0.Cc2e13UnusualDataTypesLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/22-statements/cc2e-part-04-statements": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-part-04-statements");
+    return {
+      Cc2ePart04StatementsLab: module0.Cc2ePart04StatementsLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code":
     async () => {
       const module0 =
@@ -3946,6 +3953,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e19GeneralControlIssuesBooleanLab,
         Cc2e19GeneralControlIssuesComplexityLab:
           module0.Cc2e19GeneralControlIssuesComplexityLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/29-code-improvement/cc2e-part-05-code-improvement":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-part-05-code-improvement");
+      return {
+        Cc2ePart05CodeImprovementLab: module0.Cc2ePart05CodeImprovementLab,
       } as ChapterMdxComponents;
     },
   "code-complete-2e/30-software-quality-landscape/cc2e-20-software-quality-landscape":
@@ -4009,6 +4024,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cc2e26CodeTuningTechniquesLab: module0.Cc2e26CodeTuningTechniquesLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/37-system-considerations/cc2e-part-06-system-considerations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-part-06-system-considerations");
+      return {
+        Cc2ePart06SystemConsiderationsLab:
+          module0.Cc2ePart06SystemConsiderationsLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/38-program-size/cc2e-27-program-size": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-27-program-size");
@@ -4040,6 +4064,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         Cc2e30ProgrammingToolsMechanismLab:
           module0.Cc2e30ProgrammingToolsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/42-software-craftsmanship/cc2e-part-07-software-craftsmanship":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-part-07-software-craftsmanship");
+      return {
+        Cc2ePart07SoftwareCraftsmanshipLab:
+          module0.Cc2ePart07SoftwareCraftsmanshipLab,
       } as ChapterMdxComponents;
     },
   "code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style": async () => {

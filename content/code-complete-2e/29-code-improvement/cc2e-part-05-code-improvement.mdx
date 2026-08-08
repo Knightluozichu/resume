@@ -1,71 +1,126 @@
 ---
-title: "第5部分：代码改善"
+title: "第5部分：代码改进"
 type: B
 section: "代码大全（第2版·2006中文版）"
 order: 29
-description: "第5部分：代码改善：从“凭感觉做大改”推进到“每次改进都有基线与回归证据”，以目录节点、专属机制实验和故障复位验收。"
+description: "第5部分代码改进：从问题定位出发，单变量重构，比较性能与边界，并用回归反馈证明改进。"
 demo: true
 math: true
 sourceUrl: "https://book.douban.com/reading/10145819/"
 qualityVersion: 2
-practiceMode: diagnosis
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: cc2e-part-05-code-improvement
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Callout } from "@/components/mdx/callout";
+import { Term } from "@/components/mdx/term";
+import { Exercises, Answer } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Cc2ePart05CodeImprovementLab } from "@/components/mdx/code-complete-2e/v2/cc2e-part-05-code-improvement";
 
-## 为什么需要这一机制
+<Objectives>
 
-第5部分：代码改善 解决的不是一个可背诵口号，而是从 **凭感觉做大改** 到 **每次改进都有基线与回归证据** 的可观察变化。它的核心机制是：代码改善从质量目标出发，用协同检查和开发者测试发现问题，以调试定位、重构保行为、性能测量验证改进。
+- 能先定位可复现的问题，再决定是重构、调优还是补防御。
+- 能把一次改进限制为可比较的单变量变更，并同时记录收益、代价和边界。
+- 能用回归反馈确认行为契约没有被破坏，而不是只凭局部结果宣称改进。
 
-学习 第5部分：代码改善 时先预测 质量目标、协同检查、测试调试、安全重构、性能复测 的输入与输出，再改变一个直接条件。最终结果即使看似正确，只要中间状态违反合同、故障不能隔离或重置不能回到同一基线，本页结论就不通过。
+</Objectives>
 
+## 为什么需要这一部分
 
-## 核心合同
+代码改进不是随意重写，而是从一个可复现的问题出发改变一个条件，再比较前后结果。重构关注结构，性能调优关注资源和观察窗口，防御关注异常边界；三者都需要基线、对照和回归。
 
-$$
-improvement=detect\rightarrow explain\rightarrow change\rightarrow regress
-$$
+<Callout type="info" title="范围与事实来源">
+  本部分范围依据[2006 中文第 2 版公开试读目录](https://book.douban.com/reading/10145819/)，软件质量与性能测量边界交叉核对[IEEE SWEBOK](https://www.computer.org/education/bodies-of-knowledge/software-engineering/v4)和[NIST Engineering Statistics Handbook](https://www.itl.nist.gov/div898/handbook/)。本文是独立教学重写。
+</Callout>
 
-第5部分：代码改善 的合同变量必须绑定到同一版本、同一输入、同一单位和同一观察窗口。先由合同推出预期，再观察 测试调试 与 性能复测；如果只是修改阈值来迎合结果，实验失去裁决能力。
+## 先避开三个改进误区
 
-## 目录节点到四级证据
+<Callout type="trap" title="误区一：没有基线也能判断更好">
+  现象 → 改完后凭感觉接受。原因 → 输入、版本和指标不固定。修法 → 先冻结基线和观察窗口。
+</Callout>
 
-以下节点逐项给出“出现—解释—视觉/实验—练习验证”证据。第5部分：代码改善 不把目录词频当作覆盖率；每一项都必须能在专属机制链中指出状态变化，并在章末练习清单中被复核。
+<Callout type="trap" title="误区二：局部更快就是整体改进">
+  现象 → 只看一次局部耗时。原因 → 忽略内存、可维护性和尾延迟。修法 → 明确目标函数和被接受的代价。
+</Callout>
 
-### 第5部分 代码改善
+<Callout type="trap" title="误区三：重构可以跳过回归">
+  现象 → 认为只改结构就不会改变行为。原因 → 隐藏契约没有被测试。修法 → 保留正常、边界和故障回归。
+</Callout>
 
-在 **第5部分：代码改善** 中，目录节点 **第5部分 代码改善** 落在“质量目标”检查点。这里的技术含义是：把“第5部分 代码改善”放回 代码改善从质量目标出发，用协同检查和开发者测试发现问题，以调试定位、重构保行为、性能测量验证改进；它影响“质量”时，必须同时声明对象、输入、状态、输出和适用边界，不能用标题出现代替解释。
+## 核心合同与操作术语
 
-验证 **第5部分 代码改善** 时，固定其余条件，只改变与“第5部分 代码改善”直接相连的一个输入或决定。先写预期，再运行正常值、恰好边界和一个故障；若出现“同时修复、重构和调优，结果变好却无法归因”，就在 第5部分：代码改善 的 **质量目标** 保存首个偏离、拒绝结果和复位后的重放证据。
+<Term def="由输入、版本、观察窗口和首个偏离组成的可复现问题记录">问题定位</Term>是起点；<Term def="不改变外部行为而改善结构、职责或表达的单变量变更">重构</Term>要保持契约。<Term def="在固定负载和指标下比较资源、延迟或吞吐的取舍">性能取舍</Term>不能脱离环境；<Term def="对无效、异常和边界输入规定拒绝或恢复行为">防御</Term>保留失败边界；<Term def="修订后重新执行原始路径及受影响边界的记录">回归反馈</Term>裁决是否真的变好。
+
+## 目录节点逐项深读
+
+### 第5部分 代码改进
+
+本部分的阅读合同是：定位问题，冻结基线，只改一个条件，比较结果与代价，最后回归。若改进同时改变接口、数据、环境和指标，结果不能归因，必须拆成多个实验。
 
 ## 最小可重放实现
 
-```text
-# 第5部分：代码改善：保留竞争假设，只用单变量探针排除
-hypotheses = enumerate_causes(reproducible_failure)
-while len(hypotheses) > 1:
-    hypotheses = distinguish_with_one_probe(hypotheses)
-assert replay_after_fix() == baseline_trace
-```
+~~~text
+baseline = freeze(version, input, metric, observationWindow)
+deviation = reproduce_problem(baseline)
+candidate = change_one_thing(baseline)
+compare(candidate, baseline, cost, boundary)
+record(firstDeviation, regression, decision)
+~~~
 
-这段 第5部分：代码改善 验证草图表达独立教学合同，不复制原书代码。真实执行应保存输入、环境、节点轨迹、最终结果、拒绝理由和复位结果，使第二位读者能从干净状态重放。
+正常轨迹验证原行为；边界轨迹改变规模或负载；故障轨迹让改进破坏契约；复位轨迹从原始基线重跑，避免在已污染的环境上得出结论。
 
-## 专属因果实验
+## 先预测，再操作证据实验
 
-先预测改变“质量”或“协作”后，第5部分：代码改善 的哪一个节点最先变化。切换基线、边界和注入故障，运行并保存证据；最后点击“重置实验”，确认滑块、场景、节点、压力和结果文字全部恢复。
+先预测问题定位、重构、性能或回归节点的首个变化，再只切换一个场景。专属面板表达改进的因果链，不输出真实项目性能承诺。
 
+<Cc2ePart05CodeImprovementLab />
 
-## 故障诊断与误区
+## 练习与答案
 
+<Exercises>
 
-## 术语与边界
+**问题 1：建立基线。** 你要优化一个慢查询，最少要固定哪些条件？
 
-第5部分：代码改善 的五个操作术语是、、、、。每个术语必须能指向实验控件、节点或状态文本；若只能指向目录标题，说明解释和验证仍未完成。
+<Answer>
+  固定数据库版本、数据快照、查询输入、索引配置、并发负载、观察窗口和指标，先记录正常与边界样本，再一次只改变查询或索引策略。
+</Answer>
 
+**问题 2：区分重构和行为变化。** 重命名并移动函数后测试失败，如何判断是不是无害重构？
+
+<Answer>
+  从失败输入追踪首个偏离，比较接口、异常、顺序和副作用；如果外部行为改变，就不是纯重构，应明确修订契约并补回归。
+</Answer>
+
+**问题 3：处理代价。** 延迟下降但内存翻倍，如何写出可交接判断？
+
+<Answer>
+  写明目标、收益、内存代价、负载边界和接受条件；让第二位实践者在同一基线重放，并由系统约束决定是否接受，而非只看一个更好的数字。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+<GlossaryItem term="问题定位">包含输入、版本、窗口和首个偏离的可复现问题记录。</GlossaryItem>
+<GlossaryItem term="重构">保持外部行为、改善结构的单变量变更。</GlossaryItem>
+<GlossaryItem term="性能取舍">在固定指标和负载下比较收益与资源代价。</GlossaryItem>
+<GlossaryItem term="防御">对异常和边界输入规定拒绝或恢复行为。</GlossaryItem>
+<GlossaryItem term="回归反馈">修订后重新执行原路径和受影响边界的记录。</GlossaryItem>
+</Glossary>
 
 ## 本页小结
 
-第5部分：代码改善 的完成标准是能解释“代码改善从质量目标出发，用协同检查和开发者测试发现问题，以调试定位、重构保行为、性能测量验证改进”，用核心合同推出预期，沿五个专属节点观察实际，诊断“同时修复、重构和调优，结果变好却无法归因”，并证明复位后同一输入重建基线轨迹。
+代码改进靠基线和对照说话：先定位，再单变量改变，比较收益与代价，保留防御边界，最后用回归反馈裁决。没有可复现基线，就没有可靠的“改进”。
 
-
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Steve McConnell, Code Complete, Second Edition"
+  adaptedUrl="https://book.douban.com/reading/10145819/"
+/>
