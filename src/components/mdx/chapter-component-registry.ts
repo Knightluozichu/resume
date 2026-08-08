@@ -16891,6 +16891,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Tpp20PostfaceLoopDiagram: module0.Tpp20PostfaceLoopDiagram,
     } as ChapterMdxComponents;
   },
+  "pragmatic-programmer/67-bibliography/tpp20-bibliography": async () => {
+    const module0 =
+      await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-bibliography-diagram");
+    return {
+      Tpp20BibliographyEvidenceDiagram:
+        module0.Tpp20BibliographyEvidenceDiagram,
+      Tpp20BibliographyLab: module0.Tpp20BibliographyLab,
+      Tpp20BibliographyLoopDiagram: module0.Tpp20BibliographyLoopDiagram,
+    } as ChapterMdxComponents;
+  },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
