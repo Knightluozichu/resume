@@ -11116,6 +11116,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem41ImplicitInterfaceLab: module0.EcppItem41ImplicitInterfaceLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-42-typename-two-meanings":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-42-typename-two-meanings");
+      return {
+        EcppTypenameContextLab: module0.EcppTypenameContextLab,
+        EcppTypenameDiagnosticFlow: module0.EcppTypenameDiagnosticFlow,
+        EcppTypenameMeaningMap: module0.EcppTypenameMeaningMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/06-templates-generic-programming/item-43-access-templatized-base-names":
     async () => {
       const module0 =
