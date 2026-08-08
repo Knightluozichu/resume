@@ -6,6 +6,10 @@ order: 50
 description: 对齐 Effective C++ 第三版 Item 50：从 usage errors、allocation statistics、performance、clustering 和 alignment 五类证据判断是否替换 new/delete，并以局部 allocator、完整契约和可重复基准控制风险。
 demo: false
 math: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ecpp3-50
 sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
 draft: false
 ---
@@ -16,6 +20,10 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import {
+  EcppItem50ReplacementDecisionMap,
+  EcppItem50ReplacementLab,
+} from "@/components/mdx/effective-cpp/diagrams/item-50-replacement-lab";
 
 <Objectives>
 
@@ -24,6 +32,10 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 - 能比较默认 allocator、现成 pool/resource 与自定义 new/delete，并设计 A/B 基准和回退门禁
 
 </Objectives>
+
+<EcppItem50ReplacementDecisionMap />
+
+<EcppItem50ReplacementLab />
 
 ## 从“为什么要替换”开始
 
@@ -34,12 +46,15 @@ void operator delete(void* memory) noexcept;
 
 能写替换函数不代表应该写。系统 allocator 已处理并发、碎片、对齐、空请求和平台内存 API；自定义实现必须有可测理由。
 
-<Term def="为程序、class 或 allocation domain 提供不同于默认实现的 storage 获取与释放函数。">replace new and delete</Term>
+<Term def="为程序、class 或 allocation domain 提供不同于默认实现的 storage 获取与释放函数。">
+  replace new and delete
+</Term>
 
-<Term def="默认 allocator 在特定 workload 下无法满足、且可由指标或错误重现证明的问题。">allocation replacement motive</Term>
+<Term def="默认 allocator 在特定 workload 下无法满足、且可由指标或错误重现证明的问题。">
+  allocation replacement motive
+</Term>
 
 Item 50 的原则是 Understand when it makes sense to replace new and delete（理解何时替换 new/delete 有意义）。
-
 
 先预测：若 microbenchmark 显示自定义 pool 快 20%，能否直接替换 global new？还需证明真实 workload、尾延迟、内存、线程和全部 allocation forms。
 
@@ -47,9 +62,13 @@ Item 50 的原则是 Understand when it makes sense to replace new and delete（
 
 典型错误包括写越界、double delete、释放陌生 pointer、use-after-free 和 new/delete family 不匹配。
 
-<Term def="客户错误使用动态 storage，如越界、重复释放或释放后访问。">usage errors</Term>
+<Term def="客户错误使用动态 storage，如越界、重复释放或释放后访问。">
+  usage errors
+</Term>
 
-<Term def="放在 payload 前后、释放时验证是否被改写的已知字节模式。">allocation guard pattern</Term>
+<Term def="放在 payload 前后、释放时验证是否被改写的已知字节模式。">
+  allocation guard pattern
+</Term>
 
 ```text
 [header][front guard][aligned payload][rear guard]
@@ -57,21 +76,28 @@ Item 50 的原则是 Understand when it makes sense to replace new and delete（
 
 header 可记录 requested size、state、thread、callsite id 和校验值；delete 先验证 state 与 guards，再标记 freed。
 
+<Term def="释放后暂不把 block 返回 free list，以增加悬空访问被毒化数据捕获的窗口。">
+  deallocation quarantine
+</Term>
 
-<Term def="释放后暂不把 block 返回 free list，以增加悬空访问被毒化数据捕获的窗口。">deallocation quarantine</Term>
-
-<Term def="用固定 pattern 覆盖新分配或已释放 payload，暴露未初始化读取和悬空访问。">memory poisoning</Term>
+<Term def="用固定 pattern 覆盖新分配或已释放 payload，暴露未初始化读取和悬空访问。">
+  memory poisoning
+</Term>
 
 <Callout type="trap" title="陷阱：在 payload 前加 header 后直接返回下一字节">
-  这样可能破坏 alignment。必须向上对齐 payload address，并保存可恢复真实
-  allocation base 的元数据；guard 设计不能违反正常对象要求。
+  **现象 →** debug block 偶尔在 SIMD、DMA 或 over-aligned object 上崩溃。 **原因
+  →** header 长度改变了 payload address，真实 allocation base 也没有被保存。
+  **修法 →** 向上对齐 payload、记录 base/size/state，并用每种支持的 alignment
+  做断言。
 </Callout>
 
 ## 成熟诊断工具通常优先
 
 AddressSanitizer、Valgrind、平台 heap diagnostics 已覆盖大量越界和生命周期错误，并持续处理 ABI/线程细节。
 
-<Term def="在不永久替换生产 allocator 的情况下插桩检测内存错误的工具。">allocator diagnostic instrumentation</Term>
+<Term def="在不永久替换生产 allocator 的情况下插桩检测内存错误的工具。">
+  allocator diagnostic instrumentation
+</Term>
 
 自定义 debug allocator 适合受限平台、领域 metadata 或可控 failure injection，但不应复制一套更弱 sanitizer。先比较覆盖能力、运行开销与部署环境。
 
@@ -81,23 +107,33 @@ AddressSanitizer、Valgrind、平台 heap diagnostics 已覆盖大量越界和�
 requested size, actual size, lifetime, thread, callsite, peak live bytes
 ```
 
-<Term def="关于请求尺寸、频率、寿命、并发、峰值和调用来源的分配数据。">allocation statistics</Term>
+<Term def="关于请求尺寸、频率、寿命、并发、峰值和调用来源的分配数据。">
+  allocation statistics
+</Term>
 
 统计可回答：小对象是否占多数、哪些 callsites 泄漏、峰值由谁造成、对象是否跨线程释放。它是后续 pool/clustering 决策的证据。
 
-<Term def="同一 callsite 或分配域在时间和尺寸上的真实请求序列。">allocation trace</Term>
+<Term def="同一 callsite 或分配域在时间和尺寸上的真实请求序列。">
+  allocation trace
+</Term>
 
 但统计代码本身不能使用被追踪的 allocator 存储无限 map/log，否则递归分配。使用预分配 ring buffer、采样或低层事件 sink。
 
-<Term def="allocator instrumentation 为记录自身事件再次调用 allocator 的递归问题。">instrumentation allocation recursion</Term>
+<Term def="allocator instrumentation 为记录自身事件再次调用 allocator 的递归问题。">
+  instrumentation allocation recursion
+</Term>
 
 ## 动机三：改善 performance
 
 通用 allocator 必须服务多种尺寸和寿命。若 workload 是大量固定尺寸、同线程分配释放的小对象，专用 free list/pool 可能减少 metadata、系统调用和锁。
 
-<Term def="allocation/free latency、吞吐、锁竞争、cache miss 与尾延迟的综合表现。">allocation performance</Term>
+<Term def="allocation/free latency、吞吐、锁竞争、cache miss 与尾延迟的综合表现。">
+  allocation performance
+</Term>
 
-<Term def="为固定或少数尺寸预先取得 blocks，并在私有 free list 中重复使用的分配器。">fixed-size pool</Term>
+<Term def="为固定或少数尺寸预先取得 blocks，并在私有 free list 中重复使用的分配器。">
+  fixed-size pool
+</Term>
 
 ```cpp
 std::pmr::unsynchronized_pool_resource localPool;
@@ -110,14 +146,19 @@ std::pmr::polymorphic_allocator<Node> alloc(&localPool);
 
 一起遍历、一起销毁的对象若散落在 heap，可能增加 cache/TLB misses。arena 可让同一场景/请求的 nodes 靠近。
 
-<Term def="把相关对象放在相近 pages/cache lines，提高共同访问局部性的布局策略。">object clustering</Term>
+<Term def="把相关对象放在相近 pages/cache lines，提高共同访问局部性的布局策略。">
+  object clustering
+</Term>
 
-<Term def="为一组生命周期相同对象顺序分配，最终整体释放的 allocation domain。">arena lifetime domain</Term>
+<Term def="为一组生命周期相同对象顺序分配，最终整体释放的 allocation domain。">
+  arena lifetime domain
+</Term>
 
 clustering 必须按访问关系而非仅按类型。把不同线程频繁写的对象挤在同一 cache line 还会造成 false sharing。
 
-<Term def="独立数据因共享 cache line 被不同 cores 写入而产生的缓存一致性开销。">false sharing risk</Term>
-
+<Term def="独立数据因共享 cache line 被不同 cores 写入而产生的缓存一致性开销。">
+  false sharing risk
+</Term>
 
 ## 动机五：特殊 alignment
 
@@ -132,21 +173,40 @@ operator delete(memory, std::align_val_t{64});
 
 现代 C++ 已有 aligned allocation 与 `alignas`。只有标准接口/平台 allocator 仍不能满足领域要求时，才需自定义路径；对应 aligned delete 必须匹配。
 
-<Term def="对 over-aligned storage 使用带 align_val_t 的配对 allocation/deallocation forms。">aligned allocation pair</Term>
+<Term def="对 over-aligned storage 使用带 align_val_t 的配对 allocation/deallocation forms。">
+  aligned allocation pair
+</Term>
 
 <Callout type="trap" title="陷阱：自定义 allocator 只要对齐到指针大小就够">
-  over-aligned types、SIMD
-  和硬件协议可能要求更大边界。错误对齐可能是未定义行为或性能退化；应测试每个支持
-  alignment 并保持 delete 配对。
+  **现象 →** 普通类型通过，但 over-aligned type 或硬件 buffer 在运行时失败。
+  **原因 →** 指针大小不是所有对象和协议的 alignment 要求，释放形式也可能不匹配。
+  **修法 →** 优先用 aligned allocation，并为每种 alignment 配对 aligned delete
+  和测试。
+</Callout>
+
+<Callout
+  type="trap"
+  title="陷阱：单一尺寸 microbenchmark 赢了就替换 global new"
+>
+  **现象 →** 固定小对象测试快很多，真实服务却出现 p99、RSS 或碎片退化。 **原因
+  →** benchmark 没有回放 lifetime、cross-thread free、峰值 live set
+  和第三方调用。 **修法 →** 先在 scoped resource 中做 trace replay
+  A/B，设定回退阈值，再决定是否扩大范围。
 </Callout>
 
 ## global、class-specific 与 scoped resource
 
-<Term def="替换所有普通 global allocation calls、影响范围和兼容风险最大的方式。">global allocation replacement</Term>
+<Term def="替换所有普通 global allocation calls、影响范围和兼容风险最大的方式。">
+  global allocation replacement
+</Term>
 
-<Term def="只影响某个 class 的 new/delete expressions 的静态成员分配函数。">class-specific allocation replacement</Term>
+<Term def="只影响某个 class 的 new/delete expressions 的静态成员分配函数。">
+  class-specific allocation replacement
+</Term>
 
-<Term def="通过 allocator/resource 对象绑定容器或 subsystem，显式限制策略生效范围。">scoped memory resource</Term>
+<Term def="通过 allocator/resource 对象绑定容器或 subsystem，显式限制策略生效范围。">
+  scoped memory resource
+</Term>
 
 优先级通常是 scoped resource，然后 class-specific，最后才是 global replacement。范围越大，越要覆盖 arrays、aligned/sized/nothrow forms、第三方库、启动/退出顺序和跨 module 边界。
 
@@ -154,11 +214,15 @@ operator delete(memory, std::align_val_t{64});
 
 实现必须考虑：size 为 0、失败时 new-handler/bad_alloc、alignment、thread safety、matching delete、constructor failure、sized/aligned overload 与 null delete。
 
-<Term def="所有 allocation/deallocation overloads、失败、大小、对齐和线程行为组成的语言边界。">allocation function contract surface</Term>
+<Term def="所有 allocation/deallocation overloads、失败、大小、对齐和线程行为组成的语言边界。">
+  allocation function contract surface
+</Term>
 
 不同 shared libraries 若使用不同 heaps，跨 module 分配/释放会破坏 allocator identity。
 
-<Term def="storage 必须由与分配它相兼容的 allocator domain 释放的要求。">allocator identity pairing</Term>
+<Term def="storage 必须由与分配它相兼容的 allocator domain 释放的要求。">
+  allocator identity pairing
+</Term>
 
 ## 性能基准必须覆盖真实分布
 
@@ -171,11 +235,17 @@ operator delete(memory, std::align_val_t{64});
 5. RSS、internal/external fragmentation。
 6. cache/TLB misses 与构建/二进制影响。
 
-<Term def="allocator 预留 block 内未被客户使用的浪费。">internal fragmentation</Term>
+<Term def="allocator 预留 block 内未被客户使用的浪费。">
+  internal fragmentation
+</Term>
 
-<Term def="空闲总量足够但分散成无法满足大请求的 holes。">external fragmentation</Term>
+<Term def="空闲总量足够但分散成无法满足大请求的 holes。">
+  external fragmentation
+</Term>
 
-<Term def="以生产尺寸、寿命和线程序列重放分配行为的可重复测试。">allocation trace replay</Term>
+<Term def="以生产尺寸、寿命和线程序列重放分配行为的可重复测试。">
+  allocation trace replay
+</Term>
 
 先预测自定义方案在哪些 workload 赢、在哪些输，再设置回退阈值；不是只保留最好的一张图。
 
@@ -188,7 +258,9 @@ operator delete(memory, std::align_val_t{64});
 5. 回放真实 traces，比较 latency、RSS、fragmentation 与 locality。
 6. 保留 feature flag/回退路径，并持续监测 workload 漂移。
 
-<Term def="从证据、成熟替代、局部原型、契约到生产回退的替换流程。">allocator replacement workflow</Term>
+<Term def="从证据、成熟替代、局部原型、契约到生产回退的替换流程。">
+  allocator replacement workflow
+</Term>
 
 ## 小结
 

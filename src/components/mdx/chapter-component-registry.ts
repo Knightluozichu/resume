@@ -11191,6 +11191,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppNewHandlerFlowMap: module0.EcppNewHandlerFlowMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/07-customizing-new-delete/item-50-when-replace-new-delete":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-50-replacement-lab");
+      return {
+        EcppItem50ReplacementDecisionMap:
+          module0.EcppItem50ReplacementDecisionMap,
+        EcppItem50ReplacementLab: module0.EcppItem50ReplacementLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete":
     async () => {
       const module0 =
