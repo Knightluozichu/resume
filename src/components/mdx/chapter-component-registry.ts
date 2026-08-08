@@ -10846,6 +10846,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EcppItem13ResourceManagingObjectsMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/02-resource-management/item-14-resource-copying": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-14-resource-copying-lab");
+    return {
+      EcppItem14ResourceCopyingLab: module0.EcppItem14ResourceCopyingLab,
+      EcppItem14ResourceCopyingMap: module0.EcppItem14ResourceCopyingMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/02-resource-management/item-15-raw-resource-access":
     async () => {
       const module0 =

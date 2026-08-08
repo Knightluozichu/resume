@@ -689,7 +689,7 @@
     - 路径：`content/effective-cpp/01-special-members/item-11-self-assignment.mdx`
 - [x] ✅ **01-special-members/item-12-copy-all-parts** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/01-special-members/item-12-copy-all-parts.mdx`
-- [ ] 🟡 P3 **02-resource-management/item-14-resource-copying** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-resource-management/item-14-resource-copying** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-14-resource-copying.mdx`
 - [ ] 🟡 P3 **02-resource-management/item-16-match-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/02-resource-management/item-16-match-new-delete.mdx`
