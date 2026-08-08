@@ -11032,6 +11032,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppPublicInheritanceMap: module0.EcppPublicInheritanceMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-33-avoid-hiding-inherited-names-lab");
+      return {
+        EcppNameLookupMap: module0.EcppNameLookupMap,
+        EcppItem33NameLookupLab: module0.EcppItem33NameLookupLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance":
     async () => {
       const module0 =
