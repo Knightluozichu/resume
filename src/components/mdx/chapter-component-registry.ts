@@ -10735,6 +10735,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppLanguageFederationMap: module0.EcppLanguageFederationMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/00-accustoming/item-02-const-enum-inline": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-02-const-enum-inline-lab");
+    return {
+      EcppConstEnumInlineMap: module0.EcppConstEnumInlineMap,
+      EcppItem02ConstEnumInlineLab: module0.EcppItem02ConstEnumInlineLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/00-accustoming/item-03-use-const": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-03-use-const-lab");
