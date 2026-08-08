@@ -10827,6 +10827,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem11SelfAssignmentMap: module0.EcppItem11SelfAssignmentMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/01-special-members/item-12-copy-all-parts": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-12-copy-all-parts-lab");
+    return {
+      EcppItem12CopyAllPartsLab: module0.EcppItem12CopyAllPartsLab,
+      EcppItem12CopyAllPartsMap: module0.EcppItem12CopyAllPartsMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/02-resource-management/item-15-raw-resource-access":
     async () => {
       const module0 =
