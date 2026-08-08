@@ -3,104 +3,285 @@ title: "2.4 JDBC的诞生"
 type: B
 section: "码农翻身（2018年第1版）"
 order: 22
-description: "2.4 JDBC的诞生：从“每个数据库驱动暴露完全不同调用方式”推进到“统一接口与工厂选择具体驱动”，用专属机制图、实验和故障诊断验证。"
+description: "从各数据库各说各话走到 JDBC 统一接口，用谈判、工厂、驱动、参数和事务追踪一次安全查询。"
 demo: true
 math: true
 sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=52126"
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crv18-section-02-04
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Crv18Section0204EvidenceDiagram,
+  Crv18Section0204JdbcLab,
+  Crv18Section0204JdbcDiagram,
+} from "@/components/mdx/coder-revolution/diagrams/crv18-section-02-04-diagram";
 
-## 为什么需要这一机制
+<Objectives>
 
-2.4 JDBC的诞生 不能停在故事类比。真实系统要解决的变化是从 **每个数据库驱动暴露完全不同调用方式** 到 **统一接口与工厂选择具体驱动**；可执行机制是：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
+- 能沿配置、工厂、DataSource、Connection、PreparedStatement 和 ResultSet 追踪一次 JDBC 查询
+- 能用统一接口、面向接口编程、简单工厂和工厂方法解释应用如何隔离具体数据库驱动
+- 能在正常、边界和单一故障样本中定位参数注入、连接泄漏、驱动不匹配和事务提交错误
 
-对 2.4 JDBC的诞生 的验收从同一份最小输入开始，先预测 取得连接、准备语句、绑定参数、读取结果、提交关闭 各自会看到什么，再运行正常、边界和故障场景。故事帮助记住矛盾，状态、协议、类型、构建或反馈证据才决定解释是否成立。
+</Objectives>
 
+## 2.4 JDBC的诞生
 
-## 核心合同
+本页依据刘欣《码农翻身》（2018 年第 1 版）及出版社公开书目信息，独立重构 **2.4 JDBC的诞生**。正文、代码、图示、实验和练习都是本课程重新设计的教学材料，不复制原书正文、插图、练习答案或代码。
 
-$$
-transaction = begin + statements + commit\;|\;rollback
-$$
+数据库厂商各自拥有协议、类型和连接方式，应用如果直接调用每家 API，就会被实现细节锁住。JDBC 的关键不是“把所有数据库变成一样”，而是定义一组稳定的接口和责任：驱动负责翻译，`DataSource` 负责获得连接，`Connection` 负责事务边界，`PreparedStatement` 负责参数化语句，`ResultSet` 负责游标式读取。应用依赖接口，具体驱动由配置和工厂选择。
 
-在 2.4 JDBC的诞生 中，公式或状态表达式里的量必须绑定到具体对象、单位、版本或生命周期。先给基线输入算出预期，再逐步观察；如果最终结果碰巧相同，但中途已违反 绑定参数 或 读取结果，仍应拒绝该实现。
+<Crv18Section0204JdbcDiagram />
 
-## 目录节点到机制证据
+## 三个会让 JDBC 抽象失真的陷阱
 
-### 2.4 JDBC的诞生
+<Callout type="trap" title="把统一接口当成统一语义">
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **2.4 JDBC的诞生** 对应“取得连接”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
+- **现象**：同一条 SQL 在不同数据库的类型、分页、隔离级别或错误码上表现不同，应用却只依赖方法名。
+- **原因**：接口统一了调用形状，不会抹掉方言、驱动版本和数据库约束差异。
+- **修法**：记录数据库、驱动、SQL 方言、事务隔离和错误映射；对跨库能力定义最小共同合同。
 
-复核 **2.4 JDBC的诞生** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“取得连接”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+</Callout>
+
+<Callout type="trap" title="把连接取得成功当成资源管理完成">
+
+- **现象**：查询结束后连接没有归还池，压力上升后新请求全部等待或超时。
+- **原因**：Connection、Statement、ResultSet 的生命周期没有嵌套关闭，异常路径遗漏释放。
+- **修法**：用 try-with-resources 或等价 finally 合同，记录池借出/归还、事务状态和关闭异常。
+
+</Callout>
+
+<Callout type="trap" title="把工厂选择当成安全边界">
+
+- **现象**：配置字符串决定驱动和 URL，用户输入又被拼进 SQL，团队却说“用了 JDBC 所以安全”。
+- **原因**：驱动选择、连接凭据、参数绑定和权限授权属于不同边界。
+- **修法**：工厂只选择可信实现；查询使用 PreparedStatement，凭据来自受控配置，连接账号遵循最小权限。
+
+</Callout>
+
+## 七个目录节点到接口证据
 
 ### 谈判
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **谈判** 对应“准备语句”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
-
-复核 **谈判** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“准备语句”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+<Term def="应用与数据库厂商围绕连接、语句、结果、类型和错误共同约定一套可调用的最小契约。">
+  谈判
+</Term>
+不是让所有数据库失去特色，而是确定应用必须依赖的共同能力。接口名称、参数类型、资源关闭和异常传播要稳定；方言能力则通过扩展或明确降级表达。
 
 ### 统一接口
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **统一接口** 对应“绑定参数”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
-
-复核 **统一接口** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“绑定参数”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+<Term def="用 Driver/DataSource、Connection、PreparedStatement 和 ResultSet 等抽象承载关系数据库访问的共同调用形状。">
+  统一接口
+</Term>
+让业务代码不必直接知道每家驱动的类名。但接口调用仍有状态：连接可能在事务中，语句可能已关闭，结果集必须按游标读取。把接口当成无状态函数会隐藏资源和时序错误。
 
 ### 面向接口编程
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **面向接口编程** 对应“读取结果”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
-
-复核 **面向接口编程** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“读取结果”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+<Term def="业务逻辑依赖 JDBC 接口和自己的端口，而不是依赖某个数据库驱动的具体类，从而可以替换实现并隔离测试。">
+  面向接口编程
+</Term>
+把驱动选择放在组合根或工厂边界。测试可以注入假的
+DataSource，生产环境注入真实池；替换实现仍要验证 SQL 方言、事务和错误语义。
 
 ### 简单工厂
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **简单工厂** 对应“提交关闭”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
-
-复核 **简单工厂** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“提交关闭”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+<Term def="读取受控配置并创建某一种 DataSource、ConnectionProvider 或驱动适配对象的集中选择点。">
+  简单工厂
+</Term>
+适合把“选择哪种实现”从业务代码中移走。它不应把任意类名和凭据交给外部输入，也不应在每次查询中随意创建连接；配置校验、池生命周期和失败诊断属于工厂合同。
 
 ### 数据驱动
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **数据驱动** 对应“取得连接”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
-
-复核 **数据驱动** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“取得连接”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+<Term def="由具体数据库驱动把 JDBC 调用翻译成目标数据库协议、类型和错误的实现层。">
+  数据驱动
+</Term>
+是真正面对数据库差异的地方。驱动版本、数据库版本、字符编码、时区、TLS
+和错误映射都可能影响行为；应用要保存驱动身份和连接参数摘要，不能把接口层日志当成全部事实。
 
 ### 工厂方法
 
-在 **2.4 JDBC的诞生** 中，目录坐标 **工厂方法** 对应“准备语句”这一步。它不是故事情节的复述，而是要求读者解释：JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界。
+<Term def="把创建连接、语句或数据源的步骤延迟到可替换的创建方法，使调用方只依赖抽象且可注入不同生命周期管理。">
+  工厂方法
+</Term>
+适合区分单元测试、池化生产连接、只读连接和事务连接。创建策略改变时，必须重新验证关闭、超时、隔离和回滚；“能
+new 出对象”不等于生命周期合同成立。
 
-复核 **工厂方法** 时，为 2.4 JDBC的诞生 固定一个最小输入，先写出预期状态和输出，再改变与“准备语句”直接相连的一个条件。若出现“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，应记录最早偏离的节点、拒绝结果以及恢复后的重放结果。
+### 2.4 JDBC的诞生
 
-## 最小可重放实现
+**2.4 JDBC的诞生**的结果是一条可替换但不失真的访问链：共同接口负责形状，工厂负责选择，驱动负责翻译，连接负责事务，参数化语句负责输入边界，结果集负责读取。抽象减少耦合，却把驱动、资源和事务的验证责任变得更明确。
 
-```text
-// 2.4 JDBC的诞生：接口行为与运行时边界一起验证
-var baseline = runCase("baseline");
-assertContract(baseline);
-var rejected = runCase("fault");
-assertTrue(rejected.isRejected());
-assertEquals(baseline, resetAndRun());
+## 最小 JDBC 访问合同
+
+```java
+interface QueryPort {
+  List<String> findNames(DataSource dataSource, String prefix) throws SQLException;
+}
+
+final class JdbcQuery implements QueryPort {
+  public List<String> findNames(DataSource dataSource, String prefix) throws SQLException {
+    String sql = "SELECT name FROM account WHERE name LIKE ? ORDER BY name";
+    try (Connection connection = dataSource.getConnection();
+         PreparedStatement statement = connection.prepareStatement(sql)) {
+      statement.setString(1, prefix + "%");
+      try (ResultSet result = statement.executeQuery()) {
+        List<String> names = new ArrayList<>();
+        while (result.next()) names.add(result.getString("name"));
+        return names;
+      }
+    }
+  }
+}
 ```
 
-这段实现草图只表达 2.4 JDBC的诞生 的验证合同，不复制书中叙事或代码。实际运行时应保存输入、环境、每个节点状态、最终结果和复位结果，使另一位读者能够从干净状态重放。
+这里的 `?` 是输入边界，try-with-resources 是资源边界，`DataSource` 是实现替换边界。若要执行多条写入，先明确 `setAutoCommit(false)`、提交、回滚和异常传播；查询成功不自动意味着业务事务已经完成。
 
-## 专属因果实验
+## 四步复核一次 JDBC 调用
 
-先预测改变一个控制量后，2.4 JDBC的诞生 的哪一节点最先变化。依次切换基线、边界和注入故障，保存一次轨迹；随后点击“重置实验”，确认控件、节点选择、压力值和状态文本全部恢复。
+<Stepper>
 
+<Step title="1. 谈判：固定共同能力和数据库差异">
 
-## 故障诊断
+列出目标数据库、驱动版本、支持的 SQL、类型、隔离级别和错误映射。把必须跨库的能力放进接口，把方言能力标成显式扩展。
 
+<Crv18Section0204JdbcDiagram />
 
-## 术语与边界
+</Step>
 
-2.4 JDBC的诞生 使用五个可验证术语：、、、、。术语若不能指向本页实验中的控件、节点或状态，就仍然只是目录名词。
+<Step title="2. 用工厂创建受控 DataSource">
 
+校验配置、凭据、URL、池大小和超时。测试环境注入替身或嵌入数据库，生产环境由工厂方法获得池化数据源，业务代码不直接 new 驱动类。
+
+<Crv18Section0204EvidenceDiagram />
+
+</Step>
+
+<Step title="3. 参数化查询并读取结果">
+
+记录 SQL 模板、参数类型、绑定顺序、行数和游标关闭。用恶意前缀、空结果、大结果和类型边界验证 PreparedStatement 没有拼接输入。
+
+<Crv18Section0204JdbcLab />
+
+</Step>
+
+<Step title="4. 对齐事务、关闭与恢复">
+
+对多条写入注入异常，检查回滚；对连接池施加压力，检查借出/归还；对驱动或数据库断开，记录异常映射和重试条件。修复后从干净连接池重放。
+
+<Crv18Section0204EvidenceDiagram />
+
+</Step>
+
+</Stepper>
+
+<Crv18Section0204JdbcLab />
+
+## 正常、边界与单一故障证据
+
+<Crv18Section0204EvidenceDiagram />
+
+| 样本     | 只改变的变量                       | 预期判定                    | 必存证据                         |
+| -------- | ---------------------------------- | --------------------------- | -------------------------------- |
+| 正常     | 驱动、配置、参数和资源生命周期匹配 | 查询结果正确，资源归还      | 驱动、SQL 模板、参数类型、池状态 |
+| 边界     | 空值、大结果、超时或事务冲突       | 明确结果/异常，连接仍可复用 | 行数、游标、超时、事务状态       |
+| 单一故障 | 驱动断开、参数非法或提交失败       | 拒绝/回滚且关闭资源         | 异常映射、借还记录、重放结果     |
+
+## 故障诊断：先分清接口、驱动和资源层
+
+1. **配置层**：检查工厂选择、URL、驱动版本、凭据来源和最小权限；没有连接前不要把问题归咎于 SQL。
+2. **接口层**：检查参数类型、绑定顺序、SQL 模板、游标和关闭顺序；PreparedStatement 仍需要正确的类型与语义。
+3. **驱动/数据库层**：检查方言、字符集、时区、隔离级别、错误码和服务器日志；接口异常只是入口。
+4. **资源/事务层**：检查连接借出与归还、自动提交、提交/回滚和重试；连接泄漏与数据错误要分开定位。
+
+如果同一业务在替身 DataSource 成功、真实驱动失败，先比较驱动和数据库合同；如果查询结果正确但池耗尽，先找关闭路径；如果写入重复，先找自动提交与重试幂等性。JDBC 通过必须同时覆盖输入、实现和生命周期。
+
+## 最小 JDBC 证据包与反例
+
+证据包包含工厂配置摘要、DataSource/驱动身份、连接池参数、SQL 模板、参数类型与脱敏值、结果行数、游标状态、事务模式、提交/回滚、异常映射、借出/归还和重试记录。不要把密码或完整敏感值写入日志，但要保留能区分一次请求的 ID。
+
+反例一是把用户输入拼进 SQL 导致注入或类型错误；反例二是异常路径没有关闭 ResultSet/Statement/Connection，压力测试后池被耗尽；反例三是自动提交与业务重试共同造成重复写入。每次只改一个边界并从干净连接池重放。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="谈判">
+    应用与数据库厂商共同确定连接、语句、结果、类型和错误的最小契约。
+  </GlossaryItem>
+  <GlossaryItem term="统一接口">
+    用 JDBC 抽象承载不同关系数据库共同调用形状与资源状态。
+  </GlossaryItem>
+  <GlossaryItem term="面向接口编程">
+    业务依赖接口并在组合根注入具体数据源或驱动实现。
+  </GlossaryItem>
+  <GlossaryItem term="简单工厂">
+    根据受控配置集中选择并创建 DataSource 或连接适配对象。
+  </GlossaryItem>
+  <GlossaryItem term="数据驱动">
+    把 JDBC 调用翻译为目标数据库协议、类型和错误的具体实现。
+  </GlossaryItem>
+  <GlossaryItem term="工厂方法">
+    延迟和替换创建连接、语句或数据源的生命周期策略。
+  </GlossaryItem>
+</Glossary>
+
+## 练习
+
+<Exercises>
+
+**问题 1：** 为什么 `PreparedStatement` 比字符串拼接更适合作为 JDBC 输入边界？还需要检查什么？
+
+<Answer>
+
+参数化把值与 SQL 结构分开，减少注入风险并保留类型绑定；仍要检查参数顺序、类型、权限、方言和结果处理。它不能替代业务授权，也不能保证 SQL 逻辑本身正确。
+
+</Answer>
+
+**问题 2：** 连接池在高压下耗尽，但数据库查询都返回正确。你会先看哪些记录？
+
+<Answer>
+
+比较每次借出与归还、ResultSet/Statement/Connection 的关闭、异常路径、事务是否仍打开、池大小和超时。用固定并发与失败注入重放，确认修复归还路径后池可以恢复，而不是简单扩大池。
+
+</Answer>
+
+**问题 3：** 同一套接口换了数据库驱动后，事务隔离和错误码表现不同。如何保持面向接口编程不自欺？
+
+<Answer>
+
+把共同能力和方言能力分开，记录驱动/数据库版本、隔离选择和错误映射；为接口合同建立跨驱动测试，对不支持的能力明确拒绝或降级。接口隐藏类名，不隐藏语义差异。
+
+</Answer>
+
+</Exercises>
+
+<Attribution
+  sources={[
+    {
+      label: "本书版本与目录范围依据：中国电子工业出版社《码农翻身》书目页",
+      url: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=52126",
+    },
+    {
+      label: "JDBC 接口、连接与资源管理边界参考：Java 官方 JDBC 教程",
+      url: "https://docs.oracle.com/javase/tutorial/jdbc/basics/",
+    },
+    {
+      label: "作者公开文章与技术写作范围交叉核对：刘欣博客",
+      url: "https://liuxiaochen.blog.csdn.net/",
+    },
+  ]}
+  note="本页仅使用公开书目信息、Java JDBC 官方教程与作者公开写作范围作为边界；正文、代码、图示、实验和练习均为独立重写。"
+  license="出版社公开书目信息与 Java JDBC 教程链接；教学内容为本项目独立创作。"
+/>
 
 ## 本页小结
 
-2.4 JDBC的诞生 的关键不是记住故事，而是能解释“JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界”。完成标准是用本页合同推出预期，沿五个专属节点观察实际，诊断“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”，并证明复位后的同一输入重新得到基线轨迹。
-
-
+2.4 JDBC的诞生的关键不是“一个接口解决所有数据库问题”，而是把谈判、统一接口、接口编程、工厂、驱动、参数和事务边界分开验证。完成标准是能追踪一次安全查询，解释驱动差异，并在异常、池耗尽和重试场景下证明资源与数据都能恢复。
