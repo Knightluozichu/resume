@@ -4056,6 +4056,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Crv18Section0306BackendLab: module0.Crv18Section0306BackendLab,
     } as ChapterMdxComponents;
   },
+  "coder-revolution/39-section-03-07/crv18-section-03-07": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-07-diagram");
+    return {
+      Crv18Section0307EvidenceDiagram: module0.Crv18Section0307EvidenceDiagram,
+      Crv18Section0307FunctionDiagram: module0.Crv18Section0307FunctionDiagram,
+      Crv18Section0307FunctionLab: module0.Crv18Section0307FunctionLab,
+    } as ChapterMdxComponents;
+  },
   "coder-revolution/42-section-03-10/crv18-section-03-10": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-10-diagram");
