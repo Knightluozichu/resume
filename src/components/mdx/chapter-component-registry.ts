@@ -11108,6 +11108,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppMultipleInheritanceMap: module0.EcppMultipleInheritanceMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-41-template-implicit-interfaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-41-template-implicit-interfaces");
+      return {
+        EcppItem41ImplicitInterfaceLab: module0.EcppItem41ImplicitInterfaceLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/06-templates-generic-programming/item-44-factor-template-parameter-independent-code":
     async () => {
       const module0 =
