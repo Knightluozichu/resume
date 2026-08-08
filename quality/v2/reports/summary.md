@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T06:07:55.924Z；旧版分数不迁移。
+> 2026-08-08T06:14:29.586Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2360
+- failed：2359
 - queued：401
-- passed：1111
+- passed：1112
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -57,16 +57,16 @@
 | 44 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
 | 45 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
 | 46 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 47 | coder-revolution | 62 | 19 | 0 | 43 | 57 |
-| 48 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 49 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 50 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 51 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
-| 52 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 53 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 54 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
-| 55 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 56 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 47 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 48 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 49 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 50 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
+| 51 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 52 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 53 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
+| 54 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 55 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 56 | coder-revolution | 62 | 18 | 0 | 44 | 54 |
 | 57 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 58 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 59 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
