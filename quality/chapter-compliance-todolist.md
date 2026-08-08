@@ -639,7 +639,7 @@
     - 路径：`content/effective-cpp/00-accustoming/item-04-initialize-objects.mdx`
 - [x] ✅ **01-special-members/item-10-assignment-return-this** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/01-special-members/item-10-assignment-return-this.mdx`
-- [ ] 🟡 P3 **03-designs-declarations/item-20-pass-by-reference-to-const** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **03-designs-declarations/item-20-pass-by-reference-to-const** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const.mdx`
 - [ ] 🟡 P3 **03-designs-declarations/item-21-return-object-not-reference** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/03-designs-declarations/item-21-return-object-not-reference.mdx`

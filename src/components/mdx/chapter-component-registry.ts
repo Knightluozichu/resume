@@ -10768,6 +10768,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppResourceAccessFormsMap: module0.EcppResourceAccessFormsMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-20-parameter-passing-lab");
+      return {
+        EcppItem20ParameterLab: module0.EcppItem20ParameterLab,
+        EcppParameterPassingMap: module0.EcppParameterPassingMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-22-private-data-members":
     async () => {
       const module0 =
