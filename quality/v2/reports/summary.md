@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T05:15:45.345Z；旧版分数不迁移。
+> 2026-08-08T05:22:42.066Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2367
+- failed：2366
 - queued：401
-- passed：1104
+- passed：1105
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -26,10 +26,10 @@
 | 13 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 14 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
 | 15 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
-| 16 | coder-revolution | 62 | 26 | 0 | 36 | 78 |
-| 17 | fluent-python | 26 | 26 | 0 | 0 | 78 |
-| 18 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
-| 19 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 16 | fluent-python | 26 | 26 | 0 | 0 | 78 |
+| 17 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
+| 18 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 19 | coder-revolution | 62 | 25 | 0 | 37 | 75 |
 | 20 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
 | 21 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
 | 22 | programmers-math | 25 | 25 | 0 | 0 | 75 |
