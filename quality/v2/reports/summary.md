@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T07:25:37.714Z；旧版分数不迁移。
+> 2026-08-08T07:32:34.446Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2350
+- failed：2349
 - queued：401
-- passed：1121
+- passed：1122
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -127,10 +127,10 @@
 | 114 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 115 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 116 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 117 | coder-revolution | 62 | 9 | 0 | 53 | 27 |
-| 118 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 119 | ai-agent | 9 | 9 | 0 | 0 | 9 |
-| 120 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 117 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 118 | ai-agent | 9 | 9 | 0 | 0 | 9 |
+| 119 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 120 | coder-revolution | 62 | 8 | 0 | 54 | 24 |
 | 121 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
 | 122 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 123 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
