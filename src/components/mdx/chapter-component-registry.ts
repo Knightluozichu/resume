@@ -10841,6 +10841,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EfcFinalReviewLab: module0.EfcFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/05-inheritance-object-oriented-design/item-32-public-inheritance-is-a":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-32-public-inheritance-lab");
+      return {
+        EcppItem32PublicInheritanceLab: module0.EcppItem32PublicInheritanceLab,
+        EcppPublicInheritanceMap: module0.EcppPublicInheritanceMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
