@@ -10865,6 +10865,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppResourceAccessFormsMap: module0.EcppResourceAccessFormsMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/02-resource-management/item-16-match-new-delete": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-16-match-new-delete");
+    return {
+      EcppItem16MatchNewDeleteLab: module0.EcppItem16MatchNewDeleteLab,
+      EcppItem16ProtocolMap: module0.EcppItem16ProtocolMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const":
     async () => {
       const module0 =
