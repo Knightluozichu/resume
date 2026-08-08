@@ -10744,6 +10744,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         EcppConversionPolicyDecisionMap:
           module0.EcppConversionPolicyDecisionMap,
+        EcppItem24ConversionLab: module0.EcppItem24ConversionLab,
         EcppMemberConversionAsymmetryMap:
           module0.EcppMemberConversionAsymmetryMap,
         EcppNonMemberCandidateFlowMap: module0.EcppNonMemberCandidateFlowMap,
