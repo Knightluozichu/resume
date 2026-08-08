@@ -790,7 +790,7 @@
     - 路径：`content/code-complete-2e/35-code-tuning-strategies/cc2e-25-code-tuning-strategies.mdx`
 - [ ] 🔴 P1 **36-code-tuning-techniques/cc2e-26-code-tuning-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques.mdx`
-- [ ] 🔴 P1 **38-program-size/cc2e-27-program-size** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **38-program-size/cc2e-27-program-size** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/38-program-size/cc2e-27-program-size.mdx`
 - [ ] 🔴 P1 **39-managing-construction/cc2e-28-managing-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/39-managing-construction/cc2e-28-managing-construction.mdx`

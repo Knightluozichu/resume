@@ -3929,6 +3929,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e23DebuggingMechanismLab: module0.Cc2e23DebuggingMechanismLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/38-program-size/cc2e-27-program-size": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-27-program-size");
+    return {
+      Cc2e27ProgramSizeActivityLab: module0.Cc2e27ProgramSizeActivityLab,
+      Cc2e27ProgramSizeNetworkLab: module0.Cc2e27ProgramSizeNetworkLab,
+      Cc2e27ProgramSizeRecoveryLab: module0.Cc2e27ProgramSizeRecoveryLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
