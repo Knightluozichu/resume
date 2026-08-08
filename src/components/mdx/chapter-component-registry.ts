@@ -10869,6 +10869,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppStaticBindingMap: module0.EcppStaticBindingMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-37-default-parameter-lab");
+      return {
+        EcppDefaultParameterMap: module0.EcppDefaultParameterMap,
+        EcppItem37DefaultParameterLab: module0.EcppItem37DefaultParameterLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =

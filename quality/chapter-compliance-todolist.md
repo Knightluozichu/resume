@@ -653,7 +653,7 @@
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance.mdx`
 - [x] ✅ **05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual.mdx`
-- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters.mdx`
 - [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-38-composition-has-a** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-38-composition-has-a.mdx`
