@@ -675,7 +675,7 @@
     - 路径：`content/effective-cpp/00-accustoming/item-01-language-federation.mdx`
 - [x] ✅ **00-accustoming/item-02-const-enum-inline** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/00-accustoming/item-02-const-enum-inline.mdx`
-- [ ] 🟡 P3 **01-special-members/item-05-compiler-generated-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **01-special-members/item-05-compiler-generated-functions** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/01-special-members/item-05-compiler-generated-functions.mdx`
 - [ ] 🟡 P3 **01-special-members/item-06-disallow-generated-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/01-special-members/item-06-disallow-generated-functions.mdx`

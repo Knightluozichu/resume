@@ -10764,6 +10764,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EfcLearningMapLab: module0.EfcLearningMapLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/01-special-members/item-05-compiler-generated-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-05-compiler-generated-lab");
+      return {
+        EcppCompilerGeneratedMap: module0.EcppCompilerGeneratedMap,
+        EcppItem05CompilerGeneratedLab: module0.EcppItem05CompilerGeneratedLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/01-special-members/item-10-assignment-return-this":
     async () => {
       const module0 =
