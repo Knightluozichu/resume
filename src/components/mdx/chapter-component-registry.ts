@@ -11042,6 +11042,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EcppItem34InterfaceImplementationLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-35-virtual-function-alternatives":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-35-virtual-alternatives-lab");
+      return {
+        EcppVirtualAlternativesMap: module0.EcppVirtualAlternativesMap,
+        EcppItem35VirtualAlternativesLab:
+          module0.EcppItem35VirtualAlternativesLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual":
     async () => {
       const module0 =
