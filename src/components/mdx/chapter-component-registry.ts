@@ -11144,6 +11144,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppTemplateFactoringMap: module0.EcppTemplateFactoringMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-45-member-function-templates-compatible-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-45-member-function-templates-compatible-types");
+      return {
+        EcppItem45CompatibilityLab: module0.EcppItem45CompatibilityLab,
+        EcppItem45CompatibilityMap: module0.EcppItem45CompatibilityMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/06-templates-generic-programming/item-46-nonmember-functions-inside-templates":
     async () => {
       const module0 =
