@@ -10887,6 +10887,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem38CompositionLab: module0.EcppItem38CompositionLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-39-private-inheritance-lab");
+      return {
+        EcppItem39PrivateInheritanceLab:
+          module0.EcppItem39PrivateInheritanceLab,
+        EcppPrivateInheritanceMap: module0.EcppPrivateInheritanceMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =

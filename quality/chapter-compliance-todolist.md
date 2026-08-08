@@ -657,7 +657,7 @@
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-37-never-redefine-default-parameters.mdx`
 - [x] ✅ **05-inheritance-object-oriented-design/item-38-composition-has-a** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-38-composition-has-a.mdx`
-- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-39-private-inheritance-judiciously.mdx`
 - [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-40-multiple-inheritance-judiciously** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-40-multiple-inheritance-judiciously.mdx`
