@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ecpp3-16
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,14 +20,24 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import {
+  EcppItem16MatchNewDeleteLab,
+  EcppItem16ProtocolMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-16-match-new-delete";
 
 <Objectives>
 
 - 能解释 new/delete 与 new[]/delete[] 在元素构造、array cookie、逆序析构和 deallocation 上的协议差异
 - 能分析并识别 typedef、raw factory 与 allocator family 隐藏的释放形式，并改为 vector/array/typed owner
-- 能设计 destructor ledger、sanitizer 与跨模块测试，验证每个分配入口使用匹配 deleter 和参数
+- 能回答：给定 `new`、`new[]`、`malloc` 和跨模块 factory，如何为每个入口选择匹配 deleter 并用测试证据证明它
 
 </Objectives>
+
+猜一猜：把 `new Widget[4]` 改成 `delete`，哪一条释放证据会先失真——元素析构次数、array cookie，还是 allocator family？
+
+<EcppItem16ProtocolMap />
+
+<EcppItem16MatchNewDeleteLab />
 
 ## 从“pointer 类型为什么看不出数组”开始
 
@@ -39,17 +53,22 @@ delete single;
 delete[] many;
 ```
 
-<Term def="new-expression 创建一个对象，delete-expression 销毁一个对象并释放对应存储的协议。">single-object allocation form</Term>
+<Term def="new-expression 创建一个对象，delete-expression 销毁一个对象并释放对应存储的协议。">
+  single-object allocation form
+</Term>
 
-<Term def="new[] 创建多个元素，delete[] 必须销毁全部元素并使用数组释放入口的协议。">array allocation form</Term>
+<Term def="new[] 创建多个元素，delete[] 必须销毁全部元素并使用数组释放入口的协议。">
+  array allocation form
+</Term>
 
 Item 16 要求 Use the same form in corresponding uses of new and delete（成对使用相同形式的 new 和 delete）。
 简化成审计规则就是 same form in new and delete：单对象、数组、对齐、C heap 与平台 allocator 都必须从创建入口追踪到同家族释放入口。
 
-
 ## 数组需要知道析构多少元素
 
-<Term def="部分 new[] 实现在返回 pointer 前保存的数组元素数量或其他元数据。">array cookie</Term>
+<Term def="部分 new[] 实现在返回 pointer 前保存的数组元素数量或其他元数据。">
+  array cookie
+</Term>
 
 delete[] 需要逐个调用非平凡 destructor，典型实现通过 cookie 找到数量。标准不规定具体布局，但程序必须使用匹配表达式。
 
@@ -65,7 +84,9 @@ delete[] probes;
 assert(Probe::alive == 0);
 ```
 
-<Term def="对数组每个已构造元素按逆序执行析构的过程。">element-wise destruction</Term>
+<Term def="对数组每个已构造元素按逆序执行析构的过程。">
+  element-wise destruction
+</Term>
 
 错误 `delete probes` 是未定义行为，可能只析构一个元素、读取错误 cookie 或传错 deallocator。
 
@@ -78,7 +99,9 @@ assert(Probe::alive == 0);
 
 ## delete[] 也负责构造失败回滚
 
-<Term def="new[] 构造第 N 个元素失败时，已构造元素自动逆序析构并释放整块存储的保证。">partial-array construction cleanup</Term>
+<Term def="new[] 构造第 N 个元素失败时，已构造元素自动逆序析构并释放整块存储的保证。">
+  partial-array construction cleanup
+</Term>
 
 ```cpp
 class Element {
@@ -94,7 +117,9 @@ public:
 
 new[] expression 自己管理回滚。手工 malloc 加 placement new 数组则必须自行记录已构造数量并在异常时逆序清理。
 
-<Term def="在原始存储指定地址上显式开始对象生命周期、不会分配存储的构造形式。">placement construction</Term>
+<Term def="在原始存储指定地址上显式开始对象生命周期、不会分配存储的构造形式。">
+  placement construction
+</Term>
 
 这属于低层容器实现，不能和普通 new[] 混为一谈。
 
@@ -109,7 +134,9 @@ std::string* lines = new AddressLines;
 delete[] lines; // 必须知道 typedef 是数组
 ```
 
-<Term def="别名名称不显示底层为数组，使调用点难以判断 delete 形式的问题。">hidden array type</Term>
+<Term def="别名名称不显示底层为数组，使调用点难以判断 delete 形式的问题。">
+  hidden array type
+</Term>
 
 不要对数组类型 typedef 后暴露 raw new/delete。现代写：
 
@@ -118,13 +145,17 @@ using AddressLines = std::array<std::string, 4>;
 auto lines = std::make_unique<AddressLines>();
 ```
 
-<Term def="把固定数量元素直接封装为值类型并自动管理生命周期的标准容器。">std::array value</Term>
+<Term def="把固定数量元素直接封装为值类型并自动管理生命周期的标准容器。">
+  std::array value
+</Term>
 
 调用方只销毁一个 AddressLines 对象，内部数组由其 destructor 正确处理。
 
 ## 动态序列优先 vector
 
-<Term def="拥有动态连续元素、记录 size/capacity 并自动构造析构的标准值容器。">vector ownership</Term>
+<Term def="拥有动态连续元素、记录 size/capacity 并自动构造析构的标准值容器。">
+  vector ownership
+</Term>
 
 ```cpp
 std::vector<Widget> widgets(10);
@@ -132,15 +163,21 @@ std::vector<Widget> widgets(10);
 
 比 `new Widget[10]` 多提供 size、迭代器、异常安全和移动。大多数应用代码无需直接数组 new。
 
-<Term def="由容器成员管理资源，外层代码不显式使用 new/delete 的设计。">container-managed lifetime</Term>
+<Term def="由容器成员管理资源，外层代码不显式使用 new/delete 的设计。">
+  container-managed lifetime
+</Term>
 
 把 Item 16 从运行时纪律变成类型保证。
 
 ## unique_ptr 单对象与数组特化
 
-<Term def="默认 deleter 使用 delete 的独占单对象 owner，并提供解引用和箭头。">unique_ptr single form</Term>
+<Term def="默认 deleter 使用 delete 的独占单对象 owner，并提供解引用和箭头。">
+  unique_ptr single form
+</Term>
 
-<Term def="默认 deleter 使用 delete[] 的独占数组 owner，并提供下标访问。">unique_ptr array form</Term>
+<Term def="默认 deleter 使用 delete[] 的独占数组 owner，并提供下标访问。">
+  unique_ptr array form
+</Term>
 
 ```cpp
 auto singleOwner = std::make_unique<Widget>();
@@ -149,14 +186,17 @@ auto arrayOwner = std::make_unique<Widget[]>(10);
 
 类型不同，deleter 与 API 不同。不能把 `new Widget[10]` 放进 `unique_ptr<Widget>`。
 
-
-<Term def="owner 类型本身携带单对象、数组或 custom deleter 的释放形式。">typed deallocation protocol</Term>
+<Term def="owner 类型本身携带单对象、数组或 custom deleter 的释放形式。">
+  typed deallocation protocol
+</Term>
 
 让错误在构造 owner 时暴露，而不是销毁时。
 
 ## make_unique 避免裸 new 窗口
 
-<Term def="分配并构造对象后直接返回正确 unique_ptr 类型的标准 factory。">make_unique</Term>
+<Term def="分配并构造对象后直接返回正确 unique_ptr 类型的标准 factory。">
+  make_unique
+</Term>
 
 ```cpp
 auto image = std::make_unique<Image>(width, height);
@@ -165,13 +205,17 @@ auto pixels = std::make_unique<Pixel[]>(count);
 
 减少重复类型和 raw pointer 暴露；异常路径自动清理。
 
-<Term def="资源已由 new 获取但尚未交给 owner、异常可能造成泄漏的短暂代码区间。">unowned allocation window</Term>
+<Term def="资源已由 new 获取但尚未交给 owner、异常可能造成泄漏的短暂代码区间。">
+  unowned allocation window
+</Term>
 
 Item 17 会继续讨论函数实参求值中的这一风险。
 
 ## malloc/free 是另一分配家族
 
-<Term def="C heap 只分配和释放原始字节、不自动开始或结束 C++ 对象生命周期的 API。">malloc/free family</Term>
+<Term def="C heap 只分配和释放原始字节、不自动开始或结束 C++ 对象生命周期的 API。">
+  malloc/free family
+</Term>
 
 ```cpp
 void* memory = std::malloc(bytes);
@@ -182,10 +226,11 @@ std::free(memory);
 
 不能 `delete memory`，也不能 `free(new T)`。
 
-<Term def="资源必须由与创建入口同一协议家族的释放函数归还。">allocator-family pairing</Term>
+<Term def="资源必须由与创建入口同一协议家族的释放函数归还。">
+  allocator-family pairing
+</Term>
 
 不仅是括号匹配，还包括 API/heap/参数。
-
 
 ## custom deleter 编码外部协议
 
@@ -197,30 +242,40 @@ struct FreeDeleter {
 using MallocBuffer = std::unique_ptr<void, FreeDeleter>;
 ```
 
-<Term def="由智能 owner 保存并在析构时调用，确保使用正确释放入口的函数对象。">custom deleter</Term>
+<Term def="由智能 owner 保存并在析构时调用，确保使用正确释放入口的函数对象。">
+  custom deleter
+</Term>
 
 平台资源同理：`fopen/fclose`、`CreateFile/CloseHandle`、GPU create/destroy。
 
-<Term def="由平台 API 创建并要求特定 destroy/release 函数结束生命周期的资源。">external allocation family</Term>
+<Term def="由平台 API 创建并要求特定 destroy/release 函数结束生命周期的资源。">
+  external allocation family
+</Term>
 
 factory 应直接返回带 deleter 的 owner。
 
 ## aligned allocation 还要匹配参数
 
-<Term def="以超出默认 new 对齐的 alignment 请求分配存储的 C++ 分配形式。">over-aligned allocation</Term>
+<Term def="以超出默认 new 对齐的 alignment 请求分配存储的 C++ 分配形式。">
+  over-aligned allocation
+</Term>
 
 ```cpp
 void* memory = ::operator new(bytes, std::align_val_t{64});::
 operator delete(memory, std::align_val_t{64});
 ```
 
-<Term def="释放函数需要收到与分配入口一致的 alignment、size 或 placement 参数。">deallocation-parameter pairing</Term>
+<Term def="释放函数需要收到与分配入口一致的 alignment、size 或 placement 参数。">
+  deallocation-parameter pairing
+</Term>
 
 编译器生成 delete-expression 会选择正确 overload；手工 operator new/delete 调用必须自己配对。Item 51/52 会深入 custom new/delete。
 
 ## 跨模块 allocator
 
-<Term def="对象在一个 DLL/共享库 heap 创建，却在另一个不兼容 heap 释放的错误。">cross-module heap mismatch</Term>
+<Term def="对象在一个 DLL/共享库 heap 创建，却在另一个不兼容 heap 释放的错误。">
+  cross-module heap mismatch
+</Term>
 
 库导出 raw pointer 并让调用方 delete 可能跨 CRT。安全接口导出配对 destroy：
 
@@ -231,7 +286,9 @@ extern "C" void destroy_object(ApiObject*) noexcept;
 
 调用方用 custom deleter 回到创建模块。
 
-<Term def="资源由创建模块提供的函数释放，以保持 allocator、ABI 和版本一致的规则。">creator-owned deallocation</Term>
+<Term def="资源由创建模块提供的函数释放，以保持 allocator、ABI 和版本一致的规则。">
+  creator-owned deallocation
+</Term>
 
 这是 allocator-family pairing 的模块级形式。
 
@@ -244,7 +301,9 @@ extern "C" void destroy_object(ApiObject*) noexcept;
 
 ## API 不应返回模糊 raw array
 
-<Term def="函数只返回 T*，调用方无法从类型知道长度、ownership 和 delete 形式的接口。">ambiguous raw allocation API</Term>
+<Term def="函数只返回 T*，调用方无法从类型知道长度、ownership 和 delete 形式的接口。">
+  ambiguous raw allocation API
+</Term>
 
 ```cpp
 Widget* makeWidgets(std::size_t count); // 谁拥有？delete 还是 delete[]？
@@ -252,7 +311,9 @@ Widget* makeWidgets(std::size_t count); // 谁拥有？delete 还是 delete[]？
 
 替代：返回 vector、unique_ptr array 加 count、span borrow，或 caller-provided buffer。
 
-<Term def="返回 owner 和元素数量，使数组释放和范围信息同时明确的结果类型。">sized array owner</Term>
+<Term def="返回 owner 和元素数量，使数组释放和范围信息同时明确的结果类型。">
+  sized array owner
+</Term>
 
 ```cpp
 struct WidgetArray {
@@ -265,7 +326,9 @@ struct WidgetArray {
 
 ## 形式匹配审计
 
-<Term def="追踪每个分配入口到 owner/deleter、元素数量、模块和最终释放入口的检查。">allocation-pair audit</Term>
+<Term def="追踪每个分配入口到 owner/deleter、元素数量、模块和最终释放入口的检查。">
+  allocation-pair audit
+</Term>
 
 先预测：`new Probe[4]` 配 `delete` 时 destructor ledger 会剩多少；不要在主进程依赖 UB 结果，使用 sanitizer 子测试。
 
