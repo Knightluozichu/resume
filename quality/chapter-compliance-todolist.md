@@ -736,13 +736,13 @@
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
-- [ ] 🔴 P1 **50-review/cc2e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+- [x] ✅ **50-review/cc2e-official-final-review** — 已修复（2026-08-09，score 48→100，passed）
     - 路径：`content/code-complete-2e/50-review/cc2e-official-final-review.mdx`
-- [ ] 🔴 P1 **07-construction-world/cc2e-01-construction-world** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **07-construction-world/cc2e-01-construction-world** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/07-construction-world/cc2e-01-construction-world.mdx`
-- [ ] 🔴 P1 **08-software-metaphors/cc2e-02-software-metaphors** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **08-software-metaphors/cc2e-02-software-metaphors** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors.mdx`
-- [ ] 🔴 P1 **09-prerequisites/cc2e-03-prerequisites** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **09-prerequisites/cc2e-03-prerequisites** — 已修复（2026-08-09，score 43→97，passed）
     - 路径：`content/code-complete-2e/09-prerequisites/cc2e-03-prerequisites.mdx`
 - [ ] 🔴 P1 **10-construction-decisions/cc2e-04-construction-decisions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/10-construction-decisions/cc2e-04-construction-decisions.mdx`
