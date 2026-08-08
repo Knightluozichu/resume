@@ -643,7 +643,7 @@
     - 路径：`content/effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const.mdx`
 - [x] ✅ **03-designs-declarations/item-21-return-object-not-reference** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/03-designs-declarations/item-21-return-object-not-reference.mdx`
-- [ ] 🟡 P3 **04-implementations/item-28-avoid-internal-handles** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **04-implementations/item-28-avoid-internal-handles** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/04-implementations/item-28-avoid-internal-handles.mdx`
 - [ ] 🟡 P3 **04-implementations/item-29-exception-safe-code** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/04-implementations/item-29-exception-safe-code.mdx`

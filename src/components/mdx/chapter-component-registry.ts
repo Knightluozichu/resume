@@ -10817,6 +10817,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/04-implementations/item-28-avoid-internal-handles":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-28-internal-handles-lab");
+      return {
+        EcppInternalHandlesMap: module0.EcppInternalHandlesMap,
+        EcppItem28InternalHandlesLab: module0.EcppItem28InternalHandlesLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/04-misc/final-review": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-final-review-lab");
