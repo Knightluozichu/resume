@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T00:06:48.079Z；旧版分数不迁移。
+> 2026-08-08T00:13:36.957Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2412
+- failed：2411
 - queued：401
-- passed：1059
+- passed：1060
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -129,9 +129,9 @@
 | 116 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
 | 117 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 118 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 119 | pragmatic-programmer | 71 | 9 | 0 | 62 | 27 |
-| 120 | ai-agent | 9 | 9 | 0 | 0 | 9 |
-| 121 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 119 | ai-agent | 9 | 9 | 0 | 0 | 9 |
+| 120 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 121 | pragmatic-programmer | 71 | 8 | 0 | 63 | 24 |
 | 122 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
 | 123 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 124 | effective-cpp | 57 | 0 | 57 | 0 | 57 |
