@@ -10768,6 +10768,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/04-misc/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/efc-final-review-lab");
+    return {
+      EfcFinalReviewLab: module0.EfcFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/08-miscellaneous/item-53-compiler-warnings": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-53-compiler-warnings");
