@@ -10961,16 +10961,6 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem25SwapResolutionMap: module0.EcppItem25SwapResolutionMap,
       } as ChapterMdxComponents;
     },
-  "effective-cpp/04-implementations/item-27-minimize-casting": async () => {
-    const module0 =
-      await import("@/components/mdx/effective-cpp/diagrams/item-27-minimize-casting");
-    return {
-      EcppBaseSubobjectAdjustmentMap: module0.EcppBaseSubobjectAdjustmentMap,
-      EcppCastFreeDispatchDecisionMap: module0.EcppCastFreeDispatchDecisionMap,
-      EcppItem27CastLab: module0.EcppItem27CastLab,
-      EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
-    } as ChapterMdxComponents;
-  },
   "effective-cpp/04-implementations/item-26-postpone-variable-definitions":
     async () => {
       const module0 =
@@ -10982,6 +10972,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppVariableScopeDecisionMap: module0.EcppVariableScopeDecisionMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/04-implementations/item-27-minimize-casting": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-27-minimize-casting");
+    return {
+      EcppBaseSubobjectAdjustmentMap: module0.EcppBaseSubobjectAdjustmentMap,
+      EcppCastFreeDispatchDecisionMap: module0.EcppCastFreeDispatchDecisionMap,
+      EcppItem27CastLab: module0.EcppItem27CastLab,
+      EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/04-implementations/item-28-avoid-internal-handles":
     async () => {
       const module0 =
