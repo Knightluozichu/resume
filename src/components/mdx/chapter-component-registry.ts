@@ -10897,6 +10897,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppPrivateInheritanceMap: module0.EcppPrivateInheritanceMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-40-multiple-inheritance-judiciously":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-40-multiple-inheritance-lab");
+      return {
+        EcppItem40MultipleInheritanceLab:
+          module0.EcppItem40MultipleInheritanceLab,
+        EcppMultipleInheritanceMap: module0.EcppMultipleInheritanceMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
