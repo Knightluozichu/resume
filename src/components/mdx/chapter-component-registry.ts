@@ -11239,6 +11239,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppWarningLifecycleMap: module0.EcppWarningLifecycleMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/08-miscellaneous/item-54-standard-library-tr1": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-54-standard-library-tr1");
+    return {
+      EcppItem54LibraryLab: module0.EcppItem54LibraryLab,
+      EcppStandardLibraryMap: module0.EcppStandardLibraryMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/08-miscellaneous/item-55-familiarize-boost": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-55-familiarize-boost");
