@@ -625,7 +625,7 @@
     - 路径：`content/effective-cpp/08-miscellaneous/item-53-compiler-warnings.mdx`
 - [x] ✅ **04-implementations/item-27-minimize-casting** — 已修复（2026-08-08，score 71→100，passed）
     - 路径：`content/effective-cpp/04-implementations/item-27-minimize-casting.mdx`
-- [ ] 🟡 P3 **00-intro/learning-map** — 未升级 v2、可视化不足、UX 不足（score 69）
+- [x] ✅ **00-intro/learning-map** — 已修复（2026-08-08，score 69→100，passed）
     - 路径：`content/effective-cpp/00-intro/learning-map.mdx`
 - [ ] 🟡 P3 **04-misc/final-review** — 未升级 v2、可视化不足、UX 不足（score 69）
     - 路径：`content/effective-cpp/04-misc/final-review.mdx`
