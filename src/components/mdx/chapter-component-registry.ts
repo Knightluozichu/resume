@@ -3891,6 +3891,44 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e19GeneralControlIssuesComplexityLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/30-software-quality-landscape/cc2e-20-software-quality-landscape":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-20-software-quality-landscape");
+      return {
+        Cc2e20SoftwareQualityLandscapeLab:
+          module0.Cc2e20SoftwareQualityLandscapeLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/31-collaborative-construction/cc2e-21-collaborative-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-21-collaborative-construction");
+      return {
+        Cc2e21CollaborativeConstructionPracticeLab:
+          module0.Cc2e21CollaborativeConstructionPracticeLab,
+        Cc2e21CollaborativeConstructionInspectionLab:
+          module0.Cc2e21CollaborativeConstructionInspectionLab,
+        Cc2e21CollaborativeConstructionComparisonLab:
+          module0.Cc2e21CollaborativeConstructionComparisonLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/32-developer-testing/cc2e-22-developer-testing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-22-developer-testing");
+      return {
+        Cc2e22DeveloperTestingMechanismLab:
+          module0.Cc2e22DeveloperTestingMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/33-debugging/cc2e-23-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-23-debugging");
+    return {
+      Cc2e23DebuggingMechanismLab: module0.Cc2e23DebuggingMechanismLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");

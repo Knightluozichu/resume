@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T17:57:35.813Z；旧版分数不迁移。
+> 2026-08-08T18:14:44.662Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2320
+- failed：2316
 - queued：344
-- passed：1140
+- passed：1144
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -19,13 +19,13 @@
 | 6 | lua-programming | 35 | 35 | 0 | 0 | 105 |
 | 7 | unity-shaderlab | 35 | 35 | 0 | 0 | 105 |
 | 8 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
-| 9 | code-complete-2e | 51 | 30 | 0 | 21 | 90 |
-| 10 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
-| 11 | windows-journey | 29 | 29 | 0 | 0 | 87 |
-| 12 | out-of-control | 28 | 28 | 0 | 0 | 84 |
-| 13 | design-patterns | 27 | 27 | 0 | 0 | 81 |
-| 14 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
-| 15 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 9 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
+| 10 | windows-journey | 29 | 29 | 0 | 0 | 87 |
+| 11 | out-of-control | 28 | 28 | 0 | 0 | 84 |
+| 12 | design-patterns | 27 | 27 | 0 | 0 | 81 |
+| 13 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
+| 14 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
+| 15 | code-complete-2e | 51 | 26 | 0 | 25 | 78 |
 | 16 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 17 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 18 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
