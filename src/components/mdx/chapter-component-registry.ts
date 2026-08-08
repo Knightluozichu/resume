@@ -3743,6 +3743,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e03ReadinessEvidenceMap: module0.Cc2e03ReadinessEvidenceMap,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/50-review/cc2e-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
+    return {
+      Cc2eOfficialFinalReviewContractLab:
+        module0.Cc2eOfficialFinalReviewContractLab,
+      Cc2eOfficialFinalReviewFailureTraceLab:
+        module0.Cc2eOfficialFinalReviewFailureTraceLab,
+      Cc2eOfficialFinalReviewReleaseGateLab:
+        module0.Cc2eOfficialFinalReviewReleaseGateLab,
+    } as ChapterMdxComponents;
+  },
   "coder-revolution/00-map/crv18-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map-diagram");
