@@ -4113,6 +4113,20 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e35MoreInformationLab: module0.Cc2e35MoreInformationLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/48-references/cc2e-references": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-references");
+    return {
+      Cc2eReferencesLab: module0.Cc2eReferencesLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/49-index/cc2e-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-index");
+    return {
+      Cc2eIndexLab: module0.Cc2eIndexLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");

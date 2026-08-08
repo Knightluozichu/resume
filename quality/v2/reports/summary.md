@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T19:47:00.495Z；旧版分数不迁移。
+> 2026-08-08T19:53:19.499Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2292
+- failed：2290
 - queued：344
-- passed：1168
+- passed：1170
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -131,36 +131,36 @@
 | 118 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
 | 119 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
 | 120 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
-| 121 | code-complete-2e | 51 | 2 | 0 | 49 | 6 |
-| 122 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 123 | taocp | 30 | 0 | 30 | 0 | 30 |
-| 124 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
-| 125 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
-| 126 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
-| 127 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
-| 128 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
-| 129 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 130 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 131 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
-| 132 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
-| 133 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 134 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
-| 135 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
-| 136 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
-| 137 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
-| 138 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
-| 139 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
-| 140 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
-| 141 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
-| 142 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
-| 143 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
-| 144 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
-| 145 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
-| 146 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
-| 147 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
-| 148 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
-| 149 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
-| 150 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
+| 121 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
+| 122 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 123 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
+| 124 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
+| 125 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
+| 126 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
+| 127 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
+| 128 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
+| 129 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 130 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 131 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
+| 132 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
+| 133 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
+| 134 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
+| 135 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |
+| 136 | android-advanced-light | 13 | 0 | 0 | 13 | 0 |
+| 137 | android-art-exploration | 17 | 0 | 0 | 17 | 0 |
+| 138 | android-component-arch | 11 | 0 | 0 | 11 | 0 |
+| 139 | android-design-patterns | 14 | 0 | 0 | 14 | 0 |
+| 140 | android-perf-optimization | 11 | 0 | 0 | 11 | 0 |
+| 141 | architecture-domain-design | 13 | 0 | 0 | 13 | 0 |
+| 142 | art-of-unix-programming | 33 | 0 | 0 | 33 | 0 |
+| 143 | auto-why-car-runs | 14 | 0 | 0 | 0 | 0 |
+| 144 | automotive-systems-specialization | 13 | 0 | 0 | 0 | 0 |
+| 145 | autosar-vehicle-controller | 13 | 0 | 0 | 0 | 0 |
+| 146 | beginning-cpp-game-programming | 23 | 0 | 0 | 23 | 0 |
+| 147 | big-nerd-ranch-guide | 34 | 0 | 0 | 34 | 0 |
+| 148 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
+| 149 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
+| 150 | code-complete-2e | 51 | 0 | 0 | 51 | 0 |
 | 151 | coder-revolution | 62 | 0 | 0 | 62 | 0 |
 | 152 | coding-interviews | 81 | 0 | 0 | 0 | 0 |
 | 153 | competitive-algorithms | 6 | 0 | 0 | 6 | 0 |

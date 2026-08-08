@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌2 ⚠️0 ✅49）
+## code-complete-2e（51 章 · ❌0 ⚠️0 ✅51）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -832,9 +832,9 @@
     - 路径：`content/code-complete-2e/37-system-considerations/cc2e-part-06-system-considerations.mdx`
 - [x] ✅ **42-software-craftsmanship/cc2e-part-07-software-craftsmanship** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/42-software-craftsmanship/cc2e-part-07-software-craftsmanship.mdx`
-- [ ] 🔴 P1 **48-references/cc2e-references** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **48-references/cc2e-references** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/48-references/cc2e-references.mdx`
-- [ ] 🔴 P1 **49-index/cc2e-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **49-index/cc2e-index** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/49-index/cc2e-index.mdx`
 
 ## math-girl（50 章 · ❌50 ⚠️0 ✅0）
