@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T06:22:46.151Z；旧版分数不迁移。
+> 2026-08-08T06:29:51.755Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2358
+- failed：2357
 - queued：401
-- passed：1113
+- passed：1114
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -76,13 +76,13 @@
 | 63 | effective-java | 17 | 17 | 0 | 0 | 73 |
 | 64 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
 | 65 | blender-3d | 17 | 17 | 0 | 0 | 51 |
-| 66 | coder-revolution | 62 | 17 | 0 | 45 | 51 |
-| 67 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 68 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 69 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 70 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 71 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 72 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 66 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 67 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 68 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 69 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 70 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 71 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 72 | coder-revolution | 62 | 16 | 0 | 46 | 48 |
 | 73 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
 | 74 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
 | 75 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
