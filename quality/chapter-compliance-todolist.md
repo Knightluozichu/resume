@@ -393,7 +393,7 @@
     - 路径：`content/pragmatic-programmer/19-topic-14-domain-languages/tpp20-topic-14-domain-languages.mdx`
 - [x] ✅ **20-topic-15-estimating/tpp20-topic-15-estimating** — 已修复（2026-08-08，score 42→95，passed）
     - 路径：`content/pragmatic-programmer/20-topic-15-estimating/tpp20-topic-15-estimating.mdx`
-- [ ] 🔴 P1 **21-chapter-03-basic-tools/tpp20-chapter-03-basic-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **21-chapter-03-basic-tools/tpp20-chapter-03-basic-tools** — 已修复（2026-08-08，score 42→94，passed）
     - 路径：`content/pragmatic-programmer/21-chapter-03-basic-tools/tpp20-chapter-03-basic-tools.mdx`
 - [x] ✅ **22-topic-16-power-plain-text/tpp20-topic-16-power-plain-text** — 已修复（2026-08-08，score 42→96，passed）
     - 路径：`content/pragmatic-programmer/22-topic-16-power-plain-text/tpp20-topic-16-power-plain-text.mdx`
