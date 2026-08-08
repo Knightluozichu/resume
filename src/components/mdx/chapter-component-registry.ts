@@ -3726,14 +3726,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2eConstructionWorldEvidenceLab,
       } as ChapterMdxComponents;
     },
-  "code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors": async () => {
-    const module0 =
-      await import("@/components/mdx/code-complete-2e/v2/cc2e-02-software-metaphors");
-    return {
-      Cc2e02SoftwareMetaphorsMechanismLab:
-        module0.Cc2e02SoftwareMetaphorsMechanismLab,
-    } as ChapterMdxComponents;
-  },
+  "code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-02-software-metaphors");
+      return {
+        Cc2e02SoftwareMetaphorsMechanismLab:
+          module0.Cc2e02SoftwareMetaphorsMechanismLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/09-prerequisites/cc2e-03-prerequisites": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/cc2e-03-prerequisites");
