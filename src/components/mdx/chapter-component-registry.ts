@@ -10850,6 +10850,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppPublicInheritanceMap: module0.EcppPublicInheritanceMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-34-interface-implementation-lab");
+      return {
+        EcppInterfaceImplementationMap: module0.EcppInterfaceImplementationMap,
+        EcppItem34InterfaceImplementationLab:
+          module0.EcppItem34InterfaceImplementationLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =

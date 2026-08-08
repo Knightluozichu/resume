@@ -649,7 +649,7 @@
     - 路径：`content/effective-cpp/04-implementations/item-29-exception-safe-code.mdx`
 - [x] ✅ **05-inheritance-object-oriented-design/item-32-public-inheritance-is-a** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-32-public-inheritance-is-a.mdx`
-- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-34-interface-vs-implementation-inheritance.mdx`
 - [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual.mdx`
