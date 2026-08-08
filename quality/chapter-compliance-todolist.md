@@ -707,13 +707,13 @@
     - 路径：`content/effective-cpp/04-implementations/item-26-postpone-variable-definitions.mdx`
 - [x] ✅ **04-implementations/item-30-inline-ins-and-outs** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/04-implementations/item-30-inline-ins-and-outs.mdx`
-- [ ] 🟡 P3 **04-implementations/item-31-minimize-compilation-dependencies** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-implementations/item-31-minimize-compilation-dependencies** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/04-implementations/item-31-minimize-compilation-dependencies.mdx`
-- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-33-avoid-hiding-inherited-names.mdx`
-- [ ] 🟡 P3 **05-inheritance-object-oriented-design/item-35-virtual-function-alternatives** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **05-inheritance-object-oriented-design/item-35-virtual-function-alternatives** — 已修复（2026-08-08，score 59→95，passed）
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-35-virtual-function-alternatives.mdx`
-- [ ] 🟡 P3 **06-templates-generic-programming/item-41-template-implicit-interfaces** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-templates-generic-programming/item-41-template-implicit-interfaces** — 已修复（2026-08-08，score 59→98，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-41-template-implicit-interfaces.mdx`
 - [ ] 🟡 P3 **06-templates-generic-programming/item-42-typename-two-meanings** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-42-typename-two-meanings.mdx`
