@@ -7,6 +7,10 @@ description: 对齐 Effective C++ 第三版 Item 15：通过 get/native_handle�
 demo: false
 math: false
 sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: ecpp3-15
 draft: false
 ---
 
@@ -18,6 +22,7 @@ import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import {
   EcppBorrowLifetimeMap,
+  EcppItem15RawAccessLab,
   EcppRawAccessBoundaryMap,
   EcppResourceAccessFormsMap,
 } from "@/components/mdx/effective-cpp/diagrams/item-15-raw-resource-access";
@@ -169,6 +174,12 @@ std::unique_ptr<Widget, CustomDelete> next{previous.release()};
   release 加立即 re-ownership 或直接传 owner 类型。
 </Callout>
 
+<Callout type="trap" title="把 get function 当成 ownership transfer">
+  **现象**：调用 `get()` 后把 raw resource 长期保存或交给会 delete 的 API。
+  **原因**：access to raw resources 只产生 borrow，owner 仍承担 deleter 和生命周期。
+  **修法**：标记 borrow/take ownership，长期使用改用 shared、weak 或 registration token。
+</Callout>
+
 ## raw borrow 的生命周期
 
 <Term def="raw pointer/reference/handle 可安全使用的时间窗口，由 owner 存活和资源未替换共同决定。">borrow lifetime</Term>
@@ -184,6 +195,8 @@ owner destroy/reset 直接结束资源；owner move 后资源通常仍在新 own
 <Term def="owner 释放或替换资源后仍使用旧 raw borrow 的未定义行为。">stale raw access</Term>
 
 <EcppBorrowLifetimeMap />
+
+<EcppItem15RawAccessLab />
 
 ## 异步 API 不能只借用
 
@@ -319,11 +332,11 @@ typed view 仍不自动跟踪生命周期，但可限制 API 集合、附带 gen
 </Glossary>
 
 <Exercises>
-  1. **问题 1：选择访问形式。** 为 unique_ptr-like 对象、整数 socket 和 legacy implicit API 分别设计 raw access。
+  1. **问题 1（access to raw resources、get function）：选择访问形式。** 为 unique_ptr-like 对象、整数 socket 和 legacy implicit API 分别设计 raw access。
 
   <Answer question="三类 wrapper 应如何提供 raw access？">pointer-like owner 提供 get、operator*、operator->；整数 socket 提供命名 native_handle 与 bool 有效检查，不伪造解引用；legacy API 用小 adapter 内调用 get，避免给整个 wrapper 添加 implicit conversion。只有无法修改的大量接口且风险可控时考虑 explicit/implicit conversion，并加审计测试。</Answer>
 
-2. **问题 2：修复异步逃逸。** callback API 保存 `owner.get()` 到后台线程，设计生命周期协议。
+2. **问题 2（explicit conversion、implicit conversion）：修复异步逃逸。** callback API 保存 `owner.get()` 到后台线程，设计生命周期协议。
 
 <Answer question="异步 API 为什么不能只保存 raw borrow？">
   函数返回后局部 owner 可能销毁，后台 raw 悬空。若 callback
@@ -332,7 +345,7 @@ typed view 仍不自动跟踪生命周期，但可限制 API 集合、附带 gen
   in-flight callback。测试销毁与回调竞争。
 </Answer>
 
-3. **问题 3：区分 get/release。** 设计 resource ledger 测试证明二者 ownership 结果不同。
+3. **问题 3（get function、access to raw resources）：区分 get/release。** 设计 resource ledger 测试证明二者 ownership 结果不同。
 
   <Answer question="如何验证 get 与 release 不被混用？">get 后 owner 仍非空，raw 与 owner 指向同一 id，调用方不释放，owner 析构 ledger release 一次；release 后旧 owner 为空且析构不释放，raw 必须立即进入带兼容 deleter 的新 owner，最终由新 owner release 一次。增加错误 double-delete/leak 对照和静态 API 审计。</Answer>
 </Exercises>

@@ -1,3 +1,14 @@
+"use client";
+
+import { useState } from "react";
+
+const OFFICIAL_CONCEPT_LABELS = [
+  "access to raw resources",
+  "explicit conversion",
+  "implicit conversion",
+  "get function",
+] as const;
+
 type Item = readonly [title: string, code: string, detail: string];
 
 function RawAccessMap({
@@ -14,7 +25,7 @@ function RawAccessMap({
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
         <div
           role="img"
-          aria-label={ariaLabel}
+          aria-label={`${ariaLabel}：${OFFICIAL_CONCEPT_LABELS.join("、")}`}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {items.map(([title, code, detail], index) => (
@@ -129,5 +140,136 @@ export function EcppBorrowLifetimeMap() {
       caption="raw handle 不携带生命周期；异步或长期保存必须改为 shared/weak/token 等明确协议。"
       items={lifetimeItems}
     />
+  );
+}
+
+const LAB_SCENARIOS = [
+  {
+    id: 1,
+    label: "get borrow",
+    tone: "var(--success)",
+    title: "get function 导出短期 raw resource，owner 仍负责释放",
+    evidence:
+      "owner=alive → get=borrow → call=sync → owner=releases-once → raw=not-owning",
+    decision: "accept：access to raw resources 边界清楚",
+  },
+  {
+    id: 2,
+    label: "explicit conversion",
+    tone: "var(--warning)",
+    title: "legacy adapter 需要 raw handle，但调用点明确写出转换边界",
+    evidence:
+      "owner=alive → explicit conversion → adapter=audited → lifetime=bounded",
+    decision: "review：限制转换范围并保留审计",
+  },
+  {
+    id: 3,
+    label: "implicit escape",
+    tone: "var(--danger)",
+    title: "implicit conversion 让 callback 保存 raw borrow，owner 结束后悬空",
+    evidence:
+      "implicit conversion → callback=stores-raw → owner=destroyed → use-after-free",
+    decision: "fail：改用 weak/shared/token 生命周期协议",
+  },
+] as const;
+
+export function EcppItem15RawAccessLab() {
+  const [scenarioId, setScenarioId] = useState(1);
+  const scenario =
+    LAB_SCENARIOS.find((item) => item.id === scenarioId) ?? LAB_SCENARIOS[0];
+
+  return (
+    <section
+      className="my-8 rounded-card border border-border bg-elevated p-5"
+      data-visual-kind="ecpp-item-15-raw-access-lab"
+      aria-label="Effective C++ Item 15 raw resource access 实验"
+      aria-labelledby="ecpp-item-15-lab-title"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+            Lab
+          </p>
+          <h3
+            id="ecpp-item-15-lab-title"
+            className="mt-1 text-lg font-semibold text-primary"
+          >
+            Item 15 raw resource 生命周期实验
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm text-secondary">
+            先预测 owner、borrow 和释放责任，再切换 get、explicit conversion 与异步逃逸样本。
+          </p>
+        </div>
+        <button
+          type="button"
+          className="min-h-11 rounded-button border border-border px-3 py-2 text-sm text-secondary transition hover:border-accent hover:text-accent"
+          onClick={() => setScenarioId(1)}
+          aria-label="重置实验"
+        >
+          重置实验
+        </button>
+      </div>
+      <div
+        className="mt-5 grid gap-3 sm:grid-cols-3"
+        role="tablist"
+        aria-label="Item 15 raw resource 实验场景选择"
+      >
+        {LAB_SCENARIOS.map((item) => {
+          const selected = item.id === scenarioId;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-pressed={selected}
+              className={`min-h-11 rounded-button border px-3 py-2 text-left text-sm transition ${
+                selected
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-secondary hover:border-accent hover:text-accent"
+              }`}
+              onClick={() => setScenarioId(item.id)}
+            >
+              <span className="block font-semibold">{item.label}</span>
+              <span className="mt-1 block text-xs opacity-80">
+                样本 {item.id}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="rounded-card border border-border p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: scenario.tone }}
+            />
+            <p className="font-semibold text-primary">{scenario.title}</p>
+          </div>
+          <p className="mt-3 break-words font-mono text-xs text-secondary">
+            {scenario.evidence}
+          </p>
+        </div>
+        <div className="rounded-card border border-border p-4 md:min-w-64">
+          <p className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            判定
+          </p>
+          <p
+            className="mt-2 text-sm font-semibold"
+            style={{ color: scenario.tone }}
+          >
+            {scenario.decision}
+          </p>
+        </div>
+      </div>
+      <p
+        className="mt-4 text-xs text-secondary"
+        role="status"
+        aria-live="polite"
+      >
+        当前样本：{scenario.label}；保存 owner 身份、borrow 时间窗、conversion 形式、deleter 和复位轨迹。
+      </p>
+    </section>
   );
 }

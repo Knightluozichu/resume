@@ -10733,6 +10733,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         await import("@/components/mdx/effective-cpp/diagrams/item-15-raw-resource-access");
       return {
         EcppBorrowLifetimeMap: module0.EcppBorrowLifetimeMap,
+        EcppItem15RawAccessLab: module0.EcppItem15RawAccessLab,
         EcppRawAccessBoundaryMap: module0.EcppRawAccessBoundaryMap,
         EcppResourceAccessFormsMap: module0.EcppResourceAccessFormsMap,
       } as ChapterMdxComponents;
