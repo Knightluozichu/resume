@@ -667,7 +667,7 @@
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-46-nonmember-functions-inside-templates.mdx`
 - [x] ✅ **06-templates-generic-programming/item-47-traits-classes-type-information** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-47-traits-classes-type-information.mdx`
-- [ ] 🟡 P3 **06-templates-generic-programming/item-48-template-metaprogramming-awareness** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **06-templates-generic-programming/item-48-template-metaprogramming-awareness** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-48-template-metaprogramming-awareness.mdx`
 - [ ] 🟡 P3 **07-customizing-new-delete/item-51-conventions-writing-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete.mdx`

@@ -10934,6 +10934,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppTraitsInformationMap: module0.EcppTraitsInformationMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-48-template-metaprogramming-awareness":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-48-tmp-lab");
+      return {
+        EcppItem48TmpLab: module0.EcppItem48TmpLab,
+        EcppTmpMap: module0.EcppTmpMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
