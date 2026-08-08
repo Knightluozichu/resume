@@ -10826,6 +10826,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem28InternalHandlesLab: module0.EcppItem28InternalHandlesLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/04-implementations/item-29-exception-safe-code": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-29-exception-safe-lab");
+    return {
+      EcppExceptionGuaranteeMap: module0.EcppExceptionGuaranteeMap,
+      EcppItem29ExceptionSafeLab: module0.EcppItem29ExceptionSafeLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/04-misc/final-review": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-final-review-lab");
