@@ -10916,6 +10916,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppTemplateFactoringMap: module0.EcppTemplateFactoringMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-46-nonmember-functions-inside-templates":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-46-hidden-friend-lab");
+      return {
+        EcppHiddenFriendConversionMap: module0.EcppHiddenFriendConversionMap,
+        EcppItem46HiddenFriendLab: module0.EcppItem46HiddenFriendLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
