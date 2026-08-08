@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T06:14:29.586Z；旧版分数不迁移。
+> 2026-08-08T06:22:46.151Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2359
+- failed：2358
 - queued：401
-- passed：1112
+- passed：1113
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -66,17 +66,17 @@
 | 53 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
 | 54 | unity5 | 18 | 18 | 0 | 0 | 64 |
 | 55 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 56 | coder-revolution | 62 | 18 | 0 | 44 | 54 |
-| 57 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 58 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 59 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 60 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 61 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
-| 62 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 63 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
-| 64 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 65 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 66 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 56 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 57 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 58 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 59 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 60 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
+| 61 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 62 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
+| 63 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 64 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 65 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 66 | coder-revolution | 62 | 17 | 0 | 45 | 51 |
 | 67 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
 | 68 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
 | 69 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
