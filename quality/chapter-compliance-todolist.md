@@ -729,7 +729,7 @@
     - 路径：`content/effective-cpp/08-miscellaneous/item-54-standard-library-tr1.mdx`
 - [ ] 🟡 P3 **08-miscellaneous/item-55-familiarize-boost** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/08-miscellaneous/item-55-familiarize-boost.mdx`
-- [ ] 🟡 P3 **02-resource-management/item-13-resource-managing-objects** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 58）
+- [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
 ## code-complete-2e（51 章 · ❌51 ⚠️0 ✅0）
