@@ -469,7 +469,7 @@
     - 路径：`content/pragmatic-programmer/59-topic-48-essence-agility/tpp20-topic-48-essence-agility.mdx`
 - [x] ✅ **60-chapter-09-pragmatic-projects/tpp20-chapter-09-pragmatic-projects** — 已修复（2026-08-08，score 42→94，passed）
     - 路径：`content/pragmatic-programmer/60-chapter-09-pragmatic-projects/tpp20-chapter-09-pragmatic-projects.mdx`
-- [ ] 🔴 P1 **61-topic-49-pragmatic-teams/tpp20-topic-49-pragmatic-teams** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **61-topic-49-pragmatic-teams/tpp20-topic-49-pragmatic-teams** — 已修复（2026-08-08，score 42→92，passed）
     - 路径：`content/pragmatic-programmer/61-topic-49-pragmatic-teams/tpp20-topic-49-pragmatic-teams.mdx`
 - [ ] 🔴 P1 **62-topic-50-coconuts-dont-cut-it/tpp20-topic-50-coconuts-dont-cut-it** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/pragmatic-programmer/62-topic-50-coconuts-dont-cut-it/tpp20-topic-50-coconuts-dont-cut-it.mdx`
