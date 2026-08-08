@@ -11180,6 +11180,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppTmpMap: module0.EcppTmpMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/07-customizing-new-delete/item-49-understand-new-handler":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-49-new-handler-lab");
+      return {
+        EcppItem49NewHandlerLab: module0.EcppItem49NewHandlerLab,
+        EcppNewHandlerFlowMap: module0.EcppNewHandlerFlowMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete":
     async () => {
       const module0 =
