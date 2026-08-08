@@ -10777,6 +10777,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppParameterPassingMap: module0.EcppParameterPassingMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-21-return-object-not-reference":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-21-return-object-lab");
+      return {
+        EcppItem21ReturnObjectLab: module0.EcppItem21ReturnObjectLab,
+        EcppReturnObjectMap: module0.EcppReturnObjectMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-22-private-data-members":
     async () => {
       const module0 =
