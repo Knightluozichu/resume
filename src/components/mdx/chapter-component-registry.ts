@@ -3713,6 +3713,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2eOfficialLearningMapTraceLab: module0.Cc2eOfficialLearningMapTraceLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/07-construction-world/cc2e-01-construction-world":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-01-construction-world-labs");
+      return {
+        Cc2eConstructionWorldActivityLab:
+          module0.Cc2eConstructionWorldActivityLab,
+        Cc2eConstructionWorldBoundaryLab:
+          module0.Cc2eConstructionWorldBoundaryLab,
+        Cc2eConstructionWorldEvidenceLab:
+          module0.Cc2eConstructionWorldEvidenceLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-02-software-metaphors");
