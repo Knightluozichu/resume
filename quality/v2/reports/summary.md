@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T07:03:58.928Z；旧版分数不迁移。
+> 2026-08-08T07:11:16.196Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2353
+- failed：2352
 - queued：401
-- passed：1118
+- passed：1119
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -120,13 +120,13 @@
 | 107 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
 | 108 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
 | 109 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 110 | coder-revolution | 62 | 12 | 0 | 50 | 36 |
-| 111 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 112 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 113 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 114 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 115 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 116 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 110 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 111 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 112 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 113 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 114 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 115 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 116 | coder-revolution | 62 | 11 | 0 | 51 | 33 |
 | 117 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 118 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 119 | ai-agent | 9 | 9 | 0 | 0 | 9 |
