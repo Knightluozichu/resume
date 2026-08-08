@@ -16846,6 +16846,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic50CoconutsDontCutItLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/63-topic-51-starter-kit/tpp20-topic-51-starter-kit":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-51-starter-kit-diagram");
+      return {
+        Tpp20Topic51StarterKitEvidenceDiagram:
+          module0.Tpp20Topic51StarterKitEvidenceDiagram,
+        Tpp20Topic51StarterKitLab: module0.Tpp20Topic51StarterKitLab,
+        Tpp20Topic51StarterKitLoopDiagram:
+          module0.Tpp20Topic51StarterKitLoopDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
