@@ -3750,6 +3750,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Crv18Section0103ReliabilityDiagram,
     } as ChapterMdxComponents;
   },
+  "coder-revolution/06-section-01-04/crv18-section-01-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-04-diagram");
+    return {
+      Crv18Section0104EvidenceDiagram: module0.Crv18Section0104EvidenceDiagram,
+      Crv18Section0104Lab: module0.Crv18Section0104Lab,
+      Crv18Section0104PipelineDiagram: module0.Crv18Section0104PipelineDiagram,
+    } as ChapterMdxComponents;
+  },
   "coder-revolution/07-section-01-05/crv18-section-01-05": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-05-diagram");
