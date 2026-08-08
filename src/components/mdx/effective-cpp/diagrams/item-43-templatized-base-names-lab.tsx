@@ -24,8 +24,10 @@ const STRATEGIES: readonly Strategy[] = [
   {
     id: "unqualified",
     label: "未限定调用",
-    definition: "definition context：名称不依赖 Company，dependent base 不在此处展开。",
-    instantiation: "CompanyA 到达实例化时已经太晚：模板定义阶段就拒绝了 sendClear。",
+    definition:
+      "definition context：名称不依赖 Company，dependent base 不在此处展开。",
+    instantiation:
+      "CompanyA 到达实例化时已经太晚：模板定义阶段就拒绝了 sendClear。",
     dispatch: "没有形成可调用表达式",
     code: "sendClear(info)",
     result: "错误：primary template 的成员不能替 specialization 做保证。",
@@ -33,8 +35,10 @@ const STRATEGIES: readonly Strategy[] = [
   {
     id: "this",
     label: "this->",
-    definition: "definition context：this 的类型依赖 Company，调用被标记为 dependent name。",
-    instantiation: "CompanyA 找到 sendClear；CompanyZ 在真实 specialization 边界失败。",
+    definition:
+      "definition context：this 的类型依赖 Company，调用被标记为 dependent name。",
+    instantiation:
+      "CompanyA 找到 sendClear；CompanyZ 在真实 specialization 边界失败。",
     dispatch: "保留 virtual dispatch",
     code: "this->sendClear(info)",
     result: "当前对象的接口语义仍可让更深 derived override 接管。",
@@ -42,8 +46,10 @@ const STRATEGIES: readonly Strategy[] = [
   {
     id: "using",
     label: "using declaration",
-    definition: "definition context：先声明要把 MsgSender<Company>::sendClear 引入 derived scope。",
-    instantiation: "名称及其 overload set 参与查找；再和 derived 同名函数一起做重载选择。",
+    definition:
+      "definition context：先声明要把 MsgSender<Company>::sendClear 引入 derived scope。",
+    instantiation:
+      "名称及其 overload set 参与查找；再和 derived 同名函数一起做重载选择。",
     dispatch: "普通调用仍可 virtual dispatch",
     code: "using MsgSender<Company>::sendClear",
     result: "适合恢复一组 base overload；同时检查访问级别和 name hiding。",
@@ -51,7 +57,8 @@ const STRATEGIES: readonly Strategy[] = [
   {
     id: "qualified",
     label: "explicit qualification",
-    definition: "definition context：调用表达式明确写出 dependent base 的 scope。",
+    definition:
+      "definition context：调用表达式明确写出 dependent base 的 scope。",
     instantiation: "CompanyA 直接解析 MsgSender<CompanyA> 的 implementation。",
     dispatch: "抑制 virtual dispatch",
     code: "MsgSender<Company>::sendClear(info)",
@@ -305,7 +312,8 @@ export function EcppItem43TemplatizedBaseNamesLab() {
                 fontSize="12"
                 fill="var(--text-secondary)"
               >
-                this-&gt;：依赖当前对象 · using：引入 overload set · qualified：固定 base
+                this-&gt;：依赖当前对象 · using：引入 overload set ·
+                qualified：固定 base
               </text>
               <text
                 x="480"
@@ -329,7 +337,9 @@ export function EcppItem43TemplatizedBaseNamesLab() {
             </svg>
           </div>
           <figcaption className="mt-2 text-center text-sm text-secondary">
-            同一 dependent base 可在不同查找策略下得到不同边界；图中把两阶段查找与 virtual dispatch 分成两个问题。
+            同一 dependent base
+            可在不同查找策略下得到不同边界；图中把两阶段查找与 virtual dispatch
+            分成两个问题。
           </figcaption>
         </figure>
 
@@ -345,5 +355,108 @@ export function EcppItem43TemplatizedBaseNamesLab() {
         </div>
       </div>
     </section>
+  );
+}
+
+export function EcppTemplatizedBaseNamesDecisionMap() {
+  const steps = [
+    ["1", "定义期", "Company 未知", "先判定名称是否依赖模板参数"],
+    ["2", "实例化期", "specialization 已知", "再检查真实 base 的成员集合"],
+    ["3", "调用意图", "动态还是固定", "选择 this->、using 或 qualified call"],
+  ];
+
+  return (
+    <figure
+      aria-label="Item 43 模板化基类名称查找决策地图"
+      data-visual-kind="ecpp-item-43-templatized-base-names-decision-map"
+      className="not-prose my-8 overflow-hidden rounded-card border border-border bg-elevated"
+    >
+      <figcaption className="border-b border-border p-4 text-sm font-semibold text-primary">
+        决策地图：先分离名称查找，再选择调用语义
+      </figcaption>
+      <div className="overflow-x-auto p-4">
+        <svg
+          viewBox="0 0 960 190"
+          role="img"
+          aria-label="定义期、实例化期、调用意图三步决策地图"
+          className="h-auto min-w-[720px] w-full"
+        >
+          {steps.map(([number, phase, fact, action], index) => {
+            const x = 24 + index * 312;
+            return (
+              <g key={number}>
+                <rect
+                  x={x}
+                  y="30"
+                  width="270"
+                  height="116"
+                  rx="14"
+                  fill="var(--bg)"
+                  stroke={index === 1 ? "var(--warning)" : "var(--accent)"}
+                  strokeWidth="2"
+                />
+                <circle
+                  cx={x + 28}
+                  cy="60"
+                  r="16"
+                  fill={index === 1 ? "var(--warning)" : "var(--accent)"}
+                />
+                <text
+                  x={x + 28}
+                  y="65"
+                  textAnchor="middle"
+                  fontSize="12"
+                  fontWeight="700"
+                  fill="var(--bg)"
+                >
+                  {number}
+                </text>
+                <text
+                  x={x + 56}
+                  y="58"
+                  fontSize="15"
+                  fontWeight="700"
+                  fill="var(--text-primary)"
+                >
+                  {phase}
+                </text>
+                <text
+                  x={x + 22}
+                  y="92"
+                  fontSize="12"
+                  fill="var(--text-secondary)"
+                >
+                  {fact}
+                </text>
+                <text
+                  x={x + 22}
+                  y="119"
+                  fontSize="12"
+                  fill="var(--text-primary)"
+                >
+                  {action}
+                </text>
+                {index < steps.length - 1 ? (
+                  <path
+                    d={`M${x + 278} 88 H${x + 302}`}
+                    stroke="var(--text-secondary)"
+                    strokeWidth="2"
+                  />
+                ) : null}
+              </g>
+            );
+          })}
+          <text
+            x="480"
+            y="178"
+            textAnchor="middle"
+            fontSize="12"
+            fill="var(--text-secondary)"
+          >
+            查找边界决定“能否找到”，调用限定决定“谁来执行”
+          </text>
+        </svg>
+      </div>
+    </figure>
   );
 }

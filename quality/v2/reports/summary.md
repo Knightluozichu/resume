@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T14:46:32.466Z；旧版分数不迁移。
+> 2026-08-08T15:08:31.132Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2341
-- queued：351
-- passed：1169
+- queued：347
+- passed：1173
 - published：635
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -144,7 +144,7 @@
 | 131 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
 | 132 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 133 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 134 | effective-cpp | 57 | 0 | 7 | 50 | 7 |
+| 134 | effective-cpp | 57 | 0 | 3 | 54 | 3 |
 | 135 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
 | 136 | algorithms-4e | 30 | 0 | 0 | 30 | 0 |
 | 137 | android-advanced-decryption | 19 | 0 | 0 | 19 | 0 |

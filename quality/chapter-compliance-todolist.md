@@ -715,13 +715,13 @@
     - 路径：`content/effective-cpp/05-inheritance-object-oriented-design/item-35-virtual-function-alternatives.mdx`
 - [x] ✅ **06-templates-generic-programming/item-41-template-implicit-interfaces** — 已修复（2026-08-08，score 59→98，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-41-template-implicit-interfaces.mdx`
-- [ ] 🟡 P3 **06-templates-generic-programming/item-42-typename-two-meanings** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-templates-generic-programming/item-42-typename-two-meanings** — 已修复（2026-08-08，score 59→98，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-42-typename-two-meanings.mdx`
-- [ ] 🟡 P3 **06-templates-generic-programming/item-43-access-templatized-base-names** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-templates-generic-programming/item-43-access-templatized-base-names** — 已修复（2026-08-08，score 59→95，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-43-access-templatized-base-names.mdx`
-- [ ] 🟡 P3 **06-templates-generic-programming/item-45-member-function-templates-compatible-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-templates-generic-programming/item-45-member-function-templates-compatible-types** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-45-member-function-templates-compatible-types.mdx`
-- [ ] 🟡 P3 **07-customizing-new-delete/item-49-understand-new-handler** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **07-customizing-new-delete/item-49-understand-new-handler** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-49-understand-new-handler.mdx`
 - [ ] 🟡 P3 **07-customizing-new-delete/item-50-when-replace-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-50-when-replace-new-delete.mdx`

@@ -11133,6 +11133,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         EcppItem43TemplatizedBaseNamesLab:
           module0.EcppItem43TemplatizedBaseNamesLab,
+        EcppTemplatizedBaseNamesDecisionMap:
+          module0.EcppTemplatizedBaseNamesDecisionMap,
       } as ChapterMdxComponents;
     },
   "effective-cpp/06-templates-generic-programming/item-44-factor-template-parameter-independent-code":
