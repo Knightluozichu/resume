@@ -10999,6 +10999,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem29ExceptionSafeLab: module0.EcppItem29ExceptionSafeLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/04-implementations/item-30-inline-ins-and-outs": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-30-inline-ins-and-outs-lab");
+    return {
+      EcppInlineDecisionMap: module0.EcppInlineDecisionMap,
+      EcppItem30InlineLab: module0.EcppItem30InlineLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/04-misc/final-review": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-final-review-lab");
