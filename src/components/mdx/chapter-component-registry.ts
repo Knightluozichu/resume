@@ -3741,6 +3741,20 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2eTableIndexLab: module0.Cc2eTableIndexLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/05-figure-index/cc2e-figure-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-figure-index");
+    return {
+      Cc2eFigureIndexLab: module0.Cc2eFigureIndexLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/06-foundations/cc2e-part-01-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-part-01-foundations");
+    return {
+      Cc2ePart01FoundationsLab: module0.Cc2ePart01FoundationsLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/07-construction-world/cc2e-01-construction-world":
     async () => {
       const module0 =
@@ -3779,6 +3793,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       return {
         Cc2e04ConstructionDecisionsMechanismLab:
           module0.Cc2e04ConstructionDecisionsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/11-high-quality-code/cc2e-part-02-high-quality-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-part-02-high-quality-code");
+      return {
+        Cc2ePart02HighQualityCodeLab: module0.Cc2ePart02HighQualityCodeLab,
       } as ChapterMdxComponents;
     },
   "code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction":
@@ -3827,6 +3849,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e09PseudocodeProgrammingProcessMechanismLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/17-variables/cc2e-part-03-variables": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-part-03-variables");
+    return {
+      Cc2ePart03VariablesLab: module0.Cc2ePart03VariablesLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use":
     async () => {
       const module0 =

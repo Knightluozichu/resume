@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T19:28:03.264Z；旧版分数不迁移。
+> 2026-08-08T19:38:47.844Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2300
+- failed：2296
 - queued：344
-- passed：1160
+- passed：1164
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -125,11 +125,11 @@
 | 112 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
 | 113 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 114 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 115 | code-complete-2e | 51 | 10 | 0 | 41 | 30 |
-| 116 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
-| 117 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
-| 118 | ai-agent | 9 | 9 | 0 | 0 | 9 |
-| 119 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 115 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 116 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
+| 117 | ai-agent | 9 | 9 | 0 | 0 | 9 |
+| 118 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
+| 119 | code-complete-2e | 51 | 6 | 0 | 45 | 18 |
 | 120 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
 | 121 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 122 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
