@@ -723,18 +723,18 @@
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-45-member-function-templates-compatible-types.mdx`
 - [x] ✅ **07-customizing-new-delete/item-49-understand-new-handler** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-49-understand-new-handler.mdx`
-- [ ] 🟡 P3 **07-customizing-new-delete/item-50-when-replace-new-delete** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **07-customizing-new-delete/item-50-when-replace-new-delete** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-50-when-replace-new-delete.mdx`
-- [ ] 🟡 P3 **08-miscellaneous/item-54-standard-library-tr1** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **08-miscellaneous/item-54-standard-library-tr1** — 已修复（2026-08-08，score 59→99，passed）
     - 路径：`content/effective-cpp/08-miscellaneous/item-54-standard-library-tr1.mdx`
-- [ ] 🟡 P3 **08-miscellaneous/item-55-familiarize-boost** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **08-miscellaneous/item-55-familiarize-boost** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/08-miscellaneous/item-55-familiarize-boost.mdx`
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
 ## code-complete-2e（51 章 · ❌51 ⚠️0 ✅0）
 
-- [ ] 🔴 P1 **00-map/cc2e-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
+- [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
 - [ ] 🔴 P1 **50-review/cc2e-official-final-review** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 48）
     - 路径：`content/code-complete-2e/50-review/cc2e-official-final-review.mdx`
