@@ -10745,6 +10745,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppResourceAccessFormsMap: module0.EcppResourceAccessFormsMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-22-private-data-members":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-22-private-data-lab");
+      return {
+        EcppItem22PrivateDataLab: module0.EcppItem22PrivateDataLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-24-non-member-conversions":
     async () => {
       const module0 =
