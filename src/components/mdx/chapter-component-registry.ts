@@ -16870,6 +16870,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20Topic52DelightUsersLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/65-topic-53-pride-prejudice/tpp20-topic-53-pride-prejudice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-topic-53-pride-prejudice-diagram");
+      return {
+        Tpp20Topic53PridePrejudiceEvidenceDiagram:
+          module0.Tpp20Topic53PridePrejudiceEvidenceDiagram,
+        Tpp20Topic53PridePrejudiceLab: module0.Tpp20Topic53PridePrejudiceLab,
+        Tpp20Topic53PridePrejudiceLoopDiagram:
+          module0.Tpp20Topic53PridePrejudiceLoopDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
