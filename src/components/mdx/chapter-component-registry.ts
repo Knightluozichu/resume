@@ -10951,6 +10951,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppNonMemberCandidateFlowMap: module0.EcppNonMemberCandidateFlowMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-25-non-throwing-swap":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-25-non-throwing-swap");
+      return {
+        EcppItem25SwapCostMap: module0.EcppItem25SwapCostMap,
+        EcppItem25SwapLab: module0.EcppItem25SwapLab,
+        EcppItem25SwapResolutionMap: module0.EcppItem25SwapResolutionMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/04-implementations/item-27-minimize-casting": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-27-minimize-casting");
