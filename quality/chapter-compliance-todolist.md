@@ -584,7 +584,7 @@
     - 路径：`content/coder-revolution/36-section-03-04/crv18-section-03-04.mdx`
 - [x] ✅ **39-section-03-07/crv18-section-03-07** — 已修复（2026-08-08，score 40→100，passed）
     - 路径：`content/coder-revolution/39-section-03-07/crv18-section-03-07.mdx`
-- [ ] 🔴 P1 **40-section-03-08/crv18-section-03-08** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **40-section-03-08/crv18-section-03-08** — 已修复（2026-08-08，score 40→100，passed）
     - 路径：`content/coder-revolution/40-section-03-08/crv18-section-03-08.mdx`
 - [ ] 🔴 P1 **43-chapter-04/crv18-chapter-04** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
     - 路径：`content/coder-revolution/43-chapter-04/crv18-chapter-04.mdx`
