@@ -10878,6 +10878,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem37DefaultParameterLab: module0.EcppItem37DefaultParameterLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-38-composition-has-a":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-38-composition-lab");
+      return {
+        EcppCompositionRelationMap: module0.EcppCompositionRelationMap,
+        EcppItem38CompositionLab: module0.EcppItem38CompositionLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
