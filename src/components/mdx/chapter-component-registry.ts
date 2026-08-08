@@ -10907,6 +10907,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppMultipleInheritanceMap: module0.EcppMultipleInheritanceMap,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-44-factor-template-parameter-independent-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-44-template-factoring-lab");
+      return {
+        EcppItem44TemplateFactoringLab: module0.EcppItem44TemplateFactoringLab,
+        EcppTemplateFactoringMap: module0.EcppTemplateFactoringMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
