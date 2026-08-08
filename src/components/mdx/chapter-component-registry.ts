@@ -10928,6 +10928,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem22PrivateDataLab: module0.EcppItem22PrivateDataLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-23-non-member-non-friend":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-23-non-member-non-friend");
+      return {
+        EcppItem23EncapsulationMap: module0.EcppItem23EncapsulationMap,
+        EcppItem23PlacementLab: module0.EcppItem23PlacementLab,
+        EcppItem23PlacementMatrixMap: module0.EcppItem23PlacementMatrixMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-24-non-member-conversions":
     async () => {
       const module0 =
