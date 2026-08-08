@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T05:02:40.257Z；旧版分数不迁移。
+> 2026-08-08T05:09:10.441Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2369
+- failed：2368
 - queued：401
-- passed：1102
+- passed：1103
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -22,8 +22,8 @@
 | 9 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
 | 10 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 11 | windows-journey | 29 | 29 | 0 | 0 | 87 |
-| 12 | coder-revolution | 62 | 28 | 0 | 34 | 84 |
-| 13 | out-of-control | 28 | 28 | 0 | 0 | 84 |
+| 12 | out-of-control | 28 | 28 | 0 | 0 | 84 |
+| 13 | coder-revolution | 62 | 27 | 0 | 35 | 81 |
 | 14 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 15 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
 | 16 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
