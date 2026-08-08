@@ -494,7 +494,7 @@
     - 路径：`content/coder-revolution/00-map/crv18-official-learning-map.mdx`
 - [x] ✅ **61-review/crv18-official-final-review** — 已修复（2026-08-08，score 48→98，passed）
     - 路径：`content/coder-revolution/61-review/crv18-official-final-review.mdx`
-- [ ] 🔴 P1 **07-section-01-05/crv18-section-01-05** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
+- [x] ✅ **07-section-01-05/crv18-section-01-05** — 已修复（2026-08-08，score 42→97，passed）
     - 路径：`content/coder-revolution/07-section-01-05/crv18-section-01-05.mdx`
 - [ ] 🔴 P1 **08-section-01-06/crv18-section-01-06** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 42）
     - 路径：`content/coder-revolution/08-section-01-06/crv18-section-01-06.mdx`
