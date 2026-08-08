@@ -744,13 +744,13 @@
     - 路径：`content/code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors.mdx`
 - [x] ✅ **09-prerequisites/cc2e-03-prerequisites** — 已修复（2026-08-09，score 43→97，passed）
     - 路径：`content/code-complete-2e/09-prerequisites/cc2e-03-prerequisites.mdx`
-- [ ] 🔴 P1 **10-construction-decisions/cc2e-04-construction-decisions** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **10-construction-decisions/cc2e-04-construction-decisions** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/10-construction-decisions/cc2e-04-construction-decisions.mdx`
-- [ ] 🔴 P1 **12-design-in-construction/cc2e-05-design-in-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **12-design-in-construction/cc2e-05-design-in-construction** — 已修复（2026-08-09，score 43→96，passed）
     - 路径：`content/code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction.mdx`
-- [ ] 🔴 P1 **13-working-classes/cc2e-06-working-classes** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **13-working-classes/cc2e-06-working-classes** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/13-working-classes/cc2e-06-working-classes.mdx`
-- [ ] 🔴 P1 **14-high-quality-routines/cc2e-07-high-quality-routines** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **14-high-quality-routines/cc2e-07-high-quality-routines** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines.mdx`
 - [ ] 🔴 P1 **15-defensive-programming/cc2e-08-defensive-programming** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/15-defensive-programming/cc2e-08-defensive-programming.mdx`

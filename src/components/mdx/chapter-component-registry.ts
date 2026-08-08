@@ -3770,8 +3770,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     return {
       Cc2e06WorkingClassesMechanismLab:
         module0.Cc2e06WorkingClassesMechanismLab,
-      } as ChapterMdxComponents;
-    },
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines":
     async () => {
       const module0 =

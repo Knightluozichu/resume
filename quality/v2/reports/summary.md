@@ -1,19 +1,19 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T16:05:01.867Z；旧版分数不迁移。
+> 2026-08-08T16:50:56.472Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2336
+- failed：2332
 - queued：344
-- passed：1181
-- published：635
+- passed：1128
+- published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
 | 1 | math-girl | 50 | 50 | 0 | 0 | 150 |
 | 2 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
-| 3 | code-complete-2e | 51 | 46 | 0 | 5 | 138 |
+| 3 | code-complete-2e | 51 | 42 | 0 | 9 | 126 |
 | 4 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 5 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 6 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
@@ -193,7 +193,7 @@
 | 180 | deep-understanding-csharp | 17 | 0 | 0 | 17 | 0 |
 | 181 | dragon-book-compilers | 16 | 0 | 0 | 16 | 0 |
 | 182 | easy-cpp-5e | 18 | 0 | 0 | 18 | 0 |
-| 183 | effective-cpp | 57 | 0 | 0 | 57 | 0 |
+| 183 | effective-cpp | 57 | 0 | 0 | 0 | 0 |
 | 184 | effective-csharp | 7 | 0 | 0 | 7 | 0 |
 | 185 | first-line-android | 18 | 0 | 0 | 18 | 0 |
 | 186 | frontend-engineering | 9 | 0 | 0 | 9 | 0 |
