@@ -10873,6 +10873,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem16ProtocolMap: module0.EcppItem16ProtocolMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/03-designs-declarations/item-18-easy-correct-interfaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-18-easy-correct-interfaces");
+      return {
+        EcppItem18InterfaceContractMap: module0.EcppItem18InterfaceContractMap,
+        EcppItem18OwnershipBoundaryLab: module0.EcppItem18OwnershipBoundaryLab,
+        EcppItem18ValidationBoundaryDiagram:
+          module0.EcppItem18ValidationBoundaryDiagram,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const":
     async () => {
       const module0 =
