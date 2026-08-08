@@ -671,7 +671,7 @@
     - 路径：`content/effective-cpp/06-templates-generic-programming/item-48-template-metaprogramming-awareness.mdx`
 - [x] ✅ **07-customizing-new-delete/item-51-conventions-writing-new-delete** — 已修复（2026-08-08，score 60→96，passed）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-51-conventions-writing-new-delete.mdx`
-- [ ] 🟡 P3 **00-accustoming/item-01-language-federation** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **00-accustoming/item-01-language-federation** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/00-accustoming/item-01-language-federation.mdx`
 - [ ] 🟡 P3 **00-accustoming/item-02-const-enum-inline** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/00-accustoming/item-02-const-enum-inline.mdx`

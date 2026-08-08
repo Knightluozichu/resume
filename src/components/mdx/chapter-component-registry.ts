@@ -10727,6 +10727,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EasyCppFileIoFaultLab: module0.EasyCppFileIoFaultLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/00-accustoming/item-01-language-federation": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-01-language-federation-lab");
+    return {
+      EcppItem01FederationLab: module0.EcppItem01FederationLab,
+      EcppLanguageFederationMap: module0.EcppLanguageFederationMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/00-accustoming/item-03-use-const": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-03-use-const-lab");

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T11:17:58.153Z；旧版分数不迁移。
+> 2026-08-08T11:23:38.772Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2341
-- queued：374
-- passed：1157
+- queued：373
+- passed：1158
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -133,8 +133,8 @@
 | 120 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
 | 121 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
 | 122 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
-| 123 | effective-cpp | 57 | 0 | 30 | 27 | 30 |
-| 124 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 123 | taocp | 30 | 0 | 30 | 0 | 30 |
+| 124 | effective-cpp | 57 | 0 | 29 | 28 | 29 |
 | 125 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |
 | 126 | cg-principles-practice | 25 | 0 | 25 | 0 | 25 |
 | 127 | essential-csharp-7 | 24 | 0 | 24 | 0 | 24 |
