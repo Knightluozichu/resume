@@ -3816,6 +3816,39 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cc2e11VariableNamingLab: module0.Cc2e11VariableNamingLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/20-fundamental-data-types/cc2e-12-fundamental-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-12-fundamental-data-types");
+      return {
+        Cc2e12FundamentalDataTypesLab: module0.Cc2e12FundamentalDataTypesLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/21-unusual-data-types/cc2e-13-unusual-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-13-unusual-data-types");
+      return {
+        Cc2e13UnusualDataTypesDiagram: module0.Cc2e13UnusualDataTypesDiagram,
+        Cc2e13UnusualDataTypesLab: module0.Cc2e13UnusualDataTypesLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-14-straight-line-code");
+      return {
+        Cc2e14StraightLineCodeMechanismLab:
+          module0.Cc2e14StraightLineCodeMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/24-conditionals/cc2e-15-conditionals": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-15-conditionals");
+    return {
+      Cc2e15ConditionalsMechanismLab: module0.Cc2e15ConditionalsMechanismLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");

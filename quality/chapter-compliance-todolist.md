@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌38 ⚠️0 ✅13）
+## code-complete-2e（51 章 · ❌34 ⚠️0 ✅17）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -760,13 +760,13 @@
     - 路径：`content/code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use.mdx`
 - [x] ✅ **19-power-of-variable-names/cc2e-11-power-of-variable-names** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names.mdx`
-- [ ] 🔴 P1 **20-fundamental-data-types/cc2e-12-fundamental-data-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **20-fundamental-data-types/cc2e-12-fundamental-data-types** — 已修复（2026-08-09，score 43→96，passed）
     - 路径：`content/code-complete-2e/20-fundamental-data-types/cc2e-12-fundamental-data-types.mdx`
-- [ ] 🔴 P1 **21-unusual-data-types/cc2e-13-unusual-data-types** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **21-unusual-data-types/cc2e-13-unusual-data-types** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/21-unusual-data-types/cc2e-13-unusual-data-types.mdx`
-- [ ] 🔴 P1 **23-straight-line-code/cc2e-14-straight-line-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **23-straight-line-code/cc2e-14-straight-line-code** — 已修复（2026-08-09，score 43→96，passed）
     - 路径：`content/code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code.mdx`
-- [ ] 🔴 P1 **24-conditionals/cc2e-15-conditionals** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **24-conditionals/cc2e-15-conditionals** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/24-conditionals/cc2e-15-conditionals.mdx`
 - [ ] 🔴 P1 **25-loops/cc2e-16-loops** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/25-loops/cc2e-16-loops.mdx`
