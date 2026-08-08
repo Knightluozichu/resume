@@ -10893,6 +10893,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EcppItem18ValidationBoundaryDiagram,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/03-designs-declarations/item-19-class-design-type-design":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-19-class-design-type-design");
+      return {
+        EcppItem19TypeDesignLab: module0.EcppItem19TypeDesignLab,
+        EcppItem19TypeDesignMap: module0.EcppItem19TypeDesignMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-20-pass-by-reference-to-const":
     async () => {
       const module0 =
