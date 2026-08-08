@@ -10860,6 +10860,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EcppItem34InterfaceImplementationLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/05-inheritance-object-oriented-design/item-36-never-redefine-inherited-nonvirtual":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-36-static-binding-lab");
+      return {
+        EcppItem36StaticBindingLab: module0.EcppItem36StaticBindingLab,
+        EcppStaticBindingMap: module0.EcppStaticBindingMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
