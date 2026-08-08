@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T19:14:36.601Z；旧版分数不迁移。
+> 2026-08-08T19:28:03.264Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2304
+- failed：2300
 - queued：344
-- passed：1156
+- passed：1160
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -102,30 +102,30 @@
 | 89 | effective-executive | 14 | 14 | 0 | 0 | 56 |
 | 90 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
 | 91 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
-| 92 | code-complete-2e | 51 | 14 | 0 | 37 | 42 |
-| 93 | css-world | 14 | 14 | 0 | 0 | 42 |
-| 94 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 95 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 96 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 97 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 98 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
-| 99 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 100 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 101 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 102 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 103 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 104 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 105 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 106 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 107 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
-| 108 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 109 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 110 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 111 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 112 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 113 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 114 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 115 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 92 | css-world | 14 | 14 | 0 | 0 | 42 |
+| 93 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 94 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 95 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 96 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 97 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
+| 98 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
+| 99 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 100 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 101 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 102 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 103 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 104 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 105 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 106 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
+| 107 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 108 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 109 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 110 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 111 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 112 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 113 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 114 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 115 | code-complete-2e | 51 | 10 | 0 | 41 | 30 |
 | 116 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 117 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 118 | ai-agent | 9 | 9 | 0 | 0 | 9 |

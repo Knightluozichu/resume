@@ -3713,6 +3713,34 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2eOfficialLearningMapTraceLab: module0.Cc2eOfficialLearningMapTraceLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/01-preface/cc2e-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-preface");
+    return {
+      Cc2ePrefaceLab: module0.Cc2ePrefaceLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/02-acknowledgments/cc2e-acknowledgments": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-acknowledgments");
+    return {
+      Cc2eAcknowledgmentsLab: module0.Cc2eAcknowledgmentsLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/03-checklist-index/cc2e-checklist-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-checklist-index");
+    return {
+      Cc2eChecklistIndexLab: module0.Cc2eChecklistIndexLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/04-table-index/cc2e-table-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-table-index");
+    return {
+      Cc2eTableIndexLab: module0.Cc2eTableIndexLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/07-construction-world/cc2e-01-construction-world":
     async () => {
       const module0 =

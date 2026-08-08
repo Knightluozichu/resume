@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌14 ⚠️0 ✅37）
+## code-complete-2e（51 章 · ❌10 ⚠️0 ✅41）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -808,13 +808,13 @@
     - 路径：`content/code-complete-2e/46-software-craftsmanship/cc2e-34-software-craftsmanship.mdx`
 - [x] ✅ **47-more-information/cc2e-35-more-information** — 已修复（2026-08-09，score 43→95，passed）
     - 路径：`content/code-complete-2e/47-more-information/cc2e-35-more-information.mdx`
-- [ ] 🔴 P1 **01-preface/cc2e-preface** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **01-preface/cc2e-preface** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/01-preface/cc2e-preface.mdx`
-- [ ] 🔴 P1 **02-acknowledgments/cc2e-acknowledgments** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **02-acknowledgments/cc2e-acknowledgments** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/02-acknowledgments/cc2e-acknowledgments.mdx`
-- [ ] 🔴 P1 **03-checklist-index/cc2e-checklist-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **03-checklist-index/cc2e-checklist-index** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/03-checklist-index/cc2e-checklist-index.mdx`
-- [ ] 🔴 P1 **04-table-index/cc2e-table-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
+- [x] ✅ **04-table-index/cc2e-table-index** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/04-table-index/cc2e-table-index.mdx`
 - [ ] 🔴 P1 **05-figure-index/cc2e-figure-index** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 41）
     - 路径：`content/code-complete-2e/05-figure-index/cc2e-figure-index.mdx`
