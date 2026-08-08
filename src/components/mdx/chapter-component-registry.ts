@@ -3770,8 +3770,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     return {
       Cc2e06WorkingClassesMechanismLab:
         module0.Cc2e06WorkingClassesMechanismLab,
-    } as ChapterMdxComponents;
-  },
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-07-high-quality-routines");
+      return {
+        Cc2e07HighQualityRoutinesContractLab:
+          module0.Cc2e07HighQualityRoutinesContractLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
