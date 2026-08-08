@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T03:44:48.343Z；旧版分数不迁移。
+> 2026-08-08T03:50:55.876Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2381
+- failed：2380
 - queued：401
-- passed：1090
+- passed：1091
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -15,7 +15,7 @@
 | 2 | math-girl | 50 | 50 | 0 | 0 | 150 |
 | 3 | gpu-gems | 48 | 48 | 0 | 0 | 96 |
 | 4 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
-| 5 | coder-revolution | 62 | 40 | 0 | 22 | 120 |
+| 5 | coder-revolution | 62 | 39 | 0 | 23 | 117 |
 | 6 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 7 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
 | 8 | lua-programming | 35 | 35 | 0 | 0 | 105 |
