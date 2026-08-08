@@ -11007,6 +11007,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem30InlineLab: module0.EcppItem30InlineLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/04-implementations/item-31-minimize-compilation-dependencies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-31-minimize-compilation-dependencies-lab");
+      return {
+        EcppCompilationDependencyMap: module0.EcppCompilationDependencyMap,
+        EcppItem31DependencyLab: module0.EcppItem31DependencyLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/04-misc/final-review": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-final-review-lab");
