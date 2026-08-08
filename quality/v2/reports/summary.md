@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T04:41:15.959Z；旧版分数不迁移。
+> 2026-08-08T04:49:45.820Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2372
+- failed：2371
 - queued：401
-- passed：1099
+- passed：1100
 - published：624
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -20,7 +20,7 @@
 | 7 | lua-programming | 35 | 35 | 0 | 0 | 105 |
 | 8 | unity-shaderlab | 35 | 35 | 0 | 0 | 105 |
 | 9 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
-| 10 | coder-revolution | 62 | 31 | 0 | 31 | 93 |
+| 10 | coder-revolution | 62 | 30 | 0 | 32 | 90 |
 | 11 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 12 | windows-journey | 29 | 29 | 0 | 0 | 87 |
 | 13 | out-of-control | 28 | 28 | 0 | 0 | 84 |
