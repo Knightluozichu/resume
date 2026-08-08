@@ -3781,6 +3781,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cc2e07HighQualityRoutinesContractLab,
       } as ChapterMdxComponents;
     },
+  "code-complete-2e/15-defensive-programming/cc2e-08-defensive-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-08-defensive-programming");
+      return {
+        Cc2e08DefensiveProgrammingMechanismLab:
+          module0.Cc2e08DefensiveProgrammingMechanismLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
