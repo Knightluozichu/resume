@@ -16913,6 +16913,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Tpp20ExerciseAnswersLoopDiagram,
       } as ChapterMdxComponents;
     },
+  "pragmatic-programmer/69-translator-postface/tpp20-translator-postface":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-translator-postface-diagram");
+      return {
+        Tpp20TranslatorPostfaceEvidenceDiagram:
+          module0.Tpp20TranslatorPostfaceEvidenceDiagram,
+        Tpp20TranslatorPostfaceLab: module0.Tpp20TranslatorPostfaceLab,
+        Tpp20TranslatorPostfaceLoopDiagram:
+          module0.Tpp20TranslatorPostfaceLoopDiagram,
+      } as ChapterMdxComponents;
+    },
   "pragmatic-programmer/70-review/tpp20-official-final-review": async () => {
     const modules = await Promise.all([
       import("@/components/mdx/pragmatic-programmer/diagrams/tpp20-final-review-chain-diagram"),
