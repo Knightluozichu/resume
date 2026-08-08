@@ -3734,6 +3734,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Cc2e02SoftwareMetaphorsMechanismLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/09-prerequisites/cc2e-03-prerequisites": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/cc2e-03-prerequisites");
+    return {
+      Cc2e03PrerequisitesPathDiagram: module0.Cc2e03PrerequisitesPathDiagram,
+      Cc2e03PrerequisitesLab: module0.Cc2e03PrerequisitesLab,
+      Cc2e03ReadinessEvidenceMap: module0.Cc2e03ReadinessEvidenceMap,
+    } as ChapterMdxComponents;
+  },
   "coder-revolution/00-map/crv18-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map-diagram");
