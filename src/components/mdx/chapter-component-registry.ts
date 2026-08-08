@@ -3713,6 +3713,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Crv18OfficialLearningMapLoopDiagram,
     } as ChapterMdxComponents;
   },
+  "coder-revolution/61-review/crv18-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-official-final-review-diagram");
+    return {
+      Crv18OfficialFinalReviewEvidenceDiagram:
+        module0.Crv18OfficialFinalReviewEvidenceDiagram,
+      Crv18OfficialFinalReviewLab: module0.Crv18OfficialFinalReviewLab,
+      Crv18OfficialFinalReviewLoopDiagram:
+        module0.Crv18OfficialFinalReviewLoopDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");
