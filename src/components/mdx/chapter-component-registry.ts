@@ -11116,6 +11116,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem41ImplicitInterfaceLab: module0.EcppItem41ImplicitInterfaceLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-43-access-templatized-base-names":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-43-templatized-base-names-lab");
+      return {
+        EcppItem43TemplatizedBaseNamesLab:
+          module0.EcppItem43TemplatizedBaseNamesLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/06-templates-generic-programming/item-44-factor-template-parameter-independent-code":
     async () => {
       const module0 =
