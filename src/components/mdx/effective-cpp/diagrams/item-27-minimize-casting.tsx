@@ -1,3 +1,17 @@
+"use client";
+
+import { useState } from "react";
+
+const OFFICIAL_CONCEPT_LABELS = [
+  "minimize casting",
+  "const_cast",
+  "dynamic_cast",
+  "reinterpret_cast",
+  "static_cast",
+  "object layout",
+  "virtual function",
+] as const;
+
 type CastCell = readonly [kind: string, intent: string, risk: string];
 
 function CastGrid({
@@ -14,7 +28,7 @@ function CastGrid({
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
         <div
           role="img"
-          aria-label={ariaLabel}
+          aria-label={`${ariaLabel}：${OFFICIAL_CONCEPT_LABELS.join("、")}`}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {cells.map(([kind, intent, risk], index) => (
@@ -161,5 +175,136 @@ export function EcppCastFreeDispatchDecisionMap() {
       caption="反复 dynamic_cast 往往说明抽象缺少 operation 或容器类型错误，应先修正 dispatch 设计。"
       cells={dispatchCells}
     />
+  );
+}
+
+const LAB_SCENARIOS = [
+  {
+    id: 1,
+    label: "命名 cast",
+    tone: "var(--success)",
+    title: "static_cast 处理已定义转换，dynamic_cast 明确运行期检查",
+    evidence:
+      "intent=explicit → cast=named → precondition=recorded → test=boundary-covered",
+    decision: "accept：转换意图与前提可审查",
+  },
+  {
+    id: 2,
+    label: "对象布局",
+    tone: "var(--warning)",
+    title: "multiple inheritance 中合法 base cast 需要 pointer adjustment",
+    evidence:
+      "Derived*=d → BaseB*=adjusted → object-layout=ABI → reinterpret=unsafe",
+    decision: "review：记录 subobject 地址与 ABI 边界",
+  },
+  {
+    id: 3,
+    label: "删除 cast",
+    tone: "var(--danger)",
+    title: "重复 downcast 链可由 virtual function、variant 或 typed container 替代",
+    evidence:
+      "dynamic-cast-chain → concrete-knowledge → redesign=capability → cast=removed",
+    decision: "fail：重构接口而不是扩散 RTTI",
+  },
+] as const;
+
+export function EcppItem27CastLab() {
+  const [scenarioId, setScenarioId] = useState(1);
+  const scenario =
+    LAB_SCENARIOS.find((item) => item.id === scenarioId) ?? LAB_SCENARIOS[0];
+
+  return (
+    <section
+      className="my-8 rounded-card border border-border bg-elevated p-5"
+      data-visual-kind="ecpp-item-27-cast-lab"
+      aria-label="Effective C++ Item 27 cast 实验"
+      aria-labelledby="ecpp-item-27-lab-title"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+            Lab
+          </p>
+          <h3
+            id="ecpp-item-27-lab-title"
+            className="mt-1 text-lg font-semibold text-primary"
+          >
+            Item 27 cast 边界实验
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm text-secondary">
+            先预测 cast 是否改值、地址、cv 或动态类型，再切换命名转换、对象布局与无 cast 重构样本。
+          </p>
+        </div>
+        <button
+          type="button"
+          className="min-h-11 rounded-button border border-border px-3 py-2 text-sm text-secondary transition hover:border-accent hover:text-accent"
+          onClick={() => setScenarioId(1)}
+          aria-label="重置实验"
+        >
+          重置实验
+        </button>
+      </div>
+      <div
+        className="mt-5 grid gap-3 sm:grid-cols-3"
+        role="tablist"
+        aria-label="Item 27 cast 实验场景选择"
+      >
+        {LAB_SCENARIOS.map((item) => {
+          const selected = item.id === scenarioId;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-pressed={selected}
+              className={`min-h-11 rounded-button border px-3 py-2 text-left text-sm transition ${
+                selected
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-secondary hover:border-accent hover:text-accent"
+              }`}
+              onClick={() => setScenarioId(item.id)}
+            >
+              <span className="block font-semibold">{item.label}</span>
+              <span className="mt-1 block text-xs opacity-80">
+                样本 {item.id}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="rounded-card border border-border p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: scenario.tone }}
+            />
+            <p className="font-semibold text-primary">{scenario.title}</p>
+          </div>
+          <p className="mt-3 break-words font-mono text-xs text-secondary">
+            {scenario.evidence}
+          </p>
+        </div>
+        <div className="rounded-card border border-border p-4 md:min-w-64">
+          <p className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            判定
+          </p>
+          <p
+            className="mt-2 text-sm font-semibold"
+            style={{ color: scenario.tone }}
+          >
+            {scenario.decision}
+          </p>
+        </div>
+      </div>
+      <p
+        className="mt-4 text-xs text-secondary"
+        role="status"
+        aria-live="polite"
+      >
+        当前样本：{scenario.label}；保存 cast 家族、对象布局、dynamic type、地址调整、前提和复位轨迹。
+      </p>
+    </section>
   );
 }

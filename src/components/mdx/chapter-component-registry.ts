@@ -10757,6 +10757,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     return {
       EcppBaseSubobjectAdjustmentMap: module0.EcppBaseSubobjectAdjustmentMap,
       EcppCastFreeDispatchDecisionMap: module0.EcppCastFreeDispatchDecisionMap,
+      EcppItem27CastLab: module0.EcppItem27CastLab,
       EcppCastTaxonomyRiskMap: module0.EcppCastTaxonomyRiskMap,
     } as ChapterMdxComponents;
   },
