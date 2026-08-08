@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T18:33:33.830Z；旧版分数不迁移。
+> 2026-08-08T18:45:28.797Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2312
+- failed：2311
 - queued：344
-- passed：1148
+- passed：1149
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -45,12 +45,12 @@
 | 32 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
 | 33 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 34 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 35 | code-complete-2e | 51 | 22 | 0 | 29 | 66 |
-| 36 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 37 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 38 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 39 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
-| 40 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 35 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 36 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 37 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 38 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 39 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 40 | code-complete-2e | 51 | 21 | 0 | 30 | 62 |
 | 41 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 42 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
 | 43 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |

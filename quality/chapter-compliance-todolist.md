@@ -798,7 +798,7 @@
     - 路径：`content/code-complete-2e/40-integration/cc2e-29-integration.mdx`
 - [ ] 🔴 P1 **41-programming-tools/cc2e-30-programming-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/41-programming-tools/cc2e-30-programming-tools.mdx`
-- [ ] 🔴 P1 **43-layout-and-style/cc2e-31-layout-and-style** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **43-layout-and-style/cc2e-31-layout-and-style** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style.mdx`
 - [ ] 🔴 P1 **44-self-documenting-code/cc2e-32-self-documenting-code** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/44-self-documenting-code/cc2e-32-self-documenting-code.mdx`
