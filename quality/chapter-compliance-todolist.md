@@ -683,7 +683,7 @@
     - 路径：`content/effective-cpp/01-special-members/item-07-virtual-destructor.mdx`
 - [x] ✅ **01-special-members/item-08-destructor-exceptions** — 已修复（2026-08-08，score 59→100，passed）
     - 路径：`content/effective-cpp/01-special-members/item-08-destructor-exceptions.mdx`
-- [ ] 🟡 P3 **01-special-members/item-09-no-virtual-in-ctor-dtor** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **01-special-members/item-09-no-virtual-in-ctor-dtor** — 已修复（2026-08-08，score 59→96，passed）
     - 路径：`content/effective-cpp/01-special-members/item-09-no-virtual-in-ctor-dtor.mdx`
 - [ ] 🟡 P3 **01-special-members/item-11-self-assignment** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
     - 路径：`content/effective-cpp/01-special-members/item-11-self-assignment.mdx`

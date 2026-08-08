@@ -10800,6 +10800,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EcppItem08DestructorExceptionsLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/01-special-members/item-09-no-virtual-in-ctor-dtor":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-09-no-virtual-lab");
+      return {
+        EcppItem09NoVirtualLifecycleLab:
+          module0.EcppItem09NoVirtualLifecycleLab,
+        EcppNoVirtualLifecycleMap: module0.EcppNoVirtualLifecycleMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/01-special-members/item-10-assignment-return-this":
     async () => {
       const module0 =
