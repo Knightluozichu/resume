@@ -3702,6 +3702,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.CgptOfficialFinalReviewEvidenceGateLab,
       } as ChapterMdxComponents;
     },
+  "coder-revolution/00-map/crv18-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map-diagram");
+    return {
+      Crv18OfficialLearningMapEvidenceDiagram:
+        module0.Crv18OfficialLearningMapEvidenceDiagram,
+      Crv18OfficialLearningMapLab: module0.Crv18OfficialLearningMapLab,
+      Crv18OfficialLearningMapLoopDiagram:
+        module0.Crv18OfficialLearningMapLoopDiagram,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");
