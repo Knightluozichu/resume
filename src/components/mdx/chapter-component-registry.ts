@@ -10873,6 +10873,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EcppItem16ProtocolMap: module0.EcppItem16ProtocolMap,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/02-resource-management/item-17-smart-pointer-statement":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-17-smart-pointer-statement-lab");
+      return {
+        EcppItem17OwnershipGapMap: module0.EcppItem17OwnershipGapMap,
+        EcppItem17SmartPointerLab: module0.EcppItem17SmartPointerLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/03-designs-declarations/item-18-easy-correct-interfaces":
     async () => {
       const module0 =
