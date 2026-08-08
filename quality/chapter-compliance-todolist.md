@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌34 ⚠️0 ✅17）
+## code-complete-2e（51 章 · ❌30 ⚠️0 ✅21）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -768,13 +768,13 @@
     - 路径：`content/code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code.mdx`
 - [x] ✅ **24-conditionals/cc2e-15-conditionals** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/24-conditionals/cc2e-15-conditionals.mdx`
-- [ ] 🔴 P1 **25-loops/cc2e-16-loops** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **25-loops/cc2e-16-loops** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/25-loops/cc2e-16-loops.mdx`
-- [ ] 🔴 P1 **26-unusual-control-structures/cc2e-17-unusual-control-structures** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **26-unusual-control-structures/cc2e-17-unusual-control-structures** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/26-unusual-control-structures/cc2e-17-unusual-control-structures.mdx`
-- [ ] 🔴 P1 **27-table-driven-methods/cc2e-18-table-driven-methods** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **27-table-driven-methods/cc2e-18-table-driven-methods** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/27-table-driven-methods/cc2e-18-table-driven-methods.mdx`
-- [ ] 🔴 P1 **28-general-control-issues/cc2e-19-general-control-issues** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **28-general-control-issues/cc2e-19-general-control-issues** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/28-general-control-issues/cc2e-19-general-control-issues.mdx`
 - [ ] 🔴 P1 **30-software-quality-landscape/cc2e-20-software-quality-landscape** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
     - 路径：`content/code-complete-2e/30-software-quality-landscape/cc2e-20-software-quality-landscape.mdx`

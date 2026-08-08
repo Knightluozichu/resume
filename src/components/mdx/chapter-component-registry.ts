@@ -3849,6 +3849,48 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e15ConditionalsMechanismLab: module0.Cc2e15ConditionalsMechanismLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/25-loops/cc2e-16-loops": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-16-loops");
+    return {
+      Cc2e16LoopsMechanismLab: module0.Cc2e16LoopsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/26-unusual-control-structures/cc2e-17-unusual-control-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-17-unusual-control-structures");
+      return {
+        Cc2e17UnusualControlStructuresMechanismLab:
+          module0.Cc2e17UnusualControlStructuresMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/27-table-driven-methods/cc2e-18-table-driven-methods":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-18-table-driven-methods");
+      return {
+        Cc2e18TableDrivenMethodsContractLab:
+          module0.Cc2e18TableDrivenMethodsContractLab,
+        Cc2e18TableDrivenMethodsAccessLab:
+          module0.Cc2e18TableDrivenMethodsAccessLab,
+        Cc2e18TableDrivenMethodsLadderLab:
+          module0.Cc2e18TableDrivenMethodsLadderLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/28-general-control-issues/cc2e-19-general-control-issues":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-19-general-control-issues");
+      return {
+        Cc2e19GeneralControlIssuesMechanismLab:
+          module0.Cc2e19GeneralControlIssuesMechanismLab,
+        Cc2e19GeneralControlIssuesBooleanLab:
+          module0.Cc2e19GeneralControlIssuesBooleanLab,
+        Cc2e19GeneralControlIssuesComplexityLab:
+          module0.Cc2e19GeneralControlIssuesComplexityLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
