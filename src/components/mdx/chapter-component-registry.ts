@@ -10765,6 +10765,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       await import("@/components/mdx/effective-cpp/diagrams/item-53-compiler-warnings");
     return {
       EcppHiddenVirtualWarningMap: module0.EcppHiddenVirtualWarningMap,
+      EcppItem53WarningLab: module0.EcppItem53WarningLab,
       EcppMultiCompilerWarningMap: module0.EcppMultiCompilerWarningMap,
       EcppWarningLifecycleMap: module0.EcppWarningLifecycleMap,
     } as ChapterMdxComponents;

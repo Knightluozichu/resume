@@ -1,3 +1,14 @@
+"use client";
+
+import { useState } from "react";
+
+const OFFICIAL_CONCEPT_LABELS = [
+  "compiler warnings",
+  "warning level",
+  "different compilers",
+  "portability",
+] as const;
+
 type WarningCell = readonly [stage: string, signal: string, action: string];
 
 function WarningGrid({
@@ -14,7 +25,7 @@ function WarningGrid({
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
         <div
           role="img"
-          aria-label={ariaLabel}
+          aria-label={`${ariaLabel}：${OFFICIAL_CONCEPT_LABELS.join("、")}`}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {cells.map(([stage, signal, action], index) => (
@@ -105,5 +116,136 @@ export function EcppMultiCompilerWarningMap() {
       caption="different compilers 和 libraries 覆盖不同诊断盲区；多工具链矩阵比单一 warning level 更接近 portability 证据。"
       cells={compilerCells}
     />
+  );
+}
+
+const LAB_SCENARIOS = [
+  {
+    id: 1,
+    label: "warning contract",
+    tone: "var(--success)",
+    title: "高 warning level 发现 hidden virtual，override 把意图升为契约",
+    evidence:
+      "warning-level=curated → hidden-virtual=found → override=added → regression=tested",
+    decision: "accept：诊断进入可验证 contract",
+  },
+  {
+    id: 2,
+    label: "zero-new baseline",
+    tone: "var(--warning)",
+    title: "旧项目保留 baseline，但每次 change 不得增加新 warning",
+    evidence:
+      "baseline=versioned → diff=checked → new-warning=blocked → debt=repays",
+    decision: "review：逐模块偿还历史存量",
+  },
+  {
+    id: 3,
+    label: "compiler drift",
+    tone: "var(--danger)",
+    title: "GCC 干净而 Clang 或 MSVC 暴露 portability warning",
+    evidence:
+      "compiler=differs → diagnostic=differs → standard-mode=checked → portability=review",
+    decision: "fail：补齐矩阵或修标准语义",
+  },
+] as const;
+
+export function EcppItem53WarningLab() {
+  const [scenarioId, setScenarioId] = useState(1);
+  const scenario =
+    LAB_SCENARIOS.find((item) => item.id === scenarioId) ?? LAB_SCENARIOS[0];
+
+  return (
+    <section
+      className="my-8 rounded-card border border-border bg-elevated p-5"
+      data-visual-kind="ecpp-item-53-warning-lab"
+      aria-label="Effective C++ Item 53 compiler warnings 实验"
+      aria-labelledby="ecpp-item-53-lab-title"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+            Lab
+          </p>
+          <h3
+            id="ecpp-item-53-lab-title"
+            className="mt-1 text-lg font-semibold text-primary"
+          >
+            Item 53 warning 治理实验
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm text-secondary">
+            先预测诊断会落在契约、baseline 还是 portability，再切换三种 warning 治理样本。
+          </p>
+        </div>
+        <button
+          type="button"
+          className="min-h-11 rounded-button border border-border px-3 py-2 text-sm text-secondary transition hover:border-accent hover:text-accent"
+          onClick={() => setScenarioId(1)}
+          aria-label="重置实验"
+        >
+          重置实验
+        </button>
+      </div>
+      <div
+        className="mt-5 grid gap-3 sm:grid-cols-3"
+        role="tablist"
+        aria-label="Item 53 warning 实验场景选择"
+      >
+        {LAB_SCENARIOS.map((item) => {
+          const selected = item.id === scenarioId;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-pressed={selected}
+              className={`min-h-11 rounded-button border px-3 py-2 text-left text-sm transition ${
+                selected
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-secondary hover:border-accent hover:text-accent"
+              }`}
+              onClick={() => setScenarioId(item.id)}
+            >
+              <span className="block font-semibold">{item.label}</span>
+              <span className="mt-1 block text-xs opacity-80">
+                样本 {item.id}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="rounded-card border border-border p-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: scenario.tone }}
+            />
+            <p className="font-semibold text-primary">{scenario.title}</p>
+          </div>
+          <p className="mt-3 break-words font-mono text-xs text-secondary">
+            {scenario.evidence}
+          </p>
+        </div>
+        <div className="rounded-card border border-border p-4 md:min-w-64">
+          <p className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            判定
+          </p>
+          <p
+            className="mt-2 text-sm font-semibold"
+            style={{ color: scenario.tone }}
+          >
+            {scenario.decision}
+          </p>
+        </div>
+      </div>
+      <p
+        className="mt-4 text-xs text-secondary"
+        role="status"
+        aria-live="polite"
+      >
+        当前样本：{scenario.label}；保存 compiler、warning level、diagnostic id、baseline、mode 与复位轨迹。
+      </p>
+    </section>
   );
 }

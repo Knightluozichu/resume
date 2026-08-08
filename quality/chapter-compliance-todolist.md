@@ -621,7 +621,7 @@
     - 路径：`content/effective-cpp/03-designs-declarations/item-24-non-member-conversions.mdx`
 - [x] ✅ **02-resource-management/item-15-raw-resource-access** — 已修复（2026-08-08，score 73→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-15-raw-resource-access.mdx`
-- [ ] 🟡 P3 **08-miscellaneous/item-53-compiler-warnings** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 72）
+- [x] ✅ **08-miscellaneous/item-53-compiler-warnings** — 已修复（2026-08-08，score 72→100，passed）
     - 路径：`content/effective-cpp/08-miscellaneous/item-53-compiler-warnings.mdx`
 - [ ] 🟡 P3 **04-implementations/item-27-minimize-casting** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 71）
     - 路径：`content/effective-cpp/04-implementations/item-27-minimize-casting.mdx`
