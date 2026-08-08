@@ -10727,6 +10727,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EasyCppFileIoFaultLab: module0.EasyCppFileIoFaultLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/00-accustoming/item-03-use-const": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-03-use-const-lab");
+    return {
+      EcppItem03UseConstLab: module0.EcppItem03UseConstLab,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/efc-learning-map-lab");
