@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T18:45:28.797Z；旧版分数不迁移。
+> 2026-08-08T18:53:57.502Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2311
+- failed：2308
 - queued：344
-- passed：1149
+- passed：1152
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -50,22 +50,22 @@
 | 37 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
 | 38 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
 | 39 | shader-practice | 21 | 21 | 0 | 0 | 63 |
-| 40 | code-complete-2e | 51 | 21 | 0 | 30 | 62 |
-| 41 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
-| 42 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 43 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 44 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 45 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 46 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 47 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 48 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 49 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 50 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
-| 51 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 52 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 53 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
-| 54 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 55 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 40 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
+| 41 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 42 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 43 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 44 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 45 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 46 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 47 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 48 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 49 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
+| 50 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 51 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 52 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
+| 53 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 54 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 55 | code-complete-2e | 51 | 18 | 0 | 33 | 54 |
 | 56 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 57 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 58 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |

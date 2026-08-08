@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌22 ⚠️0 ✅29）
+## code-complete-2e（51 章 · ❌18 ⚠️0 ✅33）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -792,11 +792,11 @@
     - 路径：`content/code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques.mdx`
 - [x] ✅ **38-program-size/cc2e-27-program-size** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/38-program-size/cc2e-27-program-size.mdx`
-- [ ] 🔴 P1 **39-managing-construction/cc2e-28-managing-construction** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **39-managing-construction/cc2e-28-managing-construction** — 已修复（2026-08-09，score 43→95，passed）
     - 路径：`content/code-complete-2e/39-managing-construction/cc2e-28-managing-construction.mdx`
-- [ ] 🔴 P1 **40-integration/cc2e-29-integration** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **40-integration/cc2e-29-integration** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/40-integration/cc2e-29-integration.mdx`
-- [ ] 🔴 P1 **41-programming-tools/cc2e-30-programming-tools** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **41-programming-tools/cc2e-30-programming-tools** — 已修复（2026-08-09，score 43→96，passed）
     - 路径：`content/code-complete-2e/41-programming-tools/cc2e-30-programming-tools.mdx`
 - [x] ✅ **43-layout-and-style/cc2e-31-layout-and-style** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style.mdx`

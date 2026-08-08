@@ -3961,6 +3961,30 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e27ProgramSizeRecoveryLab: module0.Cc2e27ProgramSizeRecoveryLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/39-managing-construction/cc2e-28-managing-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-28-managing-construction");
+      return {
+        Cc2e28ManagingConstructionLab: module0.Cc2e28ManagingConstructionLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/40-integration/cc2e-29-integration": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-29-integration");
+    return {
+      Cc2e29IntegrationLab: module0.Cc2e29IntegrationLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/41-programming-tools/cc2e-30-programming-tools":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-30-programming-tools");
+      return {
+        Cc2e30ProgrammingToolsMechanismLab:
+          module0.Cc2e30ProgrammingToolsMechanismLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-31-layout-and-style");
