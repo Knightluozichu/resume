@@ -3992,6 +3992,37 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e31LayoutAndStyleLab: module0.Cc2e31LayoutAndStyleLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/44-self-documenting-code/cc2e-32-self-documenting-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-32-self-documenting-code");
+      return {
+        Cc2e32SelfDocumentingCodeLab: module0.Cc2e32SelfDocumentingCodeLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/45-personal-character/cc2e-33-personal-character":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-33-personal-character");
+      return {
+        Cc2e33PersonalCharacterLab: module0.Cc2e33PersonalCharacterLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/46-software-craftsmanship/cc2e-34-software-craftsmanship":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-34-software-craftsmanship");
+      return {
+        Cc2e34SoftwareCraftsmanshipLab: module0.Cc2e34SoftwareCraftsmanshipLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/47-more-information/cc2e-35-more-information": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-35-more-information");
+    return {
+      Cc2e35MoreInformationLab: module0.Cc2e35MoreInformationLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");

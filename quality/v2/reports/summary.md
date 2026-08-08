@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T18:53:57.502Z；旧版分数不迁移。
+> 2026-08-08T19:14:36.601Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2308
+- failed：2304
 - queued：344
-- passed：1152
+- passed：1156
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -65,44 +65,44 @@
 | 52 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
 | 53 | unity5 | 18 | 18 | 0 | 0 | 64 |
 | 54 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 55 | code-complete-2e | 51 | 18 | 0 | 33 | 54 |
-| 56 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 57 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 58 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 59 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 60 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
-| 61 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 62 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
-| 63 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 64 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 65 | blender-3d | 17 | 17 | 0 | 0 | 51 |
-| 66 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 67 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 68 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 69 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 70 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 71 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 72 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 73 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 74 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 75 | python-advanced | 16 | 16 | 0 | 0 | 48 |
-| 76 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 77 | large-language-models | 16 | 16 | 0 | 0 | 16 |
-| 78 | csapp | 15 | 15 | 0 | 0 | 74 |
-| 79 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 80 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 81 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 82 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 83 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 84 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 85 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 86 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 87 | ddia | 15 | 15 | 0 | 0 | 44 |
-| 88 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 89 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 90 | effective-executive | 14 | 14 | 0 | 0 | 56 |
-| 91 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 92 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 55 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 56 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 57 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 58 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 59 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
+| 60 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 61 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
+| 62 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 63 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 64 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 65 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 66 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 67 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 68 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 69 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 70 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 71 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 72 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 73 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 74 | python-advanced | 16 | 16 | 0 | 0 | 48 |
+| 75 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 76 | large-language-models | 16 | 16 | 0 | 0 | 16 |
+| 77 | csapp | 15 | 15 | 0 | 0 | 74 |
+| 78 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 79 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 80 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 81 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 82 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 83 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 84 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 85 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 86 | ddia | 15 | 15 | 0 | 0 | 44 |
+| 87 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 88 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 89 | effective-executive | 14 | 14 | 0 | 0 | 56 |
+| 90 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 91 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 92 | code-complete-2e | 51 | 14 | 0 | 37 | 42 |
 | 93 | css-world | 14 | 14 | 0 | 0 | 42 |
 | 94 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
 | 95 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
