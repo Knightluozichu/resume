@@ -3929,6 +3929,29 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e23DebuggingMechanismLab: module0.Cc2e23DebuggingMechanismLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/34-refactoring/cc2e-24-refactoring": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-24-refactoring");
+    return {
+      Cc2e24RefactoringMechanismLab: module0.Cc2e24RefactoringMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/35-code-tuning-strategies/cc2e-25-code-tuning-strategies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-25-code-tuning-strategies");
+      return {
+        Cc2e25CodeTuningStrategiesLab: module0.Cc2e25CodeTuningStrategiesLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-26-code-tuning-techniques");
+      return {
+        Cc2e26CodeTuningTechniquesLab: module0.Cc2e26CodeTuningTechniquesLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/38-program-size/cc2e-27-program-size": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-27-program-size");

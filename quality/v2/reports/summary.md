@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T18:14:44.662Z；旧版分数不迁移。
+> 2026-08-08T18:33:33.830Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2316
+- failed：2312
 - queued：344
-- passed：1144
+- passed：1148
 - published：692
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -25,27 +25,27 @@
 | 12 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 13 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
 | 14 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |
-| 15 | code-complete-2e | 51 | 26 | 0 | 25 | 78 |
-| 16 | fluent-python | 26 | 26 | 0 | 0 | 78 |
-| 17 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
-| 18 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
-| 19 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
-| 20 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
-| 21 | programmers-math | 25 | 25 | 0 | 0 | 75 |
-| 22 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
-| 23 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
-| 24 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
-| 25 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
-| 26 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
-| 27 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
-| 28 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
-| 29 | head-first-java | 23 | 23 | 0 | 0 | 111 |
-| 30 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
-| 31 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
-| 32 | os-concepts | 23 | 23 | 0 | 0 | 92 |
-| 33 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
-| 34 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
-| 35 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 15 | fluent-python | 26 | 26 | 0 | 0 | 78 |
+| 16 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
+| 17 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
+| 18 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
+| 19 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
+| 20 | programmers-math | 25 | 25 | 0 | 0 | 75 |
+| 21 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
+| 22 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
+| 23 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 24 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
+| 25 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 26 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
+| 27 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
+| 28 | head-first-java | 23 | 23 | 0 | 0 | 111 |
+| 29 | game-design-fundamentals | 23 | 23 | 0 | 0 | 98 |
+| 30 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
+| 31 | os-concepts | 23 | 23 | 0 | 0 | 92 |
+| 32 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
+| 33 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
+| 34 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 35 | code-complete-2e | 51 | 22 | 0 | 29 | 66 |
 | 36 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
 | 37 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
 | 38 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |

@@ -732,7 +732,7 @@
 - [x] ✅ **02-resource-management/item-13-resource-managing-objects** — 已修复（2026-08-08，score 58→100，passed）
     - 路径：`content/effective-cpp/02-resource-management/item-13-resource-managing-objects.mdx`
 
-## code-complete-2e（51 章 · ❌26 ⚠️0 ✅25）
+## code-complete-2e（51 章 · ❌22 ⚠️0 ✅29）
 
 - [x] ✅ **00-map/cc2e-official-learning-map** — 已修复（2026-08-08，score 48→100，passed）
     - 路径：`content/code-complete-2e/00-map/cc2e-official-learning-map.mdx`
@@ -784,11 +784,11 @@
     - 路径：`content/code-complete-2e/32-developer-testing/cc2e-22-developer-testing.mdx`
 - [x] ✅ **33-debugging/cc2e-23-debugging** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/33-debugging/cc2e-23-debugging.mdx`
-- [ ] 🔴 P1 **34-refactoring/cc2e-24-refactoring** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **34-refactoring/cc2e-24-refactoring** — 已修复（2026-08-09，score 43→98，passed）
     - 路径：`content/code-complete-2e/34-refactoring/cc2e-24-refactoring.mdx`
-- [ ] 🔴 P1 **35-code-tuning-strategies/cc2e-25-code-tuning-strategies** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **35-code-tuning-strategies/cc2e-25-code-tuning-strategies** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/35-code-tuning-strategies/cc2e-25-code-tuning-strategies.mdx`
-- [ ] 🔴 P1 **36-code-tuning-techniques/cc2e-26-code-tuning-techniques** — 缺/多 Objectives、缺/多 Attribution、缺视觉证据、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 43）
+- [x] ✅ **36-code-tuning-techniques/cc2e-26-code-tuning-techniques** — 已修复（2026-08-09，score 43→99，passed）
     - 路径：`content/code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques.mdx`
 - [x] ✅ **38-program-size/cc2e-27-program-size** — 已修复（2026-08-09，score 43→100，passed）
     - 路径：`content/code-complete-2e/38-program-size/cc2e-27-program-size.mdx`
