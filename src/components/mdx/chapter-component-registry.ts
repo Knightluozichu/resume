@@ -10819,6 +10819,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem10AssignmentLab: module0.EcppItem10AssignmentLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/01-special-members/item-11-self-assignment": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-cpp/diagrams/item-11-self-assignment-lab");
+    return {
+      EcppItem11SelfAssignmentLab: module0.EcppItem11SelfAssignmentLab,
+      EcppItem11SelfAssignmentMap: module0.EcppItem11SelfAssignmentMap,
+    } as ChapterMdxComponents;
+  },
   "effective-cpp/02-resource-management/item-15-raw-resource-access":
     async () => {
       const module0 =
