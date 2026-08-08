@@ -10773,6 +10773,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem05CompilerGeneratedLab: module0.EcppItem05CompilerGeneratedLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/01-special-members/item-06-disallow-generated-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-06-disallow-generated-lab");
+      return {
+        EcppDisallowGeneratedMap: module0.EcppDisallowGeneratedMap,
+        EcppItem06DisallowGeneratedLab: module0.EcppItem06DisallowGeneratedLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/01-special-members/item-10-assignment-return-this":
     async () => {
       const module0 =
