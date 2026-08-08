@@ -3744,6 +3744,25 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e03ReadinessEvidenceMap: module0.Cc2e03ReadinessEvidenceMap,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/v2/cc2e-05-design-in-construction");
+      return {
+        Cc2e05DesignInConstructionEvidenceMap:
+          module0.Cc2e05DesignInConstructionEvidenceMap,
+        Cc2e05DesignInConstructionMechanismLab:
+          module0.Cc2e05DesignInConstructionMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/13-working-classes/cc2e-06-working-classes": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/v2/cc2e-06-working-classes");
+    return {
+      Cc2e06WorkingClassesMechanismLab:
+        module0.Cc2e06WorkingClassesMechanismLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/50-review/cc2e-official-final-review": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-final-review");
