@@ -1,13 +1,13 @@
 # 全书库质量 v2 基线
 
-> 2026-08-08T12:43:01.823Z；旧版分数不迁移。
+> 2026-08-08T14:14:25.390Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
 - failed：2341
-- queued：363
-- passed：1168
-- published：624
+- queued：359
+- passed：1161
+- published：635
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
@@ -140,9 +140,9 @@
 | 127 | real-time-rendering-4e | 24 | 0 | 24 | 0 | 24 |
 | 128 | rust-programming-language | 23 | 0 | 23 | 0 | 23 |
 | 129 | python-crash-course | 22 | 0 | 22 | 0 | 22 |
-| 130 | effective-cpp | 57 | 0 | 19 | 38 | 19 |
-| 131 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
-| 132 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 130 | opengl-superbible | 18 | 0 | 18 | 0 | 18 |
+| 131 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
+| 132 | effective-cpp | 57 | 0 | 15 | 42 | 15 |
 | 133 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 134 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
 | 135 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
@@ -172,7 +172,7 @@
 | 159 | cpp-high-performance | 13 | 0 | 0 | 13 | 0 |
 | 160 | cpp-primer-5e | 20 | 0 | 0 | 20 | 0 |
 | 161 | cpp-primer-plus | 20 | 0 | 0 | 20 | 0 |
-| 162 | cpp-server-essence | 11 | 0 | 0 | 11 | 0 |
+| 162 | cpp-server-essence | 11 | 0 | 0 | 0 | 0 |
 | 163 | cpp-testing-recipes | 13 | 0 | 0 | 13 | 0 |
 | 164 | cpu-eye-cpp | 8 | 0 | 0 | 8 | 0 |
 | 165 | crazy-android | 21 | 0 | 0 | 21 | 0 |
