@@ -629,7 +629,7 @@
     - 路径：`content/effective-cpp/00-intro/learning-map.mdx`
 - [x] ✅ **04-misc/final-review** — 已修复（2026-08-08，score 69→100，passed）
     - 路径：`content/effective-cpp/04-misc/final-review.mdx`
-- [ ] 🟡 P3 **07-customizing-new-delete/item-52-placement-delete-with-placement-new** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+- [x] ✅ **07-customizing-new-delete/item-52-placement-delete-with-placement-new** — 已修复（2026-08-08，score 62→96，passed）
     - 路径：`content/effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new.mdx`
 - [ ] 🟡 P3 **03-designs-declarations/item-22-private-data-members** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
     - 路径：`content/effective-cpp/03-designs-declarations/item-22-private-data-members.mdx`

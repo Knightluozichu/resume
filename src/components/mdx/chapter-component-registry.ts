@@ -10775,6 +10775,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EfcFinalReviewLab: module0.EfcFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-52-placement-delete-lab");
+      return {
+        EcppItem52PlacementDeleteLab: module0.EcppItem52PlacementDeleteLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/08-miscellaneous/item-53-compiler-warnings": async () => {
     const module0 =
       await import("@/components/mdx/effective-cpp/diagrams/item-53-compiler-warnings");
