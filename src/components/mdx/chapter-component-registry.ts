@@ -10748,6 +10748,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EfcLearningMapLab: module0.EfcLearningMapLab,
     } as ChapterMdxComponents;
   },
+  "effective-cpp/01-special-members/item-10-assignment-return-this":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-10-assignment-lab");
+      return {
+        EcppAssignmentFlowMap: module0.EcppAssignmentFlowMap,
+        EcppItem10AssignmentLab: module0.EcppItem10AssignmentLab,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/02-resource-management/item-15-raw-resource-access":
     async () => {
       const module0 =
