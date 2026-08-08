@@ -10925,6 +10925,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         EcppItem46HiddenFriendLab: module0.EcppItem46HiddenFriendLab,
       } as ChapterMdxComponents;
     },
+  "effective-cpp/06-templates-generic-programming/item-47-traits-classes-type-information":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-cpp/diagrams/item-47-traits-lab");
+      return {
+        EcppItem47TraitsLab: module0.EcppItem47TraitsLab,
+        EcppTraitsInformationMap: module0.EcppTraitsInformationMap,
+      } as ChapterMdxComponents;
+    },
   "effective-cpp/07-customizing-new-delete/item-52-placement-delete-with-placement-new":
     async () => {
       const module0 =
