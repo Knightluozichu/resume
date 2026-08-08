@@ -3744,6 +3744,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cc2e03ReadinessEvidenceMap: module0.Cc2e03ReadinessEvidenceMap,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/10-construction-decisions/cc2e-04-construction-decisions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/cc2e-04-construction-decisions");
+      return {
+        Cc2e04ConstructionDecisionsMechanismLab:
+          module0.Cc2e04ConstructionDecisionsMechanismLab,
+      } as ChapterMdxComponents;
+    },
   "code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction":
     async () => {
       const module0 =
