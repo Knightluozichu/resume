@@ -1,255 +1,191 @@
 ---
-title: "Chapter 18: Image Processing"
+title: "GPU Gems 1 · Chapter 18. Spatial BRDFs"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part III · Materials"
 order: 18
-description: "GPU Gems Part: Image Processing, Chapter 18"
+description: "用紧凑的空间 BRDF 参数表示每个表面点的角度反射差异，并支持离散光与预卷积环境光的实时渲染。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-18-spatial-brdfs"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-18
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh18EnvironmentConvolutionDiagram,
+  GpuGemsCh18LafortuneLobesDiagram,
+  GpuGemsCh18SbrdfLab,
+  GpuGemsCh18SbrdfPipelineDiagram,
+  GpuGemsCh18TexturePackingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch18-spatial-brdfs";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 18: Image Processing的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Image Processing, Chapter 18之间的关系是什么？
+- 能区分空间变化与角度变化，并用自己的话解释为什么纹理与 BRDF 的组合比单独的颜色贴图更能描述真实表面
+- 能实现 Lafortune representation 的 diffuse 加多个 specular lobe，并说明 Cx、Cy、Cz、n 和 albedo 各自控制什么
+- 能把每个 texel 的 lobe 参数打包到纹理，在 local surface coordinates 中完成离散光评估
+- 能解释预卷积环境图如何把 sharpness n 映射为 cube mipmap LOD，并在质量、带宽和精度之间做取舍
 
 </Objectives>
 
-## 为什么需要Chapter 18: Image Processing
+一张普通颜色纹理只回答“这个位置是什么颜色”，而一个普通光照模型只回答“这个位置在不同入射、出射方向下如何反射”。真实的木纹、刷痕、丝线和金属表面同时拥有这两种变化：不同位置的材质不同，同一位置从不同角度看也不同。GPU Gems 1 第 18 章把两者合并为 Spatial BRDF，并讨论用紧凑参数在硬件上实时评估。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 18: Image Processing作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Image Processing, Chapter 18正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="SBRDF 不是给每个 texel 存一张完整的四维表">
+完整 BRDF 数据量会随空间位置和入射、出射方向快速膨胀。实用方案用少量可调的 lobe 近似每个 texel 的反射形状，再让纹理存 albedo、shape 和 exponent；先定义参数预算，再谈表现力。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 18: Image Processing从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 18: Image Processing涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 18: Image Processing相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 18: Image Processing相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="Cx、Cy、Cz 不能当普通颜色直接线性插值">
+Lafortune shape 参数会参与非线性函数，八位纹理还需要 scale 和 bias 才能表达负值。对这些通道盲目使用 bilinear 或 trilinear filtering，可能把 lobe 峰值推到错误方向，出现 sparkle；优先使用 point sampling 或验证专门的参数滤波。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="预卷积环境图不是任意 BRDF 的免费积分器">
+环境路径将光照积分近似成预先卷积的 kernel 与一次 lookup，适合受限的 lobe 族。改变参数范围、各向异性方向或环境分辨率时，必须重新检查卷积层、LOD 和能量归一化，否则高光会过亮、过暗或漂移。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="把纹理映射的空间变化与表面 BRDF 的入射、出射角度变化组合起来的反射表示">spatial BRDF</Term> 为每个表面位置保存一组反射参数，而不是让整张物体共享一个材质。这里的空间坐标通常通过 UV 找到 texel，角度则在 shading 时由光向量和视向量提供。这样，同一个模型可以在不同位置混合粗糙、镜面、织物或带方向性的反射行为。
 
-## 性能考量
+<GpuGemsCh18SbrdfPipelineDiagram />
 
-### 批量操作
+## 1. 从 BRDF 到可存储的空间表示
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="描述固定表面点在不同入射方向与出射方向之间反射比例的函数">BRDF</Term> 关注一个点的角度响应；空间 BRDF 再为表面上的每个点提供不同的响应。最直接的方案是在每个 texel 保存完整 BRDF 参数，但参数数量必须足够紧凑，才能接受纹理带宽、缓存和 fragment shader 成本。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+GPU Gems 采用 Lafortune 风格的和式：一个 diffuse reflectance 加上若干 specular terms。可以用下面的结构理解它，而不必把它当成对所有真实光传输的精确测量：
 
-### 避免 CPU-GPU 同步点
+$$
+f_r(p, w_i, w_r) \approx d(p) + \sum_j s_j(p)\,\bigl(C_{x,j}w_{i,x}w_{r,x} + C_{y,j}w_{i,y}w_{r,y} + C_{z,j}w_{i,z}w_{r,z}\bigr)^{n_j}
+$$
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<Term def="Lafortune 风格的空间 BRDF 近似，用少量可调 lobe 的 albedo、方向系数和 exponent 组成反射响应">Lafortune representation</Term> 把每个 term 看作一个可缩放、可偏转的高光形状。<Term def="空间 BRDF 中描述一个局部镜面峰值的单个高光项，包含 albedo、shape 和 sharpness 参数">specular lobe</Term> 的 albedo 控制能量，C 系数控制峰值方向与各向异性，n 控制峰值宽窄。一个、两个或三个 lobe 通常足以表达常见材质的质量与速度折中。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+<GpuGemsCh18LafortuneLobesDiagram />
+
+当 Cx 与 Cy 相等时，响应更接近各向同性；不同符号和不同大小可以把峰值从法线反射方向拉开，表达 off-specular、retroreflection，或沿刮痕和丝线方向不同的 forward/back scattering。需要注意的是，这种灵活性来自参数近似，不能自动恢复测量数据中所有尖峰和遮挡。
+
+## 2. local frame 与 lobe 评估
+
+<Term def="以切线 T、双切线 B 和法线 N 为轴，把光线和视线变换到表面局部坐标后评估 BRDF 的坐标系">local surface coordinates</Term> 将方向对齐到材质的切线框架：z 轴是法线，x、y 轴可以指向木纹、刷痕或织物主方向。顶点阶段应把 light vector 和 eye vector 以一致的坐标约定传给片元阶段，否则 C 系数的方向意义会错位。
+
+离散光路径可以按以下顺序组织：
+
+1. 由 UV 读取 diffuse albedo、每个 lobe 的 albedo 和 shape 参数。
+2. 用 scale-bias 解码八位纹理里的 Cx、Cy、Cz 与 n；若使用浮点纹理，则减少量化误差但增加带宽。
+3. 归一化 local-space 的 to-light 与 to-eye，按 lobe 计算广义点积，再累加 diffuse 和 specular response。
+4. 将每个 light 的 incident radiance 乘上 `max(0, N dot L)`，再把所有 light 的 exitant radiance 相加。
+
+```hlsl
+float3 EvaluateLobe(float3 wi, float3 wr, Lobe lobe) {
+  float3 shearedEye = lobe.C * wr;
+  float shape = max(0.0, dot(shearedEye, wi));
+  return lobe.albedo * pow(shape, lobe.n);
+}
+
+float3 ShadeSbrdf(float2 uv, float3 wi, float3 wr, float3 lightColor) {
+  float3 result = sampleDiffuse(uv);
+  for (int j = 0; j < LOBE_COUNT; ++j) {
+    Lobe lobe = decodeLobe(uv, j);
+    result += EvaluateLobe(normalize(wi), normalize(wr), lobe);
+  }
+  return result * lightColor * max(0.0, wi.z);
+}
 ```
 
-### 内存对齐
+这里的伪代码将 lobe 的形状和入射 irradiance 分开，便于检查能量是否被重复乘入。原始实现还会处理 HDR exposure、alpha 和多个 light；工程实现应保持参数解码、坐标变换和归一化的一致性。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh18TexturePackingDiagram />
 
-## 验证层检查
+八位纹理无法直接覆盖 Cx、Cy 的负值范围，因此需要约定 `encoded = value * scale + bias`，读取后再反解码。示例中可用固定 scale 与 bias 让数值落入可存储范围；实际平台应通过材质范围、压缩格式和误差测试校准，而不是把一个示例常数当成普适物理单位。
 
-启用验证层后，Chapter 18: Image Processing相关的常见错误会被捕获：
+## 3. 纹理采样与质量预算
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+普通 diffuse albedo 通常可以使用线性过滤，因为颜色在空间上的平滑混合较自然；但 Cx、Cy、Cz 与 n 进入非线性 lobe 函数，线性插值可能产生视觉上不连续的峰值、sparkle 或错误各向异性。point sampling 是保守起点，代价是 zoom 或 mip 过渡时可能显得块状。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+有三种常见取舍：
 
-## 本章要点
+- **point sample**：保持每个 texel 的参数离散性，减少参数被混合到非法范围的机会；需要处理纹理放大和 mip 选择。
+- **浮点参数纹理**：减少 scale-bias 和八位量化，适合精细材料；带宽、缓存占用和平台支持会增加成本。
+- **受控滤波**：如果必须平滑参数，应在 lobe 评估之前做约束、重归一化或对 log-sharpness 等更合适的量进行滤波，并用极端 C 值测试。
 
-1. Chapter 18: Image Processing是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+不要只看高光中心截图。应同时检查镜头移动、纹理接缝、远近 mip、斜视角和各向异性方向；一个在静态近景看似准确的压缩策略，可能在动画中产生跳变。
+
+## 4. 用预卷积环境图服务很多空间 BRDF
+
+离散光只需要对有限个 light 评估每个 lobe；环境光则需要对整个入射半球积分。如果每个 texel 都有自己的 BRDF，为每个 BRDF 单独卷积环境图会不可行。<Term def="已按一组反射 kernel 预先积分环境辐射，使运行时可以按方向和 sharpness 快速查表的环境纹理">preconvolved environment map</Term> 的策略是预先卷积若干固定 sharpness 的 kernel，再让运行时用方向与 n 选择合适的层。
+
+最简单的组织方式是把不同 n 的卷积结果放入 cube mipmap：较粗层保存宽 lobe，较细层保存尖 lobe。n 作为 LOD 的依据，lobe 的峰值方向 `p(wr)` 作为 cube lookup 方向；最后用 lobe albedo 和适当的 irradiance factor 组合结果。diffuse 环境项可以单独用法线方向索引的预卷积图。
+
+<GpuGemsCh18EnvironmentConvolutionDiagram />
+
+预卷积的核心近似是把入射积分中的权重集中到 lobe 峰值附近。它减少了运行时成本，但要记住三点：卷积层只覆盖预设 n 集合，峰值方向需要从 local frame 正确变到 world space，且归一化与 irradiance falloff 不能被误当成同一个量。对 HDR 环境图，还要保留足够的动态范围，例如使用 RGBE 或浮点路径。
+
+卷积本身也可能是离线成本。一个朴素实现遍历 cube map 每个面、每个 texel 和每个 incident direction，计算 kernel weight 后归一化；真正的工具链可以加入重要性采样、并行生成、缓存和质量分档，但必须用同一套 BRDF 参数验证离线与运行时方向约定。
+
+## 5. 动手实验：在表现力与带宽之间选方案
+
+先预测四个变化：增加 lobe 数量会提高材质表现力但带来更多纹理读取与 shader 工作；增大 n 会收窄高光并要求更细的预卷积层；把各向异性推离零会让峰值沿切线框架移动；把 shape 参数改成 linear filtering 可能让尖锐 lobe 出现 sparkle。
+
+<GpuGemsCh18SbrdfLab />
+
+实验图是确定性的示意模型，不代替 GPU profile。把它对应到实际材质时，至少记录 lobe 数量、参数纹理格式、采样方式、环境图卷积层和目标分辨率；这样当画质或带宽预算改变时，才知道要牺牲哪一层近似。
+
+## 小结：让每个表面点拥有适度复杂的反射
+
+- spatial BRDF 把纹理的空间变化与 BRDF 的角度变化组合起来，让不同 texel 拥有不同的反射模型。
+- Lafortune representation 用少量 specular lobe 近似 diffuse 之外的复杂反射，albedo、C 系数和 n 分别控制能量、方向和宽窄。
+- local surface coordinates 让各向异性方向进入 lobe 评估；坐标变换和归一化错误会直接表现为高光方向错误。
+- 参数纹理需要处理负值范围、量化和非线性采样；point sampling 是保守起点，浮点纹理和受控滤波是更高成本选项。
+- preconvolved environment map 把环境积分换成方向与 sharpness lookup，必须同时验证卷积层、LOD、HDR 动态范围和 irradiance 近似。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 18: Image Processing涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　一个材质当前只有一个 specular lobe，`n=16`。请把它扩展为两个 lobe：第一个保持宽而弱，第二个变为窄而亮；说明你会新增哪些纹理参数，以及如何避免两个 lobe 的能量被重复归一化。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+为第二个 lobe 新增一组 albedo 与 shape 参数，或在已有纹理中为每个 lobe 分配独立通道；第一个 lobe 使用较小 n 和较低 albedo，第二个使用较大 n 和较高 albedo。每个 lobe 先按自己的 shape 评估，再与各自 albedo 相乘后相加，最终统一检查 light irradiance、HDR exposure 和材质能量范围，不能把整张结果再次无条件放大。
 </Answer>
 
+**问题 2｜推导题**　某个 texel 的编码 Cx 为 160，采用 `value = encoded / 96 - 128 / 96` 解码。计算 Cx，并判断它相对于零是正还是负；再说明如果误省略 bias 会怎样。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+Cx 是 `160 / 96 - 128 / 96 = 32 / 96 ≈ 0.333`，因此它为正。省略 bias 会把同一个编码误读成约 1.667，lobe 峰值会被过度推向一个方向，且响应强度和形状都会偏离预期；这不是单纯的颜色误差。
+</Answer>
+
+**问题 3｜独立实现题**　为一面具有木纹各向异性的墙面选择离散光、预卷积环境光或混合方案。要求镜头移动稳定、近景高光有方向、远景带宽可控，请写出你的参数纹理和验证计划。
+
+<Answer>
+
+可以用参数纹理存 diffuse、一个或两个沿木纹方向的 lobe，并在 local surface coordinates 中评估离散主光；同时用预卷积环境图提供远景和填充环境。近景检查 C 系数、切线框架和 n 的峰值方向，远景检查 cube mip 的 LOD 与量化误差，镜头移动检查 point 或受控滤波是否产生 sparkle，再用 GPU profile 决定是否改用浮点纹理或减少 lobe。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="spatial BRDF">将表面空间变化与 BRDF 角度变化组合起来的反射表示。</GlossaryItem>
+<GlossaryItem term="BRDF">描述固定表面点在入射方向和出射方向之间反射比例的函数。</GlossaryItem>
+<GlossaryItem term="Lafortune representation">用 diffuse 与多个可调 specular lobe 近似空间 BRDF 的参数化表示。</GlossaryItem>
+<GlossaryItem term="specular lobe">表示局部镜面峰值的高光项，包含 albedo、shape 和 sharpness。</GlossaryItem>
+<GlossaryItem term="local surface coordinates">由切线、双切线和法线构成，用于在材质局部方向中评估 BRDF 的坐标系。</GlossaryItem>
+<GlossaryItem term="preconvolved environment map">把环境辐射按反射 kernel 预先积分，运行时按方向和 sharpness 查表的环境纹理。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 18 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 18. Spatial BRDFs"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-18-spatial-brdfs"
+/>
