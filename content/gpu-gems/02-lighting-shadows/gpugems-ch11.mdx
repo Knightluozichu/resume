@@ -1,255 +1,231 @@
 ---
-title: "Chapter 11: Lighting and Shadows"
+title: "GPU Gems 1 · Chapter 11. Shadow Map Antialiasing"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part II · Lighting and Shadows"
 order: 11
-description: "GPU Gems Part: Lighting and Shadows, Chapter 11"
+description: "用 percentage-closer filtering 平均多个 shadow compare，缓解 shadow map 放大造成的锯齿，并在 16 与 4 次采样之间取得质量与性能平衡。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-11
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh11AliasingDiagram,
+  GpuGemsCh11OptimizationDiagram,
+  GpuGemsCh11OverlapDiagram,
+  GpuGemsCh11PcfLab,
+  GpuGemsCh11SampleFootprintDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch11-shadow-map-antialiasing";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 11: Lighting and Shadows的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Lighting and Shadows, Chapter 11之间的关系是什么？
+- 能解释 shadow map 投影到表面后为什么会产生放大锯齿，以及为什么单纯提高分辨率并不总能解决问题
+- 能用 percentage-closer filtering 表达“比较多个深度结果，再平均遮挡比例”的含义
+- 能修改实验中的样本数、footprint、放大程度与抖动开关，预测阴影边界和采样成本的变化
+- 能实现 16 样本与 4 样本 PCF，并说明固定 footprint、硬件 PCF 和空间变化采样模式之间的关系
 
 </Objectives>
 
-## 为什么需要Chapter 11: Lighting and Shadows
+<Callout type="trap" title="陷阱一：把 shadow map 当普通颜色纹理先做模糊">
+**现象 →** 阴影边界似乎变软了，但遮挡判断漂移，漏光和错误的深度比较同时出现。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 11: Lighting and Shadows作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** shadow map 存的是光源视角下的深度，不能像颜色纹理那样先平均深度再判断。平均深度可能来自不同遮挡层，失去“这个接收点是否被挡住”的语义。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Lighting and Shadows, Chapter 11正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 先对每个样本做深度比较，再平均比较结果；这就是 percentage-closer filtering，而不是预过滤 shadow map 的深度值。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：只增加 shadow map 分辨率">
+**现象 →** 近距离边界更细了，但某些与光线近乎平行的表面仍然出现巨大锯齿。
 
-### 设计动机
+**原因 →** 投影会把一个 shadow texel 放大到很多屏幕像素；当光线几乎平行于受影表面时，放大率可以趋近无穷，分辨率无法覆盖所有投影比例。
 
-Vulkan 把Chapter 11: Lighting and Shadows从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 11: Lighting and Shadows涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 11: Lighting and Shadows相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 11: Lighting and Shadows相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 用一片覆盖区域的多个 compare 估计遮挡比例。分辨率提升可以配合 PCF，但不能代替采样 footprint 的设计。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：每个像素固定做十六次采样就结束">
+**现象 →** 阴影很平滑，但片元成本过高；改成四次采样后又出现规则网格或闪烁。
+
+**原因 →** 4×4 区域的覆盖范围和采样数量是两个变量。四样本方案要保持大 footprint，并让每个屏幕位置选择不同的四点，才能把黑白结果抖动成稳定灰度。
+
+**修法 →** 先用 16 samples 建立质量基线，再用确定性的屏幕位置模式选 4 samples；比较边界、缓存命中和帧时间，而不是只看单张截图。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 直觉引入：阴影边界不是一条线，而是一片被覆盖的区域
 
-## 性能考量
+把 shadow map 想成光源拍下的一张深度照片。接收点投影到照片上，比较照片里最近的遮挡物深度和接收点自己的光源深度：如果接收点更远，它就在阴影里。单次比较只能回答 0 或 1。
 
-### 批量操作
+问题在于，照片上的一个 texel 可能覆盖屏幕上的许多像素。此时一个 0 或 1 会被放大成阶梯边界。真实的软边并不是把深度照片涂模糊，而是询问一片 footprint 里的多个样本，有多少个比较结果认为接收点被遮挡。这个比例就是更有用的阴影值。
 
-Vulkan 鼓励批量提交而非逐个提交：
+## 1. shadow map 的放大锯齿从哪里来
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<Term def="从光源视角渲染的深度纹理；接收点通过投影坐标与其中的深度比较来判断是否被遮挡">shadow map</Term> 的基本流程是：先把场景从光源视角渲染到深度纹理，再在正常相机的片元 shader 中把当前点送入 light space。比较接收点深度与 shadow map 深度，得到遮挡结果。
 
-### 避免 CPU-GPU 同步点
+<Term def="shadow map 的一个纹理元素覆盖多个屏幕像素时，阴影边界被放大成阶梯或闪烁的采样伪影">shadow map aliasing</Term> 不是简单的“纹理太小”。投影比例由相机、光源方向、表面倾角和深度范围共同决定。尤其当光线几乎平行于受影表面时，邻近屏幕像素映射到 shadow map 的位置变化很小，一个 texel 会对应很大的屏幕区域。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<GpuGemsCh11AliasingDiagram />
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+设接收点的光源深度为 $z_r$，第 i 个 shadow sample 的深度为 $z_i$。单次硬比较可以写成：
+
+$$
+c_i = 1 if z_r is behind z_i, otherwise 0
+$$
+
+实际 shader 会使用 bias、硬件比较器和投影坐标处理阴影 acne 等工程细节。本章的关键转折是：不要让一个 c_i 代表整块屏幕像素，而是让一组 c_i 代表一个采样区域。
+
+## 2. percentage-closer filtering：比较后再平均
+
+<Term def="对多个 shadow map 样本分别做深度比较，再平均比较结果以估计一个区域中有多少比例处于阴影的过滤方法">percentage-closer filtering</Term>（PCF）输出的不是平均深度，而是平均“更靠近光源的样本比例”或其阴影互补值。用 n 个样本表示时：
+
+$$
+s = (c_1 + c_2 + ... + c_n) / n
+$$
+
+其中 s 是遮挡比例。若 16 个比较中有 6 个认为接收点被挡住，阴影比例就是 6/16；材质可以用它混合亮部和暗部，而不是在 0 与 1 之间突然跳变。
+
+<Term def="把屏幕像素对应到 shadow map 空间的一片采样区域；它定义过滤覆盖范围，不等于采样点的数量">sampling footprint</Term> 需要和目标边缘宽度匹配。章节采用一个固定的 4×4 texel 区域，区域故意不对齐 texel 边界；这样既能覆盖足够大的范围，又不需要把代表屏幕像素的四边形显式变换到 shadow map 空间。
+
+<GpuGemsCh11SampleFootprintDiagram />
+
+要特别区分两个旋钮：
+
+| 概念 | 含义 | 变大后的代价 |
+| --- | --- | --- |
+| footprint | 在 shadow map 上覆盖多大的区域 | 边界更软，但可能混入不该混合的遮挡层 |
+| samples | 区域内实际做多少次 compare | 结果更稳定，但片元 fetch 与比较更多 |
+| shadow resolution | 深度纹理的 texel 数量 | 占用更多显存，不能消除极端投影放大 |
+
+## 3. 16 样本固定区域：先建立质量基线
+
+<Term def="对一个固定 4×4 shadow-map footprint 中的十六个偏移点逐一比较深度，再求平均的 PCF 基线">brute-force 16-sample PCF</Term> 是最容易验证的版本。对于一张宽度为 W、高度为 H 的 shadow map，texel scale 是 1/W 与 1/H；偏移取 -1.5、-0.5、0.5、1.5，覆盖相邻但不以 texel 边界对齐的 4×4 区域。
+
+下面的伪代码保留算法结构，省略具体图形 API 的 compare sampler 细节：
+
+```glsl
+float pcf16(sampler2DShadow shadowMap,
+            vec4 shadowCoord,
+            vec2 texelScale) {
+  float result = 0.0;
+  for (float y = -1.5; y <= 1.5; y += 1.0) {
+    for (float x = -1.5; x <= 1.5; x += 1.0) {
+      vec2 offset = vec2(x, y) * texelScale * shadowCoord.w;
+      result += textureProj(shadowMap,
+                            vec4(shadowCoord.xy + offset,
+                                 shadowCoord.z, shadowCoord.w));
+    }
+  }
+  return result / 16.0;
+}
 ```
 
-### 内存对齐
+这里的 sampler2DShadow 假定硬件会先比较深度再返回比较结果；如果平台不支持比较采样器，就需要手写采样深度、比较和平均。无论实现路径如何，**先 compare、后 average** 是不可替换的语义。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<Term def="由图形硬件在采样 shadow map 时完成多次深度比较并插值的比较采样路径，减少 shader 中的显式工作">hardware PCF</Term> 可以把一次采样变成四次深度 compare，再利用坐标的小数部分插值阴影值。单个 texel-size 区域通常不够平滑，但 shader 可以组合硬件 PCF 结果扩大到 4×4 footprint。硬件不是魔法：它仍然受到比较次数、缓存和纹理投影的约束。
 
-## 验证层检查
+## 4. 用四样本覆盖同一片区域
 
-启用验证层后，Chapter 11: Lighting and Shadows相关的常见错误会被捕获：
+<Term def="让每个屏幕位置从固定 4×4 footprint 中选择不同的四个样本，以较少比较近似十六样本 PCF 的抖动采样策略">dithered 4-sample PCF</Term> 不是把 4×4 footprint 缩成 2×2。它保持大区域，只改变本像素使用其中哪四个点。相邻屏幕位置使用不同的四点组合后，黑白的单次结果在空间上被分散，最终看起来像连续灰度。
 
+一个确定性的模式可以使用屏幕位置的分数部分选择偏移。下面只展示一个教学版的四点布局：
+
+```glsl
+vec2 cell = floor(fract(screenPosition.xy * 0.5) * 2.0);
+float x = cell.y > 0.5 ? 0.5 : -1.5;
+float y = cell.x > 0.5 ? 0.5 : -1.5;
+
+float result = 0.0;
+result += shadowCompare(shadowCoord, vec2(x, y));
+result += shadowCompare(shadowCoord, vec2(x + 2.0, y));
+result += shadowCompare(shadowCoord, vec2(x, y + 2.0));
+result += shadowCompare(shadowCoord, vec2(x + 2.0, y + 2.0));
+return result * 0.25;
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+工程实现需要把 cell 映射成有效的偏移模式，并注意投影坐标的 w、texel scale 和 shadow bias。抖动的目标是让样本分布随屏幕位置变化，而不是引入不可复现的随机数；确定性模式更容易调试，也更容易比较帧间稳定性。
 
-## 本章要点
+<GpuGemsCh11OptimizationDiagram />
 
-1. Chapter 11: Lighting and Shadows是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+在 16 samples 与 4 samples 之间做选择时，先比较同一 footprint 下的边界误差，再检查片元成本。四样本通常更快，但在非常高对比度的细节上可能有更多抖动；十六样本更稳定，却不应成为所有灯光和所有像素的默认代价。
+
+## 5. 为什么固定区域能在放大时工作
+
+<Term def="相邻屏幕像素投影到 shadow map 后，其 PCF footprint 彼此覆盖的关系；放大越强时，邻近采样区域越接近并重叠">sample-region overlap</Term> 是固定 footprint 方案的核心直觉。shadow map 被放大时，相邻屏幕像素映射到纹理上的位置距离更小；虽然每个像素仍使用同样大小的采样区域，但两个区域会大量重叠。
+
+<GpuGemsCh11OverlapDiagram />
+
+设相邻屏幕像素分别得到 s0 和 s1。如果它们的 sample footprint 只移动很小距离，两个区域共享大部分比较结果，s0 到 s1 的变化也会很小。于是放大并不会制造新的跳变，反而让边界的 shadow coefficient 更连续。硬件使用有限精度表示这个比例时，仍然需要注意高对比度边界和输出格式的量化。
+
+这也解释了为什么直接提高分辨率不是完整答案：分辨率试图让 texel 变小，PCF 则让一个像素拥有一个区域统计。两者可以一起用，但解决的是不同层次的问题。
+
+## 6. 用实验把质量、成本和稳定性分开
+
+猜一猜：先把 sampleMode 切到 16，再逐渐提高 shadow map 放大程度；然后切到 4 samples 并启用抖动。你应该看到 footprint 仍然覆盖边界，但每像素 compare 数量下降。最后把 footprint 调小，观察边界变硬，而不是把深度值算错。
+
+<GpuGemsCh11PcfLab />
+
+实验中的 magnification 改变投影放大的程度，radius 改变采样窗口的覆盖范围，1/4/16 三档改变实际比较次数。dither 是确定性的屏幕位置模式，showSamples 用来把抽象的 compare 变成可检查的采样点。把这几个控制分开，才能判断问题来自投影、过滤范围还是样本预算。
+
+## 小结：PCF 平均的是遮挡答案
+
+- shadow map aliasing 来自投影放大；单次 depth compare 只能给出跳变的 0/1。
+- PCF 对多个深度比较结果求平均，得到一个 footprint 内的遮挡比例。
+- 固定 4×4 footprint 可以避开复杂的屏幕像素四边形变换，并在放大时利用相邻区域重叠。
+- 16-sample PCF 是质量基线；dithered 4-sample PCF 保留大 footprint、减少每像素比较。
+- hardware PCF 可以先在硬件中完成比较，shader 仍需管理更大的 footprint、投影坐标和 bias。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 11: Lighting and Shadows涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　把实验分别切换到 1、4、16 samples，在相同的 footprint 和 magnification 下记录边界观感与每像素 fetch 数。解释为什么 4 samples 仍然能比 1 sample 更平滑。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+1 sample 只产生一个 0/1 判断，边界会阶梯化；4 samples 在同一片区域里得到四个比较结果并取平均，因此能出现更多中间值。16 samples 进一步降低抽样噪声，但每像素比较成本也按样本数增加。
 </Answer>
 
+**问题 2｜推导题**　一个 4-sample PCF 的比较结果为 1, 1, 0, 1，其中 1 表示接收点被遮挡。阴影比例是多少？如果只使用第一个样本，结果会丢失什么信息？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+阴影比例是 (1 + 1 + 0 + 1) / 4 = 0.75。只看第一个样本只能得到完全遮挡或完全不遮挡，无法表达 footprint 内四分之一的亮区，因此边界会更硬、更容易出现放大锯齿。
+</Answer>
+
+**问题 3｜独立实现题**　实现一个固定 4×4 footprint 的 dithered 4-sample PCF。除了平均帧时间，你会记录哪些指标来判断它是否真的接近 16 samples？
+
+<Answer>
+
+记录阴影边界的最大位置误差、相邻像素 shadow coefficient 的变化、帧间闪烁次数、每像素纹理 fetch 与 compare 数、纹理缓存命中情况，以及不同光线角度下的结果。若只测平均 FPS，可能掩盖高对比度边界上的抖动和投影极端情况。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="shadow map">从光源视角生成的深度纹理，用接收点的 light-space 深度比较遮挡。</GlossaryItem>
+<GlossaryItem term="shadow map aliasing">shadow texel 被投影放大到多个屏幕像素后产生的锯齿、跳变或闪烁。</GlossaryItem>
+<GlossaryItem term="percentage-closer filtering">先逐样本比较深度，再平均比较结果以估计遮挡比例的过滤方法。</GlossaryItem>
+<GlossaryItem term="sampling footprint">屏幕像素对应到 shadow map 上的一片采样覆盖区域。</GlossaryItem>
+<GlossaryItem term="brute-force 16-sample PCF">对固定 4×4 区域的十六个偏移点逐一比较并平均的 PCF 基线。</GlossaryItem>
+<GlossaryItem term="hardware PCF">由硬件完成多次 shadow depth compare 并插值的比较采样路径。</GlossaryItem>
+<GlossaryItem term="dithered 4-sample PCF">保持大 footprint、随屏幕位置选择不同四点的低成本 PCF 近似。</GlossaryItem>
+<GlossaryItem term="sample-region overlap">相邻屏幕像素的 PCF 采样区域彼此重叠的关系。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 11 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 11. Shadow Map Antialiasing"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing"
+/>
