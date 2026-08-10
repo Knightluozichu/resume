@@ -1,255 +1,175 @@
 ---
-title: "Chapter 47: Rendering Techniques"
-type: B
-section: "计算机图形学与渲染"
+title: "GPU Gems 2 · Chapter 47. Flow Simulation with Complex Boundaries"
+type: C
+section: "GPU Gems 2 Part VI · Simulation and Numerical Algorithms"
 order: 47
-description: "GPU Gems Part: Rendering Techniques, Chapter 47"
+description: "用 Lattice Boltzmann Method 在 GPU 上模拟复杂边界流体：从 D2Q9/D3Q19 分布、collision/streaming，到动态 voxelization、边界反射和粒子可视化。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-47-flow-simulation-complex"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-47
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh47BoundaryBounceDiagram,
+  GpuGemsCh47D2Q9Diagram,
+  GpuGemsCh47LbmFlowLab,
+  GpuGemsCh47LbmPipelineDiagram,
+  GpuGemsCh47ParticleAdvectionDiagram,
+  GpuGemsCh47VoxelPeelingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch47-lbm-boundaries";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 47: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 47之间的关系是什么？
+- 能解释 LBM 节点、D2Q9/D3Q19 分布、density 和 velocity 的关系，并区分 2D 与 3D 的存储规模
+- 能逐步描述 GPU 上的 equilibrium、collision、streaming 和 boundary update 数据流
+- 能把静态、移动或变形几何转换为 lattice 对齐的边界节点，并说明 GPU voxelization 为什么避免 CPU-GPU 传输瓶颈
+- 能通过实验调整障碍物、relaxation 和步数，观察速度场、bounce-back 与粒子可视化的变化
 
 </Objectives>
 
-## 为什么需要Chapter 47: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 47: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 47正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要只把速度纹理当成 LBM 的完整状态">
+现象：只保存 density 和 velocity，下一步无法恢复正确的流体演化。原因：LBM 的状态是各离散速度方向上的 packet distributions，宏观量只是由它们求和得到的派生结果。修法：按 e_qi 保存分布数组或纹理，先从分布计算宏观量，再生成 equilibrium 并更新全部方向。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 47: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 47: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 47: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 47: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要让 streaming 读写同一份分布纹理">
+现象：某些方向的 packet 被重复传播，流场出现设备相关的噪声。原因：streaming 同时读取上一时间步并写入下一时间步，原地更新会让后写入的节点读到已经改变的值。修法：使用 source/target 分布纹理，按一个时间步完成 collision 和 propagation 后再交换。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要只更新移动几何的可见表面而跳过 revoxelization">
+现象：障碍物已经移动，流体仍按照旧轮廓反射，边界附近出现穿透或空洞。原因：LBM 只认识对齐到 lattice 的离散 boundary nodes，连续网格改变后旧体素位置不再有效。修法：每次边界变化都重新 voxelize，更新位置、壁面速度和边界平面属性。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+直接解 Navier–Stokes 往往很贵，而图形应用通常更需要“足够可信、可以实时更新”的流场。LBM 把连续流体换成规则格点：每个格点保存几组沿离散方向移动的 packet，局部规则反复更新，就能在宏观上产生密度和速度场。
 
-## 性能考量
+本章的难点不只是流体公式，还包括障碍物和动态边界。复杂网格必须变成 lattice 能理解的离散节点；如果每帧在 CPU 上 voxelize 再把边界传回 GPU，数据传输会吞掉模拟收益。因此边界生成、LBM 更新、粒子 advect 和渲染都尽量留在 GPU。
 
-### 批量操作
+## 1. 从 packet distributions 到 D2Q9
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="用离散速度方向上的分布函数更新流体宏观量的格点流体方法">Lattice Boltzmann Method</Term> 把空间划成 Cartesian lattice。每个节点保存多个分布 `f_qi`，离散时间步中先让它们在局部碰撞，再沿对应速度方向传播到邻居。宏观 density 是所有分布的和，velocity 是按方向加权后的动量。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<Term def="二维九速度格点模型：一个静止方向、四个轴向和四个对角方向">D2Q9</Term> 有 9 个 packet distributions：中心项、上/下/左/右四个轴向项，以及四个对角项。3D 版本常用 D3Q19，每个节点有 19 个方向，内存主要就消耗在这些分布数组上。
 
-### 避免 CPU-GPU 同步点
+<GpuGemsCh47D2Q9Diagram />
+
+```text
+rho = sum(q = 0 .. Q - 1, f[q])
+u   = sum(q = 0 .. Q - 1, f[q] * e[q]) / rho
+```
+
+D2Q9 和 D3Q19 不是两种渲染材质，而是状态布局契约：每个方向都有自己的邻居偏移、权重和反向方向。选择模型时要同时考虑目标维度、边界精度、纹理数量和每步需要更新的带宽。
+
+## 2. equilibrium、collision 和 streaming
+
+<Term def="把当前 density 和 velocity 代入局部平衡分布，并按 relaxation 参数让实际分布靠近平衡的更新阶段">collision</Term> 在每个节点局部完成。简化地说，先由 `rho` 和 `u` 计算 `f_eq`，再用 `f_post = f + ω(f_eq − f)` 松弛到平衡。`ω` 影响粘性和稳定性，过激的参数可能放大数值误差。
+
+<Term def="把某个离散方向的分布沿 e_qi 搬到相邻 lattice 节点，形成下一时间步输入的传播阶段">streaming</Term> 把 collision 后的 packet 按方向搬运。中心分布留在原节点，其他方向写入对应邻居；GPU 实现通常从 source textures 读取上一时间步，在 target textures 中形成下一步。
+
+<GpuGemsCh47LbmPipelineDiagram />
+
+一个时间步的逻辑顺序是：读分布纹理 → 生成 density/velocity → 生成 equilibrium distributions → collision 与 streaming → 应用边界和 outflow → 交换分布纹理。每个阶段可以由 fragment program 对应纹理 texel 执行，3D 数据则拆成切片堆或 tiled 2D texture。
+
+## 3. GPU 数据布局和内存路径
+
+将所有相同速度向量的分布分到一组数组，能让每一张 2D texture 保持原 lattice 的布局。D2Q9 就是 9 张方向纹理或经过通道 packing 的若干纹理；每次更新时同一 lattice 坐标从各方向取样，计算一个节点的宏观量和新分布。
+
+这里的性能边界通常是带宽，而不是单条公式。需要减少重复读取、合理复用 density/velocity 的中间纹理，并用双缓冲隔离时间步。原章的 GPU 实现还把计算、边界处理、粒子位置更新和渲染串在同一显存路径中，避免每步搬运大型状态数组。
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+bindTextures(sourceDistributions);
+renderQuad(equilibriumAndCollision);
+renderQuad(streamingAndBoundary);
+swap(sourceDistributions, targetDistributions);
 ```
 
-### 内存对齐
+这段伪代码只表达资源关系：具体 shader 可以合并阶段，也可以为了边界分支单独处理。验证时应先对照 CPU LBM 的每个方向分布，再比较 density、velocity 和粒子轨迹，不能只看最终画面是否像流体。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. 复杂边界：从连续几何到 lattice 节点
 
-## 验证层检查
+<Term def="把连续或网格几何投影、分层并转换为 lattice 对齐体素位置和附加属性的过程">voxelization</Term> 把任意模型变成 Cartesian grid volume。静态障碍可以预计算；移动或变形物体则需要每次几何改变都重新生成边界节点。除了位置，还需要 wall velocity 和用于边界平面计算的系数。
 
-启用验证层后，Chapter 47: Rendering Techniques相关的常见错误会被捕获：
+<GpuGemsCh47VoxelPeelingDiagram />
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+简单的 slicing 会沿一个方向逐层移动 clip slab，render pass 数等于 slice 数。原章从三个正交方向进行 depth peeling，得到覆盖的体素集合，允许少量重复，因为重复不会损害体素边界的准确性。GPU 当前 fragment 无法 scatter 到任意输出位置，所以先把体素属性放入 vertex array，再通过 vertex program 将每个体素点放回正确位置。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+## 5. boundary condition：bounce-back 与动态壁面
 
-## 本章要点
+<Term def="把 lattice link 与固体或流体交界处的反射、壁面速度和出流规则编码到分布更新中的边界规则">boundary condition</Term> 只对内部节点的 LBM 方程还不够。边界 link 两侧的两个分布方向相反且共线；简单的 bounce-back 把撞到固体的分布反射回去，曲壁和移动壁面则要加入交点位置与 `u_w` 修正。
 
-1. Chapter 47: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<GpuGemsCh47BoundaryBounceDiagram />
+
+对于动态边界，voxel array 还携带 voxel position、wall velocity 和 polygon plane coefficients。渲染边界顶点数组时，可以通过不同颜色通道和顶点平移，让一个 boundary node 收到它需要的相反方向分布。边界处理必须和 source/target 分布的时间步严格对齐，否则几何虽然更新了，packet 仍会按照旧墙面反射。
+
+## 6. 可视化：让速度场可读
+
+LBM 状态本身不容易直接观察，因此从入口注入带颜色的 particles，按当前 velocity field 更新位置。粒子越过出口或停在零速度区域时回收到入口；总粒子数保持固定，便于使用 vertex array 渲染。
+
+<GpuGemsCh47ParticleAdvectionDiagram />
+
+先预测：把圆形障碍物换成条形障碍物，哪一侧更可能产生长尾涡流？把显示粒子关闭后，速度格点仍然应该变化，因为粒子只是可视化层，不是 LBM 的状态变量。
+
+<GpuGemsCh47LbmFlowLab />
+
+实验用小型 D2Q9 网格实际执行 equilibrium、collision、streaming 和边界反射；它刻意牺牲规模换取可读性。真实 3D D3Q19 系统的内存和带宽更大，但数据流、双缓冲和动态边界的契约相同。
+
+## 小结
+
+- LBM 用离散方向分布表示流体，D2Q9 和 D3Q19 决定每个节点的状态规模。
+- collision 让分布靠近平衡，streaming 把 packet 沿 lattice link 传播到邻居。
+- GPU 用方向纹理和 source/target 双缓冲把每个时间步写成规则数据流。
+- 动态几何必须重新 voxelize，边界节点要携带位置、壁面速度和几何属性。
+- 粒子 advect 是观察速度场的可视化层，不能替代分布状态或边界条件。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 47: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜模型与状态**　为什么 D2Q9 实现不能只保存 density 和 velocity？如果把 D2Q9 换成 D3Q19，首先会增加哪一类成本？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+LBM 下一步的 collision 和 streaming 需要每个离散方向的分布，density 和 velocity 只是从分布求出的宏观量。换成 D3Q19 首先增加每节点分布数组、纹理/通道存储、取样和更新带宽，随后才是三维边界和切片管理成本。
 </Answer>
 
+**问题 2｜改写 Demo**　为实验增加一个可移动障碍物，让每次位置变化都重新生成 obstacle mask。为什么不能只移动绘制的灰色形状？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+LBM 的反射发生在 lattice 对齐的离散 boundary nodes 上。只移动可见形状而不重建 mask，streaming 仍会把 packet 送进旧障碍或从旧位置反射。必须更新体素位置和相关边界属性，再用新 mask 参与当前时间步。
+</Answer>
+
+**问题 3｜GPU 排查**　如果粒子轨迹看起来正确但速度场出现噪声，按什么顺序检查？
+
+<Answer>
+
+先关闭粒子，仅比较 CPU 与 GPU 的 density、velocity 和每个方向分布；再检查 source/target 是否在时间步末交换，确认 streaming 没有原地读写；接着检查 obstacle mask、bounce-back 的 opposite direction 和 inlet/outflow；最后才调整 relaxation、精度和纹理 packing。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="Lattice Boltzmann Method">用离散速度方向上的分布函数更新格点流体宏观量的方法。</GlossaryItem>
+<GlossaryItem term="D2Q9">二维九速度模型，一个中心方向、四个轴向和四个对角方向。</GlossaryItem>
+<GlossaryItem term="collision">根据 density、velocity 和 equilibrium distribution 松弛当前节点分布的阶段。</GlossaryItem>
+<GlossaryItem term="streaming">沿离散速度方向把 distribution 搬到相邻 lattice 节点的阶段。</GlossaryItem>
+<GlossaryItem term="voxelization">把连续几何转换为 lattice 对齐体素位置和属性的过程。</GlossaryItem>
+<GlossaryItem term="boundary condition">规定分布撞到固体、移动墙面或流场出口时如何更新的规则。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 47 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 2 Chapter 47 “Flow Simulation with Complex Boundaries”的独立重写，保留 Wei Li、Zhe Fan、Xiaoming Wei 与 Arie Kaufman 原章关于 LBM、D2Q9/D3Q19、distribution textures、collision/streaming、GPU voxelization、复杂动态边界、bounce-back、粒子可视化和 GPU 加速的核心内容，并整理为可验证的现代 GPU 流体模拟学习路径。原始章节：[NVIDIA GPU Gems 2 Chapter 47](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-47-flow-simulation-complex)
+
 </Attribution>
