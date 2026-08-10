@@ -1,0 +1,138 @@
+---
+title: "GPU Gems 2 · Chapter 12. Tile-Based Texture Mapping"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 12
+description: "用 Wang tiles、packed tile texture 和 index texture 在 fragment shader 中合成大虚拟纹理，保持原始 geometry/UV 不变并处理边缘过滤与 mipmap。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-12-tile-based-texture-mapping"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-12
+---
+
+import {
+  GpuGems2Ch12LookupDiagram,
+  GpuGems2Ch12MipmapDiagram,
+  GpuGems2Ch12TileTextureLab,
+  GpuGems2Ch12VirtualTextureDiagram,
+  GpuGems2Ch12WangTileDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch12-tile-textures";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释大纹理的尺寸、存储和带宽限制，以及 tile-based mapping 的虚拟纹理思路
+- 能用 Wang tile 的 edge color 约束构建无缝、低重复的 tile set
+- 能实现 UV → index texture → packed tile texture 的两次 fragment lookup，并保留正确 derivatives
+- 能说明 lower-resolution mipmap 为什么会跨错 tile，以及 edge sanitization 如何缓解 seam 和 popping
+
+</Objectives>
+
+<Callout type="trap" title="不要把 tile 拼接只理解成重复 UV">
+**现象 →** 大墙纹理出现明显周期重复，或者为了避免重复把整张大纹理重新存一份。
+
+**原因 →** 单一 tile 的平铺没有非周期组合，简单 atlas 也没有为每个输出区域生成可扩展的选择。
+
+**修法 →** 使用带 edge color 约束的 Wang tile set，用 index texture 选择不同 tile，让输出可以很大且不必改原始 geometry/UV。
+
+</Callout>
+
+<Callout type="trap" title="不要让 index texture 参与 mipmap 插值">
+**现象 →** 相邻 tile 的行列索引被线性混合，shader 选出了不存在的 tile 坐标。
+
+**原因 →** index 是离散 mapping data，不是连续颜色或法线。
+
+**修法 →** index texture 使用离散读取且不生成 mipmap；最终 packed tile 的颜色采样才使用显式 derivatives 计算 LOD。
+
+</Callout>
+
+<Callout type="trap" title="不要直接对 packed tiles 自动生成所有 mipmap">
+**现象 →** 高分辨率看似无缝，低分辨率出现 seam、aliasing 或随镜头移动的 popping。
+
+**原因 →** packed layout 中相邻的内存 tile 不一定是 virtual texture 中相邻的 tile，自动平均会跨错边界。
+
+**修法 →** 对每个 mip level 按 edge color 统一平均边缘，保证低层仍是合法 Wang tiles；必要时连 corners 一起处理，但注意过度模糊。
+
+</Callout>
+
+大型墙面、地面和地形纹理同时受显存、加载带宽和单纹理尺寸上限约束。<Term def="用少量 tile 在运行时合成、对应用隐藏大尺寸细节的虚拟输出纹理">virtual texture</Term>把输出规模与存储规模解耦：应用仍使用原始 geometry 和 UV，fragment shader 负责回答 texture request。
+
+<GpuGems2Ch12VirtualTextureDiagram />
+
+## 1. Wang tiles 与 edge color
+
+<Term def="四条边带有离散颜色编码、相邻 tile 共享边必须匹配的方形纹理 tile">Wang tiles</Term>通过边界约束避免任意重复。两个 tile 共享边时，南北或东西 edge color 必须相同；只要匹配边上图案连续，硬件双线性过滤跨边采样也不会产生明显断裂。
+
+<Term def="描述 Wang tile 边界兼容关系的离散边缘标识，而非最终像素颜色">edge color</Term>是组合规则。tile set 可以手工绘制，也可以从自然纹理算法生成；关键是边缘连续和组合后具有足够的变化。
+
+<GpuGems2Ch12WangTileDiagram />
+
+## 2. Tile packing 与两次查样
+
+<Term def="把多个输入 tile 放入一张 packed texture 并依据边缘编码计算其行列位置的布局">tile packing</Term>将 tile 集合装入单张输入纹理，避免每块 tile 都绑定独立资源。对输出 UV 先缩放得到 virtual tile 坐标，再读取 <Term def="为每个输出区域保存 packed tile 行列坐标的离散纹理">index texture</Term>。
+
+<GpuGems2Ch12LookupDiagram />
+
+取出 tile 坐标后，用缩放 UV 的 fractional part 采样 packed tile 的局部 texel。最终查样要把 `ddx` 和 `ddy` 传给纹理函数，保证 LOD 依据 virtual texture 的尺度而不是 packed layout 的偶然邻接。
+
+## 3. Mipmap 与过滤边界
+
+<Term def="在每个低分辨率 mip 层按共享 edge color 重新平均 tile 边缘、避免 packed layout 错误混合的校正过程">mipmap sanitization</Term>是 tile-based mapping 的质量关键。直接自动生成 mipmap 会把物理相邻但虚拟不相邻的 tile 混起来；低层过滤 footprint 越大，错误越明显。
+
+<GpuGems2Ch12MipmapDiagram />
+
+实际可以只 sanitise edges，因为低分辨率自然纹理通常已经趋于均匀；若需要更严格连续性，也可以校正 corners，但会增加模糊。另一条边界是最高可用 mip level 受 packed tile 总尺寸限制，输出虚拟纹理再大也不能凭空获得未存储的超粗层。
+
+## 4. 动手实验：组合、LOD 与连续性
+
+增大 tile 网格，观察 virtual texture 变化；提高 mip level 并关闭 sanitization，观察 seam/popping 风险；切换 line-art 和 organic，思考为什么 tile construction 与 filtering 不能完全分开。
+
+<GpuGems2Ch12TileTextureLab />
+
+## 小结
+
+- tile-based texture mapping 用少量 tile 合成大 virtual texture，避免单纹理尺寸和存储瓶颈。
+- Wang tiles 通过 matching edge color 获得非周期、连续的组合。
+- fragment shader 先查 index texture，再查 packed tile，并显式传 derivatives。
+- index 是离散 mapping，不应 mipmap 插值；颜色采样需要正确的 virtual LOD。
+- mipmap sanitization 让低层 edge 仍合法，但会在连续性、模糊和成本之间折中。
+
+<Exercises>
+
+**问题 1｜两次查样**　为什么 tile-based mapping 需要 index texture 和 packed tile texture 两次 lookup？
+
+<Answer>
+
+index texture 回答“当前 virtual region 使用哪块输入 tile”，packed tile texture 回答“这块 tile 内的具体 texel 颜色”。把选择和局部采样分开，才能用很小的 tile 集合合成任意大的输出。
+</Answer>
+
+**问题 2｜边缘匹配**　Wang tile 的 edge color 为什么能帮助硬件双线性过滤跨 tile？
+
+<Answer>
+
+共享边的 tile 被约束为相同 edge color，并且图案在匹配边连续。即使过滤器跨出一块 tile，来自相邻 tile 的样本仍属于连续图案；edge color 是兼容关系，不是显示给用户的颜色。
+</Answer>
+
+**问题 3｜mipmap**　为什么 packed texture 的自动 mipmap 会在 virtual texture 中产生错误 seam？
+
+<Answer>
+
+自动 mipmap 按 packed 内存邻接平均，但 packed 中相邻的 tile 可能在 virtual 输出中不相邻，过滤就混入错误 pattern。应按共享 edge color 对各 mip 层边缘 sanitise，或使用更严格的 tile-aware 低层构建。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="virtual texture">由少量 tile 在运行时合成、对应用呈现为大纹理的输出。</GlossaryItem>
+<GlossaryItem term="Wang tiles">通过共享边编码约束组合连续性的方形 tile 集合。</GlossaryItem>
+<GlossaryItem term="edge color">描述相邻 Wang tile 边界兼容关系的离散标识。</GlossaryItem>
+<GlossaryItem term="tile packing">把多个输入 tile 放进单张 packed texture 的布局。</GlossaryItem>
+<GlossaryItem term="index texture">记录每个输出区域对应 packed tile 坐标的离散纹理。</GlossaryItem>
+<GlossaryItem term="mipmap sanitization">按 edge color 校正低分辨率 tile 边缘的过程。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 12. Tile-Based Texture Mapping" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-12-tile-based-texture-mapping" />
