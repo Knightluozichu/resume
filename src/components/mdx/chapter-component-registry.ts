@@ -13129,6 +13129,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh29VisibilityLevelsDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/06-beyond-triangles/gpugems-ch30": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch30-design-fx-composer");
+    return {
+      GpuGemsCh30FxComposerLab: module0.GpuGemsCh30FxComposerLab,
+      GpuGemsCh30MaterialCompilationDiagram:
+        module0.GpuGemsCh30MaterialCompilationDiagram,
+      GpuGemsCh30PluginObjectDiagram: module0.GpuGemsCh30PluginObjectDiagram,
+      GpuGemsCh30ToolchainDiagram: module0.GpuGemsCh30ToolchainDiagram,
+      GpuGemsCh30WorkspaceFormatDiagram:
+        module0.GpuGemsCh30WorkspaceFormatDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

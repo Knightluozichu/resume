@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:42:53.840Z；旧版分数不迁移。
+> 2026-08-10T06:53:05.793Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2211
+- failed：2210
 - queued：344
-- passed：1148
+- passed：1149
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -57,16 +57,16 @@
 | 44 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
 | 45 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
 | 46 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
-| 47 | gpu-gems | 48 | 19 | 0 | 29 | 38 |
-| 48 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
-| 49 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
-| 50 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
-| 51 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
-| 52 | unity5 | 18 | 18 | 0 | 0 | 64 |
-| 53 | shaderx | 18 | 18 | 0 | 0 | 60 |
-| 54 | python-ops | 18 | 18 | 0 | 0 | 54 |
-| 55 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
-| 56 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 47 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
+| 48 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
+| 49 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |
+| 50 | building-llm-applications | 18 | 18 | 0 | 0 | 73 |
+| 51 | unity5 | 18 | 18 | 0 | 0 | 64 |
+| 52 | shaderx | 18 | 18 | 0 | 0 | 60 |
+| 53 | python-ops | 18 | 18 | 0 | 0 | 54 |
+| 54 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
+| 55 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
+| 56 | gpu-gems | 48 | 18 | 0 | 30 | 36 |
 | 57 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
 | 58 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
 | 59 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
