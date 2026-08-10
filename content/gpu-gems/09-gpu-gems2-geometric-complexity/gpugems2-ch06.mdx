@@ -1,0 +1,150 @@
+---
+title: "GPU Gems 2 · Chapter 6. Hardware Occlusion Queries Made Useful"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 6
+description: "用保守包围盒、空间层次、front-to-back 遍历和上一帧可见性，将硬件 occlusion query 的 latency 与 query overhead 控制在可用范围。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-6-hardware-occlusion-queries-made-useful"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-06
+---
+
+import {
+  GpuGems2Ch06CoherenceDiagram,
+  GpuGems2Ch06HierarchyDiagram,
+  GpuGems2Ch06OcclusionQueryLab,
+  GpuGems2Ch06QueryLifecycleDiagram,
+  GpuGems2Ch06QueryPolicyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch06-occlusion-queries";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 hardware occlusion query 为什么同时带来额外 draw call 和结果 latency
+- 能用保守包围盒、空间层次和 front-to-back 顺序建立正确的可见性测试
+- 能说明 temporal coherence、query queue 与 pull up 如何减少等待和无效 query
+- 能判断城市漫游等高遮挡场景适合 occlusion culling，而高空飞越等低遮挡场景应关闭它
+
+</Objectives>
+
+<Callout type="trap" title="不要为每个物体发 query 后立刻 stop-and-wait">
+**现象 →** CPU 等结果时不提交新命令，GPU 也可能因为命令队列被掏空而空转。
+
+**原因 →** 每个小物体都支付 query 的 draw 开销，并把高延迟结果变成同步依赖。
+
+**修法 →** 用空间层次把对象分组，使用 query queue 轮询可用结果，让查询与有用的层次遍历交错。
+
+</Callout>
+
+<Callout type="trap" title="不要让包围盒比真实物体更小">
+**现象 →** 包围盒没有通过深度测试，复杂物体却本来有一部分可见，画面出现漏物体。
+
+**原因 →** occlusion test 的近似几何没有覆盖原物体的屏幕范围，测试不再保守。
+
+**修法 →** 使用覆盖原物体的保守 bounds；靠近 near plane 时额外处理被裁切的盒面，必要时直接标记为可见。
+
+</Callout>
+
+<Callout type="trap" title="不要在没有遮挡的场景强行开启 query culling">
+**现象 →** 高空飞越或开阔地形里几乎所有对象可见，query draw 反而让帧时间变长。
+
+**原因 →** 没有大的 occluded interior node 可以一次节省许多几何，query 本身成了额外负担。
+
+**修法 →** 根据场景模式和遮挡统计关闭该路径，或使用纯视锥体剔除；只有高遮挡场景才值得维护 query 状态。
+
+</Callout>
+
+硬件 occlusion query 可以询问一段近似几何通过深度测试后产生了多少可见像素。听起来像是“画前先问 GPU”，但朴素使用会产生两个问题：发 query 本身是一条额外绘制命令，读取结果又可能让 CPU 等待 GPU 完成之前的工作。
+
+<GpuGems2Ch06QueryLifecycleDiagram />
+
+## 1. 用保守近似测试复杂物体
+
+<Term def="查询一段近似几何经过深度测试后产生的可见片段数量的硬件机制">occlusion query</Term>通常不直接光栅化复杂 mesh，而是关闭颜色写入、保留深度测试，并绘制一个便宜的包围盒。可见像素数大于阈值，就说明复杂物体可能可见；像素为零，才可以跳过复杂绘制。
+
+<Term def="覆盖真实物体屏幕范围、不会把实际可见物体误判为不可见的近似边界">conservative bounding box</Term>是正确性的核心。盒子太松会多做一些工作，但盒子太紧会漏画。靠近相机 near plane 的节点还要注意盒子前面被裁掉导致零片段的问题。
+
+## 2. 用空间层次减少 query 数量
+
+<Term def="递归把空间划分成内部分组节点和包含实际几何的叶节点的数据结构">spatial hierarchy</Term>可以是 k-d tree、BSP、octree 或 bounding-volume hierarchy。内部节点代表一组对象，测试一个被遮挡的内部节点，就可能跳过它下面大量 draw calls、三角形和过度绘制。
+
+<GpuGems2Ch06HierarchyDiagram />
+
+朴素的层次算法仍可能为每个可见内部节点发 query，甚至把屏幕填充很多次来测试大盒子。更好的做法需要利用上一帧的分类：上一帧已经可见的内部节点先递归，上一帧不可见的大节点才是值得验证的 query 候选。
+
+## 3. 用 temporal coherence 隐藏 latency
+
+<Term def="连续帧之间可见性通常变化不大的性质，可用上一帧状态预测当前帧">temporal coherence</Term>允许系统把上一帧可见当作本帧的工作提示。可见猜错只会多遍历或多画一些，query 结果稍后回来时更新下一帧分类；不可见猜错则必须在结果到达时向下遍历，不能永久跳过。
+
+<Term def="保存已发出但结果尚未可用的 occlusion query，并在遍历期间轮询结果的队列">query queue</Term>让 CPU 不必在每个节点上停住。遍历 hierarchy 的同时检查队首结果：可用就处理，不可用就继续做前后排序、提交已知可见节点等工作。
+
+<GpuGems2Ch06CoherenceDiagram />
+
+## 4. coherent hierarchical culling 的规则
+
+<Term def="结合空间层次、front-to-back 遍历、上一帧可见性和异步结果队列的层次剔除算法">coherent hierarchical culling</Term>把两条经验组合起来：第一，上一帧可见的 interior node 不发 query，直接访问子节点；第二，上一帧可见的 leaf 可以发 query 但先绘制；第三，上一帧不可见的最大节点发 query，结果可见时再 pull down 遍历其子树。
+
+<GpuGems2Ch06QueryPolicyDiagram />
+
+当 query 结果证明一个节点可见时，visibility 可以向树根 pull up；当一个曾经可见的节点变为不可见，下一帧则不再沿它的路径直接遍历。每帧使用 frame ID 标记访问，避免为整个树做昂贵的全量清零。
+
+## 5. 什么时候值得用
+
+城市漫游、室内街区和有大块建筑遮挡的动态场景通常适合。它们存在被遮挡的内部节点，一次 query 可以跳过许多对象。高空飞越、开阔平原或几乎没有遮挡的场景则不同：所有节点都可能可见，query 数量和包围盒光栅化反而增加成本。
+
+还可以把它放在 z-only pass 中，先获得稳定的深度和 visibility，再让后续昂贵 shading pass 跳过不可见对象。阈值优化可以把很少像素的对象当成不可见，但阈值过高会误删潜在的 occluder，需要用图像正确性和 profile 一起校验。
+
+## 6. 动手实验：遮挡、连续性与查询队列
+
+实验中的 query、stall 和 skipped 数量是趋势示意，不是 GPU benchmark。把遮挡调低，观察 query 失去收益；把帧间连续性调低，观察预测变差、等待增多。切换到高空飞越时，应认真考虑关闭 occlusion culling。
+
+<GpuGems2Ch06OcclusionQueryLab />
+
+## 小结
+
+- occlusion query 用保守近似几何测试可见像素，但自身有 draw 与 latency 成本。
+- spatial hierarchy 把许多对象聚成可一次测试的内部节点。
+- temporal coherence 允许先按上一帧可见性做有用工作，再异步纠正猜测。
+- query queue、front-to-back 和 pull up 共同减少 stall 与无效 query。
+- 高遮挡动态场景适合，开阔场景应通过统计关闭该路径。
+
+<Exercises>
+
+**问题 1｜正确性**　一个物体的包围盒 query 返回零像素，但物体实际有一角可见。最可能的两个原因是什么？
+
+<Answer>
+
+可能是包围盒不是保守覆盖，漏掉了物体的可见屏幕范围；也可能是节点靠近 near plane，盒子的前面被裁切后没有产生片段。应先扩大或修正 bounds，并对 near-plane 情况直接标记为可见或使用更稳健的测试。
+</Answer>
+
+**问题 2｜队列流程**　为什么 query 结果未返回时仍能继续渲染上一帧可见的 leaf？
+
+<Answer>
+
+上一帧可见是一个允许多做工作但不漏画的预测。该 leaf 即使本帧变为不可见，也只是暂时多画；等 query 结果返回后更新分类即可。这样等待 latency 的时间被有用绘制填充。
+</Answer>
+
+**问题 3｜场景选择**　高空飞越中几乎没有遮挡，是否应该增加更多 query 以“确认可见”？
+
+<Answer>
+
+不应该。若大多数节点可见，query 的额外绘制与结果管理无法换来跳过大量几何，可能比视锥体剔除更慢。应关闭 occlusion culling，或只在遮挡统计显示收益时启用。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="occlusion query">查询近似几何可见片段数量的硬件机制。</GlossaryItem>
+<GlossaryItem term="conservative bounding box">覆盖真实物体屏幕范围的保守包围盒。</GlossaryItem>
+<GlossaryItem term="spatial hierarchy">递归分组空间对象、支持内部节点测试的层次结构。</GlossaryItem>
+<GlossaryItem term="temporal coherence">连续帧可见性具有稳定性的性质。</GlossaryItem>
+<GlossaryItem term="query queue">保存未完成 query 并轮询可用结果的队列。</GlossaryItem>
+<GlossaryItem term="coherent hierarchical culling">利用层次、时间连续性和队列隐藏 query 成本的剔除算法。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 6. Hardware Occlusion Queries Made Useful" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-6-hardware-occlusion-queries-made-useful" />
