@@ -13242,6 +13242,21 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh38JacobiProjectionDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/08-rendering-techniques/gpugems-ch39": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch39-volume-rendering");
+    return {
+      GpuGemsCh39RayCompositingDiagram:
+        module0.GpuGemsCh39RayCompositingDiagram,
+      GpuGemsCh39TransferLightingDiagram:
+        module0.GpuGemsCh39TransferLightingDiagram,
+      GpuGemsCh39ViewAlignedSlicingDiagram:
+        module0.GpuGemsCh39ViewAlignedSlicingDiagram,
+      GpuGemsCh39VolumePipelineDiagram:
+        module0.GpuGemsCh39VolumePipelineDiagram,
+      GpuGemsCh39VolumeRenderingLab: module0.GpuGemsCh39VolumeRenderingLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

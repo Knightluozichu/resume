@@ -1,255 +1,212 @@
 ---
-title: "Chapter 39: Rendering Techniques"
+title: "GPU Gems 1 · Chapter 39. Volume Rendering Techniques"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 39
-description: "GPU Gems Part: Rendering Techniques, Chapter 39"
+description: "用 3D 纹理和代理切片把体数据映射为颜色与不透明度：理解传递函数、视线对齐采样、前后向合成、梯度光照和空区域跳过之间的质量与性能取舍。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-39-volume-rendering-techniques"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-39
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh39RayCompositingDiagram,
+  GpuGemsCh39TransferLightingDiagram,
+  GpuGemsCh39ViewAlignedSlicingDiagram,
+  GpuGemsCh39VolumePipelineDiagram,
+  GpuGemsCh39VolumeRenderingLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch39-volume-rendering";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 39: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 39之间的关系是什么？
+- 能区分体数据、体素、光学属性与几何表面的关系，并解释为什么直接体渲染不必先提取三角形等值面
+- 能把 3D 纹理、传递函数、代理切片、采样和合成组织成一个可执行的 GPU volume renderer
+- 能说明视线对齐切片、前后向合成、梯度光照和半角体积光照分别解决什么问题，以及各自的限制
+- 能通过样本数、透明度修正、空区域跳过和程序细节实验，在图像质量、片段数量、纹理带宽和交互性之间做出取舍
 
 </Objectives>
 
-## 为什么需要Chapter 39: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 39: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 39正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把体数据先当成普通表面网格">
+现象：为了显示 CT、烟雾或云层，先提取一层三角网格，结果细节消失，或者预处理和拓扑更新成为主要成本。原因：体数据表达的是空间中分布的标量或向量，不一定存在清晰的表面。修法：先决定使用直接体渲染还是显式表面；需要保留内部结构时，直接沿视线采样并合成光学属性。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 39: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 39: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 39: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 39: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要忽略样本顺序和透明度修正">
+现象：切片顺序改变后亮度反转，降低采样率后整体变黑，或远处的烟雾错误地盖住近处结构。原因：发射-吸收模型沿视线是有序累积，采样距离变化还会改变单步不透明度。修法：明确 front-to-back 或 back-to-front 合成规则，并根据实际采样率做 opacity correction。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要用大四边形把整个视口都画满">
+现象：体渲染画面内容不多，却被大量透明片段拖慢，降低分辨率后才突然变快。原因：代理切片会产生大量光栅化 fragment，透明合成还难以使用早期深度剔除。修法：只生成与体包围盒相交的切片，跳过空区域，控制采样率，并用 profiler 区分光栅化、纹理读取和 fragment shader 成本。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 39 章讨论的不是 Vulkan 对象生命周期，而是如何利用可编程 GPU 和 3D 纹理显示三维数据。流体、云、火焰、烟雾、雾和医学扫描都不天然适合用一组薄薄的多边形表达；它们更像空间中连续变化的样本。所谓 volume rendering，就是沿观察者的视线取得这些样本，把数据值解释为颜色和不透明度，再累积成一张图。
 
-## 性能考量
+## 1. 直接体渲染：不先提取表面
 
-### 批量操作
+<Term def="不显式提取几何表面，而是沿视线采样三维数据并累积颜色与不透明度来生成图像的方法">direct volume rendering</Term> 把体数据看成一个连续场的离散近似。与等值面提取不同，它可以同时保留内部的弱结构、透明层和多个材料区域；代价是每条视线需要许多样本，性能受光栅化、纹理带宽和合成次数共同限制。
 
-Vulkan 鼓励批量提交而非逐个提交：
+最简单的光学模型假定体内粒子同时发光和吸收。数据值本身不必直接成为灰度：一个分类步骤可以把标量范围映射到颜色和不透明度，让用户强调骨骼、软组织、密度峰值或某个模拟变量。复杂模型还可以加入局部光照、体积阴影和散射，但交互式实现通常从发射-吸收模型开始。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh39VolumePipelineDiagram />
 
-### 避免 CPU-GPU 同步点
+一个可维护的 renderer 可以拆成三个阶段：
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+1. **Initialize**：加载体数据，准备 3D texture、查找表、fragment shader 和必要的梯度/缩略数据。
+2. **Update**：相机或传递函数改变时，重算代理几何、更新采样率相关的透明度修正和 shader 参数。
+3. **Draw**：按正确深度顺序绘制代理切片，让每个 fragment 从体纹理采样并执行合成。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+这个拆分把不频繁变化的资源留在 GPU 上，也让性能问题有明确归属：初始化慢不一定影响交互帧，Draw 阶段的 fragment 数量却会直接影响每帧成本。
+
+## 2. 从三维数组到体素采样
+
+体数据通常以统一的三维数组表示，显存中可以放成一个 3D texture，或在不支持 3D texture 的历史硬件上拆成多组 2D slices。一个 `<Term def="体数据中的单个 volume element，对应三维数组中的一个位置并带有一个或多个数据值">voxel</Term>` 类似二维图像的 pixel 或纹理的 texel，但它有三个空间坐标。采样位置落在体素之间时，需要从邻居重建数据，最常见的是三线性插值。
+
+数据准备阶段要先面对几个现实问题：原始尺寸可能太大，格式可能不适合 GPU，边界可能需要 padding，值域可能需要归一化。可以离线重采样，也可以在应用中生成梯度、直方图或缩略体。把值和归一化梯度打包到同一 RGBA texture 有时能减少 lookup，但会增加格式设计和精度验证的压力。
+
+```text
+volume array → resample / pad → 3D texture
+                                  ├─ scalar value
+                                  ├─ gradient or normal
+                                  └─ optional empty-space metadata
 ```
 
-### 内存对齐
+三线性插值便宜且通用，却会平滑尖锐边界；边界重复填充值能让中心差分有邻居，但也可能在视觉上扩大边缘。科学可视化若依赖细小结构，应把重采样误差和渲染误差分开测量，而不要只调 shader 颜色。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. 传递函数：决定数据如何被看见
 
-## 验证层检查
+<Term def="把体数据值或值与梯度的组合映射为颜色和不透明度的查找函数">transfer function</Term> 是体渲染的分类器。最简单的是一维查找表：横轴是标量值，输出颜色和 alpha。若单一标量无法区分边界，可以把梯度幅值也作为第二个维度，用二维查找表突出“值发生快速变化”的材料边界。
 
-启用验证层后，Chapter 39: Rendering Techniques相关的常见错误会被捕获：
+传递函数的设计比换一张 colormap 更重要。高不透明度能让结构显现，但会遮住后面的信息；低不透明度能让多个层叠起来，却可能让图像过淡。直方图能告诉我们哪些值出现频繁，但不能告诉我们这些值在空间中的位置，所以应把 histogram 与切片、局部拾取或三维预览结合使用。
 
+```glsl
+float value = texture(volumeTex, texCoord).r;
+vec4 optical = texture(transferTex, vec2(value, 0.5));
+vec3 premultipliedColor = optical.rgb * optical.a;
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+颜色通常要预乘 alpha，因为颜色项既代表发射，也要受到沿射线的吸收。采样率变化时，单个样本代表的射线段长度也变化；若仍使用原来的 alpha，总体强度会随切片数改变。opacity correction 应根据新采样距离重算或更新查找表，而不是用一个固定常数掩盖变化。
+
+## 4. 代理几何与视线方向
+
+<Term def="把体包围盒切成一组与观察方向相交的采样多边形，并按深度顺序送入光栅化器的体渲染方法">view-aligned slicing</Term> 不绘制体的真实表面，而是生成一组穿过包围盒的代理多边形。对每个切片，顶点携带数据空间纹理坐标；fragment shader 在切片内部得到一个或多个采样位置，再把分类后的光学属性交给混合硬件或显式合成。
+
+<GpuGemsCh39ViewAlignedSlicingDiagram />
+
+切片的构造需要：把包围盒顶点变换到视空间，找到观察方向上的最小和最大深度，按采样距离生成平面，与包围盒边相交得到多边形，再把多边形三角化。视角变化会改变交点、平面数量和纹理坐标，但不会改变 3D 体数据本身。切片过少会产生 banding 和 image popping；切片过多则会让 rasterizer 和 fragment shader 成为瓶颈。
+
+若观察方向固定为体数据的 z 轴，可以直接用平行的矩形切片作为起点；交互应用必须处理任意相机方向。现代实现也可以把这套采样逻辑改成 ray marching 或 compute shader，但“沿射线取样并累积”的数据流仍然相同。
+
+## 5. 合成：把样本变成一条光线的颜色
+
+<Term def="按从远到近或从近到远的样本顺序逐步累积颜色和不透明度的体渲染合成方式">front-to-back compositing</Term> 是最适合交互式体渲染的顺序之一：从相机开始，当前样本的颜色只会贡献给还没有被前方吸收的部分。当累计不透明度接近 1 时，可以提前终止这条光线，避免处理后面已经不可见的样本。
+
+如果每个样本的颜色为 `C_i`、不透明度为 `a_i`，累计颜色和 alpha 的概念更新为：
+
+```text
+C_next = C_acc + (1 - A_acc) * C_i
+A_next = A_acc + (1 - A_acc) * a_i
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这里的 `C_i` 应是预乘 alpha 的颜色。硬件 alpha blending 可以直接实现这组“over”操作；如果要和不透明几何混合，通常先绘制不透明物体、保留深度，再让体切片的深度测试裁掉位于几何内部的片段。back-to-front 则从远处开始，适合另一种混合状态，但必须始终让切片顺序和公式匹配。
 
-## 本章要点
+<GpuGemsCh39RayCompositingDiagram />
 
-1. Chapter 39: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+不要把“样本很多”误认为“结果一定更好”。如果样本距离小于数据变化尺度，增加样本只是重复纹理读取；如果采样距离过大，薄结构会穿过相邻切片。实验时应同时观察透明度修正、空区域跳过和质量指标，而不是只提高 slice count。
+
+## 6. 梯度光照、阴影与程序细节
+
+<Term def="使用体数据的局部梯度近似表面法线，再用局部光照模型调制体渲染颜色的增强方法">gradient lighting</Term> 用相邻体素差分估计局部梯度，把梯度归一化后当作法线，接入 Blinn–Phong 等局部模型。它能让边界更立体，但均匀区域的梯度很小，噪声也可能被放大；可以设置梯度阈值，或在预处理阶段保存更稳定的梯度。
+
+<GpuGemsCh39TransferLightingDiagram />
+
+局部光照不包含远距离的体积散射。更真实的效果可以在光源方向上再做一次半角切片或光照传播，把光线穿过体的衰减近似写入二维或三维缓冲。它会带来额外切片、纹理读取和合成成本，因此应该只在视觉目标确实需要时启用。
+
+低分辨率体数据很难表达云、烟、火焰和毛发中的高频细节。原书还讨论了小噪声体：在不同尺度采样噪声，扰动光学属性或数据坐标，让粗糙的宏观体看起来更丰富。程序噪声不是凭空创造真实细节，过强的扰动会破坏医学数据的可解释性；在科学可视化和艺术特效之间要使用不同的默认值。
+
+## 7. 性能：真正的瓶颈在片段和带宽
+
+纹理体渲染容易把 rasterizer 推到瓶颈：少量大多边形会产生许多 fragment，透明代理几何又难以充分利用早期深度剔除。片段 shader 的复杂度、依赖纹理读取、3D texture cache 命中率和合成时的颜色缓冲读写都会影响结果。
+
+优先检查以下旋钮：
+
+1. **样本距离**：降低相对采样率能直接减少切片和 fragment，但要同步做 opacity correction。
+2. **代理几何**：只生成与包围盒真正相交的多边形；不要用覆盖整个视口的大四边形代替精确切片。
+3. **空区域跳过**：用直方图、低分辨率 occupancy 或包围盒元数据跳过透明区域，减少无效片段。
+4. **纹理格式**：在可接受精度的前提下选择更小格式，必要时压缩或把多个字段打包进 RGBA。
+5. **shader 结构**：把常用分类放进查找表，谨慎增加依赖纹理读取和复杂程序噪声。
+6. **数据驻留**：体数据、传递函数和中间缓冲尽量留在 GPU，避免每次交互都发生 CPU readback。
+
+<GpuGemsCh39VolumeRenderingLab />
+
+实验从视线对齐切片开始，再切换到半角方向、梯度光照和程序细节。先把样本数设为较低值，观察速度；再逐个打开空区域跳过、光照和噪声，记录画质与 lookup budget。真实发布前还应在目标设备上采集 GPU 时间，而不是把示意成本当作硬件测量。
+
+## 8. 复用清单：从体数据到可发布渲染器
+
+1. **数据契约**：记录体数据尺寸、值域、边界 padding、格式和 3D texture 坐标约定。
+2. **分类契约**：写清传递函数输入、颜色是否预乘 alpha、采样率变化时怎样做透明度修正。
+3. **几何契约**：确认代理切片与包围盒相交、切片方向正确、顶点纹理坐标在数据空间中连续。
+4. **合成契约**：选择 front-to-back 或 back-to-front，保证切片排序、blend factor 和深度测试匹配。
+5. **质量证据**：用已知结构、窄薄层、透明区域和移动相机测试重建、边界、排序与 popping。
+6. **性能证据**：分别记录切片数、fragment 数、3D texture lookup、带宽、早期深度收益与交互延迟。
+
+## 小结
+
+- 直接体渲染沿视线采样三维数据，直接生成颜色和不透明度，不必先把内部结构提取成三角表面。
+- 3D texture 保存体素；传递函数把值或值-梯度组合分类为光学属性；opacity correction 让采样率变化不至于改变整体强度。
+- 视线对齐切片用代理几何驱动 GPU 光栅化，合成顺序和 over 公式必须匹配；front-to-back 还能在累计不透明度足够高时提前停止。
+- 梯度光照、体积阴影和程序噪声可以增加立体感与细节，但会提高纹理读取、切片和片段成本，也可能放大数据噪声。
+- 发布级体渲染要同时验证体素重建、传递函数、切片排序、边界与空区域跳过，并用目标 GPU profiler 分解真实瓶颈。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 39: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜体渲染还是表面提取**　医学体数据或烟雾为什么不一定适合先提取三角网格？请给出选择直接体渲染的两个理由。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+体数据可能没有单一清晰的表面，内部弱结构、透明层和多个材料边界都可能是观察目标；提取表面还会丢失一部分体积信息并增加预处理成本。直接体渲染沿视线采样并分类，可以保留内部结构，让用户通过传递函数改变“看见什么”。如果最终只关心一个稳定等值面，表面提取仍可能更便宜。
 </Answer>
 
+**问题 2｜合成顺序**　为什么 front-to-back 合成可以提前终止？如果切片顺序与 blend 公式不匹配，会出现什么现象？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+front-to-back 从相机开始累积，当前累计不透明度接近 1 时，后面的样本几乎没有可见贡献，因此可以停止采样。若顺序与公式不匹配，例如用 front-to-back 的公式处理 back-to-front 的切片，颜色和透明度会被错误遮挡，视角变化或切换顺序时亮度、深度关系会明显反转。
+</Answer>
+
+**问题 3｜性能调优**　当体渲染画面内容很少但仍然很慢时，应优先检查哪些因素？为什么不能只降低 3D texture 分辨率？
+
+<Answer>
+
+先检查代理切片是否产生了大量无效 fragment、空区域是否被跳过、片段 shader 是否有昂贵的依赖纹理读取，以及合成的颜色缓冲带宽。只降低 3D texture 分辨率可能损失细节，却没有减少切片数量或透明片段；应结合采样率、精确代理几何、occupancy 元数据、纹理格式和 shader profiler 定位瓶颈。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="direct volume rendering">不提取几何表面，沿视线采样并累积光学属性的体渲染方法。</GlossaryItem>
+<GlossaryItem term="voxel">三维体数据中的单个 volume element，带有一个或多个数据值。</GlossaryItem>
+<GlossaryItem term="transfer function">把数据值映射为颜色和不透明度的查找函数。</GlossaryItem>
+<GlossaryItem term="view-aligned slicing">沿观察方向生成代理切片并按深度采样体纹理的方法。</GlossaryItem>
+<GlossaryItem term="front-to-back compositing">从近到远累积颜色和不透明度、可在前方已不透明时提前停止的合成方式。</GlossaryItem>
+<GlossaryItem term="gradient lighting">使用体数据梯度近似法线并参与局部光照的增强方法。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 39 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 39 “Volume Rendering Techniques”的独立重写，保留直接体渲染、体素与三维纹理、传递函数、视线对齐代理切片、前后向合成、梯度光照、体积阴影、程序细节和 GPU 性能约束等核心线索，并将历史纹理切片实现整理为可验证的现代 volume renderer 决策路径。原始章节：[NVIDIA GPU Gems Chapter 39](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-39-volume-rendering-techniques)
+
 </Attribution>
