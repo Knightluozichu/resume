@@ -1,0 +1,148 @@
+---
+title: "GPU Gems 2 · Chapter 7. Adaptive Tessellation of Subdivision Surfaces with Displacement Mapping"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 7
+description: "把 Catmull-Clark subdivision surface 分成 patch，在 GPU 纹理缓冲中重复执行 flatness test、细分和 limit 属性计算，并把 displacement 计入屏幕误差。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-7-adaptive-tessellation-subdivision-surfaces"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-07
+---
+
+import {
+  GpuGems2Ch07AdaptiveTessellationLab,
+  GpuGems2Ch07AdaptiveFlatnessDiagram,
+  GpuGems2Ch07GpuPipelineDiagram,
+  GpuGems2Ch07SubdivisionDiagram,
+  GpuGems2Ch07WatertightDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch07-adaptive-tessellation";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 Catmull-Clark subdivision surface 如何从低密度控制网格得到平滑曲面
+- 能用屏幕像素 flatness 判断 patch 继续细分还是直接计算 limit position 和 normal
+- 能描述 patch texture、GPU shader 循环与 CPU 索引管理之间的边界
+- 能把 displacement 产生的额外误差加入细分决策，并说明如何避免相邻 patch 裂缝
+
+</Objectives>
+
+<Callout type="trap" title="不要让整个模型使用固定细分级别">
+**现象 →** 近处弯曲区域仍有多边形瑕疵，远处平面却生成大量几乎只有一个像素的三角形。
+
+**原因 →** 固定 subdivision 没有把曲率和屏幕距离纳入预算。
+
+**修法 →** 对 patch 做屏幕像素 flatness test；低于阈值停止，高于阈值才继续 subdivision。
+
+</Callout>
+
+<Callout type="trap" title="不要把 displacement 只当成 shading 细节">
+**现象 →** 法线看起来有细节，但轮廓和遮挡仍然像平面，近看出现穿透。
+
+**原因 →** normal map 只改变光照，displacement 实际改变的是几何位置。
+
+**修法 →** 将最大 displacement 加入 flatness error，并在 limit position 阶段沿法线移动顶点；法线贴图可继续补充逐像素光照。
+
+</Callout>
+
+<Callout type="trap" title="不要让不同深度的相邻 patch 自由拼接">
+**现象 →** 自适应细分边界出现裂缝、T-junction 或 alpha surface 的零面积三角形伪影。
+
+**原因 →** 相邻 patch 的浮点结果和细分深度不一致，索引构建没有统一共享边。
+
+**修法 →** 用一侧边缘数据构建共享索引，显式处理 T-junction，把边界连接规则放进 primitive index 生成阶段。
+
+</Callout>
+
+Subdivision surface 用少量控制点描述平滑曲面，适合动画角色和需要高质量几何的模型。但实时渲染不能盲目把整个控制网格预先细分到最高级别：相机距离和曲率决定了屏幕上是否真的需要这些顶点。
+
+<GpuGems2Ch07SubdivisionDiagram />
+
+## 1. Catmull-Clark 与 patch
+
+<Term def="通过递归规则把控制网格变成平滑极限曲面的曲面表示">Catmull-Clark subdivision surface</Term>每次将四边形面拆成四个面，并按 face、edge、vertex 的权重更新位置。不断细分的理论结果是 <Term def="无限次 subdivision 后得到的理论平滑曲面">limit surface</Term>；实际渲染只需在误差足够小时逼近它。
+
+<Term def="作为 subdivision 输入、包含少量顶点和面连接关系的低密度网格">control mesh</Term>通常使用全 quad 拓扑。为了让 GPU 以规则二维数组处理任意模型，预处理阶段将控制网格分成 patch，并为每个 patch 保留邻接 ring、尺寸和 extraordinary corner 的 valence 信息。
+
+## 2. 用屏幕 flatness 做 adaptive tessellation
+
+固定细分的两个坏结果是 over-tessellation 和 under-tessellation。更稳健的判据是把曲线或 patch 到 limit surface 的最大距离换算成屏幕像素：误差小于阈值就输出，误差大于阈值就继续细分。近处和弯曲处自然获得更多几何。
+
+<Term def="以屏幕像素衡量 patch 多边形近似与 limit surface 距离的误差测试">flatness test</Term>可对 patch 的每条边进行，先测试 control points 形成的 B-spline 曲线，再把透视深度纳入缩放。近裁剪面附近要特别处理 z 值，避免不必要的过度细分。
+
+<GpuGems2Ch07AdaptiveFlatnessDiagram />
+
+## 3. 在 GPU 纹理缓冲中循环
+
+<Term def="以二维纹理形式保存 patch 控制点和中间 subdivision 结果的缓冲布局">patch buffer</Term>把顶点数据放到 GPU 可读取的纹理中。shader 先将控制点拷贝到 patch buffer，flatness shader 写出边缘误差；平的 patch 计算最终属性，不平的 patch 渲染到另一张 buffer，再交换 source 和 destination。
+
+<GpuGems2Ch07GpuPipelineDiagram />
+
+CPU 仍然负责 buffer 分配、读取压缩后的 flatness 结果和构建 primitive index list，但不需要逐顶点搬运每次 subdivision 产生的数据。limit shader 计算位置，normal shader 计算切线叉积；二者可以通过多个 render target 一起写出。
+
+## 4. displacement 如何进入几何预算
+
+<Term def="沿曲面法线移动实际顶点位置、改变轮廓和遮挡的纹理驱动几何细节">displacement mapping</Term>与只改变光照的 bump 或 normal mapping 不同。要避免 displacement 区域细分不足，预处理或 shader 计算每条 patch edge 两侧的最大 displacement，并把它加到 flatness error 中。
+
+最终的 limit position 沿法线加入 displacement；normal mapping 仍可用来处理逐像素细节，并减少 adaptive tessellation 改变时的 shading popping。几何轮廓由 displacement 负责，光照细节由 normal map 补充，二者职责不能互换。
+
+## 5. watertight tessellation
+
+<GpuGems2Ch07WatertightDiagram />
+
+相邻 patch 的运算顺序可能不同，不能赌浮点结果逐位相同。索引生成器应统一使用一侧 patch 的共享边和 corner 数据。若一个 patch 已经细分、邻居仍平坦，就出现 T-junction；可以把 junction 顶点替换为更远的边界顶点并补一组三角形，保持无缝连接。
+
+## 6. 动手实验：误差预算随视图变化
+
+先把距离调远，观察级别下降；再增加曲率和 displacement，观察相同距离下细分重新增加。实验数值是决策趋势的可视化，不是具体 GPU 时间测量。
+
+<GpuGems2Ch07AdaptiveTessellationLab />
+
+## 小结
+
+- control mesh 经过 Catmull-Clark subdivision 逼近 limit surface。
+- flatness test 以屏幕像素误差决定 patch 是否继续细分。
+- patch buffer 让 GPU 在纹理中循环生成细分结果，CPU 主要管理索引与内存。
+- displacement 必须进入几何误差和 limit position，而不仅是法线贴图。
+- watertight 索引和 T-junction 处理保证不同 adaptive depth 仍无裂缝。
+
+<Exercises>
+
+**问题 1｜停止条件**　为什么一个远处但很弯的 patch 仍可能需要细分，而一个近处平面 patch 可以停止？
+
+<Answer>
+
+停止条件不是只看世界距离，也不是只看曲率，而是看投影到屏幕后的几何误差。远处弯曲如果仍超过像素阈值就继续，近处平面若误差已经低于阈值就可以直接输出。
+</Answer>
+
+**问题 2｜职责分配**　GPU 细分算法中，为什么 CPU 可以读取 flatness 结果和构建索引，却不必读取每个新顶点？
+
+<Answer>
+
+新顶点和中间 patch 保存在 GPU texture buffer，由 shader 继续处理；CPU 只需要知道哪些边平坦来决定索引拓扑和 buffer 位置。这样避免大批顶点跨总线往返。
+</Answer>
+
+**问题 3｜displacement**　如果只在最后用 normal map 表现高频 displacement，会丢失哪两类视觉信息？
+
+<Answer>
+
+normal map 不会改变轮廓，也不会提供真实的几何遮挡，因此会丢失 silhouette 和特征之间的自遮挡。应把最大 displacement 计入 flatness test，并在 limit position 阶段移动实际顶点。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Catmull-Clark subdivision surface">通过递归面、边、顶点规则生成平滑曲面的表示。</GlossaryItem>
+<GlossaryItem term="limit surface">无限次 subdivision 后的理论平滑曲面。</GlossaryItem>
+<GlossaryItem term="control mesh">用于生成 subdivision surface 的低密度输入网格。</GlossaryItem>
+<GlossaryItem term="flatness test">以屏幕像素误差决定 patch 是否继续细分的测试。</GlossaryItem>
+<GlossaryItem term="patch buffer">以二维纹理保存 patch 控制点和中间细分结果的布局。</GlossaryItem>
+<GlossaryItem term="displacement mapping">沿曲面法线移动几何顶点、改变轮廓和遮挡的纹理细节。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 7. Adaptive Tessellation of Subdivision Surfaces with Displacement Mapping" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-7-adaptive-tessellation-subdivision-surfaces" />
