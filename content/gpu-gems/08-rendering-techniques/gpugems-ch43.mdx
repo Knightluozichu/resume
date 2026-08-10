@@ -1,255 +1,181 @@
 ---
-title: "Chapter 43: Rendering Techniques"
-type: B
-section: "计算机图形学与渲染"
+title: "GPU Gems 2 · Chapter 43. GPU Computing for Protein Structure Prediction"
+type: C
+section: "GPU Gems 2 Part VI · Simulation and Numerical Algorithms"
 order: 43
-description: "GPU Gems Part: Rendering Techniques, Chapter 43"
+description: "把 NMR 距离上下界平滑改写为 GPU 上的 Floyd–Warshall：从三角不等式、ping-pong 缓冲到 RGBA 向量化，理解蛋白质结构预测中的数据并行。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-43-gpu-computing-protein"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-43
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh43FloydWarshallDiagram,
+  GpuGemsCh43PingPongDiagram,
+  GpuGemsCh43ProteinGraphDiagram,
+  GpuGemsCh43ProteinSmoothingLab,
+  GpuGemsCh43TriangleInequalityDiagram,
+  GpuGemsCh43VectorizationDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch43-protein-smoothing";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 43: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 43之间的关系是什么？
+- 能把 NMR 的原子距离约束表示成带上下界的距离矩阵，并用三角不等式收紧它们
+- 能逐步解释 Floyd–Warshall 如何映射到 GPU fragment unit、ping-pong 缓冲和 RGBA 向量化
+- 能修改实验中的边界类型或 k 轮数，判断哪些矩阵单元被更新以及为什么只能写回一个确定位置
+- 能回答：为什么 GPU 实现必须先收紧 upper bound，再据此更新 lower bound？
 
 </Objectives>
 
-## 为什么需要Chapter 43: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 43: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 43正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把上下界更新写成同一个 max/min 规则">
+现象：距离范围越来越宽，或者 lower bound 超过了 upper bound。原因：上界要用绕行路径的较小值收紧，下界要用差值的较大值抬高，而且下界更新依赖已经收紧的上界。修法：先完成 upper smoothing，再用 `max(lᵢⱼ, lᵢₖ − uₖⱼ, lₖⱼ − uᵢₖ)` 更新 lower bound。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 43: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 43: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 43: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 43: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把 GPU 的动态矩阵更新原地读写">
+现象：某一轮的结果依赖 fragment 执行顺序，换设备后数值不同。原因：同一纹理同时作为输入和 render target 会产生读写冲突，GPU 不保证片段之间的顺序。修法：准备 front/back 两个缓冲，每轮从 front 读、写入 back，完成后交换角色。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 RGBA 打包当成只改一个索引">
+现象：向量化后部分距离错位，只有每四个元素中的第一个看起来正确。原因：一个 texel 的四个通道分别对应连续的四条边，`k` 的行列访问也必须按通道重排。修法：先写清 scalar 到 channel 的映射，再验证 `D[i, k]` 的广播、对齐和尾部 padding。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+蛋白质结构预测里，实验设备通常只给出一部分原子之间的距离范围。剩下的范围很宽，像一张只画出少量道路的地图：单条道路的信息不够，但三点之间的绕行关系可以不断排除不可能的距离。本章把这个“收紧范围”的过程变成 GPU 可并行的矩阵更新。
 
-## 性能考量
+GPU 适合这里不是因为它懂生物学，而是因为每一轮都能让很多矩阵单元同时读取相同的中间节点并写回自己的位置。难点在于更新有时间顺序、上下界有依赖、纹理不能原地读写；处理好这三件事，旧式 fragment unit 也能承担密集的数值计算。
 
-### 批量操作
+## 1. 从原子距离到带边界的完全图
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="把每一对原子之间可能的距离范围逐步收紧，使它同时满足所有已知几何约束的过程">distance-bound smoothing</Term> 是本章的任务。将含有 n 个原子的分子表示为完全图 Kₙ：节点是原子，边 `(i, j)` 记录距离的上界 `uᵢⱼ` 和下界 `lᵢⱼ`。NMR 只提供部分边的约束，未知边可以先用分子直径和接近零的下界占位。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh43ProteinGraphDiagram />
 
-### 避免 CPU-GPU 同步点
+矩阵存储让 GPU 可以把每条边当作一个独立的输出单元。距离矩阵的对角线是零，通常还保持对称性 `D[i, j] = D[j, i]`。不过，GPU 版本将上下界分别放在纹理里，即使 `(i, j)` 与 `(j, i)` 重复，也能减少 shader 的条件分支和取样次数。
+
+## 2. 三角不等式如何收紧范围
+
+<Term def="任意三点间一条边不能长于另外两条边之和，并可用两条边的差值抬高第三条边下界的几何约束">triangle inequality</Term> 给每条边带来一个中间节点 `k`。对上界，绕 `i → k → j` 的路径提供更紧的候选值：`uᵢⱼ ← min(uᵢⱼ, uᵢₖ + uₖⱼ)`。对下界，`i` 与 `j` 不能比其中一段减去另一段更近：`lᵢⱼ ← max(lᵢⱼ, lᵢₖ − uₖⱼ, lₖⱼ − uᵢₖ)`。
+
+<GpuGemsCh43TriangleInequalityDiagram />
+
+上界必须先收紧。lower bound 的两个候选差值使用 upper bound；如果先用宽松的 `u` 去抬高 `l`，后面再改变 `u`，就可能错过本轮本应排除的距离。这个先后关系是算法正确性的一部分，不是 GPU 优化的可选项。
+
+## 3. Floyd–Warshall：把三重循环拆成 GPU 轮次
+
+<Term def="固定一个中间节点 k，并让所有 i、j 对同时尝试经过 k 的最短路径式更新的全对最短路径算法">Floyd-Warshall algorithm</Term> 原本是全对最短路径算法。把它用于 upper smoothing 时，外层固定 `k`，内层对所有 `(i, j)` 执行一次 min 更新；lower smoothing 只需替换更新表达式。串行伪代码的关键结构如下：
+
+```text
+for k = 0 .. n - 1:
+    for every pair (i, j) in parallel:
+        U[i, j] = min(U[i, j], U[i, k] + U[k, j])
+```
+
+这段结构适合 GPU，因为一个输出单元只写 `U[i, j]`，不需要写入其他边。当前 `k` 的所有 fragment 都可以并行；只有外层的 `k` 轮必须按顺序推进，下一轮要看到上一轮完整的矩阵。
+
+<GpuGemsCh43FloydWarshallDiagram />
+
+在 fragment shader 中，`(i, j)` 由当前像素位置确定，`(i, k)` 与 `(k, j)` 的纹理坐标由 rasterizer 或 shader 提供。每个 fragment 读取三个值，计算一个 min 或 max，然后只输出自己的颜色值。这是“读多个、写一个”的数据并行形状。
+
+## 4. GPU 实现：纹理、动态更新与 ping-pong
+
+<Term def="在两块缓冲之间交替读写，让上一轮输出成为下一轮输入而不发生同一存储的读写冲突">ping-pong buffering</Term> 解决外层 `k` 轮的动态依赖。GPU 不能把同一块纹理同时当作 sampler 输入和 render target；因此第 k 轮从 front 纹理读取，把结果渲染到 back 纹理，结束后交换两个句柄。
+
+<GpuGemsCh43PingPongDiagram />
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+for (int k = 0; k < n; ++k) {
+    bindTexture(frontBounds);
+    bindRenderTarget(backBounds);
+    setUniform("uMiddle", k);
+    drawFullscreenPrimitive();
+    swap(frontBounds, backBounds);
+}
 ```
 
-### 内存对齐
+这里的 `drawFullscreenPrimitive` 不是在画蛋白质几何，而是在启动一张覆盖距离矩阵的计算网格。每个 fragment 的颜色就是一个新的距离边界；将纹理坐标生成交给 rasterizer，还能减少 shader 指令并让访问模式更规则。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<Term def="把一个标量循环改写成同时处理多个独立元素的向量操作，在本章中对应 RGBA 四通道打包">vectorization</Term> 把 GPU 四分量运算单元利用起来。连续四条边可以装进一个 RGBA texel：`T[i, j] = (D[i, 4j], D[i, 4j+1], D[i, 4j+2], D[i, 4j+3])`。这样渲染矩形的宽度约变为原来的四分之一，但 shader 必须把 `D[i, k]` 广播到正确通道，并处理 n 不是 4 的倍数时的尾部。
 
-## 验证层检查
+<GpuGemsCh43VectorizationDiagram />
 
-启用验证层后，Chapter 43: Rendering Techniques相关的常见错误会被捕获：
+## 5. 动手实验：观察 k 轮怎样收紧矩阵
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+先预测：把“完成的 k 轮”从 0 拖到 3，哪一类矩阵单元会先变小？打开 RGBA 向量化后，数值会改变，还是只会改变存储和 fetch 估算？
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+<GpuGemsCh43ProteinSmoothingLab />
 
-## 本章要点
+实验中的上界矩阵使用与官方算法相同的 `min` 更新，下界矩阵使用依赖 upper 的 `max` 更新；每次推进都按矩阵副本计算一整轮，避免把同一轮的新值提前泄漏给其他单元。绿色单元表示相对初始边界已经收紧，蓝色行列表示当前中间节点的读路径。
 
-1. Chapter 43: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 6. 三角存储、精度与规模边界
+
+上下界矩阵是对称的，因此只保存上三角和下三角可以节省空间；原章选择把两个三角分别存进纹理，并在几何上只绘制对应区域。这样做会浪费 `(i, j)` 与 `(j, i)` 的重复值，却能减少分支，让 texture fetch 和 fragment 区域更规则。对于 GPU，少一次条件判断有时比少一半 texel 更值得，必须在目标设备上测量。
+
+距离平滑对精度敏感。原章的实验使用 32 位 IEEE 浮点纹理，并在不同矩阵规模上比较 CPU 与 GPU 时间；GPU 的优势来自并行性和带宽，而不是改变了 O(n³) 的算法复杂度。规模继续扩大时，纹理边长、GPU 显存和单次 render target 限制会先成为瓶颈，不能把“更大的 n”当作免费收益。
+
+实现检查可以按下面的顺序收敛：
+
+1. 先用 CPU 标量版本验证 upper 和 lower 的更新式与顺序。
+2. 再用双缓冲 fragment 版本逐 k 对比每个矩阵单元。
+3. 打开三角区域裁剪，确认只读取合法的上三角或下三角。
+4. 最后加入 RGBA packing，并测试 `n mod 4` 的尾部通道和对称性。
+
+## 小结
+
+- 距离上下界平滑把稀疏 NMR 约束变成可迭代的矩阵更新。
+- 三角不等式用中间节点收紧 upper，再用 upper 抬高 lower。
+- Floyd–Warshall 的内层 `(i, j)` 更新具有 GPU 需要的独立写回形状。
+- ping-pong 隔离动态轮次的读写，RGBA packing 减少存储宽度与向量 fetch。
+- 精度、纹理尺寸、尾部通道和显存限制决定了 GPU 实现的实际边界。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 43: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜边界规则**　给定 `uᵢⱼ = 12`、`uᵢₖ = 5`、`uₖⱼ = 4`，以及 `lᵢⱼ = 2`、`lᵢₖ = 6`、`lₖⱼ = 5`。经过 k 的 upper 和 lower 候选值分别是多少？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+upper 候选为 `5 + 4 = 9`，所以新的 `uᵢⱼ = min(12, 9) = 9`。lower 候选为 `6 − 4 = 2` 与 `5 − 5 = 0`，所以新的 `lᵢⱼ = max(2, 2, 0) = 2`。这个例子说明上界可能被收紧，而下界未必每轮都会变化。
 </Answer>
 
+**问题 2｜改写 Demo**　把实验改成只显示 lower smoothing，并在每次推进后标出相对初始值变大的单元。为什么 lower 更新仍然需要一份已经收紧的 upper 矩阵？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+lower 的候选值包含 `lᵢₖ − uₖⱼ` 和 `lₖⱼ − uᵢₖ`。upper 越紧，这两个差值越可靠；如果使用尚未 smoothing 的宽松 upper，得到的 lower 也会偏松。实现时可以保留 upper 的内部状态，只把 lower 作为可见矩阵。
+</Answer>
+
+**问题 3｜GPU 取舍**　n 不是 4 的倍数时，RGBA packing 要处理什么？如果结果与 CPU 版本不同，按什么顺序排查？
+
+<Answer>
+
+尾部 texel 的无效通道必须 padding，并且不能参与 min 或 max 更新；`D[i, k]` 的通道索引也要与打包规则一致。排查顺序应是：先比较 scalar GPU 与 CPU 的每轮矩阵，再检查 ping-pong 是否真正交换，接着检查 triangle 区域和 texture 坐标，最后检查 RGBA 通道重排、浮点精度与尾部遮罩。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="distance-bound smoothing">不断排除不可能的距离，让每对原子的上下界变得更紧。</GlossaryItem>
+<GlossaryItem term="triangle inequality">三点之间一条边不能超过另外两条边之和，也不能短于两段距离的差。</GlossaryItem>
+<GlossaryItem term="Floyd-Warshall algorithm">轮流指定中间节点，尝试用绕行路径改进所有点对距离的算法。</GlossaryItem>
+<GlossaryItem term="ping-pong buffering">用两块存储轮流读写，避免同一纹理同时被读和写。</GlossaryItem>
+<GlossaryItem term="vectorization">把多个独立标量塞进一个向量，一次执行相同的运算。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 43 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 2 Chapter 43 “GPU Computing for Protein Structure Prediction”的独立重写，保留 Paulius Micikevicius 原章关于 NMR 距离上下界、三角不等式、Floyd–Warshall、GPU fragment unit、动态 ping-pong 更新、三角区域存储、RGBA 向量化、浮点精度和规模限制的核心内容，并整理为可交互的现代 GPU 计算学习路径。原始章节：[NVIDIA GPU Gems 2 Chapter 43](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-43-gpu-computing-protein)
+
 </Attribution>
