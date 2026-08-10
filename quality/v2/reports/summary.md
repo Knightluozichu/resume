@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:43:10.900Z；旧版分数不迁移。
+> 2026-08-10T07:52:46.493Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2205
+- failed：2204
 - queued：344
-- passed：1154
+- passed：1155
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -114,13 +114,13 @@
 | 101 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
 | 102 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
 | 103 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
-| 104 | gpu-gems | 48 | 13 | 0 | 35 | 26 |
-| 105 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
-| 106 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
-| 107 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 108 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 109 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 110 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 104 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
+| 105 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
+| 106 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
+| 107 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 108 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 109 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 110 | gpu-gems | 48 | 12 | 0 | 36 | 24 |
 | 111 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
 | 112 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 113 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
