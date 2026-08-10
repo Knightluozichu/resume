@@ -1,0 +1,146 @@
+---
+title: "GPU Gems 2 · Chapter 8. Per-Pixel Displacement Mapping with Distance Functions"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 8
+description: "用 3D distance map 为 tangent-space ray 提供保守步长，在 pixel shader 中执行 sphere tracing，实现带遮挡和非多边形轮廓的细节 displacement。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-8-pixel-displacement-mapping-distance-functions"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-08
+---
+
+import {
+  GpuGems2Ch08DistanceMapDiagram,
+  GpuGems2Ch08DistanceMappingLab,
+  GpuGems2Ch08FilteringDiagram,
+  GpuGems2Ch08PixelPipelineDiagram,
+  GpuGems2Ch08SphereTracingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch08-distance-mapping";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分 bump/normal mapping、固定步长 relief mapping 与 distance mapping 的几何能力
+- 能解释 3D distance map 如何给 sphere tracing 提供不会越过表面的安全步长
+- 能把 vertex shader 的 tangent-space ray、fragment shader 的迭代和命中后的纹理采样串起来
+- 能指出 displaced UV 导数不连续时的过滤策略，以及 displacement depth 与迭代预算的边界
+
+</Objectives>
+
+<Callout type="trap" title="不要用固定步长 ray march 直接猜命中">
+**现象 →** 小尺度特征被跨过，表面出现空洞、锯齿或严重 aliasing；把步长减小又让每个像素成本爆炸。
+
+**原因 →** height map 没有告诉你当前 ray 位置到表面还有多少安全空间。
+
+**修法 →** 预计算 3D distance map，以当前位置的距离作为下一步长度，远处跳大步、近处逐渐收敛。
+
+</Callout>
+
+<Callout type="trap" title="不要把 pixel displacement 当成任意大的几何位移">
+**现象 →** 表面局部细节正确，但大幅位移的轮廓仍然被原始平面限制，边缘出现不可能的投影。
+
+**原因 →** pixel shader 只能改变采样和光照，不能改变已经栅格化的像素屏幕坐标。
+
+**修法 →** 将 distance mapping 限制在有界的小尺度细节；需要大位移或真实轮廓时改用几何 tessellation。
+
+</Callout>
+
+<Callout type="trap" title="不要用 displaced UV 的导数直接选 mipmap">
+**现象 →** 特征遮挡边缘出现纹理 seam，颜色或法线采样突然选择了错误的 mip level。
+
+**原因 →** ray 命中后的 UV 在可见性不连续处跳变，GPU 用有限差分估计出的导数失真。
+
+**修法 →** 颜色和 normal map 使用 base UV 的 derivatives；distance map 使用线性过滤且不依赖 mipmap 的粗距离。
+
+</Callout>
+
+Bump mapping 只改变光照法线，不能让一个表面特征遮挡另一个特征，也不能改变 silhouette。displacement mapping 改变实际表面，但传统做法需要持续 tessellate，顶点 shader 又不能生成新顶点。
+
+本章换一个方向：把平面或局部切平面当作屏幕 ray 的起点，在 fragment shader 中求这个 ray 与 displaced surface 的交点。这样工作量随屏幕像素而不是模型顶点增长。
+
+## 1. 从 height map 到 distance map
+
+<Term def="为纹理空间中的三维点保存其到 displaced surface 最近距离的 3D 纹理">distance map</Term>是一个体数据。height map 只给定 `(u, v)` 的高度，distance map 则对体内每个点提供到表面的最短距离；只要当前点在表面外，沿任意方向走不超过这个距离，就不会越过表面。
+
+<GpuGems2Ch08DistanceMapDiagram />
+
+距离变换可以通过多次邻域 sweep 生成，每个体素先保存指向最近表面的位移向量，最后取向量长度并归一化到纹理深度范围。预处理成本换来运行时可跳过大量空空间的安全步长。
+
+## 2. sphere tracing：距离驱动的 ray marching
+
+<Term def="使用到隐式表面的安全距离作为 ray 步长、逐步收敛到交点的追踪方法">sphere tracing</Term>从起点 `p0` 查询 `dist(p0, S)`，再令 `p1 = p0 + distance * rayDirection`。重复这个步骤，远离表面时步子大，接近表面时自动变小；它不会像固定步长那样跨过一个比步长更薄的 feature。
+
+<GpuGems2Ch08SphereTracingDiagram />
+
+<Term def="在像素阶段沿 viewing ray 反复更新纹理坐标、查询距离并向交点前进的过程">ray marching</Term>通常设置固定的最大迭代次数，在距离小于命中阈值时提前结束。迭代预算要和 displacement depth、视角和 distance map 分辨率一起调；次数太少会提前终止，太多会增加 dependent texture read。
+
+## 3. tangent space 中的 shader 路径
+
+<Term def="由表面切线、副切线和法线构成、用于把 view ray 与 light vector 转入局部纹理坐标的坐标系">tangent space</Term>让平面算法推广到一般 mesh。vertex shader 将 eye vector 投影到 tangent、binormal、normal 三个基向量上，同时传递 base texture coordinate；fragment shader 以它为 ray 起点和方向。
+
+<GpuGems2Ch08PixelPipelineDiagram />
+
+命中 UV 之后，fragment shader 采样 color texture 和 normal texture，继续做 tangent-space lighting。注意 pixel displacement 只能在已有 rasterized surface 的像素范围内改变采样结果，不能承担任意大的位移轮廓。
+
+## 4. 过滤与坐标导数
+
+<GpuGems2Ch08FilteringDiagram />
+
+<Term def="由原始未扰动纹理坐标的屏幕有限差分得到的采样导数，用于稳定选择颜色和法线纹理 mip level">base UV derivatives</Term>在 displacement 命中点发生跳变时更可靠。用 `ddx` 和 `ddy` 计算 base UV 的导数，再把它们显式传给颜色与 normal map 采样；不要直接让 GPU 从 discontinuous hit UV 推断。
+
+distance map 的距离值本身不能粗暴使用 mipmap，因为过粗的 level 会把安全距离抹平。常见策略是对 distance map 做线性过滤但不生成 mipmap；颜色和法线则继续用 base UV 导数选择合适层级。
+
+## 5. 动手实验：安全步长与迭代预算
+
+调大 displacement depth 或让视角更掠射，观察需要的追踪步骤趋势；再降低最大迭代次数，判断何时会提前停止。实验数值用于理解控制变量，真实实现仍需依据 texture size、shader 指令和目标 GPU profile。
+
+<GpuGems2Ch08DistanceMappingLab />
+
+## 小结
+
+- distance mapping 将屏幕 pixel displacement 变成局部 ray-intersection 问题。
+- distance map 提供到表面的安全距离，sphere tracing 因此能跳过空空间且避免 overshoot。
+- tangent space 让同一算法适用于局部平面化的普通 mesh。
+- pixel shader 适合有界小位移，不会改变既有像素的屏幕轮廓。
+- hit UV 可能不连续，颜色和法线应使用 base UV derivatives，distance map 要谨慎过滤。
+
+<Exercises>
+
+**问题 1｜步长安全**　为什么在 surface 外使用 distance map 的值作为步长不会直接穿过表面？
+
+<Answer>
+
+distance map 的值是当前位置到表面的最短距离；沿单位 ray 方向前进不超过这个距离时，终点仍在表面外或刚好接近表面。因此它提供保守上界，远处可以跳得大，近处自然收缩。
+</Answer>
+
+**问题 2｜坐标变换**　为什么 vertex shader 要把 viewing ray 转到 tangent space，而不是直接用世界空间 ray 查询 height map？
+
+<Answer>
+
+局部的 height/distance map 以纹理坐标和表面法线定义，世界空间 ray 与它的轴向不一致。转到 tangent space 后，ray 起点、方向和纹理体坐标具有一致的局部度量，平面算法才能用于普通 mesh。
+</Answer>
+
+**问题 3｜过滤**　命中 UV 的导数在遮挡边缘跳变，直接用它选 mipmap 会发生什么？如何修？
+
+<Answer>
+
+有限差分会把不连续的 UV 当成很大的纹理梯度，导致错误的 mip level 和 seam。颜色与 normal map 应使用 base UV 的 ddx/ddy；distance map 使用合适的线性过滤并避免依赖错误的 mip 层级。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="distance map">保存体内点到 displaced surface 最近距离的 3D 纹理。</GlossaryItem>
+<GlossaryItem term="sphere tracing">使用安全距离作为 ray 步长并逐步收敛的追踪方法。</GlossaryItem>
+<GlossaryItem term="ray marching">沿 viewing ray 迭代采样并更新纹理坐标的过程。</GlossaryItem>
+<GlossaryItem term="tangent space">由切线、副切线和法线构成的局部坐标系。</GlossaryItem>
+<GlossaryItem term="base UV derivatives">由未扰动 UV 的屏幕有限差分得到的稳定采样导数。</GlossaryItem>
+<GlossaryItem term="pixel displacement">在 fragment shader 中改变命中采样与光照、但不生成新屏幕顶点的位移表现。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 8. Per-Pixel Displacement Mapping with Distance Functions" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-8-pixel-displacement-mapping-distance-functions" />
