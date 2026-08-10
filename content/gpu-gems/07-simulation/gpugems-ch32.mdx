@@ -1,255 +1,224 @@
 ---
-title: "Chapter 32: Simulation and Numerical Algorithms"
+title: "GPU Gems 1 · Chapter 32. An Introduction to Shader Interfaces"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part V · Performance and Practicalities"
 order: 32
-description: "GPU Gems Part: Simulation and Numerical Algorithms, Chapter 32"
+description: "用 Cg 1.2 的 shader interfaces、unsized arrays 和运行时绑定，把归一化、可变数量光源以及 Material/Texture 材质树组合成可复用且可专门化的 shader。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-32-introduction-shader-interfaces"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-32
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh32InterfaceCompositionDiagram,
+  GpuGemsCh32LightArrayDiagram,
+  GpuGemsCh32MaterialTreeDiagram,
+  GpuGemsCh32NormalizationDiagram,
+  GpuGemsCh32ShaderInterfaceLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch32-shader-interfaces";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 32: Simulation and Numerical Algorithms的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Simulation and Numerical Algorithms, Chapter 32之间的关系是什么？
+- 能用接口声明、实现对象和 Cg runtime 绑定解释 shader 如何在运行时组合并在绑定后编译
+- 能实现一个支持可变数量光源的 `Light` interface 与 `lights[]`，并说明为什么需要先设置数组长度
+- 能用 `Material` 与 `Texture` interface 组织可替换的材质树，而不为每一种纹理来源复制材质 shader
+- 能判断手动编译、constant 参数和多光源组合对编译时成本、最终 GPU 指令和代码维护性的影响
 
 </Objectives>
 
-## 为什么需要Chapter 32: Simulation and Numerical Algorithms
+GPU Gems 1 第 32 章介绍 Cg 1.2 的 shader interfaces。它解决的是“同一份 shader 如何容纳多种实现”的组合问题：归一化可以走数值计算或 cube-map 查表，光源可以有不同类型且数量未知，材质又可以由纹理节点和其他材质节点组成。接口把这些变化从主 shader 的分支和字符串拼接中移出，交给 Cg runtime 在运行时连接对象并生成最终程序。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 32: Simulation and Numerical Algorithms作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<GpuGemsCh32InterfaceCompositionDiagram />
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Simulation and Numerical Algorithms, Chapter 32正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把所有光源类型写成主 shader 里的 if 链">
+现象：加入一种新光源，就要复制或修改所有 surface shader；光源数量增加后分支和重复计算持续膨胀。原因：主 shader 同时承担了抽象、选择和具体实现。修法：让主 shader 只调用 `Light` interface，把 point、spot 或 shadow light 作为实现对象交给 runtime 绑定。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 32: Simulation and Numerical Algorithms从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 32: Simulation and Numerical Algorithms涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 32: Simulation and Numerical Algorithms相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 32: Simulation and Numerical Algorithms相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要在接口尚未绑定时就编译程序">
+现象：`cgCreateProgramFromFile()` 返回的程序无法加载到 GPU，或自动编译在接口缺失时失败。原因：interface 参数还没有具体实现，最终代码尚未确定。修法：用 `cgSetAutoCompile(context, CG_COMPILE_MANUAL)` 延迟编译，创建并连接实现对象后再调用 `cgCompileProgram()`。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 unsized array 当成已经有长度的数组">
+现象：shader 能遍历 `lights[]`，但 runtime 端绑定失败或执行前没有完整的光源集合。原因：数组声明只表达“长度稍后决定”，并没有替你创建和连接元素。修法：先用 `cgSetArraySize()` 设置长度，再逐项创建参数、调用 `cgConnectParameter()`，最后编译。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="在 Cg 中声明一组抽象方法、允许 shader 调用而无需知道具体实现，并由 runtime 在执行前连接实现对象的接口机制">shader interface</Term> 的价值不是像 C++ 一样为大型软件层次提供抽象，而是让 shader 可以由多个模块在运行时组合。主程序只依赖方法契约；用户提供实现；runtime 把这些实现放进最终 shader。由于具体类型在编译前已确定，GPU 执行阶段不需要为接口调用支付动态分派成本。
 
-## 性能考量
+## 1. 接口的最小形态：先声明能力，再提供实现
 
-### 批量操作
+Cg 的接口声明包含名称和方法签名，结构体通过继承接口名来承诺实现所有方法。归一化例子足够小，却能展示完整路径：fragment shader 接收一个 `Normalizer`，对光向量和插值法线都调用 `nrm()`，却不关心归一化来自数学运算还是纹理查表。
 
-Vulkan 鼓励批量提交而非逐个提交：
+```c
+interface Normalizer {
+  float3 nrm(float3 v);
+};
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+float4 main(float3 Pworld, float3 Nworld,
+            uniform float3 Plight,
+            uniform Normalizer normalizer) : COLOR {
+  float3 L = normalizer.nrm(Plight - Pworld);
+  float3 C = Kd * max(0, dot(L, normalizer.nrm(Nworld)));
+  return float4(C, 1);
+}
 ```
 
-### 内存对齐
+<Term def="遵守 shader interface 方法契约的具体 Cg 结构体，例如用 normalize 数学函数或 cube map 查表完成向量归一化">interface implementation</Term> 可以是 `StdNormalizer` 或 `CubeNormalizer`。前者实现 `normalize(v)`；后者在结构体中持有 `samplerCUBE`，用 `texCUBE()` 读取已经编码好的归一化向量。主 shader 不需要两份，也不需要把 hardware profile 判断写进每个 fragment program。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh32NormalizationDiagram />
 
-## 验证层检查
+接口替换的边界很清楚：实现的输入、输出和所有方法必须满足声明；实现内部可以持有自己的 sampler、常量和中间数据；应用需要在程序运行前把某个实现绑定给接口参数。类型安全来自这个契约，而不是来自主 shader 自己解析字符串。
 
-启用验证层后，Chapter 32: Simulation and Numerical Algorithms相关的常见错误会被捕获：
+## 2. Cg runtime：绑定完成后才生成最终程序
 
+<Term def="负责创建程序、创建用户类型参数、连接 interface 实例、设置数组长度并触发最终 shader 编译的 Cg 运行时 API 层">Cg runtime</Term> 负责把源码里的抽象参数变成已连接的程序。推荐的手动编译顺序如下：
+
+```c
+cgSetAutoCompile(context, CG_COMPILE_MANUAL);
+CGprogram prog = cgCreateProgramFromFile(
+    context, CG_SOURCE, "frag.cg", profile, NULL, NULL);
+
+CGtype nrmType = cgGetNamedUserType(prog, "StdNormalizer");
+CGparameter stdNorm = cgCreateParameter(context, nrmType);
+CGparameter normIface = cgGetNamedParameter(prog, "normalizer");
+cgConnectParameter(stdNorm, normIface);
+
+cgCompileProgram(prog);
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+先手动关闭自动编译，是因为程序创建时接口还没有实例。`cgGetNamedUserType()` 找到实现类型，`cgCreateParameter()` 创建实现对象，`cgGetNamedParameter()` 找到主 shader 的接口参数，`cgConnectParameter()` 建立连接，最后 `cgCompileProgram()` 才能生成完整代码。换实现时可以重新连接并再次编译；同一个实现对象也能被同一 context 中的多个程序共享。
+
+自动编译并非永远错误：如果连接变化很少且工具希望简化调用，可以让 runtime 自动重编译。但要把“连接导致的隐式编译”当成明确的成本边界，尤其是在材质编辑器或大量对象同时变更时。
+
+## 3. Light interface 与可变数量光源
+
+多光源是接口真正有用的场景。若把 `light type` 当作普通参数，主 shader 必须为 point、spot、projective 和 shadow-map light 写一串判断；若用预处理器，则应用需要手工拼接并维护大量专用源码。接口可以把每种光源的方向 `L` 和到达强度交给实现：
+
+```c
+interface Light {
+  float3 illuminate(float3 P, out float3 L);
+};
+
+struct SpotLight : Light {
+  sampler2D shadow;
+  samplerCUBE distribution;
+  float3 Plight, Clight;
+
+  float3 illuminate(float3 P, out float3 L) {
+    L = normalize(Plight - P);
+    return Clight * tex2D(shadow, P).xxx * texCUBE(distribution, L).xyz;
+  }
+};
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+<Term def="声明时不固定元素数量、由 Cg runtime 在执行前设置长度并逐项连接 interface 实例的数组">unsized array</Term> 让主 shader 声明 `uniform Light lights[]`，并用 `lights.length` 遍历当前集合。runtime 端需要先设置长度，再创建每个 `Light` 的实现参数并连接到数组槽位：
 
-## 本章要点
+```c
+cgSetArraySize(lightsParam, lightCount);
+for (int i = 0; i < lightCount; ++i) {
+  CGparameter lightInstance = createLightParameter(lightTypes[i]);
+  cgConnectParameter(lightInstance, cgGetArrayParameter(lightsParam, i));
+}
+cgCompileProgram(prog);
+```
 
-1. Chapter 32: Simulation and Numerical Algorithms是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<GpuGemsCh32LightArrayDiagram />
+
+这样主 shader 只需要做一次纹理读取、法线归一化和光源累加循环，而不是每个 light pass 都重复运行整套 fragment program。最终 GPU 指令在光源数量和具体类型确定之后生成，因此接口和 unsized array 本身不会引入执行阶段的动态分派成本；它们把成本放在 runtime/compiler 的绑定阶段。
+
+## 4. Material 与 Texture：把材质库组织成树
+
+材质树的关键是区分职责：`Material` 描述表面如何响应光照，`Texture` 提供材质所需的某个点值。`Material.color()` 接收位置、法线、视线方向、纹理坐标和 `Light[]`，而 `Texture.eval()` 可以来自图片、常量或程序生成函数。
+
+```c
+interface Texture {
+  float3 eval(float3 P, float3 N, float2 uv);
+};
+
+interface Material {
+  float3 color(float3 P, float3 N, float3 I,
+               float2 uv, Light lights[]);
+};
+```
+
+<Term def="用 interface 节点递归描述表面如何响应光照，并把 Texture、Light 和其他 Material 作为可替换子节点的层次化材质结构">material tree</Term> 允许 `DiffuseMaterial` 只依赖 `Texture`，而不区分 `ImageTexture`、`ConstantTexture` 或 `BlendTexture`。`BlendTexture` 又可以持有三个 Texture：两个输入值和一个混合量。`FogMaterial` 可以持有另一个 Material，先调用 base 的颜色，再混入雾颜色。新增一种纹理或装饰材质时，不需要修改已经存在的 DiffuseMaterial 源码。
+
+<GpuGemsCh32MaterialTreeDiagram />
+
+这种正交性正是接口组合的工程收益：材质实现管理反射模型，纹理实现管理取值来源，光源实现管理照明行为。应用只负责创建对象并连接节点；shader 库不必为每一种组合预先生成一份巨大的专用文件。Material tree 也为 content-creation 工具提供了自然的节点图表达方式。
+
+## 5. constant 参数：让编译器看到稳定事实
+
+Cg 1.2 还允许把 shader 参数标记为 <Term def="被标记为稳定值、允许编译器在生成程序时进行分支求值和代码优化的 shader 参数">constant parameter</Term>。若一个 `if` 的条件只依赖常量，编译器可以在编译阶段求值：删掉永远不会走到的分支，或把必然成立的代码直接展开。这里的收益发生在最终程序生成阶段，不是让运行时接口调用更快。
+
+因此，常量标记要和绑定时机一起设计：在实现类型、Light[] 长度和 constant 参数都确定后编译，编译器才有足够事实做专门化；如果同一个程序还要频繁更换这些值，就要比较重编译成本与运行时分支成本。接口提供组合能力，constant 提供优化信息，两者解决的是不同问题。
+
+<GpuGemsCh32ShaderInterfaceLab />
+
+## 6. 什么时候该用接口，什么时候不该用
+
+shader interface 并不能表达以前无法表达的数学程序；它改变的是组织和生成方式。适合使用的信号包括：实现类型会随硬件或内容变化、光源数量不固定、材质节点要递归组合、主 shader 已经开始出现大量类型分支或字符串拼接。
+
+不应盲目抽象的信号包括：只有一个永不替换的实现、绑定变化频繁却无法承受重编译、profile 对接口相关语法支持不一致，或简单的静态代码已经足够清楚。官方章节强调的成本边界是 compile-time 的 runtime/compiler overhead；发布前仍应检查目标 profile 的生成代码、编译次数和实际 shader 资源。
+
+## 小结
+
+- shader interface 声明抽象方法，具体 implementation 在运行时连接，绑定后生成专用 GPU 程序。
+- 手动编译时应先关闭自动编译，创建用户类型参数、连接接口，再调用 `cgCompileProgram()`。
+- `Light` interface 与 unsized array 让主 shader 支持不同光源类型和运行时数量，避免重复 pass 与源码拼接。
+- `Material`、`Texture` 和 `Light` 可以组成可递归的 material tree；新增节点不必修改已有节点。
+- constant 参数让编译器利用稳定事实做分支消除；接口和 unsized array 的主要成本位于绑定与编译阶段，而不是 GPU 执行阶段。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 32: Simulation and Numerical Algorithms涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜绑定顺序**　为什么程序创建后不能立刻编译一个带 `Normalizer` interface 的 Cg program？请写出从创建程序到得到可执行 GPU 程序的最小调用顺序。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+程序创建时 `normalizer` 还没有具体 implementation，编译器无法生成完整代码。先调用 `cgSetAutoCompile(context, CG_COMPILE_MANUAL)`，再创建程序；用 `cgGetNamedUserType()` 找到实现类型，`cgCreateParameter()` 创建实例，用 `cgGetNamedParameter()` 找到接口参数，调用 `cgConnectParameter()` 连接，最后调用 `cgCompileProgram()`。若更换实现，需要重新连接并再次编译。
 </Answer>
 
+**问题 2｜可变光源**　一个 fragment shader 需要支持任意数量的 point light 和 spot light。为什么 `Light lights[]` 比“每个光源渲染一次”更适合这个抽象？runtime 必须完成哪两类工作？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`Light` interface 让主 shader 只调用 `illuminate()` 并累加结果，不必为每种光源复制 surface shader，也避免每个 pass 重复执行顶点和纹理计算。`lights[]` 的长度要由 runtime 先用 `cgSetArraySize()` 设置，然后逐项创建实现参数并用 `cgConnectParameter()` 连接到数组槽位；所有实例都确定后再编译程序。
+</Answer>
+
+**问题 3｜材质树**　请设计一个支持图片纹理、常量颜色和雾装饰的组合。哪些 interface 节点需要实现？为什么 `DiffuseMaterial` 不应该直接判断纹理来源？
+
+<Answer>
+
+实现 `Texture` 的 `ImageTexture`、`ConstantTexture` 和 `BlendTexture`，实现 `Material` 的 `DiffuseMaterial`，再实现一个持有 `base Material` 的 `FogMaterial`。`DiffuseMaterial` 只调用 `diffuse.eval()`，因此可以接受任何 Texture 实现；FogMaterial 只包装 base 的 `color()` 结果。这样新增程序纹理或新的 Material 不需要修改已有节点，应用只需在 runtime 中连接节点。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="shader interface">声明抽象方法、由 runtime 绑定实现并在编译时组合进最终 shader 的 Cg 接口机制。</GlossaryItem>
+<GlossaryItem term="interface implementation">遵守接口方法契约的具体 Cg 结构体，例如 StdNormalizer 或 SpotLight。</GlossaryItem>
+<GlossaryItem term="Cg runtime">创建程序和用户类型参数、连接接口实例、设置数组长度并触发编译的运行时 API 层。</GlossaryItem>
+<GlossaryItem term="unsized array">声明时不固定长度、由 runtime 在执行前设置长度并绑定元素的数组。</GlossaryItem>
+<GlossaryItem term="material tree">以 Material、Texture 和 Light 等接口节点递归组合表面描述的层次结构。</GlossaryItem>
+<GlossaryItem term="constant parameter">被标记为稳定值、允许编译器在生成程序时进行分支求值和代码优化的 shader 参数。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 32 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 32 “An Introduction to Shader Interfaces”的独立重写，保留 Cg 1.2 shader interfaces、Normalizer、Cg runtime 绑定、Light interface、unsized arrays、constant 参数以及 Material/Texture 材质树等核心线索，并将历史 API 示例整理为可验证的运行时组合学习路径。原始章节：[NVIDIA GPU Gems Chapter 32](https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-32-introduction-shader-interfaces)
+
 </Attribution>

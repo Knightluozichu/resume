@@ -1004,7 +1004,7 @@
     - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch30.mdx`
 - [x] ✅ **06-beyond-triangles/gpugems-ch31** — 已修复（2026-08-10，score 42→96，passed）
     - 路径：`content/gpu-gems/06-beyond-triangles/gpugems-ch31.mdx`
-- [ ] 🔴 P1 **07-simulation/gpugems-ch32** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+- [x] ✅ **07-simulation/gpugems-ch32** — 已修复（2026-08-10，score 42→95，passed）
     - 路径：`content/gpu-gems/07-simulation/gpugems-ch32.mdx`
 - [ ] 🔴 P1 **07-simulation/gpugems-ch33** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
     - 路径：`content/gpu-gems/07-simulation/gpugems-ch33.mdx`

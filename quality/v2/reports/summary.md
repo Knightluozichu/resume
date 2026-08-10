@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:03:08.219Z；旧版分数不迁移。
+> 2026-08-10T07:13:22.457Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2209
+- failed：2208
 - queued：344
-- passed：1150
+- passed：1151
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -78,13 +78,13 @@
 | 65 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
 | 66 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
 | 67 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
-| 68 | gpu-gems | 48 | 17 | 0 | 31 | 34 |
-| 69 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
-| 70 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
-| 71 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
-| 72 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
-| 73 | python-advanced | 16 | 16 | 0 | 0 | 48 |
-| 74 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 68 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
+| 69 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
+| 70 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
+| 71 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
+| 72 | python-advanced | 16 | 16 | 0 | 0 | 48 |
+| 73 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
+| 74 | gpu-gems | 48 | 16 | 0 | 32 | 32 |
 | 75 | large-language-models | 16 | 16 | 0 | 0 | 16 |
 | 76 | csapp | 15 | 15 | 0 | 0 | 74 |
 | 77 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
