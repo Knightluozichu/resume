@@ -13181,6 +13181,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh33RenderManLab: module0.GpuGemsCh33RenderManLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/07-simulation/gpugems-ch34": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch34-cinema4d-hardware-shading");
+    return {
+      GpuGemsCh34Cinema4DLab: module0.GpuGemsCh34Cinema4DLab,
+      GpuGemsCh34MaterialConversionDiagram:
+        module0.GpuGemsCh34MaterialConversionDiagram,
+      GpuGemsCh34ParameterWrapperDiagram:
+        module0.GpuGemsCh34ParameterWrapperDiagram,
+      GpuGemsCh34PluginBridgeDiagram: module0.GpuGemsCh34PluginBridgeDiagram,
+      GpuGemsCh34SceneSnapshotDiagram: module0.GpuGemsCh34SceneSnapshotDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

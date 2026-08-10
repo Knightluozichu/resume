@@ -1,255 +1,239 @@
 ---
-title: "Chapter 34: Simulation and Numerical Algorithms"
+title: "GPU Gems 1 · Chapter 34. Integrating Hardware Shading into Cinema 4D"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part V · Performance and Practicalities"
 order: 34
-description: "GPU Gems Part: Simulation and Numerical Algorithms, Chapter 34"
+description: "以 C4Dfx 为例，把硬件 shading 接入现有 Cinema 4D：隔离宿主场景、转换材质参数、管理 CgFX/OpenGL 资源，并用交互预览与离线序列的成本证据做取舍。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-34-integrating-hardware-shading-cinema"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-34
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh34Cinema4DLab,
+  GpuGemsCh34MaterialConversionDiagram,
+  GpuGemsCh34ParameterWrapperDiagram,
+  GpuGemsCh34PluginBridgeDiagram,
+  GpuGemsCh34SceneSnapshotDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch34-cinema4d-hardware-shading";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 34: Simulation and Numerical Algorithms的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Simulation and Numerical Algorithms, Chapter 34之间的关系是什么？
+- 能解释 C4Dfx 为什么增强现有 Cinema 4D，以及交互预览与离线 renderer 的质量边界
+- 能画出 wrapper、worker、scene snapshot、off-screen buffer 与 bitmap 输出之间的生命周期
+- 能把层级几何、材质参数和 CgFX 资源组织成可并发渲染的输入，并处理参数重载
+- 能用启动成本、跨帧资源复用、画面尺寸与硬件能力评估实时近似的取舍
 
 </Objectives>
 
-## 为什么需要Chapter 34: Simulation and Numerical Algorithms
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 34: Simulation and Numerical Algorithms作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Simulation and Numerical Algorithms, Chapter 34正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要在 Cinema 4D 的宿主窗口里直接跑 worker 渲染">
+现象：预览窗口卡顿、尺寸变化时画面错位，或者 OpenGL/CgFX 调用与宿主 API 互相干扰。原因：宿主并不把任意窗口访问和图形上下文共享当作插件的稳定契约。修法：让插件通过 wrapper 管理自己的 Win32 线程与 off-screen render target，再把位图拷回宿主对话框。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 34: Simulation and Numerical Algorithms从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 34: Simulation and Numerical Algorithms涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 34: Simulation and Numerical Algorithms相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 34: Simulation and Numerical Algorithms相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把正在编辑的场景对象直接交给渲染线程">
+现象：艺术家拖动物体或删除材质时，worker 偶发读到半更新的层级、悬空对象或不一致矩阵。原因：Cinema 4D 的宿主场景仍然可变，而渲染线程需要一份稳定输入。修法：遍历层级并复制成 scene snapshot，worker 只读快照，下一次交互再生成新的快照。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 shader 和纹理创建放进每一帧的热路径">
+现象：单帧看起来能跑，连续序列却被 CgFX 编译、纹理上传和转换成本拖慢。原因：启动成本没有被多帧摊销，而且同一张没有变化的纹理被重复创建。修法：按动画检查资源是否真的变化，尽量做 texture reuse，并把序列长度纳入性能判断。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 34 章讨论的不是“再写一个独立的渲染器”，而是如何给成熟的 3D 设计软件加一条硬件加速路径。官方案例的插件叫 C4Dfx：它增强现成的 Cinema 4D，让设计师在修改场景时得到高质量的近交互反馈，也能把相近的路径用于离线 `.avi` 渲染。这个目标同时受宿主 API、显卡能力、shader 资源和线程边界约束。
 
-## 性能考量
+<GpuGemsCh34PluginBridgeDiagram />
 
-### 批量操作
+## 1. 先定义插件的目标与质量边界
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="为 Cinema 4D 增加 CgFX/OpenGL 硬件预览与离线输出能力的插件案例，而不是替换宿主软件的独立 renderer">C4Dfx</Term> 的价值在“接入”：它复用 Cinema 4D 的场景编辑、层级和材质入口，再把可执行的硬件 shading 放到插件拥有的渲染路径。这样用户可以继续使用现有软件，而插件只需要解决桥接、数据快照、参数映射和输出显示。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+交互预览与离线输出共享不少材质转换代码，但目标不同。预览要在修改后尽快显示一张可信的图；离线 renderer 可以花更多时间处理较大画面、阴影和纹理，却仍不必承诺与 Cinema 4D 原 renderer 逐像素一致。官方案例的正确表述是“高质量反馈”和“近交互”，不是一个无条件替换原 renderer 的精确复刻。
 
-### 避免 CPU-GPU 同步点
+发布一个这类插件前，可以把边界写成三项验收条件：
+
+- **语义**：漫反射、凹凸、环境图、阴影和关键高光在对应位置出现。
+- **交互**：场景修改后，预览能在可接受时间内刷新，不阻塞宿主 UI。
+- **成本**：对目标显卡记录 shader 编译、纹理转换、每帧渲染和显存占用；不把历史硬件上的绝对数字直接当成今天的承诺。
+
+## 2. 用 wrapper、线程与 off-screen buffer 连接宿主
+
+Cinema 4D 的 C++ API 与 Win32、OpenGL、CgFX 头文件存在命名和类型冲突。直接把所有头文件混在一个编译单元里，容易让桥接代码变成不可维护的宏隔离。更稳妥的做法是使用一组 wrapper functions/classes：宿主侧只看到插件需要的窄接口，图形 API 的细节留在隔离模块中。
+
+<Term def="渲染到独立的颜色或深度目标，再把结果作为位图显示给宿主 UI，而不是把 worker 直接绑定到宿主窗口">off-screen buffer</Term> 是线程边界的关键。插件可以拥有自己的 Win32 线程，让交互 renderer 与离线 renderer 和 Cinema 4D 并行工作；渲染完成后把 off-screen 结果复制为位图，显示对话框只负责缩放和刷新。窗口尺寸变化只改变位图显示尺寸，不应迫使 worker 重新绑定宿主窗口。
+
+“并行”不等于“共享可变对象”。宿主的场景可能在用户拖动时改变层级、对象或材质；worker 若直接持有这些对象，就会把 API 生命周期问题变成随机崩溃。每次提交前应生成只读 <Term def="从宿主可变场景复制出的只读渲染输入，由 worker 在并发渲染期间持有">scene snapshot</Term>，并定义快照的所有权和释放时刻。简化的提交协议如下：
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+SceneSnapshot snapshot = clone(hostScene);
+renderQueue.submit(std::move(snapshot));
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+// worker owns the snapshot until all OpenGL reads finish
+while (renderQueue.hasWork()) {
+  SceneSnapshot frame = renderQueue.take();
+  renderOffscreen(frame, previewTarget);
+  publishBitmap(previewTarget);
+}
 ```
 
-### 内存对齐
+这段伪代码的重点不是队列类名，而是两个不变量：宿主提交后可以继续编辑自己的对象；worker 在完成 OpenGL 读取前拥有快照。若用户连续修改场景，可以丢弃过时快照，但不能在 worker 尚未完成时复用其底层数组。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. 从层级场景得到 GPU 可消费的几何
 
-## 验证层检查
+<GpuGemsCh34SceneSnapshotDiagram />
 
-启用验证层后，Chapter 34: Simulation and Numerical Algorithms相关的常见错误会被捕获：
+渲染器要遍历 Cinema 4D 的 Hierarchy，收集经过 tessellation 和 deformation 的对象，再把全局矩阵带到渲染输入中。原章的几何路径可以概括为：
 
+1. 由层级遍历得到当前可见对象和其 world matrix。
+2. 把四边形和三角形整理为 indexed vertex arrays；不支持四边形的路径可以把四边形退化成两个三角形。
+3. 为每个顶点准备位置、normal、tangent、binormal 和 UV 等 CgFX 需要的属性。
+4. 用邻接关系辅助法线计算；对于 tessellated 或 polyhedral geometry，切线和副切线可以用局部的最佳线性近似。
+
+这些属性必须在同一个坐标协议中解释。vertex shader 既要把位置变换到 clip space，也可能要把 tangent、binormal、normal 变到 world space，并计算 world position 与 view vector。若法线在 object space、光源却在 world space，画面会像“shader 有问题”，实际是快照属性与矩阵契约没有对齐。
+
+## 4. 用 ParamWrapper 管理可编辑效果参数
+
+标准材质只能覆盖一小部分效果；CgFX 的优势是每个 material 可以加载一个 `.fx` effect，并从 annotations 生成参数 GUI。插件需要一个稳定的适配对象：`<Term def="把 CgFX 参数的类型、UI、动画值和 GPU 资源生命周期接到宿主材质的适配层">ParamWrapper</Term>`。
+
+创建 ParamWrapper 时先读取参数的类型和 annotations，再选择 float、color、texture、matrix 或 light-link 等子类。每个子类至少要回答四个问题：
+
+- 如何在 Cinema 4D 材质面板建立合适的控件；
+- 如何在当前帧读取动画后的值，并绑定到 `ICgFXEffect`；
+- 是否要为这一帧或这一对象分配 GPU 资源；
+- 何时释放资源，避免 GUI 销毁后仍访问 effect。
+
+<Term def="持有已解析 CgFX effect、参数和资源绑定的效果实例，负责在当前渲染阶段提供可设置的 shader 参数">ICgFXEffect</Term> 可以把这些 ParamWrapper 组织到一个 effect 实例中。位置和方向参数还可以链接到 Cinema 4D 的 camera 或 light object；world、view、projection matrix 则由当前 scene snapshot 推导。这样 GUI 修改的是可追踪的材质数据，worker 读取的是某一帧的一致参数。
+
+重载被编辑过的 `.fx` 文件时，不要无条件把所有控件重置为默认值：如果参数类型和范围仍兼容，就保留 Cinema 4D 中已有的值；如果类型不匹配，给出明确错误并打开编辑器对应行。错误应同时写入插件 console，避免用户只看到一个空白预览。
+
+```cpp
+class ParamWrapper {
+public:
+  virtual void buildGui(MaterialPanel& panel) = 0;
+  virtual void readAnimatedValue(const SceneSnapshot& scene, int frame) = 0;
+  virtual void allocateResources(RenderContext& context) = 0;
+  virtual void releaseResources(RenderContext& context) = 0;
+  virtual ~ParamWrapper() = default;
+};
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+这个接口把“值如何显示”和“值如何进入 GPU”放在同一生命周期上，减少了材质面板、动画系统与 renderer 各自维护一份状态的机会。
+
+<GpuGemsCh34ParameterWrapperDiagram />
+
+## 5. 把标准材质转换成 CgFX 资源
+
+离线 renderer 需要模拟 Cinema 4D 标准材质，而不是假设所有场景都已经写成 CgFX。一个实用路径是把标准材质转换成内存中的 `.fx` 字符串流，再让 `ICgFXEffect` 解析它。转换器还要把 bitmap、movie 和 procedural map 变成目标硬件可采样的纹理。
+
+<Term def="在多帧或多对象之间保留已经创建的 texture、shadow map 或 effect 资源，只在输入真的变化时重建">texture reuse</Term> 决定这条路径能否接近交互速度。常见的转换规则包括：
+
+- diffuse map 直接绑定为颜色纹理；
+- bump 的灰度 height map 根据像素邻域差分生成 normal map；
+- spherical environment map 转成 cubemap，供反射或环境采样；
+- shadow map 在 off-screen depth target 中生成；
+- 高光形状可以按当前 frame 预计算成 1024 像素的一维纹理。
+
+这些转换都应考虑“输入何时变化”。静态环境图不应每帧上传；随动画变化的 procedural map 则可能必须更新。阴影光源数量还会受到目标硬件的纹理数量限制；如果用“一光源一 pass”支持更多灯，就要把重复的顶点和片元工作写进预算。
+
+<GpuGemsCh34MaterialConversionDiagram />
+
+## 6. 组织 vertex、fragment 与输出阶段
+
+生成的 vertex shader 可以负责位置变换、tangent 和 binormal 的 world-space 变换、normal 的 inverse-transpose 变换，以及 world position 与 view vector 的准备。fragment 阶段再读取材质纹理、阴影深度和高光 lookup，完成每个可见 fragment 的颜色组合。
+
+这条分工有一个重要的工程含义：同一个 CgFX effect 可能要按多个 pass 渲染。若每个光源都需要单独的 shadow 或 lighting pass，效果会随光源数量增长；而固定纹理数量的显卡又会限制同一 pass 能消费的 shadow map 数。硬件加速不是“调用一个 API 就免费得到速度”，而是要把资源数量、pass 数、片元数量和画面尺寸同时记录下来。
+
+```text
+host scene → snapshot → hierarchy traversal → vertex arrays
+            → CgFX parameter binding → off-screen color/depth passes
+            → bitmap preview or offline frame
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+<GpuGemsCh34Cinema4DLab />
 
-## 本章要点
+交互实验中的数值是示意模型：启动成本包含 effect 编译和纹理创建，每帧成本随画面像素、effect 复杂度和 shadow light 数量增加。把纹理从“每帧重建”切换为“跨帧复用”，并增加序列帧数，可以直接观察摊销逻辑；取消 scene snapshot 则会把并发正确性风险显式显示出来。
 
-1. Chapter 34: Simulation and Numerical Algorithms是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 7. 用实测结果决定“近交互”是否成立
+
+官方案例报告的一个核心观察是：硬件 renderer 具有明显启动成本，但在较大画面或较长序列上可以获得很高的吞吐。历史硬件上的原始 megapixels-per-second 数字不能直接移植到今天；可迁移的是测量方法：
+
+- 分开记录 CgFX effect 编译、纹理创建、场景快照、每帧渲染和 bitmap 拷贝时间。
+- 用同一场景比较单帧、短序列和长序列，观察启动成本何时被摊薄。
+- 统计 texture 数量、shadow pass 数、shader 复杂度、画面尺寸和显存，而不是只报一个平均 FPS。
+- 适当加入 frustum culling 与 occlusion culling，确认被裁掉的对象没有继续消耗 tessellation 和 fragment 工作。
+
+硬件覆盖范围也需要写进发布说明。效果越复杂，支持的显卡 profile 越少；一个能在高端卡运行的 shader 可能在目标用户的卡上无法编译，或需要减少纹理和光源。先统计参数、纹理和 pass，再选择目标 profile；不要等到艺术家完成材质后才发现资源上限不够。
+
+最后，C4Dfx 的“硬件 preview”与 Cinema 4D 离线 renderer 的结果只应在已声明的功能子集内比较。若要逐像素复刻，需要逆向并重建原 renderer 的算法；若目标是高质量反馈，则可以接受明确、可解释、可回归的近似。
+
+## 8. 可复用的插件规则
+
+这个案例可以抽象成一条适用于旧软件接入新硬件 API 的规则链：
+
+1. 用窄 wrapper 隔离宿主 API 与图形 API，避免把头文件冲突扩散到整个插件。
+2. 用只读 scene snapshot 隔离宿主编辑线程与 worker，定义快照的所有权和丢弃策略。
+3. 用 ParamWrapper 管理 GUI、动画、effect 参数和 GPU 资源的同一生命周期。
+4. 让材质转换器显式记录 diffuse、bump、environment、shadow 与高光的近似规则。
+5. 按序列长度、画面尺寸、纹理复用和硬件资源上限报告性能，而不是只展示一个“最快帧”。
+
+## 小结
+
+- C4Dfx 的设计目标是增强 Cinema 4D：用 CgFX/OpenGL 提供高质量预览和离线输出，而不是假装与原 renderer 完全相同。
+- wrapper、独立线程、off-screen buffer 和 bitmap 回传让插件可以与宿主协作；scene snapshot 则保护 worker 不读取正在修改的对象。
+- 层级遍历需要同时准备 tessellated/deformed geometry、索引、法线、切线、副切线、UV 和矩阵。
+- ParamWrapper 与 ICgFXEffect 把 CgFX 参数的 GUI、动画值、场景链接和资源释放串成可重载的生命周期。
+- 标准材质要通过内存 `.fx`、normal map、cubemap、shadow map 和高光 lookup 转换；texture reuse 和硬件上限决定实际吞吐。
+- 近交互是启动成本被序列摊薄后的测量结论；质量、画面尺寸、shader profile、光源数量和显存必须一起验证。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 34: Simulation and Numerical Algorithms涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜并发边界**　请画出 Cinema 4D、C4Dfx、scene snapshot、worker、off-screen buffer 和 bitmap preview 的所有权关系，并说明为什么 worker 不能直接持有宿主的可变 scene object。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+Cinema 4D 保有正在编辑的原始场景；C4Dfx 在提交时复制出 scene snapshot，并把快照的所有权交给 worker。worker 只从快照读取层级、几何、材质和矩阵，渲染到自己的 off-screen buffer，再把完成后的像素复制为 bitmap 交给预览 UI。这样宿主可以继续编辑或丢弃下一份快照，而不会在 worker 读取中途删除对象或修改数组。
 </Answer>
 
+**问题 2｜参数生命周期**　一个 CgFX 参数带有类型、范围和动画 annotation。请列出 ParamWrapper 在加载、每帧渲染、效果文件重载和销毁时分别要做什么。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+加载时读取类型和 annotation，选择对应子类并建立 GUI；每帧从 scene snapshot 读取当前动画值，必要时绑定 camera、light 或矩阵，再把值写入 ICgFXEffect。重载时若类型和范围兼容就保留旧值，否则报告具体行号和类型错误。销毁时先解除 effect 使用的纹理或 frame/object 资源，再释放 ParamWrapper，避免 GUI 或 worker 继续访问已经失效的对象。
+</Answer>
+
+**问题 3｜性能实验**　为什么单帧测试可能低估硬件 renderer 的价值？请设计一个至少包含三种序列长度的测试，并说明要记录哪些指标。
+
+<Answer>
+
+单帧会把 CgFX 编译、纹理转换和 OpenGL 纹理创建的启动成本全部计入，无法显示这些成本在长序列上的摊销。可以固定场景和画面尺寸，测试 1、10、100 帧三种序列，并分别记录 effect 编译、纹理创建、snapshot、每帧渲染、bitmap 拷贝、总时间、texture 数量、shadow pass 数和显存。再对比 texture reuse 开关，才能判断吞吐改善来自真正的跨帧复用还是偶然的单帧波动。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="C4Dfx">为 Cinema 4D 增加 CgFX/OpenGL 硬件预览与离线输出能力的插件案例。</GlossaryItem>
+<GlossaryItem term="scene snapshot">从宿主可变场景复制出的只读渲染输入，由 worker 在并发渲染期间持有。</GlossaryItem>
+<GlossaryItem term="ICgFXEffect">持有已解析 CgFX effect、参数和资源绑定的效果实例。</GlossaryItem>
+<GlossaryItem term="ParamWrapper">把 CgFX 参数的类型、UI、动画值和 GPU 资源生命周期接到宿主材质的适配层。</GlossaryItem>
+<GlossaryItem term="off-screen buffer">独立的颜色或深度渲染目标，完成后可复制为位图显示给宿主。</GlossaryItem>
+<GlossaryItem term="texture reuse">在多帧或多对象之间保留已创建资源，只在输入变化时重建。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 34 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 34 “Integrating Hardware Shading into Cinema 4D”的独立重写，保留 C4Dfx 插件、Cinema 4D 宿主桥接、CgFX/OpenGL、线程与 scene snapshot、层级几何、ParamWrapper、标准材质转换、off-screen renderer、资源复用与性能边界等核心线索，并将历史 Cg 示例整理为可验证的插件设计路径。原始章节：[NVIDIA GPU Gems Chapter 34](https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-34-integrating-hardware-shading-cinema)
+
 </Attribution>

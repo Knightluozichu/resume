@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:22:28.930Z；旧版分数不迁移。
+> 2026-08-10T07:32:50.115Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2207
+- failed：2206
 - queued：344
-- passed：1152
+- passed：1153
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -96,16 +96,16 @@
 | 83 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
 | 84 | ddia | 15 | 15 | 0 | 0 | 44 |
 | 85 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
-| 86 | gpu-gems | 48 | 15 | 0 | 33 | 30 |
-| 87 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
-| 88 | effective-executive | 14 | 14 | 0 | 0 | 56 |
-| 89 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 90 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
-| 91 | css-world | 14 | 14 | 0 | 0 | 42 |
-| 92 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 93 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 94 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 95 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 86 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
+| 87 | effective-executive | 14 | 14 | 0 | 0 | 56 |
+| 88 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
+| 89 | blockchain-plain | 14 | 14 | 0 | 0 | 51 |
+| 90 | css-world | 14 | 14 | 0 | 0 | 42 |
+| 91 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 92 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 93 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 94 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 95 | gpu-gems | 48 | 14 | 0 | 34 | 28 |
 | 96 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
 | 97 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
 | 98 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
