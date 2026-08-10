@@ -1,0 +1,146 @@
+---
+title: "GPU Gems 2 · Chapter 14. Dynamic Ambient Occlusion and Indirect Lighting"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 14
+description: "把动态网格离散成 surface elements，用 GPU fragment passes 近似 ambient occlusion、bent normal 和一次 bounce 的间接光，并用层级聚合控制遍历成本。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-14-dynamic-ambient-occlusion-and"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-14
+---
+
+import {
+  GpuGems2Ch14AmbientOcclusionLab,
+  GpuGems2Ch14HierarchyDiagram,
+  GpuGems2Ch14IndirectLightingDiagram,
+  GpuGems2Ch14OcclusionPassDiagram,
+  GpuGems2Ch14SurfaceElementsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch14-ambient-occlusion";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能把动态 polygon mesh 转成带 position、normal、area 的 surface elements
+- 能用 oriented-disk 的近似理解 accessibility、AO 和 bent normal 的计算
+- 能说明两遍 shadowing 如何减少 double shadowing，以及为什么最终遍才写 bent normal
+- 能用 element hierarchy 将实际遍历从平铺的 O(n²) 控制到接近 O(n log n)
+- 能把同一套 element transfer 改造成一次 bounce 的间接光与 area light 传播
+
+</Objectives>
+
+<Callout type="trap" title="不要把这套 AO 当成逐 receiver 的完整 ray tracing">
+**现象 →** 为了追求精确 visibility，给每一对 element 发射大量 rays，动态场景立刻超出预算。
+
+**原因 →** 本章的目标是实时近似 diffuse light transfer；它用 oriented disk 的 solid angle 和近似 shadowing，刻意不计算 element 到 element 的显式可见性。
+
+**修法 →** 先把误差边界写进效果定义：软环境光使用 element approximation，细小高频遮挡交给其他 shadowing 或离线路径。
+
+</Callout>
+
+<Callout type="trap" title="不要让已经被遮挡的 emitter 继续等强度投影阴影">
+**现象 →** 重叠物体的 AO 结果比参考解过暗，多个遮挡层被重复计算。
+
+**原因 →** 第一遍的 accessibility 没有反馈到第二遍，已经处于阴影中的 emitter 仍然被当成完整光源。
+
+**修法 →** 把第一遍结果作为 emitter 权重，在第二遍调制 form factor；再用加权组合逼近更多层 shadowing，并在最后一遍求 bent normal。
+
+</Callout>
+
+<Callout type="trap" title="不要让每个 receiver 永远遍历全部叶子节点">
+**现象 →** 少量模型看起来没问题，element 数一多，fragment pass 的耗时按平方增长。
+
+**原因 →** 远处的许多小 element 对柔和 diffuse lighting 的贡献可以被一个更大的 parent 近似，却被平铺遍历浪费掉。
+
+**修法 →** 按 mesh 邻接关系建立层级；当 receiver 足够远时接受 parent，只有接近 emitter 才展开 children。
+
+</Callout>
+
+GPU 上的动态全局光照不一定要从“每个点看见哪些点”开始。<Term def="由网格顶点离散出的带位置、朝向法线和面积的定向圆盘，用来近似表面小片">surface element</Term>把几何表面变成适合 fragment program 批处理的记录：位置和法线可以随动画更新，面积通常可以复用。
+
+<GpuGems2Ch14SurfaceElementsDiagram />
+
+## 1. 用 surface elements 代替 polygon visibility
+
+一个顶点 element 的面积可以由相邻三角形面积的三分之一累加得到，四边形则按四分之一分摊。每条记录至少包含 position、normal 和 area；将它们放进 texture maps 后，可以用一个 quad 让每个 fragment 对应一个 receiver element。
+
+这里的方向很重要：一个 element 的 front face 发光或反射，back face 负责传输与投射阴影。<Term def="在 element-to-element 计算中接收阴影或辐射的表面 element">receiver</Term>和<Term def="向其他 element 投射近似阴影或传出辐射的表面 element">emitter</Term>只是同一数据结构在当前 pass 中的角色，不是两种固定的几何类型。
+
+## 2. accessibility、AO 与 bent normal
+
+<Term def="receiver 上方半球仍可接触环境光的比例，通常由 1 减去所有 emitter 的遮挡贡献得到">accessibility</Term>可以理解为环境光的可达率。对每个 emitter，先计算从 receiver 指向 emitter 的单位向量，再用 emitter area、距离平方以及两侧法线的 cosine 项估计它张开的 solid angle。代码层面可以把贡献写成一个稳定的 `saturate(dot(...))` 乘积，并对距离平方加很小的 epsilon 防止自遮挡除零。
+
+<GpuGems2Ch14OcclusionPassDiagram />
+
+第一遍把所有 emitter 的 shadow contribution 相加，从 1 中减去得到初始 accessibility。第二遍读取上一遍写回的 accessibility，让已经被遮挡的 emitter 少投射阴影；它既修正重叠物体的过暗，也提供计算 bent normal 的机会。<Term def="把各方向可见性加权后的方向归一化，替代普通法线以改善环境贴图采样">bent normal</Term>朝向最不容易被遮挡的方向，适合拿来选取更合理的环境光方向。
+
+## 3. 用 hierarchy 降低 fragment 工作量
+
+element 数量较少时，逐 receiver 遍历全部 emitter 很直观，但它是 O(n²)。可以沿 mesh 邻接关系把子 element 聚合成 parent：parent 的 position/normal 用子节点平均，area 用子节点面积求和。<Term def="按空间或网格邻接把多个 element 聚合成 parent，并在近处递归展开的多级结构">element hierarchy</Term>让远处的柔和阴影使用大圆盘近似，近处才展开细节。
+
+<GpuGems2Ch14HierarchyDiagram />
+
+典型判据是 receiver 到 emitter 的距离相对 emitter 半径足够大时直接接受 parent，否则把 traversal 继续下钻。每一层的聚合也可以用 shader pass 从 leaves 向上生成；实践中遍历成本接近 O(n log n)，而不必让每个 fragment 读取所有叶子。
+
+## 4. 从 AO 复用到间接光
+
+AO 的 pass 写入标量 accessibility；间接光只需把 transfer 的载荷改成 RGB radiance。先算每个 element 从环境光、点光或方向光获得的直接入射，再乘上材质颜色作为它要反射的光；area light 可以直接初始化成带 emission 的 element。
+
+<Term def="描述 emitter 与 receiver 之间方向、距离、面积和两侧法线共同决定的近似辐射传输权重">form factor</Term>使用 disk-to-disk 的几何项，把 emitter area、两侧 cosine 和距离合并起来。第一遍把 radiance 传到 receiver，后续 shadowing pass 再用同样的 element 关系扣掉被遮挡的光；这样同一套层级 traversal 同时服务于 AO、area light 和一次 bounce 的 indirect lighting。
+
+<GpuGems2Ch14IndirectLightingDiagram />
+
+## 5. 动手实验：两遍修正与层级预算
+
+下面的实验把 element 数量、AO pass、indirect bounce 和 hierarchy 暴露出来。它是算法预算的可视化模型：重点观察单遍 AO 的偏暗、第二遍对 accessibility 的修正，以及关闭 hierarchy 后工作量的平方增长。
+
+<GpuGems2Ch14AmbientOcclusionLab />
+
+## 小结
+
+- surface element 用 position、normal 和 area 把动态 mesh 变成可在 GPU texture 中批处理的数据。
+- accessibility 是环境半球的可达率，bent normal 则把最少遮挡方向带入环境光采样。
+- 两遍 AO 让第一遍 accessibility 调制第二遍 emitter，减少 double shadowing。
+- element hierarchy 在远处接受 parent、近处展开 children，使实际 traversal 比平铺 O(n²) 更可控。
+- 把标量遮挡换成 RGB radiance，就能复用 element transfer 估算一次 bounce 的间接光和 area light。
+
+<Exercises>
+
+**问题 1｜数据表示**　为什么要把 polygon mesh 转成 surface elements，并把 position、normal、area 放入 texture map？
+
+<Answer>
+
+每个 element 都能作为一个 receiver 或 emitter，fragment program 可以用 quad 并行计算它们之间的近似 transfer；位置和法线随动画更新，面积则可在拓扑不变时复用。texture map 让这些记录适合 GPU pass 批处理。
+</Answer>
+
+**问题 2｜两遍 AO**　第二遍为什么要乘上第一遍 emitter 的 accessibility？bent normal 又应该在哪一遍计算？
+
+<Answer>
+
+如果 emitter 自己已经被遮挡，它不应再完整地向外投射阴影；用第一遍 accessibility 调制 form factor 能减少 double shadowing。bent normal 在包含上一遍结果的最终遍计算，因为它需要把有效遮挡贡献按方向累积。
+</Answer>
+
+**问题 3｜性能与间接光**　如何同时降低 element traversal 成本并得到一次 bounce 的间接光？
+
+<Answer>
+
+按 mesh 邻接建立 hierarchy，receiver 远离 emitter 时接受 parent，接近时再展开 children。将 AO 的标量 shadow 换成 RGB radiance transfer，先把直接光乘材质颜色得到 emitter radiance，再用 form factor 传播，最后用 shadowing pass 去掉被遮挡的光。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="surface element">由 mesh 顶点表示的带位置、法线和面积的定向圆盘。</GlossaryItem>
+<GlossaryItem term="receiver">在当前 element-to-element 计算中接收阴影或辐射的表面 element。</GlossaryItem>
+<GlossaryItem term="emitter">在当前计算中投射近似阴影或传出辐射的表面 element。</GlossaryItem>
+<GlossaryItem term="accessibility">receiver 上方半球没有被遮挡、仍可接触环境光的比例。</GlossaryItem>
+<GlossaryItem term="bent normal">由各方向可见性加权得到的最少遮挡方向，用于环境光采样。</GlossaryItem>
+<GlossaryItem term="element hierarchy">把邻近 element 聚合成 parent、近处递归展开 children 的多级结构。</GlossaryItem>
+<GlossaryItem term="form factor">描述 emitter 到 receiver 的面积、方向和距离影响的近似辐射传输权重。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 14. Dynamic Ambient Occlusion and Indirect Lighting" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-14-dynamic-ambient-occlusion-and" />
