@@ -1,0 +1,144 @@
+---
+title: "GPU Gems 2 · Chapter 9. Deferred Shading in S.T.A.L.K.E.R."
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 9
+description: "以 G-buffer 和 MRT 把几何属性与动态光照分开，再用光源剔除、stencil mask、材质索引与 shadow map 控制屏幕空间成本。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-9-deferred-shading-stalker"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-09
+---
+
+import {
+  GpuGems2Ch09DeferredShadingLab,
+  GpuGems2Ch09ForwardDeferredDiagram,
+  GpuGems2Ch09GBufferDiagram,
+  GpuGems2Ch09LightingPassDiagram,
+  GpuGems2Ch09TransparencyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch09-deferred-shading";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明 deferred shading 如何把 geometry pass、G-buffer 和 lighting pass 分开
+- 能为位置、法线、albedo、gloss、material ID 与 ambient occlusion 设计 MRT 布局
+- 能用光源剔除和 stencil mask 限制真正受影响的屏幕像素，并识别阴影造成的额外成本
+- 能解释透明 primitive 为什么通常走 forward fallback，以及虚拟位置如何改善 parallax 的光照一致性
+
+</Objectives>
+
+<Callout type="trap" title="不要把 deferred shading 简化成“光照永远更快”">
+**现象 →** 所有场景都写 G-buffer 和做多光源 pass，开阔场景反而比 forward 更慢。
+
+**原因 →** deferred 把成本重排到固定 geometry、G-buffer 带宽和屏幕空间 lighting；若光源很少或 overdraw 很高，额外带宽未必值得。
+
+**修法 →** 用真实 profile 比较 CPU、vertex、G-buffer、lighting 和 shadow pass，按光源数量与受影响像素选择架构。
+
+</Callout>
+
+<Callout type="trap" title="不要把所有材质字段都无条件塞进高精度 MRT">
+**现象 →** 图像质量没有明显提升，G-buffer 带宽和解码成本却成为瓶颈。
+
+**原因 →** MRT layout 没有根据 lighting shader 的真实输入和硬件 bit-depth 约束做预算。
+
+**修法 →** 明确每个通道的精度、采样、解码与空余组件用途；根据目标 GPU 选择压缩法线、material ID、gloss 与 AO 的编码。
+
+</Callout>
+
+<Callout type="trap" title="不要把透明物体硬塞进单层 G-buffer">
+**现象 →** alpha blend 顺序错误，后面的半透明层覆盖了前面的材质或光照。
+
+**原因 →** G-buffer 通常每像素只保存一层表面，而透明需要多层、排序或深度 peeling。
+
+**修法 →** 不透明物体走 deferred；透明 primitive 使用带光照的 forward fallback，接受它与 deferred 的状态差异。
+
+</Callout>
+
+forward renderer 在每个物体 pass 中重复做顶点变换、纹理过滤、法线解压和材质计算。<Term def="先把可见表面属性写入中间缓冲、再用屏幕空间 pass 统一计算动态光照的渲染架构">deferred shading</Term>将几何与光照解耦：geometry pass 只输出后续需要的属性，lighting pass 读取这些属性为像素累积光照。
+
+<GpuGems2Ch09ForwardDeferredDiagram />
+
+## 1. G-buffer 与 MRT
+
+<Term def="保存每个屏幕像素位置、法线、颜色和材质控制字段的中间缓冲集合">G-buffer</Term>可以放 eye-space position、normal、albedo、gloss、material ID 和 ambient occlusion。DirectX 9 的 MRT 允许一次 geometry pass 写多个 render target，但每个额外通道都会增加显存带宽和后续采样。
+
+<Term def="让一个 geometry pass 同时写入多个 render target 的输出机制">MRT</Term>的布局应从 lighting shader 反推，而不是按“能放多少就放多少”。法线可以编码在 32-bit 或浮点格式中，position 可能需要更高精度；material ID 与 gloss 可以占用空余组件，帮助 light shader 选择不同响应函数。
+
+<GpuGems2Ch09GBufferDiagram />
+
+## 2. Lighting pass 的屏幕空间预算
+
+<Term def="读取 G-buffer、遍历影响屏幕的光源并累积最终像素光照的后续阶段">lighting pass</Term>的理论成本与光源覆盖的屏幕区域相关，而不是与场景中所有物体的数量直接相关。先用 sector/portal、CPU 或 GPU occlusion culling 减少候选光源，再用光源体积和 stencil mask 限制像素。
+
+<GpuGems2Ch09LightingPassDiagram />
+
+shadow-casting light 还要生成或采样 shadow map，通常是最大的额外成本。艺术决策也很关键：并非每盏模拟环境光的灯都需要阴影或 glossy specular；将不必要的 shadow light 降为 unshadowed light，收益往往比继续微调 shader 更直接。
+
+## 3. 太阳、AO 与虚拟位置
+
+方向光常覆盖很大的屏幕区域，但仍可以用 sky mask、背向太阳的 normal 和 AO 为零的像素做 stencil 过滤。先快速标记不可能被太阳照亮的像素，再让复杂 shadow filtering 只运行在剩余区域。
+
+<Term def="沿像素法线按 height 值轻微移动 G-buffer position、让 parallax 细节参与光照和阴影的近似">virtual position</Term>可以改善近距离 parallax 的阴影边界和 surface acne，但它是视觉近似，不能把它当成真实几何位移。位置、法线和 height 的编码必须保持一致，否则光源方向变化时会出现不稳定的阴影。
+
+## 4. 材质响应与透明边界
+
+deferred 的材质系统通常把 lighting shader 需要的控制量写进 G-buffer，例如 material index、gloss 和 AO；light shader 可以据此查 2D/3D lookup table，而不是为每种材质组合生成一套 shader。这将“材质改变光照响应”反过来组织成“光照读取材质参数”。
+
+<GpuGems2Ch09TransparencyDiagram />
+
+透明是架构边界：单层 G-buffer 没有空间保存多个深度排序的透明表面。实际系统可以让透明 primitive 走 forward lighting，通常不共享 deferred 的 shadow 处理；关键是把这条 fallback 当成显式的渲染路径，而不是偷偷覆盖 G-buffer。
+
+## 5. 动手实验：成本随哪一维增长
+
+调高光源数量，观察 lighting pass 和 stencil affected pixels 增长；调高 overdraw，观察 geometry/G-buffer 固定成本上升；切换 shadow-heavy，观察同一受影响区域的光照成本被放大。数值只是趋势示意，真实结论要回到 GPU profile。
+
+<GpuGems2Ch09DeferredShadingLab />
+
+## 小结
+
+- deferred shading 用 geometry pass 写 G-buffer，再在 lighting pass 读取属性累积光照。
+- MRT layout 是精度、带宽、解码和材质灵活性的折中。
+- 光源剔除与 stencil mask 将 lighting 限制到真正受影响的屏幕区域。
+- 阴影、G-buffer 带宽和 overdraw 仍可能成为瓶颈，架构选择必须依赖 profile。
+- 透明不适合单层 G-buffer，通常需要 forward fallback；virtual position 只是局部视觉近似。
+
+<Exercises>
+
+**问题 1｜pass 设计**　geometry pass 为什么不直接计算所有动态光照，而是把 position 和 normal 写入 G-buffer？
+
+<Answer>
+
+这样每个可见表面的几何和材质工作只做一次，后续 lighting pass 可以按光源覆盖的屏幕区域处理，不必在每个物体中重复顶点和材质计算。代价是 MRT 写入、带宽和 G-buffer 存储。
+</Answer>
+
+**问题 2｜通道预算**　如果一个 G-buffer 通道还有空余组件，哪些字段适合放进去？放进去前还要检查什么？
+
+<Answer>
+
+material ID、gloss、ambient occlusion 或灯光函数控制量都可能适合。要检查精度是否够、lighting shader 如何解码、MRT bit-depth 是否受硬件限制，以及新增采样和带宽是否抵消收益。
+</Answer>
+
+**问题 3｜透明**　为什么一层 G-buffer 不能自然表达多个半透明表面？工程上如何处理？
+
+<Answer>
+
+透明需要按深度排序并累积多个层，而普通 G-buffer 每像素通常只保存一层属性。可让不透明物体走 deferred，透明 primitive 走带光照的 forward fallback；若必须 deferred，则需要多层存储或 depth peeling 等更昂贵方案。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="deferred shading">先写表面属性、后按屏幕像素计算光照的渲染架构。</GlossaryItem>
+<GlossaryItem term="G-buffer">保存位置、法线、颜色和材质控制字段的中间缓冲集合。</GlossaryItem>
+<GlossaryItem term="MRT">一个 pass 同时写多个 render target 的输出机制。</GlossaryItem>
+<GlossaryItem term="lighting pass">读取 G-buffer 并累积动态光照的后续阶段。</GlossaryItem>
+<GlossaryItem term="stencil mask">标记光源实际影响像素、限制后续 shading 范围的掩码。</GlossaryItem>
+<GlossaryItem term="virtual position">沿法线轻微移动 G-buffer 位置以改善 parallax 光照近似的方法。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 9. Deferred Shading in S.T.A.L.K.E.R." adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-9-deferred-shading-stalker" />
