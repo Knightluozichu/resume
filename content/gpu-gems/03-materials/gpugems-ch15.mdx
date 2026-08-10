@@ -1,255 +1,196 @@
 ---
-title: "Chapter 15: Materials"
+title: "GPU Gems 1 · Chapter 15. Managing Visibility for Per-Pixel Lighting"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part II · Lighting and Shadows"
 order: 15
-description: "GPU Gems Part: Materials, Chapter 15"
+description: "用 camera、light 与 shadow visibility sets 剪枝 per-pixel lighting 的 batch 和 fill-rate 成本，并用 scissor 限制真正受光的屏幕区域。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-15-managing-visibility-pixel-lighting"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-15
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh15BatchCostDiagram,
+  GpuGemsCh15ScissorDiagram,
+  GpuGemsCh15ShadowHullDiagram,
+  GpuGemsCh15VisibilityLab,
+  GpuGemsCh15VisibilitySetDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch15-visibility-per-pixel-lighting";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 15: Materials的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Materials, Chapter 15之间的关系是什么？
+- 能用 batch、pass、CPU 提交率解释 per-pixel lighting 为什么会把渲染成本乘上灯光数量
+- 能构造 camera visible set、light set、illumination set 与 shadow set，并说明它们为什么不能互相替代
+- 能为视锥内外的光源选择 F∩L 或 light-frustum convex hull 的 shadow candidates
+- 能把可见对象投影到屏幕，生成 tight scissor rectangle，并通过集合与 fill-rate 指标验证剪枝收益
 
 </Objectives>
 
-## 为什么需要Chapter 15: Materials
+per-pixel lighting 让每个光源都能贡献更细腻的材质和阴影，但它也会把同一批几何重复送入硬件。GPU Gems 1 第 15 章的出发点很直接：GPU 内部处理一个 batch 越来越快，CPU 把 batch 提交给 GPU 的速率却没有同样增长；最快的 polygon，仍然是根本不提交的 polygon。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 15: Materials作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<Callout type="trap" title="batch 不是一个物体，而是一次不被状态切换打断的提交">
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+一个模型可能因为材质、骨骼或状态边界被拆成多个 batch；减少对象数不一定等于减少 batch。审计优化时应分别记录 draw/batch 次数、pass 次数和每个 pass 的可见对象数。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Materials, Chapter 15正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="I 集合不能直接当 shadow 集合">
 
-### 设计动机
+相机看不见的对象仍可能把阴影投进当前画面。illumination set 只负责当前光源的 lighting pass，shadow set 还必须考虑屏幕外 caster、视锥外光源和外挤压体积。
 
-Vulkan 把Chapter 15: Materials从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 15: Materials涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 15: Materials相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 15: Materials相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="大 light radius 不等于大屏幕影响区域">
+
+用光源半径直接生成 scissor 会把一大片无关像素送进 shader，尤其是通风井、走廊等窄区域。应投影实际受影响对象的包围体，再与光源投影范围取交集。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 为什么 per-pixel lighting 需要 visibility
 
-## 性能考量
+<Term def="一组不被状态切换打断、一次送入图形硬件的多边形集合">batch</Term> 是本章的计量单位；Direct3D 的一次 `DrawPrimitive` 可以看作一个 batch。场景的初始 ambient pass 要建立深度并处理全局 ambient/emissive，之后每盏灯通常还要先做 shadow pass，再做 lighting pass。
 
-### 批量操作
+如果一个房间和三个模型被材质、骨骼拆成 14 个 batch，三个光源的朴素成本就是：
 
-Vulkan 鼓励批量提交而非逐个提交：
+$$ batches = ambient + lights × (shadow + lighting) = 14 + 3 × 14 × 2 = 98 $$
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+这不是 shader 指令数的问题，而是 CPU 提交与重复 pass 的乘法。即使一个 GPU 可以很快处理多边形，应用线程仍可能先被 batch submission 限制。
 
-### 避免 CPU-GPU 同步点
+<GpuGemsCh15BatchCostDiagram />
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<Term def="由相机视点能看见的对象构成的对象集合，记作 V">visible set</Term> 是所有裁剪和遮挡测试的起点。但 per-pixel lighting 还需要从每盏灯的视点构造另一套集合；如果只使用 V，无法知道灯是否能看见对象，也无法知道屏幕外 caster 是否能投影进画面。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+## 1. 用集合逻辑拆开三种工作
+
+<Term def="从当前光源视点能看见、可能参与该光源渲染的对象集合，记作 L">lights set</Term> 对每盏灯单独计算。点光源是球形视野，不能简单投影到一个平面；可以把光源包在 cube 中，对六个 face 做 visibility query，但要去重同一对象被多个 face 看见的情况。
+
+<Term def="visible set 与 lights set 的交集，只有其中对象需要再次执行当前光源的 lighting pass，记作 I">illumination set</Term> 满足 `I = V ∩ L`。它只保留同时出现在屏幕和光源视野中的对象；若 I 为空，可以直接跳过这盏灯。它特别适合剪掉位于视锥边缘、被遮挡或光源实际上碰不到的灯。
+
+<Term def="会把阴影投进可见区域的 caster 集合，必须包含必要的屏幕外对象，记作 S">shadow set</Term> 与 I 不同：对象即使不在 V 中，也可能在 S 中。shadow pass 的判断是“从光源挤出的阴影体积是否与可见区域相交”，而不是“对象自身是否出现在镜头里”。
+
+<GpuGemsCh15VisibilitySetDiagram />
+
+一个稳妥的 per-light 顺序是：先得到 V，再为当前灯得到 L；用 V∩L 生成 I；再根据光源位置和投影体积生成 S。最后以 S 生成 shadowing term，以 I 重新渲染 lighting contribution。
+
+```text
+V = visible_from_camera()
+L = visible_from_light(light)
+I = intersection(V, L)
+S = shadow_casters_into_view(light, V, L)
+render_ambient(V)
+render_shadow(S, light)
+render_lighting(I, light)
 ```
 
-### 内存对齐
+## 2. 生成 shadow set：光源在不在视锥内
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+当光源在 view frustum 内时，阴影总是从光源位置向外投射。此时，视锥内但被遮挡的对象也不能从 F 中删除；令 F 表示视锥内所有对象，shadow set 可以使用 `S = F ∩ L`。如果错误地使用 V，可能丢掉被另一个对象挡住、却仍然能把阴影投向可见表面的 caster。
 
-## 验证层检查
+当光源在视锥外，屏幕外的 caster 可能沿光线投影进视锥。此时构造由光源点和 view frustum 形成的 <Term def="包住光源与视锥投影区域、用于判断外部 caster 是否可能投影进画面的凸体积">convex hull</Term>：保留光源位于 inside half-space 的原始平面，并为从光源看见的 silhouette edge 创建经过光源的平面。落入 hull 且属于 L 的对象才是 shadow candidates。
 
-启用验证层后，Chapter 15: Materials相关的常见错误会被捕获：
+<GpuGemsCh15ShadowHullDiagram />
 
+凸包算法可以用每个 frustum plane 对 light 的 inside/outside 判断开始：inside plane 直接加入结果；outside plane 则为它涉及的 edge 增加计数。某条 edge 的计数为 1 时，它是相对于 light 的 silhouette edge，需要用 edge 两端点和 light 生成一个新平面，并根据 winding 修正法向。
+
+```text
+edgeCount = zeroes(frustum.edges)
+for plane in frustum.planes:
+  if lightInside(plane): add(plane)
+  else: for edge in plane.edges: edgeCount[edge] += 1
+for edge in frustum.edges:
+  if edgeCount[edge] == 1:
+    addPlane(through=edge.points + light, winding=edge.winding)
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这个计算不是替代所有 visibility 系统的通用实现，而是把已有 frustum、portal 或 occlusion 结果接到 per-pixel lighting 的集合语义上。集合生成的 CPU 成本必须和省下的 batch、shadow fill 一起评估。
 
-## 本章要点
+## 3. 用集合缩小 fill rate
 
-1. Chapter 15: Materials是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+CPU batch 不是唯一瓶颈。stencil volume 或大型光照几何会让 GPU 重复填充屏幕；即使对象数下降，如果每盏灯仍覆盖整个 viewport，fill rate 也可能先饱和。
+
+<Term def="限制光源 pass 只能写入屏幕上受影响对象的紧包围矩形，也可扩展为深度范围的空间 scissor">scissor rectangle</Term> 应由实际受影响对象生成：把 I 中每个 primitive 的 bounding sphere 或 AABB 投影到屏幕，求总 bounding box，再与光源半径投影出的 box 相交。对象粗包围体通常足够，因为为了多挤出一点像素而计算精确几何，收益很小。
+
+<GpuGemsCh15ScissorDiagram />
+
+对 point light，sphere 视野可能需要六个方向的 visibility query；对大半径光源，仍应检查最终 I 的投影范围。若硬件支持 z-scissor，可以进一步限制深度范围，形成空间中的 scissor frustum。其目标都是让“不可能被这盏灯影响”的片元尽早被测试拒绝。
+
+## 4. 集合数据结构与更新策略
+
+集合可以有两种实现：集合持有对象引用，或对象持有自己属于哪些集合的 flags。前者需要排序列表后做线性 merge，适合本来就有排序集合的系统；后者可以先遍历对象设置 V/L 标志，再扫描轻量对象列表得到 I，代码更直接，但操作结束必须 reset flags。
+
+对每盏灯不必同时把所有 L 保存在内存中：按灯依次计算并累加 lighting buffer 即可。对 portal visibility 之类已经同时服务相机与灯的系统，可以共享空间划分；对 point light 的球形视野，则需要额外的无平面投影方案或六面 cube 查询。
+
+工程上建议把每帧的证据分成四组：V 的对象数与 occlusion 命中率、L 的对象数与查询成本、I/S 的 batch 数、scissor 前后的屏幕像素面积。这样才知道收益来自 CPU 剪枝、GPU fill-rate，还是只是改变了对象的提交顺序。
+
+## 5. 动手实验：让 I 和 S 各自承担正确的工作
+
+先预测：把 camera visible V 调小，I 会怎样变化？此时如果 light 在视锥外，S 是否一定同步变小？关闭 tight scissor 后，batch 数可能不变，但屏幕影响面积会发生什么？
+
+<GpuGemsCh15VisibilityLab />
+
+实验里的绿色对象属于 I，紫红色斜线对象属于 S；黄色表示光源可见但不一定在屏幕上。切换 light 是否在 frustum 内，会把 shadow-set 逻辑从 `F ∩ L` 切到 hull 近似；scissor 只改变屏幕影响面积，不改变 I/S 的集合计数。
+
+## 小结：先求集合，再决定渲染
+
+- per-pixel lighting 把 ambient、shadow 和 lighting pass 乘到每个光源上，batch submission 与 fill rate 都会成为瓶颈。
+- V 表示相机可见对象，L 表示当前光源可见对象，I=V∩L 只服务 lighting pass。
+- S 必须独立计算：光源在视锥内使用 F∩L，光源在视锥外需要 light 与 frustum 的 convex hull 来捕获屏幕外 caster。
+- 对 I 中的对象做屏幕投影并求 tight scissor，可以减少真正被光源 pass 填充的区域；它不是用光源半径生成的粗 box。
+- 集合生成成本、batch 数、scissor 面积和 fill-rate 需要一起测量，不能只看平均 FPS。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 15: Materials涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜集合推导**　当前相机可见集合 V 有 12 个对象，光源集合 L 有 9 个对象，其中交集 I 有 5 个。光源在视锥外，light-frustum hull 与 L 相交得到 7 个 shadow candidates。当前灯的 shadow 和 lighting 各执行一次，ambient 已完成 14 个 batch。额外需要多少 batch？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+额外 batch 是 shadow set 的 7 个加 illumination set 的 5 个，共 12 个；包含已完成的 ambient，则这一帧对应的总 batch 估计是 `14 + 7 + 5 = 26`。I 的 5 个不能替代 S 的 7 个，因为其中两个 caster 可能在屏幕外。
 </Answer>
 
+**问题 2｜改 Demo 代码**　把实验中的 tight scissor 关闭，保持 V、L、I、S 不变。请分别记录 batch 数、屏幕影响面积和 GPU fill-rate，说明为什么前两者可能不变。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+scissor 只限制光源 pass 的写入区域，不改变已经计算出的 V、L、I、S，所以 batch 数不变；屏幕影响面积会扩大到光源的粗投影范围，片元测试和填充工作增加，GPU fill-rate 可能成为新的瓶颈。
+</Answer>
+
+**问题 3｜独立实现题**　一个点光源在视锥外，房间里有 portal visibility 系统但它只支持平面投影。你会如何构造 L 与 S，并如何避免同一对象因 cube 的多个 face 被重复加入？
+
+<Answer>
+
+L 可以用光源周围 cube 的六个 face 分别做 visibility query，再按对象 ID 去重；S 需要用光源点和 view frustum 构造 convex hull，测试 caster bounding volume 是否与 hull 相交，再与 L 取交集。若六面查询成本过高，可为 point light 增加专用球形或层次包围体 visibility 路径。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="batch">一次不被状态切换打断、送入图形硬件的多边形集合。</GlossaryItem>
+<GlossaryItem term="visible set">从相机视点可见的对象集合 V。</GlossaryItem>
+<GlossaryItem term="lights set">从当前光源视点可见、可能参与该灯渲染的对象集合 L。</GlossaryItem>
+<GlossaryItem term="illumination set">V 与 L 的交集 I，只用于当前光源的 lighting pass。</GlossaryItem>
+<GlossaryItem term="shadow set">会把阴影投进可见区域的 caster 集合 S。</GlossaryItem>
+<GlossaryItem term="convex hull">包住光源与视锥投影区域、用于筛选外部 shadow caster 的凸体积。</GlossaryItem>
+<GlossaryItem term="scissor rectangle">限制光源 pass 屏幕写入区域的紧包围矩形。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 15 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 15. Managing Visibility for Per-Pixel Lighting"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-15-managing-visibility-pixel-lighting"
+/>
