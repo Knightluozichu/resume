@@ -1,255 +1,239 @@
 ---
-title: "Chapter 6: Lighting and Shadows"
+title: "GPU Gems 1 · Chapter 6. Fire in the \"Vulcan\" Demo"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part I · Natural Effects"
 order: 6
-description: "GPU Gems Part: Lighting and Shadows, Chapter 6"
+description: "从粒子发射器、视频纹理精灵、体积纹理和分层合成出发，构建可控的实时 Vulcan 火焰。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-6-fire-vulcan-demo"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-06
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh06EmitterWeightDiagram,
+  GpuGemsCh06FireLab,
+  GpuGemsCh06FireStrategyDiagram,
+  GpuGemsCh06SpriteVolumeDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch06-vulcan-fire";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 6: Lighting and Shadows的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Lighting and Shadows, Chapter 6之间的关系是什么？
+- 能解释 Vulcan 为什么在程序化火焰、二维扰动和视频纹理精灵之间做取舍
+- 能实现用发射器生成粒子、用体积纹理的 z 坐标播放精灵动画，并用 A/B 混合隐藏重复
+- 能修改 alpha/additive 混合与分层合成代码，说明它们如何影响颜色控制和像素预算
+- 能回答：为什么少量绑定发射器的粒子，反而比大量自由粒子更能保持移动火焰的连续性？
 
 </Objectives>
 
-## 为什么需要Chapter 6: Lighting and Shadows
+<Callout type="trap" title="陷阱一：用 additive blending 就能省掉排序">
+**现象 →** 粒子可以任意顺序绘制，但火焰颜色很快变成刺眼的白色，烟雾和火焰也难以混合。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 6: Lighting and Shadows作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** 加法混合会不断累加亮度并造成饱和，颜色控制被绘制次数接管；省下的排序成本换来了不可控的视觉结果。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Lighting and Shadows, Chapter 6正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 需要艺术家控制色彩时优先用 alpha blending，并只为几百个粒子做排序；先测量排序成本，再决定是否需要特殊近似。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：粒子只要向上飞，火焰就会自然">
+**现象 →** 角色移动时，火焰尾巴留下断层；少数粒子孤零零飘在空中，源头和拖尾脱节。
 
-### 设计动机
+**原因 →** 视频精灵承担了大部分形状线索，粒子数量很少；如果粒子一出生就完全自由，它们无法跟上移动的发射器。
 
-Vulkan 把Chapter 6: Lighting and Shadows从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 6: Lighting and Shadows涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 6: Lighting and Shadows相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 6: Lighting and Shadows相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 给粒子一个随年龄衰减的 emitter weight：新粒子强绑定，老粒子逐渐释放给空气运动，连续性和自由度都保留。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：把每个火焰精灵都渲染到全屏分辨率">
+**现象 →** 画面里火焰看似只是几百个四边形，帧时间却被纹理读取和混合拖垮。
+
+**原因 →** 大精灵的透明区域也会经过像素阶段；大量 frame-buffer blending 的成本通常比顶点数量更容易成为瓶颈。
+
+**修法 →** 把火焰先合成到四分之一分辨率的低分辨率目标，再用合适的矩形精灵减少空白 texel，最后统一合成回场景。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 直觉引入：火焰不是每一帧都重新发明
 
-## 性能考量
+一团真正有说服力的火焰，第一眼看见的是形状、颜色层次和烟雾的节奏，而不是每个火舌背后的物理方程。实时系统的任务，是用有限的像素预算把这些线索稳定地送到屏幕上。
 
-### 批量操作
+如果只追求物理真实，程序化方案可能需要数千粒子；如果只追求省事，一张固定图片又会暴露重复。Vulcan 的经验是把可控的粒子运动、少量动画素材和后处理组合起来：每一层承担自己擅长的视觉工作，再用性能测量决定分辨率和混合方式。
 
-Vulkan 鼓励批量提交而非逐个提交：
+## 1. 先选路线：程序化、二维流还是视频精灵
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+Vulcan 的目标不是蜡烛大小的火苗，而是包围角色、带烟雾、可由用户控制的猛烈火焰。完全程序化的火焰节省纹理内存，却要处理大量粒子和顶点；屏幕空间二维扰动适合小型蜡烛火焰，却容易受相机角度和前后运动限制；视频纹理把真实火焰的形状线索直接带进渲染流程。
 
-### 避免 CPU-GPU 同步点
+这里的 <Term def="把预先拍摄或绘制的火焰帧贴到面向相机的粒子四边形上">video-textured sprite</Term> 不是偷懒的静态贴图：每个粒子仍有位置、尺寸、寿命、透明度和动画起始帧，可以通过数量、混合和运动规则重组成大规模效果。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<GpuGemsCh06FireStrategyDiagram />
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+做方案评估时，先写清三个约束：目标视角是否会绕到火焰顶部或底部、是否需要把烟雾和火焰混在一起、像素阶段最多能花多少预算。这样就不会因为“程序化”或“真实素材”这类标签，跳过实际的相机和性能条件。
+
+## 2. 从发射器生成粒子，再用 z 坐标播放动画
+
+角色模型上可以放置多个 <Term def="定义火焰来源、尺寸、密度和寿命等参数的粒子生成位置">emitter</Term>。发射器决定粒子从哪里来，也暴露尺寸、每秒密度、纹理和寿命等调参入口；粒子系统只需要根据这些参数生成自己的 quad 并提交绘制。
+
+动画帧可以存进 <Term def="把多张二维帧沿 z 方向堆叠成一个采样对象的三维纹理">volume texture</Term>。如果纹理深度是 `D`，第 `k` 帧的采样坐标可写成：
+
+$$
+z=\frac{k+0.5}{D},\qquad 0\le k<D.
+$$
+
+这个式子在说：把离散帧映射到体积纹理的切片中心，递增 `k` 就能播放动画；在相邻切片之间采样，还能获得帧间插值。
+
+Vulcan 使用两种火焰动画和一种烟雾动画，每种 64 帧，总共 192 帧；为了满足体积纹理切片数是二的幂，最终使用 256 个切片。压缩的 256×256×256 B8G8R8A8 体积纹理约占 16 MB；低内存平台还可以缩到 64×64×256，保留帧数而降低每帧空间分辨率。
+
+<GpuGemsCh06SpriteVolumeDiagram />
+
+```glsl
+struct Particle {
+  vec3 position;
+  vec2 size;
+  float age;
+  float lifetime;
+  float frameOffset;
+  float variant;
+};
+
+float frameCoord(Particle p, float frameCount) {
+  float progress = clamp(p.age / p.lifetime, 0.0, 1.0);
+  return fract((progress * frameCount + p.frameOffset) / frameCount);
+}
 ```
 
-### 内存对齐
+`frameOffset` 让同一批粒子不要在同一时刻闪出相同帧；`variant` 还可以选择 A 或 B 动画。这里的随机性应该是可重放的伪随机值，调试时才能复现某个粒子群的问题。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. 用 A/B、翻转和属性差异隐藏重复
 
-## 验证层检查
+动画帧有限时，重复是最大的视觉风险。可以为粒子随机分配尺寸、位置偏移、衰减速度、起始帧和整体透明度；再把两种火焰动画按比例混合，让相邻粒子不再共享完全相同的轮廓。
 
-启用验证层后，Chapter 6: Lighting and Shadows相关的常见错误会被捕获：
+Vulcan 没有依赖硬件 point sprite，而是自己生成四边形，这样可以写入自定义纹理坐标，在 `u` 或 `v` 方向翻转帧。翻转成本很低，却能把同一段素材变成更多姿态；如果资源和带宽允许，还可以进一步加入任意旋转或更多动画族。
 
+注意不要把“每个参数都加随机”误当成真实感。随机尺寸太大，会让火焰像一组互不相干的贴纸；随机透明度太强，会让烟雾断裂。先固定种子和范围，再以源头连续性、重复周期和镜头运动作为验收指标。
+
+## 4. alpha blending 保留颜色控制
+
+开始实现时，additive blending 很诱人：粒子无需严格排序，叠加后也容易形成发光。但它会把多个颜色不断推向饱和，艺术家无法稳定控制火焰和烟雾的色调。
+
+<Term def="按源 alpha 在已有颜色与粒子颜色之间插值的混合方式">alpha blending</Term> 把颜色控制权交回材质，并把代价变成每帧排序几百个粒子。对 Vulcan 这种粒子数量已经由视频精灵压低的方案，排序成本可以接受；真正要测量的是排序、过度绘制和目标格式精度的总和。
+
+```glsl
+vec4 composite(vec4 scene, vec4 particle, bool useAlpha) {
+  if (useAlpha) {
+    return mix(scene, particle, particle.a);
+  }
+  // additive：顺序简单，但亮度会快速饱和。
+  return scene + particle * particle.a;
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+实验中的混合切换只模拟颜色和透明度的决策，不替代真实目标格式测试。A8R8G8B8 等有限精度目标尤其要关注亮部是否被截断，以及烟雾是否被火焰的累加亮度吞掉。
+
+## 5. 用发射器绑定权重补齐移动拖尾
+
+火焰源头移动时，少量粒子会暴露空洞。解决办法不是立刻把粒子数加到几千，而是引入 <Term def="表示粒子当前位置还应跟随其发射器多少的随年龄变化权重">emitter weight</Term>。粒子刚出生时权重高，跟随角色运动；随着年龄增加，权重衰减，粒子逐渐交给上升、滚动和风等自由运动。
+
+用一个线性示意式表达：
+
+$$
+p(t)=w(t)p_{emitter}(t)+(1-w(t))p_{free}(t),\qquad w(0)\approx1,\quad w(T)\approx0.
+$$
+
+这个式子在说：新粒子优先补齐源头，老粒子优先形成自然的漂移；权重曲线本身可以按寿命、火焰类型和源头速度调整。
+
+<GpuGemsCh06EmitterWeightDiagram />
+
+这个方法的好处是它只增加一次位置混合，却解决了移动角色上的连续性问题。流体模拟仍然可以作为未来扩展，但当粒子很少、尺寸很大时，过细的流体细节也未必能被屏幕采样出来。
+
+## 6. 分层合成：先减少像素，再谈更多粒子
+
+大型视频纹理 billboard 会消耗大量像素处理。这里的 <Term def="把高成本效果先渲染到较小目标，再统一放大合成回主画面的优化策略">layer composition</Term> 把火焰先画进四分之一屏幕分辨率的目标，再与场景合成。火焰源图只有 256×256，降低目标分辨率的画质损失有限，却能把混合操作数量大幅压低。
+
+另外，方形精灵常常包含大片透明区域。离线分析每个动画帧，可以为它生成更贴合火焰轮廓的矩形，并记录一个偏移量，使矩形中心仍对应粒子位置。这样减少的是无效 texel，而不是把火焰几何粗暴删掉。
+
+猜一猜：把发射器绑定从 `0.2` 调到 `0.9`，角色移动时拖尾会怎样？把分层分辨率降到 `25%` 后，最先变化的是轮廓、颜色，还是帧时间？
+
+<GpuGemsCh06FireLab />
+
+实验里的“分层分辨率”越低，代表像素预算越小；如果火焰看起来仍然稳定，再考虑增加烟雾层或 glow。先降采样、后加细节，通常比先堆粒子再追帧率更容易定位瓶颈。
+
+## 7. 后处理：glow 与 heat shimmer 各自承担什么
+
+实时合成把火焰放进 render target，也给了后处理一个明确入口。glow 可以把选中的画面复制出来，用 x、y 两次 box blur，再依据 alpha 把模糊亮部叠回原画面。它适合表达火焰照亮周围空间，但不应该代替火焰自身的轮廓。
+
+<Term def="用热量纹理中的二维偏移去扰动场景采样坐标，模拟空气折射的效果">heat shimmer</Term> 则可以先渲染一层 heat particles，在最终合成时读取其红、绿通道，作为场景纹理的 `(u,v)` 偏移。它成本可控，却受暗场对比度影响；Vulcan 最终把像素预算优先给 glow，而不是把每个写过的效果都塞进成品。
+
+```glsl
+vec2 heatOffset = texture(heatTarget, uv).rg * 2.0 - 1.0;
+vec4 scene = texture(sceneTarget, uv + heatOffset * 0.02);
+vec4 blurred = texture(blurTarget, uv);
+vec4 flames = texture(flameTarget, uv);
+vec4 glow = blurred * blurred.a;
+return mix(scene, flames, flames.a) + glow;
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+由于火焰使用低分辨率目标，深度缓冲也可能无法直接共享。一个低分辨率角色模型写入火焰目标的深度，可以作为便宜的遮挡近似；它牺牲少量顶点成本，换取大量像素节省。
 
-## 本章要点
+## 小结：把素材、粒子和像素预算分开验收
 
-1. Chapter 6: Lighting and Shadows是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+- 视频纹理精灵提供形状线索，粒子系统提供位置、寿命和可控变化。
+- 体积纹理用 z 坐标播放帧，A/B、翻转和属性差异隐藏有限素材的重复。
+- alpha blending 保留艺术家的颜色控制；additive 只在明确接受饱和时使用。
+- emitter weight 让新粒子补齐移动源头，老粒子再释放给自由运动。
+- layer composition、紧致矩形和后处理共同决定火焰能否进入实时预算。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 6: Lighting and Shadows涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1**　改 Demo 代码：把实验的 blend mode 切到 additive，再把 A/B 混合从 `0.45` 调到 `0` 和 `1`。分别描述亮度饱和、重复轮廓和颜色控制的变化。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+additive 会让重叠区域快速变亮，颜色更容易失去层次；A/B 混合为 0 或 1 时只使用一种动画，重复轮廓更容易暴露。alpha blending 能保留源 alpha 的颜色控制，但需要为粒子排序。
+
 </Answer>
 
+**问题 2**　推导题：粒子寿命为 `T`，采用 `w(t)=1-t/T`，当 `t=T/4` 时，发射器位置和自由位置各占多少？这种权重对移动火焰有什么作用？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+代入得到 `w=3/4`，所以 `p=0.75p_emitter+0.25p_free`。粒子仍主要跟随发射器，可以填补刚生成的拖尾空洞；同时保留四分之一自由运动，避免所有粒子像刚性贴在角色上一样。
+
+</Answer>
+
+**问题 3**　独立实现题：为一个 256×256 的火焰帧生成紧致矩形和中心偏移，并把火焰先合成到四分之一分辨率目标。你会记录哪些指标来判断画质和性能是否值得？
+
+<Answer>
+
+应记录透明 texel 数、火焰层的纹理读取与混合时间、目标分辨率变化后的帧时间、边缘 aliasing、烟雾/火焰的遮挡关系和镜头近距离下的轮廓稳定性。若矩形节省的无效 texel 很少，就不值得增加离线分析复杂度；若四分之一分辨率造成明显边缘破碎，则应调整目标尺寸或只对 glow 降采样。
+
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+  <GlossaryItem term="video-textured sprite">把动画帧贴到粒子四边形上的火焰图像单元，粒子负责位置和变化。</GlossaryItem>
+  <GlossaryItem term="emitter">生成粒子的来源位置，控制密度、尺寸、纹理和寿命等参数。</GlossaryItem>
+  <GlossaryItem term="volume texture">沿 z 方向堆叠多张二维图像的三维纹理，可用 z 坐标读取动画帧。</GlossaryItem>
+  <GlossaryItem term="alpha blending">按源 alpha 在背景与粒子颜色之间插值的混合方式，能保留颜色控制。</GlossaryItem>
+  <GlossaryItem term="emitter weight">粒子对发射器位置的跟随程度，通常随粒子年龄逐渐衰减。</GlossaryItem>
+  <GlossaryItem term="layer composition">先用较小分辨率渲染高成本效果，再放大合成回主画面的策略。</GlossaryItem>
+  <GlossaryItem term="heat shimmer">用热量纹理扰动场景采样坐标，模拟空气折射造成的摇曳。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 6 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle='GPU Gems 1 · Chapter 6. Fire in the "Vulcan" Demo'
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-6-fire-vulcan-demo"
+/>
