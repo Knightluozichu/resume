@@ -1,255 +1,201 @@
 ---
-title: "Chapter 13: Materials"
+title: "GPU Gems 1 · Chapter 13. Generating Soft Shadows Using Occlusion Interval Maps"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part II · Lighting and Shadows"
 order: 13
-description: "GPU Gems Part: Materials, Chapter 13"
+description: "把静态场景沿固定光轨迹的离线可见性压缩成 rise/fall 区间，在运行时对线性光源窗口求平均，得到实时软阴影。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-13-generating-soft-shadows-using-occlusion"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-13
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh13OcclusionIntervalDiagram,
+  GpuGemsCh13OcclusionIntervalLab,
+  GpuGemsCh13OptimizationDiagram,
+  GpuGemsCh13RenderWindowDiagram,
+  GpuGemsCh13SoftShadowPipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch13-occlusion-interval-maps";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 13: Materials的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Materials, Chapter 13之间的关系是什么？
+- 能解释点光源硬阴影与有半影的软阴影之间的视觉差异，并说明为什么 Sun 可近似为沿轨迹移动的线性光源
+- 能为静态场景构建每个接收点的 rise/fall 可见性区间，并理解它们如何被打包进纹理
+- 能用区间交叠和窗口宽度推导运行时的软阴影可见比例，并读懂四路并行的 shader 伪代码
+- 能识别该方法的适用边界：唯一 UV、固定光轨迹、离线预计算，以及禁用压缩和过滤的纹理约束
 
 </Objectives>
 
-## 为什么需要Chapter 13: Materials
+实时软阴影最难的部分不是把边缘“涂得模糊”，而是判断一个接收点在光源面积的多少位置上可见。GPU Gems 1 第 13 章的策略是收窄问题：场景不动，光源只沿一条预定轨迹移动；昂贵的可见性先离线算好，运行时只查表和做区间运算。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 13: Materials作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<Callout type="trap" title="先分清：半影不是硬阴影的后处理模糊">
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+硬阴影只有 lit 或 shadow 两种状态；软阴影的半影表示面积光源的一部分被遮住、另一部分仍可见。遮挡区间映射保存的是光源轨迹上的可见性证据，运行时的平均才产生亮度过渡。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Materials, Chapter 13正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="固定轨迹是算法前提，不是实现细节">
 
-### 设计动机
+方法把 Sun 降成固定轨迹上的线性光源。移动遮挡物、任意方向的灯、需要整个位姿空间的角色阴影，都超出了这份预计算数据的覆盖范围；不要把它误写成通用 soft shadow map。
 
-Vulkan 把Chapter 13: Materials从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 13: Materials涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 13: Materials相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 13: Materials相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="区间纹理不能随意用普通纹理采样规则">
+
+rise/fall 边界是不连续数据。章节报告的实现需要保留每通道 8 bit，并关闭压缩和纹理过滤；双线性插值会把边界混成不存在的区间。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
+## 为什么要把可见性压缩成区间
+
+<Term def="具有从完全遮挡到完全受光的连续过渡、由面积光源部分可见性产生的阴影">soft shadow</Term> 的关键视觉信号是 penumbra：它让用户从阴影边界感知遮挡物与接收面的空间关系。点光源、shadow map 或 stencil volume 很容易给出硬边，但太阳这类非零面积光源需要计算一段光源位置的平均可见性。
+
+把光源看成沿固定路径移动的点光源时，某个表面点 p 的可见性可以写成 V(p, t)，其中 t 是轨迹参数。V 只有 0 和 1：0 表示从该位置看 p 被遮挡，1 表示 p 被照亮。若直接把 x、y、t 存成 3D 纹理，空间和时间都会造成昂贵的存储；更有效的表示是保存 0/1 信号的边界。
+
+<Term def="在纹理中保存光源轨迹上可见与遮挡起止边界的预计算可见性表示">occlusion interval map</Term> 用一组 rise 和 fall 表示可见性变化：进入遮挡区间的边是 rise，离开遮挡区间的边是 fall。对每个 UV 像素，若有两段遮挡，就保存两对起止参数，而不是保存整条时间采样。
+
+<Term def="用一条固定路径上的连续位置近似面积光源，并在窗口内平均可见性的光源模型">linear light</Term> 把真实的面积光源降成一维问题。这个近似在光源宽度适中时能产生很自然的软边，但沿轨迹方向和垂直方向的平滑程度可能不同。
+
+<GpuGemsCh13SoftShadowPipelineDiagram />
+
+## 1. 先锁定场景与光源的可变范围
+
+<Term def="在离线阶段收集可见性、运行时只查询预计算结果的渲染策略">precomputed visibility</Term> 适合静态户外环境：几何体不变，灯光可以在已知的日照路径上变化。它不适合任意动态对象，因为对象一动，已经写入纹理的遮挡区间就不再描述当前几何关系。
+
+这也是本章最重要的工程判断：先问“哪些变量允许变化”，再决定是否值得预计算。章节中的 Last Chance Gas demo 用该方法表现从日出到日落的动态照明；它并没有声称对任意灯光和任意对象都成立。
+
+<GpuGemsCh13OcclusionIntervalDiagram />
+
+实现前应建立三条不变量：
+
+- **几何不变量**：静态 caster 与 receiver 的位置保持不变；角色或可动门窗不能直接复用旧区间图。
+- **轨迹不变量**：光源只能出现在预定的单一路径上，t 的范围和方向必须与离线生成阶段一致。
+- **参数化不变量**：区间图像素依赖位置，所以对象的 UV 不能重叠；使用 tiled texture 的对象需要额外的一套唯一 UV。
+
+## 2. 离线生成 rise/fall map
+
+对区间图的每个像素，在光源轨迹上取均匀分布的位置，并从该像素向每个位置发射一条射线。沿 t 扫描遮挡状态时，0→1 与 1→0 的变化就是一组边界。章节中用 8 bit 存储边界，因此 256 条光线足以完整捕获量化后的区间；背向光源的像素可以跳过，因为它们本来就不会贡献受光。
+
+一种可读的离线数据结构如下：
+
+```text
+for each receiver texel p:
+  visibility = trace_visibility(p, lightTrajectory, 256 samples)
+  rises, falls = detect_edges(visibility)
+  write_four_channels(riseTexture, fallsTexture, rises, falls)
+```
+
+实际追踪可以由可编程 ray tracer 或离线 shader 完成。成本可能是每个像素数百条射线和数小时的整场景计算；这正是它把运行时工作换成离线工作的地方。
+
+两套四通道颜色纹理的含义是：riseTexture 的每个通道保存一个区间开始，匹配的 fallTexture 保存区间结束。若区间数超过四个，增加纹理组并在运行时累加结果。纹理分辨率可以约为颜色纹理的一半；软阴影的平滑效果会掩盖一部分低分辨率，但仍需用目标场景验证伪影。
+
+<GpuGemsCh13OptimizationDiagram />
+
+## 3. 运行时用窗口平均得到软阴影
+
+当前光源位置是 t，线性光源在轨迹上覆盖窗口 [t - dt/2, t + dt/2]。阴影不是查一个点，而是把窗口和遮挡区间做交叠，计算窗口内有多少长度保持可见。用 `R_i` 和 `F_i` 表示第 i 对 rise/fall，区间长度可以通过 min、max 和 subtraction 得到：
+
+$$ V_soft(t, dt) = 1 - sum(overlap([R_i, F_i], [t - dt/2, t + dt/2])) / dt $$
+
+窗口越宽，等价的线性光源越长，半影通常越宽；窗口越窄，结果逐渐接近轨迹上某个点光源的硬阴影。对所有区间求和后要做 saturate，避免不相交区间贡献负值。
+
+<GpuGemsCh13RenderWindowDiagram />
+
+章节中的 shader 关键在于把四个区间塞进 `half4`，让一次向量运算并行完成四组 min/max：
+
+```hlsl
+half softShadow(sampler2D riseTex, sampler2D fallTex, float2 uv,
+                half intervalStart, half intervalEnd, half invWidth)
+{
+  half4 rise = tex2D(riseTex, uv);
+  half4 fall = tex2D(fallTex, uv);
+  half4 overlap = saturate(min(fall, intervalEnd) - max(rise, intervalStart));
+  return dot(overlap, invWidth);
+}
+```
+
+这里的 dot 不是为了做几何方向点积，而是把四个并行区间的可见长度相加并除以窗口宽度。`intervalStart = t - dt/2`、`intervalEnd = t + dt/2`，`invWidth = 1/dt`；若有多组纹理，就逐组调用并累加。
+
+## 4. 纹理格式与质量预算
+
+区间图的边界是数据本身，不是可供平滑采样的颜色。压缩会损失每通道的 8 bit 精度，双线性过滤会在不连续的 rise/fall 之间制造假的中间边界，因此实现应关闭两者。这样做会牺牲一部分纹理便利性，但软阴影本身的平滑会缓解低分辨率带来的块状感。
+
+另一个近似是用线性光源代替真正的面积光源。沿光轨迹方向的阴影会更平滑，垂直方向可能更硬；光源越大越容易看到这个各向异性。对章节目标中的 Sun 宽度，它通常是可接受的折中。
+
+<Callout type="trap" title="不要把 half 分辨率当成无条件的质量升级">
+
+半分辨率减少四倍存储，但它依赖软边对低频误差的遮蔽。薄几何、尖锐接触和高对比材质仍应做 A/B 检查；若出现阶梯，先比较 map resolution 和窗口宽度，再判断是否需要增加纹理尺寸。
+
 </Callout>
 
-## 性能考量
+## 5. 动手实验：把一个接收点变成可解释的曲线
 
-### 批量操作
+先预测：把 `linear-light window dt` 从窄拉宽，阴影的可见比例和半影宽度各会怎样变化？再把 `stored interval pairs` 从 2 降到 1，观察第二个遮挡时段如何消失。最后降低 map resolution，区分“区间数据少了”与“阴影窗口变宽了”这两种完全不同的原因。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh13OcclusionIntervalLab />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+实验中，橙色轨迹是固定的 light path，橙色窗口是当前线性光源覆盖的参数范围，紫红色短线只是接收面上的阴影宽度提示。`visible` 是窗口内未被区间覆盖的比例；它直接对应运行时 shader 最终要输出的 visibility coefficient。
 
-### 避免 CPU-GPU 同步点
+## 小结：用受限的可见性换取实时软阴影
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，Chapter 13: Materials相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. Chapter 13: Materials是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+- 遮挡区间映射把静态场景中随 t 变化的 0/1 可见性压缩成 rise/fall 边界。
+- 线性光源是固定轨迹上的一段窗口；软阴影可由窗口与可见区间的平均得到，而不是后处理硬边。
+- 两套四通道纹理让四个区间并行参与 min/max/subtract/dot；更多区间需要额外纹理组。
+- 256 条离线射线、半分辨率和禁用压缩/过滤分别对应精度、显存与采样规则的取舍。
+- 适用边界必须写进系统设计：静态几何、单一固定光轨迹、唯一 UV，以及可接受的线性光源近似。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 13: Materials涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜推导题**　某接收点在 t=0.20–0.35 与 t=0.60–0.75 被遮挡。当前窗口是 [0.25, 0.65]，窗口宽度 dt=0.40。按区间交叠计算 `V_soft`，并说明它对应的半影亮度趋势。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+两个交叠长度分别是 0.10 和 0.05，总遮挡长度为 0.15，因此可见比例是 `1 - 0.15 / 0.40 = 0.625`。它处在完全受光和完全遮挡之间，应该显示中等亮度的半影。
 </Answer>
 
+**问题 2｜改 Demo 代码**　将离线采样从 256 个轨迹位置改成 128 个，并把区间图改为颜色纹理的 1/4 分辨率。你会检查哪些证据来判断结果仍可接受？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+记录 rise/fall 边界是否因量化出现跳变、薄几何是否漏掉短遮挡区间、半影是否出现块状边缘，并比较显存、离线追踪时间和运行时纹理带宽。不能只看平均帧率，因为区间图的错误会先表现为局部视觉伪影。
+</Answer>
+
+**问题 3｜独立实现题**　为一张静态户外地图设计遮挡区间图的生产流水线。请列出一条会使预计算失效的运行时需求，并给出替代方案。
+
+<Answer>
+
+例如需求是让角色在地图上移动并接收太阳阴影；角色改变了 caster 几何，旧纹理中的 UV 区间不再适用。替代方案可以给角色使用动态 shadow map、PCF 或其他适合移动物体的技术，而静态环境继续使用区间图。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="soft shadow">由非零面积光源产生、在完全受光与完全遮挡之间具有半影过渡的阴影。</GlossaryItem>
+<GlossaryItem term="occlusion interval map">按接收点位置保存光源轨迹上可见性起止边界的预计算纹理。</GlossaryItem>
+<GlossaryItem term="linear light">沿固定路径的一段线性光源，用窗口平均近似面积光源。</GlossaryItem>
+<GlossaryItem term="precomputed visibility">把静态场景的可见性离线计算并在运行时查询的策略。</GlossaryItem>
+<GlossaryItem term="rise/fall edge">可见性信号进入或离开遮挡状态时的边界参数。</GlossaryItem>
+<GlossaryItem term="penumbra">面积光源只有部分可见时形成的半影区域。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 13 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 13. Generating Soft Shadows Using Occlusion Interval Maps"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-13-generating-soft-shadows-using-occlusion"
+/>

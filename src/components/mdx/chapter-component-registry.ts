@@ -12912,6 +12912,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh12TwoPhaseDiagram: module0.GpuGemsCh12TwoPhaseDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/03-materials/gpugems-ch13": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch13-occlusion-interval-maps");
+    return {
+      GpuGemsCh13OcclusionIntervalDiagram:
+        module0.GpuGemsCh13OcclusionIntervalDiagram,
+      GpuGemsCh13OcclusionIntervalLab: module0.GpuGemsCh13OcclusionIntervalLab,
+      GpuGemsCh13OptimizationDiagram: module0.GpuGemsCh13OptimizationDiagram,
+      GpuGemsCh13RenderWindowDiagram: module0.GpuGemsCh13RenderWindowDiagram,
+      GpuGemsCh13SoftShadowPipelineDiagram:
+        module0.GpuGemsCh13SoftShadowPipelineDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
