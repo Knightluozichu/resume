@@ -12808,6 +12808,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh03SkinShadingLab: module0.GpuGemsCh03SkinShadingLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/01-natural-effects/gpugems-ch04": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch04-dawn-animation");
+    return {
+      GpuGemsCh04AnimationDecisionDiagram:
+        module0.GpuGemsCh04AnimationDecisionDiagram,
+      GpuGemsCh04AnimationLab: module0.GpuGemsCh04AnimationLab,
+      GpuGemsCh04MorphTargetDiagram: module0.GpuGemsCh04MorphTargetDiagram,
+      GpuGemsCh04SkinningDiagram: module0.GpuGemsCh04SkinningDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
