@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T05:05:22.213Z；旧版分数不迁移。
+> 2026-08-10T05:12:15.395Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2221
+- failed：2220
 - queued：344
-- passed：1138
+- passed：1139
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -19,8 +19,8 @@
 | 6 | javascript-pro-guide | 34 | 34 | 0 | 0 | 102 |
 | 7 | kotlin-definitive-guide | 29 | 29 | 0 | 0 | 87 |
 | 8 | windows-journey | 29 | 29 | 0 | 0 | 87 |
-| 9 | gpu-gems | 48 | 29 | 0 | 19 | 58 |
-| 10 | out-of-control | 28 | 28 | 0 | 0 | 84 |
+| 9 | out-of-control | 28 | 28 | 0 | 0 | 84 |
+| 10 | gpu-gems | 48 | 28 | 0 | 20 | 56 |
 | 11 | design-patterns | 27 | 27 | 0 | 0 | 81 |
 | 12 | java-core-tech | 27 | 27 | 0 | 0 | 81 |
 | 13 | unix-advanced-programming | 26 | 26 | 0 | 0 | 100 |

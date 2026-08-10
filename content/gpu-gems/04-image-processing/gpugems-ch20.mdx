@@ -1,255 +1,202 @@
 ---
-title: "Chapter 20: Image Processing"
+title: "GPU Gems 1 · Chapter 20. Texture Bombing"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part III · Materials"
 order: 20
-description: "GPU Gems Part: Image Processing, Chapter 20"
+description: "用规则 cell 网格、伪随机偏移和邻居采样把小图像或 procedural shape 不规则地散布到 UV 或 object space，减少大面积纹理的重复感。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-20-texture-bombing"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-20
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh20BombingPipelineDiagram,
+  GpuGemsCh20CostDiagram,
+  GpuGemsCh20NeighborSamplingDiagram,
+  GpuGemsCh20PriorityVoronoiDiagram,
+  GpuGemsCh20TextureBombingLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch20-texture-bombing";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 20: Image Processing的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Image Processing, Chapter 20之间的关系是什么？
+- 能把 texture bombing 拆成 cell 寻址、伪随机参数、邻居覆盖和最终合成四步
+- 能实现二维四邻居采样，并说明 image 大小、offset 限制和 priority 如何影响 coverage 与遮挡顺序
+- 能把真实小图像替换为 procedural circle、Voronoi-like region 或多图随机选择，并处理 clamp、mipmap 与边界伪影
+- 能比较二维和三维 bombing 的 sample、指令与视觉成本，按目标密度和重复感选择方案
 
 </Objectives>
 
-## 为什么需要Chapter 20: Image Processing
+大面积草地、花田、瓦片、鳞片或一整座相似建筑，直接重复一张纹理会暴露规则周期；使用更大的唯一纹理又会增加数据、带宽和制作成本。GPU Gems 1 第 20 章的 Texture Bombing 采用一个规则网格做寻址，再在每个 cell 中放置位置、优先级和图像选择都不同的小元素，让规则只保留在计算结构里，而不直接出现在最终图案中。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 20: Image Processing作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Image Processing, Chapter 20正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="只采当前 cell 会截断 image">
+当 image 靠近 cell 边缘时，它会跨入相邻 cell；只读取当前 cell 会得到缺角、断花或透明缝。应先根据 image 尺寸和 offset 限制证明 coverage，再选择四邻居或九邻居采样。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 20: Image Processing从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 20: Image Processing涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 20: Image Processing相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 20: Image Processing相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="最后测试的 image 不应默认永远在最上层">
+多个 image 重叠时，简单循环往往让后访问的 cell 覆盖前面的结果，产生有方向的接缝。为每个 cell 取伪随机 priority，只让最高 priority 的有效样本成为前景，才能让遮挡顺序与访问顺序解耦。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="随机纹理开 mipmap 会在 cell 边界跳 LOD">
+同一 cell 内的 random lookup 坐标可能对相邻像素相同，边界处却突然改变；硬件会依据导数选择更高 mip，造成亮度和位置伪影。静态 random texture 可使用 NEAREST，动画位置可使用 LINEAR，并为 image texture 设置 CLAMP 防止 ghost sample。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="把小图像或程序形状以伪随机位置放入规则 cell，并合成出不规则材质细节的程序化纹理技术">texture bombing</Term> 的目标不是完全消除 grid，而是把 grid 变成廉价的候选生成器。每个像素先找到自己所在 cell，再读取该 cell 的随机参数，最后检查可能跨界的邻居；因此它可以替换真实 image，也可以生成圆、斑点、鳞片或细胞区域。
 
-## 性能考量
+<GpuGemsCh20BombingPipelineDiagram />
 
-### 批量操作
+## 1. cell 坐标与 cell 内 offset
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="由缩放后的 UV 取 floor 得到的整数网格坐标，相邻 cell 在 x 或 y 方向相差一个单位">cell coordinates</Term> 将连续 UV 变成可寻址的整数网格。设 `scale` 控制 cell 密度，则像素的 cell 与 cell 内 offset 为：
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```hlsl
+float2 scaledUV = UV * scale;
+int2 cell = floor(scaledUV);
+float2 offset = scaledUV - cell;
 ```
 
-### 内存对齐
+`cell` 用作随机参数的索引，`offset` 用来访问 image。相邻 cell 的整数坐标差一个单位，因此可以用固定偏移枚举邻居。这里的 scale 不是图像缩放本身，而是决定单位 UV 中包含多少候选 cell；提高 scale 会增加细节数量，也会让每个 image 可用的像素更少。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<Term def="存储由 cell 坐标映射得到的偏移、优先级、颜色或图像索引等参数的噪声纹理或确定性哈希函数">pseudo-random texture</Term> 可以把 integral cell name 映射到近似不相关的值。二维随机纹理的坐标不需要神秘常数，只要相邻 cell 不落在同一个 texel、并且不会形成明显短周期即可：
 
-## 验证层检查
-
-启用验证层后，Chapter 20: Image Processing相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+```hlsl
+float2 randomUV = cell * float2(0.037, 0.119);
+float4 random = tex2D(randomTex, randomUV);
+float2 imageOffset = random.xy;
+float priority = random.w;
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+random 的不同通道可以承担不同职责：xy 控制 image 位置，z 选择多图纹理中的某一张，w 作为 priority 或出现概率。为 image 采样时，要把 `imageOffset` 从 cell 内 offset 中扣除；image 的 alpha 可以表示透明或不透明，从而决定是否覆盖背景。
 
-## 本章要点
+## 2. 邻居采样：先保证 coverage，再压缩成本
 
-1. Chapter 20: Image Processing是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+若 image 不大于 cell，且它的 opaque 区域始终落在 cell 内，边界附近仍可能受到邻居 image 的影响。没有额外限制时，需要检查当前 cell 周围的九个 cell；如果规定 offset 只向一个固定方向跨界，且 image 尺寸不超过 cell，则可以只检查当前 cell 与三个方向邻居，共四个候选。
+
+```hlsl
+float4 color = background;
+float bestPriority = -1.0;
+
+for (int i = -1; i <= 0; ++i) {
+  for (int j = -1; j <= 0; ++j) {
+    int2 candidateCell = cell + int2(i, j);
+    float2 candidateOffset = offset - float2(i, j);
+    float2 randomUV = candidateCell * float2(0.037, 0.119);
+    float4 random = tex2D(randomTex, randomUV);
+    float4 image = tex2D(imageTex, candidateOffset - random.xy);
+    if (image.a > 0.0 && random.w > bestPriority) {
+      color = image;
+      bestPriority = random.w;
+    }
+  }
+}
+```
+
+代码中的四邻居不是一个可以无条件复制的常数：image 被放大、旋转、offset 范围改变或 opaque 区域进入更多角落时，候选集合也要扩大。为了避免多次真实 image texture read，procedural shape 可以先保存 winner 的坐标，循环结束后只做一次最终颜色 lookup；依赖 alpha 判断的真实 image 则不一定能使用这个优化。
+
+<GpuGemsCh20NeighborSamplingDiagram />
+
+如果要让重叠结果有稳定层次，priority 比访问顺序更重要。priority 可以表示前后关系，也可以设置初值来控制出现概率：例如初始阈值提高后，部分 image 会被拒绝，密度自然降低；这种 rejection 仍然要经过 coverage 和性能测试。
+
+## 3. image、procedural shape 与多样性
+
+真实 image 的 alpha 能提供精细花朵、瓦片或树叶轮廓，但它需要多次 dependent texture samples。程序形状可以用 cell 内距离平方判断，例如把中心移到 `(0.5, 0.5)` 后检查 `dot(p, p)` 是否落在半径平方内；这样可以把最终颜色 sample 移出内部循环，并很适合圆、斑点与简单鳞片。
+
+image 选择也可以增加变化：将多个小图横向打包，用 random.z 计算整数 index，再把 x 坐标限制在所选子图区域；子图之间要有足够边框，mipmap 每一级也要保留边框，否则边界颜色会从相邻子图渗入。静态 image 可以使用 CLAMP 防止越界 ghost sample；动画 image 的 random 参数若使用 LINEAR，运动更平滑，但随机值的方差会被压低。
+
+随机 scale 和 rotation 要服从邻居范围。若旋转后的 opaque 圆盘进入 cell 角落，四邻居假设可能漏掉它；要么缩小 image，要么扩大候选 cell。视差、法线和简单 diffuse factor 也可以作用在 procedural 3D bombing 的形状上，让球和体积元素不再只是平面圆。
+
+## 4. priority 与 Voronoi-like cellular 方法
+
+<Term def="为每个候选 image 分配覆盖顺序、出现概率或距离值，并用最优值选择像素前景的规则">priority</Term> 让重叠 compositing 有可解释的 winner。随机 w 可以形成鳞片或瓦片的遮挡层；将 priority 换成到 cell 内随机点的距离平方，则能生成 Voronoi-like regions，并且不需要计算平方根。
+
+<Term def="以到随机特征点的距离平方作为 winner 条件，近似生成细胞分区图案的方法">Voronoi-like regions</Term> 的简化算法先把 priority 设为很大，再对候选点计算 `radius2 = dot(offset, offset)`；距离更小的点覆盖当前结果。严格的 Voronoi 区域可能需要检查更远的 cell，因为第二邻居有时会比已检查的近邻更近；增加每 cell 的样本数可以降低这种错误出现的概率，也能减弱矩形 grid 感。
+
+<GpuGemsCh20PriorityVoronoiDiagram />
+
+这类 cellular 结果适合裂纹、皮肤、干泥和叶片等需要空间变化但不要求精确几何边界的材质。不要把近似区域当成严格的几何分割：边界统计、sample 数和 cell scale 改变时，结果会随之变化，必须用目标纹理分辨率重新校准。
+
+## 5. 二维、三维与性能预算
+
+<Term def="将二维 cell 寻址推广到 object space 的 unit cube，并检查三维邻居来生成体积或三维程序纹理的变体">procedural 3D bombing</Term> 把 UV 网格换成 object-space unit cube。二维四邻居可能只需四次候选，二维九邻居覆盖更安全，而三维受限的邻居集合也通常需要八次访问；每次访问都可能包含 random sample、image 或 shape 计算。
+
+主要成本来源包括 dependent texture read、重复执行候选 shading、每 cell 的多个 image、寄存器压力和最终颜色采样。可以按以下顺序优化：
+
+1. 先证明 image 大小与 offset 限制，再从九候选缩减到四候选。
+2. 对 procedural shape 保存 winner 坐标，把最终 color lookup 移到循环外。
+3. 用 random.w 做 rejection 或减少每 cell 的 sample 数，但记录密度变化。
+4. 让坐标保持 full precision，颜色和中间值在目标 framebuffer 允许时再评估 half 或 fixed precision。
+
+<GpuGemsCh20CostDiagram />
+
+动画时可以让 random lookup 坐标随时间缓慢变化，但要注意 bilinear random 的 ramp-like 运动和人眼对方向断点的敏感性。静态材质优先稳定与低成本，动态材质再选择平滑随机参数，不能只凭一帧截图判断质量。
+
+## 6. 动手实验：从“重复”调到“丰富”
+
+先预测四个变化：提高 density 会减少空洞但增加重叠和成本；增大 image size 会让 coverage 更完整却需要更多邻居；提高 cell scale 会增加元素数但让单个 image 更小；从二维四邻居切到三维或九邻居会提高成本并降低边界漏采样。
+
+<GpuGemsCh20TextureBombingLab />
+
+这个实验使用确定性的示意点，不替代真实 image texture 的 alpha 和 mipmap 测试。工程验收应覆盖静态重复感、cell 边界、image 旋转、透明边框、多图 atlas、动画 random、目标分辨率和 shader 指令数。
+
+## 小结：把重复变成可控的随机变化
+
+- texture bombing 用规则 cell 寻址，把 image 或 procedural shape 以伪随机位置散布到大面积表面。
+- cell coordinates、cell 内 offset 和 pseudo-random texture 是基础数据流；xy 可控制位置，z 可选图，w 可做 priority 或概率。
+- image 靠近 cell 边界时必须检查邻居；四邻居需要受限 image，九邻居更安全但更贵。
+- priority 解耦重叠顺序与访问顺序，Voronoi-like regions 则把距离平方作为 winner 条件。
+- procedural 3D bombing 更有体积感却需要更多邻居；先验证 coverage，再用候选数、最终 sample 和精度策略做性能优化。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 20: Image Processing涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　当前 shader 只采样当前 cell，花朵在 cell 边缘被切断。请把它改为四邻居采样，并说明 image 尺寸与 offset 必须满足的限制。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+为 `i`、`j` 取负一到零的两个循环，分别构造候选 cell 和对应的 cell 内 offset，再用 random.xy 定位 image，用 alpha 判断有效样本并用 random.w 选择 priority 最高者。四邻居成立的前提是 image 不大于 cell，opaque 区域只向被枚举的方向跨界，offset 范围固定；放宽任一条件就要检查更多邻居。
 </Answer>
 
+**问题 2｜推导题**　一个像素所在 cell 的 `scaledUV` 是 `(3.35, 1.72)`，scale 已经应用。请写出 cell 坐标和 cell 内 offset；如果 imageOffset 是 `(0.20, 0.60)`，采样坐标的基本形式是什么？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`cell = floor((3.35, 1.72)) = (3, 1)`，`offset = (0.35, 0.72)`。当前 cell 的 image 坐标可写成 `offset - imageOffset = (0.15, 0.12)`；实际 shader 还要根据 image texture 的缩放、CLAMP 和候选邻居坐标调整，并用 alpha 判断是否覆盖背景。
+</Answer>
+
+**问题 3｜独立实现题**　为一片需要叶片密度可控、远景不重复、近景不出现明显 grid 的地面设计 texture bombing。请选择 2D 或 3D、邻居数量、priority、随机纹理过滤，并列出性能与视觉验证项。
+
+<Answer>
+
+平面地面可先用 2D bombing；以 density texture 控制叶片出现概率，用 random.z 选择多个叶片图，用 random.w 做 priority，静态 random 使用 NEAREST，image 使用 CLAMP，并在 coverage 允许时用四邻居。近景检查 cell 边界、旋转后的叶片是否漏采样和 atlas 边框；远景检查 mipmap、重复周期和 density；GPU profile 记录依赖 reads、候选数、寄存器与最终 color sample 成本。若需要体积球或沿模型表面稳定分布，再考虑 3D，但要接受更高邻居成本。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="texture bombing">将小图像或程序形状以伪随机位置放入规则 cell 并合成出不规则细节的程序化纹理技术。</GlossaryItem>
+<GlossaryItem term="cell coordinates">由缩放 UV 取 floor 得到的整数网格坐标，用于索引相邻 cell 的参数。</GlossaryItem>
+<GlossaryItem term="pseudo-random texture">将 cell 坐标映射到偏移、颜色、priority 或图像索引等参数的随机纹理。</GlossaryItem>
+<GlossaryItem term="priority">决定重叠候选的前景顺序、出现概率或距离 winner 的值。</GlossaryItem>
+<GlossaryItem term="procedural 3D bombing">在 object-space unit cube 中进行三维 cell 寻址和邻居采样的 bombing 变体。</GlossaryItem>
+<GlossaryItem term="Voronoi-like regions">以到随机特征点的距离平方选择 winner，近似生成细胞分区的图案。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 20 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 20. Texture Bombing"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-20-texture-bombing"
+/>

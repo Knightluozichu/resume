@@ -13000,6 +13000,20 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh19LocalizedIblLab: module0.GpuGemsCh19LocalizedIblLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/04-image-processing/gpugems-ch20": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch20-texture-bombing");
+    return {
+      GpuGemsCh20BombingPipelineDiagram:
+        module0.GpuGemsCh20BombingPipelineDiagram,
+      GpuGemsCh20CostDiagram: module0.GpuGemsCh20CostDiagram,
+      GpuGemsCh20NeighborSamplingDiagram:
+        module0.GpuGemsCh20NeighborSamplingDiagram,
+      GpuGemsCh20PriorityVoronoiDiagram:
+        module0.GpuGemsCh20PriorityVoronoiDiagram,
+      GpuGemsCh20TextureBombingLab: module0.GpuGemsCh20TextureBombingLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
