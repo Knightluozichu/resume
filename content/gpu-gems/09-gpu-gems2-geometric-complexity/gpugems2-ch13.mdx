@@ -1,0 +1,144 @@
+---
+title: "GPU Gems 2 · Chapter 13. Implementing the mental images Phenomena Renderer on the GPU"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 13
+description: "把 mental ray 的模块化 shaders 和 Phenomena graph 通过 Cg interfaces 组合成 GPU fragment program，并在编译、资源或功能受限时保留 software fallback。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-13-implementing-mental-images"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-13
+---
+
+import {
+  GpuGems2Ch13CompilePipelineDiagram,
+  GpuGems2Ch13InterfaceDiagram,
+  GpuGems2Ch13PhenomenaLab,
+  GpuGems2Ch13ShaderGraphDiagram,
+  GpuGems2Ch13VaryingStateDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch13-phenomena";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分 interactive GPU shader 与 production renderer shader 的模块化组合需求
+- 能把 Phenomenon 的 input/result 参数、subshader graph 和 root shader 映射成可编译 GPU program
+- 能说明 Cg shader interfaces、vert2frag varyings 与 global uniforms 如何连接节点
+- 能设计 GPU 编译失败、透明 depth peeling、显存不足时的 software/hybrid fallback
+
+</Objectives>
+
+<Callout type="trap" title="不要把每个 shader 当作 GPU 上可动态调用的函数">
+**现象 →** 运行时 graph 看起来正确，但 GPU program 无法链接或无法在 fragment 中调用另一个 shader。
+
+**原因 →** 目标硬件不支持在一个 fragment program 中加载并动态调用多个独立 shader。
+
+**修法 →** 在提交前收集 Phenomenon graph，用 interface connection 生成一个完整 fragment program，再下载到 GPU。
+
+</Callout>
+
+<Callout type="trap" title="不要把接口连接和最终编译混成内容导入步骤">
+**现象 →** 同一材质改一个常量就触发大量资源复制，或者不同 profile 的 GPU 无法复用资产。
+
+**原因 →** graph 的抽象节点、硬件 profile 和可优化的 constant folding 没有分层管理。
+
+**修法 →** 保持 shader/Phenomenon 声明抽象，在运行时实例化 concrete interface；对 literal 参数让编译器做 constant folding，并按 profile 缓存 program。
+
+</Callout>
+
+<Callout type="trap" title="不要因为 GPU 编译失败就丢掉整帧质量">
+**现象 →** 一个复杂材质、透明 pass 或显存不足让整帧无法渲染。
+
+**原因 →** 没有将 hardware/software 路径作为同一 renderer 的可验证 fallback。
+
+**修法 →** 对对象级别记录编译与资源失败，失败对象走 software；透明使用 depth peeling 等额外 pass，最后按 depth/alpha 合成。
+
+</Callout>
+
+在 production renderer 中，shader 可能负责材料、灯、体积、相机或环境，而不是一个单一的 vertex/fragment effect。<Term def="封装多个 subshader 节点、连接参数并暴露 input/result 的可复用渲染组件">Phenomenon</Term>把这些节点组织成 graph，让艺术家组合 wood、fog、light 和 material response。
+
+<GpuGems2Ch13ShaderGraphDiagram />
+
+## 1. 从 graph 到一个 GPU program
+
+<Term def="记录 shader/Phenomenon 节点之间 input 与 result 连接关系的模块化计算图">shader graph</Term>中的每个节点知道自己的名称、接口参数和结果参数。运行时从 root shader 反向收集依赖的 subshader、light shader、texture 和 volume，再把它们拼成一个完整 fragment program。
+
+GPU 不能在运行时加载多个 shader 后让一个 shader 调另一个 shader，因此编译期组合是必要步骤。Graph 仍然保留模块化，但下载到 GPU 前必须得到一个可编译的单体程序。
+
+<GpuGems2Ch13CompilePipelineDiagram />
+
+## 2. Cg interfaces 连接抽象参数
+
+<Term def="为 scalar、vector、color、texture 等参数定义统一 eval 方法、允许具体实现插入 graph 的 Cg 抽象接口">shader interface</Term>把节点之间的契约稳定下来。例如 `miiColor` 暴露 `float4 eval(vert2frag)`，常量、纹理或另一个 shader 都能实现它；root shader 只依赖接口，不依赖具体来源。
+
+<GpuGems2Ch13InterfaceDiagram />
+
+literal 参数可以用 Cg runtime 的 literal variability 连接，让编译器常量折叠并删掉无效计算。接口的价值不是增加一次函数调用，而是把 graph 组合转成编译器可见的具体结构。
+
+## 3. 统一的 varying 与 global state
+
+<Term def="由 vertex program 传给 fragment program 的 position、normal、UV、导数、screen 和 face 等共享输入结构">vert2frag varying parameters</Term>让多数 Phenomenon 使用一致的输入语义。常见字段包括 camera-space position/normal、四组 texture coordinates、parametric derivatives 和 face orientation。
+
+<Term def="由 renderer 统一绑定、供多个 shader 节点读取的矩阵、相机、shadow map 和分辨率状态">global state variables</Term>则提供节点间共享的环境，例如 `miToWorld`、`miFromWorld`、camera resolution、shadow map transform 和 texture。状态变化只需更新 shared uniform，而不必为每个节点复制值。
+
+<GpuGems2Ch13VaryingStateDiagram />
+
+## 4. light、texture、volume 与透明
+
+Light shader 通过统一接口返回光色、方向和 `dot(N,L)`，还可以在内部采样 shadow map；surface shader 不必知道具体是 point、spot 还是 directional light。Texture shader 可以在 fragment 阶段生成 spherical UV，解决顶点投影的插值伪影。Volume shader 作为 camera root 影响每个 fragment 的最终颜色。
+
+透明对象需要 order-independent transparency 或 depth peeling 等额外 pass。硬件 pass 与 software pass 完成后，renderer 按 z-depth 和 alpha 合并结果。完全通用的 ray tracing 仍可能只能由 software renderer 完成，GPU 路径必须明确承认这些边界。
+
+## 5. 动手实验：组合规模与 fallback
+
+增加 node 数量，观察生成的 program 复杂度；降低 GPU capability，观察为何需要 software fallback；勾选透明对象，观察 opaque GPU pass 之外还要加 depth-peel pass。实验是架构趋势示意，不替代真实 Cg compiler 和目标硬件检查。
+
+<GpuGems2Ch13PhenomenaLab />
+
+## 小结
+
+- Phenomenon 把 production shader 组合成可复用 graph，GPU 下载前必须生成一个完整 program。
+- shader interface 用统一 `eval` 契约连接常量、纹理和 subshader。
+- vert2frag varyings 与 global state 为所有节点提供一致的输入和共享 uniforms。
+- light、texture、volume 都可以作为 graph 节点，但透明和通用 ray tracing 仍需额外路径。
+- 编译、显存和 profile 失败时按对象回退 software，保持最终图像可交付。
+
+<Exercises>
+
+**问题 1｜组合边界**　为什么 GPU 上需要在编译前把多个 shader 组合成一个 fragment program？
+
+<Answer>
+
+目标硬件不能在 fragment program 中动态加载并调用任意独立 shader。renderer 必须收集 Phenomenon graph，生成包含所有依赖的单一 program；interface 仍保留模块化连接，但组合发生在编译前。
+</Answer>
+
+**问题 2｜接口设计**　一个 Phong 节点的 diffuse 参数既可能来自常量，也可能来自纹理节点，如何让它们共享输入类型？
+
+<Answer>
+
+让 diffuse 声明为 `miiColor` 之类的抽象 shader interface；常量实现和 texture implementation 都提供 `eval(vert2frag)` 并返回相同 color 类型。运行时把具体 struct 连接到该接口，root shader 不需要分支。
+</Answer>
+
+**问题 3｜fallback**　GPU shader 编译失败但场景仍必须输出正确图像，renderer 应如何组织？
+
+<Answer>
+
+在对象级别记录编译或资源失败，让该对象走 software renderer；其他可编译对象继续走 GPU。透明对象可额外走 depth peeling，最终按 depth 和 alpha 合并 hardware/software pass，而不是放弃整帧。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Phenomenon">封装 subshader graph、参数连接和结果的可复用渲染组件。</GlossaryItem>
+<GlossaryItem term="shader graph">记录 shader/Phenomenon 节点与 input/result 连接的模块化计算图。</GlossaryItem>
+<GlossaryItem term="shader interface">用统一 eval 契约允许具体参数实现插入 graph 的 Cg 抽象接口。</GlossaryItem>
+<GlossaryItem term="vert2frag varying parameters">vertex 到 fragment 共享的 position、normal、UV 和导数输入。</GlossaryItem>
+<GlossaryItem term="global state variables">由 renderer 绑定、供多个 shader 节点读取的共享矩阵和相机状态。</GlossaryItem>
+<GlossaryItem term="software fallback">GPU 编译、资源或功能不满足时由 CPU/软件路径渲染对象的回退方案。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 13. Implementing the mental images Phenomena Renderer on the GPU" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-13-implementing-mental-images" />
