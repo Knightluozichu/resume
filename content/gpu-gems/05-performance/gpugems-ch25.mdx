@@ -1,255 +1,182 @@
 ---
-title: "Chapter 25: Performance and Practicalities"
+title: "GPU Gems 1 · Chapter 25. Fast Filter-Width Estimates with Texture Maps"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part IV · Image Processing"
 order: 25
-description: "GPU Gems Part: Performance and Practicalities, Chapter 25"
+description: "用编码 mipmap 的 filterMap 借助纹理硬件估计任意程序量的变化宽度，在不支持 ddx/ddy 的 fragment profile 上实现可控的程序抗锯齿。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-25-fast-filter-width-estimates-texture-maps"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-25
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh25FilterWidthConceptDiagram,
+  GpuGemsCh25FilterWidthLab,
+  GpuGemsCh25FilterWidthPipelineDiagram,
+  GpuGemsCh25LimitationsDiagram,
+  GpuGemsCh25MipmapEncodingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch25-filter-width-estimates";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 25: Performance and Practicalities的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Performance and Practicalities, Chapter 25之间的关系是什么？
+- 能解释程序纹理为什么需要 filter width，并区分单点采样、区域平均与硬件纹理过滤
+- 能实现标准 `ddx/ddy` 版 filter width，并说明它在不支持 derivative 的 fragment profile 上为何不可用
+- 能构造每级保存 level 常量的 filterMap，解码纹理硬件返回的 mip 级别并恢复 width
+- 能识别 mipmap 上下限、过度估计、纹理内存和压缩格式对发布质量与性能的影响
 
 </Objectives>
 
-## 为什么需要Chapter 25: Performance and Practicalities
+程序纹理把 checkerboard、条纹、噪声和其他函数直接写进 fragment shader，省掉了预制纹理，却也失去了纹理硬件自动提供的 filter 信息。当镜头远离表面或物体运动时，一个屏幕像素覆盖越来越大的程序坐标范围；如果 shader 仍只在一个点计算函数，高频细节就会折叠成 alias。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 25: Performance and Practicalities作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Performance and Practicalities, Chapter 25正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要用单点 checker 函数代替区域平均">
+现象：近处还能看清，远处和运动中出现 staircase、crawl 或摩尔纹。原因：`floor`、取模和阈值函数在一个 pixel sample 上做了 binary 决策，没有计算相邻像素覆盖的范围。修法：先估计 filter width，再在 `uv ± 0.5 × width` 区间做预过滤或积分。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 25: Performance and Practicalities从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 25: Performance and Practicalities涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 25: Performance and Practicalities相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 25: Performance and Practicalities相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要假设所有 fragment profile 都有 ddx/ddy">
+现象：现代 profile 能运行，旧的 `arbfp1` 路径无法编译或只能关闭抗锯齿。原因：标准 derivative 函数不是所有硬件 profile 都暴露。修法：用编码 mipmap 的 filterMap 让纹理硬件间接返回过滤级别，或为不支持路径提供预过滤纹理。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 filterMap 当成无限精度导数仪">
+现象：变化极快或极慢时，估计 width 被夹到错误范围，结果分别 alias 或过度模糊。原因：最高和最低 mip level 限制了可测范围。修法：增加 mip 深度、调整编码比例、压缩资源，或在超出范围时切换到标准 derivatives 与显式 fallback。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="一个屏幕像素覆盖的程序坐标变化范围，用于决定函数需要被预过滤或平均的区域">filter width</Term> 是把采样率带入程序纹理的接口。对二维 `uv`，可以用相邻像素差的最大分量得到一个各向同性近似；它通常宁可略微高估，也不应低估到让高频细节穿过像素采样。
 
-## 性能考量
+<GpuGemsCh25FilterWidthConceptDiagram />
 
-### 批量操作
+## 1. 先理解 filter width：程序 checker 为什么会 alias
 
-Vulkan 鼓励批量提交而非逐个提交：
+假设 checker 函数根据 `floor(uv.x) + floor(uv.y)` 返回零或一。单点版本只知道当前坐标落在哪个格子，却不知道一个屏幕像素跨过了多少个格子。理想结果应该是对 pixel footprint 内的 checker 面积求平均；当 footprint 横跨黑白边界时，输出就应该是中间灰度而不是突然跳变。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```hlsl
+float checker(float2 uv) {
+  return (fmod(floor(uv.x) + floor(uv.y), 2) < 1) ? 0 : 1;
+}
 ```
 
-### 内存对齐
+<Term def="用相邻像素的值差近似当前值相对屏幕 x 与 y 的变化量的 fragment shader 函数">derivative</Term> 可以从这个变化量估计窗口。现代 Cg/HLSL profile 通常提供 `ddx()` 和 `ddy()`：
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，Chapter 25: Performance and Practicalities相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+```hlsl
+float filterwidth(float2 value) {
+  float2 fw = max(abs(ddx(value)), abs(ddy(value)));
+  return max(fw.x, fw.y);
+}
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这个宽度是 <Term def="用一个标量近似 x、y 方向最大变化范围的过滤宽度">isotropic filter width</Term>，可能比真实的各向异性 footprint 更宽，但它倾向于避免低估。得到 width 后，可以把 checker 函数变成对区间的平均，或者把它交给一个已有的 mip、lookup 或 analytical filter。
 
-## 本章要点
+<Term def="通过预过滤或区域平均把程序函数中超过像素采样率的高频细节移除的过程">procedural antialiasing</Term> 的关键是先确定变化速度，再决定要保留多少细节。只在结果上加一个固定 blur 并不能适应物体缩放；width 随屏幕坐标变化，过滤半径也应该变化。
 
-1. Chapter 25: Performance and Practicalities是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 2. 用编码 mipmap 让纹理硬件“报告”变化范围
+
+在不支持 derivatives 的 profile 上，章节利用纹理采样硬件的一个特性：普通 texture lookup 会根据相邻像素的纹理坐标自动选择 <Term def="纹理 mip 链中代表特定分辨率与过滤范围的层级编号">mipmap level</Term>。只要构造一个特殊的 <Term def="每级 mipmap 存放可解码 level 值、用于让 texture lookup 间接报告 filter width 的辅助纹理">filterMap</Term>，让 level 0 的值为零、level 1 的值为一，以此类推，返回值就携带了硬件选择的 mip 级别信息。
+
+<GpuGemsCh25MipmapEncodingDiagram />
+
+构造完成后，纹理硬件并不知道自己在做“导数估计”，它只是按通常的过滤规则在相邻 mip 之间插值。我们读取的 fractional level 近似于 `log2` 的纹理 footprint，再通过指数运算恢复 width：
+
+```hlsl
+uniform sampler2D filterMap;
+
+float filterwidthFromTexture(float2 uv) {
+  float log2width = (255.0 / 16.0) * tex2D(filterMap, uv).x;
+  return exp2(-log2width);
+}
+```
+
+这里的比例因子来自资源编码：纹理通道通常归一化到零到一，写入 mip 的 level 还可以额外乘一个常数以扩大有效范围。实际工程要把 `filterMap` 的尺寸、mip 数、格式、过滤模式、寻址模式和解码系数作为同一个资源契约版本化。
+
+<GpuGemsCh25FilterWidthPipelineDiagram />
+
+## 3. 用 width 过滤程序函数，而不是只画得更模糊
+
+得到 width 后，最简单的 checker 近似是围绕当前坐标采样两个边界并计算平均；更复杂的程序函数可以选择一个预过滤 LUT、积分表达式或按 width 调整采样数量。目标是让函数变化的频率不超过当前像素能够表示的频率。
+
+```hlsl
+float width = filterwidthFromTexture(uv);
+float2 lo = uv - 0.5 * width;
+float2 hi = uv + 0.5 * width;
+float average = checkerIntegral(hi) - checkerIntegral(lo);
+return average / max(width, 0.0001);
+```
+
+过滤函数的误差方向很重要：width 略高会产生过度模糊，但通常比 width 过低造成 alias 更可接受。对各向异性表面，单个 isotropic width 会丢失方向信息；可以分别保存 x、y 变化，或使用多个样本估计椭圆 footprint，但那会增加带宽和 shader 成本。
+
+## 4. 上下限、压缩与 profile 兼容性
+
+<GpuGemsCh25LimitationsDiagram />
+
+编码 mipmap 的最高级别限制了最大可分辨 width：当函数变化快到需要比顶层还大的过滤范围时，多个不同的大 width 都会返回同一个顶层值，结果可能重新 alias。反过来，base level 限制了最小 width：缓慢变化的值会被当成同一个最细 level，造成轻微过度过滤或 width 高估。
+
+这种方法的性能接近 derivative 版本，却需要一个 texture unit 和额外纹理内存。因为每一级的纹理值是常量，它很适合压缩格式；但压缩、通道归一化和 mip 过滤不能改变 level 的单调关系。发布前应在 profile 支持、资源大小、缓存命中、最大最小变化速度和 fallback 行为之间做完整测量。
+
+## 5. 动手实验：比较两条 width 路径
+
+先预测四个变化：提高 pattern scale 或 screen motion 会扩大真实 width；降低 mipmap range 会让 texture method 在极端快变或慢变处失真；prefilter quality 降低会提高 checker alias；`ddx/ddy` 与 encoded filterMap 的 width 应在覆盖范围内接近，但不必逐像素完全相等。
+
+<GpuGemsCh25FilterWidthLab />
+
+这个实验用确定性的 checker 柱状图表达估计关系，不替代 GPU profiler。发布前要对近景、远景、掠射角、快速运动、静止平面、不同纹理坐标函数、资源压缩和不支持 derivatives 的目标 profile 回归，并保存 reference width、alias、ALU、texture unit 和显存数据。
+
+## 小结：用硬件选择 mip 反推出程序变化率
+
+- filter width 描述一个像素覆盖的程序坐标范围，是 procedural antialiasing 的输入。
+- derivative 版用 `ddx/ddy` 直接估计局部变化，但并非所有 fragment profile 都支持。
+- filterMap 为每级 mip 写入可解码 level 值，利用纹理硬件返回的 mip 选择近似 `log2 width`，再用 `exp2` 恢复宽度。
+- 这个方法成本接近 derivative 路径，却消耗 texture unit 和纹理内存；常量 mip 很适合压缩，但资源契约必须保持单调。
+- mipmap 上下限会夹断极快或极慢的变化，发布实现要有覆盖范围测试和 fallback。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 25: Performance and Practicalities涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　标准 profile 中 `ddx(uv)` 的绝对值最大分量为 `0.125`，`ddy(uv)` 的最大分量为 `0.25`。按 `filterwidth()` 的各向同性定义，width 是多少？它变成原来的两倍时，checker 应如何调整过滤范围？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+width 是 `max(0.125, 0.25) = 0.25`。两倍后是 `0.5`，说明当前像素覆盖更宽的程序坐标范围；checker 应扩大积分或预过滤区间，而不是继续做单点 binary sample，否则会出现 alias。
 </Answer>
 
+**问题 2｜推导题**　`filterMap` 查表返回归一化值 `0.25`，解码公式是 `log2width = (255 / 16) × value`，随后 `width = exp2(-log2width)`。写出解码过程的近似值，并说明为何资源归一化不能遗漏。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`log2width` 约为 `15.9375 × 0.25 = 3.984375`，因此 `width` 约为 `2^-3.984375`，接近 `0.063`。如果忘记纹理通道的零到一归一化，解码会把实际 level 缩小约 255 倍，width 会被严重错误地夹到极端，导致全屏 alias 或过度模糊。
+</Answer>
+
+**问题 3｜独立实现题**　为不支持 `ddx/ddy` 的旧 fragment profile 设计 checkerboard 的抗锯齿方案。请说明 filterMap 的制作、运行时解码、覆盖范围限制和至少五个测试场景。
+
+<Answer>
+
+离线制作拥有完整 mip 链的 filterMap，每级填入可解码的 level 常量，确保过滤与通道归一化不会破坏单调关系。运行时用程序 UV 做一次 filterMap lookup，解码 fractional mip level 为 width，再用 width 选择 checker 的积分窗口或预过滤 LUT。限制包括最大最小可测 width、texture unit、显存、压缩误差和 profile 过滤模式；必要时对超范围切换固定安全 blur。测试应包含近景、远景、掠射角、快速相机运动、静止平面、不同 UV 函数、mip 边界、资源压缩和另一条支持 `ddx/ddy` 的参考路径。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="filter width">一个屏幕像素覆盖的程序坐标变化范围，用于决定过滤区域。</GlossaryItem>
+<GlossaryItem term="derivative">用相邻像素值差近似 fragment 中局部变化量的函数。</GlossaryItem>
+<GlossaryItem term="procedural antialiasing">通过预过滤或区域平均移除程序纹理中超过采样率的高频细节。</GlossaryItem>
+<GlossaryItem term="filterMap">每级 mip 存放可解码 level 值、用于间接估计 filter width 的辅助纹理。</GlossaryItem>
+<GlossaryItem term="mipmap level">纹理 mip 链中代表特定分辨率与过滤范围的层级编号。</GlossaryItem>
+<GlossaryItem term="isotropic filter width">用一个标量近似 x、y 方向最大变化范围的过滤宽度。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 25 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 25 “Fast Filter-Width Estimates with Texture Maps”的独立重写，保留程序抗锯齿、derivative、编码 mipmap、filterMap 解码与范围限制等核心技术线索，并将示例改写为可验证的 profile 兼容学习路径。原始章节：[NVIDIA GPU Gems Chapter 25](https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-25-fast-filter-width-estimates-texture-maps)
+
 </Attribution>
