@@ -1,0 +1,171 @@
+---
+title: "GPU Gems 2 · Chapter 3. Inside Geometry Instancing"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 3
+description: "把重复物体拆成共享的几何包与逐实例属性，比较 static batching、dynamic batching、vertex constants 和 Geometry Instancing API 的更新边界。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-3-inside-geometry-instancing"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-03
+---
+
+import {
+  GpuGems2Ch03BatchStrategiesDiagram,
+  GpuGems2Ch03DecisionMatrixDiagram,
+  GpuGems2Ch03GeometryInstancingLab,
+  GpuGems2Ch03PacketInstanceDiagram,
+  GpuGems2Ch03StreamFrequencyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch03-geometry-instancing";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能把可复用的顶点、索引、材质与逐实例的变换、颜色、动画参数分开描述
+- 能比较 static batching、dynamic batching、vertex constants 和 Geometry Instancing API 的更新代价与灵活性
+- 能根据实例是否静态、是否需要 skinning、数量是否超过常量容量，为一个场景选择合适策略
+- 能解释两个 vertex stream 的更新频率如何让 GPU 在不复制几何数据的情况下展开多个实例
+
+</Objectives>
+
+<Callout type="trap" title="不要把几何包和实例属性混成一份大顶点缓冲">
+**现象 →** 只是移动或换颜色，就要重传整棵树、整名士兵的顶点和索引，实例数量一多 CPU 带宽先耗尽。
+
+**原因 →** 把每个实例都烘焙成独立几何，失去了重复拓扑的共享关系。
+
+**修法 →** 将共享拓扑放入 GeometryPacket，把位置、旋转、缩放和材质索引放入 InstanceAttributes；只更新真正变化的那一侧。
+
+</Callout>
+
+<Callout type="trap" title="不要因为实例很多就默认选择 dynamic batching">
+**现象 →** 动画物体能正确变化，但每帧 CPU 构建和上传批次，帧时间随实例数线性上涨。
+
+**原因 →** dynamic batching 的灵活性是用每帧重写实例数据换来的；对只改变变换的同拓扑物体，这个代价没有必要。
+
+**修法 →** 先确认是否需要 skinning 或不同几何；若只是不同变换，优先比较 Geometry Instancing API 或其他能保留静态几何 stream 的路径。
+
+</Callout>
+
+<Callout type="trap" title="不要把 vertex constants 当成无限长的实例数组">
+**现象 →** 少量实例显示正常，数量增大后实例被截断，或者 shader 读取到了下一组数据。
+
+**原因 →** 常量寄存器容量有限，而且该方法要把实例变换塞进 vertex shader 可访问的常量空间。
+
+**修法 →** 把常量容量当成硬边界；超出后改用动态 stream 或 Geometry Instancing API，并用实际绘制批次验证上限。
+
+</Callout>
+
+重复的树、石头、士兵和粒子往往共享同一张网格，却拥有不同的位置、朝向、颜色或动画状态。最直接的做法是复制整套顶点；这样代码容易写，但 GPU 看到的是许多份相同拓扑，内存和提交次数一起增长。
+
+本章把问题拆成两个更新频率：几何本身通常很少变，实例属性可能每帧变。只要保持这两个频率分离，渲染器就能用一个 GeometryPacket 生成很多 GeometryInstance。
+
+## 1. 先分清 packet、attributes 与 instance
+
+<Term def="可被多个实例共享的顶点、索引、材质和拓扑描述">geometry packet</Term>是“不变的那一侧”。它描述三角形如何连接、顶点有哪些属性，以及这批几何使用哪套材质；它不应该因为某一棵树移动而被复制。
+
+<Term def="描述单个实例变换、颜色、骨骼入口或其他逐实例数据的记录">instance attributes</Term>是“变化的那一侧”。一条记录可以包含模型矩阵、颜色、LOD 选择或动画相位。它的布局要由 vertex shader 约定，不能把 packet 中的顶点索引误当成实例编号。
+
+<Term def="将一个 geometry packet 与一条 instance attributes 记录组合后的可绘制对象">geometry instance</Term>是渲染器真正提交的逻辑对象。多个实例可以共享 packet，但每个实例仍需有自己的变换和可见性状态。
+
+<GpuGems2Ch03PacketInstanceDiagram />
+
+这个拆分还影响批次排序：渲染器可以先按材质和 GeometryPacket 分组，再在组内排列实例属性。这样状态切换发生在批次边界，而不是每遇到一个物体就重新绑定整套几何。
+
+## 2. 四种 batching 路径
+
+<Term def="预先把不会变化的相同或相关几何合并成较大缓冲的批处理方式">static batching</Term>把重复几何在加载期或构建期合并。它的 CPU 更新很低，适合室内装饰、静态建筑或完全不会移动的物体；代价是灵活性低，单个实例很难再独立更新。
+
+<Term def="每帧把实例或顶点数据重新流式写入 GPU 以获得最大更新自由度的批处理方式">dynamic batching</Term>把数据更新放到帧循环里。它适合需要 skinning、每个实例顶点真正不同，或其他静态布局无法表达的场景，但上传和 CPU 组批的代价最高。
+
+<GpuGems2Ch03BatchStrategiesDiagram />
+
+第三条路径是把变换写入 vertex shader 可读的常量寄存器。它比复制几何轻，但实例数量被常量容量限制；同时 shader 需要按实例索引读取正确的矩阵，不能把“数量很多”当作它的优势。
+
+<Term def="把每个实例的变换等数据放入 vertex shader 常量空间的实例化方式">vertex constants instancing</Term>适合实例少、属性结构固定且 shader 可控的批次。若实例需要复杂的动态数据，或者数量已经接近寄存器上限，就应该换用真正的实例属性 stream。
+
+## 3. Geometry Instancing API：让 GPU 组合两条 stream
+
+<Term def="以静态几何 stream 加动态实例属性 stream，并用 stream frequency 让 GPU 重复几何的实例化接口">Geometry Instancing API</Term>将 GeometryPacket 放进一个 stream，将 InstanceAttributes 放进另一个 stream。顶点 stream 对一个实例反复使用，属性 stream 每个实例提供一次，GPU 在顶点阶段把二者组合。
+
+<GpuGems2Ch03StreamFrequencyDiagram />
+
+这条路径的边界必须说清楚：它节省的是重复几何的内存和 CPU 组批成本，不会把不同拓扑魔法般变成相同拓扑。若实例需要不同顶点数量或不同索引结构，就要拆批、改用 dynamic batching，或采用更合适的几何表示。
+
+## 4. 用场景而不是口号做选择
+
+<GpuGems2Ch03DecisionMatrixDiagram />
+
+可以用三问快速筛选：第一，所有对象是否真的共享一个 GeometryPacket？第二，变化发生在变换和少量属性，还是顶点本身需要重写？第三，实例数是否超出 vertex constants 的可用容量？
+
+静态建筑优先考虑 static batching；大量需要骨骼或顶点级动画的士兵可以接受 dynamic batching；少量、布局稳定的实例可用 vertex constants；植被、树木和粒子这类同拓扑的大量副本，则更适合保留静态几何 stream，再更新实例属性。
+
+## 5. 动手实验：改变实例属性的更新边界
+
+先预测：把实例数量从 12 调到 24，哪种策略仍然只需要一份三角形拓扑？再打开或关闭动画，观察“静态几何”与“实例属性”哪一侧发生变化。
+
+<GpuGems2Ch03GeometryInstancingLab />
+
+实验中的三角形刻意保持同一拓扑。策略选择只改变数据路径说明，实例数量改变只改变属性记录的数量；这能帮助你把“画了很多物体”和“复制了很多几何数据”区分开。
+
+## 小结
+
+- geometry packet 保存可共享的拓扑，instance attributes 保存逐实例变化。
+- static batching 最省更新，dynamic batching 最灵活，vertex constants 受容量约束。
+- Geometry Instancing API 用两个更新频率不同的 stream 让 GPU 复用同一份几何。
+- 实例化只适用于相同 GeometryPacket；不同拓扑必须拆批或选择别的表示。
+- 场景选择应同时考虑静态程度、动画需求、实例数量和 shader 能力。
+
+<Exercises>
+
+**问题 1｜拆数据**　一个场景里有 500 棵同网格树，每棵树的位置和颜色不同。哪些字段应该进入 geometry packet，哪些字段应该进入 instance attributes？
+
+<Answer>
+
+顶点、索引、拓扑和共享材质属于 geometry packet；位置、旋转、缩放、颜色和动画相位属于 instance attributes。这样移动一棵树只更新一条属性记录，不需要重新上传整套顶点和索引。
+</Answer>
+
+**问题 2｜选策略**　100 个需要骨骼动画的相同士兵和 1000 个只改变变换的树实例，是否应该使用同一种 batching 策略？说明你的判断边界。
+
+<Answer>
+
+不应直接使用同一种策略。士兵的 skinning 让顶点或骨骼数据需要动态处理，可以选择 dynamic batching 或能表达动画的专用方案；树实例只改变变换，更适合保留静态 geometry packet，使用 Geometry Instancing API。最终还要用实际 shader 和带宽测量验证。
+</Answer>
+
+**问题 3｜找上限**　使用 vertex constants 后，实例数量从 50 增加到 200，画面只出现前一部分实例。你先查哪里，而不是立刻复制顶点？
+
+<Answer>
+
+先查 vertex shader 的常量寄存器布局、每个实例占用的寄存器数量、实例索引步进和批次上限。若确认是常量容量边界，就把实例拆成多个批次或迁移到实例属性 stream；复制几何会重新引入本章要避免的内存浪费。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="geometry packet">可共享的顶点、索引、材质和拓扑数据。</GlossaryItem>
+<GlossaryItem term="instance attributes">描述每个实例变换、颜色或动画状态的属性记录。</GlossaryItem>
+<GlossaryItem term="geometry instance">一个 geometry packet 与一条实例属性记录的组合。</GlossaryItem>
+<GlossaryItem term="static batching">在加载或构建阶段合并静态几何、减少运行时更新的方式。</GlossaryItem>
+<GlossaryItem term="dynamic batching">每帧流式重建或更新批次、换取顶点级灵活性的方式。</GlossaryItem>
+<GlossaryItem term="Geometry Instancing API">用静态几何 stream 和实例属性 stream 让 GPU 展开多个实例的接口。</GlossaryItem>
+<GlossaryItem term="vertex constants instancing">把逐实例数据放进 vertex shader 常量空间的实例化方式。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 3. Inside Geometry Instancing"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-3-inside-geometry-instancing"
+/>
