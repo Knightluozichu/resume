@@ -1,255 +1,239 @@
 ---
-title: "Chapter 40: Rendering Techniques"
+title: "GPU Gems 1 · Chapter 40. Applying Real-Time Shading to 3D Ultrasound Visualization"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 40
-description: "GPU Gems Part: Rendering Techniques, Chapter 40"
+description: "把非笛卡尔超声声学网格映射到 GPU 体渲染管线：从金字塔坐标、投影纹理采样和切平面，到时变 3D 数据的填充率与交互预算。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-40-applying-real-time-shading-3d-ultrasound"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-40
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh40CutPlaneDiagram,
+  GpuGemsCh40GridComparisonDiagram,
+  GpuGemsCh40ProjectiveMappingDiagram,
+  GpuGemsCh40UltrasoundLab,
+  GpuGemsCh40UltrasoundPipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch40-ultrasound-shading";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 40: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 40之间的关系是什么？
+- 能解释超声数据的非笛卡尔声学网格为什么不能直接套用 CT/MRI 的平行切片坐标
+- 能把探头 aperture、apex、range、azimuth 和 elevation 映射为顶点与片段阶段的投影纹理坐标
+- 能说明 3D 纹理、切平面、颜色/透明度查找表、alpha blending 和 clipping 如何共同构成实时体渲染
+- 能通过切片数、时变体积速率、金字塔顶角和 clipping 实验，在填充率、图像质量与交互延迟之间做出可解释的取舍
 
 </Objectives>
 
-## 为什么需要Chapter 40: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 40: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 40正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把超声声学网格当成均匀立方体">
+现象：CT 体渲染看起来正常，换成超声后深度越远，结构越被拉伸或错位。原因：超声束从探头发散，采样点落在金字塔、圆锥或其他非笛卡尔网格上，s、t 的间距随 range 改变。修法：先识别数据空间，再用投影纹理坐标把发散网格的几何关系写进顶点和片段阶段。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 40: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 40: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 40: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 40: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要在顶点阶段提前做非线性坐标除法">
+现象：切片边缘采样正确，内部却出现条纹、错位或随视角变化的纹理漂移。原因：顶点坐标会在三角形内部线性插值，不能把需要在每个片段执行的 range 缩放提前算完。修法：顶点阶段传递带 w 的 projective coordinate，片段阶段先修正 r，再执行 projective 3D texture lookup。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要只看体纹理分辨率而忽略 fill rate">
+现象：体数据并不大，帧率却随切片数和视口面积快速下降。原因：体渲染通常要为每层切片生成许多 fragment，透明合成还会反复读写颜色缓冲，瓶颈可能在光栅化和片段程序。修法：测量有效片段、体外片段、纹理读取和切片重算；用 clipping、合适的代理几何和采样率控制每帧预算。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 40 章把上一章的通用体渲染推进到一个更棘手的场景：实时显示时变的三维医学超声。CT 和 MRI 通常采样在笛卡尔网格；超声探头发出声束，越离开探头，采样线越发散，天然形成金字塔、圆锥或柱面网格。心脏等器官还要求每秒渲染多个体积，才能让运动可被观察。
 
-## 性能考量
+本章不是医疗诊断建议，也不把历史 OpenGL/Cg API 当成现代实现的唯一答案。重点是数据空间、坐标变换、GPU 阶段职责与填充率预算：今天可以用现代 3D texture、vertex/fragment shader、compute pipeline 或其他图形 API 实现同一数据流，但几何关系仍然要被正确表达。
 
-### 批量操作
+## 1. 实时超声的任务：在时间维度里看懂体数据
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="把来自超声探头的空间采样与时间序列作为一个可交互渲染的三维医学体数据">3D ultrasound</Term> 不只是“很多二维图片叠起来”。扫描器沿 range 方向记录离探头的距离，沿 azimuth 方向记录横向声束位置，沿 elevation 方向记录切面位置；如果再加入时间，每一帧就是一个 volume，整个序列就是 4D 数据。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+医学用户熟悉二维影像，却不容易直接理解三维数组内部的结构。体渲染通过颜色、透明度和阴影把内部组织映射成一张画面，但实时场景多了一个硬约束：视角、传递函数和 volume index 可能持续变化，渲染器必须把数据留在 GPU，避免每一帧在 CPU 与 GPU 之间搬运完整体积。
 
-### 避免 CPU-GPU 同步点
+<GpuGemsCh40UltrasoundPipelineDiagram />
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+一条可执行的管线可以这样拆：
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+1. **输入**：扫描器产生声学网格中的样本，主机负责上传或选择当前 volume。
+2. **顶点阶段**：根据相机、数据空间和金字塔参数生成切平面顶点与带 w 的纹理坐标。
+3. **片段阶段**：修正 projective coordinate，采样 3D ultrasound volume，再查颜色和透明度表。
+4. **合成**：按切片顺序用 alpha blending 累积，必要时与不透明几何共享深度。
+
+对于快速运动的心脏，体积速率和每个体积的切片数会共同决定帧预算。先做数据空间和采样预算，往往比一开始调颜色更能避免“静态示例很好、实时序列卡顿”的返工。
+
+## 2. 从笛卡尔网格到声学网格
+
+CT 和 MRI 常见的笛卡尔网格中，x、y、z 方向的采样线平行，3D texture 坐标可以随切平面线性插值。超声声束从探头上的 aperture 发出，在更远的 range 处覆盖更大的横向区域。把它画成二维截面，就是一个顶点位于 apex 的金字塔；三维情况下则形成金字塔或近似圆锥。
+
+<Term def="用一个 apex 和 aperture 描述声束发散、并让横向坐标随 range 线性缩放的非笛卡尔数据网格">pyramidal grid</Term> 可以被看成“加了深度缩放的笛卡尔网格”。令 `r` 表示归一化 range，原始的 `s`、`t` 表示 azimuth 和 elevation；随着 `r` 增大，横向范围需要按 aperture 与 apex angle 做线性调整。重要的是只缩放 s、t，不要把 range 也错误地缩放，否则体数据会沿深度方向越看越长。
+
+<GpuGemsCh40GridComparisonDiagram />
+
+这个抽象有两个好处。首先，网格的非线性几何被压缩成少数 uniform 参数；其次，切片仍然可以是包围体的矩形，顶点程序只需传递随位置变化的坐标。对真实探头，如果声学网格是圆锥或其他形状，可以先沿 range 方向重采样到金字塔网格，或者在同一坐标框架中扩展缩放函数。
+
+## 3. 切平面：怎样让光栅化器遍历体
+
+<Term def="穿过体数据包围盒、负责触发纹理采样的一层代理多边形">cut-plane</Term> 不是解剖表面，而是一个采样平面。将多层切平面按远到近或近到远绘制，每个片段都可以取得一个 3D texture 坐标，片段程序再完成分类和合成。
+
+有两种常见代理几何：包围矩形和切平面与体包围盒的交集多边形。包围矩形简单，顶点可以预存，适合视角变化频繁的交互；代价是矩形覆盖体外区域，需要 clipping 或边界纹理值抑制无效片段。交集多边形只光栅化体内区域，能减少片段，但相机方向改变时必须重算交点，CPU 重算后还可能需要重新上传顶点。
+
+<GpuGemsCh40CutPlaneDiagram />
+
+一个简单的渲染循环可以表达成：
+
+```text
+for plane in sortedCutPlanes:
+    bind(volumeTexture, colorMap)
+    draw(plane)
+    fragment:
+        texCoord = projectiveCoord(vertexOutput)
+        value = sample3D(volumeTexture, texCoord)
+        colorAlpha = lookup(colorMap, value)
+        blendOver(colorAlpha)
 ```
 
-### 内存对齐
+如果使用包围矩形，必须定义体外纹理坐标的行为：clamp to border、clamp to edge 并把边界值设为零，或使用 clipping planes。不要依赖“纹理坐标刚好不会越界”的假设；相机旋转、插值精度和金字塔缩放都会把片段带到原始体数据之外。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. Projective texture mapping：把发散关系交给 GPU
 
-## 验证层检查
+<Term def="把带有齐次 w 的纹理坐标传过顶点插值，并在片段阶段完成非线性除法或缩放以访问体纹理的方法">projective texture mapping</Term> 的核心是把 range 相关的缩放编码进坐标的 w。顶点程序先计算笛卡尔坐标对应的 `s`、`t`、`r`，再让 `w` 表示当前位置需要的金字塔缩放；片段程序接到插值后的坐标，完成最终的 `r` 修正和 projective lookup。
 
-启用验证层后，Chapter 40: Rendering Techniques相关的常见错误会被捕获：
+<GpuGemsCh40ProjectiveMappingDiagram />
 
+设 normalized aperture 为 `a`，金字塔参数为 `k`，可以把缩放写成概念公式：
+
+```text
+w = a + r · k
+s′ = s - 0.5 + 0.5 · w
+t′ = t - 0.5 + 0.5 · w
+r′ = r · w
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+这里的具体常数取决于数据空间、包围盒和顶点坐标约定；不变的部分是横向坐标围绕中心轴缩放，range 坐标不能被同一缩放误伤。因为 `r′` 是非线性结果，不能只在顶点阶段输出一个已经除好的值，让三角形内部做线性插值；必须把足够的信息传入片段阶段。
+
+片段 shader 最小逻辑可以是：
+
+```c
+float3 projectiveSample(float4 coord, Texture3D volume, Texture1D colorMap) {
+    coord.z = coord.z * coord.w;
+    float value = sample3DProjective(volume, coord);
+    return lookupColor(colorMap, value);
+}
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+现代 API 的函数名会不同，但调试时可以把坐标分成三份可视化：原始数据空间坐标、经过 w 修正的纹理坐标、最终命中的体素值。只看最后的颜色，很难分辨是坐标错误、颜色表错误还是 alpha 合成错误。
 
-## 本章要点
+## 5. 分类与合成：颜色表不只是 colormap
 
-1. Chapter 40: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<Term def="同时存储预乘颜色与透明度、让每个体采样直接成为可混合片段输出的查找表">opacity-weighted transfer function</Term> 把体数据值映射成 RGBA 光学属性。RGB 应该已经乘过 alpha，这样硬件用 `source = 1`、`destination = 1 - sourceAlpha` 的 over blending 时，当前样本对最终颜色的贡献与吸收一致。
+
+假设第 i 个切片送入的片段颜色是 `I_i`、透明度是 `a_i`，上一层的帧缓冲像素是 `P_{i-1}`，概念上的更新为：
+
+```text
+P_i = (1 - a_i) · P_{i-1} + I_i
+```
+
+从远到近绘制时，前方不透明样本自然会压低后方贡献；从近到远绘制时要使用相应的 under 规则。切片顺序、blend factor 和深度测试必须成套验证，否则同一 volume 旋转时可能出现亮度、遮挡和结构关系反转。
+
+传递函数如果直接输出颜色和 alpha，再在片段程序中相乘，可能减少量化误差，却会增加指令和 fill-rate 成本。预乘表能把这一步放到表格构建阶段，适合对每个片段都执行同一查找的实时路径。对医学数据，颜色和透明度的语义也要写入数据契约，避免把显示用的调色板误当作测量结果。
+
+## 6. 时变 volume：为心脏而不是单张 CT 优化
+
+3D 超声的难点不是只渲染一个大体积，而是连续接收多个体积。对于较慢的胎儿面部，较低 volume rate 也许足够；对于快速运动的心脏，需要在每个心动周期里渲染更多 volume，才能减少运动跳跃。可操作的时间预算是：
+
+```text
+frame budget = upload / select volume
+             + cut-plane update
+             + rasterization and fragment shading
+             + blending and display
+```
+
+尽量让 3D texture、颜色表和切片顶点驻留在 GPU。时间变化只切换 volume layer、更新少量纹理或使用环形缓冲；如果每个 volume 都先读回 CPU、重新编码、再完整上传，所谓 GPU 加速可能被同步和传输抹平。
+
+如果视角变化，包围矩形可以复用但可能产生更多体外片段；交集多边形可以减少有效片段，但增加几何重算。对时变数据，频繁视角和频繁 volume update 的组合要分别测量，不能用单张静态 CT 的结果推断医疗交互体验。
+
+## 7. 性能：识别 fill-rate bound 的真实来源
+
+<Term def="渲染速度主要由可生成和处理的 fragment 数量、片段程序复杂度与颜色缓冲带宽限制的状态">fill-rate bound</Term> 是这类体渲染的常见状态。体纹理可能只有几百个 slice，但每个 slice 可以覆盖很大的屏幕区域；透明合成还会让每个片段反复读取和更新颜色缓冲。
+
+可以按以下顺序排查：
+
+1. **片段覆盖**：包围矩形是否让大量体外区域进入片段阶段？开启 clipping 后有效片段减少多少？
+2. **切片数**：减少采样率是否降低画质，或者只是让 opacity correction 失配？
+3. **片段指令**：投影坐标、3D lookup、颜色表查找和额外的逆运算分别占多少成本？
+4. **带宽与格式**：体纹理格式是否过宽，颜色表是否能预乘，缓存是否能隐藏依赖读取？
+5. **几何更新**：相机变化时，交集多边形重算和顶点上传是否超过省下的 fragment 工作？
+
+预积分体渲染可以减少切片间的 moiré 与采样伪影，但通常会牺牲一部分帧率；应该把它作为质量旋钮，不是默认免费升级。手工优化片段程序集在旧硬件上可能有效，现代实现则应先用 GPU profiler 和 shader compiler 输出确认瓶颈，再决定是否改写坐标计算。
+
+<GpuGemsCh40UltrasoundLab />
+
+## 8. 复用清单：把非笛卡尔体数据做成可验证管线
+
+1. **数据空间**：写清 range、azimuth、elevation 的轴顺序、值域、aperture、apex angle 和 volume rate。
+2. **坐标空间**：保留数据空间、切平面空间、视空间和纹理空间的转换，避免在一个矩阵里混入未说明的缩放。
+3. **顶点/片段边界**：顶点阶段生成带 w 的坐标，片段阶段执行非线性 range 修正和 3D lookup。
+4. **切片策略**：在包围矩形和交集多边形之间用有效片段与几何更新成本做选择。
+5. **合成证据**：验证切片顺序、预乘 alpha、blend factor、clipping 和体外纹理值。
+6. **时间预算**：用目标 volume rate、相机变化和目标设备 profiler 测量 upload、fill rate、shader、blend 与 display。
+
+## 小结
+
+- 3D 超声通常来自发散的非笛卡尔声学网格；把它当成普通均匀立方体会造成深度拉伸和纹理错位。
+- 金字塔网格可以用 aperture、apex 和 range 相关缩放近似描述；projective texture mapping 让 GPU 在片段阶段恢复正确的三维采样坐标。
+- 切平面是遍历体数据的代理几何；包围矩形简单但会产生体外片段，交集多边形有效但需要随视角重算。
+- opacity-weighted transfer function、alpha blending 和切片顺序共同决定图像是否正确；不能只调颜色表而忽略合成公式。
+- 实时 4D 超声常受 fill rate、片段指令、3D texture 带宽和 volume rate 约束；clipping、预积分、采样率和 GPU resident 数据是可测量的工程旋钮。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 40: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜坐标空间**　为什么 CT/MRI 的笛卡尔切片可以直接线性插值，而发散超声网格需要额外的金字塔坐标缩放？请指出哪些坐标应随 range 变化。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+笛卡尔网格中采样线平行，横向间距不随深度变化；超声声束从探头 aperture 发散，离探头越远，同一 azimuth/elevation 范围覆盖的空间越大。因而 s、t 等横向坐标要按 range 做线性缩放，r 仍代表深度方向，不能把同一个缩放错误地应用到 r。
 </Answer>
 
+**问题 2｜顶点与片段阶段**　为什么不能在顶点阶段直接算完金字塔的非线性纹理坐标？projective coordinate 中的 w 起什么作用？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+三角形内部的顶点输出会线性插值，而 range 缩放是随位置变化的非线性关系；如果在顶点阶段除完，内部片段会命中错误的体素。w 保存当前位置所需的缩放信息，顶点阶段传递 s、t、r、w，片段阶段先用 w 修正 r，再执行 projective 3D texture lookup，从而让每个片段获得正确的数据空间位置。
+</Answer>
+
+**问题 3｜性能诊断**　一个 3D 超声 renderer 在切片数增加时明显变慢，但体纹理上传并没有变慢。你会先检查什么？如何判断使用交集多边形是否值得？
+
+<Answer>
+
+先检查有效片段、体外片段、片段程序指令、3D texture lookup、颜色缓冲带宽和 alpha blending；这类路径常是 fill-rate bound，不应只看上传。交集多边形值得使用的条件是它显著减少体外 fragment，省下的片段与带宽成本超过每次视角变化的交点计算和顶点上传；应在相机固定、相机快速变化和时变 volume 三种场景中分别测量。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="3D ultrasound">来自超声探头的三维空间采样，通常还可沿时间形成时变体数据。</GlossaryItem>
+<GlossaryItem term="pyramidal grid">用 apex、aperture 和 range 相关缩放描述发散声束的非笛卡尔网格。</GlossaryItem>
+<GlossaryItem term="projective texture mapping">使用带 w 的纹理坐标，在片段阶段完成投影修正后采样体纹理的方法。</GlossaryItem>
+<GlossaryItem term="cut-plane">穿过体数据包围盒、触发每层体纹理采样的代理多边形。</GlossaryItem>
+<GlossaryItem term="opacity-weighted transfer function">直接提供预乘颜色和透明度、可交给 alpha blending 的查找表。</GlossaryItem>
+<GlossaryItem term="fill-rate bound">性能主要受 fragment 数量、片段程序和颜色缓冲带宽限制的状态。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 40 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 40 “Applying Real-Time Shading to 3D Ultrasound Visualization”的独立重写，保留 4D 超声背景、笛卡尔与金字塔声学网格、切平面、projective texture mapping、顶点/片段程序协作、预乘颜色查找与 fill-rate 性能约束等核心线索，并将历史 OpenGL/Cg 示例整理为可验证的现代 GPU 体渲染决策路径。原始章节：[NVIDIA GPU Gems Chapter 40](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-40-applying-real-time-shading-3d-ultrasound)
+
 </Attribution>

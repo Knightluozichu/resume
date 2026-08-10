@@ -13257,6 +13257,20 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh39VolumeRenderingLab: module0.GpuGemsCh39VolumeRenderingLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/08-rendering-techniques/gpugems-ch40": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch40-ultrasound-shading");
+    return {
+      GpuGemsCh40CutPlaneDiagram: module0.GpuGemsCh40CutPlaneDiagram,
+      GpuGemsCh40GridComparisonDiagram:
+        module0.GpuGemsCh40GridComparisonDiagram,
+      GpuGemsCh40ProjectiveMappingDiagram:
+        module0.GpuGemsCh40ProjectiveMappingDiagram,
+      GpuGemsCh40UltrasoundLab: module0.GpuGemsCh40UltrasoundLab,
+      GpuGemsCh40UltrasoundPipelineDiagram:
+        module0.GpuGemsCh40UltrasoundPipelineDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
