@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:27:53.974Z；旧版分数不迁移。
+> 2026-08-10T06:35:29.478Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2213
+- failed：2212
 - queued：344
-- passed：1146
+- passed：1147
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -48,12 +48,12 @@
 | 35 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
 | 36 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
 | 37 | shader-practice | 21 | 21 | 0 | 0 | 63 |
-| 38 | gpu-gems | 48 | 21 | 0 | 27 | 42 |
-| 39 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
-| 40 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
-| 41 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
-| 42 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
-| 43 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 38 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
+| 39 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
+| 40 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
+| 41 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
+| 42 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
+| 43 | gpu-gems | 48 | 20 | 0 | 28 | 40 |
 | 44 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
 | 45 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
 | 46 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
