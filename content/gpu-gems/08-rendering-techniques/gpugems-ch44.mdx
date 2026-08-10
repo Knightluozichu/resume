@@ -1,255 +1,179 @@
 ---
-title: "Chapter 44: Rendering Techniques"
-type: B
-section: "计算机图形学与渲染"
+title: "GPU Gems 2 · Chapter 44. A GPU Framework for Solving Systems of Linear Equations"
+type: C
+section: "GPU Gems 2 Part VI · Simulation and Numerical Algorithms"
 order: 44
-description: "GPU Gems Part: Rendering Techniques, Chapter 44"
+description: "从标量、向量和矩阵的纹理表示，到矩阵-向量乘法、归约和共轭梯度，搭建能在 GPU 上求解线性系统并推进 2D 波方程的数值框架。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-44-gpu-framework-solving"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-44
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh44ConjugateGradientDiagram,
+  GpuGemsCh44LinearSolverLab,
+  GpuGemsCh44MatrixLayoutDiagram,
+  GpuGemsCh44MatrixVectorDiagram,
+  GpuGemsCh44VectorTextureDiagram,
+  GpuGemsCh44WaveSchemeDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch44-linear-systems";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 44: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 44之间的关系是什么？
+- 能把标量、向量和 dense、banded、sparse 矩阵映射到适合 GPU 访问的纹理表示
+- 能解释矩阵-向量乘法、归约和内存复用如何组成 GPU 共轭梯度求解器
+- 能通过实验推进共轭梯度迭代，比较矩阵布局、纹理 packing 和 residual 的变化
+- 能回答：为什么 2D 波方程的显式更新便宜但可能不稳定，而 Crank–Nicolson 需要线性系统求解？
 
 </Objectives>
 
-## 为什么需要Chapter 44: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 44: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 44正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把所有矩阵都按 dense 纹理存储">
+现象：三对角波算子也分配完整矩阵，取样次数和中间纹理迅速膨胀。原因：PDE 离散后的矩阵通常是 banded 或 sparse，绝大多数元素为零，dense 表示丢掉了结构信息。修法：先标注非零模式，再选择 dense、banded 或 sparse 布局，并让 matrix-vector 操作匹配该布局。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 44: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 44: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 44: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 44: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把 GPU 归约当成普通逐元素运算">
+现象：每个 fragment 都能算乘法，却无法得到 `dot(p, q)` 或 residual。原因：点积和平方和需要把多个元素合并为一个标量，还涉及中间纹理和多级 reduction。修法：把 reduceAdd 作为框架一级算子，管理临时纹理、归约层级和单值读取。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要用过大的显式时间步推进波方程">
+现象：水面刚开始运动就出现发散尖峰或整张高度场变成噪声。原因：显式差分方法有条件稳定性，时间步超过空间步长和波速允许的范围后误差会放大。修法：限制时间步，或把下一帧写成线性系统，使用 Crank–Nicolson 加共轭梯度获得更稳定的隐式更新。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+把偏微分方程离散成网格之后，问题不再是“画出一张纹理”，而是不断对大量数值做加法、乘法、点积和求解。CPU 可以直接使用数组和指针；GPU 则更擅长纹理取样和并行写入，因此需要先约定数值对象在纹理里的形状。
 
-## 性能考量
+本章的框架把底层存储和 fragment program 封装成向量、矩阵、归约等可组合的操作。上层算法只关心 `A * x`、`x + αp` 以及 residual 是否变小；底层负责把它们变成纹理分配、坐标、渲染目标和临时内存。
 
-### 批量操作
+## 1. 统一表示：标量和向量也要有纹理地址
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="把标量、向量和矩阵的数值布局、纹理坐标和访问约定统一起来的 GPU 数值软件层">GPU linear algebra framework</Term> 的第一步不是写 solver，而是设计表示。一个 GPU 上的单浮点值看似可以直接作为 uniform，但许多操作会生成并再次读取标量；把它放在单元素纹理里，才能和向量、矩阵共享同一套访问路径。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh44VectorTextureDiagram />
 
-### 避免 CPU-GPU 同步点
+一维向量可以重排成二维纹理，让相邻数据落在相近的 texel。为了减少内部表示大小，原章进一步把连续的 2×2 元素打包到一个 RGBA texel。这个布局不是视觉上的“把四个颜色混在一起”，而是一个可逆的地址协议：给定逻辑索引，就能算出 texel 坐标和 channel。
+
+<Term def="GPU 纹理中的标量、向量或矩阵元素排列、打包和坐标访问协议">texture representation</Term> 还决定边界行为：长度不是 2 的倍数时要处理 padding，矩阵对角线或稀疏条带要保持索引一致，临时纹理要在下一次操作前可复用。表示层一旦稳定，上面的数值算子才能组合。
+
+## 2. 按非零结构选择矩阵布局
+
+矩阵经常比向量稀疏。dense 矩阵几乎每个元素都非零；banded 矩阵只在若干条对角带上有值；sparse 矩阵的非零项分布更零散。三者不能只换一个类型名，因为它们的 texture fetch、地址计算、内存占用和输出写法都不同。
+
+<GpuGemsCh44MatrixLayoutDiagram />
+
+对由 PDE 离散得到的邻域算子，banded 布局通常比完整 dense 矩阵更合适；对通用输入或小矩阵，dense 可能更简单。原章的框架支持多种矩阵和向量类型，目标是让上层 solver 不必知道每个非零值究竟存在哪一张纹理里。
+
+## 3. matrix-vector：让位置和坐标承担索引
+
+<Term def="将矩阵每一行与向量做点积并写入对应输出元素的线性代数基本操作">matrix-vector product</Term> 是共轭梯度和波方程更新的核心。对 `x = A · b`，输出 `xᵢ` 等于第 i 行与 b 的点积。GPU 实现可以让点的位置编码矩阵列索引，让纹理坐标编码向量取样位置；渲染这些点时，结果自然落到输出向量的正确位置。
+
+<GpuGemsCh44MatrixVectorDiagram />
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+// 抽象 API：隐藏矩阵的实际纹理布局
+clMatrix->matrixVectorOp(CL_NULL, p, nullptr, q);
+// q = A * p
+clR->subtractVector(q, r, 1.0f);
+// r = r - q（具体系数由 solver 控制）
 ```
 
-### 内存对齐
+这里的 API 名称体现框架目标，而不是要求读者照抄旧版 C++。关键是每个算子有明确的输入、输出和布局契约：不能因为换成 banded 矩阵就改变上层 `matrixVectorOp` 的语义。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. reduction 和可复用的临时内存
 
-## 验证层检查
+共轭梯度需要 `dot(r, r)`、`dot(p, q)` 这类 reduction。逐元素乘法仍然适合 fragment unit，但把 n 个结果收成一个标量需要反复缩小纹理：相邻元素先合并，再对中间结果继续合并，直到只剩一个值。
 
-启用验证层后，Chapter 44: Rendering Techniques相关的常见错误会被捕获：
+框架因此需要一个虚拟内存管理层，为 reduction 和中间向量共享临时纹理。复用的好处不是只省一次分配，而是让多轮 solve 不必不断创建和销毁 render target；代价是生命周期必须清楚，任何仍被后续算子读取的纹理都不能提前归还。
 
+## 5. 共轭梯度：把基础算子组成稳定迭代
+
+<Term def="在对称正定线性系统上沿互相共轭的搜索方向迭代，使残差逐步下降的线性方程求解方法">conjugate gradient</Term> 从初始解 `x` 开始计算残差 `r = b − A x`，令搜索方向 `p = r`。每轮先算 `q = A p`，用两个 reduction 得到步长 `α` 和方向系数 `β`，然后更新 x、r、p。每个变量都可以对应框架里的向量对象，矩阵只通过 matrix-vector 算子参与。
+
+<GpuGemsCh44ConjugateGradientDiagram />
+
+```cpp
+void solveIteration() {
+    A->matrixVectorOp(CL_NULL, P, nullptr, Q); // Q = A * P
+    P->reduceAdd(Q, Temp);                     // temp = dot(P, Q)
+    Rho->div(Temp, Alpha);                    // alpha = rho / temp
+    X->addVector(P, X, 1.0f, Alpha);          // X += alpha * P
+    R->subtractVector(Q, R, 1.0f, Alpha);     // R -= alpha * Q
+    R->reduceAdd(R, NewRho);                  // newrho = dot(R, R)
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+循环的停止条件可以是 residual 小于阈值，也可以是达到最大迭代次数。它并不保证任意矩阵都快速收敛：矩阵条件数、初始猜测、浮点精度和 reduction 误差都会影响实际表现。GPU 框架的价值在于把这些变量放到同一个可测量的算子图里。
 
-## 本章要点
+<GpuGemsCh44LinearSolverLab />
 
-1. Chapter 44: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+先预测：把 banded 切换为 dense，残差曲线会改变，还是只有 storage count 改变？把 RGBA packing 打开时，solver 的数学结果应该保持不变；如果结果变了，优先检查地址和 channel 映射，而不是怀疑共轭梯度公式。
+
+## 6. 从线性系统到 2D 波方程
+
+<Term def="把当前和下一时间层取平均以获得更稳定离散系统的隐式时间推进方案">Crank-Nicolson scheme</Term> 用当前和下一时刻的空间差分平均来离散 2D 波方程。显式方案可以直接从 `current` 和 `last` 算出 `next`，代码短且每次只做一轮矩阵-向量操作；但时间步过大就会不稳定。
+
+<GpuGemsCh44WaveSchemeDiagram />
+
+隐式方案把下一帧未知高度收进 `A · x(next) = b(current)`，因此每个时间步都要调用一次线性系统 solver。这里共轭梯度不再是抽象的 benchmark，而是让水面或流体模拟在更宽松的时间步下保持稳定的工具。代价是每帧需要若干轮 matrix-vector、reduction 和向量更新。
+
+一个可审计的实现顺序是：先用 CPU 验证 central difference 的离散式，再用 GPU framework 验证单次 matrix-vector，然后比较显式与隐式同一时间步的结果，最后才优化 texture packing 和临时内存。这样可以把“数学错误”“布局错误”和“稳定性错误”分开定位。
+
+## 小结
+
+- GPU 线性代数框架先统一标量、向量和矩阵的纹理表示。
+- dense、banded、sparse 的非零结构决定不同的存储与 matrix-vector 路径。
+- reduction 是点积和 residual 的基础，需要分层归约与临时纹理管理。
+- 共轭梯度由 matrix-vector、归约和向量更新组合而成。
+- Crank-Nicolson 通过求解线性系统换取波方程的条件稳定性改善。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 44: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜布局选择**　一个二维波方程离散后每个网格点只与自己和四个邻居相连。为什么不应该默认用 dense 矩阵？列出选择 banded 或 sparse 布局时要验证的一个访问条件。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+这个算子绝大多数元素为零，dense 会为零值分配纹理并增加无意义的取样。若按 banded 或 sparse 存储，必须验证非零邻居的索引可以由当前输出位置稳定推导，并且每个有效项都能在 shader 中取到对应的系数和向量元素。
 </Answer>
 
+**问题 2｜改写 Demo**　让实验在每次迭代旁边显示 `q = A · p` 的向量，并比较 banded 与 dense 的矩阵-向量次数。为什么同样的 CG 公式可以复用两种布局？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+上层公式只依赖 `A · p` 的数学语义，不依赖 A 的物理存储。只要两种 layout 都实现同一输入输出契约，banded shader 可以只取邻带，dense shader 可以按行取完整矩阵，CG 仍然接收同一个 q。
+</Answer>
+
+**问题 3｜稳定性判断**　显式波方程开始发散，而隐式方案每帧变慢时，你会先改时间步、迭代次数还是矩阵布局？给出排查顺序。
+
+<Answer>
+
+先固定布局和 solver，减小显式时间步确认是否是条件稳定性问题；再检查隐式系统的 residual 和迭代上限，确认求解确实收敛；最后用 profiler 比较 matrix-vector、reduction 和临时纹理成本，再决定是否优化 banded 布局或 packing。不能用降低迭代次数掩盖未收敛的解。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="GPU linear algebra framework">把纹理存储和 fragment 运算封装成向量、矩阵、归约等可组合操作的 GPU 数值软件层。</GlossaryItem>
+<GlossaryItem term="texture representation">数值元素在纹理中的排列、打包、坐标和 channel 访问约定。</GlossaryItem>
+<GlossaryItem term="matrix-vector product">矩阵每一行与输入向量做点积，并把结果写到输出向量的对应位置。</GlossaryItem>
+<GlossaryItem term="conjugate gradient">沿互相共轭的方向逐步减小残差、求解特定线性系统的迭代方法。</GlossaryItem>
+<GlossaryItem term="Crank-Nicolson scheme">把当前和下一时刻平均起来的隐式差分方案，通常比简单显式推进更稳定。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 44 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 2 Chapter 44 “A GPU Framework for Solving Systems of Linear Equations”的独立重写，保留 Jens Krüger 与 Rüdiger Westermann 原章关于 GPU 线性代数框架、标量/向量/矩阵纹理表示、dense/banded/sparse 布局、matrix-vector、归约、临时纹理、共轭梯度、Poisson/2D 波方程和 Crank-Nicolson 的核心内容，并整理为可验证的现代 GPU 数值计算路径。原始章节：[NVIDIA GPU Gems 2 Chapter 44](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-44-gpu-framework-solving)
+
 </Attribution>
