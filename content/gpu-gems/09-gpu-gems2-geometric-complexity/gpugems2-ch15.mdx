@@ -1,0 +1,147 @@
+---
+title: "GPU Gems 2 · Chapter 15. Blueprint Rendering and Sketchy Drawings"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 15
+description: "用 G-buffer、image-space edge enhancement 和 depth sprite 构建 blueprint；再用 depth peeling、几何锚定的 uncertainty 与纹理扰动生成稳定的 sketchy rendering。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-15-blueprint-rendering-and-sketchy"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-15
+---
+
+import {
+  GpuGems2Ch15BlueprintCompositionDiagram,
+  GpuGems2Ch15BlueprintSketchyLab,
+  GpuGems2Ch15DepthPeelingDiagram,
+  GpuGems2Ch15IntermediateBuffersDiagram,
+  GpuGems2Ch15SketchyUncertaintyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch15-blueprint-sketchy";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明 blueprint 和 sketchy rendering 为什么都从中间渲染结果开始，而不是只靠最终 fragment color
+- 能从 normal/z buffer 的邻域不连续性提取 silhouette、border 和 crease edges
+- 能描述 depth peeling 如何得到多层 geometry，以及 depth sprite 如何恢复 image-based geometry 的深度测试
+- 能组合 visible/occluded edge maps 生成 blueprint，并用 depth masking 和 occlusion query 控制 pass 数
+- 能用几何属性驱动两套 edge/shade texture 的不同 uncertainty，降低 shower-door effect
+
+</Objectives>
+
+<Callout type="trap" title="不要只把最终颜色做边缘检测">
+**现象 →** 颜色相近但法线折角明显的结构消失，或者材质纹理被误判为结构边缘。
+
+**原因 →** blueprint 关注几何关系，单一 color buffer 不包含足够的法线与深度信息。
+
+**修法 →** 先 render-to-texture 保存高精度 normal buffer 和 z-buffer，再比较邻域 texels 生成 edge map；颜色只在最后的 compose pass 参与。
+
+</Callout>
+
+<Callout type="trap" title="不要把第一层 depth test 当成完整的隐藏线提取">
+**现象 →** blueprint 只有可见轮廓，看不到被前表面遮住的关键边缘。
+
+**原因 →**普通 depth test 只保留最小 z，无法告诉你同一像素后面的第二层、第三层几何。
+
+**修法 →** 用 depth peeling 按唯一深度层重复渲染，同时保存每层 depth/color map；compose 时以 depth sprite 进行正确深度合成。
+
+</Callout>
+
+<Callout type="trap" title="不要让 sketchy noise 只依赖屏幕坐标">
+**现象 →** 相机移动或物体动画时，笔触像贴在玻璃上滑动，出现 shower-door effect。
+
+**原因 →** image-space noise 没有关联底层几何的 position、normal 或 curvature，纹理扰动不随对象稳定。
+
+**修法 →** 将几何属性写入额外 G-buffer，或者沿 vertex normal 略微 enlarge geometry，把可靠的 object-space 信息延伸到边界附近，再分别驱动 edge/shade 的扰动。
+
+</Callout>
+
+非真实感渲染的难点不只是“画一条更粗的线”，而是让结果保留对象之间的空间关系。<Term def="把 3D 几何的法线、深度等属性写入纹理，供后续 image-space pass 复用的中间渲染结果">intermediate rendering result</Term>提供了这条桥：先把几何投影到纹理，再在屏幕对齐 quad 上做边缘增强、深度合成和风格化。
+
+<GpuGems2Ch15IntermediateBuffersDiagram />
+
+## 1. G-buffer 与 image-space edge enhancement
+
+先把 encoded normal 和高精度 z 写入两个 texture。对每个屏幕 fragment，采样上下左右或更大邻域的 texels，累积 normal discontinuity 和 z discontinuity，得到 edge intensity。<Term def="由 normal/z buffer 的邻域不连续性组成的单通道边缘强度纹理">edge map</Term>因此能同时发现 silhouette、border 和 crease；它不依赖最终材质颜色，也可以对单个对象独立计算。
+
+这种设计的收益是中间结果只生成一次，后续 blueprint 与 sketchy 两条路径都能复用。采样半径、法线差阈值和深度差阈值则决定边缘的敏感度；高精度 buffer 能减少远处或斜面上的误判。
+
+## 2. depth sprite：给屏幕图片恢复 z
+
+屏幕对齐 quad 自己的 rasterizer z 并不代表它所携带的 3D 图像深度。<Term def="把高精度 depth texture 作为屏幕 quad 的逐像素 z，并重新参与普通 depth test 的图像渲染方式">depth sprite</Term>在 fragment shader 中读取纹理 z，替换 quad 的 fragment depth；当 z 等于 far plane 的 1 时直接 discard，否则让普通 depth test 决定它能否进入 framebuffer。
+
+<GpuGems2Ch15DepthPeelingDiagram />
+
+这样，edge map、shade map 或 color layer map 就能像真正的几何一样和场景按深度合并。对于 blueprint，depth sprite 是把 image-space 的隐藏线重新放回正确空间关系的关键。
+
+## 3. blueprint：把可见和隐藏边缘都交给用户
+
+blueprint 需要可见边缘，也需要被遮挡但对理解结构有价值的边缘。<Term def="按深度排序逐次剥离屏幕上唯一深度层，得到 layer depth/color maps 的多遍渲染过程">depth peeling</Term>先抽取 layer 1，再以上一层深度为约束抽取 layer 2、layer 3，直到没有 fragment 或达到最大 depth complexity。
+
+每一层的 edge map 与 depth map 通过 depth sprite compose：fragment shader 读取 edge intensity，生成蓝色系 RGB 和由 intensity 控制的 alpha，再用 blending 叠加。<Term def="用目标组件达到指定可见片段比例作为 peeling 停止条件，动态限制隐藏层数量的优化">depth masking</Term>可以先保存指定组件的 depth mask，每次 peel 后用 occlusion query 统计已露出的片段；达到目标比例就停止，避免为了很少的深层像素付出完整 pass。
+
+<GpuGems2Ch15BlueprintCompositionDiagram />
+
+## 4. sketchy：从 edge 到不稳定但可控的笔触
+
+sketchy drawing 同时需要 edge map 与 surface color 的 shade map。对屏幕坐标 `(s, t)` 采样 noise，再用 2×2 matrix 得到不确定偏移，把坐标扰动到 `(s′, t′)`；edge 与 shade 使用不同 matrix，才能让轮廓和色块产生互相错开的手绘感。内区与外区的采样穿过原几何边界，因而可以得到略微溢出的 crayon-like patches。
+
+<Term def="控制 image-space 纹理坐标扰动幅度和方向的噪声/几何驱动偏移量，用来产生手绘不确定性">uncertainty</Term>若只从屏幕坐标计算，物体一动笔触就会游移。更稳定的路径是把 object-space position、normal 等写入额外 G-buffer，再用几何值参数化 noise；也可以沿 vertex normal 稍微扩大 connected component，让边界外近邻区域也有可用属性。
+
+<GpuGems2Ch15SketchyUncertaintyDiagram />
+
+最后把 perturb 后的 edge intensity 与 shade color 相乘，并借助 depth sprite 和普通深度测试与其他 3D 内容合成。如此既保留了风格，也不丢掉前后遮挡关系。
+
+## 5. 动手实验：质量、层数与稳定度
+
+下面的实验把 depth layers、终止阈值、uncertainty 和 object-space 锚定暴露出来。提高 layers 会露出更多隐藏结构，但增加 pass；提高 uncertainty 会增强手绘感，也会降低轮廓稳定度；关闭几何锚定则能直观看到 shower-door effect 的风险。
+
+<GpuGems2Ch15BlueprintSketchyLab />
+
+## 小结
+
+- normal/z G-buffer 是 blueprint 和 sketchy 复用的 intermediate rendering result。
+- 邻域 discontinuity 生成 edge map，能找出 silhouette、border 和 crease，而不被材质颜色绑死。
+- depth peeling 抽取隐藏的唯一深度层，depth sprite 让 texture image 重新参加逐像素 depth test。
+- blueprint 通过 depth-sorted edge layers、alpha blending 与 depth masking 表达可见和不可见结构。
+- sketchy 的 edge/shade 扰动要用几何属性约束 uncertainty，才能减少 shower-door effect。
+
+<Exercises>
+
+**问题 1｜中间结果**　为什么 blueprint 的 edge map 应该从 normal/z buffer 生成，而不是直接检测最终颜色？
+
+<Answer>
+
+normal 和 z 记录了几何朝向与深度，邻域不连续性可以识别 silhouette、border、crease；最终颜色还受到材质和光照影响，容易把纹理或颜色变化误判成结构边缘。
+</Answer>
+
+**问题 2｜隐藏线**　普通 depth test 为什么不能提取 blueprint 的第二层边缘？depth sprite 在这里解决了什么？
+
+<Answer>
+
+普通 depth test 只保留每个像素最小 z，后面的层被丢掉。depth peeling 逐层保存 depth/color map，compose 时 depth sprite 用保存的 z 替换屏幕 quad 的 z，再通过普通 depth test 以正确空间关系合成。
+</Answer>
+
+**问题 3｜风格稳定性**　如何让 sketchy drawing 有手绘不确定性，却不随相机产生 shower-door effect？
+
+<Answer>
+
+将 object-space position、normal 等几何属性写入额外 G-buffer，用它们参数化 noise 和 texture-coordinate perturbation；edge 与 shade 用不同矩阵形成风格差异。必要时沿 vertex normal 扩大 connected geometry，为边界外近邻区域提供属性。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="intermediate rendering result">写入纹理、供后续 image-space pass 复用的几何中间结果。</GlossaryItem>
+<GlossaryItem term="edge map">由 normal/z buffer 邻域不连续性得到的边缘强度纹理。</GlossaryItem>
+<GlossaryItem term="depth sprite">把 depth texture 作为屏幕 quad 逐像素 z 并重新参与 depth test 的渲染方式。</GlossaryItem>
+<GlossaryItem term="depth peeling">按深度逐层剥离、保存每一层 depth/color map 的多遍过程。</GlossaryItem>
+<GlossaryItem term="depth masking">按目标组件达到的可见片段比例动态终止 peeling 的优化。</GlossaryItem>
+<GlossaryItem term="uncertainty">由噪声或几何属性驱动的纹理坐标扰动量，控制 sketchy 笔触。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 15. Blueprint Rendering and Sketchy Drawings" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-15-blueprint-rendering-and-sketchy" />
