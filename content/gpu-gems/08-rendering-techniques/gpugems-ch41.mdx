@@ -1,255 +1,202 @@
 ---
-title: "Chapter 41: Rendering Techniques"
+title: "GPU Gems 1 · Chapter 41. Real-Time Stereograms"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 41
-description: "GPU Gems Part: Rendering Techniques, Chapter 41"
+description: "从深度图和重复纹理生成单图立体图：用垂直条带传播、深度水平位移和实时 z-buffer，把普通 3D 场景变成可交互更新的裸眼立体效果。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-41-real-time-stereograms"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-41
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh41AnimatedStereogramDiagram,
+  GpuGemsCh41DepthDisparityDiagram,
+  GpuGemsCh41StereogramLab,
+  GpuGemsCh41StereogramPipelineDiagram,
+  GpuGemsCh41StripPropagationDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch41-real-time-stereograms";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 41: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 41之间的关系是什么？
+- 能解释双目视差、随机点图案和单图立体图如何让一张二维图像携带隐藏的三维结构
+- 能把深度图、重复纹理、垂直 strip、水平位移和 fragment pass 组织成一个可执行的立体图生成器
+- 能说明条带数、深度因子、深度反转、过滤和 z-buffer 动画分别改变什么视觉效果与实现成本
+- 能通过静态与动态实验建立正确的融合观看距离，并用连续性、位移范围和每帧 pass 成本评估结果
 
 </Objectives>
 
-## 为什么需要Chapter 41: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 41: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 41正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把立体图当成左右两张普通截图">
+现象：左右图看起来相似，却无法融合，或深度方向完全反了。原因：立体感依赖两只眼睛接收到的水平视差与正确的左右对应关系，不是简单复制一张图。修法：先明确观看方式和左右匹配，再使用深度图控制相邻图案条带的位移；交换视图时要验证前后关系是否反转。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 41: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 41: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 41: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 41: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要用过大的深度因子掩盖错误坐标">
+现象：把 depth factor 调大后“立体感”变强，但条带断裂、空洞和重复纹理错配也变多。原因：位移超过相邻条带可提供的匹配范围，算法无法凭空填补被移走的内容。修法：先检查深度值、条带宽度和上一条 result map 的坐标，再在舒适融合范围内逐步增加深度因子。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要在动态场景里忽略深度来源和观看基准">
+现象：静态图能看出 3D，场景一动就无法融合，或者深度抖动。原因：动态版本每帧更新深度图，眼睛的交叉观看距离却没有稳定下来；过滤不足还会放大 z-buffer 的台阶。修法：先用静态帧找到融合距离，再使用实时 z-buffer；对深度做合理过滤，并限制每帧位移变化。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 41 章讨论的是把 GPU 的纹理和片段处理能力用来生成实时立体图。普通立体摄影用左右两个相机位置制造水平视差；随机点图案把“可匹配的纹理”与“看不见的几何”分开；单图版本则把相邻的垂直条带设计成可重复匹配的样本，让双眼通过不同的融合方式感知深度。
 
-## 性能考量
+这里的“观看”不是医疗、驾驶或安全关键应用的视觉校准。实现部分关注数据流和工程边界：深度如何变成位移、为什么每条 strip 依赖上一条结果、怎样从 z-buffer 做动态更新，以及条带数和采样成本如何影响实时性。
 
-### 批量操作
+## 1. 从双目视差到随机点图案
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="用随机点纹理编码左右视差，使双眼融合后出现隐藏三维结构的立体图">random-dot stereogram</Term> 建立在一个简单事实之上：人的两只眼睛相距约 65 毫米，从略有水平位移的两个位置观察同一场景，大脑会利用两幅图的差异推断深度。经典 RDS 先生成随机点图，再复制某个区域并水平移动，最后用新的随机点填补移动产生的空隙。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+如果左图给左眼、右图给右眼，移动量越大，隐藏区域看起来越深；如果左右图交换，前后关系会反转。交叉观看和使用设备观看的图像排列不同，应用必须明确输出给哪种观看方式，不应把一个“深度值正负号”当成通用答案。
 
-### 避免 CPU-GPU 同步点
+<GpuGemsCh41StereogramPipelineDiagram />
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+随机点的价值在于它没有真实物体轮廓可以直接追踪，眼睛必须依赖相邻区域的对应关系。对算法而言，这要求条带之间有稳定的参考样本；对用户而言，这也解释了为什么过滤、重复图案和深度连续性会影响“能不能看出来”。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+## 2. Single-image stereogram：把两张图压成一张
+
+<Term def="只使用一张二维图像，通过相邻垂直条带的重复匹配和水平位移来呈现隐藏深度的立体图">single-image stereogram</Term> 不需要并排的 stereo pair。它把输出图像切成若干垂直 strips，相邻条带之间的重复纹理提供匹配线索；因为单条带的位移更小，观看者可以在更接近图像平面的距离上融合。
+
+条带数越少，每条带越宽，需要的位移通常越大，观看距离也更敏感；条带数增加，单次位移可以变小，但生成 pass 和纹理传播的组织更复杂。GPU Gems 的示例常使用 8 到 24 条带作为可调范围，具体选择取决于画布尺寸、图案周期和目标观看方式。
+
+两种立体图的关系可以这样记：RDS 类似两条大条带组成的立体图，SIS 把画面拆成更多小条带，让匹配和融合更局部。不要只看“图像有几列”，要看相邻条带是否拥有可重复、连续的纹理身份。
+
+## 3. 深度图与图案：生成器的两个输入
+
+<Term def="以灰度或归一化值表达每个像素相对深度、并控制输出纹理位移的输入图">depth map</Term> 是一个包含几何深度的灰度图。它可以来自手工绘制、离线渲染，也可以来自实时场景的深度缓冲。白色是否表示近处、黑色是否表示远处并没有天然唯一答案，因此生成器要提供明确的 invert depth 选项。
+
+另一个输入是 `<Term def="被重复铺设、再依据深度位移以产生相邻条带匹配关系的二维纹理">tile pattern</Term>`。随机点 tile 适合演示隐藏结构；彩色或有规律的 tile 也可以生成艺术效果，但重复周期过强会让观看者直接看到图案接缝。必要时先对图案做平滑或设计足够长的周期，再让深度位移在有限范围内变化。
+
+```text
+depthMap[x, y]  → displacement[x, y]
+tilePattern[u,v] → repeated reference texture
+result[x, y]    ← sample(previousStrip, x + displacement, y)
 ```
 
-### 内存对齐
+深度图和图案的值域必须分开：深度用于位移，图案用于颜色。把深度直接乘到颜色上，或把 tile 的亮度误认为深度，都会让调参无法解释。生成器的 UI 应同时展示当前深度、位移和条带宽度，方便定位是数据还是观看的问题。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. 条带传播：为什么每一条都读上一条
 
-## 验证层检查
+<GpuGemsCh41StripPropagationDiagram />
 
-启用验证层后，Chapter 41: Rendering Techniques相关的常见错误会被捕获：
+以 `num_strips = N` 为例，输出结果需要 N 加 1 个条带，其中第 0 条是参考条带。先用 tile pattern 绘制它，再把这一小块复制到 result map。之后启用 fragment program，对每个下一条带读取上一条已完成的 result map，依据当前深度在同一水平扫描线上寻找偏移位置，并把结果写回新的条带。
 
+```text
+draw strip 0 with tile pattern
+copy strip 0 into result map
+
+for i in 0 ... N-1:
+    draw strip i + 1
+    depth = sample(depth map, current strip coordinate)
+    displacement = depth × abs(depthFactor) × stripWidth
+    previousUv.x = currentUv.x - stripWidth + displacement
+    color = sample(result map, previousUv)
+    write current strip
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这个顺序不是可随意并行的数组 map：第 i 加 1 条带依赖第 i 条带刚刚写出的颜色。历史实现通过 copy-to-texture 保持 result map 的可读版本；现代实现可以用 ping-pong texture、render pass 依赖或显式资源 barrier 表达相同的阶段边界。若在同一目标上无序读写，结果会出现条纹和帧间不稳定。
 
-## 本章要点
+## 5. 深度因子、位移与观看舒适度
 
-1. Chapter 41: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<Term def="把归一化深度值转换为条带水平位移强度、控制立体图视觉深度的标量参数">depth factor</Term> 通常取 0 到 1 的范围。它越大，深度图中的差异被映射成越大的水平位移，隐藏结构的立体感可能越强；但过大的位移会让相邻条带找不到对应样本，产生空洞、断层、重复纹理或难以融合的视差。
+
+`depth factor` 还与条带宽度耦合。条带越宽，单步位移的绝对像素数越大；条带越窄，观看交叉点更接近图像平面，但过小的周期也会让图案变得难以分辨。一次只改一个旋钮，先固定条带数，再逐步增大深度因子，能更容易判断舒适范围。
+
+<GpuGemsCh41DepthDisparityDiagram />
+
+深度反转并不是“增加深度”，而是把近远解释交换。若观看方式导致图像看起来向屏幕内凹，反转深度或调整交叉观看方向可能解决前后关系；如果条带本身已经错位，反转只会把错误翻面，不能代替坐标检查。
+
+## 6. 过滤、深度台阶与动画来源
+
+深度图的值如果没有过滤，连续的几何表面可能变成明显的 depth stairs。对实时场景来说，z-buffer 还可能受到几何边缘、量化和相机运动影响。线性过滤可以让深度变化更平滑，但也会跨越真实遮挡边界；应用要在连续性和边缘清晰度之间做取舍，而不是默认过滤越强越好。
+
+当深度图来自静态渲染时，用户可以先找到正确的融合距离。动态版本则每帧从一个普通 3D scene 渲染得到深度缓冲，再把这个深度缓冲当作下一帧的输入。如果动画开始前观看基准还没建立，用户很难区分“场景在动”和“眼睛融合失败”。
+
+<Term def="记录屏幕空间每个像素深度的缓冲，可作为实时单图立体图的动态深度图来源">z-buffer</Term> 让算法可以消费任意实时三维场景，而不必为每个物体单独制作 depth map。注意深度缓冲的范围、near/far 解释和遮挡关系要与 depth factor 的归一化约定一致；直接把非线性设备深度当作线性距离，可能让远处的位移分配不符合预期。
+
+<GpuGemsCh41AnimatedStereogramDiagram />
+
+## 7. 交互与性能：把观看条件纳入系统设计
+
+立体图生成的片段工作量近似随输出面积和 strip 数增长。每次传播都要读取深度图、读取上一条 result map，并写入下一条区域；开启动画后还要先渲染场景并生成新的深度来源。优化的第一步不是把 depth factor 拉低，而是测量：
+
+1. **片段面积**：是否只绘制有效条带，是否发生不必要的全屏拷贝？
+2. **纹理读取**：深度图和 result map 是否有缓存友好的访问，过滤是否增加了依赖读取？
+3. **传播轮数**：条带数是否真的提高可观看性，还是只增加了重复工作？
+4. **动态来源**：z-buffer 生成和 stereogram 传播是否共享同一帧预算？
+5. **用户反馈**：静态图是否先能稳定融合，再开启动画和更大的深度？
+
+另一个工程边界是历史 API 的读回或 copy 操作。把整张结果图每一步从 GPU 读回 CPU 会摧毁实时性；应使用 GPU 端的纹理复制、ping-pong surface 或现代 render pass 依赖。为了调试，可以只读取小块统计或抓取少量帧，不要让诊断路径成为发布路径。
+
+<GpuGemsCh41StereogramLab />
+
+## 8. 复用清单：从深度来源到可观看输出
+
+1. **观看契约**：明确交叉观看或平行观看、左右方向和深度正负解释。
+2. **输入契约**：深度图值域、near/far 约定、tile pattern 周期和是否过滤。
+3. **传播契约**：参考 strip、previous result map、当前输出区域和资源交换边界。
+4. **视差预算**：条带宽度、depth factor 和最大水平位移必须同时检查。
+5. **动态契约**：z-buffer 来自哪个相机、何时更新、深度是否需要平滑或重映射。
+6. **发布证据**：静态帧先能稳定融合，再检查动画抖动、深度反转、空洞、帧时间和移动端布局。
+
+## 小结
+
+- 立体图通过双眼水平视差携带深度；随机点图案把可匹配纹理与隐藏几何分离，单图立体图进一步用相邻垂直条带压缩视差。
+- 深度图决定位移，tile pattern 提供重复参考；每条输出 strip 读取上一条结果，根据深度水平采样，再写回下一条。
+- 条带数和 depth factor 共同决定观看距离、视觉深度和片段成本；过大位移会产生空洞与匹配错误。
+- 过滤可以减少深度台阶，但可能跨过遮挡边缘；反转深度改变前后方向，不会修复错误的条带坐标。
+- 动态版本使用 z-buffer 作为每帧深度来源；应先建立静态观看基准，再评估动画传播和 GPU 预算。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 41: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜输入关系**　深度图和 tile pattern 在单图立体图中分别负责什么？为什么不能只用深度图生成有意义的颜色？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+深度图提供每个位置的相对深度，用来计算条带的水平位移；tile pattern 提供可重复、可匹配的颜色纹理，让双眼能在相邻条带中找到对应关系。深度图本身通常只是灰度数值，没有足够的重复纹理身份；只有把它作用到图案的采样位置，才会形成可融合的立体线索。
 </Answer>
 
+**问题 2｜传播依赖**　为什么第 i 加 1 条带要读取第 i 条带的 result map？如果所有条带同时读取初始图案，会发生什么？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+每一条新 strip 都要继承前一条已经根据深度变形过的纹理，才能让视差在整张图中连续传播。若所有条带都读取初始 tile pattern，条带之间不会保持同一条纹理的位移链，结果会出现接缝，隐藏结构也无法按照深度逐步展开。实现上要用 ping-pong 或明确的纹理复制表达这个顺序依赖。
+</Answer>
+
+**问题 3｜动态深度**　为什么动态 stereogram 应先用静态帧找观看距离，再切换到 z-buffer 动画？调高 depth factor 能否解决动画融合失败？
+
+<Answer>
+
+静态帧不会改变，观看者可以先找到稳定的眼睛交叉或平行融合距离；动画启动后，深度和条带内容同时变化，若基准尚未建立，就难以判断失败来自观看姿势还是算法。调高 depth factor 只会放大位移，可能带来空洞、匹配错误和不舒适视差，不能修复 z-buffer 值域、过滤或传播坐标的问题。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="random-dot stereogram">用随机点纹理编码左右视差、隐藏三维结构的立体图。</GlossaryItem>
+<GlossaryItem term="single-image stereogram">用一张图的相邻垂直条带匹配呈现深度的立体图。</GlossaryItem>
+<GlossaryItem term="depth map">表达每个位置相对深度并控制纹理位移的输入图。</GlossaryItem>
+<GlossaryItem term="tile pattern">被重复铺设并依据深度水平位移的参考纹理。</GlossaryItem>
+<GlossaryItem term="depth factor">把归一化深度转换成条带位移强度的参数。</GlossaryItem>
+<GlossaryItem term="z-buffer">记录屏幕空间像素深度、可作为动态深度图来源的缓冲。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 41 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 41 “Real-Time Stereograms”的独立重写，保留随机点立体图、单图立体图、深度图与 tile pattern、条带传播、深度因子、深度反转、过滤、z-buffer 动画和 GPU fragment pass 等核心线索，并将历史 OpenGL/Cg 示例整理为可验证的现代实时 stereogram 决策路径。原始章节：[NVIDIA GPU Gems Chapter 41](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-41-real-time-stereograms)
+
 </Attribution>
