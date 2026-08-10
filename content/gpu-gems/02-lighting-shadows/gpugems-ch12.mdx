@@ -1,255 +1,233 @@
 ---
-title: "Chapter 12: Lighting and Shadows"
+title: "GPU Gems 1 · Chapter 12. Omnidirectional Shadow Mapping"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part II · Lighting and Shadows"
 order: 12
-description: "GPU Gems Part: Lighting and Shadows, Chapter 12"
+description: "用 cubemap 为点光源覆盖六个方向，写入 squared distance，再在接收阶段比较投影距离，构成全方向动态阴影管线。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-12-omnidirectional-shadow-mapping"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-12
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh12CubeMapDiagram,
+  GpuGemsCh12DistancePackingDiagram,
+  GpuGemsCh12OmniShadowLab,
+  GpuGemsCh12TwoPhaseDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch12-omnidirectional-shadow";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 12: Lighting and Shadows的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Lighting and Shadows, Chapter 12之间的关系是什么？
+- 能解释点光源为什么需要 cubemap 覆盖六个方向，并把六个 face 与采样方向对应起来
+- 能实现创建阶段写入光源到遮挡物的 squared distance，以及投影阶段的方向采样、bias 和深度比较
+- 能比较浮点 cubemap 与 RGBA 深度打包的精度、兼容性、显存和 shader 成本
+- 能修改实验中的硬/软阴影、cubemap 分辨率、bias 与过滤半径，判断 acne、漏光和性能变化
 
 </Objectives>
 
-## 为什么需要Chapter 12: Lighting and Shadows
+<Callout type="trap" title="陷阱一：点光源只渲染一张正面 shadow map">
+**现象 →** 光源绕物体转到侧面或背面时，阴影突然消失，或者只有一个方向正确。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 12: Lighting and Shadows作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** 点光源向四周发光；单张平面 shadow map 只覆盖一个视锥，无法回答来自相反方向的遮挡问题。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Lighting and Shadows, Chapter 12正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 以光源为中心渲染 cubemap 的 +x、-x、+y、-y、+z、-z 六个面；接收点的 light direction 决定采样哪个方向。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：创建阶段存线性距离，比较阶段却用平方距离">
+**现象 →** 阴影边界有偏移，远处表面更容易漏光；为了修正，只能不断调大 bias。
 
-### 设计动机
+**原因 →** shadow map 和接收点必须在同一度量下比较。一个阶段存 d，另一个阶段算 d²，会把误差混进遮挡判定。
 
-Vulkan 把Chapter 12: Lighting and Shadows从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 12: Lighting and Shadows涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 12: Lighting and Shadows相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 12: Lighting and Shadows相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 两个阶段都使用 squared distance。它只是一次 dot product，避免平方根；若使用整数 RGBA，还要保证 pack/unpack 的尺度一致。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：把软阴影当成平均深度">
+**现象 →** 多次采样后边界变软了，但遮挡关系错乱，薄物体附近出现不合理的亮边。
+
+**原因 →** shadow map 存的是深度，不能先平均深度再比较；软阴影应当先逐样本比较，再平均 0/1 的遮挡结果。
+
+**修法 →** 复用 PCF 语义：采样方向可以在 cubemap 周围做小偏移，但每个偏移都要独立完成深度比较。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 直觉引入：让点光源在黑暗房间里转一圈
 
-## 性能考量
+想象一盏裸灯放在房间中央。它照向天花板、地板和四面墙，任何方向都可能产生遮挡。平面 shadow map 像一台只朝前拍摄的相机；要让它回答光从哪个方向到达这个点，需要把相机围着光源转六次，并把六张深度照片装进一个 cubemap。
 
-### 批量操作
+创建 cubemap 时记录的是每个方向遇到的最近遮挡距离。渲染接收物体时，计算接收点到光源的方向与距离，沿该方向取出最近遮挡距离并比较。如果接收点更远，它被挡住；如果更近，它仍然可见。
 
-Vulkan 鼓励批量提交而非逐个提交：
+## 1. 从普通 shadow mapping 到 point light
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<Term def="通过投影深度纹理比较光源与接收点距离来判断遮挡的阴影算法">shadow mapping</Term> 的基本流程是：先从光源视角渲染深度纹理，再在正常相机的片元 shader 中把当前点送进 light space，最后比较当前深度和纹理深度。
 
-### 避免 CPU-GPU 同步点
+<Term def="从一个位置向所有方向发光、因此需要在光源周围覆盖六个视锥的光源类型">point light</Term> 与方向光不同：方向光可以用一张正交投影图，点光源必须根据接收点的 light direction 选择 cubemap face。
+
+<Term def="以光源为中心、包含正负 x、y、z 六个 90 度方向面的立方体纹理">omnidirectional cubemap</Term> 把全方向采样交给硬件。每个 face 都应使用 90 度视场和正确的 up 向量；面矩阵错位会表现为接缝、跳面或某些方向没有阴影。
+
+<GpuGemsCh12CubeMapDiagram />
+
+章节将 cubemap 作为六个 shadow map 的容器。采样方向既决定选择哪一面，也决定该面上的纹理坐标；因此 face 的朝向和 light vector 的坐标空间必须统一。
+
+## 2. 创建与投影：两阶段距离比较
+
+<Term def="以光源为视点向六个 cubemap 面渲染遮挡物，写入每个方向上的最近距离信息的阶段">shadow-map creation</Term> 只关注 cast shadow 的对象。动态场景每帧重渲染，静态场景可以预计算；点光源移动时，cubemap 仍需跟着光源更新。
+
+<Term def="正常相机渲染接收物体时，根据接收点到光源的方向采样 cubemap 并比较距离的阶段">shadow projection</Term> 要完成四件事：算 light direction、采样 cubemap、算当前点距离、用 bias 比较两者。
+
+<GpuGemsCh12TwoPhaseDiagram />
+
+<Term def="用点积表示距离平方、避免平方根并在创建和投影阶段复用的度量">squared distance</Term> 让两个阶段使用同一度量。令 v 为光源到当前点的向量，则 d2 = dot(v, v)。这是一次点积，不需要 square root；代价是远距离数值范围更大，需要关注纹理精度。
+
+```glsl
+vec3 vLight = worldPosition - lightPosition;
+float fDistSquared = dot(vLight, vLight);
+return fDistSquared;
+```
+
+创建阶段把 fDistSquared 写入当前 cubemap face；投影阶段用接收点的 fDistSquared 减去 depth bias，再与 cubemap sample 比较。两边必须使用同一坐标空间和尺度。
+
+## 3. 六面渲染与深度格式
+
+每个 cubemap face 都是一次 90 度的光源视角渲染，方向为 +x、-x、+y、-y、+z、-z。实现可以用六次普通 pass，也可以用硬件的 layered rendering 减少状态切换；算法语义不变。
+
+<Term def="把高精度深度值拆到 RGBA 颜色通道，采样后按相同权重恢复的兼容性存储方案">RGBA depth packing</Term> 可以在缺少浮点纹理时保存 32 位深度。浮点 cubemap 代码直观、精度高，但硬件支持和访问速度有限；RGBA pack 更普遍，却增加编码、解码和量化误差。
+
+<GpuGemsCh12DistancePackingDiagram />
+
+选择格式时还要计算六面显存。一个 1024×1024、32 位、六面 cubemap 还需要额外深度缓冲；分辨率提升会改善阴影质量，也会增加创建渲染、纹理带宽和显存成本。
+
+```glsl
+vec4 packDistance(float d2) {
+  vec4 scale = vec4(1.0, 256.0, 65536.0, 16777216.0);
+  return fract(d2 * scale);
+}
+
+float unpackDistance(vec4 packed) {
+  vec4 weight = vec4(1.0, 1.0 / 256.0,
+                     1.0 / 65536.0, 1.0 / 16777216.0);
+  return dot(packed, weight);
+}
+```
+
+这里的 pack 是示意，真实实现还要处理通道精度、范围归一化和边界溢出。浮点与 RGBA 两条路径都必须使用同一 bias 和距离尺度。
+
+## 4. z-only pass 与逐灯累加
+
+<Term def="先只把不透明可见物体写入深度缓冲，再让后续光照与阴影 pass 只处理可见像素的预处理阶段">z-only pass</Term> 是多光源场景的重要优化。完成一次深度预处理后，每盏灯的 shadow-writing 与 shading pass 都可以用深度测试跳过隐藏片元；透明对象不应写入这个 pass。
+
+一盏灯的逻辑可以压缩成：
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+for (int light = 0; light < lightCount; light++) {
+  for (int face = 0; face < 6; face++) {
+    renderCastersToCubeFace(light, face);
+  }
+  for (Object object : visibleObjects) {
+    shadeWithOmniShadow(object, light);
+  }
+}
 ```
 
-### 内存对齐
+第一层循环填充 cubemap，第二层循环投影并累加 lighting × shadow。点光源数量增加时，六面创建成本和逐灯 shading 成本都会增加；静态 cubemap 缓存可以把创建阶段移出每帧热路径。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 5. projection 与 bias：先判断遮挡，再决定颜色
 
-## 验证层检查
+当前点的平方距离减去 bias 后，与对应方向的 cubemap 距离比较。如果当前值更大，点在遮挡物后方；如果 bias 太小，自身深度误差会产生 acne；如果 bias 太大，接触阴影会被推开并漏光。
 
-启用验证层后，Chapter 12: Lighting and Shadows相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+```glsl
+float current = dot(vLight, vLight) - depthBias;
+float mapDistance = sampleCubeDistance(-vLight);
+float shadow = current > mapDistance ? 1.0 : 0.0;
+vec3 litColor = lightingColor * (1.0 - shadow);
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这个片元段只展示 hard shadow。真实项目还要考虑 cube face 接缝、过滤、半精度与深度范围；排错时应分别可视化方向、当前 d2、map d2 和最终 shadow coefficient。
 
-## 本章要点
+## 6. 软阴影只是多方向比较的近似
 
-1. Chapter 12: Lighting and Shadows是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<Term def="在 cubemap 方向周围取多个偏移方向，分别做遮挡比较并平均结果来近似软边的过滤方法">omnidirectional PCF</Term> 不是物理面积光源。它把采样方向在 cubemap 周围散开，再平均比较结果，从视觉上减轻硬边和 aliasing；它没有显式建模遮挡者、接收者与光源面积。
+
+```glsl
+float shadow = 0.0;
+for (int i = 0; i < 4; i++) {
+  vec3 direction = -vLight + filterOffsets[i];
+  float mapDistance = sampleCubeDistance(direction);
+  shadow += current < mapDistance ? 0.0 : 0.25;
+}
+```
+
+过滤半径越大，边缘越软，但需要更多 fetch 才能避免 banding；把方向计算移到顶点阶段可以节省片元指令。多次采样要与 cubemap 分辨率、bias 和缓存命中一起评估。
+
+## 7. 实验：让光源绕着遮挡物走一圈
+
+猜一猜：先切换到 RGBA pack，再把 bias 拉到最小；你应该看到精度和自遮挡伪影变得更敏感。切到 soft 后增大 filter radius，边界会变软，但 sample 数和纹理 fetch 也会增加。最后隐藏六面 cubemap，观察画面仍保留接收面，但无法直观看见方向覆盖。
+
+<GpuGemsCh12OmniShadowLab />
+
+实验将四类工程选择分开：storage 决定深度格式，shadow mode 决定单次还是多次比较，resolution 表示六面纹理预算，bias 与 filter radius 分别影响接触稳定性和软边宽度。这样排查时可以先判断是 face 方向错、距离格式错，还是过滤参数错。
+
+## 小结：全方向阴影是 cubemap 加距离比较
+
+- 点光源向所有方向发光，必须用六个 cubemap face 覆盖正负 x、y、z。
+- 创建阶段从光源视角写入遮挡物的 squared distance，投影阶段用接收点距离与对应方向的 map distance 比较。
+- 浮点 cubemap 直观且精度高；RGBA depth packing 兼容性好，但需要一致的 pack/unpack。
+- z-only pass 先建立可见深度，后续逐灯执行 shadow map 与 lighting 的 multipass。
+- 多方向采样可以近似软阴影，但样本、过滤半径和 bias 都会影响质量与性能。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 12: Lighting and Shadows涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　把实验从 float d2 切换为 RGBA pack，再把 cubemap resolution 调低。记录阴影边界、显存预算和可能出现的量化误差。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+浮点格式直接存平方距离，精度和调试直观性通常更好；RGBA pack 需要额外编码和解码，分辨率降低还会让单个 texel 覆盖更大的表面区域。应同时记录六面纹理的显存、采样带宽和接触阴影是否出现阶梯或漏光。
 </Answer>
 
+**问题 2｜推导题**　创建阶段记录到的遮挡距离平方是 9.0，接收点距离平方是 9.2，depth bias 为 0.1。按当前距离平方减 bias 后的比较，接收点是否在阴影中？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+比较值是 9.2 - 0.1 = 9.1，它仍大于 cubemap 中的 9.0，说明接收点比遮挡物更远，因此应判定为阴影。若 bias 过大使比较值降到 9.0 或更小，就可能出现漏光或接触阴影被推开。
+</Answer>
+
+**问题 3｜独立实现题**　为一个动态点光源实现六面 shadow-map creation 和 projection pass。除了平均帧时间，你会记录哪些指标来定位性能瓶颈？
+
+<Answer>
+
+记录六面创建各自的 GPU 时间、每面可见 caster 数、cubemap 更新次数、纹理格式与显存、每盏灯的 shading fetch 数、z-only pass 的可见像素数，以及硬阴影和软阴影的差异。这样可以区分六面 cubemap 的成本、投影 shader 的成本和过度采样的成本。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="shadow mapping">通过投影深度纹理并比较光源到接收点距离来判断遮挡的算法。</GlossaryItem>
+<GlossaryItem term="point light">从一个位置向所有方向发光、需要全方向阴影覆盖的光源。</GlossaryItem>
+<GlossaryItem term="omnidirectional cubemap">以光源为中心、覆盖正负 x、y、z 六个方向的立方体纹理。</GlossaryItem>
+<GlossaryItem term="shadow-map creation">从光源视角向六面 cubemap 写入遮挡距离的阶段。</GlossaryItem>
+<GlossaryItem term="shadow projection">接收阶段按 light direction 采样 cubemap 并比较距离的阶段。</GlossaryItem>
+<GlossaryItem term="squared distance">用点积表示距离平方、避免平方根并在创建和投影阶段复用的度量。</GlossaryItem>
+<GlossaryItem term="RGBA depth packing">把深度拆到 RGBA 颜色通道并在采样后恢复的存储方案。</GlossaryItem>
+<GlossaryItem term="z-only pass">先只更新可见物体深度、供后续逐灯 pass 跳过隐藏片元的预处理。</GlossaryItem>
+<GlossaryItem term="omnidirectional PCF">在 cubemap 方向周围多次比较并平均以近似软阴影的过滤方式。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 12 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 12. Omnidirectional Shadow Mapping"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-12-omnidirectional-shadow-mapping"
+/>

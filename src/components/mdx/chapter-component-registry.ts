@@ -12901,6 +12901,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh11SampleFootprintDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/02-lighting-shadows/gpugems-ch12": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch12-omnidirectional-shadow");
+    return {
+      GpuGemsCh12CubeMapDiagram: module0.GpuGemsCh12CubeMapDiagram,
+      GpuGemsCh12DistancePackingDiagram:
+        module0.GpuGemsCh12DistancePackingDiagram,
+      GpuGemsCh12OmniShadowLab: module0.GpuGemsCh12OmniShadowLab,
+      GpuGemsCh12TwoPhaseDiagram: module0.GpuGemsCh12TwoPhaseDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

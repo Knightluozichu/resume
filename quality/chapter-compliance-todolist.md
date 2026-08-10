@@ -964,7 +964,7 @@
     - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch10.mdx`
 - [x] ✅ **02-lighting-shadows/gpugems-ch11** — 已修复（2026-08-10，score 42→100，passed）
     - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch11.mdx`
-- [ ] 🔴 P1 **02-lighting-shadows/gpugems-ch12** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+- [x] ✅ **02-lighting-shadows/gpugems-ch12** — 已修复（2026-08-10，score 42→100，passed）
     - 路径：`content/gpu-gems/02-lighting-shadows/gpugems-ch12.mdx`
 - [ ] 🔴 P1 **03-materials/gpugems-ch13** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
     - 路径：`content/gpu-gems/03-materials/gpugems-ch13.mdx`
