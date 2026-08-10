@@ -1,255 +1,196 @@
 ---
-title: "Chapter 16: Materials"
+title: "GPU Gems 1 · Chapter 16. Real-Time Approximations to Subsurface Scattering"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part III · Materials"
 order: 16
-description: "GPU Gems Part: Materials, Chapter 16"
+description: "用 wrap lighting、光线穿透厚度估计与纹理空间 diffusion 近似皮肤、大理石等半透明材质的次表面散射外观。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-16-real-time-approximations-subsurface-scattering"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-16
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh16DepthMapDiagram,
+  GpuGemsCh16ScatteringJourneyDiagram,
+  GpuGemsCh16SubsurfaceLab,
+  GpuGemsCh16TextureSpaceDiffusionDiagram,
+  GpuGemsCh16WrapLightingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch16-subsurface-scattering";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 16: Materials的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Materials, Chapter 16之间的关系是什么？
+- 能从 entry、内部散射、exit 三个阶段解释皮肤和大理石的柔化、邻域 bleed 与偏红阴影过渡
+- 能实现 wrap lighting 和 LUT 近似，并说明它没有显式模拟材料内部的真实传播
+- 能用 light depth map 的 d_o − d_i 估计穿透距离，并识别凸物体、深度精度和投影边缘限制
+- 能把模型展开到唯一 UV 的纹理空间，用低分辨率 light map 和 separable blur 近似 diffusion
 
 </Objectives>
 
-## 为什么需要Chapter 16: Materials
+大多数实时 shading 只在表面交点处理光：法线、光向量和材质颜色决定当前像素。但皮肤、蜡、大理石等材料会让光从一个表面点进入，在内部散射和吸收，再从另一个点离开。GPU Gems 1 第 16 章不追求完整的物理求解，而是把这种外观拆成几种可编程硬件能够承受的近似。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 16: Materials作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<Callout type="trap" title="柔化不是简单把最终画面高斯模糊">
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+后处理 blur 会把轮廓、阴影和材质细节一起混合，无法区分光在材料内传播还是在屏幕上相邻。更可靠的近似先构造 light map、厚度或 wrap term，再决定哪些量应该扩散。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Materials, Chapter 16正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="厚度图不是任意模型的真实体积">
 
-### 设计动机
+depth-map 方法用进入与离开表面的距离之差近似穿透长度，凸物体最容易成立；孔洞、内部骨骼和多层结构会让单层 depth 失效，需要 depth peeling、额外层或体积方法。
 
-Vulkan 把Chapter 16: Materials从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 16: Materials涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 16: Materials相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 16: Materials相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="UV 空间扩散的前提是唯一且合理的参数化">
+
+如果多个表面点重叠到同一个 texel，light map 的 bleed 会跨越不相邻的几何；如果 UV 拉伸严重，纹理空间的邻近也不再对应世界空间邻近。先检查 UV，再选择 blur 半径。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 为什么次表面散射看起来不一样
 
-## 性能考量
+<Term def="光进入材料后在内部传播、散射、吸收并从另一个表面位置离开的光传输现象">subsurface scattering</Term> 的三个外观线索是：整体光照对比被柔化，局部光会 bleed 到相邻区域，细薄区域和明暗交界会出现更明显的颜色变化。皮肤的血液和组织会让背光过渡略偏红；耳朵、鼻翼等薄处尤其明显。
 
-### 批量操作
+<GpuGemsCh16ScatteringJourneyDiagram />
 
-Vulkan 鼓励批量提交而非逐个提交：
+光传播越远，能量越被 attenuation 和 diffusion；这意味着“厚度”既影响亮度，也影响颜色和边缘宽度。实时近似的关键不是制造一张泛白的图，而是让传播距离、方向和材质颜色至少有一个可解释的对应关系。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+## 1. 低成本的 wrap lighting
 
-### 避免 CPU-GPU 同步点
+<Term def="把 Lambert diffuse 的明暗截止向背光侧延伸，以降低硬对比的经验性光照近似">wrap lighting</Term> 修改 `dot(L, N)` 的映射：标准 Lambert 在点积为负时直接归零，wrap 则使用一个 0 到 1 的 wrap 参数把曲线向背光侧延伸。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```hlsl
+float diffuse = max(0, dot(L, N));
+float wrapDiffuse = max(0, (dot(L, N) + wrap) / (1 + wrap));
 ```
 
-### 内存对齐
+wrap lighting 不能告诉我们光从哪个点进入、在内部走了多远，也不能处理真实的多次散射；它只是降低 diffuse 对比的 cheap approximation。章节还建议把点积映射编码进 1D 或 2D LUT：纹理可以同时加入过渡区的红色 tint、diffuse color 和 specular power。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh16WrapLightingDiagram />
 
-## 验证层检查
+LUT 的优势是把多个经验曲线合成一次 texture lookup；代价是需要预先定义参数范围，并注意 `dot(N,L)` 和 `dot(N,H)` 的归一化。适合先做视觉风格探索，再决定是否需要更高成本的厚度或纹理空间方案。
 
-启用验证层后，Chapter 16: Materials相关的常见错误会被捕获：
+## 2. 用 depth map 估计穿透距离
 
+<Term def="用光源到表面进入点的距离 d_i 与光源到离开点的距离 d_o 相减，估计光在材料内行进距离的量">penetration depth</Term> 是比 wrap 更具方向性的近似。第一遍从光源视点渲染，把进入表面的距离存入 light depth texture；正常 shading 时，把当前点投影回这张纹理得到 d_i，再计算当前点到光源的距离 d_o。
+
+$$ s = d_o - d_i $$
+
+可以把 `s` 直接查到 artist-created 1D scatter texture，也可以使用指数吸收：
+
+```glsl
+float s = trace(point, lightTexMatrix, lightMatrix, lightDepthTex);
+float transmission = exp(-s * sigma_t);
+return transmission * lightColor;
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+<GpuGemsCh16DepthMapDiagram />
+
+这种方法把入射方向保留在 depth map 里，比静态 painted thickness 更适合动画模型；但单层深度只记录一个可见表面，孔洞和复杂内部结构会被错误解释。解决方向包括 depth peeling、额外的 front/back layers，或接受它作为 convex approximation。
+
+深度精度同样是质量预算：旧硬件的 depth texture 读取可能只提供很少的有效位，需要 floating-point texture 或把 32-bit float pack 到 RGBA8。浮点纹理又可能不支持 filtering，放大投影时会出现 block artifacts；投影边缘还可能把背景采样到物体边缘，因此 depth pass 常会沿顶点法线做轻微 grow。
+
+如果 shader 还需要入射点的 normal 或 surface color，可以把它们作为额外 render target 写出；支持 multiple render targets 的路径可以把 depth、normal 和其他信息合并到同一 pass。
+
+## 3. 从单次散射到 diffusion
+
+<Term def="假设光在介质中只发生一次散射，通过沿折射光线步进估计向相机散射光子的近似模型">single scattering</Term> 用 phase function 描述方向分布，并可在入射、离开处考虑 Fresnel。它能表达更具体的路径，但步进成本和参数复杂度会快速上升。
+
+<Term def="把强散射介质的多次散射累积效果用扩散过程近似的模型">diffusion approximation</Term> 更适合皮肤这类高度散射介质；本章把它作为更复杂的模型方向，并把可实时实现的重点放在 wrap、depth map 和 texture-space diffusion 上。
+
+这些模型的边界应写进产品决策：若目标只是让角色在实时光照中不显得像塑料，wrap + LUT 可能已足够；若需要方向性、厚度和薄处的透射，应加入 depth map；若需要稳定的邻域柔化且拥有良好 UV，则 texture space 更可控。
+
+## 4. texture-space diffusion
+
+<Term def="把模型按 UV 展开，在二维 light map 上计算和模糊光照，再重新投影回模型的扩散近似">texture-space diffusion</Term> 将 3D 表面参数化为二维图像：顶点 shader 把 UV 的 0 到 1 映射到 NDC，先在纹理空间渲染 diffuse lighting，再对 light map 做 blur，最后像普通纹理一样应用回 3D 模型。
+
+它的优势是 shading 复杂度由屏幕分辨率解耦到纹理 texel；很多 image-processing 操作在 2D 上更高效。若 UV 参数化相对均匀，纹理空间邻近可以近似世界空间邻近。低分辨率 light map 本身也会提供一些平滑效果。
+
+<GpuGemsCh16TextureSpaceDiffusionDiagram />
+
+blur 应拆成 horizontal 与 vertical 两个 pass，利用 separable filter 和 bilinear filtering 减少采样。皮肤的颜色传播还可以对 RGB 使用不同权重：红色通道用更宽的 kernel，绿色和蓝色更窄，以模拟波长依赖的吸收和散射。
+
+```hlsl
+half4 diffusion(float2 uv, sampler2D lightTex) {
+  half4 sum = 0;
+  sum += tex2D(lightTex, uv + float2(-5.5, 0)) * weight0;
+  sum += tex2D(lightTex, uv + float2(-1.5, 0)) * weight1;
+  sum += tex2D(lightTex, uv) * weight2;
+  sum += tex2D(lightTex, uv + float2(1.5, 0)) * weight3;
+  sum += tex2D(lightTex, uv + float2(5.5, 0)) * weight4;
+  return sum;
+}
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+如果把 shadow 也写进 light map，blur 会自然地产生软阴影；但最终材质仍应把 diffused lighting 与原始高分辨率 color map 合成，避免把所有纹理细节都抹掉。对于内部密度变化明显的物体，表面 UV 方法仍然不如体积渲染准确。
 
-## 本章要点
+## 5. 动手实验：分辨 wrap、厚度与纹理空间
 
-1. Chapter 16: Materials是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+先预测：把 material thickness 拉高时，transmission 会如何变化？把 scatter width 拉宽时，邻域 bleed 是否增强？把 mode 从 texture 切到 wrap，哪些 entry/exit 信息会消失？最后提高 red diffusion，观察阴影边缘的色相而非只有亮度。
+
+<GpuGemsCh16SubsurfaceLab />
+
+实验中的 entry 与 exit 用来提醒你：wrap 只改照明曲线，depth 估计 `d_o - d_i`，texture mode 则将 light map 在 UV 空间扩散。四个滑杆不是物理参数求解器，而是把“厚度、传播宽度、颜色通道差异和近似模式”拆开观察。
+
+## 小结：用最小模型换取可信外观
+
+- 次表面散射让光从 entry 点进入、在材料内部传播后从另一个 exit 点离开，形成柔化、bleed、吸收和偏红过渡。
+- wrap lighting 便宜且适合 LUT 风格控制，但不表达真实穿透距离。
+- depth map 通过 `s = d_o - d_i` 估计光程，需面对凸物体、深度精度、过滤和投影边缘限制。
+- single scattering 和 diffusion approximation 是更复杂的路径模型；texture-space diffusion 用 UV light map 与 separable blur 近似邻域传播。
+- 唯一且均匀的 UV、合理的低分辨率、分通道 blur 权重和最终与原始 color map 合成，是可发布实现的质量护栏。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 16: Materials涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　将 wrap 参数从 0.2 提高到 0.8，同时保持原始 diffuse 和 LUT 的 specular alpha 不变。请说明你会观察哪些视觉变化，以及为什么不能把结果称为真实 subsurface scattering。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+背光侧 diffuse 会更晚归零，明暗对比降低，过渡区可能更偏向 LUT 中设置的红色；但 wrap 没有记录光进入、在内部传播或从另一点离开的路径，因此只能称为外观近似，不能替代带厚度的 transport 模型。
 </Answer>
 
+**问题 2｜推导题**　当前点到光源的离开距离 d_o 为 3.4，light depth texture 中的进入距离 d_i 为 2.6，吸收系数 sigma_t 为 1.2。计算 penetration depth 和指数 transmission，并说明厚度增加的趋势。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+穿透距离是 `s = 3.4 - 2.6 = 0.8`，指数 transmission 约为 `exp(-0.8 × 1.2) = exp(-0.96) ≈ 0.38`。若 d_o - d_i 增大，指数项会继续下降，光更暗、更扩散；实际还要考虑颜色通道和光照强度。
+</Answer>
+
+**问题 3｜独立实现题**　为一张带动画的人脸选择方案：只要求柔和光照时使用什么；需要薄耳朵透射时增加什么；要做稳定的邻域 diffusion 时还要验证什么？
+
+<Answer>
+
+只要求降低塑料感时可用 wrap + LUT；薄耳朵和方向性透射应增加每帧更新的 depth map，估计入射与离开距离；邻域 diffusion 可加入 texture-space light map，但必须验证 UV 无重叠、参数化相对均匀，并以 separable blur 和原始 color map 合成检查细节是否被抹掉。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="subsurface scattering">光在材料内部散射、吸收并从不同表面点离开的次表面光传输。</GlossaryItem>
+<GlossaryItem term="wrap lighting">将 diffuse 明暗曲线向背光侧延伸的低成本光照近似。</GlossaryItem>
+<GlossaryItem term="penetration depth">由离开距离减去进入距离得到的材料内光程估计。</GlossaryItem>
+<GlossaryItem term="single scattering">假设光只发生一次内部散射的近似模型。</GlossaryItem>
+<GlossaryItem term="diffusion approximation">用扩散过程近似强散射介质多次散射累积效果的模型。</GlossaryItem>
+<GlossaryItem term="texture-space diffusion">在唯一 UV 的二维 light map 上计算、模糊并重新应用光照的扩散方法。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 16 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 16. Real-Time Approximations to Subsurface Scattering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-16-real-time-approximations-subsurface-scattering"
+/>
