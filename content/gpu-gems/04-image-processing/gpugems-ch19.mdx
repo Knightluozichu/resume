@@ -1,255 +1,220 @@
 ---
-title: "Chapter 19: Image Processing"
+title: "GPU Gems 1 · Chapter 19. Image-Based Lighting"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part III · Materials"
 order: 19
-description: "GPU Gems Part: Image Processing, Chapter 19"
+description: "把通常位于无限远的 cube map 放入有限 lighting space，结合反射求交、Fresnel、diffuse IBL 与接触阴影获得更可信的环境光照。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-19-image-based-lighting"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-19
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh19DiffuseShadowDiagram,
+  GpuGemsCh19FresnelBumpDiagram,
+  GpuGemsCh19IblPipelineDiagram,
+  GpuGemsCh19LightingSpaceDiagram,
+  GpuGemsCh19LocalizedIblLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch19-image-based-lighting";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 19: Image Processing的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Image Processing, Chapter 19之间的关系是什么？
+- 能解释普通 cube map 为什么产生无限远反射，并用 lighting space 描述有限环境中的对象位置
+- 能实现局部化反射的顶点与片元数据流：变换位置、法线、切线和视线，求反射射线与单位球的交点
+- 能把 Fresnel attenuation、bump normal、surface color 与反射 lookup 组合，并识别坐标、半径和 miss 处理的边界
+- 能设计 diffuse IBL、specular IBL 与接触阴影的混合方案，在真实感、稳定性和性能之间做出取舍
 
 </Objectives>
 
-## 为什么需要Chapter 19: Image Processing
+普通 cube map 假设环境无限远：反射向量只决定“从哪个方向看”，不会因为物体在房间里移动而改变反射图案的尺度和位置。这个假设对天空或远处环境很划算，但在小房间、窗户、显示器和可识别的墙面上，反射会像贴在物体表面，失去空间对齐。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 19: Image Processing作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Image Processing, Chapter 19正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="局部化 IBL 不等于每次移动都重建 cube map">
+如果每个对象移动都重新捕获环境，成本会随对象和动态场景快速增长。更轻的方案是在 shader 中把位置与方向变换到环境自身的有限坐标系，再用几何求交把 lookup 方向局部化；它是几何近似，仍需要验证环境边界。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 19: Image Processing从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 19: Image Processing涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 19: Image Processing相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 19: Image Processing相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="reflection vector 与位置必须来自同一 lighting space">
+只把反射向量变换到 lighting space，而保留 world-space 位置，会让球面交点失去意义；法线、切线、视线和位置的矩阵约定也必须一致。先用可视化的坐标轴和 miss 颜色验证数据，再调材质参数。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="IBL 自己不会自动提供可信的接触阴影">
+环境图包含许多潜在光源，直接为每个方向生成阴影既昂贵又难以解释。实际方案可以选择明亮方向、额外的 shadow map、stencil shadow 或只做接触阴影；关键是让角色和地面建立关系，而不是把所有像素压黑。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="用环境图近似从许多方向到达表面的光照与反射的渲染方法">image-based lighting</Term> 把环境辐射编码到 cube map 等纹理中，再以法线、反射方向或预卷积结果近似积分。GPU Gems 1 第 19 章的重点不是换一种纹理格式，而是用少量 shader 数学让这个环境具有大小、位置和空间对齐。
 
-## 性能考量
+<GpuGemsCh19IblPipelineDiagram />
 
-### 批量操作
+## 1. 为什么要把无限环境局部化
 
-Vulkan 鼓励批量提交而非逐个提交：
+无限 cube map 的反射方向通常是 `R = reflect(V, N)`，其中 V、N 只描述表面方向；对象的位置 P 不参与 lookup。因此模型从房间的一端移动到另一端时，窗户和墙面在反射中的角度与尺度不会跟着移动。视觉上，环境像粘在物体上，而不是物体在环境中运动。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<Term def="相对于 cube map 环境中心和边界定义的坐标系，用于在 shader 中表达表面位置、方向和视线">lighting space</Term> 解决的是位置缺失：把环境体积当作一个半径为 1 的单位空间，对象的 position、normal、tangent、binormal 和 eye vector 都转换到这个坐标系。环境的真实尺寸和方向由应用传入的 lighting transform 控制，动画时只需更新对象在该空间中的位置。
 
-### 避免 CPU-GPU 同步点
+<Term def="把原本表示无限远环境的 cube map 解释为有限体积中的局部反射环境的技术">localized cube map</Term> 并没有改变 cube map 的采样硬件，而是改变了查询方向的构造。反射射线从 lighting-space 的表面位置出发，与以原点为中心的单位球求交；交点方向随后作为 cube map 的地址。对象移动时，起点改变，交点也改变，反射中的房间特征便会重新对齐。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<GpuGemsCh19LightingSpaceDiagram />
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+这是一种有限环境的近似：球或立方体只是 texturing hardware 友好的边界，不会自动表达真实房间的所有遮挡。开发阶段可以把不存在交点的像素显示为醒目的红色，避免 miss 被误认为是“材质颜色”。生产路径再决定使用 fallback、裁剪对象、扩大 volume 或回退到无限反射。
+
+## 2. 顶点阶段：同时输出 world 与 lighting 数据
+
+顶点 shader 需要把常规的 clip-space position 保留下来，同时把几何数据带入 lighting space。法线、切线和双切线使用 inverse-transpose 变换，位置和眼睛位置使用普通位置变换。若 CPU 愿意预先拼接矩阵，可以减少重复乘法，但要保留两套空间的命名，避免 fragment 阶段混用。
+
+```hlsl
+struct VertexOutput {
+  float4 clipPosition : POSITION;
+  float2 uv : TEXCOORD0;
+  float3 lightingNormal : TEXCOORD1;
+  float3 lightingTangent : TEXCOORD2;
+  float3 lightingBinormal : TEXCOORD3;
+  float3 lightingEyeVec : TEXCOORD4;
+  float3 lightingPos : TEXCOORD5;
+};
+
+VertexOutput Localize(VertexInput input, Matrices m) {
+  VertexOutput output;
+  float4 pw = mul(m.world, float4(input.position, 1.0));
+  output.clipPosition = mul(m.worldViewProj, float4(input.position, 1.0));
+  output.lightingPos = mul(m.lighting, pw).xyz;
+  output.lightingEyeVec = m.lightingEyePosition - output.lightingPos;
+  output.lightingNormal = mul(m.lightingInverseTranspose, mul(m.worldInverseTranspose, input.normal)).xyz;
+  output.lightingTangent = mul(m.lightingInverseTranspose, mul(m.worldInverseTranspose, input.tangent)).xyz;
+  output.lightingBinormal = mul(m.lightingInverseTranspose, mul(m.worldInverseTranspose, input.binormal)).xyz;
+  output.uv = input.uv;
+  return output;
+}
 ```
 
-### 内存对齐
+传到片元阶段的数据应满足三个不变量：位置和方向在同一个 lighting space，法线与切线仍然可以归一化，反射所用的 eye vector 方向与应用的 `reflect` 约定一致。先验证无 bump 的法线，再加入法线贴图，能把坐标问题和高频材质问题分开。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. 片元阶段：反射射线与环境球求交
 
-## 验证层检查
+片元阶段先构造局部法线，再从 lighting-space 的视线向量得到反射向量。假设环境球半径为 1、球心在原点，射线为 `P + tR`。代入球方程后可写成：
 
-启用验证层后，Chapter 19: Image Processing相关的常见错误会被捕获：
+$$
+b = -2(R \cdot P), \qquad c = P \cdot P - 1, \qquad \Delta = b^2 - 4c
+$$
 
+当判别式为正且交点在有效方向上，就能求出 near intersection，将该点作为 cube map 方向。实际 shader 会使用一个很小的 epsilon 排除数值误差；没有交点的像素不应静默采样一个随机方向。
+
+片元伪代码如下：
+
+```hlsl
+float4 LocalizedReflection(VertexOutput input, samplerCUBE envMap,
+                           sampler2D normalMap, Material material) {
+  float3 n = normalize(input.lightingNormal);
+  float3 t = normalize(input.lightingTangent);
+  float3 b = normalize(input.lightingBinormal);
+  float3 bump = material.bumpiness * (tex2D(normalMap, input.uv).xyz - 0.5.xxx);
+  float3 nb = normalize(n + bump.x * t + bump.y * b);
+  float3 v = normalize(input.lightingEyeVec);
+  float fresnel = FresnelWeight(dot(v, nb), material.krMin, material.kr, material.fresnelExp);
+  float3 r = normalize(reflect(v, nb));
+  float quadraticB = -2.0 * dot(r, input.lightingPos);
+  float quadraticC = dot(input.lightingPos, input.lightingPos) - 1.0;
+  float discriminant = quadraticB * quadraticB - 4.0 * quadraticC;
+  if (discriminant <= 0.0) return material.debugMissColor;
+  float nearT = (-quadraticB - sqrt(discriminant)) * 0.5;
+  if (nearT <= 0.0) return material.debugMissColor;
+  float3 hit = nearT * r - input.lightingPos;
+  return material.surfaceColor * fresnel * texCUBE(envMap, hit);
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+## 4. 让反射更像材质，而不是纯色贴图
 
-## 本章要点
+<Term def="根据视线与法线的夹角改变反射权重的边缘增强近似，常用 Schlick 风格的幂函数表达">Fresnel attenuation</Term> 在正视表面时降低反射，在掠射角提高反射，使塑料、涂层和金属边缘更可信。可以使用 `KrMin + (Kr - KrMin) * pow(1 - abs(dot(V, N)), exponent)`，也可以把一维曲线预烘焙为 LUT。纯光滑金属可以简化为固定反射强度，但真实金属仍可能因污渍和表面状态出现颜色与强度变化。
 
-1. Chapter 19: Image Processing是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+normal map 会把无 bump 的法线 Nu 改为带细节的 Nb，从而改变反射方向。高频 bump 如果直接用于 Fresnel 夹角，边缘可能出现 sparkle；一个实用对照是用 Nu 计算 Fresnel，用 Nb 计算反射方向，然后根据目标材质决定是否合并。
+
+<GpuGemsCh19FresnelBumpDiagram />
+
+表面颜色也应作为材质决策：金属反射可以吸收表面颜色，塑料和水等 dielectric 往往使用白色或单独的 tint。环境图的坐标约定还可能存在上下方向差异，尤其是不同工具链混用 OpenGL 与 DirectX 资源时，必须用一张已知方向的测试图验证 y 翻转。
+
+## 5. diffuse IBL：低频环境的另一条路径
+
+<Term def="把环境图的 Lambertian 入射贡献预先积分，使运行时只需用表面法线查找 diffuse irradiance 的环境纹理">preconvolved diffuse cube map</Term> 把 diffuse 环境项从全方向积分变成以 N 为 lookup 的纹理。它的频率很低，所以由对象位置偏离环境中心造成的误差通常不如高光显眼；但它仍然编码了某个参考点的可见半球，离开中心越远，结果可能越不准确。
+
+specular 反射使用反射向量或局部化交点，diffuse 则常用法线索引预卷积图。二者可以组合成一个便宜的基础光照，再用少量直接光、AO 或额外的 shadow pass 处理接触和局部方向性。
+
+<GpuGemsCh19DiffuseShadowDiagram />
+
+IBL 阴影的难点在于环境图可能包含许多潜在光源，而 shadow map 或 stencil volume 通常来自有限方向。一个可控的策略是选择环境图中最亮方向生成主要阴影；另一个策略是只做黑白或彩色的接触阴影，避免对象在地面上漂浮。阴影不必完美解释每个环境像素，但必须服务于空间关系。
+
+## 6. 背景代理与发布边界
+
+局部 cube map 既可以只用作物体反射，也可以用简单的 room cube 作为背景代理。代理几何不需要完整 UV 和法线，只需在同一个 lighting transform 下把位置映射为 cube map lookup。这样能让反射物体和背景中的窗、墙、灯具对齐，代价是房间边界外的视角会出现弯曲或投影失真。
+
+使用代理背景时，应把相机尽量放在 lighting volume 中心附近；墙和天花板是平面时，让它们对齐 volume 边界会更稳定。对象跑出球体或房间边界时，选择 fallback 颜色、裁剪反射、切换到无限环境或扩大 volume，不能把异常交给用户。
+
+## 7. 动手实验：移动对象，观察环境是否跟着走
+
+先预测：在 infinite 模式中移动 object offset，反射图案只会轻微改变或保持同一方向感；在 localized 模式中，窗户和墙面反射会随对象位置发生尺度和对齐变化。提高 Fresnel exponent 会让掠射角边缘更集中，提高 bumpiness 会让反射细节更碎；打开接触阴影则会增强对象与地面的连接。
+
+<GpuGemsCh19LocalizedIblLab />
+
+这个实验是确定性的示意模型，不替代实际 cube map 与 GPU profile。工程验证应使用一张带明显窗格、墙边和灯具的测试环境，在对象平移、镜头绕行、normal map 开关、进入 volume 边界以及不同 HDR 曝光下分别截图对比。
+
+## 小结：用少量数学换取更强的空间感
+
+- image-based lighting 用环境图提供丰富的全方向光照，但普通 cube map 默认环境无限远。
+- lighting space 与 localized cube map 把对象位置带进反射查询，射线与单位球求交后再查 environment map。
+- 顶点阶段要同时输出位置、法线、切线、双切线和视线的 lighting-space 数据；片元阶段先验证坐标，再加入 bump 和 Fresnel。
+- diffuse IBL 可以用 preconvolved diffuse cube map 快速查找，specular IBL 用反射方向或局部交点保持高光空间感。
+- IBL 阴影不需要覆盖所有潜在光源，优先保证接触阴影和背景代理的空间关系，再按预算增加 shadow map 或 stencil pass。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 19: Image Processing涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　将无限远 cube map 改为 localized cube map。请列出顶点阶段必须新增的三个 lighting-space 输出，并说明片元阶段为什么不能只使用反射向量。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+至少新增 lighting-space 的表面位置、法线以及视线向量；若要支持 bump，还需要切线和双切线。片元阶段需要表面位置，因为反射射线要从该点出发与有限环境球求交；只有方向没有起点时，仍然是无限远 cube map 的假设。
 </Answer>
 
+**问题 2｜推导题**　某片元在 lighting space 中 `P = (0.3, 0, 0)`，反射方向 `R = (1, 0, 0)`，单位球半径为 1。计算 `b`、`c` 和判别式，并判断射线正方向是否有交点。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`b = -2 × dot(R, P) = -0.6`，`c = dot(P, P) - 1 = 0.09 - 1 = -0.91`。判别式是 `(-0.6)^2 - 4 × (-0.91) = 4.0`，因此有交点；正方向的 near intersection 为 `(-b + sqrt(4)) / 2 = 1.3`，可以用该交点构造 cube map lookup。
+</Answer>
+
+**问题 3｜独立实现题**　为一个会在室内房间移动的金属角色设计 IBL 方案。要求窗户反射能够对齐、角色脚下不漂浮，并且角色移出局部 volume 时不出现异常颜色。请写出你的路径和验证清单。
+
+<Answer>
+
+用 room transform 建立 lighting space，顶点阶段输出位置、法线、切线、双切线和 lighting-space eye vector，片元阶段通过反射射线与单位球求交后查 cube map，再用 Fresnel 和金属表面 tint 合成。diffuse 使用预卷积环境图，地面增加选择性接触 shadow map 或彩色接触阴影；移出 volume 时切换到无限环境、fallback 或扩大 volume，而不是继续使用无效交点。验证对象平移、镜头移动、窗格对齐、bump 高频 sparkle、HDR 曝光和边界 fallback。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="image-based lighting">用环境图近似多方向环境光照与反射的渲染方法。</GlossaryItem>
+<GlossaryItem term="lighting space">相对于环境体积定义，用于表达表面位置和方向的局部坐标系。</GlossaryItem>
+<GlossaryItem term="localized cube map">将 cube map 解释为有限环境并让 lookup 随对象位置变化的技术。</GlossaryItem>
+<GlossaryItem term="Fresnel attenuation">根据视线与法线夹角调节反射强度的边缘增强近似。</GlossaryItem>
+<GlossaryItem term="preconvolved diffuse cube map">预先积分 Lambertian 环境贡献、运行时按法线查找的 diffuse 环境纹理。</GlossaryItem>
+<GlossaryItem term="contact shadow">用于把对象与承接表面连接起来的局部阴影线索。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 19 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 19. Image-Based Lighting"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-19-image-based-lighting"
+/>
