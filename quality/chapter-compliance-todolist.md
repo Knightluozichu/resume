@@ -1043,7 +1043,7 @@
 
 - [x] ✅ **00-intro/learning-map** — 已修复（2026-08-10，score 84→100，passed）
     - 路径：`content/effective-modern-cpp/00-intro/learning-map.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-07-parentheses-vs-braces** — 未升级 v2、来源不足、内容深度不足、UX 不足（score 71）
+- [x] ✅ **02-moving-to-modern-cpp/item-07-parentheses-vs-braces** — 已修复（2026-08-10，score 71→99，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-07-parentheses-vs-braces.mdx`
 - [ ] 🟡 P3 **04-concurrency/final-review** — 未升级 v2、可视化不足、UX 不足（score 69）
     - 路径：`content/effective-modern-cpp/04-concurrency/final-review.mdx`

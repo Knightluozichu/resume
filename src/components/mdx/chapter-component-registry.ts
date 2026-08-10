@@ -11771,6 +11771,8 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         await import("@/components/mdx/effective-modern-cpp/diagrams/item-07-parentheses-vs-braces");
       return {
         EmcppBraceSyntaxCoverageMap: module0.EmcppBraceSyntaxCoverageMap,
+        EmcppItem07ConstructionDecisionLab:
+          module0.EmcppItem07ConstructionDecisionLab,
         EmcppInitializerListPreferenceMap:
           module0.EmcppInitializerListPreferenceMap,
         EmcppVectorConstructionSemanticsMap:
