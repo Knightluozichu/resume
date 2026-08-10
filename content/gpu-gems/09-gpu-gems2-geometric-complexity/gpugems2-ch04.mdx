@@ -1,0 +1,157 @@
+---
+title: "GPU Gems 2 · Chapter 4. Segment Buffering"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 4
+description: "把空间相邻的重复实例排序并拼进 segment buffer，再按可见集合合并连续区间，减少 draw call，同时保留不重复的场景布局。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-4-segment-buffering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-04
+---
+
+import {
+  GpuGems2Ch04AtlasDiagram,
+  GpuGems2Ch04DrawCallProblemDiagram,
+  GpuGems2Ch04PipelineDiagram,
+  GpuGems2Ch04SegmentBufferingLab,
+  GpuGems2Ch04SegmentMergeDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch04-segment-buffering";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明大量小实例为什么会被 draw call 和 render-state 切换，而不是三角形数量本身拖慢
+- 能实现“空间排序 → 大 buffer → 可见区间合并”的三步 segment buffering 流程
+- 能判断 segment buffering 何时会破坏独立剔除，以及 texture atlas 如何减少 light map 状态切换
+- 能使用实验调整实例分布和可见性，解释 draw range 数量为何随连续性变化
+
+</Objectives>
+
+<Callout type="trap" title="不要只把所有模型机械拼成一个不可剔除的大模型">
+**现象 →** draw call 变少了，但镜头只看到一小块场景时，整张地图仍被提交和光栅化。
+
+**原因 →** 合并没有留下实例边界或 segment 元数据，渲染器无法从大 buffer 中跳过不可见部分。
+
+**修法 →** 为每个原始实例记录 buffer 偏移和计数；先构造 visibility set，再把相邻可见 segment 合并成 draw range。
+
+</Callout>
+
+<Callout type="trap" title="不要按输入顺序拼 buffer 而忽略空间邻近性">
+**现象 →** 可见对象很多，但它们在大 buffer 中彼此穿插，最终仍然需要很多小 range。
+
+**原因 →** segment 是否能合并取决于 buffer 中的连续性；原始列表顺序不等于空间顺序。
+
+**修法 →** 用 k-d tree、octree 或其他空间结构组织实例，按稳定的遍历顺序生成列表，再进行拼接。
+
+</Callout>
+
+<Callout type="trap" title="不要忘记 light map 也是 render state">
+**现象 →** 几何已经连续，但每个实例仍要绑定不同的 light map，draw range 无法跨过状态变化。
+
+**原因 →** segment buffering 只能合并兼容的顶点、索引和材质状态，独立纹理会强制打断批次。
+
+**修法 →** 为实例自动生成 texture atlas，修改每段的 UV 区域，让多个 light map 共享一次纹理绑定。
+
+</Callout>
+
+实例化能减少建模工作，却不必然减少批次数。如果场景里有成百上千个小物体，每个物体都带着自己的变换、纹理或 vertex stream，驱动和 CPU 可能在真正画三角形之前就耗尽时间。
+
+<GpuGems2Ch04DrawCallProblemDiagram />
+
+<Term def="把多个空间相邻实例按段拼入一个共享 vertex/index buffer 的批处理结构">segment buffer</Term>的目标是把“许多独立实例”变成“一个可切片的大实例”。它不要求场景中的模型重复排列成规则网格，也不要求艺术家预先手工合并地图。
+
+## 1. 先把实例变成空间顺序
+
+<Term def="让空间上相近的实例在一维数组中也尽量相邻的组织方式">spatial ordering</Term>是这项技术的关键。可以把实例位置送进三维 k-d tree、octree 或其他空间结构，然后采用稳定的遍历顺序生成一维列表。只要实例列表没有变化，这一步通常只在加载期执行。
+
+空间顺序不是为了改变物体位置，而是为了改变它们在大 buffer 中的邻接关系。相机看到一个局部区域时，附近实例更可能形成连续段，从而在一次 indexed draw 中覆盖更多物体。
+
+<GpuGems2Ch04PipelineDiagram />
+
+## 2. 构建 uber-instance 并保留 segment 元数据
+
+<Term def="由多个已排序实例拼接而成、可用区间切片绘制的大型合并几何">uber-instance</Term>会在构建期遍历空间排序后的实例，把每个模型变换到世界空间后写进一份 vertex/index buffer。每个实例在这份 buffer 中的起点、顶点数、索引起点和索引数都必须保存。
+
+每个这样的记录就是一个 <Term def="大 buffer 中对应原始实例的一段顶点和索引范围">segment</Term>。segment 让合并可逆：渲染器虽然提交的是大 buffer 的范围，但仍然知道哪些范围对应哪些原始实例，因此可以把视锥体外的对象排除掉。
+
+## 3. 从 visibility set 合并连续范围
+
+<Term def="经过视锥体、遮挡或场景规则筛选后需要绘制的实例集合">visibility set</Term>先由原始实例得到，再映射到 segment 列表。遍历这些 segment 时，如果下一个可见 segment 紧跟在当前 range 后面，就扩展同一个 draw range；遇到不可见或不兼容的段，就结束当前 range。
+
+<GpuGems2Ch04SegmentMergeDiagram />
+
+这样做的输出应该与逐实例绘制相同：不可见实例不产生像素，可见实例保持原来的世界变换和材质含义。性能收益来自提交次数和状态变化下降，而不是牺牲独立剔除。
+
+## 4. 材质状态与 texture atlas
+
+如果每个实例都有不同的 light map，顶点和索引虽然可以相邻，纹理绑定仍然会在它们之间插入状态切换。<Term def="把多张小纹理放进一张大纹理并为每个实例分配 UV 子区域的布局">texture atlas</Term>把这类状态差异转成坐标差异：构建每个 segment 时改写其 UV，让它采样 atlas 中自己的矩形区域。
+
+<GpuGems2Ch04AtlasDiagram />
+
+atlas 不是自动解决所有材质差异的魔法。透明模式、shader、采样器或不同渲染 pass 仍可能要求拆分；正确的合并条件是顶点布局和所有影响绘制的状态都兼容。
+
+## 5. 动手实验：连续性比数量更重要
+
+把实例数量调高，再打开可见性剔除。你可能会看到可见实例减少，却没有按相同比例减少 draw range，因为被剔除的段把剩余可见段切碎了。再改变空间叶大小，观察排序粒度如何影响连续性。
+
+<GpuGems2Ch04SegmentBufferingLab />
+
+实验将 segment 简化成一维条带，但保留了真实流程的两个不变量：每个实例有自己的段记录，只有相邻可见段才能合并。真实系统还需要按材质、pass 和 atlas 区域分组。
+
+## 小结
+
+- segment buffering 面向的是大量小实例造成的 draw-call 和状态切换瓶颈。
+- spatial ordering 让空间相近对象在大 buffer 中相邻，为区间合并创造条件。
+- uber-instance 只是一份合并几何；segment 元数据和 visibility set 负责保留剔除能力。
+- 只有连续且状态兼容的 segment 才能合成一个 draw range。
+- texture atlas 可把 light map 绑定切换转成 UV 区域变化，但不会消除 shader 或 pass 不兼容。
+
+<Exercises>
+
+**问题 1｜三步实现**　请为静态树林写出 segment buffering 的构建期和渲染期流程，并标出哪些步骤不应每帧重复。
+
+<Answer>
+
+构建期先用空间结构生成 spatial ordering，再把实例变换到世界空间拼成 uber-instance，同时记录每个 segment 的偏移和计数。渲染期只根据 visibility set 遍历 segment、合并相邻范围并提交 draw。排序和大 buffer 构建通常不应每帧重复，除非实例列表或模型发生变化。
+</Answer>
+
+**问题 2｜剔除判断**　一个不可见实例位于两个可见实例之间。为什么不能把三者无条件合成一个 draw range？
+
+<Answer>
+
+因为中间实例的 segment 也会被 GPU 读取和绘制，结果可能出现本应剔除的几何。应结束前一个可见 range，跳过不可见段，再从下一个可见段开始新 range；性能与正确性的折中由空间排序质量决定。
+</Answer>
+
+**问题 3｜状态兼容**　大 buffer 的几何连续，但每个实例使用独立 light map。你会先改索引还是先设计 texture atlas？为什么？
+
+<Answer>
+
+先设计 texture atlas 并为每个 segment 分配 UV 子区域。索引连续不能消除纹理绑定状态变化；atlas 让同一张纹理覆盖多个实例，再由 UV 选择各自的 light map，从而给 range 合并提供一致的绑定状态。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="segment buffer">把多个实例拼成一个大 vertex/index buffer、同时保存各段元数据的结构。</GlossaryItem>
+<GlossaryItem term="spatial ordering">按空间邻近性生成实例一维顺序的组织方式。</GlossaryItem>
+<GlossaryItem term="uber-instance">由多个实例拼成、可按区间切片绘制的合并几何。</GlossaryItem>
+<GlossaryItem term="segment">大 buffer 中对应一个原始实例的顶点和索引范围。</GlossaryItem>
+<GlossaryItem term="visibility set">经过可见性筛选后需要绘制的实例集合。</GlossaryItem>
+<GlossaryItem term="texture atlas">把多张纹理放进一张大纹理并用 UV 子区域区分的布局。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 4. Segment Buffering" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-4-segment-buffering" />
