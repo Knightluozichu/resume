@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:32:50.115Z；旧版分数不迁移。
+> 2026-08-10T07:43:10.900Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2206
+- failed：2205
 - queued：344
-- passed：1153
+- passed：1154
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -105,16 +105,16 @@
 | 92 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
 | 93 | unity-master | 14 | 14 | 0 | 0 | 42 |
 | 94 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 95 | gpu-gems | 48 | 14 | 0 | 34 | 28 |
-| 96 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
-| 97 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 98 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 99 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 100 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
-| 101 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
-| 102 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
-| 103 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
-| 104 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 95 | ai-agent-dev | 14 | 14 | 0 | 0 | 14 |
+| 96 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
+| 97 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 98 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 99 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 100 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
+| 101 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
+| 102 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
+| 103 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
+| 104 | gpu-gems | 48 | 13 | 0 | 35 | 26 |
 | 105 | chatgpt-principles-practice | 13 | 13 | 0 | 0 | 13 |
 | 106 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
 | 107 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
