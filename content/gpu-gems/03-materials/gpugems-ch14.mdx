@@ -1,255 +1,201 @@
 ---
-title: "Chapter 14: Materials"
+title: "GPU Gems 1 · Chapter 14. Perspective Shadow Maps: Care and Feeding"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part II · Lighting and Shadows"
 order: 14
-description: "GPU Gems Part: Materials, Chapter 14"
+description: "在 post-projective space 中重新分配 shadow-map texel，配合 light-camera clipping、位置相关 bias、PCF 与 color-mask blur 缓解透视阴影图的 aliasing。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-14-perspective-shadow-maps-care-and-feeding"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-14
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh14BiasAndFilteringDiagram,
+  GpuGemsCh14LightCameraDiagram,
+  GpuGemsCh14PerspectiveShadowLab,
+  GpuGemsCh14PsmPipelineDiagram,
+  GpuGemsCh14VirtualCameraDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch14-perspective-shadow-maps";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 14: Materials的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Materials, Chapter 14之间的关系是什么？
+- 能解释标准 shadow map 的 screen-space aliasing，以及 PSM 为什么把深度图放到 post-projective space
+- 能识别 virtual camera、light-camera 视野、near/far 分布和 constant bias 带来的质量问题
+- 能根据 receiver bounding volumes 选择 unit cube clipping 或 cube-map 方案，并理解 displaced center 的纹理坐标
+- 能实现位置相关的 world-space bias、PCF 采样和只对 color shadow mask 做 blur 的质量补丁
 
 </Objectives>
 
-## 为什么需要Chapter 14: Materials
+标准 shadow map 的痛点不是“有没有一张深度图”，而是同一个 texel 在屏幕上覆盖了多大的区域。远处物体可能拥有过多 texel，近处物体却让一个 texel 覆盖很多像素，于是阴影边缘出现 stair-stepping 和 shimmering。GPU Gems 1 第 14 章从 PSM 出发，把资源分配问题放到 post-projective space，再讨论它并不自动解决的 camera、bias 和 filtering 问题。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 14: Materials作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<Callout type="trap" title="PSM 不是把 shadow map 分辨率简单调大">
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+如果近处很多屏幕像素仍落进一个 texel，4K 纹理也只是把成本往上推。PSM 的重点是改变投影后的 texel 分布；后续仍要检查 light camera 的角度、接收者范围和 bias。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Materials, Chapter 14正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="virtual camera 只是覆盖问题的补丁">
 
-### 设计动机
+把相机向后滑能把相机后方的潜在 caster 收进视锥，但会缩小近处物体在 shadow map 中的占比、制造 unused space，还可能在 caster 进出集合时造成质量跳变。
 
-Vulkan 把Chapter 14: Materials从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 14: Materials涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 14: Materials相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 14: Materials相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="PCF 能软化边缘，但不能修复严重 aliasing">
+
+PCF 只对邻近 texel 的深度比较做平均；当一个 texel 已经覆盖很大的屏幕区域时，平均只会得到更柔和的错误。先修正投影和 texel 密度，再把 PCF 当作边缘质量手段。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 为什么 shadow map 会 alias
 
-## 性能考量
+<Term def="把场景变换到透视投影之后、深度和坐标已被重新分布的空间">post-projective space</Term> 是 PSM 的关键工作域。普通阴影图在光源空间里投影，再把结果投回相机画面；这种双重投影会让靠近相机的屏幕像素在阴影图里变得稀疏。PSM 先用相机的投影把近处对象放大，再在这个空间里构造 shadow map，希望把更多 texel 给真正占据屏幕面积的区域。
 
-### 批量操作
+<Term def="在 post-projective space 中生成、用相机投影重新分配 texel 密度的阴影图方法">perspective shadow map</Term> 可以看作一次资源重排，而不是一种新的遮挡判定。它仍然渲染深度、再把接收点投到光源视角做比较；变化发生在 shadow-map 的坐标空间和光源 camera 的选择。
 
-Vulkan 鼓励批量提交而非逐个提交：
+阴影体积是在 object space 构造遮挡多边形，几何精确但 fill rate 昂贵，而且不适合没有常规多边形结构的 alpha-test 或 displacement 几何。shadow map 是 image space 方法：只要对象能被渲染就能产生阴影，但必须正视 aliasing。PSM 选择后者的速度，并把 aliasing 当成投影分配问题处理。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh14PsmPipelineDiagram />
 
-### 避免 CPU-GPU 同步点
+## 1. post-projective space 与 virtual camera
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+原始 PSM 在特定相机和光源关系下效果很好，但有三个需要先暴露出来的问题：
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+- 当光源在相机后方时，潜在 caster 可能位于真实视锥之外；把相机虚拟地向后滑，虽能覆盖它们，却牺牲有效分辨率。
+- 阴影质量依赖 light 在 camera space 的位置。对着相机的光方向更容易让整个 unit cube 挤进很大的视场，近处 texel 变得不够。
+- PSM 的 z 值和 texel 面积分布不均匀，统一 constant bias 不再适用；近处应小、远处应大的误差尺度不能用一个常数概括。
+
+<Term def="为覆盖真实相机后方的潜在遮挡物而把视点向后滑动的替代相机">virtual camera</Term> 会把问题从“漏掉 caster”变成“纹理空间被虚拟平移吞掉”。更糟的是，如果某个对象刚好成为或不再成为潜在 caster，所需的 slideback distance 会突然改变，阴影质量就会跳变。
+
+<GpuGemsCh14VirtualCameraDiagram />
+
+一个替代方向是构造特殊的 inverse projection：让 post-projective ray 穿过负 near 与正 far 的范围，以匹配“穿过 infinity 仍继续”的几何关系。代价是 z 值跨度更大，需要更谨慎的 depth precision；在合理场景中，章节指出 24-bit fixed-point depth 可能足够，但应通过目标场景验证。
+
+## 2. light camera：把 texel 放在 receiver 上
+
+<Term def="根据接收者和 caster 的粗略包围体收窄 light camera 视野、避免把整个 unit cube 塞进纹理的优化">unit cube clipping</Term> 利用一个事实：shadow map 只需要覆盖真实对象，而不是覆盖 post-projective unit cube 的每一处空白。可以在 view-camera space 中收集 receiver 的 bounding volumes，再把它们变换到 post-projective space，最后选择能包住这些点的 light camera。
+
+实用算法可以拆成四步：
+
+1. 收集当前帧真正可见的 receiver，以及可能投射到它们上的 caster bounding volumes。
+2. 把这些包围体的顶点变换到 post-projective space，得到需要被 light camera 看见的点集。
+3. 用包含点集的最小锥近似 light camera 的最佳方向；位置、up vector 和投影参数由光源与 view matrix 约束。
+4. 用足够覆盖 caster 的 near/far 范围渲染 shadow map，但不要让 far-away 空间无谓地扩大接收者的视场。
+
+粗略包围体通常已经有收益：户外场景可以包住地形上的对象高度，室内场景可以用当前房间的体积。目标是给出“关注哪一块空间”，而不是为每个三角形支付一次 CPU 几何分析。
+
+<GpuGemsCh14LightCameraDiagram />
+
+当光源位置靠近 unit cube 或几乎正对相机时，单张纹理可能仍难以容纳整个区域。更一般的做法是使用 cube map：对位于 unit cube 外的 direct light，通常只需 3 到 5 个背向 unit cube 的 face；若 point light 位于 unit cube 内，则使用全部 6 个 face。
+
+<Term def="把 post-projective 顶点位置减去 light position 作为 cube-map 方向、并把 unit cube 面作为纹理平台的采样方案">displaced-center cube map</Term> 的关键坐标是 `texture coordinate = vertex position - light position`。它不是普通世界空间 cubemap：face 仍然对准 unit cube 的面，目的是让纹理面积更接近屏幕投影面积。总纹理尺寸相同时，fill rate 可以接近单张图，但会增加 render-target 切换和坐标计算成本。
+
+```glsl
+vec3 shifted = postProjectivePosition - lightPosition;
+vec3 cubeFacePoint = intersectUnitCube(shifted);
+vec3 cubeDirection = cubeFacePoint;
+float shadowDepth = projectDepth(cubeFacePoint);
 ```
 
-### 内存对齐
+深度不能直接依赖所有硬件的 cubemap depth texture；一种实现是把深度打包到颜色纹理，另一种是把每个 face 作为独立纹理并管理各自的坐标集。选择方案时要把资源切换和每像素指令纳入预算。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. bias 必须跟着 texel 位置变化
 
-## 验证层检查
+在 uniform shadow map 中，常量 depth bias 常常足以压住 self-shadowing 的数值误差。PSM 中，透视投影让 near object 被放大、far object 被压缩，texel 在 world space 的大小随位置变化；因此 constant bias 会在一端造成 acne，在另一端造成 peter-panning 或漏光。
 
-启用验证层后，Chapter 14: Materials相关的常见错误会被捕获：
+<Term def="先在世界空间估计几何误差，再通过双投影转换成当前 PSM 深度比较所需偏移的 bias 策略">world-space bias</Term> 可以按 texel 尺寸估计：把点投进 shadow-map space，沿不改变深度的方向移动一个 texel，再变回 world space，差向量的长度平方给出局部尺度。然后把这个世界空间误差转换到 post-projective depth，供比较阶段使用。
 
+不要把 bias 的调参结果只看作一个全局滑杆：要分别观察近处接触边缘、远处平面和光线几乎平行表面的情况。一个位置有效的常数，在另一处可能已远大于 texel 的实际误差。
+
+## 4. PCF 与 color-mask blur：两种不同的软化
+
+<Term def="对相邻 shadow-map texel 执行多次深度比较并平均结果，以产生软边的过滤方法">percentage-closer filtering</Term> 先做 depth compare，再平均 compare 结果。硬件 depth texture 可以在比较后执行 PCF；否则需要采样邻近 texel 并手动累加。四次采样是常见起点，但要知道它只是 soften aliasing 的边缘，不会增加原始深度信息。
+
+真正的 blur 不能直接作用于 depth map：深度值不是黑白遮罩，把相邻深度做高斯平均会混合不同遮挡面的几何距离。对于地面、墙面等不需要自阴影的对象，可以在生成 shadow map 时额外写一个 color mask：目标对象写 1，其他对象写 0；之后对这个 color mask 做多 pass blur，渲染时仅对这些对象使用模糊结果。
+
+<GpuGemsCh14BiasAndFilteringDiagram />
+
+PCF 的最小逻辑可以写成：
+
+```hlsl
+float shadow = 0.0;
+for (int i = 0; i < sampleCount; i++) {
+  float sampleDepth = sampleShadowMap(uv + offsets[i]);
+  shadow += currentDepth > sampleDepth + bias ? 1.0 : 0.0;
+}
+shadow /= sampleCount;
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+工程上要分开记录三类证据：aliasing 是否来自 texel 过稀、acne 是否来自 bias 过小、边缘是否只是需要更多 PCF。若把三者混成一个 blur 滑杆，调参会掩盖投影错误而不是解决它。
 
-## 本章要点
+## 5. 动手实验：把投影预算拨给真正的 receiver
 
-1. Chapter 14: Materials是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+先预测：关闭 unit cube clipping 时，哪些格子会变成 unused texel？把 bias 切到 constant 后，近处和远处哪个区域更容易出现错误？增加 PCF samples 会让 aliasing 消失，还是只让它变软？
+
+<GpuGemsCh14PerspectiveShadowLab />
+
+实验中的绿色区域代表 receiver bounds，网格代表 shadow-map texel 的预算。`near plane` 与 `light angle` 改变 post-projective 的密度，clipping 决定是否把预算聚焦到 receiver，bias 模式影响位置相关误差，PCF 只改变比较的平均程度。用同一个场景逐项切换，才能把 aliasing、bias 和 filtering 的症状分开。
+
+## 小结：PSM 是空间分配加质量补丁
+
+- PSM 在 post-projective space 中重新分配 texel，让近处高屏幕占比区域得到更多阴影采样。
+- virtual camera 能覆盖真实相机后方的 caster，却会减少有效分辨率并引入质量跳变；inverse projection 和 receiver clipping 是更可控的方向。
+- light camera 应围绕 receiver bounding volumes 选择；unit cube clipping 用粗略几何换取更集中的纹理预算。
+- PSM 的 depth 与 texel 尺度不均匀，bias 要在 world space 估计并随位置转换，不能迷信一个 constant。
+- PCF 负责比较结果的边缘平均；不需要自阴影的 ground/wall 可以另写 color mask，再对 mask blur，不能直接 blur depth。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 14: Materials涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜推导题**　一个远处 receiver 的 world-space texel 尺寸约为近处 receiver 的 4 倍。若两处都使用相同的 constant bias，哪一处更可能出现 acne，哪一处更可能出现漏光？为什么？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+近处 texel 更小，固定 bias 可能不足以覆盖深度量化和斜率误差，因此更容易 acne；远处 texel 更大，同一个 bias 相对更容易过量，把接触阴影推开并造成漏光。应按位置估计 world-space 误差，再转换到 shadow-map depth。
 </Answer>
 
+**问题 2｜改 Demo 代码**　把实验中的 unit cube clipping 关闭，并把 light angle 调到接近正对相机。请记录 texel 密度、unused 区域、PCF 采样数和边缘 aliasing，说明哪个变化属于投影问题。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+关闭 clipping 会让网格覆盖更多空白区域，receiver 获得的有效 texel 变少；接近正对相机时，为容纳 unit cube 需要更大的 light-camera 视场，近处密度进一步下降。PCF 只能让阶梯更柔和，不能恢复已经丢失的 texel 密度，所以主要问题属于 light-camera 投影。
+</Answer>
+
+**问题 3｜独立实现题**　为一个室外地面、建筑物和移动角色设计混合方案：哪些对象可以使用 color-mask blur，哪些对象必须保留 depth + PCF？
+
+<Answer>
+
+地面和不需要自阴影的墙面可以在 shadow-map 生成阶段写入单独 color mask，再离线或多 pass blur；建筑物和移动角色需要自身遮挡关系，应保留 depth shadow map 与 PCF。若角色改变了接收或投射几何，还要确保每帧更新适合它的动态 shadow map。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="post-projective space">透视投影后的坐标空间，PSM 在此重新分配 shadow-map texel。</GlossaryItem>
+<GlossaryItem term="perspective shadow map">利用相机投影后的空间分布来缓解阴影图 aliasing 的方法。</GlossaryItem>
+<GlossaryItem term="virtual camera">为覆盖真实相机后方 caster 而向后滑动的替代视点。</GlossaryItem>
+<GlossaryItem term="unit cube clipping">依据 receiver/caster 包围体收窄 light camera 视野的优化。</GlossaryItem>
+<GlossaryItem term="displaced-center cube map">以顶点位置减去光源位置构造方向、并以 unit cube 面为平台的 cubemap 方案。</GlossaryItem>
+<GlossaryItem term="world-space bias">在世界空间按局部 texel 误差估计、再转换到 PSM 深度的偏移策略。</GlossaryItem>
+<GlossaryItem term="percentage-closer filtering">对多个深度比较结果平均以软化阴影边缘的过滤方法。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 14 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 14. Perspective Shadow Maps: Care and Feeding"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-14-perspective-shadow-maps-care-and-feeding"
+/>
