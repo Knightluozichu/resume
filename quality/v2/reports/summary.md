@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T05:48:07.590Z；旧版分数不迁移。
+> 2026-08-10T05:55:02.708Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2218
+- failed：2217
 - queued：344
-- passed：1141
+- passed：1142
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -26,13 +26,13 @@
 | 13 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 14 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 15 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
-| 16 | gpu-gems | 48 | 26 | 0 | 22 | 52 |
-| 17 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
-| 18 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
-| 19 | programmers-math | 25 | 25 | 0 | 0 | 75 |
-| 20 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
-| 21 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
-| 22 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 16 | crafting-compiler | 25 | 25 | 0 | 0 | 75 |
+| 17 | deep-understanding-jvm | 25 | 25 | 0 | 0 | 75 |
+| 18 | programmers-math | 25 | 25 | 0 | 0 | 75 |
+| 19 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
+| 20 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
+| 21 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 22 | gpu-gems | 48 | 25 | 0 | 23 | 50 |
 | 23 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
 | 24 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
 | 25 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |

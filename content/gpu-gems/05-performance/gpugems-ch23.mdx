@@ -1,255 +1,170 @@
 ---
-title: "Chapter 23: Performance and Practicalities"
+title: "GPU Gems 1 · Chapter 23. Depth of Field: A Survey of Techniques"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part IV · Image Processing"
 order: 23
-description: "GPU Gems Part: Performance and Practicalities, Chapter 23"
+description: "从镜头模型与 circle of confusion 出发，对比 ray tracing、accumulation buffer、layered、forward z-buffer 与 reverse z-buffer 景深，并拆解实时后处理的伪影。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-23-depth-field-survey-techniques"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-23
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh23ArtifactDiagram,
+  GpuGemsCh23CocPipelineDiagram,
+  GpuGemsCh23DofConceptDiagram,
+  GpuGemsCh23DofLab,
+  GpuGemsCh23TechniqueSurveyDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch23-depth-of-field";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 23: Performance and Practicalities的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Performance and Practicalities, Chapter 23之间的关系是什么？
+- 能用镜头、焦平面和 circle of confusion 解释景深，而不是把景深误解为全屏 blur
+- 能比较五类 depth of field 技术的 visibility、质量、速度和伪影取舍
+- 能从 z-buffer 计算每像素 CoC，设计 mip 或纹理后处理，并指出 depth discontinuity、bilinear 与 pixel bleeding 风险
+- 能根据实时预算选择算法和回归样本，验证焦点、光圈、运动和后处理稳定性
 
 </Objectives>
 
-## 为什么需要Chapter 23: Performance and Practicalities
+摄影中的景深让一段距离范围内的物体保持清晰，焦平面前后的物体则逐渐失焦。传统实时渲染使用理想 pinhole camera，镜头尺寸为零，每个像素只有一条光线路径，因此不会自然产生真实镜头的离焦圆。GPU 实现需要从颜色和深度证据中近似这种效果。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 23: Performance and Practicalities作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Performance and Practicalities, Chapter 23正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把景深当成一次全屏高斯 blur">
+现象：前景、主体和背景都被同样模糊，焦点移动时没有摄影机的层次感。原因：blur 没有使用每像素深度，也没有计算相对焦平面的 CoC。修法：保存 color 与 depth，根据相机参数生成 CoC，再让模糊半径随像素变化。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 23: Performance and Practicalities从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 23: Performance and Practicalities涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 23: Performance and Practicalities相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 23: Performance and Practicalities相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要只看 CoC 大小而忽略 visibility">
+现象：前景模糊颜色穿过中景边缘，出现 halo 或错误遮挡。原因：后处理只从一个 z 值推断 blur，没有真实镜头的多路径 visibility。修法：补充邻域深度、layer mask、前后景分离或接受特定场景限制，并把 depth discontinuity 纳入测试。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要用更多采样掩盖所有实时伪影">
+现象：画面更平滑了，但帧时间、ghosting 或 banding 超出预算。原因：accumulation、splatting 和高质量 mip 都把 CoC 面积转成更多样本或 pass。修法：先确定目标质量和最大 CoC，再选择算法、样本数、jitter、filter 与降级策略。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="让焦平面内一段距离范围清晰、焦平面前后逐渐失焦的镜头成像效果">depth of field</Term> 的关键不是“模糊越多越好”，而是模糊半径随物体与 focus plane 的距离变化。光圈越大，离焦区域的影响越明显；焦平面移动时，最小 CoC 应跟着目标物体移动。
 
-## 性能考量
+<GpuGemsCh23DofConceptDiagram />
 
-### 批量操作
+## 1. 从镜头模型得到 CoC
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="离焦点在成像面上形成的模糊圆直径，用于把物体相对焦平面的距离转换为像素 blur 半径">circle of confusion</Term>（CoC）是实时景深的桥梁。若 `objectDistance` 是相机到物体的距离，`planeInFocus` 是焦平面距离，`aperture` 是光圈参数，官方章节给出的近似关系可以写成：
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```hlsl
+float coc = abs(
+  aperture * (focalLength * (objectDistance - planeInFocus)) /
+  (objectDistance * (planeInFocus - focalLength))
+);
 ```
 
-### 内存对齐
+工程上常把相机参数折叠成 scale 与 bias，直接从 z-buffer 得到：
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，Chapter 23: Performance and Practicalities相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+```hlsl
+float coc = abs(z * cocScale + cocBias);
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这一步隐含了深度表示契约。z-buffer 可能是非线性的，near/far plane、projection matrix 和世界空间距离不能混用；如果焦点在很远处，浮点精度和深度不连续会直接影响 CoC。先用一条从近到远的深度 ramp 检查 CoC 曲线，再把它连接到颜色后处理。
 
-## 本章要点
+## 2. 五类技术如何交换质量与速度
 
-1. Chapter 23: Performance and Practicalities是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+官方章节综述了五条路线：跨镜头表面分布 ray tracing、多相机 accumulation buffer、按深度分层、forward-mapped z-buffer，以及 reverse-mapped z-buffer。前两类更接近真实镜头但代价高；z-buffer 技术更适合当前 GPU 的实时后处理，因此工程讨论应集中在它们的 visibility 与伪影。
+
+<GpuGemsCh23TechniqueSurveyDiagram />
+
+<Term def="用多个相机采样并把结果累积到高精度颜色缓冲的景深方法，用更多场景 pass 逼近真实镜头">accumulation buffer</Term> 通过从不同镜头位置渲染多次，再混合结果近似 distributed ray tracing。CoC 面积越大，需要的 pass 越多；样本不足会在远近景出现 ghosting 或 banding，整数缓冲的精度也可能不足。它适合质量优先、可以接受非实时成本的路径。
+
+<Term def="将场景按深度切成互不重叠层、对每层使用代表性 blur 后再合成的景深方法">layered depth of field</Term> 只在场景可以可靠分层时简单有效。每层独立保存可见物体，因此边缘 visibility 比直接 blur 一张全屏颜色图更可控；但一个物体跨越很大深度范围时，整层统一 blur 会出现内部不自然的焦散边界，层与层之间也可能藏入错误的遮挡。
+
+## 3. z-buffer 后处理：从 CoC 到可变模糊
+
+<Term def="把源像素按 CoC 直径作为 sprite 投到目标图像，并用 alpha 权重近似离焦圆的 forward-mapped 景深方法">forward-mapped z-buffer</Term> 保存 color 与 depth，按每个源像素的 CoC 将颜色作为圆形 sprite 写回 frame buffer。为了减少前景模糊污染前景清晰物体，源像素只混合到比自己更远的邻域，最终还需要按 alpha 总和重新归一化。它适用于任意场景，但大量 sprite 和每像素最大 CoC 会迅速消耗预算。
+
+<Term def="按每个像素 z 值选择不同模糊等级或纹理 mip，再把结果合成为景深的后处理方法">reverse-mapped z-buffer</Term> 反过来让每个目标像素根据自己的 CoC 读取模糊图像。最简单的版本用 scene texture 的 mipmap；更高质量的版本预先生成多个 blur level，或用 summed-area table 查询更大范围。这个方法通常最快，却最容易在深度断点、bilinear magnification 和颜色 bleeding 处暴露近似限制。
+
+<GpuGemsCh23CocPipelineDiagram />
+
+```hlsl
+float coc = abs(z * cocScale + cocBias);
+float lod = saturate(coc * maxBlurMip);
+float3 blurred = tex2Dlod(sceneColor, float4(uv, 0.0, lod)).rgb;
+return float4(blurred, 1.0);
+```
+
+不要把这段伪代码当成完整发布 shader：真实实现要决定 mip 生成过滤、CoC 到 lod 的标定、前后景合成和 alpha 归一化。硬件自动生成 mipmap 通常更快，但三乘三或五乘五的 downsample 可以减少低级纹理的方块感；质量和带宽必须在目标 GPU 上测量。
+
+## 4. 伪影诊断：先定位证据缺口
+
+<GpuGemsCh23ArtifactDiagram />
+
+depth discontinuity 是最难看的问题之一：一个 z 值不足以说明前景模糊应该怎样覆盖中景。读取多个深度样本可以提供更多证据，但固定数量样本可能只产生一个半径固定、逐渐衰减的 halo；直接 blur depth 又会把锐利边缘模糊掉。实际产品往往通过额外 blur bias、限制焦平面位置、层分离或艺术遮罩规避最坏情况。
+
+bilinear interpolation artifact 来自放大较小的 mip 或 blur texture。可以用 summed-area table、多个全尺寸 blur、按 CoC 抖动采样，或接受由 jitter 引入的细噪声来换取不出现爬行的方块图案。pixel bleeding 则是颜色图被无差别模糊：焦点内的颜色会错误渗到离焦区域，分对象渲染与分别合成只能缓解常见场景，不能成为通用可见性证明。
+
+## 5. 动手实验：把摄影控制变成 GPU 参数
+
+先预测四个变化：focus plane 接近某个物体时，该物体的 CoC 应下降；aperture 增大会扩大前景和背景 CoC；filter quality 降低可能出现 banding、jitter 或 pixel bleeding；depth edge 增大时，reverse z-buffer 的 artifact 指标应上升。
+
+<GpuGemsCh23DofLab />
+
+实验采用确定性的三层场景，目的是建立参数因果，而不是替代真实镜头渲染。发布前要在前景遮挡细线、焦平面远近切换、相机运动、透明物体、最大 CoC、mip 边界和不同分辨率下回归；同时记录每个算法的 pass 数、纹理带宽、最大半径和可接受伪影。
+
+## 小结：景深是相机模型与可见性近似的协商
+
+- depth of field 由 focus plane 和 aperture 共同决定，CoC 把镜头距离转成每像素的 blur 规模。
+- ray tracing 与 accumulation buffer 更接近真实 visibility，但可能不可实时；layered 方法简单却依赖场景可分层。
+- forward-mapped z-buffer 以 sprite 传播源像素，reverse-mapped z-buffer 以 z 选择模糊纹理；后者通常更适合实时后处理。
+- depth discontinuity、bilinear interpolation 和 pixel bleeding 是证据不足的表现，应通过深度样本、过滤、jitter、layer mask 或场景约束处理。
+- 没有单一算法满足所有质量与速度要求，发布选择必须和最大 CoC、样本预算及回归场景一起记录。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 23: Performance and Practicalities涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜推导题**　某像素的 `z=0.6`、`cocScale=0.8`、`cocBias=-0.2`。计算 `abs(z × cocScale + cocBias)`；如果焦平面移动使 bias 变成 `-0.5`，该像素的 blur 趋势是什么？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+原始 CoC 是 `abs(0.6 × 0.8 - 0.2) = 0.28`。bias 变成 `-0.5` 后是 `abs(0.48 - 0.5) = 0.02`，说明这个 z 值更接近新的 focus plane，像素应明显变清晰。实际 shader 还要确认 CoC 的单位和 screen-space 半径映射。
 </Answer>
 
+**问题 2｜方法选择题**　一个镜头场景需要真实 visibility，但允许离线渲染；另一个游戏后处理场景要求稳定实时帧率。分别优先选择哪类技术？写出一个主要风险。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+离线镜头优先 distributed ray tracing，因为它直接从镜头表面发射样本，正确性最好，风险是样本数和噪声。实时游戏优先 reverse-mapped 或 forward-mapped z-buffer，风险是深度断点、pixel bleeding、mip 插值或大量 sprite 带来的成本；需要按场景遮挡结构选择 z-buffer 变体。
+</Answer>
+
+**问题 3｜独立实现题**　为第三人称游戏设计一个 reverse z-buffer 景深 pass。请列出输入、关键计算、至少三条伪影防线和回归样本。
+
+<Answer>
+
+输入是 scene color、非线性 z-buffer、焦平面、focal length、aperture 和近远裁剪面。先把 z 按投影契约转为 CoC，再生成多个过滤稳定的 blur level，按 CoC 选择 mip 或插值，最后根据前后景关系做合成与 alpha 归一化。防线包括邻域深度检查、jitter 或多样本、layer mask、轻微 blur bias、限制焦平面进入高断点区域，以及观察最大 CoC。回归至少覆盖灰阶深度 ramp、前景遮挡中景、透明物体、快速焦点切换、mip 边界和相机运动。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="depth of field">让焦平面内一段距离范围清晰、焦平面前后逐渐失焦的镜头成像效果。</GlossaryItem>
+<GlossaryItem term="circle of confusion">离焦点在成像面上形成的模糊圆直径，用于决定 blur 半径。</GlossaryItem>
+<GlossaryItem term="accumulation buffer">累积多个镜头采样结果的高精度颜色缓冲，用更多场景 pass 逼近真实景深。</GlossaryItem>
+<GlossaryItem term="layered depth of field">按深度切分场景层、分别模糊并合成的景深方法。</GlossaryItem>
+<GlossaryItem term="forward-mapped z-buffer">以 CoC 为 sprite 直径把源像素传播到目标图像的 z-buffer 景深方法。</GlossaryItem>
+<GlossaryItem term="reverse-mapped z-buffer">按每个目标像素的 z 与 CoC 选择模糊纹理等级的后处理景深方法。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 23 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 23 “Depth of Field: A Survey of Techniques”的独立重写，保留 CoC、五类景深路线、z-buffer 后处理与伪影分析等核心技术线索，并将示例改写为可验证的实时渲染学习路径。原始章节：[NVIDIA GPU Gems Chapter 23](https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-23-depth-field-survey-techniques)
+
 </Attribution>
