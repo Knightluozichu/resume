@@ -12851,6 +12851,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh07WavingGrassLab: module0.GpuGemsCh07WavingGrassLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/02-lighting-shadows/gpugems-ch08": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch08-diffraction");
+    return {
+      GpuGemsCh08DiffractionLab: module0.GpuGemsCh08DiffractionLab,
+      GpuGemsCh08GratingGeometryDiagram:
+        module0.GpuGemsCh08GratingGeometryDiagram,
+      GpuGemsCh08RainbowSumDiagram: module0.GpuGemsCh08RainbowSumDiagram,
+      GpuGemsCh08WaveInterferenceDiagram:
+        module0.GpuGemsCh08WaveInterferenceDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

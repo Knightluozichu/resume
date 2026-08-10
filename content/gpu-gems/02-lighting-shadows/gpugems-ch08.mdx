@@ -1,255 +1,225 @@
 ---
-title: "Chapter 8: Lighting and Shadows"
+title: "GPU Gems 1 · Chapter 8. Simulating Diffraction"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part I · Natural Effects"
 order: 8
-description: "GPU Gems Part: Lighting and Shadows, Chapter 8"
+description: "从衍射光栅的波干涉出发，用切线、halfway vector 和有限彩虹样本构建实时衍射着色器。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-8-simulating-diffraction"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-08
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh08DiffractionLab,
+  GpuGemsCh08GratingGeometryDiagram,
+  GpuGemsCh08RainbowSumDiagram,
+  GpuGemsCh08WaveInterferenceDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch08-diffraction";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 8: Lighting and Shadows的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Lighting and Shadows, Chapter 8之间的关系是什么？
+- 能解释为什么普通光线反射模型会漏掉 CD 等微结构表面的彩色效果
+- 能推导 `λ=|u|d/n`，并说明切线方向、条纹间距与 halfway vector 如何进入 `u`
+- 能修改实时衍射实验的间距、视角、粗糙度和样本数，判断画质与 shader 成本的变化
+- 能回答：为什么 `u=0` 的精确反射需要单独加入各向异性高光？
 
 </Objectives>
 
-## 为什么需要Chapter 8: Lighting and Shadows
+<Callout type="trap" title="陷阱一：把 CD 的颜色当成普通镜面贴图">
+**现象 →** 贴一张彩虹纹理后，某个角度看起来正确，换光源或转动表面就失去随视角移动的亮带。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 8: Lighting and Shadows作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** 彩色亮带来自微小平行结构造成的波干涉，不是固定在物体 UV 上的装饰颜色。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Lighting and Shadows, Chapter 8正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 保留表面的局部方向与条纹间距，让 shader 根据光源、观察者和切线实时计算增强的波长。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：只累加一个波长">
+**现象 →** 画面只出现单色亮线，或者彩色区域随样本数量改变而剧烈闪烁。
 
-### 设计动机
+**原因 →** 可见光是多个波长的叠加；衍射条件还会产生多个有效阶次，漏掉求和会把物理近似削成假高光。
 
-Vulkan 把Chapter 8: Lighting and Shadows从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 8: Lighting and Shadows涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 8: Lighting and Shadows相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 8: Lighting and Shadows相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 固定展开有限个 `n`，把每个 `λ` 送入连续的彩虹映射，再将结果与高光贡献相加。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：没有给网格提供切线方向">
+**现象 →** 同一个 shader 在 CD 上有彩色条纹，换到另一块表面后颜色方向错乱或完全不动。
+
+**原因 →** shader 不知道微结构窄带朝哪边；法线只描述表面朝向，不能替代条纹的主方向。
+
+**修法 →** 为每个顶点提供与局部条纹平行的 tangent，并在与法线相同的变换空间里参与 halfway vector 投影。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 直觉引入：表面太细时，光会“记住”波
 
-## 性能考量
+一面普通墙壁的细节比可见光的波长大得多，我们可以把光当成一条条射线；但 CD 上的细密轨道非常小，邻近轨道反射出来的波会互相影响。观察者移动时，某些颜色突然变亮，正是不同波峰在某个方向重新对齐。
 
-### 批量操作
+这章解决的问题是：不用完整求解电磁场，怎样让任意带有微结构方向的表面，在实时渲染中出现可控的彩色衍射。答案不是一张静态彩虹图，而是从局部几何算出哪些波长会增强，再用一个便宜的颜色近似完成着色。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh08WaveInterferenceDiagram />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+## 1. 从光线模型切换到波的视角
 
-### 避免 CPU-GPU 同步点
+<Term def="当表面微结构尺度接近光的波长时，反射波之间发生增强或抵消的彩色现象">diffraction</Term> 可以看作波干涉在微结构表面的可见结果。普通表面反射模型忽略了光的波动性，这是合理的工程近似；当结构细到微米级，忽略它就会丢掉 CD、珠光包装和某些水印材料的颜色变化。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<Term def="描述周期振荡中相邻波峰距离的量；可见光不同波长对应不同颜色">wavelength</Term> 决定颜色，振幅决定强度。可见范围可以粗略取为 0.5 到 1 微米；shader 不需要模拟紫外和红外，只需把落在这段范围里的候选波长映射成 RGB。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+## 2. 衍射光栅为什么会挑出颜色
+
+本章把表面近似成 <Term def="由平行窄反射带组成、相邻带间距为 d 的周期微结构">diffraction grating</Term>。相邻反射带之间的距离记为 `d`，入射波到达每一条带后都会产生向外传播的波。接收点看到的是这些波的叠加，而不是每条带独立贡献的亮度。
+
+<Term def="两列或多列波相遇后振幅增强或抵消的现象">interference</Term> 是关键：当不同路径差是波长的整数倍，波峰相遇并增强；当相位相反，波峰与波谷抵消。因为不同波长满足增强条件的方向不同，观察者移动时就会看到颜色沿表面滑动。
+
+设入射角为 `θ₁`、观察方向角为 `θ₂`，用
+
+$$
+u=\sin(\theta_1)-\sin(\theta_2)
+$$
+
+这个式子在说：入射与观察方向的差异，可以先压缩成一个描述路径差的标量 `u`。对第 `n` 个干涉阶次，满足增强的波长近似为：
+
+$$
+\lambda_n=\frac{|u|d}{n},\qquad n=1,2,3,\ldots
+$$
+
+这个式子在说：条纹间距 `d` 越大，候选波长整体越长；阶次 `n` 越高，候选波长越短。最终只保留落在可见范围的 `λ`，并把它们的颜色累加。
+
+## 3. 把物理关系放进顶点着色器
+
+GPU Gems 的简化实现把衍射放在 vertex program 中。它并不限制网格形状，但每个顶点必须同时提供位置、法线和一条 <Term def="沿着微结构窄带方向的局部向量；CD 上通常沿着轨道">tangent vector</Term>。CD 的薄 quad 只是一种演示几何，任意带主方向的表面都可以复用这条路径。
+
+在观察和光源方向之间构造 <Term def="由归一化光线与视线相加得到、代表二者中间方向的向量">halfway vector</Term> `H=L+V`，再将它投影到经过同一空间变换的切线 `T` 上：
+
+$$
+u=\operatorname{dot}(T,H)\,d
+$$
+
+这个式子在说：切线负责告诉 shader 条纹朝向，`H` 负责把光源与观察者合成一个方向，`d` 把无量纲的方向差换成真实的周期尺度。实际代码可以把 `u` 取绝对值，因为正负只代表方向相反。
+
+<GpuGemsCh08GratingGeometryDiagram />
+
+```glsl
+vec3 P = (modelView * position).xyz;
+vec3 L = normalize(lightPosition - P);
+vec3 V = normalize(eyePosition - P);
+vec3 H = L + V;
+vec3 N = normalize((normalMatrix * normal));
+vec3 T = normalize((normalMatrix * tangent));
+float u = abs(dot(T, H) * spacing);
+vec3 diffraction = vec3(0.0);
+for (int n = 1; n < 8; n++) {
+  float lambda = u / float(n);
+  diffraction += rainbow(lambda);
+}
 ```
 
-### 内存对齐
+这里的循环上限不是物理上的“只有七阶”，而是可实时实现的固定近似。原书指出早期 Cg 编译器会展开循环，顶点程序大小限制了动态循环；固定少量阶次使每个顶点的成本可预测，也方便在 WebGL2 中复现。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. 用彩虹映射把波长变成颜色
 
-## 验证层检查
+真实的光谱到 RGB 需要更精确的颜色匹配函数，但实时 demo 可以使用 <Term def="把可见波长区间映射为近似红橙黄绿蓝紫颜色的函数或一维表">rainbow map</Term>。原书使用三个相同形状的 bump function，分别放在蓝、绿、红区域；每个候选波长经过这个函数后，再加到 `diffraction` 颜色上。
 
-启用验证层后，Chapter 8: Lighting and Shadows相关的常见错误会被捕获：
+若用一个形状参数 `C` 控制 bump 宽度，可以先把波长归一化到 `[0,1]`，再用 `max(1-x²,0)` 形成平滑峰。`C=4` 是原实现给出的可接受起点，但它是艺术与性能之间的参数，不是新的物理常数。
 
+<GpuGemsCh08RainbowSumDiagram />
+
+实践中还要限制亮度。把所有候选颜色直接相加可能超过目标格式的范围，因此可以在输出前做软压缩或让材质强度参与缩放；不要通过删掉整个颜色通道来掩盖过曝，那会让颜色随视角变化失去连续性。
+
+## 5. `u=0` 时补上各向异性高光
+
+当 `u` 接近 0，公式会让很多可见波长同时参与精确反射。理想情况下，这会像一条极细的白线；现实中条纹有微小不规则，亮线会扩散。原书用一个 <Term def="沿表面主方向拉开的高光近似；这里补足精确反射附近的亮部">anisotropic highlight</Term> 单独表达这部分。
+
+可以用 `w=dot(N,H)` 描述 halfway vector 在法线方向的分量，再用粗糙度 `r` 控制扩散范围。直觉上，`r` 越大，高光越宽但越不尖；衍射彩色部分和这个高光部分最后相加。
+
+```glsl
+float w = max(dot(N, H), 0.001);
+float e = roughness * u / w;
+float highlight = exp(-e * e);
+vec3 anis = highlightColor * highlight;
+vec3 finalColor = diffraction + anis;
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+这段高光不是把衍射替换成普通 Phong，而是专门处理 `u` 接近零时的极端情况。把它放在实验开关里，读者可以看到：隐藏它，正反射方向会变得过暗或过窄；打开它，颜色亮带和主高光的过渡更完整。
 
-## 本章要点
+## 6. 视线、材质与网格方向的验证
 
-1. Chapter 8: Lighting and Shadows是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+原书用薄 quad 构造 CD，并把切线沿轨道方向；同时还加了一层类似 Fresnel 的透明反射层，让掠射角更容易看到环境反射。这个 demo 也可以应用到带方向纹理的普通表面，只要每个顶点的 tangent 真正对应微结构主方向。
+
+验证时不要只站在一个角度看。至少检查三类状态：正反射附近的高光、偏离反射方向后的彩色亮带，以及切线旋转后条纹是否随之旋转。若只有第一类状态正确，通常是 `u` 或 tangent 空间不一致；若只有第二类状态正确，通常是各向异性补偿没有覆盖 `u≈0`。
+
+猜一猜：把 `d` 从 `0.62` 调到 `0.95`，候选波长会整体往长波还是短波移动？把波长样本从 6 降到 3，首先变差的是颜色连续性、亮度，还是顶点成本？
+
+<GpuGemsCh08DiffractionLab />
+
+实验中的“单波长误区”会把所有样本涂成同一种颜色，便于和正常的有限彩虹求和对照；它不是物理正确模式，而是一个故障注入，用来证明“多阶样本 + 彩虹映射”各自承担了什么。
+
+## 7. 实时近似的边界
+
+这套 shader 展示的是波动特征的工程近似，而不是完整的电磁求解。固定 `n` 的数量让成本稳定，却可能漏掉某些视角下的有效波长；简单 rainbow map 让颜色好看，却不等同于严格的光谱渲染；各向异性高光补足了 `u=0` 的视觉缺口，却依赖粗糙度和高光色调参数。
+
+因此，调参顺序应当是：先确认 tangent 与空间变换正确，再确认 `u` 随光源和视角连续变化，之后才调整样本数、rainbow map 形状和高光粗糙度。这样每一个视觉变化都有对应的几何或近似原因，而不是在错误坐标上堆颜色。
+
+## 小结：把微结构变成可控的频谱近似
+
+- diffraction 来自微结构反射波的 interference，不是固定彩虹贴图。
+- 光栅间距 `d` 与方向差 `u` 决定候选波长 `λ=|u|d/n`。
+- tangent 与 halfway vector 把局部表面方向接入 vertex shader。
+- rainbow map 将有限波长样本转成颜色，固定循环换取实时成本。
+- `u=0` 的 anisotropic highlight 负责补足精确反射附近的亮部。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 8: Lighting and Shadows涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　把实验的“单波长误区”打开，再分别把样本数设为 3、6、8。描述颜色连续性和每顶点计算量的变化，并说明为什么不能无限增加样本。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+单波长误区会让所有亮带失去光谱变化；正常模式下样本越多，颜色过渡通常越连续，但每个顶点的 rainbow 求值与累加也越多。固定有限样本能让 shader 成本可预测，实际数量应由目标 GPU、视角和可见效果共同决定。
 </Answer>
 
+**问题 2｜推导题**　取 `u=0.8`、`d=0.5`，分别计算 `n=1` 和 `n=4` 时的候选波长比例 `λ`。哪一个更可能落入可见范围，为什么还需要检查可见区间而不能直接累加？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`n=1` 时 `λ=0.8×0.5/1=0.4`，`n=4` 时 `λ=0.8×0.5/4=0.1`。二者都只是比例示例，是否可见仍要和约 0.5 到 1 微米的区间比较；不做筛选就会把不可见波长错误地贡献到 RGB。
+</Answer>
+
+**问题 3｜独立实现题**　为一个带主方向纹理的表面补充 tangent，并把衍射 shader 应用到它。除了最终截图，你会如何验证切线方向、`u≈0` 高光和样本数量都工作正常？
+
+<Answer>
+
+应旋转切线方向并观察彩色亮带是否随之旋转，移动光源或相机检查 `u` 是否连续变化；再把视角调到 `u≈0`，开关各向异性高光比较亮部；最后固定画面测量样本数变化后的 vertex shader 时间和颜色稳定性。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="diffraction">微小周期结构让反射波增强或抵消，从而出现随视角变化的彩色效果。</GlossaryItem>
+<GlossaryItem term="wavelength">波峰到下一个波峰的距离；可见光的不同波长对应不同颜色。</GlossaryItem>
+<GlossaryItem term="interference">多列波相遇后互相增强或抵消的现象。</GlossaryItem>
+<GlossaryItem term="diffraction grating">由平行窄反射带组成的周期表面，用间距 d 描述它的微结构。</GlossaryItem>
+<GlossaryItem term="tangent vector">沿着表面微结构主方向的向量；shader 用它判断条纹朝哪边。</GlossaryItem>
+<GlossaryItem term="halfway vector">光源方向与观察方向相加得到的中间方向，用来概括两者的相对关系。</GlossaryItem>
+<GlossaryItem term="rainbow map">把候选波长换成近似彩虹 RGB 颜色的函数或查找表。</GlossaryItem>
+<GlossaryItem term="anisotropic highlight">沿表面主方向拉开的高光，用来补足精确反射附近的亮部。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 8 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 8. Simulating Diffraction"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-8-simulating-diffraction"
+/>
