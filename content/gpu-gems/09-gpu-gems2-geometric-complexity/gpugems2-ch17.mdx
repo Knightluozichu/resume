@@ -1,0 +1,146 @@
+---
+title: "GPU Gems 2 · Chapter 17. Efficient Soft-Edged Shadows Using Pixel Shader Branching"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 17
+description: "用单张 shadow map 的 percentage-closer filtering 近似软阴影，再用 jittered/stratified offsets 和 fragment branching 只为 penumbra 承担高采样成本。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-17-efficient-soft-edged-shadows-using"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-17
+---
+
+import {
+  GpuGems2Ch17AdaptiveBranchDiagram,
+  GpuGems2Ch17CoherenceDiagram,
+  GpuGems2Ch17JitterDiagram,
+  GpuGems2Ch17PcfDiagram,
+  GpuGems2Ch17SoftShadowsLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch17-soft-shadows";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说明 shadow map 与 stencil shadow volume 的适用边界，以及为什么 PCF 可以从单张 shadow map 得到软边缘
+- 能把多个偏移 depth comparisons 平均成 percentage-closer filtering，而不是直接模糊 depth 值
+- 能用 stratified/jittered offsets 将规则采样 banding 转换为可隐藏的高频误差
+- 能设计“少量 estimator → penumbra 扩采样 → fully lit/dark early-out”的 adaptive branch
+- 能评估动态 branching 的局部 coherence、shadow acne/bias 和纹理带宽成本
+
+</Objectives>
+
+<Callout type="trap" title="不要直接模糊 shadow map 里的 depth 数值">
+**现象 →** 物体深度被混合成不存在的表面，阴影边缘泄漏或遮挡关系错误。
+
+**原因 →** shadow map 存的是 light-space z，不是可以安全做颜色 blur 的 coverage；不同深度的 occluder 不能被平均成一个深度。
+
+**修法 →** 保持 depth map 原值不动，在 shading pass 对多个偏移坐标分别做 depth comparison，再平均 comparison 结果。
+
+</Callout>
+
+<Callout type="trap" title="不要用规则 grid 采样就期待大 penumbra 没有 banding">
+**现象 →** 阴影半影像叠了几条硬边，样本数不够时出现明显条带。
+
+**原因 →** 规则 offset 的误差在像素间重复，视觉系统会读出采样 pattern。
+
+**修法 →** 把 square domain 分成等面积 strata，每格做 jitter，再用 area-preserving warp 映射到 disk；让误差更像高频噪声，并通过预计算 jitter map 复用。
+
+</Callout>
+
+<Callout type="trap" title="不要假设 fragment branching 总能带来加速">
+**现象 →** 加了 early-out，帧率反而不升反降，或不同场景收益差异很大。
+
+**原因 →** GPU 同时处理很多邻近 fragment；如果它们走不同分支，pipeline/SIMD 并行度被破坏，branch divergence 的代价抵消了跳过的采样。
+
+**修法 →** 用空间连续的 estimator 保持局部 branch coherence；只让明显 fully lit/dark 的像素提前退出，penumbra 统一走完整 PCF。
+
+</Callout>
+
+软阴影的关键是把“光源有面积”转成屏幕上可控的半影。<Term def="从光源视角渲染得到的 light-space 深度纹理，用来判断当前 fragment 是否被遮挡">shadow map</Term>只需一张：在当前 fragment 的投影坐标附近反复查询它，而不必为每个 area-light sample 重渲染整套 shadow map。
+
+## 1. PCF：平均比较结果而非深度
+
+<Term def="对 shadow-map 的多个偏移坐标分别做深度比较，再把 lit/shadow 结果平均成 coverage 的过滤方法">percentage-closer filtering</Term>先把 fragment 变换到 light space，得到 projected coordinate 和 receiver depth。每次 texture comparison 返回“该 offset 是否被遮挡”的比例，再对这些结果求平均。offset radius 越大，边缘看起来越软；它不改变 shadow map 中的 z，也就不会制造虚假的中间表面。
+
+<GpuGems2Ch17PcfDiagram />
+
+直接用固定规则 offset 在很小 penumbra 上有效，但半影变宽后需要很多 sample，否则各个离散硬边会形成 banding。PCF 是视觉近似，不是物理精确的 area-light visibility；它的优势是兼容普通 shadow-map pipeline，代价集中在 fragment texture bandwidth。
+
+## 2. jittered sampling 让误差不再成带
+
+<Term def="在采样域的每个等面积子区域内随机扰动一个样本，以保持覆盖又打散规则 pattern 的采样策略">stratified jittered sampling</Term>把 square domain 分成若干 strata，在每格内随机取一个点，再做 area-preserving square-to-disk warp。这样 disk 中心和边缘不会因为简单极坐标映射产生密度偏差。
+
+<GpuGems2Ch17JitterDiagram />
+
+每个像素使用略有不同的 offset 序列，规则误差被换成更高频的 noise；视觉上通常比明显条带更容易接受。<Term def="预先保存多组每像素 jitter offsets 的 3D texture，用屏幕坐标选择序列并按 r 维读取样本">jitter map</Term>可以把生成成本移出渲染 loop，并让相邻屏幕区域使用不同序列。两个二维 offset 可以打包进一个 RGBA texel，减少纹理深度和读取次数。
+
+## 3. 只在 penumbra 做高成本采样
+
+大多数像素不是半影：它们完全亮或完全暗，一次比较通常就足够。<Term def="shadow 与 light 之间的软过渡区域，需要更多 PCF samples 才能稳定估计的半影">penumbra</Term>才是高采样预算的目标。先用少量、也经过 jitter 的 estimator samples 估计局部 coverage；若结果接近 0 或 1，直接返回；若落在中间区域，再执行完整 PCF。
+
+<GpuGems2Ch17AdaptiveBranchDiagram />
+
+这种 adaptive sampling 把固定的 64 samples 变成“估计成本 + 只有必要像素的完整成本”。但 branch 本身有代价：GPU 以 tile/warp 为单位并行，如果同一局部既有 fully lit 又有 penumbra，路径会发散，跳过的采样不一定能转化为吞吐收益。
+
+## 4. branch coherence 与 shadow acne
+
+<Term def="相邻 fragment 选择相同 branch、因此能一起执行或一起 early-out 的局部路径一致性">branch coherence</Term>决定 adaptive 分支的实际收益。让 estimator 取样具有空间连续性，或让 jitter 频率足够高但不让 branch classification 在相邻像素间剧烈抖动，通常更容易保持 coherence。
+
+<GpuGems2Ch17CoherenceDiagram />
+
+shadow acne 是 shadow map 深度精度和重采样造成的自遮挡伪影。常见缓解方式是用 back faces 生成 shadow map，把 acne 移到不受当前光源照亮的面；也可以使用 depth bias 或 midpoint shadow map。若 estimator 在背光面仍错误地判断为 penumbra，会让分支 coherence 和成本都变差，因此应把 `dot(N, L) <= 0` 等表面朝向信息纳入判定。
+
+## 5. 动手实验：质量和 early-out 预算
+
+下面的实验把 PCF samples、penumbra radius、branch coherence 和 adaptive mode 暴露出来。提高 samples 会降低 banding；提高 penumbra 会要求更可靠的覆盖；coherence 越高，adaptive early-out 越可能真正省下工作。
+
+<GpuGems2Ch17SoftShadowsLab />
+
+## 小结
+
+- shadow map 保持 light-space depth，PCF 对多次 depth comparison 求平均，产生软边缘。
+- stratified/jittered offsets 与 jitter map 打散规则采样，缓解宽半影的 banding。
+- estimator 先区分 fully lit/dark 与 penumbra，只有后者执行高成本 PCF。
+- branch coherence 是 fragment branching 能否加速的关键；路径发散会损失并行度。
+- 处理 shadow acne、bias、背面 shadow map 与 projection 限制，才能让估计稳定。
+
+<Exercises>
+
+**问题 1｜PCF 数据**　为什么 PCF 应该平均 shadow comparisons，而不是先把 shadow map 的 depth 做 blur？
+
+<Answer>
+
+shadow map 的 depth 代表遮挡表面在 light space 的 z，直接 blur 会把不同表面混成不存在的深度。PCF 保持每个 z 不变，对多个 offset 做“是否遮挡”的比较，再平均这些 coverage 结果，得到软边缘。
+</Answer>
+
+**问题 2｜采样分布**　如何用 jittered sampling 减少大 penumbra 的 banding？
+
+<Answer>
+
+将 square domain 划成等面积 strata，每格随机取一点，再用面积保持的映射变到 disk；每个像素使用不同序列。覆盖仍然均匀，但规则 grid 的重复误差会变成更容易被视觉隐藏的高频噪声，可把 offsets 预存到 jitter map。
+</Answer>
+
+**问题 3｜adaptive branch**　为什么“先估计、再按需扩采样”不一定加速？实现时应检查什么？
+
+<Answer>
+
+GPU 同时运行邻近 fragment；若 branch divergent，不同路径会破坏并行，跳过的纹理读取可能抵不过分支成本。应让 estimator 保持局部 branch coherence，只对接近 0/1 的 fully lit/dark 像素 early-out，并校验 shadow acne、bias 和 penumbra 估计。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="shadow map">从光源视角渲染的 light-space 深度纹理。</GlossaryItem>
+<GlossaryItem term="percentage-closer filtering">平均多个深度比较结果以产生软阴影边缘的过滤方法。</GlossaryItem>
+<GlossaryItem term="stratified jittered sampling">在等面积 strata 内扰动采样，再映射到 disk 的分布策略。</GlossaryItem>
+<GlossaryItem term="jitter map">保存多组 per-pixel 随机 offset 序列的预计算纹理。</GlossaryItem>
+<GlossaryItem term="penumbra">软阴影从亮到暗的过渡区域。</GlossaryItem>
+<GlossaryItem term="branch coherence">相邻 fragment 选择相同动态分支、维持并行执行的程度。</GlossaryItem>
+<GlossaryItem term="shadow acne">shadow-map 深度精度/采样造成的自遮挡伪影。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 17. Efficient Soft-Edged Shadows Using Pixel Shader Branching" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-17-efficient-soft-edged-shadows-using" />
