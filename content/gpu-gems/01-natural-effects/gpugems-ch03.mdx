@@ -1,255 +1,242 @@
 ---
-title: "Chapter 3: Natural Effects"
+title: "GPU Gems 1 · Chapter 3. Skin in the \"Dawn\" Demo"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part I · Natural Effects"
 order: 3
-description: "GPU Gems Part: Natural Effects, Chapter 3"
+description: "以 HDR 环境光、遮蔽、法线细节和轮廓透光近似 Dawn 的皮肤响应，并把计算拆到顶点与片段着色器。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-3-skin-dawn-demo"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-03
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh03EnvironmentLightingDiagram,
+  GpuGemsCh03ShaderDataflowDiagram,
+  GpuGemsCh03SkinLayerDiagram,
+  GpuGemsCh03SkinShadingLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch03-dawn-skin";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 3: Natural Effects的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Natural Effects, Chapter 3之间的关系是什么？
+- 能解释 Dawn 皮肤为何不能只用一张颜色贴图和一个点光源，并说出环境光、遮蔽与轮廓项各自解决的问题
+- 能从顶点阶段传递的切线到世界矩阵与视线向量，说明片段阶段如何还原法线并采样环境立方体贴图
+- 能比较真实次表面散射与 Dawn 的实时近似，识别粗糙度、遮蔽项和轮廓光对“塑料感”的不同影响
+- 能修改皮肤着色实验的参数，先预测再验证高光、边缘光和环境遮蔽的变化
 
 </Objectives>
 
-## 为什么需要Chapter 3: Natural Effects
+<Callout type="trap" title="陷阱一：把本章当成 Dawn 的动画实现">
+**现象 →** 章节里只讲骨骼、blend shape 和顶点变形，却没有说明皮肤如何响应环境光，读者也无法区分第 3 章和第 4 章。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 3: Natural Effects作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** Dawn 的动画确实在顶点着色器中提供形状和骨骼数据，但本章的主线是皮肤的光照与加速；动画驱动细节属于下一章。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Natural Effects, Chapter 3正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 只把蒙皮和 morph target 当作输入边界，重点解释 HDR 环境、遮蔽项、法线贴图、轮廓光和顶点到片段的数据契约。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：把环境立方体贴图当成每个位置都准确的光照">
+**现象 →** 角色移动时环境仍像无限远背景，或者皮肤被自己遮挡的区域依然和无遮挡区域一样亮。
 
-### 设计动机
+**原因 →** 立方体贴图只按方向描述拍摄环境，对单个空间点是近似；它不会自动知道 Dawn 自身和场景几何造成的遮挡。
 
-Vulkan 把Chapter 3: Natural Effects从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 3: Natural Effects涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 3: Natural Effects相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 3: Natural Effects相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 用预计算的遮蔽项压低环境贡献；接受“背景无限远”的适用范围，并在镜头与角色尺度改变时重新评估这个假设。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：只加大 bump 和高光来修复塑料皮肤">
+**现象 →** 皮肤纹理越加越密、镜面高光越亮，结果却更像湿润塑料，边缘也没有柔和的透光感。
+
+**原因 →** 真实皮肤的辨识度来自多层组织的散射、细微法线和背光响应；高光强度单独增加只能制造锐利反射，不能替代轮廓与遮蔽。
+
+**修法 →** 先固定高光，分别观察遮蔽项、法线细节和轮廓环境光，再按屏幕尺寸限制 bump；让每个参数只承担一种视觉职责。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 为什么 Dawn 的皮肤难以看起来像皮肤
 
-## 性能考量
+NVIDIA 制作 Dawn 是为了展示 GeForce FX 可编程硬件如何把实时角色推向电影感。人类对脸部表情、皮肤颜色和边缘明暗非常敏感；即使观众不认识“次表面散射”这个词，也能立刻察觉脸像塑料、边缘像剪纸，或阴影硬得不自然。
 
-### 批量操作
+先预测：一张颜色贴图已经包含脸颊的红色，为什么还需要把光线送进皮肤的近似？关键在于颜色贴图描述的是“本来是什么颜色”，而光照要解释“从哪个方向来、经过哪些组织、在边缘怎样变软”。本章用一套为 Dawn 的模型、镜头距离和硬件预算定制的着色器，把这些感知线索组合起来。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh03SkinLayerDiagram />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+## 1. 皮肤响应：从分层组织到实时线索
 
-### 避免 CPU-GPU 同步点
+皮肤由半透明的表皮、真皮和皮下组织组成。光进入表面后可能在组织内部散射，再从附近位置离开；这种现象称为 <Term def="光进入表面后在介质内部散射，并从另一个邻近位置离开的现象">次表面散射</Term>。把光只看成“同一点入射、同一点反射”的模型，会漏掉手指对着太阳时边缘发红、脸颊透出柔光等线索。
+
+完整的体积输运很昂贵，因此 Dawn 使用了几种可控近似：一张颜色贴图提供基础肤色；环境立方体贴图提供大范围光照；切线空间法线带来毛孔和细皱的微变化；视线接近轮廓时，从角色背后的环境采样一份柔和亮度，再混入基础颜色。
+
+这里的核心不是声称“模拟了所有散射”，而是把观众最敏感的信号拆开。可以把皮肤着色理解成：环境负责整体色调，遮蔽负责哪里变暗，法线负责微表面朝向，轮廓项负责边缘的透光错觉。
+
+## 2. HDR 环境光如何进入实时着色
+
+传统实时架构常用点光、方向光和聚光灯；这会让白纸和白色光源都被压到相近的亮度，角色像被贴进场景。Dawn 的制作流程使用多张不同曝光的校准照片拼出全景，再生成 <Term def="能同时表达远亮于白色和远暗于黑色的亮度范围">高动态范围</Term> 环境数据，让每个方向不只存颜色，也保留亮度差异。
+
+从 HDR 环境可以预计算三类方向查表。<Term def="把某个方向的环境光预先卷积为低频漫反射结果的立方体纹理">漫反射立方体贴图</Term>按表面法线索引，近似余弦加权的半球光；<Term def="按反射方向索引、并按材质粗糙度预先模糊的环境纹理">镜面立方体贴图</Term>按反射向量索引；另一张高光环境图按视线方向取角色背后的亮区域。
+
+<GpuGemsCh03EnvironmentLightingDiagram />
+
+立方体贴图有一个必须主动接受的边界：它对拍摄中心点最准确，角色走动时背景会像无限远。对 Dawn 这种小角色和远景，这个近似是合适的；若场景要展示近处墙面或大幅移动，就需要局部环境、阴影或更完整的空间光照。
+
+## 3. 遮蔽项：让环境光知道哪里被挡住
+
+环境图描述的是相机拍到的入射光，却不知道 Dawn 的头发、肩膀和身体会遮挡自己的半球。为此，原书用软件工具从每个顶点的可见半球随机发射射线，统计有多少方向撞上其他几何，再把比例压缩成 <Term def="表示一个顶点上方半球有多少入射光被几何挡住的预计算量">遮蔽项</Term>。
+
+这个项不必每帧重新计算。Dawn 的遮蔽项保持在角色顶点上；脸部如果有 morph target，则在不同形状的遮蔽项之间做混合。这样得到的是柔和的环境暗部，而不是需要额外实时 pass 的硬阴影。注意它是“预计算的可见性近似”，不是动态阴影的替代品；角色与场景关系大幅变化时，旧项会失效。
+
+## 4. 法线、轮廓与血液透射项
+
+皮肤表面的细小毛孔和汗毛太小，不能按几何建模。Dawn 使用切线空间法线贴图，并把一些高光强度信息塞进贴图的另一个通道。<Term def="在纹理中记录相对于切线基的局部表面方向，再转换到世界空间的法线数据">切线空间法线</Term>让同一套细节可以沿模型表面移动，同时不会把网格顶点数量推得过高。
+
+轮廓附近是另一个敏感区域。当视线方向与表面法线接近垂直时，`N · V` 变小；这时可以从角色背后的环境取光，和基础肤色混合，制造边缘透光的错觉。原书把多个相关量打包为 <Term def="由遮蔽、视线夹角和法线朝向等量组成的轮廓/透光辅助向量">血液透射项</Term>，供片段阶段按模型和视觉需要调制。
+
+数学上，若 `V` 是视线方向，常用的边缘因子可以写成：
+
+$$
+rim = (1 - \operatorname{saturate}(N\cdot V))^2.
+$$
+
+它不是完整的组织散射方程，却能把“越接近轮廓，背光越显眼”的视觉规律变成可调的信号。先把 `rim` 视作独立因素，再决定要不要叠加 bump 和高光，调参才不会互相遮蔽。
+
+<GpuGemsCh03SkinShadingLab />
+
+## 5. 顶点阶段：把昂贵但可插值的量提前
+
+本章的皮肤方案是一遍着色：不需要再做额外的渲染 pass 或 alpha 混合。顶点着色器首先接收位置、法线、切线、UV、morph target 偏移以及骨骼索引/权重。对 Dawn 的高分辨率网格，顶点阶段先做形状混合，再做索引蒙皮；这些角色变形的详细控制属于下一章，本章只关心它们如何提供最终姿态。
+
+接着顶点阶段把法线和切线变换到世界空间，并构成一个 <Term def="把切线空间向量旋转到世界空间的 3×3 基矩阵">切线到世界矩阵</Term>。它还计算世界空间视线方向、`N · V` 的轮廓参数和遮蔽/透射辅助量。片段阶段不必再次重做这些昂贵的矩阵变换，只需插值这些输出。
+
+<GpuGemsCh03ShaderDataflowDiagram />
+
+一个缩减后的顶点阶段骨架如下。它强调数据契约，不是完整可编译源码：
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+struct Varyings {
+  float4 clipPosition;
+  float2 skinUv;
+  float3 worldEyeDirection;
+  float3 tangentToWorldX;
+  float3 tangentToWorldY;
+  float3 tangentToWorldZ;
+  float4 skinSilhouette;
+};
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+Varyings dawnVertex(Input IN, Uniforms U) {
+  float3 objectPosition = applyMorphTargets(IN, U.morphWeights);
+  float3 worldPosition = skinPosition(objectPosition, IN.boneIndex, IN.boneWeight, U.bones);
+  float3 worldNormal = skinNormal(applyNormalMorphs(IN, U.morphWeights), IN, U.bones);
+  float3 worldTangent = orthonormalize(IN.tangent, worldNormal, U.bones);
+  float3 worldBinormal = normalize(cross(worldNormal, worldTangent));
+  Varyings OUT;
+  OUT.worldEyeDirection = normalize(U.cameraPosition - worldPosition);
+  OUT.tangentToWorldX = float3(worldTangent.x, worldBinormal.x, worldNormal.x);
+  OUT.tangentToWorldY = float3(worldTangent.y, worldBinormal.y, worldNormal.y);
+  OUT.tangentToWorldZ = float3(worldTangent.z, worldBinormal.z, worldNormal.z);
+  OUT.skinSilhouette = makeSilhouetteTerms(worldNormal, OUT.worldEyeDirection, IN.occlusion);
+  OUT.clipPosition = mul(U.projection, mul(U.view, float4(worldPosition, 1)));
+  OUT.skinUv = IN.skinUv;
+  return OUT;
+}
 ```
 
-### 内存对齐
+这里的 <Term def="在图形流水线中由顶点处理阶段执行的程序，负责变换位置并准备插值数据">顶点着色器</Term>把数据整理成稳定接口；不要为了追求“全都逐像素”而把本可插值的矩阵和轮廓量全部推迟。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 6. 片段阶段：把法线细节与环境光合成
 
-## 验证层检查
+片段阶段先从纹理读取切线空间法线，再用顶点阶段传来的矩阵转换到世界空间。<Term def="在光栅化后为每个可见片段计算最终颜色的程序">片段着色器</Term>可以按世界法线读取漫反射环境图，按反射向量读取镜面环境图，再用遮蔽项和 `rim` 调制；最后把高光、背光和基础颜色合成到一遍输出中。
 
-启用验证层后，Chapter 3: Natural Effects相关的常见错误会被捕获：
-
+```cpp
+float4 dawnFragment(Varyings IN, Textures T) {
+  float4 normalSpec = sample2D(T.normalSideSpec, IN.skinUv);
+  float3 tangentNormal = normalize(normalSpec.xyz * 2.0 - 1.0);
+  float3 worldNormal = normalize(float3(
+    dot(tangentNormal, IN.tangentToWorldX),
+    dot(tangentNormal, IN.tangentToWorldY),
+    dot(tangentNormal, IN.tangentToWorldZ)));
+  float nDotV = saturate(dot(IN.worldEyeDirection, worldNormal));
+  float3 skin = sample2D(T.skinColor, IN.skinUv).rgb;
+  float3 diffuse = skin * sampleCube(T.diffuseCube, worldNormal);
+  float3 specular = normalSpec.w * sampleCube(T.specularCube, reflect(-IN.worldEyeDirection, worldNormal));
+  float3 backLight = sampleCube(T.hilightCube, IN.worldEyeDirection).rgb;
+  float rim = pow(1.0 - nDotV, 2.0) * IN.skinSilhouette.y;
+  float3 result = diffuse * IN.skinSilhouette.x + specular + backLight * rim;
+  return float4(result, rim * normalSpec.w);
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+代码中的 `normalSpec.w` 代表把法线与高光强度共用一张纹理的工程取舍；它减少输入数量，却要求美术和着色器约定好每个通道的职责。<Term def="把向量按环境方向索引立方体纹理以取得颜色和亮度的采样方式">环境立方体采样</Term>则把远处光照压缩成几次方向查表。
 
-## 本章要点
+## 7. 为特定角色优化，而不是宣称通用皮肤
 
-1. Chapter 3: Natural Effects是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+原书特别强调 Dawn 的着色器高度针对模型与镜头范围。Dawn 网格足够细，`N · V` 等量在线性插值后仍能接受；如果换成低模角色、极近的脸部镜头或完全不同的骨骼，就需要重新评估误差。Dawn 的顶点着色器还由规则文件和搜索过程按角色设置生成，目标是只保留当前 fragment shader 真正请求的输入。
+
+这是一条很实用的工程结论：实时效果可以为固定内容“量身定做”。如果产品要支持许多角色与任意视距，再把其中的环境、遮蔽、法线和轮廓思路抽成参数化材质，并为每个质量档位设定预算；不要把一套展示 Demo 的经验直接包装成万能模型。
+
+## 本章回顾：让皮肤线索各司其职
+
+- HDR 环境提供大范围亮度与颜色，不再只依赖几个点光源。
+- 遮蔽项压低被角色自身挡住的环境光，形成柔和暗部。
+- 切线空间法线提供微细表面变化，轮廓项近似边缘透光。
+- 顶点阶段准备矩阵、视线和辅助项，片段阶段完成细节采样与合成。
+- Dawn 的方案是针对模型和镜头的实时近似，适用边界必须显式保留。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 3: Natural Effects涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1**　改 Demo 代码：将实验中的遮蔽项固定为 `1.0`，再将它固定为 `0.2`。分别预测脸部环境光与轮廓光会怎样变化，并说明这与实时阴影有什么不同。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+遮蔽项为 `1.0` 时表示环境半球几乎无遮挡，漫反射会更亮；为 `0.2` 时环境贡献显著变暗，脸部会更柔和地压低。它是预计算的可见性调制，不会随着每帧动态几何自动产生新的硬阴影。
+
 </Answer>
 
+**问题 2**　推导题：若世界空间法线 `N=(0,0,1)`，视线方向分别为 `V₁=(0,0,1)` 与 `V₂=(0.98,0,0.2)`，用 `rim=(1-saturate(N·V))²` 比较两个点的轮廓因子。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`N·V₁=1`，所以 `rim₁=0`；`N·V₂=0.2`，所以 `rim₂=(1-0.2)²=0.64`。第二个方向更接近轮廓，因此背光环境的柔和贡献更明显。
+
+</Answer>
+
+**问题 3**　场景选型题：一个角色需要在固定的近景脸部镜头中表现柔和边缘光；另一个系统需要支持许多低模角色并允许相机贴近任意部位。分别说明 Dawn 方案哪些部分可以直接采用，哪些部分必须重新设计。
+
+<Answer>
+
+固定近景可以直接采用预计算遮蔽、切线空间法线、HDR 环境立方体贴图和轮廓项，并针对该网格细度调校插值误差。多角色低模系统需要重新设计 LOD、法线与轮廓计算，可能把 `N·V` 和部分矩阵计算移到片段阶段，并为不同模型重新烘焙遮蔽或使用动态可见性。
+
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+  <GlossaryItem term="次表面散射">光进入皮肤后在组织内部散开，再从附近位置透出的现象；它让边缘不至于像硬塑料。</GlossaryItem>
+  <GlossaryItem term="高动态范围">同时保存很亮和很暗的环境亮度，避免所有白色区域都挤成同一个亮度。</GlossaryItem>
+  <GlossaryItem term="漫反射立方体贴图">按表面法线查找预先平均好的环境光，提供柔和的整体亮度。</GlossaryItem>
+  <GlossaryItem term="镜面立方体贴图">按反射方向查找环境高光，并用模糊程度近似材质粗糙度。</GlossaryItem>
+  <GlossaryItem term="遮蔽项">记录周围几何挡住多少环境光的预计算比例，用来压低不该太亮的区域。</GlossaryItem>
+  <GlossaryItem term="切线空间法线">相对于表面切线基记录的微小朝向，能在不增加几何的情况下做细节光照。</GlossaryItem>
+  <GlossaryItem term="血液透射项">把遮蔽、视线夹角和法线朝向等辅助量打包给轮廓与背光近似使用的向量。</GlossaryItem>
+  <GlossaryItem term="切线到世界矩阵">把法线贴图里的局部方向旋转到世界空间的三乘三基。</GlossaryItem>
+  <GlossaryItem term="顶点着色器">逐顶点运行，负责位置变换和准备可供后续片段插值的向量。</GlossaryItem>
+  <GlossaryItem term="片段着色器">逐可见片段运行，读取纹理和环境光并输出最终颜色。</GlossaryItem>
+  <GlossaryItem term="环境立方体采样">用一个方向去查立方体纹理，取得该方向的远处环境颜色和亮度。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 3 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle='GPU Gems 1 · Chapter 3. Skin in the "Dawn" Demo'
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-3-skin-dawn-demo"
+/>

@@ -12796,6 +12796,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh02ResolutionDiagram: module0.GpuGemsCh02ResolutionDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/01-natural-effects/gpugems-ch03": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch03-dawn-skin");
+    return {
+      GpuGemsCh03EnvironmentLightingDiagram:
+        module0.GpuGemsCh03EnvironmentLightingDiagram,
+      GpuGemsCh03ShaderDataflowDiagram:
+        module0.GpuGemsCh03ShaderDataflowDiagram,
+      GpuGemsCh03SkinLayerDiagram: module0.GpuGemsCh03SkinLayerDiagram,
+      GpuGemsCh03SkinShadingLab: module0.GpuGemsCh03SkinShadingLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
