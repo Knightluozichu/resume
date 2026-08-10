@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T09:12:18.509Z；旧版分数不迁移。
+> 2026-08-10T09:20:01.406Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2195
+- failed：2194
 - queued：344
-- passed：1164
+- passed：1165
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -127,9 +127,9 @@
 | 114 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 115 | ai-agent | 9 | 9 | 0 | 0 | 9 |
 | 116 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
-| 117 | gpu-gems | 48 | 3 | 0 | 45 | 6 |
-| 118 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
-| 119 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 117 | clr-via-csharp | 32 | 2 | 30 | 0 | 36 |
+| 118 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
+| 119 | gpu-gems | 48 | 2 | 0 | 46 | 4 |
 | 120 | effective-modern-cpp | 44 | 0 | 44 | 0 | 44 |
 | 121 | taocp | 30 | 0 | 30 | 0 | 30 |
 | 122 | csharp-10-core | 27 | 0 | 27 | 0 | 27 |

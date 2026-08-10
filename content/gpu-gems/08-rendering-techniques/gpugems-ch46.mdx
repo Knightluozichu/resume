@@ -1,255 +1,173 @@
 ---
-title: "Chapter 46: Rendering Techniques"
-type: B
-section: "计算机图形学与渲染"
+title: "GPU Gems 2 · Chapter 46. Improved GPU Sorting"
+type: C
+section: "GPU Gems 2 Part VI · Simulation and Numerical Algorithms"
 order: 46
-description: "GPU Gems Part: Rendering Techniques, Chapter 46"
+description: "从 compare-swap、odd-even merge 到 bitonic merge，理解如何用双缓冲、插值比较参数和 key/index packing 让 GPU 排序充分利用 fragment、vertex 与 rasterizer。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-46
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh46BitonicStageDiagram,
+  GpuGemsCh46CompareSwapDiagram,
+  GpuGemsCh46GpuPassDiagram,
+  GpuGemsCh46OddEvenBitonicDiagram,
+  GpuGemsCh46PackingDiagram,
+  GpuGemsCh46SortingLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch46-gpu-sorting";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 46: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 46之间的关系是什么？
+- 能解释 data-independent sorting 为什么适合 GPU，并用 compare-swap 描述一个排序网络 pass
+- 能比较 odd-even merge 和 bitonic merge 的 pass 数量、中间状态和实时响应取舍
+- 能把排序 pass 映射到双缓冲 fragment program，并说明 vertex/rasterizer 如何提供比较方向与 partner 地址
+- 能通过实验推进排序网络，确认 key 与 index 成对交换，并评估 packing 对 fragment 数量的影响
 
 </Objectives>
 
-## 为什么需要Chapter 46: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 46: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 46正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把 GPU 排序写成每个 fragment 等待邻居的原地交换">
+现象：排序结果随设备或帧顺序变化，偶尔出现重复 key 或丢失 item。原因：同一纹理既被读取又被写回时，fragment 之间没有可依赖的执行顺序。修法：使用两张 source/target 纹理完成一个 pass，结束后交换角色；每个输出位置只写自己的结果。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 46: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 46: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 46: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 46: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要只排序 key 而丢掉对象 index">
+现象：距离顺序看似正确，但渲染出来的粒子、透明物体或碰撞对象对应错了。原因：key 只是排序依据，真正要重排的是 key 和 payload 的关联。修法：把 key 与 index 作为同一个记录移动，最后再按 index 读取原始对象数据。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 bitonic 的中间状态当成全局有序">
+现象：把一个 stage 的结果分摊到多帧后，画面在每一帧都被当成已经排序。原因：bitonic stage 中仍然存在升序/降序的局部序列，只有完整 network 结束才得到全局有序结果。修法：若必须逐帧渐进，选择保留近似有序性质的 odd-even 路线；否则等待 bitonic 的完整 pass 链。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+排序是透明物体可见性、early-z 利用、粒子距离和碰撞空间结构的共同基础。CPU 上可以自由读写数组，但 GPU 更像大量同步执行的 SIMD lane：算法必须事先规定每个位置在每个 pass 比较谁、把结果写到哪里。
 
-## 性能考量
+本章从简单的 odd-even transition network 出发，再转向 odd-even merge 和 bitonic merge。优化的重点不是减少某一条比较，而是让 fragment、vertex processor 和 rasterizer 都参与工作，并把 key/index 记录压紧到更少的 fetch 和 fragment 中。
 
-### 批量操作
+## 1. data-independent sorting 和 compare-swap
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="比较路径由位置和 pass 参数决定、不依赖输入值本身分支的数据无关排序方式">data-independent sorting</Term> 不根据当前 key 选择下一步算法路径；同样数量的 item、stage 和 pass 总会执行同样的比较网络。这种确定结构很适合 GPU，因为线程无需互相等待或动态分配工作。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<Term def="由固定连接的 compare-swap 单元组成、每列可并行执行的排序结构">sorting network</Term> 的一个基本单元接收两个 key，把较小值送到升序通道，把较大值送到降序通道。多个单元排成一列就是一个 pass；输入从左向右经过多列后逐渐有序。
 
-### 避免 CPU-GPU 同步点
+<GpuGemsCh46CompareSwapDiagram />
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+最直接的 odd-even transition sort 每轮只比较相邻位置。最坏情况下最小值每次只移动一步，因此要用 O(n²) 的 pass 才能完成 n 个元素的排序；单个 pass 很便宜，但总 pass 数在实时场景里太昂贵。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+## 2. odd-even merge：减少全排序 pass
+
+<Term def="先分别形成有序的子序列，再用奇偶交错规则合并它们的固定排序网络">odd-even merge sort</Term> 把排序分成 stage 和 pass。排序 m 个元素的 stage 需要 log(m) 个 pass，所有 n 个元素总体是 O(n log²(n) + log(n)) 的 pass 结构。它仍然比 CPU 常见的 O(n log(n)) 多一些，但比逐步相邻交换少得多。
+
+<GpuGemsCh46OddEvenBitonicDiagram />
+
+原章的 GPU 实现用 CPU 上的两个循环只传 stage、pass 和派生 uniform，然后绘制 full-size quad。fragment shader 读取当前位置和 partner 位置，执行 less-than 或 greater-equal，并写到 target buffer。问题是有些值只被复制、不需要比较，但复制和比较仍然消耗同样的 fragment 时间。
+
+## 3. bitonic merge：让每个 fragment 都有工作
+
+<Term def="先构造升序与降序交替的 bitonic 序列，再通过固定距离比较合并成升序结果的排序网络">bitonic merge sort</Term> 让每个 stage 产生一组升序和降序子序列，然后逐步合并。第 i 个 stage 有 i 个 pass；比较距离由 stage 和 pass 决定，能够用位操作、取模和符号方向表达。
+
+<GpuGemsCh46BitonicStageDiagram />
+
+直接在 fragment 中计算所有 modulo、位移和 partner 地址并不一定高效。更好的做法是把一组具有相同参数的 fragment 组成 quad：vertex program 只给 quad 两侧一个 `+1` 与 `−1` 的 flag，rasterizer 线性插值它，fragment shader 根据 flag 的符号选择比较方向。这样 vertex processor 和 rasterizer 分担了原本由 fragment 重复完成的工作。
+
+<GpuGemsCh46GpuPassDiagram />
+
+对于二维 field，行 pass 使用水平 compare distance，列 pass 则转置 quad 并使用垂直距离。两种方向共享同一个 sorting network 逻辑，但 texture 坐标必须分别保证 partner 位于正确的行或列。
+
+## 4. key/index packing：减少 fetch，同时保留关联
+
+<Term def="把排序 key 与对象 index 作为一条记录移动，并将连续的两条记录打包进一个四分量纹理值">key/index pair</Term> 是粒子排序和透明物体排序的关键。key 可以是 viewer distance，index 则指向粒子或几何对象；交换时二者必须一起交换。
+
+<GpuGemsCh46PackingDiagram />
+
+GPU 使用四分量向量，因此可以把两个 key/index pair 装到一个 RGBA texel，切掉一半 row width。bitonic 每个 stage 的最后一级只比较相邻 item，这时两个 item 已经在同一个 fragment 中，可以把比较折叠到一次 shader 调用并省掉第二次 texture fetch。
+
+```glsl
+// 逻辑上是两个 key/index pair；实际由一个 RGBA texel 携带
+float4 packed = tex2D(source, texcoord);
+Pair left  = unpackPair(packed.xy);
+Pair right = unpackPair(packed.zw);
+Pair small = left.key < right.key ? left : right;
+Pair large = left.key < right.key ? right : left;
+return packPairForDirection(small, large, direction);
 ```
 
-### 内存对齐
+这里的 `direction` 由 pass 的升序/降序区域决定，而不是由输入数据动态决定。pack 之后要测试 n 不是 2 的倍数时的尾部、index 精度和 key 的排序稳定性。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 5. 动手实验：逐 pass 观察排序网络
 
-## 验证层检查
+先预测：bitonic 的某个 stage 尚未完成时，序列会不会已经全局有序？打开 packing 后，比较次数会变少，还是只会减少需要处理的 fragment groups？
 
-启用验证层后，Chapter 46: Rendering Techniques相关的常见错误会被捕获：
+<GpuGemsCh46SortingLab />
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+实验执行真实的 bitonic 与 odd-even pass：每次推进都会生成新的 key/index 数组，比较次数按实际比较单元累加；packing 只改变逻辑 item 到 fragment group 的映射，不改变排序结果。黄色柱表示当前 pass 触及的 partner，编号表示 index 仍然跟着 key 移动。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+## 6. 实时应用的取舍
 
-## 本章要点
+odd-even merge 的优势是中间结果更适合逐帧观察，排序过程可以更自然地分摊到多帧；bitonic merge 的优势是更积极地重排并更充分地使用 GPU 资源，但每个 stage 的中间状态并不保持全局有序，不能随意当成“已经可显示的最终排序”。
 
-1. Chapter 46: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+GPU 的 pass 数仍然要结合 field 大小、纹理带宽和目标设备测量。原章报告了在 GeForce 6800 Ultra 上，bitonic 对 256²、512²、1024² field 的 pass 数和吞吐；这些数字是历史硬件实验，不应直接当作现代设备的基准。应保留算法结构，重新测量实际平台。
+
+粒子按 camera distance 排序时，短暂的小误差有时比让应用完全停顿更可接受；但透明混合、阴影或严格碰撞排序可能需要完整有序结果。排序算法的选择必须跟视觉/物理容错契约一起做，而不是只看“GPU 比 CPU 快”。
+
+## 小结
+
+- data-independent sorting 用固定网络把比较路径交给 GPU 并行执行。
+- odd-even transition 简单但 pass 太多，odd-even merge 通过 stage 降低总成本。
+- bitonic merge 让每个 pass 更规则，并利用 vertex/rasterizer 生成方向和地址参数。
+- 双缓冲隔离 source/target，key/index pair packing 减少 fetch 但必须保留关联。
+- bitonic 与 odd-even 的中间状态和响应特性不同，应按实时容错选择。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 46: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜网络选择**　一个粒子系统允许中间帧暂时近似有序，但要求每帧响应；一个透明渲染提交要求整批排序完成。分别更倾向 odd-even 还是 bitonic？为什么？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+允许渐进近似有序时倾向 odd-even，因为其中间状态更适合分摊到多帧；要求整批完成时倾向 bitonic，因为它用更规则、更紧凑的 stage/pass 网络充分利用 GPU。最终仍要用目标设备 profiler 验证。
 </Answer>
 
+**问题 2｜改写 Demo**　把实验的 key 从固定数组改成 camera distance，并把 index 用作粒子 ID。为什么交换 key 时必须同步交换 index？packing 的尾部要检查什么？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+排序只决定次序，真正要渲染的粒子仍由 index 找回；不同步交换会让距离顺序和对象 payload 脱钩。尾部要检查元素数不是 2 的倍数时的 padding、无效 channel 是否参与比较，以及 key/index 是否仍保持同一条记录。
+</Answer>
+
+**问题 3｜性能排查**　bitonic shader 看起来比 odd-even 复杂，但实际更快时，应该观察哪些证据，而不是只比较源码行数？
+
+<Answer>
+
+观察总 pass 数、每 pass 的 fragment 数、source texture fetch 次数、只复制而不比较的比例、vertex/rasterizer 是否承担了参数生成，以及 packing 是否减少了 row width。GPU 性能取决于这些执行量和带宽，而不是 shader 文本的长短。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="data-independent sorting">比较路径只由位置和 pass 参数决定、不由输入 key 动态改变的排序方式。</GlossaryItem>
+<GlossaryItem term="sorting network">由固定 compare-swap 连接组成、每列可以并行执行的排序结构。</GlossaryItem>
+<GlossaryItem term="odd-even merge sort">用奇偶交错规则合并有序子序列的固定排序网络。</GlossaryItem>
+<GlossaryItem term="bitonic merge sort">先构造升降序交替的 bitonic 序列，再按比较距离逐步合并的排序网络。</GlossaryItem>
+<GlossaryItem term="key/index pair">绑定在一起移动的排序键和对象索引记录。</GlossaryItem>
+<GlossaryItem term="double buffering">用 source 和 target 两个缓冲轮流读写、避免同一纹理原地读写的方法。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 46 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 2 Chapter 46 “Improved GPU Sorting”的独立重写，保留 Peter Kipfer 与 Rüdiger Westermann 原章关于 data-independent sorting、odd-even transition/merge、bitonic merge、双缓冲 fragment pass、vertex/rasterizer 参数插值、二维 field 行列排序、key/index packing 和实时应用取舍的核心内容，并整理为可验证的现代 GPU 排序学习路径。原始章节：[NVIDIA GPU Gems 2 Chapter 46](https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting)
+
 </Attribution>
