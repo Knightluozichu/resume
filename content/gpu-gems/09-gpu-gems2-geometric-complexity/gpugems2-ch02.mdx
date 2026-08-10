@@ -1,0 +1,190 @@
+---
+title: "GPU Gems 2 · Chapter 2. Terrain Rendering Using GPU-Based Geometry Clipmaps"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 2
+description: "把大地形表示成围绕视点移动的嵌套规则网格，用 vertex texture、toroidal 增量更新、跨层 morph 和法线纹理把大量地形工作移到 GPU。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-2-terrain-rendering-using-gpu-based-geometry"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-02
+---
+
+import {
+  GpuGems2Ch02GeometryClipmapLab,
+  GpuGems2Ch02GpuPipelineDiagram,
+  GpuGems2Ch02NestedGridDiagram,
+  GpuGems2Ch02ToroidalUpdateDiagram,
+  GpuGems2Ch02TransitionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch02-geometry-clipmaps";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 geometry clipmap 为什么使用围绕视点的嵌套规则网格，而不是每帧重建不规则三角网格
+- 能修改实验中的视点、层数和 transition width，判断哪些高程条带需要更新以及为什么
+- 能把高程纹理、vertex shader、normal map 和 pixel shader 串成一条 GPU 地形渲染路径
+- 能回答：为什么窗口移动后只更新窄条，就能让一个远大于显存的地形持续可见？
+
+</Objectives>
+
+<Callout type="trap" title="不要每帧重建一个新的不规则地形网格">
+**现象 →** 相机一移动，CPU 就花大量时间生成顶点和索引，画面虽然没变复杂，帧时间却出现尖峰。
+
+**原因 →** 视点相关的 LOD 被直接编码成动态网格结构，更新范围和拓扑都随移动变化，CPU 还要承担上传成本。
+
+**修法 →** 用固定拓扑的嵌套规则网格表达不同尺度；变化放进高程纹理、窗口偏移和 shader，索引缓冲保持常量。
+
+</Callout>
+
+<Callout type="trap" title="不要把 clipmap 窗口移动当成整张纹理搬家">
+**现象 →** 每次相机移动都复制整层高程数据，带宽随窗口大小增长，平滑飞行也会卡顿。
+
+**原因 →** 没有使用环绕地址，无法复用已经在显存中的窗口位置。
+
+**修法 →** 用逻辑坐标对窗口尺寸取模，把越界的一列或一行映射到另一侧，只上传真正新出现的高程条带。
+
+</Callout>
+
+<Callout type="trap" title="不要把层级切换做成瞬间替换">
+**现象 →** 地形外圈出现裂缝，或相机移动时山脊突然跳到另一种高度。
+
+**原因 →** 细层和粗层采样位置不同，直接切换会暴露高度差；法线如果也瞬间替换，光照会再闪一次。
+
+**修法 →** 在外圈加入 transition region，让 vertex shader 混合高程，让 pixel shader 混合法线，并保持两层边界的拓扑可缝合。
+
+</Callout>
+
+大地形的问题不是“能不能画一个网格”，而是“镜头飞得很远时，网格数据如何仍然保持可更新”。把整个地表都做成最高分辨率会耗尽存储，把每帧看见的区域重新三角化又会把 CPU 变成瓶颈。
+
+本章采用一个反直觉的表示：地形首先是一张高程图，然后才是要被渲染的三角形。视点附近使用细窗口，远处使用更粗的窗口；这些窗口拥有固定的规则拓扑，变化通过纹理和 shader 表达。
+
+## 1. 从高程图到嵌套规则网格
+
+<Term def="用多层嵌套规则网格缓存高程图窗口，并随视点移动而增量更新的地形表示">geometry clipmap</Term>把地形的 LOD 结构固定下来。每一层都缓存一个 `n × n` 的方形样本窗口，细层覆盖较小的近处区域，粗层覆盖更大的远处区域。最细层绘制完整方格，其余层通常只绘制一个环，中心已经由更细层覆盖。
+
+<GpuGems2Ch02NestedGridDiagram />
+
+规则网格的价值在于它不需要每帧决定“这个三角形应该和哪个邻居连接”。顶点和索引缓冲可以预先创建并重复使用，视点变化只影响网格的世界偏移、从哪张高程纹理取样，以及外圈的过渡权重。
+
+如果目标是让屏幕上的三角形大小大致均匀，那么每一级窗口的世界间隔可以按 2 倍或其他固定比例增长。近处的细采样承担几何起伏，远处的粗采样承担地平线轮廓；这比让一张细网格覆盖整个世界更容易控制内存。
+
+## 2. vertex texture：让高程留在 GPU
+
+<Term def="允许 vertex shader 按坐标读取纹理样本的机制，用纹理中的高程值驱动顶点位置">vertex texture</Term>让“网格拓扑”和“地形高度”分离。固定的顶点缓冲只描述规则网格中的 `(x, y)`，vertex shader 根据顶点对应的纹理坐标读取 `z`，再把它变成世界空间位置。
+
+<GpuGems2Ch02GpuPipelineDiagram />
+
+这条路径还可以延伸到 runtime synthesis：粗层高程经过上采样，再叠加当前层的 residual detail，得到细层的高度。解压、上传等仍可能需要 CPU，但插值、残差合成、法线计算和最终绘制都可以交给 GPU。核心边界是：数据可以是纹理，拓扑可以是常量，二者不必绑在同一个动态 vertex buffer 里。
+
+一个简化的顶点阶段可以写成：
+
+```hlsl
+float2 worldXY = gridOrigin + footprint * gridScale;
+float fineZ = ElevationTex.SampleLevel(PointSampler, uv, 0).r;
+float coarseZ = CoarseElevation.SampleLevel(PointSampler, coarseUv, 0).r;
+float morph = ComputeTransitionAlpha(footprint, transitionWidth);
+float height = lerp(fineZ, coarseZ, morph);
+outPosition = mul(viewProjection, float4(worldXY, height, 1));
+outMorph = morph;
+```
+
+顶点与纹理样本一一对应时不需要高程的线性过滤；如果要在不同层之间连续过渡，应该显式控制采样层级和混合位置，不能让过滤器偷偷决定几何形状。
+
+## 3. 窗口移动与 toroidal addressing
+
+<Term def="用取模把逻辑上的无限窗口坐标映射回有限纹理存储，使窗口移动时可以复用两侧空间">toroidal addressing</Term>解决的是“同一个缓存槽现在代表世界中的哪一列”。当视点向右移动，逻辑窗口左侧的一列离开视野；纹理存储中的这列位置可以环绕到右侧，接收新世界坐标对应的高程数据。
+
+<GpuGems2Ch02ToroidalUpdateDiagram />
+
+平滑移动时，新增区域通常只是窗口外缘的一条窄带。CPU 可以解压或上传这条带，GPU 则继续用固定的纹理坐标和规则网格绘制整个窗口。若一次移动跨过多个样本，就把多个窄条合并成一个更新区；若移动没有越过样本边界，则无需更新高程窗口。
+
+这里要区分两套坐标：世界坐标决定地形采样的是哪一块地面，环绕后的纹理坐标决定数据暂存在显存的哪一个槽。把二者混成同一坐标会让相机转身后地形纹理“漂移”。
+
+## 4. 环形层和跨层 morph
+
+<Term def="位于相邻分辨率层边缘的混合区域，用连续权重同时使用细层与粗层的高程或法线">transition region</Term>把 LOD 切换藏在几何 clipmap 的外圈。权重可以用顶点相对于方格边界的最大距离计算：在过渡区内从 0 连续增加到 1，代表从细层逐渐靠近粗层。
+
+<GpuGems2Ch02TransitionDiagram />
+
+只有高程过渡还不够。粗细两层的法线也会不同，因此 normal map 可以同时打包当前层与粗层的法线分量，pixel shader 用同一个 morph 权重混合，再把结果重新归一化。这样山脊不会在换层时只改变轮廓却保留旧光照，减少“地形跳了一下”的感觉。
+
+细层与粗层的边界还必须保持可缝合。常见做法是让外圈使用约束过的网格连接模式，并让过渡宽度小于环本身；不能只靠颜色混合掩盖真实的几何裂缝。
+
+## 5. residual detail 与法线纹理
+
+<Term def="相对于粗层上采样预测值新增的高频高度信息，用来恢复当前层的地形细节">residual detail</Term>让大地形可以压缩和逐级合成。粗层给出一个平滑预测，当前层只需要存或生成预测之外的差值；渲染前将两者相加即可。对合成型地形，残差可以来自噪声或程序规则；对压缩数据，残差可以来自增量解压。
+
+法线纹理通常可以比几何窗口更高分辨率，因为每个顶点一张法线会显得过于平滑。<Term def="记录表面朝向、供像素阶段光照使用的纹理">normal map</Term>还可以把当前层和更粗层的法线分量打包进同一张四通道纹理，减少采样数量；取出后要把编码值恢复到 `[-1, 1]` 并重新归一化。
+
+<GpuGems2Ch02GpuPipelineDiagram />
+
+## 6. 动手实验：移动视点，观察更新面积
+
+先预测：把视点滑杆从 48% 拖到 80%，你预计需要重新上传整张高程纹理，还是只需要更新一侧窄条？再把 transition width 调小，裂缝会消失还是更容易暴露？
+
+<GpuGems2Ch02GeometryClipmapLab />
+
+实验中的彩色方框代表不同分辨率层，视点移动只改变窗口的中心位置。切换层数会改变远景覆盖范围；增大过渡宽度会让层间变化更柔和，但也会扩大同时读取两层数据的区域。勾选 runtime synthesis 时，实验用一个明确的“粗层预测 + residual”标签表示 GPU 负责合成，而不是把它伪装成真实地形数据。
+
+## 小结
+
+- geometry clipmap 用嵌套规则网格替代每帧重建的动态拓扑。
+- vertex texture 把高程从可变 vertex buffer 解耦出来。
+- toroidal addressing 让窗口移动只更新越界的高程条带。
+- transition region 同时平滑高程和法线，减少裂缝与 popping。
+- residual detail、normal map 和 shader 合作，把更多地形工作移到 GPU。
+
+<Exercises>
+
+**问题 1｜选择表示**　一个飞行模拟器需要持续观察很大的地形。为什么“全世界一张最高分辨率网格”和“每帧重建视锥体内的不规则网格”都不是本章首选？
+
+<Answer>
+
+前者的存储和带宽随世界范围增长，后者需要频繁修改拓扑、顶点和索引，并把大量工作放在 CPU。geometry clipmap 用固定规则网格缓存局部窗口，用层级覆盖范围，用纹理和 shader 承担高度变化，在内存和 CPU 更新之间取得稳定的折中。
+</Answer>
+
+**问题 2｜改写 Demo**　把 transition width 调到最小，并关闭粗层。你会优先观察哪一种错误：边界裂缝、纹理漂移，还是法线跳变？请分别写出它们对应的排查位置。
+
+<Answer>
+
+边界裂缝先查细粗层的网格连接和 morph 权重；纹理漂移查世界坐标与环绕纹理坐标是否被混用；法线跳变查 pixel shader 是否同时混合了当前层和粗层法线并完成归一化。关闭粗层后如果仍有裂缝，说明问题在网格连接而非高程数据。
+</Answer>
+
+**问题 3｜增量更新**　视点只移动了半个采样间隔时，是否需要上传新高程？跨过一个采样间隔后，为什么更新区域通常只是一条窄带？
+
+<Answer>
+
+半个采样间隔还没有改变窗口对应的离散样本集合，可以只调整世界偏移和 shader 坐标，不上传新数据。跨过一个采样间隔后，只有窗口一侧出现了以前没有的世界样本，另一侧的纹理槽可以环绕复用，因此只需更新对应窄带。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="geometry clipmap">围绕视点缓存多层规则高程窗口的地形结构，细层覆盖近处，粗层覆盖远处。</GlossaryItem>
+<GlossaryItem term="vertex texture">vertex shader 读取的高程纹理；它让固定网格可以拥有变化的世界高度。</GlossaryItem>
+<GlossaryItem term="toroidal addressing">用取模把逻辑窗口映射回有限纹理槽的地址方式，支持边界条带复用。</GlossaryItem>
+<GlossaryItem term="transition region">相邻分辨率之间的渐变区域，在这里混合高程和法线以隐藏换层。</GlossaryItem>
+<GlossaryItem term="residual detail">粗层预测值之外的新增细节，通常在当前层合成回高程。</GlossaryItem>
+<GlossaryItem term="normal map">记录表面朝向的纹理，用于像素阶段光照而不必把所有细节写进几何。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 2. Terrain Rendering Using GPU-Based Geometry Clipmaps"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-2-terrain-rendering-using-gpu-based-geometry"
+/>
