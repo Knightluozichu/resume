@@ -1,255 +1,226 @@
 ---
-title: "Chapter 2: Natural Effects"
+title: "GPU Gems 1 · Chapter 2. Rendering Water Caustics"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part I · Natural Effects"
 order: 2
-description: "GPU Gems Part: Natural Effects, Chapter 2"
+description: "从水面法线与反向折射出发，用多遍渲染和着色器生成实时水焦散。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-2-rendering-water-caustics?lang=en"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-02
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh02CausticPipelineDiagram,
+  GpuGemsCh02CausticsLab,
+  GpuGemsCh02RayPathDiagram,
+  GpuGemsCh02ResolutionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch02-water-caustics";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 2: Natural Effects的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Natural Effects, Chapter 2之间的关系是什么？
+- 能解释水焦散为何由曲面折射造成，并区分前向光子追踪、反向追踪与本章的美学近似
+- 能从波面高度函数的两个偏导构造法线，并用线面相交得到海底采样点
+- 能按三遍渲染流程实现海底底图、焦散叠加与水面反射，并说明屏幕空间与纹理空间的取舍
+- 能调整水深、波面坡度与焦散图分辨率，预测光斑会如何改变并用实验验证
 
 </Objectives>
 
-## 为什么需要Chapter 2: Natural Effects
+<Callout type="trap" title="陷阱一：把漂亮的亮斑当成物理正确的光子模拟">
+**现象 →** 看到水底会动的亮斑，就声称已经追踪了所有太阳光子，随后无法解释结果与真实水深不符。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 2: Natural Effects作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** 完整焦散需要处理大量反射、折射和遮挡；原书方法明确采用强假设，只保留最可能形成视觉焦散的候选光线。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Natural Effects, Chapter 2正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 在实现与讲解中标注“美学驱动的近似”，把垂直投影、太阳在正上方和水的折射率 1.33 当作可替换假设，而不是物理定律的完整求解。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：用法线方向直接当作海底纹理坐标">
+**现象 →** 水面有波动，但光斑总贴在海底固定位置，或坡度稍大就出现明显拉伸。
 
-### 设计动机
+**原因 →** 法线只给出折射光线方向，还必须把这条线与海底平面求交，交点才是光照纹理的采样坐标。
 
-Vulkan 把Chapter 2: Natural Effects从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 2: Natural Effects涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 2: Natural Effects相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 2: Natural Effects相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 先构造 `p(t) = p₀ + t v`，用 `t = (D - n · p₀) / (n · v)` 求交点，再把交点映射到 Sun/LightMap；分母接近零时要做保护。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：把每个屏幕像素都算到无限精细">
+**现象 →** 放大可见水底区域后帧率骤降，或者低分辨率下焦散出现十字状的双线纹理。
+
+**原因 →** 屏幕空间的工作量跟可见像素数增长；纹理空间虽固定成本，却受 texel 到像素比例和过滤质量影响。
+
+**修法 →** 对小可见区域优先屏幕空间，对稳定预算优先固定 render target；为纹理空间焦散生成 mipmap，并用各向异性过滤抑制混叠。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 为什么水底会出现焦散
 
-## 性能考量
+先想象一块起伏的玻璃压在手电筒前面：光线经过平面玻璃只会整体偏移，经过弯曲表面却会被分散到不同方向；一些邻近光线恰好落到同一片地面，就形成亮斑。水焦散（caustics）就是这种由曲面反射或折射造成的光线集中，亮斑会随波面移动。
 
-### 批量操作
+原书的目标不是建立昂贵的海洋光学仿真，而是用一个实时可行的、视觉上可信的模型。先预测：如果把水面坡度调大，你觉得海底亮斑会更均匀，还是会更集中？答案会在后面的法线、折射方向和实验里逐步出现。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh02RayPathDiagram />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+## 1. 从完整光线输运退到可计算近似
 
-### 避免 CPU-GPU 同步点
+严格计算焦散需要从太阳发射大量光子，逐次追踪它们与水面的交互，最后统计每个海底小区域收到的能量。前向光子追踪直观却浪费严重：多数光子碰不到水面，碰到水面的光子中又只有少数真正贡献给某个焦散亮斑。
+
+<Term def="从光源发出光子并沿传播路径累计贡献的光线追踪方法">前向光子追踪</Term>正是从太阳向下发射；<Term def="从被照亮的采样点反向寻找可能入射光线的估计方法">反向光线追踪</Term>则从海底点出发向上猜测候选光线。后者可以用蒙特卡洛采样估计积分，但仍要丢弃大量没有打到光源的假设光线。
+
+本章选择反向思路，却进一步采用美学近似：假定中午、太阳在正上方，海底采样点先垂直投影到水面；再由波面法线反向产生一条候选折射光线。由于太阳盘距离极远，候选方向越接近垂直，越可以把它看作获得了更多太阳能量。
+
+水的折射率设为约 `1.33`。这不是把整套光学公式藏起来，而是让实现集中在“波面如何改变候选方向”这一视觉主因上。真正的物理准确度与实时预算之间，正是本章需要读者能说清楚的工程边界。
+
+## 2. 用波面法线找到候选光线
+
+设水面高度是 `z = f(x, y, t)`，在某个海底顶点 `p₀` 上方的水面点记为 `p`。水面沿两个水平轴的变化率分别是 `fₓ` 与 `fᵧ`。<Term def="曲面高度沿某个坐标轴的局部变化率">偏导数</Term>把“波面往哪边上升”变成可计算的斜率，于是未归一化的表面方向可写为：
+
+$$
+N' = (-f_x, -f_y, 1), \qquad N = \frac{N'}{\lVert N'\rVert}.
+$$
+
+其中 <Term def="垂直于曲面切平面的单位方向，决定光线如何被反射或折射">法线</Term> `N` 是波面改变光线方向的关键。若原来的波函数由多层余弦或正弦叠加而成，就可以按链式法则逐层计算 `fₓ` 与 `fᵧ`；GPU 不需要先把整张高度图读回 CPU。
+
+<GpuGemsCh02CausticPipelineDiagram />
+
+### 斯涅尔定律在这里扮演什么角色
+
+<Term def="描述光线穿过两种介质时入射角与折射角关系的定律">斯涅尔定律</Term>写成 `η₁ sin θ₁ = η₂ sin θ₂`，其中 `η` 是介质折射率。原书的 OpenGL 版本可以沿法线和折射率构造反向折射线；着色器版本则发现，用“沿波面法线到海底的截距”做环境映射，视觉上已非常接近完整折射计算，而且更便宜。
+
+这个取舍很值得记住：不是因为折射定律不重要，而是因为远处太阳盘近似、垂直入射假设和水底距离共同决定了最终亮度；把可见差异很小的步骤合并，才能把预算留给每像素细节。
+
+## 3. 线面相交把方向变成纹理坐标
+
+法线给出方向，却还没有给出海底上哪个纹素应该变亮。把候选光线写成：
+
+$$
+p(t) = p_0 + t v,
+$$
+
+把海底平面写成 `n · p = D`，则交点距离为：
+
+$$
+t = \frac{D - n\cdot p_0}{n\cdot v}, \qquad p_{hit}=p_0+t v.
+$$
+
+这里 <Term def="把一条射线与平面联立，得到射线在平面上的交点的计算">线面相交</Term>把方向 `v` 转成 `p_hit`；再将 `p_hit.xy` 归一化，就可以访问太阳光图。`n · v` 接近零时，光线几乎平行于海底，应该降低贡献或走保护分支，不能直接除零。
+
+<GpuGemsCh02CausticsLab />
+
+实验操作顺序：先预测坡度滑杆从 `0.24` 增大到 `0.45` 后，亮斑是否变得更尖；再只改变一个滑杆，观察亮度网格和候选光线的变化。最后点“重置实验”，确认你看到的是参数变化，而不是视图残留。
+
+## 4. 三遍渲染：把焦散叠加到海底
+
+原书的基础 OpenGL 实现采用多遍绘制。第一遍以普通纹理四边形绘制海底；第二遍使用与波网格粒度相近的细网格，为每个顶点计算焦散值并做加法叠加；第三遍绘制水面波形，并用平面环境映射得到天空反射。焦散值可以从 `0`（没有集中光线）到 `1`（高度集中）理解。
+
+在第二遍中，每个海底顶点执行以下链条：
+
+1. 从海底点向上发出垂直射线，和波面相交。
+2. 用相交点的法线与水的折射率构造反向折射方向。
+3. 让折射方向与海底平面求交，得到 `p_hit`。
+4. 用 `p_hit` 计算太阳光图坐标，并把焦散值写入细网格顶点颜色。
+
+这种 <Term def="把多个渲染结果按像素颜色相加的混合方式">加法混合</Term>只负责把光照贡献叠到海底底色上，不负责重新计算海底材质。水面反射仍是独立的第三遍，因此调焦散强度时不会意外改变水面几何。
+
+## 5. 从顶点计算迁移到着色器
+
+把同一波函数复制到 HLSL 或 Cg 等高层着色语言后，可以将焦散从逐顶点提升为逐像素计算。这样视觉质量不再强依赖细网格密度：每个像素都可以按自身位置计算波面梯度，再得到线面交点。
+
+一个压缩后的实现骨架如下。代码只保留因果链，真实项目还应加入参数缓冲、边界保护、颜色空间和深度衰减：
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+float2 gradWave(float x, float y, float time);
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+float3 linePlaneHit(float3 p, float3 v, float3 planeN, float planeD) {
+  float denominator = dot(planeN, v);
+  float distance = (planeD - dot(planeN, p)) / denominator;
+  return p + v * distance;
+}
+
+float4 shadeFloor(VertexOut input, sampler2D lightMap,
+                  sampler2D groundMap, float time) {
+  float2 slope = gradWave(input.position.x, input.position.y, time);
+  float3 candidate = normalize(float3(slope.x, slope.y, 1.0));
+  float3 hit = linePlaneHit(input.position.xyz, candidate,
+                            float3(0, 0, 1), -0.8);
+  float3 caustic = tex2D(lightMap, hit.xy * 0.8).rgb;
+  return float4(tex2D(groundMap, input.uv).rgb + caustic, 1.0);
+}
 ```
 
-### 内存对齐
+这里的 <Term def="在计算过程中用上一个采样结果决定下一个纹理坐标的读取">依赖纹理读取</Term>是性能与画质的交汇点：`hit.xy` 不是静态 UV，而是由当前波面、法线和深度共同决定的坐标。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 6. 屏幕空间还是纹理空间
 
-## 验证层检查
+屏幕空间只为当前可见像素计算焦散，因此小窗口或局部水底很划算；但可见面积变大时，每帧工作量也随之膨胀。纹理空间把焦散写入固定分辨率的 render target，成本更稳定，还能利用自动 mipmap 生成与各向异性过滤降低混叠；代价是不可见区域也会被计算，并且分辨率选得过低时会显出双线或十字纹理。
 
-启用验证层后，Chapter 2: Natural Effects相关的常见错误会被捕获：
+<GpuGemsCh02ResolutionDiagram />
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+工程上可以按三个问题选方案：焦散覆盖多少屏幕？需要多少高频细节？过滤和带宽预算能否支撑目标分辨率？不要把“逐像素”直接等同于“永远更快”，也不要把固定 render target 当作无需调参的万能解。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+## 本章回顾：近似如何形成可控效果
 
-## 本章要点
-
-1. Chapter 2: Natural Effects是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+- 焦散是曲面反射或折射后光线在局部集中形成的亮斑。
+- 反向采样从海底点找候选光线，比追踪所有光子更适合实时近似。
+- 波面偏导得到法线；线面相交把折射方向落到海底纹理坐标。
+- 三遍渲染把海底、焦散叠加和水面反射分开，便于调试与扩展。
+- 屏幕空间与纹理空间分别交换可见性收益、固定成本和过滤能力。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 2: Natural Effects涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1**　改 Demo 代码：把实验中的候选光线从“按波面坡度计算”改成固定竖直方向。你预计亮斑会失去什么变化？请指出应改动的向量，并用重置前后的截图验证。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+将候选方向从由 `slope` 构造的 `float3(slope.x, slope.y, 1.0)` 改为 `float3(0, 0, 1.0)`。海底亮斑会不再随波面坡度重新聚焦，移动与集中变化明显减少；应先记录原实验状态，再点重置复现基线。
+
 </Answer>
 
+**问题 2**　推导题：若海底平面为 `z = -0.8`，采样点 `p₀=(0.2,0.3,0)`，候选方向 `v=(0.1,0.2,-1)`，用线面相交公式求 `t` 并写出交点。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+平面法线取 `n=(0,0,1)`，所以 `n·v=-1`，`D=-0.8`，`n·p₀=0`。因此 `t=(-0.8-0)/(-1)=0.8`，交点是 `p_hit=(0.28,0.46,-0.8)`。
+
+</Answer>
+
+**问题 3**　场景选型题：一个小型水池只占屏幕的四分之一，另一个海底镜头几乎铺满屏幕且希望焦散图跨帧稳定。分别选择屏幕空间或纹理空间，并说明过滤策略。
+
+<Answer>
+
+小水池选择屏幕空间，避免为不可见像素计算；大面积海底选择固定分辨率的纹理空间，并生成 mipmap、配合各向异性过滤降低混叠。最终分辨率仍应由目标画质和带宽预算实测决定。
+
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+  <GlossaryItem term="水焦散">曲面折射或反射后，许多光线集中到局部区域形成的动态亮斑。</GlossaryItem>
+  <GlossaryItem term="前向光子追踪">从光源发射光子并跟随它们传播，统计它们最终照亮哪里的办法。</GlossaryItem>
+  <GlossaryItem term="反向光线追踪">从被照亮的点反过来寻找可能来自光源的光线，减少无关光线的办法。</GlossaryItem>
+  <GlossaryItem term="蒙特卡洛采样">用许多随机候选样本近似一个难以直接计算的光照积分。</GlossaryItem>
+  <GlossaryItem term="偏导数">固定其他坐标后，只看曲面沿一个方向变化得有多快。</GlossaryItem>
+  <GlossaryItem term="法线">垂直于表面的方向；它决定光线遇到表面后会朝哪边转。</GlossaryItem>
+  <GlossaryItem term="斯涅尔定律">描述光线进入另一种介质后，入射角和折射角如何关联的公式。</GlossaryItem>
+  <GlossaryItem term="线面相交">计算一条光线在什么位置穿过平面，把方向变成落点。</GlossaryItem>
+  <GlossaryItem term="加法混合">把新算出的光照颜色加到已有底色上的像素混合方式。</GlossaryItem>
+  <GlossaryItem term="依赖纹理读取">用计算出的交点或其他结果临时生成纹理坐标，再读取纹理。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 2 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 2. Rendering Water Caustics"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-2-rendering-water-caustics?lang=en"
+/>

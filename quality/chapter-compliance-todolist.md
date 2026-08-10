@@ -944,7 +944,7 @@
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — 已修复（2026-08-09，score 42→100，passed）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
-- [ ] 🔴 P1 **01-natural-effects/gpugems-ch02** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+- [x] ✅ **01-natural-effects/gpugems-ch02** — 已修复（2026-08-10，score 42→100，passed）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch02.mdx`
 - [ ] 🔴 P1 **01-natural-effects/gpugems-ch03** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch03.mdx`

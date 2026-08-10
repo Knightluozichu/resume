@@ -1,17 +1,17 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T01:41:27.482Z；旧版分数不迁移。
+> 2026-08-10T02:08:27.485Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2239
+- failed：2238
 - queued：344
-- passed：1170
-- published：743
+- passed：1121
+- published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
-| 1 | gpu-gems | 48 | 47 | 0 | 1 | 94 |
+| 1 | gpu-gems | 48 | 46 | 0 | 2 | 92 |
 | 2 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
 | 3 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 4 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
@@ -213,7 +213,7 @@
 | 200 | linux-kernel-design | 22 | 0 | 0 | 22 | 0 |
 | 201 | linux-kernel-essence | 10 | 0 | 0 | 10 | 0 |
 | 202 | machine-learning-watermelon | 19 | 0 | 0 | 0 | 0 |
-| 203 | math-girl | 50 | 0 | 0 | 50 | 0 |
+| 203 | math-girl | 50 | 0 | 0 | 0 | 0 |
 | 204 | modern-cpp-design | 13 | 0 | 0 | 13 | 0 |
 | 205 | multiagent-systems | 27 | 0 | 0 | 0 | 0 |
 | 206 | nodejs-debugging-guide | 10 | 0 | 0 | 10 | 0 |

@@ -12785,6 +12785,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh01WaveSumDiagram: module0.GpuGemsCh01WaveSumDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/01-natural-effects/gpugems-ch02": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch02-water-caustics");
+    return {
+      GpuGemsCh02CausticPipelineDiagram:
+        module0.GpuGemsCh02CausticPipelineDiagram,
+      GpuGemsCh02CausticsLab: module0.GpuGemsCh02CausticsLab,
+      GpuGemsCh02RayPathDiagram: module0.GpuGemsCh02RayPathDiagram,
+      GpuGemsCh02ResolutionDiagram: module0.GpuGemsCh02ResolutionDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
