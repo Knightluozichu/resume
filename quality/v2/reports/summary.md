@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T05:55:02.708Z；旧版分数不迁移。
+> 2026-08-10T06:01:46.015Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2217
+- failed：2216
 - queued：344
-- passed：1142
+- passed：1143
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -32,9 +32,9 @@
 | 19 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
 | 20 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
 | 21 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
-| 22 | gpu-gems | 48 | 25 | 0 | 23 | 50 |
-| 23 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
-| 24 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 22 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
+| 23 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
+| 24 | gpu-gems | 48 | 24 | 0 | 24 | 48 |
 | 25 | sql-ten-minutes | 24 | 24 | 0 | 0 | 48 |
 | 26 | this-is-chatgpt | 24 | 24 | 0 | 0 | 24 |
 | 27 | head-first-java | 23 | 23 | 0 | 0 | 111 |
