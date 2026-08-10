@@ -940,7 +940,7 @@
 - [x] ✅ **02-volume-2/mg2-splitting-primes** — 已修复（2026-08-09，score 27→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-splitting-primes.mdx`
 
-## gpu-gems（48 章 · ❌47 ⚠️0 ✅1）
+## gpu-gems（49 章 · ❌0 ⚠️0 ✅49）
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — 已修复（2026-08-09，score 42→100，passed）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
@@ -1038,6 +1038,8 @@
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch47.mdx`
 - [x] ✅ **08-rendering-techniques/gpugems-ch48** — 已修复（2026-08-10，score 42→100，passed）
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch48.mdx`
+- [x] ✅ **09-gpu-gems2-geometric-complexity/gpugems2-ch01** — 已新增并通过 v2 验收（2026-08-10，score 98，passed）
+    - 路径：`content/gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch01.mdx`
 
 ## effective-modern-cpp（44 章 · ❌0 ⚠️44 ✅0）
 
