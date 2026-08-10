@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:19:11.918Z；旧版分数不迁移。
+> 2026-08-10T06:27:53.974Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2214
+- failed：2213
 - queued：344
-- passed：1145
+- passed：1146
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -44,11 +44,11 @@
 | 31 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 32 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
 | 33 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 34 | gpu-gems | 48 | 22 | 0 | 26 | 44 |
-| 35 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 36 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
-| 37 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
-| 38 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 34 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 35 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 36 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
+| 37 | shader-practice | 21 | 21 | 0 | 0 | 63 |
+| 38 | gpu-gems | 48 | 21 | 0 | 27 | 42 |
 | 39 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |
 | 40 | mastering-bitcoin | 20 | 20 | 0 | 0 | 98 |
 | 41 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
