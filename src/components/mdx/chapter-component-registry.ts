@@ -11761,6 +11761,7 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
     return {
       EmcppEightChapterJourneyMap: module0.EmcppEightChapterJourneyMap,
       EmcppItemEvidenceMap: module0.EmcppItemEvidenceMap,
+      EmcppLearningMapDecisionLab: module0.EmcppLearningMapDecisionLab,
       EmcppPrincipleDependencyFlowMap: module0.EmcppPrincipleDependencyFlowMap,
     } as ChapterMdxComponents;
   },
