@@ -1,255 +1,209 @@
 ---
-title: "Chapter 37: Simulation and Numerical Algorithms"
+title: "GPU Gems 1 · Chapter 37. A Toolkit for Computation on GPUs"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 37
-description: "GPU Gems Part: Simulation and Numerical Algorithms, Chapter 37"
+description: "用 stream programming model 把通用数据变换映射到 GPU：从粒子 map 到多 pass reduce、bitonic sort 和 binary search，并在输出槽位、readback 与 CPU/GPU 分工之间做工程取舍。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-37-toolkit-computation-gpus"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-37
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh37BitonicSortDiagram,
+  GpuGemsCh37ComputationLab,
+  GpuGemsCh37GpuChallengesDiagram,
+  GpuGemsCh37MapReduceDiagram,
+  GpuGemsCh37StreamProgramDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch37-gpu-computation-toolkit";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 37: Simulation and Numerical Algorithms的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Simulation and Numerical Algorithms, Chapter 37之间的关系是什么？
+- 能把一组独立数据记录、kernel 和 GPU 输出组织成 stream programming model，而不是把 GPU 当成串行 CPU
+- 能解释 map、reduce、sort、search 四类 primitive 如何通过纹理、fragment program 和多 pass 实现
+- 能为粒子、tone mapping 或 uniform grid 选择合适的 GPU primitive，并估算 pass 数、输出槽位和数据布局成本
+- 能根据并行性、GPU/CPU readback、有限输出和工具成熟度判断某个算法应留在 GPU、CPU 还是采用混合方案
 
 </Objectives>
 
-## 为什么需要Chapter 37: Simulation and Numerical Algorithms
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 37: Simulation and Numerical Algorithms作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Simulation and Numerical Algorithms, Chapter 37正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把 GPU 当成换一条编译参数就能运行的串行 CPU">
+现象：算法在单线程 CPU 上正确，搬到 fragment program 后却依赖邻居刚刚写出的结果，产生竞态或不稳定画面。原因：GPU stream 中每个元素独立执行，fragment 之间不能共享可写内存。修法：先把算法拆成独立的 per-record kernel；跨元素依赖必须显式变成下一次 pass、sort 或 reduce。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 37: Simulation and Numerical Algorithms从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 37: Simulation and Numerical Algorithms涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 37: Simulation and Numerical Algorithms相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 37: Simulation and Numerical Algorithms相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要因为 GPU 有更高算力就把所有算法都迁移过去">
+现象：kernel 的计算很快，但总帧时间变长，或者排序结果刚算完就被 CPU 读回而失去收益。原因：多 pass、有限输出槽位、GPU/CPU 同步和 readback 传输都属于算法成本。修法：把中间数据尽量保持在 GPU memory，先估算 pass 与带宽，再和 CPU 的成熟实现做端到端比较。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把 map、reduce、sort、search 混成一个万能 shader">
+现象：为了复用一段代码，聚合、排序和查找被塞进同一条不透明路径，难以验证数据依赖和性能。原因：四类 primitive 的输出规模、pass 结构和适用条件不同。修法：先标注输入输出的基数变化，再选择最小的 primitive 组合，并把每一轮的纹理读写作为可观察边界。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 37 章的主张很直接：GPU 不必只渲染 shaded pixels。它可以把粒子、网格点、物理方程和数组记录作为输入，通过可编程 fragment pipeline 并行计算。原章使用旧式 floating-point textures 与 pbuffers 说明方法；今天可以把这些对象理解为 GPU buffer/texture 上的中间数据，而不是把历史 API 当成唯一实现。
 
-## 性能考量
+## 1. Stream programming model：把记录交给 kernel
 
-### 批量操作
+<Term def="以独立数据记录组成输入集合、对每条记录并行执行相同函数、再产生输出集合的 GPU 计算模型">stream processor</Term> 的关键不是暴露多少并行线程，而是把工作表达成 record stream 与独立计算。CPU 常按顺序更新共享内存；GPU 则把同一个函数应用于大量输入记录，让硬件自行安排并行执行。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh37StreamProgramDiagram />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+在这个模型里，`<Term def="对 stream 中每条记录执行一次的计算函数，通常对应一个 fragment program 或其他 GPU 程序阶段">kernel</Term>` 读取当前记录、计算结果并写入对应输出位置。它不能假设另一个记录已经完成，也不能写入邻居会同时读取的共享区域。这个限制看似严格，却让独立粒子、点、像素和数组元素能够自然并行。
 
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```text
+input stream:  position[i], velocity[i], orientation[i]
+kernel:        nextPosition = integrate(position[i], velocity[i])
+output stream: newPosition[i]
 ```
 
-### 内存对齐
+为什么值得这样做？历史 GPU 在浮点计算和内存带宽上都可能领先当时 CPU，且当 CPU 已经成为瓶颈、GPU 仍有空闲周期时，把一部分工作移过去还能实现 load balancing。但性能判断必须比较端到端时间：上传、pass、同步、readback 和后续工作不能被“kernel 很快”掩盖。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 2. Map：逐记录更新粒子和数组
 
-## 验证层检查
+<Term def="保持输入记录数量、对每条记录独立执行函数并产生一条对应输出的数组变换 primitive">map</Term> 是最容易映射到 GPU 的通用操作。粒子模拟可以把位置、速度和方向存入 floating-point texture；绘制一个大 quad，让 fragment 数量对应粒子数量，再用 texture coordinates 找到当前粒子的记录。fragment program 计算新位置，结果写回另一个 pbuffer 或 texture。
 
-启用验证层后，Chapter 37: Simulation and Numerical Algorithms相关的常见错误会被捕获：
+<GpuGemsCh37MapReduceDiagram />
 
+map 的正确性条件是每个输出只依赖一个输入记录和常量参数。布料中某个点若只读取上一帧缓存的邻居位置，可以把依赖冻结在输入纹理；但如果它要读取“本次 pass 已更新的邻居”，就必须把更新拆成下一次 pass，不能假设写入立即可见。
+
+```c
+// conceptual fragment kernel, one invocation per particle
+float4 updateParticle(float2 recordUv, samplerRECT state, float dt) {
+  float4 positionVelocity = texRECT(state, recordUv);
+  float3 nextPosition = integrate(positionVelocity.xyz, dt);
+  return float4(nextPosition, positionVelocity.w);
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+map 适合逐像素 tone adjustment、粒子积分、点云属性变换和独立的物理更新。它不负责把很多记录合成一个结果，也不负责建立有序关系；一旦输出基数改变，就要转向 reduce 或其他 primitive。
+
+## 3. Reduce：多 pass 得到 min、max 或单值
+
+<Term def="把一组输入记录逐层合并为更少记录，最终得到 min、max、sum、average 或其他聚合结果的 primitive">reduce</Term> 解决“GPU 通常一条输入对应一条输出，但我只需要一个结果”的问题。原章以 tone mapping 为例：不要每帧把整张 HDR 图读回 CPU 找最大值，而是让每个 fragment 读取局部四个值并输出最大值，再把更小的 quad 作为下一轮输入。
+
+每一轮可以把二维纹理的宽和高各缩小一半，因此记录数量约变为原来的四分之一；重复若干轮就能得到一个值或一个足够小的结果块。对非二次幂尺寸，要明确边界填充和无效 texel 的处理；不一定非要 reduce 到单个像素，读回一个小方块再由 CPU 做最后聚合有时更划算。
+
+```text
+pass 0:  [a b] [c d]  →  [max(a,b,c,d)]
+pass 1:  four local maxima → one local maximum
+repeat:  keep reducing the active texture
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+reduce 的限制来自 fragment 指令数和 output 数。一个 pass 如果需要输出多个四分量矩阵，却只有一个 RGBA 输出槽，就必须拆分布局或增加 pass。算法设计要先问“这一轮能安全写出多少结果”，再决定一次合并多少输入。
 
-## 本章要点
+## 4. Sort 与 Search：为粒子碰撞建立 uniform grid
 
-1. Chapter 37: Simulation and Numerical Algorithms是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+粒子碰撞若让每个粒子和所有其他粒子比较，计算量会随粒子数量平方增长，而且远距离粒子的大部分比较没有价值。uniform grid 把空间划成 cell，让相邻粒子落入同一或相邻 cell；构建它需要先按 cell id 排序，再为每个 cell 找到有序列表的起始位置。
+
+### 4.1 Bitonic merge sort
+
+<Term def="用规则 compare-and-swap stage 合并 bitonic sequences、适合在受限 GPU 多 pass 环境中执行的并行排序算法">bitonic merge sort</Term> 适合 GPU，不是因为它在所有规模上都比 CPU 快，而是因为每个 stage 都有规则的并行比较和交换。输入存在 texture memory；每个 rendering pass 读取上一阶段纹理，计算当前元素需要比较的 partner，按方向写入 min 或 max，再将新纹理交给下一阶段。
+
+<GpuGemsCh37BitonicSortDiagram />
+
+若数据规模是 n，原章给出的 pass 数按 log n 乘以 log n 加一再除以二增长。排序一百万元素可能要约两百多个 pass，这时单纯追求 GPU 计算并不明智；较小的 4096 元素集合则可能在合适硬件上获得实际收益，尤其当排序结果无需读回 CPU 时。
+
+辅助函数需要把一维数组地址映射成二维 texture 坐标。这个转换应保持整数索引、纹理宽度和边界条件一致；任何一处坐标误差都会在多轮 compare-and-swap 后扩大为错误排序。
+
+### 4.2 Binary search
+
+<Term def="在已排序列表中不断检查中点并缩小候选区间、为每个 query 并行查找目标位置的搜索 primitive">binary search</Term> 依赖已经排序的 list。uniform grid 中每个 cell 可以独立发起一次查找，寻找它在 sorted particle list 中的起始位置。每个 fragment 执行一段固定次数的依赖 texture lookup，步骤大约随 log n 增长，最后需要一次 correction 比较处理“第一个相等位置”边界。
+
+与 sort 相比，binary search 常能在单个 rendering pass 中完成大量 query，因此当排序结果可以持续驻留 GPU 时，整体构建 grid 的成本可能很低。它不能替代 sort：无序列表上二分查找没有语义，必须明确数据生命周期和排序缓存。
+
+## 5. GPU 计算的三个现实约束
+
+<GpuGemsCh37GpuChallengesDiagram />
+
+### 5.1 有限输出
+
+fragment program 的 output 数量和每个 output 的宽度会限制一个 pass 能保留的中间状态。ray tracing 中一个输入 ray 可能产生 reflection、transmission 和 shadow 多个结果；若硬件只提供少数输出槽，就要拆成多个 pass，或把结果重新打包到纹理的不同区域。多 pass 不是免费，它会增加读写和调度成本。
+
+### 5.2 慢 readback
+
+GPU 计算完成后若立刻把数据读回 CPU，往往需要同步 GPU、跨总线传输并阻塞后续工作。粒子位置在 GPU 更新后若必须由 CPU 做碰撞，就可能抵消 offload 的收益。更好的安排是把碰撞、排序和邻域查找也留在 GPU；只有最终摘要、少量查询或 CPU 确实必须接管的阶段才 readback。
+
+### 5.3 GPU 与 CPU 的边界
+
+CPU 上成熟的排序、调试器和 profiler 仍然很有价值。GPU 的强项是大量独立记录、规则的多 pass 和高带宽数据流；CPU 可能更适合复杂分支、强依赖和小数据集。不要为了“纯 GPU”牺牲可观测性，应以端到端 benchmark 选择 GPU、CPU 或混合 pipeline。
+
+## 6. 交互实验：选择 primitive 而不是追逐算力
+
+<GpuGemsCh37ComputationLab />
+
+实验把四类 primitive 放到同一个关系模型中：map 的 pass 数固定但依赖并行独立性；reduce 的 pass 数随数据规模逐层增长；sort 的 pass 数增长更快；search 需要 sorted input 却常能在单 pass 中处理许多 query。关闭 GPU residency 会显式加入 readback penalty，减少 output slots 会让某些多结果算法需要额外拆分。
+
+## 7. 可复用的 GPU 算法决策
+
+把一个 CPU 算法迁移到 GPU 前，可以按以下顺序检查：
+
+1. **记录化**：能否把输入组织成固定格式的 stream，每条记录是否有清晰的输出位置？
+2. **并行化**：一个 output 是否只依赖当前 input 或上一个稳定 pass 的结果？
+3. **基数变化**：输出是 N、N/4 还是单值？这决定 map、reduce 和 pass 组织。
+4. **顺序需求**：是否需要排序后才能搜索？排序成本是否会被后续 query 数量摊薄？
+5. **驻留策略**：中间数据能否留在 GPU，避免每个 primitive 之间往返 CPU？
+6. **端到端证据**：记录 kernel、pass、纹理读写、同步、readback 和 CPU 对照，而不是只比较算术吞吐。
+
+这套决策也解释了原章的四个核心操作：map 让大量独立记录更新成为可能，reduce 将流压缩为摘要，sort 建立有序空间索引，search 在索引上高效查询。它们不是四个孤立技巧，而是一套把通用算法重新表达为 GPU-friendly 数据流的工具箱。
+
+## 小结
+
+- GPU 的通用计算模型是 stream 加 kernel：每条记录独立处理，结果写回另一个 stream，不依赖共享可写邻居。
+- map 保持记录数量，适合粒子和数组逐元素更新；reduce 通过多 pass 合并局部结果，适合 min、max、sum 和 tone mapping。
+- bitonic merge sort 用规则的 parallel compare-and-swap 适应 GPU，但 pass 数可能让大数据集输给 CPU。
+- binary search 依赖排序结果，能够让多个 query 并行查找 cell 起点，常适合单 pass 的依赖 texture lookup。
+- 有限输出槽位、慢 readback、同步和成熟度不足的工具会改变迁移收益；GPU residency 是重要的设计选择。
+- 先验证并行性、数据基数变化、pass 数和驻留策略，再用端到端数据决定 GPU、CPU 或混合实现。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 37: Simulation and Numerical Algorithms涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜粒子更新**　请把“每个粒子根据上一帧位置和速度计算新位置”映射成 GPU stream program，并说明为什么不能读取同一 pass 中邻居刚写出的新位置。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+把位置、速度和方向编码为输入 texture，每个粒子占一条记录；绘制与粒子数量对应的 quad，让每个 fragment 执行同一个 kernel，按 texture coordinate 读取自己的记录并写出新位置到另一张 texture。fragment 之间不能共享可写内存，也不能保证邻居的写入先完成，因此邻居的新位置必须在下一 pass 作为稳定输入，或改用明确的 reduce、sort 等阶段组织依赖。
 </Answer>
 
+**问题 2｜reduce 预算**　一个 1024×1024 的浮点图要计算最大值。若每轮把宽高都缩小一半，为什么大约需要十轮？什么时候可以只读回一个小方块而不是单个像素？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+每轮总 texel 数缩小到四分之一；1024 经过十次除以二会到 1，因此需要约十轮才能得到单个 texel。实际不必强求单值：如果最后几轮的 GPU pass、同步和单像素 readback 成本较高，可以保留一个小方块，把少量结果读回 CPU 完成最后聚合；应通过端到端 benchmark 选择边界。
+</Answer>
+
+**问题 3｜uniform grid**　为什么粒子碰撞的 GPU pipeline 常把 bitonic merge sort 和 binary search 配在一起？请说明两者各自的前置条件和代价。
+
+<Answer>
+
+先根据粒子的 grid cell id 排序，使同一 cell 的粒子在列表中连续；bitonic merge sort 通过多 pass compare-and-swap 建立这个顺序，代价是 pass 数随 log² n 增长。之后每个 cell 可以独立对 sorted list 做 binary search，找到该 cell 的起点，通常一个 rendering pass 就能并行处理许多 query；它的前置条件是列表已经有序，并且需要处理第一次命中位置的 correction 边界。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="stream processor">以独立数据记录组成输入、对每条记录并行执行相同函数并产生输出集合的 GPU 计算模型。</GlossaryItem>
+<GlossaryItem term="kernel">对 stream 中每条记录执行一次的计算函数。</GlossaryItem>
+<GlossaryItem term="map">保持输入记录数量、对每条记录独立执行函数的数组变换 primitive。</GlossaryItem>
+<GlossaryItem term="reduce">把输入记录逐层合并为更少记录并得到聚合结果的 primitive。</GlossaryItem>
+<GlossaryItem term="bitonic merge sort">用规则 compare-and-swap stage 合并 bitonic sequences 的并行排序算法。</GlossaryItem>
+<GlossaryItem term="binary search">在已排序列表中不断缩小候选区间、为 query 查找目标位置的搜索 primitive。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 37 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 37 “A Toolkit for Computation on GPUs”的独立重写，保留 stream processor、kernel、粒子 map、parallel reduce、bitonic merge sort、binary search、uniform grid、limited outputs、slow readback 与 GPU/CPU 边界等核心线索，并将历史 texture/pbuffer 示例整理为可验证的通用 GPU 数据流决策路径。原始章节：[NVIDIA GPU Gems Chapter 37](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-37-toolkit-computation-gpus)
+
 </Attribution>

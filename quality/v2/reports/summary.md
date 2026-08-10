@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:52:46.493Z；旧版分数不迁移。
+> 2026-08-10T08:01:42.048Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2204
+- failed：2203
 - queued：344
-- passed：1155
+- passed：1156
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -120,10 +120,10 @@
 | 107 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
 | 108 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
 | 109 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 110 | gpu-gems | 48 | 12 | 0 | 36 | 24 |
-| 111 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
-| 112 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 113 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 110 | code-quality-refactoring | 11 | 11 | 0 | 0 | 55 |
+| 111 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 112 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 113 | gpu-gems | 48 | 11 | 0 | 37 | 22 |
 | 114 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 115 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 116 | ai-agent | 9 | 9 | 0 | 0 | 9 |
