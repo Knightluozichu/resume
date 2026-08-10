@@ -1024,7 +1024,7 @@
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch40.mdx`
 - [x] ✅ **08-rendering-techniques/gpugems-ch41** — 已修复（2026-08-10，score 42→98，passed）
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch41.mdx`
-- [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch42** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+- [x] ✅ **08-rendering-techniques/gpugems-ch42** — 已修复（2026-08-10，score 42→98，passed）
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch42.mdx`
 - [ ] 🔴 P1 **08-rendering-techniques/gpugems-ch43** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
     - 路径：`content/gpu-gems/08-rendering-techniques/gpugems-ch43.mdx`

@@ -13286,6 +13286,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh41StripPropagationDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/08-rendering-techniques/gpugems-ch42": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch42-deformers");
+    return {
+      GpuGemsCh42DeformerLab: module0.GpuGemsCh42DeformerLab,
+      GpuGemsCh42DeformerPipelineDiagram:
+        module0.GpuGemsCh42DeformerPipelineDiagram,
+      GpuGemsCh42JacobianNormalDiagram:
+        module0.GpuGemsCh42JacobianNormalDiagram,
+      GpuGemsCh42NormalMethodsDiagram: module0.GpuGemsCh42NormalMethodsDiagram,
+      GpuGemsCh42WaveDeformerDiagram: module0.GpuGemsCh42WaveDeformerDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

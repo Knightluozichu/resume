@@ -1,255 +1,213 @@
 ---
-title: "Chapter 42: Rendering Techniques"
+title: "GPU Gems 1 · Chapter 42. Deformers"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 42
-description: "GPU Gems Part: Rendering Techniques, Chapter 42"
+description: "把顶点独立、确定性地变形到 GPU：从 wave、twist、bulge 的函数表达，到 Jacobian 变换切线和副切线并重建非线性变形后的法线。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-42-deformers"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-42
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh42DeformerLab,
+  GpuGemsCh42DeformerPipelineDiagram,
+  GpuGemsCh42JacobianNormalDiagram,
+  GpuGemsCh42NormalMethodsDiagram,
+  GpuGemsCh42WaveDeformerDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch42-deformers";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 42: Rendering Techniques的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Rendering Techniques, Chapter 42之间的关系是什么？
+- 能把 wave、twist、bulge 等网格变形写成逐顶点、确定性、无邻居依赖的函数，并判断它们是否适合放进 vertex shader
+- 能解释非线性变形为什么不能直接用普通模型矩阵变换法线，并用 Jacobian 变换切线和副切线
+- 能比较 Jacobian 与有限差分重建法线的成本、精度、可微性和奇异点限制
+- 能通过变形振幅、频率、相位、网格规模和法线方法实验，在动画质量、顶点指令与实时帧预算之间做出取舍
 
 </Objectives>
 
-## 为什么需要Chapter 42: Rendering Techniques
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 42: Rendering Techniques作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Rendering Techniques, Chapter 42正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把所有网格修改都称为逐顶点 deformer">
+现象：把平滑、重拓扑或随机化操作直接塞进 vertex shader，却无法得到正确结果。原因：这些操作可能创建/删除顶点，或依赖邻居和随机状态，不符合单个输入顶点独立产生单个输出的模型。修法：先检查拓扑不变、无邻居依赖、确定性三个条件；不满足时改用 compute、mesh processing 或 CPU 阶段。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 42: Rendering Techniques从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 42: Rendering Techniques涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 42: Rendering Techniques相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 42: Rendering Techniques相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要对非线性变形直接套 inverse-transpose 模型矩阵">
+现象：位置波形看起来正确，但高光方向、法线贴图或阴影完全错误。原因：wave、twist、bulge 没有一个全局固定矩阵 M，普通线性变换的 inverse-transpose 规则不适用。修法：在顶点位置处计算局部 Jacobian，用它变换切线和副切线后叉积并归一化，或明确选择有限差分近似。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要忽略 Jacobian 奇异点和归一化前的零向量">
+现象：某些顶点的法线突然闪烁、变成随机方向，或者强变形时模型出现黑色尖点。原因：变形局部折叠使 det(J) 接近零，变换后的切线和副切线几乎共线，归一化接近零向量会放大数值误差。修法：检测 determinant 和向量长度，对退化区域使用稳定 fallback 或限制控制参数，再进行 normalize。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 42 章把模型变形从 CPU 搬到 GPU，并把真正困难的部分放在法线上。平移、旋转和缩放可以用矩阵轻松处理；但 wave、lattice、bend、twist 和 bulge 等函数会让每个顶点的位置以空间相关方式改变，不能再假设整个网格共享一张矩阵。
 
-## 性能考量
+这类工作适合顶点程序的前提是严格的：不创建或删除顶点、不读取正在处理的其他顶点、相同输入得到相同输出。满足条件时，每个顶点可以独立计算，控制参数和时间作为 uniform 输入，GPU 可以把大量顶点并行处理；法线则需要一个能描述局部导数的工具。
 
-### 批量操作
+## 1. 什么是 GPU deformer
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="把输入顶点坐标逐点映射为新坐标，并可同时产生新法线和切线的确定性顶点函数">deformer</Term> 是一个把位置 `p = (x, y, z)` 映射为 `p′ = f(x, y, z)` 的操作。它的控制参数可以是 amplitude、frequency、phase、lattice control points 或时间；对一次渲染调用来说，这些控制是所有顶点共享的常量。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh42DeformerPipelineDiagram />
 
-### 避免 CPU-GPU 同步点
+要把一个操作放入 vertex shader，先问三个问题：
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+1. **拓扑是否不变**：每个输入顶点是否只产生一个输出顶点，没有插入、删除或重连边？
+2. **是否独立**：顶点的新位置是否只依赖自己的坐标和 uniform，不需要邻居平均、平滑或全局排序？
+3. **是否确定**：相同输入和相同控制是否始终得到相同输出？纯随机化若没有稳定 seed，就不是本章意义上的 deformer。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+一个平移可以写成 `f(x, y, z) = (x, y + 2, z)`；一个径向波则会在 xz 平面的距离上计算正弦位移。变形在哪个坐标空间执行也很重要：把 object-space 坐标传给函数，波纹跟随物体；把 world-space 坐标传给函数，波纹固定在世界中；把 view-space 坐标传入，视角会参与形状。
+
+## 2. 用函数而不是黑盒矩阵表达变形
+
+在 vertex shader 中，顶点位置逻辑通常是：读取输入 position，计算 `f(position, controls)`，再应用模型视图投影变换。控制参数不应该被混进顶点属性，否则每个顶点都要重复存储一份本来可以 uniform 传入的时间或频率。
+
+```glsl
+vec3 deformPosition(vec3 p, float amplitude, float frequency, float phase) {
+    float radius = length(p.xz);
+    float offset = amplitude * sin(frequency * radius + phase);
+    return vec3(p.x, p.y + offset, p.z);
+}
+
+void main() {
+    vec3 deformed = deformPosition(inPosition, uAmplitude, uFrequency, uPhase);
+    gl_Position = uModelViewProjection * vec4(deformed, 1.0);
+}
 ```
 
-### 内存对齐
+这个函数只说明位置；真正用于光照的 normal 不能简单地仍然是原来的 `(0, 1, 0)`。原始法线描述的是原表面的切平面，变形后表面的切平面已经旋转或剪切。线性变换的 normal 可以通过矩阵 inverse-transpose 变换，但一般函数 `f` 没有固定的全局 M，需要局部化。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh42WaveDeformerDiagram />
 
-## 验证层检查
+## 3. 变形法线的两条路线
 
-启用验证层后，Chapter 42: Rendering Techniques相关的常见错误会被捕获：
+### 3.1 有限差分近似
 
+<Term def="通过在顶点附近沿切线和副切线偏移两个微小点，分别变形后用向量叉积近似新法线的方法">finite difference</Term> 直观地模拟 CPU 的邻域重建。对顶点 p，取两个很近的点 `p + εt` 和 `p + εb`，将三个点都交给 deformer，得到两个变形后的方向，叉积后归一化：
+
+```text
+p0 = f(p)
+p1 = f(p + epsilon * tangent)
+p2 = f(p + epsilon * binormal)
+n′ = normalize(cross(p1 - p0, p2 - p0))
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+它的优点是不用推导复杂的偏导数；缺点是每个顶点要额外计算两组位置，而且 epsilon 太大时会混入非局部曲率，太小时又会受到浮点精度和相减消去影响。对于大量顶点，这个方法可能把单次变形成本扩大到三倍以上。
+
+### 3.2 Jacobian 法线
+
+<Term def="由变形函数对输入坐标的一阶偏导数组成、在每个顶点处近似局部线性变换的导数矩阵">Jacobian matrix</Term> 把同一个 `f` 在顶点附近展开。若 `f = (fₓ, fᵧ, f_z)`，则 J 的每个元素是对应输出分量对输入坐标的偏导：
+
+```text
+J(p) = [ ∂fx/∂x  ∂fx/∂y  ∂fx/∂z
+         ∂fy/∂x  ∂fy/∂y  ∂fy/∂z
+         ∂fz/∂x  ∂fz/∂y  ∂fz/∂z ]
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+它在 p 处把一个很小的方向向量当作局部线性变换：`t′ = J(p)t`。为了避免每个顶点求 3×3 矩阵逆，通常保留 `<Term def="位于表面切平面内、用于构建法线局部坐标框架的方向向量">tangent</Term>` 与 `<Term def="由法线和切线叉积得到、与表面切平面互相垂直的第二方向向量">binormal</Term>`，直接算 `Jt` 和 `Jb`，再用它们的叉积得到 `<Term def="经过顶点变形后、用于光照计算并应重新归一化的表面法线">deformed normal</Term>`。
 
-## 本章要点
+<GpuGemsCh42JacobianNormalDiagram />
 
-1. Chapter 42: Rendering Techniques是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+```glsl
+vec3 tangentPrime = jacobian(position) * tangent;
+vec3 binormalPrime = jacobian(position) * binormal;
+vec3 normalPrime = normalize(cross(tangentPrime, binormalPrime));
+```
+
+如果只提供了 normal，没有 tangent，可以在加载网格时生成一个与 normal 不平行的方向，再用叉积得到 binormal。简单的 fallback 可能在不同顶点选择不同轴，产生不连续的 tangent field；它足以支持本章的法线重建，却不一定适合需要连续切线的 bump mapping。
+
+## 4. 为什么局部导数能变换法线
+
+在一个足够小的邻域内，光滑函数可以用一阶 Taylor 展开近似为“局部线性变换加平移”。平移不会改变切向方向，所以 J 就是决定表面局部如何拉伸、剪切和旋转的矩阵。J 作用在原始切线和副切线上，得到变形表面的两个切向方向；它们的叉积与新法线垂直。
+
+另一条等价路线是对 normal 使用 J 的 inverse-transpose：`n′ ∝ (J⁻¹)ᵀ n`，再 normalize。它数学上简洁，但顶点 shader 中求逆可能比两次矩阵乘法和一次叉积更不划算；J 的 determinant 还必须非零。选择哪条路线要结合 shader 指令、已有 tangent 数据和对法线精度的要求。
+
+<GpuGemsCh42NormalMethodsDiagram />
+
+这里的 smooth-surface assumption 是关键限制。对于一个有尖锐折面的 faceted mesh，面法线在边界处不连续；先逐点应用局部 Jacobian，再假设有一张光滑曲面，未必等于 CPU 变形网格后按面重新计算的结果。发布前应分别测试 smooth mesh、硬边、UV seam 和法线贴图。
+
+## 5. 奇异点、不可微函数与控制参数
+
+如果 J 在某个点的 determinant 接近零，变形会压扁一个局部方向，Jt 和 Jb 可能接近共线，叉积接近零。此时 normalize 会把微小数值误差放大成随机方向。实际实现应检测长度或 determinant，在退化点使用原法线、邻近稳定法线或降级材质，而不是无条件归一化。
+
+Jacobian 还要求函数有连续的一阶偏导。硬阈值、绝对值折角、噪声查找或不可微的 procedural branch 可能只能用有限差分近似，但代价是额外位置计算和更难控制的 epsilon。若 deformer 由多个阶段组成，只有最后一个在 GPU 上求导时，必须把前面阶段对坐标和 frame 的影响纳入输入契约，否则法线只对应部分变形。
+
+控制参数也会改变数值行为：amplitude 太大可能造成折叠，frequency 太高让 J 快速变化，phase 动画会让法线持续更新。应把参数范围作为 asset 或 runtime contract，而不是把任何 slider 值都当成合法输入。
+
+## 6. 性能：一条顶点程序能承担多少变形
+
+GPU deformer 的成本近似由顶点数量乘以函数和法线计算的指令数决定。简单平移、波和 twist 往往很便宜；4×4×4 lattice、多个复合 deformer、skinning 与复杂材质若全塞进一条 vertex shader，可能超过指令长度或让大网格失去实时性。
+
+有限差分至少需要额外变形两个近邻点；Jacobian 需要偏导表达式，但偏导经常复用位置函数已经计算过的中间量。因此可微且表达式可控时，Jacobian 通常能在更低成本下提供更稳定的法线。不是所有 deformer 都适合它：复杂导数有时比两次额外位置变形还贵，应以目标设备 profiler 判断。
+
+<GpuGemsCh42DeformerLab />
+
+## 7. 复用清单：把变形送进 vertex shader
+
+1. **输入输出**：确认一个输入顶点生成一个输出顶点，拓扑不变，没有邻居读依赖。
+2. **函数形式**：写出 `f(x, y, z, controls, time)`，标明执行在 object、world 还是 view space。
+3. **法线路线**：线性变形用 inverse-transpose；非线性可微变形优先评估 Jacobian；没有导数时再评估 finite difference。
+4. **frame 数据**：保证 tangent、binormal、normal 的方向和 seam 约定一致，并在输出后 normalize。
+5. **退化测试**：检查 determinant、零向量、折面、硬边、UV seam 和极端控制参数。
+6. **帧预算**：分别记录顶点数量、position 指令、J 或额外点变形、uniform 更新和材质光照成本。
+
+## 小结
+
+- GPU deformer 是确定性的逐顶点函数：不创建或删除顶点，不读取邻居，并且相同输入得到相同输出。
+- 线性矩阵的 normal inverse-transpose 规则不适用于一般 wave、twist、bulge；非线性变形需要局部导数。
+- finite difference 用三个相近位置近似新法线，容易实现但额外成本高且受 epsilon 影响；Jacobian 用偏导变换切线和副切线，再叉积归一化。
+- Jacobian 需要可微函数和非奇异局部映射；强变形、折面和归一化前的近零向量都必须单独处理。
+- 位置函数、法线方法、控制参数和顶点规模应共同纳入 GPU profiler 与发布测试，而不是只观察模型是否“动起来”。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 42: Rendering Techniques涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜适用条件**　为什么平滑操作或随机化操作不一定是本章意义上的 GPU deformer？请列出逐顶点 deformer 的三个条件。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+平滑通常需要读取邻居，随机化如果没有固定 seed 就不具备确定性；二者都不能简单地让一个 vertex invocation 只读取自己的输入并得到可重复输出。适用条件是拓扑不变、当前顶点不依赖其他顶点、相同输入和控制始终产生相同结果。
 </Answer>
 
+**问题 2｜法线重建**　对非线性变形，为什么不能沿用原法线或直接套一个全局 inverse-transpose 矩阵？Jacobian 路线怎样得到新法线？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+非线性函数没有一个对整个网格都成立的固定矩阵，原法线描述的切平面也会随位置改变。Jacobian 在每个顶点处近似局部线性变换，用它变换输入 tangent 和 binormal，再对两个变形后的切向量做叉积并归一化，得到局部的 deformed normal；也可以在 J 非奇异时使用 inverse-transpose。
+</Answer>
+
+**问题 3｜性能与退化**　什么时候 finite difference 可能比 Jacobian 更合适？在强变形下应检查哪些证据？
+
+<Answer>
+
+如果函数没有可靠的解析一阶导数，或推导出的 Jacobian 远比额外两次位置变形复杂，finite difference 可能更快落地，但要用合适 epsilon 并承担额外顶点成本。强变形时应检查 Jacobian determinant、变形后的 tangent/binormal 是否接近共线、normal 长度是否接近零、硬边是否满足平滑假设，并用 GPU profiler 比较两种方法的真实指令与帧时间。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="deformer">把输入顶点逐点映射为新坐标并可生成新 frame 的确定性函数。</GlossaryItem>
+<GlossaryItem term="Jacobian matrix">由变形函数一阶偏导组成、描述局部线性变化的导数矩阵。</GlossaryItem>
+<GlossaryItem term="finite difference">变形顶点附近的两个偏移点并用叉积近似新法线的方法。</GlossaryItem>
+<GlossaryItem term="tangent">位于表面切平面内、用于构建局部 frame 的方向向量。</GlossaryItem>
+<GlossaryItem term="binormal">由法线和切线叉积得到的第二切向方向。</GlossaryItem>
+<GlossaryItem term="deformed normal">经过变形后重新计算并归一化、用于光照的表面法线。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 42 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 42 “Deformers”的独立重写，保留逐顶点变形条件、控制参数、函数表达、vertex program、非线性法线、有限差分、Jacobian、切线/副切线、奇异点、wave 示例与指令性能约束等核心线索，并将历史 GPU 顶点程序整理为可验证的现代 deformer 决策路径。原始章节：[NVIDIA GPU Gems Chapter 42](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-42-deformers)
+
 </Attribution>
