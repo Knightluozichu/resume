@@ -13230,6 +13230,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh37StreamProgramDiagram: module0.GpuGemsCh37StreamProgramDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/07-simulation/gpugems-ch38": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch38-fast-fluid-dynamics");
+    return {
+      GpuGemsCh38BoundaryDiagram: module0.GpuGemsCh38BoundaryDiagram,
+      GpuGemsCh38FieldPackingDiagram: module0.GpuGemsCh38FieldPackingDiagram,
+      GpuGemsCh38FluidLab: module0.GpuGemsCh38FluidLab,
+      GpuGemsCh38FluidStepDiagram: module0.GpuGemsCh38FluidStepDiagram,
+      GpuGemsCh38JacobiProjectionDiagram:
+        module0.GpuGemsCh38JacobiProjectionDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

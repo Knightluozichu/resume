@@ -1,255 +1,216 @@
 ---
-title: "Chapter 38: Simulation and Numerical Algorithms"
+title: "GPU Gems 1 · Chapter 38. Fast Fluid Dynamics Simulation on the GPU"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part VI · Beyond Triangles"
 order: 38
-description: "GPU Gems Part: Simulation and Numerical Algorithms, Chapter 38"
+description: "把不可压缩流体的时间步拆成 GPU 纹理 pass：从源项、扩散、平流到投影，再用边界条件、ping-pong 存储和迭代预算做成可交互的二维流体模拟。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-38-fast-fluid-dynamics-simulation"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh38BoundaryDiagram,
+  GpuGemsCh38FieldPackingDiagram,
+  GpuGemsCh38FluidLab,
+  GpuGemsCh38FluidStepDiagram,
+  GpuGemsCh38JacobiProjectionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch38-fast-fluid-dynamics";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 38: Simulation and Numerical Algorithms的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Simulation and Numerical Algorithms, Chapter 38之间的关系是什么？
+- 能解释 GPU Gems 1 第 38 章为何用稳定流体方法把二维 Navier–Stokes 时间步拆成源项、扩散、平流和投影
+- 能把速度、密度、压力、散度和障碍物映射为浮点纹理，并用 ping-pong 表面组织 fragment pass 的读写
+- 能说明 Jacobi 迭代、半拉格朗日回溯和边界条件分别解决什么数值问题，以及它们的近似代价
+- 能通过分辨率、迭代次数、源强和 GPU 驻留实验，在画质、稳定性、带宽和交互延迟之间做出可解释的取舍
 
 </Objectives>
 
-## 为什么需要Chapter 38: Simulation and Numerical Algorithms
-
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 38: Simulation and Numerical Algorithms作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Simulation and Numerical Algorithms, Chapter 38正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要在同一张纹理上边读边写">
+现象：流体纹理有时出现条纹、依赖帧顺序，或同一硬件上结果不稳定。原因：一个 fragment 读到的邻居可能已经被本轮写过，也可能还没写，读写同一渲染目标没有可用的顺序保证。修法：每个 pass 从稳定的输入 surface 读取，把结果写到另一张 surface，完成后再交换 ping-pong 角色。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 38: Simulation and Numerical Algorithms从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 38: Simulation and Numerical Algorithms涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 38: Simulation and Numerical Algorithms相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 38: Simulation and Numerical Algorithms相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把稳定等同于无散">
+现象：烟雾不爆炸了，却仍然向量场膨胀，源项附近有明显的非物理汇聚。原因：半拉格朗日平流通常很稳定，但稳定不等于速度满足不可压缩约束。修法：计算散度、解压力，再减去压力梯度；用迭代残差而不是“画面没有炸”判断投影是否足够。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要把边界和网格外采样留到最后补">
+现象：染料穿过墙体、速度从障碍物里冒出，或粒子在边缘突然消失。原因：回溯采样可能落到计算域外，邻居 stencil 也可能跨过 obstacle mask。修法：先定义 clamp、墙面速度和密度边界，再让扩散、平流、压力求解都遵守同一份边界规则。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+GPU Gems 1 第 38 章的主线是一个很实用的转换：把连续的流体方程离散到二维网格，再把每个网格 cell 交给 GPU 的 fragment pipeline。原章建立在早期浮点纹理、render-to-texture 和双缓冲之上；今天可以把它理解为 GPU texture 或 buffer 上的一组字段，以及由多个 shader pass 组成的 solver，而不是把历史 API 当成唯一实现。
 
-## 性能考量
+## 1. 稳定流体：先确定一个可执行的时间步
 
-### 批量操作
+<Term def="以半拉格朗日平流、扩散、压力投影和边界处理组成的稳定二维流体求解框架">stable fluids</Term> 是 Mark Harris 等人在本章中采用的思路，源自 Stam 的 Stable Fluids。它的取舍很明确：通过半拉格朗日平流获得无条件稳定的时间推进，再用投影维持不可压缩条件；代价是数值耗散、有限网格分辨率和需要多轮迭代的压力求解。
 
-Vulkan 鼓励批量提交而非逐个提交：
+我们不直接在 GPU 上保存一个抽象的“流体对象”，而是保存网格上的字段：速度向量决定染料怎么走，密度代表烟或墨水，压力帮助速度满足约束，障碍物 mask 描述墙的位置。每个时间步按约定顺序消费上一阶段的稳定结果。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+<GpuGemsCh38FluidStepDiagram />
 
-### 避免 CPU-GPU 同步点
+最小的 solver 可以写成下面的概念流程。它不是某个 API 的完整实现，却把每个 pass 的输入输出边界说清楚了：
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```text
+addSource(density, source)
+addSource(velocity, force)
+diffuse(velocity, viscosity, dt)
+advect(velocity, velocity)
+advect(density, density, velocity)
+project(velocity, pressure, divergence)
 ```
 
-### 内存对齐
+源项和边界条件会影响每一个阶段。实际工程中也可能先投影速度再平流密度，或为不同字段使用不同的扩散设置；重要的是每一步都从已完成的输入读取，并且明确哪一个字段在何时成为下一阶段的状态。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 2. 把连续场装进纹理
 
-## 验证层检查
+<Term def="沿着当前速度反向追踪采样位置、再从上一时刻场中插值得到新值的平流方法">semi-Lagrangian advection</Term> 的第一步不是写 shader，而是决定数据布局。二维网格的每个 cell 对应一个 texel，也对应一次 fragment invocation。速度可以把两个分量放在浮点纹理的 R、G 通道；密度、压力和散度可以使用独立纹理，或在带宽与精度允许时打包到不同通道。
 
-启用验证层后，Chapter 38: Simulation and Numerical Algorithms相关的常见错误会被捕获：
+<GpuGemsCh38FieldPackingDiagram />
 
+渲染一个覆盖计算域的 quad，就能让 fragment 坐标遍历所有 cell。对于每个输出 texel，shader 读取同一坐标的输入字段和邻居字段，应用离散方程，再写入另一张渲染目标。绝不能把当前输入纹理同时绑定为采样源和写入目标：即使某些驱动看起来“能跑”，结果也依赖未定义的读写顺序。
+
+这里的 `<Term def="在两个等价的 GPU 表面之间交替读写、避免一个 pass 同时读写同一目标的存储模式">ping-pong surface</Term>` 是最小的同步协议：本轮从 A 读、向 B 写；pass 完成后交换 A 和 B。压力的 Jacobi 迭代、速度扩散和平流都可以复用这个协议。字段是否需要单独 surface，要根据格式、带宽和同时读取的通道数做决定，不能为了少几个对象而牺牲清晰的数据契约。
+
+## 3. 源项、平流与数值耗散
+
+加入源项是最容易理解的一步：用户在鼠标位置注入密度，或把一个局部 force 加到速度。把画笔栅格化到 source texture 后，`addSource` 只需逐 texel 相加，并对边界区域应用规则。源项应当乘以时间步长或显式强度，避免帧率变化改变注入量。
+
+平流则采用回溯：对当前 cell 位置 `x`，从速度场读取 `u(x)`，计算 `x_back = x - dt * u(x)`，再到上一张字段纹理采样 `field(x_back)`。双线性采样让结果比最近邻更平滑；clamp 规则保证回溯位置不会访问网格外的无效内存。下面的伪代码刻意省略 API 细节，只突出依赖方向：
+
+```c
+float2 backtrace(float2 cell, Texture velocity, float dt) {
+  float2 u = sample(velocity, cell);
+  return clamp(cell - dt * u, domainMin, domainMax);
+}
+
+float advectCell(float2 cell, Texture velocity, Texture field, float dt) {
+  float2 previousCell = backtrace(cell, velocity, dt);
+  return bilinearSample(field, previousCell);
+}
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+半拉格朗日方法的稳定性来自“沿流线回到过去取值”，但每次插值都会抹平高频细节，因此烟雾会逐渐变淡。增大网格分辨率、减少不必要的重采样、加入受控的 vorticity confinement 或提高源强，都可能改善视觉效果；这些都不能替代对时间步和边界的检查。
+
+## 4. 扩散：用 Jacobi 迭代换取可并行的近似解
+
+扩散和压力求解都可以归结为邻居线性方程。GPU 不适合在一个 fragment 中顺序解完整的全局线性系统，因此使用 `<Term def="反复用邻居的旧值更新当前网格值、每轮在两张表面之间交换的线性系统近似求解方法">Jacobi iteration</Term>`：每一轮每个 cell 独立读取邻居旧值，计算一个新值，再写入下一张 surface。
+
+以四邻居 stencil 为例，一轮的结构是：
+
+```text
+for each cell in parallel:
+    neighbors = read(input, left, right, up, down)
+    next[cell] = (source[cell] + neighbors.sum * alpha) / beta
+swap(input, next)
+repeat a fixed number of iterations
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+它很适合 fragment pass，因为所有输出只依赖上一轮的稳定纹理；它也很适合教学和调参，因为迭代次数直接暴露了精度与成本的关系。轮数太少，压力残差或扩散误差明显；轮数太多，带宽和 pass 调度可能压低帧率。固定轮数通常比等待一个不可预测的全局收敛条件更容易满足交互预算，但应在开发阶段记录残差。
 
-## 本章要点
+扩散速度时要处理障碍物邻居：墙内的 texel 不应被当成普通流体 cell。密度扩散也可能使用不同的边界规则。把“所有字段一套邻居公式”当成捷径，往往会在墙边产生泄漏。
 
-1. Chapter 38: Simulation and Numerical Algorithms是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 5. 让速度满足不可压缩约束
+
+源项、扩散和平流之后，速度场通常不是不可压缩的。先用 `<Term def="速度场的局部膨胀率，通常通过相邻速度分量的差分计算">divergence</Term>` 估计每个 cell 的散度：正值表示局部向外膨胀，负值表示汇聚。然后用 Jacobi 迭代近似求压力场，最后执行 `<Term def="先计算散度、再求压力并减去压力梯度，使速度场回到近似无散状态的修正阶段">projection</Term>`。
+
+<GpuGemsCh38JacobiProjectionDiagram />
+
+概念上可以记成三步：
+
+1. `divergence = ∇ · velocity`：把速度场违反约束的程度写到纹理。
+2. `pressure = solve(divergence)`：用多轮邻居更新近似解压力 Poisson 方程。
+3. `velocity -= gradient(pressure)`：从速度中减掉压力梯度，让相邻 cell 的流量尽量守恒。
+
+投影不是“让画面好看”的可选后处理。没有它，源项会不断制造体积误差；有了它，迭代次数不足时仍可能留下残差。可以在 debug view 中显示散度热图，或用一个 reduction 统计最大绝对散度，把视觉结果和数值证据连接起来。
+
+## 6. 边界、障碍物与 GPU 读写纪律
+
+<GpuGemsCh38BoundaryDiagram />
+
+边界条件决定了流体域的物理含义。墙面常用 no-slip 约束：靠墙的速度分量被置零或按法向反射；密度可以贴着墙流动，也可以按问题定义被吸收。障碍物 mask 需要被扩散、平流、压力和投影共同读取，否则某一阶段把量带过墙，下一阶段再严谨也无法恢复。
+
+回溯位置落到域外时要 clamp 或使用专门的边界 texel；访问一个未定义的纹理坐标可能产生随机密度。压力 stencil 还要区分流体邻居和墙邻居，避免把墙内的压力当成普通未知量。建议给每个 pass 写一条“允许读取哪些字段、允许写哪一个 surface、遇到 mask 怎样处理”的数据契约，再开始优化布局。
+
+历史 GPU 实现用 render-to-texture 和浮点纹理把每轮结果留在显存中。现代实现可以换成计算着色器、storage image 或 GPU buffer，但两个约束仍然一样：读写依赖要用显式 barrier 或分离资源表达，CPU readback 要尽量推迟。把整张速度场每帧读回 CPU 做 debug，会让一个本来适合 GPU 的 pipeline 变成同步瓶颈；更好的做法是只读回小摘要，或使用 GPU 端可视化。
+
+## 7. 交互实验：把质量旋钮换成预算
+
+<GpuGemsCh38FluidLab />
+
+实验把一个二维流体 solver 的主要工程旋钮放在一起：平流阶段强调回溯与耗散，投影阶段强调散度与迭代；分辨率平方增长会放大每次纹理读写，Jacobi 迭代会线性增加 pass；障碍物提高了边界正确性但也需要额外 mask 处理；关闭 GPU resident 会显式加入 readback 风险。
+
+可以从 256 × 256、16 次迭代和启用障碍物开始，再逐项改变一个变量。若只提高分辨率，先看带宽和帧时间；若只提高迭代，先看散度热图；若降低黏性，观察细节是否保留但稳定性是否变差。数值是示意，发布前仍需用目标 GPU、真实 shader 和 GPU profiler 校准。
+
+## 8. 复用清单：从算法到发布实现
+
+把本章方法迁移到一个新的实时模拟时，可以按以下顺序复核：
+
+1. **场的定义**：列出每个 cell 的字段、格式、精度和是否需要独立纹理。
+2. **时间步顺序**：明确源项、扩散、平流、散度、压力、投影和边界的先后关系。
+3. **读写契约**：每个 pass 只有一个写目标；跨 pass 的依赖通过 ping-pong 和 barrier 表达。
+4. **迭代预算**：记录 Jacobi 轮数、分辨率、纹理带宽和残差，不用“看起来稳定”替代指标。
+5. **边界测试**：用静态墙、窄通道和域外回溯测试速度与密度是否穿透。
+6. **端到端检查**：确认字段是否保持 GPU resident，readback、同步、展示和输入注入是否共同满足帧预算。
+
+## 小结
+
+- GPU Gems 1 第 38 章把稳定二维流体拆成源项、扩散、平流和投影，每个阶段都能映射为纹理上的并行 pass。
+- 半拉格朗日回溯带来很好的稳定性，但插值会造成耗散；Jacobi 迭代能并行近似求解，却需要用 pass 预算换精度。
+- 速度、密度、压力和散度应有清晰的数据布局；ping-pong surface 保证输入稳定，不能在同一目标上读写。
+- 投影通过散度、压力和压力梯度把速度拉回近似不可压缩状态；边界 mask、clamp 和墙面条件必须贯穿整个 solver。
+- 分辨率、迭代次数、障碍物和 GPU resident 策略共同决定交互质量；应结合残差、带宽、同步和视觉巡检做发布判断。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 38: Simulation and Numerical Algorithms涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜时间步拆分**　请解释为什么快速流体 solver 要把一个时间步拆成源项、扩散、平流和投影，而不是在一个 fragment 中顺序更新所有字段。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+拆分让每个阶段拥有稳定的输入输出和明确的数值职责：源项加入外力，扩散处理邻居耦合，平流沿速度回溯，投影修正不可压缩约束。GPU 的 fragment 不能依赖同一 pass 中邻居刚写出的结果，因此跨阶段依赖必须通过多个 pass 和 ping-pong surface 表达；拆分也让每个阶段可以单独调试和预算。
 </Answer>
 
+**问题 2｜平流与耗散**　对一个 cell 做半拉格朗日平流时，为什么要从当前位置反向回溯？它带来什么优点和代价？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+从当前位置沿当前速度反向回到上一时刻，再采样旧字段，避免了把值向前推进时出现的空洞和不稳定；配合双线性采样，它对较大的时间步也通常稳定。代价是每次插值会抹平高频细节，烟雾或染料会逐渐耗散，因此需要在时间步、分辨率、源强和受控的细节增强之间做取舍。
+</Answer>
+
+**问题 3｜投影与边界**　如果速度场已经“看起来不爆炸”，为什么仍要计算散度和做压力投影？障碍物 mask 应在什么阶段使用？
+
+<Answer>
+
+稳定只说明数值没有发散，不说明局部流量守恒。源项和插值可能让速度场产生膨胀或汇聚，投影用压力梯度消除这部分散度，才接近不可压缩流体。障碍物 mask 应同时参与邻域采样、扩散、平流、压力和投影；若只在显示阶段遮住墙，内部状态已经穿墙，下一帧仍会把错误带回流体域。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="stable fluids">以稳定平流、扩散、压力投影和边界处理组成的二维流体求解框架。</GlossaryItem>
+<GlossaryItem term="semi-Lagrangian advection">沿当前速度反向追踪，再从上一时刻场中插值的平流方法。</GlossaryItem>
+<GlossaryItem term="ping-pong surface">在两张 GPU 表面之间交替读写、避免同一 pass 读写同一目标的存储模式。</GlossaryItem>
+<GlossaryItem term="Jacobi iteration">反复用邻居旧值更新当前网格值的线性系统近似求解方法。</GlossaryItem>
+<GlossaryItem term="divergence">速度场的局部膨胀率，通常由相邻速度分量的差分估计。</GlossaryItem>
+<GlossaryItem term="projection">通过压力梯度修正速度，使速度场接近无散的阶段。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 38 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 38 “Fast Fluid Dynamics Simulation on the GPU”的独立重写，保留稳定流体、Navier–Stokes 离散、半拉格朗日平流、浮点纹理、Jacobi 迭代、投影、边界条件与 GPU resident 数据流等核心线索，并将历史 render-to-texture 例子整理为可验证的现代 GPU solver 决策路径。原始章节：[NVIDIA GPU Gems Chapter 38](https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-38-fast-fluid-dynamics-simulation)
+
 </Attribution>
