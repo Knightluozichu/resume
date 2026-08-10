@@ -1,0 +1,144 @@
+---
+title: "GPU Gems 2 · Chapter 5. Optimizing Resource Management with Multistreaming"
+type: C
+section: "GPU Gems 2 Part I · Geometric Complexity"
+order: 5
+description: "用 G、T、A、I 四类 vertex stream 拆分几何、纹理、动画和实例数据，再由资源管理器按渲染 pass 只绑定当前需要的组件。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-5-optimizing-resource-management-multistreaming"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-05
+---
+
+import {
+  GpuGems2Ch05MultistreamingLab,
+  GpuGems2Ch05OptionalBandwidthDiagram,
+  GpuGems2Ch05PassMatrixDiagram,
+  GpuGems2Ch05ResourcePipelineDiagram,
+  GpuGems2Ch05StreamTypesDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch05-multistreaming";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能把 mesh 的 geometry、texture、animation、instance 数据拆成职责清晰的 vertex stream
+- 能按 z-pass、纹理、动画和实例化等渲染 pass 选择最小 stream 组合
+- 能解释硬件无关的 mesh resource、Vertexprocessor 与硬件相关 vertex buffer 之间的边界
+- 能用实验识别“需要的 stream 超出硬件上限”时应该降级效果而不是读取缺失字段
+
+</Objectives>
+
+<Callout type="trap" title="不要每个 pass 都传一份包含全部字段的胖顶点">
+**现象 →** z-pass 也携带大量 UV、切线和骨骼权重，显存、总线和缓存压力无效增长。
+
+**原因 →** 顶点布局按“模型完整性”而不是“当前 pass 的实际输入”设计。
+
+**修法 →** 以 G、T、A、I 拆成独立 stream，让 renderer 只绑定当前 shader 读取的字段。
+
+</Callout>
+
+<Callout type="trap" title="不要让资源文件直接等于某个 GPU 的硬件布局">
+**现象 →** 同一 mesh 在不同设备或效果开关下需要复制很多格式，资源生命周期和兼容性变得脆弱。
+
+**原因 →** 导入数据把 API 的 vertex declaration、stride 和 stream 数量写死在内容层。
+
+**修法 →** 保留硬件无关的 MeshResource，由 Vertexprocessor 根据当前 pass 和硬件能力生成所需布局。
+
+</Callout>
+
+<Callout type="trap" title="不要忽略 stream 数量和效果降级边界">
+**现象 →** 低端硬件缺少某个 stream 时，shader 仍按高端路径读取动画或实例数据，结果是错误变换或越界布局。
+
+**原因 →** 只检查“硬件支持 multistreaming”，没有检查当前组合需要多少 stream 和哪些字段。
+
+**修法 →** 在资源选择阶段验证 MaxStreams 和实际声明；不足时关闭对应效果或切换 fallback，而不是绑定空数据冒充正确输入。
+
+</Callout>
+
+现代 mesh 的一个顶点往往包含 position、normal、颜色、多个 UV、切线和骨骼权重，但一个具体 pass 通常只读取其中一部分。若每次绘制都传输完整顶点，系统会为没有被读取的数据支付内存和带宽成本。
+
+<GpuGems2Ch05StreamTypesDiagram />
+
+## 1. 用职责拆分 vertex stream
+
+<Term def="承载位置、法线和顶点颜色等基础几何字段的 vertex stream">G-stream</Term>保存 geometry data，是大多数 pass 的基础。<Term def="承载纹理坐标、切线和其他表面采样字段的 vertex stream">T-stream</Term>只在需要纹理或切线空间效果时加入。
+
+<Term def="承载骨骼权重、骨骼影响等顶点动画字段的 vertex stream">A-stream</Term>服务硬件 skinning。<Term def="承载逐实例变换和 stream-frequency 实例化字段的 vertex stream">I-stream</Term>服务实例化。它们的拆分让“动画开关”和“实例化开关”不必改变基础几何 stream 的布局。
+
+<GpuGems2Ch05PassMatrixDiagram />
+
+组合不是越多越好。每增加一个 active stream，就增加绑定、声明和访存复杂度，因此应该从当前 shader 的输入反推最小集合：solid 可能是 G 加 T，纯 z-pass 甚至只需要 G，instanced mesh 再加入 I。
+
+## 2. 资源管理器与 Vertexprocessor
+
+<Term def="保存通用 mesh 数组、索引和资源引用，不绑定具体图形 API 顶点布局的资源对象">MeshResource</Term>可以用文件名或全局 ID 查询，并用引用计数让同一份 mesh 被多个场景对象复用。它保存的是 position、normal、UV、weights 等逻辑数组，而不是某个 GPU 的最终 stride。
+
+<Term def="把通用 MeshResource 按 pass 和硬件能力翻译成具体 vertex stream 与 declaration 的处理器">Vertexprocessor</Term>在需要绘制时读取 MeshResource，决定当前顶点格式，过滤不需要的字段，并生成 G、T、A、I 等硬件相关 buffer。这个边界让同一套内容能适配不同设备和效果开关。
+
+<GpuGems2Ch05ResourcePipelineDiagram />
+
+生成后的 stream 可以缓存并复用；当资源尚未加载时再按需读取，已经加载时只增加引用。索引也应该选择足够而不过大的类型：顶点数量允许时使用较小索引能减少内存，但不能为了节省几个字节而溢出索引范围。
+
+## 3. 带宽预算与效果降级
+
+<GpuGems2Ch05OptionalBandwidthDiagram />
+
+“不传用不到的数据”有两层收益：显存中的 stream 更小，系统内存到 GPU 的传输也更少。硬件能力更弱时，关闭某个效果意味着它对应的 UV、切线或动画字段也可以从这条路径移除，而不是保留一份永远不会被读取的冗余布局。
+
+同时要注意 multistreaming 不是免费的抽象。硬件有 MaxStreams 之类的能力上限，active stream 太多会带来绑定和访存开销。工程上应把常用组合控制在较小数量，并让资源管理器把能力检查与 fallback 变成明确的策略。
+
+## 4. 动手实验：pass 决定输入
+
+切换不同 pass，观察 G、T、A、I 哪些 stream 被绑定。再把可用 stream 数量调低，问自己：是关闭某个效果，还是继续绑定一个不完整的 stream？正确的答案应该由 shader 输入和硬件能力共同决定。
+
+<GpuGems2Ch05MultistreamingLab />
+
+实验只模拟声明和绑定，不模拟真实 DMA 时间；它的目标是建立资源布局的决策顺序：先确定 pass，再选择字段，再检查能力，最后生成硬件声明。
+
+## 小结
+
+- G、T、A、I 分别承担几何、纹理、动画和实例数据。
+- multistreaming 让不同 pass 只绑定实际需要的 vertex components。
+- MeshResource 保持硬件无关，Vertexprocessor 负责按 pass 和设备生成布局。
+- 少传字段可降低显存和带宽，但 active stream 数量也有硬件与性能边界。
+- 能力不足时应显式降级效果，不能让 shader 假设不存在的 stream。
+
+<Exercises>
+
+**问题 1｜组合 pass**　为纯 z-pass、带纹理的静态 mesh、带动画的纹理 mesh 分别选择最小 stream 组合。
+
+<Answer>
+
+纯 z-pass 使用 G；带纹理的静态 mesh 使用 G 加 T；带动画的纹理 mesh 使用 G 加 T 加 A。只有当实例化确实参与该 pass 时才加入 I。
+</Answer>
+
+**问题 2｜架构边界**　为什么 MeshResource 不应该直接保存某个 GPU 的最终 vertex declaration？
+
+<Answer>
+
+同一 mesh 可能在不同硬件、不同 pass 和不同效果开关下需要不同字段与 stride。让 MeshResource 保存逻辑数组，由 Vertexprocessor 生成目标布局，可以避免内容层与 API、硬件能力耦合，并支持按需删除未使用字段。
+</Answer>
+
+**问题 3｜能力不足**　一个 instanced pass 需要 G、T、I，但设备只允许两个 active stream。你会怎么处理？
+
+<Answer>
+
+先确认是否能把部分字段合并到已有 stream 且仍满足布局和缓存要求；如果不能，就切换到兼容的 fallback、关闭一个效果或拆成另一条渲染路径。不能把缺少的 I stream 当成空 buffer 继续绘制，否则实例变换会错误。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="G-stream">承载位置、法线和颜色等基础几何字段的 stream。</GlossaryItem>
+<GlossaryItem term="T-stream">承载 UV、切线和表面采样字段的 stream。</GlossaryItem>
+<GlossaryItem term="A-stream">承载骨骼权重与影响等动画字段的 stream。</GlossaryItem>
+<GlossaryItem term="I-stream">承载逐实例数据和实例化字段的 stream。</GlossaryItem>
+<GlossaryItem term="MeshResource">硬件无关的通用 mesh 数据与资源引用容器。</GlossaryItem>
+<GlossaryItem term="Vertexprocessor">将通用 mesh 翻译成当前 pass 和硬件所需 stream 布局的处理器。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 5. Optimizing Resource Management with Multistreaming" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-5-optimizing-resource-management-multistreaming" />
