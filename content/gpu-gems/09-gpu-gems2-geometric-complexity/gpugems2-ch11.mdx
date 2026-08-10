@@ -1,0 +1,140 @@
+---
+title: "GPU Gems 2 · Chapter 11. Approximate Bidirectional Texture Functions"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 11
+description: "用少量入射光切片采集材料细尺度变化，把粗略 BRDF 亮度作为 3D volume texture 的第三维，实时补回布料、皮革等材质的 mesostructure。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-11-approximate-bidirectional-texture"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-11
+---
+
+import {
+  GpuGems2Ch11AcquisitionDiagram,
+  GpuGems2Ch11BtfLab,
+  GpuGems2Ch11DimensionalityDiagram,
+  GpuGems2Ch11LimitationsDiagram,
+  GpuGems2Ch11VolumeLookupDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch11-btf";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分 BRDF、完整 BTF 与 approximate BTF 保存的材质维度和视觉效果
+- 能描述固定相机、弧线光源、亮度线性化和 shading map 构建流程
+- 能用粗略 BRDF 亮度选择 3D volume texture slice，并用 trilinear filtering 平滑查表
+- 能指出小尺度、近似 isotropic 假设何时成立，以及大结构和强方向性会丢失什么
+
+</Objectives>
+
+<Callout type="trap" title="不要把单张 diffuse texture 当成 BTF">
+**现象 →** 布料、羊毛和皮革看起来像平面颜色，细丝之间的 self-shadowing 和空间变化消失。
+
+**原因 →** 单张纹理只描述颜色，不描述 view/light 方向引起的反射和遮挡变化。
+
+**修法 →** 用少量入射光切片采集 mesostructure，并在运行时按粗略亮度选择 3D shading map 层。
+
+</Callout>
+
+<Callout type="trap" title="不要把 approximation 当成完整的六维 BTF">
+**现象 →** 普通布料表现不错，但掠射角、强方向性或大尺度结构下差异明显。
+
+**原因 →** 近似方法只沿一条光源弧线采样，默认材料小尺度且近似 isotropic，没有捕捉所有 view/light/position 组合。
+
+**修法 →** 把它定位为快速采集和实时预览；对 anisotropic、大遮挡结构或需要物理一致性的资产使用更完整的测量/模型。
+
+</Callout>
+
+<Callout type="trap" title="不要用最近整数 slice 取样">
+**现象 →** 光照强度变化时材质出现分层、contour 或跳变。
+
+**原因 →** brightness 轴被量化成离散图层，没有在相邻样本之间插值。
+
+**修法 →** 将采集图像按平均 radiance 线性化，使用连续的第三维坐标和 trilinear filtering；超出最大亮度时明确 clamp 或缩放策略。
+
+</Callout>
+
+完整的 <Term def="同时依赖局部 view/light 方向和表面空间位置、描述真实材质反射的高维函数">bidirectional texture function</Term> 能表达局部反射、self-shadowing、masking 和 interreflection，但采集与存储维度很高。近似目标不是重建全部函数，而是捕捉让人辨认出布料、皮革和木材的细尺度变化。
+
+<GpuGems2Ch11DimensionalityDiagram />
+
+## 1. 用少量图片采集材质
+
+<Term def="只沿入射光 elevation 变化采集的近似材质样本图像集合">light-elevation slices</Term>在固定正交相机下拍摄平面材料。光源沿一条弧线移动，通常每隔约十度采一张；不绕表面法线旋转，因此采集过程短且容易手动完成。
+
+<GpuGems2Ch11AcquisitionDiagram />
+
+对每张图像计算平均 radiance，再把样本重采样到亮度均匀递增的层。得到的 stack 叫 <Term def="把不同入射光样本按平均亮度线性化、可按亮度连续索引的纹理图像堆">shading map</Term>，每层包含同一材料空间位置的细节响应。
+
+## 2. 从粗略 BRDF 到 volume lookup
+
+运行时先用 Phong 或其他简单 <Term def="只描述局部光照与视线方向反射的粗略反射模型">BRDF</Term>计算一个亮度估计 `r`。这个值不是最终颜色，而是选择 shading map 第三维层级的坐标；前两维是材料的 `(s, t)` 位置。
+
+<Term def="把多张二维 shading map 作为第三维堆叠、供 shader 按亮度连续查样的 3D 纹理">volume texture</Term>提供实际细节。shader 用 `(s, t, r / a_max)` 查询，按光源强度缩放返回值。第三维使用 trilinear filtering，避免只在相邻层之间跳变。
+
+<GpuGems2Ch11VolumeLookupDiagram />
+
+这相当于把“粗模型负责亮度趋势”和“采集数据负责材质细节”分开。艺术家还能调节 diffuse、specular 或 gloss 参数，而不必重新采集每张图像。
+
+## 3. GPU 实时渲染边界
+
+vertex shader 可以计算 view/light 方向和粗略 BRDF，fragment shader 做 dependent lookup；如果硬件支持在 fragment 阶段计算，亮度可以逐像素得到，减少 vertex undersampling。volume texture 本身就是 GPU 友好的资源，运行时主要成本是一套简单 shader 加一次 3D 采样。
+
+<GpuGems2Ch11LimitationsDiagram />
+
+方法最适合细尺度、近似 isotropic 的材料。大尺度结构的阴影方向会随视线和光源方位变化，而该采集方案只记录一条 elevation arc；强 anisotropy、尖锐高光和掠射角 masking 可能出现可见差异。即便如此，它通常比单张 diffuse texture 更有材质感，适合实时 preview。
+
+## 4. 动手实验：亮度、切片与假设
+
+调节粗略亮度，观察 volume slice；增加切片数量，观察层间采样的连续性；打开 anisotropic 开关，思考一条光源弧线为何不能完整表达方向性。实验数据是概念模型，不代表具体采集设备的 radiance 标定。
+
+<GpuGems2Ch11BtfLab />
+
+## 小结
+
+- 完整 BTF 维度高，approximate BTF 用少量 light-elevation slices 捕捉细尺度变化。
+- shading map 将样本按平均亮度线性化，volume texture 的第三维表示 brightness。
+- 粗略 BRDF 负责选 slice，采集图像负责 self-shadowing 等 mesostructure 细节。
+- fragment-stage dependent lookup 可实时完成，trilinear filtering 避免层间 contour。
+- 小尺度、近似 isotropic 是适用前提；大结构和强方向性需要更完整的模型。
+
+<Exercises>
+
+**问题 1｜数据维度**　为什么完整 BTF 的采集远比 approximate BTF 昂贵？
+
+<Answer>
+
+BRDF 已依赖 view/light 方向，加入表面空间变化后还要覆盖更多位置和方向组合。approximate BTF 固定视角，只沿一条入射 elevation arc 采少量图片，再用粗略 BRDF 选择层，从而大幅减少采集维度。
+</Answer>
+
+**问题 2｜查表坐标**　volume texture 的 `(s, t, r)` 三个坐标分别代表什么？为什么第三维不能直接用最近整数层？
+
+<Answer>
+
+`s,t` 是材料表面位置，`r` 是粗略 BRDF 估计的亮度归一化值。第三维代表连续的平均 radiance；使用最近整数层会出现亮度 contour，应在线性化的相邻切片之间做 trilinear filtering。
+</Answer>
+
+**问题 3｜失真来源**　为什么大尺度 anisotropic 织物的掠射角效果可能不准确？
+
+<Answer>
+
+采集只沿一条 elevation arc 变化，没有完整记录绕法线的方位变化；大结构的遮挡和强方向反射正依赖这些维度，因此近似 volume lookup 会漏掉它们。应增加采集维度或改用更完整的 BTF/材质模型。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="bidirectional texture function">同时描述位置、视线方向和光照方向变化的高维材质函数。</GlossaryItem>
+<GlossaryItem term="light-elevation slices">沿光源入射 elevation 采集的近似材质图像层。</GlossaryItem>
+<GlossaryItem term="shading map">按平均亮度线性化的材质图像堆。</GlossaryItem>
+<GlossaryItem term="BRDF">描述局部光照与视线方向反射的粗略反射模型。</GlossaryItem>
+<GlossaryItem term="volume texture">把多张二维 shading map 作为第三维堆叠的 3D 纹理。</GlossaryItem>
+<GlossaryItem term="mesostructure">造成细尺度亮暗、遮挡和纹理变化的表面微结构。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 11. Approximate Bidirectional Texture Functions" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-11-approximate-bidirectional-texture" />
