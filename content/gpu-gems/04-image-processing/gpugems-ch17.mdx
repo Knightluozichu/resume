@@ -1,255 +1,185 @@
 ---
-title: "Chapter 17: Image Processing"
+title: "GPU Gems 1 · Chapter 17. Ambient Occlusion"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part III · Materials"
 order: 17
-description: "GPU Gems Part: Image Processing, Chapter 17"
+description: "用物体空间预计算与屏幕空间深度采样估计环境光可达性，增强接触、缝隙和褶皱中的明暗线索。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-17-ambient-occlusion"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-17
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh17AmbientOcclusionLab,
+  GpuGemsCh17ArtifactTradeoffDiagram,
+  GpuGemsCh17HemisphereSamplingDiagram,
+  GpuGemsCh17OcclusionPipelineDiagram,
+  GpuGemsCh17ScreenSpaceAoDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch17-ambient-occlusion";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 17: Image Processing的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Image Processing, Chapter 17之间的关系是什么？
+- 能把 ambient occlusion 解释为表面点对环境光的可达性估计，并区分它与直接光照、阴影的职责
+- 能从法线半球采样推导 object-space AO 的 occlusion factor，并说明预计算纹理或顶点属性的适用边界
+- 能实现 screen-space AO 的 depth 读取、view-space reconstruction、邻域比较与 bias，并识别屏幕空间缺失
+- 能在 radius、sample count、bias、分辨率和动态稳定性之间做出可解释的质量取舍
 
 </Objectives>
 
-## 为什么需要Chapter 17: Image Processing
+GPU Gems 1 第 17 章讨论 **Ambient Occlusion**：它不追求求解完整的全局光照，而是估计一个表面点周围的环境光有多少能够到达。缝隙、接触面和褶皱通常挡住更多方向，因此会自然变暗；这个额外的接触线索能让只靠 diffuse 的模型不再显得漂浮。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 17: Image Processing作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Image Processing, Chapter 17正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="AO 不是另一盏直接光">
+ambient occlusion 是一个可达性标量，不携带入射光源方向、颜色或完整遮挡路径。把它当成“额外的 shadow map”会让亮度被重复衰减，甚至把没有直接光的区域错误地照亮。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 17: Image Processing从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 17: Image Processing涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 17: Image Processing相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 17: Image Processing相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="屏幕空间看不见屏幕外的遮挡物">
+screen-space AO 只能使用当前 depth buffer 中可见的几何。物体离开视锥、被前景遮住或落在屏幕边界外时，邻域采样无法证明它存在；因此漏光和边缘 halo 是方法边界，不只是参数错误。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="bias 不是越大越稳定">
+深度比较需要 bias 避免表面自身被误判为遮挡，但过大的 bias 会把真实的近距离遮挡抹掉。应先用最小 bias 消除 acne，再用 radius、采样模式和深度精度处理剩余噪声。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="表示一个表面点能接收到的环境光比例的标量，通常取值为零到一">ambient occlusion</Term> 的输出可以记为 A(p)：A(p) 越接近 0，说明 p 周围的半球越封闭；越接近 1，说明环境光更容易从各方向到达。常见做法是让 ambient 项乘以 A(p)，或只让它调制 diffuse 中的环境部分，而不是覆盖整个最终颜色。
 
-## 性能考量
+<GpuGemsCh17OcclusionPipelineDiagram />
 
-### 批量操作
+## 1. 从可达半球得到一个标量
 
-Vulkan 鼓励批量提交而非逐个提交：
+对表面点 p，法线 n 定义了朝向外侧的半球。向半球内发射 N 条射线，统计没有命中几何体的方向，就能得到一个可解释的近似：
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+$$
+A(p) = \frac{N_{open}}{N}, \qquad L_{ambient}(p) \approx A(p) L_{ambient}^{base}(p)
+$$
 
-### 避免 CPU-GPU 同步点
+<Term def="以表面法线为轴，在可见半球内选取方向并测试射线是否命中几何体的过程">hemisphere sampling</Term> 的采样分布影响质量：均匀随机方向容易有噪声，分层、低差异序列或预计算方向集更容易获得稳定的屏幕结果。采样半径也必须和模型尺度或当前像素的 view-space 深度一致，否则同一套参数在近景和远景会产生不同的接触范围。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<GpuGemsCh17HemisphereSamplingDiagram />
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+上图中命中凸起的射线是 blocked，没有命中的射线是 open。这个定义使 AO 具有单调性：附近几何越多，A(p) 越低；但它仍是局部可见性统计，不能告诉我们遮挡物材质、光源颜色或多次反射的结果。
+
+## 2. object-space AO：把昂贵的 ray test 放到预处理
+
+<Term def="在模型或场景坐标中对几何体执行半球可见性测试，并将结果预计算到纹理、顶点或其他资产数据中的方法">object-space ambient occlusion</Term> 直接在物体空间为每个顶点、纹理 texel 或采样点发射射线。将未遮挡比例烘焙后，可以把它存成 AO texture 或顶点属性，在实时 shading 中低成本读取。
+
+一个面向静态资产的预处理流程如下：
+
+1. 为采样点构造以 n 为轴的切线空间半球，并把每个方向变换到 object space。
+2. 对每个方向执行 ray intersection；命中模型内部或邻近几何时，把该方向记为 blocked。
+3. 对 open 数量归一化，按 UV texel 或顶点写入 A(p)，并用 dilation 修补栅格边缘的空洞。
+4. 在材质中将 AO 乘到环境项；需要动画时，确认烘焙结果与蒙皮、形变和相邻物体仍然成立。
+
+它能看到屏幕外的几何，结果也不会随相机移动而闪烁，适合静态建筑、道具和不变拓扑。代价是资产更新需要重新烘焙；动态遮挡物、可变形褶皱和灯光方向变化不会被这张静态图自动反映。AO 贴图的 UV 缝、分辨率和颜色空间也要纳入内容管线，否则接缝会比它解决的接触问题更显眼。
+
+## 3. screen-space AO：从深度重建邻域
+
+screen-space 方法把计算移到每帧的屏幕像素。首先从 depth buffer 读取当前像素的深度，再用投影矩阵的逆变换得到 view-space 点；法线可以来自 G-buffer，也可以从相邻 view-space 点的叉积近似。随后沿法线半球选择屏幕邻域样本，将样本位置投影回屏幕，读取样本深度并与预期深度比较。
+
+```glsl
+vec3 p = reconstructViewPosition(uv, depth);
+vec3 n = decodeOrReconstructNormal(uv);
+float blocked = 0.0;
+
+for (int i = 0; i < SAMPLE_COUNT; ++i) {
+  vec3 q = p + tangentHemisphere(i, n) * radius;
+  vec2 sampleUv = projectToScreen(q);
+  float zSample = texture(depthTex, sampleUv).r;
+  float delta = viewDepth(zSample) - q.z;
+  blocked += step(bias, delta) * validScreenSample(sampleUv);
+}
+
+float ao = 1.0 - blocked / float(SAMPLE_COUNT);
+ambient *= ao;
 ```
 
-### 内存对齐
+<Term def="从屏幕深度和逆投影矩阵恢复当前像素在相机坐标中的位置与深度关系的步骤">view-space reconstruction</Term> 的关键是统一深度约定：投影后的非线性 depth 不能直接与线性 view-space z 相减。样本还要检查屏幕边界、前后方向与深度范围；否则边界的背景值会被当成无遮挡，产生亮边。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh17ScreenSpaceAoDiagram />
 
-## 验证层检查
+screen-space AO 的优势是适应动态物体、无需离线烘焙，并且可以在后处理或 deferred pipeline 中复用已有 depth。它的边界也很具体：屏幕外的墙不会被采到，被前景遮住的遮挡物不会进入 buffer，低分辨率 depth 会把细缝量化掉，相机移动时固定的随机旋转还可能产生闪烁。发布前应分别测试镜头运动、角色动画、屏幕边缘和物体尺度变化。
 
-启用验证层后，Chapter 17: Image Processing相关的常见错误会被捕获：
+## 4. 参数与伪影：把质量预算写出来
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+<Term def="用于避免深度精度或浮点误差把接收表面误判为自身遮挡的深度比较偏移量">depth bias</Term> 只应略大于重建误差。radius 决定遮挡影响的空间范围：小半径能保留接触细节，大半径会把不同物体之间的距离也混进来。sample count 决定统计方差；少量样本便宜但容易噪声，多样本更稳却增加纹理读取和 ALU 成本。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+常见伪影可以按原因排查：
 
-## 本章要点
+- **acne**：bias 太小、深度精度不足或法线重建有误；先验证线性深度和法线方向。
+- **halo**：radius 太大，或者深度边界没有做 thickness、normal 或邻域一致性判断；减小半径并把接触与远距离遮挡分开。
+- **漏光**：遮挡物在屏幕外、被前景隐藏或 bias 太大；物体空间 AO、额外深度层或混合方案可以补足它。
+- **噪声与闪烁**：样本太少或每帧随机旋转没有时序处理；使用低差异方向、旋转噪声的时序重投影和适度 blur，但要防止把 contact cue 抹平。
 
-1. Chapter 17: Image Processing是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<GpuGemsCh17ArtifactTradeoffDiagram />
+
+AO 最好作为小幅度的环境项调制，并保留 artist 可控的强度和距离衰减。若把 AO 强度推到纯黑来“修”建模问题，最终会把接触线索变成不自然的污渍；可解释的半径、bias 和强度更容易随相机、分辨率和平台变化进行校准。
+
+## 5. 动手实验：先预测，再调参数
+
+先预测三个变化：把 radius 拉大，接触阴影会扩大但 halo 风险也会上升；把 bias 拉大，acne 会减少但近距离遮挡会漏掉；把 samples 降到很低，静态画面会出现颗粒或带状变化。再切换 object-space 和 screen-space，观察屏幕外遮挡物为何只能在前者中保留。
+
+<GpuGemsCh17AmbientOcclusionLab />
+
+这个实验用确定性的示意数据表达参数关系，不是替代 GPU profile 的真实性能测量。它把一个发布检查拆成四项：接触范围是否可信，深度比较是否稳定，屏幕边缘是否出现 halo，以及在目标帧预算内是否有足够的 samples。
+
+## 小结：用局部可见性补足接触线索
+
+- ambient occlusion 估计半球环境光的可达性，A(p) 越小表示附近几何越封闭。
+- object-space AO 可以预计算并看到屏幕外几何，适合静态或拓扑稳定的资产，但动态遮挡不会自动更新。
+- screen-space AO 从 depth buffer 重建 view-space 邻域，适合动态场景，却受屏幕外、深度分辨率和边界伪影限制。
+- radius、sample count 与 depth bias 必须一起调；提升其中一个维度不能自动修复另一个维度的错误。
+- AO 应以可解释的小幅度调制 ambient 或 diffuse，而不是代替直接光、阴影或完整全局光照。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 17: Image Processing涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　把示例 shader 的 `radius` 从 0.25 改为 0.65，并保持 sample count 与 bias 不变。请预测接触区域、远距离表面和屏幕边缘分别会发生什么变化。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+接触区域会扩大，原本分离的近邻可能被一起压暗；远距离表面更容易被误认为同一局部邻域，产生 halo。屏幕边缘若缺少邻域样本，边界亮度可能不连续，因此需要边界检查、厚度判断或减小半径，而不是只提高 AO 强度。
 </Answer>
 
+**问题 2｜推导题**　某点有 32 条半球样本，其中 8 条命中几何体。若基础环境光为 1.0，按 `A(p) = N_open / N` 调制 ambient，忽略其他项时得到什么 AO 因子和环境亮度？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+未命中方向是 24 条，因此 `A(p) = 24 / 32 = 0.75`。环境亮度为 `1.0 × 0.75 = 0.75`；这只表达局部可达性，不代表直接光照或阴影贴图也应该乘上同一个因子。
+</Answer>
+
+**问题 3｜独立实现题**　为一个会移动的角色选择 object-space、screen-space 或混合方案。你的目标是保留薄缝接触、避免镜头运动闪烁，并说明至少一个无法由单一 screen-space buffer 解决的情况。
+
+<Answer>
+
+可用 screen-space AO 提供每帧动态接触，再用低强度 object-space AO 保留静态的基础形状；对 screen-space 样本使用低差异方向、时序重投影和合理 bias，减轻镜头运动闪烁。屏幕外的墙、被前景遮住的遮挡物和屏幕边界外的几何无法由当前单一 depth buffer 证明存在，需要预计算、额外深度层或接受漏光。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="ambient occlusion">表面点接收环境光的可达性估计，通常以零到一的标量表示。</GlossaryItem>
+<GlossaryItem term="hemisphere sampling">以表面法线为轴选择半球方向并测试射线可见性的过程。</GlossaryItem>
+<GlossaryItem term="object-space ambient occlusion">在物体空间预计算半球可见性并存入纹理或顶点数据的方法。</GlossaryItem>
+<GlossaryItem term="view-space reconstruction">从屏幕深度和逆投影关系恢复相机坐标位置的步骤。</GlossaryItem>
+<GlossaryItem term="depth bias">用于避免深度比较误判表面自身遮挡的偏移量。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 17 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 17. Ambient Occlusion"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-17-ambient-occlusion"
+/>
