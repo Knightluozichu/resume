@@ -1,0 +1,153 @@
+---
+title: "GPU Gems 2 · Chapter 16. Accurate Atmospheric Scattering"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 16
+description: "在 GPU shader 中数值积分 Nishita 大气模型，区分 Rayleigh/Mie scattering、optical depth 与 phase function，并通过专用 camera paths 和 HDR 保持实时与稳定。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-16-accurate-atmospheric-scattering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-16
+---
+
+import {
+  GpuGems2Ch16AtmosphereLab,
+  GpuGems2Ch16OpticalDepthDiagram,
+  GpuGems2Ch16RaySegmentDiagram,
+  GpuGems2Ch16ScatteringTypesDiagram,
+  GpuGems2Ch16ShaderPathsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch16-atmospheric-scattering";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能从相机 ray 与 atmosphere sphere 的交点确定有效积分区间 A→B
+- 能解释 Rayleigh 与 Mie scattering 的粒子、波长和方向性差异
+- 能把嵌套积分离散成 shader loop，并理解 optical depth、in-scattering 和 surface attenuation 的关系
+- 能按 camera 在大气内/外选择专用 shader path，避免端点和条件分支处理混乱
+- 能用 floating-point buffer 与 exponential exposure 将散射结果映射到可显示范围
+
+</Objectives>
+
+<Callout type="trap" title="不要把大气积分的起点终点写死成地面和天空顶点">
+**现象 →** 地面相机看起来正常，一旦升到高空或太空，地平线断裂、颜色跳变，甚至采样出异常大值。
+
+**原因 →** ray 真正参与散射的是它穿过大气球的线段；相机或目标在大气外时，端点必须由 sphere intersection 求出。
+
+**修法 →** 先计算 A、B，再沿有效线段采样；相机在大气内时 A 直接取 camera，目标在大气内时 B 直接取 vertex。
+
+</Callout>
+
+<Callout type="trap" title="不要把 Rayleigh 和 Mie 当成一个 RGB 雾颜色">
+**现象 →** 天空、日落和雾霾都只能调一个参数，太阳 halo 或蓝天颜色无法同时成立。
+
+**原因 →** 小分子与气溶胶对波长和方向的散射规律不同：Rayleigh 强烈偏向短波长，Mie 更接近均匀波长且可以强前向。
+
+**修法 →** 分别维护 Kr/Km、scale height 和 wavelength dependence，再用 phase function 组合两类 contribution。
+
+</Callout>
+
+<Callout type="trap" title="不要为了速度把 sample count 固定得过低，也不要让 g 取 ±1">
+**现象 →** 采样不足导致 banding 和积分误差；Mie 相位函数在 g 接近 ±1 时数值爆炸或归零。
+
+**原因 →** 积分精度和 shader loop 成本是直接 trade-off，而 Henyey–Greenstein 近似在边界参数处退化。
+
+**修法 →** 用可配置 sample budget，按距离/质量档位调整；将 g 限制在安全区间，例如 Mie 使用约 -0.75 到 -0.999，但绝不设成 ±1。
+
+</Callout>
+
+逼真的天空可以从一条射线开始。<Term def="从相机经过场景顶点、并在大气球内产生散射贡献的视线">camera ray</Term>与行星表面和 outer atmosphere 的交点定义了需要计算的线段；只对这段做数值积分，才能同时支持地面、飞行和太空视角。
+
+<GpuGems2Ch16RaySegmentDiagram />
+
+## 1. 确定 A→B 与 sample points
+
+若 camera 在 atmosphere 内，A 就是 camera position；若 camera 在 space，A 是 ray 与 outer sphere 的交点。目标 vertex 同理：在 atmosphere 内时 B 是 vertex，否则用 sphere intersection 得到 B。将 A→B 分成 n 个 sample segments，在中心或规则位置取 `P₁…Pₙ`，每个 sample 代表太阳光进入、在此散射、再朝相机传播的一小段贡献。
+
+积分可以用 trapezoid-like weighted sum 实现：sample count 提高会提高精度，也会线性增加 shader loop 工作。由于射线长度和 density 变化不均匀，可以把相邻采样间距纳入权重，并在 near horizon 或高密度区域分配更多样本。
+
+## 2. Rayleigh、Mie 与 phase function
+
+<Term def="由空气中小分子造成、对短波长散射更强并形成蓝天/红霞的散射类型">Rayleigh scattering</Term>按波长大致呈 `1 / λ⁴` 的差异：蓝光到处散开，长路径的太阳光则逐渐失去蓝绿，形成黄橙红的 sunset。
+
+<Term def="由尘埃、污染或水滴等较大气溶胶造成、波长较均匀且常强烈前向的散射类型">Mie scattering</Term>不应和 Rayleigh 共用同一颜色常量；它带来灰白 haze、太阳周围的 halo，也能作为彩虹等粒子效果的基础。两类散射都要按 RGB 和各自 scale height 计算。
+
+<GpuGems2Ch16ScatteringTypesDiagram />
+
+<Term def="根据视线与光线夹角以及各向异性参数 g，决定散射向相机方向分配多少光的角度函数">phase function</Term>控制方向性。Rayleigh 可以用 `g = 0` 的对称情形；Mie 常用负值表示前向散射。phase function 对角度敏感，放在 fragment 阶段比 per-vertex 计算更不容易出现 tessellation artifacts。
+
+## 3. optical depth 与 in-scattering
+
+<Term def="沿一条光路把随高度指数衰减的 density 乘以路程积分，表示光被大气散射掉的平均程度">optical depth</Term>或 optical thickness 是内层积分。sample 点高度 h 的 density 可用 `exp(-h / H₀)` 表示；H₀ 是 scale height，决定密度下降有多快。沿 sample 到太阳的路径计算一份，到相机的路径再计算一份，两个路径的衰减共同决定 sample 能贡献多少光。
+
+<GpuGems2Ch16OpticalDepthDiagram />
+
+<Term def="从太阳进入大气、在每个 sample 点散射并朝相机增加的光量积分">in-scattering</Term>把 solar intensity、Rayleigh/Mie scattering constants、phase function 和两条 optical depth 的 exponential attenuation 组合起来。若渲染的是有反射面的 terrain，还要把 surface-emitted/reflected radiance 乘上从表面到相机的 out-scattering attenuation，并加上沿视线的新 in-scattering；天空本身没有表面反射项。
+
+## 4. 把嵌套积分变成实时 shader
+
+直接实现会产生外层 camera samples × 两个内层 optical-depth samples × 两种散射 × 三个颜色通道的巨大计算量。历史做法使用 2D lookup table；本章的 GPU 路径则把可行的积分与采样放进 shader，通过较小 sample count 和多种 shader variant 维持实时。
+
+相机在 atmosphere 内时，针对“到相机中途结束”的 ray，可以用从 sample 到 atmosphere top 的 optical depth 减去从 camera 到 top 的那一段。若 vertex 在 camera 上方，反转相关 ray 方向，避免 lookup/积分高度落到预期范围之外。<Term def="根据 camera 位于大气内或太空、以及目标在地面/天空/大气外选择的独立 shader 组合">specialized camera path</Term>把这些边界条件挪到 material/shader 选择阶段，减少一个通用 shader 里难以验证的动态分支。
+
+<GpuGems2Ch16ShaderPathsDiagram />
+
+## 5. HDR：把 radiance 安全地映射到屏幕
+
+散射方程的结果很容易超出 0..1，直接写入普通 8-bit framebuffer 会剪裁亮部或让整体过暗。使用 floating-point render target 保存 radiance，最后再用 exponential exposure 映射：`color_display = 1 - exp(-exposure × color_radiance)`。<Term def="先在浮点 framebuffer 保留高范围 radiance，再用可调 exposure 映射到 0..1 的高动态范围处理">HDR exposure</Term>像相机光圈一样控制整体亮度，曝光应有合理上下限，否则白天可能被压成月光，月光又被拉爆。
+
+## 6. 动手实验：样本、视角与曝光
+
+下面的实验把 outer sample count、camera altitude、Mie 的 g 和 HDR exposure 暴露出来。调低 samples 可以看到成本下降但精度风险上升；把 g 推向更负值会增强太阳方向的 haze；改变 exposure 只应改变显示映射，不应改变相对的 RGB 散射比例。
+
+<GpuGems2Ch16AtmosphereLab />
+
+## 小结
+
+- A→B 由 camera ray 与 atmosphere sphere 的交点决定，支持地面到太空的统一视角。
+- Rayleigh 负责短波长偏色，Mie 负责气溶胶与前向 halo，两者需要分开建模。
+- optical depth 描述路径衰减，in-scattering 把各 sample 的太阳光贡献累积到视线。
+- shader variant、合理 sample budget 和 fragment 阶段 phase function 共同把嵌套积分变成实时算法。
+- floating-point buffer 与 HDR exposure 保留散射的动态范围，再稳定映射到显示颜色。
+
+<Exercises>
+
+**问题 1｜积分区间**　相机在大气内、顶点在太空时，如何确定散射 ray 的 A 和 B？
+
+<Answer>
+
+A 取 camera position，因为它已经是 ray 进入大气的起点；B 取 ray 与 outer atmosphere sphere 的交点，因为顶点在大气外。之后只在 A→B 上采样，避免把太空部分错误积分为大气。
+</Answer>
+
+**问题 2｜散射模型**　为什么 Rayleigh 和 Mie 要分别计算？phase function 的 g 应该如何使用？
+
+<Answer>
+
+Rayleigh 对短波长更强，形成蓝天和红霞；Mie 由较大气溶胶造成，波长更均匀且可强前向。分别维护它们的 scattering constants 和 wavelength dependence，再用 phase function 按视线/光线夹角分配；Mie 的 g 取安全的负值范围，不能等于 ±1。
+</Answer>
+
+**问题 3｜实时与 HDR**　如何降低嵌套积分成本，同时避免结果在普通 framebuffer 中失真？
+
+<Answer>
+
+用可配置的 sample count、专用 camera shader path 和可复用的 optical-depth 计算减少每顶点工作；将 radiance 写入 floating-point target，最后用 `1 - exp(-exposure × color)` 做 HDR exposure 映射到 0..1。这样速度与数值范围分别可控。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="camera ray">从相机穿过场景顶点、在大气中产生散射的视线。</GlossaryItem>
+<GlossaryItem term="Rayleigh scattering">小分子造成、对短波长更强的散射。</GlossaryItem>
+<GlossaryItem term="Mie scattering">气溶胶造成、波长较均匀且可强前向的散射。</GlossaryItem>
+<GlossaryItem term="phase function">按夹角与各向异性参数 g 分配散射方向的角度函数。</GlossaryItem>
+<GlossaryItem term="optical depth">沿光路积分密度与距离，表示大气衰减程度的量。</GlossaryItem>
+<GlossaryItem term="in-scattering">太阳光在 sample 点散射并沿视线增加的光量。</GlossaryItem>
+<GlossaryItem term="specialized camera path">按 camera 内外和目标类型选择的独立 shader 处理路径。</GlossaryItem>
+<GlossaryItem term="HDR exposure">在浮点 radiance 上用可调指数映射到显示范围的处理。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 16. Accurate Atmospheric Scattering" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-16-accurate-atmospheric-scattering" />

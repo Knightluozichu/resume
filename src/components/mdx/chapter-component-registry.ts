@@ -13575,6 +13575,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGems2Ch15SketchyUncertaintyDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch16": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems2-ch16-atmospheric-scattering");
+    return {
+      GpuGems2Ch16AtmosphereLab: module0.GpuGems2Ch16AtmosphereLab,
+      GpuGems2Ch16OpticalDepthDiagram: module0.GpuGems2Ch16OpticalDepthDiagram,
+      GpuGems2Ch16RaySegmentDiagram: module0.GpuGems2Ch16RaySegmentDiagram,
+      GpuGems2Ch16ScatteringTypesDiagram:
+        module0.GpuGems2Ch16ScatteringTypesDiagram,
+      GpuGems2Ch16ShaderPathsDiagram: module0.GpuGems2Ch16ShaderPathsDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
