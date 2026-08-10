@@ -12774,6 +12774,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GiaFinalReviewEvidenceGateLab: module0.GiaFinalReviewEvidenceGateLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/01-natural-effects/gpugems-ch01": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch01-water-simulation");
+    return {
+      GpuGemsCh01AuthoringDiagram: module0.GpuGemsCh01AuthoringDiagram,
+      GpuGemsCh01SurfaceBasisDiagram: module0.GpuGemsCh01SurfaceBasisDiagram,
+      GpuGemsCh01WaterLab: module0.GpuGemsCh01WaterLab,
+      GpuGemsCh01WaveLayerDiagram: module0.GpuGemsCh01WaveLayerDiagram,
+      GpuGemsCh01WaveSumDiagram: module0.GpuGemsCh01WaveSumDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
@@ -15859,6 +15870,242 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.MlwOfficialFinalReviewAcceptanceGateLab,
       } as ChapterMdxComponents;
     },
+  "math-girl/01-volume-1/mg1-arithmetic-geometric-mean": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg1-arithmetic-geometric-mean");
+    return {
+      Mg1AmGMLab: module0.Mg1AmGMLab,
+      Mg1FixedSumDiagram: module0.Mg1FixedSumDiagram,
+      Mg1MeanBalanceDiagram: module0.Mg1MeanBalanceDiagram,
+      Mg1NormalizationDiagram: module0.Mg1NormalizationDiagram,
+      Mg1SquareDifferenceDiagram: module0.Mg1SquareDifferenceDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/02-volume-2/mg2-euler-formula": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg2-euler-formula");
+    return {
+      Mg2EulerBridgeDiagram: module0.Mg2EulerBridgeDiagram,
+      Mg2EulerLab: module0.Mg2EulerLab,
+      Mg2ExponentLadderDiagram: module0.Mg2ExponentLadderDiagram,
+      Mg2SeriesCoefficientDiagram: module0.Mg2SeriesCoefficientDiagram,
+      Mg2UnitCircleDiagram: module0.Mg2UnitCircleDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/02-volume-2/mg2-fermat-last-theorem": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg2-fermat-last-theorem");
+    return {
+      Mg2FermatLab: module0.Mg2FermatLab,
+      Mg2FermatLogicDiagram: module0.Mg2FermatLogicDiagram,
+      Mg2FiniteFieldDiagram: module0.Mg2FiniteFieldDiagram,
+      Mg2FreyCurveDiagram: module0.Mg2FreyCurveDiagram,
+      Mg2ModularBridgeDiagram: module0.Mg2ModularBridgeDiagram,
+      Mg2PythagoreanRouteDiagram: module0.Mg2PythagoreanRouteDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/02-volume-2/mg2-modular-arithmetic": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg2-modular-arithmetic");
+    return {
+      Mg2ClockDiagram: module0.Mg2ClockDiagram,
+      Mg2CongruenceRulesDiagram: module0.Mg2CongruenceRulesDiagram,
+      Mg2InverseTableDiagram: module0.Mg2InverseTableDiagram,
+      Mg2ModularLab: module0.Mg2ModularLab,
+      Mg2StructureDiagram: module0.Mg2StructureDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/02-volume-2/mg2-splitting-primes": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg2-splitting-primes");
+    return {
+      Mg2ComplexPlaneDiagram: module0.Mg2ComplexPlaneDiagram,
+      Mg2GaussianFactorDiagram: module0.Mg2GaussianFactorDiagram,
+      Mg2Mod4ClassificationDiagram: module0.Mg2Mod4ClassificationDiagram,
+      Mg2ParityPigeonholeDiagram: module0.Mg2ParityPigeonholeDiagram,
+      Mg2PrimeSplittingLab: module0.Mg2PrimeSplittingLab,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-bewildering-spiral": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-bewildering-spiral");
+    return {
+      Mg3QuotientDiagram: module0.Mg3QuotientDiagram,
+      Mg3RadianDiagram: module0.Mg3RadianDiagram,
+      Mg3SpecialAnglesDiagram: module0.Mg3SpecialAnglesDiagram,
+      Mg3SpiralDiagram: module0.Mg3SpiralDiagram,
+      Mg3SpiralLab: module0.Mg3SpiralLab,
+      Mg3UnitCircleDiagram: module0.Mg3UnitCircleDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-diagonal-argument": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-diagonal-argument");
+    return {
+      Mg3CountabilityMapDiagram: module0.Mg3CountabilityMapDiagram,
+      Mg3DiagonalLab: module0.Mg3DiagonalLab,
+      Mg3DiagonalMatrixDiagram: module0.Mg3DiagonalMatrixDiagram,
+      Mg3DomainBoundaryDiagram: module0.Mg3DomainBoundaryDiagram,
+      Mg3GodelBridgeDiagram: module0.Mg3GodelBridgeDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-epsilon-delta-language": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-epsilon-delta-language");
+    return {
+      Mg3ContinuityDiagram: module0.Mg3ContinuityDiagram,
+      Mg3DenseSetDiagram: module0.Mg3DenseSetDiagram,
+      Mg3EpsilonDeltaDiagram: module0.Mg3EpsilonDeltaDiagram,
+      Mg3EpsilonLab: module0.Mg3EpsilonLab,
+      Mg3EpsilonNDiagram: module0.Mg3EpsilonNDiagram,
+      Mg3QuantifierDiagram: module0.Mg3QuantifierDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-galileos-hesitation": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-galileos-hesitation");
+    return {
+      Mg3BijectionDiagram: module0.Mg3BijectionDiagram,
+      Mg3LogicDiagram: module0.Mg3LogicDiagram,
+      Mg3MembershipDiagram: module0.Mg3MembershipDiagram,
+      Mg3RussellDiagram: module0.Mg3RussellDiagram,
+      Mg3SetLab: module0.Mg3SetLab,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-goedel-incompleteness": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-goedel-incompleteness");
+    return {
+      Mg3FixedPointDiagram: module0.Mg3FixedPointDiagram,
+      Mg3FormalSystemDiagram: module0.Mg3FormalSystemDiagram,
+      Mg3GodelNumberDiagram: module0.Mg3GodelNumberDiagram,
+      Mg3IncompletenessLab: module0.Mg3IncompletenessLab,
+      Mg3RepresentabilityDiagram: module0.Mg3RepresentabilityDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-leibniz-dream": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-leibniz-dream");
+    return {
+      Mg3FormalSystemDiagram: module0.Mg3FormalSystemDiagram,
+      Mg3ImplicationTableDiagram: module0.Mg3ImplicationTableDiagram,
+      Mg3LeibnizLab: module0.Mg3LeibnizLab,
+      Mg3ProofChainDiagram: module0.Mg3ProofChainDiagram,
+      Mg3SyntaxSemanticsDiagram: module0.Mg3SyntaxSemanticsDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-limit-destination": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-limit-destination");
+    return {
+      Mg3DestinationLab: module0.Mg3DestinationLab,
+      Mg3FiniteStagesDiagram: module0.Mg3FiniteStagesDiagram,
+      Mg3GeometricSeriesDiagram: module0.Mg3GeometricSeriesDiagram,
+      Mg3LimitThresholdDiagram: module0.Mg3LimitThresholdDiagram,
+      Mg3NotationDiagram: module0.Mg3NotationDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-mirror-monologue": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-mirror-monologue");
+    return {
+      Mg3ConstraintPropagationDiagram: module0.Mg3ConstraintPropagationDiagram,
+      Mg3KnowledgeLayersDiagram: module0.Mg3KnowledgeLayersDiagram,
+      Mg3MirrorLayersDiagram: module0.Mg3MirrorLayersDiagram,
+      Mg3MirrorMonologueLab: module0.Mg3MirrorMonologueLab,
+      Mg3TruthModelDiagram: module0.Mg3TruthModelDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-peano-arithmetic": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-peano-arithmetic");
+    return {
+      Mg3AdditionDiagram: module0.Mg3AdditionDiagram,
+      Mg3AxiomOmissionDiagram: module0.Mg3AxiomOmissionDiagram,
+      Mg3InductionDiagram: module0.Mg3InductionDiagram,
+      Mg3PeanoChainDiagram: module0.Mg3PeanoChainDiagram,
+      Mg3PeanoLab: module0.Mg3PeanoLab,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/03-advanced/mg3-two-solitudes": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg3-two-solitudes");
+    return {
+      Mg3EquivalenceDiagram: module0.Mg3EquivalenceDiagram,
+      Mg3PairArithmeticLab: module0.Mg3PairArithmeticLab,
+      Mg3PairGridDiagram: module0.Mg3PairGridDiagram,
+      Mg3QuotientDiagram: module0.Mg3QuotientDiagram,
+      Mg3WellDefinedDiagram: module0.Mg3WellDefinedDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-lonely-random-walk": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-lonely-random-walk");
+    return {
+      Mg4EigenModeDiagram: module0.Mg4EigenModeDiagram,
+      Mg4MarkovMatrixDiagram: module0.Mg4MarkovMatrixDiagram,
+      Mg4PianoPathDiagram: module0.Mg4PianoPathDiagram,
+      Mg4RandomWalkLab: module0.Mg4RandomWalkLab,
+      Mg4ReflectionDiagram: module0.Mg4ReflectionDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-matrices": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-matrices");
+    return {
+      Mg4FibonacciQDiagram: module0.Mg4FibonacciQDiagram,
+      Mg4LinearTransformDiagram: module0.Mg4LinearTransformDiagram,
+      Mg4MatrixEquationDiagram: module0.Mg4MatrixEquationDiagram,
+      Mg4MatrixLab: module0.Mg4MatrixLab,
+      Mg4RowColumnDiagram: module0.Mg4RowColumnDiagram,
+      Mg4RotationDiagram: module0.Mg4RotationDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-never-lose-gamble": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-never-lose-gamble");
+    return {
+      Mg4ConditionalCoinsDiagram: module0.Mg4ConditionalCoinsDiagram,
+      Mg4DiceTableDiagram: module0.Mg4DiceTableDiagram,
+      Mg4MontyLab: module0.Mg4MontyLab,
+      Mg4MontyTreeDiagram: module0.Mg4MontyTreeDiagram,
+      Mg4ProtocolDiagram: module0.Mg4ProtocolDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-probability-axioms": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-probability-axioms");
+    return {
+      Mg4AxiomDiagram: module0.Mg4AxiomDiagram,
+      Mg4DistributionDiagram: module0.Mg4DistributionDiagram,
+      Mg4DistributionLab: module0.Mg4DistributionLab,
+      Mg4ProcessEquivalenceDiagram: module0.Mg4ProcessEquivalenceDiagram,
+      Mg4RatioDiagram: module0.Mg4RatioDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-randomized-algorithms": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-randomized-algorithms");
+    return {
+      Mg4IndicatorComparisonDiagram: module0.Mg4IndicatorComparisonDiagram,
+      Mg4QuickSortLab: module0.Mg4QuickSortLab,
+      Mg4QuickSortPartitionDiagram: module0.Mg4QuickSortPartitionDiagram,
+      Mg4RandomAlgorithmCompareDiagram:
+        module0.Mg4RandomAlgorithmCompareDiagram,
+      Mg4RecurrenceDiagram: module0.Mg4RecurrenceDiagram,
+    } as ChapterMdxComponents;
+  },
+  "math-girl/04-randomized/mg4-strong-correct-beautiful": async () => {
+    const module0 =
+      await import("@/components/mdx/math-girl/diagrams/mg4-strong-correct-beautiful");
+    return {
+      Mg4GuaranteeDiagram: module0.Mg4GuaranteeDiagram,
+      Mg4PathExponentDiagram: module0.Mg4PathExponentDiagram,
+      Mg4SatLab: module0.Mg4SatLab,
+      Mg4SatTableDiagram: module0.Mg4SatTableDiagram,
+      Mg4WalkDiagram: module0.Mg4WalkDiagram,
+    } as ChapterMdxComponents;
+  },
   "modern-cpp-design/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/modern-cpp-design/learning-map");

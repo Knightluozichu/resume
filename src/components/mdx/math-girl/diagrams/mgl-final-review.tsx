@@ -77,3 +77,132 @@ export function MglFinalReviewDiagram() {
     </figure>
   );
 }
+
+export function MglRepresentationDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-4">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <svg
+          viewBox="0 0 720 160"
+          role="img"
+          aria-label="表示迁移图：原对象经过编码和运算，再回译为原问题的结论"
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
+          <defs>
+            <marker id="mgl-representation-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill={secondary} />
+            </marker>
+          </defs>
+          <text x="360" y="22" textAnchor="middle" fontSize="14" fontWeight="700" fill={primary}>
+            表示迁移：对象 → 编码 → 运算 → 回译
+          </text>
+          {[
+            ["原对象", "数列 / 状态", accent],
+            ["编码", "生成函数 / 向量", success],
+            ["运算", "乘法 / 矩阵幂", warning],
+            ["回译", "系数 / 原结论", danger],
+          ].map(([title, detail, color], index) => {
+            const x = 24 + index * 174;
+            return (
+              <g key={title}>
+                <rect x={x} y="52" width="140" height="66" rx="8" fill={color} fillOpacity="0.08" stroke={color} />
+                <text x={x + 70} y="78" textAnchor="middle" fontSize="12" fontWeight="700" fill={color}>{title}</text>
+                <text x={x + 70} y="99" textAnchor="middle" fontSize="11" fill={primary}>{detail}</text>
+                {index < 3 ? <line x1={x + 144} y1="85" x2={x + 166} y2="85" stroke={secondary} markerEnd="url(#mgl-representation-arrow)" /> : null}
+              </g>
+            );
+          })}
+          <text x="360" y="145" textAnchor="middle" fontSize="11" fill={secondary}>
+            每次迁移都要写清楚：编码保存了什么，哪些条件仍然有效？
+          </text>
+        </svg>
+      </div>
+    </figure>
+  );
+}
+
+export function MglProofBoundaryDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-4">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <svg
+          viewBox="0 0 720 160"
+          role="img"
+          aria-label="证明证据链图：对象、前提、动作、结论四格相连"
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
+          <defs>
+            <marker id="mgl-proof-boundary-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill={secondary} />
+            </marker>
+          </defs>
+          <text x="360" y="22" textAnchor="middle" fontSize="14" fontWeight="700" fill={primary}>
+            证明证据链：每一格都能被另一位读者检查
+          </text>
+          {[
+            ["对象", "反例属于哪一类？", accent],
+            ["前提", "最小性 / 量词", success],
+            ["动作", "构造或变换", warning],
+            ["结论", "矛盾 / 边界", danger],
+          ].map(([title, detail, color], index) => {
+            const x = 24 + index * 174;
+            return (
+              <g key={title}>
+                <rect x={x} y="52" width="140" height="66" rx="8" fill={color} fillOpacity="0.08" stroke={color} />
+                <text x={x + 70} y="78" textAnchor="middle" fontSize="12" fontWeight="700" fill={color}>{title}</text>
+                <text x={x + 70} y="99" textAnchor="middle" fontSize="11" fill={primary}>{detail}</text>
+                {index < 3 ? <line x1={x + 144} y1="85" x2={x + 166} y2="85" stroke={secondary} markerEnd="url(#mgl-proof-boundary-arrow)" /> : null}
+              </g>
+            );
+          })}
+          <text x="360" y="145" textAnchor="middle" fontSize="11" fill={secondary}>
+            删除任意一格，证明就会从“可检查”退化成“像是正确”。
+          </text>
+        </svg>
+      </div>
+    </figure>
+  );
+}
+
+export function MglRandomGuaranteeDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-4">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <svg
+          viewBox="0 0 720 160"
+          role="img"
+          aria-label="随机算法保证图：随机源经过随机变量和失败事件得到可复查保证"
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
+          <defs>
+            <marker id="mgl-random-guarantee-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill={secondary} />
+            </marker>
+          </defs>
+          <text x="360" y="22" textAnchor="middle" fontSize="14" fontWeight="700" fill={primary}>
+            随机算法保证：随机源 → 变量 → 失败事件 → 复查
+          </text>
+          {[
+            ["随机源", "枢纽选择", accent],
+            ["随机变量", "比较次数", success],
+            ["失败事件", "概率与重复", warning],
+            ["复查", "固定输入重放", danger],
+          ].map(([title, detail, color], index) => {
+            const x = 24 + index * 174;
+            return (
+              <g key={title}>
+                <rect x={x} y="52" width="140" height="66" rx="8" fill={color} fillOpacity="0.08" stroke={color} />
+                <text x={x + 70} y="78" textAnchor="middle" fontSize="12" fontWeight="700" fill={color}>{title}</text>
+                <text x={x + 70} y="99" textAnchor="middle" fontSize="11" fill={primary}>{detail}</text>
+                {index < 3 ? <line x1={x + 144} y1="85" x2={x + 166} y2="85" stroke={secondary} markerEnd="url(#mgl-random-guarantee-arrow)" /> : null}
+              </g>
+            );
+          })}
+          <text x="360" y="145" textAnchor="middle" fontSize="11" fill={secondary}>
+            输入模型的随机与算法内部的随机，必须在证据表中分开记录。
+          </text>
+        </svg>
+      </div>
+    </figure>
+  );
+}

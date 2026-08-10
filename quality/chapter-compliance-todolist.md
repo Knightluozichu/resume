@@ -837,112 +837,112 @@
 - [x] ✅ **49-index/cc2e-index** — 已修复（2026-08-09，score 41→96，passed）
     - 路径：`content/code-complete-2e/49-index/cc2e-index.mdx`
 
-## math-girl（50 章 · ❌50 ⚠️0 ✅0）
+## math-girl（50 章 · ❌0 ⚠️0 ✅50）
 
-- [ ] 🔴 P1 **03-advanced/mgl-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、练习不足、UX 不足、工程结构不足（score 60）
+- [x] ✅ **03-advanced/mgl-final-review** — 已修复（2026-08-09，score 60→100，passed）
     - 路径：`content/math-girl/03-advanced/mgl-final-review.mdx`
-- [ ] 🔴 P1 **00-intro/mgl-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+- [x] ✅ **00-intro/mgl-learning-map** — 已修复（2026-08-09，score 45→98，passed）
     - 路径：`content/math-girl/00-intro/mgl-learning-map.mdx`
-- [ ] 🔴 P1 **00-intro/mgl-number-theory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **00-intro/mgl-number-theory** — 已修复（2026-08-09，score 39→91，passed）
     - 路径：`content/math-girl/00-intro/mgl-number-theory.mdx`
-- [ ] 🔴 P1 **01-algebra/mgl-equations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-algebra/mgl-equations** — 已修复（2026-08-09，score 39→99，passed）
     - 路径：`content/math-girl/01-algebra/mgl-equations.mdx`
-- [ ] 🔴 P1 **01-algebra/mgl-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-algebra/mgl-functions** — 已修复（2026-08-09，score 39→98，passed）
     - 路径：`content/math-girl/01-algebra/mgl-functions.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-fibonacci-generating-functions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-volume-1/mg1-fibonacci-generating-functions** — 已修复（2026-08-09，score 39→97，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-fibonacci-generating-functions.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-formula-love-letter** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-volume-1/mg1-formula-love-letter** — 已修复（2026-08-09，score 39→95，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-formula-love-letter.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-omega-waltz** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-volume-1/mg1-omega-waltz** — 已修复（2026-08-09，score 39→96，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-omega-waltz.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-partition-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-volume-1/mg1-partition-numbers** — 已修复（2026-08-09，score 39→95，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-partition-numbers.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-sequences-models** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-volume-1/mg1-sequences-models** — 已修复（2026-08-09，score 39→94，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-sequences-models.mdx`
-- [ ] 🔴 P1 **02-discrete/mgl-combinatorics** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **02-discrete/mgl-combinatorics** — 已修复（2026-08-09，score 39→98，passed）
     - 路径：`content/math-girl/02-discrete/mgl-combinatorics.mdx`
-- [ ] 🔴 P1 **02-discrete/mgl-graph-theory** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **02-discrete/mgl-graph-theory** — 已修复（2026-08-09，score 39→99，passed）
     - 路径：`content/math-girl/02-discrete/mgl-graph-theory.mdx`
-- [ ] 🔴 P1 **02-discrete/mgl-probability** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **02-discrete/mgl-probability** — 已修复（2026-08-09，score 39→98，passed）
     - 路径：`content/math-girl/02-discrete/mgl-probability.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-infinite-universe** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **02-volume-2/mg2-infinite-universe** — 已修复（2026-08-09，score 39→98，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-infinite-universe.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-pythagorean-theorem** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **02-volume-2/mg2-pythagorean-theorem** — 已修复（2026-08-09，score 39→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-pythagorean-theorem.mdx`
-- [ ] 🔴 P1 **03-advanced/mgl-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **03-advanced/mgl-algorithms** — 已修复（2026-08-09，score 39→95，passed）
     - 路径：`content/math-girl/03-advanced/mgl-algorithms.mdx`
-- [ ] 🔴 P1 **03-advanced/mgl-machine-learning** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **03-advanced/mgl-machine-learning** — 已修复（2026-08-09，score 39→99，passed）
     - 路径：`content/math-girl/03-advanced/mgl-machine-learning.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-differentiation-and-difference** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+- [x] ✅ **01-volume-1/mg1-differentiation-and-difference** — 已修复（2026-08-09，score 38→100，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-differentiation-and-difference.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-harmonic-numbers** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+- [x] ✅ **01-volume-1/mg1-harmonic-numbers** — 已修复（2026-08-09，score 38→99，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-harmonic-numbers.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-abelian-groups** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+- [x] ✅ **02-volume-2/mg2-abelian-groups** — 已修复（2026-08-09，score 38→95，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-abelian-groups.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-proof-by-contradiction** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 38）
+- [x] ✅ **02-volume-2/mg2-proof-by-contradiction** — 已修复（2026-08-09，score 38→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-proof-by-contradiction.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-convolution-catalan** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+- [x] ✅ **01-volume-1/mg1-convolution-catalan** — 已修复（2026-08-09，score 37→99，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-convolution-catalan.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-taylor-basel** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 37）
+- [x] ✅ **01-volume-1/mg1-taylor-basel** — 已修复（2026-08-09，score 37→99，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-taylor-basel.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-coprime** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 36）
+- [x] ✅ **02-volume-2/mg2-coprime** — 已修复（2026-08-09，score 36→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-coprime.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-infinite-descent** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+- [x] ✅ **02-volume-2/mg2-infinite-descent** — 已修复（2026-08-09，score 35→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-infinite-descent.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-expectation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+- [x] ✅ **04-randomized/mg4-expectation** — 已修复（2026-08-09，score 35→96，passed）
     - 路径：`content/math-girl/04-randomized/mg4-expectation.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-exponential-solitude** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 35）
+- [x] ✅ **04-randomized/mg4-exponential-solitude** — 已修复（2026-08-09，score 35→96，passed）
     - 路径：`content/math-girl/04-randomized/mg4-exponential-solitude.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-elusive-future** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+- [x] ✅ **04-randomized/mg4-elusive-future** — 已修复（2026-08-09，score 34→95，passed）
     - 路径：`content/math-girl/04-randomized/mg4-elusive-future.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-linear-search** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+- [x] ✅ **04-randomized/mg4-linear-search** — 已修复（2026-08-09，score 34→95，passed）
     - 路径：`content/math-girl/04-randomized/mg4-linear-search.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-matrices** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 34）
+- [x] ✅ **04-randomized/mg4-matrices** — 已修复（2026-08-09，score 34→95，passed）
     - 路径：`content/math-girl/04-randomized/mg4-matrices.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-fermat-last-theorem** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **02-volume-2/mg2-fermat-last-theorem** — 已修复（2026-08-09，score 33→98，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-fermat-last-theorem.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-modular-arithmetic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **02-volume-2/mg2-modular-arithmetic** — 已修复（2026-08-09，score 33→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-modular-arithmetic.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-bewildering-spiral** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **03-advanced/mg3-bewildering-spiral** — 已修复（2026-08-09，score 33→99，passed）
     - 路径：`content/math-girl/03-advanced/mg3-bewildering-spiral.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-epsilon-delta-language** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **03-advanced/mg3-epsilon-delta-language** — 已修复（2026-08-09，score 33→96，passed）
     - 路径：`content/math-girl/03-advanced/mg3-epsilon-delta-language.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-limit-destination** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **03-advanced/mg3-limit-destination** — 已修复（2026-08-09，score 33→96，passed）
     - 路径：`content/math-girl/03-advanced/mg3-limit-destination.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-two-solitudes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **03-advanced/mg3-two-solitudes** — 已修复（2026-08-09，score 33→96，passed）
     - 路径：`content/math-girl/03-advanced/mg3-two-solitudes.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-never-lose-gamble** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **04-randomized/mg4-never-lose-gamble** — 已修复（2026-08-09，score 33→99，passed）
     - 路径：`content/math-girl/04-randomized/mg4-never-lose-gamble.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-probability-axioms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **04-randomized/mg4-probability-axioms** — 已修复（2026-08-09，score 33→98，passed）
     - 路径：`content/math-girl/04-randomized/mg4-probability-axioms.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-randomized-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **04-randomized/mg4-randomized-algorithms** — 已修复（2026-08-09，score 33→93，passed）
     - 路径：`content/math-girl/04-randomized/mg4-randomized-algorithms.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-strong-correct-beautiful** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 33）
+- [x] ✅ **04-randomized/mg4-strong-correct-beautiful** — 已修复（2026-08-09，score 33→95，passed）
     - 路径：`content/math-girl/04-randomized/mg4-strong-correct-beautiful.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-galileos-hesitation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+- [x] ✅ **03-advanced/mg3-galileos-hesitation** — 已修复（2026-08-09，score 32→99，passed）
     - 路径：`content/math-girl/03-advanced/mg3-galileos-hesitation.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-leibniz-dream** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+- [x] ✅ **03-advanced/mg3-leibniz-dream** — 已修复（2026-08-09，score 32→98，passed）
     - 路径：`content/math-girl/03-advanced/mg3-leibniz-dream.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-peano-arithmetic** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+- [x] ✅ **03-advanced/mg3-peano-arithmetic** — 已修复（2026-08-09，score 32→99，passed）
     - 路径：`content/math-girl/03-advanced/mg3-peano-arithmetic.mdx`
-- [ ] 🔴 P1 **04-randomized/mg4-lonely-random-walk** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 32）
+- [x] ✅ **04-randomized/mg4-lonely-random-walk** — 已修复（2026-08-09，score 32→92，passed）
     - 路径：`content/math-girl/04-randomized/mg4-lonely-random-walk.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-euler-formula** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **02-volume-2/mg2-euler-formula** — 已修复（2026-08-09，score 31→93，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-euler-formula.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-goedel-incompleteness** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **03-advanced/mg3-goedel-incompleteness** — 已修复（2026-08-09，score 31→93，passed）
     - 路径：`content/math-girl/03-advanced/mg3-goedel-incompleteness.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-mirror-monologue** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 31）
+- [x] ✅ **03-advanced/mg3-mirror-monologue** — 已修复（2026-08-09，score 31→93，passed）
     - 路径：`content/math-girl/03-advanced/mg3-mirror-monologue.mdx`
-- [ ] 🔴 P1 **01-volume-1/mg1-arithmetic-geometric-mean** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+- [x] ✅ **01-volume-1/mg1-arithmetic-geometric-mean** — 已修复（2026-08-09，score 30→99，passed）
     - 路径：`content/math-girl/01-volume-1/mg1-arithmetic-geometric-mean.mdx`
-- [ ] 🔴 P1 **03-advanced/mg3-diagonal-argument** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 30）
+- [x] ✅ **03-advanced/mg3-diagonal-argument** — 已修复（2026-08-09，score 30→99，passed）
     - 路径：`content/math-girl/03-advanced/mg3-diagonal-argument.mdx`
-- [ ] 🔴 P1 **02-volume-2/mg2-splitting-primes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 27）
+- [x] ✅ **02-volume-2/mg2-splitting-primes** — 已修复（2026-08-09，score 27→99，passed）
     - 路径：`content/math-girl/02-volume-2/mg2-splitting-primes.mdx`
 
-## gpu-gems（48 章 · ❌48 ⚠️0 ✅0）
+## gpu-gems（48 章 · ❌47 ⚠️0 ✅1）
 
-- [ ] 🔴 P1 **01-natural-effects/gpugems-ch01** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
+- [x] ✅ **01-natural-effects/gpugems-ch01** — 已修复（2026-08-09，score 42→100，passed）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
 - [ ] 🔴 P1 **01-natural-effects/gpugems-ch02** — 未对齐原书目录、未升级 v2、来源不足、内容深度不足、教学法不足、可视化不足、练习不足、UX 不足（score 42）
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch02.mdx`
