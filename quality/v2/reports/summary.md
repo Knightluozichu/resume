@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:53:05.793Z；旧版分数不迁移。
+> 2026-08-10T07:03:08.219Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2210
+- failed：2209
 - queued：344
-- passed：1149
+- passed：1150
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -66,19 +66,19 @@
 | 53 | python-ops | 18 | 18 | 0 | 0 | 54 |
 | 54 | vuejs-practice | 18 | 18 | 0 | 0 | 54 |
 | 55 | kafka-definitive-guide | 18 | 18 | 0 | 0 | 52 |
-| 56 | gpu-gems | 48 | 18 | 0 | 30 | 36 |
-| 57 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
-| 58 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
-| 59 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
-| 60 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
-| 61 | effective-java | 17 | 17 | 0 | 0 | 73 |
-| 62 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
-| 63 | blender-3d | 17 | 17 | 0 | 0 | 51 |
-| 64 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
-| 65 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
-| 66 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
-| 67 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
-| 68 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 56 | engineering-a-compiler | 17 | 17 | 0 | 0 | 84 |
+| 57 | deep-nodejs | 17 | 17 | 0 | 0 | 83 |
+| 58 | real-time-collision-detection | 17 | 17 | 0 | 0 | 83 |
+| 59 | blockchain-dev-practice | 17 | 17 | 0 | 0 | 76 |
+| 60 | effective-java | 17 | 17 | 0 | 0 | 73 |
+| 61 | game-engine-practice-vol2 | 17 | 17 | 0 | 0 | 62 |
+| 62 | blender-3d | 17 | 17 | 0 | 0 | 51 |
+| 63 | game-math-3d | 17 | 17 | 0 | 0 | 51 |
+| 64 | game-mechanics-advanced | 17 | 17 | 0 | 0 | 51 |
+| 65 | head-first-statistics | 17 | 17 | 0 | 0 | 51 |
+| 66 | high-performance-mysql | 17 | 17 | 0 | 0 | 47 |
+| 67 | rabbitmq-practice | 17 | 17 | 0 | 0 | 44 |
+| 68 | gpu-gems | 48 | 17 | 0 | 31 | 34 |
 | 69 | game-engine-practice-vol1 | 16 | 16 | 0 | 0 | 73 |
 | 70 | head-first-design-patterns | 16 | 16 | 0 | 0 | 48 |
 | 71 | javascript-fullstack | 16 | 16 | 0 | 0 | 48 |
