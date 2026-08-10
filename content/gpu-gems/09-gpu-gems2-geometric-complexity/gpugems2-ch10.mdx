@@ -1,0 +1,142 @@
+---
+title: "GPU Gems 2 · Chapter 10. Real-Time Computation of Dynamic Irradiance Environment Maps"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 10
+description: "把动态环境 map 投影到 spherical harmonics，在频域中与 diffuse/specular reflection coefficients 卷积，再由 GPU 重建可实时采样的 irradiance map。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-10-real-time-computation-dynamic"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-10
+---
+
+import {
+  GpuGems2Ch10ConvolutionDiagram,
+  GpuGems2Ch10DynamicEnvironmentDiagram,
+  GpuGems2Ch10GpuPassDiagram,
+  GpuGems2Ch10IrradianceLab,
+  GpuGems2Ch10SphericalHarmonicsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch10-irradiance-maps";
+import { Answer, Attribution, Callout, Exercises, Glossary, GlossaryItem, Objectives, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 irradiance environment map 如何把复杂方向光环境折叠成按 normal 的高效 lookup
+- 能说明 spherical harmonics 的 band、coefficient 数量与低频 diffuse lighting 的关系
+- 能把环境投影、频域卷积和 inverse evaluation 映射到 GPU pass 与 tiled lookup texture
+- 能判断 diffuse、glossy、动态环境和 shadowing 之间的近似边界
+
+</Objectives>
+
+<Callout type="trap" title="不要每个输出 texel 都遍历全部输入环境 texel">
+**现象 →** 小分辨率 cubemap 也无法实时更新，计算量随输入和输出分辨率相乘爆炸。
+
+**原因 →** 直接在 spatial domain 做 convolution，没有利用 diffuse irradiance 的低频特性。
+
+**修法 →** 先投影到 spherical harmonics，在 frequency domain 乘以预计算 reflection coefficients，再 inverse transform。
+
+</Callout>
+
+<Callout type="trap" title="不要用同一阶数假设覆盖所有 reflection function">
+**现象 →** diffuse 看起来平滑，但高 gloss 的 specular highlight 被抹掉。
+
+**原因 →** glossy reflection 包含更高频率，需要更多 SH band；低阶近似无法表达尖锐峰值。
+
+**修法 →** 按 BRDF 频率预算 band；对 diffuse 采用低阶，对高 gloss 增加系数或改用更适合的预过滤表示。
+
+</Callout>
+
+<Callout type="trap" title="不要把 irradiance map 当成完整 shadow solution">
+**现象 →** 动态环境的整体光照正确，但物体之间没有准确的局部遮挡和投影阴影。
+
+**原因 →** environment convolution 只描述方向光能量的积分，没有知道每个动态表面的可见性。
+
+**修法 →** 额外使用 shadow map、ambient occlusion 或其他 visibility term；把 irradiance 当作高效的环境光近似。
+
+</Callout>
+
+环境 map 可以把许多方向的光强存成一个球面函数。若每个像素都对所有光源 texel 求 `max(0, dot(L, N))`，成本与环境分辨率和光源数量相关。<Term def="按表面法线索引、预先把环境光与 diffuse response 卷积后的环境纹理">irradiance environment map</Term>把这次积分提前，运行时只需按 normal 查一次。
+
+<GpuGems2Ch10ConvolutionDiagram />
+
+## 1. 从 spatial domain 到 frequency domain
+
+<Term def="将球面函数投影到一组正交基并用少量 band coefficient 表示的频域基函数系统">spherical harmonics</Term>把环境光表示为系数集合。第 `l` 个 band 有 `2l + 1` 个系数，直到某阶的总系数数量是 `(l + 1)²`。diffuse irradiance 随 normal 变化缓慢，因此低阶已经能捕捉主要形状。
+
+<GpuGems2Ch10SphericalHarmonicsDiagram />
+
+<Term def="把输入环境函数与 Lambert 或 Phong response 结合的积分运算">convolution</Term>在频域中可通过分别投影、逐项相乘和求和来完成，这就是 convolution theorem。reflection function 的系数是固定的，可以预计算；动态运行时只更新环境的系数。
+
+## 2. GPU 的两阶段实现
+
+第一阶段是 projection：pixel shader 对输入环境的样本按权重求和，得到每个 `(l, m)` 的 RGB coefficient。第二阶段把这些 coefficient 乘 reflection function 系数，并在每个输出环境 texel 上做 inverse transform，重建空间 irradiance map。
+
+<GpuGems2Ch10GpuPassDiagram />
+
+<Term def="把多个 spherical-harmonic coefficient 排列到一张纹理的 tile 中，使一个 GPU pass 并行生成多个输出系数">coefficient tiling</Term>利用 output pixel 的位置找到对应 tile 和 input offset。这样不必为每个 coefficient 单独提交 pass，能把多个系数组织进一次渲染到纹理流程。
+
+## 3. 动态环境与 diffuse/specular
+
+<GpuGems2Ch10DynamicEnvironmentDiagram />
+
+只要环境 map 能通过 render-to-texture 更新，后续 projection、convolution 和 evaluation 就可以在 GPU 上实时完成。太阳移动、动态灯光或反射对象改变时，表面不必重新积分所有环境样本，只需重新生成或更新 irradiance map。
+
+diffuse 的低频性质让低阶 SH 很有效；specular 的 gloss 越高，函数越尖，需要更多频率。使用环境 map 的材质还要结合 base color、normal 和可见性 term，不能把所有复杂反射都压成一张低阶 diffuse map。
+
+## 4. 阴影、插值与可组合系数
+
+环境 map 本身不包含每个表面的动态 occlusion。静态对象可以预计算 ambient occlusion，动态对象则需要额外的实时近似。SH 系数可以逐分量线性插值和相加，因此能够平滑地过渡两个环境或叠加多个低频光照贡献，但这种组合仍继承输入近似的频率上限。
+
+## 5. 动手实验：band 与预算
+
+调整 SH band，观察 coefficient 数量按平方增长；增加动态光源，观察 projection 需要重新累积更多输入；提高 gloss，思考低阶 approximation 是否仍能保留高频 highlight。实验显示的是预算关系，不是实际 shader 计时。
+
+<GpuGems2Ch10IrradianceLab />
+
+## 小结
+
+- irradiance environment map 将方向光环境与 diffuse response 的积分折叠为一次 lookup。
+- spherical harmonics 用低频系数表达缓慢变化的 diffuse irradiance。
+- convolution 在频域中变成系数相乘；GPU 通过 projection 和 inverse evaluation 两阶段实现。
+- coefficient tiling 将多个 `(l,m)` 系数组织成并行纹理输出。
+- 动态 irradiance map 不自动提供局部阴影；gloss 越高，对高频表示的要求越高。
+
+<Exercises>
+
+**问题 1｜复杂度**　为什么直接 convolution 的输出 texel 数和输入 texel 数相乘，而 SH 方法能降低成本？
+
+<Answer>
+
+直接方法对每个输出方向遍历所有输入方向。SH 方法先把环境投影成 K 个系数，在频域中与固定 reflection coefficients 相乘，再为输出方向求 K 项，因此复杂度近似由 M×N 变成 K×M 加 K×N，且 diffuse 的 K 很小。
+</Answer>
+
+**问题 2｜band 选择**　为什么低阶 SH 适合 diffuse，却可能不适合高 gloss specular？
+
+<Answer>
+
+diffuse response 平滑、低频，少量 band 已经能表达主要变化；高 gloss 的 specular response 更尖锐，包含更高频成分，低阶截断会模糊 highlight，需要增加 band 或采用别的预过滤表示。
+</Answer>
+
+**问题 3｜阴影边界**　动态 irradiance map 已经更新，为什么仍需要 shadow map 或 AO？
+
+<Answer>
+
+irradiance map 描述环境方向光的整体积分，不知道某个动态表面与另一个物体之间的局部遮挡。shadow map、AO 或其他 visibility term 负责这一维信息，两者是互补的近似。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="irradiance environment map">按表面 normal 查询的、已卷积环境光的环境纹理。</GlossaryItem>
+<GlossaryItem term="spherical harmonics">用正交球面基函数和 band coefficients 表示方向函数的方法。</GlossaryItem>
+<GlossaryItem term="convolution">将环境函数与 diffuse/specular response 结合的积分运算。</GlossaryItem>
+<GlossaryItem term="coefficient tiling">把多个 SH coefficient 排到纹理 tile 中并行计算的布局。</GlossaryItem>
+<GlossaryItem term="frequency domain">以基函数系数而非空间采样表达环境函数的表示域。</GlossaryItem>
+<GlossaryItem term="inverse evaluation">用 SH 系数和基函数重建输出空间环境 map 的过程。</GlossaryItem>
+</Glossary>
+
+<Attribution mode="independent-rewrite" sourceBasis="full-text-primary" workTitle="GPU Gems 2 · Chapter 10. Real-Time Computation of Dynamic Irradiance Environment Maps" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-10-real-time-computation-dynamic" />
