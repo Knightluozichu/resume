@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:35:29.478Z；旧版分数不迁移。
+> 2026-08-10T06:42:53.840Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2212
+- failed：2211
 - queued：344
-- passed：1147
+- passed：1148
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -53,11 +53,11 @@
 | 40 | vuejs-design-implementation | 20 | 20 | 0 | 0 | 60 |
 | 41 | gc-handbook | 24 | 20 | 4 | 0 | 44 |
 | 42 | phoenix-architecture | 20 | 20 | 0 | 0 | 42 |
-| 43 | gpu-gems | 48 | 20 | 0 | 28 | 40 |
-| 44 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
-| 45 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
-| 46 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
-| 47 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 43 | mobile-xr-web-optimization | 19 | 19 | 0 | 0 | 59 |
+| 44 | javascript-definitive-guide | 19 | 19 | 0 | 0 | 57 |
+| 45 | mastering-rust-2e | 19 | 19 | 0 | 0 | 57 |
+| 46 | kotlin-in-action | 19 | 19 | 0 | 0 | 51 |
+| 47 | gpu-gems | 48 | 19 | 0 | 29 | 38 |
 | 48 | ai-agent-apps | 19 | 19 | 0 | 0 | 19 |
 | 49 | nodejs-definitive-guide | 18 | 18 | 0 | 0 | 74 |
 | 50 | peak-deliberate-practice | 18 | 18 | 0 | 0 | 74 |

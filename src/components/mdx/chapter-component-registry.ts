@@ -13117,6 +13117,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh28PipelineStagesDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/06-beyond-triangles/gpugems-ch29": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch29-efficient-occlusion-culling");
+    return {
+      GpuGemsCh29AsyncQueryDiagram: module0.GpuGemsCh29AsyncQueryDiagram,
+      GpuGemsCh29OcclusionLab: module0.GpuGemsCh29OcclusionLab,
+      GpuGemsCh29QuerySequenceDiagram: module0.GpuGemsCh29QuerySequenceDiagram,
+      GpuGemsCh29SortAndBoundsDiagram: module0.GpuGemsCh29SortAndBoundsDiagram,
+      GpuGemsCh29VisibilityLevelsDiagram:
+        module0.GpuGemsCh29VisibilityLevelsDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
