@@ -1,255 +1,203 @@
 ---
-title: "Chapter 26: Performance and Practicalities"
+title: "GPU Gems 1 · Chapter 26. The OpenEXR Image File Format"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part IV · Image Processing"
 order: 26
-description: "GPU Gems Part: Performance and Practicalities, Chapter 26"
+description: "用 OpenEXR 的 HDR、half、多通道和线性像素值保存 GPU 图像，在处理与显示之间建立可验证的格式契约。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-26-openexr-image-file-format"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-26
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh26FileStructureDiagram,
+  GpuGemsCh26HalfFloatDiagram,
+  GpuGemsCh26HdrComparisonDiagram,
+  GpuGemsCh26LinearDisplayDiagram,
+  GpuGemsCh26OpenExrLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch26-openexr-image-file-format";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 26: Performance and Practicalities的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Performance and Practicalities, Chapter 26之间的关系是什么？
+- 能解释为什么 GPU 图像不能在处理前过早量化到显示器的零到一范围
+- 能拆解 OpenEXR 的 half、header、独立通道和无损压缩契约
+- 能在 linear color space 中完成合成或模糊，并把 gamma correction 留在显示边界
+- 能设计一条读取、处理、写回和显示 HDR 图像的可测试代码路径
 
 </Objectives>
 
-## 为什么需要Chapter 26: Performance and Practicalities
+GPU 生成的图像通常只在一帧里短暂存在，但值得保存的帧可能包含比显示器白点亮很多的高光。GPU Gems 1 第 26 章把问题拆成两段：先用能保留信息的格式保存图像，再在显示时把宽动态范围映射到设备能呈现的范围。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 26: Performance and Practicalities作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Performance and Practicalities, Chapter 26正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要在处理前把 HDR 夹到 0 到 1">
+现象：火焰、太阳或高光在文件里变成一片白，之后再变暗、模糊或合成都会出现灰边和不自然的颜色。原因：8-bit display file 只保存显示器需要的范围，超过白点的信息已经丢失。修法：先写 OpenEXR，最后一步才做 tone mapping 或显示量化。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 26: Performance and Practicalities从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 26: Performance and Practicalities涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 26: Performance and Practicalities相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 26: Performance and Practicalities相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把 half 当成普通 8-bit 整数">
+现象：实现把 16 位数据按整数范围解释，或者认为 half 没有特殊值和范围限制。原因：half 是带 sign、exponent、mantissa 的浮点格式，能表示远超一的值，但也有最大值、最小正值、无穷和 NaN。修法：在 API、纹理格式和测试数据中明确 half 的语义。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要在 gamma 空间直接做 over 或 blur">
+现象：合成边缘变暗，抗锯齿或景深高光看起来像被削弱。原因：alpha coverage 和滤波表达的是光量，gamma 编码值与场景亮度不成正比。修法：以 linear color space 读写和计算，显示前再按显示器 gamma 转换。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="由 Industrial Light & Magic 开发、面向计算机成像的高动态范围图像文件格式">OpenEXR</Term> 的核心价值是把“保存”与“显示”解耦。文件可以保留超过 1 的亮度和额外数据通道，应用则在需要时读取、处理、合成，再针对目标显示器做转换。
 
-## 性能考量
+<GpuGemsCh26HdrComparisonDiagram />
 
-### 批量操作
+## 1. HDR 不是更亮的滤镜，而是更大的信息预算
 
-Vulkan 鼓励批量提交而非逐个提交：
+典型显示设备的动态范围大约是 500 比 1，而常见显示格式把黑和白编码为 0.0 到 1.0。只要任务是直接显示，这个范围足够；但环境贴图、全局光照、色彩校正、景深和运动模糊都可能需要保留超出显示白点的像素。
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+用低动态范围文件保存高光，等价于在后续算法之前执行不可逆的 clamp。比如一个原始值为 4.0 的高光和另一个原始值为 1.0 的白点，都会被保存成 1.0；之后把整张图变暗，算法已经无法知道两者原本不同。OpenEXR 的设计让量化延后到显示端，因此高光可以参与正确的扩散、合成和曝光调整。
 
-### 避免 CPU-GPU 同步点
+<Term def="允许像素精度和亮度范围超出典型显示设备、以便继续处理或用于环境照明的图像表示">high-dynamic-range image</Term> 不是某一种视觉风格，而是数据表示的选择。发布检查应问“这一步之后还要不要处理”，而不是只问“当前屏幕是否看起来正常”。
+
+## 2. half：用指数覆盖亮度范围
+
+OpenEXR 直接支持 <Term def="OpenEXR 使用的 16 位浮点类型，由 1 位 sign、5 位 exponent 和 10 位 mantissa 组成">half</Term>。它的布局类似 IEEE 754 单精度和双精度浮点数，但标准本身没有定义 16 位格式，所以 half 需要由格式和实现共同约定。
+
+<GpuGemsCh26HalfFloatDiagram />
+
+原章给出的可表示范围约为 5.96 × 10⁻⁸ 到 65504.0，动态范围达到约一万亿比一；实际常见的百万比一场景可以舒适地容纳。每个 stop 还有 1024 个不同值，所以 half 不只是 HDR 的容器，也能为正常动态范围图像提供比 8-bit gamma 编码更细的颜色分辨率。
 
 ```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+Imath::half hdrPixel(3.5f);
+float workingValue = hdrPixel + std::sqrt(static_cast<float>(hdrPixel));
+hdrPixel += workingValue;
 ```
 
-### 内存对齐
+工程上要把这种类型信息一路保留下来：CPU image buffer、GPU texture internal format、上传的数据类型和写回文件的 channel type 必须互相匹配。half 支持与 float、double 混合运算，不代表所有中间步骤都可以无检查地降精度；范围边界、NaN 和无穷值仍应进入测试。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 3. header 是读取方必须遵守的格式契约
 
-## 验证层检查
+一个 OpenEXR 文件由 header 和 pixels 两大部分组成。header 的 attribute 描述像素如何解释，其中 `displayWindow` 描述图像分辨率，`dataWindow` 描述 crop 与 offset，`channels` 描述通道，`compression` 描述像素压缩方式，`lineOrder` 描述扫描线顺序；像素宽高比和屏幕窗口属性也属于跨程序读取时的重要信息。
 
-启用验证层后，Chapter 26: Performance and Practicalities相关的常见错误会被捕获：
+<GpuGemsCh26FileStructureDiagram />
 
+<Term def="描述 OpenEXR 像素有效区域、裁剪范围和偏移的 header attribute">dataWindow</Term> 值得单独检查：把 buffer 当成从零开始的紧密矩形，可能会忽略负坐标或 crop offset。读取时应先从 data window 计算维度，再用窗口的最小坐标设置 frame buffer 的偏移，最后按窗口范围读取像素。
+
+```cpp
+Imath::Box2i window = input.dataWindow();
+const int width = window.max.x - window.min.x + 1;
+const int height = window.max.y - window.min.y + 1;
+buffer.resize(static_cast<size_t>(width) * height);
+input.setFrameBuffer(buffer.data() - window.min.x - window.min.y * width, 1, width);
+input.readPixels(window.min.y, window.max.y);
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+像素按独立通道保存。RGBA 可以使用 half，而 z-depth 或其他需要更大精度的通道可以使用 32 位 float；通道集合不必固定为四个。额外 attribute 还能保存计算历史、色彩配置、相机位置和观察方向，让文件成为可追溯的图像资产，而不是只有一块没有上下文的像素数组。
+
+## 4. 压缩必须与数据和 I/O 目标一起选择
+
+OpenEXR 的 PIZ、ZIP、RLE 三种方案都是无损的：压缩和解压不会改变像素数据。它们的差别在速度、压缩比和图像内容适配性，而不是“是否会损失颜色”。PIZ 对摄影图像通常压缩比最好；ZIP 解压较快但压缩较慢；RLE 很快并适合大面积平坦区域。快速文件系统上也可以选择不压缩，以换取更快的读写。
+
+<Term def="OpenEXR 的无损压缩策略，压缩和解压不改变像素值，但不同实现会在速度和文件大小之间取不同折中">lossless compression</Term> 的工程契约是“字节布局可以变化，像素语义不能变化”。发布前要用同一组输入验证压缩前后的像素、通道列表、窗口属性和读写耗时，不要只看文件大小。
+
+```cpp
+Imf::RgbaOutputFile output(fileName, displayWindow, dataWindow, Imf::WRITE_RGBA);
+output.setFrameBuffer(pixels - offsetX - offsetY * width, 1, width);
+output.writePixels(height);
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+## 5. linear 像素值让合成和滤波表达光量
 
-## 本章要点
+原章把 linear 定义为：像素数值与所代表的相对场景亮度成比例。数值加倍就表示光加倍；除以二就是暗一个 stop。标准 `over` 合成、coverage alpha、抗锯齿和软件渲染都依赖这个关系。
 
-1. Chapter 26: Performance and Practicalities是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+<Term def="数值与相对场景亮度成比例的颜色空间，适合进行光量相关的合成、抗锯齿和滤波">linear color space</Term> 中，前景和背景的 alpha 混合才是在混合光量。显示器则通常以幂律响应输出光，因此需要在最后一步做 gamma correction；这不是把整个处理链改成 gamma 空间的理由。
+
+<GpuGemsCh26LinearDisplayDiagram />
+
+```hlsl
+float3 overLinear(float3 foreground, float alpha, float3 background) {
+  return foreground * alpha + background * (1.0 - alpha);
+}
+
+float3 toDisplay(float3 linearValue, float monitorGamma) {
+  return pow(max(linearValue, 0.0), 1.0 / monitorGamma);
+}
+```
+
+如果图像确实要落到有限范围的显示设备，可以先做 tone mapping，再做显示编码。关键顺序是：OpenEXR 保留 HDR，算法在 linear 数据上运行，显示适配放在边界；否则曝光、景深和合成都会把量化误差放大成可见伪影。
+
+## 6. 读写路径：让 GPU buffer 与文件契约对齐
+
+读取 OpenEXR 时，库接口会把像素写入内部 buffer；异常应在 catch 路径中处理，文件生命周期交给 RAII。写回时，先确认 display window、data window 和 channel layout，再把合成结果写入输出文件。旧原章示例使用 OpenGL 的 RGBA half texture 传输 GPU buffer；今天的 API 名称可能不同，但“不 clamp、类型匹配、窗口一致”的验证点仍然适用。
+
+```cpp
+try {
+  Imf::RgbaInputFile input(fileName);
+  readIntoBuffer(input, pixels, window);
+  uploadHalfTexture(pixels, width, height);
+  renderAndCompositeInLinearSpace();
+  writeOpenExr(resultFile, resultPixels, displayWindow, dataWindow);
+} catch (const Iex::BaseExc& error) {
+  reportImageIoFailure(error.what());
+}
+```
+
+<GpuGemsCh26OpenExrLab />
+
+实验中先切换格式，再改变曝光并选择 blur 或 composite。预期是 8-bit 路径的 clipped 在高光超过 1 时上升，而 OpenEXR 路径仍保留场景峰值；这不是显示器真的变成 HDR，而是说明处理阶段拿到的数据仍有信息。
+
+## 小结：把保存、处理和显示分成三个边界
+
+- OpenEXR 保存 HDR 像素、额外通道和描述像素的 header，使后续处理不必接受提前 clamp。
+- half 用 sign、exponent 和 mantissa 在 16 位预算下覆盖宽动态范围；RGBA 与 z-depth 等通道可以选择不同类型。
+- dataWindow、channels、compression 和 lineOrder 是读取方必须尊重的格式契约；PIZ、ZIP、RLE 都是无损方案。
+- linear color space 适合 over、抗锯齿、景深和运动模糊；gamma correction 或 tone mapping 应留在显示边界。
+- 发布前用异常路径、窗口偏移、通道类型、压缩往返、超一高光和目标显示器回归整条读写链。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 26: Performance and Practicalities涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜格式判断**　场景里有一个值为 4.0 的高光。分别说明把它写入 8-bit display file 与 OpenEXR half 后，再执行整体变暗和景深 blur，会出现什么差异？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+8-bit display file 通常先把 4.0 夹为 1.0，因此高光和原本为 1.0 的白点不可区分；变暗后会得到被压平的白色区域，blur 也无法恢复真实能量。OpenEXR half 保留 4.0，变暗只是在线性空间缩放，blur 仍能把高光扩散成自然的亮区。
 </Answer>
 
+**问题 2｜header 与通道**　`dataWindow` 的最小坐标是 `(-8, 4)`，最大坐标是 `(119, 67)`。写出 buffer 的宽高，并说明为什么 RGBA 使用 half、Z 使用 float 是合理的。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+宽度是 `119 - (-8) + 1 = 128`，高度是 `67 - 4 + 1 = 64`。RGBA 的 half 可以以较低存储成本保留 HDR 颜色；Z-depth 的数值范围和精度需求可能不同，使用 32 位 float 可以避免把深度语义强行塞进颜色通道的类型契约。读取 buffer 时还必须按 `dataWindow` 的最小坐标设置偏移。
+</Answer>
+
+**问题 3｜设计题**　为一个 GPU 景深管线设计 OpenEXR 回归测试。至少覆盖数据范围、linear 合成、窗口、通道、压缩和显示转换六个方面，并说明每项的通过条件。
+
+<Answer>
+
+生成包含 0.0、1.0、4.0、负坐标窗口和 NaN 或无穷边界的 HDR 输入；检查读写后超一高光仍存在，dataWindow 的宽高和偏移一致，RGBA half 与 Z float 的 channel type 没有改变。用 PIZ、ZIP、RLE 和不压缩做往返，要求像素语义保持不变，再在 linear 空间执行 over 与 blur，和参考结果比较。最后只在显示边界应用 monitor gamma 或 tone mapping，并分别验证直出、曝光变化和景深高光没有提前 clamp。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="OpenEXR">面向计算机成像的高动态范围图像文件格式。</GlossaryItem>
+<GlossaryItem term="high-dynamic-range image">允许像素范围和精度超出典型显示设备的图像表示。</GlossaryItem>
+<GlossaryItem term="half">由 sign、exponent 和 mantissa 组成的 16 位浮点类型。</GlossaryItem>
+<GlossaryItem term="dataWindow">描述像素有效区域、裁剪范围和偏移的 header attribute。</GlossaryItem>
+<GlossaryItem term="lossless compression">不改变像素语义、只在速度和文件大小间折中的压缩策略。</GlossaryItem>
+<GlossaryItem term="linear color space">数值与相对场景亮度成比例、适合光量运算的颜色空间。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 26 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 26 “The OpenEXR Image File Format”的独立重写，保留 HDR、half、header、独立通道、无损压缩、linear 像素值以及 GPU 图像读写和显示边界等核心技术线索，并将旧版示例改写为可验证的现代学习路径。原始章节：[NVIDIA GPU Gems Chapter 26](https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-26-openexr-image-file-format)
+
 </Attribution>

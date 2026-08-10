@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T06:09:44.896Z；旧版分数不迁移。
+> 2026-08-10T06:19:11.918Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2215
+- failed：2214
 - queued：344
-- passed：1144
+- passed：1145
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -41,10 +41,10 @@
 | 28 | mfc-deep-dive | 23 | 23 | 0 | 0 | 92 |
 | 29 | os-concepts | 23 | 23 | 0 | 0 | 92 |
 | 30 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
-| 31 | gpu-gems | 48 | 23 | 0 | 25 | 46 |
-| 32 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
-| 33 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 34 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 31 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
+| 32 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
+| 33 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 34 | gpu-gems | 48 | 22 | 0 | 26 | 44 |
 | 35 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
 | 36 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
 | 37 | hackers-delight | 21 | 21 | 0 | 0 | 63 |

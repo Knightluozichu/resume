@@ -13078,6 +13078,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGemsCh25MipmapEncodingDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/05-performance/gpugems-ch26": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch26-openexr-image-file-format");
+    return {
+      GpuGemsCh26FileStructureDiagram: module0.GpuGemsCh26FileStructureDiagram,
+      GpuGemsCh26HalfFloatDiagram: module0.GpuGemsCh26HalfFloatDiagram,
+      GpuGemsCh26HdrComparisonDiagram: module0.GpuGemsCh26HdrComparisonDiagram,
+      GpuGemsCh26LinearDisplayDiagram: module0.GpuGemsCh26LinearDisplayDiagram,
+      GpuGemsCh26OpenExrLab: module0.GpuGemsCh26OpenExrLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
