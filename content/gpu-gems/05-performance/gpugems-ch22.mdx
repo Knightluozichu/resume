@@ -1,255 +1,181 @@
 ---
-title: "Chapter 22: Performance and Practicalities"
+title: "GPU Gems 1 · Chapter 22. Color Controls"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part IV · Image Processing"
 order: 22
-description: "GPU Gems Part: Performance and Practicalities, Chapter 22"
+description: "用 Levels、Curves、一维查找纹理、灰度点积与三乘三矩阵，把艺术家可控的色彩校正稳定地带进实时 pixel shader。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-22-color-controls"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-22
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh22ColorControlLab,
+  GpuGemsCh22ColorCorrectionPipelineDiagram,
+  GpuGemsCh22ColorSpaceConversionDiagram,
+  GpuGemsCh22LevelsCurvesDiagram,
+  GpuGemsCh22LutWorkflowDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch22-color-controls";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 22: Performance and Practicalities的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Performance and Practicalities, Chapter 22之间的关系是什么？
+- 能把 color correction 分解为逐通道 remap、查表与通道混合，并说明每一步的输入输出
+- 能实现 Levels 与 Curves 的 shader 版本，选择合适的一维或三维资源保存艺术家控制
+- 能用加权点积和三乘三矩阵完成灰度与色彩空间转换，并验证结果没有意外压暗或溢出
+- 能在实时预算内调试 lookup texture、gamma、saturation 和矩阵顺序，保留可复现的视觉控制
 
 </Objectives>
 
-## 为什么需要Chapter 22: Performance and Practicalities
+色彩校正不是渲染完成后的静态修图，而是把像素从一个可见的颜色关系映射到另一个关系。它可以把不同资产的色彩统一到同一场景，也可以制造褪色胶片、交叉冲洗、红外和游戏 UI 的风格。关键是把艺术家熟悉的控制，转换成 pixel shader 能稳定执行的资源。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 22: Performance and Practicalities作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
-
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Performance and Practicalities, Chapter 22正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把每一条 Curves 曲线硬编码成一条巨型公式">
+现象：复杂曲线难以维护，换一个艺术版本就要重新编译 shader。原因：曲线是任意的输入到输出映射，不一定有简短的代数表达式。修法：把曲线烘焙成每通道的一维 lookup texture，让运行时只做查表。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 22: Performance and Practicalities从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 22: Performance and Practicalities涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 22: Performance and Practicalities相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 22: Performance and Practicalities相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要把通道独立 remap 当成色彩空间转换">
+现象：只改 R、G、B 各自的曲线，却无法正确完成 hue、灰度或 RGB 到另一空间的转换。原因：这些任务的输出通道依赖多个输入通道。修法：使用加权 dot product、三乘三矩阵，只有确实需要任意 RGB 到 RGB 映射时才考虑三维 map。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要让 gamma、saturation 和顺序成为隐形状态">
+现象：同一组参数在工具预览与游戏画面中不一致，或调色后出现纯色压暗、溢出。原因：Levels 的黑白点、gamma、通道混合顺序和颜色空间没有记录。修法：将参数归一化、顺序写入资源契约，并用灰阶 ramp 与纯色样本做回归测试。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="把像素颜色从一种通道关系、色彩空间或艺术风格映射到另一种结果的过程">color correction</Term> 的共同接口是逐像素输入和逐像素输出。输入可以来自 2D 纹理、3D 场景的 back buffer 或中间 render target；输出通常在 pixel shader 中完成，因此可以实时作用于完整画面。
 
-## 性能考量
+<GpuGemsCh22ColorCorrectionPipelineDiagram />
 
-### 批量操作
+## 1. 逐通道控制：Levels 先建立可解释的基线
 
-Vulkan 鼓励批量提交而非逐个提交：
+<Term def="使用 input black、input white、output black、output white 与 gamma 调整单个颜色通道动态范围的参数化校正">Levels</Term> 用少量参数描述每个通道的输入输出范围。将输入归一化后，可以先把 `inBlack` 到 `inWhite` 映射到零到一，再施加 gamma，最后恢复到目标输出范围：
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+```hlsl
+float LevelChannel(float value, float inBlack, float inWhite, float gamma,
+                   float outBlack, float outWhite) {
+  float normalized = saturate((value - inBlack) / max(inWhite - inBlack, 0.0001));
+  float shaped = pow(normalized, gamma);
+  return lerp(outBlack, outWhite, shaped);
+}
 ```
 
-### 内存对齐
+这里把颜色先放到零到一的 shader 表示；若工具以零到二百五十五的整数工作，就在 CPU 端预先归一化参数，避免每个像素重复做无意义的缩放。<Term def="作用于归一化颜色值的幂函数参数，用于改变中间调的亮暗曲线">gamma</Term> 不同于黑白点：若三个通道的 gamma 不同，就不能把所有幂运算合并成一个共享标量，必须保留三条通道路径。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh22LevelsCurvesDiagram />
 
-## 验证层检查
+Levels 适合做曝光、对比度和动态范围的基础调整。它也适合作为资产校验的第一层：给输入 ramp，检查黑点是否真的变黑、白点是否真的到达目标、gamma 是否只改变曲线而没有偷偷改变端点。
 
-启用验证层后，Chapter 22: Performance and Practicalities相关的常见错误会被捕获：
+## 2. Curves 与一维查找纹理：把艺术操作变成数据
 
+<Term def="由输入通道值索引输出通道值的纹理资源，常用一条一乘二百五十六的 RGB ramp 保存复杂的每通道曲线">1D lookup texture</Term> 是 Curves 的运行时表示。Curves 工具可以让艺术家绘制任意的输入到输出关系；shader 不必重现 spline，而是读取这条已经烘焙好的 ramp。通常准备一张一乘二百五十六的 RGB 图：黑到白的初始 ramp 经过 Curves 调整后，R、G、B 三个分量分别成为三个通道的映射。
+
+<GpuGemsCh22LutWorkflowDiagram />
+
+```hlsl
+float3 inputColor = tex2D(inSampler, IN.UV).xyz;
+float3 outputColor;
+outputColor.r = tex1D(colorCorrMap, inputColor.r).r;
+outputColor.g = tex1D(colorCorrMap, inputColor.g).g;
+outputColor.b = tex1D(colorCorrMap, inputColor.b).b;
+return float4(outputColor, 1.0);
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+查表的工程契约需要明确纹理格式、寻址模式、采样过滤和颜色空间。对于连续的颜色映射，线性过滤能在相邻 texel 之间插值；对于需要精确分段的风格化 map，则应验证过滤不会制造不想要的中间色。工具导出的 ramp 还要和运行时读取的通道顺序一致。
+
+## 3. 通道混合：灰度、矩阵与三维映射
+
+当输出通道依赖多个输入通道时，逐通道一维 map 不再够用。<Term def="将 RGB 或其他通道值通过标准或自定义关系映射到另一种颜色表示的过程">color-space conversion</Term> 可以用每个输出通道一个 dot product 表示；把三个 dot product 放在一起，就是一个三乘三矩阵乘法。
+
+灰度是最小的例子。按照官方章节给出的 Rec 709 权重，可以写成：
+
+```hlsl
+float grayscale = dot(float3(0.222, 0.707, 0.071), inputColor);
+float3 grayColor = float3(grayscale, grayscale, grayscale);
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+权重总和为一，通常能保持整体能量尺度，但它也意味着纯蓝可能被压到很暗的灰度。游戏风格不一定要服从这个默认结果，因此应把权重作为显式艺术参数，而不是把它藏在 shader 常量里。
 
-## 本章要点
+<Term def="用一个三维输入坐标索引输出颜色的查找资源，可表达任意 RGB 到 RGB 关系但需要更多内存与制作工具">3D color map</Term> 能表达最一般的 RGB 到 RGB 映射：
 
-1. Chapter 22: Performance and Practicalities是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+```hlsl
+float3 outputColor = tex3D(colorSpaceSampler, inputColor);
+```
+
+代价是三维纹理的内存、滤波和制作管线。若转换关系是线性的，优先把它写成三乘三矩阵：
+
+```hlsl
+float3x3 conversionMatrix;
+float3 outputColor = mul(conversionMatrix, inputColor);
+```
+
+矩阵不仅可以表达 RGB 到其他工业色彩空间，也可以表达饱和度、亮度和色轮旋转等控制。将多个线性操作预先在 CPU 端串接，可以减少 shader 中的中间值和纹理访问；但要记录矩阵乘法顺序，因为矩阵通常不满足交换律。
+
+<GpuGemsCh22ColorSpaceConversionDiagram />
+
+## 4. 运行时控制与验证策略
+
+艺术家需要看到参数改变后的完整画面，程序员则需要知道每个参数改变的是哪条通道。建议把控制分成三层：先用 Levels 处理输入范围，再用一维 map 处理风格化的 per-channel remap，最后用 dot product 或矩阵执行需要通道混合的操作。若要做 grayscale，就在混合阶段明确写出权重；若要做 3D map，就将其视为独立资源并记录版本。
+
+<GpuGemsCh22ColorControlLab />
+
+实验中的示意像素不是完整色彩管理系统，但它能暴露三个高频错误：黑白点反转造成所有输出饱和，gamma 方向写反造成中间调过亮或过暗，以及 saturation 与 grayscale 顺序不清造成预览和 shader 不一致。发布前至少用黑、白、灰、纯红、纯绿、纯蓝和一条灰阶 ramp 验证，并在目标 framebuffer 的颜色空间中重复检查。
+
+## 小结：把艺术控制编码成可验证的像素映射
+
+- color correction 先区分逐通道 remap 与通道混合，再选择 shader 公式或纹理资源。
+- Levels 用黑白点和 gamma 提供可解释的动态范围控制；Curves 更自由，适合烘焙到一维 lookup texture。
+- 灰度可用加权 dot product；线性的色彩空间转换可用三乘三矩阵；任意 RGB 到 RGB 关系才值得考虑 3D color map。
+- 运行时必须记录颜色空间、采样过滤、通道顺序和操作顺序，并用极端颜色与灰阶 ramp 回归。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 22: Performance and Practicalities涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　给定 `inBlack=0.1`、`inWhite=0.9`、`gamma=1.0`，输入通道值为 `0.5`。按 Levels 的归一化步骤计算输出的中间值；如果把 gamma 改为 `2.0`，中间调趋势如何变化？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+归一化值是 `(0.5 - 0.1) / (0.9 - 0.1) = 0.5`。gamma 为 `1.0` 时保持 `0.5`；gamma 为 `2.0` 时变为 `0.25`，所以在这个约定下中间调会更暗。实际项目还要确认工具与 shader 对 gamma 的方向定义一致。
 </Answer>
 
+**问题 2｜资源选择题**　艺术家要复现三条任意 Curves 曲线，运行时每个像素只需要独立改变 R、G、B；应选择一维 lookup texture 还是三维 color map？说明制作和采样代价。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+选择一维 lookup texture。三条独立曲线可以放在一张 RGB ramp 中，每个通道用自己的输入分量查表；它的资源和采样成本远低于表达任意通道交叉关系的三维 map。只有输出 R 依赖输入 G、B 等跨通道关系时，三维 map 或矩阵才有必要。
+</Answer>
+
+**问题 3｜独立实现题**　为一个需要灰度预览、复古曲线和可调饱和度的实时画面设计 shader 与验证计划。请写出阶段顺序，并列出至少四个回归样本。
+
+<Answer>
+
+先把输入像素按颜色空间契约归一化，再用每通道一维 lookup texture 做复古曲线；随后用可配置权重计算 luminance，并按 saturation 在 luminance 与曲线结果之间插值，最后写回目标 framebuffer。回归样本至少包含黑、白、中灰、纯红、纯绿、纯蓝和灰阶 ramp，另外检查 lookup texture 过滤、alpha 保留、过曝 clamp、矩阵或权重版本以及不同分辨率下的结果一致性。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="color correction">将像素颜色从一种通道关系、色彩空间或艺术风格映射到另一种结果的过程。</GlossaryItem>
+<GlossaryItem term="Levels">使用黑白点、输出范围和 gamma 调整单个颜色通道动态范围的参数化校正。</GlossaryItem>
+<GlossaryItem term="1D lookup texture">由输入通道值索引输出通道值的一维纹理资源，常用于保存 Curves 映射。</GlossaryItem>
+<GlossaryItem term="color-space conversion">将 RGB 或其他通道值通过标准或自定义关系映射到另一种颜色表示的过程。</GlossaryItem>
+<GlossaryItem term="3D color map">用三维输入坐标索引输出颜色的查找资源，可表达任意 RGB 到 RGB 关系。</GlossaryItem>
+<GlossaryItem term="gamma">作用于归一化颜色值的幂函数参数，用于改变中间调的亮暗曲线。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 22 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 22 “Color Controls”的独立重写，保留 Levels、Curves、一维映射、灰度 dot product 与三乘三矩阵等核心技术线索，并将示例改写为可验证的现代 shader 学习路径。原始章节：[NVIDIA GPU Gems Chapter 22](https://developer.nvidia.com/gpugems/gpugems/part-iv-image-processing/chapter-22-color-controls)
+
 </Attribution>
