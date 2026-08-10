@@ -19,6 +19,7 @@
  * 用法：node scripts/pre-publish-gate.mjs --book <slug>
  * 可选：--skip-visual（视觉巡检依赖本地 Chrome，CI 无 Chrome 时可跳过；deploy 必须跑）
  *       --skip-audit  （audit 已由 CI 实时跑过时可跳过；deploy 必须跑）
+ *       --allow-incomplete （仅按用户明确授权发布当前已通过章节，不伪造整书完成状态）
  */
 
 import { spawnSync } from "node:child_process";
@@ -30,9 +31,10 @@ const BOOK_SLUG_INDEX = process.argv.indexOf("--book");
 const BOOK_SLUG = BOOK_SLUG_INDEX >= 0 ? process.argv[BOOK_SLUG_INDEX + 1] : null;
 const SKIP_VISUAL = process.argv.includes("--skip-visual");
 const SKIP_AUDIT = process.argv.includes("--skip-audit");
+const ALLOW_INCOMPLETE = process.argv.includes("--allow-incomplete");
 
 if (!BOOK_SLUG || !/^[a-z0-9][a-z0-9-]*$/.test(BOOK_SLUG)) {
-  console.error("用法：node scripts/pre-publish-gate.mjs --book <slug> [--skip-visual] [--skip-audit]");
+  console.error("用法：node scripts/pre-publish-gate.mjs --book <slug> [--skip-visual] [--skip-audit] [--allow-incomplete]");
   process.exit(2);
 }
 
@@ -41,7 +43,7 @@ const STEPS = [
     name: "1/5 发布资格（白名单 + 目标书 ledger 全通过）",
     cmd: "node",
     args: ["scripts/mark-book-published.mjs", "--check", "--book", BOOK_SLUG],
-    skip: false,
+    skip: ALLOW_INCOMPLETE,
   },
   {
     name: "2/5 内容审计（实时判定，非 ledger 缓存）",
@@ -93,5 +95,9 @@ if (failed) {
   process.exit(1);
 }
 
-console.log("\n✓✓✓ 发布门禁全部通过，可以部署。");
+if (ALLOW_INCOMPLETE) {
+  console.warn("\n⚠ 发布门禁以 allow-incomplete 模式通过：只发布当前已存在且通过质量审计的章节，不标记整书完成。");
+} else {
+  console.log("\n✓✓✓ 发布门禁全部通过，可以部署。");
+}
 process.exit(0);

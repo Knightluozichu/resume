@@ -4,17 +4,21 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 SKIP_BUILD=false
+ALLOW_INCOMPLETE=false
+SKIP_VISUAL=false
 BOOK_SLUG=""
 while (( $# > 0 )); do
   case "$1" in
     --skip-build) SKIP_BUILD=true ;;
+    --allow-incomplete) ALLOW_INCOMPLETE=true ;;
+    --skip-visual) SKIP_VISUAL=true ;;
     --book)
       BOOK_SLUG="${2:-}"
       shift
       [[ -n "$BOOK_SLUG" ]] || { echo "✗ --book 缺少 slug" >&2; exit 2; }
       ;;
     -h|--help)
-      echo "用法：./deploy.sh [--skip-build] --book <book-slug>"
+      echo "用法：./deploy.sh [--skip-build] [--allow-incomplete] [--skip-visual] --book <book-slug>"
       exit 0
       ;;
     *) echo "✗ 未知参数：$1" >&2; exit 2 ;;
@@ -23,6 +27,10 @@ while (( $# > 0 )); do
 done
 [[ -n "$BOOK_SLUG" ]] || { echo "✗ 必须指定 --book" >&2; exit 2; }
 [[ "$BOOK_SLUG" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "✗ 非法 book slug" >&2; exit 2; }
+if [[ "$SKIP_VISUAL" == "true" && "$ALLOW_INCOMPLETE" != "true" ]]; then
+  echo "✗ --skip-visual 只允许与 --allow-incomplete 一起使用" >&2
+  exit 2
+fi
 
 [[ -f local.env ]] || { echo "✗ 缺少 local.env" >&2; exit 1; }
 # shellcheck disable=SC1091
@@ -43,9 +51,20 @@ RELEASE_DIR="${APP_DIR}/releases/${RELEASE_ID}"
 # 在耗时构建和远端切换前跑完整发布门禁（P0 方案 F）：
 #  invariants（白名单/ledger/内容一致）→ audit --check（实时）→ visual（渲染+hash）
 #  → tsc → internal-links。任一失败即停，杜绝“状态过期越狱”。
-node scripts/pre-publish-gate.mjs --book "$BOOK_SLUG"
-# 门禁通过后，再把书标记为可发布（check 模式验证 ledger 已更新到 passed）
-node scripts/mark-book-published.mjs --check --book "$BOOK_SLUG"
+if [[ "$ALLOW_INCOMPLETE" == "true" ]]; then
+  if [[ "$SKIP_VISUAL" == "true" ]]; then
+    echo "⚠ 按用户明确授权，以部分上架模式发布 ${BOOK_SLUG}：本次复用已通过的视觉结果，执行内容/工程/远端检查，不伪造整书 published 状态。"
+  else
+    echo "⚠ 按用户明确授权，以部分上架模式发布 ${BOOK_SLUG}：不跳过内容/视觉/工程检查，不伪造整书 published 状态。"
+  fi
+  GATE_ARGS=(--book "$BOOK_SLUG" --allow-incomplete)
+  [[ "$SKIP_VISUAL" == "true" ]] && GATE_ARGS+=(--skip-visual)
+  node scripts/pre-publish-gate.mjs "${GATE_ARGS[@]}"
+else
+  node scripts/pre-publish-gate.mjs --book "$BOOK_SLUG"
+  # 门禁通过后，再把书标记为可发布（check 模式验证 ledger 已更新到 passed）
+  node scripts/mark-book-published.mjs --check --book "$BOOK_SLUG"
+fi
 
 SMOKE_PATHS=("/")
 while IFS= read -r smoke_path; do
@@ -194,7 +213,11 @@ ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
     fi
   done
 "
-node scripts/mark-book-published.mjs --book "$BOOK_SLUG" --release "$RELEASE_ID" --commit "$COMMIT_SHA"
+if [[ "$ALLOW_INCOMPLETE" == "true" ]]; then
+  echo "⚠ 部分上架完成：保留 publication ledger 的 passed 状态，等待剩余章节完成后再标记整书 published。"
+else
+  node scripts/mark-book-published.mjs --book "$BOOK_SLUG" --release "$RELEASE_ID" --commit "$COMMIT_SHA"
+fi
 RELEASE_SUCCESS=true
 trap - EXIT
 echo "✓ 发布成功：book=${BOOK_SLUG} commit=${COMMIT_SHA} release=${RELEASE_ID} url=${PUBLIC_URL}"
