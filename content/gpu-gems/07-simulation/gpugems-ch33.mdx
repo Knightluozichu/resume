@@ -1,255 +1,201 @@
 ---
-title: "Chapter 33: Simulation and Numerical Algorithms"
+title: "GPU Gems 1 · Chapter 33. Converting Production RenderMan Shaders to Real-Time"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part V · Performance and Practicalities"
 order: 33
-description: "GPU Gems Part: Simulation and Numerical Algorithms, Chapter 33"
+description: "以 Stuart Little 毛发 shader 为例，把 RenderMan 的隐式光源与表面计算映射到 Cg 的 vertex/fragment 程序，再用频率分工、纹理查表、向量化和误差证据获得实时近似。"
 demo: true
 math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-33-converting-production-renderman"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-33
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh33ConversionPipelineDiagram,
+  GpuGemsCh33FrequencySplitDiagram,
+  GpuGemsCh33LightingMappingDiagram,
+  GpuGemsCh33OptimizationEvidenceDiagram,
+  GpuGemsCh33RenderManLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch33-renderman-to-realtime";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 33: Simulation and Numerical Algorithms的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Simulation and Numerical Algorithms, Chapter 33之间的关系是什么？
+- 能把 RenderMan 的光源遍历、表面变量和 shading rate 映射成应用、vertex 与 fragment 三层职责
+- 能解释为什么实时 Cg 需要显式管理光源、为什么多 pass 会随光源数量增加而变贵
+- 能使用 texture lookup、向量化和计算上移等优化，并用画面差异、采样率与指令数检查近似质量
+- 能在质量、硬件 profile、fragment 工作量和 shader 可维护性之间做出可复现的转换取舍
 
 </Objectives>
 
-## 为什么需要Chapter 33: Simulation and Numerical Algorithms
+GPU Gems 1 第 33 章以《Stuart Little》的 RenderMan 毛发 shader 为案例，讨论生产离线 shader 如何转成硬件 shader。重点不是把 RenderMan 语法机械替换为 Cg，而是重新理解 GPU 的执行频率：RenderMan 的 `illuminance` 可以隐式遍历光源，GPU 却需要应用显式提供参数；RenderMan 的一个 surface shader 也常常要拆成 vertex program 与 fragment program 才能在实时预算内运行。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 33: Simulation and Numerical Algorithms作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+<GpuGemsCh33ConversionPipelineDiagram />
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Simulation and Numerical Algorithms, Chapter 33正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Callout type="trap" title="不要把 RenderMan 代码逐行翻译成 fragment program">
+现象：转换后的画面看似正确，实时运行却很慢。原因：几乎所有计算都落在每个 generated fragment 上，没有利用 vertex 数量更少或应用级重用。修法：先标记每个量的变化频率，再把稳定计算上移到 application，把随顶点变化的计算放到 vertex program。
 </Callout>
 
-## 核心概念
-
-### 设计动机
-
-Vulkan 把Chapter 33: Simulation and Numerical Algorithms从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 33: Simulation and Numerical Algorithms涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 33: Simulation and Numerical Algorithms相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 33: Simulation and Numerical Algorithms相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+<Callout type="trap" title="不要假设 Cg 有与 illuminance 完全等价的语句">
+现象：shader 参数写死十个光源，场景多一盏灯就要改源码；或者改成多 pass 后帧时间线性恶化。原因：RenderMan 的光源遍历在 Cg 中没有直接映射，光源集合与累加策略必须由应用管理。修法：明确选择固定数组、应用侧列表或 multipass，并把每光源的重复成本纳入预算。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="不要只用指令数判断优化成功">
+现象：profile 显示 shader 变短，但毛发高曲率区域出现闪烁或查表误差。原因：vertex 到 fragment 的线性插值、输入几何采样率和 LUT 分辨率共同影响近似质量。修法：同步记录 difference image、采样率和真实 frame time，先设定可接受误差再比较速度。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+<Term def="描述表面如何响应光照、包含材质参数和光源交互的生产级 RenderMan shader，在转换中被拆分为硬件可执行阶段">RenderMan surface shader</Term> 是转换的语义基线。原章的 fur shader 里包含毛发切线、表面法线、根部到尖部参数、漫反射和高光等数据；转换前先问“这个值由谁、多久变化一次”，再决定它落在哪个 GPU 阶段。
 
-## 性能考量
+## 1. 从生产 shader 到硬件 profile 的转换边界
 
-### 批量操作
+离线渲染语言可以接受每帧数小时的计算时间，以换取复杂光照和材质表达；实时预览的价值则是尽快看到增量变化。Cg 是原章使用的硬件 shading language，编译器可以按不同 hardware profile 生成指令。这里的概念也适用于其他 shader 语言，但具体寄存器、指令数和分支行为必须以目标 profile 为准。
 
-Vulkan 鼓励批量提交而非逐个提交：
+<GpuGemsCh33ConversionPipelineDiagram />
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+转换时至少要保留三份证据：原始 RenderMan 图像作为视觉基线，Cg 初始转换作为语义基线，优化后图像和差异图作为取舍记录。这样才能区分“代码改错了”和“为了实时预算主动接受了近似”。
 
-### 避免 CPU-GPU 同步点
+## 2. Lights：把隐式 illuminance 变成应用协议
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+<Term def="在 RenderMan surface shader 中遍历满足空间和角度条件的场景光源，并让表面计算读取当前光源贡献的语句">illuminance</Term> 会在 shading point 处迭代符合条件的光源，表面 shader 可以读取光色、方向，甚至通过消息传递取得额外信息。Cg 没有直接等价的语句，因此不能只把 `illuminance(P, N, width)` 改成一个函数调用就结束。
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+最直接的 Cg 映射是固定长度参数，例如 `lightDir[10]`；它可以在循环中累加，但超过十盏灯就要改 shader。另一条路径是 multipass：每个 pass 只绑定当前光源，把结果加到 framebuffer。它把光源数量管理移到应用，却会重复运行 vertex 与 fragment 计算；光源越多、shader 越复杂，成本越明显。
+
+<GpuGemsCh33LightingMappingDiagram />
+
+复杂 light source shader 还需要一套稳定参数协议。原章通过预处理宏把 uber light 的参数声明和调用列表集中起来，让入口签名可读，并把当前光源参数显式传入。RenderMan 中的 message passing 在这个模型里由当前 pass 的参数绑定替代：不要依赖隐式消息，要让应用知道每个值来自哪里。
+
+## 3. Vertex program 与 fragment program：同一语义的不同频率
+
+<Term def="在 GPU 上按输入顶点执行、负责变换并准备可插值 varying 数据的程序阶段">vertex program</Term> 的工作单位是顶点。它可以计算依赖顶点位置的 light direction、eye direction，也可以把 hair tangent、hair parameter、surface normal 等数据直接传给下一个阶段。
+
+<Term def="在 GPU 上按生成的 fragment 执行、负责纹理操作和最终颜色计算的程序阶段">fragment program</Term> 的工作单位接近最终像素，通常会执行更多毛发高光和纹理运算，而且会覆盖可见与不可见的 generated fragments。RenderMan 中由 `ShadingRate` 表达的采样概念，不能简单等同为 GPU 的 vertex/fragment 频率；硬件会在 rasterization 阶段对 varying 做线性插值，输入几何采样率因此直接影响画质。
+
+<GpuGemsCh33FrequencySplitDiagram />
+
+可以用下面的标注方式开始拆分：
+
+```text
+application: hairNorm 不随 view 或 light 改变
+vertex:     L、V 随 vertex position 改变，但沿一段曲线变化较慢
+fragment:   最终颜色、纹理采样和真正随 fragment 改变的高光
 ```
 
-### 内存对齐
+如果把 dot product 从 fragment 移到 vertex，就必须接受 rasterizer 的 <Term def="vertex 输出经过 rasterizer 线性插值后，与真实 fragment 计算之间产生的近似误差">interpolation error</Term>。曲率高或采样稀疏的区域更容易出现误差，因此“上移”不是无条件优化，而是带着采样率约束的近似。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+## 4. 优化一：把稳定计算移到 application 或 vertex
 
-## 验证层检查
+原始 fur fragment program 中，有一段由法线和切线构造 `hairNorm` 的代码不依赖 view 或 light。它可以在 application level 预先计算，再作为新 attribute 传给 vertex program。另一组 `dot(T, L)` 和 `dot(T, V)` 依赖光源和视点，不能放到 application，但如果一段曲线内变化缓慢，可以放到 vertex，再交给 rasterizer 插值。
 
-启用验证层后，Chapter 33: Simulation and Numerical Algorithms相关的常见错误会被捕获：
+```c
+// application or vertex stage
+float3 S = cross(nSN, T);
+float3 N_hair = cross(T, S);
+float l = saturate(dot(nSN, T));
+float3 hairNorm = normalize((l * nSN) + ((1.0 - l) * N_hair));
 
+// fragment stage keeps only values that truly vary per fragment
+float T_Dot_nL = saturate(dot(T, L));
+float T_Dot_nV = saturate(dot(T, V));
 ```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
+
+移动前后要同时核对数据接口：vertex 输出寄存器必须提供 fragment 需要的 varying，属性的坐标空间要一致，曲线采样率要足以支撑插值。少一个输入或错误地混用 world/object space，都会把性能优化变成画面错误。
+
+## 5. 优化二：用 texture lookup 近似复杂函数
+
+<Term def="用 1D、2D 或 3D 纹理保存复杂函数的采样结果，在 shader 中以输入变量索引近似原始数学计算的优化方法">texture lookup</Term> 适合重复计算、输入维度明确且可接受近似的函数。Kajiya-Kay 毛发模型中的项可以由两个 dot product 作为坐标，预先生成二维浮点纹理；fragment program 用 lookup 替代 `acos`、`sin` 等完整计算。
+
+查表不是免费魔法：要决定纹理空间是否归一化、尺寸是否足够、采样是否带来 banding，并用一个简单的差异程序把“完整函数”和“纹理结果”显示成颜色。LUT 分辨率应由误差实验确定，不应只凭纹理看起来够大。
+
+<GpuGemsCh33OptimizationEvidenceDiagram />
+
+## 6. 优化三：利用向量化和 profile 约束
+
+GPU 常以向量宽度执行算术。原章把两个类似的 power 结果组织成向量，再与 spec 分量并行相乘，帮助编译器识别可向量化的工作。纹理查表也要考虑目标 profile 的纹理类型、坐标方式和寄存器限制；Cg 的硬件无关源代码最终仍会被 profile 约束。
+
+```c
+// scalar-like organization
+float3 Cspec = (spec.x * lightColor * pow(Kajiya, rough.x))
+             + (spec.y * lightColor * pow(Kajiya, rough.y));
+
+// vector-friendly organization
+float2 powVal = spec * pow(Kajiya, rough);
+float3 Cspec = lightColor * powVal.x + lightColor * powVal.y;
 ```
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+分支也要谨慎：原章指出目标硬件可能同时计算条件两侧，条件语句不一定减少成本。优化目标通常是更短的 fragment program，但必须以 profile 输出和实际 frame time 为证据，而不是把“源码更漂亮”当作性能结论。
 
-## 本章要点
+<GpuGemsCh33RenderManLab />
 
-1. Chapter 33: Simulation and Numerical Algorithms是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 7. 质量—性能取舍：近似要有可回归的边界
+
+原章记录了一个清晰的经验：初始 fragment shader 虽然容易转换，却因为没有考虑 GPU 架构而运行缓慢；通过把计算移出 fragment、查表和向量化，示例指令规模从 104 降到 42，画面差异在实践中很小。但生产级角色可能有数百万根毛发，即使优化后的 fragment shader 仍然太慢，最后需要更激进的 vertex-program fur shader，并接受更明显的近似。
+
+因此发布级转换应保存以下回归表：
+
+- 语义：高光、颜色变化和重要轮廓是否出现在正确位置
+- 质量：差异图、几何采样率、LUT 分辨率与高曲率区域误差
+- 成本：vertex/fragment 指令、纹理读取、光源 pass 数和实际 frame time
+- 可维护性：RenderMan 原逻辑改变后，优化后的硬件 shader 是否仍能定位对应语义
+
+最终实现可能已经不像原始 RenderMan 文件，但它仍应能回答“哪一段生产逻辑被移动、近似或删除”。否则下一次艺术修改会无法安全回流。
+
+## 小结
+
+- RenderMan 的 `illuminance`、消息和 shading rate 在 GPU 上没有逐项等价物，转换需要应用显式管理光源和数据。
+- vertex program 按顶点准备可插值数据，fragment program 按 generated fragment 计算最终颜色，稳定计算还可以上移到 application。
+- vertex 到 fragment 的线性插值会引入与采样率、曲率相关的误差；频率优化必须同时检查画质。
+- texture lookup 能近似复杂函数，向量化能帮助 GPU 利用宽算术，但二者都要受目标 hardware profile 约束。
+- 指令数、差异图、光源数量、LUT 误差和 frame time 应共同组成优化证据；实时版本是可解释、可回归的近似，而不是盲目追求更短代码。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 33: Simulation and Numerical Algorithms涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜光源映射**　RenderMan 的 `illuminance` 可以遍历场景光源，而 Cg 没有直接等价语句。请比较固定数组和 multipass 两种转换方案，并说明各自的代价。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+固定数组把光源参数写进 shader，例如 `lightDir[10]`，可以一次循环累加，但数量上限写死，超过上限就要修改并重新编译。Multipass 每次只绑定当前光源并把贡献加到 framebuffer，应用管理数量更灵活，但会重复运行 vertex/fragment 程序；光源越多或 shader 越复杂，重复成本越高。两种方案都必须显式定义参数绑定和累加策略。
 </Answer>
 
+**问题 2｜频率分工**　下列三类计算应如何放置：不随 view/light 改变的 `hairNorm`、随光源和顶点位置变化的 `dot(T, L)`、每个 fragment 的最终高光纹理组合？请说明把第二类移到 vertex 的风险。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`hairNorm` 可以放到 application 或至少放到 vertex；`dot(T, L)` 适合放到 vertex 后作为 varying 传递；最终高光和纹理组合保留在 fragment。第二类移到 vertex 后会被 rasterizer 线性插值，曲率高或输入几何采样率低的区域会产生较大的近似误差，因此需要提高采样率或用差异图验证。
+</Answer>
+
+**问题 3｜查表优化**　一个二维毛发函数由 `T_Dot_nL` 和 `T_Dot_e` 决定。如何判断使用 2D texture lookup 是否值得？至少列出两个性能指标和两个质量指标。
+
+<Answer>
+
+先生成代表函数的 2D 纹理，用对照程序比较完整数学计算和查表结果，再确认目标 profile 支持所需纹理和坐标方式。性能指标可以是 fragment 指令数、texture fetch 数和实际 frame time；质量指标可以是 difference image 的最大/平均误差、高曲率区域误差、LUT 分辨率造成的 banding，以及重要高光位置是否保持一致。只有误差在可接受范围且 frame time 真正下降，查表才值得保留。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="RenderMan surface shader">描述表面响应光照的生产级 shader，转换时需要拆分到硬件执行阶段。</GlossaryItem>
+<GlossaryItem term="illuminance">RenderMan 中遍历满足条件的场景光源并读取其贡献的语句。</GlossaryItem>
+<GlossaryItem term="vertex program">按顶点执行、准备变换结果和可插值 varying 数据的 GPU 程序阶段。</GlossaryItem>
+<GlossaryItem term="fragment program">按 generated fragment 执行并计算最终颜色或深度的 GPU 程序阶段。</GlossaryItem>
+<GlossaryItem term="texture lookup">用纹理采样结果近似原始复杂函数的 shader 优化方法。</GlossaryItem>
+<GlossaryItem term="interpolation error">vertex 输出经过 rasterizer 线性插值后，与真实 fragment 计算之间产生的近似误差。</GlossaryItem>
 </Glossary>
 
 <Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 33 章整理重写，
-代码示例为教学简化版本。
+
+本章为基于 GPU Gems 1 Chapter 33 “Converting Production RenderMan Shaders to Real-Time”的独立重写，保留 Stuart Little 毛发案例、RenderMan illuminance、光源参数、多 pass、vertex/fragment 频率、插值、texture lookup、向量化、hardware profile 和 质量—性能结果等核心线索，并将历史 Cg 示例整理为可验证的实时转换路径。原始章节：[NVIDIA GPU Gems Chapter 33](https://developer.nvidia.com/gpugems/gpugems/part-v-performance-and-practicalities/chapter-33-converting-production-renderman)
+
 </Attribution>

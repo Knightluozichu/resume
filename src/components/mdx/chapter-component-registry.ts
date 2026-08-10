@@ -13166,6 +13166,21 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       GpuGemsCh32ShaderInterfaceLab: module0.GpuGemsCh32ShaderInterfaceLab,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/07-simulation/gpugems-ch33": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems-ch33-renderman-to-realtime");
+    return {
+      GpuGemsCh33ConversionPipelineDiagram:
+        module0.GpuGemsCh33ConversionPipelineDiagram,
+      GpuGemsCh33FrequencySplitDiagram:
+        module0.GpuGemsCh33FrequencySplitDiagram,
+      GpuGemsCh33LightingMappingDiagram:
+        module0.GpuGemsCh33LightingMappingDiagram,
+      GpuGemsCh33OptimizationEvidenceDiagram:
+        module0.GpuGemsCh33OptimizationEvidenceDiagram,
+      GpuGemsCh33RenderManLab: module0.GpuGemsCh33RenderManLab,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");

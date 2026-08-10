@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T07:13:22.457Z；旧版分数不迁移。
+> 2026-08-10T07:22:28.930Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2208
+- failed：2207
 - queued：344
-- passed：1151
+- passed：1152
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -84,19 +84,19 @@
 | 71 | multiplayer-game-programming | 16 | 16 | 0 | 0 | 48 |
 | 72 | python-advanced | 16 | 16 | 0 | 0 | 48 |
 | 73 | unity-core-tech | 16 | 16 | 0 | 0 | 48 |
-| 74 | gpu-gems | 48 | 16 | 0 | 32 | 32 |
-| 75 | large-language-models | 16 | 16 | 0 | 0 | 16 |
-| 76 | csapp | 15 | 15 | 0 | 0 | 74 |
-| 77 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
-| 78 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
-| 79 | modern-os | 15 | 15 | 0 | 0 | 57 |
-| 80 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
-| 81 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
-| 82 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
-| 83 | rust-way | 15 | 15 | 0 | 0 | 45 |
-| 84 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
-| 85 | ddia | 15 | 15 | 0 | 0 | 44 |
-| 86 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 74 | large-language-models | 16 | 16 | 0 | 0 | 16 |
+| 75 | csapp | 15 | 15 | 0 | 0 | 74 |
+| 76 | how-programs-work | 15 | 15 | 0 | 0 | 60 |
+| 77 | make-it-stick | 15 | 15 | 0 | 0 | 60 |
+| 78 | modern-os | 15 | 15 | 0 | 0 | 57 |
+| 79 | game-server-architecture | 15 | 15 | 0 | 0 | 45 |
+| 80 | profiling-unity-games | 15 | 15 | 0 | 0 | 45 |
+| 81 | programming-pearls | 15 | 15 | 0 | 0 | 45 |
+| 82 | rust-way | 15 | 15 | 0 | 0 | 45 |
+| 83 | unity-scripting-game-dev | 15 | 15 | 0 | 0 | 45 |
+| 84 | ddia | 15 | 15 | 0 | 0 | 44 |
+| 85 | microservices-patterns | 15 | 15 | 0 | 0 | 32 |
+| 86 | gpu-gems | 48 | 15 | 0 | 33 | 30 |
 | 87 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
 | 88 | effective-executive | 14 | 14 | 0 | 0 | 56 |
 | 89 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
