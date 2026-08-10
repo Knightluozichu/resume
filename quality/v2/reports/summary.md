@@ -1,18 +1,18 @@
 # 全书库质量 v2 基线
 
-> 2026-08-10T02:50:50.742Z；旧版分数不迁移。
+> 2026-08-10T03:00:58.804Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4496
-- failed：2234
+- failed：2233
 - queued：344
-- passed：1125
+- passed：1126
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
 |---:|---|---:|---:|---:|---:|---:|
 | 1 | you-dont-know-js | 42 | 42 | 0 | 0 | 126 |
-| 2 | gpu-gems | 48 | 42 | 0 | 6 | 84 |
+| 2 | gpu-gems | 48 | 41 | 0 | 7 | 82 |
 | 3 | introduction-to-algorithms | 39 | 39 | 0 | 0 | 117 |
 | 4 | unix-network-programming-vol1 | 38 | 38 | 0 | 0 | 114 |
 | 5 | lua-programming | 35 | 35 | 0 | 0 | 105 |

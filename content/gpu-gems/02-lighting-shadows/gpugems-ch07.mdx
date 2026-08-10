@@ -1,255 +1,206 @@
 ---
-title: "Chapter 7: Lighting and Shadows"
+title: "GPU Gems 1 · Chapter 7. Rendering Countless Blades of Waving Grass"
 type: B
-section: "计算机图形学与渲染"
+section: "GPU Gems Part I · Natural Effects"
 order: 7
-description: "GPU Gems Part: Lighting and Shadows, Chapter 7"
+description: "从透明草纹理、相交草丛对象和顶点着色器风场出发，在少量多边形与自然摆动之间取得平衡。"
 demo: true
-math: false
-sourceUrl: "https://developer.nvidia.com/gpugems"
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-7-rendering-countless-blades-waving-grass"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v1-07
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  GpuGemsCh07AnimationStrategyDiagram,
+  GpuGemsCh07GrassObjectDiagram,
+  GpuGemsCh07VertexWindDiagram,
+  GpuGemsCh07WavingGrassLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems-ch07-waving-grass";
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释Chapter 7: Lighting and Shadows的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：GPU Gems Part: Lighting and Shadows, Chapter 7之间的关系是什么？
+- 能解释如何用少量多边形覆盖大面积草地，并说明交叉草丛为什么不怕视线变化
+- 能实现只移动草叶上部的风动画，并比较按簇、按顶点和按对象三种方法的代价
+- 能修改实验中的风强度、局部相位和密度，观察自然感与 draw call / shader 成本的取舍
+- 能回答：为什么按 grass object 的中心位置计算动画，常常是本章三种方法的折中解？
 
 </Objectives>
 
-## 为什么需要Chapter 7: Lighting and Shadows
+<Callout type="trap" title="陷阱一：每一根草都建成独立模型">
+**现象 →** 草地面积一大，三角形数和提交次数迅速增长，远处的草还没有被看清，GPU 已经先被压满。
 
-GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics将Chapter 7: Lighting and Shadows作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+**原因 →** 逐根建模把不可见的几何细节也交给了光栅化；大草地需要的是密度错觉，不是每根草的独立拓扑。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
-
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
-
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
-
-GPU Gems Part: Lighting and Shadows, Chapter 7正是这一哲学在特定领域的具体体现。
-
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+**修法 →** 把多根草叶画进透明纹理，再用少量相交四边形重复铺开；把预算留给轮廓、混合和风动画。
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="陷阱二：只放一张竖直草片">
+**现象 →** 正面看像草地，绕到侧面却只剩一条薄线，玩家移动镜头时立刻看出贴片结构。
 
-### 设计动机
+**原因 →** 单一平面的法线和轮廓都绑定在一个方向，视线一变，透明纹理无法继续伪装体积。
 
-Vulkan 把Chapter 7: Lighting and Shadows从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
-
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Chapter 7: Lighting and Shadows涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Chapter 7: Lighting and Shadows相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Chapter 7: Lighting and Shadows相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
+**修法 →** 让三张 quad 以不同角度相交，并关闭 back-face culling；远距离再用淡入淡出隐藏草丛的增删。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="陷阱三：所有草簇共享同一个风向和相位">
+**现象 →** 整片草像一块同步摆动的布，边界处出现规律波纹，画面虽便宜却很假。
+
+**原因 →** 同一平移向量被复制给邻近草簇，没有局部变化；按顶点乱加噪声又可能拉伸纹理。
+
+**修法 →** 让每个 grass object 用自己的中心位置产生相位，并用固定种子的变化保持连续；需要更复杂风场时再增加 CPU 计算。
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 直觉引入：草地的“多”来自重复，不来自建模
 
-## 性能考量
+想象一张印着许多草叶的半透明卡片。把它竖在地上只能骗过一个方向；把几张卡片交叉起来，从不同方向看仍然有厚度，再把这样的草丛密密铺在地面上，就能得到一片开阔的草地。
 
-### 批量操作
+本章解决的是两个同时存在的问题：草必须看起来足够密，还要随着风摆动。如果直接为每根草建模，面积一大就无法实时；如果所有草同步摇摆，面积再大也像一张布。我们要把几何数量、视线稳定性和局部变化分开处理。
 
-Vulkan 鼓励批量提交而非逐个提交：
+## 1. 先把很多草叶压进一张纹理
 
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
+本章的第一个压缩动作是把许多草叶打包成一张 <Term def="包含多根草叶颜色与透明轮廓的二维图像">grass texture</Term>。颜色通道用几种绿色和黄色区分年龄、状态与朝向；透明通道只保留草叶形状，尽量不要留出巨大的空白方块。
 
-### 避免 CPU-GPU 同步点
+这不是把草地变成一张平面图片。纹理只负责提供“这里有很多细草叶”的局部线索，实际的厚度和视线稳定性由下一层几何结构完成。不同状态的草叶也可以共用同一张图，从而让重复不那么明显。
 
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+## 2. 用相交 quad 组成不怕转身的草丛
 
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
+把几张贴有草纹理的四边形穿过同一个中心，得到一个 <Term def="由多张相交四边形组成、从多种视线都像一团草的几何单元">grass object</Term>。三张互相穿插的 quad 通常已经足够；它们不要排成一条线，否则从垂直方向看仍会变薄。
+
+因为这些面要从正反两面都能看到，需要关闭 <Term def="决定是否丢弃背向摄像机三角形的光栅化开关">back-face culling</Term>。为了让坡地上的草丛不随着地形明暗跳变，顶点法线可以统一沿着四边形的竖直方向，而不是直接复制地面的法线。
+
+<GpuGemsCh07GrassObjectDiagram />
+
+铺开许多 grass object 后，渲染顺序要结合深度测试、深度写入与透明混合一起检查。远处对象可以淡入淡出，而不是在某一帧突然生成或消失；这让地平线上的草地更稳定，也把对象管理从“有没有”变成“以什么透明度出现”。
+
+## 3. alpha blending 让透明草叶保持层次
+
+草叶纹理包含透明区域，因此需要 <Term def="按源 alpha 在草叶颜色与背景之间插值的透明混合方式">alpha blending</Term>。它让草叶边缘能够和地面、其他草丛渐变融合，但也带来排序和过度绘制成本：后画的透明面会继续改写前面的颜色，顺序不当就会出现边缘发黑或层次错乱。
+
+不要把“关闭深度写入”理解成“关闭深度测试”。深度测试仍然可以帮助遮挡被前方草丛挡住的片元；是否写深度则取决于你的透明排序策略。远处密集草地常常需要在视觉稳定和准确排序之间取一个可测量的折中。
+
+## 4. 顶点着色器只移动叶尖
+
+风动画的共同骨架是：根部固定，顶部受风，位移同时由时间、风向、风强度和一个位置相关的相位决定。<Term def="在顶点阶段读取位置与纹理坐标并计算新顶点位置的 GPU 程序">vertex shader</Term> 可以用草叶纹理坐标的 `v` 值区分上下：底部 `v` 接近 0，顶部 `v` 接近 1。
+
+一个最小的 WebGL2 风动画片段如下。这里的 `topMask` 让位移从根部的 0 平滑增长到叶尖的 1；如果整张 quad 都平移，草丛会像硬纸片被搬走，而不是弯曲。
+
+```glsl
+float topMask = smoothstep(0.72, 1.0, aTexCoord.y);
+float phase = dot(aObjectCenter.xz, windDirection) + time;
+float wave = sin(phase) * windStrength;
+vec3 offset = vec3(windDirection.x, 0.0, windDirection.y);
+position.xyz += offset * wave * topMask;
 ```
 
-### 内存对齐
+这个片段只负责“哪一部分动”和“动多少”，并没有决定局部变化的粒度。粒度由下一节的三种策略决定；这正是同一套 vertex shader 框架可以复用、而动画部分可以替换的地方。
 
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
+<GpuGemsCh07VertexWindDiagram />
 
-## 验证层检查
+## 5. 三种风动画策略：从 CPU 控制到局部折中
 
-启用验证层后，Chapter 7: Lighting and Shadows相关的常见错误会被捕获：
+### 5.1 按簇动画：画面稳定，提交次数高
 
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
+<Term def="让一组相邻草丛共享 CPU 计算出的平移向量的风动画方法">cluster animation</Term> 在 CPU 上根据簇中心计算平移向量，再把它作为常量传给 shader。它可以容纳很复杂的风场，草叶边长不会因为逐顶点移动而改变；代价是每个簇都要更新常量并发起 draw call，簇太大时还会暴露整齐的同步摆动。
 
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
+### 5.2 按顶点动画：提交少，可能产生拉伸
 
-## 本章要点
+<Term def="让每个顶点依据自己的位置、时间和风向独立计算位移的风动画方法">per-vertex animation</Term> 把计算移进 vertex shader，因此一大片草地甚至可以一次提交。它能形成连续的风波，也不容易看出簇边界；但是相邻顶点位移不同会改变 quad 上边缘的长度和厚度，近景可能出现纹理拉伸。用位置相关的伪随机相位可以减少“整片同频”，但不能消除形变成本。
 
-1. Chapter 7: Lighting and Shadows是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+### 5.3 按对象中心动画：少量提交与局部变化的折中
+
+<Term def="让同一草丛的顶点共享中心位置、而相邻草丛使用不同相位的风动画方法">object-centered animation</Term> 把每个 grass object 的中心位置放进顶点属性。shader 以中心位置而不是单个顶点计算位移，所以同一草丛内部保持几何稳定；相邻草丛又因为中心不同而拥有不同风相位。
+
+它需要额外的顶点数据，并且为了保持实时性能，风函数不能无限复杂，但通常能同时满足少量 draw call、局部混沌和不明显拉伸三个目标。这就是本章推荐的默认起点。
+
+<GpuGemsCh07AnimationStrategyDiagram />
+
+三种方法并不是互斥的渲染模式：近处可以用按对象动画保持轮廓，远处可以降低密度或减少簇数量；若 CPU 有足够预算，也可以只对关键区域启用更复杂的簇风场。真正的验收指标应当同时包括 draw call、vertex shader 时间、纹理边缘稳定性和镜头转动时的重复感。
+
+## 6. 用可重放的变化打破同步感
+
+局部变化不等于每个参数都随机。对每个草丛固定一个种子或由中心位置推导相位，能保证同一镜头在调试时可复现。相位可以写成：
+
+$$
+\phi_i = \operatorname{dot}(c_i, d) + t + r_i,
+$$
+
+这个式子在说：第 `i` 个草丛的风相位由中心位置 `c_i`、风向 `d`、当前时间 `t` 和一个稳定的小变化 `r_i` 共同决定。相邻草丛因此不会完全同相，但每次运行仍能重现。
+
+还要控制变化尺度。太大的相位差会让草地像许多独立机关，太小则会恢复成同步波。先在实验中把风强度、方向、时间和密度分开调，再根据远景、近景和镜头转身三个视角设定范围。
+
+猜一猜：把“同步簇误区”打开，草地为什么会立刻变得像布？再把策略切换到 `object`，风强度保持不变，哪些相邻草丛开始拥有不同的相位？
+
+<GpuGemsCh07WavingGrassLab />
+
+实验把错误模式保留下来，是为了让“局部变化”成为可观察的现象，而不是一句抽象建议。按簇模式的同步范围较大，按顶点模式的每根草变化最大，按对象模式则以草丛为单位共享位移。
+
+## 7. 性能预算：先问提交、顶点还是片元
+
+草地优化不能只看三角形数量。透明纹理会带来过度绘制，密集 grass object 会带来排序和片元混合，按顶点动画会增加 shader 算术，而按簇动画会增加 draw call。四个因素可能在不同镜头下轮流成为瓶颈。
+
+建议记录四组数据：每帧草丛的 draw call 数、vertex shader 时间、透明片元数量，以及不同距离下的淡入淡出切换次数。若远景草叶只占几个像素，继续增加纹理细节不会改善观感；若近景出现边缘拉伸，应优先调整动画策略或 quad 结构，而不是盲目增加草叶数量。
+
+## 小结：让密度、视线和风各自承担一部分真实感
+
+- 透明 grass texture 用很少的几何提供草叶密度。
+- 相交 grass object 让草丛从多个视线保持厚度。
+- vertex shader 只移动顶部，根部固定才能像弯曲而非搬运。
+- cluster、per-vertex、object-centered 分别交换 CPU、形变和额外数据。
+- 固定相位、深度策略和性能测量共同决定最终自然感。
 
 <Exercises>
 
-<Answer>
-练习 1：画出Chapter 7: Lighting and Shadows涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1｜改 Demo 代码**　将实验策略依次设为 `cluster`、`vertex`、`object`，保持风强度与密度不变。记录每种策略的同步范围、叶片形变和你认为应关注的成本。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+
+`cluster` 的草丛会成组同步，形状稳定但 draw call 可能更多；`vertex` 的相邻顶点变化最大，风波连续但可能拉伸纹理；`object` 让同一草丛稳定、相邻草丛有不同相位，通常是三者的折中。实际工程还应记录提交次数和 vertex shader 时间。
 </Answer>
 
+**问题 2｜推导题**　若草丛中心为 `c=(2,1)`、风向为 `d=(0.5,0.25)`、时间为 `t=3`、稳定变化为 `r=0.2`，用 `φ=dot(c,d)+t+r` 算出相位，并说明把 `r` 固定下来有什么好处。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+
+`dot(c,d)=2×0.5+1×0.25=1.25`，所以 `φ=1.25+3+0.2=4.45`。固定 `r` 能让同一草丛在相同输入下保持相同风相位，截图、回归测试和性能比较都可以复现。
+</Answer>
+
+**问题 3｜独立实现题**　实现一个三张相交 quad 的草丛，并在移动镜头时比较开启和关闭 back-face culling 的结果。除了截图，你会记录哪些指标来决定是否采用这种结构？
+
+<Answer>
+
+至少记录不同视角下的可见面积、透明片元数量、草丛边缘是否暴露、深度排序错误和 GPU 帧时间。若关闭剔除后两面都稳定可见，但透明片元成本过高，可以在远处降低密度或使用更小的草纹理区域。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+<GlossaryItem term="grass texture">一张带透明边缘的草叶图片；它把许多小草的颜色和轮廓打包在一起。</GlossaryItem>
+<GlossaryItem term="grass object">几张相交的草叶四边形；从不同方向看都像一小团有厚度的草。</GlossaryItem>
+<GlossaryItem term="back-face culling">GPU 丢弃背向摄像机三角形的开关；草片需要两面可见时通常要关闭它。</GlossaryItem>
+<GlossaryItem term="alpha blending">用透明度把草叶颜色和背景混合的方式；它自然但需要留意顺序和过度绘制。</GlossaryItem>
+<GlossaryItem term="vertex shader">在 GPU 上逐个处理顶点的小程序；本章用它移动草叶顶部。</GlossaryItem>
+<GlossaryItem term="cluster animation">让一组草丛共享一个 CPU 风位移的方法；控制力强，但提交次数较多。</GlossaryItem>
+<GlossaryItem term="per-vertex animation">每个顶点根据自身位置计算风位移的方法；提交少，但可能拉伸草纹理。</GlossaryItem>
+<GlossaryItem term="object-centered animation">让同一草丛共享中心位置、相邻草丛拥有不同相位的方法；它是本章推荐的折中方案。</GlossaryItem>
 </Glossary>
 
-<Attribution>
-内容基于《GPU Gems: Programming Techniques, Tips, and Tricks for Real-Time Graphics》（https://developer.nvidia.com/gpugems）第 7 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text"
+  workTitle="GPU Gems 1 · Chapter 7. Rendering Countless Blades of Waving Grass"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-7-rendering-countless-blades-waving-grass"
+/>
