@@ -3,56 +3,152 @@ title: "Chapter 16 · Amortized Analysis"
 type: C
 section: "CLRS4 · 高级设计与分析"
 order: 16
-description: "按CLRS第四版第16章重建聚合分析、核算法、势能法和动态表，区分摊还界与概率平均。"
+description: "按 CLRS 第四版第 16 章重建聚合分析、核算法、势能法和动态表，区分摊还界与概率平均。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-16
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter16AmortizedAnalysisLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch16-amortized-analysis";
 
-## 从“一次昂贵扩容是否意味着每次都很慢”开始
+<Objectives>
 
-先预测：动态数组第9次插入可能复制8个旧元素再写入新元素，实际成本为9。能否据此断言每次INSERT都要$O(n)$？不能。前8次插入中只有容量边界触发复制；昂贵操作之间积累了足够多便宜操作。
+- 能对任意操作序列用聚合分析给出总成本上界，并区分摊还成本与单次实际成本。
+- 能用核算法或势能法定义 credit、状态势能和 prefix 不变量，证明预付工作不会被重复消费。
+- 能分析动态表的倍增与滞回缩容，解释为什么摊还界是确定性序列保证而不是概率平均。
 
-研究sequence cost。它允许某次operation很贵，但要求所有长度$n$的合法序列总成本都受控。若总成本$T(n)=O(n)$，则每次amortized cost为$O(1)$，这不是说每次actual cost都为常数。
+</Objectives>
 
+## 先问：一次昂贵扩容是否意味着每次都很慢？
 
-## 16.1 Aggregate analysis
+动态数组第 9 次插入可能复制 8 个旧元素再写入新元素，实际成本为 9。先预测：能否据此断言每次 INSERT 都要线性成本？不能。扩容只发生在容量边界，之前的便宜插入为这次复制积累了足够的总预算。
+
+再预测：摊还成本是不是把昂贵操作“平均随机化”了？也不是。摊还分析对每一条合法操作序列给出确定性总上界，即使序列专门结束在一次昂贵 carry 或 resize 上也成立。推进下面的实验，观察 aggregate、accounting、potential 和 dynamic tables 如何共享同一条证据链。
+
+<Clrs4Chapter16AmortizedAnalysisLab />
+
+## 权威目录定位
+
+本章对应 CLRS 第四版第 16 章，官方概念包括：
+
+- amortized analysis / 摊还分析；
+- aggregate analysis / 聚合分析；
+- accounting method / 核算法；
+- potential method / 势能法；
+- dynamic tables / 动态表。
+
+正文是独立教学重构：先用栈和二进制计数器建立总成本直觉，再把支付能力写成逐对象 credit 或状态势能，最后用动态表展示倍增和滞回如何避免 thrashing。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：单次最坏成本就是摊还成本">
+
+现象：一次 MULTIPOP 弹出很多项，或一次扩容复制很多元素，于是把每个操作都标为同样昂贵。
+
+原因：摊还分析的对象是整段操作序列；昂贵操作消耗此前便宜操作积累的结构，不能只看单次峰值。
+
+修复：先写总实际成本，再按聚合、核算法或势能法证明任意合法序列的总和上界。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：摊还分析就是 average-case 概率分析">
+
+现象：把摊还成本解释成随机输入上的平均时间，或者只在随机 trace 上测量余额。
+
+原因：摊还界不依赖输入分布；它要求对每条合法操作序列成立，包括专门触发 carry 或 resize 的序列。
+
+修复：声明序列量词、actual cost model 和 prefix 不变量，不使用概率假设替代确定性支付证明。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：最终 credit 为正就说明核算法有效">
+
+现象：只检查完整序列结束时余额非负，却允许中间操作先借用尚未收取的未来费用。
+
+原因：若某个 prefix 已经负债，提前停止的序列就没有总成本上界；最终余额无法修复中途的欠债。
+
+修复：证明每个 prefix 的 credit 都非负，并说明每枚 credit 所属对象、创建位置和唯一消费位置。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：容量一半就缩容不会造成抖动">
+
+现象：删除到半满就减半，接着一次插入又扩容，认为两个阈值都很自然。
+
+原因：在边界附近，插入和删除可以交替触发 Θ(n) 次复制，resize 成本不再被足够多的普通操作摊平。
+
+修复：使用 hysteresis，例如满载扩为两倍、低于四分之一才减半，让扩缩容边界之间隔着线性数量的普通操作。
+
+</Callout>
+
+## 核心术语与证据所有权
+
+<Term def="把一段操作序列的总实际成本直接加总并除以操作数，以得到整个序列的平均上界，不依赖操作之间的概率分布。">聚合分析</Term> 先求总账，再得到摊还成本。
+
+<Term def="为操作收取可能高于实际成本的费用，并把差额作为绑定在对象或状态上的 credit 预留给未来工作的方法。">核算法</Term> 必须证明每个 prefix 都不欠债。
+
+<Term def="给每个数据结构状态分配一个非负量，用实际成本加势能变化定义摊还成本的证明方法。">势能法</Term> 将此前储存的工作编码为状态函数。
+
+<Term def="对一段操作序列给出的每次平均支付；它约束总成本，不要求每次实际操作都具有相同常数成本。">摊还成本</Term> 与单次 actual cost 的峰值是不同指标。
+
+<Term def="能按容量扩张和收缩、持续支持插入删除的数组式结构；resize 的复制成本由一段普通操作共同承担。">动态表</Term> 需要倍增和滞回策略避免反复复制。
+
+<Term def="在操作序列任意前缀上都成立的余额、势能或结构约束；它保证证明可以在任何时刻停止。">前缀不变量</Term> 是把局部支付推广到任意序列的边界。
+
+术语核对顺序是：聚合分析先给出总账，核算法把总账拆成对象 credit，势能法把 credit 提升为状态函数，动态表提供 resize 场景，前缀不变量则检查证明没有借用未来。
+
+## amortized analysis / 摊还分析
+
+设一段合法操作序列包含 m 个操作，实际成本为 c₁、c₂、…、cₘ。摊还分析要找到一个确定的上界：
+
+$$
+\sum_{i=1}^{m}c_i\le mK+K_0.
+$$
+
+于是可以把每次摊还成本报告为常数 K，哪怕某一次 actual cost 远大于 K。这里没有“随机平均”的含义：量词是对任意合法操作序列，而不是对某个概率分布取期望。
+
+## aggregate analysis / 聚合分析
 
 ### Stack operations
 
-不区分各操作收费。考虑`PUSH`、`POP`和`MULTIPOP(k)`：单次`MULTIPOP`最坏可弹出$n$项，但每个item在被PUSH后最多POP一次。
-
-
-若序列包含$n$次操作，PUSH数至多$n$，所有POP和MULTIPOP实际弹出的item总数也至多PUSH数。因此：
+考虑 PUSH、POP 和 MULTIPOP(k)。一次 MULTIPOP 最坏可能弹出很多项，但每个 item 在被 PUSH 后最多被 POP 一次。若序列含 m 次操作，PUSH 数至多 m，所有 POP 与 MULTIPOP 实际弹出的 item 总数也至多 PUSH 数：
 
 $$
-T(n)\le n+n=2n,
+T(m)\le m+m=2m,
 \qquad
-\frac{T(n)}{n}\le 2.
+\frac{T(m)}{m}\le 2.
 $$
 
-该界对任何操作排列成立，包括最后一次清空全部元素。不能把每次MULTIPOP的参数$k$直接相加，因为空栈停止条件让许多requested pops没有实际成本。
+该界对任何操作排列成立，包括最后一次清空全部元素。不能把每次 MULTIPOP 请求的 k 直接相加，因为空栈会停止，许多 requested pops 没有实际成本。
 
 ### Incrementing a binary counter
 
-二进制计数器`INCREMENT`把尾部连续1翻成0，再把首个0翻成1。值$2^j-1$之后的一次操作会翻$j+1$位，单次成本并非常数。
+二进制计数器的 INCREMENT 把尾部连续的 1 翻成 0，再把首个 0 翻成 1。值 2ʲ-1 之后的一次操作会翻 j+1 位，所以单次成本可能很大。
 
-
-观察每一bit：最低位每次翻，bit $j$每$2^j$次increment至多翻一次。$n$次操作总flip数满足：
+观察第 j 位：最低位每次翻，bit j 每 2ʲ 次 increment 至多翻一次。m 次操作的总翻转数满足：
 
 $$
-\sum_{j=0}^{\lfloor\lg n\rfloor}
-\left\lfloor\frac{n}{2^j}\right\rfloor
+\sum_{j=0}^{\lfloor\lg m\rfloor}
+\left\lfloor\frac{m}{2^j}\right\rfloor
 \lt
-n\sum_{j=0}^{\infty}\frac{1}{2^j}
-=2n.
+m\sum_{j=0}^{\infty}\frac{1}{2^j}
+=2m.
 $$
 
-所以单次amortized cost小于2。这里没有假设counter value均匀分布；即使序列专门结束在昂贵carry上，总和仍受几何级数控制。
+因此单次摊还成本小于 2。这里没有假设计数器值均匀分布；即使序列专门结束在昂贵 carry 上，总和仍受几何级数控制。
 
-```cpp
+~~~cpp
 int increment(vector<int>& bits) {
     int flips = 0;
     int i = 0;
@@ -64,29 +160,33 @@ int increment(vector<int>& bits) {
     bits[i] = 1;
     return flips + 1;
 }
-```
+~~~
 
-## 16.2 The accounting method
+聚合证明的优点是直接、全局、容易检查；它不一定告诉我们每次操作的支付归属。需要解释“谁为未来工作预付”时，就转向核算法。
 
-### Prepaying future work
+## accounting method / 核算法
 
-像记账：amortized charge减actual cost形成credit。便宜操作预付，未来昂贵操作消费这些余额。
+### 预付未来工作
 
-对stack可向每次PUSH收2：1支付实际push，1枚coin留在该item上。POP收费0并拿走item上的coin支付实际pop。因为item不存在就不能pop，任何sequence prefix都不会欠债。
-
-
-对前$i$次操作，令$\hat c_j$为摊还收费、$c_j$为实际成本、$b_i$为余额：
+像记账一样，为第 i 个操作收取摊还费用 ĉᵢ。差额 ĉᵢ-cᵢ 形成 credit，绑定在对象或状态上，用于未来的昂贵操作。对前 p 次操作，余额是：
 
 $$
-b_i=\sum_{j=1}^{i}(\hat c_j-c_j)\ge 0.
+b_p=\sum_{i=1}^{p}(\hat c_i-c_i).
 $$
 
-于是$\sum c_j\le\sum\hat c_j$。非负条件必须对每个prefix成立，而不是仅检查最终余额；否则证明可能在中途借用尚未发生操作的钱，无法上界提前停止的序列。
+若每个 prefix 都满足 bₚ 不小于 0，则：
 
+$$
+\sum_{i=1}^{p}c_i\le\sum_{i=1}^{p}\hat c_i.
+$$
 
-核算法不要求所有operation采用相同charge。可以让push收费2、pop收费0；关键是明确credit属于哪个object或state，并证明其创建、转移和消费均保持不变量。信用不能被同一未来工作重复使用。
+对栈，每次 PUSH 收 2：1 支付实际 push，1 枚 coin 留在该 item 上。POP 收 0，并拿走 item 上的 coin 支付实际 pop。因为 item 不存在就不能合法 POP，任何 prefix 都不会欠债。
 
-```cpp
+核算法不要求所有操作采用相同 charge。关键是说明 credit 的所有权、创建、转移和消费，并证明同一枚 credit 不会被两个未来工作重复使用。只检查序列终点余额是不够的；提前停止的 prefix 也必须合法。
+
+### 记账代码的边界
+
+~~~cpp
 struct AccountedStack {
     vector<int> data;
     int credits = 0;
@@ -102,60 +202,55 @@ struct AccountedStack {
         assert(credits >= 0);
     }
 };
-```
+~~~
 
+代码中的 assert 不是证明本身，但它把 prefix 不变量变成了可测试的运行时断言；理论证明还要覆盖所有合法序列和边界条件。
 
-## 16.3 The potential method
+## potential method / 势能法
 
-### State-level stored work
+### 把储存工作编码为状态
 
-是全局化accounting。对第$i$次操作前后状态$D_{i-1},D_i$，定义：
+对第 i 次操作前后状态 Dᵢ₋₁、Dᵢ 定义势能 Φ，摊还成本为：
 
 $$
 \hat c_i=c_i+\Phi(D_i)-\Phi(D_{i-1}).
 $$
 
-正势能变化表示预存未来工作，负变化表示释放能量支付昂贵操作。求和后中间项两两抵消：
+正的势能变化表示预存未来工作，负的势能变化表示释放能量支付昂贵操作。求和后中间项两两抵消：
 
 $$
-\sum_{i=1}^{n}\hat c_i
-=
-\sum_{i=1}^{n}c_i+\Phi(D_n)-\Phi(D_0).
+\sum_{i=1}^{m}\hat c_i
+=\sum_{i=1}^{m}c_i+\Phi(D_m)-\Phi(D_0).
 $$
 
-若$\Phi(D_n)\ge\Phi(D_0)$，则总摊还成本上界总实际成本。常令$\Phi(D_0)=0$且所有reachable state势能非负，便自动覆盖任意prefix。
+若所有可达状态势能非负，并且 Φ(D₀)=0，则总摊还成本不低于总实际成本，得到实际总成本的上界。势能可以整体加常数而不改变变化量，但边界条件必须保留；允许任意大的负势能会让形式推导低估 actual total。
 
+### 二进制计数器的势能
 
-### Binary counter potential
-
-令$\Phi(D)$为counter中1的个数。一次increment若有$t$个trailing ones，实际翻$t+1$位；势能变化为$1-t$，所以：
+令 Φ(D) 为 counter 中 1 的个数。一次 increment 若有 t 个 trailing ones，实际成本为 t+1；翻转后势能变化为 1-t。因此：
 
 $$
 \hat c_i=(t+1)+(1-t)=2.
 $$
 
+carry 越长，actual cost 越高，但清除的 1 越多，释放的势能恰好抵消。选择 potential 不是猜一个“看起来像能量”的量，而是识别昂贵操作消耗了哪些此前逐步积累的结构。
 
-carry越长，actual cost越高，但清除的1越多，释放势能恰好抵消。选择potential不是猜一个“看起来像能量”的量，而是识别昂贵操作消耗了哪些此前逐步积累的结构。
+## dynamic tables / 动态表
 
-Potential可以整体加常数而不改变$\Delta\Phi$，但边界条件仍要保证最终potential不低于初始值。若允许任意大负势能，摊还总和可能低估actual total。
+### 倍增扩容
 
-## 16.4 Dynamic tables
+动态表支持 table insert 和 delete。令容量为 size，元素数为 num，load factor 为 α=num/size。只考虑插入：未满时写一个 slot，成本为 1；满时申请两倍空间，复制 num 项，再插入。
 
-### Expansion by doubling
-
-支持table insert和delete。容量`size`、元素数`num`，load factor为$\alpha=num/size$。
-
-只考虑插入：未满时写一个slot成本1；满时申请两倍空间，复制`num`项，再插入。扩容复制规模依次为$1,2,4,\ldots$，到$n$次insert前总复制量小于$n$：
+扩容复制规模依次为 1、2、4、…，直到 m 次 insert 前总复制量小于 m：
 
 $$
-T(n)
+T(m)
 \lt
-n+\sum_{j=0}^{\lfloor\lg n\rfloor}2^j
-\lt 3n.
+m+\sum_{j=0}^{\lfloor\lg m\rfloor}2^j
+\lt 3m.
 $$
 
-
-```cpp
+~~~cpp
 void table_insert(Table& t, Value value) {
     if (t.num == t.size) {
         auto larger = allocate(max(1, 2 * t.size));
@@ -166,16 +261,15 @@ void table_insert(Table& t, Value value) {
     }
     t.data[t.num++] = value;
 }
-```
+~~~
 
-势能$\Phi(T)=2\,num-size$适用于load至少一半的插入阶段。普通insert使势能增加2并支付写入；扩容后size翻倍，旧状态积累的势能下降，支付复制。严格推导需分别代入扩容前后`num`与`size`。
+势能 Φ(T)=2·num-size 适用于 load 至少一半的插入阶段。普通 insert 使势能增加并支付写入；扩容后 size 翻倍，旧状态积累的势能下降，支付复制。严格推导要分别代入扩容前后的 num 与 size。
 
-### Contraction without thrashing
+### 缩容与 hysteresis
 
-若delete后load一到$1/2$就容量减半，边界附近一次insert扩容、一次delete缩容可反复复制$\Theta(n)$项，摊还界失效。CLRS使用hysteresis：满载时扩为两倍，仅在load降至$1/4$时缩为一半；缩容后load回到$1/2$，与下一次扩容之间隔着许多insert。
+若 delete 后 load 一到一半就容量减半，边界附近一次 insert 扩容、一次 delete 缩容可以反复复制 Θ(n) 项，摊还界失效。使用 hysteresis：满载时扩为两倍，仅在 load 降到四分之一时缩为一半；缩容后 load 回到一半，下一次扩容前必须经历许多普通插入。
 
-
-同时处理扩缩容时可用分段potential：
+同时处理扩缩容时可用分段势能：
 
 $$
 \Phi(T)=
@@ -185,13 +279,82 @@ size/2-num,&\alpha\lt 1/2.
 \end{cases}
 $$
 
-它在$\alpha=1/2$处为0，在接近满载或四分之一缩容边界时积累credit。每次普通insert/delete的actual cost与potential change均为常数，resize释放的potential支付copy，因此任意$m$次操作总成本为$O(m)$。
+它在 α=1/2 处为 0，在接近满载或四分之一缩容边界时积累 credit。每次普通 insert/delete 的 actual cost 与势能变化均为常数，resize 释放的势能支付 copy，因此任意 m 次操作总成本为 O(m)。
 
+动态表把三种证明方法连接起来：聚合分析看到几何级数，核算法把空闲槽位解释为预付 credit，势能法则把负载和容量写成状态函数。三者证明的是同一个确定性序列界，不是三种不同的运行语义。
+
+## 练习
+
+<Exercises>
+
+1. 对包含 PUSH、POP 和 MULTIPOP 的任意栈操作序列，证明总实际成本是线性的，并解释为什么单次 MULTIPOP 的线性最坏成本不矛盾。
+
+   <Answer>
+
+   每个 item 至多被 PUSH 一次、被弹出一次。若序列有 m 次操作，PUSH 数至多 m，所有 POP 与 MULTIPOP 实际弹出的 item 总数也至多 m，所以总成本至多 2m。一次 MULTIPOP 可以很贵，但它消费的是此前已经 PUSH 的 item；摊还界约束整段序列，不要求每次 actual cost 都是常数。
+
+   </Answer>
+
+2. 用势能 Φ(D) 等于二进制计数器中 1 的个数，推导一次带 t 个 trailing ones 的 INCREMENT 的摊还成本。为什么不需要计数器值的概率分布？
+
+   <Answer>
+
+   一次操作翻 t 个 1 为 0，再把一个 0 翻为 1，actual cost 是 t+1，势能变化是 1-t。因此摊还成本为 (t+1)+(1-t)=2。这个推导对每个状态逐次成立，不依赖随机输入或均匀分布，因此即使操作序列专门选择 carry 很长的状态，累计界仍成立。
+
+   </Answer>
+
+3. 动态表满载时倍增、低于四分之一时减半。解释这个滞回阈值如何避免扩缩容 thrashing，并指出只在一半时缩容的风险。
+
+   <Answer>
+
+   倍增后负载约为一半；若只有降到四分之一才缩容，缩容后负载又回到一半，下一次 resize 前至少需要线性数量的普通操作，因此复制成本可以被这些操作摊平。若在一半时就缩容，边界附近插入和删除可以交替触发扩容与缩容，每次复制 Θ(n) 项，单次操作序列总成本可能退化。
+
+   </Answer>
+
+</Exercises>
+
+## 本章证据清单
+
+交付一个摊还分析证明前，至少留下：
+
+1. actual cost model、合法操作序列和序列长度量词；
+2. 聚合总账或每一步的摊还 charge；
+3. credit 的所有权、创建、转移和唯一消费规则；
+4. potential 的初值、非负性、状态变化和终值条件；
+5. 每个 prefix 都成立的余额或结构不变量；
+6. 动态表扩缩容边界以及是否存在 hysteresis；
+7. 一个专门触发昂贵操作的 trace，用来检验证明不是只对平均样例有效。
 
 ## 小结
 
-Chapter 16 Amortized Analysis用aggregate analysis直接界定栈与binary counter总成本，用accounting method把预付coin绑定到未来工作，用potential method把储存工作编码成状态函数。Dynamic tables展示扩容几何级数，以及四分之一缩容阈值如何避免thrashing。
+- amortized analysis / 摊还分析对任意合法操作序列给确定性总成本上界，不是 average-case 概率分析。
+- aggregate analysis / 聚合分析直接求栈、MULTIPOP 和 binary counter 的总成本。
+- accounting method / 核算法让便宜操作预付 credit，并要求每个 prefix 不欠债。
+- potential method / 势能法把储存工作编码成状态函数，求和时中间势能变化抵消。
+- dynamic tables / 动态表依靠倍增和四分之一缩容的 hysteresis 避免 resize thrashing。
 
-摊还界是对任意操作序列的确定性上界，不是average-case概率。合格证明必须写清actual cost model、操作序列量词、credit或potential不变量、昂贵事件间隔与最终求和；单个示例trace只能辅助理解，不能替代全序列证明。
+## 术语表
 
+<Glossary>
 
+<GlossaryItem term="聚合分析">把一段操作序列的总实际成本直接求和并除以操作数，得到确定性的平均上界。</GlossaryItem>
+<GlossaryItem term="核算法">收取高于实际成本的摊还费用，将差额作为绑定到对象或状态的 credit。</GlossaryItem>
+<GlossaryItem term="势能法">为状态分配非负势能，并用实际成本加势能变化定义摊还成本的方法。</GlossaryItem>
+<GlossaryItem term="摊还成本">约束一段序列总成本的每次平均支付，不要求单次实际成本相同。</GlossaryItem>
+<GlossaryItem term="动态表">按容量扩张和收缩、用一段普通操作共同承担 resize 复制成本的数组结构。</GlossaryItem>
+<GlossaryItem term="前缀不变量">在操作序列任意前缀上都成立的余额、势能或结构约束。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 16 章的目录定位与核心论证进行独立教学重写。聚合分析、核算法、势能法和动态表来自官方主题；交互实验、故障注入、实现边界、练习答案和证据清单是本项目新增材料。
+
+所有摊还结论都依赖明确的 actual cost model、合法操作序列和边界条件。动态表的线性结论还依赖倍增与滞回；若改变阈值、元素复制语义或内存分配成本，应重新检查势能不变量。
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 16: Amortized Analysis"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

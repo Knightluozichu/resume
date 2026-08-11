@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/scope%20%26%20closures/apC.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-08
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkScopeAppendixCLexicalThisLab } from "@/components/mdx/you-dont-know-js/ydk-scope-appendix-c-lexical-this";
+
+<Objectives>
+
+- 能区分普通函数按调用点绑定 this 与箭头函数捕获外层 this 的规则
+- 能修改异步回调和对象方法示例，预测接收者变化、脱离调用和构造器错误
+- 能为方法、回调和构造器选择合适的函数类型，并记录首个绑定偏离点
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 箭头函数不建立自己的 this，而是像普通词法变量一样捕获外层 this；它适合保留上下文，却不适合作为需要动态接收者的方法或构造器。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkScopeAppendixCLexicalThisLab />
 
 ## 权威目录定位
 
@@ -27,15 +49,17 @@ draft: false
 
 ## 核心概念与状态所有权
 
-。
+<Term def="像词法变量一样由函数创建位置决定的 this 绑定；箭头函数采用这种方式。">词法 this</Term>
 
-。
+<Term def="不自带 this、而是从调用它的外层函数或环境取得 this 的函数。">箭头函数</Term>
 
-。
+<Term def="普通函数根据调用表达式、接收者和调用方式确定的 this 绑定。">动态 this</Term>
 
-。
+<Term def="创建箭头函数时所在函数调用中的 this，之后由箭头继续引用。">外层绑定</Term>
 
-。
+<Term def="调用表达式左侧提供给普通函数的对象或上下文。">调用接收者</Term>
+
+<Term def="不立即执行、而在事件或定时器触发后运行的函数调用。">异步回调</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -133,6 +157,15 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：把箭头函数当成普通方法来动态切换 this">
+  现象：更换 obj 后，仍期待箭头方法的 this 跟着新接收者变化。原因：箭头没有自己的 this，绑定来自创建位置。修法：需要动态接收者就使用普通方法，并用 obj.method() 记录调用点。
+</Callout>
+
+<Callout type="trap" title="陷阱：任何函数都可以拿来做构造器或脱离调用">
+  现象：对箭头函数使用 new，或把普通方法取出后直接调用仍期待原对象。原因：箭头不可构造，普通函数脱离接收者后会按严格模式或全局规则得到另一种 this。修法：把函数类型、receiver 和调用语法一起写进测试。
+</Callout>
+
+故障注入只改变一个条件：函数类型、调用接收者或回调执行时机。若同时改写对象状态和调用语法，就无法判断偏离来自词法捕获、动态绑定还是构造器限制。
 
 ## 四类样本与验收
 
@@ -153,6 +186,27 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：把计时器回调分别写成箭头函数和普通函数。** 预测两者稍后读取 `this.value` 时的接收者，并说明如何让普通函数得到对象上下文。
+
+<Answer question="为什么箭头回调能在定时器中保留 obj？">
+  箭头在 obj.start 的执行环境中创建，捕获了外层方法调用的 this。定时器稍后调用它时不会重新绑定 this，因此仍读取 obj；普通函数需要显式 bind(obj)、闭包变量或合适的调用接收者。
+</Answer>
+
+2. **问题 2：把 `obj.method` 取出为 `const run = obj.method`，再比较 `obj.method()` 与 `run()`。** 记录调用接收者和第一个绑定差异。
+
+<Answer question="为什么脱离对象调用会改变普通函数的 this？">
+  普通函数按调用点动态绑定；obj.method() 的接收者是 obj，而 run() 没有左侧接收者，严格模式下 this 可能是 undefined，非严格模式则有不同的全局行为。函数定义本身没有改变，改变的是调用方式。
+</Answer>
+
+3. **问题 3：尝试用 `new` 调用箭头函数，再用普通函数构造一个对象。** 判断哪一步失败，并为方法、回调和构造器分别选择函数类型。
+
+<Answer question="为什么箭头函数不能当构造器？">
+  箭头函数没有构造器内部机制，也没有自己的 prototype 供 new 使用，因此 new arrow() 会失败。需要创建实例时使用普通函数或 class；需要动态方法接收者用普通方法，需要保留外层上下文的回调才适合箭头。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -166,6 +220,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="词法 this">由函数创建位置决定的 this，箭头函数会把它带到稍后执行的地方。</GlossaryItem>
+  <GlossaryItem term="箭头函数">没有自己的 this、不能作为构造器的函数形式。</GlossaryItem>
+  <GlossaryItem term="动态 this">普通函数根据调用语法和接收者临时确定的 this。</GlossaryItem>
+  <GlossaryItem term="外层绑定">创建箭头函数的外部函数或环境所提供的 this。</GlossaryItem>
+  <GlossaryItem term="调用接收者">调用表达式中位于点号左侧、提供给普通方法的对象。</GlossaryItem>
+  <GlossaryItem term="异步回调">由定时器、事件或队列在稍后触发执行的函数。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, Scope & Closures, Appendix C: Lexical-this"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/scope%20%26%20closures/apC.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

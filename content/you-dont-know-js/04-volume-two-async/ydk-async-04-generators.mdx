@@ -7,19 +7,42 @@ description: "生成器把函数执行分割为可暂停的迭代步骤，next �
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch4.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-25
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkAsync04GeneratorsLab } from "@/components/mdx/you-dont-know-js/ydk-async-04-generators";
+
+<Objectives>
+
+- 能解释生成器在执行管线中的位置，并画出 iterator、next 与 yield 的暂停状态。
+- 能修改生成器加 Promise 执行器，处理 fulfilled、rejected、throw 和 yield* 委托路径。
+- 能回答：`next(value)` 的 value 会进入哪一个 yield 表达式，以及 `done: true` 何时出现？
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
-生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。
+普通函数一旦调用就会沿着当前调用栈运行到结束；生成器函数则把“继续执行”的权力交给调用者。调用 `flow()` 得到的是一个迭代器，函数体要等到第一次 `next()` 才开始，之后每个 `yield` 都会把执行权暂时交回外部。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+这形成了一条双向通道：生成器通过 `yield` 把值送出，调用者通过下一次 `next(value)` 把值送回暂停的表达式，也可以用 `throw(error)` 从同一个暂停点注入失败。Promise 只是被 yield 出来的值；要把它变成顺序代码，仍然需要一个执行器等待并恢复生成器。
+
+先预测：第一次 `next()` 返回什么，第二次 `next(10)` 会填入哪一个绑定，`yield*` 的子迭代器完成后父生成器如何继续。记录预期后再切换样本，比较第一个偏离点。
+
+<YdkAsync04GeneratorsLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本页对应作者开放的一版仓库目录。目录标题用于一对一追踪，正文是独立教学重构：
 
 - Chapter 4: Generators
 - Breaking Run-to-completion
@@ -33,121 +56,185 @@ draft: false
 
 本页逐项覆盖 9 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
 
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：调用生成器函数就会立即执行函数体">
+
+现象：调用 `flow()` 后立刻期待日志出现，或以为函数已经跑过第一个 `yield`。
+
+原因：生成器函数调用只创建迭代器并保存 suspendedStart 状态；执行体要等 `next()` 恢复。
+
+修复：分别断言调用前、调用后和第一次 `next()` 后的日志与 `{ value, done }`，把迭代器视为状态所有者。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：yield 只是 return，next(value) 不能把消息送回">
+
+现象：把 `const value = yield item` 当成普通 return，忽略下一次 `next(value)` 才会为表达式提供结果。
+
+原因：`yield` 同时是暂停点和双向协议；第一次 `next()` 没有待恢复的 yield，传入的 value 不会填入某个表达式。
+
+修复：在第二次 `next(10)` 后检查 `const value` 的绑定，并用 `throw(error)` 测试暂停点的失败入口。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：yield Promise 会自动等待并恢复">
+
+现象：生成器 yield 出 Promise 后，期待生成器自动接收兑现值，或把 Promise 当作已解析的业务值继续计算。
+
+原因：生成器只遵守迭代协议，不负责调度 Promise。等待、拒绝转 `throw` 和再次 `next` 都必须由执行器完成。
+
+修复：给执行器写 fulfilled 与 rejected 两条分支，分别调用 `iterator.next(value)` 和 `iterator.throw(error)`。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：yield* 表示两个生成器并行运行">
+
+现象：看到父子两个生成器就把它们当成并发任务，或者忘记子迭代器结束后控制权会回到父生成器。
+
+原因：`yield*` 是委托迭代协议；父生成器把推进权交给子迭代器，子迭代器 `done` 后父生成器才继续。
+
+修复：给父、子迭代器分别记录状态；要并发就显式创建多个 runner，并单独证明它们的交错顺序。
+
+</Callout>
+
 ## 核心概念与状态所有权
 
-。
+<Term def="由生成器函数调用产生的可暂停执行单元；它保存局部绑定、当前暂停点以及下一次恢复所需的控制状态。">生成器</Term> 不直接拥有一个最终值，而是逐步签发迭代结果；调用者决定何时恢复。
 
-。
+<Term def="实现 next、throw 或 return 等迭代协议入口的对象；每个生成器调用都会得到独立的迭代器状态。">迭代器</Term> 保存暂停点与局部绑定，因此两个迭代器不会共享同一份生成器执行进度。
 
-。
+<Term def="暂停生成器并向调用者交出一个值的表达式；下一次恢复会把消息送回该表达式所在的位置。">yield</Term> 既是向外发送值的出口，也是下一次 `next(value)` 或 `throw(error)` 的入口。
 
-。
+<Term def="调用者与暂停生成器之间的双向传递；next(value) 发送成功值，throw(error) 发送失败事件，二者都从当前暂停点恢复。">双向消息</Term> 让异步执行器能够把 Promise 结果映射回顺序代码。
 
-。
+<Term def="使用 yield* 把父生成器的迭代权交给子迭代器，并在子迭代器完成后继续父生成器的协议。">yield 委托</Term> 是顺序委托，不是自动并发；子迭代器的返回值可以成为委托表达式的结果。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Term def="把延迟操作和回调封装在函数中的旧式异步接口；调用 thunk 才会启动工作，完成后通过回调报告结果。">thunk</Term> 可以模拟可暂停步骤，但它本身不是语言级生成器，也不会自动提供 `next` 和 `yield` 协议。
 
-|   # | 观察量     | 本页判定方式                                             |
-| --: | ---------- | -------------------------------------------------------- |
-|   1 | 生成器     | 在“调用生成器取得迭代器”阶段保存前后状态并核对不变量     |
-|   2 | 迭代器     | 在“next 恢复到下一个 yield”阶段保存前后状态并核对不变量  |
-|   3 | yield      | 在“yield 暂停并向外给值”阶段保存前后状态并核对不变量     |
-|   4 | 双向消息   | 在“调用者等待异步结果”阶段保存前后状态并核对不变量       |
-|   5 | yield 委托 | 在“next 或 throw 把结果送回”阶段保存前后状态并核对不变量 |
+这些概念要一起回答五个问题：谁创建输入，暂停状态保存在哪里，哪一步读取或修改绑定，失败如何传播，结束后谁清理执行器。只看最终字符串，无法判断 `next(value)` 是否进入了正确的 yield，也无法判断 Promise 拒绝是否被送到生成器内部。
+
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| 生成器 | 对比调用函数前、创建迭代器后和第一次 next 后的状态 |
+| 迭代器 | 为两个独立调用分别记录暂停点与局部绑定 |
+| yield | 检查交出值、暂停位置和下一次恢复位置 |
+| 双向消息 | 对比 next(value) 的成功路径与 throw(error) 的失败路径 |
+| yield 委托 | 记录子迭代器完成前后的父生成器控制权 |
+| thunk | 把延迟函数的启动时机与生成器协议分开验收 |
 
 ## 机制拆解
 
-### 1. 调用生成器取得迭代器
+### 1. Chapter 4: Generators
 
-调用生成器取得迭代器不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Chapter 4: Generators** 的第一个观察点是生成器函数调用与普通函数调用的时机差异。`function* flow() { yield 1; }` 被调用时不会执行函数体，而是返回一个迭代器；第一次 `next()` 才会运行到 `yield 1`，结果是一个包含 `value` 和 `done` 的记录。
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+生成器的状态属于这次调用得到的迭代器。再次调用 `flow()` 会创建另一份局部绑定与暂停点，所以调试时要把 iterator 身份、当前步骤和输出记录在一起。
 
-### 2. next 恢复到下一个 yield
+### 2. Breaking Run-to-completion
 
-next 恢复到下一个 yield不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Breaking Run-to-completion** 讨论生成器如何把普通函数的一次性完成边界拆成多个可观察的恢复点。`yield` 之前的局部状态会保留，调用者可以在两次 `next()` 之间做别的工作，然后再决定是否继续推进。
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+这并不意味着生成器自动抢占 JavaScript 执行线程。每次恢复仍然是同步执行到下一个 `yield`、`return` 或异常；可交错的顺序来自调用者显式安排多个恢复动作。
 
-### 3. yield 暂停并向外给值
+### 3. Generator'ing Values
 
-yield 暂停并向外给值不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Generator'ing Values** 把每次 `next()` 返回的内容落实为一个迭代结果：未完成时是 `{ value, done: false }`，执行到 `return` 或自然结束后是 `{ value, done: true }`。`yield` 产出的值不等于生成器最终返回值；最终返回值只在完成记录中出现。
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+function* values() {
+  const first = yield 1;
+  yield first + 1;
+  return "done";
+}
 
-### 4. 调用者等待异步结果
+const iterator = values();
+iterator.next();       // { value: 1, done: false }
+iterator.next(10);     // { value: 11, done: false }
+iterator.next();       // { value: "done", done: true }
+```
 
-调用者等待异步结果不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+第一次 `next()` 只是启动生成器，没有可恢复的 yield，所以传入的参数被忽略；第二次 `next(10)` 才把 10 填入 `first`。这是排查“值送错位置”问题的最小证据。
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+### 4. Iterating Generators Asynchronously
 
-### 5. next 或 throw 把结果送回
+**Iterating Generators Asynchronously** 说明生成器本身不会等待异步值，但它可以把 Promise 作为 yield 的载荷交给执行器。执行器读取 `result.value`，确认它是可等待的工作，完成后再调用 `next(resolvedValue)`；如果工作拒绝，则调用 `throw(error)`。
 
-next 或 throw 把结果送回不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+因此异步迭代有两个状态机：生成器保存暂停点，执行器保存等待中的任务。二者必须由同一个迭代器结果连接，否则迟到的 Promise 可能恢复错误的生成器调用。
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+### 5. Generators + Promises
 
-### 6. done 为真时完成
+**Generators + Promises** 的关键是把 Promise 的成功与失败映射成同一暂停点的两种恢复方式。成功值进入 `yield` 表达式，拒绝原因在该表达式位置抛出；生成器可以用 `try/catch` 恢复，也可以让错误结束迭代。
 
-done 为真时完成不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+```js
+function* requestFlow() {
+  try {
+    const response = yield Promise.resolve({ status: 200 });
+    return response.status;
+  } catch (error) {
+    return `recovered: ${error.message}`;
+  }
+}
+```
 
-结合本章主张来看：生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+执行器不能只写 `promise.then(value => iterator.next(value))`，还要写 rejection 分支，并且在 `done: true` 后停止继续调度。否则生成器已结束而旧 Promise 仍可能再次触发恢复。
 
-## 目录主题逐项讲解
+### 6. Generator Delegation
 
-### Chapter 4: Generators
+**Generator Delegation** 通过 `yield* child()` 把当前迭代权委托给子迭代器。子迭代器的每个值都由父迭代器转发给调用者；子迭代器完成后，父生成器继续执行，委托表达式的结果是子迭代器的返回值。
 
-Chapter 4: Generators在本单元中落到“调用生成器取得迭代器”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+```js
+function* child() {
+  yield "child:one";
+  return "child:done";
+}
 
-### Breaking Run-to-completion
+function* parent() {
+  const result = yield* child();
+  return `parent:${result}`;
+}
+```
 
-Breaking Run-to-completion在本单元中落到“next 恢复到下一个 yield”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+委托要单独记录父子两层状态。它减少了手动转发循环，却没有创造并发；如果两个工作要同时推进，应创建两个独立 iterator 和 runner，并明确调度策略。
 
-### Generator'ing Values
+### 7. Generator Concurrency
 
-Generator'ing Values在本单元中落到“yield 暂停并向外给值”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+**Generator Concurrency** 关注多个生成器各自拥有暂停状态后，调用者如何以交错顺序推进它们。这里的 concurrency 是调度层的概念，不是某个生成器调用自动获得的能力；一个 iterator 的 `next()` 不会推进另一个 iterator。
 
-### Iterating Generators Asynchronously
+验证并发时至少记录 iterator 身份、恢复时间、当前 yield 和完成状态。若 runner 共享一个可变结果槽或没有检查 `done`，迟到结果就可能覆盖另一个生成器的绑定。
 
-Iterating Generators Asynchronously在本单元中落到“调用者等待异步结果”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+### 8. Thunks
 
-### Generators + Promises
+**Thunks** 以生成器出现以前的常见做法为背景：把异步操作包装成 thunk，调用 thunk 时启动工作，完成后用回调报告 `(error, value)`。一个执行器可以把 thunk 放在生成器的 `yield` 后面，但它需要自己处理回调只调用一次、异常转换和资源清理。
 
-Generators + Promises在本单元中落到“next 或 throw 把结果送回”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+thunk 和 Promise 都是生成器外部的载荷协议。Promise 统一了结果状态，thunk 依赖回调约定；二者都不会替生成器保存暂停点，只有 runner 才知道何时调用 `next` 或 `throw`。
 
-### Generator Delegation
+### 9. Pre-ES6 Generators
 
-Generator Delegation在本单元中落到“done 为真时完成”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+**Pre-ES6 Generators** 说明 ES6 以前没有语言级 `function*`、`yield` 和 `next` 协议，开发者会用回调、thunk、状态机或手写 continuation 模拟暂停与恢复。这些技术能表达相同的异步意图，但暂停状态通常由应用代码显式保存，错误和嵌套流程也更容易散落。
 
-### Generator Concurrency
-
-Generator Concurrency在本单元中落到“调用生成器取得迭代器”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Thunks
-
-Thunks在本单元中落到“next 恢复到下一个 yield”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Pre-ES6 Generators
-
-Pre-ES6 Generators在本单元中落到“yield 暂停并向外给值”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+阅读旧式实现时，先把“下一步函数”“待恢复的局部值”和“错误回调”标出来，再与生成器的 iterator、yield 和 throw 对照。这样既能理解历史方案，也不会把手写约定误说成 JavaScript 运行时自动提供的生成器。
 
 ## 六阶段证据链
 
-本页的可执行链条是：调用生成器取得迭代器 → next 恢复到下一个 yield → yield 暂停并向外给值 → 调用者等待异步结果 → next 或 throw 把结果送回 → done 为真时完成。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
+本页的可执行链条是：调用生成器取得迭代器 → `next` 恢复到下一个 `yield` → `yield` 暂停并向外给值 → 调用者等待异步结果 → `next` 或 `throw` 把结果送回 → `done` 为真时完成。正常样本证明主路径，边界样本证明第一次 next、空值和嵌套委托，失败样本定位 rejection 或 throw 的停止点，恢复样本证明旧任务没有污染下一次执行。
 
 ## 最小可运行实验
 
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+下面的片段保留生成器、Promise 和 runner 的最小连接。运行前先预测 iterator 的三次结果，再改动 Promise 的兑现或拒绝分支：
 
 ```js
 function* flow() {
   const a = yield Promise.resolve(2);
   return a * 3;
 }
+
 const it = flow();
-it.next().value.then((v) => console.log(it.next(v).value));
+const first = it.next();
+first.value.then((value) => console.log(it.next(value).value));
 ```
+
+这里 `flow()` 只创建 iterator，第一次 `next()` 取出 Promise；Promise 兑现后，第二次 `next(2)` 把 2 送回 `yield` 表达式，最终输出 6 并返回 `done: true`。若把 Promise 改为拒绝，runner 就必须改为 `it.throw(error)` 才能让生成器内部的 `try/catch` 有机会处理。
 
 ```yaml
 book: 你不知道的 JavaScript（一版三卷六册）
@@ -162,49 +249,87 @@ cleanup_complete: true
 ```
 
 ```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
+freeze iterator + runner + input promise
+predict value, done, pause point and resume message
+inject one controlled rejection or duplicate resume
 stop at first divergence
 recover and replay the same sample
-assert stable state and no stale work
+assert no resume after done and no stale runner
 ```
-
-## 常见误区与故障注入
-
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 单个 iterator 依次 next，Promise 兑现 | 暂停点、绑定、value 与 done | 六阶段按预期完成 |
+| 边界 | 第一次 next 传值、空值、嵌套 yield* | 参数入口、委托边界、返回值 | 值进入正确的 yield，状态不越界 |
+| 失败 | Promise 拒绝、iterator.throw、未捕获异常 | rejection 来源、throw 位置、结束记录 | 错误明确传播、捕获或结束 |
+| 恢复 | 重建 runner 后重放相同输入 | 迭代器身份、任务数、清理状态 | 无旧消息再次恢复已完成 iterator |
 
-本页签发不变量是：**生成器把函数执行分割为可暂停的迭代步骤，next 在调用者与生成器之间双向传值；执行器可把 yield 的 Promise 恢复为顺序代码，并用 yield\* 委托子迭代器。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**生成器调用只创建独立迭代器；`yield` 保存暂停点；第一次 `next()` 启动而不填入 yield；后续 `next(value)` 与 `throw(error)` 从当前暂停点传回消息；Promise 等待与并发必须由 runner 明确调度；`yield*` 是顺序委托；`done: true` 后不得再次恢复。**
 
 ## 版本与原书边界
 
 本单元以 2014 至 2015 年一版目录为结构基线。正文使用现代可运行示例独立重构核心机制；现代规范差异单独披露，不修改或伪造原书目录。
 
+原书章节讨论生成器如何打破 run-to-completion、逐步产生值、与 Promise 和 thunk 组合，以及 ES6 以前的模拟方式。本文保留这些问题边界，并用现代执行器、`throw`、`yield*` 和独立 runner 补足可运行的验收路径；这些补充属于今天的工程重构，不冒充一版原书当年的 API 清单。
+
 站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
 
 ## 练习
 
+<Exercises>
+
+1. 修改 `values` 生成器，让它接收三个 `next(value)` 输入并累计总和；为每一次恢复写出 `value` 与 `done`，再把实验组件切换到边界样本检查第一次 `next` 的参数。
+
+   <Answer>
+
+   第一次 `next()` 只启动生成器；可以让生成器写成 `const a = yield 0; const b = yield a; const c = yield b; return a + b + c;`，随后依次调用 `next()`、`next(2)`、`next(3)`、`next(4)`。前三个记录仍是 `done: false`，最后一个记录是 `value: 9, done: true`。如果把 2 传给第一次 `next(2)`，它不会进入 `a`，因为此时还没有暂停的 yield。
+
+   </Answer>
+
+2. 解释 `next(value)` 与 `throw(error)` 在暂停点的差异，并指出为什么 Promise rejection 不能只走成功回调。
+
+   <Answer>
+
+   `next(value)` 会让暂停的 yield 表达式求值为 `value`，生成器从该处继续；`throw(error)` 则像在该暂停点抛出异常，能被生成器内部的 `try/catch` 捕获，否则迭代器结束并向外报告错误。Promise 执行器必须同时提供兑现和拒绝分支：兑现调用 `next(value)`，拒绝调用 `throw(error)`，否则拒绝会脱离生成器的错误边界。
+
+   </Answer>
+
+3. 写一个最小 runner，消费生成器 yield 出的 Promise；或者使用 `yield*` 委托一个子生成器，并说明如何证明两个生成器并没有因为委托而并行执行。
+
+   <Answer>
+
+   runner 可以递归读取 `iterator.next(input)` 的结果：若 `done` 为真就结束，否则对 `result.value` 使用 `Promise.resolve`，兑现后再次调用 `next(value)`，拒绝后调用 `throw(error)`。委托实验可让子生成器先 yield 两个标记、父生成器再 yield 一个标记；输出顺序应是两个子标记、父标记。若要并行，必须显式创建两个 iterator 和两个 runner，并记录交错顺序，不能把 `yield*` 当成并发 API。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **生成器**：对应“调用生成器取得迭代器”阶段的核心观察量。
-- **迭代器**：对应“next 恢复到下一个 yield”阶段的核心观察量。
-- **yield**：对应“yield 暂停并向外给值”阶段的核心观察量。
-- **双向消息**：对应“调用者等待异步结果”阶段的核心观察量。
-- **yield 委托**：对应“next 或 throw 把结果送回”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- 生成器调用只创建独立迭代器，第一次 `next()` 才启动函数体。
+- `yield` 保存暂停点；后续 `next(value)` 或 `throw(error)` 把消息送回该点。
+- Promise 等待、拒绝传播和多个生成器的交错推进都需要 runner 明确调度。
+- `yield*` 委托子迭代器并在子迭代器完成后回到父生成器，不自动产生并发。
+- `done: true` 是完成边界；完成后必须停止旧任务继续恢复。
 
 ## 术语表
 
+<Glossary>
 
-## 来源与改编边界
+<GlossaryItem term="生成器">可暂停、可恢复的函数执行单元；调用它会创建迭代器，执行体由 next 推进。</GlossaryItem>
+<GlossaryItem term="迭代器">持有当前暂停点并实现迭代协议的对象；每次生成器调用拥有独立状态。</GlossaryItem>
+<GlossaryItem term="yield">向调用者交出值并暂停执行的表达式；后续恢复会在该表达式位置接收消息。</GlossaryItem>
+<GlossaryItem term="双向消息">调用者用 next 或 throw 向暂停生成器发送成功值或错误的协议。</GlossaryItem>
+<GlossaryItem term="yield 委托">通过 yield* 把迭代推进交给子迭代器，子完成后父生成器继续。</GlossaryItem>
+<GlossaryItem term="thunk">把延迟操作与回调包装进函数的旧式异步接口，不等同于语言级生成器。</GlossaryItem>
 
+</Glossary>
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, Async & Performance, Chapter 4: Generators"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch4.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

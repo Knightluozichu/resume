@@ -7,15 +7,36 @@ description: "ES6 class 提供更整洁的构造器与继承语法，但底层�
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/apA.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-15
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkThisAppendixAEs6ClassLab } from "@/components/mdx/you-dont-know-js/ydk-this-appendix-a-es6-class";
+
+<Objectives>
+
+- 能用 `new`、`constructor`、`extends` 和 `super` 画出实例到父级原型的查找路径，并指出每一步的接收者。
+- 能用 `Object.getPrototypeOf` 与 `Object.getOwnPropertyDescriptor` 验证 class 方法的存放位置、共享方式和不可枚举属性。
+- 能通过一个正常样本、一个边界样本和一个故障样本解释 class 的运行时链接，而不是只凭最终输出猜测机制。
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
 ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下 `new Child().speak()` 的预期结果，再切换样本比较首个偏离点。
+
+<YdkThisAppendixAEs6ClassLab />
 
 ## 权威目录定位
 
@@ -27,74 +48,117 @@ ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链�
 
 ## 核心概念与状态所有权
 
-。
+<Term def="class 是声明构造器与原型方法的语法形式；它改变书写方式，不会把方法复制到每个实例。">class 语法</Term> 先提供类定义；真正的实例状态仍由构造器调用时的 `this` 持有。
 
-。
+<Term def="constructor 是用 new 创建实例时运行的初始化方法；它把属于当前实例的字段写到 this 上。">constructor</Term> 负责把输入转成实例自己的状态。
 
-。
+<Term def="extends 建立子类原型与父类原型之间的链接，使缺失的方法可以向父级查找。">extends</Term> 表达的是可观察的原型关系，而不是把父类源码拷贝进子类。
 
-。
+<Term def="super 在子类方法中定位父级实现，同时仍以当前实例作为接收者执行它。">super</Term> 让父级行为可以复用，但不会把当前 `this` 换成父级对象。
 
-。
+<Term def="原型链接是对象查找自身属性失败后继续向上查找的关系；它决定共享方法从哪里被找到。">原型链接</Term> 连接 `child`、`Child.prototype` 与 `Parent.prototype`。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Term def="方法描述符是属性的 value、writable、configurable、enumerable 等元数据；class 方法默认位于原型上且不可枚举。">方法描述符</Term> 把“方法没有复制到实例”变成可以检查的证据。
 
-|   # | 观察量      | 本页判定方式                                             |
-| --: | ----------- | -------------------------------------------------------- |
-|   1 | class 语法  | 在“声明类与原型方法”阶段保存前后状态并核对不变量         |
-|   2 | constructor | 在“用 new 创建实例”阶段保存前后状态并核对不变量          |
-|   3 | extends     | 在“constructor 初始化状态”阶段保存前后状态并核对不变量   |
-|   4 | super       | 在“extends 建立两层原型关系”阶段保存前后状态并核对不变量 |
-|   5 | 方法描述符  | 在“super 解析父级方法”阶段保存前后状态并核对不变量       |
+这些概念要一起回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| class 语法 | 比较类定义与实例自身属性，确认方法没有被复制 |
+| constructor | 记录 `new Child()` 产生的接收者与实例字段 |
+| extends | 用 `Object.getPrototypeOf` 检查两层原型关系 |
+| super | 跟踪父级方法查找与当前实例的 `this` |
+| 方法描述符 | 读取 prototype 方法的 `enumerable` 等属性 |
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：class 方法会复制到每个实例">
+
+现象：为每个 `child` 想象一份独立的 `speak` 函数。
+
+原因：把类声明的视觉结构误当成对象内存布局；方法实际通常在 `Child.prototype` 上共享。
+
+修复：同时运行 `Object.hasOwn(child, "speak")` 与 `Object.hasOwn(Child.prototype, "speak")`，比较状态归属和行为来源。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：super 就是把父方法复制到子方法里">
+
+现象：认为 `super.speak()` 会把 `this` 换成 `Parent.prototype`。
+
+原因：忽略了父级方法的查找位置与当前调用接收者是两件事。
+
+修复：让父方法读取 `this.name`，再用 `new Child()` 调用，确认父级实现读取的仍是 child 的状态。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：class 构造器可以像普通函数一样调用">
+
+现象：直接运行 `Child()`，期待得到一个没有原型链接的对象。
+
+原因：class 构造器有强制的 `new` 调用约束，缺少实例接收者时会在入口处失败。
+
+修复：把调用改为 `new Child()`，再比较实例状态、原型链接和方法查找路径。
+
+</Callout>
+
+<Callout type="info" title="观察法：先看 own property，再看 prototype">
+
+现象：只打印 `child.speak()` 的返回值，无法分辨方法从哪里来。
+
+原因：属性查找把实例自身属性和原型上的共享行为合并成了一个最终结果。
+
+修复：依次读取 `Object.keys(child)`、`Object.getPrototypeOf(child)` 和方法描述符，把状态、关系、元数据分栏记录。
+
+</Callout>
 
 ## 机制拆解
 
 ### 1. 声明类与原型方法
 
-声明类与原型方法不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+声明 `class Parent` 时，方法定义进入 `Parent.prototype` 的方法槽；声明本身不会为未来每个实例复制一份函数。`class` 语法收紧了构造器调用和方法定义的边界，但它仍然要依赖对象属性查找来执行行为。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+先写证据：`Object.hasOwn(Parent.prototype, "speak")` 应为真，而 `Object.keys(Parent.prototype)` 通常看不到 `speak`，因为 class 方法默认不可枚举。这个差异正是语法外观与属性描述符之间的连接点。
 
 ### 2. 用 new 创建实例
 
-用 new 创建实例不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+`new Child()` 做两件关键的事：创建新的实例接收者，并把它的原型设置为 `Child.prototype`，随后进入构造器流程。实例自己的数据应写到 `this`，共享行为则留在原型链上。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+如果把 `Child()` 当普通函数调用，class 构造器会直接抛出 `TypeError`。这不是“少了一个可选参数”，而是实例创建契约没有成立；应在故障样本中把停止点记录为构造器入口。
 
 ### 3. constructor 初始化状态
 
-constructor 初始化状态不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+`constructor(name) { this.name = name; }` 中的 `this` 是新建的 child。因而 `Object.keys(child)` 可以看到 `name`，但通常看不到 `speak`。这让状态所有权和行为来源保持分离：每个实例有自己的数据，多个实例共享同一个方法实现。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+验证时不要只比较输出。创建两个不同名字的实例，分别读取 `name`，再比较 `childA.speak === childB.speak`；前者应不同，后者应相同，才能同时证明实例状态独立、方法行为共享。
 
 ### 4. extends 建立两层原型关系
 
-extends 建立两层原型关系不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+`class Child extends Parent` 会建立 `Child.prototype → Parent.prototype` 的方法查找链。`Object.getPrototypeOf(child) === Child.prototype`，而 `Object.getPrototypeOf(Child.prototype) === Parent.prototype`，这两条断言比“Child 继承 Parent”这句口号更可验收。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+当 child 自身没有 `speak` 时，查找先检查 `Child.prototype`，再进入 `Parent.prototype`。若链条被错误替换，结果可能仍然偶尔正确，却会在 `super`、内省或多层继承时暴露首个偏离点。
 
 ### 5. super 解析父级方法
 
-super 解析父级方法不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+子类覆盖 `speak` 时，`super.speak()` 定位的是父级实现；真正执行函数时，接收者仍是当前 child。因此父级方法可以读取 `this.name`，返回与 child 状态相关的结果。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+把它简化成普通的“复制 + 调用”会漏掉两个证据：父级方法来自哪里，以及它为谁执行。实验应同时记录 `Parent.prototype.speak` 的来源和 `new Child("Ada").speak()` 的接收者。
 
 ### 6. 检查语法糖之外的运行时链接
 
-检查语法糖之外的运行时链接不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+最后用内省把推理钉住：`Object.getOwnPropertyNames(Child.prototype)` 可以看到 `constructor` 与方法名，而 `Object.getOwnPropertyDescriptor(Child.prototype, "speak")` 可以读取 `enumerable: false` 等元数据。实例只承担自己的字段，不承担一份重复的方法。
 
-结合本章主张来看：ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+这条证据链覆盖正常、边界、失败与恢复：正常样本证明查找路径，边界样本证明多个实例的状态隔离，失败样本证明缺少 `new` 时明确停止，恢复样本则在修正调用后重新创建干净实例。
 
 ## 目录主题逐项讲解
 
 ### Appendix A: ES6 class
 
-Appendix A: ES6 class在本单元中落到“声明类与原型方法”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+本页唯一的权威目录条目是 **Appendix A: ES6 class**。它在本单元中落到“class 语法 → 实例 → 原型链接 → super → 描述符”这一观察链。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造错误接收者和错误调用方式，验证解释是否仍成立。
 
 ## 六阶段证据链
 
-本页的可执行链条是：声明类与原型方法 → 用 new 创建实例 → constructor 初始化状态 → extends 建立两层原型关系 → super 解析父级方法 → 检查语法糖之外的运行时链接。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
+本页的可执行链条是：声明类与原型方法 → 用 new 创建实例 → constructor 初始化状态 → extends 建立两层原型关系 → super 解析父级方法 → 检查语法糖之外的运行时链接。正常样本证明主路径，边界样本证明身份与状态隔离，失败样本定位停止点，恢复样本证明修正后没有旧接收者污染下一次执行。
 
 ## 最小可运行实验
 
@@ -103,51 +167,39 @@ Appendix A: ES6 class在本单元中落到“声明类与原型方法”这一�
 ```js
 class Parent {
   speak() {
-    return "parent";
+    return this.name;
   }
 }
+
 class Child extends Parent {
+  constructor(name) {
+    super();
+    this.name = name;
+  }
+
   speak() {
     return super.speak() + ":child";
   }
 }
-console.log(new Child().speak());
+
+const child = new Child("Ada");
+console.log(child.speak());
+console.log(Object.getPrototypeOf(child) === Child.prototype);
+console.log(Object.getOwnPropertyDescriptor(Child.prototype, "speak"));
 ```
 
-```yaml
-book: 你不知道的 JavaScript（一版三卷六册）
-page: ydk-this-appendix-a-es6-class
-role: chapter
-official_entries: 1
-sample: normal | boundary | failure | recovery
-first_divergence: null
-bindings_stable: true
-ordering_explained: true
-cleanup_complete: true
-```
-
-```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
-stop at first divergence
-recover and replay the same sample
-assert stable state and no stale work
-```
-
-## 常见误区与故障注入
-
+预期结果是 `Ada:child`、第一条原型断言为 `true`，并且 `speak` 的描述符显示 `enumerable: false`。如果把 `new Child("Ada")` 改成 `Child("Ada")`，故障应在构造器入口停止，而不是生成一个“半成品实例”。
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | `new Child("Ada").speak()` | `this`、父级方法、返回值 | 输出 `Ada:child`，且查找路径可解释 |
+| 边界 | 创建两个不同名字的 Child 实例 | own state 与共享方法 | `name` 独立，方法引用可共享 |
+| 失败 | 直接调用 `Child("Ada")` | 构造器入口的停止点 | 明确得到 `TypeError`，没有半成品状态 |
+| 恢复 | 修正为 `new Child("Ada")` 后重放 | 新实例与原型链 | 结果稳定，没有旧接收者污染 |
 
-本页签发不变量是：**ES6 class 提供更整洁的构造器与继承语法，但底层仍以原型链接、this 和属性描述符运行；方法不可枚举、super 词法绑定等差异必须单独验证。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**class 改善声明方式，但没有移除 this、原型链接、super 与属性描述符。** 最终输出不能替代作用域查找、接收者、方法来源和调用约束的完整轨迹。
 
 ## 版本与原书边界
 
@@ -157,19 +209,59 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. 修改 `Child`，为每个实例加入 `name`，创建两个实例并证明它们的状态不同、`speak` 方法来源相同。
+
+   <Answer>
+
+   在 `constructor(name)` 中写入 `this.name = name`，然后比较 `first.name !== second.name` 与 `first.speak === second.speak`。前者说明状态属于实例，后者说明方法沿原型共享。
+
+   </Answer>
+
+2. 使用 `Object.keys`、`Object.getOwnPropertyNames` 和 `Object.getOwnPropertyDescriptor` 检查 `Child.prototype.speak`。哪一项证据能解释方法为什么没有出现在实例的键列表中？
+
+   <Answer>
+
+   `Object.keys(child)` 只列出实例自身的可枚举状态字段；`Object.getOwnPropertyNames(Child.prototype)` 能看到 `speak`，而其描述符的 `enumerable` 为 `false`。因此方法在原型上共享，并非复制到每个 child。
+
+   </Answer>
+
+3. 分别运行 `new Child("Ada").speak()`、`Child("Ada")`，再让父级 `speak` 读取 `this.name`。记录正常输出、故障类型和 `super` 调用时的接收者。
+
+   <Answer>
+
+   正常调用应返回 `Ada:child`；直接调用 class 构造器会得到 `TypeError`，因为缺少 `new`。`super.speak()` 找到父级实现，但父级函数仍以当前 child 为 `this`，所以能够读取 `Ada`。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **class 语法**：对应“声明类与原型方法”阶段的核心观察量。
-- **constructor**：对应“用 new 创建实例”阶段的核心观察量。
-- **extends**：对应“constructor 初始化状态”阶段的核心观察量。
-- **super**：对应“extends 建立两层原型关系”阶段的核心观察量。
-- **方法描述符**：对应“super 解析父级方法”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- **class 语法**：提供更整洁的声明外壳，不等于复制实例方法。
+- **constructor**：在 `new` 流程中把状态写入当前实例。
+- **extends**：建立子类与父类原型之间的可观察链接。
+- **super**：定位父级实现，同时保留当前实例作为接收者。
+- **原型链接**：决定属性查找如何从 child 向两个 prototype 继续。
+- **方法描述符**：用 `enumerable` 等元数据证明方法的存放与枚举行为。
+
+理解 class 的关键不是背诵语法，而是能沿着实例、原型、父级方法和描述符逐步复演一次运行时过程。
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="class 语法">声明构造器和原型方法的语法形式；它让代码更整洁，但不改变方法共享的对象模型。</GlossaryItem>
+  <GlossaryItem term="constructor">用 `new` 创建实例时运行的初始化方法，通常把字段写入当前 `this`。</GlossaryItem>
+  <GlossaryItem term="extends">建立子类原型与父类原型之间的链接，使方法查找可以向父级继续。</GlossaryItem>
+  <GlossaryItem term="super">在子类方法中定位父级实现，并以当前实例继续执行该实现。</GlossaryItem>
+  <GlossaryItem term="原型链接">对象查找自身属性失败后向上查找的关系，决定共享行为的来源。</GlossaryItem>
+  <GlossaryItem term="方法描述符">描述属性值、可写性、可配置性和可枚举性的元数据；class 方法默认不可枚举。</GlossaryItem>
+</Glossary>
 
-## 来源与改编边界
-
+<Attribution
+  adaptedFrom={"You Don't Know JS, this & Object Prototypes, Appendix A: ES6 class"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/apA.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

@@ -3,23 +3,44 @@ title: "第 7 章 元编程"
 type: A
 section: "下卷 · 第二部分 ES6 及未来"
 order: 39
-description: "元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。"
+description: "元编程通过知名 Symbol、Proxy 和 Reflect 观察或改写语言级操作；可靠的处理器必须保留 receiver 语义、验证代理不变量，并用特性检测面对运行时差异。"
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch7.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-39
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkEs607MetaProgrammingLab } from "@/components/mdx/you-dont-know-js/ydk-es6-07-meta-programming";
 
-## 直觉：先预测，再运行
+<Objectives>
 
-元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。
+- 能把一次属性读取、写入、调用或迭代拆成目标对象、receiver、处理器和返回值，判断它经过了哪一个语言级协议。
+- 能用 Proxy 与 Reflect 实现最小观察器，同时验证知名 Symbol、处理器返回值、代理不变量和撤销后的错误边界。
+- 能用 Feature Testing 识别运行时能力，并说明 Tail Call Optimization (TCO) 等优化不能只凭语法或一次调用结果推断。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+</Objectives>
+
+## 直觉：先问“哪一个内部动作被改写”
+
+元编程不是“让对象变魔法”，而是让程序观察或改写语言本来会执行的动作：读取属性、写入属性、调用函数、创建实例和迭代对象。可靠的元编程代码先指出动作，再决定是否拦截；它不会用一个万能 Proxy 把所有行为都藏起来。
+
+先预测：读取 `proxy.value` 时，处理器收到哪些参数；在 getter 内部读取另一个属性时，receiver 应该是谁；`Reflect.get` 为什么比 `target[key]` 更能保留默认语义；撤销代理后，读取和调用会怎样失败。记录预期后切换交互样本，观察首个偏离点。
+
+<YdkEs607MetaProgrammingLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本章沿作者公开的一版仓库目录组织内容，覆盖从函数上下文到代理、反射和能力检测的八个条目。正文是独立教学重构：可视化、代码和练习用于验证语言机制，不把现代引擎的实现细节伪装成原书历史断言。
 
 - Chapter 7: Meta Programming
 - Function Names
@@ -30,178 +51,307 @@ draft: false
 - Feature Testing
 - Tail Call Optimization (TCO)
 
-本页逐项覆盖 8 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
+目录条目都被落到“入口、转发、约束、能力”四类问题中。导航页和跨章复习不计入本章正式条目。
 
-## 核心概念与状态所有权
+## 常见误区与故障注入
 
-。
+<Callout type="trap" title="陷阱：Proxy 只是给对象加一层日志">
 
-。
+现象：处理器打印了 key，就认为读取已经被正确观察；却没有传递 receiver，也没有检查 getter 或原型行为。
 
-。
+原因：属性读取是带目标、键和接收者的内部操作。简写的 `target[key]` 可能改变 getter 中的 this，日志也可能掩盖真正的语义变化。
 
-。
+修复：用 `Reflect.get(target, key, receiver)` 转发默认路径，并为自有属性、原型 getter、缺失键和异常分别写断言。
 
-。
+</Callout>
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Callout type="trap" title="陷阱：处理器可以返回任何想要的结果">
 
-|   # | 观察量      | 本页判定方式                                            |
-| --: | ----------- | ------------------------------------------------------- |
-|   1 | 元编程      | 在“选择要观察的语言操作”阶段保存前后状态并核对不变量    |
-|   2 | 知名 Symbol | 在“创建目标对象与处理器”阶段保存前后状态并核对不变量    |
-|   3 | Proxy       | 在“Proxy 拦截对应内部方法”阶段保存前后状态并核对不变量  |
-|   4 | Reflect     | 在“用 Reflect 保留默认语义”阶段保存前后状态并核对不变量 |
-|   5 | 内部方法    | 在“维护代理不变量”阶段保存前后状态并核对不变量          |
+现象：set trap 返回 true 却没有写入目标，或 get trap 伪造不可配置只读属性的值，直到严格模式或冻结对象才爆错。
+
+原因：代理必须遵守目标对象的不可变约束；处理器返回值并不是脱离目标状态的自由数据。
+
+修复：为不可配置属性、非可写属性、原型和返回类型建立不变量测试，失败时让错误在代理边界处可见。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：知名 Symbol 是普通字符串键">
+
+现象：给对象加一个名为 `"Symbol.iterator"` 的字符串属性，期待 `for...of` 识别它。
+
+原因：语言协议使用真正的知名 Symbol，例如 `Symbol.iterator`；字符串同名键没有接入内部迭代流程。
+
+修复：把协议入口、next 返回形状和 done 边界一起测试；如果运行时没有所需能力，先检测并提供明确降级。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：一次快速调用就证明了 TCO 或代理性能">
+
+现象：递归样例没有立刻溢出，或代理样例一次运行很快，就断言引擎启用了尾调用优化或没有额外成本。
+
+原因：Tail Call Optimization (TCO) 属于运行时能力和调用上下文问题；微基准还会受到热身、缓存、内联和输入规模影响。
+
+修复：用 Feature Testing 检查能力，用独立基准和多个输入观察趋势；记录环境与限制，不把偶然结果写成语言保证。
+
+</Callout>
+
+## 核心概念与操作所有权
+
+<Term def="让程序观察或改变语言级操作的设计；它必须明确被观察的动作、转发方式、约束和失败出口。">元编程</Term> 负责把隐藏的内部步骤变成可检查的边界。
+
+<Term def="规范描述的属性读取、写入、调用、构造或迭代动作；Proxy trap 与 Reflect API 都围绕这些动作对齐。">内部方法</Term> 是理解代理行为的关键单位。
+
+<Term def="JavaScript 预留给语言协议的 Symbol，例如 Symbol.iterator；对象通过它们接入迭代等内置流程。">知名 Symbol</Term> 把协议入口与普通字符串键区分开。
+
+<Term def="Proxy 创建时接收 trap 函数的对象；它决定哪些操作被观察、拒绝或转发。">代理处理器</Term> 拥有拦截逻辑，但不能无视目标约束。
+
+<Term def="使用与内部方法对应的 Reflect 函数，并把 target、key、receiver 等上下文继续传递的动作。">反射转发</Term> 用来保留默认语义，再在边界上增加验证或记录。
+
+<Term def="Proxy 处理器必须满足的目标对象约束，例如不可配置属性不能被伪造、set 成功必须返回布尔结果。">代理不变量</Term> 防止“拦截成功”与对象真实状态互相矛盾。
+
+这六个概念组成一条责任链：先命名操作，再找协议入口；处理器决定是否拦截，Reflect 负责默认路径，不变量负责约束，特性检测负责环境边界。每次实验都要保存 target、receiver、返回值和失败类型。
+
+| 观察量 | 要记录的证据 | 不应偷换成 |
+| --- | --- | --- |
+| 内部方法 | 操作名称、目标、键、receiver、结果 | 一个普通函数调用 |
+| 知名 Symbol | Symbol 身份、协议入口、next 形状 | 同名字符串属性 |
+| 代理处理器 | trap、参数、转发或拒绝分支 | 无条件日志包装 |
+| 反射转发 | Reflect 方法、receiver、异常路径 | `target[key]` 的简写猜测 |
+| 代理不变量 | 属性描述符、返回类型、冻结状态 | “处理器想返回什么都行” |
 
 ## 机制拆解
 
-### 1. 选择要观察的语言操作
+### 1. Chapter 7: Meta Programming
 
-选择要观察的语言操作不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Chapter 7: Meta Programming** 的核心是把“语言会怎么做”变成可以观察的操作轨迹。一次 `proxy.name` 至少涉及目标、键、receiver 和 get 路径；一次 `proxy.run()` 还要增加 this、参数和异常边界。
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+先写原始操作的预期，再加一个只记录、不改变结果的处理器。只有在默认路径的证据稳定后，才增加校验、缓存或拒绝逻辑。这样调试失败时可以判断是观察器改变了语义，还是原始对象本来就不满足约束。
 
-### 2. 创建目标对象与处理器
+### 2. Function Names
 
-创建目标对象与处理器不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Function Names** 提供函数上下文的可读线索。命名函数、匿名函数、对象方法和绑定后的函数在 `name` 上可能呈现不同的推断结果；这个元属性适合诊断和错误报告，却不应被当成可靠的业务 ID。
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+const named = function loadConfig() {};
+const method = { run() {} }.run;
 
-### 3. Proxy 拦截对应内部方法
+console.log(named.name, method.name);
+```
 
-Proxy 拦截对应内部方法不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+验证时记录函数是如何创建和赋值的，再观察 name 是否被推断或改变。若系统需要稳定标识，请显式配置 ID，不要把调试元属性当作持久化契约。
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+### 3. Meta Properties
 
-### 4. 用 Reflect 保留默认语义
+**Meta Properties** 是语法提供的上下文入口，例如函数内部的 `new.target` 可以告诉构造函数是否通过 `new` 调用，`import.meta` 则提供模块环境的元信息。它们不是普通变量，不能脱离对应语法位置随意读取。
 
-用 Reflect 保留默认语义不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+```js
+function Entry() {
+  return { constructed: new.target === Entry };
+}
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+console.log(new Entry(), Entry());
+```
 
-### 5. 维护代理不变量
+用正常调用和构造调用做对照，记录元属性在每条路径上的值。元属性回答的是“当前语言上下文是什么”，不是“调用者希望我把它解释成什么”。
 
-维护代理不变量不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+### 4. Well Known Symbols
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+**Well Known Symbols** 把对象接入内置协议。`Symbol.iterator` 让 `for...of` 找到迭代器，`Symbol.toPrimitive` 可以参与原始值转换；协议方法必须返回规范要求的形状，否则错误会在使用方才暴露。
 
-### 6. 用特性检测和撤销路径验收
+```js
+const range = {
+  start: 1,
+  end: 3,
+  *[Symbol.iterator]() {
+    for (let value = this.start; value <= this.end; value += 1) {
+      yield value;
+    }
+  },
+};
 
-用特性检测和撤销路径验收不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+console.log([...range]);
+```
 
-结合本章主张来看：元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+知名 Symbol 是身份唯一的协议入口，不等于字符串键。测试时分别验证协议存在、迭代器对象、next 返回值和 done 终点，不能只验证展开结果刚好正确。
 
-## 目录主题逐项讲解
+### 5. Proxies
 
-### Chapter 7: Meta Programming
-
-Chapter 7: Meta Programming在本单元中落到“选择要观察的语言操作”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Function Names
-
-Function Names在本单元中落到“创建目标对象与处理器”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Meta Properties
-
-Meta Properties在本单元中落到“Proxy 拦截对应内部方法”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Well Known Symbols
-
-Well Known Symbols在本单元中落到“用 Reflect 保留默认语义”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Proxies
-
-Proxies在本单元中落到“维护代理不变量”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Reflect API
-
-Reflect API在本单元中落到“用特性检测和撤销路径验收”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Feature Testing
-
-Feature Testing在本单元中落到“选择要观察的语言操作”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Tail Call Optimization (TCO)
-
-Tail Call Optimization (TCO)在本单元中落到“创建目标对象与处理器”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-## 六阶段证据链
-
-本页的可执行链条是：选择要观察的语言操作 → 创建目标对象与处理器 → Proxy 拦截对应内部方法 → 用 Reflect 保留默认语义 → 维护代理不变量 → 用特性检测和撤销路径验收。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
-
-## 最小可运行实验
-
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+**Proxies** 把目标对象和代理处理器组合起来，处理器可以拦截 get、set、has、apply、construct、ownKeys 等操作。每个 trap 的参数和返回契约不同，应该按内部方法分别记录，而不是写一个含糊的“代理已生效”日志。
 
 ```js
 const target = { value: 2 };
 const proxy = new Proxy(target, {
-  get(obj, key, receiver) {
-    console.log("get", String(key));
-    return Reflect.get(obj, key, receiver);
+  get(object, key, receiver) {
+    console.log("read", String(key));
+    return Reflect.get(object, key, receiver);
   },
 });
+
 console.log(proxy.value);
 ```
 
+代理可以把权限检查、调试追踪或虚拟属性放在边界，但每一项改变都要回到目标约束。尤其在 getter、原型、冻结属性和异常传播场景中，receiver 不能被省略。
+
+### 6. Reflect API
+
+**Reflect API** 提供与内部方法对应的函数接口，例如 `Reflect.get`、`Reflect.set`、`Reflect.apply` 和 `Reflect.construct`。它们返回明确的成功值或抛出明确的异常，并允许调用者把 receiver、thisArg 和参数继续传入。
+
+```js
+const base = { get label() { return this.value; } };
+const object = Object.create(base);
+object.value = "ok";
+
+console.log(Reflect.get(object, "label", object));
+```
+
+处理器中优先使用对应的 Reflect 操作，把“默认行为”写成可读的分支。这样新增日志或校验时，不必复制一套容易漏掉原型和 receiver 的手写语义。
+
+### 7. Feature Testing
+
+**Feature Testing** 是直接检查能力是否存在、接口是否可调用以及行为是否满足当前需求，而不是检测一个可能被转译器改写的版本字符串。对 Proxy、知名 Symbol 或模块元属性，都应该把能力测试放在功能入口附近。
+
+```js
+const canProxy = typeof Proxy === "function";
+const canIterate = typeof Symbol === "function" && typeof Symbol.iterator === "symbol";
+
+console.log(canProxy, canIterate);
+```
+
+能力检测之后仍要定义降级路径：禁用增强、使用普通对象、返回可解释错误，或选择不同的数据结构。检测失败是产品状态，不是可以悄悄吞掉的异常。
+
+### 8. Tail Call Optimization (TCO)
+
+**Tail Call Optimization (TCO)** 描述某些尾部调用可以复用当前调用帧的优化方向，但是否实现、在什么模式下实现以及调试器如何展示，都属于运行时和环境边界。ES6 的语法形式本身不能证明当前引擎已经提供这个优化。
+
+```js
+function countDown(value) {
+  if (value === 0) return 0;
+  return countDown(value - 1);
+}
+
+console.log(countDown(3));
+```
+
+把递归正确性、栈空间、性能和 TCO 能力分开测量。需要深度递归的业务应采用显式循环或栈，并通过环境文档和基准说明选择，而不是等待一次小输入“看起来没问题”。
+
+## 保留默认语义的代理流程
+
+一个可靠的 trap 可以按四步运行：记录内部操作，检查业务前置条件，调用对应的 Reflect 方法，再验证返回结果和目标不变量。缺少第二步会放过非法状态，缺少第三步会复制不完整的默认语义，缺少第四步会让错误延迟到调用者。
+
+```js
+function observingGet(target, key, receiver) {
+  if (typeof key === "symbol") return Reflect.get(target, key, receiver);
+  const value = Reflect.get(target, key, receiver);
+  console.log("observed", String(key), value);
+  return value;
+}
+```
+
+撤销也是流程的一部分。`Proxy.revocable` 返回的 revoke 函数一旦执行，后续操作应立即失败；应用层必须清理监听器、缓存和外部引用，不能只把代理对象留在某个闭包里等待它自然消失。
+
+## 最小可运行实验
+
+下面的实验把读取、转发、接收者和撤销放在一条可回放轨迹中。运行前先预测每次日志和失败位置：
+
+```js
+const target = {
+  value: 3,
+  get doubled() {
+    return this.value * 2;
+  },
+};
+const { proxy, revoke } = Proxy.revocable(target, {
+  get(object, key, receiver) {
+    return Reflect.get(object, key, receiver);
+  },
+});
+
+console.log(proxy.doubled);
+revoke();
+try {
+  console.log(proxy.value);
+} catch (error) {
+  console.log(error.constructor.name);
+}
+```
+
 ```yaml
-book: 你不知道的 JavaScript（一版三卷六册）
-page: ydk-es6-07-meta-programming
-role: chapter
-official_entries: 8
 sample: normal | boundary | failure | recovery
+operation: get
+receiver_preserved: true
+reflect_forwarded: true
+invariant_checked: true
+revoked_access: explicit-failure
 first_divergence: null
-bindings_stable: true
-ordering_explained: true
-cleanup_complete: true
 ```
 
-```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
-stop at first divergence
-recover and replay the same sample
-assert stable state and no stale work
-```
-
-## 常见误区与故障注入
-
-
-## 四类样本与验收
-
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
-
-本页签发不变量是：**元编程让程序观察或改写语言级操作：函数名与元属性提供上下文，知名 Symbol 定制协议，Proxy 拦截内部方法，Reflect 提供与这些内部操作对齐的函数接口。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
-
-## 版本与原书边界
-
-本单元忠实保留原书讨论的 ES6 语境，同时把年度规范、现代浏览器实现和转译工具的差异放入版本栏；后续规范补充不会冒充原书正式分节。
-
-站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
+修改一个条件再重放：把 receiver 换成 target、移除 Reflect、在 revoke 后调用代理，或者把 getter 改成依赖原型。日志应该指出是哪一层语义发生了变化。
 
 ## 练习
 
+<Exercises>
+
+1. 为一个拥有原型 getter 的对象添加 get trap，比较 `target[key]` 和 `Reflect.get(target, key, receiver)` 在 receiver 不同情况下的结果。
+
+   <Answer>
+
+   getter 中的 `this` 取决于 receiver。处理器使用 Reflect.get 并传入代理 receiver 时，getter 可以观察到代理上下文；直接使用 target[key] 会把这层上下文丢掉。答案应记录目标、原型、receiver 和 getter 读取的每一项。
+
+   </Answer>
+
+2. 为 set trap 写不可配置属性和严格模式赋值的边界测试，验证处理器返回值、目标状态和代理不变量三者一致。
+
+   <Answer>
+
+   先定义不可配置或只读属性，再尝试通过代理写入；如果 trap 宣称成功却违背目标约束，运行时应抛出不变量错误。正常写入则应通过 Reflect.set 并检查布尔结果，不能只返回 true 让调用者误以为写入完成。
+
+   </Answer>
+
+3. 实现一个 Feature Testing 函数，分别检查 Proxy、Symbol.iterator 和可选的 TCO 运行时能力，并为检测失败设计降级路径。
+
+   <Answer>
+
+   Proxy 和 Symbol.iterator 可以通过类型和最小行为测试判断；TCO 不能只看语法，应把它标成环境相关能力，并用文档或受控基准验证。检测失败时可以关闭增强、改用普通对象或显式循环，同时向调用者报告降级原因。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **元编程**：对应“选择要观察的语言操作”阶段的核心观察量。
-- **知名 Symbol**：对应“创建目标对象与处理器”阶段的核心观察量。
-- **Proxy**：对应“Proxy 拦截对应内部方法”阶段的核心观察量。
-- **Reflect**：对应“用 Reflect 保留默认语义”阶段的核心观察量。
-- **内部方法**：对应“维护代理不变量”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- **Function Names** 与 **Meta Properties** 提供函数和调用上下文，但不应被扩大成业务身份契约。
+- **Well Known Symbols** 把对象接入迭代、原始值转换等语言协议。
+- **Proxies** 拦截内部方法；每个 trap 都有独立的参数、返回值和不变量。
+- **Reflect API** 用与内部操作对齐的函数保留默认语义，尤其要传递 receiver。
+- **Feature Testing** 直接验证运行时能力；**Tail Call Optimization (TCO)** 等优化不能靠一次调用猜出。
+- **Chapter 7: Meta Programming** 的核心是改变入口后仍能解释、回放和约束出口。
 
 ## 术语表
 
+<Glossary>
+
+<GlossaryItem term="元编程">观察或改变语言级操作的设计方式，必须明确操作、转发、约束和失败出口。</GlossaryItem>
+<GlossaryItem term="内部方法">规范描述的属性读取、写入、调用、构造或迭代动作。</GlossaryItem>
+<GlossaryItem term="知名 Symbol">用于接入内置语言协议的 Symbol，例如 Symbol.iterator。</GlossaryItem>
+<GlossaryItem term="代理处理器">Proxy 创建时接收 trap 函数的对象，决定哪些操作被观察、拒绝或转发。</GlossaryItem>
+<GlossaryItem term="反射转发">调用对应的 Reflect 方法并继续传递 target、receiver 或参数，以保留默认语义。</GlossaryItem>
+<GlossaryItem term="代理不变量">处理器必须遵守的目标对象约束，例如不可配置属性和布尔返回结果。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章保留原书 ES6 语境中的元属性、知名 Symbol、Proxy 和 Reflect 讨论，并把现代引擎的特性检测、撤销能力和尾调用优化状态单独标出。不同运行时可以支持不同的优化，但不会改变处理器需要验证 receiver、返回值和目标不变量的基本契约。
+
+站内示例优先使用今天可运行的标准写法；原书目录和历史能力归属仍以作者一版仓库为准。若业务依赖代理性能、TCO 或某个 Symbol 协议，应把环境测试和降级策略作为工程代码，而不是把语言提案或引擎偶然行为写成永久保证。
 
 ## 来源与改编边界
 
+本文根据作者公开的章节目录进行独立教学重写，目录条目用于结构对齐；示例、练习、交互时间线和故障注入均为本项目新增教学材料。
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, ES6 & Beyond, Chapter 7: Meta Programming"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch7.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

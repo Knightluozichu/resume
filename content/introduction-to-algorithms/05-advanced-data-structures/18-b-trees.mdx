@@ -3,66 +3,137 @@ title: "Chapter 18 · B-Trees"
 type: C
 section: "CLRS4 · 高级数据结构"
 order: 18
-description: "按CLRS第四版第18章重建B树定义、搜索插入基本操作与删除，并突出外存页访问和下行不变量。"
+description: "按 CLRS 第四版第 18 章重建 B 树定义、页面搜索、分裂插入与删除修复，并把外存访问和下行不变量连成一份可验证证书。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-18
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter18BTreesLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch18-b-trees";
 
-## 从“磁盘上为什么不直接用二叉搜索树”开始
+<Objectives>
 
-先预测：一次storage page读取能容纳数百个key。如果每个tree node只放一个key，二叉树每层都可能触发一次随机I/O；若一个node恰好装满一页并拥有数百个children，同样规模的数据只需少数几层。
+- 能解释 B 树如何用页面占用边界、separator 和等深叶子减少外存访问。
+- 能修改搜索、分裂插入或删除伪代码，并分别报告 page access 与页内比较成本。
+- 能回答：为什么删除时必须在下降前借位或合并，而不是等 underflow 出现后再补救？
 
-为external memory设计。算法先最小化page access，再在内存中的page内线性或二分查找；只写$O(\log n)$而不说明对哪个cost model，无法表达它的工程价值。
+</Objectives>
 
+## 先问：为什么外存里的树不照搬二叉搜索树？
 
-## 18.1 Definition of B-trees
+把磁盘想成一排需要整箱搬运的货架：一次搬运可以带回很多相邻货物，但搬运本身比在箱内扫一遍更贵。如果每个节点只放一个 key，查找就会反复搬箱；如果一个节点正好填满页面，同一箱里的许多比较可以在内存中完成。
 
-### Node occupancy
+本章解决的问题是：如何让一棵搜索树把昂贵的“搬一页”次数压到很少，同时仍然能插入和删除。没有占用边界，页面可能太空；没有分裂和合并，更新会破坏有序范围。
 
-$t\ge2$。每个node内keys严格非降序，并把children的key range按separator分开。包含$n[x]$个keys的internal node恰有$n[x]+1$个children。
+先预测：当页面一次能装下数百个 key 时，应该优先减少树的层数，还是优先让每页只放一个 key？选择后推进下面的实验，观察搜索、分裂和删除的证据是否保持一致。
 
-包括：
+<Clrs4Chapter18BTreesLab />
 
-1. 除root外，每个node至少$t-1$个keys，至多$2t-1$个keys。
-2. 非空root至少1个key；root可以是leaf。
-3. Internal node的children数比keys多1。
-4. 所有leaves具有相同depth。
-5. Child $c_i$中的keys落在相邻separator规定的范围内。
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 18 章，官方概念包括：
+
+- B-trees / B 树；
+- definition of B-trees / B 树定义；
+- basic operations on B-trees / B 树基本操作；
+- deleting a key from a B-tree / 从 B 树删除键。
+
+正文是独立教学重构：先固定最小度数、节点占用和 child range，再把搜索、split-before-descent 插入、borrow/merge 删除与根收缩放进同一个页面访问模型。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：只看比较次数，不看 page access">
+
+现象：实现报告了页内二分查找的比较次数，却说算法一定很快。
+
+原因：外存模型中读取一页的代价通常远高于在已读页面内比较；两种成本不是同一个计数器。
+
+修复：同时报告 page access 和页内比较；先根据页面容量选择最小度数，再讨论 CPU 常数。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把 full child 直接交给插入递归">
+
+现象：向一个已经有 `2t−1` 个 keys 的 child 继续下降，写入时才发现 parent 没有位置。
+
+原因：parent 可能无法接收 promoted median，递归也无法保证下一步有空位。
+
+修复：下降前先 split child；median 上移、两侧 child 分开后，再根据新 separator 选择路径。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：删除后再处理 underflow">
+
+现象：删除已经让 child 变空，随后才尝试从 sibling 借 key，结果忘记同步 parent separator 或 child pointer。
+
+原因：递归已经经过不合法的 page，修复时机太晚，无法维持一遍向下遍历的前提。
+
+修复：进入 child 前先 borrow 或 merge，让递归目标至少拥有 `t` 个 keys；每次搬运都同步 separator 和 pointer。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：只验证 inorder keys 就宣布 B 树正确">
+
+现象：所有 key 的中序序列正确，但某个 leaf 深度不同，或一个 internal node 的 child 数与 key 数不匹配。
+
+原因：集合结果无法证明占用边界、范围分区和页面指针仍然成立。
+
+修复：每次操作后递归检查 key 有序、child range、occupancy、children 数、等深叶子和 dirty page 写回。
+
+</Callout>
+
+## B-trees / B 树
+
+### 页面模型与核心字段
+
+<Term def="把搜索树节点按页面组织、让一页容纳多个有序 key 的外存搜索树">B 树</Term>把节点设计成页面，而不是把每个 key 分散到独立节点。一个 internal page 有 `n[x]` 个 keys，就有 `n[x]+1` 个 children；相邻 separator 划出的范围决定下一页是否值得读取。
+
+<Term def="控制每个非根节点最少和最多 key 数的参数，通常记作 t">最小度数</Term> `t` 满足 `t ≥ 2`。除 root 外，每个节点至少有 `t−1` 个 keys，最多有 `2t−1` 个 keys；internal node 的 children 数总比 keys 多 1。root 可以更小，因为小树不应被迫浪费一个完整页面。
+
+这些上下界就是 <Term def="节点在页面中允许保持的 key 数和 child 数范围">页面占用边界</Term>。它们让 split 有确定的上限，也让 delete 能够通过 borrow 或 merge 恢复合法占用。
+
+### definition of B-trees / B 树定义
+
+一棵 B-trees 必须同时满足以下结构不变量：
+
+1. 每个节点内的 keys 有序；相邻 child range 被 separator 严格分开。
+2. 除 root 外，节点的 key 数在 `t−1` 到 `2t−1` 之间。
+3. internal node 有 `n[x]+1` 个 children；leaf 没有 children。
+4. 所有 leaves 具有相同 depth。
+5. root 非空时至少有一个 key；删除后可以收缩为唯一 child。
+
+高度为 `h` 的最稀疏非空 B 树，root 有 1 个 key，下一层最多只提供两个 children，之后每个 internal node 至少有 `t` 个 children。因此：
 
 $$
-t-1\le n[x]\le 2t-1
-\quad\text{for every nonroot node }x.
+n \ge 1 + 2(t-1)\sum_{i=0}^{h-1}t^i = 2t^h - 1.
 $$
 
+这个式子在说：节点越宽，达到同样 key 数所需的页面层数越少。
 
-Root exception允许小tree不浪费大量空间，也允许delete后高度收缩。Duplicates需要额外policy：将等值key统一放某一侧，或按`(key,id)`建立严格全序。
-
-### Height bound
-
-高度为$h$的最稀疏非空B-tree，root有1个key和2个children，之后每个internal node至少$t$个children。最少key数满足：
+于是高度满足：
 
 $$
-n\ge 1+2(t-1)\sum_{i=0}^{h-1}t^i
-=2t^h-1.
+h \le \log_t\frac{n+1}{2}.
 $$
 
-因此：
+这个式子在说：B 树把外存查找的 page access 压到 `O(log_t n)`；但 `t` 不能盲目增大，还要平衡页面大小、key 宽度、pointer 宽度和页内搜索。
 
-$$
-h\le\log_t\frac{n+1}{2}.
-$$
+## basic operations on B-trees / B 树基本操作
 
+### 搜索：一次只读取一页
 
-增大$t$显著降低page levels，但page过大也会增加读取字节、页内查找和写放大。实际$t$由page size、key宽度、pointer宽度和目标fill factor共同决定。
-
-## 18.2 Basic operations on B-trees
-
-### Searching one page at a time
-
-首先在当前page寻找首个不小于target的key。相等则成功；若leaf则失败；否则读取对应child。
+在当前 page 中找到首个不小于目标 key 的位置。相等就返回；当前节点是 leaf 就失败；否则根据 range 读取对应 child。
 
 ```text
 B-TREE-SEARCH(x, k)
@@ -73,100 +144,123 @@ B-TREE-SEARCH(x, k)
 5  return B-TREE-SEARCH(x.child[i], k)
 ```
 
+若树高为 `h`，page access 是 `O(h) = O(log_t n)`。页内线性扫描每层约需 `O(t)` 比较，二分查找约需 `O(log t)` 比较；因此应该把两个成本分开描述。缓存命中可能减少物理设备等待，但不会改变算法的 page reference 边界。
 
-Page I/O为$O(h)=O(\log_t n)$。页内线性查找需要$O(t)$比较，binary search为$O(\log t)$；CPU与I/O两个维度都应报告。Cache命中时`DISK-READ`可能不触发物理设备，但算法的page reference边界不变。
+### 插入：先分裂，再下降
 
-$$
-Q_{mathrm{page}}=O(\log_t n),
-\qquad
-C_{mathrm{compare}}=O(\log_t n\cdot\log t).
-$$
+当 child 已经有 `2t−1` 个 keys 时，先把中间 key 提升到 parent：左 child 保留前 `t−1` 个，右 sibling 接收后 `t−1` 个；如果 child 不是 leaf，还要把对应的 children 一起分开。
 
-### Splitting a full child
-
-Full node有$2t-1$个keys。SPLIT-CHILD把median第$t$个key提升到parent；原node保留前$t-1$个，新sibling取得后$t-1$个，若非leaf还要对应拆分$2t$个children。
-
+<Term def="把 full child 的中间 key 提升到 parent，并把两侧 keys 与 pointers 分开">分裂提升</Term>要求 parent 本身 nonfull。若 root full，先创建一个空的新 root，把旧 root 接成 child，再执行 split；只有这一刻树高会增加。
 
 ```cpp
-void split_child(Node* parent, int i) {
-    Node* full = parent->child[i];
-    Node* right = allocate_node(full->leaf);
-    Key median = full->key[t - 1];
-    right->key.assign(full->key.begin() + t, full->key.end());
-    if (!full->leaf)
-        right->child.assign(full->child.begin() + t, full->child.end());
-    full->key.resize(t - 1);
-    if (!full->leaf) full->child.resize(t);
-    parent->key.insert(parent->key.begin() + i, median);
-    parent->child.insert(parent->child.begin() + i + 1, right);
+void splitChild(Node& parent, int i, int t) {
+    Node& full = *parent.child[i];
+    auto right = makeNode(full.leaf);
+    Key median = full.keys[t - 1];
+    right->keys.assign(full.keys.begin() + t, full.keys.end());
+    full.keys.resize(t - 1);
+    if (!full.leaf) {
+        right->children.assign(full.children.begin() + t, full.children.end());
+        full.children.resize(t);
+    }
+    parent.keys.insert(parent.keys.begin() + i, median);
+    parent.children.insert(parent.children.begin() + i + 1, std::move(right));
 }
 ```
 
-Parent必须nonfull，才能接收promoted median和新child pointer。Root full时先创建空new root，把old root设为child 0并split，tree height增加1。
+插入 nonfull node 时，leaf 只需右移较大的 keys；internal node 则先判断目标 child 是否 full，必要时 split，再根据 promoted median 重新决定左或右。这个顺序保证递归永远不会进入 full child。
 
-### Inserting into a nonfull node
+### 页面写回与复杂度
 
-INSERT-NONFULL在leaf内移动较大keys并写入；在internal node选择child后，若child full就先split，再按新separator决定左右。关键invariant是“从不下降到full node”。
+一次操作包含 `DISK-READ`、页内比较、节点修改和 `DISK-WRITE`。渐近地，搜索和插入都沿一条 root-to-leaf 路径工作，每层只做常数次页面读写：
 
+$$
+Q_{page}=O(h)=O(\log_t n).
+$$
 
-```text
-B-TREE-INSERT-NONFULL(x, k)
-1  if x is a leaf, shift larger keys right and insert k
-2  else find child i whose range contains k
-3       DISK-READ(x.child[i])
-4       if x.child[i] is full
-5           B-TREE-SPLIT-CHILD(x, i)
-6           choose left or right side of promoted key
-7       B-TREE-INSERT-NONFULL(chosen child, k)
-```
+这个式子在说：page access 随树高增长，而页内比较应作为另一个成本维度报告。
 
-每层至多一次split并继续向下，I/O为$O(h)$。新node写回、parent写回与child写回应纳入具体storage model；渐近page数仍为常数每层。
+## deleting a key from a B-tree / 从 B 树删除键
 
+### 下行前的安全边界
 
-## 18.3 Deleting a key from a B-tree
+删除比搜索和插入更容易破坏占用。我们使用 <Term def="递归下降前先保证目标 child 至少有 t 个 keys，使删除后仍不会低于 t−1">下行不变量</Term>：进入 child 前，它至少有 `t` 个 keys。
 
-### A stronger descent invariant
+如果目标 child 只有 `t−1` 个 keys，就在下降前修复：相邻 sibling 至少有 `t` 个 keys 时借位；两侧都是 `t−1` 时，把一个 separator 和两个 child 合并为 `2t−1` 个 keys 的节点。这样递归进入的目标仍然有足够余量。
 
-比insert分支更多。为实现one-pass downward traversal，进入child前保证它至少有$t$个keys，比通常的合法下界$t-1$多一个余量；删除后仍不会underflow。
+### key 在 leaf 或 internal node
 
-若key位于leaf，直接移除。若key位于internal node $x$：
+- key 在 leaf：直接删除，剩余占用仍由下行不变量保护。
+- key 在 internal node：若前 child 至少有 `t` 个 keys，用 predecessor 替换；否则若后 child 至少有 `t` 个 keys，用 successor 替换；两边都不足时 merge，再在合并节点中继续删除。
+- key 不在当前 node：定位 child；若它只有 `t−1` 个 keys，先 borrow 或 merge，再递归。
 
-1. 前child $y$至少$t$个keys：用predecessor替换key，再从$y$递归删predecessor。
-2. 后child $z$至少$t$个keys：对称地用successor替换。
-3. $y,z$都只有$t-1$个keys：把$y$、separator key和$z$合成$2t-1$ key node，再递归。
+<Term def="从富 sibling 向目标 child 借 key，或把两个贫 child 与 parent separator 合并">借位合并</Term>不是把 key 随便塞进 child。以 left sibling 借位为例：parent separator 先下移到目标 child，left sibling 的最大 key 再上移成为新的 separator；internal node 还必须同步移动对应 child pointer。
 
+### root 收缩与完整验证
 
-若key不在$x$，目标child只有$t-1$个keys，则下降前先修复：相邻sibling至少$t$时borrow；否则与一个minimum sibling和parent separator merge。
+merge 可能让 root 的最后一个 key 被移走。此时把唯一合并 child 提升为新 root，树高减少 1。实现测试不能只比较所有 key 的集合，还要在每次操作后检查：
 
-### Borrowing through the parent
-
-Borrow不是直接把sibling key塞给child，因为必须保持key ranges。以left sibling为例：parent separator降到target child，left sibling最大key升为新的separator；若internal，还要移动对应child pointer。
-
-
-### Merging and shrinking the root
-
-Merge把两个$t-1$ key siblings与中间separator组成$2t-1$ key node，parent少一个key和child。若parent是root且最后一个key被移走，令merged child成为new root，height减1。
-
-
-```text
-B-TREE-DELETE(x, k)
-1  if k occurs in x
-2      delete from leaf, or use predecessor/successor/merge
-3  else if x is a leaf, report not found
-4  else choose child c containing k
-5      if c has t−1 keys
-6          borrow from a rich sibling, otherwise merge
-7      recurse into the resulting child with at least t keys
-8  if root has no keys and is not a leaf, replace root by its child
-```
-
-Delete的page I/O仍为$O(h)$，但case implementation容易出现off-by-one、漏移child pointer和stale disk page。测试必须在每次operation后递归验证sorted ranges、occupancy与equal leaf depth，而不只是比较inorder key集合。
-
+1. 每个 node 的 keys 有序，且 child range 没有交叠或空洞。
+2. 非根节点满足 `t−1 ≤ keys ≤ 2t−1`；internal node 的 children 数等于 keys 数加 1。
+3. 所有 leaves 深度相同，root 收缩后仍然满足 root 例外。
+4. 发生 borrow、merge、split 时，separator、child pointer 与 dirty page 都同步写回。
 
 ## 小结
 
-Chapter 18 B-Trees先用definition of B-trees固定minimum degree、occupancy、child ranges和equal leaf depth，再以basic operations on B-trees完成page search、split-before-descent insertion。Deleting a key from a B-tree通过predecessor、successor、borrow、merge和root contraction维持更强下行不变量。
+- B 树把多个有序 keys 与 child ranges 放入页面，减少 page access。
+- definition of B-trees 固定占用边界、root 例外、child 数和等深叶子。
+- basic operations on B-trees 通过 page search 与 split-before-descent 保持路径安全。
+- deleting a key from a B-tree 在下降前 borrow 或 merge，并在 root 空时收缩高度。
+- 正确性检查必须覆盖 ranges、occupancy、leaf depth 和页面写回，而非只看 key 集合。
 
-B-tree的核心性能指标是很小的page height；正确性核心是每个page的有序分区和占用边界。实现不能只检查inorder结果，还要持续验证每个node的keys数、children数、range、leaf depth与dirty page写回。
+<Exercises>
 
+1. 画出一次搜索路径
 
+设 `t = 3`，root page 的 keys 是 `[20, 40]`，目标 key 是 `34`。画出要读取的 child range，并分别写出最多几次 page access 与每页的页内比较上界。
+
+   <Answer>
+
+34 落在 `[20, 40)` 对应的中间 child。若 root 到 leaf 共两层，则最多读取 root 之外的两个 child page，page access 为 `O(h)`；每页最多 `2t−1 = 5` 个 keys，线性比较上界是常数 5，二分比较则是 `O(log t)`。
+
+   </Answer>
+
+2. 改 Demo 代码题
+
+把上方实验的默认模式改为 `split`，并把页面中的 full child `[4 | 8 | 12 | 20 | 24]` 改为 `t = 4` 的七个 keys。你需要同时修改 median、左右 child 的 key 数和说明文字；不要只替换标题。
+
+   <Answer>
+
+`t = 4` 时 full child 有 `2t−1 = 7` 个 keys，中间的第 4 个 key 被提升；左、右 child 各保留 3 个 keys。若只改标题或 median 而不改两侧数据，图示就不能继续证明 split 后两个 child 都 nonfull。
+
+   </Answer>
+
+3. 删除推导题
+
+`t = 2` 时，parent separator 为 `[20]`，左 child 为 `[8]`，右 child 为 `[24]`。要删除 8，为什么不能先直接删除再补救？请写出 merge 后的节点 keys，并说明 root 收缩何时发生。
+
+   <Answer>
+
+两个 child 都只有 `t−1 = 1` 个 key，因此下降前把左 child、separator 20、右 child 合并为 `[8 | 20 | 24]`，再在合并节点中删除 8。若 parent 恰好是 root 且删除 separator 后 root 没有 key，就把合并 child 设为新 root，树高减少 1。
+
+   </Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="B 树">把许多有序 key 放进同一页面的搜索树；它用较少的页面层数换取页内比较。</GlossaryItem>
+<GlossaryItem term="最小度数">决定非根节点容量下界和上界的参数 `t`；非根节点通常有 `t−1` 到 `2t−1` 个 keys。</GlossaryItem>
+<GlossaryItem term="页面占用边界">每个页面允许拥有的 key 和 child 数范围；它让插入分裂、删除合并有明确的触发条件。</GlossaryItem>
+<GlossaryItem term="分裂提升">把 full child 的中间 key 放到 parent，并把剩余 keys 与 pointers 分成左右两个 child。</GlossaryItem>
+<GlossaryItem term="下行不变量">删除递归进入 child 前，先保证 child 至少有 `t` 个 keys，因此删掉一个后仍不会低于合法下界。</GlossaryItem>
+<GlossaryItem term="借位合并">child 太少时，从富 sibling 借一个 key，或把两个贫 child 与 parent separator 合并。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 18: B-Trees"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

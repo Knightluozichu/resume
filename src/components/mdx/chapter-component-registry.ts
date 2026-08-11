@@ -11755,6 +11755,39 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       ExceptionContractFailureDiagram: module0.ExceptionContractFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "effective-modern-cpp/00-deducing-types/item-01-template-type-deduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-01-template-type-deduction");
+      return {
+        EmcppItem01TemplateDeductionLab:
+          module0.EmcppItem01TemplateDeductionLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/00-deducing-types/item-02-auto-type-deduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-02-auto-type-deduction");
+      return {
+        EmcppItem02AutoDeductionLab: module0.EmcppItem02AutoDeductionLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/00-deducing-types/item-03-understand-decltype":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-03-understand-decltype");
+      return {
+        EmcppItem03DecltypeLab: module0.EmcppItem03DecltypeLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/00-deducing-types/item-04-view-deduced-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-04-view-deduced-types");
+      return {
+        EmcppItem04ViewDeducedTypesLab: module0.EmcppItem04ViewDeducedTypesLab,
+      } as ChapterMdxComponents;
+    },
   "effective-modern-cpp/00-intro/learning-map": async () => {
     const module0 =
       await import("@/components/mdx/effective-modern-cpp/diagrams/learning-map");
@@ -11765,6 +11798,21 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       EmcppPrincipleDependencyFlowMap: module0.EmcppPrincipleDependencyFlowMap,
     } as ChapterMdxComponents;
   },
+  "effective-modern-cpp/01-auto/item-05-prefer-auto": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-05-prefer-auto");
+    return {
+      EmcppItem05PreferAutoLab: module0.EmcppItem05PreferAutoLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/01-auto/item-06-explicitly-typed-initializer":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-06-explicitly-typed-initializer");
+      return {
+        EmcppItem06TypedInitializerLab: module0.EmcppItem06TypedInitializerLab,
+      } as ChapterMdxComponents;
+    },
   "effective-modern-cpp/02-moving-to-modern-cpp/item-07-parentheses-vs-braces":
     async () => {
       const module0 =
@@ -11779,6 +11827,298 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.EmcppVectorConstructionSemanticsMap,
       } as ChapterMdxComponents;
     },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-08-prefer-nullptr":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-08-prefer-nullptr");
+      return {
+        EmcppItem08PreferNullptrLab: module0.EmcppItem08PreferNullptrLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-09-alias-declarations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-09-alias-declarations");
+      return {
+        EmcppItem09AliasDeclarationsLab:
+          module0.EmcppItem09AliasDeclarationsLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-10-scoped-enums":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-10-scoped-enums");
+      return {
+        EmcppItem10ScopedEnumsLab: module0.EmcppItem10ScopedEnumsLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-11-deleted-functions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-11-deleted-functions");
+      return {
+        EmcppItem11DeletedFunctionsLab: module0.EmcppItem11DeletedFunctionsLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-12-override": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-12-override");
+    return {
+      EmcppItem12OverrideContractLab: module0.EmcppItem12OverrideContractLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-13-const-iterators":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-13-const-iterators");
+      return {
+        EmcppItem13ConstIteratorsLab: module0.EmcppItem13ConstIteratorsLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-14-noexcept": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-14-noexcept");
+    return {
+      EmcppItem14NoexceptLab: module0.EmcppItem14NoexceptLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-15-constexpr":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-15-constexpr");
+      return {
+        EmcppItem15ConstexprLab: module0.EmcppItem15ConstexprLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-16-const-thread-safe":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-16-const-thread-safe");
+      return {
+        EmcppItem16ConstThreadSafeLab: module0.EmcppItem16ConstThreadSafeLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/02-moving-to-modern-cpp/item-17-special-member-generation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-17-special-member-generation");
+      return {
+        EmcppItem17SpecialMemberLab: module0.EmcppItem17SpecialMemberLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/03-smart-pointers/item-18-unique-ptr": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-18-unique-ptr");
+    return {
+      EmcppItem18UniquePtrLab: module0.EmcppItem18UniquePtrLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/03-smart-pointers/item-19-shared-ptr": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-19-shared-ptr");
+    return {
+      EmcppItem19SharedPtrLab: module0.EmcppItem19SharedPtrLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/03-smart-pointers/item-20-weak-ptr": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-20-weak-ptr");
+    return {
+      EmcppItem20WeakPtrLab: module0.EmcppItem20WeakPtrLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/03-smart-pointers/item-21-make-smart-pointers":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-21-make-smart-pointers");
+      return {
+        EmcppItem21MakeSmartPointersLab:
+          module0.EmcppItem21MakeSmartPointersLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/03-smart-pointers/item-22-pimpl-special-members":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-22-pimpl-special-members");
+      return {
+        EmcppItem22PimplSpecialMembersLab:
+          module0.EmcppItem22PimplSpecialMembersLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-concurrency/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/final-review");
+    return {
+      EmcppFinalReviewEvidenceTimelineLab:
+        module0.EmcppFinalReviewEvidenceTimelineLab,
+    } as ChapterMdxComponents;
+  },
+  "effective-modern-cpp/04-rvalue-references/item-23-move-forward":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-23-move-forward");
+      return {
+        EmcppItem23MoveForwardLab: module0.EmcppItem23MoveForwardLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-24-forwarding-vs-rvalue-references":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-24-forwarding-vs-rvalue-references");
+      return {
+        EmcppItem24ForwardingVsRvalueLab:
+          module0.EmcppItem24ForwardingVsRvalueLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-25-move-rvalue-forward-universal":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-25-move-rvalue-forward-universal");
+      return {
+        EmcppItem25MoveForwardLab: module0.EmcppItem25MoveForwardLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-26-avoid-forwarding-overloads":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-26-avoid-forwarding-overloads");
+      return {
+        EmcppItem26ForwardingOverloadLab:
+          module0.EmcppItem26ForwardingOverloadLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-27-forwarding-overload-alternatives":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-27-forwarding-overload-alternatives");
+      return {
+        EmcppItem27ForwardingAlternativesLab:
+          module0.EmcppItem27ForwardingAlternativesLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-28-reference-collapsing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-28-reference-collapsing");
+      return {
+        EmcppItem28ReferenceCollapsingLab:
+          module0.EmcppItem28ReferenceCollapsingLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-29-assume-move-absent-costly-unused":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-29-assume-move-absent-costly-unused");
+      return {
+        EmcppItem29MoveAssumptionsLab: module0.EmcppItem29MoveAssumptionsLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/04-rvalue-references/item-30-perfect-forwarding-failure-cases":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-30-perfect-forwarding-failure-cases");
+      return {
+        EmcppItem30ForwardingFailuresLab:
+          module0.EmcppItem30ForwardingFailuresLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/05-lambda-expressions/item-31-avoid-default-capture-modes":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-31-avoid-default-capture-modes");
+      return {
+        EmcppItem31CaptureAuditLab: module0.EmcppItem31CaptureAuditLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/05-lambda-expressions/item-32-init-capture-move-into-closures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-32-init-capture-move-into-closures");
+      return {
+        EmcppItem32InitCaptureOwnershipLab:
+          module0.EmcppItem32InitCaptureOwnershipLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-33-decltype-auto-forward-generic-lambda");
+      return {
+        EmcppItem33GenericLambdaForwardingLab:
+          module0.EmcppItem33GenericLambdaForwardingLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/05-lambda-expressions/item-34-prefer-lambdas-to-std-bind":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-34-prefer-lambdas-to-std-bind");
+      return {
+        EmcppItem34LambdaBindLab: module0.EmcppItem34LambdaBindLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-35-prefer-task-based-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-35-prefer-task-based-programming");
+      return {
+        EmcppItem35TaskThreadLab: module0.EmcppItem35TaskThreadLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-36-specify-launch-async":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-36-specify-launch-async");
+      return {
+        EmcppItem36LaunchPolicyLab: module0.EmcppItem36LaunchPolicyLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-37-make-threads-unjoinable":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-37-make-threads-unjoinable");
+      return {
+        EmcppItem37ThreadOwnerLab: module0.EmcppItem37ThreadOwnerLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-38-thread-handle-destructor-behavior":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-38-thread-handle-destructor-behavior");
+      return {
+        EmcppItem38FutureDestructorLab: module0.EmcppItem38FutureDestructorLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-39-void-futures-one-shot-events":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-39-void-futures-one-shot-events");
+      return {
+        EmcppItem39VoidFutureEventLab: module0.EmcppItem39VoidFutureEventLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/06-concurrency/item-40-atomic-vs-volatile":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-40-atomic-vs-volatile");
+      return {
+        EmcppItem40AtomicVolatileLab: module0.EmcppItem40AtomicVolatileLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/07-tweaks/item-41-pass-by-value-cheap-move":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/effective-modern-cpp/diagrams/item-41-pass-by-value-cheap-move");
+      return {
+        EmcppItem41PassByValueCostLab: module0.EmcppItem41PassByValueCostLab,
+      } as ChapterMdxComponents;
+    },
+  "effective-modern-cpp/07-tweaks/item-42-consider-emplacement": async () => {
+    const module0 =
+      await import("@/components/mdx/effective-modern-cpp/diagrams/item-42-consider-emplacement");
+    return {
+      EmcppItem42EmplacementLab: module0.EmcppItem42EmplacementLab,
+    } as ChapterMdxComponents;
+  },
   "first-line-android/00-official-learning-map/fla3-official-learning-map":
     async () => {
       const module0 =
@@ -15000,6 +15340,135 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CuspOfObjectModelFailureDiagram: module0.CuspOfObjectModelFailureDiagram,
     } as ChapterMdxComponents;
   },
+  "introduction-to-algorithms/01-foundations/01-role-of-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch01-role-of-algorithms");
+      return {
+        Clrs4Chapter01AlgorithmsLab: module0.Clrs4Chapter01AlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/01-foundations/02-getting-started": async () => {
+    const module0 =
+      await import("@/components/mdx/introduction-to-algorithms/clrs4-ch02-getting-started");
+    return {
+      Clrs4Chapter02GettingStartedLab: module0.Clrs4Chapter02GettingStartedLab,
+    } as ChapterMdxComponents;
+  },
+  "introduction-to-algorithms/01-foundations/05-probabilistic-analysis-randomized-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch05-probabilistic-analysis-randomized-algorithms");
+      return {
+        Clrs4Chapter05ProbabilisticLab: module0.Clrs4Chapter05ProbabilisticLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/04-advanced-design-analysis/15-greedy-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch15-greedy-algorithms");
+      return {
+        Clrs4Chapter15GreedyAlgorithmsLab:
+          module0.Clrs4Chapter15GreedyAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/04-advanced-design-analysis/16-amortized-analysis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch16-amortized-analysis");
+      return {
+        Clrs4Chapter16AmortizedAnalysisLab:
+          module0.Clrs4Chapter16AmortizedAnalysisLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/05-advanced-data-structures/17-augmenting-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch17-augmenting-data-structures");
+      return {
+        Clrs4Chapter17AugmentingDataStructuresLab:
+          module0.Clrs4Chapter17AugmentingDataStructuresLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/05-advanced-data-structures/18-b-trees":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch18-b-trees");
+      return {
+        Clrs4Chapter18BTreesLab: module0.Clrs4Chapter18BTreesLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/20-elementary-graph-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch20-elementary-graph-algorithms");
+      return {
+        Clrs4Chapter20ElementaryGraphAlgorithmsLab:
+          module0.Clrs4Chapter20ElementaryGraphAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/21-minimum-spanning-trees":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch21-minimum-spanning-trees");
+      return {
+        Clrs4Chapter21MinimumSpanningTreesLab:
+          module0.Clrs4Chapter21MinimumSpanningTreesLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/23-all-pairs-shortest-paths":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch23-all-pairs-shortest-paths");
+      return {
+        Clrs4Chapter23AllPairsShortestPathsLab:
+          module0.Clrs4Chapter23AllPairsShortestPathsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/24-maximum-flow":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch24-maximum-flow");
+      return {
+        Clrs4Chapter24MaximumFlowLab: module0.Clrs4Chapter24MaximumFlowLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/06-graph-algorithms/25-matchings-in-bipartite-graphs":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch25-matchings-in-bipartite-graphs");
+      return {
+        Clrs4Chapter25MatchingsInBipartiteGraphsLab:
+          module0.Clrs4Chapter25MatchingsInBipartiteGraphsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/26-parallel-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch26-parallel-algorithms");
+      return {
+        Clrs4Chapter26ParallelAlgorithmsLab:
+          module0.Clrs4Chapter26ParallelAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/27-online-algorithms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch27-online-algorithms");
+      return {
+        Clrs4Chapter27OnlineAlgorithmsLab:
+          module0.Clrs4Chapter27OnlineAlgorithmsLab,
+      } as ChapterMdxComponents;
+    },
+  "introduction-to-algorithms/07-selected-topics/28-matrix-operations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/introduction-to-algorithms/clrs4-ch28-matrix-operations");
+      return {
+        Clrs4Chapter28MatrixOperationsLab:
+          module0.Clrs4Chapter28MatrixOperationsLab,
+      } as ChapterMdxComponents;
+    },
   "langchain-programming/00-map/lcp-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/langchain-programming/v2/lcp-official-learning-map");
@@ -22066,6 +22535,332 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Ppa3OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "you-dont-know-js/00-guide/ydk-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-official-learning-map");
+    return {
+      YdkOfficialLearningMapEvidenceLab:
+        module0.YdkOfficialLearningMapEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-01-what-is-scope":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-01-what-is-scope");
+      return {
+        YdkScope01WhatIsScopeLab: module0.YdkScope01WhatIsScopeLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-02-lexical-scope":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-02-lexical-scope");
+      return {
+        YdkScope02LexicalScopeLab: module0.YdkScope02LexicalScopeLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-03-function-vs-block-scope":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-03-function-vs-block-scope");
+      return {
+        YdkScope03FunctionVsBlockScopeLab:
+          module0.YdkScope03FunctionVsBlockScopeLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-04-hoisting": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-scope-04-hoisting");
+    return {
+      YdkScope04HoistingLab: module0.YdkScope04HoistingLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-05-scope-closures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-05-scope-closures");
+      return {
+        YdkScope05ScopeClosuresLab: module0.YdkScope05ScopeClosuresLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-appendix-a-dynamic-scope");
+      return {
+        YdkScopeAppendixADynamicScopeLab:
+          module0.YdkScopeAppendixADynamicScopeLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-appendix-b-block-scope-polyfill");
+      return {
+        YdkScopeAppendixBBlockScopePolyfillLab:
+          module0.YdkScopeAppendixBBlockScopePolyfillLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-c-lexical-this":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-scope-appendix-c-lexical-this");
+      return {
+        YdkScopeAppendixCLexicalThisLab:
+          module0.YdkScopeAppendixCLexicalThisLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/02-volume-one-this/ydk-this-01-this-or-that": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-this-01-this-or-that");
+    return {
+      YdkThis01ThisOrThatLab: module0.YdkThis01ThisOrThatLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/02-volume-one-this/ydk-this-02-this-all-makes-sense":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-this-02-this-all-makes-sense");
+      return {
+        YdkThis02ThisAllMakesSenseLab: module0.YdkThis02ThisAllMakesSenseLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/02-volume-one-this/ydk-this-03-objects": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-this-03-objects");
+    return {
+      YdkThis03ObjectsLab: module0.YdkThis03ObjectsLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/02-volume-one-this/ydk-this-04-mixing-class-objects":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-this-04-mixing-class-objects");
+      return {
+        YdkThis04MixingClassObjectsLab: module0.YdkThis04MixingClassObjectsLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/02-volume-one-this/ydk-this-05-prototypes": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-this-05-prototypes");
+    return {
+      YdkThis05PrototypesLab: module0.YdkThis05PrototypesLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/02-volume-one-this/ydk-this-06-behavior-delegation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-this-06-behavior-delegation");
+      return {
+        YdkThis06BehaviorDelegationLab: module0.YdkThis06BehaviorDelegationLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/02-volume-one-this/ydk-this-appendix-a-es6-class":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-this-appendix-a-es6-class");
+      return {
+        YdkThisAppendixAEs6ClassLab: module0.YdkThisAppendixAEs6ClassLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/03-volume-two-types/ydk-types-01-types": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-types-01-types");
+    return {
+      YdkTypes01TypesLab: module0.YdkTypes01TypesLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/03-volume-two-types/ydk-types-02-values": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-types-02-values");
+    return {
+      YdkTypes02ValuesLab: module0.YdkTypes02ValuesLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/03-volume-two-types/ydk-types-03-natives": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-types-03-natives");
+    return {
+      YdkTypes03NativesLab: module0.YdkTypes03NativesLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/03-volume-two-types/ydk-types-04-coercion": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-types-04-coercion");
+    return {
+      YdkTypes04CoercionLab: module0.YdkTypes04CoercionLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/03-volume-two-types/ydk-types-05-grammar": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-types-05-grammar");
+    return {
+      YdkTypes05GrammarLab: module0.YdkTypes05GrammarLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/03-volume-two-types/ydk-types-appendix-a-mixed-environment":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-types-appendix-a-mixed-environment");
+      return {
+        YdkTypesAppendixAMixedEnvironmentLab:
+          module0.YdkTypesAppendixAMixedEnvironmentLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/04-volume-two-async/ydk-async-01-now-and-later":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-async-01-now-and-later");
+      return {
+        YdkAsync01NowLaterLab: module0.YdkAsync01NowLaterLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/04-volume-two-async/ydk-async-02-callbacks": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-async-02-callbacks");
+    return {
+      YdkAsync02CallbacksLab: module0.YdkAsync02CallbacksLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/04-volume-two-async/ydk-async-03-promises": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-async-03-promises");
+    return {
+      YdkAsync03PromisesLab: module0.YdkAsync03PromisesLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/04-volume-two-async/ydk-async-04-generators": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-async-04-generators");
+    return {
+      YdkAsync04GeneratorsLab: module0.YdkAsync04GeneratorsLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/04-volume-two-async/ydk-async-05-program-performance":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-async-05-program-performance");
+      return {
+        YdkAsync05ProgramPerformanceLab:
+          module0.YdkAsync05ProgramPerformanceLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/04-volume-two-async/ydk-async-06-benchmarking-tuning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-async-06-benchmarking-tuning");
+      return {
+        YdkAsync06BenchmarkingTuningLab:
+          module0.YdkAsync06BenchmarkingTuningLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/04-volume-two-async/ydk-async-appendix-a-asynquence":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-async-appendix-a-asynquence");
+      return {
+        YdkAsyncAppendixAAsynquenceLab: module0.YdkAsyncAppendixAAsynquenceLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/04-volume-two-async/ydk-async-appendix-b-advanced-patterns":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-async-appendix-b-advanced-patterns");
+      return {
+        YdkAsyncAppendixBAdvancedPatternsLab:
+          module0.YdkAsyncAppendixBAdvancedPatternsLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/05-volume-three-up-going/ydk-up-01-into-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-up-01-into-programming");
+      return {
+        YdkUp01IntoProgrammingLab: module0.YdkUp01IntoProgrammingLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/05-volume-three-up-going/ydk-up-02-into-javascript":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-up-02-into-javascript");
+      return {
+        YdkUp02IntoJavaScriptLab: module0.YdkUp02IntoJavaScriptLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/05-volume-three-up-going/ydk-up-03-into-ydkjs":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-up-03-into-ydkjs");
+      return {
+        YdkUp03IntoYdkjsLab: module0.YdkUp03IntoYdkjsLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-01-now-future": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-01-now-future");
+    return {
+      YdkEs601NowFutureLab: module0.YdkEs601NowFutureLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-02-syntax": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-02-syntax");
+    return {
+      YdkEs602SyntaxLab: module0.YdkEs602SyntaxLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-03-organization": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-03-organization");
+    return {
+      YdkEs603OrganizationLab: module0.YdkEs603OrganizationLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-04-async-flow-control":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-es6-04-async-flow-control");
+      return {
+        YdkEs604AsyncFlowControlLab: module0.YdkEs604AsyncFlowControlLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-05-collections": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-05-collections");
+    return {
+      YdkEs605CollectionsLab: module0.YdkEs605CollectionsLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-06-api-additions": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-06-api-additions");
+    return {
+      YdkEs606ApiAdditionsLab: module0.YdkEs606ApiAdditionsLab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-07-meta-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/you-dont-know-js/ydk-es6-07-meta-programming");
+      return {
+        YdkEs607MetaProgrammingLab: module0.YdkEs607MetaProgrammingLab,
+      } as ChapterMdxComponents;
+    },
+  "you-dont-know-js/06-volume-three-es6/ydk-es6-08-beyond-es6": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-es6-08-beyond-es6");
+    return {
+      YdkEs608BeyondEs6Lab: module0.YdkEs608BeyondEs6Lab,
+    } as ChapterMdxComponents;
+  },
+  "you-dont-know-js/07-review/ydk-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/you-dont-know-js/ydk-official-final-review");
+    return {
+      YdkOfficialFinalReviewEvidenceLab:
+        module0.YdkOfficialFinalReviewEvidenceLab,
+    } as ChapterMdxComponents;
+  },
 };
 
 export async function getChapterMdxComponents(

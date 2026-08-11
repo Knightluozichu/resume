@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/scope%20%26%20closures/ch5.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-05
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkScope05ScopeClosuresLab } from "@/components/mdx/you-dont-know-js/ydk-scope-05-scope-closures";
+
+<Objectives>
+
+- 能用词法环境解释闭包为何在外层调用栈结束后仍可访问自由变量
+- 能修改循环回调示例，比较 var 共享绑定与 let 独立绑定的输出差异
+- 能设计只暴露方法的模块模式，验证私有状态不会被公开 API 直接改写
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 闭包是函数在定义它的词法作用域之外执行时仍能访问该作用域的能力；循环回调暴露共享绑定问题，模块模式则把闭包转化为持久私有状态与显式 API。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkScope05ScopeClosuresLab />
 
 ## 权威目录定位
 
@@ -32,15 +54,17 @@ draft: false
 
 ## 核心概念与状态所有权
 
-。
+<Term def="函数在定义它的词法作用域之外执行时，仍能访问那份作用域状态的能力。">闭包</Term>
 
-。
+<Term def="按函数定义位置保存名称与绑定关系的环境，而不是按调用位置重新猜测。">词法环境</Term>
 
-。
+<Term def="函数体中使用、却不是函数参数或局部声明的名称。">自由变量</Term>
 
-。
+<Term def="循环中由 var 或 let 决定的回调所共享或各自拥有的迭代变量绑定。">循环绑定</Term>
 
-。
+<Term def="把私有状态留在封装内部，只通过返回的方法提供有限能力的组织方式。">模块模式</Term>
+
+<Term def="由闭包持有、外部不能直接按名称读取，只能经由公开方法改变或观察的数据。">私有状态</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -162,6 +186,15 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：外层函数返回后，闭包里的变量就一定被回收">
+  现象：把调用栈结束误认为词法环境立即消失。原因：只要返回的函数仍引用该环境，绑定就保持可达。修法：记录引用链和最后一个闭包，再判断状态何时真正没有所有者。
+</Callout>
+
+<Callout type="trap" title="陷阱：循环回调会自动记住每一轮的索引">
+  现象：用 var 创建回调后预期输出 0、1、2。原因：所有回调解析同一份共享绑定，执行时通常都看到循环结束后的值。修法：改用 let 或工厂函数为每一轮创建独立环境，再重放同一输入。
+</Callout>
+
+故障注入只改变一个条件：循环绑定的创建方式、回调执行时机或公开方法的数量。若同时改变输入值和 API，就无法判断错误来自词法环境还是业务逻辑。
 
 ## 四类样本与验收
 
@@ -182,6 +215,27 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：修改 `counter` 示例，让两次 `next()` 分别返回 1 和 2。** 画出闭包捕获的绑定、外层返回后的状态和两次调用的读取点。
+
+<Answer question="为什么外层函数返回后 value 仍然存在？">
+  `next` 是在 `counter` 内部定义的函数，它携带对词法环境中 `value` 的引用。外层调用栈结束只回收不再可达的环境；由于 `next` 仍可达，value 会被保留并在每次调用时更新。
+</Answer>
+
+2. **问题 2：把三个循环回调分别用 `var` 和 `let` 实现，运行并比较输出。** 标出共享绑定、独立绑定和第一个偏离点。
+
+<Answer question="为什么 var 回调常常都输出同一个最终索引？">
+  var 在循环中复用同一份绑定，回调稍后执行时都从这份绑定解析索引，因此读取到循环结束后的值。let 为每轮创建新的绑定，或用工厂函数显式创建环境，回调才会保留各自的索引。
+</Answer>
+
+3. **问题 3：把 `counter` 改成模块模式，只返回 `next` 与 `reset`。** 验证调用者不能直接改写 value，同时说明公开方法如何约束状态访问。
+
+<Answer question="模块模式为什么只返回方法而不返回私有状态？">
+  返回方法可以把允许的读写操作固定在边界内，value 仍由闭包持有，调用者无法通过名称直接覆盖它。`next` 和 `reset` 形成最小公开 API；若暴露 value，外部代码就能绕过不变量直接改写状态。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -195,6 +249,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="闭包">函数离开原来的代码块后，仍能带着原环境访问其中变量的机制。</GlossaryItem>
+  <GlossaryItem term="词法环境">按照函数写在哪里来决定名称归属的一张绑定记录。</GlossaryItem>
+  <GlossaryItem term="自由变量">函数自己没有声明，却需要从外层环境取得的名称。</GlossaryItem>
+  <GlossaryItem term="循环绑定">循环变量在多次回调之间共享，或为每一轮分别创建的绑定。</GlossaryItem>
+  <GlossaryItem term="模块模式">把实现藏在闭包里，只通过少数方法对外提供能力的组织方式。</GlossaryItem>
+  <GlossaryItem term="私有状态">外部不能直接按名称访问，只能经过公开方法改变的数据。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, Scope & Closures, Chapter 5: Scope Closures"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/scope%20%26%20closures/ch5.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

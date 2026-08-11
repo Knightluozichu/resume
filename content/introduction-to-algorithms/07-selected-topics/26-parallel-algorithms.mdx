@@ -3,26 +3,133 @@ title: "Chapter 26 · Parallel Algorithms"
 type: C
 section: "CLRS4 · 专题"
 order: 26
-description: "按CLRS第四版第26章重建fork-join并行基础、并行矩阵乘法与并行归并排序。"
+description: "按 CLRS 第四版第 26 章重建 fork-join 并行基础、并行矩阵乘法与并行归并排序，并绑定 DAG、work、span 与 race 证据。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-26
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter26ParallelAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch26-parallel-algorithms";
 
-## 从“八个core为什么不一定快八倍”开始
+<Objectives>
 
-先预测：总work 80、critical path 12，即使有无限processors也至少耗时12，最大parallelism约$80/12$；给16 cores不会获得16倍speedup。并行性能同时受work law与span law限制。
+- 能从 computation DAG 推导 parallel algorithm 的 work、span、parallelism 和 processor bound，并说明 scheduler 假设。
+- 能修改 fork-join、矩阵乘法或归并排序代码，指出 spawn、sync、output ownership、reduction 与 race-free 条件。
+- 能回答：为什么一个算法即使拥有更多 processors，也可能被 critical path、memory traffic 或过细的 grain 限制？
 
-不能只数threads。正确模型先描述computation DAG，再把算法成本与scheduler和processor count组合。
+</Objectives>
 
+## 先问：八个 core 为什么不一定快八倍？
 
-## 26.1 The basics of fork-join parallelism
+先预测：如果总 work 是 80、critical path 是 12，那么无限 processors 也至少需要 12 个时间单位；给 16 个 cores 不能自动获得 16 倍 speedup。并行性能同时受 work law、span law、scheduler、memory hierarchy 和 task grain 限制。
 
-### Strands, spawn, and sync
+本章先描述 computation DAG，再把算法成本与 processor count 组合。只数 threads 或 spawn 次数，既不能证明并行正确，也不能预测实际速度。
 
-把连续instruction序列压成strands，spawn/continue edges表示fork，sync dependencies表示join。
+<Clrs4Chapter26ParallelAlgorithmsLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 26 章，官方概念包括：
+
+- parallel algorithms / 并行算法；
+- fork-join parallelism / fork-join并行；
+- parallel matrix multiplication / 并行矩阵乘法；
+- parallel merge sort / 并行归并排序。
+
+正文是独立教学重构：先固定 DAG、work、span 与 processor 合同，再把 output ownership 和 race 约束带入矩阵乘法，最后用 median partition 让 merge sort 的合并阶段也获得可分析的 span。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：把 spawn 数量当成 speedup 或 parallelism">
+
+现象：看到八个 processors 就声称程序会快八倍，或用 task 数直接替代 parallelism。
+
+原因：可用并行度由 work 除以 critical path 决定；同步、memory traffic、scheduler 和 uneven tasks 都会降低实际利用率。
+
+修复：先计算 `T₁`、`T∞`，再使用 `Tₚ ≥ max(T₁/P,T∞)` 和 scheduler bound；同时声明 grain 与 cache 假设。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：递归调用并行化后忘记 sync">
+
+现象：parent 在 child 结果尚未 ready 时进行 combine，得到偶发的未初始化值。
+
+原因：spawn 只创建并发 work，不会自动建立“两个 child 都完成”的 dependency。
+
+修复：在 combine 前显式 sync；DAG 中必须有两条 child-to-join dependency，测试也要覆盖不同执行顺序。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：矩阵的多个 task 同时写同一 output cell">
+
+现象：八个 block product 并发累加到同一个 `C[i][j]`，结果随调度顺序变化。
+
+原因：共享写入没有 ownership 或 reduction dependency，形成 data race；DAG 无法定义哪个写入先发生。
+
+修复：为每个 output cell 分配唯一 writer，或使用 private partials 后 tree reduction；不要把 atomic 当成没有成本的结构修复。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：只并行两次 recursive sort，把 linear merge 留在 critical path">
+
+现象：两个 half sort 并发了，但每一层 merge 仍串行扫描全部元素，span 逐层累积成线性。
+
+原因：排序的 critical path 不只包含 recursive sort，还包含 merge；spawn 两个 child 不会自动并行 merge。
+
+修复：用较长 run 的 median 与另一 run 的 binary search 做 partition，让左右 submerge 读取和写入 disjoint ranges。
+
+</Callout>
+
+## parallel algorithms / 并行算法
+
+### DAG、strand 与调度合同
+
+<Term def="把可并发执行的 computation strands、dependency edges 与 join 关系显式表示出来的算法模型">并行计算</Term>把 computation 表示为 directed acyclic graph：vertex 是有限 work 的 strand，edge 是 ready dependency。spawn 把一个 strand 分成可并发的 child；sync 等待指定 child 完成后，parent 才能继续。
+
+若 DAG 有 cycles，scheduler 无法得到稳定的 readiness；若漏掉 dependency，程序可能读到尚未写完的值。正确性首先来自 DAG 与实际 memory access 一致，而不是来自运行时恰好使用了某个顺序。
+
+### Work、span 与 processor bound
+
+<Term def="所有 DAG strands 的 cost 总和，也是理想单处理器执行的总工作量">工作量</Term> `T₁` 是把所有 vertex cost 相加的总量；<Term def="DAG 中最长 dependency path 的 cost，表示无限 processors 也不能突破的关键路径">跨度</Term> `T∞` 是 critical path。使用 `P` 个 processors 时：
+
+$$
+T_P\ge\frac{T_1}{P},
+\qquad
+T_P\ge T_\infty,
+\qquad
+T_P\ge\max\left(\frac{T_1}{P},T_\infty\right).
+$$
+
+`T₁/T∞` 是平均 parallelism，表示超过这个量后继续增加 processors 不会由 DAG 本身带来理想收益。greedy scheduler 只要有 ready strand 就分配给 idle processor，可给出常见上界：
+
+$$
+T_P\le\frac{T_1}{P}+T_\infty.
+$$
+
+该式不包含 spawn、cache、communication、NUMA 和 contention 常数。工程报告因此还要给出 grain cutoff、memory layout 和 scheduler 版本。
+
+### Parallel loops 与 data race
+
+若 parallel loop 的 iterations 只读共享输入、各自写不相交的 output，通常可以安全并发。若两个 iterations 访问同一 location，至少一个访问是 write，又没有 DAG dependency，就存在 <Term def="并发访问同一 location 且至少一个写入、又没有排序 dependency 的错误">数据竞争</Term>；结果并非由算法定义。
+
+Reduction 不能让所有 tasks 直接执行 `sum += value`。更稳妥的结构是每个 task 写 private partial，再用 tree combine；atomic 可以提供顺序约束，但它有 contention 与 memory-order 成本，不能隐去 work/span 分析。
+
+## fork-join parallelism / fork-join并行
+
+### Strands、spawn 与 sync
+
+用递归求数组和时，两个 child 可以同时计算，但 parent 必须在 combine 前等待：
 
 ```text
 PARALLEL-SUM(A, lo, hi)
@@ -34,58 +141,21 @@ PARALLEL-SUM(A, lo, hi)
 6  return left + right
 ```
 
-漏掉sync会在`left`尚未ready时combine；把两个recursive calls都写成普通calls则保持正确却丢失parallelism。
+`spawn` 表示 left 与 right 的 work 可以并发；`sync` 表示 combine 有两条 child-ready dependency。把两个 calls 改成普通 sequential calls 仍然正确但失去 parallelism；删掉 sync 则可能读取未完成的 left。
 
-### Work and span
+若每层将数组二分，sequential work 为 `Θ(n)`，critical path 为 `Θ(log n)`，理想 parallelism 为 `Θ(n/log n)`。<Term def="每个 parallel task 包含的工作量，用于平衡并行度与 scheduler overhead">粒度</Term> cutoff 在小区间改用 sequential sum，能减少 scheduler overhead，但过大的 cutoff 会浪费可用并发。
 
- $T_1$是所有vertex cost之和，也是最优sequential simulation上界。
+## parallel matrix multiplication / 并行矩阵乘法
 
- $T_\infty$是critical path。
+### Output ownership
 
-$$
-T_P\ge\frac{T_1}{P},
-\qquad
-T_P\ge T_\infty.
-$$
-
-
-Parallelism：
-
-$$
-\frac{T_1}{T_\infty}
-$$
-
-是可利用processor数量的平均上限。Work-efficient要求$T_1$不比best sequential algorithm渐近更差；低span但work爆炸的算法可能实际更慢。
-
-Greedy scheduler只要有ready strands就分配给idle processors，可保证：
-
-$$
-T_P\le\frac{T_1}{P}+T_\infty.
-$$
-
-
-这不包含spawn、cache、communication、NUMA和contention常数，实际测量仍需grain control。
-
-### Parallel loops and races
-
-Parallel for适用于iterations独立。若两iterations无同步读写同一location且至少一个write，存在data race，结果不由DAG value dependencies完全定义。
-
-
-Reduction不能让所有tasks执行`sum += value`；应使用private partials再以tree combine，或使用有明确成本的atomic operation。
-
-
-## 26.2 Parallel matrix multiplication
-
-### Independent output cells
-
-对$C=AB$：
+对 `C=AB`：
 
 $$
 c_{ij}=\sum_{k=1}^{n}a_{ik}b_{kj}.
 $$
 
-不同$(i,j)$ cells只读$A,B$并写独立$C[i,j]$，天然race-free。
-
+不同 `(i,j)` cells 只读 `A,B` 并写各自的 `C[i][j]`，因此 <Term def="为每个 output cell 或 range 指定唯一 writer，避免共享写入 race 的规则">输出所有权</Term>天然避免 cell-level race：
 
 ```cpp
 parallel_for (int i = 0; i < n; ++i)
@@ -97,30 +167,25 @@ parallel_for (int i = 0; i < n; ++i)
     }
 ```
 
-该版本work $\Theta(n^3)$，每cell inner loop sequential，span包含$\Theta(n)$ dot product，加parallel-loop scheduling depth。Parallelism约$\Theta(n^2)$，通常已足够。
+这个版本的 work 为 `Θ(n³)`；如果 dot product 的 `k` loop 保持 sequential，span 还包含 `Θ(n)` 的 inner work，加上 loop scheduling depth。不同 output cells 大约提供 `Θ(n²)` 的外层 parallelism，通常已经足够覆盖中等数量的 processors。
 
-若每个dot product也用balanced reduction，multiplications work仍$\Theta(n)$、span降至$\Theta(\log n)$：
+### Tree reduction 与 block multiplication
 
+把每个 dot product 的 partial products 分成 tree reduction，可以保持 `Θ(n³)` work，把每个 cell 的 reduction span 降到 `Θ(log n)`；理想 nested loop 模型下：
 
 $$
 T_1(n)=\Theta(n^3),
 \qquad
-T_\infty(n)=\Theta(\log n)
+T_\infty(n)=\Theta(\log n).
 $$
 
-在理想nested parallel loops与tree reduction模型下成立，但需要temporary partials并可能增加memory traffic。Blocked matrix multiply往往因cache locality胜过理论上更细的tasks。
+代价是 temporary partials 和更多 memory traffic。recursive block multiplication 如果把八个 subproducts 同时累加到四个 output blocks，就会共享写入；可分 waves 并 sync，或给每个 product private temporary 后 parallel reduce。两者 work 可能相近，但 span、空间和 cache 行为不同。
 
-Recursive block multiplication必须避免8个subproducts同时累加到4个same output blocks造成races。可分两waves并sync，或给products private temporaries后parallel reduce；两者work相近，span与memory不同。
+## parallel merge sort / 并行归并排序
 
+### Parallel merge 的 partition
 
-## 26.3 Parallel merge sort
-
-### Parallel merge
-
-的关键不是spawn两次sort，而是merge也必须有低span，否则每层linear merge沿critical path累积。
-
-Parallel merge对两个sorted runs，选较长run median $x$，在另一run binary search lower bound；$x$的output rank由两个prefix lengths相加得到。左右subproblems读取disjoint input ranges并写disjoint output ranges。
-
+仅仅并行两个 half sort 不够，因为每层 linear merge 仍会堆叠在 critical path。对两个 sorted runs，选择较长 run 的 median `x`，在另一 run 中 binary search `x` 的 split point；两侧 prefix lengths 相加得到 `x` 的 output rank。左右 subproblems 读取 disjoint input ranges、写 disjoint output ranges：
 
 ```text
 P-MERGE(A[p:r], B[q:s], T[o:])
@@ -132,34 +197,74 @@ P-MERGE(A[p:r], B[q:s], T[o:])
 6  sync
 ```
 
+每次 partition 让 largest child 至多是 constant fraction；binary search 花 `Θ(log n)` span。标准构造的 merge work 为 `Θ(n)`、span 为 `Θ(log² n)`。稳定排序还需固定 tie policy：例如左 run 的 equal pivot 在 right run 使用 lower bound，让 equal left element 先输出。
 
-每次split让largest child至多为constant fraction，binary search花$\Theta(\log n)$ span。Standard construction有merge work $\Theta(n)$、span $\Theta(\log^2 n)$。
+### Sorting recurrence 与 cutoff
 
-### Sorting recurrence
-
-两half sorts并发，所以span只取一个half critical path，再加parallel merge：
+两半 sort 可以并发，所以 span 只取一半 recursive critical path，再加 parallel merge：
 
 $$
 T_1(n)=2T_1(n/2)+\Theta(n)=\Theta(n\log n),
 $$
 
 $$
-T_\infty(n)
-=
-T_\infty(n/2)+\Theta(\log^2 n)
-=\Theta(\log^3 n).
+T_\infty(n)=T_\infty(n/2)+\Theta(\log^2 n)=\Theta(\log^3 n).
 $$
 
-
-Parallelism为$\Theta(n/\log^2 n)$。Base cutoff应在small arrays切换sequential sort；实际实现还要复用temporary buffer，避免每recursive call allocation。
-
-Stability要求binary-search tie policy一致：例如左run pivot在right run使用lower bound，并让equal left elements先输出。若只验证sorted multiset，可能漏掉stability regression。
-
+由此可得到约 `Θ(n/log² n)` 的平均 parallelism。真实实现应复用 temporary buffer，避免每次 recursive call allocation；small arrays 使用 sequential sort，选择 cutoff 时要测量 scheduler、cache 和 copy 成本，而不是只看渐近式。
 
 ## 小结
 
-Chapter 26 Parallel Algorithms先建立the basics of fork-join parallelism：computation DAG、work、span、parallelism与greedy scheduling。Parallel matrix multiplication把output cells独立化，并可用tree reduction降低dot-product span。Parallel merge sort通过median partition生成disjoint submerges，保持$\Theta(n\log n)$ work与polylog span。
+- parallel algorithms / 并行算法先由 computation DAG、work、span 和 scheduler 合同定义正确性与上界。
+- fork-join parallelism / fork-join并行用 spawn 暴露独立 strands，用 sync 建立 child-ready dependency。
+- parallel matrix multiplication / 并行矩阵乘法通过 output ownership 避免 cell race，并可用 tree reduction 降低 dot-product span。
+- parallel merge sort / 并行归并排序用 median partition 与 binary search 并行化 merge，保持 `Θ(n log n)` work 与 polylog span。
+- 实际性能还受 grain、cache、communication 和 contention 影响；不能只报告 core 数或 task 数。
 
-并行正确性要求dependency完整与race-free，性能要求work-efficient、span足够低且grain合理。只报告cores或task数没有意义；应交付$T_1,T_\infty,T_P$ bounds、scheduler assumptions、output ownership和practical cutoff。
+<Exercises>
 
+1. Work/span 题：一个 fork-join sum 对 `n` 个元素每层把数组二分，leaf 使用常数时间 sequential cutoff。写出 `T₁`、`T∞` 和 `P` 个 processors 的两个下界，并解释什么时候继续增加 processors 不再理想加速。
 
+   <Answer>
+
+   总 work 为 `T₁=Θ(n)`；每层只沿一条 child path 加上常数 combine，因此 `T∞=Θ(log n)`。任何执行都满足 `Tₚ ≥ T₁/P` 和 `Tₚ ≥ T∞`，所以 `Tₚ ≥ max(Θ(n/P),Θ(log n))`。当 `P` 大于 `T₁/T∞=Θ(n/log n)` 后，critical path 成为主导，增加 processors 不会突破 `T∞`；过细的 tasks 还会引入 scheduler overhead。
+
+   </Answer>
+
+2. 改 Demo 代码题：将实验切换为 `matrix` 模式，把 `C[i][j]` 的 dot product 改为 private partials 加 tree reduction。同步更新 output ownership、span 文案和图中的 reduction 节点，不能只改按钮标题。
+
+   <Answer>
+
+   每个 `(i,j)` task 先写自己的 partial array，不与其他 task 共享写入 `C[i][j]`；随后以二叉 tree 逐层合并 partials，最后由唯一 owner 写回 `C[i][j]`。图中应出现多个 partial 节点和 reduction tree，span 说明从 `Θ(n)` 降为 `Θ(log n)` 的 cell reduction，同时保留 total work `Θ(n³)`。
+
+   </Answer>
+
+3. 故障诊断题：并行归并排序的两个 half sort 已经 spawn，但整体 span 仍接近 sequential。列出最先检查的两个 dependency，并说明如何确认 merge 的写入没有 race。
+
+   <Answer>
+
+   先检查是否在两个 half sort 完成前就开始 merge，或者 merge 是否仍沿一个 linear scan 没有 median partition；前者缺 sync dependency，后者把 merge 留在 critical path。然后检查每次 partition 的左右 submerge 是否读取 disjoint input ranges、写入 disjoint output ranges，并固定 equal-key tie policy；若两个 task 写同一 output slot，必须增加 ownership 或 private buffer reduction。
+
+   </Answer>
+
+</Exercises>
+
+## Glossary
+
+<Glossary>
+
+<GlossaryItem term="并行计算">用 computation DAG 表示可并发 strands、dependency 与 join 的模型。</GlossaryItem>
+<GlossaryItem term="工作量">DAG 所有 strand cost 的总和，记作 `T₁`。</GlossaryItem>
+<GlossaryItem term="跨度">DAG 最长 dependency path 的 cost，记作 `T∞`。</GlossaryItem>
+<GlossaryItem term="数据竞争">并发访问同一 location 且至少一个写入、又没有排序 dependency 的错误。</GlossaryItem>
+<GlossaryItem term="粒度">每个 parallel task 包含的工作量，用于平衡并行度与 scheduler overhead。</GlossaryItem>
+<GlossaryItem term="输出所有权">为每个 output cell 或 range 指定唯一 writer，避免共享写入 race 的规则。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 26: Parallel Algorithms"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

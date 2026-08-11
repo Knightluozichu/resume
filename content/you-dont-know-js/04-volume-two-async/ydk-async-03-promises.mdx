@@ -7,15 +7,38 @@ description: "Promise 是未来值的只结算一次契约；then 链把返回�
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch3.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-24
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkAsync03PromisesLab } from "@/components/mdx/you-dont-know-js/ydk-async-03-promises";
+
+<Objectives>
+
+- 能解释 Promise 在渲染管线中的位置，并画出 pending、fulfilled、rejected 与处理器链的状态转换。
+- 能修改一段 Promise 链，使它正确同化 thenable、传播异常，并把取消、进度和并发策略作为额外契约处理。
+- 能回答：当处理器返回普通值、另一个 Promise 或抛出异常时，下一段链分别如何确定状态？
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
-Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。
+Promise 像一张只允许盖一次章的取件单：现在可以先拿到单据，货物以后才到；一旦盖成“已取”或“失败”，柜台不会因为后来又来一张说明就改写结果。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+它解决的是“未来的结果如何被多个步骤安全接力”。没有这条状态契约，回调容易重复结算、错误走丢、嵌套流程互相覆盖；有了它，链条可以把成功、失败和下一段工作放在同一套传播规则中，但取消和进度仍然不是这张单据自动提供的能力。
+
+先预测：对普通值、thenable、拒绝、处理器返回 Promise 和 `Promise.all` 分别写下状态变化与错误出口，再切换样本比较首个偏离点。
+
+<YdkAsync03PromisesLab />
 
 ## 权威目录定位
 
@@ -33,121 +56,181 @@ Promise 是未来值的只结算一次契约；then 链把返回值、异常与�
 
 本页逐项覆盖 9 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
 
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：Promise resolve 之后还能被 reject 改写">
+
+现象：在同一个执行器里先调用 resolve、再调用 reject，期待调用者看到最后一次结果。
+
+原因：Promise 状态从 pending 进入 settled 后就锁定，后续 resolve 或 reject 只会被忽略或保留为诊断信息。
+
+修复：为完成动作加一次性断言，并测试成功、失败和同时触发两条路径的结果。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：对象有 then 方法，就和原生 Promise 完全一样">
+
+现象：把任意 thenable 当成可信 Promise，忽略它可能多次调用、同步调用或抛出异常。
+
+原因：thenable 同化需要执行外部提供的 then；它是兼容协议，不是原生实例身份的证明。
+
+修复：把 thenable 放入边界测试，验证只结算一次、异常转拒绝以及自解析保护。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：then 回调里抛错会自动消失">
+
+现象：链中某一步抛出异常，后续代码却继续当成成功值处理，最终只看到一个不完整结果。
+
+原因：异常会把当前链段转为 rejected；如果没有 catch 或明确的最终错误边界，它可能变成未处理拒绝。
+
+修复：为每条链指定错误消费者，并在测试中检查错误是否被转换、恢复或报告。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Promise 自带取消、进度和并发上限">
+
+现象：创建 Promise 后想要取消执行、读取中间进度，或默认限制多个任务同时运行。
+
+原因：Promise 标准化的是状态和结果传播，不自动拥有底层工作控制权、进度事件或调度策略。
+
+修复：另行设计 AbortSignal、进度协议和并发池，并把它们与 Promise 结果契约分开验收。
+
+</Callout>
+
 ## 核心概念与状态所有权
 
-。
+<Term def="代表未来结果的状态对象；它从 pending 开始，最终只进入 fulfilled 或 rejected 之一。">Promise</Term> 的所有权在状态机：创建者负责完成它，消费者通过 then、catch 或 finally 订阅后续。
 
-。
+<Term def="拥有 then 方法、可以被 Promise 解析过程采用的外部对象；它可以像 Promise 一样提供未来结果，但不共享原生身份。">thenable</Term> 是兼容边界，必须经过同化和一次性完成保护。
 
-。
+<Term def="Promise 成功结束的状态；它携带一个值，并把等待中的处理器安排到后续微任务。">兑现</Term> 只说明成功状态，不等于处理器已经同步执行。
 
-。
+<Term def="Promise 失败结束的状态；它携带错误或拒绝原因，并沿链寻找错误处理器。">拒绝</Term> 是控制流的一部分，不能只当成日志字符串。
 
-。
+<Term def="多个 Promise 处理器通过返回值连接起来的传播结构；每个 then 都产生下一段可继续订阅的状态。">链式流</Term> 会吸收普通值、嵌套 Promise 和异常，决定下一段是继续兑现还是转为拒绝。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Term def="Promise 只保证状态传播，不自动提供取消、进度、重试、超时或并发数量控制的事实。">Promise 限制</Term> 要求应用层把工作控制与结果契约分开设计。
 
-|   # | 观察量   | 本页判定方式                                           |
-| --: | -------- | ------------------------------------------------------ |
-|   1 | Promise  | 在“创建待定 Promise”阶段保存前后状态并核对不变量       |
-|   2 | thenable | 在“启动产生未来值的操作”阶段保存前后状态并核对不变量   |
-|   3 | 兑现     | 在“以兑现或拒绝只结算一次”阶段保存前后状态并核对不变量 |
-|   4 | 拒绝     | 在“把处理器排入微任务”阶段保存前后状态并核对不变量     |
-|   5 | 链式流   | 在“吸收处理器返回值或异常”阶段保存前后状态并核对不变量 |
+这些概念要一起回答五个问题：状态由谁完成，输入是普通值还是 thenable，处理器什么时候运行，返回值如何决定下一段，失败在哪里被消费。只看最后的字符串，无法判断链是否经历了同化、拒绝传播或异常恢复。
+
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| Promise | 记录 pending 到 settled 的唯一转换 |
+| thenable | 用外部 then 方法注入重复调用和抛错样本 |
+| 兑现 | 验证成功值何时可被处理器消费 |
+| 拒绝 | 追踪原因沿链传播到哪个 catch |
+| 链式流 | 对比普通值、嵌套 Promise 和异常的下一状态 |
+| Promise 限制 | 单独验收取消、进度、重试和并发策略 |
 
 ## 机制拆解
 
-### 1. 创建待定 Promise
+### 1. Chapter 3: Promises
 
-创建待定 Promise不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Chapter 3: Promises** 的主线是把未来结果变成可观察的状态机。创建时是 pending，成功时 fulfilled，失败时 rejected；settled 不是“当前回调已经跑完”，而是结果已经不可改写。
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+状态机把生产者与消费者解耦。生产者只负责一次完成，消费者可以在结果之前或之后注册处理器，运行时会把处理器安排到后续微任务。这样可以减少“到底谁调用了回调”的猜测，但底层工作本身仍需要独立的取消和资源管理。
 
-### 2. 启动产生未来值的操作
+### 2. What is a Promise?
 
-启动产生未来值的操作不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**What is a Promise?** 先区分 Promise 对象和它代表的工作。Promise 是结果的观察接口，不一定拥有停止网络请求、释放文件或撤销计算的权力。
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+const future = new Promise((resolve, reject) => {
+  setTimeout(() => resolve("ready"), 10);
+});
 
-### 3. 以兑现或拒绝只结算一次
+future.then((value) => console.log(value));
+```
 
-以兑现或拒绝只结算一次不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+执行器登记了未来完成动作，`future` 让消费者订阅结果。处理器不会因为 `then` 写在下一行就同步执行；它要等待状态可用，再进入 Promise job 的调度边界。
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+### 3. Thenable Duck-Typing
 
-### 4. 把处理器排入微任务
+**Thenable Duck-Typing** 用结构而不是原生身份判断兼容对象：有一个可调用的 then 方法，就可能被 Promise 解析过程采用。但结构兼容不等于行为可信，then 可能同步调用两次、抛出异常，或把自己作为结果再次解析。
 
-把处理器排入微任务不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+```js
+const foreign = {
+  then(resolve) {
+    resolve(2);
+    resolve(3);
+  },
+};
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+Promise.resolve(foreign).then(console.log);
+```
 
-### 5. 吸收处理器返回值或异常
+可靠的同化过程会让外部 then 只有第一次完成有影响，后续调用不再改写状态。测试 thenable 时必须同时覆盖多次完成、抛错和自解析，而不只是测试一个正常值。
 
-吸收处理器返回值或异常不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+### 4. Promise Trust
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+**Promise Trust** 讨论 Promise 如何把不可信的异步合作变成较稳定的结果边界。状态只结算一次、处理器异步运行、异常转换为拒绝，这些保证使消费者不必猜测每个回调的调用次数。
 
-### 6. 沿链传播最终结果
+但 Promise 不会替你验证底层 API 的输入、取消能力或资源释放。把第三方 thenable、网络请求和业务状态放在同一条链上时，仍要为每一层写来源、超时、取消和错误契约。
 
-沿链传播最终结果不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+### 5. Chain Flow
 
-结合本章主张来看：Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+**Chain Flow** 的关键是处理器返回值决定下一段：返回普通值时下一段 fulfilled；返回 Promise 时下一段等待它；抛出异常时下一段 rejected。每个 `then` 都创建一个新的链节点，原 Promise 的状态不会被后续处理器改写。
 
-## 目录主题逐项讲解
-
-### Chapter 3: Promises
-
-Chapter 3: Promises在本单元中落到“创建待定 Promise”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### What is a Promise?
-
-What is a Promise?在本单元中落到“启动产生未来值的操作”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Thenable Duck-Typing
-
-Thenable Duck-Typing在本单元中落到“以兑现或拒绝只结算一次”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Promise Trust
-
-Promise Trust在本单元中落到“把处理器排入微任务”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Chain Flow
-
-Chain Flow在本单元中落到“吸收处理器返回值或异常”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Error Handling
-
-Error Handling在本单元中落到“沿链传播最终结果”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Promise Patterns
-
-Promise Patterns在本单元中落到“创建待定 Promise”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Promise API Recap
-
-Promise API Recap在本单元中落到“启动产生未来值的操作”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Promise Limitations
-
-Promise Limitations在本单元中落到“以兑现或拒绝只结算一次”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-## 六阶段证据链
-
-本页的可执行链条是：创建待定 Promise → 启动产生未来值的操作 → 以兑现或拒绝只结算一次 → 把处理器排入微任务 → 吸收处理器返回值或异常 → 沿链传播最终结果。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
-
-## 最小可运行实验
-
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+因此下面的链会先把 2 变成 6，再把抛出的异常交给 catch：
 
 ```js
 Promise.resolve(2)
   .then((value) => value * 3)
-  .then((value) => {
-    throw new Error(String(value));
+  .then(() => {
+    throw new Error("broken");
   })
   .catch((error) => console.log(error.message));
 ```
+
+链式流把值、嵌套 Promise 和异常统一成下一状态，但“统一传播”不代表“错误已经处理”。最终边界仍应有明确的报告或恢复动作。
+
+### 6. Error Handling
+
+**Error Handling** 需要区分拒绝产生点、传播路径和消费点。catch 可以把错误转成恢复值，也可以再次抛出让更外层处理；finally 适合清理，但不应静默覆盖关键错误。
+
+未处理拒绝是可观察的工程信号。测试中不要只验收成功路径；至少让创建器拒绝、then 处理器抛错、catch 恢复和 catch 再抛错各自出现一次，记录最终消费者是谁。
+
+### 7. Promise Patterns
+
+**Promise Patterns** 是把多个 Promise 编排成业务策略。`Promise.all` 适合全都成功才继续，`Promise.race` 适合第一个完成决定结果，`Promise.allSettled` 适合收集每项结果；这些方法选择的是聚合策略，不是自动的取消策略。
+
+多个任务同时启动时，要单独记录资源占用和失败处理。若只允许有限并发，应使用队列或 worker pool；不要把 `Promise.all` 误当成并发上限。
+
+### 8. Promise API Recap
+
+**Promise API Recap** 可以按四类记忆：创建与解析用 `new Promise`、`resolve`、`reject`；链式消费用 `then`、`catch`、`finally`；聚合用 `all`、`race`、`allSettled` 等；调度与取消则需要宿主或应用层的额外 API。
+
+API 名称只是入口，真正的验收仍是状态、排队时机、错误路径和资源清理。每个 API 的输入输出都应在最小实验中留下可复核证据。
+
+### 9. Promise Limitations
+
+**Promise Limitations** 是边界清单：Promise 不自动停止已经开始的工作，不携带进度事件，不决定重试次数，不限制并发，也不能替业务选择超时后的补偿策略。
+
+可以使用 AbortController 表达取消意图、使用进度事件表达中间状态、使用重试策略处理暂时失败、使用并发池限制活动任务。它们与 Promise 组合，但不是 Promise 状态机本身。
+
+## 六阶段证据链
+
+本页的可执行链条是：创建待定 Promise → 识别并同化输入值 → 以兑现或拒绝只结算一次 → 把处理器排入微任务 → 吸收返回值或异常 → 沿链传播并在边界恢复。正常样本证明主路径，边界样本证明 thenable 与嵌套状态，失败样本定位拒绝或未处理错误，恢复样本证明旧处理器没有污染新的链。
+
+## 最小可运行实验
+
+下面的片段只保留本章最小机制。运行前先预测每一段链的状态，再替换一个返回值或错误观察首个偏离点：
+
+```js
+const result = Promise.resolve(2)
+  .then((value) => value * 3)
+  .then((value) => Promise.resolve(value + 1))
+  .then((value) => {
+    if (value === 7) throw new Error("stop");
+    return value;
+  })
+  .catch((error) => `recovered: ${error.message}`);
+
+result.then(console.log);
+```
+
+预期状态是 fulfilled 2 → fulfilled 6 → 等待嵌套 Promise 后 fulfilled 7 → rejected Error → fulfilled `recovered: stop`。如果把 catch 删除，错误会继续到更外层；如果把 Promise 限制样本加入，还要另记取消与并发策略。
 
 ```yaml
 book: 你不知道的 JavaScript（一版三卷六册）
@@ -162,49 +245,85 @@ cleanup_complete: true
 ```
 
 ```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
+freeze input + state machine + error boundary
+predict pending → settled → reaction → next state
+inject one controlled thenable or handler fault
 stop at first divergence
 recover and replay the same sample
-assert stable state and no stale work
+assert one settlement and no unhandled rejection
 ```
-
-## 常见误区与故障注入
-
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 普通值、一次 then、明确 catch | 状态、处理器、下一段结果 | 链式流按契约传播 |
+| 边界 | thenable 多次 resolve、嵌套 Promise、空值 | 同化保护、等待关系、状态锁定 | 只结算一次且结果可解释 |
+| 失败 | 执行器 reject、处理器 throw、catch 再抛错 | 拒绝来源、传播路径、最终消费者 | 错误不吞没、不误当成功 |
+| 恢复 | catch 返回恢复值、AbortSignal 或并发池重放 | 新状态、取消意图、资源清理 | 恢复策略显式且无未处理拒绝 |
 
-本页签发不变量是：**Promise 是未来值的只结算一次契约；then 链把返回值、异常与嵌套 Promise 统一吸收到后续状态，但 thenable 同化、错误吞没、取消和进度仍需额外设计。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**Promise 从 pending 只进入一种 settled 状态；thenable 需要同化而不是盲目信任；处理器返回值或异常决定下一段；错误沿链传播；取消、进度、重试和并发限制必须另行设计。**
 
 ## 版本与原书边界
 
 本单元以 2014 至 2015 年一版目录为结构基线。正文使用现代可运行示例独立重构核心机制；现代规范差异单独披露，不修改或伪造原书目录。
 
+原书章节讨论 Promise 的信任、链式流和 API 模式。本文保留这些问题边界，并用现代 `allSettled`、AbortSignal 和并发池语境说明限制；这些补充属于今天的工程重构，不冒充一版原书当年的 API 清单。
+
 站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
 
 ## 练习
 
+<Exercises>
+
+1. 修改最小实验，让 thenable 的 resolve 被调用两次时仍只产生一个最终值，并为第二次调用保留诊断信息。
+
+   <Answer>
+
+   在 thenable 同化适配器中加入 `settled` 标记：第一次 resolve 或 reject 设置标记并转发，后续调用只记录重复完成事件，不再改变 Promise 状态。测试应分别覆盖第一次成功、第一次失败和成功后再次失败。
+
+   </Answer>
+
+2. 把一段 `then` 链改成明确的错误恢复链：中间处理器抛出异常，catch 返回一个可识别的恢复值，最后打印恢复结果。
+
+   <Answer>
+
+   在抛错处理器后接 `.catch((error) => ({ recovered: true, message: error.message }))`，再接 `.then((value) => console.log(value.recovered, value.message))`。异常让链转为 rejected，catch 返回普通对象后，下一段重新 fulfilled；这不是把错误从历史中删除，而是明确选择了恢复状态。
+
+   </Answer>
+
+3. 为三个异步任务设计一个“最多同时运行两个”的策略，并说明为什么 `Promise.all(tasks)` 本身不能提供这个限制或取消未完成任务的能力。
+
+   <Answer>
+
+   用队列保存待运行任务，用两个 worker 循环取出任务并在每个 Promise 完成后再取下一个；收集结果后再决定是否继续。`Promise.all` 会接收已经创建的 Promise，它只聚合结果，不控制这些任务何时启动，也没有自动取消协议，所以并发上限和取消必须由 worker、AbortSignal 或任务包装器负责。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **Promise**：对应“创建待定 Promise”阶段的核心观察量。
-- **thenable**：对应“启动产生未来值的操作”阶段的核心观察量。
-- **兑现**：对应“以兑现或拒绝只结算一次”阶段的核心观察量。
-- **拒绝**：对应“把处理器排入微任务”阶段的核心观察量。
-- **链式流**：对应“吸收处理器返回值或异常”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- Promise 只把 pending 结算为一种最终状态。
+- thenable 需要同化与一次性完成保护。
+- 链式返回值和异常决定下一段状态。
+- catch 明确消费拒绝，错误不能静默消失。
+- 取消、进度和并发策略属于额外契约。
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="Promise">代表未来结果的状态对象，从 pending 最终进入 fulfilled 或 rejected。</GlossaryItem>
+  <GlossaryItem term="thenable">拥有 then 方法、可被 Promise 解析过程采用的外部对象。</GlossaryItem>
+  <GlossaryItem term="兑现">Promise 成功结束并携带一个值的状态。</GlossaryItem>
+  <GlossaryItem term="拒绝">Promise 失败结束并携带错误或原因的状态。</GlossaryItem>
+  <GlossaryItem term="链式流">多个 Promise 处理器通过返回值连接并传播状态的结构。</GlossaryItem>
+  <GlossaryItem term="Promise 限制">Promise 不自动提供取消、进度、重试或并发数量控制的边界。</GlossaryItem>
+</Glossary>
 
-## 来源与改编边界
-
+<Attribution
+  adaptedFrom={"You Don't Know JS, Async & Performance, Chapter 3: Promises"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch3.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

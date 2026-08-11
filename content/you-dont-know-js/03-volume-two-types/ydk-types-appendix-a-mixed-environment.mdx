@@ -7,15 +7,38 @@ description: "宿主环境、polyfill、跨 realm 对象与原生原型修改会
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/types%20%26%20grammar/apA.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-21
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkTypesAppendixAMixedEnvironmentLab } from "@/components/mdx/you-dont-know-js/ydk-types-appendix-a-mixed-environment";
+
+<Objectives>
+
+- 能解释 ECMAScript 语义、宿主对象、polyfill 和原型补丁在渲染管线中的位置，并把四者的证据分栏记录。
+- 能修改一段兼容性检测代码，使它用行为验证能力，并处理跨 realm 对象与缺失 API 的降级路径。
+- 能回答：当对象存在但身份判断失败时，如何证明是 realm 边界、polyfill 来源还是原生原型污染造成的？
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
-宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。
+同一段代码会被放进不同的房间：语言规则像统一的说明书，运行环境再提供自己的门、工具和补丁。先把这三层分开，才知道一次“类型不一样”究竟是规则变化，还是环境换了。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+如果不做这层区分，代码可能在自己的机器上通过，却在浏览器、Node 或测试运行器里把额外对象当成标准能力；跨窗口对象看起来相同，也可能因为来自不同房间而无法通过身份检查。
+
+先预测：对 `globalThis.fetch`、`Array.prototype.includes` 和来自 iframe 的数组，分别写下“由谁提供、能做什么、是否共享构造器”的答案，再切换样本比较首个偏离点。
+
+<YdkTypesAppendixAMixedEnvironmentLab />
 
 ## 权威目录定位
 
@@ -25,87 +48,154 @@ draft: false
 
 本页逐项覆盖 1 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
 
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：全局对象上的 API 都是语言标准">
+
+现象：看到 `fetch` 或某个 Web API 存在，就把它当成所有 JavaScript 环境都保证的语义。
+
+原因：运行器可以提供宿主扩展；语言核心只保证规范范围内的行为，宿主对象还带着平台、版本和权限条件。
+
+修复：把语言基线、宿主能力和降级策略分成三列，并用一次行为调用确认当前契约。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：有 polyfill 就等于原生实现完全一致">
+
+现象：只检查属性存在，不验证补丁的边界、加载顺序和失败行为。
+
+原因：polyfill 是兼容层，不一定复制所有原生细节；第三方实现还可能改写原型或引入自己的约束。
+
+修复：记录补丁来源，运行正常与边界样本，并把能力检测放在真正使用之前。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：同名构造器一定能通过 instanceof">
+
+现象：把来自 iframe、worker 或 vm 的数组、错误对象直接与当前 realm 的构造器比较。
+
+原因：每个 realm 有自己的全局对象和构造器身份；对象结构相似，不代表原型链指向同一个函数。
+
+修复：优先采用行为检测、稳定标签或 `Array.isArray` 等跨 realm 语义，并明确剩余误判边界。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：给原生原型加方法只是局部小改动">
+
+现象：测试中给 `Array.prototype` 加标记或方法，结束后没有撤销，其他模块却开始依赖它。
+
+原因：原生原型是共享入口；一次写入会改变同一 realm 中许多对象的可见行为，并隐藏依赖来源。
+
+修复：把补丁限定在适配层，保存旧值、记录所有权，测试结束后恢复或使用不污染原型的包装函数。
+
+</Callout>
+
 ## 核心概念与状态所有权
 
-。
+<Term def="JavaScript 语言规范保证的行为集合；它描述值、语法和内建算法，不等同于浏览器或 Node 提供的全部 API。">宿主环境</Term> 的边界要先被标记：浏览器、Node 和测试运行器都可以提供额外对象，但不能把额外对象反推成语言核心。
 
-。
+<Term def="为了让旧环境拥有较新 API 而加入的兼容实现；它可能写入全局对象或原生原型，因此需要记录来源和加载顺序。">polyfill</Term> 是补丁层，不是“实现天然来自引擎”的证明。可靠代码既要检查能力，也要保留补丁的 provenance。
 
-。
+<Term def="拥有独立全局对象、内建构造器和原型链的执行空间，例如 iframe、worker 或某些 VM 上下文。">realm</Term> 决定对象身份的边界。两个对象都显示为数组，不代表它们来自同一 realm 的 `Array` 构造器。
 
-。
+<Term def="对象继承属性和方法的共享链；直接修改内建对象的原型会影响同一执行空间中许多调用方。">原生原型</Term> 是高影响共享状态，补丁必须有范围、来源、撤销和测试隔离。
 
-。
+<Term def="调用对象实际能力并检查结果或错误的兼容性策略；它验证行为契约，而不是只看版本号、属性名或构造器身份。">特性检测</Term> 把“环境声称支持”变成“这次调用确实满足需求”的证据。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+这些概念要一起回答五个问题：规则由谁保证，对象由谁提供，能力是否被补丁改写，身份是否跨 realm，失败时应该怎样降级。只写 `typeof value === "function"`，往往还没有说明它的行为契约。
 
-|   # | 观察量   | 本页判定方式                                                    |
-| --: | -------- | --------------------------------------------------------------- |
-|   1 | 宿主环境 | 在“锁定 ECMAScript 基线”阶段保存前后状态并核对不变量            |
-|   2 | polyfill | 在“识别宿主提供的对象”阶段保存前后状态并核对不变量              |
-|   3 | realm    | 在“检查 polyfill 注入”阶段保存前后状态并核对不变量              |
-|   4 | 原生原型 | 在“避免跨 realm 的 instanceof 假设”阶段保存前后状态并核对不变量 |
-|   5 | 特性检测 | 在“用行为做特性检测”阶段保存前后状态并核对不变量                |
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| 宿主环境 | 把 ECMAScript 保证的内容与平台扩展分栏 |
+| polyfill | 记录补丁来源、加载顺序、正常行为与边界行为 |
+| realm | 用跨上下文样本验证构造器身份是否共享 |
+| 原生原型 | 追踪写入者、可见范围和清理动作 |
+| 特性检测 | 实际调用最小能力并验证结果或错误路径 |
 
 ## 机制拆解
 
-### 1. 锁定 ECMAScript 基线
+### 1. Appendix A: Mixed Environment JavaScript
 
-锁定 ECMAScript 基线不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Appendix A: Mixed Environment JavaScript** 的主线不是收集更多 API，而是建立环境边界。先把源码依赖的语言规则列出来，再把宿主对象、兼容补丁、跨 realm 身份和原型改写作为可替换变量。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+一个有用的记录表至少有四列：`language`、`host`、`patch`、`identity`。例如，`Promise` 的构造与微任务语义属于语言能力；`fetch` 通常由宿主提供；对旧环境加入的 `includes` 可能来自 polyfill；来自 iframe 的数组则有自己的构造器身份。列清楚后，失败才有可定位的所有权。
 
-### 2. 识别宿主提供的对象
+### 2. 锁定 ECMAScript 基线
 
-识别宿主提供的对象不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+先定义“无宿主、无补丁时仍然成立”的最小行为。例如，对一个普通数组调用 `Array.isArray`，对一个已知 Promise 观察 `then` 是否产生下一步异步链，这些是语言或内建语义的基线；不要用浏览器专属 API 作为基线样本。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+基线的作用是固定比较尺。运行同一测试时，如果语言基线通过而宿主能力失败，问题在环境层；如果基线本身就不成立，继续检查 polyfill 只会把错误归因到错误位置。
 
-### 3. 检查 polyfill 注入
+### 3. 识别宿主提供的对象
 
-检查 polyfill 注入不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+宿主对象解决的是平台问题：浏览器提供 DOM、网络和窗口，Node 提供文件系统、进程和不同的全局入口，测试运行器还可能模拟其中一部分。它们可以长得像标准对象，却仍然需要单独的存在性、权限和行为检查。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+例如，`globalThis.fetch` 可能不存在，也可能存在但需要特定请求参数。第一步检查属性，第二步用最小安全调用验证返回值或错误类型，第三步准备降级方案。将这三步合并成一个版本判断，会让能力与环境版本紧紧耦合。
 
-### 4. 避免跨 realm 的 instanceof 假设
+### 4. 检查 polyfill 注入
 
-避免跨 realm 的 instanceof 假设不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+polyfill 的价值是把“旧环境没有的能力”补到兼容层，但补丁也会改变观察面。一个方法可能由引擎原生提供、由入口文件写入原型，或由测试设置在单个用例中临时安装；来源不同，边界行为和撤销方式也不同。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+检查时不要只写 `"includes" in Array.prototype`。同时记录加载前后属性描述符、实现来源和一个正常与边界输入；如果补丁版本与原生版本对稀疏数组、异常或接收者的处理不同，适配层就应明确选择哪种契约。
 
-### 5. 用行为做特性检测
+### 5. 避免跨 realm 的 instanceof 假设
 
-用行为做特性检测不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+realm 是对象身份的隔离线。浏览器 iframe、worker 或 VM 可以创建自己的 `Array`、`Error` 和 `Promise` 构造器；从另一个上下文传来的数组仍然是数组，但 `value instanceof Array` 依赖当前上下文的构造器身份，可能返回假。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+跨 realm 验收应优先选择语义稳定的检查：数组使用 `Array.isArray`，错误对象可结合 `Object.prototype.toString` 与必要的字段，能力对象则直接调用并验证结果。没有一种标签能证明所有行为都相同，所以还要把检测范围写进契约。
 
-### 6. 隔离原生原型修改
+### 6. 用行为做特性检测
 
-隔离原生原型修改不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+特性检测的顺序是：确认入口存在 → 以最小输入调用 → 验证成功结果或可接受错误 → 选择主路径或降级路径。检测“名称”只能说明某个属性可读，检测“行为”才能说明当前实现满足你的调用合同。
 
-结合本章主张来看：宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+function supportsThenable(value) {
+  return value != null && typeof value.then === "function";
+}
 
-## 目录主题逐项讲解
+function chooseFetch(fetchValue) {
+  if (typeof fetchValue !== "function") return "fallback";
+  return "native-or-polyfilled";
+}
+```
 
-### Appendix A: Mixed Environment JavaScript
+这段代码只做入口层检测；生产代码仍应对调用异常、权限、网络和返回数据做独立处理。检测结果要带上环境与补丁信息，避免把一次通过误认为所有未来调用都安全。
 
-Appendix A: Mixed Environment JavaScript在本单元中落到“锁定 ECMAScript 基线”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+### 7. 隔离原生原型修改
+
+修改原生原型会把局部适配变成全局共享状态。若必须为旧环境补方法，应尽量把写入集中在一个入口，先保存旧描述符，再暴露撤销动作；测试用例不能因为前一个用例留下的标记而通过。
+
+更稳妥的方式是导出包装函数或局部适配器，让调用方显式依赖它，而不是让任意数组突然获得隐藏方法。无论采用哪种方式，都要测试“补丁加载前、加载后、撤销后”三种状态，确保恢复样本回到语言基线。
 
 ## 六阶段证据链
 
-本页的可执行链条是：锁定 ECMAScript 基线 → 识别宿主提供的对象 → 检查 polyfill 注入 → 避免跨 realm 的 instanceof 假设 → 用行为做特性检测 → 隔离原生原型修改。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
+本页的可执行链条是：锁定 ECMAScript 基线 → 识别宿主提供的对象 → 检查 polyfill 注入 → 避免跨 realm 的 `instanceof` 假设 → 用行为做特性检测 → 隔离原生原型修改。正常样本证明主路径，边界样本证明身份与能力边界，失败样本定位停止点，恢复样本证明补丁没有污染下一次执行。
 
 ## 最小可运行实验
 
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+下面的片段只保留本附录的最小机制。运行前先预测 `fetch` 入口、thenable 行为与数组身份，再替换一个环境变量观察首个偏离点：
 
 ```js
-function supportsFeature(value) {
+function supportsThenable(value) {
   return value != null && typeof value.then === "function";
 }
-console.log(supportsFeature(Promise.resolve()));
+
+function inspectEnvironment({ fetchValue, foreignArray }) {
+  return {
+    hasFetch: typeof fetchValue === "function",
+    hasThenable: supportsThenable(Promise.resolve()),
+    crossRealmArray: Array.isArray(foreignArray),
+    localInstanceof: foreignArray instanceof Array,
+  };
+}
+
+console.log(inspectEnvironment({
+  fetchValue: globalThis.fetch,
+  foreignArray: [],
+}));
 ```
+
+在同一 realm 中，最后两个数组判断通常都为真；跨 realm 样本的 `Array.isArray` 仍可为真，而 `instanceof Array` 可能为假。这个差异不是“数组坏了”，而是身份检查依赖了错误的构造器边界。
 
 ```yaml
 book: 你不知道的 JavaScript（一版三卷六册）
@@ -120,49 +210,84 @@ cleanup_complete: true
 ```
 
 ```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
+freeze language baseline + host + patch source
+predict capability + identity + fallback
+inject one controlled environment difference
 stop at first divergence
 recover and replay the same sample
-assert stable state and no stale work
+assert no stale prototype or patch state
 ```
-
-## 常见误区与故障注入
-
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 当前 realm 的数组、明确的语言内建行为 | 语言基线、对象来源、行为结果 | 核心规则与主路径都能解释 |
+| 边界 | 缺少宿主 API、跨 realm 数组、polyfill 前后对照 | 能力入口、构造器身份、属性描述符 | 选择有依据的降级或跨 realm 检测 |
+| 失败 | 假存在的 API、错误补丁、未清理原型标记 | 首个异常、来源和污染范围 | 明确停止并报告环境假设 |
+| 恢复 | 撤销 polyfill、删除原型补丁后重放 | 基线行为、旧描述符、残留状态 | 下一次测试不依赖旧补丁或旧身份 |
 
-本页签发不变量是：**宿主环境、polyfill、跨 realm 对象与原生原型修改会改变类型判断的假设；可靠代码必须区分 ECMAScript 语义、宿主扩展和第三方补丁。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**语言规则、宿主扩展、polyfill、realm 身份和原生原型状态必须分开记录；存在性检查不能替代行为检测；跨 realm 身份不能默认共享；原型补丁必须可追踪、可撤销、可恢复。**
 
 ## 版本与原书边界
 
 本单元以 2014 至 2015 年一版目录为结构基线。正文使用现代可运行示例独立重构核心机制；现代规范差异单独披露，不修改或伪造原书目录。
 
+原书附录讨论的是混合 JavaScript 环境中的兼容性判断。本文保留这一问题边界，同时用今天可运行的 `globalThis`、跨 realm 语义和行为检测示例重构验证路径；示例中的现代 API 不应回写成原书当年的全部平台能力。
+
 站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
 
 ## 练习
 
+<Exercises>
+
+1. 修改最小实验中的 `inspectEnvironment`，让它额外返回 `hasCustomArrayMethod`，并设计一个不依赖全局原型写入的降级分支。
+
+   <Answer>
+
+   可以把能力作为显式依赖传入，而不是直接读取 `Array.prototype`：先检查 `typeof arrayAdapter?.includes === "function"`，通过时使用适配器，缺失时调用一个局部循环实现。答案的关键是把补丁来源变成参数，让测试可以分别覆盖原生、polyfill 和降级路径。
+
+   </Answer>
+
+2. 解释为什么跨 iframe 传入的数组可能让 `foreignArray instanceof Array` 返回假，却让 `Array.isArray(foreignArray)` 返回真；写出你会记录的三项证据。
+
+   <Answer>
+
+   `instanceof` 会沿对象原型链寻找当前 realm 的 `Array.prototype`，而 iframe 有自己的 `Array` 构造器和原型，所以身份可能不匹配。`Array.isArray` 使用数组的内建判定语义，不要求共享当前构造器。应记录对象来源 realm、当前与来源构造器是否相同、行为检测结果以及最终选择的处理路径。
+
+   </Answer>
+
+3. 设计一次 polyfill 生命周期测试：加载前、加载后、撤销后各运行一个边界样本，并说明如何证明原生原型没有被旧测试污染。
+
+   <Answer>
+
+   加载前确认能力缺失或走降级；加载后记录属性描述符、补丁版本并运行正常与边界输入；撤销后恢复原描述符，再用新对象和新模块重跑同一输入。最后检查属性不存在或描述符与基线完全一致，并在独立测试进程中复验，才能证明旧原型状态没有泄漏。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **宿主环境**：对应“锁定 ECMAScript 基线”阶段的核心观察量。
-- **polyfill**：对应“识别宿主提供的对象”阶段的核心观察量。
-- **realm**：对应“检查 polyfill 注入”阶段的核心观察量。
-- **原生原型**：对应“避免跨 realm 的 instanceof 假设”阶段的核心观察量。
-- **特性检测**：对应“用行为做特性检测”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- 语言基线与宿主扩展必须分栏记录。
+- polyfill 要记录来源、边界和加载顺序。
+- 跨 realm 身份不能替代行为检测。
+- 原生原型补丁必须可追踪、可撤销。
+- 恢复测试要证明环境回到干净基线。
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="宿主环境">运行 JavaScript 的平台及其额外对象，例如浏览器或 Node；它不等于语言规范本身。</GlossaryItem>
+  <GlossaryItem term="polyfill">为旧环境补上较新 API 的兼容代码，可能写入全局对象或原生原型。</GlossaryItem>
+  <GlossaryItem term="realm">拥有独立全局对象、构造器和原型链的执行空间，iframe 是常见例子。</GlossaryItem>
+  <GlossaryItem term="原生原型">对象共享属性和方法的继承链；修改它会影响同一执行空间中的许多对象。</GlossaryItem>
+  <GlossaryItem term="特性检测">实际调用能力并验证结果，以决定使用主路径还是降级路径的做法。</GlossaryItem>
+</Glossary>
 
-## 来源与改编边界
-
+<Attribution
+  adaptedFrom={"You Don't Know JS, Types & Grammar, Appendix A: Mixed Environment JavaScript"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/types%20%26%20grammar/apA.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

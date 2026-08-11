@@ -3,39 +3,150 @@ title: "Chapter 15 · Greedy Algorithms"
 type: C
 section: "CLRS4 · 高级设计与分析"
 order: 15
-description: "按CLRS第四版第15章重建活动选择、贪心策略原理、Huffman编码与离线缓存，并用交换论证验证局部选择。"
+description: "按 CLRS 第四版第 15 章重建活动选择、贪心策略、Huffman 编码与离线缓存。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-15
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter15GreedyAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch15-greedy-algorithms";
 
-## 从“最早结束为何比最短活动更安全”开始
+<Objectives>
 
-先预测：会议室只能容纳一个活动。面对`[1,4)`、`[3,5)`和`[0,6)`，先选持续时间最短的活动，是否一定给后续留下最多机会？不一定。持续时间忽略了结束边界；活动越早结束，可兼容的时间后缀越大。
+- 能把优化目标、局部选择、tie policy、可行性和剩余子问题写成一个可审计的贪心合同。
+- 能用交换论证证明活动选择、Huffman 编码或离线缓存中的局部选择不会让最优目标变差。
+- 能构造一个击穿局部规则的反例，并判断何时应切换到动态规划或其他算法范式。
 
-不是“取最大或最小”的语法模板。它是一份proof contract：精确定义local choice，把任意optimum交换成包含该choice的optimum，再把剩余部分归约为同类子问题。
+</Objectives>
 
+## 先问：最早结束为何比最短活动安全？
 
-## 15.1 An activity-selection problem
+会议室一次只能安排一个活动。面对区间 [1,4)、[3,5) 和 [0,6)，先选持续时间最短的活动，是否一定给后续留下最多机会？不一定。持续时间没有直接说明结束边界；最早结束的活动留下的可兼容后缀最大。
 
-### Compatible intervals
+先预测：如果一个规则“看起来每一步都更好”，它是否自动得到全局最优？不是。推进下面的实验，分别切换活动选择、Huffman、离线缓存和零钱反例，观察贪心规则从直觉变成定理需要哪些证据。
 
-要求最大化活动数量，而不是占用总时长或空闲时间。活动$a_i$占半开区间$[s_i,f_i)$；若$s_j\ge f_i$，则$a_j$可接在$a_i$之后。
+<Clrs4Chapter15GreedyAlgorithmsLab />
 
-设活动按结束时间非降序排列。选择最早结束的$a_1$后，剩余候选是：
+## 权威目录定位
+
+本章对应 CLRS 第四版第 15 章，官方概念包括：
+
+- greedy algorithms / 贪心算法；
+- activity-selection problem / 活动选择问题；
+- elements of the greedy strategy / 贪心策略原理；
+- Huffman codes / Huffman 编码；
+- offline caching / 离线缓存。
+
+正文是独立教学重构：活动选择展示最早结束的交换论证，策略原理抽象出可迁移的证明结构，Huffman 和离线缓存展示两种不同方向的局部选择，反例则标出贪心的边界。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：持续时间最短就等于最早结束">
+
+现象：把活动按 finish - start 从小到大排序，声称短活动一定为后续留下最多空间。
+
+原因：目标是兼容活动数量，而不是单个活动时长；一个短活动如果很晚结束，仍然会阻塞大量后缀。
+
+修复：把选择依据写成结束边界，并用交换论证说明最早结束的活动可被放进某个最优解的第一位置。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：贪心选择性质来自直觉，不需要证明">
+
+现象：局部选择在几个样例上有效，于是直接永久丢弃其他候选。
+
+原因：贪心算法的速度正来自删减选择空间；没有交换后不变差和剩余仍同类的证明，删减可能删除全局最优路径。
+
+修复：比较 greedy witness 与 optimal witness 的第一处分歧，构造一个不降低目标的交换，并验证后缀或子问题没有变坏。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Huffman 总是取两个最小值，所以代码本身就是证明">
+
+现象：实现用最小堆反复合并两个节点，却没有说明低频节点为什么可以放在最深层。
+
+原因：优先队列只实现了候选选择；最优性需要 sibling exchange 与 contraction 两段论证。
+
+修复：先交换出一对最低频的最深 siblings，再收缩成伪字符，证明收缩树最优才能推出原树最优。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：离线缓存知道未来，所以它是线上可部署策略">
+
+现象：把 farthest-in-future 当成普通运行时缓存算法，忽略它需要完整请求轨迹。
+
+原因：Belady 策略是 offline optimum，价值在于作为在线 LRU/FIFO 的基准，而不是假装系统拥有预言能力。
+
+修复：明确未来信息的可见边界；线上实现选择可获得的信号，离线最优只用来比较 miss 下界和策略差距。
+
+</Callout>
+
+## 核心术语与证据所有权
+
+<Term def="若一个整体问题有最优解，则固定某个合法边界后，剩余部分也可以由同一种问题形式的最优解组成。">最优子结构</Term> 把一个选择后的 residual instance 连接回原优化问题。
+
+<Term def="存在一个全局最优解包含贪心算法第一步所选局部动作的性质；它授权算法永久提交该动作。">贪心选择性质</Term> 是贪心区别于普通局部启发式的关键证明义务。
+
+<Term def="把某个最优解的一处选择替换为贪心选择，同时证明可行性不丢失且目标不变差的证明方法。">交换论证</Term> 通常沿 greedy witness 与 optimal witness 的第一处分歧展开。
+
+<Term def="固定一个选择后仍需解决的同类较小问题；它必须保留原问题的目标与可行性语义。">剩余子问题</Term> 说明为什么一次贪心选择之后可以继续递归或扫描。
+
+<Term def="没有一个字符编码是另一个字符编码前缀的二进制表示；它保证串联后的比特流可以无歧义解码。">前缀码</Term> 把 Huffman 树的叶子结构转化为编码合同。
+
+<Term def="在完整请求序列中，一个驻留页下一次再次被请求的位置；离线缓存用它决定哪个页应被淘汰。">下一次使用</Term> 是 farthest-in-future 选择的比较坐标。
+
+术语核对顺序是：先定目标，再寻找贪心选择性质；交换论证负责证明，剩余子问题负责归约，前缀码和下一次使用则把同一证明框架落到两类不同系统约束中。
+
+## greedy algorithms / 贪心算法
+
+贪心算法每一步都提交一个局部选择，不回溯已提交的决定。它可能很快，因为选择空间被立即压缩；也可能很危险，因为一次错误删减会让全局最优解永远不可达。
+
+一份可交付的贪心合同应明确：
+
+| 证据 | 要回答的问题 | 缺失时的风险 |
+| --- | --- | --- |
+| objective | 优化数量、权重、成本还是 miss？ | 局部好坏没有坐标 |
+| choice | 选择依据与 tie policy 是什么？ | 规则不可复现 |
+| exchange | 任意最优解怎样换成包含 choice 的解？ | 贪心可能只是启发式 |
+| residual | 固定 choice 后剩余是否同类？ | 后续步骤不再解决原问题 |
+| witness | 如何检查可行性、边界和反例？ | 样例通过冒充证明 |
+
+贪心与动态规划都依赖最优子结构，但动态规划通常保留多个候选状态再比较；贪心要额外证明第一步可以安全提交。因此“有最优子结构”是必要线索，不是贪心正确性的充分条件。
+
+## activity-selection problem / 活动选择问题
+
+### 兼容区间与目标
+
+活动 ai 占用半开区间 [si, fi)。若一个活动的开始时间不早于前一个活动的结束时间，它们兼容。目标是最大化活动数量，而不是最大化总持续时长或空闲时间。
+
+假设活动按结束时间非降序排列。选择最早结束的 a1 后，剩余候选集合是：
 
 $$
-S_1=\{a_i\in S:s_i\ge f_1\}.
+S_1=\{a_i\in S\mid s_i\ge f_1\}.
 $$
 
-问题的关键不是$a_1$“看起来不错”，而是存在一个最优解以$a_1$开始。设某最优解$A$的第一个活动为$a_k$。因为$a_1$结束最早，所以$f_1\le f_k$；用$a_1$替换$a_k$不会让$A$中任何后续活动冲突，活动数也不变。这是nonworsening exchange。
+### 最早结束的交换证明
 
+取任意最优解 A，设它的第一个活动是 ak。因为 a1 结束最早，所以 f1 不晚于 fk。把 A 的第一项 ak 换成 a1：
 
-交换后，最优解余下部分必须是$S_1$上的最优解；否则用更大的兼容集合替换它，就能得到比原解更多活动，矛盾。因此一次choice后可永久丢弃所有开始早于$f_1$的活动，并在后缀上重复。
+1. a1 与 A 中后续活动仍兼容，因为后续活动都在 fk 之后开始，而 f1 更早或相等；
+2. 活动数量没有变化，目标没有变差；
+3. 交换后得到一个同样最优、且包含 a1 的解。
 
-```cpp
+这就是贪心选择性质。固定 a1 后，后续活动恰好落在 S1 中；如果后缀选择不是 S1 的最优解，就能替换它而改进原解，产生矛盾。因此剩余子问题完成了归约。
+
+~~~cpp
 vector<Activity> select_activities(vector<Activity> a) {
     sort(a.begin(), a.end(),
          [](auto x, auto y) { return x.finish < y.finish; });
@@ -49,105 +160,75 @@ vector<Activity> select_activities(vector<Activity> a) {
     }
     return selected;
 }
-```
+~~~
 
-排序耗时$O(n\log n)$，扫描$O(n)$；若输入已按finish排序，整体为$\Theta(n)$。相同结束时间可按start或标识稳定排序，正确性不变，但tie policy使witness可复现。
+排序成本为 O(n log n)，扫描成本为 O(n)；若输入已按 finish 排序，整体为 Θ(n)。相同结束时间的 tie policy 不改变数量证明，却决定 witness 是否稳定可重放。
 
-活动选择也可以写成区间DP：令$c[i,j]$为结束于$a_i$之后、开始于$a_j$之前的最大兼容活动数，则
+活动选择也可以写成区间动态规划，枚举中间活动并保存 c[i,j]。贪心证明说明：在这个特定目标和兼容关系下，许多候选 transition 可以由最早结束的一个安全选择代表；没有证明时，不能把这种删减推广到加权活动。
 
-$$
-c[i,j]=
-\max_{a_k\in S_{ij}}\{c[i,k]+c[k,j]+1\}.
-$$
+## elements of the greedy strategy / 贪心策略原理
 
-DP枚举第一个或中间活动；贪心证明进一步说明只需尝试最早结束的安全choice。贪心并非没有子问题，而是proof把transition候选从许多个压成一个。
+### 从第一处分歧开始交换
 
-## 15.2 Elements of the greedy strategy
+设 G 是贪心解，O 是任意最优解。找到两者第一处不同的选择；如果能把 O 的选择替换为 G 的选择，同时保持前缀可行、剩余空间不缩小且目标不变差，就得到一个新的最优解。重复交换，最终可把 O 变成 G。
 
-### Greedy-choice property
+交换论证通常需要四个不变量：前缀仍合法、资源边界未被越过、目标值未变差、后缀仍拥有同类问题语义。缺少任何一项，都可能只证明了“局部替换看起来合理”。
 
-比optimal substructure更强。动态规划通常先求子问题，再比较choice；贪心先提交choice，只求由它产生的一个residual problem。
+### 局部规则失败时主动构造反例
 
+零钱系统 {1, 3, 4} 中，金额 6 的 largest-first 选择是 4+1+1，用了三枚；最优解 3+3 只用两枚。这里不存在把最优首枚 3 无损换成 4 的证据：换成 4 后，剩余金额 2 只能用两枚 1。
 
-设计一个贪心算法时，应依次回答：
+反例搜索应优先改变会破坏交换的条件：
 
-1. optimization objective究竟是数量、权重、成本还是延迟？
-2. local choice的全序和tie policy是什么？
-3. 任意optimal solution怎样交换成包含该choice且objective不变差？
-4. 固定choice后，剩余候选是否真是原问题的较小实例？
-5. feasibility和objective如何在induction中保持？
+- 目标从活动数量改为活动权重；
+- 候选有容量、负权或不可替代的资源约束；
+- tie policy 改变后缀可行性；
+- 一个局部选择阻塞两个稍差但组合更好的选择。
 
-Exchange argument常用一个“最早分歧点”。比较greedy witness $G$与optimal witness $O$，找到两者第一处不同；把$O$该处选择替换成$G$的选择，证明前缀仍可行、剩余空间不缩小且成本不增。重复交换便把$O$变成$G$。
+找不到 nonworsening exchange 时，应切换到动态规划、网络流、搜索或带界启发式，而不是给局部规则添加更多样例来掩盖缺证。
 
+## Huffman codes / Huffman 编码
 
-### When a plausible rule fails
+### 前缀码与加权路径长度
 
-局部最优必须与问题结构对齐。零钱系统$\{1,3,4\}$中，largest coin first对金额6给出$4+1+1$，而最优是$3+3$。这里不存在把最优首枚3无损交换成4的论证：交换后剩余金额2需要两枚硬币，总数增加。
+把字符放在二叉树叶子，左边记 0、右边记 1。因为字符只出现在叶子，没有 codeword 是另一个 codeword 的前缀，串联后的 bitstream 可以无歧义解码。
 
-
-反例测试应优先覆盖：一个局部choice阻塞两个稍差choice、相同key的tie产生不同未来、负权或容量约束破坏单调性，以及目标从cardinality改成weight。活动选择若改为最大总价值，earliest finish不再普遍正确，应转为weighted interval scheduling DP。
-
-## 15.3 Huffman codes
-
-### Prefix-free representation
-
-把字符放在二叉树叶子，左边记0、右边记1。叶子到根路径决定codeword；因为字符只在叶子，没有codeword是另一个的prefix，串接后的bitstream可唯一解码。
-
-若字符$c$频率为$c.freq$、在树$T$中深度为$d_T(c)$，总编码成本为：
+字符 c 的频率为 c.freq，在树 T 中的深度为 dT(c)，编码成本是：
 
 $$
 B(T)=\sum_{c\in C}c.freq\cdot d_T(c).
 $$
 
-固定长度码对6个字符每个至少3位；variable-length prefix code让高频字符靠近root、低频字符更深，从而降低weighted path length。
+固定长度编码没有利用频率差；Huffman 让高频字符更靠近根、低频字符更深，从而最小化加权路径长度。
 
+### 两个最低频节点为什么安全
 
-Huffman算法维护一片forest。每轮从min-priority queue取出频率最小的$x,y$，建立频率$x.freq+y.freq$的parent并插回；最后剩下的root就是code tree。
+Huffman 维护一片 forest。每一轮从最小优先队列取出频率最低的 x、y，建立频率 x.freq + y.freq 的 parent 并插回；最后剩下的 root 就是编码树。
 
-```cpp
-Node* huffman(vector<Node*> leaves) {
-    MinPriorityQueue q(leaves);
-    while (q.size() > 1) {
-        Node* x = q.extract_min();
-        Node* y = q.extract_min();
-        Node* z = new Node(x->freq + y->freq, x, y);
-        q.insert(z);
-    }
-    return q.extract_min();
-}
-```
-
-有$n$个字符时进行$n-1$次merge；二叉heap实现为$O(n\log n)$，若频率已排序可用两个FIFO queue做到线性merge。编码左右位可以互换，等频tie也可能产生不同树，但最优成本相同；生产实现需固定排序次键以获得确定输出。
-
-
-### Why merging two minima is safe
-
-任意最优full binary prefix tree中，取最深的一对sibling leaves。若它们不是最低频$x,y$，把更高频深叶与较低频浅叶交换不会增加成本，因为：
+证明先取任意最优 full binary prefix tree 中最深的一对 sibling leaves。如果它们不是最低频的 x、y，把高频深叶与低频浅叶交换。交换造成的成本变化为：
 
 $$
 \Delta=(f_{\mathrm{low}}-f_{\mathrm{high}})
-(d_{\mathrm{deep}}-d_{\mathrm{shallow}})\le 0.
+(d_{\mathrm{deep}}-d_{\mathrm{shallow}})\le0.
 $$
 
-更完整地说，成本差是频率差与深度差的乘积，低频放得更深不劣。因此存在一个最优树让$x,y$成为最深siblings。把它们收缩为频率$x.freq+y.freq$的伪字符$z$，原树成本满足
+因此存在一个最优树，让 x、y 成为最深 siblings。把它们收缩为伪字符 z，原树成本满足：
 
 $$
 B(T)=B(T')+x.freq+y.freq.
 $$
 
-附加项与其余结构无关，所以$T'$必须是收缩alphabet的最优树；否则替换为更优$T'$并展开$x,y$就会改进$T$。Sibling exchange给greedy choice，contraction给optimal substructure，induction完成证明。
+若收缩树 T' 不是最优，就用更优的 T' 替换并展开 z，得到比 T 更低的树，矛盾。sibling exchange 授权局部选择，contraction 提供剩余子问题，归纳完成证明。
 
+有 n 个字符时执行 n-1 次合并；二叉堆实现为 O(n log n)，频率已排序时可用两个 FIFO 队列线性合并。等频节点的左右位可以互换，生产实现应固定次级排序键以获得确定 witness。
 
-## 15.4 Offline caching
+## offline caching / 离线缓存
 
-### Farthest in the future
+给定容量 k 和完整请求序列。命中不增加 miss；未命中且有空位时直接装入；只有“未命中且缓存已满”需要选择 victim。
 
-给定容量$k$和完整page request sequence。命中不改变miss数；未命中且尚有空位时直接装入；只有“miss且已满”需要选择victim。
+Belady 的 farthest-in-future 规则查看每个驻留页的下一次使用位置，淘汰下一次使用最晚的页；永不再请求可视为位置无穷大。它需要未来轨迹，因此是 offline optimum，常用来作为在线 LRU、FIFO 等策略的 benchmark。
 
-
-Belady策略也称farthest-in-future：对每个resident page查找其下一次请求位置，淘汰位置最远者；永不再请求可视为next use为$\infty$。它需要知道未来，因此是offline optimum，常用作在线LRU、FIFO等策略的benchmark，而不是普通运行时可直接实现的预言算法。
-
-```text
+~~~text
 OFFLINE-CACHE(requests, capacity)
 1  for each request r at position i
 2      if r is resident, continue
@@ -155,26 +236,92 @@ OFFLINE-CACHE(requests, capacity)
 4      if cache is full
 5          evict page with farthest next request after i
 6      load r
-```
+~~~
 
+### 离线交换论证
 
-正确性仍是exchange。设OPT在当前第一次与Belady不同的full-cache miss上淘汰$x$，Belady淘汰$y$，且$y$的next use不早于$x$。修改OPT，让它先淘汰$y$并暂时保留$x$。在原OPT下一次请求$y$之前，修改方案拥有$x$而缺$y$：任何请求若需要$x$，修改方案反而命中；其余page状态一致。到请求$y$时再对齐两方案，修改后的miss不会更多。
+设 OPT 在第一个与 Belady 不同的满缓存 miss 上淘汰 x，而 Belady 淘汰 y，且 y 的下一次使用不早于 x。修改 OPT，让它先淘汰 y、暂时保留 x。在原 OPT 下一次请求 y 之前：
 
-若cache初始为空，miss count可写为：
+- 任何需要 x 的请求，修改后的方案命中而原方案可能 miss；
+- 不需要 x 或 y 的请求，两套缓存状态可以保持一致；
+- 到下一次请求 y 时，再让修改后的方案装入 y，两条 trace 对齐。
 
-$$
-M=\sum_{i=1}^{m}\mathbf{1}[r_i\notin C_{i-1}],
-$$
+修改没有增加 miss，因此存在一个同样最优、在该分歧处采用 Belady choice 的方案。重复交换后，Belady 不会比 OPT 差。
 
-其中$C_{i-1}$是处理请求$i$前的resident set。Proof必须核算强制load造成的状态变化，不能只比较victim的下次访问。相同next-use距离时任意victim都安全，但需稳定tie policy保证trace可重放。
+这个证明依赖完整未来信息，不能直接变成在线实现。工程上可以用它生成离线下界，再测量 LRU、FIFO 或预测型缓存与该下界的差距。
 
-Offline caching说明“最晚使用”有时才是正确局部choice；同一个词“greedy”并不规定方向。安全方向完全由exchange中的dominance关系决定。
+## 练习
 
+<Exercises>
+
+1. 活动按 finish 非降序排列。证明选择最早结束活动不会减少最大兼容活动数量，并给出一个“最短活动”失败的反例。
+
+   <Answer>
+
+   取任意最优解 O 的第一项 ak，令 a1 是最早结束的活动。由于 f1 不晚于 fk，把 ak 换成 a1 后，O 的后续活动仍与它兼容，活动数量不变；固定 a1 后剩余候选正是从 f1 开始的同类子问题。最短规则失败的核心反例是：一个持续时间很短但很晚结束的活动，会阻塞两个更早结束的活动；因此正确依据是结束边界而不是持续时间。
+
+   </Answer>
+
+2. 频率为 5、9、12、13、16、45 的字符使用 Huffman。说明第一步为何合并 5 和 9，并指出证明中的 exchange 与 contraction 分别负责什么。
+
+   <Answer>
+
+   在某个最优 full binary tree 中，最深 sibling 可以通过交换变成两个最低频叶而不增加加权路径长度，所以第一步可安全合并 5 和 9。exchange 把最优树改造成包含 greedy choice 的树；contraction 把这两个叶收缩为频率 14 的伪字符，证明剩余树必须是收缩 alphabet 的最优解。
+
+   </Answer>
+
+3. 给定请求序列 A,B,C,A,D,B,E,A,C,D 和容量 3，解释 farthest-in-future 会在请求 D 时比较什么；为什么它适合作为在线策略 benchmark 而不是普通线上实现？
+
+   <Answer>
+
+   请求 D 时缓存为 A、B、C。下一次使用分别在位置 7、5 和 8，所以淘汰下一次使用最晚的 C，载入 D。该规则需要知道完整未来请求，因此是 offline optimum；线上 LRU 或 FIFO 没有这些信息，但可以用 Belady 的 miss 数作为比较基准和下界参照。
+
+   </Answer>
+
+</Exercises>
+
+## 本章证据清单
+
+交付一个贪心算法前，至少留下：
+
+1. 优化目标、输入约束、tie policy 和失败边界；
+2. 局部选择的全序或比较规则；
+3. 一份可复现的 greedy witness；
+4. 从任意最优解到包含该选择的最优解的交换映射；
+5. 固定选择后的剩余子问题与复杂度；
+6. 一个能击穿相似局部规则的反例；
+7. 如果使用未来信息，标注 offline benchmark 与 online implementation 的边界。
 
 ## 小结
 
-Chapter 15 Greedy Algorithms从activity-selection problem建立earliest-finish交换论证，再提炼elements of the greedy strategy：greedy-choice property、optimal substructure、feasibility invariant、exchange与residual instance。Huffman codes用最低频siblings交换和contraction最小化带权路径长度；offline caching用farthest-in-future交换最小化miss。
+- greedy algorithms / 贪心算法的速度来自提交一个局部选择，但每次删减都必须有证明许可证。
+- activity-selection problem / 活动选择问题通过 earliest-finish choice、交换论证和剩余子问题得到最大兼容活动数。
+- elements of the greedy strategy / 贪心策略原理包括目标、选择、交换、归约、可行性和反例检查；最优子结构本身不足以授权贪心。
+- Huffman codes / Huffman 编码用最低频 siblings 的交换与收缩最小化加权路径长度，并保持前缀码合同。
+- offline caching / 离线缓存用 farthest-in-future 最小化已知 trace 的 miss，但必须明确未来信息只属于 benchmark。
 
-贪心的速度来自只保留一个choice，但这一删减必须由证明授权。每个可交付算法都应带有目标、确定choice、tie policy、交换映射、归约关系和复杂度；找不到nonworsening exchange时，应主动寻找反例并切换算法范式。
+## 术语表
 
+<Glossary>
 
+<GlossaryItem term="最优子结构">固定一个合法边界后，剩余部分仍可由同类问题的最优解组成的性质。</GlossaryItem>
+<GlossaryItem term="贪心选择性质">存在一个全局最优解包含贪心算法第一步选择的性质。</GlossaryItem>
+<GlossaryItem term="交换论证">把某个最优解的一处选择替换为贪心选择且证明目标不变差的方法。</GlossaryItem>
+<GlossaryItem term="剩余子问题">固定一次选择后仍需解决、且保留原目标和可行性语义的较小问题。</GlossaryItem>
+<GlossaryItem term="前缀码">没有一个编码是另一个编码前缀的二进制编码，支持无歧义解码。</GlossaryItem>
+<GlossaryItem term="下一次使用">请求序列中某个驻留页再次被请求的位置，离线缓存据此选择 victim。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 15 章的目录定位与核心论证进行独立教学重写。活动选择、贪心选择性质、Huffman 编码和离线缓存来自官方主题；交互实验、故障注入、证明清单、反例和练习答案是本项目新增材料。
+
+活动选择的 earliest-finish 结论依赖“最大化活动数量”和兼容区间合同；改成加权活动后应重新验证选择性质。Huffman 的频率和缓存的未来轨迹也属于输入假设，不能把一次实现的局部规则推广成无条件定理。
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 15: Greedy Algorithms"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

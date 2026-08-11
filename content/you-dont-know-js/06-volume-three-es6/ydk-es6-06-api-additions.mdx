@@ -3,23 +3,44 @@ title: "第 6 章 新增 API"
 type: A
 section: "下卷 · 第二部分 ES6 及未来"
 order: 38
-description: "ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。"
+description: "ES6 为 Array、Object、Math、Number 和 String 增加更明确的转换、复制、数值判断与 Unicode 操作；选择 API 时要让输入类型和边界语义可验证。"
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch6.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-38
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkEs606ApiAdditionsLab } from "@/components/mdx/you-dont-know-js/ydk-es6-06-api-additions";
 
-## 直觉：先预测，再运行
+<Objectives>
 
-ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。
+- 能将旧式转换、复制、数值判断和字符串遍历改写为明确的 ES6 API，并说明每个 API 保留或拒绝了哪些隐式行为。
+- 能用边界样本验证 Array.from、Object.assign、Math.trunc、Number.isNaN 与 Unicode 字符串迭代的输入类型、复制层级和单位。
+- 能设计一组回归断言，证明新增 API 改善的是语义可读性和可测试性，而不是凭一次成功输出宣称所有写法等价。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+</Objectives>
+
+## 直觉：先指出旧写法藏起来的决定
+
+新增 API 的价值不在于把旧名字换成新名字，而在于把原来散落在调用者脑中的决定写进接口：输入能否迭代，属性复制到哪里，数字要截断还是向下取整，`NaN` 是否真的存在，字符串按什么单位前进。决定没有被记录，边界一来就会暴露出“看起来能跑”的假等价。
+
+先预测：`Array.from("A😀")` 有几个元素，`Object.assign` 会不会深复制，`Math.trunc(-1.8)` 与 `Math.floor(-1.8)` 是否相同，`Number.isNaN("NaN")` 会返回什么，以及字符串下标能否独立得到 😀。把预期写下，再逐个切换交互样本验证。
+
+<YdkEs606ApiAdditionsLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本章以作者公开的一版仓库目录作为结构基线，逐项覆盖 API Additions 下的 Array、Object、Math、Number 和 String。示例采用独立教学重写：它们帮助读者验证概念，但不把现代运行时的额外方法伪装成原书历史分节。
 
 - Chapter 6: API Additions
 - Array
@@ -28,165 +49,254 @@ ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复
 - Number
 - String
 
-本页逐项覆盖 6 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
-
-## 核心概念与状态所有权
-
-。
-
-。
-
-。
-
-。
-
-。
-
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
-
-|   # | 观察量        | 本页判定方式                                           |
-| --: | ------------- | ------------------------------------------------------ |
-|   1 | Array.from    | 在“识别旧写法的语义缺口”阶段保存前后状态并核对不变量   |
-|   2 | Object.assign | 在“选择对应新增 API”阶段保存前后状态并核对不变量       |
-|   3 | Number.isNaN  | 在“检查可迭代或类数组输入”阶段保存前后状态并核对不变量 |
-|   4 | Math.trunc    | 在“验证浅复制和属性顺序”阶段保存前后状态并核对不变量   |
-|   5 | 字符串迭代    | 在“验证 NaN 与整数边界”阶段保存前后状态并核对不变量    |
-
-## 机制拆解
-
-### 1. 识别旧写法的语义缺口
-
-识别旧写法的语义缺口不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 2. 选择对应新增 API
-
-选择对应新增 API不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 3. 检查可迭代或类数组输入
-
-检查可迭代或类数组输入不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 4. 验证浅复制和属性顺序
-
-验证浅复制和属性顺序不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 5. 验证 NaN 与整数边界
-
-验证 NaN 与整数边界不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 6. 用 Unicode 样本回归
-
-用 Unicode 样本回归不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-## 目录主题逐项讲解
-
-### Chapter 6: API Additions
-
-Chapter 6: API Additions在本单元中落到“识别旧写法的语义缺口”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Array
-
-Array在本单元中落到“选择对应新增 API”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Object
-
-Object在本单元中落到“检查可迭代或类数组输入”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Math
-
-Math在本单元中落到“验证浅复制和属性顺序”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Number
-
-Number在本单元中落到“验证 NaN 与整数边界”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### String
-
-String在本单元中落到“用 Unicode 样本回归”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-## 六阶段证据链
-
-本页的可执行链条是：识别旧写法的语义缺口 → 选择对应新增 API → 检查可迭代或类数组输入 → 验证浅复制和属性顺序 → 验证 NaN 与整数边界 → 用 Unicode 样本回归。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
-
-## 最小可运行实验
-
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
-
-```js
-console.log(Array.from("A😀"));
-console.log(Object.assign({}, { a: 1 }, { b: 2 }));
-console.log(Number.isNaN(NaN), Math.trunc(3.9));
-```
-
-```yaml
-book: 你不知道的 JavaScript（一版三卷六册）
-page: ydk-es6-06-api-additions
-role: chapter
-official_entries: 6
-sample: normal | boundary | failure | recovery
-first_divergence: null
-bindings_stable: true
-ordering_explained: true
-cleanup_complete: true
-```
-
-```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
-stop at first divergence
-recover and replay the same sample
-assert stable state and no stale work
-```
+目录条目都落到一个可以输入、执行、比较和回归的观察点。站内导航与跨章复习属于产品层，不冒充本章的原书条目。
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：所有转换 API 都会先帮你转成数字">
 
-## 四类样本与验收
+现象：把 `Number.isNaN("NaN")` 当成全局 `isNaN("NaN")`，或者把转换成功当成类型验证成功。
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+原因：全局函数可能先做隐式数值转换，而 Number 的静态判断保留了输入类型边界；两个名字相似，契约并不相同。
 
-本页签发不变量是：**ES6 为 Array、Object、Math、Number 和 String 增加更明确的查找、复制、数值判断与 Unicode 操作；选择 API 时应以语义精确和边界行为为标准。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+修复：同时传入 `NaN`、数字字符串、普通数字和对象，记录类型、转换步骤以及最终判断，不只测一个真值。
 
-## 版本与原书边界
+</Callout>
 
-本单元忠实保留原书讨论的 ES6 语境，同时把年度规范、现代浏览器实现和转译工具的差异放入版本栏；后续规范补充不会冒充原书正式分节。
+<Callout type="trap" title="陷阱：截断就是向下取整">
 
-站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
+现象：对正数样本测试通过后，直接用 `Math.floor` 替换所有 `Math.trunc`。
+
+原因：负数会揭示两者意图不同：截断朝零移动，floor 朝负无穷移动；名称相近不代表边界相同。
+
+修复：把 `1.8`、`-1.8`、`-0` 和非有限值放进同一组断言，先写业务需要的舍入方向再选 API。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Object.assign 会复制完整对象树">
+
+现象：复制后修改嵌套对象，期待源对象不会变化。
+
+原因：Object.assign 只复制可枚举自有属性的第一层；嵌套对象的引用仍然共享，访问器和目标属性也会影响结果。
+
+修复：明确写出 shallow copy 契约；若需要隔离嵌套状态，选择专门的深复制策略并单独验证类型、原型和循环引用。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：字符串 length 就是用户看到的字符数">
+
+现象：用 `text[i]` 切分带 emoji 或组合字符的字符串，得到半个代理项或错误的长度。
+
+原因：JavaScript 字符串索引以 UTF-16 code unit 为单位，而迭代协议按 Unicode 码点推进；两种单位不是一回事。
+
+修复：用 `for...of` 或展开语法验证码点序列，同时说明组合字符、字形簇和“用户看到的字符”仍可能需要更高层的分词工具。
+
+</Callout>
+
+## 核心概念与边界所有权
+
+<Term def="让 API 的名字、输入类型、输出形状和失败边界互相对齐的性质；调用者无需猜测隐藏的强制转换。">API 精确性</Term> 是本章挑选新增方法的共同标准。
+
+<Term def="能提供迭代器或长度与索引的输入；Array.from 会按相应协议把它转换成数组。">可迭代输入</Term> 决定 Array.from 读取哪些元素以及映射回调收到什么参数。
+
+<Term def="只复制对象第一层可枚举自有属性的结果；嵌套对象引用仍可能与源对象共享。">浅复制</Term> 描述 Object.assign 的真实所有权边界。
+
+<Term def="针对值的类型、有限性、整数性或 NaN 状态做显式判断，而不是让全局函数先偷偷转换。">数值判定</Term> 让错误输入在边界处尽早暴露。
+
+<Term def="从一个数中移除小数部分并朝零靠近的运算；它与向负无穷取整在负数上不同。">截断</Term> 表达 Math.trunc 的方向意图。
+
+<Term def="字符串迭代器一次推进一个 Unicode 码点，而不是盲目推进一个 UTF-16 code unit。">码点迭代</Term> 让非 BMP 字符的处理方式可以被测试。
+
+这些术语共同组成一个检查顺序：先确认输入协议，再确认复制或转换动作，最后用正数、负数、特殊值和 Unicode 样本回归。不要让“输出看起来对”替代对中间单位的说明。
+
+| 观察量 | 要记录的证据 | 常见偷换 |
+| --- | --- | --- |
+| 可迭代输入 | iterator、length、映射回调和输出数组 | 把字符串下标当作迭代协议 |
+| 浅复制 | 目标对象、可枚举自有属性、嵌套引用 | 把第一层复制说成深复制 |
+| 数值判定 | 原始类型、转换与 NaN/整数状态 | 用一个真值覆盖所有输入 |
+| 截断 | 正负号、小数部分、非有限值 | 用 floor 代替朝零语义 |
+| 码点迭代 | code point、code unit、组合字符边界 | 把 length 当用户字符数 |
+
+## 机制拆解
+
+### 1. Chapter 6: API Additions
+
+**Chapter 6: API Additions** 不是方法清单，而是把旧写法的隐式决定变成可命名的契约。Array.from 关注输入如何迭代，Object.assign 关注属性如何进入目标对象，Math 和 Number 关注数值意图，String 关注文本推进单位。
+
+把每个方法写成“输入协议 → 语义动作 → 输出边界”三段式。这样即使两个实现给出同一结果，也能通过中间记录判断它们是否真的拥有相同的类型检查、复制层级和 Unicode 行为。
+
+### 2. Array
+
+**Array** 在 ES6 新增的关键能力之一是 `Array.from`：它可以消费可迭代对象，也可以消费带有 `length` 和索引的类数组输入，并可在创建结果时映射每一项。
+
+```js
+const text = Array.from("A😀", (char, index) => `${index}:${char}`);
+const pair = Array.from({ 0: "x", 1: "y", length: 2 });
+
+console.log(text, pair);
+```
+
+这里的输入协议必须写清楚：字符串走迭代器，类数组依赖长度与索引；稀疏位置、负长度和映射回调抛错时，结果不能用“反正是数组”概括。验证时对照输入顺序、输出长度和每一项的映射记录。
+
+### 3. Object
+
+**Object** 的 `Object.assign` 把多个来源对象的可枚举自有属性按顺序写入目标对象。后面的来源会覆盖前面相同的键，但它只做一层复制，并且读取来源属性、写入目标属性都可能触发访问器行为。
+
+```js
+const source = { nested: { ready: true }, version: 1 };
+const copy = Object.assign({}, source, { version: 2 });
+
+copy.nested.ready = false;
+console.log(copy.version, source.nested.ready);
+```
+
+输出能证明覆盖顺序，却不能证明嵌套隔离；最后一行会暴露浅复制共享的引用。需要不可变更新时，调用者必须决定嵌套层级如何复制，而不是把 Object.assign 当成深复制承诺。
+
+### 4. Math
+
+**Math** 的 `Math.trunc` 把小数部分移除并朝零靠近。它适合表达“只要整数部分”的意图，但不应和 `Math.floor`、`Math.ceil` 或四舍五入互换，尤其要把负数纳入样本。
+
+```js
+const values = [1.8, -1.8, -0, Infinity, NaN];
+console.log(values.map((value) => Math.trunc(value)));
+console.log(Math.trunc(-1.8) === Math.floor(-1.8));
+```
+
+对非有限值的结果也要有业务解释。若下游要求有限整数，先用 Number 的判断 API 拦住输入，再执行截断；不要让一个数学方法同时承担验证、转换和错误恢复三种责任。
+
+### 5. Number
+
+**Number** 提供更精确的数值判断边界，例如 `Number.isNaN` 只在输入已经是 `NaN` 时返回 true，不会先把字符串或其他值强制转换成数字。这样的 API 让类型错误不再被转换步骤掩盖。
+
+```js
+const samples = [NaN, "NaN", 0 / 0, undefined];
+console.log(samples.map((value) => Number.isNaN(value)));
+console.log(Number.isInteger(3), Number.isInteger(3.2));
+```
+
+把 `NaN`、字符串、整数、小数和无穷值放在同一组回归里。判断通过后仍要定义如何处理：返回错误、跳过记录还是使用默认值，不能把“不是 NaN”误解成“可以安全参与所有计算”。
+
+### 6. String
+
+**String** 的迭代行为让展开语法和 `for...of` 可以按 Unicode 码点推进。它解决的是代理项被单独切开的常见问题，但不保证每一步都等于用户眼中的一个字形，因为组合字符仍可能由多个码点组成。
+
+```js
+const text = "A😀é";
+console.log(text.length);
+console.log([...text]);
+for (const codePoint of text) console.log(codePoint);
+```
+
+比较 `length`、下标访问和迭代结果，才能看到三种单位的差异。需要按用户可见字形截断时，还要使用更高层的国际化分段能力；本章只保证码点迭代这条 ES6 语义边界。
+
+## 把新增 API 变成回归契约
+
+一个可复用的回归表至少包含四列：原始输入、旧写法、新 API、边界断言。例如字符串样本要同时保存 UTF-16 长度和迭代后的码点列表；复制样本要保存嵌套引用是否相同；数值样本要保存符号、有限性和整数状态。
+
+```js
+const cases = [
+  { input: "A😀", check: (value) => [...value].length === 2 },
+  { input: -1.8, check: (value) => Math.trunc(value) === -1 },
+  { input: NaN, check: (value) => Number.isNaN(value) },
+];
+
+for (const item of cases) {
+  if (!item.check(item.input)) throw new Error("contract failed");
+}
+```
+
+回归表的目的不是堆更多断言，而是让每条断言对应一个语义决定。未来替换实现、升级转译器或更换运行时后，失败位置应该能告诉你是输入协议、复制层级、数值方向还是文本单位发生了变化。
+
+## 最小可运行实验
+
+下面把本章常用 API 放进一段短实验。运行前先预测所有边界，再只改动一个输入：
+
+```js
+const array = Array.from("A😀");
+const source = { nested: { ready: true } };
+const copy = Object.assign({}, source);
+const numeric = [Math.trunc(-1.8), Number.isNaN(NaN)];
+const codePoints = [..."A😀"];
+
+console.log(array, copy.nested === source.nested, numeric, codePoints);
+```
+
+```yaml
+sample: normal | boundary | failure | recovery
+input_protocol_checked: true
+copy_depth_checked: true
+numeric_direction_checked: true
+unicode_unit_checked: true
+first_divergence: null
+```
+
+如果实验只打印最终数组，信息还不够；请补充 `typeof`、负数样本、嵌套身份比较和码点列表。每次修改只改变一个条件，才能把首个偏离点归因到具体 API 契约。
 
 ## 练习
 
+<Exercises>
+
+1. 为一个类数组对象和一个字符串分别写 Array.from 实验，记录长度、顺序和映射回调收到的参数；再加入一个带 emoji 的字符串。
+
+   <Answer>
+
+   类数组对象依赖 `length` 与数值索引，字符串优先使用迭代器。带 emoji 的字符串通过 Array.from 得到完整码点项，而不是把代理项拆成两个元素；答案应同时记录输入协议、输出长度和映射顺序。
+
+   </Answer>
+
+2. 用 Object.assign 复制一个含嵌套对象的配置，并用 `Math.trunc`、`Math.floor` 比较正负小数；写出每个结果对应的业务意图。
+
+   <Answer>
+
+   Object.assign 只复制第一层，所以复制对象与源对象的嵌套字段仍共享引用。正数上 trunc 和 floor 可能相同，负数上 `Math.trunc(-1.8)` 为 -1 而 floor 为 -2；如果意图是朝零取整，应选 trunc，否则应明确选择另一种方向。
+
+   </Answer>
+
+3. 为 `NaN`、`"NaN"`、`3.2` 和 `"3.2"` 写 Number 判断，再用字符串迭代验证 `"A😀"` 的 code unit 与 code point 差异。
+
+   <Answer>
+
+   `Number.isNaN` 只接受真正的 NaN，因此 `NaN` 为 true，字符串 `"NaN"` 为 false；`Number.isInteger(3.2)` 为 false，字符串 `"3.2"` 也不会被悄悄转换。字符串的 length 和下标按 UTF-16 单元工作，而展开或 for...of 按码点推进，emoji 的项数会因此不同。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **Array.from**：对应“识别旧写法的语义缺口”阶段的核心观察量。
-- **Object.assign**：对应“选择对应新增 API”阶段的核心观察量。
-- **Number.isNaN**：对应“检查可迭代或类数组输入”阶段的核心观察量。
-- **Math.trunc**：对应“验证浅复制和属性顺序”阶段的核心观察量。
-- **字符串迭代**：对应“验证 NaN 与整数边界”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- **Array**：用 Array.from 显式消费可迭代或类数组输入，并在转换处执行映射。
+- **Object**：用 Object.assign 表达第一层可枚举属性复制，不能假定嵌套隔离。
+- **Math**：用 Math.trunc 表达朝零移除小数，负数样本负责揭示方向。
+- **Number**：用 Number.isNaN 等判断保留类型边界，先验证再决定如何恢复。
+- **String**：用迭代协议按 Unicode 码点推进，但不要把码点当成全部字形处理。
+- **Chapter 6: API Additions** 的核心是把隐式转换、复制和文本单位变成能被回归的语义契约。
 
 ## 术语表
 
+<Glossary>
+
+<GlossaryItem term="API 精确性">方法的输入类型、输出形状和失败边界彼此对齐，调用者不必猜隐式转换。</GlossaryItem>
+<GlossaryItem term="可迭代输入">能提供迭代器，或能按长度与索引读取的输入，Array.from 会据此创建数组。</GlossaryItem>
+<GlossaryItem term="浅复制">只复制对象第一层可枚举自有属性，嵌套对象引用仍可能共享。</GlossaryItem>
+<GlossaryItem term="数值判定">针对类型、有限性、整数性或 NaN 状态做显式检查的过程。</GlossaryItem>
+<GlossaryItem term="截断">移除小数并朝零靠近的运算；负数时与向负无穷取整不同。</GlossaryItem>
+<GlossaryItem term="码点迭代">字符串迭代器按 Unicode 码点推进，而不是逐个 UTF-16 code unit 前进。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章保留原书 ES6 语境中的新增方法和语义问题，并把现代运行时的国际化分段、转译限制和类型边界单独标出。不同环境可能支持不同的后续方法，但不会改变本章对输入协议、浅复制、数值方向和码点迭代的核心解释。
+
+站内示例优先使用今天可以运行的标准写法；历史章节归属和目录标题仍以作者一版仓库为准。对需要深复制、用户可见字形切分或复杂数值校验的业务，应在本章 API 之外增加明确的工具和测试，不把 ES6 方法承诺扩大到它们没有覆盖的范围。
 
 ## 来源与改编边界
 
+本文根据作者公开的章节目录进行独立教学重写，目录条目用于结构对齐；示例、练习、交互时间线和边界回归均为本项目新增教学材料。
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, ES6 & Beyond, Chapter 6: API Additions"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch6.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

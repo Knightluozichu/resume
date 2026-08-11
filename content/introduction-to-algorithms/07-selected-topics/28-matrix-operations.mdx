@@ -3,41 +3,112 @@ title: "Chapter 28 · Matrix Operations"
 type: C
 section: "CLRS4 · 专题"
 order: 28
-description: "按CLRS第四版第28章重建线性方程求解、LUP分解、矩阵求逆、对称正定矩阵与最小二乘。"
+description: "按 CLRS 第四版第 28 章重建矩阵运算、线性方程组、矩阵求逆、对称正定矩阵与最小二乘，并绑定分解、残差和数值结构证据。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-28
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter28MatrixOperationsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch28-matrix-operations";
 
-## 从“不要真的先求逆”开始
+<Objectives>
 
-先预测：要解$Ax=b$，最直接的公式是$x=A^{-1}b$，但可靠实现通常不会先显式形成$A^{-1}$。原因不只是速度；factorization能保留结构、复用多个right-hand sides，并允许pivot和residual构成更清楚的正确性证书。
+- 能根据矩阵的形状、秩、对称性和正定性选择 LUP、Cholesky 或 least-squares 路径，并写出每个假设。
+- 能实现或修改 triangular solve、partial pivoting、basis-vector solve 与 residual check 代码，区分 factorization identity 和 solution evidence。
+- 能回答：为什么“先求显式 inverse 再乘向量”通常不是求解 Ax=b 的默认实现，以及为什么 normal equations 可能放大 condition number？
 
-把许多图算法、optimization和statistics中的子问题统一成“factor once, solve many”。本章默认dense arithmetic cost model，并在工程说明中区分exact algebraic identity与floating-point behavior。
+</Objectives>
 
+## 先问：为什么解 Ax=b 不等于先算 A⁻¹？
 
-### 形状、秩与结构先于代码
+先预测：公式 `x = A⁻¹b` 在代数上成立，但一个可靠实现通常先做 factorization，再复用 triangular solve。这样既避免为了一个 `b` 计算不需要的 inverse columns，也能把 pivot、storage、residual 和 precision 假设写成可复查证书。
 
-对$A\in\mathbb{R}^{n\times n}$，唯一解要求$A$ nonsingular；对rectangular least-squares matrix，normal equations要有唯一解通常要求columns linearly independent。Symmetry、triangularity和positive definiteness不是装饰标签，它们决定可用factorization、storage和stability。
+本章把矩阵计算拆成一条证据链：先固定 shape、rank 与 arithmetic model，再用 Gaussian elimination 和 LUP decomposition 解一般线性方程组；随后把矩阵求逆还原成重复 solve；最后利用对称正定矩阵的 Cholesky structure 连接 least-squares approximation。每个结果都要回答“输入满足什么条件、算法保存了什么中间状态、如何验证输出”。
 
-同一个$A$对应多个$b$时，factorization cost只付一次，每个新$b$只做triangular solves。报告总复杂度时必须把one-time preprocessing与per-query cost分开。
+<Clrs4Chapter28MatrixOperationsLab />
 
-## 28.1 Solving systems of linear equations
+## 权威目录定位
 
-### Gaussian elimination
+本章对齐 CLRS 第四版第 28 章，官方概念包括：
 
-求解从row operations开始。把pivot column下方entries消成0，就得到upper-triangular $U$；再从最后一行向上back substitute。
+- matrix operations / 矩阵运算；
+- solving systems of linear equations / 解线性方程组；
+- inverting matrices / 矩阵求逆；
+- symmetric positive-definite matrices / 对称正定矩阵；
+- least-squares approximation / 最小二乘逼近。
 
+正文是独立教学重构：先把矩阵运算当作 shape、structure、cost 和 certificate 的合同，再让同一个 LUP factorization 服务于多个 right-hand sides，最后比较 normal equations 与更稳健的 QR/SVD 路径。演示组件的五个 mode 对应五个官方概念，时间线则展示从检查到验证的共同流程。
 
-消去第$k$列时，用multiplier $l_{ik}=a_{ik}/a_{kk}$执行row update。若直接覆盖matrix，可把$U$存在diagonal及上方，把multipliers存在下方，省去独立matrix；但logical identity仍应保留。
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：矩阵形状和秩没有进入算法合同">
+
+现象：代码对 square、rectangular、rank-deficient 输入使用同一条 solve 路径，直到运行时才遇到维度错误或非唯一解。
+
+原因：`Ax=b` 是否有唯一解取决于 shape、rank 和 consistency；对称、三角、正定等结构也会改变允许的 factorization。
+
+修复：在入口记录 dimensions、rank assumption、right-hand-side 数量和 initial storage；遇到不满足条件的输入要报告 singular、rank deficient 或 inconsistent，而不是继续产生一个看似精确的向量。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把小 pivot 当作普通除法处理">
+
+现象：pivot 很小仍直接除，multiplier 变得巨大，floating-point 结果出现异常放大。
+
+原因：exact algebra 中非零 pivot 可以继续消元，但 finite precision 中小 pivot 会放大 roundoff；没有 permutation 记录也无法重放 row swaps。
+
+修复：使用 partial pivoting，按当前 column 的 absolute value 选择候选 pivot，保存 permutation，并按 numeric scale 与 tolerance 定义 numerically zero。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：用一次 residual 小证明所有计算都正确">
+
+现象：只检查一个 `Ax≈b` 的 residual，便宣称 LUP、permutation 和其他 right-hand sides 都正确。
+
+原因：specific solution residual 只覆盖一次 solve；factorization identity、pivot 应用、triangular solve 和 forward error 是不同证据，某一项通过不能替代其余检查。
+
+修复：同时检查 `PA≈LU`、目标 solve residual、norm choice、precision 与 conditioning；对多个 right-hand sides 做回归，记录 residual 的尺度而不只是打印小数。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把 normal equations 当成所有 least-squares 的最佳实现">
+
+现象：任何 least-squares 输入都先形成 `AᵀA`，然后把 normal-equation 解称为数值上最稳健。
+
+原因：`κ(AᵀA)` 约等于 `κ(A)²`；列接近相关时，形成 Gram matrix 会放大 conditioning 问题，rank deficiency 也会被隐藏。
+
+修复：normal equations 只在结构和 conditioning 允许时使用；数值要求高时优先 QR，rank 信息或最稳健结果需要 SVD，并报告 residual 与 orthogonality evidence。
+
+</Callout>
+
+## matrix operations / 矩阵运算
+
+<Term def="在固定维度、数据布局、算术精度与结构假设下，对矩阵执行乘法、分解、求解或变换的运算合同">矩阵运算</Term>不是只把数字放进二维数组。实现前先固定矩阵的 shape、storage layout、arithmetic model、right-hand sides 数量和是否允许 row permutation。Dense `n×n` elimination 的主要 arithmetic work 是 Θ(n³)，而一次 triangular solve 是 Θ(n²)；当多个 `b` 共用同一个 `A` 时，应把 one-time factorization 和 per-query solve 分开报告。
+
+对 `A ∈ R^(m×n)`，square、tall、wide 矩阵的 rank 条件不同。若要得到唯一的 square-system solution，需要 `A` nonsingular；least-squares 的唯一 minimizer 通常需要 columns linearly independent。Symmetry、triangularity 和 positive definiteness 是算法入口的可用结构，不是事后添加的标签。
+
+## solving systems of linear equations / 解线性方程组
+
+### Gaussian elimination 与 triangular solve
+
+消元把 pivot column 下方 entries 变为 0，得到 upper-triangular `U`；随后 backward substitution 从最后一行向上求解。若先把右侧写成 lower-triangular 问题，则 forward substitution 完成 `Ly=b`：
 
 ```text
 FORWARD-SUBSTITUTION(L, b)
 1  for i = 1 to n
 2      y[i] = b[i] - sum(L[i,j] * y[j], j = 1..i-1)
-3      if L has a nonunit diagonal, divide y[i] by L[i,i]
+3      if L[i,i] is not 1, divide y[i] by L[i,i]
 4  return y
 
 BACKWARD-SUBSTITUTION(U, y)
@@ -46,18 +117,17 @@ BACKWARD-SUBSTITUTION(U, y)
 3  return x
 ```
 
-两次triangular solve各做$\Theta(n^2)$ arithmetic operations，真正昂贵的是dense elimination的$\Theta(n^3)$ factorization。
+<Term def="在当前 pivot column 的候选 rows 中按绝对值选择较大 pivot 并同步交换 rows 的策略">主元选取</Term>通过 row swap 降低小 pivot 造成的 multiplier 放大。它不等于误差消失：threshold、matrix scale、numeric type 和 conditioning 仍需记录。若 pivot 在当前 tolerance 下为零，应报告 singular 或 rank deficient，而不是静默除法。
 
 ### LUP decomposition
 
-把消去历史结构化。$P$记录row swaps；$L$记录multipliers；$U$是eliminated matrix：
+把消元历史保存为 permutation `P`、multipliers `L` 和 upper-triangular `U`：
 
 $$
-PA=LU.
+PA = LU
 $$
 
-
-解$Ax=b$时，不需要重放所有row operations。先算$Pb$，再解$Ly=Pb$，最后解$Ux=y$：
+解 `Ax=b` 时，先应用 permutation，再做两次 triangular solve：
 
 ```text
 LUP-SOLVE(L, U, P, b)
@@ -67,128 +137,125 @@ LUP-SOLVE(L, U, P, b)
 4  return x
 ```
 
+<Term def="把 permutation、消元 multiplier 与 upper-triangular matrix 保存为 PA=LU 的分解结构">LUP 分解</Term>让同一个 `A` 的多个 right-hand sides 复用 factorization。它留下两类不同证据：factorization residual `PA-LU` 是否小，以及 specific solution residual `Ax-b` 是否小；两者都要在报告中出现。
 
-Factorization identity与solve residual是两种不同检查。前者验证$PA$是否接近$LU$；后者验证specific solution是否满足$Ax\approx b$。前者通过但后者很差，可能是triangular solve或permutation application有bug；后者偶然很小也不能证明factorization对其他$b$都正确。
+## inverting matrices / 矩阵求逆
 
-### Partial pivoting
+### 把求逆还原为重复求解
 
-若pivot为0，division非法；若pivot极小，即使exact matrix nonsingular，floating-point multiplier也可能巨大并放大roundoff。Partial pivoting在当前column尚未处理的rows中选absolute value最大的entry，与当前pivot row交换。
-
-
-```text
-for k = 1 to n
-    p = argmax |A[i,k]| over i = k..n
-    if A[p,k] is numerically zero, report singular or rank deficient
-    swap rows p and k in A and permutation P
-    eliminate rows below k and store multipliers in L
-```
-
-Partial pivoting不等于“数值误差消失”，但它避免最明显的小pivot disaster。Threshold不能随意写成固定decimal；应结合matrix norm、scale和numeric type。若输入是exact integers而任务要求symbolic result，则cost model与pivot criterion又会变化。
-
-
-## 28.2 Inverting matrices
-
-### Inverse as repeated solves
-
-可以看成$n$个right-hand sides。Inverse第$j$列$x_j$满足
-
-$$
-Ax_j=e_j.
-$$
-
-因此先做一次LUP factorization，再对identity的每一列调用LUP-SOLVE。Dense arithmetic总量仍为$\Theta(n^3)$，但分解只做一次。
-
+逆矩阵 `X=A⁻¹` 的第 `j` 列满足 `A xⱼ=eⱼ`，其中 `eⱼ` 是 identity 的第 `j` 个 basis vector。因此可以先做一次 LUP decomposition，再对每个 `eⱼ` 调用 `LUP-SOLVE`：
 
 ```ts
-function inverseFromFactors(n: number, solve: (rhs: number[]) => number[]) {
+function inverseFromFactors(
+  n: number,
+  solve: (rhs: number[]) => number[],
+) {
   const columns: number[][] = [];
   for (let j = 0; j < n; j += 1) {
     const basis = Array.from({ length: n }, (_, i) => Number(i === j));
     columns.push(solve(basis));
   }
-  return columns; // transpose this column collection for row-major storage
+  return columns;
 }
 ```
 
-如果目标只是一个$b$，显式inverse多计算了$n-1$个不需要的right-hand sides，还增加storage和roundoff paths。只有API确实需要inverse entries、后续有大量right-hand sides，或推导本身依赖inverse时，才考虑形成它；即便如此，factorization通常仍是实现入口。
+总 arithmetic work 仍为 Θ(n³)，但如果目标只有一个 `b`，显式求逆会多算 `n-1` 个 right-hand sides，并增加 storage 和 roundoff paths。因此“需要 inverse entries 的 API”与“只需要解一个 system”应分成两个工程决策。求逆结果还要检查 `AX≈I`，不能用“打印很多小数”代替证书。
 
-### Inverse verification
+<Term def="输出与目标方程左侧之间的误差向量或范数，用于检查计算结果是否满足原问题">残差</Term>要和 norm choice、matrix scale、numeric precision 一起解释。对 solve，报告 `||Ax-b||`；对 inverse，报告 `||I-AX||` 的相对形式；对 least-squares，还要报告 residual 与 column space 的正交性。
 
-Exact arithmetic检查$AX=I$；floating point检查relative backward residual，例如
+### Conditioning 与 forward error
 
-$$
-\frac{\lVert I-AX\rVert}{\lVert A\rVert\lVert X\rVert}
-$$
+矩阵可能在 exact algebra 中可逆，但若 condition number 很大，输入或 roundoff 的微小 perturbation 也会造成 solution 的显著变化。small residual 说明“某个附近问题被解好”，不单独保证 forward error 很小；因此实际报告应同时给出 conditioning information、backward residual 和任务所需的 accuracy contract。
 
-是否与machine precision和problem conditioning相称。只打印许多小数不是certificate。
+## symmetric positive-definite matrices / 对称正定矩阵
 
+### 结构与 Cholesky
 
-Inverse存在与计算可靠是两件事。Nearly singular matrix在exact algebra中有inverse，但$\kappa(A)$很大时，input或roundoff的微小perturbation可能引起solution大变化。Residual small说明“某个附近问题被解好”，不单独保证forward error small；还需要condition information。
-
-## 28.3 Symmetric positive-definite matrices and least-squares approximation
-
-### Positive definiteness
-
-（SPD）把algebraic symmetry与geometric curvature结合。定义为
+<Term def="满足 A=Aᵀ 且对所有 nonzero x 的二次型 xᵀAx 严格为正的矩阵结构，可用更专门的 Cholesky 路径">对称正定</Term>把 algebraic symmetry 和 geometric curvature 结合起来：
 
 $$
-A=A^T,
+A=Aᵀ,
 \qquad
-x^TAx>0\quad\text{for all }x\ne0.
+xᵀAx>0\quad\text{for all }x≠0
 $$
 
+若 `Ax=0` 对某个 nonzero `x` 成立，就会有 `xᵀAx=0`，与 positive definiteness 矛盾，所以 SPD matrix 必须 nonsingular。Cholesky 把它写成 `A=LLᵀ`，只存一个 lower-triangular factor，再解 `Ly=b` 和 `Lᵀx=y`。如果 diagonal radicand 变成负数，可能说明输入并非 SPD，也可能是 roundoff 暴露 near-indefiniteness；不能偷偷取 absolute value 继续。
 
-SPD matrix必nonsingular：若$Ax=0$存在nonzero $x$，则$x^TAx=0$，与positive definiteness矛盾。它的leading principal pivots为正，可在不做row permutations的结构化条件下factor。
+## least-squares approximation / 最小二乘逼近
 
-### Cholesky factorization
+### Projection 与 normal equations
 
-对SPD matrix，Cholesky构造lower-triangular $L$：
-
-$$
-A=LL^T.
-$$
-
-
-解$Ax=b$变成先解$Ly=b$，再解$L^Tx=y$。只需存一个triangular factor；相比general LUP，常数工作量更小并保持symmetry。若计算某个diagonal square root时radicand为负，可能输入并非SPD，也可能roundoff暴露near-indefiniteness；不能偷偷取absolute value继续。
-
-### Least-squares projection
-
-处理overdetermined systems：
+对 overdetermined system，寻找最小化 `||Ax-b||₂²` 的 `x̂`。在最优点，residual `r=b-Ax̂` 与 `A` 的每个 column direction 正交，因此
 
 $$
-\hat{x}=\arg\min_x \lVert Ax-b\rVert_2^2.
+Aᵀ(b-Ax̂)=0
 $$
 
+等价于 normal equations `AᵀA x̂=Aᵀb`。`AᵀA` 总是 symmetric positive semidefinite；若 `A` 的 columns linearly independent，则对 nonzero `x` 有 `||Ax||₂²>0`，因此 `AᵀA` 是 SPD，normal equations 有唯一解。
 
-令residual $r=b-A\hat{x}$。最优点处，沿$A$每个column direction的first-order change必须为0，所以$r$与column space正交：
-
-$$
-A^T(b-A\hat{x})=0,
-\qquad
-A^TA\hat{x}=A^Tb.
-$$
-
-这就是normal equations。$A^TA$总是symmetric positive semidefinite；若$A$ columns linearly independent，则对nonzero $x$有$\lVert Ax\rVert_2^2>0$，因此$A^TA$为SPD，normal equations有唯一解，可用Cholesky求解。
-
-
-Normal equations在算法结构上清楚，却可能把condition number近似平方：
-
-$$
-\kappa_2(A^TA)=\kappa_2(A)^2
-$$
-
-（full-column-rank条件下）。因此numerically demanding work通常优先QR，rank-deficient或最稳健分析常用SVD。本章用normal equations连接SPD与least squares，但不能把代数推导误写成所有数值场景的最佳实现。
-
+<Term def="把 b 投影到 A 的 column space、使 residual 与该 column space 正交的 least-squares 几何解释">正交投影</Term>解释了为什么 `Aᵀr=0` 是可检查的 optimality evidence。代数上 normal equations 很清楚，但 `κ(AᵀA)` 约为 `κ(A)²`；在 numerically demanding 或 rank-sensitive 的任务中，QR 通常比直接形成 `AᵀA` 更稳健，SVD 则更适合暴露 rank。
 
 ## 一份可复查的矩阵计算证书
 
-算法输出不应只有$x$或$A^{-1}$。最小证书应包含input dimensions、rank/structure assumptions、pivot policy、factorization identity residual、solve residual、norm choice与numeric precision。Least squares还应报告$\lVert Ax-b\rVert$和orthogonality residual $\lVert A^T(Ax-b)\rVert$。
-
+算法输出不应只有 `x` 或 `A⁻¹`。最小 certificate 应包含 input dimensions、rank/structure assumptions、pivot policy、factorization identity residual、solve residual、norm choice 和 numeric precision。least-squares 还应报告 `||Ax-b||` 与 `||Aᵀ(Ax-b)||`；如果使用 normal equations，要解释 conditioning 是否允许这条路径。
 
 ## 小结
 
-Chapter 28 Matrix Operations从solving systems of linear equations出发：Gaussian elimination产生triangular structure，LUP decomposition用$P,L,U$保存row swaps与multipliers，partial pivoting控制小pivot带来的放大。Inverting matrices被还原为同一factorization上的$n$个basis-vector solves，而不是把inverse当黑箱公式。
+- matrix operations / 矩阵运算先固定 shape、rank、storage、precision 和 cost model，再决定 factorization。
+- solving systems of linear equations / 解线性方程组用 Gaussian elimination、主元选取与 LUP decomposition，把 `Ax=b` 还原为两个 triangular solves。
+- inverting matrices / 矩阵求逆可以复用一次 factorization，针对 identity 的每个 basis vector 求解，但不应成为单个 `b` 的默认路径。
+- symmetric positive-definite matrices / 对称正定矩阵通过 `A=LLᵀ` 获得 Cholesky 的专门结构与更少 storage。
+- least-squares approximation / 最小二乘逼近通过正交投影得到 normal equations；实际数值实现还要考虑 condition squaring、QR 与 SVD。
+- 可靠的矩阵程序同时交付中间 factor、residual、conditioning 和 precision 证据。
 
-Symmetric positive-definite matrices提供严格正二次型与Cholesky factorization。Least-squares approximation把inconsistent $Ax=b$转成projection，normal equations连接$A^TA$的SPD structure，但也揭示condition squaring。可靠实现最终交付的是factorization、assumptions与residual evidence，而不只是一个看似精确的array。
+<Exercises>
 
+1. solving systems of linear equations / 解线性方程组题：给定 `PA=LU` 和一个 right-hand side `b`，写出从 `b` 得到 `x` 的操作顺序，并说明为什么不能把 `P` 忽略。
 
+   <Answer>
+
+   先计算 `rhs=Pb`，再按 forward substitution 解 `Ly=rhs`，最后按 backward substitution 解 `Ux=y`。`P` 记录消元过程中发生的 row swaps；若直接用 `b` 而不应用 `P`，就相当于把不同顺序的 equations 配给了错误的 rows，得到的向量不再对应原来的 `Ax=b`。
+
+   </Answer>
+
+2. matrix operations / 矩阵运算 Demo 修改题：把演示切换到 inverting matrices / 矩阵求逆或 symmetric positive-definite matrices / 对称正定矩阵模式，补充一项与输出相匹配的验证证据，并说明代码或图形需要发生的改变。
+
+   <Answer>
+
+   1. `inverse` 模式应显示 identity 的 basis vectors 逐列进入同一个 factorization，并在末端显示 `AX≈I`，而不是只显示一个 `A⁻¹` 标签。
+   2. `spd` 模式应显示 `A=Aᵀ`、`xᵀAx>0` 与 `A=LLᵀ`，并把求解路径改为 `Ly=b` 后 `Lᵀx=y`。
+   3. 两个模式都要让 reset、步进和进度条恢复到同一初始状态，使读者能复查证据顺序而不是只切换装饰文字。
+
+   </Answer>
+
+3. least-squares approximation / 最小二乘逼近数值审计题：一个报告形成了 `AᵀA`，得到很小的 residual，就声称结果最稳健。列出至少三个必须补充或修正的判断，并说明何时应改用 QR 或 SVD。
+
+   <Answer>
+
+   1. 检查 `A` 的 conditioning，因为形成 `AᵀA` 可能把 condition number 近似平方；small residual 不代表 forward error 一定小。
+   2. 检查 columns 是否 linearly independent、是否存在 rank deficiency，并报告 `||Aᵀ(Ax-b)||` 的 orthogonality residual。
+   3. 给出 numeric precision、norm choice 与 backward/forward evidence；若矩阵病态、列近相关或必须可靠识别 rank，应优先 QR，强 rank-sensitive 场景使用 SVD。
+
+   </Answer>
+
+</Exercises>
+
+## Glossary
+
+<Glossary>
+
+<GlossaryItem term="矩阵运算">在固定维度、数据布局、算术精度与结构假设下，对矩阵执行乘法、分解、求解或变换的运算合同。</GlossaryItem>
+<GlossaryItem term="主元选取">在当前 pivot column 的候选 rows 中按绝对值选择较大 pivot 并同步交换 rows 的策略。</GlossaryItem>
+<GlossaryItem term="LUP 分解">把 permutation、消元 multiplier 与 upper-triangular matrix 保存为 PA=LU 的分解结构。</GlossaryItem>
+<GlossaryItem term="残差">输出与目标方程左侧之间的误差向量或范数，用于检查计算结果是否满足原问题。</GlossaryItem>
+<GlossaryItem term="对称正定">满足 A=Aᵀ 且对所有 nonzero x 的二次型 xᵀAx 严格为正的矩阵结构，可用更专门的 Cholesky 路径。</GlossaryItem>
+<GlossaryItem term="正交投影">把 b 投影到 A 的 column space、使 residual 与该 column space 正交的 least-squares 几何解释。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 28: Matrix Operations"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch06.html"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: emcpp-34
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,6 +20,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { EmcppItem34LambdaBindLab } from "@/components/mdx/effective-modern-cpp/diagrams/item-34-prefer-lambdas-to-std-bind";
 
 <Objectives>
 
@@ -29,12 +34,17 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 lambda 和 `std::bind` 都能生成 callable object，但维护者需要回答的不只是“能否调用”：哪个函数被调、每个参数从哪里来、表达式何时求值、对象按值还是按引用保存、重载和 value category 如何处理。
 
-<Term def="用占位符和预先绑定的 arguments 生成 callable adaptor object 的标准库工具。">std bind adaptor</Term>
+猜一猜：把闹钟 adaptor 创建后放十分钟再调用，`now()+1h` 会在哪个时间点执行？再打开下面的故障注入，观察 bind 的 construction-time 绑定如何偏离 lambda 的 invocation-time 语义。
+
+<EmcppItem34LambdaBindLab />
+
+<Term def="用占位符和预先绑定的 arguments 生成 callable adaptor object 的标准库工具。">
+  std bind adaptor
+</Term>
 
 Item 34 的默认选择是 prefer lambdas：lambda body 保留普通 C++ statement/expression 结构，capture list 显示 state boundary；`std::bind` 将相同意图编码成 callable、bound values 与 `_1/_2` 的位置协议。
 
 先预测两种写法在创建时和调用时分别执行哪些表达式。
-
 
 ## 业务例子：一小时后设置闹钟
 
@@ -49,7 +59,9 @@ void setAlarm(Time when, Sound sound, Duration duration);
 
 目标 callable 接收 Sound，在“每次调用它的一小时后”设置持续 30 秒的 alarm。
 
-<Term def="callable 创建后可在任意稍晚时间执行，因此 construction time 与 invocation time 必须区分的适配场景。">deferred-call timing contract</Term>
+<Term def="callable 创建后可在任意稍晚时间执行，因此 construction time 与 invocation time 必须区分的适配场景。">
+  deferred-call timing contract
+</Term>
 
 C++14 lambda 直接表达：
 
@@ -80,14 +92,17 @@ auto setSound = std::bind(
 );
 ```
 
-<Term def="调用 std::bind 构造 adaptor 时，所有普通 bound argument expressions 已经求值并存入 bind object。">bind-construction evaluation</Term>
+<Term def="调用 std::bind 构造 adaptor 时，所有普通 bound argument expressions 已经求值并存入 bind object。">
+  bind-construction evaluation
+</Term>
 
 这段代码把 absolute Time 在 `std::bind` 调用时算好。若 adaptor 创建十分钟后才 invocation，alarm time 只剩五十分钟；重复调用还会复用同一个过期时间。语法很像“未来调用 setAlarm”，但 argument evaluation 已提前发生。
 
-
 ## lambda 的求值边界可直接读出
 
-<Term def="lambda capture initializers 在 closure creation 时求值，而 body expressions 在每次 call operator invocation 时求值的分界。">lambda evaluation boundary</Term>
+<Term def="lambda capture initializers 在 closure creation 时求值，而 body expressions 在每次 call operator invocation 时求值的分界。">
+  lambda evaluation boundary
+</Term>
 
 lambda 仍可能把时间错误地 capture：
 
@@ -113,7 +128,9 @@ auto setSound = [when](Sound sound) {
 
 理论上可再构造 callable，在 invocation 时计算 `now()+1h`，但必须组合 `steady_clock::now`、加法和 placeholders，并处理 overload/callable type。读者需要理解 bind 对 nested bind expressions 的特殊识别规则。
 
-<Term def="bound argument 本身是 bind expression 时，外层 adaptor 调用会先以当前 unbound arguments 调用内层 adaptor 的组合规则。">nested-bind composition</Term>
+<Term def="bound argument 本身是 bind expression 时，外层 adaptor 调用会先以当前 unbound arguments 调用内层 adaptor 的组合规则。">
+  nested-bind composition
+</Term>
 
 即使能写对，业务意图“一小时后响 30 秒”也被模板机制淹没。lambda 的三行普通 call 对审查、断点调试和修改都更直接。
 
@@ -128,7 +145,9 @@ void setAlarm(Time when, Sound sound, Duration duration, int volume);
 
 lambda body 的 argument list 让 ordinary overload resolution 自动选择三参数版本。`std::bind(setAlarm, ...)` 的第一个 argument 却是 overloaded function name，没有唯一可推导 callable type。
 
-<Term def="根据 call expression 的 argument count、types 与 conversions 在同名候选中选择最佳函数的普通语言过程。">local overload resolution</Term>
+<Term def="根据 call expression 的 argument count、types 与 conversions 在同名候选中选择最佳函数的普通语言过程。">
+  local overload resolution
+</Term>
 
 bind 必须显式指定 function pointer type：
 
@@ -157,7 +176,9 @@ auto setSound = [](Sound sound) {
 };
 ```
 
-<Term def="让 overload set 在 lambda body 的真实 call expression 处按普通规则解析，而非先转换成指定 function pointer。">body-local overload choice</Term>
+<Term def="让 overload set 在 lambda body 的真实 call expression 处按普通规则解析，而非先转换成指定 function pointer。">
+  body-local overload choice
+</Term>
 
 这不只减少代码，也把选择依据放回实际 arguments。若确需固定 overload 作为 API 契约，可以在 lambda 中写明确 cast，但默认无需为 adaptor 机制提前消歧。
 
@@ -173,7 +194,9 @@ auto compressAndLog = [](auto&& value) -> decltype(auto) {
 };
 ```
 
-<Term def="在 generic lambda body 中以 decltype(parameter) 驱动 std::forward，明确保留 caller value category 的策略。">explicit lambda forwarding</Term>
+<Term def="在 generic lambda body 中以 decltype(parameter) 驱动 std::forward，明确保留 caller value category 的策略。">
+  explicit lambda forwarding
+</Term>
 
 `std::bind` 对 placeholder 对应的 unbound arguments 有自己的 forwarding 规则，但源码只显示 `_1`；读者需要查 adaptor protocol 才知道 cv/reference。lambda 把 parameter、forward 和 target call 放在同一处。
 
@@ -181,10 +204,11 @@ auto compressAndLog = [](auto&& value) -> decltype(auto) {
 
 `std::bind` 会 decay-store 普通 bound values；调用时 stored values 通常作为 lvalue-like arguments 交给 target。若要 reference semantics，需 `std::ref`；若 bind object 的 constness 不同，传递形态也受影响。
 
-<Term def="bind object 按 decay 后类型拥有普通 bound arguments，并在 invocation 中从内部存储提供参数的状态模型。">bound-value storage</Term>
+<Term def="bind object 按 decay 后类型拥有普通 bound arguments，并在 invocation 中从内部存储提供参数的状态模型。">
+  bound-value storage
+</Term>
 
 placeholder 对应的 invocation arguments 与 stored bound values 不是同一种路径。lambda capture list 则显式区分 `[value]`、`[&value]`、`[p=std::move(p)]`，body 内仍按普通表达式规则使用。
-
 
 <Callout type="trap" title="陷阱：bind 中所有参数都会自动 perfect-forward">
   placeholder arguments、stored bound values、reference_wrapper 与 nested bind
@@ -194,7 +218,9 @@ placeholder 对应的 invocation arguments 与 stored bound values 不是同一�
 
 ## 可读性是正确性工具
 
-<Term def="代码表面直接显示 callable、argument source、evaluation timing、ownership 与 conversion，使 reviewer 可局部验证语义的性质。">semantic readability</Term>
+<Term def="代码表面直接显示 callable、argument source、evaluation timing、ownership 与 conversion，使 reviewer 可局部验证语义的性质。">
+  semantic readability
+</Term>
 
 prefer lambdas 不是风格投票。延迟求值、重载和 reference lifetime 都是 correctness properties；当它们能从 capture/body 直接读出，修改时更容易维持。bind placeholders 还会随着参数重排产生位置错误，而命名 lambda parameters 可随语义重命名。
 
@@ -202,7 +228,9 @@ prefer lambdas 不是风格投票。延迟求值、重载和 reference lifetime 
 
 ## std::bind 的有限合理边界
 
-<Term def="在受限语言版本或既有 adaptor API 中，bind 能以稳定且已测试方式表达简单参数重排的兼容场景。">bind compatibility niche</Term>
+<Term def="在受限语言版本或既有 adaptor API 中，bind 能以稳定且已测试方式表达简单参数重排的兼容场景。">
+  bind compatibility niche
+</Term>
 
 C++11 缺少 generic lambda 与 init capture 时，bind 有时可模拟多态 callable 或 move state；Item 32 已给出示例。既有代码若表达简单、已有测试且改写收益低，也不必机械重构。
 
@@ -210,7 +238,9 @@ C++11 缺少 generic lambda 与 init capture 时，bind 有时可模拟多态 ca
 
 ## 用语义对照表验收改写
 
-<Term def="逐项比较 construction/invocation evaluation、capture ownership、overload winner、argument category 与返回类型的等价性检查。">callable equivalence audit</Term>
+<Term def="逐项比较 construction/invocation evaluation、capture ownership、overload winner、argument category 与返回类型的等价性检查。">
+  callable equivalence audit
+</Term>
 
 1. 哪些 expressions 在 adaptor 创建时执行，哪些每次 invocation 执行？
 2. state 是 copy、reference、move ownership 还是 live external lookup？

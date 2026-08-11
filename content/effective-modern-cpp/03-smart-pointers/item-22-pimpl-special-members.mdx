@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: emcpp-22
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,6 +20,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { EmcppItem22PimplSpecialMembersLab } from "@/components/mdx/effective-modern-cpp/diagrams/item-22-pimpl-special-members";
 
 <Objectives>
 
@@ -29,7 +34,11 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 Item 22 的原则是 When using the Pimpl Idiom, define special member functions in the implementation file（使用 Pimpl 时，把特殊成员函数定义在实现文件）。Pimpl 用一根 owning pointer 把 private representation 移出 public class definition。
 
-<Term def="public class 只保存指向前置声明 Impl 的 pointer，把 data members 与实现依赖放进 source file 的模式。">Pimpl idiom</Term>
+<EmcppItem22PimplSpecialMembersLab />
+
+<Term def="public class 只保存指向前置声明 Impl 的 pointer，把 data members 与实现依赖放进 source file 的模式。">
+  Pimpl idiom
+</Term>
 
 ```cpp
 // widget.h
@@ -45,12 +54,13 @@ private:
 
 先预测：consumer 编译 widget.h 时知道 `unique_ptr<Impl>` 的固定 handle size，不需要知道 Impl 的 members 或 sizeof。
 
-
 ## Pimpl 隔离 private dependencies
 
 没有 Pimpl 时，private members 也必须完整写在 header，consumer 需要包含 string/vector/Gadget 等定义；任何 member 变化都触发 dependent translation units 重编译。
 
-<Term def="通过 incomplete Impl pointer 隔离 private headers，使 implementation 变化不扩散到 API consumers。">compilation dependency firewall</Term>
+<Term def="通过 incomplete Impl pointer 隔离 private headers，使 implementation 变化不扩散到 API consumers。">
+  compilation dependency firewall
+</Term>
 
 ```cpp
 // widget.cpp
@@ -61,7 +71,9 @@ struct Widget::Impl {
 };
 ```
 
-<Term def="只声明名称、尚未提供成员和大小的 class/struct type。">incomplete type</Term>
+<Term def="只声明名称、尚未提供成员和大小的 class/struct type。">
+  incomplete type
+</Term>
 
 只有 widget.cpp 看见完整 representation。header ABI 只暴露 unique_ptr handle 与 public members。
 
@@ -69,7 +81,9 @@ struct Widget::Impl {
 
 unique_ptr declaration 本身不需要 T complete；它只保存 pointer 与 deleter。问题出现在执行 default deletion 的位置：delete 需要完整 object type。
 
-<Term def="以 unique_ptr 独占保存 forward-declared Impl，并在 owning class 析构时释放。">unique_ptr Pimpl</Term>
+<Term def="以 unique_ptr 独占保存 forward-declared Impl，并在 owning class 析构时释放。">
+  unique_ptr Pimpl
+</Term>
 
 ```cpp
 std::unique_ptr<Widget::Impl> implementation;
@@ -81,10 +95,11 @@ std::unique_ptr<Widget::Impl> implementation;
 
 若 Widget 不声明 destructor，compiler 会隐式生成 inline destructor。consumer 创建并销毁 Widget 时，destructor 会实例化 unique_ptr destructor/default_delete，而 Impl 在该 translation unit 仍不完整。
 
-<Term def="compiler 在 class definition 可见处隐式生成 destructor，导致 unique_ptr deleter 在 incomplete type 上实例化。">inline destructor instantiation</Term>
+<Term def="compiler 在 class definition 可见处隐式生成 destructor，导致 unique_ptr deleter 在 incomplete type 上实例化。">
+  inline destructor instantiation
+</Term>
 
 常见 diagnostic 来自 default_delete 的 complete-type assertion 或 delete incomplete type。
-
 
 <Callout
   type="trap"
@@ -119,7 +134,9 @@ struct Widget::Impl {
 Widget::~Widget() = default;
 ```
 
-<Term def="只在 header 声明 special member，把 = default definition 放到 Impl 已完整的 source file。">out-of-line defaulting</Term>
+<Term def="只在 header 声明 special member，把 = default definition 放到 Impl 已完整的 source file。">
+  out-of-line defaulting
+</Term>
 
 consumer 只需调用 external destructor symbol；definition translation unit 能看到完整 Impl，因此 default_delete 合法。
 
@@ -127,7 +144,9 @@ consumer 只需调用 external destructor symbol；definition translation unit �
 
 Item 17 已说明：即使 destructor 只是 out-of-line `= default`，它仍是 user-declared，会阻止 compiler 隐式生成 move constructor/assignment。
 
-<Term def="为了完整类型边界声明 destructor 后，Pimpl class 不再自动获得 move operations 的副作用。">Pimpl move suppression</Term>
+<Term def="为了完整类型边界声明 destructor 后，Pimpl class 不再自动获得 move operations 的副作用。">
+  Pimpl move suppression
+</Term>
 
 若 Widget 应 movable，必须显式声明：
 
@@ -144,14 +163,17 @@ Widget::Widget(Widget&&) noexcept = default;
 Widget& Widget::operator=(Widget&&) noexcept = default;
 ```
 
-<Term def="在 Impl complete 处 default move operations，使 unique_ptr ownership 可转移且异常规范真实。">out-of-line move restoration</Term>
+<Term def="在 Impl complete 处 default move operations，使 unique_ptr ownership 可转移且异常规范真实。">
+  out-of-line move restoration
+</Term>
 
 ## move definition 也放 source file
 
 某些 defaulted operations 的 generation/destruction paths 仍可能需要 Impl completeness。统一把 destructor 和 move definitions 放在 Impl 后，形成可审计规则。
 
-<Term def="所有可能实例化 Impl ownership 操作的 special members 都在 complete-type boundary 后定义。">complete-type special-member boundary</Term>
-
+<Term def="所有可能实例化 Impl ownership 操作的 special members 都在 complete-type boundary 后定义。">
+  complete-type special-member boundary
+</Term>
 
 ## unique_ptr 默认让 Pimpl class 不可复制
 
@@ -161,7 +183,9 @@ unique_ptr copy operations deleted，因此 Widget 的 implicit copy 也 deleted
 static_assert(!std::is_copy_constructible_v<Widget>);
 ```
 
-<Term def="Pimpl owner 继承 unique_ptr 的 move-only ownership，未显式实现时不支持 copy。">move-only Pimpl semantics</Term>
+<Term def="Pimpl owner 继承 unique_ptr 的 move-only ownership，未显式实现时不支持 copy。">
+  move-only Pimpl semantics
+</Term>
 
 这常是正确默认：复制复杂 implementation 需要明确 deep/shallow/shared contract，compiler 不应猜测。
 
@@ -181,7 +205,9 @@ Widget::Widget(const Widget& other)
       ) {}
 ```
 
-<Term def="复制 Impl object 及其 owned state，使两个 Widget 拥有独立 representation。">deep-copy Pimpl</Term>
+<Term def="复制 Impl object 及其 owned state，使两个 Widget 拥有独立 representation。">
+  deep-copy Pimpl
+</Term>
 
 copy assignment 可 copy-and-swap 提供 strong exception guarantee：
 
@@ -193,7 +219,9 @@ Widget& Widget::operator=(const Widget& other) {
 }
 ```
 
-<Term def="先完整构造副本，再以 nonthrowing swap 提交，失败时原对象不变。">Pimpl copy-and-swap</Term>
+<Term def="先完整构造副本，再以 nonthrowing swap 提交，失败时原对象不变。">
+  Pimpl copy-and-swap
+</Term>
 
 所有 copy definitions 都需要 Impl complete，因此自然位于 implementation file。
 
@@ -201,7 +229,9 @@ Widget& Widget::operator=(const Widget& other) {
 
 default move 后 source unique_ptr 通常为空。member functions 若无条件 dereference implementation，会在 moved-from object 上失败。
 
-<Term def="Pimpl ownership 被移走后 source object 的可析构、可赋值及可调用范围约定。">moved-from Pimpl contract</Term>
+<Term def="Pimpl ownership 被移走后 source object 的可析构、可赋值及可调用范围约定。">
+  moved-from Pimpl contract
+</Term>
 
 方案：只保证可析构/可赋值；lazy reinitialize；或 move 后让 source 指向默认 Impl（会增加成本/可能抛）。tests 应固定选择。
 
@@ -214,7 +244,9 @@ default move 后 source unique_ptr 通常为空。member functions 若无条件 
 
 shared_ptr 的 deleter type-erased 在 control block 中，shared_ptr destructor 不需在每个 call site 实例化 `delete Impl`；因此 header-only generated destructor 常能与 incomplete Impl 共存。
 
-<Term def="shared_ptr 删除逻辑存于 control block，使 handle destructor 不直接依赖 Impl 完整定义。">type-erased Pimpl deletion</Term>
+<Term def="shared_ptr 删除逻辑存于 control block，使 handle destructor 不直接依赖 Impl 完整定义。">
+  type-erased Pimpl deletion
+</Term>
 
 但 shared_ptr 表达 shared ownership、增加 control block/reference count，通常不符合 Widget 唯一拥有 Impl 的模型。不能仅为省 out-of-line destructor 改变 ownership semantics。
 
@@ -222,13 +254,17 @@ shared_ptr 的 deleter type-erased 在 control block 中，shared_ptr destructor
 
 Pimpl 让 Impl size/member changes 不改变 Widget layout，利于 binary boundary；public virtual table、inline functions、compiler ABI、allocator 和 exception contract 仍可能影响兼容。
 
-<Term def="隐藏 representation 可降低 layout change，但不能消除所有 source/binary compatibility 风险。">Pimpl ABI boundary</Term>
+<Term def="隐藏 representation 可降低 layout change，但不能消除所有 source/binary compatibility 风险。">
+  Pimpl ABI boundary
+</Term>
 
 public inline member 若访问 Impl details，也会重新暴露 dependency；实现应放 source file。
 
 ## header/source 验收矩阵
 
-<Term def="分别验证 forward-only header、complete source、move/copy traits、moved-from 与 dependency isolation 的测试集合。">Pimpl contract matrix</Term>
+<Term def="分别验证 forward-only header、complete source、move/copy traits、moved-from 与 dependency isolation 的测试集合。">
+  Pimpl contract matrix
+</Term>
 
 1. consumer 只 include widget.h 即可编译创建/销毁 Widget。
 2. destructor/move symbols 定义在 widget.cpp 且无 incomplete diagnostic。

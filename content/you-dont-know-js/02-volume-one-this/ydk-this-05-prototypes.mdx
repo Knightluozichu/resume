@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch5.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-13
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkThis05PrototypesLab } from "@/components/mdx/you-dont-know-js/ydk-this-05-prototypes";
+
+<Objectives>
+
+- 能从接收对象开始画出属性读取的原型链路，并定位首个命中或 null 终点
+- 能修改一个 `Object.create` 样本，区分原型委托、prototype 属性和接收对象上的属性遮蔽
+- 能在读取或写入结果异常时记录自有属性、原型链接与方法查找路径，再修复最小代码
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 对象的内部原型链接在属性未命中时把查询委托给另一个对象；constructor 与 prototype 的类外观只是函数和对象链接的组合，不代表行为被复制。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkThis05PrototypesLab />
 
 ## 权威目录定位
 
@@ -31,15 +53,17 @@ draft: false
 
 ## 核心概念与状态所有权
 
-。
+<Term def="对象运行时指向另一个对象的内部委托关系；属性未命中时查询可以沿它继续。">内部原型链接</Term>
 
-。
+<Term def="从接收对象出发，经过多个内部原型链接直到 null 的查找路径。">原型链</Term>
 
-。
+<Term def="接收对象拥有与原型同名的自有属性，因此读取优先命中更近的一层。">属性遮蔽</Term>
 
-。
+<Term def="函数对象上可被用于建立对象关系的普通属性；它不等同于任意对象的内部原型链接。">prototype 属性</Term>
 
-。
+<Term def="两个对象之间的委托边；读取时从当前对象跳到链接指向的对象。">对象链接</Term>
+
+<Term def="沿查找路径遇到的第一个同名属性；命中后本次读取不再继续向上。">首个命中</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -155,6 +179,20 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：把原型链当成属性复制">
+  现象：child 能读到 parent.kind，就断言 child 自己也保存了 kind。原因：未命中时查询沿内部原型链接委托，读取结果不等于目标对象拥有自有属性。修法：同时检查 `Object.hasOwn(child, "kind")` 与 `Object.getPrototypeOf(child)`。
+</Callout>
+
+<Callout type="trap" title="陷阱：把 prototype 属性等同于每个对象的内部链接">
+  现象：看到 `Fn.prototype` 就认为任意对象都能通过它查找属性。原因：prototype 是函数对象上的普通属性，内部 [[Prototype]] 链接是对象运行时的委托关系，两者角色不同。修法：分别记录函数的 prototype 属性和实例的 `Object.getPrototypeOf` 结果。
+</Callout>
+
+<Callout type="trap" title="陷阱：把写入继承属性当成修改父对象">
+  现象：给 child.name 赋值后，认为 parent.name 已被改写。原因：对继承来的可写数据属性赋值，通常会在接收对象上创建自有属性，形成遮蔽。修法：写入前后分别读取 child 与 parent 的自有属性和原型值。
+</Callout>
+
+故障注入只改变一个条件：增加 child 的同名属性、替换原型链接，或在链末读取未知键。先记录读取路径和首个命中，再观察写入是否产生遮蔽；不要只用最终值判断原型关系。
+
 
 ## 四类样本与验收
 
@@ -175,6 +213,33 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：用 `Object.create(parent)` 创建 `child`，让 `child.kind` 读到 parent 的值。** 写出读取前后 `Object.hasOwn(child, "kind")` 的结果。
+
+   ```js
+   const parent = { kind: "shared" };
+   const child = Object.create(parent);
+   console.log(child.kind);
+   ```
+
+<Answer question="为什么 child.kind 有值，但 child 不一定拥有 kind？">
+  读取先查 child，未命中后沿内部原型链接查到 parent；因此结果是 shared，但 `Object.hasOwn(child, "kind")` 仍为 false。读取命中和自有属性是两个不同证据。
+</Answer>
+
+2. **问题 2：给 `child.kind = "local"`，再比较 child 与 parent 的 kind。** 记录这次赋值建立了什么新属性，以及查找在哪一层停止。
+
+<Answer question="给继承来的属性赋值为什么会形成遮蔽？">
+  对普通可写数据属性赋值时，接收对象通常会创建自己的同名属性。下一次读取先命中 child.kind，parent.kind 仍保留原值，所以新属性遮蔽了原型层而不是修改它。
+</Answer>
+
+3. **问题 3：分别读取 `Fn.prototype` 和 `Object.getPrototypeOf(instance)`，画出两条关系。** 再把实例原型改成 null，验证未知属性如何结束。
+
+<Answer question="prototype 属性和内部原型链接为什么不能混为一谈？">
+  `Fn.prototype` 是函数对象上的一个普通属性，常被用作创建实例时的关系来源；`Object.getPrototypeOf(instance)` 读取的是实例当前的内部委托对象。改变一个值不会自动等于改变另一条关系，必须分别观察。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -188,6 +253,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="内部原型链接">对象指向另一个对象的内部委托关系，属性未命中时沿它继续查找。</GlossaryItem>
+  <GlossaryItem term="原型链">从当前对象一路查到 null 的对象链接序列。</GlossaryItem>
+  <GlossaryItem term="属性遮蔽">接收对象的同名自有属性挡住了原型对象的同名属性。</GlossaryItem>
+  <GlossaryItem term="prototype 属性">函数对象上的普通属性，常用来提供实例的原型来源。</GlossaryItem>
+  <GlossaryItem term="对象链接">当前对象与下一个委托对象之间的关系边。</GlossaryItem>
+  <GlossaryItem term="首个命中">查找路径上第一个找到的同名属性；找到后就停止本次读取。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, this & Object Prototypes, Chapter 5: Prototypes"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch5.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

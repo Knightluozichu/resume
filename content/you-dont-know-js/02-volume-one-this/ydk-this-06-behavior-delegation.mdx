@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch6.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-14
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkThis06BehaviorDelegationLab } from "@/components/mdx/you-dont-know-js/ydk-this-06-behavior-delegation";
+
+<Objectives>
+
+- 能把对象状态与共享能力分开，并画出从接收对象到能力对象的委托关系
+- 能修改一个行为委托样本，比较委托、类式复制、缺失行为和内省结果
+- 能在行为来源不明或调用失败时定位委托链、接收者与关系证据，并简化对象设计
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 面向委托的设计让对象保持各自状态，并把缺失行为委托给能力对象；它用清晰的对象关系替代构造器、伪类继承和脆弱的父方法调用。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkThis06BehaviorDelegationLab />
 
 ## 权威目录定位
 
@@ -32,15 +54,17 @@ draft: false
 
 ## 核心概念与状态所有权
 
-。
+<Term def="把缺失行为交给另一个对象处理，同时让当前对象继续保留自己的状态。">行为委托</Term>
 
-。
+<Term def="集中提供可复用行为的对象；它不应该代替任务对象保存每个调用者的私有状态。">能力对象</Term>
 
-。
+<Term def="接收对象与能力对象之间的明确链接；它表达关系，不依赖类名猜测。">对象关联</Term>
 
-。
+<Term def="从接收对象出发，沿对象链接寻找缺失属性或方法的查找路径。">委托链</Term>
 
-。
+<Term def="真正发起方法调用并提供 this 状态的对象；能力函数通常读取它的属性。">接收对象</Term>
+
+<Term def="用 Object.getPrototypeOf、Object.hasOwn 等 API 检查对象实际关系和状态归属。">内省</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -159,6 +183,20 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：把能力对象当成共享状态容器">
+  现象：多个 session 共用 Auth.check，却把 token 也放进 Auth，导致一次登录污染另一个对象。原因：委托共享的是行为，接收对象仍应拥有自己的状态。修法：让函数通过 this 读取 session.token，并检查每个对象的自有状态。
+</Callout>
+
+<Callout type="trap" title="陷阱：用类名或 constructor 代替对象关系">
+  现象：看到同一个类名就断言对象一定拥有相同能力，实际调用却找不到方法。原因：行为委托依赖对象链接与属性查找，类名不能证明关系已经建立。修法：用 Object.getPrototypeOf、Object.hasOwn 等内省 API 验证真实链接。
+</Callout>
+
+<Callout type="trap" title="陷阱：委托失败后继续添加父方法和 super 层级">
+  现象：缺少一个能力就继续堆叠构造器、父类和覆盖方法，调用路径越来越难追踪。原因：委托链只解决明确的缺失行为，不会自动修复错误关系或不存在的能力。修法：停在首个缺失点，补齐能力对象链接或明确报告失败。
+</Callout>
+
+故障注入只改变一个关系：移除能力链接、把状态移入能力对象，或把 `check` 改成不存在的 `audit`。先记录接收对象和委托路径，再判断失败来自状态、链接还是能力缺失。
+
 
 ## 四类样本与验收
 
@@ -179,6 +217,33 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：用 `Object.create(Auth)` 创建两个 session，各自设置不同 token，并让 `check()` 读取接收对象的 token。** 说明行为和状态分别属于谁。
+
+   ```js
+   const Auth = { check() { return this.token === "ok"; } };
+   const first = Object.create(Auth);
+   const second = Object.create(Auth);
+   ```
+
+<Answer question="为什么共享 check 方法不会让两个 session 共享 token？">
+  check 是能力对象上的共享行为，调用 `first.check()` 或 `second.check()` 时 this 分别是对应的接收对象；token 作为自有状态留在各自 session 上，所以一次修改不会污染另一个对象。
+</Answer>
+
+2. **问题 2：移除 `Auth.check` 或把调用改成 `session.audit()`，记录委托链在哪里停止。** 再补回一个能力对象链接，验证修复后的首个命中。
+
+<Answer question="委托链找不到方法时，为什么不应该立刻增加父类层级？">
+  缺失说明当前对象和能力对象关系或能力签发有问题。先停在首个缺失点，检查 Object.getPrototypeOf 和属性来源，再补齐明确链接；继续增加父类会把一个可定位的问题扩散成更长的调用链。
+</Answer>
+
+3. **问题 3：用 `Object.hasOwn` 与 `Object.getPrototypeOf` 检查 `token`、`check` 和能力对象的关系。** 写出哪些是自有状态，哪些是委托行为。
+
+<Answer question="内省如何帮助简化行为委托设计？">
+  `Object.hasOwn(session, "token")` 能证明状态归属，`Object.hasOwn(session, "check")` 与 `Object.getPrototypeOf(session)` 能证明行为来源。把这些关系直接写出来，就不必依赖 constructor 名称或父方法调用链猜测设计。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -192,6 +257,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="行为委托">当前对象缺少方法时，沿对象关系把查找交给另一个对象。</GlossaryItem>
+  <GlossaryItem term="能力对象">提供可复用方法的对象，例如集中提供 check 行为的 Auth。</GlossaryItem>
+  <GlossaryItem term="对象关联">两个对象之间实际存在的链接；可用内省 API 验证。</GlossaryItem>
+  <GlossaryItem term="委托链">从接收对象到能力对象逐层查找行为的路径。</GlossaryItem>
+  <GlossaryItem term="接收对象">发起方法调用并拥有本次 this 状态的对象。</GlossaryItem>
+  <GlossaryItem term="内省">直接观察对象自有属性和原型关系，而不是根据名字推断。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, this & Object Prototypes, Chapter 6: Behavior Delegation"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch6.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

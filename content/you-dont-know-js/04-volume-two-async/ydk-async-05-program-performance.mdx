@@ -3,23 +3,46 @@ title: "第 5 章 程序性能"
 type: A
 section: "中卷 · 第二部分 异步和性能"
 order: 26
-description: "性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。"
+description: "程序性能先从可重复的热点测量开始，再决定是否把纯计算移出主线程；Web Worker 通过消息边界隔离工作，而 SIMD.js 与 asm.js 应作为历史快照，与今天的 WebAssembly 基线分开评估。"
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch5.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-26
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkAsync05ProgramPerformanceLab } from "@/components/mdx/you-dont-know-js/ydk-async-05-program-performance";
+
+<Objectives>
+
+- 能定位一段计算造成的长任务，并画出主线程、消息边界、Worker 与结果合并的成本链。
+- 能修改 Web Worker 示例，明确结构化克隆、transferable、请求 id、错误路径与资源清理。
+- 能回答：为什么 SIMD.js 与 asm.js 不能直接当作今天的 JavaScript API 推荐，以及应如何建立现代基线？
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
-性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。
+性能优化不是把某个关键词换成另一个关键词，而是先找出真正占用响应预算的工作，再决定工作、数据和结果如何跨边界流动。把 CPU 密集计算移进 Worker 可能让主线程更流畅，也可能因为启动、序列化和合并成本而变慢。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+这章还要区分历史语境和当前能力：SIMD.js 曾试图把向量操作标准化为 JavaScript API，asm.js 曾用严格子集和类型提示帮助引擎优化；它们都是理解 Web 性能演进的证据，不等于今天应该直接调用的稳定 API。现在的对照实验应把 Web Worker、WebAssembly 以及 WebAssembly SIMD 作为独立路径测量。
+
+先预测：同一批输入在主线程、Worker 和 WebAssembly 路径上，哪一段会改变响应时延，哪一段会增加传输成本。记录总时延之外，还记录长任务、p95 响应、消息大小、内存和清理结果，再切换样本比较第一个偏离点。
+
+<YdkAsync05ProgramPerformanceLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本页对应作者开放的一版仓库目录。目录标题用于一对一追踪，正文是独立教学重构：
 
 - Chapter 5: Program Performance
 - Web Workers
@@ -28,99 +51,125 @@ draft: false
 
 本页逐项覆盖 4 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
 
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：把任何慢代码都丢进 Worker 就会更快">
+
+现象：看到主线程有计算就立即创建 Worker，最后只比较一次函数返回时间。
+
+原因：Worker 有启动、消息传输、结构化克隆、结果合并和生命周期管理成本；小输入或频繁短任务可能因此更慢。
+
+修复：先固定输入和热身策略，分别记录主线程长任务、消息字节数、Worker 计算和端到端时延，再用阈值决定是否迁移。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Worker 与主线程共享 DOM 和普通对象引用">
+
+现象：在 Worker 中直接访问页面节点，或修改发送过去的普通对象后期待主线程看到同一引用。
+
+原因：Worker 拥有独立全局环境，普通消息默认经过结构化克隆；它不能直接操作主线程 DOM，也不会共享普通对象身份。
+
+修复：只发送可序列化的输入快照，使用请求 id 和版本校验回传结果；需要转移二进制所有权时显式使用 transferable。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：SIMD.js 是今天浏览器里的稳定 JavaScript API">
+
+现象：照着历史示例调用 `SIMD.float32x4`，把提案时代接口当成当前平台保证。
+
+原因：SIMD.js 方案没有成为现行 JavaScript 标准 API；向量化能力后来更多通过 WebAssembly SIMD 等路径提供。
+
+修复：把 SIMD.js 保留为历史对照，运行当前实验时记录浏览器、模块格式和 WebAssembly SIMD 能力，不把提案接口作为部署前提。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：asm.js 与 WebAssembly 是同一个运行时 API">
+
+现象：把 asm.js 的严格 JavaScript 子集、编译器提示和 WebAssembly 模块加载混写，得出不可复核的性能结论。
+
+原因：asm.js 是 JavaScript 代码约定，WebAssembly 是独立的二进制模块与线性内存执行模型；二者的加载、调试和边界不同。
+
+修复：分别保留源码或模块版本、输入布局、编译配置和内存指标，并把 asm.js 作为历史基线、WebAssembly 作为现代路径验收。
+
+</Callout>
+
 ## 核心概念与状态所有权
 
-。
+<Term def="在固定输入、运行时和观察指标下显著消耗响应预算的代码路径；热点需要由测量而不是直觉确认。">性能热点</Term> 的所有权在测量记录：优化前后都要能回放相同输入并定位长任务来源。
 
-。
+<Term def="浏览器主执行上下文对输入事件、布局、绘制和脚本任务可用的时间余量；长任务会压缩这份余量。">主线程响应预算</Term> 不是一个抽象分数，而是要用长任务、p95 输入延迟和渲染节奏观察的工程约束。
 
-。
+<Term def="拥有独立全局环境、通过消息与主线程通信的浏览器执行上下文；它不能直接访问主线程 DOM。">Web Worker</Term> 可以隔离纯计算，但不会自动消除启动、传输和结果合并成本。
 
-。
+<Term def="把可序列化数据编码为另一份值并发送到 Worker 的消息机制；它保留数据结构但不保留普通对象引用身份。">结构化克隆</Term> 要与消息大小、嵌套结构和复制时间一起测量。
 
-。
+<Term def="把数组缓冲区等资源的所有权交给接收方而不是复制完整内容的传输方式；发送后原方可能失去访问权。">transferable</Term> 能减少复制，但引入所有权转移与生命周期约束，必须在结果合并后检查缓冲区状态。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Term def="以严格类型和可预测数值运算约束 JavaScript 代码，曾帮助引擎识别可优化路径的历史约定。">asm.js 子集</Term> 是语言层面的历史优化契约，不是与 WebAssembly 相同的模块加载 API。
 
-|   # | 观察量     | 本页判定方式                                         |
-| --: | ---------- | ---------------------------------------------------- |
-|   1 | Web Worker | 在“定位阻塞主线程的热点”阶段保存前后状态并核对不变量 |
-|   2 | 消息传递   | 在“划分可独立计算的数据”阶段保存前后状态并核对不变量 |
-|   3 | 并行计算   | 在“序列化消息给 Worker”阶段保存前后状态并核对不变量  |
-|   4 | SIMD.js    | 在“Worker 并行执行”阶段保存前后状态并核对不变量      |
-|   5 | asm.js     | 在“返回结果并合并”阶段保存前后状态并核对不变量       |
+这些概念要一起回答五个问题：热点由谁测量，输入在哪里复制或转移，工作在哪个执行上下文运行，结果如何验证，优化后资源是否清理。只看一个最快样本，无法判断收益是否来自热身、输入偶然性或遗漏了传输成本。
+
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| 性能热点 | 用固定输入记录长任务、调用栈和重复次数 |
+| 主线程响应预算 | 对比输入延迟、p95 事件响应与渲染期间的脚本时间 |
+| Web Worker | 记录启动、消息、计算、返回和 terminate 的完整链路 |
+| 结构化克隆 | 改变消息大小与嵌套结构，观察复制成本 |
+| transferable | 验证发送后的所有权变化、回收时机和重复使用边界 |
+| asm.js 子集 | 与现代 WebAssembly 基线分开记录版本、工具链和结果 |
 
 ## 机制拆解
 
-### 1. 定位阻塞主线程的热点
+### 1. Chapter 5: Program Performance
 
-定位阻塞主线程的热点不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Chapter 5: Program Performance** 的第一原则是先测量工作如何消耗响应预算，再选择优化边界。一个总时长数字不能说明主线程是否被长任务阻塞，也不能区分计算、复制、调度和绘制成本。
 
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+建立基线时固定输入规模、浏览器版本、设备、热身次数和采样方式。至少保存脚本总时长、长任务数量、p95 输入延迟、峰值内存和结果校验；优化后的数字只有在同一协议下才可比较。
 
-### 2. 划分可独立计算的数据
+### 2. Web Workers
 
-划分可独立计算的数据不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Web Workers** 提供独立的执行上下文，让纯计算不直接占用主线程的 JavaScript 执行机会。它通过 `postMessage` 与主线程通信，不能直接读取页面 DOM，也不会让普通对象保持跨线程的引用身份。
 
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+Worker 适合计算边界清晰、输入可快照化、结果可验证的工作。若任务太小或消息频率太高，启动和通信成本会吞掉收益；因此 Worker 是调度工具，不是“更快”这个结论本身。
 
-### 3. 序列化消息给 Worker
+### 3. SIMD
 
-序列化消息给 Worker不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**SIMD** 在原书语境里指向把相同操作同时应用到多个数值 lane 的尝试。SIMD.js 曾以 JavaScript API 形式推进，但提案没有成为今天稳定的通用浏览器 API；它仍然有助于解释向量化和数据布局为什么影响性能。
 
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+当前实验应把“向量化算法是否适合输入”与“具体 API 是否可部署”分开。WebAssembly SIMD 可以作为现代路径，但必须记录模块版本、线性内存布局、浏览器能力和 fallback，而不是复用历史 API 名称来替代证据。
 
-### 4. Worker 并行执行
+### 4. asm.js
 
-Worker 并行执行不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**asm.js** 是严格、可预测的 JavaScript 子集约定，曾让引擎和编译器更容易识别整数、浮点和线性内存操作。它通常通过工具链从更高层语言生成，性能结论依赖代码形状、引擎和编译阶段。
 
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 5. 返回结果并合并
-
-返回结果并合并不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 6. 以现代基线复测历史优化
-
-以现代基线复测历史优化不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-## 目录主题逐项讲解
-
-### Chapter 5: Program Performance
-
-Chapter 5: Program Performance在本单元中落到“定位阻塞主线程的热点”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Web Workers
-
-Web Workers在本单元中落到“划分可独立计算的数据”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### SIMD
-
-SIMD在本单元中落到“序列化消息给 Worker”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### asm.js
-
-asm.js在本单元中落到“Worker 并行执行”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+它与 WebAssembly 的关系更像演进中的前后两种部署表达，而不是两个可以互换的运行时 API。阅读历史材料时要保留 asm.js 的约束与收益；做今天的基准时，则用可加载的 WebAssembly 模块、相同输入和明确 fallback 重测。
 
 ## 六阶段证据链
 
-本页的可执行链条是：定位阻塞主线程的热点 → 划分可独立计算的数据 → 序列化消息给 Worker → Worker 并行执行 → 返回结果并合并 → 以现代基线复测历史优化。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
+本页的可执行链条是：定位主线程热点 → 划分可独立计算的数据 → 序列化消息给 Worker → Worker 并行执行 → 返回结果并合并 → 以现代基线复测历史优化。正常样本证明主路径，边界样本证明输入规模和所有权，失败样本定位消息、执行或结果校验的停止点，恢复样本证明 terminate、缓冲区和请求状态没有污染下一次执行。
 
 ## 最小可运行实验
 
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+下面的片段只保留 Worker 消息边界和结果合并的最小机制。运行前预测 Worker 是否直接修改输入、结果何时返回以及 URL 何时释放：
 
 ```js
-const workerSource = "onmessage = e => postMessage(e.data * 2)";
-const url = URL.createObjectURL(new Blob([workerSource]));
+const workerSource = `
+  self.onmessage = ({ data }) => {
+    const total = data.values.reduce((sum, value) => sum + value, 0);
+    self.postMessage({ requestId: data.requestId, total });
+  };
+`;
+const url = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
 const worker = new Worker(url);
-worker.postMessage(21);
+worker.onmessage = ({ data }) => {
+  if (data.requestId === "sum-1") console.log(data.total);
+  worker.terminate();
+  URL.revokeObjectURL(url);
+};
+worker.postMessage({ requestId: "sum-1", values: [1, 2, 3] });
 ```
+
+主线程仍然拥有请求 id 和结果提交权；Worker 只接收快照并返回结果。生产代码还要处理 `worker.onerror`、超时、取消、重复响应和输入验证，不能把一个成功回调当成完整的生命周期契约。
 
 ```yaml
 book: 你不知道的 JavaScript（一版三卷六册）
@@ -135,49 +184,87 @@ cleanup_complete: true
 ```
 
 ```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
+freeze input + browser + runtime + warmup policy
+predict long task, message size, compute time and merge order
+inject one controlled timeout, malformed result or detached buffer
 stop at first divergence
 recover and replay the same sample
-assert stable state and no stale work
+assert result identity, resource cleanup and repeatable baseline
 ```
-
-## 常见误区与故障注入
-
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 固定数组、一次 Worker 请求、明确 terminate | 输入、请求 id、消息字节、计算与合并时间 | 结果正确且生命周期完整 |
+| 边界 | 空数组、大消息、transferable 缓冲区、极小任务 | 复制或转移成本、所有权、响应预算 | 不误判传输成本，所有权变化可解释 |
+| 失败 | Worker error、超时、错误请求 id、历史 API 不可用 | 首个失败点、错误来源、清理动作 | 错误明确传播，旧任务不会继续写状态 |
+| 恢复 | 重建 Worker 并重放完全相同输入 | 新请求 id、内存、终止状态、现代基线 | 无旧消息、旧缓冲区和旧基准污染结果 |
 
-本页签发不变量是：**性能提升首先来自把 CPU 密集工作移出主线程；Web Worker 通过消息与隔离内存并行处理，而原书中的 SIMD.js 与 asm.js 代表 2015 年探索，今天应结合 WebAssembly 与现代引擎重新评估。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**先测量性能热点，再决定边界；Worker 通过消息与独立全局隔离计算但不消除传输成本；结构化克隆与 transferable 是不同的所有权协议；SIMD.js 和 asm.js 属于历史语境；现代性能结论必须在固定输入、运行时与 WebAssembly 等基线下复测。**
 
 ## 版本与原书边界
 
-本单元保留原书 2015 年的技术快照，并逐项标注今天的状态：已进入规范的能力按最终语义讲解，Object.observe 与 SIMD.js 等撤回方案只作为语言演进案例，不作为现行 API 推荐。
+本单元以 2014 至 2015 年一版目录为结构基线。正文使用现代可运行示例独立重构核心机制；历史提案与现代能力分栏说明，不修改或伪造原书目录。
+
+原书章节讨论 Web Worker、SIMD 和 asm.js 如何参与性能优化。本文保留当时的问题边界，同时说明 SIMD.js 的提案历史、asm.js 的语言约定和 WebAssembly 的现代对照；这些补充属于今天的工程重构，不冒充一版原书当年的 API 清单。
 
 站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
 
 ## 练习
 
+<Exercises>
+
+1. 把最小 Worker 实验改成分块求和：主线程把一个大数组切成两个快照，分别发送给 Worker，再按 `requestId` 合并结果，并记录复制成本与总时延。
+
+   <Answer>
+
+   为每个块生成唯一 `requestId`，Worker 只返回 `{ requestId, total }`，主线程用 `Map` 收集两个结果，收到全部结果后再合并。不要用消息到达顺序代替请求 id；基准表至少包含块大小、消息字节数、Worker 计算时间、合并时间和端到端时延。若改用 transferable，应额外验证发送后原缓冲区是否已失去访问权。
+
+   </Answer>
+
+2. 解释为什么“Worker 更快”不能由单次 `reduce` 运行时间证明，并设计一个能发现小任务反而变慢的边界样本。
+
+   <Answer>
+
+   Worker 方案包含创建或复用 Worker、序列化或转移输入、排队、计算、返回和合并；只测 Worker 内部计算会漏掉端到端成本。可以固定同一浏览器和热身策略，逐渐缩小输入，分别记录主线程长任务、消息耗时、Worker 计算和总时延。当任务低于传输与调度开销时，端到端时延上升就是边界证据，而不是实现失败的猜测。
+
+   </Answer>
+
+3. 对比 SIMD.js、asm.js 与现代 WebAssembly 的历史和部署边界，写出一个基准报告必须包含的版本字段；或者把 asm.js 示例迁移为 WebAssembly 路径并保留 fallback。
+
+   <Answer>
+
+   SIMD.js 是未成为现行稳定 API 的 JavaScript 提案，asm.js 是可优化的严格 JavaScript 子集约定，WebAssembly 是独立模块和线性内存执行模型。报告至少要写浏览器与引擎版本、模块或源码版本、工具链与编译选项、输入布局、热身次数、是否使用 SIMD、fallback 路径、内存占用和 p95 时延。这样才能把历史解释与当前可部署结果分开。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **Web Worker**：对应“定位阻塞主线程的热点”阶段的核心观察量。
-- **消息传递**：对应“划分可独立计算的数据”阶段的核心观察量。
-- **并行计算**：对应“序列化消息给 Worker”阶段的核心观察量。
-- **SIMD.js**：对应“Worker 并行执行”阶段的核心观察量。
-- **asm.js**：对应“返回结果并合并”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- 程序性能先用固定输入和运行时定位热点，再决定是否跨 Worker 或模块边界迁移。
+- Worker 隔离执行环境，但消息复制、transferable 所有权、启动、合并和清理都属于端到端成本。
+- SIMD.js 是历史提案，asm.js 是历史优化约定；二者不能直接当作今天的 JavaScript 部署 API。
+- WebAssembly 与 WebAssembly SIMD 可以作为现代基线，但必须记录模块、内存、能力检测和 fallback。
+- 合格的性能结论来自可重复的长任务、p95 响应、时延、内存与资源生命周期证据。
 
 ## 术语表
 
+<Glossary>
 
-## 来源与改编边界
+<GlossaryItem term="性能热点">在固定输入与环境下显著消耗响应预算的可测量代码路径。</GlossaryItem>
+<GlossaryItem term="主线程响应预算">主执行上下文为输入、脚本、布局与绘制保留的可用时间余量。</GlossaryItem>
+<GlossaryItem term="Web Worker">拥有独立全局环境、通过消息与主线程通信的浏览器执行上下文。</GlossaryItem>
+<GlossaryItem term="结构化克隆">发送消息时复制可序列化数据结构、但不保留普通对象引用身份的机制。</GlossaryItem>
+<GlossaryItem term="transferable">把资源所有权转移给接收方、避免完整复制但改变原方访问权的传输方式。</GlossaryItem>
+<GlossaryItem term="asm.js 子集">曾帮助引擎识别可优化数值路径的严格 JavaScript 代码约定。</GlossaryItem>
 
+</Glossary>
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, Async & Performance, Chapter 5: Program Performance"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/async%20%26%20performance/ch5.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

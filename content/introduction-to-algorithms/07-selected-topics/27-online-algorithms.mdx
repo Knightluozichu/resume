@@ -3,106 +3,176 @@ title: "Chapter 27 · Online Algorithms"
 type: C
 section: "CLRS4 · 专题"
 order: 27
-description: "按CLRS第四版第27章重建在线决策、竞争分析、等待电梯、搜索列表与在线缓存。"
+description: "按 CLRS 第四版第 27 章重建在线决策、竞争分析、等待电梯、搜索列表与在线缓存，并绑定模型契约、势能证明与 adversarial witness。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-27
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter27OnlineAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch27-online-algorithms";
 
-## 从“未来只差一秒，但现在看不见”开始
+<Objectives>
 
-先预测：你决定放弃等电梯并迈上楼梯的一刻，电梯门打开了。事后看，错误显而易见；但评价一个算法时，不能把尚未到达的信息偷偷交给它，也不能只挑一次幸运运行。
+- 能定义在线算法的 information boundary、合法动作、cost model、初始状态、offline comparator 与 adversary 合同，并写出竞争比不等式。
+- 能用 threshold、move-to-front 与 k-distinct phase argument 分析等待电梯、维护搜索列表和在线缓存的最坏情况成本。
+- 能回答：为什么把 future suffix、不同 cache capacity 或不同 adversary power 偷渡进比较，足以让一个看似正确的 online proof 失效？
 
-研究的不是“运行在网络上”，而是information arrival。与普通离线算法相比，困难不一定来自计算量，而来自决策发生时缺少future suffix。
+</Objectives>
 
+## 先问：为什么“再等一秒”不能偷看未来？
 
-设完整request sequence为$\sigma$，在线算法$A$与知道整个$\sigma$的offline optimum在相同cost model上运行。对minimization problem，若存在常数$\alpha$和与sequence length无关的$\beta$，使所有合法$\sigma$满足
+先预测：你决定放弃等电梯并走楼梯时，电梯可能下一秒到达；也可能还要等很久。在线算法的难点不是不知道如何执行一次动作，而是动作发生时只能看到已经到达的 request prefix，不能读取 future suffix。一个可审计的结论必须把这个信息边界写进模型，而不是在证明中悄悄使用未来。
+
+本章把四个场景放进同一套语言：online algorithms / 在线算法、waiting for an elevator / 等待电梯、maintaining a search list / 维护搜索列表、online caching / 在线缓存。先定义 online 与知道全序列的 offline optimum 如何比较，再分别使用 rent-or-buy threshold、list potential 和 k-distinct phases 建立上界与下界。
+
+<Clrs4Chapter27OnlineAlgorithmsLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 27 章，官方概念包括：
+
+- online algorithms / 在线算法；
+- waiting for an elevator / 等待电梯；
+- maintaining a search list / 维护搜索列表；
+- online caching / 在线缓存。
+
+正文是独立教学重构：先固定信息到达和成本合同，再用等待电梯演示阈值决策，用维护搜索列表演示势能记账，最后用缓存阶段与 $k+1$ 个 page 构造上下界。组件中的四个 mode 也分别对应这些概念，便于把模型假设和证据逐项核对。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：把 future suffix 传给 online algorithm">
+
+现象：算法在请求尚未到达前就因为“下一次一定会访问”而预留资源，证明看起来比实际策略好。
+
+原因：offline optimum 可以读完整 sequence，但 online algorithm 只能依据已揭示的 prefix；两者的 information boundary 被混用了。
+
+修复：在每一步标注已揭示输入、可用 state 与 legal action；若实验要显示未来，只把它放进 oracle 对照或故障注入模式，并明确该模式不是合法 online run。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把 competitive ratio 当成 average latency">
+
+现象：在一批友好的 workload 上平均很快，就宣称策略具有相同的最坏情况保证。
+
+原因：平均延迟是 workload distribution 下的 measurement；competitive ratio 是对每条合法 sequence 与 offline optimum 的最坏倍数比较，两个结论的量词不同。
+
+修复：同时报告模型中的 ratio proof 和固定 trace 上的测量值，并写明是否存在 additive constant、随机化以及 adversary 假设。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：证明中途改变 OPT 或 adversary 合同">
+
+现象：上界使用 same-resource OPT，下界却给 OPT 更大的 cache；或者 randomized strategy 的后续请求依赖已经看到的 random bits，却仍声称是 oblivious adversary。
+
+原因：comparator resource 和 adversary power 是定理的一部分，不是实现细节；改变它们就改变了问题。
+
+修复：在定理旁写出 comparator 的 capacity、初始状态、随机源和 adversary 时序，任何变体都另起一个 claim。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：只数 cache miss，却漏掉 capacity 和初始状态">
+
+现象：两个缓存策略的 miss count 可以复现，但结果无法解释，或一个策略因额外 buffer 获得了不公平优势。
+
+原因：miss cost 依赖 capacity、初始 cache、prefetch、write-back 和 dirty-page policy；少写一项就可能是在比较不同 resource。
+
+修复：回放相同 trace，记录完整初始状态与容量；如果使用 resource augmentation，就在结论中显式标注，不把它包装成纯 replacement-policy 优势。
+
+</Callout>
+
+## online algorithms / 在线算法
+
+<Term def="只能依据已经到达的 request prefix 作出动作、不能读取 future suffix 的算法模型">在线算法</Term>把输入看作逐步揭示的 sequence `σ`。第 `t` 步到达 request 后，算法可以读取当前 prefix、自己的 state 和题目允许的 metadata，然后选择 legal action；它不能把尚未到达的 suffix 当作 feature。一个完整的模型至少要声明：request 何时 revealed、动作有哪些、每种动作如何计 cost、initial state 是什么、offline comparator 拥有什么 resource，以及 adversary 如何产生后续 request。
+
+设 online algorithm 为 $A$，知道完整序列 σ 的 offline optimum 为 `OPT`。在 minimization problem 中，若存在与 sequence length 无关的常数 α 和 β，使每条合法 sequence 都满足
 
 $$
 C_A(\sigma)\le \alpha C_{\mathrm{OPT}}(\sigma)+\beta,
 $$
 
-则称$A$为$\alpha$-competitive。不要求OPT可高效计算；它是performance benchmark，不是部署方案。
+则称 `A` 为 α-competitive。`OPT` 是 performance benchmark，不要求可高效计算；β 可以吸收 initial state 或最后一个不完整 phase 的边界成本，但不能随输入规模增长。若随机化，还要说明比较的是 expected cost，以及 adversary 是在 random bits 之前固定 sequence，还是能根据观察到的动作适应性地产生后续输入。
 
+<Term def="用持续等待成本与一次切换成本的平衡点决定何时停止等待的确定性规则">阈值策略</Term>把未知 future 转换成可检查的 stopping rule；等待超过阈值后继续租用的代价，不能再被“也许下一刻就结束”掩盖。
 
-Additive constant $\beta$用来吸收initial state或最后一个未完整phase的边界成本。若问题规模增大而$\beta$也随之增长，就不能借“常数”隐藏坏行为。Competitive ratio也不是average latency：它承诺在adversarial sequence上仍不超过某个倍数，因此经常保守，却能明确算法对unknown future付出的代价。
+<Term def="online cost 相对于同一 sequence 上 offline optimum cost 的最坏倍数保证">竞争比</Term>只在 comparator、cost model 和 adversary 合同固定时有意义。它不等同于 average latency，也不保证每个实例都接近 α 倍；它保证的是所有合法输入上的上界。
 
-### 先固定比较契约
+<Term def="根据当前不可预知输入选择后续请求、用于构造最坏序列的对手模型">对手模型</Term>规定 adversary 如何产生输入；它必须和 random bits 的揭示时序、comparator resource 与 initial state 一起写进定理。
 
-一份可审计的在线分析必须先写清六件事：request何时revealed；算法可执行哪些actions；每种action的cost；initial state；OPT是否拥有同样resource；adversary能否根据random choices调整后续请求。缺少其中任一项，ratio可能只是把两个不同问题相除。
+## waiting for an elevator / 等待电梯
 
+### Rent-or-buy 模型
 
-## 27.1 Waiting for an elevator
-
-### Rent-or-buy模型
-
-把现实细节压缩成两个量：走楼梯固定耗时$b$；电梯还需等待$\ell$时间到达，而$\ell$事先未知。把电梯到达后的共同乘坐时间归一化掉，offline optimum知道$\ell$：
+把场景压缩成两个量：走楼梯固定成本为 $b$；电梯还需等待的时间为 ℓ，而 ℓ 在决策时未知。电梯到达后的共同乘坐时间可归一化掉，因此知道 ℓ 的 offline optimum 成本为
 
 $$
 C_{\mathrm{OPT}}(\ell)=\min\{\ell,b\}.
 $$
 
-Always-stairs在$\ell$很小时支付$b$而OPT几乎立刻乘梯；always-wait在$\ell$很大时持续付waiting cost而OPT早已走楼梯。两个extreme policies都没有与$b$无关的好界。
+Always-stairs 在 ℓ 很小时支付 $b$，而 `OPT` 几乎立即乘梯；always-wait 在 ℓ 很大时持续支付等待成本，而 `OPT` 早已走楼梯。两个极端策略都不能给出与 $b$ 无关的好界。
 
-### Hedging threshold
+### Threshold hedge
 
-一个确定性hedge是先等待$b$ units；若电梯在此之前到达就乘梯，否则立刻走楼梯。它不预测arrival distribution，只把继续等待的累计沉没成本限制在一次stairs cost：
+确定性策略先等待 $b$ 个时间单位；若电梯在此之前到达就乘梯，否则立刻走楼梯：
 
 ```text
-WAIT-OR-WALK(stair_time b)
+WAIT-OR-WALK(stair_cost b)
 1  wait until the elevator arrives or elapsed time reaches b
 2  if the elevator arrives, take it
 3  otherwise take the stairs immediately
 ```
 
-若$\ell\le b$，online与OPT都等待$\ell$；若$\ell>b$，online先等待$b$再花$b$走楼梯，而OPT直接走楼梯。因此
+若 ℓ≤b，online 与 `OPT` 都等待 ℓ；若 ℓ>b，online 先等待 $b$ 再支付 $b$ 走楼梯，而 `OPT` 直接支付 $b$。因此
 
 $$
-C_{\mathrm{HEDGE}}(\ell)
-=
+C_{\mathrm{HEDGE}}(\ell)=
 \begin{cases}
-\ell, & \ell\le b,\\
-2b, & \ell>b,
+\ell,&\ell\le b,\\
+2b,&\ell>b,
 \end{cases}
 \qquad
 C_{\mathrm{HEDGE}}(\ell)\le 2C_{\mathrm{OPT}}(\ell).
 $$
 
+重点不是电梯，而是 rent-or-buy 的阈值设计：当持续成本累积到一次切换成本时停止等待。云实例按小时租还是预留、idle machine 维持高功耗还是 sleep，都可以先问相同的 break-even threshold。
 
-这个证明的重点不是电梯，而是“何时停止租用并购买”的threshold design。Cloud instance按小时租或预留、idle machine维持高功耗或进入sleep、反复修补或一次重建，都可以先问：持续成本累积到一次切换成本时，是否应该hedge？
+### 为什么阈值必须与 $b$ 同量级？
 
-### Threshold为何取$b$
+设策略等待 $t$ 后走楼梯。若 $t$ 远小于 $b$，adversary 可让电梯在放弃后不久到达，online 支付 $t+b$，而 `OPT` 只需等待略多于 $t$；若 $t$ 远大于 $b$，adversary 可让电梯迟迟不来，online 支付 $t+b$，而 `OPT` 支付 $b$。平衡这两类损失会把 $t$ 放在 $b$ 附近；固定 threshold 后再挑最不利 arrival time，才是有效的 deterministic lower-bound witness。
 
-设策略等待$t$后走楼梯。若$t$远小于$b$，adversary可让电梯在放弃后不久到达，online支付$t+b$而OPT等待略多于$t$；若$t$远大于$b$，adversary让电梯迟迟不来，online支付$t+b$而OPT支付$b$。平衡两类损失会把$t$放在$b$附近。
+## maintaining a search list / 维护搜索列表
 
+### Access rank 与 move-to-front
 
-这里的adversary不是必须存在的恶意乘客，而是worst-case input construction。它帮助验证一个claim是否依赖运气：先固定deterministic threshold，再选择最不利的arrival time。若引入randomized threshold，必须说明adversary是否在random bits之前固定sequence；否则期待值竞争比没有明确语义。
+保存 $n$ 个 items 的 list。访问 item `x` 需要从 head 扫描到当前位置，cost 为 one-based rank；访问完成后是否可以免费移动元素，必须在模型中声明。如果未来 frequency distribution 已知，静态最优顺序会把高频 item 放在前面；在线状态下既不知道 frequency 是否稳定，也不知道下一次 request。
 
-## 27.2 Maintaining a search list
-
-### Access与reorganization cost
-
-保存$n$个items。Access item $x$需要从head扫描到当前位置，cost为one-based rank。一次request处理完后，可把刚访问item向前移动；具体move是否免费必须在模型里声明。
-
-
-如果未来frequency distribution已知，静态最优顺序会优先放高频items。但在线状态下既不知道frequency是否稳定，也不知道下一次request。Counting heuristic响应长期frequency，（move-to-front，MTF）则立即响应recency：
+Move-to-front（MTF）在访问后立即把 `x` 移到 head：
 
 ```text
 MOVE-TO-FRONT(L, x)
 1  scan L from the head until x is found
-2  pay the current rank of x
+2  pay the current one-based rank of x
 3  unlink x from its current position
 4  insert x at the head of L
 ```
 
+MTF 让 burst 和 working set 中刚访问的 item 下一次成本为 1，但 alternating pattern 也会扰动它。因此不能只说“它响应 locality”，还要与知道完整 request sequence、可以提前重排 list 的 offline comparator 比较。
 
-MTF对burst和working set有直观优势：刚访问的item下一次cost为1，反复未访问的items自然向后退。它也会被alternating patterns扰动，所以不能只说“符合locality”；需要与能够提前知道整个request sequence并重排list的OPT比较。
+<Term def="用 online list 与 offline comparator list 的相对次序差异记账、把重排状态转成未来收益的函数">势能</Term>是分析 state difference 的工具，不是对未来访问的预测。它通常从 inversion count 构造：一对 items 在两个 list 中相对次序不同，就贡献一个 inversion。
 
-### Inversion potential proof
+### Inversion potential 证明骨架
 
-令在线MTF list为$L$，offline comparator list为$L^*$。一对items若在$L$和$L^*$中的relative order不同，就构成inversion。取potential为inversion count：
+令 online MTF list 为 `L`，offline comparator list 为 `L*`，定义
 
 $$
 \Phi(L,L^*)=
@@ -110,21 +180,17 @@ $$
 \text{ but follows }y\text{ in }L^*\}\right|.
 $$
 
+访问 `x` 时，假设 `x` 在 MTF 中的 rank 为 $k$，在 `OPT` 中的 rank 为 $j$。MTF 把 `x` 移到 front，会消除一批位于 `x` 前且在 `OPT` 中位于 `x` 后的 inversions，也可能新增另一批；共同位于 `x` 前面的 items 数量不超过 $j-1$。因此，online 的实际 access cost 加上 potential change，可以由 `OPT` 本次 access 与它允许支付的 transpositions 的常数倍控制。
 
-访问$x$时，假设$x$在MTF中rank为$k$，在OPT中rank为$j$。MTF把$x$移到front，会消除那些“在MTF中位于$x$前、但在OPT中位于$x$后”的inversions，也可能新增另一类inversions。共同位于$x$前面的items数量不会超过$j-1$，因此actual access cost与potential change之和可由OPT本次access和paid transpositions的常数倍控制。
+把每次 amortized inequality 在整个 sequence 上求和，potential terms telescoping，只剩初始与最终 potential 的边界项。在 free-move-after-access 模型下，MTF 相对允许同类重组的 comparator 有 constant competitive bound；在 access rank 计费、OPT 的额外 adjacent transposition 也计费的常见模型中，紧分析给出 2 倍界。若把 MTF 自身的每次 adjacent swap 也计费，cost model 改变，常数必须重新证明。
 
-把每次amortized inequality在整个sequence上求和，potential terms telescoping；只剩初始与最终potential的additive boundary。标准free-move-after-access模型下可得到MTF相对允许同类重组的OPT的constant competitive bound；在只按access rank且OPT额外transposition付费的常见模型中，紧分析给出2倍界。若把move-to-front自身每次adjacent swap也计费，cost定义改变，证明中的常数也会改变。
+## online caching / 在线缓存
 
-这说明potential不是为了猜未来，而是给“当前多付但改善了list state”记账。相同技巧也用于amortized data structures，但在线分析多了一个reference state：potential衡量online与offline states的距离，而不只是单一数据结构的stored credit。
+### Hits、faults 与 eviction
 
+缓存容量为 $k$，每次请求一个 page。hit cost 归一化为 0；miss 或 page fault cost 为 1，cache 满时必须选择一个 page evict。offline furthest-in-future policy 知道未来，online replacement policy 只能看到 prefix。
 
-## 27.3 Online caching
-
-### Hits, faults, and eviction
-
-有capacity $k$，每次请求一个page。Hit cost归一为0；miss或page fault cost为1，并在cache满时必须evict一个page。Offline furthest-in-future policy知道未来，而online replacement policy只能看到prefix。
-
-LRU逐出最久未被请求的resident page：
+LRU 逐出最久未被请求的 resident page，FIFO 按进入 cache 的时间逐出：
 
 ```ts
 function accessLRU(cache: string[], page: string, capacity: number) {
@@ -136,35 +202,27 @@ function accessLRU(cache: string[], page: string, capacity: number) {
 }
 ```
 
+LRU 与 FIFO 对同一 trace 可能产生不同 faults，但都能用 phase argument 给出 coarse worst-case guarantee。LIFO 或 least-frequently-used 在合适 adversarial sequence 上可能长期保留坏 pages，不能只凭策略名称推出 competitive ratio。
 
-FIFO按进入cache的时间逐出，LRU按最近request时间逐出；它们对同一trace可能产生不同faults，但可以共享一个coarse worst-case proof。LIFO和least-frequently-used在合适adversarial sequence上可能长期保留坏pages，不能仅凭名称推出competitive guarantee。
+<Term def="把请求按 distinct page 数切分、用于聚合 cache fault 成本并比较 online 与 OPT 的阶段">缓存阶段</Term>是证明里的输入分区，而不是 LRU 内部的状态。capacity、initial cache、prefetch 和 dirty-page policy 仍必须单独写清。
 
-### Phase partition
+### $k$-distinct phase argument
 
-把request sequence划成maximal $k$-phases：每个phase最多包含$k$个distinct pages，下一次出现第$k+1$个distinct page时开始新phase。Phase由input决定，不依赖LRU内部state。
+把 request sequence 划成 maximal $k$-phases：每个 phase 最多包含 $k$ 个 distinct pages；下一次出现第 $k+1$ 个 distinct page 时开始新 phase。phase 由 input 决定，不依赖 LRU 内部 state。
 
-
-LRU在一个phase中对每个distinct page至多fault一次，因为phase内再次访问会使该page保持得比所有上个phase残留但未访问的pages更recent。因此每个完整phase至多$k$ faults。
-
-另一方面，从一个phase过渡到下一个phase会引入一个不属于上一phase distinct set的新page。任何capacity同为$k$的offline algorithm不可能在所有phase transitions上永远零fault；把相邻phase的lower bound适当charge，可得到
+LRU 在一个 phase 中对每个 distinct page 至多 fault 一次，因为 phase 内再次访问会使它比上个 phase 残留但未访问的 page 更 recent。因此每个完整 phase 至多产生 $k$ faults。另一方面，相邻 phase 会引入上一 phase distinct set 之外的新 page；同容量为 $k$ 的 offline algorithm 不可能在所有 phase transitions 上都零 fault。把相邻 phase 的 lower bound 适当 charge，可得到
 
 $$
-C_{\mathrm{LRU}}(\sigma)
-\le k\,C_{\mathrm{OPT}}(\sigma)+O(k).
+C_{\mathrm{LRU}}(\sigma)\le kC_{\mathrm{OPT}}(\sigma)+O(k).
 $$
 
-同类conservative/marking argument也给FIFO一个$k$-competitive upper bound。这个bound不能证明LRU与FIFO在真实locality workload上等好，只说明最坏情况下两者落入同一asymptotic class。
+同类 conservative 或 marking argument 也能给 FIFO 一个 $k$-competitive upper bound。这个 bound 只说明最坏情况下两者处于同一 asymptotic class，不说明真实 locality workload 上两者平均表现相同。
 
-### Deterministic lower bound
+### Deterministic lower bound 与 resource augmentation
 
-为什么$k$看起来很大却难以避免？考虑$k+1$个pages。对任何deterministic online cache，adversary总请求当前不在cache的page，使online每次fault。Offline知道未来，可在每组请求里选择未来最晚使用的page逐出，使其fault frequency低得多。由此任何deterministic online paging algorithm在同capacity comparator下都不能保证优于$k$量级的competitive ratio。
+考虑 $k+1$ 个 pages。对任何 deterministic online cache，adversary 总请求当前不在 cache 中的 page，使 online 每次 fault；offline 知道未来，可逐出未来最晚使用的 page，因此 fault frequency 低得多。于是同 capacity comparator 下，任何 deterministic online paging algorithm 都不能保证优于 $k$ 量级的 competitive ratio。这个 lower bound 与 LRU 的 upper bound 相遇，显示瓶颈来自 information gap，而不只是 LRU 实现不够聪明。
 
-
-这一下界与LRU upper bound相遇，说明问题来自information gap，不只是LRU实现不够聪明。Randomization可在oblivious-adversary模型下改善bound，但必须把expected cost、random source和adversary power写进定义；本章确定性结论不能自动转成随机化结论。
-
-### Resource augmentation
-
-比较时cache capacities也必须相同或显式标注。若online有$k$ slots而OPT只有$h$ slots，phase argument可得到与$k-h+1$相关的更细界；额外少量cache可能显著改变ratio。工程benchmark中若一个policy实际上用了metadata cache、prefetch buffer或victim cache，而baseline没有，这也是resource augmentation，不应包装成纯replacement-policy胜利。
+若 online 有 $k$ 个 slots 而 `OPT` 只有 $h$ 个 slots，比较的问题已经不同；phase argument 会出现与 $k-h+1$ 相关的 resource-augmentation 界。额外 metadata cache、prefetch buffer 或 victim cache 也属于 resource augmentation，工程 benchmark 不能把它们藏在“同一个 cache policy”里。随机化可以在 oblivious-adversary 模型下改善 bound，但必须另行定义 expected cost、random source 和 adversary power。
 
 ```text
 AUDIT-ONLINE-CACHE(trace, k)
@@ -177,13 +235,66 @@ AUDIT-ONLINE-CACHE(trace, k)
 
 ## 从证明到工程决策
 
-Competitive analysis回答“没有future oracle时最坏会损失多少”，trace simulation回答“这批workload上实际发生什么”。两者应同时存在：证明防止策略在罕见输入上失控，measurement暴露constant factors、cache hierarchy、prefetch和distribution shift。
-
+Competitive analysis 回答“没有 future oracle 时最坏会损失多少”，trace simulation 回答“这批 workload 上实际发生什么”。两者应同时存在：证明防止策略在罕见输入上失控，measurement 暴露 constant factors、cache hierarchy、prefetch 和 distribution shift。若报告只给 ratio，不给 trace 与 state contract，读者无法复现实验；若只给平均 miss count，也无法判断 adversarial witness 是否会击穿策略。
 
 ## 小结
 
-Chapter 27 Online Algorithms把“未来未知”变成可证明的模型。Waiting for an elevator用threshold hedging在继续等待和走楼梯之间取得2-competitive guarantee；maintaining a search list用move-to-front响应recency，并以online/OPT list之间的inversion potential支付重排带来的状态差；online caching用$k$-distinct phases证明LRU与FIFO的worst-case upper bound，再以$k+1$ pages构造deterministic lower bound。
+- online algorithms / 在线算法先固定 information boundary、legal actions、cost model、offline comparator 与 adversary timing。
+- waiting for an elevator / 等待电梯把继续等待和一次走楼梯成本平衡为 threshold，得到确定性 2-competitive guarantee。
+- maintaining a search list / 维护搜索列表用 move-to-front 响应 recency，并以 online/OPT list 间的 inversion potential 记账。
+- online caching / 在线缓存用 $k$-distinct phases 给 LRU/FIFO 的 worst-case upper bound，再以 $k+1$ pages 构造 deterministic lower bound。
+- 竞争比不是平均延迟；改变 transposition cost、cache capacity 或 adversary power 后，原结论不能直接复用。
 
-在线证书的核心不是报一个ratio，而是同时交付information boundary、legal actions、cost model、offline comparator、adversary assumptions、upper-bound proof和lower-bound witness。模型一旦改变，例如transposition是否付费、cache capacity是否相同、adversary是否看见random choices，结论就必须重新证明。
+<Exercises>
 
+1. Threshold 证明题：走楼梯成本为 $b$，电梯等待时间为未知的 $\ell$。证明“等待至多 $b$，否则走楼梯”的策略满足 $C_A(\ell)\le 2C_{\mathrm{OPT}}(\ell)$，并分别给出 adversary 在阈值前到达和阈值后到达时的两类成本。
 
+   <Answer>
+
+   当 $\ell\le b$，策略和 `OPT` 都等待电梯，$C_A=\ell=C_{\mathrm{OPT}}$；当 $\ell>b$，策略支付 $b$ 的等待和 $b$ 的楼梯成本，$C_A=2b$，而 `OPT` 直接走楼梯，$C_{\mathrm{OPT}}=b$。所以两种情形都满足 $C_A\le 2C_{\mathrm{OPT}}$。对任意等待阈值 $t$，adversary 可在放弃后不久让电梯到达，或让电梯一直不来；这解释了为什么 $t$ 应与 $b$ 同量级。
+
+   </Answer>
+
+2. Demo 修改题：把实验切换为 `cache` 或 `list` 模式，任选其一补上一个可审计的证据。要求写出至少三项代码或状态改变，并说明它们如何对应 phase fault 或 inversion potential。
+
+   <Answer>
+
+   1. `cache` 模式应固定 capacity `k`、initial cache 和同一 request trace，并显示每个 phase 的 distinct-page 集合。
+   2. 每次请求都要记录 hit/fault 与 eviction；fault 计数必须能回到 phase 上界，而不能只更新一个装饰数字。
+   3. `list` 模式则应画出当前 list、访问 rank 和 inversion potential；访问后把被访问 item 移到 head，并让 potential 随相对次序变化。
+
+   </Answer>
+
+3. 模型审计题：一个报告声称“LRU 比 OPT 只差两倍”，但 online cache 有 4 个 slots、OPT 有 3 个 slots，且 OPT 可以读取完整未来。列出至少三个必须修正或补充的合同，并说明修正后应如何命名结论。
+
+   <Answer>
+
+   1. 先统一 comparator capacity，或明确把它称为 resource-augmentation result，而不是同 capacity 的 competitive ratio。
+   2. 写清 initial cache、prefetch、write policy 和 fault cost，确保两边的 cost model 一致。
+   3. 声明 offline OPT 知道完整 sequence，而 online 只能读取当前 prefix；若改变 adversary 或引入 randomization，还要重新写 expected-cost 与时序假设。
+
+   修正合同后，若容量相同且证明确实适用于该策略，才能报告相应的 $k$-competitive upper bound；若保留 4 对 3 的容量差异，应报告 resource-augmentation bound，并给出对应的 phase argument。
+
+   </Answer>
+
+</Exercises>
+
+## Glossary
+
+<Glossary>
+
+<GlossaryItem term="在线算法">只能依据已经到达的 request prefix 作出动作、不能读取 future suffix 的算法模型。</GlossaryItem>
+<GlossaryItem term="阈值策略">用持续等待成本与一次切换成本的平衡点决定何时停止等待的确定性规则。</GlossaryItem>
+<GlossaryItem term="竞争比">online cost 相对于同一 sequence 上 offline optimum cost 的最坏倍数保证。</GlossaryItem>
+<GlossaryItem term="势能">用 online list 与 offline comparator list 的相对次序差异记账、把重排状态转成未来收益的函数。</GlossaryItem>
+<GlossaryItem term="缓存阶段">把请求按 distinct page 数切分、用于聚合 cache fault 成本并比较 online 与 OPT 的阶段。</GlossaryItem>
+<GlossaryItem term="对手模型">根据当前不可预知输入选择后续请求、用于构造最坏序列的对手模型。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 27: Online Algorithms"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

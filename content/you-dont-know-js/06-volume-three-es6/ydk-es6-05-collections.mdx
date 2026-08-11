@@ -3,23 +3,44 @@ title: "第 5 章 集合"
 type: A
 section: "下卷 · 第二部分 ES6 及未来"
 order: 37
-description: "TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。"
+description: "TypedArrays 固定二进制视图，Maps 保存任意键和值的关联，Sets 保证值唯一；WeakMaps 与 WeakSets 则把对象成员资格放进不可枚举的弱引用边界。"
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch5.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-37
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkEs605CollectionsLab } from "@/components/mdx/you-dont-know-js/ydk-es6-05-collections";
 
-## 直觉：先预测，再运行
+<Objectives>
 
-TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。
+- 能根据数据形状、键身份、唯一性和对象生命周期，选择 TypedArrays、Maps、Sets、WeakMaps 或 WeakSets，并说明选择的所有权后果。
+- 能用最小代码验证二进制偏移、对象键相等、重复值去重、弱集合不可枚举和序列化边界，记录首个偏离点。
+- 能解释为什么集合 API 不是“更快的数组”，并在强引用、弱引用、清理和回放之间建立可测试的资源契约。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+</Objectives>
+
+## 直觉：先问“谁拥有这条记录”
+
+集合解决的不是“把很多值放在一起”这么简单。TypedArrays 规定一段缓冲区怎样被解释，Maps 规定键如何找到值，Sets 规定重复值怎样消失，WeakMaps 与 WeakSets 则规定对象失去外部引用后不应被集合继续挽留。选错集合，通常不是一行 API 写错，而是数据所有权和生命周期被悄悄改写。
+
+先预测：把两个外形相同但身份不同的对象放进 Map，把重复数字放进 Set，再把同一对象放入 WeakMap 和 WeakSet；哪些查询会命中，哪些内容能被枚举，哪些内容能被 JSON 序列化？写下预测后切换交互样本，观察首个偏离点。
+
+<YdkEs605CollectionsLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本章沿用作者公开的一版仓库目录作为章节边界，并把目录条目逐一落到可运行的观察任务。标题用于追踪原书结构；示例会补充现代运行时的验证方式，但不会把今天的实现细节冒充历史原文。
 
 - Chapter 5: Collections
 - TypedArrays
@@ -28,166 +49,278 @@ TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一
 - Sets
 - WeakSets
 
-本页逐项覆盖 6 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
-
-## 核心概念与状态所有权
-
-。
-
-。
-
-。
-
-。
-
-。
-
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
-
-|   # | 观察量     | 本页判定方式                                         |
-| --: | ---------- | ---------------------------------------------------- |
-|   1 | TypedArray | 在“根据数据语义选择集合”阶段保存前后状态并核对不变量 |
-|   2 | Map        | 在“定义键相等规则”阶段保存前后状态并核对不变量       |
-|   3 | WeakMap    | 在“执行添加读取和删除”阶段保存前后状态并核对不变量   |
-|   4 | Set        | 在“按插入顺序迭代强集合”阶段保存前后状态并核对不变量 |
-|   5 | WeakSet    | 在“让弱集合键随对象回收”阶段保存前后状态并核对不变量 |
-
-## 机制拆解
-
-### 1. 根据数据语义选择集合
-
-根据数据语义选择集合不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 2. 定义键相等规则
-
-定义键相等规则不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 3. 执行添加读取和删除
-
-执行添加读取和删除不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 4. 按插入顺序迭代强集合
-
-按插入顺序迭代强集合不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 5. 让弱集合键随对象回收
-
-让弱集合键随对象回收不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-### 6. 验证序列化与生命周期边界
-
-验证序列化与生命周期边界不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
-
-结合本章主张来看：TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
-
-## 目录主题逐项讲解
-
-### Chapter 5: Collections
-
-Chapter 5: Collections在本单元中落到“根据数据语义选择集合”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### TypedArrays
-
-TypedArrays在本单元中落到“定义键相等规则”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Maps
-
-Maps在本单元中落到“执行添加读取和删除”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### WeakMaps
-
-WeakMaps在本单元中落到“按插入顺序迭代强集合”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### Sets
-
-Sets在本单元中落到“让弱集合键随对象回收”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-### WeakSets
-
-WeakSets在本单元中落到“验证序列化与生命周期边界”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
-
-## 六阶段证据链
-
-本页的可执行链条是：根据数据语义选择集合 → 定义键相等规则 → 执行添加读取和删除 → 按插入顺序迭代强集合 → 让弱集合键随对象回收 → 验证序列化与生命周期边界。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
-
-
-## 最小可运行实验
-
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
-
-```js
-const bytes = new Uint8Array([1, 2, 3]);
-const map = new Map([[{}, "object-key"]]);
-const set = new Set([1, 1, 2]);
-console.log(bytes, map.size, [...set]);
-```
-
-```yaml
-book: 你不知道的 JavaScript（一版三卷六册）
-page: ydk-es6-05-collections
-role: chapter
-official_entries: 6
-sample: normal | boundary | failure | recovery
-first_divergence: null
-bindings_stable: true
-ordering_explained: true
-cleanup_complete: true
-```
-
-```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
-stop at first divergence
-recover and replay the same sample
-assert stable state and no stale work
-```
+六个目录条目共同回答一个问题：数据是按字节、键值、唯一性，还是按对象可达性来组织？学习地图、跨章复习与站内导航不计入本章正式条目。
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：集合只是数组的另一种写法">
 
-## 四类样本与验收
+现象：先把所有数据塞进数组，遇到查找、去重或元数据绑定时再用循环补救。
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+原因：数组表达位置序列，不自动表达键身份、唯一性、字节宽度或对象生命周期；补丁会把真正的不变量藏在调用者代码里。
 
-本页签发不变量是：**TypedArray 提供固定二进制视图，Map 与 Set 提供任意键和值唯一性，WeakMap 与 WeakSet 则以弱引用键避免延长对象生命周期，但不可枚举。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+修复：先写出读取契约，再选择集合；用正常、重复、错误身份和生命周期结束四类样本验证不变量。
 
-## 版本与原书边界
+</Callout>
 
-本单元忠实保留原书讨论的 ES6 语境，同时把年度规范、现代浏览器实现和转译工具的差异放入版本栏；后续规范补充不会冒充原书正式分节。
+<Callout type="trap" title="陷阱：对象键按内容相等">
 
-站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
+现象：`map.get({ id: 1 })` 期待取回之前用 `{ id: 1 }` 存入的值。
+
+原因：普通对象作为 Map 键按引用身份比较；两个对象即使字段相同，也不是同一个键。
+
+修复：保存并复用同一个键对象，或在边界处明确生成稳定的原始键；测试 get、has 和 delete 的身份条件。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：弱集合可以像强集合一样枚举">
+
+现象：尝试遍历 WeakMap 或 WeakSet，或者把它们直接转换为 JSON 快照。
+
+原因：弱集合不提供成员枚举，避免快照本身成为对象存活的强引用；可达性也可能随运行时回收而变化。
+
+修复：用已知对象调用 get、has、set 或 delete；需要报告时维护独立的、明确拥有生命周期的索引。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：视图边界和缓冲区边界是一回事">
+
+现象：修改一个 TypedArray 后，假定所有视图都以同一元素类型、偏移和长度读取。
+
+原因：多个视图可以共享 ArrayBuffer，但 byteOffset、length 和元素类型各自决定解释窗口；越界读写不是“自动扩容”。
+
+修复：记录 buffer、byteOffset、length 和 BYTES_PER_ELEMENT，先对照字节图再断言读写结果。
+
+</Callout>
+
+## 核心概念与状态所有权
+
+<Term def="把数据组织方式与读取契约绑定的设计判断：先确定字节形状、键身份、唯一性或对象生命周期，再选择集合。">集合选择</Term> 决定调用者需要维护多少额外不变量。
+
+<Term def="由 ArrayBuffer、元素类型、字节偏移和长度共同决定的一段二进制读取窗口。">二进制视图</Term> 让同一块内存可以被不同类型的 TypedArray 解释。
+
+<Term def="把一个键和一个值关联起来的 Map 记录；对象键按引用身份查找，而不是按字段内容猜测。">键值关联</Term> 适合缓存、索引和对象元数据。
+
+<Term def="只保留一个成员的 Set 集合规则；重复加入不会产生第二个成员，并且迭代遵循插入顺序。">唯一性</Term> 把去重从调用者循环提升为集合契约。
+
+<Term def="集合只通过对象键或成员资格访问，不提供枚举，并且不应凭自身引用阻止对象被回收的关系。">弱可达性</Term> 是 WeakMaps 和 WeakSets 的生命周期边界。
+
+<Term def="把集合内容转换为日志、网络载荷或持久化快照的过程；弱集合不能直接提供完整枚举，因此必须另建强索引。">集合快照</Term> 需要明确谁拥有快照以及何时失效。
+
+这六个概念可以压缩成一张责任表：TypedArrays 负责“如何解释字节”，Maps 负责“怎样找到值”，Sets 负责“哪些值算重复”，弱集合负责“对象是否仍可达”，快照负责“怎样向外部系统报告”。每次实验都要记录输入身份、读取方式、输出边界和清理责任。
+
+| 观察量 | 要记录的证据 | 不应偷换成 |
+| --- | --- | --- |
+| 二进制视图 | buffer、offset、length、元素类型 | 普通数组的数字列表 |
+| 键值关联 | 键的身份、has/get/delete 结果 | 对象字段的相似度 |
+| 唯一性 | 首次加入顺序、重复加入结果 | 排序后的偶然顺序 |
+| 弱可达性 | 已知对象的 has/get 与外部所有权 | 可枚举的成员清单 |
+| 集合快照 | 快照创建者、时间点和失效条件 | 弱集合的实时内容 |
+
+## 机制拆解
+
+### 1. Chapter 5: Collections
+
+**Chapter 5: Collections** 的主线是“选择正确的观察契约”。如果问题关心的是固定字节布局，使用 TypedArrays；如果关心键和值的关系，使用 Maps；如果关心是否已经出现，使用 Sets；如果元数据不应延长对象生命周期，才考虑 WeakMaps 或 WeakSets。
+
+先把每个候选集合写成四元组：输入是什么、成员怎样比较、能否枚举、谁负责清理。四元组中任何一项没有答案，集合选择就还没有完成。交互时间线把这些问题按步骤展开，避免只凭 API 名称做决定。
+
+### 2. TypedArrays
+
+**TypedArrays** 是访问 ArrayBuffer 的类型化窗口，而不是一组“更快的数字”。`Uint8Array` 每个元素占一个字节，`Uint16Array` 的元素宽度不同；同一缓冲区上改变视图类型、偏移或长度，就可能得到完全不同的读取解释。
+
+```js
+const buffer = new ArrayBuffer(4);
+const bytes = new Uint8Array(buffer);
+const words = new Uint16Array(buffer);
+
+bytes[0] = 1;
+bytes[1] = 2;
+console.log(bytes.byteOffset, bytes.length, words.length);
+```
+
+验证 TypedArrays 时不要只打印数组内容。把 `buffer`、`byteOffset`、`length` 和 `BYTES_PER_ELEMENT` 一起记录；如果数据来自网络或文件，还要明确字节序和截断策略。固定长度视图不会替调用者完成容量检查。
+
+### 3. Maps
+
+**Maps** 用键和值表达关联，键可以是对象、函数或原始值。Map 的关键不是“查找更方便”，而是把键的身份规则写入数据结构：保存时的键和查询时的键必须是同一个身份，除非键本身是稳定的原始值。
+
+```js
+const owner = { id: 7 };
+const metadata = new Map([[owner, { dirty: false }]]);
+
+console.log(metadata.get(owner));
+console.log(metadata.get({ id: 7 }));
+```
+
+第二次查询得到 `undefined` 并非 Map 丢数据，而是查询对象不是原来的键。`size`、`has`、`get`、`set` 和 `delete` 应该在边界测试中一起出现，分别证明记录数量、身份命中、读取、更新和清除的契约。
+
+### 4. WeakMaps
+
+**WeakMaps** 适合保存“对象作为所有者时才有意义”的私有状态。它们不能枚举，键必须是对象；外部代码仍持有对象时，可以通过同一对象读取或删除状态，但不能从 WeakMap 反推出所有对象。
+
+```js
+const privateState = new WeakMap();
+const widget = {};
+
+privateState.set(widget, { mounted: true });
+console.log(privateState.get(widget));
+privateState.delete(widget);
+```
+
+弱引用不是立即回收的通知，也不是资源清理回调。若状态关联了事件监听器、文件句柄或网络连接，必须由拥有这些资源的生命周期显式关闭；不能把垃圾回收当作业务层 finally。
+
+### 5. Sets
+
+**Sets** 表达成员资格和唯一性。重复 `add` 不会追加第二个成员，迭代顺序则保留首次加入的顺序；这让 Set 很适合去重、访问记录和能力集合，但不适合表达“每个键对应一个值”的关系。
+
+```js
+const seen = new Set(["cache", "cache", "network"]);
+seen.add("cache");
+
+console.log([...seen]);
+console.log(seen.has("network"));
+```
+
+测试 Set 时同时验证 `size`、迭代结果和 `has`。如果业务需要把一次出现的来源、时间或计数也保存下来，就要把 Set 与 Map 的职责分开，不要把附加字段藏在数组索引里。
+
+### 6. WeakSets
+
+**WeakSets** 只表达对象成员资格，不提供枚举和关联值。它适合标记“这个对象已经通过校验”或“这个对象已经被处理”，但不能用于生成成员报告，也不能把原始值直接加入其中。
+
+```js
+const visited = new WeakSet();
+const node = {};
+
+visited.add(node);
+console.log(visited.has(node));
+visited.delete(node);
+```
+
+WeakSet 的 `has` 需要一个已知对象；如果产品需要展示所有已处理对象，就要由业务层维护一个明确的强索引，并规定索引何时删除。这样可以把“弱集合的生命周期语义”和“报告系统的可枚举需求”分开。
+
+## 从比较规则走到生命周期
+
+集合 API 的相似外形容易掩盖不同的所有权。下面四段实验分别固定一种问题：
+
+1. **形状**：TypedArrays 只解释自己覆盖的字节窗口；改变 offset 或类型就改变读取语义。
+2. **关联**：Maps 通过键身份找到值；稳定的原始键和可复用的对象键都比临时对象可靠。
+3. **成员资格**：Sets 只保留唯一成员；需要值之外的信息时，另建 Map 保存元数据。
+4. **可达性**：WeakMaps 与 WeakSets 不提供枚举；业务清理不能依赖“也许已经回收”。
+
+把这四类问题写入测试名称，代码审查时就能看到集合选择是否与数据契约一致。
+
+## 序列化与快照边界
+
+`JSON.stringify` 适合有明确字段的对象和数组，却不会自动把 Map、Set、WeakMap 或 WeakSet 变成业务想要的快照。强集合可以通过展开或自定义转换表达成员；弱集合没有完整枚举协议，任何快照都必须来自另外维护的强索引或已知对象集合。
+
+```js
+const ids = new Set(["a", "b"]);
+const labels = new Map([["a", "alpha"]]);
+
+const snapshot = {
+  ids: [...ids],
+  labels: Object.fromEntries(labels),
+};
+console.log(JSON.stringify(snapshot));
+```
+
+快照是某个时间点的副本，不是集合本身。写入缓存或网络前要记录快照创建时间、来源和失效条件；读取时不能把旧快照误认为实时成员资格。
+
+## 最小可运行实验
+
+下面的片段把本章四种核心选择放在同一条可回放轨迹中。运行前先预测日志，再只改一个变量：
+
+```js
+const buffer = new ArrayBuffer(2);
+const bytes = new Uint8Array(buffer);
+const key = { id: 1 };
+const map = new Map([[key, "metadata"]]);
+const set = new Set(["ready", "ready"]);
+const weakMap = new WeakMap([[key, { active: true }]]);
+const weakSet = new WeakSet([key]);
+
+bytes[0] = 9;
+console.log(bytes.length, map.get(key), [...set], weakMap.has(key), weakSet.has(key));
+```
+
+```yaml
+sample: normal | boundary | failure | recovery
+ownership: buffer + key + snapshot
+identity_checked: true
+ordering_checked: true
+weak_membership_enumerated: false
+cleanup_owner: explicit-lifecycle
+first_divergence: null
+```
+
+验收时至少加入四个变化：用新的同形对象查询 Map，重复加入 Set，改变 TypedArray 的视图窗口，以及尝试从弱集合生成成员列表。每个变化都应得到“契约规定的结果”，而不是只记录最终输出。
 
 ## 练习
 
+<Exercises>
+
+1. 给一个共享 ArrayBuffer 建立 `Uint8Array` 和 `Uint16Array` 两个视图，记录同一字节写入后两者的读取差异，并说明 offset、length 和字节序如何影响结论。
+
+   <Answer>
+
+   先打印两个视图的 `byteOffset`、`length` 和 `BYTES_PER_ELEMENT`，再写入两个字节。`Uint8Array` 按单字节读取，`Uint16Array` 把两个字节组合成一个元素，具体数值还受运行时字节序影响。答案的重点不是背一个十进制数字，而是证明两个视图拥有不同的解释窗口。
+
+   </Answer>
+
+2. 用 Map 保存对象元数据，用 Set 记录已经处理过的对象 ID；故意用一个字段相同的新对象查询 Map，并比较两种结构的测试结果。
+
+   <Answer>
+
+   Map 的对象键按引用身份比较，新对象不会命中旧记录；如果需要按 ID 查找，应使用稳定的原始 ID 作为键，或复用原对象。Set 只表达 ID 是否出现，重复 `add` 不增加成员；若还要保存元数据，应由 Map 承担关联职责。
+
+   </Answer>
+
+3. 设计一个 WeakMap 私有状态和一个 WeakSet 访问标记，并写出独立的资源清理与报告索引；解释为什么不能遍历弱集合来完成这两件事。
+
+   <Answer>
+
+   WeakMap 保存对象对应的状态，WeakSet 保存已访问成员资格；二者只能对已知对象调用 `get`、`has` 或 `delete`，不能生成完整成员列表。需要报告时维护一个有明确删除时机的强索引；计时器、监听器或连接则由显式生命周期关闭，不能等待垃圾回收替代清理。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **TypedArray**：对应“根据数据语义选择集合”阶段的核心观察量。
-- **Map**：对应“定义键相等规则”阶段的核心观察量。
-- **WeakMap**：对应“执行添加读取和删除”阶段的核心观察量。
-- **Set**：对应“按插入顺序迭代强集合”阶段的核心观察量。
-- **WeakSet**：对应“让弱集合键随对象回收”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- **TypedArrays**：用固定的字节宽度、偏移和长度解释 ArrayBuffer。
+- **Maps**：用键身份连接任意值与元数据，查询前必须确认键仍是同一身份。
+- **Sets**：把唯一性和插入顺序作为成员资格契约，而不是数组循环的副作用。
+- **WeakMaps**：把对象私有状态放进不可枚举的弱引用边界，但不负责业务资源清理。
+- **WeakSets**：只记录对象成员资格，报告需求要由独立强索引承担。
+- **Chapter 5: Collections** 的核心判断是“数据需要哪一种比较规则和所有权”，不是“哪一个 API 看起来最短”。
 
 ## 术语表
 
+<Glossary>
+
+<GlossaryItem term="集合选择">先判断数据按字节、键值、唯一性还是对象可达性组织，再挑选集合类型。</GlossaryItem>
+<GlossaryItem term="二进制视图">用元素类型、字节偏移和长度解释 ArrayBuffer 某个窗口的 TypedArray。</GlossaryItem>
+<GlossaryItem term="键值关联">由 Map 保存的键到值的关系；对象键按引用身份而非字段内容命中。</GlossaryItem>
+<GlossaryItem term="唯一性">Set 对成员去重并保留首次加入的迭代顺序。</GlossaryItem>
+<GlossaryItem term="弱可达性">WeakMaps 与 WeakSets 不提供枚举，也不应仅凭自身引用延长对象寿命。</GlossaryItem>
+<GlossaryItem term="集合快照">在特定时间点把集合状态复制到外部结构，并明确快照的拥有者和失效条件。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章保留原书 ES6 语境中的 TypedArrays、Maps、WeakMaps、Sets 和 WeakSets，同时把现代运行时的序列化、垃圾回收和资源管理边界单独标出。浏览器或 Node.js 的实现差异不会改变集合 API 的核心契约，但会影响调试工具能看到什么以及何时能观察到回收。
+
+站内代码优先使用今天可以运行的标准写法；历史章节目录和能力归属仍以作者一版仓库为准。若业务需要可枚举报告、持久化或显式清理，就必须在集合之外补上拥有者和生命周期，而不能把这些职责寄托在弱引用或一次性快照上。
 
 ## 来源与改编边界
 
+本文根据作者公开的章节目录进行独立教学重写，目录条目用于结构对齐；示例、练习、可视化和故障注入均为本项目新增教学材料。
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, ES6 & Beyond, Chapter 5: Collections"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch5.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

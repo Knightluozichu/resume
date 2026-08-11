@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch3.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-11
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkThis03ObjectsLab } from "@/components/mdx/you-dont-know-js/ydk-this-03-objects";
+
+<Objectives>
+
+- 能把对象访问拆成属性键、属性描述符、读取/写入和迭代四类可观察证据
+- 能修改一个 `Object.defineProperty` 样本，比较 writable、enumerable、configurable 与 getter/setter 的行为
+- 能在属性访问结果异常时定位首个偏离点，并用最小代码实验验证对象是否真的暴露或允许修改该属性
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 对象是属性描述符管理的键值集合；点语法与中括号语法只是访问形式，复制、可写性、可配置性、可枚举性与迭代顺序才决定真实行为。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkThis03ObjectsLab />
 
 ## 权威目录定位
 
@@ -31,15 +53,17 @@ draft: false
 
 ## 核心概念与状态所有权
 
-。
+<Term def="用花括号或构造器创建的属性容器；它有自己的身份，并由属性描述符管理内容。">对象字面量</Term>
 
-。
+<Term def="访问对象时最终使用的名字或字符串，例如 id；点语法和中括号语法可以归一到同一个键。">属性键</Term>
 
-。
+<Term def="描述属性如何读、写、配置和枚举的一组规则，而不只是属性当前保存的值。">属性描述符</Term>
 
-。
+<Term def="描述数据属性能否被赋新值的规则；false 时写入会被拒绝或忽略。">可写性</Term>
 
-。
+<Term def="由 getter 和 setter 组成的访问规则；读取或赋值会调用函数，而不是直接取存 value。">访问描述符</Term>
+
+<Term def="描述属性是否出现在 Object.keys 等枚举结果中的规则；不可枚举不代表属性不存在。">可枚举性</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -153,6 +177,20 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：把对象当成没有规则的键值袋">
+  现象：看到 `record.id` 能读到 7，就断言它一定可写、可枚举、可配置。原因：属性值只是一次读取结果，writable、enumerable、configurable 等描述符才决定后续行为。修法：先用 `Object.getOwnPropertyDescriptor` 读取描述符，再预测写入和 Object.keys 的结果。
+</Callout>
+
+<Callout type="trap" title="陷阱：把不可枚举误判成属性不存在">
+  现象：`Object.keys(record)` 没有 secret，就认为 `record.secret` 也读不到。原因：enumerable 只控制枚举暴露，不会自动删除直接访问路径。修法：分别测试直接读取、写入和 Object.keys，不用一个 API 的结果替代另一个 API 的语义。
+</Callout>
+
+<Callout type="trap" title="陷阱：把 getter 当成保存好的 value">
+  现象：访问 `record.label` 时把 getter 的计算结果当成稳定字段。原因：访问器属性通过 getter/setter 运行代码，不拥有普通数据属性的 value/writable 对。修法：记录访问路径，分别验证 getter 的读取和 setter 的写入，再检查副作用。
+</Callout>
+
+故障注入只改变一个属性条件：writable、enumerable 或 getter/setter。先预测直接读取、赋值和 Object.keys 三个结果，再切换可视化样本；如果只改变一个结果，首个偏离点就是对应描述符的边界。
+
 
 ## 四类样本与验收
 
@@ -173,6 +211,36 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：把下面的对象改成一个只读但可枚举的 `id` 属性。** 运行 `record.id = 8` 与 `Object.keys(record)`，分别写出结果。
+
+   ```js
+   const record = {};
+   Object.defineProperty(record, "id", {
+     value: 7,
+     writable: false,
+     enumerable: true,
+   });
+   ```
+
+<Answer question="为什么 id 能被 Object.keys 找到，却不能被赋值改成 8？">
+  `enumerable: true` 控制它出现在枚举结果中，`writable: false` 控制数据属性不可被赋新值。两个描述符负责不同通道，所以读取、枚举和写入必须分别验证。
+</Answer>
+
+2. **问题 2：把 `record.label` 改成 getter/setter，并让 setter 保存一个经过规范化的值。** 记录一次读取和一次赋值分别经过哪条路径。
+
+<Answer question="getter/setter 与普通 value 属性的关键差异是什么？">
+  普通数据属性直接保存 value；访问器属性把读取交给 getter、把赋值交给 setter，不使用普通的 value/writable 对。调用路径本身就是证据，不能只比较最终字符串。
+</Answer>
+
+3. **问题 3：新增一个 `enumerable: false` 的 `secret` 属性，比较 `record.secret`、`Object.keys(record)` 和 `Object.getOwnPropertyNames(record)`。** 说明哪个 API 看到了什么。
+
+<Answer question="为什么 secret 不在 Object.keys 中，却仍能直接读取？">
+  `enumerable: false` 只把 secret 从常规枚举中隐藏；直接属性访问仍按属性键查找，`Object.getOwnPropertyNames` 也会列出不可枚举的自有属性。三个 API 的观察边界不同。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -186,6 +254,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="对象字面量">用花括号写出的对象容器，例如 `{ id: 7 }`，它可以继续接收属性规则。</GlossaryItem>
+  <GlossaryItem term="属性键">对象查找时使用的名字；`record.id` 与 `record["id"]` 会指向同一个键。</GlossaryItem>
+  <GlossaryItem term="属性描述符">记录属性读写、配置和枚举权限的规则集合。</GlossaryItem>
+  <GlossaryItem term="可写性">决定数据属性能否被赋予新值；关闭它不会自动让属性消失。</GlossaryItem>
+  <GlossaryItem term="访问描述符">用 getter/setter 接管读取和写入的属性规则。</GlossaryItem>
+  <GlossaryItem term="可枚举性">决定属性是否出现在 Object.keys 等常规键列表中。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, this & Object Prototypes, Chapter 3: Objects"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch3.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

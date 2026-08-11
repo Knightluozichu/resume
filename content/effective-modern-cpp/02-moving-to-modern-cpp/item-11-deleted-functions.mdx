@@ -8,6 +8,10 @@ demo: false
 math: false
 sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: emcpp-11
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -16,6 +20,7 @@ import { Callout } from "@/components/mdx/callout";
 import { Attribution } from "@/components/mdx/attribution";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Answer, Exercises } from "@/components/mdx/exercises";
+import { EmcppItem11DeletedFunctionsLab } from "@/components/mdx/effective-modern-cpp/diagrams/item-11-deleted-functions";
 
 <Objectives>
 
@@ -29,7 +34,11 @@ import { Answer, Exercises } from "@/components/mdx/exercises";
 
 Item 11 的原则是 Prefer deleted functions to private undefined ones（优先使用删除函数而非私有未定义函数）。如果某个操作不应存在，最佳契约是在 declaration 上明确 `= delete`，让任何调用者都在语义检查阶段失败。
 
-<Term def="在函数声明末尾写 = delete，声明该函数参与查找但禁止任何 odr-use 或调用。">deleted function</Term>
+<EmcppItem11DeletedFunctionsLab />
+
+<Term def="在函数声明末尾写 = delete，声明该函数参与查找但禁止任何 odr-use 或调用。">
+  deleted function
+</Term>
 
 ```cpp
 class Widget {
@@ -40,7 +49,6 @@ public:
 ```
 
 先预测普通 caller、member 和 friend：三者都不能调用 deleted copy operations，失败发生在 compile time。
-
 
 ## C++98 用 private declaration 模拟不可复制
 
@@ -54,11 +62,15 @@ private:
 };
 ```
 
-<Term def="只声明在 private 区域且故意没有 definition，用 access control 与链接失败模拟禁止调用的函数。">private undefined function</Term>
+<Term def="只声明在 private 区域且故意没有 definition，用 access control 与链接失败模拟禁止调用的函数。">
+  private undefined function
+</Term>
 
 普通 caller 首先被 access control 拒绝；但 class member 与 friend 有 private access，可以通过编译，直到 linker 找不到 definition 才失败。
 
-<Term def="调用在编译阶段被允许，却因没有函数定义在最终链接阶段才暴露的错误。">deferred link failure</Term>
+<Term def="调用在编译阶段被允许，却因没有函数定义在最终链接阶段才暴露的错误。">
+  deferred link failure
+</Term>
 
 这让禁止契约依赖调用者身份，诊断位置也远离错误源。
 
@@ -78,11 +90,15 @@ public:
 };
 ```
 
-<Term def="compiler 在分析调用表达式时直接指出 selected function 已删除，不等待链接阶段。">deleted-call diagnostic</Term>
+<Term def="compiler 在分析调用表达式时直接指出 selected function 已删除，不等待链接阶段。">
+  deleted-call diagnostic
+</Term>
 
 deleted declaration 通常放 public：调用先完成 overload resolution，再得到“use of deleted function”这一直接诊断，而不是较次要的 private-access error。
 
-<Term def="把 deleted declaration 放在 public，使所有调用路径得到一致且面向契约的错误信息。">public deletion contract</Term>
+<Term def="把 deleted declaration 放在 public，使所有调用路径得到一致且面向契约的错误信息。">
+  public deletion contract
+</Term>
 
 即使 member 或 friend 选中该函数，delete 仍禁止使用；权限不能绕过删除状态。
 
@@ -90,7 +106,9 @@ deleted declaration 通常放 public：调用先完成 overload resolution，再
 
 删除函数不是从 candidate set 消失。它仍参与 name lookup 与 overload ranking；如果它是最佳匹配，调用明确失败，不会退回一个较差但可调用的 overload。
 
-<Term def="被删除函数仍作为候选参与匹配，若成为最佳候选则产生编译错误。">deleted candidate selection</Term>
+<Term def="被删除函数仍作为候选参与匹配，若成为最佳候选则产生编译错误。">
+  deleted candidate selection
+</Term>
 
 这项特性使 delete 能建立类型防火墙，而不只是控制 special member functions。
 
@@ -106,7 +124,9 @@ isLucky(true); // bool promotes to int
 isLucky(3.5);  // double converts to int
 ```
 
-<Term def="参数通过 promotion 或 conversion 进入本不应接受该语义的目标 overload。">accidental scalar conversion</Term>
+<Term def="参数通过 promotion 或 conversion 进入本不应接受该语义的目标 overload。">
+  accidental scalar conversion
+</Term>
 
 添加精确 deleted overloads：
 
@@ -117,16 +137,19 @@ bool isLucky(bool) = delete;
 bool isLucky(double) = delete;
 ```
 
-<Term def="为不支持的输入类型声明更精确的 deleted candidate，阻止其转入宽泛 API。">deleted overload firewall</Term>
+<Term def="为不支持的输入类型声明更精确的 deleted candidate，阻止其转入宽泛 API。">
+  deleted overload firewall
+</Term>
 
 `isLucky(true)` 现在对 bool deleted overload 是 exact match；它被选中后立即 compile-time error，而不是退回 int。
-
 
 ## 一个 double 删除重载还能拦截 float
 
 float argument 到 double 是 floating-point promotion，到 int 是 conversion；deleted double candidate 更优，因此也会阻止 float。
 
-<Term def="利用 overload conversion rank，让一个 deleted candidate 覆盖一族可提升到该类型的输入。">conversion-rank firewall</Term>
+<Term def="利用 overload conversion rank，让一个 deleted candidate 覆盖一族可提升到该类型的输入。">
+  conversion-rank firewall
+</Term>
 
 但 long double 到 double 与到 int 的等级可能需要单独审查。公共 API 应通过 compile-fail tests 列出所有禁止类型，不靠猜测 conversion ranking。
 
@@ -150,7 +173,9 @@ public:
 };
 ```
 
-<Term def="通过删除特定 constructor 或 conversion 路径，阻止模糊领域值进入对象。">construction conversion gate</Term>
+<Term def="通过删除特定 constructor 或 conversion 路径，阻止模糊领域值进入对象。">
+  construction conversion gate
+</Term>
 
 还可以删除 rvalue-qualified overload，防止从 temporary owner 返回 view；关键是 deleted signature 必须精准对应禁止路径。
 
@@ -171,7 +196,9 @@ template<>
 void processPointer<char>(char*) = delete;
 ```
 
-<Term def="为 function template 的特定模板参数提供 = delete specialization，禁止该实例。">deleted template specialization</Term>
+<Term def="为 function template 的特定模板参数提供 = delete specialization，禁止该实例。">
+  deleted template specialization
+</Term>
 
 这比在 function body 中 static assertion 更早表达 overload contract，也能让 declaration-only consumers 看到限制。
 
@@ -190,8 +217,9 @@ template<>
 void processPointer<unsigned char>(unsigned char*) = delete;
 ```
 
-<Term def="对 pointee 的 const、volatile、signedness 与字符类别逐项覆盖禁止实例的集合。">pointer specialization matrix</Term>
-
+<Term def="对 pointee 的 const、volatile、signedness 与字符类别逐项覆盖禁止实例的集合。">
+  pointer specialization matrix
+</Term>
 
 遗漏一个 cv 组合会让调用绕过规则，因此应从“支持哪些 semantic pointee types”设计 constraints，而不是零散追加删除。
 
@@ -199,7 +227,9 @@ void processPointer<unsigned char>(unsigned char*) = delete;
 
 member function template 的 explicit specialization 必须声明在 namespace scope，而不是 class scope 的 private 区域；也不能为 specialization 单独赋予 private access。
 
-<Term def="explicit specialization 的声明位置由语言规定，不能通过 class access section 单独隐藏。">specialization scope rule</Term>
+<Term def="explicit specialization 的声明位置由语言规定，不能通过 class access section 单独隐藏。">
+  specialization scope rule
+</Term>
 
 delete 不依赖 access control，因此可在合法 specialization 位置直接表达禁止实例。这是 private undefined idiom 无法等价覆盖的场景。
 
@@ -207,7 +237,9 @@ delete 不依赖 access control，因此可在合法 specialization 位置直接
 
 C++20 concepts 可从 candidate set 约束 supported types；C++11/14 项目则常用 deleted overloads、SFINAE 或 traits。两者诊断语义不同：
 
-<Term def="明确列举少量危险输入时优先 deleted overload，定义广泛支持集合时优先 constraint 的选择原则。">rejection strategy boundary</Term>
+<Term def="明确列举少量危险输入时优先 deleted overload，定义广泛支持集合时优先 constraint 的选择原则。">
+  rejection strategy boundary
+</Term>
 
 - 少量已知危险 implicit conversions：deleted overload 清晰。
 - 支持集合可由 trait/concept 描述：constraint 更可扩展。
@@ -216,7 +248,9 @@ C++20 concepts 可从 candidate set 约束 supported types；C++11/14 项目则�
 
 ## 编译期错误矩阵就是验收物
 
-<Term def="把允许调用编译成功、禁止调用必须失败及诊断原因固定下来的测试集合。">compile-time rejection matrix</Term>
+<Term def="把允许调用编译成功、禁止调用必须失败及诊断原因固定下来的测试集合。">
+  compile-time rejection matrix
+</Term>
 
 1. copy construction/assignment 对 caller、member、friend 都 compile-fail。
 2. int 正常调用，char/bool/double/float 选择 deleted overload。

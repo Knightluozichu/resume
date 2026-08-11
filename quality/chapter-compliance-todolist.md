@@ -1079,209 +1079,209 @@
     - 路径：`content/effective-modern-cpp/00-intro/learning-map.mdx`
 - [x] ✅ **02-moving-to-modern-cpp/item-07-parentheses-vs-braces** — 已修复（2026-08-10，score 71→99，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-07-parentheses-vs-braces.mdx`
-- [ ] 🟡 P3 **04-concurrency/final-review** — 未升级 v2、可视化不足、UX 不足（score 69）
+- [x] ✅ **04-concurrency/final-review** — 已修复（2026-08-10，score 69→99，passed）
     - 路径：`content/effective-modern-cpp/04-concurrency/final-review.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-12-override** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+- [x] ✅ **02-moving-to-modern-cpp/item-12-override** — 已修复（2026-08-10，score 62→96，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-12-override.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-28-reference-collapsing** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+- [x] ✅ **04-rvalue-references/item-28-reference-collapsing** — 已修复（2026-08-10，score 62→97，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-28-reference-collapsing.mdx`
-- [ ] 🟡 P3 **05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda** — 未升级 v2、来源不足、可视化不足、UX 不足（score 62）
+- [x] ✅ **05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda** — 已修复（2026-08-10，score 62→98，passed）
     - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-33-decltype-auto-forward-generic-lambda.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-10-scoped-enums** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **02-moving-to-modern-cpp/item-10-scoped-enums** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-10-scoped-enums.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-11-deleted-functions** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **02-moving-to-modern-cpp/item-11-deleted-functions** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-11-deleted-functions.mdx`
-- [ ] 🟡 P3 **03-smart-pointers/item-19-shared-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **03-smart-pointers/item-19-shared-ptr** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/03-smart-pointers/item-19-shared-ptr.mdx`
-- [ ] 🟡 P3 **03-smart-pointers/item-20-weak-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **03-smart-pointers/item-20-weak-ptr** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/03-smart-pointers/item-20-weak-ptr.mdx`
-- [ ] 🟡 P3 **03-smart-pointers/item-22-pimpl-special-members** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **03-smart-pointers/item-22-pimpl-special-members** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/03-smart-pointers/item-22-pimpl-special-members.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-24-forwarding-vs-rvalue-references** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 61）
+- [x] ✅ **04-rvalue-references/item-24-forwarding-vs-rvalue-references** — 已修复（2026-08-10，score 61→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-24-forwarding-vs-rvalue-references.mdx`
-- [ ] 🟡 P3 **00-deducing-types/item-01-template-type-deduction** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **00-deducing-types/item-01-template-type-deduction** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/00-deducing-types/item-01-template-type-deduction.mdx`
-- [ ] 🟡 P3 **00-deducing-types/item-02-auto-type-deduction** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **00-deducing-types/item-02-auto-type-deduction** — 已修复（2026-08-10，score 60→94，passed）
     - 路径：`content/effective-modern-cpp/00-deducing-types/item-02-auto-type-deduction.mdx`
-- [ ] 🟡 P3 **00-deducing-types/item-04-view-deduced-types** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **00-deducing-types/item-04-view-deduced-types** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/00-deducing-types/item-04-view-deduced-types.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-09-alias-declarations** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **02-moving-to-modern-cpp/item-09-alias-declarations** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-09-alias-declarations.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-16-const-thread-safe** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **02-moving-to-modern-cpp/item-16-const-thread-safe** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-16-const-thread-safe.mdx`
-- [ ] 🟡 P3 **03-smart-pointers/item-18-unique-ptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **03-smart-pointers/item-18-unique-ptr** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/03-smart-pointers/item-18-unique-ptr.mdx`
-- [ ] 🟡 P3 **03-smart-pointers/item-21-make-smart-pointers** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **03-smart-pointers/item-21-make-smart-pointers** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/03-smart-pointers/item-21-make-smart-pointers.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-25-move-rvalue-forward-universal** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **04-rvalue-references/item-25-move-rvalue-forward-universal** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-25-move-rvalue-forward-universal.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-26-avoid-forwarding-overloads** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **04-rvalue-references/item-26-avoid-forwarding-overloads** — 已修复（2026-08-10，score 60→97，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-26-avoid-forwarding-overloads.mdx`
-- [ ] 🟡 P3 **05-lambda-expressions/item-31-avoid-default-capture-modes** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **05-lambda-expressions/item-31-avoid-default-capture-modes** — 已修复（2026-08-10，score 60→97，passed）
     - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-31-avoid-default-capture-modes.mdx`
-- [ ] 🟡 P3 **05-lambda-expressions/item-34-prefer-lambdas-to-std-bind** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **05-lambda-expressions/item-34-prefer-lambdas-to-std-bind** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-34-prefer-lambdas-to-std-bind.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-35-prefer-task-based-programming** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **06-concurrency/item-35-prefer-task-based-programming** — 已修复（2026-08-10，score 60→97，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-35-prefer-task-based-programming.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-37-make-threads-unjoinable** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **06-concurrency/item-37-make-threads-unjoinable** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-37-make-threads-unjoinable.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-38-thread-handle-destructor-behavior** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **06-concurrency/item-38-thread-handle-destructor-behavior** — 已修复（2026-08-10，score 60→96，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-38-thread-handle-destructor-behavior.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-40-atomic-vs-volatile** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **06-concurrency/item-40-atomic-vs-volatile** — 已修复（2026-08-10，score 60→97，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-40-atomic-vs-volatile.mdx`
-- [ ] 🟡 P3 **07-tweaks/item-42-consider-emplacement** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 60）
+- [x] ✅ **07-tweaks/item-42-consider-emplacement** — 已修复（2026-08-10，score 60→98，passed）
     - 路径：`content/effective-modern-cpp/07-tweaks/item-42-consider-emplacement.mdx`
-- [ ] 🟡 P3 **00-deducing-types/item-03-understand-decltype** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **00-deducing-types/item-03-understand-decltype** — 已修复（2026-08-10，score 59→95，passed）
     - 路径：`content/effective-modern-cpp/00-deducing-types/item-03-understand-decltype.mdx`
-- [ ] 🟡 P3 **01-auto/item-05-prefer-auto** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **01-auto/item-05-prefer-auto** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/01-auto/item-05-prefer-auto.mdx`
-- [ ] 🟡 P3 **01-auto/item-06-explicitly-typed-initializer** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **01-auto/item-06-explicitly-typed-initializer** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/01-auto/item-06-explicitly-typed-initializer.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-08-prefer-nullptr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-moving-to-modern-cpp/item-08-prefer-nullptr** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-08-prefer-nullptr.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-13-const-iterators** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-moving-to-modern-cpp/item-13-const-iterators** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-13-const-iterators.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-14-noexcept** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-moving-to-modern-cpp/item-14-noexcept** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-14-noexcept.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-15-constexpr** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-moving-to-modern-cpp/item-15-constexpr** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-15-constexpr.mdx`
-- [ ] 🟡 P3 **02-moving-to-modern-cpp/item-17-special-member-generation** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **02-moving-to-modern-cpp/item-17-special-member-generation** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/02-moving-to-modern-cpp/item-17-special-member-generation.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-23-move-forward** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-rvalue-references/item-23-move-forward** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-23-move-forward.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-27-forwarding-overload-alternatives** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-rvalue-references/item-27-forwarding-overload-alternatives** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-27-forwarding-overload-alternatives.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-29-assume-move-absent-costly-unused** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-rvalue-references/item-29-assume-move-absent-costly-unused** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-29-assume-move-absent-costly-unused.mdx`
-- [ ] 🟡 P3 **04-rvalue-references/item-30-perfect-forwarding-failure-cases** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **04-rvalue-references/item-30-perfect-forwarding-failure-cases** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/04-rvalue-references/item-30-perfect-forwarding-failure-cases.mdx`
-- [ ] 🟡 P3 **05-lambda-expressions/item-32-init-capture-move-into-closures** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **05-lambda-expressions/item-32-init-capture-move-into-closures** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/05-lambda-expressions/item-32-init-capture-move-into-closures.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-36-specify-launch-async** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-concurrency/item-36-specify-launch-async** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-36-specify-launch-async.mdx`
-- [ ] 🟡 P3 **06-concurrency/item-39-void-futures-one-shot-events** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **06-concurrency/item-39-void-futures-one-shot-events** — 已修复（2026-08-10，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/06-concurrency/item-39-void-futures-one-shot-events.mdx`
-- [ ] 🟡 P3 **07-tweaks/item-41-pass-by-value-cheap-move** — 未升级 v2、来源不足、内容深度不足、可视化不足、UX 不足（score 59）
+- [x] ✅ **07-tweaks/item-41-pass-by-value-cheap-move** — 已修复（2026-08-11，score 59→98，passed）
     - 路径：`content/effective-modern-cpp/07-tweaks/item-41-pass-by-value-cheap-move.mdx`
 
 ## you-dont-know-js（42 章 · ❌42 ⚠️0 ✅0）
 
-- [ ] 🔴 P1 **00-guide/ydk-official-learning-map** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+- [x] ✅ **00-guide/ydk-official-learning-map** — 已修复（2026-08-11，score 45→99，passed）
     - 路径：`content/you-dont-know-js/00-guide/ydk-official-learning-map.mdx`
-- [ ] 🔴 P1 **07-review/ydk-official-final-review** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 45）
+- [x] ✅ **07-review/ydk-official-final-review** — 已修复（2026-08-11，score 45→99，passed）
     - 路径：`content/you-dont-know-js/07-review/ydk-official-final-review.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-01-what-is-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-01-what-is-scope** — 已修复（2026-08-11，score 40→97，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-01-what-is-scope.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-02-lexical-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-02-lexical-scope** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-02-lexical-scope.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-03-function-vs-block-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-03-function-vs-block-scope** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-03-function-vs-block-scope.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-04-hoisting** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-04-hoisting** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-04-hoisting.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-05-scope-closures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-05-scope-closures** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-05-scope-closures.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-a-dynamic-scope.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-b-block-scope-polyfill.mdx`
-- [ ] 🔴 P1 **01-volume-one-scope/ydk-scope-appendix-c-lexical-this** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **01-volume-one-scope/ydk-scope-appendix-c-lexical-this** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/01-volume-one-scope/ydk-scope-appendix-c-lexical-this.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-01-this-or-that** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-01-this-or-that** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-01-this-or-that.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-02-this-all-makes-sense** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-02-this-all-makes-sense** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-02-this-all-makes-sense.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-03-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-03-objects** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-03-objects.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-04-mixing-class-objects** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-04-mixing-class-objects** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-04-mixing-class-objects.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-05-prototypes** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-05-prototypes** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-05-prototypes.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-06-behavior-delegation** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-06-behavior-delegation** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-06-behavior-delegation.mdx`
-- [ ] 🔴 P1 **02-volume-one-this/ydk-this-appendix-a-es6-class** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **02-volume-one-this/ydk-this-appendix-a-es6-class** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/02-volume-one-this/ydk-this-appendix-a-es6-class.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-01-types** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-01-types** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-01-types.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-02-values** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-02-values** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-02-values.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-03-natives** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-03-natives** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-03-natives.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-04-coercion** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-04-coercion** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-04-coercion.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-05-grammar** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-05-grammar** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-05-grammar.mdx`
-- [ ] 🔴 P1 **03-volume-two-types/ydk-types-appendix-a-mixed-environment** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **03-volume-two-types/ydk-types-appendix-a-mixed-environment** — 已修复（2026-08-11，score 40→98，passed）
     - 路径：`content/you-dont-know-js/03-volume-two-types/ydk-types-appendix-a-mixed-environment.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-01-now-and-later** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-01-now-and-later** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-01-now-and-later.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-02-callbacks** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-02-callbacks** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-02-callbacks.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-03-promises** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-03-promises** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-03-promises.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-04-generators** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-04-generators** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-04-generators.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-05-program-performance** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-05-program-performance** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-05-program-performance.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-06-benchmarking-tuning** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-06-benchmarking-tuning** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-06-benchmarking-tuning.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-appendix-a-asynquence** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-appendix-a-asynquence** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-appendix-a-asynquence.mdx`
-- [ ] 🔴 P1 **04-volume-two-async/ydk-async-appendix-b-advanced-patterns** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **04-volume-two-async/ydk-async-appendix-b-advanced-patterns** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/04-volume-two-async/ydk-async-appendix-b-advanced-patterns.mdx`
-- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-01-into-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **05-volume-three-up-going/ydk-up-01-into-programming** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-01-into-programming.mdx`
-- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-02-into-javascript** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **05-volume-three-up-going/ydk-up-02-into-javascript** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-02-into-javascript.mdx`
-- [ ] 🔴 P1 **05-volume-three-up-going/ydk-up-03-into-ydkjs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **05-volume-three-up-going/ydk-up-03-into-ydkjs** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/05-volume-three-up-going/ydk-up-03-into-ydkjs.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-01-now-future** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-01-now-future** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-01-now-future.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-02-syntax** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-02-syntax** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-02-syntax.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-03-organization** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-03-organization** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-03-organization.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-04-async-flow-control** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-04-async-flow-control** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-04-async-flow-control.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-05-collections** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-05-collections** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-05-collections.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-06-api-additions** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-06-api-additions** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-06-api-additions.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-07-meta-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-07-meta-programming** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-07-meta-programming.mdx`
-- [ ] 🔴 P1 **06-volume-three-es6/ydk-es6-08-beyond-es6** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 40）
+- [x] ✅ **06-volume-three-es6/ydk-es6-08-beyond-es6** — 已修复（2026-08-11，score 40→99，passed）
     - 路径：`content/you-dont-know-js/06-volume-three-es6/ydk-es6-08-beyond-es6.mdx`
 
 ## introduction-to-algorithms（39 章 · ❌39 ⚠️0 ✅0）
 
-- [ ] 🔴 P1 **01-foundations/01-role-of-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-foundations/01-role-of-algorithms** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/01-foundations/01-role-of-algorithms.mdx`
-- [ ] 🔴 P1 **01-foundations/02-getting-started** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-foundations/02-getting-started** — 已修复（2026-08-11，score 39→97，passed）
     - 路径：`content/introduction-to-algorithms/01-foundations/02-getting-started.mdx`
-- [ ] 🔴 P1 **01-foundations/05-probabilistic-analysis-randomized-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **01-foundations/05-probabilistic-analysis-randomized-algorithms** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/01-foundations/05-probabilistic-analysis-randomized-algorithms.mdx`
-- [ ] 🔴 P1 **04-advanced-design-analysis/15-greedy-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **04-advanced-design-analysis/15-greedy-algorithms** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/04-advanced-design-analysis/15-greedy-algorithms.mdx`
-- [ ] 🔴 P1 **04-advanced-design-analysis/16-amortized-analysis** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **04-advanced-design-analysis/16-amortized-analysis** — 已修复（2026-08-11，score 39→97，passed）
     - 路径：`content/introduction-to-algorithms/04-advanced-design-analysis/16-amortized-analysis.mdx`
-- [ ] 🔴 P1 **05-advanced-data-structures/17-augmenting-data-structures** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **05-advanced-data-structures/17-augmenting-data-structures** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/05-advanced-data-structures/17-augmenting-data-structures.mdx`
-- [ ] 🔴 P1 **05-advanced-data-structures/18-b-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **05-advanced-data-structures/18-b-trees** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/05-advanced-data-structures/18-b-trees.mdx`
-- [ ] 🔴 P1 **06-graph-algorithms/20-elementary-graph-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **06-graph-algorithms/20-elementary-graph-algorithms** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/06-graph-algorithms/20-elementary-graph-algorithms.mdx`
-- [ ] 🔴 P1 **06-graph-algorithms/21-minimum-spanning-trees** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **06-graph-algorithms/21-minimum-spanning-trees** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/06-graph-algorithms/21-minimum-spanning-trees.mdx`
-- [ ] 🔴 P1 **06-graph-algorithms/23-all-pairs-shortest-paths** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **06-graph-algorithms/23-all-pairs-shortest-paths** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/06-graph-algorithms/23-all-pairs-shortest-paths.mdx`
-- [ ] 🔴 P1 **06-graph-algorithms/24-maximum-flow** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **06-graph-algorithms/24-maximum-flow** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/06-graph-algorithms/24-maximum-flow.mdx`
-- [ ] 🔴 P1 **06-graph-algorithms/25-matchings-in-bipartite-graphs** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **06-graph-algorithms/25-matchings-in-bipartite-graphs** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/06-graph-algorithms/25-matchings-in-bipartite-graphs.mdx`
-- [ ] 🔴 P1 **07-selected-topics/26-parallel-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **07-selected-topics/26-parallel-algorithms** — 已修复（2026-08-11，score 39→99，passed）
     - 路径：`content/introduction-to-algorithms/07-selected-topics/26-parallel-algorithms.mdx`
-- [ ] 🔴 P1 **07-selected-topics/27-online-algorithms** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **07-selected-topics/27-online-algorithms** — 已修复（2026-08-11，score 39→98，passed）
     - 路径：`content/introduction-to-algorithms/07-selected-topics/27-online-algorithms.mdx`
-- [ ] 🔴 P1 **07-selected-topics/28-matrix-operations** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
+- [x] ✅ **07-selected-topics/28-matrix-operations** — 已修复（2026-08-11，score 39→98，passed）
     - 路径：`content/introduction-to-algorithms/07-selected-topics/28-matrix-operations.mdx`
 - [ ] 🔴 P1 **07-selected-topics/29-linear-programming** — 缺/多 Objectives、缺/多 Attribution、未升级 v2、来源不足、教学法不足、可视化不足、练习不足、UX 不足、工程结构不足（score 39）
     - 路径：`content/introduction-to-algorithms/07-selected-topics/29-linear-programming.mdx`

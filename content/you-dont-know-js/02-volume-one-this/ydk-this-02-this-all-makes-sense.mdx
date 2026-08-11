@@ -8,7 +8,27 @@ demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch2.md"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-10
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkThis02ThisAllMakesSenseLab } from "@/components/mdx/you-dont-know-js/ydk-this-02-this-all-makes-sense";
+
+<Objectives>
+
+- 能从具体调用表达式定位 call-site，并按 new、显式、隐式、默认的顺序判定 this
+- 能修改一个调用样本，比较方法调用、显式绑定、普通调用与箭头函数的绑定差异
+- 能用最小实验记录绑定丢失、间接引用、装箱或词法 this 的首个偏离点并修复它
+
+</Objectives>
 
 
 ## 直觉：先预测，再运行
@@ -16,6 +36,8 @@ draft: false
 this 绑定按 new、显式、隐式、默认的优先级判定，并受绑定丢失、间接引用、装箱和箭头函数等例外影响；判断必须从调用点开始。
 
 先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+
+<YdkThis02ThisAllMakesSenseLab />
 
 ## 权威目录定位
 
@@ -32,15 +54,17 @@ this 绑定按 new、显式、隐式、默认的优先级判定，并受绑定�
 
 ## 核心概念与状态所有权
 
-。
+<Term def="真正触发函数执行的表达式位置；判断 this 必须从这里开始。">调用点</Term>
 
-。
+<Term def="由 call、apply 或 bind 直接指定函数接收者的绑定方式。">显式绑定</Term>
 
-。
+<Term def="由 obj.method() 的点号左侧对象自动提供接收者的绑定方式。">隐式绑定</Term>
 
-。
+<Term def="没有 new、显式或隐式接收者时，按严格模式等规则得到的绑定。">默认绑定</Term>
 
-。
+<Term def="把方法取出或间接调用后，原本的点号接收者不再随函数值传递。">绑定丢失</Term>
+
+<Term def="箭头函数从创建位置捕获外层 this，不在每次调用时重新动态绑定。">词法 this</Term>
 
 这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
 
@@ -158,6 +182,20 @@ assert stable state and no stale work
 
 ## 常见误区与故障注入
 
+<Callout type="trap" title="陷阱：只看函数定义，不看 call-site">
+  现象：函数写在对象外，就断言 this 一定是全局对象或函数自身。原因：普通函数的 this 在执行时按调用表达式建立，函数声明位置不提供接收者。修法：先圈出 obj.read()、read.call(obj) 或 read()，再按优先级判定。
+</Callout>
+
+<Callout type="trap" title="陷阱：把所有规则同时套用，忽略优先级">
+  现象：看到 call 和 new 同时出现，凭最后一行输出猜哪个对象生效。原因：new、显式、隐式、默认绑定有固定顺序，首个命中规则会停止继续查找。修法：用时间线逐条勾选规则，并记录首个命中点。
+</Callout>
+
+<Callout type="trap" title="陷阱：取出方法后仍以为接收者会跟着函数值走">
+  现象：`const run = obj.read; run()` 仍被预期为 obj.read()。原因：赋值把方法变成普通调用，点号左侧的接收者已经丢失；箭头函数还会改走外层词法 this。修法：恢复点号调用，或使用 `run.call(obj)`，再单独检查箭头例外。
+</Callout>
+
+故障注入只改变一个条件：调用点、调用形式或接收者。先切换可视化中的样本，再只改一行代码；若绑定、输出和规则轨迹同时变化，停止在第一个偏离点，不要把后续结果当成原因。
+
 
 ## 四类样本与验收
 
@@ -178,6 +216,35 @@ assert stable state and no stale work
 
 ## 练习
 
+<Exercises>
+
+1. **问题 1：改写下面的 `read`，让同一个函数分别读到 `alpha` 与 `beta`。** 请标出两个 call-site、接收者和输出。
+
+   ```js
+   function read() {
+     return this.value;
+   }
+   const alpha = { value: "alpha", read };
+   const beta = { value: "beta", read };
+   ```
+
+<Answer question="为什么 alpha.read() 与 beta.read() 能读到不同值？">
+  函数值只保存可复用行为；`alpha.read()` 与 `beta.read()` 是两个不同的调用点，各自用点号左侧对象建立隐式绑定，所以函数体读取到不同的 this.value。
+</Answer>
+
+2. **问题 2：把 `target.read()` 改成 `const run = target.read; run()`，再分别用 `run.call(target)` 和 `run.bind(target)` 修复。** 记录绑定丢失发生在哪里。
+
+<Answer question="为什么取出方法后直接调用会丢失 target？">
+  点号调用携带 target；赋值后 `run()` 变成普通调用，函数值本身不携带原来的接收者。`call` 立即指定 target，`bind` 返回一个固定接收者的新函数，两者都把证据重新接回调用过程。
+</Answer>
+
+3. **问题 3：补全一个构造函数与一个箭头函数样本，验证 new 优先级和词法 this。** 只修改一个调用条件，并写出每次的绑定结果。
+
+<Answer question="为什么 new 和箭头函数不能按同一套动态规则解释？">
+  `new` 在优先级检查中直接建立新实例绑定；箭头函数没有自己的动态 this，而是捕获创建时的外层词法 this。因此前者改变构造调用的接收者，后者会忽略后续 call-site 的动态重绑定。
+</Answer>
+
+</Exercises>
 
 ## 小结
 
@@ -191,6 +258,20 @@ assert stable state and no stale work
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="调用点">真正让函数开始执行的那一处调用语法；判断 this 时先找它。</GlossaryItem>
+  <GlossaryItem term="显式绑定">用 call、apply 或 bind 把目标对象直接交给函数。</GlossaryItem>
+  <GlossaryItem term="隐式绑定">用 obj.method() 调用时，obj 自动成为普通函数的 this。</GlossaryItem>
+  <GlossaryItem term="默认绑定">调用没有提供接收者时，按严格模式等规则得到的后备结果。</GlossaryItem>
+  <GlossaryItem term="绑定丢失">方法被取出后变成普通调用，原来点号左侧的对象不再跟随。</GlossaryItem>
+  <GlossaryItem term="词法 this">箭头函数从外层创建环境捕获的 this，不由当前调用形式重新决定。</GlossaryItem>
+</Glossary>
 
 ## 来源与改编边界
 
+<Attribution
+  adaptedFrom="You Don't Know JS, this & Object Prototypes, Chapter 2: this All Makes Sense Now!"
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/this%20%26%20object%20prototypes/ch2.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

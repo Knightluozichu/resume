@@ -3,52 +3,167 @@ title: "Chapter 17 · Augmenting Data Structures"
 type: C
 section: "CLRS4 · 高级数据结构"
 order: 17
-description: "按CLRS第四版第17章重建动态顺序统计、扩张数据结构的方法与区间树，并验证旋转后的元数据维护。"
+description: "按 CLRS 第四版第 17 章重建动态顺序统计、数据结构扩张方法与区间树，并验证旋转后的元数据维护。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-17
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter17AugmentingDataStructuresLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch17-augmenting-data-structures";
 
-## 从“为什么不为每次rank查询重新中序遍历”开始
+<Objectives>
 
-先预测：一棵平衡搜索树有一百万个节点，要查询key 42是第几小。每次中序遍历需线性时间；若每个节点记录其subtree size，沿一条root-to-node路径就能累计被跳过的节点数。
+- 能为扩张字段写出精确定义、NIL 基值和 child-local recurrence，并区分字段语义与缓存直觉。
+- 能证明插入、删除和旋转后的 metadata 维护成本受控，再用字段授权顺序统计或区间查询剪枝。
+- 能构造一个旋转后字段失真的反例，检查查询正确性、更新路径和 O(log n) 复杂度是否共享同一证书。
 
-不是随手加cache字段。必须给出字段的精确定义、base value、更新与旋转维护规则，并证明新查询依据该字段跳过数据时不会漏解。
+</Objectives>
 
+## 先问：为什么不为每次 rank 查询重新中序遍历？
 
-## 17.1 Dynamic order statistics
+一棵平衡搜索树有一百万个节点，要查询 key 42 是第几小。每次中序遍历都要扫描大量节点；如果每个节点记录 subtree size，沿 root-to-node 路径就能累计被跳过的节点数。
+
+先预测：给节点加一个 cache 字段就能自动得到新查询吗？不能。你需要定义字段表示什么、NIL 表示什么、更新和旋转如何维护它，以及查询为什么可以安全跳过某个 subtree。推进下面的实验，观察 size、max 和错误 depth 字段的证书差异。
+
+<Clrs4Chapter17AugmentingDataStructuresLab />
+
+## 权威目录定位
+
+本章对应 CLRS 第四版第 17 章，官方概念包括：
+
+- augmenting data structures / 数据结构扩张；
+- dynamic order statistics / 动态顺序统计；
+- how to augment a data structure / 扩张数据结构的方法；
+- interval trees / 区间树。
+
+正文是独立教学重构：动态顺序统计用 size 字段支持 SELECT 与 RANK，扩张方法抽象出四步设计和维护条件，区间树用 subtree max 支持重叠搜索，错误字段则用旋转反例标出扩张定理的边界。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：字段值正确一次就代表维护正确">
+
+现象：构造树时 size 或 max 看起来正确，于是直接相信后续插入、删除和旋转也会保持它。
+
+原因：动态结构会改变 child 关系；字段的正确性必须在每个更新路径和每次局部旋转后重新建立。
+
+修复：写出 child-local recurrence、NIL base，并按 child-first 顺序重算受旋转影响的节点，再检查字段语义。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：任何 metadata 都能用扩张定理 O(1) 修复">
+
+现象：把 node depth、全局排名或依赖 ancestors 的字段当成只依赖 children 的字段。
+
+原因：一次旋转可能改变整个 moved subtree 的值；若字段不是 child-local，常数个节点修复无法覆盖所有受影响后代。
+
+修复：先验证字段能否由节点和两个 child 的字段递推；不能就改用路径更新、懒惰标记或另一种数据结构。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：查询可以凭直觉剪掉 subtree">
+
+现象：区间查询看到左子树不方便就走右侧，或者顺序统计没有核对 left.size 就直接跳跃。
+
+原因：剪枝必须由 metadata 的不可能性证明授权；错误剪枝会漏掉答案，而返回一个样例命中不代表完整正确。
+
+修复：把每次 branch 的条件写成字段语义的反证，并区分返回一个答案与枚举全部答案的复杂度。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：duplicate key 的 rank 天然是一个确定整数">
+
+现象：多个节点 key 相同，却没有定义节点全序，直接声称某个 key 的 rank 唯一。
+
+原因：相同 key 可能对应一段 rank 区间；BST 的结构顺序还需要 insertion id 或稳定 tie policy。
+
+修复：把比较键扩展为 key 加唯一标识，或明确 rank 查询返回 first、last 或范围，并让更新和查询使用同一排序合同。
+
+</Callout>
+
+## 核心术语与证据所有权
+
+<Term def="在已有搜索树或其他基础结构上增加字段与查询能力，同时保持原更新操作和复杂度边界的方法。">数据结构扩张</Term> 的核心不是保存更多值，而是让字段、维护和查询共享一份证明。
+
+<Term def="节点子树中所有内部节点的数量；它由左右子树 size 加一得到，可用于计算局部 rank。">子树大小</Term> 使顺序统计查询沿树高下降，而不用重新遍历整棵树。
+
+<Term def="把一个有序树节点映射到其全局序列位置的查询；它在每次向右跨过一个父节点时累加被跳过的左子树。">动态顺序统计</Term> 包含 OS-SELECT 和 OS-RANK 两条互逆的证据路径。
+
+<Term def="对每个节点保存其子树中 interval high 的最大值，用来判断左子树是否仍可能包含重叠区间。">区间最大值</Term> 是区间树安全剪枝的 metadata。
+
+<Term def="通过选择基础结构、定义字段、证明维护和设计查询四步，把额外信息接入原数据结构的过程。">扩张方法</Term> 把工程实现拆成可独立审计的设计义务。
+
+<Term def="在更新或查询中由字段定义推出的必然关系；它允许算法跳过不可能含有答案的节点或子树。">元数据证书</Term> 连接字段语义、branch 条件和复杂度保证。
+
+术语核对顺序是：先定义扩张对象和子树字段，再写扩张方法的维护规则，最后让动态顺序统计或区间最大值授权查询；任何 branch 都必须指向一条元数据证书。
+
+## augmenting data structures / 数据结构扩张
+
+扩张一个数据结构时，按四步设计：
+
+1. 选择支持原始更新和基础查询的 underlying structure；
+2. 定义额外字段、NIL 基值和 child-local recurrence；
+3. 证明 insert、delete 和 rotation 能维护字段且代价受控；
+4. 设计新操作，并证明每个 branch 或 pruning 都由字段语义授权。
+
+如果基础结构是 red-black tree，普通搜索路径有 O(log n) 个节点，路径上的字段可以自底向上更新；fixup 只含 O(log n) 次 recolor 和常数次 rotation。若字段只由节点和 children 的字段决定，一次 rotation 只需重算常数个节点。
+
+以 left rotation 为例，原 x 的 right child y 上升为 subtree root。先按新 children 重算下降的 x，再用更新后的 x 和新 children 重算 y：
+
+$$
+field[x]\leftarrow F(x,x.left,x.right),
+\qquad
+field[y]\leftarrow F(y,y.left,y.right).
+$$
+
+~~~cpp
+void repair_after_left_rotate(Node* x, Node* y) {
+    x->size = x->left->size + x->right->size + 1;
+    y->size = y->left->size + y->right->size + 1;
+}
+~~~
+
+字段 depth 不满足这个局部条件：一次 rotation 可能改变整个 moved subtree 内许多节点的 depth，且 depth 依赖 ancestors 而不是 children。扩张定理不是说任何 metadata 都能 O(1) 修复，而是要求字段语义与基础结构的局部更新相容。
+
+## dynamic order statistics / 动态顺序统计
 
 ### Subtree sizes
 
-以red-black tree为base。每个节点$x$增加`size[x]`，表示以$x$为root的内部节点数；sentinel `NIL`的size为0：
+以 red-black tree 为 base。每个内部节点 x 增加 size[x]，表示以 x 为 root 的内部节点数；sentinel NIL 的 size 为 0：
 
 $$
 size[x]=size[x.left]+size[x.right]+1.
 $$
 
-只依赖两个children，因此沿insert/delete search path可自底向上更新；rotation只改变常数个节点的child关系。
-
+该 recurrence 只依赖两个 children，因此沿 insert/delete search path 可自底向上更新；rotation 只改变常数个节点的 child 关系。
 
 ### Selecting by rank
 
-在节点$x$，其local rank为$r=size[x.left]+1$。若请求$i=r$返回$x$；若$i\lt r$去left；否则去right并把请求改为$i-r$。
+在节点 x，local rank 为 r=size[x.left]+1。若请求 i=r 返回 x；若 i 小于 r 去 left；否则去 right 并把请求改为 i-r。
 
-```text
+~~~text
 OS-SELECT(x, i)
 1  r = x.left.size + 1
 2  if i == r, return x
 3  if i < r, return OS-SELECT(x.left, i)
 4  return OS-SELECT(x.right, i - r)
-```
+~~~
 
-
-每步下降一层，red-black tree高度$O(\log n)$，所以OS-SELECT为$O(\log n)$。调用前必须验证$1\le i\le size[x]$；否则递归可能进入NIL却没有合法答案。
+每步下降一层，red-black tree 高度 O(log n)，所以 OS-SELECT 为 O(log n)。调用前必须验证 1≤i≤size[x]；否则递归可能进入 NIL 却没有合法答案。
 
 ### Computing a node's rank
 
-OS-RANK从$x$开始，初值$r=size[x.left]+1$。向parent上升时，若当前node是right child，则parent及parent的left subtree都排在$x$之前，需加$size[parent.left]+1$：
+OS-RANK 从 x 开始，初值 r=size[x.left]+1。向 parent 上升时，若当前 node 是 right child，则 parent 及 parent 的 left subtree 都排在 x 之前，需加 size[parent.left]+1：
 
 $$
 rank(x)=size[x.left]+1+
@@ -56,8 +171,7 @@ rank(x)=size[x.left]+1+
 (size[y.parent.left]+1).
 $$
 
-
-```cpp
+~~~cpp
 int os_rank(Node* tree, Node* x) {
     int rank = x->left->size + 1;
     for (Node* y = x; y != tree; y = y->parent) {
@@ -66,49 +180,15 @@ int os_rank(Node* tree, Node* x) {
     }
     return rank;
 }
-```
+~~~
 
-循环同样只走tree height。若允许duplicate keys，必须定义节点全序，例如`(key, insertion_id)`，否则“某个key的rank”可能是区间而非单值。
+循环同样只走 tree height。若允许 duplicate keys，必须定义节点全序，例如 key 加 insertion id；否则“某个 key 的 rank”可能是区间而非单值。
 
-## 17.2 How to augment a data structure
-
-### Four design steps
-
-扩张数据结构的方法可分四步：
-
-1. 选择支持原始更新和基础查询的underlying structure。
-2. 定义额外字段及NIL值，写出局部recurrence。
-3. 证明insert、delete和rotation能维护字段且代价受控。
-4. 设计新操作，并证明每次branch或pruning都由字段语义授权。
-
-
-给出通用维护上界。普通BST search path有$O(\log n)$个节点，可在path上更新字段；red-black fixup执行$O(\log n)$次recolor和常数次rotation。每次rotation只需重算旋转涉及的两个node。
-
-以left rotation为例，原$x$的右child $y$升为subtree root。先用新children重算$x$，再重算$y$：
-
-$$
-field[x]\leftarrow F(x,x.left,x.right),
-\qquad
-field[y]\leftarrow F(y,y.left,y.right).
-$$
-
-
-```cpp
-void repair_after_left_rotate(Node* x, Node* y) {
-    x->size = x->left->size + x->right->size + 1;
-    y->size = y->left->size + y->right->size + 1;
-    // The same child-first order works for any child-local field.
-}
-```
-
-字段“node depth”不满足该定理：一个rotation可能改变整个moved subtree内许多节点的depth，且depth依赖ancestors而非children。定理不是说它无法维护，而是不能直接获得常数rotation repair的结论。
-
-
-## 17.3 Interval trees
+## interval trees / 区间树
 
 ### Overlap contract
 
-存closed intervals $i=[i.low,i.high]$。两个closed intervals $i,j$重叠当且仅当：
+存储 closed intervals i=[i.low,i.high]。两个 closed intervals i、j 重叠，当且仅当：
 
 $$
 i.low\le j.high
@@ -116,25 +196,23 @@ i.low\le j.high
 j.low\le i.high.
 $$
 
-
-若业务使用half-open intervals，端点相等不算overlap，应改用严格比较。Endpoint policy必须从存储到查询保持一致。
+若业务使用 half-open intervals，端点相等不算 overlap，应改用严格比较。Endpoint policy 必须从存储到查询保持一致，否则字段 max 的剪枝条件和 overlap 判定会互相矛盾。
 
 ### The max field
 
-每个node $x$保存以$x$为root的所有interval最大high：
+每个 node x 保存以 x 为 root 的所有 interval 最大 high：
 
 $$
 x.max=\max\{x.int.high,\ x.left.max,\ x.right.max\},
 $$
 
-并令`NIL.max`为负无穷。该字段是child-local，扩张定理保证red-black insert/delete仍为$O(\log n)$。
-
+并令 NIL.max 为负无穷。该字段是 child-local，扩张方法保证 red-black insert/delete 仍为 O(log n) 的维护边界。
 
 ### Searching for one overlap
 
-从root开始。若当前interval与query重叠就返回；否则，当left非空且`left.max >= query.low`时去left，因为left仍可能存在high足够大的interval；反之去right。
+从 root 开始。若当前 interval 与 query 重叠就返回；否则，当 left 非空且 left.max 不小于 query.low 时去 left，因为 left 仍可能存在 high 足够大的 interval；反之去 right。
 
-```text
+~~~text
 INTERVAL-SEARCH(T, query)
 1  x = T.root
 2  while x != T.nil and x.int does not overlap query
@@ -143,18 +221,84 @@ INTERVAL-SEARCH(T, query)
 5      else
 6          x = x.right
 7  return x
-```
+~~~
 
+为什么 left.max 小于 query.low 时可以剪掉左子树？因为 left 中每个 interval 的 high 都早于 query.low，任何 interval 都不可能与 query 重叠。这是一条由 max 语义推出的反证，不是路径偏好。
 
-为何去right不会漏掉left解？若`left.max < query.low`，left中每个interval的high都早于query.low，绝无重叠。为何选择left不会错过唯一right解？即使left最终无解，可以证明若right有重叠，则沿所选路径的结构关系保证left方向存在可返回的overlap，或算法之后在相关证明中以BST low-order排除不可能区域。这里目标是返回任意一个overlap，不是枚举全部。
+查询每轮下降一层，时间为 O(log n)。若要报告全部 k 个重叠区间，需要遍历所有仍可能命中的 subtrees，典型输出敏感上界为 O(log n+k)；不能用“返回一个”的路径证明直接宣称完成枚举。
 
-查询每轮下降一层，时间$O(\log n)$。若要报告所有$k$个重叠区间，需要遍历所有仍可能命中的subtrees，典型输出敏感上界为$O(\log n+k)$，不能用“返回一个”的路径证明直接宣称完成枚举。
+## 练习
 
+<Exercises>
+
+1. 为红黑树节点定义 size 字段和 NIL 基值。说明 OS-SELECT 为什么每次只需沿一条 root-to-leaf 路径下降，并指出请求 rank 越界时的处理。
+
+   <Answer>
+
+   定义 size[x]=size[x.left]+size[x.right]+1，NIL.size=0。在节点 x，左子树有 size[x.left] 个节点，所以 x 的局部 rank 是 size[x.left]+1；根据请求与该 rank 的关系只能去 left、返回 x 或去 right 并减去已跳过的 rank。红黑树高度为 O(log n)，因此查询同阶；调用前应检查 rank 至少为 1 且不超过 size[root]，越界应返回无答案或错误。
+
+   </Answer>
+
+2. 一次 left rotation 后，为什么 child-local 的 size 或 max 字段只需重算两个节点，而 depth 字段不能直接套用同一维护结论？
+
+   <Answer>
+
+   rotation 只改变局部 child 关系；先按新 children 重算下降的 x，再用更新后的 x 重算上升的 y，两个节点的 recurrence 就恢复正确。depth 依赖祖先路径，moved subtree 的许多后代都可能同时改变 depth，因此不是 child-local 字段，不能用常数节点修复直接维护。
+
+   </Answer>
+
+3. 对 query=[10,14] 和包含 [3,8]、[8,12]、[15,20] 的区间树，说明 max 字段何时允许剪枝；若改成 half-open interval，端点合同有什么变化？
+
+   <Answer>
+
+   [3,8] 的 high 小于 query.low=10，所以以它为根的子树若 max 也小于 10，就不可能存在 overlap，可以安全剪枝；若 left.max 至少为 10，仍必须进入 left。closed interval 中 [8,10] 与 [10,14] 在端点相等时重叠；half-open 合同则端点相等不重叠，存储、比较和查询条件必须一起改变。
+
+   </Answer>
+
+</Exercises>
+
+## 本章证据清单
+
+交付一个扩张数据结构前，至少留下：
+
+1. underlying structure、基础更新和原始复杂度；
+2. 每个 metadata 的语义、NIL 基值和 child-local recurrence；
+3. insert、delete、recolor 和 rotation 的维护顺序；
+4. 查询每次 branch 或 pruning 的字段证书；
+5. duplicate、端点、空树和 rank 越界等合同；
+6. 更新后字段一致性、查询正确性和复杂度的分离证明；
+7. 一个专门让字段失真的旋转或边界反例。
 
 ## 小结
 
-Chapter 17 Augmenting Data Structures以dynamic order statistics展示`size`如何支持SELECT与RANK，再用how to augment a data structure中的四步法和augmentation theorem概括维护条件。Interval trees以low为BST key、以subtree max high为扩张字段，实现重叠搜索。
+- augmenting data structures / 数据结构扩张要求基础结构、字段语义、维护规则和新查询共享一份证书。
+- dynamic order statistics / 动态顺序统计用 size 支持 OS-SELECT 与 OS-RANK，查询沿树高下降。
+- how to augment a data structure / 扩张数据结构的方法可以拆为选择 base、定义字段、证明维护、设计查询四步。
+- interval trees / 区间树用 subtree max high 授权 overlap search 的安全剪枝。
+- 不是所有字段都能 O(1) 修复：依赖 ancestors 的 depth 字段会被旋转影响整个 moved subtree。
 
-扩张的核心不是多一个字段，而是一个端到端证书：field semantics、sentinel base、path update、rotation repair、query pruning和complexity。任何一环缺失，metadata都可能在结构更新后悄悄失真，或让查询错误跳过含答案的subtree。
+## 术语表
 
+<Glossary>
 
+<GlossaryItem term="数据结构扩张">在已有搜索树或基础结构上增加字段与查询能力，同时保持原更新和复杂度边界的方法。</GlossaryItem>
+<GlossaryItem term="子树大小">以节点为根的内部节点数量，由左右子树 size 加一得到。</GlossaryItem>
+<GlossaryItem term="动态顺序统计">通过 size 字段支持按 rank 选择节点和计算节点全局 rank 的查询能力。</GlossaryItem>
+<GlossaryItem term="区间最大值">节点子树中所有 interval high 的最大值，用于判断左子树是否仍可能重叠。</GlossaryItem>
+<GlossaryItem term="扩张方法">选择基础结构、定义字段、证明维护并设计查询的四步过程。</GlossaryItem>
+<GlossaryItem term="元数据证书">由字段语义推出更新、branch 或 pruning 必然正确的关系。</GlossaryItem>
+
+</Glossary>
+
+## 版本与原书边界
+
+本章依据 CLRS 第四版第 17 章的目录定位与核心论证进行独立教学重写。动态顺序统计、数据结构扩张方法和区间树来自官方主题；交互实验、故障注入、旋转反例、练习答案和证据清单是本项目新增材料。
+
+顺序统计的 rank 合同需要定义 duplicate key 的全序；区间树的查询正确性需要固定 closed 或 half-open endpoint policy。不同 sentinel、旋转实现和字段组合可能需要不同的维护顺序，不能把一个 size 示例未经证明复制到任意 metadata。
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 17: Augmenting Data Structures"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

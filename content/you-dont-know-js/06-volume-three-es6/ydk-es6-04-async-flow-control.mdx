@@ -3,23 +3,46 @@ title: "第 4 章 异步流程控制"
 type: A
 section: "下卷 · 第二部分 ES6 及未来"
 order: 36
-description: "ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。"
+description: "ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器把兑现、拒绝、回灌和清理变成可观察状态机。"
 demo: true
 math: false
 sourceUrl: "https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch4.md"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: ydk-unit-36
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { YdkEs604AsyncFlowControlLab } from "@/components/mdx/you-dont-know-js/ydk-es6-04-async-flow-control";
+
+<Objectives>
+
+- 能解释 Promise 的 pending/fulfilled/rejected 状态如何与生成器的 yield、next 和 throw 连接。
+- 能修改一个最小执行器，处理顺序任务、拒绝、提前结束和 finally 清理，并定位第一个偏离点。
+- 能回答：为什么“异步代码看起来像同步代码”仍不等于没有队列边界，以及如何证明错误和资源不会被吞掉？
+
+</Objectives>
 
 ## 直觉：先预测，再运行
 
-ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。
+异步流程控制要解决的不是“怎样把回调写得更短”，而是怎样把未来值、暂停位置、恢复输入、拒绝原因和最终结果连接成一条可观察的状态链。Promise 表达未来值的结算，生成器表达顺序代码的暂停，执行器负责在两者之间传递控制权。
 
-先预测：只看最后输出而不记录中间绑定与调度顺序，最可能把哪个机制误判成语法偶然？请先写下预期，再切换样本比较首个偏离点。
+把 `await` 或 `.then()` 当成魔法会隐藏两个边界：任务不会在当前调用栈中同步完成，错误也不会自动成为普通返回值。可靠的执行器必须说明谁在等待、谁保存暂停帧、兑现值怎样回到 yield、拒绝怎样进入 catch，以及提前取消时谁负责清理。
+
+先预测：一个生成器依次 yield 两个 Promise，第一项兑现、第二项拒绝时，执行器会调用几次 `next`，哪一步会调用 `throw`，finally 何时执行，最终 Promise 怎样结束？记录预期后切换正常、失败和提前结束样本。
+
+<YdkEs604AsyncFlowControlLab />
 
 ## 权威目录定位
 
-本页对应作者开放的一版仓库目录。目录标题仅用于一对一追踪，正文为独立教学重构：
+本页使用作者公开的一版仓库目录作为结构基线；目录标题用于逐项追踪，正文是独立教学重构。页面不把今天的 async/await 实现或某个运行时的队列细节伪装成原书当年的示例环境。
 
 - Chapter 4: Async Flow Control
 - Promises
@@ -27,97 +50,243 @@ ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代�
 
 本页逐项覆盖 3 个公开目录条目；全系列基线为中文版三卷、英文一版六册、40 个正式单元和 211 个条目。学习地图与总复习是站内导航页，不冒充原书章节。
 
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：Promise 是已经完成的值">
+
+现象：创建 Promise 后立刻读取结果，或把 pending 当成普通变量等待赋值。
+
+原因：Promise 是未来值的状态容器；它只能通过 then/catch/finally 或执行器约定观察结算。
+
+修复：记录 pending、fulfilled、rejected 三种状态，并为成功、拒绝和重复观察分别写断言。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：yield Promise 会自动继续生成器">
+
+现象：生成器 yield 一个 Promise 后，期待生成器自动执行到下一行。
+
+原因：yield 只把控制权和 Promise 交给调用者；必须有执行器在结算后调用 next 或 throw。
+
+修复：显式记录执行器、暂停帧和回灌方向，测试执行器缺失、结算迟到和重复回灌。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：拒绝就是特殊返回值">
+
+现象：把拒绝当成普通值继续算，或在执行器中只实现成功回调而没有错误路径。
+
+原因：拒绝代表异常控制流；生成器需要通过 throw 收到错误，Promise 链还必须保持 rejection 可观察。
+
+修复：让拒绝进入明确的 catch/finally 或执行器出口，验证错误不会被吞掉、重复处理或变成假成功。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：看起来顺序就没有异步边界">
+
+现象：代码按源文件从上到下书写，就认为每个 Promise 回调会在上一行立刻执行。
+
+原因：结算回调进入任务队列；当前调用栈、微任务、计时器和外部 I/O 具有不同的时序和取消边界。
+
+修复：记录同步标记、Promise 回调、计时器和清理事件的顺序，使用日志而不是视觉上的代码顺序证明行为。
+
+</Callout>
+
 ## 核心概念与状态所有权
 
-。
+<Term def="从创建到结算的异步控制过程；它包括未来值、暂停位置、回灌输入、任务队列、错误传播和资源清理。">异步流程</Term> 负责说明控制权何时离开、何时回来以及谁拥有下一步。
 
-。
+<Term def="表示一个未来值的状态对象；它从 pending 走向 fulfilled 或 rejected，结算后状态不可再次改变。">Promise 状态</Term> 是异步契约的外部可观察部分。
 
-。
+<Term def="连接生成器和 Promise 的控制程序；它等待 yield 的 Promise，并根据结算调用 next 或 throw，把结果继续交给生成器。">生成器执行器</Term> 拥有回灌方向和错误出口。
 
-。
+<Term def="生成器在 yield 处暂停并保存局部绑定，之后由 next、return 或 throw 重新进入的过程。">暂停恢复</Term> 让顺序代码可以分段等待，但不会消除队列和取消边界。
 
-。
+<Term def="把 Promise rejection 或执行失败送回生成器暂停点的异常路径；它必须被 catch、finally 或执行器出口明确消费。">错误回灌</Term> 防止失败被伪装成成功值。
 
-这些概念不是孤立名词。每一个都要回答五个问题：输入由谁创建，绑定或状态保存在哪里，哪一步读取或修改它，失败怎样传播，结束后由谁清理。只有五项同时可观察，机制解释才算闭环。
+<Term def="异步工作从 pending 进入最终状态，并通知等待者继续的事件；结算顺序、重复结算和资源清理共同决定最终可观察结果。">Promise 结算</Term> 是执行器推进状态机的触发点。
 
-|   # | 观察量       | 本页判定方式                                              |
-| --: | ------------ | --------------------------------------------------------- |
-|   1 | 异步流程     | 在“生成器 yield 一个 Promise”阶段保存前后状态并核对不变量 |
-|   2 | Promise 链   | 在“执行器等待其结算”阶段保存前后状态并核对不变量          |
-|   3 | 生成器执行器 | 在“兑现值通过 next 回灌”阶段保存前后状态并核对不变量      |
-|   4 | 暂停恢复     | 在“拒绝原因通过 throw 回灌”阶段保存前后状态并核对不变量   |
-|   5 | 错误回灌     | 在“生成器继续到下一暂停点”阶段保存前后状态并核对不变量    |
+这些概念共同回答五个问题：谁创建未来值，谁保存暂停帧，谁决定 next/throw，谁观察队列顺序，谁在成功、失败和取消后清理。每个实验都要保留正常、边界、失败和恢复四类样本。
+
+| 观察量 | 本页判定方式 |
+| --- | --- |
+| 异步流程 | 记录调用栈、任务队列、暂停、恢复和资源生命周期 |
+| Promise 状态 | 区分 pending、fulfilled、rejected 及不可逆转的结算 |
+| 生成器执行器 | 记录 yield 交接、next/throw 决策和最终出口 |
+| 暂停恢复 | 记录局部绑定、输入回灌、return 和提前结束 |
+| 错误回灌 | 检查 rejection、throw、catch、finally 和传播边界 |
+| Promise 结算 | 检查结算顺序、重复结算、观察者和清理结果 |
 
 ## 机制拆解
 
-### 1. 生成器 yield 一个 Promise
+### 1. Chapter 4: Async Flow Control
 
-生成器 yield 一个 Promise不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Chapter 4: Async Flow Control** 把异步控制理解为一个状态机：生成器在 yield 处暂停，Promise 在未来结算，执行器根据结果选择 next 或 throw，生成器继续到下一个暂停点，最终以 done 结果结束。代码是否像同步写法，不改变这些状态转换。
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+最小执行器需要保存当前生成器、处理 yield 出来的值、等待 thenable、区分成功和失败，并在完成或异常时兑现或拒绝外层 Promise。每一个动作都应留下日志，才能证明控制权没有被重复交接或静默丢失。
 
-### 2. 执行器等待其结算
+### 2. Promises
 
-执行器等待其结算不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+**Promises** 表示一个未来值的状态和观察接口。创建后处于 pending，之后只能一次性转为 fulfilled 或 rejected；then/catch/finally 返回新的 Promise，因此链条可以把值转换、错误传播和清理继续交给下一段。
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+const task = new Promise((resolve, reject) => {
+  if (true) resolve(2);
+  else reject(new Error("unreachable"));
+});
 
-### 3. 兑现值通过 next 回灌
+task
+  .then((value) => value + 1)
+  .then(console.log)
+  .catch(console.error);
+```
 
-兑现值通过 next 回灌不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+Promise 不会让工作自动并行，也不会消除执行顺序。结算回调通常在当前调用栈之后运行；测试时要分别观察同步标记、回调标记、拒绝和 finally，避免把“链式写法”误当成“即时执行”。
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+### 3. Generators + Promises
 
-### 4. 拒绝原因通过 throw 回灌
+**Generators + Promises** 组合了两个协议：生成器用 yield 暂停并交给执行器，Promise 在未来提供结算结果。执行器是第三个角色，它决定何时 next、何时 throw，并把最终 done value 兑现给调用者。
 
-拒绝原因通过 throw 回灌不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+```js
+function* workflow() {
+  const first = yield Promise.resolve(2);
+  const second = yield Promise.resolve(first + 3);
+  return second * 2;
+}
+```
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+直接调用 `workflow().next()` 只能得到第一个 Promise，不能自动完成流程。一个可靠执行器要区分“生成器返回了什么”和“Promise 结算了什么”，并在每次交接前记录当前暂停点和待处理任务。
 
-### 5. 生成器继续到下一暂停点
+### 4. 兑现值通过 next 回灌
 
-生成器继续到下一暂停点不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+当 yield 的 Promise fulfilled 时，**生成器执行器** 应调用 `iterator.next(value)`，让 yield 表达式的结果成为生成器内部的普通值。这样顺序代码可以继续计算下一项，而不需要把每个阶段都嵌套在回调中。
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+```js
+function run(generator) {
+  return new Promise((resolve, reject) => {
+    const iterator = generator();
+    function step(method, value) {
+      let result;
+      try {
+        result = iterator[method](value);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      if (result.done) {
+        resolve(result.value);
+        return;
+      }
+      Promise.resolve(result.value).then(
+        (nextValue) => step("next", nextValue),
+        (error) => step("throw", error),
+      );
+    }
+    step("next");
+  });
+}
+```
 
-### 6. done 后兑现总结果
+这里的 `nextValue` 只会在 Promise 兑现后进入下一次 `next`。若生成器已经 done，执行器必须停止继续调用，而不是把最终返回值当作下一项 Promise。
 
-done 后兑现总结果不是口号，而是可执行检查点。输入必须来自上一阶段已经签发的状态；执行时记录当前绑定、接收者、值类型、队列位置或规范版本；输出必须能被下一阶段消费。若本阶段失败，应立即保存首个偏离点，不能让错误状态继续传播。
+### 5. 拒绝原因通过 throw 回灌
 
-结合本章主张来看：ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。 因此本阶段至少要保留一份正常样本和一份反例。两者可以得到相同最终值，但只要中间查找路径、调用点、转换步骤或时间顺序不同，就不能判为同一机制。
+当 yield 的 Promise rejected 时，执行器应调用 `iterator.throw(error)`。生成器可以在暂停点用 try/catch 捕获，也可以让错误继续冒泡到执行器的最终 reject；两条路径都要可观察。
 
-## 目录主题逐项讲解
+```js
+function* protectedWork() {
+  try {
+    yield Promise.reject(new Error("network"));
+    return "unreachable";
+  } catch (error) {
+    return `recovered:${error.message}`;
+  } finally {
+    console.log("cleanup");
+  }
+}
+```
 
-### Chapter 4: Async Flow Control
+错误回灌不是把错误转换成字符串就结束。测试要确认 catch 是否真的恢复、finally 是否执行、执行器是否只处理一次 rejection，以及外层 Promise 的最终状态是否符合调用者契约。
 
-Chapter 4: Async Flow Control在本单元中落到“生成器 yield 一个 Promise”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+### 6. 生成器继续到下一暂停点
 
-### Promises
+每次回灌都可能让生成器 yield 下一项 Promise，于是执行器再次等待并重复流程。这个循环必须有明确的 done 条件、错误出口和取消策略；没有这些边界，执行器可能永远等待或在完成后继续推进。
 
-Promises在本单元中落到“执行器等待其结算”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+```js
+function* sequence() {
+  const a = yield Promise.resolve("a");
+  const b = yield Promise.resolve(`${a}b`);
+  return `${b}c`;
+}
 
-### Generators + Promises
+run(sequence).then(console.log);
+```
 
-Generators + Promises在本单元中落到“兑现值通过 next 回灌”这一观察点。阅读时先标出参与者与状态，再写出执行前、执行中和执行后的差异；随后主动制造空值、重复调用、错误接收者、迟到结果或旧环境能力缺失，验证解释是否仍成立。
+执行轨迹是：第一次 next 得到 Promise，兑现后 next("a")；第二次兑现后 next("ab")；最后生成器返回 `"abc"`，执行器 resolve 外层 Promise。每一步都可以注入拒绝，观察 throw 是否在正确暂停点发生。
+
+### 7. done 后兑现总结果
+
+生成器返回 `{ done: true, value }` 后，执行器应兑现自己的 Promise，并停止后续交接。**Promise 结算** 只发生一次，调用者可以在 then 中取得总结果，在 catch 中取得未处理错误，在 finally 中完成外部清理。
+
+```js
+run(function* () {
+  const value = yield Promise.resolve(4);
+  return value * 2;
+}).then((result) => console.log(result));
+```
+
+如果生成器在完成后仍有未关闭的计时器、网络请求或锁，外层 Promise fulfilled 并不代表资源生命周期正确。生产代码要为取消、超时和进程结束补上清理路径，不能只验证最终数字。
 
 ## 六阶段证据链
 
-本页的可执行链条是：生成器 yield 一个 Promise → 执行器等待其结算 → 兑现值通过 next 回灌 → 拒绝原因通过 throw 回灌 → 生成器继续到下一暂停点 → done 后兑现总结果。正常样本证明主路径，边界样本证明容量与身份，失败样本定位停止点，恢复样本证明旧绑定、旧值、旧任务和旧资源没有污染下一次执行。
+本页的可执行链条是：生成器 yield Promise → 执行器等待结算 → 兑现值通过 next 回灌 → 拒绝原因通过 throw 回灌 → 生成器继续到下一暂停点 → done 后兑现总结果。正常样本证明主路径，边界样本证明多个暂停、迟到结算和提前结束，失败样本定位 rejection 或执行器错误，恢复样本证明旧任务、旧暂停帧和旧资源没有污染下一次执行。
 
+| 阶段 | 输入 | 关键状态 | 输出 |
+| --- | --- | --- | --- |
+| Promise 状态 | 未来任务、resolve/reject | pending、结算、观察者 | 结算信号 |
+| 生成器暂停 | yield 值、局部绑定 | iterator、暂停点、任务 | 待处理 Promise |
+| 执行器等待 | Promise、回调、队列 | 成功/失败分支、当前帧 | next 或 throw 决策 |
+| next 回灌 | fulfilled value | yield 表达式、顺序绑定 | 下一次任务 |
+| throw 回灌 | rejection error | catch、finally、传播 | 恢复或拒绝 |
+| 最终兑现 | done value 或未处理错误 | 完成、取消、清理 | 外层 Promise 结果 |
 
 ## 最小可运行实验
 
-下面的片段只保留本章最小机制。运行前先预测每一行的绑定、类型与输出，再修改一个条件观察首个偏离点：
+下面的片段实现一个只支持 Promise 的最小执行器。运行前先预测每次暂停、回灌和最终结算：
 
 ```js
-async function load() {
-  const first = await Promise.resolve(2);
-  const second = await Promise.resolve(3);
-  return first + second;
+function execute(makeGenerator) {
+  return new Promise((resolve, reject) => {
+    const iterator = makeGenerator();
+    function step(method, input) {
+      let result;
+      try {
+        result = iterator[method](input);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      if (result.done) {
+        resolve(result.value);
+        return;
+      }
+      Promise.resolve(result.value).then(
+        (value) => step("next", value),
+        (error) => step("throw", error),
+      );
+    }
+    step("next");
+  });
 }
-load().then(console.log);
+
+execute(function* () {
+  const first = yield Promise.resolve(2);
+  const second = yield Promise.resolve(first + 3);
+  return second * 2;
+}).then(console.log);
 ```
+
+实验契约是：每个 yield 只交给一个 Promise，兑现只触发一次 next，拒绝只触发一次 throw，done 后 resolve 且不再推进。把第二个 Promise 改为 reject、在生成器中加入 finally、或让迭代器提前 return，分别记录错误、清理和完成边界。
 
 ```yaml
 book: 你不知道的 JavaScript（一版三卷六册）
@@ -132,49 +301,87 @@ cleanup_complete: true
 ```
 
 ```text
-freeze source + runtime + input
-predict bindings + values + call-site + queue
-inject one controlled fault
+freeze generator frame + promise state + queue + cancellation + cleanup
+predict yield, settle, next, throw, done and outer result
+inject one controlled rejection, timeout, early return or duplicate settle
 stop at first divergence
 recover and replay the same sample
-assert stable state and no stale work
+assert one continuation, observable errors and released resources
 ```
-
-## 常见误区与故障注入
-
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                           | 必查证据               | 通过条件                 |
-| ---- | ---------------------------------- | ---------------------- | ------------------------ |
-| 正常 | 规范输入与单次执行                 | 绑定、值、调用点、队列 | 六阶段按预期完成         |
-| 边界 | 空值、重复键、极值或嵌套调用       | 查找终点与类型边界     | 不发生隐式越界           |
-| 失败 | 错误接收者、拒绝、旧提案或迟到结果 | 首个偏离点             | 明确停止、传播或降级     |
-| 恢复 | 修复后重放完全相同输入             | 清理后的状态与任务数   | 无旧绑定、旧任务和旧资源 |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 多个 Promise 依次兑现、生成器正常完成 | yield、next、done、外层结果 | 六阶段按预期完成 |
+| 边界 | 空任务、迟到结算、提前 return、重复观察 | 队列、暂停帧、完成和清理 | 不重复推进、不丢失最终状态 |
+| 失败 | Promise reject、生成器 throw、执行器异常 | throw 回灌、catch、finally、外层 reject | 明确传播并只处理一次 |
+| 恢复 | 修复任务或取消后重放同一样本 | 新队列、暂停帧、资源和最终结果 | 无旧任务、旧错误或旧资源污染 |
 
-本页签发不变量是：**ES6 用 Promise 标准化未来值契约，用生成器暂停与恢复顺序代码；二者结合的执行器正是后来 async 与 await 语义的重要前身。** 最终输出、单次截图或一次性能数字都不能替代作用域查找、值转换、调用绑定、任务顺序和版本状态的完整轨迹。
+本页签发不变量是：**ES6 用 Promise 表示未来值，用生成器保存暂停位置；执行器只在结算后通过 next 或 throw 回灌一次，并在 done、拒绝、取消和 finally 路径上完成可观察的最终清理。**
 
 ## 版本与原书边界
 
-本单元忠实保留原书讨论的 ES6 语境，同时把年度规范、现代浏览器实现和转译工具的差异放入版本栏；后续规范补充不会冒充原书正式分节。
+本单元以 2014 至 2015 年一版目录为结构基线。正文保留原书关于 Promise、生成器和二者组合执行器的主题边界，并用现代可运行示例补充取消、清理、错误观察和队列证据；后续 async/await 规范不会冒充原书当年的实现。
 
-站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已经撤回、替代或标准化后发生变化的能力，本页要求同时写出原书快照和当前状态。
+原书章节讨论 ES6 的异步流程控制。本文增加可重放执行器、四类样本、拒绝回灌和资源清理，这些属于今天的教学与工程重构，不把它们伪装成原书当年的库或运行时行为。
+
+站内示例优先使用今天可运行且语义稳定的写法，但目录清单、章节归属和历史判断仍以作者一版仓库为准。对已标准化、替代或受目标环境影响的能力，本页同时记录历史快照和当前验证条件。
 
 ## 练习
 
+<Exercises>
+
+1. 扩展最小执行器，让第二个 Promise 拒绝时生成器可以 catch 并返回恢复值；记录 next、throw 和 finally 的顺序。
+
+   <Answer>
+
+   在生成器中用 `try/catch/finally` 包住第二个 yield；执行器的 rejection 分支调用 `iterator.throw(error)`。如果 catch 返回恢复值，生成器会继续到 done，外层 Promise fulfilled；无论是否恢复，finally 都必须执行一次。日志应显示第一次 next、拒绝后的 throw、finally 和最终 resolve 的顺序。
+
+   </Answer>
+
+2. 为执行器加入提前结束或取消路径，证明取消后不会继续调用后续 next，也不会留下未释放的资源。
+
+   <Answer>
+
+   设计一个显式的 cancel 信号，在信号触发时调用 `iterator.return()`，并让生成器在 finally 中关闭计时器、请求或锁。取消后忽略迟到 Promise 的 continuation，检查 next 次数、资源计数和外层状态；如果迟到结果仍推进生成器，就说明执行器缺少取消门禁。
+
+   </Answer>
+
+3. 比较 Promise 链、生成器执行器和 async/await 的同一错误样本，说明三者都不能隐藏队列与清理边界。
+
+   <Answer>
+
+   三种写法都应记录任务何时排队、错误在哪里被捕获、finally 何时执行以及外层结果何时结算。Promise 链把错误沿 catch 传播，生成器执行器把 rejection 变成 throw，async/await 把等待表达成语法，但底层仍依赖 Promise 结算和任务队列。若只比较最终字符串而不比较这些轨迹，就不能证明语义等价。
+
+   </Answer>
+
+</Exercises>
 
 ## 小结
 
-- **异步流程**：对应“生成器 yield 一个 Promise”阶段的核心观察量。
-- **Promise 链**：对应“执行器等待其结算”阶段的核心观察量。
-- **生成器执行器**：对应“兑现值通过 next 回灌”阶段的核心观察量。
-- **暂停恢复**：对应“拒绝原因通过 throw 回灌”阶段的核心观察量。
-- **错误回灌**：对应“生成器继续到下一暂停点”阶段的核心观察量。
-- 六阶段机制链已映射到正常、边界、失败与恢复证据。
-- 一版目录与现代规范状态分栏记录，后续变化不会冒充原书章节。
+- Promise 提供不可逆的未来值状态；生成器提供可暂停的顺序执行帧。
+- 执行器等待 yield 的 Promise，并在兑现时调用 next、拒绝时调用 throw。
+- 错误回灌必须经过 catch、finally 或最终 reject，不能静默转成普通值。
+- done 后必须停止推进并兑现总结果；取消、超时和迟到任务仍需要清理契约。
+- async/await 改善表达方式，但没有消除 Promise、队列、错误和资源生命周期边界。
 
 ## 术语表
 
+<Glossary>
 
-## 来源与改编边界
+<GlossaryItem term="异步流程">由未来值、暂停、恢复、任务队列、错误传播和资源清理组成的控制过程。</GlossaryItem>
+<GlossaryItem term="Promise 状态">Promise 从 pending 到 fulfilled 或 rejected 的不可逆状态。</GlossaryItem>
+<GlossaryItem term="生成器执行器">等待生成器 yield 的 Promise，并用 next 或 throw 推进生成器的控制程序。</GlossaryItem>
+<GlossaryItem term="暂停恢复">生成器在 yield 处保存局部状态并由 next、return 或 throw 重新进入的过程。</GlossaryItem>
+<GlossaryItem term="错误回灌">把 Promise rejection 或执行错误通过 throw 送回生成器暂停点的异常路径。</GlossaryItem>
+<GlossaryItem term="Promise 结算">Promise 从 pending 进入最终状态并通知等待者继续的事件。</GlossaryItem>
 
+</Glossary>
+
+<Attribution
+  adaptedFrom={"You Don't Know JS, ES6 & Beyond, Chapter 4: Async Flow Control"}
+  adaptedUrl="https://github.com/getify/You-Dont-Know-JS/blob/1st-ed/es6%20%26%20beyond/ch4.md"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

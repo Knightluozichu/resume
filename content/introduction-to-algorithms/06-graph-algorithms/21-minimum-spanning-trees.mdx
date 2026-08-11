@@ -3,19 +3,101 @@ title: "Chapter 21 · Minimum Spanning Trees"
 type: C
 section: "CLRS4 · 图算法"
 order: 21
-description: "按CLRS第四版第21章重建安全边与割性质，并统一讲解Kruskal和Prim最小生成树算法。"
+description: "按 CLRS 第四版第 21 章重建安全边与割性质，并统一讲解 Kruskal 和 Prim 最小生成树算法。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-21
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter21MinimumSpanningTreesLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch21-minimum-spanning-trees";
 
-## 从“每次选最便宜edge为什么会成环”开始
+<Objectives>
 
-先预测：把所有edges按weight从小到大拿，是否一定得到tree？不一定。若不检查components，三角形的三条cheap edges会形成cycle。安全choice不是“全局最小”四个字，而是“对当前forest某个respecting cut的light crossing edge”。
+- 能解释最小生成树如何用 cut、light edge 和 extendable forest invariant 证明安全选择。
+- 能修改 Kruskal 或 Prim 的伪代码，并分别指出 DSU component 与 frontier key 的作用。
+- 能回答：为什么“每次拿全局最便宜的 edge”不等价于“每次加入一条 safe edge”？
 
-优化的是连接全部vertices的基础设施总成本，不是source到各vertex路径之和。任意spanning tree有$|V|-1$条edges：
+</Objectives>
+
+## 先问：每次选最便宜的边为什么可能成环？
+
+把图想成一组城市和候选道路。目标是让所有城市连通，同时总道路成本尽可能小；不需要让每个城市都沿着离某个起点最近的路线到达。选择一条很便宜的道路之前，要先问它是否会把两个已经连通的区域再次绕成环。
+
+本章解决的问题是：怎样把“便宜”变成可证明的安全选择。没有 component 或 cut 的证据，三角形上的三条低价边会形成 cycle；图不连通时，算法得到的也只是 forest，不能悄悄称作 spanning tree。
+
+先预测：当一条 edge 是当前 crossing edges 中最轻的，它是否一定能加入某棵 MST？选择一个模式推进下面的实验，观察割性质、Kruskal 和 Prim 如何给同一个 safe edge 不同的操作路径。
+
+<Clrs4Chapter21MinimumSpanningTreesLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 21 章，官方概念包括：
+
+- minimum spanning trees / 最小生成树；
+- growing a minimum spanning tree / 生成最小生成树；
+- Kruskal / Kruskal 算法 / Kruskal算法；
+- Prim / Prim 算法 / Prim算法。
+
+正文是独立教学重构：先固定无向连通加权图的合同，再以 cut property 证明 safe edge，最后分别解释 Kruskal 如何维护 forest、Prim 如何维护 frontier。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：全局最小 edge 就一定安全">
+
+现象：把所有 edge 按 weight 排序，看到最小 edge 就无条件加入。
+
+原因：它可能连接同一 component 的两个 vertex，形成 cycle；全局 weight 没有说明当前 forest 的 cut。
+
+修复：Kruskal 先用 DSU 判断 endpoints 是否属于不同 component；更一般地，回到某个 respecting cut 的 light crossing edge 证书。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Prim 的 key 是从 root 累加的距离">
+
+现象：把 `key[v]` 当作 root 到 `v` 的路径总 weight，按 shortest path 的方式更新。
+
+原因：Prim 的 key 只表示一条连接当前 tree 与 `v` 的最轻 crossing edge，不是 source distance。
+
+修复：只在 `v` 仍在 frontier 且 `w(u,v)` 小于当前 key 时更新 parent 和 key；不要累加 root path。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：少于 V−1 条边也可以叫 MST">
+
+现象：输入图 disconnected，算法返回了几棵 component 内的树，却把结果标成 spanning tree。
+
+原因：spanning 要求覆盖全部 vertex 且连通；disconnected input 不存在 spanning tree。
+
+修复：明确 API 返回 minimum spanning forest，或拒绝 disconnected input；同时检查 edge 数、连通性和 component 数。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：weight 相等时只允许一个答案">
+
+现象：测试把某一棵 MST 当作唯一正确数组，换了 tie order 就判错。
+
+原因：equal weights 可能产生多棵总 weight 相同的 MST；唯一的是最优值，不一定是 edge witness。
+
+修复：固定 deterministic tie policy 以便复现，或验证无环、连通、总 weight 与 safe-choice 证据，而不是比较单一排列。
+
+</Callout>
+
+## minimum spanning trees / 最小生成树
+
+### 图的合同和目标
+
+<Term def="覆盖同一无向连通图全部 vertex、边数为 V−1 且总 weight 最小的 spanning tree">最小生成树</Term>（MST）针对 undirected、connected、weighted graph。任意 spanning tree 都有 `|V|−1` 条 edges，目标函数是树中 edge weight 的总和，而不是从某个 source 出发的路径和。
 
 $$
 |T|=|V|-1,
@@ -23,12 +105,13 @@ $$
 w(T)=\sum_{e\in T}w(e).
 $$
 
+这个式子在说：MST 同时受结构约束和权重目标约束；连通但含 cycle 的 edge set 不是 tree。
 
-## 21.1 Growing a minimum spanning tree
+negative weights 没问题，因为安全性只依赖 weight 的相对顺序。equal weights 可以有多个 MST；实现需要明确 tie policy 和多重 edge 的 identity。
 
-### The extendable forest invariant
+### growing a minimum spanning tree / 生成最小生成树
 
-维护edge set $A$，invariant是“存在一棵MST $T$使$A\subseteq T$”。初始$A=\varnothing$显然成立；每次只加safe edge。
+维护 edge set `A`，并保持 <Term def="存在某一棵 MST 包含当前已选 edge set 的不变量">可延展森林</Term> 不变量：存在一棵 MST `T` 使 `A` 是 `T` 的子集。初始 `A` 为空时显然成立；每次加入 safe edge 后，不变量继续成立。
 
 ```text
 GENERIC-MST(G, w)
@@ -39,34 +122,21 @@ GENERIC-MST(G, w)
 5  return A
 ```
 
+### cut 与 crossing edge
 
-### Cuts and light edges
+把 vertex 集合分成 `(S, V−S)` 就得到一个 cut。若当前 `A` 没有 edge crossing 这个 cut，就说 cut respects `A`。所有从 `S` 到 `V−S` 的 edges 构成 crossing edges，其中 weight 最小者是 light edge。
 
-$(S,V-S)$ respects $A$，若$A$中没有edge crossing该cut。对cut的light edge是所有crossing edges中weight最小者，equal minimum可以有多个。
+<Term def="把 vertex 分成两侧且不切断当前 forest 的边界；它用于授权一条 crossing edge">割</Term>的关键性质是：如果 cut respects `A`，那么该 cut 的任意 light crossing edge 都是 safe，可以加入某一棵仍然包含 `A` 的 MST。
 
-$$
-\delta(S)=\{(u,v)\in E:u\in S,\ v\notin S\}.
-$$
+证明用 exchange argument：若 light edge `(u,v)` 不在某棵包含 `A` 的 MST `T` 中，把它加入 `T` 会产生唯一 cycle；cycle 中还有另一条 crossing edge `(x,y)`。由于 `(u,v)` 是 light edge，`w(u,v)` 不大于 `w(x,y)`；移除 `(x,y)` 得到 weight 不增的新 spanning tree `T'`，因此 `T'` 仍是 MST，并包含 `A` 加上这条 safe edge。
 
+<Term def="在某个 respecting cut 的 crossing edges 中 weight 最小的边；cut property 证明它可以安全加入">安全边</Term>不是“全局最便宜”的同义词，而是拥有 cut 证书的 light edge。Kruskal 和 Prim 的差别在于它们每一步维护的 cut 不同。
 
-由cut property保证。设$A$被MST $T$包含，light crossing edge $(u,v)$不在$T$。把它加入$T$会产生唯一cycle；cycle必有另一条crossing edge $(x,y)$。因为$(u,v)$是light：
+## Kruskal 与 Prim
 
-$$
-w(u,v)\le w(x,y).
-$$
+### Kruskal
 
-移除$(x,y)$得到spanning tree $T'$，其weight不大于$T$；$T$已经minimum，所以$T'$也是MST且包含$A\cup\{(u,v)\}$。
-
-
-这份exchange proof解释了negative weights完全可接受：比较只依赖相对weight。Equal weights可产生多个MST，safe edge不必唯一；deterministic tie order只决定witness。
-
-
-## 21.2 The algorithms of Kruskal and Prim
-
-### Kruskal algorithm
-
-让$A$保持forest。每个component定义一个cut；当前最轻的跨component edge是该cut的light edge，因此safe。
-
+<Term def="按 weight 扫描 edges，并用并查集跳过成环边的最小生成树算法">Kruskal</Term> 让 `A` 始终保持 forest。把 edges 按 weight 排序，依次检查当前 edge 的两个 endpoints 是否属于不同 component；不同就加入并 union，相同就跳过。
 
 ```cpp
 vector<Edge> kruskal(Graph g) {
@@ -83,20 +153,18 @@ vector<Edge> kruskal(Graph g) {
 }
 ```
 
+每个 component 都可以看作一个正在被维护的区域；跨 component 的当前最轻 edge 对应某个 respecting cut，所以是 safe。排序成本为 `O(E log E)`，DSU 操作总成本近似为 `O(E α(V))`，整体通常由排序主导。
 
-Sorting需要$O(E\log E)=O(E\log V)$；union-find $O(E\alpha(V))$，整体由sort主导。若weights为小整数可用counting/radix等更快排序，但cycle test仍需要components。
+### Prim
 
-Disconnected graph不会得到spanning tree，而得到minimum spanning forest。API应选择reject disconnected input，或明确返回每个component的MSF；不能把少于$V-1$ edges的结果标成MST。
+Prim 从一个 root 开始维护一棵 tree。此时 cut 固定为当前 tree vertices `S` 与外部 `V−S`；对每个外部 vertex `v`，`key[v]` 是已知连接 `v` 与 `S` 的最轻 crossing edge weight，`parent[v]` 保存对应端点。
 
-### Prim algorithm
-
-的cut固定为当前tree vertices $S$与其余vertices。对每个$v\notin S$，`key[v]`是已知连接$v$到$S$的最轻edge weight，`parent[v]`记录该edge。
-
+<Term def="Prim 用来表示某个外部 vertex 连接当前 tree 的最轻 crossing edge weight">frontier key</Term>每轮从优先队列取最小 key 的 vertex，并把对应 parent edge 加入 tree；扫描新 vertex 的邻接边后更新仍在 frontier 中的 keys。
 
 ```text
 MST-PRIM(G, w, r)
 1  for each vertex u: key[u] = infinity, parent[u] = NIL
-2  key[r] = 0; put all vertices in a min-priority queue Q
+2  key[r] = 0; put all vertices in min-priority queue Q
 3  while Q is not empty
 4      u = EXTRACT-MIN(Q)
 5      for each v adjacent to u
@@ -105,29 +173,69 @@ MST-PRIM(G, w, r)
 8              DECREASE-KEY(Q, v, w(u,v))
 ```
 
+`key` 不是 root 到 vertex 的 shortest path distance；它只记录一条 crossing edge 的 weight。binary heap 加 adjacency list 的典型成本为 `O(E log V)`；dense graph 配 matrix 和简单数组可以达到 `O(V²)`。
 
-每次extract-min选当前cut的light crossing edge，故safe。Binary heap与adjacency list给$O(E\log V)$；Fibonacci heap理论上为$O(E+V\log V)$。Dense matrix配简单array可为$O(V^2)$，并可能优于heap的常数与memory overhead。
+### minimum spanning trees 的终态证书
 
-Root只影响MST witness，最优weight不变。`key`不是source shortest distance：它只记录一条crossing edge的weight，不累加root path。
-
-
-### Final certificate
-
-完成时$A$应有$V-1$ edges、无cycle且connected。仅重算weight不足以证明minimum；算法trace应为每个accepted edge保留其respecting cut或等价component/frontier witness。
+当 `A` 有 `V−1` 条 edges、无 cycle 且覆盖全部 vertices 时，`A` 是 spanning tree；若每条加入的 edge 都有 safe-choice 证书，它就是 MST。生产验证还需要检查 edge identity、integer overflow、floating-point tie policy 与输入是否 disconnected。
 
 $$
 A\text{ acyclic and }|A|=|V|-1
-\quad\Longrightarrow\quad
-A\text{ is a spanning tree}
+\Longrightarrow A\text{ is a spanning tree}.
 $$
 
-前提是vertices都在同一connected component。生产验证还需检查edge确实来自input、多重edge identity、integer overflow与floating-point tie policy。
-
+这个式子在说：无环和边数给出 tree 结构，但 minimum 仍需要每次选择的 cut 或等价 exchange 证据。
 
 ## 小结
 
-Chapter 21 Minimum Spanning Trees先以growing a minimum spanning tree建立extendable forest invariant、cut、light edge与safe-edge exchange theorem。Kruskal按global edge order扩张多个components，Prim用priority queue扩张一棵tree；二者选择不同cut，却共享同一正确性定理。
+- minimum spanning trees 要求无向连通图上的 spanning tree 具有最小总 weight。
+- growing a minimum spanning tree 维护可延展森林，并用 cut property 证明 safe edge。
+- Kruskal 按全局 weight 顺序扫描，用 DSU 跳过同 component 的 cycle edge。
+- Prim 维护当前 tree 与外部的 frontier key，选择该 cut 的 light edge。
+- negative 或 equal weights 不会破坏理论；disconnected graph 只能返回 forest 或显式报错。
 
-MST允许negative和equal weights，但要求undirected connected input。交付结果应包含$V-1$ edge tree、weight、tie policy与safe-choice trace；disconnected时明确返回forest或报错，不能静默把不完整forest称作tree。
+<Exercises>
 
+1. 割性质推导题：设当前 forest `A` 不切过 cut `(S,V−S)`，跨 cut 的 edges weight 为 2、5、5。说明 weight 为 2 的 edge 为什么能安全加入；如果有两条 weight 为 5 的 edge，结论有什么变化？
 
+   <Answer>
+
+   weight 为 2 的 edge 是该 cut 的 light crossing edge，cut property 保证它 safe：存在一棵包含 `A` 加上它的 MST。两条 weight 为 5 的 edge 都可能是 safe，结论不要求 witness 唯一；deterministic tie policy 只负责让实现可复现。
+
+   </Answer>
+
+2. 改 Demo 代码题：把上方实验的默认模式改为 `kruskal`，将 `AC:3` 标为 skipped，并在 DSU component 相同时显示“跳过成环边”。不要只改按钮文案，还要同步当前结论和图中的边颜色。
+
+   <Answer>
+
+   默认 state 改为 `useState<Mode>("kruskal")`，当 `find(u) === find(v)` 时保持 edge 为 warning 色并显示 skipped；只有不同 component 才显示 success 色、加入 forest 并调用 union。顶部结论应从 safe 切换为 accept / skip 语义。
+
+   </Answer>
+
+3. 比较题：Prim 的 `key[v]` 和单源最短路的 distance label 有什么不同？如果 graph disconnected，从任意 root 启动 Prim 会得到什么，API 应如何声明？
+
+   <Answer>
+
+   `key[v]` 是连接当前 tree 与外部 `v` 的一条最轻 crossing edge weight，不累加 root path；shortest-path distance label 则表示从 source 到 `v` 的路径总 weight。若 graph disconnected，Prim 只能覆盖 root 所在 component，结果是 spanning forest 的一个 component，API 应拒绝输入或明确返回 minimum spanning forest，而不能称为完整 MST。
+
+   </Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="最小生成树">覆盖全部 vertex 且没有 cycle、总 edge weight 最小的 spanning tree。</GlossaryItem>
+<GlossaryItem term="可延展森林">当前已选 edges 仍能被某一棵 MST 包含的不变量；它让下一条 safe edge 有延伸空间。</GlossaryItem>
+<GlossaryItem term="割">把 vertex 分成两侧的边界；不切过当前 forest 的 cut 可以用来证明 crossing edge 安全。</GlossaryItem>
+<GlossaryItem term="安全边">由 respecting cut 的 light crossing edge 证书授权加入当前 forest 的 edge。</GlossaryItem>
+<GlossaryItem term="frontier key">Prim 中外部 vertex 连接当前 tree 的最轻 edge weight，不是 root path distance。</GlossaryItem>
+<GlossaryItem term="Kruskal">按 weight 扫描 edges，用并查集只合并不同 component 的最小生成树算法。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 21: Minimum Spanning Trees"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

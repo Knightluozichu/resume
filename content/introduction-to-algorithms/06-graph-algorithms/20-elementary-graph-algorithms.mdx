@@ -3,49 +3,124 @@ title: "Chapter 20 · Elementary Graph Algorithms"
 type: C
 section: "CLRS4 · 图算法"
 order: 20
-description: "按CLRS第四版第20章重建图表示、广度优先、深度优先、拓扑排序与强连通分量。"
+description: "按 CLRS 第四版第 20 章重建图的表示、广度优先、深度优先、拓扑排序与强连通分量，并把每种结论绑定到可复核的状态证据。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-20
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter20ElementaryGraphAlgorithmsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch20-elementary-graph-algorithms";
 
-## 从“同一张图为何会有两种完全不同的遍历形状”开始
+<Objectives>
 
-先预测：从A出发，BFS先访问所有一跳neighbors，形成按distance展开的layers；DFS则沿一个neighbor走到尽头再回退，形成嵌套时间区间。它们读取同一graph，差别来自frontier policy与算法要证明的问题。
+- 能解释图的表示如何改变空间、邻居枚举和边查询的成本，并声明 directed 与 weighted 合同。
+- 能修改 BFS、DFS、拓扑排序或 SCC 的伪代码，指出 parent、distance、timestamp 或 transpose 的作用。
+- 能回答：为什么同一张有向图要在转置图上按第一遍 finish 顺序再跑一次 DFS，才能安全提取强连通分量？
 
-的“线性”指$O(V+E)$，前提是adjacency-list让每个vertex与edge只被常数次检查。若使用matrix，扫描neighbors本身可能变为$\Theta(V^2)$。
+</Objectives>
 
+## 先问：同一张图为什么会有不同的遍历形状？
 
-## 20.1 Representations of graphs
+把图想成一张城市地图：路口是地点，路是连接。你可以先把离起点一条路能到的地点全部看完，也可以沿一条路走到尽头再回头；两种路线都看同一张地图，却留下不同的证据。
 
-### Lists and matrices
+本章解决的问题是：如何存储连接、如何系统地发现地点，以及如何从发现顺序推出最短距离、依赖顺序或互相可达的群组。没有明确的边合同，反向边、重复边和权重会让“访问一次”失去意义。
 
-必须先声明directed、undirected、weighted、parallel edges和self-loops语义。
+先预测：从起点出发，应该先展开同一距离的所有节点，还是先沿一条分支走到底？选择一个模式并推进下面的实验，观察它留下的是 frontier、时间区间、完成顺序还是转置证据。
 
-Adjacency list空间：
+<Clrs4Chapter20ElementaryGraphAlgorithmsLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 20 章，官方概念包括：
+
+- elementary graph algorithms / 基本图算法；
+- representations of graphs / 图的表示；
+- breadth-first search / 广度优先搜索；
+- depth-first search / 深度优先搜索；
+- topological sort / 拓扑排序；
+- strongly connected components / 强连通分量。
+
+正文是独立教学重构：先固定图与边的表示合同，再把 BFS、DFS、拓扑序与 SCC 各自的证明载体画出来；所有算法都保留对每个 vertex 和 adjacency entry 的有限次扫描。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：把 adjacency list 与 matrix 的成本混成一个 O(V+E)">
+
+现象：不管图是稀疏还是稠密，都直接写遍历成本为 `O(V+E)`，却没有说明如何枚举邻居。
+
+原因：list 枚举一个 vertex 的邻居与 degree 相关；matrix 扫描一整行则可能每次都花 `Θ(V)`。
+
+修复：先声明表示，再分别报告空间、邻居枚举和 edge membership 的成本；不要把矩阵的逐行扫描省略掉。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：BFS 发现节点后还反复改 parent">
+
+现象：节点已入队却被后来的边再次改 parent，最后得到的路径不再对应首次达到它的最短层。
+
+原因：BFS 的距离证书来自 FIFO frontier；首次发现时，所有更短层已经处理完。
+
+修复：WHITE 节点第一次发现时立即设置 distance 和 parent，之后只扫描它，不重新选择父节点。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：看到一条边就宣布图能拓扑排序">
+
+现象：输出了一个看似合理的排列，却没有检查 directed cycle。
+
+原因：拓扑序只对 DAG 存在；DFS 看到 GRAY ancestor 的 back edge 就已经给出环证据。
+
+修复：在生成 reverse finish order 前先处理 back edge；验证器检查每条 directed edge 的起点位置严格早于终点。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：在原图上跑第二遍 SCC DFS">
+
+现象：第二遍 DFS 从一个 component 沿 outgoing edge 吞并了另一个本不互达的 component。
+
+原因：Kosaraju 的第二遍需要在 transpose 上按第一遍 finish 时间递减顺序启动。
+
+修复：构造 `Gᵀ`，按第一遍的 decreasing finish order 启动第二遍；每棵第二遍 DFS tree 才是一个 SCC。
+
+</Callout>
+
+## elementary graph algorithms / 基本图算法
+
+### 图和边的合同
+
+图算法前必须先声明：graph 是 directed 还是 undirected，edge 是否 weighted，是否允许 parallel edge 与 self-loop，以及遍历时是否按 logical edge 去重。相同的 vertex 集合在不同合同下可能代表不同问题。
+
+<Term def="描述 vertex、edge、方向、权重与表示方式的完整约定">图的表示</Term>是算法的输入边界。它决定空间和访问方式，但不决定 BFS、DFS 或 SCC 的证明本身。
+
+### representations of graphs / 图的表示
+
+<Term def="为每个 vertex 保存相邻 vertex 列表的表示，适合枚举实际存在的边">邻接表</Term>对有向图的空间是 `Θ(V+E)`；无向边 `{u,v}` 通常在 `u` 和 `v` 的列表中各出现一次。枚举 `u` 的邻居需要 `Θ(deg(u))`，所有列表扫描一次就是 `Θ(V+E)`。
+
+邻接矩阵空间是 `Θ(V²)`，判断某条边是否存在可在 `O(1)` 完成，但枚举一行的成本是 `Θ(V)`。稠密图或频繁 pair query 可以偏好矩阵；稀疏图的遍历通常偏好邻接表。
+
+对无向图，如果要让每条 logical edge 只处理一次，需要 edge id 或固定的 vertex 顺序；否则同一条边的两个 adjacency incidences 会被误计为两条边。
 
 $$
-\Theta(V+E)\text{ for directed graphs},
-\qquad
-\Theta(V+2E)=\Theta(V+E)\text{ for undirected graphs}.
+\text{adjacency-list space}=\Theta(V+E),\qquad
+\text{adjacency-matrix space}=\Theta(V^2).
 $$
 
-Undirected edge $\{u,v\}$通常在$u$与$v$的lists各出现一次；遍历时若要每条logical edge只处理一次，需要edge id或次序过滤。
+这个式子在说：表示不是实现细节，而是决定遍历成本模型的第一项选择。
 
+## breadth-first search / 广度优先搜索
 
-Adjacency matrix占$\Theta(V^2)$，edge membership为$O(1)$，适合dense graph或频繁pair query。List枚举$u$ neighbors为$\Theta(deg(u))$，但判断特定edge可能线性于degree，除非额外hash/index。
-
-
-Transpose $G^T$反转每条directed edge；adjacency lists可在$O(V+E)$重建。Weighted graph把neighbor entry扩为`(v,weight)`，但BFS shortest-path结论只适用于所有edge等成本的unweighted metric。
-
-
-## 20.2 Breadth-first search
-
-### FIFO layers
-
-维护WHITE、GRAY、BLACK lifecycle。WHITE未发现；发现时立即设distance与parent并enqueue为GRAY；出队扫描完全部neighbors后变BLACK。
+<Term def="使用先进先出队列逐层发现 vertex 的遍历，适合无权边的最短距离">广度优先搜索</Term>（BFS）维护 WHITE、GRAY、BLACK 三种状态。起点 distance 为 0；发现邻居时立即设置 `distance = parent.distance + 1` 并入队；出队后扫描完全部邻居才变 BLACK。
 
 ```text
 BFS(G, s)
@@ -60,107 +135,117 @@ BFS(G, s)
 9      color u BLACK
 ```
 
-
-在任意edge $(u,v)$上，source shortest distance满足：
+FIFO 队列保证队首节点所在层不晚于队尾节点。若 edge `(u,v)` 连接两个可达节点，则真实最短距离满足：
 
 $$
 \delta(s,v)\le\delta(s,u)+1.
 $$
 
-BFS queue中vertices距离最多相差1；当$v$首次由$u$发现时，所有更短layer已入队或处理，故$d[v]=d[u]+1=\delta(s,v)$。首次发现后不再改parent，形成breadth-first tree。
+这个式子在说：沿一条边最多只增加一层；BFS 首次发现 `v` 时，前面所有更短层都已经被处理，因此 `d[v] = δ(s,v)`。
 
+parent 指针形成 breadth-first tree。打印路径时从目标沿 parent 回到 source，再反转；不可达 vertex 保持 infinity 和 NIL。邻接表实现总成本为 `O(V+E)`，因为每个 vertex 最多入队一次、每个 adjacency entry 扫描一次。
 
-打印path时沿parents从target回到source再reverse。Unreachable vertex保持infinity和NIL。Adjacency-list BFS为$O(V+E)$：每个vertex最多enqueue一次，每个adjacency entry扫描一次。
+## depth-first search / 深度优先搜索
 
-## 20.3 Depth-first search
-
-### Discovery and finish times
-
-也生成forest。WHITE首次进入时记录$d[u]$并置GRAY；所有edges扫描完，置BLACK并记录$f[u]$。
+<Term def="沿一条分支递归深入、完成后回退，并记录发现与完成时间的遍历">深度优先搜索</Term>（DFS）在首次进入 vertex 时记录 discovery time 并置 GRAY；所有 outgoing adjacency 扫描完后置 BLACK 并记录 finish time。它得到的是 DFS forest，而不是按距离分层的树。
 
 ```cpp
-void dfs_visit(Vertex u) {
+void dfsVisit(Vertex u) {
     color[u] = GRAY;
     discover[u] = ++time;
-    for (Vertex v : adjacency[u])
+    for (Vertex v : adjacency[u]) {
         if (color[v] == WHITE) {
             parent[v] = u;
-            dfs_visit(v);
+            dfsVisit(v);
         }
+    }
     color[u] = BLACK;
     finish[u] = ++time;
 }
 ```
 
-Parenthesis theorem说明任意vertices $u,v$的interval $[d[u],f[u]]$与$[d[v],f[v]]$要么disjoint，要么一个完整包含另一个；包含关系恰对应DFS forest ancestor：
+任意两个 vertex 的时间区间要么互不相交，要么一个完整包含另一个；完整包含关系恰好对应 DFS forest 中的 ancestor 关系：
 
 $$
-u\text{ is an ancestor of }v
-\iff
-d[u]\lt d[v]\lt f[v]\lt f[u].
+u\text{ is ancestor of }v
+\iff d[u]\lt d[v]\lt f[v]\lt f[u].
 $$
 
+这个式子在说：一个分支从打开到关闭的时间窗会包住它递归发现的后代。
 
-Directed DFS edges分tree、back、forward、cross。扫描到GRAY ancestor产生back edge；图有directed cycle当且仅当DFS存在back edge。Undirected DFS只有tree与back类别，且两个adjacency incidences不能误算成两个logical edge。
+在 directed graph 中，遇到 GRAY ancestor 是 back edge，说明存在 directed cycle；遇到 WHITE 是 tree edge，遇到 BLACK 可能是 forward 或 cross edge。递归实现的 call stack 最坏为 `O(V)`，大图可改用显式 stack，但必须保存下一个 neighbor index 才能保持 finish 语义。
 
+## topological sort / 拓扑排序
 
-DFS同样$O(V+E)$。Recursive实现还需考虑call-stack depth最坏$O(V)$；大图可用显式stack并保存“下一个neighbor index”，否则pop/push顺序可能改变finish time语义。
+<Term def="对 DAG 的 vertex 排列，使每条 directed edge 都从较早位置指向较晚位置">拓扑序</Term>只对 DAG 存在。DFS 在 vertex finish 时把它放到列表前端，等价于按 finish time 递减排序。
 
-## 20.4 Topological sort
+对每条 edge `(u,v)`，合法结果必须满足 `position(u)` 小于 `position(v)`。如果 DFS 发现 `v` 是 GRAY ancestor，就存在 back edge，图有环，不能生成拓扑序。
 
-### Reverse finish order
+拓扑序通常不唯一：neighbor iteration 顺序和 tie policy 会改变 witness。验证器不应只比较一个固定数组，而应检查每个 vertex 恰好出现一次，并逐条检查 edge 方向。
 
-只对DAG存在。运行DFS，在每个vertex finish时prepend到list，等价于按$f[u]$递减排序。
+## strongly connected components / 强连通分量
 
-对每条DAG edge $(u,v)$：
+<Term def="有向图中任意两个 vertex 互相可达的最大等价类">强连通分量</Term>（SCC）把 mutual reachability 压缩成 component。Kosaraju 的两遍 DFS 是：
 
-$$
-f[u]\gt f[v],
-\qquad
-position(u)\lt position(v).
-$$
+1. 在 `G` 上运行 DFS，记录 finish times。
+2. 构造 transpose `Gᵀ`，把每条 directed edge 反向。
+3. 按第一遍 finish time 递减顺序，在 `Gᵀ` 上启动 DFS。
+4. 第二遍的每棵 DFS tree 就是一个 SCC。
 
-若DFS从$u$看到WHITE $v$，$v$先finish；若$v$已BLACK，finish也早于$u$；若$v$GRAY则是back edge，说明graph不是DAG。
+把每个 SCC 收缩成一个节点得到 condensation graph。它必是 DAG：如果 component 之间存在环，它们就能互相到达，原本应属于同一个 SCC。第一遍的 finish 顺序保证第二遍从 transpose condensation 的合适 source component 开始，DFS 不会越过仍未输出的 component。
 
-
-Topological order通常不唯一，neighbor iteration与tie policy会影响witness。验证器不应只比较一个expected array，而应检查每个vertex恰好一次且每条edge位置递增。
-
-
-## 20.5 Strongly connected components
-
-### Two DFS passes
-
-是mutual reachability的equivalence classes。Kosaraju算法：
-
-1. 在$G$运行DFS并记录finish times。
-2. 构造transpose $G^T$。
-3. 按第一遍finish time递减顺序，在$G^T$运行DFS。
-4. 第二遍每棵DFS tree恰为一个SCC。
-
-```text
-STRONGLY-CONNECTED-COMPONENTS(G)
-1  DFS(G) to compute finish times
-2  build transpose GT
-3  order vertices by decreasing finish time from the first pass
-4  DFS(GT) in that order
-5  output each second-pass DFS tree as one SCC
-```
-
-
-为何顺序有效？把SCC收缩成component graph $G^{SCC}$，它必为DAG；若components之间成cycle，它们实际彼此可达，应属于同一SCC。第一遍finish order让第二遍总从transpose condensation中的source component开始，DFS无法越到尚未输出的其他component，却能覆盖本SCC全部vertices。
-
-$$
-G^{SCC}\text{ is a DAG}.
-$$
-
-
-Transpose不改变每个SCC内部的mutual reachability，只反转component之间edges。若第二遍误在原$G$上运行，可能沿outgoing component edge吞并多个SCC。两遍总时间与构造transpose均为$O(V+E)$。
-
+transpose 不改变 SCC 内部的 mutual reachability，只反向 component 之间的 edge。因此两遍 DFS、构造 transpose 和扫描所有 adjacency entry 的总成本仍为 `O(V+E)`。
 
 ## 小结
 
-Chapter 20 Elementary Graph Algorithms从representations of graphs建立$V+E$成本模型。Breadth-first search用FIFO layers求unweighted shortest paths；depth-first search产生nested timestamps和edge classification；topological sort按reverse finish order排列DAG；strongly connected components用$G$与$G^T$两遍DFS分解directed graph。
+- elementary graph algorithms 先由图与边的合同决定空间和邻居访问成本。
+- representations of graphs 在 adjacency list 的稀疏遍历与 matrix 的常数边查询之间做取舍。
+- breadth-first search 以 FIFO frontier 证明无权最短距离；depth-first search 以时间区间证明祖先和环。
+- topological sort 用 reverse finish order 排列 DAG；back edge 表示不能排序的环。
+- strongly connected components 在 `G` 与 `Gᵀ` 上运行两遍 DFS，得到 condensation DAG 的互达分组。
 
-这些算法共同依赖“每个vertex发现一次、每个adjacency entry扫描常数次”。正确性证书则各不相同：BFS是distance frontier，DFS是parenthesis intervals，topological sort是每条edge向前，SCC是condensation DAG与transpose pass。
+<Exercises>
 
+1. 表示选择题：给出一个稀疏有向图和一个需要频繁判断边是否存在的查询。分别选择 adjacency list 或 matrix，并写出空间、邻居枚举和单边查询的成本。
 
+   <Answer>
+
+   稀疏图通常选择 adjacency list，空间为 `Θ(V+E)`，枚举 `u` 的邻居为 `Θ(deg(u))`；若单边查询非常频繁且希望 `O(1)` 判断，可以选择 matrix，空间为 `Θ(V²)`，枚举邻居则要扫描整行 `Θ(V)`。选择必须同时说明图密度和主要操作。
+
+   </Answer>
+
+2. 改 Demo 代码题：把上方实验的默认模式改成 `bfs`，再把 source 的两个邻居调整为不同距离的节点。你需要同步修改节点 distance、队列说明和 `aria-label` 中的模式描述，不能只替换标题。
+
+   <Answer>
+
+   默认 state 改为 `useState<Mode>("bfs")`，并让 source 的直接邻居标记为 distance 1、它们发现的节点标记为 distance 2；队列文案要按 FIFO 顺序更新。若只改标题而不改距离层，图示仍然不能证明 BFS 的首次发现结论。
+
+   </Answer>
+
+3. 推导题：一张有向图的第一遍 DFS finish order 为 `A, B, C, D`（从大到小）。解释 SCC 第二遍为什么要在 `Gᵀ` 上按这个顺序启动；如果误用 `G`，哪种跨 component 边会造成吞并？
+
+   <Answer>
+
+   第一遍 finish 顺序把 condensation graph 的 component 关系编码进排序；在 `Gᵀ` 上从递减顺序启动时，每次 DFS 会先完整覆盖一个可互达 component，不会沿错误方向越过尚未输出的 component。若在原图 `G` 上运行，outgoing component edge 可能把当前 component 推向另一个只能单向到达的 component，结果把多个 SCC 错误合并。
+
+   </Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="图的表示">把 vertex、edge 以及方向和权重等合同编码成列表或矩阵的方式。</GlossaryItem>
+<GlossaryItem term="邻接表">每个 vertex 对应一份相邻 vertex 列表；它只存实际存在的边，适合稀疏图遍历。</GlossaryItem>
+<GlossaryItem term="广度优先搜索">用队列按距离一层层发现节点的算法；首次发现时记录的距离是无权最短距离。</GlossaryItem>
+<GlossaryItem term="深度优先搜索">沿一条分支深入到底再回退的算法；发现时间和完成时间会形成嵌套区间。</GlossaryItem>
+<GlossaryItem term="拓扑序">DAG 的一种线性排列，使每条有向边都从前面的节点指向后面的节点。</GlossaryItem>
+<GlossaryItem term="强连通分量">有向图中任意两点互相可达的一组节点；把每组收缩后不会产生环。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 20: Elementary Graph Algorithms"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

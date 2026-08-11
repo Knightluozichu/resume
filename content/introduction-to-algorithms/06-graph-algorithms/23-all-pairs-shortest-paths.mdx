@@ -3,45 +3,129 @@ title: "Chapter 23 · All-Pairs Shortest Paths"
 type: C
 section: "CLRS4 · 图算法"
 order: 23
-description: "按CLRS第四版第23章重建最短路径与矩阵乘法、Floyd-Warshall及稀疏图Johnson算法。"
+description: "按 CLRS 第四版第 23 章重建所有结点对最短路径、min-plus 乘法、Floyd-Warshall 与 Johnson 算法，并绑定可复核的路径证据。"
 demo: true
 math: true
 sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: clrs4-23
 draft: false
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Attribution } from "@/components/mdx/attribution";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Clrs4Chapter23AllPairsShortestPathsLab } from "@/components/mdx/introduction-to-algorithms/clrs4-ch23-all-pairs-shortest-paths";
 
-## 从“一次运行为什么不够回答所有source”开始
+<Objectives>
 
-先预测：有$n$个vertices，每个source都要到其余vertices的distance。对每个source单独Bellman-Ford可行却昂贵；若graph dense，直接在$n\times n$ matrix上共享subproblems更自然。APSP的关键是选“path允许多少edges”或“允许哪些intermediate vertices”为state。
+- 能用边数上界、中间顶点集合和势函数分别解释 min-plus、Floyd-Warshall 与 Johnson 的状态不变量。
+- 能修改一段 APSP 代码，处理 diagonal、infinity、predecessor 和 negative-cycle contract，并用一条 path witness 验证结果。
+- 能回答：为什么 dense graph 常选 Floyd-Warshall，而 sparse graph 可以用 Johnson 在 reweight 后重复运行 Dijkstra？
 
-输出distance matrix $D=(d_{ij})$。假定不存在negative-weight cycle；否则受该cycle影响的ordered pairs没有finite optimum。
+</Objectives>
 
+## 先问：一张 distance matrix 为什么不能只填数字？
 
-## 23.1 Shortest paths and matrix multiplication
+设有向加权图中有多个 source。对每个 source 单独运行单源最短路当然能得到一行结果，但实现还必须说明 diagonal、不可达值、负权边和负权环的含义。否则矩阵看似完整，实际无法判断某个 finite value 是否有 path witness。
 
-### Paths with bounded edge count
+先预测：如果把“允许的边数”或“允许的 intermediate vertex 集合”写进状态，哪些重复子问题可以共享？切换下面的实验，观察 min-plus 乘法、Floyd-Warshall、Johnson 以及负环故障如何留下不同证据。
 
-也称min-plus product。Weight matrix $W=(w_{ij})$定义：
+<Clrs4Chapter23AllPairsShortestPathsLab />
+
+## 权威目录定位
+
+本章对齐 CLRS 第四版第 23 章，官方概念包括：
+
+- all-pairs shortest paths / 所有结点对最短路径；
+- shortest paths and matrix multiplication / 最短路径与矩阵乘法；
+- Floyd-Warshall algorithm / Floyd-Warshall算法；
+- Johnson's algorithm / Johnson算法。
+
+正文是独立教学重构：先固定 APSP 的输出合同，再用 min-plus 和中间顶点 DP 解释稠密图路线，最后用势函数把稀疏图上的负权边转换为可运行 Dijkstra 的非负边。每个结论都保留 diagonal、triangle inequality 或 predecessor path 等可复核证据。
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="陷阱：把单源最短路逐行运行就当作 APSP 规格">
+
+现象：输出一个 distance matrix，却没有声明 infinity、diagonal 或负权环时的结果。
+
+原因：APSP 不只是重复调用；所有 ordered pairs 必须共享同一套不可达和故障语义。
+
+修复：先写 input/output contract，再说明每个 finite pair 的 path witness；检测到 negative cycle 时拒绝矩阵，或明确 affected pairs 的语义。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：把 min-plus 乘法误当成普通乘法">
+
+现象：矩阵相乘时使用乘法和加法，或把中间点的选择漏掉。
+
+原因：路径串接对应 weight 相加，候选路径之间对应取最小值；这不是普通线性代数的运算。
+
+修复：把 `⊗` 定义为 `min_k(left[i][k] + right[k][j])`，同时写清楚矩阵的 diagonal 与 infinity 初始化。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Floyd-Warshall 更新顺序与状态定义不一致">
+
+现象：循环顺序随意交换后仍声称得到同一个中间顶点 DP 结果，或在原地更新时无法解释已更新值。
+
+原因：外层 `k` 代表当前允许加入的 intermediate vertex 集合；inner loop 必须围绕这个阶段推进。
+
+修复：保持 `k` 在最外层，写出“不经过 k / 经过 k”的 recurrence，并用 `d[k][k] < 0` 检测负环。
+
+</Callout>
+
+<Callout type="trap" title="陷阱：Johnson 重权后忘记恢复原始距离">
+
+现象：Dijkstra 得到的 reweighted distance 直接作为答案，含负权边的样例出现系统性偏差。
+
+原因：势函数给每条同端点 path 加了同一个常数，但这个常数必须在输出时抵消。
+
+修复：保存 `h`，对每个 pair 使用 `d(u,v) = d̂(u,v) − h(u) + h(v)`；同时逐条验证 reweighted edge nonnegative。
+
+</Callout>
+
+## all-pairs shortest paths / 所有结点对最短路径
+
+### 输出合同与可复核证据
+
+<Term def="对每个 ordered pair (u,v) 求最短路径距离，并统一处理不可达与负环语义的问题">全点对最短路</Term>（all-pairs shortest paths）输出距离矩阵 `D`，其中 `D[u][v]` 是从 `u` 到 `v` 的最小 path weight。初始化时 `D[u][u] = 0`；没有路径的 pair 为 infinity；若存在可影响该 pair 的 negative cycle，就不能把它报告成 finite optimum。
+
+一个发布级结果至少应满足：diagonal 合同明确；每个 finite pair 有 predecessor 或 split witness；unreachable pair 没有 parent；并且所有端点满足 triangle inequality：
 
 $$
-w_{ij}=
-\begin{cases}
-0,&i=j,\\
-w(i,j),&(i,j)\in E,\\
-\infty,&\text{otherwise}.
-\end{cases}
+d_{ij} \le d_{ik}+d_{kj}.
 $$
 
-令$l_{ij}^{(m)}$为从$i$到$j$使用至多$m$ edges的minimum path weight。Extension recurrence：
+这个不等式表示从 `i` 到 `k` 再到 `j` 不会比最优 `i` 到 `j` 更短。若某条边 `(u,v)` 存在，则还应有 `d[u][v] ≤ w(u,v)`；验证器可以沿 predecessor 在有限步内回到 source，并检查每条 edge 的 weight tightness。
+
+### infinity 与 negative-cycle contract
+
+infinity 不能参加普通整数加法：`INF + negative` 可能溢出并制造伪造的短路。实现应在加法前判断 operand 是否可达，或采用带保护的 `safeAdd`。<Term def="总 weight 为负、可被反复绕行并破坏 finite shortest-path optimum 的 cycle">负权环</Term>的检测也不能只看最终某个 pair 的数值：要记录哪些 source 可以到达 cycle、哪些 target 可以从 cycle 到达，从而标记 affected pairs。
+
+## shortest paths and matrix multiplication / 最短路径与矩阵乘法
+
+### 以边数为上界的状态
+
+<Term def="用最小值替代加法、用加法替代乘法来表达路径串接与候选比较的矩阵运算">min-plus 乘法</Term>把两个矩阵的组合定义为：
 
 $$
-l_{ij}^{(m)}
-=
-\min_{1\le k\le n}
-\{l_{ik}^{(m-1)}+w_{kj}\}.
+(A \otimes B)_{ij}=\min_k\{A_{ik}+B_{kj}\}.
 $$
 
+令 `W` 为权重矩阵：diagonal 为 0，有边处为 edge weight，其余为 infinity。令 `L[m][i][j]` 表示至多使用 `m` 条边从 `i` 到 `j` 的最小 weight，则：
+
+$$
+L^{(m)}_{ij}=\min_k\{L^{(m-1)}_{ik}+W_{kj}\}.
+$$
+
+代码的关键不是三层循环本身，而是每一层都必须保留“至多多少条边”的语义：
 
 ```cpp
 Matrix extend_shortest_paths(const Matrix& left, const Matrix& right) {
@@ -49,137 +133,129 @@ Matrix extend_shortest_paths(const Matrix& left, const Matrix& right) {
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
             for (int k = 0; k < n; ++k)
-                out[i][j] = min(out[i][j], left[i][k] + right[k][j]);
+                if (left[i][k] != INF && right[k][j] != INF)
+                    out[i][j] = min(out[i][j], left[i][k] + right[k][j]);
     return out;
 }
 ```
 
-从$L^{(1)}=W$逐次extension到$L^{(n-1)}$需$n-2$次$O(n^3)$ multiplication，总$O(n^4)$。任何无negative cycle shortest path可取simple path，最多$n-1$ edges。
+没有 negative cycle 时，simple shortest path 至多使用 `V−1` 条边；逐次扩展需要 `O(V^4)`，重复平方则用 `O(log V)` 次 min-plus multiplication，时间为 `O(V^3 log V)`。这条路线适合把“路径长度上界”作为实验变量，也清楚展示了矩阵密度带来的 `V^3` 代价。
 
-Repeated squaring计算：
+## Floyd-Warshall algorithm / Floyd-Warshall算法
 
-$$
-L^{(2m)}=L^{(m)}\otimes L^{(m)},
-$$
+### 中间顶点动态规划
 
-只需$O(\log n)$轮，时间$O(n^3\log n)$。
-
-
-## 23.2 The Floyd-Warshall algorithm
-
-### Intermediate-vertex dynamic programming
-
-编号vertices为$1,\ldots,n$。令$d_{ij}^{(k)}$为从$i$到$j$、所有internal vertices只来自$\{1,\ldots,k\}$的minimum。
-
-Shortest path要么不用$k$，要么在simple path中使用$k$并分成$i$到$k$与$k$到$j$两段：
+<Term def="按编号逐步扩大允许出现的 internal vertex 集合并原地更新距离的算法">中间顶点 DP</Term>令 `d[k][i][j]` 表示从 `i` 到 `j` 且 internal vertices 只来自前 `k` 个顶点的最小距离。第 `k` 阶段的路径要么不经过 `k`，要么拆成 `i → k` 与 `k → j`：
 
 $$
-d_{ij}^{(k)}
-=
-\min\{d_{ij}^{(k-1)},
-d_{ik}^{(k-1)}+d_{kj}^{(k-1)}\}.
+d^{(k)}_{ij}=\min\{d^{(k-1)}_{ij},d^{(k-1)}_{ik}+d^{(k-1)}_{kj}\}.
 $$
 
+因此实现可写成：
 
 ```cpp
 for (int k = 0; k < n; ++k)
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
-            d[i][j] = min(d[i][j], d[i][k] + d[k][j]);
+            if (d[i][k] != INF && d[k][j] != INF)
+                d[i][j] = min(d[i][j], d[i][k] + d[k][j]);
 ```
 
+`k` 必须是最外层，因为它代表状态阶段；原地更新安全，是因为使用 `k` 的候选只是在当前阶段允许的集合内加入一次 `k`。时间为 `O(V^3)`，距离空间为 `O(V^2)`。若最终某个 `d[k][k] < 0`，说明可从 `k` 回到自身并形成 negative cycle；再结合可达性即可标记 affected pairs。
 
-In-place update安全，因为stage $k$对row/column $k$的值不会因允许$k$作为intermediate而获得更优simple path；读取已更新值不会改变recurrence result。时间$O(V^3)$、distance空间$O(V^2)$。
+### 路径恢复与传递闭包
 
-若结束后某个$d_{ii}\lt0$，存在reachable-from-itself negative cycle。若需标记所有affected pairs，还要传播哪些$i$可到该cycle且cycle可到$j$。
+若经 `k` 更新 `i` 到 `j`，可以记录 predecessor 或 split matrix；每次恢复都要保留固定 tie policy，避免 zero-weight cycle 让 parent loop 无界。与 distance 同步的 predecessor 表、边存在检查和 tightness 检查，构成 path witness。
 
-### Reconstructing paths
-
-可与distance同步更新。若经$k$改进$i$到$j$，令$\pi_{ij}=\pi_{kj}$；也可保存split matrix并递归输出$i\to k$和$k\to j$。
-
-
-Equal shortest paths需fixed tie policy，避免zero-weight cycles造成parent loop。验证器应沿parents在最多$V$步内到达source，并检查edge存在与weight tightness。
-
-### Transitive closure
-
-使用：
+把加法和最小值替换为逻辑或与，就得到 transitive closure：
 
 $$
-t_{ij}^{(k)}
-=
-t_{ij}^{(k-1)}
-\lor
-(t_{ik}^{(k-1)}\land t_{kj}^{(k-1)}).
+t^{(k)}_{ij}=t^{(k-1)}_{ij}\lor(t^{(k-1)}_{ik}\land t^{(k-1)}_{kj}).
 $$
 
+若业务把 length-0 path 视为可达，diagonal 初始为 true；若只接受 nonempty path，则必须在合同中改写 diagonal 语义，不能让初始化细节偷偷改变答案。
 
-Initial diagonal通常为true表示length-0 path。若业务只接受nonempty reachability，需要调整diagonal contract。
+## Johnson's algorithm / Johnson算法
 
-## 23.3 Johnson's algorithm for sparse graphs
+### 势函数与重权
 
-### Reweighting without changing shortest paths
+<Term def="由 Bellman-Ford 距离构造、用于把可能为负的 edge weight 变为非负的函数">势函数</Term> `h` 通过新增 source `q` 和从 `q` 到每个顶点的零权边获得。运行 Bellman-Ford：若发现 negative cycle，APSP 没有统一的 finite answer；否则 `h(v)` 等于 `q` 到 `v` 的距离。
 
-允许negative edges但不允许negative cycles。
-
-新增vertex $q$，向每个$v\in V$连weight 0 edge；运行Bellman-Ford得到：
-
-$$
-h(v)=\delta(q,v).
-$$
-
-若检测negative cycle则APSP无finite solution。否则reweight：
+<Term def="用 h(u) 与 h(v) 抵消端点势能差、保持路径次序但改变单条边权重的变换">重权</Term>定义为：
 
 $$
 \widehat w(u,v)=w(u,v)+h(u)-h(v).
 $$
 
-Triangle inequality $h(v)\le h(u)+w(u,v)$保证$\widehat w(u,v)\ge0$，可运行Dijkstra。
-
-
-```text
-JOHNSON(G)
-1  add q and zero-weight edges q to every vertex
-2  run Bellman-Ford from q; reject if a negative cycle exists
-3  set h(v) = distance from q
-4  reweight every edge: w_hat(u,v) = w(u,v) + h(u) - h(v)
-5  for each source u, run Dijkstra using w_hat
-6  recover d(u,v) = d_hat(u,v) - h(u) + h(v)
-```
-
-对path $p=\langle v_0,\ldots,v_k\rangle$，potential terms telescope：
+Bellman-Ford 给出的 triangle inequality `h(v) ≤ h(u)+w(u,v)` 保证 `ŵ(u,v) ≥ 0`，所以每个 source 都可以运行 Dijkstra。对 path `p = ⟨v₀,…,vₖ⟩`，中间势能会 telescope：
 
 $$
-\widehat w(p)
-=w(p)+h(v_0)-h(v_k).
+\widehat w(p)=w(p)+h(v_0)-h(v_k).
 $$
 
-同一ordered endpoints的所有paths都加同一常数，最短path次序不变。
-
-
-恢复original distances：
+同一 ordered pair 的所有 paths 加上同一个常数，最短 path 的顺序不变；运行 Dijkstra 后必须恢复：
 
 $$
 d(u,v)=\widehat d(u,v)-h(u)+h(v).
 $$
 
-Binary heap实现为$O(VE\log V)$量级；Fibonacci heap可给$O(VE+V^2\log V)$，加一次$O(VE)$ Bellman-Ford。Sparse graph比Floyd的$O(V^3)$更有吸引力；dense graph通常选择Floyd以获得简单连续memory access。
+### 稀疏图的选择与验证
 
+Johnson 的典型实现先花 `O(VE)` 跑 Bellman-Ford，再对每个 source 运行 Dijkstra。binary heap 下常见复杂度量级为 `O(VE log V)`；与 Floyd-Warshall 的 `O(V^3)` 相比，稀疏图往往更有吸引力，稠密图则通常选择连续矩阵上的 Floyd-Warshall。
 
-### Cross-checking the result
-
-APSP输出可独立验证：
-
-1. $d_{ii}=0$，除非报告negative-cycle semantics。
-2. 对所有$i,j,k$满足$d_{ij}\le d_{ik}+d_{kj}$。
-3. 每个finite pair的predecessor path存在、weight等于$d_{ij}$。
-4. Unreachable pair为infinity且无parent。
-5. Johnson的reweighted edges全部nonnegative，recovery equation逐pair成立。
-
+发布前逐 pair 验证四件事：reweighted edge 全部 nonnegative；恢复公式成立；finite pair 的 predecessor path 存在且 weight 等于 `d(u,v)`；unreachable pair 为 infinity 且没有 parent。复杂度结论只有在 graph density、heap 和 infinity arithmetic 已声明时才有意义。
 
 ## 小结
 
-Chapter 23 All-Pairs Shortest Paths以shortest paths and matrix multiplication展示min-plus algebra与edge-count state；Floyd-Warshall algorithm按intermediate set做$O(V^3)$ DP，并可扩展到predecessor matrix与transitive closure。Johnson's algorithm为sparse graphs构造nonnegative reweighting，再从每个source运行Dijkstra。
+- all-pairs shortest paths / 所有结点对最短路径首先是输出合同：diagonal、infinity、negative cycle 和 path witness 都必须明确。
+- shortest paths and matrix multiplication / 最短路径与矩阵乘法用 min-plus 和边数上界共享路径子问题。
+- Floyd-Warshall algorithm / Floyd-Warshall算法按 intermediate vertex 集合做 `O(V^3)` DP，并能扩展到 predecessor 与 transitive closure。
+- Johnson's algorithm / Johnson算法用势函数完成 reweight，再对每个 source 运行 Dijkstra 并恢复原始距离。
 
-三条路线都要求明确negative-cycle contract、infinity arithmetic和path witness。Distance matrix不是孤立数字表；diagonal、all-pairs triangle inequalities、predecessor tightness以及Johnson recovery共同构成可独立复核的certificate。
+<Exercises>
 
+1. 状态设计题：给定一个没有 negative cycle 的有向图，说明 `L[m][i][j]` 的语义、min-plus recurrence，以及为什么 `m = V−1` 足以覆盖 finite shortest path。
 
+   <Answer>
+
+   `L[m][i][j]` 表示至多使用 `m` 条边从 `i` 到 `j` 的最小 weight；每个候选在最后一次串接处选择中间顶点 `k`，所以是 `min_k(L[m−1][i][k] + W[k][j])`。没有 negative cycle 时可以删除重复顶点而不变长，得到 simple shortest path，最多 `V−1` 条边。
+
+   </Answer>
+
+2. 改 Demo 代码题：把上方实验切换到 `floyd` 模式，并把一个矩阵单元的更新原因改成“经过 k 更短”。你需要同时修改当前 stage、单元格高亮和结论文案，不能只改按钮标题。
+
+   <Answer>
+
+   将 mode 设为 `floyd`，在 `k` 对应的 stage 激活时渲染 `d[i][k] + d[k][j]` 与旧值的比较；只有候选更小才把单元格标成更新色，并在 aria-label 中说明 intermediate `k`。这样视觉状态、状态证据和结论仍然指向同一个 recurrence。
+
+   </Answer>
+
+3. 诊断题：Johnson 在重权后得到一个负的 `ŵ(u,v)`，或者恢复公式的结果与 Floyd-Warshall 不一致。列出最先检查的两项，并说明 negative cycle 时 API 应返回什么。
+
+   <Answer>
+
+   先检查 Bellman-Ford 的 `h` 是否满足每条边的 triangle inequality，再检查重权是否使用了 `w + h(u) − h(v)` 以及恢复是否使用 `d̂ − h(u) + h(v)`。若发现 negative cycle，不能发布 finite APSP matrix；API 应拒绝结果或明确返回 cycle 证据与 affected pairs，而不是静默填入数字。
+
+   </Answer>
+
+</Exercises>
+
+## Glossary
+
+<Glossary>
+
+<GlossaryItem term="全点对最短路">对所有 ordered source-target pairs 同时求最短距离，并统一声明不可达与负环语义。</GlossaryItem>
+<GlossaryItem term="min-plus 乘法">以候选路径权重之和取最小值的矩阵组合运算。</GlossaryItem>
+<GlossaryItem term="中间顶点 DP">按允许的 intermediate vertex 集合逐阶段更新距离的动态规划。</GlossaryItem>
+<GlossaryItem term="势函数">由 Bellman-Ford 距离产生、用于证明重权非负的顶点函数。</GlossaryItem>
+<GlossaryItem term="重权">使用端点势能差重写 edge weight、保持同端点 path 次序的变换。</GlossaryItem>
+<GlossaryItem term="负权环">总 weight 为负、可被反复绕行并破坏 finite shortest-path optimum 的 cycle。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom={"Introduction to Algorithms, 4th Edition, Chapter 23: All-Pairs Shortest Paths"}
+  adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
