@@ -1,0 +1,266 @@
+---
+title: "GPU Gems 3 · Chapter 22. Baking Normal Maps on the GPU"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 22
+description: "从低模 UV 空间投影出发，解释如何用 boundary cage、uniform grid 与 3D-DDA 在 GPU 上为低模烘焙高模法线。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-22-baking-normal-maps-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-22
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch22CageDiagram,
+  GpuGems3Ch22GpuMemoryDiagram,
+  GpuGems3Ch22GridDdaDiagram,
+  GpuGems3Ch22NormalMapLab,
+  GpuGems3Ch22PipelineDiagram,
+  GpuGems3Ch22ProjectionDiagram,
+  GpuGems3Ch22TangentNormalDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch22-baking-normal-maps";
+
+<Objectives>
+
+- 能解释低模 UV、投影 cage 与高模射线命中如何在 GPU 中生成每个纹理像素的法线
+- 能修改 GPU Normal Map Baking Lab 的网格、遍历、pass、抗锯齿与精度选项，比较内存和访问取舍
+- 能回答：为什么 uniform grid 配合 3D-DDA 能跳过空 cell，以及命中法线为什么必须转到 tangent space
+
+</Objectives>
+
+## 先问：为什么高模细节不能直接跟着低模一起渲染
+
+想象一件雕刻得很细的物体和一件只有几百个面的外壳。游戏运行时，我们希望只画轻量外壳，却保留雕刻留下的明暗变化。提前把这些变化写进一张图片，就能让轻量外壳看起来更复杂。
+
+本章解决的是：怎样让每个图片小格独立地寻找高模表面，并把找到的方向写回图片。没有这条路径，制作人员只能依赖耗时的单线程工具；如果搜索每个高模三角形，又会把 GPU 的并行优势浪费在重复检查上。
+
+<Callout type="tip" title="先预测：把网格分辨率翻倍一定更划算吗？">
+  先猜一猜：在 Lab 中把 grid resolution 从 128 调到 256，再切换到 linear cell
+  scan；访问 cell、纹理内存和锯齿风险会怎样变化？先观察 3D-DDA
+  基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 用低模 UV 逐像素投影高模法线
+
+<Term def="把高模表面的方向信息投影到低模 UV 图片上的过程；每个纹理像素都独立寻找一个高模命中点。">
+  normal-map baking
+</Term>
+
+低模是运行时真正提交的工作模型，高模是提供细节的参考模型。先把低模三角形光栅化到纹理空间，硬件插值器会为每个纹理像素补出表面位置、UV 和切线基。高模不需要自己的 UV，这正是投影式烘焙的优势：复杂参考网格可以只提供几何与法线。
+
+随后，每个纹理像素从一个可控的起点向高模发射一条射线。若沿途有多个命中，选择离起点最近且有效的命中，取它的高模法线，再交给后面的坐标变换。
+
+<GpuGems3Ch22ProjectionDiagram />
+
+## 2. 用投影 cage 控制射线的起点和方向
+
+<Term def="围住低模与高模的外扩网格；它为每个像素提供射线起点和可编辑的投影范围，帮助避免错误穿透。">
+  boundary cage
+</Term>
+
+投影 cage 通常由低模向外挤出。它不只是一个包围盒，而是艺术家可以局部调整的发射面：cage 越贴合两个模型，射线越容易先命中期待的那一层；在尖角、薄片或相邻表面附近，局部修改 cage 可以减少穿透和错选。
+
+光栅化时，cage 位置与低模对应点之间的向量也会被插值到像素。它提供了每个像素的射线方向。理想情况下，cage 同时包住工作模型和参考模型，使“离 cage 最近的有效命中”成为稳定的选择规则。
+
+<GpuGems3Ch22CageDiagram />
+
+<Callout type="trap" title="把 cage 当成一次性包围盒">
+  现象 → 大多数区域正确，尖角和薄片处却出现穿透、黑斑或取到背面法线。原因 → cage
+  的局部形状决定射线起点与方向，统一膨胀量无法覆盖所有曲率和间距。修法 → 让 cage
+  包住两套模型，再在问题区域手动调整外扩距离，并检查最近命中是否真的是目标表面。
+</Callout>
+
+## 3. 用 uniform grid 把高模搜索变成邻居遍历
+
+<Term def="把空间切成固定大小的三维格子；每个格子只记录其中可能相交的三角形列表，从而把全局搜索缩小到局部。">
+  uniform grid
+</Term>
+
+直接让一条射线测试几十万甚至几百万个三角形，计算量会随参考模型规模爆炸。uniform grid 把空间分成等尺寸的 voxel。每个 voxel 只保存一个三角形列表的起始位置，射线进入某个 cell 后，只需要读取这个 cell 对应的候选几何。
+
+这套结构特别适合本章，因为工作模型和参考模型大体占据同一片空间，射线通常只穿过很短的一串 cell。网格不必成为最通用的光线追踪结构；它只要在这种局部相干的投影任务上稳定地减少候选集合即可。
+
+## 4. 用 3D-DDA 按顺序跨过 voxel
+
+<Term def="一种沿射线在三维网格中前进的算法；它保存三轴下一个边界的时间，选择最早到达的边界并进入相邻 cell。">
+  3D-DDA
+</Term>
+
+3D-DDA 不需要每一步重新猜一个三维位置。它维护三组状态：`tmax` 表示射线在每个轴上何时碰到下一个 cell 边界，`step` 表示沿该轴前进还是后退，`delta` 表示跨过一个 cell 需要增加多少射线参数。每次选择最小的 `tmax`，只推进对应的轴，再把该轴的 `tmax` 加上 `delta`。
+
+因为 cell 按射线顺序访问，先命中的有效三角形可以遮挡后续 cell 的命中。空 cell 只做一次网格读取即可跳过；有几何的 cell 才进入三角形列表和求交测试。
+
+<GpuGems3Ch22GridDdaDiagram />
+
+<Callout type="trap" title="用线性扫描替代网格遍历">
+  现象 → 法线图能生成，但高模一复杂，读取次数和耗时迅速增加。原因 →
+  每条射线重复检查了大量空区域，空间相干性没有转化成 GPU 可读的邻居跳转。修法 →
+  预计算 uniform grid，让 3D-DDA 维护 `tmax`、`step` 和 `delta`，只在占用 cell
+  中遍历三角形列表。
+</Callout>
+
+## 5. 把网格、索引和几何塞进纹理资源
+
+高模没有必要以传统顶点缓冲的形态被片元阶段直接访问。一个 3D 纹理保存网格 cell 到三角形列表的指针；另一个 2D 纹理把每个 cell 的三角形索引排成线性列表，用空指针结束；顶点位置和法线再分别放进 2D 纹理。
+
+这样做需要用归一化立方坐标查询 3D 网格，并把一维列表索引折算成 2D 纹理坐标。由于索引是离散地址，采样器应关闭过滤并使用 clamp addressing。数据布局还受到显存和索引精度限制：网格分辨率越高，空 cell 可能更少，但 3D 纹理会迅速占用显存。
+
+<GpuGems3Ch22GpuMemoryDiagram />
+
+## 6. 把世界法线编码为可复用的切线空间颜色
+
+<Term def="以工作模型的切线、副切线和法线为坐标轴的局部空间；把高模方向写进这里，低模重用时就不依赖原来的世界朝向。">
+  tangent space
+</Term>
+
+求交得到的法线来自参考模型的世界空间。为了让低模在不同姿态、不同位置复用这张图，必须用低模自己的切线基做三个点积，把方向变到 tangent space。再把从负一到一的分量平移缩放到从零到一，写进 RGB；读取时再反变换，就能恢复用于着色的方向。
+
+这一转换也是烘焙质量的检查点：切线、副切线、法线的约定必须和运行时材质一致。若烘焙器和渲染器使用不同的切线方向或绿色通道约定，图片看起来会像“反了”或在接缝处断裂，即使射线命中完全正确。
+
+<GpuGems3Ch22TangentNormalDiagram />
+
+## 7. 用单遍、多遍和抗锯齿处理工程边界
+
+基础实现可以一次绘制低模，把完整遍历放进片元阶段。旧式片元循环有迭代次数上限，复杂网格可能超过这个预算；多遍或 tiled rendering 可以把 cell、射线状态和 `tmax` 存进临时 render texture，每一遍只推进一段，最后再编码法线。
+
+<Term def="用多条轻微偏移的射线或多次抖动渲染来平均边缘误差，减少法线图中的锯齿。">
+  antialiasing
+</Term>
+有两种直观路径：同一像素发射多条稍微偏移的射线并平均，或者重复渲染法线图、抖动低模顶点与
+cage
+再累积。样本数增加会近似线性增加成本，因此应先判断误差来自几何搜索还是边缘采样，再决定提高网格、增加
+pass 还是增加射线。
+
+```hlsl
+float4 BakeNormal(float2 uv, float3 position, float3 cageDir) {
+  Ray ray = MakeRay(position, -cageDir);
+  Cell cell = EnterGrid(ray);
+  float3 hitNormal = 0.0;
+  while (InsideGrid(cell) && !HasHit(hitNormal)) {
+    hitNormal = FindNormalAtCell(cell, ray);
+    cell = Advance3DDDA(cell, ray);
+  }
+  if (!HasHit(hitNormal)) return float4(0.5, 0.5, 1.0, 1.0);
+  float3 tangentNormal = float3(
+    dot(hitNormal, Input.binormal),
+    dot(hitNormal, Input.tangent),
+    dot(hitNormal, Input.normal));
+  return float4(normalize(tangentNormal) * 0.5 + 0.5, 1.0);
+}
+```
+
+代码的主循环只关心三个状态：当前 cell、射线和最近命中的法线。`FindNormalAtCell` 内部读取三角形列表并保留离 cage 最近的命中；主循环随后沿 3D-DDA 前进。这个分层让“网格遍历”和“cell 内求交”可以分别优化或拆到多遍。
+
+<Stepper>
+  <Step title="先把低模表面变成独立的 UV 像素">
+    光栅化工作模型，插值位置、cage 方向和切线基；每个像素由此得到一条可以独立处理的高模投影射线。
+
+    <GpuGems3Ch22ProjectionDiagram />
+    <GpuGems3Ch22CageDiagram />
+
+  </Step>
+  <Step title="再沿网格邻居搜索最近命中">
+    从网格盒内的起点开始，用 3D-DDA 选择下一个 cell；读取列表中的三角形，保留最近命中，并在没有命中时继续前进。
+
+    <GpuGems3Ch22GridDdaDiagram />
+    <GpuGems3Ch22GpuMemoryDiagram />
+
+  </Step>
+  <Step title="最后把命中方向写成切线空间颜色">
+    用工作模型的 tangent basis 变换高模法线，归一化后编码到 RGB；需要更少锯齿时，增加偏移射线或累积 pass。
+
+    <GpuGems3Ch22TangentNormalDiagram />
+    <GpuGems3Ch22PipelineDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch22NormalMapLab />
+
+## 本章小结
+
+- 低模 UV 像素可以独立投影高模法线
+- boundary cage 决定射线起点、方向和最近命中
+- uniform grid 与 3D-DDA 跳过空区域并按顺序访问 cell
+- 纹理资源把网格指针、三角形列表和几何数据映射给 GPU
+- tangent space 编码让法线图能随低模姿态复用
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把 Lab 的 traversal mode 从 3D-DDA 切换到 linear cell scan，再把 grid resolution 调到 256；你预计访问 cell 和纹理内存如何变化？
+
+<Answer>
+  linear scan 会检查更多空区域，因此访问 cell 通常增加；分辨率升到 256 会让 3D
+  网格内存按体积增长，虽然单个 cell
+  更细，整体显存压力显著上升。实际选择应同时看参考网格的密度和射线平均穿过的长度，不能只追求更高分辨率。
+</Answer>
+
+**问题 2｜诊断法线接缝。** 高模命中位置正确，但 normal map 在 UV 接缝或旋转后出现方向跳变，请按“基、编码、运行时”列出检查点。
+
+<Answer>
+  先检查低模 tangent、binormal、normal 的方向和镜像 UV
+  处理；再检查从负一到一映射到 RGB
+  时是否使用同一通道顺序和缩放；最后确认运行时材质使用与烘焙器相同的切线空间约定，并在
+  mipmap 生成时保留足够的边缘 padding。
+</Answer>
+
+**问题 3｜场景选型。** 低模 UV 很大、参考网格有数百万三角形、显存又有限时，你会如何组合网格、精度与渲染 pass？
+
+<Answer>
+  先用 uniform grid 和 3D-DDA 保持局部访问，避免扫描全部三角形；再用 packed
+  vertex/normal
+  纹理降低几何数据占用，同时验证误差；如果单遍循环或临时变量超过预算，就切到
+  multipass 或 tiled rendering，把遍历状态分段存入 render
+  texture。抗锯齿应最后按边缘误差增加样本，而不是一开始就把所有像素乘以多条射线。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="normal-map baking"
+    definition="把高模表面的方向细节投影到低模 UV 图片中的过程，让轻量模型也能呈现复杂明暗。"
+  />
+  <GlossaryItem
+    term="boundary cage"
+    definition="包住两套模型并提供射线起点与方向的外扩网格，像可调的投影边界。"
+  />
+  <GlossaryItem
+    term="uniform grid"
+    definition="把空间切成同样大小的三维格子，每格只列出附近可能命中的几何。"
+  />
+  <GlossaryItem
+    term="3D-DDA"
+    definition="沿射线逐格移动的算法，每次进入最早碰到边界的相邻格子。"
+  />
+  <GlossaryItem
+    term="tangent space"
+    definition="以低模自身的切线基为坐标轴的局部空间，让法线图片能随模型姿态复用。"
+  />
+  <GlossaryItem
+    term="antialiasing"
+    definition="用多条轻微偏移的射线或多次抖动渲染来平均边缘误差，减少锯齿。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 22. Baking Normal Maps on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-22-baking-normal-maps-gpu"
+/>
