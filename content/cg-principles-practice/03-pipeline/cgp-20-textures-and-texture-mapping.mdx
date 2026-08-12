@@ -1,0 +1,238 @@
+---
+title: "Textures and Texture Mapping"
+type: D
+section: "纹理与纹理映射"
+order: 20
+description: "从 UV 坐标、纹理采样、MipMap 与过滤出发，理解图像如何稳定地映射到三维表面。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-20
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp20FilteringDiagram,
+  Cgp20MipMapDiagram,
+  Cgp20TextureMappingDiagram,
+  Cgp20TextureMappingLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-20-texture-mapping";
+
+<Objectives>
+
+- 能解释 texture mapping 如何通过 uv coordinates 把三维表面位置映射到纹理图像
+- 能修改 TextureViz 的 filtering、MipMap level、斜视角与 repeat UV，并记录 sampling 覆盖和访问代价
+- 能回答：纹理闪烁、变糊或出现接缝时，如何区分 UV、sampling、MipMap 和 filtering 问题？
+
+</Objectives>
+
+## 先把纹理看成表面上的一套采样坐标
+
+纹理不是贴纸被动盖住模型，而是一张图像与几何表面之间的坐标契约。每个顶点可以携带 UV，片段阶段对 UV 插值，再根据当前像素覆盖的纹理范围选择 texel 和过滤规则。
+
+本章把 texture mapping 拆成坐标、sampling、MipMap 和 filtering 四个可以分别检查的责任。先猜一猜：同一张纹理映射到正视表面和斜视表面时，应该读取相同数量的 texel 吗？如果远处纹理闪烁，是 UV 错了，还是高频没有被正确过滤？
+
+<Cgp20TextureMappingLab />
+
+## texture mapping：从 UV 到表面颜色
+
+<Callout type="trap" title="只把纹理坐标写在顶点上就结束">
+  现象 → 纹理方向翻转、接缝错位或图案沿三角形边界突然跳变。 原因 → UV
+  的原点、轴方向、顶点顺序或跨三角形插值契约没有统一。 修法 → 先用非对称 UV
+  测试图验证每个顶点和三角形，再检查插值、寻址模式与纹理坐标范围。
+</Callout>
+
+<Term def="把几何表面上的 uv coordinates 映射到纹理图像位置，并在每个片段处读取和过滤 texel 的过程。">
+  texture mapping
+</Term>
+
+<Term def="附着在顶点或片段上的二维纹理位置坐标，通常用 u、v 表示，并在图元内部插值。">
+  uv coordinates
+</Term>
+
+**texture mapping** 的第一步是把表面位置转换为 **uv coordinates**。`u` 和 `v` 通常被规范化到 0 到 1 的范围，但这不是绝对限制；repeat、clamp 和 mirror 等寻址模式会定义超出范围后的行为。顶点 UV 经过透视正确插值后，每个片段得到一个纹理位置，再由 sampling 过程查找图像。
+
+<Cgp20TextureMappingDiagram />
+
+可以把纹理坐标写成从三角形重心坐标到图像位置的插值：
+
+$$
+uv(p) = \lambda_0 uv_0 + \lambda_1 uv_1 + \lambda_2 uv_2
+$$
+
+人话翻译：片段 `p` 的纹理坐标由三个顶点 UV 按覆盖权重混合得到。若顶点 UV 顺序或插值方式错误，之后的 filtering 再好也无法修复图案接缝。
+
+## sampling：一个片段覆盖多少纹理
+
+<Term def="根据片段的纹理坐标与局部 footprint，从纹理图像中选择一个或多个 texel 的读取过程。">
+  sampling
+</Term>
+
+**sampling** 不只是查一个整数像素。纹理坐标映射到图像后，片段在纹理上的 footprint 可能覆盖一个 texel，也可能覆盖一条很长的斜向区域。近处、正视的表面通常 footprint 小；远处或斜视表面会让许多源 texel 汇聚到一个屏幕片段。若仍然固定读取一个 texel，就容易出现锯齿、闪烁和摩尔纹。
+
+一个简化的 footprint 估计可以观察相邻片段的 UV 变化：
+
+$$
+footprint \approx \left\|\frac{\partial uv}{\partial x}\right\| + \left\|\frac{\partial uv}{\partial y}\right\|
+$$
+
+人话翻译：UV 在屏幕上变化得越快，一个屏幕像素对应的纹理范围越大，sampling 就需要更多邻域信息或更低分辨率的纹理版本。
+
+## filtering：用邻域规则稳定颜色
+
+<Term def="把一个或多个候选 texel 按空间权重组合成片段纹理值的规则；它在清晰度、平滑度、抗混叠和访问成本之间取舍。">
+  filtering
+</Term>
+
+**filtering** 决定 sampling 得到什么颜色。nearest 只取最近 texel，保持硬边但容易出现块状；linear 在邻域之间插值，通常更平滑；anisotropic filtering 会根据斜向 footprint 沿更长方向读取更多样本，在斜视表面上更稳定但访问成本更高。
+
+<Cgp20FilteringDiagram />
+
+过滤器的选择要和任务一致。像素风格可能需要 nearest，普通材质常用 linear，斜视地面或长条纹理可能需要 anisotropic。不能只用“更平滑”作为质量标准，因为过度 filtering 也会抹掉纹理边缘和细节。
+
+## MipMap：为不同 footprint 准备纹理层级
+
+<Term def="从原始纹理预先生成的一组逐级缩小图像；sampling 时根据纹理 footprint 选择合适层级，以降低缩小场景的高频混叠。">
+  MipMap
+</Term>
+
+当一个屏幕片段覆盖许多源 texel 时，直接在最高分辨率图像上随机采样很容易 alias。MipMap 为同一纹理准备多个较小层级，sampling 可以根据 footprint 选择 level，再在相邻 level 之间做 trilinear filtering。这样把“缩小后的低频版本”提前计算，换取额外存储来稳定远处纹理。
+
+<Cgp20MipMapDiagram />
+
+MipMap level 不是越小越好。level 过粗会让纹理变糊，level 过细又会保留过多无法显示的高频。实际系统可以使用屏幕导数、LOD 偏移和各向异性策略决定层级；调试时至少记录选中的 level、footprint 和最终过滤模式。
+
+一个纹理采样状态可以把这些责任写进配置：
+
+```ts
+const sampler = createSampler({
+  minFilter: "linear-mipmap-linear",
+  magFilter: "linear",
+  addressU: "repeat",
+  addressV: "clamp",
+  anisotropy: 8,
+});
+const color = sampleTexture(texture, uv, sampler);
+```
+
+如果纹理只在远处闪烁，先检查 minification filter、MipMap 和 footprint；如果近处放大变块，检查 magnification filter；如果边缘出现接缝，检查 address mode 和 UV 是否越界。
+
+## 三步实验：从 UV 回放到纹理过滤
+
+每一步只改变一个责任。先预测 UV、footprint、MipMap level 和过滤样本数，再在 TextureViz 中操作并记录输出。
+
+<Stepper>
+  <Step title="第一步：验证 texture mapping 与 UV">
+    使用非对称纹理图，固定 filtering，检查三角形顶点的 uv coordinates、插值方向和 repeat/clamp 行为。先排除坐标问题，再判断纹理质量。
+
+    <Cgp20TextureMappingDiagram />
+
+  </Step>
+  <Step title="第二步：改变 filtering 比较邻域">
+    保持 UV 和几何 footprint 不变，依次切换 nearest、linear 和 anisotropic，记录清晰度、斜视稳定性和估计 sampling 数量。
+
+    <Cgp20FilteringDiagram />
+
+  </Step>
+  <Step title="第三步：按 footprint 选择 MipMap">
+    增大斜视角或把纹理推远，观察 footprint 和 MipMap level 的变化。先判断是高频 alias、level 过粗还是 filtering 访问不足。
+
+    <Cgp20MipMapDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用最高分辨率纹理解决所有远处闪烁">
+  现象 → 远处纹理仍然闪烁，显存带宽和 sampling 成本却持续上升。 原因 → 没有根据
+  footprint 选择 MipMap，最高分辨率中的高频超过屏幕可表达带宽。 修法 →
+  先检查缩小过滤、MipMap level 和屏幕导数，再决定是否需要更高各向异性等级。
+</Callout>
+
+<Callout type="trap" title="把过滤器当成 UV 错位的修复工具">
+  现象 → 纹理接缝、翻转或重复位置错误，切换 linear 和 anisotropic 仍然存在。
+  原因 → filtering 只能组合已找到的 texel，不能修正 uv coordinates、顶点顺序或
+  address mode。 修法 → 用 nearest 和非对称测试图先验证坐标与寻址，再比较不同
+  filtering 的质量。
+</Callout>
+
+<Callout type="trap" title="只看正视近处，不测斜视和缩小">
+  现象 → 正面材质清晰，地面、远处或斜向纹理却出现模糊、闪烁和摩尔纹。 原因 →
+  测试没有覆盖大 footprint 与方向性差异，固定 level 和单点 sampling 隐藏了
+  minification 问题。 修法 → 同时测试近处放大、远处缩小、斜视平面和高频图，记录
+  footprint、MipMap 与样本数。
+</Callout>
+
+## 本章小结
+
+- texture mapping 通过 uv coordinates 把表面位置连接到纹理图像，坐标正确是后续质量的前提。
+- sampling 决定一个片段覆盖哪些 texel，footprint 越大越需要低频版本和邻域信息。
+- filtering 在清晰度、平滑度、抗混叠和访问成本之间取舍，nearest、linear、anisotropic 各有边界。
+- MipMap 预先准备不同尺度纹理，帮助 shrinking 场景降低高频 alias，但 level 与过滤仍需按 footprint 选择。
+
+<Exercises>
+
+**问题 1：检查一个纹理接缝。** 纹理在三角形边界翻转，但切换 nearest、linear 和 anisotropic 都没有改变接缝。你先查什么？
+
+<Answer>
+  先检查 uv coordinates 的顶点顺序、插值方向、纹理原点和 address
+  mode，再用非对称纹理图确认 UV 是否越界或被错误 repeat。filtering 只组合查到的
+  texel，不能修正坐标契约。
+</Answer>
+
+**问题 2：修改 TextureViz。** 固定 UV 和几何，依次切换 nearest、linear、anisotropic，把 MipMap level 从 0 调到 2，并增大斜视角。记录 footprint、估计 sampling 数量和纹理稳定性。
+
+<Answer>
+  斜视角增大时 footprint 会变长；nearest 访问少但容易闪烁，linear
+  更平滑，anisotropic 会沿方向采更多样本。MipMap level 变粗通常降低高频
+  alias，但过高会损失细节；要根据缩小程度和画面质量平衡。
+</Answer>
+
+**问题 3：诊断远处纹理变糊。** 纹理没有接缝也不闪烁，但远处细节明显消失。你会检查哪些设置？
+
+<Answer>
+  检查 MipMap level 是否过粗、LOD bias 是否偏大、minification filtering
+  是否过度平滑，以及 anisotropic 等级是否不足。用同一 footprint 对照相邻 level
+  和过滤模式，区分正确的抗混叠与过度模糊。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="texture mapping"
+    definition="把几何表面位置映射到纹理图像并读取材质颜色的过程。"
+  />
+  <GlossaryItem
+    term="sampling"
+    definition="根据纹理坐标和 footprint 选择一个或多个 texel 的读取过程。"
+  />
+  <GlossaryItem
+    term="filtering"
+    definition="按空间权重组合 texel、决定片段纹理值的规则。"
+  />
+  <GlossaryItem
+    term="uv coordinates"
+    definition="附着在顶点或片段上的二维纹理位置坐标。"
+  />
+  <GlossaryItem
+    term="MipMap"
+    definition="为不同纹理尺度预先生成的逐级缩小图像层级。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 20: Textures and Texture Mapping"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

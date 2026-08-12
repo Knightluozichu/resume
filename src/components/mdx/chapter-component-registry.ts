@@ -4376,6 +4376,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp19ScalingConceptDiagram: module0.Cgp19ScalingConceptDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-20-textures-and-texture-mapping":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-20-texture-mapping");
+      return {
+        Cgp20FilteringDiagram: module0.Cgp20FilteringDiagram,
+        Cgp20MipMapDiagram: module0.Cgp20MipMapDiagram,
+        Cgp20TextureMappingDiagram: module0.Cgp20TextureMappingDiagram,
+        Cgp20TextureMappingLab: module0.Cgp20TextureMappingLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
