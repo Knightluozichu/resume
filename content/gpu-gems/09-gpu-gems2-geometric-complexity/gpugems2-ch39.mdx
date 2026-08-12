@@ -1,0 +1,265 @@
+---
+title: "GPU Gems 2 · Chapter 39. Global Illumination Using Progressive Refinement Radiosity"
+type: D
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 39
+description: "把 progressive refinement radiosity 改写为 receiver gather，在 GPU 上用纹理、可见性和 form factor 逐轮逼近全局光照。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-39-global-illumination-using-progressive"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-39
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch39GatherScatterDiagram,
+  GpuGems2Ch39ProgressiveLoopDiagram,
+  GpuGems2Ch39RadiosityEnergyDiagram,
+  GpuGems2Ch39RadiosityLab,
+  GpuGems2Ch39RadiosityTimelineDiagram,
+  GpuGems2Ch39RealtimeSplitDiagram,
+  GpuGems2Ch39TextureQuadtreeDiagram,
+  GpuGems2Ch39VisibilityReconstructionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch39-progressive-radiosity";
+
+<Objectives>
+
+- 能解释 radiosity 如何用 accumulated/residual energy 和 form factor 逐轮逼近表面间的漫反射能量
+- 能修改 Radiosity Lab 的 residual、reflectance、gradient 和 quadtree depth，预测传输量与细分候选数如何变化
+- 能回答：为什么 GPU 实现选择 receiver gather，以及什么场景适合用低分辨率间接光搭配实时直达光
+
+</Objectives>
+
+## 先把房间里的“余光”分成许多小块
+
+想象把墙壁、地板和桌面切成很多小纸片。灯光照到其中一片后，这片纸又会把一部分能量反射给其他纸片；如果每次都把整间房间的所有互相影响同时解完，账本会大得难以携带。
+
+本章解决的问题是：怎样只追踪当前最值得处理的那一小笔“还没发出去的能量”，并让 GPU 的每个纹理位置都能规则地完成自己的计算？如果把一片面直接“撒”到许多远处位置，就会遇到 GPU 不擅长的任意地址写入和巨大的 pairwise storage。
+
+<Callout type="tip" title="先预测 shooter 和 receiver 的变化">
+  先猜一猜：把 shooter residual 调大，transferred energy 和 remaining residual
+  哪个会增加？再把 radiosity gradient 调大，为什么 split candidates
+  会增加，而不是直接让所有 texel 都变细？
+</Callout>
+
+<GpuGems2Ch39RadiosityEnergyDiagram />
+
+## 1. radiosity：把全局光照变成能量转账
+
+<Term def="把场景离散成许多小面元，并计算面元之间传递的漫反射能量；它适合表达软阴影和物体间接反射。">
+  radiosity
+</Term>
+
+Radiosity 把几何表面看成有限个 element。每一对 element 之间能传多少能量，由 form factor 描述；receiver 的 reflectance 决定收到的能量有多少会继续反射。这样，全局光照不再是“每个像素都独立发一堆 ray”，而是面元之间的能量交换。
+
+经典做法把所有 pair 的 form factor 放进一个 `N²` 大系统，存储很快成为瓶颈。progressive refinement 则在需要时计算当前 shooter 到 receiver 的可见性和 form factor，避免把整张矩阵长期放在 GPU 上。
+
+<Term def="从一个面元出发、向其他可见面元释放 residual energy 的角色；每轮通常选择 residual power 最大的面元。">
+  shooter
+</Term>
+
+<Term def="接收 shooter 能量的面元；在 GPU gather 版本中，它会在自己的 texel 位置读取 shooter 的数据并写回自己。">
+  receiver
+</Term>
+
+每个 element 维护两种能量：`accumulated` 是到目前为止收到的总量，`residual` 是还没有作为下一轮输入发出的量。初始时光源 element 有指定能量，其余为零；每轮 shooter 发完后 residual 清零，receiver 同时增加 accumulated 和 residual。
+
+<GpuGems2Ch39ProgressiveLoopDiagram />
+
+## 2. progressive refinement：优先处理 residual power 最大者
+
+<Term def="反复选择残余功率最高的 shooter，向所有可见 receiver 传能量，并在所有 residual 足够小后停止的迭代过程。">
+  progressive refinement
+</Term>
+
+选择最大 residual power（能量乘面元面积）是一个收敛策略：它优先消化对最终结果影响最大的未发射能量。一次 shot 会测试 shooter 到其他面元的 visibility，根据 form factor 计算传输，再乘上 receiver 的 reflectance。receiver 获得的结果既加入最终 accumulated，也加入下一轮可传播的 residual。
+
+当所有面元 residual 都小于阈值时停止。阈值越低，画面更接近收敛结果，但要付出更多 shot 和纹理 pass；因此实验中应把“质量”与“剩余能量”同时记录，不能只看某一轮的局部亮度。
+
+## 3. 用 receiver gather 代替 shooter scatter
+
+<Callout type="trap" title="从 shooter 视角把能量 splat 到所有纹理">
+  现象 → shader 需要把一份能量写入许多 receiver texture
+  的任意位置，结果难以在当前 GPU 上高效实现。原因 → 这是 scatter，写地址随可见
+  receiver 改变，不能保证规则的 fragment 输出。修法 → 反转循环：让每个 receiver
+  texel 读取当前 shooter，再只写自己的 texel。
+</Callout>
+
+<Term def="由每个 receiver 主动读取 shooter 状态、计算自己收到的能量并写回自己位置的 GPU 数据流；它把不规则 scatter 反转成规则 gather。">
+  receiver gather
+</Term>
+
+GPU 的纹理和 fragment pipeline 更擅长“每个位置执行相同 kernel”。因此本章不让 shooter 把能量撒到所有 receiver，而是遍历 receiver polygons：每个 receiver 检查自己是否能看见 shooter，随后在自己的 radiosity texel 中计算并写入结果。这样既保留 progressive refinement 的快速收敛，又把内存访问变成规则的 gather。
+
+<GpuGems2Ch39GatherScatterDiagram />
+
+## 4. 一次 shot 的 visibility pass 与 reconstruction pass
+
+<Term def="从 shooter 的视角渲染并记录 polygon ID 的中间纹理；receiver 用它判断自己是否被 shooter 看见。">
+  item buffer
+</Term>
+
+一次 shot 分两遍。visibility pass 从 shooter 视角渲染场景，把 polygon ID 写入 item buffer；reconstruction pass 把每个潜在 receiver 以正交投影绘制到与 radiosity texture 同分辨率的 framebuffer，于是一个 fragment 对应一个 receiver texel。fragment shader 读取 item buffer 中投影位置的 ID，通过 visibility 判断和 analytic form factor 得到传输能量。
+
+用 ID 而不是深度可以避免深度精度带来的比较问题，但也意味着不能直接使用硬件 shadow mapping 的 percentage-closer filtering。几何投影的边缘如果过于粗糙，还需要更高的 tessellation，让半球投影后的曲线更接近真实边界。
+
+<GpuGems2Ch39VisibilityReconstructionDiagram />
+
+```glsl
+// reconstruction pass: receiver texel writes its own location
+vec4 receiver = texture(receiverTexture, uv);
+float visible = texture(itemBuffer, projectedShooterUv).r == receiver.id ? 1.0 : 0.0;
+vec3 transfer = shooterResidual * formFactor(shooter, receiver) * visible;
+receiverAccumulated += transfer * receiver.reflectance;
+receiverResidual += transfer * receiver.reflectance;
+outRadiosity = vec4(receiverAccumulated, receiverResidual.r);
+```
+
+这里的关键不是某个具体纹理格式，而是写入方向：当前 fragment 只写它自己的 `outRadiosity`。下一轮重新选择 shooter，再执行 visibility 和 reconstruction，直到 residual power 低于停止条件。
+
+## 5. texture quadtree：让细分跟着光照变化走
+
+均匀把所有场景面切成相同分辨率，会在平坦墙面上浪费 texels，却可能在阴影边界不够细。Chapter 39 为每个 scene polygon 建一棵 texture quadtree：根节点是粗粒度区域，叶节点保存小的 `16 × 16` radiosity texture。
+
+<Term def="以场景面元为根、按局部 radiosity 变化递归四分的层级；叶节点承载固定大小的 radiosity texture。">
+  texture quadtree
+</Term>
+
+每次 reconstruction 后，fragment program 评估 radiosity gradient；如果梯度超过阈值，说明线性插值无法稳定表达这片区域，就 split 当前节点；如果光照平滑，就保留当前粒度。用 gradient 而不是绝对亮度避免把一整面均匀明亮的墙过度细分。递归在光照平滑或达到最大深度时结束。
+
+<GpuGems2Ch39TextureQuadtreeDiagram />
+
+<Callout type="trap" title="看到亮就细分，忽略光照变化率">
+  现象 → 大面积均匀亮墙也被拆成大量节点，纹理和 pass 成本暴涨。原因 →
+  绝对值高不代表局部函数难以插值，真正需要关注的是 gradient 或
+  discontinuity。修法 → 用 gradient 阈值触发 split，并设置最大深度；再用
+  occlusion query 统计需要细分的 fragments。
+</Callout>
+
+## 6. 性能取舍：把间接光降频，保留直达光细节
+
+小模型可以通过 visibility pass 的 occlusion query 跳过不可见表面，也可以用 substructuring：以低于纹理最终分辨率的粒度进行 shooting，把 mipmap 或排序得到的层级用于下一 shooter 选择。选中同一 polygon 后，让其多个 element 连续 shooting，可以摊薄 mipmap 和排序成本；批量处理多个 shooter 还能减少 context switching。
+
+如果目标是实时帧率，可以把间接光当作低频信号：用低分辨率 radiosity texture 计算 indirect，第一轮后清零 accumulated 中的 direct 部分；direct illumination 另用逐像素光照、shadow volume 等高频方法计算，最后将两者相加。这样牺牲部分间接光细节，换取更低的纹理与 fragment 成本。
+
+<GpuGems2Ch39RealtimeSplitDiagram />
+
+先猜一猜：在下面的实验中把 reflectance 调高，transferred energy 会怎样？把 gradient 调高而保持 max depth 不变，split candidates 会不会立刻等于全部 leaf texels？打开实验后一次只改一个控件，比较 gather 和 scatter 两种访问方向。
+
+<GpuGems2Ch39RadiosityLab />
+
+## 三步验收：从残余能量到自适应光照纹理
+
+<Stepper>
+  <Step title="第一步：记录能量并选 shooter">
+    把每个面元的 accumulated 与 residual 分开保存；从光源初始化 residual，再按 residual power 选择下一次 shooter。只有当前 shooter 的残余能量被发射完，才进入下一轮选择。
+
+    <GpuGems2Ch39RadiosityEnergyDiagram />
+    <GpuGems2Ch39ProgressiveLoopDiagram />
+
+  </Step>
+  <Step title="第二步：把 shot 改写成 receiver gather">
+    visibility pass 建立 item buffer，reconstruction pass 为每个 receiver texel 做规则的可见性和 form-factor 计算；避免 shooter 对多个纹理执行任意 scatter 写入。
+
+    <GpuGems2Ch39GatherScatterDiagram />
+    <GpuGems2Ch39VisibilityReconstructionDiagram />
+
+  </Step>
+  <Step title="第三步：按 gradient 细分并做性能取舍">
+    reconstruction 后评估 radiosity gradient；高变化区域 split texture quadtree，平滑区域保持粗节点。若要实时，把 indirect 降为低频纹理，direct 另算并在最终输出相加。
+
+    <GpuGems2Ch39TextureQuadtreeDiagram />
+    <GpuGems2Ch39RealtimeSplitDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- radiosity 用 form factor 描述面元间能量转移。
+- progressive refinement 优先发射 residual power 最大的 shooter。
+- receiver gather 让每个 texel 写自己的位置，绕开 scatter。
+- visibility/reconstruction 两遍完成一次 shot 的可见性与重建。
+- texture quadtree 按 radiosity gradient 自适应细分，低频 indirect 可降分辨率。
+
+<Exercises>
+
+**问题 1｜排出一次 shot。** 请按顺序写出 shooter 选择、visibility pass、receiver reconstruction、residual 更新和下一轮停止判断，并说明为什么 receiver 需要同时更新 accumulated 与 residual。
+
+<Answer>
+  先选择 residual power 最大的 shooter；从 shooter 视角写 item buffer；让每个
+  receiver texel 检查可见性并计算 form factor；将传输量乘 reflectance 后加入
+  receiver 的 accumulated 和 residual，同时把 shooter residual
+  清零。下一轮继续选择，直到所有 residual power 低于阈值。receiver 还要更新
+  residual，是因为它收到的能量还要在之后继续反射到其他面元。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Radiosity Lab 增加一个 `occlusion-query` 开关：只对 visibility pass 中有可见 receiver 的节点运行 reconstruction。你要防止什么误判？
+
+<Answer>
+  需要区分“当前没有可见 fragment”和“当前面元确实没有能量”。occlusion query
+  只能帮助跳过没有可见输出的 pass，不能把不可见误认为 residual
+  已经收敛；仍需单独检查 residual power、最大深度和下一轮是否可能出现可见
+  receiver。
+</Answer>
+
+**问题 3｜场景选型。** 一面平坦墙和一道锐利阴影边界使用同样的 quadtree split 规则。哪个区域应该得到更深的叶节点？为什么不用绝对 radiosity 值判断？
+
+<Answer>
+  锐利阴影边界应该得到更深的叶节点，因为局部 radiosity gradient
+  更大，线性插值更容易失败。平坦墙即使整体很亮，只要变化平滑就可以保持较粗节点；用绝对值会把“亮但平滑”的区域错误地过度细分。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="radiosity"
+    definition="把表面切成小面元，再计算光能在这些面元之间怎样来回传递。"
+  />
+  <GlossaryItem
+    term="shooter"
+    definition="本轮把还没发出去的光能释放给其他面元的面元。"
+  />
+  <GlossaryItem
+    term="receiver"
+    definition="收到 shooter 光能的面元；在 GPU 版本里它会主动计算并写回自己的纹理位置。"
+  />
+  <GlossaryItem
+    term="progressive refinement"
+    definition="每轮优先处理最有影响的一笔残余光能，逐步让整个场景接近收敛。"
+  />
+  <GlossaryItem
+    term="receiver gather"
+    definition="每个接收方自己读取发射方的数据，避免一个 fragment 向许多任意地址写入。"
+  />
+  <GlossaryItem
+    term="item buffer"
+    definition="记录从 shooter 方向看到的多边形编号的中间纹理，receiver 用它判断自己是否可见。"
+  />
+  <GlossaryItem
+    term="texture quadtree"
+    definition="按光照变化把一个面元递归四分，变化大的地方用更多小纹理，平滑地方保持粗纹理。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 39. Global Illumination Using Progressive Refinement Radiosity"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-39-global-illumination-using-progressive"
+/>
