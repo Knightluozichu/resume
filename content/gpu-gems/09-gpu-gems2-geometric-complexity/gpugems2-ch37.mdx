@@ -1,0 +1,269 @@
+---
+title: "GPU Gems 2 · Chapter 37. Octree Textures on the GPU"
+type: C
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 37
+description: "用存放在 3D texture 中的八叉树替代复杂网格的 UV 参数化，并把查找、过滤、绘制与表面模拟连成一条 GPU 管线。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-37-octree-textures-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-37
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch37FilteringDiagram,
+  GpuGems2Ch37LookupPathDiagram,
+  GpuGems2Ch37LookupTimelineDiagram,
+  GpuGems2Ch37MipLodDiagram,
+  GpuGems2Ch37OctreeStructureDiagram,
+  GpuGems2Ch37OctreeTextureLab,
+  GpuGems2Ch37ParameterizationCompareDiagram,
+  GpuGems2Ch37SurfacePaintDiagram,
+  GpuGems2Ch37SurfaceSimulationDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch37-octree-textures";
+
+<Objectives>
+
+- 能解释为什么复杂网格不适合强行摊成 2D UV，并画出八叉树叶节点与表面相交区域的关系
+- 能修改 Octree Texture Lab 的深度、表面覆盖率和画笔半径，预测 lookup steps、LOD 与局部更新量的变化
+- 能回答：什么时候保留八叉树纹理，什么时候把它转换为带过滤的标准 2D 纹理
+
+</Objectives>
+
+## 先别急着把模型摊平
+
+想象你要给一只皱褶很多的模型贴纸。把它压成一张平面纸，贴纸会被拉伸，还必须在某些地方剪开；而且模型表面的大部分空间其实并没有贴到东西。
+
+本章解决的问题是：能不能让每个表面点直接在包围模型的空间里找到自己的颜色？如果没有这套方法，复杂模型会被迫维护接缝密集的平面坐标，过滤和表面模拟也容易把“空白区域”当成真实数据。
+
+<Callout type="tip" title="先预测查找会在哪一层停下">
+  先猜一猜：把树的深度从 4 调到 7，fragment 的 lookup steps
+  会怎样变化？如果画面缩小、需要更粗的颜色平均，查找应该继续走到最底层，还是在较浅的
+  LOD 停下？
+</Callout>
+
+<GpuGems2Ch37ParameterizationCompareDiagram />
+
+## 1. 从 UV 平面转向体积中的表面采样
+
+<Term def="把颜色或其他表面数据放进包围模型的层级体积中，并用表面点的三维位置直接查找，而不是依赖二维 UV。">
+  octree texture
+</Term>
+
+传统纹理把网格顶点映射到 `(u, v)` 平面；复杂模型的弯折、孔洞和接缝会让这个映射变得难以维护。octree texture 反过来把纹理放进包围物体的立方体，只在体积与表面相交的区域保存颜色，因此不需要为每个顶点设计一套摊平规则。
+
+这不是把整个 `256³` 体积都填满：八叉树会保留空区域为叶节点，只继续细分碰到表面的节点。结果是采样网格仍然规则，表面颜色不会因为 UV 拉伸而变形。`GpuGems2Ch37ParameterizationCompareDiagram` 展示了“摊平”与“按三维位置查找”的差别。
+
+## 2. N³-tree：把空间分成可追踪的层级
+
+<Term def="每个内部节点把立方体的每条边分成 N 段，因此产生 N³ 个孩子；八叉树就是 N 等于 2 的情况。">
+  N³-tree
+</Term>
+
+八叉树的根节点是一个立方体；每次细分都把它变成 `2 × 2 × 2` 个孩子。孩子要么继续成为内部节点，要么成为叶节点。叶节点保存颜色，空节点直接标记为空；只有包住表面的节点才继续向下展开。
+
+每深入一层，每个方向的分辨率乘 2，所以深度 `D` 的完整网格分辨率是 `2^D`。将每条边切成更大的 `N` 会减少树深，但表面附近会留下更多没有用的格子；这正是存储效率与查找深度之间的取舍。
+
+<GpuGems2Ch37OctreeStructureDiagram />
+
+## 3. 把指针改成纹理中的索引
+
+<Callout type="trap" title="把 GPU 纹理当成 CPU 指针树">
+  现象 → shader 试图保存或解引用真实指针，结果无法访问子节点。原因 → fragment
+  program 只能通过纹理读取，GPU 地址必须被编码成数据。修法 → 用 RGB 记录 child
+  indirection grid 的索引，用 alpha 区分“继续走子节点”和“这是叶颜色”。
+</Callout>
+
+<Term def="保存每个节点的 N³ 个 child index 或 leaf 内容的 8-bit RGBA 3D texture；RGB 是索引或颜色，alpha 是分支标记。">
+  indirection pool
+</Term>
+
+GPU 版本把 CPU 树中的指针换成 3D texture 里的索引。每个节点对应一个 `N × N × N` 的 indirection grid；一个 cell 的 RGB 可以是下一级 grid 的位置，也可以直接是叶节点颜色，alpha 则告诉 shader 应该继续查找还是停下。
+
+<Term def="依赖前一次纹理读取结果来决定下一次纹理坐标的查找；它让 shader 能逐层追踪八叉树，但会增加读取延迟。">
+  dependent texture lookup
+</Term>
+
+fragment 在栅格化时已经获得未变换的表面坐标 `M`。它从根索引开始，根据 `M` 在当前节点内的相对位置计算 cell 坐标，再读一次 indirection pool。如果 alpha 表明它是 child，就把 RGB 解码成下一级索引；如果 alpha 表明它是 leaf，就返回颜色。老硬件不能保证动态循环，因此应以最大深度的固定循环为底线，支持动态分支时再提前退出。
+
+<GpuGems2Ch37LookupPathDiagram />
+
+```glsl
+vec4 lookupOctree(vec3 M, sampler3D indirectionPool) {
+  vec3 localPoint = M;
+  vec3 gridIndex = vec3(0.0);
+  vec4 cell = vec4(0.0);
+  for (int depth = 0; depth < MAX_DEPTH; depth++) {
+    vec3 P = (localPoint + gridIndex) * INV_POOL_SIZE;
+    cell = texture(indirectionPool, P);
+    if (cell.a > 0.9) return cell;
+    if (cell.a < 0.1) discard;
+    gridIndex = floor(cell.rgb * 255.0 + 0.5);
+    localPoint *= N;
+  }
+  return cell;
+}
+```
+
+这段伪 GLSL 把“指针树”改写成一串 dependent lookup：`gridIndex` 不是 CPU 地址，而是下一轮查找要使用的纹理索引。`discard` 对应空 cell；固定的 `MAX_DEPTH` 让同一段代码可以在没有动态分支的设备上运行。
+
+## 4. 过滤与 LOD：让结果在远处仍然稳定
+
+八叉树查找得到的最近叶颜色还不等于高质量纹理。三维线性插值需要八个相邻样本；如果建树时只收录恰好穿过表面的点，缺少的邻居会让背景色渗入。解决办法是在建树时扩大用于相交测试的盒子，把过滤所需的邻居一起纳入。
+
+<GpuGems2Ch37FilteringDiagram />
+
+<Term def="把不同深度的父节点平均颜色存放在另一张纹理中，让 shader 在较远或较小的屏幕投影上提前停止查找。">
+  LOD pool
+</Term>
+
+mipmap 的 finest level 是原始颜色叶节点；更粗的一层把同一父节点的孩子颜色合并成平均值。shader 根据屏幕导数选择一个合适的深度：近处深入树保留细节，远处在较浅层从 LOD pool 取平均颜色，避免单个叶样本造成 aliasing。
+
+<GpuGems2Ch37MipLodDiagram />
+
+<Callout type="trap" title="只存表面点，却要求八点插值无条件成立">
+  现象 → 模型边缘出现背景色、闪烁或锯齿。原因 → 线性过滤访问到没有颜色的邻居，空
+  cell 被当成有效样本。修法 → 建树时为过滤扩大相交盒，或明确使用
+  LOD/邻居补全规则，再检查八个样本是否都有定义。
+</Callout>
+
+## 5. 用同一棵树支持绘制与表面模拟
+
+建树时先把模型缩放进 unit box，再从根开始检查每个子盒是否和多边形相交；到达目标深度就创建颜色叶，否则继续创建 child，未相交的格子直接标记为空。绘制时，画笔是沿表面移动的小球，只局部更新被覆盖的叶节点，并通过 3D texture 的局部上传减少带宽。
+
+<GpuGems2Ch37SurfacePaintDiagram />
+
+```cpp
+void createNode(int depth, Polygons polygons, Box box) {
+  for (Child child : childrenOf(box)) {
+    Box childBox = computeSubBox(child, box);
+    if (depth + 1 == paintingDepth) {
+      setChildColor(child, white);
+    } else if (intersects(childBox, polygons)) {
+      createChild(child);
+      createNode(depth + 1, polygons, childBox);
+    } else {
+      setChildAsEmpty(child);
+    }
+  }
+}
+```
+
+这段建树逻辑的关键不是递归本身，而是“只为相交区域创建路径”。绘制时可以把 `setChildColor` 换成基于画笔距离的颜色混合，并只调用局部 texture 更新；显示复杂场景时，则可以在细节可见时使用八叉树，在远处切换到过滤好的 2D 表示。
+
+第二种应用把八叉树当作表面地址层，而不是直接存液体密度。每个叶节点保存 density map 的索引，neighbor textures 把一个叶节点映射到空间邻居，再从 density map 读取邻居值，下一轮 GPU cellular automaton 只更新 2D 状态纹理。表面通常只需要约 9 个邻居，不必为完整 3D 的 26 个方向都固定一张纹理。
+
+<GpuGems2Ch37SurfaceSimulationDiagram />
+
+## 三步验收：从坐标到可用的表面数据
+
+<Stepper>
+  <Step title="第一步：建立只贴近表面的层级">
+    把网格放进 unit box，从 root cube 开始做相交测试；空区域变成 leaf，表面附近的 child 才继续细分。用 N³-tree 的深度控制分辨率，用 Octree Texture Lab 观察表面覆盖率改变后占用 cell 的估计。
+
+    <GpuGems2Ch37OctreeStructureDiagram />
+    <GpuGems2Ch37ParameterizationCompareDiagram />
+
+  </Step>
+  <Step title="第二步：沿 indirection pool 查找并过滤">
+    用 fragment 的三维坐标计算当前 cell，在 RGBA indirection pool 中读取 child index 或 leaf color；接着用八点过滤与 LOD pool 修补缺失邻居和远处 aliasing。打开 lookup 动画，逐步观察 alpha 何时让查找停下。
+
+    <GpuGems2Ch37LookupTimelineDiagram />
+    <GpuGems2Ch37FilteringDiagram />
+
+  </Step>
+  <Step title="第三步：把树接到真实应用">
+    绘制应用局部更新被 3D brush 命中的叶节点；液体模拟则让叶节点保存 density map 地址，并用 neighbor texture 获取邻居。最后比较：近景用 octree texture，远景是否值得转换成标准 2D 纹理。
+
+    <GpuGems2Ch37SurfacePaintDiagram />
+    <GpuGems2Ch37SurfaceSimulationDiagram />
+
+  </Step>
+</Stepper>
+
+先猜一猜：在下面的实验里把 `tree depth` 调大、把 `surface coverage` 调小，再从 `lookup` 切换到 `liquid`，哪些指标会分别变化？动手试时一次只改一个控件，观察 lookup steps、selected LOD、occupied cells 和 neighbor reads。
+
+<GpuGems2Ch37OctreeTextureLab />
+
+## 本章小结
+
+- octree texture 用表面三维坐标替代复杂 UV 参数化。
+- N³-tree 只细分相交区域，深度决定分辨率与查找成本。
+- indirection pool 用 RGB 索引和 alpha 标志实现 GPU 树查找。
+- 过滤需要邻居补全，LOD pool 用父节点平均色抑制远处 aliasing。
+- 同一棵树既能支撑 3D 绘制，也能给表面模拟提供邻居地址。
+
+<Exercises>
+
+**问题 1｜画出一次 lookup。** 给定深度为 3 的八叉树，fragment 的 `M` 落在根节点的第二个 child；该 child 的 alpha 表示仍是内部节点，RGB 解码出下一级索引。请写出 shader 接下来至少要保存的两个状态，并说明何时返回颜色。
+
+<Answer>
+  需要保存当前节点的 `gridIndex` 与表面点在当前节点内的 `localPoint`，并把新的
+  RGB 解码为下一次 indirection pool 读取的索引。读取到 alpha 表示 leaf 的 cell
+  时返回 RGB 颜色；读取到空 cell 则丢弃
+  fragment；达到固定最大深度时使用兜底结果。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Octree Texture Lab 增加一个 `standard-2d` 模式：把当前 LOD 的颜色画成一张平面图，并增加一个“边缘外推”开关。你要防止什么过滤伪影？
+
+<Answer>
+  可以新增模式并把 alpha 为 0 的三角形外部像素标记为背景，再做从粗到细的
+  push-pull 式颜色外推，最后重新生成 mipmap。要防止的是 2D
+  过滤在三角形外采样时把背景色逐级渗入模型表面；这个 Demo
+  只展示数据流，不应冒充真实 benchmark。
+</Answer>
+
+**问题 3｜做取舍。** 一个近景角色经常被重新绘制，另一个远处物体只占屏幕很小区域。哪个更适合保留 octree texture，哪个更适合转换为标准 2D 纹理？请给出两个证据。
+
+<Answer>
+  近景角色更适合保留八叉树以得到无 UV 接缝的细节；远处物体更适合转换为带 mipmap
+  的标准 2D 纹理，让 GPU 原生完成过滤。证据应包括屏幕覆盖率/LOD、fragment lookup
+  次数、过滤后的画质，以及转换后的存储和绘制成本，而不是只看树深。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="octree texture"
+    definition="把颜色放在包围模型的立体树中，只在表面附近保存数据，所以不必先把网格摊成一张 UV 平面。"
+  />
+  <GlossaryItem
+    term="N³-tree"
+    definition="每次把一个立方体切成 N 乘 N 乘 N 个小块；N 等于 2 时就是常说的八叉树。"
+  />
+  <GlossaryItem
+    term="indirection pool"
+    definition="一张记录“下一个节点在哪里”或“这里的颜色是什么”的 3D RGBA 纹理，shader 靠它逐层走树。"
+  />
+  <GlossaryItem
+    term="dependent texture lookup"
+    definition="下一次纹理读取的位置由上一次读取的结果决定；它像沿着地址线索一格一格查找。"
+  />
+  <GlossaryItem
+    term="LOD pool"
+    definition="保存父节点平均颜色的纹理，物体变远时可以提前停在浅层，减少闪烁和锯齿。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 37. Octree Textures on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-37-octree-textures-gpu"
+/>

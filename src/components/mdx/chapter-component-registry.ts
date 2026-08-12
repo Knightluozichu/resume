@@ -16282,6 +16282,25 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGems2Ch36SubdivisionStreamDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch37": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems2-ch37-octree-textures");
+    return {
+      GpuGems2Ch37FilteringDiagram: module0.GpuGems2Ch37FilteringDiagram,
+      GpuGems2Ch37LookupPathDiagram: module0.GpuGems2Ch37LookupPathDiagram,
+      GpuGems2Ch37LookupTimelineDiagram:
+        module0.GpuGems2Ch37LookupTimelineDiagram,
+      GpuGems2Ch37MipLodDiagram: module0.GpuGems2Ch37MipLodDiagram,
+      GpuGems2Ch37OctreeStructureDiagram:
+        module0.GpuGems2Ch37OctreeStructureDiagram,
+      GpuGems2Ch37OctreeTextureLab: module0.GpuGems2Ch37OctreeTextureLab,
+      GpuGems2Ch37ParameterizationCompareDiagram:
+        module0.GpuGems2Ch37ParameterizationCompareDiagram,
+      GpuGems2Ch37SurfacePaintDiagram: module0.GpuGems2Ch37SurfacePaintDiagram,
+      GpuGems2Ch37SurfaceSimulationDiagram:
+        module0.GpuGems2Ch37SurfaceSimulationDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
