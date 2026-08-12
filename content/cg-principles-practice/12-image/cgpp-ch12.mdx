@@ -3,253 +3,257 @@ title: "The Image Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 12
-description: "Computer Graphics: Principles and Practice Chapter 12"
+description: "围绕像素表示、重采样滤波与颜色通路，建立图像从存储到输出的可计算直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh12ImageLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch12-image";
 
 <Objectives>
 
-- 能用自己的话解释The Image Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 12之间的关系是什么？
+- 能推导像素通道的线性索引与加权重采样关系，并解释图像表示如何影响结果
+- 能修改 ImageViz 的通道、采样位置、对比度和访问等待，用证据定位图像质量问题
+- 能回答：图像如何从像素存储经过滤波和颜色变换，在现代硬件上形成可显示输出？
 
 </Objectives>
 
-## 为什么需要The Image Pipeline
+## 先把图像想成一张带地址和邻居的表
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Image Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+一张图像不只是“许多颜色排在一起”。它还规定了宽度、高度、通道顺序、数值范围和行步长；任何一个约定改变，像素地址和滤波邻域都可能随之改变。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决“像素怎样表示、尺寸变化时怎样取样、颜色怎样传递到输出”三个相连的问题。图像表示负责保存数据，采样与滤波负责从离散数据估计新位置，颜色通路负责把物理能量和显示数值区分开。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+先预测再实验：如果通道数量改变，像素地址应改变但几何位置不变；如果采样位置移动，滤波结果应连续变化而不是随机跳变；如果访问等待变长，图像数值不应凭空改变，只是生成时间变长。把地址、数值和时间分开观察，才能找准故障。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：Image Pipeline 是 Graphics Pipeline 的数据延伸
 
-Computer Graphics: Principles and Practice Chapter 12正是这一哲学在特定领域的具体体现。
+在计算机图形学导论中，Graphics Pipeline（图形管线）把几何和片段变成颜色、深度等像素结果。Image Pipeline（图像管线）接过这些结果后，负责把像素组织成图像、在不同尺寸间重采样，并把颜色转换成后续显示或存储可以使用的形式。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+Graphics Pipeline（图形管线）决定哪些片段产生，Image Pipeline 决定这些结果怎样被保存、读取和重建。前者的错误常表现为几何或可见性不对，后者的错误常表现为通道错位、边缘模糊、色阶断裂或处理延迟；调试时要先确认像素契约。
+
+### 图像表示与像素地址
+
+<Term def="规定图像的尺寸、通道、数值格式、行步长和存储顺序的一组描述；它决定后续读取如何解释字节。">
+  图像表示
+</Term>
+
+图像表示可以是紧密排列的 RGB，也可以包含透明通道、额外行对齐或分块布局。视觉上相同的图像，若通道顺序从 RGB 变成 BGR，读出的颜色就会互换；若行步长包含填充，下一行的起始位置也不能按宽度直接猜。
+
+<Term def="图像网格中一个位置的离散记录，通常包含多个颜色或深度通道；它是采样和显示的基本数据单位。">
+  像素
+</Term>
+
+设图像宽度为 $W$，通道数为 $C$，坐标为 $(x,y)$，通道编号为 $c$。在紧密交错存储中，样本的线性地址可以写成：
+
+$$
+i = ((yW + x)C) + c
+$$
+
+这个地址式先跳过前面的行和像素，再进入当前像素的指定通道；它不包含行对齐、压缩块或平面分离等额外布局，所以真实格式必须同时读取步长契约。
+
+### 采样、滤波与图像重建
+
+<Term def="在离散图像坐标中选择一个或多个邻居来估计目标位置数值的过程；它连接像素网格与连续坐标。">
+  采样
+</Term>
+
+放大、缩小和旋转都会让目标位置落在原图像网格之间。最近邻采样选择距离最近的一个像素，速度快但可能出现锯齿；加权方法读取多个邻居，让结果随位置平滑变化，但会增加访问和计算。
+
+<Term def="按照空间距离或预设核，为邻域像素分配权重并汇聚成新值的过程；核的形状决定锐利、平滑和边缘响应。">
+  滤波
+</Term>
+
+两个相邻像素值为 $A$ 与 $B$，目标位置距离 $A$ 的归一化偏移为 $t$ 时，一维线性滤波可以写成：
+
+$$
+F(t) = (1-t)A + tB
+$$
+
+这个式子说明采样位置移动时，两个邻居的权重互补；二维双线性滤波只是把同样的思想扩展到四个邻居。
+
+颜色空间描述颜色数值所在的编码和物理意义约定，例如线性空间或显示编码空间；不同空间不能直接混合计算。
+
+<Term def="从离散像素估计连续或不同分辨率图像的过程；它依赖采样位置、滤波核和边界处理规则。">
+  图像重建
+</Term>
+
+图像重建不是凭空恢复原始细节，而是在已知样本和假设的基础上估计目标位置。缩小时如果没有先做合适的低通滤波，细密纹理会折叠成摩尔纹；放大时如果只重复最近邻像素，边缘会变成明显方块。
+
+下面的伪代码强调三个必须保持一致的输入：目标位置、邻域访问和滤波权重。边界模式也属于图像契约，不能让每个调用者临时猜测。
+
+```cpp
+Sample sampleImage(Image image, Vec2 uv, Filter filter) {
+  Neighbors neighbors = filter.neighbors(image, uv);
+  Weights weights = filter.weights(uv, neighbors);
+  return weightedSum(neighbors.values, weights);
+}
+```
+
+## Light（光）：像素数值要保留能量语义
+
+Light（光）在片段或图像生成阶段贡献能量，图像管线则把能量编码成像素数值。若在错误的颜色空间中插值或滤波，几何位置可能完全正确，亮度却会出现不自然的边缘和渐变。
+
+### Radiometry（辐射度量）与 Reflectance（反射率）
+
+Radiometry（辐射度量）描述光能量按功率、面积、方向或立体角的分布，Reflectance（反射率）描述材质保留多少入射能量。二者决定线性颜色的物理意义；图像表示、滤波和颜色空间决定这些数值如何被保存和解释。
+
+固定图像布局和滤波核后，只改变光源能量，再只改变反射率。若线性像素发生变化而地址和邻域不变，问题属于光照或材质；若线性值稳定但显示值变化，问题更可能在颜色空间转换。
+
+### 颜色空间与输出数值
+
+<Term def="把颜色表示为特定数值坐标的编码约定；在线性颜色空间中做能量运算，在显示空间中做输出编码。">
+  颜色空间
+</Term>
+
+实际编写时应明确每个阶段的颜色空间：光照和滤波通常需要线性值，纹理资产可能带有显示编码，最终输出还可能经过伽马或色调映射。把不同空间的数值直接平均，会让中间灰度偏亮或偏暗，即使每个像素的地址都读取正确。
+
+## Modern Graphics Hardware：图像处理在带宽与并行之间取舍
+
+Modern Graphics Hardware（现代图形硬件）可以并行处理像素块、通道和滤波邻域，但更高分辨率和更多通道也会增加内存读写量。图像算法的速度不只取决于算术操作数，还取决于访问是否连续、邻居是否能复用以及中间结果是否需要落回内存。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（并行性）让多个像素或图像块同时推进，memory latency（内存延迟）表示从读取纹理、图像块或缓存行到数据可用的等待时间。一个滤波核虽然计算简单，如果每个输出都访问分散的邻域，更多并行单元也可能只是一起等待。
+
+观察图像性能时至少记录像素数、通道数、每像素邻居数、缓存命中、处理中间带宽和尾部等待。先确认输出值是否正确，再比较不同布局和滤波核的吞吐；不要用“画面看起来相同”推断访问成本相同。
+
+## 三步实验：从地址走到颜色与硬件
+
+每一步先预测一个地址、权重或等待变化，再只改变相关滑块。三个视角共享同一个 ImageViz，但分别呈现像素布局、重采样邻域和颜色访问通路。
+
+<Stepper>
+  <Step title="第一步：定位一个像素通道">
+    先预测：把通道数从 4 调到 3，像素位置会不会改变？选择“像素布局”，观察线性索引和通道配置，说明地址式为何必须包含通道数。
+
+    <CgppCh12ImageLab />
+
+  </Step>
+  <Step title="第二步：移动滤波采样点">
+    先预测：采样位置从 0.30 移到 0.70，两个邻居的权重会怎样交换？选择“重采样滤波”，观察最近邻和加权结果，不要把平滑误认为创造了新细节。
+
+    <CgppCh12ImageLab />
+
+  </Step>
+  <Step title="第三步：区分颜色和访问瓶颈">
+    先预测：只增加访问等待，输出颜色数值会不会跟着改变？选择“颜色通路”，分别调对比度和访问等待，比较数值变化与执行等待。
+
+    <CgppCh12ImageLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：通道错位是光照计算错误">
+  现象 → 图像中红蓝通道互换或透明度异常，继续调 Light（光）仍无法恢复正确颜色。
+
+原因 → 图像表示的通道顺序、步长或平面布局与读取代码不一致，像素地址已经指向了错误数据。
+
+修法 → 先打印尺寸、通道顺序、步长和单像素地址，再检查辐射度量与反射率。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：滤波可以恢复不存在的细节">
+  现象 → 放大后的边缘仍然模糊，便不断换更复杂的滤波核，期待原始纹理重新出现。
 
-### 设计动机
+原因 → 采样和滤波只能根据现有邻居估计目标位置，已经丢失的高频信息无法被算法凭空恢复。
 
-Vulkan 把The Image Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先检查输入分辨率、缩放方向和采样频率，再选择合适的重建核与边界策略。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Image Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Image Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Image Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：并行像素越多就一定越快">
+  现象 → 增加并行任务后，图像结果不变但帧时间和等待比例上升。
+
+原因 → 邻域访问分散或通道布局不连续，memory latency（内存延迟）让多个任务同时等待数据。
+
+修法 → 先测量缓存局部性、带宽和每像素访问量，再决定是否增加 Parallelism（并行性）。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 图像表示规定像素、通道、步长和存储顺序，地址错误会先于视觉算法出问题。
+- 采样选择邻居，滤波按权重汇聚邻居，图像重建不能凭空创造已丢失的细节。
+- 颜色空间决定数值能否直接做能量运算，辐射度量和反射率应保留在线性语义中。
+- 现代图形硬件能并行处理像素，但内存延迟、邻域复用和带宽会限制吞吐。
+- 调试顺序应是“地址正确 → 邻域正确 → 颜色空间正确 → 访问代价可控”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Image Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Image Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Image Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：计算像素通道地址。** 图像宽度为 `640`，通道数为 `4`，像素坐标为 `(5, 3)`，求通道 `c=2` 的紧密存储地址，并说明有行填充时还需要什么信息。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  地址为 `((3 × 640 + 5) × 4) + 2 =
+  7702`。如果存在行填充，还需要真实行步长，不能只用宽度乘通道数推导下一行的起点。
 </Answer>
 
+**问题 2：修改重采样实验。** 把采样位置从 `0.30` 调到 `0.70`，解释线性滤波结果为什么变化，并指出它没有恢复什么信息。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  两个邻居的权重随位置互补变化，所以加权结果会从更接近左邻居变为更接近右邻居；滤波没有恢复输入中已经不存在的高频纹理或额外细节。
+</Answer>
+
+**问题 3：定位图像处理瓶颈。** 输出颜色保持一致，但提高通道数后访问等待明显增加。你会先改变对比度、滤波核还是检查布局和缓存局部性？
+
+<Answer>
+  先检查布局、通道连续性、缓存局部性和带宽，因为颜色数值没有变化而执行时间变长，证据指向数据访问成本；对比度和滤波核属于数值语义，不能直接解释该等待。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="图像表示">
+  规定图像尺寸、通道、数值格式、行步长和存储顺序的一组描述。
+</GlossaryItem>
+
+<GlossaryItem term="像素">
+  图像网格中一个位置的离散记录，通常包含多个颜色或深度通道。
+</GlossaryItem>
+
+<GlossaryItem term="采样">
+  在离散图像坐标中选择一个或多个邻居来估计目标位置数值的过程。
+</GlossaryItem>
+
+<GlossaryItem term="滤波">
+  按空间距离或预设核为邻域像素分配权重并汇聚成新值的过程。
+</GlossaryItem>
+
+<GlossaryItem term="颜色空间">
+  描述颜色数值编码和物理意义的约定，不同空间的数值不能直接混合计算。
+</GlossaryItem>
+
+<GlossaryItem term="图像重建">
+  从离散像素估计连续或不同分辨率图像的过程，依赖采样位置和滤波规则。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 12 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

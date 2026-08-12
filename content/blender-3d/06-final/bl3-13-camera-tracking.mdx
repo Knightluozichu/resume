@@ -3,78 +3,214 @@ title: "第 13 章 Camera Tracking in Blender：从真实镜头解算相机"
 type: A
 section: "玩转 Blender 第 3 版 · 追踪、合成与渲染"
 order: 13
-description: "覆盖 Camera Tracking 原理、易跟踪素材拍摄、Movie Clip Editor、相机运动追踪和结果测试。"
+description: "从可追踪素材、Movie Clip Editor 轨迹清理和 Camera Solve 出发，用 Ground、Scale 与测试几何验收真实镜头匹配。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-13
 ---
 
+import {
+  Bl3Ch13CaptureLab,
+  Bl3Ch13TrackCleanupLab,
+  Bl3Ch13SolveTestLab,
+} from "@/components/mdx/blender-3d/06-final/bl3-13-camera-tracking";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 Camera Tracking 如何从二维轨迹估计镜头运动和空间约束
+- 能为追踪拍摄选择跨深度特征，并在 Movie Clip Editor 中清理失败轨迹
+- 能完成 Camera Solve、Ground/Origin/Scale 对齐和测试几何验收
+- 能回答：平均 Solve Error 很低时，如何继续证明真实镜头没有局部漂移？
+
+</Objectives>
+
+{/* BL3_CH13_QUALITY_V2 */}
 
 ## 问题：为什么标记数量很多仍可能得到漂移的相机解算
 
-先预测：在同一面墙上放一百个跟踪点，是否比在前景、中景、背景各有稳定特征更可靠？不一定。相机解算需要跨深度视差、合理镜头参数和贯穿足够帧的低误差轨迹。第十三章从拍摄条件开始，在 Movie Clip Editor 追踪、清理、求解并用测试几何验证。
+先预测：在同一面墙上放一百个跟踪点，是否一定比前景、中景、背景各有稳定特征更可靠？不一定。Camera Tracking 需要镜头运动带来的真实视差、贯穿多帧的稳定特征、合理的镜头参数和可诊断的误差；点数只能掩盖约束不足，不能创造深度。
 
-## 原书边界与官方小节
+本章解决的是“素材是否适合、轨迹是否可信、相机如何求解、结果怎样回到真实地面”的完整链路。没有测试几何和逐段检查，低平均误差也可能隐藏局部漂移、错误地面、比例不对或动态物体被当成静态点。
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+## 本章知识点清单
 
-- **Understanding Camera Tracking**
-- **Shooting Video for Easy Tracking**
-- **Using the Movie Clip Editor**
-- **Tracking the Camera Motion**
-- **Testing Camera Tracking**
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Camera Tracking | 拍摄条件实验 | Track、Parallax | 特征是否提供空间约束 |
+| Easy Tracking 素材 | 拍摄条件实验 | Motion Blur | 镜头参数和清晰度是否可用 |
+| Movie Clip Editor | 轨迹清理实验 | Movie Clip Editor | 哪条轨迹应被删除 |
+| Camera Motion Solve | 解算实验 | Solve Error、Reprojection Error | 相机路径是否稳定 |
+| Testing Camera Tracking | 解算实验 | Ground Plane | 测试几何是否粘附真实镜头 |
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+## Understanding Camera Tracking
 
-## 二维轨迹到三维相机参数
+Camera Tracking 把视频中可重复识别的二维特征点变成跨帧轨迹，再让求解器估计相机内参和逐帧位姿。每条 **<Term>Track</Term>** 都应说明它跟着哪个真实特征、持续了哪些帧、误差是否稳定；一条短暂滑动的轨迹即使数量很多，也不如一条跨越全段且贴在真实角点的轨迹有用。
 
-每个 Track 提供特征在多帧中的二维位置，求解器寻找相机内参和逐帧位姿，使三维点重投影误差最小。纯旋转、平面特征、运动模糊和动态物体会削弱约束。Solve Error 是平均指标，仍需查看单轨误差、漂移、地平面、尺度与测试几何粘附。拍摄前锁定焦距、快门和对焦通常比后期堆标记更有效。
+当相机在空间中移动时，前景、中景和背景的相对位移不同，这种 **<Term>Parallax</Term>** 为深度和相机运动提供约束。纯旋转、完全平面纹理、动态物体、滚动快门和运动模糊都会削弱约束。Solve Error 只能做平均概览，还要查看单轨、时间段、画面区域和最终测试几何。
 
-## 五个核心术语与责任边界
+先把镜头内参、帧率、分辨率和相机运动写进素材记录，再判断是全局解算问题还是某一条 Track 的局部问题。相机路径正确但地面方向错误，通常不是再加点，而是需要重新对齐 Ground、Origin 和 Scale。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Shooting Video for Easy Tracking
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+易追踪素材来自拍摄阶段的选择：让镜头具有适度的平移或空间移动，保留前中后景特征，避免大面积动态物体覆盖静态角点；锁定焦距和对焦，控制快门与曝光，减少拖影、过曝和压缩噪声。手机或手持镜头还要记录滚动快门风险，不能把后期算法当成素材质量的替代品。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+拍摄时为每个区域寻找高对比、形状稳定、不会自行移动的特征。对同一面墙堆很多点，只能提高局部重复观测，不能替代深度分布；单纯绕轴旋转则要谨慎解释尺度和三维结构。正常样本保留清晰角点和空间移动，边界样本降低光照或压缩质量，故障样本加入运动模糊、动态人或短暂遮挡，用来测试清理策略。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+<Bl3Ch13CaptureLab />
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Using the Movie Clip Editor
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+**<Term>Movie Clip Editor</Term>** 是检查素材、添加和清理 Track、观察误差与执行解算的工作区。先自动生成一批候选轨迹，再按持续帧数、画面分布、单轨误差和特征是否真实粘附筛选；滑在纹理上的点、跟随行人的点和只出现几帧的点都应被删除或重新追踪。
 
-## 关键对象与数据流
+清理不是把所有红色标记变成绿色，而是保留能解释镜头的约束。把画面分成开头、中段、结尾以及前景、中景、背景网格，逐区记录轨迹数量、最大误差和人工修正点。删除最差轨迹后重新求解，比较焦距、相机路径和局部漂移是否真正改善，而不是只比较一个平均数字。
 
-先检查素材帧率、分辨率、焦距、滚动快门、运动模糊和动态区域，选择跨深度高对比特征。自动或手工追踪后查看 Track 长度和误差，删除滑动与动态点，分布关键帧并 Solve。设置地面、原点、尺度和相机，再放置立方体和阴影接收平面逐帧查看粘附；局部漂移则回到对应 Track，而不是盲调场景。
+### 轨迹交接记录
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+| 记录项 | 正常信号 | 失败信号 | 修法 |
+| --- | --- | --- | --- |
+| 持续帧数 | 覆盖主要镜头段 | 只出现几帧 | 重新追踪或删除 |
+| 画面位置 | 前中后景均有 | 全在同一平面 | 补拍或降低解算预期 |
+| 特征粘附 | 跟着真实角点 | 在纹理或物体上滑 | 手工修正并重算 |
+| 单轨误差 | 随时间稳定 | 某段突然上升 | 定位时间段和遮挡 |
 
-## 正常、边界与失败样本
+<Bl3Ch13TrackCleanupLab />
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+## Tracking the Camera Motion
 
+清理后的轨迹进入 Camera Solve，求解器寻找焦距、相机位置和旋转，使三维点重新投影到视频中的二维位置。**<Term>Reprojection Error</Term>** 表示这种投影回视频后的偏差；它应按轨迹、时间段和画面区域观察，而不能只看一个总平均。焦距、传感器设置和镜头失真模型也要与素材记录一致，否则相机路径会在错误的内参上稳定地漂移。
+
+Solve 后建立世界基准：指定 **<Term>Ground Plane</Term>**、Origin 和 Scale，让三维场景的地面、方向和尺寸可被后续模型与灯光消费。Ground 只解决方向和接触关系，不会修复错误 Track；Scale 只解决大小，不会消除相机路径的局部漂移。每次改变对齐条件都保存前后解算版本。
+
+在解算验收中同时记录全局 Solve Error、最大单轨 Reprojection Error、相机轨迹突变、地平面方向和尺度参考。若错误集中在某个时间段，回到对应 Track；若所有轨迹都在同一区域，重新评估视差；若测试几何随地面漂浮，则查对齐与镜头内参，而不是盲目增加标记。
+
+## Testing Camera Tracking
+
+测试几何是相机追踪的最后证据：放置与真实地面尺寸一致的立方体、平面或阴影接收体，在整段镜头中检查它是否保持接触、透视和相对尺度。若几何在开头正确、中段漂移，说明局部轨迹或解算参数仍有问题；若所有几何都旋转错向，优先检查 Ground 与 Origin。
+
+正常测试同时覆盖近景、中景和远景，边界测试改变尺度或地面位置，故障测试故意混入移动物体轨迹、同平面轨迹和短轨迹。保存前后帧截图、最大漂移、几何接触阴影和当前求解参数。**<Term>Solve Error</Term>** 很低但测试立方体漂移时，结论仍然是不通过，因为视觉粘附是面向最终合成的实际验收。
+
+<Bl3Ch13SolveTestLab />
+
+<Callout type="trap" title="低平均 Solve Error 不等于相机稳定">
+  现象：总误差很低，但测试立方体在中段漂移或阴影脱离地面。原因：平均值掩盖了单轨、局部时间段、同平面特征或动态物体的错误。修法：按画面区域和时间段查看 Reprojection Error，删除最差轨迹后重算，再用测试几何逐帧复核。
+</Callout>
+
+<Callout type="trap" title="同一平面堆点无法创造视差">
+  现象：Track 数量很多，焦距和空间解仍不稳定。原因：特征集中在一面墙或纯旋转镜头，深度变化不足。修法：拍摄时加入前中后景和真实平移；素材无法重拍时，明确解算限制并避免过度承诺三维结果。
+</Callout>
+
+<Callout type="trap" title="用 Ground 或 Scale 掩盖错误轨迹">
+  现象：把地面调到看似正确后，镜头其他区域仍漂移或尺寸跳变。原因：Ground 只改变世界对齐，Scale 只改变大小，不能修复滑动点和错误焦距。修法：先回到 Track 与相机内参，确认路径稳定后再设置 Ground、Origin 和 Scale。
+</Callout>
+
+## 三组相机追踪验收实验
+
+<Stepper>
+  <Step title="1. 拍摄条件：运动、视差与清晰特征">
+    先猜一猜：同一面墙上增加更多标记，和让镜头真正经过前中后景，哪一个更能帮助三维解算？切换素材条件，观察约束来自哪里。
+
+    <Bl3Ch13CaptureLab />
+  </Step>
+  <Step title="2. Movie Clip Editor：Track 与误差清理">
+    先预测：一条轨迹只要能跟上几帧就值得保留吗？选择画面区域，制造滑动并执行清理，比较单轨误差和时间覆盖。
+
+    <Bl3Ch13TrackCleanupLab />
+  </Step>
+  <Step title="3. Camera Solve：世界对齐与测试几何">
+    先预测：Solve Error 低就可以直接放入模型了吗？推进 Solve、Ground/Origin/Scale 和测试几何，注入失败轨迹来验证诊断。
+
+    <Bl3Ch13SolveTestLab />
+  </Step>
+</Stepper>
+
+## 验收证据：从数字误差到真实镜头粘附
+
+交付包至少包含：素材帧率与分辨率、焦距/对焦/快门记录、Track 分布与持续帧数、清理前后误差、最差轨迹、Camera Solve 参数、焦距与相机路径、Ground/Origin/Scale、测试几何逐帧截图、最大漂移、接触阴影以及故障对照。把镜头分成开头、中段、结尾和前景、中景、背景网格，避免证据只覆盖最容易的一帧。
+
+正常样本证明相机运动与测试几何在整段镜头中一致；边界样本降低清晰度、减少视差或改变尺度，记录何时超出适用范围；故障样本删除稳定点、混入移动物体或使用同平面短轨迹，确认诊断能回到具体 Track 和时间段。另一位读者应能依据证据包重放解算，而不必猜隐藏的镜头参数。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-Movie Clip Editor、Tracks、Solve 与世界对齐概念保持。当前 Blender 的求解选项和界面可能变化，现代相机或手机滚动快门问题仍需外部校正或谨慎拍摄；不能把算法升级当作素材质量替代品。
+Movie Clip Editor、Tracks、Camera Solve、Ground、Origin 和 Scale 的核心职责仍然稳定；当前 Blender 可能调整求解选项、镜头失真工具和手机滚动快门处理方式。迁移时保留素材质量评估、跨深度视差、单轨 Reprojection Error 和测试几何验收，不把算法升级当成坏素材的替代品。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含素材元数据、Track 分布和长度、清理前后误差、求解参数、Ground/Origin/Scale 设置、测试几何逐帧截图和最大漂移。至少保留一个错误 Track 导致的失败对照。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
-
-解算验收按时间和画面区域建立误差表，而不是只保留一个平均值。将镜头分成开头、中段、结尾以及前景、中景、背景网格，记录每条 Track 的持续帧数、重投影误差和人工修正点；删除最差轨迹后重新求解，比较焦距、相机路径和局部漂移是否真正改善。设置 Ground、Origin 与 Scale 后放置与真实地面尺寸一致的测试立方体，让它在整段镜头中保持接触阴影和透视。再故意混入移动物体轨迹、同平面轨迹和短轨迹，保存失败对照，证明当前结果来自有效视差而非偶然低总误差。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目加入外部镜头校正、滚动快门补偿或不同求解器，要说明它如何回到 Track 清理、Camera Solve、世界对齐和最终几何测试。
 
 ## 小结
 
-- 相机跟踪质量从素材拍摄开始
-- 稳定解算需要跨深度视差和长期轨迹
-- 总误差必须配合单轨和视觉验证
-- 测试几何是相机与真实镜头粘附的最终证据
+- Camera Tracking 的约束从拍摄条件和真实视差开始
+- Movie Clip Editor 要按时间、区域和单轨误差清理
+- Camera Solve 后仍要设置 Ground、Origin 和 Scale
+- 测试几何与接触阴影是相机追踪的最终证据
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：素材诊断。** 一段视频在同一面墙上有很多高对比点，但相机主要绕轴旋转。你会如何判断它是否适合三维 Camera Tracking？
+
+<Answer>
+  检查镜头是否有真实平移和前中后景视差，再记录焦距、运动模糊、滚动快门和特征持续帧数。若主要是纯旋转或单平面，说明深度约束不足，应降低三维解算预期或重新拍摄，而不是继续增加同平面标记。
+</Answer>
+
+**问题 2：修改实验。** 在 `Bl3Ch13TrackCleanupLab` 中选择 Middle Ground 并制造一条滑动轨迹。请写出删除它前后应该比较的两个量。
+
+<Answer>
+  比较该轨迹的单轨 Reprojection Error 随时间的变化和它对相机路径/局部漂移的影响；同时记录保留轨迹的持续帧数与空间分布，确认删除后不是把某个时间段或深度层的约束全部删空。
+</Answer>
+
+**问题 3：解算验收。** Solve Error 很低，但测试立方体在中段离开地面。请列出排查顺序。
+
+<Answer>
+  先按时间段和画面区域查最差 Track 与 Reprojection Error，再检查焦距、镜头失真和动态物体轨迹；确认相机路径稳定后，检查 Ground、Origin、Scale 与真实地面方向。最后用接触阴影和近中远景逐帧复核，不能只调 Scale 让某一帧看起来贴地。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Track">
+    视频中某个真实特征跨多帧的位置记录，用来给相机求解提供约束。
+  </GlossaryItem>
+  <GlossaryItem term="Parallax">
+    相机移动时不同深度物体产生的相对位移差，它帮助求解器推断空间关系。
+  </GlossaryItem>
+  <GlossaryItem term="Movie Clip Editor">
+    Blender 中用于查看视频、创建和清理轨迹、观察误差并执行相机追踪的工作区。
+  </GlossaryItem>
+  <GlossaryItem term="Reprojection Error">
+    解算出的三维点重新投影回视频后与实际特征位置之间的偏差。
+  </GlossaryItem>
+  <GlossaryItem term="Ground Plane">
+    用来定义真实地面方向和接触关系的世界基准平面。
+  </GlossaryItem>
+  <GlossaryItem term="Solve Error">
+    对相机解算整体拟合程度的误差概览，必须配合单轨和视觉测试一起判断。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：角色动画](/learn/blender-3d/05-rig-animation/bl3-12-animating-character) · [下一章：灯光、合成与渲染](/learn/blender-3d/06-final/bl3-14-lighting-compositing-rendering)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

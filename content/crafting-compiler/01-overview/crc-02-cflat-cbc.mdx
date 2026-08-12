@@ -1,11 +1,9 @@
 ---
-title: 第2章 C♭和cbc
+title: "第2章 C♭和cbc"
 type: C
-section: 总览 · C♭与cbc
+section: "总览 · C♭与cbc"
 order: 2
-description: >-
-  第2章 C♭和cbc围绕C♭语言的概要、C♭编译器cbc的构成推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖3个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "把 C♭ 的语言合同与 cbc 的编译器分层对齐，用构造探针观察源码、AST、语义检查和目标代码之间的责任边界。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -13,53 +11,230 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-02
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcCflatCbcLab } from "@/components/mdx/crafting-compiler/v2/crc-02-cflat-cbc";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“C♭语言—cbc边界台”开始
+- 能把 C♭ 的表达式、变量和函数调用写成输入、结构和诊断规则组成的语言合同
+- 能沿 cbc 的扫描、解析、AST、语义检查、IR 与后端边界解释每个模块消费和交付什么
+- 能修改一个构造探针，在正常、边界和不支持输入下判断责任模块，并用清理重建复核结果
 
-第2章 C♭和cbc沿“language contract → compiler phases → runtime assumptions”转换信息。最终进程返回正确值只能证明一条执行路径；C♭语言—cbc边界台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第2章 C♭和cbc固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变语言构造或编译出口。本页交互只移动language contract → compiler phases → runtime assumptions中的真实对象和状态，不生成置信、风险或证据分数。
+## 从“能写”到“能说明谁负责”
 
-## 来源、版本与独立重写边界
+学习一门小语言时，最容易出现的错觉是：代码能写出来，就已经知道编译器怎样处理它。实际上，写法只是入口；编译器还要回答这个写法是否属于语言、它应该形成什么结构、哪一层发现错误，以及错误后是否继续生成下游结果。
 
-第2章 C♭和cbc以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+本章把 C♭ 当作一份可观察的合同，把 `cbc` 当作履行合同的分层系统。先用几个很小的构造建立边界，再把同一构造沿编译器模块推进。没有这张责任图，后面学习语法树、类型检查或 IR 时，很容易把模块职责互相推来推去。
 
-第2章 C♭和cbc用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+<Callout type="trap" title="误区一：把 C♭ 当作缩小版 C">
+  现象 → 直接套用熟悉的 C 语法或库假设，遇到拒绝就认为 cbc 不完整。
 
-## 本章合同与可运行探针
+原因 → 没有先区分 C♭ 已声明的语言合同与宿主语言的习惯。
 
-、、、、。
+修法 → 先列出构造、操作数和期望诊断；只在 C♭ 合同允许的范围内比较 cbc 的行为。
 
-第2章 C♭和cbc的通过不变量是“每个C♭构造有语法、类型、布局和诊断边界并映射到cbc阶段”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
+</Callout>
 
-```bash
-input: minimal.cb
-outputs: tokens+ast+ir+asm
-reference: cflat-contract
+<Callout type="trap" title="误区二：看到报错就修改后端">
+  现象 → 变量或函数调用被拒绝，却直接查看汇编或调整链接参数。
+
+原因 → 错误发生在结构或语义阶段，后端根本没有收到可用输入。
+
+修法 → 先确认扫描、解析和语义检查是否交付结构；没有下游产物时不要伪造后端证据。
+
+</Callout>
+
+<Callout type="trap" title="误区三：用一次成功覆盖所有构造">
+  现象 → 常量表达式能编译，就断言变量、函数调用和错误输入也都符合预期。
+
+原因 → 探针只覆盖了一条主路径，构造之间的边界没有被单独验证。
+
+修法 → 每种构造准备正常、边界和不支持样本，保存诊断位置、阶段和是否生成产物。
+
+</Callout>
+
+## 语言合同：C♭允许什么
+
+<Term def="一门语言对可写构造、组合方式、值的约束和错误反馈作出的明确约定；编译器实现必须把它变成可检查规则。">
+  语言合同
+</Term>
+
+C♭的概要可以先写成一张卡片，而不是一长串术语：有哪些字面量和表达式，变量如何声明和使用，函数调用需要哪些信息，语句如何组织，以及不满足条件时应该在哪里报告。每张卡片都要同时写“允许样例”和“拒绝样例”。
+
+例如，整数返回值是一个适合入门的正常样例；把一个表达式放进变量初始化可以测试组合边界；调用未声明函数则能测试名称与调用信息在编译器中的流动。样例越小，诊断越容易对应到一条规则。
+
+<Term def="把一个语言构造压缩成小输入，沿 cbc 阶段观察结构、诊断和产物的实验；它一次只验证一个责任边界。">
+  构造探针
+</Term>
+
+构造探针的记录格式可以是：`construct`、`source`、`expectedStage`、`expectedArtifact`、`diagnostic` 和 `replay`。它比“这个例子通过了”更有用，因为它明确写出通过或失败应该停在哪一层。
+
+## 第2章 C♭和cbc
+
+第2章建立两个方向的对齐：向左看 C♭ 语言合同，向右看 cbc 模块分层，中间用同一个构造探针连接。总览节点的完成标志不是记住缩写，而是能从一个小输入追踪到结构、诊断和下游产物。
+
+<Term def="把扫描、解析、树构建、语义检查、IR 转换和后端生成组织起来的编译器实现；每层只消费上一层的合同。">
+  cbc 分层
+</Term>
+
+cbc 分层让错误定位有了方向：字符和 token 的问题回到扫描，括号或语句结构的问题回到解析，名称、类型或调用规则的问题回到语义检查，只有形成有效结构后才进入 IR 和后端。模块之间不是一组可以随意替换的黑盒，而是有输入输出的接力。
+
+## 2.1 C♭语言的概要
+
+C♭语言的概要应从构造之间的关系来读。常量表达式验证值与运算符，变量声明和使用验证名称与作用域，函数调用验证参数和返回值的组合。每个构造都应有最小正常样例、一个边界样例和一个不支持样例。
+
+| 构造       | 正常样例               | 边界或不支持样例   | 重点观察                |
+| ---------- | ---------------------- | ------------------ | ----------------------- |
+| 常量表达式 | `return 2 + 5;`        | 结果为 0           | token、表达式树、返回值 |
+| 局部变量   | `int n = 7; return n;` | 未初始化或重复声明 | 名称、绑定、诊断        |
+| 函数调用   | `return add(2, 5);`    | 参数数量不符       | 调用节点、类型和符号    |
+
+这张表不是完整语法手册，而是阅读后续章节的入口。遇到新构造时，先为它补齐三类输入，再决定需要观察 token、AST、语义信息还是 IR；不要把所有问题都延迟到运行时。
+
+## 2.2 C♭编译器cbc的构成
+
+cbc 可以按“输入越变越结构化”的方向理解：扫描器把字符变成 token，解析器把 token 组织成 AST，语义阶段给节点补充名称和类型约束，IR 阶段把结构降低为更适合生成机器代码的表示，后端再交付汇编或目标文件。
+
+<Term def="抽象语法树的简称；它保留程序的结构关系，让后续阶段不用重新从字符猜测表达式和语句的层次。">
+  AST
+</Term>
+
+AST 不是“源码的漂亮画法”，而是模块交接的结构证据。若一个不完整表达式已经形成了错误的树，问题应停在解析边界；若树结构正确但名称找不到，应该查看语义阶段；若语义有效却生成了错误指令，才把调查推进到 IR 或后端。
+
+<Term def="编译器在构造探针上留下的源码位置、阶段、节点或文件等可比较结果，用来判断哪一层首先偏离预期。">
+  阶段证据
+</Term>
+
+阶段证据不要求每个版本都输出同样的调试文件，但要保持字段稳定。至少记录输入哈希、cbc 提交、工具版本、目标 ABI、命令、阶段名称、产物摘要和退出码；清理后用相同条件回放，才能区分实现变化与环境残留。
+
+## 构造探针：把合同交给 cbc
+
+先用常量、变量和函数调用三个探针切换实验视角。常量探针建立主路径，变量探针让名称与初始化规则出现，函数调用探针则把参数、返回类型和符号交接带进来。每次只换一个构造，其他输入、工具坐标和目标保持不变。
+
+```text
+construct: variable
+source: int n = 7; return n;
+expectedStage: semantic check
+expectedArtifact: bound name + typed AST
+diagnostic: source position and message
+replay: clean build, same cbc commit, same target ABI
 ```
 
+如果故障输入在扫描或解析阶段就停止，就不应拿“没有生成汇编”当作后端失败；如果结构与语义都通过，才继续比较 IR、汇编和运行结果。把责任停在合适模块，正是本章要练的能力。
 
-## 官方目录逐项深读
+## 三步实验：从语言合同到阶段证据
 
-### 第2章 C♭和cbc
+三个步骤共享 CrcCflatCbcLab。每一步先写下预期阶段，再切换一个构造或故障模式，最后用重置后的相同输入确认观察结果没有被上一次状态污染。
 
-**四级证据 1/3。** 流水线槽1将“第2章 C♭和cbc”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定编译出口，只改变语言构造，以构造覆盖与阶段归属找到第一处分叉并清理重建。
+<Stepper>
+  <Step title="第一步：填写语言合同">
+    先预测：一个构造要怎样才算“属于 C♭”？选择“语言合同”，切换常量、变量和函数调用，为每个构造写正常样例与一个拒绝条件。
 
-### 2.1 C♭语言的概要
+    <CrcCflatCbcLab />
 
-**四级证据 2/3。** 流水线槽2将“2.1 C♭语言的概要”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定编译出口，只改变语言构造，以构造覆盖与阶段归属找到第一处分叉并清理重建。
+  </Step>
+  <Step title="第二步：追踪 cbc 分层">
+    动手试：选择“cbc 构成”，推进扫描、解析、AST、语义、IR 和后端，说明当前构造交给下一模块的结构证据。
 
-### 2.2 C♭编译器cbc的构成
+    <CrcCflatCbcLab />
 
-**四级证据 3/3。** 流水线槽3将“2.2 C♭编译器cbc的构成”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定编译出口，只改变语言构造，以构造覆盖与阶段归属找到第一处分叉并清理重建。
+  </Step>
+  <Step title="第三步：复核构造探针">
+    先猜一猜：当输入不支持或参数不匹配时，哪一层应该停止？选择“构造探针”，注入故障并比较诊断阶段、产物状态与清理回放结果。
 
-## 三个必须主动触发的误区
+    <CrcCflatCbcLab />
 
+  </Step>
+</Stepper>
 
-## 练习、答案与116层级验证
+## 常见误区
 
+### 误区 1：用宿主语言补全 C♭ 合同
 
+看到 C♭ 的写法像 C，不代表每个 C 习惯都成立。先查本章的构造卡片和 cbc 能消费的输入，再把新增假设写成一个待验证探针。
+
+### 误区 2：把 AST、IR 和汇编混成“编译结果”
+
+它们服务的观察目的不同：AST 保留结构，IR 便于降低和分析，汇编接近目标指令。区分产物，才能知道错误应该回到哪个模块。
+
+### 误区 3：只测试能通过的例子
+
+只有正常样例会掩盖诊断边界。给每个构造配一个边界和一个不支持输入，并验证错误位置稳定、下游不会消费伪产物。
+
+## 小结
+
+- C♭语言的概要要写成构造、允许条件和拒绝条件组成的语言合同。
+- cbc 分层把扫描、解析、AST、语义、IR 与后端的责任边界拆开。
+- 构造探针一次只验证一个语言边界，并保留阶段证据和回放条件。
+- AST、IR 和汇编是不同交接产物，不能用一个“编译成功”概括。
+- 正常、边界与不支持输入都能定位责任模块，才算真正开始制作编译器。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：解释第2章 C♭和cbc。** 请画出从 C♭ 源文件到后端的最小分层，并为“第2章 C♭和cbc”选择一份能证明总览完成的阶段证据。
+
+<Answer>
+  最小分层可以写为扫描、解析/AST、语义检查、IR
+  和后端。总览证据应包含一个固定构造、预期阶段、实际诊断或产物、cbc 提交、目标
+  ABI、命令与退出码；只保存最终可执行文件不能说明中间交接是否正确。
+</Answer>
+
+**问题 2：分析 2.1 C♭语言的概要。** 为常量表达式、局部变量和函数调用各设计一个正常样例与一个拒绝条件，并说明拒绝时应观察什么。
+
+<Answer>
+  常量表达式可以用整数相加，并用不支持的操作作为拒绝条件；局部变量可以声明后返回，并用重复声明或未初始化作为拒绝条件；函数调用可以匹配参数调用，并用参数数量不符作为拒绝条件。观察点分别是源位置、诊断阶段、是否形成合法结构以及是否继续生成下游产物。
+</Answer>
+
+**问题 3：改 Demo 代码。** 结合 2.2 C♭编译器cbc的构成，在 CrcCflatCbcLab 中把变量探针改成一个参数数量不符的函数调用，要求错误停在语义阶段；请写出修改、清理和重放步骤。
+
+<Answer>
+  保持工具版本、目标 ABI 和命令不变，只把变量样例替换成调用参数数量不符的 C♭
+  代码；预期扫描和解析仍能交付结构，语义阶段报告参数诊断，不生成可被后端误用的汇编。删除旧构建目录后用同一命令重放两次，比较诊断阶段、源位置和退出码，再恢复匹配参数验证正常路径。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="语言合同">
+  C♭ 对可写构造、组合方式、值的约束和错误反馈作出的明确约定。
+</GlossaryItem>
+
+<GlossaryItem term="构造探针">
+  用一个很小的语言构造沿 cbc 阶段观察结构、诊断和产物的实验。
+</GlossaryItem>
+
+<GlossaryItem term="cbc 分层">
+  扫描、解析、AST、语义、IR 和后端组成的编译器责任链，每层只消费上一层的合同。
+</GlossaryItem>
+
+<GlossaryItem term="AST">
+  保留表达式和语句结构关系的树，让后续阶段能直接消费程序结构。
+</GlossaryItem>
+
+<GlossaryItem term="阶段证据">
+  编译器在某一阶段留下的输入、节点、产物摘要、诊断和退出码等可比较结果。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC、ELF、GNU binutils 技术文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

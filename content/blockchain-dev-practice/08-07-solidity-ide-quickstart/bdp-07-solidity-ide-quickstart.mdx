@@ -3,172 +3,222 @@ title: "第7章 Solidity IDE和Solidity快速入门"
 type: C
 section: "区块链开发实战（2018版）"
 order: 8
-description: "比较历史IDE，并通过银行合约贯通状态、调用者、金额、事件和回滚。"
+description: "比较历史 Solidity IDE，并用银行合约练习编译版本、权限、余额、事件和原子回滚。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bdp-07-solidity-ide-quickstart
 ---
 
+import {
+  BdpCh07IdeCompareLab,
+  BdpCh07BankStateLab,
+  BdpCh07SafetyLab,
+} from "@/components/mdx/blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 为什么从可重放状态开始
+<Objectives>
 
-IDE负责编辑、编译、部署和调试反馈，但合约正确性来自状态不变量。银行案例应明确谁能存取、余额如何变化、外部调用何时发生、失败后是否原子回滚，而不是只看按钮执行成功。
+- 能比较 browser-solidity、Atom 与 IntelliJ IDEA 的编辑、编译、部署和证据边界
+- 能在固定 Compiler 版本与网络上下文下编译、部署并复核一个最小银行合约
+- 能用存款、合法取款、越权和余额不足四条轨迹解释状态、事件与回滚
+- 能回答：外部调用失败时，为什么必须让内部余额变化与交易结果保持原子一致？
 
-区块链开发最容易产生的错觉，是界面显示成功、命令返回哈希或节点高度增加，就认为整条链路已经正确。实际上，源码可能由错误编译器构建，客户端可能连接错误网络，签名可能授权了不同字节，交易可能只进入内存池，执行可能回滚，索引器也可能展示尚未确认或已经被重组撤销的数据。只有把前状态、输入、验证依据、候选输出、回执、确认与后状态连起来，才能区分“请求被看见”和“状态已按预期提交”。
+</Objectives>
 
-本页因此先定义最小对象和不变量，再运行工具。读者应在实验前写出预期状态和拒绝原因，运行后保存原始协议对象，而不是只保存截图或格式化摘要。正常样本证明主路径，边界样本验证零值、最大值、恰好余额或资源上限，单故障样本验证实现能在首个不满足条件处停止。三个样本共享版本、网络、账户和观察点，差异才有可解释性。
+{/* BDP_CH07_QUALITY_V2 */}
 
-每次重放还应生成一份机器可读记录：书目来源、提交或源码摘要、运行时版本、网络标识、账户或钱包上下文、固定输入、原始输出、错误对象、前后状态摘要与时间顺序。复核者从空目录读取这份记录，不依赖操作者浏览器缓存或终端历史；若缺失字段、节点未同步或结果绑定到不同区块哈希，门禁应明确失败而不是自动补猜。
+# 第7章 Solidity IDE和Solidity快速入门
 
-2018年版还带来一层额外要求：概念与历史工具必须分开。Geth、TestRPC、browser-solidity、Truffle、Solidity和比特币节点的命令及默认配置已经演进，直接复制可能失败，也可能在错误或不安全的上下文中运行。历史实验在无真实资产的隔离环境中复现原行为；现代迁移另列替代工具、行为差异、验证方法和回退点，不能用今天的成功结果改写原书当时的系统假设。
+把 IDE 想成工作台：它能帮你写代码、发起编译、连接节点和显示日志，但工作台上的绿色提示不是链上事实。真正需要复核的是源码用了什么版本、产物部署到哪里、谁发起了动作，以及状态前后是否符合合同。
 
-## 版次、对象与验收合同
+本章解决两个问题：历史 IDE 的便利功能怎样与可复现证据分开，以及一个银行合约如何把权限、金额、事件和失败回滚连成完整轨迹。没有这些约束，换一台电脑或点击一次默认部署，就可能得到无法解释的字节码和余额。
 
-、、、、共同构成本页复核坐标。比较历史IDE，并通过银行合约贯通状态、调用者、金额、事件和回滚。
+## 本章知识点清单
 
-本书锁定吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》，机械工业出版社，2018年6月，227页，ISBN 9787111599562。得到电子书公开前言、11章和附录A至C的完整目录；京东交叉核对三部分结构和目录页码，天珑书店交叉核对作者、出版社、2018年6月、227页与ISBN。全书共有185个正式目录层级，学习地图与总复习不计入分母。本文是独立教学重构，不复制原书正文。
+| 主题 | 要回答的问题 | 验收证据 |
+| --- | --- | --- |
+| 历史 IDE | 工具差异会改变哪些默认输入？ | IDE、Compiler、网络与账户记录 |
+| 编译部署 | 源码怎样变成可部署产物？ | 源码摘要、ABI、字节码、部署回执 |
+| 银行状态 | 谁能存款、取款，余额如何变化？ | 调用者、前后余额、权限结果 |
+| 安全回滚 | 外部调用失败时状态是否恢复？ | 事件、错误、回滚前后状态 |
 
-IDE负责编辑、编译、部署和调试反馈，但合约正确性来自状态不变量。银行案例应明确谁能存取、余额如何变化、外部调用何时发生、失败后是否原子回滚，而不是只看按钮执行成功。
+## 工具上下文与银行合同
 
+历史 IDE 都能缩短编辑和调试路径，但它们可能隐藏 Compiler、网络、账户和插件版本。<Term>IDE Context</Term> 是实验必须显式保存的工具上下文：IDE 名称、Compiler 版本、源码摘要、provider、chain ID、账户和部署回执。只有这些字段同时存在，另一个人才能重建同一产物。
 
-## 核心状态模型
+银行合约的核心不是按钮，而是一组不变量：每个调用者的 credit 不能凭空增加，成功取款后 credit 应减少相同金额，拒绝路径不能改变余额，事件要能解释状态变化。把这组规则称为 <Term>Bank Invariant</Term>，后续每次动作都用它判断成功或回滚。
 
-$$
-cost(T)=gasUsed(T) \times effectiveGasPrice(T)
-$$
+本章示例只使用测试账户、无价值请求和可清理数据目录。编译、部署、调用、回执和事件分开留档；“交易已提交”与“业务状态已经满足”不是同一个结论。
 
-$$
-address = last_{20}(keccak256(RLP(sender,nonce)))
-$$
+<Callout type="trap" title="把 IDE 的默认编译器当成项目配置">
+  现象：同一份 Solidity 源码在不同 IDE 中得到不同字节码，团队仍按界面显示继续部署。原因：Compiler、优化开关、语言版本或插件默认值没有固定。修法：保存源码摘要、Compiler 版本、优化配置、ABI、字节码和部署回执，再比较产物。
+</Callout>
 
-$$
-S_{t+1} = apply(S_t, T_t), \quad valid(T_t,S_t)=1
-$$
+<BdpCh07IdeCompareLab />
 
-$$
-gate = source \times version \times replay \times boundary \times failureEvidence
-$$
+## 7.1 三种Solidity IDE
 
-第一式描述本页资源、价值或身份约束；第二式给出地址、确认或账本链接等派生关系。状态转移式要求候选请求先通过当前状态验证，再原子地产生后状态；失败必须保留原状态。证据门禁采用乘法语义，来源、版本、重放、边界或失败证据任一缺失都不能发布。
+browser-solidity、Atom 和 IntelliJ IDEA 的共同任务是编辑与运行 Solidity，但它们的边界不同：浏览器 IDE 把编译和节点连接放在同一界面，Atom 倾向项目文件与插件组合，IntelliJ IDEA 更接近工程化编辑和调试。比较时不看界面风格，而看输入是否固定、产物是否保存、失败是否能重现。
 
-以一个最小样本固定前状态、调用者、输入、节点或编译器版本与确认阈值。正常样本走完整成功路径；边界样本取零值、最大值、恰好余额或恰好Gas；单故障样本只改变签名、nonce、网络身份、区块链接、权限或响应字段中的一项。三者使用同一观察合同，才能把差异归因到目标规则。
+迁移 IDE 时先复制源码和测试输入，再单独确认 Compiler、网络、账户和部署参数。IDE 只能提供操作入口，不能替代 ABI、字节码、交易回执和状态查询；这些证据要跨工具保持相同结构。
 
-## 三段可运行骨架
+## 7.1.1 browser-solidity
 
-```typescript
-type Trace = { before: string; input: string; after?: string; error?: string };
+browser-solidity 适合快速展示从源码到部署的短路径，编辑器、Compiler、账户和节点通常出现在同一个页面。它的优势是反馈快，风险是默认值容易被忽略；实验开始前先记录 Compiler、网络、账户、优化设置和源码摘要。把固定 Compiler 与优化配置的动作称为 <Term>Compiler Pin</Term>。
 
-function evidenceGate(trace: Trace) {
-  const complete = Boolean(
-    trace.before && trace.input && (trace.after || trace.error),
-  );
-  return { complete, trace, unit: "bdp-07-solidity-ide-quickstart" };
-}
-```
+部署后读取合约地址、创建交易回执和 ABI，并用只读调用确认初始状态。重新打开页面时不要假设默认账户和节点仍然相同；如果上下文变化，先把结果标为不可比，再重新部署或重新取证。
 
-```python
-def apply_transition(state, request, verify):
-    if not verify(state, request):
-        return {"accepted": False, "state": state, "reason": "invalid"}
-    candidate = state.copy()
-    candidate[request["key"]] = request["value"]
-    return {"accepted": True, "state": candidate, "reason": None}
-```
+## 7.1.2 Atom
 
-```solidity
+Atom 本身是编辑器，Solidity 编译和部署通常依赖插件、外部命令或项目脚本。它能把源码、配置和测试放进项目目录，却也要求作者明确记录插件版本、命令参数、工作目录和节点连接方式。
+
+用 Atom 重放时，先从干净目录安装固定依赖，再执行同一编译命令。比较的对象应包括源码摘要、Compiler 输出、ABI、字节码和部署回执；只比较编辑器中显示的代码，不足以说明两个环境生成了同一合约。
+
+## 7.1.3 IntelliJ IDEA
+
+IntelliJ IDEA 适合较大的工程，编辑、导航、插件和调试日志可以组合成更完整的开发流。工程化不等于自动正确：项目配置仍可能指向错误网络，调试器显示的调用也可能没有绑定固定区块和部署地址。
+
+验收时把 IDEA 项目配置视为输入，把部署交易和链上查询视为输出。保存运行配置、源码摘要、编译日志、合约地址、账户、chain ID 和回执；换机器后先重建这些输入，再比较状态和事件。
+
+## 7.2 Solidity快速入门：编写一个简单的银行合约案例
+
+最小银行合约可以用 credit 映射记录每个调用者的余额。存款增加调用者 credit 并发出 Deposit，合法取款先验证金额再更新 credit，越权或余额不足直接拒绝；每条路径都要说明调用者、输入、前状态、后状态和事件。
+
+下面的教学骨架强调顺序和状态边界，部署前必须锁定 Compiler、网络和测试账户：
+
+~~~solidity
 mapping(address => uint256) private credit;
 
-function withdraw() external {
-    uint256 amount = credit[msg.sender];
-    require(amount > 0, "no-credit");
-    credit[msg.sender] = 0;
+function deposit() external payable {
+    credit[msg.sender] += msg.value;
+    emit Deposit(msg.sender, msg.value);
+}
+
+function withdraw(uint256 amount) external {
+    require(credit[msg.sender] >= amount, "insufficient-credit");
+    credit[msg.sender] -= amount;
     (bool ok, ) = msg.sender.call{value: amount}("");
     require(ok, "transfer-failed");
+    emit Withdraw(msg.sender, amount);
 }
-```
+~~~
 
-第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把接口、合约或确认落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
+这里的关键顺序叫 <Term>Checks-Effects-Interactions</Term>：先检查调用者和金额，再更新内部状态，最后才进行外部交互。它不是万能的安全证明，但能缩短可重入窗口；仍需结合互斥、编译器行为、Gas 和测试覆盖复核。
 
-## 正式目录逐项讲解
+事件不是状态的替身。<Term>Event Trace</Term> 是事件名称、调用者、金额、交易哈希和所在区块组成的轨迹；它应能与前后 credit、余额和回执相互解释。只看到事件而没有状态读取，不能证明存款或取款真正满足业务不变量。
 
-### 第7章 Solidity IDE和Solidity快速入门
+<BdpCh07BankStateLab />
 
-“第7章 Solidity IDE和Solidity快速入门”位于本页正式目录坐标 1/7。IDE提供编辑、编译和调试入口，却可能隐式选择编译器、网络与账户。实验先锁定这些上下文，再比较源码摘要、编译产物和部署回执，避免界面默认值漂移。
+<Callout type="trap" title="先转账再清零，失败时仍按成功处理">
+  现象：取款函数先调用外部地址，随后才减少 credit，测试只检查按钮没有报错。原因：外部合约可以重入，或转账失败后让内部账本与实际余额脱节。修法：先检查并更新内部状态，检查外部调用返回值；失败时依靠原子回滚恢复整笔交易。
+</Callout>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+失败通过 require 触发的 <Term>Atomic Revert</Term> 会撤销同一交易中的状态写入和外部效果；它不是前端按钮的“撤销”，而是执行层对整笔调用的回退边界。
 
-### 7.1 三种Solidity IDE
+<BdpCh07SafetyLab />
 
-“7.1 三种Solidity IDE”位于本页正式目录坐标 2/7。IDE提供编辑、编译和调试入口，却可能隐式选择编译器、网络与账户。实验先锁定这些上下文，再比较源码摘要、编译产物和部署回执，避免界面默认值漂移。
+## 7.3 本章小结
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+本章的验收规则可以收束成四条：
 
-### 7.1.1 browser-solidity
+- IDE 是操作入口，Compiler、网络、账户和插件版本必须显式固定
+- 部署证据包含源码摘要、ABI、字节码、地址、回执和链上查询
+- 银行合约用 credit 不变量解释存款、取款、越权和余额不足
+- 外部调用遵循检查、效果、交互顺序，并检查失败与回滚结果
 
-“7.1.1 browser-solidity”位于本页正式目录坐标 3/7。IDE提供编辑、编译和调试入口，却可能隐式选择编译器、网络与账户。实验先锁定这些上下文，再比较源码摘要、编译产物和部署回执，避免界面默认值漂移。
+自测问题是：如果一次取款显示了 Withdraw 事件，但 credit 查询仍未减少，你会发布这笔交易吗？不会。应保留事件、回执、区块、调用者和前后状态，检查是否读错地址或区块、是否发生重组、是否存在未处理的执行错误。
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+## 三步 IDE 与合约验收实验
 
-### 7.1.2 Atom
+<Stepper>
+  <Step title="1. IDE 对比：输入与产物">
+    先预测：切换 browser-solidity、Atom 与 IntelliJ IDEA，哪些输入必须保持一致才能比较字节码？选择 IDE，保存 Compiler、源码摘要、ABI、字节码和部署回执。
 
-“7.1.2 Atom”位于本页正式目录坐标 4/7。IDE提供编辑、编译和调试入口，却可能隐式选择编译器、网络与账户。实验先锁定这些上下文，再比较源码摘要、编译产物和部署回执，避免界面默认值漂移。
+    <BdpCh07IdeCompareLab />
+  </Step>
+  <Step title="2. 银行状态：动作与不变量">
+    先预测：存款、合法取款、越权和余额不足分别会怎样改变 credit？选择动作并执行，记录调用者、前后状态和事件。
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+    <BdpCh07BankStateLab />
+  </Step>
+  <Step title="3. 安全顺序：外部调用与回滚">
+    先预测：外部调用失败时，先清零 credit 与先转账的结果是否相同？选择顺序、推进步骤并注入失败，写下回滚和重入风险。
 
-### 7.1.3 IntelliJ IDEA
+    <BdpCh07SafetyLab />
+  </Step>
+</Stepper>
 
-“7.1.3 IntelliJ IDEA”位于本页正式目录坐标 5/7。IDE提供编辑、编译和调试入口，却可能隐式选择编译器、网络与账户。实验先锁定这些上下文，再比较源码摘要、编译产物和部署回执，避免界面默认值漂移。
+## 练习与答案
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+<Exercises>
 
-### 7.2 Solidity快速入门：编写一个简单的银行合约案例
+**问题 1：改 Demo 代码。** 在 IDE 对比实验中新增一个“保存部署证据”的步骤。最少要保存哪些字段，才能让另一个人重建同一字节码？
 
-“7.2 Solidity快速入门：编写一个简单的银行合约案例”位于本页正式目录坐标 6/7。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
+<Answer>
+  至少保存源码摘要、Compiler 与优化配置、IDE 或构建命令、ABI、字节码、网络、账户、部署地址和创建交易回执。若缺少 Compiler 或源码摘要，即使地址相同，也不能证明部署的是同一产物。
+</Answer>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+**问题 2：银行状态。** 没有 credit 的账户调用 withdraw，节点返回错误。你如何证明拒绝路径没有改变状态？
 
-### 7.3 本章小结
+<Answer>
+  在调用前后读取该账户 credit、合约余额和区块上下文，保存原始错误、交易回执或调用结果，并确认没有新的 Withdraw 事件。前后状态相同且拒绝原因符合权限或金额检查，才能说明不变量保持。
+</Answer>
 
-“7.3 本章小结”位于本页正式目录坐标 7/7。“第7章 Solidity IDE和Solidity快速入门”的收束不是名词列表，而是把对象、授权、执行顺序、状态不变量和版本边界连接成一条可重放轨迹。
+**问题 3：外部交互。** withdraw 已经把 credit 清零，但外部转账返回失败。最终 credit 应该是多少？
 
-以“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”作为通过标准；只展示成功截图、最终余额或交易哈希都不构成完整证据。通过标准是“能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。”，并保留原始响应、状态摘要、版本和首个失败点。
+<Answer>
+  若失败通过 require 触发原子回滚，最终 credit 应恢复到调用前的数值，转账和 Withdraw 事件也不应作为成功结果保留。若代码吞掉失败并继续提交，则必须修复逻辑，不能把不一致状态发布给业务系统。
+</Answer>
 
-## 正常、边界与故障矩阵
+</Exercises>
 
-| 样本   | 只改变的变量                      | 预期结果               | 必存证据                   |
-| ------ | --------------------------------- | ---------------------- | -------------------------- |
-| 正常   | 合法输入与足额资源                | 状态提交并达到确认阈值 | 前后状态、哈希、回执、版本 |
-| 边界   | 零值、最大值或恰好阈值            | 按明确规则接受或拒绝   | 边界值、判断分支、资源消耗 |
-| 单故障 | 签名、nonce、网络、权限或链接一项 | 提交前拒绝且原状态不变 | 错误对象、首个差异、回退点 |
+## 术语表
 
-测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
-
-## 常见失败与回退
-
-
-## 小结
-
-- IDE负责编辑编译部署调试，正确性来自状态不变量
-- 历史IDE可能隐式选择编译器、网络与账户
-- 银行合约需锁定版本，覆盖存取越权和余额不足
-- 外部调用失败须原子回滚，先清零再转账防重入
-- 验收保留原始响应、状态摘要、版本和失败点
-
-## 本章回顾
-
-比较历史IDE，并通过银行合约贯通状态、调用者、金额、事件和回滚。 IDE负责编辑、编译、部署和调试反馈，但合约正确性来自状态不变量。银行案例应明确谁能存取、余额如何变化、外部调用何时发生、失败后是否原子回滚，而不是只看按钮执行成功。 掌握标准不是记住命令或界面，而是能在锁定编译器版本下实现最小银行合约，执行存款、合法取款、越权和余额不足四条轨迹，并核对事件与状态。。发布前必须由独立观察者从来源和固定配置重放正常、边界及单故障样本。
-
+<Glossary>
+  <GlossaryItem term="IDE Context">
+    记录 IDE、Compiler、网络、账户和源码等输入的工具上下文。
+  </GlossaryItem>
+  <GlossaryItem term="Compiler Pin">
+    把 Compiler 版本、优化设置和相关构建参数固定并保存，避免同一源码生成不同产物。
+  </GlossaryItem>
+  <GlossaryItem term="Bank Invariant">
+    描述每个账户 credit 如何随存款、取款和拒绝路径变化的状态规则。
+  </GlossaryItem>
+  <GlossaryItem term="Checks-Effects-Interactions">
+    先检查条件、再更新内部状态、最后进行外部调用的合约编程顺序。
+  </GlossaryItem>
+  <GlossaryItem term="Event Trace">
+    把事件、调用者、金额、交易哈希和区块连接起来的可复核轨迹。
+  </GlossaryItem>
+  <GlossaryItem term="Atomic Revert">
+    一笔交易失败时，把已经写入的状态和同笔外部效果整体恢复到调用前的机制。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [上一页：第6章 以太坊的编程接口](/learn/blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces)
-- [下一页：第8章 Solidity语法详解](/learn/blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax)
+[上一页：第6章 以太坊的编程接口](/learn/blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces)
+· [下一页：第8章 Solidity语法详解](/learn/blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax)
 
 <Attribution
   mode="independent-rewrite"
   sourceBasis="publisher-catalog"
-  workTitle="《区块链开发实战》2018版"
+  workTitle="《区块链开发实战：以太坊关键技术与案例分析》"
   adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 />
-

@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-17
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcDelegateAnatomyLab,
+  CvcDelegateChainLab,
+  CvcDelegateSyntaxLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-delegates";
 
 <Objectives>
 
@@ -32,7 +41,9 @@ Delegate把method和可选target object封装成type-safe callable value。Stati
 
 先预测：两个指向同一instance method的delegates是否相等；combine是否修改原delegate；multicast有返回值时返回谁；第一项抛异常后是否继续；lambda捕获的是当前值还是变量；把method name传callback是否一定分配新object；reflection能否绑定private/open instance method。后文用anatomy、chain和syntax三层验证。
 
-<Term def="Delegate保存的receiver target、method entry与可选invocation list共同形成的可调用值。">delegate invocation identity</Term>
+<Term def="Delegate保存的receiver target、method entry与可选invocation list共同形成的可调用值。">
+  delegate invocation identity
+</Term>
 
 ## A First Look at Delegates
 
@@ -60,18 +71,28 @@ Callback API要定义调用次数、同步/异步、thread、异常、是否保�
 
 Closed instance delegate保存target receiver，invoke时隐式把target传给method。Delegate相等通常要求相同delegate type、target和method；这使`obj.Handle`可用于event unsubscribe，只要target与method相同。Target强引用意味着scheduler/timer/publisher owner必须解除注册。
 
-<Term def="Delegate对instance receiver或closure display object的强引用，以及由此延长的对象图生命周期。">delegate target lifetime</Term>
+<Term def="Delegate对instance receiver或closure display object的强引用，以及由此延长的对象图生命周期。">
+  delegate target lifetime
+</Term>
 
 Open instance delegate不绑定target，签名显式接收receiver，可用reflection/CreateDelegate或某些method group形式构造。它便于把“对任意T调用某instance method”缓存为一个callable，避免为每对象创建closed delegate，但signature与null handling要明确。
 
 <Stepper>
-  <Step title="切换static、instance、open instance与closure delegate"></Step>
-  <Step title="打印Delegate证据">记录Type、Target、Method、InvocationList和被谁长期持有，画GC root path。</Step>
-  <Step title="验证可回收">注册/调用/解除后用WeakReference测试receiver能回收，覆盖timer/event/cache owner。</Step>
+  <Step title="切换static、instance、open instance与closure delegate">
+    <CvcDelegateAnatomyLab />
+  </Step>
+  <Step title="打印Delegate证据">
+    <CvcDelegateAnatomyLab />
+  </Step>
+  <Step title="验证可回收">
+    <CvcDelegateAnatomyLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="只保存Method引用，不会影响Instance生命周期">
-Closed instance delegate同时保存Target，长期owner会强引用receiver。Closure还可能把this和多个locals一起放进display object。
+  Closed instance
+  delegate同时保存Target，长期owner会强引用receiver。Closure还可能把this和多个locals一起放进display
+  object。
 </Callout>
 
 ## Demystifying Delegates
@@ -95,7 +116,9 @@ foreach (Delegate entry in pipeline.GetInvocationList())
 
 Multicast默认同步顺序调用。Void delegate无需合并returns；有return时Invoke最终只返回最后成功handler结果，前面results丢弃，因此需要所有results时逐项调用并收集。一个异常默认中止后续entries，是否隔离由caller policy决定。
 
-<Term def="Multicast delegate按固定顺序同步调用entries，并由owner定义异常、返回和重入处理的协议。">delegate chain policy</Term>
+<Term def="Multicast delegate按固定顺序同步调用entries，并由owner定义异常、返回和重入处理的协议。">
+  delegate chain policy
+</Term>
 
 ## C#'s Support for Delegate Chains
 
@@ -106,20 +129,28 @@ Multicast默认同步顺序调用。Void delegate无需合并returns；有return
 用`GetInvocationList()`逐项cast/invoke可做per-handler timeout（同步delegate无法真正强停）、exception capture、results aggregation和telemetry。策略必须透明：继续后可能partial side effects；并行调用会失去ordering并引入thread safety；retry可能重复非idempotent handler。更复杂工作流应使用显式pipeline/queue而非隐藏multicast。
 
 <Stepper>
-  <Step title="切换combine、invoke、remove与inspect"></Step>
-  <Step title="定义Chain语义">记录ordering、duplicate、return aggregation、exception、reentrancy、thread和unsubscribe-in-flight。</Step>
-  <Step title="执行故障矩阵">让第1/中间/最后handler抛错、慢、重入和自退订，验证owner state与telemetry。</Step>
+  <Step title="切换combine、invoke、remove与inspect">
+    <CvcDelegateChainLab />
+  </Step>
+  <Step title="定义Chain语义">
+    <CvcDelegateChainLab />
+  </Step>
+  <Step title="执行故障矩阵">
+    <CvcDelegateChainLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Multicast Delegate会自动隔离每个Handler异常">
-默认Invoke遇到第一个未处理异常即停止，后续不执行。若需隔离，owner必须逐项调用、记录并定义partial-success语义。
+  默认Invoke遇到第一个未处理异常即停止，后续不执行。若需隔离，owner必须逐项调用、记录并定义partial-success语义。
 </Callout>
 
 ## Enough with the Delegate Definitions Already (Generic Delegates)
 
 `Action`/`Action<T...>`表达void callback，`Func<T...,TResult>`表达有结果callback，`Predicate<T>`等提供常用语义。自定义delegate仍适合parameter names/attributes/ref/out、事件语义或清晰domain name。Generic delegate可声明variance：Func result `out`，Action inputs `in`，允许安全reuse。
 
-<Term def="用Action/Func或命名generic delegate复用signature，同时按输入/输出位置获得type-safe variance。">generic callback contract</Term>
+<Term def="用Action/Func或命名generic delegate复用signature，同时按输入/输出位置获得type-safe variance。">
+  generic callback contract
+</Term>
 
 不要把所有业务operation都降为Func，命名interface能表达多个相关members、lifetime和docs。Single operation且策略可注入时delegate最轻量。Callback是否可null、调用几次、是否保存、async/exception/cancellation都应在parameter docs/owner type体现。
 
@@ -151,17 +182,29 @@ Console.WriteLine(accumulate(3));  // 15
 
 Compiler生成display class，把captured locals提升为fields，lambda delegate target指向该object。Capture的是variable cell，不是每次声明时的冻结值；loop capture要理解变量作用域。Modern foreach为每iteration variable有特定语义，但for index仍常需要局部copy。
 
-<Term def="Compiler把captured locals提升到display object fields，使lambda与外层代码共享同一变量cell。">closure capture cell</Term>
+<Term def="Compiler把captured locals提升到display object fields，使lambda与外层代码共享同一变量cell。">
+  closure capture cell
+</Term>
 
 Closure可延长large object、DI scope、this和CancellationTokenSource的lifetime。只捕获所需scalar，避免无意capture this；长期callback用显式state object更易审计。并发调用closure访问mutable captured state需要同步。
 
 <Stepper>
-  <Step title="切换method group、lambda、generic delegate与reflection"></Step>
-  <Step title="检查Capture集合">反编译display class，列出被提升fields、root owner、并发访问和解除时间。</Step>
-  <Step title="复现Loop陷阱">生成callbacks后再调用，比较共享index cell与每轮local copy，加入allocation/lifetime断言。</Step>
+  <Step title="切换method group、lambda、generic delegate与reflection">
+    <CvcDelegateSyntaxLab />
+  </Step>
+  <Step title="检查Capture集合">
+    <CvcDelegateSyntaxLab />
+  </Step>
+  <Step title="复现Loop陷阱">
+    <CvcDelegateSyntaxLab />
+  </Step>
 </Stepper>
 
 ## Delegates and Reflection
+
+<Term def="从MethodInfo创建open或closed delegate时，对可见性、签名兼容、泛型闭合和代码保留的约束。">
+  delegate binding boundary
+</Term>
 
 `Delegate.CreateDelegate`可从Type/target与MethodInfo创建open/closed delegate，提供比`MethodInfo.Invoke`更typed且可缓存的调用路径。必须验证static/instance、visibility、parameter variance、return compatibility、generic method closed状态。错误可能在create时抛，而不是首次invoke。
 
@@ -187,18 +230,44 @@ Plugin/serializer通过reflection发现methods时，先metadata筛选allowlist/a
 
 **问题 3：For循环创建十个Lambdas都打印10，为什么？**
 
-<Answer>Lambdas capture同一个loop variable cell，调用发生时循环已结束。每轮创建`int copy=i;`并capture copy，或把值作为显式state传callback。通过反编译display class和延迟调用测试验证，不把capture误认为冻结值。</Answer>
+<Answer>
+  Lambdas capture同一个loop variable cell，调用发生时循环已结束。每轮创建`int
+  copy=i;`并capture copy，或把值作为显式state传callback。通过反编译display
+  class和延迟调用测试验证，不把capture误认为冻结值。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="delegate invocation identity" definition="Delegate的target、method与invocation list形成的调用身份。" />
-  <GlossaryItem term="delegate target lifetime" definition="Delegate强引用receiver/display object造成的对象图生命周期。" />
-  <GlossaryItem term="delegate chain policy" definition="Multicast的顺序、返回、异常与重入规则。" />
-  <GlossaryItem term="generic callback contract" definition="Action/Func或命名generic delegate的typed回调协议。" />
-  <GlossaryItem term="closure capture cell" definition="被提升到display object并由多处共享的变量单元。" />
+  <GlossaryItem
+    term="delegate invocation identity"
+    definition="Delegate的target、method与invocation list形成的调用身份。"
+  />
+  <GlossaryItem
+    term="delegate target lifetime"
+    definition="Delegate强引用receiver/display object造成的对象图生命周期。"
+  />
+  <GlossaryItem
+    term="delegate chain policy"
+    definition="Multicast的顺序、返回、异常与重入规则。"
+  />
+  <GlossaryItem
+    term="generic callback contract"
+    definition="Action/Func或命名generic delegate的typed回调协议。"
+  />
+  <GlossaryItem
+    term="closure capture cell"
+    definition="被提升到display object并由多处共享的变量单元。"
+  />
+  <GlossaryItem
+    term="delegate binding boundary"
+    definition="Reflection创建delegate时的可见性、签名、泛型与代码保留约束。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 17: Delegates" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 17: Delegates"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

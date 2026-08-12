@@ -3,76 +3,216 @@ title: "第 9 章 Painting Textures：从 Base Texture 到角色细节"
 type: A
 section: "玩转 Blender 第 3 版 · UV、纹理与材质"
 order: 9
-description: "覆盖主要纹理流程、Blender Texture Paint、Base Texture、纹理元素、外部软件绘制和 Blender 中回看。"
+description: "从纹理工作流、Base Texture 分层和外部绘制往返出发，建立可保存、可回看、可交接的角色纹理证据。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-09
 ---
 
+import {
+  Bl3Ch09WorkflowLab,
+  Bl3Ch09BaseTextureLab,
+  Bl3Ch09ExternalRoundtripLab,
+} from "@/components/mdx/blender-3d/04-lookdev/bl3-09-painting-textures";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 问题：为什么视口里已经画完，关闭文件后纹理仍可能丢失
+<Objectives>
 
-先预测：在 Texture Paint 中画出颜色但没有保存 Image Datablock，保存 .blend 是否保证像素写入磁盘？不保证。第九章把绘画拆成 UV、Image、Material Slot、Paint Slot、笔刷和外部文件链，先建立 Base Texture，再添加面部、服装与配件细节，并在 Blender 中回看。
+- 能解释角色纹理从图像、材质引用到磁盘文件的主工作流
+- 能创建并修改 Base Texture，按镜头为皮肤、布料和金属安排纹理元素
+- 能用 Blender Texture Paint 和外部软件完成一次可回看的绘制往返
+- 能回答：关闭并重开 `.blend` 后，如何证明角色仍引用了正确的图像文件？
 
-## 原书边界与官方小节
+</Objectives>
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+{/* BL3_CH09_QUALITY_V2 */}
 
-- **Defining the Main Workflow**
-- **Texture Painting in Blender**
-- **Creating the Base Texture**
-- **Understanding the Elements of a Texture**
-- **Texturing in Other Software；Seeing the Painted Character in Blender**
+## 问题：为什么视口里已经画完，重开文件后颜色仍可能消失
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+先预测：在 Texture Paint 中看到颜色，是否就代表像素已经安全写入项目？不一定。视口画面、内存中的图像和磁盘文件是不同层次；本章把它们串成一条可检查的工作流，再把大色块、材质变化和角色细节送回最终镜头。
 
-## Image Datablock、磁盘文件与材质引用
+这章解决的是“画了什么、写到哪里、如何被材质读取、怎样交给别人”的连续问题。没有这条链，漂亮的预览可能只是未保存图像、错误路径或不匹配的颜色解释，下一位作者打开文件时只能从头猜。
 
-Image Datablock 是 Blender 内存中的图像对象，Material Node 引用它，Texture Paint 写入其像素；磁盘文件是独立持久化载体。Save .blend、Save Image 和 Pack Resources 是不同动作。Base Texture 先分配皮肤、布料、金属等大色块，再用明度、色相、粗糙变化和磨损表达材质层级；细节尺度必须匹配最终镜头。
+## 本章知识点清单
 
-## 五个核心术语与责任边界
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Main Workflow | 工作流实验 | Image Datablock、Paint Slot | 重开后路径是否仍然有效 |
+| Texture Paint | 工作流实验 | Texture Paint | 笔刷实际写入哪张图 |
+| Base Texture | 分层实验 | Base Texture | 大色块是否先读清 |
+| Texture Elements | 分层实验 | Texture Element | 细节频率是否服务镜头 |
+| External Roundtrip | 往返实验 | Color Space、Texture Set | 外部修改能否回到角色 |
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Defining the Main Workflow
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+角色纹理的主工作流不是“拿笔刷涂一遍”，而是从 UV 对应的图像开始，经过材质节点引用、绘制修改、保存和重开检查，最后形成可交接的版本。先为图像确定名称、分辨率、格式和路径；再把它接入材质的 Base Color，并确认 Texture Paint 的目标是同一张图。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+工作流的第一个责任是创建像素容器，第二个责任是让材质和 Paint Slot 指向它，第三个责任是把内存变化写到磁盘。`.blend` 文件可以保存场景和引用关系，但不等于每张外部图像都已更新。正常样本应能重开并看到颜色，边界样本应说明远景分辨率或压缩限制，故障样本则故意断开路径来验证诊断。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+<Bl3Ch09WorkflowLab />
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Texture Painting in Blender
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+Blender 的 Texture Paint 直接在模型表面提供笔刷反馈，适合快速确认 UV 对齐、颜色位置和角色局部细节。开始前先选中正确材质、图像和 **<Term>Image Datablock</Term>**；它是 Blender 内存里保存像素的对象，不是自动等同于磁盘上的 PNG 或 TIFF。绘制后执行 Save Image，并记录图像名称、尺寸、格式和路径。
 
-## 关键对象与数据流
+**<Term>Paint Slot</Term>** 是绘画目标的明确入口：它把某个材质通道和一张图像关联起来。若场景里有多张相似贴图，必须在 Paint Slot、图像名称和 UV 结果上同时确认，而不能只看颜色“好像出现了”。用近景、斜视和材质预览观察笔刷边缘，再关闭并重开文件，验证颜色仍由同一个图像文件提供。
 
-为 UV 创建固定分辨率图像并立即命名、保存，连接到材质 Base Color 并设为 Paint Slot。先填材质大区，再在独立外部图层或版本文件添加色差、接缝、污渍和角色特征。每次绘制后执行 Save Image，重新打开 .blend 验证路径；导入外部修改时检查色彩空间、Alpha 和 UV 对齐。
+### 一次绘制的证据顺序
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+1. 保存未绘制的输入版本，并截图记录当前材质和 UV。
+2. 选择图像与 Paint Slot，画一个容易识别的测试标记。
+3. Save Image，记录输出路径和文件版本。
+4. 重新加载图像并重开 `.blend`，比较标记、路径和材质节点。
 
-## 正常、边界与失败样本
+## Creating the Base Texture
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+**<Term>Base Texture</Term>** 是角色材质的第一层可读颜色和明度组织：皮肤先有稳定的肤色大区，服装先建立主色与分区，金属配件先建立底色和明暗方向。它不负责一次性塞入所有划痕和噪声，而是让角色在目标镜头中先有清楚的形体、材质差异和视觉层级。
 
+先按 UV 岛和角色部件填充大色块，再以少量变化补充面部红润、布料方向或金属边缘。变化层必须有镜头理由：近景可以保留较细的毛孔、织纹或磨损，远景则需要降低频率，避免细节变成闪烁噪声。每种材质都要留下正常、低分辨率边界和过度细节三个对照。
+
+<Bl3Ch09BaseTextureLab />
+
+## Understanding the Elements of a Texture
+
+纹理不是单一颜色，而是由颜色、明度、粗糙度提示、边界、方向、磨损和角色特征共同构成的视觉信息。**<Term>Texture Element</Term>** 可以是一个面部色差、一条衣服接缝、金属边缘的亮度变化或一个能帮助识别角色的标记；它必须能说明所服务的材质和镜头，而不是随机撒点。
+
+把元素按三层检查：第一层是远景仍然可见的材质分区，第二层是中景能读出的方向、褶皱和磨损，第三层是近景才值得保留的角色特征。观察元素的边缘是否越过 UV 接缝、是否与模型法线和灯光重复表达同一件事、是否在缩小预览中变成噪声。每次只增加一种变化并保存版本，才能知道哪一层真正改善了画面。
+
+### 角色细节的取舍表
+
+| 部件 | 第一层底色 | 第二层变化 | 近景细节 | 失败信号 |
+| --- | --- | --- | --- | --- |
+| 皮肤 | 肤色与明度 | 红润、阴影过渡 | 痣、雀斑、伤痕 | 脸部像脏点集合 |
+| 服装 | 主色与分区 | 织物方向、接缝 | 局部磨损与污渍 | 图案频率压过轮廓 |
+| 金属 | 底色与边界 | 粗糙差异、边缘亮度 | 划痕与氧化 | 所有区域都像同一种材质 |
+
+## Texturing in Other Software；Seeing the Painted Character in Blender
+
+外部软件适合处理分层、选区、笔刷和批量修改，但交接必须围绕同一张 **<Term>Texture Set</Term>** 展开：它是一组按角色、材质和通道命名的图像文件，而不是“导出一张看起来差不多的图”。导出前锁定 UV、图像尺寸、命名和通道；外部修改时保持边界和 Alpha 约定不变。
+
+颜色图通常使用 **<Term>Color Space</Term>** 的 sRGB 解释，法线、遮罩或粗糙度等数据图则要按数据用途选择 Non-Color。色彩空间错配会让颜色、对比度或数值通道在 Blender 中看起来失真。外部文件保存后回到 Blender 执行 Reload Image，在材质预览、正视和斜视中比较；如果角色没有变化，先查路径、文件名、材质节点和 Paint Slot，再判断是否是绘画内容的问题。
+
+<Bl3Ch09ExternalRoundtripLab />
+
+<Callout type="trap" title="保存 .blend 不等于保存图像像素">
+  现象：文件能打开，视口却恢复到旧颜色或变成空白。原因：Image Datablock 的像素仍在内存里，外部图像没有执行 Save Image 或路径已失效。修法：保存图像文件，记录绝对/项目相对路径，关闭并重开后再次检查标记。
+</Callout>
+
+<Callout type="trap" title="Base Texture 还没稳定就堆微小细节">
+  现象：近看细节很多，角色缩小后却没有清楚的材质差异。原因：没有先建立大色块和明度层级，细节频率超过目标镜头能表达的范围。修法：先锁定 Base Texture，再逐层加入变化，并用最终镜头尺寸做缩小预览。
+</Callout>
+
+<Callout type="trap" title="外部往返后颜色完全变样">
+  现象：外部软件中的颜色回到 Blender 后变亮、变暗或通道关系异常。原因：Color Space、Alpha、文件路径或 Texture Set 命名不一致。修法：按通道记录颜色解释，Reload Image 后对照 UV 和材质节点，再保存交接版本。
+</Callout>
+
+## 三次纹理交接实验
+
+<Stepper>
+  <Step title="1. 主工作流：Image、Paint Slot 与保存">
+    先猜一猜：如果只完成 Image Datablock 和 Paint Slot，却不执行 Save Image，关闭文件后会留下什么？推进流程并记录每个对象的责任。
+
+    <Bl3Ch09WorkflowLab />
+  </Step>
+  <Step title="2. Base Texture：大色块到细节层">
+    先预测：把细节层加入得越多，角色在远景中就越清楚吗？切换皮肤、服装和金属，再比较基础层与变化层的镜头可读性。
+
+    <Bl3Ch09BaseTextureLab />
+  </Step>
+  <Step title="3. 外部绘制：往返与 Blender 回看">
+    先预测：同一张图像从外部软件保存后，为什么仍要在 Blender 中 Reload Image 并检查 Color Space？完成往返，定位任何断开的交接条件。
+
+    <Bl3Ch09ExternalRoundtripLab />
+  </Step>
+</Stepper>
+
+## 验收证据：从能显示到可交接
+
+交付包至少包含：输入 `.blend` 版本、UV Layout、图像名称与尺寸、材质节点和 Paint Slot 截图、Base Texture 版本、细节层版本、外部编辑文件、Color Space 与 Alpha 说明、输出路径、Reload Image 结果和重开文件截图。证据要让另一位作者能沿同一条路径复现，而不是只看到一张最终渲染图。
+
+正常样本证明角色的皮肤、服装和配件都能读取正确图像；边界样本改变分辨率、远景镜头或外部格式；故障样本断开路径、误设颜色空间或跳过 Save Image。每个样本都记录预期与实际差异，才能把“看起来不对”转化为可修复的资产问题。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-Texture Paint 界面和画笔系统会变化，但 Image Datablock、Paint Slot、磁盘持久化、色彩空间和材质引用链稳定。现代外部 PBR 工具可补充流程，本章仍需证明 Base Texture 和 Blender 回看。
+原书流程中的 Texture Paint、图像保存、材质引用和 Blender 回看仍是稳定不变量；当前版本可能改变工作区布局、笔刷选项、颜色管理和外部 PBR 工具的连接方式。迁移时保留图像对象、Paint Slot、Base Texture 分层、Texture Set 命名和回看证据，不把菜单位置误当成流程本身。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含图像名称、尺寸、色彩空间、文件路径、Paint Slot、Base Texture、细节版本、外部往返对照、未保存图像检查和重开文件结果。目标镜头尺寸下不应出现无意义高频细节。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目改用 UDIM、分层 PSD 或外部烘焙工具，也要说明它们如何回到 Blender 的 UV、材质节点和目标镜头，而不是只列工具名称。
 
 ## 小结
 
-- 纹理绘制目标是 Image Datablock 与材质槽的组合
-- 保存项目和保存图像是不同操作
-- Base Texture 先建立材质和明度层级
-- 外部往返必须验证路径、色彩空间和 UV
+- 纹理工作流同时管理像素、材质引用和磁盘持久化
+- Texture Paint 的可见结果必须经过 Save Image 与重开验证
+- Base Texture 先建立大色块，再按镜头加入纹理元素
+- 外部绘制交接要检查 Texture Set、Color Space、Alpha 与路径
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：工作流诊断。** 你在视口中画出一个明显标记，保存 `.blend` 后重开却看不到它。请按顺序列出四个检查点，并指出最可能的责任对象。
+
+<Answer>
+  依次检查当前材质与 Paint Slot、Image Datablock 名称、Save Image 是否真的写入目标路径、重开后的图像路径与 Reload Image 结果。最先确认的是图像像素是否已经保存到磁盘，因为保存场景关系不等于保存外部图像。
+</Answer>
+
+**问题 2：修改实验。** 在 `Bl3Ch09BaseTextureLab` 中为服装增加一个变化层，并写出一个判定它是否过密的镜头证据；不要只凭近距离观察下结论。
+
+<Answer>
+  选择 Cloth 并加入织物方向或磨损变化，然后把角色缩放到最终远景和中景尺寸比较轮廓、主色与材质差异。如果纹理变化变成闪烁噪声或压过服装轮廓，就降低频率、对比度或覆盖范围，并保存前后版本。
+</Answer>
+
+**问题 3：外部往返实现。** 外部软件保存了颜色图与遮罩图，回到 Blender 后颜色发灰且遮罩效果异常。你会如何区分 Color Space 问题与路径/节点问题？
+
+<Answer>
+  先在 Blender 中逐张确认文件路径、Texture Set 命名、材质节点输入和 Reload Image 结果，再分别检查颜色图是否按 sRGB、遮罩是否按 Non-Color。用同一 UV 区域的测试标记对照，若文件已更新但通道解释异常，优先修正 Color Space；若图像未变化，优先修正路径或引用。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Image Datablock">
+    Blender 内存中负责保存一张图像像素的对象；它可以指向磁盘文件，但不会自动替你保存每次像素修改。
+  </GlossaryItem>
+  <GlossaryItem term="Paint Slot">
+    告诉 Texture Paint 要把笔刷写入哪个材质通道和哪张图像的明确入口。
+  </GlossaryItem>
+  <GlossaryItem term="Base Texture">
+    纹理的第一层大色块和明度组织，让角色的材质分区先在目标镜头中读清楚。
+  </GlossaryItem>
+  <GlossaryItem term="Texture Element">
+    纹理中承担一种视觉信息的局部内容，例如接缝、磨损、色差或角色特征。
+  </GlossaryItem>
+  <GlossaryItem term="Texture Set">
+    按角色、材质和通道命名的一组相关图像文件，方便在不同软件之间交接。
+  </GlossaryItem>
+  <GlossaryItem term="Color Space">
+    解释图像数值应该如何变成颜色或数据的规则；颜色图和遮罩图不能随意用同一种解释。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：展开与 UV](/learn/blender-3d/04-lookdev/bl3-08-unwrapping-uvs) · [下一章：材质与着色器](/learn/blender-3d/04-lookdev/bl3-10-materials-shaders)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

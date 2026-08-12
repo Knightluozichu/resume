@@ -3,253 +3,249 @@ title: "The Lighting Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 15
-description: "Computer Graphics: Principles and Practice Chapter 15"
+description: "围绕直接光照、阴影与多光源执行，建立从法线和能量到片段颜色的光照直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh15LightingLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch15-lighting";
 
 <Objectives>
 
-- 能用自己的话解释The Lighting Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 15之间的关系是什么？
+- 能推导漫反射入射项与距离衰减关系，并解释法线、光源和材质如何共同影响亮度
+- 能修改 LightingViz 的光角、能量、遮挡、光源数量和访问等待，用证据定位光照瓶颈
+- 能回答：光照如何接收图形管线的几何属性，在现代硬件上形成可见片段颜色？
 
 </Objectives>
 
-## 为什么需要The Lighting Pipeline
+## 先把光照想成一笔需要方向和能量的账
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Lighting Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+表面变亮不是因为“有一个灯”这么简单。光源提供方向、颜色和能量，表面法线决定接收方向，材质反射率决定保留多少能量，观察方向还会影响高光等方向性响应。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决“光从哪里来、表面能接收多少、为什么有时算得很慢”三个相连的问题。直接光照计算入射贡献，阴影判断光线是否可达，多光源执行则把同一片段的照明任务扩展成一批可并行工作。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+先预测再实验：只旋转光源方向，几何轮廓和法线不应改变；只移动遮挡物，阴影区域应变化而材质参数不变；只提高访问等待，最终颜色数值不应改变，只是完成时间变长。把几何、能量和执行时间分开取证。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：光照是 Graphics Pipeline 的能量解释阶段
 
-Computer Graphics: Principles and Practice Chapter 15正是这一哲学在特定领域的具体体现。
+在计算机图形学导论中，Graphics Pipeline（图形管线）把顶点和片段属性送到可编程着色阶段。Lighting Pipeline（光照管线）接收片段位置、法线、纹理材质和光源数据，计算入射能量与反射响应，再把结果交给混合和帧缓冲输出。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+Graphics Pipeline（图形管线）负责几何和可见性契约，光照阶段负责把“表面朝向”和“光从哪里来”解释成颜色。几何错误会让法线和位置错位，能量错误会让所有表面过亮或过暗；调试时应先确认坐标空间和光源单位。
+
+### 光源、法线与直接光照
+
+<Term def="描述发出或贡献照明能量的对象，至少包含方向、位置、强度和颜色等属性。">
+  光源
+</Term>
+
+<Term def="描述表面朝向的单位方向，用于与入射光和观察方向比较；它不是顶点位置。">
+  法线
+</Term>
+
+<Term def="根据光源方向、表面法线、距离和材质响应估计一个片段直接获得的照明贡献。">
+  光照
+</Term>
+
+最简单的漫反射模型只保留光源方向与法线的夹角。设单位法线为 $n$、指向光源的单位方向为 $l$、入射能量为 $E$、反射率为 $\rho$，则可以写成：
+
+$$
+I_{\text{diffuse}} = \max(0,n\cdot l)E\rho
+$$
+
+这个式子把三个责任分开：点积决定方向匹配，$E$ 决定光源能量，$\rho$ 决定材质保留比例。法线背向光源时，点积为负，直接漫反射贡献应被截断。
+
+点光源还会随着距离衰减。若光源功率为 $P$、距离为 $r$，理想化的球面扩散可表示为：
+
+$$
+E(r) = \frac{P}{4\pi r^2}
+$$
+
+这个平方反比提醒我们，移动光源会同时改变方向和能量；如果只想研究法线，应固定距离和光源强度。
+
+### 阴影与间接光
+
+<Term def="表示表面因光线被几何体阻挡而无法直接接收某个光源贡献的区域或状态。">
+  阴影
+</Term>
+
+阴影判断的是从表面到光源的可达性。若路径被遮挡，直接光项被移除；表面仍可能从环境光、反射或间接光得到能量，因此阴影不等于材质反射率为零。
+
+阴影贴图、光线查询和屏幕空间近似各有误差与成本。无论实现方式如何，调试都应把“光线是否可达”和“可达后反射多少”分开记录，否则会用反射率去掩盖遮挡错误。
+
+## Radiometry（辐射度量）与 Reflectance（反射率）
+
+<Term def="描述光能量如何按功率、面积、方向或立体角分布的一组物理量；它为光照计算提供可比较的能量语义。">
+  辐射度量
+</Term>
+
+<Term def="表示表面保留或反射入射能量的比例；它是材质属性，不是光源强度或阴影可见性。">
+  反射率
+</Term>
+
+Radiometry（辐射度量）负责描述光有多少，Reflectance（反射率）负责描述表面留下多少。两者都需要统一单位、方向和颜色空间；把显示编码值直接当作线性能量，会让光照叠加和距离衰减失去可解释性。
+
+固定几何、法线和阴影状态后，只改变光源能量，再只改变反射率。若所有表面一起变化，优先查光源单位或颜色变换；若只有某种材质变化，检查反射率、法线方向和纹理采样。
+
+## Modern Graphics Hardware：光照任务可以并行但会共享数据
+
+Modern Graphics Hardware（现代图形硬件）能够同时计算大量片段的光照。每个片段可能读取相同的光源、阴影和材质数据，因此缓存复用能提高吞吐；当光源很多或阴影访问分散时，带宽和依赖会变成瓶颈。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（并行性）让彼此独立的光源或片段任务同时推进，memory latency（内存延迟）表示读取光源列表、阴影图或材质数据后等待结果的时间。提高光源数量不一定线性提高质量或速度：如果所有任务都等待同一份远端数据，执行单元会一起暴露尾部延迟。
+
+观察光照性能时至少记录片段数、光源数、阴影查询数、缓存命中、活跃任务和等待比例。先判断某个光源是否真正贡献可见区域，再决定是否扩大批次或降低阴影采样。
+
+下面的伪代码把光照的输入和遮挡判定分开。先计算可达性，再把通过的光源贡献累加，最后交给材质响应；这样每一项都能被单独测量。
+
+```cpp
+Color shade(Fragment fragment, Lights lights) {
+  Color result = ambient(fragment.material);
+  for (Light light : lights) {
+    if (visibleToLight(fragment.position, light)) {
+      result += directLight(fragment, light);
+    }
+  }
+  return result;
+}
+```
+
+## 三步实验：从光源方向走到多光源吞吐
+
+每一步先预测一个亮度、阴影状态或完成数，再只改变相关滑块。三个视角共享同一个 LightingViz，但分别呈现直接光照、阴影可达性和多光源任务队列。
+
+<Stepper>
+  <Step title="第一步：比较法线与光源方向">
+    先预测：把光角从 35° 拖到 0°，表面亮度会变亮还是几何会移动？选择“直接光照”，观察法线、光线和点积证据。
+
+    <CgppCh15LightingLab />
+
+  </Step>
+  <Step title="第二步：移动阴影遮挡物">
+    先预测：遮挡物移开后，反射率会改变还是直接光项会恢复？选择“阴影遮挡”，区分光线可达性与材质能量比例。
+
+    <CgppCh15LightingLab />
+
+  </Step>
+  <Step title="第三步：定位多光源瓶颈">
+    先预测：光源数量和访问等待同时增加时，完成光照任务是否同步增加？选择“多光源吞吐”，比较活跃、完成和等待任务。
+
+    <CgppCh15LightingLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：表面变暗就是反射率太低">
+  现象 → 整个区域突然变黑，直接调高材质反射率仍然无法恢复局部光照。
+
+原因 → 法线可能背向光源，或阴影测试阻断了光线；反射率只改变已经到达的能量比例。
+
+修法 → 先记录法线与光线点积、光线可达性和距离衰减，再检查反射率。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：阴影可以用环境光补回来">
+  现象 → 阴影边界错误，增加环境光后画面不黑了，但遮挡轮廓仍然不对。
 
-### 设计动机
+原因 → 环境光改变整体基线，不能修复光源可达性或阴影查询的几何错误。
 
-Vulkan 把The Lighting Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先验证光源到表面的遮挡路径，再分别调整环境项、直接光和材质反射率。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Lighting Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Lighting Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Lighting Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：光源越多就越逼真也越快">
+  现象 → 增加光源后高光更丰富，但帧时间和等待任务一起上升。
+
+原因 → 每个片段要处理更多光照和阴影任务，memory latency（内存延迟）会抵消 Parallelism（并行性）。
+
+修法 → 先测量可见贡献、缓存命中和阴影采样，再选择重要光源或分层近似。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 光照由光源方向、法线、距离和材质反射率共同决定，单独调一个参数不能解释所有亮度变化。
+- 漫反射点积和距离衰减把方向与能量分开，阴影则判断直接光是否可达。
+- 辐射度量描述光有多少，反射率描述表面保留多少，二者需要统一物理和颜色语义。
+- 现代图形硬件能并行处理多光源任务，但共享数据和内存延迟会限制吞吐。
+- 调试顺序应是“法线方向 → 光线可达 → 能量单位 → 材质响应 → 执行代价”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Lighting Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Lighting Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Lighting Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：计算漫反射项。** 当 `n·l=0.8`、入射能量 `E=2`、反射率 `ρ=0.5` 时，按本章简化模型计算漫反射强度；如果法线背向光源会怎样？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  漫反射强度为 `0.8 × 2 × 0.5 = 0.8`。如果法线背向光源，点积为负，经过 `max(0,
+  n·l)` 截断后直接漫反射项为零。
 </Answer>
 
+**问题 2：修改阴影实验。** 把 LightingViz 的遮挡物移开，说明发生变化的是哪一项，并指出反射率是否应该自动改变。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  变化的是光源到表面的可达性，阴影测试通过后直接光项恢复；反射率是材质属性，不应因遮挡物移动而自动改变。
+</Answer>
+
+**问题 3：定位多光源瓶颈。** 光源数从 8 增到 12，同时等待任务从 2 增到 7。你会先减少光源、增加并行还是改善共享数据访问？
+
+<Answer>
+  先检查共享光源、阴影和材质数据的缓存局部性，并筛掉对当前片段没有贡献的光源；等待下降后再评估并行批次，而不是只增加执行任务。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="光源">
+  描述发出或贡献照明能量的对象，包含方向、位置、强度和颜色等属性。
+</GlossaryItem>
+
+<GlossaryItem term="法线">
+  描述表面朝向的单位方向，用于与入射光和观察方向比较。
+</GlossaryItem>
+
+<GlossaryItem term="光照">
+  根据光源方向、表面法线、距离和材质响应估计片段照明贡献的过程。
+</GlossaryItem>
+
+<GlossaryItem term="阴影">
+  表面因光线被几何体阻挡而无法直接接收某个光源贡献的区域或状态。
+</GlossaryItem>
+
+<GlossaryItem term="辐射度量">
+  描述光能量按功率、面积、方向或立体角分布的一组物理量。
+</GlossaryItem>
+
+<GlossaryItem term="反射率">
+  表示表面保留或反射入射能量比例的材质属性。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 15 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

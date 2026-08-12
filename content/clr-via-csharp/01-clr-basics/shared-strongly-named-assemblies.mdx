@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-03
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcStrongNameIdentityLab,
+  CvcBindingResolutionLab,
+  CvcTrustBoundaryLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-shared-strongly-named-assemblies";
 
 <Objectives>
 
@@ -50,9 +59,15 @@ Strong name把assembly simple name、version、culture和public key组合成更�
 私钥不应长期放在repository。真实流水线通常由HSM/key vault或受限signing service完成正式签名，开发构建使用public signing或专用测试key。日志记录key id、签名工具版本和artifact hash，但不能泄露private material。密钥轮换等同identity迁移，要提供双版本兼容期和consumer重建计划。
 
 <Stepper>
-  <Step title="切换simple name、strong name、Authenticode与package"></Step>
-  <Step title="绘制身份矩阵">为每种签名记录它保护的对象、验证者、密钥owner、撤销方式、失败行为和是否进入CLR type identity。</Step>
-  <Step title="执行替换实验">分别改变内容、AssemblyVersion、public key和publisher certificate，观察reference、loader、OS和package client各自如何反应。</Step>
+  <Step title="切换simple name、strong name与发布身份">
+    <CvcStrongNameIdentityLab />
+  </Step>
+  <Step title="追踪reference、policy与probe">
+    <CvcBindingResolutionLab />
+  </Step>
+  <Step title="检查完整性、信任与隔离">
+    <CvcTrustBoundaryLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Strong name证明程序集来自可信公司">
@@ -94,6 +109,8 @@ Delayed signing适用于开发团队需要用public key固定最终identity，�
 
 <Term def="先用public key固定assembly identity并预留签名，待受控发布阶段再用private key完成签名的流程。">delay-signing ceremony</Term>
 
+<Term def="由HSM、key vault或受限signing service控制private key访问并记录审批、输入输出hash和验证结果的责任边界。">key custody</Term>
+
 签名前任何IL rewrite、resource injection或obfuscation都会改变hash，因此流水线顺序必须是compile/link、deterministic transformations、finalize metadata/resources、sign、verify、package。签名后只允许外部封装，不再原地改DLL。Ceremony应记录approver、key id、input/output hash和verification result。
 
 <Callout type="trap" title="Delay-signed程序集已经拥有正式签名保护">
@@ -114,11 +131,9 @@ Strongly named assembly完全可以放进应用目录。这样保留精确identi
 
 解析失败要保留四类证据：原始requested identity、每层policy变换、每个probe location与拒绝原因、最终selected file/hash。只记录“找不到DLL”无法区分文件缺失、version/token不符、架构错误、坏image或依赖的依赖失败。
 
-<Stepper>
-  <Step title="切换reference、policy、probe、load与type use"></Step>
-  <Step title="制作binding ledger">记录AssemblyRef、app/publisher/machine policy、GAC与private candidates、最终FullName/Location。</Step>
-  <Step title="复现冷启动">在没有开发机GAC和缓存污染的干净虚拟机启动，打开bind log并逐条验证resolver结论。</Step>
-</Stepper>
+1. 切换 reference、policy、probe、load 与 type use，先冻结 requested identity。
+2. 制作 binding ledger：记录 AssemblyRef、app/publisher/machine policy、GAC、private candidates 与最终 FullName/Location。
+3. 在没有开发机 GAC 和缓存污染的干净虚拟机启动，打开 bind log 并逐条验证 resolver 结论。
 
 ## Advanced Administrative Control (Configuration)
 
@@ -148,11 +163,9 @@ Publisher policy assembly允许组件发布者在GAC中声明某旧版本应重�
 
 发布者不能只凭SemVer宣称兼容：要测试public API、binary signature、exception、serialization、COM/native ABI、配置和性能。管理员应用policy前应保留旧版本与撤销方案，监控按consumer分组。安全更新可能要求统一升级，但也要承认无法兼容的应用需要隔离或迁移，而不是用全局redirect强压。
 
-<Stepper>
-  <Step title="切换exact、redirect、publisher与bypass"></Step>
-  <Step title="建立兼容矩阵">横轴列consumer版本，纵轴列candidate assembly，验证load、API、serialization、配置和关键行为。</Step>
-  <Step title="演练policy回滚">发布到测试机，观察effective bind和业务指标；再移除policy，确认旧identity与旧文件仍可恢复。</Step>
-</Stepper>
+1. 切换 exact、redirect、publisher 与 bypass，记录 effective binding。
+2. 建立兼容矩阵：横轴列 consumer 版本，纵轴列 candidate assembly，验证 load、API、serialization、配置和关键行为。
+3. 发布到测试机后演练 policy 回滚，确认旧 identity 与旧文件仍可恢复。
 
 ## 本章回顾：Identity、Trust与Compatibility不可互换
 
@@ -184,6 +197,7 @@ Publisher policy assembly允许组件发布者在GAC中声明某旧版本应重�
   <GlossaryItem term="strong-name identity" definition="由名称、版本、culture和public key token构成的CLR身份。" />
   <GlossaryItem term="GAC residency" definition="程序集在Framework全局缓存中的存在与共享服务责任。" />
   <GlossaryItem term="delay-signing ceremony" definition="先固定身份、后由受控私钥完成正式签名的流程。" />
+  <GlossaryItem term="key custody" definition="由受控签名服务管理private key访问、审批与证据的责任边界。" />
   <GlossaryItem term="binding policy" definition="把requested identity映射到selected identity的配置规则。" />
   <GlossaryItem term="publisher policy" definition="发布者在Framework共享环境中提供的集中版本策略。" />
 </Glossary>

@@ -3307,6 +3307,636 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       UiFragmentsFaultLab: module0.UiFragmentsFaultLab,
     } as ChapterMdxComponents;
   },
+  "blender-3d/00-guide/bl3-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/00-guide/bl3-official-learning-map");
+    return {
+      Bl3OfficialLearningMapFlowLab: module0.Bl3OfficialLearningMapFlowLab,
+      Bl3OfficialLearningMapAssetLab: module0.Bl3OfficialLearningMapAssetLab,
+      Bl3OfficialLearningMapMigrationLab:
+        module0.Bl3OfficialLearningMapMigrationLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/01-basics/bl3-01-what-you-need-know-about-blender": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/01-basics/bl3-01-what-you-need-know-about-blender");
+    return {
+      Bl3Ch01GovernanceLab: module0.Bl3Ch01GovernanceLab,
+      Bl3Ch01ReleaseEvidenceLab: module0.Bl3Ch01ReleaseEvidenceLab,
+      Bl3Ch01IssueReportLab: module0.Bl3Ch01IssueReportLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/01-basics/bl3-02-user-interface": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/01-basics/bl3-02-user-interface");
+    return {
+      Bl3Ch02ContextLab: module0.Bl3Ch02ContextLab,
+      Bl3Ch02NavigationLab: module0.Bl3Ch02NavigationLab,
+      Bl3Ch02StartupLab: module0.Bl3Ch02StartupLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/01-basics/bl3-03-first-scene": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/01-basics/bl3-03-first-scene");
+    return {
+      Bl3Ch03SceneGraphLab: module0.Bl3Ch03SceneGraphLab,
+      Bl3Ch03SurfaceModifierLab: module0.Bl3Ch03SurfaceModifierLab,
+      Bl3Ch03RenderPipelineLab: module0.Bl3Ch03RenderPipelineLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/02-project-design/bl3-04-project-overview": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/02-project-design/bl3-04-project-overview");
+    return {
+      Bl3Ch04PhaseGateLab: module0.Bl3Ch04PhaseGateLab,
+      Bl3Ch04ScopeBudgetLab: module0.Bl3Ch04ScopeBudgetLab,
+      Bl3Ch04DependencyRecoveryLab: module0.Bl3Ch04DependencyRecoveryLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/02-project-design/bl3-05-character-design": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/02-project-design/bl3-05-character-design");
+    return {
+      Bl3Ch05SilhouetteLab: module0.Bl3Ch05SilhouetteLab,
+      Bl3Ch05ColorHierarchyLab: module0.Bl3Ch05ColorHierarchyLab,
+      Bl3Ch05ReferenceAlignmentLab: module0.Bl3Ch05ReferenceAlignmentLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/03-modeling/bl3-06-modeling-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/03-modeling/bl3-06-modeling-tools");
+    return {
+      Bl3Ch06SelectionLab: module0.Bl3Ch06SelectionLab,
+      Bl3Ch06TopologyLab: module0.Bl3Ch06TopologyLab,
+      Bl3Ch06AddonValidationLab: module0.Bl3Ch06AddonValidationLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/03-modeling/bl3-07-character-modeling": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/03-modeling/bl3-07-character-modeling");
+    return {
+      Bl3Ch07ReferenceMethodLab: module0.Bl3Ch07ReferenceMethodLab,
+      Bl3Ch07DeformationLab: module0.Bl3Ch07DeformationLab,
+      Bl3Ch07PartsDetailsLab: module0.Bl3Ch07PartsDetailsLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/04-lookdev/bl3-08-unwrapping-uvs": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/04-lookdev/bl3-08-unwrapping-uvs");
+    return {
+      Bl3Ch08UnwrapProjectionLab: module0.Bl3Ch08UnwrapProjectionLab,
+      Bl3Ch08SeamEditorLab: module0.Bl3Ch08SeamEditorLab,
+      Bl3Ch08PackingLab: module0.Bl3Ch08PackingLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/04-lookdev/bl3-09-painting-textures": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/04-lookdev/bl3-09-painting-textures");
+    return {
+      Bl3Ch09WorkflowLab: module0.Bl3Ch09WorkflowLab,
+      Bl3Ch09BaseTextureLab: module0.Bl3Ch09BaseTextureLab,
+      Bl3Ch09ExternalRoundtripLab: module0.Bl3Ch09ExternalRoundtripLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/04-lookdev/bl3-10-materials-shaders": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/04-lookdev/bl3-10-materials-shaders");
+    return {
+      Bl3Ch10MaterialModelLab: module0.Bl3Ch10MaterialModelLab,
+      Bl3Ch10MaskChannelsLab: module0.Bl3Ch10MaskChannelsLab,
+      Bl3Ch10RenderTestLab: module0.Bl3Ch10RenderTestLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/05-rig-animation/bl3-11-character-rigging": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/05-rig-animation/bl3-11-character-rigging");
+    return {
+      Bl3Ch11ArmatureLab: module0.Bl3Ch11ArmatureLab,
+      Bl3Ch11SkinningLab: module0.Bl3Ch11SkinningLab,
+      Bl3Ch11ControlReuseLab: module0.Bl3Ch11ControlReuseLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/05-rig-animation/bl3-12-animating-character": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/05-rig-animation/bl3-12-animating-character");
+    return {
+      Bl3Ch12RigPoseLab: module0.Bl3Ch12RigPoseLab,
+      Bl3Ch12TimingCurveLab: module0.Bl3Ch12TimingCurveLab,
+      Bl3Ch12WalkCycleLab: module0.Bl3Ch12WalkCycleLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/06-final/bl3-13-camera-tracking": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/06-final/bl3-13-camera-tracking");
+    return {
+      Bl3Ch13CaptureLab: module0.Bl3Ch13CaptureLab,
+      Bl3Ch13TrackCleanupLab: module0.Bl3Ch13TrackCleanupLab,
+      Bl3Ch13SolveTestLab: module0.Bl3Ch13SolveTestLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/06-final/bl3-14-lighting-compositing-rendering": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/06-final/bl3-14-lighting-compositing-rendering");
+    return {
+      Bl3Ch14LightingLab: module0.Bl3Ch14LightingLab,
+      Bl3Ch14CompositeLab: module0.Bl3Ch14CompositeLab,
+      Bl3Ch14RenderDeliveryLab: module0.Bl3Ch14RenderDeliveryLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/07-extend-review/bl3-15-other-features": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/07-extend-review/bl3-15-other-features");
+    return {
+      Bl3Ch15FeatureRouteLab: module0.Bl3Ch15FeatureRouteLab,
+      Bl3Ch15SculptBakingLab: module0.Bl3Ch15SculptBakingLab,
+      Bl3Ch15AutomationLab: module0.Bl3Ch15AutomationLab,
+    } as ChapterMdxComponents;
+  },
+  "blender-3d/07-extend-review/bl3-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/blender-3d/07-extend-review/bl3-official-final-review");
+    return {
+      Bl3FinalReviewDependencyLab: module0.Bl3FinalReviewDependencyLab,
+      Bl3FinalReviewEvidenceLab: module0.Bl3FinalReviewEvidenceLab,
+      Bl3FinalReviewReleaseLab: module0.Bl3FinalReviewReleaseLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-dev-practice/00-map/bdp-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-dev-practice/00-map/bdp-official-learning-map");
+    return {
+      BdpMapRouteLab: module0.BdpMapRouteLab,
+      BdpStateContractLab: module0.BdpStateContractLab,
+      BdpEvidenceGateLab: module0.BdpEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-dev-practice/01-preface/bdp-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-dev-practice/01-preface/bdp-preface");
+    return {
+      BdpPrefaceContextLab: module0.BdpPrefaceContextLab,
+      BdpPrefaceTraceLab: module0.BdpPrefaceTraceLab,
+      BdpPrefaceMigrationLab: module0.BdpPrefaceMigrationLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/02-01-understand-blockchain/bdp-01-understand-blockchain");
+      return {
+        BdpCh01TrustModelLab: module0.BdpCh01TrustModelLab,
+        BdpCh01MechanismLab: module0.BdpCh01MechanismLab,
+        BdpCh01UseCaseLab: module0.BdpCh01UseCaseLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/03-02-practice-preparation/bdp-02-practice-preparation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/03-02-practice-preparation/bdp-02-practice-preparation");
+      return {
+        BdpCh02EnvironmentContractLab: module0.BdpCh02EnvironmentContractLab,
+        BdpCh02FailureMatrixLab: module0.BdpCh02FailureMatrixLab,
+        BdpCh02ToolchainLab: module0.BdpCh02ToolchainLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/04-03-ethereum-introduction/bdp-03-ethereum-introduction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/04-03-ethereum-introduction/bdp-03-ethereum-introduction");
+      return {
+        BdpCh03TransactionTraceLab: module0.BdpCh03TransactionTraceLab,
+        BdpCh03GasBudgetLab: module0.BdpCh03GasBudgetLab,
+        BdpCh03NetworkLab: module0.BdpCh03NetworkLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/05-04-compile-install-run/bdp-04-compile-install-run":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/05-04-compile-install-run/bdp-04-compile-install-run");
+      return {
+        BdpCh04PlatformInstallLab: module0.BdpCh04PlatformInstallLab,
+        BdpCh04HealthCheckLab: module0.BdpCh04HealthCheckLab,
+        BdpCh04FailureIsolationLab: module0.BdpCh04FailureIsolationLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/06-05-private-chain/bdp-05-private-chain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/06-05-private-chain/bdp-05-private-chain");
+      return {
+        BdpCh05GenesisLab: module0.BdpCh05GenesisLab,
+        BdpCh05ConsoleLab: module0.BdpCh05ConsoleLab,
+        BdpCh05PeerLab: module0.BdpCh05PeerLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/07-06-programming-interfaces/bdp-06-programming-interfaces");
+      return {
+        BdpCh06RequestLab: module0.BdpCh06RequestLab,
+        BdpCh06ApiMappingLab: module0.BdpCh06ApiMappingLab,
+        BdpCh06ConfirmationLab: module0.BdpCh06ConfirmationLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/08-07-solidity-ide-quickstart/bdp-07-solidity-ide-quickstart");
+      return {
+        BdpCh07IdeCompareLab: module0.BdpCh07IdeCompareLab,
+        BdpCh07BankStateLab: module0.BdpCh07BankStateLab,
+        BdpCh07SafetyLab: module0.BdpCh07SafetyLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/09-08-solidity-syntax/bdp-08-solidity-syntax");
+      return {
+        BdpCh08TypeLab: module0.BdpCh08TypeLab,
+        BdpCh08DataLocationLab: module0.BdpCh08DataLocationLab,
+        BdpCh08SafetyLab: module0.BdpCh08SafetyLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy");
+      return {
+        BdpCh09CompileLab: module0.BdpCh09CompileLab,
+        BdpCh09DeployLab: module0.BdpCh09DeployLab,
+        BdpCh09CallLab: module0.BdpCh09CallLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/11-10-truffle/bdp-10-truffle": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-dev-practice/11-10-truffle/bdp-10-truffle");
+    return {
+      BdpCh10ProjectLab: module0.BdpCh10ProjectLab,
+      BdpCh10InteractionLab: module0.BdpCh10InteractionLab,
+      BdpCh10TestLab: module0.BdpCh10TestLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice");
+      return {
+        BdpCh11LifecycleLab: module0.BdpCh11LifecycleLab,
+        BdpCh11ContextLab: module0.BdpCh11ContextLab,
+        BdpCh11PostLab: module0.BdpCh11PostLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles");
+      return {
+        BdpAppendixABlockLab: module0.BdpAppendixABlockLab,
+        BdpAppendixANodeLab: module0.BdpAppendixANodeLab,
+        BdpAppendixAUTXOLab: module0.BdpAppendixAUTXOLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli");
+      return {
+        BdpAppendixBCommandLab: module0.BdpAppendixBCommandLab,
+        BdpAppendixBWalletLab: module0.BdpAppendixBWalletLab,
+        BdpAppendixBBroadcastLab: module0.BdpAppendixBBroadcastLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis");
+      return {
+        BdpAppendixCRequestLab: module0.BdpAppendixCRequestLab,
+        BdpAppendixCServerLab: module0.BdpAppendixCServerLab,
+        BdpAppendixCTransactionLab: module0.BdpAppendixCTransactionLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-dev-practice/16-review/bdp-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-dev-practice/16-review/bdp-official-final-review");
+    return {
+      BdpOfficialFinalReviewBoundaryLab:
+        module0.BdpOfficialFinalReviewBoundaryLab,
+      BdpOfficialFinalReviewReleaseLab:
+        module0.BdpOfficialFinalReviewReleaseLab,
+      BdpOfficialFinalReviewTraceLab: module0.BdpOfficialFinalReviewTraceLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/00-map/bp-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/00-map/bp-official-learning-map");
+    return {
+      BpOfficialLearningMapCoverageLab:
+        module0.BpOfficialLearningMapCoverageLab,
+      BpOfficialLearningMapEvidenceLab:
+        module0.BpOfficialLearningMapEvidenceLab,
+      BpOfficialLearningMapPathLab: module0.BpOfficialLearningMapPathLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/01-technical-review/bp-technical-review": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/01-technical-review/bp-technical-review");
+    return {
+      BpTechnicalReviewClaimLab: module0.BpTechnicalReviewClaimLab,
+      BpTechnicalReviewFailureLab: module0.BpTechnicalReviewFailureLab,
+      BpTechnicalReviewVersionLab: module0.BpTechnicalReviewVersionLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/02-preface/bp-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/02-preface/bp-preface");
+    return {
+      BpPrefaceLearningContractLab: module0.BpPrefaceLearningContractLab,
+      BpPrefaceSequenceLab: module0.BpPrefaceSequenceLab,
+      BpPrefaceStopConditionLab: module0.BpPrefaceStopConditionLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/03-01-first-blockchain/bp-01-first-blockchain");
+      return {
+        BpFirstBlockchainConsensusLab: module0.BpFirstBlockchainConsensusLab,
+        BpFirstBlockchainLedgerFlowLab: module0.BpFirstBlockchainLedgerFlowLab,
+        BpFirstBlockchainUtxoLab: module0.BpFirstBlockchainUtxoLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/04-02-application-development/bp-02-application-development":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/04-02-application-development/bp-02-application-development");
+      return {
+        BpApplicationBoundaryLab: module0.BpApplicationBoundaryLab,
+        BpApplicationContractLab: module0.BpApplicationContractLab,
+        BpApplicationTrackLab: module0.BpApplicationTrackLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/05-03-cryptography/bp-03-cryptography": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/05-03-cryptography/bp-03-cryptography");
+    return {
+      BpCryptographyEncodingLab: module0.BpCryptographyEncodingLab,
+      BpCryptographyHashLab: module0.BpCryptographyHashLab,
+      BpCryptographyKeyLab: module0.BpCryptographyKeyLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/06-04-consensus/bp-04-consensus": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/06-04-consensus/bp-04-consensus");
+    return {
+      BpConsensusFailureModelLab: module0.BpConsensusFailureModelLab,
+      BpConsensusQuorumLab: module0.BpConsensusQuorumLab,
+      BpConsensusTradeoffLab: module0.BpConsensusTradeoffLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/07-05-scaling-sidechains-lightning/bp-05-scaling-sidechains-lightning");
+      return {
+        BpScalingCapacityLab: module0.BpScalingCapacityLab,
+        BpScalingInterchainLab: module0.BpScalingInterchainLab,
+        BpScalingLightningLab: module0.BpScalingLightningLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/08-06-ethereum/bp-06-ethereum": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/08-06-ethereum/bp-06-ethereum");
+    return {
+      BpEthereumGasRollbackLab: module0.BpEthereumGasRollbackLab,
+      BpEthereumStateTransitionLab: module0.BpEthereumStateTransitionLab,
+      BpEthereumTokenAuthorityLab: module0.BpEthereumTokenAuthorityLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/09-07-hyperledger/bp-07-hyperledger": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/09-07-hyperledger/bp-07-hyperledger");
+    return {
+      BpFabricCommitPipelineLab: module0.BpFabricCommitPipelineLab,
+      BpFabricEndorsementLab: module0.BpFabricEndorsementLab,
+      BpFabricIdentityAccessLab: module0.BpFabricIdentityAccessLab,
+    } as ChapterMdxComponents;
+  },
+  "blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/10-08-build-mini-chain/bp-08-build-mini-chain");
+      return {
+        BpMiniChainBlockIntegrityLab: module0.BpMiniChainBlockIntegrityLab,
+        BpMiniChainSyncPersistenceLab: module0.BpMiniChainSyncPersistenceLab,
+        BpMiniChainUtxoValidationLab: module0.BpMiniChainUtxoValidationLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/11-09-potential-problems/bp-09-potential-problems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/11-09-potential-problems/bp-09-potential-problems");
+      return {
+        BpRiskConfirmationLab: module0.BpRiskConfirmationLab,
+        BpRiskRecoveryRunbookLab: module0.BpRiskRecoveryRunbookLab,
+        BpRiskThreatModelLab: module0.BpRiskThreatModelLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/blockchain-plain/12-afterword-programmable-society/bp-afterword-programmable-society");
+      return {
+        BpAfterwordAutomationBoundaryLab:
+          module0.BpAfterwordAutomationBoundaryLab,
+        BpAfterwordExitMechanismLab: module0.BpAfterwordExitMechanismLab,
+        BpAfterwordGovernanceLab: module0.BpAfterwordGovernanceLab,
+      } as ChapterMdxComponents;
+    },
+  "blockchain-plain/13-review/bp-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/blockchain-plain/13-review/bp-official-final-review");
+    return {
+      BpFinalReviewFailureMatrixLab: module0.BpFinalReviewFailureMatrixLab,
+      BpFinalReviewReleaseGateLab: module0.BpFinalReviewReleaseGateLab,
+      BpFinalReviewStateReplayLab: module0.BpFinalReviewStateReplayLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/00-map/bla-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/00-map/bla-official-learning-map");
+    return {
+      BlaLearningMapEvaluationLab: module0.BlaLearningMapEvaluationLab,
+      BlaLearningMapReleaseLab: module0.BlaLearningMapReleaseLab,
+      BlaLearningMapRouteLab: module0.BlaLearningMapRouteLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/01-preface/bla-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/01-preface/bla-preface");
+    return {
+      BlaPrefaceEnvironmentLab: module0.BlaPrefaceEnvironmentLab,
+      BlaPrefaceResourceLab: module0.BlaPrefaceResourceLab,
+      BlaPrefaceSupportLab: module0.BlaPrefaceSupportLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models");
+      return {
+        Bla01CustomizationLab: module0.Bla01CustomizationLab,
+        Bla01RepresentationLab: module0.Bla01RepresentationLab,
+        Bla01TrainingLab: module0.Bla01TrainingLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications");
+      return {
+        Bla02CopilotLab: module0.Bla02CopilotLab,
+        Bla02FrameworkLab: module0.Bla02FrameworkLab,
+        Bla02OrchestratorLab: module0.Bla02OrchestratorLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/04-chapter-03/bla-03-choosing-an-llm":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm");
+      return {
+        Bla03BenchmarkLab: module0.Bla03BenchmarkLab,
+        Bla03DecisionLab: module0.Bla03DecisionLab,
+        Bla03RequirementsLab: module0.Bla03RequirementsLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/05-chapter-04/bla-04-prompt-engineering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/05-chapter-04/bla-04-prompt-engineering");
+      return {
+        Bla04DecompositionLab: module0.Bla04DecompositionLab,
+        Bla04InstructionLab: module0.Bla04InstructionLab,
+        Bla04LoopLab: module0.Bla04LoopLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications");
+      return {
+        Bla05HubLab: module0.Bla05HubLab,
+        Bla05PipelineLab: module0.Bla05PipelineLab,
+        Bla05StateLab: module0.Bla05StateLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/07-chapter-06/bla-06-conversational-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/07-chapter-06/bla-06-conversational-applications");
+      return {
+        Bla06ConversationLab: module0.Bla06ConversationLab,
+        Bla06KnowledgeLab: module0.Bla06KnowledgeLab,
+        Bla06ToolLab: module0.Bla06ToolLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/08-chapter-07/bla-07-search-recommendation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/08-chapter-07/bla-07-search-recommendation");
+      return {
+        Bla07BaselineLab: module0.Bla07BaselineLab,
+        Bla07ColdStartLab: module0.Bla07ColdStartLab,
+        Bla07RankingLab: module0.Bla07RankingLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/09-chapter-08/bla-08-structured-data":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/09-chapter-08/bla-08-structured-data");
+      return {
+        Bla08SchemaLab: module0.Bla08SchemaLab,
+        Bla08SqlLab: module0.Bla08SqlLab,
+        Bla08UiLab: module0.Bla08UiLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/10-chapter-09/bla-09-working-with-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/10-chapter-09/bla-09-working-with-code");
+      return {
+        Bla09ContractLab: module0.Bla09ContractLab,
+        Bla09SandboxLab: module0.Bla09SandboxLab,
+        Bla09TestLab: module0.Bla09TestLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/11-chapter-10/bla-10-multimodal-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/11-chapter-10/bla-10-multimodal-applications");
+      return {
+        Bla10ModalityLab: module0.Bla10ModalityLab,
+        Bla10OrchestrationLab: module0.Bla10OrchestrationLab,
+        Bla10ReviewLab: module0.Bla10ReviewLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/12-chapter-11/bla-11-fine-tuning": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/12-chapter-11/bla-11-fine-tuning");
+    return {
+      Bla11DatasetLab: module0.Bla11DatasetLab,
+      Bla11DecisionLab: module0.Bla11DecisionLab,
+      Bla11TrainingLab: module0.Bla11TrainingLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/13-chapter-12/bla-12-responsible-ai": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/13-chapter-12/bla-12-responsible-ai");
+    return {
+      Bla12LayerLab: module0.Bla12LayerLab,
+      Bla12ReviewLab: module0.Bla12ReviewLab,
+      Bla12RiskLab: module0.Bla12RiskLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/14-chapter-13/bla-13-emerging-trends":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/building-llm-applications/14-chapter-13/bla-13-emerging-trends");
+      return {
+        Bla13AdoptionLab: module0.Bla13AdoptionLab,
+        Bla13EvidenceLab: module0.Bla13EvidenceLab,
+        Bla13RadarLab: module0.Bla13RadarLab,
+      } as ChapterMdxComponents;
+    },
+  "building-llm-applications/15-other-books/bla-other-books": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/15-other-books/bla-other-books");
+    return {
+      BlaOtherBooksGapLab: module0.BlaOtherBooksGapLab,
+      BlaOtherBooksPlanLab: module0.BlaOtherBooksPlanLab,
+      BlaOtherBooksSourceLab: module0.BlaOtherBooksSourceLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/16-index/bla-index": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/16-index/bla-index");
+    return {
+      BlaIndexEntryLab: module0.BlaIndexEntryLab,
+      BlaIndexReverseLab: module0.BlaIndexReverseLab,
+      BlaIndexValidationLab: module0.BlaIndexValidationLab,
+    } as ChapterMdxComponents;
+  },
+  "building-llm-applications/17-review/bla-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/building-llm-applications/17-review/bla-official-final-review");
+    return {
+      BlaFinalReviewFailureLab: module0.BlaFinalReviewFailureLab,
+      BlaFinalReviewPipelineLab: module0.BlaFinalReviewPipelineLab,
+      BlaFinalReviewReleaseLab: module0.BlaFinalReviewReleaseLab,
+    } as ChapterMdxComponents;
+  },
   "c-primer-plus/c-advanced/advanced-data": async () => {
     const module0 =
       await import("@/components/mdx/c-primer-plus/advanced-data");
@@ -3552,6 +4182,181 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Csi23OfficialFinalReviewBoundaryProbeLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/01-intro/cgpp-ch01": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch01-introduction");
+    return {
+      CgppCh01IntroductionLab: module0.CgppCh01IntroductionLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/02-programming/cgpp-ch02": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch02-graphics-programming");
+    return {
+      CgppCh02GraphicsProgrammingLab: module0.CgppCh02GraphicsProgrammingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
+    return {
+      CgppCh03GraphicsPipelineLab: module0.CgppCh03GraphicsPipelineLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/04-math/cgpp-ch04": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch04-math");
+    return {
+      CgppCh04MathLab: module0.CgppCh04MathLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/05-camera/cgpp-ch05": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch05-camera");
+    return {
+      CgppCh05CameraLab: module0.CgppCh05CameraLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/06-viewing/cgpp-ch06": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch06-viewing");
+    return {
+      CgppCh06ViewingLab: module0.CgppCh06ViewingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/07-object/cgpp-ch07": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch07-object");
+    return {
+      CgppCh07ObjectLab: module0.CgppCh07ObjectLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/08-raster/cgpp-ch08": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch08-raster");
+    return {
+      CgppCh08RasterLab: module0.CgppCh08RasterLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/09-fragment/cgpp-ch09": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch09-fragment");
+    return {
+      CgppCh09FragmentLab: module0.CgppCh09FragmentLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/10-framebuffer/cgpp-ch10": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch10-framebuffer");
+    return {
+      CgppCh10FramebufferLab: module0.CgppCh10FramebufferLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/11-display/cgpp-ch11": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch11-display");
+    return {
+      CgppCh11DisplayLab: module0.CgppCh11DisplayLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/12-image/cgpp-ch12": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch12-image");
+    return {
+      CgppCh12ImageLab: module0.CgppCh12ImageLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/13-geometry/cgpp-ch13": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch13-geometry");
+    return {
+      CgppCh13GeometryLab: module0.CgppCh13GeometryLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/14-texture/cgpp-ch14": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch14-texture");
+    return {
+      CgppCh14TextureLab: module0.CgppCh14TextureLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/15-lighting/cgpp-ch15": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch15-lighting");
+    return {
+      CgppCh15LightingLab: module0.CgppCh15LightingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/16-shading/cgpp-ch16": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch16-shading");
+    return {
+      CgppCh16ShadingLab: module0.CgppCh16ShadingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/17-color/cgpp-ch17": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch17-color");
+    return {
+      CgppCh17ColorLab: module0.CgppCh17ColorLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/18-compositing/cgpp-ch18": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch18-compositing");
+    return {
+      CgppCh18CompositingLab: module0.CgppCh18CompositingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/19-animation/cgpp-ch19": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch19-animation");
+    return {
+      CgppCh19AnimationLab: module0.CgppCh19AnimationLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/20-modeling/cgpp-ch20": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch20-modeling");
+    return {
+      CgppCh20ModelingLab: module0.CgppCh20ModelingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/21-rendering/cgpp-ch21": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch21-rendering");
+    return {
+      CgppCh21RenderingLab: module0.CgppCh21RenderingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/22-raytracing/cgpp-ch22": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch22-raytracing");
+    return {
+      CgppCh22RaytracingLab: module0.CgppCh22RaytracingLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/23-radiosity/cgpp-ch23": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch23-radiosity");
+    return {
+      CgppCh23RadiosityLab: module0.CgppCh23RadiosityLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/24-gi/cgpp-ch24": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch24-gi");
+    return {
+      CgppCh24GiLab: module0.CgppCh24GiLab,
+    } as ChapterMdxComponents;
+  },
+  "cg-principles-practice/25-future/cgpp-ch25": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch25-future");
+    return {
+      CgppCh25FutureLab: module0.CgppCh25FutureLab,
+    } as ChapterMdxComponents;
+  },
   "chatgpt-principles-practice/00-map/cgpt-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/chatgpt-principles-practice/v2/cgpt-official-learning-map");
@@ -3702,6 +4507,306 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.CgptOfficialFinalReviewEvidenceGateLab,
       } as ChapterMdxComponents;
     },
+  "clr-via-csharp/00-clr/cvc-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-learning-map");
+    return {
+      CvcLearningMapContextContractLab:
+        module0.CvcLearningMapContextContractLab,
+      CvcLearningMapComputeTraceLab: module0.CvcLearningMapComputeTraceLab,
+      CvcLearningMapEvidenceGateLab: module0.CvcLearningMapEvidenceGateLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/01-clr-basics/building-packaging-deploying-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-building-packaging-deploying-types");
+      return {
+        CvcBuildingPackagingArtifactGraphLab:
+          module0.CvcBuildingPackagingArtifactGraphLab,
+        CvcBuildingPackagingVersionMatrixLab:
+          module0.CvcBuildingPackagingVersionMatrixLab,
+        CvcBuildingPackagingDeploymentRollbackLab:
+          module0.CvcBuildingPackagingDeploymentRollbackLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/01-clr-basics/clr-execution-model": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-clr-execution-model");
+    return {
+      CvcClrExecutionPipelineLab: module0.CvcClrExecutionPipelineLab,
+      CvcClrVerificationBoundaryLab: module0.CvcClrVerificationBoundaryLab,
+      CvcClrInteropContractLab: module0.CvcClrInteropContractLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/01-clr-basics/shared-strongly-named-assemblies": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-shared-strongly-named-assemblies");
+    return {
+      CvcStrongNameIdentityLab: module0.CvcStrongNameIdentityLab,
+      CvcBindingResolutionLab: module0.CvcBindingResolutionLab,
+      CvcTrustBoundaryLab: module0.CvcTrustBoundaryLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/constants-and-fields": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-constants-and-fields");
+    return {
+      CvcConstEmbeddingLab: module0.CvcConstEmbeddingLab,
+      CvcFieldOwnershipLab: module0.CvcFieldOwnershipLab,
+      CvcPublicationProtocolLab: module0.CvcPublicationProtocolLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/events": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-events");
+    return {
+      CvcEventTimelineLab: module0.CvcEventTimelineLab,
+      CvcEventDispatchLab: module0.CvcEventDispatchLab,
+      CvcSubscriptionLifetimeLab: module0.CvcSubscriptionLifetimeLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/generics": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-generics");
+    return {
+      CvcConstraintProofLab: module0.CvcConstraintProofLab,
+      CvcGenericIdentityLab: module0.CvcGenericIdentityLab,
+      CvcVarianceFlowLab: module0.CvcVarianceFlowLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/interfaces": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-interfaces");
+    return {
+      CvcBoxingDispatchLab: module0.CvcBoxingDispatchLab,
+      CvcContractChoiceLab: module0.CvcContractChoiceLab,
+      CvcInterfaceMapLab: module0.CvcInterfaceMapLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/methods": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-methods");
+    return {
+      CvcBindingRebindLab: module0.CvcBindingRebindLab,
+      CvcConstructionFailureLab: module0.CvcConstructionFailureLab,
+      CvcConversionPolicyLab: module0.CvcConversionPolicyLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/parameters": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-parameters");
+    return {
+      CvcDefaultEmbeddingLab: module0.CvcDefaultEmbeddingLab,
+      CvcParameterAliasLab: module0.CvcParameterAliasLab,
+      CvcParameterContractLab: module0.CvcParameterContractLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/primitive-reference-value-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-primitive-reference-value-types");
+      return {
+        CvcBoxingOwnershipLab: module0.CvcBoxingOwnershipLab,
+        CvcEqualityDynamicLab: module0.CvcEqualityDynamicLab,
+        CvcStorageCopyLab: module0.CvcStorageCopyLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/02-designing-types/properties": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-properties");
+    return {
+      CvcAccessorBehaviorLab: module0.CvcAccessorBehaviorLab,
+      CvcInitializerSequencingLab: module0.CvcInitializerSequencingLab,
+      CvcPropertyBoundaryLab: module0.CvcPropertyBoundaryLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/type-fundamentals": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-type-fundamentals");
+    return {
+      CvcConversionContractLab: module0.CvcConversionContractLab,
+      CvcRuntimeIdentityLab: module0.CvcRuntimeIdentityLab,
+      CvcTypeStorageLab: module0.CvcTypeStorageLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/02-designing-types/type-member-basics": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-type-member-basics");
+    return {
+      CvcAccessibilityBoundaryLab: module0.CvcAccessibilityBoundaryLab,
+      CvcDispatchVersioningLab: module0.CvcDispatchVersioningLab,
+      CvcMemberShapeLab: module0.CvcMemberShapeLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-advanced/cvc-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-final-review");
+    return {
+      CvcAcceptanceMatrixLab: module0.CvcAcceptanceMatrixLab,
+      CvcEvidenceChainLab: module0.CvcEvidenceChainLab,
+      CvcFaultEvidenceLab: module0.CvcFaultEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-essential-types/arrays": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-arrays");
+    return {
+      CvcArrayBoundaryLab: module0.CvcArrayBoundaryLab,
+      CvcArrayLifetimeLab: module0.CvcArrayLifetimeLab,
+      CvcArrayShapeLab: module0.CvcArrayShapeLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-essential-types/chars-strings-working-with-text":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-text");
+      return {
+        CvcTextBoundaryLab: module0.CvcTextBoundaryLab,
+        CvcTextComparisonLab: module0.CvcTextComparisonLab,
+        CvcTextUnitLab: module0.CvcTextUnitLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/03-essential-types/custom-attributes": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-custom-attributes");
+    return {
+      CvcAttributeDeclarationLab: module0.CvcAttributeDeclarationLab,
+      CvcAttributeInspectionLab: module0.CvcAttributeInspectionLab,
+      CvcAttributePolicyLab: module0.CvcAttributePolicyLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-essential-types/delegates": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-delegates");
+    return {
+      CvcDelegateAnatomyLab: module0.CvcDelegateAnatomyLab,
+      CvcDelegateChainLab: module0.CvcDelegateChainLab,
+      CvcDelegateSyntaxLab: module0.CvcDelegateSyntaxLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-essential-types/enumerated-types-bit-flags": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-enumerated-types-bit-flags");
+    return {
+      CvcEnumAdapterLab: module0.CvcEnumAdapterLab,
+      CvcEnumValueLab: module0.CvcEnumValueLab,
+      CvcFlagsMaskLab: module0.CvcFlagsMaskLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/03-essential-types/nullable-value-types": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-nullable-value-types");
+    return {
+      CvcNullableBoundaryLab: module0.CvcNullableBoundaryLab,
+      CvcNullableBoxingLab: module0.CvcNullableBoxingLab,
+      CvcNullableStateLab: module0.CvcNullableStateLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/04-core-facilities/assembly-loading-reflection": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-assembly-loading-reflection");
+    return {
+      CvcAddinLifecycleLab: module0.CvcAddinLifecycleLab,
+      CvcAssemblyLoadingLab: module0.CvcAssemblyLoadingLab,
+      CvcReflectionBindingLab: module0.CvcReflectionBindingLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/04-core-facilities/clr-hosting-appdomains": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-clr-hosting-appdomains");
+    return {
+      CvcCrossDomainLab: module0.CvcCrossDomainLab,
+      CvcHostRecoveryLab: module0.CvcHostRecoveryLab,
+      CvcHostingBoundaryLab: module0.CvcHostingBoundaryLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/04-core-facilities/exceptions-state-management": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-exceptions-state-management");
+    return {
+      CvcExceptionFlowLab: module0.CvcExceptionFlowLab,
+      CvcExceptionTaxonomyLab: module0.CvcExceptionTaxonomyLab,
+      CvcStateGuaranteeLab: module0.CvcStateGuaranteeLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/04-core-facilities/interoperating-winrt-components":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-interoperating-winrt-components");
+      return {
+        CvcWinrtAsyncDataLab: module0.CvcWinrtAsyncDataLab,
+        CvcWinrtComponentContractLab: module0.CvcWinrtComponentContractLab,
+        CvcWinrtProjectionLab: module0.CvcWinrtProjectionLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/04-core-facilities/managed-heap-garbage-collection":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-managed-heap-garbage-collection");
+      return {
+        CvcHeapReachabilityLab: module0.CvcHeapReachabilityLab,
+        CvcLifetimeControlLab: module0.CvcLifetimeControlLab,
+        CvcResourceCleanupLab: module0.CvcResourceCleanupLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/04-core-facilities/runtime-serialization": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-runtime-serialization");
+    return {
+      CvcGraphSerializationLab: module0.CvcGraphSerializationLab,
+      CvcLegacyControlsLab: module0.CvcLegacyControlsLab,
+      CvcMigrationBoundaryLab: module0.CvcMigrationBoundaryLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/05-threading/compute-bound-asynchronous-operations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-compute-bound-asynchronous-operations");
+      return {
+        CvcParallelTimerLab: module0.CvcParallelTimerLab,
+        CvcPoolSchedulingLab: module0.CvcPoolSchedulingLab,
+        CvcTaskOutcomeLab: module0.CvcTaskOutcomeLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/05-threading/hybrid-thread-synchronization-constructs":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-hybrid-thread-synchronization-constructs");
+      return {
+        CvcAsyncCollectionLab: module0.CvcAsyncCollectionLab,
+        CvcHybridLockLab: module0.CvcHybridLockLab,
+        CvcPhaseCoordinationLab: module0.CvcPhaseCoordinationLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/05-threading/io-bound-asynchronous-operations": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-io-bound-asynchronous-operations");
+    return {
+      CvcAsyncServerLab: module0.CvcAsyncServerLab,
+      CvcAsyncStateLab: module0.CvcAsyncStateLab,
+      CvcIoLifecycleLab: module0.CvcIoLifecycleLab,
+    } as ChapterMdxComponents;
+  },
+  "clr-via-csharp/05-threading/primitive-thread-synchronization-constructs":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/clr-via-csharp/v2/cvc-primitive-thread-synchronization-constructs");
+      return {
+        CvcMemoryOrderLab: module0.CvcMemoryOrderLab,
+        CvcPrimitiveChoiceLab: module0.CvcPrimitiveChoiceLab,
+        CvcWaitProtocolLab: module0.CvcWaitProtocolLab,
+      } as ChapterMdxComponents;
+    },
+  "clr-via-csharp/05-threading/thread-basics": async () => {
+    const module0 =
+      await import("@/components/mdx/clr-via-csharp/v2/cvc-thread-basics");
+    return {
+      CvcThreadLifecycleLab: module0.CvcThreadLifecycleLab,
+      CvcWorkloadSizingLab: module0.CvcWorkloadSizingLab,
+      CvcThreadShutdownLab: module0.CvcThreadShutdownLab,
+    } as ChapterMdxComponents;
+  },
   "code-complete-2e/00-map/cc2e-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/code-complete-2e/v2/cc2e-official-learning-map");
@@ -4139,6 +5244,84 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Cc2eOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "code-quality-refactoring/00-intro/intro": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-intro");
+    return {
+      CqrfIntroLab: module0.CqrfIntroLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/00-intro/learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-learning-map");
+    return {
+      CqrfLearningMapLab: module0.CqrfLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/classes": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-classes");
+    return {
+      CqrfClassesLab: module0.CqrfClassesLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/comments-format": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-comments-format");
+    return {
+      CqrfCommentsFormatLab: module0.CqrfCommentsFormatLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/error-handling": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-error-handling");
+    return {
+      CqrfErrorHandlingLab: module0.CqrfErrorHandlingLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/functions": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-functions");
+    return {
+      CqrfFunctionsLab: module0.CqrfFunctionsLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/naming": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-naming");
+    return {
+      CqrfNamingLab: module0.CqrfNamingLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/01-clean-code/testing": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-testing");
+    return {
+      CqrfTestingLab: module0.CqrfTestingLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/02-refactoring/code-smells": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-code-smells");
+    return {
+      CqrfCodeSmellsLab: module0.CqrfCodeSmellsLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/02-refactoring/final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/code-quality-refactoring/v2/cqrf-final-review");
+    return {
+      CqrfFinalReviewLab: module0.CqrfFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
+  "code-quality-refactoring/02-refactoring/refactoring-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-quality-refactoring/v2/cqrf-refactoring-techniques");
+      return {
+        CqrfRefactoringTechniquesLab: module0.CqrfRefactoringTechniquesLab,
+      } as ChapterMdxComponents;
+    },
   "coder-revolution/00-map/crv18-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map-diagram");
@@ -6877,6 +8060,185 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CpuFinalReviewLab: module0.CpuFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "crafting-compiler/00-guide/crc-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-learning-map");
+    return {
+      CrcLearningMapLab: module0.CrcLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/01-overview/crc-01-start-compiler": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-01-start-compiler");
+    return {
+      CrcStartCompilerLab: module0.CrcStartCompilerLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/01-overview/crc-02-cflat-cbc": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-02-cflat-cbc");
+    return {
+      CrcCflatCbcLab: module0.CrcCflatCbcLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/02-source-analysis/crc-03-parsing-overview": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-03-parsing-overview");
+    return {
+      CrcParsingOverviewLab: module0.CrcParsingOverviewLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/02-source-analysis/crc-04-lexical-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-04-lexical-analysis");
+    return {
+      CrcLexicalAnalysisLab: module0.CrcLexicalAnalysisLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/02-source-analysis/crc-05-javacc-parser": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-05-javacc-parser");
+    return {
+      CrcJavaccParserLab: module0.CrcJavaccParserLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/02-source-analysis/crc-06-syntax-analysis": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-06-syntax-analysis");
+    return {
+      CrcSyntaxAnalysisLab: module0.CrcSyntaxAnalysisLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/03-ast-ir/crc-07-javacc-actions-ast": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-07-javacc-actions-ast");
+    return {
+      CrcJavaccActionsAstLab: module0.CrcJavaccActionsAstLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/03-ast-ir/crc-08-build-ast": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-08-build-ast");
+    return {
+      CrcBuildAstLab: module0.CrcBuildAstLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/03-ast-ir/crc-09-reference-resolution": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-09-reference-resolution");
+    return {
+      CrcReferenceResolutionLab: module0.CrcReferenceResolutionLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/03-ast-ir/crc-10-static-type-checking": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-10-static-type-checking");
+    return {
+      CrcStaticTypeCheckingLab: module0.CrcStaticTypeCheckingLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/03-ast-ir/crc-11-ir-conversion": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-11-ir-conversion");
+    return {
+      CrcIrConversionLab: module0.CrcIrConversionLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/04-assembly/crc-12-x86-overview": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-12-x86-overview");
+    return {
+      CrcX86OverviewLab: module0.CrcX86OverviewLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/04-assembly/crc-13-x86-assembly": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-13-x86-assembly");
+    return {
+      Crc13X86AssemblyLab: module0.Crc13X86AssemblyLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/04-assembly/crc-14-functions-variables": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-14-functions-variables");
+    return {
+      Crc14FunctionsVariablesLab: module0.Crc14FunctionsVariablesLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/05-codegen/crc-15-compile-expressions-statements":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/crafting-compiler/v2/crc-15-compile-expressions-statements");
+      return {
+        Crc15CompileExpressionsStatementsLab:
+          module0.Crc15CompileExpressionsStatementsLab,
+      } as ChapterMdxComponents;
+    },
+  "crafting-compiler/05-codegen/crc-16-stack-frame": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-16-stack-frame");
+    return {
+      Crc16StackFrameLab: module0.Crc16StackFrameLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/05-codegen/crc-17-optimization": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-17-optimization");
+    return {
+      Crc17OptimizationLab: module0.Crc17OptimizationLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/06-link-load/crc-18-object-files": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-18-object-files");
+    return {
+      Crc18ObjectFilesLab: module0.Crc18ObjectFilesLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/06-link-load/crc-19-linking-libraries": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-19-linking-libraries");
+    return {
+      Crc19LinkingLibrariesLab: module0.Crc19LinkingLibrariesLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/06-link-load/crc-20-program-loading": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-20-program-loading");
+    return {
+      Crc20ProgramLoadingLab: module0.Crc20ProgramLoadingLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/06-link-load/crc-21-position-independent-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/crafting-compiler/v2/crc-21-position-independent-code");
+      return {
+        Crc21PositionIndependentCodeLab:
+          module0.Crc21PositionIndependentCodeLab,
+      } as ChapterMdxComponents;
+    },
+  "crafting-compiler/06-link-load/crc-22-further-reading": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-22-further-reading");
+    return {
+      Crc22FurtherReadingLab: module0.Crc22FurtherReadingLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/07-appendix/crc-appendix-resources": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-appendix-resources");
+    return {
+      CrcAppendixResourcesLab: module0.CrcAppendixResourcesLab,
+    } as ChapterMdxComponents;
+  },
+  "crafting-compiler/08-review/crc-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/crafting-compiler/v2/crc-official-final-review");
+    return {
+      CrcOfficialFinalReviewLab: module0.CrcOfficialFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
   "crazy-android/00-official-learning-map/cra4-official-learning-map":
     async () => {
       const module0 =
@@ -7093,6 +8455,110 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cra4OfficialFinalReviewFailureDiagram,
       } as ChapterMdxComponents;
     },
+  "csapp/00-guide/cap-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-official-learning-map");
+    return {
+      CapOfficialLearningMapLab: module0.CapOfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/01-program-execution/cap-01-system-tour": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-01-system-tour");
+    return {
+      Cap01SystemTourLab: module0.Cap01SystemTourLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/01-program-execution/cap-02-information": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-02-information");
+    return {
+      Cap02InformationLab: module0.Cap02InformationLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/01-program-execution/cap-03-machine-level": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-03-machine-level");
+    return {
+      Cap03MachineLevelLab: module0.Cap03MachineLevelLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/02-architecture-performance/cap-04-processor-architecture":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/csapp/v2/cap-04-processor-architecture");
+      return {
+        Cap04ProcessorArchitectureLab: module0.Cap04ProcessorArchitectureLab,
+      } as ChapterMdxComponents;
+    },
+  "csapp/02-architecture-performance/cap-05-optimization": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-05-optimization");
+    return {
+      Cap05OptimizationLab: module0.Cap05OptimizationLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/02-architecture-performance/cap-06-memory-hierarchy": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-06-memory-hierarchy");
+    return {
+      Cap06MemoryHierarchyLab: module0.Cap06MemoryHierarchyLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/03-system-runtime/cap-07-linking": async () => {
+    const module0 = await import("@/components/mdx/csapp/v2/cap-07-linking");
+    return {
+      Cap07LinkingLab: module0.Cap07LinkingLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/03-system-runtime/cap-08-exceptional-control": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-08-exceptional-control");
+    return {
+      Cap08ExceptionalControlLab: module0.Cap08ExceptionalControlLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/03-system-runtime/cap-09-virtual-memory": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-09-virtual-memory");
+    return {
+      Cap09VirtualMemoryLab: module0.Cap09VirtualMemoryLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/04-communication/cap-10-system-io": async () => {
+    const module0 = await import("@/components/mdx/csapp/v2/cap-10-system-io");
+    return {
+      Cap10SystemIoLab: module0.Cap10SystemIoLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/04-communication/cap-11-network-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-11-network-programming");
+    return {
+      Cap11NetworkProgrammingLab: module0.Cap11NetworkProgrammingLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/04-communication/cap-12-concurrent-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-12-concurrent-programming");
+    return {
+      Cap12ConcurrentProgrammingLab: module0.Cap12ConcurrentProgrammingLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/05-appendix/cap-appendix-a-error-handling": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-appendix-a-error-handling");
+    return {
+      CapAppendixAErrorHandlingLab: module0.CapAppendixAErrorHandlingLab,
+    } as ChapterMdxComponents;
+  },
+  "csapp/06-review/cap-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/csapp/v2/cap-official-final-review");
+    return {
+      CapOfficialFinalReviewLab: module0.CapOfficialFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
@@ -7564,6 +9030,104 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.CsecOfficialFinalReviewReleaseGateLab,
     } as ChapterMdxComponents;
   },
+  "css-world/00-guide/csw-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-official-learning-map");
+    return {
+      CswOfficialLearningMapLab: module0.CswOfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/01-world/csw-01-worldview-flow": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-01-worldview-flow");
+    return {
+      Csw01WorldviewFlowLab: module0.Csw01WorldviewFlowLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/01-world/csw-02-terms-undefined-behavior": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-02-terms-undefined-behavior");
+    return {
+      Csw02TermsUndefinedBehaviorLab: module0.Csw02TermsUndefinedBehaviorLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/02-flow-size/csw-03-flow-elements-sizing": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-03-flow-elements-sizing");
+    return {
+      Csw03FlowElementsSizingLab: module0.Csw03FlowElementsSizingLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/02-flow-size/csw-04-box-dimensions": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-04-box-dimensions");
+    return {
+      Csw04BoxDimensionsLab: module0.Csw04BoxDimensionsLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/02-flow-size/csw-05-inline-flow": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-05-inline-flow");
+    return {
+      Csw05InlineFlowLab: module0.Csw05InlineFlowLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/03-layout-stack/csw-06-flow-breaking-protection": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-06-flow-breaking-protection");
+    return {
+      Csw06FlowBreakingProtectionLab: module0.Csw06FlowBreakingProtectionLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/03-layout-stack/csw-07-stacking-rules": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-07-stacking-rules");
+    return {
+      Csw07StackingRulesLab: module0.Csw07StackingRulesLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/04-text-visual/csw-08-text-processing": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-08-text-processing");
+    return {
+      Csw08TextProcessingLab: module0.Csw08TextProcessingLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/04-text-visual/csw-09-decoration": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-09-decoration");
+    return {
+      Csw09DecorationLab: module0.Csw09DecorationLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/05-interface-direction/csw-10-display-visibility": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-10-display-visibility");
+    return {
+      Csw10DisplayVisibilityLab: module0.Csw10DisplayVisibilityLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/05-interface-direction/csw-11-user-interface": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-11-user-interface");
+    return {
+      Csw11UserInterfaceLab: module0.Csw11UserInterfaceLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/05-interface-direction/csw-12-writing-directions": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-12-writing-directions");
+    return {
+      Csw12WritingDirectionsLab: module0.Csw12WritingDirectionsLab,
+    } as ChapterMdxComponents;
+  },
+  "css-world/06-review/csw-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/css-world/v2/csw-official-final-review");
+    return {
+      CswOfficialFinalReviewLab: module0.CswOfficialFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
   "data-structures-visual/00-intro/dsv-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/data-structures-visual/v2/dsv-learning-map");
@@ -7952,6 +9516,115 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         DscConceptLab: module0.DscConceptLab,
       } as ChapterMdxComponents;
     },
+  "ddia/00-learning-map/ddi-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-official-learning-map");
+    return {
+      DdiOfficialLearningMapLab: module0.DdiOfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/01-reliable-scalable-maintainable/ddi-01-reliable-scalable-maintainable-applications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/ddia/v2/ddi-01-reliable-scalable-maintainable-applications");
+      return {
+        Ddi01ReliableScalableMaintainableLab:
+          module0.Ddi01ReliableScalableMaintainableLab,
+      } as ChapterMdxComponents;
+    },
+  "ddia/02-data-models-query-languages/ddi-02-data-models-query-languages":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/ddia/v2/ddi-02-data-models-query-languages");
+      return {
+        Ddi02DataModelsQueryLanguagesLab:
+          module0.Ddi02DataModelsQueryLanguagesLab,
+      } as ChapterMdxComponents;
+    },
+  "ddia/03-storage-retrieval/ddi-03-storage-retrieval": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-03-storage-retrieval");
+    return {
+      Ddi03StorageRetrievalLab: module0.Ddi03StorageRetrievalLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/04-encoding-evolution/ddi-04-encoding-evolution": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-04-encoding-evolution");
+    return {
+      Ddi04EncodingEvolutionLab: module0.Ddi04EncodingEvolutionLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/05-replication/ddi-05-replication": async () => {
+    const module0 = await import("@/components/mdx/ddia/v2/ddi-05-replication");
+    return {
+      Ddi05ReplicationLab: module0.Ddi05ReplicationLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/06-partitioning/ddi-06-partitioning": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-06-partitioning");
+    return {
+      Ddi06PartitioningLab: module0.Ddi06PartitioningLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/07-transactions/ddi-07-transactions": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-07-transactions");
+    return {
+      Ddi07TransactionsLab: module0.Ddi07TransactionsLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/08-trouble-distributed-systems/ddi-08-trouble-distributed-systems":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/ddia/v2/ddi-08-trouble-distributed-systems");
+      return {
+        Ddi08TroubleDistributedSystemsLab:
+          module0.Ddi08TroubleDistributedSystemsLab,
+      } as ChapterMdxComponents;
+    },
+  "ddia/09-consistency-consensus/ddi-09-consistency-consensus": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-09-consistency-consensus");
+    return {
+      Ddi09ConsistencyConsensusLab: module0.Ddi09ConsistencyConsensusLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/10-batch-processing/ddi-10-batch-processing": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-10-batch-processing");
+    return {
+      Ddi10BatchProcessingLab: module0.Ddi10BatchProcessingLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/11-stream-processing/ddi-11-stream-processing": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-11-stream-processing");
+    return {
+      Ddi11StreamProcessingLab: module0.Ddi11StreamProcessingLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/12-future-data-systems/ddi-12-future-data-systems": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-12-future-data-systems");
+    return {
+      Ddi12FutureDataSystemsLab: module0.Ddi12FutureDataSystemsLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/13-glossary/ddi-glossary": async () => {
+    const module0 = await import("@/components/mdx/ddia/v2/ddi-glossary");
+    return {
+      DdiGlossarySemanticsLab: module0.DdiGlossarySemanticsLab,
+    } as ChapterMdxComponents;
+  },
+  "ddia/99-final-review/ddi-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/ddia/v2/ddi-official-final-review");
+    return {
+      DdiFinalReviewGateLab: module0.DdiFinalReviewGateLab,
+    } as ChapterMdxComponents;
+  },
   "deep-android-kernel/00-official-learning-map/dak-14-official-learning-map":
     async () => {
       const module0 =
@@ -10222,6 +11895,55 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.DltOfficialFinalReviewEvidenceGateLab,
       } as ChapterMdxComponents;
     },
+  "deep-nodejs/00-guide/dnj-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-official-learning-map");
+    return {
+      DnjOfficialLearningMapLab: module0.DnjOfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/01-foundations/dnj-01-node-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-01-node-introduction");
+    return {
+      DnjNodeIntroductionLab: module0.DnjNodeIntroductionLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/01-foundations/dnj-02-module-mechanism": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-02-module-mechanism");
+    return {
+      DnjModuleMechanismLab: module0.DnjModuleMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/02-async-memory/dnj-03-async-io": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-03-async-io");
+    return {
+      DnjAsyncIoLab: module0.DnjAsyncIoLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/02-async-memory/dnj-04-async-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-04-async-programming");
+    return {
+      DnjAsyncProgrammingLab: module0.DnjAsyncProgrammingLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/02-async-memory/dnj-05-memory-control": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-05-memory-control");
+    return {
+      DnjMemoryControlLab: module0.DnjMemoryControlLab,
+    } as ChapterMdxComponents;
+  },
+  "deep-nodejs/03-data-network/dnj-06-buffer": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/v2/dnj-06-buffer");
+    return {
+      DnjBufferLab: module0.DnjBufferLab,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");

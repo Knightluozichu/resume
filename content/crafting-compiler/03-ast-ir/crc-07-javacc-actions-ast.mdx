@@ -1,12 +1,9 @@
 ---
-title: 第7章 JavaCC的action和抽象语法树
+title: "第7章 JavaCC的action和抽象语法树"
 type: C
-section: 第2部分 · AST、语义与IR
+section: "第2部分 · 抽象语法树和中间代码"
 order: 7
-description: >-
-  第7章
-  JavaCC的action和抽象语法树围绕JavaCC的action、抽象语法树和节点推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖4个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 JavaCC action 的执行边界、不可变 AST 节点和源码跨度回放语法结果，区分解析动作、结构产物与后续语义阶段。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,56 +11,210 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-07
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcJavaccActionsAstLab } from "@/components/mdx/crafting-compiler/v2/crc-07-javacc-actions-ast";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“Action纯度与AST节点台”开始
+- 能把 JavaCC action 的输入、执行时机、返回值和副作用边界记录为可回放证据
+- 能设计带节点类型、子节点、值和源码跨度的不可变 AST 节点，并验证等价输入的结构结果
+- 能在 action 失败、节点跨度错误和清理重建场景中定位差异，不把语义状态泄漏给下一次解析
 
-第7章 JavaCC的action和抽象语法树沿“matched symbols → JavaCC action → immutable AST node”转换信息。最终进程返回正确值只能证明一条执行路径；Action纯度与AST节点台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第7章 JavaCC的action和抽象语法树固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变Action职责或失败时点。本页交互只移动matched symbols → JavaCC action → immutable AST node中的真实对象和状态，不生成置信、风险或证据分数。
+## 从匹配符号到一次稳定的节点构造
+
+JavaCC production 匹配 token 后，可以在规则内部执行 action。action 适合把已经确认的语法片段组装成节点或返回值，但它不应偷偷修改全局符号表、依赖上一次解析的缓存，或替语义阶段决定类型。稳定的边界是：匹配符号进入 action，action 读取局部数据，节点携带结构和跨度，后续阶段再解释它。
+
+先预测 `1 + 2` 会生成哪些节点，再在专属实验中逐步显示匹配符号、action、AST 节点、源码跨度和重放结果。每次只注入一个故障，才能判断是 action 执行、节点构造还是状态清理发生了问题。
+
+<Callout type="trap" title="误区一：让 action 直接修改全局语义状态">
+  现象 → 第一次解析成功，第二次解析同样输入却受到上一次名称、计数器或缓存的影响。
+
+原因 → 把解析阶段的局部结构构造和语义阶段的环境更新混在 action 中，失败路径也没有回滚。
+
+修法 → action 只返回局部节点或值；需要的环境变化交给后续阶段，并在重放时比较状态快照。
+
+</Callout>
+
+<Callout type="trap" title="误区二：用可变节点节省一次构造">
+  现象 → 一个节点被多个父节点共享后，修改其中一处导致另一棵树的子节点和跨度一起变化。
+
+原因 → AST 节点暴露可写字段，action 或调试代码可以在构造完成后改变既有结构。
+
+修法 → 节点字段和子节点集合在构造后不可变；需要变化时创建新节点，并保留新的源跨度。
+
+</Callout>
+
+<Callout type="trap" title="误区三：把跨度当成调试附属信息">
+  现象 → 树形看起来正确，但诊断高亮了错误文本，后续类型错误无法指回源码。
+
+原因 → action 只传递值和节点类型，没有把 token 的起止位置合并到父节点。
+
+修法 → 每个节点保存半开区间 `[start, end)`；组合节点取子树覆盖范围，并用嵌套样本检查边界。
+
+</Callout>
+
+## Action 与 AST 的工作合同
+
+第2部分 抽象语法树和中间代码从语法结构继续向语义与 IR 传递信息。第7章 JavaCC的action和抽象语法树只负责把已匹配的符号变成结构化节点；它的输出要能被后续阶段读取，也要能在相同输入与相同 grammar 下重复得到相同结果。
+
+<Term def="在 JavaCC production 内、匹配到指定 token 或子规则后执行的代码片段；它可以组装局部节点或返回值，但不应隐藏跨解析状态。">
+  action
+</Term>
+
+action 的输入应来自当前 production 的局部变量和已匹配符号。一个清晰的 action 能回答“已经确认了什么、正在构造什么、交付给谁”；如果它还要更新全局环境，就需要把责任移动到语义阶段并留下显式接口。
+
+<Term def="表示语法类别、子节点、字面值和源码范围的数据对象；它把解析结果交给类型检查、解释或代码生成。">
+  AST 节点
+</Term>
+
+AST 节点要有稳定的种类和字段。例如二元加法节点可以保存左子节点、右子节点、运算符位置和整体跨度。字段越明确，后续阶段越不需要重新猜 token 的含义。
+
+<Term def="创建后字段和子节点引用不再被原地修改的结构性质；它让树可以安全共享、缓存和跨阶段传递。">
+  不可变
+</Term>
+
+不可变不是为了让代码更漂亮，而是为了让回放可比较。若 action 失败或下游需要另一种表示，创建新节点比修改旧节点更容易记录原因、保留旧快照和复现差异。
+
+<Term def="对应源码中的半开区间 `[start, end)`；它由 token 和子节点范围合并得到，用于诊断、跳转和错误高亮。">
+  源码跨度
+</Term>
+
+源码跨度是节点结构的一部分。叶节点直接取 token 范围，组合节点覆盖最左子节点到最右子节点；空结构和缺失 token 不应伪造一个越过错误位置的跨度。
+
+<Term def="在相同输入、grammar、工具版本和清理条件下再次执行 action 与节点构造，并比较结构、跨度、状态和退出码的过程。">
+  回放
+</Term>
+
+回放记录不仅包含最终树，还要包含 action 顺序、节点标识、跨度、错误消息和状态快照。这样才能区分生成器变化、输入变化和 action 残留。
 
 ## 来源、版本与独立重写边界
 
-第7章 JavaCC的action和抽象语法树以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)对齐范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。JavaCC action 行为以[官方 grammar 文档](https://javacc.github.io/javacc/documentation/grammar.html)核对，JDK、JavaCC 版本、C♭样本和生成目录应在回放记录中单独注明。
 
-第7章 JavaCC的action和抽象语法树用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+## 第2部分 抽象语法树和中间代码
 
-## 本章合同与可运行探针
+语法分析交付 AST 后，语义分析和 IR 转换才有稳定的输入。节点应保留语法阶段真正知道的事实：节点类型、子节点、字面值和源码跨度；类型、绑定和机器表示属于后续阶段，不要在 action 里提前写死。
 
-、、、、。
+## 第7章 JavaCC的action和抽象语法树
 
-第7章 JavaCC的action和抽象语法树的通过不变量是“同一token串只构造一次等价AST，失败路径不残留语义状态”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
+本章的主线是 `matched symbols → JavaCC action → immutable AST node`。在 action 之前，解析器只确认局部符号；在 action 之后，节点可以被检查、打印和转换；在重放验收中，等价输入应产生等价结构，失败输入不应污染下一次解析。
 
-```bash
-javacc Parser.jj
-java ActionTrace samples/actions.cb
-```
+## 7.1 JavaCC的action
 
+action 的执行时机跟 production 的消费顺序绑定。若 action 在右括号或分号确认之前就发布了完整节点，后续失败会留下半成品；更稳妥的做法是把局部值保存在 action 内，等必需符号匹配完成后一次构造节点。
 
-## 官方目录逐项深读
+action 也不应承担类型检查和名称解析。它可以把字面值、操作符和子节点组合起来，但“这个名字是否已声明”“两个类型能否相加”应在下一阶段通过明确的节点接口处理。
 
-### 第2部分 抽象语法树和中间代码
+## 7.2 抽象语法树和节点
 
-**四级证据 1/4。** 前端槽1用合法、最长匹配、歧义、截断和非法字符样本核对“第2部分 抽象语法树和中间代码”的token、前看、树形与源位置；固定失败时点，只改变Action职责，以Action调用、节点ID与残留状态找到第一处分叉并清理重建。
+AST 节点把语法事实组织成后续阶段可以消费的接口。节点类型应足够区分字面值、名字、二元运算和调用；子节点顺序应表达结合性；源码跨度应覆盖用户真正输入的片段。构造后保持不可变，调试打印和类型检查就能共享同一份树。
 
-### 第7章 JavaCC的action和抽象语法树
+<CrcJavaccActionsAstLab />
 
-**四级证据 2/4。** 前端槽2用合法、最长匹配、歧义、截断和非法字符样本核对“第7章 JavaCC的action和抽象语法树”的token、前看、树形与源位置；固定失败时点，只改变Action职责，以Action调用、节点ID与残留状态找到第一处分叉并清理重建。
+## 三步实验：回放 action 与节点边界
 
-### 7.1 JavaCC的action
+三个步骤共享本章专属实验，先看正式目录和数据流，再切换 action 的纯度与执行时机，最后比较节点字段、跨度和清理重建的稳定性。
 
-**四级证据 3/4。** 前端槽3用合法、最长匹配、歧义、截断和非法字符样本核对“7.1 JavaCC的action”的token、前看、树形与源位置；固定失败时点，只改变Action职责，以Action调用、节点ID与残留状态找到第一处分叉并清理重建。
+<Stepper>
+  <Step title="第一步：定位 AST 交接">
+    先预测：第2部分 抽象语法树和中间代码为什么需要节点而不是原始 token？选择“数据流”，逐个查看四个正式节点与 action 的交接。
 
-### 7.2 抽象语法树和节点
+    <CrcJavaccActionsAstLab />
 
-**四级证据 4/4。** 前端槽4用合法、最长匹配、歧义、截断和非法字符样本核对“7.2 抽象语法树和节点”的token、前看、树形与源位置；固定失败时点，只改变Action职责，以Action调用、节点ID与残留状态找到第一处分叉并清理重建。
+  </Step>
+  <Step title="第二步：观察 action 边界">
+    动手试：切换字面值、二元运算和调用样本，观察 action 何时读取 matched symbols，何时发布节点，以及哪种状态必须留给语义阶段。
 
-## 三个必须主动触发的误区
+    <CrcJavaccActionsAstLab />
 
+  </Step>
+  <Step title="第三步：验证节点与回放">
+    先猜一猜：跨度错误或 action 残留发生时，应该先改变节点字段、清理状态还是重写语法规则？注入故障并比较 AST、跨度、状态快照和退出码。
 
-## 练习、答案与116层级验证
+    <CrcJavaccActionsAstLab />
 
+  </Step>
+</Stepper>
 
+## 小结
+
+- action 只应基于当前 production 的已匹配符号构造局部结构，不应暗中改变跨解析状态。
+- AST 节点要明确类型、子节点、值和源码跨度，构造后保持不可变。
+- 源码跨度应随叶节点和组合节点一起保存，诊断才能指回用户输入。
+- 回放要比较 action 顺序、节点结构、跨度、状态快照和退出码，而不只是最终打印文本。
+
+<Exercises>
+
+**问题 1：覆盖正式节点。** 请为“第2部分 抽象语法树和中间代码”“第7章 JavaCC的action和抽象语法树”“7.1 JavaCC的action”“7.2 抽象语法树和节点”各写一份输入、产物和验收证据。
+
+<Answer>
+  第2部分 抽象语法树和中间代码记录 AST 到后续阶段的交接；第7章
+  JavaCC的action和抽象语法树记录 matched symbols、action、节点和回放；7.1
+  JavaCC的action记录执行时机、局部输入和副作用边界；7.2
+  抽象语法树和节点记录节点类型、子节点、值、源码跨度与不可变性。每份证据都要包含输入、预期
+  action 顺序、实际节点和退出码。
+</Answer>
+
+**问题 2：设计节点。** 为 `1 + 2` 设计字面值节点和二元运算节点，写出字段、子节点顺序和源码跨度，并说明为什么构造完成后不应原地修改。
+
+<Answer>
+  字面值节点可保存 kind=Number、value、span；二元节点保存
+  kind=Add、left、right、operatorSpan 和覆盖两侧子树的 span。`1 + 2` 应形成
+  `Add(Number(1),
+  Number(2))`，如果需要另一种表示就创建新节点，不能改变共享旧树的 left、right 或
+  span。
+</Answer>
+
+**问题 3：修复 action 残留。** 让一次非法输入在 action 执行后失败，再用同一解析器重放合法输入；要求证明第二次结果没有继承第一次的节点或计数状态。
+
+<Answer>
+  把 action
+  的节点和计数放入当前解析上下文，非法输入失败时丢弃当前上下文；清理生成目录后重新生成，并连续运行非法、合法、合法三组样本。比较每次
+  action 顺序、节点
+  ID、源码跨度、状态快照和退出码，第二次与第三次合法结果应等价且不含失败样本的残留。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="action">
+  在 JavaCC production 内、匹配符号后执行的代码片段。
+</GlossaryItem>
+
+<GlossaryItem term="AST 节点">
+  表示语法类别、子节点、字面值和源码范围的数据对象。
+</GlossaryItem>
+
+<GlossaryItem term="不可变">
+  创建后字段和子节点引用不再被原地修改的结构性质。
+</GlossaryItem>
+
+<GlossaryItem term="源码跨度">
+  对应源码半开区间 `[start, end)` 的节点位置信息。
+</GlossaryItem>
+
+<GlossaryItem term="回放">
+  在固定条件下再次执行并比较 action、节点、跨度、状态和退出码的过程。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC 官方 grammar 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

@@ -3,347 +3,273 @@ title: "Chapter 8: Using LLMs with Structured Data"
 type: C
 section: "Chapter 8: Using LLMs with Structured Data"
 order: 9
-description: "以Chinook关系数据库为实验场，构建DBCopilot、SQL Agent、提示和附加工具，并把自然语言查询置于只读安全边界。"
+description: "以 Chinook 关系数据库为实验场，构建 DBCopilot、SQL Agent、提示和附加工具，并把自然语言查询置于只读安全边界。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-08
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla08SchemaLab,
+  Bla08SqlLab,
+  Bla08UiLab,
+} from "@/components/mdx/building-llm-applications/09-chapter-08/bla-08-structured-data";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。以Chinook关系数据库为实验场，构建DBCopilot、SQL
-Agent、提示和附加工具，并把自然语言查询置于只读安全边界。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能区分自然语言、数据库模式、SQL 生成、静态检查、只读执行和结果解释的责任边界。
+- 能在 Chinook 或等价关系数据库上实现参数化查询、行数/耗时限制和可回溯来源。
+- 能为 DBCopilot、SQL Agent 和附加工具设置最小权限、注入防护、人工确认和错误回退。
+- 能通过前端状态、数据口径、查询日志、隐私和成本证据判断结构化数据应用是否可发布。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 8：让自然语言查询停在数据库安全边界内
 
+结构化数据应用的核心不是让模型“懂 SQL”，而是让自然语言问题经过模式理解、查询生成、静态检查、只读执行和结果解释。数据库中的表、列、关系和权限是事实边界；模型只能提出候选查询，不能直接授予自己写入权限。本章使用 Chinook 作为小型练习库，展示 DBCopilot、SQL Agent 和前端如何共同承担证据。
 
-## 数学、检索与成本骨架
+先预测：如果用户请求访问未授权字段，应该在生成前还是执行前阻断？如果模型生成了 UPDATE，界面应该继续运行还是进入人工确认？如果查询超时，是否可以让模型凭上下文补一个数字？三个实验会逐个触发这些边界。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**模型生成的 SQL 语法正确，就直接执行；**原因：**没有检查表、列、权限、行数、连接和副作用；**修法：**模式检索、参数化、静态检查、只读账号和超时限制缺一不可。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**回答展示一个精确数字，却没有说明查询口径和数据时间；**原因：**把数据库结果和模型解释混成同一层；**修法：**保存 SQL、参数、行数、字段、来源快照和聚合口径，结果与解释分开。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**SQL Agent 失败后继续尝试写入或猜测结果；**原因：**没有区分权限拒绝、超时、语法错误和副作用未知；**修法：**按错误类型取消、重试或人工确认，并把请求 ID 和影响范围显示给用户。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="描述表、列、类型、关系、约束和可访问范围的结构化数据库信息">Database Schema</Term>` 是查询生成的输入边界。`<Term def="把自然语言问题映射为可检查数据库操作的候选文本或结构">SQL Candidate</Term>` 只是建议，不是已经授权的动作。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+执行前需要 `<Term def="在数据库执行前检查 SQL 语法、表列、参数、权限、行数和副作用的门禁">SQL Guard</Term>`；生成系统通常使用 `<Term def="只允许读取、限制资源并拒绝结构变更的数据库访问模式">Read-only Boundary</Term>`。结果解释还应提供 `<Term def="说明字段、筛选、聚合、时间范围和数据快照的结果上下文">Query Provenance</Term>`，最后由 `<Term def="检查查询安全、数据口径、隐私、成本和前端错误恢复的发布步骤">Data Copilot Gate</Term>` 决定是否上线。
 
-## 三段可运行骨架
+## 三步结构化数据实验
+
+每一步先写下预测，再只改变一个条件。实验不连接真实数据库；生产环境要使用专用账号、脱敏数据、参数化查询和明确的审计策略。
+
+<Stepper>
+  <Step title="1. 检查模式与权限">
+    选择模式检查、SQL 生成或结果验证，再请求未授权字段，观察 schema、权限和拒答如何先于模型文本生效。
+
+    <Bla08SchemaLab />
+  </Step>
+  <Step title="2. 约束 SQL Agent">
+    选择只读、聚合或关联查询，再让模型生成写入语句，观察 SQL Guard、人工确认和只读边界如何阻断副作用。
+
+    <Bla08SqlLab />
+  </Step>
+  <Step title="3. 呈现查询口径与失败">
+    选择预览、执行或解释，再触发超时，观察前端如何展示请求 ID、取消、重试、来源和可解释错误。
+
+    <Bla08UiLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的 SQL 门禁
+
+下面的 Python 函数只允许白名单表和只读语句，并要求查询带资源限制；TypeScript 版本把查询结果和口径分开。示例不执行 SQL，先验证生成候选是否有资格进入数据库适配器。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / SQL Guard">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def sql_guard(sql, allowed_tables, max_rows):
+    normalized = sql.strip().lower()
+    forbidden = any(word in normalized for word in ["insert", "update", "delete", "drop", "alter"])
+    tables_ok = all(table in normalized for table in allowed_tables[:1])
+    limited = "limit" in normalized and str(max_rows) in normalized
+    return {"pass": tables_ok and limited and not forbidden, "forbidden": forbidden, "limited": limited}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 查询来源">
 
 ```typescript
-type RequestContract = {
-  task: string;
-  model: string;
-  prompt: string;
-  data: string;
-  tools: string[];
-  seed: number;
+type QueryResult = {
+  sql: string;
+  columns: string[];
+  rows: unknown[];
+  snapshot: string;
+  explanation: string;
 };
 
-function freezeRequest(
-  task: string,
-  model: string,
-  prompt: string,
-  dataHash: string,
-  tools: string[],
-  seed: number,
-): RequestContract {
-  return { task, model, prompt, data: dataHash, tools, seed };
+function explainResult(result: QueryResult) {
+  return {
+    text: result.explanation,
+    evidence: `${result.snapshot}: ${result.columns.join(", ")}`,
+    rowCount: result.rows.length,
+  };
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`sql_guard` 只是教学门禁，真实实现还要使用 SQL AST、参数绑定、数据库权限、查询计划和连接级超时；`explainResult` 将回答、字段、快照和行数关联起来，避免模型解释脱离实际查询结果。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type GateRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(
-  records: GateRecord[],
-): { pass: boolean; missing: number[] } {
-  const required = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从模式到可审计查询
 
 ### Chapter 8: Using LLMs with Structured Data
 
-“Chapter 8: Using LLMs with Structured Data”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“Chapter 8: Using LLMs with Structured Data”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 8: Using LLMs with Structured Data”沿自然语言、模式、SQL 候选、SQL Guard、数据库结果和 Query Provenance 追踪。模型可以加速理解问题与生成查询，但权限、口径、资源和副作用必须由确定性程序控制。
 
 ### Technical requirements
 
-“Technical requirements”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Technical requirements”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Technical requirements”包括数据库文件或端点、schema 快照、只读账号、Python/框架版本、SQL 解析器、超时、行数限制、脱敏日志和前端状态。没有这些条件，查询差异不能可靠归因或重放。
 
 ### What is structured data?
 
-“What is structured data?”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“What is structured data?”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“What is structured data?”说明表格、关系、类型、主外键和约束如何形成可查询边界。结构化并不意味着内容永远正确；时间、权限、空值、重复和业务口径仍然要写进查询与解释。
 
 ### Getting started with relational databases
 
-“Getting started with relational databases”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“Getting started with relational databases”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Getting started with relational databases”应先选择只读连接、列出允许的表和示例查询，再让模型提出自然语言到 SQL 的候选。连接身份、快照和资源限制先于任何自动执行。
 
 ### Introduction to relational databases
 
-“Introduction to relational databases”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“Introduction to relational databases”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Introduction to relational databases”把关系数据库理解为表、行、列、主键、外键、连接和事务的组合。模型生成查询时必须尊重这些关系；错误连接可能返回看似合理但重复或数量级错误的结果。
 
 ### Overview of the Chinook database
 
-“Overview of the Chinook database”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“Overview of the Chinook database”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Overview of the Chinook database”提供一个小型音乐商店数据集，用于练习 Artist、Album、Track、Customer、Invoice 等关系。学习重点不是记表名，而是保存 schema 版本、允许访问范围、连接键和问题到字段的映射。
 
 ### How to work with relational databases in Python
 
-“How to work with relational databases in Python”沿自然语言、模式检索、SQL生成、静态验证、只读执行和结果解释追踪。数据库账号采用最小权限，限制表、行数和耗时；越权、注入、笛卡尔积与错误聚合在执行前被门禁捕获。
-
-针对“How to work with relational databases in Python”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“How to work with relational databases in Python”将连接、参数、游标、查询结果和异常分开。Python 适配器应拒绝拼接用户输入，设置查询超时和行数上限，保存 SQL 模板、参数哈希、快照和关闭连接动作。
 
 ### Implementing the DBCopilot with LangChain
 
-“Implementing the DBCopilot with LangChain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Implementing the DBCopilot with LangChain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Implementing the DBCopilot with LangChain”可以把 schema、提示、SQL 工具和结果解释串成流程，但框架不应获得超过数据库账号的权限。先用假数据库验证拒绝和错误分支，再接 Chinook 或其他脱敏数据。
 
 ### LangChain agents and SQL Agent
 
-“LangChain agents and SQL Agent”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“LangChain agents and SQL Agent”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“LangChain agents and SQL Agent”让模型选择查看 schema、生成 SQL、修复错误或解释结果的下一步。每一步都需要白名单、步数、预算、超时和回执；SQL Agent 不能因为重试次数增加就获得写入权限。
 
 ### Prompt engineering
 
-“Prompt engineering”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Prompt engineering”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Prompt engineering”在结构化数据中要明确 schema、输出 SQL、只读限制、表列白名单、错误处理和回答口径。提示只是第一层约束，最终仍由 parser、权限和执行门禁确认，不能靠文字宣告安全。
 
 ### Adding further tools
 
-“Adding further tools”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Adding further tools”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Adding further tools”可以增加 schema 检查、查询计划、字段解释、导出或图表，但每个工具都要有输入、输出、权限、超时、隐私和副作用边界。导出和写入属于高风险动作，需要人工确认或完全禁用。
 
 ### Developing the front-end with Streamlit
 
-“Developing the front-end with Streamlit”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Developing the front-end with Streamlit”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Developing the front-end with Streamlit”应让用户看到问题、SQL 预览、限制、运行状态、结果、口径、来源和错误。超时可取消或重试，权限拒绝要可解释，空结果不能被渲染成模型自行补写的数字。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为六个动作：读取 schema，生成 SQL 候选，执行 SQL Guard，只读运行，保存 Query Provenance，在前端呈现口径与回退。结构化数据让错误可检查，但不代表模型可以直接操作数据库。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”标记 Packt 原书、关系数据库、Chinook、LangChain 和 Streamlit 资料的来源边界。框架 API、数据库版本、权限模型与价格会变化，当前部署必须重新验证，不从历史 demo 继承安全结论。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类结构化数据证据
 
-## 六类应用证据
+### 1. Schema 与权限证据
 
-### 任务与来源合同
+保存 schema 快照、表列白名单、类型、关系、数据库账号、scope 和脱敏规则。权限改变时重新运行模式和越权测试，不把数据库可见性默认为业务授权。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. SQL 生成与验证证据
 
-### 模型与提示合同
+保存自然语言问题、提示版本、SQL 候选、AST 或 parser 结果、参数、阻断原因和人工确认。未通过门禁的候选不得进入执行适配器。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 执行与资源证据
 
-### 数据、检索与状态合同
+保存查询计划、快照、行数、耗时、超时、连接、错误和成本。限制全表扫描、笛卡尔积、超长返回和重复重试，副作用未知时停止而不是继续。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 结果与口径证据
 
-### 工具、代码与权限合同
+保存字段、空值、聚合、时间范围、快照、来源和解释。回答中的数字必须能够回到 SQL 与结果，模型补充的业务含义要明确标注为解释而非数据库事实。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 工具与前端证据
 
-### 评测、安全与成本合同
+保存 schema 工具、SQL 工具、导出工具、权限、请求 ID、UI 状态、取消、重试和错误提示。前端不展示秘密，不把错误页面隐藏成成功结果。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 回归与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存正常、空、越权、注入、超时、聚合和多表查询样本，记录旧版 SQL、结果、指标和回退配置。模型、schema、提示、框架或数据库变化都触发回归。
 
 ## 容易踩的坑
 
-**现象 →** 用户问"删除所有客户"，LLM 生成 `DROP TABLE Customer` 并被执行，数据被清空。
-**原因 →** 数据库账号有写权限，SQL 未经静态校验直接执行，无语句类型白名单。
-**修法 →** 账号只读，执行前用白名单校验语句类型（只允许 SELECT），破坏性语句直接拒绝并审计。
+<Callout type="trap">**现象：**用户输入直接拼接进 SQL；**原因：**把模型的自然语言理解当作参数安全；**修法：**使用参数绑定、AST 检查、表列白名单和只读账号，拒绝结构变更。</Callout>
 
-**现象 →** 自然语言查询返回百万行，前端卡死，API 成本飙升。
-**原因 →** LLM 生成的 SQL 缺少 JOIN 条件，产生笛卡尔积，且未限制行数与超时。
-**修法 →** 静态检查 JOIN 数与表数，强制 LIMIT 与查询超时，结果行数超阈值即截断告警。
+<Callout type="trap">**现象：**聚合结果正确，却没有说明时间范围和空值口径；**原因：**把数字和业务定义分离；**修法：**保存 Query Provenance，让字段、过滤、聚合、快照和解释一起展示。</Callout>
 
-**现象 →** 错误信息把完整 DDL（含其他租户表名）回显给前端，泄露敏感结构。
-**原因 →** 提示中塞入全库 schema，错误处理未脱敏，把原始 SQL 与 schema 一并返回。
-**修法 →** 只注入用户可见表的精简 schema，错误返回脱敏摘要，完整日志留在后端审计链。
+<Callout type="trap">**现象：**查询超时后模型继续生成数字；**原因：**前端没有区分错误、空结果和成功结果；**修法：**保留请求 ID，取消或重试可重试错误，返回明确的可解释失败。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 数据库账号最小权限，默认只读，限制表与行数。
-- SQL 执行前静态校验语句类型、JOIN 与 LIMIT。
-- 自然语言到 SQL 须经过模式检索与只读边界。
-- 提示只注入用户可见表的精简 schema，避免泄露。
-- 保留查询审计链，结果与文字解释分开记录。
+- Schema 是自然语言查询的输入边界，SQL Candidate 不是授权动作。
+- SQL Guard 结合参数绑定、只读权限、AST 检查、行数和耗时限制阻断风险。
+- Chinook 等练习库必须保存快照、关系、权限和查询口径，不能只留最终数字。
+- SQL Agent 和附加工具拥有最小权限，写入、导出和高成本查询需要人工或禁用。
+- Streamlit 前端展示 SQL 状态、来源、口径、错误、取消和重试，缺证据就降级。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 为什么自然语言转 SQL 必须放在只读边界内？
+**问题 1：**自然语言请求“删除所有旧发票”到达 SQL Agent 时，应该经过哪些门禁？
 
 <Answer>
-
-LLM 生成的 SQL 可能包含 DROP/UPDATE/DELETE 等破坏性语句，或越权访问其他表；只读账号从权限层兜底，静态校验从语句层拦截，双保险确保即使提示被注入也无法造成不可逆破坏。
-
+  先识别这是写入/删除动作，检查身份、授权和业务审批；默认只读账号应直接阻断，不能让模型自行提升权限。若业务明确允许，也要人工确认、参数化、预览影响行数、使用事务/回滚和完整审计，失败时停止而不是重试扩大范围。
 </Answer>
 
-**问题 2：实践应用。** 如何检测并阻止 LLM 生成的笛卡尔积查询？
+**问题 2：**为什么一个精确数字仍需要 Query Provenance？
 
 <Answer>
-
-解析 SQL 的 FROM/JOIN 子句，统计表数量与连接条件数；若表数减一大于 JOIN 条件数，判定笛卡尔积风险并拒绝；同时强制 LIMIT 与查询超时，结果行数超阈值截断告警。
-
+  数字可能来自错误表、重复连接、不同时间快照、空值处理或口径不同。保存 SQL、参数、字段、过滤、聚合、时间范围、数据库快照、行数和解释，才能让用户和审计者复核数字的含义。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版 SQL 安全校验器：只允许 SELECT 且必须有 LIMIT，否则拒绝。
+**问题 3（独立实现）：**实现一个 `sql_guard`，拒绝包含写入关键字、未授权表或缺少 LIMIT 的 SQL。
 
 <Answer>
-
-```python
-import re
-
-def validate_sql(sql):
-    s = sql.strip().lower()
-    if not s.startswith("select"):
-        return False, "only SELECT allowed"
-    if not re.search(r"\blimit\b\s+\d+", s):
-        return False, "missing LIMIT"
-    bad = re.search(r"\b(drop|update|delete|insert|alter)\b", s)
-    if bad:
-        return False, f"forbidden: {bad.group()}"
-    return True, "ok"
-```
-
+  先标准化 SQL 并解析为 AST，检查操作类型、表集合和资源限制；任一写入操作、未知表或缺少 LIMIT 就返回阻断原因。不要只用字符串替换或让模型重新生成后直接执行，所有候选都要经过同一门禁。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-以Chinook关系数据库为实验场，构建DBCopilot、SQL Agent、提示和附加工具，并把自然语言查询置于只读安全边界。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能验证生成SQL的语法、权限、结果与成本，阻断越权和破坏性语句，并保留查询审计链。
-
+<Glossary>
+  <GlossaryItem term="Database Schema">描述表、列、类型、关系、约束和可访问范围的结构化数据库信息。</GlossaryItem>
+  <GlossaryItem term="SQL Candidate">把自然语言问题映射为可检查数据库操作的候选文本或结构。</GlossaryItem>
+  <GlossaryItem term="SQL Guard">在数据库执行前检查 SQL 语法、表列、参数、权限、行数和副作用的门禁。</GlossaryItem>
+  <GlossaryItem term="Read-only Boundary">只允许读取、限制资源并拒绝结构变更的数据库访问模式。</GlossaryItem>
+  <GlossaryItem term="Query Provenance">说明字段、筛选、聚合、时间范围和数据快照的结果上下文。</GlossaryItem>
+  <GlossaryItem term="Data Copilot Gate">检查查询安全、数据口径、隐私、成本和前端错误恢复的发布步骤。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 7: Search and Recommendation Engines with LLMs](/learn/building-llm-applications/08-chapter-07/bla-07-search-recommendation)
-- [Chapter 9: Working with Code](/learn/building-llm-applications/10-chapter-09/bla-09-working-with-code)
+- [上一页：Chapter 7 — Search and Recommendation Engines with LLMs](/learn/building-llm-applications/08-chapter-07/bla-07-search-recommendation)
+- [下一页：Chapter 9 — Working with Code](/learn/building-llm-applications/10-chapter-09/bla-09-working-with-code)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留结构化数据、Chinook、DBCopilot 与 SQL Agent 范围，并补充 schema、权限、口径和前端门禁练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

@@ -3,170 +3,215 @@ title: "附录C 比特币系统的编程接口"
 type: C
 section: "区块链开发实战（2018版）"
 order: 15
-description: "覆盖REST API启动、请求参数、返回结果与通过接口发起交易的客户端边界。"
+description: "用 REST API 的启动边界、请求校验和交易确认流程建立可重放的节点客户端。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bdp-appendix-c-bitcoin-apis
 ---
 
+import {
+  BdpAppendixCRequestLab,
+  BdpAppendixCServerLab,
+  BdpAppendixCTransactionLab,
+} from "@/components/mdx/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 为什么从可重放状态开始
+<Objectives>
 
-编程接口把节点能力暴露给客户端，但不会替客户端保证网络身份、数据新鲜度或交易确认。每个请求必须验证状态码、内容类型、字段、区块上下文和错误，写操作还要隔离签名密钥。
+- 能解释 REST API、节点、HTTP 响应和区块上下文之间的责任边界
+- 能修改请求校验 Demo，区分状态码、响应类型、字段和链上上下文
+- 能实现一个通过 API 发起交易的客户端，隔离密钥并处理未找到、失败和确认不足
+- 能回答：接口返回 HTTP 200 时，为什么仍不能直接把响应当成链上事实？
 
-区块链开发最容易产生的错觉，是界面显示成功、命令返回哈希或节点高度增加，就认为整条链路已经正确。实际上，源码可能由错误编译器构建，客户端可能连接错误网络，签名可能授权了不同字节，交易可能只进入内存池，执行可能回滚，索引器也可能展示尚未确认或已经被重组撤销的数据。只有把前状态、输入、验证依据、候选输出、回执、确认与后状态连起来，才能区分“请求被看见”和“状态已按预期提交”。
+</Objectives>
 
-本页因此先定义最小对象和不变量，再运行工具。读者应在实验前写出预期状态和拒绝原因，运行后保存原始协议对象，而不是只保存截图或格式化摘要。正常样本证明主路径，边界样本验证零值、最大值、恰好余额或资源上限，单故障样本验证实现能在首个不满足条件处停止。三个样本共享版本、网络、账户和观察点，差异才有可解释性。
+{/* BDP_APPENDIX_C_QUALITY_V2 */}
 
-每次重放还应生成一份机器可读记录：书目来源、提交或源码摘要、运行时版本、网络标识、账户或钱包上下文、固定输入、原始输出、错误对象、前后状态摘要与时间顺序。复核者从空目录读取这份记录，不依赖操作者浏览器缓存或终端历史；若缺失字段、节点未同步或结果绑定到不同区块哈希，门禁应明确失败而不是自动补猜。
+# 附录C 比特币系统的编程接口
 
-2018年版还带来一层额外要求：概念与历史工具必须分开。Geth、TestRPC、browser-solidity、Truffle、Solidity和比特币节点的命令及默认配置已经演进，直接复制可能失败，也可能在错误或不安全的上下文中运行。历史实验在无真实资产的隔离环境中复现原行为；现代迁移另列替代工具、行为差异、验证方法和回退点，不能用今天的成功结果改写原书当时的系统假设。
+把编程接口想成节点窗口上的传话员：它负责把请求送进去、把响应带回来，但不会替你判断响应是否来自目标网络，也不会替你等到交易获得足够确认。客户端必须把传输结果和链上事实分开。
 
-## 版次、对象与验收合同
+本附录解决三个问题：接口怎样安全启动，请求和返回怎样验收，以及怎样通过接口发起并追踪交易。若只检查 HTTP 200 或一个交易哈希，客户端可能把错误节点、截断响应、旧区块或尚未确认的状态写入业务系统。
 
-、、、、共同构成本页复核坐标。覆盖REST
-API启动、请求参数、返回结果与通过接口发起交易的客户端边界。
+## 本附录知识点清单
 
-本书锁定吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》，机械工业出版社，2018年6月，227页，ISBN 9787111599562。得到电子书公开前言、11章和附录A至C的完整目录；京东交叉核对三部分结构和目录页码，天珑书店交叉核对作者、出版社、2018年6月、227页与ISBN。全书共有185个正式目录层级，学习地图与总复习不计入分母。本文是独立教学重构，不复制原书正文。
+| 知识点 | 观察形态 | 验收证据 |
+| --- | --- | --- |
+| 请求与响应 | 校验管线 SVG | 方法、状态码、类型、字段、区块 |
+| 接口启动 | 服务边界 SVG | 监听地址、认证、节点、日志 |
+| API 交易 | 交易状态 SVG | 签名、广播、交易哈希、确认 |
+| REST API 调用 | curl 代码 | 请求参数和原始响应 |
+| 客户端容错 | 练习与错误开关 | 未找到、失败、重组、超时 |
 
-编程接口把节点能力暴露给客户端，但不会替客户端保证网络身份、数据新鲜度或交易确认。每个请求必须验证状态码、内容类型、字段、区块上下文和错误，写操作还要隔离签名密钥。
+## 接口合同与术语
 
+本章把节点 HTTP 入口称为 <Term def="用 HTTP 方法和资源路径访问节点功能的接口风格">REST API</Term>。客户端发送方法、路径、参数和认证信息，节点返回状态码与 body；接口层只提供传输，不自动证明 body 对应正确网络或最新链头。
 
-## 核心状态模型
+响应验收至少检查 <Term def="HTTP 响应表示请求处理结果的数字，例如成功、客户端错误或服务端错误">HTTP Status</Term>、<Term def="说明响应 body 如何编码和解释的媒体类型字段">Content Type</Term>、必需字段和错误结构。读取区块或交易时还要保存 <Term def="把响应绑定到网络、区块哈希、区块高度和查询时间的上下文">Block Context</Term>，否则同一请求可能在不同链头得到不同结果。
 
-$$
-cost(T)=gasUsed(T) \times effectiveGasPrice(T)
-$$
+写接口要有 <Term def="让客户端重复发送同一意图时仍只产生一次业务效果的请求标识">Idempotency Key</Term>，并把私钥操作移出公开服务。若接口接收已签名的 <Term def="已经编码并准备广播的完整交易数据">Raw Transaction</Term>，服务端只负责校验格式、广播和返回状态，不应替客户端静默生成无法追溯的签名。
 
-$$
-address = last_{20}(keccak256(RLP(sender,nonce)))
-$$
+<Callout type="trap" title="HTTP 200 不是链上确认">
+  现象：接口返回 200，客户端立即把交易或区块写成完成。原因：200 只说明 HTTP 请求被处理，body 可能是错误业务结果、旧节点视图或尚未确认的交易。修法：同时校验 Content Type、字段、网络、Block Context 和交易确认，再更新最终状态。
+</Callout>
 
-$$
-S_{t+1} = apply(S_t, T_t), \quad valid(T_t,S_t)=1
-$$
+## 三步可运行实验
 
-$$
-gate = source \times version \times replay \times boundary \times failureEvidence
-$$
+下面的实验将 API 客户端拆成请求校验、服务边界和交易确认。每一步先预测一个错误会在哪里出现，再用专属 SVG 切换状态；实验只使用本地测试接口，不暴露真实密钥。
 
-第一式描述本页资源、价值或身份约束；第二式给出地址、确认或账本链接等派生关系。状态转移式要求候选请求先通过当前状态验证，再原子地产生后状态；失败必须保留原状态。证据门禁采用乘法语义，来源、版本、重放、边界或失败证据任一缺失都不能发布。
+<Stepper>
+  <Step title="1. 请求从传输走到区块上下文">
+    先预测：响应状态码正确但字段缺失时，客户端应该继续解析还是停下？推进请求、传输、响应和上下文，注入错误并保存原始 body。
 
-以一个最小样本固定前状态、调用者、输入、节点或编译器版本与确认阈值。正常样本走完整成功路径；边界样本取零值、最大值、恰好余额或恰好Gas；单故障样本只改变签名、nonce、网络身份、区块链接、权限或响应字段中的一项。三者使用同一观察合同，才能把差异归因到目标规则。
+    <BdpAppendixCRequestLab />
+  </Step>
+  <Step title="2. REST API 启动的服务边界">
+    先预测：把监听地址改成公网且不加认证会改变什么？选择本地、受保护或错误暴露 profile，核对绑定、认证、节点和日志。
 
-## 三段可运行骨架
+    <BdpAppendixCServerLab />
+  </Step>
+  <Step title="3. API 交易的确认闭环">
+    先预测：只读请求和签名交易能否共享同一个“成功”状态？切换读取、写入或拒绝路径，完成确认检查并比较证据。
 
-```typescript
-type Trace = { before: string; input: string; after?: string; error?: string };
+    <BdpAppendixCTransactionLab />
+  </Step>
+</Stepper>
 
-function evidenceGate(trace: Trace) {
-  const complete = Boolean(
-    trace.before && trace.input && (trace.after || trace.error),
-  );
-  return { complete, trace, unit: "bdp-appendix-c-bitcoin-apis" };
+## 附录C 比特币系统的编程接口
+
+编程接口把节点能力转换成客户端可以调用的请求，但接口层和共识层职责不同。接口可以返回节点当前看到的区块、交易或错误，客户端仍要校验网络身份、响应结构、区块上下文和确认策略。
+
+## C.1 比特币RESTAPI接口的启动
+
+启动 REST API 前固定节点版本、网络、数据目录、监听地址、认证方式和日志位置。推荐只绑定本地测试接口，使用独立 Regtest 数据目录；如果必须由其他进程访问，先设置访问控制，再让客户端读取健康状态和链头。
+
+~~~shell
+bitcoind -regtest -datadir=/tmp/remuse-regtest \
+  -rest=1 -rpcbind=127.0.0.1 -rpcallowip=127.0.0.1
+curl -sS http://127.0.0.1:18443/rest/chaininfo.json
+~~~
+
+接口健康检查要保存 HTTP 状态、Content Type、响应 body、节点版本和链头哈希。服务进程能启动只说明端口被监听，不能证明它连接了目标网络，也不能证明交易写入会被正确处理。
+
+<Callout type="trap" title="把 REST 接口公开给不受控客户端">
+  现象：为了方便测试，把节点接口绑定到所有网卡并关闭认证。原因：监听范围被误当成客户端便利设置，导致任何可达进程都能读取钱包或发起管理操作。修法：本地绑定、最小权限、认证与隔离数据目录一起配置，公开服务只接收已签名且可审计的请求。
+</Callout>
+
+## C.1.1 快速启动一个RESTAPI的调用实例
+
+快速调用实例先完成三次只读检查：请求链信息，读取一个区块，再读取一笔已知交易。每次请求都记录 URL、方法、状态码、类型、响应摘要和区块高度；如果接口返回 HTML 错误页或空 body，应在解析 JSON 前停止。
+
+~~~shell
+curl -sS -D /tmp/headers \
+  http://127.0.0.1:18443/rest/chaininfo.json -o /tmp/body.json
+curl -sS -D /tmp/block-headers \
+  http://127.0.0.1:18443/rest/block/not-a-real-hash.json
+~~~
+
+第二条命令故意访问不存在的对象，用来确认客户端能区分“接口可达”和“对象存在”。错误响应同样进入证据记录，不能被通用重试器吞掉。
+
+## C.1.2 RESTAPI的请求参数和返回结果
+
+请求参数必须声明类型、单位、是否必填和边界；返回结果则要经过状态码、Content Type、字段存在性和 Block Context 四层检查。读取接口的成功 body 可能只代表节点当前视图，写接口的成功 body 还要带上交易哈希和后续查询策略。
+
+| 检查层 | 失败例子 | 客户端动作 |
+| --- | --- | --- |
+| 传输 | 超时、连接断开 | 保留请求 ID，不盲目重放写请求 |
+| HTTP | 404、401、500 | 解析错误结构并分类 |
+| 数据 | 字段缺失、类型错误 | 停止进入业务状态 |
+| 链上 | 区块过旧、网络错误 | 绑定上下文后重新读取 |
+
+## C.2 通过API接口发起交易
+
+通过 API 发起交易应把准备、签名、广播、入块和确认拆开。客户端可以在安全边界内构造请求，也可以接收离线生成的 Raw Transaction；广播成功后保存交易哈希，按区块高度轮询确认，发现 Reorg、未找到或失败时进入待复核状态。
+
+~~~javascript
+async function submitAndConfirm(api, rawTransaction, key, targetDepth) {
+  const txid = await api.broadcast(rawTransaction, { "Idempotency-Key": key });
+  const first = await api.transaction(txid);
+  if (!first || first.network !== "regtest") throw new Error("context-mismatch");
+  const confirmed = await api.waitForDepth(txid, targetDepth);
+  return { txid, confirmed, source: "api-response-and-chain-read" };
 }
-```
+~~~
 
-```python
-def apply_transition(state, request, verify):
-    if not verify(state, request):
-        return {"accepted": False, "state": state, "reason": "invalid"}
-    candidate = state.copy()
-    candidate[request["key"]] = request["value"]
-    return {"accepted": True, "state": candidate, "reason": None}
-```
+不要把广播返回的 txid 当成确认，也不要在网络超时后无条件再次签名。用 Idempotency Key、原始交易摘要和查询时间判断请求是否已经产生效果；如果接口返回未找到，先比较 mempool、节点链头和查询网络，再决定是否恢复。
 
-```javascript
-async function waitForEvidence(client, transactionHash, confirmations) {
-  const receipt = await client.getTransactionReceipt(transactionHash);
-  if (!receipt || receipt.status !== true)
-    return { state: "pending-or-failed" };
-  const head = await client.getBlockNumber();
-  return {
-    state:
-      head - receipt.blockNumber + 1 >= confirmations
-        ? "confirmed"
-        : "included",
-  };
-}
-```
+## C.3 本章小结
 
-第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把接口、合约或确认落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
+附录 C 的验收链可以收束为：接口启动先收紧监听与认证，请求处理检查状态码、类型、字段和 Block Context，交易操作隔离签名并使用 Idempotency Key，广播之后通过交易、区块和确认深度建立最终证据。HTTP 成功只完成传输层，不完成链上验收。
 
-## 正式目录逐项讲解
+## 练习与答案
 
-### 附录C 比特币系统的编程接口
+<Exercises>
 
-“附录C 比特币系统的编程接口”位于本页正式目录坐标 1/6。继承复用实现，抽象合约保留未实现行为，接口只声明外部合同。线性化、覆盖与存储布局都可能改变实际调用；测试应通过最终字节码和调用轨迹验证分派。
+**问题 1：改 Demo 代码。** 为请求校验 Demo 增加“旧区块”状态：响应字段正确但区块高度落后于客户端要求时，应该怎样标记和恢复？
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
+<Answer>
+  增加 Block Context 中的区块高度、哈希、查询时间和允许的最大陈旧范围。字段检查通过但上下文过旧时进入“待刷新”而不是“成功”，重新读取链头和同一对象；写请求不能因为超时就自动重复签名。
+</Answer>
 
-### C.1 比特币RESTAPI接口的启动
+**问题 2：接口排障。** REST API 返回 200，但 body 的 Content Type 是 HTML，客户端应该如何处理？
 
-“C.1 比特币RESTAPI接口的启动”位于本页正式目录坐标 2/6。接口调用由传输、方法、参数、区块上下文、结果和错误组成。客户端封装不能消除节点不一致、重组、超时和重复提交；读取与写入需要不同的重试和幂等策略。
+<Answer>
+  停止 JSON 解析和业务状态更新，保存状态码、headers、body 摘要、URL、网络和节点版本。将其分类为代理、服务端错误或错误路径，再确认本地绑定、认证和接口版本，不能用“200 就成功”的规则绕过类型检查。
+</Answer>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
+**问题 3：独立实现。** 设计一个 API 交易客户端的最小状态机，覆盖请求准备、签名、广播、未找到、入块和确认不足六种状态。
 
-### C.1.1 快速启动一个RESTAPI的调用实例
+<Answer>
+  状态机应为每次请求保存 Idempotency Key、Raw Transaction 摘要、网络和响应时间；广播返回 txid 后查询 mempool 和交易所在区块，按当前高度计算确认数。超时、未找到、网络不匹配和 Reorg 进入待复核，只有确认深度满足阈值才进入最终状态。
+</Answer>
 
-“C.1.1 快速启动一个RESTAPI的调用实例”位于本页正式目录坐标 3/6。接口调用由传输、方法、参数、区块上下文、结果和错误组成。客户端封装不能消除节点不一致、重组、超时和重复提交；读取与写入需要不同的重试和幂等策略。
+</Exercises>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
+## 术语表
 
-### C.1.2 RESTAPI的请求参数和返回结果
-
-“C.1.2 RESTAPI的请求参数和返回结果”位于本页正式目录坐标 4/6。接口调用由传输、方法、参数、区块上下文、结果和错误组成。客户端封装不能消除节点不一致、重组、超时和重复提交；读取与写入需要不同的重试和幂等策略。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### C.2 通过API接口发起交易
-
-“C.2 通过API接口发起交易”位于本页正式目录坐标 5/6。接口调用由传输、方法、参数、区块上下文、结果和错误组成。客户端封装不能消除节点不一致、重组、超时和重复提交；读取与写入需要不同的重试和幂等策略。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### C.3 本章小结
-
-“C.3 本章小结”位于本页正式目录坐标 6/6。“附录C 比特币系统的编程接口”的收束不是名词列表，而是把对象、授权、执行顺序、状态不变量和版本边界连接成一条可重放轨迹。
-
-以“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”作为通过标准；只展示成功截图、最终余额或交易哈希都不构成完整证据。通过标准是“能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-## 正常、边界与故障矩阵
-
-| 样本   | 只改变的变量                      | 预期结果               | 必存证据                   |
-| ------ | --------------------------------- | ---------------------- | -------------------------- |
-| 正常   | 合法输入与足额资源                | 状态提交并达到确认阈值 | 前后状态、哈希、回执、版本 |
-| 边界   | 零值、最大值或恰好阈值            | 按明确规则接受或拒绝   | 边界值、判断分支、资源消耗 |
-| 单故障 | 签名、nonce、网络、权限或链接一项 | 提交前拒绝且原状态不变 | 错误对象、首个差异、回退点 |
-
-测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
-
-## 常见失败与回退
-
-
-## 小结
-
-- 编程接口暴露节点能力但不保证身份和确认
-- 每个请求须验证状态码、内容类型和区块上下文
-- REST API启动须本地可见，校验区块与交易响应
-- 写操作要隔离签名密钥，读写重试策略不同
-- 广播交易后须处理未找到、参数错误和未同步
-
-## 本章回顾
-
-覆盖REST API启动、请求参数、返回结果与通过接口发起交易的客户端边界。 编程接口把节点能力暴露给客户端，但不会替客户端保证网络身份、数据新鲜度或交易确认。每个请求必须验证状态码、内容类型、字段、区块上下文和错误，写操作还要隔离签名密钥。 掌握标准不是记住命令或界面，而是能启动仅本地可见的测试接口，验证区块与交易响应，构造签名后广播交易，并正确处理未找到、参数错误和节点未同步。。发布前必须由独立观察者从来源和固定配置重放正常、边界及单故障样本。
-
+<Glossary>
+  <GlossaryItem term="REST API">
+    用 HTTP 方法和资源路径访问节点功能的接口风格，传输成功不等于链上成功。
+  </GlossaryItem>
+  <GlossaryItem term="HTTP Status">
+    表示 HTTP 请求在传输和服务处理层结果的数字状态码。
+  </GlossaryItem>
+  <GlossaryItem term="Content Type">
+    说明响应 body 应该按什么格式解释的媒体类型字段。
+  </GlossaryItem>
+  <GlossaryItem term="Block Context">
+    将响应绑定到网络、区块哈希、高度和查询时间的上下文记录。
+  </GlossaryItem>
+  <GlossaryItem term="Idempotency Key">
+    让重复发送同一业务意图时仍可识别为一次请求的唯一标识。
+  </GlossaryItem>
+  <GlossaryItem term="Raw Transaction">
+    已编码并准备广播的完整交易数据，通常在签名边界之外传递。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [上一页：附录B 比特币的bitcoin-cli模块详解](/learn/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli)
-- [下一页：《区块链开发实战》2018版全书总复习](/learn/blockchain-dev-practice/16-review/bdp-official-final-review)
+[上一页：附录B 比特币的bitcoin-cli模块详解](/learn/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli)
+· [下一页：《区块链开发实战》2018版全书总复习](/learn/blockchain-dev-practice/16-review/bdp-official-final-review)
 
 <Attribution
   mode="independent-rewrite"
   sourceBasis="publisher-catalog"
-  workTitle="《区块链开发实战》2018版"
+  workTitle="《区块链开发实战：以太坊关键技术与案例分析》"
   adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 />
-

@@ -3,11 +3,15 @@ title: "Chapter 24. Runtime Serialization"
 type: C
 section: "CLR via C# 4e · Core Facilities"
 order: 24
-description: "忠实覆盖Formatter/Serializable/ISerializable/context/surrogate/binder对象图机制，并明确BinaryFormatter不安全与现代DTO迁移。"
+description: "忠实覆盖 Formatter、Serializable、ISerializable、context、surrogate、binder 对象图机制，并明确 BinaryFormatter 不安全与现代 DTO 迁移。"
 demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-24
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcGraphSerializationLab,
+  CvcLegacyControlsLab,
+  CvcMigrationBoundaryLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-runtime-serialization";
 
 <Objectives>
 
@@ -32,9 +41,13 @@ import { Attribution } from "@/components/mdx/attribution";
 
 先预测：Serializable是否只保存public properties；deserialization是否调用普通constructor；private field改名会怎样；ISerializable base/derived谁负责数据；StreamingContext能否当安全信任；binder allowlist是否能完全修复BinaryFormatter；surrogate能否替换sealed第三方type；JSON DTO为何更易演进。后文按graph、controls、migration回答。
 
-<Term def="把runtime objects、private fields、type identity、references与cycles整体持久化并重建的legacy模型。">runtime object graph contract</Term>
+<Term def="把runtime objects、private fields、type identity、references与cycles整体持久化并重建的legacy模型。">
+  runtime object graph contract
+</Term>
 
 ## Serialization/Deserialization Quick Start
+
+本节先把输入、对象身份、边界检查和迁移责任分开记录，后续的每个控制点都以这条证据链为准。
 
 Legacy formatter `Serialize(stream, root)`遍历reachable graph、记录type/member/value/object id；`Deserialize`读取type、分配objects、填fields、fix references并运行callbacks。Input可控制被实例化types和graph，因而反序列化不可信payload等价给攻击者代码构造能力。
 
@@ -54,13 +67,19 @@ Migration inventory先找payload producer/consumer/storage、trusted assumption�
 
 ## Making a Type Serializable
 
+本节先说明类型布局为何会进入持久格式，再把可演进的数据责任交给显式契约。
+
 `[Serializable]`让legacy formatter默认序列化instance fields，包括private和compiler backing fields；`[NonSerialized]`排除字段。Property不是直接contract，auto-property backing field命名可随compiler。Base types也需serializable或特殊处理。Private representation一旦持久化就成为version contract。
 
-<Term def="通过Serializable默认field graph把private runtime layout意外冻结为持久数据格式的耦合。">private-layout persistence</Term>
+<Term def="通过Serializable默认field graph把private runtime layout意外冻结为持久数据格式的耦合。">
+  private-layout persistence
+</Term>
 
 Static、event/delegate、handle、cache、derived computed fields通常不应持久。Deserialized object可能绕过constructor invariant，callbacks必须验证，但验证发生前graph可能已构造。现代DTO只暴露需要的数据并通过constructor/factory进入domain。
 
 ## Controlling Serialization and Deserialization
+
+本节先按写入、读取、回调和校验的时序排列控制点，避免把读取动作误当成信任建立。
 
 `[NonSerialized]`、OnSerializing/OnSerialized/OnDeserializing/OnDeserialized callbacks、optional fields等控制legacy过程。Callbacks ordering跨graph复杂，OnDeserialized时related objects可能仍在fixup；`IDeserializationCallback.OnDeserialization`在graph完成后通知。任何callback都是payload-triggered code。
 
@@ -68,19 +87,37 @@ Callback应短、确定、不I/O；validation不把invalid graph发布。Optiona
 
 ## How Formatters Serialize Type Instances
 
+本节先从根对象画出引用关系，再说明格式化器如何保存身份、共享引用和循环。
+
 Formatter通过ObjectManager/SerializationInfo记录type、members、object IDs和references，处理cycles/shared identity。Value types嵌入，reference identity保留；surrogate/ISerializable可提供自定义entries。Output包含assembly/type names，部署重命名/strong name/version会影响binding。
 
 <Stepper>
-  <Step title="切换discover graph、write、allocate与fixup"></Step>
-  <Step title="绘制Graph schema">列出root、types、private fields、cycles/shared references、callbacks、size/depth与sensitive data。</Step>
-  <Step title="注入恶意Payload">超深/大graph、unexpected type、callback side effect、version mismatch，验证modern parser bounds和legacy隔离。</Step>
+  <Step title="切换discover graph、write、allocate与fixup">
+    <CvcGraphSerializationLab />
+  </Step>
+  <Step title="绘制Graph schema">
+    <CvcGraphSerializationLab />
+    列出root、types、private fields、cycles/shared
+    references、callbacks、size/depth与sensitive data。
+  </Step>
+  <Step title="注入恶意Payload">
+    <CvcGraphSerializationLab />
+    超深/大graph、unexpected type、callback side effect、version
+    mismatch，验证modern parser bounds和legacy隔离。
+  </Step>
 </Stepper>
 
-<Callout type="trap" title="只反序列化自己程序生成的BinaryFormatter数据就绝对安全">
-存储、队列、备份或内部调用一旦被篡改，payload可触发gadget code；allowlist也难覆盖复杂graph。安全结论不是“内网可信”，而是迁移并停止使用。
+<Callout
+  type="trap"
+  title="只反序列化自己程序生成的BinaryFormatter数据就绝对安全"
+>
+  存储、队列、备份或内部调用一旦被篡改，payload可触发gadget
+  code；allowlist也难覆盖复杂graph。安全结论不是“内网可信”，而是迁移并停止使用。
 </Callout>
 
 ## Controlling the Serialized/Deserialized Data
+
+本节先区分字段数据、运行时行为和敏感状态，再决定哪些内容可以进入持久表示。
 
 实现`ISerializable.GetObjectData`显式写SerializationInfo name/value；special constructor `(SerializationInfo, StreamingContext)`读取。它允许stable names、migration/default和不保存private field，但仍运行在unsafe formatter模型。Base/derived每层必须协作，避免漏base data或name collision。
 
@@ -110,11 +147,17 @@ public sealed class LegacyMoney : ISerializable
 
 ## How to Define a Type That Implements ISerializable
 
+本节先固定自定义字段名和版本默认值，再检查基类协作与输入验证的责任。
+
 Type通常还标Serializable，special constructor可private，GetObjectData验证info并写entries。Derived type实现时调用base GetObjectData/constructor（若base也实现），并对版本缺字段提供明确default。SecurityException-era permission demands已过时，现代风险更根本：formatter本身不可安全处理untrusted input。
 
-<Term def="Legacy type自行决定SerializationInfo entries、special constructor和base chaining的自定义协议。">ISerializable control path</Term>
+<Term def="Legacy type自行决定SerializationInfo entries、special constructor和base chaining的自定义协议。">
+  ISerializable control path
+</Term>
 
 ## When the Base Type Doesn't Implement This Interface
+
+本节先界定基类的初始化责任，再用组合和转换器避免把旧布局继续带入新领域模型。
 
 若base可serializable但不实现ISerializable，formatter/default member处理与derived custom path交互需按rules；若base不serializable且非Object，legacy formatter通常要求accessible parameterless constructor并只初始化base部分，容易破坏invariant。Composition/DTO比继承复杂serialization更稳。
 
@@ -126,9 +169,13 @@ StreamingContext携带States（File, Remoting, Clone, CrossProcess等）和addit
 
 ## Serializing a Type As a Different Type and Deserializing an Object As a Different Object
 
+本节先说明替换身份会改变对象图的恢复语义，再把迁移逻辑移到显式数据映射，并记录边界责任。
+
 `SerializationInfo.SetType`或IObjectReference等可让serialized identity/最终object替换，支持proxy/version migration，但使graph构造非局部。Deserialization callback可能返回不同object，identity fixups更复杂。Modern schema migration应在解析DTO后显式map，不让payload控制runtime type substitution。
 
 ## Serialization Surrogates
+
+本节先把第三方旧类型视为输入材料，再用固定选择器提取业务数据并完成迁移。
 
 ISerializationSurrogate为无法修改的type提供GetObjectData/SetObjectData，自定义外部serialization。SurrogateSelector按Type/StreamingContext选surrogate，可chain selectors。它能迁移第三方legacy type，却也扩大central registry和type substitution风险。Surrogate code同样payload-triggered，只在隔离migration tool使用。
 
@@ -137,20 +184,37 @@ ISerializationSurrogate为无法修改的type提供GetObjectData/SetObjectData�
 多个selectors按chain查找，第一个匹配决定，ordering必须明确；重复/广泛match会产生环境差异。Selector链要immutable配置、startup validate和coverage，记录哪个surrogate处理每type。不要让plugin随意注册处理system types。
 
 <Stepper>
-  <Step title="切换Serializable、ISerializable、surrogate与binder"></Step>
-  <Step title="建立Legacy control表">记录每type default fields/custom entries/callback/context/surrogate/binder和owner。</Step>
-  <Step title="验证版本交叉">V1->V2、V2->V1、missing/extra/type rename/base change与恶意type逐项测试，仅在隔离环境。</Step>
+  <Step title="切换Serializable、ISerializable、surrogate与binder">
+    <CvcLegacyControlsLab />
+  </Step>
+  <Step title="建立Legacy control表">
+    <CvcLegacyControlsLab />
+    记录每type default fields/custom entries/callback/context/surrogate/binder和owner。
+  </Step>
+  <Step title="验证版本交叉">
+    <CvcLegacyControlsLab />
+    V1->V2、V2->V1、missing/extra/type rename/base change与恶意type逐项测试，仅在隔离环境。
+  </Step>
 </Stepper>
 
-<Callout type="trap" title="配置SerializationBinder白名单就能让BinaryFormatter安全">
-复杂type graph、generic/array组合和gadget面使binder不是可靠修复，平台明确不建议。真正修复是停止处理BinaryFormatter payload，迁移显式安全schema。
+<Callout
+  type="trap"
+  title="配置SerializationBinder白名单就能让BinaryFormatter安全"
+>
+  复杂type
+  graph、generic/array组合和gadget面使binder不是可靠修复，平台明确不建议。真正修复是停止处理BinaryFormatter
+  payload，迁移显式安全schema。
 </Callout>
 
 ## Overriding the Assembly and/or Type When Deserializing an Object
 
+本节先把类型名称当作外部输入，再说明版本映射与允许集合必须由迁移工具固定。
+
 SerializationBinder `BindToType`把payload中的assembly/type name映射runtime Type，可处理rename/version并试图allowlist；`BindToName`控制写出identity。宽松按simple name、忽略assembly或Type.GetType任意字符串会type confusion。即使严格allowlist，也不把legacy object graph变安全。
 
-<Term def="从serialized type identity到runtime Type的映射，既承担版本迁移也构成高风险代码选择边界。">deserialization type binding</Term>
+<Term def="从serialized type identity到runtime Type的映射，既承担版本迁移也构成高风险代码选择边界。">
+  deserialization type binding
+</Term>
 
 ## Migrating to Explicit Data Contracts
 
@@ -174,12 +238,24 @@ static Order Restore(ReadOnlySpan<byte> utf8)
 
 Migration流程：freeze legacy writer；inventory/copy backups；offline isolated reader转新schema；dual-read limited window但只写new；compare semantic hashes；remove legacy code/flags。Never expose legacy deserializer as network endpoint。
 
-<Term def="把legacy runtime graph转换为有allowlist、bounds、version与domain validation的明确DTO/schema过程。">serialization migration boundary</Term>
+<Term def="把legacy runtime graph转换为有allowlist、bounds、version与domain validation的明确DTO/schema过程。">
+  serialization migration boundary
+</Term>
 
 <Stepper>
-  <Step title="切换JSON DTO、protobuf、database与legacy object graph"></Step>
-  <Step title="定义New schema">记录fields/tags、required/default、unknown、size/depth、canonicalization、validation和migration owner。</Step>
-  <Step title="执行Semantic比对">Legacy隔离读取后转new，再恢复domain，比较业务identity/value而非binary bytes；覆盖坏数据和rollback。</Step>
+  <Step title="切换JSON DTO、protobuf、database与legacy object graph">
+    <CvcMigrationBoundaryLab />
+  </Step>
+  <Step title="定义New schema">
+    <CvcMigrationBoundaryLab />
+    记录fields/tags、required/default、unknown、size/depth、canonicalization、validation和migration
+    owner。
+  </Step>
+  <Step title="执行Semantic比对">
+    <CvcMigrationBoundaryLab />
+    Legacy隔离读取后转new，再恢复domain，比较业务identity/value而非binary
+    bytes；覆盖坏数据和rollback。
+  </Step>
 </Stepper>
 
 ## 本章回顾：Persist Data，不Persist Runtime Objects
@@ -194,26 +270,57 @@ Migration流程：freeze legacy writer；inventory/copy backups；offline isolat
 
 **问题 1：旧系统有数百万BinaryFormatter blobs，如何安全迁移？**
 
-<Answer>先停止新增/外部输入并备份；建立与生产隔离、最小权限/无网络的一次性reader，固定已知assemblies/hash和resource limits，批量读后立即映射显式DTO/schema。记录失败样本、semantic hash和version，验证新reader后切换并删除legacy deserializer。</Answer>
+<Answer>
+  先停止新增/外部输入并备份；建立与生产隔离、最小权限/无网络的一次性reader，固定已知assemblies/hash和resource
+  limits，批量读后立即映射显式DTO/schema。记录失败样本、semantic
+  hash和version，验证新reader后切换并删除legacy deserializer。
+</Answer>
 
 **问题 2：为什么JSON DTO比Serializable Domain Object更易演进？**
 
-<Answer>DTO只公开稳定命名fields，不冻结private layout/type assembly identity；新增optional、保留unknown、schema version和migration明确。解析后通过domain constructor/factory恢复invariant。仍需bounds/allowlist/validation，但攻击面和版本contract可审计。</Answer>
+<Answer>
+  DTO只公开稳定命名fields，不冻结private layout/type assembly
+  identity；新增optional、保留unknown、schema
+  version和migration明确。解析后通过domain
+  constructor/factory恢复invariant。仍需bounds/allowlist/validation，但攻击面和版本contract可审计。
+</Answer>
 
 **问题 3：Surrogate何时仍有合理用途？**
 
-<Answer>只在受控legacy migration tool中，为不能修改的旧type提取业务数据并转换新schema；selector固定allowlist/order，tool隔离且输入来源受控。它不是继续接受在线BinaryFormatter payload的理由，迁移后删除。</Answer>
+<Answer>
+  只在受控legacy migration
+  tool中，为不能修改的旧type提取业务数据并转换新schema；selector固定allowlist/order，tool隔离且输入来源受控。它不是继续接受在线BinaryFormatter
+  payload的理由，迁移后删除。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="runtime object graph contract" definition="Legacy formatter持久化runtime types/private fields/references的模型。" />
-  <GlossaryItem term="private-layout persistence" definition="默认field graph把private实现冻结为格式的耦合。" />
-  <GlossaryItem term="ISerializable control path" definition="SerializationInfo与special constructor组成的legacy自定义路径。" />
-  <GlossaryItem term="deserialization type binding" definition="Payload type identity到runtime Type的高风险映射。" />
-  <GlossaryItem term="serialization migration boundary" definition="Legacy graph到显式有界DTO/schema的隔离转换。" />
+  <GlossaryItem
+    term="runtime object graph contract"
+    definition="Legacy formatter持久化runtime types/private fields/references的模型。"
+  />
+  <GlossaryItem
+    term="private-layout persistence"
+    definition="默认field graph把private实现冻结为格式的耦合。"
+  />
+  <GlossaryItem
+    term="ISerializable control path"
+    definition="SerializationInfo与special constructor组成的legacy自定义路径。"
+  />
+  <GlossaryItem
+    term="deserialization type binding"
+    definition="Payload type identity到runtime Type的高风险映射。"
+  />
+  <GlossaryItem
+    term="serialization migration boundary"
+    definition="Legacy graph到显式有界DTO/schema的隔离转换。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 24: Runtime Serialization" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 24: Runtime Serialization"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

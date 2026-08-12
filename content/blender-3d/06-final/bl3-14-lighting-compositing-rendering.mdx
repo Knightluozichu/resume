@@ -3,75 +3,222 @@ title: "第 14 章 Lighting, Compositing, and Rendering：匹配真实镜头"
 type: A
 section: "玩转 Blender 第 3 版 · 追踪、合成与渲染"
 order: 14
-description: "覆盖场景灯光、Cycles 渲染合成、EEVEE 渲染合成和最终输出。"
+description: "从光照关系、环境遮蔽和间接光，到 Render Pass、Compositing、色彩管理与可复现交付，建立一条能验收真实镜头的最终资产链。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-14
 ---
 
+import {
+  Bl3Ch14LightingLab,
+  Bl3Ch14CompositeLab,
+  Bl3Ch14RenderDeliveryLab,
+} from "@/components/mdx/blender-3d/06-final/bl3-14-lighting-compositing-rendering";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 问题：为什么角色位置跟踪正确仍会像贴在视频上的纸片
+<Objectives>
 
-先预测：相机和地面完全匹配，但角色没有接触阴影、光向相反、黑位和颗粒不同，观众会相信它在现场吗？不会。第十四章把真实镜头分析转为灯光、Shadow Catcher、Render Layers、Alpha、颜色匹配和 Compositor 节点，并分别验证 Cycles 与 EEVEE 管线，最后输出序列。
+- 能解释 Key Light、Fill、Rim、Ambient Occlusion 与 Indirect Lighting 如何共同建立形体和接触关系
+- 能拆分 Render Pass，使用 Compositing 节点、Mask 和 Color Grade 做可回退的局部修正
+- 能在 EEVEE 或 Cycles 中执行受控 Render Test，并记录分辨率、采样、色彩管理与输出格式
+- 能回答：一张渲染图看起来像参考镜头时，如何证明结果可复现、可诊断且达到交付标准？
 
-## 原书边界与官方小节
+</Objectives>
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+{/* BL3_CH14_QUALITY_V2 */}
 
-- **Lighting Your Scene**
-- **Rendering and Compositing Your Scene in Cycles**
-- **Rendering and Compositing Your Scene with EEVEE**
-- **Exporting the Final Render**
+## 问题：为什么材质参数正确，镜头仍然不像
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+先预测：如果模型、材质和相机都已经对齐，把场景整体调亮是否就能匹配真实镜头？不能。真实镜头的可信度来自光照方向、软硬关系、接触遮蔽、间接光、色彩管理和最终输出共同形成的证据；提高亮度只会改变像素，不会补回缺失的光照结构。
 
-## CG 渲染、实拍底片与合成算子
+本章处理从 Lighting 到 Compositing 再到 Rendering 的最后一公里。目标不是背下某个按钮位置，而是建立一个可回放的实验：先固定相机、材质和曝光基线，再一次只改变一个光照变量；随后把诊断需要的 Render Pass 保留下来，用节点和遮罩做局部修正；最后以 Render Test 和交付元数据证明结果不是偶然截图。
 
-可信合成需要几何一致、光照一致、成像一致。跟踪解决几何；灯光匹配主光方向、大小、色温和环境填充；Shadow Catcher 与接触阴影连接角色和地面；Compositor 以 Alpha Over、颜色变换、模糊、颗粒和景深匹配成像。Cycles 提供路径追踪与 Shadow Catcher，EEVEE 更快但需按实时限制重建效果。最终优先输出无损图像序列。
+## 本章知识点清单
 
-## 五个核心术语与责任边界
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Understanding Lighting | 光照关系实验 | Key Light、Fill、Rim | 光照是否解释形体方向 |
+| Ambient Occlusion and Indirect Lighting | 光照关系实验 | Ambient Occlusion、Indirect Lighting | 接触和暗部是否有证据 |
+| Compositing | Render Pass 节点实验 | Render Pass、Mask | 局部修正能否关闭和回退 |
+| Rendering | 渲染交付实验 | Color Management、Render Test | 输出是否可复现和可验收 |
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Understanding Lighting
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+### Lighting Your Scene
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+Lighting Your Scene 的第一步是把参考镜头拆成主方向、填充方向、轮廓分离、阴影软硬和高光位置，再判断变量属于灯的位置、尺寸、能量、颜色还是材质响应。用同一相机和曝光建立基线，才能把光照变化解释成可复现的形体证据。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+Lighting 首先是关系，不是亮度总量。把参考镜头拆成主方向、填充方向、轮廓分离、阴影软硬和高光位置，才能判断场景的问题在灯的位置、尺寸、能量、颜色还是材质响应。**<Term>Key Light</Term>** 定义主要光照方向和形体转折；Fill 控制暗部仍能读到多少信息；Rim 或 Back Light 负责把轮廓从背景中分离。三者的强弱比和相对角度比“再加一盏灯”更值得记录。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+建立基线时先锁定相机、曝光、Color Management、材质版本和世界环境，再为每盏灯记录位置、旋转、尺寸、能量、颜色以及是否参与反射/阴影。正常样本使用一组能读出体积的三点光，边界样本降低 Fill 或改变背景亮度，故障样本让 Ambient 过高或把 Key 放到几乎相机轴线上。每次只改一个变量，才知道画面变化的因果。
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+材质看起来“灰”不一定是 Base Color 错了：可能是 Key 方向丢失、Fill 抹平了对比、Rim 与背景分离不足，或色彩变换把高光压扁。先看形体轮廓、接触区域和高光位置，再看 RGB 数值。对于真实镜头匹配，保留参考帧、灯光设置和前后对照，另一位读者才能复现判断。
 
-## 关键对象与数据流
+<Bl3Ch14LightingLab />
 
-先从实拍中的阴影和高光估计主光方向、角度、软硬和色温，建立灰球/反光球或代理几何测试。Cycles 管线配置透明 Film、Shadow Catcher 和必要 Pass，Compositor 合并 Movie Clip 与 Render Layers；EEVEE 管线用当前阴影和间接光策略复现。逐帧检查接触、边缘、黑位、动态模糊和颗粒，再输出带版本号的无损序列和音视频成片。
+## Using Ambient Occlusion and Indirect Lighting
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+**<Term>Ambient Occlusion</Term>**（AO）是对近距离遮蔽和接触关系的近似表达：它能帮助读者看到物体贴地、缝隙和相互靠近的位置，但不应被当作完整的间接光。**<Term>Indirect Lighting</Term>** 描述光线经过反射、散射或环境贡献后到达表面的部分；它影响暗部颜色和空间反弹，不能简单用全局变亮代替。
 
-## 正常、边界与失败样本
+用 AO 时记录距离、强度、采样和作用范围，并检查它是否把接触压成不自然的黑边。AO 过强会让物体像被描边，过弱则会失去落地证据。用间接光时，先检查世界环境、反弹次数、噪声与收敛，再比较相同曝光下的暗部色相和亮度。EEVEE 与 Cycles 的近似方式不同，迁移时应比较稳定不变量，而不是期待像素逐点相同。
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+正常样本保留真实接触阴影和暗部层次，边界样本让物体轻微离地或减少反弹，故障样本让 AO 距离过大、只用 AO 补光或忽略世界环境。把 Beauty、AO 和必要的间接光诊断图一并保存；如果只能靠 Beauty 猜原因，后续 Compositing 就没有可追溯输入。
 
+<Callout type="note" title="先区分光照结构，再调整曝光">
+  一张图太暗时，先问 Key 的方向、Fill 的比例、世界环境和色彩管理是否正确；只有在结构正确后才改变曝光。曝光可以移动整体亮度，但不能制造接触、反弹和轮廓分离。
+</Callout>
+
+## Compositing
+
+Compositing 的价值在于把渲染拆成可解释的 **<Term>Render Pass</Term>**，再把修正记录为可关闭、可回退的节点链。Beauty 适合观察整体关系，AO Pass 帮助检查接触，Depth Pass 可用于景深、雾或按距离分层；它们不应被混成一张不可诊断的结果。先命名输入、保存原始通道，再连接修正节点，任何局部变化都要能回到对应输入。
+
+局部修正通常需要 **<Term>Mask</Term>**：它限定颜色、亮度或效果的作用区域，让前景和背景不必一起改变。Mask 也有成本，边缘、羽化、动画和跟踪都要检查；如果遮罩边缘随镜头漂移，漂亮的单帧会在序列中露出问题。**<Term>Color Grade</Term>** 应建立在正确曝光和色彩空间上，先保留中性版本，再记录曲线、色轮、对比度和高光/阴影变化。
+
+合成验收采用三种对照：关闭所有节点的原始 Beauty、只打开一个诊断节点的中间结果、打开完整链路的最终 Composite Output。正常样本证明色彩和局部关系改善，边界样本检查高光、暗部和 Mask 边缘，故障样本关闭输入或让遮罩偏移，确认链路能快速定位而不是静默输出错误。
+
+<Bl3Ch14CompositeLab />
+
+## Rendering
+
+Rendering 是把场景和合成设置变成可交付帧的过程。**<Term>Color Management</Term>** 需要与参考镜头、显示设备和输出格式一起记录；视图变换、曝光、对比度和工作色彩空间若不固定，两个看似相同的 Blender 文件也可能得到不同的视觉判断。先在同一管理设置下比较，再决定是否改变曝光或灯光。
+
+### Rendering and Compositing Your Scene in Cycles
+
+Rendering and Compositing Your Scene in Cycles 时，要把物理采样、反弹、噪声、降噪和合成输入作为同一条证据链检查。先用低成本 Render Test 找到曝光、阴影和收敛问题，再提高采样；否则最终帧即使更干净，也无法说明问题来自光照还是采样预算。
+
+### Rendering and Compositing Your Scene with EEVEE
+
+Rendering and Compositing Your Scene with EEVEE 适合快速反馈，但要明确实时近似、阴影、AO、反射和间接光与 Cycles 不等价。用同一帧、同一色彩管理和同一合成节点比较两个引擎，记录差异与可接受范围，而不是把默认设置直接当成真实光照。
+
+**<Term>Render Test</Term>** 是小范围、可重复的受控渲染：固定镜头帧、分辨率比例、采样、降噪、光照版本、合成节点和输出路径，只改变一个待测变量。Preview 用来快速发现构图、闪烁、噪声、裁切和颜色问题；Final 才使用目标分辨率和预算。无论使用 EEVEE 还是 Cycles，都要把引擎、版本、采样、时间、显存/设备、色彩管理、帧范围和文件格式写进交付记录。
+
+### Exporting the Final Render
+
+Exporting the Final Render 不只是保存一张图片，还要锁定帧范围、分辨率、颜色空间、文件格式、通道、透明度、命名和输出路径，并用校验过的文件回读结果。交付前保留源文件、外部资产版本、Render Pass、节点截图与 Preview/Final 对照，审查人才能复现并验收最终输出。
+
+渲染通过不等于发布通过。正常样本应在开头、中间、结尾抽帧，边界样本覆盖高对比、细小高光和半透明区域，故障样本故意切换色彩管理、丢失 Pass 或改变输出格式，确认审查人能发现问题。最终交付至少保留源文件、外部资产版本、Render Pass、Compositing 节点截图、Preview 与 Final 对照以及校验过的输出文件。
+
+<Bl3Ch14RenderDeliveryLab />
+
+<Callout type="trap" title="用增加亮度替代光照设计">
+  现象：画面更亮了，但物体仍不像参考镜头，接触和轮廓没有改善。原因：Key、Fill、Rim 的关系或世界环境不对，曝光只能移动整体像素。修法：锁定曝光，逐一比较方向、软硬、接触和高光位置，再恢复可解释的灯光基线。
+</Callout>
+
+<Callout type="trap" title="把 AO 当成完整的间接光">
+  现象：缝隙变黑，物体看似更立体，但大面积暗部和反弹颜色仍错误。原因：AO 只近似局部遮蔽，不能代替环境反弹和真实间接光。修法：分别保存 AO、Beauty 和间接光诊断，调小 AO 的距离/强度，并检查世界环境与反弹设置。
+</Callout>
+
+<Callout type="trap" title="直接在最终图上破坏性调色">
+  现象：某一帧很好看，但无法解释局部变化，也无法恢复原始颜色。原因：没有保留 Render Pass、Mask 和中间节点。修法：保留原始输入和中性版本，用命名节点做 Color Grade，关闭节点后能回到可比较的基线。
+</Callout>
+
+## 三组灯光、合成与渲染验收实验
+
+<Stepper>
+  <Step title="1. Lighting：方向、形体与接触">
+    先预测：把环境光调高，是否比调整 Key / Fill / Rim 更能让物体像参考镜头？切换三种光照布局与 AO，观察形体转折和接触证据，并记录每次只改变的变量。
+
+    <Bl3Ch14LightingLab />
+  </Step>
+  <Step title="2. Compositing：Render Pass 与可回退节点">
+    先预测：只保留 Beauty 是否足以诊断局部暗部和景深问题？选择 AO 或 Depth Pass，打开 Mask 与 Color Grade，检查节点链是否可以关闭、回退和复核。
+
+    <Bl3Ch14CompositeLab />
+  </Step>
+  <Step title="3. Rendering：Preview 到可交付 Final">
+    先预测：直接用最高采样渲染，是否就能证明结果达到发布标准？选择引擎、质量档位并完成 Render Test，比较测试记录和最终输出元数据。
+
+    <Bl3Ch14RenderDeliveryLab />
+  </Step>
+</Stepper>
+
+## 验收证据：从一张漂亮图片到可复现交付
+
+交付包至少包含：参考帧与相机帧号、灯光布局与能量/尺寸/颜色、世界环境、AO 与间接光设置、材质版本、Render Pass 清单、Compositing 节点和 Mask、Color Management、渲染器、采样、分辨率、输出格式、Preview/Final 对照以及抽帧检查结果。把“像不像”的判断拆成方向、轮廓、接触、暗部、高光、颜色和噪声，而不是只保存最终 PNG。
+
+正常样本证明灯光关系、合成链和最终输出一致；边界样本降低 Fill、改变 AO 距离、缩小 Mask 或切换引擎，记录哪些指标开始失效；故障样本关闭关键 Pass、移动 Mask、切换色彩管理或使用未测试的 Final 设置，确认门禁能回到具体参数。另一位读者应能从记录重建 Preview，并知道为什么批准或拒绝 Final。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-当前 EEVEE 实现、Shadow Catcher、Cryptomatte、色彩管理和 Principled 会演进。稳定不变量是几何、光照和成像一致，Render Pass 与无损序列仍是可靠交付边界。迁移时分别记录 Cycles 与 EEVEE 不可等价效果。
+Lighting、Ambient Occlusion、间接光、Render Pass、Compositing 和 Rendering 的职责是稳定不变量；当前 Blender 可能调整 Eevee 引擎、Cycles 采样、节点名称、色彩管理界面和合成性能。迁移时保留“灯光基线 → 诊断 Pass → 可回退节点 → Render Test → 输出元数据”的证据链，不把按钮位置或某个默认值当成规范本身。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含真实光照分析、代理球对照、主光和环境参数、Cycles/EEVEE 帧、Render Pass、合成节点图、接触阴影、边缘与黑位检查、输出色彩空间、序列帧完整性和最终视频。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目从旧版 Eevee 切到当前渲染器，明确记录阴影、AO、反弹、降噪和色彩管理差异；若节点或输出选项改名，用同一验收问题复测，而不是只比较截图像素。
 
 ## 小结
 
-- 跟踪只解决几何，可信合成还需光照和成像匹配
-- Shadow Catcher 建立角色与真实地面的接触
-- Cycles 与 EEVEE 需分别验证能力边界
-- 无损图像序列比直接视频更适合生产渲染
+- Lighting 要先解释 Key、Fill、Rim、AO 和间接光的关系，再谈整体亮度
+- Compositing 要保留 Render Pass、Mask 和可回退的 Color Grade 节点
+- Rendering 要用 Preview 发现问题、用 Render Test 锁定变量、用 Final 交付
+- 真实镜头匹配的证据是可复现的设置、抽帧对照和可诊断的失败样本
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：灯光诊断。** 物体的 Base Color 与参考一致，但轮廓不分离、接触也很弱。你会先检查哪些变量？
+
+<Answer>
+  先锁定曝光和 Color Management，再检查 Key 的方向与尺寸、Fill/Key 比例、Rim 与背景的分离，以及 AO 的距离和强度。用同一材质和相机一次只改一个变量，分别保存前后帧，不能先把整体亮度推高来掩盖关系问题。
+</Answer>
+
+**问题 2：合成诊断。** 你需要只压低背景高光，前景不能变暗。请说明合成链应该保留什么证据。
+
+<Answer>
+  保留原始 Beauty 和需要的 Render Pass，建立跟踪或可验证边缘的 Mask，再用命名的 Color Grade 节点只作用于背景区域。保存关闭节点的基线、中间结果和最终输出，检查 Mask 边缘在多帧中是否稳定，并记录色彩空间和节点参数。
+</Answer>
+
+**问题 3：渲染验收。** Final 图看起来正确，但没有记录引擎、采样和色彩管理。你会批准发布吗？
+
+<Answer>
+  不批准。先固定帧号、分辨率、引擎、采样/降噪、Color Management、Render Pass、Compositing 版本和输出格式，重跑一个可复现的 Render Test；再抽查开头、中间、结尾与高对比区域，保存 Preview/Final 对照和输出元数据，确认结果可重建。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Key Light">
+    定义场景主要光照方向、形体转折和核心阴影关系的主光。
+  </GlossaryItem>
+  <GlossaryItem term="Ambient Occlusion">
+    对近距离遮蔽和接触关系的近似表达，用来辅助读取空间关系，不能替代完整间接光。
+  </GlossaryItem>
+  <GlossaryItem term="Indirect Lighting">
+    光线经过环境或表面反射后对材质暗部和空间颜色的贡献。
+  </GlossaryItem>
+  <GlossaryItem term="Render Pass">
+    从一次渲染中拆出的可单独检查或参与合成的图像通道，例如 Beauty、AO 或 Depth。
+  </GlossaryItem>
+  <GlossaryItem term="Color Management">
+    规定工作色彩空间、视图变换、曝光和输出解释方式的一组设置。
+  </GlossaryItem>
+  <GlossaryItem term="Render Test">
+    固定帧和渲染变量、只改变一个因素的小范围可重复渲染，用来在 Final 前发现问题。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：Camera Tracking](/learn/blender-3d/06-final/bl3-13-camera-tracking) · [下一章：其他功能](/learn/blender-3d/06-final/bl3-15-other-features)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

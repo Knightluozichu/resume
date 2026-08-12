@@ -3,350 +3,270 @@ title: "Chapter 7: Search and Recommendation Engines with LLMs"
 type: C
 section: "Chapter 7: Search and Recommendation Engines with LLMs"
 order: 8
-description: "从K近邻、矩阵分解和神经推荐基线进入LLM推荐，实践冷启动问答、内容推荐、数据处理与Streamlit前端。"
+description: "从 K 近邻、矩阵分解和神经推荐基线进入 LLM 搜索推荐，实践冷启动问答、内容推荐、数据处理与前端验收。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-07
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla07BaselineLab,
+  Bla07ColdStartLab,
+  Bla07RankingLab,
+} from "@/components/mdx/building-llm-applications/08-chapter-07/bla-07-search-recommendation";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。从K近邻、矩阵分解和神经推荐基线进入LLM推荐，实践冷启动问答、内容推荐、数据处理与Streamlit前端。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能区分召回、排序、生成和前端呈现，并用 K 近邻、矩阵分解或神经网络建立可解释基线。
+- 能处理用户、物品、内容、时间切分和冷启动数据，避免未来交互泄漏并保留来源证据。
+- 能实现一个 LLM 增强的推荐/问答管线，记录候选、理由、权限、延迟、成本和降级状态。
+- 能用命中、排序、多样性、覆盖、事实性、隐私和用户反馈判断推荐系统是否可发布。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 7：让搜索推荐可解释、可评估、可回退
 
+搜索和推荐系统不是把用户问题交给模型就结束，而是从候选召回开始，经过排序、解释和前端反馈，最终影响用户看到什么。传统基线能提供可解释对照，LLM 可以帮助理解自然语言意图、补足冷启动和生成理由，但也会带来幻觉、偏差、成本和隐私风险。本章把这些环节拆成可以单独测量的管线。
 
-## 数学、检索与成本骨架
+先预测：如果把未来的点击混入训练数据，指标会朝哪个方向变化？如果用户没有历史行为，系统应该依赖群体平均还是显式意图和物品内容？如果模型生成了没有候选来源的推荐理由，前端是否应该照常展示？三个实验会逐个触发这些边界。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**线上点击率上涨，就认为推荐质量全面提升；**原因：**忽略位置偏差、长期满意度、多样性、覆盖和高影响失败；**修法：**同时报告离线、在线、分群和安全指标，并保留曝光、候选与反馈链。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**冷启动用户没有历史，就用热门物品替代个人意图；**原因：**把缺少数据误当成允许臆测；**修法：**询问显式偏好，使用内容和问题证据，并让用户可调整或拒绝推荐。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**模型写出漂亮推荐理由，就认为候选一定相关；**原因：**生成解释没有绑定召回候选、来源和实际属性；**修法：**理由只能引用可定位证据，缺证据时降级或不展示。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="从全量物品中筛出可供排序的小候选集合的阶段">Candidate Retrieval</Term>` 负责覆盖和效率；`<Term def="依据相关性、业务约束和风险对候选重新排列的阶段">Ranking</Term>` 负责顺序，而不是凭空创造物品。推荐质量还需要 `<Term def="根据用户、物品和时间形成可复现训练与评估边界的数据切分">Temporal Split</Term>`，防止未来交互泄漏。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+没有历史行为的用户进入 `<Term def="缺少用户或物品交互记录时，使用内容、问题或显式偏好建立初始候选的情形">Cold Start</Term>`；LLM 可以生成自然语言解释，但必须满足 `<Term def="让推荐理由能够定位到候选属性、文档或行为证据的约束">Grounded Explanation</Term>`。最终用 `<Term def="检查推荐质量、覆盖、多样性、隐私、成本和反馈风险的发布步骤">Recommendation Gate</Term>` 决定是否上线。
 
-## 三段可运行骨架
+## 三步搜索推荐实验
+
+每一步先写下预测，再只改变一个条件。实验使用合成用户和物品；真实项目应使用许可明确的数据，记录曝光、候选、排序、生成理由和用户反馈的时间版本。
+
+<Stepper>
+  <Step title="1. 比较传统推荐基线">
+    选择 K 近邻、矩阵分解或神经网络，再混入未来交互，观察时间切分如何影响指标和发布判断。
+
+    <Bla07BaselineLab />
+  </Step>
+  <Step title="2. 处理冷启动">
+    选择冷启动问答、内容相似或混合路由，再移除用户画像，观察显式意图、内容证据和用户确认的作用。
+
+    <Bla07ColdStartLab />
+  </Step>
+  <Step title="3. 绑定排序与界面证据">
+    选择召回、排序生成或前端呈现，再移除候选来源，观察系统如何降级、显示缺口并保留反馈。
+
+    <Bla07RankingLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的推荐门禁
+
+下面的 Python 函数检查候选是否来自允许集合、排序是否有来源和推荐理由是否绑定属性；TypeScript 版本把时间切分写成数据处理条件。推荐可以加入 LLM，但不能跳过确定性的候选和数据边界检查。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 推荐门禁">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def recommendation_gate(items, allowed_ids, explanations):
+    unknown = [item["id"] for item in items if item["id"] not in allowed_ids]
+    ungrounded = [item["id"] for item in items if item["id"] not in explanations]
+    if unknown or ungrounded:
+        return {"pass": False, "unknown": unknown, "ungrounded": ungrounded}
+    return {"pass": True, "unknown": [], "ungrounded": []}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 时间切分">
 
 ```typescript
-type RequestContract = {
-  task: string;
-  model: string;
-  prompt: string;
-  data: string;
-  tools: string[];
-  seed: number;
-};
+type Interaction = { user: string; item: string; at: string };
 
-function freezeRequest(
-  task: string,
-  model: string,
-  prompt: string,
-  dataHash: string,
-  tools: string[],
-  seed: number,
-): RequestContract {
-  return { task, model, prompt, data: dataHash, tools, seed };
+function temporalSplit(rows: Interaction[], cutoff: string) {
+  return {
+    train: rows.filter((row) => row.at < cutoff),
+    test: rows.filter((row) => row.at >= cutoff),
+  };
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`recommendation_gate` 阻断未知候选和无依据解释；`temporalSplit` 将未来交互留在测试边界之外。生产实现还要保存曝光、位置、过滤、用户同意、分群指标、延迟、成本和反馈撤回，不能用一个平均命中率覆盖所有后果。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type GateRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(
-  records: GateRecord[],
-): { pass: boolean; missing: number[] } {
-  const required = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从候选到用户界面
 
 ### Chapter 7: Search and Recommendation Engines with LLMs
 
-“Chapter 7: Search and Recommendation Engines with LLMs”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Chapter 7: Search and Recommendation Engines with LLMs”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 7: Search and Recommendation Engines with LLMs”把系统拆为数据处理、候选召回、排序、LLM 解释、前端展示和反馈回路。每个阶段都有不同失败：漏召回、错排序、无依据理由、隐私越权或反馈污染，发布时必须分别验证。
 
 ### Technical requirements
 
-“Technical requirements”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Technical requirements”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Technical requirements”包括用户与物品 ID、时间切分、候选存储、特征或向量、模型端点、缓存、日志、前端会话和评估资源。推荐的复现需要知道当时用户看到了什么候选，而不只是最后点击了什么。
 
 ### Introduction to recommendation systems
 
-“Introduction to recommendation systems”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Introduction to recommendation systems”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Introduction to recommendation systems”建立相关性、覆盖、多样性、新颖性、长期满意度和业务约束的共同词汇。推荐不是一个单一准确率问题；不同指标之间的取舍需要明确对象、时间窗口和失败代价。
 
 ### Existing recommendation systems
 
-“Existing recommendation systems”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Existing recommendation systems”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Existing recommendation systems”提供协同过滤、内容方法和排序模型的对照。先理解候选如何产生、训练数据如何切分、偏差如何进入，再讨论 LLM 的自然语言能力能否改善某个具体瓶颈。
 
 ### K-nearest neighbors
 
-“K-nearest neighbors”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“K-nearest neighbors”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“K-nearest neighbors”依据相似用户或物品产生直观候选，便于解释邻居和距离。它对新用户、稀疏交互和高维特征敏感，实验应记录相似度、候选覆盖和冷启动降级，而不是只看命中数。
 
 ### Matrix factorization
 
-“Matrix factorization”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Matrix factorization”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Matrix factorization”用潜在因子压缩用户物品交互，适合说明隐式偏好如何被学习。因子本身不必然是可读理由，且时间泄漏会让离线指标虚高；因此需保存切分和逐用户差异。
 
 ### Neural networks
 
-“Neural networks”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Neural networks”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Neural networks”可以组合用户、物品、上下文和序列特征，但表达能力提高也会增加训练、解释和部署成本。比较神经模型时固定特征快照、硬件和负采样，报告资源预算与失败分群。
 
 ### How LLMs are changing recommendation systems
 
-“How LLMs are changing recommendation systems”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“How LLMs are changing recommendation systems”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“How LLMs are changing recommendation systems”强调 LLM 适合理解自然语言意图、总结内容和生成可读理由，但不应绕过候选、权限和排序门。自然语言解释只有绑定真实属性和来源，才具备用户可核对性。
 
 ### Implementing an LLM-powered recommendation system
 
-“Implementing an LLM-powered recommendation system”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Implementing an LLM-powered recommendation system”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Implementing an LLM-powered recommendation system”应先保留传统召回与排序，再让 LLM 处理查询理解、重排或解释中的一个变量。逐步加入能力，记录输入、候选、模型选择、延迟、成本和理由，才能知道新增模块是否带来真实收益。
 
 ### Data preprocessing
 
-“Data preprocessing”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Data preprocessing”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Data preprocessing”处理去重、ID、时间、缺失、敏感字段、内容清洗、训练测试切分和反馈标签。预处理改变数据分布，应保存原始快照、脚本版本、统计和删除原因，不要只留下最后的矩阵或向量。
 
 ### Building a QA recommendation chatbot in a cold-start scenario
 
-“Building a QA recommendation chatbot in a cold-start scenario”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Building a QA recommendation chatbot in a cold-start scenario”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Building a QA recommendation chatbot in a cold-start scenario”可以从用户问题和内容证据开始，不要求先拥有长期画像。回答要展示候选来源、解释不确定性并允许用户修正偏好，避免用群体热门列表假装个性化。
 
 ### Building a content-based system
 
-“Building a content-based system”冻结用户、物品、时间切分与候选集合，区分召回、排序和生成。比较传统基线与LLM增强时同时报告命中、排序、多样性、覆盖、冷启动、延迟与幻觉，避免未来交互泄漏。
-
-针对“Building a content-based system”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Building a content-based system”使用物品属性、文本或嵌入建立相似候选，适合新物品和可解释场景。内容质量、许可、更新、语言偏差和相似度阈值都影响结果，理由应回到具体属性而不是泛泛描述。
 
 ### Developing the front-end with Streamlit
 
-“Developing the front-end with Streamlit”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Developing the front-end with Streamlit”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Developing the front-end with Streamlit”要显示推荐列表、来源、理由、反馈、加载、错误和重新生成状态。用户反馈必须区分点击、跳过、隐藏和明确不喜欢，并带时间与展示位置，否则在线指标无法解释。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为四步：建立传统基线，保护时间与数据边界，处理冷启动和 LLM 增强，最后在前端呈现可核对理由与反馈。推荐门禁同时检查相关性、覆盖、多样性、来源、隐私、成本和回退。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”标记 Packt 原书、推荐系统基线、LLM 搜索和 Streamlit 资料的来源边界。模型、价格、交互数据和评估指标都会变化，历史方法用于理解结构，当前推荐服务必须重新验证。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类推荐证据
 
-## 六类应用证据
+### 1. 用户与物品证据
 
-### 任务与来源合同
+保存用户同意、物品来源、属性版本、ID 映射、敏感字段处理和有效期。推荐候选必须可以回到当时存在且允许使用的物品，删除或撤回后不得继续展示。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. 时间与训练证据
 
-### 模型与提示合同
+保存时间切分、曝光、点击、负反馈、去重、特征快照和预处理脚本。训练数据不能看到未来行为，离线测试应模拟真实上线时点，反馈进入新版本而不是覆盖旧测试集。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 召回与排序证据
 
-### 数据、检索与状态合同
+保存候选集合、召回原因、排序分数、过滤条件、位置、版本和延迟。LLM 重排或解释不能创造不在允许集合中的物品，也不能把过滤后的高风险候选重新放回列表。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 理由与来源证据
 
-### 工具、代码与权限合同
+保存推荐理由引用的属性、文档、行为或用户偏好。无法定位证据时显示缺口或降级，不把模型生成的漂亮句子作为新的物品事实。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 冷启动与分群证据
 
-### 评测、安全与成本合同
+保存新用户、新物品、长尾、不同语言和高影响人群的结果。比较显式问题、内容方法、热门基线和人工确认，报告覆盖、多样性、错误和用户可控性。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 前端与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存展示位置、曝光、反馈、撤回、错误、延迟、成本、缓存和旧版回退。前端应能解释为什么展示、如何隐藏、如何修改偏好以及证据缺失时发生什么。
 
 ## 容易踩的坑
 
-**现象 →** 离线评测 NDCG 很高，上线后推荐效果骤降，用户毫无点击。
-**原因 →** 切分未按时间，测试集含训练期之后的交互，未来信息泄漏到特征里。
-**修法 →** 按时间戳切分训练/测试，用户与物品 ID 冻结，报告时同时给出切分边界与泄漏检查。
+<Callout type="trap">**现象：**训练集和测试集随机切分后离线分数很高；**原因：**未来交互或重复用户行为泄漏到训练；**修法：**按时间和用户边界切分，保存快照并用上线时点重放。</Callout>
 
-**现象 →** 冷启动场景下 LLM 推荐了目录中不存在的物品名，用户点击 404。
-**原因 →** LLM 直接生成物品文本，未约束到候选集合，缺乏物品存在性校验。
-**修法 →** 先召回合法候选集，再让 LLM 在候选内排序或生成理由，输出前校验物品 ID 是否在目录。
+<Callout type="trap">**现象：**推荐理由提到物品没有的属性；**原因：**生成解释没有绑定候选属性或来源；**修法：**理由只从允许证据模板生成，缺属性时不展示肯定结论。</Callout>
 
-**现象 →** 排序结果十条里有八条是同一部电影的相似条目，用户感到单调。
-**原因 →** 只按相关度排序，未引入多样性约束，长尾物品被头部压制。
-**修法 →** 在排序分数中加入 MMR 或类别配额约束，同时报告命中、排序与多样性指标。
+<Callout type="trap">**现象：**前端只记录点击，不记录曝光、位置和隐藏反馈；**原因：**把用户行为当成脱离界面的质量标签；**修法：**保存展示上下文、反馈类型、时间和版本，按分群重新评估。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 冻结用户、物品、时间切分，杜绝未来交互泄漏。
-- 区分召回、排序、生成三层，分别报告指标。
-- 冷启动场景须约束 LLM 输出到合法候选集。
-- 同时报告命中、排序、多样性、覆盖与延迟。
-- 传统基线与 LLM 方案在同一切分上对照比较。
+- 用 K 近邻、矩阵分解或神经网络建立不含 LLM 的可解释基线。
+- 用 Temporal Split 防止未来交互泄漏，保存用户、物品、内容和预处理版本。
+- 冷启动依赖显式意图、内容证据和用户控制，不用热门列表冒充个性化。
+- LLM 可以理解查询、重排或生成理由，但候选、来源、权限和门禁不能被绕过。
+- 发布前检查质量、覆盖、多样性、事实性、隐私、成本、前端反馈和回退。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 为什么推荐评测必须按时间切分而非随机切分？
+**问题 1：**为什么推荐系统应按时间切分训练和评估数据？请说明一个不这样做的后果。
 
 <Answer>
-
-推荐依赖用户历史交互预测未来行为；若测试集包含训练期之后的交互，模型相当于偷看未来，离线指标虚高，上线后骤降。按时间戳切分并冻结切分边界，才能反映真实时序泛化能力。
-
+  上线时只能使用过去的数据，时间切分模拟真实预测边界；随机切分可能把未来点击、物品更新或用户行为泄漏进训练，使离线命中率虚高。保存 cutoff、样本快照和预处理版本，才能重放当时的评估。
 </Answer>
 
-**问题 2：实践应用。** 如何避免冷启动时 LLM 推荐目录外的物品？
+**问题 2：**冷启动用户没有历史行为，系统应如何生成第一批推荐并让用户保持控制？
 
 <Answer>
-
-先用传统方法召回合法候选集，把候选 ID 与元数据注入提示，约束 LLM 只在候选内排序或生成推荐理由；输出前校验每个物品 ID 是否在目录中，越界直接过滤并记录失败。
-
+  使用用户明确回答的问题、物品内容属性或可解释的热门基线，展示来源和选择理由，让用户隐藏、调整或确认偏好。不要把群体平均偏好描述成个人兴趣，后续反馈应带时间和展示位置进入新版本评估。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版 MMR 多样性重排器：在相关度与已选物品最大相似度之间折中，选 k 条。
+**问题 3（独立实现）：**实现一个 `recommendation_gate`，阻断不在允许候选集合中的物品，以及缺少来源的推荐理由。
 
 <Answer>
-
-```python
-def mmr(candidates, rel, sim, lam=0.5, k=5):
-    selected = []
-    pool = list(candidates)
-    while pool and len(selected) < k:
-        best = max(pool, key=lambda c: lam * rel[c] -
-                   (1 - lam) * max((sim[c, s] for s in selected),
-                                   default=0))
-        selected.append(best)
-        pool.remove(best)
-    return selected
-```
-
+  遍历推荐项，比较 ID 是否属于允许集合，再检查每个 ID 是否有来源或属性证据；返回 `unknown` 和 `ungrounded` 列表。任何列表非空都返回 `pass=false`，不使用模型文本替换缺失的候选证据。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-从K近邻、矩阵分解和神经推荐基线进入LLM推荐，实践冷启动问答、内容推荐、数据处理与Streamlit前端。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能在相同切分上比较传统与LLM方案，报告排序、冷启动、多样性、延迟和幻觉指标。
-
+<Glossary>
+  <GlossaryItem term="Candidate Retrieval">从全量物品中筛出可供排序的小候选集合的阶段。</GlossaryItem>
+  <GlossaryItem term="Ranking">依据相关性、业务约束和风险对候选重新排列的阶段。</GlossaryItem>
+  <GlossaryItem term="Temporal Split">根据用户、物品和时间形成可复现训练与评估边界的数据切分。</GlossaryItem>
+  <GlossaryItem term="Cold Start">缺少用户或物品交互记录时，使用内容、问题或显式偏好建立初始候选的情形。</GlossaryItem>
+  <GlossaryItem term="Grounded Explanation">让推荐理由能够定位到候选属性、文档或行为证据的约束。</GlossaryItem>
+  <GlossaryItem term="Recommendation Gate">检查推荐质量、覆盖、多样性、隐私、成本和反馈风险的发布步骤。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 6: Building Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
-- [Chapter 8: Using LLMs with Structured Data](/learn/building-llm-applications/09-chapter-08/bla-08-structured-data)
+- [上一页：Chapter 6 — Building Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
+- [下一页：Chapter 8 — Structured Data](/learn/building-llm-applications/09-chapter-08/bla-08-structured-data)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留搜索推荐、冷启动与 Streamlit 范围，并补充时间切分、候选来源和反馈回退练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

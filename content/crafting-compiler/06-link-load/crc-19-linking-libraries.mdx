@@ -1,11 +1,9 @@
 ---
-title: 第19章 链接和库
+title: "第19章 链接和库"
 type: C
-section: 第4部分 · 链接和加载
+section: "第4部分 · 链接和加载"
 order: 19
-description: >-
-  第19章 链接和库围绕链接的概要、什么是链接、动态链接和静态链接、生成库推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用符号解析图、静态/动态链接对照、归档库成员选择和 DT_NEEDED 依赖，回放 cbc 从对象文件到可执行文件的可验证链接链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -13,61 +11,221 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-19
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc19LinkingLibrariesLab } from "@/components/mdx/crafting-compiler/v2/crc-19-linking-libraries";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“符号解析与库选择台”开始
+- 能解释对象文件、符号解析、库选择和最终可执行文件之间的链接边界
+- 能比较静态链接、动态链接与归档库成员提取，并用 `readelf`、`nm`、`ldd` 验证依赖
+- 能回答“库里有同名符号但链接仍失败时，先查哪条解析证据？”并完成干净重建
 
-第19章 链接和库沿“objects/archives/shared objects → symbol resolution → relocations”转换信息。最终进程返回正确值只能证明一条执行路径；符号解析与库选择台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第19章 链接和库固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变链接方式或符号状态。本页交互只移动objects/archives/shared objects → symbol resolution → relocations中的真实对象和状态，不生成置信、风险或证据分数。
+## 从对象文件到可运行依赖
+
+链接器不是简单地把 `.o` 文件拼接起来。它要收集输入对象和库，解析每个未定义符号，选择归档库中真正需要的成员，应用重定位，并决定哪些依赖留给运行时加载器。静态链接和动态链接的差异，最终都应落在符号来源、输出文件字段和运行时依赖上。
+
+本章的主实验是“符号解析与库选择台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU `as`/`ld`/binutils、IA-32 目标、链接参数和输入对象，只切换链接策略或符号状态。每个样本都保存链接命令、link map、符号来源、输出类型、依赖列表和清理记录；先定位最早不一致，再决定是否修改库顺序。
+
+<Callout type="trap" title="误区一：库中存在符号就一定能完成链接">
+  现象 → `nm` 能在某个库里找到名字，但链接器仍报告未定义引用，或者换一个输入顺序后结果改变。
+
+原因 → 归档库通常按需提取成员，链接顺序和当前未定义符号集合会影响选择；共享库还要经过动态依赖记录。
+
+修法 → 用 link map 和 `nm` 标出符号实际来源，记录输入顺序与被提取的 archive member，再用同一参数清理重建。
+
+</Callout>
+
+<Callout type="trap" title="误区二：静态和动态链接只差一个输出文件后缀">
+  现象 → 静态版本运行正常，动态版本在目标机器上找不到共享库，或 `ldd` 显示了未预期的依赖。
+
+原因 → 动态链接把部分解析和加载推迟到运行时，输出文件会保存 `DT_NEEDED`、搜索路径或解释器信息。
+
+修法 → 分别检查 `readelf -d`、`ldd`、运行时库路径和目标架构；不要用静态版本的成功替代动态依赖验收。
+
+</Callout>
+
+<Callout type="trap" title="误区三：加上所有库就能解决重复符号">
+  现象 → 链接命令变长后出现 multiple definition、ABI 不匹配或库版本漂移，问题更难复现。
+
+原因 → 库不是无条件的功能袋，重复定义、符号可见性和 ABI 版本都会改变解析结果。
+
+修法 → 保留最小输入集合，先列出每个符号的唯一来源，再只加入满足该引用的库；用 link map 与清理重建验证。
+
+</Callout>
+
+## 术语：把库选择变成解析图
+
+<Term def="描述对象文件、归档库、共享库、符号解析和输出文件之间输入、选择与依赖关系的有向图。">
+  链接图
+</Term>
+
+链接图让“哪个输入提供了哪个符号”变得可检查。节点是对象或库，边是引用、提供、提取或运行时依赖。
+
+<Term def="把未定义符号匹配到定义、应用重定位并确认绑定唯一性的过程。">
+  符号解析
+</Term>
+
+符号解析先回答来源，再回答地址。库顺序、可见性、重复定义和架构必须在同一份 map 中留下证据。
+
+<Term def="在生成可执行文件时把需要的代码和数据从对象或归档库合入输出，运行时不再依赖这些输入库的链接方式。">
+  静态链接
+</Term>
+
+静态链接的输出通常更自足，但文件可能更大，库更新也需要重新链接。`ld` 的输入、重定位和最终节布局仍要检查。
+
+<Term def="把部分符号解析和库装载推迟到程序启动或运行期间的链接方式。">
+  动态链接
+</Term>
+
+动态链接的输出会保留运行时依赖，常见证据是 `DT_NEEDED`、解释器和 `ldd` 结果。构建成功不等于目标机器加载成功。
+
+<Term def="由多个目标文件成员组成、链接器按当前未定义符号按需提取成员的静态库文件。">
+  归档库
+</Term>
+
+归档库通常由 `ar` 生成。成员不会因为“库被写在命令行上”就全部进入输出，成员选择要与未定义符号和链接顺序一起观察。
+
+<Term def="在运行时由动态加载器装入并提供符号的共享目标文件，通常带有版本和依赖信息。">
+  共享库
+</Term>
+
+共享库把一部分代码和数据留在独立文件中。`readelf -d` 的 `DT_NEEDED`、搜索路径和 `ldd` 的实际解析共同构成依赖证据。
 
 ## 来源、版本与独立重写边界
 
-第19章 链接和库以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第19章 链接和库用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第19章 链接和库的通过不变量是“符号来源、库选择、重定位和最终依赖在干净环境可重现”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-ld -m elf_i386 -Map=link.map -o app *.o
-readelf -s -r app
-ldd app
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。技术事实用 [JavaCC 完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF 规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/) 与 [ld](https://sourceware.org/binutils/docs/ld/) 文档核对。实验保持原书的 JavaCC、Linux/IA-32、GNU 工具坐标；现代 JDK、x86-64、PIE 和新版 binutils 默认值要单独记录。
 
 ## 官方目录逐项深读
 
 ### 第19章 链接和库
 
-**四级证据 1/5。** 装载槽1用readelf、objdump、nm、link map与加载器轨迹核对“第19章 链接和库”的节/段、符号、重定位、权限和地址解析；固定符号状态，只改变链接方式，以link map、符号来源与动态依赖找到第一处分叉并清理重建。
+本章总链路是“对象输入 → 符号解析 → 库成员选择 → 重定位与输出 → 运行时依赖”。先固定符号状态，再切换静态、动态或归档库策略，才能把库选择错误与运行时搜索错误分开。
 
 ### 19.1 链接的概要
 
-**四级证据 2/5。** 装载槽2用readelf、objdump、nm、link map与加载器轨迹核对“19.1 链接的概要”的节/段、符号、重定位、权限和地址解析；固定符号状态，只改变链接方式，以link map、符号来源与动态依赖找到第一处分叉并清理重建。
+链接器合并多个目标文件的节，建立符号定义与引用的对应关系，应用重定位并生成输出。link map 是把这个过程从黑盒变成可复查记录的最短路径。
 
 ### 19.2 什么是链接
 
-**四级证据 3/5。** 装载槽3用readelf、objdump、nm、link map与加载器轨迹核对“19.2 什么是链接”的节/段、符号、重定位、权限和地址解析；固定符号状态，只改变链接方式，以link map、符号来源与动态依赖找到第一处分叉并清理重建。
+链接把编译阶段分散保存的名称和地址约束合成一个可加载边界。未定义符号、重复定义、库顺序和目标 ABI 都是解析合同的一部分，不是命令行装饰。
 
 ### 19.3 动态链接和静态链接
 
-**四级证据 4/5。** 装载槽4用readelf、objdump、nm、link map与加载器轨迹核对“19.3 动态链接和静态链接”的节/段、符号、重定位、权限和地址解析；固定符号状态，只改变链接方式，以link map、符号来源与动态依赖找到第一处分叉并清理重建。
+静态链接在构建期吸收所需成员，动态链接则在输出中留下共享库依赖。用相同源码和输入分别生成两种结果，比较文件类型、节、`DT_NEEDED`、解释器、`ldd` 与运行时搜索路径。
 
 ### 19.4 生成库
 
-**四级证据 5/5。** 装载槽5用readelf、objdump、nm、link map与加载器轨迹核对“19.4 生成库”的节/段、符号、重定位、权限和地址解析；固定符号状态，只改变链接方式，以link map、符号来源与动态依赖找到第一处分叉并清理重建。
+归档库用 `ar rcs libcalc.a add.o mul.o` 组织成员，链接器根据未定义符号选择所需成员；共享库则需要一致的目标格式、导出符号与动态依赖。库生成后要用 `nm` 和 `ar t` 复查成员，而不是只看命令退出码。
 
-## 三个必须主动触发的误区
+<Crc19LinkingLibrariesLab />
 
+## 三步实验：解析、选择与依赖验收
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先画出对象与库的链接图，再对照静态/动态输出，最后检查归档成员、运行时依赖并清理重建。每一步都保存源码、符号表、输入顺序、link map、工具版本和退出码。
 
+<Stepper>
+  <Step title="第一步：建立符号解析图">
+    选择静态对象、共享库或归档库样本，列出每个未定义符号、候选提供者和输入顺序。用 `nm -A` 与 link map 找到实际来源，先确认符号解析再观察输出文件。
 
+    <Crc19LinkingLibrariesLab />
+
+  </Step>
+  <Step title="第二步：比较静态与动态输出">
+    用相同源码生成静态和动态结果，比较 `readelf -h -S -d`、`ldd`、解释器、`DT_NEEDED` 和目标架构。注入缺失依赖或重复定义，记录最小失败命令和对应字段。
+
+    <Crc19LinkingLibrariesLab />
+
+  </Step>
+  <Step title="第三步：验证库成员与清理重建">
+    用 `ar t`、`nm -s` 和 link map 确认归档库只提取需要的成员；删除输出和中间对象，以相同参数重建，要求符号来源、依赖列表和运行结果保持一致。
+
+    <Crc19LinkingLibrariesLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 链接先解析符号，再选择库成员、应用重定位并形成输出与依赖。
+- 静态链接和动态链接的差异要落到输出字段、库搜索和运行时加载证据。
+- 归档库按未定义符号按需提取，库顺序、重复定义和 ABI 不能靠“多加库”解决。
+- `nm`、link map、`readelf -d`、`ldd`、`ar t` 与清理重建共同构成链接验收证据。
+
+<Exercises>
+
+本组练习覆盖第19章 链接和库、19.1 链接的概要、19.2 什么是链接、19.3 动态链接和静态链接与 19.4 生成库；每题都要把符号来源、库选择、输出字段和重建结果写入链接档案。
+
+**问题 1：画出解析边界。** 针对 19.1 链接的概要与 19.2 什么是链接，给出 `main.o` 引用 `add`、`libcalc.a` 提供 `add` 时的链接图，并说明需要哪些证据。
+
+<Answer>
+  图中应有 `main.o → add` 的未定义引用、`libcalc.a/add.o → add` 的提供边，以及
+  `ld` 从引用集合中选择成员后生成输出的边。用 `nm -A` 记录定义/引用，用 `ar t`
+  确认成员，用 link map 证明实际提取的成员和最终解析来源。
+</Answer>
+
+**问题 2：比较两种输出。** 针对 19.3 动态链接和静态链接，说明如何用同一输入验证静态版本和动态版本的差异，而不把一次运行成功当成依赖已正确。
+
+<Answer>
+  分别记录静态输出的文件类型、节和链接输入，以及动态输出的 `readelf
+  -d`、解释器、`DT_NEEDED` 和 `ldd` 结果；在同一 IA-32
+  环境运行并记录库搜索路径。若动态版本缺库或架构不符，保留最小命令和错误输出，不能用静态版本替代动态依赖验收。
+</Answer>
+
+**问题 3：诊断库选择。** 针对第19章 链接和库与 19.4 生成库，归档库里有目标符号但链接仍失败，如何判断是成员未提取、库顺序、重复定义还是目标格式错误？
+
+<Answer>
+  先用 `ar t` 确认成员存在，再用 `nm -A`
+  比较未定义引用与全局定义；交换库顺序只作为受控对照，并用 link map
+  观察成员是否被提取。随后用 `readelf -h` 核对所有输入的机器和文件类型，检查
+  multiple definition 与 ABI
+  诊断。删除所有中间产物后重建，只有符号来源和输出依赖稳定才接受修复。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="链接图">
+  描述对象文件、归档库、共享库、符号解析和输出文件之间输入、选择与依赖关系的有向图。
+</GlossaryItem>
+
+<GlossaryItem term="符号解析">
+  把未定义符号匹配到定义、应用重定位并确认绑定唯一性的过程。
+</GlossaryItem>
+
+<GlossaryItem term="静态链接">
+  在生成可执行文件时把需要的代码和数据从对象或归档库合入输出，运行时不再依赖这些输入库的链接方式。
+</GlossaryItem>
+
+<GlossaryItem term="动态链接">
+  把部分符号解析和库装载推迟到程序启动或运行期间的链接方式。
+</GlossaryItem>
+
+<GlossaryItem term="归档库">
+  由多个目标文件成员组成、链接器按当前未定义符号按需提取成员的静态库文件。
+</GlossaryItem>
+
+<GlossaryItem term="共享库">
+  在运行时由动态加载器装入并提供符号的共享目标文件，通常带有版本和依赖信息。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、JavaCC 文档、ELF 规范与 GNU readelf/as/ld 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

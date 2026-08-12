@@ -3,78 +3,185 @@ title: "第 8 章 Unwrapping and UVs in Blender"
 type: A
 section: "玩转 Blender 第 3 版 · UV、纹理与材质"
 order: 8
-description: "覆盖 UV 原理、展开方法、展开前决策、UV 编辑、角色其余部分展开与 UV Packing。"
+description: "从 UV 原理、展开方法和接缝决策开始，建立角色 UV 岛、Texel Density、Padding 与可回归的打包证据。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-08
 ---
 
+import {
+  Bl3Ch08UnwrapProjectionLab,
+  Bl3Ch08SeamEditorLab,
+  Bl3Ch08PackingLab,
+} from "@/components/mdx/blender-3d/04-lookdev/bl3-08-unwrapping-uvs";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释三维曲面到二维 UV 坐标的展开、接缝和失真取舍
+- 能按可见性、材质和绘制需求选择展开方法并建立 UV 岛
+- 能用 Stretch、Checker、Texel Density 和 Mipmap 预览检查 UV 质量
+- 能完成角色其余部件的 Packing，记录 Padding、镜像、重叠与导出版本
+
+</Objectives>
+
+{/* BL3_CH08_QUALITY_V2 */}
 
 ## 问题：为什么没有重叠的 UV 仍可能导致纹理模糊和接缝明显
 
-先预测：所有 UV 岛都在 0 到 1 范围内且不重叠，是否就一定合格？不一定。面积比例、拉伸、方向、接缝位置、像素密度和边缘 Padding 同样决定纹理结果。第八章从映射原理出发，为 Jim 的面部、身体、服装和配件建立可绘制的 UV 布局。
+先预测：所有 UV 岛都在 0 到 1 范围内且不重叠，是否就一定合格？不一定。面积比例、拉伸、方向、接缝位置、像素密度和边缘 Padding 同样决定纹理结果。第八章从映射原理出发，为 Jim 的面部、身体、服装和配件建立可绘制、可导出、可回归的 UV 布局。
 
-## 原书边界与官方小节
+本页依据 Pearson 第三版目录重写，不逐字复制原文。目录身份可在 [Pearson 书目页](https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758) 复核；当前 Blender 的 UV Editor、Pack Islands 和纹理导出行为应回到 [Blender 官方手册](https://docs.blender.org/manual/en/latest/) 与具体版本说明核对。
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+## Seeing How Unwrapping and UVs Work
 
-- **Seeing How Unwrapping and UVs Work**
-- **Unwrapping in Blender**
-- **Considering Before Unwrapping**
-- **Working with UVs in Blender**
-- **Unwrapping the Rest of the Character；Packing UVs**
+UV 为每个网格角保存二维坐标，把三维曲面映射到绘画和纹理采样使用的平面。切割连续曲面后形成 **<Term>UV Island</Term>**；算法需要在角度保持、面积保持、边长比例、岛数量和可绘制性之间折中。一个平面图看起来整齐，不代表曲面上的方格没有被拉伸。
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+先给 Jim 的脸、手、躯干和靴子套方向明确、格子等大的测试图，分别在正视和斜视中观察格子面积与线条方向。记录哪一块更重要、哪一块允许更大失真，以及纹理会不会在接缝两侧跳变。正常样本证明测试图可读；边界样本把部件缩到远景；故障样本故意让一块岛旋转或翻转，确认检查能发现它。
 
-## 切割曲面、控制失真、分配纹理预算
+## Unwrapping in Blender
 
-UV 为每个网格角保存二维坐标。接缝把连续三维表面切成可摊平岛，算法在角度、面积和边长之间折中。角色面部优先降低可见区拉伸，接缝放在后脑或遮挡处；服装和配件按材质边界和绘制便利切分。Packing 需要统一 Texel Density、岛间 Padding、方向和镜像策略。
+展开流程通常包含选择网格、标记 **<Term>Seam</Term>**、执行 Unwrap、在 UV Editor 中移动和缩放岛、检查覆盖层，再输出 UV Layout。Seam 把连续三维表面切开，位置要避开高可见区域、面部焦点和需要连续绘画的材质区域。面部可把接缝放在后脑或耳后，服装可沿缝线和材质边界切分。
 
-## 五个核心术语与责任边界
+Planar 适合平面部件，Cylindrical 适合管状部件，接缝加 Unwrap 适合需要控制切割位置的角色网格。选择方法时保存模型版本、接缝图、展开参数和 UV 岛数量。若拓扑、Mirror 或修改器改变，不能假设旧 UV 仍然有效，应重新比较 UV 哈希、岛数量、方向和测试图。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Considering Before Unwrapping
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+展开前先考虑镜头、材质、绘制方式、纹理分辨率、对称策略和下游消费者。**<Term>Texel Density</Term>** 是把纹理像素预算分配到模型表面积的基线：面部、手和近景道具可能需要更高密度，不可见的鞋底或远景部件可以更低，但差异必须有镜头和材质理由。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+决定是否镜像、是否允许重叠、是否保留左右独立绘画、哪些接缝可见、哪个部件需要连续图案。镜像可以节省空间和绘画时间，却会共享左右细节；重叠可以节省像素，却不适合需要独立污渍、伤痕或文字的区域。先写约束，再进入 Packing，避免最后才发现空间或绘画策略冲突。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Working with UVs in Blender
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+UV Editor 中要同时检查岛的方向、比例、旋转、重叠、边界和 **<Term>Stretch</Term>**。Stretch Overlay 能显示角度或面积失真，Checker Texture 能显示方格拉伸和旋转；两者都应在面部、手、躯干、靴子和帽子上截取证据。把岛移动到 0 到 1 范围内只是基础整理，不是质量结论。
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+使用固定测试图比较三种状态：原始展开、接缝调整后展开、最终打包。每次只改一个条件，记录岛面积、长宽比、方向、Texel Density 和接缝跳变。导出 UV Layout 时保存图像尺寸、透明背景、命名和版本，让绘画者能按同一坐标回到模型。
 
-## 关键对象与数据流
+## Unwrapping the Rest of the Character；Packing UVs
 
-复制最终拓扑并锁定模型版本，先用测试栅格观察面部和躯干潜在接缝。标记接缝后分区展开，逐岛检查 Stretch、镜像、翻转和方向。为面部等高关注区域分配更高面积或保持统一密度，再按目标分辨率计算 Padding 并打包。任何拓扑变化都触发 UV 回归检查。
+处理 Jim 的其余部件时按消费者分组：眼球与眼睑要支持材质和表情，手要保留指缝与绘画方向，帽子和头发要说明独立材质与遮挡，靴子可以按鞋面/鞋底分配不同预算。Packing 把这些岛放入目标图像尺寸，记录旋转策略、镜像规则、岛间 **<Term>Padding</Term>** 和允许的重叠区域。
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+打包不是越满越好。Padding 要按像素记录，考虑贴图缩小后的 Mipmap 和边缘采样，避免颜色从邻岛渗入；岛太小会让近景细节消失，岛太拥挤会让绘画和修补困难。最终导出 **<Term>UV Layout</Term>**、利用率、最小岛尺寸、Texel Density 统计和 Mipmap 预览，交给下一章纹理绘制。
 
-## 正常、边界与失败样本
+<Callout type="trap" title="UV 不重叠不等于 UV 合格">
+  现象：岛都在 0 到 1 内，纹理却在脸上拉伸、接缝明显或远景闪烁。原因：忽略 Stretch、Texel Density、方向和 Mipmap Padding。修法：使用测试图、覆盖层和缩小预览，逐部件记录失真与像素预算。
+</Callout>
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+<Callout type="trap" title="接缝不能只按算法方便放置">
+  现象：展开很快，但脸颊、服装图案和手部绘画在接缝处断裂。原因：Seam 没有考虑可见性、材质边界和绘画方向。修法：在高可见区域之外放接缝，保存接缝图，并在正视、斜视和材质测试图下复核。
+</Callout>
 
+<Callout type="trap" title="Packing 塞满会牺牲边缘安全">
+  现象：UV 利用率很高，纹理缩小后却出现邻岛渗色。原因：Padding 只按屏幕空间估计，没有按像素和 Mipmap 级别验证。修法：提高安全 Padding，记录图像尺寸、旋转/镜像策略和缩小预览，再重新打包。
+</Callout>
+
+## 三组 UV 生产实验
+
+<Stepper>
+  <Step title="1. Unwrapping 与 Stretch / Checker">
+    先猜一猜：Planar、Cylindrical 和 Seam + Unwrap 的失真会出现在哪里？切换方法与覆盖层，记录测试图如何暴露曲面到平面的折中。
+
+    <Bl3Ch08UnwrapProjectionLab />
+  </Step>
+  <Step title="2. Seam、UV Island 与 Texel Density">
+    先预测：面部、身体和靴子的接缝与密度应该相同吗？选择区域，比较镜像/独立岛和接缝位置，再写下镜头与材质理由。
+
+    <Bl3Ch08SeamEditorLab />
+  </Step>
+  <Step title="3. Packing、Padding 与 Mipmap Safety">
+    先预测：换成 4K 贴图或更安全的 Padding 会怎样改变利用率与渗色风险？执行打包并确认是否可以交给纹理绘制。
+
+    <Bl3Ch08PackingLab />
+  </Step>
+</Stepper>
+
+## 从模型版本到可绘制 UV
+
+证据包至少包含：模型拓扑版本、接缝图、UV 岛列表、Stretch Overlay、Checker Texture、每部件 Texel Density、图像尺寸、岛间 Padding、镜像/重叠规则、Pack Islands 参数、UV Layout 导出和 Mipmap 预览。每次修改前保存输入版本，修改后记录岛数量、哈希、截图和输出路径。
+
+验收分为正常、边界和故障三条路径。正常路径证明面部、身体、手、帽子、头发和靴子都可绘制；边界路径改变镜头距离、分辨率或镜像规则；故障路径制造拉伸、翻转、重叠和过窄 Padding。拓扑发生变化时必须重跑 UV 回归，不能让旧纹理静默落到新网格。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-UV 原理与第三版一致，当前 Blender 的 UV 工具、Pack Islands 选项和 Density 工作流可能增强。迁移应记录算法和参数，不能只写按 U；UDIM 可扩展高分辨率项目，但本书单角色布局仍先通过基础密度与接缝验收。
+UV 原理与第三版一致，当前 Blender 的 UV 工具、Pack Islands 选项、Density 工作流和 UDIM 支持可能增强。迁移应记录算法和参数，不能只写按 U；UDIM 可扩展高分辨率项目，但单角色基础布局仍先通过密度、接缝、Padding 和导出验收。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含接缝图、各部件 UV 岛、Stretch Overlay、测试栅格、Texel Density 统计、Padding 像素、打包占用率和导出的 UV Layout。目标镜头中面部与手的像素预算必须可解释。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
-
-UV 验收必须把几何正确和像素预算同时量化。先给全角色套方向明确、格子等大的测试图，在面部、手、躯干、靴子和帽子上分别截取正视与斜视图，记录弯曲线、格子面积和接缝跳变；再按最终镜头的重要度设定 Texel Density，说明面部为何可以高于不可见鞋底。打包时记录图像尺寸、最小岛尺寸、旋转策略、允许重叠的对称部件和以像素计的 Padding，并用缩小后的 Mipmap 预览检查渗色。修改模型后重跑 UV 哈希与岛数量对照，证明拓扑变化没有静默破坏已绘制纹理。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单、算法选项和贴图工作流变化，不允许抹去 UV 岛、接缝策略、像素预算或 Mipmap 安全责任。
 
 ## 小结
 
-- UV 展开是曲面切割和失真控制问题
-- 接缝位置应服从可见性与绘制便利
-- Texel Density 分配纹理预算
-- Packing 必须同时考虑 Padding、方向和叠放策略
+- UV 展开是曲面切割、失真控制和像素分配的联合问题
+- Seam 和 UV Island 要同时服从可见性、材质边界和绘画便利
+- Stretch、Checker、Texel Density 和 Padding 都需要量化证据
+- Packing 必须经过分辨率、镜像/重叠规则和 Mipmap 预览验收
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：展开选择。** 躯干像一个管状体，面部又需要避开可见接缝，你会如何选择展开和接缝策略？
+
+<Answer>
+  躯干可以先用 Cylindrical 或接缝加 Unwrap，再沿腋下、背部等低可见区域控制接缝；面部需要围绕眼、嘴和鼻翼检查 Stretch，把接缝放在后脑或耳后，并用 Checker 与 Stretch Overlay 复核。
+</Answer>
+
+**问题 2：像素预算。** 为什么面部可以比鞋底拥有更高 Texel Density？如何证明分配不是主观偏好？
+
+<Answer>
+  面部通常在镜头中更近、材质细节更敏感，鞋底可能不可见或只在远景出现。用最终镜头占屏、材质需求、岛面积、图像分辨率和测试图记录分配理由，再比较缩小后的可读性。
+</Answer>
+
+**问题 3：打包验收。** UV 利用率很高但 Mipmap 预览出现渗色，你会先改什么？
+
+<Answer>
+  先按像素提高岛间 Padding，必要时降低利用率或提高图像分辨率，再重新 Pack Islands；记录旋转、镜像、重叠规则和缩小级别，用同一测试图确认邻岛颜色不再采样进边缘。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="UV Island">
+    由接缝切开并在二维 UV Editor 中独立移动、旋转和缩放的一块网格展开区域。
+  </GlossaryItem>
+  <GlossaryItem term="Seam">
+    把连续三维曲面切开以便摊平的接缝标记，位置要考虑可见性与材质绘画。
+  </GlossaryItem>
+  <GlossaryItem term="Texel Density">
+    分配到模型表面积的纹理像素密度，用来保持不同部件的细节预算可解释。
+  </GlossaryItem>
+  <GlossaryItem term="Stretch">
+    三维表面映射到二维时出现的角度、面积或边长比例失真，需要用覆盖层检查。
+  </GlossaryItem>
+  <GlossaryItem term="Padding">
+    UV 岛边缘之间按像素保留的安全间隔，用来降低纹理缩小与采样时的渗色。
+  </GlossaryItem>
+  <GlossaryItem term="UV Layout">
+    可导出给纹理绘制和交接使用的最终 UV 岛布局，带有图像尺寸和版本证据。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：角色建模](/learn/blender-3d/03-modeling/bl3-07-character-modeling) · [下一章：绘制纹理](/learn/blender-3d/04-lookdev/bl3-09-painting-textures)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

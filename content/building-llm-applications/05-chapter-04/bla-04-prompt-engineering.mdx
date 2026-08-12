@@ -3,340 +3,280 @@ title: "Chapter 4: Prompt Engineering"
 type: C
 section: "Chapter 4: Prompt Engineering"
 order: 5
-description: "从清晰指令、任务拆分、理由与多候选选择进入分隔符、少样本、思维链和ReAct，并建立提示回归集。"
+description: "从清晰指令、任务拆分与边界设计出发，比较少样本、候选选择和工具循环，并建立提示回归门禁。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-04
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla04DecompositionLab,
+  Bla04InstructionLab,
+  Bla04LoopLab,
+} from "@/components/mdx/building-llm-applications/05-chapter-04/bla-04-prompt-engineering";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。从清晰指令、任务拆分、理由与多候选选择进入分隔符、少样本、思维链和ReAct，并建立提示回归集。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能把一次模型调用写成包含任务、资料、格式、权限、拒答和评估方法的 Prompt Contract。
+- 能用清晰指令、分隔符、任务拆分和少样本示范构建可比较的提示，并保留每一步中间证据。
+- 能比较多候选选择、分步分析和 ReAct 工具循环，设置权限、失败处理与停止条件。
+- 能建立提示回归集，固定模型、数据和解码配置，在版本变化后定位提示行为的真实差异。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 4：把提示变成可回归的应用接口
 
+提示工程不是给模型“说得更聪明”，而是把任务、输入资料、输出结构、可用工具和失败边界写成一个能被反复比较的接口。一个好提示会减少歧义，但不会替应用承担事实验证、权限控制或数据治理；它必须和模型版本、样本、解码配置及评估协议一起进入运行记录。
 
-## 数学、检索与成本骨架
+先预测：如果资料里藏着一条与任务相冲突的指令，模型应该跟随它还是拒绝它？如果复杂任务被拆成三步，哪一步的中间结果最适合定位失败？如果工具没有返回结果，提示应该让模型继续猜，还是安全停止？本章用三个交互实验把这些问题连接到可观察的边界。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**提示越长，团队就认为它越可靠；**原因：**把文字数量误当成任务约束和证据质量；**修法：**分离任务、资料、格式、权限和拒答条件，并用固定回归样本验证实际变化。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**要求模型给出一段理由，就把理由当成事实证明；**原因：**把生成的解释与外部来源、程序校验混为一谈；**修法：**让理由指向可检查的输入或工具回执，关键结论仍经过独立验证。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**多候选或 ReAct 得到更好的答案，就取消人工和停止条件；**原因：**把搜索空间扩大误解为风险已经消失；**修法：**定义候选评分、工具白名单、最大步数、超时和安全回退。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="描述任务、输入资料、输出结构、权限、拒答条件和评估协议的提示接口">Prompt Contract</Term>` 把自然语言变成可验收的运行对象。`<Term def="把指令、外部资料、示例和模型输出区域清楚分开的标记结构">Delimiter</Term>` 帮助模型和程序识别边界，但不能单独解决恶意内容。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+复杂任务可以拆成多个 `<Term def="可以独立执行、验证和失败回退的任务步骤">Subtask</Term>`；示范输入输出组成 `<Term def="展示任务规则和输出格式的少量标注样例">Few-shot Example</Term>`。当提示需要访问外部系统时，`<Term def="由观察、受限动作、工具回执和停止条件组成的模型调用循环">Tool Loop</Term>` 描述的是流程，不是模型的自由权限。
 
-## 三段可运行骨架
+最后，用 `<Term def="固定样本、期望结构、模型配置和比较规则的提示版本测试集合">Prompt Regression Set</Term>` 防止一次改写悄悄破坏旧任务。提示工程的质量来自可比较的变化，而不是来自某个单次回答的修辞效果。
+
+## 三步提示工程实验
+
+每一步先写下预测，再只改变一个条件。实验使用合成任务，交互状态用于练习边界分析；真实应用要把数据许可、模型服务、用户隐私和人工升级路径纳入同一份回归记录。
+
+<Stepper>
+  <Step title="1. 固定指令与资料边界">
+    在直接指令、结构化模板和分隔输入之间切换，再触发资料中的冲突指令，观察边界保护、格式校验和拒答路径。
+
+    <Bla04InstructionLab />
+  </Step>
+  <Step title="2. 保存任务拆分证据">
+    选择拆分子任务、少样本示范或多候选选择，再隐藏中间结果或选择标准，观察为什么最终输出不能替代过程记录。
+
+    <Bla04DecompositionLab />
+  </Step>
+  <Step title="3. 约束高级调用循环">
+    选择分步分析、ReAct 工具环或候选评分，再触发工具失败，观察安全停止、取消和回退如何阻止模型补造结果。
+
+    <Bla04LoopLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的提示回归器
+
+下面的 Python 函数检查一次输出是否满足结构、引用和拒答要求；TypeScript 版本比较同一回归样本在两个提示版本中的字段差异。它们不判断模型是否“聪明”，而是把提示变更变成可审计的门禁结果。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 输出门禁">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def prompt_gate(output, required_keys, citations, should_refuse=False):
+    missing = [key for key in required_keys if key not in output]
+    citation_ok = all(item in output.get("sources", []) for item in citations)
+    refused = output.get("status") == "refused"
+    passed = not missing and citation_ok and (refused == should_refuse)
+    return {"pass": passed, "missing": missing, "citation_ok": citation_ok}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 回归差异">
 
 ```typescript
-type Request = {
-  task: string;
-  model: string;
-  prompt: string;
-  dataHash: string;
-  tools: string[];
-  seed: number;
+type PromptRun = {
+  promptVersion: string;
+  inputHash: string;
+  output: Record<string, unknown>;
+  status: "ok" | "refused";
 };
 
-function freezeRequest(req: Request): Readonly<Request> {
-  return Object.freeze({ ...req });
+function comparePromptRuns(before: PromptRun, after: PromptRun) {
+  return {
+    sameInput: before.inputHash === after.inputHash,
+    changedStatus: before.status !== after.status,
+    changedKeys: Object.keys(after.output).filter(
+      (key) => before.output[key] !== after.output[key],
+    ),
+  };
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`prompt_gate` 把结构、来源和拒答作为独立条件；`comparePromptRuns` 先确认输入一致，再报告状态和字段变化。生产系统还应保存完整提示、模板版本、模型、解码参数、工具权限、延迟、成本、人工判断和回归样本哈希，避免只把差异写成一句“模型表现变了”。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type RunRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(records: RunRecord[]): {
-  pass: boolean;
-  missing: number[];
-} {
-  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从指令到工具循环
 
 ### Chapter 4: Prompt Engineering
 
-“Chapter 4: Prompt Engineering”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Chapter 4: Prompt Engineering”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 4: Prompt Engineering”把提示当作应用接口来审查：谁提供资料，模型能做什么，输出如何校验，失败如何拒答，版本变化怎样回归。提示的文字风格可以变化，但这些责任字段必须在每次运行中保持可追踪。
 
 ### Technical requirements
 
-“Technical requirements”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Technical requirements”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Technical requirements”包括模型端点、上下文窗口、解码参数、模板存储、结构解析、日志脱敏、超时、成本和回归执行器。没有这些运行条件，同一段提示在不同环境下的差异无法归因，也无法在升级后复现。
 
 ### What is prompt engineering?
 
-“What is prompt engineering?”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“What is prompt engineering?”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“What is prompt engineering?”回答的是如何设计和测试模型输入，而不是如何用话术保证答案正确。它要求明确任务、资料、示例、格式和拒答，再用样本比较提示变化；最终事实仍由来源和程序校验负责。
 
 ### Principles of prompt engineering
 
-“Principles of prompt engineering”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Principles of prompt engineering”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Principles of prompt engineering”可以归纳为清晰、分层、可验证、最小权限和可回归。一个原则只有在固定样本上改变输出或降低失败时才有工程意义；如果只是让提示更长，就应该重新检查是否增加了真正的约束。
 
 ### Clear instructions
 
-“Clear instructions”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Clear instructions”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Clear instructions”要求使用可执行动词、明确对象、输入范围、输出格式和缺失信息处理。把“回答得好一点”改成字段、长度、来源和拒答条件，模型才有可比较的目标，评估器也才知道如何判定。
 
 ### Split complex tasks into subtasks
 
-“Split complex tasks into subtasks”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Split complex tasks into subtasks”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Split complex tasks into subtasks”把分类、抽取、转换、校验等步骤分开，让每一步拥有输入、输出和失败状态。拆分不是把一个模糊提示复制三次，而是保留中间结果，以便重试单步而不是重跑整条链。
 
 ### Ask for justification
 
-“Ask for justification”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Ask for justification”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Ask for justification”应要求模型指向输入片段、规则或工具回执，而不是把一段流畅解释当作真理证明。高影响任务还需要独立程序检查或人工审核；模型生成的理由本身可能同样包含错误或迎合。
 
 ### Generate many outputs, then use the model to pick the best one
 
-“Generate many outputs, then use the model to pick the best one”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Generate many outputs, then use the model to pick the best one”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Generate many outputs, then use the model to pick the best one”把生成与选择分成两个阶段。选择器需要明确评分标准、候选来源、拒绝阈值和成本上限，否则更多候选只会扩大预算与错误传播，并不能自动提高可靠性。
 
 ### Use delimiters
 
-“Use delimiters”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Use delimiters”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Use delimiters”通过标签、代码块或结构化字段区分指令与资料。分隔符有助于降低混淆，却不能赋予资料可信权限；系统仍需限制外部文本中的指令、校验引用并在冲突时暂停或升级。
 
 ### Advanced techniques
 
-“Advanced techniques”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Advanced techniques”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Advanced techniques”包括少样本、分步分析、候选选择和工具循环。它们都扩大了模型可用的上下文或动作空间，因此必须同时增加回归样本、观测字段、权限控制和停止条件，而不是只增加提示复杂度。
 
 ### Few-shot approach
 
-“Few-shot approach”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Few-shot approach”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Few-shot approach”用少量输入输出示范告诉模型任务规则和格式。示例要覆盖正常、边界和拒答，不应把真实个人数据直接塞入提示；示例变化会改变行为，因此要给每个示例版本和来源哈希。
 
 ### Chain of thought
 
-“Chain of thought”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Chain of thought”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chain of thought”可作为分步求解的教学概念，但内部生成的长理由不等于可公开的证明，也不能替代外部证据。工程上更稳妥的做法是输出结构化中间检查、引用或计算结果，并限制敏感内容暴露。
 
 ### ReAct
 
-“ReAct”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“ReAct”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“ReAct”把观察、动作和工具回执放入循环，适合讨论检索、计算和外部操作的边界。每个动作都要经过白名单、参数校验、超时、幂等和取消；工具失败时必须停止或降级，不能由模型补造回执。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为四个动作：写 Prompt Contract，保护资料和指令边界，保存拆分与候选证据，给高级循环设置权限和停止条件。提示只有进入回归集，才会从一次性技巧变成可维护接口。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”用于记录原书章节、提示工程研究、模型文档和本站独立重写边界。提示技巧与模型版本强相关，引用可以说明概念来源，但当前表现、服务限制和安全行为必须在目标环境中重新验证。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类提示证据
 
-## 六类应用证据
+### 1. 任务与输出证据
 
-### 任务与来源合同
+保存任务目标、输入样本、输出 schema、长度、拒答条件、成功指标和失败成本。一个可解析的 JSON 仍可能事实错误，因此结构门和内容门要分别记录。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. 指令与资料证据
 
-### 模型与提示合同
+保存系统指令、用户请求、外部资料、分隔符、来源、权限和脱敏结果。资料里的文本不能自动升级为任务指令；冲突时保留冲突片段与处理决定，方便复盘注入风险。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 示例与拆分证据
 
-### 数据、检索与状态合同
+保存少样本示例的版本和来源、每个子任务的输入输出、重试次数以及进入下一步的条件。中间证据让团队知道失败来自示范、分类、抽取、选择还是最后格式化。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 模型与解码证据
 
-### 工具、代码与权限合同
+保存模型、端点、词元器、温度、采样、最大输出、停止序列和工具配置。提示本身没有改变但解码默认值变化时，输出仍可能改变；所有变量都要进入回归记录。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 工具与权限证据
 
-### 评测、安全与成本合同
+保存工具 schema、白名单、参数、授权主体、回执、耗时、错误、取消和副作用。ReAct 或其他调用循环只能在程序边界内动作，模型的自然语言不能直接授予写入、支付或删除权限。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 回归与发布证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存输入哈希、旧版输出、新版差异、人工判断、风险分类、成本、延迟和回退提示。提示变更、模型升级、资料更新或工具变化都应触发回归，而不是等用户发现答案变坏。
 
 ## 容易踩的坑
 
-**现象 →** 提示分隔符被用户输入逃逸，模型执行了注入指令。
-**原因 →** 分隔符是普通文本，未做转义或结构化隔离。
-**修法 →** 用结构化模板包裹用户输入，对分隔符做转义并校验边界。
+<Callout type="trap">**现象：**把少样本示例从生产数据直接复制进公共提示；**原因：**忽略个人信息、版权、许可和示例污染；**修法：**脱敏、标注来源、缩小样本并用版本化回归集验证。</Callout>
 
-**现象 →** 把思维链的"推理"直接当事实证据，结论出错无法追溯。
-**原因 →** 隐藏推理不可验证，理由未由可见证据或外部校验支持。
-**修法 →** 理由必须引用检索片段或外部验证，隐藏推理不作为事实来源。
+<Callout type="trap">**现象：**把分步分析文本保存为唯一审计依据；**原因：**内部生成理由可能不稳定、含敏感信息或与实际工具状态不一致；**修法：**保存结构化检查、引用、工具回执和人工判断，不依赖隐藏理由。</Callout>
 
-**现象 →** 改提示一个词结果翻转。你可以亲自验证：冻结样本集，只改一个措辞跑全集，对比逐样本输出。
-**原因 →** 提示对输出高度敏感，未建立回归集做版本对照。
-**修法 →** 冻结提示回归集，每次改动只改一处并保留上版基线。
+<Callout type="trap">**现象：**工具循环没有达到目标就继续增加步数；**原因：**没有定义最大步数、成本上限和错误分类；**修法：**按错误类型停止、取消或降级，保留回执并返回可解释状态。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 清晰指令与任务拆分是提示基础
-- 分隔符隔离输入防止注入逃逸
-- 少样本引导稳定输出结构
-- 思维链理由需可见证据支持
-- 提示回归集冻结版本逐项对照
+- 用 Prompt Contract 固定任务、资料、格式、权限、拒答和评估方法。
+- 用 Delimiter、Subtask 和 Few-shot Example 降低歧义，但不把模型输出当作事实证明。
+- 多候选、分步分析和 ReAct 都要记录中间证据、成本、权限和停止条件。
+- Prompt Regression Set 固定输入和配置，让提示、模型、数据或工具变化可以被定位。
+- 发布前确认输出门、来源门、权限门、成本门和回退门全部通过。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 提示工程中为什么要使用分隔符？
+**问题 1：**请把“总结这份资料”改写为一个可回归的 Prompt Contract，至少包含输入边界、输出格式和资料冲突处理。
 
 <Answer>
-
-分隔符把用户输入与指令、示例、检索片段明确隔开，降低提示注入风险，让模型清楚哪部分是指令、哪部分是待处理数据。但分隔符是普通文本，仍需配合结构化模板和转义校验，防止用户输入逃逸分隔符。
-
+  写清任务是从标记为 `source` 的资料提取事实，输出固定字段、每个结论带来源片段，资料缺少证据时返回 `insufficient-evidence`。将指令、资料和用户请求用不同字段包裹，禁止资料中的指令改变任务权限，并为正常、空资料和冲突资料各保存一个回归样本。
 </Answer>
 
-**问题 2：实践应用。** 思维链（Chain of Thought）的推理能直接当作事实证据吗？
+**问题 2：**为什么要求模型给出更长的理由不能单独提高事实性？请给出一个更可靠的替代证据。
 
 <Answer>
-
-不能。思维链是模型生成的隐藏推理，不可验证、可能幻觉。理由必须由可见的检索片段或外部校验支持。把隐藏推理当事实来源会导致错误无法追溯。正确做法是要求模型引用证据，并对引用做来源校验。
-
+  理由也是模型生成的文本，可能只是对错误答案的合理化。更可靠的证据包括可定位的原文引用、确定性计算、结构校验、工具回执或独立人工判断；这些证据要和输出字段分开保存，并在回归集上逐样本检查。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版少样本提示模板：输入指令、示例列表和待处理输入，用分隔符拼装成完整提示字符串。
+**问题 3（独立实现）：**实现一个 `prompt_gate`，当输出缺少必需字段、引用不完整或拒答状态与预期不一致时返回阻断原因。
 
 <Answer>
-
-```python
-def build_few_shot(instruction, examples, user_input, sep="###"):
-    parts = [instruction]
-    for ex in examples:
-        parts.append(f"{sep}\n输入: {ex['input']}\n输出: {ex['output']}")
-    parts.append(f"{sep}\n输入: {user_input}\n输出:")
-    return "\n".join(parts)
-```
-
+  先检查必需字段集合，再检查每个引用是否来自允许的来源列表，最后比较 `status` 与当前样本的拒答预期。返回缺失字段、缺失引用和状态差异；不要用空字符串填充缺失值，否则门禁会把未测量误判成通过。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-从清晰指令、任务拆分、理由与多候选选择进入分隔符、少样本、思维链和ReAct，并建立提示回归集。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能在冻结样本上比较提示版本，验证结构化输出与注入边界，不把隐藏推理当作事实证据。
-
+<Glossary>
+  <GlossaryItem term="Prompt Contract">描述任务、输入资料、输出结构、权限、拒答条件和评估协议的提示接口。</GlossaryItem>
+  <GlossaryItem term="Delimiter">把指令、外部资料、示例和模型输出区域清楚分开的标记结构。</GlossaryItem>
+  <GlossaryItem term="Subtask">可以独立执行、验证和失败回退的任务步骤。</GlossaryItem>
+  <GlossaryItem term="Few-shot Example">展示任务规则和输出格式的少量标注样例。</GlossaryItem>
+  <GlossaryItem term="Tool Loop">由观察、受限动作、工具回执和停止条件组成的模型调用循环。</GlossaryItem>
+  <GlossaryItem term="Prompt Regression Set">固定样本、期望结构、模型配置和比较规则的提示版本测试集合。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 3: Choosing an LLM for Your Application](/learn/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm)
-- [Chapter 5: Embedding LLMs within Your Applications](/learn/building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications)
+- [上一页：Chapter 3 — Choosing an LLM for Your Application](/learn/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm)
+- [下一页：Chapter 5 — Embedding LLMs in Applications](/learn/building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留提示工程范围并补充边界设计、任务拆分、工具循环与回归门禁练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

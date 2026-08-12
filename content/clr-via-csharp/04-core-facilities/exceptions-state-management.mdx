@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-20
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcExceptionFlowLab,
+  CvcExceptionTaxonomyLab,
+  CvcStateGuaranteeLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-exceptions-state-management";
 
 <Objectives>
 
@@ -32,7 +41,9 @@ import { Attribution } from "@/components/mdx/attribution";
 
 先预测：`throw ex`与`throw`是否保留同一stack；finally是否绝对执行；catch(Exception)记录后继续是否安全；OperationCanceledException是否error；constructor失败获得的resources谁释放；未处理异常后进程是否应该继续；CER能否保证任意代码可靠。后文从mechanics、taxonomy和state guarantee回答。
 
-<Term def="操作成功、失败或取消后，对内存状态、外部副作用与资源仍成立的明确保证。">exception state guarantee</Term>
+<Term def="操作成功、失败或取消后，对内存状态、外部副作用与资源仍成立的明确保证。">
+  exception state guarantee
+</Term>
 
 ## Defining Exception
 
@@ -61,22 +72,72 @@ catch (StorageException error) when (error.IsTransient)
 
 `throw;`保留当前exception原始stack；`throw error;`重置当前throw point并损伤诊断。跨boundary翻译用new domain exception(innerException)，保留cause。ExceptionDispatchInfo可捕获并在另一位置重新抛同时保留stack语义。
 
-## The try Block, The catch Block, and The finally Block
+## The try Block
 
-Try只包围你准备在同一抽象层处理/清理的最小范围，过大会把无关异常误归类。Catch按最具体到一般，只有能恢复、translate或add evidence then rethrow时使用。Finally无论正常/异常离开都用于清理/恢复，但进程fail-fast、断电、stack overflow等不能保证执行，关键durability不能仅靠finally。
-
-<Term def="CLR从throw site查找handler并在离开frames时执行finally的搜索与展开过程。">stack unwinding path</Term>
-
-Finally自身抛异常会遮蔽原异常，cleanup应幂等且尽量不失败；若Dispose可能失败，记录/aggregate并保留主failure。`using`编译为try/finally，await using处理异步释放。Lock statement同样finally Exit，不能在持锁时调用未知代码。
+Try只包围你准备在同一抽象层处理或清理的最小范围，过大会把无关异常误归类。它应当尽量靠近可能失败的操作，并让资源 ownership 在进入前已经清楚。这样后续的 handler 才能把 contract failure 与无关 bug 分开。
 
 <Stepper>
-  <Step title="切换try、catch、finally与filter"></Step>
-  <Step title="画控制流">标出throw、filter、selected catch、每个finally、resource ownership和最终caller看到的exception。</Step>
-  <Step title="故障注入">在acquire、work、commit、cleanup各点抛错，验证原failure、资源释放与state guarantee。</Step>
+  <Step title="切换try、catch、finally与filter">
+    <CvcExceptionFlowLab />
+  </Step>
+  <Step title="画控制流">
+    <CvcExceptionFlowLab />
+    标出throw、filter、selected catch、每个finally、resource
+    ownership和最终caller看到的exception。
+  </Step>
+  <Step title="故障注入">
+    <CvcExceptionFlowLab />
+    在acquire、work、commit、cleanup各点抛错，验证原failure、资源释放与state
+    guarantee。
+  </Step>
+</Stepper>
+
+## The catch Block
+
+Catch按最具体到一般排列，只有能恢复、translate或add evidence then rethrow时使用。捕获后必须说明 caller 看到的稳定结果、原异常是否保留，以及 unknown state 是否已经被隔离；没有恢复证据就让更高层 owner 处理。
+
+<Term def="CLR从throw site查找handler并在离开frames时执行finally的搜索与展开过程。">
+  stack unwinding path
+</Term>
+
+<Stepper>
+  <Step title="选择最具体的handler">
+    <CvcExceptionTaxonomyLab />
+  </Step>
+  <Step title="保留failure evidence">
+    <CvcExceptionTaxonomyLab />
+    记录type、inner、stack、correlation与resource ownership；跨boundary只用typed
+    translation包装。
+  </Step>
+  <Step title="验证Caller行为">
+    <CvcExceptionTaxonomyLab />
+    分别测试fix input、change sequence、retry/fallback、propagate
+    cancellation和fatal stop。
+  </Step>
+</Stepper>
+
+## The finally Block
+
+Finally无论正常或一般异常离开都用于清理与恢复，但 fail-fast、断电、stack overflow 等致命情形不能保证执行，关键 durability 不能仅靠 finally。Finally 自身抛异常会遮蔽原异常，cleanup 应幂等且尽量不失败；`using` 编译为 try/finally，`await using` 处理异步释放，lock 也依赖 finally 释放持锁状态。
+
+<Stepper>
+  <Step title="注入cleanup故障">
+    <CvcExceptionFlowLab />
+  </Step>
+  <Step title="声明清理保证">
+    <CvcExceptionFlowLab />
+    记录Dispose失败如何聚合、主failure如何保留，以及哪些 durable effects
+    不能依赖 finally。
+  </Step>
+  <Step title="复测资源边界">
+    <CvcExceptionFlowLab />
+    在正常return、取消、异常、进程终止四条路径验证资源释放与最终状态。
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Finally在任何情况下都一定执行">
-正常return和一般exception unwind会执行，但fail-fast、进程终止、断电、某些致命runtime故障不会。关键外部一致性需要事务、journal/outbox和重启恢复。
+  正常return和一般exception
+  unwind会执行，但fail-fast、进程终止、断电、某些致命runtime故障不会。关键外部一致性需要事务、journal/outbox和重启恢复。
 </Callout>
 
 ## The System.Exception Class
@@ -90,9 +151,19 @@ StackTrace受优化、async/iterator state machine、inlining和symbol影响；�
 使用最具体标准type：ArgumentNull/OutOfRange/ArgumentException、InvalidOperation、ObjectDisposed、NotSupported、IOException等，让caller/tool识别。不要为每个message创建type，也不要用Exception/ApplicationException泛化。Argument exceptions在public boundary同步验证，async方法可能在await Task时才观察，API要一致。
 
 <Stepper>
-  <Step title="切换argument、state、external与cancellation taxonomy"></Step>
-  <Step title="建立Exception表">记录type、owner、retryable、state guarantee、telemetry level、external mapping与secret policy。</Step>
-  <Step title="验证Caller行为">分别测试fix input、change sequence、retry/fallback、propagate cancellation和fatal stop。</Step>
+  <Step title="切换argument、state、external与cancellation taxonomy">
+    <CvcExceptionTaxonomyLab />
+  </Step>
+  <Step title="建立Exception表">
+    <CvcExceptionTaxonomyLab />
+    记录type、owner、retryable、state guarantee、telemetry level、external
+    mapping与secret policy。
+  </Step>
+  <Step title="验证Caller行为">
+    <CvcExceptionTaxonomyLab />
+    分别测试fix input、change sequence、retry/fallback、propagate
+    cancellation和fatal stop。
+  </Step>
 </Stepper>
 
 ## Throwing an Exception
@@ -116,7 +187,9 @@ public void Transfer(Account source, Account destination, decimal amount)
 
 Custom type用于caller确实需要单独catch或读取typed context的domain/boundary failure。继承Exception，命名`Exception`后缀，提供message/inner和typed immutable properties。原书要求Serializable与serialization constructor以支持Framework remoting；现代.NET不应依赖BinaryFormatter exception serialization，跨process映射stable error contract。
 
-<Term def="在system boundary把底层异常保留为inner并转换成当前层稳定failure语义的规则。">exception translation boundary</Term>
+<Term def="在system boundary把底层异常保留为inner并转换成当前层稳定failure语义的规则。">
+  exception translation boundary
+</Term>
 
 不要让custom exception constructor做I/O或格式化敏感对象。Versioning新增property应有default，caller不解析message。大量validation errors更适合result collection，不抛第一项。
 
@@ -124,12 +197,21 @@ Custom type用于caller确实需要单独catch或读取typed context的domain/bo
 
 Catch-all继续执行看似提高availability，却可能在unknown state上服务错误数据。Reliability优先隔离unit of work、使用transaction/immutable state、让process supervisor restart。对request边界可catch top-level记录并返回500，同时丢弃request scope；不能假装整个process state一定健康，native corruption/OutOfMemory等通常不恢复。
 
-## Guidelines and Best Practices, Use finally Blocks Liberally, and Don't Catch Everything
+## Guidelines and Best Practices
 
-用using/finally释放你拥有的resources；只catch可处理types；避免empty catch；重抛保stack；不因日志重复catch；异步observe all Tasks；后台线程exception交host policy。Finally“liberally”指可靠cleanup，不是把业务逻辑塞finally。Catch(Exception)只适合top-level isolation boundary并默认不继续同一unit state。
+用 using/finally 释放你拥有的 resources；只 catch 可处理 types；避免 empty catch；重抛保 stack；不因日志重复 catch；异步 observe all Tasks；后台线程 exception 交 host policy。可靠性规则必须与 owner、状态保证和可观测证据一起写进边界。
+
+## Use finally Blocks Liberally
+
+Use finally liberally 的含义是让每个 owner 都有清理路径，而不是把业务逻辑塞进 finally。清理应小、幂等、可重复执行；若 Dispose 可能失败，应记录或 aggregate 并保留主 failure，同时把真正的外部一致性放到 transaction、journal 或 outbox。
+
+## Don't Catch Everything
+
+Don't catch everything：`Catch(Exception)` 只适合 request、job 或 process worker 的 top-level isolation boundary，并且必须终止当前 unit。若无法证明 state 已恢复，继续执行只会把显式 failure 变成隐式 corruption；fatal runtime failure 应交给 host 和 supervisor。
 
 <Callout type="trap" title="Catch Exception并记录即可提高系统可用性">
-若无法证明state恢复，继续只把显式failure变成隐式corruption。Top-level boundary应终止当前unit、释放scope、返回稳定error；必要时重启process。
+  若无法证明state恢复，继续只把显式failure变成隐式corruption。Top-level
+  boundary应终止当前unit、释放scope、返回稳定error；必要时重启process。
 </Callout>
 
 ## Recovering Gracefully from an Exception
@@ -149,7 +231,9 @@ next = next.SetItem(destinationId, destinationAfter);
 Interlocked.Exchange(ref _balances, next);
 ```
 
-<Term def="在可能失败的多步操作中，对未改变、原子提交或可补偿partial effects作出的保证。">failure atomicity</Term>
+<Term def="在可能失败的多步操作中，对未改变、原子提交或可补偿partial effects作出的保证。">
+  failure atomicity
+</Term>
 
 ## When an Unrecoverable Exception Occurs: Maintaining State
 
@@ -180,9 +264,17 @@ CER是.NET Framework reliability mechanism，试图提前prepare code并在受�
 原书介绍System.Diagnostics.Contracts的preconditions/postconditions/invariants与rewriter/static checker。该工具链已非现代.NET主流，但design-by-contract思想仍有效：public validation、nullable annotations、Debug.Assert、tests、types/constructors和analyzers表达。不要部署依赖过时rewriter才能正确的contract；把关键invariant放runtime code/type system。
 
 <Stepper>
-  <Step title="切换validate-first、commit-swap、compensate与terminate"></Step>
-  <Step title="声明State guarantee">对每个public operation写成功/失败/取消后内存、数据库、消息和资源状态。</Step>
-  <Step title="执行Crash/Fault测试">在每个side effect间kill/throw，重启后按journal/outbox恢复并验证没有双扣/丢事件。</Step>
+  <Step title="切换validate-first、commit-swap、compensate与terminate">
+    <CvcStateGuaranteeLab />
+  </Step>
+  <Step title="声明State guarantee">
+    <CvcStateGuaranteeLab />
+  </Step>
+  <Step title="执行Crash/Fault测试">
+    <CvcStateGuaranteeLab />
+    在每个side
+    effect间kill/throw，重启后按journal/outbox恢复并验证没有双扣/丢事件。
+  </Step>
 </Stepper>
 
 ## 本章回顾：Catch之前先证明State
@@ -197,28 +289,61 @@ CER是.NET Framework reliability mechanism，试图提前prepare code并在受�
 
 **问题 1：为何`catch(Exception ex){ log; throw ex; }`有问题？**
 
-<Answer>它重复日志且`throw ex`重置stack origin，损伤诊断；若不处理只让top-level owner记录，或catch后用`throw;`保留stack。若跨抽象层必须translate，new DomainException(context, ex)保留inner并让caller按稳定type处理。</Answer>
+<Answer>
+  它重复日志且`throw ex`重置stack origin，损伤诊断；若不处理只让top-level
+  owner记录，或catch后用`throw;`保留stack。若跨抽象层必须translate，new
+  DomainException(context, ex)保留inner并让caller按稳定type处理。
+</Answer>
 
 **问题 2：转账第二步失败，如何保证不会只扣不加？**
 
-<Answer>单数据库用transaction原子更新ledger；内存用validate/calculate next snapshot后一次swap；跨系统用durable saga/outbox记录steps、idempotency key和compensation。对每个side effect后注入failure/process kill，重启验证最终一致且不重复。</Answer>
+<Answer>
+  单数据库用transaction原子更新ledger；内存用validate/calculate next
+  snapshot后一次swap；跨系统用durable saga/outbox记录steps、idempotency
+  key和compensation。对每个side effect后注入failure/process
+  kill，重启验证最终一致且不重复。
+</Answer>
 
 **问题 3：何时Top-level catch Exception是合理的？**
 
-<Answer>Request/job/process worker边界可捕获以记录完整cause、终止当前scope、返回稳定failure并释放resources；它不能在未知状态继续同一operation。对corrupted-state/fatal runtime failure应让process终止，由supervisor restart和durable state恢复。</Answer>
+<Answer>
+  Request/job/process
+  worker边界可捕获以记录完整cause、终止当前scope、返回稳定failure并释放resources；它不能在未知状态继续同一operation。对corrupted-state/fatal
+  runtime failure应让process终止，由supervisor restart和durable state恢复。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="exception state guarantee" definition="成功、失败、取消后仍成立的内外部状态保证。" />
-  <GlossaryItem term="stack unwinding path" definition="Throw后handler搜索与finally展开的控制流。" />
-  <GlossaryItem term="exception translation boundary" definition="保留inner cause并转换为当前抽象层failure。" />
-  <GlossaryItem term="failure atomicity" definition="失败时未改变、原子提交或可补偿的状态保证。" />
-  <GlossaryItem term="recovery ownership" definition="负责重试、补偿、重启或终止的明确system owner。" />
+  <GlossaryItem
+    term="exception state guarantee"
+    definition="成功、失败、取消后仍成立的内外部状态保证。"
+  />
+  <GlossaryItem
+    term="stack unwinding path"
+    definition="Throw后handler搜索与finally展开的控制流。"
+  />
+  <GlossaryItem
+    term="exception translation boundary"
+    definition="保留inner cause并转换为当前抽象层failure。"
+  />
+  <GlossaryItem
+    term="failure atomicity"
+    definition="失败时未改变、原子提交或可补偿的状态保证。"
+  />
+  <GlossaryItem
+    term="recovery ownership"
+    definition="负责重试、补偿、重启或终止的明确system owner。"
+  />
 </Glossary>
 
-<Term def="负责对特定failure执行重试、补偿、隔离、重启或终止的明确组件。">recovery ownership</Term>
+<Term def="负责对特定failure执行重试、补偿、隔离、重启或终止的明确组件。">
+  recovery ownership
+</Term>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 20: Exceptions and State Management" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 20: Exceptions and State Management"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

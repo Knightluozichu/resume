@@ -3,286 +3,255 @@ title: "Chapter 12: Responsible AI"
 type: C
 section: "Chapter 12: Responsible AI"
 order: 13
-description: "在模型、元提示和用户界面三层落实Responsible AI，并将法规、风险、人工复核、事件记录与回退并入发布门禁。"
+description: "把 Responsible AI 拆成模型、元提示和用户界面三层，使用风险登记、分群评测、人工复核和事件回退形成可审计发布门禁。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-12
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla12LayerLab,
+  Bla12ReviewLab,
+  Bla12RiskLab,
+} from "@/components/mdx/building-llm-applications/13-chapter-12/bla-12-responsible-ai";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。在模型、元提示和用户界面三层落实Responsible
-AI，并将法规、风险、人工复核、事件记录与回退并入发布门禁。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能把一个 Responsible AI 风险拆成受影响人群、失败模式、证据和控制动作。
+- 能区分模型层、元提示层和用户界面层的责任，并为每层设计独立测试。
+- 能按偏见、有害性、隐私、越权和过度拒答分群评估，保留人工复核与事件时间线。
+- 能回答“这个系统是否可以发布”，并说明暂停、通知、降级或回退的触发条件。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 12：把责任 AI 变成发布证据
 
+责任 AI 不是在页面底部加一句声明，也不是把所有风险交给模型自己判断。一个系统可能在模型层生成偏见，在元提示层被注入，在界面层泄露敏感输入；如果只看最终答案，就不知道哪一层先失守。本章把责任拆成可测试的场景、分群、证据和动作。
 
-## 数学、检索与成本骨架
+先猜一猜：平均安全分很高，但某个小群体的拒答率翻倍时，系统能否发布？一句元提示被绕过后，界面仍显示“已验证”，谁应该阻断？出现隐私事件后，团队最先需要的是一条口号、一次回退，还是带请求 ID 的时间线？三个实验会让这些问题变成可观察状态。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**安全评测平均通过，某个高影响人群的错误率却没有被发现；**原因：**样本没有按人群和场景分组，尾部结果被平均数掩盖；**修法：**保存分群样本、逐例判断和人工抽查，任何高影响缺口都暂停发布。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**元提示写着“请保持安全”，提示注入后模型仍输出越权内容；**原因：**控制只存在于提示文本，模型和界面没有独立阻断；**修法：**三层分别跑正常、边界和注入测例，并记录首个失败层。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**合规文档完整，线上发生隐私事件时却不知道影响哪些请求；**原因：**没有保存同意、输入范围、访问日志和事件时间线；**修法：**用请求 ID 连接数据、工具、显示和回退记录，按事件流程通知与修复。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+<Term def="列出受影响人群、风险场景、严重程度和控制责任的记录">Impact Assessment</Term> 把抽象风险变成范围；<Term def="按风险类型与严重程度组织测试样例和预期动作的方法">Harm Taxonomy</Term> 让偏见、有害性、隐私和越权可以分别评估。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+用 <Term def="主动构造越权、注入和边界输入来寻找防线缺口的测试集合">Red Team Case</Term> 压测防线；把需要人判断的结果交给 <Term def="由授权人员查看证据、确认风险并决定继续或停止的步骤">Human Review</Term>。数据只保留完成任务所需的最小范围，称为 <Term def="只收集、使用和保留完成任务所需数据的约束">Data Minimization</Term>；事件及其处理过程进入 <Term def="记录事件时间、影响范围、证据、通知和修复动作的台账">Incident Register</Term>。
 
-## 三段可运行骨架
+## 三步责任 AI 实验
+
+每一步先写下预测，再只改变一个控制条件。案例使用无敏感的合成请求；真实系统需要加入适用地区、法规日期、用户同意、数据保留、模型版本和人工值班信息。
+
+<Stepper>
+  <Step title="1. 登记风险与影响范围">
+    选择画风险图、跑安全测例或处理线上事件，再取消一个高影响人群的覆盖，观察为什么没有证据就必须暂停。
+
+    <Bla12RiskLab />
+  </Step>
+  <Step title="2. 分开三层控制">
+    选择模型、元提示或界面层，再跳过本层控制，观察为什么一层的分数不能替另一层签字。
+
+    <Bla12LayerLab />
+  </Step>
+  <Step title="3. 用分群评测和人工复核放行">
+    选择有害性、隐私或公平性，再移除人工抽查，观察平均分之外的尾部风险如何改变决定。
+
+    <Bla12ReviewLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的三层安全门
+
+下面的 Python 函数将模型风险和界面约束分开记录；TypeScript 版本把事件台账的关键字段写成类型。它们只负责让阻断理由可追踪，不能代替分群测例、法律复核和人工判断。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 三层检查">
 
-```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
-```
+~~~python
+def safety_gate(text, blocked_terms, max_chars, consented):
+    findings = []
+    if any(term in text for term in blocked_terms):
+        findings.append({"layer": "model", "reason": "blocked-term"})
+    if len(text) > max_chars:
+        findings.append({"layer": "ui", "reason": "input-too-long"})
+    if not consented:
+        findings.append({"layer": "ui", "reason": "missing-consent"})
+    return {"pass": not findings, "findings": findings}
+~~~
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 事件台账">
 
-```typescript
-type FrozenRequest = {
-  task: string; model: string; prompt: string;
-  data: string; tools: string[]; seed: number;
+~~~typescript
+type Incident = {
+  requestId: string;
+  layer: "model" | "metaprompt" | "ui";
+  severity: "low" | "high";
+  action: "pause" | "rollback" | "notify";
 };
 
-function freezeRequest(
-  task: string, model: string, prompt: string,
-  dataHash: string, tools: string[], seed: number
-): FrozenRequest {
-  return { task, model, prompt, data: dataHash, tools, seed };
+function isIncident(value: Partial<Incident>): value is Incident {
+  return Boolean(value.requestId && value.layer && value.severity && value.action);
 }
-```
+~~~
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+safety_gate 会把不同层的缺口放进 findings；isIncident 只确认事件记录能被连接。发布前还要检查分群、人工复核、法规范围、数据最小化和上一版回退，不能因为函数返回 pass 就跳过责任判断。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type ReleaseGate = { pass: boolean; missing: number[] };
-
-function releaseGate(records: Record<string, unknown>[]): ReleaseGate {
-  const required = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从风险登记到可回退发布
 
 ### Chapter 12: Responsible AI
 
-“Chapter 12: Responsible AI”从风险场景、受影响人群、控制层、测试、人工复核和事件响应建立证据。模型层、元提示层和界面层各有独立职责与失败样本，法规引用记录适用地区和日期，不用合规口号替代技术验证。
-
-针对“Chapter 12: Responsible AI”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+Responsible AI 的工作对象是决策链：谁受到影响，什么可能失败，哪一层负责拦截，谁查看证据，以及事件发生后如何停止和恢复。模型、元提示、界面、数据和运营记录要能用请求 ID 串起来，发布判断才可以审计。
 
 ### What is Responsible AI and why do we need it?
 
-“What is Responsible AI and why do we need it?”从风险场景、受影响人群、控制层、测试、人工复核和事件响应建立证据。模型层、元提示层和界面层各有独立职责与失败样本，法规引用记录适用地区和日期，不用合规口号替代技术验证。
-
-针对“What is Responsible AI and why do we need it?”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+Responsible AI 关注系统如何影响人，而不只关注模型能否生成流畅文字。需要它，是因为偏见、隐私、越权和有害输出常常发生在平均质量之外；只有明确人群、风险和控制，团队才能在上线前看到不可接受的后果。
 
 ### Responsible AI architecture
 
-“Responsible AI architecture”从风险场景、受影响人群、控制层、测试、人工复核和事件响应建立证据。模型层、元提示层和界面层各有独立职责与失败样本，法规引用记录适用地区和日期，不用合规口号替代技术验证。
-
-针对“Responsible AI architecture”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+架构把控制分成模型、元提示和用户界面三层，并为每层设置输入边界、测试、日志和回退。层之间可以互相补充，但不能互相替代：提示被绕过时，界面仍应阻断敏感动作；界面显示正常时，模型仍需通过安全评测。
 
 ### Model level
 
-“Model level”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Model level”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+模型层关注训练数据、权重、对齐、拒答、偏见和有害内容。评估要保留基础模型与当前模型的逐例差异，覆盖不同语言、身份和任务；发现高影响分群退化时，暂停模型发布或加入新的训练与回归样例。
 
 ### Metaprompt level
 
-“Metaprompt level”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Metaprompt level”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+元提示层负责角色、任务边界、工具权限、输出结构和注入隔离。提示不是安全边界本身，结构化参数、允许动作和独立规则必须在外部检查；每次模板变更都要重跑越狱、越权、缺失上下文和格式错误样例。
 
 ### User interface level
 
-“User interface level”从风险场景、受影响人群、控制层、测试、人工复核和事件响应建立证据。模型层、元提示层和界面层各有独立职责与失败样本，法规引用记录适用地区和日期，不用合规口号替代技术验证。
-
-针对“User interface level”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+界面层决定用户看到什么、可以提交什么、是否知道系统不确定，以及何时进入人工复核。输入框应限制类型和长度，敏感内容应有同意与脱敏提示，拒答和降级必须给出可行动的原因，不能用“已通过”掩盖证据缺口。
 
 ### Regulations surrounding Responsible AI
 
-“Regulations surrounding Responsible AI”从风险场景、受影响人群、控制层、测试、人工复核和事件响应建立证据。模型层、元提示层和界面层各有独立职责与失败样本，法规引用记录适用地区和日期，不用合规口号替代技术验证。
-
-针对“Regulations surrounding Responsible AI”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+法规不是一条跨地区通用的字符串，而是适用范围、时间、数据类型、风险类别和责任主体的组合。保存法规来源、适用地区和日期，将每条要求连接到测试与记录；当前法律或服务规则变化时，重新做范围审查。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+Summary 的执行顺序是：先登记影响和风险，再为模型、元提示和界面分配控制，随后用分群测例、红队样例和人工复核验证，最后把事件、通知、回退和版本写入发布台账。责任 AI 的结论必须能回答谁受影响、证据在哪里、下一步是什么。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+References 的历史结构参考 Valentina Alto 的 Packt 原书出版信息；本章加入的风险台账、三层实验、分群评测和事件回退是独立重写。当前法规、服务政策和模型能力会变化，运行项目应以适用地区的最新官方资料和内部审批记录为准。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类责任 AI 证据
 
-## 六类应用证据
+### 影响与风险证据
 
-### 任务与来源合同
+记录用户群体、场景、影响类型、严重度、已知不确定性和负责人。风险登记不是一次性文档；模型、数据、工具或界面变化时，重新检查受影响人群和控制是否仍然覆盖。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 分群与红队证据
 
-### 模型与提示合同
+保存正常、边界、越狱、隐私、越权、偏见和过度拒答样例，并标记语言、地区、身份或任务分组。每个失败连接到预期阻断层、实际分叉层和修复动作，平均值不能覆盖尾部。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 数据与同意证据
 
-### 数据、检索与状态合同
+记录输入来源、用户同意、敏感字段、访问者、保留期限和删除请求。只收集完成任务所需数据；日志脱敏后仍要保留能够调查事件的请求 ID，做到最小化与可追溯并存。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 控制与人工复核证据
 
-### 工具、代码与权限合同
+记录模型过滤、元提示版本、界面校验、规则门、人工查看者、决定理由和升级路径。人工复核不是点击确认，而是能看到原始证据、风险等级和可回退选项。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 法规与政策证据
 
-### 评测、安全与成本合同
+将适用地区、日期、法规或服务政策条款映射到测试、数据和发布条件。政策变化时重新评估范围，不能用旧声明覆盖新部署、不同地区或新的高影响用途。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 事件与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存事件时间线、受影响请求、外泄范围、通知、修复、回退版本和复盘结论。线上先停止高风险动作，再通知负责人和受影响方；修复后重放原失败与边界样例。
 
 ## 容易踩的坑
 
-**现象 →** 加了“请勿输出有害内容”元提示，越狱测试仍被绕过。
-**原因 →** 只在元提示层加了一句口号，模型层和界面层无校验，分隔符逃逸直接注入。
-**修法 →** 三层各设独立测试样本，记录首个分叉层，不靠单层兜底。
+<Callout type="trap">**现象：**安全评测平均通过，某个高影响群体的拒答率却翻倍；**原因：**测试没有分群，尾部被平均分隐藏；**修法：**按人群和场景报告通过、拒答、误伤和人工升级，任一高影响缺口都暂停。</Callout>
 
-**现象 →** 安全阈值调高后，过度拒答率上升，正常问题被误伤。
-**原因 →** 阈值一刀切，没区分风险等级与受影响人群。
-**修法 →** 按场景分级，保留人工复核与降级路径，监控过度拒答指标。
+<Callout type="trap">**现象：**元提示写了安全要求，注入文本仍让工具执行越权动作；**原因：**把提示当作唯一边界，外部参数和权限没有确定性检查；**修法：**工具白名单、参数模式和界面确认独立存在，并记录首个拦截层。</Callout>
 
-**现象 →** 合规声明齐全，监管抽查仍不通过。
-**原因 →** 用合规口号替代技术验证，没记录法规适用地区与日期。
-**修法 →** 每条法规绑定地区、日期与测试证据，可审计可回放。
+<Callout type="trap">**现象：**发生隐私事件后，团队无法判断哪些请求被读取；**原因：**没有保留同意、访问、输入范围和事件时间线；**修法：**用请求 ID 连接脱敏日志、工具调用、显示和回退，先止损再通知与修复。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 责任AI分模型、元提示、界面三层各负其责
-- 每层配独立失败样本与首个分叉检测
-- 法规引用记录适用地区与日期，不靠口号
-- 监控偏见、有害性、隐私、越权与过度拒答
-- 三层控制可审计、不互相抵消才放行
+- 先登记受影响人群、风险场景、控制责任和证据缺口。
+- 模型、元提示和界面各有独立的阻断、测试和回退。
+- 分群、红队、隐私、越权和过度拒答不能被平均分掩盖。
+- 法规记录适用地区和日期，并连接到具体测试与发布条件。
+- 事件台账保存请求、影响、通知、修复和上一版回退。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 责任AI的三层架构各自承担什么职责？
+**问题 1：概念理解。** 为什么 Responsible AI 需要模型、元提示和界面三层控制？
 
 <Answer>
 
-模型层管权重与输出概率，元提示层管任务边界与模板约束，界面层管用户输入校验、降级与人工复核；三层独立测试，任一失败都记录首个分叉层。
-
+模型可能产生偏见或有害输出，元提示可能被注入或越权，界面可能泄露输入或隐藏不确定性。三层分别做安全评测、任务边界和用户确认，任一层失守都能被其他层发现或阻断，但不能用一层的分数替代另外两层。
 </Answer>
 
-**问题 2：实践应用。** 如何证明安全控制没有导致过度拒答？
+**问题 2：实践应用。** 如何设计一个能发现过度拒答的评测集合？
 
 <Answer>
 
-在同一评测集上同时报告有害性拦截率与正常问题通过率，按风险等级分级，保留尾部分布与人工复核样本，二者不可互相抵消。
-
+同时加入明确有害、边界可答和正常任务，按语言、地区、身份与用途分组，逐样本记录通过、拒答、误伤、理由和人工复核。报告有害拦截率与正常通过率的尾部分布，并设置高影响群体的暂停阈值。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版三层安全校验：给定输入文本，分别在模型、界面层返回是否拦截及原因。
+**问题 3（独立实现）：** 实现一个简化版三层安全门，返回每个拦截层和原因。
 
 <Answer>
 
-```python
-def three_layer_check(text, blocked_words, max_len):
-    reasons = []
-    if any(w in text for w in blocked_words):
-        reasons.append(("model", "命中阻断词"))
-    if len(text) > max_len:
-        reasons.append(("ui", "超长截断"))
-    return {"blocked": len(reasons) > 0, "layer": reasons}
-```
+~~~python
+def three_layer_gate(text, blocked_terms, max_chars, consented):
+    findings = []
+    if any(term in text for term in blocked_terms):
+        findings.append(("model", "命中风险词"))
+    if len(text) > max_chars:
+        findings.append(("ui", "输入超长"))
+    if not consented:
+        findings.append(("ui", "缺少同意"))
+    return {"pass": not findings, "findings": findings}
+~~~
 
+真实系统还要把模板版本、工具权限、分群样例、人工决定、请求 ID 和事件动作写入台账。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-在模型、元提示和用户界面三层落实Responsible AI，并将法规、风险、人工复核、事件记录与回退并入发布门禁。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能按风险场景测试偏见、有害性、隐私、越权与过度拒答，证明三层控制可审计且不互相抵消。
-
+<Glossary>
+  <GlossaryItem term="Impact Assessment">列出受影响人群、风险场景、严重程度和控制责任的记录。</GlossaryItem>
+  <GlossaryItem term="Harm Taxonomy">按风险类型与严重程度组织测试样例和预期动作的方法。</GlossaryItem>
+  <GlossaryItem term="Red Team Case">主动构造越权、注入和边界输入来寻找防线缺口的测试集合。</GlossaryItem>
+  <GlossaryItem term="Human Review">由授权人员查看证据、确认风险并决定继续或停止的步骤。</GlossaryItem>
+  <GlossaryItem term="Data Minimization">只收集、使用和保留完成任务所需数据的约束。</GlossaryItem>
+  <GlossaryItem term="Incident Register">记录事件时间、影响范围、证据、通知和修复动作的台账。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
@@ -295,4 +264,3 @@ def three_layer_check(text, blocked_words, max_len):
   workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
   adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 />
-

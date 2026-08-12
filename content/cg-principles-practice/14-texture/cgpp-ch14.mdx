@@ -3,253 +3,253 @@ title: "The Texture Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 14
-description: "Computer Graphics: Principles and Practice Chapter 14"
+description: "围绕 UV 映射、MipMap 与各向异性采样，建立纹理从材质数据到硬件访问的直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh14TextureLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch14-texture";
 
 <Objectives>
 
-- 能用自己的话解释The Texture Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 14之间的关系是什么？
+- 能推导 UV 坐标插值与 MipMap 层级选择的基本关系，并解释纹理为什么会闪烁或模糊
+- 能修改 TextureViz 的 UV、LOD、各向异性和访问等待，用证据定位纹理质量或吞吐瓶颈
+- 能回答：纹理如何从材质图像经过图形管线采样，在现代硬件上变成片段颜色？
 
 </Objectives>
 
-## 为什么需要The Texture Pipeline
+## 先把纹理想成一张带坐标的材质地图
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Texture Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+纹理不是贴纸被动地盖在模型上，而是一个由坐标、过滤规则和存储层级共同决定的采样系统。几何顶点携带纹理坐标，片段阶段对坐标插值，再从图像中取出与当前表面位置对应的颜色或材质参数。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决“纹理坐标如何对应图像、远近变化时读哪一层、为什么高质量采样会变慢”三个相连的问题。UV 映射建立几何和图像的对应，MipMap 提供不同细节层级，各向异性过滤则在斜视表面上扩大采样覆盖。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+先预测再实验：只移动 UV，纹理图案应沿表面移动而几何不变；只提高 LOD，读取的图像层级应变小而材质语义不变；只增加访问等待，颜色数值不应改变，只是完成时间变长。把坐标、层级和硬件代价分开观察。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：纹理是 Graphics Pipeline 的材质输入
 
-Computer Graphics: Principles and Practice Chapter 14正是这一哲学在特定领域的具体体现。
+在计算机图形学导论中，Graphics Pipeline（图形管线）把顶点属性插值到片段，再由纹理阶段用插值后的坐标读取材质图像。Texture Pipeline（纹理管线）因此连接几何属性、图像存储和片段颜色，而不是一个独立于图形管线的文件加载步骤。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+Graphics Pipeline（图形管线）决定片段坐标在哪里产生，纹理采样决定该坐标访问哪些图像邻居。坐标范围、边界模式、过滤核和颜色空间若不一致，问题可能表现为接缝、闪烁、重复纹理或亮度异常；调试要保留 UV、LOD 和实际采样位置。
+
+### 纹理与纹理坐标
+
+<Term def="可被几何表面采样的一组二维或三维图像数据，通常保存颜色、法线、粗糙度等材质参数。">
+  纹理
+</Term>
+
+<Term def="附着在顶点或片段上的图像坐标，通常用 u、v 表示并在图元内部插值。">
+  纹理坐标
+</Term>
+
+纹理坐标通常在一个规范化区间内描述图像位置。顶点的坐标会随三角形插值到片段，如果三角形的三个顶点坐标顺序错误，纹理就会翻转、拉伸或出现跨边界接缝。地址模式还决定超出区间后是重复、夹紧还是镜像。
+
+对一条边上坐标为 $u_0$ 和 $u_1$ 的两个顶点，位置参数为 $s$ 的片段坐标可写成：
+
+$$
+u(s) = (1-s)u_0 + su_1
+$$
+
+这个式子说明纹理坐标是几何属性的一部分；改变模型位置不会自动改变 UV 拓扑，改变 UV 才会改变纹理图案如何落在表面上。
+
+### 纹理映射与细节层级
+
+<Term def="把几何表面上的纹理坐标对应到图像位置，并根据采样规则取得材质值的过程。">
+  纹理映射
+</Term>
+
+纹理映射的难点在于屏幕像素与纹理像素的覆盖比例会随距离、视角和投影变化。近处表面可能一个片段对应多个纹理像素，远处表面则可能许多纹理像素挤进一个片段；固定读取原始大图会产生闪烁、摩尔纹和不稳定的高频细节。
+
+<Term def="为同一纹理预先生成的一组逐级缩小图像，采样时根据纹理在屏幕上的投影大小选择合适层级。">
+  MipMap
+</Term>
+
+可用纹理坐标在相邻片段中的变化率估计层级。若局部投影尺度为 $\rho$，一个简化的层级选择式为：
+
+$$
+L = \log_2 \rho
+$$
+
+这个式子表达“投影越大，所需层级越粗”的趋势；实际系统会在相邻方向分别估计导数，并在层级之间做三线性或各向异性组合。
+
+### 各向异性过滤与纹理缓存
+
+<Term def="针对斜视或拉长的纹理投影，沿覆盖区域的多个方向采样并加权汇聚，以减少锯齿和闪烁的过滤策略。">
+  各向异性过滤
+</Term>
+
+<Term def="保存近期纹理块或采样数据的高速存储区域，利用相邻片段的访问局部性降低重复读取的等待。">
+  纹理缓存
+</Term>
+
+各向异性过滤可以改善斜视地面的清晰度，但通常要访问更多纹理样本。若这些样本沿连续方向排列，纹理缓存能复用数据；若 UV 跳跃很大或纹理布局不利于局部访问，过滤质量的提高会直接暴露带宽和延迟成本。
+
+下面的伪代码把坐标、层级和过滤器分开。每一步都可以单独记录，避免把“UV 错位”和“缓存未命中”混成同一种问题。
+
+```cpp
+Vec2 uv = interpolate(vertexUv, fragmentBarycentrics);
+float lod = estimateMipLevel(uvDerivatives);
+TextureSample sample = textureSample(texture, uv, lod, filterMode);
+return shadeWithMaterial(sample);
+```
+
+## Light（光）：纹理保存能量响应或材质参数
+
+Light（光）在纹理阶段之后或片段着色阶段使用纹理中的颜色、法线和材质参数。纹理本身并不自动等于光照结果：同一张颜色纹理放在不同光源和反射率下，会得到不同的最终能量。
+
+### Radiometry（辐射度量）与 Reflectance（反射率）
+
+Radiometry（辐射度量）描述光能量按功率、面积、方向或立体角分布，Reflectance（反射率）描述表面保留或反射入射能量的比例。纹理可以存储反射率、法线或其他材质响应，纹理映射负责准确取值，光照阶段再解释这些值的物理意义。
+
+固定 UV、LOD 和过滤规则后，只改变光源能量，再只改变纹理中的反射率。如果纹理图案位置变化，先查坐标和地址模式；如果图案位置正确但亮度变化，才检查辐射度量、反射率和颜色空间。
+
+## Modern Graphics Hardware：纹理质量与访问吞吐互相牵制
+
+Modern Graphics Hardware（现代图形硬件）通常能并行执行大量纹理请求，并依靠纹理缓存复用相邻片段的访问。更高的各向异性级别、更大的纹理和更复杂的过滤核会扩大每个片段的访问范围，缓存失配时尤其容易出现尾部等待。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（并行性）让许多片段同时发起纹理采样，memory latency（内存延迟）则表示采样请求等待纹理块返回的时间。并行任务很多并不意味着每个请求都更快：如果 UV 访问分散，执行单元会一起等待缓存或显存。
+
+观察纹理性能时至少记录 UV 局部性、MipMap 命中层级、过滤样本数、缓存命中和等待比例。先确定画面质量是否需要提高过滤级别，再用访问证据判断是否应该调整纹理布局或采样批次。
+
+## 三步实验：从 UV 坐标走到纹理吞吐
+
+每一步先预测一个坐标、层级或完成数，再只改变相关滑块。三个视角共享同一个 TextureViz，但分别展示纹理映射、MipMap 层级和采样缓存队列。
+
+<Stepper>
+  <Step title="第一步：移动 UV 坐标">
+    先预测：把 UV 偏移从 0.50 调到 0.80，图案会移动还是几何会旋转？选择“纹理映射”，观察采样点和 repeat 边界模式。
+
+    <CgppCh14TextureLab />
+
+  </Step>
+  <Step title="第二步：选择 MipMap 层级">
+    先预测：把 LOD 从 0 调到 3，远处表面的高频细节会更清楚还是更稳定？选择“MipMap 层级”，比较金字塔中被选中的预过滤图。
+
+    <CgppCh14TextureLab />
+
+  </Step>
+  <Step title="第三步：检查采样缓存">
+    先预测：提高各向异性过滤并同时增加访问等待时，完成请求会不会同步增加？选择“采样与缓存”，比较已完成请求、等待请求和局部性代价。
+
+    <CgppCh14TextureLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：纹理接缝一定是图像文件坏了">
+  现象 → 模型边界出现突然跳变或纹理重复位置不对，但图像文件单独查看正常。
+
+原因 → 顶点 UV 顺序、地址模式或跨接缝的坐标范围不一致，采样位置已经落到了错误邻域。
+
+修法 → 先显示 UV、检查插值方向和 repeat 或 clamp 设置，再检查纹理文件内容。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：读取最高分辨率就最清晰">
+  现象 → 远处地面闪烁、摩尔纹明显，继续固定读取原始大图却没有改善稳定性。
 
-### 设计动机
+原因 → 屏幕一个像素覆盖了过多纹理细节，未预过滤的高频信息发生混叠。
 
-Vulkan 把The Texture Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先根据导数选择 MipMap 层级，再比较三线性和各向异性过滤的质量与代价。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Texture Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Texture Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Texture Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：提高各向异性不会影响性能">
+  现象 → 斜视表面更清楚了，但纹理带宽、等待比例和帧时间一起上升。
+
+原因 → 更多方向样本扩大了纹理请求，访问局部性不足时 memory latency（内存延迟）会抵消 Parallelism（并行性）。
+
+修法 → 先测量缓存命中、样本数和 UV 局部性，再选择满足画质目标的最低过滤级别。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 纹理坐标把几何表面和材质图像对应起来，地址模式决定边界之外如何取值。
+- MipMap 通过预过滤层级减少缩小时的高频混叠，各向异性过滤改善斜视表面但增加样本访问。
+- 辐射度量和反射率解释纹理材质值的能量语义，纹理映射本身不等于最终光照。
+- 现代图形硬件能并行处理纹理请求，纹理缓存和内存延迟决定实际吞吐。
+- 调试顺序应是“UV 正确 → LOD 合适 → 过滤稳定 → 缓存可控”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Texture Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Texture Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Texture Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：判断 UV 插值。** 一条边的两个顶点纹理坐标为 `u₀=0.20` 和 `u₁=0.80`，片段位置参数为 `s=0.25`。求片段的 `u`，并说明改变 UV 不会改变什么。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  `u = (1 - 0.25) × 0.20 + 0.25 × 0.80 = 0.35`。改变 UV
+  会改变纹理图案在表面上的对应位置，但不会改变模型的几何轮廓或顶点数量。
 </Answer>
 
+**问题 2：修改 MipMap 实验。** 把 TextureViz 的 LOD 从 `0` 调到 `3`，解释为什么远处纹理通常更稳定，并指出它牺牲了什么。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  更粗的预过滤层减少了屏幕像素覆盖的大量高频细节，因此闪烁和混叠更少；代价是远处图案的细节和锐度降低，且层级选择仍要匹配投影尺度。
+</Answer>
+
+**问题 3：定位采样瓶颈。** 各向异性级别提高后画面更清楚，但纹理缓存命中下降。你会先继续提高过滤还是改善访问局部性？
+
+<Answer>
+  先改善 UV
+  访问局部性和纹理布局，并比较样本数、缓存命中和等待比例；只有质量仍不足且带宽预算允许时，才继续提高各向异性级别。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="纹理">
+  可被几何表面采样的一组图像数据，通常保存颜色、法线或材质参数。
+</GlossaryItem>
+
+<GlossaryItem term="纹理坐标">
+  附着在顶点或片段上的图像坐标，通常用 u、v 表示并在图元内部插值。
+</GlossaryItem>
+
+<GlossaryItem term="纹理映射">
+  把几何表面的纹理坐标对应到图像位置并取得材质值的过程。
+</GlossaryItem>
+
+<GlossaryItem term="MipMap">
+  为同一纹理预先生成的一组逐级缩小图像，采样时按投影大小选择层级。
+</GlossaryItem>
+
+<GlossaryItem term="各向异性过滤">
+  针对斜视纹理投影沿多个方向采样并加权，以减少锯齿和闪烁的策略。
+</GlossaryItem>
+
+<GlossaryItem term="纹理缓存">
+  保存近期纹理块或采样数据的高速区域，利用访问局部性降低重复读取等待。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 14 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

@@ -3,253 +3,242 @@ title: "The Display Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 11
-description: "Computer Graphics: Principles and Practice Chapter 11"
+description: "围绕扫描输出、颜色传递与刷新同步，建立从渲染图像到显示设备的时间直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh11DisplayLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch11-display";
 
 <Objectives>
 
-- 能用自己的话解释The Display Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 11之间的关系是什么？
+- 能推导刷新周期与伽马编码的基本关系，并解释显示端为什么要区分线性值和可见值
+- 能修改 DisplayViz 的扫描进度、伽马、刷新率和延迟，用证据定位撕裂或停顿来源
+- 能回答：渲染完成的图像如何经过扫描输出和显示转换，在正确的刷新时刻到达面板？
 
 </Objectives>
 
-## 为什么需要The Display Pipeline
+## 先把显示想成一场有节拍的交接
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Display Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+渲染器写完一张图，并不意味着观察者已经看到它。图像还要从后缓冲交给显示控制器，经过颜色传递，再按面板的刷新节拍逐行或逐块读取；任意一段落后，都可能出现停顿、撕裂或亮度不一致。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决“图像怎样被读出、数值怎样变成光、帧怎样赶上刷新”三个相连的问题。扫描输出说明空间顺序，颜色传递说明数值表示，刷新同步说明时间顺序；三者共同构成显示端的显示管线。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+先预测再实验：如果扫描线停在半帧，屏幕应同时包含两个时间点的内容；如果只改变伽马，物体的几何和深度不应移动；如果呈现延迟超过刷新周期，帧队列会堆积。把空间、颜色和时间证据分开，才能避免把显示问题误诊为渲染问题。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：从 Graphics Pipeline 到面板扫描
 
-Computer Graphics: Principles and Practice Chapter 11正是这一哲学在特定领域的具体体现。
+在计算机图形学导论中，Graphics Pipeline（图形管线）把几何和片段变成写入帧缓冲的图像。显示端接过这个结果后，还要经历获取后缓冲、颜色编码、扫描输出和面板刷新；因此“渲染完成”只是图形管线与显示管线之间的交界点。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+Graphics Pipeline（图形管线）关注如何生成像素，显示管线关注如何按设备时序消费像素。前者可以在 GPU 上大规模并行，后者受到扫描顺序、刷新率、面板响应和同步策略约束；调试时必须标注一帧在哪个交接点停住。
+
+### 显示管线与扫描输出
+
+<Term def="把已完成的渲染图像转换、排队并按显示设备时序送出的一组阶段；它连接帧缓冲与面板。">
+  显示管线
+</Term>
+
+显示管线通常从后缓冲获取一张已完成图像，再交给显示控制器。控制器可能按从上到下、从左到右的顺序扫描，也可能把图像分成多个传输块；无论具体接口如何，图像内容和读取时刻必须有明确关系。
+
+<Term def="显示控制器把图像中的行或块依次传送到面板的过程；读取过程可能与下一帧渲染并行发生。">
+  扫描输出
+</Term>
+
+扫描输出不是一次瞬间复制。假设显示器正在读取当前帧，而渲染器同时覆盖同一个后缓冲，面板可能在一帧内读到前后两种内容，这就是撕裂的空间表现。双缓冲或交换链的意义，就是让显示器读取稳定图像，渲染器写入另一张图。
+
+### 刷新周期与垂直同步
+
+<Term def="在显示器完成一轮刷新时，协调渲染图像交换的机制；它避免在扫描中途替换正在读取的帧。">
+  垂直同步
+</Term>
+
+显示器刷新率为 $f$ 时，一帧可用的刷新周期为：
+
+$$
+T_{\text{frame}} = \frac{1}{f}
+$$
+
+这个关系说明 60 Hz 大约给每帧 16.7 ms，144 Hz 则只有约 6.9 ms；渲染和呈现都要在对应节拍内完成，超过周期就会等待下一次可用交接点。
+
+<Term def="显示器每秒开始并完成的刷新轮数，以 Hz 表示；它决定每帧可用的时间窗口。">
+  显示刷新率
+</Term>
+
+垂直同步可以牺牲一部分即时性来保护帧边界，也可以通过可变刷新率让面板适应渲染节奏。选择策略时要同时看输入响应、呈现延迟和帧时间稳定性，不能只用平均帧率判断体验。
+
+### 颜色传递与伽马编码
+
+<Term def="把渲染阶段的线性光能值映射到显示设备使用的非线性数值范围的编码过程。">
+  伽马编码
+</Term>
+
+渲染中的线性值适合做光照计算，面板输入则常使用非线性编码来更有效地分配有限的数值精度。一个简化模型是：
+
+$$
+C_{\text{display}} = C_{\text{linear}}^{1/\gamma}
+$$
+
+这个模型说明调整伽马会改变可见亮度分布，却不会改变物体的位置或深度；实际系统还可能使用分段传递函数和色彩管理配置。
+
+Light（光）在片段阶段提供能量，Radiometry（辐射度量）描述能量如何按功率、面积和方向分布，Reflectance（反射率）描述材质保留多少入射能量。显示端通常不重新推导这些物理量，而是把它们已经形成的线性颜色转换成面板可用的信号。
+
+固定光源、反射率和帧缓冲内容后，只改变伽马编码。若几何边界和深度不变但亮度阶调改变，问题属于颜色传递；若颜色数值正确却出现上一帧或半帧，问题更可能在扫描输出和同步。
+
+## Modern Graphics Hardware：并行渲染还要服从显示节拍
+
+Modern Graphics Hardware（现代图形硬件）可以并行完成片段着色、颜色写入和部分传输，但显示控制器的扫描顺序仍然是有时间方向的。GPU 可以很快生成多张候选帧，却不能让一个面板在同一刷新时刻完整消费所有帧。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（并行性）帮助图形硬件在刷新周期前完成更多独立工作，memory latency（内存延迟）则会推迟纹理、帧缓冲或交换队列的可用时间。渲染已经完成不等于图像已经呈现，队列等待、显示传输和面板响应都可能成为最终延迟的一部分。
+
+观察显示性能时至少记录 GPU 完成时间、交换图像获取时间、刷新周期、队列深度和扫描等待。帧时间尖峰可能来自内存延迟，也可能来自错过垂直同步窗口；只有把这些时间线画在一起，才能判断是吞吐不够还是交接策略过于保守。
+
+下面的伪代码展示一个安全的交接顺序：先等待可用图像，再提交渲染结果，最后在允许的刷新点呈现。具体 API 的名称会随平台变化，但“获取—写入—提交—呈现”的顺序必须保持。
+
+```cpp
+image = acquireNextImage(swapchain);
+renderTo(image);
+submit(graphicsQueue, imageReady, renderDone);
+present(displayQueue, renderDone, image);
+```
+
+## 三步实验：从扫描行走到刷新同步
+
+每一步先预测一个时间点或颜色值，再只改变对应滑块。三个视角共享同一个 DisplayViz，但分别呈现空间扫描、颜色传递和帧队列，让显示端的三个责任边界都可观察。
+
+<Stepper>
+  <Step title="第一步：观察扫描输出">
+    先预测：把扫描进度停在中间，显示区域会不会只包含一帧？选择“扫描输出”，观察扫描线和已送出的行，解释为什么后缓冲不能在读取途中被覆盖。
+
+    <CgppCh11DisplayLab />
+
+  </Step>
+  <Step title="第二步：比较线性与显示值">
+    先预测：把伽马从 2.20 调低，画面亮度会怎样变化？选择“颜色传递”，只改变伽马，观察输入能量、编码曲线和显示值之间的关系。
+
+    <CgppCh11DisplayLab />
+
+  </Step>
+  <Step title="第三步：检查刷新窗口">
+    先预测：把呈现延迟调到高于一个刷新周期，帧队列会发生什么？选择“刷新同步”，比较队列长度和 VSync 判定，区分渲染吞吐与显示节拍。
+
+    <CgppCh11DisplayLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：撕裂说明几何生成错误">
+  现象 → 三角形形状在屏幕中间出现水平断层，断层上下像来自不同时间点。
+
+原因 → 扫描输出读取图像时，渲染器覆盖了正在被显示控制器读取的缓冲，帧边界没有被保护。
+
+修法 → 先检查双缓冲、交换图像和垂直同步时机，再检查几何或片段着色。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：调伽马能修复光照能量错误">
+  现象 → 画面整体变亮或变暗，便直接改变伽马来补偿局部材质和光源问题。
 
-### 设计动机
+原因 → 伽马编码只改变线性颜色到显示值的表示，不能替代 Light（光）、辐射度量或反射率的计算。
 
-Vulkan 把The Display Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先在线性空间核对光照和材质，再单独验证颜色传递曲线与显示配置。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Display Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Display Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Display Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：平均帧率高就不会卡顿">
+  现象 → 平均帧率达标，但偶尔出现停顿、重复帧或输入响应突然变慢。
+
+原因 → 某些帧错过刷新窗口，memory latency（内存延迟）或交换队列等待把延迟集中到少数时刻。
+
+修法 → 记录每帧完成时间、刷新周期和队列深度，优先处理尾部延迟而不是只提高平均 Parallelism（并行性）。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 显示管线把已完成的帧缓冲交给扫描输出、颜色传递和面板刷新。
+- 扫描输出具有空间顺序，覆盖正在读取的缓冲会造成撕裂。
+- 垂直同步保护帧边界，显示刷新率决定每帧可用的时间窗口。
+- 伽马编码把线性光能值转成显示值，不替代光照、辐射度量或反射率计算。
+- 现代图形硬件的并行性不能消除内存延迟和显示设备的固定节拍。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Display Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Display Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Display Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：计算刷新窗口。** 显示器刷新率为 `60 Hz` 和 `144 Hz` 时，每帧理论上分别有多少毫秒？如果某帧渲染需要 `10 ms`，它在哪个刷新率下更容易错过窗口？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  60 Hz 的周期约为 `16.7 ms`，144 Hz 的周期约为 `6.9 ms`。`10 ms` 的渲染时间在
+  144 Hz 下超过单个窗口，更容易等待下一次刷新；还要加上提交和呈现的时间。
 </Answer>
 
+**问题 2：修改颜色传递实验。** 把 DisplayViz 的伽马从 `2.20` 调到 `1.40`，说明哪些证据会变化，哪些证据不应变化。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  显示值和亮度阶调会变化，因为同一个线性输入经过了不同的非线性编码；几何位置、扫描行数、深度关系和光源的线性能量不应因此改变。
+</Answer>
+
+**问题 3：定位刷新卡顿。** 平均帧率稳定，但每隔几帧就重复一次画面。你会先调高并行性、改变伽马还是检查呈现队列？
+
+<Answer>
+  先检查呈现队列、交换图像获取和刷新同步，因为重复帧说明图像没有在刷新窗口及时交接；并行性和伽马分别属于渲染吞吐与颜色表示，不能直接解释重复呈现。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="显示管线">
+  把已完成的渲染图像转换、排队并按显示设备时序送出的一组阶段。
+</GlossaryItem>
+
+<GlossaryItem term="扫描输出">
+  显示控制器把图像中的行或块依次传送到面板的过程。
+</GlossaryItem>
+
+<GlossaryItem term="垂直同步">
+  在显示器完成一轮刷新时协调图像交换的机制，用来保护帧边界。
+</GlossaryItem>
+
+<GlossaryItem term="显示刷新率">
+  显示器每秒完成的刷新轮数，以 Hz 表示并决定每帧时间窗口。
+</GlossaryItem>
+
+<GlossaryItem term="伽马编码">
+  把线性光能值映射到显示设备非线性数值范围的编码过程。
+</GlossaryItem>
+
+<GlossaryItem term="帧延迟">
+  从渲染输入或帧完成到显示设备真正呈现之间经历的时间。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 11 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

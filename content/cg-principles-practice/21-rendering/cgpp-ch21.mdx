@@ -3,253 +3,223 @@ title: "The Rendering Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 21
-description: "Computer Graphics: Principles and Practice Chapter 21"
+description: "围绕几何输入、可见性、光照采样与硬件吞吐，建立从场景数据到屏幕输出的可验证渲染直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh21RenderingLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch21-rendering";
 
 <Objectives>
 
-- 能用自己的话解释The Rendering Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 21之间的关系是什么？
+- 能按几何、可见性、光照与输出四个阶段解释一个片段如何穿过 Graphics Pipeline（图形管线）
+- 能修改 RenderViz 的采样、光能量、反射率、任务数和访问等待，用证据区分图像错误与吞吐瓶颈
+- 能回答：渲染阶段如何连接 Light（光）的能量解释与 Modern Graphics Hardware（现代图形硬件）的并行执行？
 
 </Objectives>
 
-## 为什么需要The Rendering Pipeline
+## 先把渲染想成一条有证据的生产线
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Rendering Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+屏幕上的一个像素不是场景数据的直接拷贝。它先获得几何输入，再经过可见性筛选，随后用光照模型解释留下的片段，最后被写入目标缓冲区。每一步都有自己的输入、输出和可观测指标；画面异常时，应该沿着这条链回放，而不是直接把所有参数一起调亮。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章把 The Rendering Pipeline 组织成三个可检查问题：哪些几何最终可见，光能量如何被表面保留，以及现代图形硬件怎样并行处理这些工作。先预测：只增加采样数量，物体轮廓会变宽还是有效样本会变多？只改变 Reflectance（反射率），几何位置会移动还是输出响应会变化？只增加 memory latency（内存延迟），颜色会改变还是完成任务会减少？
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：Graphics Pipeline 是输入到输出的契约
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+计算机图形学导论中最重要的工程习惯之一，是把 Graphics Pipeline（图形管线）视为一份阶段契约：前一阶段交付的数据必须说明坐标空间、覆盖范围和生命周期，后一阶段才可以据此工作。一个常见的抽象顺序是几何处理、可见性判断、片段着色和输出合成。
 
-Computer Graphics: Principles and Practice Chapter 21正是这一哲学在特定领域的具体体现。
+### 几何输入与坐标空间
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="把顶点、法线、材质引用和拓扑数据交给后续渲染阶段的结构化输入。">
+  几何输入
+</Term>
+
+几何输入包含位置、法线、纹理坐标和索引。模型空间中的顶点经过变换后进入世界空间，再由相机变换进入观察关系；如果法线仍停留在另一个空间，后续光照即使公式正确也会产生错误方向。渲染阶段首先要确认的不是颜色，而是每一份数据的空间语义。
+
+### 可见性与片段预算
+
+<Term def="决定哪些几何覆盖当前像素并值得继续计算的过程，包含深度、遮挡和采样覆盖等证据。">
+  可见性
+</Term>
+
+可见性把大量潜在几何收缩成一组有效片段。深度测试可以拒绝被遮挡的片段，背面剔除可以减少不需要处理的面，采样覆盖则决定边缘像素的证据是否充分。可见性并不负责解释材质颜色；它的职责是给光照阶段一份有边界的工作清单。
+
+若一个物体轮廓缺口只出现在边缘，先记录覆盖样本和深度顺序，再决定是否修改几何。若整个物体位置都偏移，应回到变换和相机输入检查，而不是提高采样密度掩盖坐标错误。
+
+## Light（光）：把入射能量带到当前片段
+
+Light（光）可以在世界空间、视图空间或局部空间中定义，但参与计算的方向和位置必须与片段数据处于同一坐标语义。光源方向决定能量从哪里来，距离和方向衰减决定能量到达多少，表面法线则决定这份能量以什么角度到达。
+
+<Term def="在渲染阶段中把几何、光源和材质状态组合为片段颜色的计算过程。">
+  光照
+</Term>
+
+光照不是一个“把颜色调亮”的按钮。Radiometry（辐射度量）负责描述功率、面积、方向和立体角等能量量纲，Reflectance（反射率）负责描述表面保留入射能量的比例。固定几何与采样后，改变光能量应主要改变亮度；固定光能量后，改变反射率应主要改变表面响应，这两个预测可以在实验中分别验证。
+
+### Radiometry（辐射度量）与 Reflectance（反射率）
+
+辐射度量的价值是让“更亮”变成可追踪的能量变化，而不是凭视觉猜测。对于一个简化的片段，可把输出响应写成：
+
+$$
+L_{out}=V\cdot E_{light}\cdot R_{surface}
+$$
+
+其中 $V$ 表示可见且有效的样本比例，$E_{light}$ 表示到达片段的光能量，$R_{surface}$ 表示表面反射率。这个模型不是完整的材质方程，却足以帮助定位：轮廓不动而亮度变化，优先查能量或反射率；有效样本减少而平均响应稳定，优先查可见性和采样覆盖。
+
+下面的伪代码保留了阶段边界，让每种证据可以单独记录：
+
+```cpp
+Geometry geometry = fetchGeometry(scene, camera);
+VisibleSet visible = resolveVisibility(geometry, depthBuffer, samples);
+Radiance radiance = evaluateLight(visible, light, radiometry);
+Color frame = applyReflectance(radiance, material.reflectance);
+present(frame);
+```
+
+## Modern Graphics Hardware：渲染工作被拆成许多任务
+
+Modern Graphics Hardware（现代图形硬件）擅长批量执行顶点、片段和纹理访问。一个阶段如果有许多相互独立的片段，就可以把它们分配给多个执行单元；但任务之间共享的纹理、深度缓冲和材质表仍会形成等待。硬件吞吐因此不是“核心越多越快”的单变量答案，而是工作量、局部性和同步边界的共同结果。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+<Term def="让多个相互独立的渲染任务同时推进的执行能力；它提高吞吐，但不能取消数据依赖。">
+  并行性
+</Term>
+
+Parallelism（并行性）适合同时处理不同像素、实例或片段。memory latency（内存延迟）表示任务发出纹理、深度或材质访问后，等待数据返回的时间。若所有任务都读取同一份远端数据，继续扩大并行宽度可能只会增加排队；若数据局部性良好，更多并行任务才可能转化为有效吞吐。
+
+性能诊断应同时记录片段数量、批次大小、缓存命中、带宽和等待比例。先确认光照与可见性没有产生无效工作，再调整任务布局；否则“优化”可能只是把错误更快地算完。
+
+## 三步实验：从管线阶段走到硬件证据
+
+每一步先写下预测，再只改变一个相关控制。三个视角共享同一个 RenderViz，但分别呈现阶段接力、光照采样和硬件任务队列。
+
+<Stepper>
+  <Step title="第一步：逐阶段回放">
+    先猜一猜：从几何输入走到输出时，哪个阶段最适合拒绝被遮挡的片段？选择“渲染流程”，使用单步和进度条观察每个阶段的输入与证据。
+
+    <CgppCh21RenderingLab />
+
+  </Step>
+  <Step title="第二步：拆开采样与材质">
+    先预测：采样数量增加时，Light（光）的能量会自动变强吗？选择“采样与光照”，先固定反射率，再分别改变采样和光能量。
+
+    <CgppCh21RenderingLab />
+
+  </Step>
+  <Step title="第三步：观察任务等待">
+    动手试：把片段任务和访问等待都调高，记录完成任务、等待任务和有效吞吐。选择“硬件吞吐”，判断 Parallelism（并行性）是否抵消了 memory latency（内存延迟）。
+
+    <CgppCh21RenderingLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：采样越多，轮廓错误就会消失">
+  现象 → 采样数量上升后，边缘仍然出现断裂，帧时间却增加。
+
+原因 → 采样只能增加覆盖证据，不能修复错误的顶点位置、深度顺序或坐标空间；可见性阶段收到的几何若已错误，更多样本只会重复观察错误。
+
+修法 → 先冻结材质与光能量，检查几何变换、深度和有效样本位置，再判断是否需要提高采样密度。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：画面变暗就只调高 Light（光）">
+  现象 → 调高光源能量后，局部仍然反常地暗，或不同视角的亮度变化方向不一致。
 
-### 设计动机
+原因 → 法线和光源可能不在同一空间，或者 Reflectance（反射率）和 Radiometry（辐射度量）的单位语义被混在一起；能量增益无法修正方向错误。
 
-Vulkan 把The Rendering Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 记录片段法线、入射方向、到达能量和表面反射率，逐项固定后再比较输出响应。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Rendering Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Rendering Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Rendering Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：扩大 Parallelism（并行性）必然降低帧时间">
+  现象 → 执行单元增加后，完成任务数没有按比例上升，等待任务和带宽压力反而变大。
+
+原因 → 任务共享纹理、深度或材质数据，memory latency（内存延迟）成为关键路径；更多并行工作不能取消数据依赖与访问排队。
+
+修法 → 先测缓存局部性、访问批次和等待比例，再通过数据布局、可见性裁剪或任务分块减少无效访问。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- Graphics Pipeline（图形管线）是一份阶段契约：几何输入先被处理，再经过可见性、光照和输出阶段。
+- 可见性决定哪些片段值得继续计算，采样覆盖和深度顺序是可复核的证据。
+- Light（光）带来能量，Radiometry（辐射度量）描述能量语义，Reflectance（反射率）描述表面保留能量的比例。
+- Modern Graphics Hardware（现代图形硬件）可以利用 Parallelism（并行性）批量处理任务，但 memory latency（内存延迟）会限制有效吞吐。
+- 调试顺序应是“几何与空间 → 可见性覆盖 → 能量与反射 → 任务局部性 → 帧输出”，每次只改变一个条件。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Rendering Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Rendering Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Rendering Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：定位阶段责任。** 一个片段的顶点位置正确，但被遮挡的区域仍然执行了大量光照计算。你会先检查哪个阶段？请写出两个可观测证据。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  先检查可见性阶段。可以记录深度测试前后的片段数量、遮挡剔除比例或有效采样覆盖；如果无效片段仍大量进入光照阶段，问题在阶段边界或裁剪策略，而不是先调高
+  Light（光）。
 </Answer>
 
+**问题 2：拆分能量因素。** 固定有效样本比例后，光能量从 0.6 提高到 0.9，表面反射率保持 0.5。用本章的简化模型说明输出响应如何变化；如果几何轮廓也移动，说明还混入了什么问题？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  在 $L_{out}=V\cdot E_{light}\cdot R_{surface}$ 中，$V$ 与 $R_{surface}$
+  不变时，能量项按 0.9 除以 0.6
+  的比例提高，输出应随之变亮。若轮廓也移动，说明几何、相机或可见性输入被同时改变，不能把结果归因于光照。
+</Answer>
+
+**问题 3：判断吞吐瓶颈。** 片段任务从 12 增加到 18，Parallelism（并行性）保持不变，memory latency（内存延迟）明显升高，而有效吞吐下降。请给出一个优先修复动作和一个不应先做的动作。
+
+<Answer>
+  优先检查纹理与深度访问的局部性，减少不可见片段或重排批次，让任务少等待共享数据。不应先盲目扩大并行宽度，因为更多任务可能继续争用同一访问路径，反而放大排队。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="几何输入">
+  进入渲染阶段的顶点、法线、材质引用和拓扑数据集合。
+</GlossaryItem>
+
+<GlossaryItem term="可见性">
+  通过深度、遮挡和采样覆盖判断哪些片段值得继续计算的过程。
+</GlossaryItem>
+
+<GlossaryItem term="光照">
+  将几何、光源和材质状态组合为片段颜色的计算过程。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  让多个相互独立的渲染任务同时推进的执行能力。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 21 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

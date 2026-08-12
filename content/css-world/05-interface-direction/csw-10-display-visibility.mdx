@@ -3,147 +3,241 @@ title: "第 10 章 元素的显示与隐藏"
 type: A
 section: "CSS 世界 · 界面与流向"
 order: 10
-description: "display:none 让元素不生成盒，visibility:hidden 保留布局盒并让可见性可被后代覆盖；隐藏策略还会影响事件命中、可访问树、资源加载和表格 collapse 行为。"
+description: "从盒是否生成出发，区分 display:none、visibility:hidden、后代可见性覆盖和 visibility:collapse 对布局空间、命中、焦点、语义树与资源状态的影响。"
 demo: true
 math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: csw-unit-10
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Attribution } from "@/components/mdx/attribution";
+import { Csw10DisplayVisibilityLab } from "@/components/mdx/css-world/v2/csw-10-display-visibility";
 
-## 直觉起点
+# 第 10 章 元素的显示与隐藏
 
-、、、、共同构成本页的观察坐标。display:none 让元素不生成盒，visibility:hidden
-保留布局盒并让可见性可被后代覆盖；隐藏策略还会影响事件命中、可访问树、资源加载和表格
-collapse 行为。 CSS
-的困难不在属性名称，而在多个声明经过级联、继承和格式化后才产生最终使用值；同一截图可能由完全不同的盒树、固定尺寸或偶然层叠得到，必须向前追踪原因。
+本章以张鑫旭著《CSS 世界》人民邮电出版社版的第 10 章公开目录为身份基线，采用独立教学改写。显示与隐藏不是把像素调成透明：先判断元素是否生成盒，再区分布局空间、绘制、事件命中、键盘焦点、可访问树和资源状态。排查“元素消失”时，先找盒树或计算可见性上的第一个变化。
+
+<Objectives>
+
+- 能从盒生成和正常流位置解释 display:none 与 visibility:hidden 对布局空间的不同影响。
+- 能追踪 visibility 的继承与后代覆盖，并分别核对绘制、事件命中、焦点和可访问性结果。
+- 能在表格行列、资源加载、响应式布局和恢复场景中选择合适的隐藏策略，保留可读和可操作契约。
+
+</Objectives>
+
+## 先追踪一个元素怎样消失
+
+遇到“按钮不见了”“空白仍然占位”或“表格行没有按预期收起”，不要先改 margin、opacity 或固定高度。固定 DOM、内容、容器、视口和样式，先写出元素是否生成盒、是否参与布局，再分别检查绘制、命中、焦点和语义树。动手前先猜：第一个变化来自盒生成、可见性传播，还是交互与表格规则？
+
+<Csw10DisplayVisibilityLab />
+
+## 三个必须先拆开的误区
+
+<Callout type="trap" title="把 display:none 当成透明但仍占位">
+  **现象：** 设置隐藏后后续内容突然上移，或脚本测不到元素尺寸。**原因：**
+  display:none 会让元素不生成参与布局的盒，不是把已有盒涂成透明。**修法：**
+  同时记录盒树、布局占位和测量结果；若必须保留空间，改用适合的可见性策略并单独处理交互。
+</Callout>
+
+<Callout type="trap" title="把 visibility:hidden 当成绝对不可见且后代不能恢复">
+  **现象：** 父级不可见但后代声明 visible
+  后又出现，或者隐藏区域仍影响布局。**原因：** visibility
+  作用于已经生成的盒，且可见性可以沿继承链被后代重新声明。**修法：**
+  分别记录父子计算值、绘制状态和命中状态，不要只看父元素的 CSS 文本。
+</Callout>
+
+<Callout type="trap" title="把 visibility:collapse 当成所有元素的 display:none">
+  **现象：** 表格行、列或普通块在不同浏览器中留下不同空间。**原因：** collapse
+  对表格行列有专门的布局语义，普通元素不能直接套用表格经验。**修法：**
+  明确元素类型，分别检查表格布局、剩余空间、边框和替代内容。
+</Callout>
 
 ## 六阶段机制链
 
-### 1. 决定是否生成盒
+### 1. 判断是否生成盒
 
-固定 DOM、样式表、视口、字体和内容，先预测生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+先读取<Term def="决定元素参与何种盒生成与格式化上下文的显示属性">display</Term>的计算值，再观察盒树和正常流位置。`display:none` 会移除元素的布局盒；其他 display 值可能只改变内部或外部格式化上下文，因此不能仅以“可见/不可见”概括。
 
 ### 2. 计算布局占位
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="使元素不生成盒、通常不占用布局空间的显示计算结果">display:none</Term>
+会让后续兄弟元素重新参与空间分配；保留布局盒的策略则可能维持尺寸、间距和滚动高度。测量
+offset、布局截图和容器高度时，要把“盒存在”和“盒是否绘制”分开。
 
 ### 3. 传播 visibility
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="控制已生成盒是否绘制并参与可见性传播的属性">visibility</Term>
+作用于已经生成的盒。它通常保留布局空间，但 visibility
+的计算值还会沿继承链影响后代，因此要记录父级声明、子级计算值和实际绘制状态。
 
 ### 4. 处理后代覆盖
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="让元素保留布局盒但关闭自身可见绘制的可见性值">
+  visibility:hidden
+</Term>
+并不意味着整个后代树永远不能出现。后代可以声明
+`visibility:visible`，但它仍处于父元素留下的布局空间中；恢复时还要确认焦点顺序、命中区域和读屏语义没有被误判。
 
 ### 5. 核对交互与可访问性
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+视觉隐藏、事件命中、键盘焦点、辅助技术语义和资源加载是不同维度。`display:none` 常会从布局和语义路径中移除节点，visibility 隐藏则需要结合浏览器与辅助技术验证；不能用 opacity 或截图替代语义属性、焦点管理和可操作性检查。
 
 ### 6. 比较 collapse
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。恢复后重放同一输入，并确认窄宽、长内容和方向变化不会暴露旧补丁。
+<Term def="对表格行列等特定布局对象提供折叠语义的可见性值">
+  visibility:collapse
+</Term>
+需要按元素类型单独验收。表格行列可能释放部分空间而保留表格结构，普通元素和不同浏览器的处理不能直接推断；记录表格布局、边框、跨行跨列和回退结果。
 
-## 核心机制深挖
+## 三步可重放实验路线
 
-display 决定盒树中是否存在该元素，visibility 则在盒已经参与布局后控制绘制与命中。visibility 的后代可以重新 visible，因此它不是简单的整体透明。 选择隐藏方案前必须写明是否保留空间、是否允许后代出现、是否可聚焦、是否读屏可见以及是否继续加载资源；只比较视觉结果不够。 实验时把浏览器开发者工具中的盒模型、计算样式和层叠上下文当成观测工具，而不是答案来源；答案必须能从规范规则和当前 DOM 结构推导出来。先删除非必要覆盖，再逐条加入约束，这样才能分辨默认流在做什么、哪条声明真正改变了结果。
+每一步都嵌入本章专属显示与隐藏图。先建立三个正常盒，再注入一个隐藏声明，最后删除故障并在焦点、读屏、表格和窄视口下重放。
 
-## 边界记录模板
+<Stepper>
+  <Step title="建立盒树与空间基线">
+    固定三个兄弟盒、容器高度和一个可聚焦子控件，记录每个盒是否生成、是否占位以及正常流中的后续位置。
 
-每次实验建立六列证据：**DOM 与内容、生成盒与格式化上下文、包含块、计算值与使用值、首个偏离点、恢复结果**。尺寸页增加视口与固有尺寸，内联页增加字体度量和基线，定位页增加脱流空间与四向偏移，层叠页增加上下文树，文本页增加字体回退，界面页增加键盘与书写方向。若最终外观相同但固定宽高、隐藏溢出、不可见焦点或错误层叠仍存在，依然失败。
+    <Csw10DisplayVisibilityLab />
 
-## 出版社目录逐项讲解
+  </Step>
+  <Step title="注入一个隐藏策略">
+    只切换 display:none、visibility:hidden、后代 visible 或 visibility:collapse 中的一项，定位盒生成、绘制或交互的首个变化。
+
+    <Csw10DisplayVisibilityLab />
+
+  </Step>
+  <Step title="恢复并核对交互契约">
+    删除故障声明，重新测试键盘焦点、事件命中、辅助技术语义、资源状态和表格行列，确认布局空间与内容可操作性恢复。
+
+    <Csw10DisplayVisibilityLab />
+
+  </Step>
+</Stepper>
+
+## 出版社目录逐项映射
 
 ### 第10章 元素的显示与隐藏
 
-**第10章 元素的显示与隐藏** 要解决的是：把该目录项放回正常流、盒生成、尺寸计算和格式化上下文，记录输入、约束与浏览器使用值。先预测元素在“决定是否生成盒”前后会生成哪些盒、读取哪个包含块，并记录“display:none”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+本章把“消失”拆成盒生成、布局占位、可见性传播、后代覆盖、交互语义和表格折叠六层。最终截图只是结果证据，必须同时解释盒树、容器尺寸、命中状态、焦点和语义树。
 
 ### 10.1 display与元素的显隐
 
-**10.1 display与元素的显隐** 要解决的是：比较盒是否生成、空间是否保留、后代可见性、事件命中与可访问性。先预测元素在“计算布局占位”前后会生成哪些盒、读取哪个包含块，并记录“visibility:hidden”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+display 决定外部和内部盒如何生成，`display:none` 还会让元素退出正常流。比较显隐时要先看元素类型和格式化上下文，再看空间是否由兄弟元素重新分配；不要用 opacity 变化代替 display 语义。
 
 ### 10.2 visibility与元素的显隐
 
-**10.2 visibility与元素的显隐** 要解决的是：比较盒是否生成、空间是否保留、后代可见性、事件命中与可访问性。先预测元素在“传播 visibility”前后会生成哪些盒、读取哪个包含块，并记录“盒生成”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+visibility 作用于已经生成的盒，隐藏通常不释放它在正常流中占用的空间。绘制不可见不等于所有交互和语义结果都能凭直觉推断，必须结合浏览器的命中、焦点和辅助技术行为验证。
 
 ### 10.2.1 不仅仅是保留空间这么简单
 
-**10.2.1 不仅仅是保留空间这么简单** 要解决的是：把该目录项放回正常流、盒生成、尺寸计算和格式化上下文，记录输入、约束与浏览器使用值。先预测元素在“处理后代覆盖”前后会生成哪些盒、读取哪个包含块，并记录“可见性继承”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+保留空间只是 visibility 的一个结果。父级 hidden、后代 visible、焦点路径、事件监听、图片请求和辅助技术树可能各自有不同状态；恢复实验应该分别记录父子计算值、盒尺寸、可操作性与读屏结果。
 
 ### 10.2.2 了解visibility:collapse
 
-**10.2.2 了解visibility:collapse** 要解决的是：比较盒是否生成、空间是否保留、后代可见性、事件命中与可访问性。先预测元素在“核对交互与可访问性”前后会生成哪些盒、读取哪个包含块，并记录“visibility:collapse”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+collapse 不是对所有元素都等价于 none。表格行列拥有特殊的折叠算法，可能保留表格结构并改变剩余空间；在普通块、列表和不同浏览器中要提供明确回退，不要把一次表格截图推广到所有盒。
 
-## 最小可运行实验
+## 显示与隐藏证据记录
+
+每个样本写六列：**DOM 与内容、生成盒与格式化上下文、布局占位、计算值与绘制状态、首个交互/语义偏离点、恢复结果**。响应式样本增加容器和视口，焦点样本增加 tabindex 与键盘顺序，表格样本增加行列结构和跨行跨列关系。
+
+```text
+freeze = DOM + stylesheet + content + container + viewport
+trace = generated boxes + normal-flow space + visibility inheritance
+change = exactly one display | visibility | descendant | focus | collapse variable
+stop = first divergent box, used size, hit target, focus path, or semantic tree
+replay = remove fault + same inputs + readable, focusable, fluid contract restored
+```
 
 ```css
-.removed[hidden] {
+.removed {
   display: none;
 }
+
 .reserved {
   visibility: hidden;
 }
+
 .reserved > .status {
   visibility: visible;
 }
-@media (prefers-reduced-motion: reduce) {
-  .reserved {
-    transition: none;
-  }
+
+tr.is-collapsed {
+  visibility: collapse;
 }
 ```
 
-```yaml
-book: CSS 世界
-page: csw-10-display-visibility
-public_toc_entries: 5
-sample: normal | boundary | failure | recovery
-first_divergence: null
-box_tree_explained: true
-used_values_explained: true
-fluid_contract_preserved: true
-```
-
-```text
-freeze DOM + stylesheet + viewport + fonts
-predict generated boxes + containing blocks
-change exactly one variable
-stop at the first divergent used value
-restore and replay the same DOM
-assert fluid layout across content and directions
-```
-
-## 常见误区与故障注入
-
-
-## 四类样本与验收
-
-| 样本 | 注入方式                             | 必查证据                       | 通过条件               |
-| ---- | ------------------------------------ | ------------------------------ | ---------------------- |
-| 正常 | 标准字体、常规内容和宽视口           | 盒、包含块、使用值、行框、层级 | 六阶段按预期完成       |
-| 边界 | 窄视口、长内容、替换元素、字体缺失   | min/max、溢出、基线和回退      | 不依赖固定像素补丁     |
-| 失败 | 单一脱流、错误层叠、隐藏焦点或错方向 | 首个偏离点                     | 能定位并解释根因       |
-| 恢复 | 删除故障声明后重放同一 DOM           | 盒树和计算样式                 | 无旧覆盖且流体契约恢复 |
-
-本页签发不变量是：**display:none 让元素不生成盒，visibility:hidden 保留布局盒并让可见性可被后代覆盖；隐藏策略还会影响事件命中、可访问树、资源加载和表格 collapse 行为。** 单次截图不能替代盒生成、格式化上下文、包含块、计算值、使用值与绘制顺序的完整轨迹。
-
 ## 练习
 
+<Exercises>
 
-## 小结
+**问题 1：** 为什么 display:none 会让后续内容上移，而 visibility:hidden 通常不会？
 
-- **display:none**：对应“决定是否生成盒”阶段的核心观察量。
-- **visibility:hidden**：对应“计算布局占位”阶段的核心观察量。
-- **盒生成**：对应“传播 visibility”阶段的核心观察量。
-- **可见性继承**：对应“处理后代覆盖”阶段的核心观察量。
-- **visibility:collapse**：对应“核对交互与可访问性”阶段的核心观察量。
-- 5 个公开目录条目已经全部映射到本页证据链。
-- 盒树、使用值和边界样本共同决定是否通过，最终截图不是唯一证据。
+<Answer>
+  display:none
+  让元素不生成参与布局的盒，正常流会重新分配它原本占用的空间；visibility:hidden
+  通常保留已经生成的盒和布局占位，只关闭绘制。应通过盒树、容器尺寸和后续兄弟位置验证，而不是只看透明度。
+</Answer>
+
+**问题 2：** 父元素 visibility:hidden 时，后代声明 visibility:visible 说明了什么？
+
+<Answer>
+  visibility 会沿继承链影响后代，但后代可以用显式 visible
+  覆盖自己的计算值，因此父级隐藏不等于整棵树永远不可见。后代仍处在父级留下的布局空间中，焦点、命中和语义还要独立检查。
+</Answer>
+
+**问题 3：** 为什么不能把 visibility:collapse 的表格经验直接用于普通块元素？
+
+<Answer>
+  collapse
+  对表格行列有专门的布局语义，可能保留结构并释放特定空间；普通元素和不同浏览器的处理可能不同。验收时应按元素类型记录布局、边框、跨行跨列和回退结果，并准备明确的替代样式。
+</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="display">
+    决定元素参与何种盒生成与格式化上下文的显示属性。
+  </GlossaryItem>
+  <GlossaryItem term="display:none">
+    使元素不生成盒、通常不占用布局空间的显示计算结果。
+  </GlossaryItem>
+  <GlossaryItem term="visibility">
+    控制已生成盒是否绘制并参与可见性传播的属性。
+  </GlossaryItem>
+  <GlossaryItem term="visibility:hidden">
+    让元素保留布局盒但关闭自身可见绘制的可见性值。
+  </GlossaryItem>
+  <GlossaryItem term="visibility:collapse">
+    对表格行列等特定布局对象提供折叠语义的可见性值。
+  </GlossaryItem>
+</Glossary>
+
+## 小结
+
+- display 先决定盒是否生成；display:none 通常让元素退出正常流，后续空间会重新分配。
+- visibility 作用于已生成盒，通常保留布局空间；父级 hidden 与后代 visible 需要沿继承链分别验证。
+- 绘制、事件命中、焦点、辅助技术语义和资源加载不是同一维度，opacity 或截图不能替代它们。
+- visibility:collapse 对表格行列有特殊语义，普通元素和跨浏览器结果必须单独测试并准备回退。
 
 ## 版本与改编边界
 
-本单元以张鑫旭著《CSS 世界》为身份基线。详细目录来自人民邮电出版社出版电子版页面，CSS 2.1 定位由作者官网和图书官网交叉确认；正文是独立教学重构，不复制原书段落。现代浏览器兼容状态需另行按当前 CSS 规范和浏览器文档核验。
+本章以张鑫旭著《CSS 世界》、人民邮电出版社 2017 年版公开目录为身份基线。目录核验参考[得到电子书页面](https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO)、[作者官网](https://www.zhangxinxu.com/)和[CSS 世界站点](https://www.cssworld.cn/)。盒生成与可见性规则参考 [W3C CSS 2.1](https://www.w3.org/TR/CSS21/)、[MDN display](https://developer.mozilla.org/en-US/docs/Web/CSS/display)、[MDN visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) 与 [HTML hidden 属性](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/hidden)。
 
+正文是独立教学改写，不复制原书段落。现代浏览器的辅助技术树、焦点管理、资源加载和 table collapse 行为可能因平台与用户代理变化；迁移时应另建可访问性、响应式和兼容性实验，并保留可操作回退。
+
+<Attribution
+  adaptedFrom="张鑫旭《CSS 世界》人民邮电出版社版第 10 章公开目录与作者公开 CSS 资料"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
+/>

@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-26
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcThreadLifecycleLab,
+  CvcWorkloadSizingLab,
+  CvcThreadShutdownLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-thread-basics";
 
 <Objectives>
 
@@ -32,7 +41,9 @@ Process提供资源与保护容器，thread提供可独立调度的execution str
 
 先预测：100个threads是否能让4核CPU快25倍；等待socket的thread是否消耗CPU；thread priority能否保证deadline；Thread.Sleep是否释放lock；background thread是否会自动Dispose资源；async I/O是否每请求需要一thread；CLR Thread是否与Windows thread一一对应。后文从cost、schedule、lifetime回答。
 
-<Term def="一个process内可由OS独立调度、拥有stack/register/TLS并执行managed/native代码的控制流。">execution thread</Term>
+<Term def="一个process内可由OS独立调度、拥有stack/register/TLS并执行managed/native代码的控制流。">
+  execution thread
+</Term>
 
 ## Why Does Windows Support Threads?
 
@@ -62,16 +73,29 @@ started.Wait();
 
 Dedicated Thread不是默认异步API；thread pool/Task复用workers。只有长期blocking legacy call、affinity、priority、single-owner loop或隔离pool starvation才考虑，并由component持有shutdown。
 
-<Term def="Stack memory、scheduler state、context switching、cache disruption与同步共同组成的线程成本。">thread overhead budget</Term>
+<Term def="Stack memory、scheduler state、context switching、cache disruption与同步共同组成的线程成本。">
+  thread overhead budget
+</Term>
 
 <Stepper>
-  <Step title="切换stack、context switch、TLS与synchronization cost"></Step>
-  <Step title="建立Thread inventory">记录creator、name、stack、affinity、blocking reason、shared state、shutdown和exception owner。</Step>
-  <Step title="压测Oversubscription">逐步增加runnable/blocked threads，观察throughput、tail latency、switch rate和memory。</Step>
+  <Step title="切换stack、context switch、TLS与synchronization cost">
+    <CvcThreadLifecycleLab />
+  </Step>
+  <Step title="建立Thread inventory">
+    记录creator、name、stack、affinity、blocking reason、shared
+    state、shutdown和exception owner。
+    <CvcThreadLifecycleLab />
+  </Step>
+  <Step title="压测Oversubscription">
+    逐步增加runnable/blocked threads，观察throughput、tail latency、switch
+    rate和memory。
+    <CvcThreadLifecycleLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Thread很轻，所以每个Request创建一个最直观">
-高并发会消耗stack、切换和memory；I/O-bound用OS async+Task，CPU-bound用bounded pool/parallelism。Thread-per-request在负载峰值容易崩溃。
+  高并发会消耗stack、切换和memory；I/O-bound用OS async+Task，CPU-bound用bounded
+  pool/parallelism。Thread-per-request在负载峰值容易崩溃。
 </Callout>
 
 ## Stop the Madness
@@ -92,7 +116,9 @@ Frequency scaling放缓后，多核/SMT推动parallelism；Amdahl说明串行部
 
 Thread进入managed code需要runtime cooperative/preemptive GC coordination；blocking native call与P/Invoke影响GC mode/stack. ThreadAbort是Framework legacy且现代不支持，cooperative CancellationToken替代。不要从外部强杀thread。
 
-<Term def="CLR在OS thread上执行managed code并协调GC、exception、ExecutionContext与thread-pool状态的关系。">managed thread runtime</Term>
+<Term def="CLR在OS thread上执行managed code并协调GC、exception、ExecutionContext与thread-pool状态的关系。">
+  managed thread runtime
+</Term>
 
 ## Using a Dedicated Thread to Perform an Asynchronous Compute-Bound Operation
 
@@ -137,25 +163,39 @@ Bound queue提供backpressure；Dispose停止adding、drain、Join。Job excepti
 
 Windows scheduler按priority、quantum、affinity、ready queues等选择runnable thread；waiting thread不占CPU。Priority是hint，会被boost/OS policy影响，不保证顺序/deadline。High priority compute可饿UI/runtime/GC相关work，real-time requirements需要专门平台设计。
 
-<Term def="Thread在runnable、running与waiting状态间转换，以及scheduler依据priority/core/time slice选择的时间线。">thread scheduling timeline</Term>
+<Term def="Thread在runnable、running与waiting状态间转换，以及scheduler依据priority/core/time slice选择的时间线。">
+  thread scheduling timeline
+</Term>
 
 诊断high CPU看running stacks；hang看wait chains/lock owner；pool starvation看queue delay、worker count与blocking stacks；CPU saturation看runnable queue与cores。不要只看thread总数。
 
 <Stepper>
-  <Step title="切换runnable、running、waiting与starved"></Step>
-  <Step title="采集Timeline">关联thread id/name、CPU samples、context switches、wait reason/owner、pool queue和request latency。</Step>
-  <Step title="验证Priority假设">在相同load调priority并观察SLO/副作用；若correctness变化，设计本身错误。</Step>
+  <Step title="切换runnable、running、waiting与starved">
+    <CvcWorkloadSizingLab />
+  </Step>
+  <Step title="采集Timeline">
+    关联thread id/name、CPU samples、context switches、wait reason/owner、pool
+    queue和request latency。
+    <CvcWorkloadSizingLab />
+  </Step>
+  <Step title="验证Priority假设">
+    在相同load调priority并观察SLO/副作用；若correctness变化，设计本身错误。
+    <CvcWorkloadSizingLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="提高Thread Priority可以解决锁竞争和延迟">
-Priority不修复持锁时间、死锁或unbounded queue，反而可能让低优先级lock owner更难运行。先用wait timeline定位owner和critical section。
+  Priority不修复持锁时间、死锁或unbounded queue，反而可能让低优先级lock
+  owner更难运行。先用wait timeline定位owner和critical section。
 </Callout>
 
 ## Foreground Threads vs. Background Threads
 
 Foreground thread会让CLR process保持运行，background不会；当所有foreground结束，runtime可终止remaining background threads，不保证finally/Dispose完整。Thread pool workers通常background。IsBackground只影响process exit，不影响CPU、priority、GC或exception。
 
-<Term def="由组件明确发出停止、取消/完成queue、等待Join并释放thread-owned资源的关闭协议。">thread shutdown ownership</Term>
+<Term def="由组件明确发出停止、取消/完成queue、等待Join并释放thread-owned资源的关闭协议。">
+  thread shutdown ownership
+</Term>
 
 Service host应维护CancellationTokenSource、task/thread registry，收到shutdown停止新工作、cancel、drain deadline、Join，超时由process host决定退出。不要靠background flag做清理。Foreground dedicated thread若忘记stop会阻止进程结束。
 
@@ -176,9 +216,19 @@ if (!worker.Join(TimeSpan.FromSeconds(5)))
 Thread exception若未处理通常终止process（host/version semantics），worker boundary可捕获以complete job/report fatal，不能吞后继续unknown state。Join不可在worker自己调用，UI thread等待会freeze。
 
 <Stepper>
-  <Step title="切换foreground、background、pool与dedicated lifetime"></Step>
-  <Step title="填写Shutdown表">记录stop signal、new-work gate、drain、Join/await、deadline、resource release与forced process exit。</Step>
-  <Step title="演练Process exit">Busy/blocked/faulted worker下发送shutdown，证明无丢数据、hang或silent background truncation。</Step>
+  <Step title="切换foreground、background、pool与dedicated lifetime">
+    <CvcThreadShutdownLab />
+  </Step>
+  <Step title="填写Shutdown表">
+    记录stop signal、new-work gate、drain、Join/await、deadline、resource
+    release与forced process exit。
+    <CvcThreadShutdownLab />
+  </Step>
+  <Step title="演练Process exit">
+    Busy/blocked/faulted worker下发送shutdown，证明无丢数据、hang或silent
+    background truncation。
+    <CvcThreadShutdownLab />
+  </Step>
 </Stepper>
 
 ## What Now?
@@ -199,26 +249,59 @@ Threads是execution carrier，不是application architecture。Task表达operati
 
 **问题 1：服务CPU只有20%却请求延迟暴涨且Pool queue增长，如何分析？**
 
-<Answer>这是可能pool starvation/blocking而非CPU saturation。采集worker count/injection、queue delay、thread wait stacks、sync-over-async/lock/I/O。把I/O改async，限制blocking并隔离dedicated bounded workers；不要只调MinThreads掩盖unbounded blocking。</Answer>
+<Answer>
+  这是可能pool starvation/blocking而非CPU saturation。采集worker
+  count/injection、queue delay、thread wait
+  stacks、sync-over-async/lock/I/O。把I/O改async，限制blocking并隔离dedicated
+  bounded workers；不要只调MinThreads掩盖unbounded blocking。
+</Answer>
 
 **问题 2：何时Dedicated Thread优于Task.Run？**
 
-<Answer>长期blocking legacy API、thread affinity/apartment、single-owner loop、特定stack/priority且有测量时。Component必须有bounded queue、exception completion、cancel/stop、Join/deadline。普通短CPU work用pool Task更易compose和复用。</Answer>
+<Answer>
+  长期blocking legacy API、thread affinity/apartment、single-owner
+  loop、特定stack/priority且有测量时。Component必须有bounded queue、exception
+  completion、cancel/stop、Join/deadline。普通短CPU work用pool
+  Task更易compose和复用。
+</Answer>
 
 **问题 3：Background Worker在Process exit丢数据，修复是什么？**
 
-<Answer>IsBackground不提供drain。Host收到shutdown先拒绝新work，Complete queue/cancel，await/Join worker到deadline，flush durable output并Dispose；超时记录并由process policy终止。关键work写durable queue/outbox，不能只在memory background thread。</Answer>
+<Answer>
+  IsBackground不提供drain。Host收到shutdown先拒绝新work，Complete
+  queue/cancel，await/Join worker到deadline，flush durable
+  output并Dispose；超时记录并由process policy终止。关键work写durable
+  queue/outbox，不能只在memory background thread。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="execution thread" definition="拥有stack/register/TLS并由OS独立调度的控制流。" />
-  <GlossaryItem term="thread overhead budget" definition="Stack、切换、cache与同步组成的线程成本。" />
-  <GlossaryItem term="managed thread runtime" definition="CLR对OS thread上的GC/exception/context协调。" />
-  <GlossaryItem term="thread scheduling timeline" definition="Runnable/running/waiting与scheduler选择的时间线。" />
-  <GlossaryItem term="thread shutdown ownership" definition="停止、drain、Join与释放资源的组件责任。" />
+  <GlossaryItem
+    term="execution thread"
+    definition="拥有stack/register/TLS并由OS独立调度的控制流。"
+  />
+  <GlossaryItem
+    term="thread overhead budget"
+    definition="Stack、切换、cache与同步组成的线程成本。"
+  />
+  <GlossaryItem
+    term="managed thread runtime"
+    definition="CLR对OS thread上的GC/exception/context协调。"
+  />
+  <GlossaryItem
+    term="thread scheduling timeline"
+    definition="Runnable/running/waiting与scheduler选择的时间线。"
+  />
+  <GlossaryItem
+    term="thread shutdown ownership"
+    definition="停止、drain、Join与释放资源的组件责任。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 26: Thread Basics" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 26: Thread Basics"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

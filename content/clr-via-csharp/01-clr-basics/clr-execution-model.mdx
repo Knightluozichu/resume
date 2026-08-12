@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-01
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcClrExecutionPipelineLab,
+  CvcClrVerificationBoundaryLab,
+  CvcClrInteropContractLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-clr-execution-model";
 
 <Objectives>
 
@@ -60,14 +69,22 @@ Assembly manifest把一个或多个module、resource和外部assembly reference�
 当consumer IL含有`AssemblyRef`和`TypeRef`时，loader先解析目标assembly，再在其中解析type。相同namespace与type name若来自不同assembly identity，或被不同load context私有加载，运行时仍可视为不同类型。因此排查cast失败不能只打印`FullName`，还要打印定义assembly与load context。
 
 <Stepper>
-  <Step title="切换source、module、assembly与native code"></Step>
-  <Step title="建立产物账本">记录源文件、编译器版本、target framework、module MVID、assembly identity、references和资源。</Step>
-  <Step title="追踪首次执行">从入口方法开始记录依赖何时解析、类型何时初始化、方法何时首次编译，以及异常落在哪一层。</Step>
+  <Step title="切换source、module、assembly与native code">
+    <CvcClrExecutionPipelineLab />
+  </Step>
+  <Step title="验证metadata与求值栈">
+    <CvcClrVerificationBoundaryLab />
+  </Step>
+  <Step title="检查CTS、CLS与native边界">
+    <CvcClrInteropContractLab />
+  </Step>
 </Stepper>
 
 ## Loading the Common Language Runtime
 
 可执行托管程序先由host读取应用配置，选择并初始化合适CLR，再把入口assembly交给loader。现代`.NET`常由`dotnet`或apphost结合`.runtimeconfig.json`与`.deps.json`选择framework与dependency graph；本书第四版主要描述.NET Framework时代的MSCORWKS/CLR hosting，但“host先选择runtime，runtime再加载应用”的分层仍成立。
+
+<Term def="由宿主选择runtime、配置和依赖图后交给CLR初始化的装载边界。">runtime host boundary</Term>
 
 Framework版本、runtime版本和C#语言版本并不相同。新编译器可以生成面向旧目标框架的代码，只要所需runtime语义与API存在；反之，机器安装了新runtime也不会自动让旧二进制拥有新reference API。部署诊断要同时报告编译器、TFM、runtime、RID/架构和host选择结果。
 
@@ -111,11 +128,9 @@ IL是基于求值栈的中间指令集，metadata signature给每个操作数、
 
 这个方法入口栈为空，两个`ldarg`压入`int32`，`add`消费两个并压回一个，`ret`消费与返回类型相符的值。真正分析复杂IL时，要为每个basic block记录入口栈、异常区域和所有分支汇合，不要只顺序阅读文本。
 
-<Stepper>
-  <Step title="切换metadata、verifiable IL、unsafe与runtime guard"></Step>
-  <Step title="手算求值栈">对一个含分支和异常处理的方法，为每条路径写出stack height与元素类型，检查汇合是否一致。</Step>
-  <Step title="归类失败证据">把bad image、type load、invalid program、cast、bounds和native crash分别放到结构、验证、运行期或ABI边界。</Step>
-</Stepper>
+1. 切换 metadata、verifiable IL、unsafe 与 runtime guard，先写出每层的输入和输出。
+2. 手算一个含分支和异常处理的方法，为每条路径写出 stack height 与元素类型，检查汇合是否一致。
+3. 把 bad image、type load、invalid program、cast、bounds 和 native crash 分别放到结构、验证、运行期或 ABI 边界。
 
 <Callout type="trap" title="IL是平台无关的，所以执行性能也平台无关">
 IL携带可移植托管语义，JIT/AOT仍依据CPU、ABI、runtime版本、tier和profile生成本机代码。同一IL的布局、指令选择、内联和GC safe point都可能不同。
@@ -126,6 +141,14 @@ IL携带可移植托管语义，JIT/AOT仍依据CPU、ABI、runtime版本、tier
 `unsafe`允许指针、fixed buffer、stackalloc和绕过部分可验证规则，但代码仍在CLR方法、异常和GC世界中执行。危险在于GC可移动对象、native API遵循外部ABI、allocator与lifetime可能跨边界。Pinning只能暂时稳定地址，不能自动保证结构布局、字符编码、calling convention、线程亲和或回调寿命。
 
 托管到非托管调用通常通过P/Invoke；COM interop则加入identity、apartment和reference-counting适配。每个接口都要写清binary name、entry point、calling convention、参数宽度/符号、struct packing、字符串编码、buffer长度、所有权、错误码和回调线程。只要其中一项含糊，错误可能在调用后很久才表现为heap corruption。
+
+### Unsafe Code
+
+Unsafe Code 允许指针、fixed buffer、stackalloc 和绕过部分可验证规则，但它仍受 CLR 方法、异常与 GC 生命周期约束。审计时必须记录 pinning 范围、对象是否可移动、结构布局、边界长度和 allocator owner；“没有托管异常”不代表 native 内存安全。
+
+### Interoperability with Unmanaged Code
+
+Interoperability with Unmanaged Code 要把 P/Invoke 或 COM interop 的 binary name、entry point、calling convention、参数宽度、字符串编码、错误码和回调线程写进合同。托管 wrapper 应把 native failure 翻译成可观察结果，并明确 buffer、句柄和回调的释放责任。
 
 <Callout type="trap" title="unsafe只影响当前几行，不会改变系统设计">
 一处裸指针会引入pinning、ABI、所有权和故障隔离义务。代码块很小，验证与运维边界却可能扩大到整个进程。
@@ -145,13 +168,19 @@ FCL/BCL提供字符串、集合、I/O、网络、反射、并发等库类型，�
 
 CTS定义所有CLR语言共享的类型系统：类型成员种类、继承、可见性、调用约定、值类型与引用类型、装箱、泛型等。C#语法只是映射到CTS的一种前端。CLS则是面向跨语言公共API的保守子集，例如仅按大小写区分的两个公共成员、无符号类型暴露或某些重载可能让其他语言难以消费。私有实现可使用完整CTS，公共surface再接受CLS约束。
 
+### The Common Type System
+
+The Common Type System 规定 CLR 语言共享的类型成员、继承、可见性、值类型、引用类型、装箱和泛型语义。跨语言 API 设计要从真实 metadata 观察这些语义，而不是把 C# 关键字直接当作运行时契约。
+
+### The Common Language Specification
+
+The Common Language Specification 是面向跨语言公共 API 的保守子集。公共 surface 应避免仅按大小写区分成员、难以消费的无符号类型和语言专属重载，并从第二种 CLR 语言实际编译调用来验证兼容性。
+
 <Term def="面向多种CLR语言消费者的公共API兼容子集，而不是完整CTS能力清单。">CLS surface</Term>
 
-<Stepper>
-  <Step title="切换CLR、CTS、CLS与FCL"></Step>
-  <Step title="审计公共API">列出public/protected签名，检查类型、名称、重载、异常和可空性是否适合目标语言消费者。</Step>
-  <Step title="做跨语言验证">从第二种CLR语言引用程序集，编译、调用、处理事件/泛型并观察真实metadata，而非只相信C#视角。</Step>
-</Stepper>
+1. 区分 CLR、CTS、CLS 与 FCL 的责任，再列出 public/protected 签名。
+2. 检查类型、名称、重载、异常和可空性是否适合目标语言消费者。
+3. 从第二种 CLR 语言引用程序集，编译、调用、处理事件/泛型并观察真实 metadata。
 
 ## 本章回顾：每一层都要有证据
 
@@ -182,6 +211,7 @@ CTS定义所有CLR语言共享的类型系统：类型成员种类、继承、�
 <Glossary>
   <GlossaryItem term="managed module" definition="承载CLR头、metadata、IL与可选资源的编译模块。" />
   <GlossaryItem term="assembly identity" definition="由程序集名称等身份信息与加载边界共同决定的解析身份。" />
+  <GlossaryItem term="runtime host boundary" definition="由host选择runtime、配置与依赖图后交给CLR初始化的装载边界。" />
   <GlossaryItem term="verification boundary" definition="结构、类型安全与运行期检查分层形成的验证边界。" />
   <GlossaryItem term="JIT specialization" definition="JIT针对当前目标和画像把IL具体化为本机代码。" />
   <GlossaryItem term="CLS surface" definition="供多种CLR语言可靠消费的公共API子集。" />

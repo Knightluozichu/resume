@@ -3,253 +3,243 @@ title: "The Color Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 17
-description: "Computer Graphics: Principles and Practice Chapter 17"
+description: "围绕线性能量、颜色模型、显示色域与硬件访问，建立从光照结果到屏幕颜色的可验证直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-28
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh17ColorLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch17-color";
 
 <Objectives>
 
-- 能用自己的话解释The Color Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 17之间的关系是什么？
+- 能用线性能量、传递函数和色域解释同一光照结果为什么会在不同显示设备上呈现不同颜色
+- 能修改 ColorViz 的入射能量、曝光、可用色域、颜色样本和访问等待，用证据区分颜色语义问题与吞吐问题
+- 能回答：颜色如何沿着图形管线从光和材质响应进入颜色模型，再被现代图形硬件送到显示器？
 
 </Objectives>
 
-## 为什么需要The Color Pipeline
+## 先把颜色想成一张从能量到账本的翻译表
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Color Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+屏幕上的一个 RGB 三元组并不等于“现实中的一种颜色”。它可能是光照计算产生的线性能量，也可能已经经过颜色模型转换、曝光压缩、传递函数编码和显示器范围裁剪。要解释颜色变化，先问这个数字处在哪一层，而不是马上说“红色变少了”。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章把颜色问题拆成三个可测部分：图形管线传递什么数据，光和材质贡献多少能量，设备能把哪些颜色稳定地显示出来。先写下预测：只改变曝光，几何和光源方向不应变化；只缩小色域，超出范围的颜色会被映射或裁剪；只增加访问等待，颜色关系不应改变，完成时间才会变化。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：颜色是 Graphics Pipeline 的输出契约
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+Graphics Pipeline（图形管线）把顶点、纹理、光照和材质响应送到片段阶段，颜色管线再把片段结果解释成可存储、可传输和可显示的通道值。这个过程不是把一张图片简单涂到屏幕上，而是不断声明“这些数字代表什么”。
 
-Computer Graphics: Principles and Practice Chapter 17正是这一哲学在特定领域的具体体现。
+### 从光照结果进入颜色管线
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="描述由光照和材质计算得到、尚未经过显示编码的可加性光能量。">
+  线性能量
+</Term>
+
+在片段阶段，Light（光）提供入射方向与能量，材质的 Reflectance（反射率）保留其中一部分，Radiometry（辐射度量）则给出功率、面积、方向和立体角等能量语义。把这些结果保持在线性空间，才能正确进行加法、混合和曝光调整。
+
+一个简化的片段颜色可以写成：
+
+$$
+L_{linear} = L_{light} \times \rho + L_{ambient}
+$$
+
+其中 $L_{light}$ 是光源贡献，$\rho$ 是反射率。这个式子只说明能量账本，不代表完整的材质模型；它的价值在于提醒我们，不要把显示编码值直接拿来做物理叠加。
+
+## Color（颜色）：模型决定通道如何说话
+
+<Term def="用一组有明确语义的通道描述颜色的方法，例如以红绿蓝通道描述显示输入。">
+  颜色模型
+</Term>
+
+Color Model（颜色模型）规定通道值如何表示颜色。RGB 适合描述许多显示设备的输入，但它不是唯一模型；有些流程会使用亮度与色度分离的模型，有些流程会使用感知更均匀的坐标。模型转换必须保留需要的颜色关系，不能只把三个数字机械换位。
+
+颜色模型还决定哪些运算有意义。线性 RGB 中的加法可以近似能量累积，已经编码的 RGB 更接近显示传输语义；如果在错误空间混合，边缘会变暗、光晕会变脏，且问题通常只在叠加场景中出现。
+
+### 传递函数与曝光
+
+<Term def="把线性光能量映射到显示或传输所需数值范围的函数，常用于压缩高光并适配有限位深。">
+  传递函数
+</Term>
+
+<Term def="对线性能量进行整体增益调整的参数，用来改变画面明暗而不改变几何、光源方向或材质结构。">
+  曝光
+</Term>
+
+传递函数可以压缩高亮区、扩大暗部可用的编码精度；曝光则改变送入传递函数的整体能量。一个教学性的流程是：
+
+$$
+C_{display} = T(2^{e} L_{linear})
+$$
+
+这里 $e$ 表示曝光变化，$T$ 表示传递函数。实际系统还要考虑色调映射、白点、位深和显示配置，但“先在线性空间调整能量，最后编码”的顺序通常不能颠倒。
+
+## Gamut（色域）：设备能表达的颜色边界
+
+<Term def="某个颜色模型和设备组合能够可靠表示或显示的颜色集合及其边界。">
+  色域
+</Term>
+
+Gamut（色域）不是颜色模型本身。颜色模型描述坐标如何命名，色域描述设备在这些坐标中能覆盖的范围。一个光照结果可以在宽色域中保持细节，却在窄色域显示器上超出范围；这时需要裁剪、压缩或重新映射，而不是把几何或光源强度当作错误。
+
+判断色域问题时，固定曝光和材质，只改变目标设备的色域。如果颜色只在高饱和区域发生变化，优先检查映射策略；如果整个画面一起偏移，优先检查颜色模型、白点或传递函数。显示端的裁剪可能隐藏源数据中的高光差异，所以调试时应同时保留线性值和编码值。
+
+下面的伪代码把线性计算、曝光和范围映射分开，便于逐段观察：
+
+```cpp
+Color linear = evaluateLight(fragment, light) * material.reflectance;
+Color exposed = applyExposure(linear, exposure);
+Color encoded = applyTransferFunction(exposed, displayProfile);
+return mapToGamut(encoded, displayProfile.gamut);
+```
+
+## Modern Graphics Hardware：颜色转换也要面对供给和等待
+
+Modern Graphics Hardware（现代图形硬件）会并行执行许多片段的颜色计算、纹理读取和格式转换。相邻片段使用相同的传递函数和查找表时，缓存复用有助于吞吐；如果每个片段访问不同的颜色表或高精度资源，带宽和等待会成为限制。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（并行性）适合同时推进多个片段和颜色样本，但它不能消除数据依赖。memory latency（内存延迟）描述读取纹理、颜色查找表或显示缓冲配置后等待结果的时间。样本数越多、格式转换越复杂，不一定意味着颜色更准确；先确认画面质量目标，再测量缓存命中、转换批次和尾部等待。
+
+如果颜色数值正确但帧时间升高，优先看访问路径与批次局部性；如果帧时间稳定但颜色关系错误，优先回到线性能量、颜色模型和色域边界。把正确性证据和吞吐证据分成两张表，才能避免用性能优化掩盖颜色错误。
+
+## 三步实验：从能量语义走到颜色吞吐
+
+每一步先写预测，再只改变一个相邻条件。三个视角共享同一个 ColorViz，但分别展示能量编码、颜色模型与色域、现代硬件上的颜色转换任务。
+
+<Stepper>
+  <Step title="第一步：追踪能量到显示值">
+    先预测：把曝光从 1.15 调高，光源方向和几何轮廓会改变，还是显示输出会改变？选择“能量到显示”，观察线性能量、颜色模型、编码和输出阶段。
+
+    <CgppCh17ColorLab />
+
+  </Step>
+  <Step title="第二步：收缩可用色域">
+    先预测：把可用色域调低后，所有颜色都会一起变暗，还是超出范围的高饱和颜色先被映射？选择“模型与色域”，比较目标点和设备边界。
+
+    <CgppCh17ColorLab />
+
+  </Step>
+  <Step title="第三步：定位颜色转换等待">
+    先预测：颜色样本增多、访问等待升高时，颜色关系会变错，还是完成通道会减少？选择“硬件吞吐”，比较 Parallelism（并行性）和 memory latency（内存延迟）。
+
+    <CgppCh17ColorLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：RGB 数字相加就是能量相加">
+  现象 → 两层编码后的颜色直接相加，边缘或高光比预期更暗、更灰，换一张图才暴露问题。
+
+原因 → 已编码通道不再保持线性能量语义，直接混合会把传递函数的形状当成光学规律。
+
+修法 → 先解码到线性空间完成光照与混合，再应用曝光和传递函数输出。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：超出色域就是光照公式错了">
+  现象 → 宽色域输出有细节，换到窄色域设备后高饱和区域被压平或裁剪。
 
-### 设计动机
+原因 → Gamut（色域）是设备能力边界，颜色模型和光照结果可能都正确，只是目标设备无法表达全部颜色。
 
-Vulkan 把The Color Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 固定线性能量和曝光，比较色域映射、白点和裁剪策略，不要先修改光源或几何。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Color Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Color Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Color Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：颜色处理越精细就一定越慢且更好">
+  现象 → 提高样本数或格式精度后画面变化很小，但等待通道和帧时间明显增加。
+
+原因 → 额外访问可能暴露 memory latency（内存延迟），而 Parallelism（并行性）受共享查找表、带宽和批次局部性限制。
+
+修法 → 先比较颜色误差与缓存命中、转换批次和尾部等待，再选择满足画质目标的最低成本路径。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- Graphics Pipeline（图形管线）传递颜色数据，颜色管线负责声明这些数据处于能量、模型、编码还是显示层。
+- Light（光）、Radiometry（辐射度量）和 Reflectance（反射率）共同定义线性能量的来源与保留比例。
+- Color Model（颜色模型）规定通道语义，Gamut（色域）规定设备能表达的边界，二者不能互相替代。
+- 曝光和传递函数应在线性计算之后作用；直接混合编码值会破坏能量关系。
+- 现代图形硬件可以利用 Parallelism（并行性）处理颜色任务，但 memory latency（内存延迟）会限制实际吞吐。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Color Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Color Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Color Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：判断混合空间。** 两个线性能量分别为 `0.25` 和 `0.75`，先求它们的平均值；再说明如果这两个数已经经过传递函数编码，为什么不能直接把编码值平均后当作线性结果。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  线性平均值为 `(0.25 + 0.75) ÷ 2 =
+  0.50`。编码值经过非线性传递函数后不再等距代表能量，必须先解码、在线性空间平均，再重新编码。
 </Answer>
 
+**问题 2：区分颜色模型与色域。** ColorViz 中颜色点超出了目标 Gamut（色域），但线性能量和曝光都没有变化。你会调整 Color Model（颜色模型）还是选择映射策略？说明理由。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  先选择色域映射、压缩或裁剪策略，因为颜色模型仍可能正确，只是目标设备不能表达该点。只有通道语义、白点或坐标变换本身错误时，才需要重新检查颜色模型。
+</Answer>
+
+**问题 3：定位硬件成本。** 颜色样本从 4 增到 10 后颜色关系几乎不变，但等待通道增加。你会先增加 Parallelism（并行性）还是检查 memory latency（内存延迟）？
+
+<Answer>
+  先检查 memory
+  latency（内存延迟）、颜色查找表的访问局部性和缓存命中；确认数据供给稳定后，再评估
+  Parallelism（并行性）是否能隐藏部分等待。单纯增加并行任务可能让共享访问更加拥堵。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="线性能量">
+  尚未经过显示编码、可以按能量语义进行加法和混合的光照结果。
+</GlossaryItem>
+
+<GlossaryItem term="颜色模型">
+  用有明确语义的通道坐标描述颜色的方法，例如 RGB 通道模型。
+</GlossaryItem>
+
+<GlossaryItem term="传递函数">
+  把线性光能量映射到显示或传输数值范围的函数。
+</GlossaryItem>
+
+<GlossaryItem term="曝光">
+  对线性能量进行整体增益调整的参数，用于改变画面明暗。
+</GlossaryItem>
+
+<GlossaryItem term="色域">
+  某个颜色模型和设备组合能够可靠表示或显示的颜色集合及边界。
+</GlossaryItem>
+
+<GlossaryItem term="颜色">
+  由光能量、观察条件、颜色模型和显示设备共同定义的视觉与数据结果。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 17 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

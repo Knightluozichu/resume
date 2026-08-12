@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-11
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcEventTimelineLab,
+  CvcEventDispatchLab,
+  CvcSubscriptionLifetimeLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-events";
 
 <Objectives>
 
@@ -58,6 +67,8 @@ EventArgs优先immutable snapshot，防止第一个handler修改后影响后续�
 
 <Term def="一次通知发生时固定下来的不可变事件数据，使所有handler观察同一事实版本。">event snapshot</Term>
 
+<Term def="规定handler异常、后续通知、重试、可观测性和是否允许部分投递的事件分发规则。">handler failure policy</Term>
+
 ## Defining EventArgs Data and the Event Member
 
 标准pattern使用`EventHandler`/`EventHandler<TEventArgs>`，sender通常是publisher，args承载额外数据。Event member只允许外部add/remove，不能读取invocation list、清空或raise；public delegate field则把这些权限全部暴露。Null表示无subscribers，duplicate subscription通常会被调用多次，remove一次只移除一个匹配项。
@@ -85,9 +96,15 @@ public void Accept(Order order)
 在lock内raise会把未知handler带入critical section，容易deadlock和延长lock；先完成state transition，capture args，退出lock再raise。若要求state与notification原子可靠，普通event做不到crash recovery，应使用outbox/persistent message。Handler exception默认停止delegate chain并传播；publisher必须明确fail-fast、逐个隔离aggregate，或把work入queue，不能随意catch everything。
 
 <Stepper>
-  <Step title="切换EventArgs、event member、OnEvent与translation"></Step>
-  <Step title="画事实时序">标出validate、state commit、lock release、snapshot、handler invocation与持久消息边界。</Step>
-  <Step title="注入重入和失败">让handler退订、再次调用publisher、阻塞和抛异常，验证状态invariant与后续handler policy。</Step>
+  <Step title="切换EventArgs、event member与事实时序">
+    <CvcEventTimelineLab />
+  </Step>
+  <Step title="追踪snapshot与delegate dispatch">
+    <CvcEventDispatchLab />
+  </Step>
+  <Step title="验证subscriber lifetime与退订">
+    <CvcSubscriptionLifetimeLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="在Lock里Raise可以保证Subscriber看到一致状态">
@@ -130,11 +147,9 @@ public event EventHandler<MessageEventArgs> Message
 
 自定义accessor只有在需要shared event table、weak subscription、native registration或special synchronization时使用；否则field-like event减少错误。Weak event会改变可达性和delivery确定性，subscriber若无其它root可能提前消失，不能当免费泄漏修复。
 
-<Stepper>
-  <Step title="切换subscribe、snapshot、invoke与unsubscribe"></Step>
-  <Step title="检查IL与metadata">定位add_/remove_ methods、backing field和delegate Combine/CompareExchange，理解而非猜测并发行为。</Step>
-  <Step title="制定exception policy">分别测试fail-fast、per-handler isolation和queue delivery，记录ordering、latency和observability。</Step>
-</Stepper>
+1. 切换 subscribe、snapshot、invoke 与 unsubscribe，先固定一次 raise 的观察边界。
+2. 检查 IL 与 metadata：定位 add_/remove_ methods、backing field 和 delegate Combine/CompareExchange。
+3. 分别测试 fail-fast、per-handler isolation 和 queue delivery，记录 ordering、latency 和 observability。
 
 ## Designing a Type That Listens for an Event
 
@@ -152,11 +167,9 @@ Async event handler若落到`async void`，caller无法await、聚合异常或�
 
 同名events若语义相同可由一个public event隐式实现多个interfaces；语义不同应explicit分离，避免一个raise误通知另一contract。Reflection需要区分public event与nonpublic interface accessors。Versioning还要测试interface map和consumer cast。
 
-<Stepper>
-  <Step title="切换short-lived、UI-thread、async与explicit listener"></Step>
-  <Step title="建立subscription ledger">记录publisher lifetime、subscriber owner、delegate实例、thread、dispose点和泄漏检测。</Step>
-  <Step title="验证可回收">创建/销毁subscriber，退订并清除owner后用WeakReference在测试中证明回收；同时确认in-flight snapshot语义。</Step>
-</Stepper>
+1. 区分 short-lived、UI-thread、async 与 explicit listener，记录 publisher 和 subscriber 的 owner。
+2. 建立 subscription ledger：记录 delegate 实例、thread、dispose 点和泄漏检测。
+3. 创建/销毁 subscriber，退订并清除 owner 后用 WeakReference 证明回收，同时确认 in-flight snapshot 语义。
 
 <Callout type="trap" title="Subscriber离开Scope后GC会自动处理Event订阅">
 Publisher的delegate强引用subscriber target，只要publisher可达，subscriber就可达。必须由lifecycle owner退订/Dispose，或采用经过语义评估的weak subscription。
@@ -191,6 +204,7 @@ Publisher的delegate强引用subscriber target，只要publisher可达，subscri
 <Glossary>
   <GlossaryItem term="event lifetime contract" definition="订阅、通知、线程、异常、退订和可达性的整体协议。" />
   <GlossaryItem term="event snapshot" definition="一次raise中供所有handlers观察的不可变事实数据。" />
+  <GlossaryItem term="handler failure policy" definition="规定handler异常后续通知、隔离、重试和可观测性的分发规则。" />
   <GlossaryItem term="event backing store" definition="Compiler生成并由add/remove维护的multicast delegate存储。" />
   <GlossaryItem term="subscription ownership" definition="由明确owner在生命周期结束时解除订阅的责任。" />
   <GlossaryItem term="reentrancy boundary" definition="Raise同步进入外部handler后，publisher再次被调用时的状态边界。" />

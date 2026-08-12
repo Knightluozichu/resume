@@ -128,6 +128,22 @@ export function Stepper({
         ))}
       </ol>
 
+      {/* 外层重置放在步骤内容之前：嵌套实验也有各自的重置按钮，
+          先恢复 Stepper 才能保证整棵教学状态树回到同一初始快照。 */}
+      <div className="mb-4 flex justify-center">
+        <button
+          type="button"
+          onClick={() => {
+            setPlaying(false);
+            go(0);
+          }}
+          aria-label="重置分步演示"
+          className="rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+        >
+          重置
+        </button>
+      </div>
+
       {/* 当前步内容 */}
       <div
         id={`${baseId}-panel`}
@@ -174,18 +190,6 @@ export function Stepper({
           className="rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           上一步
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setPlaying(false);
-            go(0);
-          }}
-          aria-label="重置分步演示"
-          className="rounded-control border border-border px-3 py-2 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
-        >
-          重置
         </button>
 
         {/* 暂停/播放：reduced-motion 下隐藏自动播放（无意义）。

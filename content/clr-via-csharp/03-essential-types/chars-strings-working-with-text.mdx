@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-14
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcTextBoundaryLab,
+  CvcTextComparisonLab,
+  CvcTextUnitLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-text";
 
 <Objectives>
 
@@ -53,26 +62,36 @@ while (elements.MoveNext())
 Protocol按bytes限制时先选择encoding再`GetByteCount`；database/UI按grapheme限制时用相应segmentation。Unicode normalization把canonical equivalent sequences统一为Form C/D等，但不能当安全identifier全部方案；homoglyph、case与locale仍需单独policy。
 
 <Stepper>
-  <Step title="切换UTF-16 unit、scalar、grapheme与bytes"></Step>
-  <Step title="建立长度矩阵">对ASCII、surrogate、combining mark、ZWJ emoji记录四种长度和每种合法切片点。</Step>
-  <Step title="验证边界">在UI输入、database column和UTF-8 protocol分别按真实unit限制，做round-trip与截断测试。</Step>
+  <Step title="切换UTF-16 unit、scalar、grapheme与bytes">
+    <CvcTextUnitLab />
+  </Step>
+  <Step title="建立长度矩阵">
+    <CvcTextUnitLab />
+  </Step>
+  <Step title="验证边界">
+    <CvcTextUnitLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="String.Length就是用户看到的字符数">
 Length统计UTF-16 code units。Supplementary scalar占2，combining sequence/ZWJ emoji可占更多；用户可见单位应按grapheme segmentation。
 </Callout>
 
-## The System.String Type and Constructing Strings
+## The System.String Type
 
 String是sealed immutable reference type，内部表示UTF-16 sequence。Literal由compiler写入metadata并可能intern；可从char array、repeated char、pointer/encoding bytes等构造。Byte到string必须显式Encoding，不能逐byte cast char。Null与empty不同，whitespace又是业务分类，API要说明允许哪种。
 
-Constructor或factory应验证输入encoding与lifetime。Native pointer/Span转换必须知道length、terminator和ownership；不要假设所有native text UTF-16或null-terminated。跨边界最好传byte length或span，避免扫描越界。
+## Constructing Strings
 
-## Strings Are Immutable and Other String Operations
+Constructor或factory应验证输入encoding与lifetime。Native pointer/Span转换必须知道length、terminator和ownership；不要假设所有native text UTF-16或null-terminated。跨边界最好传byte length或span，避免扫描越界。构造时把source buffer、encoding和snapshot ownership写进边界协议，避免把外部可变内存误当成String的稳定内容。
+
+## Strings Are Immutable
 
 Substring、Replace、ToUpper等返回新string，原实例不变；runtime可在结果等于原值时复用引用，但consumer不能依赖。Immutability使string安全共享、hash稳定，却让循环拼接可能产生大量中间对象。Index/range仍按UTF-16 code units，不能自动保护Unicode cluster。
 
-常见operations有search、split、trim、pad、copy；每个都要选择StringComparison或culture。当处理path/URL/header时，应使用domain parser而非普通string manipulation，避免escaping/canonicalization漏洞。Null check与empty处理先在boundary统一。
+## Other String Operations
+
+常见operations有search、split、trim、pad、copy；每个都要选择StringComparison或culture。当处理path/URL/header时，应使用domain parser而非普通string manipulation，避免escaping/canonicalization漏洞。Null check与empty处理先在boundary统一。操作名称相似不代表语义相同，尤其要记录返回新值、offset单位、异常契约和是否允许空白。
 
 <Term def="String内容创建后不改变，所有变换产生新逻辑值，从而允许安全共享与稳定hash。">string immutability</Term>
 
@@ -93,18 +112,26 @@ int displayOrder = StringComparer
 
 Dictionary/HashSet必须使用与业务equality相同的StringComparer。不要先`ToLower()`再ordinal比较：会分配、受culture影响且可能改变长度。Normalization、case folding和confusable detection分别解决不同问题，登录名/域名应遵循专用标准。
 
-## String Interning and String Pooling
+## String Interning
 
 Compiler通常intern相同literal，使references可能相等；`String.Intern`把equal string加入runtime intern pool并返回canonical reference，`IsInterned`查询。Intern pool可能长期保留内容，外部高基数字符串主动intern会导致memory retention。Reference equality永远不能替代value comparison，因为equal runtime-created strings不一定intern。
 
 <Term def="Runtime为选定相等字符串保留canonical reference的机制，不改变value equality且可能扩大lifetime。">intern pool lifetime</Term>
 
-“String pooling”可指literal/intern复用，也可指应用自建dedup cache。自建pool需bounded eviction、tenant/security隔离和measure；很多字符串短命时，pool dictionary本身更贵。只有profile显示大量重复长生命周期值才考虑。
+## String Pooling
+
+“String pooling”可指literal/intern复用，也可指应用自建dedup cache。自建pool需bounded eviction、tenant/security隔离和measure；很多字符串短命时，pool dictionary本身更贵。只有profile显示大量重复长生命周期值才考虑。pool的收益必须与canonical reference的保留时间、跨租户泄漏风险和回收策略一起验收。
 
 <Stepper>
-  <Step title="切换ordinal、culture、intern与immutable semantics"></Step>
-  <Step title="填写比较策略">为identifier、display sort、search、protocol和path分别记录comparer、normalization和版本稳定要求。</Step>
-  <Step title="制造等值非同引用">分别用literal、runtime construction和Intern生成内容相等字符串，证明ReferenceEquals不可作为业务判断。</Step>
+  <Step title="切换ordinal、culture、intern与immutable semantics">
+    <CvcTextComparisonLab />
+  </Step>
+  <Step title="填写比较策略">
+    <CvcTextComparisonLab />
+  </Step>
+  <Step title="制造等值非同引用">
+    <CvcTextComparisonLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Interning后可以用ReferenceEquals加速所有String比较">
@@ -121,9 +148,13 @@ Search match index通常是UTF-16 offset，传给byte slicing前必须重新enco
 
 少量固定拼接由compiler/JIT优化成`string.Concat`，interpolation可用handler减少boxing；不要机械替换。循环、未知次数append或多字段format适合StringBuilder；最终一次ToString。已知最终length可设置capacity，减少growth/copy，但过大capacity会浪费memory。
 
-## Constructing a StringBuilder Object and StringBuilder Members
+## Constructing a StringBuilder Object
 
 StringBuilder是mutable buffer，有Capacity、Length、Append、AppendLine、AppendFormat、Insert、Remove、Replace和indexer。它不thread-safe，不应跨并发requests共享；ToString产生immutable snapshot，后续builder修改不影响旧string。Clear保留capacity，长期缓存巨大builder可能保留large char buffer。
+
+## StringBuilder Members
+
+Append、Insert、Remove、Replace、Length和Capacity共同形成mutable buffer的操作面；它们改变的是builder状态，不是已经由ToString生成的immutable snapshot。调用者应在单一owner内管理并发、容量上限、清空和最终输出，不能把“可变”误解成线程安全。
 
 ```csharp
 var builder = new StringBuilder(capacity: 256);
@@ -162,14 +193,20 @@ Composite formatting/interpolation把多个objects按format/provider组合。Obj
 Parse对无效输入抛Format/Overflow，TryParse返回false并设置out。Public untrusted input通常TryParse，随后domain validation；内部必须成功的固定配置可Parse快速失败。Styles/culture要显式；DateTime还需kind/timezone/offset，decimal需允许的sign/group/scale。Parse成功不代表业务合法。
 
 <Stepper>
-  <Step title="切换format、parse、encode与decode"></Step>
-  <Step title="定义round-trip corpus">覆盖culture、边界数值、timezone、Unicode、invalid input、fallback和canonical output。</Step>
-  <Step title="验证双向协议">检查Format->Parse恢复语义值，Encode->Decode恢复text，并对非canonical input定义接受/拒绝。</Step>
+  <Step title="切换format、parse、encode与decode">
+    <CvcTextBoundaryLab />
+  </Step>
+  <Step title="定义round-trip corpus">
+    <CvcTextBoundaryLab />
+  </Step>
+  <Step title="验证双向协议">
+    <CvcTextBoundaryLab />
+  </Step>
 </Stepper>
 
 ## Encodings: Converting Between Characters and Bytes
 
-Encoding把Unicode scalar sequence表示成UTF-8/UTF-16等bytes。选择UTF-8等只是开始，还要定义BOM、fallback、invalid sequence、normalization和framing。默认replacement fallback会把坏bytes变`�`并丢失证据；安全protocol常使用throwing fallback并拒绝invalid input。
+Encoding把Unicode scalar sequence表示成UTF-8/UTF-16等bytes。选择UTF-8等只是开始，还要定义 <Term def="编码失败时是拒绝、替换还是报告错误，以及这些选择如何影响协议完整性的约定。">encoding fallback contract</Term>：BOM、fallback、invalid sequence、normalization和framing都要明确。默认replacement fallback会把坏bytes变`�`并丢失证据；安全protocol常使用throwing fallback并拒绝invalid input。
 
 `Encoding.UTF8.GetByteCount`先算长度，`GetBytes/GetString`执行转换。不要用system ANSI/default encoding跨机器；原书时代`Encoding.Default`更常见，现代跨平台系统应显式UTF-8或协议指定encoding。
 
@@ -221,6 +258,7 @@ SecureString试图让secret以可清除/受保护buffer存在，并限制明文�
   <GlossaryItem term="intern pool lifetime" definition="Canonical string引用的runtime池与潜在长期保留。" />
   <GlossaryItem term="text round-trip contract" definition="Format/Parse约定的grammar、culture与恢复语义。" />
   <GlossaryItem term="secret plaintext window" definition="Secret以明文出现的最小时间、内存与权限范围。" />
+  <GlossaryItem term="encoding fallback contract" definition="编码失败时拒绝、替换或报告错误的协议约定。" />
 </Glossary>
 
 <Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 14: Chars, Strings, and Working with Text" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

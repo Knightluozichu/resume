@@ -3,253 +3,220 @@ title: "The Future"
 type: B
 section: "计算机图形学与渲染"
 order: 25
-description: "Computer Graphics: Principles and Practice Chapter 25"
+description: "围绕可编程图形管线、可验证光照与硬件规模化，建立从未来能力假设到可交付系统的设计直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh25FutureLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch25-future";
 
 <Objectives>
 
-- 能用自己的话解释The Future的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 25之间的关系是什么？
+- 能用 Graphics Pipeline（图形管线）解释未来能力如何在输入契约、可编程阶段、质量验收和规模化交付之间推进
+- 能修改 FutureGraphicsViz 的成熟度、保真度、光能量、样本、任务、波次和访问等待，用证据区分视觉收益与硬件成本
+- 能回答未来图形系统如何在 Light（光）的能量语义、Modern Graphics Hardware（现代图形硬件）的并行执行和可复核验收之间平衡
 
 </Objectives>
 
-## 为什么需要The Future
+## 先把“未来”变成可验收的设计空间
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Future作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+“未来”不是对某个产品发布日期的猜测，而是一个压力测试：如果渲染系统多出一种能力，它要接收什么输入、改变哪个阶段、提供哪些证据，又会把成本转移到哪里？这个问题把想象力拉回工程边界。我们不需要假装知道具体硬件或接口的名字，也能比较一条路线是否可解释、可测量、可回放。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章用四个问题贯穿一条未来路线：输入契约是否稳定？新能力是否落在明确的可编程阶段？视觉质量是否能拆成光照、采样和误差证据？规模扩大后，Parallelism（并行性）是否被 memory latency（内存延迟）抵消？先预测：如果只把“未来能力”接到输出端，系统会更容易验收，还是更难定位责任？
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：Graphics Pipeline 的边界仍然重要
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+计算机图形学导论给出的第一种稳定视角，是把图像看成一串有输入和输出的变换，而不是某个神奇的最终颜色。Graphics Pipeline（图形管线）可以把几何、可见性、材质、光源、采样和合成组织成阶段。未来能力只有在这些阶段之间有清楚的责任边界，才可能被替换、比较和回退。
 
-Computer Graphics: Principles and Practice Chapter 25正是这一哲学在特定领域的具体体现。
+例如，未来的光照估计可以替换一个光照阶段，但不应该默默改写相机坐标、材质单位或显示编码。未来的几何压缩可以改变输入表示，但必须说明它是否影响法线、纹理坐标和可见性。这样的拆分让“更先进”变成可验证的接口变化，而不是只看一张更亮或更锐的截图。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+### 输入、阶段和输出的能力契约
+
+<Term def="描述某阶段允许的输入单位、坐标、范围、随机性和输出承诺的最小接口；未来能力必须先遵守它，才能被替换和比较。">
+  能力契约
+</Term>
+
+一份能力契约至少写清几何坐标空间、材质和光照的单位、随机样本的种子、允许的误差范围，以及输出属于线性空间还是显示空间。契约越具体，越容易用同一组输入重放两个实现；契约越含糊，性能或质量的变化就可能来自输入漂移。
+
+<Term def="在管线中承担清楚输入与输出责任、可以由不同算法实现并接受相同验收的处理阶段。">
+  可编程阶段
+</Term>
+
+可编程阶段不是把所有逻辑塞进一个黑盒，而是让阶段的输入、状态和验收保持可见。替换阶段时，应先固定场景、随机种子和显示变换，再比较能量、误差、帧时间及回退结果。这样才能知道提升来自算法，还是来自偷偷改变了输入。
+
+## Light、Radiometry 与 Reflectance：未来光照不能丢掉单位
+
+Light（光）是能量传播的对象，Radiometry（辐射度量）为功率、面积、方向和立体角提供计量语义，Reflectance（反射率）则描述表面保留和重新分配能量的方式。未来的光照模型即使更擅长估计复杂路径，也不能把这些概念合并成一个没有单位的亮度滑块。
+
+可以用一个小模型约束预测。对一次直接贡献和一次单反弹贡献，令路径可见性为 $V$，到达能量为 $E$，表面反射率为 $R$，则
+
+$$
+C=V_0E_0R_0+V_1E_1R_0R_1
+$$
+
+第二项多经过一个表面，因此多一个反射率因素。它不是完整的渲染方程，却足以检查三件事：增加光能量是否改变能量账本，改变反射率是否只影响表面响应，增加样本是否主要降低估计噪声。若结果突破了单位或能量预算，应先查坐标、色彩空间、可见性和重复计入，而不是把“未来”当作错误的免责理由。
+
+## 质量验收：把视觉收益拆成误差预算
+
+<Term def="把允许的几何、可见性、能量、采样噪声和时间误差分配到可观察证据中的计划；它说明系统何时算作足够好。">
+  误差预算
+</Term>
+
+误差预算让质量讨论有了可操作的边界。几何误差可以用轮廓或深度差异观察，光照误差可以对比能量和可见性，采样误差可以记录方差，性能误差则要看帧时间和等待比例。它们不能被一张总分遮盖：一张低噪声但漏光的图，并不比一张有噪声但遮挡正确的图更可靠。
+
+先猜一猜：把样本数量从 4 提高到 20，会自动修复法线方向错误吗？不会。更多样本可以让同一个估计更稳定，却不能把错误的输入变成正确的输入。实践时固定相机、场景、种子和曝光，只改一个旋钮，并为每次比较保存质量指标和成本指标。
+
+### 质量、延迟与回退
+
+一个可交付的未来功能至少需要三条路径：目标质量路径、资源不足时的回退路径，以及问题出现后的诊断路径。目标质量路径说明新增细节或更稳定的光照；回退路径说明降低样本、关闭某个阶段或使用旧实现时仍然保持什么契约；诊断路径说明如何重放同一输入并定位责任阶段。
+
+<Term def="用固定输入、固定随机种子和记录的参数重新执行一次实验，使质量或性能差异可以被复核。">
+  复核回放
+</Term>
+
+复核回放不是录屏，而是保存足以再现决策的输入、参数、随机种子和输出证据。它让“看起来更好”变成“在同一条件下，误差下降了多少，成本增加了多少”。未来路线越复杂，回放越是验收的一部分，而不是发布后的补救工具。
+
+## Modern Graphics Hardware：并行扩展仍受内存等待约束
+
+Modern Graphics Hardware（现代图形硬件）可以并行推进像素、光线、材质和缓存更新，但并行执行并不会删除数据依赖。Parallelism（并行性）擅长扩大独立工作，memory latency（内存延迟）则来自纹理、几何、加速结构和缓存条目的等待。访问局部性差、路径分歧大或批次之间依赖强时，更多工作单元可能只是同时等待。
+
+先预测：任务数量翻倍时，有效吞吐一定翻倍吗？只有在占用、访问和路径形态仍然适合并行时，答案才可能接近“是”。因此应同时记录完成任务、等待任务、缓存命中、路径分歧和每任务时间。若质量已经稳定但吞吐变差，优先检查数据布局、批次重排、无贡献样本和阶段间依赖，而不是盲目增大并行宽度。
+
+### 从能力路线到规模化交付
+
+一个未来能力的路线可以压缩成四个门：输入契约、可编程阶段、质量验收、规模化交付。每一扇门都要有一个失败时仍可解释的结果：契约不满足就拒绝输入，阶段不稳定就回退，质量超预算就标记，吞吐不足就保留等待证据。这样的路线并不承诺未来一定成功，却让失败可以被复盘。
+
+## 三步实验：让未来路线接受同一组证据
+
+每一步先写下预测，再只改变一个相关控制。三个视角共享同一个 FutureGraphicsViz：路线视角检查阶段边界，质量视角检查光照与误差，吞吐视角检查硬件等待。
+
+<Stepper>
+  <Step title="第一步：检查能力路线">
+    先预测：把一个新算法直接接到输出端，会让责任更清楚吗？选择“能力路线”，用单步查看输入契约、可编程阶段、质量验收和规模化交付；再改变能力成熟度，观察成熟度变化是否替代了验收证据。
+
+    <CgppCh25FutureLab />
+
+  </Step>
+  <Step title="第二步：比较质量与成本">
+    先猜一猜：提高保真度、样本和光能量时，视觉质量、估计噪声与能量守恒会一起改善吗？选择“质量与成本”，一次只移动一个滑块，并记录质量、噪声和需要单独核对的能量账本。
+
+    <CgppCh25FutureLab />
+
+  </Step>
+  <Step title="第三步：定位规模化瓶颈">
+    动手试：先把任务数量和波次调高，再提高访问等待。选择“硬件吞吐”，比较完成任务、等待任务、Parallelism（并行性）和 memory latency（内存延迟）；解释为什么更宽的并行度没有自动带来同等吞吐。
+
+    <CgppCh25FutureLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：未来能力越靠近输出，越容易验收">
+  现象 → 新算法让最终图像更锐，但几何、材质、光照和显示变换的责任混在一起，问题无法定位。
+
+原因 → 输出端只有结果，没有明确的输入契约和阶段证据；任何输入漂移都可能被误认为算法收益。
+
+修法 → 把能力放入可编程阶段，固定坐标、单位、随机种子和回退实现，再分别记录质量、误差和成本。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：提高样本就能修复所有质量问题">
+  现象 → 样本增加后噪声下降，但漏光、能量超预算或轮廓错误仍然存在，渲染时间继续上升。
 
-### 设计动机
+原因 → 采样主要改善估计稳定性，不能修复错误法线、错误可见性、重复计入或显示空间混用。
 
-Vulkan 把The Future从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先固定场景和种子，分开检查 Light（光）的能量、Radiometry（辐射度量）的单位、Reflectance（反射率）的范围和遮挡证据，再决定样本预算。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Future涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Future相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Future相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：并行度扩大就代表硬件吞吐扩大">
+  现象 → 任务数量和执行单元增加后，等待任务、缓存未命中和路径分歧同步增长。
+
+原因 → Parallelism（并行性）只能同时推进可独立的工作，memory latency（内存延迟）和数据依赖仍会让批次停顿。
+
+修法 → 先按阶段或路径形态重排任务，改善访问局部性，裁剪无贡献工作，再用复核回放比较有效吞吐和总成本。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 计算机图形学导论提供了“阶段有契约”的稳定视角；Graphics Pipeline（图形管线）让未来能力可以被放置、替换和回退。
+- 能力契约、可编程阶段、误差预算和复核回放把“更先进”拆成可检查的输入、阶段、质量和重放证据。
+- Light（光）是能量对象，Radiometry（辐射度量）保留单位语义，Reflectance（反射率）决定表面如何保留和分配能量；增加样本不能修复单位或可见性错误。
+- Modern Graphics Hardware（现代图形硬件）可以利用 Parallelism（并行性）扩大独立工作，但 memory latency（内存延迟）、路径分歧和数据依赖决定规模化收益。
+- 未来路线的发布标准不是“预测准确”，而是在同一输入下能解释质量收益、成本变化、回退结果和失败责任。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Future相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Future是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Future涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：设计能力契约。** 你要把一个新的光照估计阶段接入 Graphics Pipeline（图形管线）。请列出至少四项必须固定的输入或输出约束，并说明它们如何帮助两个实现做复核回放。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  可以固定坐标空间、Light（光）的能量单位、Reflectance（反射率）的范围、随机种子、输出色彩空间和误差预算中的阈值。两个实现使用同一场景、种子和单位时，差异就能归因到阶段算法，而不是输入漂移；保存参数与输出指标后，还可以重新执行复核回放。
 </Answer>
 
+**问题 2：拆分质量收益。** 某次实验把样本从 4 提高到 16 后，估计噪声下降，但墙角仍漏光，能量账本还增加了 30%。你会如何安排排查顺序？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  先固定场景、种子和曝光，检查遮挡、法线、坐标空间和重复计入，再核对
+  Radiometry（辐射度量）的单位与
+  Reflectance（反射率）的范围；确认路径责任后，才讨论样本预算。样本减少噪声，却不能修复可见性或能量语义错误。
+</Answer>
+
+**问题 3：定位吞吐瓶颈。** 任务数量翻倍后，完成任务只增加 20%，等待任务和缓存未命中明显增加。请给出一个优先动作，并解释为什么不应先盲目增加 Parallelism（并行性）。
+
+<Answer>
+  优先按阶段或路径形态重排任务，检查数据布局和访问局部性，并裁剪没有可见贡献的工作。Parallelism（并行性）只能同时推进独立任务；如果
+  memory
+  latency（内存延迟）和数据依赖已经主导时间，更宽的批次会让更多任务一起等待。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="能力契约">
+  描述某阶段输入单位、坐标、范围、随机性和输出承诺的最小接口。
+</GlossaryItem>
+
+<GlossaryItem term="可编程阶段">
+  在管线中承担清楚输入与输出责任、可以由不同算法实现并接受相同验收的处理阶段。
+</GlossaryItem>
+
+<GlossaryItem term="误差预算">
+  把几何、可见性、能量、采样噪声和时间误差分配到可观察证据中的计划。
+</GlossaryItem>
+
+<GlossaryItem term="复核回放">
+  用固定输入、随机种子和记录的参数重新执行实验，使质量或性能差异可以被复核。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 25 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

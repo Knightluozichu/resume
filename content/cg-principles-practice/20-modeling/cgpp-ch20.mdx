@@ -3,253 +3,242 @@ title: "The Modeling Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 20
-description: "Computer Graphics: Principles and Practice Chapter 20"
+description: "围绕网格拓扑、空间变换与顶点数据，建立从模型描述到图形管线和硬件吞吐的可验证直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh20ModelingLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch20-modeling";
 
 <Objectives>
 
-- 能用自己的话解释The Modeling Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 20之间的关系是什么？
+- 能用顶点、边、面和网格拓扑解释一个模型如何被描述，并判断细节问题来自数据还是渲染阶段
+- 能修改 ModelViz 的细分、缩放、光照能量、顶点数量和访问等待，用证据定位空间变换或顶点吞吐瓶颈
+- 能回答：模型如何从局部空间进入图形管线，在光照阶段保持法线和材质语义，并在现代图形硬件上高效处理？
 
 </Objectives>
 
-## 为什么需要The Modeling Pipeline
+## 先把建模想成一份可执行的空间契约
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Modeling Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+模型不是屏幕上的轮廓，而是对形状、连接关系和属性的结构化描述。顶点提供位置与附加属性，边记录连接，面定义可被光栅化的区域；之后的变换把局部描述放入世界和相机空间，图形管线才有机会把它变成片段。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章把建模问题拆成三个可检查部分：网格如何描述形状，空间变换如何改变位置和方向，顶点数据如何被硬件批量处理。先做预测：只提高细分级别，拓扑和细节会变化但光源不应移动；只缩放模型，位置和法线的空间表达会更新而材质属性不应凭空改变；只增加访问等待，模型几何不应变化，完成时间才会变长。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：模型是 Graphics Pipeline 的几何输入
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+Graphics Pipeline（图形管线）需要一个明确的几何输入契约。建模阶段提供顶点位置、法线、纹理坐标、索引和拓扑；变换阶段把局部坐标送到世界、视图和裁剪空间；后续阶段再进行可见性、插值、着色与输出。若输入拓扑或坐标空间含义不清，后面每一步都可能看起来像“渲染错误”。
 
-Computer Graphics: Principles and Practice Chapter 20正是这一哲学在特定领域的具体体现。
+### 模型、顶点与网格拓扑
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="用顶点属性、连接关系和面来描述一个可被图形管线处理的形状数据集合。">
+  模型
+</Term>
+
+<Term def="由顶点、边和面组成的离散表面表示，拓扑关系决定哪些顶点彼此相连。">
+  网格
+</Term>
+
+网格的几何位置和拓扑连接是两种不同证据。移动一个顶点会改变形状，但不会自动改变连接；交换索引顺序可能改变面朝向、法线方向和可见性。提高细分级别通常同时增加顶点、边和面，因此画面细节与存储、变换和光栅化成本会一起变化。
+
+对一个三角形，三个顶点位置可以写成 $p_0$、$p_1$、$p_2$，片段内部的位置由重心权重组合：
+
+$$
+p = \alpha p_0 + \beta p_1 + \gamma p_2
+$$
+
+权重的和应保持为 1。这个关系说明网格拓扑、顶点顺序和后续插值是相连的；如果面出现翻转，先检查索引和绕序，不要用光照强度掩盖法线问题。
+
+## 局部空间与空间变换
+
+<Term def="模型自身定义顶点时使用的坐标系，便于复用同一模型并独立表达其形状。">
+  局部空间
+</Term>
+
+<Term def="把点、向量或法线从一个坐标系映射到另一个坐标系的矩阵或运算。">
+  变换
+</Term>
+
+局部空间只描述模型自身，世界空间描述模型在场景中的位置，视图空间再把场景放到相机的观察关系中。点通常使用模型矩阵变换：
+
+$$
+p_{world} = M_{model}p_{local}
+$$
+
+平移、旋转和缩放可以组合在同一矩阵，但法线不是普通位置。非均匀缩放会改变法线与表面的垂直关系，因此应使用适合的逆转置变换并重新归一化。空间变换的问题通常表现为模型位置、朝向或光照一起异常，调试时要同时显示局部向量和世界向量。
+
+### 法线、Light（光）与材质属性
+
+<Term def="描述表面朝向的方向属性，用于与入射光和观察方向计算夹角；它不是一个位置点。">
+  法线
+</Term>
+
+Light（光）在世界空间或对象空间中都有明确含义。模型移动或旋转后，光源方向、法线方向和材质纹理坐标必须转换到可比较的同一空间。Radiometry（辐射度量）描述光能量如何按功率、面积和方向分布，Reflectance（反射率）描述材质保留入射能量的比例；建模阶段应保存这些属性的来源和坐标契约，而不是把它们烘焙成不可解释的颜色。
+
+如果模型缩放后明暗反转，先检查法线变换和归一化，再检查 Light（光）的坐标空间。若几何正确但材质亮度不对，再检查 Reflectance（反射率）和 Radiometry（辐射度量）的单位语义。
+
+下面的伪代码保持几何和着色责任分开：
+
+```cpp
+ModelSpace local = loadMesh(vertices, indices);
+WorldSpace world = transformModel(local, modelMatrix);
+Normal worldNormal = transformNormal(local.normal, modelMatrix);
+Color shaded = evaluateLight(world, worldNormal, light, material);
+draw(world, shaded);
+```
+
+## Modern Graphics Hardware：模型细节会转化为顶点工作
+
+Modern Graphics Hardware（现代图形硬件）会批量执行顶点变换、索引读取和属性访问。共享顶点、顺序索引和紧凑布局可以提高缓存复用；拓扑跳跃、重复顶点或材质访问分散时，带宽与等待会限制有效吞吐。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+<Term def="让多个顶点、面或模型实例同时推进的执行能力；它提高吞吐，但仍受共享数据依赖限制。">
+  并行性
+</Term>
+
+Parallelism（并行性）适合处理互不依赖的顶点和实例，memory latency（内存延迟）表示读取索引、顶点属性或材质数据后等待结果返回的时间。细分越高并不一定让模型更好：如果新增细节不可见，却增加了随机读取和变换任务，画面收益会被带宽成本抵消。
+
+性能排查应记录顶点数、索引复用、面剔除比例、缓存命中和等待比例。先确认新增顶点真的贡献了可见细节，再决定是否调整拓扑、实例化或数据布局。
+
+## 三步实验：从网格契约走到顶点吞吐
+
+每一步先写预测，再只改变相关滑块。三个视角共享同一个 ModelViz，但分别展示网格结构、空间变换和现代硬件上的顶点任务。
+
+<Stepper>
+  <Step title="第一步：增加网格细节">
+    先猜一猜：把细分级别从 3 调到 5，模型的光源方向会改变，还是顶点和面数量会增加？选择“网格结构”，观察顶点、边和面的关系。
+
+    <CgppCh20ModelingLab />
+
+  </Step>
+  <Step title="第二步：检查空间变换">
+    先猜一猜：把模型缩放到 1.20 后，法线可以直接乘同一个矩阵吗？选择“空间变换”，比较局部空间、世界空间、法线和材质证据。
+
+    <CgppCh20ModelingLab />
+
+  </Step>
+  <Step title="第三步：定位顶点等待">
+    先猜一猜：顶点数量与访问等待同时升高时，几何一定会变形吗？选择“顶点吞吐”，比较完成任务、等待任务与 Parallelism（并行性）。
+
+    <CgppCh20ModelingLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：增加顶点就能修复轮廓错误">
+  现象 → 细分级别提高后，模型仍然出现裂缝、翻面或不连续的阴影。
+
+原因 → 问题可能来自索引连接、绕序或法线，而不是几何采样不足；新增顶点只增加了错误数据的数量。
+
+修法 → 先显示拓扑、面朝向和法线，验证连接关系正确后，再决定是否需要更多细节。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：法线可以像位置一样变换">
+  现象 → 模型位置和轮廓正确，但非均匀缩放后光照出现断裂或明暗翻转。
 
-### 设计动机
+原因 → 法线需要保持垂直关系，不能直接使用点的模型矩阵；缩放会改变法线方向和长度。
 
-Vulkan 把The Modeling Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 使用适合的逆转置变换并重新归一化，再检查 Light（光）所在坐标空间。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Modeling Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Modeling Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Modeling Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：模型越密，画面一定越好">
+  现象 → 顶点数和内存带宽上升，但目标尺寸下几乎看不出细节提升，帧时间却变长。
+
+原因 → 新增顶点可能不可见，或索引和材质访问破坏缓存局部性，memory latency（内存延迟）抵消了 Parallelism（并行性）。
+
+修法 → 先测量屏幕覆盖、缓存命中和顶点贡献，再选择细节层级、实例化或更紧凑的布局。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 模型由顶点、边、面和网格拓扑描述，细分会同时影响形状细节与后续顶点工作量。
+- 局部空间、世界空间和视图空间有不同责任，变换必须保持点、向量和法线的语义。
+- Graphics Pipeline（图形管线）接收建模阶段的几何契约，Light（光）、Radiometry（辐射度量）和 Reflectance（反射率）在统一空间中解释表面响应。
+- 现代图形硬件能利用 Parallelism（并行性）处理顶点和实例，但 memory latency（内存延迟）会限制拓扑访问吞吐。
+- 调试顺序应是“拓扑连接 → 法线方向 → 空间变换 → 可见细节 → 顶点访问代价”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Modeling Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Modeling Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Modeling Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：判断三角形位置。** 三个顶点位置分别为 `p₀=0`、`p₁=4`、`p₂=8`，重心权重为 `α=0.25`、`β=0.50`、`γ=0.25`。按本章公式求插值位置，并说明权重总和的作用。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  `p = 0.25 × 0 + 0.50 × 4 + 0.25 × 8 = 4`。权重总和为 1
+  时，结果保持在三个顶点描述的三角形内部；总和异常通常说明重心坐标或输入数据不完整。
 </Answer>
 
+**问题 2：区分空间与光照。** 模型沿一个轴非均匀缩放后，轮廓仍正确但局部变暗。你会先查模型位置还是法线？如何用 Light（光）和 Reflectance（反射率）证据排查？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  先查法线变换和归一化，再确认 Light（光）方向与模型处于同一坐标空间；固定
+  Reflectance（反射率）后比较法线点积和入射能量，可以区分空间错误与材质响应错误。
+</Answer>
+
+**问题 3：定位顶点瓶颈。** 细分后顶点数量增加，但目标视口中新增面几乎不可见，等待比例上升。你会先增加 Parallelism（并行性）还是检查 memory latency（内存延迟）？
+
+<Answer>
+  先检查 memory
+  latency（内存延迟）、索引复用和缓存命中，并确认新增顶点是否有可见贡献；数据布局和细节层级合理后，再评估增加
+  Parallelism（并行性）是否有收益。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="模型">
+  用顶点属性、连接关系和面描述的可被图形管线处理的形状数据集合。
+</GlossaryItem>
+
+<GlossaryItem term="网格">
+  由顶点、边和面组成的离散表面表示，拓扑关系决定连接方式。
+</GlossaryItem>
+
+<GlossaryItem term="局部空间">
+  模型自身定义顶点时使用的坐标系，便于独立表达和复用形状。
+</GlossaryItem>
+
+<GlossaryItem term="变换">
+  把点、向量或法线从一个坐标系映射到另一个坐标系的矩阵或运算。
+</GlossaryItem>
+
+<GlossaryItem term="法线">
+  描述表面朝向的方向属性，用于与入射光和观察方向计算关系。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  让多个独立顶点、面或模型实例同时推进的执行能力。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 20 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

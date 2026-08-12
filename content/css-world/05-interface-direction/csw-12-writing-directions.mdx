@@ -3,90 +3,174 @@ title: "第 12 章 流向的改变"
 type: A
 section: "CSS 世界 · 界面与流向"
 order: 12
-description: "direction 与 unicode-bidi 控制双向文本嵌入，writing-mode 改变块流和内联流方向；尺寸、边距、对齐与滚动应优先使用逻辑轴推理，而不是把横排物理方向硬编码。"
+description: "从 direction 与 unicode-bidi 的双向文本规则出发，解释 writing-mode 如何重映射块轴、内联轴、逻辑尺寸、对齐和滚动。"
 demo: true
 math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: csw-unit-12
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Attribution } from "@/components/mdx/attribution";
+import { Csw12WritingDirectionsLab } from "@/components/mdx/css-world/v2/csw-12-writing-directions";
 
-## 直觉起点
+# 第 12 章 流向的改变
 
-、、、、共同构成本页的观察坐标。direction 与 unicode-bidi 控制双向文本嵌入，writing-mode
-改变块流和内联流方向；尺寸、边距、对齐与滚动应优先使用逻辑轴推理，而不是把横排物理方向硬编码。
-CSS
-的困难不在属性名称，而在多个声明经过级联、继承和格式化后才产生最终使用值；同一截图可能由完全不同的盒树、固定尺寸或偶然层叠得到，必须向前追踪原因。
+本章以张鑫旭著《CSS 世界》人民邮电出版社版的第 12 章公开目录为身份基线，采用独立教学改写。流向不是把文字旋转九十度：direction 影响双向文本和起始边，unicode-bidi 处理嵌入与隔离，writing-mode 再决定块轴与内联轴。排查“竖排布局错位”或“中英文顺序异常”时，先找方向、流向或逻辑尺寸上的第一个偏离点。
+
+<Objectives>
+
+- 能从 direction、unicode-bidi 和 writing-mode 解释双向文本的逻辑顺序、视觉顺序与书写轴。
+- 能把物理 width、height、left、right 推理转换为 inline-size、block-size 和逻辑边距的轴向推理。
+- 能在横排、竖排、RTL 混排、窄视口和滚动容器中记录首个偏离点并恢复流体阅读和定位契约。
+
+</Objectives>
+
+## 先追踪一段文字沿哪条轴流动
+
+遇到“RTL 文本标点位置奇怪”“writing-mode 改完 width 不再代表预期方向”或“滚动起点换了位置”，不要先堆叠 left/right 补丁。固定 DOM、字体、内容和容器，先记录方向、双向嵌入、块轴、内联轴以及逻辑尺寸，再观察视觉结果。动手前先猜：第一个变化来自字符串重排，还是盒子的流向重映射？
+
+<Csw12WritingDirectionsLab />
+
+## 三个必须先拆开的误区
+
+<Callout type="trap" title="把 direction 当成只改变文字对齐">
+  **现象：** direction
+  改了，表格列、滚动起点或内联内容的顺序也跟着变化。**原因：** direction 不只是
+  text-align 的别名，还参与双向文本、起始边和部分布局方向。**修法：**
+  同时记录字符串逻辑顺序、视觉顺序、起始边和滚动行为。
+</Callout>
+
+<Callout type="trap" title="把 writing-mode 当成旋转文字的视觉滤镜">
+  **现象：** 文字看似转了方向，但 width、margin-left
+  和定位仍按横排硬编码。**原因：** writing-mode
+  重映射块轴和内联轴，尺寸与边距的物理含义随轴变化。**修法：** 先改用
+  inline/block 逻辑属性，再检查内容尺寸、对齐和溢出。
+</Callout>
+
+<Callout type="trap" title="把 unicode-bidi 当成替代 direction 的单独开关">
+  **现象：** 混合语言文本视觉顺序不稳定，继续切换 unicode-bidi
+  直到截图看起来正常。**原因：**
+  双向算法需要方向、嵌入/隔离边界和真实语言片段共同决定结果。**修法：**
+  保存原始字符串、direction、unicode-bidi、嵌入边界和可复制顺序。
+</Callout>
 
 ## 六阶段机制链
 
 ### 1. 确定文字书写方向
 
-固定 DOM、样式表、视口、字体和内容，先预测生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+先读取<Term def="指定双向文本基准方向并影响起始边和部分布局方向的属性">direction</Term>的计算值。它影响双向算法的基准方向、内联内容的起始边以及部分表格和滚动行为；不要只用文本居中截图判断它是否生效。
 
 ### 2. 应用双向算法
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="控制双向文本嵌入、覆盖与隔离行为的属性">unicode-bidi</Term>与
+direction 一起决定 RTL
+片段怎样嵌入周围文本。测试要同时保留逻辑字符串、视觉顺序、标点归属、复制结果和屏幕阅读顺序，避免用一次渲染结果代替双向证据。
 
 ### 3. 设置块流方向
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="决定块轴和内联轴方向、改变文本与盒流动规则的属性">writing-mode</Term>
+不仅旋转字形，它会把块流和内联流映射到新的物理方向。切换横排、竖排和侧向模式时，先确认包含块、滚动区域和内容的自然尺寸。
 
 ### 4. 重映射内联与块轴
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="文字沿其方向排列的逻辑轴，随 writing-mode 改变物理方向">
+  inline 轴
+</Term>
+与
+<Term def="块级内容依次堆叠的逻辑轴，随 writing-mode 改变物理方向">
+  block 轴
+</Term>
+是推理尺寸和边距的稳定坐标。不要把 inline 永远等同于水平，也不要把 block
+永远等同于垂直。
 
 ### 5. 改写逻辑尺寸
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+inline-size、block-size、margin-inline、padding-block 和 inset-inline 等逻辑属性会跟随书写模式切换。它们能减少 left/right/top/bottom 的方向耦合，但仍要检查固有尺寸、最小最大尺寸、替换元素和滚动容器。
 
 ### 6. 验证混合语言
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。恢复后重放同一输入，并确认窄宽、长内容和方向变化不会暴露旧补丁。
+最后使用中英文、数字、RTL 片段、括号和标点组成混合样本。确认文本可复制、焦点可见、内容不被裁剪，且切换书写模式后滚动起点和边界仍然可解释；恢复时删除方向补丁并重放同一 DOM。
 
-## 核心机制深挖
+## 三步可重放实验路线
 
-writing-mode 不只是旋转文字，它交换块轴和内联轴，使 width、height、margin 与定位的物理含义变得脆弱。direction 还参与表格列、滚动起点和双向文本顺序。 至少用横排中英文、RTL 文本和竖排样本验收；若切换书写模式后需要大量 left、right、top、bottom 覆盖，应改用逻辑属性重建。 实验时把浏览器开发者工具中的盒模型、计算样式和层叠上下文当成观测工具，而不是答案来源；答案必须能从规范规则和当前 DOM 结构推导出来。先删除非必要覆盖，再逐条加入约束，这样才能分辨默认流在做什么、哪条声明真正改变了结果。
+每一步都嵌入本章专属书写方向图。先建立横排与混排基线，再注入一个 direction 或 writing-mode 变量，最后删除故障并从逻辑轴、滚动、复制和窄宽边界重放。
 
-## 边界记录模板
+<Stepper>
+  <Step title="建立方向与轴的基线">
+    固定中英文和 RTL 片段、容器尺寸、字体与滚动区域，标出逻辑字符串、视觉顺序、inline 轴和 block 轴。
 
-每次实验建立六列证据：**DOM 与内容、生成盒与格式化上下文、包含块、计算值与使用值、首个偏离点、恢复结果**。尺寸页增加视口与固有尺寸，内联页增加字体度量和基线，定位页增加脱流空间与四向偏移，层叠页增加上下文树，文本页增加字体回退，界面页增加键盘与书写方向。若最终外观相同但固定宽高、隐藏溢出、不可见焦点或错误层叠仍存在，依然失败。
+    <Csw12WritingDirectionsLab />
 
-## 出版社目录逐项讲解
+  </Step>
+  <Step title="注入一个流向变量">
+    只切换 direction、unicode-bidi、writing-mode 或一个物理尺寸声明，定位文本顺序、盒尺寸或滚动起点的首个变化。
+
+    <Csw12WritingDirectionsLab />
+
+  </Step>
+  <Step title="恢复并核对逻辑契约">
+    删除故障声明，重放横排、竖排、RTL 混排、窄视口和滚动容器，确认复制顺序、焦点、逻辑尺寸与可读边界恢复。
+
+    <Csw12WritingDirectionsLab />
+
+  </Step>
+</Stepper>
+
+## 出版社目录逐项映射
 
 ### 第12章 流向的改变
 
-**第12章 流向的改变** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“确定文字书写方向”前后会生成哪些盒、读取哪个包含块，并记录“direction”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+本章把流向拆成方向基准、双向算法、书写模式、逻辑轴、逻辑尺寸和混合语言六层。最终截图只是结果证据，必须同时解释逻辑字符串、视觉顺序、盒轴、尺寸和滚动参考。
 
 ### 12.1 改变水平流向的direction
 
-**12.1 改变水平流向的direction** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“应用双向算法”前后会生成哪些盒、读取哪个包含块，并记录“unicode-bidi”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+direction 负责双向文本的基准方向，也会影响起始边、表格列方向和部分滚动行为。它不是简单的文本右对齐开关；验收需要固定字符串和盒结构，再比较 ltr、rtl 的顺序与边界。
 
 ### 12.1.1 direction简介
 
-**12.1.1 direction简介** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“设置块流方向”前后会生成哪些盒、读取哪个包含块，并记录“writing-mode”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+direction 的 ltr 与 rtl 会改变双向算法的初始方向和内联内容的起点。数字、英文、标点与 RTL 片段会按 Unicode 双向类别参与重排，测试时要同时看视觉顺序和复制顺序。
 
 ### 12.1.2 direction的黄金搭档unicode-bidi
 
-**12.1.2 direction的黄金搭档unicode-bidi** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“重映射内联与块轴”前后会生成哪些盒、读取哪个包含块，并记录“内联轴”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+unicode-bidi 决定文本片段是否嵌入、覆盖或隔离，和 direction 配合才能控制混合语言边界。优先使用语义明确的隔离策略，记录嵌入范围、标点归属和辅助技术读取结果，不要反复改 CSS 直到截图“看起来对”。
 
 ### 12.2 改变CSS世界纵横规则的writing-mode
 
-**12.2 改变CSS世界纵横规则的writing-mode** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“改写逻辑尺寸”前后会生成哪些盒、读取哪个包含块，并记录“块轴”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+writing-mode 决定块流和内联流的物理映射，改变后 width、height、滚动方向和对齐的直觉都可能失效。迁移时应先建立逻辑轴模型，再决定哪些尺寸、边距和定位属性需要调整。
 
 ### 12.2.1 writing-mode原本的作用
 
-**12.2.1 writing-mode原本的作用** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“验证混合语言”前后会生成哪些盒、读取哪个包含块，并记录“direction”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+writing-mode 的核心是改变书写和盒流方向，而不是只旋转字形。它还决定内容如何建立起始边、滚动参考与自然尺寸，不能只从字形角度理解。横排、竖排和侧向模式会产生不同的块轴、内联轴与起始边，需在真实内容和容器中观察自然尺寸、滚动边界与溢出行为。
 
 ### 12.2.2 writing-mode不经意改变了哪些规则
 
-**12.2.2 writing-mode不经意改变了哪些规则** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“确定文字书写方向”前后会生成哪些盒、读取哪个包含块，并记录“unicode-bidi”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+切换 writing-mode 后，物理 width、height、margin、padding、定位和滚动的解释可能不再符合横排经验。用 inline-size、block-size 与逻辑边距表达意图，再测试最小最大尺寸、溢出、替换元素和焦点位置。
 
 ### 12.2.3 writing-mode和direction的关系
 
-**12.2.3 writing-mode和direction的关系** 要解决的是：按双向算法、书写模式、内联轴和块轴重算尺寸、顺序与对齐。先预测元素在“应用双向算法”前后会生成哪些盒、读取哪个包含块，并记录“writing-mode”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+writing-mode 决定轴如何流动，direction 决定双向文本基准方向和部分起始边；两者相互作用但职责不同。横排 RTL、竖排 RTL、混合语言和滚动容器应分别记录轴方向、文本顺序和滚动起点。
 
-## 最小可运行实验
+## 书写方向证据记录
+
+每个样本写六列：**原始字符串、direction 与 unicode-bidi、writing-mode、inline/block 逻辑轴、首个顺序或尺寸偏离点、恢复结果**。混排样本增加复制与读屏顺序，竖排样本增加固有尺寸与滚动，响应式样本增加窄视口和逻辑边距。
+
+```text
+freeze = DOM + string order + fonts + container + viewport + scroll container
+trace = direction + unicode-bidi + writing-mode + inline/block axes
+change = exactly one direction | bidi | writing-mode | physical-size variable
+stop = first divergent visual order, used size, logical edge, or scroll origin
+replay = remove fault + same inputs + readable, copyable, fluid axes restored
+```
 
 ```css
 .article {
@@ -97,59 +181,75 @@ writing-mode 不只是旋转文字，它交换块轴和内联轴，使 width、h
   padding-inline: 1rem;
   border-block-start: 1px solid currentColor;
 }
+
+.bidi-label {
+  unicode-bidi: isolate;
+}
 ```
-
-```yaml
-book: CSS 世界
-page: csw-12-writing-directions
-public_toc_entries: 8
-sample: normal | boundary | failure | recovery
-first_divergence: null
-box_tree_explained: true
-used_values_explained: true
-fluid_contract_preserved: true
-```
-
-```text
-freeze DOM + stylesheet + viewport + fonts
-predict generated boxes + containing blocks
-change exactly one variable
-stop at the first divergent used value
-restore and replay the same DOM
-assert fluid layout across content and directions
-```
-
-## 常见误区与故障注入
-
-
-## 四类样本与验收
-
-| 样本 | 注入方式                             | 必查证据                       | 通过条件               |
-| ---- | ------------------------------------ | ------------------------------ | ---------------------- |
-| 正常 | 标准字体、常规内容和宽视口           | 盒、包含块、使用值、行框、层级 | 六阶段按预期完成       |
-| 边界 | 窄视口、长内容、替换元素、字体缺失   | min/max、溢出、基线和回退      | 不依赖固定像素补丁     |
-| 失败 | 单一脱流、错误层叠、隐藏焦点或错方向 | 首个偏离点                     | 能定位并解释根因       |
-| 恢复 | 删除故障声明后重放同一 DOM           | 盒树和计算样式                 | 无旧覆盖且流体契约恢复 |
-
-本页签发不变量是：**direction 与 unicode-bidi 控制双向文本嵌入，writing-mode 改变块流和内联流方向；尺寸、边距、对齐与滚动应优先使用逻辑轴推理，而不是把横排物理方向硬编码。** 单次截图不能替代盒生成、格式化上下文、包含块、计算值、使用值与绘制顺序的完整轨迹。
 
 ## 练习
 
+<Exercises>
 
-## 小结
+**问题 1：** 为什么 direction 不能简单理解为 text-align:right？
 
-- **direction**：对应“确定文字书写方向”阶段的核心观察量。
-- **unicode-bidi**：对应“应用双向算法”阶段的核心观察量。
-- **writing-mode**：对应“设置块流方向”阶段的核心观察量。
-- **内联轴**：对应“重映射内联与块轴”阶段的核心观察量。
-- **块轴**：对应“改写逻辑尺寸”阶段的核心观察量。
-- 8 个公开目录条目已经全部映射到本页证据链。
-- 盒树、使用值和边界样本共同决定是否通过，最终截图不是唯一证据。
+<Answer>
+  direction
+  参与双向文本的基准方向，也可能影响内联起始边、表格列和滚动行为；text-align
+  只描述行内内容的对齐方式。应同时记录逻辑字符串、视觉顺序、起始边和滚动结果。
+</Answer>
+
+**问题 2：** writing-mode 改成竖排后，为什么继续使用固定的 width、margin-left 容易产生错位？
+
+<Answer>
+  writing-mode 会把 block 轴和 inline 轴映射到新的物理方向，width 和 margin-left
+  仍是物理属性，意图可能不再跟随内容流向。应优先改写为 inline-size、block-size
+  和逻辑边距，再检查固有尺寸与溢出。
+</Answer>
+
+**问题 3：** 混合中文、英文和 RTL 片段时，如何判断是 bidi 重排还是盒尺寸问题？
+
+<Answer>
+  先固定盒尺寸并保存原始字符串，再分别记录
+  direction、unicode-bidi、视觉顺序、复制顺序和首个换行位置。如果字符串顺序已变化而盒尺寸未变，先查双向边界；如果顺序稳定但内容溢出，再查逻辑尺寸与滚动轴。
+</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="direction">
+    指定双向文本基准方向并影响起始边和部分布局方向的属性。
+  </GlossaryItem>
+  <GlossaryItem term="unicode-bidi">
+    控制双向文本嵌入、覆盖与隔离行为的属性。
+  </GlossaryItem>
+  <GlossaryItem term="writing-mode">
+    决定块轴和内联轴方向、改变文本与盒流动规则的属性。
+  </GlossaryItem>
+  <GlossaryItem term="inline 轴">
+    文字沿其方向排列的逻辑轴，随 writing-mode 改变物理方向。
+  </GlossaryItem>
+  <GlossaryItem term="block 轴">
+    块级内容依次堆叠的逻辑轴，随 writing-mode 改变物理方向。
+  </GlossaryItem>
+</Glossary>
+
+## 小结
+
+- direction 提供双向文本的基准方向，unicode-bidi 决定嵌入、覆盖或隔离边界；视觉顺序不等于原始字符串顺序。
+- writing-mode 改变块轴和内联轴，不是单纯旋转文字；尺寸、边距、定位和滚动应改用逻辑轴推理。
+- inline-size、block-size 与逻辑边距表达随书写模式保持的意图，能减少 left/right 等物理补丁。
+- 横排、竖排、RTL 混排和窄视口都要核对复制、焦点、滚动和溢出，最终截图不是唯一证据。
 
 ## 版本与改编边界
 
-本单元以张鑫旭著《CSS 世界》为身份基线。详细目录来自人民邮电出版社出版电子版页面，CSS 2.1 定位由作者官网和图书官网交叉确认；正文是独立教学重构，不复制原书段落。现代浏览器兼容状态需另行按当前 CSS 规范和浏览器文档核验。
+本章以张鑫旭著《CSS 世界》、人民邮电出版社 2017 年版公开目录为身份基线。目录核验参考[得到电子书页面](https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO)、[作者官网](https://www.zhangxinxu.com/)和[CSS 世界站点](https://www.cssworld.cn/)。双向文本与书写模式规则参考 [W3C CSS Writing Modes](https://www.w3.org/TR/css-writing-modes-3/)、[MDN direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction)、[MDN unicode-bidi](https://developer.mozilla.org/en-US/docs/Web/CSS/unicode-bidi)、[MDN writing-mode](https://developer.mozilla.org/en-US/docs/Web/CSS/writing-mode) 与 [MDN CSS logical properties](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values)。
 
+正文是独立教学改写，不复制原书段落。现代浏览器的双向文本、竖排字体、滚动起点、辅助技术和逻辑属性支持可能因平台变化；迁移时应另建国际化、可访问性和响应式实验，并保留可读回退。
+
+<Attribution
+  adaptedFrom="张鑫旭《CSS 世界》人民邮电出版社版第 12 章公开目录与作者公开 CSS 资料"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
+/>

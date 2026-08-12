@@ -3,256 +3,301 @@ title: "第10章 Truffle详解"
 type: C
 section: "区块链开发实战（2018版）"
 order: 11
-description: "覆盖项目初始化、合约、编译、迁移、交互、测试、配置和依赖管理的完整历史工作流。"
+description: "用 Truffle 的项目、编译、迁移、交互、测试、配置和依赖流程建立可重放的合约工程。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bdp-10-truffle
 ---
 
+import {
+  BdpCh10ProjectLab,
+  BdpCh10InteractionLab,
+  BdpCh10TestLab,
+} from "@/components/mdx/blockchain-dev-practice/11-10-truffle/bdp-10-truffle";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 为什么从可重放状态开始
+<Objectives>
 
-Truffle把编译产物、网络配置、迁移状态和测试组织成工程生命周期。可重复部署依赖迁移编号、目标网络、账户、artifact和依赖版本一致；交互成功也必须由事件、回执和状态断言证明。
+- 能从空项目初始化 contracts、migrations、test 目录，并固定网络、Compiler 与依赖版本
+- 能编译并迁移两个有依赖的合约，保存 artifact、迁移编号、地址与 Receipt
+- 能区分交易、只读调用、合约抽象和现有地址交互，并为每条路径保存证据
+- 能用 JavaScript 与 Solidity 测试覆盖成功、边界和回滚，并解释迁移为何必须可重放
 
-区块链开发最容易产生的错觉，是界面显示成功、命令返回哈希或节点高度增加，就认为整条链路已经正确。实际上，源码可能由错误编译器构建，客户端可能连接错误网络，签名可能授权了不同字节，交易可能只进入内存池，执行可能回滚，索引器也可能展示尚未确认或已经被重组撤销的数据。只有把前状态、输入、验证依据、候选输出、回执、确认与后状态连起来，才能区分“请求被看见”和“状态已按预期提交”。
+</Objectives>
 
-本页因此先定义最小对象和不变量，再运行工具。读者应在实验前写出预期状态和拒绝原因，运行后保存原始协议对象，而不是只保存截图或格式化摘要。正常样本证明主路径，边界样本验证零值、最大值、恰好余额或资源上限，单故障样本验证实现能在首个不满足条件处停止。三个样本共享版本、网络、账户和观察点，差异才有可解释性。
+{/* BDP_CH10_QUALITY_V2 */}
 
-每次重放还应生成一份机器可读记录：书目来源、提交或源码摘要、运行时版本、网络标识、账户或钱包上下文、固定输入、原始输出、错误对象、前后状态摘要与时间顺序。复核者从空目录读取这份记录，不依赖操作者浏览器缓存或终端历史；若缺失字段、节点未同步或结果绑定到不同区块哈希，门禁应明确失败而不是自动补猜。
+# 第10章 Truffle详解
 
-2018年版还带来一层额外要求：概念与历史工具必须分开。Geth、TestRPC、browser-solidity、Truffle、Solidity和比特币节点的命令及默认配置已经演进，直接复制可能失败，也可能在错误或不安全的上下文中运行。历史实验在无真实资产的隔离环境中复现原行为；现代迁移另列替代工具、行为差异、验证方法和回退点，不能用今天的成功结果改写原书当时的系统假设。
+Truffle 在本章中不是一组孤立命令，而是一条从项目目录到链上实例、再回到测试证据的工程流水线。读者要能够从一个空目录开始，固定运行时与网络，生成可核对的 artifact，按编号迁移合约，并用交互与测试证明结果属于目标链。
 
-## 版次、对象与验收合同
+本章采用 2018 年版本的概念边界进行独立重构。命令、默认网络和工具版本可能随今天的 Truffle 生态变化，因此每个实验都把 Node、npm、Compiler、provider、chain ID、账户和依赖锁定在记录里；历史行为可以复现，现代替代方案则单独说明，不把两者混成一个“成功”。
 
-、、、、共同构成本页复核坐标。覆盖项目初始化、合约、编译、迁移、交互、测试、配置和依赖管理的完整历史工作流。
+## 本章知识点清单
 
-本书锁定吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》，机械工业出版社，2018年6月，227页，ISBN 9787111599562。得到电子书公开前言、11章和附录A至C的完整目录；京东交叉核对三部分结构和目录页码，天珑书店交叉核对作者、出版社、2018年6月、227页与ISBN。全书共有185个正式目录层级，学习地图与总复习不计入分母。本文是独立教学重构，不复制原书正文。
+| 主题 | 要回答的问题 | 验收证据 |
+| --- | --- | --- |
+| 项目 | contracts、migrations、test 与配置怎样协作？ | 目录树、版本、网络配置 |
+| 构建 | 源码怎样变成可迁移的 artifact？ | ABI、字节码、Compiler 与日志 |
+| 迁移 | 多个合约如何按依赖顺序落到网络？ | migration 编号、Receipt、地址 |
+| 交互 | 交易、call、抽象实例分别产生什么？ | 请求、回执、事件、前后状态 |
+| 测试 | JavaScript 与 Solidity 怎样覆盖回滚？ | fixture、断言、失败原因 |
 
-Truffle把编译产物、网络配置、迁移状态和测试组织成工程生命周期。可重复部署依赖迁移编号、目标网络、账户、artifact和依赖版本一致；交互成功也必须由事件、回执和状态断言证明。
+## 工作流合同与术语
 
+一个可重放的 Truffle 项目至少包含四类输入：源码与目录结构、构建工具与依赖、网络与账户配置、迁移与测试的顺序。<Term>Project Manifest</Term>把这些输入集中为一份可检查的项目清单；清单不要求暴露私钥，但必须能指出账户来源、网络别名和版本来源。
 
-## 核心状态模型
+编译后生成的 ABI、创建字节码、运行时代码和元数据形成 <Term>Artifact Bundle</Term>。迁移脚本按编号写入网络，并将部署结果记录为 <Term>Migration Ledger</Term>；后续交互不可只从界面猜地址，而要从目标网络和该账本取得实例。
 
-$$
-cost(T)=gasUsed(T) \times effectiveGasPrice(T)
-$$
+交互时，ABI 与地址被包装成 <Term>Contract Abstraction</Term>，它让 JavaScript 代码可以区分只读调用和状态交易。测试则从隔离的 <Term>Fixture</Term> 开始，把成功、边界和回滚样本放在相同的起点上。最后用 <Term>Network Profile</Term>说明 provider、chain ID、账户和 Compiler 组合，防止“同名网络”实际指向不同节点。
 
-$$
-address = last_{20}(keccak256(RLP(sender,nonce)))
-$$
+<Callout type="trap" title="默认网络不是验收网络">
+  现象：迁移命令返回成功，应用却读不到刚部署的合约。原因：truffle-config.js 的 network 名称、provider 或 chain ID 与交互脚本不一致，地址只在另一条链上有效。修法：在迁移前输出 Network Profile，迁移后用同一 provider 读取 Receipt、地址代码和 chain ID，再把地址写入应用配置。
+</Callout>
 
-$$
-S_{t+1} = apply(S_t, T_t), \quad valid(T_t,S_t)=1
-$$
+## 项目生命周期可视化
 
-$$
-gate = source \times version \times replay \times boundary \times failureEvidence
-$$
+下面的实验把项目、artifact、migration ledger 和网络实例放在同一条可重放轨迹上。选择阶段后，先观察预期记录，再打开“证据完整”开关；它模拟的是发布门禁所需的最小记录，而不是替代真实节点。
 
-第一式描述本页资源、价值或身份约束；第二式给出地址、确认或账本链接等派生关系。状态转移式要求候选请求先通过当前状态验证，再原子地产生后状态；失败必须保留原状态。证据门禁采用乘法语义，来源、版本、重放、边界或失败证据任一缺失都不能发布。
+<Stepper>
+  <Step title="1. 初始化、编译与迁移的生命周期">
+    先预测：如果只改迁移顺序而不改合约源码，哪一份证据应该变化？依次推进项目初始化、编译和迁移，检查目录、artifact、编号、地址与 Receipt 是否来自同一份 Network Profile。
 
-以一个最小样本固定前状态、调用者、输入、节点或编译器版本与确认阈值。正常样本走完整成功路径；边界样本取零值、最大值、恰好余额或恰好Gas；单故障样本只改变签名、nonce、网络身份、区块链接、权限或响应字段中的一项。三者使用同一观察合同，才能把差异归因到目标规则。
+    <BdpCh10ProjectLab />
+  </Step>
+  <Step title="2. 合约交互的边界">
+    先预测：只读 call 返回正确值，是否足以证明一次转账完成？在交易、只读调用和合约抽象之间切换，再比较调用参数、账户、Receipt、事件和前后状态的证据差异。
 
-## 三段可运行骨架
+    <BdpCh10InteractionLab />
+  </Step>
+  <Step title="3. 测试证据的闭环">
+    先预测：成功断言通过后，怎样证明回滚分支没有污染状态？选择 JavaScript、Solidity 或组合测试，分别记录 fixture、交易、断言和失败原因。
 
-```typescript
-type Trace = { before: string; input: string; after?: string; error?: string };
+    <BdpCh10TestLab />
+  </Step>
+</Stepper>
 
-function evidenceGate(trace: Trace) {
-  const complete = Boolean(
-    trace.before && trace.input && (trace.after || trace.error),
-  );
-  return { complete, trace, unit: "bdp-10-truffle" };
+## 10.1 什么是Truffle
+
+Truffle 是面向以太坊合约项目的开发框架，核心价值在于把 contracts、migrations、test、构建产物和网络配置组织成有顺序的工程流程。理解它时要把“命令能运行”与“产物能复核”分开，并明确 2018 年工具假设和当前版本的差异。
+
+## 10.2 安装Truffle
+
+安装前先固定 Node、npm 与 Truffle 的版本来源，记录包管理器解析到的完整依赖树和校验信息，再在隔离目录执行版本查询。安装成功只证明本机找到一个可执行文件；只有当复核者能用同一版本初始化、编译并运行最小测试，安装结果才可进入项目证据。
+
+## 10.3 创建并初始化项目
+
+创建项目后检查 contracts、migrations、test 与配置文件是否存在，并把它们登记到 Project Manifest。初始化阶段还要写清目标网络、provider、账户来源、Compiler 版本和依赖锁定策略；空目录能生成模板，不代表模板已经适合部署。
+
+~~~shell
+mkdir truffle-lab
+cd truffle-lab
+truffle init
+find contracts migrations test -maxdepth 1 -type f | sort
+~~~
+
+## 10.4 创建合约
+
+创建合约时先定义状态、权限、事件和失败条件，再决定构造函数与外部接口。建议用一个有依赖的最小组合练习：Registry 保存 Treasury 地址，Treasury 负责接收并记录以太币；这样迁移顺序、artifact 地址和交互断言都有明确对象，而不是只编译一份空壳代码。
+
+~~~solidity
+pragma solidity ^0.5.0;
+
+contract Registry {
+    address public treasury;
+
+    constructor(address _treasury) public {
+        require(_treasury != address(0), "zero-treasury");
+        treasury = _treasury;
+    }
 }
-```
+~~~
 
-```python
-def apply_transition(state, request, verify):
-    if not verify(state, request):
-        return {"accepted": False, "state": state, "reason": "invalid"}
-    candidate = state.copy()
-    candidate[request["key"]] = request["value"]
-    return {"accepted": True, "state": candidate, "reason": None}
-```
+## 10.5 编译合约
 
-```solidity
-mapping(address => uint256) private credit;
+编译阶段要同时检查源码摘要、Compiler、优化开关、ABI、创建字节码、运行时代码和警告。Artifact Bundle 是迁移与交互的共同输入：如果 ABI 变了，调用编码可能变；如果运行时代码摘要变了，应先解释构建差异，再决定是否迁移，不能只看命令退出码。
 
-function withdraw() external {
-    uint256 amount = credit[msg.sender];
-    require(amount > 0, "no-credit");
-    credit[msg.sender] = 0;
-    (bool ok, ) = msg.sender.call{value: amount}("");
-    require(ok, "transfer-failed");
+~~~shell
+truffle compile --all
+sha256sum build/contracts/Registry.json
+~~~
+
+## 10.6 迁移合约
+
+迁移脚本按编号描述网络状态如何从空白变成目标实例。先迁移 Treasury，再把它的地址传给 Registry；每一步都保存 migration 编号、发送账户、交易哈希、Receipt、区块和合约地址。重复执行时必须说明是新网络、补充编号还是故意重放，不能让旧 artifact 或旧地址悄悄混入。
+
+~~~javascript
+const Treasury = artifacts.require("Treasury");
+const Registry = artifacts.require("Registry");
+
+module.exports = async function (deployer) {
+  await deployer.deploy(Treasury);
+  const treasury = await Treasury.deployed();
+  await deployer.deploy(Registry, treasury.address);
+};
+~~~
+
+<Callout type="trap" title="重复迁移与陈旧地址混在一起">
+  现象：代码已更新，脚本却继续调用旧地址，或再次执行迁移后测试偶尔读到不同实例。原因：artifact、migration 编号、网络数据目录和地址注册表没有一起更新。修法：清楚标注目标网络，保存新的 migration ledger，核对地址上的 Runtime Code 与 artifact，再让交互脚本从同一账本加载实例。
+</Callout>
+
+## 10.7 合约交互
+
+合约交互前先标注路径类型：改变状态的是交易，仅读取或模拟的是 call，Contract Abstraction 则是把 ABI、地址、网络和账户组合成可调用对象的客户端边界。每条路径都要保存输入、调用者、区块上下文和原始返回，而不是把“有返回值”统一解释成成功。
+
+## 10.7.1 交易
+
+交易需要调用者、nonce、Gas、签名、交易哈希、Receipt 与确认策略。发布判断应在 Receipt 状态、事件、前后状态和目标区块都核对后进行；交易哈希进入内存池并不等于合约函数已经执行，更不等于业务索引器已经完成更新。
+
+## 10.7.2 调用
+
+只读调用在指定 provider 和区块上下文中模拟执行，不提交共识状态，因此通常没有交易 Receipt。它适合读取余额、检查权限和预估分支，但不能证明转账、登记或迁移已经发生；调用者与区块标记仍要记录，否则同一个 call 可能在不同状态上得到不同答案。
+
+## 10.7.3 合约抽象
+
+Contract Abstraction 通常由 artifact 的 ABI、部署网络记录和地址共同生成实例。使用它可以把 `instance.method()` 的调用映射回具体合约，但抽象层不会替你验证地址属于哪条链，也不会替你区分 Promise 返回的模拟结果与需要等待 Receipt 的状态交易。
+
+## 10.7.4 与合约交互
+
+一次可复核的交互要绑定四个对象：目标 Network Profile、合约地址、ABI 和调用账户。发送前检查函数选择器与参数编码，发送后按路径保存 result 或 Receipt、事件、错误、Gas 与状态差异；如果地址或 ABI 任一项来自不同部署批次，应停止而不是自动重试。
+
+## 10.7.5 添加一个新合约到网络
+
+新增合约时先加入 contracts 与对应的 migration 脚本，再编译全部依赖并生成新的迁移编号。部署完成后把新 artifact、编号、地址、Receipt 和代码摘要写入 Migration Ledger；旧合约继续服务时，要在记录中明确旧地址与新地址的用途，避免用名称相同掩盖实例不同。
+
+## 10.7.6 使用现有合约地址
+
+使用现有地址前必须验证地址、目标 chain ID、区块上下文和链上代码摘要，再用兼容 ABI 建立 Contract Abstraction。地址能被 JSON 读取只说明格式正确，不能说明网络正确；若没有部署 Receipt 或代码核对记录，应把该地址视为未验收输入。
+
+## 10.7.7 向合约发送以太币
+
+向合约发送以太币需要确认接收函数的 payable 语义、value 单位、发送账户余额、Gas 与回退路径。发送后保存 Receipt、事件、合约余额和账本状态；若接收函数回滚，调用者余额和合约余额都应保持可解释，不能只凭钱包界面的余额刷新判断成功。
+
+~~~javascript
+const receipt = await treasury.sendTransaction({
+  from: sender,
+  value: web3.utils.toWei("1", "ether"),
+});
+assert.equal(receipt.receipt.status, true);
+~~~
+
+## 10.8 测试合约
+
+合约测试从 Fixture 建立确定起点，再覆盖成功、边界、权限拒绝、余额不足和外部调用失败。每个测试都应断言可观察结果：事件、Receipt、余额、存储或回滚原因；只断言“没有抛异常”无法证明目标状态正确，也无法发现迁移到了错误网络。
+
+## 10.9 JavaScript测试
+
+JavaScript 测试适合编排部署、账户、交易和跨合约场景，可以读取 Receipt 与事件并组织多个调用的先后关系。测试要显式等待异步交易完成，分别断言状态和错误，并在每个用例开始时重新取得 Fixture，避免上一个用例留下的余额或地址改变当前结论。
+
+~~~javascript
+it("records a funded treasury", async () => {
+  const before = await web3.eth.getBalance(treasury.address);
+  const receipt = await treasury.sendTransaction({ from: sender, value: 10 });
+  const after = await web3.eth.getBalance(treasury.address);
+  assert.equal(receipt.receipt.status, true);
+  assert.equal(BigInt(after) - BigInt(before), 10n);
+});
+~~~
+
+## 10.10 Solidity测试
+
+Solidity 测试把断言和合约调用放在接近 EVM 的位置，适合验证访问控制、状态转移和回滚条件。它仍然需要明确 Fixture、调用者和预期失败分支；测试合约自身的 helper 不应把真实合约的权限检查绕开，否则通过结果不能代表线上调用路径。
+
+~~~solidity
+function testRejectsZeroTreasury() public {
+    bool reverted = false;
+    try new Registry(address(0)) {
+        reverted = false;
+    } catch {
+        reverted = true;
+    }
+    require(reverted, "zero address accepted");
 }
-```
+~~~
 
-第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把接口、合约或确认落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
+## 10.11 Truffle配置文件
 
-## 正式目录逐项讲解
+配置文件把 networks、provider、Compiler 和 migrations_directory 等运行约束集中起来。每个网络 profile 都应给出 chain ID、RPC 来源、账户来源、Gas 策略和数据目录；不要把私钥直接写入仓库。CI 使用的 profile 与本地 profile 要能通过日志区分，避免“同名 network”造成不可见漂移。
 
-### 第10章 Truffle详解
+## 10.12 依赖管理
 
-“第10章 Truffle详解”位于本页正式目录坐标 1/21。Truffle项目用contracts、migrations、test与配置组织工程。历史版本需在锁文件和隔离运行时中重放；目录存在不代表网络、账户、编译器和artifact一致。
+依赖管理不仅是安装包，还包括版本范围、锁文件、完整性摘要和 artifact 的生成来源。提交 package manifest 与 lockfile，升级依赖时记录 ABI、字节码和测试结果的变化；若历史 Truffle 依赖无法在现代 Node 上运行，应锁定隔离运行时并记录替代方案，而不是悄悄扩大版本范围。
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
+## 10.13 本章小结
 
-### 10.1 什么是Truffle
+本章的验收链可以压缩为：Project Manifest 固定输入，Artifact Bundle 固定构建产物，Migration Ledger 固定部署顺序与地址，Contract Abstraction 固定交互边界，Fixture 固定测试起点，Network Profile 固定链和账户。只有这六类证据首尾相接，Truffle 项目的“成功”才可以由另一位复核者从空目录重放。
 
-“10.1 什么是Truffle”位于本页正式目录坐标 2/21。Truffle项目用contracts、migrations、test与配置组织工程。历史版本需在锁文件和隔离运行时中重放；目录存在不代表网络、账户、编译器和artifact一致。
+## 练习与答案
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
+<Exercises>
 
-### 10.2 安装Truffle
+**问题 1：改 Demo 代码。** 为项目生命周期 Demo 增加一个“迁移后核对代码摘要”的状态。除了地址和 Receipt，还要保存哪些字段，才能判断新实例属于目标网络和目标 artifact？
 
-“10.2 安装Truffle”位于本页正式目录坐标 3/21。平台安装路径不同，但验收合同一致：来源可信、摘要匹配、版本明确、架构正确、数据目录隔离、端口最小暴露。包管理器安装成功不能替代这些检查。
+<Answer>
+  至少保存 Network Profile、migration 编号、交易哈希、Receipt、合约地址、目标区块、链上 Runtime Code 摘要和对应 artifact 摘要。地址只做索引，必须把同一 provider 读到的代码与构建记录对照。
+</Answer>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
+**问题 2：交互分类。** `call` 返回了预期余额，但业务需要记录一次向 Treasury 的入账。这个结果能否直接发布？
 
-### 10.3 创建并初始化项目
+<Answer>
+  不能。`call` 是只读模拟，不产生 Receipt 和状态改变。应发送带 value 的交易，等待 Receipt，核对事件、合约余额、调用者余额和确认区块；失败时保留错误对象与未改变的前状态。
+</Answer>
 
-“10.3 创建并初始化项目”位于本页正式目录坐标 4/21。Truffle项目用contracts、migrations、test与配置组织工程。历史版本需在锁文件和隔离运行时中重放；目录存在不代表网络、账户、编译器和artifact一致。
+**问题 3：测试回滚。** JavaScript 测试已经覆盖一次成功迁移，怎样补一条能证明零地址构造参数不会污染状态的证据？
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
+<Answer>
+  使用独立 Fixture，记录迁移前状态，调用带零地址的构造函数并断言明确回滚，再读取目标注册表或余额确认没有新实例或异常状态。Solidity 测试可以在 EVM 内用 try/catch 断言同一拒绝条件。
+</Answer>
 
-### 10.4 创建合约
+</Exercises>
 
-“10.4 创建合约”位于本页正式目录坐标 5/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
+## 术语表
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.5 编译合约
-
-“10.5 编译合约”位于本页正式目录坐标 6/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.6 迁移合约
-
-“10.6 迁移合约”位于本页正式目录坐标 7/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7 合约交互
-
-“10.7 合约交互”位于本页正式目录坐标 8/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.1 交易
-
-“10.7.1 交易”位于本页正式目录坐标 9/21。Truffle把编译产物、网络配置、迁移状态和测试组织成工程生命周期。可重复部署依赖迁移编号、目标网络、账户、artifact和依赖版本一致；交互成功也必须由事件、回执和状态断言证明。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.2 调用
-
-“10.7.2 调用”位于本页正式目录坐标 10/21。只读调用在指定区块上下文模拟执行，不产生共识状态；状态交易经签名、传播、入块和执行后才可能改变状态。两者的错误、Gas和最终性语义不同。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.3 合约抽象
-
-“10.7.3 合约抽象”位于本页正式目录坐标 11/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.4 与合约交互
-
-“10.7.4 与合约交互”位于本页正式目录坐标 12/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.5 添加一个新合约到网络
-
-“10.7.5 添加一个新合约到网络”位于本页正式目录坐标 13/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.6 使用现有合约地址
-
-“10.7.6 使用现有合约地址”位于本页正式目录坐标 14/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.7.7 向合约发送以太币
-
-“10.7.7 向合约发送以太币”位于本页正式目录坐标 15/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.8 测试合约
-
-“10.8 测试合约”位于本页正式目录坐标 16/21。合约是由交易触发的确定性状态机。调用者、输入、前状态、代码和执行环境共同决定后状态；权限、外部调用、资源上限和失败回滚必须显式验证。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.9 JavaScript测试
-
-“10.9 JavaScript测试”位于本页正式目录坐标 17/21。测试从确定创世状态开始，每例隔离账户和时间，断言事件、回执、余额、存储和回滚。JavaScript便于跨组件编排，Solidity测试贴近EVM，两者都需覆盖攻击路径。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.10 Solidity测试
-
-“10.10 Solidity测试”位于本页正式目录坐标 18/21。测试从确定创世状态开始，每例隔离账户和时间，断言事件、回执、余额、存储和回滚。JavaScript便于跨组件编排，Solidity测试贴近EVM，两者都需覆盖攻击路径。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.11 Truffle配置文件
-
-“10.11 Truffle配置文件”位于本页正式目录坐标 19/21。Truffle项目用contracts、migrations、test与配置组织工程。历史版本需在锁文件和隔离运行时中重放；目录存在不代表网络、账户、编译器和artifact一致。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.12 依赖管理
-
-“10.12 依赖管理”位于本页正式目录坐标 20/21。配置文件决定网络、编译器与部署账户，依赖决定源代码和artifact。环境变量只保存引用，敏感值由外部密钥管理提供；锁文件与完整性摘要进入发布证据。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### 10.13 本章小结
-
-“10.13 本章小结”位于本页正式目录坐标 21/21。“第10章 Truffle详解”的收束不是名词列表，而是把对象、授权、执行顺序、状态不变量和版本边界连接成一条可重放轨迹。
-
-以“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”作为通过标准；只展示成功截图、最终余额或交易哈希都不构成完整证据。通过标准是“能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-## 正常、边界与故障矩阵
-
-| 样本   | 只改变的变量                      | 预期结果               | 必存证据                   |
-| ------ | --------------------------------- | ---------------------- | -------------------------- |
-| 正常   | 合法输入与足额资源                | 状态提交并达到确认阈值 | 前后状态、哈希、回执、版本 |
-| 边界   | 零值、最大值或恰好阈值            | 按明确规则接受或拒绝   | 边界值、判断分支、资源消耗 |
-| 单故障 | 签名、nonce、网络、权限或链接一项 | 提交前拒绝且原状态不变 | 错误对象、首个差异、回退点 |
-
-测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
-
-## 常见失败与回退
-
-
-## 小结
-
-- Truffle用contracts、migrations和test组织工程
-- 可重复部署依赖迁移编号、网络和artifact一致
-- 交易与调用语义不同，只读调用不产生共识状态
-- JavaScript测试便于编排，Solidity测试贴近EVM
-- 配置文件决定网络和编译器，锁文件进入发布证据
-
-## 本章回顾
-
-覆盖项目初始化、合约、编译、迁移、交互、测试、配置和依赖管理的完整历史工作流。 Truffle把编译产物、网络配置、迁移状态和测试组织成工程生命周期。可重复部署依赖迁移编号、目标网络、账户、artifact和依赖版本一致；交互成功也必须由事件、回执和状态断言证明。 掌握标准不是记住命令或界面，而是能从空项目创建、编译、迁移两个有依赖的合约，分别执行交易与调用，并用JavaScript和Solidity测试覆盖成功与回滚。。发布前必须由独立观察者从来源和固定配置重放正常、边界及单故障样本。
-
+<Glossary>
+  <GlossaryItem term="Project Manifest">
+    记录项目目录、源码入口、工具版本、网络、账户来源和依赖锁定策略的项目清单。
+  </GlossaryItem>
+  <GlossaryItem term="Artifact Bundle">
+    把 ABI、创建字节码、运行时代码、元数据和编译日志绑定在一起的构建产物包。
+  </GlossaryItem>
+  <GlossaryItem term="Migration Ledger">
+    按 migration 编号记录部署顺序、交易回执、区块、地址和代码核对结果的部署账本。
+  </GlossaryItem>
+  <GlossaryItem term="Contract Abstraction">
+    将 ABI、网络地址和账户组合成客户端可调用实例的合约抽象层。
+  </GlossaryItem>
+  <GlossaryItem term="Fixture">
+    为每个测试建立稳定起点的账户、合约、余额和配置集合，用来隔离测试状态。
+  </GlossaryItem>
+  <GlossaryItem term="Network Profile">
+    描述 provider、chain ID、账户来源、Gas 策略和数据目录的网络运行档案。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [上一页：第9章 Solidity合约编译、部署](/learn/blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy)
-- [下一页：第11章 以太坊DApps应用开发实战](/learn/blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice)
+[上一页：第9章 Solidity合约编译、部署](/learn/blockchain-dev-practice/10-09-contract-compile-deploy/bdp-09-contract-compile-deploy)
+· [下一页：第11章 以太坊DApps应用开发实战](/learn/blockchain-dev-practice/12-11-dapps-practice/bdp-11-dapps-practice)
 
 <Attribution
   mode="independent-rewrite"
   sourceBasis="publisher-catalog"
-  workTitle="《区块链开发实战》2018版"
+  workTitle="《区块链开发实战：以太坊关键技术与案例分析》"
   adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 />
-

@@ -3,78 +3,214 @@ title: "第 10 章 Materials and Shaders：遮罩、通道与角色着色"
 type: A
 section: "玩转 Blender 第 3 版 · UV、纹理与材质"
 order: 10
-description: "覆盖材质理解、Masks and Layers、Channels、Jim 角色着色与 Render Tests。"
+description: "从材质参数、遮罩层和通道语义出发，建立 Jim 角色的可解释着色与受控渲染测试。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-10
 ---
 
+import {
+  Bl3Ch10MaterialModelLab,
+  Bl3Ch10MaskChannelsLab,
+  Bl3Ch10RenderTestLab,
+} from "@/components/mdx/blender-3d/04-lookdev/bl3-10-materials-shaders";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 问题：为什么同一张 Base Color 不能让皮肤、布料和金属看起来不同
+<Objectives>
 
-先预测：三个区域颜色正确但 Roughness 和 Specular 完全相同，是否能读出不同材质？很难。第十章把纹理像素解释成着色参数，通过 Masks and Layers 控制区域，通过 Channels 提供颜色和非颜色数据，再在固定灯光下运行 Render Tests，完成 Jim 的材质外观。
+- 能解释 Material、Shader、纹理通道和灯光如何共同产生表面响应
+- 能用 Mask 与 Layers 把角色区域映射到颜色、粗糙度和法线输入
+- 能在固定灯光下为皮肤、布料和金属修改 Principled BSDF 参数
+- 能回答：如何用受控 Render Test 判断一次通道修改确实改善了材质？
 
-## 原书边界与官方小节
+</Objectives>
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+{/* BL3_CH10_QUALITY_V2 */}
 
-- **Understanding Materials**
-- **Masks and Layers**
-- **Channels**
-- **Shading Your Character**
-- **Running Render Tests**
+## 问题：为什么同一张 Base Color 不能让皮肤、布料和金属看起来相同又合理
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+先预测：三个区域的颜色接近，但 Roughness 和 Normal 都一样，灯光下能否稳定读出材质差异？很难。颜色只是输入的一部分；表面如何反射、散射和响应视角，还取决于材质参数、遮罩、通道解释以及测试时的灯光基线。
 
-## 从纹理通道到 BSDF 参数
+本章要解决的是“图像数据如何变成表面行为”。没有材质和 Shader 的责任边界，纹理绘制只能停留在颜色贴图；没有固定 Render Test，任何调整都可能被一盏更讨喜的灯光掩盖，无法证明改动本身有效。
 
-Material 组织节点和表面规则，Shader 根据几何、光照与参数计算响应，Image 只是参数来源。Mask 以 0 到 1 控制层混合，颜色通道使用 sRGB，粗糙度、金属度、法线和遮罩作为 Non-Color 数据。Principled BSDF 将常见材质参数统一，但皮肤、布料、金属仍需要不同粗糙度、法线尺度和能量响应。
+## 本章知识点清单
 
-## 五个核心术语与责任边界
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Material 与 Shader | 材质模型实验 | Material、Shader、Principled BSDF | 参数从哪里进入表面响应 |
+| Masks and Layers | 遮罩通道实验 | Mask | 层混合边界在哪里 |
+| Channels | 遮罩通道实验 | Channel | 颜色与数据如何区分 |
+| Shading Your Character | 材质模型实验 | Roughness、Normal | 皮肤、布料、金属为何不同 |
+| Running Render Tests | 受控渲染实验 | Render Test | 如何固定变量比较结果 |
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Understanding Materials
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+**<Term>Material</Term>** 是把表面目标、纹理输入和节点关系组织在一起的资产；**<Term>Shader</Term>** 则根据几何、视角、光照和这些参数计算最终的表面响应。图像只是数据来源，不会单独决定“像不像金属”；同一张颜色图接入不同的 Roughness、Normal 和遮罩，结果可能完全不同。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+在 Blender 中，可以把角色材质拆成三层责任：纹理负责提供局部数据，节点负责转换与混合，Shader 负责在灯光下产生响应。**<Term>Principled BSDF</Term>** 把常见的 Base Color、Roughness、Metallic、Normal 等输入放在一个可观察的表面模型里，便于逐项改变并记录结果。先用中性灰背景、固定相机和三点参考灯建立基线，再判断某个参数是否真的解释了画面。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+皮肤需要较柔和且有局部变化的高光，布料通常更分散、更受织物方向影响，金属则依赖清晰反射和边缘状态。这里的区别不是给三种材质贴三个标签，而是让每一项参数都能对应到一个可观察的光照现象。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+<Bl3Ch10MaterialModelLab />
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+## Masks and Layers
 
-## 关键对象与数据流
+**<Term>Mask</Term>** 是一个控制“某层影响哪里、影响多少”的灰度输入，通常把 0 理解为不影响、1 理解为完全影响，中间值则形成过渡。Masks and Layers 的价值在于把边缘磨损、服装接缝、面部色差等局部变化限制在应该出现的位置，而不必复制整套材质。
 
-先建立中性三点灯和灰色背景，锁定曝光与色彩管理。为 Jim 的皮肤、衣服和金属定义材质目标，用 Base Color、Roughness、Normal 和 Masks 驱动 Principled BSDF；逐通道启停，确认每个输入只改变预期属性。最后用近景、中景和轮廓角度 Render Test 检查高光、接缝、法线和层混合。
+先建立稳定的基础层，再用 Mask 混合第二层颜色、粗糙度或法线。检查 Mask 时不要只看最终渲染：单独显示灰度、反转一次、放大边界，确认它没有越过 UV 接缝或污染相邻部件。一个好的层结构能回答“哪个区域被修改、修改了哪个通道、为什么在这里修改”。
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+### 层混合的可追踪顺序
 
-## 正常、边界与失败样本
+1. 为区域命名并保存未经修改的基础层。
+2. 单独显示 Mask，确认灰度范围与边缘过渡。
+3. 只把一层变化接入一个 Channel，记录预期的表面现象。
+4. 在固定灯光下比较接入前后，保留输入、节点和渲染截图。
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+## Channels
 
+**<Term>Channel</Term>** 是一张图像或一个节点输出所承载的具体信息通道。Base Color 的数值通常按颜色空间解释；Roughness、Metallic、Normal 和 Mask 更接近供节点计算的数值数据，应按 Non-Color 语义读取。若把数据图当成颜色显示，或把颜色图当成线性数据使用，数值会在进入 Shader 前就发生错误。
+
+把每个通道视为一份有契约的输入：它有名称、用途、色彩空间、范围和下游节点。逐通道启停时，Base Color 应主要改变颜色，Roughness 应主要改变高光宽度，Normal 应主要改变微表面方向；若三个输入都同时改变，诊断就失去基准。对外部纹理使用与第九章一致的 Texture Set 命名，避免文件名和节点语义漂移。
+
+<Bl3Ch10MaskChannelsLab />
+
+## Shading Your Character
+
+为 Jim 着色时，先建立皮肤、布料、金属、眼球和头发的材质清单，再为每种材质写下 Base Color、Roughness、Normal 和可选 Mask 的目标。先在中性光照下让材质分区成立，再加入细节和局部变化；不要用过强的美术灯光把错误的粗糙度或法线“照得好看”。
+
+皮肤的颜色变化应该服从面部体积和镜头距离，布料要让褶皱、织物方向和接缝有可读的反射差异，金属则要用清晰高光和边缘磨损说明它的反射能力。每次只改一个输入，记录参数、预期现象和实际现象；如果整个角色同时变亮或变暗，先查颜色空间、曝光和灯光，而不是立刻重画纹理。
+
+### 正常、边界与故障材质
+
+正常样本是三种材质在同一灯光下有稳定差异；边界样本把 Roughness 推到极高或极低、降低贴图分辨率，观察适用范围；故障样本反转 Normal、把 Roughness 当 sRGB 或断开 Mask，确认 Render Test 能把错误指向具体输入。
+
+## Running Render Tests
+
+**<Term>Render Test</Term>** 是一组锁定相机、曝光、世界背景和参考灯的对照渲染，用来验证一个输入变化是否带来预期表面现象。至少保留近景、中景和轮廓角度：近景检查法线与高光宽度，中景检查材质分区，轮廓角度检查反射强弱和形体边界。EEVEE 与 Cycles 可以分别运行，但必须记录渲染器差异，不要把差异误判成贴图错误。
+
+测试矩阵应包含输入版本、改动通道、预期、实际、截图和下一步。先渲染基线，再只关闭 Base Color、Roughness、Normal 或区域 Mask 中的一项，最后运行修改后的版本。若只有换灯后结果才成立，就说明结论依赖隐藏条件；若固定基线下仍能观察到对应变化，才算完成材质验收。
+
+<Bl3Ch10RenderTestLab />
+
+<Callout type="trap" title="颜色一样不代表材质一样">
+  现象：皮肤、布料和金属都贴了正确颜色，画面却像同一种塑料。原因：Roughness、Normal 和反射响应没有按材质目标区分。修法：在固定灯光下逐通道修改，记录高光宽度、反射强度和表面尺度，再回到材质清单复核。
+</Callout>
+
+<Callout type="trap" title="Mask 看起来正确但层混合方向反了">
+  现象：磨损或接缝出现在相反区域，或者边界突然变硬。原因：灰度方向、反转设置或 UV 边界没有被单独检查。修法：先显示 Mask 灰度，再测试反转和边界过渡，确认 Layer 只写入预期 Channel。
+</Callout>
+
+<Callout type="trap" title="渲染器换了就以为材质坏了">
+  现象：EEVEE 与 Cycles 的高光宽度或阴影不同，作者直接重画纹理。原因：灯光、曝光、采样和渲染器语义没有分开记录。修法：保留同一节点语义的双渲染对照，先锁定基线，再区分输入错误与渲染器不可等价项。
+</Callout>
+
+## 三组材质验收实验
+
+<Stepper>
+  <Step title="1. Material、Shader 与 Principled BSDF">
+    先猜一猜：把皮肤切换成金属时，哪一个输入最先改变高光形状？选择表面并接入 Normal，观察材质目标如何进入 Shader 响应。
+
+    <Bl3Ch10MaterialModelLab />
+  </Step>
+  <Step title="2. Masks、Layers 与 Channels">
+    先预测：同一张灰度 Mask 写入 Base Color、Roughness 和 Normal，会产生相同的视觉变化吗？切换区域与通道，比较“在哪里混合”和“混合代表什么”。
+
+    <Bl3Ch10MaskChannelsLab />
+  </Step>
+  <Step title="3. Shading 与受控 Render Test">
+    先预测：只更换 EEVEE/Cycles，是否仍能证明材质参数修改有效？选择近景、中景或轮廓角度，锁定基线后执行测试并记录证据。
+
+    <Bl3Ch10RenderTestLab />
+  </Step>
+</Stepper>
+
+## 验收证据：把外观变成可复现的判断
+
+交付包至少包含：材质清单、节点图、每张图的色彩空间、Mask 灰度图、逐通道启停截图、Principled BSDF 参数、固定灯光与曝光、近景/中景/轮廓 Render Test、EEVEE/Cycles 对照以及故障样本的诊断结论。每一项证据都要带输入版本、预期现象和实际现象。
+
+材质签收不能只看最终美术灯光。先用中性世界、固定相机和三盏参考灯确认皮肤、布料、金属和眼球在同一条件下的高光宽度、反射强度和表面细节；然后分别断开 Base Color、Roughness、Normal 与区域 Mask，保存逐通道结果。最后把 Base Color 误设为 Non-Color、把 Roughness 误设为 sRGB、反转法线 Y 通道并断开 Mask，确认故障图与修法一一对应。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-第三版的 Masks、Channels、Principled 思路仍稳定，但 Principled BSDF 版本、输入名称和 EEVEE/Cycles 行为可能变化。迁移以物理参数语义和受控 Render Test 为准，不依赖节点插槽序号。
+第三版的 Material、Masks、Channels、Principled 思路和受控 Render Test 仍然稳定；当前版本可能改变 Principled BSDF 输入名称、颜色管理、EEVEE/Cycles 行为和节点界面布局。迁移时保留参数语义、通道色彩空间、Mask 边界、灯光基线和证据矩阵，不把节点插槽顺序或菜单位置当成知识本身。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含材质清单、节点图、每张图色彩空间、Mask 可视化、逐通道启停、固定灯光基线及三种距离 Render Tests。皮肤、布料和金属差异必须能由参数解释。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
-
-材质签收采用受控 Lookdev 矩阵，而不是只看最终美术灯光。固定中性世界、曝光、相机和三盏参考灯，分别关闭 Base Color、Roughness、Normal 与区域 Mask，保存逐通道结果；皮肤、布料、金属和眼球需要在相同照明下呈现可解释的高光宽度、反射强度和表面细节。随后把 Base Color 误设为 Non-Color、把 Roughness 误设为 sRGB、反转法线 Y 通道并断开 Mask，确认故障图与诊断结论一一对应。最后在 EEVEE 与 Cycles 中对照同一节点语义，记录不可等价项，避免用渲染器差异掩盖输入配置错误。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目引入额外层、UDIM 或外部烘焙工具，也要说明它如何回到材质节点、目标通道和固定 Render Test，而不是只记录工具名称。
 
 ## 小结
 
-- 纹理提供数据，材质和 Shader 解释数据
-- Mask 与 Channels 组织区域和属性语义
-- 颜色与非颜色数据需要不同色彩空间
-- Render Test 必须锁定灯光与曝光
+- Material 组织输入，Shader 在光照下产生表面响应
+- Mask 决定区域，Channel 决定数据的具体语义
+- 皮肤、布料和金属要用可解释的参数差异区分
+- Render Test 必须锁定灯光、曝光、相机和改动通道
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：材质诊断。** 皮肤和金属使用同一张 Base Color，渲染时高光也几乎一样。你会先检查哪些输入？请把预期的修复证据写出来。
+
+<Answer>
+  先在固定灯光下分别检查 Roughness、Metallic、Normal 和颜色空间，再逐个断开输入确认影响范围。修复证据应包含两种材质的参数表、近景与轮廓 Render Test，以及高光宽度、反射强度和表面细节的前后对照。
+</Answer>
+
+**问题 2：修改实验。** 在 `Bl3Ch10MaskChannelsLab` 中把“服装接缝”从 Roughness 切换到 Base Color，再反转 Mask。请描述两个变化分别改变了什么，以及如何确认没有写错区域。
+
+<Answer>
+  切换到 Base Color 会让接缝改变颜色分区，而不是只改变高光宽度；反转 Mask 会把层移到原先未选中的区域。先单独查看灰度 Mask，再在 UV 边界和最终角色上比较，最后记录输入通道与边界截图。
+</Answer>
+
+**问题 3：渲染测试设计。** 你发现 Cycles 中的布料比 EEVEE 更亮，如何判断是渲染器差异、灯光差异还是材质节点错误？
+
+<Answer>
+  先锁定同一相机、世界、三点灯、曝光、颜色管理和节点版本，分别输出两个渲染器的基线图；再只改变一个材质输入并比较同一视角。如果基线就有差异，记录为渲染器不可等价项；如果只有改动后异常，继续检查通道、颜色空间和节点连接。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Material">
+    把表面目标、纹理输入和节点关系组织在一起，供模型在灯光下呈现材质外观的资产。
+  </GlossaryItem>
+  <GlossaryItem term="Shader">
+    根据几何、视角、灯光和材质参数计算表面应该如何响应的程序或节点逻辑。
+  </GlossaryItem>
+  <GlossaryItem term="Principled BSDF">
+    Blender 中把常见颜色、粗糙度、金属度和法线等输入集中到一个表面模型的节点。
+  </GlossaryItem>
+  <GlossaryItem term="Mask">
+    用灰度值控制某一层影响哪些区域以及影响强度的图像或节点输入。
+  </GlossaryItem>
+  <GlossaryItem term="Channel">
+    图像或节点输出中承载一种具体信息的通道，例如颜色、粗糙度或法线数据。
+  </GlossaryItem>
+  <GlossaryItem term="Render Test">
+    锁定灯光、相机和曝光后进行的对照渲染，用来证明某个输入改变是否产生预期效果。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：绘制纹理](/learn/blender-3d/04-lookdev/bl3-09-painting-textures) · [下一章：角色绑定](/learn/blender-3d/05-rig-animation/bl3-11-character-rigging)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

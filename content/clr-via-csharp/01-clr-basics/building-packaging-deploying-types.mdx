@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-02
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcBuildingPackagingArtifactGraphLab,
+  CvcBuildingPackagingVersionMatrixLab,
+  CvcBuildingPackagingDeploymentRollbackLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-building-packaging-deploying-types";
 
 <Objectives>
 
@@ -75,9 +84,15 @@ foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
 这段运行时反射会加载程序集，可能触发dependency resolution；若只想静态审计不执行代码，应使用`System.Reflection.Metadata`或隔离工具进程。工具选择本身就是安全边界。
 
 <Stepper>
-  <Step title="切换module、manifest、resource与deployment"></Step>
-  <Step title="建立metadata inventory">记录MVID、assembly identity、references、files、resources、entry point和custom attributes。</Step>
-  <Step title="对照输出目录">逐项确认manifest内声明、build产物、package清单和实际部署文件，没有孤儿或缺失依赖。</Step>
+  <Step title="切换module、manifest、resource与deployment">
+    <CvcBuildingPackagingArtifactGraphLab />
+  </Step>
+  <Step title="建立version vector与metadata inventory">
+    <CvcBuildingPackagingVersionMatrixLab />
+  </Step>
+  <Step title="对照输出目录并演练回滚">
+    <CvcBuildingPackagingDeploymentRollbackLab />
+  </Step>
 </Stepper>
 
 ## Combining Modules to Form an Assembly
@@ -112,6 +127,14 @@ Windows file version resource可包含FileVersion、ProductVersion、Company等�
 
 <Term def="assembly identity、file diagnostics、product/SemVer与source commit等版本坐标组成的发布证据。">version vector</Term>
 
+### Assembly Version Resource Information
+
+Windows version resource 把 FileVersion、ProductVersion、Company 和 build provenance 暴露给运维工具；它服务的是文件诊断与发布清单，不等同于 CLR manifest 中的 assembly identity。检查时要同时保存 PE version resource、assembly manifest、签名状态和生成工具版本，避免现场只看属性面板就误判加载身份。
+
+### Version Numbers
+
+版本号要按 consumer 分层：`AssemblyVersion` 参与强名称引用和 Framework binding，`AssemblyFileVersion` 帮助运维定位文件，`AssemblyInformationalVersion` 表达 SemVer、分支和 commit。每次变更都应记录兼容规则与回滚键；只改其中一个字段，不能自动证明 API 或行为兼容。
+
 ```csharp
 [assembly: AssemblyVersion("4.0.0.0")]
 [assembly: AssemblyFileVersion("4.2.17.0")]
@@ -120,11 +143,9 @@ Windows file version resource可包含FileVersion、ProductVersion、Company等�
 
 稳定`AssemblyVersion`可降低Framework生态中的binding churn，但不自动保证兼容；每次改动File/Informational版本利于定位现场。现代NuGet package version和assembly version也可不同，发布清单应同时记录，避免只凭文件名猜版本。
 
-<Stepper>
-  <Step title="切换assembly、file、informational与culture版本"></Step>
-  <Step title="填写版本矩阵">为每个版本字段记录consumer、改变频率、兼容规则、诊断入口和回滚键。</Step>
-  <Step title="执行升级实验">让旧consumer分别加载兼容与破坏性新版本，观察compile、restore、bind和behavior各在哪一层失败。</Step>
-</Stepper>
+1. 切换 `AssemblyVersion`、`FileVersion`、`AssemblyInformationalVersion` 与 culture，先写出各自 consumer。
+2. 填写版本矩阵：记录改变频率、兼容规则、诊断入口和回滚键。
+3. 让旧 consumer 分别加载兼容与破坏性新版本，观察 compile、restore、bind 和 behavior 各在哪一层失败。
 
 <Callout type="trap" title="文件属性显示的新版本就是CLR绑定的新版本">
 FileVersion主要供文件诊断；CLR读取manifest AssemblyVersion与强名称身份。只更新文件版本不会改写已有AssemblyRef，也不会解决API不兼容。
@@ -152,11 +173,9 @@ Assembly culture通常用于satellite resource身份；主代码assembly一般�
 
 配置与binary可以分开发布，但必须通过兼容contract连接。数据库schema、feature flag和endpoint改变应支持先部署兼容代码、再切配置、最后清理旧路径。Rollback也要按相反顺序验证，不能假设恢复旧DLL能理解新配置或新数据。
 
-<Stepper>
-  <Step title="切换build、package、configure与activate"></Step>
-  <Step title="生成release manifest">列出每个managed/native/resource/config文件的hash、来源、版本、架构和owner。</Step>
-  <Step title="演练失败与回滚">注入缺DLL、错架构、坏resource、无效配置和启动超时，证明切换前失败不会污染当前版本。</Step>
-</Stepper>
+1. 区分 build、package、configure 与 activate 四个阶段，避免把复制当成发布。
+2. 生成 release manifest：列出每个 managed/native/resource/config 文件的 hash、来源、版本、架构和 owner。
+3. 注入缺 DLL、错架构、坏 resource、无效配置和启动超时，证明切换前失败不会污染当前版本。
 
 <Callout type="trap" title="私有部署就是复制bin目录，因此不需要发布协议">
 复制只解决文件传输。依赖closure、配置兼容、并发覆盖、健康检查、原子激活、日志关联和回滚仍需显式设计。

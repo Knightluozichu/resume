@@ -3,253 +3,259 @@ title: "Mathematics of 3D Graphics"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "Computer Graphics: Principles and Practice Chapter 4"
+description: "用坐标空间、齐次坐标与点积建立三维图形的数学直觉，并把光照量和硬件执行连接到图形管线。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh04MathLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch04-math";
 
 <Objectives>
 
-- 能用自己的话解释Mathematics of 3D Graphics的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 4之间的关系是什么？
+- 能推导一个点经过旋转、缩放和平移后的坐标，并说明每个操作改变了什么
+- 能修改 MathViz 的角度或尺度，分别判断方向、能量比例和执行等待的变化
+- 能回答：同一物体变暗或变慢时，如何用坐标、光照和硬件证据定位首个偏离？
 
 </Objectives>
 
-## 为什么需要Mathematics of 3D Graphics
+## 先把画面想成一张地图
 
-Computer Graphics: Principles and Practice, 3rd Edition将Mathematics of 3D Graphics作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+想象你在一张透明地图上移动一个标记。若没有固定的原点和方向，“向右移动”没有可复核的含义；换一张地图后，同一个标记也可能出现在完全不同的位置。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决的就是这个问题：把移动、转向、放大和朝向写成可以手算、可以观察、也可以交给机器重复执行的规则。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+没有这套规则，物体会漂移，明暗会随意改变，更多执行单元也未必让画面更快。读完后，你应能从一个数字或一条向量证据开始，而不是凭最后一张截图猜原因。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：数学为什么要进入图形管线
 
-Computer Graphics: Principles and Practice Chapter 4正是这一哲学在特定领域的具体体现。
+<Term def="描述一个点或向量所依据的原点、轴方向和单位的一套参照规则。">
+  坐标空间
+</Term>
+让计算机图形学导论中的“位置”有了可比较的意义：模型空间描述物体自身，世界空间描述物体之间的关系，观察空间描述相机看到的关系。每次转换都应留下输入、变换和输出，才能在画面异常时回到第一处不一致。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+本章把 Graphics Pipeline（图形管线）看成一条数学契约：顶点从模型空间进入世界空间，再进入观察与裁剪步骤，之后才会成为片段和像素。Graphics Pipeline（图形管线）并不是一个只会吐出颜色的黑盒；每一站都接收带有坐标、方向或能量的量，并交付下一站可以验证的结果。理解这条链，才能知道公式应该放在哪里、证据应该在哪一站采集。
+
+### 坐标空间：同一个点的不同参照
+
+一个点写成 `(1, 0, 0)` 并不能单独说明它在屏幕上的位置，必须先知道它属于哪个坐标空间。模型空间适合表达“物体自己的顶点”，世界空间适合表达“物体放在场景哪里”；把两者混在一起，常见结果是模型跟着相机移动，或两个物体无法对齐。
+
+先在纸上画出原点、两个轴和目标点，再把它们交给变换。可视化中橙色向量表示参照方向，绿色向量表示变换后的结果；如果方向变了但长度不该变，优先检查旋转矩阵，而不是改顶点数值。
+
+### 齐次坐标：把平移纳入同一条链
+
+<Term def="在三维位置后增加一个分量，使旋转、缩放和平移都能用矩阵乘法统一表示。">
+  齐次坐标
+</Term>
+把位置写成 `(x, y, z, 1)`，把方向写成 `(x, y, z,
+0)`。最后一个分量区分“需要被平移的位置”和“只表示方向的向量”，这是相机和物体变换中不能省略的检查点。
+
+$$
+\mathbf{x}' = s\,\mathbf{R}(\theta)\,\mathbf{x} + \mathbf{t}
+$$
+
+这个式子在说：先旋转方向，再按尺度放大，最后把原点平移到新的位置；顺序改变，结果也会改变。
+
+在工程代码中，矩阵通常按列主序与着色器约定对齐。下面的伪代码只保留一段可验证的变换逻辑；它的输出应同时记录原空间和目标空间，不能只打印最终屏幕坐标。
+
+```ts
+const local = vec4(point, 1);
+const world = modelMatrix * local;
+const view = viewMatrix * world;
+const clip = projectionMatrix * view;
+return { local, world, view, clip };
+```
+
+若 `local` 正确而 `world` 错误，查模型变换；若 `world` 正确而 `clip` 越界，查相机或投影。这个分段记录比直接调整投影参数更容易复现。
+
+### 法线与点积：方向不是位置
+
+<Term def="垂直于表面的方向向量，用来描述表面朝向；计算前通常要归一化。">
+  法线
+</Term>
+不是一个要被平移到远处的点。它只携带方向，所以变换时必须避免把平移当成方向的一部分；模型有非均匀缩放时，还要使用适合的法线变换并重新归一化。
+
+两个单位方向的点积等于夹角余弦：同向接近 1，垂直接近 0，背向为负。光照只保留正值，避免背光表面得到不合理的直接能量。这个简单的数值关系把“朝向光源”从感觉变成可测量的证据。
+
+## 光与能量：方向如何变成亮度
+
+### Light（光）在图形管线中的位置
+
+Light（光）从光源出发，经过传播、表面相互作用和观察方向，最后影响片段颜色。它不会把已经被裁掉的几何重新变回来，因此排查暗画面时，先确认片段存在，再确认方向与能量，最后才看颜色映射。
+
+固定几何和相机后，一次只改变光源方向。若法线与入射方向的夹角从小变大，点积应连续下降；如果画面突然跳变，说明归一化、坐标空间或颜色范围中至少有一项没有保持一致。
+
+### 辐射度量与反射率各自回答什么
+
+<Term def="描述光能量如何按功率、面积、方向或立体角分布的一组物理量；它把能量输入与显示颜色分开。">
+  辐射度量
+</Term>
+回答“有多少能量到达表面”，而
+<Term def="表示入射能量中由表面保留或反射的比例；它是材质属性，不等于光源强度。">
+  反射率
+</Term>
+回答“表面保留多少”。两者都参与光照，但不能用一个颜色常数代替。
+
+$$
+E = L_i\,\rho\,\max(0,\mathbf{n}\cdot\mathbf{l})
+$$
+
+这个式子在说：入射能量、表面保留比例和方向夹角共同决定直接能量；任何一个量改变，排查记录都应能说明改变来自哪里。
+
+## Modern Graphics Hardware：并行仍然受等待约束
+
+### 现代图形硬件如何执行数学
+
+Modern Graphics Hardware（现代图形硬件）把大量相似的顶点、片段和采样任务分给许多执行单元；每个单元重复相近的算术，整体才能获得高吞吐。这个架构解释了为什么数据形状、批次大小和分支一致性会影响速度，也解释了为什么“增加任务数量”不等于“每个任务都立即完成”。
+
+### 并行性与内存延迟
+
+<Term def="把彼此独立的工作分给多个执行单元同时推进的能力；它提高吞吐，却不能跳过数据依赖。">
+  并行性
+</Term>
+可以让一批独立片段同时计算，但共享资源或前一步输出仍会形成依赖。Parallelism（并行性）描述“能否同时推进”，而
+memory
+latency（内存延迟）描述“数据多久才能到达”；两者都必须在性能记录中分开出现，不能用线程数量代替等待时间。缓存命中与相邻访问可以隐藏一部分内存延迟，不能消除所有等待。
+
+把性能问题写成两个可比较的量：可同时推进的任务数，以及任务等待数据的时间。若等待占比高，先检查数据布局和访问局部性；若等待低而执行单元空闲，再考虑扩大批次或提高并行度。
+
+## 三步实验：从公式走到证据
+
+每一步先预测一个可观察变化，再只调一个变量。不要先追求漂亮画面，要先确认数学量在正确的空间、正确的范围内变化。
+
+<CgppCh04MathLab />
+
+<Stepper>
+  <Step title="第一步：推导坐标变换">
+    选择“坐标变换”，先预测旋转只会改变方向、尺度只会改变距离，再拖动滑块。指出局部点、世界点和两条向量分别代表什么。
+
+    <CgppCh04MathLab />
+
+  </Step>
+  <Step title="第二步：检查光照点积">
+    选择“光照投影”，把方向角调到接近法线，再调到背向。观察点积被截断到零的时刻，并说明辐射度量与反射率不能互换。
+
+    <CgppCh04MathLab />
+
+  </Step>
+  <Step title="第三步：判断硬件等待">
+    选择“硬件调度”，逐渐增大批次。比较活跃格子和等待格子，说明什么时候该优化数据局部性，什么时候才适合增加并行任务。
+
+    <CgppCh04MathLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：把不同坐标空间的数直接相加">
+  现象 → 物体看似移动了，但相机一转，物体与其他物体的相对位置就漂移。
+
+原因 → 模型空间、世界空间和观察空间的参照没有标注，向量的数字虽然相同，含义却不同。
+
+修法 → 给每个向量标记所属空间，逐段记录变换前后坐标，再检查矩阵相乘顺序。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：把法线当成位置处理">
+  现象 → 物体移动后明暗突然改变，或非均匀缩放让表面方向明显失真。
 
-### 设计动机
+原因 → 法线被错误地应用平移，或者变换后没有重新归一化，导致点积不再表示真实夹角。
 
-Vulkan 把Mathematics of 3D Graphics从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 区分位置的齐次分量与方向的齐次分量，使用正确的法线变换并检查长度接近一。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Mathematics of 3D Graphics涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Mathematics of 3D Graphics相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Mathematics of 3D Graphics相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：用增加并行任务掩盖内存延迟">
+  现象 → 执行单元更多了，吞吐却没有提升，等待格子反而变多。
+
+原因 → 任务共享数据或访问远处内存，依赖链与缓存未命中让更多单元一起等待。
+
+修法 → 先记录批次、访问局部性和等待比例，调整数据布局后再比较扩大并行度的收益。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 坐标空间给每个位置和方向提供可复核的参照。
+- 齐次坐标让位置与方向在矩阵链中承担不同责任。
+- 点积把法线与光方向的关系变成能量比例。
+- 辐射度量和反射率分别描述能量输入与表面保留。
+- 并行性提高吞吐，但内存延迟和数据依赖仍需测量。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，Mathematics of 3D Graphics相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. Mathematics of 3D Graphics是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出Mathematics of 3D Graphics涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：推导变换。** 给点 `x = (1, 0)`，先逆时针旋转 90 度，再按 2 倍尺度放大，最后平移 `(3, 1)`。写出中间结果和最终结果，并说明若把平移提前会发生什么。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  旋转后为 `(0, 1)`，缩放后为 `(0, 2)`，平移后为 `(3,
+  3)`。若先平移再旋转，平移向量也会被旋转，最终位置不同；这正是矩阵顺序必须写清楚的原因。
 </Answer>
 
+**问题 2：修改光照实验。** 在 MathViz 中固定入射能量，只改变方向角。写下三个时刻的点积，并说明为何背光时能量不能变成负数。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  可选取同向、近似垂直和背向三个角度，分别记录接近一、接近零和被截断为零的点积。直接光照只保留正的方向贡献，负值代表背光而不是负的可见能量。
+</Answer>
+
+**问题 3：判断优化顺序。** 一批片段互不依赖，但数据访问很分散。你会先增加执行单元，还是先改数据布局？给出验收指标。
+
+<Answer>
+  先改数据布局与访问局部性，比较缓存命中率、等待比例和批次吞吐；若等待明显下降且仍有空闲执行单元，再增加并行任务。只看线程数或平均帧率无法证明原因。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="坐标空间">
+  一套规定原点、方向和单位的参照系；同一个数字在不同空间里可能代表不同位置。
+</GlossaryItem>
+
+<GlossaryItem term="齐次坐标">
+  给三维位置多加一个分量，让旋转、缩放和平移可以统一写进矩阵。
+</GlossaryItem>
+
+<GlossaryItem term="法线">
+  垂直于表面的方向，用来判断表面朝向；它不是需要被平移的点。
+</GlossaryItem>
+
+<GlossaryItem term="辐射度量">
+  描述光能量如何分布的一组量，用来区分能量输入和屏幕颜色。
+</GlossaryItem>
+
+<GlossaryItem term="反射率">
+  表面保留或反射入射能量的比例，是材质属性而不是光源强度。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  同时推进互不依赖工作的能力；它能提高吞吐，但不能跳过依赖和等待。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 4 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

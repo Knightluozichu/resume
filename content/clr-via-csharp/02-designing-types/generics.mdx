@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-12
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcConstraintProofLab,
+  CvcGenericIdentityLab,
+  CvcVarianceFlowLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-generics";
 
 <Objectives>
 
@@ -54,6 +63,8 @@ Comparer属于generic collection行为contract；`Dictionary<string,decimal>` id
 
 Metadata用GenericParam、GenericParamConstraint、TypeSpec和MethodSpec描述parameters/constructed signatures。CLR在load/JIT验证constraints，C# compiler在call site与generic body提前检查。Generic parameter不是Object占位符；在constraint允许范围内，JIT可用constrained calls处理value/reference type，减少boxing。
 
+<Term def="在metadata中声明、在构造时绑定具体type arguments并参与约束验证的类型参数。">generic parameter</Term>
+
 Reflection通过`IsGenericTypeDefinition`、`ContainsGenericParameters`、`GetGenericArguments`、`MakeGenericType`操作，但构造时仍验证arity与constraints。Dynamic type creation/AOT/trimming还要确保closed types与metadata被保留，不能假设运行时任意组合都可生成代码。
 
 ## Open and Closed Types
@@ -65,9 +76,15 @@ Reflection通过`IsGenericTypeDefinition`、`ContainsGenericParameters`、`GetGe
 Closed generic type拥有static fields/type initialization。每个closed construction通常独立，例如`Counter<int>.Value`与`Counter<long>.Value`。DI container注册open service到open implementation时，resolution阶段构造closed type并检查constraints；失败应在startup validate，而不是首次request。
 
 <Stepper>
-  <Step title="切换open、closed、nested construction与generic method"></Step>
-  <Step title="建立identity表">记录generic definition、arity、arguments、constraints、load context、static owner与可否instantiate。</Step>
-  <Step title="验证反射/AOT">枚举实际closed set，在trimmed/AOT发布中提前preserve或source-generate，避免运行时MakeGenericType失败。</Step>
+  <Step title="切换open、closed与nested construction">
+    <CvcGenericIdentityLab />
+  </Step>
+  <Step title="建立identity表">
+    <CvcGenericIdentityLab />
+  </Step>
+  <Step title="验证反射与AOT边界">
+    <CvcGenericIdentityLab />
+  </Step>
 </Stepper>
 
 ## Generic Types and Inheritance
@@ -90,9 +107,13 @@ CLR/JIT可对reference-type instantiations共享一份canonical native code，�
 
 优化前用JIT events、native image size和startup profile量化。减少无意义closed combinations、把非type-dependent逻辑移到nongeneric helper、避免巨大value-type泛型层层组合。不要为节省理论code size退回Object并引入cast/boxing。
 
-## Generic Interfaces and Generic Delegates
+## Generic Interfaces
 
-Generic interface表达带类型的capability，generic delegate表达带类型的callback。`IComparer<T>`、`IEquatable<T>`避免Object cast；`Func<T,TResult>`/`Action<T>`减少自定义delegate proliferation。Value type实现generic interface时，受constraint的调用可constrained dispatch避免boxing，但转成interface variable仍可能boxing。
+Generic interface表达带类型的capability。`IComparer<T>`、`IEquatable<T>`避免Object cast；value type实现generic interface时，受constraint的调用可constrained dispatch避免boxing，但转成interface variable仍可能boxing。接口的type argument必须与成员的输入输出位置一致，才能让调用方获得可验证的contract。
+
+## Generic Delegates
+
+Generic delegate表达带类型的callback。`Func<T,TResult>`与`Action<T>`减少自定义delegate proliferation，但delegate equality仍由target与method决定；generic construction不同，delegate type也不同。Callback API还要定义exception、thread、lifetime和variance，generic只保证signature。
 
 ```csharp
 static T Max<T>(T left, T right, IComparer<T> comparer) =>
@@ -101,8 +122,6 @@ static T Max<T>(T left, T right, IComparer<T> comparer) =>
 Func<string, int> length = static text => text.Length;
 Console.WriteLine(Max("aa", "b", Comparer<string>.Create((x, y) => length(x) - length(y))));
 ```
-
-Delegate equality包含target+method；generic construction不同则delegate types不同。Callback API还要定义exception、thread、lifetime和variance，generic只保证signature。
 
 ## Delegate and Interface Contravariant and Covariant Generic Type Arguments
 
@@ -113,18 +132,28 @@ Covariant `out T`只把T放在输出位置，因此`IEnumerable<string>`可作�
 Variance只适用于interface/delegate generic parameters和reference-type arguments；value type constructions不通过boxing自动variance。编译器检查所有成员positions，包括nested delegate/generic组合。推导时问“谁向谁交付值”：producer可变宽，consumer可复用更宽输入。
 
 <Stepper>
-  <Step title="切换invariant、covariant、contravariant与value-type限制"></Step>
-  <Step title="标注每个T位置">对parameters、returns、delegates和nested generics逐层标记consume/produce，推导允许方向。</Step>
-  <Step title="做破坏性尝试">尝试通过假想转换写入错误type，若能构造反例就必须invariant；再用compiler验证结论。</Step>
+  <Step title="切换invariant、covariant与contravariant">
+    <CvcVarianceFlowLab />
+  </Step>
+  <Step title="标注每个T位置">
+    <CvcVarianceFlowLab />
+  </Step>
+  <Step title="做破坏性尝试">
+    <CvcVarianceFlowLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Derived继承Base，所以任何Container<Derived>都能转Container<Base>">
 可变container同时消费与生产T，转换会允许写入非Derived的Base并破坏storage。只有contract位置满足variance安全时interface/delegate才声明方向。
 </Callout>
 
-## Generic Methods and Generic Methods and Type Inference
+## Generic Methods
 
-Generic method在nongeneric或generic owner中声明自己的parameters。Compiler从arguments、receiver和某些context推断type arguments，但不只凭return target完成所有推断；失败时显式指定。Inference先收集bounds再fix types，numeric implicit conversion与overload candidates可能产生意外选择，公共overloads应减少模糊。
+Generic method在nongeneric或generic owner中声明自己的type parameters，调用点可以为它提供一组与owner无关的type arguments。先确认方法的输入、输出和约束边界，再决定是否让compiler推断；需要稳定公共API时，显式type arguments往往比模糊overload更易维护。
+
+## Generic Methods and Type Inference
+
+Compiler从arguments、receiver和某些context推断type arguments，但不只凭return target完成所有推断；失败时显式指定。Inference先收集bounds再fix types，numeric implicit conversion与overload candidates可能产生意外选择，公共overloads应减少模糊。
 
 ```csharp
 static IReadOnlyList<TOut> Map<TIn, TOut>(
@@ -154,16 +183,30 @@ Generic body在不知道具体T时只能执行所有允许T都安全的操作。
 
 <Term def="Generic constraint向compiler与CLR证明body可对所有合法type arguments执行哪些操作。">constraint capability proof</Term>
 
-## Primary Constraints, Secondary Constraints, and Constructor Constraints
+## Primary Constraints
 
-Primary constraints包括class/struct/unmanaged/notnull/base class等（具体取决语言版本），限制表示或主继承关系；secondary constraints包括interfaces和type parameter关系；`new()` constructor constraint保证public parameterless construction并通常放最后。`new()`不支持async factory、required dependencies或nonpublic constructor，复杂创建用factory interface/delegate。
+Primary constraints包括class/struct/unmanaged/notnull/base class等（具体取决语言版本），限制表示或主继承关系。它们决定generic body能否假设reference/value representation、nullability或某个base member，并影响可构造的closed type集合。
+
+## Secondary Constraints
+
+Secondary constraints包括interfaces和type parameter关系。它们把generic body需要的member capability写成可检查的contract；如果算法需要比较、枚举或异步工厂，应优先表达真实接口，而不是在body里cast、reflection或dynamic猜能力。
+
+## Constructor Constraints
+
+`new()` constructor constraint保证public parameterless construction并通常放最后，但不支持async factory、required dependencies或nonpublic constructor。复杂创建应改用factory interface/delegate，并把生命周期与失败策略写进API contract。
 
 Constraints影响API compatibility：收紧会让旧source不再构造closed type/method，放宽可能让body实现需要改变。Runtime加载已构造metadata时也验证。Public generic contract应在docs列出语义要求，type-system constraint只能表达可调用能力，不能表达“比较器必须传递”等behavior law。
 
 <Stepper>
-  <Step title="切换primary、secondary、constructor与modern static constraints"></Step>
-  <Step title="从Body反推能力">逐条列body操作需要的member、conversion、construction、null/layout，再选最小constraints。</Step>
-  <Step title="验证合法与非法Type">编译多个reference/value/nullable/derived types，并在reflection construction中验证runtime同样拒绝违规参数。</Step>
+  <Step title="切换primary、secondary与constructor constraints">
+    <CvcConstraintProofLab />
+  </Step>
+  <Step title="从Body反推能力">
+    <CvcConstraintProofLab />
+  </Step>
+  <Step title="验证合法与非法Type">
+    <CvcConstraintProofLab />
+  </Step>
 </Stepper>
 
 ## Other Verifiability Issues
@@ -222,6 +265,7 @@ Constraints影响API compatibility：收紧会让旧source不再构造closed typ
 
 <Glossary>
   <GlossaryItem term="constructed generic identity" definition="Generic definition与所有arguments共同形成的runtime身份。" />
+  <GlossaryItem term="generic parameter" definition="在定义中等待具体类型、构造时才绑定的类型参数。" />
   <GlossaryItem term="open generic type" definition="仍含未绑定parameters、不能普通instantiate的definition。" />
   <GlossaryItem term="generic code expansion" definition="Closed constructions增加JIT/AOT代码与启动成本的现象。" />
   <GlossaryItem term="variance direction" definition="按producer/consumer位置推导的安全generic引用转换方向。" />

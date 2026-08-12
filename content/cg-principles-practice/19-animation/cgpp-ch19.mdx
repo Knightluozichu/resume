@@ -3,253 +3,241 @@ title: "The Animation Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 19
-description: "Computer Graphics: Principles and Practice Chapter 19"
+description: "围绕关键帧、姿态插值与动画采样，建立从时间参数到光照更新和硬件吞吐的可验证直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-35
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh19AnimationLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch19-animation";
 
 <Objectives>
 
-- 能用自己的话解释The Animation Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 19之间的关系是什么？
+- 能用关键帧、时间参数和姿态插值解释对象在两次采样之间如何产生连续运动
+- 能修改 MotionViz 的时间、插值曲线、光照更新、采样密度和访问等待，用证据区分运动错误与吞吐瓶颈
+- 能回答：动画如何改变图形管线输入，在当前姿态上重新计算光照，并在现代图形硬件上并行采样？
 
 </Objectives>
 
-## 为什么需要The Animation Pipeline
+## 先把动画想成一张由时间驱动的状态账本
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Animation Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+一段动画不是把很多静态图片随意播放，而是用时间参数选择对象状态，再由插值规则生成中间姿态。关键帧说明“在哪个时刻必须是什么样”，姿态插值说明“两个已知姿态之间怎样走”，渲染管线则把当前姿态变成这一帧可见的几何、光照和颜色。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章把动画拆成三个可检查的问题：时间如何选择状态，姿态如何连续变化，许多对象如何同时更新。先记下预测：只移动时间参数，关键帧本身不应改变；只改变插值曲线，运动路径或速度会改变但时间轴仍在；只提高访问等待，姿态数值应保持一致而完成时间变长。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：动画改变 Graphics Pipeline 的输入
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+Graphics Pipeline（图形管线）通常处理某一时刻的顶点、法线、纹理坐标和材质参数。Animation（动画）在管线之前更新对象变换或骨骼姿态，再把新的几何状态交给变换、可见性、着色和合成阶段。动画系统不应把时间逻辑藏在光照函数里，否则很难判断是姿态错了还是颜色错了。
 
-Computer Graphics: Principles and Practice Chapter 19正是这一哲学在特定领域的具体体现。
+### 关键帧与时间参数
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="明确记录对象在某个时间点的姿态、位置或其他动画属性的样本。">
+  关键帧
+</Term>
+
+<Term def="把动画时钟归一化到相邻关键帧之间，用来选择当前样本位置的数值。">
+  时间参数
+</Term>
+
+若关键帧 A 位于时刻 $t_0$，关键帧 B 位于时刻 $t_1$，当前时刻为 $t$，可以先计算归一化时间参数：
+
+$$
+u = \frac{t-t_0}{t_1-t_0}
+$$
+
+通常会把 $u$ 限制在 0 到 1 的区间内。关键帧存储的是约束，不是每一帧的最终答案；播放速度、循环方式和时间重映射都会改变采样到的 $u$，但不会修改关键帧数据。
+
+## Motion（运动）：姿态插值产生连续状态
+
+<Term def="根据时间参数在已知姿态之间生成中间状态的过程，使位置、方向或骨骼属性随时间连续变化。">
+  姿态插值
+</Term>
+
+Pose Interpolation（姿态插值）可以直接插值位置，也可以使用专门的旋转表示处理方向。对标量或位置向量，一个线性模型是：
+
+$$
+x(u) = (1-u)x_A + ux_B
+$$
+
+线性插值容易解释，但不一定带来平滑速度。为避免开始和结束处突然改变速度，可以先用缓入缓出曲线重映射 $u$，再把结果代入位置或旋转插值。无论选哪种曲线，都应保留原始时间参数和重映射后的参数，便于定位“时间错”还是“路径错”。
+
+<Term def="在关键帧之间按指定曲线生成中间采样的过程，强调速度或数值随时间的变化方式。">
+  补间
+</Term>
+
+补间负责填充关键帧之间的状态，不负责让对象自动符合碰撞、遮挡或光照规律。姿态更新后，法线和位置也随之变化；Graphics Pipeline（图形管线）需要重新执行受影响的阶段，不能只把上一帧颜色平移到新位置。
+
+## Light（光）与 Radiometry（辐射度量）：每个新姿态都要重新解释能量
+
+<Term def="描述光源方向、能量与当前动画姿态共同形成的片段照明贡献。">光照</Term>
+
+Light（光）不会因为对象在动就自动跟随正确的坐标空间。若光源固定在世界空间，物体移动后入射方向会改变；若光源附着在对象上，则光源变换也要随对象姿态更新。Radiometry（辐射度量）描述功率、面积、方向和立体角，Reflectance（反射率）描述材质保留能量的比例。
+
+动画调试时应把姿态、光源空间和材质数据分层记录：先确认当前位置和法线，再确认入射能量，最后确认反射率和颜色编码。否则运动造成的明暗变化很容易被误判成曝光或材质错误。
+
+下面的伪代码明确了每帧更新顺序：时间先产生姿态，姿态再进入几何和光照计算。
+
+```cpp
+float u = normalizeTime(clock, keyframeA.time, keyframeB.time);
+Pose pose = interpolatePose(keyframeA.pose, keyframeB.pose, easeInOut(u));
+Geometry geometry = applyPose(characterMesh, pose);
+Color color = shade(geometry, light, material);
+present(color);
+```
+
+## Modern Graphics Hardware：动画采样会共享状态和资源
+
+Modern Graphics Hardware（现代图形硬件）可以并行更新许多对象、骨骼或顶点，但动画数据通常共享关键帧缓冲、骨骼矩阵和纹理资源。对象数量增加时，计算本身未必是唯一瓶颈；随机读取关键帧、频繁上传矩阵或在不同路径上采样，都会暴露带宽和等待。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+<Term def="让多个对象、骨骼或采样任务同时推进的执行能力；它提高吞吐，但仍受共享状态和数据依赖限制。">
+  并行性
+</Term>
+
+Parallelism（并行性）适合同时更新互不依赖的角色或骨骼分支，memory latency（内存延迟）则表示读取关键帧、矩阵或纹理后等待数据返回的时间。采样越密并不一定越流畅：如果所有任务都等待同一份关键帧数据，增加执行宽度只会让共享访问更拥堵。
+
+性能排查至少记录对象数、骨骼数、每帧采样数、缓存命中、上传字节和等待比例。先判断动画误差来自时间和插值，还是来自资源未及时到达，再选择降低采样、压缩关键帧或重排数据布局。
+
+## 三步实验：从关键帧走到采样吞吐
+
+每一步先写预测，再只改变相关滑块。三个视角共享同一个 MotionViz，但分别展示时间轴、姿态插值和现代硬件上的动画采样任务。
+
+<Stepper>
+  <Step title="第一步：移动动画时间">
+    先猜一猜：把时间参数从 0.42 拖向 0.90，关键帧会移动，还是当前姿态会沿时间轴改变？选择“时间轴”，观察播放头、关键帧和光照更新。
+
+    <CgppCh19AnimationLab />
+
+  </Step>
+  <Step title="第二步：改变插值曲线">
+    先猜一猜：改变曲线会改变起点和终点，还是改变中间姿态的速度与路径？选择“姿态插值”，比较姿态 A、当前点和姿态 B。
+
+    <CgppCh19AnimationLab />
+
+  </Step>
+  <Step title="第三步：定位采样等待">
+    先猜一猜：增加每帧采样和访问等待时，姿态数值会变错，还是等待任务会变多？选择“采样吞吐”，比较完成采样与 memory latency（内存延迟）。
+
+    <CgppCh19AnimationLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：关键帧越多，运动就越平滑">
+  现象 → 关键帧数量增加后，动作仍然卡顿，某些区间甚至出现速度突变。
+
+原因 → 平滑性取决于时间间隔、姿态插值和速度连续性，不只是样本数量；相邻关键帧的切线或旋转路径可能不连续。
+
+修法 → 先画出时间参数和速度曲线，再检查关键帧间隔、插值曲线和旋转表示。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：动画变暗就是光源强度变了">
+  现象 → 对象移动后亮度变化，调高 Light（光）强度仍然无法修复局部明暗跳变。
 
-### 设计动机
+原因 → 对象姿态改变了法线、位置或光源坐标空间，Radiometry（辐射度量）输入随姿态变化；光照和运动的责任被混在一起。
 
-Vulkan 把The Animation Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 先记录每帧姿态、法线、入射方向和能量，再检查 Reflectance（反射率）与材质响应。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Animation Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Animation Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Animation Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：提高采样密度一定能解决卡顿">
+  现象 → 每帧采样数增加后动作更细，但等待任务和帧时间同时上升。
+
+原因 → 共享关键帧、骨骼矩阵或纹理访问暴露了 memory latency（内存延迟），Parallelism（并行性）无法消除数据依赖。
+
+修法 → 先测量采样误差、缓存命中和上传等待，再选择压缩关键帧、重排数据或降低无贡献采样。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- Motion（运动）由时间参数选择状态，关键帧提供约束，Pose Interpolation（姿态插值）和补间生成中间姿态。
+- 动画更新姿态后，Graphics Pipeline（图形管线）需要用新位置和法线重新执行受影响阶段。
+- Light（光）、Radiometry（辐射度量）和 Reflectance（反射率）要在当前姿态和正确坐标空间中重新解释。
+- 现代图形硬件能利用 Parallelism（并行性）处理多个动画任务，但 memory latency（内存延迟）会限制采样吞吐。
+- 调试顺序应是“时间参数 → 姿态路径 → 光照空间 → 采样误差 → 资源等待”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Animation Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Animation Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Animation Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：计算姿态插值。** 姿态位置 `x_A=2`、`x_B=10`，归一化时间参数 `u=0.25`。按线性模型求当前位置，并说明改变关键帧间隔会不会直接改变这两个姿态值。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  `x(u) = (1 - 0.25) × 2 + 0.25 × 10 =
+  4`。改变关键帧间隔会改变同一时钟时刻对应的时间参数和运动速度，但不会直接修改关键帧保存的姿态值。
 </Answer>
 
+**问题 2：区分运动与光照。** 对象旋转后局部变暗，但 Light（光）位置和 Reflectance（反射率）没有改变。你会先查什么，并如何用 Radiometry（辐射度量）证据验证？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  先检查旋转后的法线、对象到光源的方向和坐标空间，再记录
+  Radiometry（辐射度量）对应的入射能量。姿态改变法线和入射角是合理原因，不应先把反射率或光源强度改掉。
+</Answer>
+
+**问题 3：定位动画采样瓶颈。** 角色数量不变但每帧采样从 4 增到 10，等待比例上升。你会先增加 Parallelism（并行性）还是检查 memory latency（内存延迟）？
+
+<Answer>
+  先检查 memory
+  latency（内存延迟）、关键帧和骨骼矩阵的缓存命中，以及上传带宽；数据供给稳定后，再评估
+  Parallelism（并行性）是否能隐藏部分采样等待。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="关键帧">
+  明确记录对象在某个时间点姿态、位置或其他动画属性的样本。
+</GlossaryItem>
+
+<GlossaryItem term="时间参数">
+  把动画时钟归一化到相邻关键帧之间，用来选择当前样本位置的数值。
+</GlossaryItem>
+
+<GlossaryItem term="姿态插值">
+  根据时间参数在已知姿态之间生成中间状态，使位置、方向或骨骼属性连续变化。
+</GlossaryItem>
+
+<GlossaryItem term="补间">
+  在关键帧之间按指定曲线生成中间采样，描述速度或数值的变化方式。
+</GlossaryItem>
+
+<GlossaryItem term="光照">
+  根据光源、表面方向、距离和材质响应估计当前片段照明贡献的过程。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  让多个独立对象、骨骼或采样任务同时推进的执行能力。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 19 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

@@ -3,372 +3,309 @@ title: "Chapter 10: Building Multimodal Applications with LLMs"
 type: C
 section: "Chapter 10: Building Multimodal Applications with LLMs"
 order: 11
-description: "比较Azure AI现成工具包、组合单工具Agent和硬编码顺序链三种多模态路径，覆盖发票、YouTube、Whisper与图像生成。"
+description: "把文本、图像、音频和视频接入可验证的应用合同，比较工具包、Agent 与顺序链，并用来源、置信度和回退证据控制多模态风险。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-10
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla10ModalityLab,
+  Bla10OrchestrationLab,
+  Bla10ReviewLab,
+} from "@/components/mdx/building-llm-applications/11-chapter-10/bla-10-multimodal-applications";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。比较Azure
-AI现成工具包、组合单工具Agent和硬编码顺序链三种多模态路径，覆盖发票、YouTube、Whisper与图像生成。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能为文本、图像、音频和视频输入定义类型、尺寸、来源、变换和输出验收条件。
+- 能比较现成工具包、单工具 Agent 与顺序链，并用权限、步数、延迟和回退说明取舍。
+- 能在发票、视频转写或图像生成中保存原始输入、模态中间产物、置信度和版本坐标。
+- 能根据来源、质量检查、工具失败和人工复核证据回答“这个多模态结果是否可以发布”。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 10：让多模态结果可检查、可回放、可降级
 
+当应用接收图片、声音或视频时，模型看到的并不是一个普通字符串：文件可能损坏，语音可能被误识别，图像中的金额可能缺少小数点，生成的图片也可能无法说明来源。多模态应用的难点不是把更多接口接起来，而是让每一次转换都留下可核验的输入、约束和输出。
 
-## 数学、检索与成本骨架
+先猜一猜：一个模糊的发票图像应该直接交给模型，还是先停在输入检查？多个工具都能处理同一文件时，谁决定调用顺序？如果模型给出很流畅的字幕，但语言检测和音频不一致，前端应该显示什么？下面的实验会让这些选择变成可以切换和复盘的状态。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**上传的发票识别出一个看似合理的总额，系统直接写入财务记录；**原因：**没有校验图像尺寸、字段置信度和小计与税额关系；**修法：**先保留原图与 OCR 框，关键字段交叉检查，低置信度进入人工复核。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**一个 Agent 在工具失败后悄悄换用另一个工具，用户无法知道答案来自哪里；**原因：**调用图、权限、重试和降级没有显式记录；**修法：**为每次调用保存请求 ID、参数、错误、重试次数和回退动作，禁止静默改路。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**最终图片或字幕可以展示，却无法重建三个月前的结果；**原因：**只存最终产物，丢掉原始模态、提示、模型版本和中间变换；**修法：**将每种模态的输入指纹、变换、模型和输出组成可回放链。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+<Term def="记录输入模态、输出协议、质量阈值、权限和失败动作的可检查约定">Modality Contract</Term> 规定一张图片或一段音频何时可以进入模型；<Term def="把图片、音频或视频转换成下一阶段可用表示的处理步骤">Modality Transform</Term> 则记录裁剪、采样、转写或 OCR 等变化。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+工具编排依靠 <Term def="描述模型、工具、状态和回退如何连接的有向调用计划">Orchestration Graph</Term>；每个结果还要带 <Term def="模型或规则对识别字段正确程度的数值或分级判断">Confidence Signal</Term>。最终用 <Term def="把原始输入、变换、版本和输出连成可复盘记录的链条">Artifact Lineage</Term> 找回来源，再用 <Term def="在失败、低置信度或越权风险时停止自动动作并选择下一步的规则">Fallback Gate</Term> 决定继续、人工确认或回退。
 
-## 三段可运行骨架
+## 三步多模态应用实验
+
+每一步先写下预测，再只改变一个条件。实验中的图像、音频和视频都是无敏感的示例；接入真实 Azure AI Services、Whisper、DALL·E 或 LangChain 时，要另外记录当前端点、数据许可、区域、价格和版本。
+
+<Stepper>
+  <Step title="1. 先验证模态输入">
+    选择检查文件、转写音频或生成图像，再注入格式错误或超大文件，观察输入合同如何在模型调用前保护应用。
+
+    <Bla10ModalityLab />
+  </Step>
+  <Step title="2. 比较工具编排">
+    选择现成工具包、单工具 Agent 或顺序链，再让工具失败，观察权限、步数、重试和降级如何改变控制面。
+
+    <Bla10OrchestrationLab />
+  </Step>
+  <Step title="3. 复核多模态产物">
+    选择发票、视频或图像生成，再降低置信度，观察来源、检查和记录如何把自动发布切换成人工确认。
+
+    <Bla10ReviewLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的多模态产物记录器
+
+下面的 Python 函数把每一步的模态、输入指纹、模型和输出放入同一条链；TypeScript 版本用联合类型约束模态。它不假装完成 OCR 或生成，只负责让后续验证拥有稳定的记录入口。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 产物链">
 
-```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
-```
+~~~python
+def record_artifact(modality, input_hash, model, output, previous=None):
+    return {
+        "modality": modality,
+        "input_hash": input_hash,
+        "model": model,
+        "output": output,
+        "previous": previous,
+    }
+~~~
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 模态类型">
 
-```typescript
-type RequestContract = {
-  task: string;
+~~~typescript
+type Modality = "text" | "image" | "audio" | "video";
+
+type Artifact = {
+  modality: Modality;
+  inputHash: string;
   model: string;
-  prompt: string;
-  data: string;
-  tools: string[];
-  seed: number;
+  output: unknown;
+  previous?: string;
 };
 
-function freezeRequest(
-  task: string,
-  model: string,
-  prompt: string,
-  dataHash: string,
-  tools: string[],
-  seed: number,
-): RequestContract {
-  return { task, model, prompt, data: dataHash, tools, seed };
+function accepts(artifact: Artifact): boolean {
+  return Boolean(artifact.inputHash && artifact.model && artifact.output);
 }
-```
+~~~
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+record_artifact 让 OCR、Whisper、文本模型和图像生成拥有同一套追踪字段；accepts 只检查记录是否完整，不代表内容已经正确。生产实现还要保存文件类型、大小、许可、置信度、延迟、成本、用户授权和清理状态。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type GateRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(
-  records: GateRecord[],
-): { pass: boolean; missing: number[] } {
-  const required = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从输入检查到发布决定
 
 ### Chapter 10: Building Multimodal Applications with LLMs
 
-“Chapter 10: Building Multimodal Applications with LLMs”为文本、图像、音频或视频分别保存原始输入、变换、模型版本和中间产物。比较现成工具包、Agent组合与顺序链时固定任务，报告质量、延迟、成本、可控性及局部失败的降级路径。
-
-针对“Chapter 10: Building Multimodal Applications with LLMs”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+这一章把文本、图像、音频和视频视作不同的证据来源，而不是可以互换的字符串。应用先验证模态，再选择模型和工具，最后以置信度、来源、人工复核和回退证据决定是否展示或写入下游系统。
 
 ### Technical requirements
 
-“Technical requirements”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Technical requirements”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+技术要求应列出允许的文件类型、尺寸和时长、编码、语言、采样、保留周期、输出结构、延迟预算和人工确认条件。还要冻结模型端点、区域、凭据范围、日志字段和错误协议；否则同一张图在两次运行中可能走出不可比较的路径。
 
 ### Why multimodality?
 
-“Why multimodality?”为文本、图像、音频或视频分别保存原始输入、变换、模型版本和中间产物。比较现成工具包、Agent组合与顺序链时固定任务，报告质量、延迟、成本、可控性及局部失败的降级路径。
-
-针对“Why multimodality?”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+多模态的价值在于不同输入携带不同证据：图片有空间位置，音频有时间顺序，视频同时包含画面和声音。选择多模态不是为了增加炫目的接口，而是为了回答单一模态无法回答的问题，同时承担同步、许可、质量和解释成本。
 
 ### Building a multimodal agent with LangChain
 
-“Building a multimodal agent with LangChain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Building a multimodal agent with LangChain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+多模态 Agent 需要把模态输入、工具选择、状态摘要和最大步数写入调用图。先用假工具验证路由和错误处理，再接真实 LangChain 工具；每次调用保存参数、返回类型、延迟、成本、权限和下一步原因，不能只保留最终回答。
 
 ### Option 1: Using an out-of-the-box toolkit for Azure AI Services
 
-“Option 1: Using an out-of-the-box toolkit for Azure AI Services”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Option 1: Using an out-of-the-box toolkit for Azure AI Services”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+现成 AI 工具包适合快速组合 OCR、语音、视觉或语言能力，但便利性不等于边界已经定义。封装层应明确区域、模型版本、凭据权限、输入留存、返回置信度和服务错误；把默认配置复制到自己的运行合同中再上线。
 
 ### Getting Started with AzureCognitiveServicesToolkit
 
-“Getting Started with AzureCognitiveServicesToolkit”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Getting Started with AzureCognitiveServicesToolkit”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+开始使用该认知服务工具包时，先用一张已知答案的图片和一段短音频验证身份、区域、文件上传、响应结构和错误重试。将示例代码拆成输入适配、服务调用、字段校验和存档四层，避免把 SDK 返回对象直接传给用户界面。
 
 ### Setting up the toolkit
 
-“Setting up the toolkit”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Setting up the toolkit”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+工具包配置至少要冻结端点、部署名、超时、重试、并发、区域、日志脱敏和临时文件清理。密钥不进入提示或产物正文；服务返回的原始响应只在受控存储中保留，并通过请求 ID 与用户看见的摘要连接。
 
 ### Leveraging a single tool
 
-“Leveraging a single tool”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Leveraging a single tool”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+单工具路径适合先建立可解释基线，例如只用 OCR 读取发票字段或只用 Whisper 生成时间戳。先定义工具输入输出和失败状态，再测量它在正常、低质量和缺失输入上的表现；如果工具失败，应返回明确错误而不是让模型猜一个结果。
 
 ### Leveraging multiple tools
 
-“Leveraging multiple tools”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Leveraging multiple tools”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+多个工具可以让图像、音频和视频互相补充，但每增加一个工具就增加权限、延迟、成本和失败组合。给每个工具设置最小输入、最大调用次数和可重试错误，调用图中标记来源；不同工具的结果冲突时，进入复核而不是随机选择。
 
 ### Building an end-to-end application for invoice analysis
 
-“Building an end-to-end application for invoice analysis”为文本、图像、音频或视频分别保存原始输入、变换、模型版本和中间产物。比较现成工具包、Agent组合与顺序链时固定任务，报告质量、延迟、成本、可控性及局部失败的降级路径。
-
-针对“Building an end-to-end application for invoice analysis”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+发票应用可以先校验文件，再定位文字框、抽取字段、核对小计与税额，最后生成供人确认的结构化摘要。保留原图、裁剪框、OCR 文字、字段置信度和核算结果；金额或税号出现矛盾时，系统应暂停入账并显示需要确认的字段。
 
 ### Option 2: Combining single tools into one agent
 
-“Option 2: Combining single tools into one agent”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Option 2: Combining single tools into one agent”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+把单个工具交给 Agent 调度时，模型可以决定先 OCR、再查账或再生成说明，但这种灵活性增加了不可预测路径。限制工具白名单、参数模式、最大步数和人工确认点，并在 UI 显示实际调用序列，用户才能知道答案是如何产生的。
 
 ### YouTube tools and Whisper
 
-“YouTube tools and Whisper”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“YouTube tools and Whisper”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+视频处理通常先取得允许使用的音频或字幕，再用 Whisper 转写并保留逐段时间戳。冻结源语言或可接受的语言集合，记录音频指纹、片段区间、转写置信度和修订；摘要只能引用已定位片段，不能把听不清的内容补成确定事实。
 
 ### DALL·E and text generation
 
-“DALL·E and text generation”为文本、图像、音频或视频分别保存原始输入、变换、模型版本和中间产物。比较现成工具包、Agent组合与顺序链时固定任务，报告质量、延迟、成本、可控性及局部失败的降级路径。
-
-针对“DALL·E and text generation”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+图像生成要同时记录提示、参考输入、模型版本、种子或随机设置、内容安全结果和输出指纹。文本模型可负责构造说明或替代文本，但说明中的人物、地点和版权主张应有独立证据；不能把生成模型的流畅描述当成图像事实。
 
 ### Putting it all together
 
-“Putting it all together”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Putting it all together”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+端到端流程可以是：接收并校验输入，按模态调用适配器，保存中间产物，合并结构化结果，运行质量与安全门禁，最后展示可回看的来源和回退动作。每条边都标明输入输出和失败语义，排查时才能定位是文件、模型、工具还是 UI 分叉。
 
 ### Option 3: Hard-coded approach with a sequential chain
 
-“Option 3: Hard-coded approach with a sequential chain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Option 3: Hard-coded approach with a sequential chain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+顺序链把步骤写死，适合发票抽取、视频转写这类流程明确的任务。它牺牲部分灵活性，换来可预测的调用顺序、成本和回放；每一步都用结构化输入输出连接，并为跳过、重试、超时和人工确认定义显式分支。
 
 ### Comparing the three options
 
-“Comparing the three options”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Comparing the three options”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+工具包的优势是接入快，Agent 的优势是能按上下文选择工具，顺序链的优势是审计和回放简单。用同一批样例比较质量、延迟、成本、失败率、权限复杂度和人工介入次数，再按风险和变化频率选方案，不能只凭代码行数判断优劣。
 
 ### Developing the front-end with Streamlit
 
-“Developing the front-end with Streamlit”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Developing the front-end with Streamlit”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+Streamlit 前端应显示上传限制、处理中间状态、工具调用、来源、置信度、失败原因、重试和人工确认入口。不要只展示一个最终文本框；图像字段要能回到原图位置，字幕要能跳到时间戳，生成图像要能查看提示与版本。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+本章的 Summary 是一条可执行的多模态交付路线：先检查输入与许可，再记录模态变换，随后选择工具编排并保存每次调用，最后依据置信度、来源和人工确认决定展示、降级或回退。图像、音频、视频和文本可以共享存档接口，但不能共享未经验证的事实判断。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+本章的 AI Services、LangChain、Whisper、DALL·E 和 Streamlit 章节结构参考 Valentina Alto 的 Packt 原书出版信息；实验中的合同、存档字段和复核门禁是本站的独立重写。运行当前服务时应以官方文档、当前端点和数据许可为准，并把变化写入新的版本坐标。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类多模态证据
 
-## 六类应用证据
+### 输入与许可证据
 
-### 任务与来源合同
+保存原始文件指纹、模态、类型、大小、来源、用户授权和保留期限。视频或图片里的第三方内容可能有额外许可边界，不能因为模型能读取就默认可以训练、存储或公开展示。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 变换与同步证据
 
-### 模型与提示合同
+保存裁剪、压缩、采样、OCR 框、语言检测、音频切片和视频时间轴。每个中间产物引用上一步的 ID；如果音画不同步或图片被重新缩放，审核者可以从链上看到变化发生在哪里。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 模型与工具证据
 
-### 数据、检索与状态合同
+记录服务、部署、版本、区域、提示、参数、工具白名单、超时、重试和请求 ID。Azure AI Services、Whisper、DALL·E 或 LangChain 的接口会变化，历史代码只能说明结构，不能代替当前运行验证。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 质量与置信度证据
 
-### 工具、代码与权限合同
+记录字段置信度、语言检测、内容安全、OCR 框、字幕时间戳、人工修订和阈值。低置信度要触发可解释动作；把一个数字平均分当成全链路正确，会隐藏某个模态已经失真的事实。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 产物与来源证据
 
-### 评测、安全与成本合同
+最终文本、表格、图片和音频都要引用输入、变换、模型和判断 ID。下游用户点击来源时应能看到片段、框、时间或提示，而不是只看到一段没有出处的模型话术。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 发布与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+发布单冻结调用图、依赖、服务版本、回归集合、样例许可和上一版产物。线上出现识别漂移、工具超时、越权或高成本时，系统应能降级到缓存、人工或上一组已验证组件。
 
 ## 容易踩的坑
 
-**现象 →** 发票 OCR 把金额 `1,200` 识别成 `1200` 或漏掉税额，汇总总额偏差巨大。
-**原因 →** OCR 置信度未校验，关键字段无二次确认，图像质量差时模型静默出错。
-**修法 →** 记录 OCR 原始框与置信度，关键字段交叉校验，低置信度触发人工复核而非直接入账。
+<Callout type="trap">**现象：**发票 OCR 把金额 1,200 读成 1200，系统仍然自动入账；**原因：**没有保存文字框和置信度，也没有检查小计、税额和总额关系；**修法：**关键字段做规则交叉校验，低置信度进入人工队列，并保留原图位置供复核。</Callout>
 
-**现象 →** Whisper 把英文视频转成中文幻觉字幕，下游摘要完全跑偏。
-**原因 →** 未指定源语言，Whisper 自动检测在小语种片段上误判，生成内容未与音频比对。
-**修法 →** 冻结源语言参数，保留音频指纹与逐段时间戳，转写后做语言一致性校验。
+<Callout type="trap">**现象：**Whisper 把夹杂方言的英文视频生成了流畅但错误的字幕；**原因：**依赖自动语言检测，未核对片段时间戳、语言和音频质量；**修法：**冻结语言参数，按片段保存音频指纹与置信度，低质量片段显示待确认而不生成确定摘要。</Callout>
 
-**现象 →** 三个月后无法复现某次图像生成结果，提示词与参数全部丢失。
-**原因 →** 只保存了最终图片，未记录提示、种子、模型版本与变换链，多模态产物不可追溯。
-**修法 →** 每种模态保存原始输入、变换、模型版本与中间产物，发布单元整体标记可回放。
+<Callout type="trap">**现象：**工具包升级后同一提示生成了不同图像，团队无法说明变化来源；**原因：**只保存最终图片，没有保存提示、参考图、模型、种子和变换链；**修法：**将多模态产物与版本坐标绑定，生成差异报告并保留上一版可回放结果。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 为每种模态分别保存原始输入、变换与中间产物。
-- OCR 关键字段须交叉校验，低置信度触发人工复核。
-- 音视频转写冻结语言参数，保留时间戳与指纹。
-- 比较工具包、Agent 与顺序链的质量与可控性。
-- 局部失败要有可解释的降级路径，而非整体崩溃。
+### Summary
+
+本章的 Summary 是一条可执行的多模态交付路线：先检查输入与许可，再记录模态变换，随后选择工具编排并保存每次调用，最后依据置信度、来源和人工确认决定展示、降级或回退。图像、音频、视频和文本可以共享存档接口，但不能共享未经验证的事实判断。
+
+- 每种模态先验类型、大小、来源、变换和输出边界。
+- 工具包、Agent 和顺序链用质量、成本、权限和回放比较。
+- 中间产物包含指纹、版本、置信度、时间或空间定位。
+- 低质量输入、工具失败和证据冲突触发可解释降级。
+- 发布单冻结调用图、回归集合和上一版回退路径。
+
+### References
+
+本章的 AI Services、LangChain、Whisper、DALL·E 和 Streamlit 章节结构参考 Valentina Alto 的 Packt 原书出版信息；实验中的合同、存档字段和复核门禁是本站的独立重写。运行当前服务时应以官方文档、当前端点和数据许可为准，并把变化写入新的版本坐标。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 为什么多模态链必须保存每种模态的中间产物？
+**问题 1：概念理解。** 为什么多模态应用不能只保存最终文本或图片？
 
 <Answer>
 
-多模态链中文本、图像、音频依次变换，只留最终文本会丢失原始图像质量、OCR 框、音频指纹等关键证据；一旦结果出错无法定位是 OCR、转写还是生成环节分叉，保存中间产物才能独立复核与回放。
-
+最终产物无法说明错误发生在文件、OCR、转写、模型、工具还是合并步骤，也无法恢复原始证据。保存每种模态的输入指纹、变换、模型、置信度和输出 ID，才能定位分叉、复核许可并回放结果。
 </Answer>
 
-**问题 2：实践应用。** 如何避免发票 OCR 关键字段静默出错？
+**问题 2：实践应用。** 为发票分析设计三个自动停止条件，并说明停止后给用户什么信息。
 
 <Answer>
 
-记录 OCR 原始框与置信度，对金额、税号等关键字段做规则交叉校验（如金额等于小计加税额），低置信度或校验不一致时触发人工复核，而非直接入账；同时保留原图便于复检。
-
+文件类型或尺寸不允许时返回上传约束；金额、税号或总额校验不一致时返回字段位置和差异；关键字段置信度低时返回待确认字段和原图框。三种情况都不写入下游记录，并保留请求 ID 供重试或人工接管。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版多模态产物存档器：记录每一步的模态、输入哈希、模型与输出。
+**问题 3（独立实现）：** 实现一个简化版 record_artifact，把模态、输入哈希、模型和输出连接到前一步。
 
 <Answer>
 
-```python
-def archive_step(modality, inp, model, out, meta=None):
+~~~python
+def record_artifact(modality, input_hash, model, output, previous=None):
     return {
         "modality": modality,
-        "input_hash": hash(inp),
+        "input_hash": input_hash,
         "model": model,
-        "output": out,
-        "meta": meta or {},
+        "output": output,
+        "previous": previous,
     }
+~~~
 
-
-def archive_chain(steps):
-    return {"steps": steps, "version": "1.0"}
-```
-
+实际实现还应加入时间戳、许可、置信度、请求 ID、错误状态和清理策略；函数返回的是证据记录，不是对多模态结果正确性的承诺。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-比较Azure AI现成工具包、组合单工具Agent和硬编码顺序链三种多模态路径，覆盖发票、YouTube、Whisper与图像生成。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能逐模态保存输入和中间产物，比较三种编排的质量、延迟、成本、可控性与失败回退。
-
+<Glossary>
+  <GlossaryItem term="Modality Contract">记录输入模态、输出协议、质量阈值、权限和失败动作的可检查约定。</GlossaryItem>
+  <GlossaryItem term="Modality Transform">把图片、音频或视频转换成下一阶段可用表示的处理步骤。</GlossaryItem>
+  <GlossaryItem term="Orchestration Graph">描述模型、工具、状态和回退如何连接的有向调用计划。</GlossaryItem>
+  <GlossaryItem term="Confidence Signal">模型或规则对识别字段正确程度的数值或分级判断。</GlossaryItem>
+  <GlossaryItem term="Artifact Lineage">把原始输入、变换、版本和输出连成可复盘记录的链条。</GlossaryItem>
+  <GlossaryItem term="Fallback Gate">在失败、低置信度或越权风险时停止自动动作并选择下一步的规则。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
 - [Chapter 9: Working with Code](/learn/building-llm-applications/10-chapter-09/bla-09-working-with-code)
-- [Chapter 11: Fine-Tuning Large Language Models](/learn/building-llm-applications/12-chapter-11/bla-11-fine-tuning)
+- [Chapter 11: Fine-tuning](/learn/building-llm-applications/12-chapter-11/bla-11-fine-tuning)
 
 <Attribution
   mode="independent-rewrite"
@@ -376,4 +313,3 @@ def archive_chain(steps):
   workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
   adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 />
-

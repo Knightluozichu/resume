@@ -8,12 +8,36 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcAcceptanceMatrixLab,
+  CvcEvidenceChainLab,
+  CvcFaultEvidenceLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-final-review";
+
+<Objectives>
+
+- 能从生产症状建立 runtime state、竞争假设与最小证据链
+- 能比较 load、execute、retain、coordinate 四条机制链，并定位 owner、boundary 与 invariant
+- 能用 success、fault、cancel、pressure 和 shutdown 场景验收一个跨章节 CLR 修复
+
+</Objectives>
 
 
 ## 从生产症状开始重建Runtime Evidence Graph
 
-前三十章已经给出局部机制。最终任务是把程序集身份、类型、调用、对象图、异常、加载、序列化、线程、异步和同步连接成。图中的节点不是书名术语，而是可验证状态：实际加载了哪个assembly；调用目标是哪张method table；对象被哪条root path保留；work在queue、running还是waiting；permit或lock由谁持有。
+前三十章已经给出局部机制。最终任务是把程序集身份、类型、调用、对象图、异常、加载、序列化、线程、异步和同步连接成一张 <Term def="把运行时状态、竞争假设、证据和修复验收串成可复现路径的诊断图。">runtime evidence graph</Term>。图中的节点不是书名术语，而是可验证状态：实际加载了哪个assembly；调用目标是哪张method table；对象被哪条root path保留；work在queue、running还是waiting；permit或lock由谁持有。
 
 一个生产故障往往跨Part：plugin加载成功但调用旧方法，涉及assembly identity、type loading、reflection与exception；event subscriber让cache对象无法回收，涉及delegate、event、GC roots与lifetime；request timeout但CPU很低，涉及async I/O、thread pool、blocking和synchronization。只背单章定义会把这些问题误判为“CLR偶发”。
 
@@ -26,13 +50,17 @@ draft: false
 
 Part I解释managed module、assembly、manifest、strong name和部署；Part IV的hosting、AppDomain、assembly loading、reflection、serialization及WinRT把同一identity问题推到动态边界。`Assembly.FullName`相同不代表来自同一路径或同一load context，type显示名相同也可能不具赋值兼容性。
 
-复习时构造三类失败：依赖缺失、版本/签名不匹配、同名type来自不同identity。保存应用基目录、probing/load context、requested与actual identity、module MVID、caller member reference。若没有“请求者-请求内容-实际产物”的三元组，所谓binding修复只是猜测。
+复习时构造三类失败：依赖缺失、版本/签名不匹配、同名type来自不同identity。保存应用基目录、probing/load context、requested与actual identity、module MVID、caller member reference。若没有“请求者-请求内容-实际产物”的 <Term def="把请求者、请求内容和实际产物放在同一份证据里的最小身份对照。">identity triple</Term>，所谓binding修复只是猜测。
+
+<Callout type="trap" title="FullName相同就能证明两个插件类型兼容">
+现象：名称相同却无法cast或出现MissingMethod。原因：assembly identity、MVID或load context仍可能不同。修法：记录requested/actual identity、加载上下文和可赋值关系，再固定共享contract策略。
+</Callout>
 
 ### Execute：从IL到Dispatch与Exception State
 
 Part II的method、parameter、property、event、generic、interface定义call contract；Part III的delegate和attribute改变动态调用与metadata；Part IV的reflection执行未知type。JIT将IL变为native code，但错误目标可能在更早的overload resolution、generic instantiation、virtual/interface dispatch或reflection binding产生。
 
-Exception不是日志字符串，而是执行状态和failure boundary。Catch必须明确能恢复的invariant，finally/using负责cleanup，包装时保留inner exception和上下文。不要用catch-all继续未知状态，也不要把expected cancellation记录成系统fault。
+Exception不是日志字符串，而是执行状态和 <Term def="规定哪些状态可以恢复、哪些错误必须传播的故障边界。">failure boundary</Term>。Catch必须明确能恢复的invariant，finally/using负责cleanup，包装时保留inner exception和上下文。不要用catch-all继续未知状态，也不要把expected cancellation记录成系统fault。
 
 ```csharp
 public static object InvokeChecked(object target, MethodInfo method, object?[] args)
@@ -53,7 +81,11 @@ public static object InvokeChecked(object target, MethodInfo method, object?[] a
 
 Value/reference、array、string、delegate、nullable决定allocation与reference shape；managed heap/GC章解释root、generation、finalization、pinning和large object；hosting/loading又可能延长整个type/assembly graph生命周期。比“Gen2很大”更能定位owner。
 
-先区分high allocation rate与retention：前者看allocation stack/bytes per operation，后者比较多次full collection后的survivors/root path。Dispose释放外部资源但不让managed object自动不可达；finalizer是延迟安全网而非主清理；event/static cache/Timer/Task continuation都可能形成意外root。
+先区分high allocation rate与retention：前者看allocation stack/bytes per operation，后者比较多次full collection后的survivors/<Term def="从GC root沿引用关系走到被保留对象的路径，用来定位真正的owner。">root path</Term>。Dispose释放外部资源但不让managed object自动不可达；finalizer是延迟安全网而非主清理；event/static cache/Timer/Task continuation都可能形成意外root。
+
+<Callout type="trap" title="Gen2变大就等于GC坏了">
+现象：看到Gen2或working set上升就立刻调GC参数。原因：高分配速率、managed retention、native resource和提交内存是不同假设。修法：比较多次full collection后的survivors，追root path并确认owner，再决定清理或限流。
+</Callout>
 
 ### Coordinate：从Work Classification到Result与Visibility
 
@@ -73,6 +105,18 @@ public static async Task<T> WithPermitAsync<T>(
 }
 ```
 
+<Stepper>
+  <Step title="切换load、execute、retain与coordinate">
+    <CvcEvidenceChainLab />
+  </Step>
+  <Step title="追踪每条链的owner">
+    <CvcEvidenceChainLab />
+  </Step>
+  <Step title="选择最小区分证据">
+    <CvcEvidenceChainLab />
+  </Step>
+</Stepper>
+
 ## 从现象反推章节与第一份证据
 
 
@@ -90,7 +134,11 @@ public static async Task<T> WithPermitAsync<T>(
 
 ### Case C：请求慢、CPU低、Queue增长
 
-这通常更像pool starvation、sync-over-async、lock convoy、blocked synchronous I/O或unbounded admission，而非CPU算力不足。关联request id与enqueue/start/await/complete时间，采集pool worker/injection、running/waiting stacks、lock owner和I/O duration。把总延迟按latency decomposition拆开，才能判断要改async边界、capacity、critical section还是外部deadline。
+这通常更像pool starvation、sync-over-async、lock convoy、blocked synchronous I/O或unbounded admission，而非CPU算力不足。关联request id与enqueue/start/await/complete时间，采集pool worker/injection、running/waiting stacks、lock owner和I/O duration。把总延迟按 <Term def="把请求总耗时拆成排队、执行、等待、锁和外部依赖等阶段的时间账本。">latency decomposition</Term>拆开，才能判断要改async边界、capacity、critical section还是外部deadline。
+
+<Callout type="trap" title="CPU很低所以只要增加worker就能解决慢请求">
+现象：CPU低、queue增长、p99升高。原因：线程可能在I/O、lock、pool starvation或外部deadline上等待。修法：先采集enqueue、running、await、lock和complete时间，验证capacity与async边界后再调度资源。
+</Callout>
 
 ### Case D：Serialization或Interop边界故障
 
@@ -105,12 +153,61 @@ public sealed record BoundaryProbe(
     string EvidenceId);
 ```
 
+<Stepper>
+  <Step title="切换identity、memory、latency与boundary">
+    <CvcFaultEvidenceLab />
+  </Step>
+  <Step title="比较竞争假设">
+    <CvcFaultEvidenceLab />
+  </Step>
+  <Step title="固定第一份可复现证据">
+    <CvcFaultEvidenceLab />
+  </Step>
+</Stepper>
+
 
 ## 本章回顾：掌握标准
 
-对任一问题，先说出runtime state和competing hypotheses；再选择能区分原因的最小证据；接着定位owner、boundary与invariant；修复同时覆盖success、fault、cancel、pressure/race和shutdown；最后把同一模型迁移到不同领域。能完成这一链条，才说明第四版30章从知识点变成了工程判断力。
+对任一问题，先说出runtime state和competing hypotheses；再选择能区分原因的最小证据；接着定位owner、boundary与invariant；修复同时覆盖success、fault、cancel、pressure/race和shutdown；最后把同一模型迁移到不同领域。能完成这一链条，才说明第四版30章从知识点变成了工程判断力。发布前再用 <Term def="把正常、失败、取消、压力与关闭场景列成可逐项验收的证据表。">acceptance matrix</Term>复核，不把单次成功误当成系统可靠。
 
+
+<Stepper>
+  <Step title="切换success、fault、cancel与pressure">
+    <CvcAcceptanceMatrixLab />
+  </Step>
+  <Step title="检查owner与invariant">
+    <CvcAcceptanceMatrixLab />
+  </Step>
+  <Step title="验证shutdown与重放">
+    <CvcAcceptanceMatrixLab />
+  </Step>
+</Stepper>
+
+<Exercises>
+
+**问题 1：插件加载成功但调用时报 `MissingMethodException`，第一轮应采集哪些证据？**
+
+<Answer>先固定请求者与实际程序集的 identity triple：记录 requested/actual assembly identity、路径、MVID、load context、runtime type、method token 与签名，再判断引用漂移、重复 contract、dispatch 或 reflection binding。不能只看 FullName，也不能把清空缓存当作原因证明。</Answer>
+
+**问题 2：内存持续增长、CPU正常时，如何区分高分配速率与 retention？**
+
+<Answer>分别采集 allocation stack 与 bytes per operation，再比较多次 full collection 后 survivors、类型分布和 root path。若根来自 event、static cache、Timer 或 pending Task，解除订阅、设置容量/过期或完成 operation；Dispose 外部资源不等于 managed object 已不可达。</Answer>
+
+**问题 3：如何验收一个同时涉及 async、同步和资源边界的修复？**
+
+<Answer>用 acceptance matrix 覆盖 success、fault、cancel、pressure/race 与 shutdown：记录 admission、等待、结果/异常、取消传播、permit/lock 归还和 drain 结果。保留可重放的 old/new、竞争和容量 fixture，证明 owner 与 invariant 在压力下仍成立，而非只跑一次 happy path。</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="runtime evidence graph" definition="把运行时状态、假设、证据和修复验收连成可复现诊断路径的图。" />
+  <GlossaryItem term="identity triple" definition="同时记录请求者、请求内容和实际产物的身份对照。" />
+  <GlossaryItem term="failure boundary" definition="规定哪些错误可以恢复、哪些错误必须传播的边界。" />
+  <GlossaryItem term="root path" definition="从GC root走到被保留对象的引用路径，用来定位owner。" />
+  <GlossaryItem term="latency decomposition" definition="把总延迟拆成排队、执行、等待、锁和外部依赖阶段的时间账本。" />
+  <GlossaryItem term="acceptance matrix" definition="逐项验收正常、失败、取消、压力和关闭场景的证据表。" />
+</Glossary>
 
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapters 1–30 (synthesis review)" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

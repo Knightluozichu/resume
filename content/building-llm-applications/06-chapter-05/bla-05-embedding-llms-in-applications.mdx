@@ -3,346 +3,281 @@ title: "Chapter 5: Embedding LLMs within Your Applications"
 type: C
 section: "Chapter 5: Embedding LLMs within Your Applications"
 order: 6
-description: "把模型、提示、数据连接、记忆、链与Agent嵌入应用，并通过Hugging Face Hub实践开源模型与密钥治理。"
+description: "把模型、提示、数据连接、记忆、链与 Agent 嵌入应用，并通过 Hugging Face Hub 实践开源模型与密钥治理。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-05
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla05HubLab,
+  Bla05PipelineLab,
+  Bla05StateLab,
+} from "@/components/mdx/building-llm-applications/06-chapter-05/bla-05-embedding-llms-in-applications";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。把模型、提示、数据连接、记忆、链与Agent嵌入应用，并通过Hugging
-Face Hub实践开源模型与密钥治理。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能把模型、提示、数据、记忆、链和 Agent 放进有适配器、状态边界、权限和回退的应用管线。
+- 能实现一个最小请求合同和工具门禁，记录版本、来源、延迟、成本、错误和可重放证据。
+- 能安全管理 Hugging Face Hub 令牌、`.env` 配置、开源权重、许可证和轮换流程。
+- 能用质量、隐私、可维护性、容量和回退证据判断一次嵌入是否达到发布条件。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 5：把 LLM 嵌入应用而不是散落在代码里
 
+嵌入 LLM 的第一步不是安装一个 SDK，而是决定模型、提示、数据、状态和工具如何通过稳定合同进入应用。LangChain、Hugging Face Hub 或自定义客户端都只能提供实现材料；任务、权限、日志、成本和回退仍然需要由应用团队负责。本章把一条嵌入管线拆成可替换适配器、可隔离状态和可撤销凭证三条证据链。
 
-## 数学、检索与成本骨架
+先预测：如果模型端点升级，哪个适配器最先应该变化？如果记忆跨租户泄露，应该继续生成还是立即阻断？如果 Hub 令牌出现在日志里，删除本地文件是否足够？三个实验会把这些问题转成输入、边界、证据和停止动作。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**业务代码直接调用框架和模型 SDK，样例能跑就认为嵌入完成；**原因：**没有隔离版本、错误、成本和回退；**修法：**在业务层与外部服务之间建立适配器和请求合同，保留可替换实现。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**把对话历史或数据库结果都塞进共享记忆；**原因：**没有明确会话、租户、生命周期和可见范围；**修法：**为状态指定所有者、过期、清除和审计策略，跨界时停止请求。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**令牌写进 `.env` 后就认为秘密已经安全；**原因：**忽略提交、日志、客户端打包、权限 scope 和轮换；**修法：**最小权限注入、忽略文件、定期轮换，泄露后先撤销并记录影响范围。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="隔离外部模型、框架或数据服务接口与业务逻辑的稳定薄层">Embedding Adapter</Term>` 让应用可以更换端点而不改写所有业务代码。一次调用还需要 `<Term def="固定任务、输入、模型、提示、数据、工具、输出和限制的可重放记录">Request Contract</Term>`，否则版本差异无法定位。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+记忆和链必须遵守 `<Term def="定义状态的所有者、可见范围、生命周期、清理和跨步骤传递方式的规则">State Boundary</Term>`；工具动作必须符合 `<Term def="约束工具输入、输出、权限、超时、错误和副作用的接口">Tool Contract</Term>`。访问 Hub 或其他模型服务时，`<Term def="只授予必要资源和动作、可审计且能够撤销的访问凭证">Scoped Token</Term>` 比一串未分类的密钥更容易治理。
 
-## 三段可运行骨架
+最后，`<Term def="说明开源权重来源、允许用途、限制、评估和已知风险的结构化文件">Model Card</Term>` 把“下载了模型”转成可以评审的来源与责任证据。
+
+## 三步嵌入应用实验
+
+每一步先写下预测，再改变一个条件。实验使用合成端点和状态，不会访问真实 Hub；生产环境应使用秘密管理器、经过许可审查的权重与最小权限账户。
+
+<Stepper>
+  <Step title="1. 建立嵌入管线">
+    选择模型适配、提示模板或数据连接，再移除适配器合同，观察版本、来源和回退证据为何必须留在应用边界。
+
+    <Bla05PipelineLab />
+  </Step>
+  <Step title="2. 约束状态与编排">
+    选择记忆、链或 Agent，再让状态跨越会话或租户，观察清理、所有者和停止条件如何保护多步应用。
+
+    <Bla05StateLab />
+  </Step>
+  <Step title="3. 治理 Hub 与秘密">
+    选择令牌、`.env` 或开源模型路径，再模拟秘密暴露，观察撤销、轮换、许可证和权重证据如何改变发布动作。
+
+    <Bla05HubLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的嵌入门禁
+
+下面的 Python 函数先检查请求合同和工具权限，再允许适配器执行；TypeScript 版本把秘密配置从业务对象中分离。示例不连接真实服务，目的是先验证边界和缺证据时的停止行为。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 请求合同">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def embedding_gate(request, allowed_tools):
+    required = {"task", "model", "prompt", "input_hash", "limits"}
+    missing = sorted(required - request.keys())
+    forbidden = sorted(set(request.get("tools", [])) - set(allowed_tools))
+    if missing or forbidden:
+        return {"pass": False, "missing": missing, "forbidden": forbidden}
+    return {"pass": True, "missing": [], "forbidden": []}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 配置边界">
 
 ```typescript
-type RequestContract = {
-  task: string;
+type PublicConfig = {
   model: string;
-  prompt: string;
-  data: string;
-  tools: string[];
-  seed: number;
+  endpoint: string;
+  promptVersion: string;
 };
 
-function freezeRequest(
-  task: string,
-  model: string,
-  prompt: string,
-  dataHash: string,
-  tools: string[],
-  seed: number,
-): RequestContract {
-  return { task, model, prompt, data: dataHash, tools, seed };
+function publicConfig(env: Record<string, string | undefined>): PublicConfig {
+  if (!env.MODEL_NAME || !env.MODEL_ENDPOINT || !env.PROMPT_VERSION) {
+    throw new Error("model configuration is incomplete");
+  }
+  return {
+    model: env.MODEL_NAME,
+    endpoint: env.MODEL_ENDPOINT,
+    promptVersion: env.PROMPT_VERSION,
+  };
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`embedding_gate` 不会因为工具名称看起来熟悉就放行越权动作；`publicConfig` 只返回非秘密运行配置，令牌由部署环境注入而不进入请求日志。生产实现还要增加租户、请求 ID、超时、成本、回执、数据来源和轮换记录，让一次失败能够被重放与撤销。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type GateRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(
-  records: GateRecord[],
-): { pass: boolean; missing: number[] } {
-  const required = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从管线到可维护应用
 
 ### Chapter 5: Embedding LLMs within Your Applications
 
-“Chapter 5: Embedding LLMs within Your Applications”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Chapter 5: Embedding LLMs within Your Applications”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 5: Embedding LLMs within Your Applications”把模型能力放入应用责任链：适配器隔离外部变化，状态边界保护上下文，工具合同限制副作用，秘密治理保护访问入口。读者应在连接真实服务前用假端点完成这些合同的回归。
 
 ### Technical requirements
 
-“Technical requirements”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Technical requirements”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Technical requirements”包括运行时、依赖锁、模型端点、数据连接、密钥注入、日志脱敏、超时、资源上限和回退版本。缺少其中任何一项，demo 的成功都不能说明应用可以在另一台机器或下一次升级后重放。
 
 ### A brief note about LangChain
 
-“A brief note about LangChain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“A brief note about LangChain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“A brief note about LangChain”提醒我们把框架当作外部实现，而不是应用合同。组件、回调和模型适配器都可能随版本变化；业务层应只依赖自己的接口，并保存链路配置、版本和错误回执。
 
 ### Getting started with LangChain
 
-“Getting started with LangChain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Getting started with LangChain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Getting started with LangChain”可以从假模型、假检索器和假工具开始，先验证输入输出和错误分支，再接真实端点。这样做能把框架安装问题、模型行为问题和业务合同问题分开，而不是让一个长 notebook 混在一起。
 
 ### Models and prompts
 
-“Models and prompts”按任务、输入边界、模板、模型参数、结构约束与评测集合六列冻结。先预测提示改变会影响哪个输出字段，再比较正常、边界和注入样本；隐藏推理不作为事实来源，理由必须由可见证据或外部验证支持。
-
-针对“Models and prompts”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Models and prompts”要求同时冻结模型、端点、词元器、提示版本、解码、上下文和输出 schema。提示改变可能影响缓存、成本和评估；模型别名改变可能影响质量和安全，两者都要通过同一回归集重新验证。
 
 ### Data connections
 
-“Data connections”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Data connections”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Data connections”将数据库、文件、搜索和向量索引接入模型上下文。连接必须记录来源、权限、快照、有效期、查询参数和引用；空结果、过期结果或越权结果都应进入可解释的降级路径。
 
 ### Memory
 
-“Memory”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Memory”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Memory”不是无限聊天历史，而是有所有者、范围、压缩方式、过期和删除动作的状态系统。保存摘要时要保留来源和版本；跨用户或租户的记忆必须被视为安全边界错误，而不是生成质量问题。
 
 ### Chains
 
-“Chains”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Chains”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chains”把多个确定步骤连接成可观察的流程。每个节点应有输入、输出、超时、重试、回退和负责人；链越长，越需要保存中间产物，否则最后一句文本无法告诉你哪个节点先失效。
 
 ### Agents
 
-“Agents”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Agents”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Agents”让模型选择下一步动作，因而扩大了状态、权限、成本和停止风险。工具白名单、参数校验、最大步数、预算、取消和人工升级是最低边界；Agent 能完成任务不代表它可以自由访问所有系统。
 
 ### Working with LLMs via the Hugging Face Hub
 
-“Working with LLMs via the Hugging Face Hub”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Working with LLMs via the Hugging Face Hub”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Working with LLMs via the Hugging Face Hub”把开源模型接入拆成账号、权限、权重、许可证、缓存、硬件和评估。Hub 页面可提供来源线索，但团队仍需核对模型卡、商业限制、版本、漏洞和本地运行资源。
 
 ### Create a Hugging Face user access token
 
-“Create a Hugging Face user access token”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Create a Hugging Face user access token”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Create a Hugging Face user access token”应遵守最小 scope、专用账户、过期策略和可撤销性。令牌不是教程里的普通字符串；不要提交到仓库、写入前端、打印到日志或与不需要下载权重的服务共享。
 
 ### Storing your secrets in an .env file
 
-“Storing your secrets in an .env file”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Storing your secrets in an .env file”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Storing your secrets in an .env file”适合本地开发的配置注入，但 `.env` 不是秘密保险箱。文件应被忽略、模板只保留变量名，CI 与生产使用独立注入和轮换；一旦泄露，要撤销旧凭证并检查历史与缓存。
 
 ### Start using open-source LLMs
 
-“Start using open-source LLMs”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“Start using open-source LLMs”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Start using open-source LLMs”应从模型卡、权重来源、许可证、硬件、量化、推理版本和任务评估开始。自托管增加控制力，也增加补丁、容量、监控、数据驻留与安全响应责任，下载权重只是嵌入的第一步。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为三件事：用适配器和请求合同嵌入模型，用状态和工具边界保护多步调用，用 scoped token、`.env` 注入和模型卡治理开源资源。只有这些证据与质量、成本和回退一起通过，嵌入才接近发布。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”标记 Packt 原书、LangChain、Hugging Face Hub 和安全配置资料的来源边界。框架 API、模型卡、许可证、令牌策略与服务价格会变化，当前实现必须在目标环境中重新核对，不由历史示例自动继承。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类嵌入证据
 
-## 六类应用证据
+### 1. 运行与适配器证据
 
-### 任务与来源合同
+保存运行时、依赖锁、模型端点、适配器版本、请求 ID、响应、延迟、成本和错误。业务层只看到稳定合同，外部 SDK 的变化在适配器层被隔离并可以单独回归。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. 模型与提示证据
 
-### 模型与提示合同
+保存模型卡、权重或端点来源、提示版本、解码设置、上下文限制和输出 schema。更换模型时比较逐字段差异、失败类别和回退，而不只比较一段成功文本。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 数据连接证据
 
-### 数据、检索与状态合同
+保存数据许可、连接身份、查询、快照、索引、引用、有效期和空结果处理。数据能够被模型读取不等于它应该被读取；权限、脱敏与租户边界先于生成质量。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 状态与编排证据
 
-### 工具、代码与权限合同
+保存记忆所有者、摘要版本、生命周期、链路节点、Agent 步数、工具参数、回执和取消动作。跨界状态、无限循环或重复副作用都应在边界处停止，并保留影响范围。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 秘密与许可证证据
 
-### 评测、安全与成本合同
+保存令牌 scope、创建者、过期、轮换、撤销、注入方式、`.gitignore`、模型卡和许可证审查。秘密不进入日志和客户端，开源权重不绕过商业、版权或安全评估。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 回归与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存基准样本、旧版输出、新版差异、人工判断、资源预算、回退版本和演练时间。模型、框架、提示、数据、索引或凭证流程变化都应触发回归，不等用户先发现故障。
 
 ## 容易踩的坑
 
-**现象 →** 把 Hugging Face token 写进 `.env` 后误提交到公开仓库，几小时内即被扫描器盗用。
-**原因 →** `.env` 未加入 `.gitignore`，token 权限为 write 且无过期时间，密钥随源码外泄。
-**修法 →** 立即吊销并重发只读 token，`.gitignore` 锁定 `.env`，密钥改用 secret manager 注入运行时。
+<Callout type="trap">**现象：**把框架对象直接传遍整个应用；**原因：**没有定义稳定的领域接口和适配器责任；**修法：**让业务层只依赖请求合同，框架升级先在适配器和回归环境中验证。</Callout>
 
-**现象 →** 切换 `sentence-transformers` 默认模型后，新向量维度变成 384，旧索引仍存 768 维，余弦相似度全 NaN。
-**原因 →** 模型别名指向新版本，嵌入维度未在合同中冻结，索引未随模型版本一起重建。
-**修法 →** 记录模型版本与维度到请求清单，重建索引前比对维度，版本不一致直接拒绝写入。
+<Callout type="trap">**现象：**为方便调试把完整请求、记忆和令牌写入日志；**原因：**没有区分诊断证据与秘密、个人数据和跨租户状态；**修法：**脱敏、哈希、最小化记录，并为高风险字段设置日志门禁。</Callout>
 
-**现象 →** 多用户共用一个 `ConversationBufferMemory`，A 的提问混入 B 的回答。
-**原因 →** 记忆对象按进程单例持有，未按 session_id 隔离，上下文未设所有者与生命周期。
-**修法 →** 用 session_id 作键的字典隔离每会话状态，设最大轮数与过期清理，越界降级为摘要。
+<Callout type="trap">**现象：**开源模型跑通一次就部署；**原因：**没有检查模型卡、许可证、容量、漏洞、质量和回退；**修法：**先完成来源与风险审查，再用独立样本和资源预算验证可维护性。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 先冻结任务、样本、模型、提示与权限，再接真实服务。
-- 单变量对照：每轮只改一个因素并保留上一步基线。
-- 输出验证分语法、语义、来源、权限四层，缺一不可。
-- 密钥不入代码、日志或客户端，统一由 secret manager 注入。
-- 发布单元整体标记模型、提示、索引与工具，可一键回退。
+- 用 Embedding Adapter 和 Request Contract 把外部服务与业务逻辑隔离。
+- 用 State Boundary 和 Tool Contract 约束记忆、链、Agent 的可见范围和副作用。
+- Hugging Face Hub 令牌采用最小 scope、注入、轮换与撤销；`.env` 只解决本地配置形态。
+- 开源权重必须同时通过模型卡、许可证、硬件、质量、容量和安全评估。
+- 发布前保留运行、数据、秘密、回归和回退证据，缺一项就暂停嵌入。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 为什么模型别名不能作为应用合同中的稳定标识？
+**问题 1：**请设计一个最小模型适配器接口，使业务代码可以从托管 API 切换到本地模型而不修改任务逻辑。
 
 <Answer>
-
-模型别名由提供方维护，可能随版本更新指向不同权重；端点、词元器、上下文长度和解码默认值都会漂移。应记录模型版本号、端点 URL、词元器名和参数哈希，用金样本逐字段比对，把别名漂移暴露为可见差异，而非隐藏在平均分里。
-
+  接口至少包含任务、提示、输入、模型标识、超时和限制，并统一返回文本或结构化输出、来源、延迟、成本、错误和请求 ID。托管与本地实现分别处理 SDK、凭证和硬件，业务层只消费这个合同；切换前使用同一回归集比较结果。
 </Answer>
 
-**问题 2：实践应用。** 给定一份冻结的请求清单，如何设计一次只归因于提示变更的对照实验？
+**问题 2：**发现一个 Hub 令牌出现在 CI 日志中，为什么只删除日志文件不够？
 
 <Answer>
-
-冻结基线后只改变提示模板这一个因素，其余字段（模型、数据、工具、种子）保持不变。对正常、边界和注入样本各跑多种子，报告逐样本结果、均值、方差与尾延迟；通过 `compare_controlled` 断言 `changed` 集合长度为 1，确保差异可归因到提示。
-
+  日志可能已经被缓存、复制或下载，令牌还可能出现在历史构建、仓库、镜像和客户端中。应立即撤销并轮换令牌，确认 scope 与创建者，检查日志和历史暴露范围，清理副本，恢复后用新凭证和审计记录验证。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版的 `release_gate`：输入记录列表，返回缺失必需字段的记录下标，缺字段即判不通过。
+**问题 3（独立实现）：**实现一个 `embedding_gate`，拒绝缺少请求合同字段或调用未列入白名单的工具。
 
 <Answer>
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, r in enumerate(records)
-               if not required.issubset(r)]
-    return {"pass": not missing, "missing": missing}
-```
-
+  定义任务、模型、提示、输入哈希和限制为必需字段，计算缺失列表；再把请求工具集合与允许集合做差集，返回未授权名称。任一缺口存在就返回 `pass=false`，不以空值补齐，也不把失败请求交给模型自由解释。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-把模型、提示、数据连接、记忆、链与Agent嵌入应用，并通过Hugging Face Hub实践开源模型与密钥治理。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能用适配器替换模型提供方，验证记忆与工具边界，并确保密钥不进入代码、日志或客户端。
-
+<Glossary>
+  <GlossaryItem term="Embedding Adapter">隔离外部模型、框架或数据服务接口与业务逻辑的稳定薄层。</GlossaryItem>
+  <GlossaryItem term="Request Contract">固定任务、输入、模型、提示、数据、工具、输出和限制的可重放记录。</GlossaryItem>
+  <GlossaryItem term="State Boundary">定义状态的所有者、可见范围、生命周期、清理和跨步骤传递方式的规则。</GlossaryItem>
+  <GlossaryItem term="Tool Contract">约束工具输入、输出、权限、超时、错误和副作用的接口。</GlossaryItem>
+  <GlossaryItem term="Scoped Token">只授予必要资源和动作、可审计且能够撤销的访问凭证。</GlossaryItem>
+  <GlossaryItem term="Model Card">说明开源权重来源、允许用途、限制、评估和已知风险的结构化文件。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 4: Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
-- [Chapter 6: Building Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
+- [上一页：Chapter 4 — Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
+- [下一页：Chapter 6 — Conversational Applications](/learn/building-llm-applications/07-chapter-06/bla-06-conversational-applications)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留嵌入 LLM、LangChain 与 Hugging Face Hub 范围，并补充适配器、状态和秘密治理练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

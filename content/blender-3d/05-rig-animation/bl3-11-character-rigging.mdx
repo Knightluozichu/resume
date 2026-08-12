@@ -3,76 +3,221 @@ title: "第 11 章 Character Rigging：骨架、蒙皮与控制器"
 type: A
 section: "玩转 Blender 第 3 版 · 绑定与动画"
 order: 11
-description: "覆盖 Rigging 流程、Armature、Jim 全身绑定、Skinning、自定义骨形、收尾与跨场景复用。"
+description: "从 Armature 层级、IK 控制和 Skinning 权重出发，完成 Jim 角色的可测试绑定、自定义控制器与跨场景复用。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-11
 ---
 
+import {
+  Bl3Ch11ArmatureLab,
+  Bl3Ch11SkinningLab,
+  Bl3Ch11ControlReuseLab,
+} from "@/components/mdx/blender-3d/05-rig-animation/bl3-11-character-rigging";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 问题：为什么骨头能带动角色不等于 Rig 已经可以交付动画
+<Objectives>
 
-先预测：自动权重后角色能抬手，但肩膀塌陷、手腕扭曲、面部无法控制，是否完成绑定？没有。第十一章把 Rig 分为骨架结构、约束与控制、Deform Bones、Skin Weights、Custom Shapes 和跨场景复用；交付标准是动画师能稳定摆姿势且网格保持体积。
+- 能解释骨架层级、控制骨和变形骨如何共同驱动角色
+- 能在肩、肘、腕、髋、膝和踝的极限姿势中修正 Skinning 权重
+- 能为手、脚和面部建立可读的 Custom Shape 控制器并记录责任边界
+- 能回答：把 Jim 复用到新场景时，如何证明绑定、权重和覆写没有静默分叉？
 
-## 原书边界与官方小节
+</Objectives>
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+{/* BL3_CH11_QUALITY_V2 */}
 
-- **Understanding the Rigging Process；Working with Armatures**
-- **Rigging Your Character**
-- **Skinning**
-- **Creating Custom Shapes；Making Final Retouches**
-- **Reusing Your Character in Different Scenes**
+## 问题：为什么骨头能带动角色不等于 Rig 可以交付动画
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+先预测：自动权重后角色能抬手，是否就说明绑定完成？不一定。真正的交付还要经过骨架方向、约束行为、权重热图、极限姿势、控制器可读性和跨场景资产边界的验证。
 
-## 控制层、求解层与变形层
+本章解决的是“谁被动画师操作、谁负责求解、谁真正变形、问题如何被定位”的链路。没有分层，控制骨会被误当成变形骨；没有极限姿势，肩膀塌陷和膝盖穿插会在交付后才出现；没有复用证据，同一个角色在新场景中可能悄悄变成另一份绑定。
 
-Animator 操作 Custom Shape 控制骨，约束与 IK/FK 规则求解中间骨架，Deform Bones 通过 Armature Modifier 和 Vertex Groups 变形网格。把控制骨与变形骨分离可以保持权重语义清晰。Skinning 不只是自动权重，而是逐关节在极端姿势下修正影响范围、归一化和体积。Shape Keys 与 Drivers 可建立面部控制。
+## 本章知识点清单
 
-## 五个核心术语与责任边界
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Rigging Process | Armature 实验 | Armature、Bone Roll | 层级和轴向是否可预测 |
+| Armatures | Armature 实验 | IK Chain | 控制链如何影响姿势 |
+| Skinning | 权重诊断实验 | Skin Weights、Vertex Group | 极限姿势哪里暴露问题 |
+| Custom Shapes 与 Retouches | 控制器复用实验 | Custom Shape | 动画师操作的责任是什么 |
+| Reuse in Scenes | 控制器复用实验 | Library Override | 新场景如何避免资产分叉 |
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+## Understanding the Rigging Process；Working with Armatures
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+绑定流程可以分成四层：Armature 结构提供父子关系，控制骨提供动画师操作入口，约束与 IK Chain 根据目标求解中间姿势，变形骨最终通过 Armature Modifier 和 Vertex Groups 影响网格。这个拆分让“手柄动了但网格没动”和“网格变形了但控制器不可用”成为两类不同问题。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+创建 **<Term>Armature</Term>** 时先在中立姿态确认骨盆、脊柱、头、手臂、腿和脚的父子关系，再统一左右命名与轴向。**<Term>Bone Roll</Term>** 决定局部轴的方向；如果同一条链的 Roll 漂移，扭转、Pole 目标和约束限位就会出现难以解释的偏差。先保存结构版，再添加约束，避免把结构错误藏在复杂控制器后面。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+IK Chain 适合让手或脚跟随目标保持落地和定位，但它不是“自动正确”的按钮。定义链长、Pole 方向和可旋转轴后，要回到肩、肘、髋和膝检查是否仍符合角色解剖与动画意图。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+<Bl3Ch11ArmatureLab />
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+## Rigging Your Character
 
-## 关键对象与数据流
+为 Jim 搭建绑定时，先把骨架放进经过清理的角色网格，再按照下游动作列出控制需求：身体姿态、手脚接触、头部方向、眼球和面部表情。控制骨可以独立于变形骨存在，命名、显示层和锁定通道要让动画师知道每个手柄能改什么、不能改什么。
 
-先在中立姿态校准骨轴、父子和左右命名，搭建脊柱、头、四肢、手和眼控制，镜像后检查 Roll。区分控制与变形骨，添加必要 IK、Pole 和限制。绑定网格后从肩、肘、腕、髋、膝、踝到面部逐项测试极端姿态，修权重并归一化。最后锁定无关通道、添加 Custom Shapes，并通过链接/覆写方式在新场景复用。
+建立控制器时按“目标—约束—输出”记录：手部目标移动会改变 Arm IK Chain，Pole 控制肘部朝向，约束把结果传给变形骨，变形骨再把影响交给网格。对肩、腕、髋、踝和面部分别保存中立姿势、可用姿势和故障姿势，不能只用一张站立图证明 Rig 正常。
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+### 绑定阶段的交接顺序
 
-## 正常、边界与失败样本
+1. 锁定网格、骨架和命名版本，确认左右对称与 Bone Roll。
+2. 区分控制骨、求解骨和变形骨，写出每条约束的输入与输出。
+3. 连接 Armature Modifier 与 Vertex Groups，先做小范围权重测试。
+4. 用极限姿势回归肩、肘、腕、髋、膝、踝和面部，再开放给动画。
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+## Skinning
 
+**<Term>Skin Weights</Term>** 是顶点受一个或多个骨骼影响的权重分配；在 Blender 中通常通过 Vertex Groups 让 Armature Modifier 把骨骼姿态传递给网格。自动权重可以快速建立起点，却不能替代肩胛、肘、膝、手指和面部等高风险区域的人工检查。
+
+检查 Skinning 时先看权重热图，再切换到极限姿势。肩部要保持体积和腋下空间，肘部要形成连续折叠，膝盖要避免穿插，腕部要控制扭转扩散；如果相邻骨的影响突然跳变，先修正归一化和边界，再判断是否需要辅助骨或 Corrective Shape。
+
+### 权重的正常、边界与故障样本
+
+正常样本在中立和极限姿势下都保留合理体积；边界样本把关节推到最大安全范围，记录开始出现折痕的位置；故障样本故意复制过宽的权重或反转一侧影响，确认热图和姿势截图能指出责任骨。每次只改一个区域，保存修改前后的 Vertex Group 统计。
+
+<Bl3Ch11SkinningLab />
+
+## Creating Custom Shapes；Making Final Retouches
+
+**<Term>Custom Shape</Term>** 是替代默认骨骼显示的控制图形，让动画师在视图中直接认出手、脚、身体和面部的操作入口。它不应掩盖骨架关系：形状、名称、颜色、显示层和可用通道要和控制责任一致。面部控制可以进一步连接 Shape Keys 或 Drivers，但仍要留下“控制器—驱动—输出”的证据。
+
+收尾不是把控制器装饰得更漂亮，而是清理无关通道、锁定不该被动画修改的轴、统一命名、检查约束顺序并删除调试对象。最终修正要在极限姿势、镜头可见区域和动画师实际操作距离下复核；如果一个控制器需要作者口头解释才能使用，它就还没有完成。
+
+### 绑定签收清单
+
+- 控制骨、求解骨、变形骨的层级与命名可读
+- 手、脚、躯干和面部控制器的形状对应真实责任
+- 极限姿势截图覆盖体积、接触、扭转和面部边界
+- 无关通道已锁定，调试对象与临时约束已清理
+
+## Reusing Your Character in Different Scenes
+
+复用角色时先判断资产来源：链接数据可以让多个场景共享同一份 Rig 修复，Library Override 则允许单个场景做受控定制；本地复制会产生独立版本，修复必须手工同步。现代 Blender 用 Collections 和 Library Overrides 取代旧 Proxy 术语，但“谁是源资产、谁能修改、如何回收修复”的责任没有改变。
+
+迁移到新场景前记录 Collection、Armature、网格、材质、动作和控制形状的来源。打开新场景后先测试控制器可见性、约束、权重和一组极限姿势，再做场景特有的覆写。若动作在源文件更新后变得不兼容，要区分链接版本、Override 版本和本地副本，不能用“重新导入”掩盖资产分叉。
+
+<Bl3Ch11ControlReuseLab />
+
+<Callout type="trap" title="自动权重能动起来不等于 Skinning 合格">
+  现象：角色可以走几步，但抬臂、屈膝或扭腕时出现塌陷、穿插和体积丢失。原因：只在中立姿势看过自动权重，没有检查热图、归一化和极限姿势。修法：按关节保存中立/极限对照，逐区修正 Vertex Groups，并记录修改前后的影响范围。
+</Callout>
+
+<Callout type="trap" title="控制骨和变形骨混在一起">
+  现象：动画师拖动一个手柄却直接改坏网格，或约束循环导致姿势不可预测。原因：控制、求解和变形责任没有分层，命名与锁定通道也不清楚。修法：把目标、约束、输出写成链路，分离控制骨与变形骨，再为无关通道加锁。
+</Callout>
+
+<Callout type="trap" title="复制角色后修复只存在一个场景">
+  现象：源场景的绑定修好了，新场景仍保留旧的 Roll、权重或控制形状。原因：链接、Library Override 和本地复制的更新责任没有记录。修法：声明源资产与覆写边界，优先用可追踪的链接/覆写，打开新场景后重新跑极限姿势回归。
+</Callout>
+
+## 三组绑定验收实验
+
+<Stepper>
+  <Step title="1. Armature、层级与 Bone Roll">
+    先猜一猜：同一条手臂链只改变 Bone Roll，为什么 IK Pole 和扭转结果可能同时改变？切换骨架链并制造漂移，观察结构问题如何传到控制层。
+
+    <Bl3Ch11ArmatureLab />
+  </Step>
+  <Step title="2. Skinning、权重热图与极限姿势">
+    先预测：自动权重在中立姿势看起来平滑，到了极限姿势还会保持体积吗？选择肩、肘或膝，切换姿态并完成权重修正。
+
+    <Bl3Ch11SkinningLab />
+  </Step>
+  <Step title="3. Custom Shape 与跨场景复用">
+    先预测：把 Rig 复制到新场景后，哪种方式最容易让修复责任消失？比较 Custom Shape、链接/覆写和本地复制的交接差异。
+
+    <Bl3Ch11ControlReuseLab />
+  </Step>
+</Stepper>
+
+## 验收证据：从“能摆姿势”到可交付 Rig
+
+交付包至少包含：骨架层级、左右命名与 Bone Roll 检查、控制/求解/变形骨清单、IK/FK/Pole 约束图、Armature Modifier 与 Vertex Groups、肩肘腕髋膝踝及面部的极限姿势、权重热图、Custom Shape 控制器、锁定通道、清理记录和跨场景链接/覆写测试。每张图要带角色版本、场景来源和预期/实际结果。
+
+正常样本证明动画师能用控制器完成基础姿势且网格保持体积；边界样本把关节推到动作设计的最大范围；故障样本断开约束、制造 Roll 漂移、扩大错误权重或使用本地复制。交接前由另一位读者按照清单打开新场景，不依赖作者口头说明即可重放，才算完成绑定。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-第三版可能使用旧 Group/Proxy 术语，现代 Blender 推荐 Collections 与 Library Overrides；骨骼层也演进为 Bone Collections。稳定不变量是控制/变形分层、命名、约束、权重和复用边界。迁移必须明确旧 Proxy 与当前 Override 的差异。
+第三版中的 Armature、约束、Skinning、Custom Shapes 和跨场景角色复用仍是稳定不变量；现代 Blender 把旧 Group/Proxy 工作流逐步替换为 Bone Collections、Collections 与 Library Overrides。迁移时保留控制/求解/变形分层、权重语义、命名、极限姿势和源资产边界，不把 UI 名称变化误当成 Rig 逻辑变化。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含骨架层级、命名和 Roll 检查、控制/变形骨清单、约束图、六大关节极端姿势、权重热图、归一化结果、面部控制和跨场景覆写测试。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目加入额外辅助骨、Corrective Shape 或面部 Drivers，要说明它们如何进入控制链、如何被测试，以及在新场景中由谁负责更新。
 
 ## 小结
 
-- Rig 是供动画使用的控制系统，不只是骨头
-- 控制、求解和变形层应分离
-- 自动权重必须经过极端姿势压力测试
-- 跨场景复用需要明确库关联与覆写策略
+- Rig 把骨架、控制、求解和变形组织成可追踪链路
+- Skin Weights 必须在极限姿势和热图中验收
+- Custom Shape 让动画师看见控制责任，但不应隐藏骨架关系
+- 复用角色要区分链接、覆写和本地复制的更新边界
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：Rig 诊断。** 角色能抬手但肘部扭转方向错误。请按顺序列出你会检查的结构、约束和变形证据。
+
+<Answer>
+  先查手臂骨的父子关系、左右命名和 Bone Roll，再检查 IK Chain、Pole 目标与旋转限制，最后在极限姿势查看控制/变形骨是否分离、Vertex Groups 是否把影响传到正确区域。每一步都保存结构图或姿势截图，避免只凭最终画面猜原因。
+</Answer>
+
+**问题 2：修改实验。** 在 `Bl3Ch11SkinningLab` 中选择 Shoulder，切到 Extreme Pose 并完成权重修正。请写出一个可观察的通过标准和一个不能接受的故障信号。
+
+<Answer>
+  通过标准可以是肩胛与上臂在抬臂时保持连续体积，腋下没有突然塌陷，热图边界也随解剖区域平滑过渡；不可接受的信号包括肩部穿插、整片胸部被上臂带走或修正后相邻区域出现新的权重跳变。
+</Answer>
+
+**问题 3：跨场景实现。** 你需要把 Jim 放进两个镜头场景，同时希望源 Rig 的修复能被两个场景接收。你会选择什么资产方式，如何验证覆写没有分叉？
+
+<Answer>
+  以源文件保存 Armature、网格、控制形状和约束，通过链接资产进入两个场景，再用 Library Override 记录各场景自己的镜头调整。打开每个新场景后检查控制器、极限姿势、权重和源版本；若出现本地副本，必须标记独立更新责任并重新比较修复记录。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Armature">
+    Blender 中承载角色骨骼层级、父子关系和姿态控制基础的骨架对象。
+  </GlossaryItem>
+  <GlossaryItem term="Bone Roll">
+    骨骼局部轴绕自身方向的旋转；它会影响扭转、Pole 目标和约束的可预测性。
+  </GlossaryItem>
+  <GlossaryItem term="Skin Weights">
+    每个网格顶点受不同骨骼影响的权重分配，决定姿态改变时网格如何变形。
+  </GlossaryItem>
+  <GlossaryItem term="Custom Shape">
+    用来替代默认骨骼显示的控制图形，让动画师更容易认出和操作控制责任。
+  </GlossaryItem>
+  <GlossaryItem term="IK Chain">
+    从目标反向求解的一段骨骼链，例如让手或脚跟随目标并保持可用的关节姿势。
+  </GlossaryItem>
+  <GlossaryItem term="Library Override">
+    在保留链接资产来源的前提下，为某个场景记录受控修改的机制，便于共享源文件修复。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：材质与着色器](/learn/blender-3d/04-lookdev/bl3-10-materials-shaders) · [下一章：角色动画](/learn/blender-3d/05-rig-animation/bl3-12-animating-character)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

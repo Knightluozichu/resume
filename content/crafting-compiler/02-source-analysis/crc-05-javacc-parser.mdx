@@ -1,12 +1,9 @@
 ---
-title: 第5章 基于JavaCC的解析器描述
+title: "第5章 基于JavaCC的解析器描述"
 type: C
-section: 第1部分 · 代码分析
+section: "第1部分 · 代码分析"
 order: 5
-description: >-
-  第5章
-  基于JavaCC的解析器描述围绕基于EBNF语法的描述、语法的二义性和token的超前扫描推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖3个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 EBNF 产生式、LOOKAHEAD 决策和 ParseException 回放 JavaCC 解析器，观察共同前缀、二义性与错误位置如何被固定。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,52 +11,209 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-05
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcJavaccParserLab } from "@/components/mdx/crafting-compiler/v2/crc-05-javacc-parser";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“EBNF与前看决策台”开始
+- 能把一条 JavaCC 产生式改写成 EBNF，并标出每个 expansion 的输入边界与产物
+- 能用 LOOKAHEAD token 数解释共同前缀下的分支选择，并区分规则歧义与输入非法
+- 能在合法、二义和截断样本上回放 ParseException 的位置、期望 token 与清理重建结果
 
-第5章 基于JavaCC的解析器描述沿“production → expansion choice → LOOKAHEAD → action”转换信息。最终进程返回正确值只能证明一条执行路径；EBNF与前看决策台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第5章 基于JavaCC的解析器描述固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变前看深度或产生式族。本页交互只移动production → expansion choice → LOOKAHEAD → action中的真实对象和状态，不生成置信、风险或证据分数。
+## 从产生式到一次可解释的选择
+
+解析器不是把 token 机械地“读完”就算成功。它必须在每个产生式入口判断：当前 token 是否满足某个 expansion、需要向前查看多少 token、选择后应该交付什么结构。JavaCC 把这些选择写进 grammar，再生成可运行的递归下降解析器。
+
+本章固定同一组 token、同一份 `Parser.jj` 和同一条生成命令，只替换输入样本或 LOOKAHEAD 配置。先预测分支，再观察 token 游标、选择理由和错误位置，才能把“解析失败”拆成可以修复的证据。
+
+<Callout type="trap" title="误区一：把 EBNF 写成没有边界的自然语言">
+  现象 → 产生式看起来能读懂，但重复项、可选项和分支的结束位置无法由解析器确认。
+
+原因 → 省略了 `[]`、`{}` 和 `|` 的约束，规则没有告诉解析器何时停止当前 expansion。
+
+修法 → 为每个 expansion 写出进入 token、结束 token 和交付节点，再用最小合法串与截断串验证边界。
+
+</Callout>
+
+<Callout type="trap" title="误区二：用更大的 LOOKAHEAD 隐藏二义性">
+  现象 → LOOKAHEAD 数字不断增大，生成器可以继续工作，但规则仍然无法说明为什么某个分支获胜。
+
+原因 → 两个 expansion 共享了过长前缀，真正的问题是规则分层或左因子没有表达清楚。
+
+修法 → 先列出共同前缀和首个差异 token，再决定重写产生式或增加有证据的 LOOKAHEAD。
+
+</Callout>
+
+<Callout type="trap" title="误区三：只看 ParseException 的最后一行">
+  现象 → 截断输入直到文件末尾才报错，修复者只记住消息，却不知道哪个产生式消费过多。
+
+原因 → 没有保存 token 游标、期望集合、调用栈和源跨度，错误位置无法回到决策现场。
+
+修法 → 记录最早无法继续的位置、期望 token 和当前 production；清理生成目录后重复运行，确认诊断稳定。
+
+</Callout>
+
+## JavaCC 解析器的工作合同
+
+第5章 基于JavaCC的解析器描述关心的是 grammar 如何把 token 组织为可验证的结构。输入合同包括 token 类型、源位置和 EOF；规则合同包括 production、expansion、动作与返回值；验收合同包括合法串的产物和非法串的诊断。
+
+<Term def="用形式化记号描述序列、可选项、重复项和分支的语法表示；它把规则边界写成可以被解析器执行的结构。">
+  EBNF
+</Term>
+
+在 EBNF 中，序列表示必须按顺序消费，方括号表示可选，花括号表示重复，竖线表示分支。例如 `argument := expression { "," expression }` 表示至少一个表达式，并允许继续消费逗号和表达式。JavaCC 的 production 应保留这些边界，而不是把所有情况挤进一个巨大动作块。
+
+<Term def="JavaCC grammar 中接收 token、调用其他 production 并返回结构或值的规则入口；它是解析器的可追踪决策单元。">
+  production
+</Term>
+
+每个 production 都应该能回答三个问题：它从哪里进入、消费到哪里停止、成功后交付什么。把答案写进返回类型、局部变量和节点构造，后续遇到错误时才有办法判断是 token 不对、分支选错还是子规则没有返回。
 
 ## 来源、版本与独立重写边界
 
-第5章 基于JavaCC的解析器描述以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)对齐章节范围，未复制原书正文；中文解释、代码、图示、实验和答案均为独立教学重写。JavaCC 行为以[官方 grammar 文档](https://javacc.github.io/javacc/documentation/grammar.html)核对，命令、JDK、目标平台和生成目录必须在实验记录中单独注明。
 
-第5章 基于JavaCC的解析器描述用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+<Term def="解析器在选择 expansion 前读取的 token 数或上下文条件；它用于区分共享前缀的分支，而不是替代清晰的规则设计。">
+  LOOKAHEAD
+</Term>
 
-## 本章合同与可运行探针
+LOOKAHEAD 的价值在于让分支选择可解释。若 `statement` 的两个 expansion 都从标识符开始，`LOOKAHEAD(2)` 只有在第二枚 token 真能区分它们时才有意义；否则应先拆分规则或左因子化。实验中保存实际查看的 token 序列，避免只留下一个配置数字。
 
-、、、、。
+<Term def="JavaCC 在无法满足当前 production 时报告的解析错误对象；它应携带源位置、期望 token 和实际 token，帮助定位最早不可继续处。">
+  ParseException
+</Term>
 
-第5章 基于JavaCC的解析器描述的通过不变量是“每个选择点有可解释前缀，合法串唯一选择且非法串在最早位置失败”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
+ParseException 不是下游的模糊失败。它应与当前 production、token 游标和期望集合一起被记录。合法输入要留下树或返回值，非法输入要停止交付伪造结构；两者都要有退出码和可重放命令。
 
-```bash
-javacc -DEBUG_LOOKAHEAD=true Parser.jj
-java ParserProbe cases.txt
+## 第1部分 代码分析
+
+词法分析交付 token，JavaCC 解析器消费 token 并交付结构。边界一旦混淆，解析器会重新猜字符含义，或者把语义检查提前到不该出现的阶段。对本章而言，最小证据链是：token 序列 → production → LOOKAHEAD → expansion → 结构或诊断。
+
+```text
+identifier LPAREN identifier COMMA identifier RPAREN
+  → call(argument, argument)
+  → source span [0, 31)
 ```
 
+每次实验只改变一项：输入、共同前缀后的 token，或 LOOKAHEAD 配置。固定其他条件，才可以判断差异来自规则选择，而不是生成目录残留、工具版本或运行命令改变。
 
-## 官方目录逐项深读
+## 第5章 基于JavaCC的解析器描述
 
-### 第5章 基于JavaCC的解析器描述
+本章的主线是把 JavaCC 配置当作一份可回放合同。先写清 production 的入口与返回值，再为 expansion 标记必要的前缀，最后通过正常、二义和截断样本检查生成器与运行时行为。专属实验把三个正式目录概念放进同一条决策轨迹，并显示当前 token、前看窗口和结果。
 
-**四级证据 1/3。** 前端槽1用合法、最长匹配、歧义、截断和非法字符样本核对“第5章 基于JavaCC的解析器描述”的token、前看、树形与源位置；固定产生式族，只改变前看深度，以LOOKAHEAD轨迹与ParseException找到第一处分叉并清理重建。
+## 5.1 基于EBNF语法的描述
 
-### 5.1 基于EBNF语法的描述
+EBNF 让序列、可选、重复和分支成为可见结构。把 `call := IDENTIFIER "(" [ arguments ] ")"` 转成 JavaCC production 时，空参数列表和多个参数的边界要分别可测；不要依赖动作代码在错误时“猜”缺失的右括号。
 
-**四级证据 2/3。** 前端槽2用合法、最长匹配、歧义、截断和非法字符样本核对“5.1 基于EBNF语法的描述”的token、前看、树形与源位置；固定产生式族，只改变前看深度，以LOOKAHEAD轨迹与ParseException找到第一处分叉并清理重建。
+一个小规则通常比一个大动作更容易验证。为每个分支准备最短输入，记录进入 token、离开 token、返回节点和源跨度；如果最短输入无法说明边界，先改写 EBNF，再调整 JavaCC 配置。
 
-### 5.2 语法的二义性和token的超前扫描
+## 5.2 语法的二义性和token的超前扫描
 
-**四级证据 3/3。** 前端槽3用合法、最长匹配、歧义、截断和非法字符样本核对“5.2 语法的二义性和token的超前扫描”的token、前看、树形与源位置；固定产生式族，只改变前看深度，以LOOKAHEAD轨迹与ParseException找到第一处分叉并清理重建。
+二义性意味着同一段 token 在当前规则下支持多个 expansion，解析器无法仅凭已有前缀决定路径。超前扫描的任务是收集足以区分分支的上下文；它不能修补互相重叠且没有语言意图的规则。
 
-## 三个必须主动触发的误区
+例如两个分支都从 `IDENTIFIER` 开始，一个在第二枚 token看到 `LPAREN` 后形成调用，另一个在第二枚 token看到 `ASSIGN` 后形成赋值。此时 `LOOKAHEAD(2)` 有清晰证据；若两个分支第二枚 token仍相同，就继续检查规则分层、左因子和结束条件。
 
+<CrcJavaccParserLab />
 
-## 练习、答案与116层级验证
+## 三步实验：回放 JavaCC 的选择现场
 
+三个步骤都嵌入同一个专属实验，但每一步关注不同证据：先看正式目录节点，再看 EBNF 到 expansion 的边界，最后注入二义或截断输入观察 ParseException。
 
+<Stepper>
+  <Step title="第一步：定位解析器合同">
+    先预测：如果只有 token 序列而没有 production，哪一项证据无法解释？选择“语法节点”，逐个查看第5章、EBNF 与二义/超前扫描的关系。
+
+    <CrcJavaccParserLab />
+
+  </Step>
+  <Step title="第二步：比较 expansion 边界">
+    动手试：选择“EBNF边界”，切换调用、标识符和分号样本，观察可选项、重复项、入口 token 与返回节点如何变化。
+
+    <CrcJavaccParserLab />
+
+  </Step>
+  <Step title="第三步：注入二义性与截断">
+    先猜一猜：当两个 expansion 共享 `IDENTIFIER` 时，增加一个有区别的 token 会先改变选择还是错误位置？切换故障模式并记录 LOOKAHEAD 窗口与 ParseException。
+
+    <CrcJavaccParserLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- EBNF 把序列、可选、重复与分支边界写成可执行的 grammar 结构。
+- production 是可追踪的解析入口，应该明确输入边界、返回产物与失败位置。
+- LOOKAHEAD 只有在共同前缀后的差异 token 可见时才有解释力；规则重叠时先重构。
+- 合法、二义和截断输入都要保存 token、选择、期望集合、源位置与清理重建结果。
+
+<Exercises>
+
+**问题 1：覆盖正式节点。** 请为“第5章 基于JavaCC的解析器描述”“5.1 基于EBNF语法的描述”“5.2 语法的二义性和token的超前扫描”各写一份输入、产物和验收证据。
+
+<Answer>
+  第5章 基于JavaCC的解析器描述保存 token、production、LOOKAHEAD、expansion
+  和结果；5.1 基于EBNF语法的描述保存序列、可选、重复、分支的边界与返回节点；5.2
+  语法的二义性和token的超前扫描保存共同前缀、实际查看的 token、选择理由和
+  ParseException。每份记录都要有输入、预期阶段、实际结果和退出码。
+</Answer>
+
+**问题 2：改写 EBNF。** 将 `call := IDENTIFIER "(" [ arguments ] ")"` 展开为 JavaCC 风格的 production，给出空参数、单参数和缺少右括号三个样本的预期结果。
+
+<Answer>
+  production 需要明确 `IDENTIFIER`、左括号、可选的 `arguments`
+  和右括号；空参数应返回空参数列表，单参数应返回一个节点，缺少右括号应在当前
+  production 的结束位置抛出 ParseException。记录实际 token
+  游标和期望的右括号，不交付完整调用节点。
+</Answer>
+
+**问题 3：解释 LOOKAHEAD。** 设计两个都以 `IDENTIFIER` 开始的 expansion：一个在第二枚 token 遇到 `LPAREN`，另一个遇到 `ASSIGN`；说明为什么 LOOKAHEAD(2) 足够，并给出清理生成目录后的回放步骤。
+
+<Answer>
+  两个 expansion 的首枚 token 相同，第二枚 token 分别是 LPAREN 与 ASSIGN，因此
+  LOOKAHEAD(2) 能看到差异并选择对应路径。先删除生成目录，再以固定 JDK、JavaCC
+  版本和 `javacc -DEBUG_LOOKAHEAD=true Parser.jj`
+  生成；随后运行调用与赋值样本，比较 LOOKAHEAD
+  轨迹、返回节点、源跨度、标准错误和退出码。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="EBNF">
+  描述序列、可选项、重复项和分支边界的形式化语法表示。
+</GlossaryItem>
+
+<GlossaryItem term="production">
+  JavaCC grammar 中接收 token、调用子规则并返回结构或值的规则入口。
+</GlossaryItem>
+
+<GlossaryItem term="LOOKAHEAD">
+  解析器在选择 expansion 前读取的 token 数或上下文条件。
+</GlossaryItem>
+
+<GlossaryItem term="ParseException">
+  携带源位置、期望 token 和实际 token 的 JavaCC 解析错误对象。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC 官方 grammar 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

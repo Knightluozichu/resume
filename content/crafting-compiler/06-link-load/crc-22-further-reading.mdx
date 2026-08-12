@@ -1,69 +1,226 @@
 ---
-title: 第22章 扩展阅读
+title: "第22章 扩展阅读"
 type: C
-section: 第4部分 · 链接和加载
+section: "第4部分 · 链接和加载"
 order: 22
-description: >-
-  第22章 扩展阅读围绕参考书推荐、链接、加载相关、各种编程语言的功能推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖4个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用问题、权威资料、最小复现、补丁和回归结果组织扩展阅读，把编译器、ELF/链接加载与编程语言功能变成可执行的下一步。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
 draft: false
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-22
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc22FurtherReadingLab } from "@/components/mdx/crafting-compiler/v2/crc-22-further-reading";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“机制缺口阅读路线台”开始
+- 能把一个 cbc 限制或运行异常改写成可检索的问题，并为它选择版本明确的一手资料
+- 能设计最小复现、补丁和回归测试，区分资料事实、实验观察与自己的推断
+- 能回答“读完一份资料后，什么产物证明它改变了实现？”并排出下一轮扩展路线
 
-第22章 扩展阅读沿“observed gap → primary reference → reproduction → extension”转换信息。最终进程返回正确值只能证明一条执行路径；机制缺口阅读路线台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第22章 扩展阅读固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变扩展方向或证据深度。本页交互只移动observed gap → primary reference → reproduction → extension中的真实对象和状态，不生成置信、风险或证据分数。
+## 从“推荐书单”到可执行的研究路线
+
+扩展阅读不是把链接越列越长，而是让当前实现的一个缺口获得下一份可验证证据。先写清观察到的行为和边界，再选与问题直接相关的规范、上游工具文档或语言实现资料；读完后做一个最小复现，产出补丁和回归测试，最后才决定是否进入更大的功能设计。
+
+本章的主实验是“机制缺口阅读路线台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU `as`/`ld`/binutils、IA-32 目标和命令环境，只切换研究主题或资料深度。每个路线都保存问题、资料 URL、版本、最小命令、观察结果、补丁范围和回归结果；这样阅读可以离开个人记忆，成为团队可复查的工程记录。
+
+<Callout type="trap" title="误区一：资料越多，研究路线越可靠">
+  现象 → 收藏了很多书、规范和博客，却仍说不清 cbc 的限制在哪里，也没有可运行的下一步。
+
+原因 → 资料选择没有绑定一个具体问题、版本边界和预期产物。
+
+修法 → 每条路线只保留一份主资料和少量交叉资料，写出要验证的字段或语义，再规定补丁、测试或实验日志作为出口。
+
+</Callout>
+
+<Callout type="trap" title="误区二：读到一段解释就把它当成实现事实">
+  现象 → 文章说“加载器会这样做”，但当前 GNU 工具、目标架构或 cbc 代码的输出并不相同。
+
+原因 → 没有区分规范要求、特定实现行为和本地实验观察，也没有记录版本。
+
+修法 → 优先引用规范或上游文档，记录工具版本和目标 ABI；用最小命令复现，分别标注资料事实、实验结果和推断。
+
+</Callout>
+
+<Callout type="trap" title="误区三：扩展功能先做大设计再补回归">
+  现象 → 改动跨越解析器、IR、后端和运行时，失败后无法判断是哪条假设不成立。
+
+原因 → 阅读没有收敛为最小补丁，测试也没有在功能边界旁边建立。
+
+修法 → 先把路线压缩成一个最小行为、一个补丁和一个回归；通过后再扩大语法、目标或运行时范围，并保留前后输出。
+
+</Callout>
+
+## 术语：把阅读变成工程产物
+
+<Term def="当前实现中已经被命令、测试或用户报告明确观察到、但解释或能力尚不完整的行为缺口。">
+  机制缺口
+</Term>
+
+机制缺口是阅读的起点。它应写成可以被一个输入、命令或输出字段验证的问题，而不是“想了解更多”。
+
+<Term def="由规范、官方工具文档、上游源码或作者维护目录提供的、可以追溯版本和原始出处的主要资料。">
+  一手资料
+</Term>
+
+一手资料回答“规则或工具承诺什么”。选择时要记录 URL、版本、章节和适用目标，避免用二手总结覆盖实现差异。
+
+<Term def="能够稳定触发机制缺口、输入尽量小且只包含必要环境条件的命令、源码和期望输出。">
+  最小复现
+</Term>
+
+最小复现回答“问题确实在哪里发生”。它要能在清理构建后重复运行，并把标准输出、错误和退出码保存下来。
+
+<Term def="为最小复现增加一个受控行为或修正一个边界的最小代码改动，带有明确影响范围。">
+  最小补丁
+</Term>
+
+最小补丁把阅读转成实现假设。补丁越小，越容易把变化归因到资料中的一条规则，并决定下一轮是否值得扩大。
+
+<Term def="在补丁前后对相同输入执行的检查，用来确认原有行为未回退且新增行为符合预期。">
+  回归测试
+</Term>
+
+回归测试是路线的出口。除了成功样本，还应包含触发旧限制的边界样本，并记录工具版本和清理方式。
+
+<Term def="从问题到资料、复现、补丁、测试和下一步的有序记录，能够让另一个人沿相同路径重复研究。">
+  证据路线
+</Term>
+
+证据路线把阅读顺序和验收条件写在一起。它不追求覆盖所有资料，而追求每个选择都能导向可检查产物。
 
 ## 来源、版本与独立重写边界
 
-第22章 扩展阅读以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第22章 扩展阅读用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第22章 扩展阅读的通过不变量是“每条阅读路线从cbc现有限制出发，产出可运行的最小扩展和回归”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-gap: choose-one
-primary_source: specification-or-upstream
-artifact: patch+tests+before-after
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。资料选择示例使用 [JavaCC 完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF 规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/) 与 [ld](https://sourceware.org/binutils/docs/ld/) 文档。实验保持原书的 JavaCC、Linux/IA-32、GNU 工具坐标；现代 JDK、x86-64、PIE 和新版 binutils 的差异要单独记录。
 
 ## 官方目录逐项深读
 
 ### 第22章 扩展阅读
 
-**四级证据 1/4。** 资源槽1把“第22章 扩展阅读”绑定到一手资料、版本、可达状态、最小复现与回归产物，不以阅读列表代替实践；固定证据深度，只改变扩展方向，以问题—资料—实现—回归闭环找到第一处分叉并清理重建。
+本章总链路是“机制缺口 → 一手资料 → 最小复现 → 最小补丁 → 回归测试 → 下一步”。推荐阅读只有在改变一个可检查产物时才完成，否则它仍只是收藏。
 
 ### 22.1 参考书推荐
 
-**四级证据 2/4。** 资源槽2把“22.1 参考书推荐”绑定到一手资料、版本、可达状态、最小复现与回归产物，不以阅读列表代替实践；固定证据深度，只改变扩展方向，以问题—资料—实现—回归闭环找到第一处分叉并清理重建。
+选择资料时先按问题分类：编译器结构问题查编译器实现或规范，ELF/链接加载问题查格式规范和 GNU 工具文档，语言功能问题查语言规范与实现。每条路线保存版本、章节、适用目标和预期产物。
 
 ### 22.2 链接、加载相关
 
-**四级证据 3/4。** 装载槽3用readelf、objdump、nm、link map与加载器轨迹核对“22.2 链接、加载相关”的节/段、符号、重定位、权限和地址解析；固定证据深度，只改变扩展方向，以问题—资料—实现—回归闭环找到第一处分叉并清理重建。
+围绕链接、加载和 PIC 的问题，先用 `readelf`、`objdump`、`nm`、`ldd` 或 `LD_DEBUG` 形成最小观察，再回到 ELF 规范、GNU `ld` 文档或加载器资料解释字段。资料中的结论必须能与本地对象、程序头或映射输出对上。
 
 ### 22.3 各种编程语言的功能
 
-**四级证据 4/4。** 流水线槽4将“22.3 各种编程语言的功能”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定证据深度，只改变扩展方向，以问题—资料—实现—回归闭环找到第一处分叉并清理重建。
+比较闭包、异常、生成器或模块等语言功能时，把“语法允许什么”“运行时保存什么”“编译器生成什么”分开。先选一个最小程序和语言规范，再对照实现产物，最后写出不改变旧行为的回归测试。
 
-## 三个必须主动触发的误区
+<Crc22FurtherReadingLab />
 
+## 三步实验：问题、资料与扩展交付
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先把模糊兴趣改写成机制缺口，再为它选择一手资料并完成最小复现，最后用最小补丁和回归测试交付下一步。每一步都保存 URL、版本、命令、输出、差异和清理记录。
 
+<Stepper>
+  <Step title="第一步：登记机制缺口">
+    选择编译器、ELF/链接加载或语言功能路线，写下一个可观察问题、目标环境和成功标准。不要先列书单，先让问题能被一条命令或一个最小程序触发。
 
+    <Crc22FurtherReadingLab />
+
+  </Step>
+  <Step title="第二步：选择一手资料并复现">
+    记录主资料 URL、版本、章节和适用目标，再运行最小复现。把规范承诺、工具输出和本地推断分成三列，保留标准错误和退出码。
+
+    <Crc22FurtherReadingLab />
+
+  </Step>
+  <Step title="第三步：产出补丁与回归路线">
+    只实现一个最小行为，增加对应回归测试，删除中间产物后重建并保存前后差异。若结果稳定，再把下一条阅读或扩展写入路线，而不是一次扩大范围。
+
+    <Crc22FurtherReadingLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 扩展阅读从机制缺口开始，以一手资料、最小复现、最小补丁和回归测试结束。
+- 规范事实、工具行为和本地推断必须分栏记录，版本和目标 ABI 不能省略。
+- 编译器、ELF/链接加载和语言功能路线都可以用同一证据结构比较和复查。
+- 只有清理重建后产物稳定，阅读路线才具备继续扩展的资格。
+
+<Exercises>
+
+本组练习覆盖第22章 扩展阅读、22.1 参考书推荐、22.2 链接、加载相关与 22.3 各种编程语言的功能；每题都要提交问题、资料、复现命令、产物和下一步路线。
+
+**问题 1：设计资料路线。** 针对 22.1 参考书推荐，给“cbc 不知道某个 ELF 重定位类型含义”设计一条主资料路线，并说明为什么不先从泛化书单开始。
+
+<Answer>
+  先把缺口写成“某目标文件的重定位类型、节偏移和符号如何被 GNU
+  工具解释”，主资料选择 ELF 规范或 GNU `readelf`/`ld`
+  文档，记录版本、章节、IA-32 目标和要验证的字段；再用一个 `.o` 文件运行
+  `readelf -r
+  -S`，把规范描述与输出逐项对应。泛化书单可以作为后续背景，但不能替代字段级复现。
+</Answer>
+
+**问题 2：构造最小复现。** 针对 22.2 链接、加载相关，动态程序在开发机能启动而另一台机器找不到共享库，如何组织证据路线？
+
+<Answer>
+  保存相同可执行文件、目标架构、`readelf -d -l` 的
+  `DT_NEEDED`/解释器、两台机器的 `ldd` 和 `LD_DEBUG=libs`
+  输出，再记录库搜索路径与版本。最小复现只保留一个依赖和一个启动命令；修正路径或构建参数后清理重建，要求依赖列表、加载日志和退出码稳定，再决定是否扩大环境矩阵。
+</Answer>
+
+**问题 3：从阅读进入语言功能。** 针对 22.3 各种编程语言的功能，为 cbc 增加一个小型闭包捕获功能时，怎样控制扩展范围并证明资料真的改变了实现？
+
+<Answer>
+  先选语言规范和当前实现文档，定义只捕获一个不可变局部变量的最小程序与期望输出；记录语法、环境表示、调用约定和生命周期假设。实现一个最小补丁，加入普通捕获、未捕获边界和嵌套调用回归，清理后重建并保存
+  IR/汇编与运行结果；只有这些产物稳定，才进入可变捕获或多层闭包的下一条路线。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="机制缺口">
+  当前实现中已经被命令、测试或用户报告明确观察到、但解释或能力尚不完整的行为缺口。
+</GlossaryItem>
+
+<GlossaryItem term="一手资料">
+  由规范、官方工具文档、上游源码或作者维护目录提供的、可以追溯版本和原始出处的主要资料。
+</GlossaryItem>
+
+<GlossaryItem term="最小复现">
+  能够稳定触发机制缺口、输入尽量小且只包含必要环境条件的命令、源码和期望输出。
+</GlossaryItem>
+
+<GlossaryItem term="最小补丁">
+  为最小复现增加一个受控行为或修正一个边界的最小代码改动，带有明确影响范围。
+</GlossaryItem>
+
+<GlossaryItem term="回归测试">
+  在补丁前后对相同输入执行的检查，用来确认原有行为未回退且新增行为符合预期。
+</GlossaryItem>
+
+<GlossaryItem term="证据路线">
+  从问题到资料、复现、补丁、测试和下一步的有序记录，能够让另一个人沿相同路径重复研究。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、JavaCC 文档、ELF 规范与 GNU readelf/as/ld 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

@@ -3,253 +3,245 @@ title: "The Camera"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "Computer Graphics: Principles and Practice Chapter 5"
+description: "用视点、基向量与投影建立相机的数学直觉，并把光线采样与现代硬件执行连接到图形管线。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh05CameraLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch05-camera";
 
 <Objectives>
 
-- 能用自己的话解释The Camera的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 5之间的关系是什么？
+- 能推导相机的前向、右向和上向基向量，并解释它们如何构成观察空间
+- 能修改 MathViz 的偏航角、目标距离和视场角，预测投影边界与采样等待的变化
+- 能回答：物体消失、画面变暗或帧率下降时，如何区分相机矩阵、光照输入和硬件等待？
 
 </Objectives>
 
-## 为什么需要The Camera
+## 先把相机想成一扇可移动的窗
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Camera作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+想象一扇窗正在看一座模型。窗的位置、朝向和开口大小决定你能看到哪一部分；把窗转过去，模型并没有移动，落在窗上的影子却会改变。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章解决的是“同一个世界为什么会呈现出不同画面”：把移动、转向和缩放写成可复核的规则，并在每一步保留证据。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+没有这些规则，物体会在转动视角时漂移，远处物体会突然变大，灯光变化也可能被误认为是相机错误。读完后，你应该能从一条边界、一组方向或一次采样等待开始定位问题。
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+## 计算机图形学导论：视点是图形管线的一份契约
 
-Computer Graphics: Principles and Practice Chapter 5正是这一哲学在特定领域的具体体现。
+<Term def="以相机位置为原点、以相机朝向为轴的参照系；世界中的点必须先转换到这里才能被投影。">
+  观察空间
+</Term>
+把计算机图形学导论里的“看见”变成了可计算的对象：世界中的位置、相机的朝向和视野边界都有明确坐标。只要保留世界空间输入、相机基向量和观察空间输出，就能判断错误究竟发生在移动、旋转还是投影。
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+本章把 Graphics Pipeline（图形管线）看成相机参与的一条契约链：顶点先进入相机的观察空间，再经过投影、裁剪、光栅化和着色，最后才成为屏幕上的像素。Graphics Pipeline（图形管线）不会替相机猜测“向上”的方向，也不会把越过裁剪边界的点重新找回来；每个阶段都需要上一阶段交付可验证的量。
+
+### 观察空间：先固定相机的参照
+
+世界空间适合描述物体之间的关系，观察空间适合描述物体相对相机的位置。相机向前看的方向、屏幕右侧的方向和屏幕上方的方向必须互相垂直；如果其中两个方向混在一起，画面会倾斜或左右颠倒。
+
+观察空间的第一条检查记录是一个三元组：相机位置、目标位置和临时上向。三者都来自同一空间，不能把世界坐标的目标和模型坐标的上向直接拼接。专属实验中的三条箭头正是这份契约的几何证据。
+
+### 视图矩阵：把世界搬到相机眼前
+
+<Term def="把世界空间中的位置转换到相机参照系的矩阵；它通常等价于相机位姿的逆变换。">
+  视图矩阵
+</Term>
+不是“移动相机”的动画本身，而是把所有世界点用相反的方式变换，使相机看起来停在原点。相机向右转，世界在观察空间里就向左转；这个反向关系是调试时最容易遗漏的线索。
+
+设前向为 `f`，临时上向为 `up`，右向为 `r`，真正的上向为 `u`。先归一化方向，再用叉积得到互相垂直的基，可以避免相机倾斜被悄悄带入投影。
+
+$$
+r = \operatorname{normalize}(f \times up), \qquad u = r \times f
+$$
+
+这个式子在说：右向从前向与临时上向的叉积得到，真正上向再由右向和前向重建；三条轴因此保持一致。
+
+在工程代码里，先返回可检查的相机基，再构造矩阵，比把所有运算塞进一行更容易定位符号错误。
+
+```ts
+const f = normalize(target - position);
+const r = normalize(cross(f, worldUp));
+const u = cross(r, f);
+const view = lookAt(position, target, u);
+return { f, r, u, view };
+```
+
+若 `f` 的方向正确而 `r` 反了，优先检查叉积顺序；若三个向量不再接近单位长度，先归一化再看投影，避免把数值漂移误认为相机运动。
+
+### 透视投影：距离如何改变屏幕大小
+
+<Term def="让近处物体在屏幕上显得更大的投影方式；它通过视场角和深度把三维点映射到裁剪空间。">
+  透视投影
+</Term>
+把深度放进分母，所以同样大小的物体越远，屏幕上的投影越小。视场角扩大时，能看到的范围变大，但同一物体占据的屏幕比例通常变小；近裁剪面和远裁剪面则决定哪些点有资格继续进入图形管线。
+
+$$
+p' = P V p
+$$
+
+这个式子在说：先用视图矩阵把世界点变成相机参照，再用投影矩阵把它变成可裁剪的坐标；顺序不能调换。
+
+## Light（光）：相机看到的是能量的结果
+
+Light（光）在相机里的作用不是“给画面涂一层颜色”，而是沿光线到达表面、经过方向与材质作用后，才成为可观察的片段输入。Light（光）的方向、表面朝向和相机观察方向必须处于同一参照，否则点积会比较没有意义的两个箭头。
+
+### Radiometry（辐射度量）与 reflectance（反射率）
+
+Radiometry（<Term def="描述光功率、面积、方向和立体角如何分布的一组物理量；它把能量输入与屏幕颜色分开。">辐射度量</Term>）描述光功率、面积、方向和立体角如何分布；reflectance（<Term def="表示表面保留或反射入射能量的比例；它是材质属性而不是相机参数。">反射率</Term>）描述表面保留或反射入射能量的比例。前者是输入能量的量纲，后者是材质属性；相机只能记录最终结果，不能从一个颜色常数反推出两者各自发生了什么。
+
+固定相机与几何后，先记录入射方向和能量，再记录表面反射率与输出范围。若物体随视角转动而变暗，先检查法线与光方向是否仍在同一空间；若光源能量变化而输出不变，再检查曝光或颜色映射。
+
+## Modern Graphics Hardware：相机采样也由并行任务完成
+
+Modern Graphics Hardware（现代图形硬件）会把视野中的像素、阴影查询和纹理采样分发给许多执行单元。相机参数改变后，新增的工作通常不是一条长链，而是一批相似的小任务；这让并行计算成为可能，也让采样数量、分支差异和数据访问方式成为性能变量。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+Parallelism（<Term def="让彼此独立的采样工作同时推进的能力；它提高吞吐，却不能跳过数据依赖。">并行性</Term>）表示彼此独立的采样能否同时推进；memory latency（内存延迟）表示采样请求发出后，数据多久才能返回。两者必须分开测量：并行性高但纹理访问分散时，许多执行单元可能一起等待；等待可被其他独立任务覆盖，却不能被线程数量直接消除。
+
+在相机调试中，保存视场内采样数、活跃任务数、缓存命中情况和等待比例。只有采样确实独立且执行单元仍有空闲时，扩大批次才可能转化为吞吐；否则应该先减少远处访问或重排数据布局。
+
+## 三步实验：从视点走到帧时间
+
+每一步先写下预测，再只调一个滑块。观察箭头、边界和等待格子的变化，最后把变化归因到相机、光照或硬件中的一个责任点。
+
+<CgppCh05CameraLab />
+
+<Stepper>
+  <Step title="第一步：建立相机基向量">
+    选择“视点与基向量”，改变偏航角，观察前向、右向和上向是否仍然互相垂直。若目标点的位置不变而世界相对相机移动，说明你正在观察视图变换。
+
+    <CgppCh05CameraLab />
+
+  </Step>
+  <Step title="第二步：比较投影与光线">
+    选择“投影与光线”，先扩大视场角，再拉远目标。观察近远裁剪面的边界，并说明为什么辐射度量与反射率不能被相机矩阵替代。
+
+    <CgppCh05CameraLab />
+
+  </Step>
+  <Step title="第三步：检查采样等待">
+    选择“采样与执行”，改变距离和视场角，观察活跃采样与等待采样的数量。判断当前瓶颈是并行任务不足，还是内存延迟暴露。
+
+    <CgppCh05CameraLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：把移动相机写成移动世界">
+  现象 → 相机向右转时，物体也向右跑，镜头越转画面偏差越大。
+
+原因 → 视图矩阵使用了相机位姿的同向变换，而不是把世界转换到相机参照系的逆变换。
+
+修法 → 同时记录相机位姿和一个固定世界点，验证相机右转时该点在观察空间中的方向变化。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：只改视场角来修复消失物体">
+  现象 → 物体在某个角度突然消失，扩大视场角后暂时出现，但换距离又重复消失。
 
-### 设计动机
+原因 → 真正的错误可能是前向符号、近裁剪面或坐标空间不一致，视场角只是掩盖了边界问题。
 
-Vulkan 把The Camera从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 依次检查相机基向量、观察坐标深度和近远裁剪范围，再决定是否调整投影参数。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Camera涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Camera相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Camera相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：用增加采样并行度解决访存等待">
+  现象 → 执行单元数量增加了，帧时间不降，等待采样格子却变多。
+
+原因 → 采样访问远处数据或共享同一依赖，memory latency 让更多任务同时停住。
+
+修法 → 先记录局部性、缓存命中和等待比例，调整数据布局后再比较并行批次的收益。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 观察空间把世界位置转换成相机可解释的参照。
+- 视图矩阵表达相机位姿的逆变换，基向量必须保持正交。
+- 透视投影用深度和视场角决定可见范围与屏幕大小。
+- 辐射度量与反射率分别描述光能量输入与表面保留比例。
+- 并行性提高采样吞吐，但内存延迟仍需通过数据访问证据定位。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Camera相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Camera是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Camera涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：推导相机基。** 相机位置为 `(0, 0, 5)`，目标为 `(0, 0, 0)`，世界上向为 `(0, 1, 0)`。写出前向、右向和上向，并说明若叉积顺序反过来会发生什么。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  取从相机指向目标的前向后，前向为 `(0, 0, -1)`；右向由前向与世界上向叉积得到
+  `(1, 0, 0)`，上向为 `(0, 1,
+  0)`。叉积顺序反过来会让右向取反，画面左右方向也会反转。
 </Answer>
 
+**问题 2：修改投影实验。** 固定目标距离，分别把视场角设为 30 度和 90 度，记录视野范围和物体屏幕占比的变化。哪一个量不应被相机矩阵改变？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  90
+  度视场能看到更宽的范围，固定距离的物体通常占更小的屏幕比例；物体在世界空间中的位置、形状和光源入射能量不应被相机矩阵直接改变。若能量也变了，应查坐标空间或着色输入。
+</Answer>
+
+**问题 3：定位采样瓶颈。** 视场角扩大后采样数增加，但活跃任务没有增加，等待比例上升。你会先调整并行批次还是数据访问？
+
+<Answer>
+  先检查数据访问和缓存局部性，因为等待比例上升说明 memory latency
+  暴露；只有局部性改善、等待下降且仍有空闲执行单元时，扩大并行批次才有意义。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="观察空间">
+  以相机为原点、以相机朝向为轴的参照系；所有要投影的世界点都要先转换到这里。
+</GlossaryItem>
+
+<GlossaryItem term="视图矩阵">
+  把世界空间转换到相机参照系的矩阵，效果等价于使用相机位姿的逆变换。
+</GlossaryItem>
+
+<GlossaryItem term="透视投影">
+  让远处物体在屏幕上显得更小的投影方式，视场角和深度共同决定可见范围。
+</GlossaryItem>
+
+<GlossaryItem term="辐射度量">
+  描述光能量如何按功率、面积和方向分布的一组量，不直接等于屏幕亮度。
+</GlossaryItem>
+
+<GlossaryItem term="反射率">
+  表面保留或反射入射能量的比例，是材质属性而不是相机参数。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  同时推进互不依赖采样工作的能力；它能提高吞吐，但不能消除数据等待。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 5 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

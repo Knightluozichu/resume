@@ -3,232 +3,205 @@ title: "附录B 比特币的bitcoin-cli模块详解"
 type: C
 section: "区块链开发实战（2018版）"
 order: 14
-description: "用bitcoin-cli命令、选项与发起交易流程建立参数、钱包、节点和错误证据。"
+description: "用 bitcoin-cli 的命令、钱包上下文和交易状态查询建立可重放的 RPC 操作证据。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bdp-appendix-b-bitcoin-cli
 ---
 
+import {
+  BdpAppendixBCommandLab,
+  BdpAppendixBWalletLab,
+  BdpAppendixBBroadcastLab,
+} from "@/components/mdx/blockchain-dev-practice/14-appendix-b-bitcoin-cli/bdp-appendix-b-bitcoin-cli";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
 
-## 为什么从可重放状态开始
+<Objectives>
 
-bitcoin-cli是RPC调用入口，不是共识规则本身。命令必须绑定节点、网络、钱包和参数类型；发起交易要区分构造、签名、广播、进入内存池和最终确认。
+- 能解释 bitcoin-cli、节点、钱包和交易状态之间的责任边界，并为每次命令绑定上下文
+- 能修改命令生命周期 Demo，区分读取、构造、签名、广播和确认阶段
+- 能实现一套交易状态追踪流程，保存 txid、内存池、区块、确认深度和错误响应
+- 能回答：bitcoin-cli 返回一个交易 ID 时，为什么还不能把这笔交易当成已确认？
 
-区块链开发最容易产生的错觉，是界面显示成功、命令返回哈希或节点高度增加，就认为整条链路已经正确。实际上，源码可能由错误编译器构建，客户端可能连接错误网络，签名可能授权了不同字节，交易可能只进入内存池，执行可能回滚，索引器也可能展示尚未确认或已经被重组撤销的数据。只有把前状态、输入、验证依据、候选输出、回执、确认与后状态连起来，才能区分“请求被看见”和“状态已按预期提交”。
+</Objectives>
 
-本页因此先定义最小对象和不变量，再运行工具。读者应在实验前写出预期状态和拒绝原因，运行后保存原始协议对象，而不是只保存截图或格式化摘要。正常样本证明主路径，边界样本验证零值、最大值、恰好余额或资源上限，单故障样本验证实现能在首个不满足条件处停止。三个样本共享版本、网络、账户和观察点，差异才有可解释性。
+{/* BDP_APPENDIX_B_QUALITY_V2 */}
 
-每次重放还应生成一份机器可读记录：书目来源、提交或源码摘要、运行时版本、网络标识、账户或钱包上下文、固定输入、原始输出、错误对象、前后状态摘要与时间顺序。复核者从空目录读取这份记录，不依赖操作者浏览器缓存或终端历史；若缺失字段、节点未同步或结果绑定到不同区块哈希，门禁应明确失败而不是自动补猜。
+# 附录B 比特币的bitcoin-cli模块详解
 
-2018年版还带来一层额外要求：概念与历史工具必须分开。Geth、TestRPC、browser-solidity、Truffle、Solidity和比特币节点的命令及默认配置已经演进，直接复制可能失败，也可能在错误或不安全的上下文中运行。历史实验在无真实资产的隔离环境中复现原行为；现代迁移另列替代工具、行为差异、验证方法和回退点，不能用今天的成功结果改写原书当时的系统假设。
+把命令行工具想成节点前的控制台：它可以递交查询和操作，但控制台上的“命令已发送”不等于节点已经执行，更不等于交易已进入区块。每次操作都要把目标网络、数据目录、钱包和参数一起说清楚。
 
-## 版次、对象与验收合同
+本附录解决的是操作边界：怎样读取状态、怎样选择钱包、怎样构造和广播交易、怎样追踪它从内存池到确认。若只复制一条命令，错误的网络或钱包可能返回格式完全正常却毫无意义的结果。
 
-、、、、共同构成本页复核坐标。用bitcoin-cli命令、选项与发起交易流程建立参数、钱包、节点和错误证据。
+## 本附录知识点清单
 
-本书锁定吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》，机械工业出版社，2018年6月，227页，ISBN 9787111599562。得到电子书公开前言、11章和附录A至C的完整目录；京东交叉核对三部分结构和目录页码，天珑书店交叉核对作者、出版社、2018年6月、227页与ISBN。全书共有185个正式目录层级，学习地图与总复习不计入分母。本文是独立教学重构，不复制原书正文。
+| 知识点 | 观察形态 | 验收证据 |
+| --- | --- | --- |
+| 命令入口 | 生命周期 SVG | 原始命令、参数、响应、错误 |
+| 钱包上下文 | 钱包 SVG 与错误模式 | 钱包名、网络、权限、地址 |
+| 交易广播 | 状态 SVG | txid、内存池、区块、确认 |
+| 常用命令 | Shell 代码 | 网络、数据目录、参数类型 |
+| 交易构造 | 状态与练习 | 输入、手续费、签名、回滚 |
 
-bitcoin-cli是RPC调用入口，不是共识规则本身。命令必须绑定节点、网络、钱包和参数类型；发起交易要区分构造、签名、广播、进入内存池和最终确认。
+## 命令合同与术语
 
+`bitcoin-cli` 是连接节点操作面的命令行客户端。它通过 <Term def="把命令行请求转发给节点并返回 JSON 或错误的接口">RPC</Term> 发出查询或控制请求；命令本身不替代共识验证，也不替代钱包对签名的授权。
 
-## 核心状态模型
+命令必须绑定 <Term def="一次查询或交易使用的网络、数据目录、钱包和参数组合">Wallet Context</Term>。余额查询的对象是钱包视图中的 <Term def="还没有被花费的交易输出，钱包用它计算可用余额">UTXO</Term>，交易广播后先有一个 <Term def="节点暂存尚未进入区块的交易集合">Mempool</Term> 状态。
 
-$$
-H_i = SHA256(SHA256(H_{i-1} \Vert merkle(T_i) \Vert nonce_i))
-$$
+当节点返回 <Term def="标识一笔交易的哈希字符串">Transaction ID</Term> 后，操作者仍要查询它是否属于某个区块，并按 <Term def="当前链头高度减交易所在区块高度再加一的确认数量">Confirmation Depth</Term>决定是否进入最终业务视图。`sendtoaddress` 与 `sendrawtransaction` 都可能返回 ID，但构造、签名和私钥暴露边界不同。
 
-$$
-\sum value(inputs) \ge \sum value(outputs) + fee
-$$
+<Callout type="trap" title="默认钱包不是目标钱包">
+  现象：getbalance 返回 0，另一个钱包却能看到未花费输出。原因：命令没有显式绑定钱包，RPC 查询了默认钱包或尚未加载的钱包。修法：显式使用 -rpcwallet 指定钱包，先 loadwallet，再保存钱包名、网络、地址和原始 JSON 响应。
+</Callout>
 
-$$
-S_{t+1} = apply(S_t, T_t), \quad valid(T_t,S_t)=1
-$$
+## 三步可运行实验
 
-$$
-gate = source \times version \times replay \times boundary \times failureEvidence
-$$
+下面的实验把 bitcoin-cli 操作拆成命令生命周期、钱包上下文和广播证据。每一步先预测状态，再打开错误或状态开关；示例使用隔离测试节点，不连接真实资金。
 
-第一式描述本页资源、价值或身份约束；第二式给出地址、确认或账本链接等派生关系。状态转移式要求候选请求先通过当前状态验证，再原子地产生后状态；失败必须保留原状态。证据门禁采用乘法语义，来源、版本、重放、边界或失败证据任一缺失都不能发布。
+<Stepper>
+  <Step title="1. 命令从读取走到广播">
+    先预测：参数错误最早会在哪一阶段被发现？推进读取、构造、签名和广播，观察原始命令、参数和错误对象如何形成证据。
 
-以一个最小样本固定前状态、调用者、输入、节点或编译器版本与确认阈值。正常样本走完整成功路径；边界样本取零值、最大值、恰好余额或恰好Gas；单故障样本只改变签名、nonce、网络身份、区块链接、权限或响应字段中的一项。三者使用同一观察合同，才能把差异归因到目标规则。
+    <BdpAppendixBCommandLab />
+  </Step>
+  <Step title="2. 钱包上下文决定查询对象">
+    先预测：同一个节点换一个钱包名，余额查询是否仍然相同？选择默认、显式或错误钱包，比较命令、RPC、钱包和 UTXO 视图。
 
-## 三段可运行骨架
+    <BdpAppendixBWalletLab />
+  </Step>
+  <Step title="3. 广播状态需要多次查询">
+    先预测：交易 ID 已返回时，哪个查询能证明它已经确认？切换内存池、已确认和未找到状态，再打开重广播检查。
 
-以下代码展示 bitcoin-cli RPC 调用的两层视角：TypeScript 侧定义命令调用与证据结构，Python 侧实现状态查询与交易构造验证。
+    <BdpAppendixBBroadcastLab />
+  </Step>
+</Stepper>
 
-<CodeTabs>
-  <Tab label="TypeScript / RPC 证据">
+## 附录B 比特币的bitcoin-cli模块详解
 
-```typescript
-type Trace = { before: string; input: string; after?: string; error?: string };
+bitcoin-cli 是 RPC 调用入口，不是共识规则本身。它把人的意图转换为节点请求，节点再依据网络、钱包、交易规则和链状态返回结果；因此每条命令都应记录版本、网络、数据目录、钱包和参数类型。
 
-function evidenceGate(trace: Trace) {
-  const complete = Boolean(
-    trace.before && trace.input && (trace.after || trace.error),
-  );
-  return { complete, trace, unit: "bdp-appendix-b-bitcoin-cli" };
-}
-```
+## B.1 bitcoin-cli模块常用命令
 
-  </Tab>
-  <Tab label="Python / 交易验证">
+常用命令可以按观察目的分组：`getnetworkinfo` 看连接和网络，`getblockchaininfo` 看链头，`getwalletinfo` 看钱包，`listunspent` 看可花费输出，`getrawmempool` 看未入块交易。命令输出要和调用上下文一起保存，否则 JSON 数值会失去意义。
 
-```python
-def apply_transition(state, request, verify):
-    if not verify(state, request):
-        return {"accepted": False, "state": state, "reason": "invalid"}
-    candidate = state.copy()
-    candidate[request["key"]] = request["value"]
-    return {"accepted": True, "state": candidate, "reason": None}
+## B.1.1 bitcoin-cli初探
 
-def verify_utxo_transaction(inputs, outputs, fee, signatures):
-    if len(inputs) != len(set(inputs)) or not all(signatures):
-        return False
-    return sum(item["value"] for item in inputs) == sum(outputs) + fee
-```
+初次使用先在 Regtest 上检查版本、网络和钱包，而不是直接发送交易。推荐把 `-regtest`、`-datadir` 和 `-rpcwallet` 写进命令，先读取状态，再生成测试地址和区块；每次返回都保存原始 JSON 与执行时间。
 
-  </Tab>
-</CodeTabs>
+~~~shell
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest getnetworkinfo
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest -rpcwallet=lab getwalletinfo
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest -rpcwallet=lab listunspent
+~~~
 
-第一段要求成功和失败都形成结构化轨迹；第二段验证失败不污染原状态；第三段把UTXO价值守恒与签名落到可执行边界。生产实现还要补充密码库、并发、持久化、超时、整数范围与密钥管理，教学骨架不应直接连接真实资产。
+如果命令失败，先区分节点未启动、RPC 认证失败、钱包未加载和网络选项错误。错误对象是输入边界的一部分，不能只把命令改到成功为止而丢掉第一次失败。
 
-## 正式目录逐项讲解
+## B.1.2 bitcoin-cli的命令及其选项
 
-### 附录B 比特币的bitcoin-cli模块详解
+命令选项决定请求落在哪个节点状态上。`-regtest` 选择隔离网络，`-datadir` 选择数据库根目录，`-rpcwallet` 选择钱包，`-named` 改变参数传递方式；这些选项的组合应进入可复制脚本或实验记录，而不是依赖 shell 历史。
 
-“附录B 比特币的bitcoin-cli模块详解”位于本页正式目录坐标 1/6。bitcoin-cli把命令转成节点RPC。显式指定网络、数据目录和钱包可避免连接错误上下文；任何返回值都要按错误对象、节点同步和区块确认解释。
+~~~shell
+bitcoin-cli -named -regtest -datadir=/tmp/remuse-regtest \
+  -rpcwallet=lab getblockhash height=101
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest \
+  -rpcwallet=lab gettransaction "$TXID"
+~~~
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
+参数类型也属于契约：高度是整数，交易 ID 是哈希字符串，金额要遵循节点的单位和精度。使用前先查看命令帮助和节点版本，避免把另一版本的选项当作当前节点的语义。
 
-### B.1 bitcoin-cli模块常用命令
+## B.2 bitcoin-cli发起交易
 
-“B.1 bitcoin-cli模块常用命令”位于本页正式目录坐标 2/6。bitcoin-cli把命令转成节点RPC。显式指定网络、数据目录和钱包可避免连接错误上下文；任何返回值都要按错误对象、节点同步和区块确认解释。
+高层命令可以替钱包构造、签名并广播交易，低层流程则分开创建原始交易、离线签名和广播。无论选择哪条路径，都要在发送前保存输入和手续费预期，在返回后查询 Mempool、区块和 Confirmation Depth；Transaction ID 只是索引，不是完成证明。
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
+~~~shell
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest \
+  -rpcwallet=lab sendtoaddress "$DESTINATION" 0.25
+bitcoin-cli -regtest -datadir=/tmp/remuse-regtest \
+  -rpcwallet=lab getrawmempool
+~~~
 
-### B.1.1 bitcoin-cli初探
+高层命令适合隔离实验，离线签名的原始交易适合把私钥与广播节点分离。发送失败时保留错误、余额前状态和 UTXO 选择；发送成功时记录 txid、内存池结果、所在区块、当前高度和确认策略，不要只保存终端的一行输出。
 
-“B.1.1 bitcoin-cli初探”位于本页正式目录坐标 3/6。bitcoin-cli把命令转成节点RPC。显式指定网络、数据目录和钱包可避免连接错误上下文；任何返回值都要按错误对象、节点同步和区块确认解释。
+<Callout type="trap" title="交易 ID 返回不代表已经确认">
+  现象：sendtoaddress 返回 txid，业务立即发货或把余额变化写入最终账本。原因：交易可能只在 Mempool，可能被拒绝或尚未达到确认深度。修法：轮询 getrawmempool、gettransaction、getblockcount 和链上状态，Receipt、区块和确认策略全部通过后再更新业务结果。
+</Callout>
 
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
+## B.3 本章小结
 
-### B.1.2 bitcoin-cli的命令及其选项
+附录 B 的验收链可以收束为：先用明确的 Wallet Context 发 RPC 查询，再区分构造、签名和广播，最后用 Transaction ID、Mempool、区块和 Confirmation Depth 追踪交易。命令成功、哈希返回和钱包界面变化都只是中间证据，不能互相替代。
 
-“B.1.2 bitcoin-cli的命令及其选项”位于本页正式目录坐标 4/6。bitcoin-cli把命令转成节点RPC。显式指定网络、数据目录和钱包可避免连接错误上下文；任何返回值都要按错误对象、节点同步和区块确认解释。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### B.2 bitcoin-cli发起交易
-
-“B.2 bitcoin-cli发起交易”位于本页正式目录坐标 5/6。bitcoin-cli把命令转成节点RPC。显式指定网络、数据目录和钱包可避免连接错误上下文；任何返回值都要按错误对象、节点同步和区块确认解释。
-
-复核时记录前状态、输入、调用者或验证者、候选输出、拒绝原因和后状态；正常、边界与单故障样本除目标变量外保持一致。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-### B.3 本章小结
-
-“B.3 本章小结”位于本页正式目录坐标 6/6。“附录B 比特币的bitcoin-cli模块详解”的收束不是名词列表，而是把对象、授权、执行顺序、状态不变量和版本边界连接成一条可重放轨迹。
-
-以“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”作为通过标准；只展示成功截图、最终余额或交易哈希都不构成完整证据。通过标准是“能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。”，并保留原始响应、状态摘要、版本和首个失败点。
-
-## 正常、边界与故障矩阵
-
-| 样本   | 只改变的变量                      | 预期结果               | 必存证据                   |
-| ------ | --------------------------------- | ---------------------- | -------------------------- |
-| 正常   | 合法输入与足额资源                | 状态提交并达到确认阈值 | 前后状态、哈希、回执、版本 |
-| 边界   | 零值、最大值或恰好阈值            | 按明确规则接受或拒绝   | 边界值、判断分支、资源消耗 |
-| 单故障 | 签名、nonce、网络、权限或链接一项 | 提交前拒绝且原状态不变 | 错误对象、首个差异、回退点 |
-
-测试先手算预期，再运行实现，并从独立进程读取最终状态。若前端、客户端、节点和链上状态给出不同答案，以原始协议对象和固定区块哈希为复核坐标；不得用刷新页面、提高超时或重复广播掩盖不一致。
-
-## 容易踩的坑
-
-**现象 →** 执行 `bitcoin-cli getbalance` 返回 0，但 `bitcoin-cli listunspent` 明明有未花费输出。
-**原因 →** 钱包未加载或使用了错误的 RPC 钱包上下文，`getbalance` 查询的是默认钱包而非目标钱包。
-**修法 →** 使用 `bitcoin-cli -rpcwallet=<walletname> getbalance` 显式指定钱包，或先执行 `loadwallet` 加载。
-
-**现象 →** `sendtoaddress` 返回交易哈希，但 `gettransaction` 查不到确认信息。
-**原因 →** 交易进入内存池但未被区块包含，或手续费过低被节点静默丢弃。
-**修法 →** 先用 `getrawmempool` 确认交易是否在内存池，再检查 `getmempoolentry` 的手续费率，必要时用 `bumpfee` 提高手续费。
-
-**现象 →** 在 regtest 环境中 `generatetoaddress` 后余额没有变化。
-**原因 →** 挖矿奖励有 100 个区块的成熟期（coinbase maturity），未成熟前不可花费。你可以亲自验证：生成 1 个区块后立即查余额，再生成 100 个区块后对比。
-**修法 →** 使用 `getblock` 查看区块中的 coinbase 交易，用 `gettxout` 确认成熟状态，至少等待 100 个确认。
-
-## 小结
-
-- bitcoin-cli 是 RPC 调用入口，不是共识规则本身
-- 命令须绑定节点、网络、钱包和参数类型
-- 发起交易要区分构造、签名、广播、内存池和确认
-- 交易哈希返回不等于执行成功，须轮询回执
-- 显式指定 `--chain` 和 `--datadir` 避免误连网络
+## 练习与答案
 
 <Exercises>
 
-**问题 1：** `bitcoin-cli sendtoaddress` 和 `bitcoin-cli sendrawtransaction` 有什么区别？为什么说后者更安全？
+**问题 1：改 Demo 代码。** 为命令生命周期 Demo 增加“原始响应”面板：读取、构造、签名和广播四步各自应该保存哪些字段？
 
 <Answer>
-
-`sendtoaddress` 是高层封装：节点自动构造交易、选择 UTXO、签名并广播，调用者无法控制输入选择和手续费计算细节。`sendrawtransaction` 只接受已签名的原始交易_hex 并广播，调用者需要自己构造、签名交易。后者更安全因为：（1）可以离线签名，私钥不暴露给节点；（2）可以精确控制输入选择和手续费；（3）签名后的交易可以在多个节点广播，避免单点依赖。
-
+  读取保存网络、数据目录、钱包、节点版本和 JSON；构造保存输入、输出、手续费和参数形式；签名保存签名结果或错误但不暴露私钥；广播保存 txid、内存池结果、区块信息和当前高度。每步都保留命令与时间。
 </Answer>
 
-**问题 2：** 在 regtest 测试环境中，如何生成区块并验证 coinbase 成熟期？
+**问题 2：钱包排障。** `getbalance` 为 0，但你知道实验钱包已有 UTXO。如何判断是钱包上下文错误还是链状态错误？
 
 <Answer>
-
-使用 `generatetoaddress <n> <address>` 生成指定数量的区块到目标地址。生成后用 `getblock` 查看区块内容，用 `gettxout "txid" 0` 查看 coinbase 输出的成熟状态。coinbase 交易需要 100 个区块确认后才可花费（`coinbase maturity`）。在 regtest 中可以先生成 1 个区块观察未成熟状态，再生成 100 个区块后确认可花费。
-
+  先显式指定 `-rpcwallet` 并读取 `getwalletinfo`，确认钱包已加载和网络一致；再用 `listunspent` 查看输出，核对地址、确认数和数据目录。若显式钱包仍为空，再比较节点链头、创世块和交易所在网络。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版的 bitcoin-cli 交易广播状态追踪器：给定一笔已广播交易的 txid，模拟调用 `getrawmempool`、`gettransaction` 和 `getblockcount` 的结果，返回交易当前状态（内存池中/已确认/未找到）及确认深度。
+**问题 3：独立实现。** 实现一个交易状态追踪器：给定 txid、内存池集合、确认交易及当前高度，返回“内存池中、已确认或未找到”和确认深度。
 
 <Answer>
-
-```python
-def track_tx_status(txid, mempool, confirmed_txs, block_height):
-    # 检查是否在内存池中
-    if txid in mempool:
-        return {"status": "in_mempool", "confirmations": 0}
-    # 检查是否已确认
-    if txid in confirmed_txs:
-        tx_block = confirmed_txs[txid]["block_height"]
-        confirmations = block_height - tx_block + 1
-        return {
-            "status": "confirmed",
-            "confirmations": confirmations,
-            "block_height": tx_block,
-        }
-    # 未找到
-    return {"status": "not_found", "confirmations": 0}
-
-# 使用示例
-mempool = {"abc123": True}
-confirmed = {"def456": {"block_height": 100}}
-print(track_tx_status("abc123", mempool, confirmed, 105))  # in_mempool
-print(track_tx_status("def456", mempool, confirmed, 105))  # confirmed, 6 conf
-print(track_tx_status("xxx", mempool, confirmed, 105))      # not_found
-```
-
+  先查询内存池，命中时返回 0 confirmations；否则查询已确认交易，按当前高度减交易区块高度再加一计算深度；两处都未命中时返回未找到，并保留网络、钱包、数据目录和查询时间，避免把暂时不可见误判为永久失败。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-用bitcoin-cli命令、选项与发起交易流程建立参数、钱包、节点和错误证据。 bitcoin-cli是RPC调用入口，不是共识规则本身。命令必须绑定节点、网络、钱包和参数类型；发起交易要区分构造、签名、广播、进入内存池和最终确认。 掌握标准不是记住命令或界面，而是能用显式网络和钱包上下文查询状态，构造并广播一笔测试交易，保存交易ID、内存池、区块和拒绝错误四类证据。。发布前必须由独立观察者从来源和固定配置重放正常、边界及单故障样本。
-
+<Glossary>
+  <GlossaryItem term="RPC">
+    让 bitcoin-cli 把命令发送给节点并得到状态或错误响应的接口。
+  </GlossaryItem>
+  <GlossaryItem term="Wallet Context">
+    一次命令使用的网络、数据目录、钱包和参数组合，决定查询或签名针对谁。
+  </GlossaryItem>
+  <GlossaryItem term="UTXO">
+    还没有被花费的交易输出，钱包根据它们计算可用余额。
+  </GlossaryItem>
+  <GlossaryItem term="Mempool">
+    节点暂存但还没有被区块包含的交易集合。
+  </GlossaryItem>
+  <GlossaryItem term="Transaction ID">
+    标识一笔交易的哈希字符串，可以用来继续查询，但本身不代表交易已确认。
+  </GlossaryItem>
+  <GlossaryItem term="Confirmation Depth">
+    交易所在区块到当前链头之间的确认数量，用来决定业务是否接受最终结果。
+  </GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [上一页：附录A 比特币的原理和运行方式](/learn/blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles)
-- [下一页：附录C 比特币系统的编程接口](/learn/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis)
+[上一页：附录A 比特币的原理和运行方式](/learn/blockchain-dev-practice/13-appendix-a-bitcoin-principles/bdp-appendix-a-bitcoin-principles)
+· [下一页：附录C 比特币系统的编程接口](/learn/blockchain-dev-practice/15-appendix-c-bitcoin-apis/bdp-appendix-c-bitcoin-apis)
 
 <Attribution
   mode="independent-rewrite"
   sourceBasis="publisher-catalog"
-  workTitle="吴寿鹤、冯翔、刘涛、周广益《区块链开发实战：以太坊关键技术与案例分析》机械工业出版社 / 2018"
+  workTitle="《区块链开发实战：以太坊关键技术与案例分析》"
   adaptedUrl="https://www.dedao.cn/ebook/detail?id=bBVDEXGGLn7eB51b8NjVRqDoQJPMk3aKmq0adYrXmAxE4Ov92lgzK6ZypxLqdQjp"
 />
-

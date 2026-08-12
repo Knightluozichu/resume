@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-27
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcParallelTimerLab,
+  CvcPoolSchedulingLab,
+  CvcTaskOutcomeLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-compute-bound-asynchronous-operations";
 
 <Objectives>
 
@@ -32,7 +41,9 @@ CPU计算必须占用thread/core；“异步”只是caller不在当前thread同
 
 先预测：QueueUserWorkItem是否提供结果/异常；ExecutionContext是否自动流到pool callback；取消Task能否强停正在执行代码；Task.Wait为何可能死锁；ContinueWith和await是否同语义；Attached child如何影响parent；Parallel.For是否保持顺序；Timer callback会不会重叠；SetMinThreads是否越大越好。后文按pool、task、parallelism回答。
 
-<Term def="Runtime共享workers、queues与注入/回收策略，用有限threads执行大量短managed work。">thread-pool scheduling domain</Term>
+<Term def="Runtime共享workers、queues与注入/回收策略，用有限threads执行大量短managed work。">
+  thread-pool scheduling domain
+</Term>
 
 ## Introducing the CLR's Thread Pool
 
@@ -59,18 +70,35 @@ CPU operation按input size估work grain；太小parallel overhead更大，太大
 
 ExecutionContext携带AsyncLocal、security/culture等ambient state，默认随Task/pool queue capture/flow；UnsafeQueueUserWorkItem/suppress flow可减少成本但会丢correlation/security context。ThreadStatic不流，pool thread复用会残留。明确哪些ambient values允许进入background work。
 
-<Term def="在异步/线程池边界capture并恢复AsyncLocal等逻辑调用上下文，而非绑定某个physical thread。">execution-context flow</Term>
+<Term def="在异步/线程池边界capture并恢复AsyncLocal等逻辑调用上下文，而非绑定某个physical thread。">
+  execution-context flow
+</Term>
 
 Long-lived queued work capturerequest services/large objects会延长lifetime。尽量传explicit immutable state；correlation AsyncLocal只携带小值。SuppressFlow仅在审计确认无需上下文且finally restore。
 
 <Stepper>
-  <Step title="切换queue、inject、execute与retire"></Step>
-  <Step title="采集Pool timeline">记录queue length/delay、worker count/injection、active CPU、blocking stacks、context switch和request SLO。</Step>
-  <Step title="注入Blocking">把部分work改sync wait，观察starvation；再改true async/隔离pool，比较而非盲调MinThreads。</Step>
+  <Step title="切换queue、inject、execute与retire">
+    <CvcPoolSchedulingLab />
+  </Step>
+  <Step title="采集Pool timeline">
+    <CvcPoolSchedulingLab />
+    记录queue length/delay、worker count/injection、active CPU、blocking
+    stacks、context switch和request SLO。
+  </Step>
+  <Step title="注入Blocking">
+    <CvcPoolSchedulingLab />
+    把部分work改sync wait，观察starvation；再改true
+    async/隔离pool，比较而非盲调MinThreads。
+  </Step>
 </Stepper>
 
-<Callout type="trap" title="ThreadPool线程够多，所以Blocking只影响当前Work Item">
-Pool是shared且注入有反馈延迟；大量blocked workers使continuations/requests排队，形成starvation。用true async或bounded dedicated isolation。
+<Callout
+  type="trap"
+  title="ThreadPool线程够多，所以Blocking只影响当前Work Item"
+>
+  Pool是shared且注入有反馈延迟；大量blocked
+  workers使continuations/requests排队，形成starvation。用true async或bounded
+  dedicated isolation。
 </Callout>
 
 ## Cooperative Cancellation and Timeout
@@ -97,12 +125,24 @@ Cancellation checkpoint频率平衡latency/overhead，cleanup在finally。Partia
 
 Task代表一次operation，terminal state为RanToCompletion/Faulted/Canceled。`Task<T>`携结果，exception在await/Wait/Result观察；Task不是thread，promise-style TaskCompletionSource可无worker。创建Task但不start、cold API和fire-and-forget增加lifecycle混乱，API返回hot task通常。
 
-<Term def="一次操作最终以result、fault或cancellation之一完成，并由明确consumer观察的对象。">task outcome ownership</Term>
+<Term def="一次操作最终以result、fault或cancellation之一完成，并由明确consumer观察的对象。">
+  task outcome ownership
+</Term>
 
 <Stepper>
-  <Step title="切换created、running、success与fault/cancel"></Step>
-  <Step title="建立Task graph">记录producer、scheduler、parent/children、token、continuation context、observer与cleanup。</Step>
-  <Step title="验证每个Outcome">success/fault/cancel/race/shutdown都await并断言state、exception、partial effects和no orphan。</Step>
+  <Step title="切换created、running、success与fault/cancel">
+    <CvcTaskOutcomeLab />
+  </Step>
+  <Step title="建立Task graph">
+    <CvcTaskOutcomeLab />
+    记录producer、scheduler、parent/children、token、continuation
+    context、observer与cleanup。
+  </Step>
+  <Step title="验证每个Outcome">
+    <CvcTaskOutcomeLab />
+    success/fault/cancel/race/shutdown都await并断言state、exception、partial
+    effects和no orphan。
+  </Step>
 </Stepper>
 
 ## Waiting for a Task to Complete and Getting Its Result
@@ -124,7 +164,8 @@ WaitAll/WhenAll差别：WhenAll异步组合并保留所有tasks；await抛一个
 Attached child会让parent等children并聚合状态；Task.Run默认DenyChildAttach，普通TaskCreationOptions.AttachedToParent需explicit。Hidden child/fire-and-forget不延长parent，parent成功不代表child完成。Structured concurrency思想要求scope拥有所有children，shutdown/cancel/observe。
 
 <Callout type="trap" title="Parent Task返回后，它启动的所有Tasks都一定完成">
-只有attached/显式WhenAll等结构化拥有才成立。Task.Run denies child attach；未保存child就是orphan，exception/lifetime无法管理。
+  只有attached/显式WhenAll等结构化拥有才成立。Task.Run denies child
+  attach；未保存child就是orphan，exception/lifetime无法管理。
 </Callout>
 
 ## Task Factories
@@ -133,9 +174,13 @@ TaskFactory统一CancellationToken、CreationOptions、ContinuationOptions、Sch
 
 ## Task Schedulers
 
+本节先把调度器视为执行责任的边界，再比较默认池、界面上下文和自定义并发策略的差异。
+
 Default scheduler使用thread pool；SynchronizationContext scheduler用于UI；custom scheduler可限制concurrency/affinity，但实现queue/inlining/deadlock复杂。`TaskScheduler.Current`在nested task可能继承意外scheduler，Task.Run固定Default。Library async通常不capture context（ConfigureAwait policy按app/library），CPU work明确scheduler。
 
-<Term def="决定Task何时、在哪个execution resource运行，以及是否允许inline/并发的调度策略。">task scheduler contract</Term>
+<Term def="决定Task何时、在哪个execution resource运行，以及是否允许inline/并发的调度策略。">
+  task scheduler contract
+</Term>
 
 ## Parallel's Static For, ForEach, and Invoke Methods
 
@@ -166,9 +211,17 @@ Periodic work有fixed-rate/fixed-delay、overlap、drift、missed ticks语义。
 Threading.Timer、Timers.Timer、UI timer、PeriodicTimer等thread/context/exception/dispose不同。UI timer回UI queue不适合重CPU；System.Timer Elapsed可能reentrant且Dispose race。选择表写callback carrier、overlap、drift、GC rooting（timer需强引用）和shutdown。
 
 <Stepper>
-  <Step title="切换task graph、Parallel loop、PLINQ与timer"></Step>
-  <Step title="计算Work grain">测serial compute、partition/schedule/merge，找break-even并限制degree/queue。</Step>
-  <Step title="演练Timer overlap">Work>period、exception、cancel/dispose同时发生，验证无重入、orphan或shutdown丢失。</Step>
+  <Step title="切换task graph、Parallel loop、PLINQ与timer">
+    <CvcParallelTimerLab />
+  </Step>
+  <Step title="计算Work grain">
+    <CvcParallelTimerLab />
+    测serial compute、partition/schedule/merge，找break-even并限制degree/queue。
+  </Step>
+  <Step title="演练Timer overlap">
+    <CvcParallelTimerLab />
+    Work>period、exception、cancel/dispose同时发生，验证无重入、orphan或shutdown丢失。
+  </Step>
 </Stepper>
 
 ## How the Thread Pool Manages Its Threads
@@ -183,7 +236,9 @@ Get/SetMinThreads影响注入起点，不预创建所有threads；Max限制上�
 
 Idle workers等待/retire，active workers执行queues，runtime处理unhandled callback exception/ExecutionContext。Thread-local state在线程复用间残留，callback必须restore culture/ambient values；async locals由ExecutionContext scope。Never terminate pool thread or set persistent priority/affinity from library。
 
-<Term def="Pool queue delay、worker injection、blocking、CPU utilization和retirement共同形成的健康状态。">thread-pool health</Term>
+<Term def="Pool queue delay、worker injection、blocking、CPU utilization和retirement共同形成的健康状态。">
+  thread-pool health
+</Term>
 
 ## 本章回顾：Task管理Outcome，Pool管理Carriers
 
@@ -197,26 +252,59 @@ Idle workers等待/retire，active workers执行queues，runtime处理unhandled 
 
 **问题 1：WhenAny timeout后如何避免Loser Task成为Orphan？**
 
-<Answer>创建linked CTS并把token传operation；timeout winner后Cancel loser，随后await/observe loser处理它可能race成功、fault或cancel。若underlying不支持取消，仍保存并observe completion，限制并发。Timeout不等于operation已停止。</Answer>
+<Answer>
+  创建linked CTS并把token传operation；timeout winner后Cancel
+  loser，随后await/observe
+  loser处理它可能race成功、fault或cancel。若underlying不支持取消，仍保存并observe
+  completion，限制并发。Timeout不等于operation已停止。
+</Answer>
 
 **问题 2：Parallel.For比Serial慢，应检查什么？**
 
-<Answer>测单iteration work、partition/schedule/merge、degree、shared locks/false sharing、ordering和nested parallelism。增大chunk/thread-local accumulation、移除side effects，按实际cores/quota限制；若useful compute小于overhead保持serial。</Answer>
+<Answer>
+  测单iteration work、partition/schedule/merge、degree、shared locks/false
+  sharing、ordering和nested parallelism。增大chunk/thread-local
+  accumulation、移除side effects，按实际cores/quota限制；若useful
+  compute小于overhead保持serial。
+</Answer>
 
 **问题 3：调高MinThreads后延迟短期改善，是否完成修复？**
 
-<Answer>不是。它可能缩短注入延迟但增加threads/switches，持续sync I/O/lock仍会耗尽。采集blocking stacks、queue delay与CPU，改true async或隔离bounded blocking；压测稳态和峰值，MinThreads仅作为host参数记录与回归。</Answer>
+<Answer>
+  不是。它可能缩短注入延迟但增加threads/switches，持续sync
+  I/O/lock仍会耗尽。采集blocking stacks、queue delay与CPU，改true
+  async或隔离bounded
+  blocking；压测稳态和峰值，MinThreads仅作为host参数记录与回归。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="thread-pool scheduling domain" definition="Runtime以共享queue/workers执行短managed work的调度域。" />
-  <GlossaryItem term="execution-context flow" definition="AsyncLocal等逻辑上下文跨异步边界capture/restore。" />
-  <GlossaryItem term="task outcome ownership" definition="Result/fault/cancel由明确consumer观察的责任。" />
-  <GlossaryItem term="task scheduler contract" definition="Task运行位置、并发与inline策略。" />
-  <GlossaryItem term="thread-pool health" definition="Queue、injection、blocking、CPU与retirement的整体状态。" />
+  <GlossaryItem
+    term="thread-pool scheduling domain"
+    definition="Runtime以共享queue/workers执行短managed work的调度域。"
+  />
+  <GlossaryItem
+    term="execution-context flow"
+    definition="AsyncLocal等逻辑上下文跨异步边界capture/restore。"
+  />
+  <GlossaryItem
+    term="task outcome ownership"
+    definition="Result/fault/cancel由明确consumer观察的责任。"
+  />
+  <GlossaryItem
+    term="task scheduler contract"
+    definition="Task运行位置、并发与inline策略。"
+  />
+  <GlossaryItem
+    term="thread-pool health"
+    definition="Queue、injection、blocking、CPU与retirement的整体状态。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 27: Compute-Bound Asynchronous Operations" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 27: Compute-Bound Asynchronous Operations"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

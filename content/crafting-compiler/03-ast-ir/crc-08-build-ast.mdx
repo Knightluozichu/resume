@@ -1,12 +1,9 @@
 ---
-title: 第8章 抽象语法树的生成
+title: "第8章 抽象语法树的生成"
 type: C
-section: 第2部分 · AST、语义与IR
+section: "第2部分 · AST、语义与IR"
 order: 8
-description: >-
-  第8章
-  抽象语法树的生成围绕表达式的抽象语法树、语句的抽象语法树、声明的抽象语法树、cbc的解析器的启动推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用节点工厂、表达式/语句/声明结构差分和 cbc 解析器入口回放抽象语法树的生成，验证节点类型、子节点顺序与源码跨度。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,60 +11,216 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-08
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcBuildAstLab } from "@/components/mdx/crafting-compiler/v2/crc-08-build-ast";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“AST结构快照台”开始
+- 能为表达式、语句和声明选择稳定的 AST 节点类型，并验证子节点顺序与源码跨度
+- 能用结构差分比较合法、截断和边界输入，定位节点族或构建入口的最早差异
+- 能回放 cbc 解析器的启动、生成、清理和退出码，确认 AST 产物未被旧构建污染
 
-第8章 抽象语法树的生成沿“expression/statement/declaration → typed node hierarchy”转换信息。最终进程返回正确值只能证明一条执行路径；AST结构快照台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第8章 抽象语法树的生成固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变节点族或比较方式。本页交互只移动expression/statement/declaration → typed node hierarchy中的真实对象和状态，不生成置信、风险或证据分数。
+## 从源码片段到节点族
+
+抽象语法树的生成把前一章的节点合同落实为一组可使用的节点族。表达式需要表达值与运算关系，语句需要表达动作和结束边界，声明需要表达名字、类型和初始化；这些结构都不能只靠打印文本来区分。
+
+先预测 `count + 1`、`return count;` 和 `int count = 1;` 会生成哪些根节点，再通过 cbc 的解析器入口回放实际结果。固定输入、grammar、JavaCC 和构建目录，只改变一个样本，结构差分才有归因价值。
+
+<Callout type="trap" title="误区一：让所有构造都返回通用节点">
+  现象 → 表达式、语句和声明都能打印出来，但后续阶段需要通过字符串猜节点语义。
+
+原因 → 节点工厂没有按语法责任划分类型，根节点、子节点和字段合同都变得模糊。
+
+修法 → 为每个节点族定义明确 kind、字段和子节点顺序，用最短输入断言根节点与源码跨度。
+
+</Callout>
+
+<Callout type="trap" title="误区二：只比较 AST 文本而不比较结构">
+  现象 → 两棵树打印结果相似，但加法左右子树或声明初始化边界已经被交换。
+
+原因 → 快照没有比较节点类型、子节点位置、字面值和半开跨度。
+
+修法 → 使用结构化 JSON 或字段表做差分，并把根节点、子节点顺序和跨度列为验收字段。
+
+</Callout>
+
+<Callout type="trap" title="误区三：cbc 启动时复用旧生成目录">
+  现象 → 修改 grammar 后 AST 结果没有变化，或者命令在本机成功、清理后却失败。
+
+原因 → cbc 入口没有明确生成、编译、运行和清理边界，旧 parser 或旧快照遮蔽了当前输入。
+
+修法 → 记录入口参数、生成命令、工具版本、清理动作和退出码；清理后从同一输入重新生成并比较结果。
+
+</Callout>
+
+## AST 生成的工作合同
+
+第8章 抽象语法树的生成关心“如何稳定地产生结构”，而不是提前完成类型检查或 IR 优化。输入是 token 和源位置，节点工厂负责选择结构，cbc 解析器负责把 grammar 接到运行命令，验收则比较 AST 字段、跨度、错误和构建状态。
+
+<Term def="根据节点种类、子节点和值创建 AST 对象的集中接口；它把字段默认值、跨度合并和不可变约束放在同一处。">
+  节点工厂
+</Term>
+
+节点工厂应让构造路径可见。表达式、语句和声明可以有不同入口，但每个入口都应交付明确的 kind、字段和 span；不符合合同的组合在工厂边界尽早失败。
+
+<Term def="表示产生值的语法构造及其运算、调用、名字和字面量子树的 AST 族。">
+  表达式 AST
+</Term>
+
+表达式 AST 需要保留运算符和子节点顺序。`count + 1` 的根节点应知道左右子树和加号范围，括号输入则应通过嵌套节点或跨度体现，而不是被压成同一个字符串。
+
+<Term def="表示赋值、返回、调用、条件或复合块等可执行动作及其结束边界的 AST 族。">
+  语句 AST
+</Term>
+
+语句 AST 连接控制边界和表达式子树。返回语句要知道返回值是否存在，复合块要保持语句顺序，分号或右括号等结束 token 不应被错误地吞进下一条语句。
+
+<Term def="表示类型、名字、参数、初始值和声明范围等绑定结构的 AST 族。">
+  声明 AST
+</Term>
+
+声明 AST 把名字和类型放在结构字段中，把可选初始化作为明确子节点。这样语义阶段可以检查定义，而不必重新扫描源代码寻找等号和分号。
+
+<Term def="把 C♭源文件、JavaCC 生成解析器和 AST 输出命令连接起来的入口流程；它固定参数、构建目录和退出码。">
+  cbc 解析器启动
+</Term>
+
+cbc 解析器启动不是一个黑盒按钮。它至少应记录输入文件、grammar 或生成版本、生成/编译/运行命令、清理动作、AST 输出和退出码；任何一项缺失，构建结果就难以复现。
 
 ## 来源、版本与独立重写边界
 
-第8章 抽象语法树的生成以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)对齐范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。JavaCC 行为以[官方 grammar 文档](https://javacc.github.io/javacc/documentation/grammar.html)核对，C♭、JDK、目标平台和构建目录要在 cbc 回放记录中单独注明。
 
-第8章 抽象语法树的生成用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+## 第2部分 AST、语义与IR
 
-## 本章合同与可运行探针
+AST 是语义分析和 IR 转换的共享输入。生成阶段要保存语法事实和源码位置，把符号解析、类型判断、临时变量和机器约束留给后续阶段；这样结构差分才能准确指出问题属于解析器还是语义过程。
 
-、、、、。
+## 第8章 抽象语法树的生成
 
-第8章 抽象语法树的生成的通过不变量是“节点类型、子女次序、源跨度和声明边界与输入唯一对应”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
+本章将生成流程拆成五个可复查节点：第8章 抽象语法树的生成规定总合同，表达式/语句/声明 AST 规定节点族，cbc 的解析器的启动规定可执行入口。实验同时显示根节点、子节点、跨度、命令和退出码。
 
-```bash
-java AstDump --format=json samples/ast.cb
-diff -u expected/ast.json actual/ast.json
-```
+## 8.1 表达式的抽象语法树
 
+表达式 AST 的核心是结构而非字符串。对于 `a + b * c`，根节点应表达加法，右子树应表达乘法；对于 `(a + b) * c`，括号改变了根节点与跨度。最小样本足以检验优先级和子节点顺序。
 
-## 官方目录逐项深读
+## 8.2 语句的抽象语法树
 
-### 第8章 抽象语法树的生成
+语句 AST 要保留动作边界与内部表达式。`return count;` 需要明确返回值，`count = count + 1;` 需要把左侧名字、赋值操作和右侧表达式放在稳定字段中；多条语句还必须保持源顺序。
 
-**四级证据 1/5。** 前端槽1用合法、最长匹配、歧义、截断和非法字符样本核对“第8章 抽象语法树的生成”的token、前看、树形与源位置；固定比较方式，只改变节点族，以结构差分与源跨度找到第一处分叉并清理重建。
+## 8.3 声明的抽象语法树
 
-### 8.1 表达式的抽象语法树
+声明 AST 把类型、名字、可选初值与跨度绑定在一起。`int count = 1;` 的初始化不应被丢进注释文本或通用 token 列表；缺少名字或分号时，构建应停在声明入口并给出期望 token。
 
-**四级证据 2/5。** 前端槽2用合法、最长匹配、歧义、截断和非法字符样本核对“8.1 表达式的抽象语法树”的token、前看、树形与源位置；固定比较方式，只改变节点族，以结构差分与源跨度找到第一处分叉并清理重建。
+## 8.4 cbc的解析器的启动
 
-### 8.2 语句的抽象语法树
+cbc 的解析器启动先准备生成目录，再用固定命令构建和运行解析器，最后序列化 AST。清理后重建是必要的控制实验：若同一输入产生不同根节点、节点字段或退出码，应先检查入口参数、生成产物和版本，而不是直接修改节点工厂。
 
-**四级证据 3/5。** 前端槽3用合法、最长匹配、歧义、截断和非法字符样本核对“8.2 语句的抽象语法树”的token、前看、树形与源位置；固定比较方式，只改变节点族，以结构差分与源跨度找到第一处分叉并清理重建。
+<CrcBuildAstLab />
 
-### 8.3 声明的抽象语法树
+## 三步实验：结构差分与入口回放
 
-**四级证据 4/5。** 前端槽4用合法、最长匹配、歧义、截断和非法字符样本核对“8.3 声明的抽象语法树”的token、前看、树形与源位置；固定比较方式，只改变节点族，以结构差分与源跨度找到第一处分叉并清理重建。
+三个步骤共享本章专属实验，先浏览五个正式节点，再比较表达式/语句/声明节点族，最后注入旧构建或跨度错误，验证 cbc 入口的清理重建。
 
-### 8.4 cbc的解析器的启动
+<Stepper>
+  <Step title="第一步：浏览 AST 生成合同">
+    先预测：如果只保留一串 token，表达式、语句和声明的哪一项结构最难交给后续阶段？选择“目录节点”，推进五个正式概念并记录每个产物。
 
-**四级证据 5/5。** 前端槽5用合法、最长匹配、歧义、截断和非法字符样本核对“8.4 cbc的解析器的启动”的token、前看、树形与源位置；固定比较方式，只改变节点族，以结构差分与源跨度找到第一处分叉并清理重建。
+    <CrcBuildAstLab />
 
-## 三个必须主动触发的误区
+  </Step>
+  <Step title="第二步：比较三类节点族">
+    动手试：切换表达式、语句和声明样本，观察根节点、字段、子节点顺序与源码跨度的结构差异。
 
+    <CrcBuildAstLab />
 
-## 练习、答案与116层级验证
+  </Step>
+  <Step title="第三步：重放 cbc 入口">
+    先猜一猜：旧生成目录会让哪一份证据看起来没有变化？注入构建残留或跨度错误，清理后比较 AST 快照、命令、状态与退出码。
 
+    <CrcBuildAstLab />
 
+  </Step>
+</Stepper>
+
+## 小结
+
+- 节点工厂集中表达 kind、字段、子节点和跨度合同，避免所有构造退化为通用节点。
+- 表达式、语句和声明 AST 分别保留值结构、动作边界和绑定字段，并保持源顺序。
+- cbc 解析器启动必须固定输入、生成/编译/运行命令、清理动作和退出码。
+- AST 验收要做字段级结构差分，不能只比较打印文本或“命令成功”。
+
+<Exercises>
+
+**问题 1：覆盖正式节点。** 请为“第8章 抽象语法树的生成”“8.1 表达式的抽象语法树”“8.2 语句的抽象语法树”“8.3 声明的抽象语法树”“8.4 cbc的解析器的启动”各写一份输入、产物和验收证据。
+
+<Answer>
+  第8章 抽象语法树的生成记录节点工厂与整体快照；8.1
+  表达式的抽象语法树记录运算根节点、子节点顺序和跨度；8.2
+  语句的抽象语法树记录动作、内部表达式和结束边界；8.3
+  声明的抽象语法树记录类型、名字、初值和声明范围；8.4
+  cbc的解析器的启动记录输入、生成/编译/运行命令、清理动作、AST
+  输出和退出码。每份证据都要可重复。
+</Answer>
+
+**问题 2：设计结构差分。** 对 `a + b * c`、`return a + b;` 和 `int count = 1;` 写出根节点、关键子节点和跨度，说明哪些字段必须进入 JSON 快照。
+
+<Answer>
+  第一份快照应有 Add 根和右侧 Multiply 子树；第二份应有 Return 根与 Add
+  子树；第三份应有 Declaration 根、类型、名字和 Number 初值。JSON 至少包含
+  kind、子节点顺序、字面值、operator 或 keyword 位置、节点 span
+  与输入编号，不能只写一行格式化文本。
+</Answer>
+
+**问题 3：验证 cbc 清理重建。** 修改一个 AST 节点字段后，先不清理目录运行一次，再清理后重建运行一次；要求解释两个结果相同或不同的原因，并给出最小诊断顺序。
+
+<Answer>
+  先记录输入、grammar
+  与节点工厂版本、实际生成文件、命令和退出码；再删除生成目录，按相同 JavaCC/JDK
+  命令生成、编译并运行。若清理前后结果不同，先比对生成文件和入口参数，再比对 AST
+  字段与跨度，最后检查缓存或旧快照；不要只依据终端最后一行。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="节点工厂">
+  根据节点种类、子节点和值创建 AST 对象的集中接口。
+</GlossaryItem>
+
+<GlossaryItem term="表达式 AST">
+  表示产生值的运算、调用、名字和字面量子树的 AST 族。
+</GlossaryItem>
+
+<GlossaryItem term="语句 AST">
+  表示赋值、返回、调用、条件或复合块等可执行动作的 AST 族。
+</GlossaryItem>
+
+<GlossaryItem term="声明 AST">
+  表示类型、名字、参数、初始值和声明范围等绑定结构的 AST 族。
+</GlossaryItem>
+
+<GlossaryItem term="cbc 解析器启动">
+  连接源文件、生成解析器、AST 输出、清理动作和退出码的入口流程。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC 官方 grammar 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

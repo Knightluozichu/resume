@@ -3,324 +3,261 @@ title: "Chapter 2: LLMs for AI-Powered Applications"
 type: C
 section: "Chapter 2: LLMs for AI-Powered Applications"
 order: 3
-description: "分析LLM对软件开发和Copilot系统的改变，拆解AI编排器，并在LangChain、Haystack与Semantic Kernel之间建立选择合同。"
+description: "分析 LLM 如何改变软件开发与 Copilot 协作，拆解 AI 编排器，并用任务证据比较不同框架的边界。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-02
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla02CopilotLab,
+  Bla02FrameworkLab,
+  Bla02OrchestratorLab,
+} from "@/components/mdx/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。分析LLM对软件开发和Copilot系统的改变，拆解AI编排器，并在LangChain、Haystack与Semantic
-Kernel之间建立选择合同。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能把 LLM 应用拆成任务合同、模型调用、人审、工具权限、状态边界和可回滚结果。
+- 能实现一个最小 Copilot 或编排器，记录中间状态、工具回执、超时和失败回退。
+- 能用质量、延迟、成本、许可、可维护性和迁移证据比较 LangChain、Haystack 与 Semantic Kernel。
+- 能解释为什么框架生态和模型流畅度都不能替代任务级评估、权限控制与人的最终判断。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 2：把 LLM 接入应用的协作与编排边界
 
+LLM 改变软件开发的关键，不是把每个函数都换成自然语言，而是把部分分析、生成和检索步骤交给概率模型，再用人、代码和权限系统把结果收回可验证的工程流程。本章从 Copilot 的人机协作开始，继续拆解编排器的状态、调用图、工具合同和回退路径，最后把框架选型还原为可比较的任务证据。
 
-## 数学、检索与成本骨架
+先预测：当一个 Copilot 给出看似合理的补丁时，最先需要检查的是上下文、测试、权限还是模型名称？当一个 Agent 工具超时时，应该重试、停止还是让模型自由补写？当框架升级导致输出变化时，哪一层适配器应该先被隔离？下面的实验会把这些问题变成可观察的输入、状态、证据和边界。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**模型提出了正确方向，就把建议当成已完成的软件变更；**原因：**没有把人审、测试、权限和回滚视为交付物；**修法：**让 Copilot 停在候选、差异或补丁状态，保留证据后再由人决定是否合并。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**编排器能把多个调用串起来，就默认它已经是可靠 Agent；**原因：**忽略状态边界、工具权限、超时、步数上限和失败回退；**修法：**先用假模型和假工具验证调用图，再给每个动作定义输入、输出、责任和取消条件。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**框架社区活跃或示例漂亮，就直接用于生产；**原因：**把生态热度误当作当前任务的质量和迁移证据；**修法：**冻结版本并比较任务质量、延迟、成本、许可、可维护性与回退路径。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="把模型建议放入上下文、证据、人审和可回滚变更流程的协作系统">Copilot</Term>` 不等于自动提交器；它的价值来自人和模型之间清楚的交接点。`<Term def="管理模型、状态、工具、权限、超时和回退的应用层调用图">Orchestrator</Term>` 负责让概率调用进入有边界的程序流程。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+工具只有在 `<Term def="明确工具的输入、输出、权限、错误、超时和副作用的接口约束">Tool Contract</Term>` 下才适合被模型调用。多轮任务还需要 `<Term def="定义状态保存、可见范围、生命周期和跨步骤传递方式的边界">State Boundary</Term>`，避免会话或租户之间互相污染。
 
-## 三段可运行骨架
+框架通过 `<Term def="把外部框架的模型、检索和工具接口隔离成稳定内部接口的薄层">Framework Adapter</Term>` 降低迁移成本；最终应由 `<Term def="与训练或调参过程隔离、用于比较应用质量和风险的数据与协议">Evaluation Set</Term>` 判断实现是否满足任务，而不是由框架名称决定成败。
+
+## 三步应用编排实验
+
+每一步先写下预测，再只改变一个条件。实验里的模型、工具和框架是合成对象，图示的重点是责任交接和失败处理；真实部署仍要另外验证供应商服务、数据许可、隐私和运行成本。
+
+<Stepper>
+  <Step title="1. 设计 Copilot 交接点">
+    在建议、审查和补丁三种模式之间切换，先保存上下文和人的判断，再隐藏约束或测试结果，观察为什么模型输出不能直接变成合并动作。
+
+    <Bla02CopilotLab />
+  </Step>
+  <Step title="2. 检查编排器回退">
+    在固定链、路由器和受限 Agent 之间切换，先预测工具超时后的动作，再触发超时或拒权，观察安全停止与可解释回退如何保护调用图。
+
+    <Bla02OrchestratorLab />
+  </Step>
+  <Step title="3. 比较框架迁移边界">
+    选择 LangChain、Haystack 或 Semantic Kernel，比较优势与证据，再触发版本漂移，观察适配器、索引、回调和权限为什么需要重新验证。
+
+    <Bla02FrameworkLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的最小编排器
+
+先用确定性的 Python 函数描述 Copilot 的候选、人审和合并状态，再用 TypeScript 记录编排器的工具边界。代码不调用外部模型，因此可以先验证状态迁移、缺字段阻断和回退逻辑，再把真实服务放进薄适配器。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / Copilot 状态">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def review_patch(task, candidate, tests, decision):
+    if not task or not candidate or not tests:
+        return {"status": "needs-context", "reason": "missing task, patch, or tests"}
+    if decision == "reject":
+        return {"status": "rejected", "patch": candidate}
+    return {"status": "ready-to-merge", "patch": candidate, "tests": tests}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 工具合同">
 
 ```typescript
-type Request = {
-  task: string;
-  model: string;
-  prompt: string;
-  dataHash: string;
-  tools: string[];
-  seed: number;
+type ToolResult = {
+  ok: boolean;
+  value?: unknown;
+  error?: string;
+  elapsedMs: number;
 };
 
-function freezeRequest(req: Request): Readonly<Request> {
-  return Object.freeze({ ...req });
+function acceptToolResult(result: ToolResult, limitMs: number) {
+  if (!result.ok || result.elapsedMs > limitMs) {
+    return { action: "stop", reason: result.error ?? "tool limit exceeded" };
+  }
+  return { action: "continue", value: result.value };
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`review_patch` 把缺上下文、拒绝和待合并分成三个状态；`acceptToolResult` 把工具错误和超时留在编排器边界内。生产实现还要增加请求 ID、租户、权限、审计日志、成本和取消信号，但核心原则不变：状态迁移必须显式，模型不能绕过门禁直接改变外部世界。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type RunRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(records: RunRecord[]): {
-  pass: boolean;
-  missing: number[];
-} {
-  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从软件协作到调用图
 
 ### Chapter 2: LLMs for AI-Powered Applications
 
-“Chapter 2: LLMs for AI-Powered Applications”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Chapter 2: LLMs for AI-Powered Applications”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 2: LLMs for AI-Powered Applications”把 LLM 放回完整应用，而不是孤立比较一次生成。阅读本章时同时记录任务、上下文、人审、工具、状态、评估和回退七类证据，任何一类缺失都应降低自动化范围。
 
 ### How LLMs are changing software development
 
-“How LLMs are changing software development”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“How LLMs are changing software development”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“How LLMs are changing software development”讨论的是开发活动的重新分工：模型擅长提出候选，人和测试系统负责确认约束。代码生成、解释、重构和文档都应留下差异、测试结果、许可检查与责任人，不能只保存最终文件。
 
 ### The copilot system
 
-“The copilot system”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“The copilot system”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“The copilot system”应被理解为上下文、模型候选、人的判断和可回滚交付物组成的闭环。把 Copilot 嵌入编辑器或工单系统时，要明确可见上下文、数据留存、接受率、拒绝原因和升级人工的条件。
 
 ### Introducing AI orchestrators to embed LLMs into applications
 
-“Introducing AI orchestrators to embed LLMs into applications”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Introducing AI orchestrators to embed LLMs into applications”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Introducing AI orchestrators to embed LLMs into applications”将模型调用放进更大的应用流程。编排器负责连接模型、检索、数据库和工具，却不能替任务拥有者决定授权；每个连接都要定义输入、输出、超时、错误和回退。
 
 ### The main components of AI orchestrators
 
-“The main components of AI orchestrators”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“The main components of AI orchestrators”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“The main components of AI orchestrators”可以拆成模型适配器、提示模板、状态存储、路由、工具注册、权限、观测和停止条件。画出调用图后再写代码，能提前发现隐式循环、跨租户状态、无限重试和没有所有者的副作用。
 
 ### LangChain
 
-“LangChain”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“LangChain”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“LangChain”适合用来讨论组件组合、链路和生态，但示例中的抽象接口会随版本与模型适配器变化。使用它时，先把内部任务合同与框架 API 分开，保存链路配置、回调、依赖锁、真实请求和逐样本判断。
 
 ### Haystack
 
-“Haystack”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Haystack”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Haystack”适合用来讨论检索管道、节点连接和来源证据。选择这类实现时，应测量召回、重排、引用完整性、延迟和索引更新，而不是只验证管道对象能够成功运行；空检索和过期文档必须有明确回退。
 
 ### Semantic Kernel
 
-“Semantic Kernel”拆成接口、状态、调用图、权限、超时和回退。用假模型和假工具先验证编排，再接真实服务；每次调用保存参数、响应、延迟、成本和错误类型，框架名称不能替代应用合同。
-
-针对“Semantic Kernel”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Semantic Kernel”适合用来讨论插件、函数调用和规划边界。插件应像工具一样拥有清晰权限、参数校验、超时和审计记录；规划步骤需要上限与取消机制，不能因模型不断生成计划就扩大应用权限。
 
 ### How to choose a framework
 
-“How to choose a framework”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“How to choose a framework”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“How to choose a framework”不是静态排行榜，而是一次带时间戳的工程决策。固定任务和预算后比较质量、延迟、成本、许可、团队熟悉度、可观测性、迁移成本与回退方案，并把书中历史版本和当前实现分开记录。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束成三条：Copilot 必须保留人审与回滚，编排器必须约束状态和工具，框架选择必须由任务证据驱动。能运行的 demo 只是起点，发布还要有独立评估、权限边界、异常回退和可维护的适配层。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“References”标记本章的 Packt 原书来源、框架文档和本站独立重写边界。原书中的框架名称与版本保留历史语境；当前 API、模型端点和依赖行为需要在目标环境中重新验证，引用本身不等于兼容性承诺。
 
 ## 六类应用证据
 
-### 任务与来源合同
+### 1. 任务与上下文
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+保存用户目标、输入范围、输出格式、拒答条件、上下文来源和数据保留期限。Copilot 如果看不到测试或权限约束，只能提供候选；编排器如果不知道租户和任务边界，就不应继续调用外部工具。
 
-### 模型与提示合同
+### 2. 人审与交付
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+保存模型候选、差异、测试结果、审查意见、接受或拒绝原因以及合并提交。人的作用不是替模型重复打字，而是确认事实、风险、风格和权限，形成可以在事故后追溯的责任链。
 
-### 数据、检索与状态合同
+### 3. 状态与调用图
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+保存每个节点的输入输出、请求 ID、状态版本、路由理由和结束条件。多轮编排尤其要限制状态可见范围，避免上一位用户的上下文进入下一次请求，也避免重试造成重复副作用。
 
-### 工具、代码与权限合同
+### 4. 工具与权限
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+保存工具 schema、白名单、调用参数、授权主体、回执、耗时、错误和取消结果。模型产生的参数永远先经过程序校验；工具成功也不代表业务动作已经获准或达到预期。
 
-### 评测、安全与成本合同
+### 5. 框架与适配器
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+保存框架版本、模型适配器、链路配置、索引快照、回调日志和依赖锁。适配器的价值是把外部变更隔离在边界内，让内部任务合同和评估脚本保持稳定，迁移时可以逐层比较。
 
-### 发布、监控与回退合同
+### 6. 评估与回退
 
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存独立评估集、逐样本输出、人工判断、质量门槛、尾延迟、成本、风险分类和候选回退版本。发布失败时返回可解释的阻断原因，不要让模型用一段自然语言把缺失证据包装成成功。
 
 ## 容易踩的坑
 
-**现象 →** 用框架名（LangChain/Haystack）替代应用合同，升级后全线故障。
-**原因 →** 业务逻辑与框架接口耦合，没有可测试的薄适配器。
-**修法 →** 用适配器隔离模型与工具，框架升级只改适配器不改合同。
+<Callout type="trap">**现象：**Copilot 接受率很高，就把它当成代码质量高；**原因：**用户可能只是快速接受后再手动修正，接受率没有记录测试和风险；**修法：**同时保存差异、测试、人工修改、回滚和缺陷反馈。</Callout>
 
-**现象 →** 不隔离模型与工具接口，工具失败拖垮整个编排链。
-**原因 →** 调用图没有超时、回退和权限边界。
-**修法 →** 每次调用保存参数、响应、延迟、成本和错误类型，设超时与回退。
+<Callout type="trap">**现象：**Agent 调用失败后自动重试，直到得到一段文本；**原因：**没有区分可重试错误、权限拒绝、超时和副作用；**修法：**按错误类型设置次数、取消信号和安全停止，保留工具回执。</Callout>
 
-**现象 →** 编排器升级后调用图悄悄变化。你可以亲自验证：记录升级前的调用顺序，升级后diff调用日志，找出新增或缺失的节点。
-**原因 →** 框架默认行为随版本改变，未冻结调用图。
-**修法 →** 用假模型假工具先验证编排，再接真实服务并冻结调用图。
+<Callout type="trap">**现象：**升级框架后 demo 仍能运行，就认为迁移成功；**原因：**只验证了启动，没有比较调用图、输出、延迟和权限行为；**修法：**冻结旧版基线，逐层运行适配器和独立评估，再决定是否切换流量。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- LLM改变软件开发与Copilot形态
-- AI编排器拆成接口状态权限回退
-- 用假模型假工具先验证编排逻辑
-- 三框架在相同用例上受控比较
-- 框架名不能替代可测试接口合同
+- LLM 适合提出候选，但 Copilot 必须把上下文、人审、测试和回滚留在闭环中。
+- 编排器显式管理状态、路由、工具合同、权限、超时、观测和停止条件。
+- LangChain、Haystack 与 Semantic Kernel 是实现选择，不能代替任务级质量和风险证据。
+- 框架升级、模型切换和工具变化都要通过适配器、独立评估和回退路径重新验证。
+- 发布前回答：谁审查、谁授权、哪里停止、失败怎样解释、旧版本如何恢复。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** AI编排器的主要组件有哪些？
+**问题 1：**Copilot 为一个函数生成了看似合理的补丁。请列出合并前至少需要保存的五类证据。
 
 <Answer>
-
-主要包括模型接口、提示模板、状态管理、工具调用、检索、记忆、调用图编排、权限控制、超时与回退。编排器把这些组件连成可执行链，并保存每次调用的参数、响应、延迟、成本和错误类型。
-
+  保存任务与上下文、原始差异、自动化测试、人工审查意见、依赖与模型版本、许可或安全检查以及回滚提交。最终是否合并由责任人决定；“代码看起来合理”不能替代测试与权限证据。
 </Answer>
 
-**问题 2：实践应用。** 为什么要用假模型和假工具先验证编排？
+**问题 2：**一个 Agent 调用支付查询工具超时。请说明为什么不能无限重试，并设计一个最小回退状态。
 
 <Answer>
-
-假模型和假工具提供确定性输入输出，先验证调用图、状态流转、权限边界和回退逻辑是否正确，排除真实服务的不稳定性。验证通过后再接真实服务，框架升级或服务端漂移会作为可见差异暴露出来。
-
+  超时可能是服务拥塞、权限问题或已经产生副作用；无限重试会放大成本和重复动作。记录请求 ID、工具参数和耗时后，返回 `tool-timeout` 状态，取消后续步骤，提示用户稍后重试，并由人工或幂等查询确认真实状态。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版编排器调用记录器：输入调用名和参数，返回带时间戳和调用序号的记录字典。
+**问题 3（独立实现）：**实现一个 `framework_gate`，输入框架版本、质量、延迟、成本和回滚字段；缺少任一证据时返回阻断原因。
 
 <Answer>
-
-```python
-import time
-
-class CallLogger:
-    def __init__(self):
-        self.seq = 0
-        self.log = []
-
-    def record(self, name, params):
-        self.seq += 1
-        entry = {"seq": self.seq, "name": name,
-                 "params": params, "ts": time.time()}
-        self.log.append(entry)
-        return entry
-```
-
+  定义必需字段集合，逐项检查记录而不是用默认值填空；返回 `missing`、`reasons` 和候选版本。只有质量、延迟、成本、许可、适配器测试与回滚证据都存在且满足阈值，才允许进入下一轮独立评估。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-分析LLM对软件开发和Copilot系统的改变，拆解AI编排器，并在LangChain、Haystack与Semantic Kernel之间建立选择合同。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能画出编排器组件图，在相同用例上比较三个框架，并用可测试接口隔离模型与工具。
-
+<Glossary>
+  <GlossaryItem term="Copilot">把模型建议放入上下文、证据、人审和可回滚变更流程的协作系统。</GlossaryItem>
+  <GlossaryItem term="Orchestrator">管理模型、状态、工具、权限、超时和回退的应用层调用图。</GlossaryItem>
+  <GlossaryItem term="Tool Contract">明确工具的输入、输出、权限、错误、超时和副作用的接口约束。</GlossaryItem>
+  <GlossaryItem term="State Boundary">定义状态保存、可见范围、生命周期和跨步骤传递方式的边界。</GlossaryItem>
+  <GlossaryItem term="Framework Adapter">把外部框架的模型、检索和工具接口隔离成稳定内部接口的薄层。</GlossaryItem>
+  <GlossaryItem term="Evaluation Set">与训练或调参过程隔离、用于比较应用质量和风险的数据与协议。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 1: Introduction to Large Language Models](/learn/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models)
-- [Chapter 3: Choosing an LLM for Your Application](/learn/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm)
+- [上一页：Chapter 1 — Introduction to Large Language Models](/learn/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models)
+- [下一页：Chapter 3 — Choosing an LLM](/learn/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留 LLM 应用、Copilot 与编排框架的概念范围，并补充可审计的协作和迁移练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

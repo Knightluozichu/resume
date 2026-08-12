@@ -1,12 +1,9 @@
 ---
-title: 第18章 生成目标文件
+title: "第18章 生成目标文件"
 type: C
-section: 第4部分 · 链接和加载
+section: "第4部分 · 链接和加载"
 order: 18
-description: >-
-  第18章
-  生成目标文件围绕ELF文件的结构、全局变量及其在ELF文件中的表示、编译全局变量、生成目标文件推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖6个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 ELF 头、节、符号与重定位交叉核对全局变量如何进入 IA-32 可重定位目标文件，并用固定命令回放生成链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,65 +11,227 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-18
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc18ObjectFilesLab } from "@/components/mdx/crafting-compiler/v2/crc-18-object-files";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“ELF可重定位对象台”开始
+- 能解释 ELF 头、节、符号表和重定位如何共同描述一个 IA-32 可重定位目标文件
+- 能修改一个全局变量样本并用 `readelf`、`nm`、`objdump` 对照源码、汇编与对象字段
+- 能回答“`extern` 符号的地址尚未确定时，目标文件应保存哪条重定位证据？”并完成清理重建
 
-第18章 生成目标文件沿“sections → symbols → relocations → object file”转换信息。最终进程返回正确值只能证明一条执行路径；ELF可重定位对象台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第18章 生成目标文件固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变ELF视图或全局对象。本页交互只移动sections → symbols → relocations → object file中的真实对象和状态，不生成置信、风险或证据分数。
+## 从全局变量到可重定位目标文件
+
+编译全局变量时，源码中的名字、存储区域和引用地址不会一次性变成最终机器地址。汇编器先把代码和数据放入节，再把名字写入符号表；仍依赖其他对象或最终布局的地址，会以重定位记录留在可重定位目标文件中。读取对象文件时，要把 ELF 头、节、符号和重定位放回同一条生成链路。
+
+本章的主实验是“ELF 可重定位对象台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU `as`/`ld`/binutils、IA-32 目标、编译参数和输入，只切换 ELF 视角或全局对象样本。每次观察都保存命令、退出码、目标文件字段、反汇编和清理记录，先定位最早偏差，再决定是否继续链接。
+
+<Callout type="trap" title="误区一：看到一个 .text 就认为目标文件已经完成">
+  现象 → 反汇编能看到指令，但外部符号仍未绑定，链接阶段报未定义引用或地址修补错误。
+
+原因 → 只看节名，没有同时检查文件类型、符号绑定和重定位表。
+
+修法 → 用 `readelf -h -S -s -r sample.o` 交叉核对 ELF 类型、节索引、符号状态和重定位目标；可重定位对象必须保留尚未完成的地址信息。
+
+</Callout>
+
+<Callout type="trap" title="误区二：全局变量的名字出现了就代表地址已经确定">
+  现象 → `nm` 能列出变量名，但 `objdump -drwC` 仍显示对外部符号的待修补引用。
+
+原因 → 把符号表中的名字/绑定与链接后的虚拟地址混为一谈。
+
+修法 → 分开记录符号所在节、值、绑定和重定位类型；只有完成链接并按同一命令复查后，才讨论最终地址。
+
+</Callout>
+
+<Callout type="trap" title="误区三：重定位记录可以在生成目标文件时删除">
+  现象 → 内部样本似乎能运行，加入 `extern` 全局变量后链接器无法修补引用，或不同链接顺序产生错误结果。
+
+原因 → 生成器把当前汇编地址当成最终地址，丢弃了符号引用、偏移和重定位类型。
+
+修法 → 为每条未决引用保存节、偏移、符号名、重定位类型和加数；清理对象后重新生成，要求工具输出仍能互相解释。
+
+</Callout>
+
+## 术语：把对象文件字段连回源码
+
+<Term def="描述目标文件类别、机器架构、节表位置、符号表位置等全局身份和索引信息的 ELF 开头记录。">
+  ELF 文件头
+</Term>
+
+ELF 文件头先回答“这是什么对象、给哪种机器、其余表在哪里”。在本章边界内，`ET_REL` 与 `EM_386` 是生成 IA-32 可重定位对象的关键检查点。
+
+<Term def="目标文件中承载代码、已初始化数据、未初始化数据或重定位记录的有名字区域。">
+  节
+</Term>
+
+节把代码、全局数据和修补信息分开保存。`.text`、`.data`、`.bss` 与 `.rel.text` 的大小、旗标和索引要能回指到源码用途。
+
+<Term def="把符号名、绑定方式、所在节和值记录在对象文件里的表，用来描述定义或引用。">
+  符号表
+</Term>
+
+符号表连接源码名字和对象字段。`GLOBAL` 定义、`UND` 未定义引用和节索引共同说明链接器还需要做什么。
+
+<Term def="告诉链接器在某个节的哪个偏移处，用哪个符号和哪种规则修补地址或数据的记录。">
+  重定位
+</Term>
+
+重定位把“地址尚未最终确定”变成显式证据。记录至少要能找到目标节偏移、符号名、类型与加数，才能在链接时正确修补。
+
+<Term def="在源代码中具有静态存储期、可被多个函数或翻译单元引用的对象。">
+  全局变量
+</Term>
+
+初始化的全局变量通常进入 `.data`，未初始化的全局变量通常进入 `.bss`；外部声明只产生待解析的符号引用，具体布局仍由工具链决定。
+
+<Term def="尚未完成最终地址解析、保留节和重定位信息、等待链接器合并的目标文件。">
+  可重定位目标文件
+</Term>
+
+可重定位目标文件不是半成品的运行程序，而是带有地址修补合同的中间产物。它可以被 `readelf`、`nm` 和 `objdump` 从不同角度交叉读取。
 
 ## 来源、版本与独立重写边界
 
-第18章 生成目标文件以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第18章 生成目标文件用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第18章 生成目标文件的通过不变量是“节、符号绑定、大小和重定位引用相互一致并可由工具交叉解析”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-readelf -h -S -s -r sample.o
-objdump -drwC sample.o
-nm -n sample.o
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。技术事实用 [JavaCC 完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF 规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/) 与 [ld](https://sourceware.org/binutils/docs/ld/) 文档核对。实验保持原书的 JavaCC、Linux/IA-32、GNU 工具坐标；现代 JDK、x86-64、PIE 和新版 binutils 默认值要单独记录。
 
 ## 官方目录逐项深读
 
 ### 第4部分 链接和加载
 
-**四级证据 1/6。** 装载槽1用readelf、objdump、nm、link map与加载器轨迹核对“第4部分 链接和加载”的节/段、符号、重定位、权限和地址解析；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+本部分把目标文件、链接器和加载器串成一条边界链：编译器先产出可检查的对象字段，链接器再解析符号和重定位，加载阶段才得到进程地址。第18章先把对象文件的合同写清楚，避免把链接后的事实倒推成编译阶段事实。
 
 ### 第18章 生成目标文件
 
-**四级证据 2/6。** 装载槽2用readelf、objdump、nm、link map与加载器轨迹核对“第18章 生成目标文件”的节/段、符号、重定位、权限和地址解析；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+生成目标文件的核心是“节承载内容、符号描述名字、重定位保存未决地址”。实验只改变一个全局对象样本，使用同一组工具命令对照源码、汇编、对象字段和清理重建结果。
 
 ### 18.1 ELF文件的结构
 
-**四级证据 3/6。** 装载槽3用readelf、objdump、nm、link map与加载器轨迹核对“18.1 ELF文件的结构”的节/段、符号、重定位、权限和地址解析；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+先读 ELF 文件头和节表：文件类型应说明它是可重定位对象，机器字段应与 IA-32 目标一致，`.text`、`.data`、`.bss` 和重定位节的范围应能支撑后续符号与引用。
 
 ### 18.2 全局变量及其在ELF文件中的表示
 
-**四级证据 4/6。** 机器槽4把“18.2 全局变量及其在ELF文件中的表示”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+初始化和未初始化的全局变量会落入不同节，外部声明则可能只留下未定义符号。查看节索引、大小、对齐和符号绑定，才能解释源码对象如何进入 ELF 表。
 
 ### 18.3 编译全局变量
 
-**四级证据 5/6。** 机器槽5把“18.3 编译全局变量”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+编译器需要把全局对象的定义或引用传递到汇编器可表达的形式：代码引用记录符号，数据进入合适的节，外部名字保持待解析。`objdump` 的指令与 `nm` 的符号应能互相指向。
 
 ### 18.4 生成目标文件
 
-**四级证据 6/6。** 装载槽6用readelf、objdump、nm、link map与加载器轨迹核对“18.4 生成目标文件”的节/段、符号、重定位、权限和地址解析；固定全局对象，只改变ELF视图，以节/符号/重定位交叉引用找到第一处分叉并清理重建。
+目标文件生成阶段要保留后续链接所需的节、符号和重定位信息。用 `readelf -h -S -s -r sample.o`、`objdump -drwC sample.o` 和 `nm -n sample.o` 三组输出交叉复核，再删除对象文件重建，确认不是旧产物造成的假通过。
 
-## 三个必须主动触发的误区
+<Crc18ObjectFilesLab />
 
+## 三步实验：字段、引用与重建
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先从 ELF 头和节表确认对象边界，再把全局变量映射到符号与重定位，最后用完整命令链清理重建。每一步都保存源码、工具版本、目标 ABI、命令退出码和最早偏差字段。
 
+<Stepper>
+  <Step title="第一步：确认 ELF 类型与节布局">
+    选择初始化、未初始化或外部全局对象，运行 `readelf -h -S sample.o`，记录 `ET_REL`、`EM_386`、`.text`、`.data`、`.bss` 和重定位节的索引、大小与旗标。
 
+    <Crc18ObjectFilesLab />
+
+  </Step>
+  <Step title="第二步：追踪符号与重定位">
+    用 `nm -n sample.o` 和 `readelf -s -r sample.o` 对照名字、绑定、节索引、值、引用偏移和重定位类型。注入绑定或引用故障，保存最小输出并回到对应源码对象。
+
+    <Crc18ObjectFilesLab />
+
+  </Step>
+  <Step title="第三步：反汇编交叉核对并清理重建">
+    用 `objdump -drwC sample.o` 检查指令和重定位标记，删除 `sample.o` 后用相同 `cbc` 与 GNU 参数重建。只有三组工具输出对同一对象字段给出一致解释，才接受目标文件。
+
+    <Crc18ObjectFilesLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- ELF 文件头确定对象类别和机器边界，节表说明内容与重定位信息在哪里。
+- 符号表把全局变量名字、绑定、节和值连接起来，未定义引用不能被误认为最终地址。
+- 重定位保存链接阶段仍需修补的节偏移、符号和类型，可重定位目标文件必须保留它。
+- `readelf`、`nm`、`objdump` 的交叉输出和清理重建共同构成生成目标文件的证据。
+
+<Exercises>
+
+本组练习覆盖“第4部分 链接和加载”、第18章 生成目标文件、18.1 ELF文件的结构、18.2 全局变量及其在ELF文件中的表示、18.3 编译全局变量与 18.4 生成目标文件；每题都要把源码、命令、对象字段和判定结果写入实验档案。
+
+**问题 1：解释对象边界。** 针对 18.1 ELF文件的结构，给出 `readelf -h -S sample.o` 中最少要记录的字段，并说明它们怎样证明对象是 IA-32 可重定位文件。
+
+<Answer>
+  记录 ELF
+  文件类型、机器架构、节表入口和每个关键节的名称、类型、旗标、大小、对齐与索引。`ET_REL`
+  说明对象等待链接，`EM_386` 对应 IA-32；`.text`、`.data`、`.bss`
+  与重定位节的存在和范围则为后续符号、指令和地址修补提供边界。
+</Answer>
+
+**问题 2：追踪全局对象。** 针对 18.2 全局变量及其在ELF文件中的表示与 18.3 编译全局变量，比较 `int counter = 7;`、`int cache;` 和 `extern int shared;` 应在 `nm`、节表和汇编中留下哪些不同信号。
+
+<Answer>
+  `counter` 通常是可写已初始化数据，进入 `.data` 并有全局定义；`cache` 通常进入
+  `.bss` 并有全局定义但不占文件中的初始化字节；`shared`
+  没有本翻译单元的定义，符号表会显示未定义引用，引用它的指令还需要重定位。最后用
+  `objdump -drwC` 把指令位置与符号名对上。
+</Answer>
+
+**问题 3：验收目标文件。** 针对第18章 生成目标文件与 18.4 生成目标文件，若 `nm` 中符号存在但链接仍失败，如何用三组工具定位并决定是否重建？
+
+<Answer>
+  先用 `readelf -s -r`
+  检查符号的绑定、节索引、未定义状态以及重定位的节偏移、类型和目标名，再用
+  `objdump -drwC` 确认该偏移确实对应引用指令；用 `readelf -h -S`
+  排除对象类型、机器或节范围错误。保存最早不一致的字段，删除目标文件后用相同参数重建，要求三组输出一致后再进入链接。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="ELF 文件头">
+  描述目标文件类别、机器架构、节表位置、符号表位置等全局身份和索引信息的 ELF
+  开头记录。
+</GlossaryItem>
+
+<GlossaryItem term="节">
+  目标文件中承载代码、已初始化数据、未初始化数据或重定位记录的有名字区域。
+</GlossaryItem>
+
+<GlossaryItem term="符号表">
+  把符号名、绑定方式、所在节和值记录在对象文件里的表，用来描述定义或引用。
+</GlossaryItem>
+
+<GlossaryItem term="重定位">
+  告诉链接器在某个节的哪个偏移处，用哪个符号和哪种规则修补地址或数据的记录。
+</GlossaryItem>
+
+<GlossaryItem term="全局变量">
+  在源代码中具有静态存储期、可被多个函数或翻译单元引用的对象。
+</GlossaryItem>
+
+<GlossaryItem term="可重定位目标文件">
+  尚未完成最终地址解析、保留节和重定位信息、等待链接器合并的目标文件。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、JavaCC 文档、ELF 规范与 GNU readelf/as/ld 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

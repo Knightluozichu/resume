@@ -1,12 +1,9 @@
 ---
-title: 第21章 生成地址无关代码
+title: "第21章 生成地址无关代码"
 type: C
-section: 第4部分 · 链接和加载
+section: "第4部分 · 链接和加载"
 order: 21
-description: >-
-  第21章
-  生成地址无关代码围绕地址无关代码、全局变量引用的实现、链接器调用的实现、从程序解析到执行推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 PIC 引用、GOT/PLT、重定位和动态绑定回放全局变量与函数如何在不同装载地址下保持可共享，并追踪 cbc 到执行的证据。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,61 +11,219 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-21
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc21PositionIndependentCodeLab } from "@/components/mdx/crafting-compiler/v2/crc-21-position-independent-code";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“GOT/PLT与PIC台”开始
+- 能解释 PIC 如何借助 GOT、PLT 和相对寻址，让代码在不同装载地址下保持可共享
+- 能修改一个全局变量或函数引用样本，并用 `readelf`、`objdump`、`LD_DEBUG` 追踪其重定位与绑定
+- 能回答“同一共享对象换装载地址后仍可运行的证据是什么？”并完成清理重建
 
-第21章 生成地址无关代码沿“PIC reference → GOT/PLT → relocation → runtime address”转换信息。最终进程返回正确值只能证明一条执行路径；GOT/PLT与PIC台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第21章 生成地址无关代码固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变引用对象或装载地址。本页交互只移动PIC reference → GOT/PLT → relocation → runtime address中的真实对象和状态，不生成置信、风险或证据分数。
+## 从地址假设到可共享代码
+
+普通绝对地址引用把“代码会被放在哪里”写进指令或数据；共享对象换一个装载地址，旧地址就可能失效。地址无关代码把地址依赖移到可修补的数据入口或跳转入口：数据引用经由 GOT，外部函数调用经由 PLT，动态加载器再按照重定位记录填入运行时地址。真正要验收的是“代码段可共享，引用仍能在新地址解析”。
+
+本章的主实验是“PIC/GOT/PLT 重定位台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU `as`/`ld`/binutils、IA-32 目标、链接参数和输入，只切换引用对象或装载地址。每个样本保存汇编、GOT/PLT 入口、重定位类型、绑定日志和清理重建结果；地址变化本身不是错误，未更新的绝对引用才是。
+
+<Callout type="trap" title="误区一：共享对象能生成就说明代码已经地址无关">
+  现象 → `.so` 成功生成，但换装载地址后访问全局变量崩溃，或加载器报告文本段需要绝对重定位。
+
+原因 → 只检查链接结果，没有检查代码段中的重定位类型、GOT 入口和装载地址差异。
+
+修法 → 用 `readelf -r -d` 与 `objdump -drwC` 找出绝对引用，确认数据经 GOT、函数经 PLT 或合法的相对寻址，并在两个地址运行同一回归样本。
+
+</Callout>
+
+<Callout type="trap" title="误区二：全局变量地址可以直接写进共享代码">
+  现象 → 第一个装载地址下读写正常，第二个进程或另一份共享对象实例看到错误数据。
+
+原因 → 把进程相关的数据地址嵌入可共享代码，破坏了代码段只读/共享的约束。
+
+修法 → 记录变量引用的 GOT 槽、重定位和加载器写入位置；把进程相关地址留在数据表，并用不同基址比较槽值而不是比较绝对地址相等。
+
+</Callout>
+
+<Callout type="trap" title="误区三：PLT 跳转成功就代表所有绑定都稳定">
+  现象 → 首次调用能进入函数，后续换库版本、改变可见性或绑定策略后跳到了错误提供者。
+
+原因 → 把 PLT 的跳板、GOT 的可变槽和动态符号解析三个阶段混成一次静态跳转。
+
+修法 → 用 `LD_DEBUG=bindings` 记录首次绑定的提供者和符号版本，检查 PLT/GOT 入口及重定位类型；清理重建后复跑多提供者样本。
+
+</Callout>
+
+## 术语：把地址依赖拆成入口表
+
+<Term def="不依赖代码被装载到某个固定绝对地址，能够在不同虚拟地址下运行或被多个进程共享的代码。">
+  地址无关代码
+</Term>
+
+地址无关不是“没有任何地址”，而是把可变地址放到合法的间接入口，并让代码本身不必因装载基址改变而改写。
+
+<Term def="保存全局数据或外部对象运行时地址的表，代码通过槽位间接访问对象。">
+  GOT
+</Term>
+
+GOT 把数据地址从代码指令中分离出来。动态加载器修补槽值后，同一段代码仍可以在新的装载基址执行。
+
+<Term def="为外部函数调用提供的跳转入口，通常先经过一个可解析的槽，再到达真正函数。">
+  PLT
+</Term>
+
+PLT 是函数调用的入口层。它与 GOT 槽、动态符号解析和绑定策略共同决定首次调用及后续调用的去向。
+
+<Term def="记录某个指令或数据位置需要由静态链接器或动态加载器填入地址、偏移或槽值的条目。">
+  PIC 重定位
+</Term>
+
+PIC 重定位说明地址依赖被放在哪里、由谁修补以及修补后如何使用。检查重定位类型比只看程序能否启动更可靠。
+
+<Term def="进程或共享对象实际被装入虚拟地址空间的起始位置，改变它会检验代码是否依赖固定地址。">
+  装载基址
+</Term>
+
+装载基址是实验变量。用两个基址运行相同输入时，代码段应继续可共享，GOT/PLT 或重定位槽可以呈现不同的运行时地址。
+
+<Term def="动态加载器依据符号名、可见性和版本，在运行时选择实际函数或对象提供者的过程。">
+  动态绑定
+</Term>
+
+动态绑定让外部引用在启动或首次调用时确定提供者。`LD_DEBUG=bindings` 能显示选择结果，帮助区分 PLT 跳板错误与提供者错误。
 
 ## 来源、版本与独立重写边界
 
-第21章 生成地址无关代码以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第21章 生成地址无关代码用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第21章 生成地址无关代码的通过不变量是“不同装载地址下代码段保持可共享，数据/函数引用经正确重定位解析”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-readelf -r -d pic.so
-objdump -drwC pic.so
-LD_DEBUG=bindings ./pic-app
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。技术事实用 [JavaCC 完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF 规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/) 与 [ld](https://sourceware.org/binutils/docs/ld/) 文档核对。实验保持原书的 JavaCC、Linux/IA-32、GNU 工具坐标；现代 JDK、x86-64、PIE 和新版 binutils 默认值要单独记录。
 
 ## 官方目录逐项深读
 
 ### 第21章 生成地址无关代码
 
-**四级证据 1/5。** 装载槽1用readelf、objdump、nm、link map与加载器轨迹核对“第21章 生成地址无关代码”的节/段、符号、重定位、权限和地址解析；固定装载地址，只改变引用对象，以重定位类型、GOT/PLT项与绑定轨迹找到第一处分叉并清理重建。
+本章总链路是“源码引用 → PIC 指令 → GOT/PLT → 重定位 → 动态绑定 → 执行”。先固定一个全局变量或函数引用，再改变装载基址，观察哪些地址可以变化、哪些代码字节必须保持共享。
 
 ### 21.1 地址无关代码
 
-**四级证据 2/5。** 装载槽2用readelf、objdump、nm、link map与加载器轨迹核对“21.1 地址无关代码”的节/段、符号、重定位、权限和地址解析；固定装载地址，只改变引用对象，以重定位类型、GOT/PLT项与绑定轨迹找到第一处分叉并清理重建。
+PIC 的判定不是输出文件后缀，而是代码是否把固定装载地址写入可共享文本。比较两个基址下的代码段、重定位表和运行结果，确认可变地址被隔离到允许写入的槽。
 
 ### 21.2 全局变量引用的实现
 
-**四级证据 3/5。** 语义槽3为“21.2 全局变量引用的实现”保存节点ID、声明绑定、类型/值类别、求值顺序和最小错误，失败后禁止产生伪IR；固定装载地址，只改变引用对象，以重定位类型、GOT/PLT项与绑定轨迹找到第一处分叉并清理重建。
+全局变量引用通常通过 GOT 槽间接取得地址，避免把对象的最终绝对位置嵌入代码。用 `objdump` 对照加载指令、GOT 偏移和 `readelf -r` 的重定位目标。
 
 ### 21.3 链接器调用的实现
 
-**四级证据 4/5。** 装载槽4用readelf、objdump、nm、link map与加载器轨迹核对“21.3 链接器调用的实现”的节/段、符号、重定位、权限和地址解析；固定装载地址，只改变引用对象，以重定位类型、GOT/PLT项与绑定轨迹找到第一处分叉并清理重建。
+链接器根据 PIC 约束选择相对寻址、GOT/PLT 入口和动态重定位，并把这些关系写入输出。用 link map、重定位类型和动态段检查链接器没有把外部地址错误地固化到文本段。
 
 ### 21.4 从程序解析到执行
 
-**四级证据 5/5。** 前端槽5用合法、最长匹配、歧义、截断和非法字符样本核对“21.4 从程序解析到执行”的token、前看、树形与源位置；固定装载地址，只改变引用对象，以重定位类型、GOT/PLT项与绑定轨迹找到第一处分叉并清理重建。
+从源码解析到执行的完整链路包含变量/函数绑定、汇编引用、链接器生成的入口、动态加载器修补和最终调用。实验用同一输入回放这条链，避免只在运行结果处才发现地址假设错误。
 
-## 三个必须主动触发的误区
+<Crc21PositionIndependentCodeLab />
 
+## 三步实验：引用、入口与双基址验收
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先把源码引用映射到 GOT/PLT，再读取重定位和动态绑定，最后用两个装载基址清理重建并回归。每一步都保存源码、目标 ABI、汇编、表项、日志、退出码和最小失败样本。
 
+<Stepper>
+  <Step title="第一步：追踪全局变量与函数引用">
+    选择全局变量或外部函数样本，用 `objdump -drwC` 找出引用指令，再用 `readelf -r -d` 对照 GOT/PLT 和重定位类型。标记哪些地址属于代码，哪些属于可修补槽。
 
+    <Crc21PositionIndependentCodeLab />
+
+  </Step>
+  <Step title="第二步：观察链接器与动态绑定">
+    比较链接 map、动态段和 `LD_DEBUG=bindings ./pic-app`，确认链接器生成了合法入口，动态加载器选择了预期提供者。注入绝对文本重定位或错误提供者，保存最小日志。
+
+    <Crc21PositionIndependentCodeLab />
+
+  </Step>
+  <Step title="第三步：改变装载基址并清理重建">
+    在两个装载基址下运行相同输入，比较代码段字节、GOT/PLT 槽、重定位结果和返回值。删除共享对象与中间产物，用相同参数重建，要求代码可共享且绑定结果稳定。
+
+    <Crc21PositionIndependentCodeLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 地址无关代码把可变地址从共享文本中移出，常通过相对寻址、GOT 或 PLT 保持代码可共享。
+- 全局变量引用要检查 GOT 槽和重定位，外部函数调用要同时检查 PLT、GOT 与动态绑定。
+- 链接器和动态加载器各有边界，重定位类型、动态段和 `LD_DEBUG` 能把两阶段分开。
+- 两个装载基址、相同输入和清理重建共同证明 PIC 不是只在一个地址上偶然可运行。
+
+<Exercises>
+
+本组练习覆盖第21章 生成地址无关代码、21.1 地址无关代码、21.2 全局变量引用的实现、21.3 链接器调用的实现与 21.4 从程序解析到执行；每题都要把引用、重定位、绑定和双基址结果写入 PIC 证据包。
+
+**问题 1：判断是否地址无关。** 针对 21.1 地址无关代码，某共享对象在一个地址运行正常，在第二个地址出现文本重定位警告，如何用工具定位？
+
+<Answer>
+  先用 `readelf -r -d` 找出文本段中的绝对重定位，再用 `objdump -drwC`
+  回到具体指令和符号；比较两个基址下代码段是否需要修改。若数据或函数引用未经过合法的相对寻址、GOT
+  或 PLT，就把该引用改成可修补入口，清理重建后在两个地址复跑。
+</Answer>
+
+**问题 2：追踪全局变量。** 针对 21.2 全局变量引用的实现，解释为什么同一个全局对象在两个进程中可以有不同地址，而共享代码仍应相同。
+
+<Answer>
+  变量的运行时地址属于进程或共享对象实例，动态加载器可以把它写入各自 GOT
+  槽；代码只使用稳定的槽访问路径，不把绝对对象地址写入可共享文本。因此比较时应要求代码段字节一致，允许
+  GOT 槽和变量地址随装载基址不同。
+</Answer>
+
+**问题 3：验收函数调用。** 针对 21.3 链接器调用的实现与 21.4 从程序解析到执行，首次 PLT 调用成功但后续绑定到了错误库，如何定位？
+
+<Answer>
+  记录链接 map、PLT 指令、GOT 槽和 `readelf -r -d` 的重定位，再用
+  `LD_DEBUG=bindings`
+  查实际提供者、搜索顺序和符号版本。确认源码绑定、链接器入口与加载器选择是否一致，缩小到最小多库样本；删除共享对象和中间产物后重建，并在两个装载基址复测。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="地址无关代码">
+  不依赖代码被装载到某个固定绝对地址，能够在不同虚拟地址下运行或被多个进程共享的代码。
+</GlossaryItem>
+
+<GlossaryItem term="GOT">
+  保存全局数据或外部对象运行时地址的表，代码通过槽位间接访问对象。
+</GlossaryItem>
+
+<GlossaryItem term="PLT">
+  为外部函数调用提供的跳转入口，通常先经过一个可解析的槽，再到达真正函数。
+</GlossaryItem>
+
+<GlossaryItem term="PIC 重定位">
+  记录某个指令或数据位置需要由静态链接器或动态加载器填入地址、偏移或槽值的条目。
+</GlossaryItem>
+
+<GlossaryItem term="装载基址">
+  进程或共享对象实际被装入虚拟地址空间的起始位置，改变它会检验代码是否依赖固定地址。
+</GlossaryItem>
+
+<GlossaryItem term="动态绑定">
+  动态加载器依据符号名、可见性和版本，在运行时选择实际函数或对象提供者的过程。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、JavaCC 文档、ELF 规范与 GNU readelf/as/ld 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

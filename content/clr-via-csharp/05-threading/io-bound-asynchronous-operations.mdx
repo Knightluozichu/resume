@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-28
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcAsyncServerLab,
+  CvcAsyncStateLab,
+  CvcIoLifecycleLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-io-bound-asynchronous-operations";
 
 <Objectives>
 
@@ -32,7 +41,9 @@ import { Attribution } from "@/components/mdx/attribution";
 
 先预测：async method调用后是否立刻换线程；没有await的async是否同步完成；await是否总回原thread；取消I/O能否撤销已写bytes；ReadAsync是否填满buffer；ValueTask能否多次await；async void exception是否进入returned Task；FileStream构造选项是否影响真正async。后文按OS I/O、state machine和server pipeline回答。
 
-<Term def="I/O请求在kernel/device等待期间不占managed thread，只在提交与完成continuation阶段使用execution carrier。">nonblocking I/O lifecycle</Term>
+<Term def="I/O请求在kernel/device等待期间不占managed thread，只在提交与完成continuation阶段使用execution carrier。">
+  nonblocking I/O lifecycle
+</Term>
 
 ## How Windows Performs I/O Operations
 
@@ -53,16 +64,28 @@ finally
 
 Read=0表示EOF（按stream contract），正数可小于请求。Pool buffer在await完成前必须owned，logical length只read count。Completion after cancellation/close race需observe，finally归还一次。
 
-<Term def="从提交到完成期间buffer、handle、offset和callback/Task source必须保持有效且只由一个operation拥有。">I/O operation ownership</Term>
+<Term def="从提交到完成期间buffer、handle、offset和callback/Task source必须保持有效且只由一个operation拥有。">
+  I/O operation ownership
+</Term>
 
 <Stepper>
-  <Step title="切换submit、pending、complete与resume"></Step>
-  <Step title="画Kernel timeline">标出managed thread、syscall、pending handle/buffer、completion port、pool worker与continuation context。</Step>
-  <Step title="制造同步/异步完成">小缓存命中与真实慢设备都跑，验证callback不会double-complete或use-after-return。</Step>
+  <Step title="切换submit、pending、complete与resume">
+    <CvcIoLifecycleLab />
+  </Step>
+  <Step title="画Kernel timeline">
+    <CvcIoLifecycleLab />
+    标出managed thread、syscall、pending handle/buffer、completion port、pool
+    worker与continuation context。
+  </Step>
+  <Step title="制造同步/异步完成">
+    <CvcIoLifecycleLab />
+    小缓存命中与真实慢设备都跑，验证callback不会double-complete或use-after-return。
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Task.Run包装同步I/O就等于真正Asynchronous I/O">
-它避免caller thread阻塞，却占pool worker等待，峰值会starvation。优先使用底层支持nonblocking的ReadAsync/SendAsync等API。
+  它避免caller thread阻塞，却占pool
+  worker等待，峰值会starvation。优先使用底层支持nonblocking的ReadAsync/SendAsync等API。
 </Callout>
 
 ## C#'s Asynchronous Functions
@@ -88,14 +111,26 @@ Method name Async，token最后，避免async void。Library ConfigureAwait poli
 
 Compiler生成state machine struct/class、state int、builder、hoisted locals和awaiter fields。MoveNext执行case状态；未完成awaiter注册continuation并return，完成后GetResult（可能throw）继续；SetResult/SetException terminal。没有suspension时可同步完成且减少allocation，具体由builder/JIT优化。
 
-<Term def="Compiler将async body重写为可暂停/恢复、保存locals/awaiter并只完成一次builder outcome的机器。">async state machine contract</Term>
+<Term def="Compiler将async body重写为可暂停/恢复、保存locals/awaiter并只完成一次builder outcome的机器。">
+  async state machine contract
+</Term>
 
 Captured local跨await延长lifetime，大buffer/request service会存state machine直到operation完成。缩小scope、及时Dispose，避免把this/large graph无意capture。Debugger async stack是logical reconstruction，trace Task/activity关联。
 
 <Stepper>
-  <Step title="切换entry、suspend、resume与complete"></Step>
-  <Step title="反编译State machine">列出hoisted fields、awaiter、state transitions、context capture和allocation。</Step>
-  <Step title="验证Completion race">同步完成、异步完成、fault、cancel与continuation reentrancy都只Set一次且cleanup执行。</Step>
+  <Step title="切换entry、suspend、resume与complete">
+    <CvcAsyncStateLab />
+  </Step>
+  <Step title="反编译State machine">
+    <CvcAsyncStateLab />
+    列出hoisted fields、awaiter、state transitions、context
+    capture和allocation。
+  </Step>
+  <Step title="验证Completion race">
+    <CvcAsyncStateLab />
+    同步完成、异步完成、fault、cancel与continuation
+    reentrancy都只Set一次且cleanup执行。
+  </Step>
 </Stepper>
 
 ## Async Function Extensibility
@@ -108,8 +143,13 @@ ValueTask/IValueTaskSource减少特定高同步完成场景allocation，但有si
 
 Event delegate通常void，async lambda变async void：publisher不能await/observe/cancel，exception到SynchronizationContext/host，ordering/backpressure丢失。UI click handler可async void作为顶层边界，内部立即await Task method并top-level handle。Non-UI业务用Task-returning delegate、Channel/message。
 
-<Callout type="trap" title="Async Event Handler的Exception会回到Raise它的Try/Catch">
-Async void在第一次await后返回，later exception由SynchronizationContext/host处理，不在publisher call stack。改Task pipeline或在async void边界catch并记录。
+<Callout
+  type="trap"
+  title="Async Event Handler的Exception会回到Raise它的Try/Catch"
+>
+  Async void在第一次await后返回，later
+  exception由SynchronizationContext/host处理，不在publisher call stack。改Task
+  pipeline或在async void边界catch并记录。
 </Callout>
 
 ## Async Functions in the Framework Class Library
@@ -132,7 +172,9 @@ Progress用`IProgress<T>`/channel，注意context capture与rate. TaskCompletion
 
 UI (WPF/WinForms)有single-thread affinity/SynchronizationContext；ASP.NET Core通常无经典request context但有ExecutionContext；console/service靠pool；COM/WinRT有apartment；game engine有main loop. Library不假设某一model，API async all way并让caller决定marshal。
 
-<Term def="应用对thread affinity、SynchronizationContext、pool、apartment和shutdown的整体执行规则。">application threading model</Term>
+<Term def="应用对thread affinity、SynchronizationContext、pool、apartment和shutdown的整体执行规则。">
+  application threading model
+</Term>
 
 Deadlock典型：context thread `.Result`等待Task，await capture same context continuation排队但thread blocked。解决async all the way，不用ConfigureAwait(false)作为到处打补丁的唯一策略；UI update回UI dispatcher。
 
@@ -158,9 +200,19 @@ await foreach (Socket socket in listener.AcceptAllAsync(stoppingToken))
 真实实现用try/finally比ContinueWith更清楚：wrapper async HandleAndRelease。所有connection tasks registry在shutdown await。Protocol parser对size/depth/time bounded，no per-message Task.Run I/O。
 
 <Stepper>
-  <Step title="切换accept、read、process与write"></Step>
-  <Step title="填写Capacity表">每stage记录max concurrency/bytes/queue、timeout/deadline、buffer owner、CPU offload和failure response。</Step>
-  <Step title="演练Slow client">Partial byte/slowloris/write backpressure/cancel/shutdown，验证bounded memory与no orphan。</Step>
+  <Step title="切换accept、read、process与write">
+    <CvcAsyncServerLab />
+  </Step>
+  <Step title="填写Capacity表">
+    <CvcAsyncServerLab />
+    每stage记录max concurrency/bytes/queue、timeout/deadline、buffer owner、CPU
+    offload和failure response。
+  </Step>
+  <Step title="演练Slow client">
+    <CvcAsyncServerLab />
+    Partial byte/slowloris/write backpressure/cancel/shutdown，验证bounded
+    memory与no orphan。
+  </Step>
 </Stepper>
 
 ## Canceling I/O Operations
@@ -183,7 +235,9 @@ File.ReadAllBytesAsync仍按文件size分配，先限制length。Atomic write用
 
 Windows可支持I/O priority hints/QoS，managed exposure有限且平台-specific。Priority不是correctness、deadline或fair queue保证；background indexing可low priority减少interference，但先做rate/backpressure。Cross-platform API不要依赖。
 
-<Term def="从caller deadline传到底层operation并在partial completion后定义cancel、cleanup和retry的协议。">I/O cancellation boundary</Term>
+<Term def="从caller deadline传到底层operation并在partial completion后定义cancel、cleanup和retry的协议。">
+  I/O cancellation boundary
+</Term>
 
 ## 本章回顾：等待不占Thread，Ownership仍不能消失
 
@@ -197,26 +251,58 @@ Windows可支持I/O priority hints/QoS，managed exposure有限且平台-specifi
 
 **问题 1：ReadAsync请求4KB只返回600 bytes，是Error吗？**
 
-<Answer>通常不是，stream可partial read；0才按contract表示EOF。循环累积到协议frame完成、EOF或cancel，始终只处理returned count。设置max frame/deadline，pool buffer在operation完成前不归还。</Answer>
+<Answer>
+  通常不是，stream可partial
+  read；0才按contract表示EOF。循环累积到协议frame完成、EOF或cancel，始终只处理returned
+  count。设置max frame/deadline，pool buffer在operation完成前不归还。
+</Answer>
 
 **问题 2：Async server无Blocked threads却OOM，为什么？**
 
-<Answer>Async提高并发，但unbounded connections/tasks/queues/buffers仍占heap。为accept/connection、inbound bytes、CPU processing、outbound queue设置capacity与backpressure；slow client timeout，registry清tasks，shutdown drain。测queue length/bytes而非只看threads。</Answer>
+<Answer>
+  Async提高并发，但unbounded
+  connections/tasks/queues/buffers仍占heap。为accept/connection、inbound
+  bytes、CPU processing、outbound queue设置capacity与backpressure；slow client
+  timeout，registry清tasks，shutdown drain。测queue
+  length/bytes而非只看threads。
+</Answer>
 
 **问题 3：Cancel write后能否直接Retry整包？**
 
-<Answer>不一定，底层可能已写partial bytes。Framed connection通常关闭重建，或协议支持offset/idempotency/dedup后resume/retry。Observe terminal result，buffer保持到完成；cancel是request，不是rollback guarantee。</Answer>
+<Answer>
+  不一定，底层可能已写partial bytes。Framed
+  connection通常关闭重建，或协议支持offset/idempotency/dedup后resume/retry。Observe
+  terminal result，buffer保持到完成；cancel是request，不是rollback guarantee。
+</Answer>
 
 </Exercises>
 
 ## 术语表
 
 <Glossary>
-  <GlossaryItem term="nonblocking I/O lifecycle" definition="等待在OS/device进行、提交和完成才占thread的过程。" />
-  <GlossaryItem term="I/O operation ownership" definition="Pending期间buffer/handle/offset与completion的唯一owner。" />
-  <GlossaryItem term="async state machine contract" definition="Suspend/resume并以单一outcome完成的compiler机器。" />
-  <GlossaryItem term="application threading model" definition="Context、affinity、pool、apartment与shutdown的执行规则。" />
-  <GlossaryItem term="I/O cancellation boundary" definition="Deadline、partial completion、cancel、cleanup与retry协议。" />
+  <GlossaryItem
+    term="nonblocking I/O lifecycle"
+    definition="等待在OS/device进行、提交和完成才占thread的过程。"
+  />
+  <GlossaryItem
+    term="I/O operation ownership"
+    definition="Pending期间buffer/handle/offset与completion的唯一owner。"
+  />
+  <GlossaryItem
+    term="async state machine contract"
+    definition="Suspend/resume并以单一outcome完成的compiler机器。"
+  />
+  <GlossaryItem
+    term="application threading model"
+    definition="Context、affinity、pool、apartment与shutdown的执行规则。"
+  />
+  <GlossaryItem
+    term="I/O cancellation boundary"
+    definition="Deadline、partial completion、cancel、cleanup与retry协议。"
+  />
 </Glossary>
 
-<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 28: I/O-Bound Asynchronous Operations" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />
+<Attribution
+  adaptedFrom="CLR via C#, Fourth Edition, Chapter 28: I/O-Bound Asynchronous Operations"
+  adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+/>

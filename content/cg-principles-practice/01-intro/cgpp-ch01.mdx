@@ -1,255 +1,230 @@
 ---
 title: "Introduction"
-type: B
+type: A
 section: "计算机图形学与渲染"
 order: 1
-description: "Computer Graphics: Principles and Practice Chapter 1"
+description: "从图形管线、二维场景描述到固定功能三维层次建模，建立全书的观察坐标。"
 demo: true
 math: false
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-02
+  - cgp-06
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh01IntroductionLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch01-introduction";
 
 <Objectives>
 
-- 能用自己的话解释Introduction的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 1之间的关系是什么？
+- 能解释一份几何描述如何经过图形管线，最终成为可见像素，并指出每个阶段的输入与输出
+- 能修改一个二维场景描述的对象、位置或绘制顺序，再用实验说明变化发生在哪个阶段
+- 能回答：为什么固定功能三维图形需要层次建模，而不是给每个对象保存一组互不相关的世界坐标？
 
 </Objectives>
 
-## 为什么需要Introduction
+## 先从一张“会变化的图”开始
 
-Computer Graphics: Principles and Practice, 3rd Edition将Introduction作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+想象一张纸上的几何形状要变成屏幕上的图像。中间会经过几次加工：有人决定形状，有人把它摆到画布上，有人把连续区域切成小格，最后才交给显示设备。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+如果只盯着最后一张图，任何错误都像“画错了”；如果保留每次加工的中间状态，就能知道问题来自位置、顺序、覆盖还是显示。没有这种分层观察，后续章节的 API、坐标和模型都会变成孤立的记忆题。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+猜一猜：把观察尺度从“数据怎样流动”切换到“场景里有哪些对象”，再切换到“对象怎样组成整体”，哪一种关系会保留下来？
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+<CgppCh01IntroductionLab />
 
-Computer Graphics: Principles and Practice Chapter 1正是这一哲学在特定领域的具体体现。
+## Introduction：三个尺度的共同问题
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+本章的 Introduction 不把“图形学”缩成某一个库的调用表，而是建立三种互相衔接的看法：数据怎样通过阶段、对象怎样描述二维画面、局部部件怎样组成三维整体。后续章节会在这三种看法上添加更精细的坐标、光照和材质。
+
+### 1.1 图形管线：让每次交接都能被检查
+
+<Term def="把几何、属性和图像数据按明确阶段依次加工的流程；每一阶段都接收一种状态并产出下一阶段可验证的状态。">
+  图形管线
+</Term>
+不是一根只能向前跑的黑盒，而是一组有输入输出契约的工作站。几何数据先被放入统一的观察条件，再装配成可绘制图元，覆盖画布的区域被离散为片段，最后才形成像素。理解这些交接，才能在画面异常时定位是数据、坐标还是覆盖判断出了问题。
+
+最小的检查表是：记录输入几何、当前坐标空间、阶段产生的中间结果，以及下一阶段期待的格式。若变换后的点已经离开可见区域，就不应继续怀疑光栅化；若片段数量正确而颜色不对，问题已经进入后面的属性或输出阶段。
+
+### 1.2 Introduction 的主线：从结果反推过程
+
+一张图像不是“对象的照片”，而是许多决定连续组合的结果。读者应当能从最终像素反问三件事：哪些对象被描述过、它们按照什么顺序进入画面、每个对象经过了哪些加工。这个反问顺序会贯穿二维场景和三维模型，而不是只在本章出现一次。
+
+## 2D Graphics：先描述对象，再决定怎么画
+
+### 2.1 二维图形：在平面上管理形状与顺序
+
+<Term def="位于同一平面、用位置与尺寸描述的形状集合；它可以包含矩形、曲线、文本和它们的组合关系。">
+  二维图形
+</Term>
+把复杂画面拆成可命名的形状：每个形状有自己的边界、位置、填充和绘制顺序。这样做的价值不是让图形“更漂亮”，而是让改动具有局部性——移动一个对象不必重新解释整张像素网格，改变层级也能追溯谁覆盖了谁。
+
+在平面场景中，先固定坐标原点、轴方向和单位，再写对象的局部边界。对象进入画布时才应用位置变换；绘制时按场景顺序合成。若文字和形状互相遮挡，先检查场景顺序与边界，而不是盲目提高分辨率。
+
+### 2.2 WPF 与场景描述：把画面写成可修改的数据
+
+在 WPF 式的保留模式中，<Term def="用对象、属性、父子关系和绘制顺序描述画面的数据，而不是直接逐像素命令绘制。">场景描述</Term>先保存“有什么”和“在哪里”，渲染系统再根据这份描述更新画面。WPF 在这里代表一种教学模型：把形状、容器和属性保留下来，使输入可以被检查、复用和重新布局，而不是把一次绘制当成不可追溯的副作用。
+
+下面的对象描述故意只保留教学所需的字段。修改 `z` 会改变覆盖关系，修改 `position` 只应移动对象，修改 `fill` 不应改变管线中的几何边界。
+
+```ts
+const scene = {
+  children: [
+    { type: "panel", position: [0, 0], z: 0 },
+    { type: "circle", position: [120, 72], radius: 24, z: 1 },
+  ],
+};
+```
+
+场景描述的优势是可复现：保存输入后，另一位开发者能重新生成同一画面，并逐字段判断差异。它也暴露了责任边界：描述对象不等于完成光栅化，画面仍要经过后续阶段才会成为像素。
+
+## 3D Graphics：从固定功能到可组合的空间
+
+### 3.1 固定功能三维图形：用约定好的阶段建立空间
+
+<Term def="使用预先约定的变换、裁剪、光栅化等固定阶段完成三维绘制，应用主要提供输入数据与状态，而不是编写每个阶段的程序。">
+  固定功能三维图形
+</Term>
+把三维绘制拆成稳定的状态配置与数据流：模型坐标先进入世界空间，再经过观察和投影关系，最后落到屏幕。它的限制也是它的教学价值：当阶段不能随意重写时，读者更容易看见坐标、顺序和状态之间的因果关系。
+
+固定功能并不意味着“自动正确”。深度测试、面朝向、视锥范围和状态残留仍然会改变结果。调试时应保存一份最小状态快照，逐项关闭或恢复，而不是同时修改模型、相机和绘制状态。
+
+### 3.2 层次建模：让局部变换随父节点移动
+
+<Term def="用父子节点表达部件从属关系；子节点保存局部变换，世界变换由父节点变换与局部变换组合得到。">
+  层次建模
+</Term>
+把一个整体拆成可复用部件：根节点决定整体位置，身体节点决定局部姿态，手臂和道具只需要描述相对父节点的位置。移动根节点时，所有后代一起移动；旋转手臂时，身体和另一只手不应被意外改变。
+
+这是一种数据组织方式，也是一个可测试的不变量：每个子节点只能依赖自己的父链，不能偷偷读取另一个分支的世界坐标。保存父子关系和局部变换后，模型可以改变整体尺寸或姿态，而不用重写每个部件的绝对坐标。
+
+## 三步实验：切换观察尺度并记录证据
+
+每一步都只改变一个观察尺度，先预测再点击。实验中的图不是装饰：它把“管线阶段”“二维对象顺序”和“三维父子关系”放在同一章内对照。
+
+<Stepper>
+  <Step title="第一步：观察图形管线">
+    先选择“图形管线”，指出输入几何在哪一步变成图元、片段和像素；把你的判断写成“输入 → 输出”对。
+
+    <CgppCh01IntroductionLab />
+
+  </Step>
+  <Step title="第二步：观察二维场景描述">
+    切换到“二维场景”，预测把圆形的 `z` 调到背景之前会发生什么，再核对场景对象与绘制顺序。
+
+    <CgppCh01IntroductionLab />
+
+  </Step>
+  <Step title="第三步：观察三维层次关系">
+    切换到“三维层次”，说明为什么移动根节点可以带动手部和道具，同时不会破坏它们的局部坐标。
+
+    <CgppCh01IntroductionLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：看到最终像素就直接改模型">
+  现象 → 画面不在屏幕上，开发者立刻改顶点位置或缩放模型。
+
+原因 → 没有确认几何在哪个管线阶段离开了可见范围，可能实际是坐标空间或裁剪边界的问题。
+
+修法 → 保存每阶段输入输出，先定位首个不一致的交接，再只修改负责那一阶段的参数。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：把二维场景当成一串立即绘制命令">
+  现象 → 移动一个对象后，遮挡关系和其他对象的布局一起失控。
 
-### 设计动机
+原因 → 对象、属性和绘制顺序没有被保存成可复查的场景描述。
 
-Vulkan 把Introduction从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 为每个对象保留局部边界、位置和 z 顺序；先验证描述，再验证渲染结果。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。Introduction涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用Introduction相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与Introduction相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：层次模型的每个部件都保存绝对坐标">
+  现象 → 调整身体姿态后，手臂和道具必须逐个重算，且容易出现断裂。
+
+原因 → 部件之间没有父子关系，局部变换被错误地摊平成互不相干的世界坐标。
+
+修法 → 保留父节点和局部变换，用一条父链计算世界变换，并测试根节点移动能否带动所有后代。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 图形管线让每次数据交接都有可检查的输入与输出。
+- 二维图形先描述对象，再由场景顺序决定覆盖关系。
+- WPF 式场景描述把画面保留为可修改、可复现的数据。
+- 固定功能三维图形用稳定阶段暴露坐标与状态边界。
+- 层次建模用父子关系保存整体与局部的变换责任。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，Introduction相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. Introduction是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出Introduction涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：修改场景代码。** 把上面的 `scene` 改成三层对象：背景、圆形和文字；要求文字在圆形之上，并说明你改了哪一个字段。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  增加一个 `text` 对象，把它的 `z` 设为大于圆形的值，例如 `z: 2`。只改变 `z`
+  时，圆形和文字的几何位置不应改变；如果位置也变了，说明修改超出了本题的单一变量范围。
 </Answer>
 
+**问题 2：定位管线故障。** 实验中“输入”和“变换”看起来正常，但“显示”为空。列出两个应先检查的阶段交接，并说明为什么不应先改模型顶点。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  先检查装配到光栅化的图元有效性，以及光栅化到显示的片段覆盖、深度或输出状态。模型顶点已经在输入和变换阶段通过检查，先改它会掩盖真正的首个偏离点，无法证明修复了哪条契约。
+</Answer>
+
+**问题 3：解释层次建模。** 设计一个“身体—手臂—道具”的父子树。若身体整体向右移动，哪些节点的世界位置应改变？若只旋转手臂，哪些节点不应被带动？
+
+<Answer>
+  身体是根节点，手臂是身体的子节点，道具是手臂的子节点；身体向右移动时三个节点都应移动。只旋转手臂时，手臂和道具随父链改变，身体和另一条不相关的分支不应改变。验收依据是父子关系与局部变换，而不是逐个比较硬编码的绝对坐标。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="图形管线">
+  把形状数据一步步加工成屏幕像素的流程；每一步都有自己的输入、输出和可检查边界。
+</GlossaryItem>
+
+<GlossaryItem term="二维图形">
+  在同一个平面上用位置、尺寸和顺序描述的形状集合，例如矩形、圆和文字。
+</GlossaryItem>
+
+<GlossaryItem term="场景描述">
+  保存对象、属性、父子关系和绘制顺序的数据；它描述要画什么，不等于已经画成像素。
+</GlossaryItem>
+
+<GlossaryItem term="固定功能三维图形">
+  按预先约定的三维绘制阶段工作，应用提供数据和状态，不为每个阶段编写自定义程序。
+</GlossaryItem>
+
+<GlossaryItem term="层次建模">
+  用父子节点组织模型；子节点只保存相对父节点的变换，父节点移动时后代可以一起移动。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 1 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

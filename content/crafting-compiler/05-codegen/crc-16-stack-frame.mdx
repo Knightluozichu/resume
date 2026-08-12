@@ -1,12 +1,9 @@
 ---
-title: 第16章 分配栈帧
+title: "第16章 分配栈帧"
 type: C
-section: 第3部分 · 代码生成与优化
+section: "第3部分 · 代码生成与优化"
 order: 16
-description: >-
-  第16章
-  分配栈帧围绕操作栈、参数和局部变量的内存分配、利用虚拟栈分配临时变量、调整栈访问的偏移量、生成函数序言和尾声、alloca函数的实现推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖7个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用操作栈、参数/局部变量槽、虚拟栈临时量、偏移重算、函数序言/尾声与 alloca 样本，回放 IA-32 栈帧布局的可验证链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,68 +11,229 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-16
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc16StackFrameLab } from "@/components/mdx/crafting-compiler/v2/crc-16-stack-frame";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“栈帧布局计算台”开始
+- 能为参数、局部变量、临时量和 alloca 记录栈槽、大小、对齐与生命周期
+- 能根据栈对象变化重算偏移，并核对函数序言、尾声和每条返回路径的 ESP
+- 能用 `objdump`、`gdb` 与哨兵样本定位槽位重叠或动态栈错误并清理重建
 
-第16章 分配栈帧沿“parameters/locals/temps/alloca → offsets → prologue/epilogue”转换信息。最终进程返回正确值只能证明一条执行路径；栈帧布局计算台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第16章 分配栈帧固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变帧对象或调用深度。本页交互只移动parameters/locals/temps/alloca → offsets → prologue/epilogue中的真实对象和状态，不生成置信、风险或证据分数。
+## 从栈对象到稳定的帧布局
+
+栈帧分配不是简单地向 ESP 减去一个常数。参数、局部变量和临时量有不同的生命周期，`alloca` 还会在运行时改变栈顶；任何一个对象变化，都可能影响后续偏移、对齐、保存寄存器和返回路径。可靠的后端必须先建布局表，再生成序言和尾声。
+
+本章的主实验是“栈帧布局计算台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU as/ld/binutils、IA-32 目标、链接参数和运行环境，只切换帧对象或调用深度。交互中的每个状态都对应栈槽、偏移、对齐、ESP/EBP、哨兵或恢复指令；最终返回值不能替代栈状态证据。
+
+<Callout type="trap" title="误区一：固定 EBP 偏移可以覆盖所有栈变化">
+  现象 → 普通局部变量通过测试，但加入临时量或 `alloca` 后读取了错误槽位，或者返回路径破坏了调用者的栈。
+
+原因 → 生成器只保存旧偏移，没有在帧对象增加后重新计算布局、对齐和访问指令。
+
+修法 → 从帧对象清单重新计算每个槽的基址、大小和偏移；动态栈变化后使用当前 ESP 或稳定基准，并用哨兵检查每次访问。
+
+</Callout>
+
+<Callout type="trap" title="误区二：槽位不重叠就代表 ABI 合法">
+  现象 → 参数、局部和临时量地址不同，但某个槽没有满足 4 字节对齐，或保存区覆盖了返回地址边界。
+
+原因 → 布局只比较区间是否相交，没有把对齐、返回地址、保存寄存器和目标 ABI 作为同一份合同。
+
+修法 → 为每个槽记录起始地址、结束地址、对齐和所有权；在序言后、调用点和尾声前分别检查 ABI 边界。
+
+</Callout>
+
+<Callout type="trap" title="误区三：alloca 只需要调整 ESP">
+  现象 → `alloca` 后新分配的内存可用，但原来的局部访问、保存寄存器恢复或异常返回路径使用了旧偏移。
+
+原因 → 动态栈调整被当成孤立指令，没有让访问表达式、帧记录和所有返回路径共享新的栈状态。
+
+修法 → 把动态栈深度加入状态机，重算受影响的偏移，保留分配前后的 ESP 和哨兵；每条返回路径都从相同合同恢复。
+
+</Callout>
+
+## 术语：把栈帧变成布局表
+
+<Term def="按后进先出规则保存参数、返回地址、保存寄存器、局部变量和临时值的目标内存区域。">
+  操作栈
+</Term>
+
+操作栈的每次压入和弹出都会改变 ESP。布局表要说明哪个动作拥有某个槽位，并把调用点、局部空间和返回地址分开记录。
+
+<Term def="后端用来安排表达式中间结果的抽象栈；它最终映射到真实栈槽或寄存器临时量。">
+  虚拟栈
+</Term>
+
+虚拟栈让代码生成先描述临时值的入栈/出栈顺序，再由帧分配阶段计算真实偏移。虚拟深度变化必须能回溯到具体的 IR 操作。
+
+<Term def="栈帧中保存一个参数、局部变量、临时量或保存寄存器的连续地址区间，具有大小、对齐和生命周期。">
+  栈槽
+</Term>
+
+栈槽是布局计算的最小对象。每个槽都要有所有者和地址范围，重叠、越界或对齐不足都应在生成汇编前拒绝。
+
+<Term def="以 EBP 或当前 ESP 为基准定位栈槽的字节距离；动态栈变化后，相关访问的偏移可能需要重新计算。">
+  栈访问偏移
+</Term>
+
+栈访问偏移不是永恒常数。固定帧可以用 EBP 加负偏移，动态栈则要选择稳定基准或更新访问状态，并将计算过程写入证据表。
+
+<Term def="函数入口保存旧帧状态、建立新帧并为局部区域预留空间的一组指令。">
+  函数序言
+</Term>
+
+函数序言把布局表落到机器状态，常见步骤包括保存 EBP、建立 EBP 基准和扣减局部空间。序言后的 ESP/EBP 是后续偏移验证的锚点。
+
+<Term def="在运行时从操作栈申请指定大小的连续空间，并在函数返回前按照调用合同恢复栈状态的机制。">
+  alloca
+</Term>
+
+`alloca` 让帧大小依赖输入，必须记录动态深度和分配前后的 ESP。它不能只追加一条 `sub esp`，还要影响局部访问、对齐和所有返回路径。
 
 ## 来源、版本与独立重写边界
 
-第16章 分配栈帧以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第16章 分配栈帧用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第16章 分配栈帧的通过不变量是“所有槽不重叠、对齐满足ABI、每条返回路径恢复相同栈状态”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-objdump -drwC frame.o
-gdb --batch -x stack.gdb ./frame
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。GNU [as](https://sourceware.org/binutils/docs/as/)、[ld](https://sourceware.org/binutils/docs/ld/)、[objdump](https://sourceware.org/binutils/docs/binutils/objdump.html) 与 [gdb](https://sourceware.org/gdb/documentation/) 文档用于核对工具行为，ELF 规范用于核对目标文件字段。现代 x86-64 默认值、PIE 与新版 binutils 的差异必须显式记录，不能覆盖本章 IA-32 栈帧合同。
 
 ## 官方目录逐项深读
 
 ### 第16章 分配栈帧
 
-**四级证据 1/7。** 机器槽1把“第16章 分配栈帧”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+本章总链路是“parameters/locals/temps/alloca → offsets → prologue/epilogue”。先冻结帧对象、对齐和调用边界，再让每个样本只改变帧对象或调用深度，便能把布局错误与运行时恢复错误分开。
 
 ### 16.1 操作栈
 
-**四级证据 2/7。** 机器槽2把“16.1 操作栈”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+操作栈把返回地址、参数、保存寄存器、局部空间和临时量组织为后进先出状态。每次 `push`、`pop`、`call` 和 `ret` 都要进入 ESP 变化表，不能只观察函数入口和出口。
 
 ### 16.2 参数和局部变量的内存分配
 
-**四级证据 3/7。** 机器槽3把“16.2 参数和局部变量的内存分配”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+参数通常位于调用边界规定的正向区域，局部变量位于当前帧分配的区域。布局器要分别记录大小、对齐、生命周期和访问基准，避免变量添加后覆盖返回地址或其他槽。
 
 ### 16.3 利用虚拟栈分配临时变量
 
-**四级证据 4/7。** 机器槽4把“16.3 利用虚拟栈分配临时变量”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+虚拟栈将中间结果的深度变化与真实槽位分离。生成器应先完成虚拟深度和生命周期分析，再分配最小的真实帧空间，并用哨兵验证临时量没有重叠。
 
 ### 16.4 调整栈访问的偏移量
 
-**四级证据 5/7。** 机器槽5把“16.4 调整栈访问的偏移量”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+帧大小或动态深度变化后，偏移必须从布局表重新计算。访问指令、调试信息和运行时检查应引用同一版本的偏移表，不能保留旧常数。
 
 ### 16.5 生成函数序言和尾声
 
-**四级证据 6/7。** 机器槽6把“16.5 生成函数序言和尾声”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+函数序言建立基准和空间，函数尾声恢复空间、保存寄存器和返回地址。每条返回路径都必须闭合这对动作，并在 `objdump` 与 `gdb` 中呈现相同 ESP/EBP 合同。
 
 ### 16.6 alloca函数的实现
 
-**四级证据 7/7。** 机器槽7把“16.6 alloca函数的实现”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定调用深度，只改变帧对象，以帧大小、偏移、ESP平衡与哨兵找到第一处分叉并清理重建。
+`alloca` 的大小运行时可变，动态空间必须保持对齐并在返回前恢复。实验以不同大小和嵌套调用覆盖分配前后状态，检查旧槽访问、哨兵和尾声是否仍然有效。
 
-## 三个必须主动触发的误区
+<Crc16StackFrameLab />
 
+## 三步实验：布局、偏移与恢复路径
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先列出帧对象与操作栈，再根据固定/动态样本重算偏移，最后重放序言、尾声和 alloca 的返回路径。每一步都保存输入、布局表、工具参数、ESP/EBP 快照和清理记录。
 
+<Stepper>
+  <Step title="第一步：建立栈帧对象表">
+    选择“帧布局”视角，加入参数、局部和临时量，填写每个槽的大小、对齐、生命周期和所有者。用 `objdump -drwC frame.o` 标出序言后的基准，再用哨兵确认槽位没有重叠。
 
+    <Crc16StackFrameLab />
+
+  </Step>
+  <Step title="第二步：重算偏移与动态栈">
+    切换固定帧和 `alloca` 样本，观察虚拟栈深度、当前 ESP、访问偏移和对齐变化。任何新增临时槽都要让布局表、访问指令和调试记录同步更新。
+
+    <Crc16StackFrameLab />
+
+  </Step>
+  <Step title="第三步：验收序言、尾声与清理重建">
+    注入槽位重叠或动态恢复错误，运行 `gdb --batch -x stack.gdb ./frame` 比较入口、分配后、调用点、尾声前和返回后的 ESP/EBP。删除 `frame.o` 后用相同参数重建，确认所有返回路径恢复相同栈状态。
+
+    <Crc16StackFrameLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 操作栈、虚拟栈和真实栈槽是不同层次，必须用布局表连接起来。
+- 参数、局部变量和临时量需要独立记录大小、对齐、生命周期和访问偏移。
+- `alloca` 改变动态栈深度后，所有相关偏移、访问指令和返回路径都要重新验收。
+- `objdump` 的序言/尾声与 `gdb` 的 ESP/EBP、哨兵和清理重建共同构成栈帧证据。
+
+<Exercises>
+
+本组练习覆盖“第16章 分配栈帧”、16.1 操作栈、16.2 参数和局部变量的内存分配、16.3 利用虚拟栈分配临时变量、16.4 调整栈访问的偏移量、16.5 生成函数序言和尾声与 16.6 alloca函数的实现；每题都要把对应证据写入栈帧布局表。
+
+**问题 1：建立帧对象表。** 为一个含两个参数、一个局部变量和两个表达式临时量的 IA-32 函数设计栈槽表，列出大小、对齐、所有者和访问基准。
+
+<Answer>
+  先固定返回地址、保存 EBP
+  和保存寄存器的位置，再为参数、局部和临时量分配不重叠区间。每个槽记录起始/结束地址、4
+  字节对齐、生命周期与 EBP 或 ESP
+  基准；最后用哨兵写入每个区间，确认任何写入不会越界。
+</Answer>
+
+**问题 2：重算动态偏移。** `alloca(n)` 使 ESP 再减少一段运行时大小，原本位于 `[ebp-4]` 的局部变量如何保持可访问？
+
+<Answer>
+  不能沿用未经检查的 ESP 相对常数。若 EBP 保持稳定，就继续以 EBP
+  和布局表中的固定槽访问局部；若实现选择 ESP
+  基准，则必须把动态深度纳入每次访问计算。两种方案都要保存分配前后
+  ESP、对齐、哨兵和返回前恢复值。
+</Answer>
+
+**问题 3：诊断尾声错误。** 函数结果正确，但 `gdb` 显示某条返回路径的 ESP 比入口少 8 字节，如何定位？
+
+<Answer>
+  逐条比较序言分配、临时量入栈、`alloca`、嵌套调用、尾声释放和 `ret` 前的
+  ESP，标出没有配对的空间变化；同时检查保存寄存器与返回地址边界。修正对应路径后删除目标文件，用相同输入重建，并要求每条返回路径的入口/出口
+  ESP 与哨兵都一致。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="操作栈">
+  按后进先出规则保存参数、返回地址、保存寄存器、局部变量和临时值的目标内存区域。
+</GlossaryItem>
+
+<GlossaryItem term="虚拟栈">
+  后端用来安排表达式中间结果的抽象栈，最终映射到真实栈槽或寄存器临时量。
+</GlossaryItem>
+
+<GlossaryItem term="栈槽">
+  保存参数、局部变量、临时量或保存寄存器的连续地址区间，具有大小、对齐和生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="栈访问偏移">
+  以 EBP 或当前 ESP 为基准定位栈槽的字节距离，动态栈变化后可能需要重新计算。
+</GlossaryItem>
+
+<GlossaryItem term="函数序言">
+  函数入口保存旧帧状态、建立新帧并为局部区域预留空间的一组指令。
+</GlossaryItem>
+
+<GlossaryItem term="alloca">
+  在运行时从操作栈申请指定大小的连续空间，并在返回前按照调用合同恢复栈状态的机制。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、GNU as/objdump/gdb 文档与 ELF 规范"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

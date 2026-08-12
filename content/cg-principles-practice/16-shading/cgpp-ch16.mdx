@@ -3,253 +3,237 @@ title: "The Shading Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 16
-description: "Computer Graphics: Principles and Practice Chapter 16"
+description: "围绕顶点属性插值、片段着色与硬件占用，建立从图形管线输入到片段颜色的执行直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh16ShadingLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch16-shading";
 
 <Objectives>
 
-- 能用自己的话解释The Shading Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 16之间的关系是什么？
+- 能用重心权重解释顶点属性如何插值到片段，并判断输入契约还是着色公式出了问题
+- 能修改 ShadingViz 的属性权重、粗糙度、光源任务、分支分歧和访问等待，用证据定位着色瓶颈
+- 能回答：着色器如何接收图形管线属性，结合光照与反射率，并在现代图形硬件上保持可预测吞吐？
 
 </Objectives>
 
-## 为什么需要The Shading Pipeline
+## 先把着色想成一条把证据变成颜色的流水线
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Shading Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+一个片段颜色不是某个函数凭空算出来的结果。它先从顶点携带的位置、法线、纹理坐标等属性开始，在图元内部经过插值，再进入片段着色器；着色器读取光源与材质数据，最后把响应写入帧缓冲。每一步都留下可以检查的输入和输出。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章围绕三个问题展开：片段属性从哪里来、光照和材质怎样组合、为什么相同的着色逻辑在不同硬件负载下会出现等待。先做预测：只改变属性权重，几何轮廓不应移动；只改变访问等待，颜色语义不应改变；只增加分支分歧，结果可以相近，但通道完成时间会拉长。把数据正确性、光学含义和执行代价分开记录。
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：着色器是 Graphics Pipeline 的解释阶段
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+在计算机图形学导论中，Graphics Pipeline（图形管线）把几何输入逐阶段变成可显示的片段。着色管线通常接收已经投影或插值后的属性，再用程序定义的规则计算颜色；它不是重新生成模型，也不负责替代可见性阶段。
 
-Computer Graphics: Principles and Practice Chapter 16正是这一哲学在特定领域的具体体现。
+### 从顶点属性到片段属性
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="描述一组顶点属性按照片段在图元中的位置进行加权汇合的过程。">
+  插值
+</Term>
+
+三角形三个顶点的属性可以用重心权重表示。设三个权重为 $\alpha$、$\beta$、$\gamma$，则它们的和为 1，片段属性可以写成：
+
+$$
+a_f = \alpha a_0 + \beta a_1 + \gamma a_2
+$$
+
+如果法线、颜色或纹理坐标在顶点阶段正确，但片段阶段出现渐变方向错误，先检查顶点顺序、坐标空间和权重，而不是立刻修改光照常数。插值给出的是局部输入；它不会自动把法线重新归一化，也不会替你修复错误的切线空间。
+
+### 着色器的责任边界
+
+<Term def="在图形管线的可编程阶段执行的函数，读取片段属性和资源，并输出颜色或其他阶段结果。">
+  着色器
+</Term>
+
+着色器应当把输入契约、光照模型和输出编码分成三层。输入契约确认位置、法线和材质参数属于同一个坐标空间；光照模型说明光从哪里来、表面保留多少能量；输出层再处理混合、色调映射或帧缓冲格式。这样一旦画面异常，就能判断是数据未到达、公式不对，还是显示编码改变了观感。
+
+下面的伪代码保持这种边界：先读取插值后的片段，再评估光照，最后应用材质响应。它没有把“没有光”与“反射率很低”混成同一个分支。
+
+```cpp
+Color shadeFragment(Fragment fragment, Material material, Light light) {
+  Normal n = normalize(fragment.normal);
+  Vec3 incoming = evaluateLight(light, fragment.position, n);
+  return incoming * material.reflectance;
+}
+```
+
+## Light（光）：着色器要解释能量和表面响应
+
+<Term def="描述从光源到表面并参与可见颜色形成的照明贡献；它包含方向、位置、强度和颜色等信息。">
+  光照
+</Term>
+
+Light（光）提供可被表面接收的方向与能量。着色器通常先计算法线与入射方向的关系，再把距离、遮挡和光源强度合并到一个入射项中。即使两个片段使用同一个材质，只要法线方向或光源距离不同，最终结果也可能不同。
+
+### Radiometry（辐射度量）与 Reflectance（反射率）
+
+Radiometry（辐射度量）描述能量如何按功率、面积、方向或立体角分布；Reflectance（反射率）描述表面保留或反射入射能量的比例。为了让调试有意义，二者要使用一致的单位和线性能量语义，不能把显示器的编码值直接当成光源功率。
+
+用一个简化模型表达这种分工：
+
+$$
+C_{out} = L_{in} \rho + C_{ambient}
+$$
+
+其中 $L_{in}$ 是经过可达性与距离处理后的入射能量，$\rho$ 是反射率。若整个物体都变暗，先查光源单位、法线方向和坐标空间；若只有一种材质变暗，再查反射率或材质纹理。把环境项调大只能改变基线，不能修复错误的入射方向。
+
+## Modern Graphics Hardware：同一着色器会同时处理许多片段
+
+Modern Graphics Hardware（现代图形硬件）会把大量相似的片段组织成批次，交给执行单元并行处理。相邻片段共享着色器指令和只读资源时，吞吐通常较好；如果它们访问分散资源、走不同分支，批次就会暴露等待和闲置。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+<Term def="让多个独立的片段或光照任务同时推进的执行能力；它提高吞吐，但不能消除数据依赖。">
+  并行性
+</Term>
+
+Parallelism（并行性）适合处理多个片段和多个光源任务，但分支分歧会让同一批通道依次走不同路径。memory latency（内存延迟）则是读取光源列表、纹理或材质数据后等待结果返回的时间。增加并行任务只有在数据能及时供给时才有收益；如果通道都在等同一份资源，执行宽度越大，暴露的尾部也可能越明显。
+
+观察性能时记录光源任务数、活跃通道、分支分歧、缓存命中和等待比例。先确认着色结果是否值得这些资源访问，再决定是否减少光源、重排数据或改变批次大小。
+
+## 三步实验：从属性输入走到硬件占用
+
+每一步先写下预测，再只改变一个相关滑块。三个视角共用同一个 ShadingViz，但分别突出管线阶段、重心插值和现代硬件上的通道等待。
+
+<Stepper>
+  <Step title="第一步：追踪管线阶段">
+    先预测：把属性权重从 0.42 拖向 0.90，几何轮廓会改变，还是当前着色阶段会改变？选择“管线流转”，观察输入属性、插值、着色器和输出之间的契约。
+
+    <CgppCh16ShadingLab />
+
+  </Step>
+  <Step title="第二步：观察插值输入">
+    先预测：改变重心权重后，片段会跳出三角形，还是只改变它收到的法线与材质值？选择“属性插值”，比较三个权重和着色器输入快照。
+
+    <CgppCh16ShadingLab />
+
+  </Step>
+  <Step title="第三步：定位占用瓶颈">
+    先预测：光源任务、分支分歧和访问等待同时升高时，颜色一定会变错吗？选择“硬件占用”，比较完成通道、等待通道与 Parallelism（并行性）证据。
+
+    <CgppCh16ShadingLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：渐变方向错了就改光照公式">
+  现象 → 光照公式在单个片段上看起来合理，但三角形内部的颜色或法线沿错误方向渐变。
+
+原因 → 顶点顺序、插值权重或坐标空间不一致，着色器收到的输入已经偏离预期；公式只是放大了错误。
+
+修法 → 先显示三个顶点属性和片段重心权重，核对插值结果与法线归一化，再检查光照公式。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：画面变暗就是把反射率调高">
+  现象 → 整个模型变暗，调高材质反射率后局部仍不对，甚至出现不自然的高亮。
 
-### 设计动机
+原因 → Light（光）的方向、能量或遮挡可能错误；Reflectance（反射率）只描述到达表面的能量保留比例。
 
-Vulkan 把The Shading Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 分开记录入射能量、法线点积、遮挡状态和反射率，先修复 Radiometry（辐射度量）与光线可达性。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Shading Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Shading Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Shading Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：并行通道越多，着色一定越快">
+  现象 → 增加光源或执行批次后，吞吐没有提高，等待通道和帧时间反而上升。
+
+原因 → 分支分歧让通道走不同路径，或共享资源读取暴露了 memory latency（内存延迟）；Parallelism（并行性）无法绕过依赖。
+
+修法 → 先测量分支一致性、缓存命中和尾部等待，再重排数据、减少无贡献光源或调整批次大小。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 图形管线把顶点属性送到片段阶段，插值把图元内的局部位置转换成着色器输入。
+- 着色器负责把输入契约、光照模型和输出编码连接起来，不能用一个常数掩盖坐标或数据错误。
+- Light（光）提供入射能量，Radiometry（辐射度量）描述能量语义，Reflectance（反射率）描述表面保留比例。
+- 现代图形硬件可以利用 Parallelism（并行性）处理许多片段，但 memory latency（内存延迟）与分支分歧会限制吞吐。
+- 调试顺序应是“输入属性 → 插值权重 → 光照能量 → 材质响应 → 通道占用”。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Shading Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Shading Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Shading Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：计算属性插值。** 三个顶点的标量属性分别为 `a₀=0.20`、`a₁=0.80`、`a₂=0.50`，片段重心权重为 `α=0.25`、`β=0.50`、`γ=0.25`。求片段属性，并说明权重和不为 1 时会发生什么。
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  `a_f = 0.25 × 0.20 + 0.50 × 0.80 + 0.25 × 0.50 = 0.575`。权重和不为 1
+  时，属性会产生整体缩放或偏移，通常说明重心坐标计算、透视校正或输入数据出了问题。
 </Answer>
 
+**问题 2：拆分光照与反射率。** 某片段的入射能量 `L_in=1.6`，反射率 `ρ=0.5`，环境项为 `0.1`。按本章简化模型计算输出，并说明只移动遮挡物时哪一项应该变化。
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  `C_out = 1.6 × 0.5 + 0.1 =
+  0.9`。只移动遮挡物时，光源到表面的可达性会改变，因而 `L_in` 可能变为 0
+  或恢复；反射率和环境项不应自动改变。
+</Answer>
+
+**问题 3：定位硬件等待。** 光源任务从 6 增到 10 后，画面颜色基本稳定，但等待通道明显增加。你会先提高 Parallelism（并行性），还是先检查 memory latency（内存延迟）与分支分歧？
+
+<Answer>
+  先检查 memory
+  latency（内存延迟）、缓存命中和分支分歧，确认等待来自共享资源还是路径不一致；只有数据供给稳定后，再评估提高
+  Parallelism（并行性）是否能增加有效吞吐。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="图形管线">
+  把几何输入逐阶段转换为可显示片段的处理流程，包含属性传递、可见性和着色等契约。
+</GlossaryItem>
+
+<GlossaryItem term="插值">
+  按片段在图元中的位置，对顶点属性进行加权汇合的过程。
+</GlossaryItem>
+
+<GlossaryItem term="着色器">
+  在图形管线可编程阶段执行的函数，读取片段属性和资源并输出阶段结果。
+</GlossaryItem>
+
+<GlossaryItem term="光照">
+  根据光源、表面方向、距离和遮挡等因素估计片段照明贡献的过程。
+</GlossaryItem>
+
+<GlossaryItem term="反射率">
+  表示表面保留或反射入射能量比例的材质属性。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  让多个独立片段或光照任务同时推进的执行能力。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 16 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

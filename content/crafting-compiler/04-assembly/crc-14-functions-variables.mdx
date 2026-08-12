@@ -1,12 +1,9 @@
 ---
-title: 第14章 函数和变量
+title: "第14章 函数和变量"
 type: C
-section: 第3部分 · x86与调用约定
+section: "第3部分 · x86与调用约定"
 order: 14
-description: >-
-  第14章
-  函数和变量围绕程序调用约定、Linux/x86下的函数调用、Linux/x86下函数调用的细节推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖4个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 IA-32 调用约定、函数序言/尾声和参数/局部/全局变量样本，回放调用帧、寄存器保存、ESP 平衡与返回值的可验证链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,56 +11,216 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-14
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc14FunctionsVariablesLab } from "@/components/mdx/crafting-compiler/v2/crc-14-functions-variables";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“IA-32调用约定台”开始
+- 能按 IA-32 调用约定标出参数偏移、返回值位置和调用者/被调用者保存责任
+- 能从函数序言、函数体与尾声重建 ESP/EBP、局部变量和保存寄存器的变化
+- 能用 `objdump`、`gdb` 和双函数调用样本定位栈不平衡或寄存器破坏并清理重建
 
-第14章 函数和变量沿“caller arguments → call → callee frame → return value”转换信息。最终进程返回正确值只能证明一条执行路径；IA-32调用约定台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第14章 函数和变量固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变调用位置或变量类别。本页交互只移动caller arguments → call → callee frame → return value中的真实对象和状态，不生成置信、风险或证据分数。
+## 从一次 `call` 到可复查的调用帧
+
+函数调用不是“跳到另一段代码再跳回来”。调用者要按冻结的 IA-32 约定放置参数，被调用者要建立可解释的栈帧、保存约定寄存器、写入返回值并在 `ret` 前恢复 ESP。只有把这些状态逐点记录，才能区分源码变量错误、序言错误和调用边界错误。
+
+本章的主实验是“IA-32 调用约定台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU as/ld/binutils、IA-32 目标、链接参数和运行环境，只切换调用位置或变量类别。交互中的每一帧都对应参数槽、局部槽、全局符号、保存寄存器、ESP/EBP 或返回值，不用一次成功返回掩盖嵌套调用风险。
+
+<Callout type="trap" title="误区一：函数能返回一次就证明调用约定正确">
+  现象 → 单个函数返回值正确，但嵌套调用后 EBX 被改写，或调用者继续执行时出现不可解释的状态变化。
+
+原因 → 被调用者保存寄存器的责任没有进入函数序言/尾声，测试只观察返回值，没有比较调用前后的保存集合。
+
+修法 → 在 `call` 前后记录 ESI、EDI、EBX 等约定寄存器；将保存、恢复和返回值分别列为断言，再用嵌套调用复测。
+
+</Callout>
+
+<Callout type="trap" title="误区二：只看 EBP 偏移，不检查 ESP 平衡">
+  现象 → 参数和局部变量在函数体内读写正确，但 `ret` 后调用者的 ESP 偏移了，下一次调用才失败。
+
+原因 → 序言、压栈参数、尾声和清理责任被拆开观察，缺少调用前 ESP = 返回后 ESP 的整体不变量。
+
+修法 → 记录每个 `push`、`pop`、`call`、`leave` 和 `ret` 的 ESP；清理目标文件后用相同输入重建，并比较调用边界两端的数值。
+
+</Callout>
+
+<Callout type="trap" title="误区三：变量类别决定了同一套寻址方式">
+  现象 → 把参数、局部变量和全局变量都当作 `[ebp-offset]`，简单样本能运行，跨函数或重定位后却读到错误对象。
+
+原因 → 参数槽、栈帧局部槽和符号地址的生命周期与寻址来源不同，变量类别没有进入代码生成合同。
+
+修法 → 为每个变量记录类别、生命周期、寻址表达式和所有权；参数用约定偏移，局部用栈帧槽，全局用符号/重定位证据。
+
+</Callout>
+
+## 术语：把调用边界拆成可核对字段
+
+<Term def="规定参数传递、返回值、栈清理、对齐和寄存器保存责任的目标平台规则集合。">
+  调用约定
+</Term>
+
+调用约定把两个函数连接成机器代码接口。实验记录不能只写“Linux/x86”，还要写参数方向、返回寄存器、栈清理方和被调用者保存集合。
+
+<Term def="函数入口保存旧帧指针、建立新帧指针并为局部变量预留空间的一组指令。">
+  函数序言
+</Term>
+
+典型序言会保存旧 EBP、令 EBP 指向当前帧，再为局部槽调整 ESP。它把参数的正偏移与局部变量的负偏移变成可以反汇编核对的地址表。
+
+<Term def="函数返回前恢复栈指针、恢复被保存寄存器并执行返回的一组指令。">
+  函数尾声
+</Term>
+
+尾声负责把调用边界恢复到约定状态。`leave` 或等价的 ESP/EBP 恢复与 `ret` 必须一起验收，否则返回值正确也不能证明下一条调用安全。
+
+<Term def="由调用者保存、被调用者必须在返回前恢复原值的寄存器集合。">
+  被调用者保存寄存器
+</Term>
+
+被调用者保存寄存器是跨函数的承诺，不是编译器的临时偏好。若函数体使用其中一个寄存器，就要在序言保存、在尾声恢复，并用调用前后快照验证。
+
+<Term def="以当前帧指针或栈指针为基准定位参数、返回地址或局部变量的字节距离。">
+  参数偏移
+</Term>
+
+参数偏移必须和压栈顺序、返回地址以及帧指针约定一起解释。`[ebp+8]` 只有在对应序言和调用约定成立时才代表第一个参数。
+
+<Term def="一次调用开始前与返回之后，栈指针回到同一约定位置的状态不变量。">
+  栈平衡
+</Term>
+
+栈平衡是调用边界的数值合同。把参数、保存寄存器和局部空间的增减逐项相加，才能解释为什么 `ret` 后的 ESP 应恢复到调用前位置。
 
 ## 来源、版本与独立重写边界
 
-第14章 函数和变量以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第14章 函数和变量用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第14章 函数和变量的通过不变量是“参数偏移、保存集合、返回值和调用前后ESP满足冻结ABI”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-objdump -drwC call.o
-gdb --batch -x frame.gdb ./call
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。GNU [as](https://sourceware.org/binutils/docs/as/)、[ld](https://sourceware.org/binutils/docs/ld/)、[objdump](https://sourceware.org/binutils/docs/binutils/objdump.html) 与 [gdb](https://sourceware.org/gdb/documentation/) 文档用于核对工具行为，ELF 规范用于核对目标文件字段。现代 x86-64 默认值、PIE 与新版 binutils 的差异必须显式记录，不能覆盖本章 IA-32 调用约定。
 
 ## 官方目录逐项深读
 
 ### 第14章 函数和变量
 
-**四级证据 1/4。** 机器槽1把“第14章 函数和变量”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定变量类别，只改变调用位置，以ESP/EBP、保存寄存器与返回值找到第一处分叉并清理重建。
+本章总链路是“caller arguments → call → callee frame → return value”。先冻结 IA-32 参数、返回值和寄存器保存合同，再让每个样本只改变调用位置或变量类别，便能把源码变量错误与调用边界错误分开。
 
 ### 14.1 程序调用约定
 
-**四级证据 2/4。** 流水线槽2将“14.1 程序调用约定”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定变量类别，只改变调用位置，以ESP/EBP、保存寄存器与返回值找到第一处分叉并清理重建。
+程序调用约定规定参数如何进入栈、返回值放在哪里、哪些寄存器跨调用保持，以及谁负责清理参数。把这些字段写进调用帧表，才能从 `objdump` 的序言和尾声回推实现是否合约。
 
 ### 14.2 Linux/x86下的函数调用
 
-**四级证据 3/4。** 机器槽3把“14.2 Linux/x86下的函数调用”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定变量类别，只改变调用位置，以ESP/EBP、保存寄存器与返回值找到第一处分叉并清理重建。
+Linux/x86 下的函数调用把调用者和被调用者连接到具体 IA-32 栈布局。实验用两个参数和一个返回值演示压栈顺序、返回地址、EBP 基准与 ESP 恢复，并以运行时快照补足反汇编静态信息。
 
 ### 14.3 Linux/x86下函数调用的细节
 
-**四级证据 4/4。** 机器槽4把“14.3 Linux/x86下函数调用的细节”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定变量类别，只改变调用位置，以ESP/EBP、保存寄存器与返回值找到第一处分叉并清理重建。
+函数调用的细节落在寄存器保存、局部槽、全局符号、嵌套调用和尾声清理。每个变量类别都要有独立寻址证据，每个调用边界都要比较 ESP、EBP、保存寄存器和返回值。
 
-## 三个必须主动触发的误区
+<Crc14FunctionsVariablesLab />
 
+## 三步实验：合同、帧布局与返回边界
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先冻结调用约定字段，再按序言/函数体/尾声重放一帧，最后用参数、局部和全局样本以及嵌套调用故障验收返回边界。每一步都保存同一份输入、目标参数、寄存器快照和清理记录。
 
+<Stepper>
+  <Step title="第一步：冻结调用约定">
+    选择“调用合同”视角，确认参数压栈顺序、返回值寄存器、被调用者保存集合与栈清理责任。用 `objdump -drwC call.o` 标出 `call` 前后的参数槽和返回地址，再填写本次实验的 ABI 表。
 
+    <Crc14FunctionsVariablesLab />
+
+  </Step>
+  <Step title="第二步：重放序言与变量寻址">
+    依次切换参数、局部和全局变量，观察参数正偏移、局部负偏移和符号地址的差异。沿 `push ebp → mov ebp, esp → ... → leave` 记录 ESP/EBP、保存寄存器和每个变量的生命周期。
+
+    <Crc14FunctionsVariablesLab />
+
+  </Step>
+  <Step title="第三步：验收返回与清理重建">
+    用嵌套调用样本注入保存寄存器破坏或 ESP 不平衡，运行 `gdb --batch -x frame.gdb ./call` 比较调用前后快照、返回值和退出码。删除 `call.o` 后用同一参数重建，确认尾声恢复了冻结的调用边界。
+
+    <Crc14FunctionsVariablesLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 调用约定把参数、返回值、栈清理和寄存器保存责任定义为机器代码接口。
+- 函数序言建立帧，函数尾声恢复帧；参数偏移、局部槽和全局符号不能混用。
+- 被调用者保存寄存器与栈平衡必须用调用前后快照和嵌套调用验证，不能只看一次返回值。
+- `objdump` 的静态指令、`gdb` 的 ESP/EBP 快照和清理重建结果共同构成调用帧证据。
+
+<Exercises>
+
+本组练习覆盖“第14章 函数和变量”、14.1 程序调用约定、14.2 Linux/x86下的函数调用和 14.3 Linux/x86下函数调用的细节；每题都要把对应证据写入调用帧档案。
+
+**问题 1：填写调用合同。** 对一个接收两个 32 位参数并返回一个 32 位整数的 IA-32 函数，列出参数位置、返回值位置、被调用者保存寄存器和栈平衡断言。
+
+<Answer>
+  先记录调用者压入两个参数和返回地址后的栈布局，再明确返回值寄存器；若被调用者使用
+  EBX、ESI 或 EDI，就在序言保存、尾声恢复。把调用前 ESP、序言后 ESP、尾声后 ESP
+  和返回后的 ESP 放在同一张表中，最后断言调用边界两端相等。
+</Answer>
+
+**问题 2：区分三类变量。** `arg0`、`local` 和 `counter` 分别作为参数、局部变量和全局变量时，应该保存哪些寻址证据？
+
+<Answer>
+  `arg0` 要记录相对 EBP 的正偏移和压栈顺序，`local`
+  要记录栈帧负偏移、空间预留和生命周期，`counter`
+  要记录符号名、重定位或全局地址。用 `objdump` 对照指令形式，再用 `gdb`
+  检查读取的是预期对象，不能把三者都写成同一个帧偏移。
+</Answer>
+
+**问题 3：诊断嵌套调用。** 内层函数返回值正确，但外层函数返回后 ESP 比调用前少 4 字节，如何定位并修复？
+
+<Answer>
+  先在内层 `call` 前、序言后、尾声前和 `ret` 后记录 ESP/EBP，核对每次
+  `push`、局部空间和参数清理；再比较被调用者保存寄存器快照。找到少掉的槽位后修正尾声或唯一的清理责任，删除目标文件并用相同命令重建，直到调用前后的
+  ESP、返回值和保存集合同时一致。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="调用约定">
+  规定参数传递、返回值、栈清理、对齐和寄存器保存责任的目标平台规则集合。
+</GlossaryItem>
+
+<GlossaryItem term="函数序言">
+  函数入口保存旧帧指针、建立新帧指针并为局部变量预留空间的一组指令。
+</GlossaryItem>
+
+<GlossaryItem term="函数尾声">
+  函数返回前恢复栈指针、恢复被保存寄存器并执行返回的一组指令。
+</GlossaryItem>
+
+<GlossaryItem term="被调用者保存寄存器">
+  由调用者保存、被调用者必须在返回前恢复原值的寄存器集合。
+</GlossaryItem>
+
+<GlossaryItem term="参数偏移">
+  以当前帧指针或栈指针为基准定位参数、返回地址或局部变量的字节距离。
+</GlossaryItem>
+
+<GlossaryItem term="栈平衡">
+  一次调用开始前与返回之后，栈指针回到同一约定位置的状态不变量。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、GNU as/objdump/gdb 文档与 ELF 规范"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

@@ -1,12 +1,9 @@
 ---
-title: 第13章 x86汇编器编程
+title: "第13章 x86汇编器编程"
 type: C
-section: 第3部分 · x86与调用约定
+section: "第3部分 · x86与调用约定"
 order: 13
-description: >-
-  第13章
-  x86汇编器编程围绕基于GNU汇编器的编程、GNU汇编器的语法、传输指令、算术运算指令、位运算指令、流程的控制推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖7个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 GNU as 的语法、传输/算术/位运算指令和控制转移样本，回放 IA-32 汇编到机器码与 EFLAGS 的可验证链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,68 +11,227 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-13
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc13X86AssemblyLab } from "@/components/mdx/crafting-compiler/v2/crc-13-x86-assembly";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“GNU as指令编码台”开始
+- 能用 GNU as 语法拆出指令助记符、操作数顺序、宽度后缀和标签
+- 能把传输、算术、位运算与控制转移样本对照到机器码、寄存器写入和 EFLAGS
+- 能用 `as --32`、`objdump` 与 `readelf` 复现一个故障、定位分叉并完成清理重建
 
-第13章 x86汇编器编程沿“AT&T syntax → instruction/operand → machine bytes → flags”转换信息。最终进程返回正确值只能证明一条执行路径；GNU as指令编码台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第13章 x86汇编器编程固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变指令族或操作数边界。本页交互只移动AT&T syntax → instruction/operand → machine bytes → flags中的真实对象和状态，不生成置信、风险或证据分数。
+## 从一行汇编到可复查的指令合同
+
+第13章把第12章的 IA-32 目标边界推进到真正的汇编文本。实验主线不是背诵助记符，而是固定同一份源文件和目标参数，依次回答四个问题：GNU as 如何解析这行文本？源和目的操作数是否符合 AT&T 顺序？机器码是否编码了预期宽度？执行后寄存器与 EFLAGS 是否满足断言？
+
+本章的主实验是“GNU as 指令编码台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU as/ld/binutils、IA-32 目标、链接参数和运行环境，只切换指令族或操作数边界。可视化中的每个状态都对应源文本、语法槽位、编码字节、标志位或控制流标签；最终返回值只是其中一个检查项。
+
+<Callout type="trap" title="误区一：AT&T 顺序看起来像自然语言顺序">
+  现象 → 把 `movl %eax, (%ecx)` 读成“把内存送进 EAX”，或把 Intel 语法的顺序直接贴进 GNU as。
+
+原因 → AT&T 语法使用源、目的顺序，并用 `%`、`$` 和括号标出寄存器、立即数与内存寻址。
+
+修法 → 先标出 mnemonic、source、destination 和宽度后缀，再用 `objdump -Mintel` 或默认语法核对同一条机器码的解释；两种语法只能作为显式对照。
+
+</Callout>
+
+<Callout type="trap" title="误区二：汇编器接受了指令就等于语义正确">
+  现象 → `as --32` 成功，但源/目的次序、`b/w/l` 后缀或立即数宽度错误，简单输入仍得到相同结果。
+
+原因 → 装配成功只证明文本能编码，不证明寄存器写入、内存副作用和 EFLAGS 与源语义一致。
+
+修法 → 保存反汇编、机器码、操作数宽度、读写集合和边界值；把“成功装配”和“逐指令不变量通过”分成两条断言。
+
+</Callout>
+
+<Callout type="trap" title="误区三：控制转移只检查最终返回值">
+  现象 → `cmp` 后的条件跳转标签写错或条件取反，某个测试样本仍走到正确的返回语句。
+
+原因 → 控制流错误被单一路径遮住，缺少 fall-through、taken branch 和标签地址的证据。
+
+修法 → 同时跑通过和不通过的比较值，记录 EFLAGS、跳转目标、未跳转路径与退出码；清理后再次从同一输入重建。
+
+</Callout>
+
+## 术语：把文本、编码和状态分层
+
+<Term def="GNU 项目提供的汇编器，将目标架构的汇编文本解析并编码为目标文件中的机器指令与重定位信息。">
+  GNU as
+</Term>
+
+`GNU as` 是把文本交给目标架构的入口。`as --32 -o probe.o probe.s` 固定 IA-32 输出；装配退出码只能作为语法层证据，必须继续检查目标文件和反汇编。
+
+<Term def="GNU as 默认采用的汇编文本约定；本章重点记录助记符、宽度后缀、寄存器前缀、立即数前缀以及源/目的顺序。">
+  AT&T 语法
+</Term>
+
+AT&T 语法把 `movl %eax, (%ecx)` 解析为 32 位传输，源是 `%eax`，目的为内存地址 `(%ecx)`。写入解析表比凭视觉记忆更可靠。
+
+<Term def="指令名称中表示操作数宽度的后缀，常见形式为 b、w、l；它参与指令选择、编码和寄存器别名判断。">
+  宽度后缀
+</Term>
+
+宽度后缀把文本与编码绑定起来。`movb`、`movw` 和 `movl` 可能访问同一地址却产生不同的读写集合，验证时要把后缀、字节和目标寄存器一起记录。
+
+<Term def="把一个寄存器、立即数或内存值写到另一个位置的指令族；传输本身通常不按算术方式改变 EFLAGS。">
+  传输指令
+</Term>
+
+传输指令的主要不变量是源值、目的位置和宽度一致。要区分 `mov` 的数据搬运与 `lea` 的地址计算，不能只看目的寄存器最后的数值。
+
+<Term def="对操作数执行加、减、比较等数值运算的指令族；运算结果与 EFLAGS 一起构成可验收状态。">
+  算术运算指令
+</Term>
+
+算术运算的验收包至少包含输入、输出、宽度和 EFLAGS。`cmp` 不保存算术结果，但会设置供条件跳转读取的标志位，因此不能把它当作普通减法的替代品。
+
+<Term def="按位执行 and、or、xor、shift 等操作的指令族；它们的掩码、移位量和标志位需要用位模式检查。">
+  位运算指令
+</Term>
+
+位运算适合用边界位模式暴露宽度和移位错误。掩码、移位计数与 EFLAGS 都要进入记录，避免只用一个全零或全一输入掩盖问题。
 
 ## 来源、版本与独立重写边界
 
-第13章 x86汇编器编程以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第13章 x86汇编器编程用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第13章 x86汇编器编程的通过不变量是“汇编、反汇编、标志位和预期状态逐指令一致”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-as --32 -o probe.o probe.s
-objdump -drwC probe.o
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。GNU [as](https://sourceware.org/binutils/docs/as/)、[ld](https://sourceware.org/binutils/docs/ld/)、[objdump](https://sourceware.org/binutils/docs/binutils/objdump.html) 与 [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html) 文档用于核对工具行为，ELF 规范用于核对目标文件字段。现代 x86-64 默认值、PIE 与新版 binutils 的差异必须显式记录，不能覆盖本章 IA-32 目标合同。
 
 ## 官方目录逐项深读
 
 ### 第13章 x86汇编器编程
 
-**四级证据 1/7。** 机器槽1把“第13章 x86汇编器编程”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+本章总链路是“文本 → 语法槽位 → 机器码 → 执行状态”。先固定 `as --32` 和目标文件格式，再让每个样本只改变指令族或操作数边界，便能把语法错误、编码错误和语义错误分开。
 
 ### 13.1 基于GNU汇编器的编程
 
-**四级证据 2/7。** 机器槽2把“13.1 基于GNU汇编器的编程”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+GNU as 的最小实验包含 `.text`、可见标签、指令行和输出目标文件。装配命令、目标三元组、退出码与 stderr 要与源码一起保存，才能在清理后复现同一份对象文件。
 
 ### 13.2 GNU汇编器的语法
 
-**四级证据 3/7。** 前端槽3用合法、最长匹配、歧义、截断和非法字符样本核对“13.2 GNU汇编器的语法”的token、前看、树形与源位置；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+一行指令至少拆为助记符、宽度后缀、源操作数和目的操作数。寄存器前缀 `%`、立即数前缀 `$`、内存寻址括号和标签引用分别提供不同的语法信号，不能把 Intel 与 AT&T 的书写规则混用。
 
 ### 13.3 传输指令
 
-**四级证据 4/7。** 机器槽4把“13.3 传输指令”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+`movb`、`movw` 和 `movl` 体现宽度如何进入编码；`movl %eax, (%ecx)` 还体现源/目的顺序与内存副作用。实验记录要比较机器码、寄存器读写和目标地址，而不是只比较最终变量。
 
 ### 13.4 算术运算指令
 
-**四级证据 5/7。** 机器槽5把“13.4 算术运算指令”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+加减、比较和乘除改变数值或标志位的方式不同。用有符号边界、进位边界和零结果覆盖输入，把输出寄存器与 EFLAGS 分开断言，才能说明 `cmp` 为后续控制流准备了什么。
 
 ### 13.5 位运算指令
 
-**四级证据 6/7。** 机器槽6把“13.5 位运算指令”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+and、or、xor 与移位把位模式变成可读的掩码证据。选择只激活一个高位或低位的样本，能暴露宽度后缀、移位量和标志位记录的错误。
 
 ### 13.6 流程的控制
 
-**四级证据 7/7。** 流水线槽7将“13.6 流程的控制”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定操作数边界，只改变指令族，以机器码、操作数与EFLAGS找到第一处分叉并清理重建。
+条件跳转消费比较指令产生的 EFLAGS，并通过标签重定位连接到目标地址。通过和不通过的样本都要记录 taken/fall-through、标签地址和退出码；若清理重建后目标地址变化，必须回到编码与重定位层排查。
 
-## 三个必须主动触发的误区
+<Crc13X86AssemblyLab />
 
+## 三步实验：语法、指令族与控制流
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先把一行 AT&T 文本拆成结构，再比较三类指令的编码和状态，最后用双路径样本验收条件跳转。每一步都保留同一份输入、工具参数、机器码和清理记录。
 
+<Stepper>
+  <Step title="第一步：解析 GNU as 语法">
+    选择“语法槽位”视角，标出 `.text`、标签、助记符、宽度后缀、源操作数和目的操作数。用 `as --32 -o probe.o probe.s` 记录装配退出码，再把 `movl %eax, (%ecx)` 与 `objdump -drwC -Mintel probe.o` 的解释并排保存。
 
+    <Crc13X86AssemblyLab />
+
+  </Step>
+  <Step title="第二步：对照指令族与 EFLAGS">
+    依次选择传输、算术和位运算样本，固定寄存器与内存边界，只替换指令文本。核对机器码、读写集合、宽度后缀和 EFLAGS；特别记录 `mov` 不负责算术标志，而 `add`、`cmp` 或位运算可能更新标志。
+
+    <Crc13X86AssemblyLab />
+
+  </Step>
+  <Step title="第三步：验证控制转移与重建">
+    选择通过和不通过的比较值，观察 `cmp → jz` 的 taken/fall-through 路径、标签目标和退出码。注入源/目的次序、宽度或标签错误后，先在首个不变量处停止，再清理 `probe.o` 并用同一命令重建，确认目标文件与反汇编恢复一致。
+
+    <Crc13X86AssemblyLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- GNU as 的成功装配只证明文本可编码；语法槽位、宽度后缀和源/目的顺序仍需独立验收。
+- 传输、算术和位运算分别改变数据、副作用和 EFLAGS，机器码与寄存器读写是必要证据。
+- 控制转移必须同时检查比较产生的标志位、taken/fall-through 路径和标签重定位。
+- `as --32`、`objdump`、`readelf` 与清理重建共同构成可复查的 IA-32 汇编实验档案。
+
+<Exercises>
+
+本组练习覆盖“第13章 x86汇编器编程”、13.1 基于GNU汇编器的编程、13.2 GNU汇编器的语法、13.3 传输指令、13.4 算术运算指令、13.5 位运算指令和 13.6 流程的控制；每题都要把对应证据写入实验档案。
+
+**问题 1：拆解一条 AT&T 指令。** 对 `movl $7, (%ecx)` 写出助记符、宽度、源操作数、目的操作数和至少两条验收证据。
+
+<Answer>
+  助记符是 `mov`，宽度后缀是 `l`，源是立即数 `$7`，目的为以 `%ecx`
+  寻址的内存。验收证据包括 `as --32` 的退出码、`objdump -drwC -Mintel`
+  的反汇编、机器码字节，以及目标地址写入后的寄存器/内存快照。
+</Answer>
+
+**问题 2：区分算术和位运算状态。** `addl %ebx, %eax` 与 `andl %ebx, %eax` 都得到相同数值时，为什么仍要分别记录 EFLAGS？
+
+<Answer>
+  两条指令的编码和标志位语义不同；相同数值可能只是输入碰巧抵消了差异。应保存输入位模式、指令宽度、反汇编字节、输出寄存器和
+  EFLAGS，再用进位、溢出、零与符号等边界样本确认状态。
+</Answer>
+
+**问题 3：诊断条件跳转。** `cmp` 后 `jz done` 的测试只覆盖相等输入，如何证明标签方向和未跳转路径都正确？
+
+<Answer>
+  增加相等与不等两组输入，分别记录 EFLAGS、taken/fall-through、标签在 `objdump`
+  中的目标地址和退出码；若路径异常，先核对 `cmp`
+  的源/目的顺序与宽度，再检查标签重定位。删除目标文件后用 `as --32`
+  和相同参数重建，比较两次反汇编结果。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="GNU as">
+  将目标架构汇编文本解析并编码为目标文件中的机器指令与重定位信息的 GNU 汇编器。
+</GlossaryItem>
+
+<GlossaryItem term="AT&T 语法">
+  GNU as 默认采用的文本约定，包含宽度后缀、寄存器/立即数前缀和源/目的顺序。
+</GlossaryItem>
+
+<GlossaryItem term="宽度后缀">
+  指令名称中表示操作数宽度的 b、w、l 等后缀，参与指令选择和编码。
+</GlossaryItem>
+
+<GlossaryItem term="传输指令">
+  把寄存器、立即数或内存值写到另一位置的指令族，重点检查源、目的与宽度。
+</GlossaryItem>
+
+<GlossaryItem term="算术运算指令">
+  对操作数执行加、减、比较等数值运算并与 EFLAGS 一起验收的指令族。
+</GlossaryItem>
+
+<GlossaryItem term="位运算指令">
+  按位执行 and、or、xor、shift 等操作并用位模式与标志位检查的指令族。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、GNU as/objdump/readelf 文档与 ELF 规范"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

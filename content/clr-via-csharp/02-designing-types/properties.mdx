@@ -8,6 +8,10 @@ demo: true
 math: false
 sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cvc4-10
 ---
 
 import { Objectives } from "@/components/mdx/objectives";
@@ -17,6 +21,11 @@ import { Callout } from "@/components/mdx/callout";
 import { Answer, Exercises } from "@/components/mdx/exercises";
 import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
 import { Attribution } from "@/components/mdx/attribution";
+import {
+  CvcAccessorBehaviorLab,
+  CvcInitializerSequencingLab,
+  CvcPropertyBoundaryLab,
+} from "@/components/mdx/clr-via-csharp/v2/cvc-properties";
 
 <Objectives>
 
@@ -75,9 +84,15 @@ Framework design原则包括：getter快速且不抛普通可预期错误；同�
 Property can cache，但需要定义invalidating、thread safety和memory retention。Lazy initialization若factory失败是否重试也要明确。Virtual property相当于两个可能独立override的方法；base code在constructor中读取virtual property会触及未初始化derived state，应避免。
 
 <Stepper>
-  <Step title="切换field、property、auto property与method"></Step>
-  <Step title="填写访问成本表">记录每个getter/setter的复杂度、allocation、I/O、异常、缓存、线程与snapshot/live语义。</Step>
-  <Step title="执行重复访问实验">连续读取、并发读写、序列化和derived override，验证值语义与invariant没有被语法掩盖。</Step>
+  <Step title="切换field、property、auto property与method">
+    <CvcAccessorBehaviorLab />
+  </Step>
+  <Step title="填写访问成本表">
+    <CvcAccessorBehaviorLab />
+  </Step>
+  <Step title="执行重复访问实验">
+    <CvcAccessorBehaviorLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Property Getter只是读值，所以可以安全执行远程I/O">
@@ -85,6 +100,8 @@ Property can cache，但需要定义invalidating、thread safety和memory retent
 </Callout>
 
 ## Object and Collection Initializers
+
+这里先把初始化看成一条可观察的状态轨迹：构造函数先建立基础不变量，随后按源码顺序写入成员，集合再逐项接收元素；每一步都可能留下可见改变，因此发布对象前应区分验证、构造和副作用。
 
 Object initializer先调用constructor，再按源顺序调用set/init accessors或写accessible fields。它不原子：第三个setter抛异常时，前两个side effects已发生，虽然对象通常尚未赋给caller变量。Constructor必须先建立基本有效状态；跨properties invariant不能只依赖caller恰好按顺序设置。
 
@@ -113,6 +130,8 @@ Anonymous type由compiler生成internal sealed immutable-like type，properties�
 
 Anonymous equality/hash按properties结构值生成，若property是mutable reference，其内部改变仍会影响行为。跨layer需要稳定DTO/record，给字段、validation、version和documentation明确身份。
 
+<Term def="决定anonymous type或Tuple只在局部projection使用，还是需要升级为可版本化命名DTO/record的使用跨度。">shape lifetime</Term>
+
 ## The System.Tuple Type
 
 原书介绍reference-type `System.Tuple<...>`，通过`Tuple.Create`/Item1等组合多个值；现代C#更常用value-type `ValueTuple`和tuple syntax `(Name, Count)`。二者适合局部multiple return，不适合长期public protocol：Item位置难演进，元素名主要是compiler metadata/便捷，不构成独立runtime type identity。
@@ -132,9 +151,15 @@ static (int Success, int Failed) CountResults(IEnumerable<Result> results)
 若结果字段有unit、invariant、未来可选项或跨process serialization，创建命名record/class。Tuple适合“调用点附近即可理解”的组合，不应让`Item7.Rest.Item2`成为系统contract。
 
 <Stepper>
-  <Step title="切换object init、collection init、anonymous type与Tuple"></Step>
-  <Step title="追踪构造顺序">记录constructor、每个setter/Add、异常位置、对象何时发布和失败时哪些side effects已发生。</Step>
-  <Step title="判断shape寿命">局部projection保留anonymous/tuple；跨method/layer/version的shape升级为命名immutable contract。</Step>
+  <Step title="切换object init、collection init、anonymous type与Tuple">
+    <CvcInitializerSequencingLab />
+  </Step>
+  <Step title="追踪构造顺序">
+    <CvcInitializerSequencingLab />
+  </Step>
+  <Step title="判断shape寿命">
+    <CvcInitializerSequencingLab />
+  </Step>
 </Stepper>
 
 <Callout type="trap" title="Object Initializer会一次性建立完整对象">
@@ -146,6 +171,8 @@ static (int Success, int Failed) CountResults(IEnumerable<Result> results)
 CLR允许property带parameters；C#把默认命名property映射为indexer `this[...]`，metadata中常名`Item`并可由IndexerNameAttribute改变。Indexer适合collection、matrix、lookup等自然索引语义。若查找可能不存在，要决定抛KeyNotFound、返回nullable、TryGet还是提供Contains；getter不应悄悄插入default值。
 
 Multi-dimensional indexer要定义bounds、ordering与复杂度。String key要说明comparer/culture；并发collection indexer只保证单次access语义，不保证“先读后写”原子。Indexer setter若改变多个内部结构，应维持整体invariant。
+
+<Term def="Indexer对key、bounds、missing、comparer、复杂度、并发和返回引用生命周期作出的访问协议。">indexer contract</Term>
 
 ## The Performance of Calling Property Accessor Methods
 
@@ -166,9 +193,15 @@ CLR metadata中的accessor是methods，但C# property自身不能像generic meth
 Reflection调用generic owner property时，先构造closed declaring type再取PropertyInfo；open type上的accessor包含未绑定parameters，不能普通Invoke。Dynamic binding也按runtime type/property metadata选择，不会把property变成任意generic converter。
 
 <Stepper>
-  <Step title="切换indexer、accessor visibility、ref return与generic owner"></Step>
-  <Step title="审计lookup协议">写出key/index bounds、missing、comparer、cost、thread safety、mutation和returned reference lifetime。</Step>
-  <Step title="验证工具consumer">从reflection、serializer、other CLR language和AOT/trimming目标访问，确认metadata与preservation满足。</Step>
+  <Step title="切换indexer、accessor visibility、ref return与generic owner">
+    <CvcPropertyBoundaryLab />
+  </Step>
+  <Step title="审计lookup协议">
+    <CvcPropertyBoundaryLab />
+  </Step>
+  <Step title="验证工具consumer">
+    <CvcPropertyBoundaryLab />
+  </Step>
 </Stepper>
 
 ## 本章回顾：Property必须表现为Value Access
@@ -201,10 +234,9 @@ Reflection调用generic owner property时，先构造closed declaring type再取
   <GlossaryItem term="accessor contract" definition="Get/set方法共同形成的property行为协议。" />
   <GlossaryItem term="auto-property storage" definition="Compiler为auto property生成的backing field与accessors。" />
   <GlossaryItem term="initializer sequencing" definition="Constructor后按源顺序执行members/Add的非原子阶段。" />
+  <GlossaryItem term="indexer contract" definition="Indexer对key、缺失、bounds、comparer、复杂度与返回引用的访问协议。" />
   <GlossaryItem term="accessor visibility" definition="Property与单个accessor分别控制读写consumer的范围。" />
   <GlossaryItem term="shape lifetime" definition="Anonymous或tuple数据形状适合局部还是需要长期命名contract的边界。" />
 </Glossary>
-
-<Term def="决定临时projection何时升级为可版本化命名DTO/record的使用跨度。">shape lifetime</Term>
 
 <Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 10: Properties" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

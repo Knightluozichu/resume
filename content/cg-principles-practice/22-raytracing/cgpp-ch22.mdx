@@ -3,253 +3,236 @@ title: "The Ray Tracing Pipeline"
 type: B
 section: "计算机图形学与渲染"
 order: 22
-description: "Computer Graphics: Principles and Practice Chapter 22"
+description: "围绕光线发射、求交、光照累积与硬件吞吐，建立从像素采样到可见结果的可验证光线追踪直觉。"
 demo: true
-math: false
+math: true
 sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-01
+officialUnitIds:
+  - cgp-01
+  - cgp-26
+  - cgp-38
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CgppCh22RaytracingLab } from "@/components/mdx/cg-principles-practice/v2/cgpp-ch22-raytracing";
 
 <Objectives>
 
-- 能用自己的话解释The Ray Tracing Pipeline的核心概念与设计动机
-- 能看懂并独立修改相关的 Vulkan API 调用代码
-- 能回答：Computer Graphics: Principles and Practice Chapter 22之间的关系是什么？
+- 能按发射、求交、着色和累积四个阶段解释一条光线如何进入 Graphics Pipeline（图形管线）并贡献像素
+- 能修改 RayTraceViz 的反射次数、采样数、结构深度、射线任务和访问等待，用证据定位噪声或吞吐瓶颈
+- 能回答：光线追踪如何把 Light（光）的能量传播与 Modern Graphics Hardware（现代图形硬件）的并行求交连接起来？
 
 </Objectives>
 
-## 为什么需要The Ray Tracing Pipeline
+## 先把光线追踪想成一次可回放的询问
 
-Computer Graphics: Principles and Practice, 3rd Edition将The Ray Tracing Pipeline作为独立章节，是因为它解决了 Vulkan 编程中一个不可绕过的核心问题。
+光线追踪不是“从相机直接得到颜色”，而是对每个像素提出一串可回放的问题：从哪里发出一条样本光线，它先命中了哪一个表面，交点如何解释入射光，反射或折射后的贡献怎样回到像素。每个问题都有独立证据，因此噪声、黑斑和帧时间都可以沿路径定位。
 
-在 OpenGL 时代，驱动承担了大量隐式工作：状态验证、资源同步、内存管理、命令重排序。
-开发者写出的代码"看起来能跑"，但性能瓶颈和正确性问题往往藏在驱动的黑盒里。
+本章把 The Ray Tracing Pipeline 拆成三条观察线：光线怎样穿过阶段，空间结构怎样减少无关求交，以及 Modern Graphics Hardware（现代图形硬件）怎样并行完成许多射线任务。先预测：只增加反射次数，单条射线的命中位置会自动改变吗？只增加采样数量，Light（光）的能量会变强吗？只增加 memory latency（内存延迟），像素颜色会改变还是完成任务会减少？
 
-Vulkan 的设计哲学是**把这些控制权交还给应用**。代价是应用必须显式处理：
+## 计算机图形学导论：Graphics Pipeline 接收一条带语义的光线
 
-- 对象创建时的参数验证（不再有驱动帮你兜底）
-- 资源生命周期的精确管理（创建、绑定、使用、销毁）
-- 同步边界的显式声明（GPU 不会自动等你）
-- 内存分配的策略选择（设备本地 vs 主机可见）
+计算机图形学导论把 Graphics Pipeline（图形管线）描述为一组有边界的转换：几何输入经过变换和可见性处理，光照阶段解释表面响应，最后才形成输出。光线追踪把“从像素找表面”的顺序反过来，却仍然需要同样的契约：起点、方向、坐标空间、命中距离和材质引用都必须能被下一阶段理解。
 
-Computer Graphics: Principles and Practice Chapter 22正是这一哲学在特定领域的具体体现。
+### 光线与采样位置
 
-<Callout type="insight">
-本章的核心不是记住 API 名字，而是理解"为什么 Vulkan 要求你这样做"。
-每个显式步骤背后都对应一个 OpenGL 时代的隐式假设。
+<Term def="从相机或交点出发、带有起点和方向的有序射线，用来询问场景中第一个有效表面。">
+  光线
+</Term>
+
+一条相机光线可以写成：
+
+$$
+r(t)=o+td
+$$
+
+其中 $o$ 是起点，$d$ 是归一化方向，$t$ 是沿方向前进的距离。像素采样点决定 $d$ 的初始值；透视相机、镜头采样或景深效果会改变采样分布，但不会改变这份基本契约。调试时应先画出 $o$ 和 $d$，确认光线确实穿过目标像素，再检查求交结果。
+
+### 交点与几何证据
+
+<Term def="光线与场景表面满足几何约束的位置，包含命中距离、法线和材质引用等后续着色所需信息。">
+  交点
+</Term>
+
+对三角形而言，求交不仅要返回命中距离，还应携带重心坐标、法线和材质索引。最小的有效命中距离通常优先于更远的候选面，因为它代表从当前起点看到的第一个表面。若命中距离异常，先检查相机空间、三角形绕序和数值容差，不要用更强的光源掩盖错误的几何证据。
+
+## 可见性：求交阶段是在筛选“看得见的表面”
+
+<Term def="由最近有效交点决定当前光线看到哪个表面的状态；它连接空间遍历、深度关系和遮挡结果。">
+  可见性
+</Term>
+
+可见性在光线追踪中不是一个独立的颜色效果，而是“哪一个交点可以继续参与着色”的判断。主光线寻找相机看到的表面，阴影光线询问光源方向是否被遮挡，反射光线则从当前交点寻找下一次可见表面。不同类型的光线共享求交机制，却有不同的终止条件和证据窗口。
+
+### 空间结构如何缩小候选范围
+
+没有加速结构时，一条光线可能需要测试场景中的许多三角形。包围盒层次、规则网格或其他空间索引把几何组织成可拒绝的候选区域：如果光线与一个节点的包围范围不相交，就可以跳过该节点的全部子几何。结构的价值是减少测试数量，不是改变真实交点。
+
+先预测：把结构深度调高后，候选节点一定单调减少吗？如果更新代价、节点重叠或访问局部性变差，深层结构也可能增加遍历成本。实验时同时记录候选节点、真实三角形测试和更新时间，才能判断结构是否真的有效。
+
+## Light（光）与 Radiometry（辐射度量）：交点要解释能量
+
+Light（光）从光源沿路径传播，光线追踪在每个交点询问这份能量如何到达表面、被遮挡以及继续反射。法线决定方向关系，材质决定表面如何响应，路径长度和光源分布则影响到达能量。把这些因素混成一个亮度常数，会让路径错误和材质错误难以区分。
+
+Radiometry（辐射度量）为功率、面积、方向和立体角提供能量语义；Reflectance（反射率）描述表面保留入射能量的比例。对于一个教学用的单次反射模型，可以把像素贡献写成：
+
+$$
+C_{pixel}=V\cdot E_{light}\cdot R_{surface}
+$$
+
+其中 $V$ 是可见性与采样覆盖的组合项，$E_{light}$ 是到达交点的能量，$R_{surface}$ 是表面反射率。真实的渲染方程还会包含方向积分和多次反射，但这个简化式足以支持一个重要预测：固定光线路径后，只改反射率，几何命中不应移动；固定材质后，只改采样覆盖，噪声应改变而光源本身不应变强。
+
+下面的伪代码保留了从相机到像素的责任边界：
+
+```cpp
+Ray primary = makeCameraRay(pixel, sample);
+Hit hit = traceClosest(primary, sceneStructure);
+Radiance direct = evaluateLight(hit, light, radiometry);
+Color contribution = applyReflectance(direct, hit.material);
+accumulate(pixel, contribution);
+```
+
+## Modern Graphics Hardware：许多光线可以同时求交
+
+Modern Graphics Hardware（现代图形硬件）适合把像素、样本和路径分成大量任务。相同阶段的射线可以共享执行资源，分支相近的路径容易形成稳定的批次；但不同反射深度、不同材质和不同空间节点会造成分歧。硬件吞吐因此取决于任务是否可并行、访问是否局部，以及等待是否被其他工作隐藏。
+
+### Parallelism（并行性）与 memory latency（内存延迟）
+
+<Term def="让许多独立光线或求交任务同时推进的执行能力；它受路径分歧和共享数据依赖限制。">
+  并行性
+</Term>
+
+Parallelism（并行性）可以同时推进同一批主光线或阴影光线。memory latency（内存延迟）则来自读取空间节点、三角形、纹理和材质表后的等待。如果射线访问路径相近，缓存可以复用数据；如果每条射线跳到不同节点，更多并行任务可能只是制造更多未命中和排队。
+
+因此，性能记录应包括每像素样本数、平均反射深度、候选节点、缓存命中、求交测试和等待比例。先降低不可见路径和无贡献样本，再考虑扩大批次或改变任务布局；否则加宽并行度只会更快地触发 memory latency（内存延迟）。
+
+## 三步实验：从单条路径走到射线吞吐
+
+每一步先写下预测，再只改变一个相关控制。三个视角共享同一个 RayTraceViz，但分别呈现路径回放、空间结构和现代硬件上的射线任务。
+
+<Stepper>
+  <Step title="第一步：回放一条光线路径">
+    先猜一猜：光线命中后，哪个阶段负责把交点变成像素贡献？选择“光线路径”，使用单步和进度条观察发射、求交、着色与累积。
+
+    <CgppCh22RaytracingLab />
+
+  </Step>
+  <Step title="第二步：减少无关求交">
+    先预测：增加结构深度会让真实交点改变，还是只让候选节点数量变化？选择“加速结构”，同时查看候选节点和求交测试。
+
+    <CgppCh22RaytracingLab />
+
+  </Step>
+  <Step title="第三步：测量射线等待">
+    动手试：先把射线数量和样本调高，再逐步增加访问等待。选择“射线吞吐”，比较完成任务、等待任务与 Parallelism（并行性）。
+
+    <CgppCh22RaytracingLab />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="误区一：反射次数增加就会修复黑斑">
+  现象 → 反射次数提高后，画面仍有黑斑，计算量和噪声却一起上升。
+
+原因 → 黑斑可能来自错误法线、射线起点自相交或可见性判定；额外路径只会重复传播错误的交点。
+
+修法 → 先记录首个命中距离、法线和遮挡结果，给次级光线加可解释的偏移，再判断是否需要更多反射。
+
 </Callout>
 
-## 核心概念
+<Callout type="trap" title="误区二：空间结构只要更深就一定更快">
+  现象 → 结构深度增加后，候选节点减少，但遍历时间和更新时间反而上升。
 
-### 设计动机
+原因 → 节点可能重叠、访问跳跃变多，或动态场景的结构更新成本超过了节省的求交测试；结构没有改变真实交点，只改变了筛选路径。
 
-Vulkan 把The Ray Tracing Pipeline从驱动黑盒中抽出来，变成应用可控的显式流程。
-这带来三个好处：
+修法 → 同时测量候选节点、真实几何测试、缓存命中和更新时间，再选择深度、分割方式或重建策略。
 
-1. **可预测性**：应用精确知道何时发生什么，不再有驱动"惊喜"
-2. **并行性**：显式边界让多线程录制和提交成为可能
-3. **性能**：去掉运行时验证开销，把验证前移到开发期
-
-### 对象模型
-
-Vulkan 中所有资源都是不透明句柄（handle）。The Ray Tracing Pipeline涉及的对象遵循统一的生命周期：
-
-```
-创建（Create） → 绑定/配置 → 使用（Record/Submit） → 等待完成 → 销毁（Destroy）
-```
-
-每个阶段都有明确的 API 入口和前置条件。跳过任何一步都是未定义行为。
-
-### 与 OpenGL 的对比
-
-| 维度 | OpenGL | Vulkan |
-|------|--------|--------|
-| 状态管理 | 全局状态机 | 不可变管线对象 |
-| 验证 | 运行时（驱动） | 开发期（验证层） |
-| 同步 | 隐式（驱动插入） | 显式（应用声明） |
-| 内存 | 驱动管理 | 应用分配与绑定 |
-| 命令录制 | 立即执行 | 录制到缓冲区再提交 |
-
-## 工作流程
-
-### 初始化阶段
-
-在 Vulkan 中使用The Ray Tracing Pipeline相关功能前，必须完成：
-
-1. 创建 VkInstance 并启用必要的扩展
-2. 选择支持所需特性的物理设备
-3. 创建逻辑设备并获取队列
-4. 分配所需的内存和缓冲区
-
-### 录制阶段
-
-命令缓冲区的录制是 Vulkan 的核心工作模式：
-
-```cpp
-// 开始录制
-vkBeginCommandBuffer(cmdBuf, &beginInfo);
-
-// 录制与The Ray Tracing Pipeline相关的命令
-// ... 具体的 vkCmd* 调用 ...
-
-// 结束录制
-vkEndCommandBuffer(cmdBuf);
-```
-
-录制阶段不执行任何 GPU 操作，只是把命令写入缓冲区。
-这让多线程并行录制成为可能。
-
-### 提交与执行
-
-```cpp
-VkSubmitInfo submitInfo{};
-submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-submitInfo.commandBufferCount = 1;
-submitInfo.pCommandBuffers = &cmdBuf;
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence);
-```
-
-提交后 GPU 异步执行。应用通过 Fence 或 Semaphore 等待完成。
-
-## 关键 API
-
-### 创建与配置
-
-```cpp
-// 创建信息结构体（以缓冲区为例）
-VkBufferCreateInfo bufferInfo{};
-bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-bufferInfo.size = bufferSize;
-bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-VkBuffer buffer;
-vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
-```
-
-### 内存分配
-
-```cpp
-VkMemoryRequirements memReqs;
-vkGetBufferMemoryRequirements(device, buffer, &memReqs);
-
-VkMemoryAllocateInfo allocInfo{};
-allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-allocInfo.allocationSize = memReqs.size;
-allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-VkDeviceMemory memory;
-vkAllocateMemory(device, &allocInfo, nullptr, &memory);
-vkBindBufferMemory(device, buffer, memory, 0);
-```
-
-### 使用与同步
-
-```cpp
-// 在命令缓冲区中使用
-vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-vkCmdBindVertexBuffers(cmdBuf, 0, 1, &buffer, offsets);
-vkCmdDraw(cmdBuf, vertexCount, 1, 0, 0);
-
-// 等待完成
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-```
-
-## 常见陷阱
-
-<Callout type="trap">
-**陷阱 1：忘记同步**
-Vulkan 不会自动等待前一帧完成。如果不使用 Fence 或 Semaphore，
-可能在前一帧还在使用资源时就修改了它，导致撕裂或崩溃。
 </Callout>
 
-<Callout type="trap">
-**陷阱 2：内存类型选错**
-不是所有内存类型都支持所有操作。必须通过
-`vkGetPhysicalDeviceMemoryProperties` 查询设备支持的内存类型，
-并匹配 `memoryTypeBits` 和所需的属性标志。
+<Callout type="trap" title="误区三：扩大 Parallelism（并行性）就能消除等待">
+  现象 → 射线批次变大后，完成任务比例没有提高，memory latency（内存延迟）却更明显。
+
+原因 → 不同路径访问不同空间节点和材质，分支分歧与缓存未命中让执行单元等待共享数据；并行宽度不能消除数据依赖。
+
+修法 → 先按路径阶段重排任务、减少不可见样本并改善访问局部性，再评估增加并行批次是否有收益。
+
 </Callout>
 
-<Callout type="trap">
-**陷阱 3：对象销毁顺序**
-Vulkan 对象有严格的销毁顺序：先销毁使用者，再销毁被使用者。
-例如先销毁 Pipeline，再销毁 PipelineLayout；先销毁 ImageView，再销毁 Image。
-</Callout>
+## 本章小结
 
-## 性能考量
+- 光线追踪把像素询问拆成发射、求交、着色和累积，Graphics Pipeline（图形管线）的阶段契约仍然成立。
+- 光线携带起点和方向，交点携带命中距离、法线和材质引用；可见性决定哪一个交点进入后续解释。
+- Light（光）带来能量，Radiometry（辐射度量）说明能量语义，Reflectance（反射率）说明表面保留能量的比例。
+- Modern Graphics Hardware（现代图形硬件）可以利用 Parallelism（并行性）同时处理许多射线，但 memory latency（内存延迟）会限制有效吞吐。
+- 调试顺序应是“光线输入 → 首个交点 → 可见性与法线 → 能量与反射 → 路径批次与访问”，每次只改变一个条件。
 
-### 批量操作
-
-Vulkan 鼓励批量提交而非逐个提交：
-
-- 一次 `vkQueueSubmit` 提交多个命令缓冲区
-- 一次 `vkAllocateCommandBuffers` 分配多个缓冲区
-- 使用 `VkDeviceMemory` 的子分配减少分配次数
-
-### 避免 CPU-GPU 同步点
-
-```cpp
-// 坏：每帧都等待
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-// 好：使用多帧飞行（frames in flight）
-// 帧 N 提交后不等待，继续录制帧 N+1
-// 只在需要复用帧 N 的资源时才等待其 Fence
-```
-
-### 内存对齐
-
-Vulkan 对缓冲区绑定有对齐要求（`minUniformBufferOffsetAlignment`）。
-不满足对齐要求是未定义行为，在某些 GPU 上会导致数据错乱。
-
-## 验证层检查
-
-启用验证层后，The Ray Tracing Pipeline相关的常见错误会被捕获：
-
-```
-VUID-vkCmdDraw-None-02697: 描述符集未绑定
-VUID-vkQueueSubmit-pWaitSemaphores-03238: 信号量已被等待
-VUID-vkDestroyBuffer-buffer-00922: 缓冲区仍在被命令缓冲区引用
-```
-
-开发期务必启用 `VK_LAYER_KHRONOS_validation`，它能在运行时捕获绝大多数错误。
-
-## 本章要点
-
-1. The Ray Tracing Pipeline是 Vulkan 显式控制哲学的具体体现
-2. 所有操作遵循"创建→配置→录制→提交→等待→销毁"的生命周期
-3. 同步是应用的责任，不是驱动的责任
-4. 验证层是开发期的安全网，但不能替代正确的设计
-5. 性能来自批量操作、避免同步点和正确的内存策略
+## 练习与答案
 
 <Exercises>
 
-<Answer>
-练习 1：画出The Ray Tracing Pipeline涉及的对象生命周期图，标注每个阶段的 API 调用。
-</Answer>
+**问题 1：判断首个交点。** 相机光线写成 $r(t)=o+td$，沿同一方向得到两个候选命中距离 $t=2.0$ 和 $t=4.5$。在没有透明材质的简化场景中，应选择哪个交点？还要记录什么几何证据？
 
 <Answer>
-练习 2：修改示例代码，故意跳过同步步骤，观察验证层的报错信息。
+  应选择 $t=2.0$
+  的最近有效交点，因为它代表从当前起点首先看到的表面。还要记录交点法线、材质引用和坐标空间；这些证据会影响后续
+  Light（光）与 Reflectance（反射率）的解释。
 </Answer>
 
+**问题 2：拆分像素响应。** 固定可见性项 $V=0.8$、光能量 $E_{light}=0.75$ 和反射率 $R_{surface}=0.5$，用简化模型计算像素贡献。如果只增加采样而使 $V$ 从 0.8 变成 0.9，哪一项发生了变化？
+
 <Answer>
-练习 3：对比单帧飞行和多帧飞行（frames in flight）的帧率差异，解释原因。
+  初始贡献为 $0.8\times0.75\times0.5=0.30$；调整后为
+  $0.9\times0.75\times0.5=0.3375$。变化来自有效可见样本比例，不表示
+  Light（光）能量或材质反射率被改变。
+</Answer>
+
+**问题 3：定位射线吞吐。** 样本数和射线数量增加后，命中结果保持稳定，但等待任务变多、缓存命中下降。你会先调低反射次数，还是先检查空间节点与材质访问的局部性？说明理由。
+
+<Answer>
+  先检查空间节点与材质访问的局部性，因为命中结果稳定说明几何和光照语义大致正确，等待增加更像
+  memory
+  latency（内存延迟）问题。确认访问路径后，再根据无贡献路径决定是否降低反射次数或样本数。
 </Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="Command Buffer">录制 GPU 命令的缓冲区，可多线程并行录制后统一提交。</GlossaryItem>
-  <GlossaryItem term="Fence">CPU-GPU 同步原语，CPU 可等待 GPU 完成某次提交。</GlossaryItem>
-  <GlossaryItem term="Semaphore">GPU-GPU 同步原语，协调队列间的执行顺序。</GlossaryItem>
-  <GlossaryItem term="Validation Layer">开发期调试层，在运行时检查 API 调用的正确性。</GlossaryItem>
+
+<GlossaryItem term="光线">
+  从相机或交点出发、带有起点和方向的有序射线。
+</GlossaryItem>
+
+<GlossaryItem term="交点">
+  光线与场景表面满足几何约束的位置，包含命中距离和后续着色所需属性。
+</GlossaryItem>
+
+<GlossaryItem term="可见性">
+  由最近有效交点决定当前光线看到哪个表面的状态。
+</GlossaryItem>
+
+<GlossaryItem term="并行性">
+  让许多独立光线或求交任务同时推进的执行能力。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution>
-内容基于《Computer Graphics: Principles and Practice, 3rd Edition》（https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707）第 22 章整理重写，
-代码示例为教学简化版本。
-</Attribution>
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Computer Graphics: Principles and Practice, 3rd Edition"
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition 的公开目录与章节范围"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

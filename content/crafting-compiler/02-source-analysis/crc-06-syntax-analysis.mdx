@@ -1,11 +1,9 @@
 ---
-title: 第6章 语法分析
+title: "第6章 语法分析"
 type: C
-section: 第1部分 · 代码分析
+section: "第1部分 · 代码分析"
 order: 6
-description: >-
-  第6章 语法分析围绕定义的分析、语句的分析、表达式的分析、项的分析推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用定义、语句、表达式和项的层级回放 C♭ 语法树，观察优先级、结合性、源跨度与截断诊断如何被保留下来。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -13,60 +11,223 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-06
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcSyntaxAnalysisLab } from "@/components/mdx/crafting-compiler/v2/crc-06-syntax-analysis";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“C♭语法树入口台”开始
+- 能把 C♭ token 按定义、语句、表达式和项的层级组织为带源跨度的 AST
+- 能用最小样本验证表达式的优先级、结合性、括号边界和项的递归入口
+- 能在合法、截断和非法样本上定位语法分析的停止位置，并用清理重建确认诊断稳定
 
-第6章 语法分析沿“definitions/statements/expressions/terms → parse result”转换信息。最终进程返回正确值只能证明一条执行路径；C♭语法树入口台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第6章 语法分析固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变语法入口或嵌套深度。本页交互只移动definitions/statements/expressions/terms → parse result中的真实对象和状态，不生成置信、风险或证据分数。
+## 从 token 层级到可验证的语法树
+
+语法分析的任务不是把 token 全部消费后返回一个“成功”标记，而是把 token 放入有边界的结构。定义说明程序里有哪些名字和初值，语句说明一次可执行动作，表达式说明值与运算关系，项则把乘法层或更高优先级的局部结构固定下来。
+
+先预测 `a + b * c` 的树形，再观察解析器进入哪一层、消费了哪些 token、返回了哪一个节点。只要每层保存入口、出口、源跨度和子节点，优先级错误就不会被后续类型检查或代码生成掩盖。
+
+<Callout type="trap" title="误区一：把语句和表达式混成一条规则">
+  现象 → 赋值、调用和返回都能暂时解析，但分号、括号或嵌套块的错误位置不断漂移。
+
+原因 → 语句的控制边界与表达式的值边界没有分开，解析器不知道谁负责消费结束 token。
+
+修法 → 为语句和表达式分别保存入口、出口和返回节点，用最短语句与最短表达式分别验收。
+
+</Callout>
+
+<Callout type="trap" title="误区二：用从左到右的读取代替优先级">
+  现象 → `a + b * c` 被构造为先加后乘，树的节点顺序却看起来仍然完整。
+
+原因 → 项没有成为表达式的子层，乘法和加法共享了同一个平面规则。
+
+修法 → 让 expression 调用 term，再由 expression 处理加法层；比较无括号和带括号样本的树形。
+
+</Callout>
+
+<Callout type="trap" title="误区三：截断输入也返回部分成功树">
+  现象 → 缺少右括号或分号时，解析器交付一个看似完整的 AST，下游才报告无关错误。
+
+原因 → 没有把必需的结束 token 和当前 production 的源跨度纳入错误合同。
+
+修法 → 在缺口处抛出带位置和期望 token 的诊断，不交付越过错误边界的节点；清理后重复回放。
+
+</Callout>
+
+## 语法分析的工作合同
+
+第6章 语法分析固定一条证据链：token 序列进入 production，production 根据上下文进入定义、语句、表达式或项，最后交付 AST 或诊断。每一层都要说明消费范围、子节点、返回值和失败位置，避免把结构责任推给后续阶段。
+
+<Term def="保存语法结构、子节点和源码起止位置的树形产物；它把解析阶段的边界交给类型检查和代码生成继续使用。">
+  AST
+</Term>
+
+AST 不只是打印出来的缩进文本。节点类型、子节点顺序和 `[start, end)` 源跨度共同构成合同；当 `a + b * c` 的乘法层挂错位置时，后续阶段应该能直接从树形断言发现问题。
+
+<Term def="描述名字、类型、初值或函数入口等程序绑定如何出现的语法结构；它通常在定义边界处交付声明节点。">
+  定义
+</Term>
+
+定义分析要先确认名字和边界，再处理可选初值或参数。`int count = 1;` 中的类型、名称、等号、初值和分号应分别有可观察的消费位置；缺少名称时不能把等号误当作表达式入口。
+
+<Term def="表达一次可执行动作及其结束条件的语法结构，例如赋值、调用、返回或复合语句；它负责把表达式放入控制边界。">
+  语句
+</Term>
+
+语句分析负责分号、块和控制结构的边界。它可以调用表达式分析取得值，但不应把表达式内部的优先级逻辑复制一遍。这样的分层让一个表达式修复能同时改善赋值、返回和调用。
+
+<Term def="产生一个值的语法结构；它通过运算符、调用、名字和括号组合出带优先级与结合性的 AST。">
+  表达式
+</Term>
+
+表达式层处理加法、赋值或条件等较低优先级构造，并把更紧的运算交给项。判断表达式是否正确时，要看根节点、子节点顺序和括号留下的源跨度，而不只是看 token 是否耗尽。
+
+<Term def="表达式中优先级更高、可连续组合的局部结构，通常承载乘法、除法、名字、调用和括号等紧密绑定的构造。">
+  项
+</Term>
+
+项是优先级分层的关键。若 expression 先解析一个 term，再消费加号和下一个 term，`b * c` 就会先在项层完成；若项规则过宽，表达式的结合性会在最小样本上暴露。
 
 ## 来源、版本与独立重写边界
 
-第6章 语法分析以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)对齐范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。JavaCC 行为以[官方 grammar 文档](https://javacc.github.io/javacc/documentation/grammar.html)核对，C♭、JDK、目标平台和生成目录等运行条件需要在实验记录中单独注明。
 
-第6章 语法分析用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+## 第1部分 代码分析
 
-## 本章合同与可运行探针
+词法分析交付 token，语法分析交付 AST，语义检查再解释名字和类型。三者的交接可以用一个最小快照表达：输入 token、当前 production、已消费跨度、返回节点和错误位置。只有这些字段都能回放，才知道问题发生在扫描、分层还是语义阶段。
 
-、、、、。
-
-第6章 语法分析的通过不变量是“树形状保持结合性、优先级、声明边界和完整源跨度”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-java AstDump samples/syntax.cb
-java AstDump samples/syntax-invalid.cb
+```text
+tokens: identifier plus identifier star identifier eof
+tree:   add(name(a), multiply(name(b), name(c)))
+span:   [0, 9)
 ```
 
+每次只改变一个因素：括号、运算符、结束 token 或嵌套深度。固定 JavaCC 版本、生成命令和样本编号，才能把树形变化归因给语法规则，而不是构建残留。
 
-## 官方目录逐项深读
+## 第6章 语法分析
 
-### 第6章 语法分析
+第6章 语法分析把五个正式节点放在同一条可回放路径上：总入口决定当前语法合同，定义和语句建立外层边界，表达式与项决定值的分组，最后交付 AST 或诊断。专属实验显示每一层的入口 token、源跨度和当前结果。
 
-**四级证据 1/5。** 前端槽1用合法、最长匹配、歧义、截断和非法字符样本核对“第6章 语法分析”的token、前看、树形与源位置；固定嵌套深度，只改变语法入口，以括号化AST与第一诊断找到第一处分叉并清理重建。
+## 6.1 定义的分析
 
-### 6.1 定义的分析
+定义分析从类型、名字和可选初始化开始。先消费必须存在的名字，再判断等号是否开启初值；分号或块结束是定义的边界。空定义、缺失名字和重复名字可以分别交给语法层与后续语义层，不要用一个模糊错误覆盖所有情况。
 
-**四级证据 2/5。** 流水线槽2将“6.1 定义的分析”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定嵌套深度，只改变语法入口，以括号化AST与第一诊断找到第一处分叉并清理重建。
+## 6.2 语句的分析
 
-### 6.2 语句的分析
+语句分析把表达式放进动作边界。赋值语句需要确认左侧可赋值、等号和右侧表达式，调用语句需要确认参数列表和结束括号，复合语句需要让块内语句共享明确的结束条件。语句层只负责控制边界，表达式层负责值的结构。
 
-**四级证据 3/5。** 机器槽3把“6.2 语句的分析”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定嵌套深度，只改变语法入口，以括号化AST与第一诊断找到第一处分叉并清理重建。
+## 6.3 表达式的分析
 
-### 6.3 表达式的分析
+表达式分析处理较低优先级的组合。递归下降实现通常让 expression 先取得一个 term，再在看到加号或减号时继续取得 term；这样左结合的 `a - b - c` 可以形成 `(a - b) - c`，而括号则通过新的嵌套入口改变范围。
 
-**四级证据 4/5。** 机器槽4把“6.3 表达式的分析”落实到IA-32宽度、寄存器、栈效应、调用约定与反汇编，用哨兵和差分样本验证；固定嵌套深度，只改变语法入口，以括号化AST与第一诊断找到第一处分叉并清理重建。
+## 6.4 项的分析
 
-### 6.4 项的分析
+项分析处理比加法更紧的结构，例如乘法、除法、名字、调用和括号。对 `a + b * c`，项层先构造 `b * c`，表达式层再把结果与 `a` 组合。项的结束条件必须清楚，否则表达式层无法知道何时接管下一个运算符。
 
-**四级证据 5/5。** 流水线槽5将“6.4 项的分析”映射为输入、结构化产物、错误合同、第一处分叉和清理后重建断言；固定嵌套深度，只改变语法入口，以括号化AST与第一诊断找到第一处分叉并清理重建。
+<CrcSyntaxAnalysisLab />
 
-## 三个必须主动触发的误区
+## 三步实验：从入口定位到树形诊断
 
+三个步骤共享本章专属实验，但关注点逐步收窄：先确认五个正式节点，再比较表达式与项的优先级，最后注入缺失边界观察 AST 与诊断是否同步。
 
-## 练习、答案与116层级验证
+<Stepper>
+  <Step title="第一步：浏览语法层级">
+    先预测：如果定义、语句、表达式和项共用一个平面规则，哪一种边界最先失去解释？选择“语法层级”，推进五个节点并记录每层的输入与产物。
 
+    <CrcSyntaxAnalysisLab />
 
+  </Step>
+  <Step title="第二步：比较表达式与项">
+    动手试：切换 `a + b * c`、`(a + b) * c` 和 `a - b - c`，观察项层、表达式层、根节点和源跨度的变化。
+
+    <CrcSyntaxAnalysisLab />
+
+  </Step>
+  <Step title="第三步：注入边界错误">
+    先猜一猜：缺少右括号或分号时，解析器应该返回部分 AST 还是保留当前 production 的诊断？切换故障模式，比较停止位置、期望 token 和清理重建结果。
+
+    <CrcSyntaxAnalysisLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- AST 同时保存节点结构、子节点顺序和源跨度，不能用 token 耗尽替代树形验收。
+- 定义和语句负责外层边界，表达式与项负责值的分组、优先级和结合性。
+- 项层先完成更紧的运算，表达式层再处理较低优先级；括号通过嵌套入口改变范围。
+- 截断输入应在当前 production 的缺口处停止，并稳定报告期望 token、位置和退出码。
+
+<Exercises>
+
+**问题 1：覆盖正式节点。** 请为“第6章 语法分析”“6.1 定义的分析”“6.2 语句的分析”“6.3 表达式的分析”“6.4 项的分析”各写一份输入、产物和验收证据。
+
+<Answer>
+  第6章 语法分析记录入口 production 和 AST 总体结构；6.1
+  定义的分析记录类型、名字、初始化和分号；6.2
+  语句的分析记录动作边界、表达式子节点和结束 token；6.3
+  表达式的分析记录低优先级组合与结合性；6.4
+  项的分析记录乘除、名字、调用和括号等紧绑定结构。每份证据都要包含
+  token、源跨度、返回节点和退出码。
+</Answer>
+
+**问题 2：验证优先级。** 对 `a + b * c`、`(a + b) * c` 和 `a - b - c` 写出预期 AST，并说明应该由表达式层还是项层首先构造每个节点。
+
+<Answer>
+  第一棵树是 `add(a, multiply(b, c))`，乘法先由项层构造；第二棵树是
+  `multiply(add(a, b), c)`，括号让表达式子树先完成；第三棵树是
+  `subtract(subtract(a, b),
+  c)`，表达式层按左结合逐次组合。比较根节点和每个节点的源跨度即可确认层级。
+</Answer>
+
+**问题 3：修复边界诊断。** 将一个合法调用改成缺少右括号的输入，再改成缺少语句分号的输入；要求清理生成目录后重复回放，比较停止位置、期望 token 和 AST 是否被错误输入污染。
+
+<Answer>
+  缺少右括号时应停在调用 production 的结束位置，期待
+  RPAREN；缺少分号时应停在语句边界，期待
+  SEMICOLON。两种输入都不交付越过缺口的完整节点。删除生成目录后用固定命令重建并运行两次，比较错误阶段、位置、消息摘要、树摘要和退出码。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="AST">
+  保存语法结构、子节点和源码起止位置的树形产物。
+</GlossaryItem>
+
+<GlossaryItem term="定义">
+  描述名字、类型、初值或函数入口等程序绑定如何出现的语法结构。
+</GlossaryItem>
+
+<GlossaryItem term="语句">
+  表达一次可执行动作及其结束条件的语法结构。
+</GlossaryItem>
+
+<GlossaryItem term="表达式">
+  产生一个值并通过运算符、调用、名字和括号组合 AST 的语法结构。
+</GlossaryItem>
+
+<GlossaryItem term="项">
+  表达式中优先级更高、可连续组合的局部结构。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC 官方 grammar 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

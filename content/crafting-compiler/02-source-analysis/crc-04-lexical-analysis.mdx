@@ -1,12 +1,9 @@
 ---
-title: 第4章 词法分析
+title: "第4章 词法分析"
 type: C
-section: 第1部分 · 代码分析
+section: "第1部分 · 代码分析"
 order: 4
-description: >-
-  第4章
-  词法分析围绕基于JavaCC的扫描器的描述、扫描没有结构的单词、扫描不生成token的单词、扫描具有结构的单词推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 C♭ 字符流和 JavaCC 词法规则观察最长匹配、SKIP/MORE 动作、词法状态、token 文本与源跨度，建立可重放的扫描器证据。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -14,61 +11,235 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-04
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { CrcLexicalAnalysisLab } from "@/components/mdx/crafting-compiler/v2/crc-04-lexical-analysis";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“JavaCC词法状态台”开始
+- 能把字符流按最长匹配、规则优先级和源跨度拆成可验证的 token 记录
+- 能解释 JavaCC 扫描器中 TOKEN、SKIP、MORE 与词法状态各自交付或隐藏什么
+- 能修改一个词法探针，在标识符、注释、字符串和非法输入下定位首个扫描差异并重放验证
 
-第4章 词法分析沿“characters → lexical state → token/SKIP/MORE → source span”转换信息。最终进程返回正确值只能证明一条执行路径；JavaCC词法状态台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第4章 词法分析固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变词法规则或输入类别。本页交互只移动characters → lexical state → token/SKIP/MORE → source span中的真实对象和状态，不生成置信、风险或证据分数。
+## 从字符到 token 的第一站
 
-## 来源、版本与独立重写边界
+编译器看到的源文件首先只是字符。空格、注释、标识符、数字和字符串都挤在同一条流里；如果扫描器没有稳定地划分它们，后面的语法规则就只能在错误边界上工作。
 
-第4章 词法分析以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
+词法分析的难点不在于把每个字符单独读出来，而在于决定一段字符应该合成哪个单元、什么时候停止、是否交给下一条规则，以及如何把源文件位置保留下来。本章用短输入逐项观察这些决定。
 
-第4章 词法分析用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
+<Callout type="trap" title="误区一：每个字符都应该生成 token">
+  现象 → 空格、换行和注释全部进入 token 流，解析器被迫处理大量不属于语法结构的噪声。
 
-## 本章合同与可运行探针
+原因 → 没有区分需要交给语法层的词法单元和只用于分隔的字符。
 
-、、、、。
+修法 → 为空白和注释设计明确的 SKIP 或隐藏动作，并验证它们不会改变下一个 token 的源跨度。
 
-第4章 词法分析的通过不变量是“字符只被消费一次，token种类、文本和起止位置可重放”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
+</Callout>
 
-```bash
-javacc Parser.jj
-javac generated/*.java
-java TokenDump samples/lexical.cb
+<Callout type="trap" title="误区二：规则写得更靠前就一定优先">
+  现象 → 短规则抢先匹配，长标识符或多字符运算符被切成几个错误 token。
+
+原因 → 把规则排列顺序当成唯一选择机制，忽略最长匹配和词法状态。
+
+修法 → 用共享前缀样例比较候选长度、规则动作和最终跨度，明确真正的选择条件。
+
+</Callout>
+
+<Callout type="trap" title="误区三：字符串错误可以留给语法分析">
+  现象 → 未闭合字符串一路流到解析器，最后在完全不相关的语句处报错。
+
+原因 → 扫描器没有在字符串状态中处理转义、换行和结束引号。
+
+修法 → 让词法状态在缺少结束符时就报告源位置，确认不会生成一个伪字符串 token。
+
+</Callout>
+
+## 词法分析的工作对象
+
+<Term def="把字符流按规则切成 token、跳过无结构内容，并保留文本和源位置的编译器阶段。">
+  词法分析
+</Term>
+
+词法分析交给下一阶段的最小证据是 token 种类、原始文本或值、开始位置和结束位置。解析器不需要重新猜测一个标识符在哪里结束，也不应该负责判断注释是否闭合。
+
+<Term def="具有种类、文本或值以及源位置的词法单元；它是字符流交给语法规则的接口。">
+  token
+</Term>
+
+token 的文本和值要分开记录：数字 token 可以保留原文用于诊断，再转换成数值供后续阶段使用；标识符要保留拼写，字符串要保留转义前后的边界。实验只看 token 名称而不看跨度，常常会漏掉扫描器的真实错误。
+
+<Term def="多个词法规则都能匹配时，优先选择覆盖字符更多的候选；长度相同再按实现规定处理。">
+  最长匹配
+</Term>
+
+最长匹配可以用 `=` 和 `==` 这样的共享前缀验证，也可以用短标识符和长标识符验证。把候选、选中规则和剩余输入同时显示，读者才能看见扫描器为什么在这个位置停止。
+
+## 第4章 词法分析
+
+本章把字符流拆成四类证据：扫描器描述说明规则入口，没结构的单词说明直接形成 token 的路径，不生成 token 的单词说明 SKIP 或隐藏动作，具有结构的单词说明状态与 MORE 如何收集多段字符。四类证据最终都要回到 token 文本和源跨度。
+
+## 4.1 基于JavaCC的扫描器的描述
+
+JavaCC 的词法规格通常同时描述字符模式、动作和状态。简单标识符可以直接返回 token；空白和注释可以 SKIP；字符串或多段结构可以 MORE 并切换状态。规格的可读性来自每条规则都能说清“吃掉什么、交付什么、下一状态是什么”。
+
+扫描器描述的验收不是“JavaCC 生成成功”，而是用最短样例逐条触发规则。记录规则名、匹配文本、动作、状态和起止位置，才能把生成器的配置与运行时行为连起来。
+
+## 4.2 扫描没有结构的单词
+
+没有内部结构的单词包括标识符、整数和单字符运算符。它们通常在一个规则中完成匹配并交付 token，但仍要检查最长匹配、保留字与标识符的关系，以及数字边界是否符合语言合同。
+
+一个可靠样例不只包含 `count`，还要包含 `count2`、数字与标识符相邻、以及一个不能继续吞入的字符。比较每个 token 的文本和跨度，能发现“看起来分开、实际吞多了一个字符”的错误。
+
+## 4.3 扫描不生成token的单词
+
+空白、换行和注释往往不交给语法层，它们可以由 SKIP 动作消耗；某些工具还会保留特殊 token，供格式化或诊断使用。无论选择哪种动作，都应说明它是否影响下一个 token 的位置和错误列号。
+
+注释的边界尤其值得单独测试：行注释遇到换行应停止，块注释遇到结束标记应回到普通状态，未闭合块注释应在扫描阶段报告，而不是让解析器把后续源码当成注释内容。
+
+## 4.4 扫描具有结构的单词
+
+字符串、字符常量和多行结构需要记录内部状态。扫描器先进入字符串状态，遇到转义时消费成对字符，遇到结束引号才返回 token；如果遇到不允许的换行或文件结束，就保留起点并报告未完成结构。
+
+MORE 适合把多个匹配片段收集成一个最终 token，但它也会放大状态错误的影响。实验时应显示当前状态、已收集文本和下一条期待字符，确认状态切换不会泄漏到后面的普通代码。
+
+<Term def="在扫描过程中临时收集多个片段，直到结束规则把累计文本交付为一个 token 或报告错误。">
+  MORE
+</Term>
+
+## 词法探针：字符、动作与跨度
+
+为每个探针保存 `input`、`state`、`matchedRule`、`action`、`tokenText`、`span` 和 `replay`。正常输入验证主路径，最长匹配输入验证候选选择，状态错误输入验证字符串或注释的结束边界。
+
+```text
+input: "count == 10" /* note */
+tokens: identifier, equal-equal, integer
+skipped: whitespace, block-comment
+spans: [0,5), [6,8), [9,11)
+replay: clean generated scanner + same grammar revision
 ```
 
+先比较字符被谁消费，再比较 token。若字符已经被错误规则吞掉，后续 token 再漂亮也不能修复本次扫描；若 token 正确但跨度错误，解析器可能在诊断时指向错误列号。
 
-## 官方目录逐项深读
+## 三步实验：把扫描规则变成可观察状态
 
-### 第4章 词法分析
+三个步骤共享 CrcLexicalAnalysisLab。先看正式节点，再切换最长匹配和词法状态，最后用注释或字符串故障回放；每一步都能重置为同一输入。
 
-**四级证据 1/5。** 前端槽1用合法、最长匹配、歧义、截断和非法字符样本核对“第4章 词法分析”的token、前看、树形与源位置；固定输入类别，只改变词法规则，以token序列、跨度与词法状态找到第一处分叉并清理重建。
+<Stepper>
+  <Step title="第一步：浏览词法节点">
+    先预测：为什么第4章要把“有结构”和“无结构”的单词分开？选择“词法节点”，推进五个正式节点并记录每个节点的动作与 token 证据。
 
-### 4.1 基于JavaCC的扫描器的描述
+    <CrcLexicalAnalysisLab />
 
-**四级证据 2/5。** 前端槽2用合法、最长匹配、歧义、截断和非法字符样本核对“4.1 基于JavaCC的扫描器的描述”的token、前看、树形与源位置；固定输入类别，只改变词法规则，以token序列、跨度与词法状态找到第一处分叉并清理重建。
+  </Step>
+  <Step title="第二步：观察最长匹配">
+    动手试：选择“最长匹配”，切换标识符、等号运算符和数字样本，比较候选规则、选中 token 与源跨度。
 
-### 4.2 扫描没有结构的单词
+    <CrcLexicalAnalysisLab />
 
-**四级证据 3/5。** 前端槽3用合法、最长匹配、歧义、截断和非法字符样本核对“4.2 扫描没有结构的单词”的token、前看、树形与源位置；固定输入类别，只改变词法规则，以token序列、跨度与词法状态找到第一处分叉并清理重建。
+  </Step>
+  <Step title="第三步：回放词法状态">
+    先猜一猜：未闭合字符串应由哪一层报告？选择“词法回放”，注入注释或字符串故障，观察状态、累计文本和错误位置。
 
-### 4.3 扫描不生成token的单词
+    <CrcLexicalAnalysisLab />
 
-**四级证据 4/5。** 前端槽4用合法、最长匹配、歧义、截断和非法字符样本核对“4.3 扫描不生成token的单词”的token、前看、树形与源位置；固定输入类别，只改变词法规则，以token序列、跨度与词法状态找到第一处分叉并清理重建。
+  </Step>
+</Stepper>
 
-### 4.4 扫描具有结构的单词
+## 常见误区
 
-**四级证据 5/5。** 前端槽5用合法、最长匹配、歧义、截断和非法字符样本核对“4.4 扫描具有结构的单词”的token、前看、树形与源位置；固定输入类别，只改变词法规则，以token序列、跨度与词法状态找到第一处分叉并清理重建。
+### 误区 1：忽略保留字与标识符的边界
 
-## 三个必须主动触发的误区
+扫描 `if` 和 `ifCount` 时，不能只看前两个字符。先明确最长匹配与保留字判定的顺序，再用相邻样本核对 token 和跨度。
 
+### 误区 2：把 SKIP 当成“没有证据”
 
-## 练习、答案与116层级验证
+被跳过的字符仍然影响下一个 token 的源位置。记录跳过区间，才能解释错误列号为什么落在那里。
 
+### 误区 3：MORE 状态没有清理
 
+字符串或注释结束后若没有回到普通状态，后续标识符会被拼进旧 token。用“结构结束后立刻出现普通代码”的输入检查状态复位。
+
+## 小结
+
+- 词法分析把字符流切成带种类、文本和值和跨度的 token。
+- JavaCC 规则要同时说明匹配、动作、状态与结束条件。
+- 最长匹配解决共享前缀，SKIP 处理不交给语法层的内容，MORE 收集结构化片段。
+- 注释和字符串故障应在词法状态中稳定报告，不把伪 token 交给解析器。
+- 正常、最长匹配和状态故障都能清理重放，才算有可信扫描证据。
+
+## 练习与答案
+
+<Exercises>
+
+**问题 1：覆盖正式节点。** 请为“第4章 词法分析”“4.1 基于JavaCC的扫描器的描述”“4.2 扫描没有结构的单词”“4.3 扫描不生成token的单词”“4.4 扫描具有结构的单词”各写一份输入、动作、token 或跳过结果和源跨度验收。
+
+<Answer>
+  第4章 词法分析应覆盖字符到 token 的完整回放；4.1
+  基于JavaCC的扫描器的描述应保存规则、动作和状态；4.2
+  扫描没有结构的单词应核对标识符或数字 token；4.3
+  扫描不生成token的单词应核对空白/注释被 SKIP 后的下一个跨度；4.4
+  扫描具有结构的单词应核对
+  MORE、结束状态和未闭合错误。每项都要保存匹配文本、起止位置和退出码。
+</Answer>
+
+**问题 2：分析最长匹配。** 为 `=`、`==`、`count` 和 `count2` 设计输入，说明候选规则怎样选择，并指出如果跨度错误应该先检查什么。
+
+<Answer>
+  将 `=` 与 `==` 放在共享前缀样例中，将 `count` 与 `count2`
+  放在相邻样例中；比较候选长度、选中规则、剩余输入和 token
+  跨度。跨度错误先检查字符消费、最长匹配和规则动作，不要先修改语法产生式。
+</Answer>
+
+**问题 3：改 Demo 代码。** 在 CrcLexicalAnalysisLab 中把闭合字符串改成未闭合字符串，要求扫描阶段报告起始位置；删除生成目录后重放两次，比较状态、累计文本、错误位置和退出码。
+
+<Answer>
+  只删除结束引号，保持 JavaCC
+  版本、词法规则和命令不变；预期扫描器停留在字符串状态，保留字符串起点并报告文件结束或非法换行，不生成完整字符串
+  token。清理目录后用相同命令重放，比较状态、累计文本摘要、错误位置和退出码，再恢复引号验证普通
+  token 流。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="词法分析">
+  把字符流按规则切成 token、跳过无结构内容并保留源位置的编译器阶段。
+</GlossaryItem>
+
+<GlossaryItem term="token">
+  具有种类、文本或值以及源位置的词法单元，是字符流交给语法规则的接口。
+</GlossaryItem>
+
+<GlossaryItem term="最长匹配">
+  多条规则都能匹配时，优先选择覆盖字符更多的候选。
+</GlossaryItem>
+
+<GlossaryItem term="SKIP">
+  消耗空白或注释等内容但不把它交给普通语法 token 流的词法动作。
+</GlossaryItem>
+
+<GlossaryItem term="MORE">
+  在状态中累计多个匹配片段，直到结束规则把它们交付为一个 token
+  或报告错误的动作。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录与 JavaCC 技术文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

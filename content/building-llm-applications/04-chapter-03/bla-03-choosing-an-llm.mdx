@@ -3,347 +3,287 @@ title: "Chapter 3: Choosing an LLM for Your Application"
 type: C
 section: "Chapter 3: Choosing an LLM for Your Application"
 order: 4
-description: "比较书中2024年坐标下的专有与开源模型，再用质量、延迟、成本、隐私、许可和可控性选择应用模型。"
+description: "从任务约束和受控基准出发比较专有与开源模型，再把许可证、部署责任、成本和回退路径纳入选型。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-03
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla03BenchmarkLab,
+  Bla03DecisionLab,
+  Bla03RequirementsLab,
+} from "@/components/mdx/building-llm-applications/04-chapter-03/bla-03-choosing-an-llm";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。比较书中2024年坐标下的专有与开源模型，再用质量、延迟、成本、隐私、许可和可控性选择应用模型。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能把应用任务翻译成质量、延迟、成本、隐私、许可证、可维护性和回退约束。
+- 能编写一个受控基准，固定样本、版本和评估协议，只改变一个模型或部署变量。
+- 能比较专有模型、开源模型和非语言模型组件，并解释模型卡、许可证与服务责任的差异。
+- 能用决策矩阵和案例证据选择候选模型，而不是根据排行榜或单次成功回答做结论。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 3：为应用选择可负责的 LLM
 
+选择模型不是问“哪个模型最强”，而是问“在这个任务、数据、预算和责任边界内，哪个候选最值得验证”。本章把选型拆成三层：先写任务和数据约束，再用固定样本测质量、延迟与成本，最后决定托管、自托管或混合部署。模型名称只是候选标签，真正的发布证据来自可重复的比较与明确的回退。
 
-## 数学、检索与成本骨架
+先预测：如果对话质量最高的模型不能处理敏感数据，它是否仍是最佳选择？如果一个模型只在平均分上领先，却有很长的尾延迟，是否适合交互应用？如果开源权重可以下载但许可证和硬件预算不清楚，是否已经具备上线条件？三个实验会让这些取舍在图上发生变化。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**排行榜第一名被直接写进架构方案；**原因：**把公开基准的任务、时间和指标误当成自己的业务目标；**修法：**先冻结任务合同，再用同一份应用样本比较候选的质量、延迟、成本和失败类型。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**模型能通过一次试运行，就认为许可证、隐私和运营责任已经解决；**原因：**把“可调用”混同于“可部署”；**修法：**在决策门中加入来源、许可证、数据边界、SLA、容量和回退证据。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**专有或开源被当成永久阵营，忽略任务变化；**原因：**用供应方式替代对质量、控制力和维护成本的分析；**修法：**让部署方式成为可替换变量，记录各候选的责任主体和迁移条件。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="描述任务、输入、输出、限制、成功指标和拒答条件的可执行边界">Task Contract</Term>` 是选型的起点；没有它，模型之间的比较会不断移动目标。`<Term def="记录模型用途、能力、限制、数据来源、评估和风险的结构化说明">Model Card</Term>` 则帮助团队知道一个候选被怎样训练和验证。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+把多个候选放进 `<Term def="固定样本、指标、环境和版本后形成的模型比较表">Benchmark Matrix</Term>`，才能同时看到质量、延迟、成本和失败类别。`<Term def="由供应商托管权重和推理服务、调用方通过端点使用的模型">Proprietary Model</Term>` 与 `<Term def="可取得权重或本地运行材料、由部署者承担更多运营责任的模型">Open Model</Term>` 的差异，最终要落到数据、许可证和运维边界。
 
-## 三段可运行骨架
+发布前还要经过 `<Term def="检查质量、成本、合规、风险和回退证据是否齐全的发布决策步骤">Decision Gate</Term>`。它不是一个分数阈值，而是一份可以阻断不完整候选、解释缺口并保留旧版本的工程合同。
+
+## 三步模型选型实验
+
+每一步先写下预测，再只改变一个条件。实验使用教学用合成数据，不代表任何供应商当前性能；真实项目要替换为经过许可审查的业务样本，并记录运行日期、端点版本和完整账单。
+
+<Stepper>
+  <Step title="1. 把任务变成约束">
+    选择对话、结构化抽取或代码协作，再开启敏感数据约束，观察任务指标、数据边界和拒答路径如何改变模型候选。
+
+    <Bla03RequirementsLab />
+  </Step>
+  <Step title="2. 运行受控基准">
+    选择质量、延迟或成本作为主指标，再让调参数据混入独立评估集，观察为什么比较必须暂停并重建测试边界。
+
+    <Bla03BenchmarkLab />
+  </Step>
+  <Step title="3. 形成部署决策">
+    选择托管、自托管或混合路由，再移除许可证、SLA 或回退证据，观察“能调用”为什么不等于“可发布”。
+
+    <Bla03DecisionLab />
+  </Step>
+</Stepper>
+
+## 一个可运行的选型门禁
+
+下面的 Python 函数把候选的质量、延迟、成本和合规证据收拢到一个决定中；TypeScript 版本用明确类型记录模型卡和基准矩阵。它们不替团队选择阈值，只确保缺少证据时不会被默认值伪装成通过。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 决策门">
 
 ```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
+def decision_gate(candidate, limits):
+    required = {"quality", "p95_latency_ms", "cost_per_request", "license", "rollback"}
+    missing = sorted(required - candidate.keys())
+    if missing:
+        return {"pass": False, "reason": "missing evidence", "missing": missing}
+    within_limits = (
+        candidate["quality"] >= limits["quality"]
+        and candidate["p95_latency_ms"] <= limits["p95_latency_ms"]
+        and candidate["cost_per_request"] <= limits["cost_per_request"]
+    )
+    return {"pass": within_limits, "reason": "threshold check"}
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 基准矩阵">
 
 ```typescript
-type Request = {
-  task: string;
+type BenchmarkRow = {
   model: string;
-  prompt: string;
-  dataHash: string;
-  tools: string[];
-  seed: number;
+  quality: number;
+  p95LatencyMs: number;
+  costPerRequest: number;
+  license: string;
+  rollback: string;
 };
 
-function freezeRequest(req: Request): Readonly<Request> {
-  return Object.freeze({ ...req });
+function rankCandidates(rows: BenchmarkRow[]) {
+  return [...rows].sort((a, b) =>
+    b.quality - a.quality || a.p95LatencyMs - b.p95LatencyMs,
+  );
 }
 ```
 
   </Tab>
 </CodeTabs>
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+`decision_gate` 先检查许可证和回退是否存在，再比较数值门槛；`rankCandidates` 只提供排序，不会替发布者判断隐私、数据驻留、容量或责任。真正的选型报告还要保留样本哈希、模型卡、版本、硬件、提示、解码设置、逐样本判断和异常记录。
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
-
-```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
-```
-
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
-
-```typescript
-type RunRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
-};
-
-function releaseGate(records: RunRecord[]): {
-  pass: boolean;
-  missing: number[];
-} {
-  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
-  const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
-  return { pass: missing.length === 0, missing };
-}
-```
-
-  </Tab>
-</CodeTabs>
-
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
-
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从候选市场到应用责任
 
 ### Chapter 3: Choosing an LLM for Your Application
 
-“Chapter 3: Choosing an LLM for Your Application”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Chapter 3: Choosing an LLM for Your Application”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 3: Choosing an LLM for Your Application”把模型选择还原为应用合同。读者应从任务、数据和限制出发建立候选，再用同一评估协议比较，最后把服务责任、许可证和回退写进发布记录，而不是把答案交给一个静态榜单。
 
 ### The most promising LLMs in the market
 
-“The most promising LLMs in the market”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“The most promising LLMs in the market”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“The most promising LLMs in the market”是一个随时间变化的候选集合，不是永恒排名。书中所处的 2024 年语境可以帮助理解当时的选择，但当前项目必须重新记录端点、版本、价格、上下文限制、可用区域和评测日期。
 
 ### Proprietary models
 
-“Proprietary models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Proprietary models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Proprietary models”通常通过供应商端点提供权重和推理服务，团队获得较快的接入速度，却需要确认数据处理、可用性、价格、限流、服务变更和出口路径。专有不自动代表质量更高，也不自动代表隐私更差。
 
 ### GPT-4
 
-“GPT-4”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“GPT-4”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“GPT-4”在本章中是历史候选的具体例子，而不是当前采购结论。复现实验要区分模型家族、部署名称、上下文配置和发布日期，并使用应用自己的样本测试结构遵循、事实性、延迟和成本。
 
 ### Gemini 1.5
 
-“Gemini 1.5”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“Gemini 1.5”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Gemini 1.5”适合用来讨论多模态、长上下文和服务配置如何影响选型。长上下文容量不等于模型会正确使用所有内容；测试仍要覆盖超长输入、来源追踪、敏感数据、截断行为和尾延迟。
 
 ### Claude 2
 
-“Claude 2”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“Claude 2”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Claude 2”说明书中模型名单带有出版时间。使用历史名称学习概念时，应同时记录当前替代、接口差异和迁移测试；不能用旧版试验的输出为今天的合规、价格或性能背书。
 
 ### Open-source models
 
-“Open-source models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Open-source models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Open-source models”提供更多权重、硬件和部署控制，但开放程度、许可证、训练数据说明、商业使用条件和维护责任各不相同。下载权重只是开始，生产还要核对硬件容量、补丁、监控、量化误差和安全更新。
 
 ### LLaMA-2
 
-“LLaMA-2”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“LLaMA-2”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“LLaMA-2”是开源模型讨论中的历史候选。比较时不要只看本地生成质量，还要记录权重来源、许可证限制、量化方式、推理硬件、模型保护、数据留存和发生故障时的维护队伍。
 
 ### Falcon LLM
 
-“Falcon LLM”把需求、生成代码、依赖、沙箱、测试和资源上限绑定。候选代码先静态检查，再在无网络、限时限存环境运行正常、边界和恶意测试；文字解释与实际执行结果分开记录。
-
-针对“Falcon LLM”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Falcon LLM”可以帮助练习本地部署的责任拆分：模型运行成功后，团队仍需验证吞吐、显存、并发、升级、监控和回退。自托管的控制力来自可观察和可修复，不只是拥有一个文件。
 
 ### Mistral
 
-“Mistral”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“Mistral”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Mistral”适合放进同一基准矩阵，与其他候选共享任务样本、提示、解码、硬件和统计方法。只有在边界输入、失败类别、价格和迁移成本都可比较时，候选之间的差异才有工程意义。
 
 ### Beyond language models
 
-“Beyond language models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Beyond language models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Beyond language models”提醒选型不一定要用生成式 LLM。分类器、嵌入模型、检索器、规则、传统程序或人工审核可能更适合确定性、隐私、延迟或成本要求；应比较完整任务链，而不是只比较文本质量。
 
 ### A decision framework to pick the right LLM
 
-“A decision framework to pick the right LLM”是2024年出版时的技术坐标。选型重新冻结当前可用版本、质量、延迟、成本、上下文、隐私、许可和可部署性；书中型号不自动代表今天的最佳方案，结论带日期和失效条件。
-
-针对“A decision framework to pick the right LLM”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“A decision framework to pick the right LLM”可以写成四步：定义任务合同，筛掉违反隐私与许可证的候选，运行受控基准，最后评审运营和回退。矩阵中的空白不是零分，而是需要补证据的阻断原因。
 
 ### Considerations
 
-“Considerations”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Considerations”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Considerations”把抽象选型转成具体问题：谁拥有数据，谁承担账单，谁处理事故，延迟预算是多少，质量失败的代价是什么，模型如何升级和回退。每个答案都应对应报告字段、责任人和重新评估触发条件。
 
 ### Case study
 
-“Case study”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Case study”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Case study”用一个文档抽取助手说明取舍：专有端点可能有较好的初始质量，自托管候选可能满足数据驻留，混合路由可能同时增加路由和监控复杂度。最终选择取决于验证后的任务成本与责任，而不是单项最高分。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为三件事：先冻结任务和数据约束，再用受控基准比较质量、延迟与成本，最后通过许可证、运营、隐私和回退门禁。排行榜和模型名称都只能生成候选，不能替代应用级证据。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”标记 Packt 原书、模型官方资料和本站独立重写的边界。书中模型名称保留历史语境；当前价格、服务条款、许可证、版本和能力必须回到对应官方来源与目标环境重新核对。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 六类选型证据
 
-## 六类应用证据
+### 1. 任务证据
 
-### 任务与来源合同
+保存真实任务的输入范围、输出结构、成功指标、拒答条件、边界案例和失败代价。任务证据决定哪些模型值得进入候选池，也防止团队用一个与业务无关的公开分数替代验收。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. 数据与隐私证据
 
-### 模型与提示合同
+保存数据分类、来源许可、驻留要求、脱敏方式、日志策略和供应商处理条款。输入一旦包含个人、财务或机密信息，端点选择、缓存和故障排查方式都会改变。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 基准与质量证据
 
-### 数据、检索与状态合同
+保存样本哈希、提示、解码、模型版本、逐样本输出、人工判断和错误类别。平均分只能作为摘要，不能隐藏一个高影响失败；评估集一旦被用来反复调参，就需要重新隔离。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 性能与成本证据
 
-### 工具、代码与权限合同
+保存并发、P50/P95 延迟、输入输出量、限流、重试、硬件占用和每请求成本。月度预算还要包含监控、存储、索引、人工审核和故障重放，而不是只抄一行 token 价格。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 许可证与运营证据
 
-### 评测、安全与成本合同
+保存模型卡、权重来源、许可证、商业限制、服务条款、更新政策、SLA、维护团队和安全响应路径。开放权重不等于没有责任，托管 API 也不等于供应商会替你完成所有合规工作。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 决策与回退证据
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+保存候选矩阵、阻断原因、决策人、上线日期、旧版本、流量切换方案和回退演练。模型变更、价格变化、数据范围变化或错误率升高都应触发重新评估，而不是等到事故后才补记录。
 
 ## 容易踩的坑
 
-**现象 →** 直接套用书中2024年的模型型号，今天已下线或行为大变。
-**原因 →** 书中型号是出版时坐标，未重新冻结当前可用版本。
-**修法 →** 选型重新冻结版本、质量、延迟、成本、隐私、许可和可部署性。
+<Callout type="trap">**现象：**只用一组“黄金提示”比较模型；**原因：**样本过窄，无法观察边界输入、拒答和长尾失败；**修法：**加入正常、边界、对抗和高影响样本，保留逐样本判断与失败类别。</Callout>
 
-**现象 →** 只比质量分数，忽略延迟和成本，上线后预算超支。
-**原因 →** 评测只看准确率，没把延迟和成本放入同一请求账本。
-**修法 →** 用成本公式把输入、输出、检索与工具成本同集合报告。
+<Callout type="trap">**现象：**本地模型的下载大小被当成总成本；**原因：**忽略显存、硬件折旧、容量、运维、监控和安全更新；**修法：**按完整运行链核算单位成本，并与托管候选使用相同任务指标。</Callout>
 
-**现象 →** 模型别名导致结果漂移。你可以亲自验证：用别名和显式版本号各跑一组金样本，diff逐字段输出。
-**原因 →** 服务端把别名指向不同快照，未固定模型版本。
-**修法 →** 记录提供方、模型版本、端点和快照ID，用金样本显现漂移。
+<Callout type="trap">**现象：**候选矩阵的空白被填成零风险或零成本；**原因：**把尚未测量误写成没有问题；**修法：**用缺证据状态阻断决策，指定负责人和补证据动作后再比较。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 2024年专有开源模型坐标已过期
-- 选型重冻结质量延迟成本隐私许可
-- 历史型号结论带日期与失效条件
-- 决策框架要可复核并留存记录
-- 模型烘焙赛冻结任务与预算对照
+- 模型选型从 Task Contract 开始，先约束任务、数据、隐私、指标和失败代价。
+- 用固定样本和版本建立 Benchmark Matrix，只改变一个变量并保留逐样本证据。
+- 专有模型与开源模型的差异最终落到许可证、数据控制、运营责任和回退能力。
+- 非语言模型、规则、检索和人工审核也应进入候选池，比较完整任务链的结果。
+- 发布前必须通过 Decision Gate，缺少来源、质量、成本、合规或回退证据就暂停。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 为什么选型时不能直接套用书中2024年的模型型号？
+**问题 1：**一个模型在公开榜单领先，但你的应用包含敏感数据和严格的 300 毫秒响应预算。请列出选型前需要补齐的证据。
 
 <Answer>
-
-书中的GPT-4、Gemini 1.5、Claude 2、LLaMA-2等是2024年出版时的技术坐标。模型会迭代、下线或改变行为，型号名不变但快照已变。选型必须重新冻结当前可用版本、质量、延迟、成本、隐私、许可和可部署性，结论带日期和失效条件。
-
+  需要数据处理和驻留条款、端点与日志策略、应用样本上的质量与拒答结果、P50/P95 延迟、限流与重试行为、每请求和月度成本，以及超过预算时的降级与回退方案。公开榜单只能作为候选来源，不能证明这些约束成立。
 </Answer>
 
-**问题 2：实践应用。** 选型决策框架应包含哪些维度？
+**问题 2：**为什么自托管模型的权重可下载仍不足以证明它比托管模型更便宜？
 
 <Answer>
-
-至少包含质量、延迟、成本、上下文长度、隐私、许可和可控性。质量和成本在同一请求集合上报告，平均值之外保留尾部失败；隐私和许可决定能否部署到目标环境；结论需带日期和失效条件以便复核。
-
+  总成本还包括硬件或云实例、显存、容量冗余、部署和升级、监控、补丁、安全响应、人工维护以及闲置资源。应在相同任务、并发、质量门槛和可靠性要求下核算单位请求成本，并保留故障和回退成本。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版模型选型评分函数：输入各维度分数字典和权重字典，返回加权总分和最优模型名。
+**问题 3（独立实现）：**实现一个 `decision_gate`，缺少质量、延迟、成本、许可证或回退字段时返回阻断原因，并拒绝用零值补齐。
 
 <Answer>
-
-```python
-def score_models(models, weights):
-    best_name, best_score = None, -1
-    for name, scores in models.items():
-        total = sum(scores.get(k, 0) * w for k, w in weights.items())
-        if total > best_score:
-            best_name, best_score = name, total
-    return {"best": best_name, "score": best_score}
-```
-
+  先定义必需字段集合，遍历候选记录并返回缺失字段；如果字段齐全，再按任务阈值检查质量、P95 延迟和成本。许可证和回退字段应作为存在性条件，而不是可被数值平均抵消的分数；最终返回候选名、缺口和下一步补证据动作。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-比较书中2024年坐标下的专有与开源模型，再用质量、延迟、成本、隐私、许可和可控性选择应用模型。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能冻结任务与预算完成模型烘焙赛，解释历史型号边界，并留下可复核的选型决策记录。
-
+<Glossary>
+  <GlossaryItem term="Task Contract">描述任务、输入、输出、限制、成功指标和拒答条件的可执行边界。</GlossaryItem>
+  <GlossaryItem term="Model Card">记录模型用途、能力、限制、数据来源、评估和风险的结构化说明。</GlossaryItem>
+  <GlossaryItem term="Benchmark Matrix">固定样本、指标、环境和版本后形成的模型比较表。</GlossaryItem>
+  <GlossaryItem term="Proprietary Model">由供应商托管权重和推理服务、调用方通过端点使用的模型。</GlossaryItem>
+  <GlossaryItem term="Open Model">可取得权重或本地运行材料、由部署者承担更多运营责任的模型。</GlossaryItem>
+  <GlossaryItem term="Decision Gate">检查质量、成本、合规、风险和回退证据是否齐全的发布决策步骤。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Chapter 2: LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
-- [Chapter 4: Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
+- [上一页：Chapter 2 — LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
+- [下一页：Chapter 4 — Prompt Engineering](/learn/building-llm-applications/05-chapter-04/bla-04-prompt-engineering)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留模型选型范围并补充任务约束、受控基准、部署责任和回退练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

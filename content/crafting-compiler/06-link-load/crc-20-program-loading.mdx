@@ -1,11 +1,9 @@
 ---
-title: 第20章 加载程序
+title: "第20章 加载程序"
 type: C
-section: 第4部分 · 链接和加载
+section: "第4部分 · 链接和加载"
 order: 20
-description: >-
-  第20章 加载程序围绕加载ELF段、动态链接过程、动态加载、GNU ld的链接推进cbc，实现从C♭源代码到中间产物、机器代码或运行时证据的可复查转换。
-  本页覆盖5个正式目录层级，以章专属编译探针、首错定位和清理重建验收。
+description: "用 PT_LOAD、权限、动态加载器、内存映射和 GNU ld 链接脚本，回放 ELF 程序从磁盘到入口地址的可验证加载链路。"
 demo: true
 math: false
 sourceUrl: "https://i.loveruby.net/ja/stdcompiler/toc.html"
@@ -13,61 +11,221 @@ draft: false
 qualityVersion: 2
 practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: crc-unit-20
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Crc20ProgramLoadingLab } from "@/components/mdx/crafting-compiler/v2/crc-20-program-loading";
 
-{/* CRAFTING_COMPILER_QUALITY_V2 */}
+<Objectives>
 
-## 为什么从“ELF段映射与加载台”开始
+- 能解释程序头、PT_LOAD、文件偏移、虚拟地址和内存权限如何决定 ELF 段映射
+- 能修改一个动态依赖或链接脚本样本，并用 `readelf`、`LD_DEBUG`、`/proc/PID/maps` 对照加载结果
+- 能回答“程序头显示可执行但进程仍无法启动时，先查哪条映射证据？”并完成清理重建
 
-第20章 加载程序沿“program headers → mmap/protection → dynamic linker → entry”转换信息。最终进程返回正确值只能证明一条执行路径；ELF段映射与加载台保存token、AST、绑定、类型、IR、汇编、符号、重定位或加载轨迹中的适用层，让错误停在第一处分叉。
+</Objectives>
 
-第20章 加载程序固定C♭源码、cbc提交、JDK与JavaCC、GNU as/ld/binutils、IA-32目标、链接参数和运行环境，只改变加载阶段或观察方式。本页交互只移动program headers → mmap/protection → dynamic linker → entry中的真实对象和状态，不生成置信、风险或证据分数。
+## 从 ELF 文件到进程入口
+
+加载程序要把磁盘上的 ELF 视图转换为进程地址空间：内核先读取程序头，把每个 `PT_LOAD` 映射到合适的虚拟地址和权限；如果输出保留动态依赖，动态加载器再装入共享库并完成必要重定位；最后控制流才到达入口地址。节表适合描述链接产物，程序头才是加载边界。
+
+本章的主实验是“ELF 段映射与加载台”。它固定 C♭ 源码、`cbc` 提交、JDK/JavaCC、GNU `as`/`ld`/binutils、IA-32 目标、链接参数和输入，只切换程序头视角、动态依赖或链接脚本。每次观察都保存命令、退出码、程序头、加载器日志、进程映射和清理记录；先定位最早映射差异，再讨论入口地址。
+
+<Callout type="trap" title="误区一：节表能直接决定进程如何映射">
+  现象 → `readelf -S` 中的 `.text`、`.data` 看起来正确，但进程映射权限或文件偏移不符合预期。
+
+原因 → 把链接器使用的节布局误当成内核实际读取的程序头合同。
+
+修法 → 用 `readelf -l` 检查 `PT_LOAD` 的偏移、虚拟地址、文件大小、内存大小和权限，再与 `/proc/PID/maps` 对照。
+
+</Callout>
+
+<Callout type="trap" title="误区二：程序头有入口地址就代表动态依赖已完成">
+  现象 → ELF 入口字段存在，程序仍因找不到共享库、解释器或重定位目标而启动失败。
+
+原因 → 把内核把主程序映射进内存和动态加载器解析依赖混成一个阶段。
+
+修法 → 分开记录 `PT_INTERP`、`DT_NEEDED`、`LD_DEBUG=libs,reloc` 输出和实际映射；先修复加载器边界，再判断入口执行。
+
+</Callout>
+
+<Callout type="trap" title="误区三：改链接脚本只要输出文件能生成就安全">
+  现象 → `ld -T linker.ld` 成功，但段重叠、入口落在不可执行映射或数据没有按预期装入内存。
+
+原因 → 只检查链接器退出码，没有检查节到段的归属、地址对齐、权限和文件/内存大小差异。
+
+修法 → 保存 link map 和 `readelf -l -S`，逐个确认节归属 `PT_LOAD`、入口权限与映射范围；清理输出后用相同脚本重建。
+
+</Callout>
+
+## 术语：把加载边界画成映射表
+
+<Term def="位于 ELF 头之后、面向加载器描述可加载段、解释器和其他运行时区域的表。">
+  程序头
+</Term>
+
+程序头描述运行时应该读取什么，而不是链接器内部如何组织每个节。`readelf -l` 是检查它的主要入口。
+
+<Term def="程序头中表示一段需要从文件映射到进程内存的条目，包含偏移、地址、大小、对齐和权限。">
+  PT_LOAD
+</Term>
+
+`PT_LOAD` 把文件区间和内存区间连起来。内存大小大于文件大小时，差额通常需要零填充，不能只按文件字节映射。
+
+<Term def="把 ELF 文件的一段区间映射为进程虚拟地址范围，并按读、写、执行标志设置访问权限的动作。">
+  内存映射
+</Term>
+
+内存映射是磁盘到进程的可观察结果。`/proc/PID/maps` 能显示地址范围、权限和对应文件，是程序头之外的重要交叉证据。
+
+<Term def="在主程序启动过程中装入共享库、解析动态符号并执行必要重定位的运行时组件。">
+  动态加载器
+</Term>
+
+动态加载器通常由 `PT_INTERP` 指定或间接关联。`LD_DEBUG=libs,reloc` 能把库搜索和重定位阶段分开记录。
+
+<Term def="在加载或链接过程中，把某个地址或数据引用调整为实际虚拟地址的修补操作。">
+  重定位
+</Term>
+
+重定位可能发生在构建期，也可能由动态加载器延迟执行。判断它发生在哪个阶段，要看输出文件、动态表和加载器日志。
+
+<Term def="告诉 GNU ld 如何安排节、段、入口、地址和对齐约束的规则文件。">
+  链接脚本
+</Term>
+
+链接脚本改变输出的地址和节到段归属，但不替代加载验证。脚本生成后仍要检查程序头和进程映射。
 
 ## 来源、版本与独立重写边界
 
-第20章 加载程序以青木峰郎维护的[日文原版完整详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定4部分、22章、86个编号小节、附录和116个正式层级；本站未取得原书正文授权，中文解释、代码、图示、实验和答案均为独立教学重写。
-
-第20章 加载程序用[JavaCC完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/)与[ld](https://sourceware.org/binutils/docs/ld/)文档核对技术事实。原书主线是JavaCC、Linux/IA-32、GNU工具与ELF；现代JDK、x86-64、PIE和新版binutils默认值必须单独记录，不能改写原书时代坐标。
-
-## 本章合同与可运行探针
-
-、、、、。
-
-第20章 加载程序的通过不变量是“PT_LOAD范围、权限、动态依赖和入口地址与运行映射一致”。实验档案保存源码与期望、cbc提交、工具版本、目标ABI、命令与退出码、所有适用中间产物、标准错误、第一处分叉、清理记录和回归结果。
-
-```bash
-readelf -l -d app
-LD_DEBUG=libs,reloc ./app
-cat /proc/PID/maps
-```
-
+本章依据青木峰郎维护的[日文原版详细目录](https://i.loveruby.net/ja/stdcompiler/toc.html)限定概念范围，未复制原书正文；中文说明、代码、图示、实验和答案均为独立教学重写。技术事实用 [JavaCC 完整语法文档](https://javacc.github.io/javacc/documentation/grammar.html)、[ELF 规范](https://refspecs.linuxfoundation.org/elf/elf.pdf)、GNU [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html)、[as](https://sourceware.org/binutils/docs/as/) 与 [ld](https://sourceware.org/binutils/docs/ld/) 文档核对。实验保持原书的 JavaCC、Linux/IA-32、GNU 工具坐标；现代 JDK、x86-64、PIE 和新版 binutils 默认值要单独记录。
 
 ## 官方目录逐项深读
 
 ### 第20章 加载程序
 
-**四级证据 1/5。** 装载槽1用readelf、objdump、nm、link map与加载器轨迹核对“第20章 加载程序”的节/段、符号、重定位、权限和地址解析；固定观察方式，只改变加载阶段，以程序头、加载器轨迹与映射权限找到第一处分叉并清理重建。
+本章总链路是“程序头 → PT_LOAD 映射 → 动态加载器 → 重定位 → 入口”。每个阶段都有独立证据：`readelf` 说明文件合同，加载器日志说明依赖解析，进程映射说明权限和地址，入口执行只作为最后验收。
 
 ### 20.1 加载ELF段
 
-**四级证据 2/5。** 装载槽2用readelf、objdump、nm、link map与加载器轨迹核对“20.1 加载ELF段”的节/段、符号、重定位、权限和地址解析；固定观察方式，只改变加载阶段，以程序头、加载器轨迹与映射权限找到第一处分叉并清理重建。
+加载器按程序头而不是节名读取可加载段。比较文件偏移、虚拟地址、文件大小、内存大小、对齐和权限，尤其要覆盖 `bss` 式的文件/内存大小差异。
 
 ### 20.2 动态链接过程
 
-**四级证据 3/5。** 装载槽3用readelf、objdump、nm、link map与加载器轨迹核对“20.2 动态链接过程”的节/段、符号、重定位、权限和地址解析；固定观察方式，只改变加载阶段，以程序头、加载器轨迹与映射权限找到第一处分叉并清理重建。
+动态链接过程从 `PT_INTERP` 和 `DT_NEEDED` 开始，动态加载器搜索依赖、装入共享库并修补需要的引用。`LD_DEBUG=libs,reloc` 可以把搜索失败和重定位失败分开。
 
 ### 20.3 动态加载
 
-**四级证据 4/5。** 装载槽4用readelf、objdump、nm、link map与加载器轨迹核对“20.3 动态加载”的节/段、符号、重定位、权限和地址解析；固定观察方式，只改变加载阶段，以程序头、加载器轨迹与映射权限找到第一处分叉并清理重建。
+动态加载将共享对象映射到进程地址空间，并将权限落实为可读、可写或可执行的范围。把日志和 `/proc/PID/maps` 对照，才能判断“找到库”是否真的变成“映射成功”。
 
 ### 20.4 GNU ld的链接
 
-**四级证据 5/5。** 装载槽5用readelf、objdump、nm、link map与加载器轨迹核对“20.4 GNU ld的链接”的节/段、符号、重定位、权限和地址解析；固定观察方式，只改变加载阶段，以程序头、加载器轨迹与映射权限找到第一处分叉并清理重建。
+GNU `ld` 根据输入对象、库和链接脚本生成程序头、入口和重定位边界。脚本改变节到段的安排后，用 link map 与 `readelf -l -S` 验收地址、对齐、权限和入口归属。
 
-## 三个必须主动触发的误区
+<Crc20ProgramLoadingLab />
 
+## 三步实验：段映射、动态依赖与入口验收
 
-## 练习、答案与116层级验证
+三个步骤共享本章专属实验：先读取程序头和 PT_LOAD，再回放动态加载器及进程映射，最后用 GNU ld 链接脚本验证入口和权限。每一步都保存源码、目标 ABI、命令退出码、日志、映射快照和清理记录。
 
+<Stepper>
+  <Step title="第一步：核对程序头与 PT_LOAD">
+    运行 `readelf -l -S app`，记录 `PT_LOAD` 的偏移、虚拟地址、文件/内存大小、对齐和权限，并指出入口属于哪个可执行映射。不要只依据节表判断加载结果。
 
+    <Crc20ProgramLoadingLab />
+
+  </Step>
+  <Step title="第二步：追踪动态加载与内存映射">
+    用 `readelf -d app`、`LD_DEBUG=libs,reloc ./app` 和 `/proc/PID/maps` 对照 `PT_INTERP`、`DT_NEEDED`、库搜索、重定位、地址范围和权限。注入缺失依赖或权限错误，保留最小日志。
+
+    <Crc20ProgramLoadingLab />
+
+  </Step>
+  <Step title="第三步：用 GNU ld 脚本清理重建">
+    用 `ld -m elf_i386 -T linker.ld` 生成结果和 link map，重新检查节到段的归属、入口和对齐；删除输出与中间对象后用相同脚本重建，要求文件字段、映射和入口证据一致。
+
+    <Crc20ProgramLoadingLab />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 程序头和 `PT_LOAD` 决定加载器读取的文件区间、内存范围和权限，节表不能替代它们。
+- 动态加载器负责共享库搜索、映射和部分重定位，`PT_INTERP`、`DT_NEEDED` 与 `LD_DEBUG` 应分阶段观察。
+- `/proc/PID/maps` 把文件合同变成进程地址空间证据，入口地址必须落在正确权限的映射中。
+- GNU ld 链接脚本改变输出布局后，必须用程序头、link map 和清理重建共同验收。
+
+<Exercises>
+
+本组练习覆盖第20章 加载程序、20.1 加载ELF段、20.2 动态链接过程、20.3 动态加载与 20.4 GNU ld的链接；每题都要把程序头、加载日志、映射范围和重建结果写入加载档案。
+
+**问题 1：解释 PT_LOAD。** 针对 20.1 加载ELF段，某个段的 `FileSiz` 小于 `MemSiz`，应如何解释这段差额，并用哪些字段验证权限和对齐？
+
+<Answer>
+  文件中只有 `FileSiz` 字节需要读取，映射到内存后还要把 `MemSiz - FileSiz`
+  的范围置零；这正是未初始化数据常见的加载边界。记录段的文件偏移、虚拟地址、两种大小、对齐和
+  `R/W/X` 标志，再与 `/proc/PID/maps` 的地址范围和权限对照。
+</Answer>
+
+**问题 2：追踪动态依赖。** 针对 20.2 动态链接过程与 20.3 动态加载，程序头有 `PT_INTERP` 但启动时报找不到库，如何定位？
+
+<Answer>
+  先用 `readelf -d` 列出 `DT_NEEDED`，再用 `LD_DEBUG=libs,reloc ./app`
+  观察搜索路径和失败名字；程序启动后用 `/proc/PID/maps`
+  确认实际映射。区分“解释器可找到”“依赖可找到”“依赖已映射”三个状态，保存目标架构、环境变量和最小错误输出后再清理重建。
+</Answer>
+
+**问题 3：验收链接脚本。** 针对第20章 加载程序与 20.4 GNU ld的链接，链接脚本生成成功但入口不可执行，如何判断是节到段归属、权限还是地址对齐问题？
+
+<Answer>
+  用 link map 和 `readelf -l -S` 对照入口符号所在节、所属
+  `PT_LOAD`、段起始地址、对齐和 `R/E` 权限；再用 `/proc/PID/maps`
+  检查运行时范围。若入口落入非执行段或段边界不符合脚本约束，修脚本后删除输出和对象文件，用同样的
+  `ld -m elf_i386 -T linker.ld` 重建并重复三组检查。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="程序头">
+  位于 ELF 头之后、面向加载器描述可加载段、解释器和其他运行时区域的表。
+</GlossaryItem>
+
+<GlossaryItem term="PT_LOAD">
+  程序头中表示一段需要从文件映射到进程内存的条目，包含偏移、地址、大小、对齐和权限。
+</GlossaryItem>
+
+<GlossaryItem term="内存映射">
+  把 ELF
+  文件的一段区间映射为进程虚拟地址范围，并按读、写、执行标志设置访问权限的动作。
+</GlossaryItem>
+
+<GlossaryItem term="动态加载器">
+  在主程序启动过程中装入共享库、解析动态符号并执行必要重定位的运行时组件。
+</GlossaryItem>
+
+<GlossaryItem term="重定位">
+  在加载或链接过程中，把某个地址或数据引用调整为实际虚拟地址的修补操作。
+</GlossaryItem>
+
+<GlossaryItem term="链接脚本">
+  告诉 GNU ld 如何安排节、段、入口、地址和对齐约束的规则文件。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="自制编译器"
+  adaptedFrom="青木峰郎《自制编译器》日文原版公开详细目录、JavaCC 文档、ELF 规范与 GNU readelf/as/ld 文档"
+  adaptedUrl="https://i.loveruby.net/ja/stdcompiler/toc.html"
+/>

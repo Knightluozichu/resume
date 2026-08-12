@@ -3,75 +3,212 @@ title: "第 12 章 Animating Your Character：姿态、编辑器与行走循环"
 type: A
 section: "玩转 Blender 第 3 版 · 绑定与动画"
 order: 12
-description: "覆盖使用角色 Rig、摆姿态、动画编辑器和 Jim 行走循环。"
+description: "从角色 Rig、关键姿态和动画编辑器出发，完成具有 Timing、Spacing、重心与脚接触证据的 Jim 行走循环。"
 demo: true
 math: false
 sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
 draft: false
+qualityVersion: 2
+practiceMode: simulation
+sourceMode: independent-rewrite
+officialUnitId: bl3-12
 ---
 
+import {
+  Bl3Ch12RigPoseLab,
+  Bl3Ch12TimingCurveLab,
+  Bl3Ch12WalkCycleLab,
+} from "@/components/mdx/blender-3d/05-rig-animation/bl3-12-animating-character";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+  Term,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释角色 Rig、关键姿态、Timing 和 Spacing 如何组成可播放动作
+- 能用 Dope Sheet 与 Graph Editor 修改 Jim 的关键帧和运动曲线
+- 能制作并验收包含 Contact、Down、Passing、Up 的行走循环
+- 能回答：如何用脚接触、重心轨迹和首尾曲线证明循环没有脚滑？
+
+</Objectives>
+
+{/* BL3_CH12_QUALITY_V2 */}
 
 ## 问题：为什么左右脚姿态齐全的行走循环仍可能没有重量感
 
-先预测：只画 Contact 左、Contact 右两个对称姿态并线性插值，角色会自然走路吗？不会。行走需要 Contact、Down、Passing、Up 等姿态的重心起伏、髋肩反向、脚掌滚动和时间节奏。第十二章先正确使用 Rig 和动画编辑器，再把 Jim 的行走循环制作成可复用 Action。
+先预测：只制作左右两个 Contact 姿态，再让软件在线性曲线上补帧，角色会自然走路吗？不会。行走的重量来自脚接触、髋部起伏、躯干平衡、脚掌滚动和姿态之间的时间间隔；缺少任何一项，循环都可能像在滑行或上下弹跳。
 
-## 原书边界与官方小节
+本章解决的是“Rig 怎样被动画师使用、姿态怎样被安排、编辑器怎样改变运动、循环怎样被验收”的连续链路。先让每个控制器有明确的动作意图，再把关键姿态组织成时间和曲线，最后用世界空间脚位移、重心轨迹和三周期回放证明结果。
 
-本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+## 本章知识点清单
 
-- **Using the Character's Rig**
-- **Posing the Character**
-- **Working with Animation Editors**
-- **Animating a Walk Cycle**
+| 知识点 | 视觉证据 | 名词解释 | 验收问题 |
+| --- | --- | --- | --- |
+| Using the Character's Rig | Rig 姿态实验 | Pose、Control | 控制器怎样产生动作意图 |
+| Posing the Character | Rig 姿态实验 | Contact、Passing | 姿态是否支持重心和接触 |
+| Working with Animation Editors | 编辑器实验 | Timing、Spacing、F-Curve、Action | 哪个编辑器改变什么 |
+| Animating a Walk Cycle | 循环实验 | Walk Cycle、NLA | 首尾和脚位移是否闭合 |
 
-这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+## Using the Character's Rig
 
-## 关键姿态、时间间隔与曲线切线
+动画不是重新建一个角色，而是把第十一章的 Rig 当作动作输入系统。先确认控制器可见、命名稳定、旋转模式正确，并把所有控制器回到 Reference Pose。**<Term>Pose</Term>** 是某一帧角色空间关系的整体状态，包含脚与地面的接触、髋肩平衡、头部方向和手臂跟随，不只是某一根骨骼的旋转值。
 
-Pose 定义某一帧的空间关系，Timing 决定姿态间隔，Spacing 由 F-Curve 描述帧间位移。Timeline 定位与播放，Dope Sheet/Action Editor 管理关键帧和 Action，Graph Editor 调属性曲线，NLA 组合多个 Action。Walk Cycle 的根和脚接触必须闭合，首尾重复帧只用于播放边界，不能造成双停顿。
+使用 Rig 时为每次控制器修改写下“输入—关系—输出”：移动 Torso 控制重心，Foot 控制接触，Head 控制反向平衡；IK 目标改变后，肘部 Pole 和肩部约束也可能跟随变化。先在单帧检查姿态，再把它放进时间轴，避免一开始就在连续播放里追逐难以复现的问题。
 
-## 五个核心术语与责任边界
+## Posing the Character
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+行走姿态要服务动作重心。**Contact** 让一只脚向前接触地面，**Down** 吸收重量，**Passing** 让身体越过支撑脚，**Up** 通过伸展准备下一步。不要把四个阶段看成四张孤立的剪影：髋部、肩线、头部、手臂和脚掌滚动必须在相邻阶段之间形成因果关系。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+建立姿态时先处理脚与髋，再处理躯干、手臂和头部。为左右脚保存对称但不机械的参考，检查前脚接触时后脚是否已经释放，Passing 时支撑脚是否稳定，Up 时身体最高点是否与脚掌离地同步。**<Term>Timing</Term>** 决定这些姿态分别停留多久；如果 Down 只有一帧，重量会消失，如果 Contact 停留太久，脚步会像冻结。
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+<Bl3Ch12RigPoseLab />
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+### 姿态的正常、边界与故障样本
 
-必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+正常样本包含明确的 Contact、Down、Passing、Up 和连续脚步；边界样本压缩 Down 或拉长 Contact，观察重量和节奏的适用范围；故障样本让脚在接触时仍然移动、让髋部不随支撑脚变化，确认错误能被回放与截图捕捉。
 
-术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+## Working with Animation Editors
 
-## 关键对象与数据流
+Timeline 负责定位当前帧和播放范围，Dope Sheet/Action Editor 负责整体整理关键帧和 Action，Graph Editor 负责观察与修改属性曲线。**<Term>Spacing</Term>** 描述帧与帧之间的位移分布，**<Term>F-Curve</Term>** 则把一个属性随时间的值画成可编辑曲线；两者共同决定动作是匀速、加速、减速还是突然停住。
 
-先在 Reference Pose 上确认控制器归零和旋转模式，依次建立左右 Contact、Down、Passing、Up 姿态，优先脚、髋、躯干再处理手臂和头。用 Dope Sheet 调整体 Timing，用 Graph Editor 清理髋部垂直与脚位移曲线。循环播放时检查首尾速度、脚接触区世界位移和重心轨迹，再把 Action 推入 NLA 做路径或镜头测试。
+先在 Dope Sheet 中把左右 Contact、Down、Passing 和 Up 排成可读的时间骨架，再在 Graph Editor 中检查髋部上下曲线、脚部位移和手臂摆动。不要用平滑曲线掩盖接触错误：脚在地面上的帧应该近似保持世界空间位置，离地后才允许向下一步移动。调整一个曲线后重新播放相邻两周期，记录预期与实际变化。
 
-每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+**<Term>Action</Term>** 是一组可保存和复用的动画数据，包含对象或骨骼的关键帧；把行走动作整理成 Action 后，才有机会通过 NLA 组合到路径、镜头或更长表演中。**<Term>NLA</Term>** 负责把多个动作片段按轨道和时间组织起来，但不能替代单个 Action 的脚接触与曲线验收。
 
-## 正常、边界与失败样本
+<Bl3Ch12TimingCurveLab />
 
-本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+### 四个编辑器的责任边界
 
+| 编辑器 | 主要任务 | 不应替代的检查 |
+| --- | --- | --- |
+| Timeline | 定位帧、播放、设置范围 | 不替代曲线诊断 |
+| Dope Sheet / Action Editor | 排列姿态和 Action 关键帧 | 不替代脚位移检查 |
+| Graph Editor | 调整 F-Curve、切线和速度 | 不替代姿态意图 |
+| NLA Editor | 组合多个 Action 片段 | 不替代单循环验收 |
+
+## Animating a Walk Cycle
+
+行走循环先建立一个完整步幅，再复制到另一条腿并检查镜像关系。四个阶段要在时间上闭合，但首尾重复帧只服务播放边界，不能让 Contact 被停留两次而产生双重停顿。脚掌可以通过脚跟、脚掌和脚趾的滚动逐段离地；髋部和躯干则通过 Down 与 Up 形成可读的重量起伏。
+
+一个可交付的 **<Term>Walk Cycle</Term>** 至少要验证三件事：接触脚在世界空间没有不应有的平移，髋部重心在四阶段中有连续轨迹，首尾 F-Curve 的值和切线在循环处相接。把动作放入 Action 后，再用 NLA 在另一个场景播放三周期，确认节奏不会因外部时间范围或重复帧发生变化。
+
+<Bl3Ch12WalkCycleLab />
+
+<Callout type="trap" title="四张关键姿态不自动组成自然行走">
+  现象：Contact、Down、Passing、Up 都存在，回放仍然像滑步或弹簧。原因：髋肩反向、脚掌滚动和姿态间 Timing 没有形成连续关系。修法：逐阶段保存脚、髋、躯干和头部证据，先校正重心与接触，再调曲线细节。
+</Callout>
+
+<Callout type="trap" title="平滑 F-Curve 会把脚接触变成脚滑">
+  现象：曲线看起来圆润，脚在地面上却持续移动。原因：把 Spacing 的平滑当成接触约束，未检查世界空间脚位移。修法：单独观察脚的 F-Curve，在接触区保持位置，离地后再安排下一步的位移。
+</Callout>
+
+<Callout type="trap" title="首尾重复帧造成双重停顿">
+  现象：循环衔接处突然慢半拍，三周期播放有明显顿挫。原因：把同一 Contact 同时当作最后一帧和下一周期第一帧，导致它被停留两次。修法：区分 Action 的有效范围和播放边界，检查首尾值、切线和连续周期速度。
+</Callout>
+
+## 三组动画验收实验
+
+<Stepper>
+  <Step title="1. Using the Rig：控制器到姿态">
+    先猜一猜：把 Foot 控制器锁在地面、把 Torso 压低，哪一组关系会先改变？选择控制器与姿态阶段，记录动作意图和关键帧值。
+
+    <Bl3Ch12RigPoseLab />
+  </Step>
+  <Step title="2. Editors：Timing、Spacing 与 F-Curve">
+    先预测：Dope Sheet 中把两个姿态拉开，和 Graph Editor 中改变曲线切线，产生的是同一种变化吗？切换编辑器与曲线，比较时间与速度的责任。
+
+    <Bl3Ch12TimingCurveLab />
+  </Step>
+  <Step title="3. Walk Cycle：四阶段与三周期回放">
+    先预测：首尾值相同就一定不会脚滑吗？切换四个阶段，闭合循环并完成三周期验收，检查脚位移、重心和停顿。
+
+    <Bl3Ch12WalkCycleLab />
+  </Step>
+</Stepper>
+
+## 验收证据：把动作感觉变成可复现判断
+
+交付包至少包含：Reference Pose、控制器归零截图、四阶段姿态图、Dope Sheet/Action Editor 时序、髋部与脚部 F-Curve、Action 帧范围、首尾值与切线、脚滑误差、重心轨迹、三周期播放和另一场景的 NLA 复用结果。每份证据都记录帧号、控制器输入、预期动作和实际回放。
+
+正常样本证明角色能在固定步幅内连续行走；边界样本压缩或拉长某一阶段，记录节奏何时开始失真；故障样本让接触脚移动、删掉 Down 或重复首尾 Contact，确认诊断能指出具体阶段。只有当另一位读者可以从 Action 和证据包重放同一循环，才算掌握。
 
 ## 从 Blender 2.83 LTS 到当前版本
 
-Timeline、Dope Sheet、Graph Editor、Action 与 NLA 概念稳定。当前 Blender 的 Pose Library 和 Asset Browser 可复用姿态，但不替代关键姿态、Timing、Spacing 和循环验收；现代库工作流应标记为补充。
+Timeline、Dope Sheet、Graph Editor、Action 与 NLA 的职责仍然稳定；当前 Blender 的 Pose Library、Asset Browser 和动画资产工作流可补充姿态复用，但不能替代关键姿态、Timing、Spacing 和脚接触验收。迁移时记录 UI、插值默认值和资产管理方式的变化，保留同一组循环证据。
 
-迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
-
-## 验收证据
-
-验收包含八个关键姿态、Dope Sheet 时序、髋/脚 F-Curves、Action 帧范围、循环首尾值与切线、脚滑误差和至少三周期播放。另一场景能复用同一 Action。
-
-证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。若项目把行走动作拆成多个 NLA 片段或使用新的姿态资产，也要说明它如何回到完整 Action、首尾边界和三周期回放。
 
 ## 小结
 
-- 动画质量由姿态、Timing 和 Spacing共同决定
-- 四类动画编辑器承担不同层级职责
-- 行走循环需要完整重心与脚掌阶段
-- 循环验收必须量化脚滑和首尾连续性
+- Rig 控制器先定义动作意图，Pose 再被安排到帧上
+- Timing 管时长，Spacing 与 F-Curve 管运动过程
+- Walk Cycle 必须包含 Contact、Down、Passing、Up
+- 脚接触、重心轨迹和首尾曲线是循环验收证据
 
+## 练习与答案
 
+<Exercises>
+
+**问题 1：姿态诊断。** 行走动画的脚已经接触地面，但髋部没有下沉，角色看起来没有重量。你会先检查哪些姿态和关键帧？
+
+<Answer>
+  先检查 Contact、Down、Passing、Up 的髋部高度和躯干倾斜，再看 Down 是否有足够的帧间隔、支撑脚是否保持接触、头部是否做了反向平衡。用同一帧范围比较髋部 F-Curve 与脚部位置，不要先用灯光或后期掩盖姿态问题。
+</Answer>
+
+**问题 2：修改实验。** 在 `Bl3Ch12TimingCurveLab` 中把 Spacing 从均匀改为缓入缓出，再说明一个必须重新检查的接触证据。
+
+<Answer>
+  缓入缓出会改变脚、髋或手臂在两帧之间的速度，因此必须重新检查接触脚的世界空间位移：脚在地面承重的帧应保持稳定，离地后才允许连续移动。若脚滑，需在 Graph Editor 中调整脚部曲线，而不是只看整体曲线是否顺滑。
+</Answer>
+
+**问题 3：循环实现。** 一个 Action 的第一帧和最后一帧都为 Contact，三周期播放时出现双重停顿。请指出修法并列出两个回归检查。
+
+<Answer>
+  将有效 Action 范围与播放边界区分开，避免同一 Contact 在两个相邻周期被重复停留；然后比较首尾 F-Curve 的值和切线，并在世界空间测量接触脚位移。最后播放至少三周期，确认速度、重心和停顿在周期边界连续。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Pose">
+    某一帧角色所有关键身体关系的整体状态，包括脚接触、髋肩平衡和头部方向。
+  </GlossaryItem>
+  <GlossaryItem term="Timing">
+    决定一个姿态或动作阶段在时间轴上持续多久的安排。
+  </GlossaryItem>
+  <GlossaryItem term="Spacing">
+    决定相邻帧之间位移如何分布，从而影响运动速度和重量感觉的安排。
+  </GlossaryItem>
+  <GlossaryItem term="F-Curve">
+    描述某个属性随时间变化的可编辑曲线，可以调整速度、停顿和缓入缓出。
+  </GlossaryItem>
+  <GlossaryItem term="Action">
+    一组可以保存、复用和交给 NLA 组合的骨骼或对象关键帧数据。
+  </GlossaryItem>
+  <GlossaryItem term="NLA">
+    用轨道和时间把多个 Action 片段组合起来的编辑器，不替代单个动作的质量验收。
+  </GlossaryItem>
+  <GlossaryItem term="Walk Cycle">
+    由多个连续姿态组成并能首尾循环的行走动作，必须同时检查脚接触、重心和节奏。
+  </GlossaryItem>
+</Glossary>
+
+## 阅读导航
+
+[← 上一章：角色绑定](/learn/blender-3d/05-rig-animation/bl3-11-character-rigging) · [下一章：相机跟踪](/learn/blender-3d/06-final/bl3-13-camera-tracking)
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="Learning Blender, Third Edition"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

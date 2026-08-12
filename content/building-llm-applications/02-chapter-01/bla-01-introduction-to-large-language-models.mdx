@@ -3,124 +3,123 @@ title: "Chapter 1: Introduction to Large Language Models"
 type: C
 section: "Chapter 1: Introduction to Large Language Models"
 order: 2
-description: "从基础模型与LLM概念进入Transformer架构、训练、评估，以及基础模型和定制模型的能力与成本边界。"
+description: "从基础模型、Transformer 表示与训练评估出发，区分基座能力、上下文行为和定制模型的成本与风险。"
 demo: true
-math: true
+math: false
 sourceUrl: "https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: bla-01
 ---
 
 import {
-  Exercises,
   Answer,
   Attribution,
+  Callout,
   CodeTabs,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Step,
+  Stepper,
   Tab,
+  Term,
 } from "@/components/mdx/mdx-components";
+import {
+  Bla01CustomizationLab,
+  Bla01RepresentationLab,
+  Bla01TrainingLab,
+} from "@/components/mdx/building-llm-applications/02-chapter-01/bla-01-introduction-to-large-language-models";
 
-## 为什么先冻结应用合同
+<Objectives>
 
-、、、、、共同构成本页坐标。从基础模型与LLM概念进入Transformer架构、训练、评估，以及基础模型和定制模型的能力与成本边界。
-本页不把框架演示等同于应用完成，而是把需求、输入、模型、提示、数据、工具、输出验证、监控与回退连成可执行闭环。
+- 能区分基础模型、LLM、Transformer 表示层与应用层，并指出一次请求中最早可观察的中间证据。
+- 能修改一个小型分词或训练检查器，验证词元边界、训练/评测切分和逐样本结果是否可追踪。
+- 能用质量、成本、遗忘和泄漏证据比较基座模型、提示定制与微调模型，而不是只比较一段输出。
+- 能解释为什么流畅文本不等于推理、事实正确或泛化，并为发布决定写出可复核的限制条件。
 
-本书锁定Valentina Alto、Packt第一版、2024年5月、342页和ISBN 9781835462317。书中的模型名单、LangChain接口及云服务是出版时坐标；复刻核心方法时保留历史语境，运行实验时另记当前版本，不能用今天的行为反向改写原书结构。
+</Objectives>
 
-每次运行保存来源、任务版本、输入哈希、模型与端点、提示、检索快照、工具权限、随机参数、依赖锁、输出、逐样本判断、延迟和成本。只看最终文本无法区分模型漂移、提示注入、检索缺失、工具越权、状态串扰和评测污染。
+# Chapter 1：从语言表示到可审计的模型能力
 
+大型语言模型不是一个把文字直接变成答案的单一函数，而是一条由数据、词元、表示、训练目标、评估协议和应用边界组成的证据链。本章把“模型很大”拆成可以检查的对象：输入怎样被切分，Transformer 怎样混合上下文，训练怎样获得基座能力，评估怎样避免自我证明，以及定制怎样改变成本和回滚责任。
 
-## 数学、检索与成本骨架
+先预测：如果只改变词元器、数据切分或模型定制方式，哪一个中间对象会先变化？把你的猜测写下来，再使用三个交互实验验证。实验中的分数和标签是教学用合成数据，重点是训练你在看到漂亮答案之前先找表示快照、数据边界、逐样本判断和回滚路径。
 
-$$
-p(ymid x)=prod_{t=1}^{T}p(y_tmid x,y_{1:t-1})
-$$
+<Callout type="trap">**现象：**输出语气自信、结构完整，就把它当作事实；**原因：**把生成概率和外部真值混为一谈；**修法：**单独记录来源、验证规则和拒答条件，要求答案通过与任务相称的证据门。</Callout>
 
-$$
-sim(q,d)=rac{q^Td}{lVert q
-Vert_2lVert d
-Vert_2}
-$$
+<Callout type="trap">**现象：**参数更多就默认架构更适合当前任务；**原因：**只看规模，忽略上下文长度、数据分布、延迟和部署约束；**修法：**在固定任务与预算下比较中间表示、逐样本质量和尾延迟。</Callout>
 
-$$
-C=N_{in}c_{in}+N_{out}c_{out}+C_{retrieval}+C_{tools}
-$$
+<Callout type="trap">**现象：**微调后一个样例变好就直接上线；**原因：**没有测量遗忘、数据泄漏、成本和回滚窗口；**修法：**保留基座对照、隔离评测集和可回退候选版本，再做发布判断。</Callout>
 
-$$
-E=source	imes reproducibility	imes boundary
-$$
+## 六个核心术语
 
-第一式固定生成概率与上下文；比较时记录词元器和解码。第二式只是检索候选的一种分数，仍需冻结嵌入模型、切块、索引和重排。第三式把输入、输出、检索与工具成本放入同一请求账本。第四式要求来源、重放和边界同时成立，才能形成强结论。
+`<Term def="在大量未针对单一任务的数据上学习、可被多个下游任务复用的模型">Foundation Model</Term>` 是能力的起点，不是某个具体应用的验收结论。LLM 说明以语言 token 为主要输入输出的模型类别，但不承诺事实性、推理能力或安全性；`<Term def="输入文本被切分为 token 时记录的字符区间和边界">Token Boundary</Term>` 则把这个输入过程变成可检查证据。
 
-手算例取候选词概率0.8、0.5与0.25，平均负对数似然约0.998。检索例取q=(1,0)、d1=(1,0)、d2=(1,1)，余弦相似度分别为1与约0.707；若重排结果相反，必须记录重排器而不是归因给向量库。一次请求若有800输入词元、200输出词元，还应将检索和工具调用加入成本与延迟预算。
+`<Term def="把 token 表示映射为上下文表示的注意力网络结构">Transformer</Term>` 是一种表示与计算结构；`<Term def="利用大规模数据学习下一 token 分布等通用能力的训练阶段">Pretraining</Term>` 是获得基座参数的过程。`<Term def="与训练数据隔离、用于估计模型在未知样本上表现的数据集合">Evaluation Set</Term>` 负责提供外部检查，`<Term def="通过提示、检索、适配器或更新参数改变模型行为的工程过程">Customization</Term>` 则改变应用所承担的验证与运营责任。
 
-## 三段可运行骨架
+## 三步模型证据实验
 
-<CodeTabs>
-  <Tab label="Python / 实现验证">
+每一步都先预测，再改变一个条件。图中的路径不是供应商性能承诺，而是把抽象概念转成输入、表示、证据、成本和边界四类可观察对象。点击按钮后，注意变化发生在哪个节点；点击“重置实验”则应回到基线。
 
-```python
-def freeze_request(task, model, prompt, data_hash, tools, seed):
-    return {"task": task, "model": model, "prompt": prompt,
-            "data": data_hash, "tools": tools, "seed": seed}
-```
+<Stepper>
+  <Step title="1. 检查输入与表示">
+    选择词元边界、注意力关系或逐步生成，先记录中间表示，再改变上下文边界，观察为什么最终文本不能替代表示快照。
 
-  </Tab>
-  <Tab label="TypeScript / 类型定义">
+    <Bla01RepresentationLab />
+  </Step>
+  <Step title="2. 分离训练与评估证据">
+    选择预训练、评估或审计，先猜测每个阶段能回答的问题，再混用一个检查点或数据切分，观察发布判断为何必须暂停。
 
-```typescript
-type Request = {
-  task: string;
-  model: string;
-  prompt: string;
-  dataHash: string;
-  tools: string[];
-  seed: number;
-};
+    <Bla01TrainingLab />
+  </Step>
+  <Step title="3. 比较定制边界">
+    选择基座、提示定制或微调，比较改变对象、成本、风险和回滚路径；预算超出时，先缩小候选方案而不是继续堆参数。
 
-function freezeRequest(req: Request): Readonly<Request> {
-  return Object.freeze({ ...req });
-}
-```
+    <Bla01CustomizationLab />
+  </Step>
+</Stepper>
 
-  </Tab>
-</CodeTabs>
+## 一个可运行的最小检查器
 
-```python
-def compare_controlled(baseline, candidate, changed):
-    assert len(changed) == 1, "one attributable change per experiment"
-    return {key: candidate[key] - baseline[key] for key in baseline}
-```
+下面的代码把词元和字符区间一起保存，便于确认“同一句文本”是否真的经过了同一个输入表示。第二段代码将训练、评估和审计的必需字段列成门禁，缺证据时返回索引，而不是用默认值让流水线继续。
 
 <CodeTabs>
-  <Tab label="Python / 实现验证">
+  <Tab label="Python / 词元边界">
 
 ```python
-def release_gate(records):
-    required = {"input", "config", "output", "judgment", "limits"}
-    missing = [i for i, record in enumerate(records)
-               if not required.issubset(record)]
-    return {"pass": not missing, "missing": missing}
+def tokenize_with_boundaries(text, vocab):
+    tokens = []
+    cursor = 0
+    for word in text.split():
+        start = text.index(word, cursor)
+        end = start + len(word)
+        tokens.append({"text": word, "id": vocab.get(word, 0), "span": [start, end]})
+        cursor = end
+    return tokens
 ```
 
   </Tab>
-  <Tab label="TypeScript / 类型定义">
+  <Tab label="TypeScript / 评估门禁">
 
 ```typescript
-type RunRecord = {
-  input?: unknown;
-  config?: unknown;
-  output?: unknown;
-  judgment?: unknown;
-  limits?: unknown;
+type EvaluationRecord = {
+  sampleId?: string;
+  split?: "train" | "validation" | "test";
+  output?: string;
+  judgment?: string;
 };
 
-function releaseGate(records: RunRecord[]): {
-  pass: boolean;
-  missing: number[];
-} {
-  const required: (keyof RunRecord)[] = ["input", "config", "output", "judgment", "limits"];
+function evaluationGate(records: EvaluationRecord[]) {
   const missing = records
-    .map((r, i) => (required.every((k) => k in r) ? -1 : i))
-    .filter((i) => i >= 0);
+    .map((record, index) => {
+      const complete = record.sampleId && record.split && record.output && record.judgment;
+      return complete ? -1 : index;
+    })
+    .filter((index) => index >= 0);
   return { pass: missing.length === 0, missing };
 }
 ```
@@ -128,211 +127,153 @@ function releaseGate(records: RunRecord[]): {
   </Tab>
 </CodeTabs>
 
-第一段产生不可变请求清单，第二段强制单变量对照，第三段在发布前检查证据。接入真实API、LangChain、数据库、代码解释器或多模态工具时由薄适配器提供执行对象，清单字段与门禁顺序不变；这样依赖升级和服务端漂移会成为可见差异。
+词元边界让输入差异可定位，评估门禁让训练集和评测集不会被同一份记录悄悄混合。真实系统还应把模型版本、提示、随机参数、数据哈希、工具权限、延迟和成本放进运行记录；这一步的目标是建立最小证据结构，而不是假装一个小函数已经完成生产级评估。
 
-## 从最小基线到应用
-
-先实现没有记忆、检索和工具的最小模型调用，冻结五到十个正常样本及预期结构。然后每轮只加入一个能力：模板、少样本、检索、记忆、工具、代码执行或多模态输入。每一步都保留上一步基线，测量质量、延迟、成本和新引入的失败面。
-
-输出验证分语法、语义、来源和权限四层。JSON可解析不代表事实正确；检索片段存在不代表回答受其支持；工具调用成功不代表参数获授权；前端显示顺畅也不代表多会话状态隔离。门禁失败应返回可解释状态，而不是让模型自由补写。
-
-对话和Agent还需冻结会话ID、状态摘要、工具白名单、最大步数和终止条件。推荐与SQL应用按用户或时间分组切分，防止未来数据泄漏。代码执行放在无网络、限时限存沙箱。多模态链保存每种模态的原始输入及变换，避免只留最终文本。
-
-## 对照、故障与回归
-
-基线冻结任务、样本、模型、提示、知识快照、工具和判定，只改变一个因素。随机阶段至少多种子或多顺序运行，报告逐样本结果、均值、方差、尾延迟和成本。模型更大、框架更新或输出更长都不能替代受控比较。
-
-故障轮次注入提示分隔符逃逸、空检索、过期资料、错误SQL模式、工具越权、会话串扰、代码死循环、图像OCR缺失和评测标签翻转。系统应在输入、提示、检索、权限、执行、输出或判定门禁报告首个分叉；最终答案错误只是末端症状。
-
-修复后先重放原失败，再运行相邻边界与正常基线。上线反馈进入新的隔离数据版本，不直接污染测试集。质量、安全、延迟、成本和可复现性全部通过才晋级，发布单元冻结模型、提示、索引、工具适配器、服务镜像和评测清单。
-
-## 正式目录逐项讲解
+## 从表示到训练目标
 
 ### Chapter 1: Introduction to Large Language Models
 
-“Chapter 1: Introduction to Large Language Models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Chapter 1: Introduction to Large Language Models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Chapter 1: Introduction to Large Language Models”的主线是把模型能力放回数据和评估边界。阅读时同时标记输入表示、训练信号、外部验证和应用责任四个层次，避免把书中的概念说明误读为特定厂商的部署保证。
 
 ### What are large foundation models and LLMs?
 
-“What are large foundation models and LLMs?”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“What are large foundation models and LLMs?”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“What are large foundation models and LLMs?”回答的是类别和用途边界：基础模型可以复用，LLM通常以 token 序列处理语言，但二者都需要任务数据、指标和拒答条件才能进入应用。先用同一组样本区分能力描述与验收结论。
 
 ### AI paradigm shift – an introduction to foundation models
 
-“AI paradigm shift – an introduction to foundation models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“AI paradigm shift – an introduction to foundation models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“AI paradigm shift – an introduction to foundation models”强调从单任务模型到可迁移基础能力的工程转向。迁移带来更快的原型速度，也把数据许可、提示暴露、资源成本和人类审核责任推到应用团队面前。
 
 ### Under the hood of an LLM
 
-“Under the hood of an LLM”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Under the hood of an LLM”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Under the hood of an LLM”需要沿着 token、向量表示、层间上下文混合和下一 token 分布追踪一次请求。内部状态不是可直接阅读的理由，因此应把可观察的表示快照、输出和外部判断分开保存。
 
 ### Most popular LLM transformers-based architectures
 
-“Most popular LLM transformers-based architectures”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Most popular LLM transformers-based architectures”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Most popular LLM transformers-based architectures”不应被读成静态排行榜。比较架构时要固定任务、数据、上下文窗口、硬件、吞吐与评估脚本，再说明哪些差异来自编码器、解码器或混合结构，哪些只是服务配置差异。
 
 ### Early experiments
 
-“Early experiments”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Early experiments”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Early experiments”提供低成本的直觉入口：先用很小的词表、短上下文和可控数据观察预测变化，再逐渐增加层数与数据规模。小实验的价值在于暴露假设，不在于用玩具结果预测生产模型的绝对性能。
 
 ### Introducing the transformer architecture
 
-“Introducing the transformer architecture”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Introducing the transformer architecture”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Introducing the transformer architecture”把注意力理解为依据查询、键和值重新组合上下文的计算步骤。练习时记录序列长度、掩码方向和位置处理；同一个词在不同上下文中的表示变化，是比一句生成文本更早的证据。
 
 ### Training and evaluating LLMs
 
-“Training and evaluating LLMs”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Training and evaluating LLMs”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Training and evaluating LLMs”要求把优化过程和外部检验拆开。训练损失、验证指标、测试集结果、人工判断、延迟、成本和安全失败各自回答不同问题，不能用一条漂亮曲线代替全部发布证据。
 
 ### Training an LLM
 
-“Training an LLM”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Training an LLM”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Training an LLM”涉及数据清洗、token 化、批次、目标函数、检查点和资源预算。训练记录至少要能回溯数据快照、代码提交、硬件和随机种子；当检查点改变时，必须重新关联评估报告，不能覆盖旧版本。
 
 ### Model evaluation
 
-“Model evaluation”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Model evaluation”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Model evaluation”是对未知样本和真实任务约束的受控检查。评估集要与训练数据隔离，样本要覆盖正常路径、边界输入和拒答情形，报告要保留逐样本结果，避免平均数遮住少量高影响失败。
 
 ### Base models versus customized models
 
-“Base models versus customized models”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“Base models versus customized models”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Base models versus customized models”比较的是责任边界，而不是简单的强弱排序。基座模型提供通用起点，提示与检索改变请求合同，微调还会改变权重或适配器；每种方式都需要独立的成本、风险和回滚证据。
 
 ### How to customize your model
 
-“How to customize your model”冻结数据来源、切分、词元器、基础权重、训练预算和评测协议。提示、检索与微调在相同样本上比较；保存损失、梯度、检查点和逐样本输出，排除泄漏、灾难性遗忘和预算差异。
-
-针对“How to customize your model”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“How to customize your model”应从最小改变开始：先固定基座，尝试提示，再评估检索或适配器，最后才考虑更重的参数更新。每一步都比较新增能力是否值得训练成本，并检查数据泄漏、灾难性遗忘和版本回退。
 
 ### Summary
 
-“Summary”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
-
-针对“Summary”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+“Summary”把本章收束为四个动作：检查表示，隔离训练与评估，选择合适的定制深度，保存发布所需证据。若不能说明差异发生在哪个中间节点，就不应只凭最终文本宣称模型能力已经改善。
 
 ### References
 
-“References”先定义输入、输出、假设、指标和最小反例，再放回LLM应用调用链。学习证据至少包含一次手算、一次可运行对照与一个单故障样本，保存中间产物和判断理由，使结论可以独立复核。
+“References”用于标记本章的书目来源、官方产品页和独立重写边界。原书坐标保留历史语境；当前实现、接口和模型行为必须另行验证，引用存在不等于每个示例在今天仍可直接运行。
 
-针对“References”，先预测只改变模型、提示、数据、工具权限或评测协议时哪个中间对象最先分叉，再运行正常和单故障路径。保存输入、配置、阶段输出和判断依据，不用最终平均分覆盖前序失败。
+## 表示、训练与定制的六个判断
 
-## 六类应用证据
+### 1. 表示层的判断
 
-### 任务与来源合同
+词元器决定字符如何进入模型，位置与注意力决定上下文如何被组合。做对照时先保存 token 文本、ID、区间和窗口，再比较表示或生成结果；这样才能知道差异是在输入阶段发生，还是在后续解码阶段发生。
 
-定义用户、输入、允许输出、拒答、成功指标与最小反例。保存第一版目录、官方代码仓库、依赖提交和外部模型文档；区分原书示例、本站重放、当前替代实现和未知项。
+### 2. 基础模型的判断
 
-### 模型与提示合同
+基础模型的“通用”意味着训练目标和数据覆盖较广，不意味着它知道你的私有事实，也不意味着它自动遵守业务权限。下游应用仍然需要来源、检索、结构校验、人工升级和拒答设计。
 
-记录提供方、模型版本、端点、词元器、上下文、系统提示、模板、示例、解码和结构约束。模型别名与服务默认值不稳定，任何漂移都通过金样本和逐字段差异显现。
+### 3. 训练目标的判断
 
-### 数据、检索与状态合同
+下一 token 预测能训练语言连续性，却不能单独保证真值、因果理解或任务规范。目标函数、数据分布和奖励信号共同塑造行为；当应用指标变化时，要追问是哪一类训练证据支持这个结论。
 
-记录许可、来源、哈希、切块、嵌入、索引、重排和有效期；会话状态有所有者、生命周期和清理策略。答案引用可定位片段，缺证据时降级，不让模型把参数记忆冒充当前事实。
+### 4. 评估边界的判断
 
-### 工具、代码与权限合同
+独立评测集的作用不是给模型颁奖，而是制造模型没有见过的检查。切分策略、时间范围、标签质量和失败成本都应写进报告；如果评估集被用于反复调参，它就不再是原先意义上的外部检验。
 
-工具使用结构化模式、最小权限、超时、幂等键和审计日志。SQL默认只读，代码默认沙箱，多模态文件先做类型与大小验证；高影响动作需要确定性校验或人工确认。
+### 5. 定制方式的判断
 
-### 评测、安全与成本合同
+提示定制通常改输入合同，检索定制补充外部知识，微调或适配器改变参数行为。越靠近参数，长期运营和回滚责任越重；越靠近请求，运行时成本与上下文管理越重要，三者都要用同一套任务指标比较。
 
-评测可下钻到输入、输出、证据和理由，覆盖正常、边界、注入、越权、偏见、隐私与过度拒答。质量与成本在同一请求集合上报告，平均值之外保留尾部失败。
+### 6. 发布证据的判断
 
-### 发布、监控与回退合同
-
-发布前重放冻结回归集，线上监控模型错误、检索缺失、工具失败、延迟、成本和安全事件。模型、提示、索引和工具版本整体标记，可一键回到上一组已验证产物。
+发布不是看到分数超过阈值就结束，而是确认输入、版本、数据、输出、判断、限制和回滚都能被重放。若任何一类证据缺失，应返回可行动的补证据任务，并保留当前候选版本以便审计。
 
 ## 容易踩的坑
 
-**现象 →** 认为"模型更大一定更好"，换大模型后质量反降。
-**原因 →** 未在相同样本上做单变量对照，忽略提示与数据影响。
-**修法 →** 冻结任务、样本、提示和判定，只换模型，报告逐样本差异。
+<Callout type="trap">**现象：**只看训练损失下降就认为模型已经学会目标任务；**原因：**优化指标与外部任务指标并不相同；**修法：**冻结独立评估集，报告逐样本质量、成本、延迟和失败类别。</Callout>
 
-**现象 →** 评估时不记录词元器和解码参数，分数无法复现。
-**原因 →** 词元器版本和温度、top-p等解码设置影响输出。
-**修法 →** 每次评估固定词元器、解码参数和随机种子并写入记录。
+<Callout type="trap">**现象：**把提示、检索和微调统称为“定制”，然后沿用同一套回滚办法；**原因：**没有区分改变请求还是改变参数；**修法：**为每种方式记录改变对象、版本、成本、数据许可和恢复路径。</Callout>
 
-**现象 →** 同一提示不同种子结果差异大。你可以亲自验证：固定提示，只改seed跑5次，看输出是否稳定。
-**原因 →** 采样解码引入随机性，未报告方差和尾部分布。
-**修法 →** 多种子运行，报告逐样本结果、均值、方差和尾延迟。
+<Callout type="trap">**现象：**把评估集反复拿来调参后仍称为独立测试；**原因：**调参反馈已经泄漏进模型选择；**修法：**建立新的隔离测试集，并记录样本何时、由谁、为何被使用。</Callout>
 
-## 小结
+## 小结与学习验收
 
-- 区分基础模型与LLM的概念边界
-- Transformer靠注意力建模长程依赖
-- 训练评估需冻结数据切分与预算
-- 基础模型与定制模型能力成本不同
-- 手算条件概率和注意力验证理解
+- 先检查词元边界和上下文表示，再讨论一段文本是否流畅。
+- 把预训练、评估和审计的产物分开，训练损失不能替代外部验证。
+- 以任务、预算和风险比较基座、提示定制与微调，而不是默认参数越多越好。
+- 每个模型结论都要带输入、版本、数据切分、逐样本判断、限制和回滚证据。
+- 发布前回答：哪里发生变化、谁能复核、失败如何阻断、候选如何恢复。
 
 ## 练习与答案
 
 <Exercises>
 
-**问题 1：概念理解。** 基础模型（foundation model）和LLM的区别是什么？
+**问题 1：**同一段文本使用两个词元器后输出不同。请列出最先应保存的证据，并说明为什么不能只比较最终回答。
 
 <Answer>
-
-基础模型是经大规模预训练、可适配多种下游任务的通用模型；LLM是基础模型中专攻语言理解与生成的子类。LLM都是基础模型，但基础模型还包括视觉、多模态等非语言模型。
-
+  保存词元文本与 ID、字符区间、上下文窗口、模型版本、解码设置和两次输出。词元边界已经改变输入表示，最终回答的差异可能在输入阶段就产生；没有中间快照，就无法判断是表示、注意力还是解码导致变化。
 </Answer>
 
-**问题 2：实践应用。** 为什么评估LLM时要冻结词元器和解码参数？
+**问题 2：**训练损失持续下降，但独立评测集的事实性没有改善。请给出两个合理解释和一个验证动作。
 
 <Answer>
-
-词元器决定输入如何切分，解码参数（温度、top-p、种子）决定输出随机性。不冻结这些，同一模型同一提示的分数也会漂移，无法把质量差异归因给模型本身而非采样噪声。
-
+  可能是训练数据分布与任务不同，也可能是目标函数奖励语言连续性而不是事实验证；还应检查评测标签和数据切分是否稳定。验证时保留旧检查点，在同一独立集合上做逐样本对照，并按错误类型和成本重新统计。
 </Answer>
 
-**问题 3（独立实现）：** 独立实现一个简化版注意力分数计算：给定查询向量q和键向量列表keys，返回softmax归一后的注意力权重。
+**问题 3（独立实现）：**实现一个 `customization_gate`，输入基座、提示和微调三种候选，只有当质量、成本、遗忘和泄漏字段都存在时才返回可发布。
 
 <Answer>
-
-```python
-import math
-
-def attention_weights(q, keys):
-    scores = [sum(qi * ki for qi, ki in zip(q, k)) for k in keys]
-    m = max(scores)
-    exps = [math.exp(s - m) for s in scores]
-    total = sum(exps)
-    return [e / total for e in exps]
-```
-
+  先为每个候选保存 `quality`、`cost`、`forgetting`、`leakage` 与 `rollback`，再检查字段是否齐全以及是否满足预设阈值。返回候选名、缺失字段和阻断原因；不要在字段缺失时使用零值，因为零值会把“没有测量”伪装成“没有风险”。
 </Answer>
 
 </Exercises>
 
-## 本章回顾
+## 术语表
 
-从基础模型与LLM概念进入Transformer架构、训练、评估，以及基础模型和定制模型的能力与成本边界。 掌握标准不是记住模型或框架名，而是能重建任务、版本、数据、调用图、权限、对照、指标、限制和失败证据。通过标准为：能手算条件概率和注意力，区分预训练、评估与定制，并为能力声明设计反例。
-
+<Glossary>
+  <GlossaryItem term="Foundation Model">在大量未针对单一任务的数据上学习、可被多个下游任务复用的模型。</GlossaryItem>
+  <GlossaryItem term="Token Boundary">输入文本被切分为 token 时记录的字符区间和边界。</GlossaryItem>
+  <GlossaryItem term="Transformer">把 token 表示映射为上下文表示的注意力网络结构。</GlossaryItem>
+  <GlossaryItem term="Pretraining">利用大规模数据学习下一 token 分布等通用能力的训练阶段。</GlossaryItem>
+  <GlossaryItem term="Evaluation Set">与训练数据隔离、用于估计未知样本表现的数据集合。</GlossaryItem>
+  <GlossaryItem term="Customization">通过提示、检索、适配器或更新参数改变模型行为的工程过程。</GlossaryItem>
+</Glossary>
 
 ## 前后导航
 
-- [Preface](/learn/building-llm-applications/01-preface/bla-preface)
-- [Chapter 2: LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
+- [上一页：Preface](/learn/building-llm-applications/01-preface/bla-preface)
+- [下一页：Chapter 2 — LLMs for AI-Powered Applications](/learn/building-llm-applications/03-chapter-02/bla-02-llms-for-ai-powered-applications)
 
 <Attribution
-  mode="independent-rewrite"
-  sourceBasis="publisher-catalog"
-  workTitle="Valentina Alto《Building LLM Powered Applications》Packt / 2024"
-  adaptedUrl="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  authors={["Valentina Alto"]}
+  description="本章基于 Packt 原书章节主题进行独立重写，保留概念范围并补充可审计的表示、训练、评估与定制练习。"
+  license="© Packt Publishing；本页为学习用途的独立重写。"
+  source="https://www.packtpub.com/en-us/product/building-llm-powered-applications-9781835462317"
+  title="Building LLM-Powered Applications"
+  year="2024"
 />
-

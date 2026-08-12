@@ -3,151 +3,253 @@ title: "第 11 章 用户界面样式"
 type: A
 section: "CSS 世界 · 界面与流向"
 order: 11
-description: "outline 在边框之外绘制且不占布局空间，是键盘焦点的重要反馈；cursor 只表达可用交互意图，不能替代语义元素、真实状态和可访问名称。"
+description: "从原生焦点和 outline 的盒外绘制出发，解释偏移、圆角、cursor 意图、自定义光标回退以及键盘与指针反馈的一致性。"
 demo: true
 math: false
 sourceUrl: "https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: csw-unit-11
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Attribution } from "@/components/mdx/attribution";
+import { Csw11UserInterfaceLab } from "@/components/mdx/css-world/v2/csw-11-user-interface";
 
-## 直觉起点
+# 第 11 章 用户界面样式
 
-、、、、共同构成本页的观察坐标。outline
-在边框之外绘制且不占布局空间，是键盘焦点的重要反馈；cursor
-只表达可用交互意图，不能替代语义元素、真实状态和可访问名称。 CSS
-的困难不在属性名称，而在多个声明经过级联、继承和格式化后才产生最终使用值；同一截图可能由完全不同的盒树、固定尺寸或偶然层叠得到，必须向前追踪原因。
+本章以张鑫旭著《CSS 世界》人民邮电出版社版的第 11 章公开目录为身份基线，采用独立教学改写。用户界面样式不是给控件加一个“像按钮”的外观：先保留可达的焦点路径，再用 outline 在盒外提供反馈，最后用 cursor 表达指针意图。排查“控件看起来可用却无法操作”时，先找输入路径、焦点状态或语义上的第一个偏离点。
+
+<Objectives>
+
+- 能解释 outline 与 border 在盒模型、布局尺寸和焦点反馈上的差异，并为键盘焦点设计可见替代。
+- 能用 outline-offset、圆角、焦点状态和 cursor 回退建立不改变布局的界面反馈。
+- 能在键盘、鼠标、触摸、资源失败、窄视口和高对比模式下核对真实语义、焦点顺序与可操作性。
+
+</Objectives>
+
+## 先追踪一次焦点如何变得可见
+
+遇到“鼠标能点但键盘找不到”“去掉 outline 后布局更整齐”或“自定义光标加载失败”，不要先用颜色或伪元素掩盖问题。固定真实控件、焦点顺序、盒尺寸、视口和状态，先记录输入方式与 focus-visible，再观察 outline 是否在盒外绘制、cursor 是否有关键字回退。动手前先猜：第一个变化来自焦点路径、轮廓几何，还是指针资源？
+
+<Csw11UserInterfaceLab />
+
+## 三个必须先拆开的误区
+
+<Callout type="trap" title="全局 outline:0 none 只是移除了问题的反馈">
+  **现象：** 页面视觉更干净，但 Tab 用户不知道当前焦点在哪。**原因：** outline
+  被移除后，没有等价的 focus-visible 反馈，鼠标测试也不会暴露缺陷。**修法：**
+  只在有明确替代方案时调整 outline，并用键盘、对比度和高对比模式复测。
+</Callout>
+
+<Callout type="trap" title="把 outline 当成会撑大布局的 border">
+  **现象：** 为了避免跳动而不敢使用 outline，或把所有焦点环都改成
+  border。**原因：** outline 在边框外绘制，不参与盒模型；border
+  会改变尺寸或可用内容空间。**修法：** 用 outline、outline-offset
+  和圆角表达焦点，记录边框盒尺寸是否保持不变。
+</Callout>
+
+<Callout type="trap" title="cursor:pointer 能把普通元素变成按钮">
+  **现象：** 鼠标显示手形，但键盘、读屏或触摸没有同等操作路径。**原因：** cursor
+  只表达指针意图，不创建语义、事件、焦点或状态。**修法：** 优先使用真实
+  button/link，补齐焦点和状态，再为必要的自定义资源提供关键字回退。
+</Callout>
 
 ## 六阶段机制链
 
 ### 1. 保留原生焦点
 
-固定 DOM、样式表、视口、字体和内容，先预测生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+先读取<Term def="在元素外绘制焦点或状态轮廓、通常不参与盒模型的属性">outline</Term>之前的原生焦点路径：元素是否是 button、link 或具有明确键盘顺序，Tab 是否能到达，焦点状态是否能被辅助技术感知。样式应该增强路径，而不是把路径藏起来。
 
 ### 2. 绘制 outline
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+outline 在边框外绘制，通常不占布局空间，适合表达焦点、错误或拖拽状态。它可以跨越部分盒片段，几何上不等同于 border；测试要保存边框盒尺寸、焦点环覆盖范围与背景对比度。
 
 ### 3. 处理偏移与圆角
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="控制 outline 与元素边界之间额外距离的属性">outline-offset</Term>
+可以把焦点环从内容、阴影和圆角边缘移开。偏移过小会重叠文字，过大可能撞到相邻控件；圆角、窄宽、缩放和高对比模式都要复测。
 
 ### 4. 选择系统 cursor
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="控制指针在元素上方呈现何种意图图形的属性">cursor</Term>
+只改变指针反馈，不改变元素的语义、事件、焦点或可操作状态。pointer、text、not-allowed、progress
+等关键字应与真实状态一致，不能用手形掩盖 disabled 或异步状态没有表达。
 
 ### 5. 提供自定义回退
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。一旦轨迹不同，保存首个偏离点，不用最终像素掩盖过程。
+<Term def="只在自定义光标资源成功时使用并在失败后回到关键字的 cursor 资源写法">
+  cursor: url()
+</Term>
+必须配合可用的关键字回退、尺寸限制和资源失败测试。自定义图形不应替代焦点环、状态文本或触摸反馈，跨平台热点位置也要验证。
 
 ### 6. 核对键盘与指针
 
-只改变一个声明或环境变量，记录生成盒、包含块、格式化上下文、计算值、使用尺寸、行框和层叠位置。恢复后重放同一输入，并确认窄宽、长内容和方向变化不会暴露旧补丁。
+<Term def="只在键盘或其他非指针路径需要时显示焦点反馈的伪类">
+  :focus-visible
+</Term>
+让焦点样式可以更贴近输入方式，但不能借此让键盘焦点消失。最终验收要用
+Tab、Shift+Tab、Enter、Space、鼠标和触摸分别操作，并核对焦点顺序、状态名称与错误提示。
 
-## 核心机制深挖
+## 三步可重放实验路线
 
-outline 不参与盒模型，因此不会像 border 一样改变尺寸；它可以跨越碎片绘制，最适合焦点反馈。cursor URL 必须提供通用关键字回退，而且指针图形不等于控件真的可用。 任何移除 outline 的规则都必须提供对比度和几何位置同等清晰的 focus-visible 替代；鼠标、键盘和触摸路径应表达同一状态。 实验时把浏览器开发者工具中的盒模型、计算样式和层叠上下文当成观测工具，而不是答案来源；答案必须能从规范规则和当前 DOM 结构推导出来。先删除非必要覆盖，再逐条加入约束，这样才能分辨默认流在做什么、哪条声明真正改变了结果。
+每一步都嵌入本章专属用户界面图。先建立一个真实可聚焦控件，再注入 outline 或 cursor 变量，最后删除故障并从键盘、指针、触摸和资源失败路径重放。
 
-## 边界记录模板
+<Stepper>
+  <Step title="建立焦点与盒尺寸基线">
+    固定真实 button、焦点顺序、边框盒尺寸和状态文案，记录 Tab 路径以及原生焦点是否可见。
 
-每次实验建立六列证据：**DOM 与内容、生成盒与格式化上下文、包含块、计算值与使用值、首个偏离点、恢复结果**。尺寸页增加视口与固有尺寸，内联页增加字体度量和基线，定位页增加脱流空间与四向偏移，层叠页增加上下文树，文本页增加字体回退，界面页增加键盘与书写方向。若最终外观相同但固定宽高、隐藏溢出、不可见焦点或错误层叠仍存在，依然失败。
+    <Csw11UserInterfaceLab />
 
-## 出版社目录逐项讲解
+  </Step>
+  <Step title="注入一个视觉反馈变量">
+    只切换 outline、outline-offset、:focus-visible、cursor 关键字或自定义资源中的一项，定位焦点或指针反馈的首个变化。
+
+    <Csw11UserInterfaceLab />
+
+  </Step>
+  <Step title="恢复并核对输入路径">
+    删除故障声明，模拟自定义光标失败、窄视口、高对比模式和触摸设备，确认键盘、指针、状态文案和可访问名称仍然一致。
+
+    <Csw11UserInterfaceLab />
+
+  </Step>
+</Stepper>
+
+## 出版社目录逐项映射
 
 ### 第11章 用户界面样式
 
-**第11章 用户界面样式** 要解决的是：把该目录项放回正常流、盒生成、尺寸计算和格式化上下文，记录输入、约束与浏览器使用值。先预测元素在“保留原生焦点”前后会生成哪些盒、读取哪个包含块，并记录“outline”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+本章把界面反馈拆成焦点路径、轮廓绘制、几何偏移、指针意图、资源回退和多输入一致性六层。最终截图只能证明某一时刻的外观，不能证明键盘顺序、语义元素、触摸反馈或资源失败后的可用性。
 
 ### 11.1 和border形似的outline属性
 
-**11.1 和border形似的outline属性** 要解决的是：分析边框宽度、样式、颜色、透明技巧及其对可见尺寸和图形构建的影响。先预测元素在“绘制 outline”前后会生成哪些盒、读取哪个包含块，并记录“焦点可见”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+outline 与 border 都能形成边缘，但 outline 在盒外绘制且通常不改变布局尺寸，最适合焦点反馈。比较时固定元素尺寸、边框、圆角和相邻内容，分别测量 border box 与轮廓覆盖区域。
 
 ### 11.1.1 万万不可在全局设置outline:0 none
 
-**11.1.1 万万不可在全局设置outline:0 none** 要解决的是：保证焦点反馈不占空间且清晰可见，并为指针样式保留语义和回退。先预测元素在“处理偏移与圆角”前后会生成哪些盒、读取哪个包含块，并记录“outline-offset”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+全局去掉 outline 会把键盘焦点反馈一起删除，除非每个可聚焦控件都有清晰、足够对比的替代样式。验收必须使用真实 Tab 路径，并覆盖 :focus-visible、对比度、缩放和高对比模式。
 
 ### 11.1.2 真正的不占据空间的outline及其应用
 
-**11.1.2 真正的不占据空间的outline及其应用** 要解决的是：保证焦点反馈不占空间且清晰可见，并为指针样式保留语义和回退。先预测元素在“选择系统 cursor”前后会生成哪些盒、读取哪个包含块，并记录“cursor”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+outline 不参与盒模型，因此可以在不让布局跳动的情况下表达焦点、错误、拖拽或选中状态。outline-offset 和圆角用来解决重叠与几何边界，但仍要确保轮廓不被 overflow、邻接元素或背景色吞掉。
 
 ### 11.2 光标属性cursor
 
-**11.2 光标属性cursor** 要解决的是：保证焦点反馈不占空间且清晰可见，并为指针样式保留语义和回退。先预测元素在“提供自定义回退”前后会生成哪些盒、读取哪个包含块，并记录“指针回退”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+cursor 只改变指针图形和意图提示，不能替代 button、a、禁用状态、焦点顺序或可访问名称。使用前先确认真实控件和状态，再让指针与可操作性保持一致。
 
 ### 11.2.1 琳琅满目的cursor属性值
 
-**11.2.1 琳琅满目的cursor属性值** 要解决的是：保证焦点反馈不占空间且清晰可见，并为指针样式保留语义和回退。先预测元素在“核对键盘与指针”前后会生成哪些盒、读取哪个包含块，并记录“outline”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+关键字光标覆盖 pointer、text、move、wait、progress、not-allowed 等常见状态，但平台和设备可能不完全一致。选择时应让光标与状态文案、键盘路径和触摸反馈一致，避免把“看起来能点”误当成“真的能操作”。
 
 ### 11.2.2 自定义光标
 
-**11.2.2 自定义光标** 要解决的是：保证焦点反馈不占空间且清晰可见，并为指针样式保留语义和回退。先预测元素在“保留原生焦点”前后会生成哪些盒、读取哪个包含块，并记录“焦点可见”的计算值与使用值。正常样本只保留最小声明；边界样本改变容器宽度、内容长度、字体或书写方向；失败样本只引入一个脱流、溢出或层叠条件。清除故障后重放同一 DOM，只有盒树、尺寸、行框、层级和绘制结果都可解释才通过。
+自定义光标适合品牌化或工具型界面，但必须提供关键字回退、尺寸与热点约束，并测试资源加载失败、触摸设备和高对比模式。它是增强反馈，不应承担焦点、语义或操作确认。
 
-## 最小可运行实验
+## 用户界面证据记录
+
+每个样本写六列：**真实语义元素、输入方式与焦点顺序、边框盒与 outline 几何、计算值与资源回退、首个反馈偏离点、恢复结果**。键盘样本增加 focus-visible，光标样本增加平台与触摸，状态样本增加 disabled、busy 和错误文案。
+
+```text
+freeze = semantic element + focus order + box size + viewport + state text
+trace = input modality + focus-visible + outline geometry + cursor fallback
+change = exactly one outline | offset | radius | cursor | resource variable
+stop = first divergent focus path, layout size, pointer intent, or accessible name
+replay = remove fault + same inputs + keyboard, pointer, touch feedback restored
+```
 
 ```css
 .action:focus-visible {
-  outline: 3px solid #2563eb;
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
-[aria-busy="true"] {
+
+.action[aria-busy="true"] {
   cursor: progress;
 }
-[aria-disabled="true"] {
+
+.action[aria-disabled="true"] {
   cursor: not-allowed;
 }
+
+.tool {
+  cursor:
+    url("/cursors/tool.svg") 8 8,
+    pointer;
+}
 ```
-
-```yaml
-book: CSS 世界
-page: csw-11-user-interface
-public_toc_entries: 7
-sample: normal | boundary | failure | recovery
-first_divergence: null
-box_tree_explained: true
-used_values_explained: true
-fluid_contract_preserved: true
-```
-
-```text
-freeze DOM + stylesheet + viewport + fonts
-predict generated boxes + containing blocks
-change exactly one variable
-stop at the first divergent used value
-restore and replay the same DOM
-assert fluid layout across content and directions
-```
-
-## 常见误区与故障注入
-
-
-## 四类样本与验收
-
-| 样本 | 注入方式                             | 必查证据                       | 通过条件               |
-| ---- | ------------------------------------ | ------------------------------ | ---------------------- |
-| 正常 | 标准字体、常规内容和宽视口           | 盒、包含块、使用值、行框、层级 | 六阶段按预期完成       |
-| 边界 | 窄视口、长内容、替换元素、字体缺失   | min/max、溢出、基线和回退      | 不依赖固定像素补丁     |
-| 失败 | 单一脱流、错误层叠、隐藏焦点或错方向 | 首个偏离点                     | 能定位并解释根因       |
-| 恢复 | 删除故障声明后重放同一 DOM           | 盒树和计算样式                 | 无旧覆盖且流体契约恢复 |
-
-本页签发不变量是：**outline 在边框之外绘制且不占布局空间，是键盘焦点的重要反馈；cursor 只表达可用交互意图，不能替代语义元素、真实状态和可访问名称。** 单次截图不能替代盒生成、格式化上下文、包含块、计算值、使用值与绘制顺序的完整轨迹。
 
 ## 练习
 
+<Exercises>
 
-## 小结
+**问题 1：** 为什么 outline 通常比 border 更适合做键盘焦点环？
 
-- **outline**：对应“保留原生焦点”阶段的核心观察量。
-- **焦点可见**：对应“绘制 outline”阶段的核心观察量。
-- **outline-offset**：对应“处理偏移与圆角”阶段的核心观察量。
-- **cursor**：对应“选择系统 cursor”阶段的核心观察量。
-- **指针回退**：对应“提供自定义回退”阶段的核心观察量。
-- 7 个公开目录条目已经全部映射到本页证据链。
-- 盒树、使用值和边界样本共同决定是否通过，最终截图不是唯一证据。
+<Answer>
+  outline
+  在边框外绘制且通常不参与盒模型，不会因为焦点出现而让尺寸、文字换行或邻接布局跳动。仍需检查轮廓是否被裁剪、对比度是否足够以及窄宽和高对比模式下是否可见。
+</Answer>
+
+**问题 2：** 全局设置 outline:0 none 后，怎样判断替代焦点样式是否真的合格？
+
+<Answer>
+  用 Tab 和 Shift+Tab
+  走完整路径，确认每个可聚焦控件都有稳定、足够对比且不被内容遮挡的 focus-visible
+  反馈，再复测缩放、高对比、窄视口和错误状态。鼠标点击通过不能证明键盘通过。
+</Answer>
+
+**问题 3：** 为什么 cursor:pointer 不能替代 button 或 link？
+
+<Answer>
+  cursor
+  只改变指针图形，不创建语义、键盘焦点、默认事件、状态或辅助技术名称。应优先使用真实
+  button/link，补齐
+  disabled、busy、错误和焦点反馈，再在需要时添加带关键字回退的自定义 cursor。
+</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="outline">
+    在元素外绘制焦点或状态轮廓、通常不参与盒模型的属性。
+  </GlossaryItem>
+  <GlossaryItem term="outline-offset">
+    控制 outline 与元素边界之间额外距离的属性。
+  </GlossaryItem>
+  <GlossaryItem term="cursor">
+    控制指针在元素上方呈现何种意图图形的属性。
+  </GlossaryItem>
+  <GlossaryItem term="cursor: url()">
+    只在自定义光标资源成功时使用并在失败后回到关键字的 cursor 资源写法。
+  </GlossaryItem>
+  <GlossaryItem term=":focus-visible">
+    只在键盘或其他非指针路径需要时显示焦点反馈的伪类。
+  </GlossaryItem>
+</Glossary>
+
+## 小结
+
+- outline 在盒外绘制且通常不改变布局尺寸，是键盘焦点和状态反馈的合适起点；outline-offset 与圆角负责几何间距。
+- 全局移除 outline 必须有等价的 focus-visible 替代，并用真实 Tab 路径验证，而不是只看鼠标截图。
+- cursor 表达指针意图，不创建语义、事件、焦点或可访问名称；自定义 cursor 必须带关键字回退。
+- 键盘、鼠标和触摸应得到一致的状态反馈，焦点、状态文案、资源失败和高对比模式都属于发布证据。
 
 ## 版本与改编边界
 
-本单元以张鑫旭著《CSS 世界》为身份基线。详细目录来自人民邮电出版社出版电子版页面，CSS 2.1 定位由作者官网和图书官网交叉确认；正文是独立教学重构，不复制原书段落。现代浏览器兼容状态需另行按当前 CSS 规范和浏览器文档核验。
+本章以张鑫旭著《CSS 世界》、人民邮电出版社 2017 年版公开目录为身份基线。目录核验参考[得到电子书页面](https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO)、[作者官网](https://www.zhangxinxu.com/)和[CSS 世界站点](https://www.cssworld.cn/)。焦点轮廓与指针规则参考 [W3C CSS 2.1](https://www.w3.org/TR/CSS21/)、[MDN outline](https://developer.mozilla.org/en-US/docs/Web/CSS/outline)、[MDN cursor](https://developer.mozilla.org/en-US/docs/Web/CSS/cursor) 与 [MDN :focus-visible](https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-visible)。
 
+正文是独立教学改写，不复制原书段落。现代浏览器的 focus-visible、触摸输入、自定义光标热点、高对比模式和辅助技术行为可能因平台变化；迁移时应另建可访问性、响应式和兼容性实验，并保留系统关键字回退。
+
+<Attribution
+  adaptedFrom="张鑫旭《CSS 世界》人民邮电出版社版第 11 章公开目录与作者公开 CSS 资料"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=V5R16yPmaYOMqGRAv82jkX4KDe175w771mwrbx6pNgznl9VZPLJQyEBodb89mqoO"
+/>
