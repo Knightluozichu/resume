@@ -1,0 +1,244 @@
+---
+title: "GPU Gems 2 · Chapter 36. Stream Reduction Operations for GPGPU Applications"
+type: C
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 36
+description: "把 GPU 无法直接表达的变长输出改写成 filtering、scan、search 和 gather，并将它应用到碰撞检测与自适应细分。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-36-stream-reduction"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-36
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch36CollisionBreadthFirstDiagram,
+  GpuGems2Ch36FilteringPipelineDiagram,
+  GpuGems2Ch36FilteringTimelineDiagram,
+  GpuGems2Ch36ReductionLab,
+  GpuGems2Ch36ScanTreeDiagram,
+  GpuGems2Ch36SearchGatherDiagram,
+  GpuGems2Ch36SubdivisionStreamDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch36-stream-reduction";
+
+<Objectives>
+
+- 能解释 GPU 固定输出位置为什么不能直接表达按内容变长的 stream，并用 null record 表示待过滤元素
+- 能修改 Reduction Lab 中的输入规模、过滤比例和应用模式，预测 scan passes、search steps 与输出长度如何变化
+- 能回答：什么时候用 scan + search/gather 进行 compaction，什么时候应避免为了删除少量元素而增加多 pass
+
+</Objectives>
+
+## 先解决“货物变少了，传送带怎么办”
+
+想象传送带上每个工位都必须在自己的格子里放一件货物，但检查后有些货物要被丢弃。工位不能把剩下的货物直接推到左边空出来的格子；它只能在原位留下一个可识别的空标记，再由后续工序重新安排。
+
+本章解决的问题是：当每个输入元素可能产生零个、一个或多个后续元素时，怎样仍然使用固定输出位置的 GPU stream？如果硬把 CPU 的“删掉并向前移动”照搬过来，就会需要 fragment processor 不支持的任意 scatter，或者把整条最大长度的空传送带一直带到后面。
+
+<Callout type="tip" title="先预测空洞最后会去哪">
+  先猜一猜：输入里有一半元素会被过滤，最紧凑的输出应在哪一步出现？打开实验前先写下你预计会变化的是
+  null 数量、scan pass、search step 还是 output
+  records；不要把“标记”和“搬运”当成同一个 pass。
+</Callout>
+
+## 1. data filtering：先保留原长度，再制造可识别的空洞
+
+<Term def="根据每个元素的内容决定保留或丢弃，并把保留元素从输入 stream 中筛出来的过程。">
+  data filtering
+</Term>
+
+fragment processor 可以为每个固定输出位置生成一个结果，却不能根据当前输入决定“这个位置不写，后面的元素往前挪”。过滤的第一步因此不是缩短 stream，而是为每个输入位置写出两种结果：要保留的值，或一个正常算法不会产生的特殊值。
+
+<GpuGems2Ch36FilteringPipelineDiagram />
+
+<Term def="代表“这里没有要保留的元素”的特殊值；它占据原来的位置，等待后续 scan 计算移动距离。">
+  null record
+</Term>
+
+原章使用浮点 infinity 作为 null 的例子：predicate 通过的元素输出原值，否则输出 infinity。这个哨兵必须和业务数据的合法范围分离，并且在所有后续 pass 中使用同一判定规则；否则 scan 可能把真实数据误当成空洞。
+
+```glsl
+// 固定输出位置的 filtering pass
+float value = inputValue;
+bool keep = value > threshold;
+float nullRecord = 1.0 / 0.0;
+outputValue = keep ? value : nullRecord;
+```
+
+这段代码只完成“标记”，还没有产生紧凑输出。把空洞移动到末尾需要知道每个保留元素左侧有多少个 null，这正是下一节 scan 的任务。
+
+<Callout type="trap" title="把 null record 当成普通零值">
+  现象 → 过滤后的合法零值也被移动或丢失。原因 →
+  零可能本来就是业务数据，predicate 与 compaction
+  无法区分“保留的零”和“待删除的零”。修法 → 选择域外哨兵并统一 isNull
+  判定，同时为哨兵写一条不会被业务 kernel 误解的格式约束。
+</Callout>
+
+## 2. scan：用多 pass 计算每个元素的移动距离
+
+<Term def="一种并行前缀累计过程；每一轮把当前记录与更远的固定偏移相加，让每个位置逐步知道左侧的累计数量。">
+  scan
+</Term>
+
+要把一个保留元素移动到正确位置，只需要知道它左边有多少个 null。串行循环可以从左到右累计，但 GPU 更适合用多轮固定偏移：第一轮看左边 1 个位置，第二轮看左边 2 个位置，第三轮看左边 4 个位置，直到偏移覆盖整个输入。
+
+<GpuGems2Ch36ScanTreeDiagram />
+
+第 i 轮的输入来自第 i−1 轮的独立 stream，因此同一轮的元素仍可并行；代价是大约 `log₂(n)` 个 pass 和每轮一次中间 stream。最右边的累计值还告诉我们总共有多少个 null，从而得到紧凑输出的长度。
+
+## 3. compaction：把累计结果变成没有空洞的 stream
+
+<Term def="把带有空洞的固定长度 stream 转换成只包含有效元素的紧凑 stream；它需要为每个输出位置找到对应输入来源。">
+  compaction
+</Term>
+
+scan 给了“每个位置左边有多少空洞”，但 fragment processor 仍不能让输入记录自己 scatter 到新地址。直接用稳定排序把 null 推到尾部当然可行，却会引入 bitonic sort 的额外比较与多轮；原章的替代方案是让每个目标位置搜索对应来源，再 gather。
+
+<GpuGems2Ch36FilteringTimelineDiagram />
+
+在实践中要分开看两种成本：scan 有跨 pass 的数据依赖，每一轮必须结束才能进入下一轮；search 的不同试探可以写成依赖 texture read，某些硬件支持 data-dependent looping 时可在一个 pass 内完成。若硬件不支持动态循环边界，也可以针对应用规模编译固定次数的搜索 kernel。
+
+## 4. search/gather：反过来询问“谁应该填这里”
+
+<Term def="利用 scan 结果的单调性，用二分搜索找到某个输出位置对应的输入记录，再从输入位置读取数据；它用 gather 避开 scatter。">
+  search/gather
+</Term>
+
+scan 结果是单调递增的，因此每个输出位置都可以独立做并行搜索：猜一个输入位置，比较累计 null 数与目标距离，再把猜测范围缩小一半。找到来源后，输出 kernel 在自己固定的位置读取 `value[source]`。从数据流角度看，记录没有被推送，输出位置主动把想要的记录取过来。
+
+<GpuGems2Ch36SearchGatherDiagram />
+
+这种 compaction 的总工作量是 `O(n log n)`：n 个输出位置各做约 log n 步搜索。它的优势是适配 fragment processor 的 gather 限制；代价是依赖读取、scan 中间 pass、边界处理和浮点地址精度。删除比例很低时，应先比较额外 pass 是否值得。
+
+## 5. 碰撞检测：过滤候选，再展开非叶节点
+
+GPU filtering 的价值不只在删除数组元素。碰撞检测可以把两个包围盒树的候选节点对放入 stream：明显不相交的 pair 被过滤掉，相交且仍是非叶节点的 pair 被展开为子节点 pair，下一轮继续处理；叶节点才进入实际三角形检测。
+
+<GpuGems2Ch36CollisionBreadthFirstDiagram />
+
+这是一种 breadth-first 的 GPU 友好表达：每一轮都面对一个当前长度已知的 candidate stream，先做固定位置的 overlap test，再用 filtering 产生更短的 active list 或更长的 child list。与“从最大可能的三角形对开始、把绝大多数空位置带到底”相比，它把树的 pruning 价值保留下来。
+
+<Callout type="trap" title="为了少量删除也强行上 compaction">
+  现象 → 只丢掉很少元素，却新增许多 scan、search 和中间纹理，整体更慢。原因 →
+  compaction 的固定 pass 成本和依赖读取超过了省下的空元素处理。修法 →
+  记录过滤比例、scan pass、search
+  steps、后续消费次数；只有空洞会被多轮计算放大时，才值得压紧 stream。
+</Callout>
+
+## 6. 自适应细分：过滤完成项，展开 active 项
+
+自适应 subdivision 展示了过滤的另一面：已达到尺寸条件的三角形应停止并进入渲染 stream，仍需细分的三角形则生成 children，并携带新的邻居信息进入下一轮。
+
+<GpuGems2Ch36SubdivisionStreamDiagram />
+
+这里不能只保存一个“指向邻居的指针”然后期待 GPU 随时维护动态邻接表。原章选择让三角形携带邻居坐标，牺牲一部分存储换取较少的 dependent texture lookup；每轮生成新的 Triangle 和 Neighbor stream，再根据 edge flags 进行过滤。为了防止相邻三角形对同一顶点做出不同决定，浮点加法的顺序也必须保持一致。
+
+先猜一猜：在 Reduction Lab 中把模式从 `collision` 切到 `subdivide`，再把 filtered ratio 调低，哪一个指标会变大？打开实验后一次只改一个控件，观察 active records、scan passes、output records 和 expansion factor。
+
+<GpuGems2Ch36ReductionLab />
+
+## 三步验收：从空洞到变长 stream
+
+<Stepper>
+  <Step title="第一步：标记并累计空洞">
+    为 predicate 选择不会和业务数据冲突的 null record；第一 pass 只负责标记，随后用偏移翻倍的 scan 计算每个位置左侧的 null 数，并从最右值推导输出长度。
+
+    <GpuGems2Ch36FilteringPipelineDiagram />
+    <GpuGems2Ch36ScanTreeDiagram />
+
+  </Step>
+  <Step title="第二步：用 search/gather 取代 scatter">
+    在单调 scan 结果上为每个输出位置做并行搜索；确认地址、边界和哨兵判断，最后由固定输出位置 gather 对应的输入值。比较它与排序 compaction 的 pass 数和访问模式。
+
+    <GpuGems2Ch36SearchGatherDiagram />
+    <GpuGems2Ch36FilteringTimelineDiagram />
+
+  </Step>
+  <Step title="第三步：把过滤组合进真实应用">
+    碰撞检测先过滤不相交 pair，再展开 nonleaf；自适应细分过滤 complete triangle，再为 active triangle 生成 children 和邻居。记录每轮 stream 长度和边界同步，确保没有把最大空 stream 带到底。
+
+    <GpuGems2Ch36CollisionBreadthFirstDiagram />
+    <GpuGems2Ch36SubdivisionStreamDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- null record 让固定输出 pass 能表达“这个元素不要”。
+- scan 用约 log₂(n) 轮累计每个元素的移动距离。
+- search/gather 在固定输出位置重建紧凑 stream，绕开 scatter。
+- 碰撞检测把过滤与树节点展开组合成 breadth-first stream。
+- 自适应细分同时需要过滤完成项和展开 active 项。
+
+<Exercises>
+
+**问题 1｜设计 compaction。** 输入 `[4, -2, 7, -1]` 只保留正数。请写出 null 标记后的 stream，并说明 scan 结果如何帮助输出位置找到 `4` 和 `7`。
+
+<Answer>
+  可以把输入标为 `[4, null, 7, null]`。对 null 做 running sum 后，位置 0
+  的累计值为 0，位置 2 的累计值为 1；因此输出位置 0 gather 输入位置 0，输出位置
+  1 gather 输入位置 2。实际实现还要处理总 null 数和边界位置。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 在 Reduction Lab 中增加一个 `sort` 模式，用 `sort passes = ceil(log2(n))²` 展示 bitonic sort 的额外阶段，并与当前的 `scan passes + search steps` 并列。这个对比应该避免表达什么错误结论？
+
+<Answer>
+  可新增 `sort` 分支和派生指标，但应明确它是 pass 形状的教学近似，不是不同 GPU
+  上的实际微秒数或性能分数。最终仍需在相同纹理格式、地址布局和硬件上 benchmark
+  scan/search 与 bitonic sort。
+</Answer>
+
+**问题 3｜应用选型。** 碰撞检测每轮保留 5% 的 candidate pair，并把非叶 pair 平均展开成 2 个 child；另一个过滤任务只丢掉 2% 元素且后续只消费一次。哪个更值得 compaction？需要记录哪些证据？
+
+<Answer>
+  碰撞检测更值得尝试，因为过滤会反复进行，保留的列表明显变短，还能避免对大量不相交
+  pair 做后续树遍历；第二个任务可能直接保留空洞更便宜。应记录每轮 active
+  length、过滤比例、scan pass、search step、展开数量、后续消费次数和端到端时间。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="data filtering"
+    definition="按内容挑选要保留的数据；GPU 先在原位置标记，后续再把有效值集中起来。"
+  />
+  <GlossaryItem
+    term="null record"
+    definition="表示“这里没有有效元素”的特殊值，必须和正常业务数据区分开。"
+  />
+  <GlossaryItem
+    term="scan"
+    definition="多轮累计相邻范围，让每个位置逐步知道前面有多少空洞。"
+  />
+  <GlossaryItem
+    term="compaction"
+    definition="把带空洞的固定长度数据变成没有空洞的紧凑数据。"
+  />
+  <GlossaryItem
+    term="search/gather"
+    definition="输出位置先搜索对应的输入来源，再主动读取它，避免输入执行任意地址写入。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 36. Stream Reduction Operations for GPGPU Applications"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-36-stream-reduction"
+/>
