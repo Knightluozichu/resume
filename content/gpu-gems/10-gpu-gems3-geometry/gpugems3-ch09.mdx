@@ -1,0 +1,279 @@
+---
+title: "GPU Gems 3 · Chapter 9. Interactive Cinematic Relighting with Global Illumination"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 9
+description: "把 cinematic relighting 的昂贵几何关系预计算成 direct-to-indirect transfer，再用 wavelet 压缩和 GPU sparse multiply 让灯光设计保持交互。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-9-interactive-cinematic-relighting-global"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-09
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch09RelightingEngineDiagram,
+  GpuGems3Ch09RelightingLab,
+  GpuGems3Ch09RelightingOverviewDiagram,
+  GpuGems3Ch09SampleCloudDiagram,
+  GpuGems3Ch09SparsePackingDiagram,
+  GpuGems3Ch09TransferMatrixDiagram,
+  GpuGems3Ch09WaveletDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch09-cinematic-relighting";
+
+<Objectives>
+
+- 能解释 view samples、gather samples 与 deep frame buffer 如何为 cinematic relighting 提供可重用输入
+- 能修改 Relighting Lab 的灯光、gather budget、wavelet coefficients、bounce 与 material，观察 direct、indirect 和稀疏计算趋势
+- 能回答：为什么 transfer matrix 必须离线预计算、如何拆成 final gather 与 multibounce、运行时 GPU 只保留哪些操作
+
+</Objectives>
+
+## 先把“重新打光”从整条渲染链里拆出来
+
+电影灯光设计常常需要在镜头、物体和材质已经确定之后，反复尝试光源位置、颜色和能量。如果每次改灯都重新做可见性、间接反弹和材质求值，设计师等的是一条完整的离线渲染链，而不是一次交互反馈。
+
+本章的关键转换是：把不随灯光改变的几何关系提前算好，运行时只重做直接光，再把它通过一份压缩的 direct-to-indirect transfer 传播到当前相机看到的点。它不是把全局光照变得“免费”，而是把昂贵的场景关系搬到离线阶段，让灯光迭代拥有可预测的 GPU 工作量。
+
+<Callout type="tip" title="先预测：灯光变了，哪些东西真的需要重算">
+  先猜一猜：如果相机、几何和材质都不变，只提高 light
+  energy，哪些缓存可以保持不动？再打开 Lab，调整 light energy、gather budget 和
+  wavelet coefficients，观察 direct、indirect 与 sparse work 如何分开变化。
+</Callout>
+
+<GpuGems3Ch09RelightingOverviewDiagram />
+
+## 1. cinematic relighting 的边界：只改灯光
+
+<Term def="在固定相机、几何和材质的镜头中，反复修改灯光参数，并用预计算的全局光照关系快速更新画面。">
+  cinematic relighting
+</Term>
+
+这里的“固定”不是说场景永远不能动，而是先选定一个适合反复布光的工作区间：相机和物体不变，材质参数也不变，灯光设计师只试光源方向、强度和颜色。可见点的属性可以被记录，场景中可能贡献间接光的点也可以被整理成另一组输入。
+
+<Callout type="trap" title="把每次布光都当成一次完整重渲染">
+  现象 → 调一盏灯就重新构建几何、材质和全部间接光，交互反馈退化成离线等待。原因
+  → 没有区分随灯光变化的 direct illumination 与可复用的场景 transfer。修法 →
+  固定适用范围后预计算几何关系，运行时只更新直接光和压缩 transfer 的乘法。
+</Callout>
+
+这一边界也说明了它不适合什么：如果相机大幅移动、几何发生形变，或者材质变化改变了光的传播关系，旧 transfer 的契约就可能失效。发布一个 relighting cache 时，必须把它的适用场景和重新烘焙条件一起记录下来。
+
+## 2. view samples 与 gather samples：两种不同的空间责任
+
+<Term def="当前相机最终可见的采样点；每个点可携带位置、法线、材质或 BRDF 参数，并对应 deep frame buffer 中的一个像素位置。">
+  view samples
+</Term>
+
+view samples 来自当前视点真正看见的表面。一个 deep frame buffer 可以为每个可见像素保存 position、normal、diffuse 和 specular 等属性；因此运行时可以先根据新的灯光求出这一像素的直接贡献，而无需再次从场景几何中查询这些属性。
+
+<Term def="分布在整个场景中、可能向 view samples 提供间接光的采样点；它们不应被限制为当前相机可见的表面。">
+  gather samples
+</Term>
+
+gather samples 负责回答“间接光可能从哪里来”。它们需要覆盖场景中可反射或散射光的表面，而不是只覆盖屏幕上当前可见的区域；否则藏在墙后、侧面或另一片可见性区域的贡献会在 transfer 中根本没有列。为了让相近位置和相近法线的样本便于处理，可以把样本展平到 power-of-two 的方形纹理中，并保持相似样本相邻。
+
+<GpuGems3Ch09SampleCloudDiagram />
+
+<Callout type="trap" title="只在当前屏幕可见区域放 gather samples">
+  现象 → 正面画面看起来正常，间接光从遮挡区域或侧向表面传来时却突然缺光。原因 →
+  gather domain 被误当成 view domain，transfer
+  没有列出不可见但有贡献的表面点。修法 → 在整个参与光传输的场景上布置 gather
+  samples，再用位置与法线的局部性组织纹理。
+</Callout>
+
+## 3. direct-to-indirect transfer 的线性契约
+
+<Term def="把 gather samples 的直接照明向量映射到 view samples 的间接照明向量的预计算线性算子；它编码可见性、方向和材质相关的传播关系。">
+  transfer matrix
+</Term>
+
+设 view samples 的直接和间接光分别为 `Vd` 与 `Vi`，gather samples 的直接照明为 `gd`。最终像素可以写成 `Vf = Vd + Vi`，而间接部分先由 `Vi = T · gd` 得到。这里的矩阵不是每次改灯时临时从几何体生成的，它是把“哪些 gather 点能影响哪些 view 点、影响多大”这份昂贵关系封装起来的离线产物。
+
+直接把所有 view × gather 的系数存成 dense T 会迅速失去实用性：行列规模随两种样本数相乘，精度、带宽和乘法工作都同时膨胀。更有用的分解是 `Vi = F · (M + I) · gd`：F 表示 final gather，从 gather 空间传到 view 空间；M 表示 gather 空间中的 multibounce；I 保留零次额外反弹。F 更接近最终图像，可以使用更高精度，M 则可以用较低精度换取容量。
+
+<GpuGems3Ch09TransferMatrixDiagram />
+
+```text
+gd = computeDirectIllumination(gatherSamples, light)
+gIndirect = sparseMultiply(M, gd) + gd
+viewIndirect = sparseMultiply(F, gIndirect)
+finalPixel = viewDirect + viewIndirect
+```
+
+这段伪代码的重点是依赖关系而不是某个 API：CPU 或离线工具负责求出 F、M 的压缩表示，GPU 在布光时计算新的 `gd`，再按稀疏结构做两次向量乘法。相机或材质超出缓存假设时，不能靠把矩阵乘得更快来修复错误的输入契约。
+
+<Callout type="trap" title="把 dense transfer matrix 留到运行时再乘">
+  现象 → 灯光一改，GPU 带宽和显存占用都随 view × gather
+  规模爆炸，帧率与场景采样数强绑定。原因 →
+  把离线可压缩的传播关系当成了运行时几何查询。修法 → 先拆 F、M 和 I，再做
+  wavelet 稀疏化与 atlas packing，只在 GPU 上读取非零块。
+</Callout>
+
+## 4. Haar wavelet：把矩阵行变成可裁剪的结构
+
+<Term def="对方形纹理中的行或图像做多级平均与差分分解的基；它把低频整体贡献和局部水平、垂直、对角细节分开放置。">
+  Haar wavelet
+</Term>
+
+transfer matrix 的一行可以看作 gather domain 上的一张图：平滑的漫反射传播会集中在低频，阴影边界和高光则出现在局部高频。二维 Haar wavelet 在每一级把相邻值变成 average、horizontal、vertical、diagonal 四种子带，再对更小的 average 子块继续分解。变换后的许多系数接近零，就有机会裁剪成稀疏结构。
+
+裁剪不能只看系数的绝对值。一个幅度不大的低频系数可能覆盖很大的 wavelet support area，累积后的像素误差反而比一个尖锐但只覆盖小区域的高频系数更显著。可以把系数幅度乘上它的支持区域，按对最终图像的影响排序，再为不同级别设定误差预算。
+
+<GpuGems3Ch09WaveletDiagram />
+
+<Callout type="trap" title="只保留绝对值最大的 wavelet coefficients">
+  现象 → 表面没有明显噪声，却出现大块偏暗或偏亮的低频漂移。原因 →
+  裁剪规则忽略了系数覆盖的 support area，小幅但广覆盖的贡献被误删。修法 →
+  用幅度与支持区域共同评估重要性，并让误差预算对最终 view image
+  而不是对单个系数负责。
+</Callout>
+
+## 5. multibounce、final gather 与 sparse matrix packing
+
+<Term def="只存储 wavelet 变换后仍然重要的非零块及其位置索引的矩阵表示；它将乘法从所有行列对缩减为少数有效 block。">
+  sparse matrix
+</Term>
+
+wavelet 裁剪之后，非零项往往不是均匀散落的单个数字，而是一些局部矩形块。把这些 block 按列聚集并打包进 texture atlas，可以让 GPU 用纹理采样路径读取系数，同时减少频繁切换纹理状态的成本；代价是必须保存每个 block 的坐标、尺寸和它对应的 view 或 gather 索引。
+
+multibounce 的预算还要和 final gather 分开看。F 直接决定当前 view 点收到的结果，对误差更敏感；M 只在 gather 空间继续传播，多次反弹可以用较低精度和更激进的稀疏化控制容量。把二者都按最高精度保存，容量会失控；把二者都按最低精度处理，则会把最终画面最敏感的误差放大。
+
+<GpuGems3Ch09SparsePackingDiagram />
+
+<Callout type="trap" title="为了省采样，把所有 bounces 都限制在 view samples">
+  现象 →
+  当前镜头的直接间接光勉强成立，但跨遮挡层的多次反弹几乎消失，换一盏侧光就暴露缺口。原因
+  → multibounce 传播被错误地截断在屏幕可见域，gather-to-gather 的 M
+  没有输入空间。修法 → 让 gather samples 覆盖全场，在 M 中保留必要的
+  gather-to-gather 传播，再用精度和稀疏预算控制成本。
+</Callout>
+
+## 6. GPU relighting engine：运行时留下什么
+
+运行时的第一步仍是 direct illumination：根据 light 参数和 deep frame buffer 中的 position、normal、material，配合 shadow map 或其他可见性信息求出 `Vd` 与 `gd`。为了降低直接光的锯齿，可以对 direct pass 做 2×2 supersampling；间接光通常按像素计算，再用 position 和 normal 的 closest-neighbor 规则上采样，避免把墙的一侧泄漏到另一侧。
+
+因此 GPU 侧的核心操作可以收敛成三类：在纹理矩形上运行 direct shader；对方形纹理做 wavelet transform；按 atlas 中的非零 block 做 sparse matrix multiplication。CPU 并没有消失，它负责离线构建 transfer、选择裁剪阈值、打包 atlas 和保存索引；但灯光设计师改变参数时，不必再次执行这些重活。
+
+<GpuGems3Ch09RelightingEngineDiagram />
+
+<Callout type="warning" title="间接光不是越平滑越正确">
+  观察 Lab 时，先把 material 设为 diffuse，再逐步提高 bounces 与
+  coefficients。diffuse 的贡献通常更平滑；glossy 会把高频方向性带进
+  transfer，预算不足时容易出现边缘误差。这里的指标是趋势示意，不替代真实场景的
+  visibility、BRDF 和尺度验证。
+</Callout>
+
+## 三步验收：从样本域到可交互灯光
+
+<Stepper>
+  <Step title="第一步：分清 view domain 与 gather domain">
+    用 deep frame buffer 记录当前相机可见的 view samples，再在整个参与光传输的场景中布置 gather samples。后者应按位置和法线相近性组织成方形纹理，不能从屏幕可见范围偷换采样域。
+
+    <GpuGems3Ch09SampleCloudDiagram />
+    <GpuGems3Ch09RelightingOverviewDiagram />
+
+  </Step>
+  <Step title="第二步：预计算、变换并压缩 transfer">
+    先得到 `Vi = F · (M + I) · gd` 的分解，再对矩阵行做二维 Haar wavelet，按 support-aware 的重要性裁剪，最后把非零 block 打包到 atlas。F 与 M 可以使用不同精度，但不能丢掉它们各自的空间责任。
+
+    <GpuGems3Ch09TransferMatrixDiagram />
+    <GpuGems3Ch09WaveletDiagram />
+    <GpuGems3Ch09SparsePackingDiagram />
+
+  </Step>
+  <Step title="第三步：只在 GPU 上重做灯光与稀疏乘法">
+    灯光改变时，更新 direct illumination，执行方形纹理上的 wavelet pass，并按稀疏 atlas 做乘法。最后将 view direct 与 view indirect 相加，用位置和法线约束间接上采样。
+
+    <GpuGems3Ch09RelightingEngineDiagram />
+    <GpuGems3Ch09RelightingOverviewDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch09RelightingLab />
+
+## 本章小结
+
+- cinematic relighting 适合固定相机、几何与材质、反复调整灯光的工作区间；它的收益来自复用场景关系，而不是取消全局光照成本。
+- view samples 来自当前可见像素，gather samples 覆盖全场可能贡献间接光的点；二者不能互换。
+- transfer matrix 把 gather direct 映射到 view indirect，拆成 final gather F、multibounce M 与 I 后才有可管理的精度和容量预算。
+- Haar wavelet 把传播行的低频与局部细节分开；裁剪时必须考虑 support area，之后再用 sparse matrix 和 atlas 降低 GPU 工作。
+- 运行时主要保留 direct illumination、wavelet transform 与 sparse multiplication；2×2 direct supersampling 和基于位置/法线的间接上采样帮助控制画质。
+
+<Exercises>
+
+**问题 1｜样本域。** 一个室内场景里，当前相机只能看见墙的正面，但侧墙和天花板会把新灯光反弹到画面。为什么只用当前屏幕的 view samples 作为 gather samples 会失败？
+
+<Answer>
+  view samples 只描述最终可见的像素点，不能代表所有可能提供间接光的表面。gather
+  samples 必须覆盖侧墙、天花板等不可见但参与传播的点，transfer
+  才能为这些路径留下列；否则运行时即使 direct light
+  正确，也没有可乘的间接光输入。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Relighting Lab 增加一个 `keepSupport` 选项：系数裁剪不只比较绝对值，还把 wavelet support area 乘入重要性。你会怎样解释它对低频和高频系数的不同影响？
+
+<Answer>
+  可以为每个系数计算 `importance = abs(coefficient) *
+  supportArea`，再按预算保留。低频系数的 support 大，即使幅度较小也可能覆盖大量
+  view samples；高频系数的 support
+  小，通常只有在局部边缘或高光贡献足够大时才值得留下。这样优化目标更接近最终图像误差，而不是单个数字的大小。
+</Answer>
+
+**问题 3｜方案选型。** 一个固定镜头只允许设计师调整灯光；另一个工具允许用户任意移动相机并改变材质。哪一个更适合本章的 transfer cache？第二个工具需要补什么策略？
+
+<Answer>
+  固定镜头、几何和材质的工具最适合 cinematic relighting，因为 view
+  samples、gather samples 和 transfer
+  的假设保持稳定。任意移动相机或改变材质会改变可见域和传播关系，需要重新生成
+  deep frame buffer 或
+  transfer，或者改用支持动态视点、动态材质的更通用预计算/实时 GI
+  方案，不能继续无条件复用旧 cache。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="view samples"
+    definition="当前相机看见的采样点；它们携带位置、法线和材质等信息，通常对应 deep frame buffer 中的像素。"
+  />
+  <GlossaryItem
+    term="gather samples"
+    definition="分布在整个参与光传输场景中的采样点，用来提供可能到达 view samples 的间接光。"
+  />
+  <GlossaryItem
+    term="transfer matrix"
+    definition="把 gather samples 的直接照明映射为 view samples 间接照明的预计算线性算子。"
+  />
+  <GlossaryItem
+    term="Haar wavelet"
+    definition="通过多级平均与水平、垂直、对角差分，把方形纹理中的传播结构分解成可裁剪系数的基。"
+  />
+  <GlossaryItem
+    term="sparse matrix"
+    definition="只存储重要非零块及其位置的矩阵表示，便于用 texture atlas 和稀疏乘法在 GPU 上读取。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 9. Interactive Cinematic Relighting with Global Illumination"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-9-interactive-cinematic-relighting-global"
+/>
