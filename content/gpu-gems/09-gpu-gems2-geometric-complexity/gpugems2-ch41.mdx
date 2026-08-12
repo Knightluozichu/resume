@@ -1,0 +1,285 @@
+---
+title: "GPU Gems 2 · Chapter 41. Deferred Filtering: Rendering from Difficult Data Formats"
+type: D
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 41
+description: "用两遍 deferred filtering 把压缩、稀疏或 flat 3D 数据重建为可被硬件插值的局部纹理，并在质量、指令与驻留内存之间做选择。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-41-deferred-filtering-rendering-difficult"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-41
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch41AxisSlicingDiagram,
+  GpuGems2Ch41CostComparisonDiagram,
+  GpuGems2Ch41DeferredFilteringLab,
+  GpuGems2Ch41DeferredFilteringTimelineDiagram,
+  GpuGems2Ch41DeferredPassDiagram,
+  GpuGems2Ch41MemoryWindowDiagram,
+  GpuGems2Ch41StorageLayoutDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch41-deferred-filtering";
+
+<Objectives>
+
+- 能解释为什么困难数据布局要先局部重建，再交给纹理硬件完成过滤
+- 能修改 Deferred Filtering Lab 的重建成本、采样密度和切片数，比较两遍与单遍路径的指令和驻留内存
+- 能回答：面对压缩体数据、动态 flat 3D texture 和普通 3D texture，什么场景值得采用 deferred filtering？
+
+</Objectives>
+
+## 先把“难搬的货”放到传送带上
+
+想象仓库里有一批货物：为了节省空间，货物被装进带编号的箱子，编号还指向另一排说明卡。仓库机器人可以很快做计算，却不懂这套间接编号；如果每次取一件货都重新查八个邻居，传送带会被重复搬运堵住。
+
+本章解决的问题是：如何先把需要的局部货物整理成标准小托盘，再让后面的机器用现成的平滑搬运能力反复取样？没有这一步，画面放大或做体渲染时，重复解码会把片元指令和纹理读取推到不可交互的程度。
+
+<Callout type="tip" title="先预测重复工作在哪里">
+  先猜一猜：如果一个画面片元要反复访问同一块体数据，应该让每个片元自己重建，还是先把原生分辨率的一小块重建一次？再猜：只保留两张相邻切片，为什么仍然可以生成连续的体采样？
+</Callout>
+
+<GpuGems2Ch41StorageLayoutDiagram />
+
+## 1. 困难格式：计算时省空间，采样时多一步寻址
+
+<Term def="为了压缩、稀疏计算或动态更新而采用的非标准存储方式；它通常不能直接使用纹理硬件的普通插值路径。">
+  difficult data format
+</Term>
+
+GPU 上的数据不一定是一张规则的 2D 或 3D 纹理。云、火焰和隐式表面常把三维域压成二维切片、稀疏 tile，或者把一组相似块共享到一个压缩表里。这样的布局更适合更新和计算，但渲染器无法把一个坐标直接交给硬件过滤器。
+
+<Term def="把一块数据用一个索引值代替，再让这个索引指向共享的代表值或小向量的压缩方法。">
+  vector quantization
+</Term>
+
+在原书的例子里，每个数据块保存一个 key；key 指向 `codebook` 中的代表值。这样相似的块可以共用存储，但一次采样要先读 key，再读代表值，最后才能得到一个可过滤的样本。
+
+<Term def="由许多代表值组成的共享表；压缩块的 key 用它查出该块的近似数据。">
+  codebook
+</Term>
+
+直接让片元程序手写三线性过滤，会把一次采样变成八个邻域重建和多次插值。放大体数据时，许多相邻片元还会重复重建完全相同的 texel，计算量随着画面片元数一起膨胀。
+
+<GpuGems2Ch41StorageLayoutDiagram />
+
+<Callout type="trap" title="对困难格式直接打开线性过滤">
+  现象 → 采样看起来仍然是 nearest neighbor，或结果出现块状跳变。原因 →
+  纹理硬件只会在它理解的规则纹理上插值，不会替你追踪 key 到 codebook
+  的地址链。修法 → 先把局部值重建到常规纹理，再在第二遍使用硬件过滤。
+</Callout>
+
+## 2. deferred filtering：把重建与过滤拆成两遍
+
+<Term def="先按数据的原生分辨率重建一小块常规纹理，再用第二遍的硬件插值生成最终采样的两遍渲染方法。">
+  deferred filtering
+</Term>
+
+第一遍只负责读取困难格式并重建当前需要的 data slice；它不必知道最终画面会从这一层采样多少次。第二遍读取相邻的重建 slice，做最后一次 LERP、着色和光照。重建成本因此按 texel 支付一次，而不是按每个画面 fragment 重复支付。
+
+<GpuGems2Ch41DeferredPassDiagram />
+
+下面的 WebGL2 片元函数对应第二遍的核心：`textureI` 和 `textureJ` 已经是普通切片，`axisLerp` 对当前轴向切片的所有片元都相同，因此只需要两次读取和一次插值。
+
+```glsl
+vec4 deferredTex3D(
+  vec2 texCoord2D,
+  float axisLerp,
+  sampler2D textureI,
+  sampler2D textureJ
+) {
+  vec4 valueI = texture(textureI, texCoord2D);
+  vec4 valueJ = texture(textureJ, texCoord2D);
+  return mix(valueI, valueJ, axisLerp);
+}
+```
+
+这段代码刻意不包含 key、codebook 或八邻域的解码逻辑。它的职责是把已经整理好的局部数据交给纹理读取和硬件插值；第一遍的复杂性被隔离在重建 pass 内。
+
+## 3. 三线性过滤：沿主要体轴滑动窗口
+
+<Term def="在三个坐标方向上连续插值的体数据采样；在本章的两遍路径里，最终轴向插值由相邻切片和一个固定比例完成。">
+  trilinear filtering
+</Term>
+
+原书不使用任意方向的 slice plane，而是选择最接近观察方向的体轴做 axis-aligned slicing。每次先重建 `i + 1`，然后在 `i` 与 `i + 1` 之间绘制 sample slices；平面内的过滤交给纹理硬件，轴向的最后一步由 `axisLerp` 完成。
+
+<Term def="沿一个与体数据坐标轴平行的方向逐层绘制切片；这样同一张切片上的轴向坐标保持不变。">
+  axis-aligned slicing
+</Term>
+
+这个选择让当前切片上的轴向坐标对所有 fragment 都相同，`axisLerp` 可以作为常量传入 shader。视线与某个体轴越接近，所需的切片顺序越自然；视线变化时，只需切换主要体轴和对应的存储访问方式。
+
+<GpuGems2Ch41DeferredFilteringTimelineDiagram />
+
+<GpuGems2Ch41AxisSlicingDiagram />
+
+```glsl
+// 每个当前 sample slice 只在相邻重建层之间插值
+float axisLerp = slicePosition - floor(slicePosition);
+vec4 lower = texture(reconstructedI, texCoord2D);
+vec4 upper = texture(reconstructedJ, texCoord2D);
+vec4 sample = mix(lower, upper, axisLerp);
+vec3 shaded = shadeVolume(sample, gradient(sample));
+outColor = vec4(shaded, sample.a);
+```
+
+这里的 `axisLerp` 不是对整段体数据一次性插值，而是当前相邻切片窗口内的局部比例。完成这一段窗口后，旧的 `i` 可以被丢弃，`i + 1` 成为下一轮的 `i`。
+
+## 4. flat 3D texture：动态数据也能保持增量渲染
+
+<Term def="把三维域按地址顺序打包到一张二维纹理中的布局；它适合某些 GPU 计算写入，但无法直接使用原生三维三线性过滤。">
+  flat 3D texture
+</Term>
+
+动态体数据经常由 GPU 自己生成：模拟、图像处理、分割或形变会持续更新它们。受限于当时的内存模型，三维域可能被存成多张 2D slice，也可能被压成一张 flat 3D texture。deferred filtering 把“计算布局”和“渲染布局”解耦，所以渲染器不用强迫计算阶段改用另一种存储。
+
+<GpuGems2Ch41MemoryWindowDiagram />
+
+关键是增量窗口：不必同时重建整个体，只需要当前的两张 slice。空间开销主要跟切片分辨率和两层窗口有关，而不是跟体数据的深度线性增长；时间上则把每个 texel 的解码成本支付一次。
+
+## 5. 何时延后：用一次额外 pass 换掉大量重复读取
+
+<GpuGems2Ch41CostComparisonDiagram />
+
+官方示例给出一个直观数量级：单遍手写三线性过滤需要重建 8 个 texel、8 次纹理读取和 14 次 LERP/ADD，总计约 54 条片元指令；deferred 路径在最终读取中约为两次纹理读取加一次 LERP，即 3 条指令，另加一次性的重建 pass。
+
+<Callout type="trap" title="看到额外 pass 就认定它更慢">
+  现象 → 为了少一遍渲染，选择每个 fragment 直接解码。原因 → 忽略了相邻 fragment
+  会重建相同 texel，重复成本通常远大于额外 pass 的固定成本。修法 → 按 texel
+  统计重建次数，再比较 fragment 数、采样次数和缓存复用，而不是只数 pass。
+</Callout>
+
+<Callout type="trap" title="不看数据布局就固定切片方向">
+  现象 → 某些视角下采样出现错位或缓存命中率很差。原因 →
+  存储切片轴与观察方向完全垂直，访问必须跨许多不连续位置拼出一条采样线。修法 →
+  选择最接近视线的主要体轴，并让重建 pass 与当前轴向的地址转换保持一致。
+</Callout>
+
+<Callout type="trap" title="为了省内存一次性复制整个体数据">
+  现象 → 画面能过滤了，但动态体数据的显存峰值翻倍。原因 → 把 deferred filtering
+  误解成“先完整解压一份 3D 纹理”。修法 → 使用两张相邻 slice
+  的滑动窗口，完成当前层的 sample 后复用旧纹理。
+</Callout>
+
+先预测：在下面的实验中，把 `reconstruction cost` 调高，哪一种路径的估算指令增长更快？把 `samples per voxel` 调高，为什么单遍路径更容易失控？打开误区开关，观察“直接打开线性过滤”为什么不能替代第一遍重建。
+
+<GpuGems2Ch41DeferredFilteringLab />
+
+## 三步验收：从间接地址到可过滤的体采样
+
+<Stepper>
+  <Step title="第一步：识别困难格式并隔离重建">
+    先画出 key、codebook、稀疏 tile 或 flat 3D 地址之间的关系，再把重建限制在当前需要的原生分辨率区域。不要让最终画面中的每个 fragment 都重复追踪同一条地址链。
+
+    <GpuGems2Ch41StorageLayoutDiagram />
+    <GpuGems2Ch41DeferredPassDiagram />
+
+  </Step>
+  <Step title="第二步：用相邻切片完成最终插值">
+    选择主要体轴，逐层重建 `i` 与 `i + 1`；第二遍只读取两张常规纹理，用 `axisLerp` 做轴向 LERP，再交给硬件完成平面内过滤和着色。
+
+    <GpuGems2Ch41DeferredFilteringTimelineDiagram />
+    <GpuGems2Ch41AxisSlicingDiagram />
+
+  </Step>
+  <Step title="第三步：按重复工作与驻留内存做取舍">
+    比较单遍的每 fragment 解码与 deferred 的每 texel 一次重建；动态体数据用两张 slice 的滑动窗口，避免为了过滤复制整个体。
+
+    <GpuGems2Ch41CostComparisonDiagram />
+    <GpuGems2Ch41MemoryWindowDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 困难格式适合计算，不一定适合硬件过滤。
+- deferred filtering 把重建和最终过滤拆成两遍。
+- axis-aligned slicing 用两张相邻 slice 完成轴向 LERP。
+- 每个 texel 一次重建，避免每个 fragment 重复解码。
+- 滑动窗口让动态体数据只驻留两层。
+
+<Exercises>
+
+**问题 1｜排出两遍路径。** 请写出从压缩体数据到最终着色的步骤，并说明为什么第一遍应该在原生分辨率重建，而不是直接按最终画面分辨率重建。
+
+<Answer>
+  先读取 key 和 codebook，重建当前的原生 data slice；再重建下一张相邻
+  slice；对两层之间的 sample 做最终轴向
+  LERP、纹理过滤和着色。第一遍按原生分辨率只为每个 texel
+  支付一次解码，避免最终画面中的多个 fragment 重复重建同一值。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Deferred Filtering Lab 增加 `windowSlices` 控件，比较驻留 2 张、3 张和完整体数据三种窗口，并把“估算指令”与“驻留 slice 数”分开显示。你需要防止哪种误导？
+
+<Answer>
+  可以把 `memory` 从固定的 2 改为 `windowSlices`，同时只让 reconstruction
+  成本按当前窗口推进，不要把驻留层数直接当成过滤指令数。应明确显示两个维度：窗口越大占用越多，但不等于每个
+  fragment 的重建次数就越少；完整体复制也不代表过滤路径正确。
+</Answer>
+
+**问题 3｜场景选型。** 压缩云体、GPU 动态生成的 flat 3D texture、普通规则 3D texture，哪些最适合 deferred filtering？如果重建完全免费，是否仍然有理由使用它？
+
+<Answer>
+  压缩云体和 flat 3D texture
+  最适合，因为它们的地址布局不能直接使用原生过滤，而且每个 fragment
+  手写重建会重复工作；普通规则 3D texture
+  已经能直接硬件过滤，收益较小。即使重建成本很低，只要同一 texel 会被多个
+  fragment 重复访问，增加一遍 deferred reconstruction
+  仍可能减少整体重复读取和算术。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="difficult data format"
+    definition="为了计算或压缩而采用的特殊存储方式，普通纹理过滤器不能直接处理。"
+  />
+  <GlossaryItem
+    term="vector quantization"
+    definition="用一个编号代表一块数据，再从共享表里查出近似值的压缩办法。"
+  />
+  <GlossaryItem
+    term="codebook"
+    definition="存放许多共享代表值的表，数据块的编号会指向其中一项。"
+  />
+  <GlossaryItem
+    term="deferred filtering"
+    definition="先把数据整理成普通小纹理，再让下一遍使用硬件插值完成画面。"
+  />
+  <GlossaryItem
+    term="trilinear filtering"
+    definition="在三维数据的三个方向连续取平均，让体采样看起来平滑。"
+  />
+  <GlossaryItem
+    term="axis-aligned slicing"
+    definition="沿体数据的某个坐标轴逐层画切片，当前相邻两层就能支撑局部采样。"
+  />
+  <GlossaryItem
+    term="flat 3D texture"
+    definition="把三维数据压进一张二维纹理，节省或适应计算布局，但需要额外地址转换。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 41. Deferred Filtering: Rendering from Difficult Data Formats"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-41-deferred-filtering-rendering-difficult"
+/>
