@@ -1,0 +1,324 @@
+---
+title: "GPU Gems 2 · Chapter 23. Hair Animation and Rendering in the Nalu Demo"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 23
+description: "用 control hairs、约束动力学、Marschner 反射与 opacity shadow maps，把长发的动画、密度和实时 shading 拆成可预算的数据流。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-23-hair-animation-and-rendering-nalu-demo"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-23
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch23DynamicsDiagram,
+  GpuGems2Ch23HairPipelineDiagram,
+  GpuGems2Ch23HairRenderingLab,
+  GpuGems2Ch23InterpolationDiagram,
+  GpuGems2Ch23OpacityShadowMapDiagram,
+  GpuGems2Ch23ShadingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch23-hair-nalu";
+
+<Objectives>
+
+- 能解释 Hair Animation and Rendering in the Nalu Demo 如何用少量 control hairs 承担动力学，再通过 Bezier、tessellation 和插值生成可渲染密度
+- 能实现并诊断 Verlet 粒子、长度约束、球体碰撞与 barycentric interpolation 的数据流，区分稳定性问题和密度生成问题
+- 能调节 HairRenderingLab 的 hair density、constraint iterations、shadow slices 与 reflectance maps，比较发丝质量、透射阴影和 GPU 预算
+
+</Objectives>
+
+## 先把“真实头发”拆成四条管线
+
+GPU Gems 2 Chapter 23 的 **Hair Animation and Rendering in the Nalu Demo** 不是单一的 hair shader 教程。Nalu 的长发需要同时解决四件事：少量控制结构如何产生可信运动，控制发丝如何变成足够密的几何，单根发丝如何产生方向相关的散射，以及大量发丝如何形成柔和的自阴影。任何一条管线失败，最终画面都会暴露出“塑料感”、穿模、稀疏或闪烁。
+
+先打开实验，保持 control hairs，逐步提高 constraint iterations；再切到 dense interpolation，比较密度放大后稳定性是否仍然可信。最后改变 shadow slices 和 reflectance maps，观察阴影透射与查表带宽的取舍。实验强调一个边界：可见发丝数量可以很多，但昂贵的 dynamics、collision 和 authoring 不能盲目按最终数量复制。
+
+<GpuGems2Ch23HairRenderingLab />
+
+<Callout type="tip" title="先保存 control state，再生成 dense hair">
+  每帧记录 scalp root、control hair vertices、constraint error、collision
+  contacts 和随机插值 seed。只有控制结构收敛后才生成 dense
+  hair；这样能判断问题来自动力学，还是来自 Bezier/tessellation/interpolation
+  的放大。
+</Callout>
+
+<Callout type="trap" title="把发丝数量当成真实感的唯一旋钮">
+  现象 → 增加渲染发丝后画面更密，但运动仍像刚性扫帚，碰撞穿透也更明显。原因 →
+  最终几何密度没有修复错误的 control hair
+  dynamics；插值只会复制并放大根部、长度和碰撞的错误。修法 →
+  先用少量控制发丝验收约束、碰撞和可控性，再按 scalp topology 生成密集发丝。
+</Callout>
+
+本章主题 **Hair Animation and Rendering in the Nalu Demo** 的核心是分层：控制结构负责可解释的状态，生成阶段负责空间密度，shading 负责方向性散射，shadowing 负责沿光线的透射损失。
+
+<Term def="数量较少、从 scalp 生长并承担动力学、碰撞与艺术控制的代表性发丝；最终渲染发丝由它们生成或插值而来。">
+  control hair
+</Term>
+
+<Term def="用当前位置与上一帧位置推算粒子下一位置、避免显式速度状态的积分方法；它适合配合约束迭代实现稳定发丝运动。">
+  Verlet integration
+</Term>
+
+<GpuGems2Ch23HairPipelineDiagram />
+
+## 1. 从 scalp layout 生成控制发丝
+
+控制结构从专用 scalp mesh 生长：每个根顶点沿 scalp normal 生成一根 control hair，初始长度和方向描述发型，而不是直接把最终数千根发丝交给 dynamics。这样既保留了发型布局，又让动画系统只处理可控规模的粒子链。
+
+控制结构不是纯物理系统。程序动力学会让运动自然，却也可能让发型失去导演需要的形状；工程上应该提供 root pin、局部阻尼、外力、碰撞层和手工修正通道。所谓“更真实”的自动系统，如果没有可回放和可修正的状态，仍然难以用于镜头制作。
+
+<Callout type="trap" title="把 scalp normal 当成永久方向">
+  现象 → 角色转身或发根附着的头皮变形后，头发从根部脱开或出现不自然的折角。原因
+  → root frame 只在初始化时计算，后续没有跟随 scalp
+  的位置、法线或骨骼空间更新。修法 → 明确 root 的坐标空间和 pin 约束；每帧先更新
+  scalp attachment，再把动力学结果投回该局部 frame。
+</Callout>
+
+## 2. dynamics：Verlet、长度约束与碰撞
+
+<Term def="把相邻发丝粒子之间的目标距离反复投影回约束面的过程；它通过多次局部修正减少 stretching，并让一条发丝趋向保持长度。">
+  length constraint
+</Term>
+
+在控制发丝上，每个 vertex 作为 particle。Verlet 的基本预测可写成
+
+$$
+  x_{t+1}=x_t+(x_t-x_{t-1})+a_t\Delta t^2.
+$$
+
+预测之后，逐段修正相邻粒子的距离，使 $\lVert x_{i+1}-x_i\rVert$ 接近目标 segment length。一次修正会影响邻居，因此通常需要多轮迭代；迭代次数越少越便宜，但越容易出现拉伸和碰撞穿透，迭代次数越多则会增加 CPU/GPU 工作与延迟。
+
+<GpuGems2Ch23DynamicsDiagram />
+
+碰撞可以从简单开始：用 sphere rig 代表头部和身体，对粒子做 point-versus-sphere 投影。如果发丝 segment 远大于 sphere，只有检查粒子端点会留下中段穿透；可以在粒子上增加 pearl-like collision samples，或者对 segment 做更完整的测试，但要以稳定性和预算为代价。碰撞 response 还应该设置 friction、restitution 和最大 correction，避免一帧中反复弹飞。
+
+<Callout type="trap" title="只迭代一次长度约束">
+  现象 → 近根段看似固定，远端逐帧伸长，快速运动时发束像橡皮筋。原因 → 修正一个
+  segment 后会让相邻 segment 失效，单轮 projection 没有让整条链收敛。修法 →
+  使用固定迭代上限并记录 constraint error；按最长链、碰撞复杂度和目标帧预算选择
+  iterations，而不是凭截图调到“差不多”。
+</Callout>
+
+<Callout type="trap" title="只测粒子点与球体的碰撞">
+  现象 → 粒子没有进入身体，但两粒子之间的长 segment 仍然穿过肩膀或头部。原因 →
+  point-sphere 测试没有覆盖 segment interior，发丝粒子间距又随长度增大。修法 →
+  缩短远端 segment、增加 pearl samples，或为关键碰撞层使用 segment-sphere
+  test；同时做高速扫过和极端姿态回放。
+</Callout>
+
+## 3. geometry generation：Bezier、tessellation 与密度
+
+控制发丝每帧都会变化，因此最终 render hair 需要重建。一个可解释的数据流是：从控制粒子估计 tangent，转为 Bezier curve，沿曲线插入顶点进行 tessellation，再用 scalp triangle 的拓扑在三根平滑 control hairs 之间插值，生成 dense hair。动态 vertex buffer 可以承接这批每帧变化的顶点。
+
+<Term def="在三角形或其他参数域中用三个权重的凸组合生成内部位置；用于根据 scalp topology 在 control hairs 之间填充发丝密度。">
+  barycentric interpolation
+</Term>
+
+对于 scalp triangle 顶点 A、B、C，内部发丝 Y 可以写成
+
+$$
+  Y=b_AA+b_BB+b_CC,\qquad b_A+b_B+b_C=1,\qquad b_i\geq 0.
+$$
+
+随机采样 barycentric coefficients 时必须保证样本落在三角形内部；同一个 interpolated hair 应与 control hair 拥有相同的 vertex count，方便逐点混合和动态更新。随机性应使用可回放 seed，否则美术、测试和网络重现都无法稳定比较。
+
+<GpuGems2Ch23InterpolationDiagram />
+
+插值只负责填充空间密度，不负责独立物理。若每根密集发丝都跑完整 collision，会让成本随可见密度爆炸；更常见的分层策略是 control hair 解决运动，dense hair 继承控制结果并只增加轻量 jitter、phase 或材质差异。
+
+<Callout type="trap" title="用不可回放的随机数填充 dense hair">
+  现象 → 同一个镜头每次生成的发丝纹理不同，回归截图和网络重演无法对齐。原因 →
+  barycentric sample 没有固定 seed，或者随机序列随线程调度改变。修法 → 把 seed
+  与 scalp triangle、hair id、frame 绑定；记录 barycentric
+  weights，保证生成、测试和调试可复现。
+</Callout>
+
+## 4. shading：Marschner 路径与 lookup textures
+
+<Term def="把单根圆柱状发丝的方向性反射与透射拆成 R、TT、TRT 路径，并用角度函数描述其高光、折射和内部反射的头发反射模型。">
+  Marschner reflectance
+</Term>
+
+头发的外观不只是 diffuse。Marschner 模型把主要光路拆成反射 R、透射-透射 TT、透射-反射-透射 TRT，整体可以写成
+
+$$
+  S=S_R+S_{TT}+S_{TRT}.
+$$
+
+每条路径又可以分解为关于入射/出射角的 $M$ 与关于差分角的 $N$。直接在每个像素计算四维函数代价高，因此可以把两个二维函数打包进纹理：用 light/eye 与 hair tangent 的 dot 得到 sin 参数，用 perpendicular vectors 的 dot 得到 cos 参数，避免大量 inverse trigonometric functions。
+
+<GpuGems2Ch23ShadingDiagram />
+
+两张 2D lookup texture 通常比三张或更多独立纹理更容易压低带宽，但 packing 需要明确 channel layout、精度、scale factor、mipmap 和颜色空间。若改动 IOR、highlight width 或 hair color，表是否重建、哪些参数留在 shader 中，也应成为材质契约。
+
+<Callout type="trap" title="把切线当成表面 normal">
+  现象 → 头发沿长度方向的高光消失，发丝看起来像一排扁平的塑料片。原因 → hair
+  reflectance 的角度关系围绕 fiber tangent，使用 scalp normal
+  会丢失纵向方向性。修法 → 在 line strip 或 interpolated hair 上稳定传递
+  tangent；对 tangent flip、端点和曲线拐点做连续性检查。
+</Callout>
+
+<Callout type="trap" title="用 inverse trig 还原所有角度">
+  现象 → 反射模型数值正确，但大量发丝让 shader 成本和寄存器压力暴涨。原因 →
+  先求角度再查表，重复执行昂贵的 inverse trig；模型本身只需要若干 sin/cos
+  组合。修法 → 用 dot(light,tangent)、dot(eye,tangent) 和 perpendicular dot
+  构造查表坐标；把昂贵函数留在离线表生成阶段。
+</Callout>
+
+## 5. opacity shadow map：沿深度积累透射
+
+<Term def="沿 light-space 深度切片记录发丝吸收或 opacity thickness，并在 shading 时插值这些层得到透射率的阴影表示。">
+  opacity shadow map
+</Term>
+
+普通 shadow map 只回答“这个 sample 是否被挡住”，对体积状、半透明且高度细碎的头发过于二值。opacity shadow map 在 light space 沿 z 方向存储累计密度 $\sigma$，再通过
+
+$$
+  T(x,y,z)=e^{-k\sigma(x,y,z)}
+$$
+
+得到到达发丝的光比例 $T$。运行时在相邻 depth slices 之间线性插值 density，再进行指数转换；这样头发自阴影会随着发量和深度逐渐变软。
+
+<GpuGems2Ch23OpacityShadowMapDiagram />
+
+实现上可以把 16 个深度层分成多通道纹理，也可以用 MRT 一次生成多个 texture。通道 packing 降低 pass 数，但不能消除 shadow resolution、slice spacing、filtering 和 bandwidth 的预算。若 slice 太少，密集发束会出现 banding；若分布不匹配 hair volume，某些深度区间会过暗或漏光。
+
+<Callout type="trap" title="把 opacity shadow map 当作普通 depth shadow map">
+  现象 → 发丝阴影只有硬边，密度增加时突然从亮跳到黑，透明层叠没有渐变。原因 →
+  只保存第一个深度命中，丢掉了沿光线的累计 opacity thickness。修法 → 按
+  light-space depth slices 累积 density，再插值并转换
+  transmittance；用单根、稀疏发束和密集发束分别验证。
+</Callout>
+
+<Callout type="trap" title="层数增加却不检查切片范围">
+  现象 → shadow slices 从 8 增到 16，局部 banding 减少但远端阴影突然消失。原因 →
+  z0/z15 没有覆盖完整 hair volume，或者插值权重使用了错误的 inverse delta。修法
+  → 每帧计算稳定的 light-space near/far，记录 slice positions 与 weight
+  sum；超出范围的 density 必须有明确 clamp 或 fallback。
+</Callout>
+
+## 6. 把效果拆成可发布的预算
+
+最终验收不要只看一张 Nalu 风格截图。至少建立四组回归：control hair 的约束误差和碰撞穿透，dense interpolation 的密度/seed 稳定性，Marschner lookup 的 tangent 高光，opacity shadow map 的 slice 插值和透射单调性。每组都要在静止、快速摆动、极端相机角度和不同发量下记录结果。
+
+性能上要分开统计：control dynamics 粒子数与 constraint iterations，Bezier/tessellation 和动态 vertex buffer 带宽，dense hair 的 overdraw，reflectance texture fetch，以及 shadow map 的 pass、MRT 和 slice storage。增加最终发丝数量不应自动增加 dynamics；增加 lookup 精度也不应掩盖 tangent 或 shadow range 的语义错误。
+
+<Callout type="tip" title="让艺术修正成为可记录的输入">
+  记录 root pin、局部风力、collision layer、constraint iterations、barycentric
+  seed、lookup 版本和 shadow range。这样“物理不够好”的镜头可以用明确的 authored
+  correction 修正，而不是在 shader 或随机 noise 中留下不可追踪的特例。
+</Callout>
+
+## 三步实验：从控制结构到实时阴影
+
+每一步只改变一类变量，记录 control state、constraint error、生成 seed、tangent、lookup 版本和 light-space slices。若最终画面异常，先回放上游数据流，不要先增加发丝密度或提高 shadow resolution。
+
+<Stepper>
+  <Step title="第一步：稳定 control hair">
+    固定 scalp roots 和外力，调整 constraint iterations，观察 Verlet 粒子链的长度误差与 sphere/pearl collision。确认少量控制发丝可回放后，再进入密度生成。
+
+    <GpuGems2Ch23DynamicsDiagram />
+
+  </Step>
+  <Step title="第二步：生成并验证 dense hair">
+    在一个 scalp triangle 上固定 barycentric seed，比较三根平滑 control hairs 与内部插值发丝；检查 vertex count、根部连续性和密度变化是否只来自生成参数。
+
+    <GpuGems2Ch23InterpolationDiagram />
+
+  </Step>
+  <Step title="第三步：连接反射与 opacity shadow">
+    固定 geometry，切换 packed/full reflectance maps 和 shadow slices。分别观察 tangent 高光、R/TT/TRT 路径与 light-space transmittance，最后以完整帧时间验收。
+
+    <GpuGems2Ch23OpacityShadowMapDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- control hair 把昂贵 dynamics、collision 和艺术控制限制在可管理规模；dense hair 通过 Bezier、tessellation 和 barycentric interpolation 扩展可见密度。
+- Verlet integration 配合 length constraint 迭代能以较低状态成本保持发丝长度，但必须记录 constraint error、碰撞策略和迭代预算。
+- barycentric interpolation 负责空间填充，不负责独立物理；可回放 seed 和相同 vertex count 是稳定生成的工程前提。
+- Marschner reflectance 用 R、TT、TRT 路径解释方向性反射与透射，dot/tangent 参数和 2D lookup textures 能降低实时数学成本。
+- opacity shadow map 沿 light-space 深度积累 opacity thickness，再插值得到 transmittance；它比二值 depth test 更适合细碎、半透明的发束阴影。
+
+<Exercises>
+
+**问题 1｜选择 dynamics 层级。** 最终需要数千根可见发丝，但目标 GPU 无法让每根发丝都执行完整碰撞和约束。你会如何拆分计算？
+
+<Answer>
+  只对少量 control hairs 执行
+  Verlet、长度约束、碰撞和可记录的艺术修正；确认它们稳定后，再用
+  Bezier/tessellation 平滑，并依据 scalp triangle 的 barycentric coefficients
+  生成 dense hair。密集发丝只继承控制结果，最多增加可回放的轻量
+  jitter，不复制完整 dynamics。
+</Answer>
+
+**问题 2｜定位高光错误。** 头发有颜色和阴影，但沿发丝方向移动光源时高光几乎不变。应检查哪些数据？
+
+<Answer>
+  先检查传入 shader 的 hair tangent 是否连续且没有被 scalp normal 替代，再检查
+  sin 入射/出射参数、perpendicular vectors 的 cos 参数和 packed lookup channel
+  layout。随后用 R、TT、TRT 各自关闭的 reference 对比，确认 lookup scale、mipmap
+  和 IOR 参数没有把方向性抹平。
+</Answer>
+
+**问题 3｜设计 opacity shadow 回归。** 8 层 shadow map 在稀疏发束上稳定，但密集发束出现 banding 和远端漏光。如何修改实验？
+
+<Answer>
+  先记录 light-space hair near/far、每个 slice position、相邻插值权重和累计
+  density；确认范围覆盖完整发束且权重归一。再比较 8、16 层以及不同 slice spacing
+  的透射单调性和 GPU 带宽。如果问题来自深度分布而非层数，应优先重分配 slices
+  或提高过滤，而不是盲目增加全分辨率纹理。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="control hair"
+    definition="承担头发动力学、碰撞和艺术控制的少量代表性发丝。"
+  />
+  <GlossaryItem
+    term="Verlet integration"
+    definition="用当前位置和上一帧位置推算下一位置、配合约束更新粒子的积分方法。"
+  />
+  <GlossaryItem
+    term="length constraint"
+    definition="反复修正相邻粒子距离以保持发丝 segment 长度的约束。"
+  />
+  <GlossaryItem
+    term="barycentric interpolation"
+    definition="使用三角形三个权重的凸组合在 control hairs 之间生成内部发丝的方法。"
+  />
+  <GlossaryItem
+    term="Marschner reflectance"
+    definition="将发丝散射拆为 R、TT、TRT 路径并描述方向性反射与透射的模型。"
+  />
+  <GlossaryItem
+    term="opacity shadow map"
+    definition="沿光线深度累积发丝 opacity thickness 并插值得到透射率的阴影表示。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 23. Hair Animation and Rendering in the Nalu Demo"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-23-hair-animation-and-rendering-nalu-demo"
+/>
