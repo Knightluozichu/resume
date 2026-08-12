@@ -1,0 +1,258 @@
+---
+title: "GPU Gems 3 · Chapter 15. Playable Universal Capture"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 15
+description: "从多摄像机表演采集出发，解释如何用 PCA、可变区域预算和 GPU 像素着色器压缩并播放高保真面部动画。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-15-playable-universal-capture"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-15
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch15CapturePipelineDiagram,
+  GpuGems3Ch15DecompressionDiagram,
+  GpuGems3Ch15PcaBasisDiagram,
+  GpuGems3Ch15PlayableCaptureLab,
+  GpuGems3Ch15SequenceGraphDiagram,
+  GpuGems3Ch15VariablePcaDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch15-playable-universal-capture";
+
+<Objectives>
+
+- 能解释多摄像机面部表演如何变成可回放的骨骼与 UV 动态纹理，并指出采集、压缩、解压各自承担的工作
+- 能修改 Playable Universal Capture Lab 的采集源、PCA 分量、区域策略、纹理布局和表演拼接模式，比较保真度与运行时预算
+- 能回答：为什么眼睛区域应保留更多组件，以及为什么可以先在压缩空间混合表演权重再解压
+
+</Objectives>
+
+## 先问：为什么真人表情进了游戏仍然会“像贴纸”
+
+想象演员做一个很轻的微笑：眉毛、眼皮、嘴角和脸颊会同时变化，皮肤上的阴影也会跟着移动。只把一张照片贴到会动的头模上，照片里的细节不会随这些变化一起走。
+
+本章解决的是：怎样把真人表演的细小变化带进实时角色，又不把每一帧巨大的彩色图像全部塞进内存。没有这条路径，角色只能在“细节很少的手工动画”和“真实但无法交互的录像”之间二选一。
+
+<Callout type="tip" title="先预测：保留更多分量一定更值得吗？">
+  先猜一猜：把 PCA components 从 16 调到 64、把 region policy 从 uniform 切到
+  variable，再打开 motion graph，保真度、内存、shader
+  工作量和延迟会怎样变化？先在 Lab 里记录基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 让真实表演负责最难手工画出的细节
+
+<Term def="用摄像机和运动追踪记录真人表情，再把记录结果重建为可在数字角色上播放的动画资产。">
+  performance capture
+</Term>
+
+面部真实感难，不只是因为网格要精细，而是因为血管、肌肉、油脂、皱纹和自阴影会在一次表情中同时变化。Playable Universal Capture 的核心取舍是：让真实世界的物理过程负责产生这些细节，运行时只重放已经捕获的结果。
+
+红外摄像机负责稳定追踪脸上的反光标记，三台同步的高清彩色摄像机记录颜色和光照变化。标记的三维运动驱动面部骨骼；随后把多视角图像重新投影、融合到每一帧的 UV 纹理。嘴唇内轮廓等无法布置标记的区域，再由少量额外骨骼和动画师补齐。
+
+<GpuGems3Ch15CapturePipelineDiagram />
+
+<Callout type="trap" title="只采一台摄像机，再把脸贴回模型">
+  现象 → 正面看似乎还原了表情，转头或嘴角伸展时却出现拉伸、缺失和固定阴影。原因
+  → 单视角没有足够信息恢复被遮挡区域，也无法稳定分离几何运动和颜色变化。修法 →
+  用多视角颜色加几何追踪；必须降级时，明确限制视角并把缺失区域交给 rig
+  或手工修补。
+</Callout>
+
+## 2. PCA：把动画帧投影到少数变化方向
+
+<Term def="principal component analysis 的缩写：从大量相关数据中找出方差最大的正交方向，并用前 C 个方向近似原始数据。">
+  principal component analysis (PCA)
+</Term>
+
+把每一帧的 RGB 纹理按 UV 展开成一列，很多列组成动画矩阵。相邻帧的脸部变化高度相关：眉毛、眼睛和嘴角并不会每次都独立改变。因此可以先减去平均脸，再寻找“最能解释变化”的方向，而不是为每个像素、每一帧都保存一份完整图像。
+
+<GpuGems3Ch15PcaBasisDiagram />
+
+<Term def="singular value decomposition 的缩写：把去均值后的数据拆成基向量、重要性对角项和样本权重，PCA 用它排序并选择主成分。">
+  singular value decomposition (SVD)
+</Term>
+
+SVD 给出三类运行时需要的东西：组件纹理保存空间基向量，奇异值告诉我们哪些组件更重要，权重描述当前帧如何组合这些组件。保留前 C 个组件会产生误差，但误差是可控的：C 越大，细节越多，存储和像素着色器点积也越贵。
+
+<Callout type="trap" title="只看压缩比，不看被丢掉的组件">
+  现象 → 文件小了很多，但眼睛、嘴唇或快速皱眉出现糊化和闪烁。原因 →
+  尾部组件虽然总体方差小，却可能携带局部高感知细节；均方误差不会自动理解“眼睛比后脑勺重要”。修法
+  → 先检查组件重要性，再给关键区域单独预算；用 Lab 逐步减少
+  C，而不是一次砍到最小。
+</Callout>
+
+## 3. GPU 解压：每个可见像素只做自己的点积
+
+<Term def="把组件纹理和当前帧权重送进像素着色器，用若干次点积重建当前 UV 的 RGB 颜色。">
+  GPU decompression
+</Term>
+
+运行时不必把完整动画矩阵恢复到 CPU。组件纹理存储基向量，当前帧的 RGB 权重由 CPU 或动画系统更新；像素着色器读取当前 UV 的组件值，映射回原来的范围后做点积和累加。这项工作天然适合 GPU：每个可见像素都在执行同一套小计算，不可见区域也不会付出解压成本。
+
+<GpuGems3Ch15DecompressionDiagram />
+
+下面是与原书实现对应的 WebGL2 风格伪代码。组件被打包在纹理中，权重按当前帧更新；它不是完整引擎源码，但把“读组件 → 做 RGB 点积 → 加回均值”的逻辑放在同一处。
+
+```glsl
+vec3 decompressPca(vec2 uv, int componentCount) {
+  vec3 color = meanTexture(uv).rgb;
+  for (int i = 0; i < MAX_COMPONENTS; ++i) {
+    if (i >= componentCount) break;
+    vec3 component = samplePackedComponent(uv, i);
+    color += component * frameWeights[i];
+  }
+  return color;
+}
+```
+
+如果把组件纹理按 RGBA 打包，单次纹理读取可以携带多个组件；如果画面只显示脸的一部分，像素着色器还会自然地跳过不可见区域。代价是纹理读取和点积次数会随着 C 增长，所以组件数必须和屏幕占比、目标硬件一起决定。
+
+## 4. Variable PCA：把质量预算给人眼最敏感的区域
+
+<Term def="让不同 UV 区域保留不同数量的 PCA 组件；眼睛、嘴唇等高感知区域拿更多组件，头发或背景区域拿更少组件。">
+  variable PCA
+</Term>
+
+标准 PCA 对每个像素一视同仁，但观众不会这样看脸：眼睛的轻微错误比头发上的同等误差更容易被察觉。variable PCA 为眼睛、嘴唇、牙齿和脸部轮廓指定不同的组件数量，同时把这些区域打包进固定的纹理布局。这样可以在不把整张脸都升级到最高 C 的情况下，提升感知质量。
+
+<GpuGems3Ch15VariablePcaDiagram />
+
+区域布局也改变了解压代码：shader 需要知道当前 UV 属于哪个 window，再选择对应的组件起点和数量。它牺牲了一点分支和打包复杂度，换来更有效的质量/内存曲线。远处角色可以降低整张 irradiance 或动态纹理的分辨率，近景角色则保留眼睛和嘴唇的高预算。
+
+<Callout type="trap" title="uniform C 让每个像素都承担近景质量">
+  现象 → 为了保住眼睛细节，整张脸的纹理、带宽和 shader
+  工作量都变大，远处角色尤其浪费。原因 → uniform PCA
+  没有利用区域感知差异，头发和眼睛共享同一组件预算。修法 → 建立稳定的 UV region
+  layout，对高感知区域提高 C，低感知区域降低 C，并验证 window 边界没有错位。
+</Callout>
+
+## 5. 从一段表演到可交互的表演图
+
+<Term def="把多个捕获的表情片段作为节点，用可行的过渡边连接起来，再按 AI 或控制器输入选择并混合片段的运行时结构。">
+  motion graph
+</Term>
+
+压缩的好处不只在文件大小：线性组合可以先发生在权重空间。两个相邻表情的 PCA 权重混合后再解压，等价于先分别解压再对像素颜色做线性混合，却少了重复的整脸计算。把中性、微笑、眨眼、说话等片段连接成 motion graph，运行时就可以根据输入在片段之间平滑过渡。
+
+<GpuGems3Ch15SequenceGraphDiagram />
+
+但这不是任意片段都能无缝拼接。骨骼姿态、嘴唇内轮廓和颜色纹理要共享相同的 UV 与坐标约定；如果一个片段的标定、曝光或几何绑定不同，压缩空间中的线性混合也只会更快地混合出错误。正式资产应在进入图之前做标定、重采样和边界审查。
+
+## 6. 三步把捕获结果落到实时播放
+
+<Stepper>
+  <Step title="先采集几何运动和多视角颜色">
+    用红外标记恢复面部三维运动，用同步的高清彩色摄像机保留眉毛、阴影、嘴角和皱纹的变化；将无法布置标记的唇内区域列为人工补齐边界。
+
+    <GpuGems3Ch15CapturePipelineDiagram />
+
+  </Step>
+  <Step title="再按感知重要性选择 PCA 组件">
+    对动画纹理去均值并做 SVD，先看组件重要性，再决定 uniform 或 variable PCA。眼睛、嘴唇等区域应单独验证误差，而不是只看全图平均值。
+
+    <GpuGems3Ch15PcaBasisDiagram />
+    <GpuGems3Ch15VariablePcaDiagram />
+
+  </Step>
+  <Step title="最后在 GPU 解压并连接表演图">
+    将组件打包进纹理，按当前帧更新权重，在像素着色器中重建可见像素；表演片段先在压缩空间混合，再加上骨骼动画和最终光照。
+
+    <GpuGems3Ch15DecompressionDiagram />
+    <GpuGems3Ch15SequenceGraphDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch15PlayableCaptureLab />
+
+## 本章小结
+
+- 多摄像机采集把真人微小表情和动态颜色带进 UV 资产
+- PCA 用少数高方差方向近似大量相关动画帧
+- GPU 解压让每个可见像素只承担自己的组件点积
+- variable PCA 把组件预算给眼睛、嘴唇等高感知区域
+- motion graph 可以先混合压缩权重，再实时重建表情
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 下面的 shader 总是累加所有组件。请改成只使用当前区域允许的 `componentCount`，并说明为什么眼睛和头发不应强制使用相同的数量。
+
+```glsl
+vec3 color = meanTexture(uv).rgb;
+for (int i = 0; i < MAX_COMPONENTS; ++i) {
+  color += samplePackedComponent(uv, i) * frameWeights[i];
+}
+```
+
+<Answer>
+  读取当前 UV 对应的 region layout，得到 `componentCount`，并在循环中加入
+  `if (i >= componentCount) break;`。眼睛的微小误差比头发更容易被察觉，因此眼睛可以保留更多组件，头发用更少组件，把同一块内存和 shader 预算换成更高的感知质量。
+</Answer>
+
+**问题 2｜诊断解压伪影。** 表情的骨骼运动看起来正确，但眼睛边缘闪烁、嘴唇颜色跳变。你会检查哪些证据？
+
+<Answer>
+  先检查 PCA 组件是否截断过猛，再检查 variable PCA 的 UV
+  window、组件起点和当前帧 RGB
+  权重是否一致；还要验证采集帧的曝光与颜色标定是否统一。若只有眼睛边缘出错，优先比较该区域的组件数量和打包采样坐标，而不是先修改骨骼。
+</Answer>
+
+**问题 3｜场景选型。** 近景主角、远处 NPC 和需要动态对话的角色分别怎样选择采集资产、组件数量和播放方式？
+
+<Answer>
+  近景主角使用多摄像机高质量采集、variable PCA 和较高眼睛/嘴唇预算；远处 NPC
+  可以降低纹理分辨率并减少组件数量。动态对话角色应保留多个捕获片段，把它们接入
+  motion
+  graph，在压缩空间混合权重后再解压；只有单一固定表演时才使用最简单的单片段路径。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="performance capture"
+    definition="用摄像机和运动追踪记录真人表情，再把记录结果变成数字角色可以播放的动画资产。"
+  />
+  <GlossaryItem
+    term="principal component analysis (PCA)"
+    definition="从大量相关动画数据中找出最重要的变化方向，再用前几个方向近似原始帧。"
+  />
+  <GlossaryItem
+    term="singular value decomposition (SVD)"
+    definition="把去均值的数据拆成基向量、重要性和样本权重的分解方法，PCA 用它排序组件。"
+  />
+  <GlossaryItem
+    term="GPU decompression"
+    definition="在像素着色器中读取组件纹理和当前帧权重，用点积重建一个可见像素的颜色。"
+  />
+  <GlossaryItem
+    term="variable PCA"
+    definition="让眼睛、嘴唇、头发等不同区域使用不同的组件数量，把预算给更敏感的区域。"
+  />
+  <GlossaryItem
+    term="motion graph"
+    definition="把多个表情片段连接成可遍历的图，并按输入选择或混合相邻片段。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 15. Playable Universal Capture"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-15-playable-universal-capture"
+/>
