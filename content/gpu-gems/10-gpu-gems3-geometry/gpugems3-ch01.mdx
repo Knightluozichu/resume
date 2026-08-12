@@ -1,0 +1,278 @@
+---
+title: "GPU Gems 3 · Chapter 1. Generating Complex Procedural Terrains Using the GPU"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 1
+description: "用密度场、Marching Cubes 和 GPU 流式输出，把程序化地形从高度图扩展到洞穴、拱门与可回收的三维 terrain blocks。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-1-generating-complex-procedural-terrains-using-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-01
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch01BlockPipelineDiagram,
+  GpuGems3Ch01DensityCaseDiagram,
+  GpuGems3Ch01GenerationMethodsTimelineDiagram,
+  GpuGems3Ch01MethodCompareDiagram,
+  GpuGems3Ch01NoiseTerrainDiagram,
+  GpuGems3Ch01ProceduralTerrainLab,
+  GpuGems3Ch01TerrainPipelineDiagram,
+  GpuGems3Ch01TriplanarLodDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch01-procedural-terrain";
+
+<Objectives>
+
+- 能解释 density function 的正负如何把 3D 空间变成 marching cubes 的边界，并说明为什么 32³ 个 cell 需要 33³ 个角点采样
+- 能修改 Procedural Terrain Lab 的生成方法、noise frequency、amplitude 与 warp，预测洞穴、细节和 block 工作量的变化
+- 能回答：为什么从 Method 1 增加到 Method 3 的 pass 反而可能更快，以及什么时候应该选择 stream output、空 block 查询和共享 vertex/index pool
+
+</Objectives>
+
+## 先别把山看成一张高度图
+
+如果只给每个地面坐标一个高度，地形就像一张只能向上起伏的床单：它可以有山谷，却很难有悬空拱门或穿山洞穴。本章把问题换成“空间里的每一点是实体还是空气”，于是表面可以在三维空间自由弯折。
+
+你会看到一条完整的 GPU 管线：先计算密度，再用 marching cubes 把体素边界变成三角形，最后把可见的 cubic block 放进可回收的缓冲区。重点不是记住某张 lookup table，而是能根据中间数据判断瓶颈在哪里。
+
+<Callout type="tip" title="先预测：加噪声会改变什么">
+  先猜一猜：把 noise frequency 加高，会主要增加地形的“大形状”还是“细碎 case”？把
+  warp strength 加高，为什么比单纯提高高度噪声更容易出现洞穴和拱门？
+</Callout>
+
+<GpuGems3Ch01TerrainPipelineDiagram />
+
+## 1. density function：先定义实体，再提取表面
+
+<Term def="把世界坐标映射到一个带符号数的函数；正值表示实体内部，负值表示空气，零值构成待提取的表面。">
+  density function
+</Term>
+
+把每个世界坐标带入 density function：结果为正，就把这一点想成岩石；结果为负，就把它想成空气；结果等于零的地方才是地形表面。这个约定很实用，因为“洞穴”不需要额外的洞穴网格，只要让洞穴内部的密度变成负值即可。
+
+一个 block 可以划成 `32×32×32` 个小立方体。每个小立方体需要读取八个角点的密度符号，因此沿一个方向要取 `33` 个采样点，整个密度 volume 是 `33×33×33`。这是“cell 数量”和“corner 数量”最容易混淆的地方。
+
+<Term def="把空间划成规则小立方体的离散单元；本章的 marching cubes 对每个 voxel cell 读取八个角点。">
+  voxel
+</Term>
+
+<Term def="根据一个 voxel 的八个角点符号，沿符号变化的边插值并拼出等值面三角形的算法。">
+  marching cubes
+</Term>
+
+<Term def="把八个角点的正负按位编码成 0 到 255 的编号，用来索引该 cell 的边和三角形连接方式。">
+  case index
+</Term>
+
+<GpuGems3Ch01DensityCaseDiagram />
+
+Marching cubes 只需先看八个角点的正负：全空或全实心时不输出三角形，其他情况用 case index 查表。表面顶点落在发生符号变化的十二条边上，并按密度比例插值，所以表面不会被限制在 voxel 的中心。
+
+<Callout type="trap" title="33³ 不是把分辨率偷偷加一层">
+  现象 → 你创建了 `32³` 的 density texture，却又想为 `32³` 个 cell
+  读取完整八角点。原因 → cell 是区间，角点是区间端点；相邻 cell 要共享角点。修法
+  → 保留 `32³` 个 cell 的目标，但沿每轴采样 `33` 个
+  corner，避免边界读取越界或漏掉最后一层。
+</Callout>
+
+## 2. block pipeline：让 GPU 只处理值得看的体块
+
+地形不是一次性生成一张无穷大的网格，而是由许多 cubic block 拼起来。相机移动时，系统把 block 按 front-to-back 排序，先寻找可见且接近镜头的 block；远处、被遮挡或没有表面的 block 可以被跳过，已有的 vertex buffer 也可以回收到 pool。
+
+<Term def="把 geometry shader 产生的顶点直接写入后续可绑定的 vertex buffer，而不是先回到 CPU。">
+  stream output
+</Term>
+
+一个实用的顺序是：density pass 把世界坐标写入三维纹理；后续 pass 读取体素并分类；生成阶段把三角形顶点 stream output 到 buffer；最后只绘制仍在视野内的 block。空 block 的 stream-out query 可以告诉队列“这次没有几何体”，从而避免给它分配或保留过多资源。
+
+<GpuGems3Ch01BlockPipelineDiagram />
+
+密度 pass 也不必为每个 z slice 启动一次独立 draw。可以把 `33` 个二维 slice 当成 instanced draw 的实例，由 pixel shader 根据 instance id 写入 3D render-target array。这样，世界坐标、噪声采样与 block 偏移在 GPU 端保持一致，CPU 只需管理 block 生命周期。
+
+<Callout type="tip" title="先查空，再查远">
+  对可见性队列先做空 block
+  查询，再做距离和遮挡排序，能把“没有表面”的工作尽早截掉；但它不是正确性借口：生成函数、block
+  边界和邻居采样仍需保持确定，否则 LOD 或相邻 block 可能出现接缝。
+</Callout>
+
+## 3. 三种生成方法：为什么多 pass 可能更快
+
+Method 1 让 geometry shader 遍历 voxel，直接为每个 cell 输出最多 `15` 个顶点。它的控制流简单，但输出上限很宽：绝大多数空 cell 不产出任何东西，少数复杂 case 却会让 geometry stage 承担大量重复的边顶点。
+
+Method 2 把工作拆开：先输出非空 cell 的 marker，再只为 marker 生成顶点。这样 geometry shader 处理的记录更窄，stream-out query 还能快速跳过完全没有 marker 的 block。官方示例在当时的 GeForce 8800 测试设置中报告约 `6.6`、`144` blocks/s 的量级差异；这里把它当作架构比较的证据，而不是今天硬件的承诺。
+
+Method 3 再把顶点和索引分开：列出非空 cell，列出需要的 vertex，生成并 splat vertex id，最后生成 index。相邻 cell 共享边界顶点，减少了重复写入；同一测试设置下，报告约 `260` blocks/s 的量级。代价是更多 pass、额外的中间 buffer 和更复杂的同步关系。
+
+<GpuGems3Ch01MethodCompareDiagram />
+
+<GpuGems3Ch01GenerationMethodsTimelineDiagram />
+
+下面的伪代码刻意只保留“先分类，再输出”的边界：它把 GPU 阶段的职责写清楚，具体 case table 仍应从数据文件或常量 buffer 读取。
+
+```glsl
+// 伪代码：每个 cell 只在有符号变化时产生 marker
+uint caseIndex = 0u;
+for (uint corner = 0u; corner < 8u; ++corner) {
+  if (density[corner] > 0.0) {
+    caseIndex |= 1u << corner;
+  }
+}
+
+if (caseIndex != 0u && caseIndex != 255u) {
+  streamOut(markerBuffer, cellId, caseIndex);
+}
+```
+
+<Callout type="trap" title="把 pass 数量当成唯一成本">
+  现象 → Method 1 只有一个生成 pass，帧率却不一定更高。原因 → 它把大量空 cell
+  和重复顶点一并推给 geometry shader；Method 2/3
+  用中间列表换窄输出，再减少后续工作。修法 → 同时看 pass、marker 数、vertex
+  reuse、buffer 带宽和空 block 比例，不能只数 API 调用。
+</Callout>
+
+## 4. density 设计：频率定细节，warp 改变拓扑
+
+地形的“大山脉”可以来自低频噪声，多组更高频的 octaves 负责岩石细节。把坐标映射到 noise volume 时，频率越高，单位空间内的符号变化越密；amplitude 越高，密度越容易跨过零值，局部表面会更丰富。
+
+洞穴和拱门不是把一条 2D 高度曲线抬高或压低，而是让密度场发生空间 warp：低频的扭曲把本来平滑的等值面弯成隧道，高频项再为墙面补纹理。要注意，warp 加强的是拓扑可能性；最后是否出现可见洞穴仍取决于零等值面、block 采样和镜头位置。
+
+<GpuGems3Ch01NoiseTerrainDiagram />
+
+<GpuGems3Ch01ProceduralTerrainLab />
+
+在 Lab 中先把 `warp` 调到低值，观察连续山坡；再逐步提高它，预测什么时候会出现负密度的通道。切换 Method 3 后，marker/vertex records 可能下降，但 pass 数会上升；这正是“中间数据变窄”而不是“魔法加速”。
+
+## 5. texturing 与 LOD：几何连续后，外观也要稳定
+
+<Term def="从 X、Y、Z 三个方向投影材质，并按表面法线权重混合，避免单一平面投影在洞壁和陡坡上拉伸。">
+  triplanar texturing
+</Term>
+
+单一的 top-down UV 在洞穴墙壁上容易拉伸，triplanar texturing 则按法线混合三个方向的投影。地面材质可以再由高度、条带和程序噪声决定，但应把“材质分类”和“几何是否生成”分开：颜色变化不应偷偷改变 zero isosurface。
+
+<Term def="根据屏幕占用或与相机的距离，为同一 terrain block 选择不同网格细节级别的策略。">
+  level of detail
+</Term>
+
+<GpuGems3Ch01TriplanarLodDiagram />
+
+LOD 让远处 block 使用更粗的网格，近处 block 保留更多采样。相邻级别重叠时需要处理 z-fighting 和接缝；可以给较粗级别一个小的负密度偏置，或在边界显式约束采样。碰撞查询也可复用 density function：先判断符号区间，再在边界附近插值或二分定位；梯度可由六个邻域采样近似。
+
+## 三步验收：从密度定义到可回收地形
+
+<Stepper>
+  <Step title="第一步：把密度和 case 说清楚">
+    先区分 `32³` 个 voxel cell 与 `33³` 个 corner samples，再用八个符号得到 case index。只要能解释 zero isosurface 为什么是表面，就不会把高度图或材质图误当成几何生成。
+
+    <GpuGems3Ch01DensityCaseDiagram />
+    <GpuGems3Ch01TerrainPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：把 block 生成拆成可观察的 pass">
+    追踪 density、classify、marker/vertex emit 和 stream output。比较三种方法时，记录中间列表宽度、空 block 比例与 vertex reuse，而不是只比较 pass 数。
+
+    <GpuGems3Ch01BlockPipelineDiagram />
+    <GpuGems3Ch01GenerationMethodsTimelineDiagram />
+
+  </Step>
+  <Step title="第三步：让拓扑、外观和距离预算互相对齐">
+    提高 frequency 看细节，提高 warp 看洞穴倾向；最后用 triplanar texturing 和 level of detail 处理材质投影、远近细节与接缝风险。
+
+    <GpuGems3Ch01NoiseTerrainDiagram />
+    <GpuGems3Ch01TriplanarLodDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- density function 把“实体/空气”变成可采样的三维标量场，零值等值面就是表面。
+- marching cubes 用八角点的 case index 查表，并在符号变化的边上插值；`32³` 个 cell 需要 `33³` 个 corner samples。
+- Method 1、2、3 逐步缩窄输出并共享顶点；更多 pass 可能换来更少的 geometry 与带宽工作。
+- noise frequency/amplitude 控制细节和穿零概率，warp 让洞穴、拱门与 overhang 成为可能。
+- stream output、空 block 查询、triplanar texturing 和 level of detail 共同构成可交互的 block 生命周期。
+
+<Exercises>
+
+**问题 1｜检查采样边界。** 一个 terrain block 有 `32×32×32` 个 voxel cell。为什么密度 pass 不能只写 `32×32×32` 个样本？如果只想让一个 cell 判断表面，需要读取哪些数据？
+
+<Answer>
+  每个 cell 的边界由角点决定，沿一条轴的 `32` 个区间需要 `33`
+  个端点；三维合起来是 `33³` 个 corner samples。一个 cell
+  需要八个角点的密度符号，形成 case
+  index；全正或全负不输出三角形，其余情况才查表并沿符号变化的边插值。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 在 Procedural Terrain Lab 中新增一个 `warp` 上限保护：当 warp 高于阈值时显示“可能出现洞穴”，但不要直接保证一定生成洞穴。应修改哪一个派生量，才能让提示与 density 的解释一致？
+
+<Answer>
+  可以在现有 `cave tendency` 派生量上增加阈值判断：它由 warp 主导、amplitude
+  轻微参与，而不是由 frequency
+  单独决定。提示应写成“零等值面穿过负密度通道的倾向上升”，因为具体洞穴还取决于相位、采样位置、block
+  和相邻体块；不要把启用阈值等同于生成结果。
+</Answer>
+
+**问题 3｜做生成方法选型。** 一个场景里大多数 block 是空的，少数近处 block 有复杂洞穴。你会从 Method 1、2、3 中如何选？哪些信号应放进 profiling 表？
+
+<Answer>
+  先用 density/classify 与 stream-out query 尽早筛掉空 block；近处、表面复杂且
+  block 数量多时优先评估 Method 2 或 Method 3。profiling 至少记录 pass
+  时间、marker 数、输出顶点数、共享顶点比例、buffer 带宽、空 block 比例和最终
+  rasterization 时间。若共享收益小而同步成本大，Method 2 可能更稳；不能只凭“pass
+  更少”选择 Method 1。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="density function"
+    definition="把世界坐标映射到带符号的密度值；正值是实体、负值是空气、零值定义表面。"
+  />
+  <GlossaryItem
+    term="voxel"
+    definition="规则三维网格中的小立方体单元；本章对每个 cell 读取八个角点。"
+  />
+  <GlossaryItem
+    term="marching cubes"
+    definition="根据八个角点符号，在符号变化的边上插值并拼出等值面三角形的算法。"
+  />
+  <GlossaryItem
+    term="case index"
+    definition="八个角点正负的位编码，取值 0 到 255，用来查找该 cell 的三角形拓扑。"
+  />
+  <GlossaryItem
+    term="stream output"
+    definition="把 GPU 生成的顶点直接写入可供后续绘制使用的 buffer 的路径。"
+  />
+  <GlossaryItem
+    term="triplanar texturing"
+    definition="从 X、Y、Z 三个方向投影并按法线混合材质，降低陡坡和洞壁上的拉伸。"
+  />
+  <GlossaryItem
+    term="level of detail"
+    definition="按距离或屏幕占用为 terrain block 选择不同网格细节的策略。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 1. Generating Complex Procedural Terrains Using the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-1-generating-complex-procedural-terrains-using-gpu"
+/>
