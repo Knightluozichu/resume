@@ -4482,6 +4482,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp30SamplingVarianceDiagram: module0.Cgp30SamplingVarianceDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-32-rendering-in-practice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-32-rendering-in-practice");
+      return {
+        Cgp32PathTracerDiagram: module0.Cgp32PathTracerDiagram,
+        Cgp32PhotonMappingDiagram: module0.Cgp32PhotonMappingDiagram,
+        Cgp32RenderBudgetDiagram: module0.Cgp32RenderBudgetDiagram,
+        Cgp32RenderingPipelineDiagram: module0.Cgp32RenderingPipelineDiagram,
+        Cgp32RenderingPracticeLab: module0.Cgp32RenderingPracticeLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

@@ -1,0 +1,225 @@
+---
+title: "Rendering in Practice"
+type: D
+section: "渲染实践"
+order: 32
+description: "从实际渲染管线、路径追踪与光子映射出发，理解如何把算法、缓存、预算和可重放证据接成可靠的渲染器。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-32
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp32PathTracerDiagram,
+  Cgp32PhotonMappingDiagram,
+  Cgp32RenderBudgetDiagram,
+  Cgp32RenderingPipelineDiagram,
+  Cgp32RenderingPracticeLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-32-rendering-in-practice";
+
+<Objectives>
+
+- 能解释 rendering in practice 如何把场景、积分器、缓存、输出和可重放日志接成一条管线
+- 能比较 path tracer 与 photon mapping 的路径状态、存储结构、偏差和噪声来源
+- 能修改 RenderingPracticeLab 的样本、反弹、光子和查询半径，并依据预算诊断渲染问题
+
+</Objectives>
+
+## 先把渲染器看成可验收的工程系统
+
+一个公式能说明“应该计算什么”，但不能单独说明一个渲染器是否可靠。实际系统还要决定场景如何加载、相机如何生成射线、随机序列如何固定、积分器如何终止、输出如何编码，以及一次结果如何被别人重放。rendering in practice 关注的正是这些连接处：每一项都要有明确输入、状态和证据。
+
+先预测：把 path tracer 的样本数提高，画面主要会变得更稳定还是更亮？把 photon mapping 的查询半径扩大，局部亮斑会更可靠还是更容易混入邻域能量？打开实验，先固定场景和像素，再一次只改变一个预算参数。
+
+<Cgp32RenderingPracticeLab />
+
+## rendering in practice：把算法接成管线
+
+<Callout type="tip" title="先定义交接证据，再优化速度">
+  真实渲染任务的交接物不只是
+  PNG。至少要能回到场景版本、相机、随机种子、样本预算、积分器状态和输出摘要；这样“画面不同”才有机会定位到首个分叉。
+</Callout>
+
+<Term def="把渲染理论落实为场景输入、积分器执行、资源预算、输出编码和可重放诊断的工程过程。">
+  rendering in practice
+</Term>
+
+<Cgp32RenderingPipelineDiagram />
+
+一条可用管线至少分为输入、执行和验收三层。输入层要固定几何、材质、光源、相机和版本；执行层要明确采样、散射、可见性、缓存以及终止策略；验收层要保留像素、深度、耗时、内存和日志。任何一层被隐藏全局状态影响，结果就可能在本地看似正确、换机器却无法解释。
+
+## path tracer：以路径状态换取无偏估计
+
+<Callout type="trap" title="把 path tracer 当成一个会吐图的黑盒">
+  现象 → 输出图像变暗或变亮，却只能继续改曝光和材质参数。 原因 →
+  没有保存命中点、法线、散射方向、PDF、路径吞吐量与终止原因。 修法 →
+  先对固定像素输出一条路径的中间状态，再比较直接连接、继续反弹和俄罗斯轮盘终止的贡献。
+</Callout>
+
+<Term def="从相机发射射线，逐次追踪表面交点并随机采样散射方向，以路径贡献估计像素辐亮度的积分器。">
+  path tracer
+</Term>
+
+<Cgp32PathTracerDiagram />
+
+path tracer 的核心状态可以写成路径顶点序列 $x_0,x_1,\ldots,x_k$ 和吞吐量 $\beta$。到达交点后，积分器根据 BSDF、余弦项和采样 PDF 更新 $β$，再决定是否进行下一次反弹或直接连接光源。样本数增加通常降低随机波动，但不会修复错误 PDF、重复计数或遗漏 Russian roulette 补偿。
+
+工程实现还要处理射线起点偏移、最大深度、环境光、发光体命中和阴影测试。每一个早退条件都应该能在日志中解释：是射线没有命中、路径被遮挡、吞吐量太低，还是预算主动终止。否则优化器会把真正的几何或测度错误误判成性能问题。
+
+## photon mapping：把光能先存起来再查询
+
+<Callout type="trap" title="把 photon mapping 的光子数量当成正确性的开关">
+  现象 → 光子数量加倍后，亮斑更明显，但漏光和局部偏差也更严重。 原因 →
+  查询半径、光子密度、法线和存储测度没有一起校准，更多光子只是更稳定地放大了错误邻域。
+  修法 →
+  同时记录光子命中位置、能量、查询半径和邻域数量，再用平面与角落场景对照偏差。
+</Callout>
+
+<Term def="先从光源发射并存储光子命中，再在相机可见表面查询邻域密度以估计间接光的渲染方法。">
+  photon mapping
+</Term>
+
+<Cgp32PhotonMappingDiagram />
+
+photon mapping 把“光源发射”和“相机查询”拆成两个阶段。光子携带位置、入射方向和通量，存入空间结构；查询阶段在表面附近寻找一定半径内的光子，用邻域面积或立体角归一化估计局部辐亮度。半径过小会产生噪声，过大会混合不相邻的表面能量，法线和遮挡错误还会造成漏光。
+
+它的工程优势是可以复用一次光子发射结果服务多个相机查询，代价是额外的内存、构建时间和密度估计偏差。path tracer 与 photon mapping 不是“谁永远更好”的替代关系：应根据焦散、间接光、动态场景、内存预算和可接受偏差选择。
+
+## radiance cache 与终止：缓存也是一个契约
+
+<Term def="保存已经计算过的局部辐亮度或间接光结果，并在相似位置和方向复用的加速结构；复用范围必须有误差边界。">
+  radiance cache
+</Term>
+
+缓存可以减少重复计算，但缓存键、空间半径、方向相似度和失效条件必须明确。若把不同法线、材质或遮挡状态的结果混在一起，画面可能更平滑却更偏。调试时先关闭缓存得到基线，再逐步打开复用，比较缓存命中率、误差和时间，而不是只看最终图片。
+
+<Term def="控制每条路径允许消耗多少计算资源的规则，包括样本数、最大反弹、光子数量、查询半径和内存上限。">
+  render budget
+</Term>
+
+<Cgp32RenderBudgetDiagram />
+
+render budget 不是单一的“质量滑块”。样本数主要影响 path tracer 噪声，最大反弹影响间接光路径，光子数量和查询半径共同影响 photon mapping 的密度估计，缓存大小影响内存与复用误差。预算报告应同时记录时间、峰值内存、噪声、偏差、漏光和收敛趋势，才能支持实际场景选型。
+
+## 三步实验：从管线到实现选择
+
+每一步先预测，再固定场景、相机与随机种子，只改变一个实现条件。记录路径顶点、缓存命中、光子邻域、样本数、耗时和图像摘要，区分算法差异与工程配置差异。
+
+<Stepper>
+  <Step title="第一步：核对 rendering in practice 管线">
+    固定一个像素，沿场景输入、渲染器执行和输出证据逐项检查。先预测修改随机种子会影响哪些字段，再用管线图确认版本、相机、预算和日志是否都被记录。
+
+    <Cgp32RenderingPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：重放 path tracer 路径">
+    选择 path tracer，固定样本数，先预测增加最大反弹会改变噪声、间接光还是内存。再用路径图检查命中、散射、PDF、吞吐量和终止原因，定位第一个不一致的状态。
+
+    <Cgp32PathTracerDiagram />
+
+  </Step>
+  <Step title="第三步：比较 photon mapping 预算">
+    切换 photon mapping，先预测增加光子数量与扩大查询半径分别会怎样影响时间、噪声和偏差。用光子图和预算图核对邻域密度、存储成本与漏光反馈，再决定是否使用缓存或换用另一积分器。
+
+    <Cgp32PhotonMappingDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用曝光掩盖路径终止错误">
+  现象 → 低样本图像偏暗，调高曝光后平均亮度接近参考，但间接光和高光仍不稳定。
+  原因 → 路径过早终止、吞吐量更新或 Russian roulette
+  补偿错误，曝光只改变显示映射。 修法 →
+  先比较线性辐亮度、路径长度、终止概率和单样本贡献，再调整显示曝光。
+</Callout>
+
+<Callout type="trap" title="把 photon mapping 的平滑当成无偏">
+  现象 → 光子图结果很平滑，却在接缝、角落或薄物体附近产生漏光。 原因 →
+  邻域半径跨越了不应混合的表面，密度归一化或法线过滤缺失。 修法 →
+  用小半径、大半径和几何分离场景做对照，单独记录邻域光子、面积和遮挡。
+</Callout>
+
+<Callout type="trap" title="只比较总耗时，不比较交付质量">
+  现象 → 新实现快了，却没有办法说明噪声、偏差、内存和可重放性是否仍达标。 原因 →
+  render budget 只记录 wall time，忽略了中间状态和误差指标。 修法 →
+  固定同一输入，至少并列记录时间、峰值内存、图像摘要、噪声、偏差、缓存命中和日志版本。
+</Callout>
+
+## 本章小结
+
+- rendering in practice 把场景输入、积分器、资源预算、输出编码和可重放诊断连接成工程管线。
+- path tracer 逐顶点维护路径、吞吐量和采样 PDF；增加样本主要降低噪声，不会修复测度或终止错误。
+- photon mapping 分开发射存储与相机查询；光子数量、查询半径、法线和邻域测度共同决定噪声与偏差。
+- radiance cache 与 render budget 都是带误差边界的工程契约，选择实现时要同时检查时间、内存、偏差、漏光和可重放性。
+
+<Exercises>
+
+**问题 1：验收 rendering in practice。** 一个渲染器输出的 PNG 与参考图相似，但换机器和随机种子后结果不可复现。你会要求保存哪些证据？
+
+<Answer>
+  保存场景与材质版本、相机参数、随机种子、积分器配置、samples、最大反弹、缓存或光子结构配置、输出颜色空间、耗时、峰值内存和图像摘要。先用同一输入重放，再比较路径或光子邻域的首个差异，不能只比较
+  PNG 外观。
+</Answer>
+
+**问题 2：选择 path tracer。** 一个室内场景需要低偏差的漫反射间接光，预算允许增加样本但不希望建立大型缓存。你会如何配置 path tracer，并如何判断它正在收敛？
+
+<Answer>
+  使用 path tracer，固定随机种子和相机，逐步增加
+  samples，设置合理的最大反弹并记录每批样本的线性估计、方差和路径终止原因。若均值稳定、噪声按样本预算下降且没有重复计数或错误
+  PDF，才说明方向正确；曝光不能替代这些证据。
+</Answer>
+
+**问题 3：选择 photon mapping。** 一个场景包含明显焦散，内存允许存储大量光子，但查询半径过大时出现漏光。你会如何调整 photon mapping？
+
+<Answer>
+  保留 photon mapping
+  的光子发射与空间存储，先增加光子数量以降低稀疏噪声，再缩小或自适应调整查询半径，检查邻域面积、法线和遮挡过滤。用几何分离的平面、角落和焦散区域分别比较偏差与漏光，不把更平滑的结果直接当成无偏。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="rendering in practice"
+    definition="把渲染算法落实为输入、执行、预算、输出和可重放证据的工程过程。"
+  />
+  <GlossaryItem
+    term="path tracer"
+    definition="从相机沿路径逐次采样散射并估计像素辐亮度的积分器。"
+  />
+  <GlossaryItem
+    term="photon mapping"
+    definition="先存储光源发出的光子，再查询邻域密度估计间接光的方法。"
+  />
+  <GlossaryItem
+    term="radiance cache"
+    definition="复用相似位置和方向的局部辐亮度结果以减少重复计算的结构。"
+  />
+  <GlossaryItem
+    term="render budget"
+    definition="约束样本、反弹、光子、查询半径、时间和内存等资源的预算。"
+  />
+  <GlossaryItem
+    term="path throughput"
+    definition="路径经过各次散射、余弦和概率权重后的累计贡献因子。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 32: Rendering in Practice"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
