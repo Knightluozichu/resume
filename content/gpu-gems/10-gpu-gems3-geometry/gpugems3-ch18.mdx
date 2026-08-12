@@ -1,0 +1,272 @@
+---
+title: "GPU Gems 3 · Chapter 18. Relaxed Cone Stepping for Relief Mapping"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 18
+description: "从高度纹理的交点搜索出发，解释如何用放松锥步进扩大安全跳跃，再用二分搜索稳定地恢复凹凸表面。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-18-relaxed-cone-stepping-relief-mapping"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-18
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch18ConeMapBakeDiagram,
+  GpuGems3Ch18ConeMapDiagram,
+  GpuGems3Ch18MipMapDiagram,
+  GpuGems3Ch18RcsRefineDiagram,
+  GpuGems3Ch18ReliefPipelineDiagram,
+  GpuGems3Ch18RelaxedConeLab,
+  GpuGems3Ch18SearchCompareDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch18-relaxed-cone-stepping";
+
+<Objectives>
+
+- 能解释 relief mapping 如何把纹理中的深度与法线带回每个 fragment，并区分搜索阶段与着色阶段
+- 能修改 Relaxed Cone Stepping Lab 的搜索模式、锥比例、步数和采样方式，比较交点可信度与纹理访问预算
+- 能回答：为什么放松锥可以比保守锥跳得更远，却仍然能把二分搜索放在安全区间内
+
+</Objectives>
+
+## 先问：为什么一张平面也能看起来有凹凸
+
+想象一张印着砖缝的纸。真正把每块砖做成几何体会很贵，但如果每个像素都能沿着视线去查一张“表面高度表”，它就能根据看到的凹凸改变颜色、遮挡和自阴影。
+
+本章解决的是：怎样让这条视线快速找到表面，而不漏掉细薄结构，也不因为搜索太保守而停在错误的位置。没有它，凹凸效果要么出现条纹和漏检，要么需要过多纹理读取才能收敛。
+
+<Callout type="tip" title="先预测：把 cone steps 调大就一定更好吗？">
+  先猜一猜：把搜索模式从 RCS 切到 linear，再把 cone steps、binary steps 和
+  cone-map sampling
+  逐个调大或切换；薄结构风险、命中可信度、纹理读取和寄存器压力会怎样变化？先看基线，再一次只改一个变量。
+</Callout>
+
+## 1. 先把表面细节留在纹理里
+
+<Term def="用深度与法线纹理在每个片元上模拟细小几何起伏的图像空间技术，不必把每条凹槽建成真实三角形。">
+  relief mapping
+</Term>
+
+relief mapping 的输入仍然是一个普通多边形，但它额外携带深度纹理和法线纹理。深度表示细节相对于基准平面的高度，法线在最终找到交点后才用于光照。把两者分开存储，搜索阶段只读单通道深度，缓存更友好；法线可以使用适合自己的压缩方式。
+
+对每个 fragment，先把观察方向变换到该点的 tangent space，再在二维纹理坐标中寻找视线与深度表的交点。得到交点位置后，用对应的法线、颜色和更新后的深度缓冲参与遮挡与着色。
+
+<GpuGems3Ch18ReliefPipelineDiagram />
+
+<Callout type="trap" title="把深度和法线当成同一种采样数据">
+  现象 → 搜索循环每一步都读取完整 RGBA，帧率下降，压缩噪声还会改变交点。原因 →
+  搜索只需要深度，法线直到命中后才参与光照。修法 → 分离 depth map 与 normal
+  map；循环只读深度，命中后再查法线和颜色。
+</Callout>
+
+## 2. 交点其实发生在二维高度场上
+
+<Term def="把纹理坐标上的深度值看成一张起伏的表面；射线与它的首次交点就是要恢复的细节位置。">
+  height field
+</Term>
+
+height field 不是新的几何网格，而是“每个纹理坐标都有一个高度”的函数。设 fragment 的纹理坐标为 `(s, t)`，把观察方向延伸到深度为 1 的位置 `(u, v)`，就可以在这条二维线段上采样并判断射线是否已经进入表面。
+
+找到交点 `P` 后，要把它的相机空间深度写回 z-buffer，才能让 relief-mapped 表面和场景里的真实物体正确互相遮挡。自阴影也可以沿光线做同样的高度比较：如果光线先撞到别的起伏，当前点就不应被照亮。
+
+## 3. 先建立可靠区间，再谈快速收敛
+
+<Term def="从一个已知的内外区间开始，反复取中点缩小范围的搜索；它收敛快，但没有初始夹逼区间时可能从错误结构开始。">
+  binary search
+</Term>
+
+binary search 很快，但不能从纹理线段的起点直接使用。它需要一个点在表面外、另一个点在表面内；如果中点恰好落在大结构之前，它会稳定地收敛到错误的 Q。传统 linear search 先用小步长找出穿透区间，再交给二分，但小步长本身可能跳过薄结构。
+
+<GpuGems3Ch18SearchCompareDiagram />
+
+因此，搜索被拆成两个职责：第一阶段尽量少漏检地找到“已经进入表面”的位置；第二阶段只在已知区间内用固定次数二分精化。步数上限既是画质开关，也是依赖纹理读取和寄存器占用的预算。
+
+<Callout type="trap" title="从起点直接做二分搜索">
+  现象 → 大凹凸看起来正常，细长凸起却被吸到错误的交点。原因 →
+  二分没有可靠的内外端点，中点采样把搜索引向 Q。修法 →
+  先用空间跳跃找到进入表面的 K，再用 H-K
+  区间二分；不要把“收敛快”误当成“初始区间正确”。
+</Callout>
+
+## 4. 用锥图把安全跳跃变宽
+
+<Term def="给每个深度纹理 texel 附加一个可行的宽度高度比，用来估计射线下一次可以安全前进的距离。">
+  cone map
+</Term>
+
+普通 cone step mapping 用保守锥保证射线不会穿过高度场，所以它不容易漏掉首个交点，却可能在达到最大迭代次数时停在真实表面之前。锥越窄，安全但越慢；锥越宽，跳跃越远，但必须明确它允许什么样的穿透。
+
+<Term def="一种空间跳跃算法：允许射线进入高度场至多一次，再把已经得到的区间交给二分搜索精化。">
+  relaxed cone stepping
+</Term>
+
+放松锥的约束是：一条射线在锥内最多穿透表面一次，不能穿进去后又出来。这个放宽让每个 texel 的锥半径更大；当射线进入表面后，二分搜索就有了安全的内外端点。它同时保留 cone stepping 的跳跃效率和 binary search 的精度。
+
+<GpuGems3Ch18ConeMapDiagram />
+
+<Callout type="trap" title="把放松锥理解成可以无限穿透">
+  现象 → 复杂高度场上出现穿帮、错误阴影或交点跑到背面。原因 →
+  放松只允许最多一次穿透，不是放弃高度场的拓扑约束。修法 → 离线计算每个 texel
+  的最小安全 cone
+  ratio；运行时进入表面后立即切到二分，不继续把锥步当作自由飞行。
+</Callout>
+
+## 5. 离线生成每个 texel 的最小比例
+
+放松锥图不在每个 fragment 的主循环里生成。离线阶段把一个 source texel 与所有 destination texel 配对：从源点出发穿过目标点，继续寻找下一次与高度场的交点，用横向距离除以剩余高度得到候选 cone ratio。源 texel 的最终比例取所有候选值中的最小者，确保最坏方向也满足“一次穿透”的约束。
+
+算法是 O(n²) 的预处理，但运行时只需读取一个通道。原书实现把最大比例裁剪到 1.0，以便用整数纹理保存；只有少量 texel 真正能从浮点比例大于 1.0 中获益，先把存储和带宽预算固定下来通常更划算。
+
+<GpuGems3Ch18ConeMapBakeDiagram />
+
+## 6. 运行时：放松锥步进接上二分
+
+<Term def="计算视线或光线与高度场首次交点的过程；本章用放松锥负责跳跃，用二分负责最终定位。">
+  ray-height-field intersection
+</Term>
+
+运行时先把射线方向按 z 分量缩放，使它与纹理坐标中的高度变化保持同一尺度。每次采样 cone ratio 和当前高度差，计算下一段步长；步进循环结束后，以起点附近的 H 和最后位置 K 建立二分区间。即使步数偏少，二分也会收敛到 K 附近，而不是无界地采样。
+
+```hlsl
+float3 rayIntersectRcs(Texture2D relief, float2 uv, float3 rayDir) {
+  float3 pos = float3(uv, 0.0);
+  rayDir /= rayDir.z;
+  float rayRatio = length(rayDir.xy);
+  for (int i = 0; i < CONE_STEPS; ++i) {
+    float4 tex = relief.SampleLevel(linearSampler, pos.xy, 0.0);
+    float coneRatio = tex.b;
+    float height = saturate(tex.a - pos.z);
+    float distance = coneRatio * height / (rayRatio + coneRatio);
+    pos += rayDir * distance;
+  }
+  float3 range = 0.5 * rayDir * pos.z;
+  float3 refined = pos - range;
+  for (int i = 0; i < BINARY_STEPS; ++i) {
+    float depth = relief.SampleLevel(linearSampler, refined.xy, 0.0).a;
+    range *= 0.5;
+    refined += (refined.z < depth ? range : -range);
+  }
+  return refined;
+}
+```
+
+<GpuGems3Ch18RcsRefineDiagram />
+
+循环要保持短小：依赖纹理读取的延迟可以由更多并发线程隐藏，但复杂分支和额外寄存器会减少同时运行的线程。经验上，典型高度场用固定数量的放松锥步数就能达到比线性搜索更少的访问；如果仍有扭曲，优先检查 K 是否足够接近表面，而不是盲目增加所有参数。
+
+## 7. 过滤也必须尊重锥比例的含义
+
+颜色和法线是可以平滑缩小的信号，常规 mipmap 通常有帮助。cone ratio 却是“安全上限”，把相邻值做普通平均会制造一个原本不存在的比例，进而破坏交点保证。更稳妥的做法是离线用保守最小值生成锥图 mip，或者在需要时使用 nearest 采样。
+
+<GpuGems3Ch18MipMapDiagram />
+
+<Stepper>
+  <Step title="先把 relief 交点放回片元管线">
+    在 fragment 的 tangent space 中生成观察射线；搜索阶段只读取 depth map，命中后再读取 normal map 和颜色，并用交点深度更新 z-buffer。
+
+    <GpuGems3Ch18ReliefPipelineDiagram />
+
+  </Step>
+  <Step title="再用更宽的放松锥跨过大段空区">
+    离线为每个 source texel 计算最小 cone ratio；运行时允许射线最多穿透一次，让它在高度场中获得足够大的空间跳跃。
+
+    <GpuGems3Ch18ConeMapDiagram />
+    <GpuGems3Ch18ConeMapBakeDiagram />
+
+  </Step>
+  <Step title="最后在 H-K 区间里固定次数二分">
+    锥步到达 K 后立即切换到二分；用固定迭代控制寄存器和纹理读取，再用保守最小 mip 或 nearest 读取 cone map。
+
+    <GpuGems3Ch18RcsRefineDiagram />
+    <GpuGems3Ch18MipMapDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch18RelaxedConeLab />
+
+## 本章小结
+
+- relief mapping 用深度与法线纹理模拟细节几何
+- 先找可靠区间，再用 binary search 精化交点
+- relaxed cone stepping 允许至多一次穿透，换取更宽跳跃
+- 离线 cone map 取最小比例，运行时只读一个通道
+- cone map 不能普通平均过滤，应使用保守最小值或 nearest
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把线性搜索替换为放松锥步进时，你会把哪两个值存进纹理？运行时为什么还需要读取 depth？
+
+<Answer>
+  需要存每个 texel 的深度和 cone ratio；实现上可以放在 relief texture 的 alpha
+  与 blue 通道。运行时必须读取 depth 来计算当前射线与表面的高度差，cone ratio
+  只负责把这个高度差换成安全的前进距离。
+</Answer>
+
+**问题 2｜诊断薄结构漏检。** 你把 cone steps 从 12 降到 4 后，细小凸起消失但大块砖面仍然正常。请按“数据、区间、预算”的顺序列出三个检查点。
+
+<Answer>
+  先检查 cone map 是否由正确的 depth map 生成、是否被普通 mip
+  平均破坏；再检查最后位置 K 是否真的进入表面，二分区间是否覆盖
+  H-K；最后检查固定 cone steps
+  是否过少，必要时只提高锥步数或为远近层级使用不同预算。
+</Answer>
+
+**问题 3｜场景选型。** 近景石墙、远处大面积砖地和需要稳定自阴影的高度场，分别怎样选择 cone-map 采样与搜索预算？
+
+<Answer>
+  近景石墙优先使用 RCS 加足够的 binary steps，并使用保守最小
+  mip；远处砖地可以降低 cone 和 binary 预算，颜色与法线正常 mip，cone map 使用
+  nearest 以避免错误平均；自阴影路径也应复用保守 cone
+  ratio，不能为了少几次读取而改用普通 filtered cone map。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="relief mapping"
+    definition="在每个像素上查深度和法线纹理，模拟小型凹凸而不新增真实三角形。"
+  />
+  <GlossaryItem
+    term="height field"
+    definition="一张把纹理坐标映射到高度的表面表格，射线要在它上面寻找交点。"
+  />
+  <GlossaryItem
+    term="binary search"
+    definition="在已知内外端点之间不断取中点缩小范围的快速精化方法。"
+  />
+  <GlossaryItem
+    term="cone map"
+    definition="为每个深度 texel 记录安全宽度比例的辅助纹理，帮助射线跳过空区域。"
+  />
+  <GlossaryItem
+    term="relaxed cone stepping"
+    definition="允许射线最多穿透高度场一次，再用二分搜索恢复精确交点的空间跳跃算法。"
+  />
+  <GlossaryItem
+    term="ray-height-field intersection"
+    definition="计算一条射线第一次碰到高度表面的位置，是 relief mapping 的核心查询。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 18. Relaxed Cone Stepping for Relief Mapping"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-18-relaxed-cone-stepping-relief-mapping"
+/>
