@@ -1,0 +1,279 @@
+---
+title: "GPU Gems 2 · Chapter 30. The GeForce 6 Series GPU Architecture"
+type: A
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 30
+description: "以 GeForce 6800 为历史样本，拆解主机接口、vertex/fragment 处理、quad 导数、z-cull、Shader Model 3.0 与非图形计算视图。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-30-geforce-6-series-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-30
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch30ArchitectureLab,
+  GpuGems2Ch30FeaturePerformanceDiagram,
+  GpuGems2Ch30GraphicsPipelineDiagram,
+  GpuGems2Ch30HostBandwidthDiagram,
+  GpuGems2Ch30NonGraphicsDiagram,
+  GpuGems2Ch30ShaderModelDiagram,
+  GpuGems2Ch30VertexFragmentDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch30-geforce6-architecture";
+
+<Objectives>
+
+- 能解释 GeForce 6 架构在主机、GPU 本地内存、vertex/fragment 管线和 frame buffer 之间的数据路径
+- 能修改实验中的 workload、texture lookup 与 early/late cull，观察 candidate fragments、quad、shader operations 和 bandwidth proxy 如何变化
+- 能回答：给定一个图形或非图形任务，应优先检查 host transfer、z-cull、texture locality、fragment density 还是 Shader Model 3.0 的编程粒度
+
+</Objectives>
+
+## 一颗 GPU 不只是“更快的 CPU”
+
+把大型工厂想成两部分：一条窄的进料通道，连接许多本地工作台。进料通道负责把订单和原料送进来；工作台一旦拿到原料，就能以很高的速度并行加工。若每一步都回到远处取东西，工作台的数量再多也只是一起等待。
+
+这就是本章要解决的架构问题：GeForce 6 如何把主机送来的命令和数据变成顶点、候选像素，再变成最终颜色；同一套可编程单元又怎样承接非图形计算。没有这张数据路径图，只看峰值数字，很容易把“接口受限”“片元受限”和“计算受限”混成一个问题。先预测：把 early z-cull 改成 late，再增加 texture lookup，哪一项会先放大 fragment 工作？
+
+<GpuGems2Ch30ArchitectureLab />
+
+<Callout type="tip" title="先画 data path，再读性能表">
+  对每个 workload 记录 host transfer、vertex count、candidate fragment
+  count、early reject、quad count、texture lookup、shader operations
+  和本地读写。原章的 GeForce 6800
+  数字是历史参考；现代设备必须重新测量同一条路径。
+</Callout>
+
+<Callout type="trap" title="把 GPU 当成带更多核心的 CPU">
+  现象 → 任务有许多分支和逐步依赖，却只因“GPU
+  算力高”就迁移，结果同步和搬运成本吞掉收益。原因 → GPU
+  的强项是规则、批量、数据并行和本地流量，不是任意低延迟控制流。修法 →
+  先标出元素独立性、阶段边界和数据驻留位置，再决定是否适合 GPU。
+</Callout>
+
+本章聚焦 NVIDIA 原章描述的 GeForce 6 Series，尤其是 GeForce 6800。所有型号、带宽和吞吐数字都保留其 2005 年历史语境；可迁移的是“哪个单元处理什么输入、数据在哪个边界移动、哪一步可以提前拒绝”。
+
+## 1. host interface 与 GPU 本地带宽
+
+<Term def="CPU 与 GPU 之间传输命令、纹理和顶点的系统连接；它通常比 GPU 本地内存链路窄。">
+  host interface
+</Term>
+
+CPU 通过 AGP 或 PCI Express 把 command stream、texture data 和 vertex data 送到 GPU。原章表 30-1 给出的 GeForce 6 时代参考是：GPU memory interface 35 GB/s、PCI Express x16 理论值 8 GB/s、800 MHz front-side bus 的 CPU memory interface 6.4 GB/s，实际主板可能低于理论上限。
+
+<GpuGems2Ch30HostBandwidthDiagram />
+
+这个数量级差异解释了一个工程规则：尽量让数据在 GPU local memory 中复用。若每个 kernel 都把中间结果送回 CPU，除了一次额外 copy，还会把本来能在本地带宽中完成的工作压到 host interface。CPU 负责提交命令和准备资源，GPU 负责在本地处理已驻留的批量数据，两端分工必须写进资源生命周期。
+
+对每个元素的外部传输量设为 $B_{host}$，本地处理量设为 $B_{local}$，则一次 round-trip 的时间可以粗略写成
+
+$$
+T\approx\frac{B_{host}}{R_{host}}+\frac{B_{local}}{R_{local}}+T_{sync}.
+$$
+
+这个式子在说：即使本地算术很快，窄的 host rate 和同步点仍可能成为总时间主导；公式不是硬件精确模型，而是提醒你先量出边界成本。
+
+<Callout type="trap" title="只看 GPU memory bandwidth，不记录 host transfer">
+  现象 → shader 内部 profile 很快，端到端任务却比 CPU 版本慢。原因 →
+  每帧反复上传或回读，把窄接口和同步等待放大。修法 → 把资源变成持久 resident
+  buffers/textures，批量提交命令，并把 host round-trip 纳入总时间而非只看 GPU
+  timestamp。
+</Callout>
+
+## 2. graphics pipeline：从 command 到 frame buffer
+
+<GpuGems2Ch30GraphicsPipelineDiagram />
+
+CPU 写入 command stream 后，硬件解析状态和 draw command，再由 vertex fetch unit 读取被引用的顶点。接下来顶点经过变换、蒙皮或其他 per-vertex 操作，rasterizer 把三角形或点扩展成 fragments，fragment processor 对每个候选像素运行纹理与 shader，最后经过 depth、stencil 和 blend 逻辑写入 render target。
+
+<Term def="对每个输入顶点执行变换、蒙皮和其他逐顶点程序的可编程处理单元。">
+  vertex processor
+</Term>
+
+vertex processor 的输入粒度是 vertex。GeForce 6 首次允许 vertex program fetch texture data，且每个 component 使用 fp32；不同档位可配置不同数量的 vertex units，原章举例从低端两单元到高端六单元。这个可扩展性解释了产品线为何能共享架构而改变吞吐档位。
+
+<Term def="代表一个可能成为像素的候选片元；它还要通过深度、模板等测试，才会写入 render target。">
+  fragment processor
+</Term>
+
+fragment processor 的输入粒度是 candidate pixel。texture unit 与 fragment-processing unit 协同读取 texels、执行程序，然后把深度和颜色送到后续测试。片元并不等于最终可见像素：不可见片元可能在更早的 z-cull 阶段被丢弃，透明或 stencil 规则也可能继续改变结果。
+
+## 3. quad、导数与 texture pipeline
+
+GeForce 6 的 fragment/texture 单元以四个像素的 **quad** 为局部工作组。相邻四个 lanes 让硬件可以比较 texture coordinates 的变化，从而计算纹理 level-of-detail 所需的 derivatives。quad 不是“一个输出像素变四个”，而是一个让局部差分可定义、并让相邻执行保持在一起的处理粒度。
+
+<GpuGems2Ch30VertexFragmentDiagram />
+
+当 fragment shader 访问纹理时，filter、mip choice 和 anisotropy 都依赖坐标在屏幕邻域中的变化。若 quad 内 lanes 走完全不同的控制流，某些导数或 texture request 可能变得不稳定，分支 divergence 也会降低有效吞吐。因此检查 texture LOD 时，必须同时查看 quad 形成方式、坐标连续性和 fragment density。
+
+```glsl
+vec2 du = dFdx(uv);
+vec2 dv = dFdy(uv);
+float footprint = max(dot(du, du), dot(dv, dv));
+vec4 color = textureGrad(albedo, uv, du, dv);
+```
+
+这里的代码表达“使用相邻 fragment 的坐标变化指导纹理采样”；具体 GLSL 版本、可用导数函数和驱动行为要以目标 API 为准，不能把历史硬件的 quad 细节直接当成现代跨平台保证。
+
+## 4. z-cull、early reject 与固定功能收益
+
+<Term def="在 fragment shader 运行前用已有深度信息快速拒绝不可能可见的片元，以节省后续纹理和着色工作。">
+  z-cull
+</Term>
+
+GeForce 6 的 z-cull 是第三代 NVIDIA hidden-surface removal 技术，能以高速度移除不可见表面；当 stencil 不更新且测试条件合适时，还可以使用 early stencil reject。关键不是“所有片元都会被提前删掉”，而是已知深度关系允许的情况下，硬件能把工作截断在 fragment processor 之前。
+
+<GpuGems2Ch30FeaturePerformanceDiagram />
+
+固定功能阶段仍然重要：geometry instancing 减少重复提交同一几何的 driver overhead；early culling/clipping 减少无效 primitive；rasterization 支持 points、lines、triangles 与 multisample antialiasing；floating-point blending 和 filtering 为 HDR 等效果提供更大范围，但低端型号可能因带宽和芯片面积限制而不支持全部能力。
+
+<Term def="用一次 Direct3D draw call 按不同位置等参数重复绘制同一组顶点，减少重复 batch 提交的机制。">
+  geometry instancing
+</Term>
+
+instancing 特别适合军队、草地或粒子这类“几何相同、变换不同”的对象。它解决的是提交和顶点流组织，不会自动消除 fragment overdraw；若实例遮挡严重，仍需依靠 cull、LOD 和正确的深度顺序控制像素工作。
+
+<Callout type="trap" title="geometry instancing 等于免费减少全部渲染成本">
+  现象 → draw call 变少，GPU 时间却几乎不降，甚至 fragment 时间上升。原因 →
+  instancing 主要节省重复提交与顶点输入，实例数量仍可能生成更多 candidate
+  fragments。修法 → 分别测 CPU/driver submit、vertex、raster、fragment 和
+  overdraw；让 instancing 与 cull/LOD 配套。
+</Callout>
+
+## 5. Shader Model 3.0：能力汇合，粒度仍不同
+
+<Term def="GeForce 6 时代的 shader 编程模型；vertex 与 fragment processor 共享 fp32、texture lookup 和更接近的指令能力。">
+  Shader Model 3.0
+</Term>
+
+Shader Model 3.0 让 vertex 与 fragment 编程模型向共同能力集合靠拢：两者都支持 fp32 precision、texture lookups 和相同方向的 instruction set。原章列出 vertex instruction count 为 512 static instructions 与 65,536 dynamic instructions；fragment processor 则强调四宽 co-issue 的 MAD/DP4、额外 multiply 与 fp16 normalization 等吞吐结构。
+
+<GpuGems2Ch30ShaderModelDiagram />
+
+“能力汇合”不意味着两个阶段成本相同。vertex program 仍按顶点运行，fragment program 按候选像素和 quad 运行；一个 shader 在 fragment 阶段可能被数百万 fragments 放大。优化时先判断程序落在哪个 stage、输出会放大多少次，再决定减少指令、减少输入、提升 early reject 还是改变 batch 组织。
+
+## 6. 非图形计算视图：把 pipeline 当作可编程数据通路
+
+GeForce 6 也可以从非图形角度看成两块串联的可编程 fp32 processor：vertex processor 先处理数据，随后直接交给 fragment processor，或经由 rasterizer 扩展成 interpolated fragments。两者都可使用 texture unit 做随机访问，原章给出的 GPU memory bandwidth 是 35 GB/s 的历史参考。
+
+<GpuGems2Ch30NonGraphicsDiagram />
+
+这个抽象把 GPU 变成计算密集任务的 data path：输入被编码到 vertex/texture，vertex stage 做一轮 map，rasterizer 负责必要的扩展，fragment stage 再做另一轮 map，结果写入 render target。深度测试、纹理坐标、精度、打包方式和回读路径都是算法的一部分，不能只把 CPU loop 的每一行机械翻译成 shader。
+
+```ts
+const encoded = uploadAsVertices(input);
+const stageA = runVertexProgram(encoded, constants);
+const stageB = rasterizeOrExpand(stageA);
+const output = runFragmentProgram(stageB, lookupTexture);
+```
+
+这段伪代码用于标出数据阶段，不是现代 API 的可运行实现。实际工程要核对 render target format、同步、读回代价、可用 precision 和是否能保持中间数据在 GPU 内部。
+
+## 三步验收：边界、单元、工作量
+
+用同一批输入、同一纹理和同一相机记录 CPU reference、host bytes、vertex count、candidate fragments、early reject、quad count、texture reads 与最终输出 hash。先确认数据经过正确边界，再确认程序落到正确单元，最后才讨论峰值性能。
+
+<Stepper>
+  <Step title="第一步：核对 host 与 local memory 边界">
+    把命令、顶点、纹理和中间结果列成资源表，标记每次 CPU/GPU 传输与同步。固定资源后比较 host transfer 和 GPU local processing，确认是否存在不必要 round-trip。
+
+    <GpuGems2Ch30HostBandwidthDiagram />
+
+  </Step>
+  <Step title="第二步：沿 graphics pipeline 定位执行单元">
+    对一帧分别记录 vertex、raster、fragment、depth/stencil 和 blend 阶段；改变 early/late cull，观察 fragment shader invocations 与 quad 数变化，再检查输出是否仍一致。
+
+    <GpuGems2Ch30GraphicsPipelineDiagram />
+
+  </Step>
+  <Step title="第三步：把 workload 改成非图形数据通路">
+    用一个确定性 map 或 filter 任务替换 draw 的视觉目标，报告输入编码、texture lookup、fp32/fp16、render target format 和 readback；只有当单元和边界正确后，才比较指令吞吐。
+
+    <GpuGems2Ch30NonGraphicsDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- host interface 窄，GPU local memory 应承担主要复用。
+- vertex 与 fragment processor 按不同粒度执行可编程程序。
+- quad 提供局部导数，z-cull 可在 fragment shading 前拒绝工作。
+- Shader Model 3.0 汇合能力，但两阶段的工作量放大不同。
+- 非图形任务也可借用这条数据通路，但格式、同步和回读必须显式验收。
+
+<Exercises>
+
+**问题 1｜边界成本。** 原章历史表格给出 GPU memory interface 35 GB/s、PCI Express x16 8 GB/s、CPU memory interface 6.4 GB/s。一个任务每帧需要向 GPU 上传 160 MB，并且不再回读，按理论带宽下界估算 host transfer 时间；为什么真实时间会更长？
+
+<Answer>
+  只看 PCI Express，理论下界约为 $160/8000=0.02$ 秒，即 20
+  ms；实际还要加入协议开销、主板实现差异、命令排队、同步和其他竞争流量。若把中间结果反复回读，双向流量和同步会进一步放大成本，因此应先让资源驻留
+  GPU。
+</Answer>
+
+**问题 2｜解释早期拒绝。** 某批次产生 100,000 个 candidate fragments，early z-cull 拒绝其中 35%。若每个实际执行的 fragment shader 做 18 次有效 operations，early 与 late cull 的 shader operations 分别是多少？
+
+<Answer>
+  early cull 只执行 65,000 个 fragments，因此约为 $65{,}000\times18=1{,}170{,}000$ operations；late cull 先执行全部候选片元，为 $100{,}000\times18=1{,}800{,}000$ operations。两者最终可见颜色可能相同，但 early cull 节省了被拒绝片元的纹理和 shader 工作。
+</Answer>
+
+**问题 3｜修改实验并提交证据。** 在 ArchitectureLab 中先选择 graphics/early，再切到 compute/late，最后把 fragments per vertex 和 texture lookups 都调高。你需要保存哪些数据，才能判断瓶颈来自哪个阶段？
+
+<Answer>
+  保存 workload mode、vertices、candidate/shaded fragments、quad groups、texture
+  words、host words、shader operations 和输出 hash。若 late 只增加 shaded
+  fragments，问题主要是 early reject；若 texture words 和 shader operations 随
+  lookup 线性上升，问题在 fragment workload；若 host words
+  占总时间，先处理资源驻留和上传批次，而不是继续增加 shader 指令。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="host interface"
+    definition="CPU 和 GPU 之间传命令与数据的连接，通常比 GPU 本地内存链路窄。"
+  />
+  <GlossaryItem
+    term="vertex processor"
+    definition="按顶点运行变换、蒙皮和其他逐顶点程序的可编程单元。"
+  />
+  <GlossaryItem
+    term="fragment processor"
+    definition="按候选像素执行纹理和 fragment shader 的可编程单元，候选片元还要通过后续测试。"
+  />
+  <GlossaryItem
+    term="z-cull"
+    definition="利用深度信息在 fragment shading 前快速拒绝不可见片元的硬件路径。"
+  />
+  <GlossaryItem
+    term="geometry instancing"
+    definition="用一次批量提交重复绘制同一几何、只改变位置等参数的机制，主要减少提交开销。"
+  />
+  <GlossaryItem
+    term="Shader Model 3.0"
+    definition="GeForce 6 时代让 vertex 和 fragment 编程能力更接近、支持 fp32 与纹理读取的 shader 模型。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 30. The GeForce 6 Series GPU Architecture"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-30-geforce-6-series-gpu"
+/>
