@@ -1,0 +1,298 @@
+---
+title: "GPU Gems 2 · Chapter 29. Streaming Architectures and Technology Trends"
+type: A
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 29
+description: "从算力与通信增速差异出发，解释 GPU 为什么用长数据流、独立 kernel、三级并行、片上局部性与深流水换取高吞吐。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-29-streaming-architectures"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-29
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch29CommunicationDiagram,
+  GpuGems2Ch29LatencyToleranceDiagram,
+  GpuGems2Ch29ParallelismDiagram,
+  GpuGems2Ch29StreamingLab,
+  GpuGems2Ch29StreamKernelDiagram,
+  GpuGems2Ch29TechnologyTrendsDiagram,
+  GpuGems2Ch29TransistorBudgetDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch29-streaming-architectures";
+
+<Objectives>
+
+- 能解释 stream architecture 在 GPU 执行与存储层次中的位置，以及算力、通信、延迟和功耗趋势为何推动这种组织
+- 能把一段批处理改写为 stream 与独立 kernel，标出 task/data/instruction parallelism、片上局部性和外部流量
+- 能回答：给定元素数、每元素运算量、全局读写量与局部性时，工作负载更可能受计算还是通信限制，应先改算法、数据布局还是并行规模
+
+</Objectives>
+
+## 更多机器，不等于工厂自动更快
+
+工厂可以不断增加工作台，但原料如果仍从远处逐件运入，新工作台只会等待。真正的改进是把相似零件成批送入，让多条工序同时运转，并让上一道工序的产物直接交给下一道。
+
+处理芯片也面临同样的不平衡：计算部件增加得快，搬运数据和等待数据的改善却慢。没有暴露足够多的独立工作，或让中间结果反复离开芯片，再多计算资源也会闲置。先预测：实验里保持元素数不变，把每元素全局读取翻倍并把局部性降到零，单纯增加算术操作能否恢复吞吐？
+
+<GpuGems2Ch29StreamingLab />
+
+<Callout type="tip" title="把本章历史数字与可迁移原则分开记录">
+  原章发表于 2005 年，GeForce
+  型号、年增长率和功耗预测是历史证据；“通信相对计算更贵”“长独立工作隐藏延迟”“片上局部性减少外部流量”才是可迁移的分析框架。现代项目必须用目标设备重新
+  profile。
+</Callout>
+
+<Callout type="trap" title="只比较峰值 FLOPS 就宣称架构更快">
+  现象 → 峰值算力很高，真实 kernel 却长期低利用率。原因 →
+  输入供给、外部带宽、依赖链、控制分歧或并行规模没有满足 data path。修法 →
+  同时记录 operations、global words、resident work、stall reasons
+  与功耗，先定位限制路径。
+</Callout>
+
+本章主题 **Streaming Architectures and Technology Trends** 的核心是一条因果链：技术趋势扩大计算与通信的增速差，架构因此偏向高密度数据通路、显式并行、局部通信和吞吐优先的执行模型。
+
+## 1. 技术趋势：关键不是都变快，而是斜率不同
+
+原章引用 2003 年 ITRS 路线图，以约 50%/年的芯片能力增长、25%/年的 DRAM bandwidth 增长和仅 5%/年的 DRAM latency 改善解释不平衡。它还列出 GeForce FX 5800、FX 5950 与 GeForce 6800 的可编程浮点能力相对外部带宽约为 2、2.66、接近 6 operations per word。这些数值只描述当时的代际，不是现代 GPU 基准。
+
+<GpuGems2Ch29TechnologyTrendsDiagram />
+
+三项趋势导出三种压力。第一，跨芯片甚至跨芯片内部区域的通信相对算术更贵，可能值得用 recompute 或专用逻辑替代搬运。第二，带宽改善快于单次访问延迟，硬件必须在等待时继续执行其他工作。第三，晶体管总数增长快于单管功耗下降，原章预见 operations per watt 会比绝对 operations per second 更重要。
+
+<Callout type="trap" title="把 2005 年增长率直接外推到现代产品">
+  现象 → 容量规划得到精确曲线，却与目标 GPU 的 profile 完全不符。原因 →
+  原章数字来自特定时期的路线图和产品，制程、封装、缓存、内存与功耗约束已变化。修法
+  → 用历史斜率解释架构动机，绝对性能和能效一律在目标设备、目标负载上重测。
+</Callout>
+
+## 2. 芯片面积：control、data path 与 storage 的取舍
+
+<Term def="执行算术、逻辑和数据变换的硬件路径；相对于控制与存储，它直接完成程序要求的计算。">
+  data path
+</Term>
+
+同一块 die 上的晶体管大致分给 control、data path 与 storage。复杂分支预测、乱序执行和大缓存提高单线程通用性与低延迟，却占用本可复制更多算术单元的面积；图形工作负载拥有大量同构元素和较规则控制，GPU 可以把更多预算交给并行 data path，并让 rasterization 等稳定任务使用专用单元。
+
+<GpuGems2Ch29TransistorBudgetDiagram />
+
+专用化不是“固定功能永远优于可编程”。它用适用范围换单位面积与单位功耗效率；如果需求变化过快，硬连线功能可能失去价值。原章描述的演进正是图形管线从固定功能逐步加入 vertex 与 fragment programmability，同时保留适合专用实现的阶段。
+
+## 3. 用三级并行填满 data path
+
+原章区分三种可叠加的并行。task parallelism 让顺序阶段同时处理不同批次，例如 vertex stage 处理批次 B 时 raster stage 处理批次 A；data parallelism 让同一阶段同时处理多个独立元素；instruction parallelism 则在单个元素内部重叠互不依赖的简单操作。
+
+<Term def="让同一个 kernel 同时应用于多个互不依赖的数据元素，是 GPU 扩展大量算术通路的主要并行来源。">
+  data parallelism
+</Term>
+
+<GpuGems2Ch29ParallelismDiagram />
+
+三级并行不能靠硬件凭空创造。输入太短会使 lanes 不满；跨元素依赖会阻止 data-parallel 映射；长串行依赖会减少 instruction overlap；某个 stage 远慢于其他 stage 又会让整条 task pipeline 堵塞。程序需要把独立性和通信边界写进结构，硬件才能安全调度。
+
+<Callout type="trap" title="元素很多就默认存在可用 data parallelism">
+  现象 → 输入数组很长，GPU 仍出现串行等待或结果竞态。原因 →
+  每个元素读取前一元素的新结果，或多个元素无规则写同一位置，独立性只存在于表面。修法
+  → 画出依赖图；拆成 map、scan、reduce 等有明确同步边界的 passes，再验证每个
+  kernel 内元素独立。
+</Callout>
+
+## 4. stream 与 kernel：把独立性写进程序模型
+
+<Term def="由同一种数据类型构成的有序元素集合；长 stream 能摊薄启动成本并提供足够多的并行工作。">
+  stream
+</Term>
+
+<Term def="对一个或多个完整 streams 执行计算并产生输出 streams 的函数；同一 kernel 内不同元素之间不得互相依赖。">
+  kernel
+</Term>
+
+stream 可以是 numbers、points、triangles 或 matrices。典型 kernel 对每个输入元素执行同一函数，也就是 map；模型还允许 expansion、reduction 与 filter。限制 kernel 输出只依赖输入、且单个 kernel 内元素相互独立，使编译器提前知道局部数据需求，也使表面串行的 element loop 可直接映射到并行硬件。
+
+<GpuGems2Ch29StreamKernelDiagram />
+
+图形管线天然符合这种模型：vertex、assembly、clipping、rasterization 和 fragment processing 是连接的 kernels，阶段间通过 streams 传递，局部输出很快被下一阶段消费。模型不是让通信消失，而是使“何处传递、传什么、能否保留在片上”变得显式。
+
+```ts
+const shaded = vertices.map((vertex) => shadeVertex(vertex, uniforms));
+const triangles = assembleTriangles(shaded);
+const fragments = rasterize(triangles);
+const visible = fragments.filter((fragment) => depthPasses(fragment));
+const colors = visible.map((fragment) => shadeFragment(fragment, textures));
+```
+
+这段代码是结构镜像，不代表 JavaScript 数组会自动获得 GPU 性能。真实实现必须把每个 stage 映射到目标 API 的 dispatch/draw、buffer、同步和 layout，并确认中间 streams 没有因不必要的 host round-trip 离开设备。
+
+## 5. arithmetic intensity：每个外部 word 做多少工作
+
+<Term def="有效算术操作数与外部传输数据量之比；它描述每搬运一个 word 或 byte 能完成多少计算。">
+  arithmetic intensity
+</Term>
+
+本节符号如下：
+
+- $N$：stream 元素数
+- $O$：每元素有效 operations
+- $W$：每元素访问的 global words
+- $h$：被片上复用、缓存或消除的比例
+- $I$：相对 off-chip traffic 的 arithmetic intensity
+
+总有效运算和外部 word 数分别是
+
+$$
+C=NO,\qquad M=NW(1-h).
+$$
+
+这个式子在说：元素数同时放大计算与原始流量，而片上局部性 $h$ 只减少真正离开芯片的数据量。
+
+因此
+
+$$
+I=\frac{C}{M}=\frac{O}{W(1-h)}.
+$$
+
+这个式子在说：减少一次外部读取、提高复用或在已读数据上做更多有用工作，都能提升每个外部 word 的计算量；单纯扩大 $N$ 只增加并行规模，不会改变这个比值。
+
+<GpuGems2Ch29CommunicationDiagram />
+
+缓存用 storage transistors 换 bandwidth，compression 用压缩/解压计算和逻辑换 bandwidth，recompute 则直接用廉价计算替代查询表或远端传输。选择前要检查数据是否会复用、压缩率是否稳定、重算是否精确，以及新增计算会不会把通信瓶颈反转成 data-path 瓶颈。
+
+<Callout type="trap" title="为提高 arithmetic intensity 添加无用运算">
+  现象 → operations/word 数字变大，输出不变，运行时间和功耗反而上升。原因 →
+  指标只应计算产生结果所需的有效工作；人为 burn cycles 不能减少
+  bytes，也不创造价值。修法 → 通过融合
+  kernels、复用中间值、压缩或必要重算提高有效比值，并同时核对时间、流量和能耗。
+</Callout>
+
+## 6. latency tolerance：等待时切换到 ready work
+
+<Term def="在一批工作等待高延迟操作时执行其他独立工作，从而减少处理单元暴露空闲时间的能力。">
+  latency tolerance
+</Term>
+
+高吞吐架构不要求每个元素尽快完成，而是要求单位时间完成尽可能多的元素。某个 wave 发出 memory request 后，若还有其他 ready waves，处理单元可以继续发射它们；数据返回后再恢复原 wave。访问 latency 依然存在，只是被独立工作覆盖。
+
+<GpuGems2Ch29LatencyToleranceDiagram />
+
+长 stream 提供更多可切换元素，深 pipeline 让多个阶段重叠，局部状态则避免每次切换都访问外部 memory。若 stream 太短、寄存器占用让 resident waves 太少，或所有 waves 同时依赖同一个远端结果，延迟就会重新暴露为 stall。
+
+## 7. 从历史架构动机到现代工作负载判断
+
+原章认为 programmable vertex/fragment stages 已让 GPU 成为可处理图形之外任务的 stream processor，并展望更广的 programmability、阶段资源共享、功耗管理，以及 CPU/GPU 功能继续融合。这些预测应作为历史脉络阅读；现代接口和微架构已演进，但判断工作负载的方法仍可复用。
+
+先检查是否有数百个以上同类型、相互独立的元素；再标记 global inputs/outputs 与 stage-local intermediates；然后计算有效 operations 和 bytes/words，观察 communication、compute、control divergence 或 occupancy 哪条限制吞吐；最后才决定 fusion、tiling、compression、recompute 或扩大并行规模。
+
+一个 serial、分支复杂、每步依赖上一步且必须低延迟返回的任务，未必适合吞吐导向 GPU。反过来，长 stream、规则 kernel、高局部性和允许批量完成的任务，正好匹配本章描述的架构契约。选择不是“CPU 或 GPU 谁更强”，而是程序暴露的结构与目标机器资源是否一致。
+
+## 三步验收：独立性、流量、等待
+
+三个阶段对同一 workload 保留 CPU reference、元素计数、operations、global words 与输出 hash。先证明并行拆分正确，再测量流量，最后观察延迟是否被 ready work 覆盖。
+
+<Stepper>
+  <Step title="第一步：画出 stream、kernel 与依赖边界">
+    为每个 kernel 标出 input/output types、element count 和跨元素读写。任何同一 pass 内的邻居依赖、共享写冲突或全局顺序，都必须先改写为独立 passes 或显式 reduction。
+
+    <GpuGems2Ch29StreamKernelDiagram />
+
+  </Step>
+  <Step title="第二步：核算有效计算与 off-chip words">
+    从 profiler 或 API counters 记录真实 global traffic，计算 $I=O/[W(1-h)]$。分别尝试 fusion、cache/local memory、compression 与 recompute，确认减少的是外部数据而非只增加指令数。
+
+    <GpuGems2Ch29CommunicationDiagram />
+
+  </Step>
+  <Step title="第三步：改变 stream 长度验证 latency coverage">
+    固定每元素工作，从短到长逐步增加 elements，记录 active lanes、resident waves、memory stalls 和总吞吐；若扩大到某点后不再改善，继续增加元素已不是正确修法。
+
+    <GpuGems2Ch29LatencyToleranceDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 算力、带宽、延迟与功耗的不同斜率推动吞吐架构。
+- GPU 用更多 data path 和三级并行处理规则批量工作。
+- stream/kernel 显式表达元素独立性与阶段通信。
+- arithmetic intensity 衡量每个外部 word 的有效工作。
+- latency tolerance 依赖足够多 ready work，而非消除延迟。
+
+<Exercises>
+
+**问题 1｜手算强度。** 一个 kernel 处理 4096 个元素，每元素 32 次有效 operations、读写 8 个 global words；tiling 让 75% 数据留在片上。优化前后 arithmetic intensity 各是多少？元素数为何不影响比值？
+
+<Answer>
+  优化前 $I=32/8=4$ operations/word；局部性 $h=0.75$ 后，外部 words 变为
+  $8(1-0.75)=2$，所以 $I=32/2=16$ operations/word。$N$ 同时乘在总 operations
+  与总 words 上，约分后消失；增加元素可改善并行填充，却不会自动减少每元素通信。
+</Answer>
+
+**问题 2｜拆分 kernel。** 某循环让元素 $i$ 先读取刚更新的元素 $i-1$，随后所有元素把结果累加到一个全局值。如何改造成可验证的 stream pipeline？
+
+<Answer>
+  原循环同时含顺序前缀依赖和多写一址冲突，不能直接 map。先用分阶段 parallel scan
+  生成每个元素的前缀结果，在每个 pass 之间设置明确同步；再用树形 reduction
+  合并全局值。每个 pass 内只读取上一 pass 的稳定输入并写唯一位置，最后与 CPU
+  serial reference 比较输出和数值误差。
+</Answer>
+
+**问题 3｜修改实验并提出优化。** 在 StreamingLab 中选择 serial，把 stream elements 降到 32、global words 调到 12、locality 调到 0。依次改变哪两个参数最能区分“并行不足”和“通信过重”？
+
+<Answer>
+  先切回 stream 并只增加 elements，观察 lane utilization 与 latency
+  covered；若两者上升，原问题包含并行不足。随后固定长 stream，只提高 locality
+  或减少 global words；若 off-chip traffic 和 communication limiting path
+  明显改善，另一问题是通信过重。增加 operations
+  只能测试瓶颈是否反转，不能替代减少无效流量。交付时保存四组配置、限制路径、traffic
+  与正确性 hash。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="data path"
+    definition="芯片中直接完成算术、逻辑和数据变换的部分；更多面积给它，通常意味着更高并行计算密度。"
+  />
+  <GlossaryItem
+    term="data parallelism"
+    definition="把同一段计算同时应用到多个独立元素，使大量执行通路可以一起工作。"
+  />
+  <GlossaryItem
+    term="stream"
+    definition="同类型元素组成的有序长队列，为批量传输和并行 kernel 提供输入。"
+  />
+  <GlossaryItem
+    term="kernel"
+    definition="一次处理完整输入 streams 并产生输出 streams 的函数，单次执行内各元素应相互独立。"
+  />
+  <GlossaryItem
+    term="arithmetic intensity"
+    definition="每搬运一个外部 word 或 byte 完成多少有效计算，用来判断工作更接近计算限制还是通信限制。"
+  />
+  <GlossaryItem
+    term="latency tolerance"
+    definition="一批工作等待数据时切换到其他独立工作，让处理单元保持忙碌的能力。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 29. Streaming Architectures and Technology Trends"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-29-streaming-architectures"
+/>
