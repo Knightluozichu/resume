@@ -1,0 +1,247 @@
+---
+title: "GPU Gems 3 · Chapter 23. High-Speed, Off-Screen Particles"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 23
+description: "从粒子填充率出发，解释如何用离屏低分辨率目标、深度下采样和边缘修复稳定烟雾火焰等大面积粒子效果。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-23-high-speed-screen-particles"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-23
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch23DepthCompositeDiagram,
+  GpuGems3Ch23OffscreenParticleLab,
+  GpuGems3Ch23PipelineDiagram,
+  GpuGems3Ch23ResolutionDiagram,
+  GpuGems3Ch23SobelStencilDiagram,
+  GpuGems3Ch23SoftParticleDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch23-offscreen-particles";
+
+<Objectives>
+
+- 能解释大面积烟雾粒子的主要成本为什么来自屏幕片元，而不是粒子系统的顶点数量
+- 能修改 Off-Screen Particle Lab 的缩放、模式、深度、soft particles 与边缘阈值，比较粒子像素和伪影风险
+- 能回答：什么时候低分辨率足够，什么时候需要 mixed-resolution 的 Sobel 与 stencil 修复
+
+</Objectives>
+
+## 先问：为什么一团烟会拖垮整帧
+
+想象一团几乎填满画面的烟雾。它看起来柔软、没有清晰轮廓，但画面上的每一层半透明形状都要被读取、混合和写回。即使这些形状本身很简单，重复覆盖同一片屏幕也会把时间耗在“同一个小格被算很多次”上。
+
+本章解决的是：把这类柔软画面先画到一个更小的临时画布，再放回主画面。没有这条路径，粒子数量一多，帧率会随覆盖区域突然下降；只把画布缩小，又会让岩石般的锐利细节变成块状和闪烁。
+
+<Callout type="tip" title="先预测：把缩放从 2× 调到 4× 一定更快吗？">
+  先猜一猜：在 Lab 中把 off-screen scale 从 2× 调到 4×，再切换 render mode 到
+  mixed；粒子像素、图像处理像素和块状伪影风险会怎样变化？先观察基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 让低频粒子先在小画布上完成大部分工作
+
+<Term def="把粒子先绘制到小于主 frame buffer 的临时目标，再放大并合成回主画面的技术；它用少量采样换取更低的粒子填充成本。">
+  off-screen rendering
+</Term>
+
+粒子常用来表示烟、雾、火焰和爆炸。这些画面的颜色与透明度变化通常比较缓慢，没有大量细小锐边，属于低频内容。因此，用主画面的一部分分辨率采样，视觉上仍然可以保持柔和，只需在最后做一次放大和合成。
+
+缩放比例不是固定规则。应用可以根据速度与质量目标选择 1、2、4、8 等比例，也可以使用非幂次比例。比例越激进，粒子片元和混合越少，但越容易丢掉高频轮廓；飞石、碎片等锐利粒子不适合直接套用同一策略。
+
+<GpuGems3Ch23ResolutionDiagram />
+
+## 2. 先识别 overdraw，再决定是否值得缩小
+
+<Term def="同一个屏幕像素被多个透明粒子重复覆盖、着色和混合的现象；粒子填满屏幕时，它会成为主要的填充瓶颈。">
+  overdraw
+</Term>
+
+粒子系统的顶点数量可能只有几百个，但每个半透明四边形都会参与像素着色与混合。相机正对爆炸或烟柱时，一个粒子甚至可以覆盖整个屏幕，最终成本取决于被处理的粒子像素数量，而不是 draw call 看起来有多短。
+
+因此先问“粒子是不是低频、是不是覆盖了大片屏幕”。如果粒子很小，离屏目标的额外缩放、放大、边缘检测反而可能比原始绘制更贵；如果粒子填满屏幕，降低粒子像素通常能把最坏情况的帧率拉回可控范围。
+
+## 3. 用匹配尺寸的深度目标保留遮挡关系
+
+<Term def="把主场景 z buffer 按离屏目标的尺寸缩小后得到的深度纹理；粒子在小画布中用它判断自己是否被实体物体遮挡。">
+  downsampled depth buffer
+</Term>
+
+离屏粒子不能只画在一个透明黑底上，否则它会穿过墙、角色或武器。完整流程是：先正常绘制实体场景并写主 z buffer；把 z buffer 缩小到离屏目标的大小；粒子绘制时在像素阶段读取对应的小深度；最后才把粒子目标放大合成。
+
+下采样深度时取每个区域的最大深度，可以减少粒子贴着实体边缘时产生的 halo。它不是完美的几何重建，却是一个保守、适合 GPU 纹理读取的近似。深度目标尺寸必须和颜色目标匹配，否则颜色和遮挡会沿不同的网格采样，出现错位边缘。
+
+<GpuGems3Ch23DepthCompositeDiagram />
+
+<Callout type="trap" title="只缩小颜色目标，不同步缩小深度">
+  现象 → 粒子速度很快，却穿过墙面或在角色边缘漂浮。原因 → 离屏颜色与主 z buffer
+  使用不同采样网格，粒子像素没有得到对应的遮挡深度。修法 →
+  先生成与离屏颜色同尺寸的深度目标，再在粒子 pixel shader
+  中比较粒子深度与场景深度，最后执行放大合成。
+</Callout>
+
+## 4. 用 soft particles 把硬切换变成渐隐
+
+<Term def="根据粒子深度与场景深度的差值渐变 alpha 的效果；粒子靠近实体表面时逐渐消失，避免一条生硬的交界线。">
+  soft particles
+</Term>
+
+最简单的深度测试是：粒子比场景更远就丢弃，否则保留。这会在粒子平面和实体表面相交处留下硬边。soft particles 不再只做二值判断，而是把两者的深度差送入缩放和 saturate，得到从零到一的 alpha 权重。
+
+这只是离屏管线的副作用增强，不会解决分辨率不足造成的块状问题。它解决的是“相交处太硬”，而边缘检测解决的是“低分辨率无法表达尖锐轮廓”，两者针对不同的伪影来源。
+
+<GpuGems3Ch23SoftParticleDiagram />
+
+## 5. 用 Sobel 找出低分辨率无法表达的边缘
+
+<Term def="用相邻像素的梯度估计图像边缘的经典滤波器；在本章中它从离屏颜色和 alpha 中筛出可能块状的区域。">
+  Sobel filter
+</Term>
+
+把画面全部恢复到全分辨率会失去离屏渲染的意义。更省的方式是在小目标的颜色和 alpha 上做 Sobel filter，找出变化突然的地方。大多数柔软内部区域没有明显边缘，可以继续使用放大后的结果；只有少量边缘区域需要更精细的粒子重绘。
+
+边缘检测结果写成 mask。合成离屏粒子时，同时把 mask 写到 stencil buffer；下一次全分辨率粒子绘制只在 stencil 允许的位置执行。pixel shader 可以通过 discard 避免为非边缘像素写入 stencil，从而把全分辨率工作限制在少数区域。
+
+<GpuGems3Ch23SobelStencilDiagram />
+
+<Callout type="trap" title="把所有低分辨率像素都回补到全分辨率">
+  现象 → 画面更清晰了，但性能几乎回到原来的高分辨率粒子方案。原因 → 放弃了 edge
+  mask，修复 pass 重新覆盖整个 frame buffer。修法 → 只让 Sobel 选中的边缘区域写
+  stencil，再用 stencil 限制全分辨率粒子；内部低频区域继续复用离屏结果。
+</Callout>
+
+## 6. mixed-resolution 在速度和细节之间分配预算
+
+<Term def="让粒子主体使用低分辨率目标，只在边缘或高频区域用 stencil 触发全分辨率补画的组合方案。">
+  mixed-resolution rendering
+</Term>
+
+mixed-resolution rendering 不是简单的“低分辨率加一个滤镜”。它把粒子工作拆成两类：主体低频部分尽量缩小，边缘和局部高频部分用全分辨率重建。额外的 edge detection、stencil 和合成也在低分辨率完成，因此复杂度增加不一定意味着成本大幅增加。
+
+它仍然有边界：如果粒子系统在屏幕上只占很小区域，低分辨率处理的固定开销可能超过节省的粒子像素；如果粒子包含很多锐利碎片，低分辨率目标在采样时已经丢掉的信息无法完全找回。选择方案时要同时看屏幕覆盖、频率和可接受的伪影。
+
+## 7. 把深度、粒子和修边串成可调的渲染循环
+
+```hlsl
+float4 ParticlePS(ParticleIn input) {
+  float sceneDepth = depthSampler.Sample(linearSampler, input.screenUV).r;
+  float zFade = saturate(scale * (input.depth - sceneDepth));
+  float4 particle = shadeParticle(input);
+  particle.a *= zFade;
+  return particle;
+}
+
+// Low-resolution target is upsampled and composited first.
+// A Sobel mask then enables a full-resolution particle pass.
+```
+
+代码只展示 pixel shader 的深度侧：离屏目标负责降低粒子片元数量，downsampled depth buffer 负责遮挡，soft particles 负责交界渐隐。mixed-resolution 的全分辨率补画由 stencil mask 决定，而不是让每个像素都重新执行。
+
+<Stepper>
+  <Step title="先建立与颜色目标匹配的深度目标">
+    完整绘制实体场景并写主 z buffer，再按离屏颜色目标的尺寸下采样；粒子阶段读取这张小深度图，保持遮挡关系。
+
+    <GpuGems3Ch23DepthCompositeDiagram />
+    <GpuGems3Ch23ResolutionDiagram />
+
+  </Step>
+  <Step title="再在小目标中完成粒子着色和混合">
+    让低频烟雾、火焰等粒子在低分辨率目标中完成大部分工作，使用 soft particles 在接近实体表面时淡出。
+
+    <GpuGems3Ch23SoftParticleDiagram />
+    <GpuGems3Ch23PipelineDiagram />
+
+  </Step>
+  <Step title="最后只为边缘支付全分辨率成本">
+    对离屏颜色和 alpha 做 Sobel，写 stencil mask，再把全分辨率粒子绘制限制到这些边缘区域，最后合成结果。
+
+    <GpuGems3Ch23SobelStencilDiagram />
+    <GpuGems3Ch23PipelineDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch23OffscreenParticleLab />
+
+## 本章小结
+
+- 大面积低频粒子适合先绘制到较小的离屏目标
+- downsampled depth buffer 让离屏粒子仍能正确遮挡
+- soft particles 用深度差消除交界硬边
+- Sobel 与 stencil 只修复低分辨率暴露的少数边缘
+- mixed-resolution 要同时权衡屏幕覆盖、频率和固定处理成本
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把 Lab 的 render mode 切到 low，再把 off-screen scale 从 2× 调到 8×；你预计粒子像素、图像处理像素和伪影风险如何变化？
+
+<Answer>
+  粒子像素会按目标面积显著减少，通常是最大的性能收益；图像处理像素不会无限下降，因为仍要放大和合成；伪影风险会上升，尤其是尖锐轮廓会块状化或在动画中闪烁。烟雾等低频效果能承受更激进的缩小，碎石不适合。
+</Answer>
+
+**问题 2｜诊断穿墙粒子。** 离屏烟雾能正确显示，但总是穿过场景中的实体物体，请检查哪三个资源和阶段？
+
+<Answer>
+  先检查实体场景是否在粒子前写入主 z buffer；再检查 downsampled depth buffer
+  是否与离屏颜色目标同尺寸且使用一致的 screen UV；最后检查 pixel shader
+  是否读取场景深度并执行比较或 zFade，而不是直接混合所有粒子颜色。
+</Answer>
+
+**问题 3｜场景选型。** 全屏烟雾、远处小型碎石、近景带硬轮廓的爆炸分别如何选择 high、low 或 mixed？
+
+<Answer>
+  全屏烟雾优先 low 或 mixed，因为它低频且 overdraw
+  很高；远处小型碎石要先测量固定的图像处理开销，若粒子很少，high
+  可能更划算；近景硬轮廓爆炸适合 mixed，用低分辨率处理柔软主体，再用 Sobel 和
+  stencil 为边缘补全分辨率。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="off-screen rendering"
+    definition="先在较小的临时画布中绘制，再放大合成回主画面的方式，用来减少粒子片元。"
+  />
+  <GlossaryItem
+    term="overdraw"
+    definition="同一屏幕像素被多个透明粒子重复处理的现象，粒子填屏时尤其昂贵。"
+  />
+  <GlossaryItem
+    term="downsampled depth buffer"
+    definition="按离屏目标尺寸缩小的场景深度图，帮助小画布中的粒子判断遮挡。"
+  />
+  <GlossaryItem
+    term="soft particles"
+    definition="根据粒子与场景的深度差渐变 alpha，让粒子靠近实体表面时柔和消失。"
+  />
+  <GlossaryItem
+    term="Sobel filter"
+    definition="通过相邻像素梯度找边缘的滤波器，用来挑出低分辨率难以表达的区域。"
+  />
+  <GlossaryItem
+    term="mixed-resolution rendering"
+    definition="主体使用低分辨率，边缘等高频区域用 stencil 触发全分辨率补画的组合方案。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 23. High-Speed, Off-Screen Particles"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-23-high-speed-screen-particles"
+/>
