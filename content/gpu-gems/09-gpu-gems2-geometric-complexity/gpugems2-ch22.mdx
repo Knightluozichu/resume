@@ -1,0 +1,280 @@
+---
+title: "GPU Gems 2 · Chapter 22. Fast Prefiltered Lines"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 22
+description: "用对称滤波器离线预计算距离响应，运行时通过 edge function 和两次查表高效绘制平滑线段。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-22-fast-prefiltered-lines"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-22
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch22FilterDiagram,
+  GpuGems2Ch22LineSetupDiagram,
+  GpuGems2Ch22LookupProductDiagram,
+  GpuGems2Ch22PrefilterPipelineDiagram,
+  GpuGems2Ch22PrefilteredLinesLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch22-prefiltered-lines";
+
+<Objectives>
+
+- 能解释 Fast Prefiltered Lines 如何把对称滤波器与线宽转换为离线距离响应表，并说明它为何能以固定 runtime 成本支持不同滤波器
+- 能从线段端点构造四条 edge function，使用 side/end 两次 lookup 得到有限线段强度，并判断 conservative rasterization 的覆盖范围
+- 能调节 PrefilteredLinesLab 的 filter、line width、distance phase 和 radius，比较抗锯齿质量、模糊范围与 preprocess/runtime 预算
+
+</Objectives>
+
+## 先把“线条锯齿”拆成信号与成本
+
+GPU Gems 2 Chapter 22 的 **Fast Prefiltered Lines** 处理一个很具体的工程矛盾：数学上的线段没有面积，但显示器只能采样有限像素；如果直接把尖锐线段交给像素网格，斜率变化或动画会把高频边缘变成 jaggies。硬件线抗锯齿通常受 sample 数、窄 filter support 和 box filter 限制，不同 GPU 的结果也可能不一致。
+
+本章的关键转换是：不要在每个像素重新做昂贵的二维 convolution，而是先假设 filter 关于线中心对称，把“滤波器放在离线不同距离处得到的响应”预计算成一个小型 1D 表。运行时只需计算 sample 到线段四条边的距离，查两次表，再把侧边响应与端点响应相乘。
+
+<GpuGems2Ch22PrefilteredLinesLab />
+
+<Callout type="tip" title="先画出 support，再扩大 raster band">
+  调试时先记录 line width $w$、filter radius $R$、归一化距离 $d$ 和 lookup
+  输出。随后检查保守光栅化是否生成了所有距离不超过 $w/2+R$ 的 fragment；若 band
+  太窄，shader 没有机会修复漏掉的边缘。
+</Callout>
+
+<Callout type="trap" title="把提高分辨率当成唯一抗锯齿方案">
+  现象 → 线条在静止画面稍好，但动画仍然闪烁；继续提高 framebuffer 分辨率后 GPU
+  成本快速上升。原因 →
+  尖锐线段含有无法被有限像素稳定表达的高频，分辨率只能减轻而不能消除采样误差。修法
+  → 先把信号 band-limit，用可控的 symmetric filter
+  预滤波，再以距离响应在目标分辨率重建。
+</Callout>
+
+本章主题 **Fast Prefiltered Lines** 的目标不是让 line shader 变成一套昂贵的通用卷积器，而是把滤波器的复杂度放进可缓存的表，把运行时问题缩减为稳定、可验证的几何距离计算。
+
+<Term def="在绘制前把滤波器与线段宽度的卷积响应按到中心线距离采样并存入小表，使运行时可用查表代替完整卷积的线段抗锯齿方法。">
+  prefiltered line
+</Term>
+
+<Term def="主动去除有限采样无法稳定重建的高频，使尖锐信号变成目标像素分辨率能够表示的带限信号。">
+  band-limiting
+</Term>
+
+<GpuGems2Ch22PrefilterPipelineDiagram />
+
+## 1. 为什么尖锐线段需要 band-limiting
+
+理想的宽线可以理解为中心线 $L$ 两侧距离 $w/2$ 内的区域。它的边缘是 step function，包含很高的频率；当像素中心以离散位置采样时，线段平移一点点就可能让某个像素从 0 直接跳到 1。对于动画，这种相位跳变就表现为闪烁、断裂或粗细变化。
+
+<Term def="围绕一个无穷薄中心线的滤波器响应；它通常要求左右两侧形状相同，使响应只依赖 sample 到中心线的距离。">
+  symmetric filter
+</Term>
+
+band-limiting 的工程含义是用低通 filter 与线段信号做 convolution。滤波器的 support 至少要覆盖一个以上像素，才能让边缘跨过多个采样位置时逐渐变化；但 support 太大又会让线条明显变 blurry。理想 sinc filter 的 support 无穷大，无法直接用于实时渲染，因此通常选择 box、Gaussian 或 compact cubic 等有限 support 的近似。
+
+<GpuGems2Ch22FilterDiagram />
+
+滤波器选择应和线宽绑定：细线使用过宽的 Gaussian 往往显得软，较粗的线可接受更平滑的 Gaussian；box 对细节更直接，但响应边界也更硬。关键是把“滤波器形状、半径、归一化和表分辨率”写进资产或渲染规格，而不是只留下一个模糊的 `antialias=true` 开关。
+
+<Callout type="trap" title="半径变了却继续复用旧表">
+  现象 → 调大 filter radius
+  后线条亮度、宽度和边缘位置不一致，某些角度还出现暗缝。原因 → lookup table
+  编码的是旧的 $w/2+R$ 支持范围，runtime 的归一化距离与表的语义已经错位。修法 →
+  把 line width、radius、filter family 和表版本作为同一个
+  key；改变任一参数都重新生成并验证常量、中心和外边界响应。
+</Callout>
+
+## 2. preprocess：把二维 convolution 压成一维表
+
+<Term def="把采样距离或参数映射为卷积结果的紧凑数据结构；运行时用它替代对滤波器面积的逐像素积分。">
+  lookup table
+</Term>
+
+假设 filter 对中心线对称，那么把 filter 放在距离 $s$ 处时，卷积结果只与 $|s|$ 有关，不依赖线段朝向。可以把真实距离归一化成参数 $d$：中心线位置对应 $d=1$，刚好离开宽线与滤波器 support 的位置对应 $d=0$。对一组离散距离执行 convolution，存成一个 1D luminance texture，runtime 就能用 `lookup(d)` 取得 intensity。
+
+$$
+  d = clamp\left(1 - \frac{distance}{w/2 + R}, 0, 1\right).
+$$
+
+表的 entries 不需要很大：32 项通常已经足够，若误差预算更严苛可提高到 64 项，再用线性采样平滑表间间隔。真正要验证的是量化误差，而不是盲目增加表大小：在 $d=0$、$d=1$、快速变化区域和多个 filter 半径上，对比离线 reference convolution 的最大误差。
+
+<Callout type="trap" title="只看表项数量，不测归一化端点">
+  现象 → 32 项表看起来足够，但线中心发灰、外侧仍有一圈可见亮度。原因 →
+  表的中心值、零响应位置和 runtime clamp 没有统一，线宽或 radius
+  被重复缩放。修法 → 为每张表写入 `d=0` 应为 0、`d=1`
+  应为峰值的断言；用固定点、半点和 support 外样本逐项对照 reference。
+</Callout>
+
+## 3. runtime：四条 edge function 与两次查表
+
+<Term def="在屏幕坐标中用 $ax+by+c$ 表示样本相对一条直线的位置，并把每条线段边界的距离计算变成一次 dot product。">
+  edge function
+</Term>
+
+线段由窗口坐标端点 $(x_0,y_0)$ 和 $(x_1,y_1)$、宽度 $w$ 定义。围绕中心线构造四条边：两条侧边限制垂直方向 support，两条端点边限制平行方向 support。每条边都可以表示成 $(a,b,c)$，对 fragment sample $p=(x,y,1)$ 计算：
+
+$$
+  d_i = dot(edge_i, p).
+$$
+
+如果任意 $d_i<0$，说明 sample 在 $w/2+R$ 的保守 band 之外，可直接 discard。否则用两组边分别求最近距离：
+
+$$
+  intensity = lookup(min(d_0,d_2)) \times lookup(min(d_1,d_3)).
+$$
+
+第一张表处理线段两侧，第二张表处理端点。乘积是有限宽线段真实二维 convolution 的高性价比近似；它也解释了为什么只画一条“无限长”的线会在 caps 位置留下错误的硬边。
+
+<GpuGems2Ch22LineSetupDiagram />
+
+<GpuGems2Ch22LookupProductDiagram />
+
+<Callout type="trap" title="只画原始宽度，忘记保守 raster band">
+  现象 → 线中心和长边正常，但靠近端点或滤波器外缘的像素缺失，线条像被裁掉。原因
+  → 硬件 rasterizer 没有生成所有位于 $w/2+R$ 内的 fragment，pixel shader
+  没有机会执行 lookup。修法 → 按 support 扩大绘制宽度和端点长度，使用
+  conservative band 覆盖所有可能非零的响应，再由 edge function discard。
+</Callout>
+
+<Callout type="trap" title="把四个距离都相乘或取平均">
+  现象 → 线条变得过暗，端点附近尤其明显，改变角度后亮度还不守恒。原因 →
+  两侧边和端点边的几何语义被混在一起，破坏了“侧向响应 ×
+  端点响应”的可分解近似。修法 → 先按 $(d_0,d_2)$ 与 $(d_1,d_3)$ 分组取
+  min，再分别查表并相乘；用无限长线、短线和中心样本三组 reference 做断言。
+</Callout>
+
+## 4. 线段合成与工程预算
+
+<Term def="让 rasterizer 生成覆盖线段及其滤波 support 的更宽 fragment 区域，再在 shader 中剔除零响应区域的绘制策略。">
+  conservative rasterization
+</Term>
+
+为了让 shader 看到完整 support，实际绘制的 wide line 应覆盖 $w+2R$，并在两个方向延长 $w/2+R$。这个外扩区域不是最终可见线宽；它只是把候选 fragment 交给 edge function 和 lookup。外扩不足会漏边，外扩过多则增加 overdraw，因此应该把 band 作为可测量的渲染预算。
+
+多条线叠加时，shader 可以把 intensity 写入 alpha，让硬件 blending 处理同色线段。若所有线同色，alpha compositing 的次序通常不影响最终覆盖；但不同颜色的线段合成是 non-commutative，必须有 back-to-front 顺序或明确接受近似排序带来的局部误差。按线段 midpoint 排序是轻量启发式，却不能替代有严格透明需求时的正确排序。
+
+<Callout type="trap" title="用 z-buffer 代替不同颜色线段的排序契约">
+  现象 →
+  单色线叠加没问题，换成不同颜色的电缆或轮廓线后交叉区域出现颜色依赖顺序的脏斑。原因
+  → alpha blending 对不同颜色不满足交换律，标准 z-buffer
+  也不能表达每个像素的完整 back-to-front 线段序列。修法 →
+  明确线段的排序策略；能按对象排序就先排序，不能严格排序时记录 midpoint
+  heuristic 的误差边界，并避免把结果宣称为顺序无关。
+</Callout>
+
+<Callout type="tip" title="把滤波质量和 runtime 成本分开验收">
+  先用 reference convolution 评估 filter、表量化和几何距离误差，再单独测 CPU
+  setup、fragment overdraw、两次 texture lookup 与 blending。这样才能确认“换
+  Gaussian 只增加 preprocess 工作”是否真的成立，而不是把保守 band 的 overdraw
+  混进 lookup 成本。
+</Callout>
+
+## 三步实验：从表到完整线段
+
+每一步只改变一个变量，记录 line width、filter radius、表版本、四个 edge coefficient、discard band、lookup 值和 GPU 时间。若结果只在某个角度失败，优先回放 screen-space edge function，不要先调颜色或 alpha。
+
+<Stepper>
+  <Step title="第一步：比较滤波器与距离响应">
+    固定 line width 和 distance phase，在 box、Gaussian、cubic 间切换。观察 support、曲线峰值和边缘柔和度，再用离线 reference 对比表项量化误差。
+
+    <GpuGems2Ch22FilterDiagram />
+
+  </Step>
+  <Step title="第二步：验证四条 edge function">
+    固定 lookup table，拖动线段端点和角度，记录侧边与端点两组距离。确认 support 外样本被 discard，中心样本的两次 lookup 都接近峰值。
+
+    <GpuGems2Ch22LineSetupDiagram />
+
+  </Step>
+  <Step title="第三步：测 conservative band 与合成成本">
+    改变 radius 和 line width，比较外扩 band、overdraw、两次 lookup 和多线 blending 的完整 GPU 时间；再用不同颜色交叉线检查排序契约是否足够。
+
+    <GpuGems2Ch22LookupProductDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- prefiltered line 通过 band-limiting 把尖锐线段变成有限分辨率可稳定采样的信号，避免把完整二维 convolution 放进每个 fragment。
+- symmetric filter 让卷积响应主要依赖 sample 到中心线的距离；lookup table 可以在 preprocess 阶段记录 box、Gaussian 或 compact cubic 的结果。
+- edge function 把线段四条边表示为线性函数，runtime 用两组 min 值进行两次 lookup，再将侧向响应与端点响应相乘。
+- conservative rasterization 必须覆盖 $w/2+R$ 的候选区域；外扩不足会漏边，外扩过多会增加 overdraw。
+- 多线同色时 blending 可以简化合成，不同颜色线段则必须正视 alpha 的非交换性和排序误差；质量、带宽、表精度与 CPU setup 应分开测量。
+
+<Exercises>
+
+**问题 1｜计算归一化距离。** 线宽 $w=2$ 像素、滤波器半径 $R=1$ 像素，某 sample 到中心线的距离为 $0.5$ 像素。按 $d=clamp(1-distance/(w/2+R),0,1)$，它的归一化距离是多少？
+
+<Answer>
+  $w/2+R=2$，所以 $d=1-0.5/2=0.75$。这表示 sample 还在中心响应到 support
+  外缘之间；实际 intensity 还要经过所选 filter 的 lookup table，不能直接把 $d$
+  当成最终颜色。
+</Answer>
+
+**问题 2｜解释两次 lookup。** 为什么有限线段不能只使用 `lookup(min(d0,d2))`？
+
+<Answer>
+  $d_0,d_2$ 只描述中心线两侧的垂直响应，等价于一条无限长线。有限线段还需要端点边
+  $d_1,d_3$ 限制平行方向的响应，因此要计算 `lookup(min(d0,d2)) ×
+  lookup(min(d1,d3))`，才能让 caps 也平滑收束。
+</Answer>
+
+**问题 3｜定位端点缺失。** 线段长边平滑，但端点在某些角度被裁掉。你会按什么顺序排查？
+
+<Answer>
+  先检查 conservative rasterization 是否覆盖了 $w/2+R$
+  的宽度和端点延伸；再回放四条 edge function 的符号、坐标空间和 discard
+  条件；随后核对端点 lookup 是否使用 $d_1,d_3$ 而不是重复侧边
+  lookup。最后将表的零响应端点、线宽与 radius 版本同 reference convolution
+  对照，排除表语义错位。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="prefiltered line"
+    definition="把滤波器与线宽的卷积响应离线按距离存表、运行时查表的线段抗锯齿方法。"
+  />
+  <GlossaryItem
+    term="band-limiting"
+    definition="去除有限像素无法稳定表示的高频，使信号适合目标采样分辨率。"
+  />
+  <GlossaryItem
+    term="symmetric filter"
+    definition="关于线中心两侧形状相同、响应主要依赖到中心线距离的滤波器。"
+  />
+  <GlossaryItem
+    term="lookup table"
+    definition="把距离参数映射为卷积结果的紧凑表，运行时用于替代完整卷积。"
+  />
+  <GlossaryItem
+    term="edge function"
+    definition="用 ax+by+c 表示样本相对边界位置的线性函数。"
+  />
+  <GlossaryItem
+    term="conservative rasterization"
+    definition="先生成覆盖滤波 support 的更宽候选 fragment，再由 shader 剔除零响应区域的策略。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 22. Fast Prefiltered Lines"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-22-fast-prefiltered-lines"
+/>
