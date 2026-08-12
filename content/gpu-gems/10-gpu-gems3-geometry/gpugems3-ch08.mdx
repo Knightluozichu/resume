@@ -1,0 +1,266 @@
+---
+title: "GPU Gems 3 · Chapter 8. Summed-Area Variance Shadow Maps"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 8
+description: "从 PCF 的逐样本比较出发，解释 variance shadow maps 如何用 moments 线性过滤，再用 summed-area tables 支持任意矩形软阴影查询。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-08
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch08ChebyshevDiagram,
+  GpuGems3Ch08LightBleedingDiagram,
+  GpuGems3Ch08SatBuildDiagram,
+  GpuGems3Ch08SatRectangleDiagram,
+  GpuGems3Ch08ShadowFilterComparisonDiagram,
+  GpuGems3Ch08ShadowLab,
+  GpuGems3Ch08ShadowPipelineDiagram,
+  GpuGems3Ch08VsmMomentsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch08-summed-area-vsm";
+
+<Objectives>
+
+- 能解释 PCF、VSM 与 SAVSM 分别过滤什么数据，以及 filter width、纹理分辨率和 setup 成本如何影响方案选择
+- 能修改 Shadow Filtering Lab 的 method、filter width、variance、bleeding reduction 与 shadow resolution，观察阴影边缘和读取成本的变化
+- 能回答：为什么 SAVSM 可以用四角查询任意矩形，又为什么仍然必须检查 moments 的数值精度与 light bleeding
+
+</Objectives>
+
+## 先把“软阴影”拆成两个问题
+
+一块阴影边缘之所以难看，常常不是因为光源不够复杂，而是因为一张有限分辨率的深度图片被放大、缩小或反复采样。你可以逐个问附近的深度，也可以先把附近的深度整理成一份统计摘要，再一次性回答“这一块区域有多大概率被挡住”。
+
+本章解决的问题是：怎样让阴影过滤的范围可以随像素变化，却不让采样次数随软阴影半径一起失控？如果直接平均深度，再做一次比较，平均值可能既不是遮挡物也不是接收面；如果逐样本比较，画面变软的代价会迅速上升。
+
+<Callout type="tip" title="先预测：filter width 变大后谁会付账">
+  先猜一猜：在 PCF、VSM、SAVSM 三种方法中，扩大 filter width 会改变哪些 texture
+  reads，哪些成本更像一次性的 setup？再打开 Lab，用同一个 width 对比三种方法的
+  edge band 和读数。
+</Callout>
+
+<GpuGems3Ch08ShadowFilterComparisonDiagram />
+
+## 1. PCF 为什么准确却不容易变软
+
+Percentage-closer filtering（PCF）先把当前像素投到 light space，再对滤波区域中的每个 shadow texel 做一次二值深度比较：比 receiver 更近记为 lit，否则记为 shadow，最后平均这些 0/1 结果。扩大区域可以让边缘更柔和，但每扩大一次，就要承担更多比较和纹理读取。
+
+<Callout type="trap" title="把 shadow map 的深度直接做硬件平均">
+  现象 →
+  平均后的深度被拿去做一次比较，阴影会出现错误的边界和“半亮半暗”的假结果。原因 →
+  深度的平均值不等于多个比较结果的平均值。修法 →
+  要么过滤比较结果（PCF），要么把深度改写成可线性过滤的统计表示（VSM）。
+</Callout>
+
+PCF 还继承了 shadow acne 与 bias 的困难：倾斜表面覆盖很宽的深度范围，邻域采样又把需要的 bias 范围扩大。mipmap 只能平均深度，不能跳过每个样本的比较，所以它不能把 PCF 变成一次 lookup。
+
+## 2. VSM：用 moments 代替不可过滤的比较
+
+<Term def="把每个 shadow texel 表示成深度分布的两个统计量；通常保存 linear depth 的一阶与二阶矩，让区域过滤可以在线性数据上进行。">
+  variance shadow map
+</Term>
+
+VSM 在光源视角渲染时不只写入深度 z，还写入 z²。对某个区域过滤后得到一阶矩 M₁ 和二阶矩 M₂，再计算均值 μ = M₁ 与方差 σ² = M₂ − μ²。因为这两项是可以线性过滤的数值，所以 mipmap、trilinear、anisotropic filtering、MSAA 以及 SAT 都能参与。
+
+<Term def="描述一块深度区域的统计摘要；本章主要使用一阶矩 E[z] 和二阶矩 E[z²] 来恢复均值与方差。">
+  moments
+</Term>
+
+关键不是声称“区域里只有一个深度”，而是保存一个足够便宜的分布摘要。线性 depth metric 比投影后的非线性 z 更稳定；variance 还要设置一个很小的 minimum clamp，避免过滤后两个近似相等的大数相减造成数值问题。
+
+<GpuGems3Ch08VsmMomentsDiagram />
+
+## 3. Chebyshev 把分布摘要变成阴影贡献
+
+<Term def="利用均值和方差估计 receiver 深度被遮挡的概率上界；它对单个近似平面遮挡物与接收面很有效，但不是任意深度分布的精确可见率。">
+  Chebyshev upper bound
+</Term>
+
+当 receiver depth t 不大于均值 μ 时，可以直接把它视为 fully lit branch；当 t 大于 μ 时，用单侧 Chebyshev 计算 `p_max = σ² / (σ² + (t − μ)²)`。这个 p_max 是“被遮挡概率”的上界，渲染时可以用它衰减光照。
+
+上界的好处是不会轻易把本该亮的区域压黑，也解释了 VSM 为什么能缓解传统 shadow bias。代价是上界可能比真实遮挡概率更亮，尤其是同一个 filter region 里混入多个深度层时。
+
+<GpuGems3Ch08ChebyshevDiagram />
+
+```hlsl
+float ChebyshevUpperBound(float2 moments, float t)
+{
+  float fullyLit = t <= moments.x ? 1.0 : 0.0;
+  float variance = moments.y - moments.x * moments.x;
+  variance = max(variance, g_MinVariance);
+  float delta = t - moments.x;
+  float bound = variance / (variance + delta * delta);
+  return max(fullyLit, bound);
+}
+
+float ShadowContribution(float2 lightUv, float distanceToLight)
+{
+  float2 moments = texShadow.Sample(ShadowSampler, lightUv).xy;
+  return ChebyshevUpperBound(moments, distanceToLight);
+}
+```
+
+这段伪代码只保留渲染阶段的契约：取 moments、做 variance clamp、得到上界。它没有隐藏两个前提：光源 pass 必须写稳定的 linear depth，且过滤前后的 moments 必须使用兼容的格式。
+
+## 4. light bleeding：上界的可见代价
+
+<Term def="VSM 在本应完全遮挡的接收面上给出过亮尾部的伪影；它来自一个 filter region 中多个深度层被压成有限统计量。">
+  light bleeding
+</Term>
+
+当第一接收面已经产生软边，而第二接收面应该完全处于阴影中时，Chebyshev 上界仍可能给第二面一小段非零光照。这个误差不能被一个固定公式对任意 N 个遮挡层完全消除；精确重建最终会退化为更密集的采样。
+
+工程上更实用的方案是对 p_max 做 `linstep(Amount, 1, p_max)`：把低于 Amount 的尾部映射为 0，再把剩余范围重新拉伸。Amount 越高，bleeding 越少，但 penumbra 也会变暗、阴影细节会丢失。
+
+<Callout type="trap" title="把 bleeding reduction 调到最大就最正确">
+  现象 → 第二接收面变黑了，但软边也被吃掉，阴影细节像硬切。原因 → reduction
+  是重新映射上界，不是恢复真实遮挡层。修法 → 只把 Amount
+  调到刚好压掉最刺眼的尾部，并用不同 receiver 深度验证 penumbra 没有被过度压暗。
+</Callout>
+
+<GpuGems3Ch08LightBleedingDiagram />
+
+## 5. SAT：任意矩形四角求和
+
+<Term def="保存从原点到每个位置的前缀和；通过右下、左下、右上、左上四个角的加减，可以在常数次查询中得到任意矩形区域的 moments sum。">
+  summed-area table
+</Term>
+
+对源纹理建立 SAT 后，矩形区域的总和可以写成 `A − B − C + D`，再除以区域像素数得到平均值。把 VSM 的两个 moments 分别建立前缀和，就能让每个像素自由选择矩形 filter width，不再靠固定 mip level 近似一个动态范围。
+
+这里有一个容易漏掉的边界：SAT 的坐标约定必须明确 min/max 是否包含，角点查询还要考虑边界外的零值与双线性插值。错误的坐标约定会把阴影边缘整体推开一格，表现为稳定但很难定位的 halo。
+
+<GpuGems3Ch08SatRectangleDiagram />
+
+## 6. SAT 的生成与精度账本
+
+GPU 上生成 SAT 可以按 line-by-line 做 running sum，也可以用 recursive doubling 把不同 stride 的前缀部分并行合并。前者更直接但需要约 width + height 次 pass；后者减少串行依赖，但实现复杂度和同步方式要单独评估。
+
+SAT 的查询很便宜，生成与存储却不能被忽略。前缀和会快速消耗浮点 mantissa 的有效位；更大的纹理意味着更多累积项，variance 的差分也更容易放大误差。可选的补救包括元素偏置、origin-centered 布局、把 moments 分散到四个分量、使用整数累积，或在硬件允许时使用更高精度格式。
+
+<GpuGems3Ch08SatBuildDiagram />
+
+## 7. 用 filter width 选择 VSM 还是 SAVSM
+
+如果滤波宽度固定，模糊 VSM 往往更简单：分离 blur 和硬件过滤可以把成本控制在可预测范围。如果滤波宽度需要逐像素变化，SAVSM 能用相同数量的角点查询支持任意矩形区域，但要支付 SAT setup、额外存储带宽和精度管理。
+
+SAVSM 也不是 projection warping 的替代品。过滤主要处理 minification 与阴影边缘，无法单独解决 magnification；实际方案可以把 VSM/SAVSM 与 perspective、light-space 或 frustum partitioning 结合。把“过滤”和“投影”分成两个决策，才能在场景变化时解释性能与画质。
+
+<GpuGems3Ch08ShadowPipelineDiagram />
+
+猜一猜：如果把 filter width 从 4 调到 28，PCF、VSM、SAVSM 的画面软化和工作量会分别怎样变化？打开 Lab，先只切 method，再分别改变 variance 与 bleeding reduction，观察哪些旋钮影响的是形状，哪些影响的是近似误差。
+
+<GpuGems3Ch08ShadowLab />
+
+## 三步验收：从深度记录到矩形软阴影
+
+<Stepper>
+  <Step title="第一步：写出可过滤的深度统计">
+    从光源视角使用稳定的 linear depth，同时写入 z 和 z²。过滤后恢复 M₁、M₂，再做 variance clamp；不要先把深度平均后再做一次二值比较。
+
+    <GpuGems3Ch08ShadowFilterComparisonDiagram />
+    <GpuGems3Ch08VsmMomentsDiagram />
+
+  </Step>
+  <Step title="第二步：把 moments 变成受控的遮挡上界">
+    用 Chebyshev upper bound 得到 p_max，用它衰减光照；如果看到第二接收面发亮，降低 light bleeding 尾部，但不要把 reduction 当作精确重建。
+
+    <GpuGems3Ch08ChebyshevDiagram />
+    <GpuGems3Ch08LightBleedingDiagram />
+
+  </Step>
+  <Step title="第三步：按像素查询任意矩形">
+    为两个 moments 生成 SAT，在运行时用四角 inclusion–exclusion 求矩形平均值；把 SAT 的生成 pass、存储带宽和精度损失与 PCF 的逐样本成本一起放进方案账本。
+
+    <GpuGems3Ch08SatRectangleDiagram />
+    <GpuGems3Ch08SatBuildDiagram />
+    <GpuGems3Ch08ShadowPipelineDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- PCF 过滤比较结果，准确但 filter width 越大，样本成本越高。
+- VSM 保存 moments，让 depth distribution 可以线性过滤并交给 Chebyshev。
+- Chebyshev upper bound 便宜而稳健，但会带来 light bleeding 近似误差。
+- SAT 用四角前缀和支持逐像素矩形滤波，代价转移到生成、带宽与精度。
+- 固定宽度优先考虑模糊 VSM；动态宽度再评估 SAVSM 的 setup 与查询收益。
+
+<Exercises>
+
+**问题 1｜解释 moments。** 为什么 VSM 要同时写入 z 与 z²？如果只保存一个过滤后的平均深度，为什么不能得到同样的 Chebyshev 上界？
+
+<Answer>
+  z 给出一阶矩 M₁，z² 给出二阶矩 M₂；两者才能恢复 σ² = M₂ −
+  M₁²。只有平均深度没有方差，就无法判断区域内深度分布有多宽，也就无法计算
+  `p_max` 的分母项。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Shadow Filtering Lab 增加一个 `minimumVariance` 控件，并把它接入 Chebyshev 计算。你会如何避免近似相等的大数相减后出现闪烁？
+
+<Answer>
+  在得到 `variance = moments.y - moments.x * moments.x` 后执行 `variance =
+  max(variance, minimumVariance)`，再计算
+  `p_max`。控件应保持为很小的正数，并在倾斜遮挡物上观察是否仍有
+  flashing；若仍不稳定，还要检查 linear depth 和 derivative
+  contribution，而不是盲目增大 bias。
+</Answer>
+
+**问题 3｜场景选型。** 一个固定 filter width 的平台阴影和一个需要按 blocker distance 动态改变软硬度的软阴影，分别更适合模糊 VSM 还是 SAVSM？请把 setup 成本也写入理由。
+
+<Answer>
+  固定 filter width 适合模糊 VSM：分离 blur 与硬件过滤简单，setup
+  和运行时路径都短。动态 filter width 更适合
+  SAVSM：每像素可查询不同矩形，查询成本不随宽度线性增长；但必须支付 SAT
+  生成、额外存储带宽和精度管理，因此小纹理或很少动态变化的场景未必值得切换。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="variance shadow map"
+    definition="把每个阴影纹理位置保存成深度和深度平方的统计摘要，使它能像颜色一样被线性过滤。"
+  />
+  <GlossaryItem
+    term="moments"
+    definition="描述一块深度数据的两个数字：平均深度以及用来恢复方差的平方深度平均值。"
+  />
+  <GlossaryItem
+    term="Chebyshev upper bound"
+    definition="用均值和方差估计某个接收深度被遮挡的概率上限；它便宜，但不保证对复杂多层遮挡完全精确。"
+  />
+  <GlossaryItem
+    term="summed-area table"
+    definition="记录从原点累计到每个位置的和，让一个矩形区域可以用四个角快速求出总和。"
+  />
+  <GlossaryItem
+    term="light bleeding"
+    definition="本应完全在阴影里的接收面因为 VSM 的统计上界而出现一段不该有的亮光。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 8. Summed-Area Variance Shadow Maps"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps"
+/>
