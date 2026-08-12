@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T18:55:28.855Z
+> 生成时间：2026-08-12T19:13:31.387Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4569 |
+| 实际 MDX 章节/页面 | 4570 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 49 |
+| manifest 未映射 unit | 48 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1606 |
+| passed | 1607 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -6609,9 +6609,9 @@
 - [ ] 🔴 P1 **[正式 unit gwp-10] Chapter 10 · Deploying Go** — evidence 不完整；explained=5/6
     - 关联路径：`content/go-web-programming/05-runtime-release/gwp-deployment.mdx`
 
-## gpu-gems（91 个内容页面 · passed:91 · 🚫 门禁阻断 41 项）
+## gpu-gems（92 个内容页面 · passed:92 · 🚫 门禁阻断 40 项）
 
-- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=69.5%；未映射 unit=40；证据不完整 unit=0。
+- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=70.2%；未映射 unit=39；证据不完整 unit=0。
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — passed；score 100
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
@@ -6886,8 +6886,9 @@
 - [x] ✅ **10-gpu-gems3-geometry/gpugems3-ch01** — passed；score 99
     - 路径：`content/gpu-gems/10-gpu-gems3-geometry/gpugems3-ch01.mdx`
     - 正式 unit：`gpg-v3-01` explained=1/1
-- [ ] 🔴 P0 **[正式 unit gpg-v3-02] GPU Gems 3 · Chapter 2. Animated Crowd Rendering** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
-    - 路径：待创建或映射（officialUnitId: `gpg-v3-02`）
+- [x] ✅ **10-gpu-gems3-geometry/gpugems3-ch02** — passed；score 97
+    - 路径：`content/gpu-gems/10-gpu-gems3-geometry/gpugems3-ch02.mdx`
+    - 正式 unit：`gpg-v3-02` explained=1/1
 - [ ] 🔴 P0 **[正式 unit gpg-v3-03] GPU Gems 3 · Chapter 3. DirectX 10 Blend Shapes: Breaking the Limits** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
     - 路径：待创建或映射（officialUnitId: `gpg-v3-03`）
 - [ ] 🔴 P0 **[正式 unit gpg-v3-04] GPU Gems 3 · Chapter 4. Next-Generation SpeedTree Rendering** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1

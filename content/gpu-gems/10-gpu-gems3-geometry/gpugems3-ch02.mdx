@@ -1,0 +1,277 @@
+---
+title: "GPU Gems 3 · Chapter 2. Animated Crowd Rendering"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 2
+description: "用实例化、动画纹理和按实例的 LOD，让大量角色共享绘制入口，却保留各自的姿势、颜色和网格变体。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-2-animated-crowd-rendering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-02
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch02AnimatedCrowdLab,
+  GpuGems3Ch02AnimationTextureDiagram,
+  GpuGems3Ch02CrowdPipelineDiagram,
+  GpuGems3Ch02InstanceBufferDiagram,
+  GpuGems3Ch02LodCullingDiagram,
+  GpuGems3Ch02MeshVariationDiagram,
+  GpuGems3Ch02MethodCompareDiagram,
+  GpuGems3Ch02RenderingTimelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch02-animated-crowd";
+
+<Objectives>
+
+- 能解释为什么一组角色可以共享一次 instanced draw，却仍从各自的 animation texture 读取不同姿势
+- 能修改 Animated Crowd Lab 的人数、LOD 距离、提交方式与视锥剔除开关，预测 draw calls、实例批次数和 GPU 姿态读取的变化
+- 能回答：当角色数量很大但 CPU 还要处理 AI 和物理时，什么时候应选择 skinned instancing，什么时候应优先收紧 LOD 或剔除
+
+</Objectives>
+
+## 先看一片会动的广场
+
+想象一片广场上站着很多人：每个人都在走路、转身或挥手，但他们身上的骨架规则大体相同。最笨的做法是逐个叫到镜头前，每叫一个人就重新提交一次绘制；人数一多，CPU 光是在“递名单”就忙不过来。
+
+本章解决的问题是：怎样让 GPU 一次接收一组角色，同时仍让每个人使用自己的动作、颜色和装备？如果不解决它，角色越多，CPU 越难留出时间给 AI、物理和游戏逻辑；如果只把所有人强行画成同一个姿势，画面又会失去可信度。
+
+<Callout type="tip" title="先预测：减少提交会把压力移到哪里">
+  先猜一猜：把 1,000 个独立角色合成一组 instanced draw，CPU 的 draw calls
+  会怎样变化？GPU 是否因此不再需要处理 1,000 份顶点、骨骼和像素？
+</Callout>
+
+<GpuGems3Ch02CrowdPipelineDiagram />
+
+## 1. instancing：共享一份 mesh，重复放置它
+
+<Term def="用同一份 mesh 数据绘制多次，只为每次绘制提供不同位置、颜色或其他实例参数的方式。">
+  instancing
+</Term>
+
+把“同一把椅子摆在很多位置”想成一个模具：模具只保存一份，渲染时重复使用它，每个实例只补充自己的位置和少量参数。DirectX 10 把这种调用放进核心 API，`DrawInstanced()` 和 `DrawIndexedInstanced()` 可以直接表达“同一 mesh 的多次绘制”。
+
+传统实例化可以把 per-instance 数据放在第二个 vertex stream；但当每个顶点都重复携带同一份实例参数时，缓存和带宽都不理想。本章的取舍是把低频数据放到常量内存，顶点仍从共享的主 buffer 读取。
+
+<GpuGems3Ch02InstanceBufferDiagram />
+
+一个实例记录可以包含三行世界变换、颜色、动画起始位置和当前帧偏移。官方示例中一条记录占五个 `float4`，而一个 constant buffer 最多可放 4,096 个 `float4`，于是单次 draw 最多容纳 819 个实例；10,000 个角色需要拆成约 13 个批次。批次不是失败，而是把 59,726 次逐角色提交压缩成按零件和 LOD 组织的少量提交。
+
+<Callout type="trap" title="把一个 draw call 当成免费的 GPU 工作">
+  现象 → CPU draw calls 降了，帧率却没有同步翻倍。原因 → instancing
+  只减少提交和状态切换，所有实例仍要经过顶点、蒙皮、像素和带宽阶段。修法 →
+  同时看 CPU 提交时间、顶点处理、像素填充与可见实例数，不把 draw-call
+  数当成唯一指标。
+</Callout>
+
+## 2. palette skinning：每个实例拥有自己的姿势
+
+<Term def="用若干骨骼变换矩阵按顶点权重混合，把一个共享 mesh 的顶点变到当前动画姿势中的蒙皮方法。">
+  palette skinning
+</Term>
+
+如果所有角色只共享 mesh，却共享一份骨骼矩阵，他们最终会做同一个动作。palette skinning 的关键是：顶点携带骨骼索引和权重，着色器根据当前实例的动画和帧取出对应的骨骼矩阵，再按权重混合。不同实例因此可以处于不同动画、不同帧，甚至不同动画循环位置。
+
+动画矩阵数量很大，不适合把所有动画、所有帧、所有骨骼都塞进 shader constants。于是把矩阵按动画和帧线性排进一张纹理，在顶点阶段按偏移读取。
+
+<Term def="在顶点着色器中从纹理读取动画或骨骼数据的操作；这里用精确 texel 读取矩阵行。">
+  vertex texture fetch
+</Term>
+
+<GpuGems3Ch02AnimationTextureDiagram />
+
+每个骨骼矩阵可以压成三行有效 texel，着色器根据 animation offset、frame offset 和 bone offset 算出线性位置，再用 `Load()` 读取精确 texel。纹理宽度限制为合适的布局（例如四的倍数）后，地址计算可以少做昂贵的除法和取模；矩阵数据也不需要随每个实例重复上传。
+
+## 3. SV_InstanceID：让共享 draw 找到正确的人
+
+<Term def="由 GPU 为当前实例自动生成的递增编号；顶点着色器用它索引该实例在 constant buffer 中的记录。">
+  SV_InstanceID
+</Term>
+
+在一次 `DrawInstanced()` 中，所有角色都走同一套顶点着色器。`SV_InstanceID` 让着色器知道当前顶点属于第几个实例：用它索引世界变换、颜色、animation offset 和 frame offset，再把共享 mesh 顶点变成这个人的当前姿势。
+
+下面的 HLSL 风格伪代码只展示数据流，不承诺某个引擎的 buffer 绑定语法。实际项目仍需校验常量布局、纹理坐标和骨骼权重的约定。
+
+```hlsl
+struct PerInstanceData {
+  float4 world1, world2, world3;
+  float4 color;
+  uint4 animationData; // animation, frame, padding, padding
+};
+
+cbuffer InstanceData { PerInstanceData g_Instances[819]; }
+
+VSOutput CrowdVS(Vertex input, uint instanceId : SV_InstanceID) {
+  PerInstanceData instance = g_Instances[instanceId];
+  float4x4 bone = LoadBoneMatrix(instance.animationData, input.boneIndex);
+  float4 skinned = Skin(input.position, input.weights, bone);
+  VSOutput output = ApplyWorld(skinned, instance.world1, instance.world2, instance.world3);
+  output.color = input.color * instance.color;
+  return output;
+}
+```
+
+这样可以把“几何共享”和“实例状态分离”同时保留：共享的是 mesh 顶点和骨骼权重，不共享的是位置、颜色、动画偏移和当前帧。
+
+<Callout type="trap" title="把 per-instance 数据全部塞进 vertex stream">
+  现象 →
+  每个顶点都带着位置、颜色、动画偏移的副本，缓存命中下降且顶点带宽变宽。原因 →
+  这些字段在一个实例内部对所有顶点都相同，却被重复传输。修法 → 先区分高频的
+  per-vertex 数据和低频的 per-instance 数据，再用 `SV_InstanceID` 从 constant
+  buffer 取后者。
+</Callout>
+
+## 4. mesh variation：共享骨架，不共享外观零件
+
+如果每个角色都使用完全相同的头、武器和护甲，广场会像复制粘贴。解决方法不是复制整个人物，而是把角色拆成多个 submesh：头部、武器、护甲分别维护可选变体，再为每个零件建立自己的实例列表。
+
+同一套骨架动画可以驱动这些零件，因为它们仍绑定到相同的骨骼约定。CPU 在生成实例数据时决定某个角色拥有哪一把武器；渲染时只把该角色放进对应零件的 instanced draw。这样变化来自组合，动画数据仍可复用。
+
+<GpuGems3Ch02MeshVariationDiagram />
+
+颜色也可以走同一条思路：实例记录带一个 base color，材质的 alpha 通道决定把这个颜色混入多少。近处角色可以拥有更多材质细节，远处则不必为每个零件付出完整光照成本。
+
+## 5. level of detail：把像素预算给真正看得见的人
+
+<Term def="根据实例与相机的距离或屏幕占用，选择不同网格、法线贴图和光照复杂度的策略。">
+  level of detail
+</Term>
+
+远处角色在屏幕上只占少量像素，不需要与近处角色相同的三角形密度、法线贴图或复杂光照。CPU 每帧按距离把实例分到 near、mid、far 列表，再按每个 LOD 的 mesh piece 批量提交。
+
+在进入 LOD 分组前，还可以做简单的 view-frustum culling：摄像机后方或视锥外的实例不进入 GPU 队列。这是“先不画，再画粗”的顺序；只降低 LOD 而不剔除，仍会把不可见角色送进顶点处理。
+
+<GpuGems3Ch02LodCullingDiagram />
+
+官方示例在旧硬件和特定分辨率下报告约 9,547 个角色、34 frames/s、160 个 instanced draw calls；作为对照，传统逐角色路径约 59,726 个 draw calls。这个数字依赖 mesh、LOD 半径、分辨率和 GPU，不应直接当作现代机器的性能承诺。LOD 线设得太近会有细节损失，设得太远则会让远处角色承担过高成本。
+
+<Callout type="trap" title="把远处角色也放进最高 LOD">
+  现象 → 角色都清楚，却只能画很少的人。原因 →
+  远处角色的像素覆盖不足以证明高密度网格值得付费，顶点处理和像素填充先成为瓶颈。修法
+  → 用屏幕占用或距离设
+  LOD，配合视锥剔除，并用截图检查切换线附近的闪烁和几何混叠。
+</Callout>
+
+## 6. 把 CPU/GPU 边界变成一帧流程
+
+CPU 先运行 AI、物理和动画时间更新，再根据距离建立 LOD 列表。随后按 LOD、submesh 和实例 buffer 调用 `DrawInstanced()`。GPU 顶点阶段用 `SV_InstanceID` 找到实例数据，从 animation texture 取骨骼矩阵并做 palette skinning；像素阶段再处理颜色以及可选的每实例纹理。
+
+<GpuGems3Ch02MethodCompareDiagram />
+
+<GpuGems3Ch02RenderingTimelineDiagram />
+
+先猜一猜：把 near LOD 半径加大，哪一个信号会更快上升——draw calls、constant-buffer batches，还是 GPU pose reads？再关闭 Lab 的视锥剔除，观察“提交次数没有变很多，但 visible characters 变多”的差异。
+
+<GpuGems3Ch02AnimatedCrowdLab />
+
+## 三步验收：从实例数据到可扩展人群
+
+<Stepper>
+  <Step title="第一步：分离共享 mesh 与实例状态">
+    先检查一次 draw 中哪些数据对所有角色相同，哪些数据必须按实例变化；用 `SV_InstanceID` 将后者索引到 constant buffer，并估算每个 buffer 能装多少实例。
+
+    <GpuGems3Ch02InstanceBufferDiagram />
+    <GpuGems3Ch02CrowdPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：把动画矩阵从常量内存移到纹理">
+    追踪 animation offset、frame offset 和 bone offset 如何变成纹理坐标，再核对 vertex texture fetch 是否使用精确 texel 读取；最后确认权重为零的骨骼不会产生多余读取。
+
+    <GpuGems3Ch02AnimationTextureDiagram />
+    <GpuGems3Ch02RenderingTimelineDiagram />
+
+  </Step>
+  <Step title="第三步：按外观零件和距离重组批次">
+    用 mesh variation 保留角色差异，用 level of detail 与 view-frustum culling 控制提交和 GPU 工作；把 Lab 的指标拆成 CPU draw calls、实例批次和姿态读取来做取舍。
+
+    <GpuGems3Ch02MeshVariationDiagram />
+    <GpuGems3Ch02LodCullingDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- instancing 复用 mesh 与绘制入口，减少 CPU draw calls 和状态切换。
+- palette skinning 让共享 mesh 的每个实例拥有自己的骨骼姿势。
+- animation texture 与 vertex texture fetch 承载大量动画帧，避免挤爆常量数据。
+- SV_InstanceID 把一次 instanced draw 连接到各实例的变换、颜色和动画偏移。
+- mesh variation、level of detail 与视锥剔除共同控制人群的多样性和预算。
+
+<Exercises>
+
+**问题 1｜估算批次数。** 一个实例占 5 个 `float4`，constant buffer 上限为 4,096 个 `float4`。如果当前帧有 10,000 个可见角色，至少需要多少个实例批次？为什么“13 个批次”仍可能比 10,000 个单独 draw 更合理？
+
+<Answer>
+  每批最多容纳 `4096 / 5 = 819` 个实例，`ceil(10000 / 819) = 13` 个批次。13
+  次提交仍远少于 10,000 次逐角色提交；CPU 节省出来的时间可以交给
+  AI、物理和游戏逻辑，但 GPU 仍需处理每个可见角色的顶点和像素。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Animated Crowd Lab 增加一个 `maxInstancesPerBatch` 参数，并把 `constant-buffer batches` 从固定的 819 改为 `ceil(visibleCharacters / maxInstancesPerBatch)`。当参数变小时，哪些指标应该上升，哪些指标不应因此下降？
+
+<Answer>
+  可以把 819 替换为控件给出的正整数上限，批次数应随上限变小而上升；draw calls
+  也应按批次数和 submesh/LOD 组数上升。visible characters
+  与每个可见角色的姿态读取不应因为“切批”自动下降，除非同时改变剔除或 LOD。
+</Answer>
+
+**问题 3｜场景选型。** 近处有少量高细节英雄角色，远处有数千个会独立走动的群众。你会如何组合逐角色绘制、skinned instancing、mesh variation、LOD 与 view-frustum culling？
+
+<Answer>
+  英雄角色需要逐角色路径或更精细的专用批次，以保留独特材质和交互；大规模群众使用
+  skinned instancing，把共享骨架和 mesh 与每实例的动画偏移分离。用 mesh
+  variation 提供有限的头部、武器和护甲组合，先做 view-frustum
+  culling，再按距离分 LOD。最后以 CPU 提交时间、GPU
+  顶点/像素时间和切换线伪影共同决定半径，而不是只追求最少 draw calls。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="instancing"
+    definition="用同一份 mesh 数据绘制多次，每次只替换位置、颜色等少量实例参数。"
+  />
+  <GlossaryItem
+    term="palette skinning"
+    definition="用骨骼矩阵和顶点权重混合出当前姿势，让一个角色 mesh 能做动画。"
+  />
+  <GlossaryItem
+    term="vertex texture fetch"
+    definition="顶点着色器从纹理精确读取数据；本章用它读取动画帧里的骨骼矩阵。"
+  />
+  <GlossaryItem
+    term="SV_InstanceID"
+    definition="GPU 给当前实例的编号，着色器用它找到该实例的变换、颜色和动画偏移。"
+  />
+  <GlossaryItem
+    term="constant buffer"
+    definition="着色器可读取的一块常量数据区域；本章用它存放每个实例的低频参数。"
+  />
+  <GlossaryItem
+    term="level of detail"
+    definition="按距离或屏幕大小给角色选择不同网格和光照复杂度的策略。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 2. Animated Crowd Rendering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-2-animated-crowd-rendering"
+/>
