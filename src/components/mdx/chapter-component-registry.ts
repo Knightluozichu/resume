@@ -4281,6 +4281,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cgp11TransformationsThreeDimensionsLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-12-transformation-library":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-12-transformation-library");
+      return {
+        Cgp12ConventionDiagram: module0.Cgp12ConventionDiagram,
+        Cgp12HomogeneousCoordinateDiagram:
+          module0.Cgp12HomogeneousCoordinateDiagram,
+        Cgp12LibraryPipelineDiagram: module0.Cgp12LibraryPipelineDiagram,
+        Cgp12TransformationLibraryLab: module0.Cgp12TransformationLibraryLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

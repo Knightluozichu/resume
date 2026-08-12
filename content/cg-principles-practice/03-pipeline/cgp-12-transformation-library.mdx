@@ -1,0 +1,223 @@
+---
+title: "A 2D and 3D Transformation Library for Graphics"
+type: C
+section: "图形变换库"
+order: 12
+description: "把二维与三维变换封装成可复用的矩阵库，统一齐次坐标、乘法顺序、数据布局和点/方向输入契约。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-12
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp12ConventionDiagram,
+  Cgp12HomogeneousCoordinateDiagram,
+  Cgp12LibraryPipelineDiagram,
+  Cgp12TransformationLibraryLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-12-transformation-library";
+
+<Objectives>
+
+- 能解释一个二维与三维变换库如何统一矩阵构建、组合顺序、数据布局和输入输出契约
+- 能修改 TransformLibViz 的角度、尺度、平移及点/方向输入，记录矩阵和几何输出
+- 能回答：变换结果看似正确却在另一条管线中翻转时，如何定位齐次坐标或矩阵约定的问题？
+
+</Objectives>
+
+## 先把常用变换收进一套可复用的工具箱
+
+想象一个木工工具箱。每次做同一种接头，都临时磨一把刀，结果是尺寸、方向和使用顺序很容易漂移；把刀具、刻度和使用说明统一收好，下一件作品才能复刻。
+
+本章解决的是如何把二维和三维变换写成图形程序可以反复调用的库。没有统一库，点、方向和矩阵会在不同模块里使用不同约定，结果往往不是公式错，而是同一个数字在两处承担了不同责任。
+
+先猜一猜：把输入从位置点切换成方向后，平移贡献会发生什么？如果两个模块都声称使用列向量，矩阵组合顺序还可能不一致吗？
+
+<Cgp12TransformationLibraryLab />
+
+## transformation library：从调用到输出的契约
+
+<Callout type="trap" title="每个模块都自己拼一套矩阵">
+  现象 → 单独测试时旋转、平移都正确，组合到完整图形管线后物体方向或位置漂移。
+  原因 → 不同模块重复实现矩阵构建，却没有统一维度、列主序、乘法方向和坐标空间。
+  修法 → 让 transformation library
+  集中提供构建、组合、应用和断言接口，并记录输入输出空间。
+</Callout>
+
+<Term def="集中封装二维与三维变换构建、组合和应用规则的可复用代码层；它把数学约定变成可测试接口。">
+  transformation library
+</Term>
+不只是几个矩阵函数的集合，而是一份完整契约：调用者传入什么空间的点，库返回什么空间的值，矩阵按哪种布局存储，组合顺序如何解释，都要在接口层固定下来。
+
+当我们说 transformation library 时，验收标准是相同输入在不同调用点得到相同结果，并且点、方向、二维矩阵和三维矩阵都能通过同一套约定解释。库应该让重复逻辑变少，但不能把空间和顺序隐藏到无法调试。
+
+<Cgp12LibraryPipelineDiagram />
+
+一个最小的库接口可以把构建和应用责任分开：
+
+```ts
+const model = compose(translate(tx, ty), rotate(angle), scale(s));
+const worldPoint = applyPoint(model, localPoint);
+const worldDirection = applyDirection(model, localNormal);
+```
+
+`applyPoint` 和 `applyDirection` 看起来相似，却不应共享一个没有类型区分的入口。位置需要平移，方向不需要平移；这个差异必须在 API 名称、类型或测试用例中留下证据。
+
+## homogeneous coordinate：让位置与方向共享矩阵
+
+<Term def="在坐标后增加一个分量，用它区分需要平移的位置和只表示方向的向量；二维常用 3 分量，三维常用 4 分量。">
+  homogeneous coordinate
+</Term>
+是变换库能够统一处理平移的关键。位置写成 `(x, y, 1)` 或 `(x, y, z, 1)`，方向写成
+`(x, y, 0)` 或 `(x, y, z, 0)`；旋转和缩放可以作用于两者，平移只作用于位置。
+
+当我们说 homogeneous coordinate 时，验收标准是同一矩阵应用到点和方向后，点的位置发生平移而方向的起点不被拖走。若方向箭头随着物体位置一起移动，优先检查 w，而不是修改平移量。
+
+<Cgp12HomogeneousCoordinateDiagram />
+
+三维库通常使用 4×4 矩阵；底行和最后一列把平移与线性部分放进一份可组合的数据结构。矩阵数值可以很长，但测试可以先只验证两个输入：一个 `w=1` 的点和一个 `w=0` 的方向。
+
+```ts
+type Homogeneous = { x: number; y: number; z: number; w: 0 | 1 };
+
+function apply(matrix: Matrix4, value: Homogeneous) {
+  return multiplyMatrixVector(matrix, value);
+}
+```
+
+这个类型把两类责任放在一起，却仍然通过 `w` 明确区分。工程代码还应补充维度、空间和归一化约定，避免把三维方向误传给二维库。
+
+## matrix convention 与 composition：库必须和调用方说同一种语言
+
+<Term def="规定向量作为行或列、矩阵如何存储以及乘法从哪一侧发生的一组数据和运算约定。">
+  matrix convention
+</Term>
+决定了同样的矩阵数字应如何解释。列向量常写成 `p′ = M p`，行向量则写成 `p′ = p
+M`；两者都可以成立，但组合顺序和内存读取必须随之调整。
+
+<Term def="把多个变换按明确先后相乘成一份矩阵；右侧或左侧哪个操作先发生取决于库的向量约定。">
+  matrix composition
+</Term>
+是库最容易出错的边界。`T · R · S` 与 `S · R · T`
+不是同一条链；如果调用者和库对“先发生”理解不同，单个矩阵测试通过也不能保证组合正确。
+
+<Cgp12ConventionDiagram />
+
+库的文档至少要同时写出向量方向、矩阵存储布局、组合顺序和一个可手算的点。不要只写“使用标准矩阵”，因为标准取决于 API、着色器和内存上传路径是否共享同一约定。
+
+## 三步实验：从 API 约定回放到几何结果
+
+每一步只改变一种责任。先预测点的位置、方向的平移贡献或矩阵组合顺序，再在 TransformLibViz 中验证；这样可以把“库不一致”拆成可定位的输入、约定和输出。
+
+<Stepper>
+  <Step title="第一步：检查库的输入输出契约">
+    先列出调用者、矩阵构建器、组合器和应用函数各自收到与交付的空间，确认同一份约定贯穿接口。
+
+    <Cgp12LibraryPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：切换点与方向">
+    在 TransformLibViz 中保持矩阵不变，分别输入位置点和方向向量，检查 w=1 与 w=0 对平移的不同责任。
+
+    <Cgp12HomogeneousCoordinateDiagram />
+
+  </Step>
+  <Step title="第三步：核对矩阵约定">
+    固定一个可手算的点，分别记录列向量和行向量的组合结果，确认库文档、内存布局和上传接口没有互相矛盾。
+
+    <Cgp12ConventionDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把方向和位置都传给同一个无类型函数">
+  现象 → 法线、切线或方向箭头随着平移一起移动，光照方向明显错误。 原因 →
+  函数没有区分 w=0 与 w=1，所有输入都承担了位置的平移责任。 修法 → 用
+  applyPoint/applyDirection 或等价类型约束分开入口，并为两类输入各写回归测试。
+</Callout>
+
+<Callout type="trap" title="矩阵数字相同就认为两个模块兼容">
+  现象 → CPU 侧打印的矩阵看似正确，上传着色器后物体却翻转、交换轴或顺序相反。
+  原因 → 行列向量、列主序/行主序或组合顺序的约定没有一起传递到 GPU 接口。 修法 →
+  用同一个点做跨模块金样测试，明确存储布局、转置步骤和最终乘法方向。
+</Callout>
+
+<Callout type="trap" title="库只提供结果，不提供中间证据">
+  现象 → 最终位置错了，却无法判断错误来自构建、组合、应用还是空间转换。 原因 →
+  API 把所有矩阵步骤压成一个黑盒，没有暴露输入空间、输出空间和可检查的中间值。
+  修法 → 保留可选诊断输出，至少记录每段矩阵、点/方向类型和变换前后的坐标。
+</Callout>
+
+## 本章小结
+
+- transformation library 把构建、组合和应用规则统一成可测 API。
+- homogeneous coordinate 用 w 区分位置与方向的平移责任。
+- matrix convention 决定向量方向、布局和组合顺序如何解释。
+- 库的质量不仅看最终结果，也看是否能暴露中间证据。
+
+<Exercises>
+
+**问题 1：检查一个 transformation library 接口。** 你会为 `applyPoint` 和 `applyDirection` 分别写哪一条最小测试？
+
+<Answer>
+  给同一个包含平移的矩阵，输入一个 `w=1` 的点和一个 `w=0`
+  的方向。点的坐标应发生平移，方向的分量不应被平移；两者还应分别检查输出空间和方向长度约定。
+</Answer>
+
+**问题 2：修改 TransformLibViz。** 保持角度、尺度和平移参数不变，在位置点和方向向量之间切换，记录矩阵数值不变时几何输出的差异。
+
+<Answer>
+  矩阵数值保持不变；位置点会受到平移，方向向量只受到线性部分影响。若方向的起点也随平移移动，应检查
+  homogeneous coordinate 的 w 是否误设为 1。
+</Answer>
+
+**问题 3：定位两个模块的矩阵不兼容。** CPU 端与着色器端使用相同数字，但结果沿 x/y 轴交换。先检查什么？
+
+<Answer>
+  先检查 matrix
+  convention：行列向量方向、列主序或行主序、是否发生转置，以及组合顺序。用一个非对称的测试点和一份可手算矩阵跨
+  CPU/GPU 比较，不能只比较矩阵打印文本。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="transformation library"
+    definition="集中封装二维与三维矩阵构建、组合和应用规则的可复用代码层。"
+  />
+  <GlossaryItem
+    term="homogeneous coordinate"
+    definition="用额外分量区分需要平移的位置和只表示方向的向量。"
+  />
+  <GlossaryItem
+    term="matrix convention"
+    definition="规定向量方向、矩阵布局、存储顺序和乘法方向的一组约定。"
+  />
+  <GlossaryItem
+    term="matrix composition"
+    definition="把多个变换按明确先后相乘成一份矩阵的过程。"
+  />
+  <GlossaryItem
+    term="applyPoint"
+    definition="把矩阵应用到位置点的接口，点通常使用 w=1。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 12: A 2D and 3D Transformation Library for Graphics"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
