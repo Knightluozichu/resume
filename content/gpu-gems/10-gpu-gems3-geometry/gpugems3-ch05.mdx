@@ -1,0 +1,246 @@
+---
+title: "GPU Gems 3 · Chapter 5. Generic Adaptive Mesh Refinement"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 5
+description: "用 per-vertex depth tag 选择预计算三角形模式，在单次 vertex program 中完成 barycentric 细分与 displacement，把高分辨率网格留在 GPU 现场生成。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-5-generic-adaptive-mesh-refinement"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-05
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch05AdaptiveRefinementLab,
+  GpuGems3Ch05ApplicationDiagram,
+  GpuGems3Ch05BarycentricDiagram,
+  GpuGems3Ch05BottleneckDiagram,
+  GpuGems3Ch05CrackFreeDiagram,
+  GpuGems3Ch05GamerPipelineDiagram,
+  GpuGems3Ch05PatternPoolDiagram,
+  GpuGems3Ch05RenderingTimelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch05-adaptive-refinement";
+
+<Objectives>
+
+- 能解释 coarse mesh、depth tag、ARP pool 和 barycentric interpolation 如何在单次 vertex program 中共同生成细分网格
+- 能修改 GAMeR Adaptive Refinement Lab 的细分深度、输入三角形数、tag 来源和 displacement，观察 CPU 上传与 GPU 顶点工作的变化
+- 能回答：输入网格很粗、细分很深，或输入网格很大、细分很浅时，应该把瓶颈判断放在哪里
+
+</Objectives>
+
+## 先把“放大后的地图”留在 GPU
+
+想象一张只画出主要道路的纸地图：放大某一段时，你希望道路边界可以继续长出细节，而不是提前把整张地图印成最大尺寸。不同区域还需要不同的放大倍数，重要区域更细，平坦或遥远区域更粗。
+
+本章解决的问题是：如何只把一张低分辨率表面交给 GPU，却在每个三角形附近按需要生成高分辨率形状？如果先在 CPU 生成完整目标网格，动画和大场景会反复占用 CPU、总线带宽和显存；如果只做统一细分，又会把预算浪费在不需要细节的区域。
+
+<Callout type="tip" title="先预测：细分深度增加，谁会先变忙">
+  先猜一猜：输入只有 800 个 coarse triangles，却把 refinement depth 从 2 提到
+  5，CPU 需要上传的几何会不会也按同样倍数变大？如果输入改成 5,000
+  个三角形、depth 只为 1，瓶颈还会在 GPU 顶点处理吗？
+</Callout>
+
+<GpuGems3Ch05GamerPipelineDiagram />
+
+## 1. GAMeR 的基本模型：粗三角形加连续位移
+
+一张复杂表面不必从一开始就列出所有小三角形。可以保存一个 coarse mesh，再给它配一个连续的几何函数：细分负责“增加节点和连接关系”，位移负责“把新节点移动到最终表面”。这两件事互相独立，所以同一个细分内核可以接平滑曲面、程序噪声、动画形变或高度图。
+
+<Term def="针对一个 coarse triangle 和三个边深度预先生成的一组细分节点与连接关系；渲染时只需从 GPU 中选择它。">
+  adaptive refinement pattern
+</Term>
+
+GAMeR 把每种可能的三角形细分配置预先算成 adaptive refinement pattern，简称 ARP，并把它们存进 GPU 的 ARP pool。运行时不重新创建拓扑，而是按当前三角形的三个边深度选择一个 pattern，再把 pattern 的节点放回当前三角形。
+
+<GpuGems3Ch05PatternPoolDiagram />
+
+这个“先存答案、后选答案”的设计绕开了传统 vertex shader 不能直接创建任意几何的问题，也避免 geometry shader 输出上限让深细分只能走多 pass。只要 pattern 用参数空间表示，它就与三角形的世界位置、方向和形状无关。
+
+<Callout type="trap" title="先把完整 target mesh 生成到 CPU">
+  现象 → 画面正确，但动画时 CPU、graphics bus 和显存同时上涨。原因 →
+  高分辨率目标网格被重复生成、传输并保存，失去了 on-the-fly refinement
+  的优势。修法 → CPU 只维护 coarse mesh 和 tag，把 ARP 选择、细分与位移留给单次
+  vertex program。
+</Callout>
+
+## 2. depth tag：每个顶点只携带“附近需要多细”
+
+<Term def="附在 coarse mesh 顶点上的正整数，表示该顶点附近需要的细分层级；它可以来自距离、曲率、语义重要性或它们的组合。">
+  depth tag
+</Term>
+
+depth tag 是一个很小的 per-vertex scalar，却能表达很多 LOD 策略：距离远近、表面曲率、角色脸部的重要区域、科学可视化的关注区域，都可以参与计算。它不直接描述最终顶点位置，只负责告诉 ARP 选择器“附近要多细”。
+
+真实引擎通常没有显式的 edge 对象，所以 GAMeR 先给顶点打 tag，再把相邻两个顶点的 tag 合成 edge depth。用邻接顶点的均值可以让共享边得到同一个细分等级，避免一侧插入节点而另一侧没有对应节点。
+
+<GpuGems3Ch05CrackFreeDiagram />
+
+tag 可以在 CPU 上算，也可以在特殊场景中通过预备 GPU pass 得出；但距离、语义重要性和动画状态往往在 CPU 更容易获得。重点是不要把 tag 当作“网格已经细分”的标记：它只是 ARP pool 的索引输入。
+
+## 3. barycentric coordinate：把 pattern 放回任意三角形
+
+<Term def="三角形内部三个非负权重的集合，三个权重相加为 1；它能把一个参数空间节点映射到任意世界空间三角形。">
+  barycentric coordinate
+</Term>
+
+ARP 中每个节点不存固定的 world position，而存三个 barycentric coordinate。设 coarse triangle 顶点为 `p0`、`p1`、`p2`，节点位置就是三个顶点按权重的线性组合；法线、颜色和其他 per-vertex attribute 也可以使用相应的权重插值。
+
+顶点程序因此有两个连续阶段：第一步用 pattern 的坐标生成 tessellated position；第二步在这个位置上采样 <Term def="把参数、纹理或程序规则映射成顶点位移向量的函数；它决定细分后的表面细节往哪里移动。">displacement function</Term>，沿法线或任意向量移动节点。高阶 Bézier、程序噪声、height map 和动画自由形变都可以替换第二步，而不必重写 pattern 数据。
+
+<GpuGems3Ch05BarycentricDiagram />
+
+```glsl
+vec3 p = p0 * w + p1 * u + p2 * v;
+vec3 n = n0 * w + n1 * u + n2 * v;
+float d = displacementFunction(p);
+
+vec3 refinedPosition = p + d * normalize(n);
+output.position = project(refinedPosition);
+output.normal = n;
+```
+
+这段代码把关键顺序写清楚：先定位细分节点，再应用位移；如果直接对 coarse 顶点做位移，就没有生成新的采样点，也无法捕捉高频 displacement 的几何细节。
+
+## 4. crack-free adaptive refinement：邻接边必须共享答案
+
+裂缝不是由 displacement function 单独造成的，而是相邻三角形对公共边选了不同的细分拓扑。GAMeR 先统一 edge depth，再从 ARP pool 选择对应 pattern；这样公共边上的节点序列一致，两个 patch 可以无缝拼接。
+
+对于三个边深度不一样的配置，可以先达到最小深度，再在剩余边附近继续拆分；更大的 support 还能让三角形更接近等边。实现时要记住“同一配置可以有多种 pattern”，ARP pool 不是数学上唯一的答案，而是质量、节点数量和索引布局之间的工程选择。
+
+<GpuGems3Ch05CrackFreeDiagram />
+
+<Callout type="trap" title="每个三角形独立决定三条边的细分级别">
+  现象 → 细分后的表面出现细长裂缝或相邻 patch 互相穿插。原因 →
+  共享边两侧的节点数量不同，displacement 再平滑也不能补回缺失的拓扑连接。修法 →
+  从相邻顶点 tag 得到统一 edge
+  depth，使用同一组边界节点，并对退化或极端配置做专门 pattern。
+</Callout>
+
+## 5. 单次 vertex program：细分和位移一起在 GPU 完成
+
+把 pipeline 串起来：CPU 维护 coarse triangle 的属性和 depth tags；渲染时按三个 edge depth 绑定 ARP 的 index buffer；vertex program 读取 pattern 的 barycentric node，用它插值位置、法线和其他属性，再采样 displacement function。目标网格不会回到 CPU，也不必作为完整 vertex buffer 存在 GPU。
+
+<GpuGems3Ch05RenderingTimelineDiagram />
+
+先预测：把 depth 调高只会提高 GPU vertex work 还是也会增加 ARP bind 次数？把粗网格三角形数提高十倍、但把 depth 降低，会不会把瓶颈推回 CPU attribute upload？
+
+<GpuGems3Ch05BottleneckDiagram />
+
+官方样例的结果呈现了这个取舍：在粗输入、深细分时，GPU 的顶点处理能力是主要限制；在输入很大、细分很浅时，上传 coarse polygon attributes 和 bind 操作更容易成为瓶颈。相同目标规模下，输入约 4,000 个三角形、平均深度 4 的场景明显比输入约 65,000 个三角形、平均深度 2 更适合把工作留在 GPU；这是架构信号，不是今天硬件的固定帧率承诺。
+
+<GpuGems3Ch05AdaptiveRefinementLab />
+
+## 6. 同一个内核可以承载多种表面
+
+<GpuGems3Ch05ApplicationDiagram />
+
+GAMeR 的“generic”不是说所有 displacement 都长得一样，而是细分内核不依赖 mesh topology、displacement 类型或 refinement level。平滑模型可以接高阶 Bézier；程序几何可以接高频函数；动画角色或软体可以每帧更新 coarse mesh；地形可以按距离 tag 后采样 height map。
+
+真正的边界在于采样和顶点吞吐：displacement 的频率越高，需要的细分越深；输出越密，vertex program 越忙。反过来，若输入 coarse mesh 本身已经很大，继续降低细分深度也未必能解决总线与 bind 成本。先看 coarse-to-refined ratio，再决定把复杂度交给 CPU 还是 GPU。
+
+## 三步验收：从 tag 到可用的自适应表面
+
+<Stepper>
+  <Step title="第一步：把 refinement 选择和输入数据分开">
+    先列出 coarse mesh、每个顶点的 depth tag 和 ARP pool。tag 只说明附近需要多细，ARP 才包含具体节点和连接关系；不要把 target mesh 当作 CPU 输入的一部分。
+
+    <GpuGems3Ch05GamerPipelineDiagram />
+    <GpuGems3Ch05PatternPoolDiagram />
+
+  </Step>
+  <Step title="第二步：用 barycentric 坐标生成无裂缝 patch">
+    对每个 coarse triangle 选择三个 edge depth 对应的 pattern，用 barycentric coordinate 插值位置、法线和属性；公共边必须从同一组 edge depth 生成。
+
+    <GpuGems3Ch05BarycentricDiagram />
+    <GpuGems3Ch05CrackFreeDiagram />
+
+  </Step>
+  <Step title="第三步：用 ratio 判断 CPU 与 GPU 的边界">
+    调整 coarse triangle 数、refinement depth 和 displacement 复杂度，分别观察上传记录、细分后的顶点工作与可能瓶颈，再选择适合动画、地形或程序表面的函数。
+
+    <GpuGems3Ch05BottleneckDiagram />
+    <GpuGems3Ch05ApplicationDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- GAMeR 只上传 coarse mesh 与 per-vertex depth tag。
+- ARP pool 预存细分模式，运行时按 edge depth 选择。
+- barycentric coordinate 让同一 pattern 适配任意三角形。
+- 统一共享边的 depth 才能保持 crack-free refinement。
+- coarse-to-refined ratio 决定 CPU 上传还是 GPU 顶点处理占主导。
+
+<Exercises>
+
+**问题 1｜追踪一次顶点。** 一个 coarse triangle 的三个顶点为 `p0`、`p1`、`p2`，某个 ARP 节点的权重为 `w=0.2`、`u=0.3`、`v=0.5`。它的 tessellated position 如何写？如果 displacement function 返回沿法线 0.1 的位移，下一步做什么？
+
+<Answer>
+  先计算 `p = 0.2 × p0 + 0.3 × p1 + 0.5 × p2`，因为三个权重相加为
+  1，它落在三角形内部。再根据该位置采样 displacement function，把 `0.1 ×
+  normalize(n)` 加到 `p` 上，最后投影并输出；不能先对 coarse
+  顶点位移再期待得到同样的细分节点。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 GAMeR Adaptive Refinement Lab 增加 `edgeDepthBias` 控件：在生成 ARP key 前，把共享边两端的均值加上 bias 并 clamp 到最大深度。你需要在哪里保证相邻三角形仍使用同一条边的结果？
+
+<Answer>
+  bias 应作用在统一的 edge-depth 计算阶段，而不是分别写进两个三角形的 pattern
+  lookup。可以按无向边的稳定 key 缓存端点 tag 均值与 bias
+  后的结果，再让边两侧都使用同一个值；最后再由三条 edge depth 组成 ARP key。这样
+  bias 改变细分等级，却不会制造边界裂缝。
+</Answer>
+
+**问题 3｜场景选型。** 一个动画角色只有 2,000 个 coarse triangles，却需要高频位移；另一个 CAD 网格有 65,000 个 coarse triangles，只需要浅层细分。哪一个更适合 GAMeR 的深细分路径？另一个瓶颈应先查什么？
+
+<Answer>
+  2,000 个粗三角形配高频位移更适合把深细分留给 GAMeR，CPU 维护 coarse mesh，GPU
+  承担 vertex processing。65,000 个三角形只做浅细分时，应先查 coarse polygon
+  attributes 的上传、ARP bind 次数和批次聚类；盲目加深细分只会增加 GPU
+  工作，不能消除输入上传成本。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="adaptive refinement pattern"
+    definition="针对一个三角形的三条边深度预先存好的细分节点和连接关系，渲染时直接选择。"
+  />
+  <GlossaryItem
+    term="depth tag"
+    definition="写在粗网格顶点上的细分等级提示，常由距离、曲率或重要性计算得到。"
+  />
+  <GlossaryItem
+    term="barycentric coordinate"
+    definition="三角形内部的三个权重；它们相加为 1，可以把一个参数节点放回任意三角形。"
+  />
+  <GlossaryItem
+    term="displacement function"
+    definition="根据节点位置返回位移向量的函数，决定细分后的表面细节往哪里移动。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 5. Generic Adaptive Mesh Refinement"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-5-generic-adaptive-mesh-refinement"
+/>
