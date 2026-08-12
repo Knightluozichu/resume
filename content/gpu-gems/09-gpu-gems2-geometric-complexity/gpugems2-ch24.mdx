@@ -1,0 +1,298 @@
+---
+title: "GPU Gems 2 · Chapter 24. Using Lookup Tables to Accelerate Color Transformations"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 24
+description: "把复杂颜色操作烘焙进三维查找表，利用 GPU 三线性采样实时处理高分辨率图像，并处理 texel center、精度和 HDR 输入域。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-24-using-lookup-tables-accelerate-color"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-24
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch24ColorLutLab,
+  GpuGems2Ch24ColorPipelineDiagram,
+  GpuGems2Ch24HdrShaperDiagram,
+  GpuGems2Ch24LutDimensionDiagram,
+  GpuGems2Ch24TexelCenterDiagram,
+  GpuGems2Ch24TrilinearDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch24-color-luts";
+
+<Objectives>
+
+- 能解释 Using Lookup Tables to Accelerate Color Transformations 如何把任意平滑 RGB 映射烘焙进 3D texture，使运行时成本不随 operator chain 复杂度增长
+- 能实现 1D/3D LUT、trilinear interpolation 与 dependent texture lookup，并推导小型 LUT 必需的 texel-center scale/offset
+- 能调节 ColorLutLab 的 lattice size、exposure、saturation 和故障开关，判断插值误差、边缘夹紧、存储与 HDR 输入域的取舍
+
+</Objectives>
+
+## 先把“实时调色”拆成烘焙与应用
+
+电影与视频调色常把 curves、levels、hue、saturation、gamut mapping 等操作串成很长的链。直接对高分辨率画面的每个像素重复整条链，反馈会变慢；但同一组输入 RGB 总会得到同一组输出 RGB，因此可以先在一个小颜色格点上算完，再让每个像素查询缓存结果。
+
+没有这层转换，画面分辨率和算子复杂度会共同放大运行成本；使用颜色格点后，昂贵工作落在生成阶段，应用阶段只剩一次固定结构的纹理采样。猜一猜：把 lattice 从 16³ 降到 2³，primary grading 可能仍可用，但局部色相扭曲会发生什么？
+
+<GpuGems2Ch24ColorLutLab />
+
+<Callout type="tip" title="先冻结输入域，再烘焙颜色链">
+  记录输入 color space、domain floor/ceiling、operator order、lattice
+  size、texture format 和输出编码。只有同一契约下生成的 identity/reference/LUT
+  才能比较；否则看似是插值误差，实际可能是颜色空间或范围不一致。
+</Callout>
+
+<Callout type="trap" title="把 LUT 当成任意图像处理缓存">
+  现象 → 邻域锐化、matting 或空间 mask 烘焙后，在别的像素位置得到错误结果。原因
+  → 3D 颜色表只按输入 RGB
+  索引，无法表达像素坐标、相邻像素或随时间变化的状态。修法 → 只烘焙
+  position-independent、连续且输入域有界的颜色映射；空间操作保留在独立 pass。
+</Callout>
+
+本章主题 **Using Lookup Tables to Accelerate Color Transformations** 的关键是把“函数计算”替换为“规则采样”：复杂度被封装进表内容，而精度由输入域、lattice 密度、插值和纹理格式共同决定。
+
+<Term def="在有限输入格点上预先保存函数输出，运行时用索引和插值替代重复计算的数据结构。">
+  lookup table
+</Term>
+
+<Term def="按单个输入变量索引的表；颜色处理中常为 R、G、B 各使用一条曲线，适合 brightness、gamma、contrast、curves 和 levels。">
+  one-dimensional LUT
+</Term>
+
+<GpuGems2Ch24ColorPipelineDiagram />
+
+## 1. 1D LUT：通道独立时最便宜
+
+对 8-bit 灰度输入，复杂函数 $f(x)$ 只需对有限输入码值求值一次，再按像素码值查表。颜色图像可以为三个 channel 分配三条 1D curve，从而快速实现独立的 gamma、contrast 或 color balance。
+
+1D LUT 的边界也很明确：每个输出 channel 只能依赖各自的一维索引。若灰度转换需要 $R$、$G$、$B$ 的加权和，或 hue warp 要让一个 channel 影响另一个 channel，三条独立曲线无法表达这种 cross-talk。
+
+<Term def="用 R、G、B 三个独立坐标索引颜色立方体、允许任意 RGB 输入映射到任意 RGB 输出的三维格点。">
+  three-dimensional LUT
+</Term>
+
+<GpuGems2Ch24LutDimensionDiagram />
+
+3D LUT 把颜色空间离散成 $N\times N\times N$ 个 sample。它能编码灰度转换、hue/saturation、primary/secondary grading 和 gamut mapping，但存储随 $N^3$ 增长：每轴 4 个 sample 的 1D 表只有 4 项，对应 3D 表却有 64 项。因此，选择 lattice size 时必须同时看最大误差和内存/带宽。
+
+<Callout type="trap" title="用三条 1D curves 表达 channel cross-talk">
+  现象 → 单通道 ramp 测试正常，彩色区域的 luminance、hue 或 gamut correction
+  完全不对。原因 → 每条 1D curve 看不到另外两个输入 channel，无法表达联合 RGB
+  映射。修法 → 用 channel-isolation 和 mixed-color 测试判断 operator 是否
+  separable；存在 cross-talk 就切到 3D LUT 或保留解析运算。
+</Callout>
+
+## 2. 3D LUT 的适用边界
+
+3D LUT 适合满足三个条件的变换：每个像素的结果与空间位置无关；映射足够连续，稀疏格点之间可安全插值；输入 color domain 有明确的 floor 与 ceiling。只要任一条件不成立，表就会遗漏所需维度或产生无法控制的重建误差。
+
+连续性尤其重要。nearest-neighbor 只返回最近格点，会造成明显 color banding；高阶插值能提高平滑度，却需要更多 sample 和计算。现代 GPU 原生支持 3D texture 的线性过滤，因此工程基线通常是硬件 trilinear。
+
+<Term def="沿三维格点的三个轴连续执行线性插值，用包围查询点的八个角点重建结果的插值方法。">
+  trilinear interpolation
+</Term>
+
+<GpuGems2Ch24TrilinearDiagram />
+
+设查询点在局部单元中的小数坐标为 $(u,v,w)$，八个角点为 $C_{ijk}$，则
+
+$$
+  C(u,v,w)=\sum_{i=0}^{1}\sum_{j=0}^{1}\sum_{k=0}^{1}
+  C_{ijk}\,a_i(u)\,a_j(v)\,a_k(w),
+$$
+
+其中 $a_0(t)=1-t$、$a_1(t)=t$。这个式子在说：每个角点的权重由查询点沿三个轴的相对距离相乘得到，八个权重之和为 1。
+
+<Callout type="trap" title="用小 lattice 烘焙不连续变换">
+  现象 → hard key、阈值或局部 gamut cut
+  在输出中出现色带、错误过渡和跨区域污染。原因 → trilinear interpolation
+  必然在相邻 sample 间生成连续过渡，无法保留未被充分采样的不连续边界。修法 →
+  保留解析分支，拆分 domain，或提高采样并用 reference
+  证明误差可接受；不要只增加后处理噪声掩盖 banding。
+</Callout>
+
+## 3. GPU 路径：一次 dependent texture lookup
+
+<Term def="第二次纹理采样的坐标由第一次纹理读取结果决定；颜色 LUT 中先读 source RGB，再把 RGB 作为 3D texture 坐标。">
+  dependent texture lookup
+</Term>
+
+运行时先从 2D image texture 读取 `rawColor`，再用该颜色索引 3D LUT。颜色算子链已经烘焙到表里，所以 shader 不需要知道是十个 curves、一次 gamut mapping，还是更复杂的生产调色；应用阶段仍是固定次数的 texture fetch。
+
+但输入 RGB 不能直接原样作为数值 LUT 的 texture coordinates。普通图片纹理允许坐标覆盖纹理边界，而 LUT 的数值 domain 应从第一个 sample center 到最后一个 sample center。对于每轴大小 $N$ 的 LUT，应使用
+
+$$
+  u'=\frac{N-1}{N}u+\frac{1}{2N}.
+$$
+
+这个式子在说：先把零到一缩进到首尾 sample center 的跨度，再平移半个 texel，让输入极值准确落在最外层数据点。
+
+<GpuGems2Ch24TexelCenterDiagram />
+
+scale 与 offset 对整幅图恒定，应在 CPU、material setup 或 shader specialization 中预计算。大型 1D LUT 的 half-texel 误差可能小到可忽略，但常见 16³、32³ 的 3D LUT 很小，未经校正的边缘误差会造成可见 clamping 与非线性。
+
+<Callout type="trap" title="直接用 RGB 的零和一采样纹理边界">
+  现象 → identity LUT 也改变暗部和高光，边缘码值像被提前夹紧。原因 → 输入
+  extrema 落在纹理边界而不是首尾 texel center，硬件过滤在半个 texel
+  区间采用错误边界行为。修法 → 使用 $(N-1)/N$ scale 与 $1/(2N)$
+  offset；对黑、白、primaries 和 boundary ramps 做 identity round-trip。
+</Callout>
+
+## 4. 生成、缓存与系统集成
+
+生成 3D LUT 不必让每个颜色工具认识 3D texture。可以把 identity lattice 排成一个 2D proxy image，将它送入现有 color-correction pipeline，再把处理结果恢复成 3D texture。32³ lattice 等价于 32,768 个颜色 sample，远小于每帧数百万像素，因此昂贵 operator chain 只需处理小代理数据。
+
+集成流程要固定 byte order、axis order、channel order 和 row layout。一次 R/B 轴互换就会让所有混色错误，却可能让灰阶测试侥幸通过；因此测试集必须包含 primaries、secondaries、skin-tone-like mixed colors、ramps 和超范围值。
+
+<Callout type="trap" title="只用灰阶 ramp 验证 3D LUT 布局">
+  现象 → 灰阶 identity 正常，但红蓝或青品红区域严重串色。原因 → axis/channel
+  order 错误在 $R=G=B$ 时不可见，proxy image 与 GPU 3D texture
+  的展开约定不一致。修法 → 用 R/G/B/CMY corners、非对称 mixed colors
+  和索引编码图验证每个轴，再缓存经过 hash 的 layout metadata。
+</Callout>
+
+## 5. 精度、lattice size 与格式
+
+最小可用 lattice 取决于 transform，而不是固定行业数字。只调整 RGB/CMY primaries 的 primary grading 甚至可由 2³ corners 表达；局部 hue warp、复杂 gamut mapping 和高曲率 tone response 则需要更密格点。选择流程应从 reference operator 开始，对均匀网格、边界和高曲率区域测最大/感知误差，再选择满足阈值的最小尺寸。
+
+8-bit texture 会把每个输出 channel 量化到有限码值，容易在平滑渐变上出现 banding。增加 lattice size 不能恢复已经在 table value 中丢失的 bit depth；需要同时评估 16-bit float、dither、输出编码和目标显示链。
+
+<Callout type="trap" title="只增加 lattice size，不增加 table precision">
+  现象 → 32³ 升到 64³ 后内存和带宽增加，天空渐变的 banding 却几乎不变。原因 →
+  错误来自 8-bit table value quantization，而不是格点之间的空间采样密度。修法 →
+  分别测 lattice interpolation error 与 channel quantization error；必要时使用
+  16-bit float，并保持输出颜色空间和 dither 契约一致。
+</Callout>
+
+## 6. HDR：有界 domain 与 shaper LUT
+
+<Term def="包在 3D LUT 前后的匹配一维曲线；前向曲线把 HDR 非均匀压缩到规范化域，逆曲线在颜色映射后恢复动态范围。">
+  shaper LUT
+</Term>
+
+HDR 打破了默认 $[0,1]$ 输入域。LUT 必须选择 floor 和 ceiling：ceiling 太低会 clamp highlights，太高则让有限 samples 大量浪费在视觉不敏感的高值区。负值也可能来自 out-of-gamut 运算或带负 lobes 的 filter，不能在没有规格时直接截到零。
+
+均匀划分很宽的 HDR range 时，暗部和中间调会集中在少数 cells。解决办法是在 3D LUT 前加 forward shaper，把输入映射到更接近感知均匀的 normalized domain；应用 3D LUT 后，再用 inverse shaper 恢复原动态范围。
+
+<GpuGems2Ch24HdrShaperDiagram />
+
+shaper 不是任意 tone mapping。forward/inverse 必须配对，3D LUT 烘焙时也必须在相同 shaped domain 中求值。发布前要记录 floor、ceiling、shaper version、是否保留 negative values，以及超范围输入的 clamp/extrapolate 策略。
+
+<Callout type="trap" title="给 HDR 选择过大的均匀 ceiling">
+  现象 → 高光没有被夹紧，但暗部和肤色的 subtle grading
+  变粗，低值区出现色带。原因 → 固定数量的 lattice cells
+  被均匀摊到过宽范围，视觉重要区域只获得少数 sample。修法 → 根据数据集选择可解释
+  ceiling，并使用匹配的 forward/inverse shaper
+  实现非均匀采样；以暗部、中间调和高光分别验收误差。
+</Callout>
+
+## 三步实验：从 identity 到 HDR 交付
+
+每一步只改变一个变量，记录 color space、domain、lattice/format、scale/offset、operator hash 和最大误差。若 identity 都不能 round-trip，先修布局或采样坐标，不要继续调 grading 参数。
+
+<Stepper>
+  <Step title="第一步：验证 1D 与 3D 表达能力">
+    用独立 RGB curves 和一个 luminance/hue cross-talk operator 分别烘焙 1D、3D LUT。观察哪些 mixed colors 无法由三条独立曲线表达，并用 corners 验证 axis order。
+
+    <GpuGems2Ch24LutDimensionDiagram />
+
+  </Step>
+  <Step title="第二步：校准 interpolation 与 texel centers">
+    固定 identity LUT，切换 texel-center failure mode，比较黑白边界、primaries 和 ramp。再改变 lattice size，记录 trilinear reference 的最大误差与存储增长。
+
+    <GpuGems2Ch24TexelCenterDiagram />
+
+  </Step>
+  <Step title="第三步：扩展到 HDR shaped domain">
+    选择明确的 HDR floor/ceiling，加入 forward/inverse shaper；分别测试 negative、dark、midtone 和 highlight samples，确认 3D LUT 烘焙与 runtime 使用相同 domain。
+
+    <GpuGems2Ch24HdrShaperDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- lookup table 把昂贵颜色函数缓存到有限格点，使 runtime 成本与 operator chain 长度解耦。
+- one-dimensional LUT 适合通道独立变换；three-dimensional LUT 才能表达 RGB cross-talk。
+- trilinear interpolation 用八个角点连续重建颜色，但要求 transform 平滑且 lattice 足够密。
+- dependent texture lookup 必须校正到 texel centers，并固定 proxy image、axis 和 channel layout。
+- HDR 需要明确 domain 与匹配 shaper LUT；lattice size、bit depth 和范围必须分别验收。
+
+<Exercises>
+
+**问题 1｜计算采样校正。** 对一个每轴 $N=16$ 的 3D LUT，输入 $u=0$ 与 $u=1$ 应映射到哪些纹理坐标？
+
+<Answer>
+  scale 为 $15/16$，offset 为 $1/32$。因此 $u=0$ 映射到 $1/32=0.03125$，$u=1$
+  映射到 $15/16+1/32=31/32=0.96875$。两者正好是首尾 texel
+  center，而不是纹理边界。
+</Answer>
+
+**问题 2｜选择 1D 还是 3D。** 一条 pipeline 只包含独立 RGB gamma curves，另一条包含 luminance grayscale 与局部 hue warp。应分别选择什么表？
+
+<Answer>
+  独立 gamma curves 可为每个 channel 使用 one-dimensional
+  LUT，因为输出不依赖其他输入 channel。luminance 和 hue warp 存在 channel
+  cross-talk，应使用 three-dimensional
+  LUT；若操作还依赖像素邻域或位置，则两者都不能完整表达，需要保留独立 pass。
+</Answer>
+
+**问题 3｜修改实验处理 HDR。** 当前 32³ LUT 覆盖 $[0,100]$，暗部 grading 粗糙但高光必须保留。你会如何改造？
+
+<Answer>
+  先基于真实数据确定 floor/ceiling 和超范围策略，再添加匹配的 forward/inverse
+  shaper LUT，把暗部与中间调分配到更多 normalized samples；在 shaped domain
+  中重新烘焙 3D LUT。随后分别测暗部、中间调、高光和负值，并对比增加 bit depth
+  与增加 lattice size 的收益，不能只把 32³ 盲目升到更大尺寸。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="lookup table"
+    definition="预先保存函数在有限输入格点上的结果、运行时通过索引和插值查询的数据结构。"
+  />
+  <GlossaryItem
+    term="one-dimensional LUT"
+    definition="按单个输入变量索引的表，颜色处理中常用于彼此独立的 RGB curves。"
+  />
+  <GlossaryItem
+    term="three-dimensional LUT"
+    definition="用 RGB 三个坐标索引颜色立方体并允许通道交叉影响的颜色映射表。"
+  />
+  <GlossaryItem
+    term="trilinear interpolation"
+    definition="使用三维单元八个角点按距离权重重建内部查询值的插值方法。"
+  />
+  <GlossaryItem
+    term="dependent texture lookup"
+    definition="后一次纹理采样坐标由前一次纹理读取结果决定的查询。"
+  />
+  <GlossaryItem
+    term="shaper LUT"
+    definition="在 3D LUT 前后压缩并恢复 HDR domain、实现非均匀采样的一对一维曲线。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 24. Using Lookup Tables to Accelerate Color Transformations"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-24-using-lookup-tables-accelerate-color"
+/>
