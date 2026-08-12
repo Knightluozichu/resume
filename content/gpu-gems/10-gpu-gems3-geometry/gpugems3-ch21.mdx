@@ -1,0 +1,253 @@
+---
+title: "GPU Gems 3 · Chapter 21. True Impostors"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 21
+description: "从相机朝向的卡片出发，解释如何用纹理高度场、片元射线搜索和二分收敛在 GPU 上重建大量可见体积。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-21-true-impostors?lang=en"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-21
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch21BillboardDiagram,
+  GpuGems3Ch21PipelineDiagram,
+  GpuGems3Ch21RayMarchDiagram,
+  GpuGems3Ch21RefractionDiagram,
+  GpuGems3Ch21TextureVolumeDiagram,
+  GpuGems3Ch21TrueImpostorLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch21-true-impostors";
+
+<Objectives>
+
+- 能解释朝向相机的卡片如何在不提交大量多边形的情况下承载一个可查询的体积
+- 能修改 True Impostor Lab 的打包、步进、细化、材质路径与排序选项，比较读取成本和遮挡风险
+- 能回答：为什么首次命中后还要二分收敛，以及透明表面为什么必须让射线继续前进
+
+</Objectives>
+
+## 先问：为什么远处的复杂物体不必都变成多边形
+
+想象一片塞满细节的远景：如果每个物体都用完整模型绘制，屏幕上真正看见的只是很多小区域，却要为看不见的细节提交大量形状。我们需要一扇轻薄的“窗口”，让每个可见小方块只为自己负责的那一条观察路径付费。
+
+本章解决的是：怎样把物体的厚度与表面信息放进普通图片的通道里，再在 GPU 上按像素找出真正的表面。没有这条路径，远景实例会被顶点处理拖慢；只存一张静态图片，又会在视角变化时露馅。
+
+<Callout type="tip" title="先预测：把细化次数翻倍会发生什么？">
+  先猜一猜：在 Lab 中把 binary refinement 从 4 调到 8，再切换到
+  translucent；交点区间、纹理读取和遮挡风险会怎样变化？先观察不透明基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 把复杂物体变成一扇会转身的窗
+
+<Term def="一种把体积信息放进始终朝向相机的四边形，再由片元阶段逐像素恢复表面交点的图像化几何方法。">
+  true impostor
+</Term>
+
+传统 impostor 把某个视角拍成一张图片贴到矩形卡片上；相机一转，图片仍然是平的，轮廓和遮挡很快就不对。true impostor 保留卡片的低几何成本，却不把颜色预先烤死：卡片只提供观察窗口，片元阶段沿每个像素的视线去查询物体的体积表示。
+
+关键动作是让卡片绕中心转向相机。这样同一套 UV 和体积数据可以面对任意观察方向，最终颜色由当前视线与体积的交点决定，而不是由某一张固定截图决定。
+
+<GpuGems3Ch21BillboardDiagram />
+
+## 2. 让一张纹理保存一段厚度
+
+<Term def="始终面对相机的矩形四边形；它承担几何窗口的角色，把每个像素的观察路径送进纹理体积。">
+  billboard
+</Term>
+
+<Term def="在二维纹理平面上记录某个位置的表面深度；把多个这样的深度函数组合起来，就能表达不是单层平面的体积。">
+  height field
+</Term>
+
+普通纹理只有 `u` 和 `v` 两个坐标，但一个像素有四个通道。把 R、G、B、A 看成沿第三个方向排列的四个深度函数，就能让一张 RGBA 纹理表达多个表面层；需要更复杂的形状时，再增加纹理数据即可。
+
+顶点把 UV 平移到卡片中心附近，并把一个额外的深度分量从中心开始建立。卡片旋转时，纹理坐标和几何位置使用同一个中心，因此纹理体积也跟着卡片一起转。它不是把二维图片“变成真的网格”，而是把每个片元的查询空间扩展成一条可采样的深度轴。
+
+<GpuGems3Ch21TextureVolumeDiagram />
+
+<Callout type="trap" title="只换成朝向相机的卡片，却仍然贴一张静态图">
+  现象 → 物体正面看起来正确，斜着看时轮廓像纸片，背面也没有新的细节。原因 →
+  卡片只解决了朝向，静态颜色没有记录表面沿观察方向的变化。修法 →
+  把卡片当作查询窗口，在片元阶段用视线和体积数据求交点，再由交点决定颜色。
+</Callout>
+
+## 3. 沿每个像素的观察路径找第一次相交
+
+<Term def="从相机穿过一个像素并进入纹理体积的方向向量；它在卡片上插值后，每个片元都得到自己的一条查询路径。">
+  view ray
+</Term>
+
+光栅化会把卡片顶点携带的 UV 和方向插值到每个片元。片元拿到一条 view ray 后，沿它在纹理坐标空间中前进：每一步读取高度场，判断当前点是否已经进入体积。第一次跨过表面时，保存当前点和前一个点，得到一个“命中区间”。
+
+这一步适合 GPU，因为所有像素都可以执行相似的固定次数循环。没有命中的射线也会走完预算，换来的好处是分支发散更少；真正要控制的是每个片元的读取次数，以及卡片在屏幕上覆盖了多少像素。
+
+<Term def="沿观察方向以固定间隔反复读取纹理体积，直到找到表面两侧的一对样本；它先保证找到区间，再交给更精确的搜索。">
+  ray marching
+</Term>
+
+<GpuGems3Ch21RayMarchDiagram />
+
+## 4. 用二分搜索把命中点收窄
+
+<Term def="把已知包含交点的区间反复对半切开，每次保留仍然跨过表面的那一半，从而用少量步骤得到更精确的位置。">
+  binary search
+</Term>
+
+固定步长只告诉我们“表面落在这两个样本之间”，直接使用前一个点会出现边缘抖动和厚度误差。二分搜索把这个区间取中点，重新检查中点在哪一侧，再保留正确半区；重复几次后，命中位置就足够稳定，可以用来采颜色和法线。
+
+GPU 实现通常不会因为提前命中就立刻退出循环：固定迭代次数更容易保持吞吐。因此步进次数负责找到区间，细化次数负责在区间内提高位置精度，两者是不同的预算旋钮。
+
+## 5. 透明材质让射线继续穿过体积
+
+不透明表面在第一次命中后就可以着色并结束查询。透明对象不能这样做：命中点的法线需要参与折射，折射后的新方向还要继续寻找后续表面。把射线在各层之间走过的距离累加起来，就能用一个局部近似表达体积的透光程度。
+
+这一扩展仍然复用同一组高度场，只是把“第一次命中”改成“命中后更新方向并继续”。因此它的纹理读取会增加，但不需要把每个透明物体重新膨胀成大量多边形。
+
+<GpuGems3Ch21RefractionDiagram />
+
+## 6. 规模化时，瓶颈从顶点转到片元
+
+这套方法的细节等级天然由屏幕占用决定：远处卡片只覆盖少量片元，就只支付少量搜索；近处卡片覆盖更多像素，片元阶段的步进和纹理读取成为主要成本。原书的核心取舍不是“永远比多边形快”，而是用可预测的填充率预算换取一次绘制大量简单实例的能力。
+
+卡片还可能遮挡邻居。多个实例重叠时，CPU 端深度排序可以减少不必要的 overdraw；不排序时，即使最后的颜色被丢弃，前面的片元搜索仍然已经付出了成本。透明路径更需要谨慎，因为它不能简单用第一次深度命中结束。
+
+<Callout type="trap" title="命中后立刻退出所有循环">
+  现象 → 不透明物体正常，透明物体却像一层薄壳，折射和内部颜色消失。原因 →
+  固定步进只找到第一层就结束，后续表面和体积距离没有机会参与。修法 →
+  不透明路径在首次命中后结束；透明路径更新折射方向、累计距离，并为后续表面保留新的搜索预算。
+</Callout>
+
+## 7. 把卡片、搜索和着色串成一个片元循环
+
+```hlsl
+float4 ShadeTrueImpostor(float2 uv, float3 ray, Texture2D volume) {
+  float depth = 0.0;
+  float previous = 0.0;
+  bool bracketed = false;
+  for (int i = 0; i < MARCH_STEPS; ++i) {
+    float4 heights = volume.SampleLevel(linearSampler, uv, 0.0);
+    float surface = selectHeight(heights, depth);
+    if (rayInsideVolume(ray, depth, surface)) {
+      bracketed = true;
+      break;
+    }
+    previous = depth;
+    depth += STEP_SIZE;
+  }
+  if (!bracketed) return discardPixel();
+  float hit = refineBinary(previous, depth, uv, volume);
+  return shadeAtHit(uv, hit, ray);
+}
+```
+
+代码中的 `MARCH_STEPS` 负责找到命中区间，`refineBinary` 负责提高命中位置精度。若材质需要透明或折射，`shadeAtHit` 之后不能直接结束，而是要更新 ray、累计穿透距离，再开始下一段搜索。
+
+<Stepper>
+  <Step title="先生成朝向相机的查询窗口">
+    把卡片绕中心旋转，使它的法线朝向相机；同时把每个顶点的 UV 和 view ray 送进光栅化，让每个片元都获得自己的查询起点和方向。
+
+    <GpuGems3Ch21BillboardDiagram />
+    <GpuGems3Ch21TextureVolumeDiagram />
+
+  </Step>
+  <Step title="再用步进和二分找到表面">
+    沿射线固定步长读取高度场，记住首次命中前后的两个点，再在这个区间内反复对半切分，得到可用于着色的交点。
+
+    <GpuGems3Ch21RayMarchDiagram />
+    <GpuGems3Ch21PipelineDiagram />
+
+  </Step>
+  <Step title="最后按材质路径完成着色">
+    不透明路径在第一次命中后取颜色和法线；透明路径计算折射、继续搜索并累计体积距离，同时让实例排序控制 overdraw。
+
+    <GpuGems3Ch21RefractionDiagram />
+    <GpuGems3Ch21PipelineDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch21TrueImpostorLab />
+
+## 本章小结
+
+- true impostor 用低成本卡片承载可查询的体积
+- RGBA 通道可以保存多个高度场层
+- ray marching 先找区间，binary search 再收窄交点
+- 透明材质要折射并继续穿过后续表面
+- 规模化实例的成本主要落在片元、读取和 overdraw
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把 Lab 的 `march steps` 调到 8，再把 `binary refinement` 调到 8；你预计覆盖率、区间宽度和读取次数分别如何变化？
+
+<Answer>
+  步进减少会让命中区间更容易漏掉或变宽，覆盖率通常下降；细化增加会让已经找到的区间更窄，但不能完全弥补漏检；读取次数会因为步进与细化的组合而增加或重新分配。工程上应先保证步进能稳定夹住表面，再用细化换位置精度。
+</Answer>
+
+**问题 2｜诊断纸片轮廓。** 一个实例正面正确、斜视时仍像平面图片。请按“数据、射线、着色”列出三个检查点。
+
+<Answer>
+  数据侧检查 RGBA 通道是否真的保存了多个高度场，而不是只有一张颜色图；射线侧检查
+  UV 是否绕卡片中心变换、view ray
+  是否随顶点插值进入片元；着色侧检查颜色是否来自命中位置，而不是直接用卡片 UV
+  做一次静态采样。
+</Answer>
+
+**问题 3｜场景选型。** 大量不透明远景、少量近处透明物体、许多互相重叠的卡片，分别如何分配预算？
+
+<Answer>
+  大量不透明远景优先使用固定步进和较低细化，把成本交给可预测的片元填充；近处透明物体需要允许多次命中和折射，因此提高读取预算并观察累计距离；重叠卡片应先做
+  CPU 深度排序，减少已经注定被遮挡的片元搜索，不能只增加顶点预算。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="true impostor"
+    definition="用一张朝向相机的卡片承载体积信息，再按像素寻找表面交点的图像化几何方法。"
+  />
+  <GlossaryItem
+    term="billboard"
+    definition="一张会转向相机的矩形卡片；它像窗口一样把片元查询送进后面的体积。"
+  />
+  <GlossaryItem
+    term="height field"
+    definition="记录二维位置对应深度的函数；多个高度场叠起来就能表达不止一层的表面。"
+  />
+  <GlossaryItem
+    term="view ray"
+    definition="从相机穿过某个像素进入体积的方向线，每个片元都有自己的一条。"
+  />
+  <GlossaryItem
+    term="ray marching"
+    definition="沿方向线按固定间隔查询体积，先找到表面两侧的命中区间。"
+  />
+  <GlossaryItem
+    term="binary search"
+    definition="把已夹住交点的区间不断对半切分，让最终表面位置更精确。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 21. True Impostors"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-21-true-impostors?lang=en"
+/>
