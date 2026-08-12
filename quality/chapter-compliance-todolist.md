@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T19:55:41.877Z
+> 生成时间：2026-08-12T20:10:57.014Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4574 |
+| 实际 MDX 章节/页面 | 4575 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 44 |
+| manifest 未映射 unit | 43 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1611 |
+| passed | 1612 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -6609,9 +6609,9 @@
 - [ ] 🔴 P1 **[正式 unit gwp-10] Chapter 10 · Deploying Go** — evidence 不完整；explained=5/6
     - 关联路径：`content/go-web-programming/05-runtime-release/gwp-deployment.mdx`
 
-## gpu-gems（96 个内容页面 · passed:96 · 🚫 门禁阻断 36 项）
+## gpu-gems（97 个内容页面 · passed:97 · 🚫 门禁阻断 35 项）
 
-- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=73.3%；未映射 unit=35；证据不完整 unit=0。
+- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=74%；未映射 unit=34；证据不完整 unit=0。
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — passed；score 100
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
@@ -6901,8 +6901,9 @@
 - [x] ✅ **10-gpu-gems3-geometry/gpugems3-ch06** — passed；score 96
     - 路径：`content/gpu-gems/10-gpu-gems3-geometry/gpugems3-ch06.mdx`
     - 正式 unit：`gpg-v3-06` explained=1/1
-- [ ] 🔴 P0 **[正式 unit gpg-v3-07] GPU Gems 3 · Chapter 7. Point-Based Visualization of Metaballs on a GPU** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
-    - 路径：待创建或映射（officialUnitId: `gpg-v3-07`）
+- [x] ✅ **10-gpu-gems3-geometry/gpugems3-ch07** — passed；score 97
+    - 路径：`content/gpu-gems/10-gpu-gems3-geometry/gpugems3-ch07.mdx`
+    - 正式 unit：`gpg-v3-07` explained=1/1
 - [ ] 🔴 P0 **[正式 unit gpg-v3-08] GPU Gems 3 · Chapter 8. Summed-Area Variance Shadow Maps** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
     - 路径：待创建或映射（officialUnitId: `gpg-v3-08`）
 - [ ] 🔴 P0 **[正式 unit gpg-v3-09] GPU Gems 3 · Chapter 9. Interactive Cinematic Relighting with Global Illumination** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1

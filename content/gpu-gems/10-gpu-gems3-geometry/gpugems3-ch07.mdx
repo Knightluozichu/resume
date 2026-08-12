@@ -1,0 +1,243 @@
+---
+title: "GPU Gems 3 · Chapter 7. Point-Based Visualization of Metaballs on a GPU"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 7
+description: "用 surface particles 采样元球隐式表面，把密度约束、邻域排斥、空间哈希与全局 dispersion 拆成可在 GPU 上并行的可视化流程。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-7-point-based-visualization-metaballs-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-07
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch07ConstraintDiagram,
+  GpuGems3Ch07DispersionDiagram,
+  GpuGems3Ch07ImplicitSurfaceDiagram,
+  GpuGems3Ch07MetaballLab,
+  GpuGems3Ch07MethodComparisonDiagram,
+  GpuGems3Ch07RenderingDiagram,
+  GpuGems3Ch07RepulsionPassDiagram,
+  GpuGems3Ch07SpatialHashDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch07-metaballs";
+
+<Objectives>
+
+- 能解释 marching cubes、ray tracing 与 point-based surface sampling 的成本边界，以及为什么动态表面适合利用上一时刻的位置
+- 能修改 Metaball Surface Particle Lab 的粒子数、邻域半径、cell size 与分布策略，观察覆盖率、重叠和邻居查询工作的变化
+- 能回答：隐式表面的密度约束、局部排斥和全局搬运分别解决什么问题，哪一步应该留在 CPU、哪一步交给 GPU
+
+</Objectives>
+
+## 先决定你要跟踪“体积”还是“表面”
+
+想象一团会流动的果冻。你可以每一帧把它所在的整个盒子重新切成小方格，也可以从相机发出许多视线逐像素寻找边界；还有一种做法，是让一群小点贴着边界走。三种做法都能画出形状，但它们花力气的位置完全不同。
+
+本章解决的问题是：怎样让这群小点在形状变化时仍覆盖出一张连续的流体表面，并把最重复的邻居计算交给 GPU？如果只追求点的数量，画面会出现重叠与空洞；如果只追求一次性的漂亮网格，下一帧又会把同样的工作从头做一遍。
+
+<Callout type="tip" title="先预测：增加 surface particles 会改变什么">
+  先猜一猜：把 surface particles 调大，coverage、overlap 和 neighbor work
+  哪些会上升，哪些会下降？再把 distribution mode 在 raw drift、local repulsion
+  与 repulsion + dispersion 之间切换，观察你的预测是否成立。
+</Callout>
+
+<GpuGems3Ch07MethodComparisonDiagram />
+
+## 1. 三种表面路线的取舍
+
+`marching cubes` 扫描一个包住物体的三维网格，在每个 cell 的角点上判断等值面并生成三角形；它的工作量跟包围体积相关。`ray tracing` 则从屏幕像素出发重新寻找表面，适合直接得到深度，但连续帧之间的点位不能自然复用。point-based 方法把渲染对象改成 surface particles：上一时刻已经贴住表面的粒子，下一时刻只需做小幅移动。
+
+<Callout type="trap" title="动态元球优先生成完整网格">
+  现象 → 每个时间步都要扫描整个三维
+  volume，物体变小或表面稀疏时仍支付同样的网格成本。原因 → marching cubes
+  解决的是重建几何，不会自动利用上一帧的粒子位置。修法 → 先根据镜头和表面积选择
+  point-based sampling；只有确实需要稳定三角网格的下游步骤才回到体积重建。
+</Callout>
+
+## 2. 用密度场定义一张会移动的面
+
+<Term def="由许多平滑核函数叠加得到的等值边界；它没有固定三角形，而是用某个位置的密度值来判断该点是否在表面上。">
+  implicit surface
+</Term>
+
+每个 fluid atom 带着位置、影响半径和权重。把这些影响叠加，就得到位置 x 上的 density field F(x)；当 F(x) 达到约定的 iso-value 时，那里就是元球表面。这个模型与 SPH 的平滑密度相近，所以适合表达柔软、会融合的形状。
+
+<Term def="被约束在隐式表面附近、负责覆盖和绘制这张面的自由粒子；它和定义形状的 fluid atoms 不是同一组数据。">
+  surface particle
+</Term>
+
+surface particles 不负责决定形状，它们只负责把形状采样出来。每个点需要知道自己的位置、速度，以及密度值和 gradient；这样 GPU 才能判断它偏离表面的方向，并把它拉回到正确的等值面附近。
+
+<GpuGems3Ch07ImplicitSurfaceDiagram />
+
+## 3. 先约束到面上，再沿面移动
+
+粒子的目标速度由两部分组成：一部分跟随影响它的 fluid atoms 的环境速度，另一部分来自邻居之间的排斥。把这两个分量合成 desired velocity Dᵢ 后，用 density gradient 计算约束项，去掉会让 F 偏离 iso-value 的法向分量，留下跟随表面变化的速度。
+
+这解释了为什么只把粒子沿当前表面切线移动还不够：表面本身正在变形，粒子必须同时追踪 F 的变化。反过来，如果只追踪环境速度而没有排斥，所有粒子会在局部聚拢，表面覆盖就会出现大块空白。
+
+<GpuGems3Ch07ConstraintDiagram />
+
+## 4. 用 spatial hash 把邻居查询缩到局部
+
+<Term def="把空间 cell 映射到 bucket 的索引结构；CPU 负责构建位置与速度的数据池，GPU 根据粒子所在 cell 查询可能影响它的邻居。">
+  spatial hash
+</Term>
+
+fluid atom 只在自己的 influence radius 内贡献密度，因此不必让每个 surface particle 遍历所有 atoms。CPU 把 atom 的位置和速度整理进 hash index table 与 attribute pools，再把它们作为纹理数据送到 GPU。GPU 查询时先把位置离散成 cell，再读取对应 bucket。
+
+本章的 inverted hash 会把一个 atom 加入它影响到的多个 cell。这样 GPU 通常一次查询就能拿到候选邻居，但 CPU 构建会有更多重复写入。若系统是 GPU-bound，这个交换通常划算；若 CPU-bound，则应重新评估 cell size 与传统单次入桶方案。
+
+<Callout type="trap" title="cell size 越小越快">
+  现象 → GPU 查询的候选范围变精细了，整体帧时间却可能上升。原因 → 更小的 cell
+  让一个 atom 覆盖更多 bucket，inverted hash 的 CPU 构建和数据量增加。修法 →
+  用瓶颈来选 cell size：GPU-bound 可缩小查询范围，CPU-bound
+  则要把重复入桶和上传成本一起算进去。
+</Callout>
+
+<GpuGems3Ch07SpatialHashDiagram />
+
+## 5. 两遍排斥与全局 dispersion
+
+<Term def="把相邻 surface particles 推开的 GPU 绘制阶段；先写邻居位置，再在影响范围内累加距离相关的排斥力。">
+  repulsion pass
+</Term>
+
+排斥力要找附近的 surface particles，但 GPU 上动态构建可变长度邻居表并不便宜。两遍方法把第一遍的浮点 render target 当作临时位置图：每个粒子先写自己的 world-space position；第二遍为每个粒子绘制包住影响球投影的 quad，fragment shader 读取位置图并累加 repulsion force。
+
+这个方案的边界也很具体：两个粒子投到同一个 pixel 时，位置图会丢掉一个候选。提高 viewport resolution 能减少冲突，但不是免费的；因此它是“用规则的两遍绘制换邻居表构建”的工程折中。
+
+<GpuGems3Ch07RepulsionPassDiagram />
+
+<Term def="把高密度位置的粒子搬到低密度位置附近、用来加速填补空洞的全局分布步骤；它补足局部排斥无法跨 disconnected regions 搬运的问题。">
+  global dispersion
+</Term>
+
+局部排斥会让粒子慢慢摊平，却可能很久都填不满彼此断开的区域。global dispersion 周期性地比较一个 base particle 与另一个 comparison particle 的 density；若密度差超过 threshold T，就把高密度位置的粒子搬到比较粒子的 influence border。随机位置来自预先生成的纹理，让搬运不要把表面变成整齐的抖动。
+
+<Callout type="trap" title="只保留 repulsion 就能填满所有表面">
+  现象 → 相邻点不再重叠，但 disconnected surface 或初始空洞仍长时间裸露。原因 →
+  repulsion 是局部速度，粒子没有跨空洞移动的理由。修法 → 增加低频 global
+  dispersion；用 density threshold 限制搬运，避免所有粒子同时换位导致表面
+  restless。
+</Callout>
+
+<GpuGems3Ch07DispersionDiagram />
+
+## 6. 从采样点合成平滑透明表面
+
+surface particles 通常扩成 oriented quads，而不是直接画成硬圆点。先做 depth pass 保存每像素的 frontmost depth，再用粒子中心到 quad 中心的距离生成 alpha accumulation，最后只让通过 frontmost test 的粒子参与混合。density gradient 和 curvature 还可以用来扰动 quad 的 normal，让高光不再暴露“这是许多贴片”的感觉。
+
+<GpuGems3Ch07RenderingDiagram />
+
+猜一猜：把 particle 数量加倍而不改变 oriented quad 的大小，会先改善 coverage，还是先增加 overlap 与 blend 成本？打开实验，把结果与前面三条路线的选择放在同一张设计表里。
+
+<GpuGems3Ch07MetaballLab />
+
+## 三步验收：从隐式场到可绘制的流体表面
+
+<Stepper>
+  <Step title="第一步：把 fluid atoms 变成可查询的隐式场">
+    先明确 atom 的位置、速度、半径与权重，构建 CPU-side spatial hash，让 fragment shader 能在局部范围计算 density F 和 gradient。不要一开始把所有邻居塞进全局列表。
+
+    <GpuGems3Ch07ImplicitSurfaceDiagram />
+    <GpuGems3Ch07SpatialHashDiagram />
+
+  </Step>
+  <Step title="第二步：把粒子留在面上并摊开">
+    用 environment velocity 跟随表面变化，用 gradient constraint 去掉法向漂移；再用 repulsion pass 处理局部重叠，用 global dispersion 加速填补跨区域空洞。
+
+    <GpuGems3Ch07ConstraintDiagram />
+    <GpuGems3Ch07RepulsionPassDiagram />
+    <GpuGems3Ch07DispersionDiagram />
+
+  </Step>
+  <Step title="第三步：把采样点组织成连续画面">
+    以 oriented quads 承载粒子覆盖，先做深度筛选，再累积 alpha，最后利用 gradient 与 curvature 做法线扰动。此时才讨论透明混合和视觉细节，而不是让渲染器替代采样算法。
+
+    <GpuGems3Ch07RenderingDiagram />
+    <GpuGems3Ch07MethodComparisonDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- point-based 方法用 surface area 与时间连贯性换取动态元球的可扩展采样。
+- implicit surface 由 fluid atoms 的平滑密度叠加定义，不等同于固定三角网格。
+- gradient constraint 追踪表面，repulsion pass 解决局部重叠，global dispersion 填补全局空洞。
+- spatial hash 把局部邻居交给 GPU 查询，cell size 是 CPU 构建与 GPU 查询的取舍。
+- oriented quads、depth、alpha 与 normal perturbation 共同把粒子采样合成平滑表面。
+
+<Exercises>
+
+**问题 1｜解释约束。** surface particle 已经贴在当前的 implicit surface 上，为什么下一帧仍需要同时计算 density gradient 和 environment velocity？如果只保留其中一个，会出现什么现象？
+
+<Answer>
+  gradient 告诉粒子怎样消除偏离 iso-value 的法向分量；environment velocity
+  则描述 fluid atoms 的运动如何改变表面。只有
+  gradient，粒子会努力回到旧的局部面却跟不上形状变化；只有 environment
+  velocity，误差会沿时间积累，粒子可能逐渐离开表面。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Metaball Surface Particle Lab 增加一个 `thresholdT` 控件：当比较粒子的 density 差小于它时不搬运。你会如何修改 `global dispersion` 的判断，才能减少表面 restless？
+
+<Answer>
+  在比较 base 与 comparison 的密度后加入 `if (densityBase - densityComparison > thresholdT)`，只在差值足够大时移动；同时保留固定的比较间隔或随机纹理，避免所有粒子在同一帧同时尝试换位。提高 thresholdT 会减少搬运频率，但也会让空洞收敛得更慢。
+</Answer>
+
+**问题 3｜场景选型。** 一个 GPU-bound 场景中有许多 fluid atoms，另一个 CPU-bound 场景需要频繁更新 atom 数据。分别如何选择 inverted hash、cell size 与 distribution pass？
+
+<Answer>
+  GPU-bound 场景可以用 inverted hash，把 atom 按 influence area 多次入桶，缩短
+  GPU 的候选查询；cell size 可偏小，但要监控 CPU 构建与上传。CPU-bound
+  场景应减少重复入桶，考虑传统单次入桶或更大的 cell size。两者都可保留 repulsion
+  pass；global dispersion 则按空洞和初始化质量决定频率，不应无条件每帧运行。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="implicit surface"
+    definition="由很多平滑影响叠加出的边界：某个位置的密度达到指定值，就把它看作表面。"
+  />
+  <GlossaryItem
+    term="surface particle"
+    definition="贴着这张边界移动的小点，用来覆盖并绘制流体表面；它不是定义形状的元球原子。"
+  />
+  <GlossaryItem
+    term="spatial hash"
+    definition="把空间小格映射到数据桶的索引，让 GPU 只查附近可能有影响的原子。"
+  />
+  <GlossaryItem
+    term="repulsion pass"
+    definition="通过邻居位置计算相互推开的 GPU 绘制阶段，用来减少粒子重叠。"
+  />
+  <GlossaryItem
+    term="global dispersion"
+    definition="把拥挤区域的粒子搬到稀疏区域附近，用来更快填补局部排斥难以到达的空洞。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 7. Point-Based Visualization of Metaballs on a GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-7-point-based-visualization-metaballs-gpu"
+/>
