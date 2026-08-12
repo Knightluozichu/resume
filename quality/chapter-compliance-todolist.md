@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T17:15:43.648Z
+> 生成时间：2026-08-12T17:26:05.058Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4560 |
+| 实际 MDX 章节/页面 | 4561 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 58 |
+| manifest 未映射 unit | 57 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1597 |
+| passed | 1598 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -6609,9 +6609,9 @@
 - [ ] 🔴 P1 **[正式 unit gwp-10] Chapter 10 · Deploying Go** — evidence 不完整；explained=5/6
     - 关联路径：`content/go-web-programming/05-runtime-release/gwp-deployment.mdx`
 
-## gpu-gems（82 个内容页面 · passed:82 · 🚫 门禁阻断 50 项）
+## gpu-gems（83 个内容页面 · passed:83 · 🚫 门禁阻断 49 项）
 
-- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=62.6%；未映射 unit=49；证据不完整 unit=0。
+- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=63.4%；未映射 unit=48；证据不完整 unit=0。
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — passed；score 100
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
@@ -6859,8 +6859,9 @@
 - [x] ✅ **09-gpu-gems2-geometric-complexity/gpugems2-ch34** — passed；score 96
     - 路径：`content/gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch34.mdx`
     - 正式 unit：`gpg-v2-34` explained=1/1
-- [ ] 🔴 P0 **[正式 unit gpg-v2-35] GPU Gems 2 · Chapter 35. GPU Program Optimization** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
-    - 路径：待创建或映射（officialUnitId: `gpg-v2-35`）
+- [x] ✅ **09-gpu-gems2-geometric-complexity/gpugems2-ch35** — passed；score 97
+    - 路径：`content/gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch35.mdx`
+    - 正式 unit：`gpg-v2-35` explained=1/1
 - [ ] 🔴 P0 **[正式 unit gpg-v2-36] GPU Gems 2 · Chapter 36. Stream Reduction Operations for GPGPU Applications** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
     - 路径：待创建或映射（officialUnitId: `gpg-v2-36`）
 - [ ] 🔴 P0 **[正式 unit gpg-v2-37] GPU Gems 2 · Chapter 37. Octree Textures on the GPU** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1

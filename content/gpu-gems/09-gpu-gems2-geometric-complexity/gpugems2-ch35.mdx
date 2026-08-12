@@ -1,0 +1,266 @@
+---
+title: "GPU Gems 2 · Chapter 35. GPU Program Optimization"
+type: C
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 35
+description: "从向量与数据布局、计算频率、查表、swizzle 到逐次 benchmark，建立 GPU 程序优化的可测量闭环。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-35-gpu-program-optimization"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-35
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch35FrequencyPipelineDiagram,
+  GpuGems2Ch35LookupTableDiagram,
+  GpuGems2Ch35OptimizationLab,
+  GpuGems2Ch35OptimizationTimelineDiagram,
+  GpuGems2Ch35SwizzleDiagram,
+  GpuGems2Ch35VectorPackingDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch35-gpu-program-optimization";
+
+<Objectives>
+
+- 能解释标量运算、四通道向量、数据布局和管线阶段如何共同暴露 GPU 并行性
+- 能修改 Optimization Lab 中的布局、计算阶段、访问局部性和工作量，并设计一次可回退的 benchmark
+- 能回答：一个优化看起来减少了算术，却怎样证明它没有把瓶颈转移到带宽、驱动或另一个管线阶段
+
+</Objectives>
+
+## 先把“快一点”改写成可核对的账本
+
+想象一条工厂流水线：如果每个工件都要重复做同一项准备，就算后面的工位很快，整条线也会被重复劳动拖住。把四个相同的小动作合并成一次，或把准备工作移到更早、执行次数更少的工位，才可能真正减少总账。
+
+本章解决的问题是：GPU 程序怎样从“能运行”逐步变成“知道为什么更快”？如果只凭直觉改代码，可能少了一条算术却多了一次纹理读取，或把 fragment 阶段的压力转移到 vertex、CPU、驱动和带宽，最后端到端反而变慢。
+
+<Callout type="tip" title="先预测瓶颈会搬到哪里">
+  先猜一猜：把四个标量打包成一个 RGBA 值、把 fragment 里的准备工作移到
+  vertex、再把复杂函数换成查表，哪一种最可能减少重复执行？打开实验前先写下你要测的证据：阶段次数、向量工作量、查表次数、packing
+  成本还是缓存局部性。
+</Callout>
+
+## 1. 指令级并行：先用向量表达同一批工作
+
+<Term def="在同一条 GPU 指令中同时处理多个互不依赖的数值；GPU 寄存器通常以四通道向量承载这种并行性。">
+  instruction-level parallelism
+</Term>
+
+GPU 的寄存器和算术指令天然偏向四通道。若程序把四个独立的标量乘法写成四段互不相干的标量代码，硬件和编译器未必能稳定地把它们合并；主动用 `float4`、乘加和点积表达关系，更容易让并行结构显形。
+
+<GpuGems2Ch35VectorPackingDiagram />
+
+```glsl
+// 同一逻辑：把四个独立值显式放进一个向量
+float4 samples = float4(a0, a1, a2, a3);
+float4 gain4 = float4(gain);
+float4 scaled = samples * gain4;
+float total = dot(scaled, weights);
+```
+
+向量化不是把所有东西都强行塞进四个通道。若四个值之间存在顺序依赖，或为了凑满通道而额外搬运数据，新增的 pack/unpack 可能抵消收益。优化目标是表达真实的独立性，而不是制造漂亮的类型。
+
+## 2. 数据级并行：布局本身也能改变工作量
+
+<Term def="通过重新排列数组或纹理，让多个数据元素能在同一四通道操作中一起消费；它关注的是数据形状，不只是指令写法。">
+  data-level parallelism
+</Term>
+
+有些任务天生是标量数组：每个 fragment 只处理一个值。可以把网格的四个象限对应位置放进同一个 RGBA texel，或把相邻四个 texel 压进一个四通道值。这样逻辑上仍处理同样的数据，但一次 fragment 工作可以覆盖更多元素。
+
+原章也提醒两种布局各有代价：减少 fragment 数量可能带来接近四倍的理论收益，但把数据重新打包、最后再解包会消耗时间；另一种应用专属布局可能复制数据换取更简单的访问。布局选择必须跟消费模式一起设计。
+
+<GpuGems2Ch35VectorPackingDiagram />
+
+<Callout type="trap" title="把理论四倍当成实测四倍">
+  现象 → RGBA packing 后 fragment 数少了，端到端时间却没有按比例下降。原因 →
+  packing、unpacking、格式转换和额外带宽没有进入“理论加速”分母。修法 →
+  把布局转换单独计时，比较完整生命周期；若数据在 GPU
+  上会连续复用，才更可能摊薄转换成本。
+</Callout>
+
+## 3. 计算频率：把不变量移到更少执行的阶段
+
+<Term def="同一表达式在 CPU、vertex、rasterizer 或 fragment 等阶段被执行的次数；优化就是让稳定的工作尽量靠近低频阶段。">
+  computational frequency
+</Term>
+
+GPU 管线可以看成一组并行的嵌套循环：少量三角形产生更多 vertex，rasterization 再产生大量 fragment，fragment program 往往是最内层。一个对整个几何体都相同的值，没必要在每个 fragment 重新计算；一个在 primitive 上线性变化的值，也可以交给 vertex 输出和 rasterizer 插值。
+
+<GpuGems2Ch35FrequencyPipelineDiagram />
+
+判断顺序是“是什么 → 为什么需要 → 在哪一层最合适”：全局常量通常 CPU 预计算后作为 uniform；随 primitive 线性变化的坐标可在 vertex 阶段准备；只有真正依赖每个 fragment 输入的部分才留在 fragment。移动工作不是凭阶段名称，而是比较每一层的执行次数与插值/传输成本。
+
+## 4. lookup table：存储换计算，也可能换来带宽瓶颈
+
+<Term def="把固定输入域与输出域的函数预先存进纹理，运行时通过坐标读取近似值；它用一次读取换掉多条算术指令。">
+  lookup table
+</Term>
+
+查表适合输入域有限、函数在多次运行中不变的情况，例如把复杂的棋盘判断预先编码成 0/1 mask。纹理还提供插值和最多四个通道，适合把多个相关函数放在一起。
+
+<GpuGems2Ch35LookupTableDiagram />
+
+但查表的收益有前提：被省下的计算必须足够多，访问路径必须有空间局部性，且程序原本不能已经被纹理带宽限制。随机查表会破坏 cache coherence；如果只是用一次 texture read 省下几条便宜算术，优化可能把 compute bottleneck 换成 memory bottleneck。
+
+<Callout type="trap" title="查表一定比算术便宜">
+  现象 → 加了一张 lookup texture，程序的总时间反而上升。原因 →
+  额外读取、缓存失配、插值误差或纹理带宽超过了被省下的算术。修法 →
+  分别测在线计算、查表读取和端到端时间；只有当访问相干且省下的工作足够多时才保留查表。
+</Callout>
+
+## 5. substreaming：拆掉 fragment 内层分支
+
+<Term def="把一个带分支的 fragment program 拆成多个无分支程序，并用不同的绘制区域或子流分别覆盖各条路径。">
+  substreaming
+</Term>
+
+fragment program 可以看成最内层循环，因此 CPU 里“把内层分支拆成多个循环”的做法也适用于 GPU。典型例子是网格边界：内部 cell 走短程序，边界 cell 走带边界条件的程序；用填充 quad 和边缘 primitive 分别覆盖它们，避免每个 fragment 都判断自己是否在边界。
+
+这不是无成本的删除分支。应用要维护多个 program、多个 primitive 和区域边界；当条件随机、区域很碎或程序状态很大时，拆分本身可能比分支更贵。应结合上一章的分支局部性判断，并在每次拆分后独立 benchmark。
+
+<GpuGems2Ch35OptimizationTimelineDiagram />
+
+## 6. swizzle 与 write mask：减少临时搬运
+
+<Term def="对四通道寄存器的成员做重排、复制或省略；write mask 则只更新目标寄存器的指定通道。">
+  swizzle operator
+</Term>
+
+`f.xyyz` 可以把 `x、y、z` 重新排列并复制成另一个四通道视图；它不等于逐个通道构造临时变量。比如邻域采样需要 `center.xy`、`center.x - 1`、`center.x + 1` 和 `center.y` 时，可以在 vertex 输出一个四通道插值量，再在 fragment 侧用 swizzle 取出不同坐标。
+
+write mask 的作用不同：`out.xz = value` 只承诺更新 x、z 通道，给编译器和硬件一个可以省略其他写入的信号。swizzle 是重排输入视图，write mask 是限制输出修改范围，二者不要混为一谈。
+
+<GpuGems2Ch35SwizzleDiagram />
+
+先猜一猜：在 Optimization Lab 中把 `scalar` 切成 `packed`，再把 compute stage 从 fragment 移到 vertex，哪一个指标会先减少？把 `table` 的 lookup coherence 降到 20%，你预计是 table reads 还是 cache risk 发生变化？
+
+<GpuGems2Ch35OptimizationLab />
+
+## 7. profiling：每次只接受有证据的优化
+
+原章给出的最可靠习惯是：先写出简单且正确的版本，然后每应用一项优化就独立计时。驱动可能在后台重排指令；CPU 侧 API 可能是 nonblocking，真正等待 GPU 的时间会在后面的任意调用上显现；因此单看某一行 CPU API 的耗时，不能直接归因给那一行。
+
+如果 GPU 侧已经可以低级分析，再查看指令调度、算术单元和队列；否则可用增量实验定位瓶颈：给某个阶段增加一点计算，若总时间随之增加，它可能是 compute-limited；给内存系统降频却不变，说明带宽可能不是当前限制。每次实验都只改变一个主因素，并保留基线、变更和回退结果。
+
+```text
+baseline = benchmark(version = "working")
+candidate = benchmark(version = "vectorized")
+if candidate.endToEnd < baseline.endToEnd:
+  keep(candidate)
+else:
+  revert(candidate)
+```
+
+这段代码表达的是工程纪律，不是一个能替代 GPU profiler 的评分器。优化的终点不是让代码看起来更复杂，而是能说清瓶颈在哪里、改动为什么影响它、以及在目标设备上是否仍然成立。
+
+## 三步验收：从布局改写到瓶颈归因
+
+<Stepper>
+  <Step title="第一步：暴露指令级与数据级并行">
+    把互不依赖的标量运算组织成向量；再检查布局是否让同一批数据一起进入 RGBA texel。记录 fragment 数、vector arithmetic units 和 pack/unpack 成本。
+
+    <GpuGems2Ch35VectorPackingDiagram />
+    <GpuGems2Ch35SwizzleDiagram />
+
+  </Step>
+  <Step title="第二步：降低重复执行的频率">
+    把 uniform 常量移到 CPU，把线性变化移到 vertex 并交给 rasterizer 插值；固定域函数再评估 lookup table，并检查额外读取的局部性。
+
+    <GpuGems2Ch35FrequencyPipelineDiagram />
+    <GpuGems2Ch35LookupTableDiagram />
+
+  </Step>
+  <Step title="第三步：逐项 benchmark 并定位瓶颈">
+    先记录能工作的基线，再依次尝试 substreaming、布局重排或查表；每项改变单独计时，检查工作是否只是从 fragment 转移到了 packing、带宽、驱动或另一个阶段。
+
+    <GpuGems2Ch35OptimizationTimelineDiagram />
+    <GpuGems2Ch35OptimizationLab />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 向量表达式与数据布局共同决定 GPU 能否并行处理多个值。
+- computational frequency 帮助把稳定工作移到 CPU、vertex 或插值阶段。
+- lookup table 用存储换计算，但必须检查带宽与缓存局部性。
+- substreaming、swizzle 和 write mask 都是在减少重复路径或临时搬运。
+- 每项优化都要独立 benchmark，确认端到端瓶颈真的移动了。
+
+<Exercises>
+
+**问题 1｜改写布局。** 一个 fragment program 对四个相邻标量各做一次乘法和加法。请给出一种 `float4` 改写，并说明如果最后还要把结果写回四个独立位置，需要额外记录什么成本。
+
+<Answer>
+  可以把四个标量放进 `float4 values`，用 `float4 result = values * gain + bias`
+  一次表达四路运算；写回时要记录通道拆分、packing/unpacking、格式转换以及输出布局是否需要额外
+  pass，不能只记录少了一条逻辑循环。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 在 Optimization Lab 中增加 `writeMask` 模式：当只需要 x、z 通道时，让 `packing words` 保持不变，但把一个新的 `written channels` 指标从 4 改成 2。这个指标怎样帮助你判断是否值得采用 write mask？
+
+<Answer>
+  可在 shape 类型中加入 `writeMask`，并让 `written channels =
+  2`，其他布局指标保持基线。它能提醒读者：write mask
+  主要减少输出写入与可能的带宽，不会自动减少 fragment
+  数或输入读取；是否值得仍要用端到端 profile 验证。
+</Answer>
+
+**问题 3｜场景选型。** 一个复杂函数每个 fragment 都执行 30 条算术，查表访问连续；另一个函数只执行 2 条算术，但每次查表都是随机地址。分别优先尝试什么，并写出需要验证的风险。
+
+<Answer>
+  前者可以优先尝试 lookup table，验证纹理读取、插值误差、表大小和 cache
+  局部性是否小于省下的算术；后者保留在线计算更稳妥，因为新增读纹理可能造成 cache
+  thrash 和 bandwidth bottleneck，仍应 benchmark 两条路径的端到端时间。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="instruction-level parallelism"
+    definition="把互不依赖的多个小运算放进同一批 GPU 指令中，让硬件同时处理它们。"
+  />
+  <GlossaryItem
+    term="data-level parallelism"
+    definition="重新摆放数据，让多个值能被同一个四通道操作一起消费。"
+  />
+  <GlossaryItem
+    term="computational frequency"
+    definition="一项工作在 GPU 的哪一层、被重复执行多少次；越靠近 fragment，通常次数越多。"
+  />
+  <GlossaryItem
+    term="lookup table"
+    definition="把函数答案提前存进纹理，运行时用一次读取代替多条计算。"
+  />
+  <GlossaryItem
+    term="substreaming"
+    definition="把不同路径的数据拆成不同子流和程序，减少每个 fragment 内部的分支。"
+  />
+  <GlossaryItem
+    term="swizzle operator"
+    definition="用简短写法重排或复制四通道寄存器的成员，避免逐个通道搬运。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 35. GPU Program Optimization"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-35-gpu-program-optimization"
+/>
