@@ -1,0 +1,229 @@
+---
+title: "GPU Gems 3 · Chapter 26. Object Detection by Color: Using the GPU for Real-Time Video Image Processing"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 26
+description: "从视频颜色掩码出发，解释如何用 GPU 归约得到目标质心与面积，再驱动实时叠加和距离缩放。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-26-object-detection-color-using-gpu-real-time-video"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-26
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch26CentroidReductionDiagram,
+  GpuGems3Ch26ColorDetectionLab,
+  GpuGems3Ch26CompositeDiagram,
+  GpuGems3Ch26MaskDiagram,
+  GpuGems3Ch26PipelineDiagram,
+  GpuGems3Ch26RoiDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch26-color-detection";
+
+<Objectives>
+
+- 能解释颜色掩码、坐标加权和多次下采样如何把整帧视频变成一个目标质心与面积
+- 能修改 Color Detection and Tracking Lab 的目标色、阈值、噪声、归约方式与叠加图，比较误检和定位结果
+- 能回答：为什么 GPU 只返回 1×1 的统计像素，就能让 CPU 继续负责视频编解码和交互逻辑
+
+</Objectives>
+
+## 先问：为什么找一个彩色物体不必把整帧搬回 CPU
+
+想象你在一张大照片里找一只颜色独特的球。最笨的做法是把每个像素都交给 CPU，再逐个比较；更聪明的做法是让一台并行工人同时查看整张照片，最后只交回“球在哪里、占了多大”两行信息。
+
+本章解决的就是这个问题：视频帧留在 GPU 上，像素着色器先筛出目标色，再把所有命中的坐标归约成一个质心和一个面积。没有这条路径，CPU 会被像素扫描拖住，无法同时做好视频解码、编码和游戏逻辑。
+
+我们不会依赖摄像头权限，而是用确定性的彩色目标模拟一帧视频。这样每个参数变化都能复现同一条检测链路：掩码、统计、叠加。
+
+<Callout type="tip" title="先预测：把阈值调大一定更稳定吗？">
+  在 Lab 中先用 clean frame 观察绿色目标，再切换 extra similar colors 并把 threshold 调大；猜一猜掩码面积和质心会如何漂移。先只改阈值，再只改噪声。
+</Callout>
+
+## 1. 让图像处理框架管理 GPU 采样路径
+
+<Term def="把图像输入、采样器、像素 kernel 和输出组织成惰性图像处理图的高层框架；它可以只计算最终输出需要的像素。">
+  Core Image filter
+</Term>
+
+官方原章以 Core Image 为例：上层 filter 设置 sampler、传入参数、选择 kernel，再把结果写入目标图像。kernel 仍然按像素运行，但框架会处理坐标变换、硬件差异和惰性求值，让我们可以把重点放在“每个像素要算什么”。
+
+更重要的是，输出不一定必须是普通 RGBA 画面。检测阶段可以让四个通道承载 `x·m`、`y·m`、`m` 等统计量，下一轮 kernel 再把它们继续归约。GPU 负责并行算，CPU 只接收最后的少量结果。
+
+<GpuGems3Ch26RoiDiagram />
+
+## 2. 用颜色距离生成二值掩码
+
+<Term def="按目标颜色和阈值把每个像素分成命中或未命中两类的图像；命中像素为 1，其他像素为 0。">
+  color mask
+</Term>
+
+先选择要追踪的颜色，再为它设置容差。对当前像素和目标颜色分别做亮度归一化，可以减轻同一物体因光照变化而产生的整体明暗差；随后计算颜色距离，小于阈值就输出白色，否则输出黑色。
+
+阈值是检测系统最敏感的旋钮：太小会漏掉阴影或高光中的目标，太大会把背景里的相似颜色一起吞进来。掩码阶段只回答“像不像”，不回答“中心在哪里”，因此后面还要做统计归约。
+
+<GpuGems3Ch26MaskDiagram />
+
+<Callout type="trap" title="误区：只用 RGB 三个通道分别设固定范围">
+  **现象 →** 光线一变就漏检，或背景稍微接近目标色就大面积误检。
+
+  **原因 →** 三个通道的绝对范围同时受亮度和色偏影响，不能稳定表达“颜色相似”。
+
+  **修法 →** 先把当前色和目标色归一化，再计算颜色距离，并用阈值控制容差。
+</Callout>
+
+## 3. 把掩码变成可以归约的三个通道
+
+<Term def="所有命中像素坐标的加权平均位置；权重是掩码值，结果就是目标色区域的中心。">
+  centroid
+</Term>
+
+令掩码为 `m(x,y)`。目标中心就是所有 `x·m` 的总和除以 `m` 的总和，`y` 同理；而分母 `sum(m)` 还直接告诉我们目标区域的面积。于是每个像素不再输出一张最终画面，而是输出三项统计：横坐标贡献、纵坐标贡献、命中权重。
+
+这一步把“在整帧里找位置”改写成“在 GPU 上做可并行的加法”。坐标先归一化到 0 到 1，最终 1×1 像素中的 RG 通道就是质心，B 通道就是面积比例。
+
+<GpuGems3Ch26CentroidReductionDiagram />
+
+## 4. 用多次下采样把整张图压成 1×1
+
+<Term def="把较大图像按固定比例逐级缩小、每次合并邻域统计的过程；重复执行直到只剩一个汇总像素。">
+  multipass reduction
+</Term>
+
+GPU 擅长同时处理很多像素，但不适合让每个片元直接写同一个全局计数器。因此采用多次 pass：先把每个像素变成带权坐标，再把邻域平均到更小的图，反复进行直到得到一个像素。原章的示例一次横纵都缩小四倍，并利用线性插值硬件用较少采样覆盖更大的块。
+
+如果源图不是正方形或尺寸不是二的幂，需要注意边界和面积补偿；图像域外的透明像素会让平均值带固定比例偏差，最后应按真实图像面积校正。归约结束后再做一次安全除法，避免目标完全消失时除以零。
+
+<GpuGems3Ch26PipelineDiagram />
+
+## 5. 把质心和面积交给叠加阶段
+
+<Term def="用统计结果把另一张图移动到目标中心，并根据目标面积估计它应显示的大小后进行合成的过程。">
+  overlay compositing
+</Term>
+
+叠加 kernel 读取 1×1 结果，把图像采样位置平移到质心，再用面积的平方根估计目标与相机的距离尺度。对于形状大致不变的球或标记物，面积随距离平方变化，因此开平方能给出足够稳定的大小线索。
+
+最后用预乘 alpha 合成叠加图，而不是把透明颜色再乘一遍 alpha。这个假设不适用于会改变形状的气球或液体，但对球、彩色道具和交互标记很实用。
+
+<GpuGems3Ch26CompositeDiagram />
+
+<Callout type="trap" title="误区：把质心当成精确的物体边界和距离">
+  **现象 →** 叠加图中心大致正确，但缩放在变形物体或噪声场景中明显抖动。
+
+  **原因 →** 质心只描述掩码的加权中心，面积平方根的距离估计还假设目标形状不变。
+
+  **修法 →** 对球形或刚性目标使用面积尺度；对形变目标增加形状、时间滤波或更强的跟踪状态。
+</Callout>
+
+## 6. ROI 决定何时值得全帧处理
+
+<Term def="为计算某个输出区域而实际需要从源图读取的区域；它帮助框架跳过不会影响最终结果的像素。">
+  region of interest
+</Term>
+
+颜色检测的好处是计算很轻，即使每帧处理整张高清图也可能足够快；但当 filter 链包含变换、裁剪或只输出局部区域时，ROI 就决定了哪些源像素真的需要采样。Core Image 可以从目标反向推导依赖关系，把不可能出现在最终输出里的区域排除。
+
+不要把 ROI 误当成检测到的物体框。ROI 是计算依赖范围，掩码的白色区域才是颜色命中范围；两者服务于不同阶段。
+
+## 动手走一遍：从视频帧到叠加结果
+
+<Stepper>
+  <Step title="先生成颜色掩码">
+    归一化当前像素和目标颜色，计算距离并用阈值输出黑白掩码；先控制误检，再谈定位。
+
+    <GpuGems3Ch26MaskDiagram />
+  </Step>
+  <Step title="再归约到一个统计像素">
+    把 `x·m、y·m、m` 作为通道，反复下采样直到得到质心和面积，避免 CPU 扫描整帧。
+
+    <GpuGems3Ch26CentroidReductionDiagram />
+  </Step>
+  <Step title="最后定位并叠加图像">
+    以质心为中心移动 overlay，用面积平方根估计大小，并用预乘 alpha 合成到视频上。
+
+    <GpuGems3Ch26CompositeDiagram />
+  </Step>
+</Stepper>
+
+<GpuGems3Ch26ColorDetectionLab />
+
+## 小结
+
+- GPU 颜色检测先生成掩码，再把整帧压缩成质心和面积两个关键信号。
+- 归一化颜色距离和阈值共同决定漏检与误检的取舍。
+- `x·m、y·m、m` 三个通道让质心计算可以通过多次下采样并行完成。
+- 质心定位叠加图，面积平方根在形状稳定时提供距离缩放线索。
+- ROI 是计算依赖范围，不等于颜色掩码中的目标区域。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Color Detection and Tracking Lab 中把 frame noise 切到 noisy，再分别把 threshold 调到低值和高值。记录掩码面积、质心和背景风险的变化。
+
+<Answer>
+
+低阈值会过滤掉更多相似背景，掩码面积和质心通常更稳定，但也可能漏掉目标的阴影部分；高阈值会扩大命中区域，噪声场景下背景风险升高，质心可能被相似颜色拉偏。
+
+</Answer>
+
+**问题 2｜诊断归约结果为零。** 掩码画面能看到目标，但最终 1×1 结果的面积为零。请检查颜色空间、坐标通道和下采样链。
+
+<Answer>
+
+先确认目标颜色和当前像素使用同一种工作颜色空间，并且阈值没有过小；再检查 `x·m、y·m、m` 的第三通道确实保留了掩码权重；最后确认每次 reduction 的采样坐标、边界补偿和最后的除零保护没有把有效值清掉。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个形状稳定的彩色球、一个会膨胀的气球、一个只占小矩形区域的 UI 标记，分别如何选择面积缩放、时间滤波和 ROI 策略？
+
+<Answer>
+
+彩色球适合使用面积平方根估计叠加大小；会膨胀的气球不能把面积简单当距离，应加入形状或时间状态；小型 UI 标记若输出区域固定，可以用 ROI 限制采样范围，减少不必要的整帧处理。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Core Image filter">
+    把图像采样、像素 kernel 和输出组织成 GPU 处理图的高层过滤器。
+  </GlossaryItem>
+  <GlossaryItem term="color mask">
+    用颜色距离和阈值生成的黑白图，白色表示像素命中目标颜色。
+  </GlossaryItem>
+  <GlossaryItem term="centroid">
+    目标像素坐标按掩码权重求出的中心位置。
+  </GlossaryItem>
+  <GlossaryItem term="multipass reduction">
+    反复缩小并合并统计通道，直到把整张图汇总为一个像素。
+  </GlossaryItem>
+  <GlossaryItem term="overlay compositing">
+    按质心移动、按面积缩放另一张图，再把它合成到视频上的过程。
+  </GlossaryItem>
+  <GlossaryItem term="region of interest">
+    为计算输出实际需要读取的源图区域，用于跳过无关像素。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 26. Object Detection by Color: Using the GPU for Real-Time Video Image Processing"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-26-object-detection-color-using-gpu-real-time-video"
+/>
