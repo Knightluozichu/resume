@@ -4226,6 +4226,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp05VisualSystemDiagram: module0.Cgp05VisualSystemDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-07-essential-mathematics":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-07-essential-mathematics");
+      return {
+        Cgp07BasisDiagram: module0.Cgp07BasisDiagram,
+        Cgp07EssentialMathematicsLab: module0.Cgp07EssentialMathematicsLab,
+        Cgp07SpacesDiagram: module0.Cgp07SpacesDiagram,
+        Cgp07VectorDiagram: module0.Cgp07VectorDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
