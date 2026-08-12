@@ -1,0 +1,252 @@
+---
+title: "GPU Gems 2 · Chapter 18. Using Vertex Texture Displacement for Realistic Water Rendering"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 18
+description: "用顶点纹理位移把滚动高度场变成水面几何，再用邻域法线、反射和 LOD 控制真实感与 GPU 成本。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-18-using-vertex-texture-displacement-for-realistic-water-rendering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-18
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch18DisplacementDiagram,
+  GpuGems2Ch18LodDiagram,
+  GpuGems2Ch18NormalDiagram,
+  GpuGems2Ch18VertexWaterLab,
+  GpuGems2Ch18WaterPipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch18-vertex-water";
+
+<Objectives>
+
+- 能解释 vertex texture displacement 如何把时间变化的高度场映射到水面顶点，并说明它受网格密度与纹理寻址的约束
+- 能实现两张滚动高度纹理的混合、位移后 normal reconstruction，并区分几何更新、光照更新和反射采样
+- 能调节 VertexWaterLab 的波形、网格密度与相机距离，定位法线滞后、边界接缝和远景顶点浪费
+
+</Objectives>
+
+## 先把“水面动画”拆成几何、法线和采样
+
+真实水面不是一张会移动的蓝色图片。镜头靠近时，波峰会改变轮廓；光线移动时，高光又会沿波面改变；镜头拉远后，屏幕上一个像素可能覆盖很多个波纹。要把这三个现象同时表达出来，需要让高度场参与顶点位置、让位移后的邻域参与法线，并让细节层级匹配屏幕覆盖率。
+
+先打开实验，固定相机距离，分别改变 wave time、wave B mix 和 grid density。预测哪一个旋钮会改变几何轮廓，哪一个只改变相位；再切换 normal debug 与 LOD debug，观察水面是否“形状在动但高光不动”，或远景仍在处理近景级别的顶点。
+
+<GpuGems2Ch18VertexWaterLab />
+
+<Callout type="tip" title="先定义坐标与高度约定">
+  调试前固定 UV 的原点、时间正方向、世界 up 轴、height
+  的单位和波面边界。位移量是 local up 还是 world
+  up，必须与法线、反射向量和包围盒使用同一套约定。
+</Callout>
+
+<Callout type="trap" title="把滚动纹理当成已经完成的水面几何">
+  现象 → 纹理看起来在流动，但水面轮廓始终是一张平面。原因 →
+  只在像素阶段移动颜色或法线，没有在顶点阶段读取高度并修改位置。修法 →
+  让网格顶点携带稳定 UV，在 vertex texture fetch
+  后写入位移位置，并用同一高度函数更新 bounds 与法线输入。
+</Callout>
+
+<Term def="在顶点阶段读取纹理中的高度值，并沿约定的 up 方向改变顶点位置的渲染技术；它把纹理采样从颜色阶段前移到几何生成阶段。">
+  vertex texture displacement
+</Term>
+
+<Term def="定义平面上每个 UV 位置高度的离散函数；它可以来自滚动纹理、预计算波形或多个波场的混合。">
+  height field
+</Term>
+
+<GpuGems2Ch18WaterPipelineDiagram />
+
+把水面管线分成四段：CPU 或材质状态提供时间、波形参数和网格；顶点阶段通过 UV 读取 height field 并修改位置；几何之后重建或传递正确法线；像素阶段再进行反射、折射、雾和颜色合成。任何一段使用了不同的 UV、时间或坐标约定，都会出现“几何在动但光照不跟随”的错觉。
+
+## 1. 用高度场推动规则网格
+
+规则网格的每个顶点可以携带 $(u,v)$。将 UV 映射到水面局部坐标 $(x,z)$，从一个或多个高度纹理读取 $h$，再沿水面法线方向写入位置：
+
+$$
+  p'(u,v,t)=p_0(u,v)+hat{n}_{up}\,A\,h(u,v,t),
+$$
+
+其中 $A$ 是世界单位中的位移幅度。关键是 $h$ 的采样和网格位置必须使用相同的空间尺度；如果纹理滚动速度以 texel 为单位而网格以米为单位，波速和波长会随着物体缩放悄悄改变。
+
+<GpuGems2Ch18DisplacementDiagram />
+
+两张或多张高度纹理可以用不同方向和速度滚动，再按 mix 权重叠加，以减少单张纹理的重复感。混合不应只叠颜色：高度、法线和用于反射的微表面方向必须来自一致的波场。高度纹理的 wrap 方式也会影响边界，周期 tile 可以无缝循环，但 clamp 会在边缘形成水平带。
+
+<Term def="沿水面平面传播的参数化波形；Gerstner wave 用水平位移和垂直位移描述较尖的波峰，可作为高度纹理之外的解析波源。">
+  Gerstner wave
+</Term>
+
+如果采用解析波而不是纹理，Gerstner wave 可以直接给出位置和导数，便于得到更尖的波峰；但多个波相加时要限制总振幅，否则波面会穿过海床或产生不合理的自交。纹理高度场更适合把离线模拟或艺术家绘制的细节搬到 GPU，代价是纹理带宽、寻址和 mip 选择。
+
+<Callout type="trap" title="只更新高度，不更新边界和接缝策略">
+  现象 → 水面在镜头移动或块边界处突然被裁掉，或者相邻 tile 出现断裂。原因 →
+  包围盒仍使用未位移平面，或相邻块的 UV、wrap、时间相位不一致。修法 →
+  用最大保守振幅扩展 bounds，统一 tile
+  的半开区间与寻址规则，并对相邻块边界做相同时间和高度采样回归。
+</Callout>
+
+## 2. 位移后法线决定高光是否可信
+
+位移几何改变了表面切线，原始平面法线不能继续代表水面。最直接的重建方法是对同一个时间和高度函数采样两个相邻点：
+
+$$
+  T=p'(u+\epsilon,v,t)-p'(u,v,t),\qquad
+  B=p'(u,v+\epsilon,t)-p'(u,v,t),\qquad
+  N=normalize(T\times B).
+$$
+
+<Term def="在位移后的表面上用相邻位置差分得到切线与双切线，再通过叉积并归一化得到用于光照的法线。">
+  normal reconstruction
+</Term>
+
+<GpuGems2Ch18NormalDiagram />
+
+这里的 $epsilon$ 应与一个 texel 或网格边长相关，而不是永远使用一个随场景缩放失效的常数。若法线在顶点阶段重建，可以把结果随顶点传给像素阶段；若水面采用更密的像素级法线细节，也要保证低频几何法线与高频法线贴图的切线框架一致。两套法线使用不同时间或不同 UV，会让反射高光出现相位漂移。
+
+水面材质通常还会使用 Fresnel 权重、反射环境和折射颜色。几何位移负责轮廓，法线负责局部方向，Fresnel 负责视角依赖的反射比例；不要用把蓝色加亮的方式代替这些证据。调试时可以先关闭雾和泡沫，只显示法线方向，再逐层恢复反射与折射。
+
+## 3. 网格密度与 level of detail
+
+<Term def="根据相机距离、屏幕覆盖率或纹理 footprint 调整水面网格和采样细节的层级策略；它让顶点工作与可见细节匹配。">
+  level of detail
+</Term>
+
+本章的主题是 **Using Vertex Texture Displacement for Realistic Water Rendering**：把高度场送入顶点阶段，形成可被镜头观察到的波形轮廓，再用法线和反射完成水面外观。
+
+顶点纹理位移只能移动已有顶点，不能凭空增加几何。若一个波峰在屏幕上覆盖多个像素但网格只有一条边，增加 height texture 分辨率也不会让轮廓变细；反过来，远处一个像素覆盖大量波纹时，仍使用近景密度会浪费 vertex fetch 和变换工作。
+
+<GpuGems2Ch18LodDiagram />
+
+LOD 需要同步考虑四项：网格顶点数量、height map 的 mip 或采样 footprint、法线重建邻域，以及位移幅度与包围盒。块状水面可以用环形网格或分块 LOD，让靠近相机的区域更密；相邻环之间要用共享边、裙边或约束采样消除裂缝。远景也可以把高频波纹转移到法线或反射扰动，但这改变的是表现层级，不是几何轮廓。
+
+## 三步实验：从高度采样到可信光照
+
+每一步只改变一个变量，并以“位置、法线、屏幕细节”三类证据记录结果。只要出现接缝或高光跳变，就先固定时间和相机，不要继续增加波形复杂度。
+
+<Stepper>
+  <Step title="第一步：验证 height field 到位移位置">
+    保持 grid density 不变，只改变 wave time 与 wave B mix。先预测水面轮廓和高度范围，再在位移网格模式中检查 UV 滚动、振幅和 tile 边界是否连续。
+
+    <GpuGems2Ch18DisplacementDiagram />
+
+  </Step>
+  <Step title="第二步：验证位移后的 normal reconstruction">
+    固定高度场，切换 normal debug。观察绿色法线是否随波峰改变方向；如果形状在动而法线仍垂直，检查邻域采样是否使用了同一时间、同一 UV 和位移尺度。
+
+    <GpuGems2Ch18NormalDiagram />
+
+  </Step>
+  <Step title="第三步：验证 LOD 与屏幕覆盖率">
+    只拉远 camera distance，再比较网格密度、height mip、法线邻域和块边界。近景细节不足说明网格不够密，远景成本过高说明 LOD 没有随屏幕覆盖率生效。
+
+    <GpuGems2Ch18LodDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用更大的位移幅度掩盖网格不足">
+  现象 → 波峰更高了，但轮廓仍然呈锯齿或三角片折线。原因 → height texture
+  的频率高于网格能够表达的几何频率，振幅不能创造新顶点。修法 →
+  先按屏幕覆盖率增加近景网格或把高频迁移到法线/反射，再校准物理尺度中的振幅。
+</Callout>
+
+<Callout type="trap" title="把旧平面法线与新位置混用">
+  现象 → 水面轮廓随波形起伏，但镜面高光像贴在一张平板上。原因 → vertex shader
+  修改了 position，却仍传递未位移的 normal。修法 → 用同一 height function
+  做邻域差分或解析导数，统一切线框架，最后归一化并检查负缩放。
+</Callout>
+
+<Callout type="trap" title="LOD 只减少顶点，不同步减少采样细节">
+  现象 →
+  远景顶点数量下降，但纹理带宽和法线采样仍按近景预算，或者相邻块出现闪烁裂缝。原因
+  → 网格、mip、邻域和边界连接被当成四个独立旋钮。修法 → 以屏幕 footprint
+  共同选择网格与纹理级别，用共享边/裙边/约束采样处理块边界，并对相机移动做稳定性回归。
+</Callout>
+
+## 本章小结
+
+- Using Vertex Texture Displacement for Realistic Water Rendering 的核心是：在顶点阶段从 height field 读取高度，把规则网格变成有轮廓的水面几何。
+- 多张滚动高度纹理或 Gerstner wave 可以降低重复感、表达传播方向，但 UV、时间、振幅和边界必须保持一致。
+- 位移后必须执行 normal reconstruction；位置改变、法线改变和 Fresnel 反射是不同层次的证据。
+- level of detail 要同时协调网格、height mip、法线邻域和块边界；纹理分辨率不能替代缺失的顶点。
+- 发布前用固定的边界、相机移动和时间回归检查接缝、裁剪、高光相位与远景成本，而不是只看静态近景截图。
+
+<Exercises>
+
+**问题 1｜定位平面水面。** 高度纹理在调试视图中确实有波纹，但最终水面轮廓仍是平面。请给出排查顺序。
+
+<Answer>
+  先检查顶点阶段是否真的执行 vertex texture
+  displacement，而不是只在像素阶段采样高度；再检查 UV 是否随时间更新、height
+  是否按正确通道和单位解码、up
+  轴和振幅是否非零；最后检查输入网格是否有足够顶点以及裁剪/包围盒是否把位移后的顶点拒绝。纹理有内容不等于顶点位置使用了它。
+</Answer>
+
+**问题 2｜诊断高光滞后。** 水面轮廓已经随时间变化，但镜面高光方向几乎不变。请解释原因并提出修复。
+
+<Answer>
+  最常见原因是位置更新了而 normal 仍是原始平面法线，或法线重建使用了不同时间、UV
+  和位移尺度。用同一位移函数对相邻位置求差分，计算并归一化 $T\times
+  B$，再确保切线框架和反射/折射阶段使用同一坐标空间；之后分别显示法线、反射和
+  Fresnel，避免把颜色调亮当成修复。
+</Answer>
+
+**问题 3｜设计水面 LOD。** 近景需要尖锐波峰，远景希望降低顶点和纹理成本。你会同步调整哪些量，如何验证不会出现裂缝？
+
+<Answer>
+  依据屏幕覆盖率选择分块网格密度，同时选择匹配的 height mip 或采样
+  footprint，调整 normal reconstruction
+  的邻域，并为相邻块使用共享边、裙边或约束采样。验证时固定波相位，逐步移动相机穿过
+  LOD 边界，比较位置、法线、反射和 GPU vertex/texture
+  计数；若只减少顶点而保留近景采样，成本不会按预期下降。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="vertex texture displacement"
+    definition="在顶点阶段读取高度纹理并沿约定方向改变顶点位置的技术。"
+  />
+  <GlossaryItem
+    term="height field"
+    definition="定义平面上每个 UV 位置高度的离散函数。"
+  />
+  <GlossaryItem
+    term="Gerstner wave"
+    definition="用水平与垂直位移参数化传播波形、并可提供表面导数的解析波。"
+  />
+  <GlossaryItem
+    term="normal reconstruction"
+    definition="用位移后的相邻位置差分得到切线与双切线，再计算表面法线的方法。"
+  />
+  <GlossaryItem
+    term="level of detail"
+    definition="按相机距离或屏幕覆盖率调整网格和采样细节的层级策略。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 18. Using Vertex Texture Displacement for Realistic Water Rendering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-18-using-vertex-texture-displacement-for-realistic-water-rendering"
+/>
