@@ -1,0 +1,257 @@
+---
+title: "GPU Gems 2 · Chapter 19. Generic Refraction Simulation"
+type: C
+section: "GPU Gems 2 Part II · Shading, Lighting, and Shadows"
+order: 19
+description: "用表面法线、介质折射率和厚度近似计算折射方向，再通过环境或屏幕空间查询生成可控的透明材质效果。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-19-generic-refraction-simulation"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-19
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch19ErrorBudgetDiagram,
+  GpuGems2Ch19RefractionLab,
+  GpuGems2Ch19RefractionPipelineDiagram,
+  GpuGems2Ch19SnellDiagram,
+  GpuGems2Ch19ThicknessDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch19-refraction";
+
+<Objectives>
+
+- 能解释 Generic Refraction Simulation 如何把入射方向、表面法线和介质 IOR 变成折射方向，并区分方向计算与颜色查询
+- 能实现厚度或后表面深度近似、屏幕空间颜色采样和 total internal reflection fallback，说明每种近似的失效边界
+- 能调节 RefractionLab 的介质方向、入射角、IOR 与厚度，定位法线错误、偏移过大和临界角闪烁
+
+</Objectives>
+
+## 先把“透明”拆成方向、距离和颜色
+
+透明材质最容易被一张扭曲的环境图伪装：画面看起来像玻璃，但折射角、物体厚度和背面颜色之间没有可解释的关系。GPU Gems 2 第 19 章的 **Generic Refraction Simulation** 关注的是一条可实时近似的路径：先根据入射方向和法线计算光线进入介质后的方向，再用厚度、后表面或屏幕空间信息决定它应该看到什么颜色。
+
+先打开实验，固定 IOR，分别切换 air → glass 与 glass → air。增大入射角时，预测折射方向是更靠近法线还是更贴近界面；再切到厚度调试，确认厚度只改变颜色查询偏移，而不会替代正确的方向计算。最后用 TIR 调试观察临界角附近为何不能继续采样透射颜色。
+
+<GpuGems2Ch19RefractionLab />
+
+<Callout type="tip" title="先写清楚光线和法线方向">
+  调试前统一 incident vector 是“指向表面”还是“离开表面”，normal
+  是否朝向当前介质，并记录 n₁、n₂
+  的顺序。折射公式本身没有替你修正坐标约定，方向错一位就会表现成整块材质反向扭曲。
+</Callout>
+
+<Callout type="trap" title="把 screen-space 偏移当成折射定律">
+  现象 → 颜色纹理确实发生偏移，但换 IOR 或视角后折射弯曲几乎不变。原因 →
+  只用法线乘一个经验 scale，没有先计算介质边界上的折射方向。修法 → 先用
+  Snell/refract 得到方向，再用厚度、后表面或深度信息把方向投影为颜色查询；把
+  scale 当作材质参数而不是物理替代。
+</Callout>
+
+<Term def="描述光线穿过介质界面后方向变化的向量；它由入射方向、法线和两个介质的折射率共同决定。">
+  refraction vector
+</Term>
+
+<Term def="介质中光速与真空光速的比值；渲染中用两个介质的 IOR 比值控制折射角。">
+  index of refraction
+</Term>
+
+<GpuGems2Ch19RefractionPipelineDiagram />
+
+折射模拟至少有两个可以独立验证的输出：第一是 `T` 的方向，第二是沿 `T` 查询到的颜色。即使方向正确，厚度或屏幕空间投影错误也会让背景拉伸；即使颜色查询看起来平滑，方向错误也会让 IOR 和视角失去意义。把它们分开显示，才能知道问题在几何、向量还是纹理坐标。
+
+## 1. 用 Snell 定律计算折射方向
+
+<Term def="光线从一个介质进入另一个介质时，入射角和折射角满足的关系；它是计算折射方向与临界角的基础。">
+  Snell’s law
+</Term>
+
+设入射介质折射率为 $n_1$，出射介质折射率为 $n_2$，法线方向为 $N$。折射角满足：
+
+$$
+  n_1\sin(\theta_i)=n_2\sin(\theta_t).
+$$
+
+GPU shader 通常直接使用 `refract(I, N, eta)` 形式的向量函数，其中 $eta=n_1/n_2$。实现时要先把 $I$、$N$ 归一化，并保证它们位于同一坐标空间。若法线来自法线贴图，需要先从切线空间变到世界或视图空间，再参与折射计算。
+
+<GpuGems2Ch19SnellDiagram />
+
+当 $eta\sin(\theta_i)>1$ 时，$\theta_t$ 不存在，光线不会离开当前介质，这就是 total internal reflection。不能把无效的平方根或 NaN 继续送进颜色采样；应检测判别式，使用反射向量作为 fallback，并在材质边缘保持连续。
+
+<Term def="从高折射率介质射向低折射率介质时，入射角超过临界角后不再产生透射光、而全部返回原介质的现象。">
+  total internal reflection
+</Term>
+
+<Callout type="trap" title="忽略 n₁、n₂ 顺序与全内反射">
+  现象 → 玻璃到空气时角度越大，shader 输出黑色、NaN 或闪烁的折射颜色。原因 → IOR
+  比值方向写反，或没有检查 $eta\sin(\theta_i)$ 是否超过 1。修法 →
+  根据光线所在介质选择 n₁/n₂，先检查判别式；发生 TIR 时使用 reflect
+  方向或稳定的边界颜色，不读取无效 UV。
+</Callout>
+
+## 2. 用厚度与后表面补回“穿过多少介质”
+
+只知道 front surface 的位置和法线时，折射光线可以告诉我们“朝哪个方向看”，但不知道它在物体内部走了多远。薄片、球体和厚玻璃在相同 front normal 下会产生不同的颜色偏移，因此通用方案常用一个厚度代理：厚度纹理、backface depth、双层位置或预计算的 object-space thickness。
+
+<Term def="描述折射光线在介质内部传播距离的近似量；它可以来自厚度纹理、前后表面深度差或规则物体的解析估计。">
+  thickness proxy
+</Term>
+
+<GpuGems2Ch19ThicknessDiagram />
+
+一种可解释的近似是先在 front surface 计算 $T$，再用厚度 $d$ 沿 $T$ 推进到估计的 exit point：$p_{exit}\approx p_{front}+dT$。随后把 exit point 投影到环境、后表面或屏幕空间，取得透过物体后的颜色。这个模型不等同于完整的光线与真实背面相交，但它把厚度参数和颜色偏移联系起来，便于按材质调节。
+
+如果使用 backface depth，需要确认前后深度位于相同投影和线性化空间；直接相减非线性 depth 值会让远处厚度严重失真。screen-space 方案还需要处理射线走出屏幕、穿过别的物体或投影到透明物体自身之外的情况。遇到查询失败时，宁可使用环境颜色或反射 fallback，也不要把越界坐标 clamp 成一条明显的拉伸带。
+
+## 3. 把方向投影成可查询的颜色
+
+<Term def="用折射方向、厚度或 exit point 推导纹理坐标，并从屏幕颜色、环境图或后表面缓存取回透射颜色的采样策略。">
+  screen-space lookup
+</Term>
+
+颜色来源有三类：环境图适合没有可见背景的封闭场景，屏幕颜色适合把场景背景折射进透明物体，后表面缓存适合需要近似穿透顺序的物体。三者都不是免费的真实光传输：环境图缺乏局部遮挡，屏幕颜色缺少屏幕外信息，后表面缓存需要额外的渲染目标和深度管理。
+
+<GpuGems2Ch19ErrorBudgetDiagram />
+
+折射颜色常与 Fresnel 权重混合：正视角更多看到透射，掠射角更多看到反射。混合时要让反射与透射的颜色、曝光和 alpha 处在一致的能量约定中。若直接把两个未预乘颜色相加，边缘会过亮；若透明排序和深度写入不一致，正确的折射方向也会被错误遮挡。
+
+<Callout type="trap" title="用 clamp 隐藏 screen-space lookup 越界">
+  现象 → 画面没有黑边，但物体边缘出现背景颜色被拉成长条。原因 → 折射 UV
+  超出屏幕后被 clamp 到最后一个像素，越界状态被伪装成有效样本。修法 → 返回
+  lookup validity，越界时切换环境或反射
+  fallback，并对镜头移动、物体靠近屏幕边缘和大厚度做回归。
+</Callout>
+
+## 三步实验：从向量到透射颜色
+
+每一步只改变一个变量，记录入射角、IOR、折射角、TIR 状态和颜色查询偏移。不要用最终颜色单独判断方向正确性；先观察向量和命中点，再恢复材质混合。
+
+<Stepper>
+  <Step title="第一步：验证 refraction vector">
+    选择 air → glass，固定厚度，只改变 incident angle 与 IOR。预测 θₜ 如何变化，再用 Snell 图核对 n₁、n₂ 顺序、法线方向和归一化状态。
+
+    <GpuGems2Ch19SnellDiagram />
+
+  </Step>
+  <Step title="第二步：验证 thickness proxy">
+    固定 IOR 与入射角，切换厚度调试并改变 thickness。观察方向不变而 lookup offset 改变；若折射角也跟着厚度变化，说明把距离错误地混进了方向公式。
+
+    <GpuGems2Ch19ThicknessDiagram />
+
+  </Step>
+  <Step title="第三步：验证 TIR 与颜色 fallback">
+    切换 glass → air，逐步增大入射角直到 TIR。确认透射颜色查询停止、反射 fallback 连续，并检查屏幕边缘越界时没有 clamp 拉伸。
+
+    <GpuGems2Ch19RefractionPipelineDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把厚度乘到法线偏移上而不是折射方向上">
+  现象 → 改变物体厚度会让边缘颜色变化，但视角和 IOR 对弯折角几乎没有影响。原因 →
+  厚度被当成了 normal map 的 UV scale，方向阶段没有真正使用 refract。修法 →
+  先计算单位 refraction vector，再沿它估计 exit
+  point；把厚度只用于传播距离和颜色查询位置。
+</Callout>
+
+<Callout type="trap" title="把前后 depth 的非线性值直接相减">
+  现象 → 近处厚度看起来正常，远处物体的折射偏移突然爆炸或消失。原因 →
+  perspective depth 不是线性距离，前后 buffer 的数值差不等于介质内部距离。修法 →
+  先还原到线性 view-space 或 object-space，再求差并限制有效范围。
+</Callout>
+
+<Callout type="trap" title="只用折射颜色替代反射和透明排序">
+  现象 → 玻璃边缘发灰发黑、相互重叠的透明物体顺序错误，开发者继续调 IOR。原因 →
+  Fresnel、alpha、深度写入和透明排序是独立的管线状态。修法 →
+  先单独验证反射、透射、validity 和 alpha，再按材质规则混合，并为 TIR
+  与查询失败保留 fallback。
+</Callout>
+
+## 本章小结
+
+- Generic Refraction Simulation 先计算 refraction vector，再决定用环境、后表面或 screen-space lookup 得到透射颜色；方向和颜色来源必须分开验证。
+- Snell's law 由 n₁、n₂、法线和入射方向决定折射角；IOR 顺序错误或未检测 total internal reflection 会产生 NaN、黑洞和闪烁。
+- thickness proxy 让通用近似获得“穿过多少介质”的信息，但厚度应在 exit point/颜色查询阶段使用，不能替代方向公式。
+- 屏幕空间查询需要 validity 和边界 fallback；不能用 clamp 把越界样本伪装成有效背景。
+- 发布前应分别回归正视角、掠射角、玻璃到空气、厚度变化、屏幕边缘和透明排序，再决定近似是否满足材质预算。
+
+<Exercises>
+
+**问题 1｜计算折射角。** 光线从空气进入 IOR 为 1.5 的玻璃，入射角为 30°。请写出折射角的计算关系，并说明 shader 需要先做什么。
+
+<Answer>
+  使用 $n_1\sin(\theta_i)=n_2\sin(\theta_t)$，所以
+  $\sin(\theta_t)=1\cdot\sin(30°)/1.5=1/3$，折射角约为 19.5°。shader
+  应先归一化入射方向和法线，确定 n₁/n₂
+  的方向，再检查判别式并把向量送到同一坐标空间的颜色查询。
+</Answer>
+
+**问题 2｜诊断黑洞。** 玻璃到空气的折射在掠射角突然变黑。你会检查哪些证据？
+
+<Answer>
+  先记录 n₁/n₂ 顺序、$eta\sin(\theta_i)$ 和折射函数的判别式；若它超过 1，应是
+  total internal reflection，而不是继续采样透射颜色。随后检查 TIR 是否使用反射
+  fallback、法线是否朝向当前介质、screen-space lookup
+  是否越界，以及越界时是否错误 clamp。
+</Answer>
+
+**问题 3｜选择厚度方案。** 一个凸透镜需要近景可见的背景变形，但屏幕外信息不可避免。你会如何组合厚度、后表面和环境 fallback？
+
+<Answer>
+  用 front surface 的法线和 IOR 计算 refraction vector，再用 backface depth
+  或厚度纹理估计 exit point；把 exit point 投影到屏幕颜色做透射查询，并返回
+  validity。屏幕外、查询失败或 TIR 时切换环境/反射
+  fallback；用线性空间求前后深度差，并对镜头边缘、厚度极值和移动画面做回归。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="refraction vector"
+    definition="由入射方向、表面法线和介质折射率决定的折射方向向量。"
+  />
+  <GlossaryItem
+    term="index of refraction"
+    definition="控制光线在介质界面处弯折程度的折射率参数。"
+  />
+  <GlossaryItem
+    term="Snell’s law"
+    definition="描述入射角与折射角、以及两个介质折射率关系的定律。"
+  />
+  <GlossaryItem
+    term="total internal reflection"
+    definition="入射角超过临界角后没有透射光、光线全部返回原介质的现象。"
+  />
+  <GlossaryItem
+    term="thickness proxy"
+    definition="用厚度纹理、前后表面深度或解析估计表示介质内部传播距离的近似量。"
+  />
+  <GlossaryItem
+    term="screen-space lookup"
+    definition="把折射方向或 exit point 投影为纹理坐标并查询屏幕或环境颜色的策略。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 19. Generic Refraction Simulation"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-19-generic-refraction-simulation"
+/>

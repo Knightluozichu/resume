@@ -16017,6 +16017,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.GpuGems2Ch18WaterPipelineDiagram,
     } as ChapterMdxComponents;
   },
+  "gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch19": async () => {
+    const module0 =
+      await import("@/components/mdx/gpu-gems/diagrams/gpugems2-ch19-refraction");
+    return {
+      GpuGems2Ch19ErrorBudgetDiagram: module0.GpuGems2Ch19ErrorBudgetDiagram,
+      GpuGems2Ch19RefractionLab: module0.GpuGems2Ch19RefractionLab,
+      GpuGems2Ch19RefractionPipelineDiagram:
+        module0.GpuGems2Ch19RefractionPipelineDiagram,
+      GpuGems2Ch19SnellDiagram: module0.GpuGems2Ch19SnellDiagram,
+      GpuGems2Ch19ThicknessDiagram: module0.GpuGems2Ch19ThicknessDiagram,
+    } as ChapterMdxComponents;
+  },
   "grokking-algorithms-2e/core-intuitions/hash-tables": async () => {
     const module0 =
       await import("@/components/mdx/grokking-algorithms-2e/diagrams/hash-tables");
