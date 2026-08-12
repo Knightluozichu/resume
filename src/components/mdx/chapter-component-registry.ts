@@ -4436,6 +4436,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp24RayIntersectionDiagram: module0.Cgp24RayIntersectionDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-25-meshes": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-25-meshes");
+    return {
+      Cgp25AttributeDiagram: module0.Cgp25AttributeDiagram,
+      Cgp25LodDiagram: module0.Cgp25LodDiagram,
+      Cgp25MeshDataDiagram: module0.Cgp25MeshDataDiagram,
+      Cgp25MeshesLab: module0.Cgp25MeshesLab,
+      Cgp25TopologyDiagram: module0.Cgp25TopologyDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

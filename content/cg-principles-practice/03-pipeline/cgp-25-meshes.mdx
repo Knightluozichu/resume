@@ -1,0 +1,207 @@
+---
+title: "Meshes"
+type: C
+section: "网格"
+order: 25
+description: "从顶点、索引和邻接关系出发，理解 meshes 如何组织表面，并用拓扑检查、法线与 level of detail 支撑可靠渲染。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-25
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp25AttributeDiagram,
+  Cgp25LodDiagram,
+  Cgp25MeshDataDiagram,
+  Cgp25MeshesLab,
+  Cgp25TopologyDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-25-meshes";
+
+<Objectives>
+
+- 能解释 meshes 如何用顶点、索引、面和属性组织可渲染表面
+- 能检查 mesh topology 的邻接、边界与流形状态，并区分连接错误和法线属性错误
+- 能修改 MeshesLab 的密度、视图、法线、LOD 与异常拓扑开关，回答何时应降低细节层级
+
+</Objectives>
+
+## 先把网格看成一份可重建的连接契约
+
+一个网格不是“很多点堆在一起”。它至少要回答三件事：点在哪里，哪些点组成一个面，以及每个点或面携带怎样的法线、纹理坐标和材质属性。渲染器根据这份契约重建三角形；编辑器和碰撞系统也依赖同一套连接关系。
+
+先预测：把网格密度从 2 调到 7，会改变每条边的邻接语义，还是只增加局部面数？打开实验，先看 wireframe，再打开 topology 和法线，最后切换 level of detail，观察哪些证据改变、哪些不应该改变。
+
+<Cgp25MeshesLab />
+
+## meshes：位置、索引和属性一起工作
+
+<Cgp25MeshDataDiagram />
+
+<Callout type="trap" title="只保存顶点位置，不保存索引语义">
+  现象 → 顶点数量看起来正确，但面出现裂缝、翻面或完全没有被绘制。 原因 →
+  位置只说明点在哪里，不能说明哪些点组成面、绕向是什么或边如何共享。 修法 →
+  同时保存 positions、indices
+  和图元类型，并用线框和索引标签核对每组三索引的连接。
+</Callout>
+
+<Term def="由顶点、索引、面和属性组织起来的离散表面表示；它是光栅化、碰撞和几何编辑之间共享的数据契约。">
+  meshes
+</Term>
+
+一个最小三角形需要三条位置记录和一组三个索引。四边形通常拆成两个三角形，例如第一面使用 0、1、2，第二面使用 0、2、3。索引复用顶点可以减少数据量，但也把绕向、共享边和属性对应关系变成必须检查的约束。
+
+顶点属性并不总是只属于几何位置。一个位置在硬边两侧可能需要两份不同的法线或纹理坐标，于是导出的 vertex 数量会比几何角点更多。排查时要区分“几何位置重复”和“属性记录拆分”，不能看到重复点就直接删除。
+
+## mesh topology：面如何共享边
+
+<Term def="描述顶点、边和面如何连接、邻接与绕行的结构；它决定网格是否封闭、流形以及可否稳定遍历。">
+  mesh topology
+</Term>
+
+mesh topology 关心的不是点的坐标，而是连接图。对一个封闭的流形网格，内部边通常恰好有两个邻面；边界边只有一个邻面；若一条边连接了三个或更多面，或者多个局部表面只在一个顶点相碰，就需要标记为非流形或特殊拓扑。
+
+<Cgp25TopologyDiagram />
+
+拓扑信息可以由半边、翼边或显式邻接表保存。无论采用哪种结构，都应能回答：给定一条边，如何找到相邻面？给定一个面，如何按一致方向遍历边？给定一个顶点，如何找到一环邻域？这些查询直接影响法线、细分、可见性和碰撞。
+
+流形并不等于“看起来没有裂缝”。两个面可能位置接上却绕向相反，或者有重复顶点导致邻接表把一条视觉边误认为两条独立边。应先用索引和边键构建邻接，再用线框、边界标记与面法线验证。
+
+## attributes：法线和纹理坐标也有拓扑语义
+
+<Cgp25AttributeDiagram />
+
+<Term def="用于表示表面朝向的单位向量；它可以按面保存以表达硬面，也可以按顶点共享以产生平滑着色。">
+  vertex normals
+</Term>
+
+vertex normals 是否共享，改变的是着色语义而不是几何拓扑。平滑表面通常在共享顶点处平均邻面法线；硬边则需要拆分法线或顶点属性，让两个面保留不同方向。若只修位置和索引而不修法线，轮廓可能正确，高光仍会错误。
+
+纹理坐标、颜色、切线也有类似问题。一个几何位置在 UV 接缝或材质边界处需要不同属性时，数据结构应明确允许属性拆分。验证时把位置、拓扑和属性分成三层：先确认面连接，再确认属性索引，最后检查光照或纹理结果。
+
+## level of detail：按屏幕贡献分配几何预算
+
+<Cgp25LodDiagram />
+
+<Term def="根据物体的屏幕大小、距离和视觉重要性，选择不同网格分辨率或简化版本的策略。">
+  level of detail
+</Term>
+
+level of detail 不等于盲目删除顶点。近处物体的轮廓和法线变化能占据许多像素，需要较高密度；远处物体只贡献少量像素，可以用低密度版本换取顶点带宽和变换时间。切换 LOD 时还要避免突跳、裂缝和属性丢失，常见做法包括误差度量、屏幕空间阈值和过渡策略。
+
+简化算法应保留高价值特征：轮廓、尖角、材质边界和碰撞关键区域。一个面数更少但轮廓偏差更大的版本，未必比面数稍多的版本更好。验收时同时记录面数、屏幕误差、法线变化和切换时机。
+
+## 三步实验：从网格数据到稳定预算
+
+每一步先预测，再只改变一个网格证据。记录面数、边邻接、法线方向和 LOD 选择，避免把拓扑异常误认为简化误差。
+
+<Stepper>
+  <Step title="第一步：核对位置与索引">
+    选择 wireframe，逐步提高网格密度，先预测面数如何增长，再检查每条线是否由索引连接而成。固定法线显示，避免把光照变化误认为几何变化。
+
+    <Cgp25MeshDataDiagram />
+
+  </Step>
+  <Step title="第二步：注入拓扑异常">
+    切换 topology 并打开非流形连接。先预测哪条边会被标记，再用邻接关系区分边界边、流形内部边和非流形边。
+
+    <Cgp25TopologyDiagram />
+
+  </Step>
+  <Step title="第三步：比较 LOD 与属性反馈">
+    切换 level of detail，改变距离层级并打开 vertex normals。先判断远处降低密度会损失轮廓还是光照，再用属性图核对法线与纹理接缝。
+
+    <Cgp25LodDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把法线错误当成网格位置错误">
+  现象 → 轮廓和线框都正确，但表面出现黑面、亮斑或硬边方向不对。 原因 →
+  顶点法线、面法线或绕向与实际邻接不一致，几何位置本身没有问题。 修法 →
+  先固定位置和索引，再显示法线并按硬边与平滑边的语义拆分属性。
+</Callout>
+
+<Callout type="trap" title="把非流形边当成普通共享边">
+  现象 → 细分、碰撞或法线遍历在局部发散，某条边附近出现不可解释的裂缝。 原因 →
+  邻接面数量超出算法假设，或多个表面只共享一个顶点。 修法 →
+  构建边到邻面的索引，显式标记边界和非流形结构，再选择修补、拆分或拒绝该网格。
+</Callout>
+
+<Callout type="trap" title="只按面数选择 LOD">
+  现象 → 面数减少了，但远处轮廓跳变、材质接缝消失或切换时出现裂缝。 原因 →
+  简化没有约束屏幕空间误差、边界属性和切换过渡。 修法 →
+  同时衡量轮廓、法线、材质边界和屏幕占用，给每个 LOD 版本做固定视角回归。
+</Callout>
+
+## 本章小结
+
+- meshes 由位置、索引、面和属性组成，索引决定连接与绕向，属性决定法线、纹理和材质语义。
+- mesh topology 描述邻接、边界和流形状态；必须从连接图出发检查，而不是只看最终填充。
+- vertex normals 等属性可能需要在硬边或 UV 接缝处拆分，即使几何位置相同。
+- level of detail 应按屏幕贡献和视觉误差分配预算，同时保护轮廓、拓扑和属性连续性。
+
+<Exercises>
+
+**问题 1：读索引并判断共享边。** 一个四边形拆成索引 0、1、2 和 0、2、3。哪条边是两个三角面的共享边？绕向检查为什么重要？
+
+<Answer>
+  共享边是顶点 0 与顶点 2
+  组成的对角线。两组三索引的绕向决定面法线方向；若一组顺序反了，背面剔除、光照和邻接遍历都会出现错误，即使位置仍然相同。
+</Answer>
+
+**问题 2：诊断 topology。** 一条边被三个面共享，另一个边只被一个面共享。它们分别代表什么情况？你会如何处理？
+
+<Answer>
+  三个邻面通常是非流形边，需要标记并根据用途拆分或修补；一个邻面是边界边，可能是有意的开口，也可能是缺面。先根据网格用途决定是否允许，再检查索引、重复顶点和邻接表。
+</Answer>
+
+**问题 3：选择 level of detail。** 一个角色远离相机后面数可以降到四分之一，但脸部轮廓和材质边界必须稳定。你会保留哪些证据？
+
+<Answer>
+  保留屏幕空间轮廓、眼口等高价值特征、材质与 UV 边界、关键法线方向以及 LOD
+  切换阈值。面数只是预算指标，必须和视觉误差、属性连续性及切换是否平滑一起验收。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="meshes"
+    definition="由顶点、索引、面和属性组织起来的离散表面表示。"
+  />
+  <GlossaryItem
+    term="mesh topology"
+    definition="描述顶点、边和面如何连接、邻接以及是否流形的结构。"
+  />
+  <GlossaryItem
+    term="vertex normals"
+    definition="表示表面朝向的单位向量，可用于平滑或硬边着色。"
+  />
+  <GlossaryItem
+    term="level of detail"
+    definition="根据屏幕贡献和视觉误差选择不同网格分辨率的策略。"
+  />
+  <GlossaryItem
+    term="manifold"
+    definition="邻接关系符合预期、局部表面可以稳定遍历的网格性质。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 25: Meshes"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
