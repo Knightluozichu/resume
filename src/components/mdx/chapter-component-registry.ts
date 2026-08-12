@@ -4257,6 +4257,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp09InterpolationDiagram: module0.Cgp09InterpolationDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-10-transformations-two-dimensions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-10-transformations-two-dimensions");
+      return {
+        Cgp10AffineGridDiagram: module0.Cgp10AffineGridDiagram,
+        Cgp10OrderDiagram: module0.Cgp10OrderDiagram,
+        Cgp10TransformationsTwoDimensionsLab:
+          module0.Cgp10TransformationsTwoDimensionsLab,
+        Cgp10TransformChainDiagram: module0.Cgp10TransformChainDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
