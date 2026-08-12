@@ -1,0 +1,266 @@
+---
+title: "GPU Gems 3 · Chapter 4. Next-Generation SpeedTree Rendering"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 4
+description: "从树枝轮廓、叶片自阴影、双面光照到 alpha-to-coverage，拆解 SpeedTree 如何把户外植被的真实感放回正确的 GPU 阶段。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-4-next-generation-speedtree-rendering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-04
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch04AlphaCoverageDiagram,
+  GpuGems3Ch04FeatureCompareDiagram,
+  GpuGems3Ch04LeafLightingDiagram,
+  GpuGems3Ch04LeafShadowOffsetDiagram,
+  GpuGems3Ch04RenderingTimelineDiagram,
+  GpuGems3Ch04SilhouetteFinDiagram,
+  GpuGems3Ch04SpeedTreePipelineDiagram,
+  GpuGems3Ch04SpeedTreeRenderingLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch04-speedtree";
+
+<Objectives>
+
+- 能解释低多边形树枝为什么需要 silhouette fin 与 height tracing 才能补足视角相关的轮廓细节
+- 能修改 SpeedTree Rendering Lab 的距离、轮廓宽度、阴影偏移与 coverage，观察几何、阴影和 MSAA 信号的变化
+- 能回答：远景植被、叶片自阴影和透明边缘分别应该把预算放在哪个渲染阶段
+
+</Objectives>
+
+## 先看一棵“太像模型”的树
+
+想象你用相机拍一棵树：树干内部的纹理已经很清楚，但枝条边缘仍像被尺子切过一样笔直。观众不需要知道多边形数量，只要看到这条过于规整的轮廓，就会立刻察觉它是模型。
+
+本章解决的问题是：怎样在不把整片森林都换成高密度网格的情况下，补上枝干轮廓、叶片阴影、背光颜色与透明边缘？如果把所有细节都交给一种纹理或一个 shader，近景会失真，远景又会浪费 GPU；更好的做法是让每个症状回到它真正所属的阶段。
+
+<Callout type="tip" title="先预测：哪一个问题该由哪一阶段解决">
+  先猜一猜：树枝边缘太直时，提高 diffuse
+  纹理分辨率能不能改变轮廓？叶片阴影出现长条纹时，应该改 shadow map
+  分辨率，还是先移动 caster 与 receiver 的采样位置？
+</Callout>
+
+<GpuGems3Ch04SpeedTreePipelineDiagram />
+
+## 1. silhouette clipping：给低模树枝补一圈视角相关的边
+
+<Term def="沿着物体可见与不可见的分界生成窄条几何，并在像素阶段用高度图决定这条边真正遮住哪些像素。">
+  silhouette clipping
+</Term>
+
+低多边形树干可以用 relief mapping 补足表面内部的凹凸，却无法改变几何轮廓：当相机看到一条三角形的直边时，纹理只会在直边内部制造细节。SpeedTree 的做法是把“轮廓”单独拿出来处理，近处树枝才会出现不规则的枝皮边缘。
+
+先在 vertex shader 中计算每个顶点法线与视线的点积。如果一个三角形的两条边跨过正负号，说明可见性在三角形内部发生变化；geometry shader 就在点积为零的位置插入顶点，沿垂直视线方向挤出两片窄 fin。没有符号变化的三角形不输出 fin，避免给普通表面增加无用几何。
+
+<GpuGems3Ch04SilhouetteFinDiagram />
+
+这里的几何只负责“把可能的轮廓位置送到屏幕”。真正的 bark 高度和遮挡仍在 pixel shader 中沿视线追踪高度图；若追踪没有交点，片元会被丢弃或交给边缘抗锯齿。也因此，fin 很窄时像素成本可控，但它不应该对所有距离的树都开启。
+
+<Callout type="trap" title="用更清晰的 bark 纹理修复直轮廓">
+  现象 → 树干表面更细了，剪影边缘仍是一条直线。原因 → bump 或 relief
+  只改变内部法线和视差，不能产生屏幕外的几何轮廓。修法 → 用 dot-product sign
+  test 找 silhouette edge，再用 fin + height tracing 补出可见边。
+</Callout>
+
+## 2. height tracing 与 silhouette LOD：细节要随距离淡出
+
+<Term def="沿切线空间的视线在高度图中逐步试探交点，用来判断挤出的 fin 在该片元处是否真的被树皮遮住。">
+  height tracing
+</Term>
+
+fin 的视线通常贴着树干表面，搜索路径比普通 relief mapping 更长。实践中可以把线性步进的最大长度截断，并让 fin 的像素 footprint 保持较小；这是一种“只为能看见的边缘付费”的预算控制，而不是假设 height map 搜索免费。
+
+轮廓细节同样需要距离预算。近处可以保留较宽的 fin；进入过渡区后，把 fin 宽度按距离连续缩小到零，远处直接移除。连续淡出比瞬间切换更不容易 pop，而且官方样例指出典型场景中真正可见的 silhouette 数量通常很少。
+
+把 `silhouette width` 调大不等于永远更真实：当树只占几个屏幕像素时，额外的 fin 和追踪步数只会增加成本。先观察它是否改变了可见轮廓，再决定是否值得保留。
+
+## 3. leaf self-shadowing：平面叶卡需要两次位置修正
+
+<Term def="把视锥拆成多个距离区间，每个区间维护自己的 shadow map，以便大范围户外场景同时保留近处细节和远处覆盖。">
+  cascaded shadow map
+</Term>
+
+SpeedTree 的叶片既有平面 leaf card，也有三维叶片。平面卡片总是朝向相机；为了生成 shadow map，它又会转向光源。如果直接把转向后的卡片投影回相机朝向的卡片，影子会沿平面拉成长条，树叶的自阴影看起来像贴纸上的污痕。
+
+修正分两步。生成 shadow map 时，把转向光源的 caster 沿光源方向移动大约半张卡片的高度，让它覆盖合理的叶片区域。应用 shadow map 时，不改已经光栅化的叶片位置，只把用于阴影查询的位置沿 view direction 偏移；偏移系数可以存进每片叶子一致的 texture。这样每个叶片内部可以得到不同的 shadowed position，而不会把整个 card 拉成一条线。
+
+远景户外场景还需要 cascaded shadow map：近级联每帧更新并绘制全部对象，较远级联可以降低更新频率，只保留对该距离有意义的叶片或枝条。级联不是越多越好，而是让 shadow texel 密度跟视距匹配。
+
+<GpuGems3Ch04LeafShadowOffsetDiagram />
+
+<Callout type="trap" title="只提高 shadow map 分辨率，却保留平面投影">
+  现象 → 条纹变细但仍然沿叶卡延伸，风吹时还会闪。原因 → 问题来自 card
+  的二维几何和错误投影位置，不是单纯的 texel 不够。修法 → 同时调整 light-space
+  caster offset 与 view-space receiver offset，再按距离选择级联更新频率。
+</Callout>
+
+## 4. two-sided leaf lighting：背光要表现“穿透”
+
+<Term def="把叶片朝向光源的一面和背向光源的一面分开处理；背光时加入偏黄或偏红的透射色，并压低不合理的高光。">
+  two-sided leaf lighting
+</Term>
+
+真实叶片背光时并不是简单地把漫反射乘黑：光线穿过薄薄的叶肉，会产生偏黄或偏红的 transmitted light。SpeedTree 的简化模型在 pixel shader 中构造暖色版本，再根据光方向与视线的夹角在原色和暖色之间插值；当光从背后照来时，也降低 specular，避免把不该反射的背面做成镜子。
+
+叶片的高光还需要抑制远处闪烁。官方实现观察到真实叶片的高光更像沿叶脉分成两块的宽反射，因此使用较粗的 V 形 normal map，并偏向较低 mip level。这个取舍把“微小纹理细节”换成“整棵树稳定的光照形状”。
+
+<GpuGems3Ch04LeafLightingDiagram />
+
+## 5. alpha-to-coverage：把透明边缘交给 MSAA 样本
+
+<Term def="把 pixel shader 输出的 alpha 转成 MSAA render target 的 sample coverage mask，用来平滑 1-bit 叶片和枝条 cutout 的边缘。">
+  alpha-to-coverage
+</Term>
+
+植被常用 alpha cutout：一个样本要么保留，要么丢弃。边缘因此容易像锯齿，风吹或 LOD 切换时还会 scintillate。alpha-to-coverage 把 alpha 转成 MSAA 的覆盖样本，resolve 时得到较平滑的透明边缘；对于叶片和 frond 这种 1-bit cutout，它不要求按深度排序，也不会把大块半透明物体误当成普通 alpha blend。
+
+LOD cross-fade 是一个常见陷阱：两个 LOD 同时绘制、各自使用 50% coverage 时，它们可能共享同一组 coverage mask，深度测试后留下的结果会比预期更透明。修法不是退回普通 blending，而是错开两条 LOD 的 alpha fade 曲线，让两个模型在过渡区承担互补的 coverage。
+
+silhouette clipping 的边缘也可以复用这条思路。geometry shader 给 fin 两端写入不同的 view-vector W 值，pixel shader 追踪高度图时记录最近 miss，再把距离边缘的片元 alpha 淡出到 coverage。这样抗锯齿的是“高度图决定的可见边”，而不只是原始三角形边。
+
+<GpuGems3Ch04AlphaCoverageDiagram />
+
+```hlsl
+float3 shadowedPosition = input.position;
+float offset = offsetTexture.Sample(linearSampler, input.texcoord).r;
+shadowedPosition += input.viewVector * offset;
+
+float4 lightSpace = mul(shadowMatrix, float4(shadowedPosition, 1));
+float shadow = shadowMap.SampleCmpLevelZero(
+  comparisonSampler,
+  lightSpace.xy / lightSpace.w,
+  lightSpace.z / lightSpace.w
+);
+return shadow;
+```
+
+这段伪代码的关键不是某个 API 名称，而是“用偏移后的位置查阴影”。几何的实际屏幕位置没有被移动；如果把两者混为一谈，叶片会出现漂移或深度错位。
+
+<Callout type="trap" title="把 alpha-to-coverage 当成 alpha blending 的替代品">
+  现象 → 大片半透明区域变得不稳定，或两个 LOD 叠加后整棵树变淡。原因 → coverage
+  是样本选择，不会像 blending 一样累积透明度；两个模型还可能使用同一 mask。修法
+  → 只在 cutout 和窄边缘使用它，并错开 LOD fade
+  曲线，大片半透明仍需单独的排序策略。
+</Callout>
+
+## 6. 用症状而不是术语做选型
+
+<GpuGems3Ch04FeatureCompareDiagram />
+
+本章的几种技术不是一张“质量开关”上的互斥选项。树枝轮廓太直，优先看 silhouette fin 是否在近处生成；叶片阴影有条纹，先看 caster/receiver 的空间偏移；背光发灰，检查 two-sided lighting 的透射色；透明边缘闪烁，检查 MSAA coverage 和 LOD 曲线。先定位症状，再决定是几何、pixel shader、shadow map 还是 resolve 阶段需要预算。
+
+<GpuGems3Ch04RenderingTimelineDiagram />
+
+先预测：把相机从 42 推到 90 时，轮廓宽度、shadow 级联和 alpha coverage 哪一个应该自动减少？再打开下面的实验，分别把 shadow offset 调到很低、把 coverage 调高，观察“边缘更平滑”是否真的能消除“投影位置错误”。
+
+<GpuGems3Ch04SpeedTreeRenderingLab />
+
+## 三步验收：从轮廓症状到完整植被管线
+
+<Stepper>
+  <Step title="第一步：用视角识别真正的 silhouette edge">
+    先对比树枝的表面细节和外轮廓，再用顶点法线与视线的点积找符号变化。只有跨过零点的三角形才需要 geometry shader 挤出 fin，随后由 height tracing 决定片元是否保留。
+
+    <GpuGems3Ch04SpeedTreePipelineDiagram />
+    <GpuGems3Ch04SilhouetteFinDiagram />
+
+  </Step>
+  <Step title="第二步：把叶片投影与背光分开检查">
+    先修 caster 和 receiver 的投影位置，再用级联 shadow map 管理距离；阴影稳定后，才观察背光透射色与远处 specular 是否闪烁。
+
+    <GpuGems3Ch04LeafShadowOffsetDiagram />
+    <GpuGems3Ch04LeafLightingDiagram />
+
+  </Step>
+  <Step title="第三步：最后处理 cutout 的 sample coverage">
+    对叶片和 silhouette 边缘使用 alpha-to-coverage，并针对 LOD 交叉淡化错开曲线。用症状对照表决定哪个阶段该承担成本，再在 Lab 中验证预测。
+
+    <GpuGems3Ch04AlphaCoverageDiagram />
+    <GpuGems3Ch04FeatureCompareDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- silhouette clipping 用 fin 与高度图补足树枝的视角轮廓。
+- 叶片自阴影要修正 caster、receiver，并按距离管理级联。
+- 背光叶片需要透射色，远处高光要降低闪烁。
+- alpha-to-coverage 用 MSAA coverage 平滑 cutout 边缘。
+- 先按画面症状定位几何、阴影、光照或采样阶段。
+
+<Exercises>
+
+**问题 1｜判断 silhouette edge。** 一个三角形三个顶点的 `n·v` 符号分别为负、正、正。它是否应该生成 silhouette fin？如果三个值都为正，geometry shader 应该做什么？
+
+<Answer>
+  负到正说明三角形内部跨过零点，因此应该在该边附近插入轮廓顶点并挤出
+  fin；三个值都为正表示整个三角形朝向同一可见性侧，不需要输出 silhouette
+  fin。实际实现还要处理点积接近零、重复位置与退化三角形。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 SpeedTree Rendering Lab 增加 `maxTraceSteps` 控件，并让 silhouette 的 `height tracing` 信号随它变化。为什么增加步数不能修复 leaf shadow 的条纹？
+
+<Answer>
+  可以把 `maxTraceSteps` 传给 fin 的 pixel
+  shader，并在到达交点或上限时停止；它只改变高度图搜索的精度和成本。leaf shadow
+  条纹来自平面 card 的 caster/receiver 位置与投影关系，应该修改两个 offset 或
+  shadow projection，而不是增加 fin 的追踪步数。
+</Answer>
+
+**问题 3｜场景选型。** 一棵近处树枝需要打破直线轮廓；一片远处森林需要稳定的自阴影；一批叶片使用 1-bit cutout 并随风运动。分别优先选择什么策略？
+
+<Answer>
+  近处树枝优先 silhouette clipping，并控制 fin 宽度和 height tracing
+  上限；远处森林优先 cascaded shadow
+  map，按级联距离和更新频率分配预算；运动叶片优先 alpha-to-coverage 配合
+  MSAA，避免硬 cutout 的闪烁，同时对 LOD fade 曲线做错开处理。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="silhouette clipping"
+    definition="给原本笔直的模型外轮廓补上窄条几何，再用高度图决定哪些像素真正可见。"
+  />
+  <GlossaryItem
+    term="height tracing"
+    definition="沿视线在高度图里逐步试探交点，用来判断 fin 是否碰到树皮表面。"
+  />
+  <GlossaryItem
+    term="cascaded shadow map"
+    definition="把视野按远近分段，每段使用一张阴影图，让近处有细节、远处有覆盖。"
+  />
+  <GlossaryItem
+    term="two-sided leaf lighting"
+    definition="正面和背面用不同光照模型，背光时加入穿过叶片的暖色，并压低背面高光。"
+  />
+  <GlossaryItem
+    term="alpha-to-coverage"
+    definition="把透明度转换为 MSAA 样本覆盖范围，用来平滑叶片和枝条的硬切边。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 4. Next-Generation SpeedTree Rendering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-4-next-generation-speedtree-rendering"
+/>
