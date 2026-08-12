@@ -1,0 +1,258 @@
+---
+title: "GPU Gems 2 · Chapter 33. Implementing Efficient Parallel Data Structures on GPUs"
+type: C
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 33
+description: "把数组、结构和稀疏数据结构改写成 GPU 可执行的 stream：理解受限内存模型、地址打包、间接读取、成员分流与 active tile 管理。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-33-implementing-efficient"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-33
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch33ArrayPackingDiagram,
+  GpuGems2Ch33DataStructureLab,
+  GpuGems2Ch33DynamicTilesDiagram,
+  GpuGems2Ch33MemoryHierarchyDiagram,
+  GpuGems2Ch33SparseIndirectionDiagram,
+  GpuGems2Ch33StreamProgramDiagram,
+  GpuGems2Ch33StructureStreamsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch33-parallel-data-structures";
+
+<Objectives>
+
+- 能解释 GPU 的 stream programming model、内存层次和固定输出位置如何约束数据结构更新
+- 能修改 Data Structure Lab 中的布局、稀疏比例和间接层数，并根据 address operations、stream count、passes 与 memory units 选择表示
+- 能回答：面对一个动态稀疏结构，什么时候让 CPU 管理 active tiles，什么时候宁可使用密集数组
+
+</Objectives>
+
+## 先把“任意内存”换成“有边界的流水线”
+
+想象一条只允许货物沿传送带前进的工厂：每个工位拿到当前位置的货物，按同一套动作加工，再把结果放到下一条传送带的对应位置。它不能临时跑到仓库另一排货架写一个格子；如果需要那样的关系，就要先保存地址，再用下一道工序完成查找。
+
+本章解决的问题是：CPU 习惯的数组、结构、链表和稀疏表，怎样改成 GPU 能并行处理的布局？如果直接保留“随时写任意地址”的习惯，程序要么不能表达，要么为了模拟任意写入而产生大量同步、搬运和无效内存。
+
+<Callout type="tip" title="先画传送带，再选数据结构">
+  先预测：把一个结构从“每条记录放在一起”改成“每个字段单独成流”，再把有效元素比例降到
+  20%，哪一个指标会明显变化？打开实验前先写下你预计改变的是地址计算、stream
+  数量、pass 数还是存储量。
+</Callout>
+
+## 1. stream programming model：数据沿流经过 kernel
+
+<Term def="按顺序排列的一组数据元素；GPU 对流中的每个元素应用相同 kernel，并把结果写到输出流的对应位置。">
+  stream
+</Term>
+
+GPU 结构的第一条规则是把程序写成 input stream → kernel → output stream。kernel 只能使用当前输入、常量和允许的全局读取，不能让一个元素随机改写另一个元素的输出位置。这个限制牺牲了 CPU 式的随意性，却换来多个元素同时运行的条件。
+
+<GpuGems2Ch33StreamProgramDiagram />
+
+CPU 的串行循环可以先拆出 loop body，再把数据集合交给 kernel：
+
+```text
+for (i = 0; i < data.size(); i++)
+  loopBody(data[i])
+```
+
+GPU 版本不再显式推进 `i`，而是让一次 apply 覆盖整个输入流：
+
+```text
+inDataStream = specifyInputData()
+kernel = loopBody()
+outDataStream = apply(kernel, inDataStream)
+```
+
+这不是把循环“隐藏”起来，而是把可并行性写进接口：每个输出元素必须能由自己的输入与可读数据决定。fragment processor 仍以 SIMD 方式处理成组元素，即使较新的硬件允许有限分支，也应尽量让相邻元素走相近路径。
+
+## 2. GPU memory model：每种 stream 都有访问规则
+
+<Term def="GPU 端的地址空间、寄存器、纹理、frame buffer 和 stream 类型共同构成的受限访问模型；它不同于 CPU 的统一可读写内存。">
+  GPU memory model
+</Term>
+
+GPU 有自己的 device address space；程序开始前，数据通常要从 CPU memory 复制到 GPU memory。进入 GPU 后，vertex stream、texture stream、fragment stream 和 frame-buffer stream 分别处在不同管线位置。它们不是四个名字相同的数组，而是四套读写时机和地址规则不同的接口。
+
+<GpuGems2Ch33MemoryHierarchyDiagram />
+
+对旧版 Pixel Shader 3.0 / Vertex Shader 3.0 模型，可以把规则压成一张检查表：不能访问 CPU 主存或磁盘；没有 GPU heap 和 stack；可以读全局 texture、常量寄存器与临时寄存器；输入 stream 是连续读取；输出只能在 kernel 结束时写到预先确定的位置。vertex kernel 写 vertex output stream，fragment kernel 写 frame-buffer stream，二者都不能在程序里发出任意 scatter write。
+
+<Callout type="trap" title="把 GPU buffer 当成 CPU vector">
+  现象 → 代码看起来像在更新数组，实际却无法写入目标元素或读到了上一 pass
+  的旧值。原因 → stream 类型有固定的输入、输出和绑定时机，GPU 没有 CPU 式的任意
+  heap。修法 → 为每个字段标记所在 stream、读写方向和 pass 边界，再检查是否需要双
+  surface 交换。
+</Callout>
+
+### pointer stream 与 dependent texture read
+
+<Term def="值本身不是业务数据，而是另一个纹理位置的地址；把它用于 texture read 就形成一层间接访问。">
+  pointer stream
+</Term>
+
+如果一个输入流的值被当成 texture 坐标，就得到 pointer stream；读取这个坐标指向的数据叫 dependent texture read。它让 GPU 能表达列表、稀疏矩阵或多级索引，但每一次读取的结果都可能决定下一次地址，连续依赖会减少 GPU 隐藏读取延迟的机会。
+
+## 3. 数组：把 N 维逻辑地址放进 2D substrate
+
+当前 GPU 的 rasterization 和 frame buffer 天然是二维，因此 2D texture 是许多 GPGPU 数据结构的基础。2D 数组可以直接使用；1D 数组需要把逻辑索引转换为二维行列；3D 数据则在“每个 slice 一张 texture”和“整个体积打包到一张 2D texture”之间取舍。
+
+<GpuGems2Ch33ArrayPackingDiagram />
+
+1D 打包的关键不是图形效果，而是地址翻译：给定数组宽度，先由一维索引定位行，再定位行内列。这个翻译可以预计算常量，并用纹理系统提供的 `floor`、`frac` 等操作减少开销。旧硬件还可能要求 texture 尺寸为 2 的幂；现代 API 的限制不同，应在目标设备查询尺寸。
+
+3D 数据分片的优点是每个 slice 容易更新，缺点是 kernel 必须预先知道要访问哪些 slice；打包成单张 2D texture 能让整个 volume 一次 render pass 更新，也能在 kernel 内随机读整个体积，但每次访问都要承担地址翻译。选布局时要同时比较更新范围、访问范围、地址运算和缓存局部性。
+
+## 4. 结构：把 stream of structures 改成结构的多条流
+
+<Term def="把一条记录的每个成员拆成独立 stream，并让同一个索引代表同一条记录；它让 GPU 能按固定输出位置更新成员。">
+  structure of streams
+</Term>
+
+CPU 常写 `Foo foo[N]`，把 `a` 和 `b` 放在同一条记录中；GPU 更适合 `Foo_a[N]` 与 `Foo_b[N]` 两条独立流。这样 kernel 可以在同一个索引写出各个成员，且每个成员都遵守 fragment output 的固定位置限制。
+
+<GpuGems2Ch33StructureStreamsDiagram />
+
+布局变换不是免费的：stream count 增加会带来绑定、读写和格式管理成本；每条记录的成员数量还不能超过 GPU 一次能输出的四分量数量。若只使用其中一个字段，把它拆成独立 stream 可以避免不必要的带宽；若字段总是一起消费，打包方式应以目标 kernel 的访问模式为准。
+
+## 5. 稀疏结构：用间接、block 和混合管理保存并行性
+
+<Term def="只为有效元素分配存储的结构，例如稀疏数组、列表、树或稀疏矩阵；它节省空间，但更新和遍历更难并行。">
+  sparse data structure
+</Term>
+
+稀疏结构的两个难点正好撞上 GPU 限制：更新往往要写计算出的地址，遍历又常常需要不均匀次数的指针跳转。静态稀疏结构可以使用多级 pointer stream：规则网格先指向列表起点，列表再指向实际数据。只要层数固定、block 内访问模式一致，就能让元素并行处理。
+
+<GpuGems2Ch33SparseIndirectionDiagram />
+
+动态稀疏结构更适合拆成两种职责：GPU 只计算当前 active elements，CPU 维护 tile 的分配和释放。GPU 把每个 active tile 的内存请求压缩成 bit vector image，CPU 读回小消息、更新 active set，再把新的 vertex/texture stream 送回 GPU。数据本身可以一直驻留 GPU，CPU 只做轻量管理，而不是参与每个元素的重计算。
+
+<GpuGems2Ch33DynamicTilesDiagram />
+
+<Callout type="trap" title="稀疏结构一定比密集结构省时">
+  现象 → 有效元素比例很低，GPU 版本仍比密集数组慢。原因 → pointer
+  hops、分支不一致、间接读取和 CPU 管理消息可能超过省下的存储。修法 → 同时测
+  active ratio、间接层数、pass、消息大小和有效计算量；让 block
+  内访问规则统一，再与密集基线比较。
+</Callout>
+
+## 6. 反馈与性能：避免同一 surface 同时读写
+
+旧版 OpenGL GPGPU 常用 multisurface pbuffer 进行 render-to-texture：一个 surface 绑定为 texture 输入，另一个 surface 作为 render target；pass 结束后交换角色。不能把同一个 surface 同时绑定为输入和输出，否则会违反 stream model 的输入不可被当前 kernel 改写保证。
+
+dependent texture read 也要控制深度。一次地址读取之后立即用结果做下一次地址，会减少可与读取并行的非依赖工作；不是所有间接读取都慢，但连续依赖、低局部性和大范围跳转叠加时，代价会明显放大。
+
+先猜一猜：在 Data Structure Lab 中把 `sparse` 切换到 `array`，再把 active ratio 提高到 100%，你预计 memory units 会变大还是变小？把 indirection levels 调高时，变化应首先出现在 address operations、passes 还是 stream count？
+
+<GpuGems2Ch33DataStructureLab />
+
+实验只计算表示层面的证据：array 关注 2D packing，structure 关注字段分流，sparse 关注 active set 与间接层数。它不会生成“性能分数”；真实项目仍要在目标 GPU 上测 cache、带宽、格式、同步和 pass 时间。
+
+## 三步验收：从 stream 规则到可更新结构
+
+<Stepper>
+  <Step title="第一步：把串行循环拆成 stream graph">
+    标出 input stream、kernel、output stream 和元素独立性。若一个元素需要写另一个元素的位置，先把依赖改写成 gather、pointer stream 或额外 pass，再继续设计布局。
+
+    <GpuGems2Ch33StreamProgramDiagram />
+    <GpuGems2Ch33MemoryHierarchyDiagram />
+
+  </Step>
+  <Step title="第二步：确定地址布局与成员布局">
+    为每个逻辑数组写出 2D packing 的行列翻译；为结构选择 stream of structures 还是 structure of streams，并记录 address operations、stream count 与输出分量上限。
+
+    <GpuGems2Ch33ArrayPackingDiagram />
+    <GpuGems2Ch33StructureStreamsDiagram />
+
+  </Step>
+  <Step title="第三步：处理稀疏更新与反馈边界">
+    固定稀疏关系用多级间接，动态 active set 用 block 和 CPU memory manager；每个 render-to-texture pass 交换读写 surface，保存消息大小、间接层数、active ratio 与实际 profile。
+
+    <GpuGems2Ch33SparseIndirectionDiagram />
+    <GpuGems2Ch33DynamicTilesDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- stream model 用固定输出位置换取元素级并行。
+- GPU memory model 把 vertex、texture、fragment 和 frame buffer 变成不同访问接口。
+- 1D/3D 数组可通过 2D packing 或 slice 布局适配更新范围。
+- structure of streams 让记录成员按相同索引独立更新。
+- 稀疏结构需要间接、block 或 CPU 管理，并用 active set 控制规模。
+
+<Exercises>
+
+**问题 1｜从循环到 stream。** 下面的 CPU 循环把每个 `data[i]` 变换成 `out[i]`，且没有读取其他元素。请写出对应的 input stream、kernel 和 output stream，并说明为什么它可以并行。
+
+<Answer>
+  input stream 是 `data`，kernel 是 `loopBody`，output stream 是 `out`，可以写成
+  `out = apply(loopBody,
+  data)`。每个输出只依赖同一索引的输入和常量，没有元素之间的写冲突，所以 kernel
+  可以同时处理多个 stream element。
+</Answer>
+
+**问题 2｜表示选择。** 一个 3D 体数据每个时间步都会更新完整 volume，但 kernel 只随机读取邻近 slice。比较“每个 slice 一张 2D texture”和“整个 volume 打包成单张 2D texture”时，分别列出一个优势和一个代价。
+
+<Answer>
+  slice 布局容易单独更新且不需要每次做完整体积的地址翻译，但 kernel
+  必须预先知道要访问的 slice，动态选择不灵活；单张 2D packing 可以一次更新整个
+  volume，并在 kernel
+  内随机访问，但每次读取都需要地址翻译，且布局和边界处理更复杂。应根据更新范围、访问范围与实际
+  cache/profile 选择。
+</Answer>
+
+**问题 3｜修改实验代码。** 在 Data Structure Lab 中增加一个 `dense` 分支：当 `activeRatio >= 70` 时推荐 `dense 2D packing`，否则保留 `active tiles + CPU manager`。请再新增一个指标，用来防止“稀疏”只因为 storage 少就被误选。
+
+<Answer>
+  可以在推荐逻辑前判断 `activeRatio >= 70`，返回 `dense 2D packing`，否则返回 `active tiles + CPU manager`。建议新增 `address operations per active element` 或 `manager message units`；前者揭示间接读取成本，后者揭示 CPU 管理边界，能防止只看 storage units 而忽略 pass 和 pointer hop。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="stream"
+    definition="一串有顺序的数据元素；GPU 用同一个小程序逐个处理它们，并生成另一串结果。"
+  />
+  <GlossaryItem
+    term="GPU memory model"
+    definition="GPU 中不同数据接口的读写规则；它不像 CPU 内存那样可以随时写任意地址。"
+  />
+  <GlossaryItem
+    term="pointer stream"
+    definition="里面存的是其他数据的位置；读取一个位置后，再用这个结果去找下一份数据。"
+  />
+  <GlossaryItem
+    term="structure of streams"
+    definition="把一条记录的每个字段拆成独立数据流，同时用相同索引保持字段对应。"
+  />
+  <GlossaryItem
+    term="sparse data structure"
+    definition="只保存有效元素、不为大量空位置分配存储的数据结构；省空间但更难并行更新。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 33. Implementing Efficient Parallel Data Structures on GPUs"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-33-implementing-efficient"
+/>
