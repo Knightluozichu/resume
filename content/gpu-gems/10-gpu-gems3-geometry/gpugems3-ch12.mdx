@@ -1,0 +1,266 @@
+---
+title: "GPU Gems 3 · Chapter 12. High-Quality Ambient Occlusion"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 12
+description: "从层次圆盘近似出发，解释环境光遮挡的伪影来源，以及过渡区、三角形裁剪、迭代收敛和参数调节如何把软阴影与接触细节带回实时 GPU。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-12-high-quality-ambient-occlusion"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-12
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch12AmbientOcclusionLab,
+  GpuGems3Ch12AoOverviewDiagram,
+  GpuGems3Ch12ArtifactDiagram,
+  GpuGems3Ch12ConvergenceDiagram,
+  GpuGems3Ch12PerformanceDiagram,
+  GpuGems3Ch12TransitionZoneDiagram,
+  GpuGems3Ch12TriangleClipDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch12-high-quality-ambient-occlusion";
+
+<Objectives>
+
+- 能解释环境光遮挡如何用层次圆盘近似远处表面，并指出它在片元着色中的计算位置
+- 能修改 Ambient Occlusion Lab 的采样方式、鲁棒路径、遍历深度和两个衰减参数，观察伪影与工作量的取舍
+- 能回答：为什么过渡区、可见三角形裁剪和 weighted minimum 分别解决哪一种错误，而不是简单提高网格密度
+
+</Objectives>
+
+## 先问：附近的表面挡住了多少“天空”
+
+想象你站在一间没有明确主光源的房间里。墙角、台阶缝和物体贴合处会比平面更暗，但这种暗不是一盏灯照出来的硬影子，而是附近表面挡住环境光的结果。
+
+本章要解决的是：如何在实时 GPU 上保留这种柔和的整体暗部，又不把接触细节抹平。如果只在顶点上算再插值，稀疏网格会出现条带；如果每个片元都直接套原始近似，圆盘边界和顶点附近又会翻车。
+
+<Callout type="tip" title="先预测：把采样变细就够了吗？">
+  先猜一猜：把 sampling 从 per-vertex 切到 per-fragment，再把 traversal depth
+  调大，线性插值条带、圆盘边界、pinching 和 GPU 工作量会怎样变化？打开
+  Lab，先记录你的预测，再逐个切换鲁棒路径。
+</Callout>
+
+## 1. 环境光遮挡：把“附近遮住多少”变成可累加的贡献
+
+<Term def="用附近几何遮住环境光的程度；它通常让缝隙和接触处变暗，而不是表示某一盏灯的方向性阴影。">
+  ambient occlusion
+</Term>
+
+环境光遮挡（AO）不追踪一条条完整光线，而是把模型表面拆成许多近似小圆盘。对 receiver 点来说，每个圆盘贡献一个“它能挡住多少天空”的量；所有贡献相加，再映射成可见度或暗部。它适合表现大范围的柔和变化，也能作为局部接触阴影的基础。
+
+GPU 的工作可以分成两段：先用较粗的圆盘层次反复更新遮挡纹理，再在可见片元阶段查询这棵树。这样，远处大面积表面不必逐三角形处理，近处才逐步展开到更精细的几何。
+
+<GpuGems3Ch12AoOverviewDiagram />
+
+## 2. 从 O(n²) 到自适应层次遍历
+
+<Term def="描述一个表面元素对 receiver 的几何影响量；它通常随面积增大、距离平方增大而变化，并受双方朝向影响。">
+  form factor
+</Term>
+
+如果让每个 receiver 和每个表面元素配对，工作量近似是 O(n²)。做法是把相邻圆盘聚成 parent，再把 parent 聚成更大的 parent：远处用一个聚合圆盘就够，距离变近时才沿树向下。
+
+这是一种 <Term def="按 receiver 与节点的距离，自适应决定接受当前聚合近似还是继续展开子节点的层次数据结构。">adaptive hierarchy</Term>：它不是“永远走到叶子”，而是把可接受的误差换成少量节点访问。理想情况下，层次遍历把配对工作压到接近 O(n log n)，但树的质量、遮挡分布和分支发散仍要用 profile 验证。
+
+<GpuGems3Ch12AoOverviewDiagram />
+
+<Callout type="trap" title="把树顶圆盘当成最终真值">
+  现象 → 远处阴影看起来顺滑，近处接触缝却消失或过度变暗。原因 →
+  聚合圆盘只保留低频面积与方向，不能表示叶子层的尖锐几何。修法 → 远处接受
+  parent，靠近 receiver 时继续展开，并在最低层回到真实三角形。
+</Callout>
+
+## 3. 为什么逐顶点与逐片元都会暴露伪影
+
+原始方案把遮挡写在顶点上，再在线性插值后覆盖三角形。它在密且规则的网格上很快，但 contact shadow 这类高频细节无法从几个顶点值恢复。把 shader 移到片元阶段能减少插值条带，却会把近似圆盘的缺陷放大出来。
+
+<GpuGems3Ch12ArtifactDiagram />
+
+最典型的两类现象是：第一，树在“接受 parent”和“展开 children”之间发生离散切换，形成圆盘形的明暗边界；第二，receiver 接近顶点圆盘时，form factor 中的距离平方变得极小，单个圆盘贡献压过其他表面，形成 pinching。
+
+<Term def="围绕 parent/children 切换距离建立的缓冲带；在带内按距离连续混合两种遮挡贡献，避免离散树决策直接变成明暗断层。">
+  transition zone
+</Term>
+
+在 transition zone 内保留 parent 的贡献，同时计算 children 的贡献，再按 receiver 到节点的距离混合。parent 的面积还要按 childArea / parentArea 调制，避免 parent 被每个 child 重复累加。
+
+<GpuGems3Ch12TransitionZoneDiagram />
+
+<Callout type="trap" title="只增加三角形数量或只切到 per-fragment">
+  现象 → 网格变密后圆盘边界更清楚，切到 per-fragment
+  后顶点附近出现更深的针状暗斑。原因 → 采样率改变了观测精度，却没有改变
+  parent/children 的跳变和近距离圆盘近似。修法 → 用 transition zone
+  平滑切换，并让最低层使用真实三角形贡献。
+</Callout>
+
+## 4. 用真实三角形找回接触细节
+
+<Term def="按 receiver 的支持平面裁掉不可见三角形部分，只对留下的三角形或四边形计算局部几何贡献。">
+  visible-triangle clipping
+</Term>
+
+在层次树的最低层，圆盘已经不够准确。更稳健的做法是把圆盘放到三角形重心附近，然后对真实三角形计算 point-to-triangle 的 form factor。这里不能假设整个三角形都能被 receiver 看到：应该用 receiver 的位置与法线构造支持平面，先裁掉背后的部分。
+
+裁剪时为每个顶点计算带符号距离，并用 epsilon 把“刚好落在平面上”的值归零。三个顶点的符号决定结果是空、完整三角形，还是由两个交点形成的可见四边形。这样做会增加分支和片元工作，却避免不可见面积被计入遮挡。
+
+```glsl
+// 片段化的伪代码：先裁剪，再求可见三角形的贡献
+float signedDistance(vec3 x, vec3 planePoint, vec3 planeNormal) {
+  float d = dot(planeNormal, x - planePoint);
+  return abs(d) < epsilon ? 0.0 : d;
+}
+
+for (int edge = 0; edge < 3; ++edge) {
+  float a = signedDistance(v[edge], p, n);
+  float b = signedDistance(v[(edge + 1) % 3], p, n);
+  if ((a > 0.0) != (b > 0.0)) {
+    visible.push_back(intersectPlane(v[edge], v[(edge + 1) % 3], a, b));
+  }
+}
+occlusion += formFactor(visible) * pow(elementOcclusion, triangleAttenuation);
+```
+
+<GpuGems3Ch12TriangleClipDiagram />
+
+<Callout type="trap" title="用完整三角形直接计算 form factor">
+  现象 →
+  墙后或支持平面背面的三角形也贡献遮挡，结果整体偏黑，边缘出现不自然的厚影。原因
+  → form factor 的几何公式默认整个 polygon 可见，而实际 receiver
+  只能看到裁剪后的部分。修法 → 先按支持平面做 visible-triangle clipping，再对
+  triangle/quad 求贡献。
+</Callout>
+
+## 5. 让迭代稳定，并把“像不像”交给参数
+
+层次 AO 用多次 pass 近似 visibility，但高遮挡场景可能在两个结果之间来回摆动。可以保存最近两次 disk occlusion，取偏向较小值的 weighted minimum，例如 `0.7 * min(o0, o1) + 0.3 * max(o0, o1)`，让结果更容易收敛，也抑制普遍偏黑的趋势。
+
+距离衰减控制远处贡献：加大后，远处环境不容易把整间封闭房间压成黑色。三角衰减作用在最低层的真实三角形：较小的指数会强调裂缝和台阶，较大的指数会降低大而远的三角形影响。它们是画质与艺术效果的旋钮，不是“更接近真值”的分数。
+
+<GpuGems3Ch12ConvergenceDiagram />
+
+<GpuGems3Ch12PerformanceDiagram />
+
+## 6. 三步把近似变成可验收的 shader 路径
+
+<Stepper>
+  <Step title="先选可接受的层次近似">
+    先从 hierarchy 的根节点开始，按 receiver 距离判断当前 parent 是否足够好。远处直接累加 parent，近处把同一分支展开到 children；不要一开始就把所有叶子送进片元程序。
+
+    <GpuGems3Ch12AoOverviewDiagram />
+    <GpuGems3Ch12PerformanceDiagram />
+
+  </Step>
+  <Step title="在两类边界处补稳健性">
+    parent/children 切换用 transition zone 连续混合；到最低层后，把三角形按 receiver 支持平面裁成可见部分，再计算局部 form factor。
+
+    <GpuGems3Ch12TransitionZoneDiagram />
+    <GpuGems3Ch12TriangleClipDiagram />
+
+  </Step>
+  <Step title="最后用迭代与参数收敛">
+    保存最近两次结果，用 weighted minimum 抑制摆动；再分别调 traversal depth、distance attenuation 和 triangle attenuation，观察细节、整体亮度和片元工作量是否符合目标。
+
+    <GpuGems3Ch12ConvergenceDiagram />
+    <GpuGems3Ch12ArtifactDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch12AmbientOcclusionLab />
+
+## 本章小结
+
+- 环境光遮挡用附近表面的累计遮挡塑造柔和暗部与接触细节
+- 层次圆盘让远处低频贡献少走节点，近处才展开到细节
+- transition zone 消除 parent/children 切换的圆盘形断层
+- visible-triangle clipping 避免把不可见面积计入 form factor
+- weighted minimum 与两个衰减参数共同控制收敛、亮度和细节
+
+<Exercises>
+
+**问题 1｜诊断采样伪影。**
+
+Lab 初始为 per-fragment + transition zone。把 sampling 切到 per-vertex，再把 robustness 切到 original。哪两条指标会明显变差？分别对应原章节中的什么问题？
+
+<Answer>
+  插值条带会明显变差，因为逐顶点结果在线性插值时无法重建 contact shadow
+  等高频变化；圆盘边界和 pinching 也会升高，因为 original 路径既没有 transition
+  zone，也没有在最低层回到真实三角形。per-fragment
+  只提高采样密度，不会自动消除这两类近似误差。
+</Answer>
+
+**问题 2｜改一段 shader 逻辑。**
+
+把下面的单一贡献改成“只有在 receiver 支持平面上方的可见部分才累加”，并说明 epsilon 为什么不能删掉。
+
+```glsl
+float contribution = formFactor(triangle, receiver);
+occlusion += contribution * elementOcclusion;
+```
+
+<Answer>
+  先调用 `visibleTriangle = clipToSupportPlane(triangle, receiverPoint,
+  receiverNormal, epsilon)`，若结果为空就跳过，否则把
+  `formFactor(visibleTriangle, receiver)` 乘上 `elementOcclusion`
+  后累加。epsilon
+  将非常接近平面的顶点归到同一侧，避免浮点噪声让边界在完整、部分可见和不可见之间闪烁。
+</Answer>
+
+**问题 3｜做场景选型。**
+
+一个建筑室内场景在多次迭代后出现“两个亮度结果来回切换”，同时封闭房间整体偏黑。你会先改哪三个地方？为什么不能只把 tessellation 加密？
+
+<Answer>
+  先用最近两次结果的 weighted minimum 强制收敛；再增加 distance attenuation
+  让远处表面的贡献衰减；最后检查 traversal depth 与 triangle
+  attenuation，让近处细节有足够展开、远处面积不会压满结果。单纯加密 tessellation
+  只增加存储和遍历压力，不能解决 visibility
+  近似的振荡，也不能改变封闭环境的整体过度遮挡。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="ambient occlusion"
+    definition="附近表面挡住环境光的程度；缝隙和接触处通常更暗，但它不是某盏灯投下的方向性阴影。"
+  />
+  <GlossaryItem
+    term="form factor"
+    definition="一个表面元素对接收点的几何影响量，可以把面积、距离和朝向对遮挡的作用合在一起。"
+  />
+  <GlossaryItem
+    term="adaptive hierarchy"
+    definition="按距离决定接受当前聚合节点还是继续展开子节点的树，让远处便宜、近处精细。"
+  />
+  <GlossaryItem
+    term="transition zone"
+    definition="parent 与 children 之间的缓冲带；在这里连续混合两种贡献，避免树的离散选择变成明暗断层。"
+  />
+  <GlossaryItem
+    term="visible-triangle clipping"
+    definition="用 receiver 的支持平面裁掉不可见三角形部分，只为剩余的 triangle 或 quad 计算局部贡献。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 12. High-Quality Ambient Occlusion"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-12-high-quality-ambient-occlusion"
+/>
