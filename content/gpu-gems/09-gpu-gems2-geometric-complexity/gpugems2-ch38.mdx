@@ -1,0 +1,259 @@
+---
+title: "GPU Gems 2 · Chapter 38. High-Quality Global Illumination Rendering Using Rasterization"
+type: D
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 38
+description: "把 final gathering 的同向射线批处理改写成 rasterization，用 depth peeling 在 GPU 上加速离线高质量全局光照。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-38-high-quality-global-illumination"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-38
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch38DepthPeelingDiagram,
+  GpuGems2Ch38DirectIndirectDiagram,
+  GpuGems2Ch38FinalGatherTimelineDiagram,
+  GpuGems2Ch38QualityLab,
+  GpuGems2Ch38RayClusteringDiagram,
+  GpuGems2Ch38TwoPassDiagram,
+  GpuGems2Ch38VisiblePointPipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch38-global-illumination";
+
+<Objectives>
+
+- 能解释为什么高质量全局光照要把间接光加入可见点，并区分粗略第一遍与 final gathering 第二遍
+- 能修改 Quality Lab 的样本数、depth peeling 层数和停止阈值，预测 raster passes 与渐进画质如何变化
+- 能回答：什么时候选择 parallel clustering 的 rasterization 管线，什么时候不能把它当成交互式 ray tracer
+
+</Objectives>
+
+## 先追一束“绕过墙壁”的光
+
+想象房间里有一盏灯。直达光能照亮桌面，但墙壁反射过来的柔和亮度，才让桌下和角落不至于全黑。要把这种反射画出来，就要在每个可见位置向周围发出很多探针，看看各个方向上最后遇到的物体带来了多少光。
+
+本章解决的问题是：这些探针数量巨大，CPU 逐条追踪会很慢；怎样把它们排列成图形硬件擅长的“同向批次”，让 rasterization 同时找到大量交点？如果只用很少探针或只算直达光，画面会出现噪声、漏光和缺少反射层次。
+
+<Callout type="tip" title="先预测样本数和剥离层的作用">
+  先猜一猜：把 final-gather samples
+  调大，应该主要改变噪声还是改变几何交点的顺序？把 depth peeling layers
+  调大，又会让哪一个 pass 成本增加？实验前先写下两个不同的预测。
+</Callout>
+
+<GpuGems2Ch38DirectIndirectDiagram />
+
+## 1. 先算一个便宜的全局光照近似
+
+<Term def="把来自其他物体反射、散射后到达当前表面的光也算进来；它不只看光源到表面的直达路径。">
+  global illumination
+</Term>
+
+全局光照的难点不是画出一盏灯，而是估计“从半球各方向到达当前点的光”。路径追踪可以直接做这件事，但要让噪声下降，通常需要大量 rays。GPU Gems 2 Chapter 38 选择先做一遍便宜的近似，再把精力留给最终图像中真正需要的可见点。
+
+第一遍可以使用 CPU 上的 grid photon mapping，或任何能快速产生 irradiance distribution 的方法；结果可以写成细分网格的 vertex colors，也可以放进 light map 或 volume texture。关键不是第一遍必须用哪一种算法，而是第二遍能以简单纹理/顶点读取拿到它。
+
+<GpuGems2Ch38TwoPassDiagram />
+
+## 2. final gathering：所有可见点都要问一遍半球
+
+<Callout type="trap" title="把第一遍的粗略结果直接当成最终画面">
+  现象 → 间接光过于平滑，或为了减少噪声不得不把第一遍样本堆得很大。原因 →
+  第一遍只提供快速近似，没有真正为每个可见点评估足够的到达方向。修法 →
+  用它作为第二遍的入射光源，单独执行 final gathering，并把两遍成本分开统计。
+</Callout>
+
+<Term def="在每个可见点周围的半球上发出许多样本，查询各方向到达的光，再把这些贡献累计成该点的间接辐射。">
+  final gathering
+</Term>
+
+最终收集可以作用在屏幕上所有可见点，而不只是一小组稀疏点。这样不需要在稀疏点上做完计算后再插值，也更容易逐步显示结果：先用少量样本得到一张粗图，继续累积直到质量足够。
+
+代价也很明确：如果有 `P` 个可见点、每点 `N` 个方向，就至少要处理 `P × N` 个 ray samples。原书给出的典型场景中，final gathering 的 rays 数量远超从相机出发的 rays，因此它是全流程瓶颈。
+
+## 3. parallel clustering：把不同 origin 的同向 rays 放进一个 pass
+
+<Callout type="trap" title="让每个可见点都随机挑一套方向">
+  现象 → 每个点的半球采样都不同，GPU 仍像在做许多互不相干的小型 ray tracer。原因
+  → 不同方向无法共享一次平行投影，rasterization 的吞吐优势被拆散。修法 → 预先选
+  N 个固定方向，把每个可见点在同一方向上的 ray 聚成一批。
+</Callout>
+
+<Term def="把所有可见点的第 k 个样本都指向同一个预先选定方向，从而能用一次平行投影批量处理这一组 rays。">
+  parallel clustering
+</Term>
+
+<Term def="当前这一批 raster pass 使用的统一射线方向；换一个方向，就能处理下一批来自所有可见点的 rays。">
+  global ray direction
+</Term>
+
+半球聚类让每个可见点各自选择方向，采样更像传统 ray tracing；parallel clustering 则把方向离散成固定集合。对于其中一个 global ray direction，所有 origins 不同但方向相同，GPU 只需要沿这个方向做一次 parallel projection，再从投影结果中找到各点的最近交点。
+
+<GpuGems2Ch38RayClusteringDiagram />
+
+## 4. depth peeling：用多层 rasterization 找最近交点
+
+<Term def="在同一个投影方向上反复渲染并保存不同深度层；通过 B/C 两个深度缓冲逐层排除已经取过的交点，直到得到可见点前方的最近命中。">
+  depth peeling
+</Term>
+
+一次普通投影只会留下一个深度层，但一条 ray 可能穿过多个物体。depth peeling 先用 reversed depth test 得到当前方向上的远层，把深度写入 B；下一轮把 B 复制到 C，拒绝比 C 更远的片元，于是逐步揭开下一层。对于每个可见点，只有投影命中位于它前方的交点才会写入采样结果 E；当更近的命中出现时覆盖旧结果。
+
+```glsl
+// one depth-peeling iteration for a fixed global direction
+if (projectedPointIsInFront(sample, visiblePoint, globalDirection)) {
+  if (sample.depth < sampledDepth) {
+    sampledDepth = sample.depth;
+    bufferE = sample.irradiance;
+  }
+}
+depthBufferB = renderFarthestLayer(globalDirection, depthBufferC);
+depthBufferC = depthBufferB;
+```
+
+这段伪代码强调两个状态：`sampledDepth`/`bufferE` 保留当前最近命中，`bufferB`/`bufferC` 让下一轮不重复消费已经剥出的层。真实实现会把这些状态放在纹理和 framebuffer 中，循环直到没有足够多的新片元，或达到允许的 fragment 阈值。
+
+<GpuGems2Ch38DepthPeelingDiagram />
+
+## 5. 把 visible buffer、投影与累积接成 GPU 管线
+
+开始 final gathering 前，先从相机渲染场景，把每个可见点的位置、法线和颜色写入浮点缓冲 A。一个 global ray direction 接着驱动平行投影：从 A 的投影位置读取当前深度层 D，做 depth peeling 得到最近交点，写入 E，再将 E 的 irradiance 累加到 indirect illumination buffer。
+
+<GpuGems2Ch38VisiblePointPipelineDiagram />
+
+```cpp
+for (Direction direction : sampledDirections) {
+  clear(depthB, maxDistance);
+  clear(depthC, maxDistance);
+  clear(sampledLayer, environmentColor);
+  do {
+    renderFarthestLayer(scene, direction, depthB, sampledLayer);
+    copy(depthB, depthC);
+    sampleVisiblePoints(bufferA, sampledLayer, bufferE, direction);
+  } while (newFragments > stopThreshold);
+  accumulate(bufferE, indirectBuffer);
+}
+```
+
+这段结构把原书的十步实现压缩成“方向循环”和“深度层循环”两层。direct illumination 仍可独立用 shadow mapping 等快速技术求出，最后再与 indirect buffer 相加；因此提高 final gathering 样本数不会替代直达光的计算。
+
+## 6. 质量、aliasing 与离线取舍
+
+这套方法不是把 GPU 变成交互式 ray tracer。它的目标是离线高质量图像：让所有可见点同时处理，逐步累积样本，并用足够 coherent 的 rays 换取更高吞吐。样本方向可以使用 quasi-Monte Carlo 或其他稳定序列，减少移动场景中 photon shooting 随机性造成的 flickering 和 popping。
+
+平行投影使用有限分辨率 buffer，所以会像 shadow mapping 一样产生 aliasing，甚至漏掉间接光。增加样本数不能自动修复这个问题；应从投影分辨率、深度层条件和阴影映射类的抗 aliasing 策略一起检查。允许少量未处理 fragments 作为停止阈值，可以减少多余迭代，但要明确这是质量与时间的选择。
+
+<GpuGems2Ch38FinalGatherTimelineDiagram />
+
+先猜一猜：在下面的实验中把 samples 从 32 调到 64，再把 stop threshold 从 2% 调到 0%，哪个指标会增加，哪个指标只是让渐进画面更细？打开实验后一次只调一个参数，比较 parallel clustering 与 per-point directions。
+
+<GpuGems2Ch38QualityLab />
+
+## 三步验收：从粗略 irradiance 到可停止的最终图像
+
+<Stepper>
+  <Step title="第一步：准备两遍数据">
+    先用便宜方法得到可读取的 irradiance 分布，再把相机看到的位置、法线和颜色写入 visible buffer A。不要把第一遍误当成最终图像；它的任务是提供第二遍每次命中时要读取的光照信息。
+
+    <GpuGems2Ch38DirectIndirectDiagram />
+    <GpuGems2Ch38TwoPassDiagram />
+
+  </Step>
+  <Step title="第二步：让同向射线共享 raster passes">
+    把每个可见点的方向改写成固定方向集合中的一个 global ray direction。每次只处理一个方向，沿平行投影做 depth peeling，逐层找到可见点前方的最近交点，再写进 buffer E。
+
+    <GpuGems2Ch38RayClusteringDiagram />
+    <GpuGems2Ch38DepthPeelingDiagram />
+
+  </Step>
+  <Step title="第三步：累积、提前停止并检查伪影">
+    把 E 的结果累加到 indirect illumination buffer，换方向继续，直到样本数或质量达到目标。用 fragment threshold 降低空迭代成本，同时分别检查投影 aliasing、漏光和随机采样导致的 flicker。
+
+    <GpuGems2Ch38VisiblePointPipelineDiagram />
+    <GpuGems2Ch38FinalGatherTimelineDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 两遍方法让第一遍只负责快速提供 irradiance。
+- final gathering 在所有可见点上估计半球入射光。
+- parallel clustering 用固定 global ray direction 批量投影。
+- depth peeling 逐层排除交点，找到每个点的最近命中。
+- rasterization 加速离线高质量光照，但仍需处理 aliasing 与停止阈值。
+
+<Exercises>
+
+**问题 1｜排出一次 raster final gather。** 给定 visible buffer A、深度缓冲 B/C、采样层 D 和结果缓冲 E，请按实际依赖顺序写出一次 global ray direction 的核心步骤，并说明 B 为什么要复制到 C。
+
+<Answer>
+  先清空或初始化 B/C 与 D，沿固定方向渲染当前深度层到 B；用 C
+  排除上一轮已经处理的更远片元，把 B 复制到 C；再从 A 的平行投影位置读取
+  D，把位于可见点前方且更近的命中写入 E。复制 B 到 C
+  是为了让下一轮知道上一轮的深度边界，而不是重复同一层。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Quality Lab 增加一个 `jittered-directions` 模式：每轮只改变方向序列，不改变 depth peeling 逻辑。你要额外观察什么现象？
+
+<Answer>
+  可以保留相同的 samples、peelLayers 和 stop
+  threshold，只替换方向序列。应额外观察 progressive image 的 flicker/popping
+  与收敛稳定性；如果每次重绘都重新随机，实验结果会混入时间噪声，不能把它当成
+  rasterization 成本变化。
+</Answer>
+
+**问题 3｜场景选型。** 一个离线建筑镜头需要高质量间接光，另一个实时游戏镜头要求稳定 60 fps。哪个更适合本章方法？还需要检查哪两个限制？
+
+<Answer>
+  离线建筑镜头更适合，因为本章方法的目标是高质量 offline
+  rendering，不承诺交互帧率。还要检查平行投影 buffer 的 aliasing/漏光，以及
+  samples、depth peeling passes 和 visible points
+  带来的总成本；实时镜头通常需要预计算或专门的实时 GI 方案。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="global illumination"
+    definition="不仅计算光源直接照到哪里，还计算光在其他表面反射后怎样继续照亮场景。"
+  />
+  <GlossaryItem
+    term="final gathering"
+    definition="从一个可见点向周围半球发出许多样本，把各方向到达的光加起来。"
+  />
+  <GlossaryItem
+    term="parallel clustering"
+    definition="让许多不同起点的 ray 共享同一个方向，这样它们可以被一次平行投影批量处理。"
+  />
+  <GlossaryItem
+    term="global ray direction"
+    definition="当前这一批 rays 共同使用的方向；换方向就是下一批 raster pass。"
+  />
+  <GlossaryItem
+    term="depth peeling"
+    definition="反复渲染并剥开不同深度层，像从外到里翻开透明胶片，直到找到需要的交点。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 38. High-Quality Global Illumination Rendering Using Rasterization"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-38-high-quality-global-illumination"
+/>
