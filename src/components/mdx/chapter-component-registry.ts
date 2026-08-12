@@ -4216,6 +4216,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp04TwoDGraphicsTestBedLab: module0.Cgp04TwoDGraphicsTestBedLab,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-05-visual-perception": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-05-visual-perception");
+    return {
+      Cgp05ReceptiveFieldDiagram: module0.Cgp05ReceptiveFieldDiagram,
+      Cgp05TemporalIntegrationDiagram: module0.Cgp05TemporalIntegrationDiagram,
+      Cgp05VisualPerceptionLab: module0.Cgp05VisualPerceptionLab,
+      Cgp05VisualSystemDiagram: module0.Cgp05VisualSystemDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
