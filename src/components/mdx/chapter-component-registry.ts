@@ -4516,6 +4516,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp34StylizationDiagram: module0.Cgp34StylizationDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-36-visibility-determination":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-36-visibility-determination");
+      return {
+        Cgp36DepthBufferDiagram: module0.Cgp36DepthBufferDiagram,
+        Cgp36FrustumCullingDiagram: module0.Cgp36FrustumCullingDiagram,
+        Cgp36OcclusionDiagram: module0.Cgp36OcclusionDiagram,
+        Cgp36VisibilityLab: module0.Cgp36VisibilityLab,
+        Cgp36VisibilityPipelineDiagram: module0.Cgp36VisibilityPipelineDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

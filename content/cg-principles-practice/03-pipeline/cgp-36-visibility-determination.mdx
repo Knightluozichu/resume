@@ -1,0 +1,230 @@
+---
+title: "Visibility Determination"
+type: D
+section: "可见性判定"
+order: 36
+description: "从对象筛选、深度比较和遮挡查询出发，理解 visibility determination 如何在对象、几何和像素粒度上减少不可见工作。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-36
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp36DepthBufferDiagram,
+  Cgp36FrustumCullingDiagram,
+  Cgp36OcclusionDiagram,
+  Cgp36VisibilityLab,
+  Cgp36VisibilityPipelineDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-36-visibility-determination";
+
+<Objectives>
+
+- 能解释 visibility determination 如何在对象、几何和像素粒度判断哪些工作值得继续
+- 能比较 depth buffer、frustum culling 和 occlusion query 的输入、状态、代价与可见结果
+- 能修改 VisibilityLab 的裁剪面、深度偏移和对象数量，定位误剔除、漏绘与深度精度问题
+
+</Objectives>
+
+## 先把“看得见”拆成三个问题
+
+渲染器遇到一个对象时，至少要问三次：它是否在相机视锥内？它虽然在视锥内，是否被别的几何挡住？它投影到某个像素后，是否比已经写入的片段更近？这三个问题的输入、粒度和时机不同，不能用一个“visible”布尔值替代全部判断。
+
+先预测：增加对象数量时，frustum culling 应该减少视锥外提交；depth buffer 应该减少最终写入的片段；occlusion query 可能因为读取延迟而在下一帧影响提交。打开实验，先固定相机，再逐一切换模式并记录被拒绝的粒度。
+
+<Cgp36VisibilityLab />
+
+## visibility determination：从对象到像素逐层筛选
+
+<Callout type="tip" title="先标注判定发生的阶段">
+  调试可见性时先写出“CPU 对象阶段、GPU
+  几何阶段、光栅化像素阶段”三个位置，再记录输入和输出。一个对象被视锥剔除，和它的片段被深度测试丢弃，是两种完全不同的证据。
+</Callout>
+
+<Term def="判断场景中的对象、几何或片段是否应该继续消耗渲染工作的过程；它在不同粒度上组合视锥、遮挡和深度证据。">
+  visibility determination
+</Term>
+
+<Cgp36VisibilityPipelineDiagram />
+
+对象级判断通常使用包围球或包围盒与相机视锥比较，目的是避免提交明显不可能出现在屏幕上的对象；几何级判断可以用遮挡探针、层级结构或早期深度结果跳过更多工作；像素级判断则比较当前片段与像素已有深度。越早做的判断通常越便宜，但它能使用的证据也更粗。
+
+可见性判定还必须考虑透明物体、天空盒、双面材质和深度写入状态。透明片段经常需要排序和混合，不能简单套用不透明物体的深度写掩码。调试时把“没有提交”“提交但没有通过深度”“通过深度但颜色被混合”分开记录。
+
+## depth buffer：用最近距离决定片段归属
+
+<Callout type="trap" title="把 depth buffer 当成颜色缓冲的附属截图">
+  现象 → 颜色看起来有遮挡，但改 draw
+  order、清除状态或深度比较函数后画面随机变化。 原因 → depth buffer
+  是逐像素的状态账本，clear、depth function、写掩码和深度范围共同决定谁能写入。
+  修法 → 固定绘制顺序，单独可视化深度值，记录通过/失败的比较与 depth write
+  状态。
+</Callout>
+
+<Term def="为每个像素保存深度值并参与片段比较的缓冲；通过测试的片段可以更新它，后续更远片段通常会被拒绝。">
+  depth buffer
+</Term>
+
+<Cgp36DepthBufferDiagram />
+
+在常见的 less 比较中，片段深度 $z_{new}$ 小于已有值 $z_{old}$ 时通过测试，并同时写入颜色与新深度；比较函数改变后，“最近”的定义也会改变。深度缓冲中的值往往经过投影映射，近裁剪面和远裁剪面之间的分布并不线性，因此过大的深度范围会降低远处精度。
+
+depth bias 可以帮助处理共面几何的 z-fighting，但它不是所有遮挡问题的修复。偏移过大可能让后方表面错误通过，偏移过小仍然会闪烁。先确认坐标、裁剪面、比较函数和写掩码，再调整 bias，并用平面与紧贴表面的几何做回归。
+
+<Term def="让光栅化器在真正执行复杂片段着色前，利用已有深度尽早拒绝被遮挡片段的硬件路径。">
+  early-z
+</Term>
+
+early-z 可以减少片段着色工作，但它受深度写入、discard、混合和管线状态约束。看到 GPU fragment 工作下降时，不能直接断言对象没有被提交；它可能只是片段在更晚阶段被丢弃。性能分析要同时看 draw、triangle、fragment 和 depth test 计数。
+
+## frustum culling：提交前排除视野外对象
+
+<Callout type="trap" title="用 frustum culling 代替所有可见性判断">
+  现象 → 视锥外对象没有提交，但视锥内被墙遮住的建筑仍然消耗大量几何和片段工作。
+  原因 → frustum culling 只回答包围体是否与视锥相交，没有回答视锥内是否被遮挡。
+  修法 → 先用便宜的视锥测试，再针对剩余对象选择层级遮挡、query 或 early-z 证据。
+</Callout>
+
+<Term def="用相机视锥的平面与对象包围体比较，提前跳过完全位于视野外对象的筛选方法。">
+  frustum culling
+</Term>
+
+<Cgp36FrustumCullingDiagram />
+
+视锥由近、远、左、右、上、下平面构成。对包围球来说，只要球心到某个平面的距离小于负半径，就可以判为完全在视锥外；包围盒测试更紧，但需要更多平面和角点计算。对象与视锥相交时，保守策略应保留对象，避免把可能可见的几何误剔除。
+
+视锥剔除的效率依赖层级结构和更新频率。静态场景可以预计算层级包围体，动态对象需要在变换后更新 bounds。剔除错误通常表现为整个对象消失，而深度错误更常表现为局部穿插、闪烁或错误遮挡；先根据故障形状选择证据。
+
+## occlusion query：用探针估计对象是否被遮挡
+
+<Term def="用一个不改变颜色和深度的包围体探针统计可见像素，再根据结果决定是否提交完整对象的遮挡测试方法。">
+  occlusion query
+</Term>
+
+<Cgp36OcclusionDiagram />
+
+遮挡查询适合处理“在视锥内但可能被大型不透明物体挡住”的对象。典型流程是先渲染 occluder，再关闭探针的颜色和深度写入，绘制被测对象的包围体，读取可见像素数量，超过阈值才提交完整模型。读取结果可能造成同步等待，常见做法是延迟一帧使用结果。
+
+query 不是免费的魔法：包围体太粗会产生假阳性，阈值太低会让几乎完全遮挡的对象继续提交，读取时机不当会拖慢 CPU。它也不能替代 frustum culling，因为视锥外对象根本不值得进入 query。三层方法应按成本和证据强度组合。
+
+## 三步实验：从裁剪面走到像素深度
+
+每一步先预测，再固定相机和场景，只改变一个可见性条件。记录对象是否在视锥内、是否提交、包围体 query 像素、片段深度、比较函数和最终颜色。
+
+<Stepper>
+  <Step title="第一步：划分 visibility determination 粒度">
+    选择 debug，先预测 near/far 平面变化会让哪些对象从视锥边界消失。用流程图区分对象级 frustum culling、遮挡级 query 和像素级 depth test，不把它们合并成同一个计数。
+
+    <Cgp36VisibilityPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：重放 depth buffer 比较">
+    选择 depth test，先预测提高 depth bias 会减少 z-fighting 还是可能造成错误通过。用深度图逐项核对 clear、z new、z old、比较函数和写掩码。
+
+    <Cgp36DepthBufferDiagram />
+
+  </Step>
+  <Step title="第三步：比较 frustum 与 occlusion">
+    先预测一个视锥内、但被前景遮挡的对象会被哪种方法拒绝。分别切换 frustum culling 与 occlusion query，再用视锥图和遮挡图核对提交时机、探针状态与延迟读取。
+
+    <Cgp36FrustumCullingDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用提高 bias 掩盖错误坐标">
+  现象 → z-fighting 暂时消失，但远处表面开始穿透或顺序反转。 原因 →
+  深度值来自错误的裁剪空间、near/far 范围或比较函数，bias
+  只是改变了错误结果的阈值。 修法 → 先固定投影和深度范围，导出 z new、z old
+  与比较结果，再用最小 bias 验证共面几何。
+</Callout>
+
+<Callout type="trap" title="看到 draw call 下降就断言对象不可见">
+  现象 → 性能计数显示提交减少，但局部物体偶尔消失，开发者只继续加大剔除范围。
+  原因 → 过于激进的 bounds、视锥平面或 query 阈值造成误剔除。 修法 →
+  为每个对象记录剔除原因、包围体、相机平面距离和上一帧状态，优先保证保守正确。
+</Callout>
+
+<Callout type="trap" title="把 occlusion query 结果同步读回当前帧">
+  现象 → 遮挡判断正确，但 CPU 等待 GPU，帧时间出现尖峰。 原因 → query
+  结果尚未完成就强制读取，破坏了并行执行。 修法 → 使用上一帧结果或异步缓冲，记录
+  query 发起、完成与消费时间，并保留失效时的保守绘制路径。
+</Callout>
+
+## 本章小结
+
+- visibility determination 在对象、几何和像素粒度逐层回答“是否值得继续工作”，越早的判断越便宜但证据越粗。
+- depth buffer 通过逐像素深度比较保留最近片段，clear、比较函数、写掩码、裁剪范围和 bias 都会改变结果。
+- frustum culling 只排除视锥外对象，occlusion query 估计视锥内对象是否被遮挡，early-z 则尽早拒绝像素工作。
+- 可见性优化必须保守正确并记录原因；性能计数下降不能单独证明对象被正确判定为不可见。
+
+<Exercises>
+
+**问题 1：区分三种粒度。** 一个对象位于相机视锥内，但被不透明墙完全挡住；另一个对象位于视锥外。你会分别使用哪种可见性证据？
+
+<Answer>
+  视锥外对象先用 frustum culling 在对象级拒绝；视锥内且可能被挡的对象可在已有
+  occluder 深度后用 occlusion query 或层级遮挡测试；即使对象提交，最终片段仍由
+  depth buffer 和 early-z 在像素级拒绝。三者回答的问题不同。
+</Answer>
+
+**问题 2：诊断 z-fighting。** 两个几乎共面的表面闪烁。你会检查哪些 depth buffer 状态，什么时候才使用 bias？
+
+<Answer>
+  先检查投影矩阵、near/far
+  范围、深度精度、clear、比较函数、写掩码、绘制顺序和两个表面的实际 z
+  值。确认坐标和状态正确后，再使用尽可能小的
+  bias，并验证它没有让远处表面错误通过；bias 不能替代错误坐标修复。
+</Answer>
+
+**问题 3：设计异步 query。** occlusion query 能正确减少提交，但同步读取结果导致 CPU 等待。你会怎样改？
+
+<Answer>
+  让 query
+  在本帧发起、在下一帧或稍后读取，使用上一帧的可见结果决定当前提交；若结果尚未完成，采用保守绘制而不是等待
+  GPU。记录 query 发起、完成、消费时间和阈值，验证延迟不会造成明显 popping
+  或误剔除。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="visibility determination"
+    definition="在对象、几何和像素粒度判断哪些渲染工作应该继续的过程。"
+  />
+  <GlossaryItem
+    term="depth buffer"
+    definition="为每个像素保存深度并参与片段比较的缓冲。"
+  />
+  <GlossaryItem
+    term="frustum culling"
+    definition="用相机视锥平面提前排除视野外对象的方法。"
+  />
+  <GlossaryItem
+    term="occlusion query"
+    definition="用包围体探针统计可见像素、再决定是否提交完整对象的测试。"
+  />
+  <GlossaryItem
+    term="early-z"
+    definition="在复杂片段着色前利用已有深度尽早拒绝遮挡片段的硬件路径。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 36: Visibility Determination"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
