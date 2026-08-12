@@ -1,0 +1,230 @@
+---
+title: "Images and Signal Processing"
+type: D
+section: "图像与信号处理"
+order: 18
+description: "从离散采样、卷积和频率成分出发，理解图像如何被平滑、增强、分析并重新构造。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-18
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp18ConvolutionDiagram,
+  Cgp18FourierDiagram,
+  Cgp18SignalProcessingLab,
+  Cgp18SignalSamplingDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-18-signal-processing";
+
+<Objectives>
+
+- 能解释 signal processing 如何把连续图像采样成离散数据，并区分时域与频域证据
+- 能修改 SignalViz 的输入信号、卷积核半径、采样率与 fourier transform/convolution 操作，并记录输出响应
+- 能回答：图像模糊、边缘增强或细节丢失时，如何区分采样不足、卷积核选择和频率成分问题？
+
+</Objectives>
+
+## 先把图像看成二维信号，而不是一堆颜色
+
+图像中的亮度和颜色会随着位置变化。平滑区域变化慢，边缘区域变化快；当图像被采样、缩放或滤波时，程序实际上是在处理一个二维信号，而不是只搬运像素。
+
+本章把采样、卷积和频率分析放在同一条证据链上。先猜一猜：把平滑信号换成边缘信号，convolution 和 fourier transform 会分别强调什么？如果细节消失，是因为采样率不够，还是因为滤波器主动压低了高频？
+
+<Cgp18SignalProcessingLab />
+
+## signal processing：从连续变化到离散样本
+
+<Callout type="trap" title="只看像素数量，不看采样带宽">
+  现象 →
+  图像尺寸看起来正确，但细密纹理出现摩尔纹、闪烁或完全变成错误的低频图案。 原因
+  → 采样间隔无法表达原信号的最高变化速度，或者重建时没有考虑混叠风险。 修法 →
+  先估计信号带宽和屏幕采样率，必要时先低通再降采样，并用频域或边缘测试检查损失。
+</Callout>
+
+<Term def="对信号进行采样、滤波、变换、重建或分析的过程；它把连续变化转成可计算的离散表示，并控制噪声与细节。">
+  signal processing
+</Term>
+
+**signal processing** 把图像看作位置函数：每个像素是某个位置的采样值，邻近像素的差异描述局部变化。采样率决定能观察到多快的变化，量化决定数值精度，滤波决定保留或抑制哪些尺度。图形学中的模糊、锐化、边缘检测和降采样都可以用这套语言解释。
+
+<Cgp18SignalSamplingDiagram />
+
+对一维信号，采样可以写成在位置 `nT` 读取连续函数 `x(t)`：
+
+$$
+x[n] = x(nT)
+$$
+
+人话翻译：`T` 是采样间隔；它越小，单位长度内的样本越多，能表达的变化越快。若采样过稀，高频变化会折叠成错误的低频外观，这就是混叠。图像降采样前的抗混叠滤波不是额外装饰，而是保护表示语义的一步。
+
+## fourier transform：从空间变化到频率成分
+
+<Term def="把信号从位置或时间域转换到频率域的数学变换；它揭示不同变化尺度的强弱，便于分析与设计滤波器。">
+  fourier transform
+</Term>
+
+**fourier transform** 换了一套坐标描述同一个信号：空间域回答“哪里亮、哪里变”，频域回答“变化以哪些尺度和方向出现”。低频通常对应缓慢的亮度变化和大块结构，高频通常对应边缘、纹理和噪声。变换本身不等于滤波，只有修改频率系数并做逆变换，才会改变图像。
+
+<Cgp18FourierDiagram />
+
+二维图像的频率还有方向。水平条纹与竖直边缘会在频域中留下不同方向的能量分布；因此一个只保留水平频率的滤波器，会选择性保留某些结构。观察频谱时不要只看峰值大小，还要看峰值的位置、方向和是否出现周期性重复。
+
+## convolution：用局部规则处理邻域
+
+<Term def="让一个小型卷积核在信号或图像邻域上滑动，对窗口内样本做加权求和并生成输出的操作。">
+  convolution
+</Term>
+
+**convolution** 在空间域直接处理局部邻域。一个二维核 `K` 在像素 `(i,j)` 周围滑动，每个输出位置都是邻域样本与核权重的乘积和：
+
+$$
+y[i,j] = \sum_{u}\sum_{v} K[u,v]x[i-u,j-v]
+$$
+
+人话翻译：核的正负和大小决定邻域被如何组合；平均核会平滑，中心更强的核会保留结构，带正负变化的核可以响应边缘。边界处没有完整邻域时，还必须明确 clamp、mirror、zero padding 等处理方式。
+
+<Cgp18ConvolutionDiagram />
+
+卷积核的选择应该对应目标。模糊核降低高频，能抑制噪声但会损失边缘；锐化核增强局部变化，可能同时放大噪声；边缘核响应亮度突变，输出不再是原始颜色而是特征证据。不要把卷积后的图像当作“真实图像”，先说明它服务于显示、分析还是后续检测。
+
+## 频域与空间域的互相验证
+
+在理想条件下，空间域卷积与频域乘法对应：
+
+$$
+\mathcal{F}(x * k) = \mathcal{F}(x)\mathcal{F}(k)
+$$
+
+人话翻译：同一个滤波效果可以在像素邻域中用卷积核完成，也可以在频域中通过修改频率成分完成；两者的边界、采样和数值误差不同，不能只凭公式假设结果完全一致。
+
+一个可检查的图像滤波接口应该把输入、核、边界与输出保留下来：
+
+```ts
+const filtered = convolve(image, kernel, { boundary: "mirror" });
+const spectrum = fourierTransform(image);
+const reconstructed = inverseFourierTransform(
+  applyFrequencyMask(spectrum, mask),
+);
+```
+
+如果空间卷积和频域重建结果不一致，先检查核是否被正确变换、边界条件是否一致、FFT 的归一化和频率排列是否一致。不要先用视觉相似度掩盖中间证据的差异。
+
+## 三步实验：从采样回放到频率响应
+
+每一步只改变一个责任。先预测输入、采样、卷积和频率响应中的哪一项会变化，再在 SignalViz 中操作并记录曲线。
+
+<Stepper>
+  <Step title="第一步：检查输入采样是否足够">
+    固定输入信号，改变采样率并观察离散样本能否跟上快速变化。先记录可能丢失的细节，再决定是否需要抗混叠处理。
+
+    <Cgp18SignalSamplingDiagram />
+
+  </Step>
+  <Step title="第二步：用 convolution 观察局部响应">
+    切换平滑与边缘信号，逐步增加卷积核半径，比较平滑、边缘响应和噪声之间的变化；同时记录边界处理假设。
+
+    <Cgp18ConvolutionDiagram />
+
+  </Step>
+  <Step title="第三步：切换 fourier transform 检查频率成分">
+    在相同输入上切换 fourier transform，观察主要频率峰值；把频域观察与空间域卷积输出对应起来，而不是只比较最终外观。
+
+    <Cgp18FourierDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把频域变换当成滤波结果">
+  现象 → 画出频谱后图像却没有变，或者把频谱幅值直接当作最终颜色显示。 原因 →
+  fourier transform 只是改变描述域，没有修改频率系数并执行逆变换。 修法 →
+  明确分析、修改 mask、逆变换三个阶段，分别保存频率峰值和重建图像。
+</Callout>
+
+<Callout type="trap" title="卷积核变大就一定更清晰">
+  现象 → 增大 kernel 后图像更平滑或边缘更粗，却被误认为细节增加。 原因 →
+  convolution
+  的核决定保留与抑制的频率，核尺寸增加通常扩大邻域而不是凭空创造信息。 修法 →
+  先说明目标是降噪、平滑、锐化还是边缘检测，再用频率响应和边缘样本验收。
+</Callout>
+
+<Callout type="trap" title="忽略边界和采样率差异">
+  现象 → 图像中心看起来正确，边缘出现暗框、重复纹理或下采样后出现周期性伪影。
+  原因 → 边界 padding 与采样间隔没有和卷积核、重建规则一起定义。 修法 → 明确
+  boundary mode，先做抗混叠再降采样，并用非对称边缘图分别检查中心与边缘。
+</Callout>
+
+## 本章小结
+
+- signal processing 把图像当作可采样、可滤波、可变换和可重建的离散信号。
+- fourier transform 把空间变化拆成频率成分，convolution 用局部加权规则直接处理邻域。
+- 采样率、边界条件、核响应和频率 mask 都会改变结果，不能只凭最终截图归因。
+- 空间域与频域可以互相验证，但必须保持采样、边界、归一化和重建契约一致。
+
+<Exercises>
+
+**问题 1：判断采样风险。** 一张图包含细密条纹，准备缩小到原宽度的一半。你会先检查什么，并采取哪一步避免混叠？
+
+<Answer>
+  先估计条纹的最高空间频率与目标采样率，再在降采样前使用合适的低通或抗混叠滤波，之后重采样并比较频域能量。不能只直接丢掉一半像素。
+</Answer>
+
+**问题 2：修改 SignalViz。** 在平滑信号和边缘信号之间切换，分别使用 convolution 与 fourier transform，把卷积核半径从 2 调到 4，再改变采样率。记录哪个操作改变局部响应、哪个操作暴露频率峰值，以及有效样本如何变化。
+
+<Answer>
+  convolution
+  直接改变邻域加权后的时域或空间域波形，核半径影响响应覆盖范围；fourier
+  transform
+  显示频率成分，峰值位置和强度提供不同证据。采样率改变可保留的带宽和有效样本，过低时可能产生混叠。
+</Answer>
+
+**问题 3：诊断“边缘变暗且中心正确”。** 你会如何区分卷积核、边界 padding 和颜色显示问题？
+
+<Answer>
+  先用常数或非对称测试图固定颜色显示，再分别切换 zero、clamp 或 mirror 等
+  boundary mode；随后检查卷积核总和、核方向和边缘响应。如果只有边缘随 padding
+  改变，问题在边界处理；若全图亮度改变，检查核归一化或颜色映射。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="signal processing"
+    definition="对信号进行采样、滤波、变换、重建或分析的过程。"
+  />
+  <GlossaryItem
+    term="fourier transform"
+    definition="把信号从位置或时间域转换到频率域的数学变换。"
+  />
+  <GlossaryItem
+    term="convolution"
+    definition="让卷积核在局部邻域滑动并进行加权求和的操作。"
+  />
+  <GlossaryItem
+    term="sampling rate"
+    definition="单位时间或空间内读取信号样本的频率，决定可表达的变化带宽。"
+  />
+  <GlossaryItem
+    term="frequency domain"
+    definition="按频率成分描述信号变化尺度的表示域。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 18: Images and Signal Processing"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

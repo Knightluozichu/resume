@@ -4354,6 +4354,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp17ImageRepresentationLab: module0.Cgp17ImageRepresentationLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-18-images-and-signal-processing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-18-signal-processing");
+      return {
+        Cgp18ConvolutionDiagram: module0.Cgp18ConvolutionDiagram,
+        Cgp18FourierDiagram: module0.Cgp18FourierDiagram,
+        Cgp18SignalProcessingLab: module0.Cgp18SignalProcessingLab,
+        Cgp18SignalSamplingDiagram: module0.Cgp18SignalSamplingDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
