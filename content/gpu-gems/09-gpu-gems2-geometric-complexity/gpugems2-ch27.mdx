@@ -1,0 +1,338 @@
+---
+title: "GPU Gems 2 · Chapter 27. Advanced High-Quality Filtering"
+type: D
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 27
+description: "从 texel-center 访问和归一化连续卷积出发，对比缩小 footprint 抗锯齿、Gaussian/windowed-sinc 放大重建与 shock filter 去模糊。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-27-advanced-high-quality-filtering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-27
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch27FilteringLab,
+  GpuGems2Ch27FootprintDiagram,
+  GpuGems2Ch27KernelDecompositionDiagram,
+  GpuGems2Ch27NormalizedConvolutionDiagram,
+  GpuGems2Ch27ReconstructionDiagram,
+  GpuGems2Ch27ShockDiagram,
+  GpuGems2Ch27TexelAccessDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch27-high-quality-filtering";
+
+<Objectives>
+
+- 能解释 Advanced High-Quality Filtering 如何把离散图像样本、连续 filter kernel 与屏幕像素 footprint 对齐
+- 能实现归一化 subpixel convolution、separable/large-kernel 路径和 Jacobian footprint 抗锯齿，并核对权重、读取与精度预算
+- 能回答：自然照片、合成硬边、透视缩小与均匀模糊分别应选 windowed sinc、Gaussian、footprint averaging 还是 shock filtering，以及会引入什么伪影
+
+</Objectives>
+
+## 同一张图，放大、缩小和变清晰不是一个问题
+
+把照片放大时，屏幕上新增的位置没有原始颜色，需要从邻近样本推算；把纹理缩小时，许多细节挤进一个像素，需要先做面积平均；修复模糊边缘时，又要把过宽的过渡收紧。三种任务都叫“过滤”，但错误地共用一个办法会分别造成发糊、闪烁或光晕。
+
+硬件内置方法速度快，却只覆盖常见折中。本章把取样区域、重建曲线和迭代锐化拆开，使每条路径都有可计算的输入、成本与失败模式。先预测：在实验里选 sinc、radius 8，再叠加 10 次 shock，硬边附近会更清楚，还是先出现 ringing 与 halo？
+
+<GpuGems2Ch27FilteringLab />
+
+<Callout type="tip" title="先分类任务，再记录 filter contract">
+  每次运行保存 magnify/minify/deblur 类型、input/output resolution、kernel
+  support、weight normalization、sample footprint、intermediate format 和
+  reference crop。只有任务相同，PSNR、锐度或截图对比才有意义。
+</Callout>
+
+<Callout type="trap" title="用一个锐化 kernel 同时处理放大与缩小">
+  现象 → 放大边缘似乎更锐，远处纹理却闪烁和摩尔纹加剧。原因 → magnification
+  需要重建缺失位置，minification
+  需要移除超过新采样带宽的频率，两者目标相反。修法 → 根据 texture-coordinate
+  derivatives 判断路径；缩小做 footprint average，放大才选择 reconstruction
+  kernel。
+</Callout>
+
+本章主题 **Advanced High-Quality Filtering** 的核心不是“选择最锐的核”，而是让离散样本、连续模型与目标像素的覆盖区域一致，然后分别控制 blur、aliasing、ringing 和计算成本。
+
+## 1. 从 normalized coordinate 回到 texel center
+
+图像滤波器常需要访问确切的离散样本，而 texture API 通常接收零到一的实数坐标。设 texture size 为 $N$、归一化坐标为 $u$，对应 sample index 是
+
+$$
+i=\lfloor uN\rfloor,\qquad u_i=\frac{i+0.5}{N}.
+$$
+
+这个式子在说：先把连续坐标量化到整数 sample，再加半个 texel 回到该 sample 的中心；中心比 corner 更能抵抗 round-off。若 sampler 明确使用 nearest/point filtering，可让硬件自动吸附到最近样本，但 linear filtering 会改变语义。
+
+<GpuGems2Ch27TexelAccessDiagram />
+
+相邻像素访问不必每次 floor。可以把 $1/N_x$、$1/N_y$ 及其正负组合预计算进 uniform，从当前 coordinate 一次加减得到八邻域。必须验证 API 的 texel-center 约定、border texels 与 wrap/clamp；跨 API 照抄 half-texel 规则常会整体偏一格。
+
+<Callout type="trap" title="把 texel corner 当成离散 sample 的稳定地址">
+  现象 → 同一 shader 在不同尺寸、GPU 或缩放下偶发读取相邻 texel。原因 → corner
+  恰好位于采样边界，微小 round-off 会改变 nearest 选择或触发 linear blend。修法
+  → 用 $(i+0.5)/N$ 定位 center，并通过 checkerboard 与边界坐标验证 sampler
+  state。
+</Callout>
+
+## 2. 连续 kernel 如何落到离散图像
+
+<Term def="把连续 convolution kernel 精确居中在当前非整数纹理位置，再从周围离散 texels 取样的过滤方式。">
+  subpixel filtering
+</Term>
+
+普通离散 convolution 假设 kernel 总是对齐某个 texel center。图像放大或 warp 时，输出 coordinate 往往落在 texels 之间；若仍用固定离散 coefficients，kernel phase 会跳动。更高质量的做法是把 kernel 视为连续函数 $k(s,t)$，根据当前 subpixel center 对每个邻域 sample 重新求权重。
+
+连续 kernel 可以预计算进 2D texture。对 rotationally invariant kernel，只存一条径向 cross section 能节省内存，但 inner loop 每次要计算距离；若 ALU 比 texture memory 更紧，2D table 可能反而更快。kernel texture 的 domain、center、format 和 linear interpolation 必须写进契约。
+
+<Term def="把颜色加权和除以本次实际采到的 kernel 权重和，使常量输入在任意 subpixel phase 下保持原亮度。">
+  normalized convolution
+</Term>
+
+<GpuGems2Ch27NormalizedConvolutionDiagram />
+
+对邻域 $\Omega$、输出中心 $(s_0,t_0)$，归一化结果是
+
+$$
+C(s_0,t_0)=
+\frac{\sum_{(s,t)\in\Omega}I(s,t)k(s-s_0,t-t_0)}
+{\sum_{(s,t)\in\Omega}k(s-s_0,t-t_0)}.
+$$
+
+这个式子在说：连续 kernel 被离散采样后，weight sum 会随 phase 和裁剪边界变化；最后除以本次权重和，才能让 constant image 的 steady-state response 保持 1。原章把 RGB 用于 color sum、alpha 用于 weight sum，可减少 instructions；若 alpha 本身要处理，就必须另存 sum。
+
+```glsl
+vec4 accum = vec4(0.0);
+for (int y = -RADIUS; y <= RADIUS; ++y) {
+  for (int x = -RADIUS; x <= RADIUS; ++x) {
+    vec2 sampleUv = (base + vec2(x, y) + 0.5) / imageSize;
+    float weight = texture(kernelLut, kernelUv(sampleUv, uv)).r;
+    accum += vec4(texture(image, sampleUv).rgb, 1.0) * weight;
+  }
+}
+return vec4(accum.rgb / accum.a, 1.0);
+```
+
+<Callout type="trap" title="只归一化离线 kernel，不归一化当前采样相位">
+  现象 → kernel 理论积分为 1，放大动画中亮度仍随 subpixel phase 呼吸。原因 →
+  连续函数落到有限离散 samples 后，实际 coefficient sum
+  并非常数，边界裁剪还会进一步改变它。修法 → 每个 output sample 同时累计
+  color×weight 与 weight，最后再相除，并保护接近零的分母。
+</Callout>
+
+## 3. separable kernel 与超大 support
+
+<Term def="可写成横向一维函数与纵向一维函数乘积的二维卷积核；它允许先滤 rows、再滤 columns。">
+  separable kernel
+</Term>
+
+若 $K(x,y)=k_x(x)k_y(y)$，一个 $(2r+1)^2$ taps 的 2D convolution 可拆成两个 $2r+1$ taps 的 passes。Gaussian 和 box kernel 都可 separable；radius 4 时，square path 要 81 samples，而 two-pass path 只要 18 samples。
+
+<GpuGems2Ch27KernelDecompositionDiagram />
+
+两 pass 会增加 render-target write/read 和同步，所以小 kernel 未必获益。超大、不可 separable 的 kernel 则可按 tiles 分多 pass：每个 pass 累计 color 与 weight 到 floating-point target，所有 tiles 完成后才统一除 weight sum。若每 tile 各自 normalize，再相加，tile 边界会获得错误相对权重。
+
+<Callout type="trap" title="每个 kernel tile 单独除以自己的 weight sum">
+  现象 → 大 kernel 中央与外围贡献比例错误，tile 边界形成亮度接缝。原因 → 每个
+  tile 被独立缩放为 unit response，破坏完整 kernel 的 coefficient 比例。修法 →
+  所有 passes 累计未归一化 color 与 weight 到高精度 target，最后单独一 pass
+  做一次总除法。
+</Callout>
+
+## 4. 缩小：让 pixel footprint 决定平均区域
+
+<Term def="一个屏幕像素映射到 texture space 后覆盖的区域；透视与非均匀缩放会把正方形变成倾斜、拉长的四边形。">
+  sampling footprint
+</Term>
+
+minification 若跳过预滤波，高于目标 Nyquist bandwidth 的细节会折回低频，产生 moiré 和 shimmer。理想抗锯齿是对每个像素覆盖的 texture area 求平均；mipmap 是高效近似，但不能在所有透视方向上最优保留信号。
+
+对屏幕到 texture 的映射 $f(i,j)$，在当前像素中心 $(i_0,j_0)$ 做一阶局部展开：
+
+$$
+f(i,j)\approx f(i_0,j_0)+J_0
+\begin{bmatrix}i-i_0\\j-j_0\end{bmatrix}.
+$$
+
+这个式子在说：用 texture-coordinate Jacobian $J_0$ 把屏幕空间像素正方形近似映射成 texture-space quadrilateral。线性只在局部成立，所以这是 quasi-optimal antialiasing，而非任意非线性 warp 的全局精确解。
+
+<GpuGems2Ch27FootprintDiagram />
+
+实现时先用 derivatives 或 `fwidth` 构造 conservative bounding box，再遍历候选 texels。把 texel offset 乘 $J_0^{-1}$ 变回 pixel coordinates，只有两个绝对分量都不超过 0.5 才纳入平均。只平均整个 bounding box 类似粗糙 anisotropic filter，会多吃 footprint 外 samples，透视方向因此更糊。
+
+<Callout type="trap" title="把 fwidth bounding box 当成真实 footprint">
+  现象 → aliasing 降低了，斜向纹理却比预期更软，细线提前消失。原因 →
+  axis-aligned box 包含 Jacobian quadrilateral 外的 texels。修法 → 用
+  inverse-Jacobian 做 inside test；若 footprint 很大，则改用
+  mipmap/EWA/edge-walking 等更适合的覆盖策略。
+</Callout>
+
+## 5. 放大：Gaussian 与 windowed sinc
+
+<Term def="依据采样定理，用 sinc 低通核从离散样本恢复带限连续信号，再在新分辨率重新采样的方法。">
+  Shannon-Nyquist reconstruction
+</Term>
+
+bilinear interpolation support 小、速度快，却会把放大图像变得 fuzzy。理想 sinc kernel $\sin(\pi x)/(\pi x)$ 能保留原 sampled signal 的带宽，但 impulse response 无限、衰减很慢，直接实现成本不可接受。因此需要截断并乘 Gaussian 等 window，让 kernel 具有有限 support。
+
+<GpuGems2Ch27ReconstructionDiagram />
+
+windowed sinc 在自然照片中往往更好保留纹理与颗粒；硬合成 intensity step 缺失无限高频，重建会在边缘两侧 resonation。Gaussian cutoff 更平滑，不产生明显 ringing，但会衰减高频细节。选型不能只比较中心锐度，还要检查硬边 overshoot、undershoot、平坦区噪声和不同 subpixel phases。
+
+<Callout type="trap" title="把最大 sinc radius 当成通用高质量答案">
+  现象 → 自然纹理更清楚，UI 边缘和 alpha cutout 周围却出现明暗波纹。原因 → sharp
+  synthetic edge 不满足有限带宽假设，增大 support 会采到更多 sinc side
+  lobes。修法 → 对硬边改用 Gaussian/edge-aware 路径或缩短 window，并用 step/ramp
+  fixtures 验收 ringing。
+</Callout>
+
+## 6. 去模糊：shock filtering 的迭代边界
+
+<Term def="根据图像 gradient 与 second-derivative 符号选择扩散方向，经过多次小步迭代把平滑过渡压缩成更陡边缘的非线性锐化方法。">
+  shock filter
+</Term>
+
+传统 sharpen 常整体放大高频，连噪声一起增强。shock filtering 根据 convexity 改变 diffusion 方向：second derivative 为正时沿反 gradient 搬运颜色，为负时沿 gradient 搬运，使模糊 transition 逐步变陡。原章示例使用五点邻域估计，并以 magnitude 0.05 运行八 passes。
+
+<GpuGems2Ch27ShockDiagram />
+
+这类 filter 适合 blur distribution 较均匀的 2D reconstructed image。透视 3D scene 的 blur 会随深度、方向和 footprint 改变，而 shock shader 看不到这份分布，容易在错误方向制造 halo。多次迭代还会强化 ringing 与噪声，因此要保存每一 pass，而不是只看最后一张图。
+
+```glsl
+vec4 center = sample(uv);
+vec4 laplacian = 4.0 * center - sample(left) - sample(right)
+               - sample(up) - sample(down);
+vec2 gradient = vec2(
+  dot(sample(right) - sample(left), laplacian),
+  dot(sample(up) - sample(down), laplacian)
+);
+gradient *= magnitude / (length(gradient) + 1e-5);
+return diffuseAlongSignedGradient(center, gradient);
+```
+
+<Callout type="trap" title="用大 magnitude 一次完成 shock sharpening">
+  现象 → 边缘出现 overshoot、halo 和局部不稳定，细噪点变成高对比斑块。原因 →
+  nonlinear diffusion 的一步位移过大，跨过可接受 transition，且 convexity
+  estimate 本身受噪声影响。修法 → 使用小 magnitude、多
+  passes，并在每步限制范围、监控 flat-field noise 与 edge profile。
+</Callout>
+
+## 7. lookup table、时间重建与交付边界
+
+复杂 kernel 函数可预计算进 texture lookup table，但必须按用途选择 format、domain、resolution 与 sampler：periodic function 用 wrap，horizontal asymptote 用 clamp；需要连续值时可 linear filter，离散索引则必须 point。若 floating-point texture 不支持 linear filtering，要提高 resolution 或在 shader 手工插值。
+
+同一重建框架可扩展到时间轴：把 frames 视为 3D signal，在 time dimension 上做 subpixel interpolation，可得到比 frame blending 更平滑、比 motion estimation 更简单的 slow motion。若重建后仍保留过长 shutter blur，可把 shock diffusion 只沿时间方向应用，但快速运动通常需要更大 temporal support。
+
+这些算法优先质量而非 full-screen game frame rate，更适合医疗/科学图像、照片和影片编辑、合成、格式转换、专业渲染或离线纹理预处理。交付必须报告 taps、passes、intermediate precision、edge/ramp/natural fixtures 与目标 GPU 时间，不能只写“高质量”。
+
+## 三步验收：地址、footprint、伪影
+
+三个阶段使用相同 checkerboard、hard step、natural crop 与 flat field。先证明读到了正确 texels，再证明采样区域符合任务，最后才选择 kernel 和去模糊强度。
+
+<Stepper>
+  <Step title="第一步：验证 sample centers 与归一化">
+    对整数中心、半像素 phase、四条边和 constant image 运行 subpixel convolution。所有 phase 的 constant output 应相同；RGB/weight sum 探针能定位地址偏移或漏除问题。
+
+    <GpuGems2Ch27NormalizedConvolutionDiagram />
+
+  </Step>
+  <Step title="第二步：缩小按 Jacobian footprint 平均">
+    用斜向 checkerboard 记录 $J$、bounding box 与 inside-test mask。比较仅 fwidth box 和 quadrilateral test，确认后者没有额外混入 footprint 外 samples。
+
+    <GpuGems2Ch27FootprintDiagram />
+
+  </Step>
+  <Step title="第三步：分开验收重建与去模糊">
+    在 natural crop 与 hard step 上对比 bilinear、Gaussian、windowed sinc；只有重建稳定后才增加 shock passes，并逐步观察 ringing、halo 与 flat-field noise。
+
+    <GpuGems2Ch27ShockDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- subpixel filtering 必须从 texel centers 采样，并按实际 weight sum 归一化。
+- separable kernel 降低大 support 读取；tiled kernel 最后统一除权重。
+- minification 应平均 Jacobian sampling footprint，而非任意放大窗口。
+- windowed sinc 保细节但会 ringing；Gaussian 更平滑但损失高频。
+- shock filter 用小步迭代收紧均匀模糊，不能替代未知 blur model。
+
+<Exercises>
+
+**问题 1｜计算读取成本。** radius 6 的 square Gaussian 有多少 taps？使用 separable 两 pass 后是多少？还需要纳入哪些隐藏成本？
+
+<Answer>
+  每轴 support 为 $2\times6+1=13$，直接 2D convolution 需要 $13^2=169$
+  taps；separable 路径需要 $13+13=26$ taps。真实选型还要计中间 render-target
+  写回/读回、第二 pass、cache behavior、format precision 和同步；小 kernel
+  不一定因 taps 少就更快。
+</Answer>
+
+**问题 2｜选择过滤路径。** 透视缩小的 checkerboard、放大的自然照片、放大的硬边 UI 和均匀 blur 的二维照片分别应使用什么基线？
+
+<Answer>
+  透视缩小使用 derivative/Jacobian footprint antialiasing 或合适的 mip/EWA
+  近似；自然照片放大可从 windowed sinc 开始并检查 ringing；硬边 UI 优先 Gaussian
+  或更短、edge-aware 的 reconstruction；均匀二维 blur 可在重建后尝试小
+  magnitude、多 pass shock filter。四者不能共享一个“最锐”配置。
+</Answer>
+
+**问题 3｜修改实验并提供发布证据。** 在 FilteringLab 中选择 sinc、radius 8、deblur 和 10 shock passes。你会怎样把配置改到可交付状态？
+
+<Answer>
+  先把 shock passes 归零，使用 hard step、natural crop 与 flat field 验收 sinc
+  reconstruction；若硬边 ringing 过大，缩小 radius/window 或改
+  Gaussian。重建通过后，从小 magnitude 和少量 passes 逐步增加 shock，每步保存
+  edge profile、halo、noise 和 clamp 统计。最终还要报告 normalized weight
+  sum、square/separable taps、intermediate format、GPU 时间与目标分辨率。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="subpixel filtering"
+    definition="把连续 kernel 对准非整数纹理位置，再从周围离散 samples 取值的高质量过滤方式。"
+  />
+  <GlossaryItem
+    term="normalized convolution"
+    definition="用颜色加权和除以当前实际权重和，使不同采样 phase 和边界下的常量亮度保持不变。"
+  />
+  <GlossaryItem
+    term="separable kernel"
+    definition="可拆成横向和纵向一维 passes 的二维核，用线性规模读取替代平方规模读取。"
+  />
+  <GlossaryItem
+    term="sampling footprint"
+    definition="一个屏幕像素在 texture space 中实际覆盖的区域，透视下通常是倾斜拉长的四边形。"
+  />
+  <GlossaryItem
+    term="Shannon-Nyquist reconstruction"
+    definition="用 sinc 低通核恢复带限连续信号，再按新分辨率重新采样的理论重建方法。"
+  />
+  <GlossaryItem
+    term="shock filter"
+    definition="按 gradient 和二阶导数符号迭代搬运颜色、把模糊过渡收紧的非线性锐化方法。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 27. Advanced High-Quality Filtering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-27-advanced-high-quality-filtering"
+/>
