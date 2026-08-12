@@ -4206,6 +4206,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp03VisibilityDiagram: module0.Cgp03VisibilityDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-04-2d-test-bed": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-04-2d-test-bed");
+    return {
+      Cgp04CornerCuttingDiagram: module0.Cgp04CornerCuttingDiagram,
+      Cgp04GridDiagram: module0.Cgp04GridDiagram,
+      Cgp04TransformDiagram: module0.Cgp04TransformDiagram,
+      Cgp04TwoDGraphicsTestBedLab: module0.Cgp04TwoDGraphicsTestBedLab,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

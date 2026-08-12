@@ -1,0 +1,241 @@
+---
+title: "A 2D Graphics Test Bed"
+type: D
+section: "二维图形与变换"
+order: 4
+description: "建立一个可重复的二维图形测试平台，用网格、切角和变换链检查点集、边界与视口输出。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-04
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp04CornerCuttingDiagram,
+  Cgp04GridDiagram,
+  Cgp04TransformDiagram,
+  Cgp04TwoDGraphicsTestBedLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-04-2d-test-bed";
+
+<Objectives>
+
+- 能解释一个二维图形测试平台为什么要固定网格、坐标原点、视口和输入点集
+- 能修改切角与二维变换代码，记录角点顺序、闭合边界和输出坐标的变化
+- 能回答：二维图形出现翻转、断边或位置漂移时，如何用测试台证据定位输入、变换还是视口问题？
+
+</Objectives>
+
+## 先把图形放回方格纸
+
+想象你在方格纸上移动一块纸板。每次只改变一个动作：转动、缩放、平移或削去一个角；方格、原点和纸张边界都保持不变。这样，纸板的变化才有可比较的参照。
+
+如果每次实验都换一张纸、换一个比例，最后即使轮廓看起来不同，也无法判断是动作造成的，还是测量方式变了。本章建立一个小型二维实验台，让每个输入点、每条边和最终视口位置都能被重放。
+
+先预测：把切角从小调大时，哪些点会移动，哪些边的连接顺序和闭合关系绝不能改变？
+
+<Cgp04TwoDGraphicsTestBedLab />
+
+## 测试台：让二维实验可以重放
+
+<Callout type="trap" title="把测试台当成一张最终效果图">
+  现象 → 每次截图都不一样，却无法说明是哪一个参数造成差异。\ 原因 →
+  输入点集、坐标原点、视口尺寸和变换参数同时变化，实验没有控制变量。\ 修法 →
+  固定网格与视口，只改变一个参数，并保存输入、变换和输出三份记录。
+</Callout>
+
+<Term def="用于反复运行二维点集、变换和边界测试的固定实验环境；它把输入与输出放在同一套坐标参照中。">
+  2d graphics test bed
+</Term>
+不是“画一个例子”，而是把可重复性当成图形功能的一部分。它至少要固定三件事：输入点集的顺序、坐标原点和单位、输出视口的边界。实验者可以只改变角度或切角长度，再观察差异是否符合预期。
+
+<Cgp04GridDiagram />
+
+一个好测试台还应保存最小证据：原始点列表、每一步变换后的点列表、是否闭合、是否越过视口边界，以及最终绘制顺序。仅记录最后颜色，会把几何错误和样式错误混在一起。
+
+```ts
+type Point = { x: number; y: number };
+type TestCase = { name: string; points: Point[]; viewport: [number, number] };
+
+function snapshot(test: TestCase, output: Point[]) {
+  return {
+    name: test.name,
+    inputCount: test.points.length,
+    outputCount: output.length,
+    closed: output[0]?.x === output.at(-1)?.x,
+    viewport: test.viewport,
+  };
+}
+```
+
+`inputCount` 和 `outputCount` 不一定相同：切角或裁剪可能生成新点。但点的顺序、闭合条件和视口尺寸都必须有明确的验收规则，不能用“肉眼差不多”代替。
+
+## 切角：从角点生成新的边界
+
+<Callout type="trap" title="直接删除角点，忘记补上两条新边">
+  现象 → 切角后图形出现缺口，或填充方向在某个角突然翻转。\ 原因 →
+  只删掉原角点，没有沿相邻边计算两个新交点，边界链因此断开。\ 修法 →
+  在进入和离开角点的两条边上各求一个点，再按原绕行方向插回点列表。
+</Callout>
+
+<Term def="沿多边形角点的相邻边截取一段，用两个新点替代原角点的边界操作。">
+  corner cutting
+</Term>
+的输入不是一张图片，而是一串按顺序排列的点。对每个角，沿前一条边走入、沿后一条边走出，得到两个新点；所有新点仍按同一方向排列，才能让填充和命中测试稳定。
+
+<Cgp04CornerCuttingDiagram />
+
+切角长度不能大到越过相邻边的中点；否则相邻角会互相穿过，边界虽然闭合，却已经不再代表原来的形状。测试台应把“过小、正常、过大”作为三组输入，而不是只测一个漂亮参数。
+
+```ts
+function cutCorner(
+  previous: Point,
+  corner: Point,
+  next: Point,
+  distance: number,
+) {
+  const inLength = Math.hypot(previous.x - corner.x, previous.y - corner.y);
+  const outLength = Math.hypot(next.x - corner.x, next.y - corner.y);
+  const safe = Math.min(distance, inLength / 2, outLength / 2);
+  const enter = {
+    x: corner.x + ((previous.x - corner.x) * safe) / inLength,
+    y: corner.y + ((previous.y - corner.y) * safe) / inLength,
+  };
+  const leave = {
+    x: corner.x + ((next.x - corner.x) * safe) / outLength,
+    y: corner.y + ((next.y - corner.y) * safe) / outLength,
+  };
+  return [enter, leave];
+}
+```
+
+这段函数只负责一个角，调用者还要负责按原点列表顺序拼回整条边界，并验证最后一个点能回到第一个点。把局部几何和全局闭合分开，才能知道错误出在距离、点序还是拼接。
+
+## 二维变换：把每一步写成可检查的契约
+
+<Callout type="trap" title="把二维变换顺序当成可以随意交换的加法">
+  现象 → 同样的旋转、缩放和平移，换一个调用顺序后图形跑到完全不同的位置。\ 原因
+  → 变换作用于当前坐标，平移后的点再旋转不等于旋转后的点再平移。\ 修法 →
+  固定顺序并保存每一步点集；需要换顺序时，明确把它当成新的测试用例。
+</Callout>
+
+<Term def="把二维点集通过旋转、缩放、平移或组合矩阵送入另一个坐标参照的过程。">
+  2d transformation
+</Term>
+应被当作一条可追踪的函数链，而不是藏在绘图调用里的副作用。先定义 local
+coordinates，再依次应用变换，最后把结果映射到
+viewport；每一层都可以用网格和点序验证。
+
+<Cgp04TransformDiagram />
+
+<Term def="保持直线和平行关系的二维变换组合，通常由旋转、缩放与平移组成。">
+  affine transform
+</Term>
+能把直线变成直线，但它仍然改变位置、方向或尺度；
+<Term def="把连续坐标映射到屏幕或画布矩形的输出区域。">viewport</Term>
+则是显示边界，不应偷偷改变几何点之间的拓扑顺序。
+<Term def="在点的坐标后加入额外分量，以便用矩阵统一表达平移与其他二维变换。">
+  homogeneous coordinate
+</Term>
+让这些操作可以写在同一条矩阵链中。
+
+一个可复核的二维变换至少要记录：输入点、变换顺序、输出点和视口映射。如果只保存最终屏幕坐标，翻转、漂移和缩放异常就失去定位入口。
+
+## 三步实验：先证据，再优化
+
+<Stepper>
+  <Step title="冻结测试台边界">
+    先确认输入点顺序、坐标原点和 viewport 尺寸不变，再运行同一组点集。
+
+    <Cgp04GridDiagram />
+
+  </Step>
+  <Step title="验证切角边界">
+    分别运行小切角、正常切角和过大切角，检查新点数量、绕行方向和闭合状态。
+
+    <Cgp04CornerCuttingDiagram />
+
+  </Step>
+  <Step title="追踪变换链">
+    一次只改变旋转、缩放或平移之一，比较 local coordinates 到 viewport coordinates 的对应点。
+
+    <Cgp04TransformDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章回顾：二维图形的四个验收问题
+
+1. 输入点是否有稳定顺序，第一点和最后一点是否满足闭合契约？
+2. 切角是否沿相邻边生成新点，而不是简单删除旧点？
+3. 二维变换是否按固定顺序记录了每个中间点集？
+4. viewport 是否只负责输出边界，没有悄悄改变几何拓扑？
+
+<Exercises>
+
+**问题 1：设计一个最小二维图形测试台。**
+
+<Answer>
+  固定输入点集、坐标原点与单位、viewport
+  尺寸和绘制顺序；每次只改变一个旋转、缩放或切角参数，并保存输入点、中间点、输出点、闭合状态与边界结果。
+</Answer>
+
+**问题 2：修改 `cutCorner`，让它拒绝越过相邻边中点的切角，并说明为什么需要两个新点。**
+
+<Answer>
+  把 distance 限制为两条相邻边长度的一半以内；沿进入边和离开边分别求
+  enter、leave
+  两个点，再按原绕行方向插回。两个新点共同替代原角点，才能让边界连续而不是留下缺口。
+</Answer>
+
+**问题 3：同一三角形经过旋转、平移后出现位置漂移，如何排查？**
+
+<Answer>
+  先在 2d graphics test bed 中冻结原始点集和 viewport，再分别记录 2d
+  transformation 每一步的点。若 local 点已变，查输入或旋转；若中间点正确而
+  viewport 错，查映射比例和原点；最后再检查绘制顺序与样式。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="2d graphics test bed"
+    definition="固定输入、网格、坐标原点和视口的二维实验环境，让每次改变都能重放和比较。"
+  />
+  <GlossaryItem
+    term="corner cutting"
+    definition="沿角点两侧的边取两个新点，用它们替代原角点并保持边界连续。"
+  />
+  <GlossaryItem
+    term="2d transformation"
+    definition="把二维点集通过旋转、缩放、平移或组合变换送入另一个坐标参照。"
+  />
+  <GlossaryItem
+    term="affine transform"
+    definition="保持直线和平行关系的二维变换组合，常由旋转、缩放和平移构成。"
+  />
+  <GlossaryItem
+    term="viewport"
+    definition="最终显示的矩形区域，负责把坐标映射到画布边界。"
+  />
+  <GlossaryItem
+    term="homogeneous coordinate"
+    definition="给坐标增加一个分量，让平移也能和其他变换一起用矩阵表达。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 4: A 2D Graphics Test Bed"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
