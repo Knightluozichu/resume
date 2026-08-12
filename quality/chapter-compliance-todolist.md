@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T11:15:57.507Z
+> 生成时间：2026-08-12T11:23:42.409Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4523 |
+| 实际 MDX 章节/页面 | 4524 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 95 |
+| manifest 未映射 unit | 94 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1560 |
+| passed | 1561 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -1369,9 +1369,9 @@
     - 路径：`content/car-structure-illustrated/08-review/csi23-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## cg-principles-practice（35 个内容页面 · passed:35 · 🚫 门禁阻断 22 项）
+## cg-principles-practice（36 个内容页面 · passed:36 · 🚫 门禁阻断 21 项）
 
-- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=47.4%；未映射 unit=20；证据不完整 unit=0。
+- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=50%；未映射 unit=19；证据不完整 unit=0。
 - 其他门禁阻断：cg-principles-practice: publication-policy-not-approved。
 
 - [x] ✅ **01-intro/cgpp-ch01** — passed；score 99
@@ -1410,6 +1410,9 @@
 - [x] ✅ **03-pipeline/cgp-13-camera-specifications** — passed；score 96
     - 路径：`content/cg-principles-practice/03-pipeline/cgp-13-camera-specifications.mdx`
     - 正式 unit：`cgp-13` explained=2/2
+- [x] ✅ **03-pipeline/cgp-14-standard-approximations** — passed；score 97
+    - 路径：`content/cg-principles-practice/03-pipeline/cgp-14-standard-approximations.mdx`
+    - 正式 unit：`cgp-14` explained=2/2
 - [x] ✅ **03-pipeline/cgpp-ch03** — passed；score 97
     - 路径：`content/cg-principles-practice/03-pipeline/cgpp-ch03.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
@@ -1479,8 +1482,6 @@
 - [x] ✅ **25-future/cgpp-ch25** — passed；score 97
     - 路径：`content/cg-principles-practice/25-future/cgpp-ch25.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
-- [ ] 🔴 P0 **[正式 unit cgp-14] Standard Approximations and Representations** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
-    - 路径：待创建或映射（officialUnitId: `cgp-14`）
 - [ ] 🔴 P0 **[正式 unit cgp-15] Ray Casting and Rasterization** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
     - 路径：待创建或映射（officialUnitId: `cgp-15`）
 - [ ] 🔴 P0 **[正式 unit cgp-16] Survey of Real-Time 3D Graphics Platforms** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2

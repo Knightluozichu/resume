@@ -1,0 +1,228 @@
+---
+title: "Standard Approximations and Representations"
+type: D
+section: "近似与表示"
+order: 14
+description: "用采样、误差预算和不同数据表示把连续几何转成可计算、可渲染、可验证的图形对象。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-14
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp14ApproximationConceptDiagram,
+  Cgp14ErrorBudgetDiagram,
+  Cgp14RepresentationPipelineDiagram,
+  Cgp14StandardApproximationsLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-14-standard-approximations";
+
+<Objectives>
+
+- 能解释 standard approximations 如何通过采样、误差指标和资源预算把连续目标变成有限数据
+- 能修改 ApproximationViz 的 representations、采样段数和允许误差，并记录精度与代价的变化
+- 能回答：面对同一个图形目标，如何选择表示方法，并判断近似误差来自采样还是表示本身？
+
+</Objectives>
+
+## 先把“近似”当成一份可验收的工程合同
+
+图形程序很少直接处理真正连续的曲线、曲面或体场。屏幕是有限像素，显存和计算时间也是有限预算，所以我们必须用一组有限的数据去代表目标，再让渲染结果足够接近目标。
+
+本章关注的不是“把数字做得越多越好”，而是如何说明目标、表示、误差和成本。先猜一猜：把一条曲线从 3 段增加到 16 段一定更好吗？如果误差降低了但内存和每帧计算超出预算，这个近似真的合格吗？
+
+<Cgp14StandardApproximationsLab />
+
+## standard approximations：从连续目标到有限数据
+
+<Callout type="trap" title="把近似当成随便减少数据">
+  现象 →
+  结果看起来更快了，但轮廓、阴影或运动稳定性明显变差，团队却说不清损失了什么。
+  原因 → 只删除采样点，没有先定义要保留的视觉性质、误差指标和资源上限。 修法 →
+  先写目标与容差，再选择采样策略和表示方法，最后用同一组输入比较误差与代价。
+</Callout>
+
+<Term def="在可接受误差和资源预算内，用有限样本替代连续几何、信号或场的系统方法；它必须说明目标、误差和成本。">
+  standard approximations
+</Term>
+
+**standard approximations** 的核心是受控替代：我们不声称有限数据等于连续目标，而是规定“在什么观察条件下足够接近”。一条曲线可以由折线近似，一个曲面可以由三角网格近似，一个体数据可以由体素近似。合格的近似需要同时回答三件事：偏离目标多少、占用多少存储、每次更新需要多少计算。
+
+把连续对象变成有限对象通常经历四步：确定观察用途，选择采样位置，选择数据表示，定义验证指标。只比较最终截图是不够的，因为不同表示可能在一个视角相似、换一个视角就暴露出误差。应该保留采样数量、误差估计和预算状态，让结果能够被复现。
+
+<Cgp14ApproximationConceptDiagram />
+
+## representations：同一目标的不同数据外形
+
+<Term def="用于存储、传输和计算图形目标的数据结构或参数化方式；它决定可表达的细节、访问方式和资源成本。">
+  representations
+</Term>
+
+**representations** 是目标进入算法前的外形。折线用有序顶点和线段描述轮廓，三角网格用顶点、边和面片描述曲面，体素用规则空间单元描述体数据。它们不只是三种文件格式：表示方法会影响插值、碰撞、法线、纹理访问和后续渲染的工作量。
+
+例如，折线适合快速表达一维轮廓，面片网格适合光栅化和局部法线计算，体素适合空间占据或体积效果，但可能带来更大的内存和访问代价。选择表示时要先问后续操作是什么：需要沿表面插值，就不能只看顶点数量；需要查空间占据，就要关注局部访问和空区域浪费。
+
+<Cgp14RepresentationPipelineDiagram />
+
+## piecewise linear approximation 与 quantization
+
+<Term def="用若干线段在局部替代曲线或信号的近似；段数增加通常能降低局部几何偏差，但会提高数据与处理成本。">
+  piecewise linear approximation
+</Term>
+
+最常见的几何近似是 **piecewise linear approximation**：先在参数轴上选取样本，再把相邻样本用直线连接。对一条足够平滑的曲线，局部段数增加通常会降低最大偏差；但若采样均匀而曲率集中在局部，仍可能把关键拐角采得太稀。更好的策略会根据曲率、屏幕投影或用途分配样本。
+
+<Term def="把连续数值映射到有限离散等级的过程；它会引入可估计的量化误差，并受到位宽或等级数量限制。">
+  quantization
+</Term>
+
+**quantization** 解决的是数值精度的另一面：即使采样位置固定，坐标、颜色、深度或法线仍可能被压到有限等级。若一个值域宽度为 `R`，使用 `n` 个等距等级，最粗略的步长约为：
+
+$$
+\Delta = \frac{R}{n - 1}
+$$
+
+人话翻译：等级数量越少，每一级跨度越大，舍入带来的误差上限通常越高。增加采样点不能自动消除 quantization；如果所有样本都被压到同样粗的等级，误差仍会在数值表示阶段出现。
+
+采样误差与量化误差要分开测量。采样误差描述“我们看了哪些位置”，量化误差描述“这些位置的值被存成多粗”。将两者混成一个总分，往往会导致错误修法：要么无谓增加几何段数，要么无谓提高所有数据的位宽。
+
+## error budget：把“够好”写成可比较的数字
+
+<Term def="为误差、内存、带宽或计算时间预先设定的允许上限；不同误差来源可以分项记录，再判断总结果是否满足用途。">
+  error budget
+</Term>
+
+**error budget** 把主观的“看起来差不多”变成可比较约束。几何轮廓可以使用最大距离或平均距离，颜色可以使用像素差，动画还要观察误差是否随时间跳变。预算也不只是一项数值：一个移动端模型可能同时受顶点内存、顶点处理时间和屏幕空间误差约束。
+
+一个简化的预算记录可以写成：
+
+```ts
+const budget = { screenError: 1.0, bytes: 64_000, milliseconds: 0.8 };
+const result = evaluateApproximation(model, representation);
+const pass =
+  result.error <= budget.screenError &&
+  result.bytes <= budget.bytes &&
+  result.timeMs <= budget.milliseconds;
+```
+
+这段代码的重点不是某个具体阈值，而是把表示选择和验收条件绑定起来。若网格把轮廓误差降到预算内，却超过时间预算，结果仍应标记为不合格；若一个误差对当前视角不可见，则可以在用途说明中给它更低优先级，而不是继续盲目增加数据。
+
+<Cgp14ErrorBudgetDiagram />
+
+## 三步实验：从目标、表示到误差回放
+
+每一步只改变一个责任。先预测再动手：记录连续目标、表示方法、采样规模和预算状态，观察 ApproximationViz 的曲线形状与状态标签如何变化。
+
+<Stepper>
+  <Step title="第一步：说明连续目标和可接受误差">
+    固定观察范围，先画出理想曲线或目标表面，再写下哪一种偏差最影响用途。不要先决定段数；先决定误差指标和允许范围。
+
+    <Cgp14ApproximationConceptDiagram />
+
+  </Step>
+  <Step title="第二步：切换 representations">
+    在 ApproximationViz 中依次选择折线、网格和体素，保持采样预算不变，比较每种 representations 如何改变数据外形、访问方式和渲染代价。
+
+    <Cgp14RepresentationPipelineDiagram />
+
+  </Step>
+  <Step title="第三步：调整采样并核对 error budget">
+    先把段数设为 3，再逐步增加到 16；同时改变允许误差，记录什么时候从“超出预算”变成“满足”。最后区分误差是来自采样不足，还是来自 quantization。
+
+    <Cgp14ErrorBudgetDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="只增加采样，不检查表示方法">
+  现象 → 顶点数量不断增加，轮廓却仍然出现块状、空洞或访问缓慢。 原因 → 当前
+  representations
+  无法表达需要的拓扑、空间邻接或局部细节，更多样本只是把错误结构变大。 修法 →
+  先检查折线、网格、体素等表示是否匹配后续操作，再决定在哪里增加采样。
+</Callout>
+
+<Callout type="trap" title="把量化误差当成采样误差">
+  现象 → 增加曲线段数没有改善颜色、深度或法线的条带和跳变。 原因 → quantization
+  的等级太少，样本虽然更多，但每个值仍被压到相同的粗粒度。 修法 →
+  分别测量采样误差和数值步长，必要时提高位宽或调整值域，而不是只增加几何点。
+</Callout>
+
+<Callout type="trap" title="用单一误差数字决定所有用途">
+  现象 → 静态近景合格的模型用于动画或移动端后出现闪烁、延迟或内存超限。 原因 →
+  error budget 没有包含观察距离、时间稳定性、带宽和计算时间等实际约束。 修法 →
+  按用途拆分预算，至少记录屏幕误差、存储成本和每帧时间，再用相同场景回归验证。
+</Callout>
+
+## 本章小结
+
+- standard approximations 是在误差和资源预算内，用有限数据替代连续目标的受控过程。
+- representations 决定目标如何存储、访问和进入渲染，不同表示不能只按数据量比较。
+- piecewise linear approximation 主要处理采样后的局部几何偏差，quantization 处理有限数值等级带来的误差。
+- error budget 把精度、内存和时间放到同一份可验收契约中，帮助选择合适的近似强度。
+
+<Exercises>
+
+**问题 1：设计一条曲线的近似契约。** 你需要在屏幕空间把一条平滑曲线表示成有限线段。请写出目标、表示、误差指标和至少一项资源预算。
+
+<Answer>
+  目标可以是轮廓在当前视口内与连续曲线的最大屏幕距离不超过 1
+  像素；表示可以是按参数排序的折线顶点；误差指标是最大点到线段距离；资源预算可以是顶点数量或每帧更新时间。若曲率集中在局部，应把更多采样分配给该区域。
+</Answer>
+
+**问题 2：修改 ApproximationViz。** 在 representations 中依次选择折线、网格和体素，把采样段数从 3 调到 16，再把允许误差调小。记录每种表示的轮廓变化、估计误差和预算状态，并说明哪一个结果最适合快速绘制曲线。
+
+<Answer>
+  折线直接表达轮廓，通常是快速绘制这条曲线的最小表示；网格和体素会增加结构或空间采样的含义，适合不同后续操作。段数增加一般降低
+  piecewise linear approximation 的几何误差，但要同时检查表示成本是否仍在 error
+  budget 内。
+</Answer>
+
+**问题 3：诊断“增加样本仍然有条带”。** 一个颜色场已经增加采样点，但画面仍出现明显的阶梯和跳变。你会如何区分采样不足与 quantization？
+
+<Answer>
+  先固定采样位置，提高数值等级或位宽；若阶梯明显减弱，主要问题是
+  quantization。再固定位宽、提高采样密度；若此时才改善，说明问题来自采样。两次实验都要记录误差、带宽和时间，避免只凭截图判断。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="standard approximations"
+    definition="在可接受误差和资源预算内，用有限样本替代连续目标的系统方法。"
+  />
+  <GlossaryItem
+    term="representations"
+    definition="用于存储、传输和计算图形目标的数据结构或参数化方式。"
+  />
+  <GlossaryItem
+    term="piecewise linear approximation"
+    definition="用若干线段局部替代曲线或信号的近似方法。"
+  />
+  <GlossaryItem
+    term="quantization"
+    definition="把连续数值映射到有限离散等级并产生量化误差的过程。"
+  />
+  <GlossaryItem
+    term="error budget"
+    definition="为误差、内存、带宽或计算时间预先设定的允许上限。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 14: Standard Approximations and Representations"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

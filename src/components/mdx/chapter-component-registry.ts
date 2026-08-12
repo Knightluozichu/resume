@@ -4304,6 +4304,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp13ProjectionModeDiagram: module0.Cgp13ProjectionModeDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-14-standard-approximations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-14-standard-approximations");
+      return {
+        Cgp14ApproximationConceptDiagram:
+          module0.Cgp14ApproximationConceptDiagram,
+        Cgp14ErrorBudgetDiagram: module0.Cgp14ErrorBudgetDiagram,
+        Cgp14RepresentationPipelineDiagram:
+          module0.Cgp14RepresentationPipelineDiagram,
+        Cgp14StandardApproximationsLab: module0.Cgp14StandardApproximationsLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
