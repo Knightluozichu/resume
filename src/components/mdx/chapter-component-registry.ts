@@ -4196,6 +4196,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CgppCh02GraphicsProgrammingLab: module0.CgppCh02GraphicsProgrammingLab,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-03-ancient-renderer": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-03-ancient-renderer");
+    return {
+      Cgp03AncientRendererLab: module0.Cgp03AncientRendererLab,
+      Cgp03ClippingDiagram: module0.Cgp03ClippingDiagram,
+      Cgp03PerspectiveFrameDiagram: module0.Cgp03PerspectiveFrameDiagram,
+      Cgp03VisibilityDiagram: module0.Cgp03VisibilityDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

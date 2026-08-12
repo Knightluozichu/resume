@@ -1,0 +1,233 @@
+---
+title: "An Ancient Renderer Made Modern"
+type: D
+section: "可见性与裁剪"
+order: 3
+description: "从 Dürer 的透视框出发，把古老的投影直觉重写为现代渲染器中的投影、可见性与裁剪契约。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-03
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp03AncientRendererLab,
+  Cgp03ClippingDiagram,
+  Cgp03PerspectiveFrameDiagram,
+  Cgp03VisibilityDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-03-ancient-renderer";
+
+<Objectives>
+
+- 能解释 Dürer 透视框如何把三维点投到二维画面，并区分投影、可见性与裁剪的职责
+- 能修改一个裁剪和深度判定的最小实现，记录几何何时被丢弃、何时成为可见像素
+- 能回答：画面出现穿透或突然变空时，应该先检查投影、可见性还是裁剪边界？为什么？
+
+</Objectives>
+
+## 先从一张透明纸开始
+
+想象你把一张透明纸竖在眼睛和桌面模型之间。模型上的每个点都向眼睛拉出一条线；线穿过透明纸的位置，就是你要在纸上留下的点。透明纸只是记录位置，不负责判断哪个物体挡住了另一个物体。
+
+如果模型的一部分跑到纸框外，继续把它交给后面的工序只会浪费时间；如果两个点落在纸上的同一位置，还必须决定哪一个离眼睛更近。没有这三步，画面会出现拉伸、穿透或整片消失，而最后的颜色往往只是受害者。
+
+猜一猜：把同一个模型放到透明纸前后两处，只记录穿过纸的位置，能不能判断前面的模型应该遮住后面的模型？
+
+<Cgp03AncientRendererLab />
+
+## 透视框：把古老直觉写成投影
+
+先看 <Term def="把眼睛、透明画框和场景连接起来的早期透视装置；现代渲染器把它抽象成投影函数。">ancient renderer</Term> 的核心：眼睛和画框固定，场景点沿视线与画框相交。Dürer 的木刻式透视框没有 GPU，但它已经包含了一个可计算的 image plane：画框上的交点就是二维坐标。
+
+<Cgp03PerspectiveFrameDiagram />
+
+<Callout type="trap" title="把画框交点当成最终可见像素">
+  现象 → 两个物体投影到同一个位置时，后画的物体覆盖了前面的物体。\ 原因 →
+  投影只回答“落在哪里”，没有回答“谁更近”。\ 修法 → 给每个候选保留深度，交给
+  visibility 阶段选择更近者。
+</Callout>
+
+把眼睛到物体的连线理解为一条射线，现代实现就能把手工透视改写为函数。对一个点 `p`，先求射线与画框的交点，再把交点的横纵位置归一化到视口。这个步骤只做坐标变换，不偷偷做遮挡判断。
+
+```ts
+type Point3 = { x: number; y: number; z: number };
+type Point2 = { u: number; v: number };
+
+function projectToFrame(point: Point3, eyeZ: number, frameZ: number): Point2 {
+  const scale = (frameZ - eyeZ) / (point.z - eyeZ);
+  return { u: point.x * scale, v: point.y * scale };
+}
+```
+
+这个函数的验收问题不是“画面是否漂亮”，而是同一个点在相同眼睛和画框条件下是否得到稳定的 `u`、`v`。若 `point.z` 越过眼睛平面，射线方向已反转，应该在投影边界先拒绝它，而不是把异常坐标传给后面。
+
+## 可见性：投到同一点之后还要选赢家
+
+<Callout type="trap" title="把可见性和绘制顺序混为一谈">
+  现象 → 改变三角形提交顺序后，穿透问题时好时坏。\ 原因 →
+  提交顺序是偶然的控制流，不能表达摄像机方向上的深近关系。\ 修法 →
+  对同一像素比较深度，并把赢家写入深度状态；不要用排序顺序冒充几何证据。
+</Callout>
+
+<Term def="判断多个投影候选中哪个表面真正朝向观察者并应留下来的过程。">
+  visibility
+</Term>
+处理的是“谁能被看见”。一个投影点可以来自前景三角形，也可以来自背景三角形；只有把它们的深度放在同一个比较规则里，像素才有稳定的
+owner。
+
+<Cgp03VisibilityDiagram />
+
+现代渲染器通常把这个规则实现为深度测试。下方的最小代码刻意把 `project`、`clip` 和 `visible` 分开：这样当结果错误时，可以指出是位置错、候选被删掉，还是深度比较错。
+
+```ts
+type Candidate = { pixel: Point2; depth: number; color: string };
+
+function chooseVisible(current: Candidate | undefined, next: Candidate) {
+  if (!current || next.depth < current.depth) return next;
+  return current;
+}
+```
+
+注意深度的方向约定：这里假定数值越小越靠近眼睛。若项目改成相反约定，比较符号、清屏值和边界测试必须一起改；只改其中一项，会得到看似随机的穿透。
+
+## 裁剪：把不可能出现的部分挡在门外
+
+<Callout type="trap" title="裁剪边界和可见性深度互相替代">
+  现象 → 视锥外的模型仍消耗大量片段工作，或靠深度测试才被丢掉。\ 原因 →
+  裁剪解决“是否可能进入画面”，深度测试解决“进入后谁更近”，两者时机不同。\ 修法 →
+  先做裁剪并保留边界交点，再在像素级执行深度比较。
+</Callout>
+
+<Term def="把视锥或画框范围外的几何切掉，并为穿过边界的几何生成新的边界点。">
+  clipping
+</Term>
+是效率与正确性的共同边界。完全在范围外的三角形可以直接丢弃；穿过边界的三角形不能粗暴删除，否则会在屏幕边缘留下缺口，应该用边界交点重建剩余多边形。
+
+<Cgp03ClippingDiagram />
+
+<Term def="描述场景点如何按眼睛、画框与距离关系落到二维平面的规则。">
+  perspective projection
+</Term>
+会让远处对象在画面上缩小，但缩小不等于被裁剪。
+<Term def="把一个场景候选与其投影位置、深度和属性绑定起来的屏幕空间记录。">
+  image-space test
+</Term>
+则发生在投影之后：它可以检查像素位置、深度和覆盖资格。
+
+```ts
+type ClipResult = { kept: Point3[]; rejected: boolean };
+
+function clipAgainstNearPlane(points: Point3, nearZ: number): ClipResult {
+  const kept = points.z >= nearZ ? [points] : [];
+  return { kept, rejected: kept.length === 0 };
+}
+```
+
+上例只展示一个点的边界判定；真实三角形需要逐条边求交并重新拼接顶点。它的工程价值在于把“空画面”拆成可回答的问题：输入是否越过近裁剪面？剩余几何是否仍形成合法图元？深度测试是否收到候选？
+
+## 三步追踪：从古老装置到现代管线
+
+<Stepper>
+  <Step title="先画出视线与画框交点">
+    先记录眼睛、image plane 和至少两个场景点的交点，再检查投影比例是否随距离改变。
+
+    <Cgp03PerspectiveFrameDiagram />
+
+  </Step>
+  <Step title="再给同一像素分配 owner">
+    让前后两个候选落到相同位置，明确深度方向、清屏值和赢家写入点。
+
+    <Cgp03VisibilityDiagram />
+
+  </Step>
+  <Step title="最后在边界处裁剪">
+    分别测试完全在外、完全在内和穿过边界的三角形，记录丢弃、保留与重建结果。
+
+    <Cgp03ClippingDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区回收：三个阶段各自负责什么
+
+1. 投影负责把三维位置变成二维位置，不负责遮挡。
+2. 可见性负责在同一画面位置选择更近的表面。
+3. 裁剪负责减少不可能出现在画面中的几何和后续工作。
+4. 边界故障要保存阶段证据，不要只盯着最后一张截图。
+
+## 小结与练习
+
+- Dürer 的透视框把视线与二维画框的关系变成了可计算的投影。
+- 投影先回答位置，visibility 再回答谁赢得像素。
+- clipping 在进入光栅化前缩小候选，并处理边界交点。
+- 现代化的关键是把每一阶段的输入、输出和失败证据分开。
+
+<Exercises>
+
+**问题 1：解释为什么“投影成功”仍不能证明表面可见。**
+
+<Answer>
+  投影只产生画面位置和深度候选；多个表面可以共享同一位置，必须由 visibility
+  按统一深度方向选择更近者，才能确定像素 owner。
+</Answer>
+
+**问题 2：修改 `clipAgainstNearPlane`，让它处理一个三角形，并说明穿过边界时不能直接删除整三角形的原因。**
+
+<Answer>
+  把每条边与 near plane
+  求交，把内侧顶点和交点按顺序组成新多边形；若整三角形在外侧才丢弃。直接删除穿过边界的三角形会在视口边缘制造缺口，也会丢掉本应可见的
+  clipping 结果。
+</Answer>
+
+**问题 3：画面出现远处三角形穿透近处三角形时，按什么顺序排查？**
+
+<Answer>
+  先确认 perspective projection 的深度方向和相机平面，再检查 clipping
+  是否错误丢弃或重建候选，最后检查 visibility
+  的比较符号、清屏值和深度写入；绘制顺序只能作为最后的控制流证据，不能替代深度规则。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="ancient renderer"
+    definition="把眼睛、画框和场景连成可计算投影关系的早期渲染装置；现代程序把它写成投影函数。"
+  />
+  <GlossaryItem
+    term="Dürer"
+    definition="以透视研究和画框装置闻名的艺术家；本章用他的装置帮助理解投影。"
+  />
+  <GlossaryItem
+    term="visibility"
+    definition="在同一画面位置的多个候选中，按深度决定哪个表面真正留下。"
+  />
+  <GlossaryItem
+    term="clipping"
+    definition="把范围外的几何切掉，并为穿过边界的几何保留正确部分。"
+  />
+  <GlossaryItem
+    term="perspective projection"
+    definition="让场景点按眼睛与画框的几何关系落到二维平面的投影规则。"
+  />
+  <GlossaryItem
+    term="image-space test"
+    definition="在二维画面位置上检查候选的深度、覆盖和写入资格。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 3: An Ancient Renderer Made Modern"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
