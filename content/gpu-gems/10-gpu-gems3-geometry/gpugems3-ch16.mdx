@@ -1,0 +1,267 @@
+---
+title: "GPU Gems 3 · Chapter 16. Vegetation Procedural Animation and Shading in Crysis"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 16
+description: "从每实例风力合成出发，解释植被主弯曲、叶片细节波、顶点色控制、廉价透光和 alpha 边缘平滑如何共同支撑密集场景。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-16-vegetation-procedural-animation-and-shading-crysis"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-16
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch16BendingLayersDiagram,
+  GpuGems3Ch16EdgeSmoothingDiagram,
+  GpuGems3Ch16ShaderAssemblyDiagram,
+  GpuGems3Ch16TriangleWaveDiagram,
+  GpuGems3Ch16VegetationShadingDiagram,
+  GpuGems3Ch16VegetationWindLab,
+  GpuGems3Ch16WindSourcesDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch16-vegetation-crysis";
+
+<Objectives>
+
+- 能解释方向风和局部风如何合成为每个植被实例的世界空间向量，并区分整株主弯曲与叶片细节弯曲
+- 能修改 Vegetation Animation & Shading Lab 的风源、风力、波频、着色位置和边缘路径，比较形变、透光与 fill-rate
+- 能回答：为什么密集草地要把一部分着色移到顶点阶段，以及为什么 alpha test 的硬边需要深度证据而不是普通 blur
+
+</Objectives>
+
+## 先问：为什么静态树海一有风就像同一张贴纸
+
+想象一片很大的草地：远处树冠慢慢偏向风，近处叶片却各自抖动，爆炸或直升机经过时，附近植被还会先被推开再回弹。如果所有树只执行同一个正弦摆动，画面会像一块同步移动的绿色幕布。
+
+本章解决的是：怎样让成千上万的植被既能响应全局和局部风源，又不会因为每片叶子都做昂贵的片元计算而拖垮帧率。没有这条分层路径，动画会失去空间层次，或者只能在真实感和密度之间二选一。
+
+<Callout type="tip" title="先预测：把风力和着色位置调大就一定更好吗？">
+  先猜一猜：把 wind strength 调高、把 shading path 从 mixed 切到
+  per-vertex，再把 alpha edge path 切到 hard
+  alpha，主弯曲、叶片细节、透光、边缘质量和 fill-rate
+  会怎样变化？先记下基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 每个实例先得到自己的风
+
+<Term def="沿风向推动整株植被的低频形变；通常用世界空间风向量和归一化高度决定位移量。">
+  main bending
+</Term>
+
+<Term def="只改变叶缘和单叶姿态的高频形变；它使用风力、叶片刚度和每片叶子的相位制造局部差异。">
+  detail bending
+</Term>
+
+植被动画先分成两层：main bending 让树冠、灌木或草丛整体朝风向偏移；detail bending 让叶缘和单叶上下摆动。方向风给出统一的风向，局部风源则按到实例的距离衰减，所有影响最后在实例级合成为一个世界空间向量。
+
+每个实例还带有 stiffness。风源停止影响后，强度不能瞬间归零，而应随时间 dampen；否则物体会像被开关切断一样突然冻结。主弯曲使用风向量的 xy 分量，并用植被高度放大顶部、限制底部；细节弯曲主要使用风力和相位，不应把整株树再次整体平移。
+
+<GpuGems3Ch16WindSourcesDiagram />
+<GpuGems3Ch16BendingLayersDiagram />
+
+<Callout type="trap" title="把所有风源直接叠到每个顶点">
+  现象 → 风源一多，顶点成本线性爆炸；不同实例还会出现不一致的方向和突变。原因 →
+  每个顶点都重复计算本可共享的实例级风力合成，且没有刚度与阻尼。修法 →
+  在实例级按方向和距离先合成世界空间风向量，顶点阶段只消费向量、刚度和高度因子。
+</Callout>
+
+## 2. 顶点色是给美术师的运动控制图
+
+<Term def="把每个顶点的 RGBA 通道当成可绘制的控制数据，而不是只当作颜色；不同通道分别编码叶缘刚度、相位、整体刚度和预计算遮蔽。">
+  vertex color encoding
+</Term>
+
+细节弯曲不应该让每片叶子都由同一个参数驱动。vertex color encoding 把控制权交给资产：R 通道可以表示叶缘 stiffness，G 通道提供每片叶子的 phase variation，B 通道表示整体 leaf stiffness，A 通道保存预计算的 ambient occlusion。
+
+这样同一套 shader 可以服务不同树种：艺术家只需改变顶点色分布，就能让一棵树的边缘更柔、另一棵树的叶片更硬，而不用为每种植物复制一套代码。顶点色越接近“可解释的控制图”，运行时参数就越少，资产审查也越容易。
+
+<Callout type="trap" title="把 RGB 当作普通顶点颜色直接乘到亮度">
+  现象 → 叶片会随风动，但所有叶子同相位、边缘像纸片一样折断。原因 →
+  通道没有被解释为 stiffness、phase 和 amplitude，或者把预计算 AO
+  当成了颜色。修法 → 固定通道契约并在工具链中可视化 R/G/B/A；先验证一片叶子的
+  phase 和 edge attenuation，再扩大到整株。
+</Callout>
+
+## 3. 用三角波近似重复运动
+
+<Term def="用 frac 和 abs 生成的周期波形；它比直接调用正弦更适合批量向量计算，再用 cubic 插值抹平尖角。">
+  triangle wave
+</Term>
+
+传统的周期动画常写成 sine，但叶片细节需要多组频率、多个相位和向量化计算。triangle wave 可以用周期取小数部分和绝对值生成，再经过 `x * x * (3 - 2 * x)` 形式的 cubic smoothing，得到足够连续的运动。
+
+本章的关键不是“用便宜波形替代所有正弦”，而是把四组向量化波分配给不同角色：两组控制叶缘，两组控制叶片或枝条。频率不要都相同，否则整片植被会出现机械同步；G 通道提供的 per-leaf phase 让相邻叶片错开峰值。
+
+<GpuGems3Ch16TriangleWaveDiagram />
+
+等价的 GLSL 风格写法如下。先生成 triangle wave，再平滑；不要在每个分支里单独计算不同周期，以免失去向量化的好处。
+
+```glsl
+vec4 smoothCurve(vec4 x) {
+  return x * x * (3.0 - 2.0 * x);
+}
+
+vec4 triangleWave(vec4 x) {
+  return abs(fract(x + 0.5) * 2.0 - 1.0);
+}
+
+vec4 smoothTriangleWave(vec4 phase) {
+  return smoothCurve(triangleWave(phase));
+}
+
+vec2 waves = time + vec2(vertexPhase, branchPhase);
+vec4 waveSet = waves.xxyy * vec4(1.975, 0.793, 0.375, 0.193);
+vec4 motion = smoothTriangleWave(waveSet);
+```
+
+## 4. 按 fill-rate 选择植被着色策略
+
+<Term def="画在低分辨率纹理上的厚度/透光控制图；它把叶脉、枝条和不同厚度编码进颜色，用来近似背光时的柔和透光。">
+  subsurface texture
+</Term>
+
+树干可以使用标准 Lambert 和 Phong；叶片需要双面渲染、alpha test 和廉价的背光近似；草因为覆盖面积大、fill-rate 压力高，通常把更多着色移到顶点阶段。不是所有物体都值得同样的 per-pixel 质量。
+
+叶片透光不必立刻做完整的物理次表面积分。用 subsurface texture 记录内部厚度，再把 `-N · L`、`E · L`、光照可见性和该纹理相乘，就能得到方向相关的 back-light。这个近似仍然保留“薄叶朝光时更亮”的线索，而且可以由美术师直接调整。
+
+<GpuGems3Ch16VegetationShadingDiagram />
+
+<Callout type="trap" title="所有植被都使用最高质量的 per-pixel shader">
+  现象 → 近景叶片漂亮，但草地一铺满屏幕，fill-rate 和 shader permutations
+  迅速失控。原因 →
+  没有按植被类型和屏幕占比选择着色阶段，把草的覆盖成本当成了树叶的局部成本。修法
+  → 树干和近景叶片保留需要的片元质量；草优先使用顶点着色、低分辨率 subsurface
+  texture 和共享 shader library。
+</Callout>
+
+## 5. 用深度把 alpha test 的硬边磨平
+
+<Term def="先把不透明几何写入深度纹理，再根据深度不连续检测轮廓，并用旋转样本和双线性查找重建边缘覆盖。">
+  edge smoothing
+</Term>
+
+alpha test 的轮廓本质上是硬阈值：像素要么保留，要么丢弃。当硬件还没有 alpha-to-coverage 时，可以先做 z-pass，把深度写入浮点纹理，再在后处理中比较邻域深度，找到真实几何轮廓，最后用旋转三角形样本做依赖纹理查找。
+
+<GpuGems3Ch16EdgeSmoothingDiagram />
+
+这条路径只适用于写入深度的 opaque geometry。非透明叶片没有同样的 z-target 证据，不能假设同一套 edge smoothing 会自动正确。工程上要把“硬边质量”和“是否可写深度”一起作为材质契约，而不是只给所有 alpha 贴图加一个模糊开关。
+
+## 6. 三步组装成可扩展的植被 shader
+
+<Stepper>
+  <Step title="先在实例级合成风和形变边界">
+    汇总方向风和局部风的方向、距离衰减与强度；乘上实例 stiffness，并在风源停止后做阻尼。主弯曲使用归一化高度和中心距离限制位移，避免树冠被拉成长条。
+
+    <GpuGems3Ch16WindSourcesDiagram />
+    <GpuGems3Ch16BendingLayersDiagram />
+
+  </Step>
+  <Step title="再用顶点色和廉价波形制造叶片差异">
+    固定 RGBA 通道契约，用 R 控叶缘、G 控相位、B 控整体刚度、A 保存 AO；用多组 vectorized triangle wave 取代重复的昂贵周期函数。
+
+    <GpuGems3Ch16TriangleWaveDiagram />
+    <GpuGems3Ch16VegetationShadingDiagram />
+
+  </Step>
+  <Step title="最后按 fill-rate 选择着色和轮廓路径">
+    叶片用 subsurface texture 近似背光，草地把更多计算放到顶点阶段；alpha test 的 opaque 几何再经过 z-pass 和 edge smoothing。把共享数据和自定义 hook 收进统一 shader library，减少排列组合。
+
+    <GpuGems3Ch16EdgeSmoothingDiagram />
+    <GpuGems3Ch16ShaderAssemblyDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch16VegetationWindLab />
+
+## 本章小结
+
+- 实例级合成风向量，让大量风源不直接放大顶点成本
+- main bending 控制整株姿态，detail bending 控制叶片局部差异
+- vertex color encoding 把 stiffness、phase、AO 变成可绘制资产数据
+- triangle wave 加 cubic smoothing 以低成本产生多频率叶片运动
+- fill-rate 决定 per-pixel、per-vertex、subsurface 和边缘平滑的分工
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 当前主弯曲直接把 `wind.xy * height` 加到顶点位置。请补上中心距离限制，并说明为什么要限制位移长度。
+
+```glsl
+float bend = vPos.z * bendScale;
+vec3 newPos = vPos;
+newPos.xy += wind.xy * bend;
+return newPos;
+```
+
+<Answer>
+  先算出候选位置，再用它到 mesh center 的方向和原始长度重新归一化，例如 `vec3
+  candidate = vec3(newPos.xy, vPos.z); newPos = normalize(candidate) *
+  length(vPos);`。限制后，植被会在一个近似球面范围内弯曲，不会因为顶部高度或风力过大而被拉成长条。
+</Answer>
+
+**问题 2｜诊断同步叶片。** 一片树林的叶子都在同一时间达到峰值，画面像一张同步摆动的布。你会检查哪两个输入？
+
+<Answer>
+  检查 detail wave 的频率组和每片叶子的 phase。频率不应全部相同，G
+  通道应提供稳定的 per-leaf phase；同时确认波形是按 object、branch、vertex
+  等层级组合，而不是只使用一个全局 time。
+</Answer>
+
+**问题 3｜场景选型。** 近景大树、满屏草地和透明树叶卡片分别怎样选择着色阶段与边缘路径？
+
+<Answer>
+  近景大树可以保留叶片的 per-pixel 光照与 subsurface texture，并使用深度支持的
+  edge smoothing；满屏草地优先把着色移到顶点阶段、减少 fill-rate 和 shader
+  permutations；透明卡片如果没有可靠的 z-pass，就不能直接套 opaque 的 edge
+  smoothing，应接受硬边、改用 alpha-to-coverage 或设计专门的透明边缘方案。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="main bending"
+    definition="让整株植被沿合成后的风向量偏移的低频形变，通常按高度和中心距离限制。"
+  />
+  <GlossaryItem
+    term="detail bending"
+    definition="只让叶缘和单叶局部摆动的高频形变，用相位和刚度制造差异。"
+  />
+  <GlossaryItem
+    term="vertex color encoding"
+    definition="把顶点的 RGBA 通道当作运动和遮蔽控制图，而不只是显示颜色。"
+  />
+  <GlossaryItem
+    term="triangle wave"
+    definition="通过周期取小数部分和绝对值生成的便宜波形，平滑后可近似重复叶片运动。"
+  />
+  <GlossaryItem
+    term="subsurface texture"
+    definition="记录叶片厚度和透光差异的纹理，用来近似背光时的柔和次表面效果。"
+  />
+  <GlossaryItem
+    term="edge smoothing"
+    definition="利用深度轮廓和旋转样本缓和 alpha test 硬边的后处理路径。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 16. Vegetation Procedural Animation and Shading in Crysis"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-16-vegetation-procedural-animation-and-shading-crysis"
+/>
