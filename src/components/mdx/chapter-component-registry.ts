@@ -4528,6 +4528,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp36VisibilityPipelineDiagram: module0.Cgp36VisibilityPipelineDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-37-spatial-data-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-37-spatial-data-structures");
+      return {
+        Cgp37BvhDiagram: module0.Cgp37BvhDiagram,
+        Cgp37GridDiagram: module0.Cgp37GridDiagram,
+        Cgp37QueryCostDiagram: module0.Cgp37QueryCostDiagram,
+        Cgp37SpatialDataStructuresLab: module0.Cgp37SpatialDataStructuresLab,
+        Cgp37SpatialPipelineDiagram: module0.Cgp37SpatialPipelineDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

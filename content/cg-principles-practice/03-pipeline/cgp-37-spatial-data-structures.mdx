@@ -1,0 +1,240 @@
+---
+title: "Spatial Data Structures"
+type: D
+section: "空间数据结构"
+order: 37
+description: "从对象分桶、层次包围体与网格查询出发，理解 spatial data structures 如何减少候选测试并保持边界正确。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-37
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp37BvhDiagram,
+  Cgp37GridDiagram,
+  Cgp37QueryCostDiagram,
+  Cgp37SpatialDataStructuresLab,
+  Cgp37SpatialPipelineDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-37-spatial-data-structures";
+
+<Objectives>
+
+- 能解释 spatial data structures 如何从对象 bounds 建立索引，并把范围查询转换成可验证的候选集
+- 能比较 bounding volume hierarchy 与 grid 在剪枝、更新、内存、边界和重复候选上的差异
+- 能修改 SpatialDataStructuresLab 的对象数量、叶子或 cell 尺度和查询半径，定位误漏检与候选爆炸
+
+</Objectives>
+
+## 先把“查附近对象”拆成两阶段
+
+碰撞检测、视锥剔除、拾取和邻域查询都共享一个问题：给定一个空间范围，哪些对象值得进行昂贵的精确几何测试？如果每次都把查询范围与全部 $N$ 个对象比较，时间成本会随场景规模线性增长；更麻烦的是，动态场景还会不断改变对象的位置和包围体。
+
+先打开实验，固定查询窗口，依次切换 BVH、grid 和全量扫描。预测对象数量增加时，候选数和精确测试数如何变化；再改变叶子或 cell 尺度，观察“索引维护成本”和“查询候选成本”之间的交换。绿色对象是精确命中，紫色对象只是候选，灰色对象已经被结构剪枝。
+
+<Cgp37SpatialDataStructuresLab />
+
+<Callout type="tip" title="先记录查询契约，再选择结构">
+  调试前先写清查询的形状、是否允许保守假阳性、对象 bounds
+  的更新时机和结果是否需要去重。空间结构的职责是减少候选，不是替精确几何测试做最终裁决。
+</Callout>
+
+<Term def="利用对象在空间中的位置、包围体或邻接关系组织数据，以便范围查询先跳过不相关对象的索引结构。">
+  spatial data structures
+</Term>
+
+<Term def="描述一个空间范围、点、射线或邻域，并返回可能与该查询相关对象的操作；它通常先走 broad phase，再走精确测试。">
+  spatial query
+</Term>
+
+<Term def="空间索引返回的可能相关对象集合；它可以包含假阳性，但不能漏掉满足查询语义的对象，之后仍要做精确相交测试。">
+  candidate set
+</Term>
+
+<Cgp37SpatialPipelineDiagram />
+
+把查询写成流水线更容易定位错误：对象先把自身的 bounds 和 id 插入索引；查询把空间范围交给 BVH 或 grid；结构返回 candidate set；最后用真实几何、距离或时间条件做 exact intersection。若最终结果漏对象，优先查插入、更新、边界和剪枝；若结果太多，优先查 bounds 是否过松、cell 是否过大或候选是否重复计算。
+
+## bounding volume hierarchy：用层次包围体剪枝
+
+<Term def="由递归嵌套包围体组成的树结构；内部节点包住子节点，范围查询不相交时可以跳过整棵子树。">
+  bounding volume hierarchy
+</Term>
+
+BVH 的核心不是“树”这个容器，而是每个内部节点都有一个能保守包住所有后代对象的包围体。常见包围体是轴对齐包围盒（AABB）或包围球。查询从根节点开始：若查询范围与节点不相交，就拒绝整棵子树；若相交，就继续访问子节点，直到叶节点拿到对象，再做精确测试。
+
+<Cgp37BvhDiagram />
+
+构建 BVH 时可以按空间中心、最长轴或表面积启发式划分对象。划分过于偏斜会让树退化，包围体重叠过多则会让一个查询同时访问多条分支。静态场景可以花更多时间构建更紧的树；动态对象则常用局部 refit，先向上重新计算包围体，必要时再重建部分子树。
+
+<Callout type="trap" title="把包围体相交当成精确命中">
+  现象 → 查询返回一个明显没有碰到的对象，开发者直接删除它。原因 → BVH
+  的包围盒相交只是保守 broad phase，盒子可能比真实网格大。修法 → 保留 candidate
+  set，对叶对象执行精确形状测试，并分别记录候选与最终命中。
+</Callout>
+
+BVH 必须优先保证保守性：包围体太小或更新滞后会造成 false negative，直接漏掉真实命中；包围体稍大只会造成 false positive，代价是多做几次精确测试。每次对象变换后，至少要更新从叶子到根的 bounds，不能只更新渲染变换而忘记索引状态。
+
+## grid：用空间桶换取直接寻址
+
+<Term def="把连续空间划分为规则 cell，并把对象登记到其覆盖的桶中；查询时读取相关 cell，再合并和去重对象引用。">
+  grid
+</Term>
+
+uniform grid 适合对象分布相对均匀、查询尺度相近的场景。用 cell size 把位置映射为整数坐标，插入对象时把它放入所有覆盖的桶；查询范围覆盖哪些桶，就读取哪些桶。对象跨越多个 cell 时会产生多个引用，因此需要通过对象 id 去重，再进行精确相交测试。
+
+<Cgp37GridDiagram />
+
+cell size 是 grid 的关键旋钮。cell 太小，单个大对象会跨越很多桶，插入和去重成本上升；cell 太大，不相关对象会被一起取出，候选集膨胀。对象高度聚集或尺度差异很大时，uniform grid 可能需要层次网格、稀疏哈希或 BVH 来处理热点区域。动态对象更新也不应悄悄保留旧桶引用，否则查询会出现重复、幽灵对象或漏检。
+
+<Callout type="trap" title="只把跨桶对象放进一个 cell">
+  现象 → 对象跨过 cell 边界后，查询其中一侧偶尔漏掉它。原因 →
+  单一归属桶没有覆盖对象的完整 bounds，邻桶查询无法保证保守。修法 → 按 bounds
+  登记到所有覆盖桶，或使用明确的 owner 加邻桶扩展规则，并为边界对象写回归测试。
+</Callout>
+
+## 候选集、边界与查询成本
+
+无论选择 BVH 还是 grid，都要把候选数量、精确测试数量、重复引用和索引更新分开计数。可以用下面的粗略账本比较一次查询：
+
+$$
+  C_{query}=C_{traverse}+C_{candidate}+C_{exact}+C_{dedupe},
+$$
+
+其中 $C_{traverse}$ 是访问节点或桶的成本，$C_{candidate}$ 是取回候选引用的成本，$C_{exact}$ 是真实几何测试，$C_{dedupe}$ 是跨桶引用合并的成本。这个分解解释了为什么“候选少”仍不一定更快：如果动态对象让 BVH 每帧重建，或者极小 cell 让 grid 的重复引用暴增，维护与去重成本会抵消剪枝收益。
+
+<Cgp37QueryCostDiagram />
+
+边界规则必须显式化。若对象的最大 x 坐标刚好落在 cell 边界，使用 `floor` 的一侧规则、闭区间或半开区间必须前后一致；若查询窗口正好贴边，不能因为浮点误差把相邻 cell 排除。工程上可以对索引 bounds 加一个很小的保守 epsilon，但要记录 epsilon 的单位和来源，避免用无限增大的 padding 掩盖坐标错误。
+
+<Callout type="trap" title="用候选数下降证明查询正确">
+  现象 → benchmark 显示精确测试少了，但边界位置的碰撞或拾取会消失。原因 →
+  剪枝过于激进、cell 边界取整不一致，或对象移动后旧索引没有清除。修法 →
+  对边界、跨桶、空查询和大对象做差分测试，以全量扫描结果作为 oracle，同时记录
+  false negative 和 duplicate reference。
+</Callout>
+
+## 三步实验：从结构选择走到边界验证
+
+每一步只改变一个旋钮，先记录对象总数、候选数、精确测试和最终命中，再改变查询半径。若候选集漏掉真实命中，先停止比较性能，回到插入与 bounds 更新路径。
+
+<Stepper>
+  <Step title="第一步：建立 candidate set 账本">
+    选择“全量扫描”，把它作为 oracle，记录所有对象的精确命中；再切到 BVH，比较候选集是否覆盖 oracle。注意候选不要求全都命中，但 oracle 中的每一个对象都必须仍在候选里。
+
+    <Cgp37SpatialPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：比较 BVH 与 grid 的剪枝形状">
+    固定对象数量与查询半径，只改变叶子或 cell 尺度。观察 BVH 的节点访问与 grid 的桶引用如何变化；如果 grid 的重复引用上升，先去重再比较精确测试，不要把同一个对象重复计入命中。
+
+    <Cgp37BvhDiagram />
+
+  </Step>
+  <Step title="第三步：把边界和更新纳入回归">
+    把查询窗口拖到概念上的 cell 边界附近，增加一个跨桶大对象，再改变对象数量。检查插入、删除、移动后的索引是否与全量扫描一致，并把 false negative、false positive 和重复候选分别记录。
+
+    <Cgp37GridDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="动态对象只更新渲染矩阵">
+  现象 → 画面中的对象已经移动，但拾取或碰撞仍命中旧位置。原因 → 渲染 transform
+  与空间索引 bounds 是两份状态，更新路径没有同步。修法 → 在对象移动接口中同时
+  refit 或移除并重新插入索引，并用移动后第一帧的查询做回归。
+</Callout>
+
+<Callout type="trap" title="用极小 cell 解决所有候选膨胀">
+  现象 → 平均查询候选下降，但大对象插入桶数、哈希访问和去重成本急剧增加。原因 →
+  cell size 只优化了局部密度，没有覆盖对象尺度分布。修法 →
+  记录每个对象覆盖桶数，考虑层次 grid、BVH
+  或按尺度分层，并以完整查询成本而非候选数单项做决策。
+</Callout>
+
+<Callout type="trap" title="边界采用不同的开闭区间">
+  现象 → 对象在 cell
+  边界轻微移动时，查询结果一帧有、一帧无，或两个桶各返回一次。原因 →
+  插入、查询和去重使用了不同的 floor、ceil 或 epsilon 规则。修法 →
+  统一半开区间约定，集中实现坐标到 cell 的映射，对边界和浮点误差添加差分测试。
+</Callout>
+
+## 本章小结
+
+- spatial data structures 把全量空间扫描拆成索引遍历、candidate set 和精确几何测试；索引必须保守，不能漏掉真实命中。
+- bounding volume hierarchy 用相交的层次包围体剪枝，适合通过树结构处理不同区域和对象尺度，但动态更新与节点重叠会影响成本。
+- grid 用规则 cell 直接读取邻桶，查询简单且适合均匀分布；cell size、跨桶对象、热点密度和重复候选决定它是否合适。
+- 发布前要用全量扫描作 oracle，分别验证边界、更新、去重、false negative 和候选爆炸，再选择结构与参数。
+
+<Exercises>
+
+**问题 1：选择结构。** 一个静态场景有大量尺度差异明显的对象，查询范围大小变化很大；另一个场景有均匀分布、尺寸相近且高速移动的对象。你会优先考虑哪种结构？请说明取舍。
+
+<Answer>
+  静态、尺度差异明显且查询尺度变化大的场景优先考虑 bounding volume
+  hierarchy：可以用紧的层次包围体剪枝，构建成本可摊薄。均匀分布、尺寸相近且高速移动的场景可优先尝试
+  grid：坐标到 cell 的映射直接，更新和查询路径简单。两者都要以候选覆盖精确
+  oracle 为正确性前提，不能只看平均候选数。
+</Answer>
+
+**问题 2：处理跨桶对象。** 一个对象覆盖了 4 个 cell，查询窗口覆盖其中 2 个 cell，并且两个桶都返回了这个对象。候选集、精确测试和最终命中应该如何计数？
+
+<Answer>
+  两个桶返回的是 2 个 references，但候选集按对象 id 去重后只包含 1
+  个对象；精确几何测试只执行 1 次，最终命中也最多计 1 次。应分别记录
+  references=2、unique candidates=1 和 exact
+  tests=1，这样才能看出去重成本，而不是把重复引用误报成两个命中。
+</Answer>
+
+**问题 3：诊断边界漏检。** 查询结果在对象贴着 cell 边界移动时出现 false negative。请给出排查顺序和修复策略。
+
+<Answer>
+  先用全量扫描固定 oracle，再检查对象 bounds
+  是否已更新；随后逐项核对插入与查询的坐标到 cell 映射、floor 或
+  ceil、开闭区间和
+  epsilon。确认跨桶对象是否登记到所有覆盖桶，并清除移动前的旧引用。最后用边界静止、跨边界移动、空桶和大对象用例回归，确保修复只增加保守候选而没有靠过大
+  padding 掩盖错误。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="spatial data structures"
+    definition="利用空间位置、包围体或邻接关系组织数据，以便范围查询跳过不相关对象的索引结构。"
+  />
+  <GlossaryItem
+    term="spatial query"
+    definition="给定空间范围、点、射线或邻域并返回可能相关对象的查询操作。"
+  />
+  <GlossaryItem
+    term="candidate set"
+    definition="空间索引返回的可能相关对象集合；它允许有假阳性，但不能漏掉真实命中。"
+  />
+  <GlossaryItem
+    term="bounding volume hierarchy"
+    definition="由递归嵌套包围体组成的树结构，查询不相交时可以跳过整棵子树。"
+  />
+  <GlossaryItem
+    term="grid"
+    definition="把空间划分为规则 cell 并登记对象引用，查询时读取相关桶并去重。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 37: Spatial Data Structures"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
