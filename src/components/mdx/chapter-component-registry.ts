@@ -4237,6 +4237,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp07VectorDiagram: module0.Cgp07VectorDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-08-shape-description": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-08-shape-description");
+    return {
+      Cgp08AttributeDiagram: module0.Cgp08AttributeDiagram,
+      Cgp08ShapeDescriptionLab: module0.Cgp08ShapeDescriptionLab,
+      Cgp08ShapeRecipeDiagram: module0.Cgp08ShapeRecipeDiagram,
+      Cgp08TopologyDiagram: module0.Cgp08TopologyDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

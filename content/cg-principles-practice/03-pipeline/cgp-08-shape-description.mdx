@@ -1,0 +1,230 @@
+---
+title: "A Simple Way to Describe Shape in 2D and 3D"
+type: C
+section: "二维与三维形状"
+order: 8
+description: "用顶点、索引、拓扑和属性把二维与三维形状写成可重建、可检查、可交给图形管线处理的数据。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-08
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp08AttributeDiagram,
+  Cgp08ShapeDescriptionLab,
+  Cgp08ShapeRecipeDiagram,
+  Cgp08TopologyDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-08-shape-description";
+
+<Objectives>
+
+- 能解释一个二维或三维形状为什么需要位置、连接和属性三类数据
+- 能修改 ShapeViz 的顶点、索引或显示模式，记录轮廓、面数和绕向的变化
+- 能回答：画面轮廓错误时，如何区分位置数据、连接顺序和顶点属性的问题？
+
+</Objectives>
+
+## 先把轮廓变成一张可重建的清单
+
+想象你要把一块纸板交给另一个人复刻。只给一张照片，对方能看见结果，却不知道边是怎样连接的，也不知道以后怎样换颜色或贴图。
+
+本章解决“如何把形状交给程序”的问题：把轮廓拆成位置、连接和附加信息，让同一份描述可以在二维画布或三维空间重新生成。没有这份清单，画面上的缺口、翻面和颜色错位就很难定位。
+
+先猜一猜：把三角形换成四边形时，哪些数据会增加？只把线框打开后，哪一种错误会更容易被看见？
+
+<Cgp08ShapeDescriptionLab />
+
+## 描述形状：位置与连接要分开
+
+<Callout type="trap" title="只保存一张轮廓截图，不保存形状数据">
+  现象 → 画面看起来对，但无法换颜色、贴图或在另一种空间重新绘制。 原因 →
+  截图记录了结果，没有记录点的位置与边面之间的连接契约。 修法 → 保存有序的
+  positions 和 indices，让程序能从数据重建同一个轮廓。
+</Callout>
+
+<Term def="把形状拆成位置、连接和属性等可计算数据，使它能被程序重建和检查。">
+  describe shape
+</Term>
+的关键不是描摹像素，而是写下一份可重放的清单。位置回答“点在哪里”，连接回答“哪些点组成一条边或一个面”，属性则回答“这个点怎样被着色或采样”。三者分工明确，故障才有入口。
+
+当我们把 describe shape 当作一个数据契约时，验收标准就是能否从同一份位置和连接记录重建相同的形状，并能单独替换颜色、法线或纹理坐标而不破坏几何关系。
+
+<Cgp08ShapeRecipeDiagram />
+
+一个最小的三角形可以这样描述：三个位置，加上一组三个索引。索引不是新的坐标，它是在位置表中取编号，告诉绘制阶段按什么顺序组成一个面。二维图形只需要两个坐标分量；进入三维后，每个位置再增加深度分量，但清单的结构不变。
+
+```ts
+const triangle = {
+  positions: [
+    [-1, -1, 0],
+    [0, 1, 0],
+    [1, -1, 0],
+  ],
+  indices: [0, 1, 2],
+};
+```
+
+这段数据同时适合画二维投影和三维对象的局部形状。重点不是数组长什么样，而是每个索引都能找到一个位置，并且一组索引的顺序符合绘制约定。
+
+## Mesh：把许多小面组织成一个形状
+
+<Term def="由顶点位置、连接关系和面组成的离散形状表示；它把复杂表面拆成可处理的小单元。">
+  mesh
+</Term>
+是一组可被图形管线处理的离散面。一个平面四边形可以由两个三角面组成，一个立方体则由更多三角面共同近似表面。复杂不等于神秘：只要能追踪点、索引和面数，就能逐层检查。
+
+<Cgp08TopologyDiagram />
+
+形状的“长相”和“怎么连”是两份不同证据。移动一个位置会改变几何轮廓，但不会自动改变索引；交换索引顺序可能让面朝向翻转，即使三个点仍在原来的地方。三维渲染中的背面剔除、法线方向和可见性，都可能因此改变。
+
+### 顶点：一个点可以带着一整行属性
+
+<Term def="形状描述中的一个位置记录，通常还可以携带颜色、法线和纹理坐标等与该位置对应的属性。">
+  vertex
+</Term>
+不是只有坐标的圆点。它可以包含位置、颜色、法线、纹理坐标或其他会随几何一起传递的数据。连接关系仍由索引决定，所以增加一个颜色字段不会自动新增一条边。
+
+<Cgp08AttributeDiagram />
+
+如果同一几何需要不同颜色或纹理接缝，一个视觉位置有时必须拆成两条顶点记录：几何坐标可以相同，但属性不同。排查时要问“位置是否重复”以及“属性是否应该重复”，不能只看屏幕上的点数。
+
+### 索引缓冲与拓扑：让绘制顺序可检查
+
+<Term def="保存顶点编号序列的数据区域；绘制阶段按这些编号复用位置并组成线或三角面。">
+  index buffer
+</Term>
+让相邻面可以复用同一个顶点。四边形通常写成两个三角形：第一面使用 `[0, 1,
+2]`，第二面使用 `[0, 2, 3]`。复用减少数据量，但也让编号和顺序必须被严格维护。
+
+<Term def="描述顶点如何组成线、三角形或其他基本图元的连接规则；它决定绘制阶段怎样解释索引。">
+  topology
+</Term>
+是“索引应该如何被读”的约定。即使 positions
+完全正确，把三角形列表当成线列表，或把绕向写反，结果也会与预期不同。
+
+程序提交时仍要保留这份语义，例如：
+
+```ts
+uploadAttribute("position", mesh.positions);
+uploadIndexBuffer(mesh.indices);
+draw("triangles", mesh.indices.length);
+```
+
+调用顺序表达了一个数据契约：先让位置属性可读，再让索引可以复用这些位置，最后用明确的图元类型解释索引。出现空面时，应按这个顺序逐项检查。
+
+## 三步实验：从数据清单回到画面
+
+每一步只改变一类证据。先预测轮廓、面数或绕向会怎么变，再在 ShapeViz 中切换显示；这样能把“看起来不对”变成可定位的差异。
+
+<Stepper>
+  <Step title="第一步：核对位置清单">
+    切换三角形和四边形，先数 positions，再观察轮廓是否由这些位置闭合重建。
+
+    <Cgp08ShapeRecipeDiagram />
+
+  </Step>
+  <Step title="第二步：核对索引与拓扑">
+    打开线框模式，检查每条边的连接和三角面的绕向；不要把位置错误与顺序错误混在一起。
+
+    <Cgp08TopologyDiagram />
+
+  </Step>
+  <Step title="第三步：核对顶点属性">
+    对同一位置分别记录颜色、法线和纹理坐标，确认属性字段不会偷偷改变面之间的连接。
+
+    <Cgp08AttributeDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把顶点属性当成连接关系">
+  现象 → 颜色或纹理调整后，开发者误以为需要重排三角形索引。 原因 →
+  position、color、normal 等字段属于顶点记录，真正决定连边的是 indices 和
+  topology。 修法 →
+  先分别打印位置、属性和索引；只有连接或绕向错误时才修改索引顺序。
+</Callout>
+
+<Callout type="trap" title="把四边形当成一个没有拆分的面提交">
+  现象 → 平面看似完整，但三维视角、法线或裁剪状态下出现缺口和翻面。 原因 →
+  图形管线通常按三角形处理表面，四边形没有明确的对角线和绕向。 修法 →
+  明确拆成两个三角面，固定共享顶点与绕向，并检查两组三索引是否闭合。
+</Callout>
+
+<Callout type="trap" title="只看最终填充，不看线框和索引标签">
+  现象 → 面积和颜色似乎正常，但某些视角下出现裂缝、黑面或背面消失。 原因 →
+  填充结果掩盖了边的连接、顶点顺序或重复顶点属性问题。 修法 →
+  切到线框并显示索引，按位置、连接、属性三层逐一保存证据。
+</Callout>
+
+## 本章小结
+
+- 形状描述由位置、连接和属性三类数据组成。
+- mesh 用许多可检查的小面组织二维或三维表面。
+- 顶点属性影响着色和采样，索引与 topology 决定连接和绕向。
+- 线框、索引标签和数据摘要能帮助定位最终画面之外的错误。
+
+<Exercises>
+
+**问题 1：读一份 mesh 清单。** 一个四边形有四个位置，索引为 `[0, 1, 2, 0, 2, 3]`。它由几个三角面组成？共享了哪条对角线？
+
+<Answer>
+  它由两个三角面组成：`[0, 1, 2]` 和 `[0, 2, 3]`，两面共享位置 0 与位置 2
+  组成的对角线。索引数量是 6，但实际位置仍只有 4 个。
+</Answer>
+
+**问题 2：修改 ShapeViz 的数据。** 在 `describe shape` 的数据中把三角形的顶点 1 向右移动，保持 indices 不变。记录哪些量改变，哪些量不应该改变。
+
+<Answer>
+  轮廓、一个三角面的面积和相关边长会改变；顶点数量、索引序列、图元类型和其他顶点属性不会因为只移动位置而自动改变。若绕向没有跨过退化状态，面的朝向约定也应保持。
+</Answer>
+
+**问题 3：诊断一个黑面。** 位置看起来正确，但从一个方向观察时面消失。你会先检查哪两份数据？
+
+<Answer>
+  先切到线框并显示索引，检查三点顺序和 topology
+  是否一致，再检查法线等顶点属性是否与实际面朝向匹配。不要先提高颜色或光照，因为背面剔除和绕向错误发生在更早的数据层。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="describe shape"
+    definition="把形状拆成位置、连接和属性等数据，使程序可以重新画出它。"
+  />
+  <GlossaryItem
+    term="mesh"
+    definition="由许多顶点、连接和小面组成的离散表面表示。"
+  />
+  <GlossaryItem
+    term="vertex"
+    definition="一个带位置的点记录，也可以附带颜色、法线和纹理坐标。"
+  />
+  <GlossaryItem
+    term="index buffer"
+    definition="保存顶点编号的序列，绘制阶段用它复用位置并组成图元。"
+  />
+  <GlossaryItem
+    term="topology"
+    definition="规定索引如何组成线、三角形或其他图元的连接规则。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 8: A Simple Way to Describe Shape in 2D and 3D"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
