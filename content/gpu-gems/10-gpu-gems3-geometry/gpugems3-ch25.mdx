@@ -1,0 +1,246 @@
+---
+title: "GPU Gems 3 · Chapter 25. Rendering Vector Art on the GPU"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 25
+description: "从 Bézier 控制点出发，解释如何把向量曲线隐式化，让 GPU 用凸包、插值和片元判断直接渲染可缩放的二次与三次曲线。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-25
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch25AntialiasDiagram,
+  GpuGems3Ch25CubicClassificationDiagram,
+  GpuGems3Ch25CurveRepresentationDiagram,
+  GpuGems3Ch25ImplicitQuadraticDiagram,
+  GpuGems3Ch25PipelineDiagram,
+  GpuGems3Ch25VectorArtLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch25-vector-art";
+
+<Objectives>
+
+- 能解释向量曲线为什么可以只提交控制点凸包，而不必把轮廓预先细分成大量三角形
+- 能修改 Vector Art on the GPU Lab 的曲线阶数、视角、边界模式与控制点形状，比较隐式判断和抗锯齿结果
+- 能回答：为什么二次曲线使用 `u² − v`，而三次曲线需要先分类再使用统一的隐式方程
+
+</Objectives>
+
+## 先问：为什么放大字体不该先变成一堆小三角形
+
+想象一条用几枚钉子和一根软尺描述的曲线。无论把它印在名片还是广告牌上，钉子的位置没有变；如果你先把软尺切成很多小直线，放大后就会看见切口，换一个角度还要重新切一遍。
+
+屏幕上的字形、图标和路径也有同样的取舍：像素最终必须一个个决定是否被曲线覆盖，但曲线本身不必先变成密集网格。本章把这两个工作分开，让 GPU 负责覆盖判断和边界平滑。
+
+没有这条路径，矢量图要么依赖高密度镶嵌来避免锯齿，要么在缩放和透视后暴露采样接缝；有了它，几何数据保持小而稳定，分辨率交给片元阶段处理。
+
+<Callout type="tip" title="先预测：把视角切到透视会发生什么？">
+  在 Lab 中先观察 cubic 曲线的 flat view，再切换到 arbitrary projective
+  view；猜一猜控制点凸包是否需要重新细分，以及边界 alpha
+  是否还能保持平滑。一次只改一个旋钮。
+</Callout>
+
+## 1. 让控制点凸包承担几何工作
+
+<Term def="用路径和曲线描述形状、而不是直接保存每个像素颜色的表示；它可以在不同分辨率下重新计算覆盖。">
+  vector art
+</Term>
+
+向量图由闭合路径和曲线片段组成。渲染时，我们不把每条曲线切成很多小线段，而是为它的控制点构造一个足以覆盖曲线的凸包三角形。内部区域可以像普通三角形一样填充，真正需要特殊处理的是包含曲线边界的那几块。
+
+这让几何量随边界描述增长，而不是随目标分辨率增长。像素着色器拿到三角形覆盖下的插值坐标后，才决定当前像素在曲线内、曲线外，还是处在需要平滑的边界附近。
+
+<GpuGems3Ch25CurveRepresentationDiagram />
+
+<Callout type="trap" title="误区：把每条曲线都细分成足够多的小线段">
+  **现象 →** 远处字形看似正常，放大或透视后出现轮廓折线、几何量暴涨。
+
+**原因 →** 细分密度绑定了某个尺度，换分辨率或视角后原来的采样预算不再合适。
+
+**修法 →** 只提交 Bézier 控制点凸包，把曲线内外判断和边界覆盖留给片元阶段。
+
+</Callout>
+
+## 2. 二次 Bézier 可以变成一个简单的隐式测试
+
+<Term def="由起点、终点和一个控制点定义的抛物线片段；在 GPU 中可以用三个顶点的程序化坐标恢复其覆盖关系。">
+  quadratic Bézier curve
+</Term>
+
+TrueType 等字形数据常把轮廓拆成二次样条。把相邻控制点转换成二次 Bézier 后，为凸包三个顶点赋予特殊的 `u`、`v` 坐标，GPU 会在透视变换后继续做正确插值。像素阶段不必查纹理，只要计算 `u² − v` 的符号：对于凸曲线，负值代表曲线内，正值代表曲线外；凹曲线则按方向翻转。
+
+关键不是“用公式画一条曲线”，而是把公式的坐标安排到三角形顶点，让硬件插值器替我们求出每个像素对应的参数。这样任意 3D 投影都只改变插值后的坐标分布，不会把曲线变成有固定分辨率的贴图。
+
+<GpuGems3Ch25ImplicitQuadraticDiagram />
+
+## 3. 隐式化把参数曲线换成像素可问的问题
+
+<Term def="把依赖参数的曲线表达式改写成只含平面坐标的方程，让像素可以直接代入并用符号判断内外。">
+  implicitization
+</Term>
+
+参数曲线回答的是“参数走到哪里”；像素着色器更适合回答“这个坐标在边界哪一侧”。隐式化就是在两种提问方式之间搭桥：把 `x(t), y(t)` 变成 `f(x,y)=0`，边界是零，符号代表两侧。
+
+二次曲线的方程很短，因此可以把同一套片元逻辑用于字形、图标和简单路径。它也解释了为什么算法不需要先把曲线烘成高分辨率纹理：真正的采样发生在最终屏幕像素上。
+
+<Callout type="trap" title="误区：把插值坐标当成普通 UV 贴图坐标">
+  **现象 →** 纹理采样看起来有颜色，但曲线边界在透视下偏移或内外方向反了。
+
+**原因 →** 这些坐标不是查图像的 UV，而是为了让隐式方程在曲线凸包内成立的函数值。
+
+**修法 →** 按曲线方向给顶点赋程序化函数坐标，片元阶段计算方程符号，并在必要时反转方向。
+
+</Callout>
+
+## 4. 三次曲线先分类，再共用一个 shader
+
+<Term def="由四个控制点定义的曲线片段；它的不同形状可以归类为 serpentine、loop 或 cusp，并映射到同一个三次隐式形式。">
+  cubic Bézier curve
+</Term>
+
+三次曲线比二次曲线灵活，但也不能像二次曲线那样全部投影自同一个原型。官方算法先通过拐点多项式的判别式分类：正值是 serpentine，负值是 loop，零值是 cusp。分类在预处理阶段完成，运行时仍保持紧凑的片元表达。
+
+对积分三次曲线，函数坐标可以让像素着色器计算 `k³ − lm`。其中 `k`、`l`、`m` 是控制点对应的线性函数值，GPU 插值后直接代入。loop 若在参数区间内有双重点，还要在预处理时细分并修正子曲线方向，避免凸包中出现错误的穿透区域。
+
+<GpuGems3Ch25CubicClassificationDiagram />
+
+## 5. 凸包重叠是几何阶段的真正陷阱
+
+<Term def="包含 Bézier 曲线控制点的最小凸多边形；局部曲线三角形在这里光栅化，不能与邻近凸包产生不受控的重叠。">
+  Bézier convex hull
+</Term>
+
+一条闭合路径通常还需要填充曲线内部。每段二次曲线的凸包是一个三角形；三次曲线的凸包可能是三角形或四边形，需要再三角化。若相邻凸包重叠，错误区域可能透出来，三角化器也会难以判断应该保留哪一侧。
+
+实际做法是离线检测重叠并细分其中一条曲线，使局部凸包互不遮挡，再对整个闭合轮廓的内部做一次全局三角化。复杂洞和凹形路径也可以借助 stencil 的奇偶规则处理，但那是填充路径的另一层，不应混入曲线片元方程。
+
+## 6. 用屏幕梯度把内外判断变成抗锯齿边界
+
+<Term def="从曲线隐式函数到屏幕坐标的近似有符号距离；它把边界附近的片元映射到连续的 alpha，而不是只保留 0/1。">
+  signed distance
+</Term>
+
+单纯按符号丢弃片元会得到硬边。为了平滑边缘，像素着色器用硬件 `ddx()` 和 `ddy()` 估算函数在屏幕相邻像素间的变化，再用链式法则把隐式值除以梯度长度，得到近似屏幕距离。距离落在半个像素附近时，把 alpha 从 1 线性过渡到 0。
+
+这不是昂贵的精确距离求解；精确距离需要解更高阶方程，片元阶段不划算。梯度近似的价值在于：它随着投影缩放自动改变边缘带宽，字形在不同尺寸和视角下仍然稳定。
+
+<GpuGems3Ch25AntialiasDiagram />
+
+```hlsl
+float2 px = ddx(p);
+float2 py = ddy(p);
+float f = p.x * p.x - p.y;
+float fx = 2.0 * p.x * px.x - px.y;
+float fy = 2.0 * p.x * py.x - py.y;
+float sd = f / sqrt(fx * fx + fy * fy);
+float alpha = saturate(0.5 - sd);
+```
+
+这里的 `p` 是插值后的程序化坐标。真实实现还会根据曲线方向处理 inside/outside，代码片段只突出“隐式函数 → 梯度 → alpha”这条关键路径。
+
+## 动手走一遍：让一条曲线穿过 GPU
+
+<Stepper>
+  <Step title="先覆盖控制点凸包">
+    把曲线控制点组成最小覆盖三角形或四边形，内部填充和曲线边界分开管理。
+
+    <GpuGems3Ch25CurveRepresentationDiagram />
+
+  </Step>
+  <Step title="再计算隐式方程">
+    让硬件插值 `u、v` 或 `k、l、m`，片元阶段只做符号判断；曲线不依赖固定纹理分辨率。
+
+    <GpuGems3Ch25ImplicitQuadraticDiagram />
+
+  </Step>
+  <Step title="最后按梯度修边">
+    用 `ddx/ddy` 得到屏幕尺度的近似距离，把半像素范围映射成 alpha，保留平滑边界。
+
+    <GpuGems3Ch25AntialiasDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch25VectorArtLab />
+
+## 小结
+
+- 向量图保存边界描述，像素阶段决定覆盖，因此不必绑定某个输出分辨率。
+- Bézier 凸包提供最小几何覆盖，GPU 插值器提供每个像素的程序化坐标。
+- 二次曲线可用 `u² − v` 判断内外，三次曲线先分类再用 `k³ − lm`。
+- 凸包不能失控重叠，loop 双重点和路径内部填充需要预处理与三角化策略。
+- `ddx/ddy` 近似 signed distance，能把硬符号测试变成随投影变化的抗锯齿 alpha。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Vector Art on the GPU Lab 中依次切换 quadratic、cubic 和 binary boundary，记录控制点数量、隐式方程和边界像素的变化。
+
+<Answer>
+
+quadratic 使用 3 个控制点和 `u² − v`；cubic 使用 4 个控制点和 `k³ − lm`。切到 binary 后，边界不再保留梯度产生的 alpha 过渡，边界像素指标降为零，效果更像简单的 inside/outside clip。
+
+</Answer>
+
+**问题 2｜诊断透视下的曲线变形。** 一条二次曲线在 flat view 正常，切换到 arbitrary projective view 后边缘偏移。请检查坐标赋值、插值方式和 inside/outside 方向。
+
+<Answer>
+
+确认顶点携带的是隐式方程所需的程序化坐标，而不是普通贴图 UV；确认光栅化使用透视正确插值；最后检查凸曲线与凹曲线的符号约定，必要时整体反转方程方向。
+
+</Answer>
+
+**问题 3｜场景选型。** 需要渲染一个可缩放字体图标、一条包含自交的 cubic 路径和一个复杂多轮廓填充区域。分别说明应优先关注哪个阶段。
+
+<Answer>
+
+字体图标适合用二次或三次凸包加隐式片元测试，重点是抗锯齿与透视稳定；自交 cubic 要先做曲线分类、双重点细分和方向修正；多轮廓区域要把局部曲线渲染与全局内部三角化或 stencil 奇偶填充分开检查。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="vector art">
+    用路径和曲线描述边界的图形表示，放大时可以重新计算像素覆盖。
+  </GlossaryItem>
+  <GlossaryItem term="quadratic Bézier curve">
+    由两个端点和一个控制点定义的抛物线片段。
+  </GlossaryItem>
+  <GlossaryItem term="implicitization">
+    把带参数的曲线改写成像素可直接代入的平面方程。
+  </GlossaryItem>
+  <GlossaryItem term="cubic Bézier curve">
+    由四个控制点定义、可按形状分类的三次曲线片段。
+  </GlossaryItem>
+  <GlossaryItem term="Bézier convex hull">
+    包住曲线控制点的最小凸多边形，GPU 先光栅化它来覆盖曲线。
+  </GlossaryItem>
+  <GlossaryItem term="signed distance">
+    表示像素离边界多远且在哪一侧的近似值，用来生成平滑 alpha。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 25. Rendering Vector Art on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu"
+/>
