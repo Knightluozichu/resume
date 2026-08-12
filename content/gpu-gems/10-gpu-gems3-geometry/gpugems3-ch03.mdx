@@ -1,0 +1,267 @@
+---
+title: "GPU Gems 3 · Chapter 3. DirectX 10 Blend Shapes: Breaking the Limits"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 3
+description: "从顶点属性上限出发，对比 stream-out 多 pass 与 buffer-template 单次 shader 循环，让复合表情突破四个 active blend shapes 的旧限制。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-3-directx-10-blend-shapes-breaking-limits"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-03
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch03AttributeLimitDiagram,
+  GpuGems3Ch03BlendShapeLab,
+  GpuGems3Ch03BlendShapePipelineDiagram,
+  GpuGems3Ch03BufferTemplateDiagram,
+  GpuGems3Ch03ExpressionGridDiagram,
+  GpuGems3Ch03MethodCompareDiagram,
+  GpuGems3Ch03RenderingTimelineDiagram,
+  GpuGems3Ch03StreamOutMethodDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch03-blend-shapes";
+
+<Objectives>
+
+- 能解释 blend shape 如何由 neutral mesh 的 per-vertex delta 组成，并说明为什么同时绑定很多表达式会撞上顶点属性预算
+- 能修改 Blend Shape Lab 的 active shapes、delta 通道、压缩和缓存选项，比较 stream-out 与 buffer-template 的 pass、读取和调用信号
+- 能回答：表情数量较少、需要缓存最终网格，或表情数量较多、希望一次 draw 完成时，应该怎样选累积策略
+
+</Objectives>
+
+## 先看一张会叠加的脸
+
+想象一张中性的脸：嘴角、眼皮、眉毛都是可以单独推拉的小纸片。一次只动嘴角很简单；但如果同时眨眼、挑眉、微笑和说话，真正困难的不是“能不能相加”，而是“这些小纸片怎样送到 GPU”。
+
+本章解决的问题是：如何让几十个表情组件参与同一次变形，而不把所有数据都塞进有限的顶点输入槽？如果不解决它，程序要么把合成工作退回 CPU，要么把表情限制在很小的集合；两者都会牺牲响应速度或表现力。
+
+<Callout type="tip" title="先预测：表情变多，哪一项会先上涨">
+  先猜一猜：把 active blend shapes 从 4 提到 20，stream-out 的 pass
+  会如何变化？切到 buffer-template 后，pass 会不会也变成 5
+  次？哪一种成本会转移到 vertex shader？
+</Callout>
+
+<GpuGems3Ch03BlendShapePipelineDiagram />
+
+## 1. blend shape：neutral 加上带权重的差分
+
+<Term def="相对于 neutral pose 的逐顶点差分；它可以改变位置、法线和切线，再由一个权重控制加入多少。">
+  blend shape
+</Term>
+
+一个表情不是一张完整的新网格，而是 neutral mesh 到目标姿势的差分向量。对一个顶点来说，可以把它写成：`deltaᵢ = poseᵢ - neutral`；最终位置则是 `neutral + weight₁ × delta₁ + weight₂ × delta₂ + ...`。法线和切线也可以采用同样的差分思路，UV 等没有变化的属性继续从 neutral mesh 复用。
+
+这一定义让“复合表情”自然出现：眨眼、微笑和挑眉各自只影响自己的 delta，权重可以同时非零。动画曲线只需更新当前有效的权重和索引，不必每帧重新制作一张完整脸。
+
+<GpuGems3Ch03ExpressionGridDiagram />
+
+## 2. attribute budget：为什么四个 active shapes 不够用
+
+旧的 GPU 路线把每个 active blend shape 的位置、法线和切线差分都作为顶点属性绑定。neutral mesh 已经占据位置、法线、切线和 UV；再加四个表达式，很快就接近 DirectX 10 的 16 个输入属性预算。把 54 个表达式全部同时绑定，会产生远超输入槽的属性宽度。
+
+<GpuGems3Ch03AttributeLimitDiagram />
+
+这里的限制不是“艺术家只能做四种表情”，而是“一次 vertex shader invocation 只能直接看到很窄的一组输入”。因此本章的两条路线都保持同一个目标：静态数据可以很多，但每次处理只让当前需要的 delta 进入计算。
+
+<Callout type="trap" title="把输入槽上限当成表情数量上限">
+  现象 → 设计工具只允许四个滑杆，复合表情无法叠加。原因 → 旧实现把 active delta
+  当成顶点属性同时绑定，槽位先被占满；这不是 blend shape 数量的数学上限。修法 →
+  让数据分批进入 stream-out，或把静态 delta 放入 shader resource
+  buffer，由着色器按 active list 读取。
+</Callout>
+
+## 3. stream-out：用多 pass 拆开属性宽度
+
+<Term def="让 vertex shader 处理一批顶点后把结果写回 buffer，当前 pass 可以不继续光栅化；下一轮把结果 buffer 当作新的输入。">
+  stream-out
+</Term>
+
+stream-out 方法把 active 表情分组，每轮最多合并一到四个 delta。第一轮从 neutral 开始，输出“neutral 加第一组表达式”；第二轮读取上一轮结果，再叠加下一组。两个 vertex buffer 交替作为输入和输出，直到所有 active shapes 都被累积，最后把结果当作普通 mesh 绘制。
+
+<Term def="两个 GPU buffer 交替承担输入与输出的布局；一轮写 A 读 B，下一轮写 B 读 A，避免同一 buffer 同时读写。">
+  ping-pong buffer
+</Term>
+
+<GpuGems3Ch03StreamOutMethodDiagram />
+
+如果每轮能处理 `k` 个表达式，active shapes 为 `n` 时，累积轮数大致是 `ceil(n / k)`。这增加了 pass 和中间 buffer 流转，但有一个重要优点：最终顶点可以留在 stream-out buffer 中。角色定制完成后，可以缓存结果，后续帧不必再次合成全部表情。
+
+## 4. buffer template：把迭代留在 vertex shader
+
+<Term def="HLSL 中用于读取无固定大小 buffer 的资源模板；blend shape 数据作为 shader resource view，由 Load 按元素访问。">
+  buffer template
+</Term>
+
+第二条路线把所有静态 blend shape 放进一个大 buffer，neutral mesh 仍由 input assembler 提供，delta 则通过 shader resource view 在顶点着色器中显式 `Load()`。另有两个动态的小 buffer 保存 active indices 和 weights，`numBS` 决定本帧循环多少项。
+
+<Term def="当前帧真正有非零权重的表达式索引和权重集合；它决定 shader 需要读取哪些 delta。">
+  active list
+</Term>
+
+<Term def="DirectX 10 自动提供的当前顶点编号；和 stride、shape offset 组合后，可以定位该顶点在 delta buffer 中的元素。">
+  SV_VertexID
+</Term>
+
+`SV_VertexID` 让每个顶点知道自己在 mesh 中的编号。着色器用 `shapeOffset + 3 × vertexID + channel` 定位位置、法线和切线差分，再乘权重累加到当前顶点。静态数据可以远超输入属性槽，单次 draw 便能完成 active list 的迭代；代价是每个顶点要执行更多 Load 和循环。
+
+<GpuGems3Ch03BufferTemplateDiagram />
+
+```hlsl
+float3 pos = input.position;
+float3 normal = input.normal;
+float3 tangent = input.tangent;
+
+for (uint i = 0; i < numBS; ++i) {
+  uint base = bsPitch * bsOffsets.Load(i);
+  float weight = bsWeights.Load(i);
+  float3 dp = bsVertices.Load(base + 3 * vertexID + 0);
+  float3 dn = bsVertices.Load(base + 3 * vertexID + 1);
+  float3 dt = bsVertices.Load(base + 3 * vertexID + 2);
+  pos += dp * weight;
+  normal += dn * weight;
+  tangent += dt * weight;
+}
+```
+
+注意“无限”只描述地址空间相对输入槽更宽，不代表 GPU 工作量无限免费：active list 越长，Load 越多；如果每个 delta 还包含切线，带宽和 shader 循环都会增加。
+
+## 5. 两条路线的取舍：调用、读取与缓存
+
+<GpuGems3Ch03MethodCompareDiagram />
+
+stream-out 的性能会随着表达式组数增加而下降，因为 CPU 需要驱动更多轮 buffer 流转；buffer-template 把迭代保留在 vertex shader，通常能减少中间流转和 API 调用。官方样例报告，在 6 个表达式时第二种方法约为第一种的 1.34 倍，在 50 个表达式时约为 2.4 倍；这些是该样例和旧硬件上的相对结果，不是跨引擎承诺。
+
+但 buffer-template 并非永远取胜：如果表情很少、最终结果要跨多帧复用，stream-out 可以把合成后的 vertex buffer 缓存下来；如果表达式很多、每帧都变且不想反复 stream-out，buffer-template 更适合。还要检查 buffer view 的元素宽度：不同宽度的属性需要 padding 或 shader 重组，不能把任意结构体直接当作模板元素。
+
+<Callout type="trap" title="看到“一次 draw”就忽略 shader 循环">
+  现象 → buffer-template 的 API 调用少，GPU 时间却随表情数明显增长。原因 →
+  每个顶点都要循环 active list，并执行多个 buffer
+  Load；减少提交不等于减少顶点工作。修法 → 同时记录 draw calls、每顶点 delta
+  reads、带宽和最终帧时间，再决定把循环留在 shader 还是拆成可缓存的 stream-out
+  pass。
+</Callout>
+
+## 6. 把实验信号和角色需求对齐
+
+官方 Dawn 样例把 54 个表情分成多个组，用动画曲线驱动一部分权重，同时保留手动滑杆来叠加其他表达式。下面的实验把这个思路缩成可观察信号：active shapes 代表当前非零表达式，delta channels 代表每个表达式需要改变的位置、法线和切线的宽度，压缩代表更紧的输入预算，缓存代表是否值得保留最终结果。
+
+<GpuGems3Ch03RenderingTimelineDiagram />
+
+先猜一猜：把 active shapes 从 18 调到 54，stream-out 的 blend passes 和 API calls 会怎样变化？切到 buffer-template 后，哪一项保持为 1，哪一项会随表达式数增加？
+
+<GpuGems3Ch03BlendShapeLab />
+
+## 三步验收：从 delta 定义到策略选择
+
+<Stepper>
+  <Step title="第一步：把表情写成 neutral 加 delta">
+    先区分不变的 UV 与会改变的位置、法线、切线，再用权重把多个 delta 叠加。之后检查一次输入最多能容纳多少 active shapes，而不是把硬件槽位误写成艺术限制。
+
+    <GpuGems3Ch03BlendShapePipelineDiagram />
+    <GpuGems3Ch03AttributeLimitDiagram />
+
+  </Step>
+  <Step title="第二步：分别追踪两条累积路径">
+    对 stream-out，追踪 pass 分组、两个 buffer 的交替和最终结果；对 buffer-template，追踪 active indices、weights、SV_VertexID 和 Load 循环。
+
+    <GpuGems3Ch03StreamOutMethodDiagram />
+    <GpuGems3Ch03BufferTemplateDiagram />
+
+  </Step>
+  <Step title="第三步：用工作负载而不是 API 数量做选型">
+    结合 active shapes 数、每个 delta 的通道宽度、是否跨帧缓存和 GPU 顶点带宽，比较两种方法；最后用 Lab 验证自己的预测。
+
+    <GpuGems3Ch03MethodCompareDiagram />
+    <GpuGems3Ch03ExpressionGridDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- blend shape 是 neutral 到目标姿势的逐顶点 delta，可按权重组合复合表情。
+- 顶点属性预算限制一次输入的宽度，不限制可制作的表情总数。
+- stream-out 用多 pass 和 ping-pong buffer 拆开属性压力，也能缓存最终网格。
+- buffer template 用 shader resource buffer、SV_VertexID 和 Load 循环支持更宽的 active set。
+- 选型要同时看 pass、draw calls、delta reads、带宽和跨帧缓存需求。
+
+<Exercises>
+
+**问题 1｜计算属性预算。** neutral mesh 占 4 个属性，每个 active blend shape 需要位置、法线和切线 3 个属性，输入上限是 16。一次最多能直接绑定多少个 active shapes？如果把切线移出这一轮，预算会怎样变化？
+
+<Answer>
+  还剩 `16 - 4 = 12` 个属性，按每个表达式 3 个属性计算，一次最多直接绑定 4 个
+  active shapes。若切线不在这一轮处理，每个表达式只占位置和法线 2
+  个属性，同样的预算可以放入 6 个 active
+  shapes；实际还要确认切线是否能在别的阶段可靠重建。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Blend Shape Lab 增加 `maxShapesPerPass` 控件，并让 stream-out 模式直接使用它计算 `ceil(activeShapes / maxShapesPerPass)`。切到 buffer-template 模式时，这个控件应该改变 pass 数吗？为什么？
+
+<Answer>
+  stream-out 模式可以用该控件替换由属性预算推导出的 `shapesPerPass`，并重新计算
+  pass 和 draw calls。buffer-template 模式把迭代留在 vertex
+  shader，理论上不受“每 pass 绑定几个属性”的拆分方式影响，因此 pass 仍为 1；但
+  active shapes 增加会让每顶点 Load 和循环变长。
+</Answer>
+
+**问题 3｜场景选型。** 一个角色有 50 个表情：加载时生成一次定制脸，之后数百帧不再改变；另一个角色每帧都由语音驱动 20 个权重。分别优先选择哪条路线？
+
+<Answer>
+  首个角色适合 stream-out：合成一次后保存最终 vertex
+  buffer，后续帧直接绘制。第二个角色适合评估 buffer-template：每帧只更新 active
+  indices 和 weights，用一次 vertex shader 循环避免多轮中间 buffer 流转；如果
+  profiling 显示顶点 Load 成为瓶颈，再考虑按组 stream-out 或减少每个 delta
+  的通道宽度。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="blend shape"
+    definition="相对于中性网格的逐顶点差分，用一个权重控制它对最终表情的影响。"
+  />
+  <GlossaryItem
+    term="stream-out"
+    definition="让顶点着色器把中间结果写回 GPU buffer，下一轮再把它当作输入。"
+  />
+  <GlossaryItem
+    term="ping-pong buffer"
+    definition="两个 buffer 轮流读写，避免同一轮同时从同一块 buffer 读和写。"
+  />
+  <GlossaryItem
+    term="buffer template"
+    definition="HLSL 用来按元素读取大 buffer 的资源模板，适合存放大量静态 delta。"
+  />
+  <GlossaryItem
+    term="SV_VertexID"
+    definition="GPU 提供的当前顶点编号，帮助着色器计算该顶点在 delta buffer 中的位置。"
+  />
+  <GlossaryItem
+    term="active list"
+    definition="当前帧真正有非零权重的表达式索引和权重列表，决定 shader 要处理哪些 delta。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 3. DirectX 10 Blend Shapes: Breaking the Limits"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-3-directx-10-blend-shapes-breaking-limits"
+/>
