@@ -4329,6 +4329,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cgp15RayCastingRasterizationLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-16-real-time-3d-graphics-platforms":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-16-real-time-platforms");
+      return {
+        Cgp16PlatformComparisonDiagram: module0.Cgp16PlatformComparisonDiagram,
+        Cgp16PlatformStackDiagram: module0.Cgp16PlatformStackDiagram,
+        Cgp16ProgrammablePipelineDiagram:
+          module0.Cgp16ProgrammablePipelineDiagram,
+        Cgp16RealTimeGraphicsPlatformsLab:
+          module0.Cgp16RealTimeGraphicsPlatformsLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

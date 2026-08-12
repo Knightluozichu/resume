@@ -1,0 +1,239 @@
+---
+title: "Survey of Real-Time 3D Graphics Platforms"
+type: D
+section: "实时三维图形平台"
+order: 16
+description: "从应用、图形 API、驱动到 GPU 和显示输出，比较实时三维平台的管线能力与帧预算约束。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-16
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp16PlatformComparisonDiagram,
+  Cgp16PlatformStackDiagram,
+  Cgp16ProgrammablePipelineDiagram,
+  Cgp16RealTimeGraphicsPlatformsLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-16-real-time-platforms";
+
+<Objectives>
+
+- 能解释 real-time 3d graphics platforms 如何由应用、图形 API、驱动、GPU、内存和显示输出共同组成
+- 能修改 PlatformViz 的平台、draw calls 与 shader 复杂度，并记录 programmable pipeline 的帧预算变化
+- 能回答：同一个场景迁移到桌面、移动或 Web 平台时，如何沿管线定位性能和能力边界？
+
+</Objectives>
+
+## 先把平台看成一条有边界的帧生产线
+
+实时三维图形不是“把程序交给 GPU”这么简单。一帧要经过应用提交、图形 API、驱动调度、GPU 管线、显存访问、同步以及显示输出；任何一层的限制都可能表现成卡顿、延迟、发热或画质下降。
+
+本章用同一份场景对照不同平台，重点观察可编程阶段如何受到资源和帧时间约束。先猜一猜：同一个 shader 从桌面迁移到移动或 Web 后，最先变化的是图像质量、帧时间，还是 API 能力？
+
+<Cgp16RealTimeGraphicsPlatformsLab />
+
+## real-time 3d graphics platforms：从应用提交到显示输出
+
+<Callout type="trap" title="把平台等同于 GPU 型号">
+  现象 → 宣称“换了更强 GPU
+  就会变快”，但实际程序仍被驱动、带宽、同步或浏览器策略限制。 原因 →
+  只比较计算单元峰值，没有分析应用、图形 API、内存、队列和显示输出组成的平台链。
+  修法 → 先画出从提交到呈现的路径，再分别测量 CPU 提交、GPU
+  阶段、带宽、同步和显示等待。
+</Callout>
+
+<Term def="能够在交互帧时间内持续生成三维图像的完整软硬件环境；它包括应用、图形 API、驱动、GPU、内存、输入和显示链路。">
+  real-time 3d graphics platforms
+</Term>
+
+**real-time 3d graphics platforms** 是一整套交付帧的环境，不是单个芯片或一个 API 名称。桌面平台通常有更高吞吐和更灵活的内存，移动平台需要在功耗、温度和带宽之间平衡，Web 平台还要经过浏览器安全边界与可用 API；主机则常用固定硬件换取稳定目标。
+
+平台调查的第一步是画清楚边界：应用负责场景和提交，图形 API 规定可见的命令契约，驱动把命令映射到设备队列，GPU 执行 programmable pipeline，内存系统提供顶点、纹理和深度数据，最后显示链路决定帧何时真正呈现。遇到问题时，应先定位哪一层改变了结果，再决定是否调整算法。
+
+<Cgp16PlatformStackDiagram />
+
+## programmable pipeline：阶段契约与可编程责任
+
+<Term def="把顶点、片段或计算阶段暴露为可由开发者编写程序的图形管线；每个阶段仍受输入、输出、同步和资源契约约束。">
+  programmable pipeline
+</Term>
+
+**programmable pipeline** 让开发者可以写 shader 来决定顶点变换、材质计算或其他阶段的行为，但它不是一条没有规则的脚本通道。顶点 shader 必须输出后续阶段需要的位置和属性，光栅化负责覆盖与插值，片段 shader 读取插值结果并写出颜色或深度；阶段之间的接口、资源布局和同步仍由 API 与平台定义。
+
+<Cgp16ProgrammablePipelineDiagram />
+
+### graphics API 与 shader stage
+
+<Term def="应用访问图形设备的命令、资源和同步接口；它把程序意图表达成平台可以调度的管线操作。">
+  graphics API
+</Term>
+
+<Term def="管线中可以执行一段可编程代码、拥有明确输入输出的阶段，例如顶点、片段或计算阶段。">
+  shader stage
+</Term>
+
+**graphics API** 是应用与设备之间的公开契约，负责资源创建、命令编码、状态和同步；**shader stage** 则是 programmable pipeline 内部可替换的计算责任。两者不能混为一谈：一个 shader 写得正确，不代表资源状态、绑定布局或命令顺序正确；API 调用通过，也不代表 shader 的工作量适合目标帧率。
+
+一个最小的提交链需要把资源、管线和同步责任写出来：
+
+```ts
+const pipeline = device.createRenderPipeline({ vertex, fragment, layout });
+const encoder = device.createCommandEncoder();
+const pass = encoder.beginRenderPass({ colorAttachment, depthAttachment });
+pass.setPipeline(pipeline);
+pass.setBindGroup(0, sceneResources);
+pass.drawIndexed(indexCount, instanceCount);
+pass.end();
+queue.submit([encoder.finish()]);
+```
+
+调试这段链时，可以分别检查 shader stage 是否得到正确输入、绑定资源是否处于正确布局、draw call 是否进入队列，以及 GPU 是否在帧结束前完成。不要用“屏幕没变化”作为唯一证据，因为命令可能提交成功却被同步或呈现时序延后。
+
+## frame budget：把实时目标写成时间约束
+
+<Term def="一帧从输入采集到可呈现允许使用的时间上限；它需要在 CPU、GPU、带宽、同步和显示等待之间分配。">
+  frame budget
+</Term>
+
+**frame budget** 把实时性变成可测量的约束。目标为每秒 60 帧时，一帧总时间约为 16.6 毫秒；这个数字不是 GPU 独占额度，还要容纳输入、应用逻辑、CPU 提交、GPU 执行、资源上传、同步和显示等待。若某一阶段占满全部预算，其他阶段就没有抖动余量。
+
+可以用一个简单的账本记录平台差异：
+
+```ts
+const frameBudget = 16.6;
+const frame = cpuSubmitMs + gpuWorkMs + syncWaitMs + presentWaitMs;
+const onTime = frame <= frameBudget;
+```
+
+当帧时间超出预算，先看分段测量而不是立刻降低所有画质。draw calls 多，可能是 CPU 提交或状态切换成为瓶颈；片段 shader 复杂，可能是填充率、纹理带宽或片段计算压力；移动设备额外还要观察温度和降频，Web 平台则要考虑浏览器调度和资源限制。
+
+<Cgp16PlatformComparisonDiagram />
+
+同一个 programmable pipeline 在不同 real-time 3d graphics platforms 上的可兑现目标可能不同。平台迁移应该保留功能、帧时间、内存和功耗的记录，避免只复制 shader 源码，却丢失了原来的资源和同步假设。
+
+## 三步实验：从平台边界回放到管线压力
+
+每一步只改变一种责任。先预测哪个阶段会变重，再在 PlatformViz 中操作；记录平台、draw calls、shader 复杂度、估计帧时间和预算状态。
+
+<Stepper>
+  <Step title="第一步：画出平台边界">
+    固定场景和 shader，先列出应用、graphics API、驱动、GPU、内存和显示输出，标注哪些边界由程序控制、哪些边界由平台决定。
+
+    <Cgp16PlatformStackDiagram />
+
+  </Step>
+  <Step title="第二步：检查 programmable pipeline 阶段">
+    在 PlatformViz 中保持平台不变，观察 draw calls 与 shader 复杂度改变后，顶点、光栅和片段阶段的相对压力；先定位阶段，再考虑优化。
+
+    <Cgp16ProgrammablePipelineDiagram />
+
+  </Step>
+  <Step title="第三步：比较不同平台的 frame budget">
+    固定场景和 shader，切换桌面 GPU、移动 GPU 与 WebGPU，记录估计帧时间、预算占用和平台重点约束。若超预算，先回到压力最大的阶段验证。
+
+    <Cgp16PlatformComparisonDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="只看 GPU 峰值，不看整条平台链">
+  现象 → GPU 理论吞吐很高，应用却卡在 CPU 提交、内存上传、同步或显示等待。 原因
+  → real-time 3d graphics platforms 被缩成了一个硬件数字，其他边界没有进入测量。
+  修法 → 分段记录应用、API、驱动、GPU、带宽、同步和呈现时间，先找出真正占用
+  frame budget 的环节。
+</Callout>
+
+<Callout type="trap" title="把 shader 可编程当成资源无限">
+  现象 → programmable pipeline 中的 shader
+  在一台设备上通过，迁移到另一平台后帧时间暴涨或资源创建失败。 原因 → 忽略了
+  shader stage 的输入输出、寄存器、纹理带宽、精度和 API 能力边界。 修法 →
+  以目标平台的 graphics API 和资源限制为契约，分别测量各阶段工作量与实际 frame
+  budget。
+</Callout>
+
+<Callout type="trap" title="平均帧率达标就认为实时稳定">
+  现象 → 平均 FPS 看起来合格，但交互时仍有明显卡顿、输入延迟或周期性掉帧。 原因
+  → 只看平均值，没有记录帧时间分布、同步等待、温度降频和最坏场景。 修法 →
+  记录每帧时间、P95 或最坏窗口，并在高 draw calls、复杂 shader
+  和资源上传场景下回归。
+</Callout>
+
+## 本章小结
+
+- real-time 3d graphics platforms 是应用、graphics API、驱动、GPU、内存、输入和显示共同组成的交付链。
+- programmable pipeline 允许编写 shader，但每个 shader stage 仍受输入输出、资源和同步契约约束。
+- frame budget 要在 CPU、GPU、带宽、同步和呈现之间分配，平均帧率不能替代逐帧证据。
+- 平台调查的价值在于找出能力和资源边界，再把场景与算法调整到可兑现的目标。
+
+<Exercises>
+
+**问题 1：画出一条平台边界链。** 一个三维应用在桌面上画面正确但帧时间超出目标。请列出从应用到显示输出的检查顺序，并指出每一层应记录什么证据。
+
+<Answer>
+  依次记录应用逻辑与 draw calls、graphics API 的命令和资源状态、驱动队列、GPU
+  各阶段时间、显存与带宽、同步等待以及最终 present
+  时间。这样可以区分提交瓶颈、programmable pipeline 压力和显示等待，而不是只更换
+  GPU。
+</Answer>
+
+**问题 2：修改 PlatformViz。** 固定场景和 shader，依次切换桌面 GPU、移动 GPU 与 WebGPU，把 draw calls 从 120 调到 300，再把 shader 复杂度从 4 调到 8。记录 programmable pipeline 中哪个阶段先变重，以及每个平台的 frame budget 是否仍满足。
+
+<Answer>
+  draw calls 增加会提高提交和多个管线阶段的工作；shader
+  复杂度增加通常首先抬高片段或对应可编程阶段压力。不同平台的 base cost
+  和约束不同，所以要按平台分别记录估计帧时间，不能用桌面结果替代移动或 Web
+  的结论。
+</Answer>
+
+**问题 3：诊断“平均 FPS 合格但仍卡顿”。** 你会检查哪些时间证据和平台因素？
+
+<Answer>
+  检查逐帧时间而非只看平均 FPS，关注
+  P95、最坏窗口、同步等待、资源上传、输入到呈现的延迟，以及移动平台温度降频或
+  Web 平台调度限制。若尖峰集中在某个 shader stage 或 draw call
+  批次，再针对该阶段优化。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="real-time 3d graphics platforms"
+    definition="在交互帧时间内生成三维图像的完整软硬件环境。"
+  />
+  <GlossaryItem
+    term="programmable pipeline"
+    definition="允许开发者编写多个图形阶段程序、但仍受阶段契约约束的管线。"
+  />
+  <GlossaryItem
+    term="graphics API"
+    definition="应用访问图形设备的命令、资源和同步接口。"
+  />
+  <GlossaryItem
+    term="shader stage"
+    definition="管线中拥有明确输入输出、可执行可编程代码的阶段。"
+  />
+  <GlossaryItem
+    term="frame budget"
+    definition="一帧从输入到呈现允许使用的时间上限及其阶段分配。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 16: Survey of Real-Time 3D Graphics Platforms"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
