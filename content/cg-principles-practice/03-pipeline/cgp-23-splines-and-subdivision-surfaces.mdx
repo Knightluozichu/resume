@@ -1,0 +1,229 @@
+---
+title: "Splines and Subdivision Surfaces"
+type: B
+section: "样条曲面与细分曲面"
+order: 23
+description: "从参数域、控制网和张量积出发，理解 spline surfaces 如何生成可编辑曲面，以及 subdivision surfaces 如何从网格逼近平滑形体。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-23
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp23SurfacePatchDiagram,
+  Cgp23SplinesLab,
+  Cgp23SubdivisionSurfaceDiagram,
+  Cgp23SurfaceContinuityDiagram,
+  Cgp23TensorProductDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-23-splines-and-subdivision-surfaces";
+
+<Objectives>
+
+- 能解释 spline surfaces 如何把二维参数域、控制网和基函数组合成三维曲面
+- 能比较 tensor-product 曲面与 subdivision surfaces 在局部编辑、边界和连续性上的取舍
+- 能修改 SplinesLab 的隆起、折痕、细分层级和控制网显示，并定位接缝或法向跳变
+
+</Objectives>
+
+## 为什么曲面不能只看成很多三角形
+
+渲染器最终确实会把曲面拆成三角形，但建模时若只操作三角形，编辑者很难表达“这里要平滑隆起、那里要保留折痕”。曲面表示需要保存更高层的设计意图：参数域告诉我们如何在曲面上定位，控制网提供形状自由度，基函数或细分规则决定这些参数如何变成位置与法向。
+
+先预测：同一张四边形控制网，切换 tensor-product 与 subdivision surfaces 后，移动一个角点会影响整片曲面还是局部邻域？打开实验，固定隆起和折痕，只切换表示方式，再观察网格密度、边界和接缝反馈。
+
+<Cgp23SplinesLab />
+
+## spline surfaces：从参数域到三维位置
+
+<Cgp23SurfacePatchDiagram />
+
+<Callout type="trap" title="把参数域坐标当成世界坐标">
+  现象 → 曲面看起来像一张平面贴图，改变 u 或 v
+  时位置跳出预期区域，法向也跟着翻转。 原因 →
+  参数域只是定位曲面点的二维坐标，不是三维世界中的
+  x、y、z；还需要控制网和基函数完成映射。 修法 →
+  分开记录参数点、曲面位置和曲面法向，先验证四个边界方向，再检查三维投影与绕序。
+</Callout>
+
+<Term def="用两个参数方向的基函数和控制网生成三维形状的参数曲面；每个参数点对应曲面上的一个位置和切向信息。">
+  spline surfaces
+</Term>
+
+<Term def="排列在参数域网格上的设计点集合；它通过权重影响曲面位置、切线和局部形状。">
+  control net
+</Term>
+
+对一个双参数曲面，可以写成：
+
+$$
+S(u,v) = \sum_i \sum_j N_i(u) M_j(v) P_{ij}
+$$
+
+其中 P_ij 是控制网中的三维点，N_i 和 M_j 分别是两个参数方向的基函数。这个式子揭示了曲面和曲线的对应关系：曲线只有一个参数和一组控制点，曲面有两个参数和一张控制网。固定 v 时，可以得到沿 u 方向的一条曲线；固定 u 时，又得到另一组曲线。
+
+曲面质量不只由位置决定。对光照来说，切向方向和法向连续性同样重要；对纹理来说，u、v 方向的参数尺度会影响采样密度；对编辑来说，控制点影响范围决定局部修形是否可控。因此调试曲面时要同时观察位置、网格方向、法向和接缝，而不是只看轮廓。
+
+## tensor-product：先做曲线，再做曲线的混合
+
+<Term def="沿 u 和 v 两个参数方向分别使用基函数，把一张控制网组织成曲面的构造方式。">
+  tensor-product
+</Term>
+
+tensor-product 曲面可以按两步理解。第一步固定 v，对控制网的一行或一列沿 u 方向求曲线；第二步把这些中间曲线再沿 v 方向混合。两个方向的 knot、阶数、端点重复度和连续性都可能不同，所以“曲面平滑”必须分别检查 u 接缝和 v 接缝。
+
+<Cgp23TensorProductDiagram />
+
+这种构造对规则四边形网格很直观，参数域也容易切成矩形片。它的代价是拓扑灵活性有限：遇到三向汇合、孔洞或任意连接关系时，需要拼接多片曲面并维护片间连续性。若只改变一片的控制网而不同步邻片边界，渲染时就会看到位置缝或高光缝。
+
+曲面法向可以由两个切向量的叉积得到：
+
+$$
+n(u,v) = \frac{S_u(u,v) \times S_v(u,v)}{\lVert S_u(u,v) \times S_v(u,v) \rVert}
+$$
+
+当两个切向量接近共线，法向会变得不稳定；当相邻曲面的切向方向不一致，即使位置已经接上，光照仍可能出现明显折断。
+
+## subdivision surfaces：用网格规则逼近平滑形体
+
+<Cgp23SubdivisionSurfaceDiagram />
+
+<Term def="从控制网格出发，反复根据面点、边点和顶点邻域规则重建更密网格，并逼近平滑极限形体的曲面表示。">
+  subdivision surfaces
+</Term>
+
+subdivision surfaces 不要求所有面都落在一个矩形参数域中，而是从多边形网格出发。每次细分会根据邻域拓扑生成新面点和边点，再更新旧顶点；继续细分后，网格越来越密，整体形状趋向一个极限曲面。不同规则对边界、尖锐边和不规则顶点的处理不同，不能只用“多细分几次”替代规则选择。
+
+<Term def="曲面网格中连接边数不是规则四边形顶点常数的顶点；它需要专门的邻域权重或极限位置处理。">
+  extraordinary vertex
+</Term>
+
+规则四边形区域通常可以获得稳定的平滑效果，但 extraordinary vertex 附近的法向、纹理参数和曲率需要单独验证。它不是一定错误的点，而是告诉我们局部拓扑与规则网格不同；如果把规则区域的公式直接套过去，可能产生波纹、尖点或高光环。
+
+## continuity：位置接上，还不够
+
+<Cgp23SurfaceContinuityDiagram />
+
+两片曲面达到 G0，表示边界位置重合；达到 G1，表示接缝两侧的切向平面方向一致，法向不会突然折断；更高阶的 G2 还要求曲率变化相容。工程上通常先明确目标：硬表面零件可能需要可控折痕，汽车外壳和角色皮肤则更重视高光连续。
+
+先观察位置，再观察法向，最后移动光源检查高光。若轮廓没有缝但高光断裂，问题往往在 G1 方向或法向计算；若法向连续但轮廓位置有缺口，则优先检查控制网边界、索引绕序和参数匹配。
+
+## 三步实验：从控制网到可渲染曲面
+
+每一步先预测，再只改变一个因素。记录表示方式、边界位置、网格层级、法向反馈和接缝处的视觉变化，避免把采样密度误判为曲面规则。
+
+<Stepper>
+  <Step title="第一步：固定参数域，观察控制网影响">
+    选择 tensor-product，显示控制网，固定折痕，只增大曲面隆起。先预测四个边界是否移动，以及中间网格的法向会怎样变化，再用曲面参数图核对 u、v 方向。
+
+    <Cgp23SurfacePatchDiagram />
+
+  </Step>
+  <Step title="第二步：分离两个参数方向">
+    观察 tensor-product 图，先固定 v 检查 u 方向曲线，再固定 u 检查 v 方向曲线。改变一个方向的控制量，判断接缝问题来自哪一组基函数和哪一条边界。
+
+    <Cgp23TensorProductDiagram />
+
+  </Step>
+  <Step title="第三步：提高 subdivision 层级并检查异常点">
+    切换 subdivision surfaces，把细分层级从 1 调到 4，再改变折痕强度。先预测曲面会平滑、收缩还是保留特征，最后用连续性图检查边界和 extraordinary vertex 附近的法向。
+
+    <Cgp23SubdivisionSurfaceDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用增加三角形数量修复曲面接缝">
+  现象 → 网格更密了，位置缝或高光断裂仍然存在，导出数据却越来越大。 原因 →
+  三角形采样只改变离散近似，不能修复控制网边界、参数匹配或法向连续性。 修法 →
+  先对齐边界位置和参数方向，再检查切向与法向；确认曲面规则正确后才选择合适采样密度。
+</Callout>
+
+<Callout type="trap" title="把所有网格顶点当成同一种规则顶点">
+  现象 → 规则四边形区域平滑，遇到孔洞、三向汇合或边界时出现波纹和尖点。 原因 →
+  extraordinary
+  vertex、边界顶点和尖锐边需要不同的邻域权重，不能直接复用内部规则。 修法 →
+  标记特殊拓扑，分别验证面点、边点、顶点更新与极限位置，并在光照下检查局部法向。
+</Callout>
+
+<Callout type="trap" title="只看轮廓，不看法向与高光">
+  现象 →
+  曲面轮廓没有裂缝，但移动光源时接缝像一道亮线；或者表面方向在边界处突然翻转。
+  原因 → G0 位置连续不代表 G1 法向连续，参数绕序或切向尺度也可能不一致。 修法 →
+  同时绘制边界、切向、法向和高光测试，先确定需要 G0、G1
+  还是更高阶连续性，再选择拼接或细分规则。
+</Callout>
+
+## 本章小结
+
+- spline surfaces 用二维参数域、控制网和两个方向的基函数生成三维位置与法向。
+- tensor-product 适合规则矩形片，优点是结构清晰，代价是复杂拓扑需要多片拼接并维护接缝连续性。
+- subdivision surfaces 从多边形网格出发，通过局部规则逼近平滑极限；边界、尖锐边和 extraordinary vertex 需要专门处理。
+- 曲面验收要同时看位置、法向、曲率与高光；增加采样密度不能替代正确的控制规则和连续性约束。
+
+<Exercises>
+
+**问题 1：定位曲面缝隙。** 两片 tensor-product 曲面的边界位置重合，但移动光源时高光在接缝处断开。你先检查哪些证据？
+
+<Answer>
+  先检查两片边界的参数方向和控制网是否对应，再比较边界切向量与法向方向。位置重合只说明达到
+  G0，若切向平面或法向不一致，还需要修正边界导数、绕序或控制点约束。
+</Answer>
+
+**问题 2：判断 subdivision surfaces 的异常。** 规则区域平滑，但一个三向汇合点附近出现波纹。为什么不能只提高细分层级？
+
+<Answer>
+  该位置可能是 extraordinary
+  vertex，局部邻域度数与规则四边形不同。提高层级只能更密地显示同一套错误或不合适的权重，应该先检查顶点更新规则、极限位置、法向和尖锐特征处理。
+</Answer>
+
+**问题 3：选择曲面表示。** 一个产品外壳由几块矩形片组成，另一个角色模型包含孔洞、三向汇合和局部尖锐边。你会如何选择并验证？
+
+<Answer>
+  规则矩形片可以优先使用 tensor-product，并用边界约束维护 G0 或
+  G1；复杂拓扑更适合 subdivision surfaces，再对 extraordinary vertex、边界和
+  crease 单独验证。两者都要用固定光源检查位置、法向、曲率和最终采样成本。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="spline surfaces"
+    definition="用两个参数方向的基函数和控制网生成三维形状的参数曲面。"
+  />
+  <GlossaryItem
+    term="control net"
+    definition="排列在参数域网格上的三维设计点集合，用来控制曲面形状。"
+  />
+  <GlossaryItem
+    term="tensor-product"
+    definition="沿两个参数方向分别使用基函数，再把结果组合成曲面的构造方式。"
+  />
+  <GlossaryItem
+    term="subdivision surfaces"
+    definition="反复细分多边形控制网并逼近平滑极限形体的曲面表示。"
+  />
+  <GlossaryItem
+    term="extraordinary vertex"
+    definition="邻接边数不符合规则网格的顶点，需要专门的邻域和极限规则。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 23: Splines and Subdivision Surfaces"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

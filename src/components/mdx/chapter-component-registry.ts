@@ -4412,6 +4412,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp22SubdivisionStepsDiagram: module0.Cgp22SubdivisionStepsDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-23-splines-and-subdivision-surfaces":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-23-splines-and-subdivision-surfaces");
+      return {
+        Cgp23SurfacePatchDiagram: module0.Cgp23SurfacePatchDiagram,
+        Cgp23SplinesLab: module0.Cgp23SplinesLab,
+        Cgp23SubdivisionSurfaceDiagram: module0.Cgp23SubdivisionSurfaceDiagram,
+        Cgp23SurfaceContinuityDiagram: module0.Cgp23SurfaceContinuityDiagram,
+        Cgp23TensorProductDiagram: module0.Cgp23TensorProductDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
