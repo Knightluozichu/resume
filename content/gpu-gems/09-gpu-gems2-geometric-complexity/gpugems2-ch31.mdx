@@ -1,0 +1,292 @@
+---
+title: "GPU Gems 2 · Chapter 31. Mapping Computational Concepts to GPUs"
+type: A
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 31
+description: "把数组、内层循环、索引、输出范围、反馈和归约映射到 GPU 的 stream、fragment kernel、texture coordinates 与 render-to-texture。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-31-mapping-computational"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-31
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch31AnalogiesDiagram,
+  GpuGems2Ch31ArithmeticIntensityDiagram,
+  GpuGems2Ch31FeedbackDiagram,
+  GpuGems2Ch31GatherScatterDiagram,
+  GpuGems2Ch31MappingLab,
+  GpuGems2Ch31MappingOverviewDiagram,
+  GpuGems2Ch31ReductionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch31-mapping-computational-concepts";
+
+<Objectives>
+
+- 能用 data parallelism、arithmetic intensity、stream、kernel、gather/scatter 和 reduction 描述一个任务是否适合 GPU
+- 能把 CPU 的 array、inner loop、函数调用、索引、输出范围和反馈分别映射到 texture、fragment program、draw、texture coordinates、vertex coordinates 与 render-to-texture
+- 能在实验中改变 operation、stream length 和 locality，并用 reads、writes、output range、passes 与 read transactions 解释映射结果，而不是把派生指标误当成硬件性能
+
+</Objectives>
+
+## 先建立一张翻译表
+
+本章的任务不是把 CPU 代码逐行改写成 shader，而是建立一个可检查的翻译过程。GPU 以许多并行处理器对 stream elements 应用 kernel；因此，问题首先要回答“元素能否独立处理、数据能否批量驻留、阶段能否在边界处分开”，然后才讨论 API 细节。
+
+<Callout type="tip" title="先标出数据形状，再选择 API">
+  对每个输入写下元素数量、每个元素的字段、读邻居的位置、输出范围和阶段依赖。若这些信息还说不清，直接开始写
+  fragment program 只会把未决的算法问题藏进纹理坐标。
+</Callout>
+
+<GpuGems2Ch31MappingOverviewDiagram />
+
+<Callout type="trap" title="把 GPU 当作更快的通用 CPU">
+  现象 → 任务有大量逐元素独立工作，但也频繁回读中间结果或依赖任意写入。原因 →
+  GPU 的优势在规则的数据并行流，不在任意低延迟控制流。修法 → 先分离
+  stream、kernel、反馈和同步边界，再决定哪些阶段值得迁移。
+</Callout>
+
+## 1. 什么样的计算适合 GPU
+
+<Term def="对许多数据元素应用相同或相似的计算，而且元素之间很少互相依赖的计算形态。">
+  data parallelism
+</Term>
+
+GPU 最擅长的是大 stream 上重复执行相同 kernel，且每个元素只需要少量、规则的邻域信息。矩阵和向量运算、图像与体数据处理、网格上的物理模拟，以及 all-pairs 一类算法，都容易找到这种形状。相反，元素数量很少、分支路径高度不规则或每一步都要等待前一个元素的任务，通常无法充分利用并行处理器。
+
+<Term def="单位数据传输量对应的运算量，即 operations / words transferred；它帮助判断任务更受算力还是带宽限制。">
+  arithmetic intensity
+</Term>
+
+用 $AI=\frac{\text{operations}}{\text{words transferred}}$ 粗略表示计算密度。GPU 的计算单元增长往往快于降低内存延迟的缓存资源，所以想获得高吞吐，不能只把大量数据搬来搬去；应让每次读入的数据支撑足够多的算术工作。这里的比值是建模工具，不是跨设备可直接比较的性能分数。
+
+<GpuGems2Ch31ArithmeticIntensityDiagram />
+
+<Callout type="trap" title="看到并行就忽略通信成本">
+  现象 → kernel 内部操作很多，端到端任务仍被内存和同步拖慢。原因 → arithmetic
+  intensity 只计算了你列入公式的传输，遗漏了邻居读取、格式转换和 host
+  round-trip。修法 → 把每一阶段的 words transferred、texture reads、render
+  target 写入和 CPU/GPU 回传都列进同一张表。
+</Callout>
+
+### 网格是天然的计算域
+
+二维网格可以自然表示为 texture，GPU 的纹理缓存也针对二维 locality 做了优化。网格上的每一步通常更新整个 grid，并且必须在下一步开始前完成；在 stream processing 的语言里，grid cells 是 stream elements，算法步骤是 kernels，每个 kernel 产生供下一步消费的新 stream。
+
+一维地址也可以编码到二维网格中，但编码改变了索引和边界条件，不能假设它自动保留 CPU 数组的访问局部性。先定义坐标域、边界策略和元素格式，再选纹理尺寸与采样方式。
+
+## 2. stream communication：gather 与 scatter
+
+<Term def="当前 kernel 处理一个元素时，从 stream 的其他位置读取所需数据。">
+  gather
+</Term>
+
+<Term def="当前 kernel 处理一个元素时，把数据分发并写入 stream 的其他位置。">
+  scatter
+</Term>
+
+以网格模拟为例，中心单元可能要读取上、下、左、右四个邻居，这就是 gather：当前输出位置固定，但输入读取可以指向其他地址。scatter 则相反，当前元素要决定把值写到哪些输出位置。传统内存术语中，gather 需要随机读，scatter 需要随机写。
+
+<GpuGems2Ch31GatherScatterDiagram />
+
+fragment processor 能从 texture 中多次读取数据，因此 gather 通常是自然路径；fragment 输出位置由已生成的 fragment 决定，并不能在 kernel 中任意改写，所以 scatter 不是它的原生能力。需要 scatter 语义时，优先考虑改写为 gather：让每个输出位置主动收集产生它所需的输入。若确实无法改写，就要显式设计地址编码、冲突处理和额外 pass。
+
+<Callout type="trap" title="把 gather 与 scatter 当成同一个邻域操作">
+  现象 → 代码都在访问邻居，于是直接把 CPU 的写入循环搬到 fragment program。原因
+  → 两者的地址责任不同：gather 固定输出位置，scatter 要改变输出位置。修法 →
+  先画箭头方向；如果箭头从多个输入汇入当前输出，优先采用
+  gather，并检查输入纹理是否可随机读。
+</Callout>
+
+### 读接口与写接口是两条边界
+
+Texture unit 可以看成 read-only memory interface，render-to-texture 可以看成 write-only memory interface。fragment program 可以在 kernel 内读取多次，但输出写入发生在 kernel 结束时。这样的分离不是语法偏好，而是 GPU stream model 的资源约束：一个阶段读输入 stream，完成后生成输出 stream。
+
+如果输出要成为下一阶段的输入，就把它写入 texture memory。不要在同一个 pass 中把同一 buffer 既绑定成输入又绑定成输出；这种 read/write alias 会破坏阶段边界，也会让结果依赖未定义的执行顺序。
+
+## 3. CPU 概念与 GPU 概念的对应
+
+<Term def="在一次 kernel 中可被处理的输入坐标集合；它可以与输入 stream 同形，也可以与输出范围不同。">
+  computational domain
+</Term>
+
+<Term def="kernel 实际产生输出元素的坐标集合；fragment processor 的输出位置由被绘制的几何范围决定。">
+  computational range
+</Term>
+
+<GpuGems2Ch31AnalogiesDiagram />
+
+这张翻译表可以这样使用：CPU array 变成 texture 或 vertex array；CPU inner loop 变成 fragment program；一次函数调用变成一次 draw geometry；数组索引变成 texture coordinates；输出范围变成 vertex coordinates；跨步骤反馈变成 render-to-texture。每个映射都保留一个可验证的边界，而不是把整段程序压成“GPU 版函数”。
+
+<Term def="把 GPU 的输出直接写入 texture memory，作为后续 kernel 的输入，从而在 GPU 内部形成反馈。">
+  render-to-texture
+</Term>
+
+纹理坐标由顶点携带，rasterizer 为每个 fragment 插值；在 GPGPU 中可以把插值后的坐标看成数组索引。输入 domain 和输出 range 可以同形，也可以发生 amplification 或 minification。四边形通常用来覆盖代表网格的矩形 fragment stream，顶点坐标则控制最终生成的输出范围。
+
+<Callout type="tip" title="把 domain 与 range 写成两个集合">
+  例如五点 stencil 的 domain 是中心和四个邻域的采样坐标，range
+  是要更新的网格单元；两者数量相同不代表它们是同一个集合。把两者分别写出，能尽早暴露边界采样、下采样和输出尺寸变化。
+</Callout>
+
+## 4. 反馈、归约与阶段同步
+
+<GpuGems2Ch31FeedbackDiagram />
+
+多步模拟通常需要上一时间步的结果。CPU 的统一内存模型允许程序在任意位置读写；GPU 侧则要把当前输出写入 texture，再把它绑定成下一次 kernel 的输入。实际实现常用两个 buffer 交替承担 read 与 write 的角色：pass 完整结束后交换指针，而不是在同一 buffer 内原地更新。
+
+<Term def="把许多输入值合并为更短的向量或单一结果，例如求和或最大值；它通过多个并行 pass 逐步缩小输出范围。">
+  reduction
+</Term>
+
+归约不是逐元素独立的 map。以求和或最大值为例，一个 fragment 读取两个或更多值并写出一个结果；下一 pass 再对更短的 buffer 重复操作。若每次大致把范围减半，$n$ 个元素需要 $O(\log n)$ 个 pass 才能收敛到单一值。
+
+<GpuGems2Ch31ReductionDiagram />
+
+归约的关键证据不是“最后得到了一个数字”，而是每一 pass 的 computational range、读取数量、写入数量和运算符是否保持结合性。浮点加法不满足严格结合律，因此并行归约与 CPU 顺序归约可能有微小差异；验证时应事先定义容差或采用稳定的累加策略。
+
+<Callout type="trap" title="把归约当成一次普通 map">
+  现象 → 每个元素只写一个输出，但 kernel 需要读取其他元素，结果在不同 pass
+  间不稳定。原因 → reduction 改变了输出范围并依赖上一 pass 完成，不能绕过 buffer
+  交换和阶段同步。修法 → 对每个 pass 记录输入长度、输出长度、算子与 buffer
+  角色，直到 range 变为单元素。
+</Callout>
+
+## 5. 从映射到一个可执行框架
+
+把概念落地时，可以用下面的顺序检查一个最小框架：初始化 GPU；加载 kernel；分配可读、可写或双向 buffer；把输入 stream 绑定到 buffer；绑定 domain 与常量；用几何指定 range 并运行 kernel；必要时在最后一次 pass 才把结果取回 CPU。旧版 GPU 框架把这些职责分别封装成 buffer、program、domain、range 和 reduction 操作，现代 API 的名字会变化，但边界仍然有用。
+
+```text
+gpuInit()
+input  = allocateBuffer(readOnly)
+output = allocateBuffer(writeOnly)
+program = loadKernel("stencil")
+bindStream(program, "concentration", input)
+bindDomain(program, gridDomain)
+run(program, output, gridRange)
+swap(input, output)
+```
+
+这段伪代码的重点是资源方向和阶段顺序，而不是某个历史 API 的可编译性。真实项目还要核对纹理格式、浮点精度、边界采样、同步、读回是否触发 pipeline flush，以及设备是否支持目标数据类型。GPU Gems 2 原章使用 Grey-Scott reaction-diffusion 作为小型例子：两个反应物浓度放在一张 texture 的两个 channel 中，kernel 对中心和四邻居做局部读取，再把新状态写入另一张 texture。
+
+<GpuGems2Ch31MappingLab />
+
+实验中的 `read transactions` 是由 stream length、operation 和 locality 推导出的比较量。切换到 `gather` 会增加每个元素的读取，切换到 `reduce` 会缩短输出范围并增加 pass；调整 locality 只影响读事务估算，不会改变逻辑上的元素数量。它帮助你练习“由映射推导指标”，但不能取代目标 GPU 上的 profiler。
+
+## 三步验收：先保证语义，再观察代价
+
+<Stepper>
+  <Step title="第一步：判定并行形状">
+    把输入元素、独立性、依赖、domain 和 range 写成表。对能独立处理的 map、规则 stencil 和高 arithmetic intensity 任务继续下一步；对需要任意写入或频繁 host round-trip 的任务先改写数据流。
+
+    <GpuGems2Ch31MappingOverviewDiagram />
+
+  </Step>
+  <Step title="第二步：固定通信与反馈边界">
+    为每个 kernel 标出 gather 或 scatter，明确 texture read、render-to-texture write 和 buffer 交换。若是 reduction，记录每个 pass 的输入和输出范围，并检查结果容差。
+
+    <GpuGems2Ch31GatherScatterDiagram />
+    <GpuGems2Ch31FeedbackDiagram />
+    <GpuGems2Ch31ReductionDiagram />
+
+  </Step>
+  <Step title="第三步：再比较算术与带宽证据">
+    在输入规模、格式和输出语义固定后，记录 operations、words transferred、reads、writes、pass 数、host transfer 与真实 GPU 时间。用 arithmetic intensity 解释趋势，用 profiler 验证趋势，不把一个派生比值写成“性能分数”。
+
+    <GpuGems2Ch31ArithmeticIntensityDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- GPU 适合 data-parallel、元素独立且 arithmetic intensity 较高的 stream 计算。
+- texture/vertex array 对应 CPU array，fragment program 对应 inner loop，draw geometry 负责 invocation。
+- gather 是当前元素读其他位置，scatter 是当前元素写其他位置；fragment 路径通常更容易表达 gather。
+- render-to-texture 把一个 kernel 的输出变成下一步的输入，双 buffer 交换能保持读写边界清楚。
+- reduction 通过多个 pass 缩小 computational range，通常需要 $O(\log n)$ 个 pass；派生指标仍需真实 profiler 验证。
+
+<Exercises>
+
+**问题 1｜算术强度。** 某任务每个元素执行 96 次 operations，并从内存读取和写回共 12 个 words。它的 arithmetic intensity 是多少？如果另一个任务执行 24 次 operations、也传输 12 个 words，为什么前者通常更值得先放到 GPU 上？
+
+<Answer>
+  第一个任务的 $AI=96/12=8$ operations/word，第二个任务是 $24/12=2$
+  operations/word。前者让每次数据传输支撑更多计算，更有机会摊薄带宽和调度成本；但这只是候选信号，仍需检查元素独立性、访问局部性、host
+  round-trip 和目标硬件的实际带宽。
+</Answer>
+
+**问题 2｜gather、scatter 与输出范围。** 一个二维 stencil 对每个输出 cell 读取中心、上、下、左、右五个位置。把它归类为 gather 还是 scatter？若 GPU 只能稳定地固定输出位置，domain 与 range 应如何分别描述？
+
+<Answer>
+  它是 gather：每个输出 cell 主动读取五个输入位置，写入地址仍是当前输出
+  cell。domain 是 kernel 为当前 cell 需要采样的中心和四邻居坐标集合，range
+  是本次要更新的输出网格集合。这样可以让 texture read 表达邻域访问，让 fragment
+  的固定输出位置表达写入。
+</Answer>
+
+**问题 3｜归约 pass。** 有 64 个输入值，每次 pass 将两个输入合成一个输出。需要多少个 pass 才得到单一结果？如果第一 pass 输出 32 个值，第二 pass 输出 16 个值，请写出后续的 range 序列。
+
+<Answer>
+  需要 $\log_2 64=6$ 个 pass。range 序列是 64 → 32 → 16 → 8 → 4 → 2 →
+  1；每个箭头表示一个 kernel 完成并交换输入、输出 buffer 后，下一 pass
+  才能开始。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="data parallelism"
+    definition="对大量数据元素应用相同或相似计算，且元素之间依赖很少的计算形态。"
+  />
+  <GlossaryItem
+    term="arithmetic intensity"
+    definition="operations 与 words transferred 的比值，用来粗略判断计算密度。"
+  />
+  <GlossaryItem
+    term="gather"
+    definition="当前 kernel 元素从 stream 的其他位置读取所需数据。"
+  />
+  <GlossaryItem
+    term="scatter"
+    definition="当前 kernel 元素把数据分发并写入 stream 的其他位置。"
+  />
+  <GlossaryItem
+    term="computational domain"
+    definition="一次 kernel 可访问或采样的输入坐标集合。"
+  />
+  <GlossaryItem
+    term="computational range"
+    definition="一次 kernel 实际产生输出元素的坐标集合。"
+  />
+  <GlossaryItem
+    term="render-to-texture"
+    definition="把 GPU 输出写入 texture memory，使其成为后续 kernel 的输入。"
+  />
+  <GlossaryItem
+    term="reduction"
+    definition="通过多个并行 pass 将许多输入合并为更短向量或单一结果的操作。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 31. Mapping Computational Concepts to GPUs"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-31-mapping-computational"
+/>
