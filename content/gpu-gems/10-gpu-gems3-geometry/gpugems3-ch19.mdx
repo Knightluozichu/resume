@@ -1,0 +1,269 @@
+---
+title: "GPU Gems 3 · Chapter 19. Deferred Shading in Tabula Rasa"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 19
+description: "从 Tabula Rasa 的双管线实践出发，解释如何用可读的 MRT 属性、局部光体积与带宽预算把延迟着色落到真实游戏引擎。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-19-deferred-shading-tabula-rasa"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-19
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch19BandwidthDiagram,
+  GpuGems3Ch19DeferredShadingLab,
+  GpuGems3Ch19GBufferDiagram,
+  GpuGems3Ch19LightVolumeDiagram,
+  GpuGems3Ch19PipelineDiagram,
+  GpuGems3Ch19ReadableBufferDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch19-deferred-shading";
+
+<Objectives>
+
+- 能解释 deferred shading 如何把材质写入与光照计算拆成离散阶段，并指出它对 MMO 场景扩展性的价值
+- 能修改 Tabula Rasa Deferred Shading Lab 的管线、光数量、分辨率、光体积和透明路径，比较绘制次数与带宽
+- 能回答：为什么透明几何需要 forward fallback，以及为什么 G-buffer 的通道必须通过可读的属性契约隐藏
+
+</Objectives>
+
+## 先问：灯越来越多，为什么画面不该越来越慢
+
+想象一座夜晚的城市：建筑数量、玩家数量和特效灯都不可预知。如果每栋建筑每遇到一盏灯就重新画一遍，新增一盏灯既增加 CPU 决策，又增加几何重复工作。
+
+本章要处理的难题是：先把每个可见像素的表面资料存下来，再让每盏灯只处理自己覆盖的像素。这样做会多写几张屏幕大小的纹理，也会让透明物体和低端硬件变得棘手；工程目标不是“永远延迟”，而是用清楚的边界换取可扩展的光照成本。
+
+<Callout type="tip" title="先预测：把 dynamic lights 调到 60 就一定更划算吗？">
+  先猜一猜：在 Lab 中把 dynamic lights 从 24 调到 60，再把 resolution
+  提高、light volume 从 sphere 切到 cone，并加入 translucent
+  geometry；绘制次数、覆盖像素、MRT
+  带宽和透明路径会怎样变化？先记住基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 先把材质和光照拆开
+
+<Term def="把几何与材质写入和光照计算分成两个或多个离散阶段的渲染方式；光照阶段读取已保存的像素资料，而不是重新遍历每个物体的材质着色。">
+  deferred shading
+</Term>
+
+传统 forward shading 在画一个物体时同时完成形状、材质、入射光和表面响应。它直观，却会让“哪些灯影响哪些物体”的 CPU 判断和多次几何 pass 随场景规模一起增长。Tabula Rasa 面对的是 MMO：玩家、可见特效和动态灯的数量都没有紧上限，因此选择把前两步和后两步拆开。
+
+材质阶段只负责把像素需要的资料写入屏幕大小的缓冲；光照阶段以屏幕像素为单位读取这些资料。几何复杂度不再直接乘上灯数量，但代价是额外的 render-target 写入、读取和视频内存管理。
+
+<GpuGems3Ch19PipelineDiagram />
+
+<Callout type="trap" title="把 deferred shading 当成“免费增加灯”的开关">
+  现象 → 灯数量增长后几何 pass 变少了，但高分辨率下帧率仍然明显下降。原因 →
+  延迟路径把成本从几何重复转成 MRT
+  写入、光照读取和带宽，屏幕像素仍然要付费。修法 →
+  同时测量覆盖像素、render-target 格式、分辨率和光体积边界，不只看 draw call
+  数量。
+</Callout>
+
+## 2. G-buffer 要成为稳定的属性接口
+
+<Term def="把位置、深度、法线、漫反射和其他材质资料写入多个屏幕大小目标的像素资料集合，光照阶段从它读取输入。">
+  multiple render targets
+</Term>
+
+延迟管线依赖 multiple render targets，把一个 fragment 的多个属性同时写出。典型布局会为深度保留高精度目标，再用若干 RGBA 目标存漫反射、法线、镜面输入和标志位。Shader Model 3.0 级硬件的同时目标数量和位深有限，所以每个通道都应被当作珍贵资源。
+
+不要让材质 shader 和 light shader 直接记住“漫反射在 MRT 0 的 rgb”这种物理布局。把每一项资料定义为 <Term def="连接材质 shader 与 light shader 的通用像素数据；它描述光照需要什么，而不暴露数据具体放在哪个 MRT 通道。">material attribute</Term>，再通过 `DL_Set*` 与 `DL_Get*` 访问器读写。以后压缩、换通道或增加默认值，只需要重建共享头文件和 shader，而不必逐个修改所有效果文件。
+
+<GpuGems3Ch19GBufferDiagram />
+
+视空间法线还能进一步节省通道：可见表面的法线 z 分量符号一致，加上单位向量约束，就能从 x、y 重建 z。重要的是先把“需要什么属性”固定下来，再决定怎样压缩，不要把某一种灯专用的数据写进所有材质的公共接口。
+
+## 3. 让光体积裁掉无关像素
+
+<Term def="紧密包围一盏灯影响范围的屏幕外形；点光用球、聚光灯用锥、盒光用盒，全局方向光才需要全屏四边形。">
+  light volume
+</Term>
+
+光照 shader 理论上可以对每盏灯画全屏四边形，但那会让远离灯的像素也执行纹理读取和光照。light volume 把灯的影响范围投影到屏幕：点光使用球体，聚光灯使用锥体，局部方向光使用盒体，方向光这类全局灯才使用全屏路径。
+
+Stencil masking、early z-rejection 和 dynamic branching 也可以进一步丢弃像素，但它们都依赖 locality：相邻像素最好做出相似的拒绝或分支决定。额外的“便宜 pass”如果带来更多 draw call，可能抵消最终光照 pass 的收益；要用目标硬件测量，而不是把每个优化都叠上去。
+
+<GpuGems3Ch19LightVolumeDiagram />
+
+<Callout type="trap" title="所有灯都画全屏四边形">
+  现象 → 一盏小点光的光照时间接近全局方向光，场景边缘也在执行同样的 shader。原因
+  → 光体积没有紧贴灯的空间范围，屏幕覆盖面积被放大。修法 →
+  点光用球、聚光灯用锥、盒光用盒，并通过深度测试或 stencil
+  让体积外像素尽早退出。
+</Callout>
+
+## 4. 深度和法线缓冲不只服务光照
+
+延迟缓冲提供了眼空间深度、法线和其他像素资料，水面、雾、体积粒子和边缘处理都可以复用。水面在同一个 pass 中比较当前水深和被折射像素的深度：目标确实在水面之后才执行折射，否则拒绝这次采样。这样可以自动形成岸线，也能让颜色和透明度随深度非线性变化。
+
+边缘处理不需要依赖固定分辨率的魔法数字。对中心像素和八个邻居同时采样，比较深度梯度的最大变化与最小变化，再比较相邻法线夹角的 cosine 变化，得到 0 到 1 的 edge weight。权重为 0 时保留中心样本，权重为 1 时混合四个角方向的双线性样本，最终在一次后处理 pass 中完成柔化。
+
+<GpuGems3Ch19ReadableBufferDiagram />
+
+## 5. 把带宽预算拆成可观察的阶段
+
+<Term def="用于保存多个光源累积结果的屏幕大小目标；把 diffuse 和 specular 分开后，最终合成阶段可以少读取不必要的材质资料，也能独立做 HDR 或后处理。">
+  light accumulation buffer
+</Term>
+
+延迟 shading 的主要税不是抽象的“更复杂”，而是每帧的字节数：材质阶段从写一个目标变成写多个 MRT，光照阶段再读取这些目标。Tabula Rasa 还把 diffuse light 和 specular light 分开写入 light accumulation buffer，最后一次全屏合成时再与未着色颜色组合。这样 light shader 不必反复读取完整材质，也保留了 HDR、对比度和其他光照后处理的独立入口。
+
+分辨率是最直接的控制杆：像素数上涨会同时放大 MRT 写入、光照读取和最终合成。降低不需要高精度的目标位深、减少不必要属性、复用 shadow-map pool，并限制同一帧需要重建的 shadow map 数量，往往比在光照函数里再塞一层分支更有效。
+
+<GpuGems3Ch19BandwidthDiagram />
+
+## 6. 透明几何必须有清楚的边界
+
+<Term def="在延迟管线之外继续用传统逐物体光照绘制的备用路径，专门处理无法只保留最近像素的透明或半透明几何。">
+  forward fallback
+</Term>
+
+alpha blending 的根本问题是：一个屏幕像素可能叠着多个材质片元，而普通 G-buffer 只保存最近的那个。要支持真正的透明，需要深 framebuffer 或 order-independent transparency 机制；Tabula Rasa 的务实做法是让水和其他半透明几何在不透明 deferred pass 完成后回到 forward fallback。这样能复用 deferred 的深度输入，却无法保证两条管线的所有灯型和材质特性完全一致。
+
+头发和地表植被尤其容易暴露差异：它们视觉上偏好 alpha blending，但如果回到 forward，阴影和灯型可能与不透明世界不匹配。因此工程上选择 alpha testing 或 clip 让它们作为“完全不透明”的像素进入 deferred，并用缩放模拟淡入淡出，而不是让每种透明都污染 G-buffer 契约。
+
+静态和动态 shadow map 也应该分开管理：静态几何的地图可以复用，动态几何只更新自己的地图再合成；shadow-map pool 保留纹理并按灯的优先级分配，避免每帧创建和释放造成显存碎片。对日夜循环里的全局光，还可以量化光位置和方向，减少相邻帧深度值微小抖动带来的阴影闪烁。
+
+<Callout type="trap" title="把透明物体硬塞进最近像素的 G-buffer">
+  现象 → 玻璃、头发或水面出现错误排序，透明层后的灯光与不透明世界不一致。原因 →
+  G-buffer 只保留一个最近 fragment，不能表达重叠的多个材质属性。修法 →
+  水和真正半透明几何走 forward fallback；需要稳定阴影的头发与植被可用 alpha
+  test/clip，明确接受它们的视觉取舍。
+</Callout>
+
+## 7. 把引擎方案组装成可扩展的三步
+
+```hlsl
+DL_PixelOutput MaterialPS(MaterialInput input) {
+  DL_PixelOutput output;
+  DL_Reset(output);
+  DL_SetDiffuse(output, input.diffuse);
+  DL_SetNormal(output, input.normal);
+  DL_SetDepth(output, input.eyeDepth);
+  return output;
+}
+
+float3 LightPS(float2 uv, Light light) {
+  float3 diffuse = DL_GetDiffuse(uv);
+  float3 normal = DL_GetNormal(uv);
+  float depth = DL_GetDepth(uv);
+  return EvaluateLight(light, diffuse, normal, depth);
+}
+```
+
+这段伪 HLSL 的重点不是 API 名字，而是依赖方向：材质 pass 初始化并写入通用属性，light pass 通过访问器读取属性并只处理光体积覆盖的像素。代码共享库让 forward、deferred、shadow-map 和 skinned/static technique 可以共用同一套数据契约。
+
+<Stepper>
+  <Step title="先建立材质属性和双管线边界">
+    用 MRT 保存深度、法线、漫反射和通用材质属性；材质 shader 不做光照，同时保留低端硬件和透明几何所需的 forward 路径。
+
+    <GpuGems3Ch19PipelineDiagram />
+    <GpuGems3Ch19GBufferDiagram />
+
+  </Step>
+  <Step title="再用光体积把工作限制到覆盖像素">
+    为点光、聚光灯和盒光选择紧密体积；全局方向光才使用全屏 pass，并检查深度/stencil/分支的 locality 是否真的减少了工作。
+
+    <GpuGems3Ch19LightVolumeDiagram />
+
+  </Step>
+  <Step title="最后用可读缓冲和带宽预算闭环">
+    复用深度与法线做水面、边缘和后处理；把 diffuse/specular 放进独立累积目标，结合分辨率、位深、shadow pool 和透明 fallback 做最终选型。
+
+    <GpuGems3Ch19ReadableBufferDiagram />
+    <GpuGems3Ch19BandwidthDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch19DeferredShadingLab />
+
+## 本章小结
+
+- deferred shading 把材质写入与光照读取拆成可扩展阶段
+- MRT 属性必须通过稳定访问器隐藏物理通道布局
+- light volume 让局部光只覆盖真正需要的屏幕像素
+- 深度、法线和累积缓冲可以复用到水面、边缘与 HDR 后处理
+- 透明几何和带宽预算决定 deferred 与 forward 的边界
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 如果 material shader 新增一个 roughness 属性，你会怎样修改 MRT 契约，才能避免所有 light shader 立刻重写？
+
+<Answer>
+  先在共享属性头文件中定义 `DL_SetRoughness` 和
+  `DL_GetRoughness`，决定它使用现有通道的压缩空间还是新增目标；材质 shader
+  只调用 setter，light shader 只调用
+  getter。这样布局、重建和默认值集中在一处，其他 shader 不需要知道 roughness
+  的物理位置。
+</Answer>
+
+**问题 2｜诊断带宽瓶颈。** Lab 中 deferred 路径的绘制次数比 forward 少，但把分辨率提高后更慢。你会先检查哪三个数据？
+
+<Answer>
+  先看每帧 MRT 写入与 light accumulation
+  读取的总字节数，再看光体积覆盖的屏幕像素和 render-target 位深，最后确认 shadow
+  map 是否在同一帧被重复重建。延迟 shading
+  解耦的是几何与灯数量，不会消除分辨率带来的像素带宽成本。
+</Answer>
+
+**问题 3｜场景选型。** 不透明建筑、动态水面和需要稳定阴影的草地，分别选择哪条管线？
+
+<Answer>
+  不透明建筑优先走 deferred，并用点光/盒光体积限制覆盖；动态水面在不透明
+  deferred pass 完成后走 forward fallback，同时读取 deferred
+  深度做折射；草地如果要保持与世界一致的阴影，可以用 alpha test/clip 作为
+  deferred 的不透明像素，但要接受淡入淡出和边缘质量的取舍。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="deferred shading"
+    definition="先保存像素表面资料，之后再统一执行光照的渲染方式，适合大量动态灯。"
+  />
+  <GlossaryItem
+    term="multiple render targets"
+    definition="一次绘制同时写入多个屏幕目标，让一个像素把不同属性分别保存下来。"
+  />
+  <GlossaryItem
+    term="material attribute"
+    definition="光照需要的通用像素资料，例如漫反射、法线、深度或镜面参数，不等于某个固定通道。"
+  />
+  <GlossaryItem
+    term="light volume"
+    definition="包住一盏灯影响范围的几何体，帮助光照阶段跳过不相关屏幕像素。"
+  />
+  <GlossaryItem
+    term="light accumulation buffer"
+    definition="保存各盏灯累积的漫反射或镜面结果的屏幕目标，最后再与未着色颜色合成。"
+  />
+  <GlossaryItem
+    term="forward fallback"
+    definition="延迟管线无法表达的透明或低端场景继续使用的逐物体光照备用路径。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 19. Deferred Shading in Tabula Rasa"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-19-deferred-shading-tabula-rasa"
+/>
