@@ -4317,6 +4317,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp14StandardApproximationsLab: module0.Cgp14StandardApproximationsLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-15-ray-casting-rasterization":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-15-ray-casting-rasterization");
+      return {
+        Cgp15PipelineComparisonDiagram: module0.Cgp15PipelineComparisonDiagram,
+        Cgp15RasterizationDiagram: module0.Cgp15RasterizationDiagram,
+        Cgp15RayCastingDiagram: module0.Cgp15RayCastingDiagram,
+        Cgp15RayCastingRasterizationLab:
+          module0.Cgp15RayCastingRasterizationLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-12T11:23:24.655Z；旧版分数不迁移。
+> 2026-08-12T11:30:42.250Z；旧版分数不迁移。
 
 - 书籍：225
-- 章节：4524
+- 章节：4525
 - failed：1925
 - queued：245
-- passed：1561
+- passed：1562
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -148,7 +148,7 @@
 | 135 | building-llm-applications | 18 | 0 | 0 | 18 | 0 |
 | 136 | c-primer-plus | 17 | 0 | 0 | 17 | 0 |
 | 137 | car-structure-illustrated | 9 | 0 | 0 | 0 | 0 |
-| 138 | cg-principles-practice | 36 | 0 | 0 | 36 | 0 |
+| 138 | cg-principles-practice | 37 | 0 | 0 | 37 | 0 |
 | 139 | chatgpt-principles-practice | 13 | 0 | 0 | 13 | 0 |
 | 140 | clr-via-csharp | 32 | 0 | 0 | 32 | 0 |
 | 141 | code-complete-2e | 51 | 0 | 0 | 0 | 0 |
