@@ -4424,6 +4424,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp23TensorProductDiagram: module0.Cgp23TensorProductDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-24-implicit-representations-of-shape":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-24-implicit-representations");
+      return {
+        Cgp24BooleanFieldDiagram: module0.Cgp24BooleanFieldDiagram,
+        Cgp24GradientNormalDiagram: module0.Cgp24GradientNormalDiagram,
+        Cgp24ImplicitFieldDiagram: module0.Cgp24ImplicitFieldDiagram,
+        Cgp24ImplicitShapeLab: module0.Cgp24ImplicitShapeLab,
+        Cgp24RayIntersectionDiagram: module0.Cgp24RayIntersectionDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

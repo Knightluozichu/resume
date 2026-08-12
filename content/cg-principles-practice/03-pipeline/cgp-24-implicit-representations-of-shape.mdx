@@ -1,0 +1,229 @@
+---
+title: "Implicit Representations of Shape"
+type: A
+section: "隐式形状表示"
+order: 24
+description: "从标量场、等值面和有符号距离出发，理解 implicit representations 如何描述形状、求交、组合并恢复曲面法向。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-24
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp24BooleanFieldDiagram,
+  Cgp24GradientNormalDiagram,
+  Cgp24ImplicitFieldDiagram,
+  Cgp24ImplicitShapeLab,
+  Cgp24RayIntersectionDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-24-implicit-representations";
+
+<Objectives>
+
+- 能解释 implicit representations 如何用空间点到标量场的查询定义形状
+- 能比较 signed distance field、iso-surface、射线求交和梯度法向在表示与渲染中的职责
+- 能修改 ImplicitShapeLab 的形状、等值面、组合混合与采样密度，并定位锯齿、漏交和法向噪声
+
+</Objectives>
+
+## 先换一个问题：哪些点属于形状
+
+网格表示从顶点和面出发，隐式表示则反过来问：给定空间中的一个点 p，它在形状内部、表面还是外部？只要有一个确定的函数回答这个问题，就不必在定义阶段列出全部顶点；曲面可以在需要绘制、求交或组合时被恢复出来。
+
+先预测：把 iso 从 0 调高，球形隐式曲面的边界会向内缩还是向外扩？切换到 union 后，增加采样密度会改变函数定义，还是只改变显示轮廓？打开实验，分别改变一个参数并记录场值、边界和采样结果。
+
+<Cgp24ImplicitShapeLab />
+
+## implicit representations：把形状写成一个场
+
+<Cgp24ImplicitFieldDiagram />
+
+<Callout type="trap" title="把采样轮廓误认为隐式形状本身">
+  现象 → 轮廓点加密后看起来更平滑，但换一条射线或改变等值面时形状立刻改变。 原因
+  →
+  采样点是从场函数提取的离散证据，不是形状的完整定义；低密度采样还可能漏掉细节。
+  修法 → 先保存并检查场函数和符号约定，再比较采样密度、等值面和提取算法的误差。
+</Callout>
+
+<Term def="不直接存储顶点和面，而是用函数查询空间点属于形状的程度，再在需要时恢复边界的表示方式。">
+  implicit representations
+</Term>
+
+一个最简单的隐式形状由标量函数 f(p) 定义：
+
+$$
+\mathcal{S} = \{p \mid f(p) = 0\}
+$$
+
+f(p) 大于 0 和小于 0 的两侧分别代表外部与内部，具体正负约定可以相反，但必须贯穿求交、布尔运算和法向计算。f(p) 的绝对值还可以表达“离边界大概有多远”，这让它不仅能回答内外，还能指导沿射线前进多少。
+
+隐式表示的优势是查询式和可组合。球体、平面、圆柱可以写成简单函数，多个函数又能通过 min、max 或平滑组合形成新的形状。代价是每次求交、采样或求法向都要调用函数；复杂场的计算成本和数值稳定性必须被测量。
+
+## signed distance field：符号和距离一起工作
+
+<Term def="一种标量场：符号表示点在形状内部还是外部，绝对值近似点到表面的距离；常缩写为 SDF。">
+  signed distance field
+</Term>
+
+signed distance field 的理想性质是 |f(p)| 等于点到最近表面的距离。球体可以写成点到中心的距离减去半径；平面可以用点到平面的有符号距离。对不规则形体，场值可能只是近似距离，但只要误差和符号稳定，仍可用于求交、碰撞和形状组合。
+
+距离信息带来一个重要的步进直觉：若当前点到表面的安全距离是 d，沿射线前进不超过 d，理论上不会直接穿过表面。这是 sphere tracing 的基础。不过真实场、缩放变换、平滑并集和数值误差会改变安全界限，所以仍需设置最大步数、最小阈值与退出条件。
+
+## implicit surface：从场值为零的位置恢复边界
+
+<Term def="标量场达到指定常数的点集；当常数为 0 且场采用内外符号时，它就是形状表面。">
+  implicit surface
+</Term>
+
+要把 implicit surface 交给渲染器，常见路线有两种。第一种沿射线反复查询场值，寻找符号变化或距离足够小的位置；第二种在体素网格上采样场，用等值面提取算法生成三角网格。前者适合直接求交，后者适合缓存、光栅化和后续网格处理。
+
+<Cgp24RayIntersectionDiagram />
+
+射线求交时，符号从外部正值变成内部负值，说明两次采样之间可能有表面；若场是可靠的距离近似，则可以用场值大小作为前进步长。只凭单点符号却没有检查步长，可能跳过薄片、尖锐细节或两个很近的表面。
+
+<Term def="标量场取同一个常数值时形成的等值面；0 等值面只是其中最常用的一层。">
+  iso-surface
+</Term>
+
+等值面中的 iso 不一定固定为 0。改变 iso 等于选择同一标量场的另一层，边界会移动；这对体数据可视化很有用，但若读者以为 iso 总是几何表面，就会把阈值变化误判为模型变形。
+
+## 布尔组合：组合函数，不焊接网格
+
+<Cgp24BooleanFieldDiagram />
+
+对采用一致符号的距离场，两个形状的并集常用 min(f_A, f_B)，交集常用 max(f_A, f_B)，差集可以把一个场取反后再组合。这里组合的是每个空间点的场值，结果仍然是一个可以继续求交、求法向和再组合的隐式表示。
+
+平滑并集会在 min 附近引入连续过渡，让接缝变圆，但也会改变距离的精确含义。混合半径过大可能吞掉细节，过小又会留下硬折线。调试时把“形状语义”和“距离精度”分开验收：先确认内部外部正确，再检查表面位置、法向和步进安全性。
+
+## gradient：从场函数得到法向
+
+<Cgp24GradientNormalDiagram />
+
+<Term def="标量场增长最快的方向；在可微的零等值面上，梯度与表面法向垂直。">
+  gradient
+</Term>
+
+在表面 f(p)=0 附近，gradient 提供法向方向：
+
+$$
+n(p) = \frac{\nabla f(p)}{\lVert \nabla f(p) \rVert}
+$$
+
+如果没有解析导数，可以用相邻采样的有限差分近似。差分步长过大，会让尖锐细节和薄片的法向被抹平；步长过小，则会放大场函数的浮点噪声。高光出现颗粒或接缝时，应把场值、差分步长和法向归一化一起检查。
+
+## 三步实验：从场定义到可渲染形状
+
+每一步先预测，再只改变一个因素。记录形状模式、等值面、采样密度、边界位置和法向反馈，区分函数误差与离散化误差。
+
+<Stepper>
+  <Step title="第一步：读取标量场和零等值面">
+    选择 sphere，固定 blend，把 iso 从负值拖到正值。先预测边界移动方向，再观察内部、外部和 f=0 标记是否保持一致。
+
+    <Cgp24ImplicitFieldDiagram />
+
+  </Step>
+  <Step title="第二步：沿射线检查求交">
+    保持形状和 iso 不变，降低采样密度，再提高采样密度。先预测薄边界是否可能被跳过，再用射线图区分符号变化、步长选择和等值面定位。
+
+    <Cgp24RayIntersectionDiagram />
+
+  </Step>
+  <Step title="第三步：组合并检查法向">
+    切换 union，改变 blend，再用梯度图检查组合后的法向。先预测平滑并集会保留还是抹掉接缝，最后用布尔运算图核对 min、max 与取反的语义。
+
+    <Cgp24BooleanFieldDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把 f=0 当成唯一可用的场信息">
+  现象 → 能找到表面，但 sphere tracing
+  步进过小、碰撞判断不稳定，组合形状也无法安全前进。 原因 →
+  只保留零等值面丢掉了场值的内外符号和距离尺度。 修法 → 同时记录 f(p)
+  的符号、绝对值与局部梯度，并为变换和平滑组合重新验证安全步长。
+</Callout>
+
+<Callout type="trap" title="用固定网格分辨率代表所有隐式细节">
+  现象 → 大形状看起来正确，薄片、尖角或两个近邻表面却消失或粘在一起。 原因 →
+  采样间距比局部特征更粗，等值面提取没有足够证据恢复几何。 修法 →
+  先估计特征尺度和场变化速度，再自适应加密或改用直接射线求交，并记录漏交率。
+</Callout>
+
+<Callout type="trap" title="从噪声场直接差分法向">
+  现象 → 轮廓没有明显问题，但高光闪烁、法向在组合接缝处跳动。 原因 →
+  有限差分步长与场函数误差不匹配，归一化前的梯度还可能接近零。 修法 →
+  比较多个差分步长，检查梯度长度和符号约定，并在法向异常时回看场函数与平滑组合。
+</Callout>
+
+## 本章小结
+
+- implicit representations 用标量场查询空间点，不必在定义阶段显式列出所有顶点。
+- signed distance field 通过符号表达内外、通过绝对值提供距离线索，可支持求交、碰撞和步进。
+- implicit surface 是等值面；射线求交和网格提取是恢复它的两条常见路径，iso 阈值与采样密度都要单独验证。
+- 布尔运算组合场值，gradient 提供法向线索；最终质量要同时检查边界、内外符号、求交稳定性和高光连续性。
+
+<Exercises>
+
+**问题 1：判断等值面移动。** 一个球体场是点到中心的距离减半径，iso 从 0 调到正值。形状边界会向内缩还是向外扩？为什么？
+
+<Answer>
+  边界满足距离减半径等于 iso，因此距离等于半径加 iso；iso
+  为正时，选出的等值面向外扩。若场的正负约定相反，方向会相反，所以应先确认函数定义和符号约定。
+</Answer>
+
+**问题 2：诊断漏交。** 射线从外部进入一个很薄的隐式壳体，但 sphere tracing 没有找到表面。你会检查哪些量？
+
+<Answer>
+  检查场是否仍是可靠的距离近似、步长是否超过局部安全界限、最大步数是否过小，以及采样阈值是否错过符号变化。再用更小的固定步长和更密采样做对照，区分场函数错误与求交策略错误。
+</Answer>
+
+**问题 3：选择恢复路径。** 一个形状需要实时布尔组合和直接求交，另一个形状要导出后交给传统光栅化管线。你会如何选择？
+
+<Answer>
+  实时组合和直接求交可以保留 implicit representations，利用场函数、距离步进和
+  gradient 法向；需要导出与光栅化时，可在足够采样密度下提取 implicit surface
+  为三角网格，再检查薄片、尖角和法向误差。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="implicit representations"
+    definition="用函数查询空间点并在需要时恢复形状边界的表示方式。"
+  />
+  <GlossaryItem
+    term="signed distance field"
+    definition="用符号表示内外、用绝对值近似到表面距离的标量场。"
+  />
+  <GlossaryItem
+    term="implicit surface"
+    definition="标量场达到指定等值的点集，零等值面常被用作形状边界。"
+  />
+  <GlossaryItem
+    term="gradient"
+    definition="标量场增长最快的方向，在曲面上可归一化为法向。"
+  />
+  <GlossaryItem
+    term="iso-surface"
+    definition="标量场取同一个常数值时形成的等值面。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 24: Implicit Representations of Shape"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
