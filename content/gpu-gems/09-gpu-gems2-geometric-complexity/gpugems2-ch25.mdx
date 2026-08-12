@@ -1,0 +1,309 @@
+---
+title: "GPU Gems 2 · Chapter 25. GPU Image Processing in Apple's Motion"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 25
+description: "从数据依赖、fragment 资源预算、采样精度、alpha 表示和调试路径五个层面，复盘 Apple Motion 如何把高质量图像处理迁移到早期 GPU。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-25-gpu-image-processing-apples-motion"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-25
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch25BudgetDiagram,
+  GpuGems2Ch25DebugDiagram,
+  GpuGems2Ch25FilteringDiagram,
+  GpuGems2Ch25FitDiagram,
+  GpuGems2Ch25MotionLab,
+  GpuGems2Ch25NumericsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch25-motion-image-processing";
+
+<Objectives>
+
+- 能解释 GPU Image Processing in Apple's Motion 为什么先按数据依赖筛选算法，再把逐像素和独立邻域操作映射到 GPU
+- 能实现受资源预算约束的 fragment pipeline，处理 texture indirection、除零、重复采样和 8-bit intermediate 的精度风险
+- 能回答：当画面出现 softening、透明暗边或跨 GPU 白色异常时，应该切换哪项实验开关，并用什么 reference 与探针定位根因
+
+</Objectives>
+
+## 先问“能否并行”，再问“能快多少”
+
+Motion 面向实时合成与动态图形：设计者希望拖动参数后立即看到高质量结果，而 CPU pipeline 很难在当时的机器上持续满足这种反馈。像素处理搬到 GPU 后可获得数量级的加速，但前提不是“算法里有循环就改成 shader”，而是每个输出像素能够独立求值。
+
+没有这层筛选，直方图、顺序递推和复杂分支会被强行塞进不匹配的执行模型；即使程序勉强运行，也可能在资源上限、纹理写回或硬件差异处失败。先预测：选择“亮度直方图”后把 pass 数拉到 4，mapping verdict 会改善吗？
+
+<GpuGems2Ch25MotionLab />
+
+<Callout type="tip" title="为每个 GPU effect 保存五项契约">
+  记录输入/输出 topology、每输出像素的 reads、是否需要 scatter 或顺序状态、每
+  pass 格式，以及 CPU reference 的误差阈值。性能 profile
+  只能说明花了多久，这份契约才能说明算法为何能并行、结果为何可信。
+</Callout>
+
+<Callout type="trap" title="先写 shader，再检查算法的数据依赖">
+  现象 → 代码不断增加 pass 和临时纹理，却仍无法实现 histogram 或 sliding
+  accumulator。原因 → 问题需要任意位置写入或依赖前一输出，不符合独立 fragment
+  的执行模型。修法 → 先画 input/output dependency graph；改成
+  reduction、分块算法或 CPU 路径，再评估 GPU 收益。
+</Callout>
+
+本章主题 **GPU Image Processing in Apple's Motion** 的可复用经验是：GPU 不是更快的通用 CPU。它提供大量并行像素执行与高带宽读取，同时把输出位置、执行顺序和某些控制流限制得很紧；架构必须围绕这些边界组织。
+
+<Term def="为每个 rasterized fragment 执行、读取纹理并写出像素结果的可编程阶段；Motion 当时使用 ARB_fragment_program 表达图像算子。">
+  fragment program
+</Term>
+
+<Term def="每个输出线程从一个或多个可选输入位置读取数据，再把结果写到自身固定输出位置的数据访问模式。">
+  gather
+</Term>
+
+<GpuGems2Ch25FitDiagram />
+
+## 1. 算法适配：固定输出、自由读取最自然
+
+逐像素 color transformation 是最直接的映射：一个 fragment 读取同位置颜色，执行 gamma、brightness 或 LUT lookup，再写回同位置输出。独立 neighborhood operation 也适合 GPU，因为每个输出像素可以读取周围若干输入，彼此不需要通信。
+
+以卷积为例，输出位置 $p$ 的值是
+
+$$
+O(p)=\sum_{k\in K} w_k I(p+\Delta_k).
+$$
+
+这个式子在说：每个 fragment 只 gather 固定邻域 $K$ 的输入并加权，所有输出位置可以并行执行。Gaussian blur 或 edge detection 的核太大时，还可拆成 separable passes 或多次小核处理。
+
+<Term def="每个输入线程根据自身数据选择不同输出位置写入的模式，例如亮度像素要递增对应的 histogram bin。">
+  scatter
+</Term>
+
+直方图正好相反：每个像素读取自己的 luminance，却要选择一个共享 bin 并递增。旧式 fragment pipeline 的输出位置由 rasterization 固定，也没有今天常见的原子累加，因此 scatter 比 gather 困难得多。顺序 box filter 也不适配，因为当前像素要复用前一像素的 running total，而 fragment 执行顺序不可见。
+
+<Callout type="trap" title="把 image-in / statistics-out 当成普通 image effect">
+  现象 → 所有 fragment 都能算出 bin
+  index，但统计纹理没有正确累加，结果随绘制顺序变化。原因 →
+  每个输入都想写向数据决定的共享位置，产生 scatter 与 write conflict。修法 →
+  使用分层 reduction、现代 compute/atomic 路径，或在 CPU 上统计；不要把固定
+  framebuffer write 当成任意地址写入。
+</Callout>
+
+## 2. 资源预算：最先耗尽的未必是指令数
+
+Motion 选择低级 `ARB_fragment_program`，代价是编写和调试更难，收益是能直接看见底层指令与硬件限制。原章记录的 ATI R3xx 上限是 64 条 arithmetic、32 次 texture access，NV34 的总指令预算更宽；但真正频繁卡住 Motion 的，是 dependent texture chain 的层级。
+
+<Term def="一次纹理读取的坐标依赖前一次纹理读取或算术结果；这种依赖链的深度在早期硬件上有严格上限。">
+  texture indirection
+</Term>
+
+<GpuGems2Ch25BudgetDiagram />
+
+读取 source color、用颜色索引 3D LUT、再用 LUT 结果索引 palette，已经形成三层 dependent reads。若硬件只允许四层，下一次相关读取就会把一个看似不长的程序推到边缘。相反，来自 interpolated vertex components 或 constants 的坐标不增加这一层级，因此可以把稳定计算提前到 vertex stage 或 CPU。
+
+```glsl
+vec4 source = texture(sourceImage, uv);
+vec3 graded = texture(colorLut, source.rgb).rgb;
+vec3 mapped = texture(palette, vec2(graded.r, 0.5)).rgb;
+outColor = vec4(mapped, source.a);
+```
+
+这段代码只有三次采样，却有连续坐标依赖；不能只用 `texture()` 的数量判断可运行性。工程记录应分别列出 arithmetic instructions、texture accesses、indirection depth 和 temporary registers。
+
+超过单 shader 限制时，可以把算法拆成多个 pass，并把中间结果写入 pbuffer 供下一 pass 读取。这样能降低单 pass 复杂度，但会增加 full-frame write/read、同步和格式量化。优化顺序应是先消除不必要依赖，再用 arithmetic 替代 table read，最后才接受 multi-pass 成本。
+
+<Callout type="trap" title="只看 instruction count，不看 indirection depth">
+  现象 → shader 指令数明显低于上限，在某类 GPU 上仍输出全黑或无法 native
+  execute。原因 → dependent texture coordinates 形成的链先达到硬件层级限制。修法
+  → 分开记录每类资源；把坐标移到 vertex/constants，合并
+  lookup，必要时再以有精度记录的 pbuffer 拆 pass。
+</Callout>
+
+## 3. 数值语义：除零不能靠“后来乘回零”
+
+不同 GPU 对 reciprocal zero 的行为可能不同：一种实现给出极大的有限值，另一种按 IEEE 语义产生 NaN 或 infinity。若 pipeline 把 premultiplied color 除以 alpha 转成 straight color，处理后再乘回 alpha，那么透明像素的 `rgb / 0` 就会把厂商差异暴露出来。
+
+<GpuGems2Ch25NumericsDiagram />
+
+NaN 的危险在于传播：后续乘零并不会可靠地恢复零，最终可能在 framebuffer 里表现为纯白异常。对已知非负 alpha，可在 reciprocal 前把分母推离零：
+
+```glsl
+const float EPSILON = 1e-5;
+float safeAlpha = max(source.a, EPSILON);
+vec3 straightRgb = source.rgb / safeAlpha;
+vec3 processed = applyColorEffect(straightRgb);
+outColor = vec4(processed * source.a, source.a);
+```
+
+这个保护必须和输入域一起定义。如果分母允许负值，简单 `max` 会改变符号，需要按绝对值和符号构造 safe denominator。发布测试应包含 alpha 为零、接近零、正常值以及非有限值探针，并跨目标 GPU 比较。
+
+<Callout type="trap" title="假设零除之后再乘 alpha 就会归零">
+  现象 → 全透明像素在某张卡上保持黑色，换一张卡却出现白点或整块污染。原因 → NaN
+  会穿过后续 arithmetic，零乘 NaN 仍不是可靠的零。修法 → 在 division
+  前按输入域加入 epsilon guard，并对中间量做 finite
+  check；不要依赖某家硬件的非标准饱和值。
+</Callout>
+
+## 4. 过滤质量：免费采样仍有表示成本
+
+Bilinear filtering 在 GPU 上几乎没有额外指令成本，但“免费”不等于“无误差”。一对一 copy 本应让输入 texel 落到同位置输出 pixel；若 rasterizer 插值造成亚像素偏离，filter 会混入邻居，图像经过多个 pass 后逐步 softening。确定不做缩放、旋转时，可用 nearest sampling 阻断小于一像素的偏差；大型 quad 也可分网格，在 CPU 端更精确地给定顶点坐标。
+
+<Term def="把 RGB 预先乘以 alpha 后再存储的颜色表示；对透明边缘做插值和 Over compositing 时，它能保持正确的颜色贡献。">
+  premultiplied alpha
+</Term>
+
+<GpuGems2Ch25FilteringDiagram />
+
+考虑白色不透明像素 $(1,1,1,1)$ 与透明黑像素 $(0,0,0,0)$ 的中点。straight-alpha 纹理分通道插值得到 RGB 0.5、alpha 0.5，之后 Over 到黑色时 RGB 还会乘 alpha，显示贡献只有 0.25，于是产生暗边。premultiplied 表示直接插值“颜色贡献”和 alpha，中点贡献为 0.5，符合覆盖面积。
+
+Blur 与 resampling 应在 premultiplied space 中完成；某些 color correction 则需要 straight RGB。两者切换必须使用安全除法，并在 effect contract 中明确输入/输出 alpha mode，不能让每个 pass 猜测当前表示。
+
+<Callout
+  type="trap"
+  title="对 straight-alpha 中间纹理直接做 bilinear filtering"
+>
+  现象 → 图层缩放、旋转或模糊后，透明边缘出现灰黑 halo。原因 → 零 alpha
+  邻居的任意 RGB 被过滤进边缘，随后 compositing 再乘一次 alpha。修法 → pipeline
+  中间结果统一使用 premultiplied alpha；只在确需 straight RGB
+  的颜色操作周围成对转换并保护零 alpha。
+</Callout>
+
+## 5. 中间精度与可观测调试
+
+多 pass 不只增加带宽，还会把 shader 内部高精度结果反复量化到 pbuffer。Motion 的大部分流程使用 8-bit/channel，但 motion blur accumulation 会累加许多 samples，8-bit 很快出现 banding。支持 floating-point pbuffer 的硬件可以改用 16-bit；只有 8-bit texture 时，原章把 16-bit fixed-point 值拆成两个 8-bit channels，并以额外 pass 换取范围。
+
+若以 8.8 fixed-point 表示非负值 $v$，可写成
+
+$$
+h=\left\lfloor v/256\right\rfloor,\qquad l=\operatorname{frac}(v).
+$$
+
+这个式子在说：一个 channel 保存缩放后的 whole part，另一个保存 fractional part；读取时用 $256h+l$ 重建。真实 packing 还必须定义 normalization、rounding、clamp 和最大可累加样本数。
+
+<Term def="与 GPU 实现保持同一算法语义、但用清晰 CPU 代码独立计算结果的基准版本，用来区分算法错误和 shader/硬件错误。">
+  CPU reference implementation
+</Term>
+
+<GpuGems2Ch25DebugDiagram />
+
+没有 shader 单步调试器时，诊断要建立可观测性。先让 CPU reference 输出小图和边界样本；再确认 shader 语法与 native limits；随后临时把某个 intermediate value 缩放到 0 至 1，写成 framebuffer 颜色，必要时用 readback 取精确值；最后在不同 GPU 上运行同一最小复现。
+
+<Callout type="trap" title="看到黑屏就直接改核心数学">
+  现象 → 开发者反复改公式，输出仍全黑，甚至引入新的数值错误。原因 → 黑屏可能表示
+  shader 超出 native limits，程序根本没有执行。修法 → 先写出固定诊断色确认
+  execution，再逐段恢复 instructions；程序能执行后，才用 framebuffer probe 与
+  CPU reference 比较中间量。
+</Callout>
+
+## 三步迁移：从算法筛选到像素级验收
+
+每一步都保存输入样本、目标 GPU、shader resource report、intermediate format 与最大误差。性能通过但 reference 不一致不算完成；静态截图正常但透明边界、零值和多 pass 压力样本失败，也不能发布。
+
+<Stepper>
+  <Step title="第一步：画清数据依赖">
+    把 effect 标成 image-in/image-out、statistics-out 或 sequential state。逐像素颜色与独立卷积走 gather；histogram 改 reduction/compute/CPU；顺序算法先重写，再谈 shader。
+
+    <GpuGems2Ch25FitDiagram />
+
+  </Step>
+  <Step title="第二步：预算资源与数值边界">
+    列出 arithmetic、texture reads、indirection depth 和 pass 数；为所有 reciprocal、normalize 与 range conversion 注入零值、极值和 NaN 测试，避免 vendor-specific behavior。
+
+    <GpuGems2Ch25BudgetDiagram />
+
+  </Step>
+  <Step title="第三步：验证过滤、精度与可观测性">
+    用 checkerboard 测一对一采样，用透明白点测 alpha fringe，用长序列累加测 banding；每个失败都与 CPU reference 对齐，并把首个偏离的 intermediate 写到 framebuffer。
+
+    <GpuGems2Ch25DebugDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 先判断固定输出、gather、scatter 与顺序依赖，再选择 GPU 路径。
+- texture indirection、指令、读取和寄存器是不同预算，multi-pass 还会引入精度成本。
+- 零除和 NaN 行为必须显式防护，不能依赖单一 GPU 的偶然结果。
+- 一对一采样要对齐 texel center；透明过滤应使用 premultiplied alpha。
+- CPU reference、诊断色与 framebuffer probe 让黑盒 shader 变得可定位。
+
+<Exercises>
+
+**问题 1｜筛选算法。** color correction、$7\times7$ Gaussian blur、histogram 和 sliding box filter 中，哪些可直接映射到 fragment pipeline，哪些必须重写？
+
+<Answer>
+  Color correction 是逐像素 image-in/image-out，可直接映射。Gaussian blur
+  是独立邻域 gather，可用 separable horizontal/vertical passes
+  降低读取数。Histogram 需要 scatter 到共享 bins，应改成 reduction、现代
+  compute/atomics 或 CPU。Sliding box filter 依赖前一位置的 running
+  total，必须改成 parallel prefix/reduction 结构，或保留顺序实现。
+</Answer>
+
+**问题 2｜诊断透明白点。** 一个 premultiplied effect 在 alpha 为零时先除 alpha，最后乘回 alpha；ATI 路径正常，另一 GPU 出现白点。最可能的根因和最小修复是什么？
+
+<Answer>
+  根因是 reciprocal zero 产生
+  NaN/infinity，后续乘零没有消除非有限值。先在除法前依据 alpha 非负域使用
+  `max(alpha, epsilon)`，再乘回原 alpha；同时用 alpha 为零和接近零的 CPU
+  reference case 比较中间量，确认修复没有改变正常范围。
+</Answer>
+
+**问题 3｜修改实验并给出交付证据。** 在 MotionLab 中选择“邻域卷积”，把 pass 增到 4、sample offset 调高、alpha 切为 straight，并保持 8-bit intermediate。你会如何改造 pipeline？
+
+<Answer>
+  先用 separable kernel 减少 reads 和 pass；对纯一对一阶段使用 exact
+  texel-center 或 nearest sampling，避免重复 softening；把中间纹理统一为
+  premultiplied alpha；累加或多次写回时升级到 16-bit
+  float，若硬件不支持则定义并测试 fixed-point packing。交付证据应包含
+  checkerboard、透明边缘、长梯度、资源报告和 CPU reference
+  最大误差，而不是只给最终截图。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="fragment program"
+    definition="在 rasterized fragment 上运行、读取纹理并写出像素结果的可编程处理阶段。"
+  />
+  <GlossaryItem
+    term="gather"
+    definition="每个输出从多个可选输入位置读取数据，但仍写回自己的固定输出位置。"
+  />
+  <GlossaryItem
+    term="scatter"
+    definition="每个输入根据自身数据选择输出位置写入，常伴随共享写入冲突。"
+  />
+  <GlossaryItem
+    term="texture indirection"
+    definition="纹理采样坐标依赖前一次读取或计算结果形成的查询层级。"
+  />
+  <GlossaryItem
+    term="premultiplied alpha"
+    definition="存储前先以 alpha 缩放 RGB，使透明边缘过滤和合成保持正确颜色贡献。"
+  />
+  <GlossaryItem
+    term="CPU reference implementation"
+    definition="独立、清晰地在 CPU 上计算同一算法，用作 shader 结果和边界行为的基准。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 25. GPU Image Processing in Apple's Motion"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-25-gpu-image-processing-apples-motion"
+/>
