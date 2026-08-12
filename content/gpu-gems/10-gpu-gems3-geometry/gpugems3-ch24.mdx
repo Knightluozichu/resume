@@ -1,0 +1,259 @@
+---
+title: "GPU Gems 3 · Chapter 24. The Importance of Being Linear"
+type: D
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 24
+description: "从显示设备的非线性响应出发，解释为什么纹理、光照、过滤和帧缓冲必须在正确的线性边界上处理。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-24-importance-being-linear"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-24
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch24ColorSpaceDiagram,
+  GpuGems3Ch24GammaCurveDiagram,
+  GpuGems3Ch24LinearColorLab,
+  GpuGems3Ch24MipFilterDiagram,
+  GpuGems3Ch24PipelineDiagram,
+  GpuGems3Ch24SrgbBoundaryDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch24-linear-color";
+
+<Objectives>
+
+- 能解释显示编码为什么不能直接参与光照、过滤和颜色合成
+- 能修改 Linear Color Lab 的输入、运算、输出与 gamma，定位错误的颜色边界
+- 能回答：为什么颜色通道要转换而 alpha、法线和高度等数据通道不能一并做 gamma 变换
+
+</Objectives>
+
+## 先问：为什么同一个数字不一定代表同样多的光
+
+想象两把刻度看起来一样的尺子：一把每一格都代表相同的长度，另一把把更多刻度挤在起点附近。你拿第二把尺子做加法，结果看似整齐，实际距离却会越来越不对。
+
+数字图像也有类似问题：保存和显示时为了适应人的眼睛，常把中间明暗重新编码。若把这种“显示刻度”直接拿去做光照、混合或缩小，画面会变暗、颜色会漂移，远处的纹理还会忽明忽暗。
+
+本章给出一条稳定边界：颜色进入计算前先还原，所有光照和过滤在同一把“真实光强刻度”上完成，最后一步才重新编码给屏幕。
+
+<Callout type="tip" title="先预测：把中间灰值调亮会发生什么？">
+  在实验台里固定同一个源值，先保持输入和输出都正确，再把 framebuffer 切到
+  raw；观察中间灰、灯光和显示亮度哪一个先偏离。一次只改一个边界。
+</Callout>
+
+## 1. 先把三种工作分开
+
+<Term def="用相同单位表示真实光强、可相加可缩放的颜色数值空间；着色和合成应在这里进行。">
+  linear color space
+</Term>
+
+在一条完整的图像链路中，保存图片、进行光照和送到显示器是三件不同的工作。图片文件常使用方便观看的编码，着色器却假设输入是可做加法的光强；显示器又会把写出的数值按自己的响应曲线变成光。
+
+因此不要把“看起来像一半亮”的数值当作“发出一半的光”。正确的管线是：输入颜色先解码到线性空间，shader 在线性空间中做加法、乘法与过滤，最终结果只在显示边界编码一次。
+
+<GpuGems3Ch24ColorSpaceDiagram />
+
+## 2. gamma 是显示刻度的弯曲程度
+
+<Callout type="trap" title="误区：把 0.5 当成一半的光">
+  **现象 →** 中间灰参与光照后，画面比预期更暗。
+
+**原因 →** 显示编码的 0.5 在典型 gamma 2.2 下只对应约 0.22 的线性光强。
+
+**修法 →** 先把颜色值提升到 gamma 次方，再在线性值上做光照。
+
+</Callout>
+
+<Term def="描述显示设备把编码值转换成光强时的指数形状；典型显示设备的响应常用约 2.2 的指数近似。">
+  gamma correction
+</Term>
+
+数学上可以把显示近似成 `light = code^gamma`。所以编码值 0.5 并不等于光强 0.5；黑和白仍在两端不动，最容易出错的是中间调。反向过程就是在显示前使用 `code = light^(1/gamma)`，让显示器的响应把它抵消回来。
+
+<GpuGems3Ch24GammaCurveDiagram />
+
+## 3. 颜色纹理要在读取处回到线性
+
+<Term def="一种遵循标准显示曲线的颜色纹理格式；采样时可由硬件把 RGB 还原到线性值，再交给 shader 使用。">
+  sRGB texture
+</Term>
+
+JPEG、照片和许多美术颜色贴图通常是为普通显示器预先编码的。它们直接显示看起来正常，但若 shader 把它们当作线性反射率，就会在乘灯光时把颜色比例改变。明暗变化越大，偏色越明显。
+
+把纹理声明为 sRGB 格式，读取时让硬件完成逆变换；这比每次采样后手写 `pow(color, gamma)` 更不容易漏掉过滤顺序。若资源本来就是线性的 HDR、法线或高度数据，就不要再走颜色解码。
+
+<GpuGems3Ch24SrgbBoundaryDiagram />
+
+<Callout type="trap" title="误区：把所有纹理都当成 sRGB">
+  **现象 →** 法线方向、透明边缘或位移高度变形。
+
+**原因 →** gamma 只适用于显示编码的颜色，不适用于已经线性的方向、覆盖率和几何数据。
+
+**修法 →** 只给 RGB 颜色纹理启用 sRGB 解码，alpha、normal、roughness 和 height 保持原值。
+
+</Callout>
+
+## 4. 过滤和 mipmap 也必须在线性光上做
+
+<Term def="纹理在不同尺寸下预先生成的一组逐级缩小版本；每一级都应由线性颜色正确过滤得到。">
+  mipmap
+</Term>
+
+缩小纹理看起来只是取平均，但平均的是光还是显示刻度，结果完全不同。黑白各占一半时，线性光的平均确实是 0.5；如果先把两个非线性编码值直接平均，得到的 0.5 会被显示成远低于一半的光，边缘因此过暗。
+
+这也是为什么“我已经离线生成过 mipmap”仍可能出错：GPU 在运行时会在相邻 mip 之间过滤和混合，如果这些 mip 或采样值仍处于非线性空间，LOD 切换时就会出现亮度脉动。先解码、在线性空间生成和过滤、最后才编码，才能让距离变化稳定。
+
+<GpuGems3Ch24MipFilterDiagram />
+
+## 5. 最后一个输出边界才做显示编码
+
+<Term def="支持在写入时把线性 RGB 编码成显示空间、在混合前把已有值还原成线性的帧缓冲格式。">
+  sRGB framebuffer
+</Term>
+
+如果 shader 已经在线性空间算完结果，最后写入 sRGB framebuffer 可以让硬件负责输出编码；支持正确混合的实现会在混合前把已有 RGB 还原到线性空间，混合完成后再编码。这样不会把“显示刻度”当成光强相加。
+
+没有 sRGB 帧缓冲时，可以在最终输出处使用 `pow(linearColor, 1.0 / gamma)`。但不要在中间后处理 pass 就编码：后面的模糊、叠加、色调映射仍然需要线性输入，否则每个 pass 都会重复制造误差。
+
+<GpuGems3Ch24PipelineDiagram />
+
+```glsl
+// WebGL2-style pseudocode: color texture enters linear math.
+vec3 diffuseLinear = pow(texture(uDiffuse, uv).rgb, vec3(uGamma));
+vec3 shadedLinear = diffuseLinear * lightContribution;
+outColor = vec4(shadedLinear, texture(uDiffuse, uv).a);
+```
+
+这段伪代码表达的是边界，而不是鼓励每个采样都手写指数：实际项目优先用 sRGB 纹理格式，让采样、过滤和缓存路径保持一致。
+
+## 6. alpha 不代表光，不能一起变换
+
+<Term def="表示覆盖率或透明度的通道；它通常已经是线性比例，不能跟显示编码的 RGB 一起做 gamma 变换。">
+  alpha channel
+</Term>
+
+alpha 描述的是“这个样本覆盖了多少”，不是“它发出了多少光”。同理，法线、粗糙度、金属度、位移和高度等通道也表达方向、比例或几何数据。它们通常已经是线性的，重复做 gamma 会破坏插值与合成。
+
+把颜色与数据通道分开管理，是比“整张 RGBA 一起 pow”更可靠的工程边界：RGB 在颜色格式边界转换，alpha 继续参与线性覆盖率计算，最终显示编码只作用于颜色。
+
+<GpuGems3Ch24SrgbBoundaryDiagram />
+
+<Callout type="trap" title="误区：把 gamma correction 放在每个后处理 pass">
+  **现象 →** 第一个 pass 看起来正确，叠加、模糊或 HDR 后颜色越来越脏。
+
+**原因 →** 中间结果已经被编码，后续 pass 又把显示值当作线性光继续运算。
+
+**修法 →** 中间缓冲保持线性或使用浮点格式，只在最后一个显示边界编码一次。
+
+</Callout>
+
+## 动手走一遍：从输入到显示
+
+<Stepper>
+  <Step title="先识别输入边界">
+    把照片或颜色纹理视为“为显示准备的刻度”，在采样处解码；法线、alpha 和高度则保持原数值。
+
+    <GpuGems3Ch24ColorSpaceDiagram />
+
+  </Step>
+  <Step title="只在线性空间计算">
+    让光照、mipmap、过滤和混合都读取同一把光强刻度；不要在中间 pass 里提前编码。
+
+    <GpuGems3Ch24MipFilterDiagram />
+
+  </Step>
+  <Step title="最后一步交给显示边界">
+    用 sRGB framebuffer 或最终的逆 gamma 把线性结果编码给显示器，同时保留 alpha 的线性含义。
+
+    <GpuGems3Ch24PipelineDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch24LinearColorLab />
+
+## 小结
+
+- 颜色输入与显示输出可以是非线性编码，shader 的光照与合成应在线性空间完成。
+- gamma 描述编码值到显示光强的弯曲关系，中间灰最容易暴露错误。
+- sRGB texture 在读取时解码，sRGB framebuffer 在最终写入时编码。
+- mipmap、过滤和混合都要平均与相加线性光，而不是直接平均显示值。
+- alpha、法线、高度等数据通道保持线性，不能跟 RGB 一起 gamma 变换。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜判断输入是否需要解码。**
+
+你拿到一张 JPEG 颜色贴图、一张 HDR 光照图和一张切线空间法线图。分别说明它们在 shader 读取时是否应走颜色解码，并解释理由。
+
+<Answer>
+
+JPEG 颜色贴图通常是显示编码，需要通过 sRGB 纹理读取并还原到线性；HDR 光照图若已在线性浮点空间，则不要再次解码；法线图表达方向，保持线性数据，不能做 gamma 变换。
+
+</Answer>
+
+**问题 2｜修改实验台。**
+
+在 Linear Color Lab 中依次把 framebuffer 切到 raw、把输入切到 linear，再恢复默认设置。记录中间灰的显示代码和中间值偏差分别如何变化，并说明哪个开关对应真实的显示边界。
+
+<Answer>
+
+raw 输出会跳过最终编码，线性结果直接作为显示代码，典型中间调会偏暗；输入切到 linear 后，shader 不再进行输入解码，若资源确实已线性这是正确的。默认实验用 sRGB 输入和 sRGB 输出，把两次边界转换放在纹理与帧缓冲处。
+
+</Answer>
+
+**问题 3｜修复一个错误的后处理管线。**
+
+某管线在 bloom pass 前把颜色 `pow(color, 1.0 / 2.2)`，然后在最终输出又做一次相同操作。请指出错误，并改写成“中间缓冲线性、最后一次编码”的顺序。
+
+<Answer>
+
+中间 pass 不应把线性结果提前编码；应让 bloom、tone mapping 和合成继续读取线性缓冲，最后一步才使用 sRGB framebuffer，或只在最终 shader 对线性颜色执行一次 `pow(color, 1.0 / gamma)`。alpha 保持原值。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="linear color space">
+    以真实光强为刻度的颜色空间，光照贡献可以在这里直接相加和相乘。
+  </GlossaryItem>
+  <GlossaryItem term="gamma correction">
+    用显示设备响应曲线的逆变换，把编码值与实际显示光强对齐。
+  </GlossaryItem>
+  <GlossaryItem term="sRGB texture">
+    读取时自动把显示编码的 RGB 还原到线性空间的颜色纹理格式。
+  </GlossaryItem>
+  <GlossaryItem term="mipmap">
+    为不同距离准备的逐级缩小纹理；生成与过滤时应使用线性颜色。
+  </GlossaryItem>
+  <GlossaryItem term="sRGB framebuffer">
+    在最终写入时编码 RGB，并在正确混合路径中保持线性光计算的帧缓冲。
+  </GlossaryItem>
+  <GlossaryItem term="alpha channel">
+    表示覆盖率或透明度的通道，通常已是线性比例，不能做 gamma 变换。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  source="GPU Gems 3 · Chapter 24. The Importance of Being Linear — Larry Gritz and Eugene d'Eon, NVIDIA Corporation"
+  sourceUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-24-importance-being-linear"
+  license="CC BY-NC 4.0"
+  note="本文为改编重写，保留原章关于线性颜色、gamma correction 与 sRGB 边界的核心思想。"
+/>
