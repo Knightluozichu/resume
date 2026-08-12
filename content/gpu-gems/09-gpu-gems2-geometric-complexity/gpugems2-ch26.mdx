@@ -1,0 +1,328 @@
+---
+title: "GPU Gems 2 · Chapter 26. Implementing Improved Perlin Noise"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 26
+description: "把 improved Perlin noise 的 permutation hash、gradient dot、quintic fade 与八角点插值精确搬到 GPU，并用 packed lookup 降低纹理读取。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-26-implementing-improved-perlin-noise"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-26
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch26CubeBlendDiagram,
+  GpuGems2Ch26FadeDiagram,
+  GpuGems2Ch26HashPipelineDiagram,
+  GpuGems2Ch26ImprovedNoiseLab,
+  GpuGems2Ch26NoisePropertiesDiagram,
+  GpuGems2Ch26OptimizationDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch26-improved-perlin-noise";
+
+<Objectives>
+
+- 能解释 Implementing Improved Perlin Noise 如何从整数格点生成可重复、范围有界且空间平滑的三维信号
+- 能实现与 CPU reference 一致的 permutation hash、gradient dot、quintic fade 和八角点三轴插值，并把查表映射到 GPU texture
+- 能回答：当噪声出现方格接缝、短周期重复或读取成本过高时，应检查哪项采样/fade/lookup 契约，并如何证明优化没有改变数值
+
+</Objectives>
+
+## 从“每次都一样的自然起伏”开始
+
+石头、烟雾和水面都需要不规则细节，但逐点独立掷骰会产生刺眼颗粒，手工绘制又难以覆盖无限空间。我们需要一种函数：同一位置永远返回同一结果，邻近位置缓慢变化，移动观察时也不会突然换图案。
+
+若只把一小块随机体积反复铺开，边界和周期很快暴露；若每次真的生成随机数，帧与帧又无法复现。更稳妥的办法是让整数格点提供确定方向，再用平滑权重重建格点之间的值。猜一猜：把实验从 quintic 切到 cubic，颜色切片仍连续，但哪一级导数会先暴露格子？
+
+<GpuGems2Ch26ImprovedNoiseLab />
+
+<Callout type="tip" title="先冻结 reference，再谈 GPU 优化">
+  保存标准 permutation、gradient mapping、坐标取整规则、负坐标 modulo、fade
+  公式和输出容差。先让 scalar CPU 与直接 GPU port 对齐，再替换 packed
+  textures；否则性能变化和算法变化会混在一起。
+</Callout>
+
+<Callout type="trap" title="把不可复现的随机采样称为 procedural noise">
+  现象 → 相同坐标在不同帧或 CPU/GPU 上返回不同值，材质表面闪烁。原因 →
+  求值依赖随机状态、时间或未固定 seed，而不是位置的确定函数。修法 → 使用固定
+  permutation 和明确定义的 coordinate
+  wrapping；对同一组整数、边界和负坐标样本做逐值回归。
+</Callout>
+
+本章的 **Implementing Improved Perlin Noise** 不是“生成一张看起来随机的图”，而是精确实现一条确定数据流：坐标定位 cell，hash 选择梯度，角点点积产生局部贡献，平滑权重完成插值。
+
+<Term def="在整数晶格角点放置确定性伪随机梯度，并用局部位移点积和平滑插值构造连续信号的方法。">
+  gradient noise
+</Term>
+
+<GpuGems2Ch26NoisePropertiesDiagram />
+
+## 1. 程序计算与 3D volume 的取舍
+
+合格的 noise 应具备五个工程性质：相同输入可重复；输出范围已知，通常落在约 $[-1,1]$；空间频率带限且平滑；没有明显短周期图案；平移输入不会改变统计频率。它不是 white noise，而是受空间结构约束的伪随机函数。
+
+预计算 3D texture 的优点是硬件采样便宜，缺点是占用体积内存、周期由 texture size 限制，hardware linear filtering 质量低于 improved interpolation，也无法直接表达四维动画输入。程序路径不保存完整噪声体积，只保存小型索引数据；代价是 shader 自己完成 hash、dot 与 interpolation。
+
+<Callout type="trap" title="用小型线性过滤 3D texture 代替 reference noise">
+  现象 → 静态截图似乎自然，移动或用于 bump mapping 后出现 cell
+  结构和短周期重复。原因 → volume 尺寸限制周期，linear filtering
+  只提供低阶重建，也无法与 reference CPU 输出逐点一致。修法 → 对 exact
+  parity、高阶导数或 4D animation 使用程序实现；texture approximation
+  必须单独声明质量与周期预算。
+</Callout>
+
+## 2. 用 permutation 把晶格坐标变成 hash
+
+<Term def="包含 0 至 255 的一个固定乱序排列；三维整数坐标按 x、y、z 递归索引它，从而得到可重复 hash。">
+  permutation table
+</Term>
+
+对输入位置 $p=(x,y,z)$，先分离整数 cell 与局部坐标：
+
+$$
+P=\lfloor p\rfloor\bmod 256,\qquad q=p-\lfloor p\rfloor.
+$$
+
+这个式子在说：$P$ 决定当前 256 周期晶格 cell，$q$ 是查询点在该 cell 内的零到一位置。CPU 常把 permutation array 复制一遍以避免越界；GPU 版本可把 256 项放进 1D texture，并使用 wrap addressing。
+
+<GpuGems2Ch26HashPipelineDiagram />
+
+三维 hash 不是把 $(x,y,z)$ 直接拼接，而是逐轴嵌套：先查 `perm(P.x)`，加 `P.y` 后再查一次，最后加 `P.z` 再查。这使相邻晶格角得到看似无规律、却完全可重复的索引。为了保持“离散表”语义，permutation sampler 必须 point filter、wrap U、关闭 mipmapping。
+
+```glsl
+float perm(float index) {
+  return texture(permTexture, index / 256.0).r * 256.0;
+}
+
+float a = perm(cell.x) + cell.y;
+float aa = perm(a) + cell.z;
+float ab = perm(a + 1.0) + cell.z;
+float b = perm(cell.x + 1.0) + cell.y;
+float ba = perm(b) + cell.z;
+float bb = perm(b + 1.0) + cell.z;
+```
+
+<Callout
+  type="trap"
+  title="对 permutation texture 开启 linear 或 mip filtering"
+>
+  现象 → 整数 cell 附近的 hash 变成小数，噪声局部变平或出现平台相关图案。原因 →
+  sampler 在相邻表项间插值，但表项代表离散索引而非连续信号。修法 → 使用 point
+  sampling、wrap addressing 和无 mip；对全部 256 个 table coordinates
+  做精确读取测试。
+</Callout>
+
+## 3. gradient texture 与角点贡献
+
+<Term def="由 hash 索引的小型方向表；GPU 通过 point-sampled texture 读取梯度，替代早期 pixel shader 缺失的整数位运算。">
+  gradient texture
+</Term>
+
+reference CPU 用 hash 的低位通过 bit manipulation 选择 gradient。原章所面对的 pixel shader 缺少所需 integer operations，因此把 16 个编码项预计算进小型 texture。表中存在重复方向，它们保持与 reference hash-to-gradient mapping 一致；不能自行“去重”后仍声称 exact match。
+
+每个角点 $c_{ijk}$ 的贡献为
+
+$$
+n_{ijk}=g\!\left(h_{ijk}\right)\cdot\left(q-(i,j,k)\right),
+\qquad i,j,k\in\{0,1\}.
+$$
+
+这个式子在说：hash 只负责选择方向 $g$；真正随位置连续变化的是该方向与“角点到查询点”位移的 dot product。查询点周围共有八个角，因此每次三维求值要构造八个 contribution。
+
+<GpuGems2Ch26CubeBlendDiagram />
+
+gradient texture 也必须 point sample。若格式会 normalize signed vectors，应核对编码与 shader 解码；若使用低精度 signed texture，还要把 quantization 纳入 CPU/GPU tolerance。最可靠的 fixture 包含八个角点、cell center、靠近边界的正负坐标和标准 permutation 的固定输出。
+
+<Callout type="trap" title="重排 gradient entries 后仍沿用旧 hash mapping">
+  现象 → 输出范围和平滑性看似正常，却与 reference 在大量坐标上逐值不一致。原因 →
+  hash 的低位约定和 gradient table
+  顺序是同一契约，单独排序会改变每个角点方向。修法 → 保留 reference 16-entry
+  mapping，或同步修改 CPU/GPU 两端并明确这是新的 noise variant。
+</Callout>
+
+## 4. quintic fade 与三轴插值
+
+<Term def="公式 6t⁵−15t⁴+10t³ 的五次平滑权重；它让端点的一阶和二阶导数都为零。">
+  quintic fade
+</Term>
+
+原始 cubic 权重 $3t^2-2t^3$ 在端点让一阶导数为零，但二阶导数跨 cell 跳变。improved algorithm 使用
+
+$$
+f(t)=6t^5-15t^4+10t^3.
+$$
+
+这个式子在说：$f(0)=0$、$f(1)=1$，并且两端的一阶、二阶导数均为零，所以相邻 cell 拼接时达到 $C^2$ 连续。对 bump、normal 或任何 derivative-based effect，这能减少晶格边界显影。
+
+<GpuGems2Ch26FadeDiagram />
+
+<Term def="包围查询点的整数晶格顶点；三维 cell 有八个角点，每个角点提供一个 gradient dot contribution。">
+  lattice corner
+</Term>
+
+求出 $f(q_x),f(q_y),f(q_z)$ 后，先沿 x 把八个 corner contributions 混成四个，再沿 y 混成两个，最后沿 z 得到一个 noise value。这里不能把 quintic weights 交给普通 trilinear texture filtering，因为硬件过滤只使用局部线性权重。
+
+```glsl
+vec3 w = fade(localPosition);
+float z0 = mix(
+  mix(c000, c100, w.x),
+  mix(c010, c110, w.x),
+  w.y
+);
+float z1 = mix(
+  mix(c001, c101, w.x),
+  mix(c011, c111, w.x),
+  w.y
+);
+return mix(z0, z1, w.z);
+```
+
+<Callout type="trap" title="计算 quintic fade，却用 linear weights 混角点">
+  现象 → shader 中存在正确 fade 函数，最终切片仍显示 grid-aligned derivative
+  seams。原因 → lerp 实际传入了原始 local coordinate，fade
+  结果没有进入三轴混合。修法 → 单独输出 $f(q)$ 探针，并验证 x、y、z 每一级 mix
+  都使用对应 quintic weight。
+</Callout>
+
+## 5. packed lookup：把重复工作搬到纹理生成期
+
+直接移植 reference 的优点是容易核对，代价是 81 条 Pixel Shader 2.0 instructions，其中 22 次 texture lookups。主要浪费来自递归 permutation reads，以及八个 gradient 读取前重复的最终 permutation lookup。
+
+<Term def="预先组合多个 permutation 结果并按 RGBA 一次返回多个 hash 的查找纹理；它用更多小型存储换更少 dependent reads。">
+  packed lookup texture
+</Term>
+
+<GpuGems2Ch26OptimizationDiagram />
+
+第一项优化是构建 $256\times256$ RGBA texture：每个 texel 预先保存四个相关 hash，一次 2D read 替代多次递归 1D reads。第二项是把 gradient table 扩成 256 项，并按 permutation 预先重排，从而去掉 gradient 前的最终 hash lookup。
+
+优化后原章报告 53 条 instructions、9 次 texture lookups。这个变化只重排“在哪里算”，不应改变 permutation、gradient 或 fade；因此必须用同一批 CPU fixtures 做 bit-exact 或约定容差比较。只看纹理形状相似，无法证明优化保持语义。
+
+<Callout type="trap" title="把 lookup 下降当成正确性证明">
+  现象 → profiler 显示 22 次读取降为 9 次，少量截图也正常，但负坐标或 cell
+  边界与 reference 不一致。原因 → packing 的 channel order、coordinate
+  normalization 或 wrap 规则错误。修法 → 逐层验证 packed texel 的 RGBA
+  hash，再比较八个 corner gradients，最后运行覆盖正负坐标与周期边界的 end-to-end
+  fixtures。
+</Callout>
+
+## 6. 精确一致性、成本与四维扩展
+
+程序 noise 的价值不只在视觉质量。相同表与数学允许 CPU authoring、offline baking 和 GPU preview 共享一套结果；四维输入还能把时间作为额外坐标，让三维体积平滑动画，而不依赖当时不存在的 4D texture hardware。
+
+但 exact 仍需定义浮点边界：负坐标的 floor 与 modulo、texture coordinate center、normalized format 解码、compiler reassociation 都可能造成差异。测试应覆盖整数点、边界两侧、远离原点、周期 256 前后和四维时间切片，并记录比较是 bitwise 还是 epsilon-based。
+
+约 50 条 pixel instructions 对早期实时应用仍然昂贵；原章将其定位为高质量、offline-like rendering 和 CPU parity 重要的场景。今天硬件更强，但“以 arithmetic 换 memory、以确定性换预烘焙体积”的决策仍需要根据采样次数、cache、目标分辨率与材质预算测量。
+
+## 三步验证：先正确，再连续，最后优化
+
+三阶段共享同一组 coordinate fixtures 和标准表。每完成一步，都保存 hash、gradient、corner contribution 和最终 noise，确保下一步出现差异时能定位到具体层级。
+
+<Stepper>
+  <Step title="第一步：对齐 permutation 与 gradients">
+    在 CPU 和直接 GPU port 上查询整数、负数和 255/256 边界。先比较 nested hash，再比较 16-entry gradient mapping，确保 point/wrap sampler 没有插值或半 texel 偏移。
+
+    <GpuGems2Ch26HashPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：证明 cell 边界连续">
+    固定 hash，在边界两侧采样 value、一阶导数与二阶导数。切换 cubic/quintic，确认改进公式进入 x、y、z 三层混合，而不只是被计算后丢弃。
+
+    <GpuGems2Ch26FadeDiagram />
+
+  </Step>
+  <Step title="第三步：替换 packed textures">
+    先逐 texel 验证 256×256 RGBA hash packing，再验证 256-entry permuted gradients。最终应从 81/22 降到 53/9，同时所有 reference fixtures 保持一致。
+
+    <GpuGems2Ch26OptimizationDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- gradient noise 用确定梯度与平滑插值制造可重复自然变化。
+- permutation 与 gradient texture 必须保持 reference 顺序并 point sample。
+- 八个 lattice corners 先点积，再按 quintic fade 沿三轴混合。
+- packed lookup 把 22 次 texture reads 降到 9 次而不应改变输出。
+- CPU/GPU parity 必须覆盖负坐标、边界、周期和 4D 切片。
+
+<Exercises>
+
+**问题 1｜手算数据流。** 输入 $p=(3.25,7.5,9.75)$ 时，整数 cell $P$、局部坐标 $q$ 和三轴 fade 分别如何得到？
+
+<Answer>
+  $P=(3,7,9)$，$q=(0.25,0.5,0.75)$。分别把三个 $q$ 分量代入
+  $6t^5-15t^4+10t^3$，得到 x、y、z 的 quintic weights。随后用 $P$ 及其相邻角点做
+  permutation hash，八个 gradient dot 先沿 x，再沿 y、z 混合。不能用 $q$
+  原值替代 fade weights。
+</Answer>
+
+**问题 2｜定位网格接缝。** shader 已经声明 quintic `fade()`，但 bump lighting 仍在整数边界出现线条。应按什么顺序检查？
+
+<Answer>
+  先输出 local coordinate 与 `fade(local)`，确认 floor/frac
+  对负坐标正确；再逐级查看 x、y、z 的 mix 参数是否确实使用 fade
+  结果；最后比较边界两侧的一阶、二阶有限差分。 同时确认 gradient/permutation
+  textures 是 point sampled，因为离散表被 linear filter 也会制造错误结构。
+</Answer>
+
+**问题 3｜修改实验验证优化。** 将 ImprovedNoiseLab 切到 direct port，再切回 packed lookup。除了读取数变化，还应保存哪些证据才能发布？
+
+<Answer>
+  保存同一批坐标的 nested hashes、八个 gradient indices、corner dot
+  contributions 和最终 noise；覆盖负坐标、cell 两侧、255/256 周期边界与多个 z
+  slices。packed 版本应从 81/22 降到 53/9，同时结果满足 bit-exact 或预先声明的
+  epsilon。再切入 3D volume 故障模式，证明它不具备同样
+  parity，避免把近似路径误标为精确实现。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="gradient noise"
+    definition="在整数格点设置确定梯度，再用位移点积和平滑插值生成连续伪随机信号的方法。"
+  />
+  <GlossaryItem
+    term="permutation table"
+    definition="0 至 255 的固定乱序表，用三维整数坐标递归索引后生成可重复 hash。"
+  />
+  <GlossaryItem
+    term="gradient texture"
+    definition="由 hash 查询的离散方向表，让缺少整数位运算的早期 pixel shader 也能选择 reference gradients。"
+  />
+  <GlossaryItem
+    term="quintic fade"
+    definition="端点一阶和二阶导数均为零的五次插值权重，用来平滑连接相邻 noise cells。"
+  />
+  <GlossaryItem
+    term="lattice corner"
+    definition="包围查询位置的整数格点；三维 cell 的八个角分别贡献一个 gradient dot。"
+  />
+  <GlossaryItem
+    term="packed lookup texture"
+    definition="预先组合多个 hash 或 gradient 结果、用一次纹理读取返回多项数据的小型查找表。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 26. Implementing Improved Perlin Noise"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-26-implementing-improved-perlin-noise"
+/>
