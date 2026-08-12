@@ -1,0 +1,252 @@
+---
+title: "GPU Gems 3 · Chapter 27. Motion Blur as a Post-Processing Effect"
+type: C
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 27
+description: "从深度重建世界坐标，计算逐像素屏幕速度，再沿速度方向采样颜色，构建可接入现有引擎的运动模糊后处理。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-27-motion-blur-post-processing-effect"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-27
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch27DepthReconstructionDiagram,
+  GpuGems3Ch27DynamicMaskDiagram,
+  GpuGems3Ch27GatherDiagram,
+  GpuGems3Ch27MotionBlurLab,
+  GpuGems3Ch27PipelineDiagram,
+  GpuGems3Ch27VelocityFieldDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch27-motion-blur";
+
+<Objectives>
+
+- 能解释如何只靠一张深浅图恢复每个屏幕位置对应的空间位置
+- 能修改 Motion Blur Post-Process Lab 的运动速度、采样次数、动态物体和遮罩，比较模糊范围
+- 能回答：为什么动态物体不能只复用相机产生的速度，深度取样又如何替代额外场景渲染
+
+</Objectives>
+
+## 先问：为什么快速移动的画面会拖出一条路
+
+想象你连续拍下两张照片：同一个物体在第二张里换了位置。如果把两张照片之间的路程画出来，再沿这条路混合颜色，静止观看时就会感觉到速度。
+
+本章解决的问题是：已有一张画面和一张深浅记录时，怎样找出画面上每个位置在上一瞬间来自哪里，然后把颜色沿这条路混合成拖影。
+
+没有这条路，游戏只能再把整个场景从头画一遍，或者要求每个物体的着色器额外输出运动信息；这会增加带宽和管线成本，也让旧引擎难以接入。
+
+<Callout type="tip" title="先预测：样本数翻倍会改变什么？">
+  在 Lab 中先保持快速平移和“保护对象”，把采样数从 4 调到 16。先猜背景拖影会变长、变平滑，还是只会变亮；再切换到“全部模糊”验证你的预测。
+</Callout>
+
+## 1. 一张深浅记录足以把屏幕像素送回空间
+
+<Callout type="trap" title="误区：把深浅值直接当成世界坐标的 z">
+  **现象 →** 平面上的物体位置大致正常，靠近屏幕边缘却出现扭曲的速度箭头。
+
+**原因 →** 深浅记录仍处在当前相机的投影空间，屏幕横纵坐标和齐次除法都没有被还原。
+
+**修法 →** 先用屏幕坐标和深浅值组成齐次位置，再乘当前视图投影矩阵的逆矩阵，最后除以 w 得到空间位置。
+
+</Callout>
+
+<Term def="记录每个屏幕位置离相机远近的纹理；后处理阶段可以把它当作输入，而不是重新绘制整个场景。">
+  depth buffer
+</Term>
+
+把画面上的坐标记作 `texCoord`，把深浅纹理读出的值记作 `zOverW`。在当前帧的投影约定下，它们可以组成一个齐次点 `H`：横纵坐标被移到 -1 到 1 的范围，第三个分量放入深度，第四个分量设为 1。
+
+<Term def="把屏幕坐标和投影空间的深度反推成三维空间位置的过程；它让后处理像素重新获得场景中的位置。">
+  world-space reconstruction
+</Term>
+
+把 `H` 乘以当前视图投影的逆矩阵，得到 `D`，再计算 `D / D.w`。这一步的意义不是凭空猜物体形状，而是利用深度记录中已经保存的遮挡结果，恢复“这个像素落在空间哪里”。
+
+<GpuGems3Ch27DepthReconstructionDiagram />
+
+## 2. 两个相机瞬间的差，就是每个像素的屏幕速度
+
+当前帧的位置还不是拖影方向。把重建得到的空间位置交给上一帧的视图投影矩阵，得到它在上一帧的屏幕位置；当前屏幕位置减去上一帧位置，再除以 2，就得到落在 -1 到 1 范围内的速度向量。
+
+<Term def="描述一个像素在当前帧和上一帧之间移动了多少屏幕距离的二维向量；它决定后续沿哪个方向取样。">
+  viewport velocity
+</Term>
+
+因此，速度不是全屏只有一个方向：相机平移时远近不同的背景速度会不同，旋转时画面两侧的方向也不同。下面的速度场把这个事实画出来；每个箭头都属于自己的像素邻域。
+
+<GpuGems3Ch27VelocityFieldDiagram />
+
+```hlsl
+float zOverW = tex2D(depthTexture, texCoord);
+float4 H = float4(texCoord.x * 2 - 1, (1 - texCoord.y) * 2 - 1, zOverW, 1);
+float4 D = mul(H, g_ViewProjectionInverseMatrix);
+float4 worldPos = D / D.w;
+
+float4 previousPos = mul(worldPos, g_previousViewProjectionMatrix);
+previousPos /= previousPos.w;
+float2 velocity = (H.xy - previousPos.xy) / 2.0;
+```
+
+这个片段把“深度 → 空间位置 → 上一帧位置 → 速度”压缩成一次全屏像素着色。要注意矩阵乘法的约定、纹理 y 轴方向，以及上一帧矩阵是否真的对应上一帧相机。
+
+## 3. 后处理阶段沿速度取样，而不是重新画一遍场景
+
+<Callout type="trap" title="误区：所有像素都沿同一个屏幕方向模糊">
+  **现象 →** 直线相机运动看起来勉强成立，转弯或靠近镜头的物体出现横向涂抹。
+
+**原因 →** 统一方向忽略了逐像素速度场，近处和远处、画面中心和边缘的运动并不相同。
+
+**修法 →** 为当前像素读取自己的速度向量，沿该向量逐次推进纹理坐标，并用样本总数做平均。
+
+</Callout>
+
+<Term def="在主场景绘制完成后，用全屏像素着色器处理颜色或深度的阶段；运动模糊可以在这里接入现有引擎。">
+  post-processing
+</Term>
+
+<Term def="沿当前像素的速度向量访问多处颜色，再把这些颜色累加并平均的取样方式；样本数控制质量与成本。">
+  gather sampling
+</Term>
+
+对每个像素先取一次原色，再让纹理坐标不断加上速度，取得若干相邻颜色。速度大时，样本线段更长；样本数多时，线段上的阶梯更少，但全屏纹理读取也更多。最后除以样本数，才不会因为取样次数变多而把画面变亮。
+
+<GpuGems3Ch27GatherDiagram />
+
+这个过程只需要一张场景颜色纹理和一张速度来源。若目标平台不能把深度缓冲当纹理读取，可以在渲染时把深度写到另一个 render target，或写到颜色缓冲的 alpha 通道；代价是需要调整输出布局，而不是改变模糊的数学链路。
+
+## 动手走一遍：把一帧画面变成运动模糊
+
+<Stepper>
+  <Step title="先从深度恢复空间位置">
+    读取当前像素的深浅值，组成齐次屏幕位置，乘当前视图投影逆矩阵并除以 w。
+
+    <GpuGems3Ch27DepthReconstructionDiagram />
+
+  </Step>
+  <Step title="再计算上一帧到当前帧的位移">
+    用上一帧视图投影矩阵把空间位置投回去，当前屏幕坐标减去上一帧坐标，得到逐像素速度。
+
+    <GpuGems3Ch27VelocityFieldDiagram />
+
+  </Step>
+  <Step title="最后沿速度方向聚合颜色">
+    沿速度向量推进纹理坐标，读取多个颜色并求平均；速度和样本数共同决定拖影长度与平滑度。
+
+    <GpuGems3Ch27GatherDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch27PipelineDiagram />
+
+## 4. 动态物体需要自己的速度，静态背景可以复用相机速度
+
+只用深度反推的办法，天然记录的是相机造成的运动：如果地面、墙和静态模型没有自己移动，它们可以直接使用这个速度。但一个正在转动的车轮、角色或刚体，在两帧之间的变化并不包含在相机矩阵里。
+
+<Callout type="trap" title="误区：把相机速度套到所有动态物体">
+  **现象 →** 相机停住时，角色移动却没有拖影；相机快速平移时，角色又出现方向错误的重影。
+
+**原因 →** 深度重建只知道当前像素的空间位置，不知道该物体上一帧的局部变换。
+
+**修法 →** 对动态刚体用当前与上一帧的对象变换计算独立速度纹理，再与相机速度合并或按对象优先使用。
+
+</Callout>
+
+<Term def="专门保存每个像素运动方向和长度的纹理；动态物体可以独立写入它，后处理再读取。">
+  velocity buffer
+</Term>
+
+动态物体的做法与相机速度相似：把顶点分别用当前帧和上一帧的视图投影变换，在像素阶段计算两次屏幕位置的差。它可以作为额外纹理，也可以由多个 render target 同时输出。这样背景和对象各自拥有可信的方向，不必让一个全屏向量承担两种运动。
+
+<GpuGems3Ch27DynamicMaskDiagram />
+
+## 5. 遮罩决定哪些像素应该保持清晰
+
+赛车、瞄准镜或 UI 目标常常需要保持锐利，即使背景正在高速移动。最简单的办法是单独渲染一张遮罩，或者占用颜色缓冲的 alpha 通道；后处理遇到遮罩值时跳过取样，直接保留原色。
+
+遮罩不是速度的替代品。速度回答“如果要模糊，应该沿哪里取样”，遮罩回答“这个像素是否允许被模糊”。两者分开，才可以让动态目标使用自己的速度，同时让选定对象保持清晰。
+
+<GpuGems3Ch27MotionBlurLab />
+
+先猜一猜：把“保护选定对象”改成“全部模糊”，再把场景切换到动态物体，哪一个指标会先变化？在 Lab 中逐个修改参数，观察背景模糊长度、对象模糊长度和深度路径的反馈。
+
+## 小结
+
+- 深浅记录加当前逆矩阵，可以恢复每个像素的空间位置。
+- 当前与上一帧屏幕位置之差，形成逐像素速度场。
+- 后处理沿速度方向取样并平均，样本数换取平滑度。
+- 动态物体需要独立速度，不能只复用相机造成的位移。
+- 遮罩可以保护目标清晰，深度纹理不可用时可退回额外输出。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把全屏取样循环的样本数从 8 改成 4 和 16，保持速度向量不变，说明画面长度、平滑度和纹理读取成本如何变化。
+
+<Answer>
+
+样本数改变的是速度线段上的离散密度，不应改变理想拖影的方向；4 次取样成本低但更容易出现阶梯，16 次更平滑却增加全屏纹理读取。每次仍要除以实际样本数，避免画面变亮。
+
+</Answer>
+
+**问题 2｜诊断矩阵错误。** 屏幕中心的速度大致正确，但画面上下边缘出现相反方向的拖影。请列出至少两个应该检查的约定。
+
+<Answer>
+
+检查纹理坐标的 y 轴是否需要翻转，检查当前与上一帧矩阵的乘法顺序和行列约定，检查上一帧位置是否在比较前除以 w，也要确认深度值的范围与投影矩阵约定一致。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个静态赛车赛道、一个快速转动的车轮、一个需要保持锐利的车身标记同时出现在画面中。分别选择相机速度、对象速度和遮罩策略。
+
+<Answer>
+
+赛道可使用深度重建得到的相机速度；车轮应使用当前/上一帧对象变换生成独立速度；车身标记写入保护遮罩并保留原色。最后的全屏 pass 读取各自速度，并在遮罩像素跳过颜色聚合。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="depth buffer">
+    一张记录每个屏幕位置远近的图，后处理可以从中恢复场景位置。
+  </GlossaryItem>
+  <GlossaryItem term="world-space reconstruction">
+    把屏幕上的点和深度反推回三维场景坐标的过程。
+  </GlossaryItem>
+  <GlossaryItem term="viewport velocity">
+    同一个像素在前后两帧屏幕坐标之间移动的二维方向和距离。
+  </GlossaryItem>
+  <GlossaryItem term="post-processing">
+    主场景完成后对颜色或深度做的全屏处理阶段。
+  </GlossaryItem>
+  <GlossaryItem term="gather sampling">
+    沿速度方向读取多处颜色并求平均的方式，用来形成拖影。
+  </GlossaryItem>
+  <GlossaryItem term="velocity buffer">
+    保存每个像素运动向量的纹理，动态物体可以独立产生它。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 27. Motion Blur as a Post-Processing Effect"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-27-motion-blur-post-processing-effect"
+/>
