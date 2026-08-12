@@ -1,0 +1,264 @@
+---
+title: "GPU Gems 3 · Chapter 17. Robust Multiple Specular Reflections and Refractions"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 17
+description: "从分层距离 cubemap 出发，解释如何用 ray marching、secant search、Fresnel 和折射率在 GPU 上稳定追踪多阶反射与折射。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-17-robust-multiple-specular-reflections-and-refractions"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-17
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch17LayeredDistanceMapDiagram,
+  GpuGems3Ch17MinMaxDiagram,
+  GpuGems3Ch17MultiplePathDiagram,
+  GpuGems3Ch17RaySearchDiagram,
+  GpuGems3Ch17ReflectionRefractionDiagram,
+  GpuGems3Ch17RobustRayLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch17-multiple-reflections";
+
+<Objectives>
+
+- 能解释为什么 fragment shader 需要分层距离地图来代替直接访问场景网格，并区分 ray marching 与 secant search 的职责
+- 能修改 Robust Secondary Ray Lab 的路径类型、最大深度、地图层数、搜索加速和步长，观察命中可信度与实时预算
+- 能回答：为什么 Fresnel、折射率和提前终止必须同时参与多阶反射/折射循环，而不是只把环境 cubemap 采样几次
+
+</Objectives>
+
+## 先问：为什么一个反射 cubemap 不够
+
+想象一个玻璃球放在镜子前：球面会看到镜子，镜子里又会看到球；如果球还是透明的，光还要继续穿过表面。只保存“从相机直接看见的颜色”，这些被遮挡的交点就永远不存在。
+
+本章解决的是：怎样把场景中可搜索的几何信息放进 GPU 可访问的纹理，再沿反射和折射方向找到第二、第三甚至更高阶的命中点。没有这条路径，反射只能停在第一跳，透明物体会把背景当作一张不随几何变化的贴图。
+
+<Callout type="tip" title="先预测：把 ray depth 调到 8 就一定更真实吗？">
+  先猜一猜：把 maximum ray depth 从 3 调到 8、把 distance map layers 从 2 切到
+  5，再把 step size 设成
+  coarse，命中可信度、路径亮度、纹理工作量和薄物体漏检风险会怎样变化？先在 Lab
+  中观察基线，再一次只改变一个变量。
+</Callout>
+
+## 1. 把场景表面存进分层距离地图
+
+<Term def="以一个参考点为中心，把每个方向上可见表面的距离、法线和材质存入多个 cubemap 层的场景采样表示。">
+  layered distance map
+</Term>
+
+fragment shader 能查纹理，却不能直接遍历完整的三角网格。因此先从参考点向六个 cubemap 方向采样场景，把每个 texel 的距离、命中法线和材质信息写入纹理。普通深度 cubemap 只保存第一层；反射物体前后或被遮挡的表面则需要额外层。
+
+分层的意义不是把场景变成精确体素，而是让二次光线拥有一个可查询的“几何近似”。距离使用世界空间欧氏距离时，方向与距离可以一起描述命中点，也能减轻 cubemap 面之间插值时的边界特殊处理。空 texel 可以写入负距离，后续搜索时明确识别为无效。
+
+<GpuGems3Ch17LayeredDistanceMapDiagram />
+
+简单的反射物体可以把参考点放在自身中心，分别渲染前后表面得到两层；复杂场景则需要 depth peeling 控制层数，把更远的表面合并到有限的层里。层数越多，遮挡证据越完整，但每帧更新纹理和内存成本也越高。
+
+<Term def="通过多次深度剥离逐层取出当前最近表面，把被前层遮挡的表面写入后续距离地图层。">
+  depth peeling
+</Term>
+
+<Callout type="trap" title="把单层环境 cubemap 当成完整场景几何">
+  现象 →
+  反射球能看到天空，却看不到被墙挡住的灯或镜子；玻璃内部路径会突然采样到错误背景。原因
+  → 单层地图只记录参考点直接可见的第一层，没有被遮挡表面。修法 →
+  用两层前后面处理简单物体，或用受控 depth peeling
+  增加遮挡层，并对层数做距离和屏幕占比预算。
+</Callout>
+
+## 2. 先不漏交点，再把交点找准
+
+<Term def="沿二次光线按固定步长逐步读取距离地图，寻找射线与采样表面之间的符号变化或穿越区间。">
+  ray marching
+</Term>
+
+从当前表面点 `x` 沿反射或折射方向 `R` 走，先用 ray marching 逐步查询距离地图。步长不能大于相邻 texel 所能表达的距离，否则细薄物体可能完整地落在两个采样点之间而被跳过。它的职责是建立安全的命中区间，而不是在大步进阶段追求最终精度。
+
+<GpuGems3Ch17RaySearchDiagram />
+
+找到一对距离符号相反或跨越表面的样本后，再切换到 <Term def="在已知命中区间内用两端函数值估计交点，并反复收缩区间以获得更精确命中的搜索方法。">secant search</Term>。它比继续用很小的固定步长更快，也能把命中位置收敛到足以支撑法线和颜色查找的精度。
+
+两阶段的边界要清楚：ray marching 负责“不要漏”，secant search 负责“不要糊”。当距离值变化非常剧烈时，要把线性步长调细；当表面平滑且 texel 代表的距离变化缓慢时，可以用更大的步长换取速度。
+
+<Callout type="trap" title="只用大步长线性搜索交点">
+  现象 → 大物体反射正常，细杆、薄叶片或灯丝在反射中偶尔消失。原因 →
+  步长跨过了两个相邻 texel 之间的窄表面，没有留下符号变化区间。修法 →
+  让步长不超过地图可分辨的邻域距离；先用 ray marching 找到区间，再用 secant
+  search 收敛，而不是只增加最大光线深度。
+</Callout>
+
+## 3. 在命中点分配反射与折射能量
+
+<Term def="描述光在界面上被反射的比例；它随入射角变化，掠射角通常反射更多能量，也可以用金属的基准反射率近似。">
+  Fresnel term
+</Term>
+
+命中点有法线 `N`、视线方向 `V` 和材质数据。理想反射使用 `reflect` 生成新的方向；透明表面使用 `refract`，并需要 <Term def="光在真空中的传播速度与在当前介质中传播速度之比；它决定折射方向和透射路径。">index of refraction</Term> 决定弯折程度。Fresnel term 用角度把能量分成反射部分 `F` 与透射部分 `1 − F`。
+
+金属可以用基准反射率、粗略的 extinction 相关参数和 Schlick 风格近似；玻璃或水则需要正的折射率。工程上还可以用折射率的符号区分路径类别：负值表示 reflector，零表示 diffuse 终点，正值表示 refractor。这样动态循环不用额外的材质枚举也能选择下一条路径。
+
+<GpuGems3Ch17ReflectionRefractionDiagram />
+
+不要把 Fresnel 当作最后的颜色滤镜。它会影响下一次路径的 radiance；如果命中点又是镜面或透明表面，就要携带新的方向、法线、折射率和能量继续追踪。
+
+## 4. 用有限循环追踪多阶路径
+
+每次命中后，循环都要更新四类状态：当前点与方向、路径辐射量、当前材质的 Fresnel 参数、已经走过的深度。命中 diffuse 表面时把它的 radiance 加入结果并停止；命中 reflector 或 refractor 时重新计算方向并继续。
+
+```hlsl
+float3 radiance = float3(1, 1, 1);
+float3 direction = normalize(viewDirection);
+for (int depth = 0; depth < MAX_DEPTH; ++depth) {
+  float3 hitNormal, hitRadiance;
+  float hitDistance;
+  if (!Hit(distanceMaps, origin, direction, hitDistance, hitRadiance, hitNormal)) break;
+  float3 F = Fresnel(hitNormal, direction, materialFp0);
+  if (materialIor == 0) { radiance *= hitRadiance; break; }
+  bool mirror = materialIor < 0;
+  direction = mirror ? reflect(direction, hitNormal) : refract(direction, hitNormal, materialIor);
+  radiance *= mirror ? F : (1.0 - F);
+  origin += direction * hitDistance;
+}
+return radiance;
+```
+
+实际 shader 还需要处理路径离开 cubemap、命中无效 texel、全黑 radiance 和动态分支支持。MAX_DEPTH 是正确性护栏，也是性能旋钮；增加它不一定改善画面，因为更高阶路径可能已经低于可见阈值。
+
+<GpuGems3Ch17MultiplePathDiagram />
+
+<Callout type="trap" title="递归追踪直到颜色不再变化">
+  现象 → 某些像素耗时异常，镜面互相对着时 shader
+  长时间运行，最终还可能出现噪声。原因 →
+  没有最大深度、能量阈值和无效命中终止条件。修法 → 固定
+  MAX_DEPTH，路径能量低于阈值时提前停止，遇到 diffuse、越界或空层也立即收尾。
+</Callout>
+
+## 5. 用 min-max 和层数做工程预算
+
+复杂场景每帧更新多层 cubemap 会很贵。min-max pair 可以为每层距离数据保存上下界，光线先跳过不可能相交的区间，再把剩下的区间交给精确搜索。它不是放宽命中标准，而是减少明显不可能命中的 texture lookup。
+
+<GpuGems3Ch17MinMaxDiagram />
+
+实现时要同时看三个预算：层数控制被遮挡表面的完整性，线性步长控制薄物体漏检概率，secant 迭代次数控制命中精度。简单物体可用两层前后表面；镜子、玻璃和复杂遮挡使用更多层；远处或小屏幕占比物体则可以降低层数和最大深度。
+
+## 6. 三步把二次光线接入实时管线
+
+<Stepper>
+  <Step title="先生成可搜索的分层场景表示">
+    选择参考点，写入方向 cubemap 中的距离、法线和材质；简单对象使用前后两层，复杂遮挡再用 depth peeling 增加层数，并标记无效 texel。
+
+    <GpuGems3Ch17LayeredDistanceMapDiagram />
+    <GpuGems3Ch17MinMaxDiagram />
+
+  </Step>
+  <Step title="再用两阶段搜索找交点">
+    从第一跳表面生成反射或折射方向，先用 ray marching 建立不漏的命中区间，再用 secant search 收准交点；步长要和地图 texel 的空间分辨率匹配。
+
+    <GpuGems3Ch17RaySearchDiagram />
+
+  </Step>
+  <Step title="最后按 Fresnel 和材质继续或终止">
+    用法线、Fresnel、折射率和命中材质更新路径能量与方向；遇到 diffuse、越界、空层、低能量或 MAX_DEPTH 时提前结束，否则继续下一阶。
+
+    <GpuGems3Ch17ReflectionRefractionDiagram />
+    <GpuGems3Ch17MultiplePathDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch17RobustRayLab />
+
+## 本章小结
+
+- 分层距离地图把被遮挡表面变成 fragment shader 可查询的几何近似
+- ray marching 负责不漏交点，secant search 负责提高交点精度
+- Fresnel 和折射率共同决定反射/透射方向与能量
+- 多阶路径必须有最大深度、能量和无效命中终止条件
+- 层数、步长、min-max 与屏幕占比共同决定实时预算
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 当前命中搜索只使用固定大步长。请增加“找到命中区间后再细化”的阶段，并说明如何减少薄物体漏检。
+
+```hlsl
+for (int i = 0; i < MAX_STEPS; ++i) {
+  float distance = SampleDistance(rayOrigin + rayDir * t);
+  if (distance < 0) return t;
+  t += STEP_SIZE;
+}
+```
+
+<Answer>
+  记录上一次和当前采样的距离符号；一旦发现跨越表面，就保存区间两端，停止粗步进，随后用
+  secant search 或二分式收缩区间。STEP_SIZE 应不大于距离地图相邻 texel
+  能表达的空间间隔；若追求速度，可用 min-max
+  先跳过安全空区间，再对候选区间使用细步长。
+</Answer>
+
+**问题 2｜诊断反射/折射能量错误。** 玻璃球的反射和透射都很亮，且掠射角没有明显变亮。你会检查哪些输入和更新？
+
+<Answer>
+  检查 Fresnel term 是否随 `N · V` 更新，反射路径是否乘了 `F`、折射路径是否乘了
+  `1 −
+  F`，以及折射率是否在每次进入/离开介质时使用正确。还要检查路径循环是否重复累加了旧
+  radiance，而不是在每一跳只携带剩余能量。
+</Answer>
+
+**问题 3｜场景选型。** 近距离玻璃球、远处金属装饰和包含细电线的镜面场景分别怎样选择层数、步长和最大深度？
+
+<Answer>
+  近距离玻璃球保留较多距离层、可靠的反射/折射路径和中等最大深度；远处金属装饰可以降低层数和深度，优先保证主反射轮廓。细电线场景应使用更细的
+  ray-marching 步长或 min-max
+  后的局部细化，不能只增加最大深度，因为漏检发生在单次搜索内部。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="layered distance map"
+    definition="从参考点向各个方向记录多层表面距离、法线和材质的 cubemap 集合，让 shader 可以搜索场景近似。"
+  />
+  <GlossaryItem
+    term="depth peeling"
+    definition="逐层剥离当前最近表面，把被遮挡的表面继续写入后面的距离地图层。"
+  />
+  <GlossaryItem
+    term="ray marching"
+    definition="沿光线按步长取样，先找到光线穿过表面的区间，重点是避免漏掉交点。"
+  />
+  <GlossaryItem
+    term="secant search"
+    definition="在已找到的命中区间内反复估计和收缩交点，重点是提高命中位置精度。"
+  />
+  <GlossaryItem
+    term="Fresnel term"
+    definition="随入射角变化的反射比例，掠射角通常反射更多能量，剩余部分可进入透射。"
+  />
+  <GlossaryItem
+    term="index of refraction"
+    definition="描述光在介质中弯折程度的数值，玻璃、水等透明材质靠它决定折射方向。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 17. Robust Multiple Specular Reflections and Refractions"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-17-robust-multiple-specular-reflections-and-refractions"
+/>
