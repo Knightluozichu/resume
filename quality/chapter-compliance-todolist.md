@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T13:08:32.420Z
+> 生成时间：2026-08-12T13:17:12.968Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4536 |
+| 实际 MDX 章节/页面 | 4537 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 82 |
+| manifest 未映射 unit | 81 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1573 |
+| passed | 1574 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -1369,9 +1369,9 @@
     - 路径：`content/car-structure-illustrated/08-review/csi23-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## cg-principles-practice（48 个内容页面 · passed:48 · 🚫 门禁阻断 9 项）
+## cg-principles-practice（49 个内容页面 · passed:49 · 🚫 门禁阻断 8 项）
 
-- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=81.6%；未映射 unit=7；证据不完整 unit=0。
+- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=84.2%；未映射 unit=6；证据不完整 unit=0。
 - 其他门禁阻断：cg-principles-practice: publication-policy-not-approved。
 
 - [x] ✅ **01-intro/cgpp-ch01** — passed；score 99
@@ -1449,6 +1449,9 @@
 - [x] ✅ **03-pipeline/cgp-27-materials-and-scattering** — passed；score 97
     - 路径：`content/cg-principles-practice/03-pipeline/cgp-27-materials-and-scattering.mdx`
     - 正式 unit：`cgp-27` explained=2/2
+- [x] ✅ **03-pipeline/cgp-29-light-transport** — passed；score 96
+    - 路径：`content/cg-principles-practice/03-pipeline/cgp-29-light-transport.mdx`
+    - 正式 unit：`cgp-29` explained=2/2
 - [x] ✅ **03-pipeline/cgpp-ch03** — passed；score 97
     - 路径：`content/cg-principles-practice/03-pipeline/cgpp-ch03.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
@@ -1518,8 +1521,6 @@
 - [x] ✅ **25-future/cgpp-ch25** — passed；score 97
     - 路径：`content/cg-principles-practice/25-future/cgpp-ch25.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
-- [ ] 🔴 P0 **[正式 unit cgp-29] Light Transport** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
-    - 路径：待创建或映射（officialUnitId: `cgp-29`）
 - [ ] 🔴 P0 **[正式 unit cgp-30] Probability and Monte Carlo Integration** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
     - 路径：待创建或映射（officialUnitId: `cgp-30`）
 - [ ] 🔴 P0 **[正式 unit cgp-32] Rendering in Practice** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2

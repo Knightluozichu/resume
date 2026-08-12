@@ -1,0 +1,223 @@
+---
+title: "Light Transport"
+type: D
+section: "光传输"
+order: 29
+description: "从光源、散射点和相机之间的路径出发，理解 light transport 如何由渲染方程组织自发光、反射与可见性。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-29
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp29EstimatorDiagram,
+  Cgp29LightTransportLab,
+  Cgp29RenderingEquationDiagram,
+  Cgp29TransportPipelineDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-29-light-transport";
+
+<Objectives>
+
+- 能沿相机、散射点和光源之间的路径解释 light transport 的输入、贡献与可见性
+- 能拆解 rendering equation 中的自发光、BRDF、入射辐亮度、余弦项与半球积分
+- 能修改 LightTransportLab 的样本数、反弹次数和遮挡状态，诊断估计波动与路径吞吐量问题
+
+</Objectives>
+
+## 先把光传输看成一条可回放的路径
+
+渲染一个像素时，真正被计算的不是“某个物体应该有多亮”这一句结论，而是从相机出发，经过一个或多个散射点，连接到光源或环境的路径。每个顶点都会改变方向、累积散射权重，并可能因为遮挡而失去一部分贡献。光传输的关键是让这些中间状态可以被记录、重放和解释。
+
+先预测：把样本数从 8 提高到 128，估计值会必然变大，还是波动会变小？把最大反弹次数提高，间接光会增加，但路径吞吐量会怎样变化？打开实验，先固定反射率，再分别切换 direct、indirect 和 occluded，记录路径与估计量。
+
+<Cgp29LightTransportLab />
+
+## light transport：从光源经过路径到相机
+
+<Callout type="tip" title="先保存路径证据，再看最终像素">
+  调试光传输时先保存每个顶点的位置、方向、散射权重、可见性和终止原因，再比较最终辐亮度。单张图只能告诉你结果不同，路径证据才能告诉你差异从哪一步开始。
+</Callout>
+
+<Term def="光能从发光体出发，经表面或介质散射后到达相机与传感器的传播过程；它由一组可追踪的路径贡献组成。">
+  light transport
+</Term>
+
+<Cgp29TransportPipelineDiagram />
+
+一条路径可以写成相机、散射点和光源之间的顶点序列。直接光通常只需要一个散射点就能连接到光源；间接光还要经过其他表面。渲染器必须同时区分路径方向、表面法线、可见性和光源类型，否则“没有光”可能是遮挡错误，“太亮”可能是同一贡献被重复累加。
+
+光传输不是只从光源向外走。相机反向追踪、光源正向发射和双向方法只是选取路径的不同策略；它们最终都要估计同一类从光源到传感器的贡献。比较算法时，应先对齐路径空间、测度和估计目标，再比较样本效率。
+
+## rendering equation：把出射量拆成来源与积分
+
+<Callout type="trap" title="把渲染方程当成亮度常数">
+  现象 → 某个固定视角看起来正确，换光源、法线或视角后亮度立刻失真。 原因 →
+  只记住了结果，没有保留入射方向、BRDF、余弦项和半球测度。 修法 →
+  逐项打印自发光、入射辐亮度、散射权重和积分贡献，再检查每一项的空间与单位。
+</Callout>
+
+<Term def="描述表面某点沿出射方向得到多少光的积分关系；它把自发光与半球上所有入射方向的反射贡献相加。">
+  rendering equation
+</Term>
+
+经典表面形式可以写成：
+
+$$
+L_o(x,\omega_o)=L_e(x,\omega_o)+\int_{\Omega}f_r(x,\omega_i,\omega_o)L_i(x,\omega_i)|\cos\theta_i|d\omega_i
+$$
+
+这里 $L_o$ 是沿出射方向离开的量，$L_e$ 是表面自发光，$f_r$ 是材质对入射方向和出射方向的反射响应，$L_i$ 是来自半球方向的入射量，$|\cos\theta_i|d\omega_i$ 把方向贡献转换到表面测度。公式的价值不在于背下来，而在于它给了每个实现步骤一个可核对的位置。
+
+<Term def="沿给定方向传播的辐射量；在光传输中，它记录某个位置和方向上的入射或出射光状态，而不是一个与方向无关的总亮度。">
+  radiance
+</Term>
+
+若程序把 radiance 与面积上的 irradiance 混用，或者漏掉余弦项，结果可能仍有合理的色彩和轮廓，却无法在不同距离、法线或光源尺寸下保持一致。验证时固定一个散射点，改变一个方向因素，再看量纲和估计值如何同步变化。
+
+<Cgp29RenderingEquationDiagram />
+
+## 从积分到路径估计：每次采样都要交代权重
+
+<Callout type="trap" title="把样本数当成额外光能">
+  现象 → 提高 samples 后图像整体变亮，而不是更稳定。 原因 →
+  把样本累加后忘了除以样本数，或把每个样本的 PDF 权重重复乘了一次。 修法 →
+  保存样本计数、PDF、单样本贡献与累计平均值，先检查估计量是否无偏，再讨论噪声。
+</Callout>
+
+<Term def="沿路径累计的散射、余弦和采样概率权重；它把前面顶点对后续光源贡献的影响压缩成一个可检查的乘积。">
+  path throughput
+</Term>
+
+每到一个散射点，路径估计器会根据采样方向更新 path throughput，再继续追踪或连接光源。一个简化的更新可以写成“旧吞吐量乘以散射项、余弦项和 PDF 的倒数”。样本越多，通常能降低估计波动；但若每个样本的测度不一致，更多样本只会更稳定地产生错误。
+
+<Term def="从散射点到光源或下一条路径是否畅通的条件；它决定某个方向的入射贡献能否真正到达当前点。">
+  visibility
+</Term>
+
+visibility 是 rendering equation 之外不可省略的几何事实：方向上有光源不代表光线没有被挡住。直接光连接要进行阴影测试，间接路径要在每个新顶点继续判断可见性。若遮挡开关只改变最终颜色，却不改变路径证据，说明实现把可见性当成了后处理混合。
+
+<Cgp29EstimatorDiagram />
+
+## 三步实验：从路径到积分，再到估计稳定性
+
+每一步先预测，再只改变一个条件。记录路径顶点、可见性、样本数、PDF、path throughput 和最终估计值，区分公式缺项、几何遮挡与采样噪声。
+
+<Stepper>
+  <Step title="第一步：追踪一条 light transport 路径">
+    选择 direct，固定样本数和反射率，先预测相机到散射点再到光源的方向。切换 occluded，观察哪一段路径消失，再用路径图核对 visibility 是否只影响可见贡献。
+
+    <Cgp29TransportPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：逐项核对 rendering equation">
+    保持路径不变，依次指认 $L_e$、$L_i$、$f_r$、余弦项和半球测度。先预测删除一个因子会改变亮度、方向还是单位，再用分解图定位公式项与实现项的对应关系。
+
+    <Cgp29RenderingEquationDiagram />
+
+  </Step>
+  <Step title="第三步：观察样本与吞吐量">
+    先预测提高 samples 会改变估计均值还是采样波动，再提高 bounces 并切换 indirect。用估计器图记录每个顶点的 path throughput、PDF 和终止原因。
+
+    <Cgp29EstimatorDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把直接光和路径命中光源重复累加">
+  现象 → 光源附近出现异常亮斑，增加反弹次数后亮度成倍增长。 原因 →
+  下一事件估计已经连接过光源，路径继续追踪又把同一发光贡献加了一次。 修法 →
+  给每条贡献标记来源策略，检查光源命中、直接连接和 MIS
+  或权重分配是否有明确的去重规则。
+</Callout>
+
+<Callout type="trap" title="把遮挡当成材质变暗">
+  现象 → 调低 albedo 后画面变暗，似乎修好了阴影，但换一个光源位置仍然错误。 原因
+  → 没有单独验证 visibility，把几何可见性错误藏进了材质参数。 修法 → 固定 BRDF
+  和光源，只切换遮挡状态，确保路径证据中的可见性先变化、材质权重保持不变。
+</Callout>
+
+<Callout type="trap" title="增加反弹次数却不检查路径吞吐量">
+  现象 → 深路径越来越黑或噪声突然增加，开发者只继续提高样本数。 原因 →
+  每次散射的 path throughput、PDF 或 Russian roulette
+  补偿不一致，深路径贡献没有可解释的预算。 修法 → 逐顶点记录
+  throughput、采样概率和终止原因，先用固定短路径验证，再逐步增加最大反弹。
+</Callout>
+
+## 本章小结
+
+- light transport 是从光源经散射到相机的路径贡献；直接光、间接光和遮挡都必须以路径证据解释。
+- rendering equation 将出射辐亮度拆成自发光和半球积分，BRDF、入射 radiance、余弦项与方向测度各有职责。
+- path throughput 累计路径上的散射与采样权重，samples 主要降低估计波动，不应凭空增加能量。
+- visibility 决定几何连接是否真实可达；实现应把公式项、路径状态、样本统计与最终估计一起验收。
+
+<Exercises>
+
+**问题 1：辨认渲染方程项。** 在 $L_o=L_e+\int f_rL_i|\cos\theta_i|d\omega_i$ 中，若表面不自发光但有一盏可见面光源，哪些项仍然提供非零贡献？
+
+<Answer>
+  $L_e$ 可以为零，但半球积分仍可能非零：可见光源提供 $L_i$，材质提供
+  $f_r$，入射方向与法线提供余弦项，$d\omega_i$
+  指定对方向半球的积分测度。若光源被遮挡，visibility
+  会把对应连接的有效贡献置零。
+</Answer>
+
+**问题 2：诊断样本数异常。** 提高 samples 后估计值系统性变大，而波动没有按预期下降。你会先检查什么？
+
+<Answer>
+  先检查累计结果是否除以实际样本数，再检查每个样本的
+  PDF、测度和单样本贡献是否重复加权。固定随机序列对比单样本、少量样本和大量样本的均值与方差，确认
+  samples 影响的是估计稳定性，而不是输入能量。
+</Answer>
+
+**问题 3：选择路径证据。** 一个像素在 direct 模式明亮，在 occluded 模式仍同样明亮。你会如何定位？
+
+<Answer>
+  固定材质、光源和相机，只比较两次运行的 visibility、连接线段和单样本贡献。若
+  visibility 没有变化，先查阴影射线或遮挡测试；若 visibility 已为 false
+  但最终值不变，再查贡献累加是否绕过了该状态。不要先调低 albedo，因为那会掩盖
+  light transport 的几何错误。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="light transport"
+    definition="光从光源经过表面或介质散射，最后到达相机的传播过程。"
+  />
+  <GlossaryItem
+    term="rendering equation"
+    definition="把一个点沿某方向离开的光写成自发光加上所有入射方向反射贡献的公式。"
+  />
+  <GlossaryItem
+    term="radiance"
+    definition="带有位置和方向的光量，描述某个方向上正在传播多少光。"
+  />
+  <GlossaryItem
+    term="path throughput"
+    definition="路径走过多个散射点后，所有散射、角度和采样权重的累计结果。"
+  />
+  <GlossaryItem
+    term="visibility"
+    definition="从当前散射点到光源或下一路径点之间是否没有被几何体挡住。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 29: Light Transport"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

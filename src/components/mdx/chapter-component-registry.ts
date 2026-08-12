@@ -4459,6 +4459,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp27MaterialsLab: module0.Cgp27MaterialsLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-29-light-transport": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-29-light-transport");
+    return {
+      Cgp29EstimatorDiagram: module0.Cgp29EstimatorDiagram,
+      Cgp29LightTransportLab: module0.Cgp29LightTransportLab,
+      Cgp29RenderingEquationDiagram: module0.Cgp29RenderingEquationDiagram,
+      Cgp29TransportPipelineDiagram: module0.Cgp29TransportPipelineDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
