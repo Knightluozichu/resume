@@ -4504,6 +4504,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp33ShadersLab: module0.Cgp33ShadersLab,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-34-expressive-rendering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-34-expressive-rendering");
+      return {
+        Cgp34CoherenceDiagram: module0.Cgp34CoherenceDiagram,
+        Cgp34ExpressivePipelineDiagram: module0.Cgp34ExpressivePipelineDiagram,
+        Cgp34ExpressiveRenderingLab: module0.Cgp34ExpressiveRenderingLab,
+        Cgp34MarksStrokesDiagram: module0.Cgp34MarksStrokesDiagram,
+        Cgp34StylizationDiagram: module0.Cgp34StylizationDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
