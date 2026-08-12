@@ -1,0 +1,259 @@
+---
+title: "GPU Gems 3 · Chapter 13. Volumetric Light Scattering as a Post-Process"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 13
+description: "从屏幕空间射线采样出发，解释体积光散射后处理如何用遮挡预处理、衰减和采样预算生成可控的光束，并处理边缘、前后景与带宽问题。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-13-volumetric-light-scattering-post-process"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-13
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch13AttenuationDiagram,
+  GpuGems3Ch13BandwidthDiagram,
+  GpuGems3Ch13CaveatsDiagram,
+  GpuGems3Ch13OcclusionMethodsDiagram,
+  GpuGems3Ch13ScatteringLab,
+  GpuGems3Ch13ScatteringOverviewDiagram,
+  GpuGems3Ch13ScreenRayDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch13-volumetric-light-scattering";
+
+<Objectives>
+
+- 能解释体积光散射后处理如何把屏幕空间光源、像素射线和衰减样本串进片元着色阶段
+- 能修改 Volumetric Light Scattering Lab 的遮挡方法、采样数、density、decay 和 exposure，观察光束质量与带宽的取舍
+- 能回答：为什么黑色 occlusion pre-pass、stencil 标记和 guard band 分别解决哪一种屏幕空间错误
+
+</Objectives>
+
+## 先把“空气里的光”想成一张图像上的柔软笔刷
+
+现实中的光不会只在物体表面停住；空气里的微粒会让光在传播途中散开，背光物体就像在空中切出一束束可见的亮线。实时渲染若要逐体素追踪这种传播，交互场景很快会承受不起。
+
+本章解决的问题是：能不能只拿已有的场景图像，在屏幕上沿着每个像素指向光源的方向取样，近似出带遮挡的光束？这样无需为每个动画物体预建体积，但也必须接受屏幕空间近似带来的漏光、条纹和边缘问题。
+
+<Callout type="tip" title="先预测：更亮等于更真实吗？">
+  先猜一猜：把 samples、density、decay 或 exposure
+  调大，光束的长度、亮度、条纹和采样带宽会怎样变化？再把 occlusion method 切到
+  none，观察原始纹理为什么会伪装成光束。
+</Callout>
+
+## 1. 空气不是透明背景：散射和遮挡一起决定光束
+
+<Term def="光在其中会被吸收、发射或散射的介质，例如含有气体分子和气溶胶的空气；它让光路本身变得可见。">
+  participating media
+</Term>
+
+在 participating media 中，观察者看到的不只是物体反射的光，还包括光在视线附近被散射进来的那一部分。对太阳或明亮天空来说，遮挡物会减少从光源到当前像素的有效照明；我们的后处理只需要估算这种减少的比例。
+
+当许多散射光沿着太阳方向形成扇形亮束时，它们常被称为 <Term def="由空气散射和遮挡共同形成的体积光束，也常被叫作 god rays、sunbeams 或 light shafts。">crepuscular rays</Term>。本章的关键取舍是：把复杂的空气传播压缩成一张 source image，再把光束作为 additive post-process 叠回场景。
+
+<GpuGems3Ch13ScatteringOverviewDiagram />
+
+<Callout type="trap" title="把 radial blur 当成完整体积光">
+  现象 →
+  画面出现从亮点发散的线，但建筑遮挡不住它，所有材质纹理都被拉成条纹。原因 → 纯
+  radial blur 只移动颜色样本，没有表示光源到像素之间的遮挡和介质衰减。修法 →
+  让样本沿屏幕空间光源方向取值，并用 pre-pass、stencil 或 contrast
+  方法控制可见性线索。
+</Callout>
+
+## 2. 屏幕空间射线：用一条向量替代体积积分
+
+<Term def="在二维 source image 上，从当前像素沿指向屏幕空间光源的向量取多个样本，以近似光源到该像素的遮挡和散射。">
+  screen-space sampling
+</Term>
+
+后处理先把世界空间的光源通过 world-view-project 变换投到屏幕，得到 `ScreenLightPos`。对每个像素，计算它和光源之间的差，再除以样本数并乘上 density，得到每一步的 `deltaTexCoord`。连续沿这个方向读 source image，就形成一条从像素“走向光源”的二维射线。
+
+<GpuGems3Ch13ScreenRayDiagram />
+
+这里的样本不是完整的空间点：它只知道屏幕坐标，不知道被屏幕外的建筑遮挡，也不知道前后景的真实体积关系。因此它最适合明亮 emissive region 对比暗色 occluder 的场景；当 source image 的纹理比光照更强时，纹理变化也会被误读成光束。
+
+<Term def="控制每个样本如何随它离开光源而衰减的系数；通常在 0 到 1 之间，连续相乘后形成平滑的光束 falloff。">
+  attenuation
+</Term>
+
+每次累加可以同时乘上 weight 和 `decay^i`，最后再乘 exposure。weight 调单个样本的存在感，decay 让远离光源的样本逐步变弱，exposure 则是整个后处理的最终亮度旋钮。
+
+<GpuGems3Ch13AttenuationDiagram />
+
+<Callout type="trap" title="把 density、decay 和 exposure 当成同一个亮度旋钮">
+  现象 → 调一个参数时光束长度、亮度和条纹同时失控，无法解释变化。原因 → density
+  改样本间距，decay 改沿射线的远近衰减，exposure 只缩放最终结果。修法 → 先用
+  samples/density 解决采样覆盖，再用 decay 控制 falloff，最后用 exposure
+  做整体亮度校准。
+</Callout>
+
+## 3. 后处理像素着色器：每个样本做同一件小事
+
+核心循环不需要知道场景几何，只需要维护当前纹理坐标、采样颜色和一个逐步衰减的 illumination factor。现代 WebGL2/GLSL 可以把它写成下面的等价伪代码：
+
+```glsl
+vec2 delta = (texCoord - screenLightPos) * density / float(sampleCount);
+vec3 color = texture(frameSampler, texCoord).rgb;
+float illuminationDecay = 1.0;
+
+for (int i = 0; i < sampleCount; ++i) {
+  texCoord -= delta;
+  vec3 sampleColor = texture(frameSampler, texCoord).rgb;
+  sampleColor *= illuminationDecay * weight;
+  color += sampleColor;
+  illuminationDecay *= decay;
+}
+
+return vec4(color * exposure, 1.0);
+```
+
+这段逻辑的优点是适用于任意动画图像、半透明物体和多个光源：每个光源都可以执行一次 screen-space pass，再做 additive blend。代价则是纹理读取数随 sampleCount 增长，低分辨率或低样本时还会出现规则条带。
+
+<GpuGems3Ch13BandwidthDiagram />
+
+## 4. 先处理遮挡，再让光束叠加
+
+<Term def="在后处理之前把遮挡物以黑色、无纹理方式写入 source buffer，让屏幕空间采样读到的是可见性线索而不是材质颜色。">
+  occlusion pre-pass
+</Term>
+
+最直接的 occlusion pre-pass 是先用黑色、无纹理材质绘制遮挡物，再用这张 buffer 生成光束，最后把普通着色场景和光束结果合成。这样做不需要额外的几何体积，也能把建筑的颜色纹理从遮挡判断里剥离。
+
+如果管线已有 stencil 或 alpha 位，可以在绘制 emissive region 时设位，在绘制遮挡物时不设位，后处理只让带位的样本参与 additive blend。无法改 source buffer 时，降低纹理对比度、使用雾和 aerial perspective，或让光束朝屏幕边缘和垂直方向 fade，也能压低错误条纹。
+
+<GpuGems3Ch13OcclusionMethodsDiagram />
+
+<Callout type="trap" title="在普通带纹理场景图上直接做累加">
+  现象 → 墙面纹理、窗格和高对比贴图被拉成长条，越靠近光源越明显。原因 →
+  screen-space sampling 把颜色变化误当成 emissive/occluder 变化。修法 →
+  优先做黑色无纹理 occlusion pre-pass；或使用 stencil
+  bit；只能使用原图时降低内容对比度并配合 fog/fade。
+</Callout>
+
+## 5. 屏幕空间近似的边界与工程预算
+
+当遮挡物穿过屏幕边缘时，射线会突然读不到屏幕外的样本，于是光束闪烁；扩大可渲染区域形成 guard band 可以增加可寻址范围。近光源还可能出现背景光束穿到前景物体前面的错觉，这是因为后处理缺少完整的深度排序。光源接近屏幕的垂直方向时，投影位置趋向无穷，应该 clamp 到 guard-band 或逐渐 fade。
+
+降低 source image 分辨率可以减少带宽；配合 bilinear filtering 能缓解块状采样，stochastic sampling 则能打散低样本时的规则条纹。多光源意味着多个 additive pass，因此应先用 GPU profile 观察纹理读取、片元数量和合成次数，再决定样本数与分辨率。
+
+<GpuGems3Ch13CaveatsDiagram />
+
+## 6. 三步把效果变成可调的后处理路径
+
+<Stepper>
+  <Step title="先确定屏幕空间射线">
+    把光源投影到屏幕；对每个像素计算指向光源的 delta；用 samples 和 density 决定射线覆盖范围。先在无遮挡图像上观察光束的几何方向，再加入可见性处理。
+
+    <GpuGems3Ch13ScreenRayDiagram />
+    <GpuGems3Ch13ScatteringOverviewDiagram />
+
+  </Step>
+  <Step title="再控制每个样本的贡献">
+    用 weight、decay 和 exposure 分开调局部贡献、远近 falloff 和整体亮度。若样本数降低，先检查条带与带宽，再决定是否 downsample、filter 或改变采样图案。
+
+    <GpuGems3Ch13AttenuationDiagram />
+    <GpuGems3Ch13BandwidthDiagram />
+
+  </Step>
+  <Step title="最后加入遮挡与边界保护">
+    选择 occlusion pre-pass、stencil 或 contrast 路径，处理纹理伪影；再为屏幕边缘、前后景和垂直光源方向配置 guard band、clamp 或 fade。
+
+    <GpuGems3Ch13OcclusionMethodsDiagram />
+    <GpuGems3Ch13CaveatsDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch13ScatteringLab />
+
+## 本章小结
+
+- 后处理用屏幕空间射线近似空气中的体积光散射
+- samples 与 density 决定射线覆盖和采样成本
+- decay 控制沿光路的衰减，weight/exposure 控制亮度层级
+- pre-pass 或 stencil 把遮挡和材质纹理分开
+- guard band、filter 与 profile 处理屏幕边界和带宽取舍
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把下面的循环改为“越远离光源，样本贡献越小”，并指出 `decay` 的初始值为什么应该不大于 1。
+
+```glsl
+vec3 color = texture(frameSampler, texCoord).rgb;
+for (int i = 0; i < sampleCount; ++i) {
+  texCoord -= delta;
+  color += texture(frameSampler, texCoord).rgb * weight;
+}
+```
+
+<Answer>
+  增加 `float illuminationDecay = 1.0;`，每次累加改成 `sampleColor *
+  illuminationDecay * weight`，循环末尾执行 `illuminationDecay *= decay`。当
+  decay 在 0 到 1 之间时，距离越远贡献越弱；若大于
+  1，远处样本会不断放大，容易过曝并把采样噪声扩散成亮条纹。
+</Answer>
+
+**问题 2｜诊断遮挡错误。** 你看到墙面纹理沿光源方向形成规则条纹，但光束本身方向正确。你会先切换哪一种 occlusion method？为什么？
+
+<Answer>
+  先切到黑色无纹理的 occlusion pre-pass，让 source buffer
+  只表达遮挡而不携带墙面纹理；如果管线已有可用的 stencil/alpha 位，也可以用
+  stencil 方法筛掉非 emissive
+  样本。两者都比直接在普通材质图上累加更能消除纹理伪影。
+</Answer>
+
+**问题 3｜场景选型。** 一个室外太阳光场景在低分辨率后处理下出现屏幕边缘闪烁，另一个近距离灯光场景出现背景光束穿到前景物体前面。分别怎样处理？
+
+<Answer>
+  边缘闪烁用 guard band 或扩大 source buffer 的可寻址区域，必要时再配合
+  bilinear/stochastic
+  sampling；近距离灯光的前后景错误来自屏幕空间缺少完整深度关系，可以用深度/遮挡
+  pre-pass 降低错误，或把效果朝不可靠区域 fade，并接受它不是完整体积光传输。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="participating media"
+    definition="会让光被吸收、发射或散射的空气、雾和尘埃等介质，因此光路本身也能被看见。"
+  />
+  <GlossaryItem
+    term="crepuscular rays"
+    definition="空气散射和遮挡形成的扇形光束，也常被叫作 god rays 或 light shafts。"
+  />
+  <GlossaryItem
+    term="screen-space sampling"
+    definition="只在二维场景图像上，从像素沿指向屏幕空间光源的方向取样，近似光源到像素之间的遮挡。"
+  />
+  <GlossaryItem
+    term="attenuation"
+    definition="让样本贡献随距离或迭代次数变弱的缩放规则，decay 是其中控制远近 falloff 的系数。"
+  />
+  <GlossaryItem
+    term="occlusion pre-pass"
+    definition="先用黑色无纹理方式绘制遮挡物，把 source buffer 变成可见性线索，再叠加光束后处理。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 13. Volumetric Light Scattering as a Post-Process"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-13-volumetric-light-scattering-post-process"
+/>
