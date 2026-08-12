@@ -1,0 +1,302 @@
+---
+title: "GPU Gems 2 · Chapter 21. High-Quality Antialiased Rasterization"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 21
+description: "用精确 coverage、MSAA sample mask 与正确 resolve 减少几何边缘锯齿，在质量、带宽和透明合成之间取得平衡。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-21-high-quality-antialiased-rasterization"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-21
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch21AntialiasedRasterizationLab,
+  GpuGems2Ch21CoverageDiagram,
+  GpuGems2Ch21MsaaDiagram,
+  GpuGems2Ch21RasterPipelineDiagram,
+  GpuGems2Ch21ResolveDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch21-antialiased-rasterization";
+
+<Objectives>
+
+- 能解释 High-Quality Antialiased Rasterization 如何用几何 coverage、sample positions 和 sample mask 表达部分覆盖，而不是把二值边缘简单 blur
+- 能区分 analytic coverage、multisample antialiasing 与 resolve，并说明 subpixel precision、深度/模板测试和透明合成怎样影响结果
+- 能调节 AntialiasedRasterizationLab 的 sample count、edge phase 与 resolve 空间，判断质量收益是否值得额外带宽和混合成本
+
+</Objectives>
+
+## 先把“边缘变平滑”拆成覆盖与合成
+
+GPU Gems 2 Chapter 21 的 **High-Quality Antialiased Rasterization** 讨论一个容易被一句“开 MSAA”掩盖的问题：一个屏幕像素到底有多少面积被三角形覆盖？如果光栅化阶段只输出一个 0/1 命中，斜线和细三角形就会在像素网格上跳变；如果保留部分覆盖的证据，后续才能用稳定的颜色、深度和透明规则合成边缘。
+
+先打开实验，固定 edge phase，依次切换 2×、4×、8× sample。观察 covered sample 数和 coverage 的变化；再打开 gamma-space resolve，比较最终 output value。实验的重点不是追求一个永远更高的 sample count，而是看见三个独立变量：几何覆盖怎样被测量，覆盖怎样进入 mask，以及 mask 怎样参与最终颜色。
+
+<GpuGems2Ch21AntialiasedRasterizationLab />
+
+<Callout type="tip" title="先记录 coverage，再选择抗锯齿实现">
+  调试时同时保存 primitive edge、sample positions、covered sample
+  mask、深度/模板结果和 resolve 输入。这样可以区分“coverage
+  算错”“样本被测试拒绝”和“resolve 把正确数据合成坏了”三类问题。
+</Callout>
+
+<Callout type="trap" title="把抗锯齿理解成事后 blur">
+  现象 → 轮廓看起来暂时柔和，但细线变粗、相邻物体互相污染。原因 → blur 没有几何
+  coverage 语义，也不知道哪个样本属于哪个 primitive。修法 → 在光栅化阶段保留
+  coverage 或 sample mask；让 resolve
+  按样本和透明规则合成，而不是对已经混合的屏幕颜色做盲目模糊。
+</Callout>
+
+本章主题 **High-Quality Antialiased Rasterization** 的核心是把几何边界的部分覆盖变成可验证的数据通路：coverage 描述“覆盖多少”，sample mask 描述“哪些样本覆盖”，resolve 决定“怎样合成”。
+
+<Term def="在像素或样本区域内估计 primitive 覆盖面积或覆盖比例的边缘表示；它的值通常位于 0 和 1 之间。">
+  coverage
+</Term>
+
+<Term def="在像素网格上计算几何边界与部分覆盖样本，并将结果用于减少离散边缘锯齿的光栅化过程。">
+  antialiased rasterization
+</Term>
+
+<GpuGems2Ch21RasterPipelineDiagram />
+
+## 1. coverage 是几何量，不是颜色滤镜
+
+一个像素可以看成面积为 $1$ 的小方形。若三角形在其中覆盖面积 $A$，最简单的面积近似是
+
+$$
+  coverage = \frac{A}{1} = A, \qquad 0 \leq coverage \leq 1.
+$$
+
+真实实现未必显式求多边形与像素的精确交集：它可能使用边方程、子像素采样点、保守光栅化规则或预先计算的边缘距离。但无论选择哪种估计，都必须明确像素中心、sample position、边界包含规则和固定点精度。否则几何边缘在相邻像素间移动时，coverage 会发生不应有的跳变。
+
+<GpuGems2Ch21CoverageDiagram />
+
+<Term def="把几何坐标量化到像素内部的更细网格所提供的位置精度；精度不足会让边缘移动出现 stair-step 和闪烁。">
+  subpixel precision
+</Term>
+
+analytic coverage 可以直接对边界与像素边界的交叠进行估计，优点是 coverage 随边缘位置连续，且不必为每个 sample 执行完整 fragment shading。它的难点是要处理顶点顺序、退化边、共享边、三角形顶点落在像素边界上的 tie-break，以及深度/模板测试的语义。对于很薄的几何，保守估计可能保护可见性但变得偏宽，激进估计可能锐利却漏掉部分覆盖；验收时应分别记录边缘位置误差和漏/多覆盖情况。
+
+<Callout type="trap" title="让边方程的符号决定覆盖方向">
+  现象 → 三角形翻转顶点顺序或跨过屏幕中心后，边缘突然消失或整片变亮。原因 →
+  实现把 edge function 的正负号当成固定 winding，没有把顶点顺序和 top-left
+  规则纳入规格。修法 → 用顺时针、逆时针、共享边和退化三角形做 golden cases；统一
+  orientation、epsilon 和边界包含规则，再生成 coverage。
+</Callout>
+
+<Callout type="trap" title="用整数像素坐标保存 subpixel edge">
+  现象 → 物体缓慢平移时边缘一格一格跳，细线在相邻帧闪烁。原因 → 顶点或 edge
+  distance 在进入 coverage 计算前被过早取整，subpixel precision 被丢掉。修法 →
+  保留足够的固定点或浮点小数位，把量化点放在明确的 raster rule
+  之后，并用半像素平移回归边缘连续性。
+</Callout>
+
+## 2. multisample antialiasing：样本位置与 mask
+
+<Term def="在一个像素内放置多个 sample position，分别执行覆盖、深度或模板判定，并在最终阶段组合样本结果的抗锯齿方法。">
+  multisample antialiasing
+</Term>
+
+<Term def="按位记录一个像素内哪些 sample position 通过几何与测试的覆盖判定；它是 coverage 的离散表示。">
+  sample mask
+</Term>
+
+对于 $N$ 个样本，最直接的离散 coverage 是
+
+$$
+  coverage_{MSAA} = \frac{\operatorname{popcount}(mask)}{N}.
+$$
+
+但这条公式只表达面积的粗略近似。样本位置的分布、旋转模式、固定样本模式，以及它们和几何边缘的相对相位，都会影响薄三角形、斜线和移动物体的稳定性。2×、4×、8× 不是只改变一个质量旋钮：它们同时改变 sample storage、depth/stencil 读写、resolve 工作量和带宽预算。
+
+<GpuGems2Ch21MsaaDiagram />
+
+MSAA 常见的优化是让同一个 primitive 的多个 sample 共享 fragment shader 的颜色，只把 coverage、depth 或 stencil 保留到 sample 粒度。这样它不像全分辨率 supersampling 那样为每个样本都重算完整颜色，但也不能因此把所有样本当成一个二值像素。纹理 alpha test、discard、深度冲突和透明几何可能让 sample mask 与颜色记录产生不同生命周期，必须在 API 和 render target 规格中写清楚。
+
+<Callout type="trap" title="把 MSAA 当成全分辨率颜色 supersampling">
+  现象 → 打开 4× MSAA 后几何边缘变好，但 alpha-tested
+  foliage、细线或高频纹理仍有缺口。原因 → 多样本可能只共享一个 fragment
+  color；coverage、discard、纹理采样和透明合成未必具有 per-sample 颜色。修法 →
+  先确认需要 per-sample 的数据，再区分 sample shading、alpha-to-coverage、显式
+  sample mask 和普通 MSAA 的能力与成本。
+</Callout>
+
+<Callout type="trap" title="忽略 sample pattern 的相位稳定性">
+  现象 → 静止画面通过截图，但相机缓慢移动时细斜线出现 shimmer。原因 →
+  样本位置在几何边缘上的相位变化造成 mask 快速翻转，sample count
+  没有解决时序不连续。修法 → 固定并记录 sample
+  pattern，测试半像素和亚像素平移；必要时结合解析 coverage、temporal
+  accumulation 或针对薄几何的保守规则。
+</Callout>
+
+## 3. resolve：预乘、颜色空间与透明边缘
+
+<Term def="把多个 sample 的颜色、alpha 或 coverage 按权重组合成一个像素结果的阶段；正确顺序会影响边缘亮度和透明合成。">
+  resolve
+</Term>
+
+若每个 sample 有颜色 $C_i$ 和覆盖权重 $w_i$，一个简化的预乘 resolve 可以写成
+
+$$
+  C_{out} = \sum_i w_i C_i^{premultiplied}, \qquad
+  A_{out} = \sum_i w_i A_i.
+$$
+
+工程上还要回答：颜色是否已预乘、权重是否来自 sample mask、透明物体是否需要按深度排序、resolve 是在 linear-light 还是 gamma-encoded 空间执行，以及最终编码何时发生。直接平均 sRGB 数值会让中间亮度偏暗或偏亮；先把非预乘颜色与 coverage 相乘的顺序错误，则会在边缘产生 halo。
+
+<GpuGems2Ch21ResolveDiagram />
+
+<Callout type="trap" title="在 gamma 空间直接平均样本颜色">
+  现象 → 几何 coverage 数值正确，但斜边比内部明显发暗或发亮。原因 → sRGB 等
+  gamma-encoded 数值不是线性能量，直接平均与物理意义的线性混合不一致。修法 → 在
+  linear-light 空间完成 coverage
+  加权与透明合成，最后再编码到显示空间；测试图要包含黑白边、半透明边和 HDR 值。
+</Callout>
+
+<Callout type="trap" title="先平均非预乘颜色，再乘 coverage">
+  现象 → 透明边缘出现背景色 halo，颜色越亮越明显。原因 → 不同 sample 的
+  alpha/coverage 被混合后才乘颜色，导致无覆盖样本的 RGB 污染输出。修法 →
+  先将颜色预乘 alpha 或 coverage，再按 sample 权重 resolve；明确
+  opaque、straight alpha 与 premultiplied alpha 的接口契约。
+</Callout>
+
+<Callout type="trap" title="把 resolve 当成无损的最后一步">
+  现象 → 采样缓冲中边缘信息存在，resolve 后却无法恢复细线或透明轮廓。原因 →
+  resolve 已经把样本维度压成单个像素，错误的权重、颜色空间或深度选择不可逆。修法
+  → 把 sample buffer、mask、resolve 输入输出都纳入捕获；先用 reference resolve
+  对比，再优化带宽和硬件路径。
+</Callout>
+
+## 4. 质量、成本与可验证的实现边界
+
+抗锯齿质量至少要用三类输入验收：长斜线检验 coverage 的均匀性，细三角形和 alpha-tested 纹理检验 sample mask 的稳定性，透明叠加与高对比边检验 premultiplied linear resolve。每一类都应在静止、亚像素平移、旋转和不同深度排序下记录最大边缘误差，而不是只比较一张平均截图。
+
+性能方面，应把成本拆为 sample storage、per-sample depth/stencil、fragment shading、resolve bandwidth 和透明排序。增大 sample count 可能改善几何边缘，却不一定改善 shader aliasing；解析 coverage 可能节省颜色采样，却会增加 edge math 和特殊几何路径。发布决策要把画质阈值、目标 GPU、render target 格式、分辨率和帧预算放在同一个 benchmark 中。
+
+<Callout type="trap" title="只看 sample count，不看失败维度">
+  现象 → 从 2× 升到 8× 后轮廓更平滑，细纹理闪烁、透明 halo
+  或整帧时间却没有改善。原因 → MSAA 主要解决几何 coverage，未必解决 shader 采样
+  aliasing；额外样本还可能放大 bandwidth 和 resolve 成本。修法 → 分别测 geometry
+  edge、texture signal、transparent composite 和 GPU
+  time；只有命中目标失败维度时才提高 sample count。
+</Callout>
+
+<Callout type="tip" title="把 mask 和 resolve 做成可回放证据">
+  对一个固定 primitive 保存 edge parameters、sample pattern、mask、per-sample
+  depth/color 和 resolve 结果。出现回归时，先比较
+  mask，再比较权重和颜色空间；这比从最终 framebuffer 反推问题更快，也能保护不同
+  GPU 后端的一致语义。
+</Callout>
+
+## 三步实验：从 coverage 到发布预算
+
+每一步只改变一个变量，记录 primitive edge、sample pattern、mask、resolve 空间和 GPU 时间。若视觉结果和数值记录冲突，优先回到 sample-level reference，不要用后处理锐化掩盖 coverage 或颜色空间错误。
+
+<Stepper>
+  <Step title="第一步：建立 coverage reference">
+    使用固定三角形边缘，在像素网格上移动 edge phase。比较二值命中、解析 coverage 和 sample-count 近似，记录共享边、半像素平移与退化三角形的结果。
+
+    <GpuGems2Ch21CoverageDiagram />
+
+  </Step>
+  <Step title="第二步：观察 sample mask 的离散化">
+    依次切换 2×、4×、8× sample，保存每个像素的 mask 与 popcount。让一条细斜线缓慢移动，检查 mask 是否出现不必要的跳变，并把深度/模板和 alpha test 一起纳入记录。
+
+    <GpuGems2Ch21MsaaDiagram />
+
+  </Step>
+  <Step title="第三步：验证 resolve 与完整帧成本">
+    固定 mask，切换 linear-light 与 gamma-space resolve，再加入透明边和不同背景。最后测量 sample storage、fragment shading、resolve bandwidth 和帧时间，确认提高 sample count 确实命中了目标伪影。
+
+    <GpuGems2Ch21ResolveDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- antialiased rasterization 应在几何阶段表达部分覆盖；coverage 是连续面积语义，sample mask 是它在离散 sample positions 上的近似。
+- subpixel precision、边界包含规则、winding 和 sample pattern 会直接影响移动边缘的稳定性；它们必须进入 reference 与回归测试。
+- multisample antialiasing 可以共享 fragment color，却仍需保留 sample-level coverage、深度或模板信息；它不是全分辨率颜色 supersampling 的同义词。
+- resolve 要明确 premultiplied alpha、coverage 权重和 linear-light 顺序，避免 gamma 平均与透明 halo。
+- 质量预算应按 geometry edge、shader aliasing、透明合成和 GPU bandwidth 分解；sample count 只有在命中目标失败维度时才值得增加。
+
+<Exercises>
+
+**问题 1｜计算 sample coverage。** 一个像素使用 4× MSAA，sample mask 为 `1011`。在只关心几何覆盖、每个 sample 权重相同的前提下，coverage 是多少？它和精确面积 coverage 有什么关系？
+
+<Answer>
+  mask 有 3 个 bit 为 1，因此 $coverage_{MSAA}=3/4=0.75$。它是由固定 sample
+  positions 得到的离散近似，不一定等于三角形与像素的精确交叠面积；改变 sample
+  pattern 或边缘相位，近似误差也会改变。
+</Answer>
+
+**问题 2｜定位透明 halo。** MSAA 边缘的 mask 正确，但透明物体边缘在深色背景上出现亮边。你会检查哪些 resolve 条件？
+
+<Answer>
+  先确认每个 sample 的颜色是否已按 alpha/coverage 预乘，再检查 resolve 是否在
+  linear-light 空间执行、无覆盖 sample 的 RGB
+  是否被错误带入，以及透明物体的深度排序和背景合成顺序。用固定 sample buffer
+  对比 reference resolve，可以把 mask 问题与颜色合成问题分开。
+</Answer>
+
+**问题 3｜选择 4× 还是 analytic coverage。** 目标设备的 8× MSAA 带宽超预算，但主要伪影是远处细三角形的几何闪烁；纹理本身已使用 mip。如何设计下一轮实验？
+
+<Answer>
+  先用 2×、4× 与 analytic coverage 在相同 sample
+  pattern、分辨率和相机运动下比较边缘位置误差、mask 时序跳变和完整 GPU
+  时间。若解析路径能稳定表达几何面积，同时不破坏深度/透明语义，可以把它用于几何边缘，把有限
+  MSAA 留给仍需 sample-level 数据的材质；最终以目标 GPU 的带宽、resolve
+  与实现复杂度共同决定，而不是只看静态截图。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="coverage"
+    definition="primitive 在像素或 sample 区域内的覆盖比例，是介于 0 和 1 的几何量。"
+  />
+  <GlossaryItem
+    term="antialiased rasterization"
+    definition="在光栅化阶段表达部分几何覆盖，以减少离散边缘锯齿的过程。"
+  />
+  <GlossaryItem
+    term="subpixel precision"
+    definition="像素内部更细网格的坐标精度，用于保持边缘移动的连续性。"
+  />
+  <GlossaryItem
+    term="multisample antialiasing"
+    definition="在一个像素内使用多个 sample position，并按样本覆盖结果抗锯齿的方法。"
+  />
+  <GlossaryItem
+    term="sample mask"
+    definition="按位记录哪些 sample position 通过覆盖与测试判定的数据。"
+  />
+  <GlossaryItem
+    term="resolve"
+    definition="把多个 sample 的颜色、alpha 或 coverage 按权重组合成一个像素的阶段。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 21. High-Quality Antialiased Rasterization"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-21-high-quality-antialiased-rasterization"
+/>
