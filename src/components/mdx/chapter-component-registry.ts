@@ -4365,6 +4365,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp18SignalSamplingDiagram: module0.Cgp18SignalSamplingDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-19-enlarging-and-shrinking-images":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-19-image-scaling");
+      return {
+        Cgp19FilterComparisonDiagram: module0.Cgp19FilterComparisonDiagram,
+        Cgp19ImageScalingLab: module0.Cgp19ImageScalingLab,
+        Cgp19SamplingDirectionDiagram: module0.Cgp19SamplingDirectionDiagram,
+        Cgp19ScalingConceptDiagram: module0.Cgp19ScalingConceptDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

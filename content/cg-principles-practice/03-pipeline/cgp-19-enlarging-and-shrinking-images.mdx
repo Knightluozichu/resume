@@ -1,0 +1,216 @@
+---
+title: "Enlarging and Shrinking Images"
+type: D
+section: "图像缩放与重建"
+order: 19
+description: "对照图像放大与缩小的采样方向、滤波器和重建误差，建立可解释的缩放质量判断。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-19
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp19FilterComparisonDiagram,
+  Cgp19ImageScalingLab,
+  Cgp19SamplingDirectionDiagram,
+  Cgp19ScalingConceptDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-19-image-scaling";
+
+<Objectives>
+
+- 能解释 enlarging images 与 shrinking images 的采样方向差异，并说明 reconstruction 如何估计目标像素
+- 能修改 ScaleViz 的缩放倍数、滤波器与高频棋盘格，记录 nearest、linear、cubic 的边缘和细节变化
+- 能回答：图像放大变糊、缩小出现混叠或边缘锯齿时，如何区分采样、滤波和重建误差？
+
+</Objectives>
+
+## 先把缩放看成一次新的采样
+
+把一张图变大或变小，不是把旧像素简单复制或删除。输出图像拥有新的采样位置，程序必须从源图像邻域估计这些位置应该呈现什么值；估计规则不同，边缘、纹理和噪声就会留下不同证据。
+
+本章对照 enlarging images 和 shrinking images，分别观察插值与抗混叠的责任。先猜一猜：同一个滤波器用于放大和缩小时，边缘会发生同样的变化吗？如果缩小后的图像出现周期性纹理，是细节不够，还是高频没有被正确处理？
+
+<Cgp19ImageScalingLab />
+
+## enlarging images 与 shrinking images：目标像素如何获得
+
+<Callout type="trap" title="把缩小理解成均匀丢掉像素">
+  现象 → 缩小后的文字、细纹或棋盘格出现闪烁、摩尔纹和方向性伪影。 原因 →
+  多个源样本汇聚到一个目标样本，却没有先做低通或面积意义上的重建。 修法 → 在
+  shrinking images 前先估计源覆盖范围，用抗混叠滤波或合适的 mip
+  级别，再执行重采样。
+</Callout>
+
+<Term def="把源图像映射到更大目标网格的过程；目标像素通常需要从源邻域插值或重建，无法凭空恢复真实新细节。">
+  enlarging images
+</Term>
+
+<Term def="把源图像映射到更小目标网格的过程；多个源样本会汇聚到目标像素，必须控制高频混叠与能量变化。">
+  shrinking images
+</Term>
+
+**enlarging images** 会让一个源区域影响多个目标像素，重点是怎样平滑地估计中间位置；**shrinking images** 会让多个源像素竞争一个目标像素，重点是怎样在保留结构的同时压低无法表示的高频。两者都需要明确源中心、目标中心和覆盖范围，而不是只修改输出宽高。
+
+<Cgp19ScalingConceptDiagram />
+
+如果输出比例为 `s`，目标位置反向映射到源图像时，常见的核心关系是：
+
+$$
+x_{source} = \frac{x_{target}}{s}
+$$
+
+人话翻译：先把目标像素放回源坐标，再根据它覆盖的邻域取样；`s` 大于 1 是放大，`s` 小于 1 是缩小。缩小时一个目标像素对应更大的源区域，不能只取一个最近点，否则会把高频结构随机采样成错误图案。
+
+<Cgp19SamplingDirectionDiagram />
+
+## reconstruction：从源邻域估计目标像素
+
+<Term def="根据源图像邻域、采样位置和滤波权重估计目标像素的过程；它决定缩放结果的平滑、锐利与误差分布。">
+  reconstruction
+</Term>
+
+**reconstruction** 把“目标位置应该是什么值”写成一个可检查的权重问题。nearest 只选一个源样本，边缘清晰但可能产生块状和锯齿；linear 在相邻样本之间插值，结果更连续但会变软；cubic 使用更宽邻域和更高阶权重，可能保留更丰富的局部形状，但计算和边界处理更复杂。
+
+<Cgp19FilterComparisonDiagram />
+
+滤波器不是越复杂越好。对 shrinking images，重建核需要压制超出目标采样能力的高频；对 enlarging images，核只能估计中间值，无法创造源图像中没有的可靠细节。评估质量时要同时看边缘位置、纹理稳定性、亮度能量和每像素成本。
+
+一个明确的缩放接口应把方向、滤波和边界一起记录：
+
+```ts
+const output = resize(image, {
+  scale: 0.5,
+  filter: "linear",
+  boundary: "clamp",
+  antialias: true,
+});
+```
+
+如果放大图像边缘有明显台阶，先换 filter 对照；如果缩小图像有闪烁，先打开 antialias 并检查源覆盖范围；如果边界一圈颜色异常，检查 boundary，而不是直接改变全图对比度。
+
+## 采样、滤波与视觉误差
+
+缩放结果的误差至少有三类。采样误差来自目标位置没有获得足够源信息；滤波误差来自核过度平滑或振铃；边界误差来自图像外部如何补值。它们在截图中可能都表现为“变糊”，所以需要用非对称边缘、细密纹理和渐变三类测试图分别观察。
+
+对于高频棋盘格，放大后 nearest 会保留硬块，linear 会产生过渡，cubic 可能产生更复杂的边缘；缩小后若不抗混叠，棋盘格会折叠成低频条纹。用同一输入、同一输出尺寸比较不同 filter，才能把质量差异归因到 reconstruction，而不是归因到源图像不同。
+
+## 三步实验：从采样方向回放到重建质量
+
+每一步只改变一个责任。先预测目标像素来自哪个源邻域，再在 ScaleViz 中操作；记录缩放倍数、滤波器、边缘状态和输出证据。
+
+<Stepper>
+  <Step title="第一步：判断是 enlarging 还是 shrinking">
+    固定源图像，先把缩放倍数设为大于 1，再设为小于 1。观察一个目标像素对应的源区域大小，写出最可能的混叠或插值风险。
+
+    <Cgp19SamplingDirectionDiagram />
+
+  </Step>
+  <Step title="第二步：比较 reconstruction 规则">
+    保持缩放倍数和棋盘格不变，依次选择 nearest、linear、cubic，比较边缘、块状结构、过渡宽度和估计成本。
+
+    <Cgp19FilterComparisonDiagram />
+
+  </Step>
+  <Step title="第三步：用高频图检查缩小质量">
+    在 ScaleViz 中打开高频棋盘格，把缩放倍数调到小于 1，再切换滤波器。记录哪些伪影随 antialias 或重建规则变化，哪些属于源图像不可恢复的信息。
+
+    <Cgp19ScalingConceptDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把 nearest 的清晰边缘当成真实细节">
+  现象 → 放大后像素块边界很硬，却被误认为比 linear 更忠实。 原因 → nearest
+  只是复制最近样本，保留了采样网格的阶梯，并没有恢复源图像中不存在的连续细节。
+  修法 → 用渐变、斜线和小文字对照 edge fidelity
+  与视觉平滑，说明任务需要的是像素风格还是连续外观。
+</Callout>
+
+<Callout type="trap" title="放大和缩小使用同一验收标准">
+  现象 → 放大追求锐利，缩小却出现闪烁；或者为了防止混叠把所有结果都过度模糊。
+  原因 → enlarging images 主要面对插值估计，shrinking images
+  主要面对频率折叠，两者的误差责任不同。 修法 →
+  分别检查放大的边缘连续性和缩小的高频稳定性，再选择不同的滤波与抗混叠策略。
+</Callout>
+
+<Callout type="trap" title="只看中心区域，忽略边界和高频样本">
+  现象 → 平滑照片看起来正常，但纹理边界、棋盘格或图像外框出现暗边和周期性伪影。
+  原因 → 测试图没有覆盖高频、非对称边缘或 boundary 处理，导致 reconstruction
+  的错误被平均掉。 修法 →
+  用渐变、斜边、细纹和高频棋盘格组成最小测试集，分别记录中心、边缘和输出尺寸变化。
+</Callout>
+
+## 本章小结
+
+- enlarging images 通过源邻域估计更多目标样本，shrinking images 则要把多个源样本安全汇聚到更少目标样本。
+- reconstruction 决定缩放边缘的平滑、锐利、振铃和计算成本，nearest、linear、cubic 各有适用边界。
+- 缩小时要优先处理高频混叠，放大时要诚实面对“无法凭空恢复新细节”的限制。
+- 质量验收必须覆盖中心、边界、渐变、斜边和高频纹理，不能只凭一张照片截图判断。
+
+<Exercises>
+
+**问题 1：解释两个缩放方向。** 对比 enlarging images 与 shrinking images，一个目标像素在源图像中对应的覆盖区域有什么不同？
+
+<Answer>
+  放大时目标采样更密，一个源区域会影响多个目标像素，重点是插值和连续边缘；缩小时目标采样更稀，一个目标像素覆盖多个源样本，重点是汇聚能量并抑制无法表示的高频，避免混叠。
+</Answer>
+
+**问题 2：修改 ScaleViz。** 打开高频棋盘格，把缩放倍数从 1.5 调到 0.5，再依次切换 nearest、linear 和 cubic。记录边缘、伪影、重建平滑度和输出成本的变化，并说明哪一步属于 reconstruction。
+
+<Answer>
+  倍数大于 1 时是 enlarging images，主要观察插值边缘；倍数小于 1 时是 shrinking
+  images，重点观察高频折叠与抗混叠。切换 nearest、linear、cubic 就是在改变
+  reconstruction 规则；它们分别使用单点、局部线性和更宽邻域权重。
+</Answer>
+
+**问题 3：诊断缩小后的摩尔纹。** 图像中心的平滑区域正常，但细密纹理出现周期性条纹。你会按什么顺序检查？
+
+<Answer>
+  先确认缩放方向与目标采样率，再检查是否在 shrinking images
+  前做了抗混叠或面积意义的低通；然后比较 filter
+  的频率响应、源纹理的最高频率和边界模式。用同一高频测试图记录频谱或多帧稳定性，避免只调锐度。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="enlarging images"
+    definition="把源图像映射到更大目标网格并从邻域估计新像素的过程。"
+  />
+  <GlossaryItem
+    term="shrinking images"
+    definition="把源图像映射到更小目标网格并汇聚源样本、控制高频混叠的过程。"
+  />
+  <GlossaryItem
+    term="reconstruction"
+    definition="根据源邻域、采样位置和滤波权重估计目标像素的过程。"
+  />
+  <GlossaryItem
+    term="resampling"
+    definition="在新的采样网格上重新读取或估计图像值的过程。"
+  />
+  <GlossaryItem
+    term="antialiasing"
+    definition="在采样或缩放前后抑制高频混叠与边缘伪影的处理。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 19: Enlarging and Shrinking Images"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
