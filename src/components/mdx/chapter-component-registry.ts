@@ -4447,6 +4447,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp25TopologyDiagram: module0.Cgp25TopologyDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-27-materials-and-scattering":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-27-materials-and-scattering");
+      return {
+        Cgp27BrdfLobeDiagram: module0.Cgp27BrdfLobeDiagram,
+        Cgp27BsdfDiagram: module0.Cgp27BsdfDiagram,
+        Cgp27EnergyDiagram: module0.Cgp27EnergyDiagram,
+        Cgp27MaterialPipelineDiagram: module0.Cgp27MaterialPipelineDiagram,
+        Cgp27MaterialsLab: module0.Cgp27MaterialsLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

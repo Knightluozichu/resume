@@ -1,0 +1,218 @@
+---
+title: "Materials and Scattering"
+type: D
+section: "材质与散射"
+order: 27
+description: "从入射与出射方向、BRDF 与 BSDF 出发，理解材质如何分配反射、透射与吸收能量。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-27
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp27BrdfLobeDiagram,
+  Cgp27BsdfDiagram,
+  Cgp27EnergyDiagram,
+  Cgp27MaterialPipelineDiagram,
+  Cgp27MaterialsLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-27-materials-and-scattering";
+
+<Objectives>
+
+- 能解释 materials and scattering 的入射、出射、反射、透射与吸收输入输出
+- 能比较 brdf 与 bsdf 的职责，并说明粗糙度、金属性和透射率如何改变散射分布
+- 能修改 MaterialsLab 的参数，依据高光宽度与能量分支定位材质实现问题
+
+</Objectives>
+
+## 先把材质看成能量分配器
+
+颜色不是材质的完整定义。光线从方向 wi 入射到表面，材质根据法线、入射方向、出射方向和自身参数，把入射能量 Li 分到不同出射方向 wo；一部分可能反射，一部分可能透射，一部分被吸收。理解 materials and scattering，就是先把“表面长什么颜色”改写成“能量往哪里走、走多少”。
+
+先预测：把粗糙度从低值拖到高值时，高光会变窄还是变宽？把透射率提高时，反射分支会不会自动增加？打开实验，每次只改一个滑块，记录高光宽度、反射峰、漫反射和透射能量。
+
+<Cgp27MaterialsLab />
+
+## materials and scattering：从入射方向到出射方向
+
+<Callout type="tip" title="先画方向，再谈颜色">
+  调试材质时先标出法线、入射方向 wi 和观测方向
+  wo，再问能量在哪个分支消失。颜色只能说明某个通道的结果，方向图才能说明散射规则是否正确。
+</Callout>
+
+<Term def="描述光进入表面后如何按方向分配到反射、透射和吸收等结果的过程与模型。">
+  materials and scattering
+</Term>
+
+<Cgp27MaterialPipelineDiagram />
+
+对固定入射方向，材质模型不是查一个固定颜色，而是评估一个方向相关的权重。渲染器通常把入射辐亮度、几何项、可见性和散射函数组合起来，得到某个出射方向的贡献。若只改变 base color 却不检查方向，镜面高光过宽、玻璃没有透射或金属边缘发灰等问题就很难定位。
+
+## brdf：只描述表面反射
+
+<Callout type="trap" title="把 brdf 当成颜色纹理">
+  现象 → 漫反射颜色看起来正确，但视角一转，高光位置和宽度完全不对。 原因 → brdf
+  是入射方向与出射方向的函数，不是贴在表面上的单一 RGB 值。 修法 →
+  固定光源和法线，扫描观测方向，先检查反射瓣的峰值、宽度与归一化，再调颜色。
+</Callout>
+
+<Term def="双向反射分布函数：在给定入射方向、出射方向和表面状态时，描述入射光被反射到该方向的比例。">
+  brdf
+</Term>
+
+brdf 的输入至少包含入射方向 wi、出射方向 wo 和表面状态；输出是一个反射权重。用符号表示，反射分支可写成 $f_r(w_i,w_o)$。它回答的是“从这个入射方向来的光，有多少会沿这个出射方向离开”，因此同一材质从正视角、掠射角观察时会出现不同高光。
+
+<Term def="控制微表面法线分布宽窄的材质参数；通常粗糙度越高，镜面反射峰越宽、峰值越低。">
+  roughness
+</Term>
+
+<Cgp27BrdfLobeDiagram />
+
+在微表面模型中，粗糙度改变的是微小法线的统计分布：表面越光滑，反射能量越集中在镜面方向附近；表面越粗糙，能量会分散到更大的角度范围。金属性会改变反射颜色和漫反射的角色，但不会替代 brdf 的方向计算。
+
+## bsdf：把反射与透射放进同一个接口
+
+<Callout type="trap" title="把玻璃只实现成透明度">
+  现象 → 物体能看穿，却没有边缘反射、折射方向也不随法线变化。 原因 →
+  透明度只是混合结果，不能表达 bsdf 中的反射与透射方向。 修法 → 分别记录反射
+  wo、透射 wt、折射率和每个分支的能量，再检查它们是否满足材质的物理约束。
+</Callout>
+
+<Term def="双向散射分布函数：统一描述表面反射与穿过表面的透射，brdf 是其中只包含反射的特例。">
+  bsdf
+</Term>
+
+bsdf 把两类方向分支放进同一个散射接口：反射仍然位于表面法线同侧，透射则穿过表面并受到折射率影响。对不透明材质，透射分支可以为零，此时 bsdf 的行为退化为 brdf；对玻璃、薄膜或半透明材料，反射与透射需要同时计算。透射率不能只作为最终颜色的 alpha，因为它还会改变能量的去向和下一次可见性。
+
+<Cgp27BsdfDiagram />
+
+## energy conservation：每一条分支都要有预算
+
+<Term def="散射模型不能凭空创造能量；在同一入射能量下，反射、透射与吸收等分支的总量必须受约束。">
+  energy conservation
+</Term>
+
+<Cgp27EnergyDiagram />
+
+在简化的标量检查中，可以写成 $L_r + L_t + L_a \leq L_i$，其中 $L_r$ 是反射、$L_t$ 是透射、$L_a$ 是吸收，$L_i$ 是入射能量。真实渲染会按颜色通道、立体角和余弦项积分，但调试时仍可先做这个预算检查：若高光和透射都变强而没有对应的吸收减少，通常是权重重复计算或归一化缺失。
+
+金属与非金属的区别也可以放进这张预算表：金属通常把更多可见光能量放在带颜色的反射分支，几乎没有传统漫反射；非金属保留漫反射，并在掠射角附近增强反射。无论模型多复杂，最终都应能解释每个分支从哪里得到能量。
+
+## 三步实验：从反射瓣到透射预算
+
+每一步先预测，再固定其他参数。记录粗糙度、金属性、透射率、高光宽度与三类能量反馈，区分方向分布错误和总量超预算错误。
+
+<Stepper>
+  <Step title="第一步：读懂入射与出射">
+    先把模式设为 diffuse，固定粗糙度和透射率，观察入射 wi、出射 wo 与材质模型之间的关系。预测改变视角后，颜色是否足以预测出射能量，再用流程图核对方向和能量各自的角色。
+
+    <Cgp27MaterialPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：扫描 brdf 反射瓣">
+    先预测粗糙度从低到高时反射峰如何变化，再在实验中切换 glossy 与 metal。用反射瓣图区分“峰值降低但面积保持”与“能量凭空消失”，不要把高光宽度误当成总反射能量。
+
+    <Cgp27BrdfLobeDiagram />
+
+  </Step>
+  <Step title="第三步：核对 bsdf 和能量预算">
+    先预测提高 transmission 后，反射和透射分支会如何重新分配。切换 glass，观察反射、透射和吸收的总预算，再用 bsdf 图与能量图检查反射方向、透射方向和总量约束。
+
+    <Cgp27BsdfDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用一个高光颜色代替方向函数">
+  现象 → 正面截图很像参考图，换光源或换视角就出现高光跳变。 原因 →
+  只存了高光颜色，没有按 wi、wo、法线和 roughness 评估 brdf。 修法 →
+  画出反射瓣，采样多个出射方向，并记录峰值、宽度和积分后的反射能量。
+</Callout>
+
+<Callout type="trap" title="让 metallic 同时打开漫反射和金属反射">
+  现象 → 金属表面既有饱和漫反射，又有异常明亮的镜面峰，整体能量超过输入。 原因 →
+  金属性被当成额外叠加项，而不是反射与漫反射权重之间的重分配。 修法 →
+  先明确材质类别，再检查反射颜色、漫反射权重和 energy conservation 的总预算。
+</Callout>
+
+<Callout type="trap" title="把透射率当成无方向的 alpha">
+  现象 → 玻璃总是像贴纸一样半透明，厚度、法线和折射率都不起作用。 原因 → alpha
+  混合没有计算 bsdf 的透射方向和界面反射。 修法 → 单独记录
+  wt、折射率、反射分支和透射分支，再用不同入射角验证方向变化。
+</Callout>
+
+## 本章小结
+
+- materials and scattering 把材质理解为方向相关的能量分配规则，输入是入射方向、出射方向、法线与材质状态。
+- brdf 只描述表面反射；roughness 改变反射瓣的宽度与峰值，metallic 改变反射颜色与漫反射权重。
+- bsdf 在同一个接口中描述反射与透射，玻璃等材质需要同时检查反射方向、透射方向和折射率。
+- energy conservation 要求反射、透射和吸收的总预算受入射能量约束；视觉调参必须与分支能量和方向采样一起验收。
+
+<Exercises>
+
+**问题 1：判断反射瓣。** 固定入射光和材质颜色，把 roughness 从 0.1 调到 0.8。你预期高光峰的宽度、峰值和总反射能量分别怎样变化？如何验证不是单纯把能量删掉？
+
+<Answer>
+  反射瓣应变宽，峰值通常降低，但在模型保持归一化时，覆盖角度范围变大后总反射能量不应凭空消失。可以扫描多个出射方向，对反射权重做离散积分，同时检查实验中的高光宽度和反射分支预算。
+</Answer>
+
+**问题 2：区分 brdf 与 bsdf。** 一个材质只有不透明的表面反射，另一个材质需要表现玻璃的反射和透射。你会选择哪个接口，并检查哪些方向量？
+
+<Answer>
+  只有表面反射时使用 brdf 就足够；玻璃需要 bsdf，因为它同时包含反射 wo 和透射
+  wt。两者都要结合入射 wi 与法线，玻璃还要检查折射率、界面反射和透射能量是否满足
+  energy conservation。
+</Answer>
+
+**问题 3：诊断能量超预算。** 提高 metallic 和 transmission 后，画面比输入光更亮。请给出最可能的排查顺序。
+
+<Answer>
+  先把反射、透射、吸收三个分支分别可视化，确认是否把同一入射能量在多个阶段重复加了一次；再检查
+  metallic 是否同时保留了不应存在的漫反射，最后检查 bsdf
+  的归一化、余弦项和光源累计方式。用 $L_r + L_t + L_a \leq L_i$
+  做每个通道的预算对照。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="materials and scattering"
+    definition="描述光进入表面后如何按方向分配到反射、透射和吸收结果的过程与模型。"
+  />
+  <GlossaryItem
+    term="brdf"
+    definition="只描述表面反射方向分布的双向反射分布函数。"
+  />
+  <GlossaryItem
+    term="bsdf"
+    definition="统一描述表面反射与穿过表面透射的双向散射分布函数。"
+  />
+  <GlossaryItem
+    term="roughness"
+    definition="控制微表面法线分布宽窄的参数，通常越高则镜面反射越分散。"
+  />
+  <GlossaryItem
+    term="energy conservation"
+    definition="反射、透射和吸收等分支的总能量不能超过入射能量的约束。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 27: Materials and Scattering"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
