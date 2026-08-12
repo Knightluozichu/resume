@@ -1,0 +1,223 @@
+---
+title: "Interaction Techniques"
+type: D
+section: "交互技术"
+order: 21
+description: "从输入映射、虚拟球面到相机约束，理解 arcball、trackball 与 unicam 如何把手势变成连续可控的视图变化。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-21
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp21ArcballProjectionDiagram,
+  Cgp21InteractionPipelineDiagram,
+  Cgp21InteractionTechniquesLab,
+  Cgp21TechniqueComparisonDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-21-interaction-techniques";
+
+<Objectives>
+
+- 能把 pointer、wheel、按键等输入拆成采样、映射、约束和相机状态更新四个环节
+- 能解释 arcball 如何用虚拟球面上的起点与终点得到旋转轴和角度，并比较 trackball 与 unicam 的取舍
+- 能修改 InteractionTechniquesLab 的交互方案、指针轨迹、灵敏度和目标约束，定位跳变、漂移与失控
+
+</Objectives>
+
+## 为什么“拖动”不是一个完整的交互模型
+
+用户说“我想看看模型背面”，程序收到的却只是指针位移、按键和滚轮事件。真正的交互技术要回答：位移对应哪个自由度？状态更新是否连续？相机是否仍然指向可理解的目标？如果只把 dx 和 dy 直接加到欧拉角上，视角可能在极点翻转、拖动速度依赖分辨率，或者松手后无法解释下一次手势的起点。
+
+先预测：把同一条从左下拖到右上的轨迹分别交给 arcball、trackball 和 unicam，三者会产生完全相同的相机方向吗？打开下面的实验，固定指针 X/Y，只切换方案，再观察相机方向、目标线和约束状态的变化。
+
+<Cgp21InteractionTechniquesLab />
+
+## interaction techniques 的共同骨架
+
+<Cgp21InteractionPipelineDiagram />
+
+<Callout type="trap" title="把输入增量直接当成最终相机角度">
+  现象 →
+  相同手势在不同窗口尺寸、帧率或缩放比例下产生不同旋转，靠近极点时还会突然翻转。
+  原因 →
+  输入采样、屏幕坐标到几何状态的映射，以及相机约束被压缩成了一次角度相加。 修法
+  →
+  明确保存相机状态，先归一化输入，再经过选定的交互模型和约束，最后一次性提交新状态。
+</Callout>
+
+<Term def="把用户输入映射为对象、相机或场景状态变化的一组规则；它规定手势的语义、连续性、约束和反馈。">
+  interaction techniques
+</Term>
+
+一个可测试的交互循环可以写成：
+
+$$
+state_{t+1} = constrain(map(sample(input_t), state_t))
+$$
+
+人话翻译：先从输入事件得到稳定的采样，再根据当前状态解释它，最后施加约束。map 决定“拖动意味着旋转还是平移”，constrain 决定相机不会穿过目标、翻到不可导航的姿态。把这两层分开，才能单独测试映射错误和约束错误。
+
+输入还需要一个坐标契约：屏幕原点在哪里，Y 轴向上还是向下，拖动的正方向是什么，按住哪个修饰键切换自由度。契约不清时，用户会把“视角反了”误认为算法不稳定；调试时应先在屏幕上画出指针轨迹和坐标轴，再检查状态变化。
+
+## arcball：用虚拟球面建立旋转直觉
+
+<Cgp21ArcballProjectionDiagram />
+
+<Term def="把屏幕指针位置投影到虚拟球面，用起点与终点的夹角和叉积构造连续旋转的交互技术。">
+  arcball
+</Term>
+
+arcball 的关键不是“画一个球”，而是给二维拖动补上可解释的三维几何。对屏幕坐标归一化后，若点落在圆盘内，可以投影到半径为 1 的球面：
+
+$$
+z = \sqrt{1 - x^2 - y^2}
+$$
+
+若点落在圆盘外，则应沿圆盘边界或用双曲面式的连续近似，避免拖动到边缘时速度突然跳变。得到起点 p_0 和终点 p_1 后，旋转轴可以取 p_0 × p_1，旋转角是两向量的夹角。这样“沿屏幕斜向拖动”自然变成绕一条空间轴旋转，而不是分别修改 yaw 和 pitch。
+
+<Term def="以场景中的目标或参考点为中心，把相机旋转限制在可导航轨道上的状态参数。">
+  camera pivot
+</Term>
+
+arcball 通常围绕 camera pivot 更新视角：旋转改变相机相对目标的方向，目标本身不漂移。实现时要保存拖动开始时的姿态，把本次手势得到的增量旋转乘到起始姿态上；不要每帧把当前指针位置重复解释成从世界原点开始的绝对旋转。
+
+## trackball 与 unicam：连续性和可控性的另一组取舍
+
+<Term def="把拖动、滚轮或轴向输入解释为绕连续旋转轴运动，并允许用户逐步调整视角的交互模型。">
+  trackball
+</Term>
+
+trackball 适合需要持续旋转和细调的场景。它可以把拖动映射到屏幕切向方向，把滚轮或第二个轴映射为绕视线旋转；优点是连续、容易累积，代价是自由度太多时用户可能失去方向感。实现时应给出明确的旋转中心和灵敏度，并在状态更新后保留正交的相机基向量。
+
+<Term def="把相机的轨道、平移、缩放和目标约束组织成可导航状态的交互模型；它优先保证视图稳定和可恢复。">
+  unicam
+</Term>
+
+unicam 更强调“相机怎么走”而不是“球面怎么转”。它通常把 orbit、pan、dolly 与目标约束组合成一套相机控制器：普通拖动绕目标旋转，修饰键平移，滚轮沿视线靠近或远离。好的 unicam 会在极点、距离下限和碰撞边界处提供软约束或明确反馈，让用户知道是输入被限制，而不是程序丢失了状态。
+
+下面的对比不是评选唯一答案，而是帮助选择状态模型：物体检查可偏向 arcball，连续旋转可偏向 trackball，场景浏览和稳定导航通常需要 unicam 的约束层。
+
+<Cgp21TechniqueComparisonDiagram />
+
+## 三步实验：从输入轨迹到可恢复相机
+
+每一步先预测，再只改变一个因素。记录输入点、相机 yaw/pitch、目标线是否漂移，以及约束开启后结果是否仍然连续。
+
+<Stepper>
+  <Step title="第一步：固定轨迹，检查输入契约">
+    将指针 X/Y 调到同一组数值，依次切换三种 interaction techniques。先判断每个方案把拖动解释成旋转、滚转还是轨道，再核对屏幕 Y 轴方向和灵敏度是否符合预期。
+
+    <Cgp21InteractionPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：用 arcball 检查球面投影">
+    选择 arcball，先预测指针靠近圆盘边缘时旋转速度的变化，再改变 X/Y。观察起点、终点和旋转轴的关系；若轨迹跨过中心时方向跳变，优先检查投影分支和拖动起始姿态。
+
+    <Cgp21ArcballProjectionDiagram />
+
+  </Step>
+  <Step title="第三步：打开约束比较可导航性">
+    选择 unicam，分别关闭和开启目标约束，增大灵敏度并观察相机目标线。若相机穿过目标或目标漂移，区分是约束缺失、状态累积顺序错误，还是输入增量重复应用。
+
+    <Cgp21TechniqueComparisonDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用欧拉角累加替代交互模型">
+  现象 → 水平拖动还算正常，垂直拖到极点后发生翻转，继续拖动时左右方向互换。 原因
+  → yaw、pitch 被当作互不相关的独立旋转，忽略了相机基向量和姿态奇异点。 修法 →
+  用 arcball
+  的球面向量、四元数或受约束的轨道状态表达旋转，并测试极点附近的连续拖动。
+</Callout>
+
+<Callout type="trap" title="把相机目标和相机位置一起无约束地移动">
+  现象 → 用户只是旋转视角，场景目标却漂移；松手后下一次拖动从错误中心开始。 原因
+  → 没有区分 camera pivot、相机位置与朝向，或在每帧更新时混用了旧状态和新状态。
+  修法 →
+  明确目标、距离和方向的所有权，先计算候选状态，再统一施加距离、极点和碰撞约束。
+</Callout>
+
+<Callout type="trap" title="只测鼠标，不测边界和恢复操作">
+  现象 →
+  桌面端看起来顺滑，触摸、窗口缩放或切换输入设备后出现跳变，用户也无法回到熟悉视角。
+  原因 → 测试没有覆盖坐标归一化、指针捕获、灵敏度边界和 reset 初始状态。 修法 →
+  用固定轨迹做跨设备回归，给控制器提供清晰的重置和可见反馈，并记录每次状态变化的来源。
+</Callout>
+
+## 本章小结
+
+- interaction techniques 的核心是把输入采样、语义映射、状态约束和反馈拆开，让每一层都可测试。
+- arcball 用虚拟球面把二维指针变成连续三维旋转；trackball 强调连续轴向调节；unicam 把相机轨道、平移、缩放和目标约束组织成可导航状态。
+- camera pivot、起始姿态和输入坐标契约必须稳定保存，否则会出现漂移、翻转、跳变或无法恢复。
+- 选择方案时先问用户想改变对象、相机方向还是浏览路径，再用固定轨迹和边界用例验证连续性与可控性。
+
+<Exercises>
+
+**问题 1：判断映射层故障。** 同一条指针轨迹在窗口放大一倍后旋转角度也放大一倍，但相机约束没有触发。你先检查什么？
+
+<Answer>
+  先检查屏幕坐标是否按 viewport
+  宽高归一化，以及输入增量是否重复乘了窗口缩放系数。再分别记录 sample、map
+  输出和 constrain 输入，确认问题发生在坐标契约或映射层，而不是约束层。
+</Answer>
+
+**问题 2：实现 arcball。** 给定拖动开始点 p_0 和结束点 p_1，说明如何构造旋转轴与角度，并指出圆盘外投影为什么需要连续处理。
+
+<Answer>
+  把两个屏幕点归一化后投影到虚拟球面，旋转轴取 p_0 ×
+  p_1，角度取两向量的夹角，再把增量旋转应用到拖动开始时保存的姿态。圆盘外若直接截断到边界，速度会在边缘突然变化，因此需要沿边界或用连续的双曲面近似。
+</Answer>
+
+**问题 3：选择交互技术。** 物体检查需要围绕中心自由旋转，建筑漫游需要平移、缩放并保持可恢复的相机目标。你会如何选择并验证？
+
+<Answer>
+  物体检查可先用 arcball 获得直观的球面旋转，持续细调可比较
+  trackball；建筑漫游更适合 unicam 的 orbit、pan、dolly
+  与目标约束。用同一组固定轨迹覆盖中心、极点、距离边界和
+  reset，比较方向连续性、目标漂移和恢复结果。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="interaction techniques"
+    definition="把用户输入映射为对象、相机或场景状态变化的一组规则。"
+  />
+  <GlossaryItem
+    term="arcball"
+    definition="用虚拟球面投影和起终点向量构造连续旋转的交互技术。"
+  />
+  <GlossaryItem
+    term="trackball"
+    definition="把拖动、滚轮或轴向输入解释为连续旋转调节的交互模型。"
+  />
+  <GlossaryItem
+    term="unicam"
+    definition="把相机轨道、平移、缩放和目标约束组织成可导航状态的交互模型。"
+  />
+  <GlossaryItem
+    term="camera pivot"
+    definition="作为相机旋转中心的场景目标或参考点，帮助保持视图稳定。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 21: Interaction Techniques"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

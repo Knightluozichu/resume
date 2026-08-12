@@ -4387,6 +4387,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp20TextureMappingLab: module0.Cgp20TextureMappingLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-21-interaction-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-21-interaction-techniques");
+      return {
+        Cgp21ArcballProjectionDiagram: module0.Cgp21ArcballProjectionDiagram,
+        Cgp21InteractionPipelineDiagram:
+          module0.Cgp21InteractionPipelineDiagram,
+        Cgp21InteractionTechniquesLab: module0.Cgp21InteractionTechniquesLab,
+        Cgp21TechniqueComparisonDiagram:
+          module0.Cgp21TechniqueComparisonDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
