@@ -1,0 +1,271 @@
+---
+title: "GPU Gems 2 · Chapter 32. Taking the Plunge into GPU Computing"
+type: D
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 32
+description: "从局部性、计算密度、传输摊销、浮点精度和 scatter 绕行策略出发，判断一个 CPU 算法是否值得迁移到 GPU。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-32-taking-plunge-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-32
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch32ArithmeticIntensityDiagram,
+  GpuGems2Ch32DecisionTreeDiagram,
+  GpuGems2Ch32LocalityDiagram,
+  GpuGems2Ch32PrecisionDiagram,
+  GpuGems2Ch32ScatterStrategiesDiagram,
+  GpuGems2Ch32StrategyLab,
+  GpuGems2Ch32TransferAmortizationDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch32-taking-plunge";
+
+<Objectives>
+
+- 能解释内存访问、计算量、数据传输和数值表示如何共同决定 GPU 迁移收益
+- 能修改 StrategyLab 中的 workload、locality 与 precision，并根据派生指标选择 scatter 绕行策略
+- 能回答：当地址动态变化、读回成本很高且结果需要高精度时，应如何判断 GPU 是否值得使用
+
+</Objectives>
+
+## 先问：为什么“搬到 GPU”不等于“自然变快”
+
+想象两间工厂：一间擅长让很多工人同时做同一种动作，另一间擅长让少数工人灵活地处理不同订单。把订单送进第一间工厂有固定的装卸成本；如果只做一小步就把半成品搬回来，工人再多也救不了总时间。
+
+本章解决的问题是：面对一个 CPU 算法，怎样在动手改写前判断它是否值得迁移？如果忽略访问方式、装卸成本和数字表示，最常见的结果是并行程序内部很快，但端到端更慢，或者结果看似接近却在大索引处出错。
+
+<Callout type="tip" title="先预测，再打开实验">
+  先猜一猜：把一个任务的访问顺序打乱、把每个元素的计算量提高、再把结果读回主机，哪一项最可能改变迁移收益？打开下方实验时只改一个条件，并记录变化来自哪里。
+</Callout>
+
+## 1. 访问顺序决定内存能否跟上
+
+<Term def="程序连续访问相邻数据的程度；连续、规则的访问通常更容易被硬件批量服务。">
+  locality
+</Term>
+
+CPU 和 GPU 都需要 locality，但两者的缓存职责不同。GPU 的 texture cache 主要服务纹理过滤，容量和布局更偏向二维局部区域；它不是一个能像 CPU cache 那样同时缓存任意读写的通用工作区。因此，连续扫描大向量通常容易发挥 GPU 带宽，而 pointer chasing 和随机读会让读取延迟更难隐藏。
+
+<GpuGems2Ch32LocalityDiagram />
+
+原章用 GeForce 6800 Ultra 与 Pentium 4 的历史测量说明了这一差异：同一 GPU 对 cached、sequential、random 三种访问模式的表现可以相差很大。数字只属于当时硬件；可迁移的结论是“先画出地址序列，再判断数据布局”，而不是把旧带宽数字当作现代保证。
+
+<Callout type="trap" title="看到 GPU 带宽高，就直接保留 pointer chasing">
+  现象 → 算法搬到 fragment program 后，随机读取占满时间。原因 →
+  高峰值带宽只对适合批量服务的访问有意义，跳跃地址会破坏局部性。修法 →
+  先把结构改成连续数组、二维邻域或排序后的访问，再比较 GPU 与 CPU。
+</Callout>
+
+## 2. 让计算覆盖读取等待
+
+<Term def="算术操作数量与内存操作数量的比值；它表示每次数据读取能支撑多少计算。">
+  arithmetic intensity
+</Term>
+
+发出 texture fetch 后，GPU 可以先切换去处理下一个 fragment；数据返回后再继续原来的计算。若 kernel 只有一次读取、一次加法和一次写回，等待很容易暴露出来；如果每个读取之后有足够多的独立算术，计算就有机会覆盖这段 latency。
+
+可以用一个粗略比值判断方向：
+
+$$
+AI=\frac{N_{arithmetic}}{N_{memory}}.
+$$
+
+这个式子在说：每次内存操作支撑的计算越多，任务越可能受 GPU 算力而不是读写等待限制。
+
+<GpuGems2Ch32ArithmeticIntensityDiagram />
+
+原章把这一点和 CPU/GPU 的计算吞吐差异联系起来，但“高 AI 必然更快”仍是不完整的结论。元素必须足够多、访问不能完全随机，且 host 与 GPU 之间不能反复同步；这些条件缺一个，计算优势都可能被边界成本抵消。
+
+## 3. 把下载和读回放进总时间
+
+<Term def="把初始数据传到 GPU 以及把结果取回 CPU 的两段边界传输；它们不属于 kernel 时间，却属于端到端时间。">
+  download/readback
+</Term>
+
+CPU 版本通常不需要先下载数据，也不需要把结果读回。GPU 版本若只运行一次简单向量加法，必须把两份输入送入显存、运行 kernel，再把结果拿回主机；这些步骤可能超过 kernel 本身节省的时间。模拟类任务更有机会摊薄成本，因为数据可以在 GPU 上迭代许多次之后再读回。
+
+<GpuGems2Ch32TransferAmortizationDiagram />
+
+因此比较时至少记录四段：CPU 计算、download、GPU compute、readback。纹理与 frame-buffer 的格式也会影响传输速度；驱动若需要做格式转换，测到的就不只是算法成本。
+
+<Callout type="trap" title="只报告 GPU timestamp，不报告端到端时间">
+  现象 → fragment program 比 CPU loop 快，用户体验却没有改善。原因 → profile
+  漏掉了 upload、readback、格式转换和同步。修法 →
+  把资源生命周期画在时间线上；只有当多次 GPU 迭代能摊薄两端传输，才把 kernel
+  优势算进总收益。
+</Callout>
+
+## 4. 浮点格式会改变正确性
+
+<Term def="浮点数能保留多少有效位以及能连续表示多大整数的能力；它决定数值误差和地址计算是否可靠。">
+  floating-point precision
+</Term>
+
+GPU Gems 2 所处的硬件时代，GPU 可能提供 NVIDIA fp16、ATI fp24 或 NVIDIA fp32 等格式。mantissa 位数越少，能精确表示的有效数字越少；这对着色颜色可能足够，对数值模拟、归约和地址计算却可能造成明显误差。fp16 在历史表格中只能连续表示到 2,048 左右的整数，超过这个范围时，某些整数会被跳过。
+
+<GpuGems2Ch32PrecisionDiagram />
+
+地址计算尤其危险：如果把一维索引压进浮点值，再用它计算二维纹理坐标，表示误差会表现成偶发的 off-by-one。修法不是“多看几位小数”，而是明确目标格式的 mantissa、最大连续整数、边界行为和允许误差；现代设备支持的格式与旧 GPU 不同，必须在目标 API 上复核。
+
+<Callout type="trap" title="把低精度只当成画面稍微不一样">
+  现象 → 小尺寸数据测试正常，大数组或长时间模拟出现跳格、漂移或索引错位。原因 →
+  precision 不只影响颜色，还影响地址和累计误差。修法 →
+  在实验中切换格式，记录最大连续整数和误差；地址与计数优先使用可证明安全的表示方式。
+</Callout>
+
+## 5. scatter 不能直接照搬
+
+<Term def="从计算出的地址写入内存，例如 a[i] = x；fragment program 通常只能写到预先确定的 fragment 输出位置。">
+  scatter
+</Term>
+
+在上一章的模型里，gather 是从计算出的地址读取；本章关注相反的 `a[i] = x`。fragment program 没有任意 texture write 指令，输出地址在 fragment 执行前已经由 rasterization 决定，因此很多 CPU 算法的间接写入不能直接翻译。
+
+### 固定连接：把 scatter 改写成 gather
+
+spring-mass 系统中，弹簧连接的质量点如果是固定的，就可以先把每条 spring 的 force 写到连续 buffer，再让第二个 pass 遍历每个 mass，主动 gather 会影响它的力。多一个 pass 换来了固定的输出位置和可验证的读取关系。
+
+### 动态地址：记录地址、排序、再 gather
+
+粒子在每个时间步移动到不同 voxel 时，scatter 地址运行时才知道。可以输出 `(value, address)` 对，按 address 排序，让相同目标相邻，再对每个目标做搜索与 gather。它的 pass 多、实现重，但不需要把中间结果读回 CPU。
+
+### 少量写入：用 vertex point rendering
+
+vertex program 天然能改变点的目标位置，因此少量 scatter 可以用点渲染表达。代价是 rasterization 利用率较低，而且多个点落到同一个位置时会发生 collision；可以用 z-buffer 或 blending 设计冲突规则，但不能假设最后写入者稳定。
+
+<GpuGems2Ch32ScatterStrategiesDiagram />
+
+<Callout type="tip" title="先问地址是否固定，再挑绕行方案">
+  固定地址优先尝试 gather；动态地址再考虑 address
+  sorting；散射量很少且碰撞可处理时，point rendering 可能更简单。三者都要报告
+  pass 数、读写量和碰撞语义，不能只比较代码行数。
+</Callout>
+
+## 6. 一个可重复的迁移决策
+
+<GpuGems2Ch32DecisionTreeDiagram />
+
+把决策压缩成四问：访问是否连续？每次读取能否支撑足够计算？download/readback 能否被多次迭代摊薄？若存在 scatter，地址是否固定、散射量多大、碰撞如何处理？这四问比“GPU 有多少 Gflops”更接近真正的工程选择。
+
+```text
+measure(addressPattern, arithmeticOps, memoryOps, transfers)
+if locality is low: reshape data or keep the CPU path
+if arithmeticOps / memoryOps is low and transfers are large: amortize or stop
+if scatterAddress is fixed: convert scatter to gather
+else if scatterCount is small: render points and define collisions
+else: sort (value, address) pairs, then gather
+```
+
+代码只是决策骨架，不是某个历史 API 的可运行实现。真正落地时仍需把纹理格式、同步、精度和设备 profile 填进测量表。
+
+先猜一猜：把 `histogram` 切到 `vector`，再把 locality 拖低，哪一项会改变推荐策略？打开实验，依次只改一个控件，并观察 `texture reads`、`transfer words`、`safe integer ceiling` 和 `recommended mapping`。
+
+<GpuGems2Ch32StrategyLab />
+
+## 三步验收：先筛选，再改写
+
+<Stepper>
+  <Step title="第一步：画地址流与计算流">
+    把 CPU 版本每次读写的地址列出来，标出连续段、跳跃段和数据复用；再计算每个元素的 arithmetic operations 与 memory operations。先确认任务的访问形状，再决定是否值得迁移。
+
+    <GpuGems2Ch32LocalityDiagram />
+    <GpuGems2Ch32ArithmeticIntensityDiagram />
+
+  </Step>
+  <Step title="第二步：补齐边界与数值证据">
+    在总账中加入 download、GPU compute、readback 和格式转换；用目标浮点格式测试大索引、长迭代与容差，不要用一次小数组通过就宣布正确。
+
+    <GpuGems2Ch32TransferAmortizationDiagram />
+    <GpuGems2Ch32PrecisionDiagram />
+
+  </Step>
+  <Step title="第三步：把 scatter 改成可验证的路径">
+    固定地址使用 gather 转换，动态地址记录并排序地址对，少量写入才考虑 point rendering；为每种方案保存 pass 数、读写量和 collision policy，最后在目标设备上 profile。
+
+    <GpuGems2Ch32ScatterStrategiesDiagram />
+    <GpuGems2Ch32DecisionTreeDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- locality 决定 GPU 内存系统能否持续供数。
+- arithmetic intensity 帮助判断计算能否覆盖读取等待。
+- download/readback 属于端到端成本，必须被迭代摊薄。
+- floating-point precision 同时影响数值误差和地址安全。
+- scatter 要按地址是否固定、规模和碰撞语义改写为 gather、排序或点渲染。
+
+<Exercises>
+
+**问题 1｜迁移判断。** 一个向量加法 kernel 每个元素只做 2 次加法，却需要下载两份输入并读回结果；一个反应扩散模拟在同一份数据上运行 500 个迭代。哪一个更可能从 GPU 受益？需要补测哪些数据才能确认？
+
+<Answer>
+  反应扩散更可能受益，因为它能在 GPU 上重复计算，摊薄两端传输；向量加法的 kernel
+  很轻，download/readback 可能占主导。确认时要测 address
+  pattern、arithmetic/memory operations、download、GPU
+  compute、readback、格式转换和目标设备上的实际吞吐，而不是只看 kernel
+  timestamp。
+</Answer>
+
+**问题 2｜精度与地址。** 使用历史 fp16 路径处理一个需要索引到 3,079 的二维纹理。为什么即使小索引测试通过，也不能相信所有地址都正确？你会在 StrategyLab 中改变哪个控件并记录什么证据？
+
+<Answer>
+  fp16 的 mantissa 只能保证连续表示到约 2,048 的整数，3,079
+  附近可能跳过某些整数，导致坐标 off-by-one。应把 precision 切到
+  fp16、fp24、fp32，记录 safe integer
+  ceiling、代表值误差与边界索引结果；真实修复还要在目标 GPU/API 上复核格式。
+</Answer>
+
+**问题 3｜修改实验代码。** StrategyLab 中把 `histogram` 的推荐路径固定为 `address sorting + gather`。请修改决策逻辑：当散射地址固定时改为 `convert scatter to gather`，当散射值少于输入的 5% 时改为 `render points`，并说明要新增哪两个验证指标。
+
+<Answer>
+  可以先判断 `scatterAddressFixed`，若为真返回 `convert scatter to gather`；否则比较 `scatterCount / elements < 0.05`，满足时返回 `render points`，否则保留 `address sorting + gather`。应新增至少两个指标：额外 pass/排序工作量，以及 collision count 或 collision policy；否则推荐路径看似变化，却无法验证语义代价。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="locality"
+    definition="数据访问彼此靠近的程度；连续读相邻元素通常比到处跳地址更容易跑满带宽。"
+  />
+  <GlossaryItem
+    term="arithmetic intensity"
+    definition="每次内存读写平均对应多少算术操作，用来判断任务更像算力问题还是带宽问题。"
+  />
+  <GlossaryItem
+    term="download/readback"
+    definition="把数据送到 GPU 和把结果取回 CPU 的两段传输；kernel 很快也不代表这两段免费。"
+  />
+  <GlossaryItem
+    term="floating-point precision"
+    definition="数字能保留多少有效位、能连续表示多大整数的能力；位数不够时地址也可能算错。"
+  />
+  <GlossaryItem
+    term="scatter"
+    definition="从计算出的地址写入数据，例如把 x 写进 a[i]；fragment 输出位置通常不能在程序中任意改变。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 32. Taking the Plunge into GPU Computing"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-32-taking-plunge-gpu"
+/>
