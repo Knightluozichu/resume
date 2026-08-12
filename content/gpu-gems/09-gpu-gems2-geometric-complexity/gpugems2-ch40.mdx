@@ -1,0 +1,286 @@
+---
+title: "GPU Gems 2 · Chapter 40. Computer Vision on the GPU"
+type: D
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 40
+description: "把计算机视觉反向映射到纹理与片元流水线，用过滤、归约、特征布局和多 GPU 取舍搭出实时路径。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-40-computer-vision-gpu"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-40
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch40CannyTimelineDiagram,
+  GpuGems2Ch40ComputerVisionLab,
+  GpuGems2Ch40FilterChainDiagram,
+  GpuGems2Ch40InversePipelineDiagram,
+  GpuGems2Ch40MomentReductionDiagram,
+  GpuGems2Ch40MultiGpuDiagram,
+  GpuGems2Ch40RegistrationFeatureDiagram,
+  GpuGems2Ch40TradeoffDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch40-computer-vision";
+
+<Objectives>
+
+- 能解释图像如何经过纹理、片元程序和结果纹理组成的 GPU 视觉流水线
+- 能修改 Computer Vision Lab 的阈值、归约遍数和错误模式，预测边缘、质心与读回量的变化
+- 能回答：为什么把密集计算留在 GPU、只在阶段边界读回少量统计量，通常比每遍读回整张图更合适？
+
+</Objectives>
+
+## 先把相机画面送进一条流水线
+
+把相机想成一台不断吐出方格纸的机器。每个小格都可以同时做同一种检查，检查完的方格纸再交给下一台机器；如果每一步都把整张纸搬回桌面，机器就会频繁停下来等搬运。
+
+本章解决的问题是：怎样把“从画面找出边缘、区域和特征”拆成一串规则的小步骤，并让每一步的结果直接成为下一步的输入？没有这条路径，中央处理器会被重复的逐像素计算和总线往返占满，留给交互逻辑的时间就会变少。
+
+<Callout type="tip" title="先预测哪一边会变慢">
+  先猜一猜：把每一遍的结果都读回中央处理器，帧率会受计算还是受搬运影响？再猜：把一个二维大滤波拆成横向和纵向两遍，为什么总
+  lookup 反而可能更少？
+</Callout>
+
+<GpuGems2Ch40InversePipelineDiagram />
+
+## 1. 视觉任务的 GPU 形状：一个位置写回一个位置
+
+<Term def="在每个输出位置执行同一段程序的 GPU 阶段；它从纹理读取邻域数据，再把一个结果写回当前片元对应的位置。">
+  fragment program
+</Term>
+
+图形硬件原本要把数值变成画面；视觉任务则把画面变成数值，正好把方向反过来。先把相机帧初始化为纹理，再把纹理映射到与图像等大的矩形上。矩形的一个片元对应一个输出位置，`fragment program` 就像普通 for 循环的循环体，只是所有位置可以并行执行。
+
+一遍处理结束后，把结果放入新的纹理；下一遍把它当作输入。这个边界很重要：当前片元只写自己的结果，不需要把一份结果任意地撒到许多位置。32 位浮点纹理还能保留足够的中间精度，适合连续的视觉计算。
+
+<GpuGems2Ch40FilterChainDiagram />
+
+如果一个算法只是逐点变换，流水线很直接；真正需要设计的是“全图都做什么、最后怎样合成一个答案”。边缘检测是前者与后者的交界：每个位置先产生梯度，再用邻居比较把线变细。
+
+## 2. Canny：把边缘拆成可并行的过滤接力
+
+<Term def="把二维卷积拆成先沿横轴、再沿纵轴的两次一维卷积；多一遍过滤，但每个位置需要读取的邻居更少。">
+  separable filter
+</Term>
+
+原书把 Canny 拆成三类片元程序。第一类用可分离的 Gaussian filter 平滑并求导；第二类在每个位置计算梯度强度和方向；第三类沿梯度的前后方向读取邻居，决定当前点是不是局部峰值。把 15 × 15 的二维核拆成 1 × 15 与 15 × 1，牺牲一次 pass，换来更少的纹理读取。
+
+<Term def="沿局部梯度方向比较前后邻居，只保留比两侧都强的像素，让宽边缘变成细线。">
+  nonmaximal suppression
+</Term>
+
+非极大值抑制不是简单的亮度阈值：它先看梯度指向哪里，再在那条方向上找峰值。因此梯度方向量化为 3 × 3 邻域可走的八个方向；当前强度只有大于前后两个样本才留下。最后再用阈值调节环境噪声下的灵敏度。
+
+<GpuGems2Ch40CannyTimelineDiagram />
+
+```glsl
+// WebGL2 片元阶段：当前像素沿梯度方向比较前后样本
+vec4 magDir = texture(gradientTexture, uv);
+vec2 direction = normalize(magDir.xy);
+vec2 forwardUv = uv + direction * texelSize;
+vec2 backwardUv = uv - direction * texelSize;
+float forwardMag = texture(gradientTexture, forwardUv).z;
+float backwardMag = texture(gradientTexture, backwardUv).z;
+float isPeak = step(forwardMag, magDir.z) * step(backwardMag, magDir.z);
+float isEdge = isPeak * step(edgeThreshold, magDir.z);
+outColor = vec4(vec3(isEdge), 1.0);
+```
+
+这段代码的关键不是把所有邻域一次性展开，而是先拿到已经编码好的方向与强度，再沿方向取两个样本。对应原书的 fragment program 时，WebGL2 用 `texture` 和显式的 `sampler2D`；数据流仍然是“当前片元读取、当前片元写回”。
+
+<Callout type="trap" title="把可分离滤波误写成一次二维暴力卷积">
+  现象 → 每个像素要查 15 × 15 个样本，Canny 一加分辨率就掉帧。原因 → 忽略了
+  Gaussian 核可分离，重复做了横纵方向的乘加。修法 → 先横向 pass，再纵向
+  pass，并把中间纹理作为下一遍输入。
+</Callout>
+
+## 3. 颜色分割与矩：从整张 mask 压到一个质心
+
+<Term def="把每个像素及其坐标乘上像素值后求和得到的统计量；M00 是总权重，M10 与 M01 分别携带横纵坐标信息。">
+  moment
+</Term>
+
+跟踪手部可以先把 RGB 转成 HSV，再按与目标颜色的距离阈值产生 mask。mask 中的像素输出 1，其他位置输出 0；同时输出 `x`、`y` 和颜色分量，就能在后续归约中得到 `M00`、`M10`、`M01`。质心是 `(M10 / M00, M01 / M00)`，所以它不需要 CPU 扫完整张图。
+
+GPU 归约可以先把每一行压成一个值，再把这一列压成一个值。最后只读回一个像素，CPU 负责除法和跟踪状态更新；大部分乘加仍留在 GPU 上。这个“先密集算、后小结果读回”的边界同样适用于图像配准中 `A x = b` 的矩阵初始化。
+
+<GpuGems2Ch40MomentReductionDiagram />
+
+```glsl
+// mask 片元阶段：为后续两遍归约准备 M00/M10/M01
+vec4 hsv = rgbToHsv(texture(cameraTexture, uv));
+float inside = step(distance(hsv, meanHsv), skinThreshold);
+vec2 pixel = uv * imageSize;
+outStats = vec4(inside, pixel.x * inside, pixel.y * inside, hsv.z * inside);
+```
+
+这里的 `outStats` 不是最终画面，而是一张给归约 pass 使用的统计纹理。常见错误是把统计纹理当成普通颜色贴图去显示；它的通道各自有含义，读回时要按相同的分量协议解释。
+
+## 4. 图像配准与特征：让少数点得到固定长度的描述
+
+<Term def="把两帧图像的对应关系写成投影参数，并通过 GPU 上的大量逐像素乘加与归约，初始化 A x = b 的线性系统。">
+  VideoOrbits
+</Term>
+
+VideoOrbits 处理相机平移、倾斜、旋转或缩放后两帧的配准。每个矩阵元素都是全图许多乘法和加法的和，因此可以像矩统计一样：片元先写出每个位置对某个元素的贡献，再用归约得到矩阵项；等 8 × 8 的 `A` 和向量 `b` 准备好后才读回，CPU 再解线性系统。
+
+<Term def="描述一个特征点周围局部纹理的固定长度数组；相似点的向量距离较小，可用于跨帧匹配。">
+  feature vector
+</Term>
+
+特征向量是另一种输出形状：不是每个像素一份结果，而是少数特征点各有一长行。一个 16 × 16 邻域被分成 16 个 4 × 4 区域，每区把梯度方向量化到 8 个直方图 bin，连接后得到 `16 × 8 = 128` 个元素。先由 CPU 快速找到少量点，再让 GPU 为每个点画一行顶点并填充向量，可以同时保持灵活的纹理坐标和规则的输出布局。
+
+<GpuGems2Ch40RegistrationFeatureDiagram />
+
+```glsl
+// 特征点的一行输出：每个 fragment 对应一个 histogram bin
+vec4 gradient = texture(gradientTexture, localUv);
+float bin = quantizeDirection(gradient.y);
+float weight = gradient.z * localGaussian(localUv);
+vec4 histogram = vec4(0.0);
+histogram = addToBin(histogram, bin, weight);
+featureRow[featureIndex] = packHalf(histogram);
+```
+
+这类工作与全图过滤不同：工作单元是“一个特征点的一行”，而不是“一个图像位置”。因此顶点布局和纹理坐标绑定本身就是算法的一部分；只要输出行长度固定，CPU 就能在帧与帧之间用欧氏距离寻找最佳匹配。
+
+## 5. 并行部署：把搬运预算留给真正的状态
+
+<Term def="在同一台机器上把不同视觉算法放到不同图形处理器上同时运行，再用共享内存或小量状态交换结果。">
+  multi-GPU
+</Term>
+
+如果应用同时需要 Canny、手部跟踪和特征向量，可以把互不依赖的阶段分到不同 GPU。GPU 0 处理过滤与边缘，GPU 1 处理颜色分割和矩，GPU 2 处理特征行；中央处理器只编排阶段边界。原书讨论了从 PCI 到 PCI Express/SLI 的演进，但不变的判断是：只有当各任务有足够的独立工作，多个 GPU 才能抵消同步与共享状态的成本。
+
+<GpuGems2Ch40MultiGpuDiagram />
+
+<Callout type="trap" title="每个 pass 都把整张纹理读回 CPU">
+  现象 → 单个 kernel 很快，完整算法却比 CPU 版本更慢。原因 →
+  每遍都触发同步、总线往返和格式转换，GPU 的连续吞吐被打断。修法 →
+  把中间结果留在纹理，先做行列归约或特征行打包，只在阶段边界读回少量状态。
+</Callout>
+
+<Callout type="trap" title="把稀疏特征点当成整张图逐点输出">
+  现象 → 只有几十个角点，却为整张图生成大向量，带宽和存储都浪费。原因 →
+  没区分“全图过滤”和“少数点的长输出”两种形状。修法 → CPU 先收集特征坐标，GPU
+  按点画固定长度的行，并为局部邻域绑定纹理坐标。
+</Callout>
+
+先猜一猜：在下面的实验中，把 `edge threshold` 调高会让候选边缘变多还是变少？把 `reduction passes` 增加，为什么质心稳定性会提高但不代表每个场景都值得增加 pass？打开 scatter 错误模式，观察规则写回为何消失。
+
+<GpuGems2Ch40ComputerVisionLab />
+
+## 三步验收：从片元 pass 到可部署的视觉系统
+
+<Stepper>
+  <Step title="第一步：把图像拆成连续的过滤 pass">
+    先将相机帧放入纹理，用等尺寸矩形保证一个位置对应一个片元；每一遍只做一种过滤，输出纹理直接成为下一遍输入。Canny 的高斯、梯度、抑制和阈值因此可以分别检查。
+
+    <GpuGems2Ch40InversePipelineDiagram />
+    <GpuGems2Ch40FilterChainDiagram />
+
+  </Step>
+  <Step title="第二步：把密集像素压成少量统计量">
+    HSV mask 仍然逐像素生成，但矩的行列归约把整张图压成一个统计像素；同一个模式也能初始化 VideoOrbits 的矩阵项，避免过早 readback。
+
+    <GpuGems2Ch40MomentReductionDiagram />
+    <GpuGems2Ch40TradeoffDiagram />
+
+  </Step>
+  <Step title="第三步：为稀疏输出选择布局并并行部署">
+    特征点不需要全图输出：每个点写一行 128 维向量；如果还有多个互不等待的算法，再把它们分到不同 GPU，并只交换小量状态。
+
+    <GpuGems2Ch40RegistrationFeatureDiagram />
+    <GpuGems2Ch40MultiGpuDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- 视觉任务可反向映射到纹理→片元程序→结果纹理的流水线。
+- 可分离滤波用多一遍 pass 换更少的二维邻域读取。
+- 矩归约把整张 mask 压成少量状态，再交给 CPU 更新。
+- 特征向量用“每点一行”的布局处理稀疏、长输出。
+- 多 GPU 的收益取决于独立工作是否足以覆盖同步成本。
+
+<Exercises>
+
+**问题 1｜画出数据流。** 请写出 Canny 的四个阶段，并说明为什么“结果纹理成为下一阶段输入”比每阶段读回 CPU 更适合实时处理。
+
+<Answer>
+  顺序是可分离 Gaussian
+  filter、梯度强度与方向、非极大值抑制、阈值输出细边缘。每阶段留在纹理中可以让
+  GPU 连续执行，避免同步、总线往返和格式转换；CPU 只在确实需要的边界读取小结果。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Computer Vision Lab 增加一个 `readbackMode` 开关，比较“每遍读回整张 mask”和“行列归约后只读一个像素”两种模式，并在界面显示读回字节数。你要在哪里插入同步点？
+
+<Answer>
+  在 reduction pass 完成后插入小结果的同步/读回，而不是在每个过滤 pass
+  后读回整张纹理。整张 mask 的模式可以作为错误对照：它会让 `readback`
+  从单像素状态膨胀为整帧，并显示出总线往返的代价。
+</Answer>
+
+**问题 3｜场景选型。** 现在有一个全图 Canny、一个手部质心和几十个角点的 128 维描述。哪些工作适合逐像素过滤，哪些适合归约或按点输出？为什么不能用同一种输出布局？
+
+<Answer>
+  Canny
+  适合逐像素过滤，因为每个位置都要计算相同的局部操作；手部质心适合逐像素生成
+  mask
+  后做归约，因为最终只需要少量矩；角点描述适合按点画固定长度的行，因为工作只发生在少数坐标但每点输出很多元素。三者的“全图一对一、全图多对一、稀疏一对多”形状不同，强行共用布局会浪费带宽或引入不规则写入。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="fragment program"
+    definition="在每个图像位置执行同一段小程序，读邻域并写回一个结果。"
+  />
+  <GlossaryItem
+    term="separable filter"
+    definition="把一次二维过滤拆成横向和纵向两次一维过滤，用多一遍换更少的读取。"
+  />
+  <GlossaryItem
+    term="nonmaximal suppression"
+    definition="沿边缘的变化方向比较邻居，只留下最强的那个点，让线条变细。"
+  />
+  <GlossaryItem
+    term="moment"
+    definition="把像素值和坐标加权求和得到的统计量，可用来算区域的中心。"
+  />
+  <GlossaryItem
+    term="VideoOrbits"
+    definition="把两帧画面的对应关系写成参数和方程，再用大量像素贡献求出这些参数。"
+  />
+  <GlossaryItem
+    term="feature vector"
+    definition="描述一个局部图案的固定长度数字行，可用距离比较不同画面中的相似点。"
+  />
+  <GlossaryItem
+    term="multi-GPU"
+    definition="让多个图形处理器同时做彼此独立的视觉任务，并交换少量结果。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 40. Computer Vision on the GPU"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-40-computer-vision-gpu"
+/>
