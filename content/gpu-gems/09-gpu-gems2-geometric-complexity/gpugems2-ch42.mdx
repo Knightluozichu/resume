@@ -1,0 +1,256 @@
+---
+title: "GPU Gems 2 · Chapter 42. Conservative Rasterization"
+type: D
+section: "GPU Gems 2 Part V · Image-Oriented Computing"
+order: 42
+description: "把像素覆盖从采样点问题改写成 cell 区域问题，用 conservative rasterization 为碰撞、遮挡与可见性测试提供不漏的候选。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-42-conservative-rasterization"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-42
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch42AlgorithmCompareDiagram,
+  GpuGems2Ch42ConservativeRasterizationLab,
+  GpuGems2Ch42ConservativeRasterizationTimelineDiagram,
+  GpuGems2Ch42DepthBoundsDiagram,
+  GpuGems2Ch42DilationErosionDiagram,
+  GpuGems2Ch42SamplingMissDiagram,
+  GpuGems2Ch42SemidiagonalHullDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch42-conservative-rasterization";
+
+<Objectives>
+
+- 能解释为什么标准 rasterization 可能漏掉像素 cell 与三角形的几何重叠，以及 overestimated 和 underestimated 的区别
+- 能修改 Conservative Rasterization Lab 的覆盖模式、三角形角度和鲁棒性参数，观察候选 cell、漏检风险与额外候选的变化
+- 能回答：面对碰撞检测、遮挡剔除和可见性测试，什么时候应该接受 conservative 候选并把精确交集留给 CPU？
+
+</Objectives>
+
+## 先别只问“采样点有没有落进去”
+
+把屏幕想成铺满小方格的地砖，三角形是一块从上方落下的薄纸。普通检查只在每块地砖的一个固定点戳一下；纸片擦过地砖边缘，却可能刚好避开那个点。
+
+本章解决的问题是：怎样把“纸片和方格有无重叠”变成一个不会漏掉边缘情况的 GPU 测试？如果仍只依赖固定采样点，碰撞、遮挡和阴影加速都可能把真实相交误判成不相交；单纯提高分辨率只能降低概率，不能给出保证。
+
+<Callout type="tip" title="先预测哪种结果更重要">
+  先猜一猜：碰撞检测宁可多报几个候选，还是宁可漏掉一次真实相交？再猜：把三角形向外扩大后，为什么需要
+  CPU 或 fragment 阶段做第二次精确确认？
+</Callout>
+
+<GpuGems2Ch42SamplingMissDiagram />
+
+## 1. pixel cell：把采样点换成一个小区域
+
+<Term def="像素周围代表该像素的矩形区域；保守覆盖判断只关心三角形是否与这个矩形相交。">
+  pixel cell
+</Term>
+
+标准 rasterization 通常依据一个或少数 sample point 决定是否生成 fragment。可是离散网格真正代表的是一个 cell，而不是 cell 中的某个点。三角形只要碰到 cell 的一条边，就已经是几何上的相交；固定采样点没有落在三角形内部，并不能推翻这个事实。
+
+<Term def="按照 pixel cell 的区域覆盖来生成候选 fragment 的光栅化方法；它用可控的多报换取对相交关系的保证。">
+  conservative rasterization
+</Term>
+
+本章主要讨论 overestimated 版本：只要三角形与 cell 的交集非空，就把该像素列为候选。underestimated 版本则更严格，只保留整个 cell 都在三角形内部的像素。前者适合“不能漏”的初筛，后者适合“不能多”的内含测试。
+
+<Term def="把 polygon 按 pixel cell 向外扩张，使所有相交 cell 都落入扩张后的区域。">
+  overestimated
+</Term>
+
+<Term def="把 polygon 按 pixel cell 向内收缩，只保留完全位于 polygon 内的 cell。">
+  underestimated
+</Term>
+
+<GpuGems2Ch42DilationErosionDiagram />
+
+<Callout type="trap" title="把提高分辨率当成正确性证明">
+  现象 → 分辨率加倍后结果更稳定，却仍偶尔漏掉细小相交。原因 →
+  采样误差被缩小了，但固定 sample point 仍不是 cell 区域测试。修法 → 用
+  overestimated conservative rasterization
+  先保证候选不漏，再用精确几何测试收尾。
+</Callout>
+
+## 2. semidiagonal：把区域测试改成顶点偏移
+
+<Term def="从 pixel cell 中心指向四个角的四个向量；它们决定顶点需要向哪些方向移动，才能覆盖 cell 的边界。">
+  semidiagonal
+</Term>
+
+对凸三角形做 overestimated 覆盖，可以把 pixel cell 沿每条边扫过去；更适合 GPU 的等价做法是：把每个顶点沿四个 semidiagonal 的方向移动，再对生成点取 convex hull。这样，原本的“矩形和三角形是否相交”被改写成一个扩大 polygon 的普通点内测试。
+
+一个顶点连接两条边。若两条边的法线落在同一象限，只需要一个偏移点；若在相邻象限，需要两个；若在对向象限，需要三个。GPU 顶点程序不能动态创建顶点，所以第一种算法按最坏情况复制每个输入顶点三次，再用退化三角形折叠掉不需要的点。
+
+<Term def="覆盖目标区域的凸边界 polygon；在本章的第一种算法中，它由顶点偏移后的点取 convex hull 得到。">
+  bounding polygon
+</Term>
+
+<GpuGems2Ch42SemidiagonalHullDiagram />
+
+```glsl
+// WebGL2 风格伪代码：根据两条边法线的象限选择偏移点
+float dp = dot(semidiagonal0, semidiagonal1);
+vec2 diagonal;
+if (dp > 0.0) {
+  diagonal = semidiagonal0;
+} else if (dp < 0.0) {
+  diagonal = localIndex == 0 ? semidiagonal0 : semidiagonal1;
+} else {
+  diagonal = localIndex == 1
+    ? betweenQuadrants(semidiagonal0, semidiagonal1)
+    : semidiagonal0;
+}
+clipPosition.xy += halfPixel * diagonal * clipPosition.w;
+```
+
+代码在 clip space 中运行，而不是直接改 window space：顶点程序发生在裁剪和透视除法之前。只要近裁剪面没有把边切进视锥，window-space 的几何直觉就能通过齐次坐标中的平面表达保留下来。
+
+## 3. 两种 GPU 算法：少顶点还是少 overdraw
+
+第一种算法构造最优 bounding polygon，填充率好，但每个输入顶点都要复制，几何处理和数据设置成本高。第二种算法只在顶点程序中生成一个 bounding triangle，再把它与最优 polygon 的轴对齐包围盒结合，在 fragment 程序中丢弃落在 AABB 外的片元。
+
+第二种算法的优点是顶点工作少，缺点是锐角三角形会被一个很宽的 triangle 包住，产生大量 overdraw。Chapter 42 的取舍不是“永远选最优 polygon”：高端 GPU 可能更能承受顶点复制，而较老硬件可能更容易受 vertex limit 约束；三角形形状和目标分辨率也会改变答案。
+
+<GpuGems2Ch42AlgorithmCompareDiagram />
+
+<Callout type="trap" title="只看顶点数量选择第二种算法">
+  现象 → bounding triangle 的顶点更少，实际帧率却更低。原因 → acute triangle
+  让候选区域很宽，fragment overdraw 远大于省下的 geometry work。修法 → 同时测
+  vertex cost、fill rate 和三角形角度；对锐角网格优先考虑最优 polygon
+  或先做轮廓筛选。
+</Callout>
+
+## 4. robustness 与 conservative depth：把错误控制在边界内
+
+两种算法都会遇到数值和几何退化。最优 polygon 在 tessellation 后可能改变朝向；bounding triangle 的平面交点在 near-degenerate triangle 上会受到浮点精度影响。可以设置一个小的 ε：当三角形到视点的有符号距离小于 ε 时，退回标准 rasterization 和剔除路径，避免用不稳定的交点继续扩张。
+
+<Term def="为每个 pixel cell 选择足够安全的最大或最小深度边界；zmax 不小于精确深度，zmin 不大于精确深度。">
+  conservative depth
+</Term>
+
+碰撞和遮挡测试还需要深度上的保守性。overestimating rasterizer 可以写入 `zmin` 或 `zmax`，再配合 depth test 和 occlusion query 得到候选关系；它不负责最终精确交点，只保证不会因为一个过于乐观的深度而漏掉可能遮挡或碰撞的对象。
+
+<GpuGems2Ch42DepthBoundsDiagram />
+
+先猜一猜：在下面的实验中，把三角形角度调得更尖，哪种算法更容易生成额外候选？打开 near-degenerate 开关后，为什么应该用 ε 回退，而不是继续相信精确的 plane intersection？
+
+<GpuGems2Ch42ConservativeRasterizationLab />
+
+## 三步验收：从 cell 定义到安全候选
+
+<Stepper>
+  <Step title="第一步：明确 pixel cell 与覆盖方向">
+    先区分 sample point 和 pixel cell，再决定目标是 overestimated 的“不漏”还是 underestimated 的“不多”。把 dilation/erosion 当成两种区域定义，而不是两个采样质量档位。
+
+    <GpuGems2Ch42SamplingMissDiagram />
+    <GpuGems2Ch42DilationErosionDiagram />
+
+  </Step>
+  <Step title="第二步：用 semidiagonal 构造候选 polygon">
+    将顶点沿半对角线移动，按相邻边法线的象限决定偏移点数量；再比较最优 polygon 和 bounding triangle + AABB trim 的几何/填充取舍。
+
+    <GpuGems2Ch42SemidiagonalHullDiagram />
+    <GpuGems2Ch42AlgorithmCompareDiagram />
+
+  </Step>
+  <Step title="第三步：用鲁棒性与深度边界收尾">
+    对接近退化的三角形引入 ε 回退；对碰撞和遮挡使用 zmin/zmax 这样的保守深度，把 GPU 结果当作候选，必要时交给 CPU 做精确确认。
+
+    <GpuGems2Ch42ConservativeRasterizationTimelineDiagram />
+    <GpuGems2Ch42DepthBoundsDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- pixel cell 区域测试比固定 sample point 更能表达真实覆盖。
+- overestimated 保证相交候选不漏，underestimated 保证 cell 完全在内。
+- semidiagonal 偏移与 convex hull 把区域膨胀变成顶点程序。
+- 最优 polygon 与 bounding triangle 分别交换 geometry 与 fill rate。
+- conservative depth 和 ε 回退把数值风险变成可控候选。
+
+<Exercises>
+
+**问题 1｜选择覆盖定义。** 碰撞检测、阴影可见性初筛和“完全位于多边形内”的选区判断，分别更适合 overestimated 还是 underestimated？说明后续是否还需要精确测试。
+
+<Answer>
+  碰撞检测和阴影可见性初筛更适合
+  overestimated，因为真实相交不能漏，额外候选可以交给精确交集或后续可见性测试；完全内含的选区判断适合
+  underestimated，因为只保留整个 cell 位于 polygon 内的像素。overestimated
+  的候选通常仍需要精确测试，conservative 不是最终交点答案。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 为 Conservative Rasterization Lab 增加 `algorithm` 开关：`optimal-polygon` 使用低 overdraw 估算，`bounding-triangle` 使用更高 fill rate 估算；当角度小于阈值时，显示为什么第二种路径要提高候选数量。
+
+<Answer>
+  可以用当前 `angle` 计算一个 acute-factor：角度越小，bounding triangle 的候选
+  cell 越多；`optimal-polygon` 保持较低的额外候选，但增加 geometry
+  work。界面应同时显示候选 cell 和算法成本，不能只显示“顶点少”就判定 bounding
+  triangle 更快。
+</Answer>
+
+**问题 3｜部署选型。** 目标 GPU 顶点吞吐强、fragment 填充压力大，或者相反时，如何在两种算法之间做选择？为什么不能把“九个顶点最坏情况”直接视为第一种算法的固定成本？
+
+<Answer>
+  顶点吞吐强且填充压力大时，最优 polygon
+  往往更有利；顶点受限而三角形不尖时，bounding triangle + fragment trim
+  可能更合适。九个顶点是第一种算法为动态输出准备的最坏上限，简单象限情况会用退化三角形折叠，实际有效
+  polygon 可能只有一到三个偏移点。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="pixel cell"
+    definition="围绕一个像素的矩形小区域，判断覆盖时看三角形是否碰到这个区域。"
+  />
+  <GlossaryItem
+    term="conservative rasterization"
+    definition="宁可多生成一些候选，也要保证相交区域不会被普通采样漏掉的光栅化方法。"
+  />
+  <GlossaryItem
+    term="overestimated"
+    definition="只要三角形和 cell 有一点交集就保留，重点是保证不漏。"
+  />
+  <GlossaryItem
+    term="underestimated"
+    definition="只有整个 cell 都在三角形里才保留，重点是避免多报。"
+  />
+  <GlossaryItem
+    term="semidiagonal"
+    definition="从 cell 中心指向角落的偏移向量，用来把顶点向安全方向推开。"
+  />
+  <GlossaryItem
+    term="bounding polygon"
+    definition="包住所有需要检查的 cell 的凸边界，通常由偏移后的点取 hull 得到。"
+  />
+  <GlossaryItem
+    term="conservative depth"
+    definition="故意取一个不会过于乐观的最大或最小深度，用来先筛出可能遮挡或碰撞的对象。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 42. Conservative Rasterization"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-v-image-oriented-computing/chapter-42-conservative-rasterization"
+/>

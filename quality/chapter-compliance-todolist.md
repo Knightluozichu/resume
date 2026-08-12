@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T18:33:59.458Z
+> 生成时间：2026-08-12T18:43:08.272Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4567 |
+| 实际 MDX 章节/页面 | 4568 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 51 |
+| manifest 未映射 unit | 50 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1604 |
+| passed | 1605 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -6609,9 +6609,9 @@
 - [ ] 🔴 P1 **[正式 unit gwp-10] Chapter 10 · Deploying Go** — evidence 不完整；explained=5/6
     - 关联路径：`content/go-web-programming/05-runtime-release/gwp-deployment.mdx`
 
-## gpu-gems（89 个内容页面 · passed:89 · 🚫 门禁阻断 43 项）
+## gpu-gems（90 个内容页面 · passed:90 · 🚫 门禁阻断 42 项）
 
-- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=67.9%；未映射 unit=42；证据不完整 unit=0。
+- 门禁摘要：目录=48，manifest=131；正式概念覆盖率=68.7%；未映射 unit=41；证据不完整 unit=0。
 
 - [x] ✅ **01-natural-effects/gpugems-ch01** — passed；score 100
     - 路径：`content/gpu-gems/01-natural-effects/gpugems-ch01.mdx`
@@ -6880,8 +6880,9 @@
 - [x] ✅ **09-gpu-gems2-geometric-complexity/gpugems2-ch41** — passed；score 98
     - 路径：`content/gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch41.mdx`
     - 正式 unit：`gpg-v2-41` explained=1/1
-- [ ] 🔴 P0 **[正式 unit gpg-v2-42] GPU Gems 2 · Chapter 42. Conservative Rasterization** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
-    - 路径：待创建或映射（officialUnitId: `gpg-v2-42`）
+- [x] ✅ **09-gpu-gems2-geometric-complexity/gpugems2-ch42** — passed；score 96
+    - 路径：`content/gpu-gems/09-gpu-gems2-geometric-complexity/gpugems2-ch42.mdx`
+    - 正式 unit：`gpg-v2-42` explained=1/1
 - [ ] 🔴 P0 **[正式 unit gpg-v3-01] GPU Gems 3 · Chapter 1. Generating Complex Procedural Terrains Using the GPU** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
     - 路径：待创建或映射（officialUnitId: `gpg-v3-01`）
 - [ ] 🔴 P0 **[正式 unit gpg-v3-02] GPU Gems 3 · Chapter 2. Animated Crowd Rendering** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=1
