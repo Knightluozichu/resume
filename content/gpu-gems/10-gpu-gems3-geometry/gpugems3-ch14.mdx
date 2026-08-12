@@ -1,0 +1,268 @@
+---
+title: "GPU Gems 3 · Chapter 14. Advanced Techniques for Realistic Real-Time Skin Rendering"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 14
+description: "从皮肤的镜面反射与次表面散射出发，解释 diffusion profile 的高斯和近似、纹理空间 U/V 卷积、stretch correction 与薄区域透射如何组合成实时皮肤管线。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-14-advanced-techniques-realistic-real-time-skin"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-14
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch14DiffusionProfileDiagram,
+  GpuGems3Ch14GaussianSumDiagram,
+  GpuGems3Ch14SkinLayersDiagram,
+  GpuGems3Ch14SkinRenderingLab,
+  GpuGems3Ch14SpecularDiagram,
+  GpuGems3Ch14TextureSpaceDiagram,
+  GpuGems3Ch14TransmissionDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch14-real-time-skin";
+
+<Objectives>
+
+- 能解释实时皮肤管线如何把镜面 BRDF、次表面散射与薄区域透射放在不同阶段，并指出各自的输入输出
+- 能修改 Real-Time Skin Rendering Lab 的 diffusion profile、卷积路径、Gaussian 数量、纹理分辨率与透射开关，观察画质、柔软度和带宽的取舍
+- 能回答：为什么要用 sum-of-Gaussians、stretch correction 和 translucent shadow map，而不是一次大 blur 解决所有皮肤问题
+
+</Objectives>
+
+## 先问：为什么高清扫描的脸仍然会“干硬”
+
+想象一张拥有皱纹、毛孔和雀斑的高清照片。把它贴到一个模型上并直接做普通漫反射，细节虽然齐全，皮肤却像石膏：表面高光不对，耳朵和鼻翼也没有柔和的透光。
+
+本章要解决的是：怎样让 GPU 同时表现皮肤表面的高光、光在组织内短距离扩散后的柔和颜色，以及薄区域的透射。没有这些层次，几何和纹理越清晰，错误反而越显眼。
+
+<Callout type="tip" title="先预测：多几个 blur 就会更真实吗？">
+  先猜一猜：把 Gaussian kernels 调多、把 convolution path 从 single Gaussian
+  切到 six textures，再打开 translucent shadow map，柔软度、seam risk
+  和带宽会怎样变化？打开 Lab，先写下预测再逐项调整。
+</Callout>
+
+## 1. 皮肤是三种光学行为的叠加
+
+<Term def="光进入半透明组织后，在内部多次散射并被部分吸收，最后从入射点附近的另一个位置出射的现象。">
+  subsurface scattering
+</Term>
+
+皮肤至少要拆成三条线索：第一条是表面直接反射，负责随观察角变化的亮斑；第二条是光进入表皮和真皮后在邻域内扩散，负责柔软的肤色；第三条是耳朵等薄区域中光穿过表面，从背光侧显出暖色。
+
+<GpuGems3Ch14SkinLayersDiagram />
+
+如果只把第二条当作普通 Lambert diffuse，光会在进入皮肤后立刻“停在原地”，脸颊、鼻翼与耳廓就会失去柔和的空间联系。反过来，如果只做大范围 blur，又会抹掉毛孔、皱纹和接触边界。因此实时方案把表面反射、局部散射和透射分开计算，再在最终 3D pass 合成。
+
+<Callout type="trap" title="把皮肤当成一张带颜色的漫反射贴图">
+  现象 → 扫描细节很清楚，但脸看起来干、硬、像蜡或石膏。原因 →
+  纹理只描述表面颜色，没有描述光在组织内离开入射点的邻域传播。修法 → 增加
+  subsurface scattering 的 profile，并让表面 specular 与次表面能量分开预算。
+</Callout>
+
+## 2. 表面高光需要物理合理的镜面 BRDF
+
+<Term def="描述入射光如何在表面反射到观察方向的函数；实时皮肤中它负责表层油脂带来的方向性高光。">
+  specular BRDF
+</Term>
+
+Phong 很便宜，但它在掠射角下的反射趋势不够可信，也可能输出比入射更多的能量。更物理的 Kelemen/Szirmay-Kalos 模型接近 Torrance/Sparrow 一类的外观，同时保留了实时 shader 可以承受的成本。
+
+<GpuGems3Ch14SpecularDiagram />
+
+镜面与次表面不是两个可以任意相加的滤镜。若一部分入射能量已经被表面反射，剩下能进入组织的能量就应减少。实际管线可以预计算粗糙度与 `N · L` 相关的积分表，用它在生成 irradiance texture 前衰减可用于散射的 diffuse 能量。
+
+## 3. diffusion profile：先量出“一点光晕多远”
+
+<Term def="描述一束极窄入射光在材料表面周围不同距离、不同颜色上重新出射多少的一维空间曲线。">
+  diffusion profile
+</Term>
+
+把一束很细的白色激光打到暗房中的皮肤薄片上，你会看到入射点周围的彩色光晕。diffusion profile 就是这团光晕随距离变化的曲线；红、绿、蓝三个通道的宽度不同，红光通常传播得更远。
+
+<GpuGems3Ch14DiffusionProfileDiagram />
+
+直接用真实的径向 profile 做二维卷积很贵，而且 profile 通常不可分离。一个可实时的表达是 <Term def="用多个 Gaussian 函数及其权重近似目标 diffusion profile；每个 Gaussian 可独立做可分离卷积，最后再线性组合。">sum-of-Gaussians</Term>：先拟合目标曲线，再分别计算每个 Gaussian 的卷积纹理。
+
+<GpuGems3Ch14GaussianSumDiagram />
+
+六个 Gaussian 不是“六次随便 blur”。每个核都有自己的方差和颜色权重；最窄的核可以近似不模糊的 irradiance，其他核逐渐扩大。最后的线性组合必须与拟合 profile 时使用的权重相同，否则只会得到一团好看的、但物理形状不对的红雾。
+
+<Callout type="trap" title="用单个大 Gaussian 代替完整 profile">
+  现象 → 皮肤很柔，但鼻翼、嘴唇和毛孔边缘全部被抹平，红色晕染也不自然。原因 →
+  单核只保留一个尺度，无法同时表达窄尖峰和宽底色，更无法匹配 RGB
+  不同的传播距离。修法 → 用多个有物理权重的 Gaussian 分别卷积，再按 profile
+  权重组合；远处角色才考虑减少核数量。
+</Callout>
+
+## 4. 纹理空间扩散：把 3D 邻域变成两次 1D blur
+
+<Term def="把 3D 网格的 UV 当成渲染坐标，把入射光写入二维 irradiance texture，再在纹理空间做散射卷积并回到 3D 合成的算法。">
+  texture-space diffusion
+</Term>
+
+因为皮肤散射是局部的，可以把模型用 UV 展平后直接在二维纹理上处理。每帧先把网格以 UV 作为 render coordinate，得到不含镜面项的 irradiance texture；然后为每个 Gaussian 执行 U 方向和 V 方向的可分离卷积，保留最终的多张中间纹理；最后重新以 3D 坐标渲染网格，读取并线性组合这些纹理，再加回 specular。
+
+<GpuGems3Ch14TextureSpaceDiagram />
+
+一次直接二维卷积如果半径是 64 texels，需要约 4096 次采样；可分离卷积只需约 64 + 64 次。这样做的前提是 UV 距离足够接近表面距离。曲面、拉伸和 seam 会破坏这个前提，所以还需要下一节的校正。
+
+```glsl
+// U/V 两次一维卷积；每个 Gaussian 都保留自己的结果纹理
+vec3 blurU(sampler2D irradiance, vec2 uv, vec2 stretch, float radius) {
+  vec3 sum = vec3(0.0);
+  for (int tap = -TAPS; tap <= TAPS; ++tap) {
+    float offset = float(tap) * radius * stretch.x / float(TAPS);
+    sum += texture(irradiance, uv + vec2(offset, 0.0)).rgb * gaussianWeight(tap);
+  }
+  return sum;
+}
+// V pass 读取 blurU 的临时纹理，再写出当前 Gaussian 的最终纹理。
+```
+
+<Callout type="trap" title="把 UV 距离当成世界距离">
+  现象 → 平面上 blur
+  看起来正确，弯曲脸颊或拉伸区域却出现宽度不一致、条带或局部过糊。原因 → UV
+  中相同的步长在模型表面并不代表相同的毫米距离。修法 → 用 world-space position
+  的 `ddx/ddy` 估计 U/V stretch，在每个卷积 tap 中调整间距。
+</Callout>
+
+## 5. stretch correction 与薄区域透射
+
+<Term def="记录纹理空间 U/V 方向相对于表面真实距离的局部缩放，用来调整卷积 tap 的宽度，减轻 UV 拉伸造成的散射失真。">
+  stretch correction
+</Term>
+
+用 fragment shader 对 world-space position 求屏幕导数，可以快速估计 U 和 V 方向的局部伸缩，把它们的倒数写入 stretch texture。卷积时读取对应值，分别调节 U/V 的 tap 间隔。高频 stretch 在大半径卷积中仍可能不稳定，因此复杂表面可以进一步做多尺度 stretch map。
+
+耳朵、鼻翼边缘等薄区域还需要 <Term def="记录光穿过表面的深度/厚度，并把背光侧位置连接到光照侧 irradiance 的阴影图，用于近似透射散射。">translucent shadow map</Term>：它不是普通阴影图，而是沿光线计算穿过表面的厚度，并把背光位置连接到光照侧已经卷积好的 irradiance texture。
+
+<GpuGems3Ch14TransmissionDiagram />
+
+透明透射路径会增加 shadow map 与额外查找，但复用了同一套 Gaussian 卷积纹理。这样耳朵可以呈现暖色透光，同时脸部大多数区域继续走局部散射的便宜路径。
+
+## 6. 三步把物理模型落到实时 GPU 管线
+
+<Stepper>
+  <Step title="先拆分表面反射与组织散射">
+    先用物理合理的 specular BRDF 得到表面反射，再生成不含 specular 的 irradiance texture。不要把镜面高光一起拿去 blur，否则高光会被扩散成错误的宽亮斑。
+
+    <GpuGems3Ch14SkinLayersDiagram />
+    <GpuGems3Ch14SpecularDiagram />
+
+  </Step>
+  <Step title="用 Gaussian 和做纹理空间卷积">
+    根据目标 diffusion profile 选择 Gaussian 数量与权重；UV 展平后为每个 Gaussian 做 U/V 两次一维 blur，保留中间结果，最终按权重线性组合。
+
+    <GpuGems3Ch14DiffusionProfileDiagram />
+    <GpuGems3Ch14GaussianSumDiagram />
+    <GpuGems3Ch14TextureSpaceDiagram />
+
+  </Step>
+  <Step title="校正几何并补上薄区域">
+    用 stretch correction 修正 UV 与世界距离的差异；对耳朵等薄区域使用 translucent shadow map 连接穿透厚度和光照侧散射纹理，最后在 3D pass 加回 specular。
+
+    <GpuGems3Ch14TransmissionDiagram />
+    <GpuGems3Ch14TextureSpaceDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch14SkinRenderingLab />
+
+## 本章小结
+
+- 皮肤外观由表面高光、次表面散射和薄区域透射共同决定
+- specular BRDF 改善掠射角高光，并约束可分配给散射的能量
+- diffusion profile 用 RGB 曲线描述光在组织内的空间传播
+- sum-of-Gaussians 把昂贵二维卷积拆成多组可分离 U/V blur
+- stretch correction 与 translucent shadow map 处理 UV 拉伸和耳朵透光
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 现在的最终皮肤颜色是 `final = scattered + specular`。请改成先让镜面反射消耗一部分入射能量，再把剩余能量送入散射，并说明为什么不能只用固定的 `Kd`。
+
+```glsl
+vec3 specular = evalSkinSpecular(N, L, V, roughness);
+vec3 scattered = combineGaussianTextures(uv, profileWeights);
+vec3 finalColor = scattered + specular;
+```
+
+<Answer>
+  可以先计算一个与 roughness、`N · L` 和视角相关的镜面能量积分
+  `rhoSpecular`，再写成 `vec3 remaining = max(vec3(0.0), vec3(1.0) -
+  rhoSpecular); vec3 finalColor = scattered * remaining + specular;`。固定 `Kd`
+  没有表达镜面反射随角度变化的能量消耗，正面和掠射角都会出现不一致的总能量。
+</Answer>
+
+**问题 2｜诊断 UV 伪影。** 一张均匀方格贴图在平面上经过 blur 正常，但映射到鼻翼后，散射半径明显变宽且出现条带。你会检查哪张辅助纹理？它应由什么数据估计？
+
+<Answer>
+  检查 stretch correction texture。它可以由每帧传入的 world-space position 的
+  `ddx` 和 `ddy` 估计 U/V 方向的局部伸缩，再取倒数写入纹理；卷积时分别调整 U 与
+  V 的 tap 间距。只检查颜色纹理或继续加大 blur 半径，无法修复 UV
+  距离和表面距离不一致的问题。
+</Answer>
+
+**问题 3｜场景选型。** 远处 NPC、近景脸部和逆光耳朵需要三种不同预算。你会怎样选择 Gaussian 数量、纹理分辨率和透射路径？
+
+<Answer>
+  远处 NPC 可以降低 irradiance 分辨率并使用少于六个
+  Gaussian，因为次表面细节已经不明显；近景脸部保留多组
+  Gaussian、较高纹理分辨率和 stretch correction；逆光耳朵再打开 translucent
+  shadow map，复用已有卷积纹理。预算不足时先按屏幕占比做
+  LOD，而不是所有角色固定使用最高精度。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="subsurface scattering"
+    definition="光进入皮肤内部后被散射、吸收，再从入射点附近出射的过程，让皮肤看起来柔软而不是干硬。"
+  />
+  <GlossaryItem
+    term="specular BRDF"
+    definition="描述表面入射光如何反射到观察方向的函数，皮肤高光和掠射角亮边由它控制。"
+  />
+  <GlossaryItem
+    term="diffusion profile"
+    definition="一束窄光打在材料上后，光在不同距离和颜色通道上重新出射多少的曲线。"
+  />
+  <GlossaryItem
+    term="sum-of-Gaussians"
+    definition="用多条带权 Gaussian 曲线近似目标扩散 profile，使每条曲线都能高效做可分离卷积。"
+  />
+  <GlossaryItem
+    term="texture-space diffusion"
+    definition="把网格 UV 当作二维渲染坐标，在 irradiance texture 上做散射卷积，再回到 3D 表面合成。"
+  />
+  <GlossaryItem
+    term="stretch correction"
+    definition="记录 UV 方向和真实表面距离差异的辅助纹理，用来调整卷积 tap 的局部间距。"
+  />
+  <GlossaryItem
+    term="translucent shadow map"
+    definition="记录光穿过薄表面的深度或厚度，并把背光位置连接到光照侧散射纹理的阴影数据。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 14. Advanced Techniques for Realistic Real-Time Skin Rendering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-14-advanced-techniques-realistic-real-time-skin"
+/>
