@@ -1,0 +1,240 @@
+---
+title: "Camera Specifications and Transformations"
+type: D
+section: "相机规格与投影"
+order: 13
+description: "用 eye/target/up、near/far、fov 和两种投影模型描述相机规格，并把世界点映射成可检查的屏幕证据。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-13
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp13CameraBasisDiagram,
+  Cgp13CameraSpecificationsLab,
+  Cgp13FrustumDiagram,
+  Cgp13ProjectionModeDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-13-camera-specifications";
+
+<Objectives>
+
+- 能解释 camera specifications 如何由 eye、target、up、near、far 与投影模型共同组成
+- 能修改 CameraViz 的 projection mode、fov、depth 和 yaw，并记录屏幕尺度与深度范围的变化
+- 能回答：如何区分相机姿态、投影模型和 near/far 裁剪规格造成的画面差异？
+
+</Objectives>
+
+## 先把“相机”当成一套可检查的测量仪器
+
+相机不只是场景里一个会移动的点。它更像一台测量仪：eye 说明仪器放在哪里，target 和 up 说明它朝向哪里，投影规格则说明同一个世界如何被压到屏幕上。
+
+本章把相机拆成可以单独修改、单独观察的规格。先猜一猜：把 perspective 切换为 orthographic 后，远处的点还会不会变小？把 near 或 far 改动时，画面首先会出现尺度变化，还是会出现裁剪？
+
+<Cgp13CameraSpecificationsLab />
+
+## camera specifications：从位置到观察坐标系
+
+<Callout type="trap" title="只记录相机位置，不记录相机姿态">
+  现象 → 相机坐标看起来在正确位置，但画面朝向、顶部方向或左右方向不稳定。 原因 →
+  只保存了 eye，缺少 target、up，或者用一个含糊的旋转角代替了观察基。 修法 →
+  明确写出 eye、target、up，先构造 forward、right、up 基向量，再生成 view
+  matrix。
+</Callout>
+
+<Term def="描述相机位置、观察方向、上方向、投影模型以及 near/far 裁剪范围的一组完整参数；它把相机从一个点扩展为可验证的观察设备。">
+  camera specifications
+</Term>
+
+这里的 **camera specifications** 不是一个只描述位置的配置对象，而是一组能解释画面结果的完整输入：eye 决定观察原点，target 或 forward 决定视线，up 决定画面顶部，projection 决定深度如何参与屏幕映射，near 与 far 决定哪些深度允许进入可见体。只要其中一项没有写清，调试时就无法判断问题来自相机姿态、投影模型还是裁剪范围。
+
+相机基向量通常从三个世界空间向量得到。先把 `forward = normalize(target - eye)` 归一化，再用 `right = normalize(cross(forward, up))` 得到横向，最后用 `trueUp = cross(right, forward)` 修正上方向。这样得到的三个方向应当彼此正交；若 up 几乎与 forward 平行，right 会变得不稳定，画面可能突然翻转。
+
+<Cgp13CameraBasisDiagram />
+
+`view matrix` 的职责是把世界中的点改写到相机观察空间，而不是把相机“画”到世界中。采用列向量约定时，可以把这条责任链写得很明确：
+
+```ts
+const basis = makeCameraBasis(eye, target, up);
+const view = lookAt(eye, target, up);
+const cameraPoint = view * worldPoint;
+```
+
+如果相机向右移动，等价的观察结果是世界向左移动；因此移动相机时，view matrix 的平移项会以相反方向作用于世界点。这是相机姿态与物体变换的分界线，也是排查“相机移动后物体跑反了”的第一条检查。
+
+## perspective camera 与 orthographic camera：两种投影模型
+
+<Term def="让远处点在屏幕上按深度缩小、让视线向远处汇聚的投影模型；它用视场角和深度共同决定屏幕尺度。">
+  perspective camera
+</Term>
+
+<Term def="让平行投影线保持平行、让屏幕尺度不随深度改变的投影模型；它更适合工程图、地图和需要稳定尺寸的观察。">
+  orthographic camera
+</Term>
+
+**perspective camera** 会把深度放进除法：同样大小的物体越远，屏幕投影越小，平行线也可能在远处汇聚；**orthographic camera** 则保持投影线平行，远近主要影响深度值而不改变屏幕尺度。因此两者的差异不是“同一相机的两套颜色”，而是世界到屏幕的规则不同：前者强调视距和空间感，后者强调尺寸可比性。
+
+<Cgp13ProjectionModeDiagram />
+
+对透视投影，可以用一个只保留核心关系的式子检查尺度：
+
+$$
+x_{screen} = f \frac{x}{z}
+$$
+
+人话翻译：焦距因子 `f` 固定时，横向位置 `x` 要除以深度 `z`；`z` 变大，点的屏幕偏移和尺寸就会变小。实际渲染还会包含 aspect、视口尺寸和裁剪到标准设备坐标的步骤，但“深度参与尺度”这一证据不变。
+
+对正交投影，可以先用下面的线性关系做预测：
+
+$$
+x_{screen} = s x
+$$
+
+人话翻译：屏幕尺度由 `s` 决定，`z` 不参与横向缩放，所以把点沿深度方向移动时，它的屏幕大小可以保持不变。若正交画面中远处物体仍然明显变小，先检查是否实际上仍在使用 perspective projection，或是否把深度误乘进了正交矩阵。
+
+在代码中，投影通常接在 view 之后，形成从世界到裁剪空间的链：
+
+```ts
+const view = lookAt(eye, target, up);
+const projection =
+  mode === "perspective"
+    ? perspective(fov, aspect, near, far)
+    : orthographic(left, right, bottom, top, near, far);
+const clip = projection * view * world;
+```
+
+`view` 负责“从哪里看”，`projection` 负责“怎样压到屏幕”。把两者混在一个不可解释的矩阵里，最终画面即使偶然正确，也很难回答为什么远处变小或为什么对象被裁掉。
+
+## view frustum：把可见范围画出来
+
+<Term def="由视点、视场角以及 near/far 平面围成的可见体；只有落在它内部的几何才有机会进入后续光栅化。">
+  view frustum
+</Term>
+
+透视相机的可见体像一个从 eye 向远处张开的截锥。`fov` 决定它张开的角度，`near` 和 `far` 则切掉太近与太远的部分；正交相机的可见体是盒状，但 near/far 仍然承担深度裁剪责任。一个物体没有出现在屏幕上，不一定是位置错了，也可能是它落在 view frustum 外面。
+
+<Cgp13FrustumDiagram />
+
+调整规格时要把结果分成两类。fov 或正交的边界改变时，通常首先看到可见宽度或屏幕尺度改变；near/far 改变时，可能看到一部分几何突然消失。`far` 太小会裁掉远处对象，`near` 太大则会裁掉靠近相机的对象。若深度缓冲精度也成为问题，应让 near 不要无谓地接近零，并根据场景尺寸选择 far。
+
+## 三步实验：从相机姿态回放到屏幕证据
+
+每一步只改变一种责任。先在纸上预测，再在 CameraViz 中操作；记录“输入规格 → 画面变化”，就能把相机问题从感觉判断变成可复查的实验记录。
+
+<Stepper>
+  <Step title="第一步：固定 eye、target、up，检查相机基">
+    保持投影模式不变，观察 forward、right 和 trueUp 是否正交。若只改 eye，预测世界点在屏幕上的移动方向应与相机移动相反。
+
+    <Cgp13CameraBasisDiagram />
+
+  </Step>
+  <Step title="第二步：切换 perspective 与 orthographic">
+    在 CameraViz 中先记录三个不同深度点的屏幕大小，再切换 projection mode。保持姿态不变，比较“深度是否参与尺度”这一条证据。
+
+    <Cgp13ProjectionModeDiagram />
+
+  </Step>
+  <Step title="第三步：改变 fov、near 和 far，检查可见体">
+    一次只改一个裁剪参数。预测哪个对象会被裁掉、视野会变宽还是屏幕尺度会变化，然后与可见体图和实验面板的结果对照。
+
+    <Cgp13FrustumDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把移动相机当成移动世界">
+  现象 → 相机向右移动后，世界也向右移动，或者物体和相机一起漂移。 原因 → 只改了
+  camera position，却没有通过相反的观察变换更新 view matrix；相机姿态与物体
+  model matrix 的责任混在了一起。 修法 → 先用 eye、target、up 重建
+  view，再验证固定世界点的 camera-space 坐标；不要直接用同方向平移去“补画面”。
+</Callout>
+
+<Callout type="trap" title="用错误的投影模型解释尺度变化">
+  现象 → 远处物体不变小却被要求呈现透视感，或工程标注的尺寸随深度明显改变。 原因
+  → perspective camera 与 orthographic camera 的屏幕尺度规则被混用，调 fov
+  也无法修复模型选择错误。 修法 → 先确认需求是空间感还是稳定尺寸，再选择
+  projection mode；用三个深度不同的点做最小对照实验。
+</Callout>
+
+<Callout type="trap" title="只调物体位置，忽略 near、far 和 fov">
+  现象 → 物体时隐时现，或画面突然变空，但物体的世界坐标没有变化。 原因 →
+  物体落到 view frustum 外，near/far 裁剪或 fov 可见范围与场景尺度不匹配。 修法
+  → 先画出 near/far 边界并检查深度，再调整
+  fov；把“被裁掉”和“被投影到屏幕外”区分开记录。
+</Callout>
+
+## 本章小结
+
+- camera specifications 同时描述位置、姿态、投影模型和裁剪范围，不能只保存 eye。
+- 相机基由 forward、right、trueUp 组成，view matrix 把世界点转换到观察空间。
+- perspective camera 让深度参与屏幕尺度，orthographic camera 保持平行尺度规则。
+- view frustum、near、far 和 fov 把“为什么看不见”转化为可画、可测、可复现的边界问题。
+
+<Exercises>
+
+**问题 1：区分相机姿态与投影。** 你只改变 eye、target、up 中的一项，应该把它归类为哪一种相机责任？如果只在 perspective camera 与 orthographic camera 之间切换，又属于哪一种责任？
+
+<Answer>
+  eye、target、up 改变的是相机姿态和 view matrix；切换 perspective camera 与
+  orthographic camera 改变的是 projection
+  matrix。先固定世界和另一组参数，再分别实验，才能把屏幕变化归因到正确的责任。
+</Answer>
+
+**问题 2：修改 CameraViz 并记录证据。** 保持 eye、target、up、near 和 far 不变，依次切换 perspective camera 与 orthographic camera，把 fov 从 60 调到 80，再把 depth 调到 5。记录三个不同深度点的屏幕尺度、是否仍在可见范围内，以及每一次变化对应的参数。
+
+<Answer>
+  切换到 orthographic camera 后，点的屏幕尺度不应随深度缩小；在 perspective
+  camera 下，远点相对更小。fov 变大通常扩大透视视野，depth
+  变小则可能裁掉较远的点。每次只改一项，并用重置按钮回到同一初始状态。
+</Answer>
+
+**问题 3：诊断“对象消失”与“尺度异常”。** 一个对象在相机前方却不可见，另一个对象在远处看起来没有缩小。你会先检查哪些规格？
+
+<Answer>
+  对不可见对象，先检查 view matrix 的姿态和 view frustum 的 near/far、fov
+  边界，再确认它是否落在屏幕侧向范围外；对尺度异常，先确认投影模式，检查是否误用了
+  orthographic camera 或漏掉了 perspective camera 的深度除法。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="camera specifications"
+    definition="描述相机位置、姿态、投影模型和 near/far 裁剪范围的一组完整参数。"
+  />
+  <GlossaryItem
+    term="perspective camera"
+    definition="让远处点按深度缩小、视线向远处汇聚的投影模型。"
+  />
+  <GlossaryItem
+    term="orthographic camera"
+    definition="保持投影线平行、让屏幕尺度不随深度改变的投影模型。"
+  />
+  <GlossaryItem
+    term="view frustum"
+    definition="由视点、视场角以及 near/far 平面围成的可见体。"
+  />
+  <GlossaryItem
+    term="view matrix"
+    definition="把世界空间点转换到相机观察空间的矩阵。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 13: Camera Specifications and Transformations"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

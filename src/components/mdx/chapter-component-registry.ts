@@ -4293,6 +4293,17 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp12TransformationLibraryLab: module0.Cgp12TransformationLibraryLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-13-camera-specifications":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-13-camera-specifications");
+      return {
+        Cgp13CameraBasisDiagram: module0.Cgp13CameraBasisDiagram,
+        Cgp13CameraSpecificationsLab: module0.Cgp13CameraSpecificationsLab,
+        Cgp13FrustumDiagram: module0.Cgp13FrustumDiagram,
+        Cgp13ProjectionModeDiagram: module0.Cgp13ProjectionModeDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
