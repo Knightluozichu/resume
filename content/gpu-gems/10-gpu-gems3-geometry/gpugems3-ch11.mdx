@@ -1,0 +1,286 @@
+---
+title: "GPU Gems 3 · Chapter 11. Efficient and Robust Shadow Volumes Using Hierarchical Occlusion Culling and Geometry Shaders"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 11
+description: "从 stencil 计数出发，解释 z-pass/z-fail、低质量网格的鲁棒体生成、geometry shader 动态挤出与层次遮挡剔除如何共同加速精确阴影。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-11-efficient-and-robust-shadow-volumes-using"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-11
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch11GeometryShaderDiagram,
+  GpuGems3Ch11HierarchicalCullingDiagram,
+  GpuGems3Ch11RobustMeshDiagram,
+  GpuGems3Ch11ShadowVolumeLab,
+  GpuGems3Ch11ShadowVolumeOverviewDiagram,
+  GpuGems3Ch11StencilPerformanceDiagram,
+  GpuGems3Ch11ZPassZFailDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch11-shadow-volumes";
+
+<Objectives>
+
+- 能解释 shadow volume 如何用 stencil counter 分离受光与受影像素，并判断 z-pass 与 z-fail 的适用边界
+- 能修改 Shadow Volume Lab 的摄像机位置、网格质量、生成路径、query 模式与节点预算，观察正确性和 fill-rate 成本的变化
+- 能回答：为什么低质量网格需要 robust volume generation，以及 geometry shader 与 hierarchical occlusion culling 分别把哪类工作搬到了 GPU
+
+</Objectives>
+
+## 先把“遮挡”变成一张逐像素账本
+
+想象一束从相机射出的细线：它经过一个遮挡物投下的区域时，会先穿进一片不可见空间，再穿出来。我们不需要真的追踪这条线，只要在它跨过边界时记一次进入、记一次离开，最后就能知道它是否曾经被遮挡。
+
+本章解决的问题是：怎样让这张账本在复杂、远大、甚至不太干净的模型上仍然可靠，同时不要让每帧的遮挡几何和大面积填充把 GPU 压垮。如果只依赖理想的闭合网格，现实 CAD 或转换模型会漏影；如果对整棵场景树逐物体生成体积，城市级场景又会把时间花在最终不可见的影子上。
+
+<Callout type="tip" title="先预测：哪一个旋钮会最先伤害帧时间">
+  先猜一猜：把 camera 放进 shadow volume、把 mesh 切换为 open、再把 query 改成
+  synchronous，stencil ops、fill risk 和 pruned subtree 会怎样变化？打开
+  Lab，逐个改变条件，观察“正确性更稳”是否也意味着“工作更多”。
+</Callout>
+
+## 1. shadow volume：用边界交点数出阴影
+
+<Term def="由遮挡物和光源方向形成的空间区域；从光源看不到的点落在该区域内，通常用 stencil buffer 记录相机射线穿过它的次数。">
+  shadow volume
+</Term>
+
+对于点光源，遮挡物的背光轮廓沿远离光源的方向延伸；对于方向光，延伸方向是统一的平行方向。相机射线每进入一次体积，counter 增加；每离开一次，counter 减少。最后 counter 为零的像素在体积外，可以得到完整光照；非零的像素只得到环境光或被压暗。
+
+实现时先把场景 depth 写好，再渲染 volume 的边界，只更新 stencil，不更新颜色和深度。现代硬件可以在同一个 pass 中用 two-sided stencil 分别处理 front-facing 与 back-facing polygon，并用 wrap-around 避免 stencil 计数在极值处饱和。
+
+<GpuGems3Ch11ShadowVolumeOverviewDiagram />
+
+<Callout type="trap" title="把 stencil counter 当成光照强度">
+  现象 → counter 越大就把像素画得越黑，多个重叠 volume
+  产生不自然的阶梯阴影。原因 → counter
+  表示射线是否在体积内，不是光能量或遮挡比例。修法 → 只把零与非零作为
+  shadowed/unshadowed 判定；需要软阴影时另加采样或光源近似。
+</Callout>
+
+shadow volume 的优势是边界按几何精确落到像素，不依赖一张 shadow map 的离散采样；代价是要生成、光栅化并填充体积几何。对大场景来说，后续章节的两个问题就是“如何保证体积对坏网格仍然闭合”和“如何尽量不画不可见的体积”。
+
+## 2. z-pass 与 z-fail：从哪一面开始数
+
+<Term def="在深度测试通过时对位于实际场景几何前方的 volume 交点更新 stencil 的方法；摄像机在体积外时通常更快。">
+  z-pass
+</Term>
+
+z-pass 从相机向场景看，只数实际几何之前的 volume 边界：front-facing 交点增加，back-facing 交点减少。它不需要绘制 front cap，因为被深度测试挡住的部分不会写 stencil；无穷远的 back cap 也可借助深度失败省略。只要摄像机不在 volume 内，路径简单且通常填充更少。
+
+<Term def="在深度测试失败的位置从场景几何后方反向统计 volume 交点的方法；它能处理摄像机位于体积内的情况，但要求前后 caps 正确闭合。">
+  z-fail
+</Term>
+
+当摄像机在 shadow volume 内时，z-pass 会从错误的起点开始计数。z-fail 反过来数几何后方的交点，并翻转增加/减少操作，因此对摄像机位置更稳健；它需要 front cap 和 back cap 都正确渲染，且更容易付出额外 fill-rate。实际系统可以用保守的 camera-inside test，在安全时用 z-pass，必要时切换 z-fail。
+
+<GpuGems3Ch11ZPassZFailDiagram />
+
+<Callout type="trap" title="无条件固定使用 z-pass">
+  现象 → 镜头穿入遮挡物或 volume 后，阴影突然反转、消失或出现大片漏光。原因 →
+  z-pass 假设摄像机在体积外，内部射线的交点计数从错误位置开始。修法 → 做保守的
+  camera-inside 检测；内部使用 z-fail，并验证 front/back caps 的封闭性。
+</Callout>
+
+无穷远顶点可以用齐次坐标表达：位置通常令 `w=1`，方向令 `w=0`。若硬件会把这些 primitive 在 far plane 裁掉，可以启用 depth clamp，或使用能把无限远投影到最大深度的特殊 projection matrix。
+
+## 3. 让低质量网格也能生成闭合边界
+
+普通 volume 生成通常假设 mesh 是 closed two-manifold：没有洞、裂缝、自相交，并且每条边恰好连接两个面。它会找出相邻 polygon 朝向光源的符号变化，把对应边挤出为 volume side，再绘制 front/back caps。这对游戏资产很合适，却无法覆盖 CAD 转换或真实扫描数据中的开放边界。
+
+鲁棒路径做两件事：没有邻居 polygon 的边也要挤出；不要只处理朝向光源的 polygon，而是处理所有 polygon，把模型分成朝光和背光的连通部分。这样共享的 silhouette edge 可能被挤出两次，分别封闭两组体积；所有输出面都必须朝向 volume 外侧，否则 stencil 的增减会失衡。
+
+<GpuGems3Ch11RobustMeshDiagram />
+
+<Callout type="trap" title="只挤出“有两个邻居”的 silhouette edge">
+  现象 → 闭合资产没有问题，单片三角形、开口 CAD 面或相交模型却出现 shadow streak
+  和漏光。原因 → 无邻居边被当成无效边，开放体积没有自己的边界；不同 polygon
+  分组也没有被分别封闭。修法 → robust 模式挤出 boundary edge，并对所有 polygon
+  计算方向和绕序，必要时重复共享边。
+</Callout>
+
+鲁棒性不是没有成本。对本来已经是二流形的网格，robust 路径可能让 caps 和 silhouette extrusion 接近做两遍；可以在预处理阶段识别普通网格，只对困难拓扑启用它。多于两个 polygon 共边、绕序相反的共享边等情况，还需要在预处理中拆成可处理的 disconnected polygon。
+
+## 4. geometry shader：在 GPU 上动态挤出 volume
+
+<Term def="位于 vertex shader 与 fragment shader 之间、可读取一个 primitive 并输出新 primitive 的 GPU 阶段；本章用它根据三角形邻接动态生成 caps 与挤出侧面。">
+  geometry shader
+</Term>
+
+动画模型每帧都可能改变 silhouette，若先把拓扑回读到 CPU 再生成体积，CPU/GPU 同步会成为瓶颈。geometry shader 可以直接接收带邻接的 triangle primitive：主三角形加三条边的邻居，共六个输入顶点。它比较主面与邻面的朝向，决定是否挤出边；再用 triangle strip 输出 front cap、back cap 和 silhouette quads。
+
+```glsl
+// adjacency: main triangle plus one neighbor per edge
+bool mainFacesLight = facesLight(gl_PositionIn[0], gl_PositionIn[2], gl_PositionIn[4]);
+for (int edge = 0; edge < 3; edge++) {
+  bool neighborFacesLight = facesLight(neighbor(edge));
+  if (mainFacesLight != neighborFacesLight) {
+    emitExtrudedQuad(edge, lightPosition); // w = 0 at infinity
+  }
+}
+if (!zPass) {
+  emitFrontCap();
+  emitBackCapAtInfinity();
+}
+EndPrimitive();
+```
+
+输入 primitive type 与输出 primitive type 是接口契约：OpenGL 可以使用带 adjacency 的三角形输入，输出选择 triangle strip，既能表达单个 cap 三角形，也能表达四边形侧面。最大输出顶点数必须按 caps 与三条边的最坏情况预留，否则正确的方向判断也会变成截断的 volume。
+
+<GpuGems3Ch11GeometryShaderDiagram />
+
+<Callout type="trap" title="把 geometry shader 当成普通的三角形透传器">
+  现象 → GPU 路径能渲染 cap，却没有随 silhouette
+  改变的侧面，动画物体的影子边界像被截断。原因 → 没有提供 triangle adjacency，或
+  GS 只重放主 primitive，没有比较邻面朝向。修法 → 绑定正确的 adjacency
+  输入，按每条边比较 face-lighting sign，再输出完整的 cap/side primitive。
+</Callout>
+
+退化三角形还会让朝向判定不稳定：同一面在不同邻接位置被重复计算时，若数值细节不同，可能多挤出或少挤出一条边。鲁棒实现应让每次判断使用完全一致的法线和 light-direction 计算，即使需要计算多个候选法线，也要优先保持结果一致。
+
+## 5. hierarchical occlusion culling：剪掉看不见的 shadow subtree
+
+<Term def="把对象组织成 BVH 等层次结构，并用硬件 occlusion query 测试节点的 shadow-volume AABB 是否可见；不可见时跳过整个子树。">
+  hierarchical occlusion culling
+</Term>
+
+大场景中，shadow volume 的成本常常来自最终根本不会出现在屏幕上的遮挡物。把对象按 front-to-back 放进 BVH，每个节点保存 AABB；查询时不只测试普通 AABB，而是沿光源方向挤出的 AABB。若这个保守的 shadow volume 都被前方物体挡住，那么节点里的任何真实 volume 都不可能把可见像素变暗，可以直接剪掉整棵子树。
+
+query 需要避免同步 readback：发出异步 occlusion query 后先遍历其他节点，结果回来再决定是否深入；上一帧的 visibility flag 与 frame ID 可以提供 temporal coherence，减少每帧都查询的必要。光源在节点 AABB 内、摄像机在挤出 AABB 内等情况会破坏保守假设，应跳过 query 继续遍历。
+
+<GpuGems3Ch11HierarchicalCullingDiagram />
+
+<Callout type="trap" title="给 BVH 的每个节点同步发 query 并立即等待">
+  现象 → 可见节点变少了，CPU 却因为 GPU readback 停顿，复杂场景反而更慢。原因 →
+  没有利用异步 query 和上一帧的 temporal coherence，遍历被同步结果串行化。修法 →
+  先发 query、继续 front-to-back 遍历其他节点，并按每个 light 保存可复用的
+  visibility 状态；不安全边界直接保守遍历。
+</Callout>
+
+## 6. 把 z 模式、网格质量和填充成本放进一张账
+
+z-pass 通常更快，因为不需要绘制 front cap，且 volume 被遮挡的区域通常更大时，z-fail 会消耗更多 fill rate。但 z-fail 对摄像机位置更通用，robust volume generation 对开放/相交模型更可靠，geometry shader 则把动态 silhouette 的 CPU 工作移到 GPU。没有一个开关可以单独决定最终方案。
+
+在 city walkthrough 这类场景里，层次遮挡剔除可能带来数量级收益；在所有节点都可见、query overhead 高或光源频繁移动的场景里，它也可能略慢于直接绘制全部对象。工程账本至少要记录 volume 生成顶点、stencil fill、query 等待、被剪枝节点和目标 GPU 的 timer，而不是只看“是否有影子”。
+
+<GpuGems3Ch11StencilPerformanceDiagram />
+
+<Callout type="warning" title="先看 pruned 百分比就宣布优化成功">
+  Lab 的 pruned 是结构性趋势，不是目标设备的帧率承诺。切换到真实场景时，还要测
+  shadow volume 的屏幕覆盖、robust extrusion 数量、query
+  延迟、退化三角形比例和光源/摄像机进入 AABB 的分支。
+</Callout>
+
+## 三步验收：从 stencil 计数到可扩展阴影
+
+<Stepper>
+  <Step title="第一步：建立正确的 stencil 计数">
+    先填充 scene depth，再生成 shadow volume 的边界。摄像机在体积外时优先 z-pass；进入体积时切换 z-fail，并确认需要的 caps 完整闭合。
+
+    <GpuGems3Ch11ShadowVolumeOverviewDiagram />
+    <GpuGems3Ch11ZPassZFailDiagram />
+
+  </Step>
+  <Step title="第二步：处理拓扑与动态 silhouette">
+    对普通闭合网格使用轻量路径；对开放、相交或有退化三角形的模型启用 robust 规则。动画场景把 adjacency 和 silhouette 判定交给 geometry shader，再输出 caps 与挤出侧面。
+
+    <GpuGems3Ch11RobustMeshDiagram />
+    <GpuGems3Ch11GeometryShaderDiagram />
+
+  </Step>
+  <Step title="第三步：只生成可能可见的 volume">
+    用 BVH 从前向后遍历，测试沿光方向挤出的节点 AABB；用异步 query 与 temporal coherence 隐藏 readback 延迟，不安全的节点则保守地继续遍历。
+
+    <GpuGems3Ch11HierarchicalCullingDiagram />
+    <GpuGems3Ch11StencilPerformanceDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch11ShadowVolumeLab />
+
+## 本章小结
+
+- shadow volume 用 stencil counter 记录射线进入/离开体积的次数，非零像素落入阴影。
+- z-pass 通常更快；摄像机可能在体积内时，用 z-fail 处理后方交点并补齐 caps。
+- robust generation 让开放、相交和低质量网格也能形成方向正确的 volume，但会增加 extrusion 工作。
+- geometry shader 用 adjacency 在 GPU 上动态生成 caps 与 silhouette sides，适合动画场景。
+- hierarchical occlusion culling 测试挤出的节点 AABB，配合异步 query 剪掉不可见 shadow subtree。
+
+<Exercises>
+
+**问题 1｜模式选择。** 为什么摄像机在 shadow volume 外时通常选择 z-pass，而进入体积后要切换 z-fail？请同时说明 z-fail 对 caps 的要求。
+
+<Answer>
+  z-pass 从实际几何前方数 volume 交点，摄像机在体积外时计数起点正确，且可以省略
+  front cap，通常 fill rate 更低。摄像机进入体积后，z-pass
+  的起点不再可靠；z-fail 从几何后方数交点，能处理这种情况，但必须把 front cap 和
+  back cap 正确闭合，否则后方交点的计数会失衡。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Shadow Volume Lab 增加 `safeCameraInside` 选项：当 camera 可能位于 volume 内时自动选 z-fail，否则选 z-pass。你会如何避免因为一个过于乐观的 inside test 产生漏影？
+
+<Answer>
+  inside test 应该是保守的：只要 camera 与 volume 的相交判断不确定，就走 z-fail
+  或继续遍历 volume。可以先用 volume
+  的包围体做快速测试，再对可能相交的候选做更精确检查；宁可为少数镜头支付 caps
+  成本，也不要把 z-pass 错用到内部相机上。
+</Answer>
+
+**问题 3｜场景选型。** 一个闭合游戏角色在固定光源下运行，另一个是含开口和相交面的城市 CAD 模型且相机连续漫游。分别如何选择 volume generation、z 模式和 hierarchical culling？
+
+<Answer>
+  闭合角色可以使用轻量的两流形生成，默认 z-pass，并在检测到 camera inside 时切换
+  z-fail；若几何动画，geometry shader 可避免 CPU 每帧重建。城市 CAD 模型应启用
+  robust generation，配合 z-pass/z-fail 动态选择；城市层次结构适合对挤出的 AABB
+  做异步 hierarchical occlusion
+  culling，同时为光源和摄像机进入不安全区域保留保守遍历分支。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="shadow volume"
+    definition="由遮挡物沿光线方向延伸出的空间区域；相机射线穿过它的次数可以告诉我们像素是否在阴影内。"
+  />
+  <GlossaryItem
+    term="z-pass"
+    definition="在深度测试通过时从实际几何前方统计体积交点的 stencil 方法，摄像机在体积外时通常更省填充。"
+  />
+  <GlossaryItem
+    term="z-fail"
+    definition="从实际几何后方统计体积交点的 stencil 方法，能处理摄像机在体积内的情况，但需要完整 caps。"
+  />
+  <GlossaryItem
+    term="geometry shader"
+    definition="可以读取一个 primitive 并输出新 primitive 的 GPU 阶段，本章用它动态生成 shadow volume 的 caps 和侧面。"
+  />
+  <GlossaryItem
+    term="hierarchical occlusion culling"
+    definition="在 BVH 上测试挤出的节点阴影包围体；看不见时跳过整棵子树，减少不会影响屏幕的 volume 工作。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 11. Efficient and Robust Shadow Volumes Using Hierarchical Occlusion Culling and Geometry Shaders"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-11-efficient-and-robust-shadow-volumes-using"
+/>
