@@ -1,0 +1,261 @@
+---
+title: "GPU Gems 3 · Chapter 6. GPU-Generated Procedural Wind Animations for Trees"
+type: D
+section: "GPU Gems 3 Part I · Geometry"
+order: 6
+description: "用二维风场、浅层树枝层级、噪声与周期规则，在 vertex shader 中合成可扩展的树木风动，并比较 simulation LOD、instancing 与 DirectX 10 stream-out。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-6-gpu-generated-procedural-wind-animations-trees"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-06
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch06HierarchyDiagram,
+  GpuGems3Ch06MotionCasesDiagram,
+  GpuGems3Ch06ProceduralWindLab,
+  GpuGems3Ch06QuaternionDiagram,
+  GpuGems3Ch06RenderingTimelineDiagram,
+  GpuGems3Ch06StreamOutDiagram,
+  GpuGems3Ch06WindFieldDiagram,
+  GpuGems3Ch06WindPipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch06-procedural-wind";
+
+<Objectives>
+
+- 能解释 wind field、树枝层级和周期规则如何在 vertex shader 中合成无需回读上一帧的树木运动
+- 能修改 Procedural Wind Lab 的风力、gust 频率、turbulence、stiffness 与 simulation LOD，观察幅度、phase spread 和 shader work 的变化
+- 能回答：大批量植被、远处树干和近处树枝分别应该采用什么 simulation、instancing 与 stream-out 组合
+
+</Objectives>
+
+## 先把“像风”的线索交给 GPU
+
+想象一片森林：远处的树干只需要一起缓慢偏摆，近处的枝条才需要有松紧、回弹和不完全同步的细节。真正的风包含太多力、质量和约束，逐枝求解会让实时程序先耗尽预算，画面也未必更像自然界。
+
+本章解决的问题是：如何用少量可控规则，合成大批树木看起来可信的风动，并把运动计算放进 GPU 以配合 instancing？如果所有树都使用同一个相位，森林会像一排同步的雨刷；如果每根枝条都运行完整物理模拟，CPU 和 GPU 都会被不必要的状态依赖拖住。
+
+<Callout type="tip" title="先预测：提高 turbulence 会改变什么">
+  先猜一猜：提高 wind power 会主要增大 sway amplitude；提高 turbulence
+  会主要增大每棵树之间的 phase spread；提高 stiffness
+  后，树干和枝条的幅度都应该上升还是下降？打开 Lab 前先写下你的预测。
+</Callout>
+
+<GpuGems3Ch06WindPipelineDiagram />
+
+## 1. phenomenological model：追求可见现象，不模拟每个力
+
+<Term def="以观察到的视觉现象为目标，用噪声、正弦或余弦等可控函数组合出运动；它不声称完整复现真实空气动力学。">
+  phenomenological model
+</Term>
+
+树的运动受枝条长度、刚度、叶冠形状和湍流影响。若直接把每个分支当成物理物体，必须处理力的传播、约束和上一时刻状态；对需要大规模植被的实时场景来说，这通常得不偿失。更适合的做法是挑出观众能看见的现象：主干缓慢偏摆、背风枝条大幅晃动、侧风枝条弯曲并带一点扭转。
+
+这些现象可以由多个简单周期函数和 noise 叠加得到。低频、低幅度的成分负责整体摆动，高频成分负责小枝条的混沌细节；规则不是物理方程的近似答案，而是直接面向屏幕结果的运动合成器。
+
+<Callout type="trap" title="把真实物理完整搬进实时树木动画">
+  现象 → 线程等待层级传播，树越多越慢，画面却不一定更自然。原因 →
+  完整受力求解需要前后依赖，而远处观众只看见主干的低频运动。修法 →
+  先提取可见现象，用周期函数、噪声和 simulation LOD 合成，再把规则并行化到 GPU。
+</Callout>
+
+## 2. wind field 与浅层树枝层级
+
+<Term def="覆盖地形的二维方向和速度场；它可以由全局风和稀疏局部 primitive 组成，并随时间变化。">
+  wind field
+</Term>
+
+把风简化成地形上的二维 vector field：给定位置和时间，函数 `v = G(x, t)` 返回方向与速度。全局风提供稳定主方向，稀疏的 wind primitive 可以表达局部旋涡、爆炸或飞行器经过的扰动。vertex shader 可以从二维 texture 采样它，也可以从额外的 instance buffer 读取每棵树的风向和风速。
+
+树本身只保留一层浅层 hierarchy：trunk 是 root，branch segment 连接到 parent branch，叶片和更小枝条的直接反作用隐含在 noise 中。官方章节指出两到三层节点通常已经足以产生可信的树木运动；这让每个顶点的 branch list 保持短，适合在 shader 中遍历。
+
+<GpuGems3Ch06WindFieldDiagram />
+
+<Term def="动画级别的细节策略；远处只保留 trunk motion，近处再加入 branch motion，以较小的视觉误差换取更低的模拟成本。">
+  simulation LOD
+</Term>
+
+远处树的主干运动是最重要的视觉线索，近处才值得加入枝条的 suppression、bending 和 twisting。把 simulation LOD 与几何 LOD 分开理解：几何 LOD 决定画多少三角形，simulation LOD 决定算多少层运动。两者可以协同切换，但不应该用“减少三角形”掩盖“仍在计算所有枝条”的问题。
+
+<GpuGems3Ch06HierarchyDiagram />
+
+## 3. 用风向关系组合 trunk 与 branch motion
+
+主干可以把平行风向、垂直风向和绕轴旋转分成不同频段。平行方向的幅度最大；垂直方向和旋转幅度较小，但能避免树像一根只会前后摆的棍子。更低频的函数表达较重、较硬的树，高频的小波叠加则模拟小枝条的 chaotic detail。
+
+枝条可以按它相对风向的关系分成三类：迎风时 drag 和 lift 将它压向 trunk，摆幅较小；背风时 turbulence 和 lift 占主导，枝条大幅摆动或 flap；与风向垂直时，较大的 attack angle 让它绕 parent branch 弯曲，并带一点绕自身轴的扭转。最终 motion 是这几类周期函数按权重的加权和。
+
+<GpuGems3Ch06MotionCasesDiagram />
+
+<Term def="给每个分支的周期运动输入独立的时间偏移；相位相关性低时树群更混沌，相关性高时更整齐。">
+  phase shift
+</Term>
+
+如果所有枝条从同一个时间点开始同一个 cosine，规则本身再好也会出现同步摆动。phase shift 可以在预处理阶段为每个 branch 生成，运行时只需把它加入时间项；turbulence 或局部风 primitive 还可以进一步改变不同树实例之间的相关性。
+
+<Callout type="trap" title="只改幅度，不给枝条分配 phase shift">
+  现象 → 每根枝条的摆幅看似不同，整片森林仍然同时向同一方向拐。原因 →
+  周期函数的起点一致，幅度差无法消除时间相关性。修法 → 预处理每个 branch 的
+  phase shift，并让 turbulence 或实例参数影响相位相关性。
+</Callout>
+
+## 4. vertex shader 中的 branch transform 合成
+
+每个顶点保存影响它的 branch indices 和 weights，从直接所属 branch 一路列到 trunk root。shader 按这条 list 计算每个 branch 的旋转角度，再沿 hierarchy 顺序合成旋转。这里更适合用 quaternion 组合角度，最后再转成 rotation matrix；直接对变换矩阵做线性插值会产生不正确的旋转。
+
+<Term def="按层级顺序把多个旋转 quaternion 连乘/组合成一个最终旋转；它保留旋转结构，再转换成矩阵去变换 position 和 normal。">
+  quaternion composition
+</Term>
+
+<GpuGems3Ch06QuaternionDiagram />
+
+```hlsl
+float angle = branchAmplitude * cos(time + phaseShift);
+float facing = dot(normalize(branchAxis), windDirection);
+float suppression = saturate(1.0 - facing);
+angle = lerp(angle, -0.5 * angle, suppression * branchSuppressPower);
+
+float4 localRotation = quatAxisAngle(branchTangent, angle);
+float4 twistRotation = quatAroundY(angle * twistPower);
+float4 branchRotation = quatConcat(localRotation, twistRotation);
+
+for (uint i = 0; i < branchCount; ++i) {
+  finalRotation = quatConcat(finalRotation, branchRotationFor(i));
+}
+
+float3 animatedPosition = rotate(finalRotation, position - branchOrigin);
+output.position = animatedPosition + branchOrigin;
+```
+
+这段伪代码保留了三个关键决策：风向影响 suppression，周期项由 phase shift 打散，层级旋转用 composition 累积。它不需要读取上一帧，因为本帧的 wind field、hierarchy 和树参数已经足够计算结果。
+
+## 5. DirectX 9 与 DirectX 10：把共享的 branch work 留下来
+
+在 DirectX 9 路线上，若每个几何顶点都重新遍历同一 branch hierarchy，属于同一分支的顶点会重复计算相同 transform。DirectX 10 的 stream-out 可以把 simulation 单独运行：先把每个 branch 当成一个 vertex，算出 branch transform 并写进临时 buffer；之后的 skinning shader 再把临时结果作为 instance data 读回几何。
+
+<GpuGems3Ch06StreamOutDiagram />
+
+这不是把完整物理状态写回 CPU，而是把本帧可复用的 GPU 中间结果留给下一阶段。再配合 hardware instancing，同一套 coarse tree geometry 可以批量绘制大量实例；若需要和 GPU fluid simulation 联动，wind field 也可以一直留在 GPU，避免 readback。
+
+<GpuGems3Ch06RenderingTimelineDiagram />
+
+先预测：把 simulation LOD 从 `full detail` 切换为 `trunk only`，应该减少哪些 shader work？把 DX9 换成 DX10 stream-out 后，哪项共享计算会被移出每个 geometry vertex？打开 Lab，分别调高 stiffness 和 turbulence 来验证。
+
+<GpuGems3Ch06ProceduralWindLab />
+
+## 6. 用视觉目标选择模拟预算
+
+procedural wind 的优势是大规模、可并行和可控，不是物理精确。若应用需要“风吹得像真的”，应该先问画面能看见什么：远景只要 trunk motion；近景需要 branch cases、phase variation 和 inertia；局部爆炸或旋翼则需要 wind primitive 影响场。
+
+同一棵树还应把 simulation LOD 与 geometry LOD 一起设计。远处降低模拟复杂度并减少几何，近处恢复 branch motion 并保留足够顶点；DX10 stream-out 适合把 branch transform 在 simulation 与 skinning 间复用，但不能替代合理的实例批次和相位分散。
+
+## 三步验收：从风场到可扩展的树群
+
+<Stepper>
+  <Step title="第一步：把风场和树层级压缩成输入">
+    先确定 wind field 的方向、速度和局部 primitive，再保存 trunk-rooted hierarchy、branch 参数与每个顶点的影响列表。不要从一开始就为每根枝条建立完整物理状态。
+
+    <GpuGems3Ch06WindPipelineDiagram />
+    <GpuGems3Ch06WindFieldDiagram />
+
+  </Step>
+  <Step title="第二步：用现象学规则合成不同枝条行为">
+    根据迎风、背风和侧风关系组合 drag、lift、suppression、bending 与 twisting；再用 phase shift 打散树群同步，用 simulation LOD 控制远近成本。
+
+    <GpuGems3Ch06HierarchyDiagram />
+    <GpuGems3Ch06MotionCasesDiagram />
+
+  </Step>
+  <Step title="第三步：把共享 transform 留在 GPU">
+    对每个顶点遍历 branch list，用 quaternion composition 得到 transform；在 DX10 中把 branch simulation stream-out 到临时 buffer，再和 skinning、instancing 一起完成大量绘制。
+
+    <GpuGems3Ch06QuaternionDiagram />
+    <GpuGems3Ch06StreamOutDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- phenomenological model 用规则和噪声换取可扩展的 believable motion。
+- wind field 提供方向速度，浅层 hierarchy 提供可并行的影响范围。
+- trunk、branch、phase shift 与 simulation LOD 共同控制视觉层次。
+- quaternion composition 在 vertex shader 中合成 branch transforms。
+- DX10 stream-out、skinning 和 instancing 复用 GPU 中间结果。
+
+<Exercises>
+
+**问题 1｜判断规则权重。** 一个 branch 位于风向正面、背面和侧面时，分别应该加强哪类视觉规则？为什么不能让三类 branch 使用同一个 sway amplitude？
+
+<Answer>
+  迎风 branch 应加强 suppression，让 drag/lift 把它压向 trunk；背风 branch
+  应提高 turbulence 与 lift 的摆动幅度；侧风 branch 应加强 bending 和
+  twisting。三类相对风向的可见现象不同，统一 amplitude
+  会丢掉迎风压缩与侧风扭转等线索。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 Procedural Wind Lab 增加一个 `phaseCorrelation` 控件：它越高，branch phase shift 越接近；它越低，phase spread 越大。你应该如何改变规则，才能让树群从“同步摆动”变成“各自有节奏”？
+
+<Answer>
+  可以让每个 branch 的 phase 从实例 seed 和预处理 offset 得到，再把 offset 乘以
+  `1 - phaseCorrelation`；相关性高时 offset
+  被压小，相关性低时保留更大的差异。wind power 和 sway amplitude
+  不必因此改变，变化的是周期函数的时间起点。
+</Answer>
+
+**问题 3｜场景选型。** 一个远景森林有 1,000 个实例，镜头只看见树干整体摆动；另一个近景角色树需要看见枝条回弹且使用 DX10。分别如何选择 simulation LOD 和数据路径？
+
+<Answer>
+  远景森林使用 trunk-only simulation LOD，保留低频主干运动，再用 instancing
+  批量绘制，避免逐枝计算。近景角色树使用 trunk + branch 或 full detail，vertex
+  shader 遍历 branch list 合成 quaternion；DX10 中先按 branch 做 simulation 并
+  stream-out transform，再让 skinning shader 复用，减少每个 geometry vertex
+  的重复计算。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="phenomenological model"
+    definition="以屏幕上看见的现象为目标，用噪声和周期函数组合出运动的简化模型。"
+  />
+  <GlossaryItem
+    term="wind field"
+    definition="为地形每个位置提供风向和速度的二维向量场，可叠加局部扰动。"
+  />
+  <GlossaryItem
+    term="simulation LOD"
+    definition="按距离或重要性决定模拟多少层运动；远处可以只算 trunk，近处再算 branches。"
+  />
+  <GlossaryItem
+    term="phase shift"
+    definition="给周期函数加的时间偏移，用来让不同枝条或树实例不在同一时刻摆动。"
+  />
+  <GlossaryItem
+    term="quaternion composition"
+    definition="按 hierarchy 组合多个旋转 quaternion，最后转成矩阵去变换顶点和法线。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 6. GPU-Generated Procedural Wind Animations for Trees"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-6-gpu-generated-procedural-wind-animations-trees"
+/>
