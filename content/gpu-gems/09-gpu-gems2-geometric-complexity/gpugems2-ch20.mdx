@@ -1,0 +1,271 @@
+---
+title: "GPU Gems 2 · Chapter 20. Fast Third-Order Texture Filtering"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 20
+description: "用三阶核重建连续纹理信号，结合硬件双线性采样与可分离过滤，在细节、ringing、mip 和采样成本之间取得平衡。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-20
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch20FootprintDiagram,
+  GpuGems2Ch20FilteringPipelineDiagram,
+  GpuGems2Ch20KernelDiagram,
+  GpuGems2Ch20SeparableDiagram,
+  GpuGems2Ch20ThirdOrderFilteringLab,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch20-third-order-filtering";
+
+<Objectives>
+
+- 能解释 Fast Third-Order Texture Filtering 如何用三阶核重建纹理，并区分线性基线、三阶支持域与硬件 fetch 数量
+- 能把 cubic reconstruction 拆成权重、硬件双线性采样和 separable filtering 两个方向，并说明边界、mip 与 ringing 的约束
+- 能调节 ThirdOrderFilteringLab 的 phase、kernel support 和纹理分辨率，定位 aliasing、过度模糊与采样成本的交换
+
+</Objectives>
+
+## 先把“纹理平滑”拆成重建与采样
+
+纹理过滤不是简单地把邻近颜色平均。GPU Gems 2 第 20 章 **Fast Third-Order Texture Filtering** 讨论的是：把离散 texel 当作连续信号的样本，在任意 UV 位置重建一个平滑值；与此同时，shader 还要面对有限的纹理 fetch、硬件线性插值、mipmap 和屏幕像素 footprint。
+
+先打开实验，固定纹理分辨率，拖动 sample phase 穿过一个 texel。观察线性基线和三阶重建在 texel 之间的过渡，再增大 kernel support，最后改变 resolution。你应该能看到一个清晰的取舍：更高阶的核可以让曲线更连续，但不代表它能恢复已经丢失的高频细节，也可能带来 overshoot 或更多计算。
+
+<GpuGems2Ch20ThirdOrderFilteringLab />
+
+<Callout type="tip" title="先画出 support，再谈优化">
+  调试前标出目标 UV 周围实际参与的 texel、每个权重和边界寻址规则。确认数学上的
+  support 与 shader 的 texture fetch
+  一致后，再用硬件线性采样合并相邻贡献；否则“优化”只是在改变错误的核。
+</Callout>
+
+<Callout type="trap" title="把高阶过滤当成恢复细节的魔法">
+  现象 → 三阶结果看起来更平滑，开发者以为它已经恢复了 minification
+  中丢失的细节。原因 →
+  过滤只能重建已有样本的连续近似，不能创造未被纹理记录的频率。修法 → 同时检查
+  texture footprint、mip
+  选择和目标分辨率；高频信号应先正确预过滤，再选择重建核。
+</Callout>
+
+本章主题 **Fast Third-Order Texture Filtering** 的目标是用更少的硬件采样逼近三阶重建，而不是牺牲过滤的可解释性换取一张“看起来更糊”的图。
+
+<Term def="在纹理离散样本之间使用三阶核进行连续信号重建的过滤方法；它通常使用四个相邻样本的一维支持域。">
+  third-order texture filtering
+</Term>
+
+<Term def="依据目标位置与相邻 texel 的相对相位计算权重，并组合四个样本得到平滑值的重建过程。">
+  cubic reconstruction
+</Term>
+
+<GpuGems2Ch20FilteringPipelineDiagram />
+
+## 1. 三阶核与四个相邻 texel
+
+一维纹理可以看成在整数位置记录的样本 $f_i$。当查询位置位于 $i$ 与 $i+1$ 之间时，三阶重建通常会使用 $f_{i-1},f_i,f_{i+1},f_{i+2}$ 四个样本，并由相位 $t$ 计算权重：
+
+$$
+  f(x)=w_0(t)f_{i-1}+w_1(t)f_i+w_2(t)f_{i+1}+w_3(t)f_{i+2}.
+$$
+
+不同的三阶核会给出不同的权重曲线。Catmull-Rom 类核倾向于保持边缘锐度，B-spline 类核更平滑但可能偏软；一个工程实现不能只写“cubic”而不记录核的参数、边界和是否允许 overshoot。权重的和、连续性以及在常量输入上的保持能力，都应成为测试断言。
+
+<GpuGems2Ch20KernelDiagram />
+
+<Term def="将相邻 texel 的颜色按线性权重混合的一次硬件采样；它可以作为三阶核优化中的组合单元，但本身只有一阶重建能力。">
+  bilinear interpolation
+</Term>
+
+如果直接逐个读取四个 texel，三阶重建会产生较高的 dependent fetch 成本。硬件双线性采样可以把相邻的两项先合并：先选择两个合适的线性采样位置和内部相位，再用外层权重组合两个结果。这样做的关键不是“调用 bilinear 就自动变成 cubic”，而是要证明新的 fetch 位置和权重在目标核上等价或足够接近。
+
+边界是最容易破坏等价性的地方。wrap、clamp、border color 和镜像寻址会改变 support 中缺失样本的替代值；如果两个线性 fetch 跨过不同边界，优化形式可能与直接四样本公式不一致。对纹理边缘、单 texel 纹理和非幂次尺寸建立专门回归，比只测中心区域更可靠。
+
+<Callout type="trap" title="把两次 bilinear fetch 当成任意三阶核">
+  现象 → 中心区域看起来平滑，但纹理边缘出现亮线、暗线或权重不守恒。原因 →
+  线性采样位置、外层组合权重和目标 cubic kernel
+  没有经过推导，边界还可能走了不同寻址路径。修法 → 先用四样本 reference 实现作
+  oracle，逐相位比较优化误差，再单独验证 wrap、clamp 和 border 行为。
+</Callout>
+
+## 2. separable filtering：把二维问题拆成两次一维重建
+
+<Term def="把二维过滤核写成水平一维核与垂直一维核的连续应用，从而复用一维权重和硬件采样优化。">
+  separable filtering
+</Term>
+
+对于可分离的二维核，先沿 x 方向对每一行重建中间值，再沿 y 方向对中间结果重建最终像素：
+
+$$
+  F(x,y)=\sum_j w_j(y)\left(\sum_i w_i(x)f_{i,j}\right).
+$$
+
+<GpuGems2Ch20SeparableDiagram />
+
+可分离形式减少了二维权重表和实现复杂度，但它不是无条件的性能胜利：中间结果可能需要额外寄存器或临时纹理，两个方向的边界策略必须一致，mip 与各向异性 footprint 也不能只在一个方向更新。对屏幕空间后处理而言，水平与垂直 pass 还要考虑 render target 往返和带宽。
+
+## 3. kernel support、footprint 与 mip
+
+<Term def="过滤核在空间中具有非零权重的范围；support 越宽，参与重建的 texel 越多，也越可能产生更平滑或更昂贵的结果。">
+  kernel support
+</Term>
+
+support 描述一次查询要查看多远。support 太窄时，快速移动或高对比纹理会出现 aliasing、shimmer 和相位跳变；support 太宽时，边缘会过度模糊，锐利核还可能在高对比处产生 ringing。不能只用“更宽”解决所有伪影，因为正确 support 应与屏幕像素实际覆盖的纹理区域相匹配。
+
+<Term def="一个屏幕像素映射回纹理后覆盖的空间区域；它由 UV 导数、投影缩放和采样方向决定，用来选择过滤宽度与 mip 级别。">
+  texture footprint
+</Term>
+
+<GpuGems2Ch20FootprintDiagram />
+
+当纹理缩小到一个屏幕像素覆盖多个 texel 时，应先通过 mip 或其他预过滤表示压低不可见频率，再在选定级别做三阶重建。若直接在最高分辨率上用尖锐三阶核，可能只是把 aliasing 重新插值成移动的波纹；若 mip 过粗，再高阶的重建也只能平滑低频结果。实现上要记录 UV 导数、mip 选择、support 半径和最终 fetch 数，方便把视觉问题与成本对应起来。
+
+## 4. 误差、ringing 与性能预算
+
+三阶核的质量不能只用静态截图判断。至少应使用常量、斜坡、阶跃、脉冲和高频棋盘格五类输入，记录重建值、最大 overshoot、边缘位置、相位连续性和边界行为。常量输入应保持常量；阶跃输入允许有预期的过渡，但 overshoot 必须受材质容忍度限制。
+
+<GpuGems2Ch20FootprintDiagram />
+
+性能预算也应分层：reference 四 texel path 用来验证数值；optimized path 使用硬件 linear fetch；separable path 评估二维带宽；最终 material path 再加上颜色空间、mip、各向异性和混合。不要用一个“fetches 少”指标证明优化有效，因为寄存器压力、纹理缓存命中率、pass 数和分辨率都会改变实际 GPU 时间。
+
+<Callout type="trap" title="只对比平均颜色，不测 phase 和边缘误差">
+  现象 → 优化结果的平均误差很小，但纹理移动时出现闪烁，边缘还有一圈亮边。原因 →
+  平均值掩盖了相位连续性、support 越界和高对比输入上的 overshoot。修法 → 对每个
+  sub-texel phase 做 reference
+  对比，加入阶跃/脉冲/棋盘格与所有边界模式，并记录最大绝对误差而不只看均值。
+</Callout>
+
+## 三步实验：从 reference 到快速实现
+
+每一步只改变一个变量，先记录 source texel、phase、support、mip/分辨率和 fetch 数，再比较视觉结果。若出现 ringing 或边缘亮线，回到四样本 reference，不要直接继续调外层颜色。
+
+<Stepper>
+  <Step title="第一步：用四样本 reference 验证 cubic reconstruction">
+    选择三阶重建，拖动 sample phase 穿过 texel。观察目标点如何在四个相邻样本之间移动，并用 kernel 图核对权重 support 与边界替代值。
+
+    <GpuGems2Ch20KernelDiagram />
+
+  </Step>
+  <Step title="第二步：比较 bilinear 优化与 separable pass">
+    切换 Kernel 调试，固定 phase 和 resolution，记录线性 fetch 数与重建曲线；再把同一逻辑拆成水平和垂直 pass，检查两个方向的边界与权重是否一致。
+
+    <GpuGems2Ch20SeparableDiagram />
+
+  </Step>
+  <Step title="第三步：把 footprint 与成本纳入验收">
+    改变 texture resolution，观察 support 过窄时的 aliasing 与过宽时的平滑；再结合 footprint 图检查 mip 和采样预算是否匹配屏幕覆盖，而不是只为单个近景样本优化。
+
+    <GpuGems2Ch20FootprintDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用增加 support 掩盖错误的 mip 选择">
+  现象 → 过滤结果变得更糊，闪烁暂时减少，但远景细节和性能都明显下降。原因 →
+  高频信号没有先进入合适 mip，shader 用更宽的三阶核承担了错误的频率管理。修法 →
+  先检查 UV footprint 与 mip 选择，再按目标级别校准
+  support，并用远近相机移动验证。
+</Callout>
+
+<Callout type="trap" title="把 ringing 当成更高质量的锐度">
+  现象 → 阶跃边缘旁出现亮暗波纹，开发者把它当作锐利细节保留。原因 →
+  三阶核权重允许 overshoot，输入高对比时会产生超过样本范围的重建值。修法 →
+  用阶跃和脉冲输入测最大
+  overshoot，必要时选择更保守核、限制范围或把该材质切回线性路径。
+</Callout>
+
+<Callout type="trap" title="只优化一维 pass，忽略二维带宽">
+  现象 → horizontal shader 的 fetch 数下降，但完整后处理帧时间没有改善。原因 →
+  vertical pass、临时 render target、读写同步和带宽成为新的瓶颈。修法 →
+  以完整帧为单位测量两个方向、分辨率、cache 命中和 render target
+  往返，再决定是否采用 separable filtering。
+</Callout>
+
+## 本章小结
+
+- Fast Third-Order Texture Filtering 把离散 texel 当作连续信号样本，用三阶 kernel 在任意 phase 重建颜色；它提高连续性，但不能恢复已丢失的频率。
+- cubic reconstruction 通常使用四个相邻 texel；硬件 bilinear interpolation 可以合并贡献，但必须用 reference path 验证权重和边界等价性。
+- separable filtering 把二维核拆成水平与垂直两次一维过滤，减少公式复杂度，却可能增加带宽、临时结果和 pass 成本。
+- kernel support 与 texture footprint、mip 和屏幕覆盖率共同决定 aliasing、模糊、ringing 与 fetch 预算。
+- 发布前用常量、阶跃、脉冲、棋盘格、全 phase 和边界模式做差分测试，再用完整 GPU profile 判断优化是否值得。
+
+<Exercises>
+
+**问题 1｜解释四样本 support。** 查询位置位于 texel $i$ 与 $i+1$ 之间时，为什么三阶重建通常需要 $i-1$ 到 $i+2$ 的四个样本？
+
+<Answer>
+  三阶多项式需要在查询点两侧同时获得足够的邻域斜率信息；$i-1$、$i$、$i+1$、$i+2$
+  能让权重随 phase
+  连续变化，并表达比一次线性插值更丰富的曲率。实际使用哪个核仍要明确参数、边界和是否允许
+  overshoot，不能只用“cubic”作完整规格。
+</Answer>
+
+**问题 2｜分析优化误差。** 你用两次 bilinear fetch 逼近四样本三阶 reference。中心区域误差很小，但边缘出现亮线。请列出排查顺序。
+
+<Answer>
+  先逐 phase 对比两条路径的线性采样位置和外层组合权重，再检查 support
+  是否跨过纹理边缘；随后核对 reference 与优化路径的 wrap、clamp、border
+  color、mip 和颜色空间。若只在边缘失败，优先修正边界等价性，不要用全局颜色
+  scale 掩盖权重错误。
+</Answer>
+
+**问题 3｜选择过滤预算。** 一个远景后处理 pass 在 1080p 上出现 shimmer，改用更宽三阶核后性能下降。你会如何重新设计？
+
+<Answer>
+  先测 UV footprint 与 mip 选择，确保高频输入已经被正确预过滤；再在匹配的 mip
+  上比较线性、三阶和 separable 方案的最大 phase 误差与完整帧 GPU
+  时间。若远景只需要低频稳定性，可以选择较保守核或更合适
+  mip，把三阶重建留给屏幕覆盖足够、锐度收益可见的区域。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="third-order texture filtering"
+    definition="使用三阶核在离散 texel 之间重建连续纹理信号的过滤方法。"
+  />
+  <GlossaryItem
+    term="cubic reconstruction"
+    definition="根据相位与相邻 texel 权重计算平滑值的三阶重建过程。"
+  />
+  <GlossaryItem
+    term="bilinear interpolation"
+    definition="使用线性权重混合相邻 texel 的一次硬件采样。"
+  />
+  <GlossaryItem
+    term="separable filtering"
+    definition="先沿一个方向再沿另一个方向应用一维过滤核的二维过滤方式。"
+  />
+  <GlossaryItem
+    term="kernel support"
+    definition="过滤核具有非零权重、会参与一次查询的空间范围。"
+  />
+  <GlossaryItem
+    term="texture footprint"
+    definition="一个屏幕像素映射回纹理后覆盖的空间区域，用来选择过滤宽度与 mip。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 20. Fast Third-Order Texture Filtering"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering"
+/>
