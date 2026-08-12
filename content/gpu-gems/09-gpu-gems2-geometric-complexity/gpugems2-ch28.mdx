@@ -1,0 +1,316 @@
+---
+title: "GPU Gems 2 · Chapter 28. Mipmap-Level Measurement"
+type: C
+section: "GPU Gems 2 Part III · High-Quality Rendering"
+order: 28
+description: "用 alpha 标定纹理、遮挡查询与参考计数测量实际可见的 mip 层，再以显著性阈值和分摊调度驱动纹理内存管理。"
+demo: true
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-28-mipmap-level-measurement"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-28
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch28CalibrationDiagram,
+  GpuGems2Ch28EngineScheduleDiagram,
+  GpuGems2Ch28MeasurementLab,
+  GpuGems2Ch28MeasurementPipelineDiagram,
+  GpuGems2Ch28MipmapChainDiagram,
+  GpuGems2Ch28OrientationDiagram,
+  GpuGems2Ch28QueryResultsDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch28-mipmap-level-measurement";
+
+<Objectives>
+
+- 能解释 Mipmap-Level Measurement 为什么让真实 GPU 采样路径回答“哪些 mip 层可见”，而不是由 CPU 猜测
+- 能实现 calibration alpha、reference/query ratio、显著性阈值与分摊调度，并核对状态覆盖和内存结果
+- 能回答：距离、表面朝向、阈值和测量间隔改变时，应保留哪一层、会节省多少内存，又可能出现什么画质或延迟风险
+
+</Objectives>
+
+## 先测量用户真正看见的细节
+
+一张大图为远近不同的物体准备了多档清晰度。最高档往往占据最多空间，却可能只在极少视角中出现；永远把它留在显存里，会挤掉其他角色、地形和特效的预算。
+
+问题在于，最终选择不仅由距离决定，还会受到表面朝向、屏幕设置和硬件内部策略影响。与其在主处理器上重建一套不完整的猜测，不如让图形硬件按真实状态再画一次，再把“有多少片元需要某档细节”读成管理决策。先预测：在实验里同时增加距离和掠射角，首个可见层会往 L0 还是 L3 移动？
+
+<GpuGems2Ch28MeasurementLab />
+
+<Callout type="tip" title="测量记录必须绑定真实 render contract">
+  每条结果同时保存 camera、viewport、texture
+  size、sampler/filter、anisotropy、AA、mesh LOD、depth state、query latency 和
+  significance threshold。只记录“对象需要
+  L2”无法解释下次为什么变化，也不能安全驱动资源管理。
+</Callout>
+
+<Callout type="trap" title="只根据摄像机距离选择纹理层">
+  现象 → 两个等距表面一个清晰、一个发糊，转动相机后结论又反转。原因 →
+  屏幕像素映射到纹理的覆盖区域还受 polygon orientation、filtering、anisotropy
+  与分辨率影响。修法 → 在目标 GPU 和真实 render state 下测量；CPU
+  距离规则只可作为保守预取提示。
+</Callout>
+
+本章的 **Mipmap-Level Measurement** 不是自己实现一套 mip 选择公式，而是把 GPU 已经隐式做出的选择转成可查询的片元数量，再决定哪些高分辨率层值得常驻。
+
+## 1. 从人工 false color 到 alpha 标定
+
+美术检查常把每个 mip 层涂成强烈不同的颜色：看到哪种颜色，就知道硬件正在采哪一层。这个方法直观，却需要人在画面里寻找少量像素。自动化的关键是把“颜色识别”改写为 GPU 已能高效完成的通过/拒绝测试。
+
+<Term def="为测量而准备的特殊 mipmap；每层用不同 alpha 区间编码，让真实 sampler 把层选择带入像素输出。">
+  calibration texture
+</Term>
+
+标定纹理尺寸应与被测纹理一致，采样状态也必须一致。最简单的最高层测试在 L0 写 alpha 1，其余层写 alpha 0；替换目标纹理后重画对象，只让 alpha 大于零的片元通过。RGB 不参与判定，可用于 false-color 调试，或填入有代表性的图案，避免驱动把异常纯色纹理走入不同优化路径。
+
+<GpuGems2Ch28MipmapChainDiagram />
+
+以未压缩 512×512 RGBA8 为例，L0、L1、L2、L3 分别约占 1024、256、64、16 KB。每降一级边长减半，面积与内存变成四分之一，因此确认 L0/L1 不可见，收益远大于继续分析 mip chain 尾部。
+
+<Callout type="trap" title="标定纹理尺寸或 sampler 与目标不一致">
+  现象 → 查询稳定返回数值，但换回真实纹理后可见层与预测不符。原因 → texture
+  dimensions、mipmap filter、LOD bias 或 anisotropy
+  任一变化都会改变硬件层选择。修法 →
+  标定纹理与目标一一配套，并在重放时只覆盖算法要求的 shader、alpha 与
+  color-write 状态。
+</Callout>
+
+## 2. 把层选择变成 query count
+
+<Term def="让 GPU 报告一次 draw call 中有多少样本或片元通过可见性测试的异步查询机制。">
+  occlusion query
+</Term>
+
+遮挡查询原本用于判断物体是否被挡住；它统计通过深度测试的片元，也会遵守该 draw call 的其他管线状态。原章利用这一点：重放物体、替换标定纹理、关闭颜色写入，再让 alpha 阶段只保留正在测试的 mip 区间。这样 query count 就成为该层对当前画面的可见证据。
+
+<Term def="按照像素输出的 alpha 与参考值决定片元继续还是被丢弃的固定功能测试；现代着色器可用 discard 模拟同一判定。">
+  alpha test
+</Term>
+
+<GpuGems2Ch28MeasurementPipelineDiagram />
+
+原始 Direct3D 路径会覆盖 pixel shader、alpha-test states 与 texture，并使用 `D3DRS_COLORWRITEENABLE` 禁止标定颜色写进画面。现代 API 可在 fragment shader 中执行等价阈值判断；但 WebGL2 的 `ANY_SAMPLES_PASSED` 只提供布尔结果，不直接返回原章所需的精确计数，移植时要选择支持 samples-passed 计数的宿主 API，或改用分级布尔策略。
+
+```glsl
+float encoded = texture(calibrationMip, uv).a;
+float remapped = clamp(4.0 * (encoded - levelOffset), 0.0, 1.0);
+if (remapped <= alphaReference) discard;
+
+// color attachment writes disabled; depth test remains identical
+outColor = vec4(0.0);
+```
+
+<Term def="不执行 alpha 拒绝、统计目标对象全部可见片元的基线查询；各层计数必须除以它才能跨视角比较。">
+  reference query
+</Term>
+
+单独重放一次无 alpha test 的 reference query，得到当前物体所有可见片元数。它自动包含遮挡、裁剪和视口变化；若省略分母，同样的 650 个片元在近景小物体与满屏地形上会被错误解释为同等重要。
+
+## 3. 一张纹理测多个 mip 区间
+
+不必为每个被测层创建一张标定纹理。原章把 L0 到 L3 的 alpha 依次设为 1、0.75、0.5、0.25；trilinear filtering 会在相邻层之间产生连续梯度。第 $k$ 次重放仅改变 offset，把目标区间缩放回 alpha test 的完整动态范围。
+
+本节符号如下：
+
+- $a$：标定纹理采样得到的 alpha
+- $c_k$：测试第 $k$ 层时使用的偏移
+- $a'_k$：重映射后送入 alpha test 的值
+- $Q_k$：第 $k$ 层查询计数
+- $Q_{ref}$：参考查询计数
+- $r_k$：第 $k$ 层相对可见比例
+
+$$
+a'_k=\operatorname{clamp}\!\left(4(a-c_k),0,1\right),
+\qquad c_k\in\{0.75,0.50,0.25,0\}.
+$$
+
+这个式子在说：四倍缩放把每个四分之一宽的 alpha 区间扩展到零至一，使 alpha test 对四个层级都使用同样的精度和参考值。
+
+<GpuGems2Ch28CalibrationDiagram />
+
+查询必须异步读取，不能在提交后立刻等待，否则 CPU/GPU pipeline 会被同步点卡住。实践中把 query handle 与对象、frame index、被测层一起放进 pending 队列，后续帧确认结果可用后再解释和更新资源状态。
+
+```ts
+for (const level of measuredLevels) {
+  beginSamplesPassedQuery(object.id, level);
+  replayWithCalibration(object, levelOffsets[level]);
+  endSamplesPassedQuery();
+}
+
+beginReferenceQuery(object.id);
+replayWithoutAlphaReject(object);
+endReferenceQuery();
+```
+
+## 4. reference ratio 与显著性阈值
+
+<Term def="把某层查询数除以 reference query 后，与之比较的画面占比下限；低于它的细层可视为视觉上不显著。">
+  significance threshold
+</Term>
+
+先把绝对计数归一化：
+
+$$
+r_k=\frac{Q_k}{Q_{ref}},\qquad
+k^*=\min\{k\mid r_k\ge\tau\}.
+$$
+
+这个式子在说：从最细层开始寻找第一个达到阈值 $\tau$ 的层 $k^*$；比它更细的层只影响过少片元，可以从当前纹理预算中去掉。必须保护 $Q_{ref}=0$ 的完全不可见对象，并把它交给不可见资源策略，而不是除零。
+
+<GpuGems2Ch28QueryResultsDiagram />
+
+原章给出的典型计数为 reference 13000、L0 0、L1 650（5%）、L2 10530（81%）、L3 13000（100%）。采用 15% 阈值时，L2 是首个显著可见层，因此 L0/L1 可移除。阈值越高，内存越省，但局部高细节表面会更早变软；它是明确的画质—空间旋钮，不是越大越好。
+
+<Callout type="trap" title="直接用绝对 query count 比较对象">
+  现象 → 小物体永远被判为“不重要”，即使它几乎覆盖自己的全部可见区域。原因 →
+  absolute count 同时受对象屏幕面积、遮挡和视口影响。修法 → 每个对象用自己的
+  reference query 归一化，再按视觉目标设 threshold，并单独处理 reference
+  为零的情况。
+</Callout>
+
+## 5. 在引擎里分摊五次附加绘制
+
+<Term def="把待测对象排成循环队列，每帧只测一个或少量对象，使多次重放成本分散到多个帧。">
+  round-robin measurement
+</Term>
+
+测四个层加一个 reference，需要五次附加 draw call。若每帧对所有对象执行，draw 数会膨胀到不可接受；但纹理层通常随相对位置缓慢变化，没有必要每个对象每帧重测。原章在 Leviathan 引擎中每帧从循环队列取一个对象，因此固定只增加五次 draw calls。
+
+<GpuGems2Ch28EngineScheduleDiagram />
+
+每个 buffered draw call 要能重放并局部覆盖状态：pixel shader、标定 texture、alpha 判定与 color-write mask；几何、depth、采样状态和通常的 view transform 保持一致。如果希望测量视锥外对象，可以临时重设 view，但这回答的是另一个问题，结果不可与当前画面直接混用。
+
+简单循环队列会产生延迟：对象快速接近相机时，新高分辨率层可能在若干帧后才被重新请求，出现 resolution pop。改进方法是让速度大、投影变化快或刚进入视野的对象提高优先级，并设置升清晰度快、降清晰度慢的 hysteresis，避免阈值附近反复换层。
+
+<Callout type="trap" title="为消除延迟而每帧测量全部对象">
+  现象 → 分辨率跳变减少，但 draw-call 数、query 管理和 GPU
+  同步成本突然放大。原因 → 四层加 reference
+  已让单对象重放五次，全场景逐帧测量按对象数线性增长。修法 →
+  循环队列承担稳定对象，priority queue 提前处理高速变化对象，并异步消费 query
+  结果。
+</Callout>
+
+## 6. 朝向、阈值与实际内存收益
+
+相同距离不能推出相同层级。平坦地形以掠射角进入视野时，一个屏幕像素覆盖很长的纹理区域，常落到较粗层；正对相机的崖壁即使等距，也可能暴露更细层。这正是 CPU 距离近似最容易漏掉、而真实 sampler 已自然纳入的变量。
+
+<GpuGems2Ch28OrientationDiagram />
+
+原章在 Leviathan terrain 的样本中报告：不测量时使用 4.333 MB；0%、15%、30% 阈值分别降到 0.864、0.538、0.464 MB，对应 80%、88%、89% 节省。数字属于当时的特定场景与引擎，不应当作现代项目保证；可迁移的是测量方法，以及“高阈值继续省内存但逐步降低画质”的趋势。
+
+扩展方向有三类。第一，调整标定纹理与 viewport 的相对尺寸，可把 magnification 也编码进测量范围。第二，给每层 alpha 加入同源、缩放偏置的确定性纹理，使小幅距离变化也有片元穿过阈值，可观察层级上升、下降或静止的趋势。第三，支持导数指令的 shader 可用 `ddx`/`ddy` 直接估计 mip level，省去标定纹理带宽，但结果回读仍需 query 或 reduction 机制。
+
+## 三步验收：编码、解释、调度
+
+三个阶段使用同一 mesh、相机路径和 sampler preset。先证明 alpha 编码隔离了目标层，再证明 ratio 与阈值结论正确，最后才把结果接入纹理常驻策略。
+
+<Stepper>
+  <Step title="第一步：核对 calibration alpha 与状态覆盖">
+    逐层检查 1、0.75、0.5、0.25 的 alpha，记录 offset 与 alpha-test 输出；重放时仅覆盖 shader、texture、alpha 判定和 color-write，保留真实 depth、geometry 与 sampler。
+
+    <GpuGems2Ch28CalibrationDiagram />
+
+  </Step>
+  <Step title="第二步：用 reference ratio 选择首个显著层">
+    对每个对象同时保存四个 level queries 和 reference query。手算 $Q_k/Q_{ref}$，再与工具输出的第一个过阈值层比较；reference 为零时必须走不可见分支。
+
+    <GpuGems2Ch28QueryResultsDiagram />
+
+  </Step>
+  <Step title="第三步：把 query 延迟纳入资源调度">
+    以 round-robin 为基线记录每帧附加 draw 数、query availability、请求层和实际 resident 层；注入高速相机移动，验证 priority queue 与 hysteresis 能抑制分辨率跳变。
+
+    <GpuGems2Ch28EngineScheduleDiagram />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- calibration texture 让真实 sampler 把层选择编码进 alpha。
+- occlusion query 与 reference query 把可见证据变成相对比例。
+- significance threshold 决定首个值得常驻的细节层。
+- round-robin 将四层加参考值的五次重放分摊到多帧。
+- 距离、朝向、过滤状态与调度延迟必须共同进入资源决策。
+
+<Exercises>
+
+**问题 1｜解释查询结果。** 某对象的 reference 为 20000，L0 到 L3 查询计数依次为 400、2400、15000、20000。阈值为 15% 时首个显著层是哪一层？L0/L1 能否同时移除？
+
+<Answer>
+  四个比例依次为 2%、12%、75%、100%。第一个达到 15% 的是
+  L2，因此本次测量支持移除 L0 和 L1，只从 L2 开始常驻。若提高到 80%，L2
+  也会被排除并选择
+  L3；这会进一步省内存，但必须用目标画质截图确认局部细节损失可接受。
+</Answer>
+
+**问题 2｜设计调度策略。** 场景有 600 个稳定地形块和 20 个快速角色，四层测量每对象需要五次附加 draw。怎样控制成本并减少角色靠近镜头时的 resolution pop？
+
+<Answer>
+  稳定地形放入 round-robin
+  队列，每帧只取固定少量；角色按屏幕面积变化、速度、距上次测量时间和刚入视野状态进入
+  priority queue。query
+  结果异步消费，升清晰度使用更低阈值或更高优先级，降清晰度延迟若干稳定帧形成
+  hysteresis。发布记录应包含每帧附加 draw 上限、最大测量年龄和最坏 query 延迟。
+</Answer>
+
+**问题 3｜修改实验并提交证据。** 在 MeasurementLab 中把 distance、grazing angle、threshold 和 cadence 分别推到高值。你应保存哪些状态，如何判断“省内存但不可交付”？
+
+<Answer>
+  保存四个 query counts、reference、ratio、首个可见层、顶部四层释放
+  KB、测量帧与应用帧。高 distance/angle 应使结果趋向粗层；高 threshold
+  会进一步丢弃只占小比例的细层；cadence
+  过大则让结果年龄增加。若崖壁或近景局部先发糊、快速接近时出现层级跳变，或应用了过期
+  query，即使释放更多内存也不可交付，应降低阈值、提高动态对象优先级或延长降级
+  hysteresis。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="calibration texture"
+    definition="为测量准备的特殊 mipmap，用每层不同 alpha 区间把硬件层选择编码成可测试的像素值。"
+  />
+  <GlossaryItem
+    term="occlusion query"
+    definition="由 GPU 异步返回可见性测试通过数量的机制，本章用它统计目标 mip 区间影响了多少片元。"
+  />
+  <GlossaryItem
+    term="alpha test"
+    definition="按 alpha 与参考值决定片元通过或丢弃的测试；现代 shader 可用 discard 表达等价判定。"
+  />
+  <GlossaryItem
+    term="reference query"
+    definition="不做 alpha 拒绝的基线计数，为各 mip 查询提供当前对象可见片元总数。"
+  />
+  <GlossaryItem
+    term="significance threshold"
+    definition="判断某层影响的画面比例是否足以保留该层的下限，是画质与纹理内存之间的显式旋钮。"
+  />
+  <GlossaryItem
+    term="round-robin measurement"
+    definition="每帧轮流测一个或少量对象，把多次重放和查询开销均匀摊到时间轴。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 28. Mipmap-Level Measurement"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-28-mipmap-level-measurement"
+/>
