@@ -1,0 +1,237 @@
+---
+title: "Image Representation and Manipulation"
+type: D
+section: "图像表示与操作"
+order: 17
+description: "从像素、通道、位深和内存布局出发，理解图像表示如何进入图层合成、颜色操作与显示。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-17
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp17CompositingDiagram,
+  Cgp17ImagePipelineDiagram,
+  Cgp17ImageRepresentationDiagram,
+  Cgp17ImageRepresentationLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-17-image-representation";
+
+<Objectives>
+
+- 能解释 image representation 如何由像素、颜色通道、位深、stride 和存储布局共同定义
+- 能修改 ImageRepViz 的格式、alpha、位深与合成模式，并记录内存和输出颜色的变化
+- 能回答：图像出现透明度、颜色或行错位问题时，如何区分表示错误与 image compositing 顺序错误？
+
+</Objectives>
+
+## 先把图像当成一份带契约的像素数据
+
+屏幕上的一张图看起来是连续的画面，程序里却通常是一块有宽度、高度、通道和排列规则的内存。一个像素如何解释，取决于颜色模型、每通道位深、alpha 语义、行跨度和读写顺序。
+
+本章把图像表示和图层操作拆开观察。先猜一猜：把 RGBA 换成灰度或索引色后，内存一定变小吗？如果 foreground 的 alpha 没有改变，为什么 image compositing 的结果仍可能因为合成模式或颜色空间不同而变化？
+
+<Cgp17ImageRepresentationLab />
+
+## image representation：像素、通道与存储布局
+
+<Callout type="trap" title="只记录宽高，不记录像素契约">
+  现象 → 图像尺寸看起来正确，但颜色偏移、透明度丢失，或每一行从错误位置开始。
+  原因 → 忽略了通道顺序、位深、alpha 语义、row stride 或 buffer 的排列方式。
+  修法 → 把格式、通道、精度、stride
+  和颜色空间写进接口，在读写前后用一个小图逐项核对。
+</Callout>
+
+<Term def="描述像素如何组织、解释和存储的一组规则；它包含尺寸、颜色通道、位深、alpha、行跨度和内存布局。">
+  image representation
+</Term>
+
+<Term def="规定一个像素包含哪些通道、每通道使用多少位以及这些数值如何在内存中排列的数据格式。">
+  pixel format
+</Term>
+
+**image representation** 不是“图片文件的后缀”，而是对像素数据的完整解释。RGBA 每个像素有红、绿、蓝和 alpha 四个通道；灰度可能只保存一个亮度通道；索引色保存像素到调色板的编号。三种表示可以有相同宽高，却拥有不同的内存成本、颜色精度与合成语义。
+
+一张宽为 `W`、每像素占 `B` 字节的紧密图像，单行最小跨度可以写成：
+
+$$
+stride = W \times B
+$$
+
+人话翻译：从一行跳到下一行，不一定只跳过可见像素；如果行有对齐填充，真实 stride 会大于公式的最小值。把真实 buffer 当作紧密排列读取，就会出现斜切、错行或底部溢出。
+
+<Cgp17ImageRepresentationDiagram />
+
+读取图像时要同时验证四个问题：一个像素占几个字节，通道按什么顺序排列，alpha 是 straight 还是 premultiplied，数值处于什么颜色空间。若只打印 RGB 数值而忽略这些语义，调试结果可能看似合理却无法与显示结果对应。
+
+## color model、alpha channel 与格式选择
+
+<Term def="规定数值如何代表颜色的坐标系统或通道集合，例如灰度、RGB、RGBA 或带调色板的索引色。">
+  color model
+</Term>
+
+<Term def="附着在像素上的覆盖或透明度分量，用于表达前景对背景的影响强度；其语义必须明确是否已经乘过颜色。">
+  alpha channel
+</Term>
+
+**color model** 决定“这些数值代表什么颜色”，**alpha channel** 决定“这个颜色以多大权重参与层叠”。straight alpha 保存原始颜色与独立 alpha；premultiplied alpha 则先把颜色乘以 alpha，适合很多合成和过滤场景。两者不能只靠字段名猜测，转换时必须明确输入与输出约定。
+
+位深也会改变操作结果。若每通道使用 `n` 个离散等级，最大等级数量可以写成 `2^n`；位深越低，量化步长越大，渐变和透明边界越容易出现条带。提高位深可以减少量化误差，但会增加内存、带宽和缓存压力，因此要按用途选择，而不是默认所有图像都使用最高精度。
+
+## image compositing：把图层组合成输出
+
+<Term def="按照 alpha、颜色空间和混合规则，把前景图层与背景图层合成为输出像素的过程。">
+  image compositing
+</Term>
+
+**image compositing** 的输入至少包括 foreground、background、alpha 和 blend rule。最常见的 over 规则可以写成：
+
+$$
+O = \alpha F + (1 - \alpha) B
+$$
+
+人话翻译：alpha 越大，输出越接近前景；alpha 越小，输出越接近背景。这个简化式假设颜色已经处于合适的线性空间，且 F、B 与 alpha 的语义一致；实际系统还要考虑 premultiplied alpha、颜色空间转换和边界裁剪。
+
+<Cgp17CompositingDiagram />
+
+合成顺序很重要。先叠加阴影再叠加高光，和先叠加高光再叠加阴影通常不会得到相同结果；使用 additive 规则也不会等价于 alpha over。调试时保留每个中间 layer 的像素和 alpha，才能知道颜色来自哪个输入，而不是只看最后一张图。
+
+一个明确的合成接口可以把约定写进类型和参数：
+
+```ts
+type Layer = { pixels: ImageBuffer; alphaMode: "straight" | "premultiplied" };
+
+const output = composite({
+  background,
+  foreground,
+  mode: "over",
+  colorSpace: "linear",
+});
+```
+
+如果 foreground 边缘出现黑边，先检查 alpha 是否被重复乘过；如果图层颜色顺序相反，检查 blend rule 和通道顺序；如果结果整体偏暗，检查是否在线性空间合成后又重复转换。
+
+## 三步实验：从像素表示回放到图层输出
+
+每一步只改变一个责任。先预测格式、通道和合成规则会改变哪一项证据，再在 ImageRepViz 中操作；记录样本颜色、alpha、位深和估计内存。
+
+<Stepper>
+  <Step title="第一步：拆解一个像素表示">
+    固定图像宽高，列出通道顺序、每通道位深、alpha 语义和 row stride。用小网格验证读出的第一行和第二行是否从预期位置开始。
+
+    <Cgp17ImageRepresentationDiagram />
+
+  </Step>
+  <Step title="第二步：切换格式并观察精度成本">
+    在 ImageRepViz 中切换 RGBA、灰度和索引色，保持 foreground alpha 不变，比较通道数量、离散等级和估计 bytes 的变化。
+
+    <Cgp17ImagePipelineDiagram />
+
+  </Step>
+  <Step title="第三步：回放 image compositing 顺序">
+    固定背景和 foreground，切换 alpha over 与 additive，再改变 alpha。记录输出颜色如何变化，并区分格式精度问题与合成规则问题。
+
+    <Cgp17CompositingDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把 straight alpha 与 premultiplied alpha 混用">
+  现象 → 半透明边缘出现黑边、白边或颜色变脏，放大和过滤后问题更明显。 原因 →
+  颜色已经乘过
+  alpha，却在合成或采样阶段再次相乘，或者把未乘颜色当成已乘颜色使用。 修法 → 在
+  image representation 的接口中标明
+  alphaMode，转换只发生一次，并用半透明边缘样本做回归测试。
+</Callout>
+
+<Callout type="trap" title="把 stride 当成宽度乘像素字节数">
+  现象 → 第一行正确，后续行逐渐错位、倾斜或出现越界读写。 原因 →
+  忽略了行对齐填充，或把外部 buffer 的 stride 当成紧密图像的最小 stride。 修法 →
+  分别记录 width、bytesPerPixel 和真实
+  stride，按行起点读取，并用两行以上的非对称测试图验证。
+</Callout>
+
+<Callout type="trap" title="只调 alpha，不检查合成规则与颜色空间">
+  现象 → alpha
+  数值看起来正确，但图层叠加后整体偏暗、过亮或顺序改变就产生不同色调。 原因 →
+  image compositing 的 blend mode、premultiplied
+  约定或颜色空间没有和输入一起固定。 修法 → 记录
+  foreground、background、alphaMode、blend mode 和
+  colorSpace，再比较每一步输出，不要只修改 alpha 常数。
+</Callout>
+
+## 本章小结
+
+- image representation 同时规定像素、通道、位深、alpha、stride 和内存布局。
+- color model 解释颜色数值，alpha channel 解释覆盖权重，两者都必须写进接口契约。
+- image compositing 依赖图层顺序、alpha 语义、混合规则和颜色空间，不能只看最终截图。
+- 小型非对称测试图、逐层输出和精确的 bytes/stride 记录，是定位图像问题的高价值证据。
+
+<Exercises>
+
+**问题 1：设计一个图像读取契约。** 给定一块宽度为 `W` 的 RGBA buffer，请列出读取每一行前必须知道的字段，并说明为什么不能只使用 `W × 4` 作为行跳距。
+
+<Answer>
+  必须知道宽高、通道顺序、每通道位深、alphaMode、颜色空间、bytesPerPixel 和真实
+  stride。`W × 4` 只是假设 8 bit RGBA 且紧密排列的最小跨度，真实 buffer
+  可能包含行对齐填充或不同格式。
+</Answer>
+
+**问题 2：修改 ImageRepViz。** 依次切换 RGBA、灰度和索引色，把 alpha over 切换为 additive，再把 alpha 从 0.65 调到 0.25。记录 image representation 的通道和内存变化，以及 image compositing 输出的差异。
+
+<Answer>
+  RGBA 保存更多通道，估计每像素字节更多；灰度通道少，索引色还需要调色板。alpha
+  over 会按前景权重混合背景，additive 会叠加能量，alpha
+  变小则前景影响减弱；格式精度和合成模式必须分开记录。
+</Answer>
+
+**问题 3：诊断半透明边缘的黑边。** 你会按什么顺序检查表示和操作？
+
+<Answer>
+  先检查 alphaMode 是 straight 还是 premultiplied，再确认颜色是否被重复乘
+  alpha；然后检查过滤、缩放和 image compositing 使用的 blend
+  mode，最后确认颜色空间转换只发生在正确阶段。用一个带纯色背景和半透明边缘的小图逐层比较。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="image representation"
+    definition="描述像素如何组织、解释和存储的一组规则。"
+  />
+  <GlossaryItem
+    term="image compositing"
+    definition="按照 alpha、颜色空间和混合规则组合前景与背景图层的过程。"
+  />
+  <GlossaryItem
+    term="color model"
+    definition="规定数值如何代表颜色的坐标系统或通道集合。"
+  />
+  <GlossaryItem
+    term="alpha channel"
+    definition="表达前景对背景影响强度的覆盖或透明度分量。"
+  />
+  <GlossaryItem
+    term="pixel format"
+    definition="规定像素通道、位深、排列和存储方式的数据格式。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 17: Image Representation and Manipulation"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>

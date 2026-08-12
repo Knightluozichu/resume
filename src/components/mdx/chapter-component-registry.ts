@@ -4342,6 +4342,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cgp16RealTimeGraphicsPlatformsLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-17-image-representation-and-manipulation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-17-image-representation");
+      return {
+        Cgp17CompositingDiagram: module0.Cgp17CompositingDiagram,
+        Cgp17ImagePipelineDiagram: module0.Cgp17ImagePipelineDiagram,
+        Cgp17ImageRepresentationDiagram:
+          module0.Cgp17ImageRepresentationDiagram,
+        Cgp17ImageRepresentationLab: module0.Cgp17ImageRepresentationLab,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");
