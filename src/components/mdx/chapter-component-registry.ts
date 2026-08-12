@@ -4469,6 +4469,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp29TransportPipelineDiagram: module0.Cgp29TransportPipelineDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-30-probability-and-monte-carlo":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-30-probability-and-monte-carlo");
+      return {
+        Cgp30MonteCarloEstimatorDiagram:
+          module0.Cgp30MonteCarloEstimatorDiagram,
+        Cgp30MonteCarloLab: module0.Cgp30MonteCarloLab,
+        Cgp30ProbabilityPipelineDiagram:
+          module0.Cgp30ProbabilityPipelineDiagram,
+        Cgp30SamplingVarianceDiagram: module0.Cgp30SamplingVarianceDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

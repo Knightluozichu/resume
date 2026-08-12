@@ -1,0 +1,232 @@
+---
+title: "Probability and Monte Carlo Integration"
+type: D
+section: "概率与蒙特卡洛积分"
+order: 30
+description: "从 probability、样本分布和估计量出发，理解 monte carlo integration 如何用可解释的权重估计高维积分并控制方差。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-30
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp30MonteCarloEstimatorDiagram,
+  Cgp30MonteCarloLab,
+  Cgp30ProbabilityPipelineDiagram,
+  Cgp30SamplingVarianceDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-30-probability-and-monte-carlo";
+
+<Objectives>
+
+- 能用 probability、样本空间和概率密度解释一个随机结果如何获得权重
+- 能推导 monte carlo integration 的样本均值估计量，并区分无偏性与方差
+- 能修改 MonteCarloLab 的采样策略和样本数，诊断 PDF 错配、估计偏差与采样波动
+
+</Objectives>
+
+## 先把随机性变成可核对的测度
+
+渲染中的积分经常跨越许多方向、位置或时间维度，直接枚举所有可能结果既昂贵又不现实。概率方法的第一步不是“加一个随机数”，而是声明有哪些结果、每个结果出现的分布是什么、样本被怎样转换成积分贡献。只有这些合同被写清楚，随机估计才可以复现和调试。
+
+先预测：样本数从 8 增加到 64 时，估计值一定变大，还是均值的波动通常会变小？切换到 importance 后，样本更集中在高贡献区域，但若仍用 uniform 的权重，会得到更好的结果还是更稳定的错误？打开实验，先固定样本数，再逐一切换策略。
+
+<Cgp30MonteCarloLab />
+
+## probability：描述结果如何出现
+
+<Callout type="tip" title="先声明样本空间，再选择随机数">
+  一个随机数本身没有物理含义。先列出可能结果和测度，再说明随机变量如何把结果映射为数值，最后才选择采样器；否则“均匀”很容易被误用成所有问题的默认分布。
+</Callout>
+
+<Term def="描述不确定结果及其发生权重的数学规则；它把样本空间、事件和概率联系起来。">
+  probability
+</Term>
+
+<Cgp30ProbabilityPipelineDiagram />
+
+设样本空间为 Ω，随机结果可以落在 Ω 的不同区域。概率不是结果的标签，而是对区域或事件赋予的权重；所有结果的总权重必须与所选测度一致。渲染时，方向半球、面积光源或时间区间都可以成为样本空间，但不能把一种测度的 PDF 直接拿去除另一种测度的函数。
+
+<Term def="把样本空间中的结果映射到数值的函数；它让事件可以进入期望、方差或积分估计。">
+  random variable
+</Term>
+
+random variable 把“抽到了哪一个方向或位置”转换成程序可以计算的数值 $X$。当目标是积分时，常把函数值 $f(X)$ 和采样密度 $p(X)$ 一起记录；当目标是分类或离散选择时，则记录事件是否发生。映射本身不是分布，分布决定 $X$ 出现的频率。
+
+## monte carlo integration：用样本均值估计积分
+
+<Callout type="trap" title="把随机抽样当成积分本身">
+  现象 → 少量样本画出的点看起来像函数，但估计值会随每次运行剧烈变化。 原因 →
+  样本只是积分的随机证据，单个样本不能代表区域总量。 修法 →
+  固定随机种子和样本序列，记录单样本贡献、均值与经验方差，再用批次结果判断收敛。
+</Callout>
+
+<Term def="用随机样本的加权均值近似积分的方法；样本来自已声明的概率密度，权重负责把采样测度还原为目标测度。">
+  monte carlo integration
+</Term>
+
+若 $X_i$ 独立地来自概率密度 $p(x)$，目标积分可以写为期望，并用样本均值估计：
+
+$$
+I=\int f(x)dx=\mathbb{E}_{p}\left[\frac{f(X)}{p(X)}\right],\qquad \hat I_N=\frac{1}{N}\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)}
+$$
+
+这里最重要的不是符号数量，而是测度匹配：样本来自 $p$，单样本贡献就必须除以同一个 $p$。当 $N$ 增加时，在满足假设的情况下，估计量通常更接近目标期望；这不意味着每次运行的数值都单调上升，也不意味着低噪声就自动代表无偏。
+
+<Term def="描述样本在结果空间中出现的密度；它必须与采样过程和积分测度一致，才能形成正确的除权。">
+  probability density
+</Term>
+
+probability density 是连续样本的“每单位区域权重”，不是某个点发生的概率。它会随坐标测度改变：按面积采样、按立体角采样和按时间采样的密度不能混为一谈。实现中应把 sample、PDF、测度和单样本 contribution 放在同一个调试记录中。
+
+<Cgp30MonteCarloEstimatorDiagram />
+
+## estimator 与 variance：分别检查中心和波动
+
+<Callout type="trap" title="把一次结果当成 estimator 的质量证明">
+  现象 →
+  运行一次得到接近参考值，就断言实现正确；换一个种子后结果偏离，却只继续调样本数。
+  原因 → 单次样本没有告诉你期望是否正确，也没有告诉你方差是否可接受。 修法 →
+  使用固定批次和多个种子，分别记录均值、经验方差、误差带和 PDF 权重。
+</Callout>
+
+<Term def="把输入样本转换为目标量估计值的规则；蒙特卡洛估计量通常是单样本贡献的平均。">
+  estimator
+</Term>
+
+estimator 的中心问题是期望是否等于目标积分，波动问题则由 variance 描述。一个有偏的实现可能非常稳定但稳定地错；一个无偏的实现也可能方差很大，需要更多样本才能看清趋势。因此验收时要把“平均是否对”和“波动是否小”拆成两条证据。
+
+<Term def="衡量单样本贡献围绕均值波动程度的量；方差大表示同样本数下估计更不稳定，但不等同于存在偏差。">
+  variance
+</Term>
+
+通过 importance sampling，把更多样本放到 $f(x)$ 较大的区域，通常可以在相同样本预算下降低方差；但每个样本仍须用其真实 probability density 除权。分层采样通过覆盖每个区间减少聚簇，也可能降低波动。任何“更平滑”的结果都要同时检查均值是否仍对齐目标积分。
+
+<Cgp30SamplingVarianceDiagram />
+
+## 三步实验：从分布到估计量
+
+每一步先预测，再只改变一个采样条件。记录样本位置、PDF、单样本权重、批次均值与经验方差，区分采样噪声、权重错配和真正的估计偏差。
+
+<Stepper>
+  <Step title="第一步：从样本空间读 probability">
+    先选择 uniform，观察样本点覆盖整个区间。预测把分布改成 importance 后哪些区域会获得更多样本，再用概率流程图确认样本空间、random variable 和 density 的职责没有混淆。
+
+    <Cgp30ProbabilityPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：核对 monte carlo integration 权重">
+    固定样本位置，先预测把 PDF 从正确值换成 uniform 会改变什么。用估计器图逐项核对 $f(X_i)$、$p(X_i)$、样本数 $N$ 和均值，确认每个样本只被同一测度除权一次。
+
+    <Cgp30MonteCarloEstimatorDiagram />
+
+  </Step>
+  <Step title="第三步：比较 estimator 与 variance">
+    切换 importance、stratified 和 mismatch，先预测哪一种会改变均值、哪一种主要改变波动。再提高样本数，记录估计误差与经验方差，用采样策略图区分降方差和改错期望。
+
+    <Cgp30SamplingVarianceDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="从一个分布采样，却用另一个 density 除权">
+  现象 → importance 模式看起来更平滑，但增加样本后均值持续偏离参考值。 原因 →
+  采样分布和 probability density 不匹配，单样本权重没有还原目标测度。 修法 →
+  在同一条记录中保存实际采样器、PDF 和 contribution，先恢复一致的 $f(X)/p(X)$
+  再比较方差。
+</Callout>
+
+<Callout type="trap" title="用低 variance 掩盖有偏 estimator">
+  现象 → 结果几乎不闪烁，于是被认为“更正确”，但与解析基线有固定差值。 原因 →
+  错误权重或截断让 estimator 稳定地偏离目标。 修法 →
+  同时比较批次均值和经验方差，先验证均值是否对齐，再选择降方差策略。
+</Callout>
+
+<Callout type="trap" title="把样本数增加当成万能修复">
+  现象 → 错误实现运行更久，却没有回到正确积分。 原因 →
+  更多样本只能减少满足假设时的随机波动，不能修复测度、PDF
+  或单样本贡献的定义错误。 修法 → 用小样本固定序列复核公式和权重，再逐步增加 N
+  验证收敛趋势。
+</Callout>
+
+## 本章小结
+
+- probability 规定结果空间与权重，random variable 把结果映射为数值，probability density 必须和采样测度一致。
+- monte carlo integration 用样本均值估计积分，单样本贡献通常包含函数值与对应 density 的除权。
+- estimator 的期望决定是否对齐目标，variance 描述波动大小；无偏与低方差是两个不同验收问题。
+- importance 与分层采样可以改善样本预算，但不能通过错误 PDF 或稳定偏差换取更平滑的图像。
+
+<Exercises>
+
+**问题 1：判断概率权重。** 样本从密度 $p(x)$ 产生，目标是积分 $I=\int f(x)dx$。为什么单样本贡献要写成 $f(X)/p(X)$，而不是直接使用 $f(X)$？
+
+<Answer>
+  样本在高密度区域出现得更频繁，直接平均 $f(X)$ 会计算按 $p$
+  加权的期望，而不一定是目标测度下的积分。除以同一个 $p(X)$
+  可以抵消采样密度，把每个样本还原为目标测度的贡献；前提是 $p$
+  在需要贡献的区域不为零。
+</Answer>
+
+**问题 2：区分均值与方差。** 两个实现的经验方差都很小，但 A 的批次均值接近解析积分，B 的均值固定偏低。你会选择哪个，为什么不能只看噪声？
+
+<Answer>
+  选择 A。B 可能使用了错误 PDF、错误测度或有偏截断，因此只是稳定地错。应先检查
+  estimator 的批次均值是否对齐目标，再在满足无偏或可控偏差的前提下比较
+  variance。
+</Answer>
+
+**问题 3：选择采样策略。** 函数只有在区间的一小段有很高贡献。你会如何使用 importance sampling，并如何证明它没有篡改期望？
+
+<Answer>
+  让 probability density
+  在高贡献区域更高，使样本预算集中到重要区域；每个样本仍用实际采样 density
+  除权，形成 $f(X)/p(X)$。用固定种子和多批次对照
+  uniform，比较均值是否仍接近同一解析积分，再比较 variance 是否下降。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="probability"
+    definition="描述不同结果出现权重的规则，所有结果的总权重要和测度一致。"
+  />
+  <GlossaryItem
+    term="random variable"
+    definition="把一次随机结果映射成可计算数值的函数。"
+  />
+  <GlossaryItem
+    term="monte carlo integration"
+    definition="用随机样本的加权均值近似积分的方法。"
+  />
+  <GlossaryItem
+    term="probability density"
+    definition="描述连续样本在结果空间中分布密度的函数，必须与采样测度匹配。"
+  />
+  <GlossaryItem
+    term="estimator"
+    definition="把样本转换为目标量估计值的计算规则。"
+  />
+  <GlossaryItem
+    term="variance"
+    definition="描述样本贡献围绕均值波动程度的量，不等同于估计偏差。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 30: Probability and Monte Carlo Integration"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
