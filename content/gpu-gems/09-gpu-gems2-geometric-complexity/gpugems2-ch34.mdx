@@ -1,0 +1,252 @@
+---
+title: "GPU Gems 2 · Chapter 34. GPU Flow-Control Idioms"
+type: D
+section: "GPU Gems 2 Part IV · General-Purpose Computation on GPUs: A Primer"
+order: 34
+description: "把 GPU 分支、循环和提前终止放回 SIMD 执行模型：比较 predication、预计算、z-cull、原生 branch 与 occlusion query。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-34-gpu-flow-control-idioms"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v2-34
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems2Ch34BranchCoherenceDiagram,
+  GpuGems2Ch34FlowControlLab,
+  GpuGems2Ch34FlowControlTimelineDiagram,
+  GpuGems2Ch34OcclusionQueryDiagram,
+  GpuGems2Ch34PredicateChoiceDiagram,
+  GpuGems2Ch34ZCullDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems2-ch34-flow-control-idioms";
+
+<Objectives>
+
+- 能解释 fragment SIMD 中分支分歧为什么会让两条路径都付出代价，并判断条件的空间一致性
+- 能修改 Flow-Control Lab 中的分支形状、分支体量和 active ratio，并选择 predication、预计算或 z-cull
+- 能回答：一个 GPU 迭代何时应使用 occlusion query 把“是否继续”交给 CPU
+
+</Objectives>
+
+## 先看一排工位，而不是一条 CPU 路口
+
+想象一排同时工作的工位：每个工位都拿到自己的订单，但这一排必须在同一时刻听同一个口令。若相邻订单都需要同一种动作，整排很顺；若一半订单要拐左、一半要拐右，工位只能轮流完成两种动作。
+
+本章解决的问题是：GPU 里 `if`、循环和提前终止怎样写，才能让并行工作少走弯路？如果把 CPU 的“每个订单独立决定路线”原样搬过来，程序可能仍然正确，却会让一组 lane 等另一组 lane，或在真正无效的工作上启动 shader。
+
+<Callout type="tip" title="先预测哪一层可以提前做决定">
+  先猜一猜：同样有一半元素会进入分支，把条件排成一个大矩形和把条件随机打散，哪一种更适合
+  GPU？打开实验前先写下你的判断：是分支体量、active
+  ratio，还是相邻元素是否同路最关键。
+</Callout>
+
+## 1. SIMD 分支：正确不等于同样高效
+
+<Term def="一组处理器用同一条指令同时处理多个数据元素；组内元素若走不同路径，就会发生分支分歧。">
+  SIMD branching
+</Term>
+
+在 CPU 上，`if (a) f() else g()` 通常意味着只执行被选中的一边；在 GPU fragment processor 上，一组相邻 fragment 共享执行节奏。若条件在空间上相近，整组可以一起走同一条路径；若条件随机交错，硬件必须让不同 lane 依次完成两条路径，未走当前路径的 lane 只能等待。
+
+<GpuGems2Ch34BranchCoherenceDiagram />
+
+这就是“空间一致性”的工程含义：不是统计全局有多少元素为真，而是观察同一执行组里的邻居是否大致有相同结果。原章也区分了 vertex processor 的 MIMD 分支和 fragment processor 的 SIMD 分支；同一个算法放在不同阶段，分支代价不能直接类比。
+
+## 2. predication：短分支可以两边都算
+
+<Term def="同时计算条件分支的两侧，再根据条件只让选中的结果写回；它避免真正跳转，但会支付两侧计算成本。">
+  predication
+</Term>
+
+旧式 GPU 可能用 condition code 模拟分支：先把 `f()` 和 `g()` 都算出来，再根据条件屏蔽其中一边的写回。这个方案对两到四个操作的短分支很实用，因为建立新 pass 或跳转的成本可能反而更高；如果两边都是大函数，计算两次就会浪费大量周期。
+
+```glsl
+// 短分支：两边很小，predication 可能更简单
+vec4 left = a * gain;
+vec4 right = a + offset;
+float takeLeft = step(threshold, signal);
+vec4 result = mix(right, left, takeLeft);
+```
+
+这里 `mix` 只是表达“按 mask 选择结果”的 WebGL2 镜像，不应被误解成一定比原生 `if` 快。真正的选择取决于目标设备、分支两侧的指令量以及条件是否一致；应以 profile 验证，而不是靠语法猜性能。
+
+<GpuGems2Ch34PredicateChoiceDiagram />
+
+## 3. 把决定上移：静态分支与预计算
+
+<Term def="把稳定不变或空间上成块的分支条件提前计算，改成多个无分支 pass，或存成后续 kernel 反复读取的 mask。">
+  static branch resolution
+</Term>
+
+如果网格的边界位置在整个循环中不变，与其让每个 cell 每次都判断“我是内部还是边界”，不如把 interior 和 boundary 拆成不同的绘制区域。主循环只执行对应的专用程序，分支决定被移到了 rasterization 或 CPU 的调度阶段。
+
+另一种情况是条件只在用户重新绘制障碍物时变化。此时可以在变化发生时预计算邻居方向，把结果存进 offset texture；之后的流体迭代只读取 offset，不在每个 cell 内重复判断。预计算不是免费，它把成本从每轮循环移到状态变化时刻；只有条件确实稳定，才能获得回报。
+
+<GpuGems2Ch34FlowControlTimelineDiagram />
+
+## 4. z-cull：让 shader 根本不启动
+
+<Term def="利用深度测试在 fragment processor 运行前拒绝不需要的 fragment；它跳过的是整个 shader 执行，而不是 shader 内的一条路径。">
+  z-cull
+</Term>
+
+z-cull 需要两个阶段。预处理 pass 先把满足“无需继续”的 cell 写成深度 0，把其他 cell 写成深度 1；计算 pass 以 z = 0.5 绘制同一片区域，深度测试会在 fragment shader 启动前挡住深度 0 的 cell。这样被拒绝的 cell 不需要执行完整计算。
+
+<GpuGems2Ch34ZCullDiagram />
+
+它的限制也很明确：硬件可能以一小块连续区域为单位做早期剔除。若待跳过的 cell 随机散落，整块区域未必全部失败，实际节省会接近没有。因此 z-cull 适合有空间局部性的 mask；它不是一个能把随机条件自动变快的魔法开关。
+
+<Callout type="trap" title="把 z-cull 当成 shader 里的 early return">
+  现象 → 加了 `discard` 或深度测试，fragment 数量没有明显下降。原因 → shader
+  内部的判断已经启动了程序，而且粗粒度 z-cull 需要连续区域一起失败。修法 →
+  把稳定条件先写成深度 mask，检查被拒绝区域的空间局部性，再比较独立 pass
+  的状态保存成本。
+</Callout>
+
+## 5. 原生 branch：硬件支持也仍怕分歧
+
+现代 GPU 可以把 `if`、`for` 和 `while` 编译成原生指令，但“有原生指令”不等于“每个 lane 自由分叉”。一组 fragment 通常仍只能同时推进一个路径；条件不一致时，硬件可能退回接近 predication 的执行方式。
+
+经验上，短分支优先考虑 predication；分支嵌在大程序中且局部性尚可时，可以使用原生 branch；能把分支隔离成独立 pass、同时又有成块条件时，z-cull 可能更划算。z-cull 需要额外保存/恢复状态和多一个 pass，所以不能只拿“有没有 shader branch”做二元选择。
+
+先猜一猜：把 Flow-Control Lab 的模式从 `random` 切到 `coherent`，再把 branch work 调大，哪一个派生指标会先放大？每次只改一个控件，观察 SIMD groups、branch instruction units 和 units skipped 的变化。
+
+<GpuGems2Ch34FlowControlLab />
+
+<Callout type="trap" title="看到 GPU 支持 if 就照搬 CPU 分支">
+  现象 → 代码可编译、结果正确，但随机条件下耗时接近两条路径相加。原因 → fragment
+  SIMD 需要同组 lane 共享执行节奏，原生 branch
+  只降低了表达成本，没有消除分歧成本。修法 →
+  先测空间一致性；能整理输入就整理，能预计算就预计算，再决定保留 branch 还是改成
+  mask。
+</Callout>
+
+## 6. data-dependent looping：用 occlusion query 做全局停止
+
+<Term def="查询一次绘制实际更新了多少 fragment；在 GPGPU 循环中可用它统计尚未满足终止条件的元素数量。">
+  occlusion query
+</Term>
+
+GPU 适合处理每个元素的迭代，却不适合让一个 fragment 直接决定整个 stream 何时结束。可以把终止判断单独做成 termination pass：已经满足条件的元素 `discard`，未满足的元素留下；occlusion query 返回仍可见的 fragment 数。CPU 只读回一个整数：数量大于零就继续下一轮，等于零就停止。
+
+<GpuGems2Ch34OcclusionQueryDiagram />
+
+这种方法把“每个元素是否完成”留在 GPU，把“整个任务是否结束”交给 CPU，避免每轮读回整张纹理。不过 query 仍是一个同步边界，循环次数太多或活跃元素太少时，查询与 pass 的固定成本会成为新的瓶颈。应记录每轮 active count、query 延迟和总 pass 数。
+
+```text
+remaining = streamSize
+while (remaining > 0) {
+  run(computeProgram)
+  beginQuery()
+  run(terminationProgram) // discard elements that already converged
+  endQuery()
+  remaining = getQueryResult()
+}
+```
+
+第一段代码表达的是控制结构，第二段 termination pass 表达的是数据筛选；二者之间的边界很重要：CPU 不应逐元素参与循环，GPU 也不应被迫猜全局停止条件。
+
+## 三步验收：从分歧定位到停止条件
+
+<Stepper>
+  <Step title="第一步：画出 SIMD 组的路径一致性">
+    把同一执行组里的条件标出来，区分“成块一致”和“随机交错”；先判断分支是否会让两条路径都执行，再决定是否需要改布局。
+
+    <GpuGems2Ch34BranchCoherenceDiagram />
+    <GpuGems2Ch34FlowControlTimelineDiagram />
+
+  </Step>
+  <Step title="第二步：把稳定决定移到更早阶段">
+    短分支比较 predication，较大分支比较原生 branch；若条件稳定，就用预计算或 static branch resolution；若可独立成 pass 且有块状局部性，再评估 z-cull。
+
+    <GpuGems2Ch34PredicateChoiceDiagram />
+    <GpuGems2Ch34ZCullDiagram />
+
+  </Step>
+  <Step title="第三步：为全局停止建立小消息边界">
+    把每个元素的计算与终止筛选留在 GPU，用 occlusion query 只回传 active count；记录 query、pass 与剩余元素变化，确认 CPU 的全局决定没有成为新瓶颈。
+
+    <GpuGems2Ch34OcclusionQueryDiagram />
+    <GpuGems2Ch34FlowControlLab />
+
+  </Step>
+</Stepper>
+
+## 本章小结
+
+- SIMD 分支的关键成本来自同组元素路径不一致。
+- predication 适合短分支，但大分支会支付两侧计算。
+- 预计算、static branch resolution 和 z-cull 都是在 shader 前移动决定。
+- 原生 branch 仍受空间局部性约束，不能照搬 CPU 直觉。
+- occlusion query 用一个小计数把 GPU 迭代与 CPU 全局停止连接起来。
+
+<Exercises>
+
+**问题 1｜识别分歧。** 一个 8×8 fragment block 中，左半块都满足条件，右半块都不满足；另一个 block 的条件随机交错。哪一个更适合 branch 或 z-cull？为什么不能只看两个 block 的 true 数量相同？
+
+<Answer>
+  左半块/右半块的条件具有空间局部性，同一执行组更可能一起走一条路径，也更可能让
+  z-cull 按连续区域跳过工作；随机交错的 block 会让 lane 分裂。true
+  数量只描述全局比例，不描述同一 SIMD 组内的邻居关系。
+</Answer>
+
+**问题 2｜改 Demo 代码。** 在 Flow-Control Lab 中加入一个 `query` 模式：当 active ratio 低于 20% 时显示“termination pass + occlusion query”，否则保留当前 branch 建议。请再添加一个派生指标，说明 query 模式的固定边界成本。
+
+<Answer>
+  可在 `pattern` 联合类型中加入 `query`，推荐逻辑读取 `activeRatio < 20`；派生指标可以是 `query passes per iteration` 或 `CPU decision messages`。它提醒读者：即便 GPU 跳过了大量元素，每一轮仍要付 termination pass 和一次小消息查询的固定成本。
+</Answer>
+
+**问题 3｜选择机制。** 一个大程序中的分支只有 3 个操作，但条件随机；另一个分支很大、条件每 100 个迭代才变化一次且区域成块。分别优先尝试什么？写出各自需要验证的证据。
+
+<Answer>
+  前者优先尝试 predication，并 profile 两侧很短的计算是否比 branch/setup
+  更便宜；随机性意味着不能期待 branch 获得很好的局部性。后者优先尝试预计算 mask
+  或 static branch resolution，条件变化慢且成块，适合把判断移到变化时刻或用
+  z-cull；需要验证重建 mask 的成本、被跳过的连续区域、额外 pass 与状态保存成本。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="SIMD branching"
+    definition="一组 GPU 工作者共享同一条指令；如果同组数据要走不同路线，就得轮流完成这些路线。"
+  />
+  <GlossaryItem
+    term="predication"
+    definition="两边都先计算，再用条件决定哪边的结果生效；适合很短的分支。"
+  />
+  <GlossaryItem
+    term="static branch resolution"
+    definition="在更早的阶段把数据分成不同区域或生成 mask，让主计算不必每个元素都判断。"
+  />
+  <GlossaryItem
+    term="z-cull"
+    definition="在 fragment shader 启动前用深度测试挡掉整块不需要的工作。"
+  />
+  <GlossaryItem
+    term="occlusion query"
+    definition="询问一次绘制留下了多少可见 fragment，用一个计数判断迭代是否还要继续。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 2 · Chapter 34. GPU Flow-Control Idioms"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems2/part-iv-general-purpose-computation-gpus-primer/chapter-34-gpu-flow-control-idioms"
+/>
