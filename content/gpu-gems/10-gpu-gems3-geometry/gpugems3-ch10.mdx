@@ -1,0 +1,267 @@
+---
+title: "GPU Gems 3 · Chapter 10. Parallel-Split Shadow Maps on Programmable GPUs"
+type: D
+section: "GPU Gems 3 Part II · Light and Shadows"
+order: 10
+description: "从 shadow-map aliasing 出发，解释如何用平行深度分层、practical split、crop matrix 与可编程 GPU 路径，为大场景分配更合适的阴影采样密度。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-10-parallel-split-shadow-maps-programmable-gpus"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-10
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch10AliasingDiagram,
+  GpuGems3Ch10CasterRangeDiagram,
+  GpuGems3Ch10CropMatrixDiagram,
+  GpuGems3Ch10PipelineComparisonDiagram,
+  GpuGems3Ch10PssmLab,
+  GpuGems3Ch10PssmOverviewDiagram,
+  GpuGems3Ch10SplitSchemeDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch10-parallel-split-shadow-maps";
+
+<Objectives>
+
+- 能解释为什么相机近处与远处需要不同的 shadow-map sampling density，以及平行深度分层如何减少 perspective aliasing
+- 能修改 PSSM Design Lab 的 split 数量、practical split 权重、light projection 与硬件路径，观察画质和 rendering passes 的变化
+- 能回答：什么时候选择 multipass、DX9 单 pass 合成或 DX10 texture array，并说明 split、crop matrix 与 caster 范围如何共同决定结果
+
+</Objectives>
+
+## 先让影子纹理匹配观察距离
+
+想象一张地图覆盖整片城市：如果地图的每一格在市中心代表一米，在郊外也仍代表一米，市中心的细节会被挤成模糊的色块，郊外却浪费很多空白。相机观察阴影时也有同样的问题：近处表面在屏幕上占很多像素，远处表面只占很少像素，但一张统一的深度纹理很难同时照顾两者。
+
+本章解决的问题是：怎样把固定数量的 shadow-map texels 分给一条很长的视线范围，让近处的锯齿减少，又不让每个深度层的额外渲染成本失控。如果只把整条范围塞进一张图，阴影边缘会随着距离出现明显的采样失配；如果盲目复制很多张图，画质可能变好，帧时间却先坏掉。
+
+<Callout type="tip" title="先预测：多一张 shadow map 是稳赚的吗">
+  先猜一猜：把 split 数量从 2 调到 4，近处密度、远处密度和 rendering passes
+  会怎样变化？再打开 Lab，分别切换 multipass、DX9 single-pass shade 和 DX10
+  array + clone，比较同样 split 数量下哪一部分成本被搬走了。
+</Callout>
+
+## 1. 一张 shadow map 为什么会把分辨率用错
+
+<Term def="把相机视锥沿视空间深度切成多个层，并为每层生成独立 shadow map 的阴影技术；每层只负责较小的深度范围。">
+  parallel-split shadow map
+</Term>
+
+标准 shadow mapping 的困难不是深度比较本身，而是屏幕像素与光空间 texel 的覆盖面积不匹配。近处的一个 texel 可能投到很长的屏幕表面，远处则可能有很多 texel 竞争很少的像素；这类 perspective aliasing 会让阴影边缘闪烁、锯齿或忽软忽硬。表面法线和光线方向还会带来 projection aliasing，但它需要场景几何信息，不能只靠分层消失。
+
+parallel-split shadow map 用平行于 view plane 的 clip planes 把 view frustum 分成 `V₀ ... Vₘ₋₁`。每个 split 都计算自己的 light view-projection matrix，并以相同或可调的分辨率生成 `Tᵢ`。因为每张图只覆盖一段深度，view-space 的采样需求可以更接近 texture-space 的采样频率。
+
+<GpuGems3Ch10PssmOverviewDiagram />
+<GpuGems3Ch10AliasingDiagram />
+
+<Callout type="trap" title="把整条视锥继续塞进一张高分辨率图">
+  现象 → 近处阴影边缘仍有锯齿，增加纹理分辨率后显存和带宽却持续上涨。原因 →
+  纹理预算被远近范围共同摊薄，perspective aliasing 没有被针对性分配。修法 → 先按
+  view-space depth 分层，再用每层的局部投影把采样密度对准实际屏幕需求。
+</Callout>
+
+这里的关键不是“层数越多越好”。层数增加会减少每层覆盖范围，但也会增加 shadow-map 生成、绑定或 shader 选择的管理成本；PSSM 的设计目标是把误差和 pass 数放进同一个预算，而不是追求一个孤立的低 aliasing 指标。
+
+## 2. practical split scheme：在近处与远处之间取平衡
+
+<Term def="把 logarithmic split 与 uniform split 的同一层位置按权重混合的分层策略，用较低的计算复杂度近似更均匀的 perspective-aliasing 分布。">
+  practical split scheme
+</Term>
+
+uniform split 沿相机的近远距离等分，简单但会继续让近处欠采样。logarithmic split 更接近让 `dz / (z ds)` 保持稳定的理论目标，却可能把最靠近相机的层压得过短，导致里面几乎没有物体、分辨率反而被浪费。practical split 用权重 `λ` 混合两组位置：`Cᵢ = λCᵢˡᵒᵍ + (1−λ)Cᵢᵘⁿⁱ`，让应用可以在两种偏差之间移动。
+
+在切分前先收紧 camera near/far plane 也很重要。空的深度范围会让每个 split 都把 shadow-map texel 花在不可见空间；收紧后再调 λ，才是在有效可见物体上分配分辨率。λ 不是一个跨镜头永远正确的常数：远近物体分布、相机速度和阴影质量目标都会改变它的合适位置。
+
+<GpuGems3Ch10SplitSchemeDiagram />
+
+<Callout type="trap" title="所有相机都使用等距 split 和固定 λ">
+  现象 → 同一套 split
+  在一个镜头里近处发糊，在另一个镜头里远处闪烁，调高总分辨率也只改善一端。原因 →
+  uniform、logarithmic 与 practical 的误差分布不同，且 near/far
+  空白范围改变了每层实际覆盖。修法 → 先按可见物体收紧深度范围，再用相机与场景的
+  aliasing 预算选择 split 位置和 λ。
+</Callout>
+
+## 3. 每个 split 都需要自己的 light projection
+
+<Term def="把一个 split 的 light-space bounding values 映射到更紧的 off-center 投影范围的变换；它让有效 casters 和 receivers 占据更多 shadow-map texels。">
+  crop matrix
+</Term>
+
+分好 view frustum 以后，还要为每个 `Vᵢ` 建立光源的子视锥 `Wᵢ`。最简单的 scene-independent 方法只在 light space 中包住 split frustum，逻辑稳定，却可能包含大量空白。scene-dependent 方法还找出可能投影到该 split 的 shadow casters 和 receivers，再把 light frustum 收紧。
+
+常见的组合顺序可以写成 `lightViewMatrix · lightProjMatrix · cropMatrixᵢ`。crop matrix 是一个 off-center orthographic projection：它不改变光源的观察方向，只把当前 split 的有效边界缩放、平移到 shadow map 的可用区域。scene-dependent projection 提升了 texel 利用率，但也要求越界采样使用合适的 border color，并且不能把可能挡光的 caster 裁掉。
+
+<GpuGems3Ch10CropMatrixDiagram />
+
+<Callout type="trap" title="把紧 crop 当成免费的分辨率提升">
+  现象 → 阴影在某些接收面突然漏光，或 split 边缘出现硬切与 halo。原因 →
+  scene-dependent 边界漏掉了 caster，或者 light-space 越界采样没有定义 border
+  行为。修法 → 同时验证 receivers、casters 和 split
+  外采样；宁可留出可解释的安全边界，也不要只按几何包围盒追求最大缩放。
+</Callout>
+
+## 4. 生成与合成：fragment 先决定自己属于哪一层
+
+PSSM 的四个主步骤可以保持不变：切分 view frustum；为每个 split 计算 light transform；生成各自的 shadow map；在场景中合成阴影。实现差异主要出现在第三和第四步：shadow map 是逐层重复生成，还是由 GPU 一次提交复制到多个目标；场景阴影是每层单独绘制，还是由 shader 按 fragment 的 view-space z 选择地图。
+
+在 DX9-level 的单 pass 合成里，fragment 不应该用 light-space depth 来决定 split，因为 split planes 是在 view space 中定义的。顶点阶段传出 view-space z 和每张地图的 texture coordinate，pixel shader 用 z 与 split end 比较，找到唯一的 `i` 后只采样 `Tᵢ`。这让场景 shadow synthesis 从每层一次变成一张场景 pass，但同时要付出多组 sampler 与 texture coordinate 的资源限制。
+
+```text
+float zView = fragment.viewSpaceZ;
+int i = firstSplitContaining(zView, splitEnds);
+float shadowDepth = sample(T[i], fragment.shadowUv[i]);
+float lit = depthTest(fragment.lightDepth[i], shadowDepth);
+return applyShadow(lit);
+```
+
+这段伪代码只描述合成阶段的选择契约。multipass 仍然是最容易验证的基线；单 pass 路径减少了合成重复，却不能自动减少 shadow-map 生成的成本。
+
+<Callout type="trap" title="用 light-space depth 或所有地图做全套比较">
+  现象 → split 交界处选择了错误地图，或者一个 fragment 的 shader 工作量随 split
+  数量线性爆炸。原因 → split plane 属于 view
+  space，却把判断混进了光空间；同时没有在命中第一层后停止采样。修法 → 传递并比较
+  view-space z，确定唯一 split 后只读取对应的 shadow map。
+</Callout>
+
+## 5. texture array 与可编程 GPU 的复制位置
+
+<Term def="把多个同尺寸的二维 shadow map 放进同一资源、用 layer index 选择的纹理组织方式；它让几何着色器或实例索引可以写入不同层。">
+  texture array
+</Term>
+
+DX10 的 render-target array 配合 geometry shader 可以让一个 primitive 被送往不同的 layer；shadow maps 可以放在一个 texture array 中，生成阶段只提交一次几何。DX9 则通常把每张地图作为独立纹理同时绑定，由 pixel shader 根据 view-space z 选择 sampler。两者不是同一硬件能力的简单换名：资源绑定、sampler 数量和可写 render-target layer 的限制不同。
+
+<Term def="在 geometry shader 中根据 caster 覆盖的 split 范围复制三角形，并为每份三角形设置对应 render-target layer 的 DX10 路径。">
+  geometry shader cloning
+</Term>
+
+DX10 路径还可以用 instancing 让 instance index 表示 split index，把 split-specific crop matrix 放到 vertex shader，再让 geometry shader 主要设置 render-target index。为了避免把每个 caster 无条件复制到所有层，可以为它记录 `firstSplit` 与 `lastSplit`；连续包围体只会覆盖连续的 split 范围。
+
+<GpuGems3Ch10PipelineComparisonDiagram />
+<GpuGems3Ch10CasterRangeDiagram />
+
+## 6. 把画质、pass 和资源限制放进同一张账
+
+PSSM 的方案选择不是一个固定排行榜。multipass 的优点是路径直观、容易调试，代价是生成和合成都按 split 重复；DX9 single-pass shade 可以把合成 pass 合并，但 sampler 数量和更复杂的 shader 会限制层数；DX10 texture array 加 geometry shader cloning 或 instancing 可以减少地图生成的重复，却需要新的资源视图、layer 输出和硬件能力。
+
+同一套 split 也不一定要同一张分辨率。近层往往更值得保留高密度 shadow map，远层可以降低分辨率；point light 可以沿同样的思路使用，只是 light projection 与覆盖面需要重新核对。最终应同时记录近远 aliasing、shadow-map 内存、caster 绘制次数、fragment 采样成本和设备功能，而不是只比较一张截图。
+
+<Callout type="warning" title="实验读数是方向，不是硬件基准">
+  先用 Lab 比较同一 split 数量下的结构性变化，再用目标设备的 GPU timer、sampler
+  限制和实际 caster 数量复测。尤其是 DX10
+  路径的收益依赖几何复制、资源创建与驱动实现，不能把示意的 passes 直接当成帧率。
+</Callout>
+
+## 三步验收：从分层到可编程阴影
+
+<Stepper>
+  <Step title="第一步：把 view frustum 切成可解释的深度层">
+    先收紧 near/far，再用 practical split scheme 在 uniform 和 logarithmic 分布之间选位置。每个 split 都应有清晰的深度边界和自己的 shadow-map 预算。
+
+    <GpuGems3Ch10PssmOverviewDiagram />
+    <GpuGems3Ch10SplitSchemeDiagram />
+
+  </Step>
+  <Step title="第二步：让 light projection 对准当前 split">
+    为每个层计算 light view-projection 与 crop matrix；先用 scene-independent 建立正确性基线，再用 scene-dependent 评估 texel 利用率和边界安全性。
+
+    <GpuGems3Ch10AliasingDiagram />
+    <GpuGems3Ch10CropMatrixDiagram />
+
+  </Step>
+  <Step title="第三步：选择 shadow-map 生成与合成路径">
+    multipass 用重复 pass 换实现直观；DX9 用 view-space z 选择对应 map；DX10 用 texture array、geometry shader cloning 或 instancing 把几何复制交给可编程管线，同时裁剪 caster 的 split 范围。
+
+    <GpuGems3Ch10PipelineComparisonDiagram />
+    <GpuGems3Ch10CasterRangeDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch10PssmLab />
+
+## 本章小结
+
+- PSSM 按 view-space depth 分层，让近远区域获得更匹配的 shadow-map sampling density。
+- practical split scheme 混合 uniform 与 logarithmic，并应先收紧 near/far plane。
+- 每个 split 都需要自己的 light transform；crop matrix 可提高有效 texel 利用率，但边界更敏感。
+- multipass、DX9 single-pass shade 与 DX10 array + clone 把重复成本放在不同管线阶段。
+- 评估方案时同时记录 aliasing、passes、sampler/array 资源、casters 与目标 GPU 能力。
+
+<Exercises>
+
+**问题 1｜分层直觉。** 为什么 near/far 等距的 split 不一定是最好的？请说明 logarithmic split 的优势、实际缺点，以及 practical split 如何介于两者之间。
+
+<Answer>
+  uniform split 让距离区间相等，却没有抵消近处更高的 perspective
+  aliasing；logarithmic split 更接近让 `dz / (z ds)`
+  均衡，但靠近相机的层可能过短、包含很少物体。practical split 用 `λ`
+  混合两种位置，再结合实际 camera near/far 和镜头内容找到可用折中。
+</Answer>
+
+**问题 2｜修改 Demo 代码。** 给 PSSM Design Lab 增加一个 `splitEnds` 预览：实现一个函数，输入 near、far、splitCount 和 λ，返回 uniform/logarithmic/practical 三组边界，并把 practical 边界画成竖线。你会怎样测试它没有把 near/far 空白也当成有效预算？
+
+<Answer>
+  可以分别计算 `uniform[i]`、`log[i]`，再用 `practical[i] = λ * log[i] + (1 - λ)
+  * uniform[i]`。测试时先给 near/far 一个包含可见物体的紧范围，再把 far
+  平面扩大一倍，观察所有 practical
+  边界是否随无效空间向外移动；若移动导致近层分辨率下降，就说明需要先做 near/far
+  tightening 或场景相关的范围估计。
+</Answer>
+
+**问题 3｜方案选型。** 一个旧 GPU 只能稳定执行多 pass，一个 DX9-level GPU 有足够 sampler 但没有 texture-array render target，一个 DX10 GPU 支持 geometry shader 和 render-target array。分别从 multipass、DX9 single-pass shade、DX10 array + clone 中选择，并指出每种路径仍需测什么。
+
+<Answer>
+  旧 GPU 先选 multipass，测生成与合成的总 pass 和帧时间；DX9-level 设备可选
+  single-pass shade，测 sampler 数量、shader 指令和 split 选择成本；DX10
+  设备可选 texture array 加 geometry shader cloning 或
+  instancing，测资源创建、caster 复制、layer 写入和实际 GPU
+  timer。三者都要在相同 split、分辨率与 caster 集合下比较，不能只看 API 名称。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="parallel-split shadow map"
+    definition="把相机视锥按深度切成多段，每段使用自己的一张 shadow map，从而让近处和远处获得不同的采样密度。"
+  />
+  <GlossaryItem
+    term="practical split scheme"
+    definition="把等距分层和对数分层按权重混合的办法，用来在近处细节、远处覆盖和实现复杂度之间取平衡。"
+  />
+  <GlossaryItem
+    term="crop matrix"
+    definition="把当前 split 的有效光空间边界缩放到 shadow map 中的变换；它能减少空白区域，但需要小心边界和遮挡物。"
+  />
+  <GlossaryItem
+    term="texture array"
+    definition="把多张二维 shadow map 作为同一个带 layer 的纹理资源组织起来，shader 可以按 split index 选择其中一层。"
+  />
+  <GlossaryItem
+    term="geometry shader cloning"
+    definition="在 geometry shader 中把一个三角形复制到它覆盖的多个 split layer，并为每份输出设置对应的 render-target index。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 10. Parallel-Split Shadow Maps on Programmable GPUs"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-10-parallel-split-shadow-maps-programmable-gpus"
+/>
