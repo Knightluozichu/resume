@@ -4247,6 +4247,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       Cgp08TopologyDiagram: module0.Cgp08TopologyDiagram,
     } as ChapterMdxComponents;
   },
+  "cg-principles-practice/03-pipeline/cgp-09-functions-on-meshes": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-09-functions-on-meshes");
+    return {
+      Cgp09ContinuityDiagram: module0.Cgp09ContinuityDiagram,
+      Cgp09FunctionFieldDiagram: module0.Cgp09FunctionFieldDiagram,
+      Cgp09FunctionsOnMeshesLab: module0.Cgp09FunctionsOnMeshesLab,
+      Cgp09InterpolationDiagram: module0.Cgp09InterpolationDiagram,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

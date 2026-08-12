@@ -1,0 +1,230 @@
+---
+title: "Functions on Meshes"
+type: B
+section: "网格数据与插值"
+order: 9
+description: "把高度、颜色和温度等函数附着到网格顶点，用重心权重计算面内值，并用共享顶点检查连续性。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-09
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp09ContinuityDiagram,
+  Cgp09FunctionFieldDiagram,
+  Cgp09FunctionsOnMeshesLab,
+  Cgp09InterpolationDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-09-functions-on-meshes";
+
+<Objectives>
+
+- 能解释一个网格函数如何把高度、颜色或温度附着到顶点与面内位置
+- 能推导三个重心权重的和，并修改 MathViz 观察查询点移动时的插值结果
+- 能回答：相邻三角面出现接缝时，如何区分顶点数据、权重计算和采样范围的问题？
+
+</Objectives>
+
+## 先给网格上的每个位置一把可追踪的尺子
+
+想象一块由三角形拼成的布。布上的每个钉子都有一个读数：可以是高度、温度，也可以是颜色强度；两颗钉子之间的布面不能凭空决定读数，必须有一条可重复的计算规则。
+
+本章解决的是“如何让一个数值跟着形状走”。我们把读数附着在网格的顶点，再用位置关系计算三角面内部的值。没有这层规则，颜色会突然跳变，深度会出现裂缝，调试时也无法判断错在数据还是计算。
+
+先猜一猜：把面内查询点向某个顶点移动时，哪个权重会变大？如果两个相邻面共享同一个位置，为什么它们仍可能显示出接缝？
+
+<Cgp09FunctionsOnMeshesLab />
+
+## functions on meshes
+
+<Callout type="trap" title="把函数值画在屏幕上，却不绑定网格位置">
+  现象 → 形状移动、细分或重用顶点后，颜色和高度仍停留在旧的屏幕位置。 原因 →
+  数值被当成独立的纹理坐标或像素结果，没有和顶点索引共享同一套几何关系。 修法 →
+  让函数值按 vertex/index 组织，随网格一起变换，并在面内按明确权重重新计算。
+</Callout>
+
+<Term def="把一个数值函数附着到网格的顶点、边或面，并按几何位置计算其他位置的函数值。">
+  functions on meshes
+</Term>
+不是“给每个像素涂颜色”，而是给几何数据增加一条可追踪的数值通道。高度、颜色、温度、法线长度都可以成为函数；关键是它们必须知道自己属于哪个顶点、哪个面以及哪一个坐标空间。
+
+当我们说 functions on meshes 时，验收标准是三件事同时成立：同一个索引能找到对应的几何位置和函数值，网格变换后两者仍保持对应，面内查询可以从周围顶点值重建而不是读取一张不透明的最终截图。
+
+<Cgp09FunctionFieldDiagram />
+
+一个函数值表可以先从最小的标量开始。若三角形的三个顶点分别保存 `f₀`、`f₁`、`f₂`，它就能支持高度或灰度；换成三元颜色或向量，计算结构仍然相同，只是每个值的分量更多。
+
+## interpolation
+
+<Term def="根据查询点在网格单元中的位置，用周围顶点或面值按权重计算一个新值的过程。">
+  interpolation
+</Term>
+是把离散读数变成面内读数的规则。三角形最常用的权重是重心权重：每个权重表示查询点从一个顶点获得了多少贡献。
+
+在一个三角面中，设查询点 `p` 对三个顶点的权重是 `w₀`、`w₁`、`w₂`。先约束权重总和：
+
+$$
+w_0 + w_1 + w_2 = 1
+$$
+
+这个式子在说：查询点仍由这三个顶点共同描述；权重总和偏离 1 时，结果可能缩放、漂移或已经走出当前三角形。
+
+函数值随后按同样的权重组合：
+
+$$
+f(p) = w_0 f_0 + w_1 f_1 + w_2 f_2
+$$
+
+这个式子在说：离查询点影响更大的顶点，对最终高度、颜色或温度贡献也更大；插值是可复核的加权和，不是渲染器凭感觉补出来的平滑。
+
+<Cgp09InterpolationDiagram />
+
+用代码表达时，位置和函数值共享同一组权重：
+
+```ts
+function interpolate(values: number[], weights: number[]) {
+  return values.reduce((sum, value, index) => sum + value * weights[index], 0);
+}
+```
+
+这段函数可以处理高度或单个颜色分量；对向量值，只需让加法和乘法分别作用在每个分量。真正需要先验证的是权重是否对应了正确的顶点，以及它们的和是否保持约束。
+
+### scalar field：先把一个通道讲清楚
+
+<Term def="给网格每个位置附着一个数值的函数通道，例如高度、温度或灰度；它可以在面内被查询。">
+  scalar field
+</Term>
+是最容易手算的网格函数。每个顶点只有一个数值，插值结果也是一个数值，因此可以直接把三个顶点读数和一个面内读数列成表。
+
+如果三个顶点值差异很大，平滑插值会让变化在三角形内部连续展开；如果某个值被错误地放到了相邻顶点，结果会沿一条边突然跳变。先固定几何，再逐个核对函数值，是比调整材质颜色更短的排查路径。
+
+## barycentric weight 与共享边连续性
+
+<Term def="描述一个点相对三角形三个顶点位置的三个非负系数；三者之和为一时，点位于该三角形内部。">
+  barycentric weight
+</Term>
+是三角形插值的坐标语言。一个权重接近 1，表示查询点靠近对应顶点；一个权重为
+0，表示该顶点不参与这次组合。权重同时可以重建位置和函数值，所以它是几何与数值之间的桥。
+
+<Term def="相邻面在共享边上给出一致的函数值，使读数从一个面跨到另一个面时不出现不应有的跳变。">
+  continuity
+</Term>
+不是“颜色足够柔和”，而是共享位置在两侧使用了相同的函数数据和一致的插值约定。
+
+<Cgp09ContinuityDiagram />
+
+如果相邻三角面共享一条边，却在共享端点保存了不同的函数值，任何正确的插值都会把这份不一致显示出来。排查顺序应是：先检查共享顶点的索引和函数值，再检查权重是否落在三角面内，最后才检查颜色映射或显示范围。
+
+## 三步实验：从顶点读数走到面内结果
+
+每一步只改变一种证据。先预测权重、函数值或接缝会怎么变，再在 MathViz 中验证；这样可以把“看起来不连续”拆成数据、公式和显示三层。
+
+<Stepper>
+  <Step title="第一步：绑定函数值与顶点">
+    选择高度或温度字段，逐个读出三个顶点的数值，并确认它们沿同一索引进入网格。
+
+    <Cgp09FunctionFieldDiagram />
+
+  </Step>
+  <Step title="第二步：移动查询点并核对权重">
+    拖动两个权重，让查询点靠近不同顶点；检查权重总和和插值结果是否同步变化。
+
+    <Cgp09InterpolationDiagram />
+
+  </Step>
+  <Step title="第三步：检查共享边连续性">
+    对相邻面分别列出共享端点的函数值，判断接缝来自数据不一致还是采样范围越界。
+
+    <Cgp09ContinuityDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把权重归一化后就认为问题已经解决">
+  现象 → 三个权重的和是 1，但查询点仍在错误的面上，颜色或高度出现跳跃。 原因 →
+  归一化只能修正总量，不能修正权重对应的顶点索引和三角形边界。 修法 →
+  同时画出查询点到三个顶点的关系，检查索引、非负性和面内范围。
+</Callout>
+
+<Callout type="trap" title="把共享边的接缝归咎于插值公式">
+  现象 → 单个三角面内部平滑，但两个相邻面交界处出现颜色或高度突变。 原因 →
+  相同几何位置可能被拆成两条记录，或者两侧保存了不同的函数值。 修法 →
+  先按共享位置核对索引与函数值，再统一插值规则；不要先改显示曲线。
+</Callout>
+
+<Callout type="trap" title="把面外查询也当成正常插值">
+  现象 → 拖动点越过边界后，数值继续延伸并污染相邻面。 原因 →
+  权重出现负数或没有重新选择包含查询点的三角面。 修法 → 约束权重非负且总和为
+  1，越界时重新定位面或明确采用外插策略。
+</Callout>
+
+## 本章小结
+
+- functions on meshes 把数值通道和网格索引绑定在一起。
+- interpolation 用三个权重从顶点值计算三角面内的结果。
+- 权重总和、顶点索引和共享边数据共同决定连续性。
+- 遇到接缝时先查数据与范围，再查插值和显示映射。
+
+<Exercises>
+
+**问题 1：手算一次 interpolation。** 三角形三个顶点的高度是 `2`、`8`、`5`，查询点的权重是 `0.2`、`0.5`、`0.3`。面内高度是多少？
+
+<Answer>
+  `0.2 × 2 + 0.5 × 8 + 0.3 × 5 = 5.7`。三个权重之和为
+  1，因此结果仍是这三个顶点值的加权组合，没有额外缩放。
+</Answer>
+
+**问题 2：修改 MathViz 的函数通道。** 把当前的高度字段换成温度字段，保持几何和权重不变，记录哪些输出变化、哪些关系必须保持。
+
+<Answer>
+  面内数值的单位和绝对结果会变化，但查询点位置、三个权重、权重总和以及顶点索引关系必须保持。若这些几何证据也变化，问题就不只是替换函数通道。
+</Answer>
+
+**问题 3：定位共享边接缝。** 两个相邻三角面共享一条边，但边两侧的颜色不同。按什么顺序排查？
+
+<Answer>
+  先核对共享端点是否真的复用了同一索引，再核对两侧的函数值、权重和插值模式，最后检查颜色映射范围。若相同位置有两份不同的值，应先统一数据或明确把它设计成硬接缝。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="functions on meshes"
+    definition="附着在网格顶点、边或面上的数值函数，可以随几何一起变换并被查询。"
+  />
+  <GlossaryItem
+    term="interpolation"
+    definition="用周围顶点或面值按位置权重计算面内新值的过程。"
+  />
+  <GlossaryItem
+    term="scalar field"
+    definition="给网格位置附着一个数值的通道，例如高度、温度或灰度。"
+  />
+  <GlossaryItem
+    term="barycentric weight"
+    definition="描述点相对三角形三个顶点位置的系数，三个系数之和为一。"
+  />
+  <GlossaryItem
+    term="continuity"
+    definition="相邻面跨过共享边时使用一致的数据，使函数值不发生意外跳变。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 9: Functions on Meshes"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
