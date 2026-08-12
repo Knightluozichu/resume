@@ -4400,6 +4400,18 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Cgp21TechniqueComparisonDiagram,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-22-splines-and-subdivision-curves":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/cg-principles-practice/v2/cgp-22-splines-and-subdivision-curves");
+      return {
+        Cgp22BasisFunctionDiagram: module0.Cgp22BasisFunctionDiagram,
+        Cgp22ContinuityDiagram: module0.Cgp22ContinuityDiagram,
+        Cgp22SplinesLab: module0.Cgp22SplinesLab,
+        Cgp22SplinePipelineDiagram: module0.Cgp22SplinePipelineDiagram,
+        Cgp22SubdivisionStepsDiagram: module0.Cgp22SubdivisionStepsDiagram,
+      } as ChapterMdxComponents;
+    },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

@@ -1,0 +1,226 @@
+---
+title: "Splines and Subdivision Curves"
+type: B
+section: "样条曲线与细分曲线"
+order: 22
+description: "从控制点、基函数与连续性出发，理解 splines 如何表达形状，以及 subdivision curves 如何从折线逼近平滑曲线。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-22
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp22BasisFunctionDiagram,
+  Cgp22ContinuityDiagram,
+  Cgp22SplinesLab,
+  Cgp22SplinePipelineDiagram,
+  Cgp22SubdivisionStepsDiagram,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-22-splines-and-subdivision-curves";
+
+<Objectives>
+
+- 能解释 splines 如何用控制点、基函数和参数区间表达可编辑的形状
+- 能比较 Bezier、B-spline 与 subdivision curves 的端点行为、局部控制和连续性
+- 能修改 SplinesLab 的控制点与细分层级，并回答为什么曲线会变形、变平滑或在连接处跳变
+
+</Objectives>
+
+## 为什么不直接存一串采样点
+
+一条曲线如果只保存屏幕上的采样点，放大、重新编辑或改变采样密度时都要重新处理大量数据。更有用的表示是保存少量设计参数，再用一个确定的规则生成任意参数位置的点：设计者拖动控制点，程序按规则重建曲线，渲染器最后才把它采样成线段。
+
+先预测：如果只移动第二个控制点，Bezier 和 B-spline 会让整条曲线以同样的幅度变化吗？打开实验，固定模型后只移动一个控制点；观察实线曲线与虚线控制多边形的变化范围，再切换到 subdivision curves 比较。
+
+<Cgp22SplinesLab />
+
+## splines 的共同骨架：控制点、权重与参数
+
+<Cgp22SplinePipelineDiagram />
+
+<Callout type="trap" title="把控制点当成曲线上的采样点">
+  现象 →
+  拖动一个点时，曲线突然穿过不该经过的位置，或编辑者无法判断点对形状的影响范围。
+  原因 →
+  控制点通常只是加权构造曲线的参数，不一定落在曲线上；不同曲线模型还有不同的端点与局部支撑规则。
+  修法 →
+  先画出控制多边形，再分别观察曲线是否经过端点、是否经过内部点以及移动一个点影响了哪些参数区间。
+</Callout>
+
+<Term def="用控制点和一组平滑、可计算的基函数表达形状的曲线族；它把设计参数与最终采样点分开。">
+  splines
+</Term>
+
+<Term def="用于改变曲线形状的少量设计点；它们通过权重影响曲线上一段或多段参数区间，不一定就是曲线上的点。">
+  control points
+</Term>
+
+一条参数曲线可以抽象成：
+
+$$
+C(t) = \sum_i N_i(t) P_i,\qquad 0 \le t \le 1
+$$
+
+其中 P_i 是控制点，N_i(t) 是随参数 t 变化的权重，C(t) 是最终曲线位置。这个表达式的重点不是记住符号，而是看清三种职责：控制点负责“往哪里拉”，基函数负责“拉多远”，参数负责“沿曲线走到哪里”。
+
+控制点越多不一定越容易编辑。若每个点都影响整条曲线，局部修改会牵动全局；若基函数只在有限区间有支撑，设计者可以局部修形，同时保持远处结构稳定。实际选择要在编辑自由度、连续性、计算成本和端点控制之间平衡。
+
+## Bezier 与 B-spline：全局直觉和局部控制
+
+Bezier 曲线用一组 Bernstein 基函数加权控制点。三次 Bezier 的端点满足 C(0)=P0、C(1)=P3，因此首尾控制点直接决定端点；内部控制点决定切线趋势，但通常不会被曲线直接经过。
+
+B-spline 把参数区间分成由 knot 组织的支撑区间。一个基函数只在有限范围内起作用，所以移动内部控制点通常只改变局部曲线。代价是端点行为不如 Bezier 直觉，需要通过端点 knot、重复度或额外约束决定曲线是否贴近端点。
+
+<Term def="随参数变化的权重函数；它在自己的支撑区间内决定某个控制点对曲线位置的贡献。">
+  basis functions
+</Term>
+
+<Cgp22BasisFunctionDiagram />
+
+图中的相邻基函数在局部区间重叠。任意参数位置的曲线点，是多个控制点按当前权重混合后的结果；当参数离开某个基函数的支撑区间，该控制点的影响就消失。局部支撑是 B-spline 适合交互编辑的重要原因。
+
+用实验比较时，不要只看曲线“更平滑”还是“更尖”。先记录三个可检验问题：曲线是否经过控制点？移动一个点影响多大范围？端点的切线能否被直接控制？这些问题比截图中的视觉差异更能解释模型的行为。
+
+## subdivision curves：把规则应用到折线
+
+<Term def="通过重复插入加权点、重连邻域并取极限，从一条控制折线逐步得到平滑形状的曲线。">
+  subdivision curves
+</Term>
+
+subdivision curves 不要求先写出一条全局高阶多项式，而是从一条控制折线开始，反复应用局部规则。一次细分通常会在相邻点之间插入新点，再按权重平滑旧点或新点；继续细分后，折线段变短，形状逼近一个极限曲线。
+
+<Cgp22SubdivisionStepsDiagram />
+
+细分规则的两个核心问题是“保留什么”和“平滑什么”。如果规则保留原始顶点，边界和尖角更容易被编辑者控制；如果规则持续平均邻域，曲线会越来越平滑，但可能缩短、收缩或失去尖锐特征。边界规则也必须单独说明，否则端点会出现意外漂移。
+
+<Term def="曲线在连接处保持平滑的程度；C0 表示位置接上，C1 还要求切线方向一致，C2 进一步约束曲率变化。">
+  continuity
+</Term>
+
+## continuity：连接处到底要连续到哪一阶
+
+两段曲线首尾位置相同，只能说达到 C0。若接缝两侧的切线方向和速度尺度也协调，才接近 C1；若曲率变化也连续，则达到更高阶的视觉平滑。连续性不是越高越好：汽车外形可能需要高阶平滑，角色头发的尖端却可能故意保留角点。
+
+<Cgp22ContinuityDiagram />
+
+工程上要把连续性目标写成可观察的检查。先放大连接处看位置是否重合，再画切线方向，最后检查曲率变化或高光是否出现折断。只看低分辨率的轮廓，很容易把 C0 的尖角误认为“已经平滑”。
+
+## 三步实验：从控制点到极限曲线
+
+每一步先预测，再只改变一个因素。记录模型、选中的控制点、曲线影响范围、端点行为与连接处连续性，避免把“模型变化”和“参数变化”混在一起。
+
+<Stepper>
+  <Step title="第一步：建立控制点与曲线的对应关系">
+    选择 Bezier，打开控制多边形，固定 P0、P2、P3，只移动 P1。预测曲线的端点是否改变，以及曲线中段会向哪一侧弯，再用实验确认控制点影响范围。
+
+    <Cgp22SplinePipelineDiagram />
+
+  </Step>
+  <Step title="第二步：比较基函数的局部支撑">
+    切换 B-spline，重复移动一个内部控制点。先预测远离该点的参数区间是否保持稳定，再观察基函数图中支撑区间与曲线局部变化是否对应。
+
+    <Cgp22BasisFunctionDiagram />
+
+  </Step>
+  <Step title="第三步：增加 subdivision 层级并检查连续性">
+    切换 subdivision curves，把细分层级从 1 调到 4。先预测折线会怎样缩短、尖角会怎样变化，再关闭控制多边形观察极限形状，并用连续性图检查连接处。
+
+    <Cgp22SubdivisionStepsDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="用更多采样点修复控制规则错误">
+  现象 → 把曲线采样得更密后，接缝仍然折断，编辑时还变得更慢。 原因 →
+  采样密度只改变离散显示，不会改变控制点权重、端点条件或连续性。 修法 →
+  先检查基函数、knot 或细分规则，再选择足够但不过量的采样密度。
+</Callout>
+
+<Callout type="trap" title="以为所有控制点都应该落在曲线上">
+  现象 → 为了让曲线经过内部控制点，强行修改算法后端点和切线一起失真。 原因 →
+  Bezier、B-spline 与 subdivision curves
+  对控制点的几何含义不同，很多控制点只定义方向和拉力。 修法 →
+  先用控制多边形和模型定义确认端点行为，再决定是否需要插值曲线或额外约束。
+</Callout>
+
+<Callout type="trap" title="只凭“更圆滑”判断细分质量">
+  现象 → 细分层级越高看起来越圆，但尖角、边界或形状尺寸逐渐丢失。 原因 →
+  平滑规则改变了极限形状，连续性、收缩和特征保留没有被分开检查。 修法 →
+  同时记录端点位置、局部特征、面积或弧长变化，并在连接处分别检查 C0、C1
+  和更高阶连续性。
+</Callout>
+
+## 本章小结
+
+- splines 用控制点和基函数生成参数曲线，控制点是设计参数，不必等于曲线采样点。
+- Bezier 提供清晰的端点直觉，B-spline 依靠局部支撑实现可控编辑；比较时要检查端点、影响范围和连续性。
+- subdivision curves 从控制折线出发，通过确定的局部规则逼近平滑极限；细分层级增加不等于形状一定更正确。
+- continuity 要通过位置、切线和曲率等可观察证据检查；正确的规则比加密采样更重要。
+
+<Exercises>
+
+**问题 1：解释局部编辑。** 移动一个内部控制点时，B-spline 的远端几乎不变，而 Bezier 的远端也发生变化。你会用哪个概念解释差异？
+
+<Answer>
+  关键是 basis functions 的支撑范围。B-spline
+  的基函数通常只在有限参数区间内非零，因此内部点的影响局部化；Bezier 的
+  Bernstein 基函数覆盖整个参数区间，内部点会对整条曲线产生贡献。
+</Answer>
+
+**问题 2：判断细分现象。** subdivision curves 经过多次细分后变得更圆，但原来的尖角和端点位置不断缩进。你先检查什么？
+
+<Answer>
+  先检查细分规则的旧点更新权重、新点插值权重和边界规则，再分别记录连续性与特征保留。增加采样点不能改变极限形状，必须从规则本身判断是否需要保留角点或固定端点。
+</Answer>
+
+**问题 3：选择表示方式。** 一个编辑器需要用户精确控制首尾切线，另一个工具需要只移动局部点而不影响远处。你会如何选择并验证？
+
+<Answer>
+  首尾切线和端点行为很重要时，可先选择端点直觉清晰的 Bezier
+  或带端点约束的样条；局部编辑优先时比较 B-spline 和 subdivision
+  curves。用固定的控制点移动实验，检查端点、局部影响范围、连接处 continuity
+  与最终采样成本。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="splines"
+    definition="用控制点和一组平滑权重函数表达可编辑形状的曲线族。"
+  />
+  <GlossaryItem
+    term="control points"
+    definition="通过权重影响曲线形状的设计点，不一定落在曲线上。"
+  />
+  <GlossaryItem
+    term="basis functions"
+    definition="随参数变化、决定各控制点贡献大小的权重函数。"
+  />
+  <GlossaryItem
+    term="subdivision curves"
+    definition="通过反复细分控制折线，逐步逼近平滑极限形状的曲线。"
+  />
+  <GlossaryItem
+    term="continuity"
+    definition="曲线连接处保持位置、切线或曲率平滑一致的程度。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 22: Splines and Subdivision Curves"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
