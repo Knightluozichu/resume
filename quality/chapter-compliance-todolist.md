@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-12T13:32:32.699Z
+> 生成时间：2026-08-12T13:39:34.203Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -10,13 +10,13 @@
 | 项目 | 数量 |
 |---|---:|
 | 书籍 | 225 |
-| 实际 MDX 章节/页面 | 4539 |
+| 实际 MDX 章节/页面 | 4540 |
 | manifest 正式 unit | 4649 |
-| manifest 未映射 unit | 79 |
+| manifest 未映射 unit | 78 |
 | manifest 证据不完整 unit | 497 |
 | failed | 1925 |
 | queued | 245 |
-| passed | 1576 |
+| passed | 1577 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -1369,9 +1369,9 @@
     - 路径：`content/car-structure-illustrated/08-review/csi23-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## cg-principles-practice（51 个内容页面 · passed:51 · 🚫 门禁阻断 6 项）
+## cg-principles-practice（52 个内容页面 · passed:52 · 🚫 门禁阻断 4 项）
 
-- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=89.5%；未映射 unit=4；证据不完整 unit=0。
+- 门禁摘要：目录=25，manifest=38；正式概念覆盖率=92.1%；未映射 unit=3；证据不完整 unit=0。
 - 其他门禁阻断：cg-principles-practice: publication-policy-not-approved。
 
 - [x] ✅ **01-intro/cgpp-ch01** — passed；score 99
@@ -1458,6 +1458,9 @@
 - [x] ✅ **03-pipeline/cgp-32-rendering-in-practice** — passed；score 97
     - 路径：`content/cg-principles-practice/03-pipeline/cgp-32-rendering-in-practice.mdx`
     - 正式 unit：`cgp-32` explained=2/2
+- [x] ✅ **03-pipeline/cgp-33-shaders** — passed；score 96
+    - 路径：`content/cg-principles-practice/03-pipeline/cgp-33-shaders.mdx`
+    - 正式 unit：`cgp-33` explained=2/2
 - [x] ✅ **03-pipeline/cgpp-ch03** — passed；score 97
     - 路径：`content/cg-principles-practice/03-pipeline/cgpp-ch03.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
@@ -1527,8 +1530,6 @@
 - [x] ✅ **25-future/cgpp-ch25** — passed；score 97
     - 路径：`content/cg-principles-practice/25-future/cgpp-ch25.mdx`
     - 正式 unit：`cgp-01` explained=2/2、`cgp-26` explained=2/2、`cgp-38` explained=2/2
-- [ ] 🔴 P0 **[正式 unit cgp-33] Shaders** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
-    - 路径：待创建或映射（officialUnitId: `cgp-33`）
 - [ ] 🔴 P0 **[正式 unit cgp-34] Expressive Rendering** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2
     - 路径：待创建或映射（officialUnitId: `cgp-34`）
 - [ ] 🔴 P0 **[正式 unit cgp-36] Visibility Determination** — manifest unit 未映射；当前没有可用于发布门禁的章节证据；concepts=2

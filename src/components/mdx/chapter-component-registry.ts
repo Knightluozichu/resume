@@ -4494,6 +4494,16 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         Cgp32RenderingPracticeLab: module0.Cgp32RenderingPracticeLab,
       } as ChapterMdxComponents;
     },
+  "cg-principles-practice/03-pipeline/cgp-33-shaders": async () => {
+    const module0 =
+      await import("@/components/mdx/cg-principles-practice/v2/cgp-33-shaders");
+    return {
+      Cgp33EnvironmentMappingDiagram: module0.Cgp33EnvironmentMappingDiagram,
+      Cgp33PhongShaderDiagram: module0.Cgp33PhongShaderDiagram,
+      Cgp33ShaderPipelineDiagram: module0.Cgp33ShaderPipelineDiagram,
+      Cgp33ShadersLab: module0.Cgp33ShadersLab,
+    } as ChapterMdxComponents;
+  },
   "cg-principles-practice/03-pipeline/cgpp-ch03": async () => {
     const module0 =
       await import("@/components/mdx/cg-principles-practice/v2/cgpp-ch03-graphics-pipeline");

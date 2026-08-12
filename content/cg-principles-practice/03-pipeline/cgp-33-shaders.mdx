@@ -1,0 +1,234 @@
+---
+title: "Shaders"
+type: D
+section: "着色器"
+order: 33
+description: "从可编程阶段、Phong 光照和环境映射出发，理解 shaders 如何接收属性、计算反射并输出可验证的片段颜色。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: cgp-33
+---
+
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import {
+  Cgp33EnvironmentMappingDiagram,
+  Cgp33PhongShaderDiagram,
+  Cgp33ShaderPipelineDiagram,
+  Cgp33ShadersLab,
+} from "@/components/mdx/cg-principles-practice/v2/cgp-33-shaders";
+
+<Objectives>
+
+- 能解释 shaders 如何在顶点与片段阶段接收属性、转换坐标并输出颜色
+- 能拆解 phong shader 的环境、漫反射与镜面项，并说明 environment mapping 的反射向量来源
+- 能修改 ShadersLab 的光源角度、shininess、环境混合和法线尺度，定位坐标空间与输入契约问题
+
+</Objectives>
+
+## 先把着色器看成阶段之间的输入契约
+
+着色器不是一段脱离管线的“颜色函数”。顶点着色器收到位置、法线、纹理坐标和矩阵，输出变换后的位置与待插值属性；片段着色器收到插值结果，再读取材质、光源和环境资源，计算最终颜色。只要阶段之间的坐标空间、类型或插值规则不一致，代码可以编译，画面仍然会错。
+
+先预测：只改变光源角度，几何轮廓是否应该移动？只提高 shininess，高光应该更亮更宽，还是更集中更窄？切换 environment mapping 后，环境颜色应该随反射向量变化，但法线和位置输入不应被悄悄修改。打开实验，每次只改一个参数并记录输入与输出。
+
+<Cgp33ShadersLab />
+
+## shaders：从顶点输入走到片段输出
+
+<Callout type="tip" title="先列出每阶段的输入和输出">
+  调试 shaders
+  时先写出位置、法线、纹理坐标、矩阵和材质参数属于哪个坐标空间，再写出下一阶段要接收的类型。只有契约明确，才有资格判断是光照公式还是数据传递出了问题。
+</Callout>
+
+<Term def="在图形管线可编程阶段执行的程序；它读取阶段输入和资源，生成位置、插值属性或片段颜色等结果。">
+  shaders
+</Term>
+
+<Cgp33ShaderPipelineDiagram />
+
+顶点阶段通常负责把对象空间的位置转换到裁剪空间，并把法线、颜色和纹理坐标作为 varyings 传给后续阶段。光栅化会对这些属性进行插值，片段阶段再根据插值后的法线、视线和材质计算颜色。输入名称相同不代表语义相同：对象空间法线、世界空间法线和切线空间法线不能直接混算。
+
+<Term def="在顶点阶段和片段阶段之间传递、并由光栅化器按图元位置插值的属性，例如法线、颜色和纹理坐标。">
+  varyings
+</Term>
+
+一个最小的片段着色模型可以写成：
+
+$$
+C_{out}=shade(normalize(n),normalize(l),normalize(v),material)
+$$
+
+其中 $n$、$l$、$v$ 必须处于同一坐标空间。若法线没有在插值后重新归一化，点积会被长度误差污染；若矩阵变换使用了错误的逆转置，非均匀缩放会让高光方向漂移。排查时先输出法线、深度和 UV，再输出最终颜色。
+
+## phong shader：把光照拆成三个可解释的项
+
+<Callout type="trap" title="把 phong shader 的高光当成固定颜色">
+  现象 → 正面看起来正常，视角或光源一变，高光却突然跳到错误位置。 原因 →
+  镜面项依赖法线、光源方向、视线方向和 shininess，不是贴在模型上的常数。 修法 →
+  分别显示环境项、漫反射项和镜面项，先核对向量归一化与坐标空间，再调材质颜色。
+</Callout>
+
+<Term def="把环境、漫反射和镜面反射贡献相加以近似片段颜色的经典光照模型；镜面项对视角和高光指数敏感。">
+  phong shader
+</Term>
+
+<Cgp33PhongShaderDiagram />
+
+Phong 模型常把颜色写成环境、漫反射和镜面三项的和：
+
+$$
+C=C_a+C_d\max(n\cdot l,0)+C_s\max(r\cdot v,0)^s
+$$
+
+环境项提供没有显式光源时的基线；漫反射项由法线与光源方向的夹角控制；镜面项由反射方向与视线方向的接近程度控制，$s$ 是 shininess。这个模型是近似，不等于完整的物理 BRDF，但它很适合作为阶段契约的诊断基线：每一项都可以单独显示、单独测试。
+
+提高 shininess 会把镜面能量集中到更窄的方向范围，未必让总能量增加。若高光位置随着模型缩放或相机移动错误地漂移，优先检查法线矩阵、视线方向和反射向量，而不是把镜面颜色调暗。
+
+## environment mapping：用反射方向查询环境
+
+<Callout type="trap" title="把 environment mapping 当成屏幕贴图">
+  现象 →
+  环境反射像一张固定贴在屏幕上的图片，物体旋转后反射纹理仍然不随表面方向变化。
+  原因 →
+  查询坐标没有由法线、视线和反射向量计算，或把世界空间方向误当成纹理空间坐标。
+  修法 → 画出 $v$、$n$ 和 $r$，固定环境纹理后旋转物体，检查反射向量到 cubemap
+  坐标的转换。
+</Callout>
+
+<Term def="根据表面法线与视线计算反射方向，再用该方向从环境纹理或 cubemap 查询颜色的近似方法。">
+  environment mapping
+</Term>
+
+<Cgp33EnvironmentMappingDiagram />
+
+给定视线方向 $v$ 和表面法线 $n$，反射方向可以写成：
+
+$$
+r=2(n\cdot v)n-v
+$$
+
+随后把 $r$ 转换到环境贴图使用的坐标空间，作为 cubemap 或球面映射的查询方向。环境映射擅长提供远处环境的视觉线索，但它通常不自动包含局部遮挡、近处物体的精确反射或动态几何。把它当成完整的光传输会产生错误预期。
+
+<Term def="用于把顶点或片段法线从对象空间变换到正确光照空间的变换结果；非均匀缩放时通常需要使用模型矩阵的逆转置。">
+  normal matrix
+</Term>
+
+normal matrix 是 shader 输入契约的重要一环。位置可以用模型矩阵变换，法线却要保持与变换后表面垂直；当模型发生非均匀缩放时，直接使用同一个矩阵会使法线长度和方向都不可靠。实验中的 normal scale 不是修复公式的捷径，它只是帮助暴露输入是否脱离了预期空间。
+
+## 三步实验：从阶段契约走到反射查询
+
+每一步先预测，再固定几何、相机和材质，只改变一个着色器条件。记录 varyings、法线、光照分量、反射向量和片段输出，区分输入错误、公式错误和环境坐标错误。
+
+<Stepper>
+  <Step title="第一步：核对 shaders 阶段输入">
+    先预测调整 normal scale 是否应该移动几何轮廓，再切换 debug。用管线图确认 position、normal、uv 和 varyings 在顶点、光栅化、片段阶段之间的职责。
+
+    <Cgp33ShaderPipelineDiagram />
+
+  </Step>
+  <Step title="第二步：分解 phong shader">
+    固定法线和环境混合，先预测光源角度与 shininess 分别影响哪一项。用 Phong 图逐项打开环境、漫反射和镜面反馈，检查向量归一化和高光宽度。
+
+    <Cgp33PhongShaderDiagram />
+
+  </Step>
+  <Step title="第三步：追踪 environment mapping 坐标">
+    切换 environment mapping，先预测旋转法线后反射查询方向怎样变化。用环境图核对视线、法线、反射向量与纹理坐标空间，确认反射颜色不是固定屏幕贴图。
+
+    <Cgp33EnvironmentMappingDiagram />
+
+  </Step>
+</Stepper>
+
+## 常见误区
+
+<Callout type="trap" title="把法线长度误当成光照强度">
+  现象 → 模型缩放后高光突然变亮或变暗，调低光源强度只能暂时遮住问题。 原因 →
+  法线没有用 normal matrix 正确变换，或插值后没有重新归一化。 修法 →
+  单独可视化法线长度和方向，固定光源与材质，先修复坐标契约再调光照。
+</Callout>
+
+<Callout type="trap" title="只修改片段颜色，不检查阶段接口">
+  现象 → 片段着色器里公式看起来正确，但 UV、法线或材质在不同图元上突然跳变。
+  原因 → 顶点输出和片段输入的 varying 类型、插值方式或坐标空间不一致。 修法 →
+  保存一个三角形的顶点输入、插值权重和片段快照，逐阶段比较，不用颜色常数掩盖数据错误。
+</Callout>
+
+<Callout type="trap" title="用 environment mapping 代替所有反射">
+  现象 → 远处环境反射看起来漂亮，但近处物体、遮挡和动态光源完全不对。 原因 →
+  environment mapping 是方向查询近似，没有自动求解局部可见性和完整光传输。 修法
+  → 明确它的空间范围，在需要局部反射时加入射线、屏幕空间或其他可见性证据。
+</Callout>
+
+## 本章小结
+
+- shaders 是管线阶段之间的可编程契约，必须同时说明输入类型、坐标空间、插值规则和输出语义。
+- phong shader 把颜色拆成环境、漫反射与镜面项；法线、光源、视线和 shininess 决定每项的变化。
+- environment mapping 用反射向量查询外部环境，必须确保反射方向与纹理坐标空间一致，并承认局部遮挡的近似边界。
+- normal matrix、varyings 和归一化是常见故障的首要证据；调参前先确认阶段输入确实正确。
+
+<Exercises>
+
+**问题 1：检查 shader 接口。** 顶点阶段输出 world-space normal，片段阶段却用 view-space light direction 做点积。画面仍有颜色但高光位置错误，你会先改哪一侧？
+
+<Answer>
+  先统一坐标空间，而不是修改 Phong 常数。可以把法线用 normal matrix 变换到 view
+  space，或者把光照方向变换到 world space；随后在片段阶段重新归一化插值后的
+  normal，并用固定法线和光源验证点积。
+</Answer>
+
+**问题 2：拆分 phong shader。** 光源角度改变后漫反射项下降，但镜面项完全不变。你会检查哪些向量和参数？
+
+<Answer>
+  检查 normalized normal、light direction、view direction、reflection direction
+  和 shininess 是否进入同一坐标空间。漫反射检查 $n\cdot l$，镜面检查 $r\cdot
+  v$；再确认镜面项没有被材质常数、错误的反射向量或未更新的 uniform 固定。
+</Answer>
+
+**问题 3：选择 environment mapping。** 一个金属球需要快速显示远处天空反射，但场景中还有会移动的近处物体。你会如何使用 environment mapping，并标出它不能保证的部分？
+
+<Answer>
+  用 environment mapping
+  根据反射向量查询稳定的远处天空，作为低成本背景反射；同时明确它不能自动反映近处移动物体、局部遮挡和精确多次反射。若这些证据重要，应加入实时射线、屏幕空间反射或其他可见性方法，并比较坐标空间与反射方向。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="shaders"
+    definition="在图形管线可编程阶段执行、读取输入并生成阶段结果的程序。"
+  />
+  <GlossaryItem
+    term="varyings"
+    definition="在顶点和片段阶段之间传递并按图元位置插值的属性。"
+  />
+  <GlossaryItem
+    term="phong shader"
+    definition="把环境、漫反射和镜面贡献相加的经典片段着色模型。"
+  />
+  <GlossaryItem
+    term="environment mapping"
+    definition="用反射方向查询环境纹理以近似表面反射的方法。"
+  />
+  <GlossaryItem
+    term="normal matrix"
+    definition="把法线变换到正确光照空间、在非均匀缩放下保持垂直关系的变换。"
+  />
+</Glossary>
+
+<Attribution
+  adaptedFrom="Computer Graphics: Principles and Practice, 3rd Edition, Chapter 33: Shaders"
+  adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
+/>
