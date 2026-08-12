@@ -1,0 +1,262 @@
+---
+title: "GPU Gems 3 · Chapter 20. GPU-Based Importance Sampling"
+type: D
+section: "GPU Gems 3 Part III · Rendering"
+order: 20
+description: "从环境光照积分出发，解释如何用 BRDF 引导的 GPU 重要性采样、Hammersley 序列和 PDF 感知 mip 过滤实时渲染高光表面。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-20
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch20EnvironmentMapDiagram,
+  GpuGems3Ch20ImportanceSamplingLab,
+  GpuGems3Ch20IntegralDiagram,
+  GpuGems3Ch20MipFilterDiagram,
+  GpuGems3Ch20PdfCdfDiagram,
+  GpuGems3Ch20SamplingPipelineDiagram,
+  GpuGems3Ch20SequenceDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch20-importance-sampling";
+
+<Objectives>
+
+- 能解释环境光照积分、BRDF 引导的 PDF 与 mip 过滤如何共同把数千个方向压缩成有限 GPU 样本
+- 能修改 GPU Importance Sampling Lab 的采样分布、样本数、光泽度、过滤和环境映射，比较方差与纹理访问
+- 能回答：为什么低差异序列还需要依据 PDF 的过滤，以及为什么 dual-paraboloid 能减轻环境图接缝
+
+</Objectives>
+
+## 先问：为什么镜面反射不能把环境图只采几次
+
+想象一块抛光金属：它看到的环境并不是一块固定颜色，而是半球上不同方向的光经过材质反射后共同贡献的结果。把环境图每个 texel 都乘一遍 BRDF，画面会很准，却远远超出实时 shader 的预算。
+
+本章解决的是：怎样把有限的样本集中在真正重要的方向，同时让每个样本代表它附近合理大小的环境区域。没有这条路径，均匀采样会把工作浪费在暗处，少量确定性样本又会变成重复高光和明显条纹。
+
+<Callout type="tip" title="先预测：把样本数翻倍就一定更好看吗？">
+  先猜一猜：在 Lab 中把 samples per pixel 从 32 调到 64，再把 sampling
+  distribution 切到 uniform、filtering 切到 none，并把 environment mapping 切到
+  cube；方差、覆盖、LOD 和读取次数会怎样变化？先观察基线，再一次只改一个旋钮。
+</Callout>
+
+## 1. 把环境光照写成可估计的积分
+
+<Term def="用有限个方向样本的加权平均近似半球上的光照积分；样本越能代表高贡献区域，有限预算下的误差通常越小。">
+  Monte Carlo quadrature
+</Term>
+
+对一个表面点和视线方向 `v`，目标是把每个入射方向 `u` 的环境光、材质响应和入射余弦相乘，再在可见半球上累积成出射光。环境图把方向 `u` 变成纹理查询，但一张高分辨率环境图可能包含成千上万的方向。
+
+有限样本的估计是“样本贡献的平均”。样本少时，估计值会偏离真实积分；如果样本分布不均，误差会表现为噪声或重复高光。重要性采样的关键是让样本分布贴近被积函数中最有贡献的部分，而不是机械地均匀撒点。
+
+<GpuGems3Ch20IntegralDiagram />
+
+## 2. 用 PDF 把样本集中到重要方向
+
+<Term def="描述每个方向被选中的相对概率，并且在整个采样域上的积分归一为 1；峰值表示更值得分配样本的区域。">
+  probability density function
+</Term>
+
+对光泽材质，镜面反射方向附近通常贡献更大，所以可以用归一化 BRDF 作为 probability density function。它告诉我们“哪些方向常被采到”，但也带来一个必须遵守的补偿：高概率区域中的一个样本只代表很小的一片，低概率区域中的一个样本代表更大的一片。
+
+因此估计器要把每个样本乘以其 PDF 的倒数，再做平均。这样偏置分布不会改变积分的期望值。真正的最优 PDF 应该接近 BRDF 与环境光的乘积；那通常需要更多预计算，因此本章采用更容易实时改变材质和环境的 BRDF-only 近似，再配合后面的样本过滤。
+
+<GpuGems3Ch20SamplingPipelineDiagram />
+
+<Callout type="trap" title="只按 BRDF 采样却忘了除以 PDF">
+  现象 → 镜面方向附近过亮，改变光泽度后整体能量还会飘。原因 →
+  偏置采样改变了方向出现的频率，却没有用 PDF
+  的倒数恢复每个样本所代表的面积。修法 → 每个样本都携带对应的 `1 / p(u)`
+  权重，再做平均；若近似 PDF 与真实 BRDF 不同，要把误差当作可测的取舍。
+</Callout>
+
+## 3. 用 CDF 反解把均匀输入变成偏置方向
+
+<Term def="把 PDF 从起点累积到当前位置得到的函数；均匀随机输入通过它的反函数，就能按 PDF 的比例落到方向上。">
+  cumulative distribution function
+</Term>
+
+GPU 最方便得到的是 `[0, 1]` 范围内的均匀数对 `ξ1, ξ2`。要从它们生成 BRDF 方向，先把二维 PDF 拆成一个边缘分布和一个条件分布，再分别积分成 cumulative distribution function，最后用反函数得到球面角度。
+
+直觉上，CDF 是把概率“堆起来”的尺子。PDF 高的区间在尺子上占更长，更多均匀输入就会落在那里；PDF 低的区间占更短，但一旦命中，就代表更大的积分区域。对 Phong glossy lobe，可以围绕镜面方向建立局部坐标，把生成的方向变回切线空间，再变到世界空间。
+
+<GpuGems3Ch20PdfCdfDiagram />
+
+采样坐标系需要一条明确的基准：镜面方向定义局部 z 轴，切线、副切线和法线把它带回世界空间。围绕镜面方向的旋转存在一个自由轴，工程实现可以选一个不与 z 轴共线的辅助轴，再用正交化得到稳定的基。
+
+## 4. 用低差异序列铺开有限样本
+
+<Term def="一种确定性的二维低差异序列；它用数字的二进制位反转生成第二维，使固定数量的点比独立伪随机数更均匀地覆盖输入域。">
+  Hammersley sequence
+</Term>
+
+独立伪随机数会偶尔成团，也会留下空洞。样本数量只有几十个时，这种覆盖不均会直接转化为估计误差。Hammersley sequence 的第二维使用 radical inverse：把样本索引的二进制位从小数点两侧反射，得到一条稳定、均匀的低差异序列。
+
+低差异不是“不会出错的随机数”。它把噪声变成更有规律的覆盖，固定样本数下通常收敛更快，但规律性也可能显出别名，像多出几块重复的高光。因此本章不把序列当成最后一步，而是让它与 PDF 引导和 mipmap 过滤一起使用。
+
+<GpuGems3Ch20SequenceDiagram />
+
+<Callout type="trap" title="认为低差异序列可以替代所有过滤">
+  现象 → 样本点看起来均匀，但金属表面出现重复亮斑或条带。原因 →
+  确定性低差异图案把有限样本的规律暴露出来，尤其是在环境图有高对比度时。修法 →
+  保留低差异覆盖，同时根据样本 PDF 与数量选择环境图 mip
+  level；不要只把随机数换成 Hammersley 就结束。
+</Callout>
+
+## 5. 让每个样本按 PDF 选择环境图 mip
+
+<Term def="纹理金字塔中代表某个采样分辨率的层级；在本章中，它根据样本代表的立体角选择，而不是固定使用同一层。">
+  mipmap level of detail
+</Term>
+
+如果一个方向的 PDF 很低，附近很少有其他样本会落在那里，那么这个样本应该从环境图较大的邻域取平均；如果 PDF 很高，许多样本已经会共同平均那片区域，这个样本只需读取较细的邻域。样本代表的立体角与 `1 / (PDF × N)` 成正比，`N` 是样本数。
+
+环境图 mip 是天然的 GPU 平均结构：层级越高，覆盖的 texel 区域越大。实现时先根据样本立体角估算它覆盖的零级 texel 数，再取对数得到 mipmap level of detail。实践中可加入小幅偏移，让相邻样本有轻微重叠，减少锐利边界。
+
+<GpuGems3Ch20MipFilterDiagram />
+
+## 6. 用 dual-paraboloid 保住过滤邻域
+
+<Term def="把上半球和下半球分别投影到两张纹理上的环境图布局；它让每张纹理包含一部分对侧信息，减少按立方体面独立生成 mip 时的接缝。">
+  dual-paraboloid mapping
+</Term>
+
+cube map 的几何失真很小，但硬件通常按每个面独立生成 mip。跨面采样时，一个样本周围本应相邻的环境信息可能落在另一面，平均区域就会被切断。dual-paraboloid mapping 用上下两张纹理承载两个半球，每张半球纹理都带进一部分对侧信息，因此过滤时更少出现接缝。
+
+原书还对通常的抛物面映射加入约 1.2 的缩放，让投影圆周向外扩展一点，进一步增加重叠。这个选择牺牲少量纹理空间，却让低 PDF 样本的宽区域平均更接近真实环境。环境布局因此不是采样函数之外的细节，而是过滤算法的一部分。
+
+<GpuGems3Ch20EnvironmentMapDiagram />
+
+## 7. 把采样、过滤和着色合并成一个短循环
+
+```hlsl
+float3 GPUImportanceSample(float3 viewing, Texture2D environment) {
+  float3 accumulated = 0.0;
+  for (int k = 0; k < SAMPLE_COUNT; ++k) {
+    float2 xi = hammersleySequence(k, SAMPLE_COUNT);
+    float3 direction = sampleMaterial(xi, viewing);
+    float pdf = materialPdf(direction, viewing);
+    float lod = computePdfAwareLod(direction, pdf, SAMPLE_COUNT);
+    float2 uv = dualParaboloid(direction);
+    float3 light = environment.SampleLevel(linearSampler, uv, lod).rgb;
+    accumulated += light * materialWeight(direction, viewing) / pdf;
+  }
+  return accumulated / float(SAMPLE_COUNT);
+}
+```
+
+实际实现可以四个方向并行生成，预计算三角函数和低差异序列，并在代数上消掉 BRDF 与 PDF 中会相互抵消的项。重点仍然是状态依赖的顺序：生成方向、得到 PDF、计算 LOD、采环境图、累积并除以样本数。
+
+<Stepper>
+  <Step title="先用材质函数定义方向分布">
+    把观察方向、法线和材质光泽度转换成镜面局部坐标；用归一化 BRDF 作为近似 PDF，让有限预算集中到真正有贡献的方向。
+
+    <GpuGems3Ch20IntegralDiagram />
+    <GpuGems3Ch20PdfCdfDiagram />
+
+  </Step>
+  <Step title="再用低差异输入生成可复现样本">
+    用 Hammersley sequence 替代成团的独立伪随机点，将均匀输入通过 CDF 反函数变成 BRDF 权重方向，并保留 `1 / p(u)` 的补偿。
+
+    <GpuGems3Ch20SequenceDiagram />
+    <GpuGems3Ch20SamplingPipelineDiagram />
+
+  </Step>
+  <Step title="最后按样本立体角过滤环境图">
+    依据 PDF 与样本数选择 mip level；低 PDF 取宽区域平均，高 PDF 取细邻域，并用 dual-paraboloid 减少跨面过滤接缝。
+
+    <GpuGems3Ch20MipFilterDiagram />
+    <GpuGems3Ch20EnvironmentMapDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch20ImportanceSamplingLab />
+
+## 本章小结
+
+- 环境光照积分可以用有限方向样本近似
+- BRDF PDF 把样本集中到高贡献方向，但必须用倒数补偿
+- CDF 反解把均匀输入变成可控的偏置方向
+- Hammersley sequence 改善低样本数下的覆盖，过滤抑制规律性别名
+- PDF 感知 mip 与 dual-paraboloid 共同把样本区域变成可用的环境平均
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把 Lab 的 sampling distribution 切换到 uniform，再保持相同的 samples 和 filter；你预计哪些指标会变化？为什么？
+
+<Answer>
+  uniform 会把方向预算平均撒在半球上，BRDF
+  高峰附近的覆盖变差，估算方差通常上升；纹理读取次数大致不变，但每个样本代表的
+  PDF 与过滤区域分布不再围绕材质高光集中。若环境很亮而材质很粗糙，uniform
+  的差距可能缩小，这是被积函数更平坦的结果。
+</Answer>
+
+**问题 2｜诊断重复高光。** 你使用 Hammersley、32 个样本和高对比度环境图，画面出现规则亮斑。请按“序列、过滤、映射”列出三个检查点。
+
+<Answer>
+  先确认序列索引和样本数没有在每个像素完全相同地投影出重复图案；再确认 LOD
+  是否根据 PDF 和样本数变化，而不是固定 mip；最后检查 cube map
+  的面边界是否让宽区域平均被切断，必要时切换到带重叠的 dual-paraboloid 布局。
+</Answer>
+
+**问题 3｜场景选型。** 动态材质编辑器、低光泽大面积墙面和非常锐利的金属球，分别如何选择样本数与过滤策略？
+
+<Answer>
+  动态材质编辑器优先使用单 shader、BRDF 引导和 PDF-aware
+  mip，先保持较低样本数以获得交互反馈；低光泽墙面可以用更少样本，因为积分更平滑，也可以用
+  diffuse 的低频表示；锐利金属球需要更多样本和更细的高 PDF
+  mip，同时依赖低差异序列的覆盖，并观察环境布局带来的接缝。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem
+    term="Monte Carlo quadrature"
+    definition="用有限个方向样本的加权平均估计半球积分的方法，样本越有代表性，有限预算下越稳定。"
+  />
+  <GlossaryItem
+    term="probability density function"
+    definition="描述一个方向被选中概率的函数，所有方向的概率加起来必须归一。"
+  />
+  <GlossaryItem
+    term="cumulative distribution function"
+    definition="把 PDF 从起点逐步累加的函数，均匀数经过它的反函数就能生成偏置样本。"
+  />
+  <GlossaryItem
+    term="Hammersley sequence"
+    definition="用数字位反转产生的低差异二维序列，能让少量样本更均匀地覆盖输入区域。"
+  />
+  <GlossaryItem
+    term="mipmap level of detail"
+    definition="纹理金字塔的采样层级；本章用样本 PDF 和数量决定它代表多大的环境区域。"
+  />
+  <GlossaryItem
+    term="dual-paraboloid mapping"
+    definition="把上下半球放进两张带重叠的抛物面纹理，帮助环境图在过滤时保留邻域信息。"
+  />
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 20. GPU-Based Importance Sampling"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling"
+/>
