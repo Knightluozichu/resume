@@ -13498,6 +13498,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DecoratorLayerStackLab: module0.DecoratorLayerStackLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/03-behavioral/mediator": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/mediator-communication-hub-lab");
+    return {
+      MediatorCommunicationHubLab: module0.MediatorCommunicationHubLab,
+    } as ChapterMdxComponents;
+  },
   "design-patterns/03-behavioral/interpreter": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/interpreter-rule-tree-lab");
