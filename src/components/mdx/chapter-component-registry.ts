@@ -8919,6 +8919,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10IntroducingCsharpPlatformLayersDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/02-official/csharp-language-basics": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/csharp-language-basics-evidence-map-diagram");
+    return {
+      Ctc10CsharpLanguageBasicsEvidenceMapDiagram:
+        module0.Ctc10CsharpLanguageBasicsEvidenceMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/03-official/creating-types-in-csharp": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/creating-types-in-csharp-type-contract-map-diagram");
