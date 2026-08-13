@@ -8927,6 +8927,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10CsharpLanguageBasicsEvidenceMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/03-modern/ctc-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/ctc-final-review-failure-matrix-diagram");
+    return {
+      CtcFinalReviewFailureMatrixDiagram:
+        module0.CtcFinalReviewFailureMatrixDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/03-official/creating-types-in-csharp": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/creating-types-in-csharp-type-contract-map-diagram");
