@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T02:49:59.885Z
+> 生成时间：2026-08-13T02:53:47.969Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 495 |
+| manifest 证据不完整 unit | 494 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2076,7 +2076,7 @@
 
 ## coding-interviews（81 个内容页面 · published:81 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=81；正式概念覆盖率=99.4%；未映射 unit=0；证据不完整 unit=2。
+- 门禁摘要：目录=未登记，manifest=81；正式概念覆盖率=99.7%；未映射 unit=0；证据不完整 unit=1。
 
 - [x] 🚀 **00-interview-process/interview-process** — published（已发布）；score 94
     - 路径：`content/coding-interviews/00-interview-process/interview-process.mdx`
@@ -2309,9 +2309,9 @@
 - [x] 🚀 **trees/serialize-binary-trees** — published（已发布）；score 97
     - 路径：`content/coding-interviews/trees/serialize-binary-trees.mdx`
     - 正式 unit：`coi-37` explained=4/4
-- [x] 🚀 **trees/squence-of-bst** — published（已发布）；score 91
+- [x] 🚀 **trees/squence-of-bst** — published（已发布）；score 95
     - 路径：`content/coding-interviews/trees/squence-of-bst.mdx`
-    - 正式 unit：`coi-33` explained=3/4
+    - 正式 unit：`coi-33` explained=4/4
 - [x] 🚀 **trees/subtree-structure** — published（已发布）；score 94
     - 路径：`content/coding-interviews/trees/subtree-structure.mdx`
     - 正式 unit：`coi-26` explained=4/4
@@ -2321,8 +2321,6 @@
 - [x] 🚀 **trees/tree-depth** — published（已发布）；score 94
     - 路径：`content/coding-interviews/trees/tree-depth.mdx`
     - 正式 unit：`coi-55-01` explained=4/4
-- [ ] 🔴 P1 **[正式 unit coi-33] 第4章 · 面试题33 二叉搜索树的后序遍历序列** — evidence 不完整；explained=3/4
-    - 关联路径：`content/coding-interviews/trees/squence-of-bst.mdx`
 - [ ] 🔴 P1 **[正式 unit coi-34] 第4章 · 面试题34 二叉树中和为某一值的路径** — evidence 不完整；explained=3/4
     - 关联路径：`content/coding-interviews/trees/path-in-tree.mdx`
 
