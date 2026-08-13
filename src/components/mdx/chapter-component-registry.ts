@@ -8991,6 +8991,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10LinqOperatorsDecisionMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/10-official/linq-to-xml": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/linq-to-xml-boundary-map-diagram");
+    return {
+      Ctc10LinqToXmlBoundaryMapDiagram:
+        module0.Ctc10LinqToXmlBoundaryMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/11-official/xml-json-technologies": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/xml-json-technologies-ownership-flow-diagram");

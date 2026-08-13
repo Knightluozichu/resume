@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T05:50:06.685Z；旧版分数不迁移。
+> 2026-08-13T05:55:07.287Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
 - failed：1925
-- queued：226
-- passed：1665
+- queued：225
+- passed：1666
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -123,7 +123,7 @@
 | 110 | dotnet-memory | 17 | 0 | 17 | 0 | 17 |
 | 111 | go-programming-language | 15 | 0 | 15 | 0 | 15 |
 | 112 | optimized-cpp | 15 | 0 | 15 | 0 | 15 |
-| 113 | csharp-10-core | 27 | 0 | 8 | 19 | 8 |
+| 113 | csharp-10-core | 27 | 0 | 7 | 20 | 7 |
 | 114 | advanced-algorithm-engineering | 16 | 0 | 0 | 16 | 0 |
 | 115 | ai-agent | 9 | 0 | 0 | 9 | 0 |
 | 116 | ai-agent-apps | 19 | 0 | 0 | 19 | 0 |
