@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T18:06:41.340Z；旧版分数不迁移。
+> 2026-08-13T18:17:52.138Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1875
+- failed：1874
 - queued：218
-- passed：1723
+- passed：1724
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -102,12 +102,12 @@
 | 89 | jetpack-compose | 13 | 13 | 0 | 0 | 34 |
 | 90 | langchain-programming | 13 | 13 | 0 | 0 | 13 |
 | 91 | mindset-growth | 12 | 12 | 0 | 0 | 52 |
-| 92 | design-patterns | 27 | 12 | 0 | 15 | 36 |
-| 93 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
-| 94 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
-| 95 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
-| 96 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
-| 97 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 92 | geometric-data-structures | 12 | 12 | 0 | 0 | 36 |
+| 93 | go-web-programming | 12 | 12 | 0 | 0 | 36 |
+| 94 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
+| 95 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
+| 96 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
+| 97 | design-patterns | 27 | 11 | 0 | 16 | 33 |
 | 98 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
 | 99 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 100 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
