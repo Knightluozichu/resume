@@ -8967,6 +8967,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10SpanMemoryOwnershipMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/24-official/native-com-interoperability": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/native-com-interop-boundary-map-diagram");
+    return {
+      Ctc10NativeComInteropBoundaryMapDiagram:
+        module0.Ctc10NativeComInteropBoundaryMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-functional-programming/00-basics/cfp-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/csharp-functional-programming/cfp-learning-map");
