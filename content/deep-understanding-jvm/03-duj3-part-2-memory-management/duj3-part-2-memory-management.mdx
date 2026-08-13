@@ -1,56 +1,258 @@
 ---
-title: 第二部分 自动内存管理
-description: 第二部分 自动内存管理覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "第二部分 自动内存管理"
+description: "用一条可重放的证据链理解 Java 运行时的堆、线程栈、非堆与本地内存，并用 GC 日志和 NMT 把资源猜测变成可核对的诊断。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: design
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-part-2-memory-management
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3Part2MemoryManagementEvidenceMap } from "@/components/mdx/deep-understanding-jvm/duj3-part-2-memory-management-evidence-map";
 
-{/* DUJ3_QUALITY_V2 */}
+# 第二部分 自动内存管理
 
-## 为什么从“内存—GC诊断路线台”开始
+程序运行一段时间后，为什么会越来越慢、突然停顿，甚至在看起来还有空间时退出？如果只盯着一个数字，往往无法分辨是对象太多、回收节奏不合适，还是进程在别的地方消耗了资源。
 
-第二部分 自动内存管理不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。内存—GC诊断路线台沿“allocation → reachability → collection → native memory → evidence”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+本部分建立一张运行时资源地图：先观察数据怎样进入程序，再追踪哪些数据仍然有用，最后把回收记录、进程外资源和重放条件放进同一份档案。没有这条链，调参只能变成碰运气。
 
-第二部分 自动内存管理固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变资源区域或压力场景；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+<Objectives>
 
-## 来源、勘误与独立重写边界
+- 能解释堆、线程私有区域、非堆和本地内存在一次运行中的责任边界。
+- 能修改一个资源或压力条件，保存 GC 日志、NMT 摘要、进程限制和退出信号，定位首个异常分叉。
+- 能回答：看到堆使用量下降后，为什么仍不能单独断定整个 Java 进程已经释放了足够内存？
 
-第二部分 自动内存管理依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。第二部分 自动内存管理未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
-
-第二部分 自动内存管理保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。第二部分 自动内存管理的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
-
-## 本章跨层合同与章专属探针
-
-、、、、。
-
-第二部分 自动内存管理的通过不变量是“堆、非堆、线程、代码缓存和本地分配使用同一时间线解释”。第二部分 自动内存管理的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
-
-第二部分 自动内存管理使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存GC日志、NMT与进程资源，不能只复制命令截图：
-
-```bash
-java -XX:NativeMemoryTracking=summary -Xlog:gc*=info App
-jcmd PID VM.native_memory summary
-```
-
-
-## 官方目录逐项深读
-
-### 第二部分 自动内存管理
-
-**四级证据 1/1。** 第二部分 自动内存管理中的第二部分 自动内存管理：区分堆、栈、元空间、直接内存与本地分配，限制资源后把异常和NMT差值映射到具体区域。第二部分 自动内存管理固定压力场景为“突发”，只把资源区域从“堆”切到“本地内存”，以GC日志、NMT与进程资源定位第一处变化并验证“堆、非堆、线程、代码缓存和本地分配使用同一时间线解释”。
+</Objectives>
 
 ## 三个必须主动触发的误区
 
+<Callout type="trap" title="把堆使用量当成进程总内存">
+  **现象 →** 监控显示堆占用下降，就认为进程一定已经恢复。 **原因 →**
+  线程栈、元空间、代码缓存、直接缓冲区和本地库都可能在堆外增长。 **修法 →**
+  同时保存堆曲线、NMT 摘要、线程数量、进程 RSS 与容器限制，按同一时间线对照。
+</Callout>
 
-## 练习、答案与282节点验证
+<Callout type="trap" title="把一次 GC 停顿当成收集器结论">
+  **现象 →** 一次 Full GC 很慢，于是立刻更换收集器或堆参数。 **原因 →**
+  单次事件无法区分晋升压力、根扫描、类元数据或本地资源争用。 **修法 →**
+  固定负载和采样窗口，保留连续 GC 日志，并用最小改动的对照重放。
+</Callout>
 
+<Callout type="trap" title="只看工具最后一行摘要">
+  **现象 →** `jcmd` 命令返回成功，便把摘要当作完整诊断。 **原因 →**
+  摘要隐藏了采样时刻、参数、失败前的日志和探针成本。 **修法 →**
+  保存原始输出、命令退出码、时间戳、PID 生命周期和清理记录；无法对齐时标为
+  unknown。
+</Callout>
 
+## 先建立五个工作词
+
+本部分先用五个词搭好共同语言。它们不是性能排名，而是帮助你把观测信号放回正确的责任区域。
+
+<Term def="对象通常被创建和回收的运行时区域；它的曲线只能说明堆内对象，不等于整个进程的内存。">
+  堆
+</Term>
+
+<Term def="从一组根出发沿引用关系仍能找到对象的状态；不可达是回收器判断对象可清理的重要依据。">
+  可达性
+</Term>
+
+<Term def="识别并处理不再需要对象的运行时过程；它会产生日志和停顿，但不负责解释所有堆外资源。">
+  垃圾收集
+</Term>
+
+<Term def="由虚拟机、类库或本地库在堆之外申请的内存；需要用进程和原生追踪信号单独核对。">
+  本地内存
+</Term>
+
+<Term def="记录虚拟机内部本地内存分类与调用来源的诊断机制；开启它会有成本，实验档案必须注明开关状态。">
+  原生内存追踪
+</Term>
+
+## 一张内存地图：每个信号都有边界
+
+先把运行时想成一栋分区的建筑，而不是一个“内存桶”。对象通常进入堆，线程的调用状态留在线程栈，类元数据和编译产物落在非堆，本地库和直接缓冲区可能绕过堆。地图的作用不是给出某个版本的固定大小，而是告诉你下一条证据应该去哪里取。
+
+### 第二部分 自动内存管理
+
+本部分的正式范围是“第二部分 自动内存管理”。它把分配、对象可达性、回收事件、堆外区域和本地资源放在同一条诊断路线上；通过不变量是：同一时间线能够解释堆、非堆、线程、代码缓存和本地分配的变化，而不是用一个堆参数替代整段证据。
+
+### 堆：对象的主要落点
+
+堆适合回答“对象分配和回收发生了什么”。先记录初始与峰值容量、已用量、回收前后存活量和压力场景，再询问对象是否被根或其他对象继续引用。堆曲线下降说明一部分对象被处理，不说明线程栈、元空间或本地缓冲区同时下降。
+
+### 线程栈：线程私有的调用状态
+
+每个线程都需要保存调用帧、局部变量和返回位置；线程数量、栈大小和阻塞状态会改变进程外观。排查线程栈问题时，至少把线程数、线程转储、启动参数和进程 RSS 放在同一采样点，避免把“堆还很空”当成线程资源安全的证明。
+
+### 元空间与代码缓存：非堆不是一个区域
+
+类元数据、运行时结构和即时编译生成的代码有各自的生命周期。类加载器泄漏可能让元数据持续增长，编译活动也可能让代码缓存产生压力；这两类现象不能用一次对象回收的结果代替。诊断时要把类加载统计、编译日志和 GC 日志按时间排序。
+
+### 本地内存：虚拟机之外的账
+
+直接缓冲区、本地库、线程栈和虚拟机内部结构都可能使用本地内存。容器限制、cgroup 计量、分配器缓存和 mmap 映射会让进程 RSS 与堆曲线脱钩。原生内存追踪能帮助分类，但必须注明开启方式、采样点和探针开销，不能把工具摘要当成无损的全量账本。
+
+## 从分配到证据的五步路线
+
+先预测：如果只把分配压力提高一倍，哪一条曲线会先改变？先写出你的预测、预期信号和可能推翻它的反例，再播放路线；动画中的高亮只表示诊断顺序，不是某次真实运行的吞吐或停顿数据。
+
+<Stepper>
+  <Step title="1. 固定输入与边界">
+    记录 JDK、虚拟机、供应商、操作系统、容器限制、启动参数、源码或 Class 哈希和基线工作量。先决定哪些信号属于堆内，哪些必须从进程或本地追踪取得。
+
+    <Duj3Part2MemoryManagementEvidenceMap />
+
+  </Step>
+  <Step title="2. 产生可控分配压力">
+    只改变分配速率、对象存活时间或线程数量中的一项，保存命令、退出码、未过滤日志和采样窗口。不要同时换收集器和堆上限，否则首个分叉无法解释。
+
+    <Duj3Part2MemoryManagementEvidenceMap />
+
+  </Step>
+  <Step title="3. 追踪可达性与回收">
+    结合 GC 日志、堆转储或类加载信号，区分“对象仍然可达”和“回收器尚未处理”。停顿发生时保留前后事件，不把最终汇总替代原始时间线。
+
+    <Duj3Part2MemoryManagementEvidenceMap />
+
+  </Step>
+  <Step title="4. 对照堆外与本地资源">
+    用 NMT 摘要、线程转储、进程 RSS 和容器计量解释堆外变化。开启探针前记录开关状态与成本，关闭后清理临时文件，避免诊断动作本身改变结论。
+
+    <Duj3Part2MemoryManagementEvidenceMap />
+
+  </Step>
+  <Step title="5. 重放并交接结论">
+    使用同一输入和时间窗口重放，比较首个分叉、日志哈希、资源曲线与退出信号。若仍有未解释的堆外差异，结论应保持 hold 或 unknown，而不是强行归因给 GC。
+
+    <Duj3Part2MemoryManagementEvidenceMap />
+
+  </Step>
+</Stepper>
+
+## 用工具把猜测变成证据
+
+下面的命令只展示采集入口，不承诺在每台机器上直接成功。先建立受控目录，记录 PID 生命周期和命令退出码，再保存原始输出；JDK 12 语境与现代 JDK 25 工具的默认值必须分开核验。
+
+```bash
+mkdir -p memory-evidence
+java -version 2> memory-evidence/java-version.txt
+java -XX:NativeMemoryTracking=summary -Xlog:gc*=info:file=memory-evidence/gc.log:time,uptime,level,tags App
+jcmd "$PID" VM.native_memory summary > memory-evidence/nmt-summary.txt
+ps -o pid,rss,thcount,etime,command -p "$PID" > memory-evidence/process.txt
+```
+
+命令本身只是输入。档案还要写下采样开始和结束时间、工作量、容器或操作系统限制、探针成本、清理动作以及未过滤日志的校验值。若 `jcmd` 找不到目标进程，先把 PID 生命周期记为失败证据，不要把空摘要当成“没有本地内存”。
+
+```yaml
+unit: duj3-part-2-memory-management
+baseline: heap-and-native-memory
+changed_axis: allocation-rate
+signals: gc-log,nmt-summary,thread-count,rss
+replay: same-input-same-window
+unknowns: explicit
+cleanup: recorded
+```
+
+## 代码对照：让压力场景可复跑
+
+这个最小程序让对象存活时间成为唯一显式变量。它不生成“真实业务性能分数”，只为 GC 日志和 NMT 摘要提供可重复的输入。
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public final class AllocationProbe {
+  public static void main(String[] args) throws Exception {
+    int rounds = args.length > 0 ? Integer.parseInt(args[0]) : 8;
+    List<byte[]> survivors = new ArrayList<>();
+    for (int round = 0; round < rounds; round++) {
+      for (int i = 0; i < 4000; i++) {
+        byte[] sample = new byte[1024];
+        if (i % 400 == 0) survivors.add(sample);
+      }
+      Thread.sleep(150);
+      if (survivors.size() > 12) survivors.subList(0, 4).clear();
+    }
+    System.out.println("survivors=" + survivors.size());
+  }
+}
+```
+
+先固定 `rounds`、数组大小、保留比例和睡眠时间，再只修改其中一项。对照两次运行时，除了 GC 日志，还要比较进程 RSS、线程数量和 NMT 分类；否则只能知道对象压力变了，不能知道进程资源是否同步变化。
+
+## 练习、答案与诊断验收
+
+<Exercises>
+
+**问题 1：分层判断。** 堆使用量下降，但进程 RSS 继续上升。请列出至少两个仍需核对的区域，并说明各自的证据入口。
+
+<Answer>
+  先核对线程栈与线程数量、元空间和代码缓存，再核对直接缓冲区、本地库和分配器缓存。前者可结合线程转储、类加载或编译日志，后者要结合
+  NMT、进程 RSS、容器计量与本地库配置；单独看 GC 日志不能覆盖这些区域。
+</Answer>
+
+**问题 2：改 Demo 代码。** 修改 `AllocationProbe`，让每轮只保留两种不同大小的对象，并写出你会固定和采集的字段。
+
+<Answer>
+  可以把数组大小和保留比例做成两个命令行参数，但每次实验只改变一个参数。固定
+  JDK、启动参数、轮数、工作量与时间窗，采集 GC 原始日志、NMT
+  摘要、线程数、RSS、退出码和清理记录。
+</Answer>
+
+**问题 3：重放判定。** 两次运行的 GC 停顿接近，但 NMT 的线程分类明显不同，能否直接说收集器没有问题？
+
+<Answer>
+  不能。先比较线程数、线程栈参数、启动顺序、容器限制、探针开关和 PID
+  生命周期，再用同一输入重放。只有差异被具体输入解释、堆内外证据相互吻合，才可以缩小归因范围；否则保留
+  unknown。
+</Answer>
+
+</Exercises>
+
+## 本部分小结
+
+- 运行时内存必须按堆、线程、非堆和本地区域分层观察。
+- 可达性解释对象为何存活，GC 日志解释回收事件，不替代堆外证据。
+- NMT、线程转储、RSS 和容器计量要绑定同一时间线。
+- 只改变一个压力条件，才能解释首个异常分叉。
+- 重放失败或证据不一致时，结论应保持 hold 或 unknown。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="堆">
+    程序对象通常放置的区域；它的使用量变化不代表整个 Java 进程的内存变化。
+  </GlossaryItem>
+  <GlossaryItem term="可达性">
+    从线程、类或其他根沿引用还能找到对象；找不到的对象才可能进入清理候选。
+  </GlossaryItem>
+  <GlossaryItem term="垃圾收集">
+    运行时处理不再需要对象的过程；它能解释一部分堆变化，不能解释所有本地资源。
+  </GlossaryItem>
+  <GlossaryItem term="本地内存">
+    在堆之外由虚拟机、类库或本地库申请的内存，需要单独采集和归因。
+  </GlossaryItem>
+  <GlossaryItem term="原生内存追踪">
+    对虚拟机内部本地内存分类的诊断机制；开启状态和探针成本必须写进实验档案。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>

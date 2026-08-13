@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T09:21:20.476Z；旧版分数不迁移。
+> 2026-08-13T09:31:30.050Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1912
+- failed：1911
 - queued：218
-- passed：1686
+- passed：1687
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -40,10 +40,10 @@
 | 27 | unity-urp-shaders | 23 | 23 | 0 | 0 | 92 |
 | 28 | game-engine-architecture-3e | 22 | 22 | 0 | 0 | 93 |
 | 29 | unity-shader-essentials | 22 | 22 | 0 | 0 | 88 |
-| 30 | deep-understanding-jvm | 25 | 22 | 0 | 3 | 66 |
-| 31 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
-| 32 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
-| 33 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 30 | kong-gateway | 22 | 22 | 0 | 0 | 61 |
+| 31 | mysql-essentials | 22 | 22 | 0 | 0 | 44 |
+| 32 | two-week-scripting-language | 21 | 21 | 0 | 0 | 87 |
+| 33 | deep-understanding-jvm | 25 | 21 | 0 | 4 | 63 |
 | 34 | hackers-delight | 21 | 21 | 0 | 0 | 63 |
 | 35 | shader-practice | 21 | 21 | 0 | 0 | 63 |
 | 36 | mastering-ethereum | 20 | 20 | 0 | 0 | 100 |

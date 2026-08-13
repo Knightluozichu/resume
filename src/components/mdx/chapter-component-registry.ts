@@ -13184,6 +13184,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Chapter1ApproachingJavaEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/03-duj3-part-2-memory-management/duj3-part-2-memory-management":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-part-2-memory-management-evidence-map");
+      return {
+        Duj3Part2MemoryManagementEvidenceMap:
+          module0.Duj3Part2MemoryManagementEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
