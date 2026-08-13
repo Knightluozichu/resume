@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T03:06:19.267Z
+> 生成时间：2026-08-13T03:10:45.741Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 491 |
+| manifest 证据不完整 unit | 490 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2467,7 +2467,7 @@
 
 ## cpp-concurrency（12 个内容页面 · passed:12 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=98.4%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 
 - [x] ✅ **advanced/designing-concurrent-code** — passed；score 100
     - 路径：`content/cpp-concurrency/advanced/designing-concurrent-code.mdx`
@@ -2478,9 +2478,9 @@
 - [x] ✅ **advanced/testing-debugging** — passed；score 100
     - 路径：`content/cpp-concurrency/advanced/testing-debugging.mdx`
     - 正式 unit：`ccia2-11` explained=5/5
-- [x] ✅ **advanced/thread-pools** — passed；score 97
+- [x] ✅ **advanced/thread-pools** — passed；score 100
     - 路径：`content/cpp-concurrency/advanced/thread-pools.mdx`
-    - 正式 unit：`ccia2-09` explained=4/5
+    - 正式 unit：`ccia2-09` explained=5/5
 - [x] ✅ **data-structures/lock-based** — passed；score 99
     - 路径：`content/cpp-concurrency/data-structures/lock-based.mdx`
     - 正式 unit：`ccia2-06` explained=5/5
@@ -2505,8 +2505,6 @@
 - [x] ✅ **shared-data/synchronizing-operations** — passed；score 100
     - 路径：`content/cpp-concurrency/shared-data/synchronizing-operations.mdx`
     - 正式 unit：`ccia2-04` explained=7/7
-- [ ] 🔴 P1 **[正式 unit ccia2-09] Advanced thread management** — evidence 不完整；explained=4/5
-    - 关联路径：`content/cpp-concurrency/advanced/thread-pools.mdx`
 
 ## cpp-high-performance（13 个内容页面 · passed:13 · ✅ 书级门禁条件满足）
 
