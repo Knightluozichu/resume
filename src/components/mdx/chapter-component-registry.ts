@@ -13448,6 +13448,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       BridgeVariationAxisLab: module0.BridgeVariationAxisLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/02-structural/composite": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/composite-permission-tree-lab");
+    return {
+      CompositePermissionTreeLab: module0.CompositePermissionTreeLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
