@@ -13462,6 +13462,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       FacadeSubsystemGatewayLab: module0.FacadeSubsystemGatewayLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/02-structural/flyweight": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/flyweight-forest-memory-lab");
+    return {
+      FlyweightForestMemoryLab: module0.FlyweightForestMemoryLab,
+    } as ChapterMdxComponents;
+  },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
