@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T09:06:08.946Z
+> 生成时间：2026-08-13T09:21:45.095Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -4319,7 +4319,7 @@
 
 ## deep-understanding-jvm（25 个内容页面 · failed:22 passed:3 · 🚫 门禁阻断 23 项）
 
-- 门禁摘要：目录=未登记，manifest=23；正式概念覆盖率=99.6%；未映射 unit=0；证据不完整 unit=1。
+- 门禁摘要：目录=未登记，manifest=23；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：deep-understanding-jvm: publication-policy-not-approved。
 
 - [x] ✅ **00-duj3-official-learning-map/duj3-official-learning-map** — passed；score 100
@@ -4330,7 +4330,7 @@
     - 正式 unit：`duj3-part-1-approaching-java` explained=1/1
 - [x] ✅ **02-duj3-01-approaching-java/duj3-01-approaching-java** — passed；score 99
     - 路径：`content/deep-understanding-jvm/02-duj3-01-approaching-java/duj3-01-approaching-java.mdx`
-    - 正式 unit：`duj3-01-approaching-java` explained=25/26
+    - 正式 unit：`duj3-01-approaching-java` explained=26/26
 - [ ] ❌ P1 **03-duj3-part-2-memory-management/duj3-part-2-memory-management** — failed；score 35；门禁阻断: status=failed、score=35<90、dimensionFailures=knowledge,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: knowledge、pedagogy、visual、practice、ux、engineering
     - 路径：`content/deep-understanding-jvm/03-duj3-part-2-memory-management/duj3-part-2-memory-management.mdx`
     - 正式 unit：`duj3-part-2-memory-management` explained=1/1
@@ -4397,8 +4397,6 @@
 - [ ] ❌ P1 **24-duj3-official-final-review/duj3-official-final-review** — failed；score 45；门禁阻断: status=failed、score=45<90、dimensionFailures=pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,visual-evidence-missing；hardBlockers: objectives-block-count、attribution-block-count、visual-evidence-missing；维度缺口: pedagogy、visual、practice、ux、engineering
     - 路径：`content/deep-understanding-jvm/24-duj3-official-final-review/duj3-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
-- [ ] 🔴 P1 **[正式 unit duj3-01-approaching-java] 第1章 走近Java** — evidence 不完整；explained=25/26
-    - 关联路径：`content/deep-understanding-jvm/02-duj3-01-approaching-java/duj3-01-approaching-java.mdx`
 
 ## design-patterns（27 个内容页面 · failed:27 · 🚫 门禁阻断 28 项）
 
