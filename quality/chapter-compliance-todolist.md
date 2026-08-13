@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T07:38:25.262Z
+> 生成时间：2026-08-13T07:47:13.984Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -4129,7 +4129,7 @@
 - [x] ✅ **05-quality-production/dnj-11-productization** — passed；score 92
     - 路径：`content/deep-nodejs/05-quality-production/dnj-11-productization.mdx`
     - 正式 unit：`dnj-unit-11` explained=28/28
-- [x] ✅ **06-appendices/dnj-appendix-a-installation** — passed；score 90
+- [x] ✅ **06-appendices/dnj-appendix-a-installation** — passed；score 96
     - 路径：`content/deep-nodejs/06-appendices/dnj-appendix-a-installation.mdx`
     - 正式 unit：`dnj-unit-12` explained=6/6
 - [ ] ❌ P1 **06-appendices/dnj-appendix-b-debugging** — failed；score 40；门禁阻断: status=failed、score=40<90、dimensionFailures=source,pedagogy,visual,practice,ux,engineering、hardBlockers=objectives-block-count,attribution-block-count,cross-chapter-template-copy,quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: objectives-block-count、attribution-block-count、cross-chapter-template-copy、quality-v2-unreviewed；维度缺口: source、pedagogy、visual、practice、ux、engineering
@@ -4145,8 +4145,6 @@
     - 路径：`content/deep-nodejs/07-review/dnj-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-- [ ] 🔴 P1 **[正式 unit dnj-unit-12] 附录 A 安装 Node** — evidence 不完整；explained=3/6
-    - 关联路径：`content/deep-nodejs/06-appendices/dnj-appendix-a-installation.mdx`
 
 ## deep-opengl（10 个内容页面 · passed:10 · ✅ 书级门禁条件满足）
 
