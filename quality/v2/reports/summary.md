@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T10:47:55.254Z；旧版分数不迁移。
+> 2026-08-13T10:57:28.951Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1904
+- failed：1903
 - queued：218
-- passed：1694
+- passed：1695
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -89,15 +89,15 @@
 | 76 | game-programmer-path | 14 | 14 | 0 | 0 | 69 |
 | 77 | effective-executive | 14 | 14 | 0 | 0 | 56 |
 | 78 | how-computers-work | 14 | 14 | 0 | 0 | 56 |
-| 79 | deep-understanding-jvm | 25 | 14 | 0 | 11 | 42 |
-| 80 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
-| 81 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
-| 82 | unity-master | 14 | 14 | 0 | 0 | 42 |
-| 83 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
-| 84 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
-| 85 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
-| 86 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
-| 87 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 79 | gpu-pro | 14 | 14 | 0 | 0 | 42 |
+| 80 | multiplayer-game-architecture | 14 | 14 | 0 | 0 | 42 |
+| 81 | unity-master | 14 | 14 | 0 | 0 | 42 |
+| 82 | unity-mmo-game | 14 | 14 | 0 | 0 | 42 |
+| 83 | large-scale-llm-practice | 14 | 14 | 0 | 0 | 14 |
+| 84 | illustrated-nev | 13 | 13 | 0 | 0 | 62 |
+| 85 | unity-game-cases | 13 | 13 | 0 | 0 | 52 |
+| 86 | vehicle-software-intelligence | 13 | 13 | 0 | 0 | 52 |
+| 87 | deep-understanding-jvm | 25 | 13 | 0 | 12 | 39 |
 | 88 | dsa-cpp | 13 | 13 | 0 | 0 | 39 |
 | 89 | grokking-algorithms-2e | 13 | 13 | 0 | 0 | 39 |
 | 90 | unity-screen-effects | 13 | 13 | 0 | 0 | 39 |
