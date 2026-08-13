@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T15:11:32.514Z；旧版分数不迁移。
+> 2026-08-13T15:22:35.715Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1888
+- failed：1887
 - queued：218
-- passed：1710
+- passed：1711
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -23,11 +23,11 @@
 | 10 | fluent-python | 26 | 26 | 0 | 0 | 78 |
 | 11 | jvm-troubleshooting | 26 | 26 | 0 | 0 | 78 |
 | 12 | mythical-man-month | 26 | 26 | 0 | 0 | 78 |
-| 13 | design-patterns | 27 | 25 | 0 | 2 | 75 |
-| 14 | programmers-math | 25 | 25 | 0 | 0 | 75 |
-| 15 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
-| 16 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
-| 17 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 13 | programmers-math | 25 | 25 | 0 | 0 | 75 |
+| 14 | spring-in-action | 25 | 25 | 0 | 0 | 75 |
+| 15 | unity-hmi | 25 | 25 | 0 | 0 | 75 |
+| 16 | tcp-ip-illustrated-vol1 | 25 | 25 | 0 | 0 | 70 |
+| 17 | design-patterns | 27 | 24 | 0 | 3 | 72 |
 | 18 | introduction-to-algorithms | 39 | 24 | 0 | 15 | 72 |
 | 19 | unity-cpp-network-game | 24 | 24 | 0 | 0 | 72 |
 | 20 | kubernetes-in-action | 24 | 24 | 0 | 0 | 68 |
