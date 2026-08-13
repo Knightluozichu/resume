@@ -9015,6 +9015,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10DisposalGcOwnershipFlowDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/13-official/diagnostics": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/diagnostics-evidence-ladder-diagram");
+    return {
+      Ctc10DiagnosticsEvidenceLadderDiagram:
+        module0.Ctc10DiagnosticsEvidenceLadderDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/14-official/concurrency-and-asynchrony": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/concurrency-and-asynchrony-execution-flow-diagram");
