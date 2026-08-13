@@ -8903,6 +8903,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CapOfficialFinalReviewLab: module0.CapOfficialFinalReviewLab,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/00-lang/ctc-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/learning-path-dependency-map-diagram");
+    return {
+      Ctc10LearningPathDependencyMapDiagram:
+        module0.Ctc10LearningPathDependencyMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/03-official/creating-types-in-csharp": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/creating-types-in-csharp-type-contract-map-diagram");
