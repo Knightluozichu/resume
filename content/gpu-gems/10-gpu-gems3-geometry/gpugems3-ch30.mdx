@@ -1,0 +1,259 @@
+---
+title: "GPU Gems 3 · Chapter 30. Real-Time Simulation and Rendering of 3D Fluids"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 30
+description: "从欧拉网格和速度场出发，解释三维流体的平流、压力投影、固体边界、level set 与体积光线行进如何在 GPU 上实时闭环。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-30-real-time-simulation-and-rendering-3d-fluids"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-30
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch30AdvectionDiagram,
+  GpuGems3Ch30EulerianGridDiagram,
+  GpuGems3Ch30FluidLab,
+  GpuGems3Ch30ObstacleLevelSetDiagram,
+  GpuGems3Ch30PipelineDiagram,
+  GpuGems3Ch30PressureDiagram,
+  GpuGems3Ch30RayMarchDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch30-fluids";
+
+<Objectives>
+
+- 能解释欧拉网格、速度平流和压力投影如何把流体约束拆成 GPU 可执行的阶段
+- 能修改 Real-Time 3D Fluid Lab 的流体类型、平流方案、压力迭代、障碍物和光线步数，比较细节与成本
+- 能回答：为什么烟雾需要体积光线行进，而水需要 level set 零等值面和不同的表面渲染路径
+
+</Objectives>
+
+## 先问：为什么一团烟不是一堆会飘的粒子
+
+想象一个透明盒子里有一股烟。烟不是几颗点在移动，而是盒子中每个位置都有“这里有多少烟”和“这里往哪儿流”的数值；下一刻，每个位置会把自己的数值带到别处，同时不能凭空压缩或膨胀。
+
+本章解决的问题是：如何在固定的三维空间中同时推进这些变化，并把体积数据转换成能与普通场景遮挡、合成的画面。
+
+没有这套结构，粒子系统很难表现烟雾的连续体积，纯模拟又可能只能离线完成；如果只推进速度不纠正压缩，烟会出现不自然的汇聚，水则会逐渐漏出或消失。
+
+<Callout type="tip" title="先预测：压力迭代翻倍会改变哪一项？">
+  在 Lab 中保持烟雾和移动障碍物，把压力迭代从 8 调到 48。先猜散度残差、细节、内存和光线采样中谁会变化，再切换到 MacCormack 比较。
+</Callout>
+
+## 1. 固定网格让三维流体适合 GPU
+
+<Callout type="trap" title="误区：把每个网格单元当成会移动的粒子">
+  **现象 →** 计算结果在密度高的区域出现空洞，邻居访问还需要不断重建连接关系。
+
+**原因 →** 欧拉方法的单元位置是固定的，移动的是速度、密度、压力等场值；把单元本身移动会混淆数据布局和物理含义。
+
+**修法 →** 保持规则体素网格不动，所有 kernel 对当前单元读取邻居场值并写到下一张 3D 纹理。
+
+</Callout>
+
+<Term def="计算元素固定在空间网格上，只有速度、密度和压力等数值随时间变化的流体离散方式。">
+  Eulerian discretization
+</Term>
+
+把模拟区域切成规则立方体单元。每个单元可以保存向量速度，也可以保存烟雾密度、火焰温度或压力等标量。由于单元排列稳定，它们天然对应三维纹理的 texel，GPU 可以让一个 pixel shader 或 compute kernel 负责一个单元。
+
+如果硬件能直接写三维纹理，就把 slice index 作为目标层；如果只能渲染二维目标，就逐层绘制与体积宽高相同的 quad。关键是每个阶段都从上一张纹理读、向另一张纹理写，不在同一张纹理中原地覆盖。
+
+<GpuGems3Ch30EulerianGridDiagram />
+
+## 2. 平流沿速度反向回溯，把旧值带到新单元
+
+<Term def="描述流体场值随局部速度移动的过程；实现时从当前单元沿反方向追踪上一时刻位置，再采样旧场。">
+  advection
+</Term>
+
+对当前网格单元，取它的中心位置和速度 `u`，沿 `-u · Δt` 回到上一时刻的位置，在旧的速度或密度纹理中插值。这个半拉格朗日思路不追踪每个粒子，而是让固定单元询问“我现在收到的量来自哪里”。
+
+```hlsl
+float3 cell = cellIndex2TexCoord(in.cellIndex);
+float3 back = cell - timestep * sample(velocityOld, cell);
+float density = sample(densityOld, back);
+float3 velocity = sample(velocityOld, back);
+return float4(velocity, density);
+```
+
+这段伪代码刻意省略边界采样和三维纹理细节，但保留了核心顺序：读旧速度 → 反向回溯 → 读旧属性 → 写新属性。半拉格朗日法对较大的时间步很稳定，却会把细节逐渐抹平。
+
+<Term def="用一次正向半拉格朗日和一次反向回溯估计误差，再修正结果的高阶平流方案；它保留更多细节但需要额外采样。">
+  MacCormack advection
+</Term>
+
+用 MacCormack 可以把“稳定但过度平滑”的结果往回修正，提高烟雾细节；代价是多几个中间场和对过冲的限制。实时应用通常让稳定方案作为默认，再在有预算时开启高阶方案。
+
+<GpuGems3Ch30AdvectionDiagram />
+
+## 3. 压力投影把速度拉回不可压缩约束
+
+只做平流和外力，速度场可能在某些单元汇聚或发散。对于不可压缩流体，体积不应凭空增加或减少，因此需要让最终速度的散度接近零。
+
+先得到受平流和外力影响的临时速度 `u*`，再解一个压力场 `p`，从 `u*` 中减去压力梯度。压力不是要渲染出来的烟，而是纠正速度约束的中间量。
+
+GPU 上常用 Jacobi 迭代：每次只读取六个相邻单元的压力和当前散度，写出一张新的压力纹理，然后交换双缓冲。迭代次数不足时，烟雾可能还能接受轻微误差，水却会慢慢穿过容器底部，因为压力信息还没传播到整个液体域。
+
+<Term def="把压力梯度从临时速度中减掉的步骤；理想结果满足散度为零，表示流体不可压缩。">
+  pressure projection
+</Term>
+
+压力投影越精确，速度约束越好，但每一次迭代都要多次纹理读取。工程上要在目标帧率、场景尺度和可见误差之间选取迭代次数。
+
+<GpuGems3Ch30PressureDiagram />
+
+## 动手走一遍：模拟与渲染的四段 GPU 管线
+
+<Stepper>
+  <Step title="先建立固定三维网格">
+    在 3D 纹理中为每个单元保存速度、密度、温度或压力，逐 slice 运行 kernel。
+
+    <GpuGems3Ch30EulerianGridDiagram />
+
+  </Step>
+  <Step title="再沿速度反向平流">
+    对每个单元反向追踪上一时刻位置，从旧场插值出新的速度和标量。
+
+    <GpuGems3Ch30AdvectionDiagram />
+
+  </Step>
+  <Step title="然后做压力投影">
+    计算散度、迭代压力并减去梯度，使速度场接近不可压缩。
+
+    <GpuGems3Ch30PressureDiagram />
+
+  </Step>
+  <Step title="最后把体积变成画面">
+    预计算射线入口和穿越距离，沿射线采样密度并前到后合成，遇到遮挡或 alpha 饱和就停止。
+
+    <GpuGems3Ch30RayMarchDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch30PipelineDiagram />
+
+## 4. 固体边界要同时提供 inside/outside 和障碍物速度
+
+<Callout type="trap" title="误区：只把障碍物当成一面不可见的墙">
+  **现象 →** 静态容器能挡住流体，移动桨叶附近却出现穿透、吸附或反向速度异常。
+
+**原因 →** 动态边界不仅要告诉 solver 哪些单元是 solid，还要告诉它边界附近固体的运动速度。
+
+**修法 →** 更新 inside-outside 体素纹理和相邻固体速度纹理，在压力和边界采样时施加 free-slip 的法向速度约束。
+
+</Callout>
+
+复杂障碍物可以先做 inside-outside 体素标记，再把模型运动产生的速度写入边界附近的单元。free-slip 的直觉是：流体不能穿过固体法向，但可以沿着固体表面滑动。压力求解遇到 solid 邻居时，不应把它当作普通流体单元读取。
+
+<GpuGems3Ch30ObstacleLevelSetDiagram />
+
+## 5. 烟、火和水共享网格，却需要不同的可视化
+
+烟雾和火焰关注的是整个体积里的密度、温度或颜色。它们适合在每个像素沿射线采样体积，按前到后 alpha 累积；累积 alpha 足够大时可以提前退出。
+
+<Term def="把相机射线分成许多小段，逐段读取三维场值并累积颜色与透明度的体积渲染方法。">
+  volume ray marching
+</Term>
+
+先渲染体积背面和正面，得到每个屏幕像素的射线入口与穿越距离，再执行全屏 ray-marching。场景深度还可以截断射线，避免流体穿过墙或角色继续出现在后方。
+
+水关注的是空气与液体的界面，而不是整个液体体积的密度。用一个带符号的距离场记录每个单元到水面的距离，沿射线找到零等值面，再用梯度估计法线进行表面着色。水还可以从背景纹理中偏移采样坐标，产生廉价的折射近似。
+
+<Term def="记录到液体表面有符号距离的标量场；负值表示液体，正值表示空气，零值就是表面。">
+  level set
+</Term>
+
+<GpuGems3Ch30RayMarchDiagram />
+
+<GpuGems3Ch30FluidLab />
+
+先猜一猜：把 smoke 切成 water，再把压力迭代降到很低，最先出现的是颜色变平、体积漂移还是水面穿底？在 Lab 中一次改一个参数，比较散度残差、压力质量、光线采样和内存预算。
+
+## 6. 数值稳定性和显存预算决定真实可用性
+
+简单方案的魅力是能在 GPU 上稳定并行，但“看起来稳定”不等于每个物理量都精确。半拉格朗日平流可能损失高频细节，Jacobi 压力求解收敛慢，水的体积误差又比烟雾更容易被看见。
+
+模拟需要保存速度、压力、密度、温度和临时纹理，体素化还要保存 inside/outside 与障碍物速度；渲染则需要 ray data 与场景深度。临时纹理可以在不同阶段复用，但总预算仍随网格体积增长。
+
+## 小结
+
+- 欧拉网格固定单元位置，让场值直接映射到 3D 纹理。
+- 平流负责搬运，压力投影负责把速度拉回不可压缩约束。
+- 动态障碍物需要 inside/outside 与边界速度两类体素数据。
+- 烟雾用体积光线行进，水用 level set 零等值面渲染。
+- 稳定性、细节、迭代次数和显存预算必须一起取舍。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把平流方案从稳定半拉格朗日改为 MacCormack，再分别减少压力迭代和光线步数，记录细节、散度残差和画面采样成本的变化。
+
+<Answer>
+
+MacCormack 通常保留更多高频细节，但需要中间采样和过冲限制；压力迭代减少会让散度残差上升，水比烟更容易出现体积漂移；光线步数减少会让体积画面更便宜但层次更粗。
+
+</Answer>
+
+**问题 2｜诊断水从容器底部下沉。** 烟雾看起来还可以，但静置水面慢慢下降。请判断是平流、压力求解还是边界数据优先需要检查。
+
+<Answer>
+
+先检查压力迭代是否足够让压力信息传播整个液体域，再确认 level set 的液体单元是否被正确 mask，以及固体边界邻居是否使用了正确的 free-slip 约束。烟雾能容忍的散度误差，水面不一定能容忍。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个需要烟雾遮挡的室内场景、一个有水面的透明容器、一个只有少量 GPU 内存的移动设备，分别选择体积渲染、level set 和网格策略。
+
+<Answer>
+
+烟雾适合用射线入口、场景深度截断和前到后合成；水面适合 level set 零等值面、梯度法线和背景偏移折射；移动设备应降低体素分辨率、共享临时纹理、减少压力迭代与光线步数，并优先保证稳定性。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Eulerian discretization">
+    网格单元固定不动，速度、密度和压力等数值在单元之间变化的离散方式。
+  </GlossaryItem>
+  <GlossaryItem term="advection">
+    沿速度场搬运密度、温度或速度的过程，常用反向回溯采样实现。
+  </GlossaryItem>
+  <GlossaryItem term="MacCormack advection">
+    用正向与反向采样修正半拉格朗日结果、保留更多细节的平流方案。
+  </GlossaryItem>
+  <GlossaryItem term="pressure projection">
+    从临时速度中减去压力梯度，使流体速度满足近似不可压缩约束。
+  </GlossaryItem>
+  <GlossaryItem term="volume ray marching">
+    沿相机射线逐段采样三维场并累积颜色与透明度的体积渲染方法。
+  </GlossaryItem>
+  <GlossaryItem term="level set">
+    用带符号距离场表示液体表面的方式，零值位置就是空气与液体的界面。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 30. Real-Time Simulation and Rendering of 3D Fluids"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-30-real-time-simulation-and-rendering-3d-fluids"
+/>
