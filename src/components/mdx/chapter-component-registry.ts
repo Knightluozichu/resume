@@ -13337,6 +13337,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3AppendixABuildOpenJdk6EvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/20-duj3-appendix-b-java-future-2013/duj3-appendix-b-java-future-2013":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-appendix-b-java-future-2013-prediction-review-map");
+      return {
+        Duj3AppendixBJavaFuture2013PredictionReviewMap:
+          module0.Duj3AppendixBJavaFuture2013PredictionReviewMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
