@@ -1,0 +1,227 @@
+---
+title: "GPU Gems 3 · Chapter 34. Signed Distance Fields Using Single-Pass GPU Scan Conversion of Tetrahedra"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 34
+description: "从有符号距离场的零等值面出发，解释 T4 窄带 shell、z 平面切片、closest-feature 距离和伪法线符号如何组成一次 GPU 扫描。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-34-signed-distance-fields-using-single-pass-gpu-scan-conversion-tetrahedra"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-34
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch34FeatureDistanceDiagram,
+  GpuGems3Ch34LeakSignDiagram,
+  GpuGems3Ch34MemoryDiagram,
+  GpuGems3Ch34PipelineDiagram,
+  GpuGems3Ch34SdfDefinitionDiagram,
+  GpuGems3Ch34SdfLab,
+  GpuGems3Ch34TetraScanDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch34-sdf";
+
+<Objectives>
+
+- 能从零等值面、正负号和最近距离三个角度解释 signed distance field，并说明为什么高分辨率网格会让 CPU 预处理成为瓶颈
+- 能沿着 T4 GPU scan 的顺序复述 triangle → tetra shell → z-slice → fragment program → depth-min 的数据流，并指出 single-pass 的真实边界
+- 能修改 SDF Lab 的 mesh 拓扑、网格分辨率、窄带宽度、查询目标和执行模式，判断伪法线能修复什么、fold 为什么仍需要额外处理
+
+</Objectives>
+
+## 先问：碰撞查询为什么需要一张距离地图
+
+上一章把碰撞候选 pair 交给了几何求解器。本章换一个视角：如果每个空间点都能快速回答“离物体表面还有多远”，碰撞、射线和路径规划就不必每次都从三角形集合重新开始。问题是，直接在 CPU 上对高分辨率体网格逐点查最近三角形，代价会随着网格尺寸迅速累积。
+
+<Callout type="tip" title="先预测：提高网格分辨率，哪一项先成为瓶颈？">
+  在 Lab 中先保持 irregular mesh 和 GPU 模式，把分辨率从 `128³` 切到 `512³`，再把窄带从 20 切到 60 voxels。先猜 covered voxels、z-slices 和查询吞吐谁会变化最大，再切到 CPU reference 对照。
+</Callout>
+
+## 1. SDF 把几何表面变成可查询的标量场
+
+<Callout type="trap" title="误区：SDF 只是把 mesh 贴到一张 3D texture 上">
+  **现象 →** 只保存无符号最近距离，碰撞查询在表面两侧得到同一个值，无法判断穿透方向。
+
+**原因 →** SDF 的符号本身编码了 inside/outside；通常约定内部为负、外部为正，零值才是表面。
+
+**修法 →** 同时保留 signed value 和距离大小。采样时可以在 voxel 之间插值，但不要把符号当成可丢弃的显示颜色。
+</Callout>
+
+<Term def="在规则网格上采样到物体表面的最近有符号距离；通常内部为负、表面为零、外部为正。">
+  signed distance field (SDF)
+</Term>
+
+一个 SDF 不是“每个三角形的距离列表”，而是空间网格上的标量采样。对点 `p`，绝对值回答“离表面多远”，符号回答“在哪一侧”；这两个信息一起才足以支持穿透判断和连续的距离查询。
+
+<GpuGems3Ch34SdfDefinitionDiagram />
+
+高分辨率网格的体素数量是 `N³`。因此本章不追求对整个空间都做昂贵计算，而是围绕表面生成一个用户指定的窄带；远离表面的区域若不参与当前应用，就不必进入扫描。
+
+<Term def="沿表面向内外延伸、只覆盖用户指定距离范围的体素壳层；它限制计算范围，也决定远离表面的查询是否有值。">
+  narrow band
+</Term>
+
+## 2. 用统一的 tetra shell 覆盖窄带
+
+<Callout type="tip" title="先看覆盖，再看速度：为什么不用每个三角形直接做复杂体扫描？">
+  想象一个三角形的窄带。它需要覆盖面、边和顶点附近的 Voronoi 区域；只扫描面平面会漏掉最近 feature，使用很多种曲面包围体又会让切片和别名处理变复杂。
+</Callout>
+
+<Term def="T4 GPU scan 使用的四面体窄带扫描流程：CPU 先生成 tetrahedral shell，GPU 再按 z 平面切片并计算覆盖 voxel 的 signed distance。">
+  T4 GPU scan
+</Term>
+
+实现选择了一个简单的统一几何单元：每个三角形先用最长边和正交高度拟合矩形，再按窄带宽度扩大，并沿面法线向内外挤出形成 OBB；OBB 再分解成五个四面体。这个构造可能产生重叠和冗余，但它容易验证，能覆盖所需窄带。
+
+<GpuGems3Ch34TetraScanDiagram />
+
+这个顺序还有一个 GPU 友好的性质：四面体被 z 平面切开时，截面只有有限的拓扑情况，而且截面多边形是凸的。于是可以把 CPU 的工作压缩为“找当前 z 切片相交的 tetrahedra”，把每个截面交给光栅化和 fragment program。
+
+## 3. 每个 fragment 先找最近 feature，再决定符号
+
+一个 voxel 落进 tetra shell，并不意味着它离三角形的面最近。它可能更接近一条边或一个顶点；如果一律用 face plane 的距离，窄带边界和尖锐折角附近就会出现错误的符号。
+
+<Term def="对一个采样点而言距离最小的三角形面、边或顶点；距离 case analysis 会输出这个 feature 以及对应的局部伪法线。">
+  closest feature
+</Term>
+
+fragment program 将截面坐标变换到三角形的局部 frame，在有限个区域中判断最近的是 face、edge 还是 vertex。随后计算 `|p − c|`，其中 `c` 是最近 feature 上的点；距离的绝对值不是最后答案，符号还要由同一个 feature 的方向信息提供。
+
+<GpuGems3Ch34FeatureDistanceDiagram />
+
+<Term def="由顶点或边邻域的法线按角度加权得到的局部方向；它让最近 feature 的符号判断不只依赖单个 face plane。">
+  angle-weighted pseudonormal
+</Term>
+
+对最近 feature 的点 `c` 和伪法线 `n(c)`，符号可以由 `d = n(c) · (p − c)` 的正负判断。这样，面、边和顶点都能沿着与其局部几何一致的方向给出 inside/outside，而不是让一个邻近平面替它做决定。
+
+## 4. 先理解 leaking，再理解 single-pass 的边界
+
+<Callout type="trap" title="误区：single-pass 意味着所有坏拓扑都能一次修好">
+  **现象 →** 不规则 mesh 的窄带结果通常没有 plane-test 的大片泄漏，于是误以为任何折叠都能被同一 pass 消除。
+
+**原因 →** angle-weighted pseudonormal 能处理平面测试和包围体构造带来的两类符号问题；fold 会让重叠三角形的 inside/outside 互相矛盾，单 pass 没有足够信息决定唯一符号。
+
+**修法 →** 把“holes、flipped surfaces、overlapping faces”等不规则输入与“folded overlap”区分开。对 fold 明确标记需要第二 pass 或额外拓扑重建，而不是悄悄把错误当成有效距离。
+</Callout>
+
+<GpuGems3Ch34LeakSignDiagram />
+
+本章的 single-pass 主要指：在一个 z-slice 的片段阶段，同时计算距离和符号，不需要先做一轮无符号距离、再做第二轮全局 sign flood。它不等于“没有 z-slice 循环”，也不等于“没有 readback”：原始实现会为每个 z 增量渲染相交截面，读取当前切片，再移动到下一层。
+
+## 动手走一遍：T4 GPU scan 如何从 shell 走到 SDF
+
+<Stepper>
+  <Step title="先建立窄带 shell">
+    CPU 遍历三角形，按窄带宽度生成 OBB，并把每个 OBB 分解成五个 tetrahedra；重叠是可接受的，首要目标是完整覆盖 Voronoi 区域。
+  </Step>
+  <Step title="沿 z 平面找截面">
+    将 tetrahedra 按 z 排序，维护当前切片相交的 status set；平面和每个 tetrahedron 的交集生成凸多边形。
+  </Step>
+  <Step title="在 fragment program 中算 signed distance">
+    对每个片段执行 closest-feature case analysis，算到 face、edge 或 vertex 的距离，再用 angle-weighted pseudonormal 得到符号。
+  </Step>
+  <Step title="用两个 buffer 选出 voxel 结果">
+    color buffer 写入 signed distance，depth buffer 写入绝对值；depth test 让同一 voxel 只保留绝对值最小的候选，随后读回这一 z-slice。
+  </Step>
+</Stepper>
+
+<GpuGems3Ch34MemoryDiagram />
+
+<GpuGems3Ch34PipelineDiagram />
+
+## 5. “一次扫描”其实是对并行职责的重新分工
+
+<Term def="以候选的绝对距离作为深度值、以带符号距离作为颜色值，让硬件 depth test 在同一 voxel 中保留最近候选的选择策略。">
+  depth-min selection
+</Term>
+
+T4 方法把最适合硬件的部分交给 GPU：截面光栅化、fragment-level feature case analysis，以及 color/depth 的竞争选择。CPU 仍负责 shell 生成、z-sweep 的状态维护和每层 readback。这个分工解释了为什么它简单而有效，也解释了为什么优化方向包括更紧的 tetra shell、一次性 flatten 3D texture，或把更多阶段搬到 geometry shader。
+
+对于同一个 voxel，多个三角形的 tetra shell 可能同时产生候选。不要用“最后写入者胜出”覆盖它们；要比较绝对值，同时保留获胜候选的 signed value。这样负号不会因为光栅化顺序而被偶然抹掉。
+
+## 6. 用 SDF Lab 比较分辨率、窄带与拓扑风险
+
+<GpuGems3Ch34SdfLab />
+
+先在 `irregular / holes` 和 `GPU depth-min path` 下扩大窄带，观察覆盖体素与构建时间；再把 mesh 切到 `folded overlap`，注意 Lab 会明确显示“folds need a second pass”。这不是性能惩罚，而是算法边界：当两个重叠面都能成为最近候选，单 pass 无法从距离大小唯一推出正确 inside/outside。
+
+## 小结
+
+- SDF 在规则网格上保存最近有符号距离：表面为零，内部通常为负，外部通常为正；窄带把计算限制在表面附近。
+- T4 方法用每个三角形的 OBB 分解出的五个 tetrahedra 覆盖窄带，再沿 z 平面切出凸多边形。
+- fragment program 不把所有样本都当成 face-plane 距离，而是先定位 closest feature，再用 angle-weighted pseudonormal 判断符号。
+- color buffer 保存 signed distance，depth buffer 保存绝对距离；depth-min selection 让硬件选择同一 voxel 的最近候选。
+- single-pass 解决了 plane-test 等符号泄漏，但 folded topology 仍可能需要额外 pass；它也不意味着取消 z-slice 循环和 readback。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 保持 `irregular mesh`，比较 `128³`、`256³` 和 `512³`，再比较窄带 20 与 60 voxels。记录 covered voxels、z-slices 和 queries/s，并解释为什么三维分辨率的增长比线性更快。
+
+<Answer>
+
+网格边长从 `N` 变为 `2N` 时，全体素数从 `N³` 变成 `8N³`；窄带只覆盖其中一部分，但分辨率和带宽都会扩大需要处理的 slice 与 fragment 数。GPU 的并行吞吐能缓冲增长，却不会改变体素数量的三次方关系；查询阶段则要看采样是否落在已构建的窄带内。
+
+</Answer>
+
+**问题 2｜诊断符号泄漏。** 某个尖锐 ridge 的 SDF 在表面内侧出现正值。请按“最近 feature → 符号方向 → buffer 选择”的顺序列出检查项。
+
+<Answer>
+
+先确认 case analysis 是否把样本归到了正确的 face、edge 或 vertex，而不是直接使用相邻 face plane；再检查对应的 angle-weighted pseudonormal 是否在局部 frame 中正确变换，以及 `n(c) · (p − c)` 的符号约定是否一致。最后检查 color 写入的是 signed distance、depth 写入的是绝对值，避免后来的候选只按写入顺序覆盖结果。若输入是 fold，还要停止把它当作普通 sign bug：单 pass 本身没有足够信息解决拓扑歧义。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个布料碰撞系统、一个只做射线可见性查询的静态模型、一个包含折叠重叠面的扫描模型，分别选择 SDF 参数和后处理策略。
+
+<Answer>
+
+布料碰撞优先选择能覆盖接触厚度的窄带和适中的网格分辨率，并使用 GPU depth-min path 批量构建；静态射线模型可以用更高分辨率换取更平滑的插值，但要确认射线不会离开窄带后继续读取无效值；折叠模型需要先修复或重建拓扑，或增加专门的第二 pass，不能仅靠 angle-weighted pseudonormal 宣称 sign 已正确。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="signed distance field (SDF)">
+    在网格上保存到表面最近有符号距离的标量场，通常内部为负、表面为零、外部为正。
+  </GlossaryItem>
+  <GlossaryItem term="narrow band">
+    围绕表面的有限厚度壳层，只在用户指定距离内生成和扫描距离值。
+  </GlossaryItem>
+  <GlossaryItem term="T4 GPU scan">
+    先生成 tetrahedral shell，再按 z 平面切片并在 GPU 上计算 signed distance 的扫描流程。
+  </GlossaryItem>
+  <GlossaryItem term="closest feature">
+    对采样点而言距离最小的三角形面、边或顶点，是距离 case analysis 的输出。
+  </GlossaryItem>
+  <GlossaryItem term="angle-weighted pseudonormal">
+    从顶点或边邻域法线按角度加权得到的局部方向，用于更可靠的 inside/outside 符号判断。
+  </GlossaryItem>
+  <GlossaryItem term="depth-min selection">
+    用绝对距离做 depth、用带符号距离做 color，让 depth test 选择同一 voxel 的最近候选。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 34. Signed Distance Fields Using Single-Pass GPU Scan Conversion of Tetrahedra"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-34-signed-distance-fields-using-single-pass-gpu-scan-conversion-tetrahedra"
+/>
