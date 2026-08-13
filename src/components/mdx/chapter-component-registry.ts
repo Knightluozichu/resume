@@ -13346,6 +13346,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3AppendixBJavaFuture2013PredictionReviewMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/21-duj3-appendix-c-bytecode-table/duj3-appendix-c-bytecode-table":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-appendix-c-bytecode-table-lab");
+      return {
+        Duj3AppendixCBytecodeTableLab: module0.Duj3AppendixCBytecodeTableLab,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");

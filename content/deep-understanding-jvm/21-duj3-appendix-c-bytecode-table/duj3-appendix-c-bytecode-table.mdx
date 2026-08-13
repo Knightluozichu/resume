@@ -1,55 +1,255 @@
 ---
-title: 附录C 虚拟机字节码指令表
-description: 附录C 虚拟机字节码指令表覆盖1个正式目录节点，以章专属JVM探针、状态交互、故障恢复和版本证据验收。
+title: "附录C 虚拟机字节码指令表"
+description: "把一条虚拟机指令拆成编码、操作数、栈效应和验证约束，并用可重放的栈状态实验检查每个结论。"
 type: C
-section: 深入理解Java虚拟机（第3版 / 2019年JDK 12基线）
+section: "深入理解Java虚拟机（第3版 / 2019年JDK 12基线）"
 draft: false
-math: true
-sourceUrl: 'https://github.com/fenixsoft/jvm_book'
+math: false
+sourceUrl: "https://github.com/fenixsoft/jvm_book"
 demo: true
 order: 0
 qualityVersion: 2
-practiceMode: diagnosis
+practiceMode: code
 sourceMode: independent-rewrite
+officialUnitId: duj3-appendix-c-bytecode-table
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { Duj3AppendixCBytecodeTableLab } from "@/components/mdx/deep-understanding-jvm/duj3-appendix-c-bytecode-table-lab";
 
-{/* DUJ3_QUALITY_V2 */}
+# 附录C 虚拟机字节码指令表
 
-## 为什么从“字节码速查与栈效应台”开始
+一段程序交给虚拟机后，会变成一串有顺序的短动作。想检查它是否正确，不能只看最终输出；还要逐格记录每一步拿走了什么、留下了什么，以及哪条规则允许它继续。
 
-附录C 虚拟机字节码指令表不能把语言、JVMS、HotSpot和某个JDK发行版混成一层。字节码速查与栈效应台沿“opcode bytes → operands → stack before/after → exception”保存输入和原始输出，让每个结论都能回到规范条款、实现状态和目标版本。
+如果只记住指令名称，读者很容易把“这次运行成功”误写成“任何输入都安全”。本附录把一条动作拆成编码、输入、输出和检查结果，并让你在同一张表上修改输入、观察失败、恢复原状。
 
-附录C 虚拟机字节码指令表固定JDK镜像、VM参数、工作量、采集窗口和资源限制，只改变指令族或验证条件；图中只呈现本章真实运行时对象、状态边与证据出口；高亮表示当前分析路径，不冒充真实吞吐、停顿、对象大小或线程安全证明。
+<Objectives>
 
-## 来源、勘误与独立重写边界
+- 能从 `javap -v -c` 输出中定位一条指令的编码、操作数和前后栈状态。
+- 能用 JVMS 的指令约束解释类型检查、分支目标和方法调用描述符，而不是只背助记符。
+- 能修改复核台的输入并回答：哪一个栈值缺失时，验证应在何处拒绝？
 
-附录C 虚拟机字节码指令表依据作者[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定代码和已知修正，并用[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)限定5个部分、13章、附录A–E和282个正式节点。附录C 虚拟机字节码指令表未取得出版正文授权，目录只限定范围，中文解释、命令、图示、实验与答案均为独立教学重写。
+</Objectives>
 
-附录C 虚拟机字节码指令表保留原书2019年的JDK 12 / JDK 13预览期语境；现代复核以[JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)与[OpenJDK源码](https://github.com/openjdk/jdk)为事实依据。附录C 虚拟机字节码指令表的JDK 25注记不是原书内容，任何默认值和实现细节都必须重新测量。
+## 先把“黑盒结果”拆成四张小卡片
 
-## 本章跨层合同与章专属探针
+想象一条流水线：原材料是字节，工位是指令，传送带是操作数栈，质检员是验证规则。每走一步都留下进站状态和出站状态，才能知道错误究竟发生在编码、取数、运算还是检查阶段。
 
-、、、、。
+这张小卡片解决两个问题：为什么同一个助记符不能脱离版本和上下文解释，以及为什么一次成功运行不足以证明栈状态在所有路径上都成立。没有它，调试只会盯着最后一行输出猜原因。
 
-附录C 虚拟机字节码指令表的通过不变量是“每条选中指令的编码、栈效应、类型约束与控制流可手算”。附录C 虚拟机字节码指令表的实验档案必须保存JDK与VM版本、供应商、OS/容器限制、参数、源码或Class哈希、工作量、时间窗、退出码、未过滤日志、探针成本和清理记录。
+## 三个容易把字节码表读错的坑
 
-附录C 虚拟机字节码指令表使用以下章专属探针作为起点；读者必须替换PID或样例、触发失败并保存opcode偏移、栈高与验证错误，不能只复制命令截图：
+<Callout type="trap" title="把助记符当成完整指令">
+  **现象 →** 看到 `iload` 就认为所有加载动作都只占一个字节、只读取同一种槽位。
+  **原因 →** 指令可能带内嵌槽位、操作数或不同的编码形式。 **修法 →** 同时记录
+  opcode 字节、操作数和版本，把短形式与带索引形式分开核对。
+</Callout>
 
-```bash
-javap -v -c -s BytecodeProbe.class
-```
+<Callout type="trap" title="只看栈高，不看栈类型">
+  **现象 →** 前后栈元素数量对得上，就宣布指令序列合法。 **原因 →**
+  栈上的值还有类型和顺序，`int`、引用和返回地址不能互换。 **修法 →**
+  记录栈元素类型与顺序；缺值、错序或类型不匹配都保留验证失败。
+</Callout>
 
+<Callout type="trap" title="把一次运行结果当成验证证明">
+  **现象 →** 当前 JDK 能执行，就把字节码写成“在所有 VM 上都有效”。 **原因 →**
+  运行时版本、类文件版本、描述符和异常路径可能不同。 **修法 →** 把 JVMS
+  条款、类文件版本、命令输出和失败输入一起归档，只对声明范围下结论。
+</Callout>
+
+## 来源、版次与独立重写边界
+
+本附录以作者的[第3版样例与持续勘误仓库](https://github.com/fenixsoft/jvm_book)核定主题，并以[出版社版式目录](https://18636251.s21i.faiusr.com/61/ABUIABA9GAAg8dqTugYo3O7rmwQ.pdf)确认正式目录中的附录C。未取得出版正文授权；本文的字节码卡片、栈状态图、命令、故障注入、实验和答案均为独立教学重写，目录只用于限定范围。
+
+规范核对入口包括 [JVMS 25](https://docs.oracle.com/javase/specs/jvms/se25/html/index.html)、[JLS 25线程与锁](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html)、[JDK 25工具规范](https://docs.oracle.com/en/java/javase/25/docs/specs/man/index.html)、[OpenJDK 25发布页](https://openjdk.org/projects/jdk/25/)和 [OpenJDK源码](https://github.com/openjdk/jdk)。这些资料帮助读者核对当前类文件、指令和工具边界，不把现代实现倒写成原书当年的唯一答案。
+
+## 六个核心概念
+
+### 操作码：先定位“做什么”
+
+<Term def="标识一条虚拟机指令的数值字节；它告诉读取者当前工位要执行哪种动作。">
+  操作码
+</Term>
+是指令表的入口。先从字节序列定位它，再查该版本的助记符和格式；只抄助记符而不保存字节，后续就无法发现编码差异。
+
+### 操作数：再确认“带什么输入”
+
+<Term def="跟在指令后面的索引、常量、分支偏移或其他数据；它补充这条指令要处理的对象。">
+  操作数
+</Term>
+决定同一个动作要读取哪个槽位、哪个常量或哪个目标。它属于指令格式的一部分，不能从最终结果反推出来。
+
+### 操作数栈：记录“动作前后有什么”
+
+<Term def="每个栈帧里保存中间值的后进先出区域；指令通常从栈顶取值，再把结果压回去。">
+  操作数栈
+</Term>
+是复核台的传送带。每条指令都要写出进入前和完成后的元素顺序，不能只记栈高变化。
+
+### 描述符：说明“参数和结果是什么”
+
+<Term def="用固定字符表示方法参数类型、返回类型或字段类型的签名格式；它约束调用双方如何交换值。">
+  描述符
+</Term>
+把调用点和被调用方法连接起来。调用前要按它准备接收者与参数，调用后要按返回类型更新栈。
+
+### 栈效应：表达“拿走多少、留下多少”
+
+<Term def="一条指令对操作数栈元素的消耗和产生，可写成栈前状态到栈后状态的变化。">
+  栈效应
+</Term>
+让字节码表变成可手算的合同。例如两个整数相加会取走两个整数，再放回一个整数；只数元素个数还不够。
+
+### 验证约束：决定“能不能继续”
+
+<Term def="类文件验证和执行阶段必须满足的格式、类型、控制流与调用条件；不满足时应拒绝或抛出明确错误。">
+  验证约束
+</Term>
+是质检规则。它检查类文件版本、栈类型、分支合流和调用描述符，帮助我们把“运行成功”与“输入满足条件”分开。
+
+## 一条指令的四层记录法
+
+把指令记录成下面四层，顺序不要跳过：
+
+| 层     | 要保存什么                      | 复核问题                       |
+| ------ | ------------------------------- | ------------------------------ |
+| 编码   | opcode 字节、助记符、类文件版本 | 这串字节在目标版本中代表什么？ |
+| 操作数 | 槽位、常量、分支偏移或描述符    | 它从哪里取输入，目标在哪里？   |
+| 栈效应 | 栈前元素、消耗顺序、栈后元素    | 类型和顺序是否都能对上？       |
+| 验证   | 规则、异常路径、工具输出        | 哪个条件不满足时应该拒绝？     |
+
+以 `iadd` 为例，输入栈尾必须有两个整数，输出栈尾只留下一个整数；以 `ifeq` 为例，输入栈尾必须有一个整数，控制流会在满足条件时跳到偏移目标，否则继续下一条。两者都不能脱离前置栈状态单独阅读。
 
 ## 官方目录逐项深读
 
 ### 附录C 虚拟机字节码指令表
 
-**四级证据 1/1。** 附录C 虚拟机字节码指令表中的附录C 虚拟机字节码指令表：从Class字节偏移和JVMS结构出发，用javap核对常量池、描述符、栈效应、调用点和验证条件。附录C 虚拟机字节码指令表固定验证条件为“栈高”，只把指令族从“加载存储”切到“控制转移”，以opcode偏移、栈高与验证错误定位第一处变化并验证“每条选中指令的编码、栈效应、类型约束与控制流可手算”。
+**四级证据 1/1。** 本正式节点的主题是把虚拟机指令当作可核对的表格，而不是背诵几百个名字。沿着“编码 → 操作数 → 栈效应 → 验证约束”保存字节偏移、类文件版本、栈类型和失败路径，读者才能解释某条指令为什么能执行、为什么被拒绝，或为什么需要换一条路径。
 
-## 三个必须主动触发的误区
+## 章专属实验：从字节偏移走到验证结果
 
+先预测：如果把 `iadd` 的一个输入整数删掉，复核台应该在哪一层先亮起警示？如果只切换“验证约束”镜头，哪一列应该变化？带着答案进入下面的四步实验。
 
-## 练习、答案与282节点验证
+<Stepper>
+  <Step title="1. 从字节序列定位操作码">
+    选择一组指令族，先记录 opcode 字节、助记符和类文件版本。不要先看最终结果；第一步只确认这串字节被解释成哪一个动作。
 
+    <Duj3AppendixCBytecodeTableLab />
 
+  </Step>
+  <Step title="2. 展开操作数与目标">
+    切换到编码镜头，补齐局部变量槽、常量池索引、分支偏移或方法描述符。缺少操作数时保留未知，不要从结果倒推输入。
+
+    <Duj3AppendixCBytecodeTableLab />
+
+  </Step>
+  <Step title="3. 手算栈前与栈后状态">
+    切换到栈效应镜头，把栈顶元素按顺序写出。对调用指令还要写接收者、参数和返回值；不要只写“栈高减一”。
+
+    <Duj3AppendixCBytecodeTableLab />
+
+  </Step>
+  <Step title="4. 注入缺值故障并恢复">
+    点击“注入缺少栈值”，观察验证约束把状态标成拒绝；再点击恢复按钮，确认指令族、镜头和栈状态回到初始值。
+
+    <Duj3AppendixCBytecodeTableLab />
+
+  </Step>
+</Stepper>
+
+## javap 证据采集命令
+
+下面的 Java 示例只制造一个可观察的字节码产物。`javap` 的输出是当前编译器和类文件版本的证据，不能替代 JVMS 条文，也不能证明所有优化器都会生成同样的序列：
+
+```bash
+set -o pipefail
+mkdir -p evidence/bytecode-table
+cat > evidence/bytecode-table/BytecodeProbe.java <<'JAVA'
+public final class BytecodeProbe {
+  static int add(int left, int right) {
+    return left + right;
+  }
+
+  static int choose(int value) {
+    return value == 0 ? 1 : -1;
+  }
+}
+JAVA
+javac -g:none -d evidence/bytecode-table evidence/bytecode-table/BytecodeProbe.java
+javap -v -c -s evidence/bytecode-table/BytecodeProbe.class \
+  | tee evidence/bytecode-table/javap.txt
+java -version 2>&1 | tee evidence/bytecode-table/java-version.txt
+sha256sum evidence/bytecode-table/BytecodeProbe.class \
+  | tee evidence/bytecode-table/class-sha256.txt
+```
+
+读输出时先定位方法边界，再从偏移、操作码和描述符建立四层记录。若换 JDK、编译参数或目标版本，必须另建证据目录并把差异写清楚；不同条件下的 `javap` 输出不能直接拼成同一条历史链。
+
+## 练习、答案与单节点验收
+
+<Exercises>
+
+**问题 1：改 Demo 代码。** 在复核台增加一个“描述符不匹配”故障：调用指令仍保留接收者和参数，但返回类型改成不一致的类型。界面应在哪一层拒绝？重置后恢复哪些输入？
+
+<Answer>
+  界面应在验证约束层拒绝，并同时提示调用前的描述符与返回类型不一致；操作码、操作数和原始栈状态仍应保留，不能把故障伪装成运行时结果。重置后恢复默认的“加载/存储”指令族、编码镜头、完整栈前后状态和正常验证结论。
+</Answer>
+
+**问题 2：判断一条 `iadd` 是否可执行。** 当前栈尾依次是 `int`、引用和 `int`。请说明为什么不能只看栈高，并写出修复前必须保留的证据。
+
+<Answer>
+  `iadd`
+  需要按顺序取出两个整数；引用处在两个整数之间，说明栈类型或顺序不满足指令合同。应保留类文件版本、opcode
+  字节、方法偏移、完整栈前状态、期望栈后状态和验证错误输出，不能只记录“元素数量是三个”。
+</Answer>
+
+**问题 3：解释一次 `javap` 差异。** 两次编译得到的 `javap -c` 顺序不同，但源码和最终结果相同。你会先核对哪三类条件？
+
+<Answer>
+  先核对 JDK
+  与编译器版本、编译参数和目标类文件版本，再核对是否改变了调试信息、优化开关或方法输入。随后比较
+  opcode、操作数、描述符和栈效应，而不是按文本顺序判定对错；结论只能限定在已记录的编译合同内。
+</Answer>
+
+</Exercises>
+
+## 本章小结与发布前回顾
+
+- 先保存 opcode、版本和偏移，再解释助记符。
+- 操作数决定槽位、常量、分支目标或调用合同。
+- 栈效应必须保留类型与顺序，不能只数栈高。
+- 验证约束把格式、控制流和调用条件变成可检查的拒绝点。
+- `javap` 输出要和版本、参数、类文件哈希一起归档。
+
+<Glossary>
+  <GlossaryItem term="操作码">
+    标识一条虚拟机指令的数值字节，可以把它想成指令表里的编号。
+  </GlossaryItem>
+  <GlossaryItem term="操作数">
+    跟在指令后面的输入数据，例如槽位编号、常量索引或分支偏移。
+  </GlossaryItem>
+  <GlossaryItem term="操作数栈">
+    保存中间值的后进先出区域，指令从顶部取值并把结果放回去。
+  </GlossaryItem>
+  <GlossaryItem term="描述符">
+    用固定字符写出的参数和返回类型签名，像调用双方共同遵守的表格。
+  </GlossaryItem>
+  <GlossaryItem term="栈效应">
+    一条指令从栈前状态变成栈后状态的过程，包含消耗和产生的类型顺序。
+  </GlossaryItem>
+  <GlossaryItem term="验证约束">
+    判断类文件、栈类型、控制流和调用条件是否满足的规则集合。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《深入理解Java虚拟机（第3版）》"
+  adaptedUrl="https://github.com/fenixsoft/jvm_book"
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+/>
