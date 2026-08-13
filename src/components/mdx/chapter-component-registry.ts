@@ -12504,6 +12504,13 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       DnjBufferLab: module0.DnjBufferLab,
     } as ChapterMdxComponents;
   },
+  "deep-nodejs/03-data-network/dnj-07-network-programming": async () => {
+    const module0 =
+      await import("@/components/mdx/deep-nodejs/network-protocol-map-diagram");
+    return {
+      DnjNetworkProtocolMapDiagram: module0.DnjNetworkProtocolMapDiagram,
+    } as ChapterMdxComponents;
+  },
   "deep-opengl/00-fundamentals/dog-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/deep-opengl/v2/dog-learning-map");

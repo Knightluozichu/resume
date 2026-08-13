@@ -3,276 +3,312 @@ title: "第 7 章 网络编程"
 type: A
 section: "深入浅出 Node.js · Buffer 与网络"
 order: 7
-description: "依次构建 TCP、UDP、HTTP、WebSocket、TLS 与 HTTPS 服务，明确协议边界、事件和安全责任。"
+description: "从 TCP 字节流、UDP 数据报、HTTP 请求、WebSocket 帧到 TLS 身份，建立可限流、可观测、可关闭的 Node 网络服务。"
 demo: true
 math: false
 sourceUrl: "https://www.96192.com/product/detail/637599"
 draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: dnj-unit-07
 ---
 
+import { Objectives } from "@/components/mdx/objectives";
+import { Term } from "@/components/mdx/term";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import { Callout } from "@/components/mdx/callout";
+import { Answer, Exercises } from "@/components/mdx/exercises";
+import { Glossary, GlossaryItem } from "@/components/mdx/glossary";
+import { Attribution } from "@/components/mdx/attribution";
+import { DnjNetworkProtocolMapDiagram } from "@/components/mdx/deep-nodejs/network-protocol-map-diagram";
 
-## 直觉起点
+# 第 7 章 网络编程
 
-、、、、共同构成本页的观察坐标。网络编程从无消息边界的 TCP 字节流、无连接 UDP 数据报到
-HTTP 请求响应与 WebSocket 帧逐层增加协议；TLS 提供身份与传输保护。 深入理解 Node
-不是背诵 API，而是回答 JavaScript
-与系统之间如何传递数据、谁拥有异步资源、错误沿哪条边传播、何时能安全退出。
+<Objectives>
 
-## 六阶段执行链
+- 能比较 TCP 字节流、UDP 数据报、HTTP 请求和 WebSocket 帧的边界、顺序、背压与关闭语义。
+- 能实现带长度上限、超时、取消和单次完成保证的 Node 网络端点，并指出每个资源的 owner。
+- 能为 TLS/HTTPS 证书、握手、错误和连接排空建立可重放的安全验收矩阵。
 
-### 1. 创建套接字
+</Objectives>
 
-固定 Node 版本、依赖锁、入口参数、环境变量和输入，先预测同步栈、异步资源与最终输出。没有版本证据，就无法区分原书历史行为和现代运行时。
+## 先画边界，再打开端口
 
-### 2. 定义协议边界
+网络 API 的相似之处在于都会等待数据，真正决定系统行为的却是边界：TCP 只提供有序字节流，UDP 保留一个个数据报，HTTP 规定请求响应，WebSocket 在升级后传输消息，TLS 负责在应用数据之前建立身份与机密性。端口打开不等于协议完成，收到 bytes 也不等于收到一条 message。
 
-明确数据是模块标识、字节、事件、请求、消息还是制品，并标出创建资源与接收完成通知的所有者。资源创建必须同时设计错误、超时和关闭。
+先预测一次完整请求：谁创建 socket，谁拥有 timer，哪些事件表示半关闭，什么条件算一条消息完整，超时后谁发出唯一的 error，最后怎样确认 connection 已经排空。再只改变一个条件，例如把一条消息切成三块或让 consumer 变慢，记录第一个不同的状态。
 
-### 3. 处理读写背压
+本章的工作不变量是：**输入有上限、消息有 framing、写入受背压约束、每个请求只有一个 completion、TLS 身份经过验证、关闭路径可观察。** 这些证据比“客户端看到了响应”更能说明服务是否可靠。
 
-把正常路径压缩为最小可运行样本，只保留一个完成出口。回调、Promise、事件和进程消息不能为同一操作重复签发结果。
+<Term def="把字节块或数据报明确划分成一条消息，并规定长度、分隔符、最大值和不完整输入的处理方式。">message framing</Term>
 
-### 4. 传播错误超时
+<Term def="生产者在写入速度超过消费者时暂停或限速，并在 drain、ack 或窗口恢复后继续的流量控制协议。">backpressure contract</Term>
 
-注入一个边界：空输入、分块、慢消费者、权限、断线、Worker 退出、依赖升级或部署失败。停止在首个偏离点并保存状态。
+<Term def="明确记录 socket、timer、buffer、request 和 worker 由谁创建、谁关闭、谁观察异常的责任表。">resource ownership ledger</Term>
 
-### 5. 建立TLS身份
+<Term def="一次网络操作只能以成功、失败、取消或超时中的一个结果结束，后续事件必须被忽略或记录而不能再次回调调用方。">single-completion rule</Term>
 
-检查 2013 年接口在当前 Node 的状态：仍支持、语义变化、弃用或移出生态。现代替代保持原问题身份，同时明确迁移不能自动保证的行为。
+<Term def="证书链、主机名、有效期、信任根和协议版本共同证明连接对端身份的验收边界。">TLS identity boundary</Term>
 
-### 6. 关闭连接资源
+<Callout type="trap" title="把一次 data 事件当成一条 TCP 消息">
+  **现象：**短样本正常，分块或合并后却出现半条命令、粘包或重复解析。**原因：**TCP 的 data 事件只承诺有一段字节，不承诺应用边界。**修法：**采用长度前缀、分隔符或状态机，并为最大帧长和残留字节写测试。
+</Callout>
 
-删除故障并重放同一输入，等待文件、套接字、队列、Worker、日志和连接排空。输出、退出码与资源计数共同收敛才算恢复。
+<Callout type="trap" title="把 write 返回 true 当成对端已经收到">
+  **现象：**慢客户端或大响应让内存持续上涨。**原因：**write 的返回值只表示本地缓冲是否还能接受更多数据，不是远端确认。**修法：**暂停生产者，等待 drain 或更高层 ack，并在 timeout、abort、close 时释放等待者。
+</Callout>
 
-## 核心机制深挖
+<Callout type="trap" title="TLS 加密后就不用检查身份">
+  **现象：**连接是加密的，却可能连到了错误的服务。**原因：**机密性和对端身份是不同目标，证书链、主机名和信任策略仍需验证。**修法：**固定信任根、hostname、有效期、协议版本和失败策略，再允许应用请求继续。
+</Callout>
 
-网络编程从无消息边界的 TCP 字节流、无连接 UDP 数据报到 HTTP 请求响应与 WebSocket 帧逐层增加协议；TLS 提供身份与传输保护。 所有案例统一记录六类证据：**输入表示、模块或协议边界、调度阶段、资源所有者、错误出口、关闭条件**。表示错误会造成编码或分帧歧义；调度理解错误会把同步事件误认为异步回调；所有权不清会留下描述符、Worker 与连接；关闭条件缺失会让进程悬挂或强行丢数据。
+<Stepper>
+  <Step title="切换 TCP、UDP 与资源 owner">
+    <DnjNetworkProtocolMapDiagram />
+  </Step>
+  <Step title="记录 framing 与输入上限">为每条消息写出编码、长度字段、最大值、半包状态和拒绝原因。</Step>
+  <Step title="重放关闭路径">分别注入 peer close、timeout、abort 和 server shutdown，确认 socket、timer 与 buffer 都有归属。</Step>
+</Stepper>
 
-本页签发不变量是：**消息边界、输入上限、超时、背压和关闭语义明确，TLS 证书经过验证，断线不会造成重复响应或悬挂套接字。**。代码必须回答正常路径完成什么、边界输入限制在哪里、失败由谁观察、取消怎样传播、关闭等待哪些资源，以及 2013 年接口在当前 Node 中是否仍适合新项目。成功输出不能独自证明这些条件。
+## 第7章 网络编程
 
-## 2013 版与现代 Node 的版本账本
+第7章 网络编程应被视为一条可观测流水线，而不是 API 清单：输入先进入传输层，再经过 framing、协议解析、业务处理和响应写出。每一层都要暴露状态和失败出口，下一层不能猜上一层是否已经完成。
 
-原书出版于 2013 年，覆盖早期 CommonJS、V8 分代回收、process.nextTick、setImmediate、node-heapdump、node-memwatch、旧 Buffer 构造器、cluster、node-inspector、AMD/CMD 和 CouchDB npm 仓库。重构保留 11 章 4 附录的知识身份，但现代示例采用安全且受支持的入口，并明确 `node:*` 模块、Promise/async、Buffer.alloc、N-API、Inspector、node:test、锁文件和当前供应链机制的对照关系。
+## 7.1 构建TCP服务
 
-版本账本至少包含原书接口、当时用途、当前支持状态、替代入口、行为差异和移除兼容层的条件。事件循环、TCP 无消息边界、字节编码、资源所有权等稳定原理不会因版本改变；模块解析细节、V8 回收器、默认超时、cluster 调度和包仓库实现必须按当前版本重新验证。
+7.1 构建TCP服务时先决定应用协议。一个简单的长度前缀协议可以把 `uint32` 长度和 payload 分离；解析器必须拒绝负值、过大值和永远等不到剩余 bytes 的输入。连接对象负责读写和 close，消息解析器不应该偷偷销毁连接。
 
-## 完整公开目录逐项讲解
-
-### 第7章 网络编程
-
-第7章 网络编程 要放回“创建套接字、定义协议边界、处理读写背压、传播错误超时、建立TLS身份、关闭连接资源”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“创建套接字”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.1 构建TCP服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“定义协议边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+```js
+function readFrames(buffer, maxFrame) {
+  const frames = [];
+  let offset = 0;
+  while (buffer.length - offset >= 4) {
+    const length = buffer.readUInt32BE(offset);
+    if (length > maxFrame) throw new Error("frame too large");
+    if (buffer.length - offset - 4 < length) break;
+    frames.push(buffer.subarray(offset + 4, offset + 4 + length));
+    offset += 4 + length;
+  }
+  return { frames, remainder: buffer.subarray(offset) };
+}
+```
 
 ### 7.1.1 TCP
 
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“处理读写背压”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+7.1.1 TCP 提供可靠、有序、面向连接的字节流，但不会替应用保留消息边界。半关闭、RST、idle timeout 和 peer 消失都可能在不同阶段出现；状态机应区分 connecting、open、draining 和 closed，而不是只设置一个 `connected` 布尔值。
 
 ### 7.1.2 创建TCP服务器端
 
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“传播错误超时”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.1.3 TCP服务的事件
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“建立TLS身份”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.2 构建UDP服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“关闭连接资源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.2.1 创建UDP套接字
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“创建套接字”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.2.2 创建UDP服务器端
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“定义协议边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.2.3 创建UDP客户端
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“处理读写背压”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.2.4 UDP套接字事件
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“传播错误超时”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.3 构建HTTP服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“建立TLS身份”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.3.1 HTTP
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“关闭连接资源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.3.2 HTTP模块
-
-模块加载依次经历标识符解析、缓存检查、文件定位、包装编译与导出缓存。循环依赖得到的是当时已完成的部分导出；现代 ESM 与 CommonJS 要分别记录解析和缓存语义。
-
-实验从“创建套接字”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.3.3 HTTP客户端
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“定义协议边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.4 构建WebSocket服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“处理读写背压”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.4.1 WebSocket握手
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“传播错误超时”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.4.2 WebSocket数据传输
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“建立TLS身份”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.4.3 小结
-
-7.4.3 小结 要放回“创建套接字、定义协议边界、处理读写背压、传播错误超时、建立TLS身份、关闭连接资源”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“关闭连接资源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.5 网络服务与安全
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“创建套接字”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.5.1 TLS/SSL
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“定义协议边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.5.2 TLS服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“处理读写背压”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.5.3 HTTPS服务
-
-协议层分别定义连接、消息边界、握手、帧和安全身份。TCP 不保留应用消息边界，UDP 可能丢失或乱序，HTTP 与 WebSocket 都需要输入上限、超时、背压和关闭处理。
-
-实验从“传播错误超时”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.6 总结
-
-7.6 总结 要放回“创建套接字、定义协议边界、处理读写背压、传播错误超时、建立TLS身份、关闭连接资源”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“建立TLS身份”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-### 7.7 参考资源
-
-7.7 参考资源 要放回“创建套接字、定义协议边界、处理读写背压、传播错误超时、建立TLS身份、关闭连接资源”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
-
-实验从“关闭连接资源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
-
-## 资源与失败矩阵
-
-| 资源          | 正常完成           | 常见边界             | 失败出口        | 关闭证据     |
-| ------------- | ------------------ | -------------------- | --------------- | ------------ |
-| 模块与包      | 导出一次、依赖锁定 | 循环依赖、平台差异   | 解析或 ABI 错误 | 模块图可追溯 |
-| Buffer 与流   | 编码完整、背压生效 | 截断、跨字符、慢目标 | pipeline 拒绝   | 描述符关闭   |
-| 套接字与请求  | 响应一次           | 半包、断线、超时     | error 或 abort  | close 已观察 |
-| Worker 与制品 | 退出、接管或回滚   | 崩溃、重启风暴       | 非零码与报警    | 在途请求排空 |
-
-## 最小可运行实验
+7.1.2 创建TCP服务器端时，`net.createServer` 的 connection callback 只是获得一个资源。服务端要立刻登记 socket owner、最大并发、idle timer、错误监听和关闭顺序；拒绝新连接时也要让客户端得到明确的可重试信号。
 
 ```js
 import net from "node:net";
+
 const server = net.createServer((socket) => {
-  socket.setTimeout(5_000);
-  socket.on("data", (chunk) => {
-    if (!socket.write(chunk)) socket.pause();
-  });
-  socket.on("drain", () => socket.resume());
-  socket.on("timeout", () => socket.destroy());
+  const owner = { socket, timer: setTimeout(() => socket.destroy(), 5_000) };
+  socket.once("close", () => clearTimeout(owner.timer));
+  socket.on("error", (error) => console.error("tcp", error.code));
 });
-server.listen(8124);
+server.maxConnections = 256;
+server.listen({ host: "127.0.0.1", port: 8124 });
 ```
 
-```yaml
-book: 深入浅出 Node.js
-edition: 2013-12
-page: dnj-07-network-programming
-sample: normal | boundary | failure | recovery
-module_graph_fixed: true
-resource_owner_known: true
-single_completion: true
-close_observed: true
+### 7.1.3 TCP服务的事件
+
+7.1.3 TCP服务的事件必须按因果顺序记录：connection 建立、data 累积、drain 恢复、timeout 触发、error 被观察、end 表示对端写入结束、close 表示资源释放。`error` 与 `close` 都可能出现，completion guard 防止它们各自向上层报告一次失败。
+
+<Stepper>
+  <Step title="切换 HTTP 请求与 WebSocket 升级">
+    <DnjNetworkProtocolMapDiagram />
+  </Step>
+  <Step title="追踪 request 到 response">把 method、target、headers、body limit、handler、status 和 socket 关联到同一 trace id。</Step>
+  <Step title="注入慢 consumer">让 response 写入返回 false，验证生产者暂停、drain 恢复和 abort 清理。</Step>
+</Stepper>
+
+## 7.2 构建UDP服务
+
+7.2 构建UDP服务需要接受丢失、重复、乱序和伪造来源的可能性。数据报适合查询、发现和实时遥测等可以容忍缺失的场景；若业务需要可靠交付，应在消息中加入 sequence、expiry、request id 和重试边界，而不是假设 UDP 会替你重传。
+
+### 7.2.1 创建UDP套接字
+
+7.2.1 创建UDP套接字使用 `dgram.createSocket` 时先选 `udp4` 或 `udp6`，再定义 bind 地址、接收上限和 close owner。共享端口、广播和 IPv6 dual-stack 都是部署约束，需要在目标环境中重放，而不是只在 loopback 上验证。
+
+### 7.2.2 创建UDP服务器端
+
+7.2.2 创建UDP服务器端的 message 回调携带 `rinfo`，但来源地址不能自动成为业务身份。服务器先检查数据报长度和 schema，再执行有限时间的处理；无效输入只产生可聚合的拒绝指标，不把原始 payload 写入日志。
+
+```js
+import dgram from "node:dgram";
+
+const socket = dgram.createSocket("udp4");
+socket.on("message", (packet, remote) => {
+  if (packet.length > 1_024) return;
+  console.log({ bytes: packet.length, address: remote.address });
+});
+socket.once("error", (error) => console.error("udp", error.code));
+socket.bind({ address: "127.0.0.1", port: 8125 });
 ```
 
-```text
-freeze node version + dependency lock + input
-predict sync stack + async resources + byte boundaries
-change exactly one boundary condition
-stop at the first divergent state
-remove fault and replay the same sample
-wait for files, sockets, workers, and logs to close
+### 7.2.3 创建UDP客户端
+
+7.2.3 创建UDP客户端要把 send callback、response timeout 和 retry budget 放进一个 request record。重试必须带 request id，服务端需要幂等或去重，否则一次网络丢包可能变成两次扣款、两次写入或两次通知。
+
+### 7.2.4 UDP套接字事件
+
+7.2.4 UDP套接字事件包含 message、listening、error 和 close；它没有 TCP 的连接状态可以替你判断对端是否存在。应用需要自己定义 response deadline、重试上限、socket close 时的 pending request 行为和指标标签。
+
+## 7.3 构建HTTP服务
+
+7.3 构建HTTP服务把字节流包装成 method、target、headers、body 和 response status。HTTP 端点仍要限制 header/body 大小、请求处理时间和并发；keep-alive 只改变连接复用方式，不会消除每个 request 的完成责任。
+
+### 7.3.1 HTTP
+
+7.3.1 HTTP 的请求响应模型要求每个 request 有且只有一个最终状态。解析完成不等于业务完成，handler 抛错、客户端 abort、response 已写出和 server shutdown 之间都要通过状态表避免重复响应。
+
+### 7.3.2 HTTP模块
+
+7.3.2 HTTP模块的 `node:http` 暴露 server、request 和 response，但连接复用、socket timeout、header 超限和流背压仍由应用配置。现代 Node 代码应使用 `node:` 前缀、显式 timeout 和 `pipeline`/abort 语义，不能把旧时代默认值当安全策略。
+
+### 7.3.3 HTTP客户端
+
+7.3.3 HTTP客户端应区分 DNS、connect、TLS、headers、body 和 idle timeout。重试只对明确幂等的操作开放；POST 若要重试，需要 request id 或服务端幂等键。响应体必须消费或销毁，否则连接池可能无法复用。
+
+```js
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 2_000);
+try {
+  const response = await fetch("https://example.test/health", { signal: controller.signal });
+  if (!response.ok) throw new Error(`status ${response.status}`);
+  await response.arrayBuffer();
+} finally {
+  clearTimeout(timer);
+}
 ```
 
-## 常见误区与故障注入
+<Stepper>
+  <Step title="切换 WebSocket 帧与 TLS 身份">
+    <DnjNetworkProtocolMapDiagram />
+  </Step>
+  <Step title="核对握手与消息状态">检查 Upgrade、Origin、协议版本、frame length、ping/pong、close code 和 idle deadline。</Step>
+  <Step title="执行安全失败矩阵">替换证书、改 hostname、截断 frame、延迟 pong，确认连接在错误边界 fail closed。</Step>
+</Stepper>
 
+## 7.4 构建WebSocket服务
+
+7.4 构建WebSocket服务先完成 HTTP Upgrade，再进入独立的连接和 frame 生命周期。连接建立后，消息的边界、最大 payload、ping/pong、close code 和 backpressure 都要写进协议契约；没有这些字段的“聊天室 demo”无法承受慢客户端。
+
+### 7.4.1 WebSocket握手
+
+7.4.1 WebSocket握手必须校验 Upgrade、Connection、Sec-WebSocket-Key、版本和允许的 Origin。服务端返回的 accept 值由规范计算，不能把客户端提供的任意字符串直接当作成功凭证；认证应在握手或明确的第一条消息中完成。
+
+### 7.4.2 WebSocket数据传输
+
+7.4.2 WebSocket数据传输以 frame 为边界，但 fragmentation、control frame、ping/pong 和 close frame 会改变读取状态。应用消息进入队列前要检查长度和权限，发送队列超过预算时暂停生产或断开慢客户端。
+
+### 7.4.3 小结
+
+7.4.3 小结：升级只证明传输模式改变，不证明用户有权访问业务频道。把 handshake identity、frame parser、queue budget 和 close reason 分开测试，才能区分协议错误、身份错误和业务拒绝。
+
+## 7.5 网络服务与安全
+
+7.5 网络服务与安全不是在端口外面再套一层加密，而是把身份、密钥、超时、日志脱敏和错误传播放进连接生命周期。TLS 保护链路，应用仍需认证用户、授权资源和限制输入。
+
+### 7.5.1 TLS/SSL
+
+7.5.1 TLS/SSL 的安全判断至少包括协议版本、cipher policy、证书链、主机名、有效期和信任根。客户端禁止“忽略证书错误”作为生产兜底；测试环境应安装明确的测试 CA，并让失败原因进入可观测指标。
+
+### 7.5.2 TLS服务
+
+7.5.2 TLS服务由 `tls.createServer` 或 HTTPS 服务器持有证书和私钥。私钥只由受控 owner 读取，证书轮换要有新旧窗口和连接重建策略；`secureConnection` 之后仍应读取授权身份，而不是把握手成功当作登录成功。
+
+### 7.5.3 HTTPS服务
+
+7.5.3 HTTPS服务把 HTTP 的 header/body/timeout 约束与 TLS 的 identity/handshake 约束叠加。生产验收要覆盖错误证书、过期证书、错误 hostname、未知 CA、过大 body、慢响应和 graceful shutdown，并确认日志不泄漏 token 或原始密钥。
+
+## 7.6 总结
+
+7.6 总结可以压缩成五个问题：消息在哪里成形，输入上限在哪里，慢方如何施加背压，谁发出唯一 completion，关闭如何被观察。TCP、UDP、HTTP、WebSocket 与 TLS 的 API 不同，但都需要同一份 resource ownership ledger 和 failure replay。
+
+## 7.7 参考资源
+
+7.7 参考资源按证据职责分组：原书目录确认知识范围，Node 当前文档确认 API 语义，RFC/协议文档确认 framing 与握手，项目实验记录确认版本、参数和边界。原书发布于 2013 年，旧接口只能作为历史对照，不能直接替代当前支持状态的验证。
+
+## 版本账本：2013 年接口如何迁移
+
+原书使用的事件回调、旧 Buffer 构造、早期 TLS/SSL 名称和包生态都有时间背景。现代改写保留 TCP 无消息边界、UDP 数据报、HTTP 请求响应、WebSocket 升级和 TLS 身份这些稳定知识，同时把 `node:` 模块、Promise/async、AbortSignal、当前证书策略和锁文件作为迁移后的操作入口。
+
+| 历史关注点 | 当前 Node 验证入口 | 迁移时必须重测 |
+| --- | --- | --- |
+| TCP/UDP socket 事件 | `node:net`、`node:dgram` | timeout、error、close、地址族与资源 owner |
+| HTTP 客户端/服务端 | `node:http`、`fetch` | body 上限、abort、连接复用、幂等重试 |
+| WebSocket 升级 | 受支持的 WebSocket 实现与规范 | Origin、frame size、ping/pong、慢 consumer |
+| SSL/TLS 服务 | `node:tls`、`node:https` | CA、hostname、证书轮换、私钥权限 |
+
+## 最小实验：用一条 trace 对账连接生命周期
+
+下面的实验不实现完整协议，而是展示验收记录应包含的字段。生产实现把 `trace` 接到结构化日志和指标中，不要把 payload 原文写进日志：
+
+```js
+const trace = {
+  id: "req-42",
+  transport: "tcp",
+  frame: { encoding: "length-prefix", bytes: 18, limit: 4096 },
+  owner: ["socket-7", "idle-timer-7", "response-buffer-7"],
+  completion: "pending",
+  failure: null,
+};
+
+function completeOnce(result) {
+  if (trace.completion !== "pending") return false;
+  trace.completion = result;
+  return true;
+}
+```
+
+先预测正常、半包、超时和 peer close 四种结果，再只改变一个边界。通过条件不是某一条日志出现，而是 `completion` 只改变一次，owner 列表最终为空，错误和 close 的顺序可解释。
 
 ## 四类样本与验收
 
-| 样本 | 注入方式                         | 必查证据                  | 通过条件       |
-| ---- | -------------------------------- | ------------------------- | -------------- |
-| 正常 | 小输入、依赖健康                 | 字节、事件、响应、提交    | 只完成一次     |
-| 边界 | 空、长、分块、慢、并发           | 上限、背压、顺序          | 内存与延迟受控 |
-| 失败 | 权限、断线、Worker退出、部署失败 | 首个错误与所有者          | 错误不丢不重复 |
-| 恢复 | 删除故障后同样本重放             | close、exit、连接数、回滚 | 无悬挂资源     |
+| 样本 | 注入方式 | 必查证据 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 小请求、完整 frame、健康证书 | framing、status、completion、close | 只完成一次且资源归零 |
+| 边界 | 半包、超大 body、慢 consumer、UDP 重复 | 长度、背压、deadline、request id | 受控拒绝，不无限排队 |
+| 失败 | 断线、错误 hostname、过期证书、handler throw | 首个错误、owner、close code | 失败可见且不重复响应 |
+| 恢复 | 修复故障后重放同一输入 | 新旧 key、连接数、日志和队列 | 结果稳定，无悬挂资源 |
 
-目录证据：第7章 网络编程、7.1 构建TCP服务、7.1.1 TCP、7.1.2 创建TCP服务器端、7.1.3 TCP服务的事件、7.2 构建UDP服务、7.2.1 创建UDP套接字、7.2.2 创建UDP服务器端、7.2.3 创建UDP客户端、7.2.4 UDP套接字事件、7.3 构建HTTP服务、7.3.1 HTTP、7.3.2 HTTP模块、7.3.3 HTTP客户端、7.4 构建WebSocket服务、7.4.1 WebSocket握手、7.4.2 WebSocket数据传输、7.4.3 小结、7.5 网络服务与安全、7.5.1 TLS/SSL、7.5.2 TLS服务、7.5.3 HTTPS服务、7.6 总结、7.7 参考资源。本页按完整公开目录独立教学重构，不复制原书正文；24 个条目全部进入输入、机制、失败、版本和关闭证据链。
+## 练习：把协议现象还原成状态证据
 
-## 练习
+<Exercises>
 
+**问题 1：** 一个 TCP 客户端发送了两条命令，服务端却只收到一次 data 事件。怎样设计解析器？
 
-## 小结
+<Answer>
+  把 data 追加到有上限的累积 buffer，使用长度前缀或分隔符循环提取完整 frame，并保留最后一个不完整 frame 作为 remainder。测试需要覆盖两条命令合并、单条命令拆分、超长 frame、空块和连接结束时的残留；data 事件本身不能被当作消息完成信号。
+</Answer>
 
-- TCP 字节流：对应“创建套接字”的核心观察量。
-- UDP 数据报：对应“定义协议边界”的核心观察量。
-- HTTP Agent：对应“处理读写背压”的核心观察量。
-- WebSocket 帧：对应“传播错误超时”的核心观察量。
-- TLS 证书：对应“建立TLS身份”的核心观察量。
-- 24 个本页公开目录条目已全部映射到执行链与版本账本。
-- 先预测再运行；最终输出、错误传播和资源关闭共同决定是否通过。
+**问题 2：** HTTP 客户端应该在什么条件下重试？
+
+<Answer>
+  先区分 DNS/connect/TLS/headers/body/response 阶段，再只对明确幂等或带幂等键的操作重试。每次尝试共享 deadline 和 retry budget，使用 AbortSignal 取消，响应体要消费或销毁；POST 没有 request id 时不能因为网络超时就盲目重放。
+</Answer>
+
+**问题 3：** HTTPS 握手成功后，怎样证明连接可以进入业务层？
+
+<Answer>
+  记录协议版本、证书链、hostname、有效期、信任根和私钥/证书加载结果，并通过允许列表检查应用身份、Origin 或 token。错误证书、未知 CA、过期、错误 hostname 和大 body 都应 fail closed；握手成功只证明 TLS identity boundary，不代表业务授权已完成。
+</Answer>
+
+</Exercises>
 
 ## 术语表
 
+<Glossary>
+  <GlossaryItem term="message framing" definition="把字节或数据报划成有长度与上限的应用消息。" />
+  <GlossaryItem term="backpressure contract" definition="消费者变慢时暂停生产，并以 drain、ack 或窗口恢复。" />
+  <GlossaryItem term="resource ownership ledger" definition="记录 socket、timer、buffer、request 与 worker 的创建和关闭责任。" />
+  <GlossaryItem term="single-completion rule" definition="一次操作只向调用方报告一个终态。" />
+  <GlossaryItem term="TLS identity boundary" definition="用证书链、hostname、有效期与信任根验收对端身份。" />
+</Glossary>
 
+<Attribution adaptedFrom="《深入浅出 Node.js》第 7 章：网络编程" adaptedUrl="https://www.96192.com/product/detail/637599" />

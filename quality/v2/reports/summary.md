@@ -1,12 +1,12 @@
 # 全书库质量 v2 基线
 
-> 2026-08-13T06:32:12.134Z；旧版分数不迁移。
+> 2026-08-13T06:40:05.522Z；旧版分数不迁移。
 
 - 书籍：225
 - 章节：4609
-- failed：1925
+- failed：1924
 - queued：218
-- passed：1673
+- passed：1674
 - published：793
 
 | 优先级 | 书籍 | 章节 | failed | queued | passed | 阻断项 |
@@ -109,8 +109,8 @@
 | 96 | unity-scripting | 12 | 12 | 0 | 0 | 36 |
 | 97 | soa-vehicle-architecture | 11 | 11 | 0 | 0 | 44 |
 | 98 | linux-os-practice | 11 | 11 | 0 | 0 | 41 |
-| 99 | deep-nodejs | 17 | 10 | 0 | 7 | 48 |
-| 100 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 99 | jvm-g1-tuning | 17 | 10 | 7 | 0 | 29 |
+| 100 | deep-nodejs | 17 | 9 | 0 | 8 | 43 |
 | 101 | opengl-redbook | 18 | 9 | 9 | 0 | 27 |
 | 102 | llm-app-dev-essentials | 9 | 9 | 0 | 0 | 9 |
 | 103 | unity-game-optimization | 12 | 2 | 10 | 0 | 16 |
