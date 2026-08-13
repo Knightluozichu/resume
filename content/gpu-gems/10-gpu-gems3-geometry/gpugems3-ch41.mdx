@@ -1,0 +1,273 @@
+---
+title: "GPU Gems 3 · Chapter 41. Using the Geometry Shader for Compact and Variable-Length GPU Feedback"
+type: C
+section: "GPU Gems 3 Part VI · GPU Computing"
+order: 41
+description: "解释 geometry shader 如何在 GPU 内执行数据依赖的可变长度输出，并用 histogram、Hough 局部极值和 corner detection 连接紧凑反馈、GPU 局部性与分区并行。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-41-using-geometry-shader-compact-and-variable-length"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-41
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch41CornerDiagram,
+  GpuGems3Ch41DynamicOutputDiagram,
+  GpuGems3Ch41FeedbackLab,
+  GpuGems3Ch41HistogramDiagram,
+  GpuGems3Ch41HoughDiagram,
+  GpuGems3Ch41LimitsDiagram,
+  GpuGems3Ch41PipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch41-geometry-feedback";
+
+<Objectives>
+
+- 能解释 vertex shader、pixel shader 与 geometry shader 在输出形状和线程上下文上的差异，并判断何时需要数据依赖的可变输出
+- 能把 histogram、压缩、Hough 局部极值和 corner detection 拆成规则的 PS 预处理、GS 紧凑反馈与 CPU 消费三个阶段
+- 能在 Lab 中比较 geometry shader、整图回读、分区数量、输出上限和 framebuffer/stream-out，识别单线程串行化与总线瓶颈
+
+</Objectives>
+
+## 先问：GPU 算出了结果，为什么还要把整张图搬回 CPU
+
+GPU 很擅长对固定形状的数据做同一件事：每个像素运行相同的 filter，每个顶点运行相同的变换。但图像分析经常反过来：输入是一张固定大小的图，输出却可能只有几个角点、几条直线或一组统计量，而且数量要等扫描完数据才能知道。
+
+如果 pixel shader 先把所有中间结果写进图像，再让 CPU 读回整张图寻找局部极值，算法虽然“能跑”，却付出了总线流量、系统内存、CPU 工作和 GPU 停顿。GPU Gems 3 第 41 章讨论的关键转折是：把规则的逐像素工作留在 PS，把需要看上下文、决定输出数量的短程序放到 GS，只把紧凑结果反馈出去。
+
+<Callout type="tip" title="先预测：一张 1,024 × 1,024 的 Hough map 最后只找到 6 条线，CPU 真正需要什么">
+  先不要把整张 map 想成“必须回读的答案”。猜一猜：如果 GPU 能在本地找到 6 个局部极值，CPU 是否只需要 6 组位置与参数；然后在 Lab 中切换 GS feedback 与 PS buffer + CPU readback，观察 transfer model 的数量级变化。
+</Callout>
+
+## 1. 先划清三种 shader 的工作边界
+
+<Term def="位于 vertex processing 与 fragment processing 之间、能够按输入数据发出或删除几何元素的可编程 GPU 阶段；本章把它用于通用的自适应输出。">
+  geometry shader
+</Term>
+
+vertex shader 为每个输入顶点运行，适合把一个输入变换成一个规则的几何结果；pixel shader 为输出网格上的像素运行，适合对固定二维域执行相同的滤波。两者都不擅长让一个线程“看完输入后再决定要写多少个不同位置的值”：PS 的输出网格在启动时就确定，VS 若要写 `n` 个不同结果就得先提供 `n` 个输入顶点，而这些线程彼此隔离，不能共享一个自适应判断。
+
+GS 位于两者之间。它可以接收一个 primitive 或一个顶点上下文，读取纹理、做短循环，然后按照数据内容发出零个、一个或许多个顶点。这里的重点不是 GS 永远更快，而是它提供了一个固定像素网格之外的输出边界。
+
+<GpuGems3Ch41PipelineDiagram />
+
+GS 的结果有两条典型路径：让 rasterizer 根据输出顶点的位置写入 framebuffer，或者写入 DirectX 10 的 <Term def="把 geometry shader 输出增量写入 GPU 可访问线性 buffer 的路径；它省去二维位置，但需要设计各线程的输出区域。">stream-out</Term> buffer。前者适合下一个 GPU pass 继续用二维位置访问；后者更像线性数据包，紧凑却需要单独处理每个 GS thread 的输出区域。
+
+<Term def="输出数量由输入数据和程序分支决定，而不是由预先分配的像素网格决定的结果序列。">
+  variable-length output
+</Term>
+
+<Term def="把少量统计量、坐标或参数从 GPU 内部边界传给 CPU 或下一个阶段，避免搬运完整中间图像的反馈方式。">
+  compact feedback
+</Term>
+
+<Callout type="trap" title="误区：把所有循环都移到 GS，就能获得更多 GPU 并行度">
+  **现象 →** 看到 GS 可以扫描纹理并 emit 多个值，就把原本的逐像素滤波和大范围扫描全部塞进一个 GS thread。
+
+**原因 →** 单个 GS thread 的确能做数据依赖决策，却会把大量规则工作串行化；GPU 的吞吐优势来自许多线程同时处理互不依赖的分区。
+
+**修法 →** 先用 PS 完成逐像素 filter，把输入切成多个区域，再让多个 GS thread 各自做短搜索并输出局部结果。
+</Callout>
+
+## 2. 可变输出的最小模型：一次输入，逐个 emit
+
+把一个 GS thread 想成一个小型 producer：它先拿到输入上下文，扫描所需纹理或统计数据，维护一个输出游标；每发现一个要保留的结果，就写入位置和 payload，再调用 emit。输出数量直到循环结束才确定，因此可以是零，也可以是很多。
+
+<GpuGems3Ch41DynamicOutputDiagram />
+
+一个简化的伪代码形状如下。它不是某个 API 的可编译实现，重点是 `count` 来自输入，而 `emit` 的次数不需要和固定像素网格相同：
+
+```text
+count = 0
+for sample in input region:
+  value = read(sample)
+  if keep(value):
+    packet.position = outputOrigin + count
+    packet.payload = value
+    emit(packet)
+    count += 1
+writeCount(count)
+```
+
+如果输出送往 framebuffer，GS 需要显式维护二维坐标，并关闭会改变 payload 的变换、裁剪、过滤或光照路径；如果使用 stream-out，则不用追踪二维位置，但线性 buffer 的并发分区与容量仍要设计。CPU 若需要数量，可以从已知位置读取计数，或使用 occlusion query，而不必先读取整张中间图。
+
+## 3. Histogram：固定大小，也需要跨越多个像素
+
+Histogram 的 bin 数量通常固定，例如 8-bit luminance 可以有 256 个 bin，但 256 个 scalar 并不适合由一个像素直接承载。GS 可以让一个 thread 初始化局部 bins、扫描它负责的图像区域，再把 bins 作为一组输出写入多个 framebuffer 像素。
+
+<GpuGems3Ch41HistogramDiagram />
+
+输入图像较大时，不应只启动一个 GS thread。把图像切成多个区域，每个 thread 生成自己的 local histogram，然后让这些输出写向相同位置并打开加法 blending，就能把局部 bin 合并为一个最终 histogram。这样做的前提是每个局部计算彼此独立，且合并操作具有可交换、可结合的加法语义。
+
+这种写法还有一个工程启示：固定大小不等于固定一个 pixel。只要输出跨越多个像素，PS 的“一次运行对应一个输出像素”就会变得笨重；GS 的 packet 可以把一个逻辑结果序列连续发出。
+
+## 4. 压缩：当输出 blob 跨过像素边界
+
+对 4 × 4 图块做 DXT-like 压缩时，输入块可以是 128 bytes，输出大约 16 bytes：代表色、索引和插值表共同组成一个小 blob。某些固定大小的压缩格式可以让 PS 直接把结果塞进一个像素的 128 bits；但当算法需要超过一个像素能容纳的 payload，GS 可以抓取一个图块并按顺序发出多个输出 packet。
+
+这里的决策边界很具体：如果输出大小固定且恰好适合一个像素，PS 往往更简单；如果输出跨越多个像素、仍然要求一次按块生成，GS 可以把一次输入块与多个输出值绑定起来。GS 不是压缩算法本身，而是提供了“一个线程写多个结果”的接口。
+
+## 5. Hough transform：把局部极值留在 GPU 内
+
+<Term def="把图像中的点映射为参数空间中的曲线，并通过参数空间的峰值寻找可能直线的计算方法；本章用它说明如何在 GPU 上完成动态极值反馈。">
+  Hough transform
+</Term>
+
+一个完整的直线检测流水线可以拆成四步：视频或图像进入 GPU；PS 用卷积和阈值寻找高梯度像素；PS 构造 Hough map；GS 扫描局部窗口并输出 `n` 个局部极值对应的直线参数。CPU 最后拿到的是少量坐标和参数，而不是 1,024 × 1,024 的浮点 map。
+
+<GpuGems3Ch41HoughDiagram />
+
+<Term def="在给定邻域中不低于其他候选的峰值位置；Hough map 中的局部 maxima 可作为待输出的直线或特征候选。">
+  local maxima
+</Term>
+
+GS 版本的关键不是“让 GS 计算整个 Hough map”，而是让 PS 继续负责规则、密集的 map 计算，让 GS 只负责需要比较邻域、并且输出数量不预先知道的最后一段。这样既保留了 PS 的数据并行，也把稀疏结果留在 GPU 侧完成压缩。
+
+## 6. Corner detection：规则滤波之后再做稀疏反馈
+
+角点检测同样有清晰的阶段边界。梯度、特征值和局部响应等卷积工作适合 PS；候选角点数量未知，需要读取邻域并输出二维位置的阶段适合 GS。将输入图像切成多个子矩形后，每个 GS thread 写自己的候选行或区域，避免一个 thread 承担整张图。
+
+<GpuGems3Ch41CornerDiagram />
+
+当算法需要把候选点交给 CPU 做跟踪时，compact feedback 的收益来自数据位置：中间图和筛选结果已经在 GPU 端，CPU 只需要少量角点坐标。历史章节中的设备与帧率数据属于特定 GeForce 8800 GTX、CPU、驱动和 API 设置；今天应保留架构结论，重新测量实际硬件。
+
+<Callout type="trap" title="误区：只比较 GPU 和 CPU 的计算时间，不比较回读的字节数">
+  **现象 →** GPU kernel 本身很快，但完整流水线因为把中间浮点图读回系统内存，帧率没有预期提升。
+
+**原因 →** 总线传输、CPU 扫描和同步等待被隐藏在 kernel 计时之外；搬运整张中间图的成本可能超过一次局部极值搜索。
+
+**修法 →** 把端到端路径拆成 GPU compute、反馈 bytes、CPU work 和同步点；让 GS 只输出候选位置或统计量，并将中间 buffer 留在 GPU。
+</Callout>
+
+## 动手走一遍：从规则输入到紧凑反馈
+
+<Stepper>
+  <Step title="先确定哪个阶段是规则工作">
+    把卷积、梯度或 Hough map 归入 PS，把数据依赖的最后筛选留给 GS；不要从“GS 能做什么”倒推全部架构。
+
+    <GpuGems3Ch41PipelineDiagram />
+  </Step>
+  <Step title="观察一个 thread 如何决定输出数量">
+    从一个输入上下文开始，跟踪 scan、keep 和 emit；注意输出数量不是预先填满的像素网格。
+
+    <GpuGems3Ch41DynamicOutputDiagram />
+  </Step>
+  <Step title="用局部极值练习 compact feedback">
+    让 PS 生成 Hough map，再让 GS 只发出峰值对应的直线参数，比较中间数据和最终反馈的大小。
+
+    <GpuGems3Ch41HoughDiagram />
+  </Step>
+  <Step title="把稀疏点列表交给下游">
+    对 corner detection 采用规则滤波、分区、局部搜索、emit 的顺序，检查 CPU 是否只收到候选点。
+
+    <GpuGems3Ch41CornerDiagram />
+  </Step>
+</Stepper>
+
+## 7. 性能边界：分区、输出上限与纹理局部性
+
+geometry shader 的一个重要限制是：按 DirectX 10 规范，单个 GS 最多写出 1,024 个 scalar，也就是 4,096 bytes。这个上限会反过来约束输入区域的大小：如果一个区域可能产生太多输出，就必须切得更小、增加 GS thread 数，或者改变输出格式。分区不只是为了并行，也为了让每个 thread 的输出不越界。
+
+<GpuGems3Ch41LimitsDiagram />
+
+分区之后仍要注意线程效率。一个 GS thread 如果只处理很小区域，启动和输出管理开销可能占主导；如果区域过大，又会串行扫描、触及输出上限。扫描纹理时，按 tile 访问通常比线性跨大范围访问更有利于 texture cache，但 tile 尺寸依赖硬件，需要 profile。
+
+stream-out 适合线性、紧凑的结果；framebuffer 输出适合带二维位置的结果，且可以直接成为下一个 texture pass 的输入。选择 sink 时要同时看消费者的访问模式、写入并发、计数方式和是否需要 CPU 读取，不要只以“buffer 更紧凑”为判断。
+
+<Callout type="trap" title="误区：把 1,024 scalar 当成每个 GPU dispatch 的总预算">
+  **现象 →** 看到 GS 的单线程输出上限，就把所有分区的输出加总后认为整个 dispatch 必然越界，或反过来完全不检查每个区域的最坏情况。
+
+**原因 →** 约束落在单个 GS thread；分区可以分摊输出，但一个区域仍可能因为数据依赖而产生过多 packet，且线程粒度会影响并行效率。
+
+**修法 →** 先按分区估算最坏 per-thread scalars，再验证分区数量、payload 大小、线程占用和 sink 写入；同时用目标硬件 profile 确认分区没有把调度开销推得过高。
+</Callout>
+
+## 8. 用 Lab 做一次可复现的反馈比较
+
+先猜一猜：把 workload 切到 corner list，再把 partitions 从 4 调到 1，并打开“注入故障：单线程 / 回读瓶颈”，哪个指标会先恶化？然后只改变 feedback path，观察传输 scalar 数、每线程输出和 modeled throughput。
+
+<GpuGems3Ch41FeedbackLab />
+
+Lab 的 workload 对应三类教学场景：Hough peaks 是局部极值，corner list 是稀疏二维位置，histogram 是固定 bin 的多像素输出。`GS compact feedback` 的 transfer model 只模拟紧凑结果；`PS buffer + CPU readback` 则故意模拟搬运整张中间图，帮助你看到总线边界。数字是可解释的教学模型，不是现代 GPU benchmark。
+
+实验顺序建议是：先固定 workload 与 sink，只切换 feedback path；再固定 path，只切换 partitions；最后调 scalar cap 并注入故障。点击“重置实验”后应回到 Hough peaks、GS、4 regions、1,024 scalars 和 framebuffer 默认状态。
+
+## 小结
+
+- vertex shader 和 pixel shader 擅长规则、固定形状的并行工作；geometry shader 适合短小的数据依赖决策和可变长度输出。
+- GS 可以把一个输入上下文变成零个、一个或多个输出 packet，并通过 framebuffer 或 stream-out 形成反馈。
+- histogram、压缩、Hough transform 和 corner detection 的共同结构是：PS 先做密集预处理，GS 再压缩稀疏或跨像素的结果。
+- compact feedback 的收益不只在计算，还在 GPU/CPU 局部性：少读回中间图，减少总线、CPU 和同步压力。
+- 分区数量、每线程 1,024 scalar 上限、texture cache、输出 sink 和线程粒度共同决定实际性能，必须在目标硬件上复测。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中固定 Hough peaks、4 regions 和 1,024 scalar cap，比较 `GS compact feedback` 与 `PS buffer + CPU readback`。记录 transfer model 与 modeled throughput，并解释为什么 GPU compute 本身不是唯一变量。
+
+<Answer>
+
+GS 路径只传输少量峰值参数，transfer model 接近输出点数量；CPU readback 路径传输整张中间图，transfer model 会显著增大，modeled throughput 下降。即使两条路径的 PS 预处理相同，回读字节数、CPU 扫描、同步和总线占用也会改变端到端结果，因此应比较完整 pipeline，而不是只看 shader 时间。
+
+</Answer>
+
+**问题 2｜诊断输出上限。** 你把 corner list 的 partitions 调成 1，并把 scalar cap 调成 256，Lab 报告输出上限风险。请说明应该先改输出格式、增加分区，还是直接提高 cap。
+
+<Answer>
+
+先估算每个区域的最坏输出数量，再判断能否用更紧凑的 payload 或过滤规则减少 scalar 数；如果算法允许，增加 partitions 让每个 GS thread 负责更小区域通常更可靠。不能只提高 cap，因为真实 DirectX 10 约束是单线程最多 1,024 scalars；超过这个边界必须改变分区或输出设计，而不是依赖一个更大的配置值。
+
+</Answer>
+
+**问题 3｜场景选型。** 固定 256-bin histogram、Hough 局部极值和实时 corner tracking 分别优先考虑什么输出 sink？哪些证据会让你改变选择？
+
+<Answer>
+
+Histogram 可以选择 framebuffer 中的连续 bin 区域并用 blending 合并，或使用线性 stream-out 传给专门的后续处理；Hough 局部极值适合输出少量带二维位置的 framebuffer packet；corner tracking 若下游需要线性点列表，则 stream-out 更直接。最终仍要根据后续 pass 的访问模式、写入冲突、计数获取、缓存行为和 CPU 是否需要读取来 profile；sink 的名字本身不能替代测量。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="geometry shader">
+    位于 vertex 与 fragment processing 之间、能依据输入发出或删除几何元素的可编程阶段。
+  </GlossaryItem>
+  <GlossaryItem term="variable-length output">
+    输出数量由输入数据决定，而不是由固定像素网格预先决定的结果。
+  </GlossaryItem>
+  <GlossaryItem term="compact feedback">
+    只把少量统计量、位置或参数从 GPU 反馈给 CPU 或下游，避免搬运完整中间图。
+  </GlossaryItem>
+  <GlossaryItem term="stream-out">
+    将 geometry shader 结果增量写入 GPU 可访问线性 buffer 的输出路径。
+  </GlossaryItem>
+  <GlossaryItem term="Hough transform">
+    将图像点映射到参数空间，并通过参数空间峰值寻找直线等几何结构的方法。
+  </GlossaryItem>
+  <GlossaryItem term="local maxima">
+    在给定邻域内不低于其他候选的峰值位置，可作为稀疏特征候选。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 41. Using the Geometry Shader for Compact and Variable-Length GPU Feedback"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-41-using-geometry-shader-compact-and-variable-length"
+/>
