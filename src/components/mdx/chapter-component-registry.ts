@@ -13310,6 +13310,15 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.Duj3Part5ConcurrencyEvidenceMap,
       } as ChapterMdxComponents;
     },
+  "deep-understanding-jvm/17-duj3-12-memory-model-threads/duj3-12-memory-model-threads":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/deep-understanding-jvm/duj3-chapter12-memory-model-threads-evidence-map");
+      return {
+        Duj3Chapter12MemoryModelThreadsEvidenceMap:
+          module0.Duj3Chapter12MemoryModelThreadsEvidenceMap,
+      } as ChapterMdxComponents;
+    },
   "dragon-book-compilers/00-guide/dbc-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/dragon-book-compilers/v2/dbc-official-learning-map");
