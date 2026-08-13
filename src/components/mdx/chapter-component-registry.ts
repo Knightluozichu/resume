@@ -8951,6 +8951,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.Ctc10AdvancedCsharpBoundaryMapDiagram,
     } as ChapterMdxComponents;
   },
+  "csharp-10-core/05-official/dotnet-overview": async () => {
+    const module0 =
+      await import("@/components/mdx/csharp-10-core/dotnet-overview-compatibility-matrix-diagram");
+    return {
+      Ctc10DotnetOverviewCompatibilityMatrixDiagram:
+        module0.Ctc10DotnetOverviewCompatibilityMatrixDiagram,
+    } as ChapterMdxComponents;
+  },
   "csharp-10-core/07-official/collections": async () => {
     const module0 =
       await import("@/components/mdx/csharp-10-core/collections-capability-flow-diagram");

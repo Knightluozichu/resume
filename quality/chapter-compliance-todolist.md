@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T05:21:30.788Z
+> 生成时间：2026-08-13T05:26:28.149Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -15,8 +15,8 @@
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
 | failed | 1925 |
-| queued | 230 |
-| passed | 1661 |
+| queued | 229 |
+| passed | 1662 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -2991,7 +2991,7 @@
     - 路径：`content/csapp/06-review/cap-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## csharp-10-core（27 个内容页面 · queued:12 passed:15 · 🚫 门禁阻断 13 项）
+## csharp-10-core（27 个内容页面 · queued:11 passed:16 · 🚫 门禁阻断 12 项）
 
 - 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：csharp-10-core: publication-policy-not-approved。
@@ -3014,7 +3014,7 @@
 - [x] ✅ **04-official/advanced-csharp** — passed；score 98
     - 路径：`content/csharp-10-core/04-official/advanced-csharp.mdx`
     - 正式 unit：`ctc10-04` explained=18/18
-- [ ] ⚠️ P1 **05-official/dotnet-overview** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
+- [x] ✅ **05-official/dotnet-overview** — passed；score 98
     - 路径：`content/csharp-10-core/05-official/dotnet-overview.mdx`
     - 正式 unit：`ctc10-05` explained=6/6
 - [ ] ⚠️ P1 **06-official/dotnet-fundamentals** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
