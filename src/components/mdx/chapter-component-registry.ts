@@ -13418,6 +13418,14 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.FactoryMethodCreationBoundaryLab,
     } as ChapterMdxComponents;
   },
+  "design-patterns/01-creational/singleton": async () => {
+    const module0 =
+      await import("@/components/mdx/design-patterns/singleton-ownership-boundary-lab");
+    return {
+      SingletonOwnershipBoundaryLab:
+        module0.SingletonOwnershipBoundaryLab,
+    } as ChapterMdxComponents;
+  },
   "design-patterns/01-creational/builder": async () => {
     const module0 =
       await import("@/components/mdx/design-patterns/builder-construction-contract-lab");
