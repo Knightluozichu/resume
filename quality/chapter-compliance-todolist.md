@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T02:58:48.245Z
+> 生成时间：2026-08-13T03:02:30.726Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -13,7 +13,7 @@
 | 实际 MDX 章节/页面 | 4609 |
 | manifest 正式 unit | 4649 |
 | manifest 未映射 unit | 9 |
-| manifest 证据不完整 unit | 493 |
+| manifest 证据不完整 unit | 492 |
 | failed | 1925 |
 | queued | 245 |
 | passed | 1646 |
@@ -2467,7 +2467,7 @@
 
 ## cpp-concurrency（12 个内容页面 · passed:12 · ✅ 书级门禁条件满足）
 
-- 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=95.2%；未映射 unit=0；证据不完整 unit=3。
+- 门禁摘要：目录=未登记，manifest=11；正式概念覆盖率=96.8%；未映射 unit=0；证据不完整 unit=2。
 
 - [x] ✅ **advanced/designing-concurrent-code** — passed；score 100
     - 路径：`content/cpp-concurrency/advanced/designing-concurrent-code.mdx`
@@ -2487,9 +2487,9 @@
 - [x] ✅ **data-structures/lock-free** — passed；score 99
     - 路径：`content/cpp-concurrency/data-structures/lock-free.mdx`
     - 正式 unit：`ccia2-07` explained=6/6
-- [x] ✅ **fundamentals/hello-concurrency** — passed；score 96
+- [x] ✅ **fundamentals/hello-concurrency** — passed；score 99
     - 路径：`content/cpp-concurrency/fundamentals/hello-concurrency.mdx`
-    - 正式 unit：`ccia2-01` explained=4/5
+    - 正式 unit：`ccia2-01` explained=5/5
 - [x] ✅ **fundamentals/managing-threads** — passed；score 100
     - 路径：`content/cpp-concurrency/fundamentals/managing-threads.mdx`
     - 正式 unit：`ccia2-02` explained=6/6
@@ -2505,8 +2505,6 @@
 - [x] ✅ **shared-data/synchronizing-operations** — passed；score 100
     - 路径：`content/cpp-concurrency/shared-data/synchronizing-operations.mdx`
     - 正式 unit：`ccia2-04` explained=7/7
-- [ ] 🔴 P1 **[正式 unit ccia2-01] Hello, world of concurrency in C++!** — evidence 不完整；explained=4/5
-    - 关联路径：`content/cpp-concurrency/fundamentals/hello-concurrency.mdx`
 - [ ] 🔴 P1 **[正式 unit ccia2-05] The C++ memory model and operations on atomic types** — evidence 不完整；explained=6/7
     - 关联路径：`content/cpp-concurrency/memory-model/atomic-types.mdx`、`content/cpp-concurrency/memory-model/memory-ordering.mdx`
 - [ ] 🔴 P1 **[正式 unit ccia2-09] Advanced thread management** — evidence 不完整；explained=4/5
