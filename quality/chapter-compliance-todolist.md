@@ -1,6 +1,6 @@
 # 全库章节规范符合性待办清单（完整库存）
 
-> 生成时间：2026-08-13T05:31:06.387Z
+> 生成时间：2026-08-13T05:36:00.276Z
 > 生成命令：`node scripts/generate-chapter-compliance-todolist.mjs`
 > 章节库存：`content/` 全部 MDX ↔ `quality/publication-ledger.json`
 > 门禁库存：`quality/fidelity-manifests.json` 全部正式 unit；未映射 unit 单独列为门禁阻断任务
@@ -15,8 +15,8 @@
 | manifest 未映射 unit | 9 |
 | manifest 证据不完整 unit | 475 |
 | failed | 1925 |
-| queued | 228 |
-| passed | 1663 |
+| queued | 227 |
+| passed | 1664 |
 | published | 793 |
 
 状态说明：`[ ]` 表示仍有章节质量问题、正式 unit 门禁缺口或证据不完整；`[x]` 仅表示该内容页面自身已通过章节审计。书级 manifest 阻断仍以每本书标题下的门禁摘要为准。
@@ -2991,7 +2991,7 @@
     - 路径：`content/csapp/06-review/cap-official-final-review.mdx`
     - 正式 unit：未映射（该页面没有 unitEvidence）
 
-## csharp-10-core（27 个内容页面 · queued:10 passed:17 · 🚫 门禁阻断 11 项）
+## csharp-10-core（27 个内容页面 · queued:9 passed:18 · 🚫 门禁阻断 10 项）
 
 - 门禁摘要：目录=未登记，manifest=25；正式概念覆盖率=100%；未映射 unit=0；证据不完整 unit=0。
 - 其他门禁阻断：csharp-10-core: publication-policy-not-approved。
@@ -3023,7 +3023,7 @@
 - [x] ✅ **07-official/collections** — passed；score 96
     - 路径：`content/csharp-10-core/07-official/collections.mdx`
     - 正式 unit：`ctc10-07` explained=8/8
-- [ ] ⚠️ P1 **08-official/linq-queries** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
+- [x] ✅ **08-official/linq-queries** — passed；score 98
     - 路径：`content/csharp-10-core/08-official/linq-queries.mdx`
     - 正式 unit：`ctc10-08` explained=9/9
 - [ ] ⚠️ P1 **09-official/linq-operators** — queued（待发布）；score 69；门禁阻断: status=queued、score=69<90、dimensionFailures=visual,ux、hardBlockers=quality-v2-unreviewed、qualityVersion!=2、practiceMode-missing、sourceMode-missing；hardBlockers: quality-v2-unreviewed；维度缺口: visual、ux
