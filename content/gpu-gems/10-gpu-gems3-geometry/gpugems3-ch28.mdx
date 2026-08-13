@@ -1,0 +1,263 @@
+---
+title: "GPU Gems 3 · Chapter 28. Practical Post-Process Depth of Field"
+type: C
+section: "GPU Gems 3 Part IV · Image Effects"
+order: 28
+description: "从薄透镜与圆形弥散圈出发，解释如何用低分辨率 CoC、高斯平滑和可变宽度合成实现可接入现有引擎的后处理景深。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-28-practical-post-process-depth-field"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-28
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch28CocDiagram,
+  GpuGems3Ch28CompositeDiagram,
+  GpuGems3Ch28DepthOfFieldLab,
+  GpuGems3Ch28DownsampleDiagram,
+  GpuGems3Ch28EdgeContinuityDiagram,
+  GpuGems3Ch28PipelineDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch28-depth-of-field";
+
+<Objectives>
+
+- 能解释焦点平面、光圈和前后景清晰范围之间的关系
+- 能修改 Practical Depth of Field Lab 的焦点、光圈、CoC 算法与工作分辨率，比较成本和伪影
+- 能回答：为什么先平滑近景 CoC，再用可变宽度模糊合成，比每个像素独立随机取样更稳定
+
+</Objectives>
+
+## 先问：为什么镜头只让一段距离清楚
+
+想象一张纸上有一排小人，镜头前后各放一个透明圆环。只有落在纸面上的光线会聚成一个小点，离开纸面的光线会在纸上摊成一圈；圈越大，轮廓越软。
+
+本章要解决的问题是：已有一帧画面和每个位置的远近记录时，怎样让一段距离保持清楚，让前后景逐渐变软，同时把运算量控制在实时游戏可以接受的范围内。
+
+没有这套安排，最直接的做法要么把场景重复渲染很多次，要么对每个像素做昂贵的随机邻域搜索；前者难接入旧引擎，后者会产生响铃边缘、前景轮廓仍然锐利等明显破绽。
+
+<Callout type="tip" title="先预测：把光圈调大后，先变软的是谁？">
+  在 Lab 中保持焦点不动，把光圈从小改成大。先猜前景、焦平面、背景中哪个区域的 CoC 增长最快，再切换场景深度验证你的预测。
+</Callout>
+
+## 1. 薄透镜把“清楚”变成一个半径问题
+
+<Callout type="trap" title="误区：把焦点当成一个固定厚度的平面">
+  **现象 →** 焦点附近突然从清晰跳到模糊，画面像切出一条硬边。
+
+**原因 →** 景深不是“平面内清晰、平面外立刻模糊”，而是允许弥散圈在阈值内连续增长的范围。
+
+**修法 →** 从深度计算连续的弥散圈直径，让最终混合权重随 CoC 平滑变化。
+
+</Callout>
+
+<Term def="镜头把一个空间点成像到感光平面时形成的圆；圆越大，屏幕上的点越不清楚。">
+  circle of confusion
+</Term>
+
+把镜头的焦距记作 `f`，光圈半径记作 `d`，物体距离记作 `u`。薄透镜几何告诉我们：物体在成像面前后偏离时，不再落成一点，而是形成直径为 `c` 的圆。实时实现不必精确模拟每条光线，但必须保留“离焦越远，圆越大”的单调关系。
+
+<Term def="镜头把光线聚成清晰点的那一层空间；它由当前相机焦距和被选择的对焦距离决定。">
+  focal plane
+</Term>
+
+焦平面上的 `c` 接近零，前景的 CoC 通常增长得更快，远景则有一个较明显的上界。这解释了为什么一个统一的模糊半径既不自然，也无法同时照顾近处物体和远处背景。
+
+<GpuGems3Ch28CocDiagram />
+
+## 2. 先选择后处理路径，再决定要保留多少物理细节
+
+景深可以用光线追踪、累积多次相机、分层合成、向前散射或向后聚合等方式实现。对于已经有颜色和深度输出的游戏引擎，基于 z-buffer 的图像处理更容易接入：它把场景绘制与景深处理分开，且深度图还能复用于软粒子和雾。
+
+<Term def="保存每个屏幕位置远近的图；景深后处理用它计算每个像素的 CoC，而不必再次绘制几何。">
+  depth buffer
+</Term>
+
+本章的实现选择“向后聚合”思路：每个目标像素从邻域取颜色，而不是把源像素散射到未知的目标位置。这样访问模式更适合纹理采样，也能在最后一个全屏 pass 里统一决定清晰、小模糊还是大模糊。
+
+对于不允许把深度缓冲当纹理读取的旧硬件，可以在深度预通过程把世界空间距离写入 32 位浮点颜色目标。透明像素用 `clip()` 丢弃，后续阶段仍然读取同一份深度信息；这改变的是数据通道，不改变 CoC 和合成逻辑。
+
+## 3. 近景 CoC 先下采样，再用平滑消掉硬边
+
+<Callout type="trap" title="误区：每个像素独立随机取样就能覆盖前景">
+  **现象 →** 远景看起来有景深，近景物体的轮廓仍然锐利，边缘还有响铃和噪点。
+
+**原因 →** 只按当前像素的 CoC 取样会让离焦前景和清晰背景互相影响不对称，样本不足时更会暴露半径 discontinuity。
+
+**修法 →** 先生成近景 CoC 图，将颜色与 CoC 下采样到四分之一分辨率，再做大范围高斯平滑让邻域半径连续。
+
+</Callout>
+
+<Term def="把图像或 CoC 的宽高都缩小到原来的四分之一的处理步骤；它让大半径模糊只遍历少量目标像素。">
+  quarter-resolution downsample
+</Term>
+
+完整的前半段可以拆成三个动作：先为前景像素计算 CoC，焦点和背景像素的近景 CoC 设为零；再同时缩小颜色与近景 CoC；最后在缩小的 CoC 图上做大范围平滑。按面积看，四分之一宽高意味着只处理十六分之一的像素。
+
+<Term def="用邻域加权平均逐步扩散颜色或 CoC 的滤波；水平和垂直分离后，可以用较少的纹理读取完成大半径平滑。">
+  Gaussian blur
+</Term>
+
+高斯模糊的重点不是制造一个更大的颜色污渍，而是让 CoC 在边缘附近连续。实际实现可以把大半径拆成水平、垂直两个方向，并利用双线性过滤一次拿到相邻样本，从而把纹理读取成本压下来。
+
+<GpuGems3Ch28DownsampleDiagram />
+
+## 4. 用邻域最大值保护前景轮廓的连续性
+
+近景物体和清晰背景交界处最容易露馅：如果只看当前像素，前景边缘可能只模糊一半，背景颜色还会穿过它。算法不必搜索所有邻居，而是用已经平滑的 CoC 估计附近半径，并在两侧选择更大的直径，再做一次小模糊。
+
+<GpuGems3Ch28EdgeContinuityDiagram />
+
+这个修正是在质量和成本之间取舍。它不保证每个遮挡关系都像多层几何一样正确，却能把最刺眼的硬边、响铃和 90 度角不连续压下去。对实时第一人称游戏来说，连续的视觉感受往往比严格的物理可逆更重要。
+
+## 动手走一遍：四个阶段组成可插拔的景深管线
+
+<Stepper>
+  <Step title="先从深度计算前后景 CoC">
+    用焦点距离、光圈和深度得到近景与远景的弥散圈，焦平面附近接近零。
+
+    <GpuGems3Ch28CocDiagram />
+
+  </Step>
+  <Step title="再把颜色和近景 CoC 缩小">
+    在四分之一分辨率目标中同时保留颜色和近景 CoC，先用较低分辨率承受大范围模糊。
+
+    <GpuGems3Ch28DownsampleDiagram />
+
+  </Step>
+  <Step title="平滑 CoC 并修正边缘">
+    对近景 CoC 做高斯模糊，使用邻域较大半径保护离焦前景的轮廓连续性。
+
+    <GpuGems3Ch28EdgeContinuityDiagram />
+
+  </Step>
+  <Step title="最后按 CoC 混合多个模糊级别">
+    读取清晰、小模糊和大模糊图像，根据近景和远景 CoC 的权重做一次可变宽度全屏合成。
+
+    <GpuGems3Ch28CompositeDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch28PipelineDiagram />
+
+## 5. 可变宽度模糊把成本集中在需要的像素
+
+<Term def="让每个像素根据自己的 CoC，在清晰、中等和大模糊图像之间选择不同混合比例的最后一步。">
+  variable-width blur
+</Term>
+
+最终 pass 可以准备三档结果：原始或清晰图、小半径模糊图、大半径模糊图。对每个像素读取深度得到远景 CoC，同时读取经过修正的近景 CoC，取两者较大值，再把这个值映射到三档之间的权重。权重从一档平滑过渡到下一档，避免半径变化时出现亮度跳变。
+
+```hlsl
+half3 sharp = GetSmallBlurSample(texCoords);
+half3 medium = tex2D(mediumSampler, texCoords).rgb;
+half3 large = tex2D(largeSampler, texCoords).rgb;
+half depth = tex2D(depthSampler, texCoords).r;
+half nearCoc = tex2D(nearCocSampler, texCoords).r;
+half farCoc = saturate(dofEqFar.x * depth + dofEqFar.y);
+half coc = max(nearCoc, farCoc * dofEqFar.z);
+
+half3 color = lerp(sharp, medium, smoothstep(0.0, smallRange, coc));
+color = lerp(color, large, smoothstep(mediumRange, largeRange, coc));
+return half4(color, coc);
+```
+
+这里的关键不是某一组常数，而是把近景和远景都纳入同一个连续的 CoC，且每次插值都保持颜色能量稳定。大半径越大，画面越像把整张屏幕涂开；所以最大半径应由目标物体尺寸、细节频率和平台预算共同决定。
+
+## 6. 透明物体与大半径是必须显式接受的边界
+
+<Callout type="trap" title="误区：把最大半径无限调大来追求更强景深">
+  **现象 →** 前景出现一圈雾，背景细节被完全抹掉，镜头移动时边缘像贴了一层光晕。
+
+**原因 →** 后处理只能模糊屏幕上已有的颜色，无法凭空补回被前景遮住的背景；半径过大时屏幕模糊会暴露出来。
+
+**修法 →** 限制最大 CoC，按目标场景调节近景半径；需要更强效果时单独渲染前景层，并为透明表面安排独立处理。
+
+</Callout>
+
+透明表面通常会继承其后方第一个不透明物体的 CoC，玻璃、粒子和窗口边缘因此可能出现不一致。常见工程选择是先对不透明几何完成景深，再在后面单独画透明对象，或接受少量边界伪影换取更低的管线侵入。
+
+<GpuGems3Ch28DepthOfFieldLab />
+
+先猜一猜：把“平滑 CoC”切换成“随机取样”，再把前景场景的焦点推远，哪个指标会先暴露问题？在 Lab 中一次改一个参数，观察前景 CoC、背景 CoC、最大模糊半径与伪影风险。
+
+## 小结
+
+- 焦平面附近 CoC 接近零，前景和背景离焦程度不同。
+- 深度图让景深成为可插入现有引擎的后处理。
+- 四分之一分辨率与高斯模糊承担大半径近景工作。
+- 平滑并取邻域较大 CoC，能减少前景硬边和响铃。
+- 最后一遍可变宽度合成，在质量、成本和透明边界之间取舍。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 把最终合成中的 `smallRange`、`mediumRange` 和 `largeRange` 改成三组更近的阈值，比较焦点过渡是否变硬，以及颜色是否出现跳变。
+
+<Answer>
+
+三档范围太近会让权重快速切换，焦点附近更容易出现 banding 或亮度不连续；范围适当拉开，清晰、中模糊、大模糊之间会有更长的平滑过渡。修改后仍应保证同一像素的权重不会重复累计过量。
+
+</Answer>
+
+**问题 2｜诊断前景轮廓。** 远景效果自然，但近处角色的轮廓像剪纸一样清楚。请说明为什么只按当前像素 CoC 的随机取样会失败，以及应加入哪一步。
+
+<Answer>
+
+当前像素的随机取样不能让相邻背景像素知道前景的较大半径，因此前景 silhouette 会保持锐利或产生响铃。应先生成近景 CoC，做大范围高斯平滑，并用邻域估计的较大 CoC 修正边缘，再进入最终合成。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个普通第一人称场景、一个需要极大前景模糊的离线镜头、一个包含大量透明粒子的场景，分别说明是否适合本章的纯后处理路径。
+
+<Answer>
+
+普通第一人称场景适合用四分之一分辨率 CoC 加平滑合成，兼顾成本和连续性；极大前景模糊会暴露屏幕模糊限制，离线镜头可考虑分层或光线方法；透明粒子需要在不透明景深之后单独处理，否则会继承错误的深度和 CoC。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="circle of confusion">
+    离焦点在成像面上形成的圆；圆越大，物体看起来越模糊。
+  </GlossaryItem>
+  <GlossaryItem term="focal plane">
+    镜头把光线聚成清晰点的一层空间，焦点距离决定它的位置。
+  </GlossaryItem>
+  <GlossaryItem term="depth buffer">
+    记录每个屏幕位置远近的图，景深用它计算 CoC。
+  </GlossaryItem>
+  <GlossaryItem term="quarter-resolution downsample">
+    把宽高都缩小到四分之一，让大半径模糊只处理少量目标像素。
+  </GlossaryItem>
+  <GlossaryItem term="Gaussian blur">
+    用邻域加权平均平滑颜色或 CoC 的滤波，常拆成水平和垂直两次。
+  </GlossaryItem>
+  <GlossaryItem term="variable-width blur">
+    根据每个像素的 CoC，在不同模糊级别之间连续混合的方式。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 28. Practical Post-Process Depth of Field"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-28-practical-post-process-depth-field"
+/>
