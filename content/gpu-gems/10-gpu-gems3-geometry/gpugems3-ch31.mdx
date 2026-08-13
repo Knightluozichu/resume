@@ -1,0 +1,248 @@
+---
+title: "GPU Gems 3 · Chapter 31. Fast N-Body Simulation with CUDA"
+type: C
+section: "GPU Gems 3 Part V · Physics Simulation"
+order: 31
+description: "从单体引力核推导 all-pairs N 体计算，解释 shared memory tile、CUDA thread block、同步与循环展开如何把 O(N²) 工作变成高吞吐 GPU kernel。"
+demo: true
+math: false
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-31-fast-n-body-simulation-cuda"
+draft: false
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
+officialUnitId: gpg-v3-31
+---
+
+import {
+  Answer,
+  Attribution,
+  Callout,
+  Exercises,
+  Glossary,
+  GlossaryItem,
+  Objectives,
+  Term,
+} from "@/components/mdx/mdx-components";
+import { Step, Stepper } from "@/components/mdx/stepper";
+import {
+  GpuGems3Ch31BlockDiagram,
+  GpuGems3Ch31ForceDiagram,
+  GpuGems3Ch31NBodyLab,
+  GpuGems3Ch31OptimizationDiagram,
+  GpuGems3Ch31PipelineDiagram,
+  GpuGems3Ch31TileReuseDiagram,
+} from "@/components/mdx/gpu-gems/diagrams/gpugems3-ch31-nbody";
+
+<Objectives>
+
+- 能解释 all-pairs N 体力计算为什么有 N² 个独立交互，以及软化项如何保护数值积分
+- 能修改 CUDA N-Body Lab 的 body 数、tile 大小、循环展开和小规模 N 的线程策略，比较复用、占用率与吞吐
+- 能回答：为什么把 p 个 body 放进 shared memory 后，thread block 仍需要两次同步才能安全遍历所有 tile
+
+</Objectives>
+
+## 先问：为什么每个 body 都要看见所有其他 body
+
+想象一群星体、带电粒子或分子。每个 body 都会被其他 body 拉动；下一步的位置取决于这一时刻的合力。若只让每个线程读取一个邻居，仍然没有回答“一个目标 body 如何汇总全部相互作用”。
+
+本章解决的问题是：把每个目标 body 的 N 次 pair interaction 映射到 CUDA，同时避免把 N² 个中间力全部写入显存。核心不是改变 all-pairs 的复杂度，而是让同一批位置数据被很多线程反复使用。
+
+这也是为什么本章的优化看起来像“分块”和“排队”：每个 thread block 负责一批目标 body，按 tile 装入共享内存，再让每个线程顺序扫过所有 tile，最后只写回自己的加速度。
+
+<Callout type="tip" title="先预测：tile 变大一定更快吗？">
+  在 Lab 中先保持大 N，把 tile 从 16 调到 32，再把 body 数切到 1,024。先猜全局读取量、占用率和吞吐哪一项会反转，再切换小规模 N 的双线程策略。
+</Callout>
+
+## 1. 先把物理问题压缩成一个 pair kernel
+
+<Callout type="trap" title="误区：把每一对交互的结果都写进 N×N 显存矩阵">
+  **现象 →** 计算虽然并行，却很快被显存容量和带宽限制，最后还要额外做一次归约。
+
+**原因 →** N² 个交互结果只是中间量；每个目标 body 真正需要的是沿行累加后的一个合力或加速度。
+
+**修法 →** 让线程持有自己的局部加速度，边读取 partner body 边累加，只把每个目标 body 的最终结果写回全局内存。
+
+</Callout>
+
+<Term def="对所有目标 body 与所有源 body 计算 pair interaction，再沿每个目标 body 的行累加总力的直接算法。">
+  all-pairs
+</Term>
+
+设目标 body `i` 的位置为 `xᵢ`，源 body `j` 的位置为 `xⱼ`，相对向量是 `rᵢⱼ = xⱼ − xᵢ`。引力的方向沿着 `rᵢⱼ`，强度随距离平方衰减；把质量、方向和距离项合在一起，就能得到对 `aᵢ` 的一次增量。
+
+当两个 body 非常接近时，理想点质量模型会让力变得过大，数值积分因此不稳定。加入正的 softening 项 `ε²`，相当于给分母一个下限，不让一次交互把速度直接推飞。
+
+<Term def="加入距离平方分母的正小量；它限制近距离交互的力峰值，让离散时间积分更稳定。">
+  softening
+</Term>
+
+```cuda
+__device__ float3 bodyBodyInteraction(float4 bi, float4 bj, float3 ai) {
+  float3 r = make_float3(bj.x - bi.x, bj.y - bi.y, bj.z - bi.z);
+  float distSqr = dot(r, r) + EPS2;
+  float invDistCube = rsqrtf(distSqr * distSqr * distSqr);
+  float scale = bj.w * invDistCube;
+  return ai + scale * r;
+}
+```
+
+这个 device 函数只处理一对 body。它包含减法、乘加和 inverse square root；把它放进更大的 tile 循环后，每个线程可以复用自己的 `bi`，只换入不同的 `bj`。
+
+<GpuGems3Ch31ForceDiagram />
+
+## 2. 用 tile 把 N² 次交互变成可复用的访问模式
+
+如果直接为每个 pair 分配一个线程，就需要把完整的 N×N 结果保存下来，带宽会成为瓶颈。更好的视角是把 pair 矩阵切成 p×p 的方块：p 个线程各自负责一个目标 body，同时共享同一组 p 个源 body。
+
+<Term def="pair interaction 矩阵中的 p×p 方块；p 个线程复用 p 个源 body，完成 p² 次交互并更新 p 个目标加速度。">
+  computational tile
+</Term>
+
+先由 block 中的 p 个线程从 global memory 各加载一个 `float4` body description 到 shared memory。同步后，每个线程循环读取这 p 个共享值，连续调用 pair kernel p 次。于是一次 tile 只需加载 2p 份 body 描述，却完成 p² 次交互。
+
+<GpuGems3Ch31TileReuseDiagram />
+
+这里的复用不是免费魔法：shared memory 容量、寄存器使用和线程数都会约束 p。p 变大能降低每次时间步的全局读取量 `N² / p`，但也会减少同时驻留的 block 数；真正的最佳值必须在硬件资源和 N 的大小之间测出来。
+
+## 3. thread block 沿 tile 网格循环，两个同步点守住共享数组
+
+一个 block 绑定 p 个目标 body。它把第一个 p 个源 body 放进 shared memory，所有线程同步后开始计算；每个线程把自己的局部加速度累加完，再次同步，才能让下一轮加载覆盖 shared memory。
+
+<Callout type="trap" title="误区：只在加载后同步，计算完就立刻覆盖 tile">
+  **现象 →** 某些线程偶尔读到下一 tile 的位置，结果出现非确定性的轨道抖动或跨设备差异。
+
+**原因 →** block 内较快的线程可能已经开始写入下一轮 shared memory，而较慢线程仍在读取上一轮的 partner body。
+
+**修法 →** 每次 tile 都执行“加载后同步 → 计算 → 计算后同步”，让所有线程在覆盖共享数组前完成当前 tile 的读取。
+
+</Callout>
+
+每个 block 最终写回 p 个加速度，整个 grid 由 `N / p` 个 block 覆盖 N 个目标 body。这样总交互次数仍是 N²，但不再需要把每个 pair 的中间结果落到显存。
+
+<GpuGems3Ch31BlockDiagram />
+
+边界条件要明确：如果 N 不是 p 的整数倍，最后一个 block 需要保护越界的 body 读取；实际实现还要决定是否补零、缩小最后一个 tile，或把输入数量填充到方便的倍数。
+
+## 动手走一遍：从 pair 到调优后的 CUDA kernel
+
+<Stepper>
+  <Step title="先计算一对 body 的力">
+    用当前位置差、softening 和源 body 质量计算一次加速度增量；这个 kernel 不负责调度其他线程。
+
+    <GpuGems3Ch31ForceDiagram />
+
+  </Step>
+  <Step title="再加载并复用一个 computational tile">
+    p 个线程各加载一个 body 到 shared memory，随后每个线程扫过 p 个源 body，完成 p² 次交互。
+
+    <GpuGems3Ch31TileReuseDiagram />
+
+  </Step>
+  <Step title="然后让 thread block 遍历整个 grid">
+    N / p 个 block 分别负责不同的目标行，每个 block 按 tile 循环，两个同步点保护共享数组。
+
+    <GpuGems3Ch31BlockDiagram />
+
+  </Step>
+  <Step title="最后用参数把硬件喂饱">
+    比较 tile 大小、循环展开和小 N 时的额外线程；目标是减少控制/带宽成本，同时保留足够的驻留 block 隐藏延迟。
+
+    <GpuGems3Ch31OptimizationDiagram />
+
+  </Step>
+</Stepper>
+
+<GpuGems3Ch31PipelineDiagram />
+
+## 4. 循环展开减少控制开销，但不能替代并行度
+
+pair kernel 中的 inverse square root 比简单加法更贵，循环本身也有分支和索引更新成本。把内层循环展开为连续的 2、4 或 8 次调用，编译器可以减少控制指令，并让独立的算术工作更容易流水化。
+
+<Term def="把多次固定迭代写成连续操作，减少循环控制和函数调用开销；它增加代码体积，也可能提高寄存器压力。">
+  loop unrolling
+</Term>
+
+展开因子不能无限增大。它会增加指令和寄存器使用；如果因此降低 occupancy，减少的循环开销可能抵不过同时少了多少个活跃 warp。要用实际 body 数、tile 大小和编译结果一起判断。
+
+对于 N 较大的场景，N 个线程已经能提供足够并行度；对于 N 小于约 4096 的场景，单线程对应一个 body 时可能无法覆盖 GPU 延迟。此时可以让同一个 body 的行由多个线程分段处理，再归并加速度，不过线程块总资源仍有上限。
+
+<GpuGems3Ch31OptimizationDiagram />
+
+## 5. 用 CUDA N-Body Lab 观察复用与吞吐的张力
+
+<GpuGems3Ch31NBodyLab />
+
+先猜一猜：在大 N 时把 tile 从 16 改成 32，为什么全局读取量会降而吞吐不一定升？再把 body 数切到 1,024，打开“两线程每 body”，观察小规模工作如何获得更多活跃线程。
+
+## 6. all-pairs 是局部 kernel，不等于整个 N 体算法只能是 O(N²)
+
+all-pairs 简单、规整、容易让 GPU 保持高吞吐，但它的总交互数仍然按 N² 增长。大规模模拟通常把它放在近场部分：近距离 leaf cell 用 all-pairs，远距离 cell 则用 Barnes–Hut、快速多极子法或 particle-mesh 等近似。
+
+这样看，优化 all-pairs 仍然有系统价值。近场 kernel 变快后，层次算法可以使用更大的 leaf cell，把更多工作放到更快的近场路径；但不能把单个 kernel 的高吞吐误认为已经改变了全局复杂度。
+
+## 小结
+
+- all-pairs 为每个目标 body 累加 N 次 pair interaction，提供 N² 级并行工作。
+- softening 限制近距离力峰值，让离散时间积分不容易发散。
+- computational tile 用 shared memory 复用 p 个源 body，以 p² 次交互摊薄全局读取。
+- thread block 需要加载后和计算后两次同步，才能安全循环遍历所有 tile。
+- tile 大小、循环展开和小 N 的多线程策略必须一起用吞吐、资源占用和数值结果评估。
+
+## 练习
+
+<Exercises>
+
+**问题 1｜修改 Demo 代码。** 在 Lab 中从大 N、tile 16、展开 4 开始，依次改成 tile 32 和展开 8，记录 pair interactions、global loads 与 relative throughput 的变化，并解释为什么交互数没有变。
+
+<Answer>
+
+pair interactions 仍然是 N²，因为 tile 只改变访问和调度方式；tile 32 会让每次 tile 复用更多源 body，normalized global loads 下降，但大 tile 也可能减少驻留 block；展开 8 可能减少循环控制成本，同时增加寄存器压力，所以吞吐不保证单调上升。
+
+</Answer>
+
+**问题 2｜诊断结果偶发抖动。** 同一组输入在不同运行中出现不同轨道，且错误集中在 tile 边界。请判断优先检查哪一处同步。
+
+<Answer>
+
+优先检查计算结束后的第二个同步点。没有它，较快线程可能覆盖 shared memory，而其他线程仍在读取上一 tile 的 body；其次检查最后一个不满 p 的 tile 是否有越界保护，以及 softening 是否保持为正。
+
+</Answer>
+
+**问题 3｜场景选型。** 一个 N=16,384 的星体系统、一个 N=1,024 的小型交互沙盒、一个包含 256K body 的大规模层次模拟，分别选择本章的调优策略。
+
+<Answer>
+
+16,384 个 body 适合一个线程对应一个 body，再用 shared tile、合适的展开因子和顺序访问把算术单元喂满；1,024 个 body 可以尝试两个线程分摊一个 body 的交互行，以增加活跃线程；256K body 不应把全局 all-pairs 当作唯一算法，而应让 Barnes–Hut 或 FMM 负责远场，把优化后的 all-pairs 用在近场 leaf cell。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="all-pairs">
+    让每个目标 body 与所有源 body 交互，再沿目标行累加总力的直接 N 体算法。
+  </GlossaryItem>
+  <GlossaryItem term="softening">
+    加到距离平方分母中的正小量，用来限制近距离交互产生的过大力。
+  </GlossaryItem>
+  <GlossaryItem term="computational tile">
+    pair interaction 矩阵中的 p×p 方块，使用 p 个线程和 shared memory 完成数据复用。
+  </GlossaryItem>
+  <GlossaryItem term="shared memory">
+    thread block 内线程共同访问的片上存储，用于缓存一个 tile 的 body 描述。
+  </GlossaryItem>
+  <GlossaryItem term="loop unrolling">
+    把固定次数的循环展开为连续操作，以减少循环控制开销并帮助指令流水化。
+  </GlossaryItem>
+  <GlossaryItem term="occupancy">
+    一个多处理器上同时驻留的活跃线程或 warp 的程度；资源压力过大时会下降。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="full-text-primary"
+  workTitle="GPU Gems 3 · Chapter 31. Fast N-Body Simulation with CUDA"
+  adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3/part-v-physics-simulation/chapter-31-fast-n-body-simulation-cuda"
+/>
